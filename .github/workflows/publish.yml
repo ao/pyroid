@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*"
+  repository_dispatch:
+    types: [publish-pypi]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish'
+        required: true
 
 # Add permissions for artifacts
 permissions:
