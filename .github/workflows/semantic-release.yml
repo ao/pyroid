@@ -5,6 +5,12 @@ on:
     branches:
       - main
 
+# Add permissions to allow pushing to the repository
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
 jobs:
   release:
     runs-on: ubuntu-latest

@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
 
+# Add permissions for artifacts
+permissions:
+  contents: read
+  id-token: write # Required for PyPI trusted publishing
+
 jobs:
   linux:
     runs-on: ubuntu-latest
