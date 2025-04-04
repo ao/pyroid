@@ -4,10 +4,10 @@
 
 ## 🔹 Why Pyroid?
 
-✅ Rust-powered acceleration for CPU-heavy tasks
-✅ True parallel computing (no GIL limits!)
-✅ Async I/O & multithreading for real speed boosts
-✅ Easy Python imports—just pip install pyroid
+- ✅ Rust-powered acceleration for CPU-heavy tasks
+- ✅ True parallel computing (no GIL limits!)
+- ✅ Async I/O & multithreading for real speed boosts
+- ✅ Easy Python imports—just pip install pyroid
 
 ## Features
 
