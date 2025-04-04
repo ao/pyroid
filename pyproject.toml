@@ -1,0 +1,45 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "pyroid"
+version = "0.1.0"
+description = "High-performance Rust functions for Python"
+authors = [
+    {name = "Pyroid Team", email = "support@ataiva.com"}
+]
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Rust",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ao/pyroid"
+"Bug Tracker" = "https://github.com/ao/pyroid/issues"
+[tool.maturin]
+python-source = "python"
+features = ["pyo3/extension-module"]
+
+[tool.semantic_release]
+version_variable = [
+    "pyproject.toml:version",
+    "Cargo.toml:version",
+    "python/pyroid/__init__.py:__version__"
+]
+branch = "main"
+upload_to_pypi = false  # We use the publish.yml workflow for this
+upload_to_release = true
+build_command = "pip install -e ."
+features = ["pyo3/extension-module"]
