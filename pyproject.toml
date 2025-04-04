@@ -45,4 +45,5 @@ build_command = "echo 'Skipping build during semantic release'"
 tag_commit = true  # Ensure tags are created
 commit = true  # Ensure version changes are committed
 push = true  # Ensure commits and tags are pushed
+tag_format = "v{version}"  # Ensure tags start with "v"
 features = ["pyo3/extension-module"]
