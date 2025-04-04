@@ -41,5 +41,5 @@ version_variable = [
 branch = "main"
 upload_to_pypi = false  # We use the publish.yml workflow for this
 upload_to_release = true
-build_command = "pip install -e ."
+build_command = "echo 'Skipping build during semantic release'"
 features = ["pyo3/extension-module"]
