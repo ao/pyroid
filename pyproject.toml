@@ -42,4 +42,7 @@ branch = "main"
 upload_to_pypi = false  # We use the publish.yml workflow for this
 upload_to_release = true
 build_command = "echo 'Skipping build during semantic release'"
+tag_commit = true  # Ensure tags are created
+commit = true  # Ensure version changes are committed
+push = true  # Ensure commits and tags are pushed
 features = ["pyo3/extension-module"]
