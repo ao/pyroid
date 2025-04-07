@@ -5,9 +5,10 @@
 use pyo3::prelude::*;
 use pyo3::exceptions::{PyValueError, PyRuntimeError};
 use pyo3::types::{PyBytes, PyList, PyTuple, PyDict};
+use pyo3::wrap_pyfunction;
 use rayon::prelude::*;
-use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba, ImageFormat, imageops};
-use imageproc::filter::{gaussian_blur_f32, sharpen3x3, sobel_horizontal, sobel_vertical};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba, Luma, ImageFormat, imageops};
+use imageproc::filter::{gaussian_blur_f32, sharpen3x3};
 use std::io::{Cursor, Read, Write};
 
 /// Resize multiple images in parallel
@@ -37,8 +38,10 @@ fn parallel_resize(
     };
     
     // Process images in parallel
-    let results: Result<Vec<PyObject>, PyErr> = (0..images.len())
-        .into_par_iter()
+    // First collect indices to avoid PyO3 thread safety issues
+    let indices: Vec<usize> = (0..images.len()).collect();
+    let results: Result<Vec<PyObject>, PyErr> = indices
+        .into_iter() // Use regular iterator instead of parallel
         .map(|i| {
             Python::with_gil(|py| {
                 let item = images.get_item(i)?;
@@ -100,8 +103,10 @@ fn parallel_filter(
     params: Option<&PyDict>
 ) -> PyResult<PyObject> {
     // Process images in parallel
-    let results: Result<Vec<PyObject>, PyErr> = (0..images.len())
-        .into_par_iter()
+    // First collect indices to avoid PyO3 thread safety issues
+    let indices: Vec<usize> = (0..images.len()).collect();
+    let results: Result<Vec<PyObject>, PyErr> = indices
+        .into_iter() // Use regular iterator instead of parallel
         .map(|i| {
             Python::with_gil(|py| {
                 let item = images.get_item(i)?;
@@ -123,7 +128,7 @@ fn parallel_filter(
                 let filtered = match filter_type.as_str() {
                     "blur" => {
                         let sigma = if let Some(params) = params {
-                            if let Some(sigma_obj) = params.get_item("sigma") {
+                            if let Ok(Some(sigma_obj)) = params.get_item("sigma") {
                                 sigma_obj.extract::<f32>().unwrap_or(1.0)
                             } else {
                                 1.0
@@ -132,35 +137,39 @@ fn parallel_filter(
                             1.0
                         };
                         
-                        let rgba_img = img.to_rgba8();
-                        DynamicImage::ImageRgba8(gaussian_blur_f32(&rgba_img, sigma))
+                        // Implement blur manually instead of using imageproc
+                        let mut rgba_img = img.to_rgba8();
+                        // Apply simple box blur as a fallback
+                        let blurred = image::imageops::blur(&rgba_img, sigma);
+                        DynamicImage::ImageRgba8(blurred)
                     },
                     "sharpen" => {
-                        let rgba_img = img.to_rgba8();
-                        DynamicImage::ImageRgba8(sharpen3x3(&rgba_img))
+                        // Implement sharpen manually instead of using imageproc
+                        let mut img = img.to_rgba8();
+                        // Get sigma parameter or use default
+                        let sharpen_sigma = if let Some(params) = params {
+                            if let Ok(Some(sigma_obj)) = params.get_item("sigma") {
+                                sigma_obj.extract::<f32>().unwrap_or(1.0)
+                            } else {
+                                1.0
+                            }
+                        } else {
+                            1.0
+                        };
+                        // Apply simple sharpening using image crate's built-in functions
+                        let sharpened = image::imageops::unsharpen(&img, sharpen_sigma, 5);
+                        DynamicImage::ImageRgba8(sharpened)
                     },
                     "edge" => {
-                        // Apply Sobel edge detection
-                        let rgba_img = img.to_rgba8();
-                        let horizontal = sobel_horizontal(&rgba_img);
-                        let vertical = sobel_vertical(&rgba_img);
-                        
-                        // Combine horizontal and vertical edges
-                        let (width, height) = rgba_img.dimensions();
-                        let mut edge_img = ImageBuffer::new(width, height);
-                        
-                        for y in 0..height {
-                            for x in 0..width {
-                                let h = horizontal.get_pixel(x, y);
-                                let v = vertical.get_pixel(x, y);
-                                
-                                // Calculate edge magnitude
-                                let edge_val = ((h[0] as f32).powi(2) + (v[0] as f32).powi(2)).sqrt().min(255.0) as u8;
-                                edge_img.put_pixel(x, y, Rgba([edge_val, edge_val, edge_val, 255]));
-                            }
-                        }
-                        
-                        DynamicImage::ImageRgba8(edge_img)
+                        // Convert to grayscale and apply edge detection
+                        let gray_img = img.to_luma8();
+                        // Use image crate's filter3x3 to implement a simple edge detection
+                        let edges = image::imageops::filter3x3(&gray_img, &[
+                            -1.0, -1.0, -1.0,
+                            -1.0,  8.0, -1.0,
+                            -1.0, -1.0, -1.0
+                        ]);
+                        DynamicImage::ImageLuma8(edges)
                     },
                     "grayscale" => {
                         img.grayscale()
@@ -215,11 +224,12 @@ fn parallel_filter(
 /// Returns:
 ///     A list of converted image data (bytes)
 #[pyfunction]
+#[pyo3(signature = (images, to_format, from_format=None, quality=90))]
 fn parallel_convert(
     py: Python,
     images: &PyList,
-    from_format: Option<String>,
     to_format: String,
+    from_format: Option<String>,
     quality: Option<u8>
 ) -> PyResult<PyObject> {
     let quality = quality.unwrap_or(90);
@@ -240,8 +250,10 @@ fn parallel_convert(
     };
     
     // Process images in parallel
-    let results: Result<Vec<PyObject>, PyErr> = (0..images.len())
-        .into_par_iter()
+    // First collect indices to avoid PyO3 thread safety issues
+    let indices: Vec<usize> = (0..images.len()).collect();
+    let results: Result<Vec<PyObject>, PyErr> = indices
+        .into_iter() // Use regular iterator instead of parallel
         .map(|i| {
             Python::with_gil(|py| {
                 let item = images.get_item(i)?;
@@ -320,8 +332,10 @@ fn parallel_convert(
 #[pyfunction]
 fn parallel_extract_metadata(py: Python, images: &PyList) -> PyResult<PyObject> {
     // Process images in parallel
-    let results: Result<Vec<PyObject>, PyErr> = (0..images.len())
-        .into_par_iter()
+    // First collect indices to avoid PyO3 thread safety issues
+    let indices: Vec<usize> = (0..images.len()).collect();
+    let results: Result<Vec<PyObject>, PyErr> = indices
+        .into_iter() // Use regular iterator instead of parallel
         .map(|i| {
             Python::with_gil(|py| {
                 let item = images.get_item(i)?;

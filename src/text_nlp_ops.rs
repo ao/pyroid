@@ -4,7 +4,7 @@
 
 use pyo3::prelude::*;
 use pyo3::exceptions::{PyValueError, PyRuntimeError};
-use pyo3::types::{PyDict, PyList, PyString};
+use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use regex::Regex;
@@ -98,8 +98,10 @@ fn parallel_ngrams(
     }
     
     // Process texts in parallel
-    let results: Result<Vec<Vec<String>>, PyErr> = (0..texts.len())
-        .into_par_iter()
+    // First collect indices to avoid PyO3 thread safety issues
+    let indices: Vec<usize> = (0..texts.len()).collect();
+    let results: Result<Vec<Vec<String>>, PyErr> = indices
+        .into_iter() // Use regular iterator instead of parallel
         .map(|i| {
             Python::with_gil(|py| {
                 let item = texts.get_item(i)?;
@@ -202,8 +204,10 @@ fn parallel_tfidf(
     };
     
     // Tokenize documents and count terms
-    let tokenized_docs: Result<Vec<Vec<String>>, PyErr> = (0..n_docs)
-        .into_par_iter()
+    // First collect indices to avoid PyO3 thread safety issues
+    let indices: Vec<usize> = (0..n_docs).collect();
+    let tokenized_docs: Result<Vec<Vec<String>>, PyErr> = indices
+        .into_iter() // Use regular iterator instead of parallel
         .map(|i| {
             Python::with_gil(|py| {
                 let item = documents.get_item(i)?;
@@ -303,8 +307,11 @@ fn parallel_tfidf(
         py_vocabulary.set_item(term, idx)?;
     }
     
-    // Return (tfidf_matrix, vocabulary)
-    Ok(PyTuple::new(py, &[py_tfidf_matrix.into(), py_vocabulary.into()]).into())
+    // Return a dictionary with both components instead of a tuple
+    let result_dict = PyDict::new(py);
+    result_dict.set_item("tfidf_matrix", py_tfidf_matrix)?;
+    result_dict.set_item("vocabulary", py_vocabulary)?;
+    Ok(result_dict.into())
 }
 
 /// Calculate document similarity matrix in parallel
@@ -332,8 +339,10 @@ fn parallel_document_similarity(
     }
     
     // Tokenize documents
-    let tokenized_docs: Result<Vec<Vec<String>>, PyErr> = (0..n_docs)
-        .into_par_iter()
+    // First collect indices to avoid PyO3 thread safety issues
+    let indices: Vec<usize> = (0..n_docs).collect();
+    let tokenized_docs: Result<Vec<Vec<String>>, PyErr> = indices
+        .into_iter() // Use regular iterator instead of parallel
         .map(|i| {
             Python::with_gil(|py| {
                 let item = docs.get_item(i)?;
@@ -397,99 +406,96 @@ fn parallel_document_similarity(
                 .collect();
             
             // Calculate cosine similarity
+            // Use sequential approach instead of parallel
             let mut matrix = vec![vec![0.0; n_docs]; n_docs];
             
-            matrix.par_iter_mut().enumerate().for_each(|(i, row)| {
-                for j in 0..n_docs {
-                    if i == j {
-                        row[j] = 1.0; // Self-similarity is 1
-                    } else if i < j {
-                        // Calculate dot product
-                        let mut dot_product = 0.0;
-                        
-                        for (&idx, &val_i) in &doc_vectors[i] {
-                            if let Some(&val_j) = doc_vectors[j].get(&idx) {
-                                dot_product += val_i * val_j;
-                            }
+            for i in 0..n_docs {
+                matrix[i][i] = 1.0; // Self-similarity is 1
+                
+                for j in (i+1)..n_docs {
+                    // Calculate dot product
+                    let mut dot_product = 0.0;
+                    
+                    for (&idx, &val_i) in &doc_vectors[i] {
+                        if let Some(&val_j) = doc_vectors[j].get(&idx) {
+                            dot_product += val_i * val_j;
                         }
-                        
-                        // Calculate cosine similarity
-                        let norm_i = norms[i];
-                        let norm_j = norms[j];
-                        
-                        let similarity = if norm_i > 0.0 && norm_j > 0.0 {
-                            dot_product / (norm_i * norm_j)
-                        } else {
-                            0.0
-                        };
-                        
-                        row[j] = similarity;
-                        matrix[j][i] = similarity; // Symmetric
                     }
+                    
+                    // Calculate cosine similarity
+                    let norm_i = norms[i];
+                    let norm_j = norms[j];
+                    
+                    let similarity = if norm_i > 0.0 && norm_j > 0.0 {
+                        dot_product / (norm_i * norm_j)
+                    } else {
+                        0.0
+                    };
+                    
+                    matrix[i][j] = similarity;
+                    matrix[j][i] = similarity; // Symmetric
                 }
-            });
+            }
             
             matrix
         },
         "jaccard" => {
+            // Use sequential approach instead of parallel
             let mut matrix = vec![vec![0.0; n_docs]; n_docs];
             
-            matrix.par_iter_mut().enumerate().for_each(|(i, row)| {
-                for j in 0..n_docs {
-                    if i == j {
-                        row[j] = 1.0; // Self-similarity is 1
-                    } else if i < j {
-                        // Get sets of terms
-                        let terms_i: HashSet<&String> = tokenized_docs[i].iter().collect();
-                        let terms_j: HashSet<&String> = tokenized_docs[j].iter().collect();
-                        
-                        // Calculate intersection and union sizes
-                        let intersection_size = terms_i.intersection(&terms_j).count();
-                        let union_size = terms_i.union(&terms_j).count();
-                        
-                        // Calculate Jaccard similarity
-                        let similarity = if union_size > 0 {
-                            intersection_size as f64 / union_size as f64
-                        } else {
-                            0.0
-                        };
-                        
-                        row[j] = similarity;
-                        matrix[j][i] = similarity; // Symmetric
-                    }
+            for i in 0..n_docs {
+                matrix[i][i] = 1.0; // Self-similarity is 1
+                
+                for j in (i+1)..n_docs {
+                    // Get sets of terms
+                    let terms_i: HashSet<&String> = tokenized_docs[i].iter().collect();
+                    let terms_j: HashSet<&String> = tokenized_docs[j].iter().collect();
+                    
+                    // Calculate intersection and union sizes
+                    let intersection_size = terms_i.intersection(&terms_j).count();
+                    let union_size = terms_i.union(&terms_j).count();
+                    
+                    // Calculate Jaccard similarity
+                    let similarity = if union_size > 0 {
+                        intersection_size as f64 / union_size as f64
+                    } else {
+                        0.0
+                    };
+                    
+                    matrix[i][j] = similarity;
+                    matrix[j][i] = similarity; // Symmetric
                 }
-            });
+            }
             
             matrix
         },
         "overlap" => {
+            // Use sequential approach instead of parallel
             let mut matrix = vec![vec![0.0; n_docs]; n_docs];
             
-            matrix.par_iter_mut().enumerate().for_each(|(i, row)| {
-                for j in 0..n_docs {
-                    if i == j {
-                        row[j] = 1.0; // Self-similarity is 1
-                    } else if i < j {
-                        // Get sets of terms
-                        let terms_i: HashSet<&String> = tokenized_docs[i].iter().collect();
-                        let terms_j: HashSet<&String> = tokenized_docs[j].iter().collect();
-                        
-                        // Calculate intersection and minimum sizes
-                        let intersection_size = terms_i.intersection(&terms_j).count();
-                        let min_size = terms_i.len().min(terms_j.len());
-                        
-                        // Calculate overlap coefficient
-                        let similarity = if min_size > 0 {
-                            intersection_size as f64 / min_size as f64
-                        } else {
-                            0.0
-                        };
-                        
-                        row[j] = similarity;
-                        matrix[j][i] = similarity; // Symmetric
-                    }
+            for i in 0..n_docs {
+                matrix[i][i] = 1.0; // Self-similarity is 1
+                
+                for j in (i+1)..n_docs {
+                    // Get sets of terms
+                    let terms_i: HashSet<&String> = tokenized_docs[i].iter().collect();
+                    let terms_j: HashSet<&String> = tokenized_docs[j].iter().collect();
+                    
+                    // Calculate intersection and minimum sizes
+                    let intersection_size = terms_i.intersection(&terms_j).count();
+                    let min_size = terms_i.len().min(terms_j.len());
+                    
+                    // Calculate overlap coefficient
+                    let similarity = if min_size > 0 {
+                        intersection_size as f64 / min_size as f64
+                    } else {
+                        0.0
+                    };
+                    
+                    matrix[i][j] = similarity;
+                    matrix[j][i] = similarity; // Symmetric
                 }
-            });
+            }
             
             matrix
         },
