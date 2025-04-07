@@ -5,6 +5,7 @@
 use pyo3::prelude::*;
 use pyo3::exceptions::{PyValueError, PyRuntimeError, PyFileNotFoundError};
 use pyo3::types::{PyDict, PyList, PyBytes};
+use std::collections::HashMap;
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{Read, Write, BufReader, BufWriter};
@@ -107,7 +108,7 @@ fn parallel_read_csv(
                             
                             // Convert field based on schema
                             let py_value = if let Some(ref schema) = schema_map {
-                                if let Some(col_type) = schema.get(header) {
+                                if let Some(col_type) = schema.get(header) as Option<&String> {
                                     match col_type.as_str() {
                                         "int" => {
                                             let value = field.parse::<i64>()
@@ -255,8 +256,10 @@ fn parallel_compress(py: Python, data: &PyList, method: Option<String>, level: O
     }
     
     // Compress data in parallel
-    let results: Result<Vec<PyObject>, PyErr> = (0..data.len())
-        .into_par_iter()
+    // First collect indices to avoid PyO3 thread safety issues
+    let indices: Vec<usize> = (0..data.len()).collect();
+    let results: Result<Vec<PyObject>, PyErr> = indices
+        .into_iter() // Use regular iterator instead of parallel
         .map(|i| {
             Python::with_gil(|py| {
                 let item = data.get_item(i)?;
@@ -320,8 +323,10 @@ fn parallel_decompress(py: Python, data: &PyList, method: Option<String>) -> PyR
     let method = method.unwrap_or_else(|| "gzip".to_string());
     
     // Decompress data in parallel
-    let results: Result<Vec<PyObject>, PyErr> = (0..data.len())
-        .into_par_iter()
+    // First collect indices to avoid PyO3 thread safety issues
+    let indices: Vec<usize> = (0..data.len()).collect();
+    let results: Result<Vec<PyObject>, PyErr> = indices
+        .into_iter() // Use regular iterator instead of parallel
         .map(|i| {
             Python::with_gil(|py| {
                 let item = data.get_item(i)?;
@@ -418,7 +423,7 @@ mod tests {
             let compressed = parallel_compress(py, data, Some("gzip".to_string()), Some(6)).unwrap();
             let decompressed = parallel_decompress(py, compressed.extract(py).unwrap(), Some("gzip".to_string())).unwrap();
             
-            let decompressed_strings: Vec<String> = decompressed.extract(py)
+            let decompressed_strings: Vec<String> = decompressed.extract::<Vec<PyObject>>(py)
                 .unwrap()
                 .iter()
                 .map(|bytes| String::from_utf8(bytes.extract::<Vec<u8>>(py).unwrap()).unwrap())

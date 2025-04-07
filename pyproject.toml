@@ -55,3 +55,8 @@ changelog_sections = [
     "performance",
     "refactor"
 ]
+major_on_zero = false  # Treat 0.x versions as major releases
+version_source = "commit"  # Use commit messages to determine version
+commit_version_number = true  # Include version number in commit message
+commit_subject = "chore(release): {version} [skip ci]"  # Commit message format
+commit_author = "github-actions <actions@github.com>"  # Commit author

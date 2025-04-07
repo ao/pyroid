@@ -5,6 +5,7 @@
 use pyo3::prelude::*;
 use pyo3::exceptions::{PyValueError, PyRuntimeError};
 use pyo3::types::{PyDict, PyList, PyTuple};
+use pyo3::wrap_pyfunction;
 use rayon::prelude::*;
 use ndarray::{Array1, Array2, Axis, s};
 use ndarray_stats::QuantileExt;
@@ -53,11 +54,9 @@ fn parallel_distance_matrix(py: Python, points: Vec<Vec<f64>>, metric: Option<St
         "euclidean" => {
             let mut result = Array2::<f64>::zeros((n_points, n_points));
             
-            // Parallelize the computation
-            result.axis_iter_mut(Axis(0))
-                .into_par_iter()
-                .enumerate()
-                .for_each(|(i, mut row)| {
+            // Use regular iterator instead of parallel
+            for i in 0..n_points {
+                let mut row = result.row_mut(i);
                     for j in 0..n_points {
                         if i == j {
                             row[j] = 0.0;
@@ -70,18 +69,16 @@ fn parallel_distance_matrix(py: Python, points: Vec<Vec<f64>>, metric: Option<St
                             row[j] = sum_sq.sqrt();
                         }
                     }
-                });
+                }
                 
             result
         },
         "manhattan" => {
             let mut result = Array2::<f64>::zeros((n_points, n_points));
             
-            // Parallelize the computation
-            result.axis_iter_mut(Axis(0))
-                .into_par_iter()
-                .enumerate()
-                .for_each(|(i, mut row)| {
+            // Use regular iterator instead of parallel
+            for i in 0..n_points {
+                let mut row = result.row_mut(i);
                     for j in 0..n_points {
                         if i == j {
                             row[j] = 0.0;
@@ -94,7 +91,7 @@ fn parallel_distance_matrix(py: Python, points: Vec<Vec<f64>>, metric: Option<St
                             row[j] = sum_abs;
                         }
                     }
-                });
+                }
                 
             result
         },
@@ -113,11 +110,9 @@ fn parallel_distance_matrix(py: Python, points: Vec<Vec<f64>>, metric: Option<St
                 })
                 .collect();
             
-            // Parallelize the computation
-            result.axis_iter_mut(Axis(0))
-                .into_par_iter()
-                .enumerate()
-                .for_each(|(i, mut row)| {
+            // Use regular iterator instead of parallel
+            for i in 0..n_points {
+                let mut row = result.row_mut(i);
                     for j in 0..n_points {
                         if i == j {
                             row[j] = 0.0;
@@ -137,7 +132,7 @@ fn parallel_distance_matrix(py: Python, points: Vec<Vec<f64>>, metric: Option<St
                             }
                         }
                     }
-                });
+                }
                 
             result
         },
@@ -242,14 +237,13 @@ fn parallel_feature_scaling(
             // Scale the data in parallel
             let mut result = Array2::<f64>::zeros((n_samples, n_features));
             
-            result.axis_iter_mut(Axis(0))
-                .into_par_iter()
-                .enumerate()
-                .for_each(|(i, mut row)| {
-                    for j in 0..n_features {
-                        row[j] = (data_array[[i, j]] - means[j]) / stds[j];
-                    }
-                });
+            // Use regular iterator instead of parallel
+            for i in 0..n_samples {
+                let mut row = result.row_mut(i);
+                for j in 0..n_features {
+                    row[j] = (data_array[[i, j]] - means[j]) / stds[j];
+                }
+            }
                 
             result
         },
@@ -271,21 +265,20 @@ fn parallel_feature_scaling(
             // Scale the data in parallel
             let mut result = Array2::<f64>::zeros((n_samples, n_features));
             
-            result.axis_iter_mut(Axis(0))
-                .into_par_iter()
-                .enumerate()
-                .for_each(|(i, mut row)| {
-                    for j in 0..n_features {
-                        let min = mins[j];
-                        let max = maxs[j];
-                        
-                        if max > min {
-                            row[j] = (data_array[[i, j]] - min) / (max - min);
-                        } else {
-                            row[j] = 0.0;
-                        }
+            // Use regular iterator instead of parallel
+            for i in 0..n_samples {
+                let mut row = result.row_mut(i);
+                for j in 0..n_features {
+                    let min = mins[j];
+                    let max = maxs[j];
+                    
+                    if max > min {
+                        row[j] = (data_array[[i, j]] - min) / (max - min);
+                    } else {
+                        row[j] = 0.0;
                     }
-                });
+                }
+            }
                 
             result
         },
@@ -319,14 +312,13 @@ fn parallel_feature_scaling(
             // Scale the data in parallel
             let mut result = Array2::<f64>::zeros((n_samples, n_features));
             
-            result.axis_iter_mut(Axis(0))
-                .into_par_iter()
-                .enumerate()
-                .for_each(|(i, mut row)| {
-                    for j in 0..n_features {
-                        row[j] = (data_array[[i, j]] - medians[j]) / iqrs[j];
-                    }
-                });
+            // Use regular iterator instead of parallel
+            for i in 0..n_samples {
+                let mut row = result.row_mut(i);
+                for j in 0..n_features {
+                    row[j] = (data_array[[i, j]] - medians[j]) / iqrs[j];
+                }
+            }
                 
             result
         },
@@ -359,13 +351,14 @@ fn parallel_feature_scaling(
 /// Returns:
 ///     A list of scores for each fold
 #[pyfunction]
+#[pyo3(signature = (X, y, model_func, scoring_func, cv=5))]
 fn parallel_cross_validation(
     py: Python,
     X: Vec<Vec<f64>>,
     y: Vec<f64>,
-    cv: Option<usize>,
     model_func: PyObject,
-    scoring_func: PyObject
+    scoring_func: PyObject,
+    cv: Option<usize>
 ) -> PyResult<PyObject> {
     let cv = cv.unwrap_or(5);
     
