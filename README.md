@@ -5,10 +5,10 @@
 ## 🔹 Why Pyroid?
 
 - ✅ **Rust-powered acceleration** for CPU-heavy tasks
-- ✅ **True parallel computing** (no GIL limits!)
-- ✅ **Async I/O & multithreading** for real speed boosts
+- ✅ **Simplified architecture** with minimal dependencies
+- ✅ **Domain-driven design** for better organization
 - ✅ **Easy Python imports**—just `pip install pyroid`
-- ✅ **Comprehensive toolkit** for data science, ML, web development, and more
+- ✅ **Modular toolkit** with optional features
 
 ## 📋 Table of Contents
 
@@ -19,17 +19,18 @@
   - [🚀 Feature Overview](#-feature-overview)
     - [Core Features](#core-features)
     - [Module Overview](#module-overview)
-  - [Installation](#installation)
+  - [🔧 Feature Flags](#-feature-flags)
   - [Usage Examples](#usage-examples)
-    - [Parallel Math Operations](#parallel-math-operations)
-    - [Fast String Processing](#fast-string-processing)
+    - [Math Operations](#math-operations)
+    - [String Processing](#string-processing)
     - [DataFrame Operations](#dataframe-operations)
-    - [Machine Learning Operations](#machine-learning-operations)
-    - [Text and NLP Processing](#text-and-nlp-processing)
-    - [Async HTTP Requests](#async-http-requests)
+    - [Collection Operations](#collection-operations)
     - [File I/O Operations](#file-io-operations)
+    - [Network Operations](#network-operations)
+    - [Async Operations](#async-operations)
     - [Image Processing](#image-processing)
-  - [📊 Performance Benchmarks](#-performance-benchmarks)
+    - [Machine Learning](#machine-learning)
+  - [📊 Performance Considerations](#-performance-considerations)
   - [🔧 Requirements](#-requirements)
   - [📄 License](#-license)
   - [👥 Contributing](#-contributing)
@@ -54,8 +55,8 @@ Pyroid provides high-performance implementations across multiple domains:
 
 ### Core Features
 
-- **Parallel Processing**: Utilizes Rayon for efficient multithreading
-- **Async Capabilities**: Leverages Tokio for non-blocking operations
+- **Simplified Architecture**: Minimal external dependencies for better maintainability
+- **Domain-Driven Design**: Organized by functionality domains
 - **Pythonic API**: Easy to use from Python with familiar interfaces
 - **Memory Efficiency**: Optimized memory usage for large datasets
 - **Cross-Platform**: Works on Windows, macOS, and Linux
@@ -64,54 +65,78 @@ Pyroid provides high-performance implementations across multiple domains:
 
 | Module | Description | Key Functions |
 |--------|-------------|--------------|
-| Math Operations | Fast numerical computations | `parallel_sum`, `matrix_multiply` |
-| String Operations | Efficient text processing | `parallel_regex_replace`, `parallel_text_cleanup` |
-| Data Operations | Collection manipulation | `parallel_filter`, `parallel_map`, `parallel_sort` |
-| DataFrame Operations | Fast pandas-like operations | `dataframe_apply`, `dataframe_groupby_aggregate` |
-| Machine Learning | ML algorithm acceleration | `parallel_distance_matrix`, `parallel_feature_scaling` |
-| Text & NLP | Text analysis tools | `parallel_tokenize`, `parallel_tfidf` |
-| Async Operations | Non-blocking I/O | `AsyncClient`, `fetch_many` |
-| File I/O | Parallel file processing | `parallel_read_csv`, `parallel_json_parse` |
-| Image Processing | Efficient image manipulation | `parallel_resize`, `parallel_filter` |
+| Math | Numerical computations | `vector_operations`, `matrix_operations`, `statistics` |
+| String | Text processing | `reverse`, `base64_encode`, `base64_decode` |
+| Data | Collection and DataFrame operations | `filter`, `map`, `reduce`, `dataframe_apply` |
+| I/O | File and network operations | `read_file`, `write_file`, `http_get`, `http_post` |
+| Image | Basic image manipulation | `create_image`, `to_grayscale`, `resize`, `blur` |
+| ML | Basic machine learning | `kmeans`, `linear_regression`, `normalize`, `distance_matrix` |
 
-## Installation
+## 🔧 Feature Flags
 
-```bash
-pip install pyroid
+Pyroid uses feature flags to allow selective compilation of components:
+
+| Feature Flag | Description | Default |
+|--------------|-------------|---------|
+| `math` | Math operations | Enabled |
+| `text` | Text processing | Enabled |
+| `data` | Collection and DataFrame operations | Enabled |
+| `io` | File and network operations | Enabled |
+| `image` | Basic image processing | Enabled |
+| `ml` | Basic machine learning | Enabled |
+
+To compile with only specific features, modify your `Cargo.toml`:
+
+```toml
+[dependencies]
+pyroid = { version = "0.1.0", default-features = false, features = ["math", "data"] }
 ```
 
 ## Usage Examples
 
-### Parallel Math Operations
+### Math Operations
 
 ```python
 import pyroid
 
-# Parallel sum of a large list
-numbers = list(range(1_000_000))
-result = pyroid.parallel_sum(numbers)
-print(f"Sum: {result}")
+# Vector operations
+v1 = pyroid.math.Vector([1, 2, 3])
+v2 = pyroid.math.Vector([4, 5, 6])
+v3 = v1 + v2
+print(f"Vector sum: {v3}")
+print(f"Dot product: {v1.dot(v2)}")
 
-# Matrix multiplication
-matrix_a = [[1, 2], [3, 4]]
-matrix_b = [[5, 6], [7, 8]]
-result = pyroid.matrix_multiply(matrix_a, matrix_b)
+# Matrix operations
+m1 = pyroid.math.Matrix([[1, 2], [3, 4]])
+m2 = pyroid.math.Matrix([[5, 6], [7, 8]])
+m3 = m1 * m2
+print(f"Matrix product: {m3}")
+
+# Statistical functions
+numbers = [1, 2, 3, 4, 5]
+mean = pyroid.math.stats.mean(numbers)
+median = pyroid.math.stats.median(numbers)
+std_dev = pyroid.math.stats.calc_std(numbers)
+print(f"Mean: {mean}, Median: {median}, StdDev: {std_dev}")
 ```
 
-### Fast String Processing
+### String Processing
 
 ```python
 import pyroid
 
-# Parallel regex replacement
-text = "Hello world! " * 1000
-result = pyroid.parallel_regex_replace(text, r"Hello", "Hi")
-print(f"Modified text length: {len(result)}")
+# Basic string operations
+text = "Hello, world!"
+reversed_text = pyroid.string.reverse(text)
+uppercase = pyroid.string.to_uppercase(text)
+lowercase = pyroid.string.to_lowercase(text)
 
-# Process multiple strings in parallel
-texts = ["Hello world!"] * 1000
-cleaned = pyroid.parallel_text_cleanup(texts)
-print(f"Cleaned {len(cleaned)} strings")
+# Base64 encoding/decoding
+encoded = pyroid.string.base64_encode(text)
+decoded = pyroid.string.base64_decode(encoded)
+print(f"Original: {text}")
+print(f"Encoded: {encoded}")
+print(f"Decoded: {decoded}")
 ```
 
 ### DataFrame Operations
@@ -126,68 +151,41 @@ df = {
     'C': [100, 200, 300, 400, 500]
 }
 
+# Create a DataFrame object
+dataframe = pyroid.data.dataframe.PyDataFrame(df)
+
 # Apply a function to each column
 def square(x):
     return [val * val for val in x]
 
-result = pyroid.dataframe_apply(df, square, 0)
-
-# Group by and aggregate
-df = {
-    'category': ['A', 'B', 'A', 'B', 'C'],
-    'value': [10, 20, 15, 25, 30]
-}
-agg_dict = {'value': 'mean'}
-result = pyroid.dataframe_groupby_aggregate(df, ['category'], agg_dict)
+result = dataframe.apply(square)
+print(f"DataFrame shape: {dataframe.shape}")
+print(f"DataFrame columns: {dataframe.columns}")
+print(f"Result: {result.to_dict()}")
 ```
 
-### Machine Learning Operations
+### Collection Operations
 
 ```python
 import pyroid
 
-# Calculate distance matrix
-points = [[1, 2], [3, 4], [5, 6]]
-distances = pyroid.parallel_distance_matrix(points, "euclidean")
+# Filter a list
+numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+even_numbers = pyroid.data.collections.filter(numbers, lambda x: x % 2 == 0)
+print(f"Even numbers: {even_numbers}")
 
-# Scale features
-data = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-scaled = pyroid.parallel_feature_scaling(data, "standard")
-```
+# Map a function over a list
+squared = pyroid.data.collections.map(numbers, lambda x: x * x)
+print(f"Squared numbers: {squared}")
 
-### Text and NLP Processing
+# Reduce a list
+sum_result = pyroid.data.collections.reduce(numbers, lambda x, y: x + y)
+print(f"Sum: {sum_result}")
 
-```python
-import pyroid
-
-# Tokenize texts in parallel
-texts = ["Hello world!", "This is a test.", "Pyroid is fast!"]
-tokens = pyroid.parallel_tokenize(texts, lowercase=True, remove_punct=True)
-
-# Calculate document similarity
-docs = ["This is the first document", "This document is the second", "And this is the third one"]
-similarity_matrix = pyroid.parallel_document_similarity(docs, "cosine")
-```
-
-### Async HTTP Requests
-
-```python
-import asyncio
-import pyroid
-
-async def main():
-    # Create an async client
-    client = pyroid.AsyncClient()
-    
-    # Fetch multiple URLs concurrently
-    urls = ["https://example.com", "https://google.com", "https://github.com"]
-    responses = await client.fetch_many(urls, concurrency=3)
-    
-    for url, response in responses.items():
-        if isinstance(response, dict):
-            print(f"{url}: Status {response['status']}")
-
-asyncio.run(main())
+# Sort a list
+unsorted = [5, 2, 8, 1, 9, 3]
+sorted_list = pyroid.data.collections.sort(unsorted)
+print(f"Sorted: {sorted_list}")
 ```
 
 ### File I/O Operations
@@ -195,60 +193,141 @@ asyncio.run(main())
 ```python
 import pyroid
 
-# Read multiple CSV files in parallel
-files = ["data1.csv", "data2.csv", "data3.csv"]
-schema = {"id": "int", "value": "float", "flag": "bool"}
-data = pyroid.parallel_read_csv(files, schema)
+# Read a file
+content = pyroid.io.file.read_file("example.txt")
+print(f"File content length: {len(content)}")
 
-# Parse multiple JSON strings in parallel
-json_strings = ['{"name": "Alice", "age": 30}', '{"name": "Bob", "age": 25}']
-parsed = pyroid.parallel_json_parse(json_strings)
+# Write a file
+pyroid.io.file.write_file("output.txt", b"Hello, world!")
+
+# Read multiple files
+files = ["file1.txt", "file2.txt", "file3.txt"]
+contents = pyroid.io.file.read_files(files)
+for file, content in contents.items():
+    print(f"{file}: {len(content)} bytes")
+```
+
+### Network Operations
+
+```python
+import pyroid
+
+# Make a GET request
+response = pyroid.io.network.get("https://example.com")
+print(f"Status: {response['status']}")
+print(f"Body length: {len(response['body'])}")
+
+# Make a POST request with JSON data
+data = {"name": "John", "age": 30}
+response = pyroid.io.network.post("https://example.com/api", json=data)
+print(f"Status: {response['status']}")
+```
+
+### Async Operations
+
+```python
+import asyncio
+import pyroid
+
+async def main():
+    # Async sleep
+    print("Sleeping for 1 second...")
+    await pyroid.io.async_io.sleep(1.0)
+    print("Awake!")
+    
+    # Async file operations
+    await pyroid.io.async_io.write_file_async("async_test.txt", b"Hello, async world!")
+    content = await pyroid.io.async_io.read_file_async("async_test.txt")
+    print(f"File content: {content}")
+    
+    # Async HTTP requests
+    response = await pyroid.io.async_io.http_get_async("https://example.com")
+    print(f"Response length: {len(response)}")
+    
+    # Async HTTP POST
+    data = {"name": "John", "age": 30}
+    response = await pyroid.io.async_io.http_post_async("https://example.com/api", json=data)
+    print(f"Response length: {len(response)}")
+
+# Run the async main function
+asyncio.run(main())
 ```
 
 ### Image Processing
 
 ```python
 import pyroid
-from PIL import Image
-import io
 
-# Load some images
-with open("image1.jpg", "rb") as f:
-    image1 = f.read()
-with open("image2.jpg", "rb") as f:
-    image2 = f.read()
+# Create a new image (width, height, channels)
+img = pyroid.image.basic.create_image(100, 100, 3)
 
-# Resize images in parallel
-images = [image1, image2]
-resized = pyroid.parallel_resize(images, (800, 600), "lanczos3")
+# Set some pixels
+for x in range(50):
+    for y in range(50):
+        img.set_pixel(x, y, [255, 0, 0])  # Red square
 
-# Apply filters
-filtered = pyroid.parallel_image_filter(images, "blur", {"sigma": 2.0})
-```
-## 📊 Performance Benchmarks
+for x in range(50, 100):
+    for y in range(50, 100):
+        img.set_pixel(x, y, [0, 0, 255])  # Blue square
 
-Pyroid significantly outperforms pure Python implementations and even specialized libraries:
+# Apply operations
+grayscale_img = img.to_grayscale()
+resized_img = img.resize(200, 200)
+blurred_img = img.blur(2)
+brightened_img = img.adjust_brightness(1.5)
 
-| Operation | Pure Python | Specialized Library | Pyroid | Speedup vs Python | Speedup vs Library |
-|-----------|-------------|---------------------|--------|-------------------|-------------------|
-| Sum 10M numbers | 1000ms | 50ms (NumPy) | 45ms | 22.2x | 1.1x |
-| Regex on 10MB text | 2500ms | N/A | 200ms | 12.5x | N/A |
-| Sort 10M items | 3500ms | 500ms (NumPy) | 300ms | 11.7x | 1.7x |
-| DataFrame apply | 4000ms (pandas) | N/A | 250ms | 16.0x | N/A |
-| Distance matrix | 6000ms | 800ms (scikit-learn) | 400ms | 15.0x | 2.0x |
-| TF-IDF calculation | 4000ms | 800ms (scikit-learn) | 300ms | 13.3x | 2.7x |
-| CSV reading | 2500ms | 800ms (pandas) | 350ms | 7.1x | 2.3x |
-| Image batch resize | 2000ms | 600ms (PIL) | 150ms | 13.3x | 4.0x |
-| HTTP requests | 5000ms | 1500ms (aiohttp) | 500ms | 10.0x | 3.0x |
-
-For detailed benchmarks, run:
-
-```bash
-python -m benchmarks.run_benchmarks
+# Get image data
+width = img.width
+height = img.height
+channels = img.channels
+data = img.data
 ```
 
-The benchmark dashboard will be available at `benchmarks/dashboard/dashboard.html`.
-| Image batch resize | 2000ms | 150ms | 13.3x |
+### Machine Learning
+
+```python
+import pyroid
+
+# K-means clustering
+data = [
+    [1.0, 2.0], [1.5, 1.8], [5.0, 8.0],
+    [8.0, 8.0], [1.0, 0.6], [9.0, 11.0]
+]
+result = pyroid.ml.basic.kmeans(data, k=2)
+print(f"Centroids: {result['centroids']}")
+print(f"Clusters: {result['clusters']}")
+
+# Linear regression
+x = [1.0, 2.0, 3.0, 4.0, 5.0]
+y = [2.0, 4.0, 5.0, 4.0, 6.0]
+result = pyroid.ml.basic.linear_regression(x, y)
+print(f"Slope: {result['slope']}")
+print(f"Intercept: {result['intercept']}")
+print(f"R-squared: {result['r_squared']}")
+
+# Data normalization
+values = [10.0, 20.0, 30.0, 40.0, 50.0]
+normalized = pyroid.ml.basic.normalize(values, method="minmax")
+print(f"Normalized (min-max): {normalized}")
+
+# Distance matrix
+points = [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]
+distances = pyroid.ml.basic.distance_matrix(points, metric="euclidean")
+print(f"Distance matrix: {distances}")
+```
+
+## 📊 Performance Considerations
+
+While Pyroid has been simplified to reduce dependencies, it still offers performance improvements over pure Python:
+
+- **Math operations**: Optimized vector and matrix operations
+- **String processing**: Efficient string manipulation and base64 encoding/decoding
+- **Data operations**: Improved collection operations and DataFrame handling
+- **I/O operations**: Efficient file and network operations
+- **Image processing**: Basic image manipulation without external dependencies
+- **Machine learning**: Simple ML algorithms implemented in pure Rust
+
+Note that some advanced parallel processing features have been simplified to improve maintainability. For extremely performance-critical applications, you may need to enable specific optimizations.
 
 ## 🔧 Requirements
 

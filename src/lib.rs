@@ -5,46 +5,57 @@
 
 use pyo3::prelude::*;
 
+// Core functionality
+mod core;
+
+// Domain-specific modules
+mod math;
+mod text;
+mod data;
+mod io;
+mod image;
+mod ml;
+
+// Legacy modules (for backward compatibility)
 mod string_ops;
 mod math_ops;
 mod data_ops;
-mod async_ops;
 mod utils;
-mod dataframe_ops;
-mod ml_ops;
-mod text_nlp_ops;
-mod io_ops;
-mod image_ops;
+
+// Disabled modules (dependencies removed)
+// mod async_ops;
+// mod dataframe_ops;
+// mod ml_ops;
+// mod text_nlp_ops;
+// mod io_ops;
+// mod image_ops;
 
 /// The pyroid Python module
 #[pymodule]
 fn pyroid(py: Python, m: &PyModule) -> PyResult<()> {
-    // Register the string operations
+    // Register the core module
+    core::register(py, m)?;
+    
+    // Register domain-specific modules
+    math::register(py, m)?;
+    text::register(py, m)?;
+    data::register(py, m)?;
+    io::register(py, m)?;
+    image::register(py, m)?;
+    ml::register(py, m)?;
+    
+    // Register legacy modules for backward compatibility
     string_ops::register(py, m)?;
-    
-    // Register the math operations
     math_ops::register(py, m)?;
-    
-    // Register the data operations
     data_ops::register(py, m)?;
     
-    // Register the async operations
-    async_ops::register(py, m)?;
-    
-    // Register the dataframe operations
-    dataframe_ops::register(py, m)?;
-    
-    // Register the machine learning operations
-    ml_ops::register(py, m)?;
-    
-    // Register the text and NLP operations
-    text_nlp_ops::register(py, m)?;
-    
-    // Register the file I/O operations
-    io_ops::register(py, m)?;
-    
-    // Register the image processing operations
-    image_ops::register(py, m)?;
+    // Disabled module registrations
+    // async_ops::register(py, m)?;
+    // dataframe_ops::register(py, m)?;
+    // ml_ops::register(py, m)?;
+    // text_nlp_ops::register(py, m)?;
+    // io_ops::register(py, m)?;
+    // image_ops::register(py, m)?;
     
     // Add module metadata
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

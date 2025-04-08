@@ -10,8 +10,6 @@ import os
 import io
 import numpy as np
 from PIL import Image, ImageFilter
-import requests
-from concurrent.futures import ThreadPoolExecutor
 import pyroid
 
 def benchmark(func, *args, **kwargs):
@@ -22,43 +20,77 @@ def benchmark(func, *args, **kwargs):
     print(f"Time taken: {(end_time - start_time) * 1000:.2f} ms")
     return result
 
-def download_sample_images(num_images):
-    """Download sample images for benchmarking."""
-    os.makedirs("test_images", exist_ok=True)
+def main():
+    print("pyroid Image Processing Operations Examples")
+    print("=========================================")
     
-    # Use Unsplash API for random images
-    image_urls = [
-        f"https://source.unsplash.com/random/800x600?sig={i}" 
-        for i in range(num_images)
-    ]
+    # Example 1: Creating and manipulating images
+    print("\n1. Creating and Manipulating Images")
     
-    image_data = []
+    # Create a new image
+    print("\nCreating a new 100x100 RGB image:")
+    img = benchmark(lambda: pyroid.image.basic.create_image(100, 100, 3))
     
-    def download_image(url):
-        try:
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                return response.content
-        except Exception as e:
-            print(f"Error downloading image: {e}")
-        return None
+    # Set pixels to create a pattern
+    print("\nSetting pixels to create a pattern:")
+    def set_pixels(img):
+        # Red square in top-left quadrant
+        for x in range(50):
+            for y in range(50):
+                img.set_pixel(x, y, [255, 0, 0])
+        
+        # Green square in top-right quadrant
+        for x in range(50, 100):
+            for y in range(50):
+                img.set_pixel(x, y, [0, 255, 0])
+        
+        # Blue square in bottom-left quadrant
+        for x in range(50):
+            for y in range(50, 100):
+                img.set_pixel(x, y, [0, 0, 255])
+        
+        # Yellow square in bottom-right quadrant
+        for x in range(50, 100):
+            for y in range(50, 100):
+                img.set_pixel(x, y, [255, 255, 0])
+        
+        return img
     
-    print(f"Downloading {num_images} sample images...")
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        image_data = list(executor.map(download_image, image_urls))
+    img = benchmark(lambda: set_pixels(img))
     
-    # Filter out any failed downloads
-    image_data = [img for img in image_data if img is not None]
+    # Example 2: Image transformations
+    print("\n2. Image Transformations")
     
-    print(f"Successfully downloaded {len(image_data)} images")
-    return image_data
-
-def create_sample_images(num_images, width=800, height=600):
-    """Create sample images for benchmarking if download fails."""
-    image_data = []
+    # Convert to grayscale
+    print("\nConverting to grayscale:")
+    grayscale_img = benchmark(lambda: img.to_grayscale())
     
-    for i in range(num_images):
-        # Create a gradient image
+    # Resize the image
+    print("\nResizing to 200x200:")
+    resized_img = benchmark(lambda: img.resize(200, 200))
+    
+    # Apply blur
+    print("\nApplying blur with radius 2:")
+    blurred_img = benchmark(lambda: img.blur(2))
+    
+    # Adjust brightness
+    print("\nAdjusting brightness (1.5x):")
+    brightened_img = benchmark(lambda: img.adjust_brightness(1.5))
+    
+    # Example 3: Creating an image from raw bytes
+    print("\n3. Creating an Image from Raw Bytes")
+    
+    # Create raw data (all red pixels for a 10x10 RGB image)
+    print("\nCreating a 10x10 red image from raw bytes:")
+    raw_data = bytes([255, 0, 0] * (10 * 10))
+    red_img = benchmark(lambda: pyroid.image.basic.from_bytes(raw_data, 10, 10, 3))
+    
+    # Example 4: Comparing with PIL
+    print("\n4. Comparing with PIL")
+    
+    # Create a gradient image with PIL
+    print("\nCreating a gradient image with PIL:")
+    def create_pil_gradient(width, height):
         img = Image.new('RGB', (width, height))
         pixels = img.load()
         
@@ -69,148 +101,78 @@ def create_sample_images(num_images, width=800, height=600):
                 b = int(255 * ((x + y) / (width + height)))
                 pixels[x, y] = (r, g, b)
         
-        # Convert to bytes
-        buffer = io.BytesIO()
-        img.save(buffer, format='JPEG')
-        image_data.append(buffer.getvalue())
+        return img
     
-    return image_data
-
-def main():
-    print("pyroid Image Processing Operations Examples")
-    print("=========================================")
+    pil_img = benchmark(lambda: create_pil_gradient(100, 100))
     
-    # Get sample images
-    num_images = 10
-    try:
-        image_data = download_sample_images(num_images)
-        if not image_data:
-            raise Exception("No images downloaded")
-    except Exception as e:
-        print(f"Failed to download images: {e}")
-        print("Creating sample images instead...")
-        image_data = create_sample_images(num_images)
+    # Create a gradient image with pyroid
+    print("\nCreating a gradient image with pyroid:")
+    def create_pyroid_gradient(width, height):
+        img = pyroid.image.basic.create_image(width, height, 3)
+        
+        for x in range(width):
+            for y in range(height):
+                r = int(255 * x / width)
+                g = int(255 * y / height)
+                b = int(255 * ((x + y) / (width + height)))
+                img.set_pixel(x, y, [r, g, b])
+        
+        return img
     
-    # Example 1: Image Resizing
-    print("\n1. Image Resizing")
+    pyroid_img = benchmark(lambda: create_pyroid_gradient(100, 100))
     
-    print(f"\nResizing {len(image_data)} images to 400x300:")
-    
-    print("\nPIL resize:")
-    def pil_resize(images, size):
-        results = []
-        for img_data in images:
-            img = Image.open(io.BytesIO(img_data))
-            resized = img.resize(size)
-            buffer = io.BytesIO()
-            resized.save(buffer, format='JPEG')
-            results.append(buffer.getvalue())
-        return results
-    
-    pil_result = benchmark(lambda: pil_resize(image_data, (400, 300)))
-    
-    print("\npyroid parallel_resize:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_resize(image_data, (400, 300), "lanczos3"))
-    
-    print("\nResults (sizes):")
-    print(f"PIL: {len(pil_result)} images, first image size: {len(pil_result[0])} bytes")
-    print(f"pyroid: {len(pyroid_result)} images, first image size: {len(pyroid_result[0])} bytes")
-    
-    # Example 2: Image Filtering
-    print("\n2. Image Filtering")
-    
-    print(f"\nApplying blur filter to {len(image_data)} images:")
-    
-    print("\nPIL filter:")
-    def pil_filter(images, filter_type):
-        results = []
-        for img_data in images:
-            img = Image.open(io.BytesIO(img_data))
-            if filter_type == "blur":
-                filtered = img.filter(ImageFilter.GaussianBlur(radius=2))
-            elif filter_type == "sharpen":
-                filtered = img.filter(ImageFilter.SHARPEN)
-            elif filter_type == "edge":
-                filtered = img.filter(ImageFilter.FIND_EDGES)
-            else:
-                filtered = img
-            buffer = io.BytesIO()
-            filtered.save(buffer, format='JPEG')
-            results.append(buffer.getvalue())
-        return results
-    
-    pil_result = benchmark(lambda: pil_filter(image_data, "blur"))
-    
-    print("\npyroid parallel_image_filter:")
-    params = {"sigma": 2.0}
-    pyroid_result = benchmark(lambda: pyroid.parallel_image_filter(image_data, "blur", params))
-    
-    print("\nResults (sizes):")
-    print(f"PIL: {len(pil_result)} images, first image size: {len(pil_result[0])} bytes")
-    print(f"pyroid: {len(pyroid_result)} images, first image size: {len(pyroid_result[0])} bytes")
-    
-    # Example 3: Format Conversion
-    print("\n3. Format Conversion")
-    
-    print(f"\nConverting {len(image_data)} images from JPEG to PNG:")
-    
-    print("\nPIL convert:")
-    def pil_convert(images, format):
-        results = []
-        for img_data in images:
-            img = Image.open(io.BytesIO(img_data))
-            buffer = io.BytesIO()
-            img.save(buffer, format=format)
-            results.append(buffer.getvalue())
-        return results
-    
-    pil_result = benchmark(lambda: pil_convert(image_data, "PNG"))
-    
-    print("\npyroid parallel_convert:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_convert(image_data, None, "png", 90))
-    
-    print("\nResults (sizes):")
-    print(f"PIL: {len(pil_result)} images, first image size: {len(pil_result[0])} bytes")
-    print(f"pyroid: {len(pyroid_result)} images, first image size: {len(pyroid_result[0])} bytes")
-    
-    # Example 4: Metadata Extraction
-    print("\n4. Metadata Extraction")
-    
-    print(f"\nExtracting metadata from {len(image_data)} images:")
-    
-    print("\nPIL metadata extraction:")
-    def pil_metadata(images):
-        results = []
-        for img_data in images:
-            img = Image.open(io.BytesIO(img_data))
-            metadata = {
-                "width": img.width,
-                "height": img.height,
-                "format": img.format,
-                "mode": img.mode
-            }
-            results.append(metadata)
-        return results
-    
-    pil_result = benchmark(lambda: pil_metadata(image_data))
-    
-    print("\npyroid parallel_extract_metadata:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_extract_metadata(image_data))
-    
-    print("\nResults (first image metadata):")
-    print(f"PIL: {pil_result[0]}")
-    print(f"pyroid: {pyroid_result[0]}")
-    
-    # Save a sample of processed images for visual inspection
+    # Save images for inspection
     os.makedirs("output_images", exist_ok=True)
     
-    # Save original
-    with open("output_images/original.jpg", "wb") as f:
-        f.write(image_data[0])
+    # Convert pyroid images to PIL for saving
+    def pyroid_to_pil(img):
+        width = img.width
+        height = img.height
+        channels = img.channels
+        data = img.data
+        
+        if channels == 1:
+            # Grayscale
+            pil_img = Image.new('L', (width, height))
+            for y in range(height):
+                for x in range(width):
+                    idx = (y * width + x) * channels
+                    pil_img.putpixel((x, y), data[idx])
+        else:
+            # RGB or RGBA
+            mode = 'RGB' if channels == 3 else 'RGBA'
+            pil_img = Image.new(mode, (width, height))
+            for y in range(height):
+                for x in range(width):
+                    idx = (y * width + x) * channels
+                    pixel = tuple(data[idx:idx+channels])
+                    pil_img.putpixel((x, y), pixel)
+        
+        return pil_img
     
-    # Save resized
-    with open("output_images/resized_pyroid.jpg", "wb") as f:
-        f.write(pyroid_result[0])
+    # Save original image
+    pil_from_pyroid = pyroid_to_pil(img)
+    pil_from_pyroid.save("output_images/original.png")
+    
+    # Save grayscale image
+    pil_from_grayscale = pyroid_to_pil(grayscale_img)
+    pil_from_grayscale.save("output_images/grayscale.png")
+    
+    # Save resized image
+    pil_from_resized = pyroid_to_pil(resized_img)
+    pil_from_resized.save("output_images/resized.png")
+    
+    # Save blurred image
+    pil_from_blurred = pyroid_to_pil(blurred_img)
+    pil_from_blurred.save("output_images/blurred.png")
+    
+    # Save brightened image
+    pil_from_brightened = pyroid_to_pil(brightened_img)
+    pil_from_brightened.save("output_images/brightened.png")
+    
+    # Save gradient image
+    pil_from_gradient = pyroid_to_pil(pyroid_img)
+    pil_from_gradient.save("output_images/gradient.png")
     
     print("\nSample images saved to 'output_images' directory for inspection")
 

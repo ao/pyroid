@@ -12,23 +12,23 @@ Pyroid is organized into several modules, each focusing on a specific domain:
 | [String Operations](./string_ops.md) | Efficient text processing | `parallel_regex_replace`, `parallel_text_cleanup` |
 | [Data Operations](./data_ops.md) | Collection manipulation | `parallel_filter`, `parallel_map`, `parallel_sort` |
 | [DataFrame Operations](./dataframe_ops.md) | Fast pandas-like operations | `dataframe_apply`, `dataframe_groupby_aggregate` |
-| [Machine Learning Operations](./ml_ops.md) | ML algorithm acceleration | `parallel_distance_matrix`, `parallel_feature_scaling` |
+| [Machine Learning Operations](./ml_ops.md) | Basic ML algorithms | `kmeans`, `linear_regression`, `normalize`, `distance_matrix` |
 | [Text & NLP Operations](./text_nlp_ops.md) | Text analysis tools | `parallel_tokenize`, `parallel_tfidf` |
-| [Async Operations](./async_ops.md) | Non-blocking I/O | `AsyncClient`, `fetch_many` |
-| [File I/O Operations](./io_ops.md) | Parallel file processing | `parallel_read_csv`, `parallel_json_parse` |
-| [Image Processing Operations](./image_ops.md) | Efficient image manipulation | `parallel_resize`, `parallel_filter` |
+| [Async Operations](./async_ops.md) | Non-blocking I/O | `sleep`, `read_file_async`, `http_get_async` |
+| [File I/O Operations](./io_ops.md) | File processing | `read_file`, `write_file`, `read_files` |
+| [Image Processing Operations](./image_ops.md) | Basic image manipulation | `create_image`, `to_grayscale`, `resize`, `blur` |
 
 ## Common Patterns
 
 Throughout the Pyroid API, you'll notice several common patterns:
 
-### Parallel Processing
+### Simple and Consistent API
 
-Most functions in Pyroid are designed to process multiple items in parallel. This is indicated by the `parallel_` prefix in the function name:
+Pyroid functions are designed with simplicity and consistency in mind:
 
 ```python
-# Process multiple items in parallel
-results = pyroid.parallel_map(items, func)
+# Simple function calls with clear parameters
+result = pyroid.ml.basic.kmeans(data, k=3)
 ```
 
 ### Optional Parameters
@@ -55,57 +55,58 @@ This makes it easy to integrate Pyroid with existing Python code.
 
 ## Function Categories
 
-### Transformation Functions
+### Math and Data Functions
 
-These functions transform input data into output data:
+These functions handle mathematical and data operations:
 
-- `parallel_map`: Apply a function to each item in a collection
-- `parallel_filter`: Filter items in a collection based on a predicate
-- `parallel_sort`: Sort items in a collection
-- `dataframe_apply`: Apply a function to each column or row of a DataFrame
-- `parallel_feature_scaling`: Scale features using various methods
-- `parallel_tokenize`: Tokenize texts
-- `parallel_resize`: Resize images
+- `vector_add`, `vector_subtract`: Vector operations
+- `matrix_multiply`: Matrix multiplication
+- `sum`, `mean`, `median`: Statistical operations
+- `filter`, `map`, `reduce`: Collection operations
+- `sort`: Sort items in a collection
+- `dataframe_apply`: Apply a function to DataFrame data
 
-### Aggregation Functions
+### Machine Learning Functions
 
-These functions aggregate input data into a single result:
+These functions provide basic machine learning capabilities:
 
-- `parallel_sum`: Calculate the sum of a collection
-- `parallel_mean`: Calculate the mean of a collection
-- `parallel_reduce`: Reduce a collection to a single value using a function
-- `dataframe_groupby_aggregate`: Group by and aggregate DataFrame data
+- `kmeans`: K-means clustering algorithm
+- `linear_regression`: Simple linear regression
+- `normalize`: Data normalization
+- `distance_matrix`: Calculate distances between points
 
-### Analysis Functions
+### Image Processing Functions
 
-These functions analyze input data and provide insights:
+These functions handle image operations:
 
-- `parallel_distance_matrix`: Calculate distances between points
-- `parallel_tfidf`: Calculate TF-IDF matrix
-- `parallel_document_similarity`: Calculate document similarity matrix
-- `parallel_extract_metadata`: Extract metadata from images
+- `create_image`: Create a new image
+- `to_grayscale`: Convert image to grayscale
+- `resize`: Resize an image
+- `blur`: Apply blur filter to an image
+- `adjust_brightness`: Adjust image brightness
 
 ### I/O Functions
 
 These functions handle input/output operations:
 
-- `parallel_read_csv`: Read multiple CSV files
-- `parallel_json_parse`: Parse multiple JSON strings
-- `parallel_compress`: Compress data
-- `parallel_decompress`: Decompress data
-- `AsyncClient.fetch_many`: Fetch multiple URLs concurrently
+- `read_file`, `write_file`: File operations
+- `read_files`: Read multiple files
+- `get`, `post`: HTTP requests
+- `sleep`, `read_file_async`, `http_get_async`: Async operations
 
 ## Performance Considerations
 
-Pyroid is designed for high performance, but there are some considerations to keep in mind:
+Pyroid is designed for good performance with minimal dependencies:
 
-1. **Data Size**: Pyroid's performance advantages are most noticeable with large datasets. For small datasets, the overhead of parallelization may outweigh the benefits.
+1. **Rust Implementation**: Core operations are implemented in Rust, providing better performance than pure Python.
 
-2. **Memory Usage**: Processing large datasets in parallel can consume significant memory. Be mindful of memory constraints, especially when working with very large datasets.
+2. **Minimal Dependencies**: The library has minimal external dependencies, making it more reliable and easier to install.
 
-3. **CPU Utilization**: Pyroid is designed to utilize multiple CPU cores. Ensure your system has multiple cores available for best performance.
+3. **Memory Efficiency**: Operations are designed to be memory-efficient, with careful management of resources.
 
-4. **Data Conversion**: Converting between Python and Rust data structures has some overhead. Minimize the number of conversions by performing multiple operations in Rust before converting back to Python.
+4. **Data Conversion**: Converting between Python and Rust data structures has some overhead. For very large datasets, this overhead may be noticeable.
+
+5. **Image and ML Operations**: Basic image and machine learning operations are implemented without external dependencies, providing good baseline performance.
 
 For more detailed performance optimization tips, see the [Performance Optimization Guide](../guides/performance.md).
 

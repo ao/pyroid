@@ -1,410 +1,389 @@
 # Machine Learning Operations
 
-The Machine Learning operations module provides high-performance implementations of common machine learning primitives and utilities. These operations are implemented in Rust and are designed to be significantly faster than their Python equivalents, especially for large datasets.
+The Machine Learning operations module provides basic machine learning algorithms implemented in pure Rust without external dependencies. These operations are designed to be simple, reliable, and easy to use.
 
 ## Overview
 
 The Machine Learning operations module provides the following key functions:
 
-- `parallel_distance_matrix`: Calculate distance matrices in parallel
-- `parallel_feature_scaling`: Scale features using various methods
-- `parallel_cross_validation`: Perform cross-validation in parallel
+- `kmeans`: K-means clustering algorithm
+- `linear_regression`: Simple linear regression
+- `normalize`: Data normalization
+- `distance_matrix`: Calculate distance matrix between points
 
 ## API Reference
 
-### parallel_distance_matrix
+### kmeans
 
-Calculate distance matrix in parallel.
+Perform K-means clustering on a dataset.
 
 ```python
-pyroid.parallel_distance_matrix(points, metric='euclidean')
+pyroid.ml.basic.kmeans(data, k, max_iterations=None)
+```
+
+#### Parameters
+
+- `data`: A list of points (each point is a list of coordinates)
+- `k`: Number of clusters
+- `max_iterations`: Maximum number of iterations (default: 100)
+
+#### Returns
+
+A dictionary containing:
+- `centroids`: List of cluster centroids
+- `clusters`: List of cluster assignments for each point
+- `iterations`: Number of iterations performed
+
+#### Example
+
+```python
+import pyroid
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Generate some sample data
+np.random.seed(42)
+data = []
+# Cluster 1
+for _ in range(50):
+    data.append([np.random.normal(0, 1), np.random.normal(0, 1)])
+# Cluster 2
+for _ in range(50):
+    data.append([np.random.normal(5, 1), np.random.normal(5, 1)])
+# Cluster 3
+for _ in range(50):
+    data.append([np.random.normal(0, 1), np.random.normal(5, 1)])
+
+# Perform K-means clustering
+result = pyroid.ml.basic.kmeans(data, k=3)
+
+# Extract results
+centroids = result['centroids']
+clusters = result['clusters']
+iterations = result['iterations']
+
+print(f"K-means converged in {iterations} iterations")
+print(f"Centroids: {centroids}")
+
+# Plot the results
+data_np = np.array(data)
+plt.figure(figsize=(10, 6))
+plt.scatter(data_np[:, 0], data_np[:, 1], c=clusters, cmap='viridis')
+centroids_np = np.array(centroids)
+plt.scatter(centroids_np[:, 0], centroids_np[:, 1], c='red', marker='X', s=100)
+plt.title('K-means Clustering')
+plt.xlabel('Feature 1')
+plt.ylabel('Feature 2')
+plt.show()
+```
+
+### linear_regression
+
+Perform simple linear regression.
+
+```python
+pyroid.ml.basic.linear_regression(x, y)
+```
+
+#### Parameters
+
+- `x`: List of independent variable values
+- `y`: List of dependent variable values
+
+#### Returns
+
+A dictionary containing:
+- `slope`: Slope of the regression line
+- `intercept`: Y-intercept of the regression line
+- `r_squared`: R-squared value (coefficient of determination)
+
+#### Example
+
+```python
+import pyroid
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Generate some sample data
+np.random.seed(42)
+x = list(range(1, 101))
+y = [2 * xi + 5 + np.random.normal(0, 10) for xi in x]
+
+# Perform linear regression
+result = pyroid.ml.basic.linear_regression(x, y)
+
+# Extract results
+slope = result['slope']
+intercept = result['intercept']
+r_squared = result['r_squared']
+
+print(f"Linear regression: y = {slope:.4f}x + {intercept:.4f}")
+print(f"R-squared: {r_squared:.4f}")
+
+# Plot the results
+plt.figure(figsize=(10, 6))
+plt.scatter(x, y)
+plt.plot(x, [slope * xi + intercept for xi in x], 'r-')
+plt.title(f'Linear Regression (y = {slope:.4f}x + {intercept:.4f}, R² = {r_squared:.4f})')
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.show()
+```
+
+### normalize
+
+Normalize a vector of values using different methods.
+
+```python
+pyroid.ml.basic.normalize(values, method=None)
+```
+
+#### Parameters
+
+- `values`: List of values to normalize
+- `method`: Normalization method (default: 'minmax')
+  - Supported methods: 'minmax', 'zscore'
+
+#### Returns
+
+A list of normalized values.
+
+#### Example
+
+```python
+import pyroid
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Generate some sample data
+np.random.seed(42)
+values = [np.random.normal(50, 10) for _ in range(100)]
+
+# Normalize using different methods
+minmax_normalized = pyroid.ml.basic.normalize(values, method='minmax')
+zscore_normalized = pyroid.ml.basic.normalize(values, method='zscore')
+
+# Plot the results
+plt.figure(figsize=(12, 6))
+
+plt.subplot(1, 3, 1)
+plt.hist(values, bins=20)
+plt.title('Original Data')
+plt.xlabel('Value')
+plt.ylabel('Frequency')
+
+plt.subplot(1, 3, 2)
+plt.hist(minmax_normalized, bins=20)
+plt.title('Min-Max Normalization')
+plt.xlabel('Value')
+
+plt.subplot(1, 3, 3)
+plt.hist(zscore_normalized, bins=20)
+plt.title('Z-Score Normalization')
+plt.xlabel('Value')
+
+plt.tight_layout()
+plt.show()
+
+# Print statistics
+print(f"Original data - Min: {min(values):.2f}, Max: {max(values):.2f}, Mean: {sum(values)/len(values):.2f}")
+print(f"Min-Max normalized - Min: {min(minmax_normalized):.2f}, Max: {max(minmax_normalized):.2f}")
+print(f"Z-Score normalized - Mean: {sum(zscore_normalized)/len(zscore_normalized):.2f}, Std: {np.std(zscore_normalized):.2f}")
+```
+
+#### Normalization Methods
+
+1. **Min-Max Normalization ('minmax')**
+
+   Scales values to a range between 0 and 1:
+   
+   ```
+   z = (x - min(x)) / (max(x) - min(x))
+   ```
+
+2. **Z-Score Normalization ('zscore')**
+
+   Standardizes values to have mean 0 and standard deviation 1:
+   
+   ```
+   z = (x - mean(x)) / std(x)
+   ```
+
+### distance_matrix
+
+Calculate distance matrix between points.
+
+```python
+pyroid.ml.basic.distance_matrix(points, metric=None)
 ```
 
 #### Parameters
 
 - `points`: A list of points (each point is a list of coordinates)
 - `metric`: Distance metric to use (default: 'euclidean')
-  - Supported metrics: 'euclidean', 'manhattan', 'cosine'
+  - Supported metrics: 'euclidean', 'manhattan'
 
 #### Returns
 
-A 2D array of distances between points.
+A 2D list representing the distance matrix.
 
 #### Example
 
 ```python
 import pyroid
+import matplotlib.pyplot as plt
 import numpy as np
-import time
+import seaborn as sns
 
-# Generate random points
-n_points = 2000
-n_dims = 10
-points = [[np.random.random() for _ in range(n_dims)] for _ in range(n_points)]
-points_np = np.array(points)
+# Generate some sample data
+np.random.seed(42)
+points = []
+for _ in range(10):
+    points.append([np.random.random() * 10, np.random.random() * 10])
 
-# Calculate distance matrix using NumPy
-def numpy_distance_matrix(points):
-    n = len(points)
-    dist_matrix = np.zeros((n, n))
-    for i in range(n):
-        for j in range(i+1, n):
-            dist = np.sqrt(np.sum((points[i] - points[j]) ** 2))
-            dist_matrix[i, j] = dist
-            dist_matrix[j, i] = dist
-    return dist_matrix
+# Calculate distance matrices using different metrics
+euclidean_distances = pyroid.ml.basic.distance_matrix(points, metric='euclidean')
+manhattan_distances = pyroid.ml.basic.distance_matrix(points, metric='manhattan')
 
-# Compare performance
-start = time.time()
-numpy_result = numpy_distance_matrix(points_np)
-numpy_time = time.time() - start
+# Plot the results
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-start = time.time()
-pyroid_result = pyroid.parallel_distance_matrix(points, "euclidean")
-pyroid_time = time.time() - start
+sns.heatmap(euclidean_distances, annot=True, fmt=".2f", cmap="YlGnBu", ax=axes[0])
+axes[0].set_title('Euclidean Distance Matrix')
 
-print(f"NumPy time: {numpy_time:.2f}s, Pyroid time: {pyroid_time:.2f}s")
-print(f"Speedup: {numpy_time / pyroid_time:.1f}x")
+sns.heatmap(manhattan_distances, annot=True, fmt=".2f", cmap="YlGnBu", ax=axes[1])
+axes[1].set_title('Manhattan Distance Matrix')
+
+plt.tight_layout()
+plt.show()
 ```
 
-#### Performance Considerations
+## Performance Considerations
 
-- `parallel_distance_matrix` is particularly efficient for large datasets with many points.
-- The implementation uses Rayon for parallel computation, which can lead to significant performance improvements on multi-core systems.
-- The 'cosine' metric includes an optimization to precompute norms, which makes it faster than a naive implementation.
-- For very large datasets, memory usage can be a concern as the distance matrix grows quadratically with the number of points.
-
-### parallel_feature_scaling
-
-Scale features in parallel.
-
-```python
-pyroid.parallel_feature_scaling(data, method='standard', with_mean=True, with_std=True)
-```
-
-#### Parameters
-
-- `data`: A 2D array of data (rows are samples, columns are features)
-- `method`: Scaling method (default: 'standard')
-  - Supported methods: 'standard', 'minmax', 'robust'
-- `with_mean`: Whether to center the data before scaling (default: True)
-- `with_std`: Whether to scale to unit variance (default: True)
-
-#### Returns
-
-A 2D array of scaled data.
-
-#### Example
-
-```python
-import pyroid
-import numpy as np
-from sklearn.preprocessing import StandardScaler
-import time
-
-# Generate random data
-n_samples = 100000
-n_features = 20
-data = [[np.random.randn() * 10 for _ in range(n_features)] for _ in range(n_samples)]
-data_np = np.array(data)
-
-# Compare with scikit-learn
-start = time.time()
-scaler = StandardScaler()
-sklearn_result = scaler.fit_transform(data_np)
-sklearn_time = time.time() - start
-
-start = time.time()
-pyroid_result = pyroid.parallel_feature_scaling(data, "standard")
-pyroid_time = time.time() - start
-
-print(f"Scikit-learn time: {sklearn_time:.2f}s, Pyroid time: {pyroid_time:.2f}s")
-print(f"Speedup: {sklearn_time / pyroid_time:.1f}x")
-```
-
-#### Scaling Methods
-
-1. **Standard Scaling ('standard')**
-
-   Standardizes features by removing the mean and scaling to unit variance:
-   
-   ```
-   z = (x - μ) / σ
-   ```
-   
-   where μ is the mean and σ is the standard deviation of the feature.
-
-2. **Min-Max Scaling ('minmax')**
-
-   Scales features to a given range (default [0, 1]):
-   
-   ```
-   z = (x - min(x)) / (max(x) - min(x))
-   ```
-
-3. **Robust Scaling ('robust')**
-
-   Scales features using statistics that are robust to outliers:
-   
-   ```
-   z = (x - median(x)) / IQR(x)
-   ```
-   
-   where IQR(x) is the interquartile range (Q3 - Q1).
-
-#### Performance Considerations
-
-- `parallel_feature_scaling` is particularly efficient for large datasets with many samples and features.
-- The implementation processes each feature in parallel, which can lead to significant performance improvements on multi-core systems.
-- The 'standard' and 'minmax' methods are generally faster than the 'robust' method, as the latter requires sorting the data to compute the median and quartiles.
-
-### parallel_cross_validation
-
-Perform cross-validation in parallel.
-
-```python
-pyroid.parallel_cross_validation(X, y, cv=5, model_func=None, scoring_func=None)
-```
-
-#### Parameters
-
-- `X`: A 2D array of features (rows are samples, columns are features)
-- `y`: A 1D array of target values
-- `cv`: Number of folds (default: 5)
-- `model_func`: A Python function that takes (X_train, y_train, X_test) and returns predictions
-- `scoring_func`: A Python function that takes (y_true, y_pred) and returns a score
-
-#### Returns
-
-A list of scores for each fold.
-
-#### Example
-
-```python
-import pyroid
-import numpy as np
-from sklearn.datasets import make_classification
-from sklearn.model_selection import cross_val_score
-from sklearn.neighbors import KNeighborsClassifier
-import time
-
-# Generate a classification dataset
-X, y = make_classification(n_samples=10000, n_features=20, random_state=42)
-X_list = X.tolist()
-y_list = y.tolist()
-
-# Define a simple model function for pyroid
-def knn_model(X_train, y_train, X_test):
-    # Convert to numpy arrays
-    X_train_np = np.array(X_train)
-    y_train_np = np.array(y_train)
-    X_test_np = np.array(X_test)
-    
-    # Train KNN model
-    model = KNeighborsClassifier(n_neighbors=3)
-    model.fit(X_train_np, y_train_np)
-    
-    # Predict
-    return model.predict(X_test_np).tolist()
-
-# Define scoring function
-def accuracy(y_true, y_pred):
-    correct = sum(1 for a, b in zip(y_true, y_pred) if a == b)
-    return correct / len(y_true)
-
-# Compare with scikit-learn
-start = time.time()
-sklearn_scores = cross_val_score(KNeighborsClassifier(n_neighbors=3), X, y, cv=5)
-sklearn_time = time.time() - start
-
-start = time.time()
-pyroid_scores = pyroid.parallel_cross_validation(X_list, y_list, 5, knn_model, accuracy)
-pyroid_time = time.time() - start
-
-print(f"Scikit-learn time: {sklearn_time:.2f}s, Pyroid time: {pyroid_time:.2f}s")
-print(f"Speedup: {sklearn_time / pyroid_time:.1f}x")
-print(f"Scikit-learn scores: {sklearn_scores}")
-print(f"Pyroid scores: {pyroid_scores}")
-```
-
-#### Performance Considerations
-
-- `parallel_cross_validation` is particularly efficient for large datasets and computationally intensive models.
-- The implementation processes each fold in parallel, which can lead to significant performance improvements on multi-core systems.
-- The performance gain depends on the complexity of the model and the size of the dataset. For simple models and small datasets, the overhead of parallelization may outweigh the benefits.
-- The function allows you to use any model and scoring function, making it highly flexible.
-
-## Performance Comparison
-
-The following table shows the performance comparison between scikit-learn and pyroid for various machine learning operations:
-
-| Operation | Dataset Size | scikit-learn | pyroid | Speedup |
-|-----------|-------------|-------------|--------|---------|
-| Distance Matrix | 2000 points, 10 dims | 2500ms | 200ms | 12.5x |
-| Standard Scaling | 100K samples, 20 features | 800ms | 100ms | 8.0x |
-| Cross-Validation (KNN) | 10K samples, 20 features | 3000ms | 500ms | 6.0x |
+- The current implementation is focused on simplicity and reliability rather than maximum performance.
+- Operations are performed in pure Rust without external dependencies, which provides good baseline performance.
+- For very large datasets, memory usage can be a concern.
+- The implementation does not currently support parallel processing.
 
 ## Best Practices
 
 1. **Choose the appropriate distance metric**: Different distance metrics are suitable for different types of data. For example, 'euclidean' is suitable for continuous data, while 'manhattan' may be better for sparse data.
 
-2. **Scale features before distance calculations**: Distance metrics are sensitive to the scale of the features. Consider using `parallel_feature_scaling` before calculating distances.
+2. **Normalize data before clustering**: K-means and other distance-based algorithms are sensitive to the scale of the features. Consider using `normalize` before applying clustering.
 
-3. **Be mindful of memory usage**: Distance matrices grow quadratically with the number of points. For very large datasets, consider using alternative approaches or processing data in chunks.
+3. **Set appropriate number of clusters**: For K-means, choosing the right number of clusters is important. Consider using techniques like the elbow method or silhouette analysis.
 
-4. **Use appropriate scaling method**: Choose the scaling method based on your data characteristics. For data with outliers, 'robust' scaling may be more appropriate than 'standard' scaling.
-
-5. **Customize model and scoring functions**: The `parallel_cross_validation` function allows you to use any model and scoring function. Take advantage of this flexibility to tailor the cross-validation to your specific needs.
+4. **Consider convergence criteria**: K-means may not always converge to the global optimum. Try running the algorithm multiple times with different initializations.
 
 ## Limitations
 
-1. **Memory usage**: For very large datasets, memory usage can be a concern, especially for distance matrices.
+1. **Basic algorithms only**: The current implementation provides only basic machine learning algorithms and does not include advanced features like regularization, kernel methods, or deep learning.
 
-2. **Limited set of distance metrics**: Currently, only 'euclidean', 'manhattan', and 'cosine' distance metrics are supported.
+2. **Limited metrics**: Only a few distance metrics are supported.
 
-3. **No sparse matrix support**: The current implementation does not support sparse matrices, which may be inefficient for sparse data.
+3. **No parallel processing**: The current implementation does not support parallel processing.
 
-4. **Model function overhead**: When using `parallel_cross_validation`, there is some overhead in converting between Python and Rust data structures, which may reduce the performance gain for very simple models.
+4. **Memory usage**: For very large datasets, memory usage can be a concern.
 
 ## Examples
 
-### Example 1: Clustering with Distance Matrix
+### Example 1: Finding Optimal Number of Clusters
 
 ```python
 import pyroid
-import numpy as np
-from sklearn.cluster import AgglomerativeClustering
 import matplotlib.pyplot as plt
+import numpy as np
 
-# Generate random points in 2D space
-n_points = 500
-points = [[np.random.random() * 10, np.random.random() * 10] for _ in range(n_points)]
+# Generate some sample data
+np.random.seed(42)
+data = []
+# Cluster 1
+for _ in range(50):
+    data.append([np.random.normal(0, 1), np.random.normal(0, 1)])
+# Cluster 2
+for _ in range(50):
+    data.append([np.random.normal(5, 1), np.random.normal(5, 1)])
+# Cluster 3
+for _ in range(50):
+    data.append([np.random.normal(0, 1), np.random.normal(5, 1)])
 
-# Calculate distance matrix
-distances = pyroid.parallel_distance_matrix(points, "euclidean")
+# Try different numbers of clusters
+inertias = []
+for k in range(1, 11):
+    result = pyroid.ml.basic.kmeans(data, k=k)
+    
+    # Calculate inertia (sum of squared distances to nearest centroid)
+    inertia = 0
+    centroids = result['centroids']
+    clusters = result['clusters']
+    
+    for i, point in enumerate(data):
+        centroid = centroids[clusters[i]]
+        # Calculate squared distance
+        dist_sq = sum((point[j] - centroid[j])**2 for j in range(len(point)))
+        inertia += dist_sq
+    
+    inertias.append(inertia)
 
-# Convert to numpy array for scikit-learn
-distances_np = np.array(distances)
-
-# Perform hierarchical clustering
-clustering = AgglomerativeClustering(
-    n_clusters=5,
-    affinity='precomputed',
-    linkage='average'
-).fit(distances_np)
-
-# Plot the results
-points_np = np.array(points)
-plt.figure(figsize=(10, 8))
-plt.scatter(points_np[:, 0], points_np[:, 1], c=clustering.labels_, cmap='viridis')
-plt.title('Hierarchical Clustering with Pyroid Distance Matrix')
-plt.xlabel('Feature 1')
-plt.ylabel('Feature 2')
-plt.colorbar(label='Cluster')
+# Plot the elbow curve
+plt.figure(figsize=(10, 6))
+plt.plot(range(1, 11), inertias, 'bo-')
+plt.xlabel('Number of Clusters (k)')
+plt.ylabel('Inertia')
+plt.title('Elbow Method for Optimal k')
+plt.grid(True)
 plt.show()
 ```
 
-### Example 2: Feature Preprocessing Pipeline
+### Example 2: Predicting with Linear Regression
 
 ```python
 import pyroid
+import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.datasets import load_wine
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
 
-# Load wine dataset
-wine = load_wine()
-X, y = wine.data, wine.target
-X_list = X.tolist()
+# Generate training data
+np.random.seed(42)
+x_train = list(range(1, 101))
+y_train = [3 * xi + 2 + np.random.normal(0, 5) for xi in x_train]
 
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(X_list, y, test_size=0.2, random_state=42)
+# Perform linear regression
+result = pyroid.ml.basic.linear_regression(x_train, y_train)
+slope = result['slope']
+intercept = result['intercept']
+r_squared = result['r_squared']
 
-# Scale features using different methods
-X_train_standard = pyroid.parallel_feature_scaling(X_train, "standard")
-X_train_minmax = pyroid.parallel_feature_scaling(X_train, "minmax")
-X_train_robust = pyroid.parallel_feature_scaling(X_train, "robust")
+# Generate test data
+x_test = list(range(101, 121))
+y_test = [3 * xi + 2 + np.random.normal(0, 5) for xi in x_test]
 
-X_test_standard = pyroid.parallel_feature_scaling(X_test, "standard")
-X_test_minmax = pyroid.parallel_feature_scaling(X_test, "minmax")
-X_test_robust = pyroid.parallel_feature_scaling(X_test, "robust")
+# Make predictions
+y_pred = [slope * xi + intercept for xi in x_test]
 
-# Train and evaluate models with different scaling methods
-for name, X_tr, X_te in [
-    ("Standard", X_train_standard, X_test_standard),
-    ("MinMax", X_train_minmax, X_test_minmax),
-    ("Robust", X_train_robust, X_test_robust)
-]:
-    clf = RandomForestClassifier(random_state=42)
-    clf.fit(np.array(X_tr), y_train)
-    y_pred = clf.predict(np.array(X_te))
-    acc = accuracy_score(y_test, y_pred)
-    print(f"{name} scaling accuracy: {acc:.4f}")
-```
+# Calculate mean squared error
+mse = sum((y_test[i] - y_pred[i])**2 for i in range(len(y_test))) / len(y_test)
+print(f"Mean Squared Error on test data: {mse:.2f}")
 
-### Example 3: Custom Cross-Validation
+# Plot the results
+plt.figure(figsize=(12, 6))
 
-```python
-import pyroid
-import numpy as np
-from sklearn.datasets import load_breast_cancer
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
+# Training data and regression line
+plt.subplot(1, 2, 1)
+plt.scatter(x_train, y_train, alpha=0.5, label='Training Data')
+plt.plot(x_train, [slope * xi + intercept for xi in x_train], 'r-', label=f'Regression Line (y = {slope:.2f}x + {intercept:.2f})')
+plt.title(f'Linear Regression (R² = {r_squared:.4f})')
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.legend()
 
-# Load breast cancer dataset
-cancer = load_breast_cancer()
-X, y = cancer.data, cancer.target
-X_list = X.tolist()
-y_list = y.tolist()
+# Test data and predictions
+plt.subplot(1, 2, 2)
+plt.scatter(x_test, y_test, alpha=0.5, label='Test Data')
+plt.scatter(x_test, y_pred, color='red', marker='x', label='Predictions')
+plt.title(f'Predictions on Test Data (MSE = {mse:.2f})')
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.legend()
 
-# Scale features
-X_scaled = pyroid.parallel_feature_scaling(X_list, "standard")
-
-# Define model function with regularization strength as a parameter
-def logistic_regression_model(X_train, y_train, X_test, C=1.0):
-    # Convert to numpy arrays
-    X_train_np = np.array(X_train)
-    y_train_np = np.array(y_train)
-    X_test_np = np.array(X_test)
-    
-    # Train logistic regression model
-    model = LogisticRegression(C=C, max_iter=1000, random_state=42)
-    model.fit(X_train_np, y_train_np)
-    
-    # Predict probabilities
-    return model.predict_proba(X_test_np)[:, 1].tolist()
-
-# Define scoring function (AUC)
-def auc_score(y_true, y_prob):
-    # Simple AUC calculation
-    pos = [i for i, y in enumerate(y_true) if y == 1]
-    neg = [i for i, y in enumerate(y_true) if y == 0]
-    
-    n_pos = len(pos)
-    n_neg = len(neg)
-    
-    if n_pos == 0 or n_neg == 0:
-        return 0.5
-    
-    # Count concordant pairs
-    concordant = 0
-    for i in pos:
-        for j in neg:
-            if y_prob[i] > y_prob[j]:
-                concordant += 1
-            elif y_prob[i] == y_prob[j]:
-                concordant += 0.5
-    
-    return concordant / (n_pos * n_neg)
-
-# Test different regularization strengths
-for C in [0.01, 0.1, 1.0, 10.0, 100.0]:
-    # Create a closure with the current C value
-    model_func = lambda X_tr, y_tr, X_te, C=C: logistic_regression_model(X_tr, y_tr, X_te, C)
-    
-    # Perform cross-validation
-    scores = pyroid.parallel_cross_validation(X_scaled, y_list, 5, model_func, auc_score)
-    
-    print(f"C={C}, Mean AUC: {sum(scores) / len(scores):.4f}, Scores: {[f'{s:.4f}' for s in scores]}")
+plt.tight_layout()
+plt.show()
