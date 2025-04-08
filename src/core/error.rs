@@ -51,35 +51,36 @@ impl From<PyroidError> for PyErr {
     }
 }
 
-// Define custom Python exception types
-#[pyclass]
-struct PyroidErrorType {}
-
-#[pymethods]
-impl PyroidErrorType {
-    #[new]
-    fn new() -> Self {
-        Self {}
-    }
-}
-
 /// Register the error module
 pub fn register(py: Python, module: &PyModule) -> PyResult<()> {
-    module.add_class::<PyroidErrorType>()?;
-    
     // Create the error hierarchy in Python
     let error_module = PyModule::new(py, "error")?;
     
     // Define the base exception class
-    error_module.add("PyroidError", py.get_type::<PyException>())?;
+    let pyroid_error = py.get_type::<PyException>();
+    module.add("PyroidError", pyroid_error)?;
+    error_module.add("PyroidError", pyroid_error)?;
     
     // Define specific exception classes using standard Python exceptions
-    error_module.add("PyroidError", py.get_type::<PyException>())?;
-    error_module.add("InputError", py.get_type::<PyValueError>())?;
-    error_module.add("ComputationError", py.get_type::<PyRuntimeError>())?;
-    error_module.add("MemoryError", py.get_type::<PyTypeError>())?;
-    error_module.add("ConversionError", py.get_type::<PyTypeError>())?;
-    error_module.add("IoError", py.get_type::<PyValueError>())?;
+    let input_error = py.get_type::<PyValueError>();
+    module.add("InputError", input_error)?;
+    error_module.add("InputError", input_error)?;
+    
+    let computation_error = py.get_type::<PyRuntimeError>();
+    module.add("ComputationError", computation_error)?;
+    error_module.add("ComputationError", computation_error)?;
+    
+    let memory_error = py.get_type::<PyTypeError>();
+    module.add("MemoryError", memory_error)?;
+    error_module.add("MemoryError", memory_error)?;
+    
+    let conversion_error = py.get_type::<PyTypeError>();
+    module.add("ConversionError", conversion_error)?;
+    error_module.add("ConversionError", conversion_error)?;
+    
+    let io_error = py.get_type::<PyValueError>();
+    module.add("IoError", io_error)?;
+    error_module.add("IoError", io_error)?;
     
     // Add the error module to the parent module
     module.add_submodule(error_module)?;

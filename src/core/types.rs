@@ -83,7 +83,7 @@ impl<T> std::ops::Deref for SharedData<T> {
 }
 
 /// A Python wrapper for SharedData
-#[pyclass]
+#[pyclass(name = "SharedData")]
 #[derive(Clone)]
 pub struct PySharedData {
     data: PyObject,
@@ -106,6 +106,10 @@ impl PySharedData {
 pub fn register(py: Python, module: &PyModule) -> PyResult<()> {
     let types_module = PyModule::new(py, "types")?;
     
+    // Add the PySharedData class as "SharedData" to the module
+    module.add_class::<PySharedData>()?;
+    
+    // Also add it to the types submodule
     types_module.add_class::<PySharedData>()?;
     
     // Add the types module to the parent module
