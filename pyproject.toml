@@ -32,20 +32,7 @@ classifiers = [
 
 [tool.maturin]
 python-source = "python"
-maturin_features = ["pyo3/extension-module"]
-
-# Feature flags configuration
-# By default, all features are enabled
-# To build with specific features only, use:
-# maturin develop --features "math data"
-[tool.maturin.features]
-default = ["math", "text", "data", "io", "image", "ml"]
-math = []
-text = ["regex"]
-data = []
-io = ["tokio", "futures"]
-image = []
-ml = []
+features = ["pyo3/extension-module", "math", "text", "data", "io", "image", "ml"]
 
 [tool.semantic_release]
 version_variable = [
