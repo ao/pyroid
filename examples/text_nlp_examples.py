@@ -6,17 +6,6 @@ This script demonstrates the text and NLP capabilities of pyroid.
 """
 
 import time
-import random
-import string
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import nltk
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-from nltk.tokenize import word_tokenize
 import pyroid
 
 def benchmark(func, *args, **kwargs):
@@ -27,110 +16,154 @@ def benchmark(func, *args, **kwargs):
     print(f"Time taken: {(end_time - start_time) * 1000:.2f} ms")
     return result
 
-def generate_random_text(word_count, word_length=5):
-    """Generate random text with the specified number of words."""
-    words = []
-    for _ in range(word_count):
-        word = ''.join(random.choice(string.ascii_lowercase) for _ in range(word_length))
-        words.append(word)
-    return ' '.join(words)
-
 def main():
-    print("pyroid Text and NLP Operations Examples")
-    print("=====================================")
+    print("Pyroid Text and NLP Operations Examples")
+    print("===================================")
     
-    # Example 1: Tokenization
-    print("\n1. Tokenization")
+    # Example 1: Basic text operations
+    print("\n1. Basic Text Operations")
     
-    # Generate sample texts
-    n_texts = 10000
-    texts = [generate_random_text(50) for _ in range(n_texts)]
+    # Create a test string
+    text = "Hello, World! This is a test of Pyroid's text processing capabilities."
+    print(f"Original text: {text}")
     
-    print(f"\nTokenizing {n_texts} texts:")
+    # Reverse the string
+    reversed_text = pyroid.text.reverse(text)
+    print(f"Reversed: {reversed_text}")
     
-    print("\nNLTK tokenization:")
-    nltk_result = benchmark(lambda: [word_tokenize(text) for text in texts])
+    # Convert to uppercase
+    upper = pyroid.text.to_uppercase(text)
+    print(f"Uppercase: {upper}")
     
-    print("\npyroid parallel tokenization:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_tokenize(texts, True, True))
+    # Convert to lowercase
+    lower = pyroid.text.to_lowercase(text)
+    print(f"Lowercase: {lower}")
     
-    print("\nResults (first text):")
-    print(f"NLTK: {nltk_result[0][:10]}...")
-    print(f"pyroid: {pyroid_result[0][:10]}...")
+    # Example 2: String manipulation
+    print("\n2. String Manipulation")
     
-    # Example 2: N-grams
-    print("\n2. N-grams")
+    # Split the string
+    words = pyroid.text.split(text, " ")
+    print(f"Split by space: {words}")
     
-    # Generate sample texts
-    n_texts = 5000
-    texts = [generate_random_text(100) for _ in range(n_texts)]
+    # Join the words
+    joined = pyroid.text.join(words, "-")
+    print(f"Joined with hyphens: {joined}")
     
-    print(f"\nGenerating bigrams for {n_texts} texts:")
+    # Regex replace
+    replaced = pyroid.text.regex_replace(text, r"World", "Python")
+    print(f"Regex replace 'World' with 'Python': {replaced}")
     
-    print("\nPython n-grams:")
-    def python_ngrams(texts, n):
-        results = []
-        for text in texts:
-            tokens = text.split()
-            if len(tokens) >= n:
-                ngrams = [' '.join(tokens[i:i+n]) for i in range(len(tokens)-n+1)]
-                results.append(ngrams)
-            else:
-                results.append([])
-        return results
+    # Example 3: Base64 encoding/decoding
+    print("\n3. Base64 Encoding/Decoding")
     
-    python_result = benchmark(lambda: python_ngrams(texts, 2))
+    # Encode to base64
+    encoded = pyroid.text.base64_encode(text)
+    print(f"Base64 encoded: {encoded}")
     
-    print("\npyroid parallel n-grams:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_ngrams(texts, 2, False))
+    # Decode from base64
+    decoded = pyroid.text.base64_decode(encoded)
+    print(f"Base64 decoded: {decoded}")
+    print(f"Original and decoded match: {text == decoded}")
     
-    print("\nResults (first text):")
-    print(f"Python: {python_result[0][:5]}...")
-    print(f"pyroid: {pyroid_result[0][:5]}...")
+    # Example 4: NLP operations
+    print("\n4. NLP Operations")
     
-    # Example 3: TF-IDF
-    print("\n3. TF-IDF")
+    # Tokenize the text
+    tokens = pyroid.text.tokenize(text)
+    print(f"Tokenized: {tokens}")
     
-    # Generate sample documents
-    n_docs = 1000
-    docs = [generate_random_text(100) for _ in range(n_docs)]
+    # Generate n-grams
+    ngrams = pyroid.text.ngrams(text, 2)
+    print(f"Bigrams: {ngrams}")
     
-    print(f"\nCalculating TF-IDF for {n_docs} documents:")
+    # Try stemming (may not be implemented)
+    try:
+        stemmed = pyroid.text.stem(text)
+        print(f"Stemmed: {stemmed}")
+    except Exception as e:
+        print(f"Stemming not implemented: {e}")
     
-    print("\nScikit-learn TfidfVectorizer:")
-    vectorizer = TfidfVectorizer()
-    sklearn_result = benchmark(lambda: vectorizer.fit_transform(docs))
+    # Try lemmatization (may not be implemented)
+    try:
+        lemmatized = pyroid.text.lemmatize(text)
+        print(f"Lemmatized: {lemmatized}")
+    except Exception as e:
+        print(f"Lemmatization not implemented: {e}")
     
-    print("\npyroid parallel TF-IDF:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_tfidf(docs, False))
+    # Try part-of-speech tagging (may not be implemented)
+    try:
+        pos_tags = pyroid.text.pos_tag(text)
+        print(f"POS Tags: {pos_tags}")
+    except Exception as e:
+        print(f"POS tagging not implemented: {e}")
     
-    print("\nResults (shape):")
-    print(f"Scikit-learn: {sklearn_result.shape}")
-    print(f"pyroid: (tfidf_matrix: {len(pyroid_result[0])}, vocabulary: {len(pyroid_result[1])})")
+    # Example 5: Text analysis
+    print("\n5. Text Analysis")
     
-    # Example 4: Document Similarity
-    print("\n4. Document Similarity")
+    # Try sentiment analysis (may not be implemented)
+    try:
+        positive_text = "I love this product! It's amazing and works perfectly."
+        negative_text = "This is terrible. I hate it and it doesn't work at all."
+        
+        positive_sentiment = pyroid.text.sentiment(positive_text)
+        negative_sentiment = pyroid.text.sentiment(negative_text)
+        
+        print(f"Positive text sentiment: {positive_sentiment}")
+        print(f"Negative text sentiment: {negative_sentiment}")
+    except Exception as e:
+        print(f"Sentiment analysis not implemented: {e}")
     
-    # Generate sample documents
-    n_docs = 500
-    docs = [generate_random_text(50) for _ in range(n_docs)]
+    # Try keyword extraction (may not be implemented)
+    try:
+        article = """
+        Artificial intelligence (AI) is intelligence demonstrated by machines, as opposed to natural intelligence displayed by animals including humans. 
+        AI research has been defined as the field of study of intelligent agents, which refers to any system that perceives its environment and takes actions that maximize its chance of achieving its goals.
+        The term "artificial intelligence" had previously been used to describe machines that mimic and display "human" cognitive skills that are associated with the human mind, such as "learning" and "problem-solving".
+        This definition has since been rejected by major AI researchers who now describe AI in terms of rationality and acting rationally, which does not limit how intelligence can be articulated.
+        """
+        
+        keywords = pyroid.text.extract_keywords(article, n=5)
+        print(f"Keywords: {keywords}")
+    except Exception as e:
+        print(f"Keyword extraction not implemented: {e}")
     
-    print(f"\nCalculating document similarity for {n_docs} documents:")
+    # Try text similarity (may not be implemented)
+    try:
+        text1 = "The quick brown fox jumps over the lazy dog."
+        text2 = "A fast brown fox leaps over a lazy dog."
+        
+        similarity = pyroid.text.similarity(text1, text2)
+        print(f"Text similarity: {similarity}")
+    except Exception as e:
+        print(f"Text similarity not implemented: {e}")
     
-    print("\nScikit-learn cosine similarity:")
-    def sklearn_doc_similarity(docs):
-        vectorizer = TfidfVectorizer()
-        tfidf_matrix = vectorizer.fit_transform(docs)
-        return cosine_similarity(tfidf_matrix)
+    # Example 6: Performance comparison
+    print("\n6. Performance Comparison")
     
-    sklearn_result = benchmark(lambda: sklearn_doc_similarity(docs))
+    # Create a large text for benchmarking
+    large_text = "Hello, World! " * 10000
+    print(f"Large text length: {len(large_text)}")
     
-    print("\npyroid parallel document similarity:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_document_similarity(docs, "cosine", False))
+    # Benchmark Python's built-in uppercase
+    print("\nPython built-in uppercase:")
+    python_result = benchmark(lambda: large_text.upper())
+    print(f"Result length: {len(python_result)}")
     
-    print("\nResults (shape):")
-    print(f"Scikit-learn: {sklearn_result.shape}")
-    print(f"pyroid: ({len(pyroid_result)}, {len(pyroid_result[0])})")
+    # Benchmark Pyroid's uppercase
+    print("\nPyroid uppercase:")
+    pyroid_result = benchmark(lambda: pyroid.text.to_uppercase(large_text))
+    print(f"Result length: {len(pyroid_result)}")
+    
+    # Benchmark Python's built-in split
+    print("\nPython built-in split:")
+    python_result = benchmark(lambda: large_text.split(" "))
+    print(f"Result length: {len(python_result)}")
+    
+    # Benchmark Pyroid's split
+    print("\nPyroid split:")
+    pyroid_result = benchmark(lambda: pyroid.text.split(large_text, " "))
+    print(f"Result length: {len(pyroid_result)}")
 
 if __name__ == "__main__":
     main()

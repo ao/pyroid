@@ -24,20 +24,22 @@ pip install pyroid
 ```python
 import pyroid
 
-# Parallel sum of a large list
-numbers = list(range(1_000_000))
-result = pyroid.parallel_sum(numbers)
-print(f"Sum: {result}")
+# Vector operations
+v1 = pyroid.math.Vector([1, 2, 3])
+v2 = pyroid.math.Vector([4, 5, 6])
+v3 = v1 + v2
+print(f"Vector sum: {v3}")
 
-# Parallel regex replacement
-text = "Hello world! " * 1000
-result = pyroid.parallel_regex_replace(text, r"Hello", "Hi")
-print(f"Modified text length: {len(result)}")
+# Matrix operations
+m1 = pyroid.math.Matrix([[1, 2], [3, 4]])
+m2 = pyroid.math.Matrix([[5, 6], [7, 8]])
+m3 = m1 * m2
+print(f"Matrix product: {m3}")
 
-# Parallel filter
-data = list(range(1_000_000))
-filtered = pyroid.parallel_filter(data, lambda x: x % 2 == 0)
-print(f"Filtered {len(filtered)} items")
+# Collection operations
+numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+even_numbers = pyroid.data.filter(numbers, lambda x: x % 2 == 0)
+print(f"Even numbers: {even_numbers}")
 ```
 
 For more detailed examples, see the [Getting Started Guide](./guides/getting_started.md).
@@ -48,23 +50,24 @@ Pyroid provides high-performance implementations across multiple domains:
 
 ### Math Operations
 
-Fast numerical computations that outperform Python's built-in functions and even NumPy for many operations.
+Fast numerical computations with vector and matrix operations.
 
 ```python
-# Matrix multiplication
-matrix_a = [[1, 2], [3, 4]]
-matrix_b = [[5, 6], [7, 8]]
-result = pyroid.matrix_multiply(matrix_a, matrix_b)
+# Vector operations
+v1 = pyroid.math.Vector([1, 2, 3])
+v2 = pyroid.math.Vector([4, 5, 6])
+dot_product = v1.dot(v2)
 ```
 
 ### String Operations
 
-Efficient text processing with parallel implementations of common string operations.
+Efficient text processing with common string operations.
 
 ```python
-# Process multiple strings in parallel
-texts = ["Hello world!", "This is a test.", "Pyroid is fast!"] * 1000
-cleaned = pyroid.parallel_text_cleanup(texts)
+# Basic string operations
+text = "Hello, world!"
+reversed_text = pyroid.text.reverse(text)
+uppercase = pyroid.text.to_uppercase(text)
 ```
 
 ### Data Operations
@@ -72,33 +75,32 @@ cleaned = pyroid.parallel_text_cleanup(texts)
 High-performance collection manipulation functions.
 
 ```python
-# Parallel sort
-data = [5, 3, 1, 4, 2] * 1000000
-sorted_data = pyroid.parallel_sort(data, None, False)
+# Filter, map, reduce operations
+numbers = [1, 2, 3, 4, 5]
+squared = pyroid.data.map(numbers, lambda x: x * x)
 ```
 
 ### DataFrame Operations
 
-Fast pandas-like operations for data manipulation.
+Fast data manipulation for structured data.
 
 ```python
-# Group by and aggregate
-df = {
-    'category': ['A', 'B', 'A', 'B', 'C'] * 200000,
-    'value': [10, 20, 15, 25, 30] * 200000
-}
-agg_dict = {'value': 'mean'}
-result = pyroid.dataframe_groupby_aggregate(df, ['category'], agg_dict)
+# Create a DataFrame
+df = pyroid.data.DataFrame({
+    'id': [1, 2, 3, 4, 5],
+    'name': ['Alice', 'Bob', 'Charlie', 'David', 'Eve'],
+    'age': [25, 30, 35, 40, 45]
+})
 ```
 
 ### Machine Learning Operations
 
-Accelerated machine learning primitives.
+Basic machine learning algorithms implemented in Rust.
 
 ```python
-# Calculate distance matrix
-points = [[1, 2], [3, 4], [5, 6]] * 1000
-distances = pyroid.parallel_distance_matrix(points, "euclidean")
+# K-means clustering
+data = [[1.0, 2.0], [1.5, 1.8], [5.0, 8.0], [8.0, 8.0], [1.0, 0.6], [9.0, 11.0]]
+kmeans_result = pyroid.ml.basic.kmeans(data, k=2)
 ```
 
 ### Text and NLP Operations
@@ -106,9 +108,10 @@ distances = pyroid.parallel_distance_matrix(points, "euclidean")
 Efficient text analysis tools.
 
 ```python
-# Calculate document similarity
-docs = ["This is the first document", "This document is the second document"]
-similarity_matrix = pyroid.parallel_document_similarity(docs, "cosine")
+# Tokenization and n-grams
+text = "Hello, World!"
+tokens = pyroid.text.tokenize(text)
+ngrams = pyroid.text.ngrams(text, 2)
 ```
 
 ### Async Operations
@@ -119,63 +122,31 @@ Non-blocking I/O operations for improved throughput.
 import asyncio
 
 async def main():
-    client = pyroid.AsyncClient()
-    urls = ["https://example.com", "https://google.com", "https://github.com"]
-    responses = await client.fetch_many(urls, concurrency=3)
+    content = await pyroid.io.read_file_async("example.txt")
+    print(f"File content: {content}")
 
 asyncio.run(main())
 ```
 
 ### File I/O Operations
 
-Parallel file processing for improved throughput.
+Efficient file operations.
 
 ```python
-# Read multiple CSV files in parallel
-files = ["data1.csv", "data2.csv", "data3.csv"]
-schema = {"id": "int", "value": "float", "flag": "bool"}
-data = pyroid.parallel_read_csv(files, schema)
+# Read and write files
+content = pyroid.io.read_file("example.txt")
+pyroid.io.write_file("output.txt", "Hello, world!")
 ```
 
 ### Image Processing Operations
 
-Efficient image manipulation operations.
+Basic image manipulation operations.
 
 ```python
-# Resize images in parallel
-images = [image1, image2, image3]  # image data as bytes
-resized = pyroid.parallel_resize(images, (800, 600), "lanczos3")
+# Create and manipulate images
+img = pyroid.image.basic.create_image(100, 100, 3)
+grayscale_img = img.to_grayscale()
 ```
-
-## 📊 Performance
-
-Pyroid significantly outperforms pure Python implementations:
-
-| Operation | Pure Python | Pyroid | Speedup |
-|-----------|-------------|--------|---------|
-| Sum 10M numbers | 1000ms | 50ms | 20x |
-| Regex on 10MB text | 2500ms | 200ms | 12.5x |
-| Sort 10M items | 3500ms | 300ms | 11.7x |
-| 100 HTTP requests | 5000ms | 500ms | 10x |
-| DataFrame groupby | 3000ms | 200ms | 15x |
-| TF-IDF calculation | 4000ms | 300ms | 13.3x |
-| Image batch resize | 2000ms | 150ms | 13.3x |
-
-For detailed benchmarks, see the [Benchmarks](../benchmarks/) directory.
-
-## 🧩 How It Works
-
-Pyroid achieves its performance advantages through several key mechanisms:
-
-1. **Rust Implementation**: Core operations are implemented in Rust, a systems programming language that offers performance comparable to C/C++ with memory safety guarantees.
-
-2. **Parallel Processing**: Pyroid uses Rayon, a data parallelism library for Rust, to automatically parallelize operations across multiple CPU cores.
-
-3. **Efficient Memory Management**: Rust's ownership model allows for efficient memory management without the overhead of garbage collection.
-
-4. **SIMD Instructions**: Where applicable, Pyroid leverages SIMD (Single Instruction, Multiple Data) instructions for vectorized operations.
-
-5. **Optimized Algorithms**: Pyroid implements optimized versions of common algorithms, taking advantage of Rust's performance characteristics.
 
 ## 🔧 Requirements
 
@@ -184,7 +155,7 @@ Pyroid achieves its performance advantages through several key mechanisms:
 
 ## 📄 License
 
-Pyroid is licensed under the MIT License. See the [LICENSE](../LICENSE) file for details.
+MIT
 
 ## 👥 Contributing
 
@@ -195,12 +166,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
-## 🤝 Getting Help
-
-If you need help with Pyroid, you can:
-
-- Check the [FAQ](./guides/faq.md) for answers to common questions.
-- Search for similar issues on the [GitHub issue tracker](https://github.com/ao/pyroid/issues).
-- Ask a question on [Stack Overflow](https://stackoverflow.com/questions/tagged/pyroid) with the `pyroid` tag.
-- Join the community discussion on [Discord](https://discord.gg/pyroid).

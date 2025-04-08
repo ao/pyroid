@@ -6,8 +6,6 @@ This script demonstrates the DataFrame capabilities of pyroid.
 """
 
 import time
-import random
-import pandas as pd
 import pyroid
 
 def benchmark(func, *args, **kwargs):
@@ -19,136 +17,124 @@ def benchmark(func, *args, **kwargs):
     return result
 
 def main():
-    print("pyroid DataFrame Operations Examples")
-    print("===================================")
+    print("Pyroid DataFrame Operations Examples")
+    print("=================================")
     
-    # Example 1: DataFrame Apply
-    print("\n1. DataFrame Apply")
+    # Example 1: Creating a DataFrame
+    print("\n1. Creating a DataFrame")
     
-    # Create a test DataFrame
-    n_rows = 1_000_000
-    df = {
-        'A': [random.random() for _ in range(n_rows)],
-        'B': [random.random() for _ in range(n_rows)],
-        'C': [random.random() for _ in range(n_rows)]
-    }
+    # Create a DataFrame
+    df = pyroid.data.DataFrame({
+        "id": [1, 2, 3, 4, 5],
+        "name": ["Alice", "Bob", "Charlie", "David", "Eve"],
+        "age": [25, 30, 35, 40, 45],
+        "salary": [50000, 60000, 70000, 80000, 90000]
+    })
     
-    # Convert to pandas DataFrame for comparison
-    pandas_df = pd.DataFrame(df)
+    print(f"DataFrame created with {len(df.get('id'))} rows")
+    print(f"Columns: {list(df.keys())}")
     
-    print("\nApplying a function to each column:")
+    # Example 2: Accessing DataFrame data
+    print("\n2. Accessing DataFrame Data")
     
-    # Define a function to apply
-    def square(x):
-        return [val * val for val in x]
+    # Access a column
+    ids = df.get("id")
+    names = df.get("name")
     
-    print("\nPandas apply:")
-    pandas_result = benchmark(lambda: pandas_df.apply(lambda x: x ** 2))
+    print(f"IDs: {ids}")
+    print(f"Names: {names}")
     
-    print("\npyroid parallel apply:")
-    pyroid_result = benchmark(lambda: pyroid.dataframe_apply(df, square, 0))
+    # Try to access a row (may not be implemented)
+    try:
+        row = df.get_row(0)
+        print(f"First row: {row}")
+    except Exception as e:
+        print(f"Row access not implemented: {e}")
     
-    print("\nResults (first 5 rows):")
-    print(f"Pandas:\n{pandas_result.head()}")
-    print(f"pyroid: {dict((k, v[:5]) for k, v in pyroid_result.items())}")
+    # Example 3: Applying functions to DataFrame
+    print("\n3. Applying Functions to DataFrame")
     
-    # Example 2: GroupBy Aggregate
-    print("\n2. GroupBy Aggregate")
+    # Apply a function to each column
+    result = pyroid.data.apply(df, lambda x: x * 2, axis=0)
     
-    # Create a test DataFrame with groups
-    n_rows = 1_000_000
-    categories = ['A', 'B', 'C', 'D', 'E']
-    df = {
-        'category': [random.choice(categories) for _ in range(n_rows)],
-        'value1': [random.random() * 100 for _ in range(n_rows)],
-        'value2': [random.random() * 100 for _ in range(n_rows)]
-    }
+    print("Original values:")
+    print(f"IDs: {df.get('id')}")
+    print(f"Ages: {df.get('age')}")
     
-    # Convert to pandas DataFrame for comparison
-    pandas_df = pd.DataFrame(df)
+    print("\nAfter applying (x * 2):")
+    print(f"IDs: {result.get('id')}")
+    print(f"Ages: {result.get('age')}")
     
-    print("\nGrouping by category and calculating aggregates:")
+    # Example 4: Filtering DataFrame
+    print("\n4. Filtering DataFrame")
     
-    print("\nPandas groupby:")
-    pandas_result = benchmark(lambda: pandas_df.groupby('category').agg({
-        'value1': 'mean',
-        'value2': 'sum'
-    }))
+    # Try to filter rows (may not be implemented)
+    try:
+        filtered = pyroid.data.filter(df, lambda row: row["age"] > 30)
+        print(f"Filtered DataFrame (age > 30): {len(filtered.get('id'))} rows")
+        print(f"Ages: {filtered.get('age')}")
+    except Exception as e:
+        print(f"DataFrame filtering not implemented: {e}")
+        
+        # Manual filtering as a workaround
+        indices = [i for i, age in enumerate(df.get("age")) if age > 30]
+        filtered_ids = [df.get("id")[i] for i in indices]
+        filtered_names = [df.get("name")[i] for i in indices]
+        filtered_ages = [df.get("age")[i] for i in indices]
+        
+        print("Manual filtering (age > 30):")
+        print(f"IDs: {filtered_ids}")
+        print(f"Names: {filtered_names}")
+        print(f"Ages: {filtered_ages}")
     
-    print("\npyroid parallel groupby:")
-    agg_dict = {'value1': 'mean', 'value2': 'sum'}
-    pyroid_result = benchmark(lambda: pyroid.dataframe_groupby_aggregate(df, ['category'], agg_dict))
+    # Example 5: Group by and aggregate
+    print("\n5. Group By and Aggregate")
     
-    print("\nResults:")
-    print(f"Pandas:\n{pandas_result}")
-    print(f"pyroid: {pyroid_result}")
+    # Create a DataFrame with duplicate age values
+    df2 = pyroid.data.DataFrame({
+        "id": [1, 2, 3, 4, 5, 6],
+        "name": ["Alice", "Bob", "Charlie", "David", "Eve", "Frank"],
+        "age": [25, 30, 25, 30, 35, 35],
+        "department": ["HR", "IT", "HR", "IT", "Finance", "Finance"]
+    })
     
-    # Example 3: Transform
-    print("\n3. Parallel Transform")
+    print(f"DataFrame created with {len(df2.get('id'))} rows")
     
-    # Create a test DataFrame
-    n_rows = 1_000_000
-    df = {
-        'A': [random.random() * 100 for _ in range(n_rows)],
-        'B': [random.random() * 100 for _ in range(n_rows)],
-        'C': [random.random() * 100 for _ in range(n_rows)]
-    }
+    # Group by age and count
+    try:
+        grouped = pyroid.data.groupby_aggregate(df2, "age", {"name": "count"})
+        print("Grouped by age:")
+        print(f"Ages: {grouped.get('age')}")
+        print(f"Counts: {grouped.get('name_count')}")
+    except Exception as e:
+        print(f"Group by operation not fully implemented: {e}")
+        
+        # Manual groupby as a workaround
+        ages = df2.get("age")
+        unique_ages = list(set(ages))
+        counts = [ages.count(age) for age in unique_ages]
+        
+        print("Manual groupby by age:")
+        print(f"Ages: {unique_ages}")
+        print(f"Counts: {counts}")
     
-    # Convert to pandas DataFrame for comparison
-    pandas_df = pd.DataFrame(df)
+    # Example 6: Performance comparison
+    print("\n6. Performance Comparison")
     
-    print("\nApplying multiple transformations:")
+    # Create a larger DataFrame for benchmarking
+    large_df = {}
+    n_rows = 10000
     
-    print("\nPandas transform:")
-    pandas_result = benchmark(lambda: pandas_df.assign(
-        A_log=lambda x: x['A'].apply(lambda y: y if y <= 0 else np.log(y)),
-        B_sqrt=lambda x: x['B'].apply(lambda y: y ** 0.5),
-        C_round=lambda x: x['C'].round(2)
-    ))
+    for i in range(10):
+        large_df[f"col_{i}"] = list(range(n_rows))
     
-    print("\npyroid parallel transform:")
-    transformations = [
-        ('A', 'log', None),
-        ('B', 'sqrt', None),
-        ('C', 'round', 2)
-    ]
-    pyroid_result = benchmark(lambda: pyroid.parallel_transform(df, transformations))
+    df_large = pyroid.data.DataFrame(large_df)
+    print(f"Large DataFrame created with {n_rows} rows and {len(large_df)} columns")
     
-    print("\nResults (first 5 rows):")
-    print(f"Pandas:\n{pandas_result.head()}")
-    print(f"pyroid: {dict((k, v[:5]) for k, v in pyroid_result.items())}")
-    
-    # Example 4: Join
-    print("\n4. Parallel Join")
-    
-    # Create test DataFrames
-    n_rows = 500_000
-    left_df = {
-        'id': list(range(n_rows)),
-        'value_left': [random.random() * 100 for _ in range(n_rows)]
-    }
-    
-    n_rows_right = 300_000
-    right_df = {
-        'id': [random.randint(0, n_rows-1) for _ in range(n_rows_right)],
-        'value_right': [random.random() * 100 for _ in range(n_rows_right)]
-    }
-    
-    # Convert to pandas DataFrames for comparison
-    pandas_left = pd.DataFrame(left_df)
-    pandas_right = pd.DataFrame(right_df)
-    
-    print("\nJoining two DataFrames:")
-    
-    print("\nPandas join:")
-    pandas_result = benchmark(lambda: pandas_left.merge(pandas_right, on='id', how='inner'))
-    
-    print("\npyroid parallel join:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_join(left_df, right_df, 'id', 'inner'))
-    
-    print("\nResults (shape):")
-    print(f"Pandas: {pandas_result.shape}")
-    print(f"pyroid: ({len(next(iter(pyroid_result.values())))}, {len(pyroid_result)})")
+    # Benchmark apply operation
+    print("\nBenchmarking apply operation (multiply by 2):")
+    result = benchmark(lambda: pyroid.data.apply(df_large, lambda x: x * 2, axis=0))
+    print(f"Result has {len(result.get('col_0'))} rows")
 
 if __name__ == "__main__":
     main()
