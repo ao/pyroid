@@ -32,7 +32,7 @@ classifiers = [
 
 [tool.maturin]
 python-source = "python"
-features = ["pyo3/extension-module"]
+maturin_features = ["pyo3/extension-module"]
 
 # Feature flags configuration
 # By default, all features are enabled
