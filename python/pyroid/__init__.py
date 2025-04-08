@@ -25,17 +25,14 @@ Examples:
 """
 
 # Import core functionality
-from .core import (
-    Config,
-    ConfigContext,
-    SharedData,
-    PyroidError,
-    InputError,
-    ComputationError,
-    MemoryError,
-    ConversionError,
-    IoError,
-)
+try:
+    # Try to import directly from the pyroid module
+    from .pyroid import Config, ConfigContext, SharedData
+    from .pyroid import PyroidError, InputError, ComputationError, MemoryError, ConversionError, IoError
+except ImportError:
+    # Fallback to importing from the core module
+    from .core import Config, ConfigContext, SharedData
+    from .core import PyroidError, InputError, ComputationError, MemoryError, ConversionError, IoError
 
 # Import submodules
 from . import core
@@ -64,7 +61,7 @@ def config(**kwargs):
     return ConfigContext(Config(kwargs))
 
 # Version information
-__version__ = "0.2.6"
+__version__ = "0.2.5"
 
 __all__ = [
     # Core classes
