@@ -3,7 +3,7 @@
 //! This module provides high-performance file operations.
 
 use pyo3::prelude::*;
-use pyo3::types::{PyList, PyDict, PyBytes};
+use pyo3::types::{PyDict, PyBytes};
 use rayon::prelude::*;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};

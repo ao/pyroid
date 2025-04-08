@@ -1,389 +1,377 @@
 # Machine Learning Operations
 
-The Machine Learning operations module provides basic machine learning algorithms implemented in pure Rust without external dependencies. These operations are designed to be simple, reliable, and easy to use.
+This document provides detailed information about the machine learning operations available in Pyroid.
 
-## Overview
-
-The Machine Learning operations module provides the following key functions:
-
-- `kmeans`: K-means clustering algorithm
-- `linear_regression`: Simple linear regression
-- `normalize`: Data normalization
-- `distance_matrix`: Calculate distance matrix between points
-
-## API Reference
-
-### kmeans
-
-Perform K-means clustering on a dataset.
+## K-means Clustering
 
 ```python
-pyroid.ml.basic.kmeans(data, k, max_iterations=None)
+pyroid.ml.basic.kmeans(data, k, max_iterations=100, tolerance=1e-4)
 ```
 
-#### Parameters
+Performs k-means clustering on the input data.
 
-- `data`: A list of points (each point is a list of coordinates)
-- `k`: Number of clusters
-- `max_iterations`: Maximum number of iterations (default: 100)
+**Parameters:**
+- `data` (list): A list of data points, where each data point is a list of features.
+- `k` (int): The number of clusters to form.
+- `max_iterations` (int, optional): The maximum number of iterations. Default is 100.
+- `tolerance` (float, optional): The convergence tolerance. Default is 1e-4.
 
-#### Returns
+**Returns:**
+- A dictionary containing:
+  - `centroids`: A list of cluster centroids.
+  - `clusters`: A list of cluster assignments for each data point.
+  - `iterations`: The number of iterations performed.
 
-A dictionary containing:
-- `centroids`: List of cluster centroids
-- `clusters`: List of cluster assignments for each point
-- `iterations`: Number of iterations performed
-
-#### Example
-
+**Example:**
 ```python
 import pyroid
-import matplotlib.pyplot as plt
-import numpy as np
 
-# Generate some sample data
-np.random.seed(42)
-data = []
-# Cluster 1
-for _ in range(50):
-    data.append([np.random.normal(0, 1), np.random.normal(0, 1)])
-# Cluster 2
-for _ in range(50):
-    data.append([np.random.normal(5, 1), np.random.normal(5, 1)])
-# Cluster 3
-for _ in range(50):
-    data.append([np.random.normal(0, 1), np.random.normal(5, 1)])
+# Sample data
+data = [
+    [1.0, 2.0], [1.5, 1.8], [5.0, 8.0],
+    [8.0, 8.0], [1.0, 0.6], [9.0, 11.0]
+]
 
-# Perform K-means clustering
-result = pyroid.ml.basic.kmeans(data, k=3)
+# Perform k-means clustering
+result = pyroid.ml.basic.kmeans(data, k=2)
 
-# Extract results
-centroids = result['centroids']
-clusters = result['clusters']
-iterations = result['iterations']
-
-print(f"K-means converged in {iterations} iterations")
-print(f"Centroids: {centroids}")
-
-# Plot the results
-data_np = np.array(data)
-plt.figure(figsize=(10, 6))
-plt.scatter(data_np[:, 0], data_np[:, 1], c=clusters, cmap='viridis')
-centroids_np = np.array(centroids)
-plt.scatter(centroids_np[:, 0], centroids_np[:, 1], c='red', marker='X', s=100)
-plt.title('K-means Clustering')
-plt.xlabel('Feature 1')
-plt.ylabel('Feature 2')
-plt.show()
+print(f"Centroids: {result['centroids']}")
+print(f"Clusters: {result['clusters']}")
+print(f"Iterations: {result['iterations']}")
 ```
 
-### linear_regression
-
-Perform simple linear regression.
+## Linear Regression
 
 ```python
-pyroid.ml.basic.linear_regression(x, y)
+pyroid.ml.basic.linear_regression(X, y)
 ```
 
-#### Parameters
+Performs linear regression on the input data.
 
-- `x`: List of independent variable values
-- `y`: List of dependent variable values
+**Parameters:**
+- `X` (list): A list of feature vectors, where each feature vector is a list of features. For simple linear regression, each feature vector can be a single value.
+- `y` (list): A list of target values.
 
-#### Returns
+**Returns:**
+- A dictionary containing:
+  - `coefficients`: The coefficients of the linear regression model.
+  - `intercept`: The intercept of the linear regression model.
+  - `r_squared`: The coefficient of determination (R²).
 
-A dictionary containing:
-- `slope`: Slope of the regression line
-- `intercept`: Y-intercept of the regression line
-- `r_squared`: R-squared value (coefficient of determination)
-
-#### Example
-
+**Example:**
 ```python
 import pyroid
-import matplotlib.pyplot as plt
-import numpy as np
 
-# Generate some sample data
-np.random.seed(42)
-x = list(range(1, 101))
-y = [2 * xi + 5 + np.random.normal(0, 10) for xi in x]
+# Sample data for multiple linear regression
+X = [[1, 1], [1, 2], [2, 2], [2, 3]]
+y = [6, 8, 9, 11]
 
 # Perform linear regression
-result = pyroid.ml.basic.linear_regression(x, y)
+result = pyroid.ml.basic.linear_regression(X, y)
 
-# Extract results
-slope = result['slope']
-intercept = result['intercept']
-r_squared = result['r_squared']
-
-print(f"Linear regression: y = {slope:.4f}x + {intercept:.4f}")
-print(f"R-squared: {r_squared:.4f}")
-
-# Plot the results
-plt.figure(figsize=(10, 6))
-plt.scatter(x, y)
-plt.plot(x, [slope * xi + intercept for xi in x], 'r-')
-plt.title(f'Linear Regression (y = {slope:.4f}x + {intercept:.4f}, R² = {r_squared:.4f})')
-plt.xlabel('X')
-plt.ylabel('Y')
-plt.show()
+print(f"Coefficients: {result['coefficients']}")
+print(f"Intercept: {result['intercept']}")
+print(f"R-squared: {result['r_squared']}")
 ```
 
-### normalize
-
-Normalize a vector of values using different methods.
+## Data Normalization
 
 ```python
-pyroid.ml.basic.normalize(values, method=None)
+pyroid.ml.basic.normalize(data, method="min-max")
 ```
 
-#### Parameters
+Normalizes the input data using the specified method.
 
-- `values`: List of values to normalize
-- `method`: Normalization method (default: 'minmax')
-  - Supported methods: 'minmax', 'zscore'
+**Parameters:**
+- `data` (list): A list of data points or a list of feature vectors.
+- `method` (str, optional): The normalization method. One of "min-max", "z-score". Default is "min-max".
 
-#### Returns
+**Returns:**
+- A list of normalized data points.
 
-A list of normalized values.
-
-#### Example
-
+**Example:**
 ```python
 import pyroid
-import matplotlib.pyplot as plt
-import numpy as np
 
-# Generate some sample data
-np.random.seed(42)
-values = [np.random.normal(50, 10) for _ in range(100)]
+# Sample data
+data = [10.0, 20.0, 30.0, 40.0, 50.0]
 
-# Normalize using different methods
-minmax_normalized = pyroid.ml.basic.normalize(values, method='minmax')
-zscore_normalized = pyroid.ml.basic.normalize(values, method='zscore')
+# Normalize using min-max scaling
+min_max_normalized = pyroid.ml.basic.normalize(data, method="min-max")
+print(f"Min-Max Normalized: {min_max_normalized}")
 
-# Plot the results
-plt.figure(figsize=(12, 6))
-
-plt.subplot(1, 3, 1)
-plt.hist(values, bins=20)
-plt.title('Original Data')
-plt.xlabel('Value')
-plt.ylabel('Frequency')
-
-plt.subplot(1, 3, 2)
-plt.hist(minmax_normalized, bins=20)
-plt.title('Min-Max Normalization')
-plt.xlabel('Value')
-
-plt.subplot(1, 3, 3)
-plt.hist(zscore_normalized, bins=20)
-plt.title('Z-Score Normalization')
-plt.xlabel('Value')
-
-plt.tight_layout()
-plt.show()
-
-# Print statistics
-print(f"Original data - Min: {min(values):.2f}, Max: {max(values):.2f}, Mean: {sum(values)/len(values):.2f}")
-print(f"Min-Max normalized - Min: {min(minmax_normalized):.2f}, Max: {max(minmax_normalized):.2f}")
-print(f"Z-Score normalized - Mean: {sum(zscore_normalized)/len(zscore_normalized):.2f}, Std: {np.std(zscore_normalized):.2f}")
+# Normalize using z-score scaling
+z_score_normalized = pyroid.ml.basic.normalize(data, method="z-score")
+print(f"Z-Score Normalized: {z_score_normalized}")
 ```
 
-#### Normalization Methods
-
-1. **Min-Max Normalization ('minmax')**
-
-   Scales values to a range between 0 and 1:
-   
-   ```
-   z = (x - min(x)) / (max(x) - min(x))
-   ```
-
-2. **Z-Score Normalization ('zscore')**
-
-   Standardizes values to have mean 0 and standard deviation 1:
-   
-   ```
-   z = (x - mean(x)) / std(x)
-   ```
-
-### distance_matrix
-
-Calculate distance matrix between points.
+## Distance Matrix
 
 ```python
-pyroid.ml.basic.distance_matrix(points, metric=None)
+pyroid.ml.basic.distance_matrix(data, metric="euclidean")
 ```
 
-#### Parameters
+Computes the distance matrix for the input data using the specified metric.
 
-- `points`: A list of points (each point is a list of coordinates)
-- `metric`: Distance metric to use (default: 'euclidean')
-  - Supported metrics: 'euclidean', 'manhattan'
+**Parameters:**
+- `data` (list): A list of data points, where each data point is a list of features.
+- `metric` (str, optional): The distance metric. One of "euclidean", "manhattan", "cosine". Default is "euclidean".
 
-#### Returns
+**Returns:**
+- A 2D list representing the distance matrix.
 
-A 2D list representing the distance matrix.
-
-#### Example
-
+**Example:**
 ```python
 import pyroid
-import matplotlib.pyplot as plt
-import numpy as np
-import seaborn as sns
 
-# Generate some sample data
-np.random.seed(42)
-points = []
-for _ in range(10):
-    points.append([np.random.random() * 10, np.random.random() * 10])
+# Sample data
+data = [
+    [1.0, 2.0],
+    [3.0, 4.0],
+    [5.0, 6.0]
+]
 
-# Calculate distance matrices using different metrics
-euclidean_distances = pyroid.ml.basic.distance_matrix(points, metric='euclidean')
-manhattan_distances = pyroid.ml.basic.distance_matrix(points, metric='manhattan')
+# Compute Euclidean distance matrix
+euclidean_distances = pyroid.ml.basic.distance_matrix(data, metric="euclidean")
+print("Euclidean Distance Matrix:")
+for row in euclidean_distances:
+    print(row)
 
-# Plot the results
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-sns.heatmap(euclidean_distances, annot=True, fmt=".2f", cmap="YlGnBu", ax=axes[0])
-axes[0].set_title('Euclidean Distance Matrix')
-
-sns.heatmap(manhattan_distances, annot=True, fmt=".2f", cmap="YlGnBu", ax=axes[1])
-axes[1].set_title('Manhattan Distance Matrix')
-
-plt.tight_layout()
-plt.show()
+# Compute Manhattan distance matrix
+manhattan_distances = pyroid.ml.basic.distance_matrix(data, metric="manhattan")
+print("\nManhattan Distance Matrix:")
+for row in manhattan_distances:
+    print(row)
 ```
 
-## Performance Considerations
-
-- The current implementation is focused on simplicity and reliability rather than maximum performance.
-- Operations are performed in pure Rust without external dependencies, which provides good baseline performance.
-- For very large datasets, memory usage can be a concern.
-- The implementation does not currently support parallel processing.
-
-## Best Practices
-
-1. **Choose the appropriate distance metric**: Different distance metrics are suitable for different types of data. For example, 'euclidean' is suitable for continuous data, while 'manhattan' may be better for sparse data.
-
-2. **Normalize data before clustering**: K-means and other distance-based algorithms are sensitive to the scale of the features. Consider using `normalize` before applying clustering.
-
-3. **Set appropriate number of clusters**: For K-means, choosing the right number of clusters is important. Consider using techniques like the elbow method or silhouette analysis.
-
-4. **Consider convergence criteria**: K-means may not always converge to the global optimum. Try running the algorithm multiple times with different initializations.
-
-## Limitations
-
-1. **Basic algorithms only**: The current implementation provides only basic machine learning algorithms and does not include advanced features like regularization, kernel methods, or deep learning.
-
-2. **Limited metrics**: Only a few distance metrics are supported.
-
-3. **No parallel processing**: The current implementation does not support parallel processing.
-
-4. **Memory usage**: For very large datasets, memory usage can be a concern.
-
-## Examples
-
-### Example 1: Finding Optimal Number of Clusters
+## Principal Component Analysis (PCA)
 
 ```python
-import pyroid
-import matplotlib.pyplot as plt
-import numpy as np
-
-# Generate some sample data
-np.random.seed(42)
-data = []
-# Cluster 1
-for _ in range(50):
-    data.append([np.random.normal(0, 1), np.random.normal(0, 1)])
-# Cluster 2
-for _ in range(50):
-    data.append([np.random.normal(5, 1), np.random.normal(5, 1)])
-# Cluster 3
-for _ in range(50):
-    data.append([np.random.normal(0, 1), np.random.normal(5, 1)])
-
-# Try different numbers of clusters
-inertias = []
-for k in range(1, 11):
-    result = pyroid.ml.basic.kmeans(data, k=k)
-    
-    # Calculate inertia (sum of squared distances to nearest centroid)
-    inertia = 0
-    centroids = result['centroids']
-    clusters = result['clusters']
-    
-    for i, point in enumerate(data):
-        centroid = centroids[clusters[i]]
-        # Calculate squared distance
-        dist_sq = sum((point[j] - centroid[j])**2 for j in range(len(point)))
-        inertia += dist_sq
-    
-    inertias.append(inertia)
-
-# Plot the elbow curve
-plt.figure(figsize=(10, 6))
-plt.plot(range(1, 11), inertias, 'bo-')
-plt.xlabel('Number of Clusters (k)')
-plt.ylabel('Inertia')
-plt.title('Elbow Method for Optimal k')
-plt.grid(True)
-plt.show()
+pyroid.ml.basic.pca(data, n_components=None)
 ```
 
-### Example 2: Predicting with Linear Regression
+Performs Principal Component Analysis (PCA) on the input data.
 
+**Parameters:**
+- `data` (list): A list of data points, where each data point is a list of features.
+- `n_components` (int, optional): The number of components to keep. If None, all components are kept. Default is None.
+
+**Returns:**
+- A dictionary containing:
+  - `components`: The principal components.
+  - `explained_variance`: The explained variance of each component.
+  - `transformed_data`: The data transformed into the new space.
+
+**Example:**
 ```python
 import pyroid
-import matplotlib.pyplot as plt
-import numpy as np
 
-# Generate training data
-np.random.seed(42)
-x_train = list(range(1, 101))
-y_train = [3 * xi + 2 + np.random.normal(0, 5) for xi in x_train]
+# Sample data
+data = [
+    [1.0, 2.0, 3.0],
+    [4.0, 5.0, 6.0],
+    [7.0, 8.0, 9.0],
+    [10.0, 11.0, 12.0]
+]
 
-# Perform linear regression
-result = pyroid.ml.basic.linear_regression(x_train, y_train)
-slope = result['slope']
-intercept = result['intercept']
-r_squared = result['r_squared']
+# Perform PCA
+result = pyroid.ml.basic.pca(data, n_components=2)
 
-# Generate test data
-x_test = list(range(101, 121))
-y_test = [3 * xi + 2 + np.random.normal(0, 5) for xi in x_test]
+print(f"Components: {result['components']}")
+print(f"Explained Variance: {result['explained_variance']}")
+print(f"Transformed Data: {result['transformed_data']}")
+```
+
+## K-Nearest Neighbors
+
+```python
+pyroid.ml.basic.knn_classify(train_data, train_labels, test_data, k=3, metric="euclidean")
+```
+
+Performs k-nearest neighbors classification.
+
+**Parameters:**
+- `train_data` (list): A list of training data points, where each data point is a list of features.
+- `train_labels` (list): A list of labels for the training data.
+- `test_data` (list): A list of test data points to classify.
+- `k` (int, optional): The number of neighbors to consider. Default is 3.
+- `metric` (str, optional): The distance metric. One of "euclidean", "manhattan", "cosine". Default is "euclidean".
+
+**Returns:**
+- A list of predicted labels for the test data.
+
+**Example:**
+```python
+import pyroid
+
+# Sample data
+train_data = [
+    [1.0, 2.0], [2.0, 3.0], [3.0, 4.0],
+    [5.0, 6.0], [6.0, 7.0], [7.0, 8.0]
+]
+train_labels = [0, 0, 0, 1, 1, 1]
+test_data = [
+    [1.5, 2.5],
+    [5.5, 6.5]
+]
+
+# Perform KNN classification
+predictions = pyroid.ml.basic.knn_classify(train_data, train_labels, test_data, k=3)
+print(f"Predictions: {predictions}")
+```
+
+## Decision Tree
+
+```python
+pyroid.ml.basic.decision_tree(train_data, train_labels, max_depth=None)
+```
+
+Trains a decision tree classifier.
+
+**Parameters:**
+- `train_data` (list): A list of training data points, where each data point is a list of features.
+- `train_labels` (list): A list of labels for the training data.
+- `max_depth` (int, optional): The maximum depth of the tree. If None, the tree is grown until all leaves are pure. Default is None.
+
+**Returns:**
+- A decision tree model that can be used for prediction.
+
+**Example:**
+```python
+import pyroid
+
+# Sample data
+train_data = [
+    [1.0, 2.0], [2.0, 3.0], [3.0, 4.0],
+    [5.0, 6.0], [6.0, 7.0], [7.0, 8.0]
+]
+train_labels = [0, 0, 0, 1, 1, 1]
+test_data = [
+    [1.5, 2.5],
+    [5.5, 6.5]
+]
+
+# Train a decision tree
+tree = pyroid.ml.basic.decision_tree(train_data, train_labels, max_depth=3)
 
 # Make predictions
-y_pred = [slope * xi + intercept for xi in x_test]
+predictions = tree.predict(test_data)
+print(f"Predictions: {predictions}")
+```
 
-# Calculate mean squared error
-mse = sum((y_test[i] - y_pred[i])**2 for i in range(len(y_test))) / len(y_test)
-print(f"Mean Squared Error on test data: {mse:.2f}")
+## Naive Bayes
 
-# Plot the results
-plt.figure(figsize=(12, 6))
+```python
+pyroid.ml.basic.naive_bayes(train_data, train_labels)
+```
 
-# Training data and regression line
-plt.subplot(1, 2, 1)
-plt.scatter(x_train, y_train, alpha=0.5, label='Training Data')
-plt.plot(x_train, [slope * xi + intercept for xi in x_train], 'r-', label=f'Regression Line (y = {slope:.2f}x + {intercept:.2f})')
-plt.title(f'Linear Regression (R² = {r_squared:.4f})')
-plt.xlabel('X')
-plt.ylabel('Y')
-plt.legend()
+Trains a Gaussian Naive Bayes classifier.
 
-# Test data and predictions
-plt.subplot(1, 2, 2)
-plt.scatter(x_test, y_test, alpha=0.5, label='Test Data')
-plt.scatter(x_test, y_pred, color='red', marker='x', label='Predictions')
-plt.title(f'Predictions on Test Data (MSE = {mse:.2f})')
-plt.xlabel('X')
-plt.ylabel('Y')
-plt.legend()
+**Parameters:**
+- `train_data` (list): A list of training data points, where each data point is a list of features.
+- `train_labels` (list): A list of labels for the training data.
 
-plt.tight_layout()
-plt.show()
+**Returns:**
+- A Naive Bayes model that can be used for prediction.
+
+**Example:**
+```python
+import pyroid
+
+# Sample data
+train_data = [
+    [1.0, 2.0], [2.0, 3.0], [3.0, 4.0],
+    [5.0, 6.0], [6.0, 7.0], [7.0, 8.0]
+]
+train_labels = [0, 0, 0, 1, 1, 1]
+test_data = [
+    [1.5, 2.5],
+    [5.5, 6.5]
+]
+
+# Train a Naive Bayes classifier
+nb = pyroid.ml.basic.naive_bayes(train_data, train_labels)
+
+# Make predictions
+predictions = nb.predict(test_data)
+print(f"Predictions: {predictions}")
+```
+
+## Support Vector Machine (SVM)
+
+```python
+pyroid.ml.basic.svm(train_data, train_labels, kernel="linear", C=1.0)
+```
+
+Trains a Support Vector Machine classifier.
+
+**Parameters:**
+- `train_data` (list): A list of training data points, where each data point is a list of features.
+- `train_labels` (list): A list of labels for the training data.
+- `kernel` (str, optional): The kernel type. One of "linear", "poly", "rbf", "sigmoid". Default is "linear".
+- `C` (float, optional): The regularization parameter. Default is 1.0.
+
+**Returns:**
+- An SVM model that can be used for prediction.
+
+**Example:**
+```python
+import pyroid
+
+# Sample data
+train_data = [
+    [1.0, 2.0], [2.0, 3.0], [3.0, 4.0],
+    [5.0, 6.0], [6.0, 7.0], [7.0, 8.0]
+]
+train_labels = [0, 0, 0, 1, 1, 1]
+test_data = [
+    [1.5, 2.5],
+    [5.5, 6.5]
+]
+
+# Train an SVM classifier
+svm = pyroid.ml.basic.svm(train_data, train_labels, kernel="linear", C=1.0)
+
+# Make predictions
+predictions = svm.predict(test_data)
+print(f"Predictions: {predictions}")
+```
+
+## Random Forest
+
+```python
+pyroid.ml.basic.random_forest(train_data, train_labels, n_trees=100, max_depth=None)
+```
+
+Trains a Random Forest classifier.
+
+**Parameters:**
+- `train_data` (list): A list of training data points, where each data point is a list of features.
+- `train_labels` (list): A list of labels for the training data.
+- `n_trees` (int, optional): The number of trees in the forest. Default is 100.
+- `max_depth` (int, optional): The maximum depth of each tree. If None, the trees are grown until all leaves are pure. Default is None.
+
+**Returns:**
+- A Random Forest model that can be used for prediction.
+
+**Example:**
+```python
+import pyroid
+
+# Sample data
+train_data = [
+    [1.0, 2.0], [2.0, 3.0], [3.0, 4.0],
+    [5.0, 6.0], [6.0, 7.0], [7.0, 8.0]
+]
+train_labels = [0, 0, 0, 1, 1, 1]
+test_data = [
+    [1.5, 2.5],
+    [5.5, 6.5]
+]
+
+# Train a Random Forest classifier
+rf = pyroid.ml.basic.random_forest(train_data, train_labels, n_trees=10, max_depth=3)
+
+# Make predictions
+predictions = rf.predict(test_data)
+print(f"Predictions: {predictions}")

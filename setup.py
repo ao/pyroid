@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="pyroid",
-    version="0.1.0",
+    version="0.2.8",
     description="High-performance Rust functions for Python",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
@@ -26,3 +26,4 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
 )
+

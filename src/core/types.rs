@@ -3,10 +3,10 @@
 //! This module provides core types used throughout Pyroid.
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+// use pyo3::types::{PyDict, PyList};
 use std::sync::Arc;
 use crate::core::error::PyroidError;
-use crate::core::conversion::{ToPyObject, FromPyObject};
+// use crate::core::conversion::{ToPyObject, FromPyObject};
 
 /// A trait for objects that can be processed in parallel
 pub trait Parallelizable {

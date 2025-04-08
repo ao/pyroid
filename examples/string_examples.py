@@ -17,58 +17,102 @@ def benchmark(func, *args, **kwargs):
     return result
 
 def main():
-    print("pyroid String Operations Examples")
-    print("=================================")
+    print("Pyroid String Operations Examples")
+    print("===============================")
     
-    # Example 1: Parallel regex replacement
-    print("\n1. Parallel Regex Replacement")
-    text = "Hello world! " * 100000
-    print(f"Input text length: {len(text)}")
+    # Example 1: Basic string operations
+    print("\n1. Basic String Operations")
     
-    print("\nReplacing 'Hello' with 'Hi' using parallel_regex_replace:")
-    result = benchmark(pyroid.parallel_regex_replace, text, r"Hello", "Hi")
-    print(f"Output text length: {len(result)}")
-    print(f"First 50 characters: {result[:50]}...")
+    # Create a test string
+    text = "Hello, World!"
+    print(f"Original text: {text}")
     
-    # Example 2: Parallel text cleanup
-    print("\n2. Parallel Text Cleanup")
-    texts = [
-        "  Hello, World! ",
-        "123 Testing 456",
-        "Special @#$% Characters",
-        "UPPERCASE text",
-        "mixed CASE text"
-    ] * 10000
+    # Reverse the string
+    reversed_text = pyroid.text.reverse(text)
+    print(f"Reversed: {reversed_text}")
     
-    print(f"\nCleaning {len(texts)} texts in parallel:")
-    results = benchmark(pyroid.parallel_text_cleanup, texts)
-    print(f"Processed {len(results)} texts")
-    print("Sample results:")
-    for i in range(min(5, len(results))):
-        print(f"  Original: '{texts[i]}'")
-        print(f"  Cleaned:  '{results[i]}'")
+    # Convert to uppercase
+    upper = pyroid.text.to_uppercase(text)
+    print(f"Uppercase: {upper}")
+    
+    # Convert to lowercase
+    lower = pyroid.text.to_lowercase(text)
+    print(f"Lowercase: {lower}")
+    
+    # Example 2: String manipulation
+    print("\n2. String Manipulation")
+    
+    # Split the string
+    words = pyroid.text.split(text, " ")
+    print(f"Split by space: {words}")
+    
+    # Join the words
+    joined = pyroid.text.join(words, "-")
+    print(f"Joined with hyphens: {joined}")
+    
+    # Regex replace
+    replaced = pyroid.text.regex_replace(text, r"World", "Python")
+    print(f"Regex replace 'World' with 'Python': {replaced}")
     
     # Example 3: Base64 encoding/decoding
     print("\n3. Base64 Encoding/Decoding")
-    data = "Hello, world! This is a test of base64 encoding and decoding." * 10000
-    print(f"Original data length: {len(data)}")
     
-    print("\nEncoding data using parallel_base64_encode:")
-    encoded = benchmark(pyroid.parallel_base64_encode, data)
-    print(f"Encoded data length: {len(encoded)}")
-    print(f"First 50 characters: {encoded[:50]}...")
+    # Encode to base64
+    encoded = pyroid.text.base64_encode(text)
+    print(f"Base64 encoded: {encoded}")
     
-    # Make sure the encoded string is valid base64 by using a smaller test
-    test_data = "Hello, world! This is a test of base64 encoding and decoding."
-    test_encoded = pyroid.parallel_base64_encode(test_data)
+    # Decode from base64
+    decoded = pyroid.text.base64_decode(encoded)
+    print(f"Base64 decoded: {decoded}")
     
-    print("\nDecoding test data using parallel_base64_decode:")
-    test_decoded = benchmark(pyroid.parallel_base64_decode, test_encoded)
-    print(f"Decoded test data length: {len(test_decoded)}")
-    print(f"Test data: {test_decoded}")
+    # Example 4: NLP operations
+    print("\n4. NLP Operations")
     
-    # Verify the test result
-    print(f"\nOriginal and test data match: {test_data == test_decoded}")
+    # Tokenize the text
+    tokens = pyroid.text.tokenize(text)
+    print(f"Tokenized: {tokens}")
+    
+    # Generate n-grams
+    ngrams = pyroid.text.ngrams(text, 2)
+    print(f"Bigrams: {ngrams}")
+    
+    # Example 5: Using the string module (alias for text)
+    print("\n5. String Module (Alias for Text)")
+    
+    # Convert to uppercase using string module
+    upper_str = pyroid.string.to_uppercase(text)
+    print(f"Uppercase (string module): {upper_str}")
+    
+    # Convert to lowercase using string module
+    lower_str = pyroid.string.to_lowercase(text)
+    print(f"Lowercase (string module): {lower_str}")
+    
+    # Example 6: Performance comparison
+    print("\n6. Performance Comparison")
+    
+    # Create a large text for benchmarking
+    large_text = "Hello, World! " * 10000
+    print(f"Large text length: {len(large_text)}")
+    
+    # Benchmark Python's built-in reverse
+    print("\nPython built-in reverse:")
+    python_result = benchmark(lambda: large_text[::-1])
+    print(f"Result length: {len(python_result)}")
+    
+    # Benchmark Pyroid's reverse
+    print("\nPyroid reverse:")
+    pyroid_result = benchmark(lambda: pyroid.text.reverse(large_text))
+    print(f"Result length: {len(pyroid_result)}")
+    
+    # Benchmark Python's built-in uppercase
+    print("\nPython built-in uppercase:")
+    python_result = benchmark(lambda: large_text.upper())
+    print(f"Result length: {len(python_result)}")
+    
+    # Benchmark Pyroid's uppercase
+    print("\nPyroid uppercase:")
+    pyroid_result = benchmark(lambda: pyroid.text.to_uppercase(large_text))
+    print(f"Result length: {len(pyroid_result)}")
 
 if __name__ == "__main__":
     main()

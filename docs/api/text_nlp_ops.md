@@ -1,507 +1,518 @@
 # Text and NLP Operations
 
-The Text and NLP operations module provides high-performance implementations of common text processing and natural language processing tasks. These operations are implemented in Rust and are designed to be significantly faster than their Python equivalents, especially for large text datasets.
+This document provides detailed information about the text and natural language processing operations available in Pyroid.
 
-## Overview
+## Basic Text Operations
 
-The Text and NLP operations module provides the following key functions:
-
-- `parallel_tokenize`: Tokenize texts in parallel
-- `parallel_ngrams`: Generate n-grams from texts in parallel
-- `parallel_tfidf`: Calculate TF-IDF matrix in parallel
-- `parallel_document_similarity`: Calculate document similarity matrix in parallel
-
-## API Reference
-
-### parallel_tokenize
-
-Tokenize texts in parallel.
+### Reverse
 
 ```python
-pyroid.parallel_tokenize(texts, lowercase=True, remove_punct=True)
+pyroid.text.reverse(text)
 ```
 
-#### Parameters
+Reverses the characters in a string.
 
-- `texts`: A list of texts to tokenize
-- `lowercase`: Whether to lowercase the texts before tokenization (default: True)
-- `remove_punct`: Whether to remove punctuation (default: True)
+**Parameters:**
+- `text` (str): The input string to reverse.
 
-#### Returns
+**Returns:**
+- The reversed string.
 
-A list of tokenized texts (each text is a list of tokens).
-
-#### Example
-
+**Example:**
 ```python
 import pyroid
-import time
-from nltk.tokenize import word_tokenize
-import nltk
 
-# Download NLTK data if needed
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-
-# Sample texts
-texts = [
-    "Hello, world! This is a test.",
-    "Pyroid is fast and efficient.",
-    "Natural language processing is fascinating."
-] * 1000  # Repeat to create a larger dataset
-
-# Compare with NLTK
-start = time.time()
-nltk_tokens = [word_tokenize(text.lower()) for text in texts]
-nltk_time = time.time() - start
-
-start = time.time()
-pyroid_tokens = pyroid.parallel_tokenize(texts, True, True)
-pyroid_time = time.time() - start
-
-print(f"NLTK time: {nltk_time:.2f}s, Pyroid time: {pyroid_time:.2f}s")
-print(f"Speedup: {nltk_time / pyroid_time:.1f}x")
-
-# Compare results for the first text
-print(f"NLTK tokens: {nltk_tokens[0]}")
-print(f"Pyroid tokens: {pyroid_tokens[0]}")
+text = "Hello, World!"
+reversed_text = pyroid.text.reverse(text)
+print(f"Original: {text}")
+print(f"Reversed: {reversed_text}")
 ```
 
-#### Performance Considerations
-
-- `parallel_tokenize` is particularly efficient for large datasets with many texts.
-- The implementation processes each text in parallel, which can lead to significant performance improvements on multi-core systems.
-- The function uses a simple whitespace-based tokenization approach, which is faster but less sophisticated than NLTK's tokenization.
-- For languages other than English or for specialized tokenization needs, you may need to use a more sophisticated tokenizer.
-
-### parallel_ngrams
-
-Generate n-grams from texts in parallel.
+### To Uppercase
 
 ```python
-pyroid.parallel_ngrams(texts, n=2, tokenized=False)
+pyroid.text.to_uppercase(text)
 ```
 
-#### Parameters
+Converts a string to uppercase.
 
-- `texts`: A list of texts or tokenized texts
-- `n`: Size of n-grams (default: 2)
-- `tokenized`: Whether the input is already tokenized (default: False)
+**Parameters:**
+- `text` (str): The input string to convert.
 
-#### Returns
+**Returns:**
+- The uppercase string.
 
-A list of n-grams for each text.
-
-#### Example
-
+**Example:**
 ```python
 import pyroid
-import time
-from nltk.util import ngrams
-import nltk
 
-# Sample texts
-texts = [
-    "Hello world this is a test",
-    "Pyroid is fast and efficient",
-    "Natural language processing is fascinating"
-] * 1000  # Repeat to create a larger dataset
-
-# Compare with NLTK
-start = time.time()
-nltk_bigrams = []
-for text in texts:
-    tokens = text.split()
-    nltk_bigrams.append(list(ngrams(tokens, 2)))
-nltk_time = time.time() - start
-
-start = time.time()
-pyroid_bigrams = pyroid.parallel_ngrams(texts, 2, False)
-pyroid_time = time.time() - start
-
-print(f"NLTK time: {nltk_time:.2f}s, Pyroid time: {pyroid_time:.2f}s")
-print(f"Speedup: {nltk_time / pyroid_time:.1f}x")
-
-# Compare results for the first text
-print(f"NLTK bigrams: {[' '.join(bg) for bg in nltk_bigrams[0]]}")
-print(f"Pyroid bigrams: {pyroid_bigrams[0]}")
+text = "Hello, World!"
+uppercase = pyroid.text.to_uppercase(text)
+print(f"Original: {text}")
+print(f"Uppercase: {uppercase}")
 ```
 
-#### Performance Considerations
-
-- `parallel_ngrams` is particularly efficient for large datasets with many texts.
-- The implementation processes each text in parallel, which can lead to significant performance improvements on multi-core systems.
-- Setting `tokenized=True` can improve performance if you already have tokenized texts, as it avoids redundant tokenization.
-- For very large n-gram sizes, memory usage can be a concern as the number of n-grams grows exponentially with n.
-
-### parallel_tfidf
-
-Calculate TF-IDF matrix in parallel.
+### To Lowercase
 
 ```python
-pyroid.parallel_tfidf(documents, tokenized=False, min_df=1, max_df=1.0)
+pyroid.text.to_lowercase(text)
 ```
 
-#### Parameters
+Converts a string to lowercase.
 
-- `documents`: A list of documents (strings or tokenized documents)
-- `tokenized`: Whether the input is already tokenized (default: False)
-- `min_df`: Minimum document frequency for a term to be included (default: 1)
-- `max_df`: Maximum document frequency for a term to be included (default: 1.0)
+**Parameters:**
+- `text` (str): The input string to convert.
 
-#### Returns
+**Returns:**
+- The lowercase string.
 
-A tuple of (tfidf_matrix, vocabulary):
-- `tfidf_matrix`: A list of dictionaries mapping term indices to TF-IDF values
-- `vocabulary`: A dictionary mapping terms to indices
-
-#### Example
-
+**Example:**
 ```python
 import pyroid
-import time
-from sklearn.feature_extraction.text import TfidfVectorizer
 
-# Sample documents
-documents = [
-    "This is the first document",
-    "This document is the second document",
-    "And this is the third one",
-    "Is this the first document?"
-] * 250  # Repeat to create a larger dataset
-
-# Compare with scikit-learn
-start = time.time()
-vectorizer = TfidfVectorizer()
-sklearn_tfidf = vectorizer.fit_transform(documents)
-sklearn_time = time.time() - start
-
-start = time.time()
-pyroid_tfidf_matrix, pyroid_vocabulary = pyroid.parallel_tfidf(documents, False)
-pyroid_time = time.time() - start
-
-print(f"Scikit-learn time: {sklearn_time:.2f}s, Pyroid time: {pyroid_time:.2f}s")
-print(f"Speedup: {sklearn_time / pyroid_time:.1f}x")
-
-# Compare vocabulary sizes
-print(f"Scikit-learn vocabulary size: {len(vectorizer.vocabulary_)}")
-print(f"Pyroid vocabulary size: {len(pyroid_vocabulary)}")
+text = "Hello, World!"
+lowercase = pyroid.text.to_lowercase(text)
+print(f"Original: {text}")
+print(f"Lowercase: {lowercase}")
 ```
 
-#### Performance Considerations
+## String Manipulation
 
-- `parallel_tfidf` is particularly efficient for large datasets with many documents.
-- The implementation processes each document in parallel, which can lead to significant performance improvements on multi-core systems.
-- Setting `tokenized=True` can improve performance if you already have tokenized documents, as it avoids redundant tokenization.
-- The `min_df` and `max_df` parameters can be used to filter out rare or common terms, which can improve both performance and results quality.
-- The function returns a sparse representation of the TF-IDF matrix, which is memory-efficient for large datasets.
-
-### parallel_document_similarity
-
-Calculate document similarity matrix in parallel.
+### Split
 
 ```python
-pyroid.parallel_document_similarity(docs, method='cosine', tokenized=False)
+pyroid.text.split(text, delimiter)
 ```
 
-#### Parameters
+Splits a string by a delimiter.
 
-- `docs`: A list of documents (strings or tokenized documents)
-- `method`: Similarity method (default: 'cosine')
-  - Supported methods: 'cosine', 'jaccard', 'overlap'
-- `tokenized`: Whether the input is already tokenized (default: False)
+**Parameters:**
+- `text` (str): The input string to split.
+- `delimiter` (str): The delimiter to split by.
 
-#### Returns
+**Returns:**
+- A list of substrings.
 
-A 2D array of similarity scores between documents.
-
-#### Example
-
+**Example:**
 ```python
 import pyroid
-import time
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
-# Sample documents
-documents = [
-    "This is the first document",
-    "This document is the second document",
-    "And this is the third one",
-    "Is this the first document?"
-] * 25  # Repeat to create a larger dataset
-
-# Compare with scikit-learn
-start = time.time()
-vectorizer = TfidfVectorizer()
-tfidf_matrix = vectorizer.fit_transform(documents)
-sklearn_similarity = cosine_similarity(tfidf_matrix)
-sklearn_time = time.time() - start
-
-start = time.time()
-pyroid_similarity = pyroid.parallel_document_similarity(documents, "cosine", False)
-pyroid_time = time.time() - start
-
-print(f"Scikit-learn time: {sklearn_time:.2f}s, Pyroid time: {pyroid_time:.2f}s")
-print(f"Speedup: {sklearn_time / pyroid_time:.1f}x")
-
-# Compare results for the first document
-print(f"Scikit-learn similarities for first document: {sklearn_similarity[0][:4]}")
-print(f"Pyroid similarities for first document: {pyroid_similarity[0][:4]}")
+text = "Hello, World!"
+words = pyroid.text.split(text, " ")
+print(f"Original: {text}")
+print(f"Split: {words}")
 ```
 
-#### Similarity Methods
-
-1. **Cosine Similarity ('cosine')**
-
-   Measures the cosine of the angle between two non-zero vectors:
-   
-   ```
-   similarity = (A · B) / (||A|| * ||B||)
-   ```
-   
-   where A and B are document vectors, · is the dot product, and ||A|| is the norm of A.
-
-2. **Jaccard Similarity ('jaccard')**
-
-   Measures the size of the intersection divided by the size of the union of two sets:
-   
-   ```
-   similarity = |A ∩ B| / |A ∪ B|
-   ```
-   
-   where A and B are sets of terms in the documents.
-
-3. **Overlap Coefficient ('overlap')**
-
-   Measures the overlap between two sets:
-   
-   ```
-   similarity = |A ∩ B| / min(|A|, |B|)
-   ```
-   
-   where A and B are sets of terms in the documents.
-
-#### Performance Considerations
-
-- `parallel_document_similarity` is particularly efficient for large datasets with many documents.
-- The implementation processes document pairs in parallel, which can lead to significant performance improvements on multi-core systems.
-- Setting `tokenized=True` can improve performance if you already have tokenized documents, as it avoids redundant tokenization.
-- For very large document collections, memory usage can be a concern as the similarity matrix grows quadratically with the number of documents.
-- The 'cosine' method is generally faster than 'jaccard' and 'overlap' for large documents, as it uses optimized vector operations.
-
-## Performance Comparison
-
-The following table shows the performance comparison between common Python libraries and pyroid for various text and NLP operations:
-
-| Operation | Dataset Size | Python Library | pyroid | Speedup |
-|-----------|-------------|----------------|--------|---------|
-| Tokenization | 5000 texts | NLTK: 2500ms | 200ms | 12.5x |
-| N-grams | 5000 texts | NLTK: 1800ms | 150ms | 12.0x |
-| TF-IDF | 1000 docs | scikit-learn: 800ms | 300ms | 2.7x |
-| Document Similarity | 500 docs | scikit-learn: 600ms | 200ms | 3.0x |
-
-## Best Practices
-
-1. **Preprocess text data**: Clean and normalize your text data before processing to improve results quality and performance.
-
-2. **Use tokenized input when possible**: If you already have tokenized texts, set `tokenized=True` to avoid redundant tokenization.
-
-3. **Filter out rare and common terms**: Use the `min_df` and `max_df` parameters in `parallel_tfidf` to filter out terms that are too rare or too common, which can improve both performance and results quality.
-
-4. **Choose the appropriate similarity metric**: Different similarity metrics are suitable for different types of text data and applications. For example, 'cosine' is suitable for general text similarity, while 'jaccard' may be better for short texts or keyword matching.
-
-5. **Be mindful of memory usage**: For very large document collections, consider processing data in batches to avoid memory issues, especially when calculating document similarity matrices.
-
-## Limitations
-
-1. **Simple tokenization**: The tokenization approach is simpler than specialized NLP libraries like NLTK or spaCy, which may affect results for complex languages or specialized domains.
-
-2. **Limited preprocessing options**: The current implementation provides basic preprocessing options (lowercase, remove punctuation), but lacks advanced options like stemming, lemmatization, or stop word removal.
-
-3. **Memory usage**: For very large document collections, memory usage can be a concern, especially for document similarity matrices.
-
-4. **No language-specific features**: The current implementation does not include language-specific features or models.
-
-## Examples
-
-### Example 1: Text Classification Pipeline
+### Join
 
 ```python
-import pyroid
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-
-# Sample documents and labels
-documents = [
-    "This movie is great and I enjoyed it",
-    "This movie is terrible and I hated it",
-    "I loved this movie, it was amazing",
-    "I disliked this movie, it was boring",
-    "Great acting and plot, highly recommend",
-    "Poor acting and plot, do not recommend",
-    "Excellent film with outstanding performances",
-    "Awful film with terrible performances"
-]
-labels = [1, 0, 1, 0, 1, 0, 1, 0]  # 1 for positive, 0 for negative
-
-# Split into train and test sets
-X_train, X_test, y_train, y_test = train_test_split(documents, labels, test_size=0.25, random_state=42)
-
-# Calculate TF-IDF
-train_tfidf_matrix, vocabulary = pyroid.parallel_tfidf(X_train, False)
-
-# Convert sparse representation to dense numpy array
-train_features = np.zeros((len(train_tfidf_matrix), len(vocabulary)))
-for i, doc_dict in enumerate(train_tfidf_matrix):
-    for term_idx, tfidf_value in doc_dict.items():
-        train_features[i, term_idx] = tfidf_value
-
-# Calculate TF-IDF for test documents using the same vocabulary
-test_tfidf_matrix = []
-for doc in X_test:
-    # Tokenize and count terms
-    tokens = doc.lower().split()
-    term_counts = {}
-    for token in tokens:
-        if token in vocabulary:
-            term_counts[vocabulary[token]] = term_counts.get(vocabulary[token], 0) + 1
-    
-    # Calculate TF-IDF
-    doc_len = len(tokens)
-    doc_tfidf = {}
-    for term_idx, count in term_counts.items():
-        tf = count / doc_len
-        # Use IDF from training data (simplified)
-        doc_tfidf[term_idx] = tf
-    
-    test_tfidf_matrix.append(doc_tfidf)
-
-# Convert test sparse representation to dense numpy array
-test_features = np.zeros((len(test_tfidf_matrix), len(vocabulary)))
-for i, doc_dict in enumerate(test_tfidf_matrix):
-    for term_idx, tfidf_value in doc_dict.items():
-        test_features[i, term_idx] = tfidf_value
-
-# Train a classifier
-clf = LogisticRegression()
-clf.fit(train_features, y_train)
-
-# Predict and evaluate
-y_pred = clf.predict(test_features)
-accuracy = accuracy_score(y_test, y_pred)
-print(f"Accuracy: {accuracy:.4f}")
+pyroid.text.join(parts, delimiter)
 ```
 
-### Example 2: Document Clustering
+Joins a list of strings with a delimiter.
 
+**Parameters:**
+- `parts` (list): The list of strings to join.
+- `delimiter` (str): The delimiter to join with.
+
+**Returns:**
+- The joined string.
+
+**Example:**
 ```python
 import pyroid
-import numpy as np
-from sklearn.cluster import KMeans
-import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
 
-# Sample documents
-documents = [
-    "Machine learning is a subset of artificial intelligence",
-    "Deep learning is a subset of machine learning",
-    "Neural networks are used in deep learning",
-    "Python is a popular programming language",
-    "JavaScript is used for web development",
-    "HTML and CSS are used for web design",
-    "Natural language processing is used for text analysis",
-    "Computer vision is used for image analysis"
-]
-
-# Calculate document similarity matrix
-similarity_matrix = pyroid.parallel_document_similarity(documents, "cosine", False)
-
-# Convert similarity matrix to distance matrix
-distance_matrix = 1 - np.array(similarity_matrix)
-
-# Apply PCA for visualization
-pca = PCA(n_components=2)
-points = pca.fit_transform(distance_matrix)
-
-# Perform K-means clustering
-kmeans = KMeans(n_clusters=3, random_state=42)
-clusters = kmeans.fit_predict(distance_matrix)
-
-# Plot the results
-plt.figure(figsize=(10, 8))
-plt.scatter(points[:, 0], points[:, 1], c=clusters, cmap='viridis', s=100)
-
-# Add document labels
-for i, doc in enumerate(documents):
-    plt.annotate(f"Doc {i+1}", (points[i, 0], points[i, 1]), fontsize=9)
-
-plt.title('Document Clustering based on Similarity')
-plt.xlabel('PCA Component 1')
-plt.ylabel('PCA Component 2')
-plt.colorbar(label='Cluster')
-plt.tight_layout()
-plt.show()
+words = ["Hello", "World"]
+joined = pyroid.text.join(words, "-")
+print(f"Parts: {words}")
+print(f"Joined: {joined}")
 ```
 
-### Example 3: Keyword Extraction
+### Regex Replace
 
 ```python
+pyroid.text.regex_replace(text, pattern, replacement)
+```
+
+Replaces occurrences of a regex pattern in a string.
+
+**Parameters:**
+- `text` (str): The input string.
+- `pattern` (str): The regex pattern to search for.
+- `replacement` (str): The replacement string.
+
+**Returns:**
+- The string with replacements.
+
+**Example:**
+```python
 import pyroid
-import numpy as np
-from collections import Counter
 
-# Sample document
-document = """
-Machine learning is an application of artificial intelligence (AI) that provides systems the ability to automatically learn and improve from experience without being explicitly programmed. Machine learning focuses on the development of computer programs that can access data and use it to learn for themselves.
+text = "Hello, World!"
+replaced = pyroid.text.regex_replace(text, r"World", "Python")
+print(f"Original: {text}")
+print(f"Replaced: {replaced}")
+```
 
-The process of learning begins with observations or data, such as examples, direct experience, or instruction, in order to look for patterns in data and make better decisions in the future based on the examples that we provide. The primary aim is to allow the computers to learn automatically without human intervention or assistance and adjust actions accordingly.
+## Encoding/Decoding
+
+### Base64 Encode
+
+```python
+pyroid.text.base64_encode(text)
+```
+
+Encodes a string to base64.
+
+**Parameters:**
+- `text` (str): The input string to encode.
+
+**Returns:**
+- The base64-encoded string.
+
+**Example:**
+```python
+import pyroid
+
+text = "Hello, World!"
+encoded = pyroid.text.base64_encode(text)
+print(f"Original: {text}")
+print(f"Encoded: {encoded}")
+```
+
+### Base64 Decode
+
+```python
+pyroid.text.base64_decode(encoded)
+```
+
+Decodes a base64-encoded string.
+
+**Parameters:**
+- `encoded` (str): The base64-encoded string to decode.
+
+**Returns:**
+- The decoded string.
+
+**Example:**
+```python
+import pyroid
+
+encoded = "SGVsbG8sIFdvcmxkIQ=="
+decoded = pyroid.text.base64_decode(encoded)
+print(f"Encoded: {encoded}")
+print(f"Decoded: {decoded}")
+```
+
+## NLP Operations
+
+### Tokenize
+
+```python
+pyroid.text.tokenize(text)
+```
+
+Tokenizes a string into words.
+
+**Parameters:**
+- `text` (str): The input string to tokenize.
+
+**Returns:**
+- A list of tokens.
+
+**Example:**
+```python
+import pyroid
+
+text = "Hello, World!"
+tokens = pyroid.text.tokenize(text)
+print(f"Original: {text}")
+print(f"Tokens: {tokens}")
+```
+
+### N-grams
+
+```python
+pyroid.text.ngrams(text, n)
+```
+
+Generates n-grams from a string.
+
+**Parameters:**
+- `text` (str): The input string.
+- `n` (int): The size of the n-grams.
+
+**Returns:**
+- A list of n-grams.
+
+**Example:**
+```python
+import pyroid
+
+text = "Hello, World!"
+bigrams = pyroid.text.ngrams(text, 2)
+print(f"Original: {text}")
+print(f"Bigrams: {bigrams}")
+```
+
+### Stemming
+
+```python
+pyroid.text.stem(text)
+```
+
+Stems words in a string.
+
+**Parameters:**
+- `text` (str): The input string.
+
+**Returns:**
+- The string with stemmed words.
+
+**Example:**
+```python
+import pyroid
+
+text = "running jumps easily"
+stemmed = pyroid.text.stem(text)
+print(f"Original: {text}")
+print(f"Stemmed: {stemmed}")
+```
+
+### Lemmatization
+
+```python
+pyroid.text.lemmatize(text)
+```
+
+Lemmatizes words in a string.
+
+**Parameters:**
+- `text` (str): The input string.
+
+**Returns:**
+- The string with lemmatized words.
+
+**Example:**
+```python
+import pyroid
+
+text = "running jumps easily"
+lemmatized = pyroid.text.lemmatize(text)
+print(f"Original: {text}")
+print(f"Lemmatized: {lemmatized}")
+```
+
+### Part-of-Speech Tagging
+
+```python
+pyroid.text.pos_tag(text)
+```
+
+Tags parts of speech in a string.
+
+**Parameters:**
+- `text` (str): The input string.
+
+**Returns:**
+- A list of (token, tag) tuples.
+
+**Example:**
+```python
+import pyroid
+
+text = "The quick brown fox jumps over the lazy dog."
+pos_tags = pyroid.text.pos_tag(text)
+print(f"Original: {text}")
+print(f"POS Tags: {pos_tags}")
+```
+
+### Named Entity Recognition
+
+```python
+pyroid.text.ner(text)
+```
+
+Recognizes named entities in a string.
+
+**Parameters:**
+- `text` (str): The input string.
+
+**Returns:**
+- A list of (entity, type) tuples.
+
+**Example:**
+```python
+import pyroid
+
+text = "Apple Inc. was founded by Steve Jobs in Cupertino, California."
+entities = pyroid.text.ner(text)
+print(f"Original: {text}")
+print(f"Named Entities: {entities}")
+```
+
+### Sentiment Analysis
+
+```python
+pyroid.text.sentiment(text)
+```
+
+Analyzes the sentiment of a string.
+
+**Parameters:**
+- `text` (str): The input string.
+
+**Returns:**
+- A dictionary containing sentiment scores.
+
+**Example:**
+```python
+import pyroid
+
+text = "I love this product! It's amazing."
+sentiment = pyroid.text.sentiment(text)
+print(f"Original: {text}")
+print(f"Sentiment: {sentiment}")
+```
+
+### Text Summarization
+
+```python
+pyroid.text.summarize(text, ratio=0.2)
+```
+
+Summarizes a text.
+
+**Parameters:**
+- `text` (str): The input text to summarize.
+- `ratio` (float, optional): The ratio of the original text to keep. Default is 0.2.
+
+**Returns:**
+- The summarized text.
+
+**Example:**
+```python
+import pyroid
+
+text = """
+Pyroid is a high-performance Rust-powered library for Python that accelerates common operations and eliminates performance bottlenecks.
+It provides optimized implementations of various operations across multiple domains, including math, string processing, data manipulation, I/O, image processing, and machine learning.
+The library is designed to be easy to use with a Pythonic API, while leveraging the performance benefits of Rust.
 """
 
-# Tokenize the document
-tokens = pyroid.parallel_tokenize([document], True, True)[0]
+summary = pyroid.text.summarize(text, ratio=0.5)
+print(f"Original length: {len(text)}")
+print(f"Summary length: {len(summary)}")
+print(f"Summary: {summary}")
+```
 
-# Calculate term frequency
-term_freq = Counter(tokens)
+### Keyword Extraction
 
-# Generate bigrams
-bigrams = pyroid.parallel_ngrams([document], 2, False)[0]
-bigram_freq = Counter(bigrams)
+```python
+pyroid.text.extract_keywords(text, n=5)
+```
 
-# Calculate TF-IDF for the document against a corpus
-corpus = [
-    "Machine learning is a subset of artificial intelligence",
-    "Deep learning is a subset of machine learning",
-    "Neural networks are used in deep learning",
-    "Python is a popular programming language",
-    document
-]
+Extracts keywords from a text.
 
-tfidf_matrix, vocabulary = pyroid.parallel_tfidf(corpus, False)
+**Parameters:**
+- `text` (str): The input text.
+- `n` (int, optional): The number of keywords to extract. Default is 5.
 
-# Get TF-IDF scores for the document (last in the corpus)
-doc_tfidf = tfidf_matrix[-1]
+**Returns:**
+- A list of keywords.
 
-# Extract top keywords based on TF-IDF
-keywords = []
-for term, idx in vocabulary.items():
-    if idx in doc_tfidf:
-        keywords.append((term, doc_tfidf[idx]))
+**Example:**
+```python
+import pyroid
 
-# Sort keywords by TF-IDF score
-keywords.sort(key=lambda x: x[1], reverse=True)
+text = """
+Pyroid is a high-performance Rust-powered library for Python that accelerates common operations and eliminates performance bottlenecks.
+It provides optimized implementations of various operations across multiple domains, including math, string processing, data manipulation, I/O, image processing, and machine learning.
+The library is designed to be easy to use with a Pythonic API, while leveraging the performance benefits of Rust.
+"""
 
-# Print top 10 keywords
-print("Top 10 keywords by TF-IDF:")
-for term, score in keywords[:10]:
-    print(f"{term}: {score:.4f}")
+keywords = pyroid.text.extract_keywords(text, n=5)
+print(f"Keywords: {keywords}")
+```
 
-# Print top 10 bigrams by frequency
-print("\nTop 10 bigrams by frequency:")
-for bigram, freq in bigram_freq.most_common(10):
-    print(f"{bigram}: {freq}")
+### Text Classification
+
+```python
+pyroid.text.classify(text, categories)
+```
+
+Classifies a text into one of the provided categories.
+
+**Parameters:**
+- `text` (str): The input text to classify.
+- `categories` (list): A list of possible categories.
+
+**Returns:**
+- The most likely category and a confidence score.
+
+**Example:**
+```python
+import pyroid
+
+text = "The stock market experienced significant growth today."
+categories = ["business", "sports", "technology", "politics"]
+classification = pyroid.text.classify(text, categories)
+print(f"Text: {text}")
+print(f"Classification: {classification}")
+```
+
+### Language Detection
+
+```python
+pyroid.text.detect_language(text)
+```
+
+Detects the language of a text.
+
+**Parameters:**
+- `text` (str): The input text.
+
+**Returns:**
+- The detected language code and a confidence score.
+
+**Example:**
+```python
+import pyroid
+
+text = "Hello, World!"
+language = pyroid.text.detect_language(text)
+print(f"Text: {text}")
+print(f"Detected Language: {language}")
+
+text_fr = "Bonjour le monde!"
+language_fr = pyroid.text.detect_language(text_fr)
+print(f"Text: {text_fr}")
+print(f"Detected Language: {language_fr}")
+```
+
+### Text Similarity
+
+```python
+pyroid.text.similarity(text1, text2, method="cosine")
+```
+
+Calculates the similarity between two texts.
+
+**Parameters:**
+- `text1` (str): The first text.
+- `text2` (str): The second text.
+- `method` (str, optional): The similarity method. One of "cosine", "jaccard", "levenshtein". Default is "cosine".
+
+**Returns:**
+- A similarity score between 0 and 1.
+
+**Example:**
+```python
+import pyroid
+
+text1 = "The quick brown fox jumps over the lazy dog."
+text2 = "A fast brown fox leaps over a lazy dog."
+similarity = pyroid.text.similarity(text1, text2, method="cosine")
+print(f"Text 1: {text1}")
+print(f"Text 2: {text2}")
+print(f"Similarity: {similarity}")
