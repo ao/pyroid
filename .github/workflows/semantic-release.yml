@@ -48,15 +48,25 @@ jobs:
           echo "Current version in pyproject.toml:"
           grep -m 1 "version" pyproject.toml
           
-          # Run semantic-release with verbose output
-          echo "Running semantic-release version --print..."
-          VERSION=$(semantic-release version --print)
-          echo "Next version would be: $VERSION"
+          # Get the current version
+          CURRENT_VERSION=$(grep -m 1 "version" pyproject.toml | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Run semantic-release to determine the next version
+          echo "Running semantic-release version..."
+          semantic-release version
+          
+          # Get the new version after running semantic-release version
+          NEW_VERSION=$(grep -m 1 "version" pyproject.toml | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+          echo "New version: $NEW_VERSION"
+          
+          # Use the new version
+          VERSION="$NEW_VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           
           # Run semantic-release publish with verbose output
           echo "Running semantic-release publish..."
-          semantic-release --verbose publish
+          semantic-release publish
           
           # Verify the tag was created
           echo "Checking for tag v$VERSION..."
