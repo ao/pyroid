@@ -12,6 +12,8 @@ Functions:
     join: Join a list of strings with a delimiter
     replace: Replace a substring in a string
     regex_replace: Replace a regex pattern in a string
+    to_uppercase: Convert a string to uppercase
+    to_lowercase: Convert a string to lowercase
     tokenize: Tokenize a string into words
     ngrams: Generate n-grams from a string
 """
@@ -27,6 +29,8 @@ try:
         join,
         replace,
         regex_replace,
+        to_uppercase,
+        to_lowercase,
         
         # NLP operations
         tokenize,
@@ -44,6 +48,8 @@ except ImportError:
             join,
             replace,
             regex_replace,
+            to_uppercase,
+            to_lowercase,
             
             # NLP operations
             tokenize,
@@ -97,6 +103,14 @@ except ImportError:
                 text = text.lower()
             tokens = text.split()
             return [tokens[i:i+n] for i in range(len(tokens) - n + 1)]
+            
+        def to_uppercase(text):
+            """Convert a string to uppercase."""
+            return text.upper()
+            
+        def to_lowercase(text):
+            """Convert a string to lowercase."""
+            return text.lower()
 
 __all__ = [
     'reverse',
@@ -108,4 +122,6 @@ __all__ = [
     'regex_replace',
     'tokenize',
     'ngrams',
+    'to_uppercase',
+    'to_lowercase',
 ]
