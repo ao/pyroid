@@ -64,7 +64,7 @@ def config(**kwargs):
     return ConfigContext(Config(kwargs))
 
 # Version information
-__version__ = "0.1.0"
+__version__ = "0.2.1"
 
 __all__ = [
     # Core classes
