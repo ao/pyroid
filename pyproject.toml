@@ -35,10 +35,12 @@ python-source = "python"
 features = ["pyo3/extension-module", "math", "text", "data", "io", "image", "ml"]
 
 [tool.semantic_release]
-version_variable = [
-    "pyproject.toml:version = \"0.2.1\"",
-    "Cargo.toml:version = \"0.2.1\"",
-    "python/pyroid/__init__.py:__version__ = \"0.2.1\""
+version_toml = [
+    "pyproject.toml:project.version",
+    "Cargo.toml:package.version"
+]
+version_pattern = [
+    "python/pyroid/__init__.py:__version__ = \"$version\""
 ]
 branch = "main"
 upload_to_pypi = false  # We use the publish.yml workflow for this
@@ -71,4 +73,4 @@ prerelease = false
 type = "github"
 
 [tool.semantic_release.parser]
-parse_version_from_variable = true
+parse_version_from_commit = true
