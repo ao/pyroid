@@ -63,5 +63,9 @@ commit_version_number = true  # Include version number in commit message
 commit_subject = "chore(release): {version} [skip ci]"  # Commit message format
 commit_author = "github-actions <actions@github.com>"  # Commit author
 
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
+
 [tool.semantic_release.remote]
 type = "github"
