@@ -195,7 +195,7 @@ pub fn clear_thread_config() {
 }
 
 /// Python Config class
-#[pyclass]
+#[pyclass(name = "Config")]
 #[derive(Clone)]
 pub struct PyConfig {
     config: Arc<Config>,
@@ -280,7 +280,7 @@ impl PyConfig {
 }
 
 /// Python context manager for configuration
-#[pyclass]
+#[pyclass(name = "ConfigContext")]
 pub struct ConfigContext {
     previous_config: Option<Arc<Config>>,
     new_config: Arc<Config>,
@@ -327,6 +327,10 @@ impl ConfigContext {
 pub fn register(py: Python, module: &PyModule) -> PyResult<()> {
     let config_module = PyModule::new(py, "config")?;
     
+    // Add the PyConfig class as "Config" to the module
+    module.add_class::<PyConfig>()?;
+    
+    // Also add it to the config submodule
     config_module.add_class::<PyConfig>()?;
     config_module.add_class::<ConfigContext>()?;
     
