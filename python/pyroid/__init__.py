@@ -38,6 +38,7 @@ except ImportError:
 from . import core
 from . import math
 from . import text
+from . import string
 from . import data
 from . import io
 from . import image
@@ -81,6 +82,7 @@ __all__ = [
     'core',
     'math',
     'text',
+    'string',
     'data',
     'io',
     'image',

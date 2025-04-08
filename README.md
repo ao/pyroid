@@ -127,13 +127,13 @@ import pyroid
 
 # Basic string operations
 text = "Hello, world!"
-reversed_text = pyroid.string.reverse(text)
-uppercase = pyroid.string.to_uppercase(text)
-lowercase = pyroid.string.to_lowercase(text)
+reversed_text = pyroid.text.reverse(text)
+uppercase = pyroid.text.to_uppercase(text)
+lowercase = pyroid.text.to_lowercase(text)
 
 # Base64 encoding/decoding
-encoded = pyroid.string.base64_encode(text)
-decoded = pyroid.string.base64_decode(encoded)
+encoded = pyroid.text.base64_encode(text)
+decoded = pyroid.text.base64_decode(encoded)
 print(f"Original: {text}")
 print(f"Encoded: {encoded}")
 print(f"Decoded: {decoded}")
@@ -144,24 +144,21 @@ print(f"Decoded: {decoded}")
 ```python
 import pyroid
 
-# Create a dictionary representing a DataFrame
-df = {
-    'A': [1, 2, 3, 4, 5],
-    'B': [10, 20, 30, 40, 50],
-    'C': [100, 200, 300, 400, 500]
-}
-
-# Create a DataFrame object
-dataframe = pyroid.data.dataframe.PyDataFrame(df)
+# Create a DataFrame
+df = pyroid.data.DataFrame({
+    'id': [1, 2, 3, 4, 5],
+    'name': ['Alice', 'Bob', 'Charlie', 'David', 'Eve'],
+    'age': [25, 30, 35, 40, 45]
+})
 
 # Apply a function to each column
-def square(x):
-    return [val * val for val in x]
+result = pyroid.data.apply(df, lambda x: x * 2, axis=0)
+print(f"DataFrame: {df}")
+print(f"Applied function: {result}")
 
-result = dataframe.apply(square)
-print(f"DataFrame shape: {dataframe.shape}")
-print(f"DataFrame columns: {dataframe.columns}")
-print(f"Result: {result.to_dict()}")
+# Group by and aggregate
+grouped = pyroid.data.groupby_aggregate(df, "age", {"name": "count"})
+print(f"Grouped by age: {grouped}")
 ```
 
 ### Collection Operations
@@ -171,21 +168,21 @@ import pyroid
 
 # Filter a list
 numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-even_numbers = pyroid.data.collections.filter(numbers, lambda x: x % 2 == 0)
+even_numbers = pyroid.data.filter(numbers, lambda x: x % 2 == 0)
 print(f"Even numbers: {even_numbers}")
 
 # Map a function over a list
-squared = pyroid.data.collections.map(numbers, lambda x: x * x)
+squared = pyroid.data.map(numbers, lambda x: x * x)
 print(f"Squared numbers: {squared}")
 
 # Reduce a list
-sum_result = pyroid.data.collections.reduce(numbers, lambda x, y: x + y)
+sum_result = pyroid.data.reduce(numbers, lambda x, y: x + y)
 print(f"Sum: {sum_result}")
 
 # Sort a list
 unsorted = [5, 2, 8, 1, 9, 3]
-sorted_list = pyroid.data.collections.sort(unsorted)
-print(f"Sorted: {sorted_list}")
+sorted_list = pyroid.data.sort(unsorted, reverse=True)  # Note: supports reverse parameter
+print(f"Sorted (descending): {sorted_list}")
 ```
 
 ### File I/O Operations
@@ -194,17 +191,16 @@ print(f"Sorted: {sorted_list}")
 import pyroid
 
 # Read a file
-content = pyroid.io.file.read_file("example.txt")
+content = pyroid.io.read_file("example.txt")
 print(f"File content length: {len(content)}")
 
 # Write a file
-pyroid.io.file.write_file("output.txt", b"Hello, world!")
+pyroid.io.write_file("output.txt", "Hello, world!")  # Note: string, not bytes
 
 # Read multiple files
 files = ["file1.txt", "file2.txt", "file3.txt"]
-contents = pyroid.io.file.read_files(files)
-for file, content in contents.items():
-    print(f"{file}: {len(content)} bytes")
+contents = pyroid.io.read_files(files)
+print(f"Read multiple files: {contents}")
 ```
 
 ### Network Operations
@@ -213,14 +209,11 @@ for file, content in contents.items():
 import pyroid
 
 # Make a GET request
-response = pyroid.io.network.get("https://example.com")
-print(f"Status: {response['status']}")
-print(f"Body length: {len(response['body'])}")
+response = pyroid.io.get("https://example.com")
+print(f"HTTP GET response length: {len(response)}")
 
-# Make a POST request with JSON data
-data = {"name": "John", "age": 30}
-response = pyroid.io.network.post("https://example.com/api", json=data)
-print(f"Status: {response['status']}")
+# Note: POST requests might not be implemented in the current version
+# If you need to make POST requests, check the documentation for the latest API
 ```
 
 ### Async Operations
@@ -232,22 +225,15 @@ import pyroid
 async def main():
     # Async sleep
     print("Sleeping for 1 second...")
-    await pyroid.io.async_io.sleep(1.0)
+    await pyroid.io.sleep(0.1)
     print("Awake!")
     
     # Async file operations
-    await pyroid.io.async_io.write_file_async("async_test.txt", b"Hello, async world!")
-    content = await pyroid.io.async_io.read_file_async("async_test.txt")
+    content = await pyroid.io.read_file_async("example.txt")
     print(f"File content: {content}")
     
-    # Async HTTP requests
-    response = await pyroid.io.async_io.http_get_async("https://example.com")
-    print(f"Response length: {len(response)}")
-    
-    # Async HTTP POST
-    data = {"name": "John", "age": 30}
-    response = await pyroid.io.async_io.http_post_async("https://example.com/api", json=data)
-    print(f"Response length: {len(response)}")
+    # Note: Other async operations might not be fully implemented
+    # in the current version. Check the documentation for the latest API.
 
 # Run the async main function
 asyncio.run(main())
@@ -293,27 +279,26 @@ data = [
     [1.0, 2.0], [1.5, 1.8], [5.0, 8.0],
     [8.0, 8.0], [1.0, 0.6], [9.0, 11.0]
 ]
-result = pyroid.ml.basic.kmeans(data, k=2)
-print(f"Centroids: {result['centroids']}")
-print(f"Clusters: {result['clusters']}")
+kmeans_result = pyroid.ml.basic.kmeans(data, k=2)
+print(f"K-means centroids: {kmeans_result['centroids']}")
+print(f"K-means clusters: {kmeans_result['clusters']}")
 
 # Linear regression
-x = [1.0, 2.0, 3.0, 4.0, 5.0]
-y = [2.0, 4.0, 5.0, 4.0, 6.0]
-result = pyroid.ml.basic.linear_regression(x, y)
-print(f"Slope: {result['slope']}")
-print(f"Intercept: {result['intercept']}")
-print(f"R-squared: {result['r_squared']}")
+# Note: Linear regression expects X as 2D array and y as 1D array
+X = [[1, 1], [1, 2], [2, 2], [2, 3]]
+y = [6, 8, 9, 11]
+regression_result = pyroid.ml.basic.linear_regression(X, y)
+print(f"Linear regression coefficients: {regression_result['coefficients']}")
+print(f"Linear regression intercept: {regression_result['intercept']}")
+print(f"Linear regression R-squared: {regression_result['r_squared']}")
 
 # Data normalization
-values = [10.0, 20.0, 30.0, 40.0, 50.0]
-normalized = pyroid.ml.basic.normalize(values, method="minmax")
-print(f"Normalized (min-max): {normalized}")
+normalized_data = pyroid.ml.basic.normalize(data, method="min-max")
+print(f"Normalized data (min-max): {normalized_data}")
 
 # Distance matrix
-points = [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]
-distances = pyroid.ml.basic.distance_matrix(points, metric="euclidean")
-print(f"Distance matrix: {distances}")
+distance_matrix = pyroid.ml.basic.distance_matrix(data, metric="euclidean")
+print(f"Distance matrix shape: {len(distance_matrix)}x{len(distance_matrix[0])}")
 ```
 
 ## 📊 Performance Considerations
