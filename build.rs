@@ -1,56 +1,89 @@
+//! Build script for Pyroid
+//!
+//! This script configures the build process for Pyroid.
+
 use std::env;
-use std::path::PathBuf;
-use std::process::Command;
+extern crate num_cpus;
+use std::path::Path;
 
 fn main() {
-    // Tell cargo to look for shared libraries in the specified directory
-    println!("cargo:rustc-link-search=/usr/local/lib");
-    println!("cargo:rustc-link-search=/opt/homebrew/lib");
-    println!("cargo:rustc-link-search=/opt/homebrew/anaconda3/lib");
+    // Configure PyO3
+    pyo3_build_config::add_extension_module_link_args();
     
-    // Explicitly link against the found Python library
-    println!("cargo:rustc-link-lib=dylib=python3.12");
-    
-    // Try to find Python library path using python3-config
-    let output = Command::new("python3-config")
-        .arg("--ldflags")
-        .output();
-    
-    if let Ok(output) = output {
-        if output.status.success() {
-            let ldflags = String::from_utf8_lossy(&output.stdout);
-            for flag in ldflags.split_whitespace() {
-                if flag.starts_with("-L") {
-                    let path = &flag[2..]; // Remove the -L prefix
-                    println!("cargo:rustc-link-search={}", path);
-                } else if flag.starts_with("-l") {
-                    let lib = &flag[2..]; // Remove the -l prefix
-                    println!("cargo:rustc-link-lib={}", lib);
-                }
-            }
-        }
-    }
-    
-    // Try to find Python library from environment
-    if let Ok(python_path) = env::var("PYTHON_SYS_EXECUTABLE") {
-        let python_path = PathBuf::from(python_path);
-        let python_dir = python_path.parent().unwrap();
-        let lib_dir = python_dir.join("lib");
-        println!("cargo:rustc-link-search={}", lib_dir.display());
-    }
-    
-    // Try to find Python library using python3 command
-    let output = Command::new("python3")
-        .args(["-c", "import sys; import os; print(os.path.join(sys.exec_prefix, 'lib'))"])
-        .output();
-    
-    if let Ok(output) = output {
-        if output.status.success() {
-            let lib_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            println!("cargo:rustc-link-search={}", lib_path);
-        }
-    }
-    
-    // Tell cargo to invalidate the built crate whenever the build script changes
+    // Print cargo configuration
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=Cargo.toml");
+    println!("cargo:rerun-if-changed=src/");
+    
+    // Set up feature-specific configurations
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let out_path = Path::new(&out_dir).join("config.rs");
+    
+    let mut config = String::new();
+    
+    // Add feature flags
+    config.push_str("/// Feature flags\n");
+    config.push_str("pub mod features {\n");
+    
+    #[cfg(feature = "math")]
+    config.push_str("    pub const MATH_ENABLED: bool = true;\n");
+    #[cfg(not(feature = "math"))]
+    config.push_str("    pub const MATH_ENABLED: bool = false;\n");
+    
+    #[cfg(feature = "text")]
+    config.push_str("    pub const TEXT_ENABLED: bool = true;\n");
+    #[cfg(not(feature = "text"))]
+    config.push_str("    pub const TEXT_ENABLED: bool = false;\n");
+    
+    #[cfg(feature = "data")]
+    config.push_str("    pub const DATA_ENABLED: bool = true;\n");
+    #[cfg(not(feature = "data"))]
+    config.push_str("    pub const DATA_ENABLED: bool = false;\n");
+    
+    #[cfg(feature = "io")]
+    config.push_str("    pub const IO_ENABLED: bool = true;\n");
+    #[cfg(not(feature = "io"))]
+    config.push_str("    pub const IO_ENABLED: bool = false;\n");
+    
+    #[cfg(feature = "image")]
+    config.push_str("    pub const IMAGE_ENABLED: bool = true;\n");
+    #[cfg(not(feature = "image"))]
+    config.push_str("    pub const IMAGE_ENABLED: bool = false;\n");
+    
+    #[cfg(feature = "ml")]
+    config.push_str("    pub const ML_ENABLED: bool = true;\n");
+    #[cfg(not(feature = "ml"))]
+    config.push_str("    pub const ML_ENABLED: bool = false;\n");
+    
+    config.push_str("}\n");
+    
+    // Add platform-specific configurations
+    config.push_str("\n/// Platform information\n");
+    config.push_str("pub mod platform {\n");
+    
+    #[cfg(target_os = "windows")]
+    config.push_str("    pub const OS: &str = \"windows\";\n");
+    #[cfg(target_os = "macos")]
+    config.push_str("    pub const OS: &str = \"macos\";\n");
+    #[cfg(target_os = "linux")]
+    config.push_str("    pub const OS: &str = \"linux\";\n");
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    config.push_str("    pub const OS: &str = \"unknown\";\n");
+    
+    #[cfg(target_arch = "x86_64")]
+    config.push_str("    pub const ARCH: &str = \"x86_64\";\n");
+    #[cfg(target_arch = "aarch64")]
+    config.push_str("    pub const ARCH: &str = \"aarch64\";\n");
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    config.push_str("    pub const ARCH: &str = \"unknown\";\n");
+    
+    // Add CPU information
+    config.push_str("    pub const NUM_CPUS: usize = ");
+    config.push_str(&num_cpus::get().to_string());
+    config.push_str(";\n");
+    
+    config.push_str("}\n");
+    
+    // Write the configuration file
+    std::fs::write(out_path, config).unwrap();
 }

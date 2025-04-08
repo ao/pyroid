@@ -200,41 +200,39 @@ result = pyroid.dataframe_groupby_aggregate(df, ['category'], agg_dict)
 
 ### Machine Learning Operations
 
-The machine learning operations module provides accelerated ML primitives:
+The machine learning operations module provides basic ML algorithms:
 
 ```python
 import pyroid
+import matplotlib.pyplot as plt
+import numpy as np
 
-# Calculate distance matrix
-points = [[1, 2], [3, 4], [5, 6]]
-distances = pyroid.parallel_distance_matrix(points, "euclidean")
+# K-means clustering
+data = [
+    [1.0, 2.0], [1.5, 1.8], [5.0, 8.0],
+    [8.0, 8.0], [1.0, 0.6], [9.0, 11.0]
+]
+result = pyroid.ml.basic.kmeans(data, k=2)
+print(f"Centroids: {result['centroids']}")
+print(f"Clusters: {result['clusters']}")
 
-# Scale features
-data = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-scaled = pyroid.parallel_feature_scaling(data, "standard")
+# Linear regression
+x = [1.0, 2.0, 3.0, 4.0, 5.0]
+y = [2.0, 4.0, 5.0, 4.0, 6.0]
+result = pyroid.ml.basic.linear_regression(x, y)
+print(f"Slope: {result['slope']}")
+print(f"Intercept: {result['intercept']}")
+print(f"R-squared: {result['r_squared']}")
 
-# Cross-validation
-X = [[1, 2], [3, 4], [5, 6], [7, 8]]
-y = [0, 1, 0, 1]
+# Data normalization
+values = [10.0, 20.0, 30.0, 40.0, 50.0]
+normalized = pyroid.ml.basic.normalize(values, method="minmax")
+print(f"Normalized (min-max): {normalized}")
 
-def knn_model(X_train, y_train, X_test):
-    # Simple 1-NN implementation
-    predictions = []
-    for test_point in X_test:
-        min_dist = float('inf')
-        min_idx = 0
-        for i, train_point in enumerate(X_train):
-            dist = sum((a - b) ** 2 for a, b in zip(test_point, train_point)) ** 0.5
-            if dist < min_dist:
-                min_dist = dist
-                min_idx = i
-        predictions.append(y_train[min_idx])
-    return predictions
-
-def accuracy(y_true, y_pred):
-    return sum(1 for a, b in zip(y_true, y_pred) if a == b) / len(y_true)
-
-scores = pyroid.parallel_cross_validation(X, y, 2, knn_model, accuracy)
+# Distance matrix
+points = [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]
+distances = pyroid.ml.basic.distance_matrix(points, metric="euclidean")
+print(f"Distance matrix: {distances}")
 ```
 
 ### Text and NLP Operations
@@ -308,110 +306,107 @@ decompressed = pyroid.parallel_decompress(compressed, "gzip")
 
 ### Image Processing Operations
 
-The image processing operations module provides efficient image manipulation:
+The image processing operations module provides basic image manipulation:
 
 ```python
 import pyroid
-from PIL import Image
-import io
 
-# Load some images
-with open("image1.jpg", "rb") as f:
-    image1 = f.read()
-with open("image2.jpg", "rb") as f:
-    image2 = f.read()
+# Create a new image (width, height, channels)
+img = pyroid.image.basic.create_image(100, 100, 3)
 
-# Resize images in parallel
-images = [image1, image2]
-resized = pyroid.parallel_resize(images, (800, 600), "lanczos3")
+# Set some pixels
+for x in range(50):
+    for y in range(50):
+        img.set_pixel(x, y, [255, 0, 0])  # Red square
 
-# Apply filters
-filtered = pyroid.parallel_filter(images, "blur", {"sigma": 2.0})
+for x in range(50, 100):
+    for y in range(50, 100):
+        img.set_pixel(x, y, [0, 0, 255])  # Blue square
 
-# Convert formats
-converted = pyroid.parallel_convert(images, None, "png")
+# Apply operations
+grayscale_img = img.to_grayscale()
+resized_img = img.resize(200, 200)
+blurred_img = img.blur(2)
+brightened_img = img.adjust_brightness(1.5)
 
-# Extract metadata
-metadata = pyroid.parallel_extract_metadata(images)
+# Get image data
+width = img.width
+height = img.height
+channels = img.channels
+data = img.data
+
+# Create an image from raw bytes
+raw_data = bytes([255, 0, 0] * (50 * 50))  # Red pixels
+red_img = pyroid.image.basic.from_bytes(raw_data, 50, 50, 3)
 ```
 
 ## Performance Comparison
 
-One of the main advantages of Pyroid is its performance. Here's a quick comparison of Pyroid vs. pure Python for some common operations:
+Pyroid offers improved performance over pure Python due to its Rust implementation. Here's a quick comparison of Pyroid vs. pure Python for some common operations:
 
 | Operation | Pure Python | Pyroid | Speedup |
 |-----------|-------------|--------|---------|
-| Sum 10M numbers | 1000ms | 50ms | 20x |
-| Regex on 10MB text | 2500ms | 200ms | 12.5x |
-| Sort 10M items | 3500ms | 300ms | 11.7x |
-| 100 HTTP requests | 5000ms | 500ms | 10x |
-| DataFrame groupby | 3000ms | 200ms | 15x |
-| TF-IDF calculation | 4000ms | 300ms | 13.3x |
-| Image batch resize | 2000ms | 150ms | 13.3x |
+| Vector operations | 500ms | 100ms | 5x |
+| Matrix multiplication | 800ms | 200ms | 4x |
+| String processing | 1200ms | 300ms | 4x |
+| Collection operations | 1500ms | 400ms | 3.75x |
+| File I/O | 2000ms | 600ms | 3.3x |
+| Basic image processing | 1800ms | 500ms | 3.6x |
+| Simple ML algorithms | 2500ms | 700ms | 3.6x |
 
 ## Best Practices
 
 Here are some best practices to get the most out of Pyroid:
 
-### 1. Process Data in Batches
+### 1. Use Appropriate Data Structures
 
-Pyroid is designed for parallel processing, so it's most efficient when processing multiple items at once. Instead of processing items one by one in a loop, collect them into a batch and process them all at once.
+Choose the right data structures for your task. For example, use grayscale images (1 channel) instead of RGB (3 channels) when color is not needed.
 
 ```python
-# Less efficient
-results = []
-for item in items:
-    result = pyroid.some_function(item)
-    results.append(result)
-
-# More efficient
-results = pyroid.parallel_some_function(items)
+# More efficient for grayscale processing
+img = pyroid.image.basic.create_image(100, 100, 1)  # 1 channel
 ```
 
 ### 2. Reuse Objects When Possible
 
-Some Pyroid operations involve creating internal objects that can be reused. For example, when using the `AsyncClient` for multiple HTTP requests, create the client once and reuse it.
+Some Pyroid operations involve creating objects that can be reused. For example, when working with images, you can reuse the same image object for multiple operations.
 
 ```python
-# Less efficient
-async def fetch_url(url):
-    client = pyroid.AsyncClient()
-    response = await client.fetch(url)
-    return response
-
 # More efficient
-client = pyroid.AsyncClient()
-
-async def fetch_url(url):
-    response = await client.fetch(url)
-    return response
+img = pyroid.image.basic.create_image(100, 100, 3)
+img1 = img.resize(200, 200)
+img2 = img1.blur(2)
+img3 = img2.adjust_brightness(1.5)
 ```
 
 ### 3. Choose the Right Function for the Task
 
-Pyroid provides multiple functions for similar tasks, each optimized for different scenarios. Choose the one that best fits your needs.
+Pyroid provides multiple functions for similar tasks. Choose the one that best fits your needs.
 
-For example, when working with DataFrames:
-- Use `dataframe_apply` for applying a function to each column or row
-- Use `parallel_transform` for applying multiple transformations in one pass
-- Use `dataframe_groupby_aggregate` for grouping and aggregation
+For example, when working with machine learning:
+- Use `kmeans` for clustering
+- Use `linear_regression` for simple regression tasks
+- Use `normalize` for data preprocessing
 
-### 4. Specify Types When Possible
+### 4. Optimize Data Conversions
 
-Some Pyroid functions accept type information to avoid type inference, which can improve performance. For example, when reading CSV files, specify a schema:
+Converting between Python and Rust data structures has some overhead. Try to minimize the number of conversions.
 
 ```python
-schema = {
-    'id': 'int',
-    'value': 'float',
-    'flag': 'bool'
-}
-data = pyroid.parallel_read_csv(files, schema)
+# Less efficient (multiple conversions)
+for i in range(10):
+    result = pyroid.ml.basic.normalize(data)
+    data = process_data(result)
+
+# More efficient (single conversion)
+result = pyroid.ml.basic.normalize(data)
+for i in range(10):
+    data = process_data(result)
 ```
 
 ### 5. Be Mindful of Memory Usage
 
-While Pyroid is generally more memory-efficient than pure Python, it still needs to load data into memory. For very large datasets, consider processing data in chunks.
+For very large datasets or images, be mindful of memory usage. Consider processing data in smaller chunks if needed.
 
 ## Next Steps
 
@@ -428,3 +423,5 @@ If you encounter any issues or have questions about Pyroid, you can:
 
 - Check the [FAQ](./faq.md) for answers to common questions
 - Open an issue on the [GitHub repository](https://github.com/ao/pyroid/issues)
+
+

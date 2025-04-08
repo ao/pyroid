@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "pyroid"
 version = "0.1.0"
-description = "High-performance Rust functions for Python"
+description = "High-performance Rust functions for Python with a simplified architecture"
 authors = [
     {name = "Pyroid Team", email = "support@ataiva.com"}
 ]
@@ -28,9 +28,24 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/ao/pyroid"
 "Bug Tracker" = "https://github.com/ao/pyroid/issues"
+"Documentation" = "https://github.com/ao/pyroid/blob/main/README.md"
+
 [tool.maturin]
 python-source = "python"
 features = ["pyo3/extension-module"]
+
+# Feature flags configuration
+# By default, all features are enabled
+# To build with specific features only, use:
+# maturin develop --features "math data"
+[tool.maturin.features]
+default = ["math", "text", "data", "io", "image", "ml"]
+math = []
+text = ["regex"]
+data = []
+io = ["tokio", "futures"]
+image = []
+ml = []
 
 [tool.semantic_release]
 version_variable = [

@@ -8,11 +8,8 @@ This script demonstrates the machine learning capabilities of pyroid.
 import time
 import random
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import cross_val_score
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score
 import pyroid
 
 def benchmark(func, *args, **kwargs):
@@ -27,97 +24,179 @@ def main():
     print("pyroid Machine Learning Operations Examples")
     print("=========================================")
     
-    # Example 1: Distance Matrix
-    print("\n1. Distance Matrix")
+    # Example 1: K-means Clustering
+    print("\n1. K-means Clustering")
     
-    # Generate random points
-    n_points = 2000
-    points = [[random.random() for _ in range(10)] for _ in range(n_points)]
-    points_np = np.array(points)
+    # Generate sample data
+    print("\nGenerating sample data...")
+    np.random.seed(42)
     
-    print(f"\nCalculating distance matrix for {n_points} points with 10 dimensions:")
+    # Create three clusters
+    n_samples = 300
+    centers = [(0, 0), (5, 5), (0, 5)]
+    cluster_std = [0.8, 1.0, 0.5]
     
-    print("\nNumPy distance matrix:")
-    def numpy_distance_matrix(points):
-        n = len(points)
-        dist_matrix = np.zeros((n, n))
-        for i in range(n):
-            for j in range(i+1, n):
-                dist = np.sqrt(np.sum((points[i] - points[j]) ** 2))
-                dist_matrix[i, j] = dist
-                dist_matrix[j, i] = dist
-        return dist_matrix
+    X = []
+    for i, (cx, cy) in enumerate(centers):
+        cluster_points = n_samples // 3
+        for _ in range(cluster_points):
+            x = np.random.normal(cx, cluster_std[i])
+            y = np.random.normal(cy, cluster_std[i])
+            X.append([x, y])
     
-    numpy_result = benchmark(lambda: numpy_distance_matrix(points_np))
+    print(f"Generated {len(X)} points in 3 clusters")
     
-    print("\npyroid parallel distance matrix:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_distance_matrix(points, "euclidean"))
+    # Run K-means clustering
+    print("\nRunning K-means clustering with k=3:")
+    result = benchmark(lambda: pyroid.ml.basic.kmeans(X, k=3))
     
-    print("\nResults (shape):")
-    print(f"NumPy: {numpy_result.shape}")
-    print(f"pyroid: ({len(pyroid_result)}, {len(pyroid_result[0])})")
+    # Extract results
+    centroids = result['centroids']
+    clusters = result['clusters']
+    iterations = result['iterations']
     
-    # Example 2: Feature Scaling
-    print("\n2. Feature Scaling")
+    print(f"K-means converged in {iterations} iterations")
+    print(f"Centroids: {centroids}")
     
-    # Generate random data
-    n_samples = 100000
-    n_features = 20
-    data = [[random.gauss(0, 10) for _ in range(n_features)] for _ in range(n_samples)]
-    data_np = np.array(data)
+    # Plot the results
+    plt.figure(figsize=(10, 6))
+    X_np = np.array(X)
+    plt.scatter(X_np[:, 0], X_np[:, 1], c=clusters, cmap='viridis')
+    centroids_np = np.array(centroids)
+    plt.scatter(centroids_np[:, 0], centroids_np[:, 1], c='red', marker='X', s=100)
+    plt.title('K-means Clustering')
+    plt.xlabel('Feature 1')
+    plt.ylabel('Feature 2')
+    plt.savefig('kmeans_clustering.png')
+    print("Plot saved as 'kmeans_clustering.png'")
     
-    print(f"\nScaling {n_samples} samples with {n_features} features:")
+    # Example 2: Linear Regression
+    print("\n2. Linear Regression")
     
-    print("\nScikit-learn StandardScaler:")
-    scaler = StandardScaler()
-    sklearn_result = benchmark(lambda: scaler.fit_transform(data_np))
+    # Generate sample data
+    print("\nGenerating sample data...")
+    np.random.seed(42)
     
-    print("\npyroid parallel feature scaling:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_feature_scaling(data, "standard"))
+    # Create linear data with noise
+    n_samples = 100
+    x = list(range(1, n_samples + 1))
+    y = [2 * xi + 5 + np.random.normal(0, 10) for xi in x]
     
-    print("\nResults (shape):")
-    print(f"Scikit-learn: {sklearn_result.shape}")
-    print(f"pyroid: ({len(pyroid_result)}, {len(pyroid_result[0])})")
+    print(f"Generated {len(x)} data points")
     
-    # Example 3: Cross Validation
-    print("\n3. Cross Validation")
+    # Run linear regression
+    print("\nRunning linear regression:")
+    result = benchmark(lambda: pyroid.ml.basic.linear_regression(x, y))
     
-    # Generate a classification dataset
-    X, y = make_blobs(n_samples=10000, centers=3, n_features=10, random_state=42)
-    X = X.tolist()
-    y = y.tolist()
+    # Extract results
+    slope = result['slope']
+    intercept = result['intercept']
+    r_squared = result['r_squared']
     
-    # Define a simple model function for pyroid
-    def knn_model(X_train, y_train, X_test):
-        # Convert to numpy arrays
-        X_train_np = np.array(X_train)
-        y_train_np = np.array(y_train)
-        X_test_np = np.array(X_test)
-        
-        # Train KNN model
-        model = KNeighborsClassifier(n_neighbors=3)
-        model.fit(X_train_np, y_train_np)
-        
-        # Predict
-        return model.predict(X_test_np).tolist()
+    print(f"Linear regression: y = {slope:.4f}x + {intercept:.4f}")
+    print(f"R-squared: {r_squared:.4f}")
     
-    # Define scoring function
-    def accuracy(y_true, y_pred):
-        correct = sum(1 for a, b in zip(y_true, y_pred) if a == b)
-        return correct / len(y_true)
+    # Plot the results
+    plt.figure(figsize=(10, 6))
+    plt.scatter(x, y)
+    plt.plot(x, [slope * xi + intercept for xi in x], 'r-')
+    plt.title(f'Linear Regression (y = {slope:.4f}x + {intercept:.4f}, R² = {r_squared:.4f})')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.savefig('linear_regression.png')
+    print("Plot saved as 'linear_regression.png'")
     
-    print("\nPerforming 5-fold cross-validation:")
+    # Example 3: Data Normalization
+    print("\n3. Data Normalization")
     
-    print("\nScikit-learn cross_val_score:")
-    model = KNeighborsClassifier(n_neighbors=3)
-    sklearn_result = benchmark(lambda: cross_val_score(model, np.array(X), np.array(y), cv=5))
+    # Generate sample data
+    print("\nGenerating sample data...")
+    np.random.seed(42)
     
-    print("\npyroid parallel cross-validation:")
-    pyroid_result = benchmark(lambda: pyroid.parallel_cross_validation(X, y, 5, knn_model, accuracy))
+    # Create data with different scales
+    values = [np.random.normal(50, 10) for _ in range(100)]
     
-    print("\nResults (scores):")
-    print(f"Scikit-learn: {sklearn_result}")
-    print(f"pyroid: {pyroid_result}")
+    print(f"Generated {len(values)} values")
+    print(f"Original data - Min: {min(values):.2f}, Max: {max(values):.2f}, Mean: {sum(values)/len(values):.2f}")
+    
+    # Run normalization
+    print("\nRunning min-max normalization:")
+    minmax_normalized = benchmark(lambda: pyroid.ml.basic.normalize(values, method='minmax'))
+    
+    print("\nRunning z-score normalization:")
+    zscore_normalized = benchmark(lambda: pyroid.ml.basic.normalize(values, method='zscore'))
+    
+    # Print statistics
+    print(f"\nMin-Max normalized - Min: {min(minmax_normalized):.2f}, Max: {max(minmax_normalized):.2f}")
+    print(f"Z-Score normalized - Mean: {sum(zscore_normalized)/len(zscore_normalized):.2f}, Std: {np.std(zscore_normalized):.2f}")
+    
+    # Plot the results
+    plt.figure(figsize=(15, 5))
+    
+    plt.subplot(1, 3, 1)
+    plt.hist(values, bins=20)
+    plt.title('Original Data')
+    plt.xlabel('Value')
+    plt.ylabel('Frequency')
+    
+    plt.subplot(1, 3, 2)
+    plt.hist(minmax_normalized, bins=20)
+    plt.title('Min-Max Normalization')
+    plt.xlabel('Value')
+    
+    plt.subplot(1, 3, 3)
+    plt.hist(zscore_normalized, bins=20)
+    plt.title('Z-Score Normalization')
+    plt.xlabel('Value')
+    
+    plt.tight_layout()
+    plt.savefig('normalization.png')
+    print("Plot saved as 'normalization.png'")
+    
+    # Example 4: Distance Matrix
+    print("\n4. Distance Matrix")
+    
+    # Generate sample data
+    print("\nGenerating sample data...")
+    np.random.seed(42)
+    
+    # Create points in 2D space
+    points = [[np.random.random() * 10, np.random.random() * 10] for _ in range(5)]
+    
+    print(f"Generated {len(points)} points")
+    
+    # Run distance matrix calculation
+    print("\nCalculating Euclidean distance matrix:")
+    euclidean_distances = benchmark(lambda: pyroid.ml.basic.distance_matrix(points, metric='euclidean'))
+    
+    print("\nCalculating Manhattan distance matrix:")
+    manhattan_distances = benchmark(lambda: pyroid.ml.basic.distance_matrix(points, metric='manhattan'))
+    
+    # Print results
+    print("\nEuclidean distance matrix:")
+    for row in euclidean_distances:
+        print([f"{val:.2f}" for val in row])
+    
+    print("\nManhattan distance matrix:")
+    for row in manhattan_distances:
+        print([f"{val:.2f}" for val in row])
+    
+    # Plot the results
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # Plot Euclidean distances
+    im1 = axes[0].imshow(euclidean_distances, cmap='viridis')
+    axes[0].set_title('Euclidean Distance Matrix')
+    fig.colorbar(im1, ax=axes[0])
+    
+    # Plot Manhattan distances
+    im2 = axes[1].imshow(manhattan_distances, cmap='viridis')
+    axes[1].set_title('Manhattan Distance Matrix')
+    fig.colorbar(im2, ax=axes[1])
+    
+    plt.tight_layout()
+    plt.savefig('distance_matrices.png')
+    print("Plot saved as 'distance_matrices.png'")
 
 if __name__ == "__main__":
     main()
