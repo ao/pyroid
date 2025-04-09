@@ -46,7 +46,7 @@ def run_math_benchmarks(sizes=[1_000, 10_000, 100_000, 1_000_000, 10_000_000]):
         if size <= 1_000_000:  # NumPy might struggle with very large arrays
             sum_benchmark.run_test("NumPy sum", "NumPy", np.sum, numpy_timeout, numbers)
             
-        sum_benchmark.run_test("pyroid parallel_sum", "pyroid", pyroid.parallel_sum, pyroid_timeout, numbers)
+        sum_benchmark.run_test("pyroid sum", "pyroid", pyroid.math.sum, pyroid_timeout, numbers)
         
         BenchmarkReporter.print_results(sum_benchmark)
         results.append(sum_benchmark)
@@ -61,7 +61,7 @@ def run_math_benchmarks(sizes=[1_000, 10_000, 100_000, 1_000_000, 10_000_000]):
             
             mean_benchmark.run_test("Python mean", "Python", python_mean, python_timeout, numbers)
             mean_benchmark.run_test("NumPy mean", "NumPy", np.mean, numpy_timeout, numbers)
-            mean_benchmark.run_test("pyroid parallel_mean", "pyroid", pyroid.parallel_mean, pyroid_timeout, numbers)
+            mean_benchmark.run_test("pyroid mean", "pyroid", pyroid.math.mean, pyroid_timeout, numbers)
             
             BenchmarkReporter.print_results(mean_benchmark)
             results.append(mean_benchmark)
@@ -77,7 +77,7 @@ def run_math_benchmarks(sizes=[1_000, 10_000, 100_000, 1_000_000, 10_000_000]):
             
             std_benchmark.run_test("Python std", "Python", python_std, python_timeout, numbers)
             std_benchmark.run_test("NumPy std", "NumPy", lambda x: np.std(x, ddof=1), numpy_timeout, numbers)
-            std_benchmark.run_test("pyroid parallel_std", "pyroid", lambda x: pyroid.parallel_std(x, 1), pyroid_timeout, numbers)
+            std_benchmark.run_test("pyroid std", "pyroid", lambda x: pyroid.math.std(x), pyroid_timeout, numbers)
             
             BenchmarkReporter.print_results(std_benchmark)
             results.append(std_benchmark)
@@ -111,7 +111,7 @@ def run_math_benchmarks(sizes=[1_000, 10_000, 100_000, 1_000_000, 10_000_000]):
                 matrix_benchmark.run_test("Python matmul", "Python", python_matmul, 30, a, b)
             
             matrix_benchmark.run_test("NumPy matmul", "NumPy", np.matmul, 30, a_np, b_np)
-            matrix_benchmark.run_test("pyroid matrix_multiply", "pyroid", pyroid.matrix_multiply, 30, a, b)
+            matrix_benchmark.run_test("pyroid multiply", "pyroid", pyroid.math.multiply, 30, a, b)
             
             BenchmarkReporter.print_results(matrix_benchmark)
             results.append(matrix_benchmark)

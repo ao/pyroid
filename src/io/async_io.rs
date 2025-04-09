@@ -4,63 +4,21 @@
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
+use pyo3::exceptions::{PyRuntimeError, PyValueError, PyIOError};
 use crate::core::error::PyroidError;
-use std::future::Future;
-use std::pin::Pin;
-use std::io::Write;
-use std::task::{Context, Poll};
-
-#[cfg(feature = "io")]
-use tokio::fs::File;
-#[cfg(feature = "io")]
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-#[cfg(feature = "io")]
-use std::path::Path;
-#[cfg(feature = "io")]
-use tokio::time::sleep as tokio_sleep;
-#[cfg(feature = "io")]
-use tokio::time::Duration;
-
-/// A simple future that can be used with PyO3
-struct PyFuture<T> {
-    inner: Pin<Box<dyn Future<Output = PyResult<T>> + Send>>,
-}
-
-impl<T> PyFuture<T> {
-    fn new<F>(future: F) -> Self
-    where
-        F: Future<Output = PyResult<T>> + Send + 'static,
-    {
-        Self {
-            inner: Box::pin(future),
-        }
-    }
-}
-
-impl<T> Future for PyFuture<T> {
-    type Output = PyResult<T>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.inner.as_mut().poll(cx)
-    }
-}
 
 /// Async sleep
 #[pyfunction]
-fn sleep(py: Python, seconds: f64) -> PyResult<PyObject> {
+fn sleep(py: Python, seconds: f64) -> PyResult<()> {
     #[cfg(feature = "io")]
     {
-        let seconds_u64 = (seconds * 1000.0) as u64;
+        // Import the async_bridge module
+        let async_bridge = PyModule::import(py, "pyroid.async_bridge")?;
         
-        let future = PyFuture::new(async move {
-            tokio_sleep(Duration::from_millis(seconds_u64)).await;
-            Ok(())
-        });
+        // Call the sleep function
+        async_bridge.getattr("sleep")?.call1((seconds,))?;
         
-        // Create a Python coroutine object
-        let coro = py.import("asyncio")?.getattr("sleep")?.call1((seconds,))?;
-        
-        Ok(coro.into())
+        Ok(())
     }
     
     #[cfg(not(feature = "io"))]
@@ -74,30 +32,13 @@ fn sleep(py: Python, seconds: f64) -> PyResult<PyObject> {
 fn read_file_async(py: Python, path: &str) -> PyResult<PyObject> {
     #[cfg(feature = "io")]
     {
-        let path_str = path.to_string();
+        // Import the async_bridge module
+        let async_bridge = PyModule::import(py, "pyroid.async_bridge")?;
         
-        // Create a Python coroutine that will read the file
-        let coro = py.import("asyncio")?.getattr("to_thread")?.call1((
-            py.get_type::<PyAny>().call_method1(
-                "__subclasses__",
-                ()
-            )?.get_item(0)?.call_method1(
-                "__new__",
-                (py.get_type::<PyAny>(),)
-            )?.call_method1(
-                "__init__",
-                (py.eval(
-                    &format!(
-                        "lambda: open('{}', 'rb').read()",
-                        path_str.replace("'", "\\'")
-                    ),
-                    None,
-                    None
-                )?,)
-            )?,
-        ))?;
+        // Call the read_file function
+        let result = async_bridge.getattr("read_file")?.call1((path,))?;
         
-        Ok(coro.into())
+        Ok(result.into())
     }
     
     #[cfg(not(feature = "io"))]
@@ -111,42 +52,13 @@ fn read_file_async(py: Python, path: &str) -> PyResult<PyObject> {
 fn write_file_async(py: Python, path: &str, data: &PyBytes) -> PyResult<PyObject> {
     #[cfg(feature = "io")]
     {
-        let path_str = path.to_string();
-        let bytes = data.as_bytes().to_vec();
+        // Import the async_bridge module
+        let async_bridge = PyModule::import(py, "pyroid.async_bridge")?;
         
-        // Create a Python coroutine that will write the file
-        let coro = py.import("asyncio")?.getattr("to_thread")?.call1((
-            py.get_type::<PyAny>().call_method1(
-                "__subclasses__",
-                ()
-            )?.get_item(0)?.call_method1(
-                "__new__",
-                (py.get_type::<PyAny>(),)
-            )?.call_method1(
-                "__init__",
-                (py.eval(
-                    &format!(
-                        "lambda: open('{}', 'wb').write({})",
-                        path_str.replace("'", "\\'"),
-                        bytes.len()
-                    ),
-                    None,
-                    None
-                )?,)
-            )?,
-        ))?;
+        // Call the write_file function
+        let result = async_bridge.getattr("write_file")?.call1((path, data),)?;
         
-        // Actually write the file in a separate thread
-        std::thread::spawn(move || {
-            if let Some(parent) = Path::new(&path_str).parent() {
-                if !parent.exists() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
-            }
-            let _ = std::fs::write(path_str, bytes);
-        });
-        
-        Ok(coro.into())
+        Ok(result.into())
     }
     
     #[cfg(not(feature = "io"))]
@@ -160,30 +72,13 @@ fn write_file_async(py: Python, path: &str, data: &PyBytes) -> PyResult<PyObject
 fn http_get_async(py: Python, url: &str) -> PyResult<PyObject> {
     #[cfg(feature = "io")]
     {
-        let url_str = url.to_string();
+        // Import the async_bridge module
+        let async_bridge = PyModule::import(py, "pyroid.async_bridge")?;
         
-        // Create a Python coroutine that will make the HTTP request
-        let coro = py.import("asyncio")?.getattr("to_thread")?.call1((
-            py.get_type::<PyAny>().call_method1(
-                "__subclasses__",
-                ()
-            )?.get_item(0)?.call_method1(
-                "__new__",
-                (py.get_type::<PyAny>(),)
-            )?.call_method1(
-                "__init__",
-                (py.eval(
-                    &format!(
-                        "lambda: __import__('urllib.request').request.urlopen('{}').read()",
-                        url_str.replace("'", "\\'")
-                    ),
-                    None,
-                    None
-                )?,)
-            )?,
-        ))?;
+        // Call the fetch_url function
+        let result = async_bridge.getattr("fetch_url")?.call1((url,))?;
         
-        Ok(coro.into())
+        Ok(result.into())
     }
     
     #[cfg(not(feature = "io"))]
@@ -197,77 +92,23 @@ fn http_get_async(py: Python, url: &str) -> PyResult<PyObject> {
 fn http_post_async(py: Python, url: &str, data: Option<&PyBytes>, json: Option<&PyDict>) -> PyResult<PyObject> {
     #[cfg(feature = "io")]
     {
-        let url_str = url.to_string();
-        let post_data = if let Some(data_bytes) = data {
-            data_bytes.as_bytes().to_vec()
-        } else if let Some(json_dict) = json {
-            // Convert PyDict to JSON string
-            let mut map = std::collections::HashMap::new();
-            for (key, value) in json_dict.iter() {
-                let key_str = key.extract::<String>()?;
-                
-                if let Ok(val_str) = value.extract::<String>() {
-                    map.insert(key_str, serde_json::Value::String(val_str));
-                } else if let Ok(val_int) = value.extract::<i64>() {
-                    map.insert(key_str, serde_json::Value::Number(serde_json::Number::from(val_int)));
-                } else if let Ok(val_float) = value.extract::<f64>() {
-                    if let Some(num) = serde_json::Number::from_f64(val_float) {
-                        map.insert(key_str, serde_json::Value::Number(num));
-                    }
-                } else if let Ok(val_bool) = value.extract::<bool>() {
-                    map.insert(key_str, serde_json::Value::Bool(val_bool));
-                } else {
-                    map.insert(key_str, serde_json::Value::Null);
-                }
-            }
-            
-            match serde_json::to_string(&map) {
-                Ok(json_string) => json_string.into_bytes(),
-                Err(e) => return Err(PyroidError::IoError(format!("Failed to serialize JSON: {}", e)).into()),
-            }
+        // Import the async_bridge module
+        let async_bridge = PyModule::import(py, "pyroid.async_bridge")?;
+        
+        // Convert PyDict to JSON if provided
+        let json_dict = if let Some(json_dict) = json {
+            Some(json_dict.to_object(py))
         } else {
-            Vec::new()
+            None
         };
         
-        // Create a Python coroutine that will make the HTTP request
-        let coro = py.import("asyncio")?.getattr("to_thread")?.call1((
-            py.get_type::<PyAny>().call_method1(
-                "__subclasses__",
-                ()
-            )?.get_item(0)?.call_method1(
-                "__new__",
-                (py.get_type::<PyAny>(),)
-            )?.call_method1(
-                "__init__",
-                (py.eval(
-                    &format!(
-                        "lambda: __import__('urllib.request').request.urlopen('{}', data={}).read()",
-                        url_str.replace("'", "\\'"),
-                        if post_data.is_empty() { "None" } else { "b'...'" }
-                    ),
-                    None,
-                    None
-                )?,)
-            )?,
-        ))?;
+        // Get raw bytes if provided
+        let raw_data = data.map(|d| d.as_bytes().to_vec());
         
-        // Actually make the request in a separate thread
-        if !post_data.is_empty() {
-            std::thread::spawn(move || {
-                let client = std::net::TcpStream::connect(url_str.replace("http://", "").replace("https://", "").split('/').next().unwrap_or("localhost:80"));
-                if let Ok(mut stream) = client {
-                    let request = format!(
-                        "POST / HTTP/1.1\r\nHost: {}\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n",
-                        url_str.replace("http://", "").replace("https://", "").split('/').next().unwrap_or("localhost"),
-                        post_data.len()
-                    );
-                    let _ = stream.write(request.as_bytes());
-                    let _ = stream.write(&post_data);
-                }
-            });
-        }
+        // Call the http_post function
+        let result = async_bridge.getattr("http_post")?.call1((url, raw_data, json_dict))?;
         
-        Ok(coro.into())
+        Ok(result.into())
     }
     
     #[cfg(not(feature = "io"))]

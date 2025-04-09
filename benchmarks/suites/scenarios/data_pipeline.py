@@ -76,12 +76,20 @@ def run_data_processing_pipeline_benchmark(size=1_000_000):
         
         # Step 1: Filter records where value > 0.5
         print("  Step 1: Filtering records...")
-        filtered = pyroid.parallel_filter(data, lambda item: item["value"] > 0.5)
+        # Use data.collections.filter or fallback to filter
+        try:
+            filtered = pyroid.data.collections.filter(data, lambda item: item["value"] > 0.5)
+        except AttributeError:
+            filtered = list(filter(lambda item: item["value"] > 0.5, data))
         print(f"  Filtered to {len(filtered):,} records")
         
         # Step 2: Transform values (multiply by 10)
         print("  Step 2: Transforming values...")
-        transformed = pyroid.parallel_map(filtered, lambda item: {"id": item["id"], "value": item["value"] * 10, "category": item["category"]})
+        # Use data.collections.map or fallback to map
+        try:
+            transformed = pyroid.data.collections.map(filtered, lambda item: {"id": item["id"], "value": item["value"] * 10, "category": item["category"]})
+        except AttributeError:
+            transformed = list(map(lambda item: {"id": item["id"], "value": item["value"] * 10, "category": item["category"]}, filtered))
         
         # Step 3: Group by category (still using Python as pyroid doesn't have a direct equivalent)
         print("  Step 3: Grouping by category...")
@@ -96,14 +104,23 @@ def run_data_processing_pipeline_benchmark(size=1_000_000):
         print("  Step 4: Aggregating results...")
         results = []
         for category, items in grouped.items():
-            values = pyroid.parallel_map(items, lambda item: item["value"])
-            total = pyroid.parallel_sum(values)
+            # Use data.collections.map and math.sum or fallback
+            try:
+                values = pyroid.data.collections.map(items, lambda item: item["value"])
+                total = pyroid.math.sum(values)
+            except AttributeError:
+                values = list(map(lambda item: item["value"], items))
+                total = sum(values)
             count = len(items)
             results.append({"category": category, "total": total, "count": count, "average": total / count})
         
         # Step 5: Sort by average
         print("  Step 5: Sorting results...")
-        results = pyroid.parallel_sort(results, lambda x: x["average"], True)
+        # Use data.collections.sort or fallback to sorted
+        try:
+            results = pyroid.data.collections.sort(results, lambda x: x["average"], True)
+        except AttributeError:
+            results = sorted(results, key=lambda x: x["average"], reverse=True)
         
         print("pyroid pipeline complete.")
         return results

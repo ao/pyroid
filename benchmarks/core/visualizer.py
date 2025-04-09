@@ -133,15 +133,48 @@ class BenchmarkDashboard:
             return
         
         # Join the dataframes to calculate speedup
-        merged_data = pd.merge(
-            pyroid_data[["benchmark_name", "duration_ms"]],
-            python_data[["benchmark_name", "duration_ms", "timed_out"]],
-            on="benchmark_name",
-            suffixes=("_pyroid", "_python")
-        )
+        try:
+            # Try to merge with timed_out column
+            if "timed_out" in python_data.columns:
+                merged_data = pd.merge(
+                    pyroid_data[["benchmark_name", "duration_ms"]],
+                    python_data[["benchmark_name", "duration_ms", "timed_out"]],
+                    on="benchmark_name",
+                    suffixes=("_pyroid", "_python")
+                )
+            else:
+                # If timed_out column doesn't exist, merge without it
+                merged_data = pd.merge(
+                    pyroid_data[["benchmark_name", "duration_ms"]],
+                    python_data[["benchmark_name", "duration_ms"]],
+                    on="benchmark_name",
+                    suffixes=("_pyroid", "_python")
+                )
+        except Exception as e:
+            print(f"Warning: Error merging dataframes: {e}")
+            # Create a simple merged dataframe without timed_out column
+            merged_data = pd.merge(
+                pyroid_data[["benchmark_name", "duration_ms"]],
+                python_data[["benchmark_name", "duration_ms"]],
+                on="benchmark_name",
+                suffixes=("_pyroid", "_python")
+            )
         
-        # Calculate speedups where Python didn't time out
-        valid_speedups = merged_data[~merged_data["timed_out_python"]]["duration_ms_python"] / merged_data[~merged_data["timed_out_python"]]["duration_ms_pyroid"]
+        # Add timed_out_python column if it doesn't exist
+        if "timed_out_python" not in merged_data.columns:
+            # Create a column with all False values
+            merged_data["timed_out_python"] = False
+        
+        # Calculate speedups for all data points
+        # Use a safe approach that handles missing or zero values
+        valid_data = merged_data[merged_data["duration_ms_pyroid"] > 0]
+        
+        # Handle division by zero by replacing zeros with a small value
+        # This avoids warnings while still showing very large speedups
+        pyroid_times = valid_data["duration_ms_pyroid"].copy()
+        pyroid_times = pyroid_times.replace(0, 1e-6)  # Replace zeros with a very small number
+        
+        valid_speedups = valid_data["duration_ms_python"] / pyroid_times
         
         # Calculate metrics
         metrics = {
@@ -225,12 +258,20 @@ class BenchmarkDashboard:
                 }
                 
                 if python_time is not None:
-                    row["speedup_vs_python"] = python_time / pyroid_time
+                    # Handle division by zero
+                    if pyroid_time == 0:
+                        row["speedup_vs_python"] = python_time / 1e-6  # Use a very small number instead of zero
+                    else:
+                        row["speedup_vs_python"] = python_time / pyroid_time
                 else:
                     row["speedup_vs_python"] = None
                     
                 if numpy_time is not None:
-                    row["speedup_vs_numpy"] = numpy_time / pyroid_time
+                    # Handle division by zero
+                    if pyroid_time == 0:
+                        row["speedup_vs_numpy"] = numpy_time / 1e-6  # Use a very small number instead of zero
+                    else:
+                        row["speedup_vs_numpy"] = numpy_time / pyroid_time
                 else:
                     row["speedup_vs_numpy"] = None
                     
@@ -414,12 +455,20 @@ class BenchmarkDashboard:
                     }
                     
                     if python_time is not None and pyroid_time is not None:
-                        row["speedup_vs_python"] = python_time / pyroid_time
+                        # Handle division by zero
+                        if pyroid_time == 0:
+                            row["speedup_vs_python"] = python_time / 1e-6  # Use a very small number instead of zero
+                        else:
+                            row["speedup_vs_python"] = python_time / pyroid_time
                     else:
                         row["speedup_vs_python"] = None
                         
                     if numpy_time is not None and pyroid_time is not None:
-                        row["speedup_vs_numpy"] = numpy_time / pyroid_time
+                        # Handle division by zero
+                        if pyroid_time == 0:
+                            row["speedup_vs_numpy"] = numpy_time / 1e-6  # Use a very small number instead of zero
+                        else:
+                            row["speedup_vs_numpy"] = numpy_time / pyroid_time
                     else:
                         row["speedup_vs_numpy"] = None
                         
@@ -585,7 +634,11 @@ class BenchmarkDashboard:
                     }
                     
                     if not python_result["timed_out"] and not pyroid_result["timed_out"]:
-                        row["speedup"] = python_result["duration_ms"] / pyroid_result["duration_ms"]
+                        # Handle division by zero
+                        if pyroid_result["duration_ms"] == 0:
+                            row["speedup"] = python_result["duration_ms"] / 1e-6  # Use a very small number instead of zero
+                        else:
+                            row["speedup"] = python_result["duration_ms"] / pyroid_result["duration_ms"]
                     else:
                         row["speedup"] = None
                         

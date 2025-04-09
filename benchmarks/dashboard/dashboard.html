@@ -1,0 +1,163 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Pyroid Performance Dashboard</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f5f5f5;
+                }
+                .header {
+                    background-color: #0066cc;
+                    color: white;
+                    padding: 20px;
+                    text-align: center;
+                }
+                .container {
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .section {
+                    background-color: white;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                    margin-bottom: 20px;
+                    padding: 20px;
+                }
+                .section-title {
+                    color: #0066cc;
+                    border-bottom: 1px solid #eee;
+                    padding-bottom: 10px;
+                    margin-top: 0;
+                }
+                .chart-container {
+                    margin: 20px 0;
+                    text-align: center;
+                }
+                .chart {
+                    max-width: 100%;
+                    height: auto;
+                }
+                .footer {
+                    text-align: center;
+                    padding: 20px;
+                    color: #666;
+                    font-size: 14px;
+                }
+                .two-column {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                }
+                .column {
+                    flex: 1;
+                    min-width: 300px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Pyroid Performance Dashboard</h1>
+                <p>Benchmark results demonstrating Pyroid's performance advantages</p>
+            </div>
+            
+            <div class="container">
+                <div class="section">
+                    <h2 class="section-title">Performance Summary</h2>
+                    <div class="chart-container">
+                        <img class="chart" src="images/performance_metrics.png" alt="Performance Metrics">
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2 class="section-title">Speedup Comparison</h2>
+                    <div class="chart-container">
+                        <img class="chart" src="images/speedup_comparison.png" alt="Speedup Comparison">
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2 class="section-title">Implementation Comparison</h2>
+                    <div class="two-column">
+                        <div class="column">
+                            <div class="chart-container">
+                                <h3>Log Scale</h3>
+                                <img class="chart" src="images/implementation_comparison_log.png" alt="Implementation Comparison (Log Scale)">
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="chart-container">
+                                <h3>Linear Scale</h3>
+                                <img class="chart" src="images/implementation_comparison_linear.png" alt="Implementation Comparison (Linear Scale)">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2 class="section-title">Scaling Analysis</h2>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_mean.png" alt="Scaling Analysis">
+                    </div>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_regex_replace.png" alt="Scaling Analysis">
+                    </div>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_base.png" alt="Scaling Analysis">
+                    </div>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_sort.png" alt="Scaling Analysis">
+                    </div>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_sum.png" alt="Scaling Analysis">
+                    </div>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_reduce.png" alt="Scaling Analysis">
+                    </div>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_matrix_multiply.png" alt="Scaling Analysis">
+                    </div>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_text_cleanup.png" alt="Scaling Analysis">
+                    </div>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_std.png" alt="Scaling Analysis">
+                    </div>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_map.png" alt="Scaling Analysis">
+                    </div>
+                    
+                    <div class="chart-container">
+                        <img class="chart" src="images/scaling_filter.png" alt="Scaling Analysis">
+                    </div>
+                    
+                </div>
+                
+                <div class="section">
+                    <h2 class="section-title">Real-world Scenarios</h2>
+                    <div class="chart-container">
+                        <img class="chart" src="images/real_world_scenarios.png" alt="Real-world Scenarios">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p>Generated by Pyroid Benchmark Suite on 2025-04-09 15:04:11</p>
+            </div>
+        </body>
+        </html>
+        
