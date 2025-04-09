@@ -23,7 +23,7 @@ mod data_ops;
 mod utils;
 
 // Disabled modules (dependencies removed)
-// mod async_ops;
+mod async_ops;
 // mod dataframe_ops;
 // mod ml_ops;
 // mod text_nlp_ops;
@@ -50,7 +50,7 @@ fn pyroid(py: Python, m: &PyModule) -> PyResult<()> {
     data_ops::register(py, m)?;
     
     // Disabled module registrations
-    // async_ops::register(py, m)?;
+    async_ops::register(py, m)?;
     // dataframe_ops::register(py, m)?;
     // ml_ops::register(py, m)?;
     // text_nlp_ops::register(py, m)?;

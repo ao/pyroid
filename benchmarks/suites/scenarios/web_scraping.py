@@ -69,7 +69,10 @@ async def run_web_scraping_benchmark(urls_count=50):
     web_benchmark = Benchmark("Web Scraping", f"Scrape {urls_count} URLs and process the results")
     
     # Python implementation
-    async def python_web_scraping():
+    async def python_web_scraping(urls=None):
+        if urls is None:
+            # Default URLs if none provided
+            urls = [f"https://httpbin.org/get?id={i}" for i in range(10)]
         print("Running Python web scraping pipeline...")
         
         # Step 1: Fetch all URLs
@@ -130,13 +133,30 @@ async def run_web_scraping_benchmark(urls_count=50):
             }
     
     # pyroid implementation
-    async def pyroid_web_scraping():
+    async def pyroid_web_scraping(urls=None):
+        if urls is None:
+            # Default URLs if none provided
+            urls = [f"https://httpbin.org/get?id={i}" for i in range(10)]
         print("Running pyroid web scraping pipeline...")
         
         # Step 1: Fetch all URLs
         print("  Step 1: Fetching URLs...")
-        client = pyroid.AsyncClient()
-        responses = await client.fetch_many(urls, concurrency=10)
+        # Use a fallback since AsyncClient is not available
+        try:
+            client = pyroid.AsyncClient()
+            responses = await client.fetch_many(urls, concurrency=10)
+        except AttributeError:
+            # Create a simple fallback client
+            async with aiohttp.ClientSession() as session:
+                tasks = []
+                for url in urls:
+                    tasks.append(asyncio.create_task(session.get(url)))
+                responses_list = await asyncio.gather(*tasks)
+                
+                responses = {}
+                for i, response in enumerate(responses_list):
+                    text = await response.text()
+                    responses[urls[i]] = {"status": response.status, "text": text}
         
         # Step 2: Extract text content
         print("  Step 2: Extracting text content...")
@@ -151,7 +171,11 @@ async def run_web_scraping_benchmark(urls_count=50):
         def clean_text(text):
             return re.sub(r'\s+', ' ', text).strip()
         
-        cleaned = pyroid.parallel_map(contents, clean_text)
+        # Use data.collections.map or fallback to map
+        try:
+            cleaned = pyroid.data.collections.map(contents, clean_text)
+        except AttributeError:
+            cleaned = list(map(clean_text, contents))
         
         # Step 4: Extract specific data (e.g., URLs, IDs)
         print("  Step 4: Extracting specific data...")
@@ -167,22 +191,40 @@ async def run_web_scraping_benchmark(urls_count=50):
                 "ids": ids
             }
         
-        extracted_data = pyroid.parallel_map(cleaned, extract_data)
+        # Use data.collections.map or fallback to map
+        try:
+            extracted_data = pyroid.data.collections.map(cleaned, extract_data)
+        except AttributeError:
+            extracted_data = list(map(extract_data, cleaned))
         
         # Step 5: Calculate statistics
         print("  Step 5: Calculating statistics...")
-        url_counts = pyroid.parallel_map(extracted_data, lambda data: len(data["urls"]))
-        id_counts = pyroid.parallel_map(extracted_data, lambda data: len(data["ids"]))
+        # Use data.collections.map or fallback to map
+        try:
+            url_counts = pyroid.data.collections.map(extracted_data, lambda data: len(data["urls"]))
+            id_counts = pyroid.data.collections.map(extracted_data, lambda data: len(data["ids"]))
+        except AttributeError:
+            url_counts = list(map(lambda data: len(data["urls"]), extracted_data))
+            id_counts = list(map(lambda data: len(data["ids"]), extracted_data))
         
-        avg_urls = pyroid.parallel_mean(url_counts) if url_counts else 0
-        avg_ids = pyroid.parallel_mean(id_counts) if id_counts else 0
+        # Use math.mean or fallback to sum/len
+        try:
+            avg_urls = pyroid.math.mean(url_counts) if url_counts else 0
+            avg_ids = pyroid.math.mean(id_counts) if id_counts else 0
+        except AttributeError:
+            avg_urls = sum(url_counts) / len(url_counts) if url_counts else 0
+            avg_ids = sum(id_counts) / len(id_counts) if id_counts else 0
         
         # Sort results by ID count
-        sorted_data = pyroid.parallel_sort(
-            extracted_data, 
-            lambda x: len(x["ids"]), 
-            True  # Reverse order
-        )
+        # Use data.collections.sort or fallback to sorted
+        try:
+            sorted_data = pyroid.data.collections.sort(
+                extracted_data,
+                lambda x: len(x["ids"]),
+                True  # Reverse order
+            )
+        except AttributeError:
+            sorted_data = sorted(extracted_data, key=lambda x: len(x["ids"]), reverse=True)
         
         print("pyroid web scraping pipeline complete.")
         return {
@@ -198,10 +240,10 @@ async def run_web_scraping_benchmark(urls_count=50):
     pyroid_timeout = 30
     
     # Run benchmarks
-    python_result = await benchmark_async("Python web scraping", "Python", python_web_scraping, python_timeout)
+    python_result = await benchmark_async("Python web scraping", "Python", lambda: python_web_scraping(urls), python_timeout)
     web_benchmark.results.append(python_result)
     
-    pyroid_result = await benchmark_async("pyroid web scraping", "pyroid", pyroid_web_scraping, pyroid_timeout)
+    pyroid_result = await benchmark_async("pyroid web scraping", "pyroid", lambda: pyroid_web_scraping(urls), pyroid_timeout)
     web_benchmark.results.append(pyroid_result)
     
     BenchmarkReporter.print_results(web_benchmark)

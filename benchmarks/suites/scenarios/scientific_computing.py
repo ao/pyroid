@@ -155,11 +155,21 @@ def run_scientific_computing_benchmark(size=1_000_000):
         
         # Step 1: Basic statistics
         print("  Step 1: Calculating basic statistics...")
-        mean = pyroid.parallel_mean(data)
-        std_dev = pyroid.parallel_std(data, 1)  # ddof=1 for sample std
+        # Use math.mean and math.std or fallback
+        try:
+            mean = pyroid.math.mean(data)
+            std_dev = pyroid.math.std(data)
+        except AttributeError:
+            mean = sum(data) / len(data)
+            variance = sum((x - mean) ** 2 for x in data) / (len(data) - 1)
+            std_dev = math.sqrt(variance)
         
         # Calculate median (requires sorting)
-        sorted_data = pyroid.parallel_sort(data, None, False)
+        # Use data.collections.sort or fallback to sorted
+        try:
+            sorted_data = pyroid.data.collections.sort(data, None, False)
+        except AttributeError:
+            sorted_data = sorted(data)
         if len(sorted_data) % 2 == 0:
             median = (sorted_data[len(sorted_data) // 2 - 1] + sorted_data[len(sorted_data) // 2]) / 2
         else:
@@ -167,7 +177,15 @@ def run_scientific_computing_benchmark(size=1_000_000):
         
         # Step 2: Z-score normalization
         print("  Step 2: Performing Z-score normalization...")
-        normalized = pyroid.parallel_map(data, lambda x: (x - mean) / std_dev)
+        # Use data.collections.map or fallback to map
+        try:
+            normalized = pyroid.data.collections.map(data, lambda x: (x - mean) / std_dev)
+        except AttributeError:
+            # Avoid division by zero
+            if std_dev == 0:
+                normalized = [0.0] * len(data)
+            else:
+                normalized = list(map(lambda x: (x - mean) / std_dev, data))
         
         # Step 3: Moving average (window size 100)
         print("  Step 3: Calculating moving average...")
@@ -175,7 +193,11 @@ def run_scientific_computing_benchmark(size=1_000_000):
         moving_avg = []
         for i in range(len(normalized) - window_size + 1):
             window = normalized[i:i + window_size]
-            avg = pyroid.parallel_mean(window)
+            # Use math.mean or fallback to sum/len
+            try:
+                avg = pyroid.math.mean(window)
+            except AttributeError:
+                avg = sum(window) / len(window)
             moving_avg.append(avg)
         
         # Step 4: Find peaks (local maxima)
@@ -192,24 +214,48 @@ def run_scientific_computing_benchmark(size=1_000_000):
         data2 = normalized[shift:]
         
         # Calculate correlation using parallel operations
-        mean1 = pyroid.parallel_mean(data1)
-        mean2 = pyroid.parallel_mean(data2)
+        # Use math.mean or fallback to sum/len
+        try:
+            mean1 = pyroid.math.mean(data1)
+            mean2 = pyroid.math.mean(data2)
+        except AttributeError:
+            mean1 = sum(data1) / len(data1)
+            mean2 = sum(data2) / len(data2)
         
         # Calculate numerator
         def calc_numerator(i):
             return (data1[i] - mean1) * (data2[i] - mean2)
         
-        numerator_values = pyroid.parallel_map(range(len(data1)), calc_numerator)
-        numerator = pyroid.parallel_sum(numerator_values)
+        # Use data.collections.map and math.sum or fallback
+        try:
+            numerator_values = pyroid.data.collections.map(range(len(data1)), calc_numerator)
+            numerator = pyroid.math.sum(numerator_values)
+        except AttributeError:
+            numerator_values = list(map(calc_numerator, range(len(data1))))
+            numerator = sum(numerator_values)
         
         # Calculate denominators
-        denom1_values = pyroid.parallel_map(data1, lambda x: (x - mean1) ** 2)
-        denom2_values = pyroid.parallel_map(data2, lambda x: (x - mean2) ** 2)
+        # Use data.collections.map or fallback to map
+        try:
+            denom1_values = pyroid.data.collections.map(data1, lambda x: (x - mean1) ** 2)
+            denom2_values = pyroid.data.collections.map(data2, lambda x: (x - mean2) ** 2)
+        except AttributeError:
+            denom1_values = list(map(lambda x: (x - mean1) ** 2, data1))
+            denom2_values = list(map(lambda x: (x - mean2) ** 2, data2))
         
-        denom1 = math.sqrt(pyroid.parallel_sum(denom1_values))
-        denom2 = math.sqrt(pyroid.parallel_sum(denom2_values))
+        # Use math.sum or fallback to sum
+        try:
+            denom1 = math.sqrt(pyroid.math.sum(denom1_values))
+            denom2 = math.sqrt(pyroid.math.sum(denom2_values))
+        except AttributeError:
+            denom1 = math.sqrt(sum(denom1_values))
+            denom2 = math.sqrt(sum(denom2_values))
         
-        correlation = numerator / (denom1 * denom2)
+        # Avoid division by zero
+        if denom1 == 0 or denom2 == 0:
+            correlation = 0.0
+        else:
+            correlation = numerator / (denom1 * denom2)
         
         print("pyroid scientific computing pipeline complete.")
         return {

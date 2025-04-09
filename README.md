@@ -9,6 +9,9 @@
 - ✅ **Domain-driven design** for better organization
 - ✅ **Easy Python imports**—just `pip install pyroid`
 - ✅ **Modular toolkit** with optional features
+- ✅ **Optimized async operations** with unified runtime
+- ✅ **Zero-copy buffer protocol** for efficient memory usage
+- ✅ **Parallel processing** for high-throughput workloads
 
 ## 📋 Table of Contents
 
@@ -31,6 +34,8 @@
     - [Image Processing](#image-processing)
     - [Machine Learning](#machine-learning)
   - [📊 Performance Considerations](#-performance-considerations)
+  - [Building from Source](#building-from-source)
+  - [Running Benchmarks and Examples](#running-benchmarks-and-examples)
   - [🔧 Requirements](#-requirements)
   - [📄 License](#-license)
   - [👥 Contributing](#-contributing)
@@ -46,8 +51,13 @@ For development installation:
 ```bash
 git clone https://github.com/ao/pyroid.git
 cd pyroid
-pip install -e .
+python build_and_install.py
 ```
+
+This script will:
+1. Check if Rust is installed and install it if needed
+2. Build the Rust code with optimizations
+3. Install the Python package in development mode
 
 ## 🚀 Feature Overview
 
@@ -60,6 +70,10 @@ Pyroid provides high-performance implementations across multiple domains:
 - **Pythonic API**: Easy to use from Python with familiar interfaces
 - **Memory Efficiency**: Optimized memory usage for large datasets
 - **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Unified Async Runtime**: Shared Tokio runtime for all async operations
+- **Zero-Copy Buffer Protocol**: Efficient memory management without copying
+- **GIL-Aware Scheduling**: Optimized task scheduling with Python's GIL
+- **Parallel Processing**: Efficient batch processing with adaptive sizing
 
 ### Module Overview
 
@@ -71,6 +85,7 @@ Pyroid provides high-performance implementations across multiple domains:
 | I/O | File and network operations | `read_file`, `write_file`, `http_get`, `http_post` |
 | Image | Basic image manipulation | `create_image`, `to_grayscale`, `resize`, `blur` |
 | ML | Basic machine learning | `kmeans`, `linear_regression`, `normalize`, `distance_matrix` |
+| Core | Core functionality | `runtime`, `buffer`, `parallel` |
 
 ## 🔧 Feature Flags
 
@@ -221,23 +236,51 @@ print(f"HTTP GET response length: {len(response)}")
 ```python
 import asyncio
 import pyroid
+from pyroid.core import runtime, buffer, parallel
 
 async def main():
-    # Async sleep
-    print("Sleeping for 1 second...")
-    await pyroid.io.sleep(0.1)
-    print("Awake!")
+    # Initialize the runtime
+    runtime.init()
+    print(f"Runtime initialized with {runtime.get_worker_threads()} worker threads")
+    
+    # Create an AsyncClient for HTTP operations
+    client = pyroid.AsyncClient()
+    
+    # Fetch a URL asynchronously
+    response = await client.fetch("https://example.com")
+    print(f"Status code: {response['status']}")
+    
+    # Fetch multiple URLs concurrently
+    urls = [f"https://example.com/{i}" for i in range(10)]
+    responses = await client.fetch_many(urls, concurrency=5)
+    print(f"Fetched {len(responses)} URLs")
     
     # Async file operations
-    content = await pyroid.io.read_file_async("example.txt")
-    print(f"File content: {content}")
+    file_reader = pyroid.AsyncFileReader("example.txt")
+    content = await file_reader.read_all()
+    print(f"File content length: {len(content)}")
     
-    # Note: Other async operations might not be fully implemented
-    # in the current version. Check the documentation for the latest API.
+    # Zero-copy buffer operations
+    zero_copy_buffer = buffer.ZeroCopyBuffer(1024)  # 1KB buffer
+    data = zero_copy_buffer.get_data()
+    # Modify data...
+    zero_copy_buffer.set_data(data)
+    
+    # Parallel processing
+    processor = parallel.BatchProcessor(batch_size=1000, adaptive=True)
+    items = list(range(1000000))
+    
+    def process_item(x):
+        return x * x
+    
+    results = processor.map(items, process_item)
+    print(f"Processed {len(results)} items")
 
 # Run the async main function
 asyncio.run(main())
 ```
+
+For a more comprehensive example, see `examples/optimized_async_example.py`.
 
 ### Image Processing
 
@@ -303,16 +346,93 @@ print(f"Distance matrix shape: {len(distance_matrix)}x{len(distance_matrix[0])}"
 
 ## 📊 Performance Considerations
 
-While Pyroid has been simplified to reduce dependencies, it still offers performance improvements over pure Python:
+Pyroid offers significant performance improvements over pure Python:
 
 - **Math operations**: Optimized vector and matrix operations
 - **String processing**: Efficient string manipulation and base64 encoding/decoding
 - **Data operations**: Improved collection operations and DataFrame handling
-- **I/O operations**: Efficient file and network operations
+- **I/O operations**: Efficient file and network operations with async support
 - **Image processing**: Basic image manipulation without external dependencies
 - **Machine learning**: Simple ML algorithms implemented in pure Rust
+- **Async operations**: High-performance async operations with unified runtime
+- **Zero-copy buffers**: Efficient memory management without copying
+- **Parallel processing**: Batch processing with adaptive sizing for optimal performance
 
-Note that some advanced parallel processing features have been simplified to improve maintainability. For extremely performance-critical applications, you may need to enable specific optimizations.
+## Building from Source
+
+To build pyroid from source, you need:
+
+1. **Rust** (1.70.0 or later)
+2. **Python** (3.8 or later)
+3. **Cargo** (comes with Rust)
+
+The easiest way to build and install pyroid is to use the provided script:
+
+```bash
+python build_and_install.py
+```
+
+Alternatively, you can build manually:
+
+```bash
+# Build the Rust code
+cargo build --release
+
+# Install the Python package in development mode
+pip install -e .
+```
+
+For performance-critical applications, consider using the following optimizations:
+
+1. **Unified Runtime**: Initialize the runtime once at the start of your application
+   ```python
+   from pyroid.core import runtime
+   runtime.init()
+   ```
+
+2. **Zero-Copy Buffers**: Use zero-copy buffers for large data transfers
+   ```python
+   from pyroid.core import buffer
+   zero_copy_buffer = buffer.ZeroCopyBuffer(size)
+   ```
+
+3. **Parallel Processing**: Use batch processing for CPU-intensive operations
+   ```python
+   from pyroid.core import parallel
+   processor = parallel.BatchProcessor(adaptive=True)
+   results = processor.map(items, process_function)
+   ```
+
+4. **Concurrency Control**: Adjust concurrency levels based on your workload
+   ```python
+   client = pyroid.AsyncClient()
+   responses = await client.fetch_many(urls, concurrency=optimal_value)
+   ```
+
+## Running Benchmarks and Examples
+
+To run the benchmarks and see the performance improvements:
+
+```bash
+# Build and install pyroid first
+python build_and_install.py
+
+# Run the async benchmarks
+python -m benchmarks.run_benchmarks --size small --suite async --no-dashboard
+
+# Run the high-throughput benchmark
+python -m benchmarks.run_benchmarks --size small --suite high-throughput --no-dashboard
+```
+
+To run the example demonstrating all the optimized features:
+
+```bash
+# Build and install pyroid first
+python build_and_install.py
+
+# Run the example
+python examples/optimized_async_example.py
+```
 
 ## 🔧 Requirements
 

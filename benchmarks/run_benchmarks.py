@@ -34,6 +34,7 @@ from benchmarks.suites.scenarios.data_pipeline import run_data_processing_pipeli
 from benchmarks.suites.scenarios.text_processing import run_text_processing_benchmark
 from benchmarks.suites.scenarios.scientific_computing import run_scientific_computing_benchmark
 from benchmarks.suites.scenarios.web_scraping import run_web_scraping_benchmark as run_detailed_web_scraping_benchmark
+from benchmarks.suites.scenarios.high_throughput import run_high_throughput_benchmark
 
 
 def parse_args():
@@ -64,8 +65,14 @@ def parse_args():
         "--suite",
         type=str,
         default="all",
-        choices=["all", "math", "string", "data", "async", "scenarios"],
+        choices=["all", "math", "string", "data", "async", "scenarios", "high-throughput"],
         help="Benchmark suite to run (default: all)"
+    )
+    
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        help="Concurrency level for async operations"
     )
     
     parser.add_argument(
@@ -95,7 +102,8 @@ def get_sizes(size_option: str) -> Dict[str, List[int]]:
             "data_pipeline": 100_000,
             "text_processing": 1_000,
             "scientific": 100_000,
-            "web_scraping": 10
+            "web_scraping": 10,
+            "high_throughput": 1_000
         }
     elif size_option == "medium":
         return {
@@ -106,7 +114,8 @@ def get_sizes(size_option: str) -> Dict[str, List[int]]:
             "data_pipeline": 500_000,
             "text_processing": 5_000,
             "scientific": 500_000,
-            "web_scraping": 25
+            "web_scraping": 25,
+            "high_throughput": 5_000
         }
     else:  # large
         return {
@@ -117,7 +126,8 @@ def get_sizes(size_option: str) -> Dict[str, List[int]]:
             "data_pipeline": 1_000_000,
             "text_processing": 10_000,
             "scientific": 1_000_000,
-            "web_scraping": 50
+            "web_scraping": 50,
+            "high_throughput": 10_000
         }
 
 
@@ -154,14 +164,13 @@ async def main():
         print("\n=== Running Data Benchmarks ===\n")
         data_benchmarks = run_data_benchmarks(sizes["data"])
         all_benchmarks.extend(data_benchmarks)
-    
     if args.suite in ["all", "async"]:
         print("\n=== Running Async Benchmarks ===\n")
-        async_benchmarks = await run_async_benchmarks()
+        async_benchmarks = await run_async_benchmarks(concurrency=args.concurrency)
         all_benchmarks.extend(async_benchmarks)
         
         print("\n=== Running Web Scraping Benchmark ===\n")
-        web_benchmark = await run_web_scraping_benchmark(sizes["web_scraping"])
+        web_benchmark = await run_web_scraping_benchmark(sizes["web_scraping"], concurrency=args.concurrency)
         all_benchmarks.append(web_benchmark)
     
     if args.suite in ["all", "scenarios"]:
@@ -180,6 +189,15 @@ async def main():
         print("\n=== Running Detailed Web Scraping Benchmark ===\n")
         detailed_web_benchmark = await run_detailed_web_scraping_benchmark(sizes["web_scraping"])
         all_benchmarks.append(detailed_web_benchmark)
+        
+        print("\n=== Running High-Throughput Data Processing Benchmark ===\n")
+        high_throughput_benchmark = await run_high_throughput_benchmark(sizes["high_throughput"])
+        all_benchmarks.append(high_throughput_benchmark)
+    
+    elif args.suite == "high-throughput":
+        print("\n=== Running High-Throughput Data Processing Benchmark ===\n")
+        high_throughput_benchmark = await run_high_throughput_benchmark(sizes["high_throughput"])
+        all_benchmarks.append(high_throughput_benchmark)
     
     # Generate reports
     print("\n=== Generating Reports ===\n")

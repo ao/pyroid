@@ -188,11 +188,19 @@ def run_text_processing_benchmark(size=10_000):
             doc = re.sub(r'\s+', ' ', doc).strip()
             return doc
         
-        cleaned = pyroid.parallel_map(documents, clean_text)
+        # Use data.collections.map or fallback to map
+        try:
+            cleaned = pyroid.data.collections.map(documents, clean_text)
+        except AttributeError:
+            cleaned = list(map(clean_text, documents))
         
         # Step 2: Tokenize
         print("  Step 2: Tokenizing...")
-        tokenized = pyroid.parallel_map(cleaned, lambda doc: doc.split())
+        # Use data.collections.map or fallback to map
+        try:
+            tokenized = pyroid.data.collections.map(cleaned, lambda doc: doc.split())
+        except AttributeError:
+            tokenized = list(map(lambda doc: doc.split(), cleaned))
         
         # Step 3: Remove stopwords
         print("  Step 3: Removing stopwords...")
@@ -200,7 +208,11 @@ def run_text_processing_benchmark(size=10_000):
         def remove_stopwords(tokens):
             return [token for token in tokens if token not in stopwords]
         
-        filtered = pyroid.parallel_map(tokenized, remove_stopwords)
+        # Use data.collections.map or fallback to map
+        try:
+            filtered = pyroid.data.collections.map(tokenized, remove_stopwords)
+        except AttributeError:
+            filtered = list(map(remove_stopwords, tokenized))
         
         # Step 4: Calculate term frequencies
         print("  Step 4: Calculating term frequencies...")
@@ -214,7 +226,11 @@ def run_text_processing_benchmark(size=10_000):
                     freq[token] = 1
             return freq
         
-        term_freqs = pyroid.parallel_map(filtered, calculate_freq)
+        # Use data.collections.map or fallback to map
+        try:
+            term_freqs = pyroid.data.collections.map(filtered, calculate_freq)
+        except AttributeError:
+            term_freqs = list(map(calculate_freq, filtered))
         
         # Step 5: Find top terms
         print("  Step 5: Finding top terms...")

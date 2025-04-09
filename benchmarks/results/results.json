@@ -1,0 +1,1063 @@
+{
+  "generated_at": "2025-04-09T15:04:09.413040",
+  "benchmarks": [
+    {
+      "name": "Sum 1,000 numbers",
+      "description": "Sum 1,000 random floating-point numbers",
+      "results": [
+        {
+          "name": "Python sum",
+          "implementation": "Python",
+          "duration_ms": 0.0030994415283203125,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        },
+        {
+          "name": "NumPy sum",
+          "implementation": "NumPy",
+          "duration_ms": 0.05316734313964844,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.05ms"
+        },
+        {
+          "name": "pyroid sum",
+          "implementation": "pyroid",
+          "duration_ms": 0.0,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Mean 1,000 numbers",
+      "description": "Calculate mean of 1,000 random floating-point numbers",
+      "results": [
+        {
+          "name": "Python mean",
+          "implementation": "Python",
+          "duration_ms": 0.0021457672119140625,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        },
+        {
+          "name": "NumPy mean",
+          "implementation": "NumPy",
+          "duration_ms": 0.04601478576660156,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.05ms"
+        },
+        {
+          "name": "pyroid mean",
+          "implementation": "pyroid",
+          "duration_ms": 0.0,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Std 1,000 numbers",
+      "description": "Calculate standard deviation of 1,000 random floating-point numbers",
+      "results": [
+        {
+          "name": "Python std",
+          "implementation": "Python",
+          "duration_ms": 0.07200241088867188,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.07ms"
+        },
+        {
+          "name": "NumPy std",
+          "implementation": "NumPy",
+          "duration_ms": 0.07987022399902344,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.08ms"
+        },
+        {
+          "name": "pyroid std",
+          "implementation": "pyroid",
+          "duration_ms": 0.00095367431640625,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Matrix multiply 31x31",
+      "description": "Multiply two 31x31 matrices",
+      "results": [
+        {
+          "name": "Python matmul",
+          "implementation": "Python",
+          "duration_ms": 1.1429786682128906,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "1.14ms"
+        },
+        {
+          "name": "NumPy matmul",
+          "implementation": "NumPy",
+          "duration_ms": 0.04482269287109375,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.04ms"
+        },
+        {
+          "name": "pyroid multiply",
+          "implementation": "pyroid",
+          "duration_ms": 0.0,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Sum 10,000 numbers",
+      "description": "Sum 10,000 random floating-point numbers",
+      "results": [
+        {
+          "name": "Python sum",
+          "implementation": "Python",
+          "duration_ms": 0.022172927856445312,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.02ms"
+        },
+        {
+          "name": "NumPy sum",
+          "implementation": "NumPy",
+          "duration_ms": 0.2079010009765625,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.21ms"
+        },
+        {
+          "name": "pyroid sum",
+          "implementation": "pyroid",
+          "duration_ms": 0.0,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Mean 10,000 numbers",
+      "description": "Calculate mean of 10,000 random floating-point numbers",
+      "results": [
+        {
+          "name": "Python mean",
+          "implementation": "Python",
+          "duration_ms": 0.0209808349609375,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.02ms"
+        },
+        {
+          "name": "NumPy mean",
+          "implementation": "NumPy",
+          "duration_ms": 0.2570152282714844,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.26ms"
+        },
+        {
+          "name": "pyroid mean",
+          "implementation": "pyroid",
+          "duration_ms": 0.0,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Std 10,000 numbers",
+      "description": "Calculate standard deviation of 10,000 random floating-point numbers",
+      "results": [
+        {
+          "name": "Python std",
+          "implementation": "Python",
+          "duration_ms": 0.7240772247314453,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.72ms"
+        },
+        {
+          "name": "NumPy std",
+          "implementation": "NumPy",
+          "duration_ms": 0.2460479736328125,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.25ms"
+        },
+        {
+          "name": "pyroid std",
+          "implementation": "pyroid",
+          "duration_ms": 0.0021457672119140625,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Matrix multiply 100x100",
+      "description": "Multiply two 100x100 matrices",
+      "results": [
+        {
+          "name": "Python matmul",
+          "implementation": "Python",
+          "duration_ms": 36.52191162109375,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "36.52ms"
+        },
+        {
+          "name": "NumPy matmul",
+          "implementation": "NumPy",
+          "duration_ms": 0.04601478576660156,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.05ms"
+        },
+        {
+          "name": "pyroid multiply",
+          "implementation": "pyroid",
+          "duration_ms": 0.00095367431640625,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Sum 100,000 numbers",
+      "description": "Sum 100,000 random floating-point numbers",
+      "results": [
+        {
+          "name": "Python sum",
+          "implementation": "Python",
+          "duration_ms": 0.19288063049316406,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.19ms"
+        },
+        {
+          "name": "NumPy sum",
+          "implementation": "NumPy",
+          "duration_ms": 1.8498897552490234,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "1.85ms"
+        },
+        {
+          "name": "pyroid sum",
+          "implementation": "pyroid",
+          "duration_ms": 0.0,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Mean 100,000 numbers",
+      "description": "Calculate mean of 100,000 random floating-point numbers",
+      "results": [
+        {
+          "name": "Python mean",
+          "implementation": "Python",
+          "duration_ms": 0.21219253540039062,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.21ms"
+        },
+        {
+          "name": "NumPy mean",
+          "implementation": "NumPy",
+          "duration_ms": 2.034902572631836,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "2.03ms"
+        },
+        {
+          "name": "pyroid mean",
+          "implementation": "pyroid",
+          "duration_ms": 0.0011920928955078125,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Std 100,000 numbers",
+      "description": "Calculate standard deviation of 100,000 random floating-point numbers",
+      "results": [
+        {
+          "name": "Python std",
+          "implementation": "Python",
+          "duration_ms": 6.457090377807617,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "6.46ms"
+        },
+        {
+          "name": "NumPy std",
+          "implementation": "NumPy",
+          "duration_ms": 2.0711421966552734,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "2.07ms"
+        },
+        {
+          "name": "pyroid std",
+          "implementation": "pyroid",
+          "duration_ms": 0.0021457672119140625,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.00ms"
+        }
+      ]
+    },
+    {
+      "name": "Regex replace 13,000 chars",
+      "description": "Replace 'Hello' with 'Hi' in 13,000 character text",
+      "results": [
+        {
+          "name": "Python re.sub",
+          "implementation": "Python",
+          "duration_ms": 0.1239776611328125,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.12ms"
+        },
+        {
+          "name": "pyroid regex_replace",
+          "implementation": "pyroid",
+          "duration_ms": 0.04291534423828125,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.04ms"
+        }
+      ]
+    },
+    {
+      "name": "Text cleanup 1,000 texts",
+      "description": "Clean up 1,000 texts (trim, normalize case, etc.)",
+      "results": [
+        {
+          "name": "Python text cleanup",
+          "implementation": "Python",
+          "duration_ms": 0.44608116149902344,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.45ms"
+        },
+        {
+          "name": "pyroid text_cleanup",
+          "implementation": "pyroid",
+          "duration_ms": 0.4229545593261719,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.42ms"
+        }
+      ]
+    },
+    {
+      "name": "Base64 encode 61,000 chars",
+      "description": "Encode 61,000 characters to base64",
+      "results": [
+        {
+          "name": "Python base64 encode",
+          "implementation": "Python",
+          "duration_ms": 0.08225440979003906,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.08ms"
+        },
+        {
+          "name": "pyroid base64_encode",
+          "implementation": "pyroid",
+          "duration_ms": 0.06198883056640625,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.06ms"
+        }
+      ]
+    },
+    {
+      "name": "Base64 decode 84,000 chars",
+      "description": "Decode 84,000 characters from base64",
+      "results": [
+        {
+          "name": "Python base64 decode",
+          "implementation": "Python",
+          "duration_ms": 0.007152557373046875,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.01ms"
+        },
+        {
+          "name": "pyroid base64_decode",
+          "implementation": "pyroid",
+          "duration_ms": 0.0050067901611328125,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.01ms"
+        }
+      ]
+    },
+    {
+      "name": "Regex replace 130,000 chars",
+      "description": "Replace 'Hello' with 'Hi' in 130,000 character text",
+      "results": [
+        {
+          "name": "Python re.sub",
+          "implementation": "Python",
+          "duration_ms": 0.3440380096435547,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.34ms"
+        },
+        {
+          "name": "pyroid regex_replace",
+          "implementation": "pyroid",
+          "duration_ms": 0.3077983856201172,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.31ms"
+        }
+      ]
+    },
+    {
+      "name": "Text cleanup 10,000 texts",
+      "description": "Clean up 10,000 texts (trim, normalize case, etc.)",
+      "results": [
+        {
+          "name": "Python text cleanup",
+          "implementation": "Python",
+          "duration_ms": 3.923177719116211,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "3.92ms"
+        },
+        {
+          "name": "pyroid text_cleanup",
+          "implementation": "pyroid",
+          "duration_ms": 3.854036331176758,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "3.85ms"
+        }
+      ]
+    },
+    {
+      "name": "Base64 encode 610,000 chars",
+      "description": "Encode 610,000 characters to base64",
+      "results": [
+        {
+          "name": "Python base64 encode",
+          "implementation": "Python",
+          "duration_ms": 0.7202625274658203,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.72ms"
+        },
+        {
+          "name": "pyroid base64_encode",
+          "implementation": "pyroid",
+          "duration_ms": 0.6461143493652344,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.65ms"
+        }
+      ]
+    },
+    {
+      "name": "Base64 decode 840,000 chars",
+      "description": "Decode 840,000 characters from base64",
+      "results": [
+        {
+          "name": "Python base64 decode",
+          "implementation": "Python",
+          "duration_ms": 0.052928924560546875,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.05ms"
+        },
+        {
+          "name": "pyroid base64_decode",
+          "implementation": "pyroid",
+          "duration_ms": 0.014066696166992188,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.01ms"
+        }
+      ]
+    },
+    {
+      "name": "Filter 1,000 items",
+      "description": "Filter even numbers from 1,000 integers",
+      "results": [
+        {
+          "name": "Python filter",
+          "implementation": "Python",
+          "duration_ms": 0.07081031799316406,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.07ms"
+        },
+        {
+          "name": "pyroid filter",
+          "implementation": "pyroid",
+          "duration_ms": 0.041961669921875,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.04ms"
+        }
+      ]
+    },
+    {
+      "name": "Map 1,000 items",
+      "description": "Square 1,000 integers",
+      "results": [
+        {
+          "name": "Python map",
+          "implementation": "Python",
+          "duration_ms": 0.041961669921875,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.04ms"
+        },
+        {
+          "name": "pyroid map",
+          "implementation": "pyroid",
+          "duration_ms": 0.03814697265625,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.04ms"
+        }
+      ]
+    },
+    {
+      "name": "Reduce 1,000 items",
+      "description": "Sum 1,000 integers",
+      "results": [
+        {
+          "name": "Python sum",
+          "implementation": "Python",
+          "duration_ms": 0.0069141387939453125,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.01ms"
+        },
+        {
+          "name": "Python functools.reduce",
+          "implementation": "Python",
+          "duration_ms": 0.04100799560546875,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.04ms"
+        },
+        {
+          "name": "pyroid reduce",
+          "implementation": "pyroid",
+          "duration_ms": 0.034809112548828125,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.03ms"
+        }
+      ]
+    },
+    {
+      "name": "Sort 1,000 items",
+      "description": "Sort 1,000 integers",
+      "results": [
+        {
+          "name": "Python sorted",
+          "implementation": "Python",
+          "duration_ms": 0.0629425048828125,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.06ms"
+        },
+        {
+          "name": "pyroid sort",
+          "implementation": "pyroid",
+          "duration_ms": 0.0438690185546875,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.04ms"
+        }
+      ]
+    },
+    {
+      "name": "Sort 1,000 items with key",
+      "description": "Sort 1,000 tuples by second element",
+      "results": [
+        {
+          "name": "Python sorted with key",
+          "implementation": "Python",
+          "duration_ms": 0.09107589721679688,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.09ms"
+        },
+        {
+          "name": "pyroid sort with key",
+          "implementation": "pyroid",
+          "duration_ms": 0.08797645568847656,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.09ms"
+        }
+      ]
+    },
+    {
+      "name": "Filter 10,000 items",
+      "description": "Filter even numbers from 10,000 integers",
+      "results": [
+        {
+          "name": "Python filter",
+          "implementation": "Python",
+          "duration_ms": 0.3750324249267578,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.38ms"
+        },
+        {
+          "name": "pyroid filter",
+          "implementation": "pyroid",
+          "duration_ms": 0.392913818359375,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.39ms"
+        }
+      ]
+    },
+    {
+      "name": "Map 10,000 items",
+      "description": "Square 10,000 integers",
+      "results": [
+        {
+          "name": "Python map",
+          "implementation": "Python",
+          "duration_ms": 0.3361701965332031,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.34ms"
+        },
+        {
+          "name": "pyroid map",
+          "implementation": "pyroid",
+          "duration_ms": 0.3361701965332031,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.34ms"
+        }
+      ]
+    },
+    {
+      "name": "Reduce 10,000 items",
+      "description": "Sum 10,000 integers",
+      "results": [
+        {
+          "name": "Python sum",
+          "implementation": "Python",
+          "duration_ms": 0.04506111145019531,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.05ms"
+        },
+        {
+          "name": "Python functools.reduce",
+          "implementation": "Python",
+          "duration_ms": 0.4763603210449219,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.48ms"
+        },
+        {
+          "name": "pyroid reduce",
+          "implementation": "pyroid",
+          "duration_ms": 0.3371238708496094,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.34ms"
+        }
+      ]
+    },
+    {
+      "name": "Sort 10,000 items",
+      "description": "Sort 10,000 integers",
+      "results": [
+        {
+          "name": "Python sorted",
+          "implementation": "Python",
+          "duration_ms": 0.6911754608154297,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.69ms"
+        },
+        {
+          "name": "pyroid sort",
+          "implementation": "pyroid",
+          "duration_ms": 0.6489753723144531,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.65ms"
+        }
+      ]
+    },
+    {
+      "name": "Sort 10,000 items with key",
+      "description": "Sort 10,000 tuples by second element",
+      "results": [
+        {
+          "name": "Python sorted with key",
+          "implementation": "Python",
+          "duration_ms": 1.1141300201416016,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "1.11ms"
+        },
+        {
+          "name": "pyroid sort with key",
+          "implementation": "pyroid",
+          "duration_ms": 0.9658336639404297,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.97ms"
+        }
+      ]
+    },
+    {
+      "name": "Fetch single URL",
+      "description": "Fetch a single URL using async HTTP client",
+      "results": [
+        {
+          "name": "Python aiohttp",
+          "implementation": "Python",
+          "duration_ms": 1008.8729858398438,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "1008.87ms"
+        },
+        {
+          "name": "pyroid fetch",
+          "implementation": "pyroid",
+          "duration_ms": 1562.673807144165,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "1562.67ms"
+        }
+      ]
+    },
+    {
+      "name": "Fetch 25 URLs",
+      "description": "Fetch 25 URLs concurrently",
+      "results": [
+        {
+          "name": "Python asyncio.gather",
+          "implementation": "Python",
+          "duration_ms": 2292.2310829162598,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "2292.23ms"
+        },
+        {
+          "name": "pyroid fetch_many",
+          "implementation": "pyroid",
+          "duration_ms": 2066.628932952881,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "2066.63ms"
+        }
+      ]
+    },
+    {
+      "name": "Async sleep",
+      "description": "Sleep for 0.5 seconds using async sleep",
+      "results": [
+        {
+          "name": "Python asyncio.sleep",
+          "implementation": "Python",
+          "duration_ms": 501.2190341949463,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "501.22ms"
+        },
+        {
+          "name": "pyroid async_sleep",
+          "implementation": "pyroid",
+          "duration_ms": 501.19614601135254,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "501.20ms"
+        }
+      ]
+    },
+    {
+      "name": "Async file read",
+      "description": "Read a file asynchronously",
+      "results": [
+        {
+          "name": "Python file read",
+          "implementation": "Python",
+          "duration_ms": 0.5688667297363281,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.57ms"
+        },
+        {
+          "name": "pyroid read_all",
+          "implementation": "pyroid",
+          "duration_ms": 0.13899803161621094,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.14ms"
+        }
+      ]
+    },
+    {
+      "name": "Gather tasks",
+      "description": "Run multiple tasks concurrently and gather results",
+      "results": [
+        {
+          "name": "Python asyncio.gather",
+          "implementation": "Python",
+          "duration_ms": 301.47290229797363,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "301.47ms"
+        },
+        {
+          "name": "pyroid gather",
+          "implementation": "pyroid",
+          "duration_ms": 301.145076751709,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "301.15ms"
+        }
+      ]
+    },
+    {
+      "name": "Zero-copy buffer",
+      "description": "Memory operations with zero-copy buffers",
+      "results": [
+        {
+          "name": "Python bytearray",
+          "implementation": "Python",
+          "duration_ms": 96.82512283325195,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "96.83ms"
+        },
+        {
+          "name": "pyroid ZeroCopyBuffer",
+          "implementation": "pyroid",
+          "duration_ms": 0.13184547424316406,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.13ms"
+        }
+      ]
+    },
+    {
+      "name": "Parallel processing",
+      "description": "Process a large list of items in parallel",
+      "results": [
+        {
+          "name": "Python ThreadPoolExecutor",
+          "implementation": "Python",
+          "duration_ms": 9735.321998596191,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "9735.32ms"
+        },
+        {
+          "name": "pyroid BatchProcessor",
+          "implementation": "pyroid",
+          "duration_ms": 0.14495849609375,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.14ms"
+        }
+      ]
+    },
+    {
+      "name": "Unified runtime",
+      "description": "Make concurrent HTTP requests with unified runtime",
+      "results": [
+        {
+          "name": "Python asyncio.gather",
+          "implementation": "Python",
+          "duration_ms": 2251.645088195801,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "2251.65ms"
+        },
+        {
+          "name": "pyroid unified runtime",
+          "implementation": "pyroid",
+          "duration_ms": 0.2512931823730469,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "0.25ms"
+        }
+      ]
+    },
+    {
+      "name": "Web Scraping",
+      "description": "Scrape 10 URLs and process the results",
+      "results": [
+        {
+          "name": "Python web scraping",
+          "implementation": "Python",
+          "duration_ms": 1352.2312641143799,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "1352.23ms"
+        },
+        {
+          "name": "pyroid web scraping",
+          "implementation": "pyroid",
+          "duration_ms": 2235.8028888702393,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "2235.80ms"
+        }
+      ]
+    },
+    {
+      "name": "Data Processing Pipeline",
+      "description": "ETL pipeline on 100,000 records",
+      "results": [
+        {
+          "name": "Python pipeline",
+          "implementation": "Python",
+          "duration_ms": 20.752906799316406,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "20.75ms"
+        },
+        {
+          "name": "pyroid pipeline",
+          "implementation": "pyroid",
+          "duration_ms": 22.671222686767578,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "22.67ms"
+        }
+      ]
+    },
+    {
+      "name": "Text Processing Pipeline",
+      "description": "NLP preprocessing on 1,000 documents",
+      "results": [
+        {
+          "name": "Python text pipeline",
+          "implementation": "Python",
+          "duration_ms": 26.561975479125977,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "26.56ms"
+        },
+        {
+          "name": "pyroid text pipeline",
+          "implementation": "pyroid",
+          "duration_ms": 27.48703956604004,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "27.49ms"
+        }
+      ]
+    },
+    {
+      "name": "Scientific Computing",
+      "description": "Statistical analysis on 100,000 data points",
+      "results": [
+        {
+          "name": "Python scientific",
+          "implementation": "Python",
+          "duration_ms": 96.95196151733398,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "96.95ms"
+        },
+        {
+          "name": "NumPy scientific",
+          "implementation": "NumPy",
+          "duration_ms": 21.509885787963867,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "21.51ms"
+        },
+        {
+          "name": "pyroid scientific",
+          "implementation": "pyroid",
+          "duration_ms": 101.58896446228027,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "101.59ms"
+        }
+      ]
+    },
+    {
+      "name": "Web Scraping",
+      "description": "Scrape 10 URLs and process the results",
+      "results": [
+        {
+          "name": "Python web scraping",
+          "implementation": "Python",
+          "duration_ms": 1386.864185333252,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "1386.86ms"
+        },
+        {
+          "name": "pyroid web scraping",
+          "implementation": "pyroid",
+          "duration_ms": 2574.2011070251465,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "2574.20ms"
+        }
+      ]
+    },
+    {
+      "name": "High-Throughput Data Processing",
+      "description": "Process 1000 data items through a complete pipeline",
+      "results": [
+        {
+          "name": "Python async pipeline",
+          "implementation": "Python",
+          "duration_ms": 63.742876052856445,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "63.74ms"
+        },
+        {
+          "name": "pyroid optimized pipeline",
+          "implementation": "pyroid",
+          "duration_ms": 1068.7229633331299,
+          "timed_out": false,
+          "timeout_seconds": null,
+          "display_time": "1068.72ms"
+        }
+      ]
+    }
+  ]
+}

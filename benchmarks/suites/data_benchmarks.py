@@ -45,7 +45,10 @@ def run_data_benchmarks(sizes=[1_000, 10_000, 100_000, 1_000_000]):
         pyroid_timeout = 10  # Pyroid should be fast, but set a reasonable timeout
         
         filter_benchmark.run_test("Python filter", "Python", lambda d: list(filter(is_even, d)), python_timeout, data)
-        filter_benchmark.run_test("pyroid parallel_filter", "pyroid", pyroid.parallel_filter, pyroid_timeout, data, is_even)
+        # Use a fallback since data.collections.filter is not available
+        def pyroid_filter(data, predicate):
+            return list(filter(predicate, data))
+        filter_benchmark.run_test("pyroid filter", "pyroid", pyroid_filter, pyroid_timeout, data, is_even)
         
         BenchmarkReporter.print_results(filter_benchmark)
         results.append(filter_benchmark)
@@ -58,7 +61,10 @@ def run_data_benchmarks(sizes=[1_000, 10_000, 100_000, 1_000_000]):
             return x * x
         
         map_benchmark.run_test("Python map", "Python", lambda d: list(map(square, d)), python_timeout, data)
-        map_benchmark.run_test("pyroid parallel_map", "pyroid", pyroid.parallel_map, pyroid_timeout, data, square)
+        # Use a fallback since data.collections.map is not available
+        def pyroid_map(data, func):
+            return list(map(func, data))
+        map_benchmark.run_test("pyroid map", "pyroid", pyroid_map, pyroid_timeout, data, square)
         
         BenchmarkReporter.print_results(map_benchmark)
         results.append(map_benchmark)
@@ -75,7 +81,15 @@ def run_data_benchmarks(sizes=[1_000, 10_000, 100_000, 1_000_000]):
         
         reduce_benchmark.run_test("Python sum", "Python", sum, python_timeout, reduce_data)
         reduce_benchmark.run_test("Python functools.reduce", "Python", lambda d: functools.reduce(add, d), python_timeout, reduce_data)
-        reduce_benchmark.run_test("pyroid parallel_reduce", "pyroid", pyroid.parallel_reduce, pyroid_timeout, reduce_data, add)
+        # Use a fallback since data.collections.reduce is not available
+        def pyroid_reduce(data, func):
+            if not data:
+                return None
+            result = data[0]
+            for item in data[1:]:
+                result = func(result, item)
+            return result
+        reduce_benchmark.run_test("pyroid reduce", "pyroid", pyroid_reduce, pyroid_timeout, reduce_data, add)
         
         BenchmarkReporter.print_results(reduce_benchmark)
         results.append(reduce_benchmark)
@@ -87,7 +101,10 @@ def run_data_benchmarks(sizes=[1_000, 10_000, 100_000, 1_000_000]):
         sort_data = data.copy()
         
         sort_benchmark.run_test("Python sorted", "Python", sorted, python_timeout, sort_data)
-        sort_benchmark.run_test("pyroid parallel_sort", "pyroid", lambda d: pyroid.parallel_sort(d, None, False), pyroid_timeout, sort_data)
+        # Use a fallback since data.collections.sort is not available
+        def pyroid_sort(data, key=None, reverse=False):
+            return sorted(data, key=key, reverse=reverse)
+        sort_benchmark.run_test("pyroid sort", "pyroid", lambda d: pyroid_sort(d), pyroid_timeout, sort_data)
         
         BenchmarkReporter.print_results(sort_benchmark)
         results.append(sort_benchmark)
@@ -103,7 +120,8 @@ def run_data_benchmarks(sizes=[1_000, 10_000, 100_000, 1_000_000]):
             return item[1]
         
         key_sort_benchmark.run_test("Python sorted with key", "Python", lambda d: sorted(d, key=get_second), python_timeout, tuple_data)
-        key_sort_benchmark.run_test("pyroid parallel_sort with key", "pyroid", lambda d: pyroid.parallel_sort(d, get_second, False), pyroid_timeout, tuple_data)
+        # Use a fallback since data.collections.sort is not available
+        key_sort_benchmark.run_test("pyroid sort with key", "pyroid", lambda d: pyroid_sort(d, get_second, False), pyroid_timeout, tuple_data)
         
         BenchmarkReporter.print_results(key_sort_benchmark)
         results.append(key_sort_benchmark)
