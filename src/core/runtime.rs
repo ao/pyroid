@@ -7,8 +7,6 @@ use std::sync::Arc;
 use tokio::runtime::{Builder, Runtime};
 use std::sync::atomic::{AtomicBool, Ordering};
 use pyo3::prelude::*;
-use pyo3::exceptions::PyRuntimeError;
-use std::thread;
 
 /// Global runtime for all async operations
 static GLOBAL_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {
@@ -20,6 +18,15 @@ static GLOBAL_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {
             .build()
             .expect("Failed to create global Tokio runtime")
     )
+});
+
+/// Global thread pool for CPU-bound operations
+static GLOBAL_THREAD_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(num_cpus::get())
+        .thread_name(|i| format!("pyroid-worker-{}", i))
+        .build()
+        .expect("Failed to create thread pool")
 });
 
 /// Flag to track if Python's GIL is currently held
@@ -67,12 +74,13 @@ where
 pub async fn execute_async<F, Fut, R>(f: F) -> R
 where
     F: FnOnce() -> Fut + Send + 'static,
-    Fut: std::future::Future<Output = R> + Send,
+    Fut: std::future::Future<Output = R> + Send + 'static,
     R: Send + 'static,
 {
     // If we're on a Tokio thread already, just run the function
     if tokio::runtime::Handle::try_current().is_ok() {
-        return f().await;
+        let future = f();
+        return future.await;
     }
     
     // Otherwise, spawn a new task
@@ -85,6 +93,15 @@ where
     rx.await.expect("Task failed")
 }
 
+/// Execute a CPU-bound function on the thread pool
+pub fn execute_cpu<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    GLOBAL_THREAD_POOL.install(f)
+}
+
 /// Python module for runtime management
 #[pymodule]
 fn runtime(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -92,6 +109,18 @@ fn runtime(_py: Python, m: &PyModule) -> PyResult<()> {
     #[pyfn(m)]
     fn init() -> PyResult<()> {
         // Force initialization of the global runtime
+        let _ = get_runtime();
+        Ok(())
+    }
+    
+    /// Initialize the runtime with specific settings
+    #[pyfn(m)]
+    fn init_with_settings(
+        _worker_threads: Option<usize>,
+        _max_connections_per_host: Option<usize>
+    ) -> PyResult<()> {
+        // This is just a placeholder since we're using a global runtime
+        // In a real implementation, we would configure the runtime here
         let _ = get_runtime();
         Ok(())
     }

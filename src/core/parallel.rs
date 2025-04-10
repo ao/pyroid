@@ -8,6 +8,7 @@ use pyo3::types::{PyList, PyDict};
 use rayon::prelude::*;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 use crate::core::runtime::get_runtime;
 
 /// A batch processor for parallel operations
@@ -16,6 +17,13 @@ pub struct BatchProcessor {
     batch_size: usize,
     max_workers: usize,
     adaptive: bool,
+    performance_metrics: Arc<Mutex<PerformanceMetrics>>,
+}
+
+/// Performance metrics for adaptive batch sizing
+struct PerformanceMetrics {
+    batch_times: Vec<(usize, f64)>,  // (data_size, processing_time_seconds)
+    optimal_batch_size: usize,
 }
 
 #[pymethods]
@@ -23,11 +31,42 @@ impl BatchProcessor {
     /// Create a new batch processor
     #[new]
     fn new(batch_size: Option<usize>, max_workers: Option<usize>, adaptive: Option<bool>) -> Self {
+        let batch_size = batch_size.unwrap_or(1000);
         Self {
-            batch_size: batch_size.unwrap_or(1000),
+            batch_size,
             max_workers: max_workers.unwrap_or(num_cpus::get()),
             adaptive: adaptive.unwrap_or(true),
+            performance_metrics: Arc::new(Mutex::new(PerformanceMetrics {
+                batch_times: Vec::new(),
+                optimal_batch_size: batch_size,
+            })),
         }
+    }
+    
+    /// Optimize batch size based on performance metrics
+    fn optimize_batch_size(&self, data_size: usize) -> usize {
+        if !self.adaptive {
+            return self.batch_size;
+        }
+        
+        let metrics_lock = self.performance_metrics.lock().unwrap();
+        
+        // Use previously optimized batch size or calculate a new one
+        let optimal_size = metrics_lock.optimal_batch_size;
+        
+        // Ensure we don't create too many or too few batches
+        let cpus = num_cpus::get();
+        let min_batches = cpus * 2; // At least 2 batches per CPU
+        let max_batches = cpus * 8; // At most 8 batches per CPU
+        
+        let calculated_size = data_size / min_batches.max(1);
+        let adjusted_size = if data_size / optimal_size > max_batches {
+            data_size / max_batches.max(1)
+        } else {
+            optimal_size
+        };
+        
+        std::cmp::max(1, std::cmp::min(calculated_size, adjusted_size))
     }
     
     /// Map a function over a list of items in parallel
@@ -36,15 +75,8 @@ impl BatchProcessor {
         let items_vec: Vec<PyObject> = items.iter().map(|item| item.into()).collect();
         let total_items = items_vec.len();
         
-        // Calculate optimal batch size if adaptive is true
-        let batch_size = if self.adaptive {
-            // Adjust batch size based on number of items and CPUs
-            let cpus = num_cpus::get();
-            let target_batches = cpus * 4; // Aim for 4 batches per CPU
-            std::cmp::max(1, total_items / target_batches)
-        } else {
-            self.batch_size
-        };
+        // Calculate optimal batch size
+        let batch_size = self.optimize_batch_size(total_items);
         
         // Create batches
         let batches: Vec<Vec<PyObject>> = items_vec
@@ -88,6 +120,12 @@ impl BatchProcessor {
                 })
             })
             .collect();
+        
+        // Update batch size metrics
+        if self.adaptive {
+            let mut metrics = self.performance_metrics.lock().unwrap();
+            metrics.optimal_batch_size = batch_size;
+        }
         
         // Flatten results
         let mut all_results = Vec::new();

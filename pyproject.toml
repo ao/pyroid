@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "pyroid"
-version = "0.2.9"
+version = "0.3.0"
 description = "High-performance Rust functions for Python with a simplified architecture"
 authors = [{ name = "Pyroid Team", email = "support@ataiva.com" }]
 readme = "README.md"
