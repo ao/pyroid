@@ -1,209 +1,208 @@
 """
-Optimized async operations example for Pyroid.
+Optimized async example for pyroid.
 
-This example demonstrates how to use Pyroid's optimized async operations,
-zero-copy buffers, and parallel processing capabilities.
+This example demonstrates the optimized async operations in pyroid.
 """
 
 import asyncio
 import time
-import numpy as np
+import sys
+import os
 from typing import List, Dict, Any
+
+# Add the parent directory to the path so we can import pyroid
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 try:
     import pyroid
-    from pyroid.core import buffer, parallel, runtime
+    from pyroid.core import runtime
 except ImportError:
-    print("Error: pyroid not found. Please install pyroid to run this example.")
-    exit(1)
+    print("pyroid not found. Make sure it's installed or built.")
+    sys.exit(1)
 
+# Initialize the runtime
+runtime.init()
 
-async def demonstrate_async_client():
-    """Demonstrate the optimized AsyncClient."""
-    print("\n=== Demonstrating AsyncClient ===")
+# URLs for testing
+TEST_URLS = [
+    "https://httpbin.org/get?id=1",
+    "https://httpbin.org/get?id=2",
+    "https://httpbin.org/get?id=3",
+    "https://httpbin.org/get?id=4",
+    "https://httpbin.org/get?id=5",
+    "https://httpbin.org/get?id=6",
+    "https://httpbin.org/get?id=7",
+    "https://httpbin.org/get?id=8",
+    "https://httpbin.org/get?id=9",
+    "https://httpbin.org/get?id=10",
+]
+
+# URLs grouped by host for more realistic testing
+MIXED_URLS = [
+    "https://httpbin.org/get?id=1",
+    "https://httpbin.org/get?id=2",
+    "https://example.com/",
+    "https://httpbin.org/get?id=3",
+    "https://example.org/",
+    "https://httpbin.org/get?id=4",
+    "https://example.net/",
+    "https://httpbin.org/get?id=5",
+]
+
+async def fetch_with_standard_python(urls: List[str], concurrency: int = 10) -> Dict[str, Any]:
+    """Fetch URLs using standard Python async/await with aiohttp."""
+    import aiohttp
     
-    # Initialize the runtime
-    runtime.init()
-    print(f"Runtime initialized with {runtime.get_worker_threads()} worker threads")
+    results = {}
+    semaphore = asyncio.Semaphore(concurrency)
     
-    # Create an AsyncClient
-    client = pyroid.AsyncClient()
-    print("AsyncClient created")
+    async def fetch_url(url: str) -> None:
+        async with semaphore:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as response:
+                        results[url] = {
+                            "status": response.status,
+                            "text": await response.text()
+                        }
+            except Exception as e:
+                results[url] = {"error": str(e)}
     
-    # Fetch a single URL
-    print("\nFetching a single URL...")
+    await asyncio.gather(*(fetch_url(url) for url in urls))
+    return results
+async def fetch_with_pyroid(urls: List[str], concurrency: int = 10) -> Dict[str, Any]:
+    """Fetch URLs using pyroid's AsyncClient."""
+    client = pyroid.AsyncClient(concurrency=concurrency, adaptive_concurrency=True)
+    return await client.fetch_many(urls, concurrency)
+    return client.fetch_many(urls, concurrency)
+
+async def benchmark_fetch(urls: List[str], concurrency: int = 10, iterations: int = 5) -> None:
+    """Benchmark URL fetching with both standard Python and pyroid."""
+    print(f"Benchmarking URL fetching with concurrency={concurrency}, iterations={iterations}")
+    print(f"URLs: {len(urls)}")
+    
+    # Warm up
+    print("Warming up...")
+    await fetch_with_standard_python(urls[:2], concurrency)
+    await fetch_with_pyroid(urls[:2], concurrency)
+    
+    # Benchmark standard Python
+    python_times = []
+    for i in range(iterations):
+        start_time = time.time()
+        await fetch_with_standard_python(urls, concurrency)
+        elapsed = time.time() - start_time
+        python_times.append(elapsed)
+        print(f"Python iteration {i+1}: {elapsed:.4f}s")
+    
+    avg_python_time = sum(python_times) / len(python_times)
+    print(f"Average Python time: {avg_python_time:.4f}s")
+    
+    # Benchmark pyroid
+    pyroid_times = []
+    for i in range(iterations):
+        start_time = time.time()
+        await fetch_with_pyroid(urls, concurrency)
+        elapsed = time.time() - start_time
+        pyroid_times.append(elapsed)
+        print(f"pyroid iteration {i+1}: {elapsed:.4f}s")
+    
+    avg_pyroid_time = sum(pyroid_times) / len(pyroid_times)
+    print(f"Average pyroid time: {avg_pyroid_time:.4f}s")
+    
+    # Calculate speedup
+    speedup = avg_python_time / avg_pyroid_time if avg_pyroid_time > 0 else float('inf')
+    print(f"Speedup: {speedup:.2f}x")
+    print()
+
+async def benchmark_zero_copy_buffer() -> None:
+    """Benchmark zero-copy buffer operations."""
+    print("Benchmarking zero-copy buffer operations")
+    
+    # Create a large buffer
+    data_size = 10 * 1024 * 1024  # 10 MB
+    data = b"x" * data_size
+    
+    # Standard Python approach
     start_time = time.time()
-    response = await client.fetch("https://httpbin.org/get")
-    end_time = time.time()
-    print(f"Fetched URL in {(end_time - start_time) * 1000:.2f}ms")
-    print(f"Status code: {response['status']}")
+    for _ in range(100):
+        # Copy the data
+        data_copy = data[:]
+        # Do something with the copy
+        _ = len(data_copy)
+    python_time = time.time() - start_time
+    print(f"Python time: {python_time:.4f}s")
     
-    # Fetch multiple URLs concurrently
-    urls = [f"https://httpbin.org/get?id={i}" for i in range(10)]
-    print(f"\nFetching {len(urls)} URLs concurrently...")
+    # pyroid approach
     start_time = time.time()
-    responses = await client.fetch_many(urls, concurrency=5)
-    end_time = time.time()
-    print(f"Fetched {len(responses)} URLs in {(end_time - start_time) * 1000:.2f}ms")
-    print(f"Average time per URL: {(end_time - start_time) * 1000 / len(urls):.2f}ms")
+    for _ in range(100):
+        # Create a zero-copy buffer
+        buffer = pyroid.core.buffer.ZeroCopyBuffer.from_bytes(data)
+        # Do something with the buffer
+        _ = buffer.size
+    pyroid_time = time.time() - start_time
+    print(f"pyroid time: {pyroid_time:.4f}s")
     
-    return "AsyncClient demonstration completed"
+    # Calculate speedup
+    speedup = python_time / pyroid_time if pyroid_time > 0 else float('inf')
+    print(f"Speedup: {speedup:.2f}x")
+    print()
 
-
-async def demonstrate_zero_copy_buffer():
-    """Demonstrate the zero-copy buffer protocol."""
-    print("\n=== Demonstrating Zero-Copy Buffer ===")
-    
-    # Create a zero-copy buffer
-    buffer_size = 1024 * 1024  # 1MB
-    zero_copy_buffer = buffer.ZeroCopyBuffer(buffer_size)
-    print(f"Created a {buffer_size / 1024 / 1024:.1f}MB zero-copy buffer")
-    
-    # Fill the buffer with data
-    data = zero_copy_buffer.get_data()
-    for i in range(0, len(data), 4):
-        if i + 4 <= len(data):
-            data[i:i+4] = (i % 256).to_bytes(4, byteorder='little')
-    
-    # Update the buffer with the modified data
-    zero_copy_buffer.set_data(data)
-    print("Buffer filled with data")
-    
-    # Create a memory view
-    memory_view = buffer.MemoryView(1024)
-    memory_view.set_data(b"Hello, world!" * 78 + b"!")
-    print(f"Created a memory view with size {memory_view.size()} bytes")
-    
-    # Get data from the memory view
-    view_data = memory_view.get_data()
-    print(f"First 20 bytes from memory view: {view_data[:20]}")
-    
-    return "Zero-copy buffer demonstration completed"
-
-
-def demonstrate_parallel_processing():
-    """Demonstrate parallel processing capabilities."""
-    print("\n=== Demonstrating Parallel Processing ===")
-    
-    # Create a batch processor
-    processor = parallel.BatchProcessor(batch_size=1000, adaptive=True)
-    print("Created a batch processor with adaptive batch sizing")
+async def benchmark_parallel_processing() -> None:
+    """Benchmark parallel processing."""
+    print("Benchmarking parallel processing")
     
     # Create a large list of items
     items = list(range(1000000))
-    print(f"Created a list with {len(items)} items")
     
-    # Define a processing function
+    # Define a CPU-intensive function
     def process_item(x):
-        # Simulate some CPU-bound work
-        result = 0
-        for i in range(100):
-            result += (x * i) % 1000
+        # Simulate CPU-intensive work
+        result = x
+        for _ in range(100):
+            result = (result * 2) % 10000007
         return result
     
-    # Process items in parallel
-    print("\nProcessing items in parallel...")
+    # Standard Python approach
     start_time = time.time()
-    results = processor.map(items, process_item)
-    end_time = time.time()
-    print(f"Processed {len(results)} items in {end_time - start_time:.2f} seconds")
-    print(f"Average time per item: {(end_time - start_time) * 1000000 / len(items):.2f} nanoseconds")
+    python_results = list(map(process_item, items[:10000]))  # Process fewer items for Python
+    python_time = time.time() - start_time
+    print(f"Python time (10K items): {python_time:.4f}s")
     
-    # Filter items in parallel
-    print("\nFiltering items in parallel...")
+    # Extrapolate to full dataset
+    extrapolated_python_time = python_time * (len(items) / 10000)
+    print(f"Extrapolated Python time (1M items): {extrapolated_python_time:.4f}s")
+    
+    # pyroid approach with BatchProcessor
+    batch_processor = pyroid.core.parallel.BatchProcessor(batch_size=10000, adaptive=True)
+    
     start_time = time.time()
-    filtered = processor.filter(items, lambda x: x % 100 == 0)
-    end_time = time.time()
-    print(f"Filtered to {len(filtered)} items in {end_time - start_time:.2f} seconds")
+    pyroid_results = batch_processor.map(items, process_item)
+    pyroid_time = time.time() - start_time
+    print(f"pyroid time (1M items): {pyroid_time:.4f}s")
     
-    # Sort items in parallel
-    print("\nSorting items in parallel...")
-    unsorted = np.random.randint(0, 1000000, 100000).tolist()
-    start_time = time.time()
-    sorted_items = processor.sort(unsorted, key=lambda x: x, reverse=False)
-    end_time = time.time()
-    print(f"Sorted {len(sorted_items)} items in {end_time - start_time:.2f} seconds")
-    
-    return "Parallel processing demonstration completed"
+    # Calculate speedup based on extrapolated time
+    speedup = extrapolated_python_time / pyroid_time if pyroid_time > 0 else float('inf')
+    print(f"Speedup: {speedup:.2f}x")
+    print()
 
-
-async def run_complete_pipeline():
-    """Run a complete pipeline using all optimized features."""
-    print("\n=== Running Complete Optimized Pipeline ===")
+async def main() -> None:
+    """Run all benchmarks."""
+    print("=== pyroid Optimized Async Benchmarks ===\n")
     
-    # Initialize the runtime
-    runtime.init()
+    # Benchmark URL fetching with different concurrency levels
+    await benchmark_fetch(TEST_URLS, concurrency=2)
+    await benchmark_fetch(TEST_URLS, concurrency=5)
+    await benchmark_fetch(TEST_URLS, concurrency=10)
     
-    # Create an AsyncClient
-    client = pyroid.AsyncClient()
+    # Benchmark URL fetching with mixed hosts
+    await benchmark_fetch(MIXED_URLS, concurrency=5)
     
-    # Create a batch processor
-    processor = parallel.BatchProcessor(batch_size=1000, adaptive=True)
+    # Benchmark zero-copy buffer operations
+    await benchmark_zero_copy_buffer()
     
-    # Step 1: Fetch data
-    print("\nStep 1: Fetching data...")
-    urls = [f"https://httpbin.org/get?id={i}" for i in range(20)]
-    start_time = time.time()
-    responses = await client.fetch_many(urls, concurrency=10)
-    fetch_time = time.time() - start_time
-    print(f"Fetched {len(responses)} URLs in {fetch_time:.2f} seconds")
-    
-    # Step 2: Process data in parallel
-    print("\nStep 2: Processing data in parallel...")
-    data = list(responses.values())
-    
-    def extract_data(response):
-        if isinstance(response, dict) and 'text' in response:
-            # Extract and process data
-            return {
-                'length': len(response['text']),
-                'processed': True
-            }
-        return {'length': 0, 'processed': False}
-    
-    start_time = time.time()
-    processed_data = processor.map(data, extract_data)
-    process_time = time.time() - start_time
-    print(f"Processed {len(processed_data)} items in {process_time:.2f} seconds")
-    
-    # Step 3: Store results using zero-copy buffer
-    print("\nStep 3: Storing results...")
-    result_str = str(processed_data).encode('utf-8')
-    
-    # Create a zero-copy buffer
-    result_buffer = buffer.ZeroCopyBuffer.from_bytes(result_str)
-    
-    start_time = time.time()
-    # Simulate writing to a file
-    await asyncio.sleep(0.01)
-    store_time = time.time() - start_time
-    print(f"Stored {len(result_buffer.get_data())} bytes in {store_time:.2f} seconds")
-    
-    # Calculate total time
-    total_time = fetch_time + process_time + store_time
-    print(f"\nTotal pipeline time: {total_time:.2f} seconds")
-    
-    return "Complete pipeline demonstration completed"
-
-
-async def main():
-    """Run all demonstrations."""
-    print("=== Pyroid Optimized Features Demonstration ===")
-    
-    # Demonstrate AsyncClient
-    await demonstrate_async_client()
-    
-    # Demonstrate zero-copy buffer
-    await demonstrate_zero_copy_buffer()
-    
-    # Demonstrate parallel processing
-    demonstrate_parallel_processing()
-    
-    # Run complete pipeline
-    await run_complete_pipeline()
-    
-    print("\n=== Demonstration Completed ===")
-
+    # Benchmark parallel processing
+    await benchmark_parallel_processing()
 
 if __name__ == "__main__":
     asyncio.run(main())

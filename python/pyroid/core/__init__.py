@@ -18,6 +18,23 @@ Exceptions:
     IoError: I/O error
 """
 
+# Import submodules
+try:
+    from . import runtime
+    from . import buffer
+    from . import parallel
+except ImportError:
+    # Create dummy modules if imports fail
+    class DummyModule:
+        def __init__(self, name):
+            self.__name__ = name
+        def __getattr__(self, name):
+            raise AttributeError(f"{self.__name__}.{name} is not available")
+    
+    runtime = DummyModule("runtime")
+    buffer = DummyModule("buffer")
+    parallel = DummyModule("parallel")
+
 # Try to import directly from the pyroid module
 try:
     from ..pyroid import Config, ConfigContext, SharedData
@@ -66,13 +83,21 @@ except ImportError:
             pass
 
 __all__ = [
+    # Core classes
     'Config',
     'ConfigContext',
     'SharedData',
+    
+    # Error classes
     'PyroidError',
     'InputError',
     'ComputationError',
     'MemoryError',
     'ConversionError',
     'IoError',
+    
+    # Submodules
+    'runtime',
+    'buffer',
+    'parallel',
 ]

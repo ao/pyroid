@@ -5,6 +5,8 @@
 
 use pyo3::prelude::*;
 use pyo3::exceptions::{PyValueError, PyBufferError};
+use pyo3::types::{PyBytes, PyByteArray};
+use std::ptr;
 
 /// A buffer that can be shared between Python and Rust without copying
 #[pyclass]
@@ -26,11 +28,27 @@ impl ZeroCopyBuffer {
 
     /// Create a new zero-copy buffer from existing data
     #[staticmethod]
-    fn from_bytes(data: &[u8]) -> Self {
+    pub fn from_bytes(data: &[u8]) -> Self {
         Self {
             data: data.to_vec(),
             readonly: true,
         }
+    }
+    
+    /// Create a zero-copy buffer from a NumPy array
+    #[staticmethod]
+    fn from_numpy_array<'py>(py: Python<'py>, array: &'py PyAny) -> PyResult<Self> {
+        // Import numpy
+        let numpy = py.import("numpy")?;
+        
+        // Convert to bytes using numpy's tobytes() method
+        let bytes = array.call_method0("tobytes")?;
+        let bytes = bytes.extract::<&[u8]>()?;
+        
+        Ok(Self {
+            data: bytes.to_vec(),
+            readonly: true,
+        })
     }
 
     /// Get the size of the buffer
@@ -40,13 +58,27 @@ impl ZeroCopyBuffer {
     }
 
     /// Get a copy of the buffer as bytes
-    fn as_bytes<'py>(&self, py: Python<'py>) -> &'py pyo3::types::PyBytes {
-        pyo3::types::PyBytes::new(py, &self.data)
+    fn as_bytes<'py>(&self, py: Python<'py>) -> &'py PyBytes {
+        PyBytes::new(py, &self.data)
     }
     
     /// Get a reference to the underlying data
     fn get_data(&self) -> Vec<u8> {
         self.data.clone()
+    }
+    
+    /// Get a reference to the underlying data pointer as an integer
+    fn get_data_ptr(&self) -> usize {
+        self.data.as_ptr() as usize
+    }
+    
+    /// Get the data as a numpy array
+    fn to_numpy_array<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        let numpy = py.import("numpy")?;
+        let array_func = numpy.getattr("frombuffer")?;
+        
+        // Create numpy array directly from our buffer without copying
+        array_func.call1((PyBytes::new(py, &self.data),))
     }
     
     /// Set data in the buffer

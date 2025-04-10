@@ -9,7 +9,21 @@ import aiohttp
 import aiofiles
 from typing import List, Dict, Any, Optional, Union
 import json
+import time
+import logging
+from .async_helpers import (
+    fetch_url_optimized, 
+    fetch_many_optimized, 
+    read_file, 
+    read_file_lines, 
+    write_file as async_write_file,
+    download_file as async_download_file,
+    http_post as async_http_post
+)
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("pyroid.bridge")
 
 def run_async(coro):
     """Run an async coroutine and return the result.
@@ -20,7 +34,13 @@ def run_async(coro):
     Returns:
         The result of the coroutine
     """
-    loop = asyncio.get_event_loop()
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        # Create a new event loop if one doesn't exist
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
     return loop.run_until_complete(coro)
 
 
@@ -32,7 +52,6 @@ def sleep(seconds: float) -> None:
     """
     return run_async(asyncio.sleep(seconds))
 
-
 def read_file(path: str) -> bytes:
     """Read a file asynchronously.
     
@@ -42,11 +61,9 @@ def read_file(path: str) -> bytes:
     Returns:
         The file contents as bytes
     """
-    async def _read_file():
-        async with aiofiles.open(path, "rb") as f:
-            return await f.read()
-    
-    return run_async(_read_file())
+    from .async_helpers import read_file as async_read_file
+    return run_async(async_read_file(path))
+    return run_async(read_file(path))
 
 
 def read_file_lines(path: str) -> List[str]:
@@ -58,11 +75,8 @@ def read_file_lines(path: str) -> List[str]:
     Returns:
         A list of lines from the file
     """
-    async def _read_file_lines():
-        async with aiofiles.open(path, "r") as f:
-            return await f.readlines()
-    
-    return run_async(_read_file_lines())
+    from .async_helpers import read_file_lines as async_read_file_lines
+    return run_async(async_read_file_lines(path))
 
 
 def write_file(path: str, data: bytes) -> Dict[str, Any]:
@@ -75,22 +89,7 @@ def write_file(path: str, data: bytes) -> Dict[str, Any]:
     Returns:
         A dictionary with success status and path
     """
-    async def _write_file():
-        # Create parent directories if they don't exist
-        import os
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        
-        # Write the file
-        async with aiofiles.open(path, "wb") as f:
-            await f.write(data)
-        
-        return {
-            "success": True,
-            "path": path,
-            "bytes_written": len(data)
-        }
-    
-    return run_async(_write_file())
+    return run_async(async_write_file(path, data))
 
 
 def fetch_url(url: str) -> Dict[str, Any]:
@@ -102,15 +101,13 @@ def fetch_url(url: str) -> Dict[str, Any]:
     Returns:
         A dictionary with status and text
     """
-    async def _fetch_url():
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                return {
-                    "status": response.status,
-                    "text": await response.text()
-                }
-    
-    return run_async(_fetch_url())
+    # Extract host from URL for connection pooling
+    if "://" in url:
+        host = url.split("://")[1].split("/")[0]
+    else:
+        host = url
+        
+    return run_async(fetch_url_optimized(url, host=host))
 
 
 def fetch_many(urls: List[str], concurrency: int = 10) -> Dict[str, Any]:
@@ -123,26 +120,19 @@ def fetch_many(urls: List[str], concurrency: int = 10) -> Dict[str, Any]:
     Returns:
         A dictionary mapping URLs to their responses
     """
-    async def _fetch_many():
-        semaphore = asyncio.Semaphore(concurrency)
-        results = {}
-        
-        async def fetch_with_semaphore(url: str) -> None:
-            async with semaphore:
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(url) as response:
-                            results[url] = {
-                                "status": response.status,
-                                "text": await response.text()
-                            }
-                except Exception as e:
-                    results[url] = str(e)
-        
-        await asyncio.gather(*(fetch_with_semaphore(url) for url in urls))
-        return results
+    # Group URLs by host for connection pooling
+    url_groups = {}
+    for url in urls:
+        if "://" in url:
+            host = url.split("://")[1].split("/")[0]
+        else:
+            host = url
+            
+        if host not in url_groups:
+            url_groups[host] = []
+        url_groups[host].append(url)
     
-    return run_async(_fetch_many())
+    return run_async(fetch_many_optimized(urls, concurrency=concurrency, url_groups=url_groups))
 
 
 def download_file(url: str, path: str) -> Dict[str, Any]:
@@ -155,29 +145,7 @@ def download_file(url: str, path: str) -> Dict[str, Any]:
     Returns:
         A dictionary with success status and path
     """
-    async def _download_file():
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if not response.ok:
-                    return {
-                        "success": False,
-                        "error": f"Failed to download file: HTTP {response.status}"
-                    }
-                
-                # Create parent directories if they don't exist
-                import os
-                os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-                
-                # Write the file
-                async with aiofiles.open(path, "wb") as f:
-                    await f.write(await response.read())
-                
-                return {
-                    "success": True,
-                    "path": path
-                }
-    
-    return run_async(_download_file())
+    return run_async(async_download_file(url, path))
 
 
 def http_post(url: str, data: Optional[bytes] = None, json_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -191,16 +159,43 @@ def http_post(url: str, data: Optional[bytes] = None, json_data: Optional[Dict[s
     Returns:
         A dictionary with status, content, and headers
     """
-    async def _http_post():
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, data=data, json=json_data) as response:
-                content = await response.read()
-                headers = {k: v for k, v in response.headers.items()}
-                
-                return {
-                    "status": response.status,
-                    "content": content,
-                    "headers": headers
-                }
+    return run_async(async_http_post(url, data, json_data))
+
+
+# Performance monitoring
+_PERFORMANCE_METRICS = {
+    "requests": 0,
+    "errors": 0,
+    "total_time": 0,
+    "start_time": time.time()
+}
+
+def get_performance_metrics() -> Dict[str, Any]:
+    """Get performance metrics for the async bridge.
     
-    return run_async(_http_post())
+    Returns:
+        A dictionary with performance metrics
+    """
+    uptime = time.time() - _PERFORMANCE_METRICS["start_time"]
+    requests_per_second = _PERFORMANCE_METRICS["requests"] / uptime if uptime > 0 else 0
+    
+    return {
+        "requests": _PERFORMANCE_METRICS["requests"],
+        "errors": _PERFORMANCE_METRICS["errors"],
+        "total_time": _PERFORMANCE_METRICS["total_time"],
+        "uptime": uptime,
+        "requests_per_second": requests_per_second
+    }
+
+def _update_metrics(success: bool, duration: float) -> None:
+    """Update performance metrics.
+    
+    Args:
+        success: Whether the request was successful
+        duration: The duration of the request in seconds
+    """
+    _PERFORMANCE_METRICS["requests"] += 1
+    _PERFORMANCE_METRICS["total_time"] += duration
+    
+    if not success:
+        _PERFORMANCE_METRICS["errors"] += 1
