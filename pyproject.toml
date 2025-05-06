@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "pyroid"
-version = "0.3.0"
+version = "0.6.0"
 description = "High-performance Rust functions for Python with a simplified architecture"
 authors = [{ name = "Pyroid Team", email = "support@ataiva.com" }]
 readme = "README.md"
@@ -42,7 +42,10 @@ features = [
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version", "Cargo.toml:package.version"]
-version_pattern = ["python/pyroid/__init__.py:__version__ = \"$version\""]
+version_pattern = [
+    "python/pyroid/__init__.py:__version__ = \"$version\"",
+    "setup.py:version=\"$version\""
+]
 branch = "main"
 upload_to_pypi = false # We use the publish.yml workflow for this
 upload_to_release = true

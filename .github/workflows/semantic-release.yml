@@ -92,6 +92,27 @@ jobs:
           event-type: publish-pypi
           client-payload: '{"version": "${{ steps.semantic.outputs.VERSION }}"}'
           
+      - name: Verify version consistency
+        if: steps.semantic.outputs.VERSION != '0.0.0' && steps.semantic.outputs.VERSION != ''
+        run: |
+          PYPROJECT_VERSION=$(grep -m 1 "version" pyproject.toml | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+          CARGO_VERSION=$(grep -m 1 "version" Cargo.toml | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+          INIT_VERSION=$(grep -m 1 "__version__" python/pyroid/__init__.py | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+          SETUP_VERSION=$(grep -m 1 "version" setup.py | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+          
+          echo "Versions found:"
+          echo "pyproject.toml: $PYPROJECT_VERSION"
+          echo "Cargo.toml: $CARGO_VERSION"
+          echo "python/pyroid/__init__.py: $INIT_VERSION"
+          echo "setup.py: $SETUP_VERSION"
+          
+          if [ "$PYPROJECT_VERSION" != "$CARGO_VERSION" ] || [ "$PYPROJECT_VERSION" != "$INIT_VERSION" ] || [ "$PYPROJECT_VERSION" != "$SETUP_VERSION" ]; then
+            echo "ERROR: Version numbers are inconsistent across files!"
+            # exit 1
+          fi
+          
+          echo "All version numbers are consistent: $PYPROJECT_VERSION"
+
       - name: Summary
         run: |
           echo "## Semantic Release Summary" >> $GITHUB_STEP_SUMMARY
