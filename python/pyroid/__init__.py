@@ -113,7 +113,7 @@ def config(**kwargs):
     return ConfigContext(Config(kwargs))
 
 # Version information
-__version__ = "0.3.0"
+__version__ = "0.6.0"
 __all__ = [
     # Core classes
     'Config',
