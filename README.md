@@ -1,5 +1,7 @@
 # 📌 Pyroid: Python on Rust-Powered Steroids
 
+[![Tests](https://github.com/ao/pyroid/actions/workflows/tests.yml/badge.svg)](https://github.com/ao/pyroid/actions/workflows/tests.yml)
+
 ⚡ Blazing fast Rust-powered utilities to eliminate Python's performance bottlenecks.
 
 ## 🔹 Why Pyroid?
@@ -358,6 +360,10 @@ Pyroid offers significant performance improvements over pure Python:
 - **Zero-copy buffers**: Efficient memory management without copying
 - **Parallel processing**: Batch processing with adaptive sizing for optimal performance
 
+For detailed benchmarks and performance comparisons between Pyroid's Rust implementation and Python alternatives, see our [Performance Comparison](docs/performance_comparison.md) document. Our benchmarks show that Pyroid's Rust implementation can be **up to 15,000x faster** than equivalent Python code for certain operations, with performance advantages that scale dramatically with data size.
+
+> **Note**: The Python fallback implementations are provided only for development and testing when the Rust components cannot be built. For production use, the Rust implementation is essential to achieve the performance benefits.
+
 ## Building from Source
 
 To build pyroid from source, you need:
@@ -384,26 +390,53 @@ pip install -e .
 
 For performance-critical applications, consider using the following optimizations:
 
-1. **Unified Runtime**: Initialize the runtime once at the start of your application
+1. **Verify Rust Implementation**: Ensure you're using the high-performance Rust implementation
+   ```bash
+   python check_implementation.py
+   ```
+
+2. **Run Python Tests**: Ensure the Python fallback implementations work correctly
+   ```bash
+   python run_tests.py
+   ```
+
+3. **Run Rust Tests**: Ensure the Rust implementations work correctly
+   ```bash
+   # Run all Rust tests
+   cargo test --test test_rust_*
+   
+   # Or run specific module tests
+   cargo test --test test_rust_core    # Core functionality tests
+   cargo test --test test_rust_math    # Math operations tests
+   cargo test --test test_rust_data    # Data operations tests
+   cargo test --test test_rust_text    # Text operations tests
+   cargo test --test test_rust_io      # I/O operations tests
+   cargo test --test test_rust_image   # Image operations tests
+   cargo test --test test_rust_impl    # ML operations tests
+   ```
+
+   For detailed information about the Rust tests, see [Rust Tests Documentation](docs/rust_tests.md).
+
+2. **Unified Runtime**: Initialize the runtime once at the start of your application
    ```python
    from pyroid.core import runtime
    runtime.init()
    ```
 
-2. **Zero-Copy Buffers**: Use zero-copy buffers for large data transfers
+3. **Zero-Copy Buffers**: Use zero-copy buffers for large data transfers
    ```python
    from pyroid.core import buffer
    zero_copy_buffer = buffer.ZeroCopyBuffer(size)
    ```
 
-3. **Parallel Processing**: Use batch processing for CPU-intensive operations
+4. **Parallel Processing**: Use batch processing for CPU-intensive operations
    ```python
    from pyroid.core import parallel
    processor = parallel.BatchProcessor(adaptive=True)
    results = processor.map(items, process_function)
    ```
 
-4. **Concurrency Control**: Adjust concurrency levels based on your workload
+5. **Concurrency Control**: Adjust concurrency levels based on your workload
    ```python
    client = pyroid.AsyncClient()
    responses = await client.fetch_many(urls, concurrency=optimal_value)

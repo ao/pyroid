@@ -10,6 +10,8 @@ Welcome to the Pyroid documentation! Pyroid is a high-performance Rust-powered l
 | [API Reference](./api/index.md) | Detailed documentation of all Pyroid functions and classes |
 | [Examples](../examples/) | Example code demonstrating various Pyroid features |
 | [Benchmarks](../benchmarks/) | Performance benchmarks comparing Pyroid to other libraries |
+| [Performance Comparison](./performance_comparison.md) | Detailed comparison between Rust and Python implementations |
+| [Rust Tests](./rust_tests.md) | Documentation for the Rust-level tests |
 
 ## 🚀 Quick Start
 
@@ -156,6 +158,38 @@ grayscale_img = img.to_grayscale()
 ## 📄 License
 
 MIT
+
+## 🧪 Testing
+
+Pyroid includes comprehensive test suites at both the Python and Rust levels:
+
+### Python Tests
+
+Run the Python tests to ensure the Python API and fallback implementations work correctly:
+
+```bash
+python run_tests.py
+```
+
+### Rust Tests
+
+Run the Rust tests to ensure the core Rust implementations work correctly:
+
+```bash
+# Run all Rust tests
+cargo test --test test_rust_*
+
+# Or run specific module tests
+cargo test --test test_rust_core    # Core functionality tests
+cargo test --test test_rust_math    # Math operations tests
+cargo test --test test_rust_data    # Data operations tests
+cargo test --test test_rust_text    # Text operations tests
+cargo test --test test_rust_io      # I/O operations tests
+cargo test --test test_rust_image   # Image operations tests
+cargo test --test test_rust_impl    # ML operations tests
+```
+
+For detailed information about the Rust tests, see the [Rust Tests Documentation](./rust_tests.md).
 
 ## 👥 Contributing
 

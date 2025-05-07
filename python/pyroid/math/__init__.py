@@ -19,112 +19,27 @@ Functions:
     describe: Calculate descriptive statistics for a list of numbers
 """
 
-# Try to import directly from the pyroid module
-try:
-    from ..pyroid import (
-        # Vector operations
-        Vector,
-        sum,
-        
-        # Matrix operations
-        Matrix,
-        multiply,
-        
-        # Statistical operations
-        mean,
-        median,
-        std,
-        variance,
-        correlation,
-        describe,
-    )
-except ImportError:
-    # Fallback to importing from the math module
-    try:
-        from ..pyroid.math import (
-            # Vector operations
-            Vector,
-            sum,
-            
-            # Matrix operations
-            Matrix,
-            multiply,
-            
-            # Statistical operations
-            mean,
-            median,
-            std,
-            variance,
-            correlation,
-            describe,
-        )
-    except ImportError:
-        # If all else fails, create dummy classes for documentation purposes
-        class Vector:
-            """Vector class for mathematical operations (not available)."""
-            def __init__(self, values):
-                self.values = values
-                
-            def __add__(self, other):
-                return self
-                
-            def dot(self, other):
-                return 0
-                
-        class Matrix:
-            """Matrix class for mathematical operations (not available)."""
-            def __init__(self, values):
-                self.values = values
-                
-            def __mul__(self, other):
-                return self
-                
-        # Dummy functions
-        def sum(values):
-            """Sum a list of numbers (not available)."""
-            return 0
-            
-        def multiply(a, b):
-            """Matrix multiplication function (not available)."""
-            return [[0]]
-            
-        def mean(values):
-            """Calculate the mean of a list of numbers (not available)."""
-            return 0
-            
-        def median(values):
-            """Calculate the median of a list of numbers (not available)."""
-            return 0
-            
-        def std(values):
-            """Calculate the standard deviation of a list of numbers (not available)."""
-            return 0
-            
-        def variance(values):
-            """Calculate the variance of a list of numbers (not available)."""
-            return 0
-            
-        def correlation(x, y):
-            """Calculate the correlation coefficient between two lists of numbers (not available)."""
-            return 0
-            
-        def describe(values):
-            """Calculate descriptive statistics for a list of numbers (not available)."""
-            return {}
+# Import from our Python implementation
+from ..math_impl import (
+    # Vector operations
+    Vector,
+    sum,
+    
+    # Matrix operations
+    Matrix,
+    multiply,
+    
+    # Statistical operations
+    mean,
+    median,
+    std,
+    variance,
+    correlation,
+    describe,
+)
 
-# Import submodules
-try:
-    from . import stats
-except ImportError:
-    # Create a dummy stats module if it's not available
-    import types
-    stats = types.ModuleType('stats')
-    stats.mean = mean
-    stats.median = median
-    stats.calc_std = std
-    stats.variance = variance
-    stats.correlation = correlation
-    stats.describe = describe
+# Import stats from our Python implementation
+from ..math_impl import stats
 
 __all__ = [
     'Vector',

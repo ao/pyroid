@@ -9,7 +9,7 @@ use pyo3::types::{PyDict, PyList};
 ///
 /// This class provides methods for making HTTP requests asynchronously.
 #[pyclass]
-struct AsyncClient {
+pub struct AsyncClient {
     #[pyo3(get)]
     timeout: Option<f64>,
     concurrency: usize,
@@ -161,7 +161,7 @@ asyncio.run(_fetch_many())
 ///
 /// This class provides methods for asynchronous file operations.
 #[pyclass]
-struct AsyncFileReader {
+pub struct AsyncFileReader {
     path: String,
 }
 
