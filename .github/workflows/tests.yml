@@ -39,7 +39,9 @@ jobs:
       run: |
         # Build the Rust extension using maturin
         pip install maturin
-        maturin develop --release
+        # Build the wheel and install it
+        maturin build --release
+        pip install target/wheels/*.whl
     
     - name: Run Python tests
       run: |
