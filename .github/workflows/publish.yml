@@ -121,15 +121,16 @@ jobs:
       
       - name: Extract version from tag
         id: get_version
+        shell: bash
         run: |
           # Extract version from tag (remove 'v' prefix)
-          if [[ $GITHUB_REF == refs/tags/v* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
-            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
             echo "Extracted version: $VERSION from tag"
           elif [[ -n "${{ github.event.inputs.version }}" ]]; then
-            VERSION=${{ github.event.inputs.version }}
-            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+            VERSION="${{ github.event.inputs.version }}"
+            echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
             echo "Using manually provided version: $VERSION"
           else
             echo "No version found in tag or inputs"
@@ -137,21 +138,22 @@ jobs:
           fi
       
       - name: Update version in files
+        shell: bash
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           echo "Updating version to $VERSION in all files"
           
           # Update pyproject.toml
-          sed -i "s/^version = \"[0-9]*\.[0-9]*\.[0-9]*\"/version = \"$VERSION\"/" pyproject.toml
+          sed -i.bak "s/^version = \"[0-9]*\.[0-9]*\.[0-9]*\"/version = \"$VERSION\"/" pyproject.toml && rm pyproject.toml.bak
           
           # Update Cargo.toml
-          sed -i "s/^version = \"[0-9]*\.[0-9]*\.[0-9]*\"/version = \"$VERSION\"/" Cargo.toml
+          sed -i.bak "s/^version = \"[0-9]*\.[0-9]*\.[0-9]*\"/version = \"$VERSION\"/" Cargo.toml && rm Cargo.toml.bak
           
           # Update python/pyroid/__init__.py
-          sed -i "s/__version__ = \"[0-9]*\.[0-9]*\.[0-9]*\"/__version__ = \"$VERSION\"/" python/pyroid/__init__.py
+          sed -i.bak "s/__version__ = \"[0-9]*\.[0-9]*\.[0-9]*\"/__version__ = \"$VERSION\"/" python/pyroid/__init__.py && rm python/pyroid/__init__.py.bak
           
           # Update setup.py
-          sed -i "s/version=\"[0-9]*\.[0-9]*\.[0-9]*\"/version=\"$VERSION\"/" setup.py
+          sed -i.bak "s/version=\"[0-9]*\.[0-9]*\.[0-9]*\"/version=\"$VERSION\"/" setup.py && rm setup.py.bak
           
           # Verify updates
           echo "Updated versions:"
@@ -165,7 +167,8 @@ jobs:
           merge-multiple: true
           path: dist
       - name: List files in dist directory
-        run: find dist -type f | sort
+        shell: bash
+        run: ls -la dist/
         
       - name: Publish to PyPI
         uses: PyO3/maturin-action@v1

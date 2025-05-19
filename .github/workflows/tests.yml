@@ -23,27 +23,23 @@ jobs:
         profile: minimal
         override: true
     
-    - name: Install Rust dependencies
+    - name: Check Cargo version
+      run: cargo --version
+      
+    - name: Install Ubuntu-specific dependencies
+      if: matrix.os == 'ubuntu-latest'
       run: |
-        cargo --version
-        
-        # Install additional dependencies if needed
-        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-          sudo apt-get update
-          sudo apt-get install -y libssl-dev
-        fi
+        sudo apt-get update
+        sudo apt-get install -y libssl-dev
     
     - name: Run Rust tests
+      run: cargo test --test test_rust_* -- --nocapture
+      
+    - name: Run Rust tests with backtrace if previous step failed
+      if: failure()
       run: |
-        # Run all Rust tests with verbose output
-        cargo test --test test_rust_* -- --nocapture
-        
-        # If any test fails, print more detailed information
-        if [ $? -ne 0 ]; then
-          echo "Rust tests failed. Running with backtrace enabled..."
-          RUST_BACKTRACE=1 cargo test --test test_rust_*
-          exit 1
-        fi
+        echo "Rust tests failed. Running with backtrace enabled..."
+        RUST_BACKTRACE=1 cargo test --test test_rust_*
 
   python-tests:
     name: Python Tests on ${{ matrix.os }}
