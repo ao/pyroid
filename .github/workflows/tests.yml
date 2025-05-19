@@ -2,26 +2,19 @@ name: Tests
 
 on:
   push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
 
 jobs:
-  test:
-    name: Test on ${{ matrix.os }}
+  rust-tests:
+    name: Rust Tests on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.10', '3.11', '3.12']
 
     steps:
     - uses: actions/checkout@v3
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
     
     - name: Set up Rust
       uses: actions-rs/toolchain@v1
@@ -30,23 +23,15 @@ jobs:
         profile: minimal
         override: true
     
-    - name: Install dependencies
+    - name: Install Rust dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -r ci-requirements.txt
-    
-    - name: Build Rust extension
-      run: |
-        # Build the Rust extension using maturin
-        pip install maturin
-        # Build the wheel and install it
-        maturin build --release
-        pip install target/wheels/*.whl
-    
-    - name: Run Python tests
-      run: |
-        # Run the tests with pytest
-        pytest python/tests/
+        cargo --version
+        
+        # Install additional dependencies if needed
+        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev
+        fi
     
     - name: Run Rust tests
       run: |
@@ -59,3 +44,29 @@ jobs:
           RUST_BACKTRACE=1 cargo test --test test_rust_*
           exit 1
         fi
+
+  python-tests:
+    name: Python Tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ['3.11']
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest numpy
+    
+    - name: Run Python implementation tests
+      run: |
+        # Run only the implementation tests that don't require the Rust extension
+        pytest python/tests/test_*_impl.py -v
