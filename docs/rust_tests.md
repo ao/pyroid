@@ -64,6 +64,17 @@ To see more detailed output, including output from passing tests:
 cargo test --test test_rust_* -- --nocapture
 ```
 
+### Continuous Integration
+
+The tests are automatically run on GitHub Actions for every push and pull request:
+
+1. **Rust Tests**: Run on multiple operating systems (Ubuntu, Windows, and macOS) to ensure cross-platform compatibility.
+2. **Python Tests**: Run the Python implementation tests that don't require the Rust extension.
+
+You can see the status of the tests in the badge at the top of the README.md file.
+
+The GitHub Actions workflow is defined in `.github/workflows/tests.yml`.
+
 ## Test Modules
 
 ### Core Tests (`test_rust_core.rs`)
