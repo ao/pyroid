@@ -16,13 +16,13 @@ use pyo3::types::{PyBool, PyList, PyString, PyTuple};
 use pyroid_core::columnar::BoolBuffers;
 use pyroid_core::dedup::exact::normalized_hash;
 use pyroid_core::dedup::{
-    Clusters, ExactSeen, HashConfig, HashFn, MinHasher, MinhashConfig, Precision, SignatureStore,
-    TextNormConfig, TokenizeError, UnicodeVersion, simplify_text,
+    CapacityError, Clusters, ExactSeen, HashConfig, HashFn, MinHasher, MinhashConfig, Precision,
+    SignatureStore, TextNormConfig, TokenizeError, UnicodeVersion, simplify_text,
 };
 use pyroid_core::par;
 
 use crate::arrow::{Chunk, Column, ColumnType};
-use crate::batch::{BatchError, map_values, transform};
+use crate::batch::{BatchError, doc_count, fill_rows, map_values, transform};
 use crate::errors::{PyroidError, input_error, type_name, with_note};
 use crate::input::{TextInput, Threads, ThreadsArg, texts_and_threads, threads};
 
@@ -171,6 +171,64 @@ fn signatures_of(
             )),
         })
         .collect()
+}
+
+/// Why adding documents to a MinHash index failed (converted once re-attached).
+#[derive(Debug)]
+enum AddError {
+    Batch(BatchError),
+    /// spaCy's E025 on document `.0`.
+    Tokenize(usize, TokenizeError),
+    Capacity(CapacityError),
+    Pool(par::PoolError),
+}
+
+impl From<CapacityError> for AddError {
+    fn from(e: CapacityError) -> Self {
+        Self::Capacity(e)
+    }
+}
+
+impl AddError {
+    fn into_pyerr(self, py: Python<'_>) -> PyErr {
+        match self {
+            Self::Batch(e) => e.into_pyerr(py),
+            // spaCy's E025 (2**30 characters or more), raised as datatrove raises it.
+            Self::Tokenize(i, e) => with_note(
+                py,
+                PyValueError::new_err(e.to_string()),
+                format!("pyroid: while tokenizing document {i}"),
+            ),
+            Self::Capacity(e) => PyValueError::new_err(e.to_string()),
+            Self::Pool(e) => PyroidError::new_err(e.to_string()),
+        }
+    }
+}
+
+/// Stage 1 of every document of `input`, written straight into `store` (one
+/// flat row per document: no per-document signature allocations, no copy).
+/// Pure Rust: runs detached. On error `store` is unchanged.
+fn append_text_signatures(
+    store: &mut SignatureStore,
+    hasher: &MinHasher,
+    input: &TextInput,
+    threads_arg: Option<Threads>,
+) -> Result<(), AddError> {
+    let h = hasher.num_hashes();
+    store.append_with(doc_count(input), |rows| {
+        fill_rows(input, threads_arg, rows, h, |s, row| {
+            hasher.signature(s, row)
+        })
+        .map_err(AddError::Batch)?
+        .into_iter()
+        .enumerate()
+        .map(|(i, r)| match r {
+            None => Ok(false), // Arrow null: no signature
+            Some(Ok(has)) => Ok(has),
+            Some(Err(e)) => Err(AddError::Tokenize(i, e)), // the first failing document
+        })
+        .collect()
+    })
 }
 
 /// `list[list[str]]` (pre-tokenized documents) for the test hooks.
@@ -405,9 +463,17 @@ impl MinHashState {
         threads: Option<ThreadsArg>,
     ) -> PyResult<(usize, usize)> {
         let (texts, threads) = texts_and_threads(texts, threads, self.threads)?;
-        let sigs = signatures_of(py, self.hasher(), &texts, threads.or(self.threads))?;
-        drop(texts);
-        self.append(py, sigs)
+        // The lock is held (detached) while the signatures are computed, so
+        // they can be written into the store in place.
+        let t = threads.or(self.threads);
+        py.detach(|| {
+            let mut inner = lock(&self.inner);
+            let start = inner.store.len();
+            append_text_signatures(&mut inner.store, self.hasher(), &texts, t)?;
+            inner.clusters = None;
+            Ok((start, inner.store.len()))
+        })
+        .map_err(|e: AddError| e.into_pyerr(py))
     }
 
     /// Add pre-tokenized documents (a parity-test hook).
@@ -435,17 +501,20 @@ impl MinHashState {
     ) -> PyResult<Bound<'py, PyAny>> {
         let (texts, threads) = texts_and_threads(texts, threads, self.threads)?;
         let t = threads.or(self.threads);
-        let sigs = signatures_of(py, self.hasher(), &texts, t)?;
         let nulls = null_rows(&texts);
         let tt = self::threads(t);
-        let keep = py.detach(|| {
-            let mut inner = lock(&self.inner);
-            inner.store.clear();
-            inner.append(sigs)?;
-            inner
-                .clusters(tt)
-                .map_err(|e| PyroidError::new_err(e.to_string()))
-        })?;
+        let keep = py
+            .detach(|| {
+                // A new store, filled in place outside the lock; the old index
+                // stays as it was if this fails.
+                let mut fresh = SignatureStore::new(self.hasher().config());
+                append_text_signatures(&mut fresh, self.hasher(), &texts, t)?;
+                let mut inner = lock(&self.inner);
+                inner.store = fresh;
+                inner.clusters = None;
+                inner.clusters(tt).map_err(AddError::Pool)
+            })
+            .map_err(|e| e.into_pyerr(py))?;
         let values: Vec<Option<bool>> = (0..keep.len())
             .map(|i| (!nulls[i]).then(|| keep.is_kept(i)))
             .collect();

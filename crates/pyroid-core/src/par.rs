@@ -206,6 +206,48 @@ where
     try_map(len, threads, |i| Ok::<R, PoolError>(f(i)))
 }
 
+/// `f(i, row_i)` for every `row_len`-element row of `out`, in order, in
+/// parallel per `threads`: each document writes its result in place (no
+/// per-document allocation, no copy afterwards). Errors as in [`try_map`].
+///
+/// # Panics
+/// If `row_len` is 0 or does not divide `out.len()`.
+pub fn try_map_rows<T, R, E, F>(
+    out: &mut [T],
+    row_len: usize,
+    threads: Threads,
+    f: F,
+) -> Result<Vec<R>, E>
+where
+    T: Send,
+    R: Send,
+    E: Send + From<PoolError>,
+    F: Fn(usize, &mut [T]) -> Result<R, E> + Sync + Send,
+{
+    assert!(
+        row_len > 0 && out.len() % row_len == 0,
+        "rows of {row_len} over {} values",
+        out.len()
+    );
+    match plan(out.len() / row_len, threads) {
+        None => out
+            .chunks_mut(row_len)
+            .enumerate()
+            .map(|(i, row)| f(i, row))
+            .collect(),
+        Some(min_len) => {
+            let pool = pool()?;
+            pool.install(|| {
+                out.par_chunks_mut(row_len)
+                    .with_min_len(min_len)
+                    .enumerate()
+                    .map(|(i, row)| f(i, row))
+                    .collect()
+            })
+        }
+    }
+}
+
 /// Run `f` on every element of `items` (consuming them), in parallel per
 /// `threads`. `weight` is the number of documents the items cover; it decides
 /// whether the pool is worth using. Each item is one task.
@@ -301,6 +343,32 @@ mod tests {
         });
         assert!(r.is_err());
         assert_eq!(map(1_000, Threads::Auto, |i| i).unwrap().len(), 1_000);
+    }
+
+    #[test]
+    fn try_map_rows_writes_in_place_in_order() {
+        for t in [Threads::Auto, Threads::ONE, n(3)] {
+            let mut out = vec![0_u64; 3 * 5_000];
+            let r: Result<Vec<usize>, PoolError> = try_map_rows(&mut out, 3, t, |i, row| {
+                row.fill(i as u64);
+                Ok(i)
+            });
+            assert_eq!(r.unwrap(), (0..5_000).collect::<Vec<_>>(), "{t:?}");
+            assert!(
+                out.chunks(3)
+                    .enumerate()
+                    .all(|(i, row)| row == [i as u64; 3])
+            );
+        }
+        let mut out = vec![0_u8; 4 * 1_000];
+        let r: Result<Vec<()>, PoolError> = try_map_rows(&mut out, 4, Threads::Auto, |i, _| {
+            if i == 777 {
+                Err(PoolError("row 777".into()))
+            } else {
+                Ok(())
+            }
+        });
+        assert_eq!(r.unwrap_err().to_string(), "row 777");
     }
 
     #[test]

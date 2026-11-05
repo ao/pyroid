@@ -93,6 +93,53 @@ impl SignatureStore {
         Ok(())
     }
 
+    /// Add `n` documents whose signatures `fill` writes in place, with no
+    /// per-document allocation or copy: it gets the `n * num_hashes` new
+    /// values (zeroed, one row per document) and returns whether each
+    /// document has a signature. Rows of documents without one are zeroed
+    /// again afterwards. If `fill` fails or panics, the store is left as it
+    /// was.
+    pub fn append_with<E, F>(&mut self, n: usize, fill: F) -> Result<(), E>
+    where
+        E: From<CapacityError>,
+        F: FnOnce(&mut [u64]) -> Result<Vec<bool>, E>,
+    {
+        /// Truncates the values back to `start` unless disarmed (on error or unwind).
+        struct Rollback<'a> {
+            data: &'a mut Vec<u64>,
+            start: usize,
+            armed: bool,
+        }
+        impl Drop for Rollback<'_> {
+            fn drop(&mut self) {
+                if self.armed {
+                    self.data.truncate(self.start);
+                }
+            }
+        }
+
+        self.reserve(n)?;
+        let h = self.num_hashes();
+        let start = self.data.len();
+        let mut guard = Rollback {
+            data: &mut self.data,
+            start,
+            armed: true,
+        };
+        guard.data.resize(start + n * h, 0);
+        let present = fill(&mut guard.data[start..])?;
+        assert_eq!(present.len(), n, "one presence flag per document");
+        for (row, &has) in guard.data[start..].chunks_mut(h).zip(&present) {
+            if !has {
+                row.fill(0);
+            }
+        }
+        guard.armed = false;
+        drop(guard);
+        self.present.extend(present);
+        Ok(())
+    }
+
     /// Add one document: its signature (`num_hashes` values), or `None` if it
     /// had no shingles.
     pub fn push(&mut self, signature: Option<&[u64]>) -> Result<(), CapacityError> {
@@ -498,5 +545,37 @@ mod tests {
         assert_eq!(c.keep_mask(), [true, true]);
         assert_eq!(c.cluster_ids(), [-1, -1]);
         assert_eq!(c.clusters(), Vec::<Vec<u32>>::new());
+    }
+
+    #[test]
+    fn append_with_matches_push_and_rolls_back() {
+        let cfg = config(2, 2, Precision::P64);
+        let mut pushed = SignatureStore::new(&cfg);
+        pushed.push(Some(&[9, 9, 9, 9])).unwrap();
+        pushed.push(Some(&[1, 2, 3, 4])).unwrap();
+        pushed.push(None).unwrap();
+        let mut filled = SignatureStore::new(&cfg);
+        filled.push(Some(&[9, 9, 9, 9])).unwrap();
+        filled
+            .append_with(2, |rows: &mut [u64]| {
+                assert_eq!(rows, [0; 8]);
+                rows.copy_from_slice(&[1, 2, 3, 4, 7, 7, 7, 7]); // row 1 written, then "no signature"
+                Ok::<_, CapacityError>(vec![true, false])
+            })
+            .unwrap();
+        assert_eq!(filled.len(), 3);
+        assert_eq!(filled.data, pushed.data); // the absent row is zeroed again
+        assert_eq!(filled.present, pushed.present);
+
+        let err = filled.append_with(1, |_: &mut [u64]| Err(CapacityError));
+        assert_eq!(err, Err(CapacityError));
+        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = filled.append_with(5, |_: &mut [u64]| -> Result<Vec<bool>, CapacityError> {
+                panic!("kernel bug")
+            });
+        }));
+        assert!(unwound.is_err());
+        assert_eq!(filled.data, pushed.data);
+        assert_eq!(filled.present, pushed.present);
     }
 }

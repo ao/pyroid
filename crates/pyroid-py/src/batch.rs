@@ -238,6 +238,67 @@ where
     }
 }
 
+/// Number of documents in `input` (a str is one; Arrow nulls count).
+pub fn doc_count(input: &TextInput) -> usize {
+    match input {
+        TextInput::Str(_) => 1,
+        TextInput::List(d) | TextInput::Tuple(d) => d.len(),
+        TextInput::Arrow(strings) => strings.len(),
+    }
+}
+
+/// `f(doc, row)` for every document, in parallel per `threads`, writing each
+/// document's fixed-size result in place: `out` holds one `row_len`-value row
+/// per document, in input order ([`doc_count`] rows). Returns `f`'s value
+/// per document; Arrow nulls give `None` and leave their row untouched.
+///
+/// Pure Rust: call it while detached (e.g. inside `py.detach` holding a lock
+/// on the destination).
+pub fn fill_rows<T, R, F>(
+    input: &TextInput,
+    threads_arg: Option<Threads>,
+    out: &mut [T],
+    row_len: usize,
+    f: F,
+) -> Result<Vec<Option<R>>, BatchError>
+where
+    T: Send,
+    R: Send,
+    F: Fn(&str, &mut [T]) -> R + Sync,
+{
+    let threads = threads(threads_arg);
+    match input {
+        TextInput::Str(s) => Ok(vec![Some(f(s, out))]),
+        TextInput::List(docs) | TextInput::Tuple(docs) => {
+            par::try_map_rows(out, row_len, threads, |i, row| Ok(Some(f(&docs[i], row))))
+        }
+        TextInput::Arrow(strings) => {
+            let mut res = Vec::with_capacity(strings.len());
+            let mut rest = out;
+            for (c, chunk) in strings.chunks.iter().enumerate() {
+                let (rows, tail) = rest.split_at_mut(chunk.len() * row_len);
+                rest = tail;
+                res.extend(par::try_map_rows(
+                    rows,
+                    row_len,
+                    threads,
+                    |i, row| match chunk.get(i) {
+                        None => Ok(None),
+                        Some(Ok(s)) => Ok(Some(f(s, row))),
+                        Some(Err(err)) => Err(BatchError::BadUtf8 {
+                            chunk: c,
+                            row: i,
+                            bytes: chunk.bytes(i).unwrap_or_default().to_vec(),
+                            err,
+                        }),
+                    },
+                )?);
+            }
+            Ok(res)
+        }
+    }
+}
+
 /// Apply `f` to every document, detached and in parallel; one entry per
 /// document in input order (`None` for Arrow nulls). For product functions
 /// whose output is not a str or bool per document (scores, hashes, labels).
