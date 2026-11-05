@@ -16,6 +16,7 @@ dependencies = [
     "fasttext-predict==0.9.2.4; python_version < '3.14'",
     "datasketch==2.0.0",
     "rensa==0.5.0",
+    "anyascii==0.3.3",
     "pyarrow==26.0.1",
     "numpy==2.5.4",
     "huggingface-hub==2.4.0",
