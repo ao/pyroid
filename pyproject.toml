@@ -52,6 +52,8 @@ test = [
   "pytest-timeout>=2.4",
   "pytest-run-parallel>=0.10",
   "pyarrow>=18",
+  # The reference implementation for pyroid.ftfy's parity tests.
+  "ftfy==6.3.1",
 ]
 # Same pins as .pre-commit-config.yaml (prek runs ruff and mypy from there).
 lint = ["ruff==0.17.3", "mypy==2.4.1", "prek==0.5.10"]
