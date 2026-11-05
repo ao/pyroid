@@ -1,42 +1,83 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin>=1.16,<2.0"]
 build-backend = "maturin"
 
 [project]
 name = "pyroid"
-version = "0.7.0"
-description = "High-performance Rust functions for Python with a simplified architecture"
-authors = [{ name = "Pyroid Team", email = "support@ataiva.com" }]
+# Single source: [workspace.package].version in the root Cargo.toml.
+dynamic = ["version"]
+description = "Rust-fast text cleaning for LLM datasets (1.0 rewrite in progress)"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Andrew Odendaal" }]
+keywords = ["llm", "dataset", "text-cleaning", "rust", "pyo3"]
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Rust",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 2 - Pre-Alpha",
   "Intended Audience :: Developers",
-  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Intended Audience :: Science/Research",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
+  "Programming Language :: Python :: Free Threading :: 2 - Beta",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Rust",
+  "Topic :: Text Processing",
+  "Typing :: Typed",
 ]
+# No runtime dependencies.
+dependencies = []
 
 [project.urls]
-"Homepage" = "https://github.com/ao/pyroid"
-"Bug Tracker" = "https://github.com/ao/pyroid/issues"
-"Documentation" = "https://github.com/ao/pyroid/blob/main/README.md"
+Homepage = "https://github.com/ao/pyroid"
+Repository = "https://github.com/ao/pyroid"
+Issues = "https://github.com/ao/pyroid/issues"
+Changelog = "https://github.com/ao/pyroid/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+test = ["pytest>=9", "packaging>=24"]
+lint = ["ruff==0.17.3", "mypy==2.4.1"]
+dev = ["maturin>=1.16,<2.0", { include-group = "test" }, { include-group = "lint" }]
 
 [tool.maturin]
+manifest-path = "crates/pyroid-py/Cargo.toml"
+module-name = "pyroid._pyroid"
 python-source = "python"
-features = [
-  "pyo3/extension-module",
-  "math",
-  "text",
-  "data",
-  "io",
-  "image",
-  "ml",
+locked = true
+strip = true
+# Ship the tests in the sdist (for downstream packagers), not in wheels.
+include = [{ path = "python/tests/**/*.py", format = "sdist" }]
+# Keep the sdist small: crate sources, Cargo.lock, pyproject, README, LICENSE,
+# python/pyroid and python/tests. Never ship locally built extensions.
+exclude = [
+  { path = "python/pyroid/*.so", format = ["sdist", "wheel"] },
+  { path = "python/pyroid/*.pyd", format = ["sdist", "wheel"] },
+  { path = "python/pyroid/*.dylib", format = ["sdist", "wheel"] },
+  { path = "python/**/__pycache__/**", format = ["sdist", "wheel"] },
+  { path = "bench/**", format = "sdist" },
+  { path = "parity/**", format = "sdist" },
+  { path = "docs/**", format = "sdist" },
+  { path = ".github/**", format = "sdist" },
 ]
 
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["python"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "PYI", "PT", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "python"
+# Tests are type-checked against the stubs too (needs pytest + packaging installed).
+files = ["python/pyroid", "python/tests"]
