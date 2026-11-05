@@ -22,7 +22,9 @@ use pyroid_core::dedup::{
 use pyroid_core::par;
 
 use crate::arrow::{Chunk, Column, ColumnType};
-use crate::batch::{BatchError, doc_count, fill_rows, map_values, transform};
+use crate::batch::{
+    BatchError, DocCost, doc_count, fill_rows, map_values, map_values_cost, transform,
+};
 use crate::errors::{PyroidError, input_error, type_name, with_note};
 use crate::input::{TextInput, Threads, ThreadsArg, texts_and_threads, threads};
 
@@ -157,20 +159,22 @@ fn signatures_of(
     input: &TextInput,
     threads_arg: Option<Threads>,
 ) -> PyResult<Vec<Signature>> {
-    map_values(py, input, threads_arg, |s| text_signature(hasher, s))?
-        .into_iter()
-        .enumerate()
-        .map(|(i, r)| match r {
-            None => Ok(None),
-            Some(Ok(sig)) => Ok(sig),
-            // spaCy's E025 (2**30 characters or more), raised as datatrove raises it.
-            Some(Err(e)) => Err(with_note(
-                py,
-                PyValueError::new_err(e.to_string()),
-                format!("pyroid: while tokenizing document {i}"),
-            )),
-        })
-        .collect()
+    map_values_cost(py, input, threads_arg, DocCost::Heavy, |s| {
+        text_signature(hasher, s)
+    })?
+    .into_iter()
+    .enumerate()
+    .map(|(i, r)| match r {
+        None => Ok(None),
+        Some(Ok(sig)) => Ok(sig),
+        // spaCy's E025 (2**30 characters or more), raised as datatrove raises it.
+        Some(Err(e)) => Err(with_note(
+            py,
+            PyValueError::new_err(e.to_string()),
+            format!("pyroid: while tokenizing document {i}"),
+        )),
+    })
+    .collect()
 }
 
 /// Why adding documents to a MinHash index failed (converted once re-attached).

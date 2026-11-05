@@ -92,7 +92,7 @@ static IS_GIL_ENABLED: PyOnceLock<Option<Py<PyAny>>> = PyOnceLock::new();
 
 /// Is the interpreter running with the GIL? (`sys._is_gil_enabled()`, 3.13+;
 /// always true before.) Asked per call: an extension can re-enable it.
-fn gil_enabled(py: Python<'_>) -> PyResult<bool> {
+pub fn gil_enabled(py: Python<'_>) -> PyResult<bool> {
     let f = IS_GIL_ENABLED.get_or_try_init(py, || -> PyResult<_> {
         let sys = py.import(pyo3::intern!(py, "sys"))?;
         Ok(sys

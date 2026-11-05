@@ -21,7 +21,7 @@ use pyroid_core::ftfy::UnicodeVersion;
 use pyroid_core::par::{self, PoolError};
 
 use crate::arrow::{Chunk, Column, ColumnType, StrChunk, StrType, build_error};
-use crate::batch::{BatchError, SINGLE_DOC_DETACH_BYTES};
+use crate::batch::{BatchError, DocCost, detach_one};
 use crate::errors::with_note;
 use crate::input::{TextInput, ThreadsArg, texts_and_threads};
 
@@ -281,10 +281,10 @@ fn run<'py>(
     let p = &pipeline.0;
     match &texts {
         TextInput::Str(s) => {
-            let res = if s.len() < SINGLE_DOC_DETACH_BYTES {
-                p.run(s)
-            } else {
+            let res = if detach_one(py, s.len(), DocCost::Heavy) {
                 py.detach(|| p.run(s))
+            } else {
+                p.run(s)
             };
             let o = res.map_err(|err| {
                 RunError::Filter {
