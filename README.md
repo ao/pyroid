@@ -1,32 +1,84 @@
 # pyroid
 
-> **Status: 1.0 is a ground-up rewrite in progress. Nothing here is usable yet.**
+[![PyPI](https://img.shields.io/pypi/v/pyroid)](https://pypi.org/project/pyroid/)
+[![Python versions](https://img.shields.io/pypi/pyversions/pyroid)](https://pypi.org/project/pyroid/)
+[![License](https://img.shields.io/pypi/l/pyroid)](https://github.com/ao/pyroid/blob/main/LICENSE)
+[![CI](https://github.com/ao/pyroid/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ao/pyroid/actions/workflows/ci.yml)
 
-Pyroid 1.0 aims to be a Rust-fast text-cleaning core for LLM datasets, as a
-Python package with prebuilt wheels and no runtime dependencies.
+[Docs](https://ao.github.io/pyroid/) | [Benchmarks](https://ao.github.io/pyroid/benchmarks/) | [Compatibility](https://ao.github.io/pyroid/compatibility/)
 
-## Planned scope
+**Drop-in Rust replacements for ftfy, fastText inference and datatrove's quality filters, for
+cleaning LLM datasets: the same API, the same output, a fraction of the CPU time.**
 
-- **`ftfy`, drop-in:** output byte-identical to [ftfy](https://github.com/rspeer/python-ftfy)
-  for the supported options.
-- **fastText inference:** load `.bin`/`.ftz` models, `predict`, sentence vectors,
-  with batched calls that release the GIL.
-- **Quality filters:** Gopher quality/repetition, C4 and FineWeb filters, returning masks.
-- **Deduplication:** MinHash-LSH and exact dedup.
-- **Transliteration:** under a permissive license.
+> [!NOTE]
+> pyroid 1.0 is not on PyPI yet: until it is, `pip install pyroid` gives the unrelated 0.7.x
+> toolkit ([see below](#the-07x-releases)). Speed numbers are preliminary, from a Docker VM.
 
-The target is CPython 3.11+, including free-threaded builds (3.14t and 3.15t).
-Correctness is checked against the incumbent libraries with differential tests.
-This README makes no performance claims: numbers will be published only once
-they are measured reproducibly.
+<!-- TODO(bare-metal): hero chart from the bare-metal harness run, light and dark SVGs rendered
+     by bench/chart.py and committed to docs/assets/. Caption: corpus, cores, versions.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+  <img alt="Time to clean the FineWeb sample, pyroid vs the incumbents" src="docs/assets/hero-light.svg">
+</picture>
+-->
+
+```console
+$ pip install pyroid               # add [fasttext] for pyroid.fasttext (numpy)
+```
+
+```python
+import pyroid.ftfy as ftfy          # was: import ftfy             (byte-identical output)
+import pyroid.fasttext as fasttext  # was: import fasttext         (same .bin/.ftz models)
+import pyroid.filters as filters    # datatrove's Gopher/C4/FineWeb filters (same decisions)
+
+docs = ftfy.fix_text_batch(docs)                                # all cores, GIL released
+lid = fasttext.load_model("lid.176.bin")
+labels, probs = lid.predict([d.replace("\n", " ") for d in docs], k=1)
+result = filters.apply(docs, [filters.GopherRepetition(), filters.GopherQuality(),
+                              filters.C4Quality(filter_no_terminal_punct=False),
+                              filters.FineWebQuality()])
+clean = [text for text, keep in zip(result.text, result.keep) if keep]
+```
+
+Every function takes a `str`, a `list` of `str` or an Arrow column (pyarrow, polars, Hugging Face
+`datasets`) and returns the same kind.
+
+**Replaces:** ftfy · fastText inference (fasttext, fasttext-wheel, fasttext-predict) · datatrove's
+Gopher, C4 and FineWeb filters · *preview:* datatrove's MinHash dedup · Unidecode (permissive,
+anyascii-based)
+
+## Why
+
+- **Faster, measured against the incumbents** (single-threaded; Docker VM on Apple Silicon,
+  indicative, preliminary: [methodology](https://ao.github.io/pyroid/benchmarks/)):
+  `fix_text` 95–167× faster than ftfy on FineWeb documents; FineWeb's four quality filters about
+  86× faster than datatrove; fastText language ID 1.5–5.4× faster.
+- **Same output, checked:** byte-identical to ftfy 6.3.1, bit-identical fastText labels and
+  probabilities, and datatrove's keep/drop decisions and reasons, on pinned FineWeb documents
+  and property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)).
+- **Installs everywhere:** wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t, on Linux
+  (glibc and musl), macOS and Windows, x86-64 and ARM64. No compiler, no runtime dependencies.
+- **Threads, not processes:** batch calls release the GIL and run on all cores, and one loaded
+  fastText model serves every thread (one copy in memory instead of one per worker process).
+- **Never silently different:** options the Rust port doesn't cover are handed to the original
+  library, with a `pyroid.FallbackWarning`.
+
+| Module | Replaces | Status |
+|---|---|---|
+| [`pyroid.ftfy`](https://ao.github.io/pyroid/guides/ftfy/) | ftfy 6.3.1 | ready |
+| [`pyroid.fasttext`](https://ao.github.io/pyroid/guides/fasttext/) | fastText inference | ready |
+| [`pyroid.filters`](https://ao.github.io/pyroid/guides/filters/) | datatrove 0.10.1 Gopher, C4, FineWeb filters | ready |
+| [`pyroid.dedup`](https://ao.github.io/pyroid/guides/dedup/) | datatrove 0.10.1 MinHash dedup | preview |
+| [`pyroid.translit`](https://ao.github.io/pyroid/guides/translit/) | anyascii; a permissive alternative to Unidecode | preview |
 
 ## The 0.7.x releases
 
-The previous general-purpose toolkit (0.1–0.7) is **not** carried forward, and
-the 1.0 API is incompatible with it.
+pyroid 1.0 is a rewrite. The previous general-purpose toolkit (0.1–0.7) is **not** carried
+forward, and the 1.0 API is incompatible with it.
 
 - 0.7.x stays installable from PyPI: `pip install "pyroid<1"`.
-- Its source is kept on the `legacy` branch.
+- Its source is kept on the [`legacy`](https://github.com/ao/pyroid/tree/legacy) branch.
+- [Migrating from 0.7](https://ao.github.io/pyroid/migrating-from-0.7/) lists replacements.
 
 ## Development
 
@@ -34,15 +86,18 @@ The extension is built with [maturin](https://www.maturin.rs/):
 
 ```console
 $ uv venv && source .venv/bin/activate
-$ uv pip install maturin pytest packaging
+$ uv pip install maturin --group test
 $ maturin develop --uv     # builds pyroid._pyroid into the venv (editable)
 $ pytest python/tests
 $ cargo test               # pure-Rust core (crates/pyroid-core)
 ```
 
-Layout: `crates/pyroid-core` (pure Rust, no Python), `crates/pyroid-py` (PyO3
-bindings, built as `pyroid._pyroid`) and `python/pyroid` (the typed Python package).
+Layout: `crates/pyroid-core` (pure Rust, no Python), `crates/pyroid-py` (PyO3 bindings, built as
+`pyroid._pyroid`), `python/pyroid` (the typed Python package), `bench/` (benchmark harness),
+`parity/` (differential tests against the incumbents) and `docs/` (this documentation). See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. Parts are ported from ftfy and datatrove (Apache-2.0) and from spaCy (MIT), and keep their
+licences: see [LICENSE](LICENSE) and [NOTICE](NOTICE).
