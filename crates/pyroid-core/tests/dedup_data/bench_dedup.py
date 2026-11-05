@@ -11,9 +11,8 @@ pyarrow and (for the incumbent rows) the bench harness's dependencies:
         datatrove's MinHash stages in one process (1 task, 14 bucket tasks): wall and CPU
 
 Every number is a median of --repeat runs after one warm-up run. Label results
-"Docker/OrbStack VM, indicative". Rows other than ``pyroid tokens`` use pyroid's whitespace
-stand-in tokenizer until the spaCy-exact one is wired in; their signatures are not datatrove's
-for ~31% of documents.
+"Docker/OrbStack VM, indicative". The ``pyroid`` rows run the whole of stage 1 from raw text
+(spaCy port included); ``pyroid tokens`` starts from datatrove's spaCy words (oracle.py tokens).
 """
 
 from __future__ import annotations

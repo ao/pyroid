@@ -9,7 +9,9 @@ Inputs (skipped when absent):
   (datatrove's ``simplify_text`` output and spaCy word tokens per doc) and
   ``stages-<hash>-<bits>.json`` (stage-2 pairs per bucket, removed ids, cluster ids and sizes).
 
-The spaCy tokens let stages 1-4 be checked exactly before pyroid's own spaCy-exact tokenizer exists.
+The raw-text tests run the whole pipeline (pyroid's own spaCy port included); the token tests
+feed datatrove's spaCy tokens to stages 1-4 directly, so a tokenizer bug and a stage bug can be
+told apart.
 """
 
 from __future__ import annotations
@@ -89,18 +91,27 @@ def test_simplify_text_matches_datatrove(corpus: list[str], tokens: dict[str, An
     assert not bad, f"{len(bad)} docs differ, first {bad[:5]}"
 
 
-def test_full_pipeline_where_spacy_equals_split(
-    ref: dict[str, Any], corpus: list[str], tokens: dict[str, Any]
-) -> None:
-    """End to end from raw text, where spaCy's tokens equal the whitespace stand-in's."""
+def test_signatures_from_raw_text(ref: dict[str, Any], corpus: list[str]) -> None:
+    """The whole of stage 1 (simplify_text, spaCy words, shingles, permutations) from raw text."""
     got = dedup.minhash_signatures(corpus, FINEWEB)
-    same_tokens = [
-        w == s.split() for w, s in zip(tokens["tokens"], tokens["simplified"], strict=True)
-    ]
-    checked = [i for i, ok in enumerate(same_tokens) if ok]
-    bad = [i for i in checked if got[i] != ref["signature"][i]]
-    assert not bad, f"{len(bad)}/{len(checked)} signatures differ, first {bad[:5]}"
-    assert len(checked) > 9000
+    bad = [i for i, (g, w) in enumerate(zip(got, ref["signature"], strict=True)) if g != w]
+    assert not bad, f"{len(bad)}/{len(got)} signatures differ, first {bad[:5]}"
+
+
+def test_removed_set_from_raw_text(ref: dict[str, Any], corpus: list[str]) -> None:
+    keep = dedup.minhash_dedup(corpus, FINEWEB)
+    assert keep == [not r for r in ref["removed"]]
+    assert sum(ref["removed"]) == 445
+
+
+@pytest.mark.parametrize("threads", [1, None])
+def test_raw_text_batches_and_threads(
+    ref: dict[str, Any], corpus: list[str], threads: int | None
+) -> None:
+    d = dedup.MinHashDedup(FINEWEB, threads=threads)
+    for i in range(0, len(corpus), 3000):
+        d.add(corpus[i : i + 3000])
+    assert d.duplicates() == [i for i, r in enumerate(ref["removed"]) if r]
 
 
 def _stage_files() -> list[Path]:
@@ -108,7 +119,7 @@ def _stage_files() -> list[Path]:
 
 
 @pytest.mark.parametrize("path", _stage_files(), ids=lambda p: p.stem)
-def test_stages_match_datatrove(path: Path, tokens: dict[str, Any]) -> None:
+def test_stages_match_datatrove(path: Path, corpus: list[str]) -> None:
     rec = json.loads(path.read_text())
     cfg = dedup.MinhashConfig(
         hash_config=dedup.HashConfig(
@@ -116,7 +127,7 @@ def test_stages_match_datatrove(path: Path, tokens: dict[str, Any]) -> None:
         )
     )
     d = dedup.MinHashDedup(cfg)
-    d._state._add_tokens(tokens["tokens"])
+    d.add(corpus)
     assert len(d) == rec["n"]
     for b, want in enumerate(rec["pairs"]):
         assert [list(p) for p in d._state._bucket_pairs(b)] == want, f"bucket {b}"

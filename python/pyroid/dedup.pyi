@@ -8,7 +8,8 @@ The MinHash pipeline makes **the same removals as datatrove 0.10.1's**
 -> ``MinhashDedupFilter``, in memory and multi-threaded:
 
 1. *Signatures.* Each document is normalised with datatrove's
-   ``simplify_text``, split into words, and every ``n_grams``-word window is
+   ``simplify_text``, split into words by pyroid's port of spaCy's English
+   tokenizer (datatrove's ``word_tokenize``), and every ``n_grams``-word window is
    hashed (``hash_fc``); ``num_buckets * hashes_per_bucket`` permutations
    ``(a * x + b) mod (2**61 - 1)``, with ``a`` and ``b`` drawn from numpy's
    ``RandomState(seed)`` exactly as datatrove draws them, give the signature.
@@ -32,11 +33,6 @@ is datatrove's default (xxhash/64); FineWeb used
 
 Known differences from datatrove
 --------------------------------
-- Words are split with a whitespace stand-in until pyroid's spaCy-exact
-  tokenizer is wired in, so signatures and removals currently differ from
-  datatrove's for documents whose spaCy tokens differ from ``str.split()``
-  (about 31% of FineWeb documents). ``simplify_text``, the hashes, the
-  permutations and stages 2-4 are exact.
 - A str with a lone surrogate raises ``UnicodeEncodeError`` (pyroid's policy);
   datatrove raises it too unless the document has fewer than ``n_grams``
   words.

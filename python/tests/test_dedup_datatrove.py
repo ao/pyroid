@@ -5,8 +5,9 @@ Run in the parity oracle env with the pyroid wheel installed, e.g.::
     /target/venv-parity/bin/python -m pytest --import-mode=importlib \
         python/tests/test_dedup_datatrove.py
 
-Words come from datatrove's own tokenizer (spaCy) and are fed to pyroid's stages, so stages 1-4 are
-checked exactly whatever pyroid's tokenizer is; ``simplify_text`` is checked on raw Unicode text.
+Each case runs twice: from raw text through pyroid's own spaCy port, and with datatrove's
+spaCy words fed to pyroid's stages (so a tokenizer bug and a stage bug can be told apart).
+``simplify_text`` is checked on raw Unicode text.
 """
 
 # The inputs are full of look-alike characters on purpose.
@@ -140,6 +141,11 @@ def test_stages_match_live_datatrove(texts: list[str], hc: tuple[str, int], n: i
     assert d.duplicates() == want["removed"]
     assert d.cluster_ids() == want["cluster_ids"]
     assert d.cluster_sizes() == want["cluster_sizes"]
+    # The same from raw text, through pyroid's own spaCy port.
+    raw = dedup.MinHashDedup(pyroid_config(*hc, **kw))
+    raw.add(texts)
+    assert [raw.signature(i) for i in range(len(texts))] == want["signatures"]
+    assert raw.duplicates() == want["removed"]
 
 
 @pytest.mark.parametrize("hc", HASHES)
@@ -158,6 +164,10 @@ def test_default_bands_on_families(hc: tuple[str, int]) -> None:
     d._state._add_tokens(want["tokens"])
     assert d.duplicates() == want["removed"]
     assert d.cluster_ids() == want["cluster_ids"]
+    assert dedup.minhash_signatures(texts, pyroid_config(*hc)) == want["signatures"]
+    assert dedup.minhash_dedup(texts, pyroid_config(*hc)) == [
+        i not in want["removed"] for i in range(len(texts))
+    ]
     assert want["removed"]  # the families really are near-duplicates
 
 
