@@ -141,13 +141,99 @@
         "license": "CC BY-SA 3.0"
       }
     },
-    "nltk_data/tokenizers/punkt_tab.zip": {
-      "sha256": "e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106",
-      "bytes": 4319076,
-      "source": {
-        "url": "https://raw.githubusercontent.com/nltk/nltk_data/550b6625bcef1f2abff2ff770a5a0d272c9c6b2a/packages/tokenizers/punkt_tab.zip",
-        "license": "Apache-2.0 (nltk_data)"
+    "parity/adversarial.parquet": {
+      "sha256": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+      "bytes": 4434803,
+      "rows": 3232,
+      "content_sha256": "7f31c6ab78886fe071422265bb1631c0cd5a553c2987d040d2ff1517afec9813",
+      "seed": 20261105,
+      "generator": "pyroid_parity.refs:build_adversarial",
+      "oracle": {
+        "ftfy": "6.3.1"
       }
+    },
+    "parity/fasttext-ref.parquet": {
+      "sha256": "209adb5e1f1243dd307a139e0b06580638d9309f22ff93cc88e43ec753085030",
+      "bytes": 1351916,
+      "rows": 26464,
+      "oracle": {
+        "fasttext-predict": "0.9.2.4"
+      },
+      "k": 5,
+      "call": "model.predict(text.replace(\"\\n\", \" \"), k=5, threshold=0.0)",
+      "models": {
+        "lid.176.bin": "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e",
+        "lid.176.ftz": "8f3472cfe8738a7b6099e8e999c3cbfae0dcd15696aac7d7738a8039db603e83"
+      }
+    },
+    "parity/filters-ref.parquet": {
+      "sha256": "702e053aac6033d4b5b6588c87cb91420299e673a313a955a92ceee280ae4976",
+      "bytes": 13281783,
+      "rows": 66160,
+      "oracle": {
+        "datatrove": "0.10.1",
+        "spacy": "3.8.18"
+      },
+      "cases": {
+        "gopher_repetition": {
+          "class": "GopherRepetitionFilter",
+          "kwargs": {}
+        },
+        "gopher_quality": {
+          "class": "GopherQualityFilter",
+          "kwargs": {}
+        },
+        "c4_quality": {
+          "class": "C4QualityFilter",
+          "kwargs": {}
+        },
+        "c4_quality@fineweb": {
+          "class": "C4QualityFilter",
+          "kwargs": {
+            "filter_no_terminal_punct": false
+          }
+        },
+        "fineweb_quality": {
+          "class": "FineWebQualityFilter",
+          "kwargs": {}
+        }
+      }
+    },
+    "parity/ftfy-ref.parquet": {
+      "sha256": "65662c54d2406b5d558a20e2591692f6bff6f68fa3dc0b60188556c1e01fefe9",
+      "bytes": 16375775,
+      "rows": 13232,
+      "oracle": {
+        "ftfy": "6.3.1"
+      },
+      "call": "ftfy.fix_text(text)",
+      "corpora": [
+        "dev",
+        "adversarial"
+      ]
+    },
+    "parity/minhash-ref.parquet": {
+      "sha256": "4133f9a18bb5247b43fa8121a5db5326a839c78555f33c27b01acc0c0f33b8aa",
+      "bytes": 11909548,
+      "rows": 13232,
+      "oracle": {
+        "datatrove": "0.10.1",
+        "spacy": "3.8.18",
+        "numpy": "2.5.4"
+      },
+      "config": {
+        "n_grams": 5,
+        "num_buckets": 14,
+        "hashes_per_bucket": 8,
+        "seed": 1,
+        "hash_fc": "sha1",
+        "precision": 64
+      },
+      "removed": 445,
+      "corpora": [
+        "dev",
+        "adversarial"
+      ]
     }
   }
 }

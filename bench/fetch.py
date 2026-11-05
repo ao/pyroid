@@ -10,18 +10,14 @@ Layout under /data (total budget 1.5 GB):
     fineweb/fineweb-dev-10k.parquet    dev slice: the first 10,000 of those rows
     fineweb2/<lang>.parquet            first rows of FineWeb-2 test splits (non-English adversarial input)
     models/lid.176.bin, lid.176.ftz    fastText language-ID models (CC BY-SA 3.0)
-    nltk_data/tokenizers/punkt_tab/    NLTK Punkt tables used by datatrove's English word tokenizer
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
-import io
 import sys
 import time
 import urllib.request
-import zipfile
 from pathlib import Path
 
 from pyroid_parity import data as D
@@ -47,11 +43,6 @@ FINEWEB2 = {
 MODELS = {
     "models/lid.176.bin": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin",
     "models/lid.176.ftz": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz",
-}
-# nltk_data has no tags; pin the gh-pages commit and the zip's sha256.
-PUNKT_TAB = {
-    "url": "https://raw.githubusercontent.com/nltk/nltk_data/{rev}/packages/tokenizers/punkt_tab.zip",
-    "rel": "nltk_data/tokenizers/punkt_tab.zip",
 }
 BUDGET = 1_500_000_000
 
@@ -148,21 +139,6 @@ def fetch_models(pin: bool) -> None:
             D.pin(rel, source={"url": url, "license": "CC BY-SA 3.0"})
 
 
-def fetch_punkt(pin: bool, rev: str) -> None:
-    zrel = PUNKT_TAB["rel"]
-    url = PUNKT_TAB["url"].format(rev=rev)
-    if not (D.DATA / zrel).exists():
-        log(f"downloading {url}")
-        download(url, D.DATA / zrel)
-    if pin:
-        D.pin(zrel, source={"url": url, "license": "Apache-2.0 (nltk_data)"})
-    D.path(zrel)  # verify before extracting
-    dest = D.DATA / "nltk_data" / "tokenizers"
-    if not (dest / "punkt_tab" / "english").is_dir():
-        with zipfile.ZipFile(io.BytesIO((D.DATA / zrel).read_bytes())) as z:
-            z.extractall(dest)
-
-
 def verify() -> int:
     manifest = D.load_manifest()
     bad, total = 0, 0
@@ -179,22 +155,11 @@ def verify() -> int:
     return bad
 
 
-def punkt_rev() -> str:
-    """Resolve nltk_data gh-pages HEAD once; afterwards the manifest's pinned URL is reused."""
-    entry = D.load_manifest()["files"].get(PUNKT_TAB["rel"])
-    if entry:
-        return entry["source"]["url"].split("/nltk_data/")[1].split("/")[0]
-    import json
-
-    with urllib.request.urlopen("https://api.github.com/repos/nltk/nltk_data/commits/gh-pages", timeout=60) as r:  # noqa: S310
-        return json.load(r)["sha"]
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--verify", action="store_true", help="only verify /data against manifest.json")
     ap.add_argument("--pin", action="store_true", help="(re)write sha256 entries for fetched files")
-    ap.add_argument("--only", default="fineweb,fineweb2,models,punkt", help="comma-separated subset")
+    ap.add_argument("--only", default="fineweb,fineweb2,models", help="comma-separated subset")
     a = ap.parse_args()
     if not a.verify:
         steps = set(a.only.split(","))
@@ -204,8 +169,6 @@ def main() -> int:
             fetch_fineweb2(a.pin)
         if "models" in steps:
             fetch_models(a.pin)
-        if "punkt" in steps:
-            fetch_punkt(a.pin, punkt_rev())
     return 1 if verify() else 0
 
 

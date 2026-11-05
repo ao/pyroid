@@ -20,7 +20,8 @@ dependencies = [
 # Live oracles + reference generation. fasttext-predict ships no wheel past cp313/cp313t (see README).
 oracle = [
     "datatrove==0.10.1",
-    "nltk==3.10.4",
+    "spacy==3.8.18",
+    "tokenizers>=0.22",
     "regex>=2024.11",
     "xxhash>=3.5,<4",
     "fasttext-predict==0.9.2.4; python_version < '3.14'",
@@ -42,7 +43,7 @@ minversion = "9.0"
 testpaths = ["tests"]
 addopts = ["-ra", "-p", "pyroid_parity.plugin"]
 strict = true
-filterwarnings = ["error", "ignore::DeprecationWarning:datatrove.*", "ignore::DeprecationWarning:nltk.*"]
+filterwarnings = ["error", "ignore::DeprecationWarning:datatrove.*"]
 timeout = "600"
 
 [tool.ruff]
