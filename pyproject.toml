@@ -80,6 +80,12 @@ exclude = [
   { path = ".github/**", format = "sdist" },
 ]
 
+[tool.pytest]
+# A bare `pytest` at the root runs pyroid's own tests only. parity/ has its own pytest config (it
+# needs `-p pyroid_parity.plugin`) and bench/ has no tests; mypy `files` below skip both too, and
+# ruff lints them with their own [tool.ruff] (the nearest pyproject.toml wins).
+testpaths = ["python/tests"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
