@@ -16,6 +16,9 @@ crate-type = ["rlib"]
 memchr = "2.7"
 rustc-hash = "2.1"
 rayon.workspace = true
+# MinHash shingle hashes, as datatrove's HashConfig(hash_fc="sha1" | "xxhash").
+sha1 = "0.10.6"
+twox-hash = { version = "2.1.2", default-features = false, features = ["xxhash32", "xxhash64", "xxhash3_128"] }
 unicode-normalization = "0.1.26"
 
 [dev-dependencies]
