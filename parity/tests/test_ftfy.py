@@ -11,7 +11,8 @@ Checks (suite ``ftfy`` in parity-report.json):
     hypothesis-*           generated input: outcome == live ftfy's, where an outcome is ("ok", result) or
                            ("raise", ExceptionTypeName); exception types are part of parity
     batch                  fix_text_batch(texts, **kw) == [ftfy.fix_text(t, **kw) for t in texts]
-    errors                 bad arguments: same outcome and same warning categories
+    errors                 bad arguments: same outcome and same warning categories, except that a candidate's
+                           pyroid.FallbackWarning (delegation notice, once per process) is not compared
     corpus-<name>          fix_text(doc) == pinned ftfy.fix_text(doc) (parity/ftfy-ref.parquet), all docs
     api-signature, api-config   signatures and TextFixerConfig defaults mirror ftfy's (non-reference only)
 """
@@ -34,6 +35,7 @@ from hypothesis import strategies as st
 
 from pyroid_parity import data as D
 from pyroid_parity import strategies as S
+from pyroid_parity.impl import warning_categories
 from pyroid_parity.plugin import need, need_corpus, reference
 from pyroid_parity.report import Collector
 
@@ -237,10 +239,11 @@ BAD_CALLS: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = [
 
 
 def outcome_and_warnings(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> tuple[Outcome, list[str]]:
+    """The outcome and the warning categories parity compares: all but pyroid.FallbackWarning (see impl)."""
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         out = outcome(fn, *args, **kwargs)
-    return out, sorted({w.category.__name__ for w in caught})
+    return out, warning_categories(caught)
 
 
 @pytest.mark.parametrize(

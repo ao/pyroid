@@ -21,6 +21,11 @@ filters   one callable per filter name in ``pyroid_parity.specs.FILTER_CASES``:
 dedup     ``minhash_signatures(texts, **config) -> list[list[int] | None]`` (``None`` = no shingles) and
           ``minhash_dedup(texts, **config) -> list[bool]`` (True = removed), with ``config`` from
           ``pyroid_parity.specs.MINHASH_CONFIG``.
+
+Warnings: where a suite compares warnings (the ftfy ``errors`` check), a candidate's
+``pyroid.FallbackWarning`` (its "delegating to the incumbent" notice, shown once per process; see
+``docs/dev/MODULES.md``) is left out, so the result does not depend on test order. Every other warning
+category must match the reference's.
 """
 
 from __future__ import annotations
@@ -28,7 +33,8 @@ from __future__ import annotations
 import importlib
 import importlib.metadata as md
 import importlib.util
-from collections.abc import Callable, Sequence
+import warnings
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -40,6 +46,20 @@ DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext",
 
 class ImplError(ValueError):
     pass
+
+
+#: pyroid's delegation warning (``pyroid.FallbackWarning``), matched by name so pyroid need not be installed.
+FALLBACK_WARNING = "pyroid.FallbackWarning"
+
+
+def is_fallback_warning(category: type[Warning]) -> bool:
+    """True for ``pyroid.FallbackWarning`` and its subclasses."""
+    return any(f"{c.__module__}.{c.__qualname__}" == FALLBACK_WARNING for c in category.__mro__)
+
+
+def warning_categories(caught: Iterable[warnings.WarningMessage]) -> list[str]:
+    """Sorted names of the warning categories in ``caught`` that parity compares (all but FALLBACK_WARNING)."""
+    return sorted({w.category.__name__ for w in caught if not is_fallback_warning(w.category)})
 
 
 def parse_specs(specs: Sequence[str]) -> dict[str, str]:
