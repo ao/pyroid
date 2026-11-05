@@ -41,7 +41,8 @@ binary and no compiler is needed:
 | Windows | x64, ARM64 | `win_amd64`, `win_arm64` |
 
 That is 24 wheels plus an sdist per release, each tested in a clean virtual environment before
-it is published. PyPy and GraalPy are not supported.
+it is published. Before the first release, wheels have only been built and tested on Linux
+aarch64; the release workflow builds the rest. PyPy and GraalPy are not supported.
 
 !!! note "Where parity has been checked"
     The parity suites have so far run on Linux aarch64 only. fastText's floating-point rounding

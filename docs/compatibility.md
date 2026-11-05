@@ -70,7 +70,7 @@ Reference: **datatrove 0.10.1 with spaCy 3.8.18**. Rule: same keep/drop decision
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
 | Harness parity suite: Gopher repetition, Gopher quality, C4 (default and FineWeb settings), FineWeb quality, on 13,232 documents | 66,160 | 66,160 | 0 |
-| Tokenizer oracle replay (words and sentence counts): FineWeb, FineWeb-2, adversarial, fuzz and Unicode probes, CPython 3.12 to 3.14 | 964,148 | 964,148 | 0 |
+| Tokenizer oracle replay (words and sentence counts): FineWeb, FineWeb-2, adversarial, fuzz and Unicode probes, CPython 3.12 to 3.14 (5 IS_ALPHA rows skipped: a spaCy history-dependent bug, see the guide) | 964,148 | 964,148 | 0 |
 | **Total** | **1,030,308** | **1,030,308** | **0** |
 
 <small>Source: the parity/ filters suite and crates/pyroid-core/tests/filters_tokenizer.rs, run on 2026-11-05.</small>
@@ -85,7 +85,7 @@ Reference: **datatrove 0.10.1 MinHash, FineWeb configuration (sha1, 64-bit, 14 b
 | Removal decisions (445 removed documents) | 13,232 | 13,232 | 0 |
 | **Total** | **26,464** | **26,464** | **0** |
 
-<small>Source: the dedup module's parity tests (preview branch), run on 2026-11-05.</small>
+<small>Source: the dedup module's parity tests and the parity/ dedup suite (13,232 same, 0 different), run on 2026-11-05.</small>
 
 ### pyroid.translit (preview) {#translit}
 
@@ -101,8 +101,9 @@ Reference: **anyascii 0.3.3**. Rule: byte-identical to anyascii on every code po
 
 ## Known differences
 
-Each guide lists its module's deliberate differences, all of them edge cases: inputs on which
-the incumbent hangs, crashes or raises a different exception type.
+Each guide lists its module's deliberate differences. Most are edge cases (inputs on which the
+incumbent hangs, crashes or raises a different exception type); the rest are design choices, such
+as returning an unchanged string as the same object.
 
 - [Differences from ftfy](guides/ftfy.md#differences-from-ftfy)
 - [Differences from fastText](guides/fasttext.md#differences-from-fasttext)

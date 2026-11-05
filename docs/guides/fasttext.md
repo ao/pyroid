@@ -3,7 +3,14 @@
 `pyroid.fasttext` is a pure-Rust port of [fastText](https://github.com/facebookresearch/fastText)'s
 inference (fastText is © Facebook, Inc., MIT License). It loads the same `.bin` and quantized
 `.ftz` model files and gives **bit-identical labels and probabilities** to fastText's C++
-predict path ([parity](../compatibility.md#fasttext)).
+predict path, as built in fasttext-predict 0.9.2.4 ([parity](../compatibility.md#fasttext)).
+
+!!! note "Verified on Linux aarch64 so far"
+    pyroid reproduces the C++ code's floating-point operations exactly, including which
+    multiply-adds are fused, and these differ by architecture. Parity on x86-64, macOS and Windows
+    is unverified until the CI runs there. Different builds of fastText itself differ slightly
+    too: fasttext-numpy2-wheel's probabilities were up to 1.79e-7 away from fasttext-predict's on
+    the same inputs.
 
 Two reasons to switch besides speed:
 

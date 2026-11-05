@@ -2,8 +2,11 @@
 
 pyroid's own exceptions all derive from
 [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError). Where a module replaces an
-incumbent, it raises the incumbent's exception types for the same inputs, so existing `except`
-clauses keep working; each guide lists the exceptions.
+incumbent, it mostly raises the incumbent's exception types for the same inputs, so existing
+`except` clauses keep working. The exceptions to that rule (for example `OSError` instead of
+fastText's `ValueError` for a missing model file, or `pyroid.InputError`, a `TypeError`, where an
+incumbent raises `AttributeError` for a non-`str` item) are listed under "Differences" in each
+guide.
 
 ## The hierarchy
 

@@ -80,7 +80,7 @@
           "diff": 0
         },
         {
-          "name": "Tokenizer oracle replay (words and sentence counts): FineWeb, FineWeb-2, adversarial, fuzz and Unicode probes, CPython 3.12 to 3.14",
+          "name": "Tokenizer oracle replay (words and sentence counts): FineWeb, FineWeb-2, adversarial, fuzz and Unicode probes, CPython 3.12 to 3.14 (5 IS_ALPHA rows skipped: a spaCy history-dependent bug, see the guide)",
           "same": 964148,
           "diff": 0
         }
@@ -103,7 +103,7 @@
           "diff": 0
         }
       ],
-      "source": "the dedup module's parity tests (preview branch), run on 2026-11-05"
+      "source": "the dedup module's parity tests and the parity/ dedup suite (13,232 same, 0 different), run on 2026-11-05"
     },
     "translit": {
       "preview": true,

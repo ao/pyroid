@@ -44,8 +44,8 @@ result = filters.apply(docs, fineweb_filters)  # in datatrove's order, one token
 clean = [text for text, keep in zip(result.text, result.keep) if keep]
 ```
 
-Every function takes a `str`, a `list` of `str` or an Arrow column (pyarrow, polars, Hugging Face
-`datasets`) and returns the same kind.
+Batch functions take a `str`, a `list` of `str` or an Arrow column (pyarrow, polars, Hugging Face
+`datasets`); text and masks come back in the same kind.
 
 **Replaces:** ftfy · fastText inference (fasttext, fasttext-wheel, fasttext-predict) · datatrove's
 Gopher, C4 and FineWeb filters · *preview:* datatrove's MinHash dedup · Unidecode (permissive,
@@ -59,13 +59,14 @@ anyascii-based)
   86× faster than datatrove; fastText language ID 1.5–5.4× faster.
 - **Same output, checked:** byte-identical to ftfy 6.3.1, bit-identical fastText labels and
   probabilities, and datatrove's keep/drop decisions and reasons, on pinned FineWeb documents
-  and property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)).
+  and property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). So
+  far verified on Linux aarch64; the other platforms are checked in CI before release.
 - **Installs everywhere:** wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t, on Linux
   (glibc and musl), macOS and Windows, x86-64 and ARM64. No compiler, no runtime dependencies.
 - **Threads, not processes:** batch calls release the GIL and run on all cores, and one loaded
   fastText model serves every thread (one copy in memory instead of one per worker process).
-- **Never silently different:** options the Rust port doesn't cover are handed to the original
-  library, with a `pyroid.FallbackWarning`.
+- **Never silently different:** `pyroid.ftfy` hands the few options it doesn't port to the real
+  ftfy, with a `pyroid.FallbackWarning`; the other modules raise rather than approximate.
 
 | Module | Replaces | Status |
 |---|---|---|

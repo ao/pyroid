@@ -3,9 +3,9 @@
 !!! warning "Docker/OrbStack VM on Apple Silicon, indicative, preliminary"
     Every number on this page was measured in a Linux (aarch64) Docker VM under OrbStack on an
     Apple M3 Pro host with 12 vCPUs, **while other jobs were running on the same machine**. They
-    show orders of magnitude, not precise ratios: repeated runs of the same benchmark differed by
-    up to 2.5×. A run on a
-    quiet bare-metal Linux machine is pending and will replace them.
+    show orders of magnitude, not precise ratios: two runs of the same ftfy benchmark measured
+    5.8 and 14.5 µs/doc. A run on a quiet bare-metal Linux machine is pending and will replace
+    them.
 
 ## Method
 
@@ -23,13 +23,15 @@ follows a few rules, enforced in code:
    1,000 documents, reported as the median [interquartile range] per document. **Multi-process
    rows** use [hyperfine](https://github.com/sharkdp/hyperfine) 2.0 over datatrove's own
    `LocalPipelineExecutor(tasks=8, workers=8)`, pinned to 8 CPUs, 3 runs after a warm-up.
-4. **CPU-seconds and peak memory** are recorded for every row.
+4. **CPU-seconds and peak memory** are recorded for the harness rows.
 5. Charts are horizontal bars on a linear axis, fastest on top, with incumbents and close rivals
    named.
 
-The per-module pyroid numbers below come from each module's own benchmark scripts, which apply the
-same equivalence check first; pyroid's rows in the shared harness are still being added (see
-[What's pending](#whats-pending)).
+The fastText rows below are the harness's own, gated rows. The other pyroid numbers come from
+each module's benchmark scripts: the filters and translit scripts check that pyroid's output
+equals the incumbent's on the timed documents before timing, and the ftfy and dedup timings rest
+on their separate [parity runs](compatibility.md). pyroid's rows in the shared harness for the
+other modules are still being added (see [What's pending](#whats-pending)).
 
 To reproduce, from a checkout on Linux (or in a Linux container), with a pyroid wheel built
 into `dist/`:
@@ -63,8 +65,8 @@ stages.
 
 The four filters are about **79%** of the CPU and MinHash about **18%**; ftfy and language ID
 together are about 3%. Speeding up `fix_text` 10× on its own makes this pipeline about 1.02×
-faster. Most of the filter and MinHash time is spaCy tokenization and Python string handling:
-datatrove tokenizes English with spaCy's `blank("en")` tokenizer.
+faster. datatrove tokenizes English with spaCy's `blank("en")` tokenizer for both the filters
+and MinHash; in MinHash, spaCy is about 70% of the cost.
 
 At 8 processes the same chain took 63.2 s [60.6–66.1] wall time (464.5 CPU-s) for 10k documents,
 6.3× faster than one process, with a peak of 2.36 GiB of anonymous memory.
@@ -136,24 +138,35 @@ per document on one thread, about 52× datatrove, and 0.097 ms per document at 8
 
 ## `pyroid.dedup` *(preview)*
 
-Measured before pyroid's spaCy tokenizer port was wired into `pyroid.dedup`, so the pyroid rows
-below **exclude the cost of tokenizing like spaCy**; final numbers are pending. Signatures,
-single thread, 1,000 FineWeb documents, CPython 3.13, median of 7 (datatrove: 3):
+Signatures from raw text (normalization, spaCy-identical tokenization and hashing all included),
+single thread, 1,000 FineWeb documents, CPython 3.13, median [IQR] or the range over two 15-run
+sets:
 
 | Implementation | ms/doc | Same decisions as datatrove? |
 |---|---:|---|
-| datatrove `MinhashDedupSignature`, sha1/64 | 9.67 [6.84–9.71] (harness: 6.88) | — |
-| datasketch 2.0.0 `MinHash.bulk` | 0.524 | no (different shingling) |
-| rensa 0.5.0 | 0.167 (harness: 0.15) | no (different shingling) |
-| pyroid, from spaCy tokens (tokenizing excluded) | 0.068 | yes |
+| datatrove `MinhashDedupSignature`, sha1/64 (3 runs) | 6.17 [6.13–6.30] (harness: 6.88) | — |
+| datasketch 2.0.0 `MinHash.bulk` | 0.551 | no (different shingling) |
+| rensa 0.5.0, with the harness's Python shingling | 0.168–0.173 | no (different shingling) |
+| **pyroid `minhash_signatures`, sha1/64** | **0.094–0.099** | yes |
+| pyroid, xxhash/64 | 0.085–0.091 | yes |
 
-About 70% of datatrove's signature cost is spaCy tokenizing (8.5 of 12.1 ms/doc in a profile run),
-so pyroid's real figure is 0.068 ms plus its tokenizer's cost per document. rensa is the
-close rival here: it is very fast and makes different (approximate) decisions.
+That is about 64× datatrove in the same session (71× against the harness baseline) and 1.7–1.8×
+rensa, with datatrove's decisions. One noisier 7-run set gave pyroid 0.144 [0.108–0.164]. In
+datatrove, spaCy is about 70% of this cost.
 
-For exact duplicates, Python's own `set` over a `list[str]` beat `pyroid.dedup.exact_dedup`
-(0.020 s against 0.071 s for 100k documents on one thread); `exact_dedup` is for Arrow input,
-normalized comparison and streaming state.
+The whole pipeline, `MinHashDedup.fit` (sha1/64, free-threaded CPython 3.15t, median of 3 fresh
+processes, wall seconds):
+
+| Documents | 1 thread | 8 threads | datatrove's 4 stages |
+|---|---:|---:|---:|
+| 10k | 1.21 | 0.29 | 99.5 (1 process); 13.78 (8 processes) |
+| 100k | 12.86 | 2.36 | — |
+
+The 1-process datatrove figure was measured earlier, under heavier load.
+
+For exact duplicates (100k documents, CPython 3.15t), Python's own `set` over a `list[str]` beat
+`pyroid.dedup.exact_dedup`: 0.020 s against 0.071 s on one thread. `exact_dedup` is for Arrow
+input, normalized comparison and streaming state.
 
 ## `pyroid.translit` *(preview)*
 
@@ -177,13 +190,16 @@ Speedup at 8 threads over 1 thread, one process, free-threaded CPython 3.15t (GI
 |---|---:|
 | `ftfy.fix_text_batch`, list / Arrow (100k docs) | 2.4–3.6× / 2.1–3.1× |
 | `ftfy.fix_text` from 8 Python threads | 3.2–5.8× |
-| `fasttext` `.bin` / `.ftz`, `threads=8` | 8.3× / 4.8× |
+| `fasttext` `.bin` / `.ftz`, `threads=8` | 8.3× / 4.8× (`.ftz` under load; needs a quiet rerun) |
 | `filters.apply`, FineWeb's 4 filters, list / Arrow | 4.3× / 5.0× |
-| `dedup.MinHashDedup.fit`, 10k docs (preview, before the tokenizer port) | 5.5× |
+| `dedup.MinHashDedup.fit`, 10k / 100k docs (preview) | 4.2× / 5.4× |
+| `translit.anyascii`, FineWeb 100k, list / Arrow (preview, working notes) | 1.27× / 4.58× |
 
-Scaling was limited by the memory allocator, not the kernels, in the ftfy measurements: with
-glibc's allocator tuned to keep freed memory, the same 8-thread run went from 5.5 to 1.5 µs/doc
-(Arrow). A different allocator is being evaluated.
+In the ftfy measurements scaling was limited by the memory allocator, not the kernels: with
+glibc's allocator tuned to keep freed memory, `fix_text_batch` on Arrow went from 5.5 µs/doc on
+one thread to 1.5 µs/doc on eight (3.6×), against 2.7–3.5 µs/doc at eight threads untuned. A
+different allocator is being evaluated. translit's list rows use fresh `str` objects, whose UTF-8
+form CPython builds on first access; with it already cached, list input scaled 1.73×.
 
 ## What's pending
 

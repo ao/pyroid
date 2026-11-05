@@ -58,7 +58,7 @@ far (Docker VM, indicative; [Benchmarks](../benchmarks.md#thread-scaling)):
   `fix_text_batch(threads=8)` scaled 2.4–3.6×, limited by the memory allocator.
 
 !!! note "Thread scaling is still being tuned"
-    Measured speedups at 8 threads over 1 thread range from 2.1× to 8.3× depending on the module
-    and the input kind, in a shared Docker VM.
+    Measured speedups at 8 threads over 1 thread range from about 1.3× to 8.3× depending on the
+    module and the input kind, in a shared Docker VM.
     The ftfy measurements point at the memory allocator, not the kernels, as the limit. See
     [Benchmarks](../benchmarks.md#thread-scaling).

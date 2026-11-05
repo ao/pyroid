@@ -19,8 +19,8 @@ MinHash) or ship as C++ extensions that lag behind new Pythons (fastText).
 Profiling [datatrove](https://github.com/huggingface/datatrove)'s FineWeb chain on one core shows
 where the time goes: the four quality filters take about **79%** of the CPU and MinHash about
 **18%**, while ftfy is 2.3% and language ID 1%
-([methodology and caveats](benchmarks.md#where-the-cpu-goes)). Most of that time is spaCy
-tokenization and Python string handling, which is the part pyroid moves to Rust.
+([methodology and caveats](benchmarks.md#where-the-cpu-goes)). Both tokenize every document with
+spaCy and then do their own work in Python; pyroid moves both to Rust.
 
 ## 30-second example
 
@@ -42,8 +42,8 @@ labels, probs = model.predict(docs, k=1)
 keep = filters.gopher_quality(docs)
 ```
 
-Every function takes a `str`, a `list` or `tuple` of `str`, or an Arrow string column (pyarrow,
-polars, pandas, Hugging Face `datasets`), and returns the same kind. See
+Batch functions take a `str`, a `list` or `tuple` of `str`, or an Arrow string column (pyarrow,
+polars, pandas, Hugging Face `datasets`); text and masks come back in the same kind. See
 [Inputs and outputs](concepts/inputs.md).
 
 ## Install
@@ -61,9 +61,9 @@ Prebuilt wheels for Linux (glibc and musl), macOS and Windows, x86-64 and ARM64.
 | Module | Replaces | Status | Identical output? |
 |---|---|---|---|
 | [`pyroid.ftfy`](guides/ftfy.md) | [ftfy](https://github.com/rspeer/python-ftfy) 6.3.1 | ready | byte-identical ([parity](compatibility.md#ftfy)) |
-| [`pyroid.fasttext`](guides/fasttext.md) | [fastText](https://github.com/facebookresearch/fastText) inference (`fasttext`, `fasttext-predict`, ...) | ready | bit-identical labels and probabilities ([parity](compatibility.md#fasttext)) |
+| [`pyroid.fasttext`](guides/fasttext.md) | [fastText](https://github.com/facebookresearch/fastText) inference (`fasttext`, `fasttext-predict`, ...) | ready | bit-identical labels and probabilities, on Linux aarch64 so far ([parity](compatibility.md#fasttext)) |
 | [`pyroid.filters`](guides/filters.md) | [datatrove](https://github.com/huggingface/datatrove) 0.10.1 Gopher, C4 and FineWeb filters | ready | same decisions, reasons and text ([parity](compatibility.md#filters)) |
-| [`pyroid.dedup`](guides/dedup.md) | datatrove 0.10.1 MinHash dedup | *preview* | being finished ([parity](compatibility.md#dedup)) |
+| [`pyroid.dedup`](guides/dedup.md) | datatrove 0.10.1 MinHash dedup | *preview* | same signatures and removals ([parity](compatibility.md#dedup)) |
 | [`pyroid.translit`](guides/translit.md) | `anyascii`; a permissive alternative to GPL `Unidecode` | *preview* | `anyascii`-identical; *not* Unidecode's output |
 
 How fast? Per-module numbers, how they were measured and what they don't show are on the
@@ -77,8 +77,9 @@ preliminary*).
 Each module is tested differentially against the library it replaces: pinned FineWeb documents,
 the incumbent's own test corpus, and Hypothesis fuzzing that includes lone surrogates, mojibake
 and every option. The counts are on the [Compatibility](compatibility.md) page, and every known
-difference is listed in each guide.
+difference is listed in each guide. All parity runs so far were on Linux aarch64; the other
+platforms are checked in CI before release.
 
-pyroid never silently runs something else. When a call needs a feature the Rust port does not
-have, it hands the call to the original library and says so with a
-[`FallbackWarning`](concepts/fallbacks.md).
+pyroid never silently computes something different. Where `pyroid.ftfy` meets an option it does
+not port, it hands the call to the real ftfy and says so with a
+[`FallbackWarning`](concepts/fallbacks.md); the other modules raise an error instead.
