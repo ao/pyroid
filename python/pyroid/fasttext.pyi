@@ -1,7 +1,7 @@
 """fastText inference in Rust (``pyroid.fasttext``)."""
 
 import os
-from typing import Any, Literal, final, overload
+from typing import Any, Literal, TypeAlias, final, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -11,10 +11,10 @@ from pyroid._typing import ArrowStrings
 
 __all__ = ["Model", "ModelError", "load_model"]
 
-_F32 = npt.NDArray[np.float32]
-_F64 = npt.NDArray[np.float64]
-_I64 = npt.NDArray[np.int64]
-_Batch = list[str] | tuple[str, ...] | ArrowStrings
+_F32: TypeAlias = npt.NDArray[np.float32]
+_F64: TypeAlias = npt.NDArray[np.float64]
+_I64: TypeAlias = npt.NDArray[np.int64]
+_Batch: TypeAlias = list[str] | tuple[str, ...] | ArrowStrings
 
 class ModelError(PyroidError, ValueError):
     """A fastText model file is malformed, truncated, or not a fastText model.
@@ -62,7 +62,7 @@ class Model:
         *,
         threads: int | None = None,
     ) -> tuple[tuple[str, ...], _F64]:
-        """Predict the most likely labels of each line of text.
+        r"""Predict the most likely labels of each line of text.
 
         As fastText: the text is split on spaces, tabs, vertical tabs, form
         feeds, carriage returns and NULs; tokens with the label prefix are
@@ -71,7 +71,7 @@ class Model:
         ``1e-5`` and so can slightly exceed 1.
 
         Args:
-            text: One line (no ``"\\n"``), or a batch of lines: a list or tuple
+            text: One line (no ``"\n"``), or a batch of lines: a list or tuple
                 of str, or an Arrow string array/column.
             k: Number of labels to return, best first; ``-1`` for all of them.
             threshold: Only return labels with at least this probability.
@@ -86,7 +86,7 @@ class Model:
             arrays)``, one entry per line (``None`` for Arrow nulls).
 
         Raises:
-            ValueError: A line contains ``"\\n"``; ``k`` is 0 or below -1; the
+            ValueError: A line contains ``"\n"``; ``k`` is 0 or below -1; the
                 model is unsupervised.
             TypeError: A line contains a lone surrogate (as fastText).
             pyroid.InputError: ``text`` is not a str or a batch of str.
@@ -105,14 +105,14 @@ class Model:
     ) -> tuple[list[list[str]], list[_F32]]: ...
     @overload
     def get_sentence_vector(self, text: str, *, threads: int | None = None) -> _F32:
-        """The sentence vector of a line (float32, ``get_dimension()`` values).
+        r"""The sentence vector of a line (float32, ``get_dimension()`` values).
 
         Supervised models average the input rows ``predict`` uses (the hidden
         layer); unsupervised models average the L2-normalized vectors of the
         whitespace-separated words.
 
         Args:
-            text: One line (no ``"\\n"``), or a batch of lines.
+            text: One line (no ``"\n"``), or a batch of lines.
             threads: As for :meth:`predict`.
 
         Returns:
@@ -120,7 +120,7 @@ class Model:
             array for a batch (rows of NaN for Arrow nulls).
 
         Raises:
-            ValueError: A line contains ``"\\n"``.
+            ValueError: A line contains ``"\n"``.
             TypeError: A line contains a lone surrogate.
         """
 
@@ -184,13 +184,11 @@ class Model:
         """The model's labels (``get_labels()``, computed once)."""
 
     @overload
-    def get_line(
-        self, text: str, on_unicode_error: str = "strict"
-    ) -> tuple[list[str], list[str]]:
-        """Split a line into its word tokens (``</s>`` included) and known labels.
+    def get_line(self, text: str, on_unicode_error: str = "strict") -> tuple[list[str], list[str]]:
+        r"""Split a line into its word tokens (``</s>`` included) and known labels.
 
         Args:
-            text: One line (no ``"\\n"``), or a batch of lines.
+            text: One line (no ``"\n"``), or a batch of lines.
             on_unicode_error: Accepted for compatibility (tokens of a str are
                 always valid UTF-8).
 
@@ -199,7 +197,7 @@ class Model:
             lists)`` for a batch.
 
         Raises:
-            ValueError: A line contains ``"\\n"``.
+            ValueError: A line contains ``"\n"``.
         """
 
     @overload
@@ -249,5 +247,5 @@ class Model:
             ValueError: The model is quantized (``"Can't get quantized Matrix"``).
         """
 
-    def __getitem__(self, word: str) -> _F32: ...
-    def __contains__(self, word: Any) -> bool: ...
+    def __getitem__(self, word: str, /) -> _F32: ...
+    def __contains__(self, word: Any, /) -> bool: ...
