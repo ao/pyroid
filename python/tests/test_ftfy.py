@@ -172,6 +172,7 @@ def test_unknown_option_raises_like_ftfy() -> None:
     assert error(candidate.fix_and_explain) == error(ftfy.fix_and_explain)
 
 
+@pytest.mark.thread_unsafe(reason="pytest.deprecated_call")
 def test_fix_entities_is_deprecated() -> None:
     example = "&amp;\n<html>\n&amp;"
     with pytest.deprecated_call():
@@ -199,6 +200,7 @@ def test_str_subclass_gives_exact_str() -> None:
             assert type(candidate.fix_and_explain(S(text), **kwargs).text) is str
 
 
+@pytest.mark.thread_unsafe(reason="global one-time-warning state")
 def test_delegates_unsupported_options_with_one_warning(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(candidate, "_WARNED", set())
     with pytest.warns(RuntimeWarning, match="delegating to ftfy"):
@@ -208,11 +210,12 @@ def test_delegates_unsupported_options_with_one_warning(monkeypatch: pytest.Monk
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         candidate.fix_text("abc", max_decode_length=5.0)  # warned only once
-    assert outcome(candidate.fix_text, "x", normalization="nfc") == outcome(
-        ftfy.fix_text, "x", normalization="nfc"
-    )
+    with pytest.warns(RuntimeWarning, match="delegating"):
+        got = outcome(candidate.fix_text, "x", normalization="nfc")
+    assert got == outcome(ftfy.fix_text, "x", normalization="nfc")
 
 
+@pytest.mark.thread_unsafe(reason="monkeypatches sys.modules")
 def test_delegation_without_ftfy_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "ftfy", None)
     with pytest.raises(pyroid.PyroidError, match="not installed"):
@@ -229,6 +232,7 @@ def test_max_decode_length_below_one_is_refused() -> None:
         candidate.fix_text("abc", max_decode_length=0)
 
 
+@pytest.mark.thread_unsafe(reason="warnings.catch_warnings")
 def test_delegated_helpers_match() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
@@ -238,6 +242,8 @@ def test_delegated_helpers_match() -> None:
         assert candidate.guess_bytes("ünicode".encode()) == ftfy.guess_bytes("ünicode".encode())
 
 
+@pytest.mark.thread_unsafe(reason="multi-megabyte documents through ftfy")
+@pytest.mark.timeout(240)
 def test_long_strings() -> None:
     line = "Ã©tÃ© â€œquotedâ€\x9d " * 60_000  # about 1.2M code points, one segment
     for text in (line, line + "\n" + line, "x" * 2_500_000 + "Ã©"):
@@ -249,9 +255,10 @@ def test_long_strings() -> None:
 
 
 def test_uses_this_interpreters_unicode_version() -> None:
-    assert candidate._UNICODE_VERSION == unicodedata.unidata_version
+    assert unicodedata.unidata_version == candidate._UNICODE_VERSION
 
 
+@pytest.mark.thread_unsafe(reason="owns its own thread pool")
 def test_concurrent_callers() -> None:
     corpus = [
         "voilÃ  le travail",

@@ -4,7 +4,7 @@
 Hypothesis never generates surrogates unless asked, so the strategies opt in
 to them explicitly, along with C1 controls, every byte of every sloppy codec,
 HTML entities, terminal escapes, combining marks and characters new in
-Unicode 15-17. Set HYPOTHESIS_PROFILE=ci (1000 examples per test) or deep (20000).
+Unicode 15-17. Set HYPOTHESIS_PROFILE=ci, or PYROID_FTFY_EXAMPLES=20000 for a deep run.
 """
 
 # The test data is full of look-alike characters on purpose.
@@ -30,16 +30,14 @@ from ftfy.chardata import CHARMAP_ENCODINGS  # noqa: E402
 from hypothesis import HealthCheck, example, given, settings  # noqa: E402
 from hypothesis import strategies as st  # noqa: E402
 
-settings.register_profile(
-    "ci", max_examples=1000, deadline=None, suppress_health_check=[HealthCheck.too_slow]
+# Profiles come from conftest.py (HYPOTHESIS_PROFILE=ci); PYROID_FTFY_EXAMPLES
+# overrides the example count for a deeper local run.
+_EXAMPLES = os.environ.get("PYROID_FTFY_EXAMPLES")
+examples = (
+    settings(suppress_health_check=[HealthCheck.too_slow], max_examples=int(_EXAMPLES))
+    if _EXAMPLES
+    else settings(suppress_health_check=[HealthCheck.too_slow])
 )
-settings.register_profile(
-    "deep", max_examples=20000, deadline=None, suppress_health_check=[HealthCheck.too_slow]
-)
-settings.register_profile(
-    "dev", max_examples=150, deadline=None, suppress_health_check=[HealthCheck.too_slow]
-)
-settings.load_profile(os.getenv("HYPOTHESIS_PROFILE", "dev"))
 
 
 def outcome(fn: Any, *args: Any, **kwargs: Any) -> tuple[str, Any]:
@@ -164,6 +162,7 @@ FUNCTIONS = [
 ]
 
 
+@examples
 @given(text=texts, kwargs=configs, fn=st.sampled_from(FUNCTIONS))
 @example(text="voilÃ  le travail", kwargs={}, fn="fix_text")
 @example(text="😀 lone \udc00", kwargs={}, fn="fix_text")
@@ -176,6 +175,7 @@ def test_matches_ftfy(text: str, kwargs: dict[str, Any], fn: str) -> None:
     )
 
 
+@examples
 @given(text=texts, explain=st.booleans())
 def test_config_object_matches_ftfy(text: str, explain: bool) -> None:
     ours, theirs = candidate.TextFixerConfig(explain=explain), ftfy.TextFixerConfig(explain=explain)
@@ -185,6 +185,7 @@ def test_config_object_matches_ftfy(text: str, explain: bool) -> None:
     )
 
 
+@examples
 @given(text=st.text(st.characters(codec="utf-8"), max_size=50))
 def test_any_valid_text_matches_ftfy(text: str) -> None:
     assert candidate.fix_text(text) == ftfy.fix_text(text)
