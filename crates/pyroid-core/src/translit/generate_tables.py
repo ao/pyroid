@@ -63,9 +63,9 @@ def parse(data: bytes) -> dict[int, str]:
 
 def check_against_package(table: dict[int, str]) -> None:
     try:
-        import anyascii  # type: ignore[import-not-found]  # noqa: PLC0415
+        import anyascii  # type: ignore[import-not-found]
     except ImportError:
-        print("anyascii not installed: skipped the package cross-check")
+        sys.stderr.write("anyascii not installed: skipped the package cross-check\n")
         return
     if anyascii.__version__ != "0.3.3":
         sys.exit(f"cross-check needs anyascii 0.3.3, found {anyascii.__version__}")
@@ -76,7 +76,7 @@ def check_against_package(table: dict[int, str]) -> None:
     ]
     if bad:
         sys.exit(f"{len(bad)} code points differ from the anyascii package, e.g. U+{bad[0]:04X}")
-    print("cross-check: every code point matches the anyascii 0.3.3 package")
+    sys.stderr.write("cross-check: every code point matches the anyascii 0.3.3 package\n")
 
 
 def ranges(cps: list[int]) -> list[tuple[int, int]]:
@@ -100,9 +100,9 @@ def main() -> None:
         "// anyascii: Copyright (c) 2020-2025, Hunter WB, ISC License (LICENSES/ISC-anyascii.txt).",
         "// Do not edit by hand.",
         "",
-        f"/// The {n_empty} code points anyascii 0.3.3 maps to \"\" on purpose (its table",
+        f'/// The {n_empty} code points anyascii 0.3.3 maps to "" on purpose (its table',
         "/// lists them with an empty value), as sorted inclusive ranges. Every other",
-        f"/// code point that maps to \"\" is one of the {0x110000 - 0x800 - 0x80 - len(table)}"
+        f'/// code point that maps to "" is one of the {0x110000 - 0x800 - 0x80 - len(table)}'
         " it has no mapping for.",
         f"/// The table lists {len(table)} non-ASCII code points in all.",
         "pub(super) static EMPTY: &[(u32, u32)] = &[",
@@ -114,7 +114,7 @@ def main() -> None:
         "",
     ]
     OUT.write_text("\n".join(lines), encoding="utf-8")
-    print(f"wrote {OUT}: {len(table)} listed, {n_empty} empty in {len(empty)} ranges")
+    sys.stderr.write(f"wrote {OUT}: {len(table)} listed, {n_empty} empty in {len(empty)} ranges\n")
 
 
 if __name__ == "__main__":
