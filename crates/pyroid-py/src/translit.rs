@@ -229,7 +229,7 @@ fn anyascii<'py>(
     string: &Bound<'py, PyAny>,
     threads: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    match string.extract::<TextInput>() {
+    match TextInput::extract_with(string, threads) {
         Ok(input) => transform(py, input, threads, kernel::anyascii),
         Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) && may_hold_surrogates(string) => {
             let strs = Strs::collect(string)?;
@@ -267,7 +267,7 @@ fn unidecode<'py>(
     threads: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let (mode, replace) = (errors.0, replace_str.0);
-    let input = match string.extract::<TextInput>() {
+    let input = match TextInput::extract_with(string, threads) {
         Ok(input) => input,
         Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) && may_hold_surrogates(string) => {
             return unidecode_wtf8(py, string, &mode, &replace, threads);

@@ -24,7 +24,7 @@ use pyroid_core::par;
 use crate::arrow::{Chunk, Column, ColumnType};
 use crate::batch::{BatchError, map_values, transform};
 use crate::errors::{PyroidError, input_error, type_name, with_note};
-use crate::input::{TextInput, Threads, threads};
+use crate::input::{TextInput, Threads, ThreadsArg, texts_and_threads, threads};
 
 fn unicode_version(v: &str) -> PyResult<UnicodeVersion> {
     UnicodeVersion::from_unidata_version(v)
@@ -233,10 +233,11 @@ fn signatures_to_py<'py>(py: Python<'py>, sigs: &[Signature]) -> PyResult<Bound<
 #[pyo3(signature = (texts, /, config, *, threads = None))]
 fn _minhash_signatures<'py>(
     py: Python<'py>,
-    texts: TextInput,
+    texts: &Bound<'py, PyAny>,
     config: &NativeConfig,
-    threads: Option<Threads>,
+    threads: Option<ThreadsArg>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let (texts, threads) = texts_and_threads(texts, threads, None)?;
     let sigs = signatures_of(py, &config.hasher, &texts, threads)?;
     if let TextInput::Str(_) = texts {
         return signatures_to_py(py, &sigs)?.get_item(0);
@@ -264,10 +265,11 @@ fn _signatures_from_tokens<'py>(
 #[pyo3(signature = (texts, /, norm, *, threads = None))]
 fn _simplify_text<'py>(
     py: Python<'py>,
-    texts: TextInput,
+    texts: &Bound<'py, PyAny>,
     norm: &NativeNorm,
-    threads: Option<Threads>,
+    threads: Option<ThreadsArg>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let (texts, threads) = texts_and_threads(texts, threads, None)?;
     transform(py, texts, threads, |s| {
         simplify_text(s, &norm.norm, norm.unicode)
     })
@@ -399,9 +401,10 @@ impl MinHashState {
     fn add(
         &self,
         py: Python<'_>,
-        texts: TextInput,
-        threads: Option<Threads>,
+        texts: &Bound<'_, PyAny>,
+        threads: Option<ThreadsArg>,
     ) -> PyResult<(usize, usize)> {
+        let (texts, threads) = texts_and_threads(texts, threads, self.threads)?;
         let sigs = signatures_of(py, self.hasher(), &texts, threads.or(self.threads))?;
         drop(texts);
         self.append(py, sigs)
@@ -427,9 +430,10 @@ impl MinHashState {
     fn fit<'py>(
         &self,
         py: Python<'py>,
-        texts: TextInput,
-        threads: Option<Threads>,
+        texts: &Bound<'py, PyAny>,
+        threads: Option<ThreadsArg>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let (texts, threads) = texts_and_threads(texts, threads, self.threads)?;
         let t = threads.or(self.threads);
         let sigs = signatures_of(py, self.hasher(), &texts, t)?;
         let nulls = null_rows(&texts);
@@ -537,10 +541,11 @@ fn exact_hashes(
 #[pyo3(signature = (texts, /, norm, *, threads = None))]
 fn _exact_dedup<'py>(
     py: Python<'py>,
-    texts: TextInput,
+    texts: &Bound<'py, PyAny>,
     norm: Option<&NativeNorm>,
-    threads: Option<Threads>,
+    threads: Option<ThreadsArg>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let (texts, threads) = texts_and_threads(texts, threads, None)?;
     let hashes = exact_hashes(py, &texts, norm, threads)?;
     let keep = py.detach(|| ExactSeen::new().keep_first(&hashes));
     mask_like(py, &texts, &keep)
@@ -570,9 +575,10 @@ impl ExactState {
     fn add<'py>(
         &self,
         py: Python<'py>,
-        texts: TextInput,
-        threads: Option<Threads>,
+        texts: &Bound<'py, PyAny>,
+        threads: Option<ThreadsArg>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let (texts, threads) = texts_and_threads(texts, threads, None)?;
         let norm = self.norm.as_ref().map(Py::get);
         let hashes = exact_hashes(py, &texts, norm, threads)?;
         let keep = py.detach(|| lock(&self.seen).keep_first(&hashes));

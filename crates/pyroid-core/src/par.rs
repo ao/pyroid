@@ -3,7 +3,12 @@
 //!
 //! Rules that keep this deadlock-free (see A1 §5 C4):
 //! - Closures passed here are pure Rust. They never call into Python; the
-//!   bindings run them while detached from the interpreter.
+//!   bindings run them while detached from the interpreter. One documented
+//!   exception: argument extraction on free-threaded builds
+//!   (`pyroid-py/src/input.rs`, `backed_range`) attaches pool workers briefly.
+//! - So the bindings must never wait for the pool while attached: a
+//!   stop-the-world request would then block the workers' attach while the
+//!   waiting thread never reaches a safe point (a deadlock, not just latency).
 //! - Work below [`MIN_DOCS_PER_TASK`] documents, or with `threads = 1`, runs
 //!   on the calling thread and never touches the pool.
 //! - The pool is built on first use, not at import, and rebuilt in a forked
@@ -123,6 +128,34 @@ fn pool() -> Result<Arc<ThreadPool>, PoolError> {
 /// Number of threads in the shared pool (builds it if needed).
 pub fn pool_size() -> Result<usize, PoolError> {
     Ok(pool()?.current_num_threads())
+}
+
+/// How many tasks a batch may run at once: the pool size, capped by
+/// `threads` (builds the pool if needed).
+pub fn max_tasks(threads: Threads) -> Result<usize, PoolError> {
+    let size = pool_size()?;
+    Ok(match threads {
+        Threads::Auto => size,
+        Threads::Max(n) => n.get().min(size),
+    })
+}
+
+/// `f(task)` for every element of `tasks`, each one rayon job on the shared
+/// pool, results in order. For a few coarse tasks the caller has already
+/// sized (e.g. [`max_tasks`] ranges of balanced work); with one task, or
+/// `threads = 1`, they run on the calling thread. Make at most
+/// `max_tasks(threads)` tasks: rayon cannot cap how many run at once.
+pub fn map_tasks<T, R, F>(tasks: &[T], threads: Threads, f: F) -> Result<Vec<R>, PoolError>
+where
+    T: Sync,
+    R: Send,
+    F: Fn(&T) -> R + Sync + Send,
+{
+    if tasks.len() <= 1 || threads == Threads::ONE {
+        return Ok(tasks.iter().map(f).collect());
+    }
+    let pool = pool()?;
+    Ok(pool.install(|| tasks.par_iter().with_max_len(1).map(f).collect()))
 }
 
 /// `None`: run serially on the calling thread. `Some(m)`: run on the pool with
@@ -279,6 +312,24 @@ mod tests {
         })
         .unwrap();
         assert_eq!(sum.load(Ordering::Relaxed), 5_050);
+    }
+
+    #[test]
+    fn map_tasks_in_order() {
+        let tasks: Vec<std::ops::Range<usize>> = (0..7).map(|i| i * 10..i * 10 + 10).collect();
+        for t in [Threads::Auto, Threads::ONE, n(3)] {
+            let sums = map_tasks(&tasks, t, |r| r.clone().sum::<usize>()).unwrap();
+            assert_eq!(
+                sums,
+                (0..7)
+                    .map(|i| (i * 10..i * 10 + 10).sum())
+                    .collect::<Vec<usize>>()
+            );
+        }
+        assert!(
+            max_tasks(n(1)).unwrap() == 1
+                && max_tasks(Threads::Auto).unwrap() == pool_size().unwrap()
+        );
     }
 
     #[test]

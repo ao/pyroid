@@ -320,7 +320,7 @@ fn fix_text_batch<'py>(
     threads: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let cfg = &config.0;
-    match texts.extract::<TextInput>() {
+    match TextInput::extract_with(texts, threads) {
         Ok(input) => transform(py, input, threads, |s| kernel::fix_text(s, cfg)),
         // Lone surrogates are valid ftfy input (it repairs them), but have no
         // UTF-8 form for `TextInput`; take the surrogatepass route instead.
