@@ -189,9 +189,13 @@ def test_str_subclass_gives_exact_str() -> None:
     class S(str):
         pass
 
-    for text in ("plain", "â€œ"):
-        assert type(candidate.fix_text(S(text))) is str
-        assert type(candidate.fix_text_segment(S(text))) is str
+    for text in ("plain", "â€œ", "lone \udc00"):
+        for kwargs in ({}, {"fix_surrogates": False}):
+            got = candidate.fix_text(S(text), **kwargs)
+            assert type(got) is str
+            assert got == ftfy.fix_text(text, **kwargs)
+            assert type(candidate.fix_text_segment(S(text), **kwargs)) is str
+            assert type(candidate.fix_and_explain(S(text), **kwargs).text) is str
 
 
 def test_delegates_unsupported_options_with_one_warning(monkeypatch: pytest.MonkeyPatch) -> None:

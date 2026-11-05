@@ -135,10 +135,13 @@ fn run_wtf8<'a>(op: Op, b: &'a [u8], cfg: &TextFixerConfig) -> Cow<'a, [u8]> {
     r.expect("surrogatepass output is valid")
 }
 
-/// `text` as UTF-8 extended with surrogates.
+/// `text` as UTF-8 extended with surrogates. Calls `str.encode` unbound, so a
+/// subclass overriding `encode` does not interfere.
 fn surrogatepass_bytes<'py>(text: &Bound<'py, PyString>) -> PyResult<Bound<'py, PyBytes>> {
-    Ok(text
-        .call_method1("encode", ("utf-8", "surrogatepass"))?
+    let py = text.py();
+    Ok(py
+        .get_type::<PyString>()
+        .call_method1("encode", (text, "utf-8", "surrogatepass"))?
         .cast_into::<PyBytes>()?)
 }
 
@@ -157,9 +160,11 @@ fn str_from_wtf8<'py>(py: Python<'py>, b: &[u8]) -> PyResult<Bound<'py, PyString
 /// `str` even for subclasses).
 fn unchanged<'py>(text: &Bound<'py, PyString>) -> PyResult<Bound<'py, PyString>> {
     if text.is_exact_instance_of::<PyString>() {
-        Ok(text.clone())
-    } else {
-        Ok(PyString::new(text.py(), text.to_cow()?.as_ref()))
+        return Ok(text.clone());
+    }
+    match text.to_str() {
+        Ok(s) => Ok(PyString::new(text.py(), s)),
+        Err(_) => str_from_wtf8(text.py(), surrogatepass_bytes(text)?.as_bytes()),
     }
 }
 
