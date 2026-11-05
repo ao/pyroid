@@ -27,3 +27,11 @@ extend-exclude = [
 [default.extend-identifiers]
 # The arro3 Arrow library (github.com/kylebarron/arro3), not a misspelt "arrow".
 arro3 = "arro3"
+
+# bench/gates.py names near-duplicate pairs `nd` (not a misspelt "and"). typos matches file types by file name
+# only, so this type covers files named gates.py; there is one, and every other word in it is still checked.
+[type.bench-gates]
+extend-glob = ["gates.py"]
+
+[type.bench-gates.extend-identifiers]
+nd = "nd"
