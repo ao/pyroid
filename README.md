@@ -27,16 +27,20 @@ $ pip install pyroid               # add [fasttext] for pyroid.fasttext (numpy)
 ```
 
 ```python
-import pyroid.ftfy as ftfy          # was: import ftfy             (byte-identical output)
-import pyroid.fasttext as fasttext  # was: import fasttext         (same .bin/.ftz models)
-import pyroid.filters as filters    # datatrove's Gopher/C4/FineWeb filters (same decisions)
+import pyroid.ftfy as ftfy  # was: import ftfy (byte-identical output)
+import pyroid.fasttext as fasttext  # was: import fasttext (same .bin/.ftz models)
+import pyroid.filters as filters  # datatrove's Gopher/C4/FineWeb filters (same decisions)
 
-docs = ftfy.fix_text_batch(docs)                                # all cores, GIL released
+docs = ftfy.fix_text_batch(docs)  # all cores, GIL released
 lid = fasttext.load_model("lid.176.bin")
 labels, probs = lid.predict([d.replace("\n", " ") for d in docs], k=1)
-result = filters.apply(docs, [filters.GopherRepetition(), filters.GopherQuality(),
-                              filters.C4Quality(filter_no_terminal_punct=False),
-                              filters.FineWebQuality()])
+fineweb_filters = [
+    filters.GopherRepetition(),
+    filters.GopherQuality(),
+    filters.C4Quality(filter_no_terminal_punct=False),
+    filters.FineWebQuality(),
+]
+result = filters.apply(docs, fineweb_filters)  # in datatrove's order, one tokenization per doc
 clean = [text for text, keep in zip(result.text, result.keep) if keep]
 ```
 

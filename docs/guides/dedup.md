@@ -15,7 +15,7 @@ and multi-threaded. It also has a fast exact-duplicate filter.
 ```python
 import pyroid.dedup as D
 
-keep = D.minhash_dedup(texts, hash_fc="sha1")   # FineWeb's configuration (sha1, 64-bit)
+keep = D.minhash_dedup(texts, hash_fc="sha1")  # FineWeb's configuration (sha1, 64-bit)
 deduped = [t for t, k in zip(texts, keep) if k]
 ```
 
@@ -31,12 +31,12 @@ arguments (`hash_fc=` and `precision=` set the hash config). The default is data
 
 ```python
 d = D.MinHashDedup(hash_fc="sha1")
-for batch in batches:                 # lists, tuples or Arrow columns
-    d.add(batch)                      # returns the range of indices given to the batch
-keep = d.keep_mask()                  # one bool per document added, in add order
-d.duplicates()                        # indices to remove (datatrove's .remove file)
-d.clusters()                          # each cluster: the kept document first, then the removed ones
-d.cluster_ids(), d.cluster_sizes()    # as datatrove writes minhash_cluster_id / _size
+for batch in batches:  # lists, tuples or Arrow columns
+    d.add(batch)  # returns the range of indices given to the batch
+keep = d.keep_mask()  # one bool per document added, in add order
+d.duplicates()  # indices to remove (datatrove's .remove file)
+d.clusters()  # each cluster: the kept document first, then the removed ones
+d.cluster_ids(), d.cluster_sizes()  # as datatrove writes minhash_cluster_id / _size
 ```
 
 Decisions are global, so a later batch can change which document of a cluster is kept: masks are
@@ -46,12 +46,12 @@ That is usually, but not always, the cluster's first document.
 ## Exact duplicates
 
 ```python
-keep = D.exact_dedup(texts)                     # True for the first copy of each text
-keep = D.exact_dedup(texts, normalize=True)     # compare datatrove's simplify_text() instead
+keep = D.exact_dedup(texts)  # True for the first copy of each text
+keep = D.exact_dedup(texts, normalize=True)  # compare datatrove's simplify_text() instead
 
-seen = D.ExactDedup()                           # streaming, across batches
+seen = D.ExactDedup()  # streaming, across batches
 for batch in batches:
-    keep = seen.add(batch)                      # final as soon as add() returns
+    keep = seen.add(batch)  # final as soon as add() returns
 ```
 
 Texts are compared by a 128-bit hash. On a plain `list[str]`, Python's own `set` is faster than
@@ -67,7 +67,7 @@ kind; Arrow nulls stay null and are always kept. `threads=` works as everywhere 
 ```python
 import pyarrow as pa
 
-keep = D.minhash_dedup(table["text"], hash_fc="sha1", threads=8)   # pyroid.Column of bools
+keep = D.minhash_dedup(table["text"], hash_fc="sha1", threads=8)  # pyroid.Column of bools
 table = table.filter(pa.chunked_array(keep))
 ```
 

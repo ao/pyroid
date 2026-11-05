@@ -14,9 +14,9 @@ Unidecode's tables.
 ```python
 import pyroid.translit as T
 
-T.anyascii("Björk Guðmundsdóttir")     # 'Bjork Gudmundsdottir'
-T.unidecode("北京")                      # 'BeiJing'   (Unidecode: 'Bei Jing ')
-T.is_ascii(["abc", "ÿ"])                 # [True, False]
+T.anyascii("Björk Guðmundsdóttir")  # 'Bjork Gudmundsdottir'
+T.unidecode("北京")  # 'BeiJing'   (Unidecode: 'Bei Jing ')
+T.is_ascii(["abc", "ÿ"])  # [True, False]
 ```
 
 ## Functions

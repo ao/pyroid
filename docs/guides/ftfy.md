@@ -26,7 +26,7 @@ import ftfy
 import pyroid.ftfy
 
 config = ftfy.TextFixerConfig(uncurl_quotes=False, normalization="NFKC")
-pyroid.ftfy.fix_text(text, config)          # same result as ftfy.fix_text(text, config)
+pyroid.ftfy.fix_text(text, config)  # same result as ftfy.fix_text(text, config)
 ```
 
 ## Many documents: `fix_text_batch`
@@ -37,9 +37,9 @@ without the GIL. Each result equals `ftfy.fix_text(doc, config, **kwargs)`.
 ```python
 import pyroid.ftfy as ftfy
 
-fixed = ftfy.fix_text_batch(docs)                     # list in, list out
+fixed = ftfy.fix_text_batch(docs)  # list in, list out
 fixed = ftfy.fix_text_batch(docs, uncurl_quotes=False)
-fixed = ftfy.fix_text_batch(docs, threads=4)          # at most 4 tasks at once
+fixed = ftfy.fix_text_batch(docs, threads=4)  # at most 4 tasks at once
 ```
 
 Documents that need no fixing come back as the original objects, so already-clean text costs no
@@ -56,7 +56,7 @@ import pyarrow.parquet as pq
 import pyroid.ftfy as ftfy
 
 table = pq.read_table("fineweb.parquet", columns=["text"])
-fixed = ftfy.fix_text_batch(table["text"])            # pyroid.Column of strings
+fixed = ftfy.fix_text_batch(table["text"])  # pyroid.Column of strings
 table = table.set_column(0, "text", pa.chunked_array(fixed))
 ```
 

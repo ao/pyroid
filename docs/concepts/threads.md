@@ -17,9 +17,9 @@ Every batch function takes a keyword-only `threads=` argument:
 ```python
 import pyroid.ftfy as ftfy
 
-ftfy.fix_text_batch(docs)               # all cores
-ftfy.fix_text_batch(docs, threads=4)    # at most 4 at once
-ftfy.fix_text_batch(docs, threads=1)    # this thread only
+ftfy.fix_text_batch(docs)  # all cores
+ftfy.fix_text_batch(docs, threads=4)  # at most 4 at once
+ftfy.fix_text_batch(docs, threads=1)  # this thread only
 ```
 
 The pool is created on first use (not at import), sized by the `PYROID_NUM_THREADS` environment

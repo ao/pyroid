@@ -31,15 +31,18 @@ filters see, and steps that see the same text tokenize it once.
 ```python
 import pyroid.filters as F
 
-result = F.apply(texts, [
-    F.GopherRepetition(),
-    F.GopherQuality(),
-    F.C4Quality(filter_no_terminal_punct=False),   # FineWeb's C4 settings
-    F.FineWebQuality(),
-])
-result.keep      # keep mask, e.g. [True, False, ...]
-result.reason    # datatrove's filter_reason, None when kept, e.g. [None, 'dup_line_frac', ...]
-result.text      # each document's text after the chain (C4 removes lines)
+result = F.apply(
+    texts,
+    [
+        F.GopherRepetition(),
+        F.GopherQuality(),
+        F.C4Quality(filter_no_terminal_punct=False),  # FineWeb's C4 settings
+        F.FineWebQuality(),
+    ],
+)
+result.keep  # keep mask, e.g. [True, False, ...]
+result.reason  # datatrove's filter_reason, None when kept, e.g. [None, 'dup_line_frac', ...]
+result.text  # each document's text after the chain (C4 removes lines)
 kept = [t for t, k in zip(result.text, result.keep) if k]
 ```
 
@@ -48,6 +51,7 @@ from them:
 
 ```python
 from datatrove.pipeline.filters import GopherQualityFilter
+
 F.apply(texts, [GopherQualityFilter(min_doc_words=100)])
 ```
 
@@ -84,7 +88,7 @@ import pyarrow.parquet as pq
 import pyroid.filters as F
 
 table = pq.read_table("fineweb.parquet")
-keep = F.fineweb_quality(table["text"], threads=8)   # pyroid.Column of bools
+keep = F.fineweb_quality(table["text"], threads=8)  # pyroid.Column of bools
 table = table.filter(pa.chunked_array(keep))
 ```
 

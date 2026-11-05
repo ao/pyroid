@@ -25,16 +25,21 @@ tokenization and Python string handling, which is the part pyroid moves to Rust.
 ## 30-second example
 
 ```python
-import pyroid.ftfy as ftfy          # was: import ftfy
+import pyroid.ftfy as ftfy  # was: import ftfy
 import pyroid.fasttext as fasttext  # was: import fasttext
-import pyroid.filters as filters    # datatrove's Gopher / C4 / FineWeb filters
+import pyroid.filters as filters  # datatrove's Gopher / C4 / FineWeb filters
 
 docs = ["âœ” No problems", "Some other web page ..."]
 
-docs = ftfy.fix_text_batch(docs)            # ["✔ No problems", ...], == [ftfy.fix_text(d) for d in docs]
-model = fasttext.load_model("lid.176.bin")  # the same .bin / .ftz files
-labels, probs = model.predict(docs, k=1)    # [["__label__en"], ["__label__en"]], batched, GIL released
-keep = filters.gopher_quality(docs)         # [False, False]: datatrove drops docs under 50 words
+# ["✔ No problems", ...]: the same as [ftfy.fix_text(d) for d in docs], on all cores
+docs = ftfy.fix_text_batch(docs)
+
+# The same .bin / .ftz files. A batch runs without the GIL: [["__label__en"], ["__label__en"]]
+model = fasttext.load_model("lid.176.bin")
+labels, probs = model.predict(docs, k=1)
+
+# datatrove's keep/drop decision per document: [False, False] (under 50 words)
+keep = filters.gopher_quality(docs)
 ```
 
 Every function takes a `str`, a `list` or `tuple` of `str`, or an Arrow string column (pyarrow,

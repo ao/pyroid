@@ -48,11 +48,11 @@ column. A batch runs on pyroid's thread pool without the GIL.
 import pyroid.fasttext as fasttext
 
 model = fasttext.load_model("lid.176.ftz")
-lines = [d.replace("\n", " ") for d in docs]          # one line per document, as with fastText
+lines = [d.replace("\n", " ") for d in docs]  # one line per document, as with fastText
 
-labels, probs = model.predict(lines, k=1)             # list of label lists, list of float32 arrays
+labels, probs = model.predict(lines, k=1)  # list of label lists, list of float32 arrays
 labels, probs = model.predict(lines, k=1, threads=8)
-vectors = model.get_sentence_vector(lines)            # 2-D float32 array, (len(lines), dim)
+vectors = model.get_sentence_vector(lines)  # 2-D float32 array, (len(lines), dim)
 ```
 
 | Input | `predict` returns | `get_sentence_vector` returns |
@@ -82,7 +82,7 @@ On 3.14t and 3.15t you can also call one shared model from many Python threads:
 ```python
 from concurrent.futures import ThreadPoolExecutor
 
-model = fasttext.load_model("lid.176.bin")             # load once, share
+model = fasttext.load_model("lid.176.bin")  # load once, share
 with ThreadPoolExecutor(8) as pool:
     results = list(pool.map(lambda line: model.predict(line, k=1), lines))
 ```

@@ -32,11 +32,11 @@ The result has the same kind as the input. There are three kinds of function:
 import pyarrow as pa
 import pyroid.text as t
 
-t.normalize_whitespace("  a \t b ")                       # 'a b'
-t.normalize_whitespace(["a  b", "ok"])                    # ['a b', 'ok']
-t.min_chars(("abc", "x"), 2)                              # (True, False)
-col = t.normalize_whitespace(pa.array(["a  b", None]))    # pyroid.Column, type 'string'
-col.to_pylist()                                           # ['a b', None]
+t.normalize_whitespace("  a \t b ")  # 'a b'
+t.normalize_whitespace(["a  b", "ok"])  # ['a b', 'ok']
+t.min_chars(("abc", "x"), 2)  # (True, False)
+col = t.normalize_whitespace(pa.array(["a  b", None]))  # pyroid.Column, type 'string'
+col.to_pylist()  # ['a b', None]
 ```
 
 A few details that matter for large corpora:
@@ -58,10 +58,10 @@ field), `.null_count`, `.num_chunks` and `.to_pylist()`, and it implements the P
 interface, so any Arrow library takes it without a copy:
 
 ```python
-pa.chunked_array(col)      # pyarrow
-pa.array(col)              # pyarrow, one chunk (concatenates if needed)
-pl.Series(col)             # polars
-pyroid.text.min_chars(col, 10)   # or straight back into pyroid
+pa.chunked_array(col)  # pyarrow
+pa.array(col)  # pyarrow, one chunk (concatenates if needed)
+pl.Series(col)  # polars
+pyroid.text.min_chars(col, 10)  # or straight back into pyroid
 ```
 
 !!! tip "polars and column names"
