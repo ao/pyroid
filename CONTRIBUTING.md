@@ -25,7 +25,7 @@ git clone https://github.com/ao/pyroid && cd pyroid
 
 uv venv --python 3.12                # a venv in .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
-uv pip install maturin pytest
+uv pip install --group dev          # maturin, pytest, ruff, mypy (pinned in pyproject.toml)
 maturin develop --uv                 # compiles the extension (debug build) into .venv
 python -c "import pyroid; print(pyroid.__version__)"
 ```
@@ -37,7 +37,7 @@ To test on a free-threaded interpreter, use a second venv:
 
 ```bash
 uv venv --python 3.14t .venv-ft
-VIRTUAL_ENV=.venv-ft uv pip install maturin pytest
+uv pip install --python .venv-ft --group test
 VIRTUAL_ENV=.venv-ft maturin develop --uv
 .venv-ft/bin/python -c "import sys, pyroid; assert not sys._is_gil_enabled()"   # importing pyroid must not re-enable the GIL
 ```
@@ -45,12 +45,12 @@ VIRTUAL_ENV=.venv-ft maturin develop --uv
 ## Tests and lint
 
 ```bash
-cargo test --workspace               # Rust unit tests (the core crate has no Python dependency)
+cargo test                           # Rust unit tests of the pure-Rust core (the default workspace member)
 pytest python/tests                  # Python tests against the extension you built
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
-uvx ruff check && uvx ruff format --check
-uvx mypy python/pyroid               # the public API is typed through .pyi stubs
+ruff check && ruff format --check
+mypy python/pyroid                   # the public API is typed through .pyi stubs
 ```
 
 CI runs the same checks on Linux, macOS and Windows, on CPython 3.11, 3.14t, 3.15 and 3.15t, against the built
