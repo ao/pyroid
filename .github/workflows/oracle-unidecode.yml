@@ -1,0 +1,64 @@
+name: oracle-unidecode
+
+# Opt-in check of pyroid.translit.unidecode's errors= semantics against Unidecode 1.4.0
+# (python/tests/test_translit_unidecode.py). Unidecode is GPL-licensed: it is used only as a
+# black-box oracle, installed in this job alone, and is never a dependency of pyroid or of its
+# test group; nothing is copied from it. Runs on demand and on PRs that touch pyroid.translit.
+# Not required by ci-ok.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/pyroid-core/src/translit/**"
+      - "python/pyroid/translit*"
+      - "python/tests/test_translit_unidecode.py"
+      - ".github/workflows/oracle-unidecode.yml"
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  MATURIN_VERSION: v1.16.0
+
+jobs:
+  oracle-unidecode:
+    name: oracle-unidecode (Unidecode 1.4.0, Python 3.13)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the cp311-abi3 wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          manylinux: auto
+          args: --release --locked --out dist -i 3.11
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - name: Install the wheel, the test group and Unidecode; run test_translit_unidecode.py
+        env:
+          UNIDECODE: Unidecode==1.4.0
+          # 300 examples per property (python/tests/conftest.py).
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          uv venv -p 3.13 .venv-unidecode
+          # Only the wheel built above: no index, no sdist fallback, no deps.
+          uv pip install --python .venv-unidecode --no-index --no-deps --no-build --find-links dist pyroid
+          uv pip install --python .venv-unidecode --group test
+          uv pip install --python .venv-unidecode --only-binary :all: "$UNIDECODE"
+          py=.venv-unidecode/bin/python
+          # The module skips itself without Unidecode 1.4.0; here that is an error, not a skip.
+          "$py" -c "import unidecode; from importlib.metadata import version; print('Unidecode', version('Unidecode'))"
+          log="$RUNNER_TEMP/oracle-unidecode.log"
+          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs \
+            python/tests/test_translit_unidecode.py | tee "$log"
+          if grep '^SKIPPED' "$log"; then echo "::error::Unidecode oracle tests skipped (see above)"; exit 1; fi
