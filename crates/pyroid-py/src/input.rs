@@ -111,6 +111,35 @@ impl<'a, 'py> FromPyObject<'a, 'py> for TextInput {
     }
 }
 
+/// A Python int argument, read without overflow: anything with `__index__`
+/// (int, numpy integers), but not bool.
+enum IntArg {
+    /// Non-negative; values past `usize::MAX` saturate.
+    Value(usize),
+    /// Negative; the value as text, for the error message.
+    Negative(String),
+    /// Not an int.
+    NotInt,
+}
+
+fn int_arg(obj: &Bound<'_, PyAny>) -> PyResult<IntArg> {
+    let py = obj.py();
+    if obj.is_instance_of::<PyBool>() {
+        return Ok(IntArg::NotInt);
+    }
+    let Ok(index) = obj.call_method0(pyo3::intern!(py, "__index__")) else {
+        return Ok(IntArg::NotInt);
+    };
+    if let Ok(n) = index.extract::<usize>() {
+        return Ok(IntArg::Value(n));
+    }
+    Ok(if index.lt(0)? {
+        IntArg::Negative(index.to_string())
+    } else {
+        IntArg::Value(usize::MAX)
+    })
+}
+
 /// The `threads=` keyword: `None` (all of the shared pool) or a positive int
 /// (at most that many tasks at once; `1` runs on the calling thread).
 /// Functions take it as `Option<Threads>` with a `None` default.
@@ -121,27 +150,17 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Threads {
     type Error = PyErr;
 
     fn extract(obj: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
-        let py = obj.py();
-        let bad_type = || {
-            input_error(
-                py,
-                format!(
-                    "threads must be None or a positive int, got {}",
-                    type_name(&obj)
-                ),
-            )
-        };
-        if obj.is_instance_of::<PyBool>() {
-            return Err(bad_type());
+        const WANT: &str = "threads must be None or a positive int";
+        match int_arg(&obj)? {
+            IntArg::Value(n) => NonZeroUsize::new(n)
+                .map(|n| Self(par::Threads::Max(n)))
+                .ok_or_else(|| PyValueError::new_err(format!("{WANT}, got 0"))),
+            IntArg::Negative(n) => Err(PyValueError::new_err(format!("{WANT}, got {n}"))),
+            IntArg::NotInt => Err(input_error(
+                obj.py(),
+                format!("{WANT}, got {}", type_name(&obj)),
+            )),
         }
-        let n: i64 = obj.extract().map_err(|_| bad_type())?;
-        let n = usize::try_from(n)
-            .ok()
-            .and_then(NonZeroUsize::new)
-            .ok_or_else(|| {
-                PyValueError::new_err(format!("threads must be None or a positive int, got {n}"))
-            })?;
-        Ok(Self(par::Threads::Max(n)))
     }
 }
 
@@ -151,6 +170,7 @@ pub fn threads(t: Option<Threads>) -> par::Threads {
 }
 
 /// A non-negative int argument (e.g. `min_chars(x, n)`), with a clear error.
+/// Values past `usize::MAX` saturate (no document is that long).
 #[derive(Clone, Copy, Debug)]
 pub struct Count(pub usize);
 
@@ -158,18 +178,14 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Count {
     type Error = PyErr;
 
     fn extract(obj: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
-        let py = obj.py();
-        if obj.is_instance_of::<PyBool>() {
-            return Err(input_error(py, "expected a non-negative int, got bool"));
+        const WANT: &str = "expected a non-negative int";
+        match int_arg(&obj)? {
+            IntArg::Value(n) => Ok(Self(n)),
+            IntArg::Negative(n) => Err(PyValueError::new_err(format!("{WANT}, got {n}"))),
+            IntArg::NotInt => Err(input_error(
+                obj.py(),
+                format!("{WANT}, got {}", type_name(&obj)),
+            )),
         }
-        let n: i64 = obj.extract().map_err(|_| {
-            input_error(
-                py,
-                format!("expected a non-negative int, got {}", type_name(&obj)),
-            )
-        })?;
-        usize::try_from(n)
-            .map(Self)
-            .map_err(|_| PyValueError::new_err(format!("expected a non-negative int, got {n}")))
     }
 }

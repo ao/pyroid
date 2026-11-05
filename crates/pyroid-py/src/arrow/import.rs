@@ -619,9 +619,8 @@ fn import_stream(obj: &Bound<'_, PyAny>) -> PyResult<ArrowStrings> {
         if array.release.is_none() {
             break;
         }
-        if array.length == 0 {
-            continue; // dropping releases it
-        }
+        // Empty chunks are kept, so chunk numbers in error messages match the
+        // producer's; `Column` drops empty output chunks.
         chunks.push(StrChunk::new(array, field.ty).map_err(|m| invalid(obj, &m))?);
     }
     Ok(ArrowStrings { field, chunks })
