@@ -10,11 +10,16 @@ extend-exclude = [
   # Generated.
   "Cargo.lock",
   "crates/pyroid-core/src/ftfy/tables.rs",
-  # Test data and incumbent fixtures: mojibake, deliberately misspelt and non-English text.
+  # Test data, incumbent fixtures and raw benchmark results: mojibake, confusables, deliberately
+  # misspelt and non-English text. Keep in step with the file-fixer excludes in .pre-commit-config.yaml.
   "python/tests/data/",
-  "parity/",
-  "bench/data/",
   "crates/pyroid-core/tests/ftfy_data/",
+  "bench/data/",
+  "bench/results/",
+  "parity/data/",
+  "parity/tests/",
+  "parity/pyroid_parity/refs.py",
+  "parity/pyroid_parity/strategies.py",
 ]
 
 [default.extend-words]
