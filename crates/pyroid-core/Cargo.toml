@@ -13,7 +13,12 @@ publish = false
 crate-type = ["rlib"]
 
 [dependencies]
+memchr = "2.7"
 rayon.workspace = true
+unicode-normalization = "0.1.26"
+
+[dev-dependencies]
+serde_json = "1.0.140"
 
 [lints]
 workspace = true
