@@ -57,6 +57,7 @@ fn active_in(cp: u32, v: UnicodeVersion) -> bool {
 /// character): nothing before it can compose with anything after it. So only
 /// the short regions from the last inert character before an NFC-active one
 /// up to the next inert character need the full algorithm.
+#[allow(clippy::many_single_char_names)]
 fn nfc(text: &[u8], v: UnicodeVersion) -> Option<Vec<u8>> {
     let mut out: Option<Vec<u8>> = None;
     let mut copied = 0;

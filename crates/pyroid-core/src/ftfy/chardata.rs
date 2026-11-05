@@ -54,11 +54,10 @@ pub(crate) fn is_sloppy(i: usize) -> bool {
 /// Encode one code point in encoding `i`, if possible.
 #[inline]
 pub(crate) fn encode_cp(i: usize, cp: u32) -> Option<u8> {
-    if cp < 0x80 {
-        if cp == 0x1A && !ENCODE_1A[i] {
-            return None;
+    if let Ok(b) = u8::try_from(cp) {
+        if b < 0x80 {
+            return (b != 0x1A || ENCODE_1A[i]).then_some(b);
         }
-        return Some(cp as u8);
     }
     let table = ENCODE_HIGH[i];
     table
@@ -115,7 +114,7 @@ pub(crate) fn is_space(cp: u32) -> bool {
 #[inline]
 pub(crate) fn is_word(cp: u32, v: UnicodeVersion) -> bool {
     if cp < 0x80 {
-        return (cp as u8).is_ascii_alphanumeric() || cp == u32::from(b'_');
+        return u8::try_from(cp).is_ok_and(|b| b.is_ascii_alphanumeric() || b == b'_');
     }
     in_ranges(
         match v {
@@ -133,7 +132,7 @@ pub(crate) fn is_word(cp: u32, v: UnicodeVersion) -> bool {
 #[inline]
 pub(crate) fn is_digit(cp: u32, v: UnicodeVersion) -> bool {
     if cp < 0x80 {
-        return (cp as u8).is_ascii_digit();
+        return u8::try_from(cp).is_ok_and(|b| b.is_ascii_digit());
     }
     in_ranges(
         match v {
@@ -224,7 +223,7 @@ mod tests {
     #[test]
     fn possible() {
         assert_eq!(possible_encodings(b"abc"), (true, ALL_ENCODINGS));
-        let (ascii, m) = possible_encodings("caf\u{e9}".as_bytes());
+        let (ascii, m) = possible_encodings("cr\u{e8}me".as_bytes());
         assert!(!ascii);
         assert_ne!(m & 1, 0);
         assert_eq!(possible_encodings("\u{4e2d}".as_bytes()).1, 0);

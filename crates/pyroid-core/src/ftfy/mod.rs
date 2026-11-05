@@ -161,6 +161,7 @@ impl Normalization {
 /// `fix_c1_controls` (ftfy calls `fix_encoding(text)` without the config);
 /// `fix_c1_controls` still controls the separate C1 fixer step.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[allow(clippy::struct_excessive_bools)] // mirrors ftfy's TextFixerConfig field for field
 pub struct TextFixerConfig {
     pub unescape_html: UnescapeHtml,
     pub remove_terminal_escapes: bool,
@@ -282,6 +283,7 @@ impl std::error::Error for InvalidWtf8 {}
 
 /// The sub-options `fix_encoding` reads from its config.
 #[derive(Clone, Copy)]
+#[allow(clippy::struct_excessive_bools)] // ftfy's four fix_encoding sub-options
 struct EncodingOptions {
     restore_byte_a0: bool,
     replace_lossy_sequences: bool,
@@ -318,6 +320,7 @@ fn record(plan: &mut Plan<'_>, step: ExplanationStep) {
 
 /// One `UTF8_DETECTOR_RE` iteration at `q`: the end of the matched sequence.
 #[inline]
+#[allow(clippy::many_single_char_names)]
 fn utf8_clue_seq(text: &[u8], q: usize) -> Option<usize> {
     let (c0, n0) = decode_at(text, q);
     let clue = class_of(c0).clue;
@@ -515,6 +518,7 @@ fn fix_encoding_loop(
 // ---------------------------------------------------------------------------
 
 /// ftfy's `fix_and_explain` on one segment. `None` if unchanged.
+#[allow(clippy::too_many_lines)] // one block per ftfy step, in ftfy's order
 fn fix_segment(seg: &[u8], cfg: &TextFixerConfig, mut steps: Plan<'_>) -> Option<Vec<u8>> {
     let v = cfg.unicode_version;
     let unescape = match cfg.unescape_html {
@@ -845,6 +849,7 @@ pub fn badness(text: &str, version: UnicodeVersion) -> usize {
 }
 
 #[cfg(test)]
+#[allow(clippy::print_stderr, clippy::cast_precision_loss)] // a profiling report
 mod perf_probe {
     //! Where the time goes (ignored; run with --ignored and PYROID_FTFY_BENCH).
     use super::*;

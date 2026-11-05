@@ -11,6 +11,9 @@
 //! All functions here assume well-formed input; [`validate`] checks it at the
 //! public API boundary.
 
+// Encoding a code point keeps only the low bits of each shifted value, on purpose.
+#![allow(clippy::cast_possible_truncation)]
+
 /// Decode the code point starting at `s[i]`; returns `(code point, byte length)`.
 #[inline]
 pub(crate) fn decode_at(s: &[u8], i: usize) -> (u32, usize) {
@@ -214,7 +217,7 @@ mod tests {
 
     #[test]
     fn roundtrip_code_points() {
-        let cps = [0x41, 0xE9, 0x20AC, 0xD800, 0xDFFF, 0x1F600, 0x10FFFF, 0];
+        let cps = [0x41, 0xE9, 0x20AC, 0xD800, 0xDFFF, 0x1F600, 0x0010_FFFF, 0];
         let mut buf = Vec::new();
         for &cp in &cps {
             push_cp(&mut buf, cp);
@@ -223,7 +226,7 @@ mod tests {
         assert_eq!(cp_len(&buf), cps.len());
         assert!(validate(&buf).is_ok());
         assert!(has_surrogates(&buf));
-        assert_eq!(decode_before(&buf, buf.len() - 1), 0x10FFFF);
+        assert_eq!(decode_before(&buf, buf.len() - 1), 0x0010_FFFF);
     }
 
     #[test]

@@ -175,8 +175,8 @@ def golden(path: str) -> None:
                 out,
                 t,
                 [
-                    call(fn, t, {"unescape_html": ue})
-                    for ue in (True, False, "auto")
+                    call(fn, t, {"unescape_html": mode})
+                    for mode in (True, False, "auto")
                     for fn in ("fix_text", "fix_text_segment")
                 ],
             )

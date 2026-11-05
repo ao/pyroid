@@ -7,6 +7,8 @@
 //! * `PYROID_FTFY_ORACLE=file1.jsonl:file2.jsonl` adds more recordings, such
 //!   as large fuzz runs generated in the dev container.
 
+#![allow(clippy::print_stderr)] // reports how many calls were replayed
+
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
@@ -67,8 +69,10 @@ fn config_for(row: &Value, version: UnicodeVersion) -> Result<TextFixerConfig, S
                 }
             }
             "max_decode_length" => {
-                cfg.max_decode_length =
-                    NonZeroUsize::new(v.as_u64().ok_or("bad length")? as usize).ok_or("zero")?;
+                cfg.max_decode_length = NonZeroUsize::new(
+                    usize::try_from(v.as_u64().ok_or("bad length")?).map_err(|_| "too long")?,
+                )
+                .ok_or("zero")?;
             }
             "explain" => cfg.explain = flag()?,
             "remove_terminal_escapes" => cfg.remove_terminal_escapes = flag()?,

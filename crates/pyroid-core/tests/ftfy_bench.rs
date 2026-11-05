@@ -9,6 +9,8 @@
 //!     cargo test -p pyroid-core --profile profiling --test ftfy_bench -- --ignored --nocapture
 //! ```
 
+#![allow(clippy::print_stderr, clippy::cast_precision_loss)] // a benchmark report
+
 use std::hint::black_box;
 use std::time::Instant;
 

@@ -24,6 +24,7 @@ enum Rep {
 /// Rebuild `text`, replacing each code point for which `f(cp, byte_offset)`
 /// returns a replacement. Returns `None` if `f` never fires.
 #[inline]
+#[allow(clippy::many_single_char_names)]
 fn translate(text: &[u8], mut f: impl FnMut(u32, usize) -> Option<Rep>) -> Option<Vec<u8>> {
     let mut out: Option<Vec<u8>> = None;
     let mut copied = 0;
@@ -78,8 +79,17 @@ fn entity_match(text: &[u8], i: usize) -> Option<usize> {
     }
 }
 
-/// What `html.unescape` does to a whole `&#...;` match, if it decodes it.
-fn numeric_charref(entity: &[u8]) -> Option<Option<u32>> {
+/// What `html.unescape` does to a whole `&#...;` match.
+enum CharRef {
+    /// Not decoded as a whole: ftfy keeps the entity.
+    Keep,
+    /// Decodes to nothing (an invalid code point).
+    Empty,
+    /// Decodes to this code point.
+    Char(u32),
+}
+
+fn numeric_charref(entity: &[u8]) -> CharRef {
     let body = &entity[2..entity.len() - 1];
     let (digits, radix) = match body.first() {
         Some(b'x' | b'X') if body.len() > 1 && body[1..].iter().all(u8::is_ascii_hexdigit) => {
@@ -88,7 +98,7 @@ fn numeric_charref(entity: &[u8]) -> Option<Option<u32>> {
         Some(_) if body.iter().all(u8::is_ascii_digit) => (body, 10),
         // html.unescape leaves a trailing part (and the `;`) behind: ftfy
         // then keeps the entity unchanged.
-        _ => return None,
+        _ => return CharRef::Keep,
     };
     let mut num: u32 = 0;
     for &d in digits {
@@ -96,15 +106,15 @@ fn numeric_charref(entity: &[u8]) -> Option<Option<u32>> {
         num = num.saturating_mul(radix).saturating_add(v).min(0x0011_0000);
     }
     if let Ok(k) = INVALID_CHARREFS.binary_search_by_key(&num, |&(n, _)| n) {
-        return Some(Some(INVALID_CHARREFS[k].1));
+        return CharRef::Char(INVALID_CHARREFS[k].1);
     }
     if (0xD800..=0xDFFF).contains(&num) || num > 0x10_FFFF {
-        return Some(Some(0xFFFD));
+        return CharRef::Char(0xFFFD);
     }
     if INVALID_CODEPOINTS.binary_search(&num).is_ok() {
-        return Some(None); // decodes to the empty string
+        return CharRef::Empty;
     }
-    Some(Some(num))
+    CharRef::Char(num)
 }
 
 /// ftfy's `unescape_html`.
@@ -121,13 +131,13 @@ pub(crate) fn unescape_html(text: &[u8]) -> Option<Vec<u8>> {
                         Ok(k) => Some(HTML_ENTITIES[k].1.as_bytes().to_vec()),
                         Err(_) if entity.starts_with(b"&#") => match numeric_charref(entity) {
                             // `if ";" in unescaped: return text`
-                            Some(Some(0x3B)) | None => None,
-                            Some(Some(cp)) => {
+                            CharRef::Char(0x3B) | CharRef::Keep => None,
+                            CharRef::Char(cp) => {
                                 let mut v = Vec::with_capacity(4);
                                 push_cp(&mut v, cp);
                                 Some(v)
                             }
-                            Some(None) => Some(Vec::new()),
+                            CharRef::Empty => Some(Vec::new()),
                         },
                         Err(_) => None,
                     };
@@ -551,10 +561,10 @@ mod tests {
 
     #[test]
     fn terminal_escapes() {
-        let t = "\x1b[36;44mI'm blue, da ba dee da ba doo...\x1b[0m";
+        let t = "\x1b[36;44mI'm blue, and so is the sky...\x1b[0m";
         assert_eq!(
             s(remove_terminal_escapes(t.as_bytes(), V), t),
-            "I'm blue, da ba dee da ba doo..."
+            "I'm blue, and so is the sky..."
         );
         assert!(remove_terminal_escapes(b"\x1b[12", V).is_none());
     }

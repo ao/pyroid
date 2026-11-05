@@ -29,7 +29,7 @@ fn char_mask(cp: u32, wanted: u128, v: UnicodeVersion) -> u128 {
     if cp != u32::from(b'\n') {
         m |= BAD_ANY;
     }
-    if !(cp < 0x80 && (cp as u8).is_ascii_alphabetic()) {
+    if !u8::try_from(cp).is_ok_and(|b| b.is_ascii_alphabetic()) {
         m |= BAD_NOTALPHA;
     }
     // `\s` and `\w` cost a table search, so only test them when they matter.
@@ -107,13 +107,13 @@ pub(crate) fn badness(text: &[u8], v: UnicodeVersion) -> usize {
     while pos < masks.len() {
         // sre tries the alternatives in order and takes the first that matches.
         let hit = BAD_ALTS.iter().find_map(|&(first, len, anchored)| {
-            let (first, len) = (u32::from(first), usize::from(len));
-            if (anchored && pos != 0) || pos + len > masks.len() {
+            let n = usize::from(len);
+            if (anchored && pos != 0) || pos + n > masks.len() {
                 return None;
             }
             (0..len)
-                .all(|j| masks[pos + j] & (1u128 << (first + j as u32)) != 0)
-                .then_some(len)
+                .all(|j| masks[pos + usize::from(j)] & (1u128 << (first + j)) != 0)
+                .then_some(n)
         });
         match hit {
             Some(len) => {
