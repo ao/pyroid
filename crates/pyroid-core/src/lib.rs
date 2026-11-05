@@ -14,5 +14,6 @@
 #![forbid(unsafe_code)]
 
 pub mod columnar;
+pub mod ftfy;
 pub mod par;
 pub mod text;
