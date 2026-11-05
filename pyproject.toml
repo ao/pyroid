@@ -62,6 +62,9 @@ test = [
   # pyroid.fasttext needs numpy; fasttext-predict is its reference (no wheels past cp313).
   "numpy>=1.26",
   "fasttext-predict==0.9.2.4; python_version < '3.14'",
+  # The reference for pyroid.translit.anyascii (ISC). Unidecode (GPL) is never a
+  # default dependency: it is only a black-box oracle in an opt-in CI job.
+  "anyascii==0.3.3",
 ]
 # Same pins as .pre-commit-config.yaml (prek runs ruff and mypy from there).
 lint = ["ruff==0.17.3", "mypy==2.4.1", "prek==0.5.10"]
@@ -86,6 +89,8 @@ exclude = [
   { path = "parity/**", format = "sdist" },
   { path = "docs/**", format = "sdist" },
   { path = ".github/**", format = "sdist" },
+  # Black-box comparison against GPL Unidecode: not shipped.
+  { path = "python/tests/test_translit_unidecode.py", format = "sdist" },
 ]
 
 [tool.pytest]
