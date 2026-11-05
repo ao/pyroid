@@ -151,11 +151,16 @@ pub unsafe fn move_out<T: Released>(src: *mut T) -> T {
 /// Types that have a "released" (empty, non-owning) value.
 pub trait Released {
     fn released() -> Self;
+    /// Is this struct released (`release == NULL`), i.e. owns nothing?
+    fn is_released(&self) -> bool;
 }
 
 impl Released for FfiSchema {
     fn released() -> Self {
         Self::released()
+    }
+    fn is_released(&self) -> bool {
+        self.release.is_none()
     }
 }
 
@@ -163,10 +168,16 @@ impl Released for FfiArray {
     fn released() -> Self {
         Self::released()
     }
+    fn is_released(&self) -> bool {
+        self.release.is_none()
+    }
 }
 
 impl Released for FfiStream {
     fn released() -> Self {
         Self::released()
+    }
+    fn is_released(&self) -> bool {
+        self.release.is_none()
     }
 }

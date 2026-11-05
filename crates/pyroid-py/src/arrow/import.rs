@@ -16,11 +16,13 @@
 //! read, inside the parallel kernel.
 
 use std::ffi::{CStr, c_char, c_int};
+use std::sync::{Mutex, PoisonError};
 use std::{ptr, slice};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::intern;
 use pyo3::prelude::*;
+use pyo3::sync::MutexExt;
 use pyo3::types::{PyCapsule, PyTuple};
 
 use super::ffi::{FfiArray, FfiSchema, FfiStream, Released, move_out};
@@ -508,8 +510,20 @@ impl StrChunk {
     }
 }
 
-/// Move the struct out of a capsule named `name`, leaving it released.
-fn take<T: Released>(cap: &Bound<'_, PyAny>, name: &CStr) -> PyResult<T> {
+/// Serialises pyroid's moves out of capsules. A producer may return the same
+/// cached capsule from every `__arrow_c_*__` call (a one-shot reader is a
+/// natural case). Without the lock, two free-threaded callers could both read
+/// the struct before either marks it released, and both would then release
+/// it: a double free in the producer.
+static TAKE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Move the struct out of a capsule named `name`, leaving it released. Fails
+/// if the capsule was already consumed (by an earlier call or another thread).
+fn take<T: Released>(
+    producer: &Bound<'_, PyAny>,
+    cap: &Bound<'_, PyAny>,
+    name: &CStr,
+) -> PyResult<T> {
     let py = cap.py();
     let bad = || {
         input_error(
@@ -522,11 +536,34 @@ fn take<T: Released>(cap: &Bound<'_, PyAny>, name: &CStr) -> PyResult<T> {
     };
     let cap = cap.cast::<PyCapsule>().map_err(|_| bad())?;
     let p = cap.pointer_checked(Some(name)).map_err(|_| bad())?;
-    // SAFETY: a capsule with this name holds a pointer to a valid `T`
-    // (PyCapsule interface spec). The capsule was just returned to us by
-    // `__arrow_c_*__` and nothing else holds it, so nobody reads it
-    // concurrently; `move_out` leaves it released for the capsule destructor.
-    Ok(unsafe { move_out(p.as_ptr().cast::<T>()) })
+    let moved = {
+        // `lock_py_attached` waits detached, so a waiter can't block a
+        // stop-the-world pause; the section itself makes no Python calls.
+        let _guard = TAKE_LOCK
+            .lock_py_attached(py)
+            .unwrap_or_else(PoisonError::into_inner);
+        // SAFETY: a capsule with this name holds a pointer to a valid `T`
+        // (PyCapsule interface spec), alive while we hold `cap`. The producer
+        // may have handed the same capsule to other callers, so the
+        // read-then-mark-released runs under TAKE_LOCK: of all pyroid callers
+        // only the first moves out a live struct; later ones move out a
+        // released one and fail below. (On GIL builds the GIL also serialises
+        // us against other consumers; on free-threaded builds a *different*
+        // library consuming the same capsule at the same moment is outside
+        // what any consumer can guard against.)
+        unsafe { move_out(p.as_ptr().cast::<T>()) }
+    };
+    if moved.is_released() {
+        return Err(invalid(
+            producer,
+            &format!(
+                "the {} capsule was already consumed (its struct is released); \
+                 __arrow_c_array__/__arrow_c_stream__ must return a fresh capsule per call",
+                name.to_string_lossy()
+            ),
+        ));
+    }
+    Ok(moved)
 }
 
 fn invalid(producer: &Bound<'_, PyAny>, msg: &str) -> PyErr {
@@ -549,8 +586,8 @@ fn import_array(obj: &Bound<'_, PyAny>) -> PyResult<ArrowStrings> {
                 "__arrow_c_array__() must return a (schema, array) tuple of PyCapsules",
             )
         })?;
-    let schema: FfiSchema = take(&pair.get_item(0)?, SCHEMA_CAPSULE)?;
-    let array: FfiArray = take(&pair.get_item(1)?, ARRAY_CAPSULE)?;
+    let schema: FfiSchema = take(obj, &pair.get_item(0)?, SCHEMA_CAPSULE)?;
+    let array: FfiArray = take(obj, &pair.get_item(1)?, ARRAY_CAPSULE)?;
     let field = parse_schema(&schema).map_err(|m| input_error(py, m))?;
     drop(schema);
     let chunk = StrChunk::new(array, field.ty).map_err(|m| invalid(obj, &m))?;
@@ -584,7 +621,7 @@ fn import_stream(obj: &Bound<'_, PyAny>) -> PyResult<ArrowStrings> {
         }
         Err(err) => return Err(err),
     };
-    let mut stream: FfiStream = take(&cap, STREAM_CAPSULE)?;
+    let mut stream: FfiStream = take(obj, &cap, STREAM_CAPSULE)?;
     let (Some(_), Some(get_schema), Some(get_next)) =
         (stream.release, stream.get_schema, stream.get_next)
     else {

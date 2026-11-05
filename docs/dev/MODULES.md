@@ -102,6 +102,10 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
   pass `&self` data into the closure; it must be `Sync`.
 - `unsafe` is only allowed in `crates/pyroid-py/src/arrow/`. Every block has a
   `// SAFETY:` comment and one unsafe operation (clippy enforces both).
+- Arrow trust model: as in arrow-rs, producers are trusted on buffer sizes,
+  schema/array consistency and `n_buffers`; everything else (shape, null counts,
+  offsets, views, UTF-8, already-consumed capsules) is checked, and a mutating
+  producer can't push reads out of bounds.
 - Errors: return `PyResult`; use `errors::input_error(py, msg)` for wrong types.
 
 ## Tests (`python/tests/test_<mod>*.py`)

@@ -139,6 +139,58 @@ def test_pool_size_is_positive() -> None:
     assert _testing.pool_size() >= 1
 
 
+# ---- a producer that hands out one cached capsule -----------------------------
+
+
+class _CachedStream:
+    """Returns the *same* stream capsule from every ``__arrow_c_stream__`` call."""
+
+    def __init__(self, docs: list[str]) -> None:
+        self.capsule: object = _testing.column(docs, chunks=2).__arrow_c_stream__()
+
+    def __arrow_c_stream__(self, requested_schema: object | None = None) -> object:
+        return self.capsule
+
+
+class _CachedArray:
+    """Returns the *same* (schema, array) capsules from every ``__arrow_c_array__`` call."""
+
+    def __init__(self, docs: list[str]) -> None:
+        self.capsules: tuple[object, object] = _testing.column(docs).__arrow_c_array__()
+
+    def __arrow_c_array__(self, requested_schema: object | None = None) -> tuple[object, object]:
+        return self.capsules
+
+
+@pytest.mark.thread_unsafe  # starts its own threads
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize("producer", [_CachedStream, _CachedArray])
+def test_cached_capsule_is_consumed_exactly_once(producer: Callable[[list[str]], Any]) -> None:
+    # Regression: on free-threaded builds two threads could both move the
+    # struct out of one shared capsule and both release it (a double free).
+    docs = _docs(500)
+    want = [ref(d) for d in docs]
+    n_threads = 8
+    for _ in range(40):
+        source = producer(docs)
+        barrier = threading.Barrier(n_threads)
+
+        def work(_: int, source: Any = source, barrier: threading.Barrier = barrier) -> object:
+            barrier.wait()
+            try:
+                return t.normalize_whitespace(source).to_pylist()
+            except ValueError as err:
+                return err
+
+        with ThreadPoolExecutor(max_workers=n_threads) as ex:
+            results = list(ex.map(work, range(n_threads)))
+        ok = [r for r in results if not isinstance(r, ValueError)]
+        errors = [r for r in results if isinstance(r, ValueError)]
+        assert ok == [want]
+        assert len(errors) == n_threads - 1
+        assert all("already consumed" in str(e) for e in errors), errors
+
+
 # ---- heavy concurrency in a child interpreter -------------------------------------
 
 _STRESS = """
