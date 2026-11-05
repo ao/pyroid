@@ -363,13 +363,13 @@ jobs:
           # live-oracle checks skip, and say so in the report; the checks against the pinned refs still run.
           groups=()
           if [[ "$PY" == *t ]]; then groups=(--no-default-groups); fi
-          # PYTHON_GIL stays unset: the report records whether the GIL stayed off. The plugin would also append
-          # the report to $GITHUB_STEP_SUMMARY; the render step below does that, pass or fail.
-          env -u GITHUB_STEP_SUMMARY uv run --project parity --frozen --python "$PY" "${groups[@]}" \
+          # PYTHON_GIL stays unset: the report records whether the GIL stayed off.
+          uv run --project parity --frozen --python "$PY" "${groups[@]}" \
             --with "${wheels[0]}" pytest parity/tests -m "$SUITE" --impl "pyroid.$SUITE"
       - name: Render parity-report.json to the job summary
         if: ${{ !cancelled() && hashFiles('parity-report.json') != '' }}
-        run: parity/.venv/bin/python -m pyroid_parity.report render parity-report.json >> "$GITHUB_STEP_SUMMARY"
+        # The only writer of the summary: pytest runs never append to it.
+        run: parity/.venv/bin/python -m pyroid_parity.report render parity-report.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:

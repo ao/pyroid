@@ -38,7 +38,7 @@ without editing the suites. Every session writes `parity-report.json`, which fee
    - The live-oracle checks skip there and say so in the report.
 4. **Hypothesis depth:** `HYPOTHESIS_PROFILE=ci` gives 2000 examples per property (default `dev`: 200).
 5. **Read the report:**
-   - `python -m pyroid_parity.report render parity-report.json` prints a Markdown table, which is also appended to `$GITHUB_STEP_SUMMARY`.
+   - `python -m pyroid_parity.report render parity-report.json` prints a Markdown table and, under GitHub Actions, appends it to `$GITHUB_STEP_SUMMARY`. It is the only writer of the summary: pytest runs never touch it.
    - `validate` checks it against [`schema/parity-report.schema.json`](schema/parity-report.schema.json).
    - `merge a.json b.json -o all.json` combines interpreters.
 

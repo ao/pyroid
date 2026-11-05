@@ -9,7 +9,7 @@ import pytest
 
 from pyroid_parity import data as D
 from pyroid_parity import impl as I
-from pyroid_parity.report import Collector, render, validate
+from pyroid_parity.report import Collector, main, render, validate, write
 
 
 @pytest.mark.parametrize(
@@ -159,3 +159,17 @@ def test_warning_comparison_does_not_depend_on_call_order():
         return I.warning_categories(caught)
 
     assert compared() == compared() == ["DeprecationWarning"]
+
+
+def test_only_render_writes_the_job_summary(tmp_path, monkeypatch, capsys):
+    summary = tmp_path / "summary.md"
+    summary.write_text("", "utf-8")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    c = Collector()
+    c.record("ftfy", "golden", True)
+    report = tmp_path / "parity-report.json"
+    write(c.build(), report)  # what the pytest plugin calls at session end
+    assert summary.read_text("utf-8") == ""
+    assert main(["render", str(report)]) == 0
+    assert summary.read_text("utf-8").count("### Parity:") == 1
+    assert "### Parity:" in capsys.readouterr().out  # and it still prints the table
