@@ -22,14 +22,14 @@ spacy==3.8.18; never on the host):
     python crates/pyroid-core/src/filters/generate_tables.py
 """
 
-# ruff: noqa: PT018, T201  (a build script, not a test)
+# ruff: noqa: PT018, T201, N812  (a build script; C/P are sre's customary aliases)
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from re import _constants as C  # type: ignore[attr-defined]
 from re import _compiler as Compiler  # type: ignore[attr-defined]
+from re import _constants as C  # type: ignore[attr-defined]
 from re import _parser as P  # type: ignore[attr-defined]
 
 HERE = Path(__file__).resolve().parent
@@ -50,7 +50,7 @@ def rs_str(s: str) -> str:
     out = []
     for ch in s:
         o = ord(ch)
-        if ch in "\\\"":
+        if ch in '\\"':
             out.append("\\" + ch)
         elif 0x20 <= o < 0x7F:
             out.append(ch)
@@ -168,7 +168,9 @@ class Gen:
         if op is C.LITERAL:
             return f"Node::Lit({rs_char(av)})"
         if op is C.NOT_LITERAL:
-            return f"Node::In(&{self.cls(Class(True, {av}, [], [(C.NEGATE, None), (C.LITERAL, av)]))})"
+            return (
+                f"Node::In(&{self.cls(Class(True, {av}, [], [(C.NEGATE, None), (C.LITERAL, av)]))})"
+            )
         if op is C.IN:
             return f"Node::In(&{self.cls(class_of(av))})"
         if op is C.CATEGORY:
@@ -355,7 +357,7 @@ def main() -> None:
     classes = [emit_class(n, c) for n, c in sorted(g.classes.values(), key=lambda x: int(x[0][1:]))]
     out = [
         HEADER,
-        "//! spaCy 3.8.18 `blank(\"en\")` tokenizer data and datatrove 0.10.1 constants.\n",
+        '//! spaCy 3.8.18 `blank("en")` tokenizer data and datatrove 0.10.1 constants.\n',
         "#![allow(clippy::unreadable_literal)]\n",
         "use super::regex::{Cat, Class, Node};\n",
         "#[rustfmt::skip]\nmod data {\nuse super::{Cat, Class, Node};\n",
@@ -367,7 +369,9 @@ def main() -> None:
         "\n".join(rule_lines),
         "];",
         "/// `Sentencizer.default_punct_chars`, sorted.",
-        "pub(crate) static SENT_PUNCT: &[char] = &[" + ", ".join(rs_char(ord(c)) for c in sent) + "];",
+        "pub(crate) static SENT_PUNCT: &[char] = &["
+        + ", ".join(rs_char(ord(c)) for c in sent)
+        + "];",
         "/// datatrove `PUNCTUATION_SET`, sorted.",
         "pub(crate) static PUNCTUATION_SET: &[char] = &["
         + ", ".join(rs_char(ord(c)) for c in sorted(PUNCTUATION_SET))
@@ -376,8 +380,10 @@ def main() -> None:
         "pub(crate) static TERMINAL_PUNCTUATION: &[char] = &["
         + ", ".join(rs_char(ord(c)) for c in sorted(TERMINAL_PUNCTUATION))
         + "];",
-        "/// datatrove language codes whose word tokenizer is `SpaCyTokenizer(\"en\")`, sorted.",
-        "pub(crate) static ENGLISH_LANGUAGES: &[&str] = &[" + ", ".join(rs_str(k) for k in english) + "];",
+        '/// datatrove language codes whose word tokenizer is `SpaCyTokenizer("en")`, sorted.',
+        "pub(crate) static ENGLISH_LANGUAGES: &[&str] = &["
+        + ", ".join(rs_str(k) for k in english)
+        + "];",
         "}\npub(crate) use data::*;\n",
     ]
     OUT.write_text("\n".join(out), encoding="utf-8")
