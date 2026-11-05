@@ -1,0 +1,43 @@
+# pyroid
+
+> Rust-fast text cleaning for LLM datasets: drop-in replacements for ftfy (`import pyroid.ftfy as ftfy`, byte-identical to ftfy 6.3.1), fastText inference (`pyroid.fasttext.load_model`, same .bin/.ftz files, bit-identical predictions) and datatrove 0.10.1's Gopher/C4/FineWeb quality filters (`pyroid.filters`, same decisions). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t; no runtime dependencies (`pyroid[fasttext]` adds numpy). pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
+
+Conventions shared by every module:
+
+- Batch functions take a `str`, a `list`/`tuple` of `str`, or an Arrow string column (pyarrow, polars, pandas, HF datasets) and return the same kind; Arrow input returns a `pyroid.Column`, which converts with `pyarrow.chunked_array(col)` or `polars.Series(col)`.
+- Transforms return text (unchanged documents are the original objects); predicates return a keep mask (`list[bool]` for a list), never a filtered list.
+- `threads=None` uses all cores, `threads=n` at most n, `threads=1` the calling thread. Batches release the GIL; free-threaded builds stay GIL-free.
+- When a call needs a feature the Rust port lacks, pyroid delegates to the original library and emits `pyroid.FallbackWarning` (or raises `pyroid.PyroidError` if that library is missing). Errors: `pyroid.InputError` is a `TypeError`.
+- To clean many documents with ftfy, prefer `pyroid.ftfy.fix_text_batch(docs)` over a loop of `fix_text`. To run several datatrove filters, use `pyroid.filters.apply(docs, [GopherRepetition(), GopherQuality(), C4Quality(...), FineWebQuality()])`, which returns `FilterResult(keep, reason, text)`.
+
+## Docs
+
+- [Home](https://ao.github.io/pyroid/): what pyroid is, the 30-second example
+- [Install](https://ao.github.io/pyroid/install/): extras, wheels and platforms
+- [Inputs and outputs](https://ao.github.io/pyroid/concepts/inputs/): str/list/tuple/Arrow in, the same kind out; masks; nulls
+- [Threads and free-threading](https://ao.github.io/pyroid/concepts/threads/): `threads=`, the GIL, 3.14t/3.15t
+- [Fallbacks](https://ao.github.io/pyroid/concepts/fallbacks/): `pyroid.FallbackWarning`
+- [Errors](https://ao.github.io/pyroid/concepts/errors/): exception types
+
+## Guides
+
+- [pyroid.ftfy](https://ao.github.io/pyroid/guides/ftfy/): drop-in ftfy 6.3.1, `fix_text_batch`, differences from ftfy
+- [pyroid.fasttext](https://ao.github.io/pyroid/guides/fasttext/): fastText inference, batches, threads, differences from fastText
+- [pyroid.filters](https://ao.github.io/pyroid/guides/filters/): datatrove's Gopher, C4 and FineWeb filters, `apply`, differences from datatrove
+- [pyroid.dedup (preview)](https://ao.github.io/pyroid/guides/dedup/): datatrove-identical MinHash dedup and exact dedup
+- [pyroid.translit (preview)](https://ao.github.io/pyroid/guides/translit/): anyascii-identical transliteration with Unidecode's signature (output is not Unidecode's)
+
+## API reference
+
+- [pyroid](https://ao.github.io/pyroid/reference/pyroid/)
+- [pyroid.ftfy](https://ao.github.io/pyroid/reference/ftfy/)
+- [pyroid.fasttext](https://ao.github.io/pyroid/reference/fasttext/)
+- [pyroid.filters](https://ao.github.io/pyroid/reference/filters/)
+- [pyroid.text](https://ao.github.io/pyroid/reference/text/)
+
+## Optional
+
+- [Compatibility](https://ao.github.io/pyroid/compatibility/): parity test counts against each incumbent
+- [Benchmarks](https://ao.github.io/pyroid/benchmarks/): methodology and preliminary numbers (Docker VM, indicative)
+- [Migrating from 0.7](https://ao.github.io/pyroid/migrating-from-0.7/): the removed 0.x API and its replacements
+- [Changelog](https://github.com/ao/pyroid/blob/main/CHANGELOG.md)
