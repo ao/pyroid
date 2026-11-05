@@ -4,7 +4,7 @@
 //! For one document datatrove computes
 //!
 //! ```python
-//! words = word_tokenizer.word_tokenize(simplify_text(text, config.norm_config))
+//! words = word_tokenizer.word_tokenize(simplify_text(text, config.norm_config))  # spaCy
 //! shingles = [hash_fc(" ".join(g)) for g in ngrams(words, config.n_grams)]   # uint64
 //! phv = (shingles[:, None] * a + b) % _mersenne_prime    # uint64, * and + wrap mod 2**64
 //! if precision == 32: phv &= 0xFFFFFFFF
@@ -20,7 +20,7 @@ use twox_hash::{XxHash32, XxHash64};
 use super::config::{ConfigError, HashFn, MinhashConfig, Precision, UnicodeVersion};
 use super::rng::{MERSENNE_PRIME, permutation_parameters};
 use super::simplify::simplify_text;
-use super::tokenize::WordTokenizer;
+use super::tokenize::{SpacyEnglish, TokenizeError, WordTokenizer};
 
 /// SHA-1's initial state.
 const SHA1_H0: [u32; 5] = [
@@ -193,18 +193,28 @@ impl MinHasher {
         self.signature_from_shingles(&shingles, out)
     }
 
-    /// The whole of stage 1 for one document: `simplify_text`, the word
-    /// tokenizer, shingles, signature.
-    pub fn signature<T: WordTokenizer + ?Sized>(
+    /// datatrove's word tokenizer (spaCy English) for this Unicode version.
+    pub fn spacy(&self) -> &'static SpacyEnglish {
+        SpacyEnglish::get(self.unicode)
+    }
+
+    /// The whole of stage 1 for one document with datatrove's tokenizer:
+    /// `simplify_text`, spaCy words, shingles, signature.
+    pub fn signature(&self, text: &str, out: &mut [u64]) -> Result<bool, TokenizeError> {
+        self.signature_with(text, self.spacy(), out)
+    }
+
+    /// [`Self::signature`] with another word tokenizer.
+    pub fn signature_with<T: WordTokenizer + ?Sized>(
         &self,
         text: &str,
         tokenizer: &T,
         out: &mut [u64],
-    ) -> bool {
+    ) -> Result<bool, TokenizeError> {
         let simplified = simplify_text(text, &self.config.norm_config, self.unicode);
         let mut tokens = Vec::new();
-        tokenizer.word_tokenize(&simplified, &mut tokens);
-        self.signature_from_tokens(&tokens, out)
+        tokenizer.word_tokenize(&simplified, &mut tokens)?;
+        Ok(self.signature_from_tokens(&tokens, out))
     }
 }
 

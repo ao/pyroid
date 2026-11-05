@@ -6,7 +6,8 @@
 //! -> `MinhashDedupFilter`, in memory:
 //!
 //! - [`simplify`]: `simplify_text`, the normalisation before shingling.
-//! - [`tokenize`]: the word tokenizer (spaCy English in datatrove).
+//! - [`tokenize`]: the word tokenizer: spaCy English, as in datatrove
+//!   (pyroid's port in `crate::filters::tokenizer`).
 //! - [`minhash`]: shingles, the permutation parameters and signatures.
 //! - [`cluster`]: bucket matching and the union-find that picks which
 //!   document of each cluster is kept.
@@ -29,4 +30,4 @@ pub use exact::ExactSeen;
 pub use minhash::MinHasher;
 pub use rng::MERSENNE_PRIME;
 pub use simplify::simplify_text;
-pub use tokenize::{WhitespaceTokenizer, WordTokenizer};
+pub use tokenize::{SpacyEnglish, TokenizeError, WhitespaceTokenizer, WordTokenizer};

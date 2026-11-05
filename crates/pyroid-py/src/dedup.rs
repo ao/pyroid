@@ -17,18 +17,14 @@ use pyroid_core::columnar::BoolBuffers;
 use pyroid_core::dedup::exact::normalized_hash;
 use pyroid_core::dedup::{
     Clusters, ExactSeen, HashConfig, HashFn, MinHasher, MinhashConfig, Precision, SignatureStore,
-    TextNormConfig, UnicodeVersion, WhitespaceTokenizer, simplify_text,
+    TextNormConfig, TokenizeError, UnicodeVersion, simplify_text,
 };
 use pyroid_core::par;
 
 use crate::arrow::{Chunk, Column, ColumnType};
 use crate::batch::{BatchError, map_values, transform};
-use crate::errors::{PyroidError, input_error, type_name};
+use crate::errors::{PyroidError, input_error, type_name, with_note};
 use crate::input::{TextInput, Threads, threads};
-
-/// The word tokenizer used for shingles. A stand-in until the spaCy-exact
-/// tokenizer from the filters track is wired in (see `tokenize.rs`).
-const TOKENIZER: WhitespaceTokenizer = WhitespaceTokenizer;
 
 fn unicode_version(v: &str) -> PyResult<UnicodeVersion> {
     UnicodeVersion::from_unidata_version(v)
@@ -139,11 +135,12 @@ impl NativeConfig {
 /// One document's stage-1 result: `None` when it has no shingles.
 type Signature = Option<Box<[u64]>>;
 
-fn text_signature(hasher: &MinHasher, text: &str) -> Signature {
+/// Stage 1 with datatrove's (spaCy) tokenizer.
+fn text_signature(hasher: &MinHasher, text: &str) -> Result<Signature, TokenizeError> {
     let mut out = vec![0; hasher.num_hashes()];
-    hasher
-        .signature(text, &TOKENIZER, &mut out)
-        .then(|| out.into_boxed_slice())
+    Ok(hasher
+        .signature(text, &mut out)?
+        .then(|| out.into_boxed_slice()))
 }
 
 fn token_signature(hasher: &MinHasher, tokens: &[PyBackedStr]) -> Signature {
@@ -160,12 +157,20 @@ fn signatures_of(
     input: &TextInput,
     threads_arg: Option<Threads>,
 ) -> PyResult<Vec<Signature>> {
-    Ok(
-        map_values(py, input, threads_arg, |s| text_signature(hasher, s))?
-            .into_iter()
-            .map(Option::flatten)
-            .collect(),
-    )
+    map_values(py, input, threads_arg, |s| text_signature(hasher, s))?
+        .into_iter()
+        .enumerate()
+        .map(|(i, r)| match r {
+            None => Ok(None),
+            Some(Ok(sig)) => Ok(sig),
+            // spaCy's E025 (2**30 characters or more), raised as datatrove raises it.
+            Some(Err(e)) => Err(with_note(
+                py,
+                PyValueError::new_err(e.to_string()),
+                format!("pyroid: while tokenizing document {i}"),
+            )),
+        })
+        .collect()
 }
 
 /// `list[list[str]]` (pre-tokenized documents) for the test hooks.
