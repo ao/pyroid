@@ -66,8 +66,8 @@ impl fmt::Display for BuildError {
         match self {
             Self::Overflow { bytes, max } => write!(
                 f,
-                "output needs more than {max} bytes in one Arrow string array (at least {bytes}); \
-                 pass large_string input to get large_string output"
+                "{bytes} bytes do not fit one Arrow string array (at most {max}); \
+                 use large_string, or a chunked result (pyarrow.chunked_array) instead of one array"
             ),
             Self::Pool(e) => e.fmt(f),
         }
@@ -114,6 +114,33 @@ pub struct StringBuffers<O> {
 }
 
 impl<O: Offset> StringBuffers<O> {
+    /// Like [`StringBuffers::build`], but splits the rows into as many arrays as
+    /// needed so that none exceeds `O::MAX` bytes (e.g. 2 GiB for `utf8`).
+    /// Fails only if a single row is larger than that.
+    pub fn build_split<S: AsRef<str> + Sync>(
+        values: &[Option<S>],
+        threads: Threads,
+    ) -> Result<Vec<Self>, BuildError> {
+        let mut parts = Vec::new();
+        let (mut start, mut bytes) = (0, 0usize);
+        for (i, v) in values.iter().enumerate() {
+            let n = v.as_ref().map_or(0, |s| s.as_ref().len());
+            if n > O::MAX {
+                return Err(BuildError::Overflow {
+                    bytes: n,
+                    max: O::MAX,
+                });
+            }
+            if bytes + n > O::MAX {
+                parts.push(Self::build(&values[start..i], threads)?);
+                (start, bytes) = (i, 0);
+            }
+            bytes += n;
+        }
+        parts.push(Self::build(&values[start..], threads)?);
+        Ok(parts)
+    }
+
     /// Build from per-row values (`None` = null). The bytes are copied into one
     /// data buffer in parallel, per `threads`.
     pub fn build<S: AsRef<str> + Sync>(
@@ -381,5 +408,32 @@ mod tests {
             StringBuffers::<Tiny>::build(&[Some("abc"), Some("de")], Threads::ONE).unwrap_err();
         assert_eq!(err, BuildError::Overflow { bytes: 5, max: 4 });
         assert!(err.to_string().contains("large_string"));
+
+        let v = [
+            Some("ab"),
+            None,
+            Some("cd"),
+            Some("e"),
+            Some("fghi"),
+            Some(""),
+        ];
+        let parts = StringBuffers::<Tiny>::build_split(&v, Threads::ONE).unwrap();
+        let lens: Vec<usize> = parts.iter().map(|p| p.len).collect();
+        assert_eq!(lens, vec![3, 1, 2]); // "ab"+null+"cd" | "e" | "fghi"+""
+        assert!(parts.iter().all(|p| p.data.len() <= 4));
+        let joined: Vec<Option<Vec<u8>>> = parts
+            .iter()
+            .flat_map(|p| (0..p.len).map(|i| p.get(i).map(<[u8]>::to_vec)))
+            .collect();
+        let want: Vec<Option<Vec<u8>>> =
+            v.iter().map(|s| s.map(|s| s.as_bytes().to_vec())).collect();
+        assert_eq!(joined, want);
+        let too_big = StringBuffers::<Tiny>::build_split(&[Some("abcde")], Threads::ONE);
+        assert_eq!(
+            too_big.unwrap_err(),
+            BuildError::Overflow { bytes: 5, max: 4 }
+        );
+        let empty = StringBuffers::<Tiny>::build_split::<&str>(&[], Threads::ONE).unwrap();
+        assert_eq!(empty.len(), 1);
     }
 }

@@ -161,13 +161,19 @@ where
                         .enumerate()
                         .map(|(c, chunk)| {
                             let outs = map_chunk(chunk, c, threads, &f)?;
+                            // A `string` chunk holds at most 2 GiB: split the
+                            // output rather than fail (or change type).
                             Ok(if large {
-                                Chunk::LargeUtf8(StringBuffers::build(&outs, threads)?)
+                                vec![Chunk::LargeUtf8(StringBuffers::build(&outs, threads)?)]
                             } else {
-                                Chunk::Utf8(StringBuffers::build(&outs, threads)?)
+                                StringBuffers::build_split(&outs, threads)?
+                                    .into_iter()
+                                    .map(Chunk::Utf8)
+                                    .collect()
                             })
                         })
-                        .collect::<Result<Vec<_>, BatchError>>()
+                        .collect::<Result<Vec<Vec<_>>, BatchError>>()
+                        .map(|v| v.into_iter().flatten().collect::<Vec<_>>())
                 })
                 .map_err(|e| e.into_pyerr(py))?;
             let ty = if large {
