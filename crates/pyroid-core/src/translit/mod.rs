@@ -23,6 +23,8 @@
 mod tables;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
+use std::sync::LazyLock;
 
 pub use any_ascii::any_ascii_char as anyascii_char;
 
@@ -70,7 +72,144 @@ fn deliberately_empty(cp: u32) -> bool {
 
 /// Does anyascii have a mapping for `c` (possibly the empty string)?
 pub fn has_transliteration(c: char) -> bool {
-    c.is_ascii() || !anyascii_char(c).is_empty() || deliberately_empty(u32::from(c))
+    let cp = u32::from(c);
+    c.is_ascii()
+        || match BMP.entries.get(cp as usize) {
+            Some(&entry) => entry != MISSING,
+            None => !anyascii_char(c).is_empty() || deliberately_empty(cp),
+        }
+}
+
+/// The BMP's mappings, flattened once from the crate's data (about 0.4 MB):
+/// per code point, `offset << 8 | len` into `pool`, [`MISSING`] for code
+/// points without a mapping, or [`LONG`] (ask the crate). Supplementary
+/// planes ask the crate directly.
+struct Bmp {
+    entries: Box<[u32]>,
+    /// Every distinct mapping once, then [`WORD`] bytes of padding.
+    pool: Box<[u8]>,
+}
+
+const MISSING: u32 = u32::MAX;
+const LONG: u32 = u32::MAX - 1;
+/// Mappings up to this long are copied as one 8-byte word.
+const WORD: usize = 8;
+
+static BMP: LazyLock<Bmp> = LazyLock::new(|| {
+    let mut entries = vec![MISSING; 0x1_0000];
+    let mut pool: Vec<u8> = Vec::new();
+    let mut seen: HashMap<&'static str, usize> = HashMap::new();
+    for (cp, entry) in (0u32..).zip(entries.iter_mut()) {
+        // Surrogates are not chars; ASCII never reaches the table.
+        let Some(c) = char::from_u32(cp).filter(|c| !c.is_ascii()) else {
+            continue;
+        };
+        let mapped = anyascii_char(c);
+        if mapped.is_empty() {
+            if deliberately_empty(cp) {
+                *entry = 0;
+            }
+            continue;
+        }
+        let off = *seen.entry(mapped).or_insert_with(|| {
+            pool.extend_from_slice(mapped.as_bytes());
+            pool.len() - mapped.len()
+        });
+        *entry = match (u32::try_from(off), u8::try_from(mapped.len())) {
+            (Ok(off), Ok(len)) if off < 0xFF_0000 => (off << 8) | u32::from(len),
+            _ => LONG,
+        };
+    }
+    pool.extend_from_slice(&[0; WORD]);
+    Bmp {
+        entries: entries.into_boxed_slice(),
+        pool: pool.into_boxed_slice(),
+    }
+});
+
+/// The code point at `b[i]` (a non-ASCII lead byte of valid UTF-8) and its
+/// length in bytes.
+#[inline]
+fn decode(b: &[u8], i: usize) -> (u32, usize) {
+    let lead = u32::from(b[i]);
+    let cont = |k: usize| u32::from(b[i + k]) & 0x3F;
+    if lead < 0xE0 {
+        (((lead & 0x1F) << 6) | cont(1), 2)
+    } else if lead < 0xF0 {
+        (((lead & 0x0F) << 12) | (cont(1) << 6) | cont(2), 3)
+    } else {
+        (
+            ((lead & 0x07) << 18) | (cont(1) << 12) | (cont(2) << 6) | cont(3),
+            4,
+        )
+    }
+}
+
+/// What `missing` writes for the character `raw` (its UTF-8 bytes).
+#[inline]
+fn put_missing(out: &mut Vec<u8>, raw: &[u8], missing: Missing<'_>) {
+    match missing {
+        Missing::Drop => {}
+        Missing::Replace(rep) => out.extend_from_slice(rep.as_bytes()),
+        Missing::Keep => out.extend_from_slice(raw),
+    }
+}
+
+/// The transliteration of `text`, whose bytes before `start` are ASCII.
+///
+/// A mapping of up to 8 bytes is appended as one word from the padded pool
+/// and the output then truncated to its real length: one fixed-size copy per
+/// character instead of a variable-length one (the crate forbids `unsafe`).
+fn translit(text: &str, start: usize, missing: Missing<'_>) -> String {
+    let bytes = text.as_bytes();
+    let bmp = &*BMP;
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len() + bytes.len() / 2 + WORD);
+    out.extend_from_slice(&bytes[..start]);
+    let mut pos = start;
+    while pos < bytes.len() {
+        let lead = bytes[pos];
+        if lead < 0x80 {
+            // Single ASCII bytes between non-ASCII ones are common (spaces
+            // in CJK or Cyrillic text): skip the run scan for them.
+            if bytes.get(pos + 1).is_none_or(|&next| next >= 0x80) {
+                out.push(lead);
+                pos += 1;
+            } else {
+                let run = ascii_prefix_len(&bytes[pos..]);
+                out.extend_from_slice(&bytes[pos..pos + run]);
+                pos += run;
+            }
+            continue;
+        }
+        let (cp, len) = decode(bytes, pos);
+        let raw = &bytes[pos..pos + len];
+        match bmp.entries.get(cp as usize).copied().unwrap_or(LONG) {
+            MISSING => put_missing(&mut out, raw, missing),
+            LONG => {
+                let ch = char::from_u32(cp).unwrap_or(char::REPLACEMENT_CHARACTER);
+                let mapped = anyascii_char(ch);
+                if mapped.is_empty() && !deliberately_empty(cp) {
+                    put_missing(&mut out, raw, missing);
+                } else {
+                    out.extend_from_slice(mapped.as_bytes());
+                }
+            }
+            entry => {
+                let (off, n) = ((entry >> 8) as usize, (entry & 0xFF) as usize);
+                if n <= WORD {
+                    let word: &[u8; WORD] =
+                        bmp.pool[off..off + WORD].try_into().unwrap_or(&[0; WORD]);
+                    out.extend_from_slice(word);
+                    out.truncate(out.len() - (WORD - n));
+                } else {
+                    out.extend_from_slice(&bmp.pool[off..off + n]);
+                }
+            }
+        }
+        pos += len;
+    }
+    // ASCII, whole mappings and whole input characters only: valid UTF-8.
+    String::from_utf8(out).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
 }
 
 /// Transliterate `s` to ASCII, exactly as `anyascii.anyascii` 0.3.3 does.
@@ -79,29 +218,7 @@ pub fn anyascii(s: &str) -> Cow<'_, str> {
     if start == s.len() {
         return Cow::Borrowed(s);
     }
-    let mut out = String::with_capacity(s.len() + s.len() / 2);
-    out.push_str(&s[..start]);
-    push_anyascii(&mut out, &s[start..]);
-    Cow::Owned(out)
-}
-
-/// Append the transliteration of `s` to `out`.
-fn push_anyascii(out: &mut String, text: &str) {
-    let bytes = text.as_bytes();
-    let mut pos = 0;
-    while pos < bytes.len() {
-        if bytes[pos] < 0x80 {
-            let run = ascii_prefix_len(&bytes[pos..]);
-            out.push_str(&text[pos..pos + run]);
-            pos += run;
-        } else {
-            let Some(ch) = text[pos..].chars().next() else {
-                break;
-            };
-            out.push_str(anyascii_char(ch));
-            pos += ch.len_utf8();
-        }
-    }
+    Cow::Owned(translit(s, start, Missing::Drop))
 }
 
 /// What [`unidecode`] does with a character that has no transliteration.
@@ -140,41 +257,11 @@ pub fn unidecode<'a>(s: &'a str, missing: Missing<'_>) -> Cow<'a, str> {
     if start == s.len() {
         return Cow::Borrowed(s);
     }
-    let mut out = String::with_capacity(s.len() + s.len() / 2);
-    out.push_str(&s[..start]);
-    push_unidecode(&mut out, &s[start..], missing);
+    let out = translit(s, start, missing);
     if missing == Missing::Keep && out == s {
         return Cow::Borrowed(s);
     }
     Cow::Owned(out)
-}
-
-/// Append the [`unidecode`] of `s` to `out`.
-fn push_unidecode(out: &mut String, text: &str, missing: Missing<'_>) {
-    let bytes = text.as_bytes();
-    let mut pos = 0;
-    while pos < bytes.len() {
-        if bytes[pos] < 0x80 {
-            let run = ascii_prefix_len(&bytes[pos..]);
-            out.push_str(&text[pos..pos + run]);
-            pos += run;
-        } else {
-            let Some(ch) = text[pos..].chars().next() else {
-                break;
-            };
-            let ascii = anyascii_char(ch);
-            if !ascii.is_empty() {
-                out.push_str(ascii);
-            } else if !deliberately_empty(u32::from(ch)) {
-                match missing {
-                    Missing::Drop => {}
-                    Missing::Replace(rep) => out.push_str(rep),
-                    Missing::Keep => out.push(ch),
-                }
-            }
-            pos += ch.len_utf8();
-        }
-    }
 }
 
 /// The first character of `s` without a transliteration, if any.
@@ -189,18 +276,19 @@ fn first_missing_from(s: &str, base: usize) -> Option<MissingAt> {
     let mut index = base;
     while i < b.len() {
         if b[i] < 0x80 {
-            let n = ascii_prefix_len(&b[i..]);
-            i += n;
-            index += n;
+            let run = ascii_prefix_len(&b[i..]);
+            i += run;
+            index += run;
         } else {
-            let c = s[i..].chars().next()?;
+            let (cp, len) = decode(b, i);
+            let c = char::from_u32(cp).unwrap_or(char::REPLACEMENT_CHARACTER);
             if !has_transliteration(c) {
                 return Some(MissingAt {
                     index,
                     unit: Unit::Char(c),
                 });
             }
-            i += c.len_utf8();
+            i += len;
             index += 1;
         }
     }
@@ -254,7 +342,7 @@ pub fn anyascii_wtf8(b: &[u8]) -> Cow<'_, [u8]> {
     let mut out = String::with_capacity(b.len() + b.len() / 2);
     for piece in pieces(b) {
         if let Piece::Str(s) = piece {
-            push_anyascii(&mut out, s);
+            out.push_str(&anyascii(s));
         }
     }
     Cow::Owned(out.into_bytes())
