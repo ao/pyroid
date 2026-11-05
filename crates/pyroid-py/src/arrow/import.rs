@@ -175,17 +175,25 @@ pub struct StrChunk {
     offsets: *const u8,
     /// `utf8`/`large_utf8`: the data buffer.
     data: *const u8,
+    /// `utf8`/`large_utf8`: the last offset, i.e. the data bytes the producer
+    /// guarantees (checked at import; reads are clamped to it).
+    data_end: usize,
     /// `utf8_view`: the 16-byte views.
     views: *const u8,
     /// `utf8_view`: each variadic data buffer and its size in bytes.
     variadic: Variadic,
 }
 
-// SAFETY: every pointer in a `StrChunk` refers to producer memory that is
-// immutable (the C Data Interface forbids mutation while the struct is live)
-// and stays valid until `_array` is released, which only happens in `Drop`.
-// Concurrent reads of immutable memory are sound, so `&StrChunk` may be shared
-// with worker threads. `StrChunk` is deliberately *not* `Send`: the producer's
+// SAFETY: every pointer in a `StrChunk` refers to producer memory that stays
+// valid until `_array` is released, which only happens in `Drop`. The C Data
+// Interface treats that memory as immutable while the struct is live; we rely
+// on it, as every consumer does (arrow-rs, pyarrow). Concurrent reads of
+// immutable memory are sound, so `&StrChunk` may be shared with worker
+// threads. If a producer breaks the contract (e.g. an array over a `bytearray`
+// that another thread writes during a batch), `raw` re-clamps every offset and
+// view to the bounds checked at import, so reads stay in bounds; only the
+// already-validated UTF-8 could be invalidated, which no consumer can prevent
+// without copying. `StrChunk` is deliberately *not* `Send`: the producer's
 // release callback may need the interpreter (e.g. pyarrow buffers backed by
 // Python objects), so it must run on the importing, attached thread.
 unsafe impl Sync for StrChunk {}
@@ -251,7 +259,7 @@ unsafe fn check_offsets(
     data: *const u8,
     offset: usize,
     len: usize,
-) -> Result<(), String> {
+) -> Result<usize, String> {
     if offsets.is_null() {
         return Err("the offsets buffer is null".to_owned());
     }
@@ -271,13 +279,14 @@ unsafe fn check_offsets(
         }
         prev = next;
     }
-    if isize::try_from(prev).is_err() {
-        return Err("string offsets exceed the address space".to_owned());
-    }
+    let end = usize::try_from(prev)
+        .ok()
+        .filter(|&e| isize::try_from(e).is_ok())
+        .ok_or("string offsets exceed the address space")?;
     if prev > first && data.is_null() {
         return Err("the data buffer is null".to_owned());
     }
-    Ok(())
+    Ok(end)
 }
 
 /// Each variadic data buffer of a view array, with its size in bytes.
@@ -385,6 +394,7 @@ impl StrChunk {
         let is_valid = |i: usize| validity.is_null() || unsafe { bit(validity, offset + i) };
 
         let (mut offsets, mut data, mut views) = (ptr::null(), ptr::null(), ptr::null());
+        let mut data_end = 0;
         let mut variadic = Vec::new();
         if len > 0 {
             if ty == StrType::Utf8View {
@@ -399,7 +409,7 @@ impl StrChunk {
                 data = unsafe { buffer_at(array.buffers, 2) };
                 // SAFETY: the producer guarantees a live array's offsets
                 // buffer holds offset + len + 1 entries.
-                unsafe { check_offsets(ty, offsets, data, offset, len)? };
+                data_end = unsafe { check_offsets(ty, offsets, data, offset, len)? };
             }
         }
         Ok(Self {
@@ -410,6 +420,7 @@ impl StrChunk {
             validity,
             offsets,
             data,
+            data_end,
             views,
             variadic,
         })
@@ -433,7 +444,12 @@ impl StrChunk {
         if self.ty == StrType::Utf8View {
             // SAFETY: k < offset + len, so view k exists.
             let view: [u8; VIEW_BYTES] = unsafe { read_bytes(self.views, k * VIEW_BYTES) };
-            let n = usize::try_from(view_i32(&view, 0)).expect("view validated at import");
+            // Each field is re-checked (not trusted from import): see the
+            // `Sync` impl for why a misbehaving producer can't push us out of
+            // bounds.
+            let Ok(n) = usize::try_from(view_i32(&view, 0)) else {
+                return &[];
+            };
             if n <= VIEW_INLINE_MAX {
                 // SAFETY: an inline string is bytes 4..4 + n of view k, inside
                 // the views buffer, which lives as long as `self`.
@@ -441,25 +457,36 @@ impl StrChunk {
                     slice::from_raw_parts(self.views.wrapping_add(k * VIEW_BYTES + 4), n)
                 };
             }
-            let b = usize::try_from(view_i32(&view, 8)).expect("view validated at import");
-            let at = usize::try_from(view_i32(&view, 12)).expect("view validated at import");
-            let (base, _) = self.variadic[b];
-            // SAFETY: validated at import: at + n <= the size of buffer b.
+            let (Ok(b), Ok(at)) = (
+                usize::try_from(view_i32(&view, 8)),
+                usize::try_from(view_i32(&view, 12)),
+            ) else {
+                return &[];
+            };
+            let Some(&(base, size)) = self.variadic.get(b) else {
+                return &[];
+            };
+            if at.checked_add(n).is_none_or(|e| e > size) {
+                return &[];
+            }
+            // SAFETY: at + n <= size of variadic buffer b (just checked), and
+            // the producer guarantees that buffer's size.
             return unsafe { slice::from_raw_parts(base.wrapping_add(at), n) };
         }
         // SAFETY: k + 1 <= offset + len, so both entries exist.
         let start = unsafe { read_offset(self.ty, self.offsets, k) };
         // SAFETY: as above.
         let end = unsafe { read_offset(self.ty, self.offsets, k + 1) };
-        // Validated at import: 0 <= start <= end <= isize::MAX.
-        let start = usize::try_from(start).expect("offsets validated at import");
-        let end = usize::try_from(end).expect("offsets validated at import");
+        // Validated at import: 0 <= start <= end <= data_end. Clamp anyway, so
+        // a producer that mutates its buffers can't push us out of bounds.
+        let end = usize::try_from(end).unwrap_or(0).min(self.data_end);
+        let start = usize::try_from(start).unwrap_or(0).min(end);
         if start == end {
             return &[];
         }
-        // SAFETY: the producer guarantees the data buffer covers the last
-        // offset; offsets are non-decreasing (validated), so [start, end) is
-        // inside it, and `data` is non-null when any row is non-empty.
+        // SAFETY: the producer guarantees the data buffer covers `data_end`
+        // bytes, 0 <= start < end <= data_end (clamped above), and `data` is
+        // non-null when data_end > 0 (validated at import).
         unsafe { slice::from_raw_parts(self.data.wrapping_add(start), end - start) }
     }
 
@@ -548,7 +575,15 @@ fn stream_error(obj: &Bound<'_, PyAny>, stream: &mut FfiStream, code: c_int) -> 
 
 fn import_stream(obj: &Bound<'_, PyAny>) -> PyResult<ArrowStrings> {
     let py = obj.py();
-    let cap = obj.call_method0(intern!(py, "__arrow_c_stream__"))?;
+    let cap = match obj.call_method0(intern!(py, "__arrow_c_stream__")) {
+        Ok(cap) => cap,
+        // Some producers export only certain types as streams; fall back to
+        // the array protocol, and report the stream error if that fails too.
+        Err(err) if obj.hasattr(intern!(py, "__arrow_c_array__"))? => {
+            return import_array(obj).map_err(|_| err);
+        }
+        Err(err) => return Err(err),
+    };
     let mut stream: FfiStream = take(&cap, STREAM_CAPSULE)?;
     let (Some(_), Some(get_schema), Some(get_next)) =
         (stream.release, stream.get_schema, stream.get_next)
@@ -565,6 +600,8 @@ fn import_stream(obj: &Bound<'_, PyAny>) -> PyResult<ArrowStrings> {
     // released struct for the producer to fill in.
     let code = unsafe { get_schema(&raw mut stream, &raw mut schema) };
     if code != 0 {
+        // On error the out-struct is not valid (spec): never release it.
+        std::mem::forget(schema);
         return Err(stream_error(obj, &mut stream, code));
     }
     let field = parse_schema(&schema).map_err(|m| input_error(py, m))?;
@@ -576,6 +613,7 @@ fn import_stream(obj: &Bound<'_, PyAny>) -> PyResult<ArrowStrings> {
         // writes a released array.
         let code = unsafe { get_next(&raw mut stream, &raw mut array) };
         if code != 0 {
+            std::mem::forget(array); // not valid on error (spec): never release it
             return Err(stream_error(obj, &mut stream, code));
         }
         if array.release.is_none() {

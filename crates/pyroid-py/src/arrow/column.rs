@@ -9,7 +9,7 @@
 
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use pyo3::exceptions::PyOverflowError;
 use pyo3::prelude::*;
@@ -105,6 +105,8 @@ struct ColumnData {
     ty: ColumnType,
     name: CString,
     chunks: Vec<Arc<Chunk>>,
+    /// The concatenation `__arrow_c_array__` exports, built on first use.
+    joined: OnceLock<Arc<Chunk>>,
 }
 
 /// A read-only Arrow column produced by pyroid (one or more chunks).
@@ -142,6 +144,7 @@ impl Column {
                     .filter(|c| c.len() > 0)
                     .map(Arc::new)
                     .collect(),
+                joined: OnceLock::new(),
             }),
         }
     }
@@ -153,6 +156,9 @@ impl Column {
             [] => Ok(Arc::new(Chunk::empty(self.inner.ty))),
             [one] => Ok(Arc::clone(one)),
             many => {
+                if let Some(done) = self.inner.joined.get() {
+                    return Ok(Arc::clone(done));
+                }
                 let joined = match self.inner.ty {
                     ColumnType::Utf8 => Chunk::Utf8(
                         StringBuffers::concat(&many.iter().map(|c| as_utf8(c)).collect::<Vec<_>>())
@@ -168,7 +174,9 @@ impl Column {
                         &many.iter().map(|c| as_bool(c)).collect::<Vec<_>>(),
                     )),
                 };
-                Ok(Arc::new(joined))
+                Ok(Arc::clone(
+                    self.inner.joined.get_or_init(|| Arc::new(joined)),
+                ))
             }
         }
     }
@@ -281,12 +289,14 @@ fn export_array(chunk: Arc<Chunk>) -> FfiArray {
         ),
     };
     let (length, null_count) = (to_i64(chunk.len()), to_i64(chunk.null_count()));
-    let mut private = Box::new(ArrayPrivate {
+    let private = Box::into_raw(Box::new(ArrayPrivate {
         _chunk: chunk,
         buffers,
-    });
-    // Points into the Box's heap allocation, which `into_raw` doesn't move.
-    let buffers_ptr = private.buffers.as_mut_ptr();
+    }));
+    // Derived from the raw pointer *after* `into_raw`, so it stays valid under
+    // the aliasing model (a pointer taken from the Box first would not).
+    // SAFETY: `private` is a valid, live allocation we just created.
+    let buffers_ptr = unsafe { &raw mut (*private).buffers }.cast::<*const c_void>();
     FfiArray {
         length,
         null_count,
@@ -297,7 +307,7 @@ fn export_array(chunk: Arc<Chunk>) -> FfiArray {
         children: ptr::null_mut(),
         dictionary: ptr::null_mut(),
         release: Some(release_array),
-        private_data: Box::into_raw(private).cast::<c_void>(),
+        private_data: private.cast::<c_void>(),
     }
 }
 
