@@ -1,8 +1,24 @@
-__pycache__
-target
-*.pyc
-*.pyo
+# Rust
+target/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
 *.pyd
-.venv
+*.dylib
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# Benchmark data is fetched into the shared volume, never committed
+/bench/data/
+
+# Local
 .local
 .DS_Store
