@@ -17,6 +17,9 @@ keyword arguments and ftfy's result. Strings with lone surrogates are stored as
 `tests/ftfy_oracle.rs` replays the file against `pyroid_core::ftfy`.
 """
 
+# The inputs are full of look-alike characters on purpose.
+# ruff: noqa: RUF001
+
 from __future__ import annotations
 
 import json
@@ -26,7 +29,7 @@ import unicodedata
 from pathlib import Path
 
 import ftfy
-import ftfy.bad_codecs  # noqa: F401  (registers the sloppy codecs)
+import ftfy.bad_codecs
 from ftfy.chardata import CHARMAP_ENCODINGS
 
 HERE = Path(__file__).resolve().parent
@@ -58,7 +61,7 @@ def call(fn: str, text: str, kwargs: dict, explain_cfg: bool | None = None) -> d
         row["config_explain"] = explain_cfg
     try:
         res = getattr(ftfy, fn)(text, **call_kwargs)
-    except Exception as e:  # noqa: BLE001  (the exception type is part of parity)
+    except Exception as e:
         row["error"] = type(e).__name__
     else:
         if isinstance(res, tuple):
@@ -74,9 +77,18 @@ def write(out, text: str, calls: list[dict]) -> None:
 
 
 def standard_calls(text: str) -> list[dict]:
-    only_encoding = {f: False for f in FLAGS if f not in (
-        "fix_encoding", "restore_byte_a0", "replace_lossy_sequences",
-        "decode_inconsistent_utf8", "fix_c1_controls")}
+    only_encoding = {
+        f: False
+        for f in FLAGS
+        if f
+        not in (
+            "fix_encoding",
+            "restore_byte_a0",
+            "replace_lossy_sequences",
+            "decode_inconsistent_utf8",
+            "fix_c1_controls",
+        )
+    }
     return [
         call("fix_text", text, {}),
         call("fix_text", text, {}, explain_cfg=True),
@@ -114,7 +126,7 @@ DOCTEST_INPUTS = [
     "“here’s a test”",
     "ﬂuﬃeﬆ",
     "Ｕﾀｰﾝ",
-    "This string is made of two things: " "1. Unicode " "2. Spite",
+    "This string is made of two things: 1. Unicode 2. Spite",
     "Content-type: text/plain\r\n\r\nHi.",
     "This is how Microsoft \r trolls Mac users",
     "What is this \x85 I don't even",
@@ -123,8 +135,7 @@ DOCTEST_INPUTS = [
     chr(0xDBFF) + chr(0xDFFF),
     chr(0xD800) + chr(0xDC00),
     "ï»¿",
-    "﻿Sometimes, ￼bad ideas \x7f￺like these characters￻ "
-    "⁪get standardized.\r\n",
+    "﻿Sometimes, ￼bad ideas \x7f￺like these characters￻ ⁪get standardized.\r\n",
     "This flag has a dragon on it 🏴󠁧󠁢󠁷󠁬󠁳󠁿",
     "#superman #ohio 🏴\U000e0075\U000e0073\U000e006f\U000e0068\U000e007f #cleveland #usa 🇺🇸",
     "\001\033[36;44mfoo",
@@ -160,9 +171,15 @@ def golden(path: str) -> None:
         for t in texts:
             write(out, t, standard_calls(t))
         for t in ("&amp;\n<html>\n&amp;", "&lt;&gt;"):
-            write(out, t, [call(fn, t, {"unescape_html": ue})
-                           for ue in (True, False, "auto")
-                           for fn in ("fix_text", "fix_text_segment")])
+            write(
+                out,
+                t,
+                [
+                    call(fn, t, {"unescape_html": ue})
+                    for ue in (True, False, "auto")
+                    for fn in ("fix_text", "fix_text_segment")
+                ],
+            )
         for t in ("ellipsis&#133;", "ellipsis&#x85;"):
             write(out, t, [call("fix_text_segment", t, {"normalization": "NFKC"})])
     print(f"wrote {path}: {len(texts)} inputs, Unicode {unicodedata.unidata_version}")
@@ -187,17 +204,110 @@ NEW_CHARS = (
     + [chr(c) for c in range(0x10940, 0x10960)]  # (17.0 additions)
 )
 SPECIALS = [
-    "&amp;", "&eacute;", "&EACUTE;", "&#x1F600;", "&#59;", "&#0;", "&#x110000;", "&lt;",
-    "&nbsp;", "&amp;amp;", "&#X41;", "&#x;", "&#;", "&NTILDE;", "&nTILDE;", "&ETH;", "&SZLIG;",
-    "&" + "a" * 25 + ";", "&CounterClockwiseContourIntegral;", "&#000000000000000000065;",
-    "\x1b[31m", "\x1b[1;2;3m", "\x1b[", "\x1b[١٢m", "\x1b[0", "\x1b\x1b[m",
-    "“", "”", "‘", "’", "ʼ", "‛", "‟", "ﬁ", "ﬀ", "Ĳ", "ǅ", "ＡＢＣ", "　", "ｶﾞ", "￣",
-    "\r\n", "\r", " ", " ", "\x85", "\x92", "\x80", "\x81", "\x9d", "﻿",
-    "\x00", "\x1a", "\x7f", "\x0b", "\xa0", "⁪", "￼", "�", "Ã ", "Ã", " ",
-    "<", "\n", "\t", "à", "Â", "Ã©", "â€™", "â€", "Ð", "Ã\xa0", "Ã la", "fÃ cil", "Ã s ",
-    "̀", "́", "̧", "ͅ", "ཱི", "가", "각",
-    "é", "Å", "Ω", "ﬃ", "²", "½", "µ", "Œ", "œ", "×", "√", "≈", "‚Ä",
-    "вЂ", "ГўВЂВ", "β€", "ā€", "Ø§", "Ù„", "", "\U0001f600", "\U000e0067",
+    "&amp;",
+    "&eacute;",
+    "&EACUTE;",
+    "&#x1F600;",
+    "&#59;",
+    "&#0;",
+    "&#x110000;",
+    "&lt;",
+    "&nbsp;",
+    "&amp;amp;",
+    "&#X41;",
+    "&#x;",
+    "&#;",
+    "&NTILDE;",
+    "&nTILDE;",
+    "&ETH;",
+    "&SZLIG;",
+    "&" + "a" * 25 + ";",
+    "&CounterClockwiseContourIntegral;",
+    "&#000000000000000000065;",
+    "\x1b[31m",
+    "\x1b[1;2;3m",
+    "\x1b[",
+    "\x1b[١٢m",
+    "\x1b[0",
+    "\x1b\x1b[m",
+    "“",
+    "”",
+    "‘",
+    "’",
+    "ʼ",
+    "‛",
+    "‟",
+    "ﬁ",
+    "ﬀ",
+    "Ĳ",
+    "ǅ",
+    "ＡＢＣ",
+    "　",
+    "ｶﾞ",
+    "￣",
+    "\r\n",
+    "\r",
+    " ",
+    " ",
+    "\x85",
+    "\x92",
+    "\x80",
+    "\x81",
+    "\x9d",
+    "﻿",
+    "\x00",
+    "\x1a",
+    "\x7f",
+    "\x0b",
+    "\xa0",
+    "⁪",
+    "￼",
+    "�",
+    "Ã ",
+    "Ã",
+    " ",
+    "<",
+    "\n",
+    "\t",
+    "à",
+    "Â",
+    "Ã©",
+    "â€™",
+    "â€",
+    "Ð",
+    "Ã\xa0",
+    "Ã la",
+    "fÃ cil",
+    "Ã s ",
+    "̀",
+    "́",
+    "̧",
+    "ͅ",
+    "ཱི",
+    "가",
+    "각",
+    "é",
+    "Å",
+    "Ω",
+    "ﬃ",
+    "²",
+    "½",
+    "µ",
+    "Œ",
+    "œ",
+    "×",
+    "√",
+    "≈",
+    "‚Ä",
+    "вЂ",
+    "ГўВЂВ",
+    "β€",
+    "ā€",
+    "Ø§",
+    "Ù„",
+    "",
+    "\U0001f600",
+    "\U000e0067",
 ]
 
 
@@ -219,8 +329,16 @@ def pool_chars(rng: random.Random) -> str:
     if kind == 6:
         return chr(rng.randrange(0xD800, 0xE000))  # lone surrogate
     if kind == 7:
-        return chr(rng.choice([rng.randrange(0x300, 0x370), rng.randrange(0x1AB0, 0x1B00),
-                               rng.randrange(0x20D0, 0x2100), rng.randrange(0xFE20, 0xFE30)]))
+        return chr(
+            rng.choice(
+                [
+                    rng.randrange(0x300, 0x370),
+                    rng.randrange(0x1AB0, 0x1B00),
+                    rng.randrange(0x20D0, 0x2100),
+                    rng.randrange(0xFE20, 0xFE30),
+                ]
+            )
+        )
     if kind == 8:
         cp = rng.randrange(0, 0x110000)
         return chr(cp)
@@ -228,21 +346,23 @@ def pool_chars(rng: random.Random) -> str:
 
 
 def word(rng: random.Random) -> str:
-    alphabet = rng.choice([
-        "abcdefghijklmnopqrstuvwxyz ",
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ .,?!",
-        "àáâãäåæçèéêëìíîïñòóôõöøùúûüýÿßœ ",
-        "αβγδεζηθικλμνξοπρστυφχψω ΑΒΓΔΕ",
-        "абвгдежзийклмнопрстуфхцчшщъыьэюя ВГРС",
-        "日本語中文한국어 ",
-        "0123456789-—–'\"…•€£¥©®™°±",
-    ])
+    alphabet = rng.choice(
+        [
+            "abcdefghijklmnopqrstuvwxyz ",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ .,?!",
+            "àáâãäåæçèéêëìíîïñòóôõöøùúûüýÿßœ ",
+            "αβγδεζηθικλμνξοπρστυφχψω ΑΒΓΔΕ",
+            "абвгдежзийклмнопрстуфхцчшщъыьэюя ВГРС",
+            "日本語中文한국어 ",
+            "0123456789-—–'\"…•€£¥©®™°±",
+        ]
+    )
     return "".join(rng.choice(alphabet) for _ in range(rng.randrange(0, 12)))
 
 
 def garble(rng: random.Random, s: str) -> str:
     for _ in range(rng.randrange(1, 3)):
-        enc = rng.choice(CHARMAP_ENCODINGS + ["windows-1252", "windows-1251"])
+        enc = rng.choice([*CHARMAP_ENCODINGS, "windows-1252", "windows-1251"])
         s = s.encode("utf-8", "surrogatepass").decode(enc, errors=rng.choice(["replace", "ignore"]))
     if rng.random() < 0.2:
         s = s.replace("\xa0", " ")
@@ -298,8 +418,15 @@ def random_kwargs(rng: random.Random) -> dict:
 
 def fuzz(path: str, n: int, seed: int) -> None:
     rng = random.Random(seed)
-    fns = ["fix_text", "fix_text", "fix_text", "fix_and_explain", "fix_encoding",
-           "fix_encoding_and_explain", "fix_text_segment"]
+    fns = [
+        "fix_text",
+        "fix_text",
+        "fix_text",
+        "fix_and_explain",
+        "fix_encoding",
+        "fix_encoding_and_explain",
+        "fix_text_segment",
+    ]
     with open(path, "w", encoding="utf-8") as out:
         for _ in range(n):
             text = random_text(rng)
@@ -348,7 +475,7 @@ def mojibake_text(rng: random.Random) -> str:
         t = garble_bytes(rng, b)
     elif mode == 1:  # CESU-8 / Java nulls
         b = s.encode("utf-16-be", "surrogatepass")
-        units = [b[i:i + 2] for i in range(0, len(b), 2)]
+        units = [b[i : i + 2] for i in range(0, len(b), 2)]
         out = bytearray()
         for u in units:
             cp = int.from_bytes(u, "big")
@@ -376,7 +503,7 @@ def mojibake_text(rng: random.Random) -> str:
 
 
 def garble_bytes(rng: random.Random, b: bytes) -> str:
-    enc = rng.choice(CHARMAP_ENCODINGS + ["windows-1252", "cp850", "koi8-r", "iso-8859-15"])
+    enc = rng.choice([*CHARMAP_ENCODINGS, "windows-1252", "cp850", "koi8-r", "iso-8859-15"])
     return b.decode(enc, errors=rng.choice(["replace", "replace", "ignore"]))
 
 

@@ -23,9 +23,10 @@ Usage (inside the pyroid-dev container; never on the host):
     python generate_tables.py emit /target/gen/*.json
 """
 
+# ruff: noqa: PT018  (a build script, not a test)
+
 from __future__ import annotations
 
-import html
 import json
 import re
 import sys
@@ -115,10 +116,10 @@ def _badness_alternatives() -> list[dict]:
                 assert (lo, hi) == (0, 1) and len(sub.data) == 1
                 el = _element(*sub.data[0], C)
                 # expand greedy `x?` into "with x", then "without x" (sre's order)
-                variants = [v for base in variants for v in (base + [el], list(base))]
+                variants = [v for base in variants for v in ([*base, el], list(base))]
             else:
                 el = _element(op, arg, C)
-                variants = [v + [el] for v in variants]
+                variants = [[*v, el] for v in variants]
         for v in variants:
             alts.append({"anchored": anchored, "elements": v})
     return alts
@@ -133,14 +134,14 @@ def _utf8_detector() -> dict:
     tree = P.parse(UTF8_DETECTOR_RE.pattern, re.VERBOSE)
     (op0, behind), (op1, rep) = tree.data
     assert str(op0) == "ASSERT_NOT" and behind[0] == -1
-    (bop, barg), = behind[1].data
+    ((bop, barg),) = behind[1].data
     strict, neg = _class_items_to_set(barg, C)
     assert bop is C.IN and not neg
-    lo, hi, sub = rep
+    lo, _hi, sub = rep
     assert str(op1) == "MAX_REPEAT" and lo == 1
-    (gop, garg), = sub.data
+    ((gop, garg),) = sub.data
     assert str(gop) == "SUBPATTERN"
-    (brop, brarg), = garg[3].data
+    ((brop, brarg),) = garg[3].data
     assert brop is C.BRANCH
     seqs = []
     for branch in brarg[1]:
@@ -151,9 +152,9 @@ def _utf8_detector() -> dict:
             cont, neg = _class_items_to_set(branch.data[1][1], C)
             count = 1
         else:
-            (rop, (rlo, rhi, rsub)), = branch.data[1:]
+            ((rop, (rlo, rhi, rsub)),) = branch.data[1:]
             assert str(rop) == "MAX_REPEAT" and rlo == rhi
-            (cop, carg), = rsub.data
+            ((_cop, carg),) = rsub.data
             cont, neg = _class_items_to_set(carg, C)
             count = rlo
         assert not neg
@@ -259,7 +260,10 @@ def _nfc_active_set() -> set[int]:
         d = unicodedata.decomposition(ch)
         if d and not d.startswith("<"):
             parts = [int(x, 16) for x in d.split()]
-            if len(parts) == 2 and unicodedata.normalize("NFC", chr(parts[0]) + chr(parts[1])) == ch:
+            if (
+                len(parts) == 2
+                and unicodedata.normalize("NFC", chr(parts[0]) + chr(parts[1])) == ch
+            ):
                 active.add(parts[1])
     active.update(range(0x1161, 0x1176))  # Hangul V jamo compose with L
     active.update(range(0x11A8, 0x11C3))  # Hangul T jamo compose with LV
@@ -340,7 +344,9 @@ def _badness_rust(alts: list[dict]) -> tuple[str, dict[int, int]]:
     lines = [f"/// Shift-And layout of `BADNESS_RE`: {len(alts)} alternatives, {pos} positions.\n"]
     for k, v in masks.items():
         lines.append(f"pub(super) const BAD_{k.upper()}: u128 = 0x{v:x};\n")
-    lines.append("/// Each alternative in `BADNESS_RE` order: (first bit, length, anchored at `^`).\n")
+    lines.append(
+        "/// Each alternative in `BADNESS_RE` order: (first bit, length, anchored at `^`).\n"
+    )
     body = ", ".join(f"({a}, {b}, {str(c).lower()})" for a, b, c in spans)
     lines.append(f"pub(super) static BAD_ALTS: [(u8, u8, bool); {len(spans)}] = [{body}];\n")
     return "".join(lines), explicit
@@ -398,7 +404,7 @@ def emit(paths: list[str]) -> None:
         "\n/// Bits of `CharClass::clue` (the `UTF8_DETECTOR_RE` character classes).\n"
         + "".join(f"pub(super) const CLUE_{k.upper()}: u8 = {v};\n" for k, v in clue_bits.items())
     )
-    out.append(f"\n/// `CHARMAP_ENCODINGS`, in ftfy's order; bit i of `CharClass::enc`.\n")
+    out.append("\n/// `CHARMAP_ENCODINGS`, in ftfy's order; bit i of `CharClass::enc`.\n")
     out.append(f"pub(super) const ENCODING_NAMES: [&str; {len(order)}] = [")
     out.append(", ".join(_rs_str(n) for n in order) + "];\n")
     out.append(
@@ -408,7 +414,7 @@ def emit(paths: list[str]) -> None:
     for (b, c, e), _ in sorted(classes.items(), key=lambda kv: kv[1]):
         out.append(f"    (0x{b:x}, {c}, 0x{e:x}),\n")
     out.append("];\n")
-    out.append(f"\n/// BMP page -> index into `CLASS_PAGES` (0 = all class 0).\n")
+    out.append("\n/// BMP page -> index into `CLASS_PAGES` (0 = all class 0).\n")
     out.append(f"pub(super) static PAGE_INDEX: [u8; 256] = {page_index};\n")
     out.append(f"pub(super) static CLASS_PAGES: [[u8; 256]; {len(pages)}] = [\n")
     for row in pages:
@@ -436,31 +442,33 @@ def emit(paths: list[str]) -> None:
     out.append("];\n")
 
     ents = base["html_entities"]
-    out.append(f"\n/// ftfy's `HTML_ENTITIES`, sorted by name.\n")
+    out.append("\n/// ftfy's `HTML_ENTITIES`, sorted by name.\n")
     out.append(f"pub(super) static HTML_ENTITIES: [(&str, &str); {len(ents)}] = [\n")
     for k, v in ents:
         out.append(f"    ({_rs_str(k)}, {_rs_str(v)}),\n")
     out.append("];\n")
     cr = base["charrefs"]
     out.append("\n/// `html._invalid_charrefs`: numeric reference -> replacement.\n")
-    out.append(f"pub(super) static INVALID_CHARREFS: [(u32, u32); {len(cr['invalid_charrefs'])}] = [")
+    out.append(
+        f"pub(super) static INVALID_CHARREFS: [(u32, u32); {len(cr['invalid_charrefs'])}] = ["
+    )
     out.append(", ".join(f"(0x{a:x}, 0x{b:x})" for a, b in cr["invalid_charrefs"]) + "];\n")
     out.append("/// `html._invalid_codepoints`: references that decode to nothing.\n")
     out.append(f"pub(super) static INVALID_CODEPOINTS: [u32; {len(cr['invalid_codepoints'])}] = [")
     out.append(", ".join(f"0x{a:x}" for a in cr["invalid_codepoints"]) + "];\n")
 
     maps = base["maps"]
-    out.append(f"\n/// ftfy's `WIDTH_MAP`.\n")
+    out.append("\n/// ftfy's `WIDTH_MAP`.\n")
     out.append(f"pub(super) static WIDTH_MAP: [(u32, &str); {len(maps['width'])}] = [\n")
     for k, v in maps["width"]:
         out.append(f"    (0x{k:x}, {_rs_str(v)}),\n")
     out.append("];\n")
-    out.append(f"/// ftfy's `LIGATURES`.\n")
+    out.append("/// ftfy's `LIGATURES`.\n")
     out.append(f"pub(super) static LIGATURES: [(u32, &str); {len(maps['ligatures'])}] = [\n")
     for k, v in maps["ligatures"]:
         out.append(f"    (0x{k:x}, {_rs_str(v)}),\n")
     out.append("];\n")
-    out.append(f"/// ftfy's `CONTROL_CHARS` (deleted by `remove_control_chars`).\n")
+    out.append("/// ftfy's `CONTROL_CHARS` (deleted by `remove_control_chars`).\n")
     out.append(f"pub(super) static CONTROL_CHARS: [u32; {len(maps['control'])}] = [")
     out.append(", ".join(f"0x{c:x}" for c in maps["control"]) + "];\n")
     out.append("/// `sloppy-windows-1252` decoding of bytes 0x80..=0x9F (for `fix_c1_controls`).\n")
