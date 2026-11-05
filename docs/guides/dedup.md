@@ -1,13 +1,16 @@
-# `pyroid.dedup`: MinHash and exact dedup *(preview)*
-
-!!! warning "Preview"
-    `pyroid.dedup` is the newest module; names and details may still change before 1.0. See its
-    [API reference](../reference/dedup.md).
+# `pyroid.dedup`: MinHash and exact dedup
 
 `pyroid.dedup` makes **the same removals as datatrove 0.10.1's MinHash deduplication**, the
 four-stage `MinhashDedupSignature` → `MinhashDedupBuckets` → `MinhashDedupCluster` →
 `MinhashDedupFilter` pipeline that FineWeb was deduplicated with, but in memory, in one process
 and multi-threaded. It also has a fast exact-duplicate filter.
+
+Every step is datatrove's, exactly: `simplify_text` normalization (for the interpreter's Unicode
+version, CPython 3.11 to 3.15), words from the same spaCy-identical English tokenizer that
+[`pyroid.filters`](filters.md) uses, `n_grams`-word shingles, the same hash functions, the
+permutations drawn from numpy's `RandomState(seed)` as datatrove draws them, the same buckets, and
+the same union-find, so the same document of each cluster is kept
+([parity](../compatibility.md#dedup)).
 
 ## From datatrove's four stages to one call
 
@@ -86,6 +89,11 @@ From the module's documentation (`pyroid/dedup.pyi`):
   produces no signatures or fails later).
 - Index files (`index_folder`, `create_index_name`, `only_dedup_in_index`) are not supported.
 
+Also (from the module's tests and report): `simplify_text`'s decimal-digit class comes from
+`regex` 2026.9.29's data, which another `regex` release could change; on a Python newer than
+Unicode 17.0, pyroid warns once and uses its 17.0 tables. pyroid never delegates to datatrove, so
+it never emits `FallbackWarning`.
+
 Documents are numbered in the order they are added, as datatrove numbers the documents of one
 task. Multi-worker hash ranges are not needed: one process does all the work.
 
@@ -95,7 +103,7 @@ Signatures from raw text measured about 64× faster than datatrove (0.094–0.09
 per document, tokenization included) and 1.7–1.8× faster than rensa, with datatrove's decisions;
 the whole four-stage pipeline on 10k documents took 1.21 s on one thread against datatrove's
 99.5 s. *Docker/OrbStack VM on Apple Silicon, indicative, preliminary*: see
-[Benchmarks](../benchmarks.md#pyroiddedup-preview).
+[Benchmarks](../benchmarks.md#pyroiddedup).
 
 Signatures and removals match datatrove on the parity corpus: all 13,232 signatures and the
 445-document removed set, from raw text ([Compatibility](../compatibility.md#dedup)).

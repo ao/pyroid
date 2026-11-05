@@ -63,14 +63,15 @@ Prebuilt wheels for Linux (glibc and musl), macOS and Windows, x86-64 and ARM64.
 | [`pyroid.ftfy`](guides/ftfy.md) | [ftfy](https://github.com/rspeer/python-ftfy) 6.3.1 | ready | byte-identical ([parity](compatibility.md#ftfy)) |
 | [`pyroid.fasttext`](guides/fasttext.md) | [fastText](https://github.com/facebookresearch/fastText) inference (`fasttext`, `fasttext-predict`, ...) | ready | bit-identical labels and probabilities, on Linux aarch64 so far ([parity](compatibility.md#fasttext)) |
 | [`pyroid.filters`](guides/filters.md) | [datatrove](https://github.com/huggingface/datatrove) 0.10.1 Gopher, C4 and FineWeb filters | ready | same decisions, reasons and text ([parity](compatibility.md#filters)) |
-| [`pyroid.dedup`](guides/dedup.md) | datatrove 0.10.1 MinHash dedup | *preview* | same signatures and removals ([parity](compatibility.md#dedup)) |
-| [`pyroid.translit`](guides/translit.md) | `anyascii`; a permissive alternative to GPL `Unidecode` | *preview* | `anyascii`-identical; *not* Unidecode's output |
+| [`pyroid.dedup`](guides/dedup.md) | datatrove 0.10.1 MinHash dedup | ready | same signatures and removals ([parity](compatibility.md#dedup)) |
+| [`pyroid.translit`](guides/translit.md) | `anyascii`; a permissive alternative to GPL `Unidecode` | ready | `anyascii`-identical; *not* Unidecode's output |
 
 How fast? Per-module numbers, how they were measured and what they don't show are on the
 [Benchmarks](benchmarks.md) page. In short, single-threaded in a Docker VM: `pyroid.ftfy` is
-95–167× faster than ftfy on FineWeb, `pyroid.fasttext` 1.5–5.4× faster than fastText, and
-`pyroid.filters` about 86× faster than datatrove for FineWeb's four filters (*indicative,
-preliminary*).
+95–167× faster than ftfy on FineWeb, `pyroid.fasttext` 1.5–5.4× faster than fastText,
+`pyroid.filters` about 86× faster than datatrove for FineWeb's four filters, `pyroid.dedup`
+about 64× faster than datatrove on MinHash signatures, and `pyroid.translit` 37× faster than
+anyascii (*indicative, preliminary*).
 
 ## Why trust the output?
 

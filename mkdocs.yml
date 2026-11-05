@@ -50,8 +50,8 @@ nav:
       - pyroid.ftfy: guides/ftfy.md
       - pyroid.fasttext: guides/fasttext.md
       - pyroid.filters: guides/filters.md
-      - pyroid.dedup (preview): guides/dedup.md
-      - pyroid.translit (preview): guides/translit.md
+      - pyroid.dedup: guides/dedup.md
+      - pyroid.translit: guides/translit.md
   - Concepts:
       - Inputs and outputs: concepts/inputs.md
       - Threads and free-threading: concepts/threads.md
@@ -63,7 +63,8 @@ nav:
       - pyroid.ftfy: reference/ftfy.md
       - pyroid.fasttext: reference/fasttext.md
       - pyroid.filters: reference/filters.md
-      - pyroid.dedup (preview): reference/dedup.md
+      - pyroid.dedup: reference/dedup.md
+      - pyroid.translit: reference/translit.md
       - pyroid.text: reference/text.md
   - Compatibility: compatibility.md
   - Benchmarks: benchmarks.md

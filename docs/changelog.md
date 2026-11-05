@@ -10,5 +10,5 @@ release-please.
 
 A rewrite: the 0.7.x API is removed (see [Migrating from 0.7](migrating-from-0.7.md)), and pyroid
 becomes a text-cleaning core for LLM datasets: [`pyroid.ftfy`](guides/ftfy.md),
-[`pyroid.fasttext`](guides/fasttext.md), [`pyroid.filters`](guides/filters.md), with
-[`pyroid.dedup`](guides/dedup.md) and [`pyroid.translit`](guides/translit.md) in preview.
+[`pyroid.fasttext`](guides/fasttext.md), [`pyroid.filters`](guides/filters.md),
+[`pyroid.dedup`](guides/dedup.md) and [`pyroid.translit`](guides/translit.md).

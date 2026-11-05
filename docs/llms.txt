@@ -1,6 +1,6 @@
 # pyroid
 
-> Rust-fast text cleaning for LLM datasets: drop-in replacements for ftfy (`import pyroid.ftfy as ftfy`, byte-identical to ftfy 6.3.1), fastText inference (`pyroid.fasttext.load_model`, same .bin/.ftz files, bit-identical predictions; parity verified on Linux aarch64 so far) and datatrove 0.10.1's Gopher/C4/FineWeb quality filters (`pyroid.filters`, same decisions). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t; no runtime dependencies (`pyroid[fasttext]` adds numpy). pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
+> Rust-fast text cleaning for LLM datasets: drop-in replacements for ftfy (`import pyroid.ftfy as ftfy`, byte-identical to ftfy 6.3.1), fastText inference (`pyroid.fasttext.load_model`, same .bin/.ftz files, bit-identical predictions; parity verified on Linux aarch64 so far) datatrove 0.10.1's Gopher/C4/FineWeb quality filters (`pyroid.filters`, same decisions) and MinHash dedup (`pyroid.dedup`, same removals), and permissive transliteration (`pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t; no runtime dependencies (`pyroid[fasttext]` adds numpy). pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
 
 Conventions shared by every module:
 
@@ -24,8 +24,8 @@ Conventions shared by every module:
 - [pyroid.ftfy](https://ao.github.io/pyroid/guides/ftfy/): drop-in ftfy 6.3.1, `fix_text_batch`, differences from ftfy
 - [pyroid.fasttext](https://ao.github.io/pyroid/guides/fasttext/): fastText inference, batches, threads, differences from fastText
 - [pyroid.filters](https://ao.github.io/pyroid/guides/filters/): datatrove's Gopher, C4 and FineWeb filters, `apply`, differences from datatrove
-- [pyroid.dedup (preview)](https://ao.github.io/pyroid/guides/dedup/): datatrove-identical MinHash dedup and exact dedup
-- [pyroid.translit (preview)](https://ao.github.io/pyroid/guides/translit/): anyascii-identical transliteration with Unidecode's signature (output is not Unidecode's)
+- [pyroid.dedup](https://ao.github.io/pyroid/guides/dedup/): datatrove-identical MinHash dedup and exact dedup
+- [pyroid.translit](https://ao.github.io/pyroid/guides/translit/): anyascii-identical transliteration with Unidecode's signature (output is not Unidecode's)
 
 ## API reference
 
@@ -33,7 +33,8 @@ Conventions shared by every module:
 - [pyroid.ftfy](https://ao.github.io/pyroid/reference/ftfy/)
 - [pyroid.fasttext](https://ao.github.io/pyroid/reference/fasttext/)
 - [pyroid.filters](https://ao.github.io/pyroid/reference/filters/)
-- [pyroid.dedup (preview)](https://ao.github.io/pyroid/reference/dedup/)
+- [pyroid.dedup](https://ao.github.io/pyroid/reference/dedup/)
+- [pyroid.translit](https://ao.github.io/pyroid/reference/translit/)
 - [pyroid.text](https://ao.github.io/pyroid/reference/text/)
 
 ## Optional

@@ -19,8 +19,8 @@ So the result is always the incumbent's; the warning tells you that this call to
 | `pyroid.ftfy` | `apply_plan`, `guess_bytes`, `fix_file`, `explain_unicode` (listed in `pyroid.ftfy.DELEGATED`), and option values the port does not handle: a `normalization` form other than NFC/NFD/NFKC/NFKD/`None`, a non-integer `max_decode_length` | `fix_text_batch` on Arrow input raises `PyroidError` for those options instead of delegating |
 | `pyroid.fasttext` | never | — |
 | `pyroid.filters` | never | unsupported parameters raise (e.g. `exclusion_writer`, a language without an English-tokenizer mapping raises `NotImplementedError`) |
-| `pyroid.dedup` *(preview)* | never | — |
-| `pyroid.translit` *(preview)* | never | — |
+| `pyroid.dedup` | never | — |
+| `pyroid.translit` | never | — |
 
 ## Handling the warning
 

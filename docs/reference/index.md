@@ -9,11 +9,9 @@ your type checker and IDE read.
 | [`pyroid.ftfy`](ftfy.md) | ftfy 6.3.1's API, plus `fix_text_batch` |
 | [`pyroid.fasttext`](fasttext.md) | `load_model`, `Model`, `ModelError`, `tokenize` |
 | [`pyroid.filters`](filters.md) | datatrove's Gopher, C4 and FineWeb filters, `apply` |
-| [`pyroid.dedup`](dedup.md) *(preview)* | `minhash_dedup`, `MinHashDedup`, `exact_dedup`, `ExactDedup`, `minhash_signatures`, `simplify_text`, datatrove's config classes |
+| [`pyroid.dedup`](dedup.md) | `minhash_dedup`, `MinHashDedup`, `exact_dedup`, `ExactDedup`, `minhash_signatures`, `simplify_text`, datatrove's config classes |
+| [`pyroid.translit`](translit.md) | `anyascii`, `unidecode`, `is_ascii`, `UnidecodeError` |
 | [`pyroid.text`](text.md) | `normalize_whitespace`, `min_chars`: small examples of pyroid's conventions |
-
-`pyroid.translit` is in preview and not merged yet; its reference page appears here once it is
-(until then, see [its guide](../guides/translit.md)).
 
 Batch functions are listed with one signature per input kind (`str`, `list`, `tuple`, Arrow);
 their parameter tables give each parameter's types across all of them. The conventions they share are in

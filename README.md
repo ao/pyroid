@@ -48,7 +48,7 @@ Batch functions take a `str`, a `list` of `str` or an Arrow column (pyarrow, pol
 `datasets`); text and masks come back in the same kind.
 
 **Replaces:** ftfy · fastText inference (fasttext, fasttext-wheel, fasttext-predict) · datatrove's
-Gopher, C4 and FineWeb filters · *preview:* datatrove's MinHash dedup · Unidecode (permissive,
+Gopher, C4 and FineWeb filters · datatrove's MinHash dedup · Unidecode (permissive,
 anyascii-based)
 
 ## Why
@@ -56,7 +56,8 @@ anyascii-based)
 - **Faster, measured against the incumbents** (single-threaded; Docker VM on Apple Silicon,
   indicative, preliminary: [methodology](https://ao.github.io/pyroid/benchmarks/)):
   `fix_text` 95–167× faster than ftfy on FineWeb documents; FineWeb's four quality filters about
-  86× faster than datatrove; fastText language ID 1.5–5.4× faster.
+  86× and MinHash signatures about 64× faster than datatrove; fastText language ID 1.5–5.4×
+  faster; transliteration 37× faster than anyascii and 76× faster than Unidecode.
 - **Same output, checked:** byte-identical to ftfy 6.3.1, bit-identical fastText labels and
   probabilities, and datatrove's keep/drop decisions and reasons, on pinned FineWeb documents
   and property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). So
@@ -73,8 +74,8 @@ anyascii-based)
 | [`pyroid.ftfy`](https://ao.github.io/pyroid/guides/ftfy/) | ftfy 6.3.1 | ready |
 | [`pyroid.fasttext`](https://ao.github.io/pyroid/guides/fasttext/) | fastText inference | ready |
 | [`pyroid.filters`](https://ao.github.io/pyroid/guides/filters/) | datatrove 0.10.1 Gopher, C4, FineWeb filters | ready |
-| [`pyroid.dedup`](https://ao.github.io/pyroid/guides/dedup/) | datatrove 0.10.1 MinHash dedup | preview |
-| [`pyroid.translit`](https://ao.github.io/pyroid/guides/translit/) | anyascii; a permissive alternative to Unidecode | preview |
+| [`pyroid.dedup`](https://ao.github.io/pyroid/guides/dedup/) | datatrove 0.10.1 MinHash dedup | ready |
+| [`pyroid.translit`](https://ao.github.io/pyroid/guides/translit/) | anyascii; a permissive alternative to Unidecode | ready |
 
 ## The 0.7.x releases
 

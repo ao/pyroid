@@ -1,4 +1,4 @@
-# `pyroid.dedup` *(preview)*
+# `pyroid.dedup`
 
 ::: pyroid.dedup
     options:

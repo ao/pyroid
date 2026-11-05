@@ -15,7 +15,7 @@ guide.
 | `pyroid.PyroidError` | `Exception` | base class; also raised directly when a fallback needs a library that is not installed |
 | `pyroid.InputError` | `PyroidError`, `TypeError` | an argument has the wrong type or shape: a non-`str` item (the message names its index), `bytes`, a non-string or dictionary-encoded Arrow column, a struct column or table, a bad `threads=` type |
 | `pyroid.fasttext.ModelError` | `PyroidError`, `ValueError` | a model file is malformed, truncated, or not a fastText model |
-| `pyroid.translit.UnidecodeError` *(preview)* | `PyroidError`, `ValueError` | `unidecode(..., errors="strict")` met a character without a transliteration; has an `index` attribute, like Unidecode's |
+| `pyroid.translit.UnidecodeError` | `PyroidError`, `ValueError` | `unidecode(..., errors="strict")` met a character without a transliteration; has an `index` attribute, like Unidecode's |
 
 Because `InputError` is a `TypeError`, code that catches `TypeError` for bad arguments keeps
 working.
