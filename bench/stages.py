@@ -600,6 +600,28 @@ def direct_rows(ctx: Ctx) -> list[Row]:
                     b,
                 )
             )
+
+            def fit(module: str = module) -> tuple[Batch, Callable[[], dict[str, Any]]]:
+                m = importlib.import_module(module)
+
+                def timed(ts: list[str]) -> Any:
+                    return m.MinHashDedup(**specs.MINHASH_CONFIG).fit(ts)
+
+                # Gated on datatrove's removed set over the whole parity corpus (dev + adversarial).
+                return timed, lambda: G.gate_minhash_dedup(
+                    lambda ts: [not k for k in timed(ts)], f"{module} MinHashDedup.fit"
+                )
+
+            rows.append(
+                Row(
+                    f"{module} {version} MinHashDedup.fit direct",
+                    spec,
+                    version,
+                    False,
+                    "candidate: all 4 dedup stages in one call, MinHashDedup(config).fit(list) -> keep mask",
+                    fit,
+                )
+            )
         elif ctx.stage in specs.FILTER_CASES and spec.startswith(("pyroid", "filters=pyroid")):
             fn_name, _, cfg = specs.FILTER_CASES[ctx.stage]
 
