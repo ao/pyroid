@@ -8,6 +8,7 @@ Run inside the pyroid-dev container with an interpreter that has
     python oracle.py golden OUT.jsonl          # ftfy's own test inputs
     python oracle.py fuzz OUT.jsonl N SEED     # N random inputs
     python oracle.py mojibake OUT.jsonl N SEED # N realistic mojibake inputs
+    python oracle.py marks OUT.jsonl N SEED    # N combining-sequence inputs, all forms
     python oracle.py corpus OUT.jsonl A.parquet [B.parquet ...]  # fix_text on real docs
 
 Each output line is one input and the calls made on it: the function, its
@@ -391,6 +392,47 @@ def mojibake(path: str, n: int, seed: int) -> None:
     print(f"wrote {path}: {n} inputs, seed {seed}, Unicode {unicodedata.unidata_version}")
 
 
+MARK_POOLS = [
+    [chr(c) for c in range(0x41, 0x7B)] + list("éÅçΩѐ가각"),
+    [chr(c) for c in range(0x300, 0x370)],
+    [chr(c) for c in range(0x1AB0, 0x1ACF)] + [chr(c) for c in range(0x1DC0, 0x1E00)],
+    [chr(c) for c in range(0x20D0, 0x20F1)] + [chr(c) for c in range(0xFE20, 0xFE30)],
+    [chr(c) for c in range(0x1100, 0x1200)],  # Hangul jamo L/V/T
+    [chr(c) for c in range(0xAC00, 0xAC40)],  # Hangul syllables
+    [chr(c) for c in range(0x0900, 0x0980)],  # Devanagari
+    [chr(c) for c in range(0x0980, 0x0A00)],  # Bengali (two-part vowels)
+    [chr(c) for c in range(0x0B00, 0x0B80)],  # Oriya
+    [chr(c) for c in range(0x0F00, 0x0FC0)],  # Tibetan
+    [chr(c) for c in range(0x1100, 0x1113)] + [chr(c) for c in range(0x11127, 0x11135)],
+    [chr(c) for c in range(0xF900, 0xFB00)],  # CJK compatibility ideographs
+    [chr(c) for c in range(0x1D15E, 0x1D16A)] + [chr(c) for c in range(0x1D1BB, 0x1D1C1)],
+    NEW_CHARS,
+    [chr(c) for c in range(0x2000, 0x2010)] + ["\u212b", "\u2126", "\u0344", "\u0f73"],
+]
+
+
+def marks(path: str, n: int, seed: int) -> None:
+    rng = random.Random(seed)
+    with open(path, "w", encoding="utf-8") as out:
+        for _ in range(n):
+            parts = []
+            for _ in range(rng.randrange(1, 14)):
+                r = rng.random()
+                if r < 0.05:
+                    parts.append(chr(rng.randrange(0xD800, 0xE000)))
+                elif r < 0.1:
+                    parts.append(rng.choice([" ", "\n", "x", "Ã©", "’"]))
+                else:
+                    parts.append(rng.choice(rng.choice(MARK_POOLS)))
+            text = "".join(parts)
+            calls = [call("fix_text", text, {})]
+            for form in ("NFD", "NFKC", "NFKD"):
+                if rng.random() < 0.4:
+                    calls.append(call("fix_text", text, {"normalization": form}))
+            write(out, text, calls)
+    print(f"wrote {path}: {n} inputs, seed {seed}, Unicode {unicodedata.unidata_version}")
+
+
 def corpus(path: str, files: list[str]) -> None:
     import pyarrow.parquet as pq
 
@@ -418,6 +460,8 @@ if __name__ == "__main__":
         fuzz(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
     elif mode == "mojibake":
         mojibake(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+    elif mode == "marks":
+        marks(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
     elif mode == "corpus":
         corpus(sys.argv[2], sys.argv[3:])
     else:

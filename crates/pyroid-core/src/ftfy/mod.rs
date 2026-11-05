@@ -857,9 +857,7 @@ mod perf_probe {
             .lines()
             .take(20000)
             .filter_map(|l| {
-                let i = l.find("\"in\": \"")? + 7;
-                let v: serde_json::Value = serde_json::from_str(&format!("{{{}", &l[1..])).ok()?;
-                let _ = i;
+                let v: serde_json::Value = serde_json::from_str(l).ok()?;
                 v["in"].as_str().map(str::to_owned)
             })
             .collect()
