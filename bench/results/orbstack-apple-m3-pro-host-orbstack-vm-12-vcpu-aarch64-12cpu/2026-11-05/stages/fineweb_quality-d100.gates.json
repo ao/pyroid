@@ -1,0 +1,3 @@
+{
+ "datatrove 0.10.1 FineWebQualityFilter()": "{\"case\":\"fineweb_quality\",\"docs\":100,\"gate\":\"filter\",\"impl\":\"datatrove fineweb_quality\",\"live\":0,\"mismatches\":0,\"pinned\":100,\"ref_kept\":98,\"seconds\":1.101}"
+}

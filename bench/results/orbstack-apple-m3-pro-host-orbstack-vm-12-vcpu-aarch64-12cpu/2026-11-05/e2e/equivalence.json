@@ -1,0 +1,11 @@
+{
+ "ok": true,
+ "labels": [
+  "digest-w1",
+  "digest-w8"
+ ],
+ "digests": {
+  "digest-w1": "ef314b8d6ae95cc63c6cfa8b1a3a76ee5bc101eb88a66729beb10ecb7226473b",
+  "digest-w8": "ef314b8d6ae95cc63c6cfa8b1a3a76ee5bc101eb88a66729beb10ecb7226473b"
+ }
+}

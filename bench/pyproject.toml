@@ -1,0 +1,43 @@
+[project]
+name = "pyroid-bench"
+version = "0.1.0"
+description = "Benchmark harness for pyroid: equivalence-gated pyperf stages, hyperfine end-to-end, charts."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+# Baselines are pinned exactly (R2 §5). The oracle env is CPython 3.13 (fasttext-predict has no cp314 wheel).
+dependencies = [
+    "pyroid-parity",
+    "ftfy==6.3.1",
+    "datatrove==0.10.1",
+    "spacy==3.8.18",
+    "tokenizers>=0.22",
+    "regex==2026.9.29",
+    "fasttext-predict==0.9.2.4; python_version < '3.14'",
+    "datasketch==2.0.0",
+    "rensa==0.5.0",
+    "pyarrow==26.0.1",
+    "numpy==2.5.4",
+    "huggingface-hub==2.4.0",
+    "pyperf==2.10.0",
+    "astral-dev-toolchain-hyperfine==2.0.0; sys_platform == 'linux'",
+    "psutil>=7",
+]
+
+[dependency-groups]
+chart = ["matplotlib>=3.10"]
+dev = [{ include-group = "chart" }, "ruff>=0.17.3"]
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+
+[tool.uv.sources]
+pyroid-parity = { path = "../parity", editable = true }
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+extend-select = ["I", "B", "UP", "PERF", "RUF"]

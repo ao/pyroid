@@ -1,0 +1,3 @@
+{
+ "datatrove 0.10.1 GopherRepetitionFilter()": "{\"case\":\"gopher_repetition\",\"docs\":1,\"gate\":\"filter\",\"impl\":\"datatrove gopher_repetition\",\"live\":0,\"mismatches\":0,\"pinned\":1,\"ref_kept\":1,\"seconds\":1.147}"
+}
