@@ -17,6 +17,7 @@ __all__ = [
     "filters",
     "ftfy",
     "text",
+    "translit",
 ]
 
 __version__: Final[str]
@@ -27,6 +28,7 @@ ftfy: ModuleType
 fasttext: ModuleType
 filters: ModuleType
 dedup: ModuleType
+translit: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):

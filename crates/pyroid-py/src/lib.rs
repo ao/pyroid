@@ -18,6 +18,7 @@ mod ftfy;
 mod input;
 mod testing;
 mod text;
+mod translit;
 
 use pyo3::prelude::*;
 
@@ -33,5 +34,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     fasttext::register(m)?;
     filters::register(m)?;
     dedup::register(m)?;
+    translit::register(m)?;
     Ok(())
 }
