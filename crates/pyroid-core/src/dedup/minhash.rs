@@ -22,6 +22,42 @@ use super::rng::{MERSENNE_PRIME, permutation_parameters};
 use super::simplify::simplify_text;
 use super::tokenize::WordTokenizer;
 
+/// SHA-1's initial state.
+const SHA1_H0: [u32; 5] = [
+    0x6745_2301,
+    0xefcd_ab89,
+    0x98ba_dcfe,
+    0x1032_5476,
+    0xc3d2_e1f0,
+];
+
+/// The first 8 bytes of `sha1(bytes)`, little-endian (datatrove's
+/// `sha1_hash64`; `sha1_hash32` is the low half).
+///
+/// Shingles are short, so most fit one 64-byte block (<= 55 bytes plus
+/// padding): those go straight to the compression function (hardware SHA-1
+/// where the CPU has it) without the streaming `Digest` machinery.
+#[inline]
+pub fn sha1_prefix64(bytes: &[u8]) -> u64 {
+    let (h0, h1) = if bytes.len() <= 55 {
+        let mut block = [0u8; 64];
+        block[..bytes.len()].copy_from_slice(bytes);
+        block[bytes.len()] = 0x80;
+        block[56..].copy_from_slice(&((bytes.len() as u64) * 8).to_be_bytes());
+        let mut state = SHA1_H0;
+        sha1::block_api::compress(&mut state, std::slice::from_ref(&block));
+        (state[0], state[1])
+    } else {
+        let d = Sha1::digest(bytes);
+        (
+            u32::from_be_bytes([d[0], d[1], d[2], d[3]]),
+            u32::from_be_bytes([d[4], d[5], d[6], d[7]]),
+        )
+    };
+    // Digest bytes are the state words big-endian; read them back little-endian.
+    u64::from(h0.swap_bytes()) | (u64::from(h1.swap_bytes()) << 32)
+}
+
 /// `x % (2**61 - 1)` for any `u64`.
 #[inline]
 fn mod_mersenne(x: u64) -> u64 {
@@ -83,15 +119,8 @@ impl MinHasher {
         match (hc.hash_fc, hc.precision) {
             (HashFn::Xxhash, Precision::P64) => XxHash64::oneshot(0, bytes),
             (HashFn::Xxhash, Precision::P32) => u64::from(XxHash32::oneshot(0, bytes)),
-            (HashFn::Sha1, p) => {
-                let d = Sha1::digest(bytes);
-                let mut le = [0u8; 8];
-                le.copy_from_slice(&d[..8]);
-                match p {
-                    Precision::P64 => u64::from_le_bytes(le),
-                    Precision::P32 => u64::from(u32::from_le_bytes([le[0], le[1], le[2], le[3]])),
-                }
-            }
+            (HashFn::Sha1, Precision::P64) => sha1_prefix64(bytes),
+            (HashFn::Sha1, Precision::P32) => sha1_prefix64(bytes) & u64::from(u32::MAX),
         }
     }
 
@@ -240,6 +269,16 @@ mod tests {
             hasher(HashFn::Xxhash, Precision::P32).hash_shingle(b""),
             0x02cc_5d05
         );
+    }
+
+    #[test]
+    fn sha1_fast_path_matches_digest() {
+        let data: Vec<u8> = (0..300u32).map(|i| (i * 131 % 251) as u8).collect();
+        for len in 0..data.len() {
+            let d = Sha1::digest(&data[..len]);
+            let want = u64::from_le_bytes([d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]]);
+            assert_eq!(sha1_prefix64(&data[..len]), want, "len {len}");
+        }
     }
 
     #[test]
