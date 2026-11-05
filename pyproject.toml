@@ -80,6 +80,12 @@ exclude = [
   { path = ".github/**", format = "sdist" },
 ]
 
+[tool.pytest]
+# A bare `pytest` at the root runs pyroid's own tests only. parity/ has its own pytest config (it
+# needs `-p pyroid_parity.plugin`) and bench/ has no tests; mypy `files` below skip both too, and
+# ruff lints them with their own [tool.ruff] (the nearest pyproject.toml wins).
+testpaths = ["python/tests"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -108,8 +114,11 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "!python/pyroid/**" = ["D"]
-# Dev scripts and the benchmark/parity harnesses report on stdout.
+# Dev scripts and the benchmark/parity harnesses report on stdout. bench/ and parity/ are linted with
+# their own [tool.ruff]; this entry covers the ftfy table generator, oracle and benchmark scripts.
 "{python/scripts,bench,parity}/**" = ["T20"]
+"crates/pyroid-core/src/ftfy/generate_tables.py" = ["T20"]
+"crates/pyroid-core/tests/ftfy_data/*.py" = ["T20"]
 
 [tool.mypy]
 python_version = "3.11"

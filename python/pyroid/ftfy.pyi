@@ -7,8 +7,8 @@ Results are byte-identical to ftfy 6.3.1 on the same CPython version.
 ``apply_plan``, ``guess_bytes``, ``fix_file`` and ``explain_unicode``, and
 option values the Rust port does not handle (an unknown ``normalization``
 form, a non-integer ``max_decode_length``), are delegated to the real ftfy
-with a one-time warning, or raise ``pyroid.PyroidError`` if it is not
-installed.
+with a one-time ``pyroid.FallbackWarning``, or raise ``pyroid.PyroidError``
+if it is not installed.
 
 Differences from ftfy
 ---------------------

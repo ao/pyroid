@@ -38,7 +38,7 @@ without editing the suites. Every session writes `parity-report.json`, which fee
    - The live-oracle checks skip there and say so in the report.
 4. **Hypothesis depth:** `HYPOTHESIS_PROFILE=ci` gives 2000 examples per property (default `dev`: 200).
 5. **Read the report:**
-   - `python -m pyroid_parity.report render parity-report.json` prints a Markdown table, which is also appended to `$GITHUB_STEP_SUMMARY`.
+   - `python -m pyroid_parity.report render parity-report.json` prints a Markdown table and, under GitHub Actions, appends it to `$GITHUB_STEP_SUMMARY`. It is the only writer of the summary: pytest runs never touch it.
    - `validate` checks it against [`schema/parity-report.schema.json`](schema/parity-report.schema.json).
    - `merge a.json b.json -o all.json` combines interpreters.
 
@@ -67,8 +67,10 @@ All inputs and references live in the shared Docker volume `/data` and are pinne
 | `parity/adversarial.parquet` | 3,232 docs: 2,000 non-English (FineWeb-2 test splits, 8 languages), 600 mojibake/HTML/control variants, 600 near-duplicates of dev docs (edit rates 0–40 %, truncation, append), 32 edge cases (empty, whitespace-only, 5k-char word, …) |
 | `parity/{ftfy,fasttext,filters,minhash}-ref.parquet` | reference outputs; the manifest records the oracle versions |
 
-- **Regenerate** (oracle env, Docker): `python -m pyroid_parity.refs all --pin` (adversarial generation is seeded and deterministic).
-- **Fetch inputs:** `../bench/fetch.py`.
+- **Fetch inputs:** `../bench/fetch.py` (it verifies the inputs it downloads; `--verify-all` checks every pinned file).
+- **Regenerate** (oracle env, Docker): `python -m pyroid_parity.refs all` rebuilds the references and checks each one
+  against the manifest, exiting 1 if any differ; add `--pin` to record new hashes instead (adversarial generation is
+  seeded and deterministic).
 
 ## Oracle choices
 - **fastText → fasttext-predict 0.9.2.4.**

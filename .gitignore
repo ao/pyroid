@@ -18,6 +18,8 @@ build/
 
 # Benchmark data is fetched into the shared volume, never committed
 /bench/data/
+# Written to the current directory by the parity suites (pytest parity/tests)
+parity-report.json
 
 # Local
 .local

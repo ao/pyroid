@@ -200,17 +200,43 @@ def test_str_subclass_gives_exact_str() -> None:
             assert type(candidate.fix_and_explain(S(text), **kwargs).text) is str
 
 
+DELEGATING_CALLS: list[tuple[str, Any]] = [
+    ("fix_text max_decode_length", lambda: candidate.fix_text("abc", max_decode_length=5.0)),
+    ("fix_text normalization", lambda: candidate.fix_text("x", normalization="nfc")),
+    ("fix_text_batch", lambda: candidate.fix_text_batch(["x"], normalization="nfc")),
+    ("fix_and_explain", lambda: candidate.fix_and_explain("x", normalization="nfc")),
+    ("fix_encoding", lambda: candidate.fix_encoding("x", max_decode_length=2.0)),
+    ("guess_bytes", lambda: candidate.guess_bytes(b"abc")),
+    ("apply_plan", lambda: candidate.apply_plan("x", [])),
+]
+
+
+@pytest.mark.thread_unsafe(reason="global one-time-warning state")
+@pytest.mark.parametrize(
+    "call", [c for _, c in DELEGATING_CALLS], ids=[n for n, _ in DELEGATING_CALLS]
+)
+def test_delegation_warns_with_fallback_warning(monkeypatch: pytest.MonkeyPatch, call: Any) -> None:
+    monkeypatch.setattr(candidate, "_WARNED", set())
+    for expected in ([pyroid.FallbackWarning], []):  # exactly that class, then once per process
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            outcome(call)  # ftfy rejects an unknown normalization form: the warning comes first
+        assert [w.category for w in caught] == expected, [str(w.message) for w in caught]
+        if expected:
+            assert "delegating to ftfy (slow path)" in str(caught[0].message)
+
+
 @pytest.mark.thread_unsafe(reason="global one-time-warning state")
 def test_delegates_unsupported_options_with_one_warning(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(candidate, "_WARNED", set())
-    with pytest.warns(RuntimeWarning, match="delegating to ftfy"):
+    with pytest.warns(pyroid.FallbackWarning, match="delegating to ftfy"):
         assert candidate.fix_text("abc", max_decode_length=5.0) == ftfy.fix_text(
             "abc", max_decode_length=5.0
         )
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         candidate.fix_text("abc", max_decode_length=5.0)  # warned only once
-    with pytest.warns(RuntimeWarning, match="delegating"):
+    with pytest.warns(pyroid.FallbackWarning, match="delegating"):
         got = outcome(candidate.fix_text, "x", normalization="nfc")
     assert got == outcome(ftfy.fix_text, "x", normalization="nfc")
 

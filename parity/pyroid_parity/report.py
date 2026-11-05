@@ -1,11 +1,14 @@
 """``parity-report.json``: collector, writer, validator and Markdown renderer.
 
     python -m pyroid_parity.report validate parity-report.json
-    python -m pyroid_parity.report render parity-report.json [--out compat.md]
+    python -m pyroid_parity.report render parity-report.json [--out compat.md]   # also appends to $GITHUB_STEP_SUMMARY
     python -m pyroid_parity.report merge a.json b.json -o merged.json   # e.g. one report per interpreter
 
 The schema lives in ``parity/schema/parity-report.schema.json`` (JSON Schema 2020-12). Status per check:
 ``pass`` (>=1 comparison, 0 diffs), ``fail`` (any diff), ``skip`` (0 comparisons). A suite fails if any check fails.
+
+Only ``render`` writes the GitHub Actions job summary (when ``$GITHUB_STEP_SUMMARY`` is set); pytest runs, which write
+the JSON through ``write``, never do, so a CI job gets exactly one table per explicit render.
 """
 
 from __future__ import annotations
@@ -151,9 +154,15 @@ def environment() -> dict[str, Any]:
 
 def write(report: dict[str, Any], out: Path) -> None:
     out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", "utf-8")
+
+
+def append_step_summary(markdown: str) -> bool:
+    """Append to the GitHub Actions job summary; False when not running under Actions."""
     if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(summary, "a", encoding="utf-8") as f:
-            f.write(render(report) + "\n")
+            f.write(markdown + "\n")
+        return True
+    return False
 
 
 def validate(report: dict[str, Any]) -> list[str]:
@@ -222,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
             Path(a.out).write_text(md + "\n", "utf-8")
         else:
             print(md)
+        append_step_summary(md)
         return 0
     merged = merge([json.loads(Path(p).read_text("utf-8")) for p in a.reports])
     Path(a.out).write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n", "utf-8")

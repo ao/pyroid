@@ -553,9 +553,11 @@ def marks(path: str, n: int, seed: int) -> None:
                     parts.append(rng.choice(rng.choice(MARK_POOLS)))
             text = "".join(parts)
             calls = [call("fix_text", text, {})]
-            for form in ("NFD", "NFKC", "NFKD"):
-                if rng.random() < 0.4:
-                    calls.append(call("fix_text", text, {"normalization": form}))
+            calls.extend(
+                call("fix_text", text, {"normalization": form})
+                for form in ("NFD", "NFKC", "NFKD")
+                if rng.random() < 0.4
+            )
             write(out, text, calls)
     print(f"wrote {path}: {n} inputs, seed {seed}, Unicode {unicodedata.unidata_version}")
 

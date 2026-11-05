@@ -263,10 +263,124 @@ jobs:
               --parallel-threads=auto --iterations=3 python/tests
           fi
 
+  # The parity data (pinned inputs + reference outputs, ~310 MB) is regenerated in CI and never published:
+  # on a cache miss this job fetches the inputs and reruns the oracles, then caches the verified result.
+  parity-data:
+    name: parity data (pinned inputs and references)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read # checkout (bench/manifest.json, bench/fetch.py, parity/)
+    env:
+      # Where pyroid_parity and bench/fetch.py read and write the pinned files (default /data).
+      PYROID_DATA: ${{ github.workspace }}/bench/data
+    outputs:
+      key: ${{ steps.cache.outputs.cache-primary-key }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: cache
+        name: Look up the parity data cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          # The manifest pins every file's sha256; the parity lockfile pins the oracles that produce the refs.
+          key: parity-data-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
+          lookup-only: true
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      # bench/ and parity/ each pin their interpreter in .python-version (3.13: the oracle env).
+      - name: Fetch and verify the pinned inputs (bench/fetch.py)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: uv run --project bench --frozen --no-default-groups python bench/fetch.py
+      - name: Regenerate and verify the references (python -m pyroid_parity.refs all)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: uv run --project parity --frozen python -m pyroid_parity.refs all
+      - name: Verify every pinned file before caching (bench/fetch.py --verify-all)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: uv run --project bench --frozen --no-default-groups python bench/fetch.py --verify-all
+      - name: Save the parity data cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+  parity:
+    name: parity (${{ matrix.suite }}, ${{ matrix.python }})
+    needs: [wheels, parity-data]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout (parity/, bench/manifest.json)
+    strategy:
+      fail-fast: false
+      matrix:
+        # One entry per merged product module pyroid.<suite>; add fasttext, filters, dedup as they land.
+        suite: [ftfy]
+        python: ["3.12", "3.14t", "3.15t"]
+        # The wheel each interpreter installs (the three flavours the wheels job checks for).
+        include:
+          - python: "3.12"
+            wheel: cp311-abi3
+          - python: "3.14t"
+            wheel: cp314-cp314t
+          - python: "3.15t"
+            wheel: cp315-abi3.abi3t
+    env:
+      PYROID_DATA: ${{ github.workspace }}/bench/data
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-ubuntu-24.04
+          path: dist
+      - name: Restore the parity data
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          key: ${{ needs.parity-data.outputs.key }}
+          fail-on-cache-miss: true
+      - name: pytest parity/tests -m ${{ matrix.suite }} --impl pyroid.${{ matrix.suite }}
+        env:
+          SUITE: ${{ matrix.suite }}
+          PY: ${{ matrix.python }}
+          WHEEL_TAG: ${{ matrix.wheel }}
+          # 2000 examples per Hypothesis property (the default dev profile runs 200).
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          mapfile -t wheels < <(find dist -maxdepth 1 -name "pyroid-*-${WHEEL_TAG}-*.whl")
+          [[ ${#wheels[@]} -eq 1 ]] || { echo "::error::expected one ${WHEEL_TAG} wheel, found ${#wheels[@]}"; exit 1; }
+          # The oracle group (datatrove, spaCy, fasttext-predict) has no free-threaded wheels. Without it the
+          # live-oracle checks skip, and say so in the report; the checks against the pinned refs still run.
+          groups=()
+          if [[ "$PY" == *t ]]; then groups=(--no-default-groups); fi
+          # PYTHON_GIL stays unset: the report records whether the GIL stayed off.
+          uv run --project parity --frozen --python "$PY" "${groups[@]}" \
+            --with "${wheels[0]}" pytest parity/tests -m "$SUITE" --impl "pyroid.$SUITE"
+      - name: Render parity-report.json to the job summary
+        if: ${{ !cancelled() && hashFiles('parity-report.json') != '' }}
+        # The only writer of the summary: pytest runs never append to it.
+        run: parity/.venv/bin/python -m pyroid_parity.report render parity-report.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: parity-report-${{ matrix.suite }}-${{ matrix.python }}
+          path: parity-report.json
+          if-no-files-found: error
+
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [lint, workflow-lint, supply-chain, rust-test, wheels, stubtest, test]
+    needs: [lint, workflow-lint, supply-chain, rust-test, wheels, stubtest, test, parity-data, parity]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:

@@ -2,6 +2,10 @@
 
     python -m pyroid_parity.refs all --pin          # adversarial, ftfy, fasttext, filters, dedup
     python -m pyroid_parity.refs filters --pin --workers 6
+    python -m pyroid_parity.refs all                # regenerate and verify against bench/manifest.json (CI)
+
+Without ``--pin`` every file written is checked against its sha256 in bench/manifest.json; the run carries on
+and exits 1 at the end if any differ (or are not pinned), naming them.
 
 Outputs (each pinned in bench/manifest.json with the oracle versions that produced it):
     parity/adversarial.parquet   id, text, kind, source_id     mojibake / non-English / near-dup / edge docs
@@ -18,6 +22,7 @@ import html
 import importlib.metadata as md
 import os
 import random
+import sys
 import tempfile
 import time
 from collections.abc import Callable
@@ -36,6 +41,8 @@ OUT = {
     "filters": "parity/filters-ref.parquet",
     "dedup": "parity/minhash-ref.parquet",
 }
+# Files written by this run that are missing from, or differ from, the manifest (checked when not pinning).
+MISMATCHED: list[str] = []
 
 
 def log(msg: str) -> None:
@@ -63,9 +70,18 @@ def write(table: Any, rel: str, pin: bool, **extra: Any) -> None:
     )
     tmp.replace(out)
     log(f"wrote {rel}: {table.num_rows} rows, {out.stat().st_size / 1e6:.1f} MB")
+    D._verified.cache_clear()
     if pin:
         D.pin(rel, rows=table.num_rows, **extra)
         D._verified.cache_clear()
+        return
+    try:
+        D.path(rel)
+    except D.DataError as e:
+        MISMATCHED.append(rel)
+        log(f"MISMATCH {e}")
+    else:
+        log(f"verified {rel} against the manifest")
 
 
 def pmap(fn: Callable[[list[Any]], list[Any]], items: list[Any], workers: int, chunk: int = 200) -> list[Any]:
@@ -494,6 +510,8 @@ def main() -> None:
         else:
             globals()[f"ref_{s}"](a.pin, a.workers)
         log(f"{s} done in {time.perf_counter() - t:.0f} s")
+    if MISMATCHED:
+        sys.exit(f"[refs] not reproduced (differ from or missing in {D.MANIFEST}): {', '.join(MISMATCHED)}")
 
 
 if __name__ == "__main__":

@@ -23,13 +23,18 @@ re-exported from `__init__.py`/`_pyroid.pyi`; ask the core owner first.
 
 ```python
 import pyarrow as pa, pyroid.text as t
-t.normalize_whitespace("  a \t b ")            # 'a b'                 str  -> str
-t.normalize_whitespace(["a  b", "ok"])          # ['a b', 'ok']         list -> list ('ok' is the same object)
-t.min_chars(("abc", "x"), 2)                    # (True, False)         tuple -> tuple
-col = t.normalize_whitespace(pa.array(["a  b", None]))   # pyroid.Column<string>
-pa.chunked_array(col); pa.array(col); polars.Series(col)  # zero-copy into any Arrow library
-t.min_chars(pa.chunked_array([["abc"], [None]]), 2).to_pylist()   # [True, None]
-t.normalize_whitespace(docs, threads=4)         # at most 4 tasks at once on the shared pool
+
+t.normalize_whitespace("  a \t b ")  # 'a b'                 str  -> str
+t.normalize_whitespace(
+    ["a  b", "ok"]
+)  # ['a b', 'ok']         list -> list ('ok' is the same object)
+t.min_chars(("abc", "x"), 2)  # (True, False)         tuple -> tuple
+col = t.normalize_whitespace(pa.array(["a  b", None]))  # pyroid.Column<string>
+pa.chunked_array(col)
+pa.array(col)
+polars.Series(col)  # zero-copy into any Arrow library
+t.min_chars(pa.chunked_array([["abc"], [None]]), 2).to_pylist()  # [True, None]
+t.normalize_whitespace(docs, threads=4)  # at most 4 tasks at once on the shared pool
 ```
 
 - **Input** (`TextInput`): `str`; `list[str]`/`tuple[str, ...]`; or any object with
@@ -63,6 +68,16 @@ t.normalize_whitespace(docs, threads=4)         # at most 4 tasks at once on the
   past 2 GiB (use `pa.chunked_array`). PyO3 adds the note
   `while processing '<arg>'`. A Rust panic surfaces as `pyo3_runtime.PanicException`
   (a `BaseException`: it means a pyroid bug), never an abort.
+- **Fallbacks**: when a module hands a call to the incumbent library because the Rust port
+  does not handle it (an option value it does not support, a helper it does not port), it
+  returns the incumbent's result and emits **`pyroid.FallbackWarning`** (a `RuntimeWarning`):
+  that class exactly, never a bare `RuntimeWarning` or a subclass, once per process for each
+  function and reason. If the incumbent is not installed, raise `PyroidError` instead.
+  Warnings about results (an incumbent at another version, missing Unicode tables) stay
+  plain `RuntimeWarning`s. Users silence the slow-path notice with
+  `warnings.simplefilter("ignore", pyroid.FallbackWarning)`; the parity suites ignore it,
+  because it says which code path ran, not what the result is. Any other warning must match
+  the incumbent's.
 
 ## Rust side
 
@@ -139,4 +154,5 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
 - [ ] `cargo fmt`, clippy pedantic `-D warnings`, ruff, mypy --strict, cargo-deny, typos clean.
 - [ ] Wheel built in Docker; pytest green on the installed wheel on 3.11, 3.12, 3.14t,
       3.15, 3.15t; `sys._is_gil_enabled()` stays False on 3.14t/3.15t.
+- [ ] Every delegation to the incumbent warns once with `pyroid.FallbackWarning`.
 - [ ] Speed numbers only from the harness (`bench/`), labelled with the machine.

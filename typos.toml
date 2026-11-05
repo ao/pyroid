@@ -10,11 +10,16 @@ extend-exclude = [
   # Generated.
   "Cargo.lock",
   "crates/pyroid-core/src/ftfy/tables.rs",
-  # Test data and incumbent fixtures: mojibake, deliberately misspelt and non-English text.
+  # Test data, incumbent fixtures and raw benchmark results: mojibake, confusables, deliberately
+  # misspelt and non-English text. Keep in step with the file-fixer excludes in .pre-commit-config.yaml.
   "python/tests/data/",
-  "parity/",
-  "bench/data/",
   "crates/pyroid-core/tests/ftfy_data/",
+  "bench/data/",
+  "bench/results/",
+  "parity/data/",
+  "parity/tests/",
+  "parity/pyroid_parity/refs.py",
+  "parity/pyroid_parity/strategies.py",
 ]
 
 [default.extend-words]
@@ -22,3 +27,11 @@ extend-exclude = [
 [default.extend-identifiers]
 # The arro3 Arrow library (github.com/kylebarron/arro3), not a misspelt "arrow".
 arro3 = "arro3"
+
+# bench/gates.py names near-duplicate pairs `nd` (not a misspelt "and"). typos matches file types by file name
+# only, so this type covers files named gates.py; there is one, and every other word in it is still checked.
+[type.bench-gates]
+extend-glob = ["gates.py"]
+
+[type.bench-gates.extend-identifiers]
+nd = "nd"

@@ -13,9 +13,21 @@ repos:
       - id: check-yaml
       - id: check-merge-conflict
       - id: check-added-large-files
-      # Test data and incumbent fixtures keep their bytes exactly (mojibake, odd whitespace).
+        # The bench/ and parity/ lockfiles (~0.5 MB each) are the only files allowed past the 500 KB limit.
+        exclude: ^(bench|parity)/uv\.lock$
+      # Test data, incumbent fixtures and raw benchmark results keep their bytes exactly (mojibake,
+      # confusables, odd whitespace). Keep in step with [files] extend-exclude in typos.toml.
       - id: end-of-file-fixer
-        exclude: &data ^(python/tests/data|parity|bench/data|crates/pyroid-core/tests/ftfy_data)/
+        exclude: &data |
+          (?x)^(
+            python/tests/data/|
+            crates/pyroid-core/tests/ftfy_data/|
+            bench/data/|
+            bench/results/|
+            parity/data/|
+            parity/tests/|
+            parity/pyroid_parity/(refs|strategies)\.py$
+          )
       - id: trailing-whitespace
         exclude: *data
 
@@ -52,7 +64,7 @@ repos:
       # third-party packages the tests import. Keep in step with [dependency-groups] test.
       - id: mypy
         name: mypy --strict
-        entry: uvx --with pytest --with packaging --with hypothesis --with pyarrow mypy@2.4.1
+        entry: uvx --with pytest --with packaging --with hypothesis --with pyarrow --with ftfy==6.3.1 mypy@2.4.1
         language: system
         files: \.pyi?$|^pyproject\.toml$
         pass_filenames: false

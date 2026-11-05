@@ -33,7 +33,6 @@ def test_mutant_fails_the_ftfy_suite(tmp_path: Path) -> None:
         "HYPOTHESIS_PROFILE": "dev",
         "HYPOTHESIS_STORAGE_DIRECTORY": str(tmp_path / "hypothesis"),
     }
-    env.pop("GITHUB_STEP_SUMMARY", None)  # the mutant's failure table must not land in the CI summary
     env.pop("PYTEST_ADDOPTS", None)
     cmd = [
         sys.executable,

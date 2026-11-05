@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import warnings
 
 import pytest
 
 from pyroid_parity import data as D
 from pyroid_parity import impl as I
-from pyroid_parity.report import Collector, render, validate
+from pyroid_parity.report import Collector, main, render, validate, write
 
 
 @pytest.mark.parametrize(
@@ -116,3 +117,59 @@ def test_content_hash_is_format_independent():
     assert D.content_sha256(["ab"], ["c"]) != D.content_sha256(
         ["a"], ["bc"]
     )  # \0 separators prevent collisions
+
+
+def _warns(*categories: type[Warning]) -> list[str]:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        for c in categories:
+            warnings.warn("x", c, stacklevel=1)
+    return I.warning_categories(caught)
+
+
+def test_warning_categories_leave_out_pyroid_fallback_warning_only():
+    fallback = type("FallbackWarning", (RuntimeWarning,), {"__module__": "pyroid"})
+    sub = type("SlowPath", (fallback,), {"__module__": "pyroid.ftfy"})
+    namesake = type("FallbackWarning", (RuntimeWarning,), {"__module__": "elsewhere"})
+    assert I.is_fallback_warning(fallback) and I.is_fallback_warning(sub)
+    assert not I.is_fallback_warning(namesake) and not I.is_fallback_warning(RuntimeWarning)
+    assert _warns(fallback, sub) == []
+    assert _warns(fallback, namesake, RuntimeWarning, DeprecationWarning) == [
+        "DeprecationWarning",
+        "FallbackWarning",
+        "RuntimeWarning",
+    ]
+
+
+def test_warning_comparison_does_not_depend_on_call_order():
+    """A candidate that warns once per process compares the same on its first and later calls."""
+    fallback = type("FallbackWarning", (RuntimeWarning,), {"__module__": "pyroid"})
+    warned: set[str] = set()
+
+    def candidate() -> None:
+        if "slow path" not in warned:
+            warned.add("slow path")
+            warnings.warn("delegating", fallback, stacklevel=2)
+        warnings.warn("renamed", DeprecationWarning, stacklevel=2)
+
+    def compared() -> list[str]:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            candidate()
+        return I.warning_categories(caught)
+
+    assert compared() == compared() == ["DeprecationWarning"]
+
+
+def test_only_render_writes_the_job_summary(tmp_path, monkeypatch, capsys):
+    summary = tmp_path / "summary.md"
+    summary.write_text("", "utf-8")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    c = Collector()
+    c.record("ftfy", "golden", True)
+    report = tmp_path / "parity-report.json"
+    write(c.build(), report)  # what the pytest plugin calls at session end
+    assert summary.read_text("utf-8") == ""
+    assert main(["render", str(report)]) == 0
+    assert summary.read_text("utf-8").count("### Parity:") == 1
+    assert "### Parity:" in capsys.readouterr().out  # and it still prints the table

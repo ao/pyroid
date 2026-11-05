@@ -76,7 +76,7 @@ Thread scaling: pass `BENCH_THREADS` / `RAYON_NUM_THREADS`; workers inherit them
 | `models/lid.176.{bin,ftz}` | fastText language ID (`dl.fbaipublicfiles.com`), CC BY-SA 3.0 |
 | `parity/*.parquet` | adversarial set and reference outputs from `python -m pyroid_parity.refs all --pin` |
 
-- `fetch.py --verify` re-hashes everything.
+- `fetch.py --verify` re-hashes the inputs; `fetch.py --verify-all` also re-hashes the generated `parity/` references.
 - `content_sha256` is computed over `id\0text\0…`, so it stays the same however the parquet file is written.
 - FineWeb and FineWeb-2 are released under ODC-By 1.0: © their authors, as distributed by Hugging Face.
 

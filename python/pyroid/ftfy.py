@@ -6,8 +6,8 @@ the same CPython version. The work is done by a Rust port of ftfy; ftfy itself
 is only needed for the few features listed in ``DELEGATED`` and for option
 values the port does not handle (an unknown ``normalization`` form, a
 non-integer ``max_decode_length``). Those calls go to the real ftfy, with a
-one-time warning, or raise :class:`pyroid.PyroidError` if ftfy is not
-installed.
+one-time :class:`pyroid.FallbackWarning`, or raise :class:`pyroid.PyroidError`
+if ftfy is not installed.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import warnings
 from collections.abc import Iterator
 from typing import Any, BinaryIO, Literal, NamedTuple, TextIO
 
-from pyroid._pyroid import PyroidError
+from pyroid._pyroid import FallbackWarning, PyroidError
 from pyroid._pyroid import ftfy as _native
 
 __all__ = [
@@ -204,7 +204,7 @@ def _ftfy(name: str, reason: str) -> Any:
         warnings.warn(
             f"pyroid.ftfy.{name}: {reason} is not supported by the Rust port; "
             "delegating to ftfy (slow path). This warning is shown once.",
-            RuntimeWarning,
+            FallbackWarning,
             stacklevel=4,
         )
     return real
