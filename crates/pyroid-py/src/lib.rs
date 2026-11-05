@@ -10,6 +10,7 @@
 
 mod arrow;
 mod batch;
+mod dedup;
 mod errors;
 mod fasttext;
 mod filters;
@@ -31,5 +32,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     ftfy::register(m)?;
     fasttext::register(m)?;
     filters::register(m)?;
+    dedup::register(m)?;
     Ok(())
 }
