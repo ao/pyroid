@@ -18,7 +18,7 @@ from collections.abc import Iterator
 from typing import Any, BinaryIO, Literal, NamedTuple, TextIO
 
 from pyroid._pyroid import PyroidError
-from pyroid._pyroid import ftfy as _native  # type: ignore[attr-defined]
+from pyroid._pyroid import ftfy as _native
 
 __all__ = [
     "DELEGATED",
@@ -32,6 +32,7 @@ __all__ = [
     "fix_encoding_and_explain",
     "fix_file",
     "fix_text",
+    "fix_text_batch",
     "fix_text_segment",
     "ftfy",
     "guess_bytes",
@@ -133,22 +134,22 @@ def _unicode_version() -> str:
 _UNICODE_VERSION = _unicode_version()
 
 
-class _Unsupported(Exception):
+class _UnsupportedError(Exception):
     """A config value the Rust port does not handle; delegate to ftfy."""
 
 
 def _native_config(config: Any) -> Any:
     """Translate a TextFixerConfig (ours or ftfy's) to a native config."""
     values = {f: getattr(config, f) for f in _FIELDS}
-    ue = values["unescape_html"]
+    unescape_value = values["unescape_html"]
     # ftfy tests `== "auto"` and then truthiness.
-    unescape = "auto" if ue == "auto" else ("always" if ue else "never")
+    unescape = "auto" if unescape_value == "auto" else ("always" if unescape_value else "never")
     norm = values["normalization"]
     if norm is not None and not (isinstance(norm, str) and norm in _FORMS):
-        raise _Unsupported(f"normalization={norm!r}")
+        raise _UnsupportedError(f"normalization={norm!r}")
     length = values["max_decode_length"]
     if not isinstance(length, int):
-        raise _Unsupported(f"max_decode_length={length!r}")
+        raise _UnsupportedError(f"max_decode_length={length!r}")
     if length < 1:
         # ftfy loops forever on such a value; refuse instead of hanging.
         raise ValueError(f"max_decode_length must be at least 1, not {length!r}")
@@ -255,13 +256,44 @@ def fix_text(text: str, config: TextFixerConfig | None = None, **kwargs: Any) ->
         raise UnicodeError(BYTES_ERROR_TEXT)
     try:
         native = _prepare(config)
-    except _Unsupported as e:
+    except _UnsupportedError as e:
         return _ftfy("fix_text", str(e)).fix_text(text, config)  # type: ignore[no-any-return]
     return _native.fix_text(text, native)  # type: ignore[no-any-return]
 
 
 #: ftfy's alias for :func:`fix_text`.
 ftfy = fix_text
+
+
+def fix_text_batch(
+    texts: Any, config: TextFixerConfig | None = None, *, threads: int | None = None, **kwargs: Any
+) -> Any:
+    """:func:`fix_text` over many documents at once, on pyroid's thread pool.
+
+    Accepts a str, a list or tuple of str, or an Arrow string array/column and
+    returns the same kind (a :class:`pyroid.Column` for Arrow); documents that
+    need no fixing come back as the original objects. Every result equals
+    ``ftfy.fix_text(doc, config, **kwargs)``. See ``ftfy.pyi`` for details.
+    """
+    if config is None and not kwargs:
+        return _native.fix_text_batch(texts, _DEFAULT_QUIET, threads=threads)
+    if config is None:
+        config = TextFixerConfig(explain=False)
+    config = _config_from_kwargs(config, kwargs)
+    try:
+        native = _prepare(config)
+    except _UnsupportedError as e:
+        if not isinstance(texts, (str, list, tuple)):
+            raise PyroidError(
+                f"pyroid.ftfy.fix_text_batch: {e} is not supported for Arrow (or other "
+                "non-str/list/tuple) input; it is only delegated to ftfy for str, list and tuple"
+            ) from None
+        real = _ftfy("fix_text_batch", str(e))
+        if isinstance(texts, str):
+            return real.fix_text(texts, config)
+        fixed = [real.fix_text(t, config) for t in texts]
+        return fixed if isinstance(texts, list) else tuple(fixed)
+    return _native.fix_text_batch(texts, native, threads=threads)
 
 
 def fix_and_explain(
@@ -275,7 +307,7 @@ def fix_and_explain(
     config = _config_from_kwargs(config, kwargs)
     try:
         native = _prepare(config)
-    except _Unsupported as e:
+    except _UnsupportedError as e:
         return _explained(_ftfy("fix_and_explain", str(e)).fix_and_explain(text, config))
     return _explained(_native.fix_and_explain(text, native))
 
@@ -293,7 +325,7 @@ def fix_encoding_and_explain(
         return ExplainedText(text, [])
     try:
         native = _prepare(config)
-    except _Unsupported as e:
+    except _UnsupportedError as e:
         real = _ftfy("fix_encoding_and_explain", str(e))
         return _explained(real.fix_encoding_and_explain(text, config))
     return _explained(_native.fix_encoding_and_explain(text, native))

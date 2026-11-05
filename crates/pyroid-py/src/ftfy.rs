@@ -15,12 +15,18 @@ use pyo3::types::{PyBytes, PyList, PyString, PyTuple};
 use pyroid_core::ftfy::{
     self as kernel, ExplanationStep, Normalization, TextFixerConfig, UnescapeHtml, UnicodeVersion,
 };
+use pyroid_core::par;
+
+use crate::batch::{BatchError, transform};
+use crate::errors::{input_error, type_name};
+use crate::input::{TextInput, Threads, threads};
 
 /// Documents at least this long are fixed with the interpreter detached.
-const DETACH_BYTES: usize = 4096;
+const DETACH_BYTES: usize = crate::batch::SINGLE_DOC_DETACH_BYTES;
 
 /// A validated `TextFixerConfig`, built once per distinct config by the shim.
 #[pyclass(frozen, module = "pyroid.ftfy", name = "_NativeConfig")]
+#[derive(Debug)]
 pub struct NativeConfig(TextFixerConfig);
 
 #[pymethods]
@@ -171,10 +177,9 @@ fn unchanged<'py>(text: &Bound<'py, PyString>) -> PyResult<Bound<'py, PyString>>
 fn run<'py>(
     op: Op,
     text: &Bound<'py, PyString>,
-    cfg: &NativeConfig,
+    cfg: &TextFixerConfig,
 ) -> PyResult<Bound<'py, PyString>> {
     let py = text.py();
-    let cfg = &cfg.0;
     match text.to_str() {
         Ok(s) => {
             let owned = |c: Cow<'_, str>| match c {
@@ -265,7 +270,7 @@ fn fix_text<'py>(
     text: &Bound<'py, PyString>,
     config: &NativeConfig,
 ) -> PyResult<Bound<'py, PyString>> {
-    run(Op::Text, text, config)
+    run(Op::Text, text, &config.0)
 }
 
 /// `ftfy.fix_text_segment(text, config)`.
@@ -274,7 +279,7 @@ fn fix_text_segment<'py>(
     text: &Bound<'py, PyString>,
     config: &NativeConfig,
 ) -> PyResult<Bound<'py, PyString>> {
-    run(Op::Segment, text, config)
+    run(Op::Segment, text, &config.0)
 }
 
 /// `ftfy.fix_encoding(text, config)`.
@@ -283,7 +288,7 @@ fn fix_encoding<'py>(
     text: &Bound<'py, PyString>,
     config: &NativeConfig,
 ) -> PyResult<Bound<'py, PyString>> {
-    run(Op::Encoding, text, config)
+    run(Op::Encoding, text, &config.0)
 }
 
 /// `ftfy.fix_and_explain(text, config)` as `(text, steps | None)`.
@@ -304,12 +309,101 @@ fn fix_encoding_and_explain<'py>(
     run_explained(text, config, true)
 }
 
+/// `fix_text` over many documents on the shared pool: str, list, tuple or
+/// Arrow in, the same kind out (see `pyroid/ftfy.pyi`).
+#[pyfunction]
+#[pyo3(signature = (texts, /, config, *, threads = None))]
+fn fix_text_batch<'py>(
+    py: Python<'py>,
+    texts: &Bound<'py, PyAny>,
+    config: &NativeConfig,
+    threads: Option<Threads>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let cfg = &config.0;
+    match texts.extract::<TextInput>() {
+        Ok(input) => transform(py, input, threads, |s| kernel::fix_text(s, cfg)),
+        // Lone surrogates are valid ftfy input (it repairs them), but have no
+        // UTF-8 form for `TextInput`; take the surrogatepass route instead.
+        Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) => {
+            with_surrogates(py, texts, cfg, threads)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// `fix_text_batch` for a str, list or tuple holding lone surrogates. Each
+/// item is passed as UTF-8 (borrowed) or surrogatepass UTF-8 (copied); the
+/// batch still runs detached on the shared pool.
+fn with_surrogates<'py>(
+    py: Python<'py>,
+    texts: &Bound<'py, PyAny>,
+    cfg: &TextFixerConfig,
+    threads_arg: Option<Threads>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Ok(s) = texts.cast::<PyString>() {
+        return Ok(run(Op::Text, s, cfg)?.into_any());
+    }
+    let is_list = texts.is_instance_of::<PyList>();
+    let items: Vec<Bound<'py, PyAny>> = if is_list {
+        texts.cast::<PyList>()?.iter().collect()
+    } else {
+        texts.cast::<PyTuple>()?.iter().collect()
+    };
+    let mut strs = Vec::with_capacity(items.len());
+    for (i, item) in items.iter().enumerate() {
+        let Ok(s) = item.cast::<PyString>() else {
+            return Err(input_error(
+                py,
+                format!("expected str at index {i}, got {}", type_name(item)),
+            ));
+        };
+        strs.push(s.clone());
+    }
+    let mut owned: Vec<Option<Bound<'py, PyBytes>>> = Vec::with_capacity(strs.len());
+    for s in &strs {
+        owned.push(match s.to_str() {
+            Ok(_) => None,
+            Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) => Some(surrogatepass_bytes(s)?),
+            Err(e) => return Err(e),
+        });
+    }
+    let bytes: Vec<&[u8]> = strs
+        .iter()
+        .zip(&owned)
+        .map(|(s, b)| match b {
+            Some(b) => Ok(b.as_bytes()),
+            None => s.to_str().map(str::as_bytes),
+        })
+        .collect::<PyResult<_>>()?;
+    let t = threads(threads_arg);
+    let outs = py
+        .detach(|| {
+            par::map(bytes.len(), t, |i| {
+                kernel::fix_text_wtf8(bytes[i], cfg).expect("str UTF-8 / surrogatepass is valid")
+            })
+        })
+        .map_err(|e| BatchError::from(e).into_pyerr(py))?;
+    let mut fixed = Vec::with_capacity(outs.len());
+    for (item, out) in strs.iter().zip(outs) {
+        fixed.push(match out {
+            Cow::Borrowed(_) => item.clone(),
+            Cow::Owned(v) => str_from_wtf8(py, &v)?,
+        });
+    }
+    Ok(if is_list {
+        PyList::new(py, fixed)?.into_any()
+    } else {
+        PyTuple::new(py, fixed)?.into_any()
+    })
+}
+
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let m = PyModule::new(parent.py(), "pyroid.ftfy")?;
     m.gil_used(false)?;
     m.add_class::<NativeConfig>()?;
     m.add_function(wrap_pyfunction!(supported_unicode_versions, &m)?)?;
     m.add_function(wrap_pyfunction!(fix_text, &m)?)?;
+    m.add_function(wrap_pyfunction!(fix_text_batch, &m)?)?;
     m.add_function(wrap_pyfunction!(fix_text_segment, &m)?)?;
     m.add_function(wrap_pyfunction!(fix_encoding, &m)?)?;
     m.add_function(wrap_pyfunction!(fix_and_explain, &m)?)?;
