@@ -34,17 +34,17 @@ fn kernel_throughput() {
             best[1] = best[1].min(t.elapsed().as_secs_f64());
             assert_eq!(n, m);
         }
-        let (mb, nd, nc) = (data.len() as f64 / 1e6, docs.len() as f64, chars as f64);
+        let (mb, ndocs, nchars) = (data.len() as f64 / 1e6, docs.len() as f64, chars as f64);
         eprintln!(
             "{:>24} {:>6} docs {:>6.1} MB {:>8} non-ASCII chars | anyascii {:>7.2} us/doc {:>6.0} MB/s {:>5.2} ns/char | unidecode {:>7.2} us/doc",
             path.file_name().and_then(|n| n.to_str()).unwrap_or("?"),
             docs.len(),
             mb,
             chars,
-            best[0] / nd * 1e6,
+            best[0] / ndocs * 1e6,
             mb / best[0],
-            best[0] / nc.max(1.0) * 1e9,
-            best[1] / nd * 1e6,
+            best[0] / nchars.max(1.0) * 1e9,
+            best[1] / ndocs * 1e6,
         );
     }
 }
