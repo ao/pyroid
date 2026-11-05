@@ -2,7 +2,7 @@
 // Derived from datatrove 0.10.1 (Apache-2.0), © HuggingFace Inc.; modified.
 //! Character data for `simplify_text`, per CPython version (see `generate_tables.py`).
 //!
-//! Sources: CPython 3.11.18 (Unicode 14.0.0), CPython 3.12.16 (Unicode 15.0.0), CPython 3.13.18 (Unicode 15.1.0), CPython 3.14.10 (Unicode 16.0.0), CPython 3.15.2 (Unicode 17.0.0); regex 2026.9.29 for `\p{Nd}`; datatrove 0.10.1 `PUNCTUATION`.
+//! Sources: CPython 3.11.18 (Unicode 14.0.0), CPython 3.12.16 (Unicode 15.0.0), CPython 3.13.18 (Unicode 15.1.0), CPython 3.14.10 (Unicode 16.0.0), CPython 3.15.2 (Unicode 17.0.0); regex 2026.9.29 for `\p{Decimal_Number}`; datatrove 0.10.1 `PUNCTUATION`.
 //!
 //! Properties that changed for an already-assigned code point:
 //! - U+0295 14.0.0:0x04 15.0.0:0x04 15.1.0:0x04 16.0.0:0x04 17.0.0:0x00

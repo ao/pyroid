@@ -6,7 +6,7 @@ Nothing is transcribed by hand: every property is read back from the running int
 * Per CPython version (Unicode 14.0, 15.0, 15.1, 16.0, 17.0): `str.lower()` per code point,
   the Final_Sigma classes (probed through `str.lower()` itself), general category Mn, which
   code points `unicodedata.normalize("NFD", ...)` treats as non-inert, and `str.isspace()`.
-* `\\p{Nd}` as the `regex` module sees it (its own Unicode data, whatever the interpreter).
+* `\\p{Decimal_Number}` as the `regex` module sees it (its own Unicode data, any interpreter).
 * datatrove's `PUNCTUATION` string, from the installed datatrove 0.10.1.
 
 Usage (inside the pyroid-dev container; never on the host):
@@ -87,9 +87,9 @@ def _expand(ranges) -> set[int]:
 def dump(out: str) -> None:
     import regex
 
-    nd_re, space_re = regex.compile(r"\p{Nd}"), re.compile(r"\s")
+    digit_re, space_re = regex.compile(r"\p{Decimal_Number}"), re.compile(r"\s")
     sets: dict[str, set[int]] = {
-        k: set() for k in ("lower", "ci", "cased", "mn", "nfdx", "space", "nd")
+        k: set() for k in ("lower", "ci", "cased", "mn", "nfdx", "space", "digit")
     }
     lower: dict[int, str] = {}
     non_mn_ccc: list[list[int]] = []
@@ -124,8 +124,8 @@ def dump(out: str) -> None:
         assert sp == (space_re.match(c) is not None) == (not c.strip()), hex(cp)
         if sp:
             sets["space"].add(cp)
-        if nd_re.match(c):
-            sets["nd"].add(cp)
+        if digit_re.match(c):
+            sets["digit"].add(cp)
     sep_re = regex.compile(r"[.,،٫⎖⎗⎘]", regex.VERBOSE | regex.UNICODE)
     assert {cp for cp in _code_points() if sep_re.match(chr(cp))} == {ord(s) for s in SEPARATORS}
     try:
@@ -192,13 +192,13 @@ def emit(paths: list[str]) -> None:
     # ---- version-independent data ----------------------------------------
     for d in dumps:
         assert d["regex"] == dumps[0]["regex"], "use the same regex release everywhere"
-        assert d["sets"]["nd"] == dumps[0]["sets"]["nd"], (
-            "regex's \\p{Nd} differs between interpreters"
+        assert d["sets"]["digit"] == dumps[0]["sets"]["digit"], (
+            "regex's \\p{Decimal_Number} differs between interpreters"
         )
         assert _expand(d["sets"]["space"]) == set(PY_WHITESPACE), (
             f"str.isspace() changed in {d['unicode']}"
         )
-    nd = _expand(dumps[0]["sets"]["nd"])
+    digits = _expand(dumps[0]["sets"]["digit"])
     puncts = [d["punctuation"] for d in dumps if d["punctuation"] is not None]
     assert puncts and all(p == puncts[0] for p in puncts), (
         "need datatrove in at least one interpreter"
@@ -207,7 +207,7 @@ def emit(paths: list[str]) -> None:
     assert len(punct) == len(puncts[0]), "PUNCTUATION repeats a character"
     # The passes are independent, but sanity-check what the Rust side relies on.
     for s in SEPARATORS:
-        assert ord(s) not in nd
+        assert ord(s) not in digits
 
     # ---- per-version flags -----------------------------------------------
     flags = [bytearray(MAX_CP) for _ in dumps]
@@ -217,7 +217,7 @@ def emit(paths: list[str]) -> None:
                 for cp in range(a, b + 1):
                     flags[i][cp] |= bit
     common = bytearray(MAX_CP)
-    for cp in nd:
+    for cp in digits:
         common[cp] |= DIGIT
     for cp in punct:
         common[cp] |= PUNCT
@@ -301,7 +301,10 @@ def emit(paths: list[str]) -> None:
     o.append("(see `generate_tables.py`).\n")
     o.append("//!\n//! Sources: ")
     o.append(", ".join(f"CPython {d['python']} (Unicode {d['unicode']})" for d in dumps))
-    o.append(f"; regex {dumps[0]['regex']} for `\\p{{Nd}}`; datatrove 0.10.1 `PUNCTUATION`.\n")
+    o.append(
+        f"; regex {dumps[0]['regex']} for `\\p{{Decimal_Number}}`;"
+        " datatrove 0.10.1 `PUNCTUATION`.\n"
+    )
     o.append("//!\n//! Properties that changed for an already-assigned code point:")
     o.append("".join(f"\n//! - {c}" for c in changes) if changes else " none.")
     o.append("\n//!\n//! Lowercase mappings that differ between versions:")

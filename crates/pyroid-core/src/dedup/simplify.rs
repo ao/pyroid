@@ -6,7 +6,7 @@
 //!
 //! 1. `lowercase`: `str.lower()`: full mappings (U+0130 becomes "i" U+0307)
 //!    and CPython's Final_Sigma rule for U+03A3 (`handle_capital_sigma`).
-//! 2. `norm_numbers`: `regex`'s `\p{Nd}+([.,،٫⎖⎗⎘]{1}\p{Nd}+)?` becomes "0".
+//! 2. `norm_numbers`: `regex`'s `\p{Decimal_Number}+([.,،٫⎖⎗⎘]{1}\p{Decimal_Number}+)?` becomes "0".
 //! 3. `norm_weekdays`, then `norm_monthnames`: the lowercase English names
 //!    become "WEEKDAY" / "MONTH".
 //! 4. `remove_punctuation`: each character of `PUNCTUATION` becomes " ".
@@ -15,7 +15,7 @@
 //! 7. Always: `.strip()`.
 //!
 //! The character data (case mappings, Final_Sigma classes, Mn, which
-//! characters NFD touches, `regex`'s `\p{Nd}`, `PUNCTUATION`) is generated
+//! characters NFD touches, `regex`'s `\p{Decimal_Number}`, `PUNCTUATION`) is generated
 //! from each CPython by `generate_tables.py` into `simplify_tables`. NFD
 //! itself uses the `unicode-normalization` crate, which implements a newer
 //! Unicode version than any CPython: decompositions and combining classes
@@ -413,7 +413,7 @@ fn final_sigma(src: &[u8], i: usize, vi: usize) -> bool {
 // 2. numbers
 // ---------------------------------------------------------------------------
 
-/// Length of the `\p{Nd}` character at `src[i]`, if there is one.
+/// Length of the `\p{Decimal_Number}` character at `src[i]`, if there is one.
 #[inline]
 fn digit_at(src: &[u8], i: usize) -> Option<usize> {
     let b = *src.get(i)?;
@@ -694,7 +694,7 @@ fn collapse(src: &[u8], dst: &mut Vec<u8>, punct: bool, numbers: bool) -> bool {
             let (cp, n) = decode(buf, rd);
             (flags(cp, 0), n)
         };
-        // A digit first: U+FF11 is both `\p{Nd}` and in `PUNCTUATION`, and
+        // A digit first: U+FF11 is both `\p{Decimal_Number}` and in `PUNCTUATION`, and
         // numbers run before punctuation.
         if fl & digit == 0 && fl & sep != 0 {
             pending = any;

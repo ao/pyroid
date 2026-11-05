@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import sys
 import unicodedata
 from dataclasses import fields
@@ -200,23 +201,25 @@ VERSIONED_CPS = [
     for cp in range(int(a, 16), int(b or a, 16) + 1)
 ]
 SEPARATORS = ".,،٫⎖⎗⎘"
-_ND: list[str] = []
+_DIGITS: list[str] = []
 
 
-def _nd() -> list[str]:
-    """Every `\\p{Nd}` character, as the regex module (the same release everywhere) sees it."""
-    if not _ND:
+def _digits() -> list[str]:
+    """Every `\\p{Decimal_Number}` character, as the (one, pinned) regex release sees it."""
+    if not _DIGITS:
         import regex
 
-        nd = regex.compile(r"\p{Nd}")
-        _ND.extend(chr(cp) for cp in range(0x110000) if nd.match(chr(cp)))
-    return _ND
+        digit_re = regex.compile(r"\p{Decimal_Number}")
+        _DIGITS.extend(chr(cp) for cp in range(0x110000) if digit_re.match(chr(cp)))
+    return _DIGITS
 
 
 def _rand_number(rng: random.Random) -> str:
     def run() -> str:
         k = rng.randrange(1, 4)
-        return "".join(rng.choice("0123456789" if rng.random() < 0.3 else _nd()) for _ in range(k))
+        return "".join(
+            rng.choice("0123456789" if rng.random() < 0.3 else _digits()) for _ in range(k)
+        )
 
     s = run()
     for _ in range(rng.choice([0, 0, 1, 2])):
@@ -269,7 +272,10 @@ def _vendored_simplify() -> tuple:
         )
     )
     punctuation_trans = str.maketrans(punctuation, " " * len(punctuation))
-    numbers = regex.compile(r"\p{Nd}+([.,،٫⎖⎗⎘]{1}\p{Nd}+)?", regex.VERBOSE | regex.UNICODE)
+    # datatrove's NUMBERS_PATTERN, with the digit class spelt out (the same set in `regex`).
+    numbers = regex.compile(
+        r"\p{Decimal_Number}+([.,،٫⎖⎗⎘]{1}\p{Decimal_Number}+)?", regex.VERBOSE | regex.UNICODE
+    )
     whitespace = re.compile(r"\s+")
     weekdays = re.compile(r"monday|tuesday|wednesday|thursday|friday|saturday|sunday")
     months = re.compile(
@@ -348,12 +354,15 @@ def _header(uses_datatrove: bool, **extra: object) -> dict:
 
 
 DEFAULT_BITS = 0b0011111
+# typos reads "iy" as a misspelt "it"; random texts that contain it as a word are left out.
+TYPOS_FLAGGED = re.compile(r"(?<![A-Za-z])[Ii][Yy](?![A-Za-z])")
 
 
 def simplify(out: Path, n: int, seed: int) -> None:
     """A header line, then one `{"text", "out": {config bit mask: output}}` line per text: every
     32nd text under all 128 configs, the others under the default, everything on, one flag on its
-    own (in turn) and a random config."""
+    own (in turn) and a random config. Texts the typos linter would flag (a lone "iy" word) are
+    skipped, after drawing their configs, so the other lines do not change."""
     config, simplify_text, uses_dt = _simplifiers(vendored=False)
     rng = random.Random(seed)
     cases = 0
@@ -366,6 +375,8 @@ def simplify(out: Path, n: int, seed: int) -> None:
             else:
                 cfgs = sorted({DEFAULT_BITS, 127, 1 << (i % 7), rng.randrange(128)})
             outs = {str(bits): simplify_text(text, config(bits)) for bits in cfgs}
+            if any(TYPOS_FLAGGED.search(s) for s in (text, *outs.values())):
+                continue
             f.write(json.dumps({"text": text, "out": outs}, ensure_ascii=False) + "\n")
             cases += len(outs)
     sys.stderr.write(f"{out}: {n} texts, {cases} cases, Unicode {unicodedata.unidata_version}\n")
