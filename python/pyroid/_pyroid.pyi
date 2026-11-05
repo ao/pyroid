@@ -5,7 +5,16 @@ from typing import Final, Generic, Literal, TypeVar, final
 
 _T_co = TypeVar("_T_co", covariant=True)
 
-__all__ = ["Column", "InputError", "PyroidError", "__version__", "_testing", "ftfy", "text"]
+__all__ = [
+    "Column",
+    "FallbackWarning",
+    "InputError",
+    "PyroidError",
+    "__version__",
+    "_testing",
+    "ftfy",
+    "text",
+]
 
 __version__: Final[str]
 
@@ -19,6 +28,9 @@ class PyroidError(Exception):
 
 class InputError(PyroidError, TypeError):
     """An argument has the wrong type or shape for this pyroid function."""
+
+class FallbackWarning(RuntimeWarning):
+    """A pyroid function delegated this call to the incumbent library (slow path)."""
 
 @final
 class Column(Generic[_T_co]):

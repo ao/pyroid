@@ -45,8 +45,15 @@ def test_version_matches_distribution_metadata() -> None:
 
 
 def test_public_api() -> None:
-    assert pyroid.__all__ == ["Column", "InputError", "PyroidError", "__version__"]
+    assert pyroid.__all__ == [
+        "Column",
+        "FallbackWarning",
+        "InputError",
+        "PyroidError",
+        "__version__",
+    ]
     assert pyroid.PyroidError is _pyroid.PyroidError
+    assert pyroid.FallbackWarning is _pyroid.FallbackWarning
     assert pyroid.InputError is _pyroid.InputError
     assert pyroid.Column is _pyroid.Column
 
@@ -59,6 +66,18 @@ def test_exception_hierarchy() -> None:
     assert err.__doc__ == "Base class for all pyroid errors."
     with pytest.raises(pyroid.PyroidError, match="boom"):
         raise err("boom")
+
+
+def test_fallback_warning() -> None:
+    # The one warning every module emits when it delegates to the incumbent (docs/dev/MODULES.md).
+    w = pyroid.FallbackWarning
+    assert w.__mro__[1:] == RuntimeWarning.__mro__
+    assert not issubclass(w, pyroid.PyroidError)
+    assert w.__module__ == "pyroid"
+    assert w.__qualname__ == "FallbackWarning"
+    clone = pickle.loads(pickle.dumps(w("slow path")))
+    assert type(clone) is w
+    assert clone.args == ("slow path",)
 
 
 def test_exception_pickles_by_public_name() -> None:

@@ -6,13 +6,17 @@
 //! - `InputError(PyroidError, TypeError)`: an argument has the wrong type
 //!   (not a str, a list holding a non-str, an Arrow column that isn't
 //!   strings, ...). It is a `TypeError`, so `except TypeError` still works.
+//! - `FallbackWarning(RuntimeWarning)`: the one warning a module emits when it
+//!   delegates a call to the incumbent library (ftfy, fastText, ...) because
+//!   the Rust port does not handle it. Results are the incumbent's; only the
+//!   speed differs. See `docs/dev/MODULES.md`.
 //!
 //! Classes report `__module__ == "pyroid"` so they pickle by their public
 //! name. Product tracks add a subclass here with one `create_exception!` (or
 //! `make_type` call for multiple bases) and one line in [`register`].
 
 use pyo3::create_exception;
-use pyo3::exceptions::{PyException, PyTypeError};
+use pyo3::exceptions::{PyException, PyRuntimeWarning, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyTuple, PyType};
@@ -22,6 +26,13 @@ create_exception!(
     PyroidError,
     PyException,
     "Base class for all pyroid errors."
+);
+
+create_exception!(
+    pyroid,
+    FallbackWarning,
+    PyRuntimeWarning,
+    "A pyroid function delegated this call to the incumbent library (slow path)."
 );
 
 static INPUT_ERROR: PyOnceLock<Py<PyType>> = PyOnceLock::new();
@@ -83,5 +94,6 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add("PyroidError", py.get_type::<PyroidError>())?;
     m.add("InputError", input_error_type(py)?)?;
+    m.add("FallbackWarning", py.get_type::<FallbackWarning>())?;
     Ok(())
 }
