@@ -46,6 +46,7 @@ Known differences from datatrove
   ``only_dedup_in_index``) are not supported.
 """
 
+from dataclasses import dataclass
 from typing import Any, Final, overload
 
 from pyroid._pyroid import Column
@@ -69,6 +70,7 @@ _UNICODE_VERSION: Final[str]
 
 def _native_config(cfg: MinhashConfig) -> Any: ...
 
+@dataclass(frozen=True)
 class HashConfig:
     """datatrove's ``HashConfig``: the shingle hash function and its width.
 
@@ -78,12 +80,10 @@ class HashConfig:
             first 8 or 4 bytes of SHA-1, little-endian).
     """
 
-    precision: int
-    hash_fc: str
-    def __init__(self, precision: int = 64, hash_fc: str = "xxhash") -> None: ...
-    def __hash__(self) -> int: ...
-    def __eq__(self, other: object) -> bool: ...
+    precision: int = 64
+    hash_fc: str = "xxhash"
 
+@dataclass(frozen=True)
 class TextNormConfig:
     """datatrove's ``TextNormConfig``: what :func:`simplify_text` does, in order.
 
@@ -98,26 +98,15 @@ class TextNormConfig:
         norm_unicode_diacritics: NFD, then drop combining marks (``Mn``).
     """
 
-    lowercase: bool
-    norm_whitespace: bool
-    remove_punctuation: bool
-    norm_unicode_diacritics: bool
-    norm_numbers: bool
-    norm_weekdays: bool
-    norm_monthnames: bool
-    def __init__(
-        self,
-        lowercase: bool = True,
-        norm_whitespace: bool = True,
-        remove_punctuation: bool = True,
-        norm_unicode_diacritics: bool = True,
-        norm_numbers: bool = True,
-        norm_weekdays: bool = False,
-        norm_monthnames: bool = False,
-    ) -> None: ...
-    def __hash__(self) -> int: ...
-    def __eq__(self, other: object) -> bool: ...
+    lowercase: bool = True
+    norm_whitespace: bool = True
+    remove_punctuation: bool = True
+    norm_unicode_diacritics: bool = True
+    norm_numbers: bool = True
+    norm_weekdays: bool = False
+    norm_monthnames: bool = False
 
+@dataclass(frozen=True)
 class MinhashConfig:
     """datatrove's ``MinhashConfig``, with the same fields and defaults.
 
@@ -131,23 +120,12 @@ class MinhashConfig:
         hash_config: The :class:`HashConfig` of the shingle hash.
     """
 
-    n_grams: int
-    num_buckets: int
-    hashes_per_bucket: int
-    seed: int
-    norm_config: TextNormConfig
-    hash_config: HashConfig
-    def __init__(
-        self,
-        n_grams: int = 5,
-        num_buckets: int = 14,
-        hashes_per_bucket: int = 8,
-        seed: int = 1,
-        norm_config: TextNormConfig = ...,
-        hash_config: HashConfig = ...,
-    ) -> None: ...
-    def __hash__(self) -> int: ...
-    def __eq__(self, other: object) -> bool: ...
+    n_grams: int = 5
+    num_buckets: int = 14
+    hashes_per_bucket: int = 8
+    seed: int = 1
+    norm_config: TextNormConfig = ...
+    hash_config: HashConfig = ...
 
 @overload
 def minhash_signatures(
