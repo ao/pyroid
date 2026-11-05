@@ -69,6 +69,15 @@ test = [
 # Same pins as .pre-commit-config.yaml (prek runs ruff and mypy from there).
 lint = ["ruff==0.17.3", "mypy==2.4.1", "prek==0.5.10"]
 dev = ["maturin>=1.16,<2.0", { include-group = "test" }, { include-group = "lint" }]
+# The docs site (mkdocs.yml; .github/workflows/docs.yml): Zensical builds and publishes it, and
+# mkdocs-material's `mkdocs build --strict` is the link, anchor and nav check. mkdocstrings reads the
+# .pyi stubs statically, so no Rust build is needed; ruff formats the signatures it renders.
+docs = [
+  "zensical==0.0.74",
+  "mkdocs-material==9.8.0",
+  "mkdocstrings-python==2.0.10",
+  "ruff==0.17.3",
+]
 
 [tool.maturin]
 manifest-path = "crates/pyroid-py/Cargo.toml"

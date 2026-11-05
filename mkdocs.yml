@@ -1,0 +1,124 @@
+# Docs site. Built with Zensical, which reads this file (mkdocs-material reads it too):
+#   uv venv .venv-docs && uv pip install --python .venv-docs --group docs
+#   .venv-docs/bin/zensical build --strict          # output in site/
+# The API reference is generated from the .pyi stubs by mkdocstrings + griffe *without importing*
+# the extension (allow_inspection: false), so no Rust build is needed.
+site_name: pyroid
+site_description: Rust-fast text cleaning for LLM datasets. Drop-in for ftfy, fastText inference and datatrove's quality filters.
+site_url: https://ao.github.io/pyroid/
+repo_url: https://github.com/ao/pyroid
+repo_name: ao/pyroid
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; Andrew Odendaal. MIT License.
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+# mkdocs build --strict (the CI link check) also fails on broken anchors and pages left out of nav.
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+# Helper scripts and data files are inputs to the build, not pages.
+exclude_docs: |
+  scripts/
+  data/
+
+nav:
+  - Home: index.md
+  - Install: install.md
+  - Guides:
+      - pyroid.ftfy: guides/ftfy.md
+      - pyroid.fasttext: guides/fasttext.md
+      - pyroid.filters: guides/filters.md
+      - pyroid.dedup (preview): guides/dedup.md
+      - pyroid.translit (preview): guides/translit.md
+  - Concepts:
+      - Inputs and outputs: concepts/inputs.md
+      - Threads and free-threading: concepts/threads.md
+      - Fallbacks (FallbackWarning): concepts/fallbacks.md
+      - Errors: concepts/errors.md
+  - API reference:
+      - reference/index.md
+      - pyroid: reference/pyroid.md
+      - pyroid.ftfy: reference/ftfy.md
+      - pyroid.fasttext: reference/fasttext.md
+      - pyroid.filters: reference/filters.md
+      - pyroid.text: reference/text.md
+  - Compatibility: compatibility.md
+  - Benchmarks: benchmarks.md
+  - Migrating from 0.7: migrating-from-0.7.md
+  - Changelog: changelog.md
+  - Development:
+      - Writing a module: dev/MODULES.md
+      - Releasing: RELEASING.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [python]
+          inventories:
+            - https://docs.python.org/3/objects.inv
+          options:
+            # Documents each module from its .pyi stub and resolves the stubs' :func:`...` roles.
+            extensions:
+              - docs/scripts/griffe_pyroid.py:PyroidStubs
+            allow_inspection: false
+            docstring_style: google
+            docstring_options:
+              returns_multiple_items: false
+            docstring_section_style: list
+            show_root_heading: true
+            show_root_full_path: true
+            show_signature_annotations: true
+            separate_signature: true
+            signature_crossrefs: true
+            show_overloads: true
+            overloads_only: true
+            members_order: source
+            filters: ["!^_"]
+            show_if_no_docstring: true
+            show_source: false
+            show_bases: true
+            merge_init_into_class: true
+            heading_level: 2
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ao/pyroid
