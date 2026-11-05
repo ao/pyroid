@@ -1,77 +1,43 @@
-[package]
-name = "pyroid"
-version = "0.7.0"
-edition = "2021"
-authors = ["Andrew O", "Pyroid Team"]
-description = "High-performance Rust functions for Python"
-readme = "README.md"
+[workspace]
+resolver = "3"
+# Listed explicitly (no globs): release tooling reads member paths literally.
+members = ["crates/pyroid-core", "crates/pyroid-py"]
+# `cargo test` / `cargo build` at the root touch only the pure-Rust core; the
+# extension module is built by maturin (see pyproject.toml).
+default-members = ["crates/pyroid-core"]
+
+[workspace.package]
+# Single source of the version. pyproject.toml reads it via `dynamic = ["version"]`
+# (maturin converts SemVer to PEP 440, e.g. 1.0.0-dev -> 1.0.0.dev0).
+version = "1.0.0-dev"
+edition = "2024"
+rust-version = "1.85"
 license = "MIT"
+authors = ["Andrew Odendaal"]
 repository = "https://github.com/ao/pyroid"
 
-[lib]
-name = "pyroid"
-crate-type = ["cdylib"]
+[workspace.dependencies]
+pyo3 = "0.30.1"
+pyroid-core = { path = "crates/pyroid-core" }
 
-# Feature flags for optional functionality
-[features]
-default = ["math", "text", "data", "io", "image", "ml"]
-math = []
-text = ["dep:regex"]
-data = []
-io = ["dep:tokio", "dep:futures"]
-image = []
-ml = []
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
 
-[dependencies]
-# Core dependencies
-pyo3 = { version = "0.20.0", features = [
-  "extension-module",
-  "auto-initialize",
-  "abi3-py38",
-  "abi3",
-  "multiple-pymethods"
-] }
-rayon = "1.10.0"
-serde_json = "1.0.114"
-num_cpus = "1.16.0"
-once_cell = "1.19.0"
-pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
-reqwest = { version = "0.11", features = ["json", "stream", "rustls-tls"] }
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
 
-# Optional dependencies based on features
-tokio = { version = "1.44.1", features = [
-  "rt",
-  "rt-multi-thread",
-  "macros",
-  "io-util",
-  "fs",
-  "time",
-  "sync",
-  "net",
-], optional = true }
-futures = { version = "0.3.31", optional = true }
-regex = { version = "1.10.3", optional = true }
-
-[build-dependencies]
-pyo3-build-config = "0.20.0"
-num_cpus = "1.16.0"
-
-[dev-dependencies]
-criterion = "0.5.1"
-rand = "0.8.5"
-base64 = "0.21.7"
-regex = "1.10.3"
-
-# Optimize for size in release mode
 [profile.release]
-opt-level = 3
-lto = true
+# "unwind" is required: PyO3 turns Rust panics into PanicException only when
+# they unwind. "abort" would kill the Python interpreter.
+panic = "unwind"
+lto = "fat"
 codegen-units = 1
-panic = "abort"
 strip = true
 
-# Enable better error messages in debug mode
-[profile.dev]
-opt-level = 0
-debug = true
-
+# `cargo build --profile profiling` / `maturin build --profile profiling`:
+# release codegen with symbols, for perf and cargo-bloat.
+[profile.profiling]
+inherits = "release"
+strip = "none"
+debug = "line-tables-only"

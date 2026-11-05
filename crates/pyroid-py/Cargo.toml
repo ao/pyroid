@@ -1,0 +1,28 @@
+[package]
+name = "pyroid-py"
+description = "PyO3 bindings for pyroid: builds the pyroid._pyroid extension module."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+# Must match the last component of `module-name` in pyproject.toml.
+name = "_pyroid"
+crate-type = ["cdylib"]
+# Tested through the installed wheel with pytest (python/tests), not cargo.
+test = false
+doctest = false
+
+[dependencies]
+# abi3-py311: one cp311-abi3 wheel for GIL-enabled CPython 3.11+.
+# abi3t: one cp315-abi3.abi3t wheel for CPython 3.15+ (GIL and free-threaded, PEP 803).
+# 3.14t still needs its own version-specific wheel.
+pyo3 = { workspace = true, features = ["abi3-py311", "abi3t"] }
+pyroid-core.workspace = true
+
+[lints]
+workspace = true
