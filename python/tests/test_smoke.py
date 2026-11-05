@@ -68,6 +68,7 @@ def test_exception_pickles_by_public_name() -> None:
 
 
 @pytest.mark.skipif(not FREE_THREADED, reason="needs a free-threaded CPython build")
+@pytest.mark.thread_unsafe(reason="runs a subprocess")
 def test_import_keeps_gil_disabled() -> None:
     # Fresh interpreter, PYTHON_GIL unset: if the module did not declare
     # Py_MOD_GIL_NOT_USED, importing it would re-enable the GIL.
