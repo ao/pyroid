@@ -58,7 +58,9 @@ def write_parquet(table, rel: str) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")
     # Fixed writer options -> deterministic bytes for a given pyarrow version (pinned in uv.lock).
-    pq.write_table(table, tmp, compression="zstd", compression_level=3, row_group_size=5_000, write_statistics=False)
+    pq.write_table(
+        table, tmp, compression="zstd", compression_level=3, row_group_size=5_000, write_statistics=False
+    )
     tmp.replace(out)
     return out
 
@@ -102,8 +104,13 @@ def fetch_fineweb(pin: bool) -> None:
             t = pq.read_table(D.DATA / rel, columns=["id", "text"])
             ids, texts = t.column("id").to_pylist(), t.column("text").to_pylist()
             assert len(ids) == n
-            D.pin(rel, rows=n, content_sha256=D.content_sha256(ids, texts), chars=sum(map(len, texts)),
-                  source={**FINEWEB, "rows": f"first {n} in file order"})
+            D.pin(
+                rel,
+                rows=n,
+                content_sha256=D.content_sha256(ids, texts),
+                chars=sum(map(len, texts)),
+                source={**FINEWEB, "rows": f"first {n} in file order"},
+            )
 
 
 def fetch_fineweb2(pin: bool) -> None:
@@ -116,15 +123,23 @@ def fetch_fineweb2(pin: bool) -> None:
             write_parquet(t.select(["id", "text"]), rel)
         if pin:
             ids = D.read_parquet_columns(D.DATA / rel, ["id", "text"])
-            D.pin(rel, rows=len(ids["id"]), content_sha256=D.content_sha256(ids["id"], ids["text"]),
-                  source={"repo": FINEWEB2["repo"], "revision": FINEWEB2["revision"],
-                          "file": f"data/{lang}/test/000_00000.parquet", "license": FINEWEB2["license"]})
+            D.pin(
+                rel,
+                rows=len(ids["id"]),
+                content_sha256=D.content_sha256(ids["id"], ids["text"]),
+                source={
+                    "repo": FINEWEB2["repo"],
+                    "revision": FINEWEB2["revision"],
+                    "file": f"data/{lang}/test/000_00000.parquet",
+                    "license": FINEWEB2["license"],
+                },
+            )
 
 
 def download(url: str, out: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(out.suffix + ".tmp")
-    with urllib.request.urlopen(url, timeout=120) as r, tmp.open("wb") as f:  # noqa: S310 (pinned https URLs)
+    with urllib.request.urlopen(url, timeout=120) as r, tmp.open("wb") as f:  # pinned https URLs
         while block := r.read(1 << 20):
             f.write(block)
     tmp.replace(out)

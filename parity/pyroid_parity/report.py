@@ -47,13 +47,24 @@ class Collector:
         self.inputs: dict[str, set[str]] = {}
         self.skips: dict[tuple[str, str], str] = {}
 
-    def record(self, suite: str, check: str, same: bool, *, case: str | None = None, input: Any = None,
-               got: Any = None, want: Any = None) -> bool:
+    def record(
+        self,
+        suite: str,
+        check: str,
+        same: bool,
+        *,
+        case: str | None = None,
+        input: Any = None,
+        got: Any = None,
+        want: Any = None,
+    ) -> bool:
         with self.lock:
             c = self.checks.setdefault((suite, check), {"same": 0, "diff": 0, "examples": []})
             c["same" if same else "diff"] += 1
             if not same and len(c["examples"]) < MAX_EXAMPLES:
-                c["examples"].append({"case": case, "input": _short(input), "got": _short(got), "want": _short(want)})
+                c["examples"].append(
+                    {"case": case, "input": _short(input), "got": _short(got), "want": _short(want)}
+                )
         return same
 
     def skip(self, suite: str, check: str, reason: str) -> None:
@@ -75,14 +86,23 @@ class Collector:
                     checks[check] = {"status": "fail" if c["diff"] else "pass", **c}
             for (suite, check), why in sorted(self.skips.items()):
                 if suite == s and check not in checks:
-                    checks[check] = {"status": "skip", "same": 0, "diff": 0, "examples": [], "skip_reason": why}
+                    checks[check] = {
+                        "status": "skip",
+                        "same": 0,
+                        "diff": 0,
+                        "examples": [],
+                        "skip_reason": why,
+                    }
             statuses = {c["status"] for c in checks.values()}
             status = "fail" if "fail" in statuses else "pass" if "pass" in statuses else "skip"
             suites[s] = {
                 "status": status,
                 "candidate": self.impls.get(s, {}),
                 "reference": self.references.get(s, {}),
-                "inputs": {rel: manifest["files"].get(rel, {}).get("sha256") for rel in sorted(self.inputs.get(s, ()))},
+                "inputs": {
+                    rel: manifest["files"].get(rel, {}).get("sha256")
+                    for rel in sorted(self.inputs.get(s, ()))
+                },
                 "checks": checks,
             }
         return {
@@ -90,7 +110,9 @@ class Collector:
             "generated_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
             "tool": {"name": "pyroid-parity", "git_sha": _git_sha()},
             "environment": environment(),
-            "manifest_sha256": hashlib.sha256(D.MANIFEST.read_bytes()).hexdigest() if D.MANIFEST.exists() else None,
+            "manifest_sha256": hashlib.sha256(D.MANIFEST.read_bytes()).hexdigest()
+            if D.MANIFEST.exists()
+            else None,
             "status": _overall(suites),
             "suites": suites,
         }
@@ -103,8 +125,13 @@ def _overall(suites: dict[str, Any]) -> str:
 
 def _git_sha() -> str | None:
     try:
-        return subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True,
-                              cwd=Path(__file__).parent).stdout.strip()
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=Path(__file__).parent,
+        ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return None
 
@@ -141,15 +168,23 @@ def validate(report: dict[str, Any]) -> list[str]:
 def render(report: dict[str, Any]) -> str:
     env = report["environment"]
     py = f"{env['implementation']} {env['python']}{'t' if env['free_threaded'] else ''} ({env['machine']})"
-    lines = [f"### Parity: **{report['status']}** · {py}", "",
-             "| suite | candidate | reference | check | status | same | diff |", "|---|---|---|---|---|---:|---:|"]
+    lines = [
+        f"### Parity: **{report['status']}** · {py}",
+        "",
+        "| suite | candidate | reference | check | status | same | diff |",
+        "|---|---|---|---|---|---:|---:|",
+    ]
     for name, s in report["suites"].items():
         cand = f"{s['candidate'].get('module', '?')} {s['candidate'].get('version') or ''}".strip()
         ref = f"{s['reference'].get('name', '?')} {s['reference'].get('version') or ''}".strip()
         for check, c in s["checks"].items():
             mark = {"pass": "✅", "fail": "❌", "skip": "⏭️"}[c["status"]]
-            lines.append(f"| {name} | {cand} | {ref} | {check} | {mark} {c['status']} | {c['same']} | {c['diff']} |")
-    fails = [(n, ch, c) for n, s in report["suites"].items() for ch, c in s["checks"].items() if c["examples"]]
+            lines.append(
+                f"| {name} | {cand} | {ref} | {check} | {mark} {c['status']} | {c['same']} | {c['diff']} |"
+            )
+    fails = [
+        (n, ch, c) for n, s in report["suites"].items() for ch, c in s["checks"].items() if c["examples"]
+    ]
     for n, ch, c in fails:
         lines += ["", f"<details><summary>{n}/{ch}: first {len(c['examples'])} diffs</summary>", "", "```"]
         lines += [json.dumps(e, ensure_ascii=False) for e in c["examples"]] + ["```", "</details>"]
@@ -158,8 +193,11 @@ def render(report: dict[str, Any]) -> str:
 
 def merge(reports: list[dict[str, Any]]) -> dict[str, Any]:
     """Combine reports from several interpreters into ``{"schema_version", "runs": [...]}`` keyed by env."""
-    return {"schema_version": SCHEMA_VERSION, "status": _overall({str(i): r for i, r in enumerate(reports)}),
-            "runs": reports}
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": _overall({str(i): r for i, r in enumerate(reports)}),
+        "runs": reports,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:

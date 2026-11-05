@@ -52,3 +52,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 extend-select = ["I", "B", "UP", "PERF", "PT", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Mojibake, confusables, control and bidi characters are the test data here.
+"pyroid_parity/{refs,strategies}.py" = ["RUF001", "RUF003", "PLE2502", "PLE2515"]
+"tests/**" = ["RUF001", "RUF003", "RUF012", "PLE2502", "PLE2515", "PT018"]

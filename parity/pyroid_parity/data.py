@@ -71,7 +71,9 @@ def _verified(rel: str) -> Path:
     if entry is None:
         raise DataError(f"{rel} is not pinned in {MANIFEST}")
     if not path.exists():
-        raise DataError(f"{path} is missing: run `bench/fetch.py` (and `python -m pyroid_parity.refs`) in Docker")
+        raise DataError(
+            f"{path} is missing: run `bench/fetch.py` (and `python -m pyroid_parity.refs`) in Docker"
+        )
     if path.stat().st_size != entry["bytes"] or sha256_file(path) != entry["sha256"]:
         raise DataError(f"{path} does not match the sha256 pinned in {MANIFEST}")
     return path

@@ -55,7 +55,9 @@ def parse_specs(specs: Sequence[str]) -> dict[str, str]:
             suites = ["filters", "dedup"] if module == "datatrove" else [last]
         for s in suites:
             if s not in SUITES:
-                raise ImplError(f"--impl {spec!r}: cannot tell which suite it is for; use SUITE=MODULE, SUITE in {SUITES}")
+                raise ImplError(
+                    f"--impl {spec!r}: cannot tell which suite it is for; use SUITE=MODULE, SUITE in {SUITES}"
+                )
             chosen[s] = module
     return chosen
 
@@ -94,13 +96,23 @@ class Impl:
     notes: list[str] = field(default_factory=list)
 
     def describe(self) -> dict[str, Any]:
-        return {"spec": self.module, "module": self.module, "dist": self.dist, "version": self.version,
-                "adapter": self.adapter, "is_reference": self.is_reference, "notes": self.notes}
+        return {
+            "spec": self.module,
+            "module": self.module,
+            "dist": self.dist,
+            "version": self.version,
+            "adapter": self.adapter,
+            "is_reference": self.is_reference,
+            "notes": self.notes,
+        }
 
 
 def resolve(suite: str, module: str) -> Impl:
     adapter_name = f"pyroid_parity.adapters.{suite}_{module.replace('.', '_')}"
-    if importlib.util.find_spec("pyroid_parity.adapters") and importlib.util.find_spec(adapter_name) is not None:
+    if (
+        importlib.util.find_spec("pyroid_parity.adapters")
+        and importlib.util.find_spec(adapter_name) is not None
+    ):
         ad = importlib.import_module(adapter_name)
         obj = ad.make()
         adapter = adapter_name
@@ -108,8 +120,16 @@ def resolve(suite: str, module: str) -> Impl:
         mod = importlib.import_module(module)
         obj = GENERIC[suite](mod)
         adapter = "generic"
-    return Impl(suite, module, adapter, obj, module == REFERENCE[suite], version_of(module), dist_of(module),
-                list(getattr(obj, "notes", [])))
+    return Impl(
+        suite,
+        module,
+        adapter,
+        obj,
+        module == REFERENCE[suite],
+        version_of(module),
+        dist_of(module),
+        list(getattr(obj, "notes", [])),
+    )
 
 
 # ---------------------------------------------------------------- generic adapters (the contracts above)
@@ -155,8 +175,10 @@ class GenericFilters:
         else:
             keep, reason, out = (*res, None)[:3]
         out = [None] * len(texts) if out is None else list(out)
-        return [("ok", bool(k), r, o if (o is not None and o != t) else None)
-                for k, r, o, t in zip(keep, reason, out, texts, strict=True)]
+        return [
+            ("ok", bool(k), r, o if (o is not None and o != t) else None)
+            for k, r, o, t in zip(keep, reason, out, texts, strict=True)
+        ]
 
     def run(self, name: str, texts: list[str], config: dict[str, Any]) -> list[Decision]:
         try:
@@ -176,12 +198,17 @@ class GenericDedup:
         self.mod = mod
 
     def signatures(self, texts: list[str], config: dict[str, Any]) -> list[list[int] | None]:
-        return [None if s is None else [int(x) for x in s] for s in self.mod.minhash_signatures(texts, **config)]
+        return [
+            None if s is None else [int(x) for x in s] for s in self.mod.minhash_signatures(texts, **config)
+        ]
 
     def duplicates(self, texts: list[str], config: dict[str, Any]) -> list[bool]:
         return [bool(x) for x in self.mod.minhash_dedup(texts, **config)]
 
 
 GENERIC: dict[str, Callable[[Any], Any]] = {
-    "ftfy": GenericFtfy, "fasttext": GenericFasttext, "filters": GenericFilters, "dedup": GenericDedup,
+    "ftfy": GenericFtfy,
+    "fasttext": GenericFasttext,
+    "filters": GenericFilters,
+    "dedup": GenericDedup,
 }

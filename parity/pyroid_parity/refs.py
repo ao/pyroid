@@ -58,8 +58,9 @@ def write(table: Any, rel: str, pin: bool, **extra: Any) -> None:
     out = D.DATA / rel
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")
-    pq.write_table(table, tmp, compression="zstd", compression_level=3, row_group_size=10_000,
-                   write_statistics=False)
+    pq.write_table(
+        table, tmp, compression="zstd", compression_level=3, row_group_size=10_000, write_statistics=False
+    )
     tmp.replace(out)
     log(f"wrote {rel}: {table.num_rows} rows, {out.stat().st_size / 1e6:.1f} MB")
     if pin:
@@ -80,18 +81,71 @@ def pmap(fn: Callable[[list[Any]], list[Any]], items: list[Any], workers: int, c
 
 # ----------------------------------------------------------------------------------------- adversarial corpus
 
-INJECT = ["café", "naïve", "résumé", "—", "“quoted”", "‘single’", "😀", "Ünïcödé", "Straße", "€100", "…", "ﬁne",
-          "日本語", "Привет", "½", "©", " ", "señor", "jalapeño", "Zürich"]
-GARBLE = ["sloppy-windows-1252", "sloppy-windows-1252", "latin-1", "sloppy-windows-1251", "macroman",
-          "sloppy-windows-1250", "cp437", "iso-8859-2"]
+INJECT = [
+    "café",
+    "naïve",
+    "résumé",
+    "—",
+    "“quoted”",
+    "‘single’",
+    "😀",
+    "Ünïcödé",
+    "Straße",
+    "€100",
+    "…",
+    "ﬁne",
+    "日本語",
+    "Привет",
+    "½",
+    "©",
+    " ",
+    "señor",
+    "jalapeño",
+    "Zürich",
+]
+GARBLE = [
+    "sloppy-windows-1252",
+    "sloppy-windows-1252",
+    "latin-1",
+    "sloppy-windows-1251",
+    "macroman",
+    "sloppy-windows-1250",
+    "cp437",
+    "iso-8859-2",
+]
 EDGE = [
-    "", " ", "\n", "\n\n\n", "\r\n\r\n", "a", "word", "...", "…", "#", "# # # #", "- - - -", "•\n•\n•",
-    "!!! ???", "IS_ALPHA", "lorem ipsum dolor sit amet. " * 10, "{ curly } bracket. " * 10,
-    "The the the the the the the the the the.", "x" * 5000, ("y" * 1001 + " ") * 3,
+    "",
+    " ",
+    "\n",
+    "\n\n\n",
+    "\r\n\r\n",
+    "a",
+    "word",
+    "...",
+    "…",
+    "#",
+    "# # # #",
+    "- - - -",
+    "•\n•\n•",
+    "!!! ???",
+    "IS_ALPHA",
+    "lorem ipsum dolor sit amet. " * 10,
+    "{ curly } bracket. " * 10,
+    "The the the the the the the the the the.",
+    "x" * 5000,
+    ("y" * 1001 + " ") * 3,
     "Line one.\nLine two.\nLine three.\nLine four.\nLine five.\nLine six.",
-    "  　", "\t\t\t", "\x00\x01\x02", "😀" * 200, "ＡＢＣ　ｆｕｌｌｗｉｄｔｈ", "ﬁﬂﬀ ligatures",
-    "&amp; &lt; &gt; &eacute; &#x1F600;", "\x1b[31mred\x1b[0m text", "Ã©Ã¨Ã  mojibake",
-    "Javascript is required. Please enable javascript.\n" * 6, "terms of use. privacy policy. cookie policy.\n" * 6,
+    "  　",
+    "\t\t\t",
+    "\x00\x01\x02",
+    "😀" * 200,
+    "ＡＢＣ　ｆｕｌｌｗｉｄｔｈ",
+    "ﬁﬂﬀ ligatures",
+    "&amp; &lt; &gt; &eacute; &#x1F600;",
+    "\x1b[31mred\x1b[0m text",
+    "Ã©Ã¨Ã  mojibake",
+    "Javascript is required. Please enable javascript.\n" * 6,
+    "terms of use. privacy policy. cookie policy.\n" * 6,
 ]
 
 
@@ -157,7 +211,10 @@ def build_adversarial(pin: bool) -> None:
             out, kind = _garble(text, "sloppy-windows-1252", 2), "mojibake:sloppy-windows-1252:2"
         elif style == 2:
             a = rng.randrange(max(1, len(text) // 2))
-            out, kind = text[:a] + _garble(text[a : a + 300], enc, 1) + text[a + 300 :], f"mojibake-span:{enc}:1"
+            out, kind = (
+                text[:a] + _garble(text[a : a + 300], enc, 1) + text[a + 300 :],
+                f"mojibake-span:{enc}:1",
+            )
         elif style == 3:
             out, kind = html.escape(text).encode("ascii", "xmlcharrefreplace").decode(), "html-entities"
         elif style == 4:
@@ -186,8 +243,15 @@ def build_adversarial(pin: bool) -> None:
     ids, texts, kinds, srcs = map(list, zip(*rows, strict=True))
     assert len(set(ids)) == len(ids)
     table = pa.table({"id": ids, "text": texts, "kind": kinds, "source_id": srcs})
-    write(table, OUT["adversarial"], pin, content_sha256=D.content_sha256(ids, texts), seed=SEED,
-          generator="pyroid_parity.refs:build_adversarial", oracle=versions("ftfy"))
+    write(
+        table,
+        OUT["adversarial"],
+        pin,
+        content_sha256=D.content_sha256(ids, texts),
+        seed=SEED,
+        generator="pyroid_parity.refs:build_adversarial",
+        oracle=versions("ftfy"),
+    )
 
 
 def all_docs() -> D.Corpus:
@@ -209,8 +273,14 @@ def ref_ftfy(pin: bool, workers: int) -> None:
 
     docs = all_docs()
     fixed = pmap(_ftfy_chunk, docs.texts, workers)
-    write(pa.table({"id": docs.ids, "fixed": fixed}), OUT["ftfy"], pin, oracle=versions("ftfy"),
-          call="ftfy.fix_text(text)", corpora=["dev", "adversarial"])
+    write(
+        pa.table({"id": docs.ids, "fixed": fixed}),
+        OUT["ftfy"],
+        pin,
+        oracle=versions("ftfy"),
+        call="ftfy.fix_text(text)",
+        corpora=["dev", "adversarial"],
+    )
 
 
 # ------------------------------------------------------------------------------------------------ fastText
@@ -241,11 +311,23 @@ def ref_fasttext(pin: bool, workers: int) -> None:
             ids.append(i)
             jobs.append((m, t))
     res = pmap(_ft_chunk, jobs, workers, chunk=500)
-    table = pa.table({"model": models, "id": ids, "labels": [r[0] for r in res],
-                      "probs": pa.array([r[1] for r in res], pa.list_(pa.float64()))})
-    write(table, OUT["fasttext"], pin, oracle=versions("fasttext-predict"), k=specs.LID_TOPK,
-          call='model.predict(text.replace("\\n", " "), k=5, threshold=0.0)',
-          models={m: D.load_manifest()["files"][rel]["sha256"] for m, rel in specs.LID_MODELS.items()})
+    table = pa.table(
+        {
+            "model": models,
+            "id": ids,
+            "labels": [r[0] for r in res],
+            "probs": pa.array([r[1] for r in res], pa.list_(pa.float64())),
+        }
+    )
+    write(
+        table,
+        OUT["fasttext"],
+        pin,
+        oracle=versions("fasttext-predict"),
+        k=specs.LID_TOPK,
+        call='model.predict(text.replace("\\n", " "), k=5, threshold=0.0)',
+        models={m: D.load_manifest()["files"][rel]["sha256"] for m, rel in specs.LID_MODELS.items()},
+    )
 
 
 # ------------------------------------------------------------------------------------------------- filters
@@ -290,15 +372,23 @@ def ref_filters(pin: bool, workers: int) -> None:
             ids.append(i)
             jobs.append((case, i, t))
     res = pmap(_filters_chunk, jobs, workers, chunk=100)
-    table = pa.table({
-        "case": cases, "id": ids,
-        "outcome": [r[0] for r in res],
-        "keep": [r[1] if r[0] == "ok" else None for r in res],
-        "reason": [r[2] if r[0] == "ok" else r[1] for r in res],
-        "text_out": [r[3] if r[0] == "ok" else None for r in res],
-    })
-    write(table, OUT["filters"], pin, oracle=versions("datatrove", "spacy"),
-          cases={k: {"class": v[1], "kwargs": v[2]} for k, v in specs.FILTER_CASES.items()})
+    table = pa.table(
+        {
+            "case": cases,
+            "id": ids,
+            "outcome": [r[0] for r in res],
+            "keep": [r[1] if r[0] == "ok" else None for r in res],
+            "reason": [r[2] if r[0] == "ok" else r[1] for r in res],
+            "text_out": [r[3] if r[0] == "ok" else None for r in res],
+        }
+    )
+    write(
+        table,
+        OUT["filters"],
+        pin,
+        oracle=versions("datatrove", "spacy"),
+        cases={k: {"class": v[1], "kwargs": v[2]} for k, v in specs.FILTER_CASES.items()},
+    )
 
 
 # --------------------------------------------------------------------------------------------------- MinHash
@@ -309,8 +399,13 @@ def minhash_config() -> Any:
     from datatrove.utils.hashing import HashConfig
 
     c = specs.MINHASH_CONFIG
-    return MinhashConfig(n_grams=c["n_grams"], num_buckets=c["num_buckets"], hashes_per_bucket=c["hashes_per_bucket"],
-                         seed=c["seed"], hash_config=HashConfig(hash_fc=c["hash_fc"], precision=c["precision"]))
+    return MinhashConfig(
+        n_grams=c["n_grams"],
+        num_buckets=c["num_buckets"],
+        hashes_per_bucket=c["hashes_per_bucket"],
+        seed=c["seed"],
+        hash_config=HashConfig(hash_fc=c["hash_fc"], precision=c["precision"]),
+    )
 
 
 _SIG: list[Any] = []
@@ -320,7 +415,11 @@ def _sig_chunk(texts: list[str]) -> list[list[int] | None]:
     if not _SIG:
         from datatrove.pipeline.dedup import MinhashDedupSignature
 
-        _SIG.append(MinhashDedupSignature(output_folder=tempfile.mkdtemp(prefix="pyroid-sig-"), config=minhash_config()))
+        _SIG.append(
+            MinhashDedupSignature(
+                output_folder=tempfile.mkdtemp(prefix="pyroid-sig-"), config=minhash_config()
+            )
+        )
     step = _SIG[0]
     out: list[list[int] | None] = []
     for t in texts:
@@ -343,7 +442,10 @@ def datatrove_minhash_removed(texts: list[str], ids: list[str], workdir: Path) -
     w = str(workdir)
     stages = [
         ([docs, MinhashDedupSignature(output_folder=f"{w}/sigs", config=cfg)], 1),
-        ([MinhashDedupBuckets(input_folder=f"{w}/sigs", output_folder=f"{w}/buckets", config=cfg)], cfg.num_buckets),
+        (
+            [MinhashDedupBuckets(input_folder=f"{w}/sigs", output_folder=f"{w}/buckets", config=cfg)],
+            cfg.num_buckets,
+        ),
         ([MinhashDedupCluster(input_folder=f"{w}/buckets", output_folder=f"{w}/remove_ids", config=cfg)], 1),
     ]
     for n, (pipeline, tasks) in enumerate(stages):
@@ -365,8 +467,15 @@ def ref_dedup(pin: bool, workers: int) -> None:
     with tempfile.TemporaryDirectory(prefix="pyroid-minhash-") as tmp:
         removed = datatrove_minhash_removed(docs.texts, docs.ids, Path(tmp))
     table = pa.table({"id": docs.ids, "signature": pa.array(sigs, pa.list_(pa.uint64())), "removed": removed})
-    write(table, OUT["dedup"], pin, oracle=versions("datatrove", "spacy", "numpy"), config=specs.MINHASH_CONFIG,
-          removed=sum(removed), corpora=["dev", "adversarial"])
+    write(
+        table,
+        OUT["dedup"],
+        pin,
+        oracle=versions("datatrove", "spacy", "numpy"),
+        config=specs.MINHASH_CONFIG,
+        removed=sum(removed),
+        corpora=["dev", "adversarial"],
+    )
 
 
 def main() -> None:

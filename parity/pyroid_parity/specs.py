@@ -17,9 +17,13 @@ REWRITES_TEXT = {"c4_quality"}
 
 # datatrove examples/fineweb.py MinhashConfig(HashConfig("sha1", 64), num_buckets=14, hashes_per_bucket=8, n_grams=5)
 MINHASH_CONFIG: dict[str, Any] = {
-    "n_grams": 5, "num_buckets": 14, "hashes_per_bucket": 8, "seed": 1, "hash_fc": "sha1", "precision": 64,
+    "n_grams": 5,
+    "num_buckets": 14,
+    "hashes_per_bucket": 8,
+    "seed": 1,
+    "hash_fc": "sha1",
+    "precision": 64,
 }
 
 LID_MODELS = {"lid.176.bin": "models/lid.176.bin", "lid.176.ftz": "models/lid.176.ftz"}
 LID_TOPK = 5
-

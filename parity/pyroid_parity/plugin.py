@@ -1,14 +1,13 @@
 """pytest plugin (loaded with ``-p pyroid_parity.plugin``): ``--impl`` selection, fixtures, report writing.
 
-    pytest parity/tests --impl pyroid.ftfy                    # ftfy suite vs pyroid.ftfy, other suites self-check
-    pytest parity/tests -m ftfy --impl pyroid.ftfy             # only the ftfy suite
-    pytest parity/tests --impl filters=pyroid.filters --impl dedup=pyroid.dedup
-    pytest parity/tests --parity-limit 500                     # quick run on the first 500 docs of each corpus
+pytest parity/tests --impl pyroid.ftfy                    # ftfy suite vs pyroid.ftfy, other suites self-check
+pytest parity/tests -m ftfy --impl pyroid.ftfy             # only the ftfy suite
+pytest parity/tests --impl filters=pyroid.filters --impl dedup=pyroid.dedup
+pytest parity/tests --parity-limit 500                     # quick run on the first 500 docs of each corpus
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -23,10 +22,24 @@ _COLLECTOR = Collector()
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     g = parser.getgroup("pyroid-parity")
-    g.addoption("--impl", action="append", default=[], metavar="[SUITE=]MODULE",
-                help="implementation under test, e.g. ftfy, pyroid.ftfy, filters=pyroid.filters (repeatable)")
-    g.addoption("--parity-report", default="parity-report.json", metavar="PATH", help="where to write the report")
-    g.addoption("--parity-limit", type=int, default=0, metavar="N", help="only the first N docs of each corpus")
+    g.addoption(
+        "--impl",
+        action="append",
+        default=[],
+        metavar="[SUITE=]MODULE",
+        help="implementation under test, e.g. ftfy, pyroid.ftfy, filters=pyroid.filters (repeatable)",
+    )
+    g.addoption(
+        "--parity-report", default="parity-report.json", metavar="PATH", help="where to write the report"
+    )
+    g.addoption(
+        "--parity-limit",
+        type=int,
+        default=None,
+        metavar="N",
+        help="only the first N docs of each corpus (0 = all). Default: all for candidates; reference "
+        "self-checks of the slow suites (filters, dedup) sample SELF_CHECK_DOCS",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -62,21 +75,37 @@ def parity() -> Collector:
     return _COLLECTOR
 
 
+SELF_CHECK_DOCS = 1000
+
+
 @pytest.fixture(scope="session")
 def parity_limit(request: pytest.FixtureRequest) -> int:
-    return int(request.config.getoption("--parity-limit"))
+    """``--parity-limit`` as an int (0 = all docs)."""
+    return int(request.config.getoption("--parity-limit") or 0)
+
+
+def effective_limit(config: pytest.Config, impl: I.Impl) -> int:
+    """Doc limit for slow suites: explicit ``--parity-limit`` wins; otherwise sample reference self-checks."""
+    raw = config.getoption("--parity-limit")
+    if raw is None:
+        return SELF_CHECK_DOCS if impl.is_reference else 0
+    return int(raw)
 
 
 def _impl(request: pytest.FixtureRequest, suite: str) -> I.Impl:
     module = request.config._parity_impls[suite]  # type: ignore[attr-defined]
-    explicit = any(spec == module or spec.endswith("=" + module) for spec in request.config.getoption("--impl"))
+    explicit = any(
+        spec == module or spec.endswith("=" + module) for spec in request.config.getoption("--impl")
+    )
     try:
         impl = I.resolve(suite, module)
     except ImportError as e:
         if explicit:
             raise
         _COLLECTOR.skip(suite, "import", f"reference {module!r} not importable here: {e}")
-        pytest.skip(f"{suite}: reference implementation {module!r} is not installed on this interpreter ({e})")
+        pytest.skip(
+            f"{suite}: reference implementation {module!r} is not installed on this interpreter ({e})"
+        )
     _COLLECTOR.impls[suite] = impl.describe()
     return impl
 
