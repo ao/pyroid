@@ -318,8 +318,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # One entry per merged product module pyroid.<suite>; add fasttext, filters, dedup as they land.
-        suite: [ftfy, fasttext]
+        # One entry per merged product module pyroid.<suite>. Every suite runs on the free-threaded builds too:
+        # without the oracle group they compare against the pinned refs, and live-oracle checks skip in the report.
+        suite: [ftfy, fasttext, filters, dedup]
         python: ["3.12", "3.14t", "3.15t"]
         # The wheel each interpreter installs (the three flavours the wheels job checks for).
         include:
