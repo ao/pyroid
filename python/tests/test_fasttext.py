@@ -779,7 +779,7 @@ def test_oracle_parity_k_types(oracle: ModuleType, zoo: Zoo) -> None:
 
 _NOT_UTF8 = Spec(
     words=(b"</s>", b"ok", b"bad\xff"),
-    labels=(b"__label__ok", b"__label__\xff\xfe", b"__label__caf\xc3"),
+    labels=(b"__label__ok", b"__label__\xff\xfe", b"__label__ma\xc3"),
     fill_out=0.0,  # ties: every label is predicted for k=-1
     seed=7,
 )
@@ -1092,7 +1092,7 @@ def test_gil_stays_disabled_after_use(run_python: RunPython, zoo: Zoo) -> None:
         import pyroid.fasttext as ft
         from pyroid._pyroid import _testing
         m = ft.load_model({str(path)!r})
-        docs = ["the cat sat", "caf\\u00e9 on the mat", ""] * 3000
+        docs = ["the cat sat", "na\\u00efve on the mat", ""] * 3000
         labels, probs = m.predict(docs, k=2)
         assert len(labels) == len(docs)
         m.predict(_testing.column(docs, chunks=2), k=-1)
@@ -1453,9 +1453,9 @@ def test_words_that_are_not_utf8(tmp_path: Path) -> None:
         _ = m.labels
     assert m.get_words(on_unicode_error="replace") == ["</s>", "ok", "bad\ufffd"]
     assert m.get_words(False, "surrogateescape")[2] == "bad\udcff"
-    assert m.get_labels(on_unicode_error="ignore") == ["__label__ok", "__label__", "__label__caf"]
+    assert m.get_labels(on_unicode_error="ignore") == ["__label__ok", "__label__", "__label__ma"]
     labels, counts = m.get_labels(True, "backslashreplace")
-    assert labels == ["__label__ok", "__label__\\xff\\xfe", "__label__caf\\xc3"]
+    assert labels == ["__label__ok", "__label__\\xff\\xfe", "__label__ma\\xc3"]
     assert counts.tolist() == [500, 493, 486]
 
 
