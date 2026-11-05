@@ -1,0 +1,43 @@
+pyroid
+Copyright (c) 2025 Andrew Odendaal
+pyroid is licensed under the MIT License (see LICENSE), except for the parts
+listed below.
+
+-------------------------------------------------------------------------------
+ftfy
+-------------------------------------------------------------------------------
+The ftfy port (crates/pyroid-core/src/ftfy/, crates/pyroid-py/src/ftfy.rs,
+python/pyroid/ftfy.py and python/pyroid/ftfy.pyi) is a derivative work of
+ftfy 6.3.1, https://github.com/rspeer/python-ftfy:
+
+    Copyright 2023 Robyn Speer
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+A copy of the Apache License 2.0 is in LICENSES/Apache-2.0.txt. Each ported
+file carries the header "Derived from ftfy 6.3.1 (Apache-2.0), © Robyn Speer;
+modified." The ftfy algorithms were rewritten in Rust; character tables were
+regenerated from ftfy's own data by generate_tables.py.
+
+crates/pyroid-core/tests/ftfy_data/test_cases.json is copied unmodified from
+ftfy 6.3.1 (tests/test_cases.json, Apache-2.0).
+
+-------------------------------------------------------------------------------
+Data derived from CPython and Unicode
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/ftfy/tables.rs and unicode_tables.rs also contain data
+extracted from CPython 3.11-3.15 (the html.entities HTML5 entity list, the
+single-byte codec tables, and the regex character classes \s, \w and \d of each
+CPython's Unicode database). CPython is distributed under the Python Software
+Foundation License; the Unicode Character Database is distributed under the
+Unicode License v3 (Unicode-3.0).
