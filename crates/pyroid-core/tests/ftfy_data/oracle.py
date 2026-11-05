@@ -7,6 +7,8 @@ Run inside the pyroid-dev container with an interpreter that has
 
     python oracle.py golden OUT.jsonl          # ftfy's own test inputs
     python oracle.py fuzz OUT.jsonl N SEED     # N random inputs
+    python oracle.py mojibake OUT.jsonl N SEED # N realistic mojibake inputs
+    python oracle.py corpus OUT.jsonl A.parquet [B.parquet ...]  # fix_text on real docs
 
 Each output line is one input and the calls made on it: the function, its
 keyword arguments and ftfy's result. Strings with lone surrogates are stored as
@@ -306,11 +308,117 @@ def fuzz(path: str, n: int, seed: int) -> None:
     print(f"wrote {path}: {n} calls, seed {seed}, Unicode {unicodedata.unidata_version}")
 
 
+# ---------------------------------------------------------------------------
+# mojibake: realistic text pushed through the mistakes ftfy is built to undo
+# ---------------------------------------------------------------------------
+
+SAMPLES = [
+    "Le café est très bon, à la carte — voilà !",
+    "Ça m’a coûté 20 € l’été dernier… «incroyable»",
+    "Größe: 5 m², Straße “Müller” – geöffnet",
+    "¿Dónde está la estación? ¡Mañana será!",
+    "Это пример текста на русском языке — «цитата»",
+    "Ελληνικά: Καλημέρα κόσμε, τι κάνεις;",
+    "Zażółć gęślą jaźń. Příliš žluťoučký kůň úpěl ďábelské ódy.",
+    "Türkçe: Işık, ağaç, şemsiye, ğ ç ö ü",
+    "Lietuvių kalba: ąčęėįšųūž ĄČĘĖĮŠŲŪŽ",
+    "日本語のテキストと中文文本，还有한국어 문장",
+    "Emoji: 😀 👍🏽 🇺🇸 ❤️ — and “quotes”",
+    "Price: £5 · ¥100 · ¢50 · ±2 · ½ · ° · µ · ×",
+    "Árvíztűrő tükörfúrógép ŐŰ őű",
+    "à la mode, às vezes, àquele, fà cil",
+    "Ølen og ærøskøbing på Åland",
+    "ﬁne ﬂour, Ｗｉｄｅ, ｶﾀｶﾅ",
+    "bullet • dagger † ‰ ™ © ® ¶ §",
+    "\u0627\u0644\u0639\u0631\u0628\u064a\u0629 \u0647\u0646\u0627",
+]
+
+
+def mojibake_text(rng: random.Random) -> str:
+    s = " ".join(rng.choice(SAMPLES) for _ in range(rng.randrange(1, 4)))
+    if rng.random() < 0.3:
+        words = s.split(" ")
+        k = rng.randrange(len(words))
+        words[k] = "\x00" if rng.random() < 0.1 else words[k]
+        s = " ".join(words)
+    mode = rng.randrange(6)
+    if mode == 0:  # plain UTF-8 misread once or twice
+        b = s.encode("utf-8")
+        t = garble_bytes(rng, b)
+    elif mode == 1:  # CESU-8 / Java nulls
+        b = s.encode("utf-16-be", "surrogatepass")
+        units = [b[i:i + 2] for i in range(0, len(b), 2)]
+        out = bytearray()
+        for u in units:
+            cp = int.from_bytes(u, "big")
+            out += b"\xc0\x80" if cp == 0 else chr(cp).encode("utf-8", "surrogatepass")
+        t = garble_bytes(rng, bytes(out))
+    elif mode == 2:  # only part of the text is mojibake
+        cut = rng.randrange(len(s) + 1)
+        t = s[:cut] + garble_bytes(rng, s[cut:].encode("utf-8"))
+    elif mode == 3:  # mojibake of mojibake, then fixed halfway
+        t = garble_bytes(rng, garble_bytes(rng, s.encode("utf-8")).encode("utf-8"))
+    elif mode == 4:  # lossy: undefined bytes became U+FFFD or "?"
+        enc = rng.choice(["windows-1252", "windows-1251", "windows-1250", "windows-1253"])
+        t = s.encode("utf-8").decode(enc, errors="replace")
+        if rng.random() < 0.5:
+            t = t.replace("\ufffd", "?")
+    else:
+        t = s
+    if rng.random() < 0.3:
+        t = t.replace("\xa0", " ")
+    if rng.random() < 0.2:
+        t = t + rng.choice(["\n", "\r\n", "\n\n", " \n"])
+    if rng.random() < 0.1:
+        t = rng.choice(SPECIALS) + t
+    return t
+
+
+def garble_bytes(rng: random.Random, b: bytes) -> str:
+    enc = rng.choice(CHARMAP_ENCODINGS + ["windows-1252", "cp850", "koi8-r", "iso-8859-15"])
+    return b.decode(enc, errors=rng.choice(["replace", "replace", "ignore"]))
+
+
+def mojibake(path: str, n: int, seed: int) -> None:
+    rng = random.Random(seed)
+    with open(path, "w", encoding="utf-8") as out:
+        for _ in range(n):
+            text = mojibake_text(rng)
+            calls = [call("fix_text", text, {}), call("fix_and_explain", text, {})]
+            if rng.random() < 0.3:
+                calls.append(call("fix_text", text, random_kwargs(rng)))
+            write(out, text, calls)
+    print(f"wrote {path}: {n} inputs, seed {seed}, Unicode {unicodedata.unidata_version}")
+
+
+def corpus(path: str, files: list[str]) -> None:
+    import pyarrow.parquet as pq
+
+    n = changed = 0
+    with open(path, "w", encoding="utf-8") as out:
+        for f in files:
+            for text in pq.read_table(f, columns=["text"]).column("text").to_pylist():
+                fixed = ftfy.fix_text(text)
+                c: dict = {"fn": "fix_text"}
+                if fixed == text:
+                    c["same"] = True
+                else:
+                    c["out"] = enc(fixed)
+                    changed += 1
+                write(out, text, [c])
+                n += 1
+    print(f"wrote {path}: {n} docs ({changed} changed), Unicode {unicodedata.unidata_version}")
+
+
 if __name__ == "__main__":
     mode = sys.argv[1]
     if mode == "golden":
         golden(sys.argv[2])
     elif mode == "fuzz":
         fuzz(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+    elif mode == "mojibake":
+        mojibake(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+    elif mode == "corpus":
+        corpus(sys.argv[2], sys.argv[3:])
     else:
         raise SystemExit(__doc__)

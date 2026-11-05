@@ -109,7 +109,11 @@ fn replay(input: &[u8], row: &Value, version: UnicodeVersion) -> Result<(), Stri
     if let Some(err) = row.get("error") {
         return Err(format!("ftfy raised {err}; not replayable"));
     }
-    let want = text_of(&row["out"]);
+    let want = if row.get("same").is_some() {
+        input.clone()
+    } else {
+        text_of(&row["out"])
+    };
     let (got, expl): (Vec<u8>, Option<Value>) = match fname {
         "fix_text" => (
             ftfy::fix_text_wtf8(&input, &cfg).unwrap().into_owned(),

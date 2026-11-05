@@ -34,6 +34,7 @@
 mod badness;
 mod chardata;
 mod codecs;
+mod features;
 mod fixes;
 mod normalize;
 #[rustfmt::skip]
@@ -527,22 +528,30 @@ fn fix_segment(seg: &[u8], cfg: &TextFixerConfig, mut steps: Plan<'_>) -> Option
     let mut cur: Cow<'_, [u8]> = Cow::Borrowed(seg);
     loop {
         let mut work: Option<Vec<u8>> = None;
+        // Which fixers can fire; refreshed whenever a step changes the text.
+        let mut feat = features::scan(&cur);
         // ftfy's `_try_fix`: apply if enabled, record the step if it changed.
         macro_rules! try_fix {
-            ($enabled:expr, $name:literal, $f:expr) => {
-                if $enabled {
+            ($enabled:expr, $trigger:expr, $name:literal, $f:expr) => {
+                if $enabled && feat.has($trigger) {
                     let input: &[u8] = work.as_deref().unwrap_or(&cur);
                     if let Some(next) = $f(input) {
                         if next[..] != input[..] {
                             record(&mut steps, ExplanationStep::new(Action::Apply, $name));
+                            feat = features::scan(&next);
                             work = Some(next);
                         }
                     }
                 }
             };
         }
-        try_fix!(unescape, "unescape_html", fixes::unescape_html);
-        if cfg.fix_encoding {
+        try_fix!(
+            unescape,
+            features::AMP,
+            "unescape_html",
+            fixes::unescape_html
+        );
+        if cfg.fix_encoding && feat.encoding_candidate() {
             let input: &[u8] = work.as_deref().unwrap_or(&cur);
             let plan = if cfg.explain {
                 steps.as_deref_mut()
@@ -550,49 +559,73 @@ fn fix_segment(seg: &[u8], cfg: &TextFixerConfig, mut steps: Plan<'_>) -> Option
                 None
             };
             if let Some(next) = fix_encoding_loop(input, enc_opts, v, plan) {
+                feat = features::scan(&next);
                 work = Some(next);
             }
         }
         try_fix!(
             cfg.fix_c1_controls,
+            features::C1,
             "fix_c1_controls",
             fixes::fix_c1_controls
         );
         try_fix!(
             cfg.fix_latin_ligatures,
+            features::LIGATURE,
             "fix_latin_ligatures",
             fixes::fix_latin_ligatures
         );
         try_fix!(
             cfg.fix_character_width,
+            features::WIDTH,
             "fix_character_width",
             fixes::fix_character_width
         );
-        try_fix!(cfg.uncurl_quotes, "uncurl_quotes", fixes::uncurl_quotes);
+        try_fix!(
+            cfg.uncurl_quotes,
+            features::CURLY,
+            "uncurl_quotes",
+            fixes::uncurl_quotes
+        );
         try_fix!(
             cfg.fix_line_breaks,
+            features::LINE_BREAK,
             "fix_line_breaks",
             fixes::fix_line_breaks
         );
-        try_fix!(cfg.fix_surrogates, "fix_surrogates", fixes::fix_surrogates);
+        try_fix!(
+            cfg.fix_surrogates,
+            features::SURROGATE,
+            "fix_surrogates",
+            fixes::fix_surrogates
+        );
         try_fix!(
             cfg.remove_terminal_escapes,
+            features::ESC,
             "remove_terminal_escapes",
             |t| { fixes::remove_terminal_escapes(t, v) }
         );
         try_fix!(
             cfg.remove_control_chars,
+            features::CONTROL,
             "remove_control_chars",
             fixes::remove_control_chars
         );
         if let Some(form) = cfg.normalization {
-            let input: &[u8] = work.as_deref().unwrap_or(&cur);
-            if let Some(next) = normalize::normalize(input, form, v) {
-                record(
-                    &mut steps,
-                    ExplanationStep::new(Action::Normalize, form.as_str()),
-                );
-                work = Some(next);
+            let trigger = if form == Normalization::Nfc {
+                features::NFC_ACTIVE
+            } else {
+                features::NON_ASCII
+            };
+            if feat.has(trigger) {
+                let input: &[u8] = work.as_deref().unwrap_or(&cur);
+                if let Some(next) = normalize::normalize(input, form, v) {
+                    record(
+                        &mut steps,
+                        ExplanationStep::new(Action::Normalize, form.as_str()),
+                    );
+                    work = Some(next);
+                }
             }
         }
         match work {
@@ -609,6 +642,9 @@ fn fix_segment(seg: &[u8], cfg: &TextFixerConfig, mut steps: Plan<'_>) -> Option
 
 /// ftfy's `fix_text` on surrogate-tolerant bytes (already validated).
 fn fix_text_bytes<'a>(text: &'a [u8], config: &TextFixerConfig) -> Cow<'a, [u8]> {
+    if features::is_quiet_ascii(text) {
+        return Cow::Borrowed(text);
+    }
     let max = config.max_decode_length.get();
     let mut cfg: Cow<'_, TextFixerConfig> = Cow::Borrowed(config);
     let mut out: Option<Vec<u8>> = None;

@@ -12,7 +12,8 @@
 use super::UnicodeVersion;
 use super::chardata::{class_of, is_space, is_word};
 use super::tables::{
-    BAD_ALTS, BAD_ANCHORED, BAD_ANY, BAD_FINAL, BAD_NOTALPHA, BAD_SPACE, BAD_START, BAD_WORD,
+    BAD_ALTS, BAD_ANCHORED, BAD_ANY, BAD_ASCII, BAD_FINAL, BAD_NOTALPHA, BAD_SPACE, BAD_START,
+    BAD_WORD,
 };
 use super::text::decode_at;
 
@@ -42,14 +43,20 @@ pub(crate) fn is_bad(text: &[u8], v: UnicodeVersion) -> bool {
     let mut start = BAD_START | BAD_ANCHORED;
     let mut i = 0;
     while i < text.len() {
-        let (cp, n) = decode_at(text, i);
+        let b = text[i];
         let wanted = (state << 1) | start;
-        state = wanted & char_mask(cp, wanted, v);
+        if b < 0x80 {
+            state = wanted & BAD_ASCII[b as usize];
+            i += 1;
+        } else {
+            let (cp, n) = decode_at(text, i);
+            state = wanted & char_mask(cp, wanted, v);
+            i += n;
+        }
         if state & BAD_FINAL != 0 {
             return true;
         }
         start = BAD_START;
-        i += n;
     }
     false
 }
@@ -123,6 +130,13 @@ mod tests {
     fn anchored_only_at_start() {
         assert!(bad("Ã x"));
         assert!(!bad("1Â x"));
+    }
+
+    #[test]
+    fn ascii_table_matches_char_mask() {
+        for b in 0..0x80u32 {
+            assert_eq!(BAD_ASCII[b as usize], char_mask(b, u128::MAX, V), "{b:#x}");
+        }
     }
 
     #[test]

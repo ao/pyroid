@@ -238,7 +238,32 @@ def _unicode_props() -> dict:
         "word": _ranges(lambda cp: wd.match(chr(cp)) is not None),
         "digit": _ranges(lambda cp: dg.match(chr(cp)) is not None),
         "assigned": _ranges(assigned),
+        "nfc_active": _ranges(_nfc_active_set().__contains__),
     }
+
+
+def _nfc_active_set() -> set[int]:
+    """Code points that can make NFC change a string they appear in.
+
+    A character is NFC-inert if it has combining class 0, is NFC on its own
+    (Quick_Check != No) and is never the second character of a canonical
+    composition (Quick_Check != Maybe). A string of inert characters is NFC.
+    """
+    active: set[int] = set()
+    for cp in range(MAX_CP):
+        if 0xD800 <= cp < 0xE000:
+            continue
+        ch = chr(cp)
+        if unicodedata.combining(ch) or not unicodedata.is_normalized("NFC", ch):
+            active.add(cp)
+        d = unicodedata.decomposition(ch)
+        if d and not d.startswith("<"):
+            parts = [int(x, 16) for x in d.split()]
+            if len(parts) == 2 and unicodedata.normalize("NFC", chr(parts[0]) + chr(parts[1])) == ch:
+                active.add(parts[1])
+    active.update(range(0x1161, 0x1176))  # Hangul V jamo compose with L
+    active.update(range(0x11A8, 0x11C3))  # Hangul T jamo compose with LV
+    return active
 
 
 def dump(path: str) -> None:
@@ -441,6 +466,43 @@ def emit(paths: list[str]) -> None:
     out.append("/// `sloppy-windows-1252` decoding of bytes 0x80..=0x9F (for `fix_c1_controls`).\n")
     out.append("pub(super) static SLOPPY_1252_C1: [u32; 32] = [")
     out.append(", ".join(f"0x{c:x}" for c in base["sloppy_1252_c1"]) + "];\n")
+    # Full Shift-And masks for ASCII (\s and \w agree in every version there).
+    sp_ascii = {c for a, b in space for c in range(a, b + 1) if c < 0x80}
+    word17 = dumps[-1]["props"]["word"]
+    wd_ascii = {c for a, b in word17 for c in range(a, b + 1) if c < 0x80}
+    for d in dumps:
+        assert {c for a, b in d["props"]["word"] for c in range(a, b + 1) if c < 0x80} == wd_ascii
+    bad_masks = dict(re.findall(r"BAD_(\w+): u128 = 0x([0-9a-f]+)", bad_rs))
+    m_any, m_notalpha = int(bad_masks["ANY"], 16), int(bad_masks["NOTALPHA"], 16)
+    m_space, m_word = int(bad_masks["SPACE"], 16), int(bad_masks["WORD"], 16)
+    ascii_masks = []
+    for c in range(0x80):
+        m = bad_explicit.get(c, 0)
+        m |= m_any if c != 0x0A else 0
+        m |= 0 if chr(c).isalpha() else m_notalpha
+        m |= m_space if c in sp_ascii else 0
+        m |= m_word if c in wd_ascii else 0
+        ascii_masks.append(m)
+    out.append("\n/// Complete Shift-And masks for ASCII characters.\n")
+    out.append("pub(super) static BAD_ASCII: [u128; 128] = [")
+    out.append(", ".join(f"0x{m:x}" for m in ascii_masks) + "];\n")
+
+    # NFC-active code points (newest version): a BMP bitmap plus astral ranges.
+    newest = dumps[-1]["props"]["nfc_active"]
+    active = {c for a, b in newest for c in range(a, b + 1)}
+    for d in dumps[:-1]:
+        older = {c for a, b in d["props"]["nfc_active"] for c in range(a, b + 1)}
+        assert older <= active, f"NFC-active set of {d['unicode']} not within newest"
+    words = [0] * 1024
+    for c in active:
+        if c < 0x10000:
+            words[c >> 6] |= 1 << (c & 63)
+    astral = [[a, b] for a, b in newest if b >= 0x10000]
+    astral = [[max(a, 0x10000), b] for a, b in astral]
+    out.append("\n/// BMP code points that can make NFC change text (bit set = active).\n")
+    out.append("pub(super) static NFC_ACTIVE_BMP: [u64; 1024] = [")
+    out.append(", ".join(f"0x{w:x}" for w in words) + "];\n")
+    out.append(_emit_ranges("NFC_ACTIVE_ASTRAL", astral))
     (HERE / "tables.rs").write_text("".join(out))
 
     # ---- per-Unicode-version tables --------------------------------------
