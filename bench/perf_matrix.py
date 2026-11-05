@@ -32,7 +32,7 @@ CASES = {
     "translit": ("translit", "pyroid.translit", "pyroid.translit,!per doc"),  # list[str] and Arrow rows
 }
 # --per-doc: the single-str call in a Python loop; the pool size becomes BENCH_THREADS Python threads.
-PER_DOC_ROWS = "per doc"
+PER_DOC_ROWS = "per doc,!rensa"  # candidates only (rensa has a per-doc reference row)
 
 
 def run(a: argparse.Namespace) -> None:
@@ -122,7 +122,9 @@ def main() -> None:
     r.add_argument("--cases", help=f"comma subset of {','.join(CASES)}")
     r.add_argument("--docs", type=int, default=10000)
     r.add_argument("--corpus", default="dev")
-    r.add_argument("--offset", type=int, default=0, help="skip the first N docs (e.g. PGO training on other docs)")
+    r.add_argument(
+        "--offset", type=int, default=0, help="skip the first N docs (e.g. PGO training on other docs)"
+    )
     r.add_argument("--processes", type=int, default=5)
     r.add_argument("--values", type=int, default=3)
     r.add_argument("--fresh", action="store_true", help="BENCH_FRESH_STRS=1")

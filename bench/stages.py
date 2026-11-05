@@ -837,6 +837,10 @@ def main() -> None:
     ids, texts = G.load_slice(args.corpus, args.offset, args.docs, verify=not args.worker)
     ctx = Ctx(args.stage, ids, texts, args.gate_workers, args.impl)
     rows = select(stage_rows(ctx), args.rows)
+    # BENCH_ROW_SUFFIX (e.g. " [3.15t, pool 8]") tells candidate rows of several runs apart in one chart.
+    for r in rows:
+        if not r.reference:
+            r.name += os.environ.get("BENCH_ROW_SUFFIX", "")
     if not rows:
         sys.exit(f"--rows {args.rows!r} matches no row of stage {args.stage}")
     names = [r.name for r in rows]
