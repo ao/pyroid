@@ -1,3 +1,0 @@
-This is a test file for async operations.
-It contains multiple lines of text.
-This file is used by the async_examples.py script.
