@@ -206,7 +206,10 @@ impl Quant {
                 pq.dim()
             )));
         }
-        if (rows as u64).checked_mul(pq.nsubq as u64) > Some(codes.len() as u64) {
+        // An overflowing product is as short of codes as any (`None` would
+        // compare below every `Some`).
+        let need = (rows as u64).checked_mul(pq.nsubq as u64);
+        if need.is_none_or(|need| need > codes.len() as u64) {
             return Err(LoadError::Invalid(format!(
                 "{what}: {} code bytes for {rows} rows of {} sub-quantizers",
                 codes.len(),

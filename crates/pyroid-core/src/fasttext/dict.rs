@@ -27,6 +27,42 @@ const EOW: u8 = b'>';
 /// fastText's default.
 pub const LABEL_PREFIX: &[u8] = b"__label__";
 
+/// The largest `maxn` and `wordNgrams` a model may declare. fastText sets no
+/// limit, but `computeSubwords` takes up to `maxn` hash steps (and ids) per
+/// byte of a word, `addWordNgrams` up to `wordNgrams` ids per token, and a
+/// negative `maxn` (compared as a huge `size_t`) is unbounded: without a
+/// cap, a corrupt header turns one long dictionary entry or input token into
+/// quadratic work and gigabytes of ids. fastText's defaults and autotune stay
+/// at or below 6 and 5.
+const MAX_NGRAM: i32 = 32;
+
+/// The longest run of occupied slots the word hash table (`word2int`, linear
+/// probing) may have. A lookup scans the rest of the run it lands in, so a
+/// dictionary crafted to collide (FNV-1a collisions are cheap to find) would
+/// make loading quadratic and every token lookup slow. At fastText's load
+/// factor of 0.7 the longest run of random hashes grows like
+/// `ln(n) / 0.057`, about 300 for 30M entries, and a run past 1024 has a
+/// probability near 1e-18 even then (lid.176.ftz's longest run is 75).
+const MAX_PROBE_RUN: usize = 1024;
+
+/// The longest cyclic run of occupied slots (`-1` is empty) in `table`.
+fn longest_run(table: &[i32]) -> usize {
+    // `ceil(size / 0.7) > size`: a non-empty table has an empty slot.
+    let Some(start) = table.iter().position(|&e| e == -1) else {
+        return table.len();
+    };
+    let (mut best, mut run) = (0, 0);
+    for k in 1..=table.len() {
+        if table[(start + k) % table.len()] == -1 {
+            run = 0;
+        } else {
+            run += 1;
+            best = best.max(run);
+        }
+    }
+    best
+}
+
 const FNV_OFFSET: u32 = 2_166_136_261;
 const FNV_PRIME: u32 = 16_777_619;
 
@@ -214,7 +250,7 @@ impl Dictionary {
         };
         dict.check_hashing()?;
         dict.init_ngrams();
-        dict.init_word2int();
+        dict.init_word2int()?;
         Ok(dict)
     }
 
@@ -225,6 +261,18 @@ impl Dictionary {
     }
 
     fn check_hashing(&self) -> Result<(), LoadError> {
+        if !(0..=MAX_NGRAM).contains(&self.maxn_signed) {
+            return Err(LoadError::Invalid(format!(
+                "maxn is {}, outside 0..={MAX_NGRAM}",
+                self.maxn_signed
+            )));
+        }
+        if self.word_ngrams > MAX_NGRAM {
+            return Err(LoadError::Invalid(format!(
+                "wordNgrams is {}, above {MAX_NGRAM}",
+                self.word_ngrams
+            )));
+        }
         if self.hashes_ngrams() && self.bucket <= 0 {
             return Err(LoadError::Invalid(format!(
                 "bucket is {} but the model uses n-grams (minn {}, maxn {}, wordNgrams {})",
@@ -382,14 +430,43 @@ impl Dictionary {
         self.sub_ids = ids;
     }
 
-    fn init_word2int(&mut self) {
+    fn init_word2int(&mut self) -> Result<(), LoadError> {
         // `int32_t word2intsize = std::ceil(size_ / 0.7);`
         let len = (self.size() as f64 / 0.7).ceil() as usize;
         self.word2int = vec![-1; len];
+        let clustered = || {
+            LoadError::Invalid(format!(
+                "the dictionary's hash table has a run of more than {MAX_PROBE_RUN} occupied \
+                 slots (entries crafted to collide)"
+            ))
+        };
         for i in 0..self.size() {
-            let slot = self.find(self.entry(i), hash(self.entry(i)));
+            let slot = self
+                .find_bounded(self.entry(i), hash(self.entry(i)))
+                .ok_or_else(clustered)?;
             self.word2int[slot] = i as i32;
         }
+        // Entries on consecutive home slots form a long run without any long
+        // probe while inserting; every lookup landing in it would scan it.
+        if longest_run(&self.word2int) > MAX_PROBE_RUN {
+            return Err(clustered());
+        }
+        Ok(())
+    }
+
+    /// `find` for building the table: `None` once it has passed
+    /// `MAX_PROBE_RUN` occupied slots (so building stays linear).
+    fn find_bounded(&self, w: &[u8], h: u32) -> Option<usize> {
+        let len = self.word2int.len();
+        let mut id = (h as usize) % len;
+        for _ in 0..=MAX_PROBE_RUN {
+            let e = self.word2int[id];
+            if e == -1 || self.entry(e as usize) == w {
+                return Some(id);
+            }
+            id = (id + 1) % len;
+        }
+        None
     }
 
     /// `find`: the slot of `w` (or the empty slot where it would go).
