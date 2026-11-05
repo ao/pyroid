@@ -12,6 +12,7 @@ dependencies = [
     "datatrove==0.10.1",
     "spacy==3.8.18",
     "tokenizers>=0.22",
+    "regex==2026.9.29",
     "fasttext-predict==0.9.2.4; python_version < '3.14'",
     "datasketch==2.0.0",
     "rensa==0.5.0",
