@@ -53,7 +53,7 @@ def run(a: argparse.Namespace) -> None:
                 dest.unlink()
             cmd = [
                 a.python, str(HERE / "stages.py"), "--stage", stage, "--impl", impl, "--rows", rows,
-                "--docs", str(a.docs), "--corpus", a.corpus, "-p", str(a.processes), "-n", str(a.values),
+                "--docs", str(a.docs), "--corpus", a.corpus, "--offset", str(a.offset), "-p", str(a.processes), "-n", str(a.values),
                 "-w", "1", "--quiet", "-o", str(dest),
             ]  # fmt: skip
             if gates is not None:
@@ -122,6 +122,7 @@ def main() -> None:
     r.add_argument("--cases", help=f"comma subset of {','.join(CASES)}")
     r.add_argument("--docs", type=int, default=10000)
     r.add_argument("--corpus", default="dev")
+    r.add_argument("--offset", type=int, default=0, help="skip the first N docs (e.g. PGO training on other docs)")
     r.add_argument("--processes", type=int, default=5)
     r.add_argument("--values", type=int, default=3)
     r.add_argument("--fresh", action="store_true", help="BENCH_FRESH_STRS=1")

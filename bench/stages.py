@@ -809,7 +809,7 @@ def main() -> None:
     if not args.stage:
         sys.exit("--stage is required (see --list)")
     keep = set(args.inherit_environ or []) | {"RAYON_NUM_THREADS"}
-    keep |= {k for k in os.environ if k.startswith(("BENCH_", "PYROID_"))}
+    keep |= {k for k in os.environ if k.startswith(("BENCH_", "PYROID_", "GLIBC_TUNABLES", "MIMALLOC_"))}
     args.inherit_environ = sorted(keep)
 
     ids, texts = G.load_slice(args.corpus, args.offset, args.docs, verify=not args.worker)

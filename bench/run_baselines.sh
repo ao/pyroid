@@ -33,6 +33,7 @@
 #   BENCH_EQUIV_DOCS [10000] (full-chain digest runs; the headline's first 10k = dev, so check-refs covers them)
 #   BENCH_EQUIV_STAGE_CORPUS [parity] (one-stage runs vs refs: dev + adversarial, 13,232 docs)
 #   BENCH_IMPL [""]  space-separated SUITE=MODULE candidates: extra pyperf rows + extra e2e commands
+#                    (translit=MODULE only adds pyperf rows: gates.py and pipeline.py have no translit stage)
 #   BENCH_IMPL_NAME [candidate]  hyperfine name prefix of the candidate e2e commands (charts accent "pyroid*"/"candidate*")
 #   BENCH_SKIP [""]  comma list of steps: gates,stages,memory,equiv,e2e,e2e_stages,charts
 set -euo pipefail
@@ -78,8 +79,12 @@ SKIP=${BENCH_SKIP:-}
 skip() { [[ ",$SKIP," == *",$1,"* ]]; }
 log() { echo "[run_baselines $(date -u +%H:%M:%S)] $*"; }
 pin() { if command -v taskset >/dev/null; then taskset -c "$CPUS" "$@"; else "$@"; fi; }
-impl_args=()
-for s in $IMPL; do impl_args+=(--impl "$s"); done
+impl_args=()   # stages.py: every candidate
+pipe_args=()   # gates.py / pipeline.py: only the suites they know (translit is a stages.py-only stage)
+for s in $IMPL; do
+    impl_args+=(--impl "$s")
+    case "$s" in translit=*|*.translit) ;; *) pipe_args+=(--impl "$s") ;; esac
+done
 
 if [[ -d "$OUT" && -n "$(ls -A "$OUT" 2>/dev/null)" ]]; then
     if [[ "${BENCH_OVERWRITE:-0}" == 1 ]]; then rm -rf "$OUT"; else
@@ -107,7 +112,7 @@ log "machine info -> $OUT/machine.json"
 
 if ! skip gates; then
     log "gates (all pinned refs, $GATE_WORKERS workers)"
-    "$PY" gates.py --workers "$GATE_WORKERS" --limit "$GATE_LIMIT" "${impl_args[@]}" --out "$OUT/gates.json"
+    "$PY" gates.py --workers "$GATE_WORKERS" --limit "$GATE_LIMIT" "${pipe_args[@]}" --out "$OUT/gates.json"
 fi
 
 sizes_for() { if [[ " $FAST_STAGES " == *" $1 "* ]]; then echo "$SIZES_FAST"; else echo "$SIZES_SLOW"; fi; }
@@ -151,7 +156,7 @@ if ! skip equiv; then
         run_pipe "digest-w$w" --corpus "$E2E_CORPUS" --docs "$EQUIV_N" --workers "$w" --check-refs
         labels+=("digest-w$w")
         if [[ -n "$IMPL" ]]; then
-            run_pipe "digest-candidate-w$w" --corpus "$E2E_CORPUS" --docs "$EQUIV_N" --workers "$w" --check-refs "${impl_args[@]}"
+            run_pipe "digest-candidate-w$w" --corpus "$E2E_CORPUS" --docs "$EQUIV_N" --workers "$w" --check-refs "${pipe_args[@]}"
             labels+=("digest-candidate-w$w")
         fi
     done
@@ -179,7 +184,7 @@ if ! skip e2e; then
     for w in $E2E_WORKERS; do
         cmds+=(-n "datatrove-$DTV-w$w" "$PIPE --workers $w --label datatrove-$DTV-w$w --out $WORK/e2e-w$w")
         if [[ -n "$IMPL" ]]; then
-            cmds+=(-n "$CAND-w$w" "$PIPE --workers $w --label $CAND-w$w --out $WORK/e2e-cand-w$w ${impl_args[*]}")
+            cmds+=(-n "$CAND-w$w" "$PIPE --workers $w --label $CAND-w$w --out $WORK/e2e-cand-w$w ${pipe_args[*]}")
         fi
     done
     log "hyperfine e2e: $E2E_CORPUS, $E2E_N docs, workers {$E2E_WORKERS}, $E2E_RUNS runs (+$E2E_WARMUP warmup), taskset $CPUS"
