@@ -1,0 +1,180 @@
+name: CI
+
+on:
+  push:
+    branches: [main, next]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  MATURIN_VERSION: v1.16.0
+  RUFF_VERSION: "0.17.3"
+  MYPY_VERSION: "2.4.1"
+
+jobs:
+  lint:
+    name: lint (rustfmt, clippy, ruff, mypy)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal -c clippy -c rustfmt && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - name: cargo fmt
+        run: cargo fmt --all --check
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: ruff check
+        run: uvx "ruff@${RUFF_VERSION}" check python
+      - name: ruff format
+        run: uvx "ruff@${RUFF_VERSION}" format --check python
+      - name: mypy --strict (package, stubs and tests)
+        run: uvx --with pytest --with packaging "mypy@${MYPY_VERSION}"
+
+  rust-test:
+    name: cargo test (pyroid-core)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: cargo test
+        run: cargo test -p pyroid-core --locked
+
+  wheels:
+    name: wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read # checkout
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Linux builds run inside the manylinux container, which has its own
+      # interpreters; macOS and Windows build on the host.
+      - id: py311
+        if: runner.os != 'Linux'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - id: py314t
+        if: runner.os != 'Linux'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14t"
+      - id: py315
+        if: runner.os != 'Linux'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15"
+      # Two maturin invocations on purpose: maturin picks one ABI per run, and a
+      # 3.15 interpreter in the same run switches it to abi3t, which turns the
+      # 3.11 build into a version-specific cp311-cp311 wheel instead of abi3.
+      - name: Build cp311-abi3 and cp314t wheels
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          manylinux: auto
+          args: >-
+            --release --locked --out dist -i
+            ${{ runner.os == 'Linux' && '3.11 3.14t' || format('{0} {1}', steps.py311.outputs.python-path, steps.py314t.outputs.python-path) }}
+      - name: Build cp315-abi3.abi3t wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          manylinux: auto
+          args: >-
+            --release --locked --out dist -i
+            ${{ runner.os == 'Linux' && '3.15' || steps.py315.outputs.python-path }}
+      - name: Check that exactly the three wheel flavours were built
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -l dist
+          for pattern in '-cp311-abi3-' '-cp314-cp314t-' '-cp315-abi3.abi3t-'; do
+            n=$(find dist -name "pyroid-*${pattern}*.whl" | wc -l)
+            [[ "$n" -eq 1 ]] || { echo "::error::expected one *${pattern}* wheel, found $n"; exit 1; }
+          done
+          [[ "$(find dist -name '*.whl' | wc -l)" -eq 3 ]]
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  test:
+    name: pytest (${{ matrix.os }}, ${{ matrix.python }})
+    needs: wheels
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read # checkout (for python/tests)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        python: ["3.11", "3.14t", "3.15", "3.15t"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist
+      - name: Install the built wheel into a clean venv and run pytest
+        shell: bash
+        env:
+          PY: ${{ matrix.python }}
+        run: |
+          set -euo pipefail
+          uv venv -p "$PY" .venv-test
+          # Only the wheel built above: no index, no sdist fallback, no deps.
+          uv pip install --python .venv-test --no-index --no-deps --no-build --find-links dist pyroid
+          uv pip install --python .venv-test pytest packaging
+          if [[ "$RUNNER_OS" == Windows ]]; then py=.venv-test/Scripts/python.exe; else py=.venv-test/bin/python; fi
+          # PYTHON_GIL stays unset so a module that re-enables the GIL is caught.
+          "$py" -c "import sys, pyroid._pyroid as m; print(sys.version); print(m.__file__)"
+          # importlib mode keeps python/ off sys.path; test_smoke also asserts
+          # that the extension was loaded from site-packages.
+          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib python/tests
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [lint, rust-test, wheels, test]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Require every job to have succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            if [[ "$r" != success ]]; then echo "::error::a required job finished with: $r"; exit 1; fi
+          done
