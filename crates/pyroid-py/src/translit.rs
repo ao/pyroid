@@ -23,17 +23,17 @@ use crate::input::{TextInput, Threads, threads};
 
 /// `errors=`: Unidecode checks the value only when it meets a character
 /// without a transliteration, so an invalid value is kept until then.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 enum Mode {
     Ignore,
     Replace,
     Strict,
     Preserve,
-    /// `repr()` of the invalid value.
-    Invalid(String),
+    /// `repr()` of the invalid value (a Python str: it may hold anything).
+    Invalid(Py<PyString>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct ErrorsArg(Mode);
 
 impl<'a, 'py> FromPyObject<'a, 'py> for ErrorsArg {
@@ -49,23 +49,23 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ErrorsArg {
         });
         Ok(Self(match known {
             Some(m) => m,
-            None => Mode::Invalid(obj.repr()?.to_string()),
+            None => Mode::Invalid(obj.repr()?.unbind()),
         }))
     }
 }
 
 /// `replace_str=`: used only when a character has no transliteration (and
 /// only then type-checked, as by Unidecode).
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 enum Replace {
     Utf8(Cow<'static, str>),
     /// A str holding lone surrogates, as surrogatepass UTF-8.
     Wtf8(Vec<u8>),
-    /// Not a str: the type name, for the `TypeError`.
-    NotStr(String),
+    /// Not a str: the object, for the `TypeError`.
+    NotStr(Py<PyAny>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct ReplaceArg(Replace);
 
 impl<'a, 'py> FromPyObject<'a, 'py> for ReplaceArg {
@@ -73,8 +73,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ReplaceArg {
 
     fn extract(obj: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
         let Ok(s) = obj.cast::<PyString>() else {
-            let name = obj.get_type().name()?.to_string();
-            return Ok(Self(Replace::NotStr(name)));
+            return Ok(Self(Replace::NotStr(obj.to_owned().unbind())));
         };
         Ok(Self(match s.to_str() {
             Ok(s) => Replace::Utf8(Cow::Owned(s.to_owned())),
@@ -130,7 +129,7 @@ static UNIDECODE_ERROR: PyOnceLock<Py<PyType>> = PyOnceLock::new();
 
 /// A `pyroid.translit.UnidecodeError(message, index)`. The class is defined
 /// in Python (it has Unidecode's constructor and `index` attribute).
-fn unidecode_error(py: Python<'_>, message: String, index: Option<usize>) -> PyErr {
+fn unidecode_error(py: Python<'_>, message: &Bound<'_, PyAny>, index: Option<usize>) -> PyErr {
     let ty = UNIDECODE_ERROR.get_or_try_init(py, || {
         let ty = py
             .import("pyroid.translit")?
@@ -144,6 +143,24 @@ fn unidecode_error(py: Python<'_>, message: String, index: Option<usize>) -> PyE
     }
 }
 
+/// The `TypeError` `str.join` gives for `obj` as item `index` (Unidecode's
+/// error for a non-str `replace_str`). CPython builds it, so the type name is
+/// its own C-level `tp_name`, which Python code cannot read under abi3.
+fn join_type_error(py: Python<'_>, obj: &Bound<'_, PyAny>, index: usize) -> PyResult<PyErr> {
+    let joined =
+        PyString::new(py, "").call_method1(pyo3::intern!(py, "join"), (PyTuple::new(py, [obj])?,));
+    let err = match joined {
+        Err(e) if e.is_instance_of::<PyTypeError>(py) => e,
+        Err(e) => return Ok(e),
+        Ok(_) => return Ok(PyTypeError::new_err("replace_str must be a str")),
+    };
+    let msg = err.value(py).str()?.call_method1(
+        pyo3::intern!(py, "replace"),
+        ("sequence item 0:", format!("sequence item {index}:"), 1),
+    )?;
+    Ok(PyTypeError::new_err(msg.unbind()))
+}
+
 /// The exception Unidecode raises when it meets `missing` in `mode`.
 fn missing_error(
     py: Python<'_>,
@@ -152,26 +169,31 @@ fn missing_error(
     missing: MissingAt,
 ) -> PyResult<PyErr> {
     Ok(match (mode, replace) {
-        (Mode::Strict, _) => unidecode_error(
-            py,
-            format!(
+        (Mode::Strict, _) => {
+            let msg = format!(
                 "no replacement found for character {} in position {}",
                 unit_repr(py, missing.unit)?,
                 missing.index
-            ),
-            Some(missing.index),
-        ),
-        (Mode::Invalid(repr), _) => unidecode_error(
-            py,
-            format!("invalid value for errors parameter {repr}"),
-            None,
-        ),
-        (Mode::Replace, Replace::NotStr(name)) => PyTypeError::new_err(format!(
-            "sequence item {}: expected str instance, {name} found",
-            missing.index
-        )),
+            );
+            unidecode_error(py, PyString::new(py, &msg).as_any(), Some(missing.index))
+        }
+        (Mode::Invalid(repr), _) => {
+            let msg =
+                PyString::new(py, "invalid value for errors parameter ").add(repr.bind(py))?;
+            unidecode_error(py, &msg, None)
+        }
+        (Mode::Replace, Replace::NotStr(obj)) => join_type_error(py, obj.bind(py), missing.index)?,
         _ => unreachable!("only strict, invalid errors and a non-str replace_str fail"),
     })
+}
+
+/// Is `obj` a str, list or tuple? Only those can hold lone surrogates that
+/// `TextInput` rejects; any other `UnicodeEncodeError` (say, from an Arrow
+/// producer) is the caller's to see.
+fn may_hold_surrogates(obj: &Bound<'_, PyAny>) -> bool {
+    obj.is_instance_of::<PyString>()
+        || obj.is_instance_of::<PyList>()
+        || obj.is_instance_of::<PyTuple>()
 }
 
 /// Does `mode` (with `replace`) raise at the first character without a
@@ -209,7 +231,7 @@ fn anyascii<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     match string.extract::<TextInput>() {
         Ok(input) => transform(py, input, threads, kernel::anyascii),
-        Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) => {
+        Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) && may_hold_surrogates(string) => {
             let strs = Strs::collect(string)?;
             let outs = strs.map_wtf8(py, threads, |b| {
                 (owned(kernel::anyascii_wtf8(b)), Vec::new(), None)
@@ -247,7 +269,7 @@ fn unidecode<'py>(
     let (mode, replace) = (errors.0, replace_str.0);
     let input = match string.extract::<TextInput>() {
         Ok(input) => input,
-        Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) => {
+        Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) && may_hold_surrogates(string) => {
             return unidecode_wtf8(py, string, &mode, &replace, threads);
         }
         Err(e) => return Err(e),

@@ -39,9 +39,9 @@ Differences from Unidecode
   drops them), and many scripts anyascii covers have no Unidecode mapping.
 - **Which characters are missing differs**, so ``errors="strict"`` raises,
   and ``errors="replace"`` substitutes, on different characters. Unidecode
-  has no mapping for about half of the code points anyascii maps (most of the
-  CJK extensions and supplementary planes); anyascii also leaves a few
-  characters out that Unidecode maps.
+  has no mapping for 80,814 of the 123,799 non-ASCII code points anyascii
+  maps (most of the CJK extensions, emoji and the supplementary planes). No
+  assigned character has a Unidecode mapping but no anyascii one.
 - Lists, tuples and Arrow columns are accepted (Unidecode raises
   ``AttributeError``); other non-str inputs raise :class:`pyroid.InputError`
   (a ``TypeError``) instead of ``AttributeError``.
@@ -50,6 +50,21 @@ Differences from Unidecode
   :class:`pyroid.PyroidError`), not an instance of Unidecode's.
 - The surrogate ``RuntimeWarning`` is attributed to the caller's line rather
   than to a line inside the library.
+
+How different the output is (measured against Unidecode 1.4.0, default
+``errors="ignore"``, CPython 3.15 / Unicode 17.0):
+
+- Of the 42,985 non-ASCII code points both libraries map, 6,705 (15.6%)
+  give identical output, 58.8% after stripping spaces (Unidecode often adds
+  a trailing space, e.g. after CJK ideographs).
+- Identical documents: FineWeb (English web text) 79.7% (68% of the docs
+  that are not pure ASCII); FineWeb-2 French and Spanish 90.4%, German
+  75.2%; Arabic, Chinese, Hindi, Japanese and Russian 0%, where the share of
+  non-ASCII characters mapped identically is 96% (Russian), 89% (Arabic),
+  77% (Hindi), 60% (Japanese) and 6% (Chinese, mostly the trailing spaces).
+- The most frequent differences on that text: EM DASH ``"--"`` → ``"-"``,
+  Devanagari vowel signs (``"aa"`` → ``"a"``), Cyrillic ``я`` ``"ia"`` →
+  ``"ya"``, ``£`` ``"PS"`` → ``"GBP"``, ``®`` ``"(r)"`` → ``"(R)"``.
 """
 
 from typing import Final, overload

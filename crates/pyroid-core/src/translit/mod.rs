@@ -17,8 +17,11 @@
 //!   hold lone surrogates. A surrogate never has a transliteration; anyascii
 //!   drops it.
 //!
-//! Every function returns `Cow::Borrowed` of the whole input when the output
-//! equals it (always for pure-ASCII input).
+//! Every function returns `Cow::Borrowed` of the whole input exactly when the
+//! input is pure ASCII (the output then equals it), and an owned result
+//! otherwise, even when that result equals the input (`Missing::Keep` on
+//! characters without a transliteration): Unidecode, too, returns its input
+//! object only for ASCII input.
 
 mod tables;
 
@@ -257,11 +260,7 @@ pub fn unidecode<'a>(s: &'a str, missing: Missing<'_>) -> Cow<'a, str> {
     if start == s.len() {
         return Cow::Borrowed(s);
     }
-    let out = translit(s, start, missing);
-    if missing == Missing::Keep && out == s {
-        return Cow::Borrowed(s);
-    }
-    Cow::Owned(out)
+    Cow::Owned(translit(s, start, missing))
 }
 
 /// The first character of `s` without a transliteration, if any.
@@ -392,9 +391,6 @@ pub fn unidecode_wtf8<'a>(b: &'a [u8], missing: MissingWtf8<'_>) -> Cow<'a, [u8]
                 MissingWtf8::Keep => out.extend_from_slice(raw),
             },
         }
-    }
-    if out == b {
-        return Cow::Borrowed(b);
     }
     Cow::Owned(out)
 }

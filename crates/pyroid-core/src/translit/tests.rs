@@ -51,13 +51,17 @@ fn anyascii_matches_the_crate_per_char_and_concatenated() {
 }
 
 #[test]
-fn unchanged_input_is_borrowed() {
+fn only_ascii_input_is_borrowed() {
     for s in ["", "plain ascii\n\0\x7f"] {
         assert!(matches!(anyascii(s), Cow::Borrowed(x) if x == s));
         assert!(matches!(unidecode(s, Missing::Drop), Cow::Borrowed(x) if x == s));
     }
     let kept = "a\u{e000}b";
-    assert!(matches!(unidecode(kept, Missing::Keep), Cow::Borrowed(x) if x == kept));
+    // Equal to the input, but owned: Unidecode returns a new str here too.
+    assert!(matches!(unidecode(kept, Missing::Keep), Cow::Owned(x) if x == kept));
+    assert!(
+        matches!(unidecode_wtf8(kept.as_bytes(), MissingWtf8::Keep), Cow::Owned(x) if x == kept.as_bytes())
+    );
     assert!(matches!(anyascii("é"), Cow::Owned(x) if x == "e"));
 }
 
