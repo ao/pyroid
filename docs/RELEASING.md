@@ -1,7 +1,7 @@
 # Releasing pyroid
 
 Owner-only instructions. Everything here needs repository-admin or PyPI-owner rights; no automation does it
-for you. Do the one-time setup (sections 1–4) once, before the first 1.0 push to `main`.
+for you. Do the one-time setup (sections 1–4 and 8) once, before the first 1.0 push to `main`.
 
 How releases work: `.github/workflows/release.yml` runs [release-please](https://github.com/googleapis/release-please)
 on every push to `main`. release-please keeps a release PR open (`chore: release X.Y.Z`) that bumps the version in
@@ -123,3 +123,32 @@ patch, and `!`/`BREAKING CHANGE` a major. Merge the release PR when you want to 
   keeps the release-please outputs, so it can still publish). If the code is broken, fix it on `main` with a
   `fix:` commit and ship the next patch release; don't move or reuse the tag.
 - **Never** publish from a laptop, and don't add an API token as a fallback.
+
+## 8. Docs site (GitHub Pages)" after section 7, plus one line in the intro list of
+     one-time setup ("Do the one-time setup (sections 1–4 and 8) once ..."). -->
+
+## 8. Docs site (GitHub Pages)
+
+`.github/workflows/docs.yml` builds the site (`mkdocs.yml`, sources in `docs/`) on every PR and push, with
+`zensical build --strict` and a `mkdocs build --strict` link check. It **deploys only on a push to `main`, and
+only if the `github-pages` environment exists**: a first job looks the environment up and, if it is missing,
+skips the deploy with a notice instead of creating it. Nothing is published until you do this once:
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.** This creates the `github-pages`
+   environment.
+2. **Settings → Environments → `github-pages`:** check that **Deployment branches and tags** allows `main` only
+   (GitHub's default for this environment). No reviewers or secrets are needed.
+3. Push to `main` (or re-run the latest `docs` run on `main`). The `deploy to GitHub Pages` job publishes
+   <https://ao.github.io/pyroid/>. The README's Docs, Benchmarks and Compatibility links point there, and 404
+   until then.
+
+To stop publishing, set the Pages source back to "Deploy from a branch" (or delete the environment); the
+workflow then goes back to build-only.
+
+Before the 1.0 release, also:
+
+- Replace the "Docker/OrbStack VM, indicative, preliminary" numbers on `docs/benchmarks.md`, `README.md` and
+  the guides with the bare-metal run, and add the hero chart (`docs/assets/hero-{light,dark}.svg`, the
+  commented-out `<picture>` in `README.md`).
+- Remove the "pyroid 1.0 is not on PyPI yet" notes (`README.md`, `docs/index.md`, `docs/install.md`,
+  `docs/llms.txt`).
