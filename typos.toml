@@ -10,10 +10,12 @@ extend-exclude = [
   # Generated.
   "Cargo.lock",
   "crates/pyroid-core/src/ftfy/tables.rs",
+  "crates/pyroid-core/src/filters/tables.rs",
   # Test data, incumbent fixtures and raw benchmark results: mojibake, confusables, deliberately
   # misspelt and non-English text. Keep in step with the file-fixer excludes in .pre-commit-config.yaml.
   "python/tests/data/",
   "crates/pyroid-core/tests/ftfy_data/",
+  "crates/pyroid-core/tests/filters_data/",
   "bench/data/",
   "bench/results/",
   "parity/data/",
@@ -23,6 +25,8 @@ extend-exclude = [
 ]
 
 [default.extend-words]
+# datatrove's parameter names (line_punct_thr, short_line_thr), kept for drop-in parity.
+thr = "thr"
 
 [default.extend-identifiers]
 # The arro3 Arrow library (github.com/kylebarron/arro3), not a misspelt "arrow".
