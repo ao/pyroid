@@ -88,35 +88,52 @@
       "source": "the parity/ filters suite and crates/pyroid-core/tests/filters_tokenizer.rs, run on 2026-11-05"
     },
     "dedup": {
-      "preview": true,
       "reference": "datatrove 0.10.1 MinHash, FineWeb configuration (sha1, 64-bit, 14 buckets x 8 hashes, 5-grams)",
-      "rule": "identical signatures and removed set",
+      "rule": "identical signatures, removed set, cluster ids and sizes",
       "checks": [
         {
-          "name": "Signatures from raw text, FineWeb dev 10k and adversarial set",
+          "name": "Harness parity suite: signatures from raw text, FineWeb dev 10k and adversarial set",
           "same": 13232,
           "diff": 0
         },
         {
-          "name": "Removal decisions (445 removed documents)",
+          "name": "Harness parity suite: removal decisions (445 documents removed)",
+          "same": 13232,
+          "diff": 0
+        },
+        {
+          "name": "simplify_text vs datatrove on the corpus documents",
           "same": 13232,
           "diff": 0
         }
       ],
-      "source": "the dedup module's parity tests and the parity/ dedup suite (13,232 same, 0 different), run on 2026-11-05"
+      "notes": [
+        "datatrove's stages 1 to 3 re-run and compared from raw text: every bucket's pairs, the removed ids, cluster ids and sizes are identical for sha1/64 (445 removed) and xxhash/32 (439 removed, 3,146 pairs).",
+        "Live-datatrove Hypothesis families (case, whitespace, punctuation, edits, swaps; 1-, 2- and 5-grams; 4 hash configurations) and a Python transcription of stages 1 to 3: identical.",
+        "simplify_text: CRC digests over all 1,112,064 code points x 13 configurations x 5 Unicode versions identical."
+      ],
+      "source": "the parity/ dedup suite and python/tests/test_dedup_parity.py, run on 2026-11-05"
     },
     "translit": {
-      "preview": true,
-      "reference": "anyascii 0.3.3",
-      "rule": "byte-identical to anyascii on every code point",
+      "reference": "anyascii 0.3.3 (for anyascii()); Unidecode 1.4.0 as a black box (for unidecode()'s errors= semantics only)",
+      "rule": "anyascii(): byte-identical; unidecode(): Unidecode's errors=, exceptions and warnings, on anyascii's data",
       "checks": [
         {
-          "name": "Every code point U+0000 to U+10FFFF except surrogates",
-          "same": 1112064,
+          "name": "anyascii() vs the anyascii package, every code point U+0000 to U+10FFFF (lists, single strings, chunked, Arrow)",
+          "same": 1114112,
+          "diff": 0
+        },
+        {
+          "name": "Documents: FineWeb dev 10k, FineWeb-2 8 x 250 and FineWeb 100k (list, Arrow, unidecode), on CPython 3.12, 3.15 and 3.15t",
+          "same": 112000,
           "diff": 0
         }
       ],
-      "source": "the translit module's agreement run against the anyascii package (preview branch), 2026-11-05"
+      "notes": [
+        "The generated table matches the anyascii package on all 1,112,064 non-surrogate code points, and the kernel matches the any_ascii crate on every scalar in all 4 errors= modes.",
+        "unidecode() vs Unidecode 1.4.0, black box: 194 tests over the alphabets both libraries map (every errors= mode, replace_str edge cases, invalid errors, messages, args, index, warning order, batches) pass. The transliterations themselves differ by design; see the translit guide."
+      ],
+      "source": "python/tests/test_translit_parity.py, test_translit_unidecode.py and the module's agreement run, 2026-11-05"
     }
   }
 }

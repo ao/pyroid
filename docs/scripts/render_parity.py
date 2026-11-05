@@ -32,8 +32,8 @@ TITLES = {
     "ftfy": "pyroid.ftfy",
     "fasttext": "pyroid.fasttext",
     "filters": "pyroid.filters",
-    "dedup": "pyroid.dedup (preview)",
-    "translit": "pyroid.translit (preview)",
+    "dedup": "pyroid.dedup",
+    "translit": "pyroid.translit",
 }
 
 
@@ -106,8 +106,10 @@ def render(suites: dict[str, dict[str, Any]]) -> str:
             f"| **Total** | **{_n(total_same + total_diff)}** | **{_n(total_same)}** "
             f"| **{_n(total_diff)}** |",
             "",
-            f"<small>Source: {s['source']}.</small>",
         ]
+        if s.get("notes"):
+            lines += [f"- {note}" for note in s["notes"]] + [""]
+        lines.append(f"<small>Source: {s['source']}.</small>")
     lines.append(END)
     return "\n".join(lines)
 

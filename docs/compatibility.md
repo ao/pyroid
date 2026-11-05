@@ -75,28 +75,37 @@ Reference: **datatrove 0.10.1 with spaCy 3.8.18**. Rule: same keep/drop decision
 
 <small>Source: the parity/ filters suite and crates/pyroid-core/tests/filters_tokenizer.rs, run on 2026-11-05.</small>
 
-### pyroid.dedup (preview) {#dedup}
+### pyroid.dedup {#dedup}
 
-Reference: **datatrove 0.10.1 MinHash, FineWeb configuration (sha1, 64-bit, 14 buckets x 8 hashes, 5-grams)**. Rule: identical signatures and removed set.
-
-| Check | Compared | Identical | Different |
-|---|---:|---:|---:|
-| Signatures from raw text, FineWeb dev 10k and adversarial set | 13,232 | 13,232 | 0 |
-| Removal decisions (445 removed documents) | 13,232 | 13,232 | 0 |
-| **Total** | **26,464** | **26,464** | **0** |
-
-<small>Source: the dedup module's parity tests and the parity/ dedup suite (13,232 same, 0 different), run on 2026-11-05.</small>
-
-### pyroid.translit (preview) {#translit}
-
-Reference: **anyascii 0.3.3**. Rule: byte-identical to anyascii on every code point.
+Reference: **datatrove 0.10.1 MinHash, FineWeb configuration (sha1, 64-bit, 14 buckets x 8 hashes, 5-grams)**. Rule: identical signatures, removed set, cluster ids and sizes.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
-| Every code point U+0000 to U+10FFFF except surrogates | 1,112,064 | 1,112,064 | 0 |
-| **Total** | **1,112,064** | **1,112,064** | **0** |
+| Harness parity suite: signatures from raw text, FineWeb dev 10k and adversarial set | 13,232 | 13,232 | 0 |
+| Harness parity suite: removal decisions (445 documents removed) | 13,232 | 13,232 | 0 |
+| simplify_text vs datatrove on the corpus documents | 13,232 | 13,232 | 0 |
+| **Total** | **39,696** | **39,696** | **0** |
 
-<small>Source: the translit module's agreement run against the anyascii package (preview branch), 2026-11-05.</small>
+- datatrove's stages 1 to 3 re-run and compared from raw text: every bucket's pairs, the removed ids, cluster ids and sizes are identical for sha1/64 (445 removed) and xxhash/32 (439 removed, 3,146 pairs).
+- Live-datatrove Hypothesis families (case, whitespace, punctuation, edits, swaps; 1-, 2- and 5-grams; 4 hash configurations) and a Python transcription of stages 1 to 3: identical.
+- simplify_text: CRC digests over all 1,112,064 code points x 13 configurations x 5 Unicode versions identical.
+
+<small>Source: the parity/ dedup suite and python/tests/test_dedup_parity.py, run on 2026-11-05.</small>
+
+### pyroid.translit {#translit}
+
+Reference: **anyascii 0.3.3 (for anyascii()); Unidecode 1.4.0 as a black box (for unidecode()'s errors= semantics only)**. Rule: anyascii(): byte-identical; unidecode(): Unidecode's errors=, exceptions and warnings, on anyascii's data.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| anyascii() vs the anyascii package, every code point U+0000 to U+10FFFF (lists, single strings, chunked, Arrow) | 1,114,112 | 1,114,112 | 0 |
+| Documents: FineWeb dev 10k, FineWeb-2 8 x 250 and FineWeb 100k (list, Arrow, unidecode), on CPython 3.12, 3.15 and 3.15t | 112,000 | 112,000 | 0 |
+| **Total** | **1,226,112** | **1,226,112** | **0** |
+
+- The generated table matches the anyascii package on all 1,112,064 non-surrogate code points, and the kernel matches the any_ascii crate on every scalar in all 4 errors= modes.
+- unidecode() vs Unidecode 1.4.0, black box: 194 tests over the alphabets both libraries map (every errors= mode, replace_str edge cases, invalid errors, messages, args, index, warning order, batches) pass. The transliterations themselves differ by design; see the translit guide.
+
+<small>Source: python/tests/test_translit_parity.py, test_translit_unidecode.py and the module's agreement run, 2026-11-05.</small>
 <!-- parity:end -->
 
 ## Known differences
@@ -108,9 +117,8 @@ as returning an unchanged string as the same object.
 - [Differences from ftfy](guides/ftfy.md#differences-from-ftfy)
 - [Differences from fastText](guides/fasttext.md#differences-from-fasttext)
 - [Differences from datatrove's filters](guides/filters.md#differences-from-datatrove)
-- [Differences from datatrove's MinHash](guides/dedup.md#differences-from-datatrove) *(preview)*
-- [Differences from Unidecode](guides/translit.md#differences-from-unidecode) *(preview:
-  `pyroid.translit.unidecode` deliberately does **not** reproduce Unidecode's output; see
+- [Differences from datatrove's MinHash](guides/dedup.md#differences-from-datatrove)
+- [Differences from Unidecode](guides/translit.md#differences-from-unidecode) *(`pyroid.translit.unidecode` deliberately does **not** reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode))*
 
 ## Interpreters and Unicode versions
