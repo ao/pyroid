@@ -614,6 +614,14 @@ impl Model {
     }
 }
 
+/// Split ``text`` into fastText tokens (``fasttext.tokenize``): ``"</s>"``
+/// for each newline.
+#[pyfunction]
+fn tokenize(text: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
+    let text = one_str(text)?;
+    Ok(ft::tokenize(&text).into_iter().map(str::to_owned).collect())
+}
+
 /// Load a fastText model (``.bin``, or quantized ``.ftz``).
 #[pyfunction]
 fn load_model(py: Python<'_>, path: PathBuf) -> PyResult<Model> {
@@ -630,5 +638,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Model>()?;
     m.add("ModelError", model_error_type(py)?)?;
     m.add_function(wrap_pyfunction!(load_model, &m)?)?;
+    m.add_function(wrap_pyfunction!(tokenize, &m)?)?;
     parent.add_submodule(&m)
 }

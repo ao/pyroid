@@ -24,5 +24,6 @@ from pyroid._pyroid import fasttext as _native
 Model = _native.Model
 ModelError = _native.ModelError
 load_model = _native.load_model
+tokenize = _native.tokenize
 
-__all__ = ["Model", "ModelError", "load_model"]
+__all__ = ["Model", "ModelError", "load_model", "tokenize"]

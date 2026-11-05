@@ -61,6 +61,30 @@ use io::Reader;
 use loss::{Head, Scored};
 use matrix::Matrix;
 
+/// `fasttext.tokenize(text)`: every token `readWord` yields for the whole
+/// text, with `</s>` for each `'\n'` (no end-of-line token is added and a
+/// literal `</s>` does not stop it). Tokens are split on fastText's
+/// separators: space, `\t`, `\v`, `\f`, `\r`, `\n` and NUL.
+pub fn tokenize(text: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    for line in text.split_inclusive('\n') {
+        let newline = line.ends_with('\n');
+        let body = if newline {
+            &line[..line.len() - 1]
+        } else {
+            line
+        };
+        out.extend(
+            body.split(|c: char| c.is_ascii() && dict::is_separator(c as u8))
+                .filter(|t| !t.is_empty()),
+        );
+        if newline {
+            out.push("</s>");
+        }
+    }
+    out
+}
+
 /// `FASTTEXT_FILEFORMAT_MAGIC_INT32`.
 pub const MAGIC: i32 = 793_712_314;
 /// `FASTTEXT_VERSION`: the newest format version fastText (and pyroid) reads.

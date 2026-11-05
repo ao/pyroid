@@ -9,7 +9,7 @@ import numpy.typing as npt
 from pyroid import PyroidError
 from pyroid._typing import ArrowStrings
 
-__all__ = ["Model", "ModelError", "load_model"]
+__all__ = ["Model", "ModelError", "load_model", "tokenize"]
 
 _F32: TypeAlias = npt.NDArray[np.float32]
 _F64: TypeAlias = npt.NDArray[np.float64]
@@ -40,6 +40,16 @@ def load_model(path: str | os.PathLike[str]) -> Model:
             ids that fastText itself would read out of bounds).
         OSError: The file cannot be opened or read (``FileNotFoundError``,
             ``PermissionError``, ...; fastText raises ``ValueError`` here).
+    """
+
+def tokenize(text: str) -> list[str]:
+    r"""Split text into fastText tokens, as ``fasttext.tokenize``.
+
+    Tokens are separated by spaces, ``\t``, ``\v``, ``\f``, ``\r``, ``\n`` and NUL;
+    each ``\n`` also yields the end-of-line token ``"</s>"``.
+
+    Raises:
+        TypeError: ``text`` is not a str, or contains a lone surrogate.
     """
 
 @final
