@@ -1,0 +1,122 @@
+{
+  "about": "Seed data for docs/compatibility.md, rendered by docs/scripts/render_parity.py. Entered by hand from each module's test runs (2026-11-05, Docker/OrbStack VM, linux/aarch64). Once CI publishes parity-report.json, render from that with --report.",
+  "suites": {
+    "ftfy": {
+      "reference": "ftfy 6.3.1",
+      "rule": "byte-identical output, same exception type",
+      "checks": [
+        {
+          "name": "Golden cases (ftfy's test_cases.json and re-garbled variants, doctests), 8 call shapes, replayed on Unicode 14.0 to 17.0",
+          "same": 74950,
+          "diff": 0
+        },
+        {
+          "name": "Fuzz: random corner-case mix, half with lone surrogates, random options, 5 Unicode versions",
+          "same": 500000,
+          "diff": 0
+        },
+        {
+          "name": "Realistic mojibake (1 to 2 layers, CESU-8, partial, lossy), 5 Unicode versions",
+          "same": 1151345,
+          "diff": 0
+        },
+        {
+          "name": "Combining sequences, jamo, Indic scripts, new characters, all 4 normalization forms",
+          "same": 2199550,
+          "diff": 0
+        },
+        {
+          "name": "Real documents: FineWeb dev 10k, FineWeb-2 (8 languages), adversarial set, 5 Unicode versions",
+          "same": 76160,
+          "diff": 0
+        },
+        {
+          "name": "Real documents: FineWeb 100k on Unicode 15.0 and 17.0",
+          "same": 200000,
+          "diff": 0
+        },
+        {
+          "name": "Replay after the final rebase, fresh seeds",
+          "same": 649606,
+          "diff": 0
+        },
+        {
+          "name": "Python Hypothesis, deep profile, on CPython 3.12 and 3.15t",
+          "same": 120000,
+          "diff": 0
+        }
+      ],
+      "source": "the Rust oracle replay (crates/pyroid-core/tests/ftfy_oracle.rs) and python/tests/test_ftfy_parity.py, run on 2026-11-05"
+    },
+    "fasttext": {
+      "reference": "fasttext-predict 0.9.2.4 (fastText's C++ predict path)",
+      "rule": "same labels, probabilities within 1e-6 (measured: bit-identical)",
+      "checks": [
+        {
+          "name": "Pinned lid.176.bin and lid.176.ftz predictions, top-5, FineWeb dev 10k and adversarial set (str, list and Arrow paths)",
+          "same": 26464,
+          "diff": 0
+        },
+        {
+          "name": "Synthetic models vs the live oracle: 52 configurations (4 losses, dense, quantized, pruned, word n-grams)",
+          "same": 63024,
+          "diff": 0
+        },
+        {
+          "name": "Dense softmax and hierarchical softmax, dimensions 1 to 33",
+          "same": 26664,
+          "diff": 0
+        }
+      ],
+      "source": "python/tests/test_fasttext_parity.py and the parity/ fastText suite, run on 2026-11-05"
+    },
+    "filters": {
+      "reference": "datatrove 0.10.1 with spaCy 3.8.18",
+      "rule": "same keep/drop decision, same filter_reason, same C4 text, same exception",
+      "checks": [
+        {
+          "name": "Harness parity suite: Gopher repetition, Gopher quality, C4 (default and FineWeb settings), FineWeb quality, on 13,232 documents",
+          "same": 66160,
+          "diff": 0
+        },
+        {
+          "name": "Tokenizer oracle replay (words and sentence counts): FineWeb, FineWeb-2, adversarial, fuzz and Unicode probes, CPython 3.12 to 3.14",
+          "same": 964148,
+          "diff": 0
+        }
+      ],
+      "source": "the parity/ filters suite and crates/pyroid-core/tests/filters_tokenizer.rs, run on 2026-11-05"
+    },
+    "dedup": {
+      "preview": true,
+      "reference": "datatrove 0.10.1 MinHash, FineWeb configuration (sha1, 64-bit, 14 buckets x 8 hashes, 5-grams)",
+      "rule": "identical signatures and removed set",
+      "checks": [
+        {
+          "name": "Signatures from raw text, FineWeb dev 10k and adversarial set",
+          "same": 13232,
+          "diff": 0
+        },
+        {
+          "name": "Removal decisions (445 removed documents)",
+          "same": 13232,
+          "diff": 0
+        }
+      ],
+      "source": "the dedup module's parity tests (preview branch), run on 2026-11-05"
+    },
+    "translit": {
+      "preview": true,
+      "reference": "anyascii 0.3.3",
+      "rule": "byte-identical to anyascii on every code point",
+      "checks": [
+        {
+          "name": "Every code point U+0000 to U+10FFFF except surrogates",
+          "same": 1112064,
+          "diff": 0
+        }
+      ],
+      "source": "the translit module's agreement run against the anyascii package (preview branch), 2026-11-05"
+    }
+  }
+}
