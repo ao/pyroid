@@ -22,6 +22,7 @@ repos:
           (?x)^(
             python/tests/data/|
             crates/pyroid-core/tests/ftfy_data/|
+            crates/pyroid-core/tests/filters_data/|
             bench/data/|
             bench/results/|
             parity/data/|

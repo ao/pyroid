@@ -13,6 +13,7 @@ __all__ = [
     "__version__",
     "_testing",
     "fasttext",
+    "filters",
     "ftfy",
     "text",
 ]
@@ -23,6 +24,7 @@ __version__: Final[str]
 text: ModuleType
 ftfy: ModuleType
 fasttext: ModuleType
+filters: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):

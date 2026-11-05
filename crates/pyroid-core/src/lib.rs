@@ -15,6 +15,7 @@
 
 pub mod columnar;
 pub mod fasttext;
+pub mod filters;
 pub mod ftfy;
 pub mod par;
 pub mod text;
