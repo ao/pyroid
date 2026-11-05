@@ -35,6 +35,11 @@ classifiers = [
 # No runtime dependencies.
 dependencies = []
 
+[project.optional-dependencies]
+# pyroid.fasttext returns numpy arrays (as fastText does); it raises a clear
+# ImportError without numpy.
+fasttext = ["numpy>=1.26"]
+
 [project.urls]
 Homepage = "https://github.com/ao/pyroid"
 Repository = "https://github.com/ao/pyroid"
@@ -54,6 +59,9 @@ test = [
   "pyarrow>=18",
   # The reference implementation for pyroid.ftfy's parity tests.
   "ftfy==6.3.1",
+  # pyroid.fasttext needs numpy; fasttext-predict is its reference (no wheels past cp313).
+  "numpy>=1.26",
+  "fasttext-predict==0.9.2.4; python_version < '3.14'",
 ]
 # Same pins as .pre-commit-config.yaml (prek runs ruff and mypy from there).
 lint = ["ruff==0.17.3", "mypy==2.4.1", "prek==0.5.10"]
