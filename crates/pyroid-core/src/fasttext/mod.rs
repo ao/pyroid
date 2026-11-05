@@ -430,10 +430,11 @@ impl Model {
             let Some(mut vec) = self.word_vector(word) else {
                 continue;
             };
-            // Vector::norm: sqrt of the sum of squares, accumulated in float.
+            // Vector::norm: sqrt of the sum of squares, accumulated in float
+            // (fused on aarch64: bit-identical to upstream fastText 0.9.2 there).
             let mut sum = 0.0f32;
             for &x in &vec {
-                sum += x * x;
+                sum = matrix::fused(sum, x, x);
             }
             let norm = sum.sqrt();
             if norm > 0.0 {

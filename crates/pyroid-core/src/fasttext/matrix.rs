@@ -13,15 +13,17 @@ use std::io::Read;
 use super::error::LoadError;
 use super::io::Reader;
 
-/// `acc + a * b` in the quantized kernels (`mulcode`, `addcode`), as the
-/// reference build computes it.
+/// `acc + a * b` in the quantized kernels (`mulcode`, `addcode`) and
+/// `Vector::norm`, as the reference builds compute it.
 ///
 /// The published fastText wheels are built by GCC with `-O3`, which
 /// contracts these two loops into fused multiply-adds where the base ISA has
 /// them: on aarch64 the reference rounds once, on baseline x86-64 twice.
 /// The dense `dotRow` loop is not contracted on either. Measured against
 /// fasttext-predict 0.9.2.4 on aarch64: with this split, all 26,464 pinned
-/// lid.176 predictions and every synthetic qout/qnorm model are bit-identical.
+/// lid.176 predictions and every synthetic qout/qnorm model are bit-identical;
+/// against upstream fastText 0.9.2 (`fasttext-numpy2-wheel`), so are
+/// unsupervised sentence vectors (`norm`).
 #[inline]
 pub fn fused(acc: f32, a: f32, b: f32) -> f32 {
     #[cfg(target_arch = "aarch64")]
