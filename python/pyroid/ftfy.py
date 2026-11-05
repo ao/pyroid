@@ -185,9 +185,12 @@ _WARNED: set[str] = set()
 
 
 def _caller_stacklevel() -> int:
-    """`stacklevel` that points `warnings.warn` (called by our caller) at the first frame outside this
-    module: the user's call, however many of our functions are in between (e.g. `fix_encoding` ->
-    `fix_encoding_and_explain` -> `_ftfy`). `skip_file_prefixes` would do this, but needs Python 3.12."""
+    """The `stacklevel` that points our caller's `warnings.warn` at the user's line.
+
+    That is the first frame outside this module, however many of our functions are in between
+    (e.g. `fix_encoding` -> `fix_encoding_and_explain` -> `_ftfy`). `skip_file_prefixes` would
+    do this, but needs Python 3.12.
+    """
     frame = sys._getframe(1)  # the function that calls warnings.warn: stacklevel 1
     level = 1
     while frame.f_back is not None and frame.f_globals.get("__name__") == __name__:
