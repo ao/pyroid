@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Download the pinned benchmark/parity inputs into the shared ``/data`` volume (run in Docker, never on the host).
 
-    DX_NAME=harness .orchestration/dx.sh 'cd bench && uv run --frozen python fetch.py'           # fetch + verify
-    ... python fetch.py --verify                 # verify only (no network)
+    DX_NAME=harness .orchestration/dx.sh 'cd bench && uv run --frozen python fetch.py'   # fetch + verify the inputs
+    ... python fetch.py --verify                 # verify the inputs only (no network)
+    ... python fetch.py --verify-all             # verify every pinned file, parity/ references included
     ... python fetch.py --pin                    # first fetch / intentional update: write hashes to manifest.json
 
 Layout under /data (total budget 1.5 GB):
@@ -10,6 +11,9 @@ Layout under /data (total budget 1.5 GB):
     fineweb/fineweb-dev-10k.parquet    dev slice: the first 10,000 of those rows
     fineweb2/<lang>.parquet            first rows of FineWeb-2 test splits (non-English adversarial input)
     models/lid.176.bin, lid.176.ftz    fastText language-ID models (CC BY-SA 3.0)
+
+The parity/ files in the manifest are generated, not fetched: ``python -m pyroid_parity.refs`` writes them and
+verifies what it wrote, so fetch.py checks them only with ``--verify-all``.
 """
 
 from __future__ import annotations
@@ -45,6 +49,8 @@ MODELS = {
     "models/lid.176.ftz": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz",
 }
 BUDGET = 1_500_000_000
+# Manifest prefix of the files each --only step downloads.
+INPUTS = {"fineweb": "fineweb/", "fineweb2": "fineweb2/", "models": "models/"}
 
 
 def log(msg: str) -> None:
@@ -154,16 +160,22 @@ def fetch_models(pin: bool) -> None:
             D.pin(rel, source={"url": url, "license": "CC BY-SA 3.0"})
 
 
-def verify() -> int:
+def verify(prefixes: tuple[str, ...] | None = None) -> int:
+    """Re-hash the pinned files under ``prefixes`` (all of them for None); returns the number that are bad."""
     manifest = D.load_manifest()
-    bad, total = 0, 0
-    for rel, entry in manifest["files"].items():
+    files = {r: e for r, e in manifest["files"].items() if prefixes is None or r.startswith(prefixes)}
+    bad, checked = 0, 0
+    for rel, entry in files.items():
         p = D.DATA / rel
         ok = p.exists() and p.stat().st_size == entry["bytes"] and D.sha256_file(p) == entry["sha256"]
-        total += entry["bytes"]
+        checked += entry["bytes"]
         print(f"{'ok ' if ok else 'BAD'} {entry['bytes']:>12,}  {rel}")
         bad += not ok
-    print(f"{len(manifest['files'])} files, {total / 1e6:,.1f} MB pinned (budget {BUDGET / 1e6:,.0f} MB)")
+    total = sum(e["bytes"] for e in manifest["files"].values())
+    print(
+        f"verified {len(files)} of {len(manifest['files'])} pinned files ({checked / 1e6:,.1f} MB); "
+        f"{total / 1e6:,.1f} MB pinned in all (budget {BUDGET / 1e6:,.0f} MB)"
+    )
     if total > BUDGET:
         print("over the 1.5 GB budget")
         bad += 1
@@ -172,19 +184,28 @@ def verify() -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--verify", action="store_true", help="only verify /data against manifest.json")
+    ap.add_argument("--verify", action="store_true", help="only verify the inputs against manifest.json")
+    ap.add_argument(
+        "--verify-all",
+        action="store_true",
+        help="only verify every pinned file against manifest.json, the generated parity/ references included",
+    )
     ap.add_argument("--pin", action="store_true", help="(re)write sha256 entries for fetched files")
     ap.add_argument("--only", default="fineweb,fineweb2,models", help="comma-separated subset")
     a = ap.parse_args()
+    steps = set(a.only.split(","))
+    if unknown := steps - INPUTS.keys():
+        ap.error(f"--only: unknown step(s) {sorted(unknown)}; choose from {sorted(INPUTS)}")
+    if a.verify_all:
+        return 1 if verify() else 0
     if not a.verify:
-        steps = set(a.only.split(","))
         if "fineweb" in steps:
             fetch_fineweb(a.pin)
         if "fineweb2" in steps:
             fetch_fineweb2(a.pin)
         if "models" in steps:
             fetch_models(a.pin)
-    return 1 if verify() else 0
+    return 1 if verify(tuple(INPUTS[s] for s in sorted(steps))) else 0
 
 
 if __name__ == "__main__":

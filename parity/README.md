@@ -67,8 +67,10 @@ All inputs and references live in the shared Docker volume `/data` and are pinne
 | `parity/adversarial.parquet` | 3,232 docs: 2,000 non-English (FineWeb-2 test splits, 8 languages), 600 mojibake/HTML/control variants, 600 near-duplicates of dev docs (edit rates 0–40 %, truncation, append), 32 edge cases (empty, whitespace-only, 5k-char word, …) |
 | `parity/{ftfy,fasttext,filters,minhash}-ref.parquet` | reference outputs; the manifest records the oracle versions |
 
-- **Regenerate** (oracle env, Docker): `python -m pyroid_parity.refs all --pin` (adversarial generation is seeded and deterministic).
-- **Fetch inputs:** `../bench/fetch.py`.
+- **Fetch inputs:** `../bench/fetch.py` (it verifies the inputs it downloads; `--verify-all` checks every pinned file).
+- **Regenerate** (oracle env, Docker): `python -m pyroid_parity.refs all` rebuilds the references and checks each one
+  against the manifest, exiting 1 if any differ; add `--pin` to record new hashes instead (adversarial generation is
+  seeded and deterministic).
 
 ## Oracle choices
 - **fastText → fasttext-predict 0.9.2.4.**

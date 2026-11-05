@@ -60,13 +60,15 @@ wheel rather than the source tree.
 
 The parity suites and benchmarks read pinned corpora (FineWeb slices) and models (fastText `lid.176`) from
 `$PYROID_DATA` (default `/data`). `bench/fetch.py` downloads them and checks each file's sha256 against
-`bench/manifest.json`:
+`bench/manifest.json`. The parity reference outputs are generated, not downloaded: `python -m pyroid_parity.refs all`
+(in `parity/`) rebuilds them and checks them against the same manifest.
 
 ```bash
 export PYROID_DATA=$HOME/.cache/pyroid-data # any directory outside the source tree
 cd bench
-uv run --frozen python fetch.py              # download and verify (about 1.5 GB)
-uv run --frozen python fetch.py --verify     # re-check what you already have (no network)
+uv run --frozen python fetch.py              # download and verify the inputs (about 300 MB)
+uv run --frozen python fetch.py --verify     # re-check the inputs you already have (no network)
+uv run --frozen python fetch.py --verify-all # ... and the generated parity references too
 uv run --frozen python fetch.py --only models
 ```
 
