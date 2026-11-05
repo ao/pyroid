@@ -11,7 +11,7 @@
 #   cp311-abi3        CPython 3.11+ with the GIL
 #   cp314-cp314t      free-threaded CPython 3.14 (abi3t needs 3.15+)
 #   cp315-abi3.abi3t  CPython 3.15+, with or without the GIL (PEP 803)
-# Each flavour is built in its own maturin call: with `-i 3.11 3.14t 3.15` in one call maturin picks abi3t
+# Built in two maturin runs (`-i 3.11 3.14t`, then `-i 3.15`): with all three in one run maturin picks abi3t
 # for the whole build and 3.11 gets a version-specific cp311-cp311 wheel instead of cp311-abi3.
 #
 # Owner setup (trusted publishers, environments, release-please permissions): docs/RELEASING.md.
@@ -120,22 +120,18 @@ jobs:
         with:
           python-version: "3.15"
 
-      - name: Build cp311-abi3 wheel
+      # Two maturin runs on purpose (same as ci.yml): maturin picks one stable-ABI family per run, and a
+      # 3.15 interpreter in the same run switches it to abi3t, turning 3.11 into a cp311-cp311 wheel.
+      - name: Build cp311-abi3 and cp314t wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           maturin-version: ${{ env.MATURIN_VERSION }}
           target: ${{ matrix.platform.target }}
           manylinux: ${{ matrix.platform.manylinux || 'auto' }} # ignored off Linux
           rust-toolchain: stable # same toolchain in containers and on macOS/Windows hosts
-          args: --release --locked --out dist -i ${{ runner.os == 'Linux' && '3.11' || steps.py311.outputs.python-path }}
-      - name: Build cp314t wheel
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-        with:
-          maturin-version: ${{ env.MATURIN_VERSION }}
-          target: ${{ matrix.platform.target }}
-          manylinux: ${{ matrix.platform.manylinux || 'auto' }}
-          rust-toolchain: stable
-          args: --release --locked --out dist -i ${{ runner.os == 'Linux' && '3.14t' || steps.py314t.outputs.python-path }}
+          args: >-
+            --release --locked --out dist -i
+            ${{ runner.os == 'Linux' && '3.11 3.14t' || format('{0} {1}', steps.py311.outputs.python-path, steps.py314t.outputs.python-path) }}
       - name: Build cp315-abi3.abi3t wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
@@ -143,7 +139,9 @@ jobs:
           target: ${{ matrix.platform.target }}
           manylinux: ${{ matrix.platform.manylinux || 'auto' }}
           rust-toolchain: stable
-          args: --release --locked --out dist -i ${{ runner.os == 'Linux' && '3.15' || steps.py315.outputs.python-path }}
+          args: >-
+            --release --locked --out dist -i
+            ${{ runner.os == 'Linux' && '3.15' || steps.py315.outputs.python-path }}
 
       - name: Check this platform's wheels
         run: |
