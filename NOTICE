@@ -105,3 +105,23 @@ and https://gist.github.com/dperini/729294 (Diego Perini, MIT License).
 crates/pyroid-core/src/filters/unicode_tables.rs contains the str.isalpha(),
 unicodedata.category() "P*" and re \w / \d sets of CPython 3.11-3.15's Unicode
 databases (see "Data derived from CPython and Unicode" above).
+
+-------------------------------------------------------------------------------
+anyascii
+-------------------------------------------------------------------------------
+pyroid.translit (crates/pyroid-core/src/translit/, crates/pyroid-py/src/translit.rs,
+python/pyroid/translit.py and python/pyroid/translit.pyi) transliterates with
+the anyascii 0.3.3 data, https://github.com/anyascii/anyascii, through the
+any_ascii crate 0.3.3 (statically linked into the extension module).
+crates/pyroid-core/src/translit/tables.rs is generated from anyascii's
+table.tsv (tag 0.3.3) by generate_tables.py:
+
+    Copyright (c) 2020-2025, Hunter WB <hunterwb.com>
+
+    Permission to use, copy, modify, and/or distribute this software for any
+    purpose with or without fee is hereby granted, provided that the above
+    copyright notice and this permission notice appear in all copies.
+
+The full ISC License text is in LICENSES/ISC-anyascii.txt. pyroid.translit
+contains no code or data from Unidecode (GPL); Unidecode's name and the
+behaviour of its errors= parameter are only matched at the API level.
