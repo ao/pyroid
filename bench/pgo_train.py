@@ -6,7 +6,8 @@
 Runs every pyroid module the way the harness rows do (list[str] and Arrow batches, single-str calls) at
 threads=1 and threads=8, so an instrumented build (rustc -Cprofile-generate) records the hot paths. No
 equivalence gates: an instrumented build's outputs are not timed, and the oracles (datatrove, spaCy,
-fasttext-predict) do not install on every interpreter. The default slice, headline[10000:20000], is disjoint
+fasttext-predict) do not install on every interpreter. Needs only pyarrow, pyroid_parity and the pinned files
+(bench/fetch.py), so a release job can run it. The default slice, headline[10000:20000], is disjoint
 from the dev slice (headline[:10000]) that the A/B and the published numbers use.
 """
 
@@ -15,15 +16,14 @@ from __future__ import annotations
 import argparse
 import time
 
-import pyarrow as pa
+import pyarrow.parquet as pq
+from pyroid_parity import data as PD
 from pyroid_parity import specs
-
-import gates as G
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--corpus", default="headline", choices=sorted(G.SEGMENTS))
+    ap.add_argument("--corpus", default="headline", choices=sorted(PD.CORPORA))
     ap.add_argument("--offset", type=int, default=10000)
     ap.add_argument("--docs", type=int, default=10000)
     ap.add_argument("--per-doc", type=int, default=1000, help="docs for the single-str calls")
@@ -34,11 +34,17 @@ def main() -> None:
     import pyroid.ftfy as FX
     import pyroid.translit as T
 
-    _, texts = G.load_slice(a.corpus, a.offset, a.docs)
-    arrow = pa.array(texts, pa.string())
-    lid = [FT.load_model(G.lid_model_path(m)) for m in specs.LID_MODELS]
+    col = pq.read_table(PD.path(PD.CORPORA[a.corpus]), columns=["text"]).column("text")
+    arrow = col.slice(a.offset, a.docs).combine_chunks()
+    texts = arrow.to_pylist()
+    lid = [FT.load_model(str(PD.path(p))) for p in specs.LID_MODELS.values()]
     flat = [t.replace("\n", " ") for t in texts]
-    chain = [F.GopherRepetition(), F.GopherQuality(), F.C4Quality(filter_no_terminal_punct=False), F.FineWebQuality()]
+    chain = [
+        F.GopherRepetition(),
+        F.GopherQuality(),
+        F.C4Quality(filter_no_terminal_punct=False),
+        F.FineWebQuality(),
+    ]
     t0 = time.perf_counter()
     for threads in (1, 8):
         for docs in (texts, arrow):
