@@ -42,11 +42,14 @@ Differences from datatrove
   ``TypeError`` before any document is filtered; a failing document raises
   for the whole batch (the exception names the document).
 - ``exclusion_writer`` is not supported (use the ``*_reasons`` functions).
-- Documents that contain the token ``IS_ALPHA`` are tokenized like any other
-  text. spaCy fails on some of them (its string store maps ``IS_ALPHA`` to
-  id 1, which collides with its hash map's deleted-key marker) and datatrove
-  then re-tokenizes the text with every ``IS_ALPHA`` removed, so datatrove's
-  words for such documents can depend on which documents it saw before.
+- A document with a token that is exactly ``IS_ALPHA`` (e.g. in
+  ``"IS_ALPHA."``, not in ``"xIS_ALPHA"``) is tokenized like any other text,
+  as datatrove does the first time in a process. After that, spaCy fails on
+  such documents (its string store maps ``IS_ALPHA`` to id 1, which is its
+  hash map's deleted-key marker), and datatrove re-tokenizes
+  ``text.replace("IS_ALPHA", "")`` instead, or raises if that still has the
+  token. So datatrove's words for these documents depend on what it saw
+  before; pyroid's do not.
 """
 
 from collections.abc import Iterable, Sequence
