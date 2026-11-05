@@ -15,7 +15,12 @@ use super::tables::{
     BAD_ALTS, BAD_ANCHORED, BAD_ANY, BAD_ASCII, BAD_FINAL, BAD_NOTALPHA, BAD_SPACE, BAD_START,
     BAD_WORD,
 };
-use super::text::decode_at;
+use super::text::{decode_at, skip_ascii};
+
+/// Every `BADNESS_RE` alternative has at least one non-ASCII element and is
+/// at most this long, so a match lies within this many characters of a
+/// non-ASCII character.
+const MAX_ALT_LEN: usize = 8;
 
 /// The Shift-And mask for one character, given the positions it may extend.
 #[inline]
@@ -43,6 +48,16 @@ pub(crate) fn is_bad(text: &[u8], v: UnicodeVersion) -> bool {
     let mut start = BAD_START | BAD_ANCHORED;
     let mut i = 0;
     while i < text.len() {
+        let b = text[i];
+        if state == 0 && b < 0x80 && i > 0 {
+            // Nothing is in progress: jump to just before the next non-ASCII
+            // character, since a match must include one.
+            let next = skip_ascii(text, i, 0x80);
+            if next == text.len() {
+                return false;
+            }
+            i = i.max(next.saturating_sub(MAX_ALT_LEN));
+        }
         let b = text[i];
         let wanted = (state << 1) | start;
         if b < 0x80 {
@@ -130,6 +145,22 @@ mod tests {
     fn anchored_only_at_start() {
         assert!(bad("Ã x"));
         assert!(!bad("1Â x"));
+    }
+
+    #[test]
+    fn every_alternative_needs_non_ascii() {
+        // Justifies the ASCII skipping in `is_bad`.
+        for &(first, len, _) in &BAD_ALTS {
+            assert!(usize::from(len) <= MAX_ALT_LEN);
+            let ascii_only = (0..u32::from(len)).all(|j| {
+                let bit = 1u128 << (u32::from(first) + j);
+                BAD_ASCII.iter().any(|m| m & bit != 0)
+            });
+            assert!(
+                !ascii_only,
+                "alternative at bit {first} can match pure ASCII"
+            );
+        }
     }
 
     #[test]

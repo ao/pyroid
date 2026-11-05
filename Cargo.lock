@@ -139,6 +139,7 @@ dependencies = [
 name = "pyroid-core"
 version = "1.0.0-dev"
 dependencies = [
+ "memchr",
  "rayon",
  "serde_json",
  "unicode-normalization",

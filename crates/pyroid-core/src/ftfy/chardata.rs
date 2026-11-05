@@ -173,7 +173,7 @@ pub(crate) fn possible_encodings(text: &[u8]) -> (bool, u16) {
             if b == 0x1A {
                 mask &= class_of(0x1A).enc;
             }
-            i += 1;
+            i = super::text::skip_ascii(text, i + 1, 0x1A);
             continue;
         }
         ascii = false;

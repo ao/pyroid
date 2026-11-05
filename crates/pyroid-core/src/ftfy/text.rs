@@ -121,6 +121,67 @@ pub(crate) fn has_surrogates(s: &[u8]) -> bool {
     s.windows(2).any(|w| w[0] == 0xED && w[1] >= 0xA0)
 }
 
+// ---------------------------------------------------------------------------
+// Word-at-a-time (SWAR) skipping of ASCII runs
+// ---------------------------------------------------------------------------
+
+const LO: u64 = 0x0101_0101_0101_0101;
+const HI: u64 = 0x8080_8080_8080_8080;
+
+#[inline]
+fn word(s: &[u8], i: usize) -> u64 {
+    let mut w = [0u8; 8];
+    w.copy_from_slice(&s[i..i + 8]);
+    u64::from_le_bytes(w)
+}
+
+/// Nonzero if some byte of `x` is zero (may also flag bytes above a true hit).
+#[inline]
+const fn has_zero(x: u64) -> u64 {
+    x.wrapping_sub(LO) & !x & HI
+}
+
+/// Nonzero if some byte of `x` is below `n` (`n <= 0x80`; bytes with the
+/// high bit set are not reported). May also flag bytes above a true hit.
+#[inline]
+const fn has_less(x: u64, n: u8) -> u64 {
+    x.wrapping_sub(LO * n as u64) & !x & HI
+}
+
+/// Offset of the first byte at or after `i` that is not plain printable
+/// ASCII: a byte `>= 0x7F`, a control byte, or `&`. Scans 8 bytes at a time;
+/// may stop early (on a false positive), never late.
+#[inline]
+pub(crate) fn skip_plain_ascii(s: &[u8], mut i: usize) -> usize {
+    while i + 8 <= s.len() {
+        let w = word(s, i);
+        let loud =
+            (w & HI) | has_less(w, 0x20) | has_zero(w ^ (LO * 0x26)) | has_zero(w ^ (LO * 0x7F));
+        if loud != 0 {
+            break;
+        }
+        i += 8;
+    }
+    i
+}
+
+/// Offset of the first non-ASCII byte at or after `i`, or of a byte in
+/// `extra` (an ASCII byte, or 0x80 for none). Never skips past either.
+#[inline]
+pub(crate) fn skip_ascii(s: &[u8], mut i: usize, extra: u8) -> usize {
+    while i + 8 <= s.len() {
+        let w = word(s, i);
+        if (w & HI) | has_zero(w ^ (LO * u64::from(extra))) != 0 {
+            break;
+        }
+        i += 8;
+    }
+    while i < s.len() && s[i] < 0x80 && s[i] != extra {
+        i += 1;
+    }
+    i
+}
+
 /// Check that `s` is UTF-8 in which surrogate code points are also allowed.
 ///
 /// Returns the offset of the first invalid byte on failure.
@@ -171,6 +232,20 @@ mod tests {
         assert_eq!(validate(b"\xed\xa0"), Err(0));
         assert_eq!(validate(b"\xc0\x80"), Err(0));
         assert!(validate("héllo".as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn swar_skips() {
+        let s = b"0123456789abcdef&xyz\xc3\xa9";
+        assert!(skip_plain_ascii(s, 0) <= 16);
+        assert_eq!(
+            s[skip_plain_ascii(s, 0)..].iter().position(|&b| b == b'&'),
+            Some(16 - skip_plain_ascii(s, 0))
+        );
+        assert_eq!(skip_ascii(s, 0, 0x80), 20);
+        assert_eq!(skip_ascii(s, 0, b'&'), 16);
+        assert_eq!(skip_ascii(b"abc", 0, 0x80), 3);
+        assert_eq!(skip_ascii(b"abcdefgh\x1aijklmnop", 0, 0x1A), 8);
     }
 
     #[test]

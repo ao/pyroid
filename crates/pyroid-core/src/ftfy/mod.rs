@@ -650,10 +650,7 @@ fn fix_text_bytes<'a>(text: &'a [u8], config: &TextFixerConfig) -> Cow<'a, [u8]>
     let mut out: Option<Vec<u8>> = None;
     let mut pos = 0;
     while pos < text.len() {
-        let mut end = text[pos..]
-            .iter()
-            .position(|&b| b == b'\n')
-            .map_or(text.len(), |k| pos + k + 1);
+        let mut end = memchr::memchr(b'\n', &text[pos..]).map_or(text.len(), |k| pos + k + 1);
         if end - pos > max && cp_len(&text[pos..end]) > max {
             end = pos + cp_offset(&text[pos..end], max);
         }
@@ -840,4 +837,97 @@ pub fn is_bad(text: &str, version: UnicodeVersion) -> bool {
 #[must_use]
 pub fn badness(text: &str, version: UnicodeVersion) -> usize {
     badness::badness(text.as_bytes(), version)
+}
+
+#[cfg(test)]
+mod perf_probe {
+    //! Where the time goes (ignored; run with --ignored and PYROID_FTFY_BENCH).
+    use super::*;
+    use std::time::Instant;
+
+    fn docs() -> Vec<String> {
+        let path = std::env::var("PYROID_FTFY_BENCH").expect("PYROID_FTFY_BENCH");
+        std::fs::read_to_string(path)
+            .unwrap()
+            .lines()
+            .take(20000)
+            .filter_map(|l| {
+                let i = l.find("\"in\": \"")? + 7;
+                let v: serde_json::Value = serde_json::from_str(&format!("{{{}", &l[1..])).ok()?;
+                let _ = i;
+                v["in"].as_str().map(str::to_owned)
+            })
+            .collect()
+    }
+
+    fn time(name: &str, n: usize, mut f: impl FnMut() -> usize) {
+        let t = Instant::now();
+        let mut acc = 0;
+        for _ in 0..3 {
+            acc += f();
+        }
+        let us = t.elapsed().as_secs_f64() * 1e6 / 3.0 / n as f64;
+        eprintln!("{name:>28}: {us:7.2} us/doc  (acc {acc})");
+    }
+
+    #[test]
+    #[ignore = "profiling probe"]
+    fn probe() {
+        let docs = docs();
+        let n = docs.len();
+        let cfg = TextFixerConfig {
+            explain: false,
+            ..TextFixerConfig::default()
+        };
+        let v = cfg.unicode_version;
+        let lines: Vec<&[u8]> = docs
+            .iter()
+            .flat_map(|d| d.as_bytes().split_inclusive(|&b| b == b'\n'))
+            .collect();
+        time("fix_text", n, || {
+            docs.iter().map(|d| fix_text(d, &cfg).len()).sum()
+        });
+        time("is_quiet_ascii(doc)", n, || {
+            docs.iter()
+                .map(|d| usize::from(features::is_quiet_ascii(d.as_bytes())))
+                .sum()
+        });
+        time("scan(lines)", n, || {
+            lines.iter().map(|l| features::scan(l).bits as usize).sum()
+        });
+        let cand: Vec<&&[u8]> = lines
+            .iter()
+            .filter(|l| features::scan(l).encoding_candidate())
+            .collect();
+        eprintln!("lines {} candidates {}", lines.len(), cand.len());
+        time("possible(cand)", n, || {
+            cand.iter().map(|l| possible_encodings(l).1 as usize).sum()
+        });
+        time("is_bad(cand)", n, || {
+            cand.iter()
+                .map(|l| usize::from(badness::is_bad(l, v)))
+                .sum()
+        });
+        let bad: Vec<&&&[u8]> = cand.iter().filter(|l| badness::is_bad(l, v)).collect();
+        eprintln!("bad candidates {}", bad.len());
+        time("fix_encoding_loop(cand)", n, || {
+            cand.iter()
+                .map(|l| {
+                    fix_encoding_loop(l, DEFAULT_ENCODING_OPTIONS, v, None).map_or(0, |x| x.len())
+                })
+                .sum()
+        });
+        time("fix_segment(lines)", n, || {
+            lines
+                .iter()
+                .map(|l| fix_segment(l, &cfg, None).map_or(0, |x| x.len()))
+                .sum()
+        });
+        time("uncurl(lines)", n, || {
+            lines
+                .iter()
+                .map(|l| fixes::uncurl_quotes(l).map_or(0, |x| x.len()))
+                .sum()
+        });
+    }
 }

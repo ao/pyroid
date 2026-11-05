@@ -17,7 +17,6 @@ use super::text::{decode_at, push_cp};
 /// A replacement produced by a [`translate`] callback.
 enum Rep {
     Cp(u32),
-    Byte(u8),
     Str(&'static str),
     Delete,
 }
@@ -41,7 +40,6 @@ fn translate(text: &[u8], mut f: impl FnMut(u32, usize) -> Option<Rep>) -> Optio
             buf.extend_from_slice(&text[copied..i]);
             match rep {
                 Rep::Cp(c) => push_cp(buf, c),
-                Rep::Byte(c) => buf.push(c),
                 Rep::Str(s) => buf.extend_from_slice(s.as_bytes()),
                 Rep::Delete => {}
             }
@@ -199,16 +197,50 @@ pub(crate) fn remove_terminal_escapes(text: &[u8], v: UnicodeVersion) -> Option<
     Some(buf)
 }
 
-/// ftfy's `uncurl_quotes`.
-pub(crate) fn uncurl_quotes(text: &[u8]) -> Option<Vec<u8>> {
-    if !text.iter().any(|&b| b == 0xCA || b == 0xE2) {
-        return None;
+/// Rebuild `text` by visiting each occurrence of a lead byte found by
+/// `find`. At a hit `p`, `f(text, p)` returns `Some((len, replacement))` to
+/// replace `text[p..p + len]`, or `None` to keep it. Lead bytes must start a
+/// code point (ASCII or a UTF-8 lead byte), so a hit is always a boundary.
+#[inline]
+fn replace_at_leads(
+    text: &[u8],
+    find: impl Fn(&[u8]) -> Option<usize>,
+    f: impl Fn(&[u8], usize) -> Option<(usize, &'static [u8])>,
+) -> Option<Vec<u8>> {
+    let mut out: Option<Vec<u8>> = None;
+    let mut copied = 0;
+    let mut i = 0;
+    while let Some(k) = find(&text[i..]) {
+        let p = i + k;
+        match f(text, p) {
+            Some((len, rep)) => {
+                let buf = out.get_or_insert_with(|| Vec::with_capacity(text.len()));
+                buf.extend_from_slice(&text[copied..p]);
+                buf.extend_from_slice(rep);
+                copied = p + len;
+                i = p + len;
+            }
+            None => i = p + 1,
+        }
     }
-    translate(text, |cp, _| match cp {
-        0x02BC | 0x2018..=0x201B => Some(Rep::Byte(b'\'')),
-        0x201C..=0x201F => Some(Rep::Byte(b'"')),
-        _ => None,
-    })
+    let mut buf = out?;
+    buf.extend_from_slice(&text[copied..]);
+    Some(buf)
+}
+
+/// ftfy's `uncurl_quotes`: U+02BC and U+2018..U+201B become `'`,
+/// U+201C..U+201F become `"`.
+pub(crate) fn uncurl_quotes(text: &[u8]) -> Option<Vec<u8>> {
+    replace_at_leads(
+        text,
+        |t| memchr::memchr2(0xE2, 0xCA, t),
+        |t, p| match (t[p], t.get(p + 1), t.get(p + 2)) {
+            (0xE2, Some(0x80), Some(0x98..=0x9B)) => Some((3, b"'")),
+            (0xE2, Some(0x80), Some(0x9C..=0x9F)) => Some((3, b"\"")),
+            (0xCA, Some(0xBC), _) => Some((2, b"'")),
+            _ => None,
+        },
+    )
 }
 
 /// ftfy's `fix_latin_ligatures`.
@@ -242,15 +274,18 @@ pub(crate) fn fix_character_width(text: &[u8]) -> Option<Vec<u8>> {
 
 /// ftfy's `fix_line_breaks`: CRLF, CR, U+2028, U+2029 and U+0085 become LF.
 pub(crate) fn fix_line_breaks(text: &[u8]) -> Option<Vec<u8>> {
-    if !text.iter().any(|&b| b == b'\r' || b == 0xC2 || b == 0xE2) {
-        return None;
-    }
-    translate(text, |cp, i| match cp {
-        // "\r\n" -> "\n" (drop the CR, keep the LF); a lone "\r" -> "\n".
-        0x0D if text.get(i + 1) == Some(&b'\n') => Some(Rep::Delete),
-        0x0D | 0x85 | 0x2028 | 0x2029 => Some(Rep::Byte(b'\n')),
-        _ => None,
-    })
+    replace_at_leads(
+        text,
+        |t| memchr::memchr3(b'\r', 0xC2, 0xE2, t),
+        |t, p| match (t[p], t.get(p + 1), t.get(p + 2)) {
+            // "\r\n" -> "\n": drop the CR and keep the LF.
+            (b'\r', Some(b'\n'), _) => Some((1, b"")),
+            (b'\r', _, _) => Some((1, b"\n")),
+            (0xC2, Some(0x85), _) => Some((2, b"\n")),
+            (0xE2, Some(0x80), Some(0xA8 | 0xA9)) => Some((3, b"\n")),
+            _ => None,
+        },
+    )
 }
 
 /// ftfy's `fix_surrogates`: join surrogate pairs, replace the rest with U+FFFD.

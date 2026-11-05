@@ -8,7 +8,7 @@ use super::chardata::{ALL_ENCODINGS, class_of};
 use super::tables::{
     CLUE_FIRST2, CLUE_FIRST3, CLUE_FIRST4, ENCODE_1A, NFC_ACTIVE_ASTRAL, NFC_ACTIVE_BMP,
 };
-use super::text::decode_at;
+use super::text::{decode_at, skip_plain_ascii};
 
 pub(crate) const NON_ASCII: u32 = 1 << 0;
 /// `&` (HTML entities).
@@ -117,7 +117,8 @@ pub(crate) fn scan(text: &[u8]) -> Features {
     while i < text.len() {
         let b = text[i];
         if b < 0x80 {
-            bits |= ASCII[b as usize];
+            let f = ASCII[b as usize];
+            bits |= f;
             if b == 0x1A {
                 for (k, ok) in ENCODE_1A.iter().enumerate() {
                     if !ok {
@@ -126,6 +127,9 @@ pub(crate) fn scan(text: &[u8]) -> Features {
                 }
             }
             i += 1;
+            if f == 0 {
+                i = skip_plain_ascii(text, i);
+            }
             continue;
         }
         let (cp, n) = decode_at(text, i);
@@ -140,15 +144,17 @@ pub(crate) fn scan(text: &[u8]) -> Features {
 /// control characters other than TAB, LF and FF). Such text is returned
 /// unchanged by every configuration.
 pub(crate) fn is_quiet_ascii(text: &[u8]) -> bool {
-    // A branch-free fold the compiler can vectorize, with an early exit
-    // between chunks.
-    text.chunks(4096).all(|chunk| {
-        !chunk.iter().fold(false, |acc, &b| {
-            let loud =
-                b >= 0x7F || b == b'&' || (b < 0x20 && b != b'\t' && b != b'\n' && b != 0x0C);
-            acc | loud
-        })
-    })
+    let mut i = 0;
+    while i < text.len() {
+        i = skip_plain_ascii(text, i);
+        match text.get(i) {
+            None => return true,
+            Some(b'\t' | b'\n' | 0x0C) => i += 1,
+            Some(b) if (0x20..0x7F).contains(b) && *b != b'&' => i += 1,
+            Some(_) => return false,
+        }
+    }
+    true
 }
 
 #[cfg(test)]
