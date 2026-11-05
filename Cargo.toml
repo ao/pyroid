@@ -18,14 +18,36 @@ repository = "https://github.com/ao/pyroid"
 
 [workspace.dependencies]
 pyo3 = "0.30.1"
+rayon = "1.12.0"
+simdutf8 = "0.1.5"
 pyroid-core = { path = "crates/pyroid-core" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
 dbg_macro = "deny"
 todo = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+# Every `unsafe` block carries a `// SAFETY:` comment, and holds one unsafe operation.
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+# Justified pedantic allows:
+# - the crates are internal (publish = false); error semantics are documented on
+#   the Python-facing functions and in the .pyi stubs, not in rustdoc sections.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# - small pure kernels; #[must_use] on every one is noise.
+must_use_candidate = "allow"
+# - pyo3 extractors take arguments by value (e.g. `TextInput`, `Threads`).
+needless_pass_by_value = "allow"
+# - `text::TextError`-style names read better than bare `Error` at call sites.
+module_name_repetitions = "allow"
+# - prose names products (CPython, PyO3, PyCapsule), which aren't code items.
+doc_markdown = "allow"
 
 [profile.release]
 # "unwind" is required: PyO3 turns Rust panics into PanicException only when

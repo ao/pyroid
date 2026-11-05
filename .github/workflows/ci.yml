@@ -15,12 +15,14 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   MATURIN_VERSION: v1.16.0
-  RUFF_VERSION: "0.17.3"
+  # The hook versions (ruff, mypy, typos, ...) are pinned in .pre-commit-config.yaml.
+  PREK_VERSION: "0.5.10"
+  # For stubtest; keep in step with .pre-commit-config.yaml and [dependency-groups] lint.
   MYPY_VERSION: "2.4.1"
 
 jobs:
   lint:
-    name: lint (rustfmt, clippy, ruff, mypy)
+    name: "lint (prek: rustfmt, clippy, ruff, mypy, typos, file checks)"
     runs-on: ubuntu-24.04
     permissions:
       contents: read # checkout
@@ -34,16 +36,60 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: false
-      - name: cargo fmt
-        run: cargo fmt --all --check
-      - name: cargo clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: ruff check
-        run: uvx "ruff@${RUFF_VERSION}" check python
-      - name: ruff format
-        run: uvx "ruff@${RUFF_VERSION}" format --check python
-      - name: mypy --strict (package, stubs and tests)
-        run: uvx --with pytest --with packaging "mypy@${MYPY_VERSION}"
+      - name: Run every prek hook on every file
+        run: uvx "prek@${PREK_VERSION}" run --all-files --show-diff-on-failure --color always
+
+  workflow-lint:
+    name: workflow lint (zizmor, actionlint)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: zizmor@1.32.0,shellcheck@0.11.0
+      - name: zizmor --pedantic (reads .github/zizmor.yml when present)
+        env:
+          # Enables the online audits (impostor commits, ref/version mismatches, known-vulnerable actions).
+          GH_TOKEN: ${{ github.token }}
+        # --strict-collection: a workflow that fails to parse is an error, not a warning.
+        run: zizmor --pedantic --strict-collection --format github .
+      - name: actionlint (with shellcheck)
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+          # From actionlint_1.7.12_checksums.txt in the v1.7.12 GitHub release.
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -sSfL -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          shellcheck --version
+          "$RUNNER_TEMP/actionlint" -color -shellcheck "$(command -v shellcheck)"
+
+  supply-chain:
+    name: supply chain (cargo-deny, cargo-shear)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-deny@0.20.2,cargo-shear@1.14.0
+      - name: cargo deny (advisories, licenses, bans, sources; config in deny.toml)
+        run: cargo deny --locked check
+      - name: cargo shear (unused dependencies, unlinked .rs files)
+        run: cargo shear --locked --deny-warnings
 
   rust-test:
     name: cargo test (pyroid-core)
@@ -125,12 +171,52 @@ jobs:
           path: dist/*.whl
           if-no-files-found: error
 
+  stubtest:
+    name: stubtest (cp311-abi3 wheel, Python 3.11)
+    needs: wheels
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout (for .stubtest-allowlist, if present)
+    env:
+      # Modules whose stubs are checked against the installed runtime (space-separated).
+      # stubtest recurses into submodules, so `pyroid` covers pyroid.text and pyroid._pyroid;
+      # listing a package together with its submodules fails in mypy 2.4.1 ("Duplicate module").
+      STUBTEST_MODULES: pyroid
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-ubuntu-24.04
+          path: dist
+      - name: Install the cp311-abi3 wheel and run stubtest
+        run: |
+          set -euo pipefail
+          mapfile -t wheels < <(find dist -maxdepth 1 -name 'pyroid-*-cp311-abi3-*.whl')
+          [[ ${#wheels[@]} -eq 1 ]] || { echo "::error::expected one cp311-abi3 wheel, found ${#wheels[@]}"; exit 1; }
+          venv="$RUNNER_TEMP/venv-stubtest"
+          uv venv -p 3.11 "$venv"
+          uv pip install --python "$venv" --no-index --no-deps "${wheels[0]}"
+          uv pip install --python "$venv" "mypy==${MYPY_VERSION}"
+          allowlist=()
+          if [[ -f .stubtest-allowlist ]]; then allowlist=(--allowlist "$PWD/.stubtest-allowlist"); fi
+          read -ra modules <<< "$STUBTEST_MODULES"
+          # Run from an empty directory: in the checkout, mypy would read pyproject.toml
+          # (mypy_path = "python") and check the source-tree stubs instead of the wheel's.
+          mkdir "$RUNNER_TEMP/stubtest-cwd"
+          cd "$RUNNER_TEMP/stubtest-cwd"
+          "$venv/bin/python" -m mypy.stubtest "${modules[@]}" --concise "${allowlist[@]}"
+
   test:
     name: pytest (${{ matrix.os }}, ${{ matrix.python }})
     needs: wheels
     runs-on: ${{ matrix.os }}
     permissions:
-      contents: read # checkout (for python/tests)
+      contents: read # checkout (for python/tests and pyproject.toml)
     strategy:
       fail-fast: false
       matrix:
@@ -151,23 +237,36 @@ jobs:
         shell: bash
         env:
           PY: ${{ matrix.python }}
+          # Optional extra for the dataframe tests. polars-runtime-32 2.1.0 ships only cp311-abi3
+          # wheels, so it installs on GIL builds (3.11, 3.15) and is skipped on 3.14t and 3.15t.
+          POLARS: polars==2.1.0
         run: |
           set -euo pipefail
+          if [[ "$PY" == *t ]]; then free_threaded=true; else free_threaded=false; fi
           uv venv -p "$PY" .venv-test
           # Only the wheel built above: no index, no sdist fallback, no deps.
           uv pip install --python .venv-test --no-index --no-deps --no-build --find-links dist pyroid
-          uv pip install --python .venv-test pytest packaging
+          # The test dependencies: [dependency-groups] test in ./pyproject.toml.
+          uv pip install --python .venv-test --group test
+          if [[ "$free_threaded" == false ]]; then
+            uv pip install --python .venv-test --only-binary :all: "$POLARS"
+          fi
           if [[ "$RUNNER_OS" == Windows ]]; then py=.venv-test/Scripts/python.exe; else py=.venv-test/bin/python; fi
           # PYTHON_GIL stays unset so a module that re-enables the GIL is caught.
           "$py" -c "import sys, pyroid._pyroid as m; print(sys.version); print(m.__file__)"
           # importlib mode keeps python/ off sys.path; test_smoke also asserts
           # that the extension was loaded from site-packages.
           "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib python/tests
+          if [[ "$free_threaded" == true ]]; then
+            # Second pass (pytest-run-parallel): each test runs on one thread per CPU at once, 3 times.
+            "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib \
+              --parallel-threads=auto --iterations=3 python/tests
+          fi
 
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [lint, rust-test, wheels, test]
+    needs: [lint, workflow-lint, supply-chain, rust-test, wheels, stubtest, test]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:

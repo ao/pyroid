@@ -23,6 +23,8 @@ doctest = false
 # 3.14t still needs its own version-specific wheel.
 pyo3 = { workspace = true, features = ["abi3-py311", "abi3t"] }
 pyroid-core.workspace = true
+# SIMD UTF-8 validation of Arrow rows (several times faster than std).
+simdutf8.workspace = true
 
 [lints]
 workspace = true

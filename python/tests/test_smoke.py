@@ -45,8 +45,10 @@ def test_version_matches_distribution_metadata() -> None:
 
 
 def test_public_api() -> None:
-    assert pyroid.__all__ == ["PyroidError", "__version__"]
+    assert pyroid.__all__ == ["Column", "InputError", "PyroidError", "__version__"]
     assert pyroid.PyroidError is _pyroid.PyroidError
+    assert pyroid.InputError is _pyroid.InputError
+    assert pyroid.Column is _pyroid.Column
 
 
 def test_exception_hierarchy() -> None:
@@ -65,33 +67,8 @@ def test_exception_pickles_by_public_name() -> None:
     assert clone.args == ("x",)
 
 
-@pytest.mark.parametrize(
-    "text",
-    ["", "pyroid", "naïve café", "€", "😀", "a\x00b", "\r\n\u2028\x85", "日本語テキスト" * 100],
-)
-def test_utf8_len_matches_python(text: str) -> None:
-    assert _pyroid.utf8_len(text) == len(text.encode("utf-8"))
-
-
-def test_utf8_len_is_positional_only() -> None:
-    with pytest.raises(TypeError):
-        _pyroid.utf8_len(text="x")  # type: ignore[call-arg]
-
-
-def test_utf8_len_rejects_non_str() -> None:
-    with pytest.raises(TypeError):
-        _pyroid.utf8_len(b"bytes")  # type: ignore[arg-type]
-
-
-def test_utf8_len_lone_surrogate_raises_like_encode() -> None:
-    # A lone surrogate has no UTF-8 encoding; Python's str.encode raises too.
-    with pytest.raises(UnicodeEncodeError):
-        "\ud800".encode("utf-8")
-    with pytest.raises(UnicodeEncodeError):
-        _pyroid.utf8_len("\ud800")
-
-
 @pytest.mark.skipif(not FREE_THREADED, reason="needs a free-threaded CPython build")
+@pytest.mark.thread_unsafe(reason="runs a subprocess")
 def test_import_keeps_gil_disabled() -> None:
     # Fresh interpreter, PYTHON_GIL unset: if the module did not declare
     # Py_MOD_GIL_NOT_USED, importing it would re-enable the GIL.

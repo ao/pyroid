@@ -1,0 +1,5 @@
+# mypy.stubtest allowlist (CI job `stubtest`). Keep it short; justify every entry.
+
+# The stub declares Column as Generic[_T_co] so Column[str] / Column[bool] type-check;
+# at runtime the same subscripting is provided by a native __class_getitem__.
+pyroid._pyroid.Column.__class_getitem__

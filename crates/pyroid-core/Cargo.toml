@@ -12,5 +12,8 @@ publish = false
 [lib]
 crate-type = ["rlib"]
 
+[dependencies]
+rayon.workspace = true
+
 [lints]
 workspace = true

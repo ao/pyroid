@@ -42,8 +42,19 @@ Issues = "https://github.com/ao/pyroid/issues"
 Changelog = "https://github.com/ao/pyroid/blob/main/CHANGELOG.md"
 
 [dependency-groups]
-test = ["pytest>=9", "packaging>=24"]
-lint = ["ruff==0.17.3", "mypy==2.4.1"]
+# pyarrow is a test-only dependency (Arrow interop tests); pyroid itself has no
+# runtime dependencies. The Arrow tests also run without it, against pyroid's
+# own Arrow exporter.
+test = [
+  "pytest>=9",
+  "packaging>=24",
+  "hypothesis>=6.170",
+  "pytest-timeout>=2.4",
+  "pytest-run-parallel>=0.10",
+  "pyarrow>=18",
+]
+# Same pins as .pre-commit-config.yaml (prek runs ruff and mypy from there).
+lint = ["ruff==0.17.3", "mypy==2.4.1", "prek==0.5.10"]
 dev = ["maturin>=1.16,<2.0", { include-group = "test" }, { include-group = "lint" }]
 
 [tool.maturin]
@@ -73,11 +84,46 @@ line-length = 100
 src = ["python"]
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "UP", "PYI", "PT", "RUF"]
+# An explicit list (not ruff's default set) so a ruff upgrade never adds rules silently.
+select = [
+  "E", "W", "F", "I", "B", "UP", "PYI", "PT", "RUF",
+  "C4",   # comprehensions
+  "D",    # docstrings: the published package only (see per-file-ignores)
+  "N",    # pep8-naming
+  "PERF", # performance anti-patterns
+  "PIE",
+  "SIM",
+  "T20",  # no print() in library code
+]
+ignore = [
+  "D105",   # magic methods are documented by their class
+  "D107",   # __init__ is documented in the class docstring
+  "PYI021", # docstrings in .pyi stubs are intentional: the API docs are built from them
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"!python/pyroid/**" = ["D"]
+# Dev scripts and the benchmark/parity harnesses report on stdout.
+"{python/scripts,bench,parity}/**" = ["T20"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
 mypy_path = "python"
-# Tests are type-checked against the stubs too (needs pytest + packaging installed).
+# Tests are type-checked against the stubs too (needs pytest, packaging and hypothesis
+# installed; the prek `mypy` hook provides them).
 files = ["python/pyroid", "python/tests"]
+
+[[tool.mypy.overrides]]
+# pyarrow 26 ships neither py.typed nor stubs.
+module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# polars is typed, but optional in the tests: polars-runtime-32 2.1.0 has no free-threaded
+# wheels, so it is only installed on GIL builds and absent from the mypy hook.
+module = ["polars", "polars.*"]
+ignore_missing_imports = true
