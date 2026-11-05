@@ -95,17 +95,17 @@ def test_surrogate_before_a_non_str_wins_and_after_loses() -> None:
     docs[300] = 42
     with pytest.raises(UnicodeEncodeError, match="surrogate"):
         D.exact_dedup(docs)
-    docs = fresh()
-    docs[300] += chr(0xD800)
-    docs[100] = None
+    mixed: list[Any] = fresh()
+    mixed[300] += chr(0xD800)
+    mixed[100] = None
     with pytest.raises(pyroid.InputError, match="expected str at index 100, got NoneType") as info:
-        D.exact_dedup(docs)
+        D.exact_dedup(mixed)
     assert "while processing 'texts'" in notes(info.value)
 
 
 def test_bad_texts_reported_before_bad_threads() -> None:
     with pytest.raises(pyroid.InputError):
-        D.exact_dedup(42, threads=0)  # type: ignore[arg-type]
+        D.exact_dedup(42, threads=0)  # type: ignore[call-overload]
     with pytest.raises(ValueError, match="threads must be None or a positive int") as info:
         D.exact_dedup(fresh(), threads=0)
     assert "while processing 'threads'" in notes(info.value)
