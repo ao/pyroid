@@ -190,7 +190,8 @@ def test_str_subclass_gives_exact_str() -> None:
         pass
 
     for text in ("plain", "â€œ", "lone \udc00"):
-        for kwargs in ({}, {"fix_surrogates": False}):
+        options: list[dict[str, Any]] = [{}, {"fix_surrogates": False}]
+        for kwargs in options:
             got = candidate.fix_text(S(text), **kwargs)
             assert type(got) is str
             assert got == ftfy.fix_text(text, **kwargs)
