@@ -41,3 +41,57 @@ single-byte codec tables, and the regex character classes \s, \w and \d of each
 CPython's Unicode database). CPython is distributed under the Python Software
 Foundation License; the Unicode Character Database is distributed under the
 Unicode License v3 (Unicode-3.0).
+
+-------------------------------------------------------------------------------
+datatrove
+-------------------------------------------------------------------------------
+The quality-filter port (crates/pyroid-core/src/filters/,
+crates/pyroid-py/src/filters.rs, python/pyroid/filters.py and
+python/pyroid/filters.pyi) is a derivative work of datatrove 0.10.1,
+https://github.com/huggingface/datatrove (GopherQualityFilter,
+GopherRepetitionFilter, C4QualityFilter, FineWebQualityFilter and the text
+utilities they use):
+
+    Copyright 2023 HuggingFace
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+Each ported file carries the header "Derived from datatrove 0.10.1
+(Apache-2.0), © HuggingFace; modified." datatrove's punctuation tables were
+extracted from datatrove itself by crates/pyroid-core/src/filters/generate_tables.py.
+
+-------------------------------------------------------------------------------
+spaCy
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/filters/tokenizer.rs, regex.rs and tables.rs port the
+English tokenizer and sentencizer of spaCy 3.8.18, https://github.com/explosion/spaCy.
+tables.rs holds spaCy's tokenizer rules (prefix, suffix, infix and URL
+patterns, tokenizer exceptions, sentencizer punctuation), extracted from spaCy
+by generate_tables.py. spaCy's URL pattern credits https://mathiasbynens.be/demo/url-regex
+and https://gist.github.com/dperini/729294 (Diego Perini, MIT License).
+
+    The MIT License (MIT)
+
+    Copyright (C) 2016-2024 ExplosionAI GmbH, 2016 spaCy GmbH, 2015 Matthew Honnibal
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
+crates/pyroid-core/src/filters/unicode_tables.rs contains the str.isalpha(),
+unicodedata.category() "P*" and re \w / \d sets of CPython 3.11-3.15's Unicode
+databases (see "Data derived from CPython and Unicode" above).
