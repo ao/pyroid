@@ -13,6 +13,12 @@ regex), never on the host:
         stages 1-3 over the corpora: stage-2 pairs, removed ids, cluster ids and sizes
     python oracle.py simplify OUT.jsonl N SEED
         simplify_text on N random strings, over all configs
+    python oracle.py digests OUT.json [--vendored]
+        CRC-32 per block of 4096 code points of simplify_text on single-code-point inputs
+
+``simplify`` and ``digests`` also run under the other CPythons (3.11-3.15, only ``regex``
+installed) with a vendored copy of ``simplify_text``; with datatrove installed the copy is
+checked against it on every call.
 
 ``tokens`` is how the stages are tested before the Rust spaCy tokenizer lands: the tokens are
 exactly ``MinhashDedupSignature.word_tokenizer.word_tokenize(simplify_text(text))``, so feeding
@@ -24,7 +30,6 @@ them to pyroid reproduces datatrove's shingles.
 
 from __future__ import annotations
 
-import itertools
 import json
 import random
 import sys
@@ -81,7 +86,11 @@ def stages(out: Path, corpora: list[str], hash_fc: str, precision: int) -> None:
         steps = [
             ([docs, MinhashDedupSignature(output_folder=f"{w}/sigs", config=cfg)], 1),
             (
-                [MinhashDedupBuckets(input_folder=f"{w}/sigs", output_folder=f"{w}/buckets", config=cfg)],  # noqa: E501
+                [
+                    MinhashDedupBuckets(
+                        input_folder=f"{w}/sigs", output_folder=f"{w}/buckets", config=cfg
+                    )
+                ],
                 cfg.num_buckets,
             ),
             (
@@ -147,18 +156,97 @@ INTERESTING = (
 )
 
 
+WORDS = [
+    "monday", "May", "DECEMBER", "Sunday", "wednesdays", "marchmay", "FRİDAY", "1.5", "12,000",
+    "3،4", "1.2.3", "5.", ".5", "1..2", "ΣΑΣ ", "ΟΔΟΣ.", "İSTANBUL", "ΑΣ'Α", "ǅUNGLA",
+]  # fmt: skip
+
+
+def _chars(cps: str) -> str:
+    return "".join(chr(int(c, 16)) for c in cps.split())
+
+
+# Final_Sigma contexts: cased (capital sigma, ASCII and Greek letters, a titlecase, Roman
+# numeral one, circled a, math bold A, Deseret), case-ignorable and cased (modifier letters,
+# ypogegrammeni), case-ignorable (' . : ^ ` soft hyphen, middle dot, acute, right quote, ZWSP,
+# ZWJ, VS1, tags), neither (space 1 -).
+SIGMA_POOL = _chars(
+    "3a3 3a3 3a3 3a3 41 61 391 3b1 1c5 2160 24d0 1d400 10400 1d43 2b0 345"
+    " 27 2e 3a 5e 60 ad b7 301 2019 200b 200d fe00 e0001 e0100 20 31 2d"
+)
+# Combining marks of many classes; the non-Mn ones whose class shows (they are reordered and
+# survive: 1D165 1D166 1D16D 1D16E 302E 302F 1734 1715 16FF0 16FF1 1134D); CGJ (Mn, class 0);
+# U+1171E (Mn until 15.1, Mc from 16.0); U+0CF3 (new in 15.0); starters.
+MARKS = _chars(
+    "334 5b0 f71 f72 f74 1dce 302a 316 302e 302f 301 345 34f 315 5bf e48 321 327 31b e38 f39"
+    " 1d165 1d166 1d16d 1d16e 1d167 1734 1715 16ff0 16ff1 1134d 1171e cf3 61 3b5 1100"
+)
+# NFD maps these to (or through) punctuation, whitespace, ASCII or a mark sequence.
+NFD_SPECIAL = _chars(
+    "37e 387 1fef 1ffd 1fee 1fed 1fc1 2000 2001 212a 212b 2126 1ffa 340 341 343 344 374 1fbe"
+    " 2329 232a f73 f75 f81 fb1d fb1f f900 2f800 958 2adc 1e9b 1c4 130"
+)
+# Code points whose properties differ between Unicode 14.0 and 17.0 (generate_tables.py dumps).
+VERSIONED = (
+    "295 897 ece 1acf-1aeb 1c89-1c8a a7cb-a7dc a7f1 105c9 105e4 10d4e-10d85 10ec5 10efa-10eff"
+    " 11241 11383-11391 113bb-113e2 1171e 11b60-11b66 11dd9 11f00-11f5a 13439-13455 1611e-1612f"
+    " 16d40-16d6c 16ea0-16ed3 16ff2-16ff3 1df25-1df2a 1e030-1e08f 1e4eb-1e4ef 1e5ee-1e5ef"
+    " 1e6e3-1e6ff"
+)
+VERSIONED_CPS = [
+    cp
+    for r in VERSIONED.split()
+    for a, _, b in [r.partition("-")]
+    for cp in range(int(a, 16), int(b or a, 16) + 1)
+]
+SEPARATORS = ".,،٫⎖⎗⎘"
+_ND: list[str] = []
+
+
+def _nd() -> list[str]:
+    """Every `\\p{Nd}` character, as the regex module (the same release everywhere) sees it."""
+    if not _ND:
+        import regex
+
+        nd = regex.compile(r"\p{Nd}")
+        _ND.extend(chr(cp) for cp in range(0x110000) if nd.match(chr(cp)))
+    return _ND
+
+
+def _rand_number(rng: random.Random) -> str:
+    def run() -> str:
+        k = rng.randrange(1, 4)
+        return "".join(rng.choice("0123456789" if rng.random() < 0.3 else _nd()) for _ in range(k))
+
+    s = run()
+    for _ in range(rng.choice([0, 0, 1, 2])):
+        s += rng.choice([*SEPARATORS, "..", " ", "a"]) + run()
+    return s + (rng.choice(SEPARATORS) if rng.random() < 0.2 else "")
+
+
 def rand_text(rng: random.Random) -> str:
     n = rng.choice([0, 1, 2, 5, 10, 30, 80])
     out = []
     for _ in range(n):
         r = rng.random()
-        if r < 0.55:
+        if r < 0.38:
             out.append(rng.choice(INTERESTING))
-        elif r < 0.7:
-            out.append(rng.choice(["monday", "May", "DECEMBER", "Sunday", "1.5", "12,000", "3،4", "ΣΑΣ "]))
+        elif r < 0.46:
+            out.append(rng.choice(WORDS))
+        elif r < 0.54:
+            out.append("".join(rng.choice(SIGMA_POOL) for _ in range(rng.randrange(1, 6))))
+        elif r < 0.62:
+            out.append("".join(rng.choice(MARKS) for _ in range(rng.randrange(1, 5))))
+        elif r < 0.68:
+            out.append(_rand_number(rng))
+        elif r < 0.72:
+            out.append(rng.choice(NFD_SPECIAL))
+        elif r < 0.76:
+            out.append(chr(rng.choice(VERSIONED_CPS)))
+        elif r < 0.78:
+            out.append(chr(rng.choice([*range(0x20), *range(0x7F, 0xA0)])))
         elif r < 0.9:
-            cp = rng.randrange(0x20, 0x3000)
-            out.append(chr(cp))
+            out.append(chr(rng.randrange(0x20, 0x3000)))
         else:
             cp = rng.randrange(0, 0x110000)
             if not 0xD800 <= cp <= 0xDFFF:
@@ -166,20 +254,164 @@ def rand_text(rng: random.Random) -> str:
     return "".join(out)
 
 
-def simplify(out: Path, n: int, seed: int) -> None:
-    from datatrove.utils.text import TextNormConfig, simplify_text
+def _vendored_simplify() -> tuple:
+    """datatrove 0.10.1's `TextNormConfig` and `simplify_text` (datatrove/utils/text.py), copied
+    with only `re`, `regex` and `unicodedata`, for interpreters without datatrove."""
+    import re
+    from dataclasses import dataclass
 
-    names = [f.name for f in fields(TextNormConfig)]
-    configs = [dict(zip(names, bits, strict=True)) for bits in itertools.product([True, False], repeat=len(names))]
+    import regex
+
+    punctuation = (
+        "!/—”:％１〈&(、━\\【#%「」，】；+^]~“《„';’{|∶´[=-`*．（–？！：$～«〉,><》)?）。…@_.\"}►»"
+        + "".join(
+            map(chr, (x for a, b in ((0, 9), (11, 13), (13, 32), (127, 160)) for x in range(a, b)))
+        )
+    )
+    punctuation_trans = str.maketrans(punctuation, " " * len(punctuation))
+    numbers = regex.compile(r"\p{Nd}+([.,،٫⎖⎗⎘]{1}\p{Nd}+)?", regex.VERBOSE | regex.UNICODE)
+    whitespace = re.compile(r"\s+")
+    weekdays = re.compile(r"monday|tuesday|wednesday|thursday|friday|saturday|sunday")
+    months = re.compile(
+        r"january|february|march|april|may|june|july|august|september|october|november|december"
+    )
+
+    @dataclass
+    class TextNormConfig:
+        lowercase: bool = True
+        norm_whitespace: bool = True
+        remove_punctuation: bool = True
+        norm_unicode_diacritics: bool = True
+        norm_numbers: bool = True
+        norm_weekdays: bool = False
+        norm_monthnames: bool = False
+
+    def simplify_text(text: str, config: TextNormConfig) -> str:
+        if config.lowercase:
+            text = text.lower()
+        if config.norm_numbers:
+            text = numbers.sub("0", text)
+        if config.norm_weekdays:
+            text = weekdays.sub("WEEKDAY", text)
+        if config.norm_monthnames:
+            text = months.sub("MONTH", text)
+        if config.remove_punctuation:
+            text = text.translate(punctuation_trans)
+        if config.norm_whitespace:
+            text = whitespace.sub(" ", text.strip())
+        if config.norm_unicode_diacritics:
+            text = "".join(
+                c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn"
+            )
+        return text.strip()
+
+    return TextNormConfig, simplify_text, punctuation
+
+
+def _simplifiers(vendored: bool) -> tuple:
+    """(config for bit mask, simplify_text, uses datatrove). Config bit i is field i of
+    `TextNormConfig`: lowercase, norm_whitespace, remove_punctuation, norm_unicode_diacritics,
+    norm_numbers, norm_weekdays, norm_monthnames. With datatrove installed, the vendored copy
+    is checked against it on every call unless `vendored` asks for the copy alone."""
+    v_cfg, v_simplify, v_punct = _vendored_simplify()
+    names = [f.name for f in fields(v_cfg)]
+    try:
+        from datatrove.utils import text as dt
+    except ImportError:
+        dt = None
+    if dt is None or vendored:
+
+        def config(bits: int) -> object:
+            return v_cfg(**{n: bool(bits >> i & 1) for i, n in enumerate(names)})
+
+        return config, v_simplify, False
+    assert [f.name for f in fields(dt.TextNormConfig)] == names
+    assert v_punct == dt.PUNCTUATION
+    assert dt.TextNormConfig() == dt.TextNormConfig(**vars(v_cfg()))
+
+    def checked(text: str, bits: int) -> str:
+        kw = {n: bool(bits >> i & 1) for i, n in enumerate(names)}
+        got = dt.simplify_text(text, dt.TextNormConfig(**kw))
+        assert got == v_simplify(text, v_cfg(**kw)), (text, bits)
+        return got
+
+    return (lambda bits: bits), checked, True
+
+
+def _header(uses_datatrove: bool, **extra: object) -> dict:
+    return {
+        "unicode": unicodedata.unidata_version,
+        "python": sys.version.split()[0],
+        "datatrove": uses_datatrove,
+        **extra,
+    }
+
+
+DEFAULT_BITS = 0b0011111
+
+
+def simplify(out: Path, n: int, seed: int) -> None:
+    """A header line, then one `{"text", "out": {config bit mask: output}}` line per text: every
+    32nd text under all 128 configs, the others under the default, everything on, one flag on its
+    own (in turn) and a random config."""
+    config, simplify_text, uses_dt = _simplifiers(vendored=False)
     rng = random.Random(seed)
+    cases = 0
     with out.open("w") as f:
+        f.write(json.dumps(_header(uses_dt, seed=seed, n=n)) + "\n")
         for i in range(n):
             text = rand_text(rng)
-            cfgs = configs if i % 16 == 0 else [rng.choice(configs), {}]
-            for cfg in cfgs:
-                got = simplify_text(text, TextNormConfig(**cfg))
-                f.write(json.dumps({"text": text, "config": cfg, "out": got}) + "\n")
-    print(f"unicode {unicodedata.unidata_version}", file=sys.stderr)
+            if i % 32 == 0:
+                cfgs = list(range(128))
+            else:
+                cfgs = sorted({DEFAULT_BITS, 127, 1 << (i % 7), rng.randrange(128)})
+            outs = {str(bits): simplify_text(text, config(bits)) for bits in cfgs}
+            f.write(json.dumps({"text": text, "out": outs}, ensure_ascii=False) + "\n")
+            cases += len(outs)
+    sys.stderr.write(f"{out}: {n} texts, {cases} cases, Unicode {unicodedata.unidata_version}\n")
+
+
+# (config bits, template): `{}` is replaced by each code point in turn.
+DIGEST_CASES = [
+    (DEFAULT_BITS, "{}"),
+    (DEFAULT_BITS, "A{}Σ"),
+    (0b0000001, "{}"),
+    (0b0000001, "A{}Σ"),
+    (0b0000001, "{}Σ"),
+    (0b0000001, "AΣ{}"),
+    (0b0001000, "{}"),
+    (0b0001000, "\U0001d16d{}\U0001d165"),
+    (0b0010000, "{}"),
+    (0b0010000, "1{}2"),
+    (0b0000110, " {} x"),
+    (0b0000010, "x{}x"),
+    (0b1111111, "{}"),
+]
+DIGEST_BLOCK = 4096
+
+
+def digests(out: Path, vendored: bool) -> None:
+    """For each DIGEST_CASES entry and each block of 4096 code points (surrogates skipped), the
+    CRC-32 of the outputs, each as a little-endian u32 byte length followed by its UTF-8."""
+    import zlib
+
+    config, simplify_text, uses_dt = _simplifiers(vendored)
+    cases = []
+    for bits, template in DIGEST_CASES:
+        cfg = config(bits)
+        crcs = []
+        for start in range(0, 0x110000, DIGEST_BLOCK):
+            crc = 0
+            for cp in range(start, start + DIGEST_BLOCK):
+                if 0xD800 <= cp <= 0xDFFF:
+                    continue
+                b = simplify_text(template.replace("{}", chr(cp)), cfg).encode()
+                crc = zlib.crc32(b, zlib.crc32(len(b).to_bytes(4, "little"), crc))
+            crcs.append(f"{crc:08x}")
+        cases.append({"config": bits, "template": template, "crc32": "".join(crcs)})
+    head = _header(uses_dt, block=DIGEST_BLOCK)
+    out.write_text(json.dumps({**head, "cases": cases}, ensure_ascii=False, indent=0) + "\n")
+    sys.stderr.write(f"{out}: {len(cases)} cases, Unicode {unicodedata.unidata_version}\n")
 
 
 def main() -> None:
@@ -193,6 +425,8 @@ def main() -> None:
         stages(Path(out), corpora, hash_fc, int(precision))
     elif cmd == "simplify":
         simplify(Path(rest[0]), int(rest[1]), int(rest[2]))
+    elif cmd == "digests":
+        digests(Path(rest[0]), vendored=rest[1:] == ["--vendored"])
     else:
         raise SystemExit(__doc__)
 

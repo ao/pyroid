@@ -18,6 +18,7 @@ pub mod exact;
 pub mod minhash;
 mod rng;
 pub mod simplify;
+mod simplify_tables;
 pub mod tokenize;
 
 pub use cluster::{CapacityError, Clusters, SignatureStore};
