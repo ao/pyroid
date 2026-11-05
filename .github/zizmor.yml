@@ -1,0 +1,14 @@
+# zizmor configuration (https://docs.zizmor.sh/configuration/).
+# Check with: uvx zizmor --pedantic .    Expected result: no findings.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # Every action, including actions/* and first-party ones, is pinned to a full commit SHA
+        # with a "# vX.Y.Z" comment. This is zizmor's default since 1.20; it is spelled out here so a
+        # future default change can't loosen it.
+        "*": hash-pin
+  dependabot-cooldown:
+    config:
+      # .github/dependabot.yml waits 7 days before proposing a new release of any dependency.
+      days: 7

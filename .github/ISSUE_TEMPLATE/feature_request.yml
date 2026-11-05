@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest a new function, option or integration.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        pyroid has a deliberately narrow scope: fast, exact text cleaning for LLM datasets (ftfy-compatible fixing, fastText inference, quality filters, dedup and transliteration). Requests that fit that scope are the most likely to land.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what's stopping you today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: What would you like to call? A short code sketch helps.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: incumbent
+    attributes:
+      label: Existing implementation
+      description: If another library already does this (ftfy, datatrove, datasketch, ...), link it, give its version, and say how pyroid should match it.
+  - type: textarea
+    id: scale
+    attributes:
+      label: Workload
+      description: Roughly how much data, how many cores, and which Python builds (e.g. 3.14t) you'd run this on. It helps us decide what to optimize.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd be willing to open a pull request for this.

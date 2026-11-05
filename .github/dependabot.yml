@@ -1,0 +1,53 @@
+# Dependabot version updates: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+# Weekly, one grouped PR per ecosystem, with a 7-day cooldown so brand-new (possibly compromised) releases
+# are never picked up on day one. Security updates ignore the cooldown.
+# Commit prefixes keep the history Conventional (chore/ci are hidden from the release-please changelog).
+# bench/ and parity/ are deliberately not listed: their incumbent pins (ftfy, datatrove, ...) are part of
+# the parity contract and are bumped by hand.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # PyO3 releases are breaking (0.x); keep them in their own PR.
+      pyo3:
+        patterns: ["pyo3", "pyo3-*"]
+      rust:
+        patterns: ["*"]
+        exclude-patterns: ["pyo3", "pyo3-*"]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
