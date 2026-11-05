@@ -67,6 +67,8 @@ __all__ = [
 DATATROVE_VERSION: Final[str]
 _UNICODE_VERSION: Final[str]
 
+def _native_config(cfg: MinhashConfig) -> Any: ...
+
 class HashConfig:
     """datatrove's ``HashConfig``: the shingle hash function and its width.
 
@@ -322,6 +324,7 @@ class MinHashDedup:
         **kwargs: As for :func:`minhash_signatures`.
     """
 
+    _state: Any
     def __init__(
         self, config: Any = None, *, threads: int | None = None, **kwargs: Any
     ) -> None: ...
