@@ -98,7 +98,9 @@ class Model:
         Raises:
             ValueError: A line contains ``"\n"``; ``k`` is 0 or below -1; the
                 model is unsupervised.
-            TypeError: A line contains a lone surrogate (as fastText).
+            TypeError: A line contains a lone surrogate, or ``k`` does not fit
+                in a 32-bit int (as fastText). A ``"\n"`` anywhere takes
+                precedence (ValueError), as in fastText.
             pyroid.InputError: ``text`` is not a str or a batch of str.
             RuntimeError: The model's weights produce NaN (``"Encountered NaN."``).
         """

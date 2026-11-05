@@ -139,9 +139,48 @@ fn surrogate_as_type_error(py: Python<'_>, err: PyErr) -> PyErr {
     te
 }
 
-fn text_input(obj: &Bound<'_, PyAny>) -> PyResult<TextInput> {
-    obj.extract::<TextInput>()
-        .map_err(|e| surrogate_as_type_error(obj.py(), e))
+/// fastText's messages for a multi-line input.
+const PREDICT_NEWLINE: &str = "predict processes one line at a time (remove '\\n')";
+const GET_LINE_NEWLINE: &str = "get_line processes one line at a time (remove '\\n')";
+
+/// The `ValueError` fastText's Python layer raises for a `"\n"` in `obj` (a
+/// str, or the first str item of a list/tuple holding one), if any.
+fn newline_error(obj: &Bound<'_, PyAny>, msg: &'static str) -> Option<PyErr> {
+    let has_newline = |s: &Bound<'_, PyAny>| {
+        s.cast::<PyString>()
+            .is_ok_and(|s| s.contains("\n").unwrap_or(false))
+    };
+    if has_newline(obj) {
+        return Some(PyValueError::new_err(msg));
+    }
+    let items: Vec<Bound<'_, PyAny>> = if let Ok(list) = obj.cast::<PyList>() {
+        list.iter().collect()
+    } else if let Ok(tuple) = obj.cast::<PyTuple>() {
+        tuple.iter().collect()
+    } else {
+        return None;
+    };
+    let i = items.iter().position(has_newline)?;
+    Some(with_note(
+        obj.py(),
+        PyValueError::new_err(msg),
+        format!("pyroid: raised for the document at index {i}"),
+    ))
+}
+
+/// The documents of a `predict`-like call. fastText's Python layer looks for
+/// `"\n"` in every line before the C++ conversion rejects a lone surrogate,
+/// so a newline anywhere wins over a surrogate anywhere.
+fn text_input(obj: &Bound<'_, PyAny>, newline_msg: &'static str) -> PyResult<TextInput> {
+    obj.extract::<TextInput>().map_err(|e| {
+        let py = obj.py();
+        if e.is_instance_of::<PyUnicodeEncodeError>(py)
+            && let Some(nl) = newline_error(obj, newline_msg)
+        {
+            return nl;
+        }
+        surrogate_as_type_error(py, e)
+    })
 }
 
 fn one_str(obj: &Bound<'_, PyAny>) -> PyResult<PyBackedStr> {
@@ -295,9 +334,20 @@ impl Model {
         threads: Option<Threads>,
     ) -> PyResult<Bound<'py, PyTuple>> {
         require_numpy(py)?;
-        let input = text_input(text)?;
+        let input = text_input(text, PREDICT_NEWLINE)?;
+        // fastText's k is a C int: pybind11 rejects anything else with TypeError.
+        let k = i32::try_from(k).map_err(|_| {
+            // The Python layer's newline check runs before pybind11 converts k.
+            newline_error(text, PREDICT_NEWLINE).unwrap_or_else(|| {
+                PyTypeError::new_err(format!(
+                    "k must fit in a 32-bit int (fastText's int32_t), got {k}"
+                ))
+            })
+        })?;
         let model = &self.inner;
-        let results = map_values(py, &input, threads, |s| model.predict(s, k, threshold))?;
+        let results = map_values(py, &input, threads, |s| {
+            model.predict(s, i64::from(k), threshold)
+        })?;
         check(py, &input, &results)?;
         if matches!(input, TextInput::Str(_)) {
             let preds = match results.into_iter().next() {
@@ -341,7 +391,7 @@ impl Model {
         threads: Option<Threads>,
     ) -> PyResult<Bound<'py, PyAny>> {
         require_numpy(py)?;
-        let input = text_input(text)?;
+        let input = text_input(text, PREDICT_NEWLINE)?;
         let model = &self.inner;
         let results = map_values(py, &input, threads, |s| model.sentence_vector(s))?;
         check(py, &input, &results)?;
@@ -464,7 +514,7 @@ impl Model {
         on_unicode_error: &str,
     ) -> PyResult<Bound<'py, PyTuple>> {
         let _ = on_unicode_error; // tokens of a str are valid UTF-8
-        let input = text_input(text)?;
+        let input = text_input(text, GET_LINE_NEWLINE)?;
         let model = &self.inner;
         let results = map_values(
             py,
@@ -482,9 +532,7 @@ impl Model {
             },
         )?;
         if results.iter().any(|r| matches!(r, Some(Err(())))) {
-            return Err(PyValueError::new_err(
-                "get_line processes one line at a time (remove '\\n')",
-            ));
+            return Err(PyValueError::new_err(GET_LINE_NEWLINE));
         }
         let pair = |r: Option<Result<LineTokens, ()>>| -> PyResult<[Bound<'py, PyAny>; 2]> {
             match r {
