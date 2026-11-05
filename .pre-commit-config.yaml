@@ -15,7 +15,7 @@ repos:
       - id: check-added-large-files
       # Test data and incumbent fixtures keep their bytes exactly (mojibake, odd whitespace).
       - id: end-of-file-fixer
-        exclude: &data ^(python/tests/data|parity|bench/data)/
+        exclude: &data ^(python/tests/data|parity|bench/data|crates/pyroid-core/tests/ftfy_data)/
       - id: trailing-whitespace
         exclude: *data
 

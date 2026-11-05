@@ -9,10 +9,12 @@ extend-exclude = [
   ".git/",
   # Generated.
   "Cargo.lock",
+  "crates/pyroid-core/src/ftfy/tables.rs",
   # Test data and incumbent fixtures: mojibake, deliberately misspelt and non-English text.
   "python/tests/data/",
   "parity/",
   "bench/data/",
+  "crates/pyroid-core/tests/ftfy_data/",
 ]
 
 [default.extend-words]
