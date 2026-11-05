@@ -5,6 +5,8 @@ from typing import Final, Generic, Literal, TypeVar, final
 
 _T_co = TypeVar("_T_co", covariant=True)
 
+__all__ = ["Column", "InputError", "PyroidError", "__version__", "_testing", "text"]
+
 __version__: Final[str]
 
 # Native submodules; their public faces are pyroid/<name>.py + .pyi.

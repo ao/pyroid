@@ -10,18 +10,26 @@ datasets, ...), and returns the same kind; Arrow input gives a
 :class:`pyroid.Column`.
 """
 
-# The native extension is imported unconditionally. If it is missing or broken,
-# importing pyroid fails: there are no pure-Python fallbacks or dummy objects.
-try:
-    from pyroid import _pyroid
-except ImportError as exc:
-    raise ImportError(
-        "pyroid's native extension (pyroid._pyroid) failed to load. Install a "
-        "pyroid wheel built for this Python, or build one from a source "
-        "checkout with `maturin develop`."
-    ) from exc
+from types import ModuleType
 
-from pyroid._pyroid import Column, InputError, PyroidError
+
+def _load_extension() -> ModuleType:
+    # The native extension is imported unconditionally. If it is missing or
+    # broken, importing pyroid fails: no pure-Python fallbacks, no dummies.
+    try:
+        from pyroid import _pyroid
+    except ImportError as exc:
+        raise ImportError(
+            "pyroid's native extension (pyroid._pyroid) failed to load. Install a "
+            "pyroid wheel built for this Python, or build one from a source "
+            "checkout with `maturin develop`."
+        ) from exc
+    return _pyroid
+
+
+_pyroid = _load_extension()
+
+from pyroid._pyroid import Column, InputError, PyroidError  # noqa: E402
 
 __version__: str = _pyroid.__version__
 

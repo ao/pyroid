@@ -2,7 +2,8 @@
 
 Every product module (`ftfy`, `fasttext`, `filters`, `dedup`, `translit`) follows the
 same shape as the demonstration module `pyroid.text`. A track touches **only its own
-files plus one registration line**, so tracks merge without conflicts.
+files plus one registration line per shared file** (two in total), so tracks merge
+without conflicts.
 
 ## Layout
 
@@ -13,7 +14,6 @@ files plus one registration line**, so tracks merge without conflicts.
 | `python/pyroid/<mod>.py` | Public module: re-exports the native functions (`from pyroid._pyroid import <mod> as _native`). Pure-Python glue only where it adds value. |
 | `python/pyroid/<mod>.pyi` | Hand-written stub: `@overload`s per input kind, Google-style docstrings (the API docs are built from these). |
 | `python/tests/test_<mod>*.py` | Tests against the installed wheel. |
-| `.github/workflows/ci.yml` | Add `pyroid.<mod>` to the stubtest module list (**registration line 3**). |
 
 `python/pyroid/__init__.py` does not import submodules; users write `import pyroid.text`.
 New exception types go in `crates/pyroid-py/src/errors.rs` (subclass `PyroidError`) and are
@@ -118,15 +118,16 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
 4. **Threads**: results identical for `threads=None/1/2/…`; large batches (10k+ docs)
    complete under a timeout. Mark tests that use subprocesses, `pytest.warns`, or global
    state `@pytest.mark.thread_unsafe` (pytest-run-parallel runs the suite on 3.14t/3.15t).
-5. **Stubs**: stubtest runs in CI over `pyroid`, `pyroid._pyroid` and every `pyroid.<mod>`;
-   mypy --strict type-checks the tests against the stubs.
+5. **Stubs**: stubtest runs in CI over the installed `pyroid` package (it recurses into
+   `pyroid.<mod>` and `pyroid._pyroid`); mypy --strict type-checks the tests against the
+   stubs. Allowlist entries go in `.stubtest-allowlist`, each with a reason.
 
 ## Checklist for a product track
 
 - [ ] Kernels in `pyroid-core/src/<mod>/` with `cargo test` coverage; no Python, no `unsafe`.
 - [ ] `pyroid-py/src/<mod>.rs` uses `transform` / `predicate` / `map_values`; no Python
       calls inside closures; per-document state hoisted out of the loop.
-- [ ] Three registration lines (core `lib.rs`, bindings `lib.rs`, stubtest list in `ci.yml`).
+- [ ] Two registration lines (core `lib.rs`, bindings `lib.rs`).
 - [ ] `<mod>.py` re-export + `<mod>.pyi` overloads for str / list / tuple / Arrow,
       with docstrings; stubtest clean.
 - [ ] Hypothesis parity vs the reference, surrogate policy, Arrow nulls and types,
