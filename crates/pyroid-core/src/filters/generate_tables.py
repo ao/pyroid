@@ -280,6 +280,12 @@ def filter_class(name: str, points: set[int] | None) -> str:
 def main() -> None:
     import spacy
     from datatrove.utils.text import PUNCTUATION_SET, TERMINAL_PUNCTUATION
+    from datatrove.utils.word_tokenizers import load_tokenizer_assignments
+
+    english = sorted(
+        k for k, f in load_tokenizer_assignments().items() if f.args == ("SpaCyTokenizer", "en")
+    )
+    assert "eng" in english and "en" in english, english
     from spacy.pipeline.sentencizer import Sentencizer
 
     if spacy.__version__ != "3.8.18":
@@ -363,15 +369,15 @@ def main() -> None:
         "/// `Sentencizer.default_punct_chars`, sorted.",
         "pub(crate) static SENT_PUNCT: &[char] = &[" + ", ".join(rs_char(ord(c)) for c in sent) + "];",
         "/// datatrove `PUNCTUATION_SET`, sorted.",
-        "#[allow(dead_code)] // used by the quality filters",
         "pub(crate) static PUNCTUATION_SET: &[char] = &["
         + ", ".join(rs_char(ord(c)) for c in sorted(PUNCTUATION_SET))
         + "];",
         "/// datatrove `TERMINAL_PUNCTUATION`, sorted.",
-        "#[allow(dead_code)] // used by the quality filters",
         "pub(crate) static TERMINAL_PUNCTUATION: &[char] = &["
         + ", ".join(rs_char(ord(c)) for c in sorted(TERMINAL_PUNCTUATION))
         + "];",
+        "/// datatrove language codes whose word tokenizer is `SpaCyTokenizer(\"en\")`, sorted.",
+        "pub(crate) static ENGLISH_LANGUAGES: &[&str] = &[" + ", ".join(rs_str(k) for k in english) + "];",
         "}\npub(crate) use data::*;\n",
     ]
     OUT.write_text("\n".join(out), encoding="utf-8")

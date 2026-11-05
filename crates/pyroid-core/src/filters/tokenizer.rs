@@ -162,22 +162,29 @@ impl SpacyEnglish {
     /// `Sentencizer.predict` over `toks`: the number of sentences (0 if
     /// there are no tokens).
     pub fn count_sentences_in(&self, text: &str, toks: &[Token]) -> usize {
-        if toks.is_empty() {
-            return 0;
-        }
-        let mut n = 1;
+        let mut ends = Vec::new();
+        self.sentence_ends_in(text, toks, &mut ends);
+        ends.len()
+    }
+
+    /// `Sentencizer.predict` over `toks`: each sentence's `end_char` (the end
+    /// of its last token, whitespace tokens included), appended to `out`.
+    pub fn sentence_ends_in(&self, text: &str, toks: &[Token], out: &mut Vec<usize>) {
+        let Some(last) = toks.last() else {
+            return;
+        };
         let mut seen_period = false;
-        for t in toks {
+        for (i, t) in toks.iter().enumerate() {
             let s = t.text(text);
             let in_punct_chars = is_sent_punct(s);
             if seen_period && !in_punct_chars && !self.is_punct(s) {
-                n += 1;
+                out.push(toks[i - 1].end as usize);
                 seen_period = false;
             } else if in_punct_chars {
                 seen_period = true;
             }
         }
-        n
+        out.push(last.end as usize);
     }
 
     /// spaCy's `is_punct` lexeme attribute: every character is in a `P*`

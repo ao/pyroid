@@ -49,7 +49,6 @@ fn has(
 }
 
 /// `c.isalpha()`: general category Lu, Ll, Lt, Lm or Lo.
-#[allow(dead_code)] // used by the quality filters
 #[inline]
 pub(crate) fn is_alpha(c: char, v: UnicodeVersion) -> bool {
     has(c, v, tables::ALPHA_ASCII, tables::alpha)
