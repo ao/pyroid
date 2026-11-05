@@ -60,102 +60,101 @@ def _ranges(pred) -> list[list[int]]:
     return out
 
 
-def _class_items_to_set(items, C) -> tuple[set[int], bool]:
+def _class_items_to_set(items, sre_constants) -> tuple[set[int], bool]:
     """Turn the items of an sre IN node into (explicit set, negated)."""
     chars: set[int] = set()
     negate = False
     for op, arg in items:
-        if op is C.NEGATE:
+        if op is sre_constants.NEGATE:
             negate = True
-        elif op is C.LITERAL:
+        elif op is sre_constants.LITERAL:
             chars.add(arg)
-        elif op is C.RANGE:
+        elif op is sre_constants.RANGE:
             chars.update(range(arg[0], arg[1] + 1))
         else:
             raise ValueError(f"unsupported class item {op} {arg}")
     return chars, negate
 
 
-def _element(op, arg, C) -> dict:
+def _element(op, arg, sre_constants) -> dict:
     """One fixed-width element of an alternative."""
-    if op is C.LITERAL:
+    if op is sre_constants.LITERAL:
         return {"kind": "set", "chars": [arg]}
-    if op is C.ANY:
+    if op is sre_constants.ANY:
         return {"kind": "any"}
-    if op is C.IN:
-        if len(arg) == 1 and arg[0][0] is C.CATEGORY:
+    if op is sre_constants.IN:
+        if len(arg) == 1 and arg[0][0] is sre_constants.CATEGORY:
             cat = str(arg[0][1])
             if cat == "CATEGORY_SPACE":
                 return {"kind": "space"}
             if cat == "CATEGORY_WORD":
                 return {"kind": "word"}
             raise ValueError(cat)
-        chars, negate = _class_items_to_set(arg, C)
+        chars, negate = _class_items_to_set(arg, sre_constants)
         return {"kind": "notset" if negate else "set", "chars": sorted(chars)}
     raise ValueError(f"unsupported element {op} {arg}")
 
 
 def _badness_alternatives() -> list[dict]:
-    import re._constants as C
-    import re._parser as P
+    import re._constants as sre_constants
+    import re._parser as sre_parse
 
     from ftfy.badness import BADNESS_RE
 
-    tree = P.parse(BADNESS_RE.pattern, re.VERBOSE)
-    assert len(tree.data) == 1 and tree.data[0][0] is C.BRANCH
+    tree = sre_parse.parse(BADNESS_RE.pattern, re.VERBOSE)
+    assert len(tree.data) == 1 and tree.data[0][0] is sre_constants.BRANCH
     alts = []
     for branch in tree.data[0][1][1]:
         anchored = False
         variants: list[list[dict]] = [[]]
         for op, arg in branch.data:
-            if op is C.AT:
+            if op is sre_constants.AT:
                 assert str(arg) == "AT_BEGINNING" and not any(variants[0])
                 anchored = True
-            elif op is C.MAX_REPEAT:
+            elif op is sre_constants.MAX_REPEAT:
                 lo, hi, sub = arg
                 assert (lo, hi) == (0, 1) and len(sub.data) == 1
-                el = _element(*sub.data[0], C)
+                el = _element(*sub.data[0], sre_constants)
                 # expand greedy `x?` into "with x", then "without x" (sre's order)
                 variants = [v for base in variants for v in ([*base, el], list(base))]
             else:
-                el = _element(op, arg, C)
+                el = _element(op, arg, sre_constants)
                 variants = [[*v, el] for v in variants]
-        for v in variants:
-            alts.append({"anchored": anchored, "elements": v})
+        alts.extend({"anchored": anchored, "elements": v} for v in variants)
     return alts
 
 
 def _utf8_detector() -> dict:
-    import re._constants as C
-    import re._parser as P
+    import re._constants as sre_constants
+    import re._parser as sre_parse
 
     from ftfy.chardata import UTF8_DETECTOR_RE
 
-    tree = P.parse(UTF8_DETECTOR_RE.pattern, re.VERBOSE)
+    tree = sre_parse.parse(UTF8_DETECTOR_RE.pattern, re.VERBOSE)
     (op0, behind), (op1, rep) = tree.data
     assert str(op0) == "ASSERT_NOT" and behind[0] == -1
     ((bop, barg),) = behind[1].data
-    strict, neg = _class_items_to_set(barg, C)
-    assert bop is C.IN and not neg
+    strict, neg = _class_items_to_set(barg, sre_constants)
+    assert bop is sre_constants.IN and not neg
     lo, _hi, sub = rep
     assert str(op1) == "MAX_REPEAT" and lo == 1
     ((gop, garg),) = sub.data
     assert str(gop) == "SUBPATTERN"
     ((brop, brarg),) = garg[3].data
-    assert brop is C.BRANCH
+    assert brop is sre_constants.BRANCH
     seqs = []
     for branch in brarg[1]:
         first_op, first_arg = branch.data[0]
-        first, neg = _class_items_to_set(first_arg, C)
-        assert first_op is C.IN and not neg
-        if len(branch.data) == 2 and branch.data[1][0] is C.IN:
-            cont, neg = _class_items_to_set(branch.data[1][1], C)
+        first, neg = _class_items_to_set(first_arg, sre_constants)
+        assert first_op is sre_constants.IN and not neg
+        if len(branch.data) == 2 and branch.data[1][0] is sre_constants.IN:
+            cont, neg = _class_items_to_set(branch.data[1][1], sre_constants)
             count = 1
         else:
             ((rop, (rlo, rhi, rsub)),) = branch.data[1:]
             assert str(rop) == "MAX_REPEAT" and rlo == rhi
             ((_cop, carg),) = rsub.data
-            cont, neg = _class_items_to_set(carg, C)
+            cont, neg = _class_items_to_set(carg, sre_constants)
             count = rlo
         assert not neg
         seqs.append({"first": sorted(first), "cont": sorted(cont), "count": count})
@@ -417,8 +416,7 @@ def emit(paths: list[str]) -> None:
     out.append("\n/// BMP page -> index into `CLASS_PAGES` (0 = all class 0).\n")
     out.append(f"pub(super) static PAGE_INDEX: [u8; 256] = {page_index};\n")
     out.append(f"pub(super) static CLASS_PAGES: [[u8; 256]; {len(pages)}] = [\n")
-    for row in pages:
-        out.append(f"    {row},\n")
+    out.extend(f"    {row},\n" for row in pages)
     out.append("];\n")
 
     out.append("\n/// Decode tables (byte -> code point; u32::MAX = undefined) for\n")
