@@ -160,7 +160,7 @@ fn word_diff(want: &[&str], got: &[&str]) -> String {
 /// The full story of one mismatching row (recomputed, so only for the shown ones).
 fn describe(location: &str, line: &str) -> String {
     let Ok(Some(row)) = parse(line) else {
-        return format!("{location}: unparseable row");
+        return format!("{location}: unparsable row");
     };
     let tok = SpacyEnglish::get(row.version);
     let got = tok.words(&row.text);
