@@ -108,6 +108,7 @@ class FineWebQuality(NamedTuple):
 
 
 Config = GopherQuality | GopherRepetition | C4Quality | FineWebQuality
+_CONFIG_TYPES = (GopherQuality, GopherRepetition, C4Quality, FineWebQuality)
 
 
 class FilterResult(NamedTuple):
@@ -174,7 +175,7 @@ def _ngrams(name: str, v: Iterable[tuple[int, float]]) -> list[tuple[int, float]
             raise TypeError(f"{name}: n must be an int, not {type(n).__name__}")
         if n < 1:
             raise ValueError(f"{name}: n must be at least 1, got {n}")
-        out.append((n, _num(name, frac)))
+        out.append((n, _num(f"{name} fraction", frac)))
     return out
 
 
@@ -207,6 +208,10 @@ def _params(cfg: Config) -> tuple[str, str, dict[str, Any]]:
         }
     else:
         stop_chars = cfg.stop_chars
+        if stop_chars is not None and not isinstance(stop_chars, (str, Iterable)):
+            raise TypeError(
+                f"stop_chars must be a str or an iterable of str, not {type(stop_chars).__name__}"
+            )
         if isinstance(stop_chars, str):
             stop_chars = (stop_chars,)
         params = {
@@ -341,6 +346,8 @@ def fineweb_quality_reasons(
 
 def apply(texts: Any, filters: Iterable[Any], /, *, threads: Any = None) -> FilterResult:
     """Run several filters in one pass, chained as datatrove's executor does."""
+    if isinstance(filters, _CONFIG_TYPES) or type(filters).__name__ in _DATATROVE:
+        filters = [filters]  # one filter, not an iterable of them
     configs = [_as_config(f) for f in filters]
     keep, reason, text = _native.run(texts, _pipeline(configs), "all", threads=threads)
     return FilterResult(keep, reason, text)

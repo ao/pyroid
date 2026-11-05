@@ -636,7 +636,11 @@ def fineweb_quality_reasons(
 
 def apply(
     texts: str | list[str] | tuple[str, ...] | ArrowStrings,
-    filters: Iterable[GopherQuality | GopherRepetition | C4Quality | FineWebQuality | Any],
+    filters: Iterable[GopherQuality | GopherRepetition | C4Quality | FineWebQuality | Any]
+    | GopherQuality
+    | GopherRepetition
+    | C4Quality
+    | FineWebQuality,
     /,
     *,
     threads: int | None = None,
@@ -650,7 +654,7 @@ def apply(
 
     Args:
         texts: As for :func:`gopher_quality`.
-        filters: Config objects, or datatrove filter instances
+        filters: Config objects, or datatrove filter instances (or one of either)
             (``GopherQualityFilter`` etc.) whose settings are read.
         threads: As for :func:`gopher_quality`.
 

@@ -267,10 +267,10 @@ fn pack<'py>(
 /// Run `pipeline` over `x`; return `what` (`"keep"`, `"reason"`, `"text"`
 /// or `"all"` = `(keep, reason, text)`) in the caller's container kind.
 #[pyfunction]
-#[pyo3(signature = (x, pipeline, what, /, *, threads = None))]
+#[pyo3(signature = (texts, pipeline, what, /, *, threads = None))]
 fn run<'py>(
     py: Python<'py>,
-    x: TextInput,
+    texts: TextInput,
     pipeline: &NativePipeline,
     what: &str,
     threads: Option<Threads>,
@@ -278,7 +278,7 @@ fn run<'py>(
     let what = What::parse(what)?;
     let n_threads = crate::input::threads(threads);
     let p = &pipeline.0;
-    match &x {
+    match &texts {
         TextInput::Str(s) => {
             let res = if s.len() < SINGLE_DOC_DETACH_BYTES {
                 p.run(s)
@@ -301,7 +301,7 @@ fn run<'py>(
             )
         }
         TextInput::List(docs) | TextInput::Tuple(docs) => {
-            let tuple = matches!(x, TextInput::Tuple(_));
+            let tuple = matches!(texts, TextInput::Tuple(_));
             let outs = py
                 .detach(|| {
                     par::try_map(docs.len(), n_threads, |i| {
