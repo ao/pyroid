@@ -13,6 +13,7 @@ publish = false
 crate-type = ["rlib"]
 
 [dependencies]
+any_ascii = "0.3.3"
 memchr = "2.7"
 rustc-hash = "2.1"
 rayon.workspace = true

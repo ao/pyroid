@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "any_ascii"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c6333e01ba7235575b6ab53e5af10f1c327927fd97c36462917e289557ea64"
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -274,6 +280,7 @@ dependencies = [
 name = "pyroid-core"
 version = "1.0.0-dev"
 dependencies = [
+ "any_ascii",
  "memchr",
  "rayon",
  "rustc-hash",

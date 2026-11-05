@@ -21,3 +21,4 @@ pub mod filters;
 pub mod ftfy;
 pub mod par;
 pub mod text;
+pub mod translit;
