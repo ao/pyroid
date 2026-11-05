@@ -425,8 +425,8 @@ impl StrChunk {
         self.validity.is_null() || unsafe { bit(self.validity, self.offset + i) }
     }
 
-    /// The raw bytes of row `i` (`i < len`). Null rows give unspecified bytes
-    /// for `utf8`/`large_utf8`; for `utf8_view` only call this on valid rows.
+    /// The raw bytes of row `i` (`i < len`). Callers must have checked
+    /// `is_valid(i)`: views of null `utf8_view` rows are not validated.
     fn raw(&self, i: usize) -> &[u8] {
         assert!(i < self.len, "row {i} out of range for {} rows", self.len);
         let k = self.offset + i;
@@ -473,9 +473,11 @@ impl StrChunk {
         })
     }
 
-    /// The raw bytes of a non-null row (for error messages).
-    pub fn bytes(&self, i: usize) -> &[u8] {
-        self.raw(i)
+    /// The raw bytes of row `i`, or `None` if it is null (for error messages).
+    pub fn bytes(&self, i: usize) -> Option<&[u8]> {
+        // `raw` is only sound on valid rows for `utf8_view` (null views are
+        // not validated), so every caller goes through `is_valid` first.
+        self.is_valid(i).then(|| self.raw(i))
     }
 }
 

@@ -98,7 +98,7 @@ where
         Some(Err(err)) => Err(BatchError::BadUtf8 {
             chunk: index,
             row,
-            bytes: chunk.bytes(row).to_vec(),
+            bytes: chunk.bytes(row).unwrap_or_default().to_vec(),
             err,
         }),
     })
