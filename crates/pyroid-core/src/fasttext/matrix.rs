@@ -17,11 +17,13 @@ use super::io::Reader;
 /// `Vector::norm`, as the reference builds compute it.
 ///
 /// The published fastText wheels are built by GCC with `-O3`, which
-/// contracts these two loops into fused multiply-adds where the base ISA has
+/// contracts these loops into fused multiply-adds where the base ISA has
 /// them: on aarch64 the reference rounds once, on baseline x86-64 twice.
-/// The dense `dotRow` loop is not contracted on either. Measured against
-/// fasttext-predict 0.9.2.4 on aarch64: with this split, all 26,464 pinned
-/// lid.176 predictions and every synthetic qout/qnorm model are bit-identical;
+/// The dense `dotRow` is vectorized instead: products four at a time, added
+/// in order, and only its scalar tail is fused (see [`Matrix::dot_row`]).
+/// Measured against fasttext-predict 0.9.2.4 on aarch64: with this split, all
+/// 26,464 pinned lid.176 predictions, every synthetic qout/qnorm model and
+/// dense models of every dim from 1 to 33 are bit-identical;
 /// against upstream fastText 0.9.2 (`fasttext-numpy2-wheel`), so are
 /// unsupervised sentence vectors (`norm`).
 #[inline]
@@ -301,9 +303,17 @@ impl Matrix {
     pub fn dot_row(&self, v: &[f32], i: usize) -> Result<f32, NaN> {
         match self {
             Self::Dense(d) => {
+                let row = d.row(i);
+                // GCC vectorizes the products four at a time and adds them in
+                // order (two roundings); the scalar tail of `cols % 4` terms
+                // is contracted into fused multiply-adds.
+                let body = row.len() - row.len() % 4;
                 let mut acc = 0.0f32;
-                for (&a, &b) in d.row(i).iter().zip(v) {
+                for (&a, &b) in row[..body].iter().zip(v) {
                     acc += a * b;
+                }
+                for (&a, &b) in row[body..].iter().zip(&v[body..]) {
+                    acc = fused(acc, a, b);
                 }
                 if acc.is_nan() { Err(NaN) } else { Ok(acc) }
             }

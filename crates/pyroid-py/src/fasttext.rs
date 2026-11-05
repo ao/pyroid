@@ -75,7 +75,15 @@ fn load_error(py: Python<'_>, path: &std::path::Path, err: LoadError) -> PyErr {
     match err {
         LoadError::Io(e) => match e.raw_os_error() {
             // OSError(errno, strerror, filename) becomes FileNotFoundError etc.
-            Some(code) => PyOSError::new_err((code, e.to_string(), path.to_path_buf())),
+            Some(code) => {
+                let msg = e.to_string();
+                // io::Error's Display appends " (os error N)": Python shows the errno itself.
+                let strerror = msg
+                    .strip_suffix(&format!(" (os error {code})"))
+                    .unwrap_or(&msg)
+                    .to_owned();
+                PyOSError::new_err((code, strerror, shown.to_string()))
+            }
             None => PyOSError::new_err(format!("{shown}: {e}")),
         },
         other => match model_error_type(py) {
@@ -135,6 +143,16 @@ fn surrogate_as_type_error(py: Python<'_>, err: PyErr) -> PyErr {
          (fastText raises TypeError for it too); remove or replace it first, e.g. \
          s.encode('utf-8', 'replace').decode('utf-8')",
     );
+    // Keep the note that names the offending item of a batch.
+    if let Ok(notes) = err.value(py).getattr(pyo3::intern!(py, "__notes__"))
+        && let Ok(notes) = notes.cast::<PyList>()
+    {
+        for note in notes.iter() {
+            if let Ok(note) = note.extract::<String>() {
+                let _ = te.add_note(py, note);
+            }
+        }
+    }
     te.set_cause(py, Some(err));
     te
 }

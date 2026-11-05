@@ -129,9 +129,14 @@ pub struct Model {
 impl Model {
     /// Load a `.bin` or `.ftz` model from a file.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, LoadError> {
-        let file = File::open(path).map_err(LoadError::Io)?;
-        let len = file.metadata().map_err(LoadError::Io)?.len();
-        Self::read(file, len)
+        let mut file = File::open(path).map_err(LoadError::Io)?;
+        let meta = file.metadata().map_err(LoadError::Io)?;
+        if meta.is_dir() {
+            // Let the OS say why (EISDIR), whatever size it reports for a directory.
+            let mut probe = [0u8; 1];
+            std::io::Read::read(&mut file, &mut probe).map_err(LoadError::Io)?;
+        }
+        Self::read(file, meta.len())
     }
 
     /// Load a model from bytes in memory.
@@ -168,8 +173,8 @@ impl Model {
         let input = Matrix::load(&mut r, quant_input, "input matrix")?;
         if !quant_input && dict.is_pruned() {
             return Err(LoadError::Invalid(
-                "Invalid model file. Please download the updated model from www.fasttext.cc. \
-                 See issue #332 on Github for more information."
+                "Invalid model file.\nPlease download the updated model from www.fasttext.cc.\n\
+                 See issue #332 on Github for more information.\n"
                     .to_owned(),
             ));
         }
