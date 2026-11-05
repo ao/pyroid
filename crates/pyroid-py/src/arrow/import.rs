@@ -12,7 +12,8 @@
 //! any row is read: struct shape, null counts, non-null buffers, non-negative
 //! and non-decreasing offsets, and in-bounds views (view buffers *do* carry
 //! their sizes). UTF-8 is not trusted: each row is validated with
-//! `str::from_utf8` when it is read, inside the parallel kernel.
+//! `simdutf8` (falling back to `str::from_utf8` for the error) when it is
+//! read, inside the parallel kernel.
 
 use std::ffi::{CStr, c_char, c_int};
 use std::{ptr, slice};
@@ -464,7 +465,12 @@ impl StrChunk {
 
     /// Row `i`: `None` if null, else its text (or why it isn't valid UTF-8).
     pub fn get(&self, i: usize) -> Option<Result<&str, std::str::Utf8Error>> {
-        self.is_valid(i).then(|| std::str::from_utf8(self.raw(i)))
+        self.is_valid(i).then(|| {
+            let raw = self.raw(i);
+            // Fast SIMD check; on failure re-run std's (also a validator) for
+            // the error position. Either way only validated bytes become &str.
+            simdutf8::basic::from_utf8(raw).or_else(|_| std::str::from_utf8(raw))
+        })
     }
 
     /// The raw bytes of a non-null row (for error messages).

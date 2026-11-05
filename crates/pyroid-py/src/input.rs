@@ -99,12 +99,14 @@ impl<'a, 'py> FromPyObject<'a, 'py> for TextInput {
         if let Some(strings) = arrow::import(&obj)? {
             return Ok(Self::Arrow(strings));
         }
+        let hint = if obj.hasattr(pyo3::intern!(py, "__iter__"))? {
+            "; convert other iterables with list(...)"
+        } else {
+            ""
+        };
         Err(input_error(
             py,
-            format!(
-                "{EXPECTED}, got {}; convert other iterables with list(...)",
-                type_name(&obj)
-            ),
+            format!("{EXPECTED}, got {}{hint}", type_name(&obj)),
         ))
     }
 }

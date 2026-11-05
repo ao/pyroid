@@ -484,7 +484,9 @@ impl Column {
         item: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = cls.py();
-        py.import("types")?.getattr("GenericAlias")?.call1((cls, item))
+        py.import("types")?
+            .getattr("GenericAlias")?
+            .call1((cls, item))
     }
 
     fn __len__(&self) -> usize {

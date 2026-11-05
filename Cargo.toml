@@ -19,6 +19,7 @@ repository = "https://github.com/ao/pyroid"
 [workspace.dependencies]
 pyo3 = "0.30.1"
 rayon = "1.12.0"
+simdutf8 = "0.1.5"
 pyroid-core = { path = "crates/pyroid-core" }
 
 [workspace.lints.rust]
