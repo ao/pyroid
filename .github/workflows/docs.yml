@@ -34,8 +34,10 @@ jobs:
         run: |
           uv venv -p 3.13 .venv-docs
           uv pip install --python .venv-docs --group docs
-      - name: Compatibility page matches docs/data/parity.json
-        run: .venv-docs/bin/python docs/scripts/render_parity.py --check
+      - name: Generated tables match docs/data/ (parity.json, benchmarks.json)
+        run: |
+          .venv-docs/bin/python docs/scripts/render_parity.py --check
+          .venv-docs/bin/python docs/scripts/render_benchmarks.py --check
       - name: Build the site (Zensical, strict)
         run: .venv-docs/bin/zensical build --clean --strict
       - name: Check links, anchors and nav (mkdocs, strict)
