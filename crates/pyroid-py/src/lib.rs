@@ -11,6 +11,7 @@
 mod arrow;
 mod batch;
 mod errors;
+mod fasttext;
 mod ftfy;
 mod input;
 mod testing;
@@ -27,5 +28,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Product modules: one registration line each.
     text::register(m)?;
     ftfy::register(m)?;
+    fasttext::register(m)?;
     Ok(())
 }

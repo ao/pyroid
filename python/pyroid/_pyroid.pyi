@@ -12,6 +12,7 @@ __all__ = [
     "PyroidError",
     "__version__",
     "_testing",
+    "fasttext",
     "ftfy",
     "text",
 ]
@@ -21,6 +22,7 @@ __version__: Final[str]
 # Native submodules; their public faces are pyroid/<name>.py + .pyi.
 text: ModuleType
 ftfy: ModuleType
+fasttext: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):

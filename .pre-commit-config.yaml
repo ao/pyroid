@@ -64,7 +64,7 @@ repos:
       # third-party packages the tests import. Keep in step with [dependency-groups] test.
       - id: mypy
         name: mypy --strict
-        entry: uvx --with pytest --with packaging --with hypothesis --with pyarrow --with ftfy==6.3.1 mypy@2.4.1
+        entry: uvx --with pytest --with packaging --with hypothesis --with pyarrow --with ftfy==6.3.1 --with numpy mypy@2.4.1
         language: system
         files: \.pyi?$|^pyproject\.toml$
         pass_filenames: false
