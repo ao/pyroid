@@ -124,9 +124,6 @@ patch, and `!`/`BREAKING CHANGE` a major. Merge the release PR when you want to 
   `fix:` commit and ship the next patch release; don't move or reuse the tag.
 - **Never** publish from a laptop, and don't add an API token as a fallback.
 
-## 8. Docs site (GitHub Pages)" after section 7, plus one line in the intro list of
-     one-time setup ("Do the one-time setup (sections 1–4 and 8) once ..."). -->
-
 ## 8. Docs site (GitHub Pages)
 
 `.github/workflows/docs.yml` builds the site (`mkdocs.yml`, sources in `docs/`) on every PR and push, with
