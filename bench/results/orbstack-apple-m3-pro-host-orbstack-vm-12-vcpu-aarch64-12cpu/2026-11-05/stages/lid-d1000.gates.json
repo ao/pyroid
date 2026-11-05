@@ -1,0 +1,7 @@
+{
+ "datatrove 0.10.1 LanguageFilter(en, 0.65, ft176)": "{\"backend\":\"ft176\",\"docs\":1000,\"gate\":\"lid_filter\",\"impl\":\"LanguageFilter\",\"language_threshold\":0.65,\"languages\":[\"en\"],\"live\":0,\"mismatches\":0,\"pinned\":1000,\"seconds\":0.515,\"tol\":1e-06}",
+ "fasttext-predict 0.9.2.4 lid.176.bin k=1": "{\"docs\":1000,\"gate\":\"lid\",\"impl\":\"fasttext-predict lid.176.bin k=1\",\"k\":1,\"live\":0,\"max_abs_dp\":0.0,\"mismatches\":0,\"model\":\"lid.176.bin\",\"pinned\":1000,\"seconds\":0.173,\"tol\":1e-06}",
+ "fasttext-predict 0.9.2.4 lid.176.bin k=5": "{\"docs\":1000,\"gate\":\"lid\",\"impl\":\"fasttext-predict lid.176.bin k=5\",\"k\":5,\"live\":0,\"max_abs_dp\":0.0,\"mismatches\":0,\"model\":\"lid.176.bin\",\"pinned\":1000,\"seconds\":0.095,\"tol\":1e-06}",
+ "fasttext-predict 0.9.2.4 lid.176.ftz k=1": "{\"docs\":1000,\"gate\":\"lid\",\"impl\":\"fasttext-predict lid.176.ftz k=1\",\"k\":1,\"live\":0,\"max_abs_dp\":0.0,\"mismatches\":0,\"model\":\"lid.176.ftz\",\"pinned\":1000,\"seconds\":0.106,\"tol\":1e-06}",
+ "fasttext-predict 0.9.2.4 lid.176.ftz k=5": "{\"docs\":1000,\"gate\":\"lid\",\"impl\":\"fasttext-predict lid.176.ftz k=5\",\"k\":5,\"live\":0,\"max_abs_dp\":0.0,\"mismatches\":0,\"model\":\"lid.176.ftz\",\"pinned\":1000,\"seconds\":0.108,\"tol\":1e-06}"
+}

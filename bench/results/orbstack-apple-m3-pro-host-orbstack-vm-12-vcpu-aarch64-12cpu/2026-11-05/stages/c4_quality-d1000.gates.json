@@ -1,0 +1,3 @@
+{
+ "datatrove 0.10.1 C4QualityFilter()": "{\"case\":\"c4_quality\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"datatrove c4_quality\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":854,\"seconds\":2.663}"
+}
