@@ -1,0 +1,22 @@
+# typos (https://github.com/crate-ci/typos) configuration. Run: typos
+# typos never checks its own config candidates (Cargo.toml, pyproject.toml, typos.toml).
+# Only genuine false positives go in [default.extend-words] / [default.extend-identifiers].
+
+[files]
+# Check dotfiles too (.github/, .pre-commit-config.yaml), but not git's internals.
+ignore-hidden = false
+extend-exclude = [
+  ".git/",
+  # Generated.
+  "Cargo.lock",
+  # Test data and incumbent fixtures: mojibake, deliberately misspelt and non-English text.
+  "python/tests/data/",
+  "parity/",
+  "bench/data/",
+]
+
+[default.extend-words]
+
+[default.extend-identifiers]
+# The arro3 Arrow library (github.com/kylebarron/arro3), not a misspelt "arrow".
+arro3 = "arro3"

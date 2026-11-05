@@ -1,0 +1,10 @@
+# Clippy configuration, found by walking up from each crate's manifest dir to the workspace root.
+# Lint levels live in [workspace.lints.clippy] in Cargo.toml; this file only configures lints.
+
+# No Python callbacks from worker threads. Bindings receive a `py: Python<'_>` token from PyO3 and
+# release it with `py.detach(..)` around pure-Rust work; rayon closures must never re-attach.
+disallowed-methods = [
+  { path = "pyo3::marker::Python::attach", reason = "take a `py: Python<'_>` argument instead; worker closures must be pure Rust" },
+  { path = "pyo3::marker::Python::try_attach", reason = "take a `py: Python<'_>` argument instead; worker closures must be pure Rust" },
+  { path = "pyo3::marker::Python::attach_unchecked", reason = "take a `py: Python<'_>` argument instead; worker closures must be pure Rust" },
+]
