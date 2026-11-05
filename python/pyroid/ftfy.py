@@ -12,6 +12,7 @@ if ftfy is not installed.
 
 from __future__ import annotations
 
+import sys
 import unicodedata
 import warnings
 from collections.abc import Iterator
@@ -183,6 +184,18 @@ def _prepare(config: Any) -> Any:
 _WARNED: set[str] = set()
 
 
+def _caller_stacklevel() -> int:
+    """`stacklevel` that points `warnings.warn` (called by our caller) at the first frame outside this
+    module: the user's call, however many of our functions are in between (e.g. `fix_encoding` ->
+    `fix_encoding_and_explain` -> `_ftfy`). `skip_file_prefixes` would do this, but needs Python 3.12."""
+    frame = sys._getframe(1)  # the function that calls warnings.warn: stacklevel 1
+    level = 1
+    while frame.f_back is not None and frame.f_globals.get("__name__") == __name__:
+        frame = frame.f_back
+        level += 1
+    return level
+
+
 def _ftfy(name: str, reason: str) -> Any:
     """Import the real ftfy for `name`, warning once, or raise PyroidError."""
     try:
@@ -197,7 +210,7 @@ def _ftfy(name: str, reason: str) -> Any:
         warnings.warn(
             f"pyroid.ftfy is falling back to ftfy {real.__version__}, not {FTFY_VERSION}",
             RuntimeWarning,
-            stacklevel=4,
+            stacklevel=_caller_stacklevel(),
         )
     if f"{name}:{reason}" not in _WARNED:
         _WARNED.add(f"{name}:{reason}")
@@ -205,7 +218,7 @@ def _ftfy(name: str, reason: str) -> Any:
             f"pyroid.ftfy.{name}: {reason} is not supported by the Rust port; "
             "delegating to ftfy (slow path). This warning is shown once.",
             FallbackWarning,
-            stacklevel=4,
+            stacklevel=_caller_stacklevel(),
         )
     return real
 
