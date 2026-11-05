@@ -143,7 +143,7 @@ def params(out: Path) -> None:
         a = gen.randint(1, p, dtype=np.uint64, size=(1, n))
         b = gen.randint(0, p, dtype=np.uint64, size=(1, n))
         cases.append({"seed": seed, "n": n, "a": a[0].tolist(), "b": b[0].tolist()})
-    out.write_text(json.dumps(cases))
+    out.write_text(json.dumps(cases) + "\n")
 
 
 # Characters simplify_text treats specially, plus a sample of everything else.
@@ -354,14 +354,14 @@ def _header(uses_datatrove: bool, **extra: object) -> dict:
 
 
 DEFAULT_BITS = 0b0011111
-# typos reads "iy" as a misspelt "it"; random texts that contain it as a word are left out.
+# The typos linter reads one random two-letter word as a misspelling: leave such texts out.
 TYPOS_FLAGGED = re.compile(r"(?<![A-Za-z])[Ii][Yy](?![A-Za-z])")
 
 
 def simplify(out: Path, n: int, seed: int) -> None:
     """A header line, then one `{"text", "out": {config bit mask: output}}` line per text: every
     32nd text under all 128 configs, the others under the default, everything on, one flag on its
-    own (in turn) and a random config. Texts the typos linter would flag (a lone "iy" word) are
+    own (in turn) and a random config. Texts the typos linter would flag (TYPOS_FLAGGED) are
     skipped, after drawing their configs, so the other lines do not change."""
     config, simplify_text, uses_dt = _simplifiers(vendored=False)
     rng = random.Random(seed)
