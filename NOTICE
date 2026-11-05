@@ -60,6 +60,16 @@ Each ported file carries the header "Derived from datatrove 0.10.1
 (Apache-2.0), © HuggingFace; modified." datatrove's punctuation tables were
 extracted from datatrove itself by crates/pyroid-core/src/filters/generate_tables.py.
 
+The MinHash deduplication port (crates/pyroid-core/src/dedup/,
+crates/pyroid-core/tests/dedup_data/, crates/pyroid-py/src/dedup.rs,
+python/pyroid/dedup.py and python/pyroid/dedup.pyi) is a derivative work of
+datatrove 0.10.1 (MinhashDedupSignature, MinhashDedupBuckets,
+MinhashDedupCluster, MinhashDedupFilter and simplify_text), under the same
+Apache-2.0 licence. Each ported file carries the header "Derived from
+datatrove 0.10.1 (Apache-2.0), © HuggingFace Inc.; modified." The permutation
+parameters reproduce numpy's legacy RandomState (MT19937 and masked bounded
+integers; numpy is BSD-3-Clause); no numpy code is included.
+
 -------------------------------------------------------------------------------
 spaCy
 -------------------------------------------------------------------------------

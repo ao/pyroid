@@ -12,6 +12,7 @@ __all__ = [
     "PyroidError",
     "__version__",
     "_testing",
+    "dedup",
     "fasttext",
     "filters",
     "ftfy",
@@ -25,6 +26,7 @@ text: ModuleType
 ftfy: ModuleType
 fasttext: ModuleType
 filters: ModuleType
+dedup: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):
