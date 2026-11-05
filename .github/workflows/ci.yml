@@ -293,22 +293,15 @@ jobs:
         with:
           enable-cache: false
       # bench/ and parity/ each pin their interpreter in .python-version (3.13: the oracle env).
-      - name: Fetch the pinned inputs (bench/fetch.py)
+      - name: Fetch and verify the pinned inputs (bench/fetch.py)
         if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          log="$RUNNER_TEMP/fetch.log"
-          # fetch.py ends by verifying every file in the manifest, including the parity/ files that the next
-          # step generates, so on a cold cache it exits 1. Fail here only if an input is bad or missing.
-          uv run --project bench --frozen --no-default-groups python bench/fetch.py 2>&1 | tee "$log" || true
-          grep -q ' MB pinned ' "$log"
-          if grep '^BAD' "$log" | grep -v ' parity/'; then exit 1; fi
-      - name: Regenerate the references (python -m pyroid_parity.refs all)
+        run: uv run --project bench --frozen --no-default-groups python bench/fetch.py
+      - name: Regenerate and verify the references (python -m pyroid_parity.refs all)
         if: steps.cache.outputs.cache-hit != 'true'
         run: uv run --project parity --frozen python -m pyroid_parity.refs all
-      - name: Verify every file against bench/manifest.json
+      - name: Verify every pinned file before caching (bench/fetch.py --verify-all)
         if: steps.cache.outputs.cache-hit != 'true'
-        run: uv run --project bench --frozen --no-default-groups python bench/fetch.py --verify
+        run: uv run --project bench --frozen --no-default-groups python bench/fetch.py --verify-all
       - name: Save the parity data cache
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
