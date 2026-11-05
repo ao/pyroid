@@ -23,13 +23,18 @@ re-exported from `__init__.py`/`_pyroid.pyi`; ask the core owner first.
 
 ```python
 import pyarrow as pa, pyroid.text as t
-t.normalize_whitespace("  a \t b ")            # 'a b'                 str  -> str
-t.normalize_whitespace(["a  b", "ok"])          # ['a b', 'ok']         list -> list ('ok' is the same object)
-t.min_chars(("abc", "x"), 2)                    # (True, False)         tuple -> tuple
-col = t.normalize_whitespace(pa.array(["a  b", None]))   # pyroid.Column<string>
-pa.chunked_array(col); pa.array(col); polars.Series(col)  # zero-copy into any Arrow library
-t.min_chars(pa.chunked_array([["abc"], [None]]), 2).to_pylist()   # [True, None]
-t.normalize_whitespace(docs, threads=4)         # at most 4 tasks at once on the shared pool
+
+t.normalize_whitespace("  a \t b ")  # 'a b'                 str  -> str
+t.normalize_whitespace(
+    ["a  b", "ok"]
+)  # ['a b', 'ok']         list -> list ('ok' is the same object)
+t.min_chars(("abc", "x"), 2)  # (True, False)         tuple -> tuple
+col = t.normalize_whitespace(pa.array(["a  b", None]))  # pyroid.Column<string>
+pa.chunked_array(col)
+pa.array(col)
+polars.Series(col)  # zero-copy into any Arrow library
+t.min_chars(pa.chunked_array([["abc"], [None]]), 2).to_pylist()  # [True, None]
+t.normalize_whitespace(docs, threads=4)  # at most 4 tasks at once on the shared pool
 ```
 
 - **Input** (`TextInput`): `str`; `list[str]`/`tuple[str, ...]`; or any object with
