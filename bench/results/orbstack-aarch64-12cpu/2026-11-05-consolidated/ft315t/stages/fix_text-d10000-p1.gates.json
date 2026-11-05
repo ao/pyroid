@@ -1,0 +1,4 @@
+{
+ "pyroid.ftfy 1.0.0.dev0 fix_text_batch [3.15t, pool 1]": "{\"docs\":10000,\"gate\":\"ftfy\",\"impl\":\"pyroid.ftfy fix_text_batch\",\"live\":0,\"mismatches\":0,\"pinned\":10000,\"seconds\":0.394}",
+ "pyroid.ftfy 1.0.0.dev0 fix_text_batch [arrow] [3.15t, pool 1]": "{\"docs\":10000,\"gate\":\"ftfy\",\"impl\":\"pyroid.ftfy fix_text_batch [arrow]\",\"live\":0,\"mismatches\":0,\"pinned\":10000,\"seconds\":0.095}"
+}

@@ -30,6 +30,29 @@ use crate::input::{TextInput, Threads, threads};
 /// detach/re-attach round trip would cost more than it frees.
 pub const SINGLE_DOC_DETACH_BYTES: usize = 4096;
 
+/// What one document costs a kernel, which decides whether a single `str` is
+/// processed detached (see [`detach_one`]). Batches always detach.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DocCost {
+    /// A few µs per document (ftfy, translit, text): only long documents
+    /// detach. With the GIL, detaching every call costs more than it frees:
+    /// 8 Python threads calling `fix_text` / `anyascii` per doc ran 32-35%
+    /// slower on 3.12 when every call detached.
+    Light,
+    /// ~100 µs per document or more (fastText, filters, MinHash): with the
+    /// GIL every call detaches, so other Python threads run meanwhile (8
+    /// threads calling per doc ran 1.4-2.9x faster on 3.12). Without the GIL
+    /// nothing waits for it, so it behaves as `Light` (detaching every call
+    /// measured up to 32% slower at 8 threads on 3.15t).
+    Heavy,
+}
+
+/// Process one `str` of `len` bytes detached?
+pub fn detach_one(py: Python<'_>, len: usize, cost: DocCost) -> bool {
+    len >= SINGLE_DOC_DETACH_BYTES
+        || (cost == DocCost::Heavy && crate::input::gil_enabled(py).unwrap_or(true))
+}
+
 /// Why a batch failed inside the detached region.
 #[derive(Debug)]
 pub enum BatchError {
@@ -238,6 +261,67 @@ where
     }
 }
 
+/// Number of documents in `input` (a str is one; Arrow nulls count).
+pub fn doc_count(input: &TextInput) -> usize {
+    match input {
+        TextInput::Str(_) => 1,
+        TextInput::List(d) | TextInput::Tuple(d) => d.len(),
+        TextInput::Arrow(strings) => strings.len(),
+    }
+}
+
+/// `f(doc, row)` for every document, in parallel per `threads`, writing each
+/// document's fixed-size result in place: `out` holds one `row_len`-value row
+/// per document, in input order ([`doc_count`] rows). Returns `f`'s value
+/// per document; Arrow nulls give `None` and leave their row untouched.
+///
+/// Pure Rust: call it while detached (e.g. inside `py.detach` holding a lock
+/// on the destination).
+pub fn fill_rows<T, R, F>(
+    input: &TextInput,
+    threads_arg: Option<Threads>,
+    out: &mut [T],
+    row_len: usize,
+    f: F,
+) -> Result<Vec<Option<R>>, BatchError>
+where
+    T: Send,
+    R: Send,
+    F: Fn(&str, &mut [T]) -> R + Sync,
+{
+    let threads = threads(threads_arg);
+    match input {
+        TextInput::Str(s) => Ok(vec![Some(f(s, out))]),
+        TextInput::List(docs) | TextInput::Tuple(docs) => {
+            par::try_map_rows(out, row_len, threads, |i, row| Ok(Some(f(&docs[i], row))))
+        }
+        TextInput::Arrow(strings) => {
+            let mut res = Vec::with_capacity(strings.len());
+            let mut rest = out;
+            for (c, chunk) in strings.chunks.iter().enumerate() {
+                let (rows, tail) = rest.split_at_mut(chunk.len() * row_len);
+                rest = tail;
+                res.extend(par::try_map_rows(
+                    rows,
+                    row_len,
+                    threads,
+                    |i, row| match chunk.get(i) {
+                        None => Ok(None),
+                        Some(Ok(s)) => Ok(Some(f(s, row))),
+                        Some(Err(err)) => Err(BatchError::BadUtf8 {
+                            chunk: c,
+                            row: i,
+                            bytes: chunk.bytes(i).unwrap_or_default().to_vec(),
+                            err,
+                        }),
+                    },
+                )?);
+            }
+            Ok(res)
+        }
+    }
+}
+
 /// Apply `f` to every document, detached and in parallel; one entry per
 /// document in input order (`None` for Arrow nulls). For product functions
 /// whose output is not a str or bool per document (scores, hashes, labels).
@@ -251,12 +335,28 @@ where
     R: Send,
     F: Fn(&str) -> R + Sync,
 {
+    map_values_cost(py, input, threads_arg, DocCost::Light, f)
+}
+
+/// [`map_values`] for a kernel of the given [`DocCost`] (it only matters for
+/// a single `str`).
+pub fn map_values_cost<R, F>(
+    py: Python<'_>,
+    input: &TextInput,
+    threads_arg: Option<Threads>,
+    cost: DocCost,
+    f: F,
+) -> PyResult<Vec<Option<R>>>
+where
+    R: Send,
+    F: Fn(&str) -> R + Sync,
+{
     let threads = threads(threads_arg);
     let result = match input {
-        TextInput::Str(s) => Ok(vec![Some(if s.len() < SINGLE_DOC_DETACH_BYTES {
-            f(s)
-        } else {
+        TextInput::Str(s) => Ok(vec![Some(if detach_one(py, s.len(), cost) {
             py.detach(|| f(s))
+        } else {
+            f(s)
         })]),
         TextInput::List(docs) | TextInput::Tuple(docs) => py
             .detach(|| par::map(docs.len(), threads, |i| Some(f(&docs[i]))))

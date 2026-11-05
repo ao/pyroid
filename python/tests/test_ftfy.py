@@ -224,6 +224,9 @@ def test_delegation_warns_with_fallback_warning(monkeypatch: pytest.MonkeyPatch,
         assert [w.category for w in caught] == expected, [str(w.message) for w in caught]
         if expected:
             assert "delegating to ftfy (slow path)" in str(caught[0].message)
+            # Attributed to the caller's line (the lambda), also through fix_encoding's extra frame.
+            where = (caught[0].filename, caught[0].lineno)
+            assert where == (call.__code__.co_filename, call.__code__.co_firstlineno)
 
 
 @pytest.mark.thread_unsafe(reason="global one-time-warning state")

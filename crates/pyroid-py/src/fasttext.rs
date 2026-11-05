@@ -23,7 +23,7 @@ use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBytes, PyDict, PyList, PyString, PyTuple, PyType};
 use pyroid_core::fasttext::{self as ft, LoadError, PredictError, Prediction};
 
-use crate::batch::map_values;
+use crate::batch::{DocCost, map_values, map_values_cost};
 use crate::errors::{PyroidError, with_note};
 use crate::input::{TextInput, Threads};
 
@@ -189,8 +189,12 @@ fn newline_error(obj: &Bound<'_, PyAny>, msg: &'static str) -> Option<PyErr> {
 /// The documents of a `predict`-like call. fastText's Python layer looks for
 /// `"\n"` in every line before the C++ conversion rejects a lone surrogate,
 /// so a newline anywhere wins over a surrogate anywhere.
-fn text_input(obj: &Bound<'_, PyAny>, newline_msg: &'static str) -> PyResult<TextInput> {
-    obj.extract::<TextInput>().map_err(|e| {
+fn text_input(
+    obj: &Bound<'_, PyAny>,
+    newline_msg: &'static str,
+    threads: Option<Threads>,
+) -> PyResult<TextInput> {
+    TextInput::extract_with(obj, threads).map_err(|e| {
         let py = obj.py();
         if e.is_instance_of::<PyUnicodeEncodeError>(py)
             && let Some(nl) = newline_error(obj, newline_msg)
@@ -352,7 +356,7 @@ impl Model {
         threads: Option<Threads>,
     ) -> PyResult<Bound<'py, PyTuple>> {
         require_numpy(py)?;
-        let input = text_input(text, PREDICT_NEWLINE)?;
+        let input = text_input(text, PREDICT_NEWLINE, threads)?;
         // fastText's k is a C int: pybind11 rejects anything else with TypeError.
         let k = i32::try_from(k).map_err(|_| {
             // The Python layer's newline check runs before pybind11 converts k.
@@ -363,7 +367,7 @@ impl Model {
             })
         })?;
         let model = &self.inner;
-        let results = map_values(py, &input, threads, |s| {
+        let results = map_values_cost(py, &input, threads, DocCost::Heavy, |s| {
             model.predict(s, i64::from(k), threshold)
         })?;
         check(py, &input, &results)?;
@@ -409,9 +413,11 @@ impl Model {
         threads: Option<Threads>,
     ) -> PyResult<Bound<'py, PyAny>> {
         require_numpy(py)?;
-        let input = text_input(text, PREDICT_NEWLINE)?;
+        let input = text_input(text, PREDICT_NEWLINE, threads)?;
         let model = &self.inner;
-        let results = map_values(py, &input, threads, |s| model.sentence_vector(s))?;
+        let results = map_values_cost(py, &input, threads, DocCost::Heavy, |s| {
+            model.sentence_vector(s)
+        })?;
         check(py, &input, &results)?;
         let dim = model.dim();
         if matches!(input, TextInput::Str(_)) {
@@ -532,7 +538,7 @@ impl Model {
         on_unicode_error: &str,
     ) -> PyResult<Bound<'py, PyTuple>> {
         let _ = on_unicode_error; // tokens of a str are valid UTF-8
-        let input = text_input(text, GET_LINE_NEWLINE)?;
+        let input = text_input(text, GET_LINE_NEWLINE, None)?;
         let model = &self.inner;
         let results = map_values(
             py,

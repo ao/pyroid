@@ -1,0 +1,5 @@
+{
+ "datatrove 0.10.1 C4QualityFilter(filter_no_terminal_punct=False)": "{\"case\":\"c4_quality@fineweb\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"datatrove c4_quality@fineweb\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":999,\"seconds\":2.292}",
+ "pyroid.filters 1.0.0.dev0 apply([C4Quality]) direct": "{\"case\":\"c4_quality@fineweb\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters direct\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":999,\"seconds\":0.088}",
+ "pyroid.filters 1.0.0.dev0 c4_quality": "{\"case\":\"c4_quality@fineweb\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters c4_quality\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":999,\"seconds\":0.094}"
+}

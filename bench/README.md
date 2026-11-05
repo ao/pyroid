@@ -65,6 +65,26 @@ Each command takes `--impl SUITE=MODULE`, resolved through `pyroid_parity.impl`,
 - `run_baselines.sh` reads `BENCH_IMPL="ftfy=pyroid.ftfy fasttext=pyroid.fasttext"`.
 
 Thread scaling: pass `BENCH_THREADS` / `RAYON_NUM_THREADS`; workers inherit them.
+- **CPU pinning.** pyperf pins its workers to the kernel's isolated CPUs when there are any; the OrbStack VM
+  isolates CPU 11, which would run every thread of a multi-thread row on one core. `stages.py` therefore passes
+  `--affinity=$BENCH_CPUS` (default `0-7`, the e2e set) whenever a row uses more than one thread.
+- **Candidate rows per stage** (all gated): the parity-contract row; `[arrow]` (input as a pyarrow `string`
+  array, built untimed); LID `batch` (`predict(list)`); `direct` (the module's own batch API, no adapter in the
+  timed region); `MinHashDedup.fit`; `per doc` (the single-str call in a Python loop over `BENCH_THREADS`
+  contiguous chunks). `translit` is a stages-only stage (anyascii 0.3.3 is its incumbent and live oracle).
+- `BENCH_FRESH_STRS=1` gives every timed call new str objects (built untimed): CPython caches a non-ASCII str's
+  UTF-8 on first use, so by default every call after the first sees warm caches.
+- `BENCH_ROW_SUFFIX=" [3.15t, pool 8]"` is appended to candidate row names, so runs can share a chart.
+- `--rows a,b,!c` keeps rows containing `a` or `b` and drops rows containing `c`.
+
+## Performance work (P4)
+
+| tool | what |
+|---|---|
+| `perf_matrix.py run/table/compare` | candidate-only A/B: every module's rows at pool sizes 1 and 8 (`--per-doc`: Python threads), gated first; `compare A B` flags changes of 5% or more |
+| `chain.py` | the FineWeb chain natively in pyroid, one process, Arrow in, `threads=N`; `--digest --expect D` gates it on `pipeline.py`'s per-doc digest of the datatrove chain |
+| `pgo_train.py`, `pgo_build.sh` | profile-guided release wheels: training on headline[10000:20000] (never the benchmarked dev slice), then `-Cprofile-use` |
+| `run_consolidated.sh`, `consolidate.py` | the consolidated benchmark: `run_baselines.sh` with all five pyroid modules on 3.13, pyroid on 3.15t at pools 1 and 8, `chain.py` under hyperfine, then `CONSOLIDATED.md`, `consolidated.json` (docs' benchmarks.json row schema) and light/dark charts |
 
 ## Inputs (pinned in `manifest.json`, fetched by `fetch.py` into `/data`, ≤ 1.5 GB total; currently 324 MB)
 

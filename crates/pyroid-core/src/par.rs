@@ -3,7 +3,12 @@
 //!
 //! Rules that keep this deadlock-free (see A1 §5 C4):
 //! - Closures passed here are pure Rust. They never call into Python; the
-//!   bindings run them while detached from the interpreter.
+//!   bindings run them while detached from the interpreter. One documented
+//!   exception: argument extraction on free-threaded builds
+//!   (`pyroid-py/src/input.rs`, `backed_range`) attaches pool workers briefly.
+//! - So the bindings must never wait for the pool while attached: a
+//!   stop-the-world request would then block the workers' attach while the
+//!   waiting thread never reaches a safe point (a deadlock, not just latency).
 //! - Work below [`MIN_DOCS_PER_TASK`] documents, or with `threads = 1`, runs
 //!   on the calling thread and never touches the pool.
 //! - The pool is built on first use, not at import, and rebuilt in a forked
@@ -125,6 +130,34 @@ pub fn pool_size() -> Result<usize, PoolError> {
     Ok(pool()?.current_num_threads())
 }
 
+/// How many tasks a batch may run at once: the pool size, capped by
+/// `threads` (builds the pool if needed).
+pub fn max_tasks(threads: Threads) -> Result<usize, PoolError> {
+    let size = pool_size()?;
+    Ok(match threads {
+        Threads::Auto => size,
+        Threads::Max(n) => n.get().min(size),
+    })
+}
+
+/// `f(task)` for every element of `tasks`, each one rayon job on the shared
+/// pool, results in order. For a few coarse tasks the caller has already
+/// sized (e.g. [`max_tasks`] ranges of balanced work); with one task, or
+/// `threads = 1`, they run on the calling thread. Make at most
+/// `max_tasks(threads)` tasks: rayon cannot cap how many run at once.
+pub fn map_tasks<T, R, F>(tasks: &[T], threads: Threads, f: F) -> Result<Vec<R>, PoolError>
+where
+    T: Sync,
+    R: Send,
+    F: Fn(&T) -> R + Sync + Send,
+{
+    if tasks.len() <= 1 || threads == Threads::ONE {
+        return Ok(tasks.iter().map(f).collect());
+    }
+    let pool = pool()?;
+    Ok(pool.install(|| tasks.par_iter().with_max_len(1).map(f).collect()))
+}
+
 /// `None`: run serially on the calling thread. `Some(m)`: run on the pool with
 /// tasks of at least `m` items.
 fn plan(len: usize, threads: Threads) -> Option<usize> {
@@ -171,6 +204,48 @@ where
     F: Fn(usize) -> R + Sync + Send,
 {
     try_map(len, threads, |i| Ok::<R, PoolError>(f(i)))
+}
+
+/// `f(i, row_i)` for every `row_len`-element row of `out`, in order, in
+/// parallel per `threads`: each document writes its result in place (no
+/// per-document allocation, no copy afterwards). Errors as in [`try_map`].
+///
+/// # Panics
+/// If `row_len` is 0 or does not divide `out.len()`.
+pub fn try_map_rows<T, R, E, F>(
+    out: &mut [T],
+    row_len: usize,
+    threads: Threads,
+    f: F,
+) -> Result<Vec<R>, E>
+where
+    T: Send,
+    R: Send,
+    E: Send + From<PoolError>,
+    F: Fn(usize, &mut [T]) -> Result<R, E> + Sync + Send,
+{
+    assert!(
+        row_len > 0 && out.len() % row_len == 0,
+        "rows of {row_len} over {} values",
+        out.len()
+    );
+    match plan(out.len() / row_len, threads) {
+        None => out
+            .chunks_mut(row_len)
+            .enumerate()
+            .map(|(i, row)| f(i, row))
+            .collect(),
+        Some(min_len) => {
+            let pool = pool()?;
+            pool.install(|| {
+                out.par_chunks_mut(row_len)
+                    .with_min_len(min_len)
+                    .enumerate()
+                    .map(|(i, row)| f(i, row))
+                    .collect()
+            })
+        }
+    }
 }
 
 /// Run `f` on every element of `items` (consuming them), in parallel per
@@ -271,6 +346,32 @@ mod tests {
     }
 
     #[test]
+    fn try_map_rows_writes_in_place_in_order() {
+        for t in [Threads::Auto, Threads::ONE, n(3)] {
+            let mut out = vec![0_u64; 3 * 5_000];
+            let r: Result<Vec<usize>, PoolError> = try_map_rows(&mut out, 3, t, |i, row| {
+                row.fill(i as u64);
+                Ok(i)
+            });
+            assert_eq!(r.unwrap(), (0..5_000).collect::<Vec<_>>(), "{t:?}");
+            assert!(
+                out.chunks(3)
+                    .enumerate()
+                    .all(|(i, row)| row == [i as u64; 3])
+            );
+        }
+        let mut out = vec![0_u8; 4 * 1_000];
+        let r: Result<Vec<()>, PoolError> = try_map_rows(&mut out, 4, Threads::Auto, |i, _| {
+            if i == 777 {
+                Err(PoolError("row 777".into()))
+            } else {
+                Ok(())
+            }
+        });
+        assert_eq!(r.unwrap_err().to_string(), "row 777");
+    }
+
+    #[test]
     fn for_each_visits_everything() {
         let sum = AtomicUsize::new(0);
         let items: Vec<usize> = (1..=100).collect();
@@ -279,6 +380,24 @@ mod tests {
         })
         .unwrap();
         assert_eq!(sum.load(Ordering::Relaxed), 5_050);
+    }
+
+    #[test]
+    fn map_tasks_in_order() {
+        let tasks: Vec<std::ops::Range<usize>> = (0..7).map(|i| i * 10..i * 10 + 10).collect();
+        for t in [Threads::Auto, Threads::ONE, n(3)] {
+            let sums = map_tasks(&tasks, t, |r| r.clone().sum::<usize>()).unwrap();
+            assert_eq!(
+                sums,
+                (0..7)
+                    .map(|i| (i * 10..i * 10 + 10).sum())
+                    .collect::<Vec<usize>>()
+            );
+        }
+        assert!(
+            max_tasks(n(1)).unwrap() == 1
+                && max_tasks(Threads::Auto).unwrap() == pool_size().unwrap()
+        );
     }
 
     #[test]
