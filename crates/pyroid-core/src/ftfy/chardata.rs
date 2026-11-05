@@ -101,10 +101,14 @@ fn in_ranges(table: &[(u32, u32)], cp: u32) -> bool {
 /// Python `re`'s `\s` for `str` patterns (the same in every supported version).
 #[inline]
 pub(crate) fn is_space(cp: u32) -> bool {
-    if cp < 0x80 {
-        return matches!(cp, 0x09..=0x0D | 0x1C..=0x20);
-    }
-    in_ranges(&ut::SPACE, cp)
+    // The same set as `unicode_tables::SPACE`, spelled out for speed.
+    let hit = matches!(
+        cp,
+        0x09..=0x0D | 0x1C..=0x20 | 0x85 | 0xA0 | 0x1680 | 0x2000..=0x200A | 0x2028 | 0x2029
+            | 0x202F | 0x205F | 0x3000
+    );
+    debug_assert_eq!(hit, in_ranges(&ut::SPACE, cp));
+    hit
 }
 
 /// Python `re`'s `\w` for `str` patterns, in the given Unicode version.
@@ -224,6 +228,13 @@ mod tests {
         assert!(!ascii);
         assert_ne!(m & 1, 0);
         assert_eq!(possible_encodings("\u{4e2d}".as_bytes()).1, 0);
+    }
+
+    #[test]
+    fn space_matches_table() {
+        for cp in 0..0x11_0000 {
+            assert_eq!(is_space(cp), in_ranges(&ut::SPACE, cp), "{cp:#x}");
+        }
     }
 
     #[test]

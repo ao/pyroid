@@ -77,7 +77,7 @@ static ASCII: [u32; 128] = {
 };
 
 #[inline]
-fn nfc_active(cp: u32) -> bool {
+pub(crate) fn nfc_active(cp: u32) -> bool {
     if cp < 0x10000 {
         NFC_ACTIVE_BMP[(cp >> 6) as usize] & (1 << (cp & 63)) != 0
     } else {
@@ -90,7 +90,7 @@ fn nfc_active(cp: u32) -> bool {
 }
 
 #[inline]
-fn non_ascii_bits(cp: u32) -> u32 {
+fn non_ascii_bits(cp: u32, clue: u8) -> u32 {
     let fixed = match cp {
         0x85 => C1 | LINE_BREAK,
         0x80..=0x9F => C1,
@@ -102,15 +102,29 @@ fn non_ascii_bits(cp: u32) -> u32 {
         0xD800..=0xDFFF => SURROGATE,
         _ => 0,
     };
-    let clue = class_of(cp).clue & (CLUE_FIRST2 | CLUE_FIRST3 | CLUE_FIRST4) != 0;
+    let clue = clue & (CLUE_FIRST2 | CLUE_FIRST3 | CLUE_FIRST4) != 0;
     fixed
         | NON_ASCII
         | if clue { UTF8_CLUE } else { 0 }
         | if nfc_active(cp) { NFC_ACTIVE } else { 0 }
 }
 
+/// `(feature bits, encodings)` for every two-byte character U+0080..U+07FF.
+fn two_byte_table() -> &'static [(u32, u16)] {
+    static TABLE: std::sync::OnceLock<Vec<(u32, u16)>> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        (0x80..0x800)
+            .map(|cp| {
+                let class = class_of(cp);
+                (non_ascii_bits(cp, class.clue), class.enc)
+            })
+            .collect()
+    })
+}
+
 /// Scan `text` once.
 pub(crate) fn scan(text: &[u8]) -> Features {
+    let two = two_byte_table();
     let mut bits = 0;
     let mut encodings = ALL_ENCODINGS;
     let mut i = 0;
@@ -132,9 +146,26 @@ pub(crate) fn scan(text: &[u8]) -> Features {
             }
             continue;
         }
+        if b < 0xE0 {
+            let cp = (u32::from(b & 0x1F) << 6) | u32::from(text[i + 1] & 0x3F);
+            let (f, e) = two[(cp - 0x80) as usize];
+            bits |= f;
+            encodings &= e;
+            i += 2;
+            continue;
+        }
         let (cp, n) = decode_at(text, i);
-        bits |= non_ascii_bits(cp);
-        encodings &= class_of(cp).enc;
+        if (0x3400..0xA000).contains(&cp) || (0xAC00..0xD7A4).contains(&cp) {
+            // CJK ideographs and Hangul syllables: no fixer acts on them and
+            // no charmap encodes them (checked by a unit test).
+            bits |= NON_ASCII | if nfc_active(cp) { NFC_ACTIVE } else { 0 };
+            encodings = 0;
+            i += n;
+            continue;
+        }
+        let class = class_of(cp);
+        bits |= non_ascii_bits(cp, class.clue);
+        encodings &= class.enc;
         i += n;
     }
     Features { bits, encodings }
@@ -160,6 +191,16 @@ pub(crate) fn is_quiet_ascii(text: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cjk_fast_path_is_exact() {
+        for cp in (0x3400..0xA000).chain(0xAC00..0xD7A4) {
+            let class = class_of(cp);
+            let nfc = if nfc_active(cp) { NFC_ACTIVE } else { 0 };
+            assert_eq!(non_ascii_bits(cp, class.clue), NON_ASCII | nfc, "{cp:#x}");
+            assert_eq!(class.enc, 0, "{cp:#x}");
+        }
+    }
 
     #[test]
     fn features() {

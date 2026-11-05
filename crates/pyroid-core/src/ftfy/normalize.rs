@@ -13,7 +13,8 @@ use unicode_normalization::{
 };
 
 use super::chardata::is_assigned;
-use super::text::{decode_at, has_surrogates};
+use super::features::nfc_active;
+use super::text::{decode_at, has_surrogates, skip_ascii};
 use super::{Normalization, UnicodeVersion};
 
 fn quick(s: &str, form: Normalization) -> IsNormalized {
@@ -41,14 +42,82 @@ fn normalize_run(s: &str, form: Normalization, out: &mut Vec<u8>) {
     out.extend_from_slice(tmp.as_bytes());
 }
 
+/// Whether `cp` can make NFC change text in version `v`.
+#[inline]
+fn active_in(cp: u32, v: UnicodeVersion) -> bool {
+    // The bitmap is for the newest version, where it only marks assigned
+    // characters; in older versions, characters added later are inert.
+    nfc_active(cp) && (v == UnicodeVersion::LATEST || is_assigned(cp, v))
+}
+
+/// NFC, region by region.
+///
+/// NFC never changes text across a character that has combining class 0,
+/// is not a decomposition's second half and is NFC on its own (an *inert*
+/// character): nothing before it can compose with anything after it. So only
+/// the short regions from the last inert character before an NFC-active one
+/// up to the next inert character need the full algorithm.
+fn nfc(text: &[u8], v: UnicodeVersion) -> Option<Vec<u8>> {
+    let mut out: Option<Vec<u8>> = None;
+    let mut copied = 0;
+    // Start of the last inert character seen (a region boundary).
+    let mut boundary = 0;
+    let mut i = 0;
+    while i < text.len() {
+        if text[i] < 0x80 {
+            let next = skip_ascii(text, i, 0x80);
+            boundary = next - 1;
+            i = next;
+            continue;
+        }
+        let (cp, n) = decode_at(text, i);
+        if !active_in(cp, v) {
+            boundary = i;
+            i += n;
+            continue;
+        }
+        let mut end = i + n;
+        while end < text.len() {
+            let (c, m) = decode_at(text, end);
+            if !active_in(c, v) {
+                break;
+            }
+            end += m;
+        }
+        // A boundary that cannot compose (a surrogate, or a character this
+        // version does not have) stays out of the region.
+        let mut start = boundary.min(i);
+        if start < i {
+            let (b, m) = decode_at(text, start);
+            if (0xD800..=0xDFFF).contains(&b) || !is_assigned(b, v) {
+                start += m;
+            }
+        }
+        let region = std::str::from_utf8(&text[start..end]).expect("regions are UTF-8");
+        if is_nfc_quick(region.chars()) != IsNormalized::Yes {
+            let fixed: String = region.chars().nfc().collect();
+            if fixed.as_bytes() != region.as_bytes() {
+                let buf = out.get_or_insert_with(|| Vec::with_capacity(text.len() + 8));
+                buf.extend_from_slice(&text[copied..start]);
+                buf.extend_from_slice(fixed.as_bytes());
+                copied = end;
+            }
+        }
+        boundary = end;
+        i = end;
+    }
+    let mut buf = out?;
+    buf.extend_from_slice(&text[copied..]);
+    Some(buf)
+}
+
 /// `unicodedata.normalize(form, text)` for Unicode version `v`; `None` if unchanged.
 pub(crate) fn normalize(text: &[u8], form: Normalization, v: UnicodeVersion) -> Option<Vec<u8>> {
     if text.is_ascii() {
         return None;
     }
-    // Every code point below U+0300 is NFC-stable with combining class 0.
-    if form == Normalization::Nfc && text.iter().all(|&b| b < 0xCC) {
-        return None;
+    if form == Normalization::Nfc {
+        return nfc(text, v);
     }
     if !has_surrogates(text) {
         let s = std::str::from_utf8(text).expect("text without surrogates is UTF-8");

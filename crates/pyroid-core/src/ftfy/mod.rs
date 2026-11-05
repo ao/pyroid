@@ -381,7 +381,7 @@ fn decode_inconsistent_utf8(text: &[u8], v: UnicodeVersion) -> Option<Vec<u8>> {
         let sub = &text[s..e];
         if cp_len(sub) < total && badness::is_bad(sub, v) {
             // `ftfy.fix_encoding(substr)`, i.e. with the default config.
-            if let Some(fixed) = fix_encoding_loop(sub, DEFAULT_ENCODING_OPTIONS, v, None) {
+            if let Some(fixed) = fix_encoding_loop(sub, DEFAULT_ENCODING_OPTIONS, v, None, None) {
                 let buf = out.get_or_insert_with(|| Vec::with_capacity(text.len()));
                 buf.extend_from_slice(&text[copied..s]);
                 buf.extend_from_slice(&fixed);
@@ -402,11 +402,12 @@ fn fix_encoding_one_step(
     o: EncodingOptions,
     v: UnicodeVersion,
     plan: &mut Plan<'_>,
+    known: Option<(bool, u16)>,
 ) -> Option<Vec<u8>> {
     if text.is_empty() {
         return None;
     }
-    let (ascii, possible) = possible_encodings(text);
+    let (ascii, possible) = known.unwrap_or_else(|| possible_encodings(text));
     if ascii || !badness::is_bad(text, v) {
         return None;
     }
@@ -493,9 +494,11 @@ fn fix_encoding_loop(
     o: EncodingOptions,
     v: UnicodeVersion,
     mut plan: Plan<'_>,
+    known: Option<(bool, u16)>,
 ) -> Option<Vec<u8>> {
     let mut cur: Cow<'_, [u8]> = Cow::Borrowed(text);
-    while let Some(next) = fix_encoding_one_step(&cur, o, v, &mut plan) {
+    let mut known = known;
+    while let Some(next) = fix_encoding_one_step(&cur, o, v, &mut plan, known.take()) {
         if next[..] == cur[..] {
             break;
         }
@@ -558,7 +561,8 @@ fn fix_segment(seg: &[u8], cfg: &TextFixerConfig, mut steps: Plan<'_>) -> Option
             } else {
                 None
             };
-            if let Some(next) = fix_encoding_loop(input, enc_opts, v, plan) {
+            let known = Some((!feat.has(features::NON_ASCII), feat.encodings));
+            if let Some(next) = fix_encoding_loop(input, enc_opts, v, plan, known) {
                 feat = features::scan(&next);
                 work = Some(next);
             }
@@ -715,6 +719,7 @@ fn encoding_explained_bytes<'a>(
         config.encoding_options(),
         config.unicode_version,
         Some(&mut steps),
+        None,
     );
     ExplainedText {
         text: fixed.map_or(Cow::Borrowed(text), Cow::Owned),
@@ -913,7 +918,8 @@ mod perf_probe {
         time("fix_encoding_loop(cand)", n, || {
             cand.iter()
                 .map(|l| {
-                    fix_encoding_loop(l, DEFAULT_ENCODING_OPTIONS, v, None).map_or(0, |x| x.len())
+                    fix_encoding_loop(l, DEFAULT_ENCODING_OPTIONS, v, None, None)
+                        .map_or(0, |x| x.len())
                 })
                 .sum()
         });
@@ -929,5 +935,30 @@ mod perf_probe {
                 .map(|l| fixes::uncurl_quotes(l).map_or(0, |x| x.len()))
                 .sum()
         });
+        time("width(lines)", n, || {
+            lines
+                .iter()
+                .map(|l| fixes::fix_character_width(l).map_or(0, |x| x.len()))
+                .sum()
+        });
+        time("nfc(lines)", n, || {
+            lines
+                .iter()
+                .map(|l| normalize::normalize(l, Normalization::Nfc, v).map_or(0, |x| x.len()))
+                .sum()
+        });
+        let mut counts = std::collections::BTreeMap::new();
+        let ecfg = TextFixerConfig {
+            explain: true,
+            ..cfg.clone()
+        };
+        for l in &lines {
+            let mut steps = Vec::new();
+            fix_segment(l, &ecfg, Some(&mut steps));
+            for s in steps {
+                *counts.entry(s.to_string()).or_insert(0) += 1;
+            }
+        }
+        eprintln!("steps applied: {counts:?}");
     }
 }

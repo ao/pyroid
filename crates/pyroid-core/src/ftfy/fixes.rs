@@ -256,20 +256,24 @@ pub(crate) fn fix_latin_ligatures(text: &[u8]) -> Option<Vec<u8>> {
     })
 }
 
-/// ftfy's `fix_character_width`.
+/// ftfy's `fix_character_width`: U+3000 and the halfwidth/fullwidth forms.
 pub(crate) fn fix_character_width(text: &[u8]) -> Option<Vec<u8>> {
-    if !text.iter().any(|&b| b == 0xE3 || b == 0xEF) {
-        return None;
-    }
-    translate(text, |cp, _| {
-        if cp != 0x3000 && !(0xFF01..0xFFF0).contains(&cp) {
-            return None;
-        }
-        WIDTH_MAP
-            .binary_search_by_key(&cp, |&(c, _)| c)
-            .ok()
-            .map(|k| Rep::Str(WIDTH_MAP[k].1))
-    })
+    replace_at_leads(
+        text,
+        |t| memchr::memchr2(0xE3, 0xEF, t),
+        |t, p| {
+            if t[p] == 0xE3 {
+                // U+3000 IDEOGRAPHIC SPACE is E3 80 80.
+                return (t.get(p + 1..p + 3) == Some(&[0x80, 0x80][..])).then_some((3, b" "));
+            }
+            let cp = decode_at(t, p).0;
+            if !(0xFF01..0xFFF0).contains(&cp) {
+                return None;
+            }
+            let k = WIDTH_MAP.binary_search_by_key(&cp, |&(c, _)| c).ok()?;
+            Some((3, WIDTH_MAP[k].1.as_bytes()))
+        },
+    )
 }
 
 /// ftfy's `fix_line_breaks`: CRLF, CR, U+2028, U+2029 and U+0085 become LF.

@@ -42,8 +42,20 @@ fn char_mask(cp: u32, wanted: u128, v: UnicodeVersion) -> u128 {
     m
 }
 
+/// Complete masks for every two-byte character U+0080..U+07FF. `\s` and `\w`
+/// agree across the supported versions there (checked by a unit test).
+fn two_byte_masks() -> &'static [u128] {
+    static TABLE: std::sync::OnceLock<Vec<u128>> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        (0x80..0x800)
+            .map(|cp| char_mask(cp, u128::MAX, UnicodeVersion::LATEST))
+            .collect()
+    })
+}
+
 /// ftfy's `is_bad`: whether `BADNESS_RE` matches anywhere in `text`.
 pub(crate) fn is_bad(text: &[u8], v: UnicodeVersion) -> bool {
+    let two = two_byte_masks();
     let mut state: u128 = 0;
     let mut start = BAD_START | BAD_ANCHORED;
     let mut i = 0;
@@ -63,6 +75,10 @@ pub(crate) fn is_bad(text: &[u8], v: UnicodeVersion) -> bool {
         if b < 0x80 {
             state = wanted & BAD_ASCII[b as usize];
             i += 1;
+        } else if b < 0xE0 {
+            let cp = (u32::from(b & 0x1F) << 6) | u32::from(text[i + 1] & 0x3F);
+            state = wanted & two[(cp - 0x80) as usize];
+            i += 2;
         } else {
             let (cp, n) = decode_at(text, i);
             state = wanted & char_mask(cp, wanted, v);
@@ -160,6 +176,27 @@ mod tests {
                 !ascii_only,
                 "alternative at bit {first} can match pure ASCII"
             );
+        }
+    }
+
+    #[test]
+    fn two_byte_masks_are_version_independent() {
+        let versions = [
+            UnicodeVersion::V14_0,
+            UnicodeVersion::V15_0,
+            UnicodeVersion::V15_1,
+            UnicodeVersion::V16_0,
+            UnicodeVersion::V17_0,
+        ];
+        let two = two_byte_masks();
+        for cp in 0x80..0x800u32 {
+            for v in versions {
+                assert_eq!(
+                    two[(cp - 0x80) as usize],
+                    char_mask(cp, u128::MAX, v),
+                    "{cp:#x} {v:?}"
+                );
+            }
         }
     }
 
