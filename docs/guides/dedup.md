@@ -1,9 +1,8 @@
 # `pyroid.dedup`: MinHash and exact dedup *(preview)*
 
 !!! warning "Preview"
-    `pyroid.dedup` is still being finished and is not in the main branch yet. This page is
-    written from the module's draft documentation and its test results so far; names and details
-    may change before release. Its API reference will be generated here once it is merged.
+    `pyroid.dedup` is the newest module; names and details may still change before 1.0. See its
+    [API reference](../reference/dedup.md).
 
 `pyroid.dedup` makes **the same removals as datatrove 0.10.1's MinHash deduplication**, the
 four-stage `MinhashDedupSignature` → `MinhashDedupBuckets` → `MinhashDedupCluster` →
@@ -60,8 +59,9 @@ state (16 bytes per distinct text).
 
 ## Arrow and threads
 
-All functions take a `str`, `list`, `tuple` or Arrow string column and return a mask of the same
-kind; Arrow nulls stay null and are always kept. `threads=` works as everywhere in pyroid
+Every function takes a `str`, `list`, `tuple` or Arrow string column. The dedup functions return
+a keep mask of the same kind (Arrow nulls stay null and are always kept), `simplify_text` returns
+text of the same kind, and `minhash_signatures` returns a list. `threads=` works as everywhere in pyroid
 ([Threads](../concepts/threads.md)).
 
 ```python
@@ -78,7 +78,7 @@ the shingles are built from.
 
 ## Differences from datatrove
 
-From the module's draft documentation:
+From the module's documentation (`pyroid/dedup.pyi`):
 
 - A `str` with a lone surrogate raises `UnicodeEncodeError` (pyroid's policy); datatrove raises it
   too unless the document has fewer than `n_grams` words.
@@ -89,11 +89,13 @@ From the module's draft documentation:
 Documents are numbered in the order they are added, as datatrove numbers the documents of one
 task. Multi-worker hash ranges are not needed: one process does all the work.
 
-## Status
+## Speed
 
-- Signatures and removals match datatrove on the parity corpus: all 13,232 signatures and the
-  445-document removed set, from raw text, after pyroid's spaCy tokenizer port was wired in
-  ([Compatibility](../compatibility.md#dedup)).
-- Timings with the real tokenizer have not been measured yet. Earlier measurements with a
-  whitespace stand-in tokenizer are on the [Benchmarks](../benchmarks.md#pyroiddedup-preview)
-  page, with their caveats.
+Signatures from raw text measured about 64× faster than datatrove (0.094–0.099 against 6.17 ms
+per document, tokenization included) and 1.7–1.8× faster than rensa, with datatrove's decisions;
+the whole four-stage pipeline on 10k documents took 1.21 s on one thread against datatrove's
+99.5 s. *Docker/OrbStack VM on Apple Silicon, indicative, preliminary*: see
+[Benchmarks](../benchmarks.md#pyroiddedup-preview).
+
+Signatures and removals match datatrove on the parity corpus: all 13,232 signatures and the
+445-document removed set, from raw text ([Compatibility](../compatibility.md#dedup)).

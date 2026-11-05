@@ -1,13 +1,13 @@
 # pyroid
 
-> Rust-fast text cleaning for LLM datasets: drop-in replacements for ftfy (`import pyroid.ftfy as ftfy`, byte-identical to ftfy 6.3.1), fastText inference (`pyroid.fasttext.load_model`, same .bin/.ftz files, bit-identical predictions) and datatrove 0.10.1's Gopher/C4/FineWeb quality filters (`pyroid.filters`, same decisions). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t; no runtime dependencies (`pyroid[fasttext]` adds numpy). pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
+> Rust-fast text cleaning for LLM datasets: drop-in replacements for ftfy (`import pyroid.ftfy as ftfy`, byte-identical to ftfy 6.3.1), fastText inference (`pyroid.fasttext.load_model`, same .bin/.ftz files, bit-identical predictions; parity verified on Linux aarch64 so far) and datatrove 0.10.1's Gopher/C4/FineWeb quality filters (`pyroid.filters`, same decisions). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t; no runtime dependencies (`pyroid[fasttext]` adds numpy). pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
 
 Conventions shared by every module:
 
-- Batch functions take a `str`, a `list`/`tuple` of `str`, or an Arrow string column (pyarrow, polars, pandas, HF datasets) and return the same kind; Arrow input returns a `pyroid.Column`, which converts with `pyarrow.chunked_array(col)` or `polars.Series(col)`.
+- Batch functions take a `str`, a `list`/`tuple` of `str`, or an Arrow string column (pyarrow, polars, pandas, HF datasets). Text and masks come back in the same kind (Arrow input gives a `pyroid.Column`, which converts with `pyarrow.chunked_array(col)` or `polars.Series(col)`); `fasttext.Model.predict` on a batch returns lists, and `get_sentence_vector` numpy arrays.
 - Transforms return text (unchanged documents are the original objects); predicates return a keep mask (`list[bool]` for a list), never a filtered list.
 - `threads=None` uses all cores, `threads=n` at most n, `threads=1` the calling thread. Batches release the GIL; free-threaded builds stay GIL-free.
-- When a call needs a feature the Rust port lacks, pyroid delegates to the original library and emits `pyroid.FallbackWarning` (or raises `pyroid.PyroidError` if that library is missing). Errors: `pyroid.InputError` is a `TypeError`.
+- `pyroid.ftfy` delegates the few features it does not port to the real ftfy and emits `pyroid.FallbackWarning` (or raises `pyroid.PyroidError` if ftfy is missing); the other modules never delegate and raise instead. Errors: `pyroid.InputError` is a `TypeError`.
 - To clean many documents with ftfy, prefer `pyroid.ftfy.fix_text_batch(docs)` over a loop of `fix_text`. To run several datatrove filters, use `pyroid.filters.apply(docs, [GopherRepetition(), GopherQuality(), C4Quality(...), FineWebQuality()])`, which returns `FilterResult(keep, reason, text)`.
 
 ## Docs
@@ -33,6 +33,7 @@ Conventions shared by every module:
 - [pyroid.ftfy](https://ao.github.io/pyroid/reference/ftfy/)
 - [pyroid.fasttext](https://ao.github.io/pyroid/reference/fasttext/)
 - [pyroid.filters](https://ao.github.io/pyroid/reference/filters/)
+- [pyroid.dedup (preview)](https://ao.github.io/pyroid/reference/dedup/)
 - [pyroid.text](https://ao.github.io/pyroid/reference/text/)
 
 ## Optional

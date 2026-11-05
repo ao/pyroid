@@ -63,6 +63,7 @@ nav:
       - pyroid.ftfy: reference/ftfy.md
       - pyroid.fasttext: reference/fasttext.md
       - pyroid.filters: reference/filters.md
+      - pyroid.dedup (preview): reference/dedup.md
       - pyroid.text: reference/text.md
   - Compatibility: compatibility.md
   - Benchmarks: benchmarks.md
