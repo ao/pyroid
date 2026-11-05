@@ -16,8 +16,9 @@ use std::sync::LazyLock;
 
 use rustc_hash::FxBuildHasher;
 
-use super::regex::{Matcher, Nfa};
+use super::regex::{Alternatives, Matcher, Nfa};
 use super::tables;
+use super::text::CharSet;
 use super::unicode;
 use crate::ftfy::UnicodeVersion;
 
@@ -58,7 +59,14 @@ pub struct SpacyEnglish {
     version: UnicodeVersion,
     specials: HashMap<&'static str, &'static [&'static str], FxBuildHasher>,
     patterns: HashMap<Box<str>, Vec<Pattern>, FxBuildHasher>,
+    /// First characters of the patterns' first tokens.
+    pattern_first: CharSet,
+    prefix: Alternatives,
+    suffix: Alternatives,
+    infix: Alternatives,
     url: Nfa,
+    /// Index of `version` (for the span cache).
+    index: usize,
 }
 
 static INSTANCES: [LazyLock<SpacyEnglish>; 5] = [
@@ -69,20 +77,40 @@ static INSTANCES: [LazyLock<SpacyEnglish>; 5] = [
     LazyLock::new(|| SpacyEnglish::new(UnicodeVersion::V17_0)),
 ];
 
+fn version_index(version: UnicodeVersion) -> usize {
+    match version {
+        UnicodeVersion::V14_0 => 0,
+        UnicodeVersion::V15_0 => 1,
+        UnicodeVersion::V15_1 => 2,
+        UnicodeVersion::V16_0 => 3,
+        UnicodeVersion::V17_0 => 4,
+    }
+}
+
+/// Non-whitespace spans up to this many bytes are cached per thread.
+const CACHE_MAX_SPAN: usize = 32;
+/// Cached spans per thread and Unicode version (the cache is cleared when full).
+const CACHE_CAP: usize = 1 << 16;
+
+/// A cached span tokenization: token offsets within the span.
+#[derive(Debug)]
+struct Cached {
+    toks: Box<[(u8, u8)]>,
+    special: bool,
+}
+
+thread_local! {
+    static SPAN_CACHE: std::cell::RefCell<[HashMap<Box<str>, Cached, FxBuildHasher>; 5]> =
+        std::cell::RefCell::new(std::array::from_fn(|_| HashMap::default()));
+}
+
 /// spaCy refuses texts of 2**30 characters or more (`Errors.E025`).
 pub const MAX_CHARS: usize = 1 << 30;
 
 impl SpacyEnglish {
     /// The shared instance for `version` (built on first use).
     pub fn get(version: UnicodeVersion) -> &'static SpacyEnglish {
-        let i = match version {
-            UnicodeVersion::V14_0 => 0,
-            UnicodeVersion::V15_0 => 1,
-            UnicodeVersion::V15_1 => 2,
-            UnicodeVersion::V16_0 => 3,
-            UnicodeVersion::V17_0 => 4,
-        };
-        &INSTANCES[i]
+        &INSTANCES[version_index(version)]
     }
 
     fn new(version: UnicodeVersion) -> Self {
@@ -90,14 +118,19 @@ impl SpacyEnglish {
             version,
             specials: tables::RULES.iter().copied().collect(),
             patterns: HashMap::default(),
+            pattern_first: CharSet::new([]),
+            prefix: Alternatives::new(tables::PREFIX),
+            suffix: Alternatives::new(tables::SUFFIX),
+            infix: Alternatives::new(tables::INFIX),
             url: Nfa::new(tables::URL),
+            index: version_index(version),
         };
         // Tokenizer.add_special_case: rules with an affix, an infix or a space
         // go to the PhraseMatcher, as their tokenization without specials.
         let mut patterns: HashMap<Box<str>, Vec<Pattern>, FxBuildHasher> = HashMap::default();
         let mut toks = Vec::new();
         let mut infixes = Vec::new();
-        for &(key, _) in tables::RULES {
+        for &(key, pieces) in tables::RULES {
             infixes.clear();
             me.find_infix(key, &mut infixes);
             if me.find_prefix(key) == 0
@@ -110,6 +143,12 @@ impl SpacyEnglish {
             toks.clear();
             me.tokenize_affixes(key, false, &mut toks);
             let tokens: Vec<Box<str>> = toks.iter().map(|t| t.text(key).into()).collect();
+            // A one-token match is filtered after every longer one, so it can
+            // only block itself; if the rule re-splits it the same way it is a
+            // no-op and needs no pattern.
+            if tokens.len() == 1 && pieces.len() == 1 {
+                continue;
+            }
             if let Some(first) = tokens.first() {
                 patterns
                     .entry(first.clone())
@@ -117,8 +156,18 @@ impl SpacyEnglish {
                     .push(Pattern { tokens });
             }
         }
+        me.pattern_first = CharSet::new(patterns.keys().filter_map(|k| k.chars().next()));
         me.patterns = patterns;
         me
+    }
+
+    /// Can a pattern of the special-case matcher start with token `s`?
+    #[inline]
+    fn is_pattern_first(&self, s: &str) -> bool {
+        s.chars()
+            .next()
+            .is_some_and(|c| self.pattern_first.contains(c))
+            && self.patterns.contains_key(s)
     }
 
     /// The Unicode version this instance reproduces.
@@ -137,8 +186,9 @@ impl SpacyEnglish {
             "text too long to tokenize"
         );
         let base = out.len();
-        self.tokenize_affixes(text, true, out);
-        self.apply_special_cases(text, out, base);
+        if self.tokenize_affixes(text, true, out) {
+            self.apply_special_cases(text, out, base);
+        }
     }
 
     /// datatrove's `split_into_words(text, "en")`: the non-whitespace tokens.
@@ -203,8 +253,8 @@ impl SpacyEnglish {
         if !tables::PREFIX_FIRST.contains(c, self.version) {
             return 0;
         }
-        Matcher { s, v: self.version }
-            .match_at(tables::PREFIX, 0)
+        self.prefix
+            .match_at(&Matcher { s, v: self.version }, 0)
             .unwrap_or(0)
     }
 
@@ -238,7 +288,7 @@ impl SpacyEnglish {
                     tables::SUFFIX_UNBOUNDED_FIRST.contains(c, v)
                 };
             if candidate {
-                if let Some(end) = m.match_at(tables::SUFFIX, pos) {
+                if let Some(end) = self.suffix.match_at(&m, pos) {
                     return Some((pos, end));
                 }
             }
@@ -260,7 +310,7 @@ impl SpacyEnglish {
         let mut pos = 0;
         while let Some(c) = s[pos..].chars().next() {
             if tables::INFIX_FIRST.contains(c, v) {
-                if let Some(end) = m.match_at(tables::INFIX, pos) {
+                if let Some(end) = self.infix.match_at(&m, pos) {
                     if end > pos {
                         out.push((pos, end));
                         pos = end;
@@ -282,24 +332,84 @@ impl SpacyEnglish {
     // ----------------------------------------------------- the tokenizer
 
     /// `Tokenizer._tokenize_affixes`.
-    fn tokenize_affixes(&self, text: &str, with_specials: bool, out: &mut Vec<Token>) {
+    /// Returns true if a token can start a special-case pattern.
+    fn tokenize_affixes(&self, text: &str, with_specials: bool, out: &mut Vec<Token>) -> bool {
         let Some(c0) = text.chars().next() else {
-            return;
+            return false;
         };
+        let mut special = false;
         let mut in_ws = unicode::is_space(c0);
         let mut start = 0;
-        for (i, c) in text.char_indices() {
-            if unicode::is_space(c) != in_ws {
+        let bytes = text.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            let b = bytes[i];
+            let (space_here, len) = if b < 0x80 {
+                (matches!(b, b'\t'..=b'\r' | 0x1c..=b' '), 1)
+            } else {
+                let c = text[i..].chars().next().unwrap_or('\0');
+                (unicode::is_space(c), c.len_utf8())
+            };
+            if space_here != in_ws {
                 if start < i {
-                    self.tokenize_span(text, start, i, in_ws, with_specials, out);
+                    special |= self.span(text, start, i, in_ws, with_specials, out);
                 }
-                start = if c == ' ' { i + 1 } else { i };
+                start = if b == b' ' { i + 1 } else { i };
                 in_ws = !in_ws;
             }
+            i += len;
         }
         if start < text.len() {
-            self.tokenize_span(text, start, text.len(), in_ws, with_specials, out);
+            special |= self.span(text, start, text.len(), in_ws, with_specials, out);
         }
+        special
+    }
+
+    /// One span, through the per-thread cache when it is a short
+    /// non-whitespace span (its tokens depend only on its text). Returns
+    /// true if one of its tokens can start a special-case pattern.
+    #[allow(clippy::cast_possible_truncation)] // cached spans are < 256 bytes
+    fn span(
+        &self,
+        text: &str,
+        lo: usize,
+        hi: usize,
+        space: bool,
+        with_specials: bool,
+        out: &mut Vec<Token>,
+    ) -> bool {
+        let before = out.len();
+        let s = &text[lo..hi];
+        if !with_specials || space || s.len() > CACHE_MAX_SPAN {
+            self.tokenize_span(text, lo, hi, space, with_specials, out);
+            return with_specials
+                && out[before..]
+                    .iter()
+                    .any(|t| self.is_pattern_first(t.text(text)));
+        }
+        SPAN_CACHE.with_borrow_mut(|caches| {
+            let cache = &mut caches[self.index];
+            if let Some(hit) = cache.get(s) {
+                out.extend(hit.toks.iter().map(|&(a, b)| Token {
+                    start: (lo + usize::from(a)) as u32,
+                    end: (lo + usize::from(b)) as u32,
+                    space: false,
+                }));
+                return hit.special;
+            }
+            self.tokenize_span(text, lo, hi, false, true, out);
+            let new = &out[before..];
+            let special = new.iter().any(|t| self.is_pattern_first(t.text(text)));
+            if cache.len() >= CACHE_CAP {
+                cache.clear();
+            }
+            let toks = new
+                .iter()
+                .map(|t| ((t.start as usize - lo) as u8, (t.end as usize - lo) as u8))
+                .collect();
+            cache.insert(s.into(), Cached { toks, special });
+            special
+        })
     }
 
     #[allow(clippy::cast_possible_truncation)] // `tokens` checks the length
@@ -341,11 +451,14 @@ impl SpacyEnglish {
         let mut suffixes: Vec<(usize, usize)> = Vec::new();
         let (mut a, mut b) = (lo, hi);
         let mut last_size = 0;
+        // The range last looked up in `specials` (and not found there).
+        let mut checked = (lo, hi);
         while a < b && b - a != last_size {
             let string = &text[a..b];
-            if with_specials && self.specials.contains_key(string) {
+            if with_specials && (a, b) != checked && self.specials.contains_key(string) {
                 break;
             }
+            checked = (a, b);
             last_size = b - a;
             let pre = self.find_prefix(string);
             if pre != 0 {
@@ -388,7 +501,10 @@ impl SpacyEnglish {
         }
         if a < b {
             let core = &text[a..b];
-            if let Some(pieces) = with_specials.then(|| self.specials.get(core)).flatten() {
+            let special = (with_specials && (a, b) != checked)
+                .then(|| self.specials.get(core))
+                .flatten();
+            if let Some(pieces) = special {
                 Self::push_pieces(out, a, pieces);
             } else if self.url_match(core) {
                 Self::push(out, a, b, space);
@@ -423,7 +539,15 @@ impl SpacyEnglish {
         let toks = &out[base..];
         let mut matches: Vec<(usize, usize)> = Vec::new();
         for (i, t) in toks.iter().enumerate() {
-            let Some(pats) = self.patterns.get(t.text(text)) else {
+            let s = t.text(text);
+            if !s
+                .chars()
+                .next()
+                .is_some_and(|c| self.pattern_first.contains(c))
+            {
+                continue;
+            }
+            let Some(pats) = self.patterns.get(s) else {
                 continue;
             };
             for p in pats {

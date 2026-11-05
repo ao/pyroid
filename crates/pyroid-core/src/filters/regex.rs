@@ -501,3 +501,135 @@ impl SparseSet {
         true
     }
 }
+
+// ------------------------------------------------------ alternative dispatch
+
+/// What an alternative's first consumed character can be.
+#[derive(Clone, Copy, Debug)]
+enum FirstItem {
+    Lit(char),
+    Class(&'static Class),
+}
+
+impl FirstItem {
+    #[inline]
+    fn contains(self, c: char, v: UnicodeVersion) -> bool {
+        match self {
+            FirstItem::Lit(l) => l == c,
+            FirstItem::Class(cls) => cls.contains(c, v),
+        }
+    }
+
+    fn may_be_non_ascii(self) -> bool {
+        match self {
+            FirstItem::Lit(l) => !l.is_ascii(),
+            FirstItem::Class(cls) => cls.negate || !cls.ranges.is_empty() || !cls.cats.is_empty(),
+        }
+    }
+}
+
+/// Collect the possible first characters of `nodes` into `out`; true if
+/// `nodes` can match without consuming one (then the set is incomplete).
+fn first_items(nodes: &[Node], out: &mut Vec<FirstItem>) -> bool {
+    for node in nodes {
+        match *node {
+            Node::Lit(c) => {
+                out.push(FirstItem::Lit(c));
+                return false;
+            }
+            Node::In(cls) => {
+                out.push(FirstItem::Class(cls));
+                return false;
+            }
+            Node::Bol | Node::Eol | Node::Ahead(..) | Node::Behind(..) => {}
+            Node::Branch(alts) => {
+                let mut nullable = false;
+                for alt in alts {
+                    nullable |= first_items(alt, out);
+                }
+                if !nullable {
+                    return false;
+                }
+            }
+            Node::Group(body) => {
+                if !first_items(body, out) {
+                    return false;
+                }
+            }
+            Node::Repeat(min, _, body) => {
+                if !first_items(body, out) && min > 0 {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+/// A top-level `a|b|...` (optionally after `^`), with each character's
+/// candidate alternatives precomputed. [`Alternatives::match_at`] tries only
+/// the alternatives that can start with the character at `pos`, in their
+/// original order, so the result is `re`'s.
+#[derive(Debug)]
+pub(crate) struct Alternatives {
+    alts: &'static [&'static [Node]],
+    ascii: Vec<Vec<u16>>,
+    /// Alternatives that may start with a non-ASCII character (`None`: any).
+    other: Vec<(u16, Option<Vec<FirstItem>>)>,
+}
+
+impl Alternatives {
+    /// `nodes` must be `[Branch]` or `[Bol, Branch]` (the `Bol` is then the
+    /// caller's business: match only at 0).
+    pub(crate) fn new(nodes: &'static [Node]) -> Self {
+        let alts: &'static [&'static [Node]] = match nodes {
+            [Node::Branch(alts)] | [Node::Bol, Node::Branch(alts)] => alts,
+            _ => panic!("not a top-level alternation"),
+        };
+        let mut ascii = vec![Vec::new(); 128];
+        let mut other = Vec::new();
+        for (i, alt) in alts.iter().enumerate() {
+            let i = u16::try_from(i).expect("fewer than 65536 alternatives");
+            let mut items = Vec::new();
+            let nullable = first_items(alt, &mut items);
+            for (a, list) in ascii.iter_mut().enumerate() {
+                let c = char::from(u8::try_from(a).expect("ASCII"));
+                // `version` does not matter below 128: ASCII is precomputed.
+                if nullable || items.iter().any(|it| it.contains(c, UnicodeVersion::V15_1)) {
+                    list.push(i);
+                }
+            }
+            if nullable {
+                other.push((i, None));
+            } else if items.iter().any(|it| it.may_be_non_ascii()) {
+                other.push((i, Some(items)));
+            }
+        }
+        Self { alts, ascii, other }
+    }
+
+    /// The end of `re`'s match of the alternation at `pos`, if any.
+    #[inline]
+    pub(crate) fn match_at(&self, m: &Matcher<'_>, pos: usize) -> Option<usize> {
+        let c = char_at(m.s, pos)?;
+        if c.is_ascii() {
+            for &i in &self.ascii[c as usize] {
+                if let Some(end) = m.match_at(self.alts[usize::from(i)], pos) {
+                    return Some(end);
+                }
+            }
+        } else {
+            for (i, items) in &self.other {
+                if items
+                    .as_ref()
+                    .is_none_or(|it| it.iter().any(|x| x.contains(c, m.v)))
+                {
+                    if let Some(end) = m.match_at(self.alts[usize::from(*i)], pos) {
+                        return Some(end);
+                    }
+                }
+            }
+        }
+        None
+    }
+}

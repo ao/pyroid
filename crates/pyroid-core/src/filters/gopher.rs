@@ -216,26 +216,26 @@ fn poly(s: &str) -> (u64, u64) {
     (h, p)
 }
 
-/// An n-gram compared as a word sequence (`" ".join(words)`: words contain no
+/// An n-gram compared as a sequence of word ids (`" ".join(words)`: words contain no
 /// spaces, so the join is injective).
-struct Seq<'w, 'a> {
-    words: &'w [&'a str],
+struct Seq<'w> {
+    ids: &'w [u32],
     hash: u64,
 }
 
-impl Hash for Seq<'_, '_> {
+impl Hash for Seq<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u64(self.hash);
     }
 }
 
-impl PartialEq for Seq<'_, '_> {
+impl PartialEq for Seq<'_> {
     fn eq(&self, other: &Self) -> bool {
-        self.hash == other.hash && self.words == other.words
+        self.hash == other.hash && self.ids == other.ids
     }
 }
 
-impl Eq for Seq<'_, '_> {}
+impl Eq for Seq<'_> {}
 
 /// An n-gram compared as the concatenation `"".join(words)`.
 struct Concat<'w, 'a> {
@@ -268,6 +268,8 @@ struct WordStats<'w, 'a> {
     hash: Vec<u64>,
     pow: Vec<u64>,
     chars: Vec<usize>,
+    /// Interned word ids: equal ids iff equal words.
+    ids: Vec<u32>,
 }
 
 impl<'w, 'a> WordStats<'w, 'a> {
@@ -275,17 +277,23 @@ impl<'w, 'a> WordStats<'w, 'a> {
         let mut hash = Vec::with_capacity(words.len());
         let mut pow = Vec::with_capacity(words.len());
         let mut chars = Vec::with_capacity(words.len());
+        let mut ids = Vec::with_capacity(words.len());
+        let mut intern: HashMap<&str, u32, FxBuildHasher> =
+            HashMap::with_capacity_and_hasher(words.len(), FxBuildHasher);
         for w in words {
             let (h, p) = poly(w);
             hash.push(h);
             pow.push(p);
             chars.push(py_len(w));
+            let next = u32::try_from(intern.len()).unwrap_or(u32::MAX);
+            ids.push(*intern.entry(w).or_insert(next));
         }
         Self {
             words,
             hash,
             pow,
             chars,
+            ids,
         }
     }
 
@@ -298,7 +306,7 @@ impl<'w, 'a> WordStats<'w, 'a> {
     fn seq_hash(&self, i: usize, n: usize) -> u64 {
         (i..i + n).fold(0u64, |h, j| {
             h.wrapping_mul(0x9E37_79B9_7F4A_7C15)
-                .wrapping_add(self.hash[j])
+                .wrapping_add(u64::from(self.ids[j]))
                 ^ (h >> 29)
         })
     }
@@ -310,11 +318,11 @@ impl<'w, 'a> WordStats<'w, 'a> {
         if n > len {
             return None;
         }
-        let mut counts: HashMap<Seq<'w, 'a>, (u32, u32), FxBuildHasher> =
+        let mut counts: HashMap<Seq<'_>, (u32, u32), FxBuildHasher> =
             HashMap::with_capacity_and_hasher(len - n + 1, FxBuildHasher);
         for i in 0..=len - n {
             let key = Seq {
-                words: &self.words[i..i + n],
+                ids: &self.ids[i..i + n],
                 hash: self.seq_hash(i, n),
             };
             let first = u32::try_from(i).unwrap_or(u32::MAX); // spaCy caps texts at 2**30 chars
@@ -332,19 +340,19 @@ impl<'w, 'a> WordStats<'w, 'a> {
     /// `find_all_duplicate(words, n)`.
     fn all_duplicate(&self, n: usize) -> usize {
         let len = self.words.len();
-        let mut unique: HashSet<Concat<'w, 'a>, FxBuildHasher> = HashSet::default();
+        let mut unique: HashSet<Concat<'w, 'a>, FxBuildHasher> =
+            HashSet::with_capacity_and_hasher(len.saturating_sub(n) + 1, FxBuildHasher);
         let (mut repeated, mut idx) = (0usize, 0usize);
         while idx + n <= len {
             let key = Concat {
                 words: &self.words[idx..idx + n],
                 hash: self.concat_hash(idx, n),
             };
-            if unique.contains(&key) {
+            if unique.insert(key) {
+                idx += 1;
+            } else {
                 repeated += self.chars[idx..idx + n].iter().sum::<usize>();
                 idx += n;
-            } else {
-                unique.insert(key);
-                idx += 1;
             }
         }
         repeated
