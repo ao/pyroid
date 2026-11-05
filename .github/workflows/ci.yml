@@ -378,10 +378,59 @@ jobs:
           path: parity-report.json
           if-no-files-found: error
 
+  # The parity jobs compare against pinned datatrove outputs. These Hypothesis tests compare pyroid.filters and
+  # pyroid.dedup with datatrove itself on generated documents; elsewhere they skip, because datatrove and spaCy are
+  # not in the test group (heavy, and no free-threaded wheels).
+  live-oracle:
+    name: live datatrove oracle (filters, dedup; Python 3.13)
+    needs: wheels
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout (python/tests and pyproject.toml)
+    env:
+      # datatrove 0.10.1 and spaCy 3.8.18 as pinned by the parity oracle group, plus what datatrove's base install lacks,
+      # at parity/uv.lock's versions: regex (datatrove.utils.text), xxhash (its xxhash hashes) and tokenizers
+      # (datatrove.pipeline.dedup.minhash imports it).
+      ORACLE: datatrove==0.10.1 spacy==3.8.18 regex==2026.9.29 xxhash==3.8.2 tokenizers==0.23.3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-ubuntu-24.04
+          path: dist
+      - name: Install the cp311-abi3 wheel with datatrove and run the live-oracle tests
+        env:
+          # 300 examples per property (python/tests/conftest.py).
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          uv venv -p 3.13 .venv-oracle
+          # Only the wheel built above: no index, no sdist fallback, no deps.
+          uv pip install --python .venv-oracle --no-index --no-deps --no-build --find-links dist pyroid
+          uv pip install --python .venv-oracle --group test
+          read -ra oracle <<< "$ORACLE"
+          uv pip install --python .venv-oracle --only-binary :all: "${oracle[@]}"
+          py=.venv-oracle/bin/python
+          # The test modules importorskip these; here a missing oracle is an error, not a skip.
+          "$py" -c "import datatrove.data, datatrove.pipeline.dedup.minhash, datatrove.pipeline.filters, datatrove.utils.hashing
+          import datatrove.utils.text, datatrove.pipeline.filters.gopher_quality_filter
+          from importlib.metadata import version as v
+          print(*(f'{d}=={v(d)}' for d in ('pyroid', 'datatrove', 'spacy', 'regex', 'xxhash', 'tokenizers')))"
+          # The pinned-decision tests in test_filters_parity.py need /data; the parity (filters) jobs cover them.
+          log="$RUNNER_TEMP/live-oracle.log"
+          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs -k "not pinned" \
+            python/tests/test_filters_parity.py python/tests/test_dedup_datatrove.py | tee "$log"
+          if grep '^SKIPPED' "$log"; then echo "::error::live-oracle tests skipped (see above)"; exit 1; fi
+
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [lint, workflow-lint, supply-chain, rust-test, wheels, stubtest, test, parity-data, parity]
+    needs: [lint, workflow-lint, supply-chain, rust-test, wheels, stubtest, test, parity-data, parity, live-oracle]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
