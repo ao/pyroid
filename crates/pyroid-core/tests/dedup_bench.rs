@@ -1,6 +1,8 @@
 //! Indicative micro-benchmarks for the MinHash kernel (run in Docker only):
 //! `cargo test --release -p pyroid-core --test dedup_bench -- --ignored --nocapture`
 
+#![allow(clippy::print_stderr)] // a benchmark report
+
 use std::hint::black_box;
 use std::time::Instant;
 
@@ -37,7 +39,7 @@ fn permutations_ns_per_element() {
         black_box(h.signature_from_shingles(black_box(&shingles), &mut out));
     }
     let ns = t.elapsed().as_secs_f64() * 1e9 / f64::from(iters) / (500.0 * 112.0);
-    println!("permutations: {ns:.3} ns per shingle x hash");
+    eprintln!("permutations: {ns:.3} ns per shingle x hash");
 }
 
 #[test]
@@ -54,7 +56,7 @@ fn shingle_hash_ns() {
             black_box(&sh);
         }
         let ns = t.elapsed().as_secs_f64() * 1e9 / f64::from(iters) / 496.0;
-        println!("{name}: {ns:.1} ns per 5-gram shingle");
+        eprintln!("{name}: {ns:.1} ns per 5-gram shingle");
     }
 }
 
@@ -68,18 +70,18 @@ fn sha1_fast_path_vs_digest() {
         let t = Instant::now();
         for i in 0..iters {
             let mut m = *msg;
-            m[0] = (i & 0x7f) as u8;
+            m[0] = u8::try_from(i & 0x7f).unwrap();
             black_box(pyroid_core::dedup::minhash::sha1_prefix64(black_box(&m)));
         }
         let fast = t.elapsed().as_secs_f64() * 1e9 / f64::from(iters);
         let t = Instant::now();
         for i in 0..iters {
             let mut m = *msg;
-            m[0] = (i & 0x7f) as u8;
+            m[0] = u8::try_from(i & 0x7f).unwrap();
             black_box(Sha1::digest(black_box(&m)));
         }
         let slow = t.elapsed().as_secs_f64() * 1e9 / f64::from(iters);
-        println!(
+        eprintln!(
             "round {round}: block compress {fast:.1} ns, Digest {slow:.1} ns per 30-byte message"
         );
     }

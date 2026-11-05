@@ -442,7 +442,10 @@ def test_bad_thread_counts(bad: int) -> None:
 @pytest.mark.thread_unsafe(reason="100k signatures: heavy per thread")
 @pytest.mark.timeout(120)
 def test_large_batch_completes() -> None:
-    distinct = [" ".join(f"w{k}x{j}" for j in range(8)) for k in range(1000)]
+    def word(k: int) -> str:  # digits would all simplify to "0"
+        return "".join(chr(97 + (k // 26**p) % 26) for p in range(4))
+
+    distinct = [" ".join(word(k * 8 + j) for j in range(8)) for k in range(1000)]
     docs = [distinct[i % 1000] for i in range(100_000)]
     keep = dedup.minhash_dedup(docs, FINEWEB)
     assert keep == [i < 1000 for i in range(100_000)]
