@@ -157,3 +157,98 @@ pub fn dumps_result(value: &Value, dump: &DumpOptions) -> Result<String, RepairE
     }
     dumps::dumps(value, dump).map_err(RepairError::Dump)
 }
+
+#[cfg(test)]
+mod tests {
+    //! The kernel against json_repair 0.64.5: every distinct input of json_repair's
+    //! own test suite (`testdata/upstream_cases.json`, recorded with CPython 3.12),
+    //! under four option sets.
+
+    use super::chars::{CharProps, UnicodeVersion};
+    use super::dumps::DumpOptions;
+    use super::{ParseError, RepairError, RepairOptions, repair_json};
+
+    fn opts() -> RepairOptions {
+        RepairOptions::new(CharProps::new(UnicodeVersion::V15_0))
+    }
+
+    fn outcome(text: &str, o: &RepairOptions) -> serde_json::Value {
+        match repair_json(text, o, &DumpOptions::default()) {
+            Ok(s) => serde_json::json!({ "ok": s }),
+            Err(RepairError::Parse(ParseError::Strict(msg))) => {
+                serde_json::json!({ "err": "ValueError", "msg": msg })
+            }
+            Err(e) => serde_json::json!({ "err": format!("{e:?}") }),
+        }
+    }
+
+    #[test]
+    fn upstream_inputs_match_json_repair() {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("testdata/upstream_cases.json")).expect("fixture");
+        let cases = data["cases"].as_array().expect("cases");
+        assert!(cases.len() > 400);
+        let mut failures = Vec::new();
+        for case in cases {
+            let text = case["in"].as_str().expect("input");
+            let variants = [
+                ("default", opts()),
+                (
+                    "skip",
+                    RepairOptions {
+                        skip_json_loads: true,
+                        ..opts()
+                    },
+                ),
+                (
+                    "strict",
+                    RepairOptions {
+                        strict: true,
+                        ..opts()
+                    },
+                ),
+                (
+                    "stream",
+                    RepairOptions {
+                        stream_stable: true,
+                        ..opts()
+                    },
+                ),
+            ];
+            for (name, o) in variants {
+                let got = outcome(text, &o);
+                if got != case[name] {
+                    failures.push(format!("{name} {text:?}: got {got}, want {}", case[name]));
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "{} diffs:\n{}",
+            failures.len(),
+            failures.join("\n")
+        );
+    }
+
+    #[test]
+    fn examples() {
+        let o = opts();
+        let d = DumpOptions::default();
+        for (input, want) in [
+            ("{'a': 1, b: [1, 2,}", r#"{"a": 1, "b": [1, 2]}"#),
+            ("[1, 2, 3", "[1, 2, 3]"),
+            (r#"{"a": "unterminated"#, r#"{"a": "unterminated"}"#),
+            ("```json\n{\"x\": [1, 2]}\n```", r#"{"x": [1, 2]}"#),
+            ("{\"a\": True, \"b\": None}", r#"{"a": true, "b": null}"#),
+            ("nothing", ""),
+            ("", ""),
+        ] {
+            assert_eq!(repair_json(input, &o, &d).as_deref(), Ok(want), "{input:?}");
+        }
+        let deep = "[".repeat(super::MAX_DEPTH + 1);
+        assert_eq!(
+            repair_json(&deep, &o, &d),
+            Err(RepairError::Parse(ParseError::Depth))
+        );
+    }
+}

@@ -1,0 +1,6860 @@
+{
+"json_repair": "0.64.5",
+"python": "3.12.16",
+"cases": [
+{
+"in": "\n    \"a\": 1\n}\n",
+"default": {
+"ok": "{\"a\": 1}"
+},
+"skip": {
+"ok": "{\"a\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 1}"
+}
+},
+{
+"in": "\"a\": 1, \"b\": 2}",
+"default": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"skip": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 1, \"b\": 2}"
+}
+},
+{
+"in": "\"a\": {\"b\": 2}}",
+"default": {
+"ok": "{\"a\": {\"b\": 2}}"
+},
+"skip": {
+"ok": "{\"a\": {\"b\": 2}}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\": {\"b\": 2}}"
+}
+},
+{
+"in": "\"a\": [1, 2]}",
+"default": {
+"ok": "{\"a\": [1, 2]}"
+},
+"skip": {
+"ok": "{\"a\": [1, 2]}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\": [1, 2]}"
+}
+},
+{
+"in": "\"a\": 0, \"b\": false, \"c\": null, \"d\": \"\"}",
+"default": {
+"ok": "{\"a\": 0, \"b\": false, \"c\": null, \"d\": \"\"}"
+},
+"skip": {
+"ok": "{\"a\": 0, \"b\": false, \"c\": null, \"d\": \"\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 0, \"b\": false, \"c\": null, \"d\": \"\"}"
+}
+},
+{
+"in": "\"a\\\"b\": \"literal } and {\"}",
+"default": {
+"ok": "{\"a\\\"b\": \"literal } and {\"}"
+},
+"skip": {
+"ok": "{\"a\\\"b\": \"literal } and {\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\\\"b\": \"literal } and {\"}"
+}
+},
+{
+"in": "\"a:b\": 1}",
+"default": {
+"ok": "{\"a:b\": 1}"
+},
+"skip": {
+"ok": "{\"a:b\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a:b\": 1}"
+}
+},
+{
+"in": "\"a\" \t\r\n: 1}",
+"default": {
+"ok": "{\"a\": 1}"
+},
+"skip": {
+"ok": "{\"a\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 1}"
+}
+},
+{
+"in": "\"a\\\\\": 1}",
+"default": {
+"ok": "{\"a\\\\\": 1}"
+},
+"skip": {
+"ok": "{\"a\\\\\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\\\\\": 1}"
+}
+},
+{
+"in": "\"a\": 1}",
+"default": {
+"ok": "{\"a\": 1}"
+},
+"skip": {
+"ok": "{\"a\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 1}"
+}
+},
+{
+"in": "\"a\": 1",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "\"a\": 1,}",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "\"a\": 1}\u000b",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "\"a\": {\"b\": 2}",
+"default": {
+"ok": "{\"b\": 2}"
+},
+"skip": {
+"ok": "{\"b\": 2}"
+},
+"strict": {
+"ok": "{\"b\": 2}"
+},
+"stream": {
+"ok": "{\"b\": 2}"
+}
+},
+{
+"in": "\"a\": 1} {\"b\": 2}",
+"default": {
+"ok": "{\"b\": 2}"
+},
+"skip": {
+"ok": "{\"b\": 2}"
+},
+"strict": {
+"ok": "{\"b\": 2}"
+},
+"stream": {
+"ok": "{\"b\": 2}"
+}
+},
+{
+"in": "Here is JSON: {\"b\": 2}",
+"default": {
+"ok": "{\"b\": 2}"
+},
+"skip": {
+"ok": "{\"b\": 2}"
+},
+"strict": {
+"ok": "{\"b\": 2}"
+},
+"stream": {
+"ok": "{\"b\": 2}"
+}
+},
+{
+"in": "a: 1}",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "\"a",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "\"a\" text",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "\"a\"\u000b: 1}",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "'a': 1}",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "“a”: 1}",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "\"a: 1}\"",
+"default": {
+"ok": "\"a: 1}\""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": "\"a: 1}\""
+},
+"stream": {
+"ok": "\"a: 1}\""
+}
+},
+{
+"in": "{}",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "[]",
+"default": {
+"ok": "[]"
+},
+"skip": {
+"ok": "[]"
+},
+"strict": {
+"ok": "[]"
+},
+"stream": {
+"ok": "[]"
+}
+},
+{
+"in": "\"note\"",
+"default": {
+"ok": "\"note\""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": "\"note\""
+},
+"stream": {
+"ok": "\"note\""
+}
+},
+{
+"in": "\"unterminated",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "\"note\" text",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}",
+"default": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"skip": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"strict": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"stream": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+}
+},
+{
+"in": "{\"employees\":[\"John\", \"Anna\", \"Peter\"]} ",
+"default": {
+"ok": "{\"employees\": [\"John\", \"Anna\", \"Peter\"]}"
+},
+"skip": {
+"ok": "{\"employees\": [\"John\", \"Anna\", \"Peter\"]}"
+},
+"strict": {
+"ok": "{\"employees\": [\"John\", \"Anna\", \"Peter\"]}"
+},
+"stream": {
+"ok": "{\"employees\": [\"John\", \"Anna\", \"Peter\"]}"
+}
+},
+{
+"in": "{\"key\": \"value:value\"}",
+"default": {
+"ok": "{\"key\": \"value:value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value:value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value:value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value:value\"}"
+}
+},
+{
+"in": "{\"text\": \"The quick brown fox,\"}",
+"default": {
+"ok": "{\"text\": \"The quick brown fox,\"}"
+},
+"skip": {
+"ok": "{\"text\": \"The quick brown fox,\"}"
+},
+"strict": {
+"ok": "{\"text\": \"The quick brown fox,\"}"
+},
+"stream": {
+"ok": "{\"text\": \"The quick brown fox,\"}"
+}
+},
+{
+"in": "{\"text\": \"The quick brown fox won't jump\"}",
+"default": {
+"ok": "{\"text\": \"The quick brown fox won't jump\"}"
+},
+"skip": {
+"ok": "{\"text\": \"The quick brown fox won't jump\"}"
+},
+"strict": {
+"ok": "{\"text\": \"The quick brown fox won't jump\"}"
+},
+"stream": {
+"ok": "{\"text\": \"The quick brown fox won't jump\"}"
+}
+},
+{
+"in": "{\"key\": \"\"",
+"default": {
+"ok": "{\"key\": \"\"}"
+},
+"skip": {
+"ok": "{\"key\": \"\"}"
+},
+"strict": {
+"ok": "{\"key\": \"\"}"
+},
+"stream": {
+"ok": "{\"key\": \"\"}"
+}
+},
+{
+"in": "{\"key1\": {\"key2\": [1, 2, 3]}}",
+"default": {
+"ok": "{\"key1\": {\"key2\": [1, 2, 3]}}"
+},
+"skip": {
+"ok": "{\"key1\": {\"key2\": [1, 2, 3]}}"
+},
+"strict": {
+"ok": "{\"key1\": {\"key2\": [1, 2, 3]}}"
+},
+"stream": {
+"ok": "{\"key1\": {\"key2\": [1, 2, 3]}}"
+}
+},
+{
+"in": "{\"key\": 12345678901234567890}",
+"default": {
+"ok": "{\"key\": 12345678901234567890}"
+},
+"skip": {
+"ok": "{\"key\": 12345678901234567890}"
+},
+"strict": {
+"ok": "{\"key\": 12345678901234567890}"
+},
+"stream": {
+"ok": "{\"key\": 12345678901234567890}"
+}
+},
+{
+"in": "{\"key\": \"value☺\"}",
+"default": {
+"ok": "{\"key\": \"value\\u263a\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\\u263a\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\\u263a\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\\u263a\"}"
+}
+},
+{
+"in": "{\"key\": \"value\\nvalue\"}",
+"default": {
+"ok": "{\"key\": \"value\\nvalue\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\\nvalue\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\\nvalue\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\\nvalue\"}"
+}
+},
+{
+"in": "{\"key\": \"value\"}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{\"items\": [1, 2, 3]}",
+"default": {
+"ok": "{\"items\": [1, 2, 3]}"
+},
+"skip": {
+"ok": "{\"items\": [1, 2, 3]}"
+},
+"strict": {
+"ok": "{\"items\": [1, 2, 3]}"
+},
+"stream": {
+"ok": "{\"items\": [1, 2, 3]}"
+}
+},
+{
+"in": "Here is your JSON:\n{\"text\": \"a\\n b c, floof: a\\n ... a b (c), floof: \\n a\", \"id\": 8}",
+"default": {
+"ok": "{\"text\": \"a\\n b c, floof: a\\n ... a b (c), floof: \\n a\", \"id\": 8}"
+},
+"skip": {
+"ok": "{\"text\": \"a\\n b c, floof: a\\n ... a b (c), floof: \\n a\", \"id\": 8}"
+},
+"strict": {
+"ok": "{\"text\": \"a\\n b c, floof: a\\n ... a b (c), floof: \\n a\", \"id\": 8}"
+},
+"stream": {
+"ok": "{\"text\": \"a\\n b c, floof: a\\n ... a b (c), floof: \\n a\", \"id\": 8}"
+}
+},
+{
+"in": "Here is your JSON:\n{\"text\": \"literal } and ]\"}\nAdditional explanation.",
+"default": {
+"ok": "{\"text\": \"literal } and ]\"}"
+},
+"skip": {
+"ok": "{\"text\": \"literal } and ]\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"text\": \"literal } and ]\"}"
+}
+},
+{
+"in": "{\"tool_args\": {\"code\": \"# note\\nconfig = {'type': 'object', 'properties': {}, 'additionalProperties': True}\"}}}",
+"default": {
+"ok": "{\"tool_args\": {\"code\": \"# note\\nconfig = {'type': 'object', 'properties': {}, 'additionalProperties': True}\"}}"
+},
+"skip": {
+"ok": "{\"tool_args\": {\"code\": \"# note\\nconfig = {'type': 'object', 'properties': {}, 'additionalProperties': True}\"}}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"tool_args\": {\"code\": \"# note\\nconfig = {'type': 'object', 'properties': {}, 'additionalProperties': True}\"}}"
+}
+},
+{
+"in": "Here is your JSON: {\"key\": \"value",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "[]{}",
+"default": {
+"ok": "[]"
+},
+"skip": {
+"ok": "[]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[]"
+}
+},
+{
+"in": "[]{\"key\":\"value\"}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{\"key\":\"value\"}[1,2,3,True]",
+"default": {
+"ok": "[{\"key\": \"value\"}, [1, 2, 3, true]]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}, [1, 2, 3, true]]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}, [1, 2, 3, true]]"
+}
+},
+{
+"in": "{\"key\":\"value\"}, {\"key\":\"value_after\"}",
+"default": {
+"ok": "[{\"key\": \"value\"}, {\"key\": \"value_after\"}]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}, {\"key\": \"value_after\"}]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}, {\"key\": \"value_after\"}]"
+}
+},
+{
+"in": "lorem ```json {\"key\":\"value\"} ``` ipsum ```json [1,2,3,True] ``` 42",
+"default": {
+"ok": "[{\"key\": \"value\"}, [1, 2, 3, true]]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}, [1, 2, 3, true]]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}, [1, 2, 3, true]]"
+}
+},
+{
+"in": "[{\"key\":\"value\"}][{\"key\":\"value_after\"}]",
+"default": {
+"ok": "[{\"key\": \"value_after\"}]"
+},
+"skip": {
+"ok": "[{\"key\": \"value_after\"}]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[{\"key\": \"value_after\"}]"
+}
+},
+{
+"in": "\n         **Decision**: bla, bla (some clarification):\n\n        ```json\n        {\n          \"key\": \"value\"\n        }\n        ```\n        ",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "\n        (1) Keep this note in the explanation.\n\n        ```json\n        {\n          \"key\": \"value\"\n        }\n        ```\n        ",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "\n        Here is the tuple payload:\n\n        ```json\n        (1, 2)\n        ```\n        ",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "{\"key\": true, \"key2\": false, \"key3\": null}",
+"default": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+},
+"skip": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+},
+"strict": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+},
+"stream": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+}
+},
+{
+"in": "[1, 2, 3, 4]",
+"default": {
+"ok": "[1, 2, 3, 4]"
+},
+"skip": {
+"ok": "[1, 2, 3, 4]"
+},
+"strict": {
+"ok": "[1, 2, 3, 4]"
+},
+"stream": {
+"ok": "[1, 2, 3, 4]"
+}
+},
+{
+"in": "\n{\n  \"resourceType\": \"Bundle\",\n  \"id\": \"1\",\n  \"type\": \"collection\",\n  \"entry\": [\n    {\n      \"resource\": {\n        \"resourceType\": \"Patient\",\n        \"id\": \"1\",\n        \"name\": [\n          {\"use\": \"official\", \"family\": \"Corwin\", \"given\": [\"Keisha\", \"Sunny\"], \"prefix\": [\"Mrs.\"},\n          {\"use\": \"maiden\", \"family\": \"Goodwin\", \"given\": [\"Keisha\", \"Sunny\"], \"prefix\": [\"Mrs.\"]}\n        ]\n      }\n    }\n  ]\n}\n",
+"default": {
+"ok": "{\"resourceType\": \"Bundle\", \"id\": \"1\", \"type\": \"collection\", \"entry\": [{\"resource\": {\"resourceType\": \"Patient\", \"id\": \"1\", \"name\": [{\"use\": \"official\", \"family\": \"Corwin\", \"given\": [\"Keisha\", \"Sunny\"], \"prefix\": [\"Mrs.\"]}, {\"use\": \"maiden\", \"family\": \"Goodwin\", \"given\": [\"Keisha\", \"Sunny\"], \"prefix\": [\"Mrs.\"]}]}}]}"
+},
+"skip": {
+"ok": "{\"resourceType\": \"Bundle\", \"id\": \"1\", \"type\": \"collection\", \"entry\": [{\"resource\": {\"resourceType\": \"Patient\", \"id\": \"1\", \"name\": [{\"use\": \"official\", \"family\": \"Corwin\", \"given\": [\"Keisha\", \"Sunny\"], \"prefix\": [\"Mrs.\"]}, {\"use\": \"maiden\", \"family\": \"Goodwin\", \"given\": [\"Keisha\", \"Sunny\"], \"prefix\": [\"Mrs.\"]}]}}]}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Duplicate key found in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"resourceType\": \"Bundle\", \"id\": \"1\", \"type\": \"collection\", \"entry\": [{\"resource\": {\"resourceType\": \"Patient\", \"id\": \"1\", \"name\": [{\"use\": \"official\", \"family\": \"Corwin\", \"given\": [\"Keisha\", \"Sunny\"], \"prefix\": [\"Mrs.\"]}, {\"use\": \"maiden\", \"family\": \"Goodwin\", \"given\": [\"Keisha\", \"Sunny\"], \"prefix\": [\"Mrs.\"]}]}}]}"
+}
+},
+{
+"in": "{\n\"html\": \"<h3 id=\"aaa\">Waarom meer dan 200 Technical Experts - \"Passie voor techniek\"?</h3>\"}",
+"default": {
+"ok": "{\"html\": \"<h3 id=\\\"aaa\\\">Waarom meer dan 200 Technical Experts - \\\"Passie voor techniek\\\"?</h3>\"}"
+},
+"skip": {
+"ok": "{\"html\": \"<h3 id=\\\"aaa\\\">Waarom meer dan 200 Technical Experts - \\\"Passie voor techniek\\\"?</h3>\"}"
+},
+"strict": {
+"ok": "{\"html\": \"<h3 id=\\\"aaa\\\">Waarom meer dan 200 Technical Experts - \\\"Passie voor techniek\\\"?</h3>\"}"
+},
+"stream": {
+"ok": "{\"html\": \"<h3 id=\\\"aaa\\\">Waarom meer dan 200 Technical Experts - \\\"Passie voor techniek\\\"?</h3>\"}"
+}
+},
+{
+"in": "\n        [\n            {\n                \"foo\": \"Foo bar baz\",\n                \"tag\": \"#foo-bar-baz\"\n            },\n            {\n                \"foo\": \"foo bar \"foobar\" foo bar baz.\",\n                \"tag\": \"#foo-bar-foobar\"\n            }\n        ]\n        ",
+"default": {
+"ok": "[{\"foo\": \"Foo bar baz\", \"tag\": \"#foo-bar-baz\"}, {\"foo\": \"foo bar \\\"foobar\\\" foo bar baz.\", \"tag\": \"#foo-bar-foobar\"}]"
+},
+"skip": {
+"ok": "[{\"foo\": \"Foo bar baz\", \"tag\": \"#foo-bar-baz\"}, {\"foo\": \"foo bar \\\"foobar\\\" foo bar baz.\", \"tag\": \"#foo-bar-foobar\"}]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[{\"foo\": \"Foo bar baz\", \"tag\": \"#foo-bar-baz\"}, {\"foo\": \"foo bar \\\"foobar\\\" foo bar baz.\", \"tag\": \"#foo-bar-foobar\"}]"
+}
+},
+{
+"in": "{\"key\": true, \"key2\": false, \"key3\": }",
+"default": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": \"\"}"
+},
+"skip": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": \"\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed value is empty in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": \"\"}"
+}
+},
+{
+"in": "{a: [1]}",
+"default": {
+"ok": "{\"a\": [1]}"
+},
+"skip": {
+"ok": "{\"a\": [1]}"
+},
+"strict": {
+"ok": "{\"a\": [1]}"
+},
+"stream": {
+"ok": "{\"a\": [1]}"
+}
+},
+{
+"in": "{a: [{a: [1]}]}",
+"default": {
+"ok": "{\"a\": [{\"a\": [1]}]}"
+},
+"skip": {
+"ok": "{\"a\": [{\"a\": [1]}]}"
+},
+"strict": {
+"ok": "{\"a\": [{\"a\": [1]}]}"
+},
+"stream": {
+"ok": "{\"a\": [{\"a\": [1]}]}"
+}
+},
+{
+"in": "{a: [{a: [{a: [{a: [1]}]}]}]}",
+"default": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}"
+},
+"skip": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}"
+},
+"strict": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}"
+},
+"stream": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}"
+}
+},
+{
+"in": "{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [1]}]}]}]}]}]}]}]}",
+"default": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}"
+},
+"skip": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}"
+},
+"strict": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}"
+},
+"stream": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}"
+}
+},
+{
+"in": "{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+"default": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"skip": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"strict": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"stream": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+}
+},
+{
+"in": "{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+"default": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"skip": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"strict": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"stream": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+}
+},
+{
+"in": "{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+"default": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"skip": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"strict": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"stream": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+}
+},
+{
+"in": "{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [{a: [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+"default": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"skip": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"strict": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+"stream": {
+"ok": "{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [{\"a\": [1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+}
+},
+{
+"in": "{'test_中国人_ascii':'统一码'}",
+"default": {
+"ok": "{\"test_\\u4e2d\\u56fd\\u4eba_ascii\": \"\\u7edf\\u4e00\\u7801\"}"
+},
+"skip": {
+"ok": "{\"test_\\u4e2d\\u56fd\\u4eba_ascii\": \"\\u7edf\\u4e00\\u7801\"}"
+},
+"strict": {
+"ok": "{\"test_\\u4e2d\\u56fd\\u4eba_ascii\": \"\\u7edf\\u4e00\\u7801\"}"
+},
+"stream": {
+"ok": "{\"test_\\u4e2d\\u56fd\\u4eba_ascii\": \"\\u7edf\\u4e00\\u7801\"}"
+}
+},
+{
+"in": "{\"key\": \"val\\",
+"default": {
+"ok": "{\"key\": \"val\\\\\"}"
+},
+"skip": {
+"ok": "{\"key\": \"val\\\\\"}"
+},
+"strict": {
+"ok": "{\"key\": \"val\\\\\"}"
+},
+"stream": {
+"ok": "{\"key\": \"val\"}"
+}
+},
+{
+"in": "{\"key\": \"val\\n",
+"default": {
+"ok": "{\"key\": \"val\"}"
+},
+"skip": {
+"ok": "{\"key\": \"val\"}"
+},
+"strict": {
+"ok": "{\"key\": \"val\"}"
+},
+"stream": {
+"ok": "{\"key\": \"val\\n\"}"
+}
+},
+{
+"in": "{\"key\": \"val\\n123,`key2:value2",
+"default": {
+"ok": "{\"key\": \"val\\n123\", \"key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"val\\n123\", \"key2\": \"value2\"}"
+},
+"strict": {
+"ok": "{\"key\": \"val\\n123\", \"key2\": \"value2\"}"
+},
+"stream": {
+"ok": "{\"key\": \"val\\n123,`key2:value2\"}"
+}
+},
+{
+"in": "{\"key\": \"val\\n123,`key2:value2`\"}",
+"default": {
+"ok": "{\"key\": \"val\\n123,`key2:value2`\"}"
+},
+"skip": {
+"ok": "{\"key\": \"val\\n123\", \"key2\": \"value2`\"}"
+},
+"strict": {
+"ok": "{\"key\": \"val\\n123,`key2:value2`\"}"
+},
+"stream": {
+"ok": "{\"key\": \"val\\n123,`key2:value2`\"}"
+}
+},
+{
+"in": "{\"key\": \"value}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "[",
+"default": {
+"ok": "[]"
+},
+"skip": {
+"ok": "[]"
+},
+"strict": {
+"ok": "[]"
+},
+"stream": {
+"ok": "[]"
+}
+},
+{
+"in": "[[1\n\n]",
+"default": {
+"ok": "[[1]]"
+},
+"skip": {
+"ok": "[[1]]"
+},
+"strict": {
+"ok": "[[1]]"
+},
+"stream": {
+"ok": "[[1]]"
+}
+},
+{
+"in": "[{]",
+"default": {
+"ok": "[]"
+},
+"skip": {
+"ok": "[]"
+},
+"strict": {
+"ok": "[]"
+},
+"stream": {
+"ok": "[]"
+}
+},
+{
+"in": "[\"",
+"default": {
+"ok": "[]"
+},
+"skip": {
+"ok": "[]"
+},
+"strict": {
+"ok": "[]"
+},
+"stream": {
+"ok": "[]"
+}
+},
+{
+"in": "]",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "[1, 2, 3,",
+"default": {
+"ok": "[1, 2, 3]"
+},
+"skip": {
+"ok": "[1, 2, 3]"
+},
+"strict": {
+"ok": "[1, 2, 3]"
+},
+"stream": {
+"ok": "[1, 2, 3]"
+}
+},
+{
+"in": "[1, 2, 3, ...]",
+"default": {
+"ok": "[1, 2, 3]"
+},
+"skip": {
+"ok": "[1, 2, 3]"
+},
+"strict": {
+"ok": "[1, 2, 3]"
+},
+"stream": {
+"ok": "[1, 2, 3]"
+}
+},
+{
+"in": "[1, 2, ... , 3]",
+"default": {
+"ok": "[1, 2, 3]"
+},
+"skip": {
+"ok": "[1, 2, 3]"
+},
+"strict": {
+"ok": "[1, 2, 3]"
+},
+"stream": {
+"ok": "[1, 2, 3]"
+}
+},
+{
+"in": "[1, 2, '...', 3]",
+"default": {
+"ok": "[1, 2, \"...\", 3]"
+},
+"skip": {
+"ok": "[1, 2, \"...\", 3]"
+},
+"strict": {
+"ok": "[1, 2, \"...\", 3]"
+},
+"stream": {
+"ok": "[1, 2, \"...\", 3]"
+}
+},
+{
+"in": "[true, false, null, ...]",
+"default": {
+"ok": "[true, false, null]"
+},
+"skip": {
+"ok": "[true, false, null]"
+},
+"strict": {
+"ok": "[true, false, null]"
+},
+"stream": {
+"ok": "[true, false, null]"
+}
+},
+{
+"in": "[\"a\" \"b\" \"c\" 1",
+"default": {
+"ok": "[\"a\", \"b\", \"c\", 1]"
+},
+"skip": {
+"ok": "[\"a\", \"b\", \"c\", 1]"
+},
+"strict": {
+"ok": "[\"a\", \"b\", \"c\", 1]"
+},
+"stream": {
+"ok": "[\"a\", \"b\", \"c\", 1]"
+}
+},
+{
+"in": "{\"employees\":[\"John\", \"Anna\",",
+"default": {
+"ok": "{\"employees\": [\"John\", \"Anna\"]}"
+},
+"skip": {
+"ok": "{\"employees\": [\"John\", \"Anna\"]}"
+},
+"strict": {
+"ok": "{\"employees\": [\"John\", \"Anna\"]}"
+},
+"stream": {
+"ok": "{\"employees\": [\"John\", \"Anna\"]}"
+}
+},
+{
+"in": "{\"employees\":[\"John\", \"Anna\", \"Peter",
+"default": {
+"ok": "{\"employees\": [\"John\", \"Anna\", \"Peter\"]}"
+},
+"skip": {
+"ok": "{\"employees\": [\"John\", \"Anna\", \"Peter\"]}"
+},
+"strict": {
+"ok": "{\"employees\": [\"John\", \"Anna\", \"Peter\"]}"
+},
+"stream": {
+"ok": "{\"employees\": [\"John\", \"Anna\", \"Peter\"]}"
+}
+},
+{
+"in": "{\"key1\": {\"key2\": [1, 2, 3",
+"default": {
+"ok": "{\"key1\": {\"key2\": [1, 2, 3]}}"
+},
+"skip": {
+"ok": "{\"key1\": {\"key2\": [1, 2, 3]}}"
+},
+"strict": {
+"ok": "{\"key1\": {\"key2\": [1, 2, 3]}}"
+},
+"stream": {
+"ok": "{\"key1\": {\"key2\": [1, 2, 3]}}"
+}
+},
+{
+"in": "{\"key\": [\"value]}",
+"default": {
+"ok": "{\"key\": [\"value\"]}"
+},
+"skip": {
+"ok": "{\"key\": [\"value\"]}"
+},
+"strict": {
+"ok": "{\"key\": [\"value\"]}"
+},
+"stream": {
+"ok": "{\"key\": [\"value]}\"]}"
+}
+},
+{
+"in": "[\"lorem \"ipsum\" sic\"]",
+"default": {
+"ok": "[\"lorem \\\"ipsum\\\" sic\"]"
+},
+"skip": {
+"ok": "[\"lorem \\\"ipsum\\\" sic\"]"
+},
+"strict": {
+"ok": "[\"lorem \\\"ipsum\\\" sic\"]"
+},
+"stream": {
+"ok": "[\"lorem \\\"ipsum\\\" sic\"]"
+}
+},
+{
+"in": "{\"key1\": [\"value1\", \"value2\"}, \"key2\": [\"value3\", \"value4\"]}",
+"default": {
+"ok": "{\"key1\": [\"value1\", \"value2\"], \"key2\": [\"value3\", \"value4\"]}"
+},
+"skip": {
+"ok": "{\"key1\": [\"value1\", \"value2\"], \"key2\": [\"value3\", \"value4\"]}"
+},
+"strict": {
+"ok": "{\"key1\": [\"value1\", \"value2\"], \"key2\": [\"value3\", \"value4\"]}"
+},
+"stream": {
+"ok": "{\"key1\": [\"value1\", \"value2\"], \"key2\": [\"value3\", \"value4\"]}"
+}
+},
+{
+"in": "{\"headers\": [\"A\", \"B\", \"C\"], \"rows\": [[\"r1a\", \"r1b\", \"r1c\"], [\"r2a\", \"r2b\", \"r2c\"], \"r3a\", \"r3b\", \"r3c\"], [\"r4a\", \"r4b\", \"r4c\"], [\"r5a\", \"r5b\", \"r5c\"]]}",
+"default": {
+"ok": "{\"headers\": [\"A\", \"B\", \"C\"], \"rows\": [[\"r1a\", \"r1b\", \"r1c\"], [\"r2a\", \"r2b\", \"r2c\"], [\"r3a\", \"r3b\", \"r3c\"], [\"r4a\", \"r4b\", \"r4c\"], [\"r5a\", \"r5b\", \"r5c\"]]}"
+},
+"skip": {
+"ok": "{\"headers\": [\"A\", \"B\", \"C\"], \"rows\": [[\"r1a\", \"r1b\", \"r1c\"], [\"r2a\", \"r2b\", \"r2c\"], [\"r3a\", \"r3b\", \"r3c\"], [\"r4a\", \"r4b\", \"r4c\"], [\"r5a\", \"r5b\", \"r5c\"]]}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing ':' after key in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"headers\": [\"A\", \"B\", \"C\"], \"rows\": [[\"r1a\", \"r1b\", \"r1c\"], [\"r2a\", \"r2b\", \"r2c\"], [\"r3a\", \"r3b\", \"r3c\"], [\"r4a\", \"r4b\", \"r4c\"], [\"r5a\", \"r5b\", \"r5c\"]]}"
+}
+},
+{
+"in": "{\"key\": [\"value\" \"value1\" \"value2\"]}",
+"default": {
+"ok": "{\"key\": [\"value\", \"value1\", \"value2\"]}"
+},
+"skip": {
+"ok": "{\"key\": [\"value\", \"value1\", \"value2\"]}"
+},
+"strict": {
+"ok": "{\"key\": [\"value\", \"value1\", \"value2\"]}"
+},
+"stream": {
+"ok": "{\"key\": [\"value\", \"value1\", \"value2\"]}"
+}
+},
+{
+"in": "{\"key\": [\"lorem \"ipsum\" dolor \"sit\" amet, \"consectetur\" \", \"lorem \"ipsum\" dolor\", \"lorem\"]}",
+"default": {
+"ok": "{\"key\": [\"lorem \\\"ipsum\\\" dolor \\\"sit\\\" amet, \\\"consectetur\\\" \", \"lorem \\\"ipsum\\\" dolor\", \"lorem\"]}"
+},
+"skip": {
+"ok": "{\"key\": [\"lorem \\\"ipsum\\\" dolor \\\"sit\\\" amet, \\\"consectetur\\\" \", \"lorem \\\"ipsum\\\" dolor\", \"lorem\"]}"
+},
+"strict": {
+"ok": "{\"key\": [\"lorem \\\"ipsum\\\" dolor \\\"sit\\\" amet, \\\"consectetur\\\" \", \"lorem \\\"ipsum\\\" dolor\", \"lorem\"]}"
+},
+"stream": {
+"ok": "{\"key\": [\"lorem \\\"ipsum\\\" dolor \\\"sit\\\" amet, \\\"consectetur\\\" \", \"lorem \\\"ipsum\\\" dolor\", \"lorem\"]}"
+}
+},
+{
+"in": "{\"k\"e\"y\": \"value\"}",
+"default": {
+"ok": "{\"k\\\"e\\\"y\": \"value\"}"
+},
+"skip": {
+"ok": "{\"k\\\"e\\\"y\": \"value\"}"
+},
+"strict": {
+"ok": "{\"k\\\"e\\\"y\": \"value\"}"
+},
+"stream": {
+"ok": "{\"k\\\"e\\\"y\": \"value\"}"
+}
+},
+{
+"in": "[\"key\":\"value\"}]",
+"default": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"strict": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}]"
+}
+},
+{
+"in": "[\"key\":\"value\"]",
+"default": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"strict": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}]"
+}
+},
+{
+"in": "[ \"key\":\"value\"]",
+"default": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"strict": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}]"
+}
+},
+{
+"in": "[{\"key\": \"value\", \"key",
+"default": {
+"ok": "[{\"key\": \"value\"}, [\"key\"]]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}, [\"key\"]]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Duplicate key found in strict mode while parsing object."
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}, [\"key\"]]"
+}
+},
+{
+"in": "{'key1', 'key2'}",
+"default": {
+"ok": "[\"key1\", \"key2\"]"
+},
+"skip": {
+"ok": "[\"key1\", \"key2\"]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "[\"key1\", \"key2\"]"
+}
+},
+{
+"in": "{\"outer\": [\"a\", \"b\", \"next\": \"value\"}",
+"default": {
+"ok": "{\"outer\": [\"a\", \"b\"], \"next\": \"value\"}"
+},
+"skip": {
+"ok": "{\"outer\": [\"a\", \"b\"], \"next\": \"value\"}"
+},
+"strict": {
+"ok": "{\"outer\": [\"a\", \"b\"], \"next\": \"value\"}"
+},
+"stream": {
+"ok": "{\"outer\": [\"a\", \"b\"], \"next\": \"value\"}"
+}
+},
+{
+"in": "(\"a\", \"b\", \"c\")",
+"default": {
+"ok": "[\"a\", \"b\", \"c\"]"
+},
+"skip": {
+"ok": "[\"a\", \"b\", \"c\"]"
+},
+"strict": {
+"ok": "[\"a\", \"b\", \"c\"]"
+},
+"stream": {
+"ok": "[\"a\", \"b\", \"c\"]"
+}
+},
+{
+"in": "((1, 2), (3, 4))",
+"default": {
+"ok": "[[1, 2], [3, 4]]"
+},
+"skip": {
+"ok": "[[1, 2], [3, 4]]"
+},
+"strict": {
+"ok": "[[1, 2], [3, 4]]"
+},
+"stream": {
+"ok": "[[1, 2], [3, 4]]"
+}
+},
+{
+"in": "{\"coords\": (1, 2), \"ok\": true}",
+"default": {
+"ok": "{\"coords\": [1, 2], \"ok\": true}"
+},
+"skip": {
+"ok": "{\"coords\": [1, 2], \"ok\": true}"
+},
+"strict": {
+"ok": "{\"coords\": [1, 2], \"ok\": true}"
+},
+"stream": {
+"ok": "{\"coords\": [1, 2], \"ok\": true}"
+}
+},
+{
+"in": "{\"empty\": ()}",
+"default": {
+"ok": "{\"empty\": []}"
+},
+"skip": {
+"ok": "{\"empty\": []}"
+},
+"strict": {
+"ok": "{\"empty\": []}"
+},
+"stream": {
+"ok": "{\"empty\": []}"
+}
+},
+{
+"in": "(true, false, null)",
+"default": {
+"ok": "[true, false, null]"
+},
+"skip": {
+"ok": "[true, false, null]"
+},
+"strict": {
+"ok": "[true, false, null]"
+},
+"stream": {
+"ok": "[true, false, null]"
+}
+},
+{
+"in": "(True, False, None)",
+"default": {
+"ok": "[true, false, null]"
+},
+"skip": {
+"ok": "[true, false, null]"
+},
+"strict": {
+"ok": "[true, false, null]"
+},
+"stream": {
+"ok": "[true, false, null]"
+}
+},
+{
+"in": "{\"coords\": (True, None)}",
+"default": {
+"ok": "{\"coords\": [true, null]}"
+},
+"skip": {
+"ok": "{\"coords\": [true, null]}"
+},
+"strict": {
+"ok": "{\"coords\": [true, null]}"
+},
+"stream": {
+"ok": "{\"coords\": [true, null]}"
+}
+},
+{
+"in": "(1)",
+"default": {
+"ok": "1"
+},
+"skip": {
+"ok": "1"
+},
+"strict": {
+"ok": "1"
+},
+"stream": {
+"ok": "1"
+}
+},
+{
+"in": "(\"x\")",
+"default": {
+"ok": "\"x\""
+},
+"skip": {
+"ok": "\"x\""
+},
+"strict": {
+"ok": "\"x\""
+},
+"stream": {
+"ok": "\"x\""
+}
+},
+{
+"in": "{\"scalar_group\": (1)}",
+"default": {
+"ok": "{\"scalar_group\": 1}"
+},
+"skip": {
+"ok": "{\"scalar_group\": 1}"
+},
+"strict": {
+"ok": "{\"scalar_group\": 1}"
+},
+"stream": {
+"ok": "{\"scalar_group\": 1}"
+}
+},
+{
+"in": "{\"string_group\": (\"x\")}",
+"default": {
+"ok": "{\"string_group\": \"x\"}"
+},
+"skip": {
+"ok": "{\"string_group\": \"x\"}"
+},
+"strict": {
+"ok": "{\"string_group\": \"x\"}"
+},
+"stream": {
+"ok": "{\"string_group\": \"x\"}"
+}
+},
+{
+"in": "[1, 2)",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"ok": "[1, 2]"
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "[\"value1\" value2\", \"value3\"]",
+"default": {
+"ok": "[\"value1\", \"value2\", \"value3\"]"
+},
+"skip": {
+"ok": "[\"value1\", \"value2\", \"value3\"]"
+},
+"strict": {
+"ok": "[\"value1\", \"value2\", \"value3\"]"
+},
+"stream": {
+"ok": "[\"value1\", \"value2\", \"value3\"]"
+}
+},
+{
+"in": "{\"bad_one\":[\"Lorem Ipsum\", \"consectetur\" comment\" ], \"good_one\":[ \"elit\", \"sed\", \"tempor\"]}",
+"default": {
+"ok": "{\"bad_one\": [\"Lorem Ipsum\", \"consectetur\", \"comment\"], \"good_one\": [\"elit\", \"sed\", \"tempor\"]}"
+},
+"skip": {
+"ok": "{\"bad_one\": [\"Lorem Ipsum\", \"consectetur\", \"comment\"], \"good_one\": [\"elit\", \"sed\", \"tempor\"]}"
+},
+"strict": {
+"ok": "{\"bad_one\": [\"Lorem Ipsum\", \"consectetur\", \"comment\"], \"good_one\": [\"elit\", \"sed\", \"tempor\"]}"
+},
+"stream": {
+"ok": "{\"bad_one\": [\"Lorem Ipsum\", \"consectetur\", \"comment\"], \"good_one\": [\"elit\", \"sed\", \"tempor\"]}"
+}
+},
+{
+"in": "{\"bad_one\": [\"Lorem Ipsum\",\"consectetur\" comment],\"good_one\": [\"elit\",\"sed\",\"tempor\"]}",
+"default": {
+"ok": "{\"bad_one\": [\"Lorem Ipsum\", \"consectetur\", \"comment\"], \"good_one\": [\"elit\", \"sed\", \"tempor\"]}"
+},
+"skip": {
+"ok": "{\"bad_one\": [\"Lorem Ipsum\", \"consectetur\", \"comment\"], \"good_one\": [\"elit\", \"sed\", \"tempor\"]}"
+},
+"strict": {
+"ok": "{\"bad_one\": [\"Lorem Ipsum\", \"consectetur\", \"comment\"], \"good_one\": [\"elit\", \"sed\", \"tempor\"]}"
+},
+"stream": {
+"ok": "{\"bad_one\": [\"Lorem Ipsum\", \"consectetur\", \"comment\"], \"good_one\": [\"elit\", \"sed\", \"tempor\"]}"
+}
+},
+{
+"in": "{\"a\": /* comment */ 1}",
+"default": {
+"ok": "{\"a\": 1}"
+},
+"skip": {
+"ok": "{\"a\": 1}"
+},
+"strict": {
+"ok": "{\"a\": 1}"
+},
+"stream": {
+"ok": "{\"a\": 1}"
+}
+},
+{
+"in": "{\"a\": // note\n \"x\", \"b\": 2}",
+"default": {
+"ok": "{\"a\": \"x\", \"b\": 2}"
+},
+"skip": {
+"ok": "{\"a\": \"x\", \"b\": 2}"
+},
+"strict": {
+"ok": "{\"a\": \"x\", \"b\": 2}"
+},
+"stream": {
+"ok": "{\"a\": \"x\", \"b\": 2}"
+}
+},
+{
+"in": "{\"a\": /* c */ {\"b\": 1}}",
+"default": {
+"ok": "{\"a\": {\"b\": 1}}"
+},
+"skip": {
+"ok": "{\"a\": {\"b\": 1}}"
+},
+"strict": {
+"ok": "{\"a\": {\"b\": 1}}"
+},
+"stream": {
+"ok": "{\"a\": {\"b\": 1}}"
+}
+},
+{
+"in": "{\"a\": # c\n true}",
+"default": {
+"ok": "{\"a\": true}"
+},
+"skip": {
+"ok": "{\"a\": true}"
+},
+"strict": {
+"ok": "{\"a\": true}"
+},
+"stream": {
+"ok": "{\"a\": true}"
+}
+},
+{
+"in": "{\"a\": /* first */ # second\n [1, 2]}",
+"default": {
+"ok": "{\"a\": [1, 2]}"
+},
+"skip": {
+"ok": "{\"a\": [1, 2]}"
+},
+"strict": {
+"ok": "{\"a\": [1, 2]}"
+},
+"stream": {
+"ok": "{\"a\": [1, 2]}"
+}
+},
+{
+"in": "{\"a\": /* comment */ \"\", \"b\": false}",
+"default": {
+"ok": "{\"a\": \"\", \"b\": false}"
+},
+"skip": {
+"ok": "{\"a\": \"\", \"b\": false}"
+},
+"strict": {
+"ok": "{\"a\": \"\", \"b\": false}"
+},
+"stream": {
+"ok": "{\"a\": \"\", \"b\": false}"
+}
+},
+{
+"in": "{\"a\": /* comment */, \"b\": 2}",
+"default": {
+"ok": "{\"a\": \"\", \"b\": 2}"
+},
+"skip": {
+"ok": "{\"a\": \"\", \"b\": 2}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed value is empty in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"a\": \"\", \"b\": 2}"
+}
+},
+{
+"in": "{\"a\": [1, /* comment */ 2]}",
+"default": {
+"ok": "{\"a\": [1, 2]}"
+},
+"skip": {
+"ok": "{\"a\": [1, 2]}"
+},
+"strict": {
+"ok": "{\"a\": [1, 2]}"
+},
+"stream": {
+"ok": "{\"a\": [1, 2]}"
+}
+},
+{
+"in": "[/* comment */]",
+"default": {
+"ok": "[]"
+},
+"skip": {
+"ok": "[]"
+},
+"strict": {
+"ok": "[]"
+},
+"stream": {
+"ok": "[]"
+}
+},
+{
+"in": "[1, /* comment */]",
+"default": {
+"ok": "[1]"
+},
+"skip": {
+"ok": "[1]"
+},
+"strict": {
+"ok": "[1]"
+},
+"stream": {
+"ok": "[1]"
+}
+},
+{
+"in": "[1, /* one */ /* two */]",
+"default": {
+"ok": "[1]"
+},
+"skip": {
+"ok": "[1]"
+},
+"strict": {
+"ok": "[1]"
+},
+"stream": {
+"ok": "[1]"
+}
+},
+{
+"in": "[/* comment */ 1, /* comment */ 2]",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"ok": "[1, 2]"
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "[/* comment */ \"\"]",
+"default": {
+"ok": "[\"\"]"
+},
+"skip": {
+"ok": "[\"\"]"
+},
+"strict": {
+"ok": "[\"\"]"
+},
+"stream": {
+"ok": "[\"\"]"
+}
+},
+{
+"in": "[/* before */ [1, /* end */], 2]",
+"default": {
+"ok": "[[1], 2]"
+},
+"skip": {
+"ok": "[[1], 2]"
+},
+"strict": {
+"ok": "[[1], 2]"
+},
+"stream": {
+"ok": "[[1], 2]"
+}
+},
+{
+"in": "[/* comment */ \"key\": \"value\"]",
+"default": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"strict": {
+"ok": "[{\"key\": \"value\"}]"
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}]"
+}
+},
+{
+"in": "{\"a\": [1, /* comment */ \"b\": 2}",
+"default": {
+"ok": "{\"a\": [1], \"b\": 2}"
+},
+"skip": {
+"ok": "{\"a\": [1], \"b\": 2}"
+},
+"strict": {
+"ok": "{\"a\": [1], \"b\": 2}"
+},
+"stream": {
+"ok": "{\"a\": [1], \"b\": 2}"
+}
+},
+{
+"in": "[/* comment */, 1, \"x\"]",
+"default": {
+"ok": "[1, \"x\"]"
+},
+"skip": {
+"ok": "[1, \"x\"]"
+},
+"strict": {
+"ok": "[1, \"x\"]"
+},
+"stream": {
+"ok": "[1, \"x\"]"
+}
+},
+{
+"in": "[/* comment */ 0, /* comment */ false, /* comment */ null, /* comment */ \"\", /* comment */]",
+"default": {
+"ok": "[0, false, null, \"\"]"
+},
+"skip": {
+"ok": "[0, false, null, \"\"]"
+},
+"strict": {
+"ok": "[0, false, null, \"\"]"
+},
+"stream": {
+"ok": "[0, false, null, \"\"]"
+}
+},
+{
+"in": "[// comment\n 0, // comment\n false, // comment\n null, // comment\n \"\", // comment\n]",
+"default": {
+"ok": "[0, false, null, \"\"]"
+},
+"skip": {
+"ok": "[0, false, null, \"\"]"
+},
+"strict": {
+"ok": "[0, false, null, \"\"]"
+},
+"stream": {
+"ok": "[0, false, null, \"\"]"
+}
+},
+{
+"in": "[# comment\n 0, # comment\n false, # comment\n null, # comment\n \"\", # comment\n]",
+"default": {
+"ok": "[0, false, null, \"\"]"
+},
+"skip": {
+"ok": "[0, false, null, \"\"]"
+},
+"strict": {
+"ok": "[0, false, null, \"\"]"
+},
+"stream": {
+"ok": "[0, false, null, \"\"]"
+}
+},
+{
+"in": "{/* comment */ \"a\" /* comment */: 1 /* comment */, /* comment */ \"b\": 2 /* comment */}",
+"default": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"skip": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"strict": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"stream": {
+"ok": "{\"a\": 1, \"b\": 2}"
+}
+},
+{
+"in": "{// comment\n \"a\" // comment\n: 1 // comment\n, // comment\n \"b\": 2 // comment\n}",
+"default": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"skip": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"strict": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"stream": {
+"ok": "{\"a\": 1, \"b\": 2}"
+}
+},
+{
+"in": "{# comment\n \"a\" # comment\n: 1 # comment\n, # comment\n \"b\": 2 # comment\n}",
+"default": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"skip": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"strict": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"stream": {
+"ok": "{\"a\": 1, \"b\": 2}"
+}
+},
+{
+"in": "{/* comment */}",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{// comment\n}",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{# comment\n}",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{/* unclosed",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{/* unclosed }",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "[{\"a\" /* comment */: \"keep /* literal */\"}]",
+"default": {
+"ok": "[{\"a\": \"keep /* literal */\"}]"
+},
+"skip": {
+"ok": "[{\"a\": \"keep /* literal */\"}]"
+},
+"strict": {
+"ok": "[{\"a\": \"keep /* literal */\"}]"
+},
+"stream": {
+"ok": "[{\"a\": \"keep /* literal */\"}]"
+}
+},
+{
+"in": "{\"a\": [1], [2] /* comment */, /* comment */ \"b\": 3}",
+"default": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+},
+"skip": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+},
+"strict": {
+"ok": "{\"a\": [1], \"b\": 3}"
+},
+"stream": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+}
+},
+{
+"in": "{\"a\": [1], [2] // comment\n, // comment\n \"b\": 3}",
+"default": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+},
+"skip": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+},
+"strict": {
+"ok": "{\"a\": [1], \"b\": 3}"
+},
+"stream": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+}
+},
+{
+"in": "{\"a\": [1], [2] # comment\n, # comment\n \"b\": 3}",
+"default": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+},
+"skip": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+},
+"strict": {
+"ok": "{\"a\": [1], \"b\": 3}"
+},
+"stream": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+}
+},
+{
+"in": "{\"a\": [1], [2] / \"b\": 3}",
+"default": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+},
+"skip": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+},
+"strict": {
+"ok": "{\"a\": [1], \"b\": 3}"
+},
+"stream": {
+"ok": "{\"a\": [1, 2], \"b\": 3}"
+}
+},
+{
+"in": "{    ",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{ // comment\n",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "/",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "/* comment */ {\"key\": \"value\"}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{ \"key\": { \"key2\": \"value2\" // comment }, \"key3\": \"value3\" }",
+"default": {
+"ok": "{\"key\": {\"key2\": \"value2\"}}"
+},
+"skip": {
+"ok": "{\"key\": {\"key2\": \"value2\"}}"
+},
+"strict": {
+"ok": "{\"key\": {\"key2\": \"value2\"}}"
+},
+"stream": {
+"ok": "{\"key\": {\"key2\": \"value2\"}}"
+}
+},
+{
+"in": "{ \"key\": { \"key2\": \"value2\" // comment\n}, \"key3\": \"value3\" }",
+"default": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+},
+"skip": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+},
+"strict": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+},
+"stream": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+}
+},
+{
+"in": "{ \"key\": { \"key2\": \"value2\" # comment }, \"key3\": \"value3\" }",
+"default": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+},
+"skip": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+},
+"strict": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+},
+"stream": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+}
+},
+{
+"in": "{ \"key\": { \"key2\": \"value2\" /* comment */ }, \"key3\": \"value3\" }",
+"default": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+},
+"skip": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+},
+"strict": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+},
+"stream": {
+"ok": "{\"key\": {\"key2\": \"value2\"}, \"key3\": \"value3\"}"
+}
+},
+{
+"in": "[ \"value\", /* comment */ \"value2\" ]",
+"default": {
+"ok": "[\"value\", \"value2\"]"
+},
+"skip": {
+"ok": "[\"value\", \"value2\"]"
+},
+"strict": {
+"ok": "[\"value\", \"value2\"]"
+},
+"stream": {
+"ok": "[\"value\", \"value2\"]"
+}
+},
+{
+"in": "{ \"key\": \"value\" /* comment",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{\n// comment ]\n}",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{/* comment ] */}",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "\n    {\n        \"Changes\": [\n            //object a\n            {\n                \"Action\": \"1\"\n            },\n            //object b ]\n            {\n                \"Action\": \"2\"\n            },\n            //object c ]\n            {\n                \"Action\": \"3\"\n            }\n        ]\n    }\n    ",
+"default": {
+"ok": "{\"Changes\": [{\"Action\": \"1\"}, {\"Action\": \"2\"}, {\"Action\": \"3\"}]}"
+},
+"skip": {
+"ok": "{\"Changes\": [{\"Action\": \"1\"}, {\"Action\": \"2\"}, {\"Action\": \"3\"}]}"
+},
+"strict": {
+"ok": "{\"Changes\": [{\"Action\": \"1\"}, {\"Action\": \"2\"}, {\"Action\": \"3\"}]}"
+},
+"stream": {
+"ok": "{\"Changes\": [{\"Action\": \"1\"}, {\"Action\": \"2\"}, {\"Action\": \"3\"}]}"
+}
+},
+{
+"in": "1",
+"default": {
+"ok": "1"
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": "1"
+},
+"stream": {
+"ok": "1"
+}
+},
+{
+"in": "1.2",
+"default": {
+"ok": "1.2"
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": "1.2"
+},
+"stream": {
+"ok": "1.2"
+}
+},
+{
+"in": "{\"value\": 82_461_110}",
+"default": {
+"ok": "{\"value\": 82461110}"
+},
+"skip": {
+"ok": "{\"value\": 82461110}"
+},
+"strict": {
+"ok": "{\"value\": 82461110}"
+},
+"stream": {
+"ok": "{\"value\": 82461110}"
+}
+},
+{
+"in": "{\"value\": 1_234.5_6}",
+"default": {
+"ok": "{\"value\": 1234.56}"
+},
+"skip": {
+"ok": "{\"value\": 1234.56}"
+},
+"strict": {
+"ok": "{\"value\": 1234.56}"
+},
+"stream": {
+"ok": "{\"value\": 1234.56}"
+}
+},
+{
+"in": "{\"value\": 1e+10",
+"default": {
+"ok": "{\"value\": 10000000000.0}"
+},
+"skip": {
+"ok": "{\"value\": 10000000000.0}"
+},
+"strict": {
+"ok": "{\"value\": 10000000000.0}"
+},
+"stream": {
+"ok": "{\"value\": 10000000000.0}"
+}
+},
+{
+"in": "{\"value\": -2.5E+3",
+"default": {
+"ok": "{\"value\": -2500.0}"
+},
+"skip": {
+"ok": "{\"value\": -2500.0}"
+},
+"strict": {
+"ok": "{\"value\": -2500.0}"
+},
+"stream": {
+"ok": "{\"value\": -2500.0}"
+}
+},
+{
+"in": "[6.02e+23, 2",
+"default": {
+"ok": "[6.02e+23, 2]"
+},
+"skip": {
+"ok": "[6.02e+23, 2]"
+},
+"strict": {
+"ok": "[6.02e+23, 2]"
+},
+"stream": {
+"ok": "[6.02e+23, 2]"
+}
+},
+{
+"in": "{\"value\": 1e+2, \"next\": true}",
+"default": {
+"ok": "{\"value\": 100.0, \"next\": true}"
+},
+"skip": {
+"ok": "{\"value\": 100.0, \"next\": true}"
+},
+"strict": {
+"ok": "{\"value\": 100.0, \"next\": true}"
+},
+"stream": {
+"ok": "{\"value\": 100.0, \"next\": true}"
+}
+},
+{
+"in": "[1+2]",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"ok": "[1, 2]"
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "[1e+]",
+"default": {
+"ok": "[\"1e\"]"
+},
+"skip": {
+"ok": "[\"1e\"]"
+},
+"strict": {
+"ok": "[\"1e\"]"
+},
+"stream": {
+"ok": "[\"1e\"]"
+}
+},
+{
+"in": "[1e-]",
+"default": {
+"ok": "[\"1e\"]"
+},
+"skip": {
+"ok": "[\"1e\"]"
+},
+"strict": {
+"ok": "[\"1e\"]"
+},
+"stream": {
+"ok": "[\"1e\"]"
+}
+},
+{
+"in": " - { \"test_key\": [\"test_value\", \"test_value2\"] }",
+"default": {
+"ok": "{\"test_key\": [\"test_value\", \"test_value2\"]}"
+},
+"skip": {
+"ok": "{\"test_key\": [\"test_value\", \"test_value2\"]}"
+},
+"strict": {
+"ok": "{\"test_key\": [\"test_value\", \"test_value2\"]}"
+},
+"stream": {
+"ok": "{\"test_key\": [\"test_value\", \"test_value2\"]}"
+}
+},
+{
+"in": "{\"key\": 1/3}",
+"default": {
+"ok": "{\"key\": \"1/3\"}"
+},
+"skip": {
+"ok": "{\"key\": \"1/3\"}"
+},
+"strict": {
+"ok": "{\"key\": \"1/3\"}"
+},
+"stream": {
+"ok": "{\"key\": \"1/3\"}"
+}
+},
+{
+"in": "{\"key\": .25}",
+"default": {
+"ok": "{\"key\": 0.25}"
+},
+"skip": {
+"ok": "{\"key\": 0.25}"
+},
+"strict": {
+"ok": "{\"key\": 0.25}"
+},
+"stream": {
+"ok": "{\"key\": 0.25}"
+}
+},
+{
+"in": "{\"here\": \"now\", \"key\": 1/3, \"foo\": \"bar\"}",
+"default": {
+"ok": "{\"here\": \"now\", \"key\": \"1/3\", \"foo\": \"bar\"}"
+},
+"skip": {
+"ok": "{\"here\": \"now\", \"key\": \"1/3\", \"foo\": \"bar\"}"
+},
+"strict": {
+"ok": "{\"here\": \"now\", \"key\": \"1/3\", \"foo\": \"bar\"}"
+},
+"stream": {
+"ok": "{\"here\": \"now\", \"key\": \"1/3\", \"foo\": \"bar\"}"
+}
+},
+{
+"in": "{\"key\": 12345/67890}",
+"default": {
+"ok": "{\"key\": \"12345/67890\"}"
+},
+"skip": {
+"ok": "{\"key\": \"12345/67890\"}"
+},
+"strict": {
+"ok": "{\"key\": \"12345/67890\"}"
+},
+"stream": {
+"ok": "{\"key\": \"12345/67890\"}"
+}
+},
+{
+"in": "[105,12",
+"default": {
+"ok": "[105, 12]"
+},
+"skip": {
+"ok": "[105, 12]"
+},
+"strict": {
+"ok": "[105, 12]"
+},
+"stream": {
+"ok": "[105, 12]"
+}
+},
+{
+"in": "{\"key\", 105,12,",
+"default": {
+"ok": "{\"key\": \"105,12\"}"
+},
+"skip": {
+"ok": "{\"key\": \"105,12\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing ':' after key in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"key\": \"105,12\"}"
+}
+},
+{
+"in": "{\"key\": 1/3, \"foo\": \"bar\"}",
+"default": {
+"ok": "{\"key\": \"1/3\", \"foo\": \"bar\"}"
+},
+"skip": {
+"ok": "{\"key\": \"1/3\", \"foo\": \"bar\"}"
+},
+"strict": {
+"ok": "{\"key\": \"1/3\", \"foo\": \"bar\"}"
+},
+"stream": {
+"ok": "{\"key\": \"1/3\", \"foo\": \"bar\"}"
+}
+},
+{
+"in": "{\"key\": 10-20}",
+"default": {
+"ok": "{\"key\": \"10-20\"}"
+},
+"skip": {
+"ok": "{\"key\": \"10-20\"}"
+},
+"strict": {
+"ok": "{\"key\": \"10-20\"}"
+},
+"stream": {
+"ok": "{\"key\": \"10-20\"}"
+}
+},
+{
+"in": "{\"key\": 1.1.1}",
+"default": {
+"ok": "{\"key\": \"1.1.1\"}"
+},
+"skip": {
+"ok": "{\"key\": \"1.1.1\"}"
+},
+"strict": {
+"ok": "{\"key\": \"1.1.1\"}"
+},
+"stream": {
+"ok": "{\"key\": \"1.1.1\"}"
+}
+},
+{
+"in": "[- ",
+"default": {
+"ok": "[]"
+},
+"skip": {
+"ok": "[]"
+},
+"strict": {
+"ok": "[]"
+},
+"stream": {
+"ok": "[]"
+}
+},
+{
+"in": "{\"key\": 1. }",
+"default": {
+"ok": "{\"key\": 1.0}"
+},
+"skip": {
+"ok": "{\"key\": 1.0}"
+},
+"strict": {
+"ok": "{\"key\": 1.0}"
+},
+"stream": {
+"ok": "{\"key\": 1.0}"
+}
+},
+{
+"in": "{\"key\": 1e10 }",
+"default": {
+"ok": "{\"key\": 10000000000.0}"
+},
+"skip": {
+"ok": "{\"key\": 10000000000.0}"
+},
+"strict": {
+"ok": "{\"key\": 10000000000.0}"
+},
+"stream": {
+"ok": "{\"key\": 10000000000.0}"
+}
+},
+{
+"in": "{\"key\": 1e }",
+"default": {
+"ok": "{\"key\": 1}"
+},
+"skip": {
+"ok": "{\"key\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Empty key found in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"key\": 1}"
+}
+},
+{
+"in": "{\"key\": 1notanumber }",
+"default": {
+"ok": "{\"key\": \"1notanumber\"}"
+},
+"skip": {
+"ok": "{\"key\": \"1notanumber\"}"
+},
+"strict": {
+"ok": "{\"key\": \"1notanumber\"}"
+},
+"stream": {
+"ok": "{\"key\": \"1notanumber \"}"
+}
+},
+{
+"in": "{\"rowId\": 57eeeeb1-450b-482c-81b9-4be77e95dee2}",
+"default": {
+"ok": "{\"rowId\": \"57eeeeb1-450b-482c-81b9-4be77e95dee2\"}"
+},
+"skip": {
+"ok": "{\"rowId\": \"57eeeeb1-450b-482c-81b9-4be77e95dee2\"}"
+},
+"strict": {
+"ok": "{\"rowId\": \"57eeeeb1-450b-482c-81b9-4be77e95dee2\"}"
+},
+"stream": {
+"ok": "{\"rowId\": \"57eeeeb1-450b-482c-81b9-4be77e95dee2\"}"
+}
+},
+{
+"in": "[1, 2notanumber]",
+"default": {
+"ok": "[1, \"2notanumber\"]"
+},
+"skip": {
+"ok": "[1, \"2notanumber\"]"
+},
+"strict": {
+"ok": "[1, \"2notanumber\"]"
+},
+"stream": {
+"ok": "[1, \"2notanumber\"]"
+}
+},
+{
+"in": "{\"sku\": 123_456ABC}",
+"default": {
+"ok": "{\"sku\": \"123_456ABC\"}"
+},
+"skip": {
+"ok": "{\"sku\": \"123_456ABC\"}"
+},
+"strict": {
+"ok": "{\"sku\": \"123_456ABC\"}"
+},
+"stream": {
+"ok": "{\"sku\": \"123_456ABC\"}"
+}
+},
+{
+"in": "[1_2_3ABC]",
+"default": {
+"ok": "[\"1_2_3ABC\"]"
+},
+"skip": {
+"ok": "[\"1_2_3ABC\"]"
+},
+"strict": {
+"ok": "[\"1_2_3ABC\"]"
+},
+"stream": {
+"ok": "[\"1_2_3ABC\"]"
+}
+},
+{
+"in": "{\"value\": 123_456}",
+"default": {
+"ok": "{\"value\": 123456}"
+},
+"skip": {
+"ok": "{\"value\": 123456}"
+},
+"strict": {
+"ok": "{\"value\": 123456}"
+},
+"stream": {
+"ok": "{\"value\": 123456}"
+}
+},
+{
+"in": "{ \"key\": \"value\", \"key2\": 1, \"key3\": True }",
+"default": {
+"ok": "{\"key\": \"value\", \"key2\": 1, \"key3\": true}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"key2\": 1, \"key3\": true}"
+},
+"strict": {
+"ok": "{\"key\": \"value\", \"key2\": 1, \"key3\": true}"
+},
+"stream": {
+"ok": "{\"key\": \"value\", \"key2\": 1, \"key3\": true}"
+}
+},
+{
+"in": "{",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{ \"key\": value, \"key2\": 1 \"key3\": null }",
+"default": {
+"ok": "{\"key\": \"value\", \"key2\": 1, \"key3\": null}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"key2\": 1, \"key3\": null}"
+},
+"strict": {
+"ok": "{\"key\": \"value\", \"key2\": 1, \"key3\": null}"
+},
+"stream": {
+"ok": "{\"key\": \"value, \", \"key2\": 1, \"key3\": null}"
+}
+},
+{
+"in": "   {  }   ",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "}",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "{\"",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{foo: [}",
+"default": {
+"ok": "{\"foo\": []}"
+},
+"skip": {
+"ok": "{\"foo\": []}"
+},
+"strict": {
+"ok": "{\"foo\": []}"
+},
+"stream": {
+"ok": "{\"foo\": []}"
+}
+},
+{
+"in": "{\"\": \"value\"",
+"default": {
+"ok": "{\"\": \"value\"}"
+},
+"skip": {
+"ok": "{\"\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Empty key found in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"\": \"value\"}"
+}
+},
+{
+"in": "{\"key\": \"v\"alue\"}",
+"default": {
+"ok": "{\"key\": \"v\\\"alue\\\"\"}"
+},
+"skip": {
+"ok": "{\"key\": \"v\\\"alue\\\"\"}"
+},
+"strict": {
+"ok": "{\"key\": \"v\\\"alue\\\"\"}"
+},
+"stream": {
+"ok": "{\"key\": \"v\\\"alue\\\"\"}"
+}
+},
+{
+"in": "{\"value_1\": true, COMMENT \"value_2\": \"data\"}",
+"default": {
+"ok": "{\"value_1\": true, \"value_2\": \"data\"}"
+},
+"skip": {
+"ok": "{\"value_1\": true, \"value_2\": \"data\"}"
+},
+"strict": {
+"ok": "{\"value_1\": true, \"value_2\": \"data\"}"
+},
+"stream": {
+"ok": "{\"value_1\": true, \"value_2\": \"data\"}"
+}
+},
+{
+"in": "{\"value_1\": true, SHOULD_NOT_EXIST \"value_2\": \"data\" AAAA }",
+"default": {
+"ok": "{\"value_1\": true, \"value_2\": \"data\"}"
+},
+"skip": {
+"ok": "{\"value_1\": true, \"value_2\": \"data\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Empty key found in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"value_1\": true, \"value_2\": \"data\"}"
+}
+},
+{
+"in": "{\"\" : true, \"key2\": \"value2\"}",
+"default": {
+"ok": "{\"\": true, \"key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"\": true, \"key2\": \"value2\"}"
+},
+"strict": {
+"ok": "{\"\": true, \"key2\": \"value2\"}"
+},
+"stream": {
+"ok": "{\"\": true, \"key2\": \"value2\"}"
+}
+},
+{
+"in": "{\"\"answer\"\":[{\"\"traits\"\":''Female aged 60+'',\"\"answer1\"\":\"\"5\"\"}]}",
+"default": {
+"ok": "{\"answer\": [{\"traits\": \"Female aged 60+\", \"answer1\": \"5\"}]}"
+},
+"skip": {
+"ok": "{\"answer\": [{\"traits\": \"Female aged 60+\", \"answer1\": \"5\"}]}"
+},
+"strict": {
+"ok": "{\"answer\": [{\"traits\": \"Female aged 60+\", \"answer1\": \"5\"}]}"
+},
+"stream": {
+"ok": "{\"answer\": [{\"traits\": \"Female aged 60+\", \"answer1\": \"5\"}]}"
+}
+},
+{
+"in": "{ \"words\": abcdef\", \"numbers\": 12345\", \"words2\": ghijkl\" }",
+"default": {
+"ok": "{\"words\": \"abcdef\", \"numbers\": 12345, \"words2\": \"ghijkl\"}"
+},
+"skip": {
+"ok": "{\"words\": \"abcdef\", \"numbers\": 12345, \"words2\": \"ghijkl\"}"
+},
+"strict": {
+"ok": "{\"words\": \"abcdef\", \"numbers\": 12345, \"words2\": \"ghijkl\"}"
+},
+"stream": {
+"ok": "{\"words\": \"abcdef\", \"numbers\": 12345, \"words2\": \"ghijkl\"}"
+}
+},
+{
+"in": "{\"number\": 1,\"reason\": \"According...\"\"ans\": \"YES\"}",
+"default": {
+"ok": "{\"number\": 1, \"reason\": \"According...\", \"ans\": \"YES\"}"
+},
+"skip": {
+"ok": "{\"number\": 1, \"reason\": \"According...\", \"ans\": \"YES\"}"
+},
+"strict": {
+"ok": "{\"number\": 1, \"reason\": \"According...\", \"ans\": \"YES\"}"
+},
+"stream": {
+"ok": "{\"number\": 1, \"reason\": \"According...\", \"ans\": \"YES\"}"
+}
+},
+{
+"in": "{ \"a\" : \"{ b\": {} }\" }",
+"default": {
+"ok": "{\"a\": \"{ b\"}"
+},
+"skip": {
+"ok": "{\"a\": \"{ b\"}"
+},
+"strict": {
+"ok": "{\"a\": \"{ b\"}"
+},
+"stream": {
+"ok": "{\"a\": \"{ b\"}"
+}
+},
+{
+"in": "{\"b\": \"xxxxx\" true}",
+"default": {
+"ok": "{\"b\": \"xxxxx\"}"
+},
+"skip": {
+"ok": "{\"b\": \"xxxxx\"}"
+},
+"strict": {
+"ok": "{\"b\": \"xxxxx\"}"
+},
+"stream": {
+"ok": "{\"b\": \"xxxxx\"}"
+}
+},
+{
+"in": "{\"key\": \"Lorem \"ipsum\" s,\"}",
+"default": {
+"ok": "{\"key\": \"Lorem \\\"ipsum\\\" s,\"}"
+},
+"skip": {
+"ok": "{\"key\": \"Lorem \\\"ipsum\\\" s,\"}"
+},
+"strict": {
+"ok": "{\"key\": \"Lorem \\\"ipsum\\\" s,\"}"
+},
+"stream": {
+"ok": "{\"key\": \"Lorem \\\"ipsum\\\" s,\"}"
+}
+},
+{
+"in": "{\"lorem\": ipsum, sic, datum.\",}",
+"default": {
+"ok": "{\"lorem\": \"ipsum, sic, datum.\"}"
+},
+"skip": {
+"ok": "{\"lorem\": \"ipsum, sic, datum.\"}"
+},
+"strict": {
+"ok": "{\"lorem\": \"ipsum, sic, datum.\"}"
+},
+"stream": {
+"ok": "{\"lorem\": \"ipsum, sic, datum.\"}"
+}
+},
+{
+"in": "{\"lorem\": sic tamet. \"ipsum\": sic tamet, quick brown fox. \"sic\": ipsum}",
+"default": {
+"ok": "{\"lorem\": \"sic tamet.\", \"ipsum\": \"sic tamet\", \"sic\": \"ipsum\"}"
+},
+"skip": {
+"ok": "{\"lorem\": \"sic tamet.\", \"ipsum\": \"sic tamet\", \"sic\": \"ipsum\"}"
+},
+"strict": {
+"ok": "{\"lorem\": \"sic tamet.\", \"ipsum\": \"sic tamet\", \"sic\": \"ipsum\"}"
+},
+"stream": {
+"ok": "{\"lorem\": \"sic tamet. \", \"ipsum\": \"sic tamet, quick brown fox. \", \"sic\": \"ipsum\"}"
+}
+},
+{
+"in": "{\"lorem_ipsum\": \"sic tamet, quick brown fox. }",
+"default": {
+"ok": "{\"lorem_ipsum\": \"sic tamet, quick brown fox.\"}"
+},
+"skip": {
+"ok": "{\"lorem_ipsum\": \"sic tamet, quick brown fox.\"}"
+},
+"strict": {
+"ok": "{\"lorem_ipsum\": \"sic tamet, quick brown fox.\"}"
+},
+"stream": {
+"ok": "{\"lorem_ipsum\": \"sic tamet, quick brown fox. \"}"
+}
+},
+{
+"in": "{\"key\":value, \" key2\":\"value2\" }",
+"default": {
+"ok": "{\"key\": \"value\", \" key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \" key2\": \"value2\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\", \" key2\": \"value2\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value, \", \" key2\": \"value2\"}"
+}
+},
+{
+"in": "{\"key\":value \"key2\":\"value2\" }",
+"default": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value \", \"key2\": \"value2\"}"
+}
+},
+{
+"in": "{'text': 'words{words in brackets}more words'}",
+"default": {
+"ok": "{\"text\": \"words{words in brackets}more words\"}"
+},
+"skip": {
+"ok": "{\"text\": \"words{words in brackets}more words\"}"
+},
+"strict": {
+"ok": "{\"text\": \"words{words in brackets}more words\"}"
+},
+"stream": {
+"ok": "{\"text\": \"words{words in brackets}more words\"}"
+}
+},
+{
+"in": "{text:words{words in brackets}}",
+"default": {
+"ok": "{\"text\": \"words{words in brackets}\"}"
+},
+"skip": {
+"ok": "{\"text\": \"words{words in brackets}\"}"
+},
+"strict": {
+"ok": "{\"text\": \"words{words in brackets}\"}"
+},
+"stream": {
+"ok": "{\"text\": \"words{words in brackets}\"}"
+}
+},
+{
+"in": "{text:words{words in brackets}m}",
+"default": {
+"ok": "{\"text\": \"words{words in brackets}m\"}"
+},
+"skip": {
+"ok": "{\"text\": \"words{words in brackets}m\"}"
+},
+"strict": {
+"ok": "{\"text\": \"words{words in brackets}m\"}"
+},
+"stream": {
+"ok": "{\"text\": \"words{words in brackets}m\"}"
+}
+},
+{
+"in": "{\"key\": \"value, value2\"```",
+"default": {
+"ok": "{\"key\": \"value, value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value, value2\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value, value2\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value, value2\"}"
+}
+},
+{
+"in": "{\"key\": \"value}```",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{key:value,key2:value2}",
+"default": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value,key2:value2\"}"
+}
+},
+{
+"in": "{\"key:\"value\"}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{\"key:value}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "[{\"lorem\": {\"ipsum\": \"sic\"}, \"\"\"\" \"lorem\": {\"ipsum\": \"sic\"}]",
+"default": {
+"ok": "[{\"lorem\": {\"ipsum\": \"sic\"}}, {\"lorem\": {\"ipsum\": \"sic\"}}]"
+},
+"skip": {
+"ok": "[{\"lorem\": {\"ipsum\": \"sic\"}}, {\"lorem\": {\"ipsum\": \"sic\"}}]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Found doubled quotes followed by another quote."
+},
+"stream": {
+"ok": "[{\"lorem\": {\"ipsum\": \"sic\"}}, {\"lorem\": {\"ipsum\": \"sic\"}}]"
+}
+},
+{
+"in": "{ \"key\": [\"arrayvalue\"], [\"arrayvalue1\"], [\"arrayvalue2\"], \"key3\": \"value3\" }",
+"default": {
+"ok": "{\"key\": [\"arrayvalue\", \"arrayvalue1\", \"arrayvalue2\"], \"key3\": \"value3\"}"
+},
+"skip": {
+"ok": "{\"key\": [\"arrayvalue\", \"arrayvalue1\", \"arrayvalue2\"], \"key3\": \"value3\"}"
+},
+"strict": {
+"ok": "{\"key\": [\"arrayvalue\"], \"arrayvalue1\\\"], [\\\"arrayvalue2\\\"], \\\"key3\": \"value3\"}"
+},
+"stream": {
+"ok": "{\"key\": [\"arrayvalue\", \"arrayvalue1\", \"arrayvalue2\"], \"key3\": \"value3\"}"
+}
+},
+{
+"in": "{ \"key\": [[1, 2, 3], \"a\", \"b\"], [[4, 5, 6], [7, 8, 9]] }",
+"default": {
+"ok": "{\"key\": [[1, 2, 3], \"a\", \"b\", [4, 5, 6], [7, 8, 9]]}"
+},
+"skip": {
+"ok": "{\"key\": [[1, 2, 3], \"a\", \"b\", [4, 5, 6], [7, 8, 9]]}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Empty key found in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"key\": [[1, 2, 3], \"a\", \"b\", [4, 5, 6], [7, 8, 9]]}"
+}
+},
+{
+"in": "{ \"key\": [\"arrayvalue\"], \"key3\": \"value3\", [\"arrayvalue1\"] }",
+"default": {
+"ok": "{\"key\": [\"arrayvalue\"], \"key3\": \"value3\", \"arrayvalue1\": \"\"}"
+},
+"skip": {
+"ok": "{\"key\": [\"arrayvalue\"], \"key3\": \"value3\", \"arrayvalue1\": \"\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing ':' after key in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"key\": [\"arrayvalue\"], \"key3\": \"value3\", \"arrayvalue1\": \"\"}"
+}
+},
+{
+"in": "{\"key\": \"{\\\\\"key\\\\\\\":[\\\"value\\\\\\\"],\\\"key2\\\":\"value2\"}\"}",
+"default": {
+"ok": "{\"key\": \"{\\\"key\\\":[\\\"value\\\"],\\\"key2\\\":\\\"value2\\\"}\"}"
+},
+"skip": {
+"ok": "{\"key\": \"{\\\"key\\\":[\\\"value\\\"],\\\"key2\\\":\\\"value2\\\"}\"}"
+},
+"strict": {
+"ok": "{\"key\": \"{\\\"key\\\":[\\\"value\\\"],\\\"key2\\\":\\\"value2\\\"}\"}"
+},
+"stream": {
+"ok": "{\"key\": \"{\\\"key\\\":[\\\"value\\\"],\\\"key2\\\":\\\"value2\\\"}\"}"
+}
+},
+{
+"in": "{\"key\": , \"key2\": \"value2\"}",
+"default": {
+"ok": "{\"key\": \"\", \"key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"\", \"key2\": \"value2\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed value is empty in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"key\": \"\", \"key2\": \"value2\"}"
+}
+},
+{
+"in": "{\"array\":[{\"key\": \"value\"], \"key2\": \"value2\"}",
+"default": {
+"ok": "{\"array\": [{\"key\": \"value\"}], \"key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"array\": [{\"key\": \"value\"}], \"key2\": \"value2\"}"
+},
+"strict": {
+"ok": "{\"array\": [{\"key\": \"value\"}], \"key2\": \"value2\"}"
+},
+"stream": {
+"ok": "{\"array\": [{\"key\": \"value\"}], \"key2\": \"value2\"}"
+}
+},
+{
+"in": "[{\"key\":\"value\"}},{\"key\":\"value\"}]",
+"default": {
+"ok": "[{\"key\": \"value\"}, {\"key\": \"value\"}]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}, {\"key\": \"value\"}]"
+},
+"strict": {
+"ok": "[{\"key\": \"value\"}, {\"key\": \"value\"}]"
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}, {\"key\": \"value\"}]"
+}
+},
+{
+"in": "{'key': ['a':{'duplicated_key': 'duplicated_value', 'duplicated_key': 'duplicated_value'}]}",
+"default": {
+"ok": "{\"key\": [{\"a\": {\"duplicated_key\": \"duplicated_value\"}}]}"
+},
+"skip": {
+"ok": "{\"key\": [{\"a\": {\"duplicated_key\": \"duplicated_value\"}}]}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Duplicate key found in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"key\": [{\"a\": {\"duplicated_key\": \"duplicated_value\"}}]}"
+}
+},
+{
+"in": "[{\"b\":\"v2\",\"b\":\"v2\"}]",
+"default": {
+"ok": "[{\"b\": \"v2\"}]"
+},
+"skip": {
+"ok": "[{\"b\": \"v2\"}]"
+},
+"strict": {
+"ok": "[{\"b\": \"v2\"}]"
+},
+"stream": {
+"ok": "[{\"b\": \"v2\"}]"
+}
+},
+{
+"in": "{'item1', 'item2', 'item3'}",
+"default": {
+"ok": "[\"item1\", \"item2\", \"item3\"]"
+},
+"skip": {
+"ok": "[\"item1\", \"item2\", \"item3\"]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "[\"item1\", \"item2\", \"item3\"]"
+}
+},
+{
+"in": "{\\\"key\\\": \\\"value\\\"}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{:}",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{   }",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{foo\\bar}",
+"default": {
+"ok": "[\"foo\\bar}\"]"
+},
+"skip": {
+"ok": "[\"foo\\bar}\"]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "[\"foo\\bar}\"]"
+}
+},
+{
+"in": "[{5}s ",
+"default": {
+"ok": "[[5]]"
+},
+"skip": {
+"ok": "[[5]]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "[[5]]"
+}
+},
+{
+"in": "{\"key\": \"value\"}, \"key2\": \"value2\"}",
+"default": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+}
+},
+{
+"in": "{\"key\": \"value\"}, \"key2\": }",
+"default": {
+"ok": "{\"key\": \"value\", \"key2\": \"\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"key2\": \"\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\", \"key2\": \"\"}"
+}
+},
+{
+"in": "{\"key\": \"value\"}, []",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{\"key\": \"value\"}, [\"abc\"]",
+"default": {
+"ok": "[{\"key\": \"value\"}, [\"abc\"]]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}, [\"abc\"]]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}, [\"abc\"]]"
+}
+},
+{
+"in": "{\"key\": \"value\"}, {}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{\"key\": \"value\"}, \"\" : \"value2\"}",
+"default": {
+"ok": "{\"key\": \"value\", \"\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"\": \"value2\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\", \"\": \"value2\"}"
+}
+},
+{
+"in": "{\"key\": \"value\"}, \"key2\" \"value2\"}",
+"default": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+}
+},
+{
+"in": "{\"key1\": \"value1\"}, \"key2\": \"value2\", \"key3\": \"value3\"}",
+"default": {
+"ok": "{\"key1\": \"value1\", \"key2\": \"value2\", \"key3\": \"value3\"}"
+},
+"skip": {
+"ok": "{\"key1\": \"value1\", \"key2\": \"value2\", \"key3\": \"value3\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key1\": \"value1\", \"key2\": \"value2\", \"key3\": \"value3\"}"
+}
+},
+{
+"in": "\"",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "\n",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": " ",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "string",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "stringbeforeobject {}",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"ok": "{}"
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "{'key': 'string', 'key2': false, \"key3\": null, \"key4\": unquoted}",
+"default": {
+"ok": "{\"key\": \"string\", \"key2\": false, \"key3\": null, \"key4\": \"unquoted\"}"
+},
+"skip": {
+"ok": "{\"key\": \"string\", \"key2\": false, \"key3\": null, \"key4\": \"unquoted\"}"
+},
+"strict": {
+"ok": "{\"key\": \"string\", \"key2\": false, \"key3\": null, \"key4\": \"unquoted\"}"
+},
+"stream": {
+"ok": "{\"key\": \"string\", \"key2\": false, \"key3\": null, \"key4\": \"unquoted\"}"
+}
+},
+{
+"in": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York",
+"default": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"skip": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"strict": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"stream": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+}
+},
+{
+"in": "{\"name\": \"John\", \"age\": 30, city: \"New York\"}",
+"default": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"skip": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"strict": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"stream": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+}
+},
+{
+"in": "{\"name\": \"John\", \"age\": 30, \"city\": New York}",
+"default": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"skip": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"strict": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"stream": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+}
+},
+{
+"in": "{\"name\": John, \"age\": 30, \"city\": \"New York\"}",
+"default": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"skip": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"strict": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}"
+},
+"stream": {
+"ok": "{\"name\": \"John, \", \"age\": 30, \"city\": \"New York\"}"
+}
+},
+{
+"in": "{“slanted_delimiter”: \"value\"}",
+"default": {
+"ok": "{\"slanted_delimiter\": \"value\"}"
+},
+"skip": {
+"ok": "{\"slanted_delimiter\": \"value\"}"
+},
+"strict": {
+"ok": "{\"slanted_delimiter\": \"value\"}"
+},
+"stream": {
+"ok": "{\"slanted_delimiter\": \"value\"}"
+}
+},
+{
+"in": "{\"name\": \"John\", \"age\": 30, \"city\": \"New",
+"default": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New\"}"
+},
+"skip": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New\"}"
+},
+"strict": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New\"}"
+},
+"stream": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New\"}"
+}
+},
+{
+"in": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York, \"gender\": \"male\"}",
+"default": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\", \"gender\": \"male\"}"
+},
+"skip": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\", \"gender\": \"male\"}"
+},
+"strict": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York\", \"gender\": \"male\"}"
+},
+"stream": {
+"ok": "{\"name\": \"John\", \"age\": 30, \"city\": \"New York, \\\"gender\\\": \\\"male\\\"\"}"
+}
+},
+{
+"in": "[{\"key\": \"value\", COMMENT \"notes\": \"lorem \"ipsum\", sic.\" }]",
+"default": {
+"ok": "[{\"key\": \"value\", \"notes\": \"lorem \\\"ipsum\\\", sic.\"}]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\", \"notes\": \"lorem \\\"ipsum\\\", sic.\"}]"
+},
+"strict": {
+"ok": "[{\"key\": \"value\", \"notes\": \"lorem \\\"ipsum\\\", sic.\"}]"
+},
+"stream": {
+"ok": "[{\"key\": \"value\", \"notes\": \"lorem \\\"ipsum\\\", sic.\"}]"
+}
+},
+{
+"in": "{\"key\": \"\"value\"}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{\"key\": \"value\", 5: \"value\"}",
+"default": {
+"ok": "{\"key\": \"value\", \"5\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"5\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\", \"5\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\", \"5\": \"value\"}"
+}
+},
+{
+"in": "{\"foo\": \"\\\"bar\\\"\"",
+"default": {
+"ok": "{\"foo\": \"\\\"bar\\\"\"}"
+},
+"skip": {
+"ok": "{\"foo\": \"\\\"bar\\\"\"}"
+},
+"strict": {
+"ok": "{\"foo\": \"\\\"bar\\\"\"}"
+},
+"stream": {
+"ok": "{\"foo\": \"\\\"bar\\\"\"}"
+}
+},
+{
+"in": "{\"\" key\":\"val\"",
+"default": {
+"ok": "{\" key\": \"val\"}"
+},
+"skip": {
+"ok": "{\" key\": \"val\"}"
+},
+"strict": {
+"ok": "{\" key\": \"val\"}"
+},
+"stream": {
+"ok": "{\" key\": \"val\"}"
+}
+},
+{
+"in": "{\"key\": value \"key2\" : \"value2\" ",
+"default": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\", \"key2\": \"value2\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value \", \"key2\": \"value2\"}"
+}
+},
+{
+"in": "{\"key\": \"lorem ipsum ... \"sic \" tamet. ...}",
+"default": {
+"ok": "{\"key\": \"lorem ipsum ... \\\"sic \\\" tamet. ...\"}"
+},
+"skip": {
+"ok": "{\"key\": \"lorem ipsum ... \\\"sic \\\" tamet. ...\"}"
+},
+"strict": {
+"ok": "{\"key\": \"lorem ipsum ... \\\"sic \\\" tamet. ...\"}"
+},
+"stream": {
+"ok": "{\"key\": \"lorem ipsum ... \\\"sic \\\" tamet. ...\"}"
+}
+},
+{
+"in": "{\"key\": value , }",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value , \"}"
+}
+},
+{
+"in": "{\"comment\": \"lorem, \"ipsum\" sic \"tamet\". To improve\"}",
+"default": {
+"ok": "{\"comment\": \"lorem, \\\"ipsum\\\" sic \\\"tamet\\\". To improve\"}"
+},
+"skip": {
+"ok": "{\"comment\": \"lorem, \\\"ipsum\\\" sic \\\"tamet\\\". To improve\"}"
+},
+"strict": {
+"ok": "{\"comment\": \"lorem, \\\"ipsum\\\" sic \\\"tamet\\\". To improve\"}"
+},
+"stream": {
+"ok": "{\"comment\": \"lorem, \\\"ipsum\\\" sic \\\"tamet\\\". To improve\"}"
+}
+},
+{
+"in": "{\"key\": \"v\"alu\"e\"} key:",
+"default": {
+"ok": "{\"key\": \"v\\\"alu\\\"e\"}"
+},
+"skip": {
+"ok": "{\"key\": \"v\\\"alu\\\"e\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"v\\\"alu\\\"e\"}"
+}
+},
+{
+"in": "{\"key\": \"v\"alue\", \"key2\": \"value2\"}",
+"default": {
+"ok": "{\"key\": \"v\\\"alue\", \"key2\": \"value2\"}"
+},
+"skip": {
+"ok": "{\"key\": \"v\\\"alue\", \"key2\": \"value2\"}"
+},
+"strict": {
+"ok": "{\"key\": \"v\\\"alue\", \"key2\": \"value2\"}"
+},
+"stream": {
+"ok": "{\"key\": \"v\\\"alue\", \"key2\": \"value2\"}"
+}
+},
+{
+"in": "[{\"key\": \"v\"alu,e\", \"key2\": \"value2\"}]",
+"default": {
+"ok": "[{\"key\": \"v\\\"alu,e\", \"key2\": \"value2\"}]"
+},
+"skip": {
+"ok": "[{\"key\": \"v\\\"alu,e\", \"key2\": \"value2\"}]"
+},
+"strict": {
+"ok": "[{\"key\": \"v\\\"alu,e\", \"key2\": \"value2\"}]"
+},
+"stream": {
+"ok": "[{\"key\": \"v\\\"alu,e\", \"key2\": \"value2\"}]"
+}
+},
+{
+"in": "{\"title\": \"\"hello\" world\"}",
+"default": {
+"ok": "{\"title\": \"\\\"hello\\\" world\"}"
+},
+"skip": {
+"ok": "{\"title\": \"\\\"hello\\\" world\"}"
+},
+"strict": {
+"ok": "{\"title\": \"\\\"hello\\\" world\"}"
+},
+"stream": {
+"ok": "{\"title\": \"\\\"hello\\\" world\"}"
+}
+},
+{
+"in": "{\"title\": \"\"hello\" world\", \"b\": \"y\"}",
+"default": {
+"ok": "{\"title\": \"\\\"hello\\\" world\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"title\": \"\\\"hello\\\" world\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"title\": \"\\\"hello\\\" world\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"title\": \"\\\"hello\\\" world\", \"b\": \"y\"}"
+}
+},
+{
+"in": "Here's your JSON:\n{\n  \"stuff\": [\n    {\n      \"a\": \"foo\",\n      \"blist\": [\n        {\n          \"text\": \"a\\n b c, floof: a\\n ... a b (c), floof: \\n a\",\n          \"id\": 8\n        }\n      ]\n    }\n  ]\n}\n",
+"default": {
+"ok": "{\"stuff\": [{\"a\": \"foo\", \"blist\": [{\"text\": \"a\\n b c, floof: a\\n ... a b (c), floof: \\n a\", \"id\": 8}]}]}"
+},
+"skip": {
+"ok": "{\"stuff\": [{\"a\": \"foo\", \"blist\": [{\"text\": \"a\\n b c, floof: a\\n ... a b (c), floof: \\n a\", \"id\": 8}]}]}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"stuff\": [{\"a\": \"foo\", \"blist\": [{\"text\": \"a\\n b c, floof: a\\n ... a b (c), floof: \\n a\", \"id\": 8}]}]}"
+}
+},
+{
+"in": "{\"command\":\"x\\nrollback: (registry: Registry, snapshot: EntitySnapshot) => void;\"}",
+"default": {
+"ok": "{\"command\": \"x\\nrollback: (registry: Registry, snapshot: EntitySnapshot) => void;\"}"
+},
+"skip": {
+"ok": "{\"command\": \"x\\nrollback: (registry: Registry, snapshot: EntitySnapshot) => void;\"}"
+},
+"strict": {
+"ok": "{\"command\": \"x\\nrollback: (registry: Registry, snapshot: EntitySnapshot) => void;\"}"
+},
+"stream": {
+"ok": "{\"command\": \"x\\nrollback: (registry: Registry, snapshot: EntitySnapshot) => void;\"}"
+}
+},
+{
+"in": "{\"command\":\"x\\nrollback: {registry: Registry, snapshot: EntitySnapshot}\"}",
+"default": {
+"ok": "{\"command\": \"x\\nrollback: {registry: Registry, snapshot: EntitySnapshot}\"}"
+},
+"skip": {
+"ok": "{\"command\": \"x\\nrollback: {registry: Registry, snapshot: EntitySnapshot}\"}"
+},
+"strict": {
+"ok": "{\"command\": \"x\\nrollback: {registry: Registry, snapshot: EntitySnapshot}\"}"
+},
+"stream": {
+"ok": "{\"command\": \"x\\nrollback: {registry: Registry, snapshot: EntitySnapshot}\"}"
+}
+},
+{
+"in": "{\"a\": \"first, b: \"second\"}",
+"default": {
+"ok": "{\"a\": \"first\", \"b\": \"second\"}"
+},
+"skip": {
+"ok": "{\"a\": \"first\", \"b\": \"second\"}"
+},
+"strict": {
+"ok": "{\"a\": \"first\", \"b\": \"second\"}"
+},
+"stream": {
+"ok": "{\"a\": \"first, b: \\\"second\\\"\"}"
+}
+},
+{
+"in": "{\"a\": \"first, b: 1}",
+"default": {
+"ok": "{\"a\": \"first\", \"b\": 1}"
+},
+"skip": {
+"ok": "{\"a\": \"first\", \"b\": 1}"
+},
+"strict": {
+"ok": "{\"a\": \"first\", \"b\": 1}"
+},
+"stream": {
+"ok": "{\"a\": \"first, b: 1\"}"
+}
+},
+{
+"in": "{\"a\": \"first, b: true}",
+"default": {
+"ok": "{\"a\": \"first\", \"b\": true}"
+},
+"skip": {
+"ok": "{\"a\": \"first\", \"b\": true}"
+},
+"strict": {
+"ok": "{\"a\": \"first\", \"b\": true}"
+},
+"stream": {
+"ok": "{\"a\": \"first, b: true\"}"
+}
+},
+{
+"in": "{\"a\": \"first, b: [1]}",
+"default": {
+"ok": "{\"a\": \"first\", \"b\": [1]}"
+},
+"skip": {
+"ok": "{\"a\": \"first\", \"b\": [1]}"
+},
+"strict": {
+"ok": "{\"a\": \"first\", \"b\": [1]}"
+},
+"stream": {
+"ok": "{\"a\": \"first, b: [1]\"}"
+}
+},
+{
+"in": "{\"a\": \"first, b: prose}",
+"default": {
+"ok": "{\"a\": \"first\", \"b\": \"prose\"}"
+},
+"skip": {
+"ok": "{\"a\": \"first\", \"b\": \"prose\"}"
+},
+"strict": {
+"ok": "{\"a\": \"first\", \"b\": \"prose\"}"
+},
+"stream": {
+"ok": "{\"a\": \"first, b: prose\"}"
+}
+},
+{
+"in": "'\"'",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "{\"key\": 'string\"\n\t\\le'",
+"default": {
+"ok": "{\"key\": \"string\\\"\\n\\t\\\\le\"}"
+},
+"skip": {
+"ok": "{\"key\": \"string\\\"\\n\\t\\\\le\"}"
+},
+"strict": {
+"ok": "{\"key\": \"string\\\"\\n\\t\\\\le\"}"
+},
+"stream": {
+"ok": "{\"key\": \"string\\\"\\n\\t\\\\le\"}"
+}
+},
+{
+"in": "{\"real_content\": \"Some string: Some other string \\t Some string <a href=\\\"https://domain.com\\\">Some link</a>\"",
+"default": {
+"ok": "{\"real_content\": \"Some string: Some other string \\t Some string <a href=\\\"https://domain.com\\\">Some link</a>\"}"
+},
+"skip": {
+"ok": "{\"real_content\": \"Some string: Some other string \\t Some string <a href=\\\"https://domain.com\\\">Some link</a>\"}"
+},
+"strict": {
+"ok": "{\"real_content\": \"Some string: Some other string \\t Some string <a href=\\\"https://domain.com\\\">Some link</a>\"}"
+},
+"stream": {
+"ok": "{\"real_content\": \"Some string: Some other string \\t Some string <a href=\\\"https://domain.com\\\">Some link</a>\"}"
+}
+},
+{
+"in": "{\"key_1\n\": \"value\"}",
+"default": {
+"ok": "{\"key_1\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key_1\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key_1\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key_1\\n\": \"value\"}"
+}
+},
+{
+"in": "{\"key\t_\": \"value\"}",
+"default": {
+"ok": "{\"key\\t_\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\\t_\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\\t_\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\\t_\": \"value\"}"
+}
+},
+{
+"in": "{\"key\": 'value'}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{\"key\": \"\\u0076\\u0061\\u006C\\u0075\\u0065\"}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{\"key\": \"valu\\'e\"}",
+"default": {
+"ok": "{\"key\": \"valu'e\"}"
+},
+"skip": {
+"ok": "{\"key\": \"valu'e\"}"
+},
+"strict": {
+"ok": "{\"key\": \"valu'e\"}"
+},
+"stream": {
+"ok": "{\"key\": \"valu'e\"}"
+}
+},
+{
+"in": "{'key': \"{\\\"key\\\": 1, \\\"key2\\\": 1}\"}",
+"default": {
+"ok": "{\"key\": \"{\\\"key\\\": 1, \\\"key2\\\": 1}\"}"
+},
+"skip": {
+"ok": "{\"key\": \"{\\\"key\\\": 1, \\\"key2\\\": 1}\"}"
+},
+"strict": {
+"ok": "{\"key\": \"{\\\"key\\\": 1, \\\"key2\\\": 1}\"}"
+},
+"stream": {
+"ok": "{\"key\": \"{\\\"key\\\": 1, \\\"key2\\\": 1}\"}"
+}
+},
+{
+"in": "{ \"content\": \"[LINK](\"https://google.com\")\" }",
+"default": {
+"ok": "{\"content\": \"[LINK](\\\"https://google.com\\\")\"}"
+},
+"skip": {
+"ok": "{\"content\": \"[LINK](\\\"https://google.com\\\")\"}"
+},
+"strict": {
+"ok": "{\"content\": \"[LINK](\\\"https://google.com\\\")\"}"
+},
+"stream": {
+"ok": "{\"content\": \"[LINK](\\\"https://google.com\\\")\"}"
+}
+},
+{
+"in": "{ \"content\": \"[LINK](\" }",
+"default": {
+"ok": "{\"content\": \"[LINK](\"}"
+},
+"skip": {
+"ok": "{\"content\": \"[LINK](\"}"
+},
+"strict": {
+"ok": "{\"content\": \"[LINK](\"}"
+},
+"stream": {
+"ok": "{\"content\": \"[LINK](\"}"
+}
+},
+{
+"in": "{ \"content\": \"[LINK](\", \"key\": true }",
+"default": {
+"ok": "{\"content\": \"[LINK](\", \"key\": true}"
+},
+"skip": {
+"ok": "{\"content\": \"[LINK](\", \"key\": true}"
+},
+"strict": {
+"ok": "{\"content\": \"[LINK](\", \"key\": true}"
+},
+"stream": {
+"ok": "{\"content\": \"[LINK](\", \"key\": true}"
+}
+},
+{
+"in": "{\n        \"results\": [\n            {\"regex\": \"^\\s*path\\(\\s*['\"]([^'\"]+)['\"]\\s*,\"},\n            {\"regex\": \"^\\s*re_path\\(\\s*[^'\"]+['\"]\\s*,\"}\n        ]\n    }",
+"default": {
+"ok": "{\"results\": [{\"regex\": \"^\\\\s*path\\\\(\\\\s*['\\\"]([^'\\\"]+)['\\\"]\\\\s*,\"}, {\"regex\": \"^\\\\s*re_path\\\\(\\\\s*[^'\\\"]+['\\\"]\\\\s*,\"}]}"
+},
+"skip": {
+"ok": "{\"results\": [{\"regex\": \"^\\\\s*path\\\\(\\\\s*['\\\"]([^'\\\"]+)['\\\"]\\\\s*,\"}, {\"regex\": \"^\\\\s*re_path\\\\(\\\\s*[^'\\\"]+['\\\"]\\\\s*,\"}]}"
+},
+"strict": {
+"ok": "{\"results\": [{\"regex\": \"^\\\\s*path\\\\(\\\\s*['\\\"]([^'\\\"]+)['\\\"]\\\\s*,\"}, {\"regex\": \"^\\\\s*re_path\\\\(\\\\s*[^'\\\"]+['\\\"]\\\\s*,\"}]}"
+},
+"stream": {
+"ok": "{\"results\": [{\"regex\": \"^\\\\s*path\\\\(\\\\s*['\\\"]([^'\\\"]+)['\\\"]\\\\s*,\"}, {\"regex\": \"^\\\\s*re_path\\\\(\\\\s*[^'\\\"]+['\\\"]\\\\s*,\"}]}"
+}
+},
+{
+"in": "```json\n{\n        \"results\": [\n            {\"regex\": \"^\\s*path\\(\\s*['\"]([^'\"]+)['\"]\\s*,\"},\n            {\"regex\": \"^\\s*re_path\\(\\s*[^'\"]+['\"]\\s*,\"}\n        ]\n    }\n```",
+"default": {
+"ok": "{\"results\": [{\"regex\": \"^\\\\s*path\\\\(\\\\s*['\\\"]([^'\\\"]+)['\\\"]\\\\s*,\"}, {\"regex\": \"^\\\\s*re_path\\\\(\\\\s*[^'\\\"]+['\\\"]\\\\s*,\"}]}"
+},
+"skip": {
+"ok": "{\"results\": [{\"regex\": \"^\\\\s*path\\\\(\\\\s*['\\\"]([^'\\\"]+)['\\\"]\\\\s*,\"}, {\"regex\": \"^\\\\s*re_path\\\\(\\\\s*[^'\\\"]+['\\\"]\\\\s*,\"}]}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"results\": [{\"regex\": \"^\\\\s*path\\\\(\\\\s*['\\\"]([^'\\\"]+)['\\\"]\\\\s*,\"}, {\"regex\": \"^\\\\s*re_path\\\\(\\\\s*[^'\\\"]+['\\\"]\\\\s*,\"}]}"
+}
+},
+{
+"in": "{\"a\":\"\\u005bx\"z] tail\", \"b\":1}",
+"default": {
+"ok": "{\"a\": \"[x\\\"z] tail\", \"b\": 1}"
+},
+"skip": {
+"ok": "{\"a\": \"[x\\\"z] tail\", \"b\": 1}"
+},
+"strict": {
+"ok": "{\"a\": \"[x\\\"z] tail\", \"b\": 1}"
+},
+"stream": {
+"ok": "{\"a\": \"[x\\\"z] tail\", \"b\": 1}"
+}
+},
+{
+"in": "{\"a\":\"[x\\u005dy\"z] tail\", \"b\":1}",
+"default": {
+"ok": "{\"a\": \"[x]y\\\"z] tail\", \"b\": 1}"
+},
+"skip": {
+"ok": "{\"a\": \"[x]y\\\"z] tail\", \"b\": 1}"
+},
+"strict": {
+"ok": "{\"a\": \"[x]y\\\"z] tail\", \"b\": 1}"
+},
+"stream": {
+"ok": "{\"a\": \"[x]y\\\"z] tail\", \"b\": 1}"
+}
+},
+{
+"in": "{\"first\": \"value\", \"second\": \"next\"}",
+"default": {
+"ok": "{\"first\": \"value\", \"second\": \"next\"}"
+},
+"skip": {
+"ok": "{\"first\": \"value\", \"second\": \"next\"}"
+},
+"strict": {
+"ok": "{\"first\": \"value\", \"second\": \"next\"}"
+},
+"stream": {
+"ok": "{\"first\": \"value\", \"second\": \"next\"}"
+}
+},
+{
+"in": "````{ \"key\": \"value\" }```",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{    \"a\": \"\",    \"b\": [ { \"c\": 1} ] \n}```",
+"default": {
+"ok": "{\"a\": \"\", \"b\": [{\"c\": 1}]}"
+},
+"skip": {
+"ok": "{\"a\": \"\", \"b\": [{\"c\": 1}]}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"a\": \"\", \"b\": [{\"c\": 1}]}"
+}
+},
+{
+"in": "Based on the information extracted, here is the filled JSON output: ```json { 'a': 'b' } ```",
+"default": {
+"ok": "{\"a\": \"b\"}"
+},
+"skip": {
+"ok": "{\"a\": \"b\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"a\": \"b\"}"
+}
+},
+{
+"in": "\n                       The next 64 elements are:\n                       ```json\n                       { \"key\": \"value\" }\n                       ```",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "\n    ```json\n    {\n    \"k\": [\n    {\n    \"b\":\"v2\",\n    \"b\":\"v2\"\n    }\n    ]\n    }\n    ```\n    ",
+"default": {
+"ok": "{\"k\": [{\"b\": \"v2\"}]}"
+},
+"skip": {
+"ok": "{\"k\": [{\"b\": \"v2\"}]}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"k\": [{\"b\": \"v2\"}]}"
+}
+},
+{
+"in": "\n    {\n    \"k\": [\n    {\n    \"b\":\"v2\",\n    \"b\":\"v2\"\n    }\n    ]\n    }\n    ",
+"default": {
+"ok": "{\"k\": [{\"b\": \"v2\"}]}"
+},
+"skip": {
+"ok": "{\"k\": [{\"b\": \"v2\"}]}"
+},
+"strict": {
+"ok": "{\"k\": [{\"b\": \"v2\"}]}"
+},
+"stream": {
+"ok": "{\"k\": [{\"b\": \"v2\"}]}"
+}
+},
+{
+"in": "{\"key\": \"``\"",
+"default": {
+"ok": "{\"key\": \"``\"}"
+},
+"skip": {
+"ok": "{\"key\": \"``\"}"
+},
+"strict": {
+"ok": "{\"key\": \"``\"}"
+},
+"stream": {
+"ok": "{\"key\": \"``\"}"
+}
+},
+{
+"in": "{\"key\": \"```json\"",
+"default": {
+"ok": "{\"key\": \"```json\"}"
+},
+"skip": {
+"ok": "{\"key\": \"```json\"}"
+},
+"strict": {
+"ok": "{\"key\": \"```json\"}"
+},
+"stream": {
+"ok": "{\"key\": \"```json\"}"
+}
+},
+{
+"in": "{\"key\": \"```json {\"key\": [{\"key1\": 1},{\"key2\": 2}]}```\"}",
+"default": {
+"ok": "{\"key\": {\"key\": [{\"key1\": 1}, {\"key2\": 2}]}}"
+},
+"skip": {
+"ok": "{\"key\": {\"key\": [{\"key1\": 1}, {\"key2\": 2}]}}"
+},
+"strict": {
+"ok": "{\"key\": {\"key\": [{\"key1\": 1}, {\"key2\": 2}]}}"
+},
+"stream": {
+"ok": "{\"key\": {\"key\": [{\"key1\": 1}, {\"key2\": 2}]}}"
+}
+},
+{
+"in": "{\"response\": \"```json{}\"",
+"default": {
+"ok": "{\"response\": \"```json{}\"}"
+},
+"skip": {
+"ok": "{\"response\": \"```json{}\"}"
+},
+"strict": {
+"ok": "{\"response\": \"```json{}\"}"
+},
+"stream": {
+"ok": "{\"response\": \"```json{}\"}"
+}
+},
+{
+"in": "{\"key\": \"```json nope\\n\"}",
+"default": {
+"ok": "{\"key\": \"```json nope\\n\"}"
+},
+"skip": {
+"ok": "{\"key\": \"```json nope\"}"
+},
+"strict": {
+"ok": "{\"key\": \"```json nope\\n\"}"
+},
+"stream": {
+"ok": "{\"key\": \"```json nope\\n\"}"
+}
+},
+{
+"in": "{\n\"a\": \"\n```{}```\n\",\n\"b\": \"x\",\n}",
+"default": {
+"ok": "{\"a\": \"\\n```{}```\", \"b\": \"x\"}"
+},
+"skip": {
+"ok": "{\"a\": \"\\n```{}```\", \"b\": \"x\"}"
+},
+"strict": {
+"ok": "{\"a\": \"\\n```{}```\", \"b\": \"x\"}"
+},
+"stream": {
+"ok": "{\"a\": \"\\n```{}```\\n\", \"b\": \"x\"}"
+}
+},
+{
+"in": "{\n\"a\": \"\n```{}```\n\"\n\",\n\"b\": \"x\",\n}",
+"default": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"skip": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"strict": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"stream": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\\n\", \"b\": \"x\"}"
+}
+},
+{
+"in": "{\n\"a\": \"\n```{}```\n\"\n\",\n'b': \"x\",\n}",
+"default": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"skip": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"strict": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"stream": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\\n\", \"b\": \"x\"}"
+}
+},
+{
+"in": "{\n\"a\": \"\n```{}```\n\"\n\", // c\n\"b\": \"x\",\n}",
+"default": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"skip": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"strict": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"stream": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\\n\", \"b\": \"x\"}"
+}
+},
+{
+"in": "{\n\"a\": \"\n```{}```\n\"\n\",\n b: \"x\",\n}",
+"default": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"skip": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"strict": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\", \"b\": \"x\"}"
+},
+"stream": {
+"ok": "{\"a\": \"\\n```{}```\\n\\\"\\n\", \"b\": \"x\"}"
+}
+},
+{
+"in": "{\"a\":\"```}```\"a\",\"b\":\"x\"}",
+"default": {
+"ok": "{\"a\": \"```}```\\\"a\", \"b\": \"x\"}"
+},
+"skip": {
+"ok": "{\"a\": \"```}```\\\"a\", \"b\": \"x\"}"
+},
+"strict": {
+"ok": "{\"a\": \"```}```\\\"a\", \"b\": \"x\"}"
+},
+"stream": {
+"ok": "{\"a\": \"```}```\\\"a\", \"b\": \"x\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` [1,2]\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` [1,2]\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` [1,2]\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` [1,2]\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` [1,2]\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` [http://x]\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` [http://x]\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` [http://x]\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` [http://x]\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` [http://x]\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` [foo[bar]\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` [foo[bar]\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` [foo[bar]\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` [foo[bar]\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` [foo[bar]\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` [{\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` [{\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` [{\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` [{\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` [{\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` [foo, [bar]\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` [foo, [bar]\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` [foo, [bar]\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` [foo, [bar]\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` [foo, [bar]\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` [1,\"z\"]\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` [1,\\\"z\\\"]\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` [1,\\\"z\\\"]\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` [1,\\\"z\\\"]\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` [1,\\\"z\\\"]\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` [1, [2]]\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` [1, [2]]\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` [1, [2]]\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` [1, [2]]\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` [1, [2]]\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` [1,[2],k:v]\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` [1,[2],k:v]\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` [1,[2],k:v]\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` [1,[2],k:v]\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` [1,[2],k:v]\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` (1,(2),k:v)\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` (1,(2),k:v)\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` (1,(2),k:v)\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` (1,(2),k:v)\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` (1,(2),k:v)\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` [1,2],\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` [1,2],\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` [1,2],\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` [1,2],\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` [1,2],\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` // c\n [1,2]\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` // c\\n [1,2]\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` // c\\n [1,2]\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` // c\\n [1,2]\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` // c\\n [1,2]\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\"a\":\"x}``` // c\n [1,2],\n\",\"b\":\"y\"}",
+"default": {
+"ok": "{\"a\": \"x}``` // c\\n [1,2],\", \"b\": \"y\"}"
+},
+"skip": {
+"ok": "{\"a\": \"x}``` // c\\n [1,2],\", \"b\": \"y\"}"
+},
+"strict": {
+"ok": "{\"a\": \"x}``` // c\\n [1,2],\", \"b\": \"y\"}"
+},
+"stream": {
+"ok": "{\"a\": \"x}``` // c\\n [1,2],\\n\", \"b\": \"y\"}"
+}
+},
+{
+"in": "{\n\"a\": \"\n```c\nint main() {\n}\n```\nImplementation: \"xxx\", xxx\n\",\n\"b\": \"x\",\n}",
+"default": {
+"ok": "{\"a\": \"\\n```c\\nint main() {\\n}\\n```\\nImplementation: \\\"xxx\\\", xxx\", \"b\": \"x\"}"
+},
+"skip": {
+"ok": "{\"a\": \"\\n```c\\nint main() {\\n}\\n```\\nImplementation: \\\"xxx\\\", xxx\", \"b\": \"x\"}"
+},
+"strict": {
+"ok": "{\"a\": \"\\n```c\\nint main() {\\n}\\n```\\nImplementation: \\\"xxx\\\", xxx\", \"b\": \"x\"}"
+},
+"stream": {
+"ok": "{\"a\": \"\\n```c\\nint main() {\\n}\\n```\\nImplementation: \\\"xxx\\\", xxx\\n\", \"b\": \"x\"}"
+}
+},
+{
+"in": "{\"a\": \"hello\n\"\n\",}",
+"default": {
+"ok": "{\"a\": \"hello\"}"
+},
+"skip": {
+"ok": "{\"a\": \"hello\"}"
+},
+"strict": {
+"ok": "{\"a\": \"hello\"}"
+},
+"stream": {
+"ok": "{\"a\": \"hello\\n\"}"
+}
+},
+{
+"in": "{\"a\": \"hello\n\"\n\",",
+"default": {
+"ok": "{\"a\": \"hello\"}"
+},
+"skip": {
+"ok": "{\"a\": \"hello\"}"
+},
+"strict": {
+"ok": "{\"a\": \"hello\"}"
+},
+"stream": {
+"ok": "{\"a\": \"hello\\n\"}"
+}
+},
+{
+"in": "{\"x\": \"a,\n “term”: explanation\", \"y\": 2}",
+"default": {
+"ok": "{\"x\": \"a,\\n \\u201cterm\\u201d: explanation\", \"y\": 2}"
+},
+"skip": {
+"ok": "{\"x\": \"a,\\n \\u201cterm\\u201d: explanation\", \"y\": 2}"
+},
+"strict": {
+"ok": "{\"x\": \"a,\\n \\u201cterm\\u201d: explanation\", \"y\": 2}"
+},
+"stream": {
+"ok": "{\"x\": \"a,\\n \\u201cterm\\u201d: explanation\", \"y\": 2}"
+}
+},
+{
+"in": "{\"text\": \"despre „autocritică\" și autocompasiune\"}",
+"default": {
+"ok": "{\"text\": \"despre \\u201eautocritic\\u0103\\\" \\u0219i autocompasiune\"}"
+},
+"skip": {
+"ok": "{\"text\": \"despre \\u201eautocritic\\u0103\\\" \\u0219i autocompasiune\"}"
+},
+"strict": {
+"ok": "{\"text\": \"despre \\u201eautocritic\\u0103\\\" \\u0219i autocompasiune\"}"
+},
+"stream": {
+"ok": "{\"text\": \"despre \\u201eautocritic\\u0103\\\" \\u0219i autocompasiune\"}"
+}
+},
+{
+"in": "{\"text\": \"despre „autocritică” și autocompasiune\"}",
+"default": {
+"ok": "{\"text\": \"despre \\u201eautocritic\\u0103\\u201d \\u0219i autocompasiune\"}"
+},
+"skip": {
+"ok": "{\"text\": \"despre \\u201eautocritic\\u0103\\u201d \\u0219i autocompasiune\"}"
+},
+"strict": {
+"ok": "{\"text\": \"despre \\u201eautocritic\\u0103\\u201d \\u0219i autocompasiune\"}"
+},
+"stream": {
+"ok": "{\"text\": \"despre \\u201eautocritic\\u0103\\u201d \\u0219i autocompasiune\"}"
+}
+},
+{
+"in": "{\"text\": \"aplicație „sham\\\"), a făcut\"}",
+"default": {
+"ok": "{\"text\": \"aplica\\u021bie \\u201esham\\\"), a f\\u0103cut\"}"
+},
+"skip": {
+"ok": "{\"text\": \"aplica\\u021bie \\u201esham\\\"), a f\\u0103cut\"}"
+},
+"strict": {
+"ok": "{\"text\": \"aplica\\u021bie \\u201esham\\\"), a f\\u0103cut\"}"
+},
+"stream": {
+"ok": "{\"text\": \"aplica\\u021bie \\u201esham\\\"), a f\\u0103cut\"}"
+}
+},
+{
+"in": "{\"text\": \"a \\„ b\", \"y\": 1}",
+"default": {
+"ok": "{\"text\": \"a \\u201e b\", \"y\": 1}"
+},
+"skip": {
+"ok": "{\"text\": \"a \\u201e b\", \"y\": 1}"
+},
+"strict": {
+"ok": "{\"text\": \"a \\u201e b\", \"y\": 1}"
+},
+"stream": {
+"ok": "{\"text\": \"a \\u201e b\", \"y\": 1}"
+}
+},
+{
+"in": "True",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "False",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "Null",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "true",
+"default": {
+"ok": "true"
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": "true"
+},
+"stream": {
+"ok": "true"
+}
+},
+{
+"in": "false",
+"default": {
+"ok": "false"
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": "false"
+},
+"stream": {
+"ok": "false"
+}
+},
+{
+"in": "null",
+"default": {
+"ok": "null"
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": "null"
+},
+"stream": {
+"ok": "null"
+}
+},
+{
+"in": "  {\"key\": true, \"key2\": false, \"key3\": null}",
+"default": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+},
+"skip": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+},
+"strict": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+},
+"stream": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+}
+},
+{
+"in": "{\"key\": TRUE, \"key2\": FALSE, \"key3\": Null}   ",
+"default": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+},
+"skip": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+},
+"strict": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+},
+"stream": {
+"ok": "{\"key\": true, \"key2\": false, \"key3\": null}"
+}
+},
+{
+"in": "{\"value\": None }",
+"default": {
+"ok": "{\"value\": null}"
+},
+"skip": {
+"ok": "{\"value\": null}"
+},
+"strict": {
+"ok": "{\"value\": null}"
+},
+"stream": {
+"ok": "{\"value\": null}"
+}
+},
+{
+"in": "[None, TRUE, false, Null]",
+"default": {
+"ok": "[null, true, false, null]"
+},
+"skip": {
+"ok": "[null, true, false, null]"
+},
+"strict": {
+"ok": "[null, true, false, null]"
+},
+"stream": {
+"ok": "[null, true, false, null]"
+}
+},
+{
+"in": "[None",
+"default": {
+"ok": "[null]"
+},
+"skip": {
+"ok": "[null]"
+},
+"strict": {
+"ok": "[null]"
+},
+"stream": {
+"ok": "[null]"
+}
+},
+{
+"in": "{\"value\": \"None\"}",
+"default": {
+"ok": "{\"value\": \"None\"}"
+},
+"skip": {
+"ok": "{\"value\": \"None\"}"
+},
+"strict": {
+"ok": "{\"value\": \"None\"}"
+},
+"stream": {
+"ok": "{\"value\": \"None\"}"
+}
+},
+{
+"in": "{\"value\": none}",
+"default": {
+"ok": "{\"value\": null}"
+},
+"skip": {
+"ok": "{\"value\": null}"
+},
+"strict": {
+"ok": "{\"value\": null}"
+},
+"stream": {
+"ok": "{\"value\": null}"
+}
+},
+{
+"in": "{\"value\": NONE}",
+"default": {
+"ok": "{\"value\": null}"
+},
+"skip": {
+"ok": "{\"value\": null}"
+},
+"strict": {
+"ok": "{\"value\": null}"
+},
+"stream": {
+"ok": "{\"value\": null}"
+}
+},
+{
+"in": "{\"value\": trueblue}",
+"default": {
+"ok": "{\"value\": \"trueblue\"}"
+},
+"skip": {
+"ok": "{\"value\": \"trueblue\"}"
+},
+"strict": {
+"ok": "{\"value\": \"trueblue\"}"
+},
+"stream": {
+"ok": "{\"value\": \"trueblue\"}"
+}
+},
+{
+"in": "{\"value\": falsehood}",
+"default": {
+"ok": "{\"value\": \"falsehood\"}"
+},
+"skip": {
+"ok": "{\"value\": \"falsehood\"}"
+},
+"strict": {
+"ok": "{\"value\": \"falsehood\"}"
+},
+"stream": {
+"ok": "{\"value\": \"falsehood\"}"
+}
+},
+{
+"in": "{\"value\": nullify}",
+"default": {
+"ok": "{\"value\": \"nullify\"}"
+},
+"skip": {
+"ok": "{\"value\": \"nullify\"}"
+},
+"strict": {
+"ok": "{\"value\": \"nullify\"}"
+},
+"stream": {
+"ok": "{\"value\": \"nullify\"}"
+}
+},
+{
+"in": "{\"value\": NoneType}",
+"default": {
+"ok": "{\"value\": \"NoneType\"}"
+},
+"skip": {
+"ok": "{\"value\": \"NoneType\"}"
+},
+"strict": {
+"ok": "{\"value\": \"NoneType\"}"
+},
+"stream": {
+"ok": "{\"value\": \"NoneType\"}"
+}
+},
+{
+"in": "{\"value\": None}",
+"default": {
+"ok": "{\"value\": null}"
+},
+"skip": {
+"ok": "{\"value\": null}"
+},
+"strict": {
+"ok": "{\"value\": null}"
+},
+"stream": {
+"ok": "{\"value\": null}"
+}
+},
+{
+"in": "{\"key\": \"value\", \"items\": [\"alpha\", \"beta\"]}",
+"default": {
+"ok": "{\"key\": \"value\", \"items\": [\"alpha\", \"beta\"]}"
+},
+"skip": {
+"ok": "{\"key\": \"value\", \"items\": [\"alpha\", \"beta\"]}"
+},
+"strict": {
+"ok": "{\"key\": \"value\", \"items\": [\"alpha\", \"beta\"]}"
+},
+"stream": {
+"ok": "{\"key\": \"value\", \"items\": [\"alpha\", \"beta\"]}"
+}
+},
+{
+"in": "{\"x\": \"However, the provided user answer is {\"blank_1\": \"music\"}, which is not a plain string\"}",
+"default": {
+"ok": "{\"x\": \"However, the provided user answer is {\\\"blank_1\\\": \\\"music\\\"}, which is not a plain string\"}"
+},
+"skip": {
+"ok": "{\"x\": \"However, the provided user answer is {\\\"blank_1\\\": \\\"music\\\"}, which is not a plain string\"}"
+},
+"strict": {
+"ok": "{\"x\": \"However, the provided user answer is {\\\"blank_1\\\": \\\"music\\\"}, which is not a plain string\"}"
+},
+"stream": {
+"ok": "{\"x\": \"However, the provided user answer is {\\\"blank_1\\\": \\\"music\\\"}, which is not a plain string\"}"
+}
+},
+{
+"in": "{\"x\": \"a, {\"k\": 1}, \"y\": 2}",
+"default": {
+"ok": "{\"x\": \"a, {\\\"k\\\": 1}\", \"y\": 2}"
+},
+"skip": {
+"ok": "{\"x\": \"a, {\\\"k\\\": 1}\", \"y\": 2}"
+},
+"strict": {
+"ok": "{\"x\": \"a, {\\\"k\\\": 1}\", \"y\": 2}"
+},
+"stream": {
+"ok": "{\"x\": \"a, {\\\"k\\\": 1}, \\\"y\\\": 2\"}"
+}
+},
+{
+"in": "{\"x\": \"a, {\"k\": {\"n\": 1}}, \"y\": 2}",
+"default": {
+"ok": "{\"x\": \"a, {\\\"k\\\": {\\\"n\\\": 1}}\", \"y\": 2}"
+},
+"skip": {
+"ok": "{\"x\": \"a, {\\\"k\\\": {\\\"n\\\": 1}}\", \"y\": 2}"
+},
+"strict": {
+"ok": "{\"x\": \"a, {\\\"k\\\": {\\\"n\\\": 1}}\", \"y\": 2}"
+},
+"stream": {
+"ok": "{\"x\": \"a, {\\\"k\\\": {\\\"n\\\": 1}}, \\\"y\\\": 2\"}"
+}
+},
+{
+"in": "{\"key\": \"value}\\\\\\\"more\"}",
+"default": {
+"ok": "{\"key\": \"value}\\\\\\\"more\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value}\\\"more\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value}\\\\\\\"more\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value}\\\\\\\"more\"}"
+}
+},
+{
+"in": "{\"key\": \"value} \"tail}",
+"default": {
+"ok": "{\"key\": \"value} \"}"
+},
+"skip": {
+"ok": "{\"key\": \"value} \"}"
+},
+"strict": {
+"ok": "{\"key\": \"value} \"}"
+},
+"stream": {
+"ok": "{\"key\": \"value} \"}"
+}
+},
+{
+"in": "{\"key\": \"value} \"tail\" more}",
+"default": {
+"ok": "{\"key\": \"value} \\\"tail\\\" more\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value} \\\"tail\\\" more\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value} \\\"tail\\\" more\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value} \\\"tail\\\" more\"}"
+}
+},
+{
+"in": "{\"key\": \"value} key2: value2}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value} key2: value2\"}"
+}
+},
+{
+"in": "{\"a\":\"\\u007bvalue} key2: value2}",
+"default": {
+"ok": "{\"a\": \"{value} key2: value2\"}"
+},
+"skip": {
+"ok": "{\"a\": \"{value} key2: value2\"}"
+},
+"strict": {
+"ok": "{\"a\": \"{value} key2: value2\"}"
+},
+"stream": {
+"ok": "{\"a\": \"{value} key2: value2\"}"
+}
+},
+{
+"in": "{\"a\":\"{x\\u007d} key2: value2}",
+"default": {
+"ok": "{\"a\": \"{x}\"}"
+},
+"skip": {
+"ok": "{\"a\": \"{x}\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"a\": \"{x}} key2: value2\"}"
+}
+},
+{
+"in": "{ \"key\": \"\\\\{1,2\\\\} \\\\{3\\\\}\" }",
+"default": {
+"ok": "{\"key\": \"\\\\{1,2\\\\} \\\\{3\\\\}\"}"
+},
+"skip": {
+"ok": "{\"key\": \"\\\\{1,2\\\\} \\\\{3\\\\}\"}"
+},
+"strict": {
+"ok": "{\"key\": \"\\\\{1,2\\\\} \\\\{3\\\\}\"}"
+},
+"stream": {
+"ok": "{\"key\": \"\\\\{1,2\\\\} \\\\{3\\\\}\"}"
+}
+},
+{
+"in": "{\"key\": \"a\\\\\\\\b\\\\\\\\c\",}",
+"default": {
+"ok": "{\"key\": \"a\\\\\\\\b\\\\\\\\c\"}"
+},
+"skip": {
+"ok": "{\"key\": \"a\\\\\\\\b\\\\\\\\c\"}"
+},
+"strict": {
+"ok": "{\"key\": \"a\\\\\\\\b\\\\\\\\c\"}"
+},
+"stream": {
+"ok": "{\"key\": \"a\\\\\\\\b\\\\\\\\c\"}"
+}
+},
+{
+"in": "{\"key\": \"1\\\\\\\\2\\\\\\\\3\",}",
+"default": {
+"ok": "{\"key\": \"1\\\\\\\\2\\\\\\\\3\"}"
+},
+"skip": {
+"ok": "{\"key\": \"1\\\\\\\\2\\\\\\\\3\"}"
+},
+"strict": {
+"ok": "{\"key\": \"1\\\\\\\\2\\\\\\\\3\"}"
+},
+"stream": {
+"ok": "{\"key\": \"1\\\\\\\\2\\\\\\\\3\"}"
+}
+},
+{
+"in": "{\"path\": \"C:\\\\\"",
+"default": {
+"ok": "{\"path\": \"C:\\\\\"}"
+},
+"skip": {
+"ok": "{\"path\": \"C:\\\\\"}"
+},
+"strict": {
+"ok": "{\"path\": \"C:\\\\\"}"
+},
+"stream": {
+"ok": "{\"path\": \"C:\\\\\"}"
+}
+},
+{
+"in": "[\"R\\\\\"]",
+"default": {
+"ok": "[\"R\\\\\"]"
+},
+"skip": {
+"ok": "[\"R\\\\\"]"
+},
+"strict": {
+"ok": "[\"R\\\\\"]"
+},
+"stream": {
+"ok": "[\"R\\\\\"]"
+}
+},
+{
+"in": "[\"R\\\\\\\\\"]",
+"default": {
+"ok": "[\"R\\\\\\\\\"]"
+},
+"skip": {
+"ok": "[\"R\\\\\\\\\"]"
+},
+"strict": {
+"ok": "[\"R\\\\\\\\\"]"
+},
+"stream": {
+"ok": "[\"R\\\\\\\\\"]"
+}
+},
+{
+"in": "{ \"key\": \"x [0,2] f(-\\\\frac{3}{4})\" }",
+"default": {
+"ok": "{\"key\": \"x [0,2] f(-\\\\frac{3}{4})\"}"
+},
+"skip": {
+"ok": "{\"key\": \"x [0,2] f(-\\\\frac{3}{4})\"}"
+},
+"strict": {
+"ok": "{\"key\": \"x [0,2] f(-\\\\frac{3}{4})\"}"
+},
+"stream": {
+"ok": "{\"key\": \"x [0,2] f(-\\\\frac{3}{4})\"}"
+}
+},
+{
+"in": "{ \"llm_reason\": \"curve $C: \\\\frac{x^2}{m}$ answer is {\"blank_1\": \"5\"}, correct is 4.\", \"llm_answer\": \"4\" }",
+"default": {
+"ok": "{\"llm_reason\": \"curve $C: \\\\frac{x^2}{m}$ answer is {\\\"blank_1\\\": \\\"5\\\"}, correct is 4.\", \"llm_answer\": \"4\"}"
+},
+"skip": {
+"ok": "{\"llm_reason\": \"curve $C: \\\\frac{x^2}{m}$ answer is {\\\"blank_1\\\": \\\"5\\\"}, correct is 4.\", \"llm_answer\": \"4\"}"
+},
+"strict": {
+"ok": "{\"llm_reason\": \"curve $C: \\\\frac{x^2}{m}$ answer is {\\\"blank_1\\\": \\\"5\\\"}, correct is 4.\", \"llm_answer\": \"4\"}"
+},
+"stream": {
+"ok": "{\"llm_reason\": \"curve $C: \\\\frac{x^2}{m}$ answer is {\\\"blank_1\\\": \\\"5\\\"}, correct is 4.\", \"llm_answer\": \"4\"}"
+}
+},
+{
+"in": "{0:a\"0\"",
+"default": {
+"ok": "{\"0\": \"a\"}"
+},
+"skip": {
+"ok": "{\"0\": \"a\"}"
+},
+"strict": {
+"ok": "{\"0\": \"a\"}"
+},
+"stream": {
+"ok": "{\"0\": \"a\"}"
+}
+},
+{
+"in": "{'': 1}",
+"default": {
+"ok": "{\"\": 1}"
+},
+"skip": {
+"ok": "{\"\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Empty key found in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"\": 1}"
+}
+},
+{
+"in": "{key:value",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"ok": "{\"key\": \"value\"}"
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "\"a\": \"1\"}",
+"default": {
+"ok": "{\"a\": \"1\"}"
+},
+"skip": {
+"ok": "{\"a\": \"1\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\": \"1\"}"
+}
+},
+{
+"in": "\"a\": \"wrong\"}",
+"default": {
+"ok": "{\"a\": \"wrong\"}"
+},
+"skip": {
+"ok": "{\"a\": \"wrong\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\": \"wrong\"}"
+}
+},
+{
+"in": "{ \"text\": , \"count\": , \"ratio\": , \"flag\": , \"items\": , \"payload\": , \"nothing\": }",
+"default": {
+"ok": "{\"text\": \"\", \"count\": \"\", \"ratio\": \"\", \"flag\": \"\", \"items\": \"\", \"payload\": \"\", \"nothing\": \"\"}"
+},
+"skip": {
+"ok": "{\"text\": \"\", \"count\": \"\", \"ratio\": \"\", \"flag\": \"\", \"items\": \"\", \"payload\": \"\", \"nothing\": \"\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed value is empty in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"text\": \"\", \"count\": \"\", \"ratio\": \"\", \"flag\": \"\", \"items\": \"\", \"payload\": \"\", \"nothing\": \"\"}"
+}
+},
+{
+"in": "Here is an example: {\"foo\": 1}\n\nFinal answer:\n```json\n{\"name\": \"Alice\", \"age\": 30}\n```\n\nAlternative: {\"name\": \"Bob\", \"age\": 40}",
+"default": {
+"ok": "[{\"foo\": 1}, {\"name\": \"Bob\", \"age\": 40}]"
+},
+"skip": {
+"ok": "[{\"foo\": 1}, {\"name\": \"Bob\", \"age\": 40}]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[{\"foo\": 1}, {\"name\": \"Bob\", \"age\": 40}]"
+}
+},
+{
+"in": "The options are [\"a\", \"b\"].\n\n{\"name\": \"Alice\", \"age\": 30}",
+"default": {
+"ok": "[[\"a\", \"b\"], {\"name\": \"Alice\", \"age\": 30}]"
+},
+"skip": {
+"ok": "[[\"a\", \"b\"], {\"name\": \"Alice\", \"age\": 30}]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[[\"a\", \"b\"], {\"name\": \"Alice\", \"age\": 30}]"
+}
+},
+{
+"in": "{\"foo\": 1}\n{\"name\": \"Alice\", \"age\": 30}",
+"default": {
+"ok": "[{\"foo\": 1}, {\"name\": \"Alice\", \"age\": 30}]"
+},
+"skip": {
+"ok": "[{\"foo\": 1}, {\"name\": \"Alice\", \"age\": 30}]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[{\"foo\": 1}, {\"name\": \"Alice\", \"age\": 30}]"
+}
+},
+{
+"in": "{\"foo\": 1}\n{\"bar\": 2}",
+"default": {
+"ok": "[{\"foo\": 1}, {\"bar\": 2}]"
+},
+"skip": {
+"ok": "[{\"foo\": 1}, {\"bar\": 2}]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[{\"foo\": 1}, {\"bar\": 2}]"
+}
+},
+{
+"in": "{\"foo\": 1} trailing prose",
+"default": {
+"ok": "{\"foo\": 1}"
+},
+"skip": {
+"ok": "{\"foo\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"foo\": 1}"
+}
+},
+{
+"in": "{\"foo\": 1} // trailing comment",
+"default": {
+"ok": "{\"foo\": 1}"
+},
+"skip": {
+"ok": "{\"foo\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"foo\": 1}"
+}
+},
+{
+"in": "",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "[{\"foo\": 1}, {\"name\": \"Alice\", \"age\": 30}]",
+"default": {
+"ok": "[{\"foo\": 1}, {\"name\": \"Alice\", \"age\": 30}]"
+},
+"skip": {
+"ok": "[{\"foo\": 1}, {\"name\": \"Alice\", \"age\": 30}]"
+},
+"strict": {
+"ok": "[{\"foo\": 1}, {\"name\": \"Alice\", \"age\": 30}]"
+},
+"stream": {
+"ok": "[{\"foo\": 1}, {\"name\": \"Alice\", \"age\": 30}]"
+}
+},
+{
+"in": "{\"value\": \"1\"}",
+"default": {
+"ok": "{\"value\": \"1\"}"
+},
+"skip": {
+"ok": "{\"value\": \"1\"}"
+},
+"strict": {
+"ok": "{\"value\": \"1\"}"
+},
+"stream": {
+"ok": "{\"value\": \"1\"}"
+}
+},
+{
+"in": "\"1\"",
+"default": {
+"ok": "\"1\""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": "\"1\""
+},
+"stream": {
+"ok": "\"1\""
+}
+},
+{
+"in": "\"bbb\"",
+"default": {
+"ok": "\"bbb\""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": "\"bbb\""
+},
+"stream": {
+"ok": "\"bbb\""
+}
+},
+{
+"in": "{\"value\": [{\"name\": \"example\"}],}",
+"default": {
+"ok": "{\"value\": [{\"name\": \"example\"}]}"
+},
+"skip": {
+"ok": "{\"value\": [{\"name\": \"example\"}]}"
+},
+"strict": {
+"ok": "{\"value\": [{\"name\": \"example\"}]}"
+},
+"stream": {
+"ok": "{\"value\": [{\"name\": \"example\"}]}"
+}
+},
+{
+"in": "{\"value\": [{\"name\": \"invalid\"}],}",
+"default": {
+"ok": "{\"value\": [{\"name\": \"invalid\"}]}"
+},
+"skip": {
+"ok": "{\"value\": [{\"name\": \"invalid\"}]}"
+},
+"strict": {
+"ok": "{\"value\": [{\"name\": \"invalid\"}]}"
+},
+"stream": {
+"ok": "{\"value\": [{\"name\": \"invalid\"}]}"
+}
+},
+{
+"in": "{\"value\": 1}",
+"default": {
+"ok": "{\"value\": 1}"
+},
+"skip": {
+"ok": "{\"value\": 1}"
+},
+"strict": {
+"ok": "{\"value\": 1}"
+},
+"stream": {
+"ok": "{\"value\": 1}"
+}
+},
+{
+"in": "{\"summary\": \"{\\\"verdict\\\": \\\"malicious\\\", \\\"confidence\\\": \\\"high\\\"}\"}",
+"default": {
+"ok": "{\"summary\": \"{\\\"verdict\\\": \\\"malicious\\\", \\\"confidence\\\": \\\"high\\\"}\"}"
+},
+"skip": {
+"ok": "{\"summary\": \"{\\\"verdict\\\": \\\"malicious\\\", \\\"confidence\\\": \\\"high\\\"}\"}"
+},
+"strict": {
+"ok": "{\"summary\": \"{\\\"verdict\\\": \\\"malicious\\\", \\\"confidence\\\": \\\"high\\\"}\"}"
+},
+"stream": {
+"ok": "{\"summary\": \"{\\\"verdict\\\": \\\"malicious\\\", \\\"confidence\\\": \\\"high\\\"}\"}"
+}
+},
+{
+"in": "{\"summary\": \"{verdict: malicious, confidence: high}\"}",
+"default": {
+"ok": "{\"summary\": \"{verdict: malicious, confidence: high}\"}"
+},
+"skip": {
+"ok": "{\"summary\": \"{verdict: malicious, confidence: high}\"}"
+},
+"strict": {
+"ok": "{\"summary\": \"{verdict: malicious, confidence: high}\"}"
+},
+"stream": {
+"ok": "{\"summary\": \"{verdict: malicious, confidence: high}\"}"
+}
+},
+{
+"in": "{\"items\": \"[\\\"a\\\", \\\"b\\\"]\"}",
+"default": {
+"ok": "{\"items\": \"[\\\"a\\\", \\\"b\\\"]\"}"
+},
+"skip": {
+"ok": "{\"items\": \"[\\\"a\\\", \\\"b\\\"]\"}"
+},
+"strict": {
+"ok": "{\"items\": \"[\\\"a\\\", \\\"b\\\"]\"}"
+},
+"stream": {
+"ok": "{\"items\": \"[\\\"a\\\", \\\"b\\\"]\"}"
+}
+},
+{
+"in": "{\"items\": \"[a, b]\"}",
+"default": {
+"ok": "{\"items\": \"[a, b]\"}"
+},
+"skip": {
+"ok": "{\"items\": \"[a, b]\"}"
+},
+"strict": {
+"ok": "{\"items\": \"[a, b]\"}"
+},
+"stream": {
+"ok": "{\"items\": \"[a, b]\"}"
+}
+},
+{
+"in": "{\"summary\": \"not json\"}",
+"default": {
+"ok": "{\"summary\": \"not json\"}"
+},
+"skip": {
+"ok": "{\"summary\": \"not json\"}"
+},
+"strict": {
+"ok": "{\"summary\": \"not json\"}"
+},
+"stream": {
+"ok": "{\"summary\": \"not json\"}"
+}
+},
+{
+"in": "{\"summary\": \"[1, 2]\"}",
+"default": {
+"ok": "{\"summary\": \"[1, 2]\"}"
+},
+"skip": {
+"ok": "{\"summary\": \"[1, 2]\"}"
+},
+"strict": {
+"ok": "{\"summary\": \"[1, 2]\"}"
+},
+"stream": {
+"ok": "{\"summary\": \"[1, 2]\"}"
+}
+},
+{
+"in": "{\"items\": \"not json\"}",
+"default": {
+"ok": "{\"items\": \"not json\"}"
+},
+"skip": {
+"ok": "{\"items\": \"not json\"}"
+},
+"strict": {
+"ok": "{\"items\": \"not json\"}"
+},
+"stream": {
+"ok": "{\"items\": \"not json\"}"
+}
+},
+{
+"in": "{\"items\": \"{\\\"a\\\": 1}\"}",
+"default": {
+"ok": "{\"items\": \"{\\\"a\\\": 1}\"}"
+},
+"skip": {
+"ok": "{\"items\": \"{\\\"a\\\": 1}\"}"
+},
+"strict": {
+"ok": "{\"items\": \"{\\\"a\\\": 1}\"}"
+},
+"stream": {
+"ok": "{\"items\": \"{\\\"a\\\": 1}\"}"
+}
+},
+{
+"in": "{\"items\": \"{a: 1}\"}",
+"default": {
+"ok": "{\"items\": \"{a: 1}\"}"
+},
+"skip": {
+"ok": "{\"items\": \"{a: 1}\"}"
+},
+"strict": {
+"ok": "{\"items\": \"{a: 1}\"}"
+},
+"stream": {
+"ok": "{\"items\": \"{a: 1}\"}"
+}
+},
+{
+"in": "Preamble\n{\"items\": [{\"text\": \"a\\n, extra: 1\", \"id\": 8}]}",
+"default": {
+"ok": "{\"items\": [{\"text\": \"a\\n, extra: 1\", \"id\": 8}]}"
+},
+"skip": {
+"ok": "{\"items\": [{\"text\": \"a\\n, extra: 1\", \"id\": 8}]}"
+},
+"strict": {
+"ok": "{\"items\": [{\"text\": \"a\\n, extra: 1\", \"id\": 8}]}"
+},
+"stream": {
+"ok": "{\"items\": [{\"text\": \"a\\n, extra: 1\", \"id\": 8}]}"
+}
+},
+{
+"in": "\"\"",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
+"in": "{\"point\": [\"1\", \"2\"]}",
+"default": {
+"ok": "{\"point\": [\"1\", \"2\"]}"
+},
+"skip": {
+"ok": "{\"point\": [\"1\", \"2\"]}"
+},
+"strict": {
+"ok": "{\"point\": [\"1\", \"2\"]}"
+},
+"stream": {
+"ok": "{\"point\": [\"1\", \"2\"]}"
+}
+},
+{
+"in": "{\"point\": [\"1\", \"2\"]",
+"default": {
+"ok": "{\"point\": [\"1\", \"2\"]}"
+},
+"skip": {
+"ok": "{\"point\": [\"1\", \"2\"]}"
+},
+"strict": {
+"ok": "{\"point\": [\"1\", \"2\"]}"
+},
+"stream": {
+"ok": "{\"point\": [\"1\", \"2\"]}"
+}
+},
+{
+"in": "[\"1\", \"2\"]",
+"default": {
+"ok": "[\"1\", \"2\"]"
+},
+"skip": {
+"ok": "[\"1\", \"2\"]"
+},
+"strict": {
+"ok": "[\"1\", \"2\"]"
+},
+"stream": {
+"ok": "[\"1\", \"2\"]"
+}
+},
+{
+"in": "[\"1\", \"2\"",
+"default": {
+"ok": "[\"1\", \"2\"]"
+},
+"skip": {
+"ok": "[\"1\", \"2\"]"
+},
+"strict": {
+"ok": "[\"1\", \"2\"]"
+},
+"stream": {
+"ok": "[\"1\", \"2\"]"
+}
+},
+{
+"in": "{ \"evidence_types\": }",
+"default": {
+"ok": "{\"evidence_types\": \"\"}"
+},
+"skip": {
+"ok": "{\"evidence_types\": \"\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed value is empty in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"evidence_types\": \"\"}"
+}
+},
+{
+"in": "{displayName: \"Alice\"}",
+"default": {
+"ok": "{\"displayName\": \"Alice\"}"
+},
+"skip": {
+"ok": "{\"displayName\": \"Alice\"}"
+},
+"strict": {
+"ok": "{\"displayName\": \"Alice\"}"
+},
+"stream": {
+"ok": "{\"displayName\": \"Alice\"}"
+}
+},
+{
+"in": "{\"displayName\": 42}",
+"default": {
+"ok": "{\"displayName\": 42}"
+},
+"skip": {
+"ok": "{\"displayName\": 42}"
+},
+"strict": {
+"ok": "{\"displayName\": 42}"
+},
+"stream": {
+"ok": "{\"displayName\": 42}"
+}
+},
+{
+"in": "{\"display_name\": \"Bob\"}",
+"default": {
+"ok": "{\"display_name\": \"Bob\"}"
+},
+"skip": {
+"ok": "{\"display_name\": \"Bob\"}"
+},
+"strict": {
+"ok": "{\"display_name\": \"Bob\"}"
+},
+"stream": {
+"ok": "{\"display_name\": \"Bob\"}"
+}
+},
+{
+"in": "{display_name: \"Bob\"}",
+"default": {
+"ok": "{\"display_name\": \"Bob\"}"
+},
+"skip": {
+"ok": "{\"display_name\": \"Bob\"}"
+},
+"strict": {
+"ok": "{\"display_name\": \"Bob\"}"
+},
+"stream": {
+"ok": "{\"display_name\": \"Bob\"}"
+}
+},
+{
+"in": "{display_name: \"Bob\", displayName: \"Alice\"}",
+"default": {
+"ok": "{\"display_name\": \"Bob\", \"displayName\": \"Alice\"}"
+},
+"skip": {
+"ok": "{\"display_name\": \"Bob\", \"displayName\": \"Alice\"}"
+},
+"strict": {
+"ok": "{\"display_name\": \"Bob\", \"displayName\": \"Alice\"}"
+},
+"stream": {
+"ok": "{\"display_name\": \"Bob\", \"displayName\": \"Alice\"}"
+}
+},
+{
+"in": "{\"display_name\": \"Bob\", \"displayName\": \"Alice\"}",
+"default": {
+"ok": "{\"display_name\": \"Bob\", \"displayName\": \"Alice\"}"
+},
+"skip": {
+"ok": "{\"display_name\": \"Bob\", \"displayName\": \"Alice\"}"
+},
+"strict": {
+"ok": "{\"display_name\": \"Bob\", \"displayName\": \"Alice\"}"
+},
+"stream": {
+"ok": "{\"display_name\": \"Bob\", \"displayName\": \"Alice\"}"
+}
+},
+{
+"in": "{\"flag\": \"yes\"}",
+"default": {
+"ok": "{\"flag\": \"yes\"}"
+},
+"skip": {
+"ok": "{\"flag\": \"yes\"}"
+},
+"strict": {
+"ok": "{\"flag\": \"yes\"}"
+},
+"stream": {
+"ok": "{\"flag\": \"yes\"}"
+}
+},
+{
+"in": "{\"flag\": 1}",
+"default": {
+"ok": "{\"flag\": 1}"
+},
+"skip": {
+"ok": "{\"flag\": 1}"
+},
+"strict": {
+"ok": "{\"flag\": 1}"
+},
+"stream": {
+"ok": "{\"flag\": 1}"
+}
+},
+{
+"in": "{\"flag\": 0}",
+"default": {
+"ok": "{\"flag\": 0}"
+},
+"skip": {
+"ok": "{\"flag\": 0}"
+},
+"strict": {
+"ok": "{\"flag\": 0}"
+},
+"stream": {
+"ok": "{\"flag\": 0}"
+}
+},
+{
+"in": "{\"flag\": 1.0}",
+"default": {
+"ok": "{\"flag\": 1.0}"
+},
+"skip": {
+"ok": "{\"flag\": 1.0}"
+},
+"strict": {
+"ok": "{\"flag\": 1.0}"
+},
+"stream": {
+"ok": "{\"flag\": 1.0}"
+}
+},
+{
+"in": "{\"flag\": 0.0}",
+"default": {
+"ok": "{\"flag\": 0.0}"
+},
+"skip": {
+"ok": "{\"flag\": 0.0}"
+},
+"strict": {
+"ok": "{\"flag\": 0.0}"
+},
+"stream": {
+"ok": "{\"flag\": 0.0}"
+}
+},
+{
+"in": "{\"items\":[{\"id\":1,\"score\":85.6},{\"id\":2,\"score\":\"N/A\"}]}",
+"default": {
+"ok": "{\"items\": [{\"id\": 1, \"score\": 85.6}, {\"id\": 2, \"score\": \"N/A\"}]}"
+},
+"skip": {
+"ok": "{\"items\": [{\"id\": 1, \"score\": 85.6}, {\"id\": 2, \"score\": \"N/A\"}]}"
+},
+"strict": {
+"ok": "{\"items\": [{\"id\": 1, \"score\": 85.6}, {\"id\": 2, \"score\": \"N/A\"}]}"
+},
+"stream": {
+"ok": "{\"items\": [{\"id\": 1, \"score\": 85.6}, {\"id\": 2, \"score\": \"N/A\"}]}"
+}
+},
+{
+"in": "[\"1\", \"bad\"]",
+"default": {
+"ok": "[\"1\", \"bad\"]"
+},
+"skip": {
+"ok": "[\"1\", \"bad\"]"
+},
+"strict": {
+"ok": "[\"1\", \"bad\"]"
+},
+"stream": {
+"ok": "[\"1\", \"bad\"]"
+}
+},
+{
+"in": "[1]",
+"default": {
+"ok": "[1]"
+},
+"skip": {
+"ok": "[1]"
+},
+"strict": {
+"ok": "[1]"
+},
+"stream": {
+"ok": "[1]"
+}
+},
+{
+"in": "[\"hello\", [\"a\", \"b\"]]",
+"default": {
+"ok": "[\"hello\", [\"a\", \"b\"]]"
+},
+"skip": {
+"ok": "[\"hello\", [\"a\", \"b\"]]"
+},
+"strict": {
+"ok": "[\"hello\", [\"a\", \"b\"]]"
+},
+"stream": {
+"ok": "[\"hello\", [\"a\", \"b\"]]"
+}
+},
+{
+"in": "{\"a\", \"b\"}",
+"default": {
+"ok": "[\"a\", \"b\"]"
+},
+"skip": {
+"ok": "[\"a\", \"b\"]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "[\"a\", \"b\"]"
+}
+},
+{
+"in": "{1, 2}",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "[\"hello\"]",
+"default": {
+"ok": "[\"hello\"]"
+},
+"skip": {
+"ok": "[\"hello\"]"
+},
+"strict": {
+"ok": "[\"hello\"]"
+},
+"stream": {
+"ok": "[\"hello\"]"
+}
+},
+{
+"in": "[[\"a\", \"b\"], \"hello\"]",
+"default": {
+"ok": "[[\"a\", \"b\"], \"hello\"]"
+},
+"skip": {
+"ok": "[[\"a\", \"b\"], \"hello\"]"
+},
+"strict": {
+"ok": "[[\"a\", \"b\"], \"hello\"]"
+},
+"stream": {
+"ok": "[[\"a\", \"b\"], \"hello\"]"
+}
+},
+{
+"in": "[\"bbb\",]",
+"default": {
+"ok": "[\"bbb\"]"
+},
+"skip": {
+"ok": "[\"bbb\"]"
+},
+"strict": {
+"ok": "[\"bbb\"]"
+},
+"stream": {
+"ok": "[\"bbb\"]"
+}
+},
+{
+"in": "[1,2]",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"ok": "[1, 2]"
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "[\n    {\n        \"type\": \"food_sport_card\",\n        \"content\": {\n            \"food\": [\n                \"mantou\"\n            ]\n        }\n    }\n",
+"default": {
+"ok": "[{\"type\": \"food_sport_card\", \"content\": {\"food\": [\"mantou\"]}}]"
+},
+"skip": {
+"ok": "[{\"type\": \"food_sport_card\", \"content\": {\"food\": [\"mantou\"]}}]"
+},
+"strict": {
+"ok": "[{\"type\": \"food_sport_card\", \"content\": {\"food\": [\"mantou\"]}}]"
+},
+"stream": {
+"ok": "[{\"type\": \"food_sport_card\", \"content\": {\"food\": [\"mantou\"]}}]"
+}
+},
+{
+"in": "[{\"value\": 1}, {\"value\": 2}]",
+"default": {
+"ok": "[{\"value\": 1}, {\"value\": 2}]"
+},
+"skip": {
+"ok": "[{\"value\": 1}, {\"value\": 2}]"
+},
+"strict": {
+"ok": "[{\"value\": 1}, {\"value\": 2}]"
+},
+"stream": {
+"ok": "[{\"value\": 1}, {\"value\": 2}]"
+}
+},
+{
+"in": "[{}]",
+"default": {
+"ok": "[{}]"
+},
+"skip": {
+"ok": "[{}]"
+},
+"strict": {
+"ok": "[{}]"
+},
+"stream": {
+"ok": "[{}]"
+}
+},
+{
+"in": "[\"a\": 1]",
+"default": {
+"ok": "[{\"a\": 1}]"
+},
+"skip": {
+"ok": "[{\"a\": 1}]"
+},
+"strict": {
+"ok": "[{\"a\": 1}]"
+},
+"stream": {
+"ok": "[{\"a\": 1}]"
+}
+},
+{
+"in": "{\"x1\": \"2\"}",
+"default": {
+"ok": "{\"x1\": \"2\"}"
+},
+"skip": {
+"ok": "{\"x1\": \"2\"}"
+},
+"strict": {
+"ok": "{\"x1\": \"2\"}"
+},
+"stream": {
+"ok": "{\"x1\": \"2\"}"
+}
+},
+{
+"in": "{\"a\": 1, \"extra\": \"drop\"}",
+"default": {
+"ok": "{\"a\": 1, \"extra\": \"drop\"}"
+},
+"skip": {
+"ok": "{\"a\": 1, \"extra\": \"drop\"}"
+},
+"strict": {
+"ok": "{\"a\": 1, \"extra\": \"drop\"}"
+},
+"stream": {
+"ok": "{\"a\": 1, \"extra\": \"drop\"}"
+}
+},
+{
+"in": "{\"a\": \"2\"}",
+"default": {
+"ok": "{\"a\": \"2\"}"
+},
+"skip": {
+"ok": "{\"a\": \"2\"}"
+},
+"strict": {
+"ok": "{\"a\": \"2\"}"
+},
+"stream": {
+"ok": "{\"a\": \"2\"}"
+}
+},
+{
+"in": "[{\"a\": 1]",
+"default": {
+"ok": "[{\"a\": 1}]"
+},
+"skip": {
+"ok": "[{\"a\": 1}]"
+},
+"strict": {
+"ok": "[{\"a\": 1}]"
+},
+"stream": {
+"ok": "[{\"a\": 1}]"
+}
+},
+{
+"in": "{\"key\":\"value\"}[\"value\"]",
+"default": {
+"ok": "[{\"key\": \"value\"}, [\"value\"]]"
+},
+"skip": {
+"ok": "[{\"key\": \"value\"}, [\"value\"]]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[{\"key\": \"value\"}, [\"value\"]]"
+}
+},
+{
+"in": "{\"key\":\"value\"}{\"key\":\"value_after\"}",
+"default": {
+"ok": "{\"key\": \"value_after\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value_after\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value_after\"}"
+}
+},
+{
+"in": "[1][2]",
+"default": {
+"ok": "[2]"
+},
+"skip": {
+"ok": "[2]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[2]"
+}
+},
+{
+"in": "{\"key\":\"value\"}[]",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{\"key\":\"value\"}{}",
+"default": {
+"ok": "{\"key\": \"value\"}"
+},
+"skip": {
+"ok": "{\"key\": \"value\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"key\": \"value\"}"
+}
+},
+{
+"in": "{}[]",
+"default": {
+"ok": "{}"
+},
+"skip": {
+"ok": "{}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{}"
+}
+},
+{
+"in": "[1]{}",
+"default": {
+"ok": "[1]"
+},
+"skip": {
+"ok": "[1]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[1]"
+}
+},
+{
+"in": "[{\"key\": \"first\", \"key\": \"second\"}]",
+"default": {
+"ok": "[{\"key\": \"second\"}]"
+},
+"skip": {
+"ok": "[{\"key\": \"second\"}]"
+},
+"strict": {
+"ok": "[{\"key\": \"second\"}]"
+},
+"stream": {
+"ok": "[{\"key\": \"second\"}]"
+}
+},
+{
+"in": "{\"\" : \"value\"}",
+"default": {
+"ok": "{\"\": \"value\"}"
+},
+"skip": {
+"ok": "{\"\": \"value\"}"
+},
+"strict": {
+"ok": "{\"\": \"value\"}"
+},
+"stream": {
+"ok": "{\"\": \"value\"}"
+}
+},
+{
+"in": "{\"missing\" \"colon\"}",
+"default": {
+"ok": "{\"missing\": \"colon\"}"
+},
+"skip": {
+"ok": "{\"missing\": \"colon\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing ':' after key in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"missing\": \"colon\"}"
+}
+},
+{
+"in": "{\"dangling\"}",
+"default": {
+"ok": "[\"dangling\"]"
+},
+"skip": {
+"ok": "[\"dangling\"]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Parsed object is empty but contains extra characters in strict mode."
+},
+"stream": {
+"ok": "[\"dangling\"]"
+}
+},
+{
+"in": "{\"key\": \"\"\"\"}",
+"default": {
+"ok": "{\"key\": \"\"}"
+},
+"skip": {
+"ok": "{\"key\": \"\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Found doubled quotes followed by another quote."
+},
+"stream": {
+"ok": "{\"key\": \"\"}"
+}
+},
+{
+"in": "{\"key\": \"\" \"value\"}",
+"default": {
+"ok": "{\"key\": \"\"}"
+},
+"skip": {
+"ok": "{\"key\": \"\"}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Found doubled quotes followed by another quote while parsing a string."
+},
+"stream": {
+"ok": "{\"key\": \"\"}"
+}
+}
+]
+}
