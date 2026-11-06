@@ -12,15 +12,21 @@ cleaning LLM datasets: the same API, the same output, a fraction of the CPU time
 
 > [!NOTE]
 > pyroid 1.0 is not on PyPI yet: until it is, `pip install pyroid` gives the unrelated 0.7.x
-> toolkit ([see below](#the-07x-releases)). Speed numbers are preliminary, from a Docker VM.
+> toolkit ([see below](#the-07x-releases)). Speed numbers are from a Docker VM (indicative); a
+> bare-metal run is pending.
 
-<!-- TODO(bare-metal): hero chart from the bare-metal harness run, light and dark SVGs rendered
-     by bench/chart.py and committed to docs/assets/. Caption: corpus, cores, versions.
+<!-- TODO(bare-metal): replace with the bare-metal run's chart (bench/consolidate.py writes it to
+     charts/consolidated-e2e-{light,dark}.svg) and update the caption. -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
-  <img alt="Time to clean the FineWeb sample, pyroid vs the incumbents" src="docs/assets/hero-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/consolidated-e2e-dark.svg">
+  <img alt="Wall time of the FineWeb chain on 10,000 documents: datatrove at 1 and 8 processes, pyroid's stages in datatrove's executor, and pyroid's native chain at 1 and 8 threads" src="docs/assets/consolidated-e2e-light.svg">
 </picture>
--->
+
+<sub>Wall time of the FineWeb chain (ftfy → language ID → 4 quality filters → MinHash dedup) on the
+first 10,000 documents of the pinned FineWeb slice, with 1 and 8 processes or threads on 8 of 12
+vCPUs. datatrove 0.10.1 (ftfy 6.3.1, fasttext-predict 0.9.2.4, spaCy 3.8.18) on CPython 3.13.18;
+pyroid 1.0.0.dev0 on free-threaded CPython 3.15.2, and on 3.13 inside datatrove's executor. The
+same output document for document. Docker VM, indicative.</sub>
 
 ```console
 $ pip install pyroid               # add [fasttext] for pyroid.fasttext (numpy)
@@ -53,11 +59,14 @@ anyascii-based)
 
 ## Why
 
-- **Faster, measured against the incumbents** (single-threaded; Docker VM on Apple Silicon,
-  indicative, preliminary: [methodology](https://ao.github.io/pyroid/benchmarks/)):
-  `fix_text` 95–167× faster than ftfy on FineWeb documents; FineWeb's four quality filters about
-  86× and MinHash signatures about 64× faster than datatrove; fastText language ID 1.5–5.4×
-  faster; transliteration 37× faster than anyascii and 76× faster than Unidecode.
+- **Faster, measured against the incumbents** (Docker/OrbStack VM on Apple Silicon (12 vCPU),
+  indicative: [methodology](https://ao.github.io/pyroid/benchmarks/)): the whole FineWeb chain
+  on 8 threads is **26× faster than datatrove on 8 processes**, and **49× faster
+  single-threaded**, with identical output (10,000 FineWeb documents: 1.61 s against 41.93 s, and
+  5.16 s against 253.20 s). Per stage, on one thread: `fix_text_batch` 147× faster than ftfy;
+  datatrove's quality filters 52–107× and MinHash signatures 63× faster than datatrove; fastText
+  language ID 2.1× (`.bin`) and 4.3× (`.ftz`) faster; transliteration 79× faster than anyascii
+  (and 76× faster than Unidecode in the module's earlier, preliminary run).
 - **Same output, checked:** byte-identical to ftfy 6.3.1, bit-identical fastText labels and
   probabilities, and datatrove's keep/drop decisions and reasons, on pinned FineWeb documents
   and property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). So
