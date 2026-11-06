@@ -204,10 +204,16 @@ def _ftfy(name: str, reason: str) -> Any:
     try:
         import ftfy as real
     except ImportError:
+        real = None
+    # Under pyroid.integrations.patch("ftfy"), `import ftfy` gives pyroid's own shim: fall back to
+    # the real ftfy it wraps (None if ftfy is not installed), never to the shim (that recurses).
+    if getattr(real, "__pyroid__", False):
+        real = real.__wrapped__
+    if real is None:
         raise PyroidError(
             f"pyroid.ftfy.{name}: {reason} is not supported by pyroid's Rust port, and "
             "ftfy is not installed to fall back to (pip install ftfy==6.3.1)"
-        ) from None
+        )
     if real.__version__ != FTFY_VERSION and "version" not in _WARNED:
         _WARNED.add("version")
         warnings.warn(

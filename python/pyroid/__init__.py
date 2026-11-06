@@ -33,4 +33,31 @@ from pyroid._pyroid import Column, FallbackWarning, InputError, PyroidError  # n
 
 __version__: str = _pyroid.__version__
 
-__all__ = ["Column", "FallbackWarning", "InputError", "PyroidError", "__version__"]
+
+def patch(*names: str) -> None:
+    """Make ``import ftfy`` / ``import fasttext`` / ``import anyascii`` give pyroid's drop-ins.
+
+    ``pyroid.patch("ftfy", "fasttext")`` is :func:`pyroid.integrations.patch`: explicit,
+    reversible ``sys.modules`` shims (see there). Nothing is imported until it is called.
+    """
+    from pyroid.integrations._patch import patch as _patch
+
+    _patch(*names)
+
+
+def unpatch(*names: str) -> None:
+    """Undo :func:`patch` for ``names`` (all if none): :func:`pyroid.integrations.unpatch`."""
+    from pyroid.integrations._patch import unpatch as _unpatch
+
+    _unpatch(*names)
+
+
+__all__ = [
+    "Column",
+    "FallbackWarning",
+    "InputError",
+    "PyroidError",
+    "__version__",
+    "patch",
+    "unpatch",
+]

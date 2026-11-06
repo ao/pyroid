@@ -51,7 +51,11 @@ def test_public_api() -> None:
         "InputError",
         "PyroidError",
         "__version__",
+        "patch",
+        "unpatch",
     ]
+    # pyroid.patch / unpatch are pyroid's own lazy wrappers of pyroid.integrations'.
+    assert pyroid.patch.__module__ == pyroid.unpatch.__module__ == "pyroid"
     assert pyroid.PyroidError is _pyroid.PyroidError
     assert pyroid.FallbackWarning is _pyroid.FallbackWarning
     assert pyroid.InputError is _pyroid.InputError
