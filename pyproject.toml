@@ -42,9 +42,9 @@ fasttext = ["numpy>=1.26"]
 # The `pyroid` command line (Parquet/JSONL streaming, the FineWeb recipe) and
 # pyroid.integrations.recipes.
 cli = ["pyarrow>=18", "numpy>=1.26"]
-# pyroid.integrations.datatrove: drop-in steps; they reproduce datatrove 0.10.1. regex: datatrove's
-# filter modules import it, but datatrove does not declare it.
-datatrove = ["datatrove>=0.10.1", "regex", "numpy>=1.26"]
+# pyroid.integrations.datatrove: drop-in steps; they reproduce datatrove 0.10.1. regex and
+# tokenizers: datatrove.pipeline.filters imports them, but datatrove does not declare them.
+datatrove = ["datatrove>=0.10.1", "regex", "tokenizers", "numpy>=1.26"]
 # pyroid.integrations.hf: Hugging Face datasets helpers.
 hf = ["datasets>=3", "pyarrow>=18", "numpy>=1.26"]
 
