@@ -148,8 +148,11 @@ _DUMP_CACHE: dict[tuple[Any, ...], Any] = {}
 
 
 def _dump_config(kwargs: dict[str, Any]) -> Any:
-    """A native dump config for ``json.dumps(**kwargs)``, ``None`` for the defaults, or
-    ``_PYTHON_DUMPS`` when only ``json.dumps`` itself can say what the kwargs do."""
+    """The native dump config for ``json.dumps(**kwargs)``.
+
+    ``None`` stands for the defaults, ``_PYTHON_DUMPS`` for kwargs only ``json.dumps``
+    itself can interpret.
+    """
     if not kwargs:
         return None
     if not kwargs.keys() <= _NATIVE_DUMPS or kwargs.get("cls") is not None:
