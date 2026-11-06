@@ -1,0 +1,59 @@
+# cargo-fuzz targets for pyroid-core (run in Docker; see README.md). A separate
+# workspace: the root workspace and its CI jobs (clippy, cargo-deny) never see it.
+[package]
+name = "pyroid-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+pyroid-core = { path = "../crates/pyroid-core" }
+
+[[bin]]
+name = "ftfy"
+path = "fuzz_targets/ftfy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filters"
+path = "fuzz_targets/filters.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tokenizer"
+path = "fuzz_targets/tokenizer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "translit"
+path = "fuzz_targets/translit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dedup_simplify"
+path = "fuzz_targets/dedup_simplify.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fasttext"
+path = "fuzz_targets/fasttext.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]
