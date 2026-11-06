@@ -1,0 +1,10 @@
+........                                                                 [100%]
+==================================== parity ====================================
+fasttext  hypothesis-lid.176.bin           same=2004     diff=0
+fasttext  hypothesis-lid.176.ftz           same=2004     diff=0
+fasttext  lid.176.bin/adversarial          same=3232     diff=0
+fasttext  lid.176.bin/dev                  same=10000    diff=0
+fasttext  lid.176.ftz/adversarial          same=3232     diff=0
+fasttext  lid.176.ftz/dev                  same=10000    diff=0
+fasttext  newline-raises                   same=2        diff=0
+8 passed, 1394 deselected in 5.68s

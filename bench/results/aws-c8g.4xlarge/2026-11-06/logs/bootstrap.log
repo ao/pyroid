@@ -1,0 +1,123 @@
+[bootstrap 07:58:49] start on Linux 6.18.56-125.164.amzn2023.aarch64 aarch64, prefix /opt/pyroid
+[bootstrap 07:58:49] dnf install git gcc gcc-c++
+
+Installed:
+  annobin-docs-12.69-1.amzn2023.0.1.noarch                                      
+  annobin-plugin-gcc-12.69-1.amzn2023.0.1.aarch64                               
+  cpp-11.5.0-5.amzn2023.0.5.aarch64                                             
+  gc-8.0.4-5.amzn2023.0.2.aarch64                                               
+  gcc-11.5.0-5.amzn2023.0.5.aarch64                                             
+  gcc-c++-11.5.0-5.amzn2023.0.5.aarch64                                         
+  gcc-plugin-annobin-11.5.0-5.amzn2023.0.5.aarch64                              
+  git-2.50.1-1.amzn2023.0.1.aarch64                                             
+  git-core-2.50.1-1.amzn2023.0.1.aarch64                                        
+  git-core-doc-2.50.1-1.amzn2023.0.1.noarch                                     
+  glibc-devel-2.34-231.amzn2023.0.5.aarch64                                     
+  guile22-2.2.7-2.amzn2023.0.3.aarch64                                          
+  kernel6.18-headers-1:6.18.56-125.164.amzn2023.aarch64                         
+  libmpc-1.2.1-2.amzn2023.0.2.aarch64                                           
+  libstdc++-devel-11.5.0-5.amzn2023.0.5.aarch64                                 
+  libtool-ltdl-2.4.7-1.amzn2023.0.3.aarch64                                     
+  libxcrypt-devel-4.4.33-7.amzn2023.aarch64                                     
+  make-1:4.3-5.amzn2023.0.2.aarch64                                             
+  perl-Error-1:0.17030-2.amzn2023.0.1.noarch                                    
+  perl-File-Find-1.37-477.amzn2023.0.11.noarch                                  
+  perl-Git-2.50.1-1.amzn2023.0.1.noarch                                         
+  perl-TermReadKey-2.38-9.amzn2023.0.3.aarch64                                  
+  perl-lib-0.65-477.amzn2023.0.11.aarch64                                       
+
+[bootstrap 07:59:10] rustup (stable, minimal)
+
+  stable-aarch64-unknown-linux-gnu installed - rustc 1.99.1 (58cf8f9c3 2026-10-13)
+
+
+Rust is installed now. Great!
+
+To get started you need Cargo's bin directory (/opt/pyroid/cargo/bin) in your 
+PATH
+environment variable. This has not been done automatically.
+
+To configure your current shell, you need to source
+the corresponding env file under /opt/pyroid/cargo.
+
+Consider running the right command for your shell (note the leading DOT):
+. "/opt/pyroid/cargo/env"           # For sh/ash/dash/pdksh/bash
+source "/opt/pyroid/cargo/env.tcsh" # For tcsh
+cargo:rerun-if-env-changed=CC_aarch64-unknown-linux-gnu
+CC_aarch64-unknown-linux-gnu = None
+cargo:rerun-if-env-changed=CC_aarch64_unknown_linux_gnu
+CC_aarch64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=HOST_CC
+HOST_CC = None
+cargo:rerun-if-env-changed=CC
+CC = None
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CPATH
+cargo:rerun-if-env-changed=C_INCLUDE_PATH
+cargo:rerun-if-env-changed=CPLUS_INCLUDE_PATH
+cargo:rerun-if-env-changed=OBJC_INCLUDE_PATH
+cargo:rerun-if-env-changed=OBJCPLUS_INCLUDE_PATH
+cargo:rerun-if-env-changed=COMPILER_PATH
+cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH
+cargo:rerun-if-env-changed=GCC_EXEC_PREFIX
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64_unknown_linux_gnu
+CFLAGS_aarch64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64-unknown-linux-gnu
+CFLAGS_aarch64-unknown-linux-gnu = None
+[bootstrap 07:59:15] uv 0.13.7
+downloading uv 0.13.7 aarch64-unknown-linux-gnu
+installing to /opt/pyroid/bin
+  uv
+  uvx
+everything's installed!
+[bootstrap 07:59:16] CPython 3.12.16 3.13.18 3.15.2 3.15.2t
+Downloading cpython-3.15.2+freethreaded-linux-aarch64-gnu (download) (30.3MiB)
+Downloading cpython-3.13.18-linux-aarch64-gnu (download) (28.1MiB)
+Downloading cpython-3.15.2-linux-aarch64-gnu (download) (30.3MiB)
+Downloading cpython-3.12.16-linux-aarch64-gnu (download) (27.9MiB)
+ Downloaded cpython-3.12.16-linux-aarch64-gnu (download)
+ Downloaded cpython-3.13.18-linux-aarch64-gnu (download)
+ Downloaded cpython-3.15.2+freethreaded-linux-aarch64-gnu (download)
+ Downloaded cpython-3.15.2-linux-aarch64-gnu (download)
+Installed 4 versions in 1.09s
+ + cpython-3.12.16-linux-aarch64-gnu (python3.12)
+ + cpython-3.13.18-linux-aarch64-gnu (python3.13)
+ + cpython-3.15.2+freethreaded-linux-aarch64-gnu (python3.15t)
+ + cpython-3.15.2-linux-aarch64-gnu (python3.15)
+warning: `/root/.local/bin` is not on your PATH. To use installed Python executables, run `export PATH="/root/.local/bin:$PATH"` or `uv python update-shell`.
+3.12.16 GIL /opt/pyroid/python/cpython-3.12.16-linux-aarch64-gnu/bin/python3.12
+3.13.18 GIL /opt/pyroid/python/cpython-3.13.18-linux-aarch64-gnu/bin/python3.13
+3.15.2 GIL /opt/pyroid/python/cpython-3.15.2-linux-aarch64-gnu/bin/python3.15
+3.15.2 free-threaded /opt/pyroid/python/cpython-3.15.2+freethreaded-linux-aarch64-gnu/bin/python3.15t
+[bootstrap 07:59:18] maturin 1.16.0
+Resolved 1 package in 120ms
+Downloading maturin (9.8MiB)
+ Downloaded maturin
+Prepared 1 package in 103ms
+Installed 1 package in 20ms
+ + maturin==1.16.0
+Installed 1 executable: maturin
+{
+ "timestamp_utc": "2026-11-06T07:59:18Z",
+ "uname": "Linux ec2-host 6.18.56-125.164.amzn2023.aarch64 #2 SMP Mon Oct 19 19:40:01 UTC 2026 aarch64 aarch64",
+ "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+ "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+ "uv": "uv 0.13.7 (aarch64-unknown-linux-gnu)",
+ "maturin": "maturin 1.16.0",
+ "gcc": "gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-5)",
+ "git": "git version 2.50.1",
+ "glibc": "ldd (GNU libc) 2.34",
+ "pythons": [
+  "cpython-3.15.2-linux-aarch64-gnu                 /opt/pyroid/python/cpython-3.15-linux-aarch64-gnu/bin/python3.15",
+  "cpython-3.15.2+freethreaded-linux-aarch64-gnu    /opt/pyroid/python/cpython-3.15+freethreaded-linux-aarch64-gnu/bin/python3.15t",
+  "cpython-3.13.18-linux-aarch64-gnu                /opt/pyroid/python/cpython-3.13-linux-aarch64-gnu/bin/python3.13",
+  "cpython-3.12.16-linux-aarch64-gnu                /opt/pyroid/python/cpython-3.12-linux-aarch64-gnu/bin/python3.12"
+ ]
+}
+[bootstrap 07:59:18] done

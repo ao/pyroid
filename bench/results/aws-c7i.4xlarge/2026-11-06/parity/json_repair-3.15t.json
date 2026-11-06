@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-06T08:13:08+00:00",
+  "tool": {
+    "name": "pyroid-parity",
+    "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+  },
+  "environment": {
+    "python": "3.15.2",
+    "implementation": "CPython",
+    "free_threaded": true,
+    "gil_enabled": false,
+    "platform": "Linux-6.18.56-125.164.amzn2023.x86_64-x86_64-with-glibc2.34",
+    "machine": "x86_64",
+    "in_docker": false
+  },
+  "manifest_sha256": "c69d5b111fdb56eecb29bbbed1553dcf1da787792c5ca5380cfc2118676889b0",
+  "status": "pass",
+  "suites": {
+    "json_repair": {
+      "status": "pass",
+      "candidate": {
+        "spec": "pyroid.json_repair",
+        "module": "pyroid.json_repair",
+        "dist": "pyroid",
+        "version": "1.0.0.dev0",
+        "adapter": "generic",
+        "is_reference": false,
+        "notes": []
+      },
+      "reference": {
+        "name": "json_repair",
+        "version": "0.64.5",
+        "tolerance": null
+      },
+      "inputs": {},
+      "checks": {
+        "api-signature": {
+          "status": "pass",
+          "same": 4,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-default": {
+          "status": "pass",
+          "same": 20000,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-ensure_ascii_false": {
+          "status": "pass",
+          "same": 20000,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-indent2": {
+          "status": "pass",
+          "same": 20000,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-inputs": {
+          "status": "pass",
+          "same": 1,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-logging": {
+          "status": "pass",
+          "same": 20000,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-pinned-default": {
+          "status": "pass",
+          "same": 80,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-pinned-ensure_ascii_false": {
+          "status": "pass",
+          "same": 80,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-pinned-indent2": {
+          "status": "pass",
+          "same": 80,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-pinned-logging": {
+          "status": "pass",
+          "same": 80,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-pinned-return_objects": {
+          "status": "pass",
+          "same": 80,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-pinned-skip_json_loads": {
+          "status": "pass",
+          "same": 80,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-pinned-stream_stable": {
+          "status": "pass",
+          "same": 80,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-pinned-strict": {
+          "status": "pass",
+          "same": 80,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-return_objects": {
+          "status": "pass",
+          "same": 20000,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-skip_json_loads": {
+          "status": "pass",
+          "same": 20000,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-stream_stable": {
+          "status": "pass",
+          "same": 20000,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-strict": {
+          "status": "pass",
+          "same": 20000,
+          "diff": 0,
+          "examples": []
+        },
+        "from_file": {
+          "status": "pass",
+          "same": 2904,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-default": {
+          "status": "pass",
+          "same": 2023,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-ensure_ascii_false": {
+          "status": "pass",
+          "same": 2023,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-indent2": {
+          "status": "pass",
+          "same": 2023,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-loads": {
+          "status": "pass",
+          "same": 2002,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-logging": {
+          "status": "pass",
+          "same": 2023,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-return_objects": {
+          "status": "pass",
+          "same": 2023,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-skip_json_loads": {
+          "status": "pass",
+          "same": 2023,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-stream_stable": {
+          "status": "pass",
+          "same": 2023,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-strict": {
+          "status": "pass",
+          "same": 2023,
+          "diff": 0,
+          "examples": []
+        },
+        "load": {
+          "status": "pass",
+          "same": 2003,
+          "diff": 0,
+          "examples": []
+        },
+        "upstream": {
+          "status": "pass",
+          "same": 516,
+          "diff": 0,
+          "examples": []
+        },
+        "upstream-hash-seed": {
+          "status": "skip",
+          "same": 0,
+          "diff": 0,
+          "examples": [],
+          "skip_reason": "4 recorded calls: the outcome changes with PYTHONHASHSEED"
+        },
+        "upstream-recursion": {
+          "status": "skip",
+          "same": 0,
+          "diff": 0,
+          "examples": [],
+          "skip_reason": "3 recorded calls: the outcome depends on Python's recursion limit and the caller's stack depth (deep nesting)"
+        },
+        "upstream-schema": {
+          "status": "skip",
+          "same": 0,
+          "diff": 0,
+          "examples": [],
+          "skip_reason": "jsonschema is not installed here (json_repair's schema= needs it; it is in the parity dev group)"
+        }
+      }
+    }
+  }
+}

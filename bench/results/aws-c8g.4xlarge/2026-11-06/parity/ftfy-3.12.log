@@ -1,0 +1,23 @@
+Installed 1 package in 3ms
+........................................................................ [ 14%]
+........................................................................ [ 29%]
+........................................................................ [ 44%]
+........................................................................ [ 59%]
+........................................................................ [ 73%]
+........................................................................ [ 88%]
+........................................................                 [100%]
+==================================== parity ====================================
+ftfy      api-config                       same=1        diff=0
+ftfy      api-signature                    same=2        diff=0
+ftfy      batch                            same=2003     diff=0
+ftfy      corpus-adversarial               same=3232     diff=0
+ftfy      corpus-dev                       same=10000    diff=0
+ftfy      errors                           same=14       diff=0
+ftfy      golden-extra-layer               same=151      diff=0
+ftfy      golden-fix_encoding              same=151      diff=0
+ftfy      golden-fix_text                  same=161      diff=0
+ftfy      hypothesis-config-object         same=2001     diff=0
+ftfy      hypothesis-fix_encoding          same=2005     diff=0
+ftfy      hypothesis-fix_text              same=2009     diff=0
+ftfy      hypothesis-fix_text-kwargs       same=2006     diff=0
+488 passed, 914 deselected in 22.75s

@@ -1,0 +1,10 @@
+....ss..                                                                 [100%]
+==================================== parity ====================================
+fasttext  lid.176.bin/adversarial          same=3232     diff=0
+fasttext  lid.176.bin/dev                  same=10000    diff=0
+fasttext  lid.176.ftz/adversarial          same=3232     diff=0
+fasttext  lid.176.ftz/dev                  same=10000    diff=0
+fasttext  newline-raises                   same=2        diff=0
+=========================== short test summary info ============================
+SKIPPED [2] parity/tests/test_fasttext.py:92: live oracle (fasttext-predict) is not installable on this interpreter
+6 passed, 2 skipped, 1394 deselected in 3.58s

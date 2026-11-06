@@ -1,0 +1,52 @@
+...........s.................................ssss.                       [100%]
+==================================== parity ====================================
+metrics   bleu                             same=141      diff=0
+metrics   bleu@add-k                       same=141      diff=0
+metrics   bleu@char                        same=141      diff=0
+metrics   bleu@eff-order                   same=141      diff=0
+metrics   bleu@floor                       same=141      diff=0
+metrics   bleu@holes                       same=141      diff=0
+metrics   bleu@intl                        same=141      diff=0
+metrics   bleu@lowercase                   same=141      diff=0
+metrics   bleu@max-order-2                 same=141      diff=0
+metrics   bleu@none                        same=141      diff=0
+metrics   bleu@nosmooth                    same=141      diff=0
+metrics   bleu@refA                        same=141      diff=0
+metrics   bleu@trg_lang                    same=126      diff=0
+metrics   bleu@zh                          same=141      diff=0
+metrics   chrf                             same=141      diff=0
+metrics   chrf++                           same=141      diff=0
+metrics   chrf@beta1                       same=141      diff=0
+metrics   chrf@eps                         same=141      diff=0
+metrics   chrf@holes                       same=141      diff=0
+metrics   chrf@lowercase                   same=141      diff=0
+metrics   chrf@refA                        same=141      diff=0
+metrics   chrf@whitespace                  same=141      diff=0
+metrics   live-rouge                       same=2000     diff=0
+metrics   live-rouge-long                  same=2000     diff=0
+metrics   rouge@article-stem               same=2000     diff=0
+metrics   rouge@article-stem[batch]        same=2000     diff=0
+metrics   rouge@cnndm                      same=11490    diff=0
+metrics   rouge@cnndm-stem                 same=11490    diff=0
+metrics   rouge@cnndm-stem[batch]          same=11490    diff=0
+metrics   rouge@cnndm[batch]               same=11490    diff=0
+metrics   rouge@summeval                   same=1600     diff=0
+metrics   rouge@summeval-multi-stem        same=1600     diff=0
+metrics   rouge@summeval[batch]            same=1600     diff=0
+metrics   rougeLsum@cnndm-stem             same=11490    diff=0
+metrics   rougeLsum@cnndm-stem[batch]      same=11490    diff=0
+metrics   sentence_bleu                    same=163000   diff=0
+metrics   sentence_bleu@multi              same=163000   diff=0
+metrics   sentence_bleu@multi[batch]       same=163000   diff=0
+metrics   sentence_bleu[batch]             same=163000   diff=0
+metrics   sentence_chrf                    same=163000   diff=0
+metrics   sentence_chrf++                  same=163000   diff=0
+metrics   sentence_chrf++[batch]           same=163000   diff=0
+metrics   sentence_chrf[batch]             same=163000   diff=0
+=========================== short test summary info ============================
+SKIPPED [1] parity/tests/test_metrics.py:66: no batch entry point for this case
+SKIPPED [1] parity/tests/test_metrics.py:223: sacrebleu would re-enable the GIL on this free-threaded build (lxml)
+SKIPPED [1] parity/tests/test_metrics.py:234: sacrebleu would re-enable the GIL on this free-threaded build (lxml)
+SKIPPED [1] parity/tests/test_metrics.py:245: sacrebleu would re-enable the GIL on this free-threaded build (lxml)
+SKIPPED [1] parity/tests/test_metrics.py:260: sacrebleu would re-enable the GIL on this free-threaded build (lxml)
+45 passed, 5 skipped, 1352 deselected in 155.13s (0:02:35)

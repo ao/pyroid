@@ -1,0 +1,35 @@
+{
+ "corpus": "dev",
+ "cpu_s": 5.958,
+ "digest": "ef314b8d6ae95cc63c6cfa8b1a3a76ee5bc101eb88a66729beb10ecb7226473b",
+ "digest_matches": true,
+ "docs": 10000,
+ "gil_enabled": false,
+ "label": "pyroid chain 3.15t threads=8 (digest gate)",
+ "maxrss_mib": 612.6,
+ "pool_size_env": {
+  "PYROID_NUM_THREADS": null,
+  "RAYON_NUM_THREADS": null
+ },
+ "pyroid": "1.0.0-dev",
+ "python": "3.15.2",
+ "removed": {
+  "c4_quality": 14,
+  "fineweb_quality": 27,
+  "gopher_quality": 1524,
+  "gopher_repetition": 24,
+  "lid": 4,
+  "minhash": 0
+ },
+ "threads": 8,
+ "tool": "bench/chain.py",
+ "wall_s": {
+  "chain": 1.046,
+  "filters": 0.589,
+  "fix_text": 0.014,
+  "lid": 0.147,
+  "load_and_model": 0.179,
+  "minhash": 0.297,
+  "startup_imports": 0.327
+ }
+}

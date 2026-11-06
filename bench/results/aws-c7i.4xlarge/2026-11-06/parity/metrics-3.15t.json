@@ -1,0 +1,311 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-06T08:11:57+00:00",
+  "tool": {
+    "name": "pyroid-parity",
+    "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+  },
+  "environment": {
+    "python": "3.15.2",
+    "implementation": "CPython",
+    "free_threaded": true,
+    "gil_enabled": false,
+    "platform": "Linux-6.18.56-125.164.amzn2023.x86_64-x86_64-with-glibc2.34",
+    "machine": "x86_64",
+    "in_docker": false
+  },
+  "manifest_sha256": "c69d5b111fdb56eecb29bbbed1553dcf1da787792c5ca5380cfc2118676889b0",
+  "status": "pass",
+  "suites": {
+    "metrics": {
+      "status": "pass",
+      "candidate": {
+        "spec": "pyroid.metrics",
+        "module": "pyroid.metrics",
+        "dist": "pyroid",
+        "version": "1.0.0.dev0",
+        "adapter": "generic",
+        "is_reference": false,
+        "notes": []
+      },
+      "reference": {
+        "name": "rouge-score + sacrebleu",
+        "version": "rouge-score 0.1.2, sacrebleu 2.6.0, nltk 3.10.4",
+        "tolerance": 0.0
+      },
+      "inputs": {
+        "metrics/cnndm-3.0.0-test.parquet": "04e322d2634a96dba76bf9a6294fbbe48e0b36abeae43f13d86ba2c3bebffe4e",
+        "metrics/summeval.parquet": "7ff6f3f4d044223bd6922c5434d27bf28473950346fcfc2a3b7352c19163690e",
+        "metrics/wmt21.parquet": "25a5d22adddb5c87b461e8c8144a185fd08b968e35ec18d800da9daed29b82b5",
+        "parity/metrics-ref.linux-x86_64.parquet": "8107ddcdfb40adc8aa20b8c71e59af7cec2382000333ce558ae8141c947ecd2e"
+      },
+      "checks": {
+        "bleu": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@add-k": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@char": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@eff-order": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@floor": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@holes": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@intl": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@lowercase": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@max-order-2": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@none": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@nosmooth": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@refA": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@trg_lang": {
+          "status": "pass",
+          "same": 126,
+          "diff": 0,
+          "examples": []
+        },
+        "bleu@zh": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "chrf": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "chrf++": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "chrf@beta1": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "chrf@eps": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "chrf@holes": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "chrf@lowercase": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "chrf@refA": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "chrf@whitespace": {
+          "status": "pass",
+          "same": 141,
+          "diff": 0,
+          "examples": []
+        },
+        "live-rouge": {
+          "status": "pass",
+          "same": 2000,
+          "diff": 0,
+          "examples": []
+        },
+        "live-rouge-long": {
+          "status": "pass",
+          "same": 2000,
+          "diff": 0,
+          "examples": []
+        },
+        "rouge@article-stem": {
+          "status": "pass",
+          "same": 2000,
+          "diff": 0,
+          "examples": []
+        },
+        "rouge@article-stem[batch]": {
+          "status": "pass",
+          "same": 2000,
+          "diff": 0,
+          "examples": []
+        },
+        "rouge@cnndm": {
+          "status": "pass",
+          "same": 11490,
+          "diff": 0,
+          "examples": []
+        },
+        "rouge@cnndm-stem": {
+          "status": "pass",
+          "same": 11490,
+          "diff": 0,
+          "examples": []
+        },
+        "rouge@cnndm-stem[batch]": {
+          "status": "pass",
+          "same": 11490,
+          "diff": 0,
+          "examples": []
+        },
+        "rouge@cnndm[batch]": {
+          "status": "pass",
+          "same": 11490,
+          "diff": 0,
+          "examples": []
+        },
+        "rouge@summeval": {
+          "status": "pass",
+          "same": 1600,
+          "diff": 0,
+          "examples": []
+        },
+        "rouge@summeval-multi-stem": {
+          "status": "pass",
+          "same": 1600,
+          "diff": 0,
+          "examples": []
+        },
+        "rouge@summeval[batch]": {
+          "status": "pass",
+          "same": 1600,
+          "diff": 0,
+          "examples": []
+        },
+        "rougeLsum@cnndm-stem": {
+          "status": "pass",
+          "same": 11490,
+          "diff": 0,
+          "examples": []
+        },
+        "rougeLsum@cnndm-stem[batch]": {
+          "status": "pass",
+          "same": 11490,
+          "diff": 0,
+          "examples": []
+        },
+        "sentence_bleu": {
+          "status": "pass",
+          "same": 163000,
+          "diff": 0,
+          "examples": []
+        },
+        "sentence_bleu@multi": {
+          "status": "pass",
+          "same": 163000,
+          "diff": 0,
+          "examples": []
+        },
+        "sentence_bleu@multi[batch]": {
+          "status": "pass",
+          "same": 163000,
+          "diff": 0,
+          "examples": []
+        },
+        "sentence_bleu[batch]": {
+          "status": "pass",
+          "same": 163000,
+          "diff": 0,
+          "examples": []
+        },
+        "sentence_chrf": {
+          "status": "pass",
+          "same": 163000,
+          "diff": 0,
+          "examples": []
+        },
+        "sentence_chrf++": {
+          "status": "pass",
+          "same": 163000,
+          "diff": 0,
+          "examples": []
+        },
+        "sentence_chrf++[batch]": {
+          "status": "pass",
+          "same": 163000,
+          "diff": 0,
+          "examples": []
+        },
+        "sentence_chrf[batch]": {
+          "status": "pass",
+          "same": 163000,
+          "diff": 0,
+          "examples": []
+        },
+        "live-sacrebleu": {
+          "status": "skip",
+          "same": 0,
+          "diff": 0,
+          "examples": [],
+          "skip_reason": "sacrebleu imports lxml, which re-enables the GIL on this build"
+        }
+      }
+    }
+  }
+}

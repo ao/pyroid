@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-06T08:08:46+00:00",
+  "tool": {
+    "name": "pyroid-parity",
+    "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+  },
+  "environment": {
+    "python": "3.15.2",
+    "implementation": "CPython",
+    "free_threaded": true,
+    "gil_enabled": false,
+    "platform": "Linux-6.18.56-125.164.amzn2023.aarch64-aarch64-with-glibc2.34",
+    "machine": "aarch64",
+    "in_docker": false
+  },
+  "manifest_sha256": "2ee2667b67b407d1e21c7f5bcfd78c761b5207ee56f93681d377e848487ee146",
+  "status": "pass",
+  "suites": {
+    "ftfy": {
+      "status": "pass",
+      "candidate": {
+        "spec": "pyroid.ftfy",
+        "module": "pyroid.ftfy",
+        "dist": "pyroid",
+        "version": "1.0.0.dev0",
+        "adapter": "generic",
+        "is_reference": false,
+        "notes": []
+      },
+      "reference": {
+        "name": "ftfy",
+        "version": "6.3.1",
+        "tolerance": null
+      },
+      "inputs": {
+        "fineweb/fineweb-dev-10k.parquet": "4d6081f32ffcd96e1ebfeabf943e1ec55a138fff96ff8937c83bf855600b5536",
+        "parity/adversarial.parquet": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+        "parity/ftfy-ref.parquet": "65662c54d2406b5d558a20e2591692f6bff6f68fa3dc0b60188556c1e01fefe9"
+      },
+      "checks": {
+        "api-config": {
+          "status": "pass",
+          "same": 1,
+          "diff": 0,
+          "examples": []
+        },
+        "api-signature": {
+          "status": "pass",
+          "same": 2,
+          "diff": 0,
+          "examples": []
+        },
+        "batch": {
+          "status": "pass",
+          "same": 2003,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "corpus-dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "errors": {
+          "status": "pass",
+          "same": 14,
+          "diff": 0,
+          "examples": []
+        },
+        "golden-extra-layer": {
+          "status": "pass",
+          "same": 151,
+          "diff": 0,
+          "examples": []
+        },
+        "golden-fix_encoding": {
+          "status": "pass",
+          "same": 151,
+          "diff": 0,
+          "examples": []
+        },
+        "golden-fix_text": {
+          "status": "pass",
+          "same": 161,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-config-object": {
+          "status": "pass",
+          "same": 2001,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-fix_encoding": {
+          "status": "pass",
+          "same": 2005,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-fix_text": {
+          "status": "pass",
+          "same": 2009,
+          "diff": 0,
+          "examples": []
+        },
+        "hypothesis-fix_text-kwargs": {
+          "status": "pass",
+          "same": 2006,
+          "diff": 0,
+          "examples": []
+        }
+      }
+    }
+  }
+}

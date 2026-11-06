@@ -1,0 +1,19 @@
+....ssssssssssssss.s..ss...s..ss..                                       [100%]
+==================================== parity ====================================
+dedup     removed                          same=13232    diff=0
+dedup     removed/arb_Arab                 same=300      diff=0
+dedup     removed/deu_Latn                 same=300      diff=0
+dedup     removed/fra_Latn                 same=300      diff=0
+dedup     removed/rus_Cyrl                 same=300      diff=0
+dedup     removed/spa_Latn                 same=300      diff=0
+dedup     signatures                       same=13232    diff=0
+dedup     signatures/arb_Arab              same=300      diff=0
+dedup     signatures/deu_Latn              same=300      diff=0
+dedup     signatures/fra_Latn              same=300      diff=0
+dedup     signatures/rus_Cyrl              same=300      diff=0
+dedup     signatures/spa_Latn              same=300      diff=0
+=========================== short test summary info ============================
+SKIPPED [2] parity/tests/test_dedup_more.py:30: needs the oracle group
+SKIPPED [12] parity/tests/test_dedup_more.py:80: needs the oracle group
+SKIPPED [6] parity/tests/test_dedup_multilingual.py:44: parity/minhash-ml-ref.parquet is not pinned and datatrove is not installed
+14 passed, 20 skipped, 1368 deselected in 1.68s

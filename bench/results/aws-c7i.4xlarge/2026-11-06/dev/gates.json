@@ -1,0 +1,289 @@
+{
+ "corpus": "parity",
+ "docs": 13232,
+ "failed": [],
+ "gates": [
+  {
+   "docs": 13232,
+   "gate": "ftfy",
+   "impl": "ftfy 6.3.1",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "seconds": 1.957
+  },
+  {
+   "docs": 13232,
+   "gate": "lid",
+   "impl": "fasttext-predict 0.9.2.4 lid.176.bin",
+   "k": 5,
+   "live": 0,
+   "max_abs_dp": 0.0,
+   "mismatches": 0,
+   "model": "lid.176.bin",
+   "pinned": 13232,
+   "seconds": 0.79,
+   "tol": 1e-06
+  },
+  {
+   "docs": 13232,
+   "gate": "lid",
+   "impl": "fasttext-predict 0.9.2.4 lid.176.ftz",
+   "k": 5,
+   "live": 0,
+   "max_abs_dp": 0.0,
+   "mismatches": 0,
+   "model": "lid.176.ftz",
+   "pinned": 13232,
+   "seconds": 0.85,
+   "tol": 1e-06
+  },
+  {
+   "backend": "ft176",
+   "docs": 13232,
+   "gate": "lid_filter",
+   "impl": "datatrove 0.10.1 LanguageFilter",
+   "language_threshold": 0.65,
+   "languages": [
+    "en"
+   ],
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "seconds": 0.836,
+   "tol": 1e-06
+  },
+  {
+   "case": "gopher_repetition",
+   "docs": 13232,
+   "gate": "filter",
+   "impl": "datatrove gopher_repetition",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "ref_kept": 12994,
+   "seconds": 13.333
+  },
+  {
+   "case": "gopher_quality",
+   "docs": 13232,
+   "gate": "filter",
+   "impl": "datatrove gopher_quality",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "ref_kept": 9254,
+   "seconds": 9.093
+  },
+  {
+   "case": "c4_quality",
+   "docs": 13232,
+   "gate": "filter",
+   "impl": "datatrove c4_quality",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "ref_kept": 10603,
+   "seconds": 8.54
+  },
+  {
+   "case": "c4_quality@fineweb",
+   "docs": 13232,
+   "gate": "filter",
+   "impl": "datatrove c4_quality@fineweb",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "ref_kept": 12620,
+   "seconds": 11.096
+  },
+  {
+   "case": "fineweb_quality",
+   "docs": 13232,
+   "gate": "filter",
+   "impl": "datatrove fineweb_quality",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "ref_kept": 12398,
+   "seconds": 8.339
+  },
+  {
+   "docs": 13232,
+   "gate": "minhash_signature",
+   "impl": "datatrove MinhashDedupSignature",
+   "live": 0,
+   "mismatches": 0,
+   "num_perm": 112,
+   "pinned": 13232,
+   "seconds": 9.952
+  },
+  {
+   "bounds": {
+    "max_mean_abs_err": 0.04,
+    "min_precision": 0.9,
+    "min_recall": 0.9
+   },
+   "fn": 10,
+   "fp": 10,
+   "gate": "minhash_estimator",
+   "impl": "datasketch 2.0.0 MinHash.bulk",
+   "mean_abs_err": 0.0244,
+   "pairs": 600,
+   "positives": 285,
+   "precision": 0.9649,
+   "recall": 0.9649,
+   "seconds": 1.03,
+   "shingles": "r2: lower().split() 5-grams",
+   "threshold": 0.8,
+   "tp": 275
+  },
+  {
+   "bounds": {
+    "max_mean_abs_err": 0.04,
+    "min_precision": 0.9,
+    "min_recall": 0.9
+   },
+   "fn": 13,
+   "fp": 11,
+   "gate": "minhash_estimator",
+   "impl": "rensa 0.5.0 RMinHash.from_token_sets",
+   "mean_abs_err": 0.0213,
+   "pairs": 600,
+   "positives": 285,
+   "precision": 0.9611,
+   "recall": 0.9544,
+   "seconds": 0.368,
+   "shingles": "r2: lower().split() 5-grams",
+   "threshold": 0.8,
+   "tp": 272
+  },
+  {
+   "fn": 11,
+   "fp": 11,
+   "gate": "minhash_estimator_info",
+   "impl": "datatrove signature (own shingles, not gated)",
+   "mean_abs_err": 0.0237,
+   "pairs": 600,
+   "positives": 285,
+   "precision": 0.9614,
+   "recall": 0.9614,
+   "shingles": "r2: lower().split() 5-grams",
+   "threshold": 0.8,
+   "tp": 274
+  },
+  {
+   "docs": 13232,
+   "gate": "ftfy",
+   "impl": "pyroid.ftfy 1.0.0.dev0",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "seconds": 0.2
+  },
+  {
+   "docs": 13232,
+   "gate": "lid",
+   "impl": "pyroid.fasttext 1.0.0.dev0 lid.176.bin",
+   "k": 5,
+   "live": 0,
+   "max_abs_dp": 0.0,
+   "mismatches": 0,
+   "model": "lid.176.bin",
+   "pinned": 13232,
+   "seconds": 1.406,
+   "tol": 1e-06
+  },
+  {
+   "docs": 13232,
+   "gate": "lid",
+   "impl": "pyroid.fasttext 1.0.0.dev0 lid.176.ftz",
+   "k": 5,
+   "live": 0,
+   "max_abs_dp": 0.0,
+   "mismatches": 0,
+   "model": "lid.176.ftz",
+   "pinned": 13232,
+   "seconds": 1.382,
+   "tol": 1e-06
+  },
+  {
+   "case": "gopher_repetition",
+   "docs": 13232,
+   "gate": "filter",
+   "impl": "pyroid.filters 1.0.0.dev0 gopher_repetition",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "ref_kept": 12994,
+   "seconds": 1.898
+  },
+  {
+   "case": "gopher_quality",
+   "docs": 13232,
+   "gate": "filter",
+   "impl": "pyroid.filters 1.0.0.dev0 gopher_quality",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "ref_kept": 9254,
+   "seconds": 1.143
+  },
+  {
+   "case": "c4_quality",
+   "docs": 13232,
+   "gate": "filter",
+   "impl": "pyroid.filters 1.0.0.dev0 c4_quality",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "ref_kept": 10603,
+   "seconds": 1.044
+  },
+  {
+   "case": "c4_quality@fineweb",
+   "docs": 13232,
+   "gate": "filter",
+   "impl": "pyroid.filters 1.0.0.dev0 c4_quality@fineweb",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "ref_kept": 12620,
+   "seconds": 1.29
+  },
+  {
+   "case": "fineweb_quality",
+   "docs": 13232,
+   "gate": "filter",
+   "impl": "pyroid.filters 1.0.0.dev0 fineweb_quality",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "ref_kept": 12398,
+   "seconds": 0.981
+  },
+  {
+   "docs": 13232,
+   "gate": "minhash_signature",
+   "impl": "pyroid.dedup 1.0.0.dev0",
+   "live": 0,
+   "mismatches": 0,
+   "num_perm": 112,
+   "pinned": 13232,
+   "seconds": 1.933
+  },
+  {
+   "docs": 13232,
+   "gate": "minhash_dedup",
+   "impl": "pyroid.dedup 1.0.0.dev0",
+   "live": 0,
+   "mismatches": 0,
+   "pinned": 13232,
+   "removed": 445,
+   "seconds": 1.894
+  }
+ ],
+ "limit": 0,
+ "ok": true,
+ "seconds": 85.9
+}

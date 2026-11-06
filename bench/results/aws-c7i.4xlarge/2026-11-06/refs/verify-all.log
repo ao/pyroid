@@ -1,0 +1,24 @@
+ok   128,503,776  fineweb/fineweb-100k.parquet
+ok    12,790,864  fineweb/fineweb-dev-10k.parquet
+ok       431,276  fineweb2/arb_Arab.parquet
+ok       494,209  fineweb2/cmn_Hani.parquet
+ok       276,263  fineweb2/deu_Latn.parquet
+ok       395,537  fineweb2/fra_Latn.parquet
+ok       385,557  fineweb2/hin_Deva.parquet
+ok       371,556  fineweb2/jpn_Jpan.parquet
+ok       441,416  fineweb2/rus_Cyrl.parquet
+ok       334,278  fineweb2/spa_Latn.parquet
+ok    30,000,471  metrics/cnndm-3.0.0-test.parquet
+ok       422,779  metrics/summeval.parquet
+ok    12,002,835  metrics/wmt21.parquet
+ok   131,266,198  models/lid.176.bin
+ok       938,013  models/lid.176.ftz
+ok     4,434,803  parity/adversarial.parquet
+ok     1,351,883  parity/fasttext-ref.linux-x86_64.parquet
+ok     1,607,143  parity/filters-ml-ref.parquet
+ok    13,281,783  parity/filters-ref.parquet
+ok    16,375,775  parity/ftfy-ref.parquet
+ok    20,003,089  parity/metrics-ref.linux-x86_64.parquet
+ok     1,443,828  parity/minhash-ml-ref.parquet
+ok    11,909,548  parity/minhash-ref.parquet
+verified 23 of 23 pinned files (389.5 MB); 389.5 MB pinned in all (budget 1,500 MB)

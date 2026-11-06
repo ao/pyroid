@@ -1,0 +1,1744 @@
+[refs 08:04:00] adversarial ...
+[refs 08:04:02] wrote parity/adversarial.parquet: 3232 rows, 4.4 MB
+[refs 08:04:02] verified parity/adversarial.parquet against the manifest
+[refs 08:04:02] adversarial done in 1 s
+[refs 08:04:02] ftfy ...
+[refs 08:04:04] wrote parity/ftfy-ref.parquet: 13232 rows, 16.4 MB
+[refs 08:04:04] verified parity/ftfy-ref.parquet against the manifest
+[refs 08:04:04] ftfy done in 2 s
+[refs 08:04:04] fasttext ...
+[refs 08:04:05] wrote parity/fasttext-ref.linux-x86_64.parquet: 26464 rows, 1.4 MB
+[refs 08:04:05] verified parity/fasttext-ref.linux-x86_64.parquet against the manifest
+[refs 08:04:05] fasttext done in 2 s
+[refs 08:04:05] filters ...
+[refs 08:04:47] wrote parity/filters-ref.parquet: 66160 rows, 13.3 MB
+[refs 08:04:47] verified parity/filters-ref.parquet against the manifest
+[refs 08:04:47] filters done in 42 s
+[refs 08:04:47] dedup ...
+2026-11-06 08:04:56.675 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:04:56.675 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+Iterable
+🫂 - DEDUP: 🎯 MinHash stage 1
+2026-11-06 08:06:02.110 | INFO     | datatrove.pipeline.dedup.minhash:run:266 - Sorting buckets...
+2026-11-06 08:06:02.279 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:06:02.280 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 1 minute and 5.60 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 1 minute and 5.60 seconds [1 minute, 5 seconds and 603.87 milliseconds±0 milliseconds/doc]
+    Stats: {total: 13232}
+2026-11-06 08:06:02.284 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 1 minute and 5.60 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 1 minute and 5.60 seconds [1 minute, 5 seconds and 603.87 milliseconds±0 milliseconds/doc]
+    Stats: {total: 13232}
+2026-11-06 08:06:02.317 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:06:02.317 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.317 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 000. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.318 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.334 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:06:02.334 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.72 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 221}
+2026-11-06 08:06:02.343 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=1
+2026-11-06 08:06:02.343 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.343 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 001. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.343 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.360 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=1
+2026-11-06 08:06:02.360 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 1 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.59 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 228}
+2026-11-06 08:06:02.369 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=2
+2026-11-06 08:06:02.369 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.369 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 002. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.369 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.385 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=2
+2026-11-06 08:06:02.385 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 2 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.25 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 204}
+2026-11-06 08:06:02.394 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=3
+2026-11-06 08:06:02.394 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.394 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 003. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.394 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.410 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=3
+2026-11-06 08:06:02.411 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 3 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.43 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 224}
+2026-11-06 08:06:02.419 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=4
+2026-11-06 08:06:02.419 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.419 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 004. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.420 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.436 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=4
+2026-11-06 08:06:02.436 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 4 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.41 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 235}
+2026-11-06 08:06:02.445 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=5
+2026-11-06 08:06:02.445 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.445 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 005. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.445 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.461 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=5
+2026-11-06 08:06:02.461 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 5 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.47 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 220}
+2026-11-06 08:06:02.470 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=6
+2026-11-06 08:06:02.470 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.470 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 006. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.470 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.486 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=6
+2026-11-06 08:06:02.487 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 6 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.41 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 224}
+2026-11-06 08:06:02.495 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=7
+2026-11-06 08:06:02.495 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.495 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 007. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.496 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.512 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=7
+2026-11-06 08:06:02.512 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 7 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.39 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 238}
+2026-11-06 08:06:02.521 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=8
+2026-11-06 08:06:02.521 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.521 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 008. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.521 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.537 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=8
+2026-11-06 08:06:02.537 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 8 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.36 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 221}
+2026-11-06 08:06:02.546 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=9
+2026-11-06 08:06:02.546 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.546 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 009. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.546 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.563 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=9
+2026-11-06 08:06:02.563 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 9 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.74 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 226}
+2026-11-06 08:06:02.572 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=10
+2026-11-06 08:06:02.572 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.572 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 010. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.572 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.588 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=10
+2026-11-06 08:06:02.588 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 10 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.15 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 224}
+2026-11-06 08:06:02.597 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=11
+2026-11-06 08:06:02.597 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.597 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 011. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.597 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.613 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=11
+2026-11-06 08:06:02.613 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 11 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.11 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 239}
+2026-11-06 08:06:02.622 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=12
+2026-11-06 08:06:02.622 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.622 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 012. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.622 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.638 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=12
+2026-11-06 08:06:02.639 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 12 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.34 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 203}
+2026-11-06 08:06:02.647 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=13
+2026-11-06 08:06:02.647 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:06:02.648 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 013. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:06:02.648 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:06:02.664 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=13
+2026-11-06 08:06:02.664 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 13 📉📉📉
+
+Total Runtime: 0.02 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds [16.44 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 232}
+2026-11-06 08:06:02.668 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 14 tasks 📉📉📉
+
+Total Runtime: 0.02 seconds ± 0 seconds/task
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0.02 seconds±0 seconds/task, min=0.02 seconds, max=0.02 seconds [16.42 milliseconds±0.18 milliseconds/doc]
+    Stats: {total_matches: 3139}
+2026-11-06 08:06:02.695 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:06:02.695 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 3
+2026-11-06 08:06:02.696 | INFO     | datatrove.pipeline.dedup.minhash:run:561 - Loading dup files...
+Reading dup files:   0%|          | 0/14 [00:00<?, ?it/s]Reading dup files: 100%|██████████| 14/14 [00:00<00:00, 5683.89it/s]
+2026-11-06 08:06:02.699 | INFO     | datatrove.pipeline.dedup.minhash:run:571 - Finished reading dup files.
+2026-11-06 08:06:02.701 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:06:02.701 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0.01 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0.01 seconds [5.11 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 865, cluster_size: 865 [min=2, max=23, 2.06±1/cluster], to_remove: 445}
+2026-11-06 08:06:02.705 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 0.01 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0.01 seconds [5.11 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 865, cluster_size: 865 [min=2, max=23, 2.06±1/cluster], to_remove: 445}
+[refs 08:06:02] wrote parity/minhash-ref.parquet: 13232 rows, 11.9 MB
+[refs 08:06:02] verified parity/minhash-ref.parquet against the manifest
+[refs 08:06:02] dedup done in 76 s
+[refs 08:06:02] metrics ...
+[refs 08:07:55] wrote parity/metrics-ref.linux-x86_64.parquet: 694757 rows, 20.0 MB
+[refs 08:07:55] MISMATCH /opt/pyroid/data/parity/metrics-ref.linux-x86_64.parquet does not match the sha256 pinned in /opt/pyroid/src/pyroid/bench/manifest.json
+[refs 08:07:55] metrics done in 112 s
+[refs 08:07:55] filters_ml ...
+[refs 08:07:56] filters_ml: skipping cmn_Hani: datatrove cannot tokenize cmn_Hani here: ImportError: Please install `jieba` to use zh word tokenizer (`pip install jieba`).
+[refs 08:08:02] filters_ml: skipping hin_Deva: datatrove cannot tokenize hin_Deva here: ImportError: Please install `indicnlp` to use hi word tokenizer (`pip install indic-nlp-library`).
+[refs 08:08:02] filters_ml: skipping jpn_Jpan: datatrove cannot tokenize jpn_Jpan here: ImportError: Japanese support requires SudachiPy and SudachiDict-core (https://github.com/WorksApplications/SudachiPy). Install with `pip install sudachipy sudachidict_core` or install spaCy with `pip install spacy[ja]`.
+[refs 08:08:06] wrote parity/filters-ml-ref.parquet: 10000 rows, 1.6 MB
+[refs 08:08:06] verified parity/filters-ml-ref.parquet against the manifest
+[refs 08:08:06] filters_ml done in 11 s
+[refs 08:08:06] dedup_ml ...
+2026-11-06 08:08:07.946 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:07.946 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+Iterable
+🫂 - DEDUP: 🎯 MinHash stage 1
+2026-11-06 08:08:09.682 | INFO     | datatrove.pipeline.dedup.minhash:run:266 - Sorting buckets...
+2026-11-06 08:08:09.686 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:09.686 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 1.74 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 1.74 seconds [1 second and 739.74 milliseconds±0 milliseconds/doc]
+    Stats: {total: 300}
+2026-11-06 08:08:09.690 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 1.74 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 1.74 seconds [1 second and 739.74 milliseconds±0 milliseconds/doc]
+    Stats: {total: 300}
+2026-11-06 08:08:09.733 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:09.733 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.733 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 000. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.733 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.734 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:09.734 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.91 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:09.743 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=1
+2026-11-06 08:08:09.743 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.743 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 001. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.743 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.744 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=1
+2026-11-06 08:08:09.744 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 1 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.67 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 15}
+2026-11-06 08:08:09.753 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=2
+2026-11-06 08:08:09.753 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.753 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 002. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.753 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.754 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=2
+2026-11-06 08:08:09.754 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 2 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.67 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 17}
+2026-11-06 08:08:09.762 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=3
+2026-11-06 08:08:09.762 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.763 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 003. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.763 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.763 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=3
+2026-11-06 08:08:09.763 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 3 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.68 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:09.772 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=4
+2026-11-06 08:08:09.772 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.772 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 004. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.772 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.773 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=4
+2026-11-06 08:08:09.773 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 4 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 18}
+2026-11-06 08:08:09.781 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=5
+2026-11-06 08:08:09.781 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.782 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 005. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.782 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.782 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=5
+2026-11-06 08:08:09.782 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 5 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.66 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 15}
+2026-11-06 08:08:09.791 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=6
+2026-11-06 08:08:09.791 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.791 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 006. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.791 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.792 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=6
+2026-11-06 08:08:09.792 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 6 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:09.801 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=7
+2026-11-06 08:08:09.801 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.801 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 007. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.801 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.801 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=7
+2026-11-06 08:08:09.802 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 7 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.67 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 18}
+2026-11-06 08:08:09.810 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=8
+2026-11-06 08:08:09.810 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.810 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 008. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.810 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.811 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=8
+2026-11-06 08:08:09.811 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 8 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.67 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 11}
+2026-11-06 08:08:09.820 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=9
+2026-11-06 08:08:09.820 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.820 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 009. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.820 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.821 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=9
+2026-11-06 08:08:09.821 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 9 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:09.829 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=10
+2026-11-06 08:08:09.829 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.829 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 010. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.830 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.830 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=10
+2026-11-06 08:08:09.830 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 10 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:09.839 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=11
+2026-11-06 08:08:09.839 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.839 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 011. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.839 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.840 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=11
+2026-11-06 08:08:09.840 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 11 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 16}
+2026-11-06 08:08:09.848 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=12
+2026-11-06 08:08:09.849 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.849 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 012. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.849 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.849 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=12
+2026-11-06 08:08:09.849 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 12 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:09.858 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=13
+2026-11-06 08:08:09.858 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:09.858 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 013. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:09.858 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:09.859 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=13
+2026-11-06 08:08:09.859 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 13 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.66 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 11}
+2026-11-06 08:08:09.863 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 14 tasks 📉📉📉
+
+Total Runtime: 0 seconds ± 0 seconds/task
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds±0 seconds/task, min=0 seconds, max=0 seconds [0.67 milliseconds±0.07 milliseconds/doc]
+    Stats: {total_matches: 193}
+2026-11-06 08:08:09.903 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:09.903 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 3
+2026-11-06 08:08:09.903 | INFO     | datatrove.pipeline.dedup.minhash:run:561 - Loading dup files...
+Reading dup files:   0%|          | 0/14 [00:00<?, ?it/s]Reading dup files: 100%|██████████| 14/14 [00:00<00:00, 32370.59it/s]
+2026-11-06 08:08:09.904 | INFO     | datatrove.pipeline.dedup.minhash:run:571 - Finished reading dup files.
+2026-11-06 08:08:09.905 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:09.905 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0 seconds [1.34 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 96, cluster_size: 96 [2.00/cluster], to_remove: 48}
+2026-11-06 08:08:09.909 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0 seconds [1.34 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 96, cluster_size: 96 [2.00/cluster], to_remove: 48}
+[refs 08:08:09] dedup_ml: skipping cmn_Hani: datatrove cannot tokenize cmn_Hani here: ImportError: Please install `jieba` to use zh word tokenizer (`pip install jieba`).
+2026-11-06 08:08:11.242 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:11.242 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+Iterable
+🫂 - DEDUP: 🎯 MinHash stage 1
+2026-11-06 08:08:12.531 | INFO     | datatrove.pipeline.dedup.minhash:run:266 - Sorting buckets...
+2026-11-06 08:08:12.535 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:12.535 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 1.29 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 1.29 seconds [1 second and 292.81 milliseconds±0 milliseconds/doc]
+    Stats: {total: 300}
+2026-11-06 08:08:12.539 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 1.29 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 1.29 seconds [1 second and 292.81 milliseconds±0 milliseconds/doc]
+    Stats: {total: 300}
+2026-11-06 08:08:12.581 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:12.581 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.581 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 000. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.581 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.582 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:12.582 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.86 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:12.591 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=1
+2026-11-06 08:08:12.591 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.591 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 001. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.591 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.592 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=1
+2026-11-06 08:08:12.592 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 1 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.69 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 13}
+2026-11-06 08:08:12.601 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=2
+2026-11-06 08:08:12.601 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.601 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 002. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.601 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.601 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=2
+2026-11-06 08:08:12.602 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 2 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.66 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 13}
+2026-11-06 08:08:12.610 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=3
+2026-11-06 08:08:12.610 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.610 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 003. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.610 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.611 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=3
+2026-11-06 08:08:12.611 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 3 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.67 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 7}
+2026-11-06 08:08:12.620 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=4
+2026-11-06 08:08:12.620 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.620 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 004. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.620 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.621 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=4
+2026-11-06 08:08:12.621 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 4 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 10}
+2026-11-06 08:08:12.629 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=5
+2026-11-06 08:08:12.629 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.629 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 005. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.630 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.630 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=5
+2026-11-06 08:08:12.630 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 5 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 5}
+2026-11-06 08:08:12.639 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=6
+2026-11-06 08:08:12.639 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.639 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 006. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.639 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.640 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=6
+2026-11-06 08:08:12.640 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 6 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 16}
+2026-11-06 08:08:12.648 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=7
+2026-11-06 08:08:12.648 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.649 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 007. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.649 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.649 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=7
+2026-11-06 08:08:12.649 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 7 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:12.658 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=8
+2026-11-06 08:08:12.658 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.658 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 008. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.659 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.659 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=8
+2026-11-06 08:08:12.659 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 8 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 16}
+2026-11-06 08:08:12.668 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=9
+2026-11-06 08:08:12.668 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.668 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 009. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.668 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.669 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=9
+2026-11-06 08:08:12.669 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 9 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:12.678 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=10
+2026-11-06 08:08:12.678 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.678 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 010. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.678 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.678 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=10
+2026-11-06 08:08:12.679 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 10 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 15}
+2026-11-06 08:08:12.687 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=11
+2026-11-06 08:08:12.687 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.687 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 011. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.687 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.688 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=11
+2026-11-06 08:08:12.688 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 11 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 9}
+2026-11-06 08:08:12.697 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=12
+2026-11-06 08:08:12.697 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.697 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 012. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.697 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.697 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=12
+2026-11-06 08:08:12.698 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 12 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 17}
+2026-11-06 08:08:12.706 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=13
+2026-11-06 08:08:12.706 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:12.706 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 013. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:12.706 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:12.707 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=13
+2026-11-06 08:08:12.707 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 13 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:12.711 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 14 tasks 📉📉📉
+
+Total Runtime: 0 seconds ± 0 seconds/task
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds±0 seconds/task, min=0 seconds, max=0 seconds [0.66 milliseconds±0.06 milliseconds/doc]
+    Stats: {total_matches: 173}
+2026-11-06 08:08:12.747 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:12.747 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 3
+2026-11-06 08:08:12.748 | INFO     | datatrove.pipeline.dedup.minhash:run:561 - Loading dup files...
+Reading dup files:   0%|          | 0/14 [00:00<?, ?it/s]Reading dup files: 100%|██████████| 14/14 [00:00<00:00, 32281.61it/s]
+2026-11-06 08:08:12.748 | INFO     | datatrove.pipeline.dedup.minhash:run:571 - Finished reading dup files.
+2026-11-06 08:08:12.749 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:12.749 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0 seconds [1.11 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 96, cluster_size: 96 [2.00/cluster], to_remove: 48}
+2026-11-06 08:08:12.753 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0 seconds [1.11 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 96, cluster_size: 96 [2.00/cluster], to_remove: 48}
+2026-11-06 08:08:15.538 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:15.538 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+Iterable
+🫂 - DEDUP: 🎯 MinHash stage 1
+2026-11-06 08:08:18.289 | INFO     | datatrove.pipeline.dedup.minhash:run:266 - Sorting buckets...
+2026-11-06 08:08:18.293 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:18.293 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 2.75 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 2.75 seconds [2 seconds and 754.31 milliseconds±0 milliseconds/doc]
+    Stats: {total: 300}
+2026-11-06 08:08:18.297 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 2.75 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 2.75 seconds [2 seconds and 754.31 milliseconds±0 milliseconds/doc]
+    Stats: {total: 300}
+2026-11-06 08:08:18.336 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:18.336 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.336 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 000. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.337 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.337 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:18.337 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.84 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:18.346 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=1
+2026-11-06 08:08:18.346 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.347 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 001. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.347 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.347 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=1
+2026-11-06 08:08:18.347 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 1 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.70 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:18.356 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=2
+2026-11-06 08:08:18.356 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.356 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 002. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.357 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.357 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=2
+2026-11-06 08:08:18.357 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 2 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 10}
+2026-11-06 08:08:18.365 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=3
+2026-11-06 08:08:18.366 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.366 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 003. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.366 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.366 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=3
+2026-11-06 08:08:18.367 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 3 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 17}
+2026-11-06 08:08:18.375 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=4
+2026-11-06 08:08:18.375 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.375 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 004. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.375 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.376 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=4
+2026-11-06 08:08:18.376 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 4 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 13}
+2026-11-06 08:08:18.384 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=5
+2026-11-06 08:08:18.384 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.385 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 005. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.385 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.385 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=5
+2026-11-06 08:08:18.385 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 5 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 15}
+2026-11-06 08:08:18.394 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=6
+2026-11-06 08:08:18.394 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.394 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 006. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.394 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.394 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=6
+2026-11-06 08:08:18.395 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 6 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:18.403 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=7
+2026-11-06 08:08:18.403 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.403 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 007. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.403 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.404 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=7
+2026-11-06 08:08:18.404 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 7 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 20}
+2026-11-06 08:08:18.412 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=8
+2026-11-06 08:08:18.412 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.412 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 008. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.413 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.413 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=8
+2026-11-06 08:08:18.413 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 8 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.62 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:18.422 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=9
+2026-11-06 08:08:18.422 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.422 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 009. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.422 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.422 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=9
+2026-11-06 08:08:18.423 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 9 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:18.431 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=10
+2026-11-06 08:08:18.431 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.431 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 010. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.431 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.432 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=10
+2026-11-06 08:08:18.432 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 10 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 16}
+2026-11-06 08:08:18.440 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=11
+2026-11-06 08:08:18.440 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.441 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 011. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.441 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.441 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=11
+2026-11-06 08:08:18.441 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 11 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 15}
+2026-11-06 08:08:18.450 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=12
+2026-11-06 08:08:18.450 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.450 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 012. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.450 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.451 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=12
+2026-11-06 08:08:18.451 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 12 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.62 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:18.459 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=13
+2026-11-06 08:08:18.459 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:18.459 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 013. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:18.460 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:18.460 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=13
+2026-11-06 08:08:18.460 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 13 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.62 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 16}
+2026-11-06 08:08:18.464 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 14 tasks 📉📉📉
+
+Total Runtime: 0 seconds ± 0 seconds/task
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds±0 seconds/task, min=0 seconds, max=0 seconds [0.65 milliseconds±0.06 milliseconds/doc]
+    Stats: {total_matches: 202}
+2026-11-06 08:08:18.502 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:18.503 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 3
+2026-11-06 08:08:18.503 | INFO     | datatrove.pipeline.dedup.minhash:run:561 - Loading dup files...
+Reading dup files:   0%|          | 0/14 [00:00<?, ?it/s]Reading dup files: 100%|██████████| 14/14 [00:00<00:00, 32370.59it/s]
+2026-11-06 08:08:18.504 | INFO     | datatrove.pipeline.dedup.minhash:run:571 - Finished reading dup files.
+2026-11-06 08:08:18.504 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:18.505 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0 seconds [1.10 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 100, cluster_size: 100 [2.00/cluster], to_remove: 50}
+2026-11-06 08:08:18.508 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0 seconds [1.10 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 100, cluster_size: 100 [2.00/cluster], to_remove: 50}
+[refs 08:08:18] dedup_ml: skipping hin_Deva: datatrove cannot tokenize hin_Deva here: ImportError: Please install `indicnlp` to use hi word tokenizer (`pip install indic-nlp-library`).
+[refs 08:08:18] dedup_ml: skipping jpn_Jpan: datatrove cannot tokenize jpn_Jpan here: ImportError: Japanese support requires SudachiPy and SudachiDict-core (https://github.com/WorksApplications/SudachiPy). Install with `pip install sudachipy sudachidict_core` or install spaCy with `pip install spacy[ja]`.
+2026-11-06 08:08:20.911 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:20.911 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+Iterable
+🫂 - DEDUP: 🎯 MinHash stage 1
+2026-11-06 08:08:23.260 | INFO     | datatrove.pipeline.dedup.minhash:run:266 - Sorting buckets...
+2026-11-06 08:08:23.264 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:23.264 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 2.35 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 2.35 seconds [2 seconds and 352.39 milliseconds±0 milliseconds/doc]
+    Stats: {total: 300}
+2026-11-06 08:08:23.268 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 2.35 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 2.35 seconds [2 seconds and 352.39 milliseconds±0 milliseconds/doc]
+    Stats: {total: 300}
+2026-11-06 08:08:23.310 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:23.310 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.310 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 000. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.310 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.311 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:23.311 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.85 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 10}
+2026-11-06 08:08:23.320 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=1
+2026-11-06 08:08:23.320 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.320 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 001. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.320 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.321 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=1
+2026-11-06 08:08:23.321 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 1 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.69 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 9}
+2026-11-06 08:08:23.329 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=2
+2026-11-06 08:08:23.329 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.329 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 002. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.330 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.330 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=2
+2026-11-06 08:08:23.330 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 2 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:23.339 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=3
+2026-11-06 08:08:23.339 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.339 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 003. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.339 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.340 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=3
+2026-11-06 08:08:23.340 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 3 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.62 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 13}
+2026-11-06 08:08:23.348 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=4
+2026-11-06 08:08:23.349 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.349 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 004. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.349 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.349 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=4
+2026-11-06 08:08:23.349 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 4 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 15}
+2026-11-06 08:08:23.358 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=5
+2026-11-06 08:08:23.358 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.358 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 005. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.358 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.359 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=5
+2026-11-06 08:08:23.359 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 5 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 10}
+2026-11-06 08:08:23.368 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=6
+2026-11-06 08:08:23.368 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.368 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 006. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.368 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.369 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=6
+2026-11-06 08:08:23.369 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 6 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 9}
+2026-11-06 08:08:23.378 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=7
+2026-11-06 08:08:23.378 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.378 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 007. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.378 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.379 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=7
+2026-11-06 08:08:23.379 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 7 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:23.388 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=8
+2026-11-06 08:08:23.388 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.388 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 008. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.388 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.389 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=8
+2026-11-06 08:08:23.389 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 8 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:23.397 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=9
+2026-11-06 08:08:23.397 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.398 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 009. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.398 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.398 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=9
+2026-11-06 08:08:23.398 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 9 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.61 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 8}
+2026-11-06 08:08:23.407 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=10
+2026-11-06 08:08:23.407 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.407 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 010. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.407 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.408 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=10
+2026-11-06 08:08:23.408 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 10 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 17}
+2026-11-06 08:08:23.416 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=11
+2026-11-06 08:08:23.416 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.417 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 011. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.417 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.417 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=11
+2026-11-06 08:08:23.417 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 11 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.61 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 13}
+2026-11-06 08:08:23.426 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=12
+2026-11-06 08:08:23.426 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.426 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 012. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.426 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.427 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=12
+2026-11-06 08:08:23.427 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 12 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.62 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 10}
+2026-11-06 08:08:23.436 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=13
+2026-11-06 08:08:23.436 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:23.436 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 013. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:23.436 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:23.436 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=13
+2026-11-06 08:08:23.436 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 13 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.62 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:23.440 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 14 tasks 📉📉📉
+
+Total Runtime: 0 seconds ± 0 seconds/task
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds±0 seconds/task, min=0 seconds, max=0 seconds [0.65 milliseconds±0.06 milliseconds/doc]
+    Stats: {total_matches: 166}
+2026-11-06 08:08:23.476 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:23.476 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 3
+2026-11-06 08:08:23.477 | INFO     | datatrove.pipeline.dedup.minhash:run:561 - Loading dup files...
+Reading dup files:   0%|          | 0/14 [00:00<?, ?it/s]Reading dup files: 100%|██████████| 14/14 [00:00<00:00, 35203.99it/s]
+2026-11-06 08:08:23.478 | INFO     | datatrove.pipeline.dedup.minhash:run:571 - Finished reading dup files.
+2026-11-06 08:08:23.478 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:23.478 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0 seconds [1.05 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 98, cluster_size: 98 [2.00/cluster], to_remove: 49}
+2026-11-06 08:08:23.482 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0 seconds [1.05 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 98, cluster_size: 98 [2.00/cluster], to_remove: 49}
+2026-11-06 08:08:25.415 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:25.415 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+Iterable
+🫂 - DEDUP: 🎯 MinHash stage 1
+2026-11-06 08:08:27.176 | INFO     | datatrove.pipeline.dedup.minhash:run:266 - Sorting buckets...
+2026-11-06 08:08:27.180 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:27.180 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 1.76 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 1.76 seconds [1 second and 764.43 milliseconds±0 milliseconds/doc]
+    Stats: {total: 300}
+2026-11-06 08:08:27.184 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 1.76 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 1
+    Runtime: (100.00%) 1.76 seconds [1 second and 764.43 milliseconds±0 milliseconds/doc]
+    Stats: {total: 300}
+2026-11-06 08:08:27.227 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:27.227 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.227 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 000. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.227 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.228 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:27.228 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.93 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 13}
+2026-11-06 08:08:27.237 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=1
+2026-11-06 08:08:27.237 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.237 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 001. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.237 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.238 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=1
+2026-11-06 08:08:27.238 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 1 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:27.247 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=2
+2026-11-06 08:08:27.247 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.247 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 002. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.247 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.248 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=2
+2026-11-06 08:08:27.248 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 2 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.62 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 10}
+2026-11-06 08:08:27.257 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=3
+2026-11-06 08:08:27.257 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.257 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 003. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.257 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.257 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=3
+2026-11-06 08:08:27.258 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 3 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:27.266 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=4
+2026-11-06 08:08:27.266 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.266 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 004. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.266 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.267 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=4
+2026-11-06 08:08:27.267 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 4 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.67 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 16}
+2026-11-06 08:08:27.276 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=5
+2026-11-06 08:08:27.276 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.276 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 005. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.276 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.276 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=5
+2026-11-06 08:08:27.277 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 5 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 8}
+2026-11-06 08:08:27.285 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=6
+2026-11-06 08:08:27.285 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.285 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 006. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.285 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.286 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=6
+2026-11-06 08:08:27.286 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 6 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.65 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 15}
+2026-11-06 08:08:27.295 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=7
+2026-11-06 08:08:27.295 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.295 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 007. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.295 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.295 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=7
+2026-11-06 08:08:27.296 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 7 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 16}
+2026-11-06 08:08:27.304 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=8
+2026-11-06 08:08:27.304 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.304 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 008. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.304 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.305 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=8
+2026-11-06 08:08:27.305 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 8 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.64 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:27.314 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=9
+2026-11-06 08:08:27.314 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.314 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 009. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.314 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.314 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=9
+2026-11-06 08:08:27.315 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 9 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.62 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 11}
+2026-11-06 08:08:27.323 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=10
+2026-11-06 08:08:27.323 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.323 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 010. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.323 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.324 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=10
+2026-11-06 08:08:27.324 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 10 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 12}
+2026-11-06 08:08:27.333 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=11
+2026-11-06 08:08:27.333 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.333 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 011. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.333 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.333 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=11
+2026-11-06 08:08:27.334 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 11 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 20}
+2026-11-06 08:08:27.342 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=12
+2026-11-06 08:08:27.342 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.342 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 012. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.342 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.343 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=12
+2026-11-06 08:08:27.343 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 12 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.63 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 10}
+2026-11-06 08:08:27.352 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=13
+2026-11-06 08:08:27.352 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 2
+2026-11-06 08:08:27.352 | INFO     | datatrove.pipeline.dedup.minhash:run:401 - Running worker 1/1 on bucket 013. Hash range: [0, np.uint64(2305843009213693951)]
+2026-11-06 08:08:27.352 | INFO     | datatrove.pipeline.dedup.minhash:run:456 - Finished initializing signatures priority queue.
+2026-11-06 08:08:27.352 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=13
+2026-11-06 08:08:27.352 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 13 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds [0.61 milliseconds±0 milliseconds/doc]
+    Stats: {total_matches: 14}
+2026-11-06 08:08:27.356 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 14 tasks 📉📉📉
+
+Total Runtime: 0 seconds ± 0 seconds/task
+
+🫂 - DEDUP: 🎯 MinHash stage 2
+    Runtime: (100.00%) 0 seconds±0 seconds/task, min=0 seconds, max=0 seconds [0.66 milliseconds±0.08 milliseconds/doc]
+    Stats: {total_matches: 185}
+2026-11-06 08:08:27.396 | INFO     | datatrove.utils.logging:add_task_logger:76 - Launching pipeline for rank=0
+2026-11-06 08:08:27.396 | INFO     | datatrove.utils.logging:log_pipeline:108 - 
+--- 🛠️ PIPELINE 🛠
+🫂 - DEDUP: 🎯 MinHash stage 3
+2026-11-06 08:08:27.397 | INFO     | datatrove.pipeline.dedup.minhash:run:561 - Loading dup files...
+Reading dup files:   0%|          | 0/14 [00:00<?, ?it/s]Reading dup files: 100%|██████████| 14/14 [00:00<00:00, 32822.95it/s]
+2026-11-06 08:08:27.398 | INFO     | datatrove.pipeline.dedup.minhash:run:571 - Finished reading dup files.
+2026-11-06 08:08:27.398 | SUCCESS  | datatrove.executor.base:_run_for_rank:140 - Processing done for rank=0
+2026-11-06 08:08:27.398 | INFO     | datatrove.executor.base:_run_for_rank:147 - 
+
+📉📉📉 Stats: Task 0 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0 seconds [1.10 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 96, cluster_size: 96 [2.00/cluster], to_remove: 48}
+2026-11-06 08:08:27.402 | SUCCESS  | datatrove.executor.local:run:151 - 
+
+📉📉📉 Stats: All 1 tasks 📉📉📉
+
+Total Runtime: 0 seconds
+
+🫂 - DEDUP: 🎯 MinHash stage 3
+    Runtime: (100.00%) 0 seconds [1.10 milliseconds±0 milliseconds/doc]
+    Stats: {duplicates: 96, cluster_size: 96 [2.00/cluster], to_remove: 48}
+[refs 08:08:27] wrote parity/minhash-ml-ref.parquet: 1500 rows, 1.4 MB
+[refs 08:08:27] verified parity/minhash-ml-ref.parquet against the manifest
+[refs 08:08:27] dedup_ml done in 21 s
+refs exit 0 (1 = some file differs from its pin; refdiff.py check says which and by how much)
+json_repair_record --check exit 0

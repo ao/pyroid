@@ -1,0 +1,416 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-06T08:09:05+00:00",
+  "tool": {
+    "name": "pyroid-parity",
+    "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+  },
+  "environment": {
+    "python": "3.12.16",
+    "implementation": "CPython",
+    "free_threaded": false,
+    "gil_enabled": true,
+    "platform": "Linux-6.18.56-125.164.amzn2023.aarch64-aarch64-with-glibc2.34",
+    "machine": "aarch64",
+    "in_docker": false
+  },
+  "manifest_sha256": "2ee2667b67b407d1e21c7f5bcfd78c761b5207ee56f93681d377e848487ee146",
+  "status": "pass",
+  "suites": {
+    "filters": {
+      "status": "pass",
+      "candidate": {
+        "spec": "pyroid.filters",
+        "module": "pyroid.filters",
+        "dist": "pyroid",
+        "version": "1.0.0.dev0",
+        "adapter": "pyroid_parity.adapters.filters_pyroid_filters",
+        "is_reference": false,
+        "notes": [
+          "pyroid.filters.apply(texts, [Config(**config)]) -> keep, reason, text",
+          "languages without a native tokenizer: apply(..., python_tokenizer=True)"
+        ]
+      },
+      "reference": {
+        "name": "datatrove",
+        "version": "0.10.1",
+        "tolerance": null
+      },
+      "inputs": {
+        "fineweb/fineweb-dev-10k.parquet": "4d6081f32ffcd96e1ebfeabf943e1ec55a138fff96ff8937c83bf855600b5536",
+        "fineweb2/arb_Arab.parquet": "cab63dc92897685fb832f590ee5a1d3a2a2e5b4e719d7676aa613b0596e4eae2",
+        "fineweb2/cmn_Hani.parquet": "6c4d801c7e049f3f9b05ca3aef608b2e25c1c9495ee49bcea4f937eeddd9064a",
+        "fineweb2/deu_Latn.parquet": "ce8448b8a80053bbfe3ee61a15f7eda42e7223d5876e832ab6735d6a9068dec2",
+        "fineweb2/fra_Latn.parquet": "1d12cf847978e1553a2745189e08a1366c5750a1650464055a3ec8503a2155da",
+        "fineweb2/hin_Deva.parquet": "02881862bd41b27fb27096c537edc5b97485189004c312e13642d6f67d47a436",
+        "fineweb2/jpn_Jpan.parquet": "ff271f2f5e47f0778b7d60eac8d31f6e3453d70b16f285df85c7cc3c66fb6c1b",
+        "fineweb2/rus_Cyrl.parquet": "58078b909d79103ab66b21af92686f0c2f3ce27ac3016d06fec2b5578858982e",
+        "fineweb2/spa_Latn.parquet": "243214b28c35d60001150d01f09f00529e9278fc00e1da9c8c1eea5c5e3e6b69",
+        "parity/adversarial.parquet": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+        "parity/filters-ref.parquet": "702e053aac6033d4b5b6588c87cb91420299e673a313a955a92ceee280ae4976"
+      },
+      "checks": {
+        "c4_quality/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality/arb_Arab": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality/deu_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality/fra_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality/rus_Cyrl": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality/spa_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality@fineweb/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality@fineweb/arb_Arab": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality@fineweb/deu_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality@fineweb/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality@fineweb/fra_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality@fineweb/rus_Cyrl": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "c4_quality@fineweb/spa_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality/arb_Arab": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality/deu_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality/fra_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality/rus_Cyrl": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality/spa_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality@fineweb2/arb_Arab": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality@fineweb2/deu_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality@fineweb2/fra_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality@fineweb2/rus_Cyrl": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "fineweb_quality@fineweb2/spa_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality/arb_Arab": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality/deu_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality/fra_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality/rus_Cyrl": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality/spa_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality@fineweb2/arb_Arab": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality@fineweb2/deu_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality@fineweb2/fra_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality@fineweb2/rus_Cyrl": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_quality@fineweb2/spa_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition/arb_Arab": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition/deu_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition/fra_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition/rus_Cyrl": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition/spa_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition@fineweb2/arb_Arab": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition@fineweb2/deu_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition@fineweb2/fra_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition@fineweb2/rus_Cyrl": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "gopher_repetition@fineweb2/spa_Latn": {
+          "status": "pass",
+          "same": 250,
+          "diff": 0,
+          "examples": []
+        },
+        "pii/all_ips/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "pii/all_ips/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "pii/custom/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "pii/custom/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "pii/default/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "pii/default/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "symbol_lines/default/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "symbol_lines/default/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "symbol_lines/fineweb2/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "symbol_lines/fineweb2/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        }
+      }
+    }
+  }
+}

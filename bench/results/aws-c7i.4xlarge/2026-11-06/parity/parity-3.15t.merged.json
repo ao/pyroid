@@ -1,0 +1,1243 @@
+{
+  "schema_version": 1,
+  "status": "pass",
+  "runs": [
+    {
+      "schema_version": 1,
+      "generated_at": "2026-11-06T08:09:22+00:00",
+      "tool": {
+        "name": "pyroid-parity",
+        "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+      },
+      "environment": {
+        "python": "3.15.2",
+        "implementation": "CPython",
+        "free_threaded": true,
+        "gil_enabled": false,
+        "platform": "Linux-6.18.56-125.164.amzn2023.x86_64-x86_64-with-glibc2.34",
+        "machine": "x86_64",
+        "in_docker": false
+      },
+      "manifest_sha256": "c69d5b111fdb56eecb29bbbed1553dcf1da787792c5ca5380cfc2118676889b0",
+      "status": "pass",
+      "suites": {
+        "dedup": {
+          "status": "pass",
+          "candidate": {
+            "spec": "pyroid.dedup",
+            "module": "pyroid.dedup",
+            "dist": "pyroid",
+            "version": "1.0.0.dev0",
+            "adapter": "pyroid_parity.adapters.dedup_pyroid_dedup",
+            "is_reference": false,
+            "notes": [
+              "pyroid.dedup returns keep masks (True = keep); the adapter inverts them to removed masks",
+              "languages without a native tokenizer: python_tokenizer=True"
+            ]
+          },
+          "reference": {
+            "name": "datatrove",
+            "version": "0.10.1",
+            "tolerance": null
+          },
+          "inputs": {
+            "fineweb/fineweb-dev-10k.parquet": "4d6081f32ffcd96e1ebfeabf943e1ec55a138fff96ff8937c83bf855600b5536",
+            "fineweb2/arb_Arab.parquet": "cab63dc92897685fb832f590ee5a1d3a2a2e5b4e719d7676aa613b0596e4eae2",
+            "fineweb2/cmn_Hani.parquet": "6c4d801c7e049f3f9b05ca3aef608b2e25c1c9495ee49bcea4f937eeddd9064a",
+            "fineweb2/deu_Latn.parquet": "ce8448b8a80053bbfe3ee61a15f7eda42e7223d5876e832ab6735d6a9068dec2",
+            "fineweb2/fra_Latn.parquet": "1d12cf847978e1553a2745189e08a1366c5750a1650464055a3ec8503a2155da",
+            "fineweb2/hin_Deva.parquet": "02881862bd41b27fb27096c537edc5b97485189004c312e13642d6f67d47a436",
+            "fineweb2/jpn_Jpan.parquet": "ff271f2f5e47f0778b7d60eac8d31f6e3453d70b16f285df85c7cc3c66fb6c1b",
+            "fineweb2/rus_Cyrl.parquet": "58078b909d79103ab66b21af92686f0c2f3ce27ac3016d06fec2b5578858982e",
+            "fineweb2/spa_Latn.parquet": "243214b28c35d60001150d01f09f00529e9278fc00e1da9c8c1eea5c5e3e6b69",
+            "parity/adversarial.parquet": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+            "parity/minhash-ref.parquet": "4133f9a18bb5247b43fa8121a5db5326a839c78555f33c27b01acc0c0f33b8aa"
+          },
+          "checks": {
+            "removed": {
+              "status": "pass",
+              "same": 13232,
+              "diff": 0,
+              "examples": []
+            },
+            "removed/arb_Arab": {
+              "status": "pass",
+              "same": 300,
+              "diff": 0,
+              "examples": []
+            },
+            "removed/deu_Latn": {
+              "status": "pass",
+              "same": 300,
+              "diff": 0,
+              "examples": []
+            },
+            "removed/fra_Latn": {
+              "status": "pass",
+              "same": 300,
+              "diff": 0,
+              "examples": []
+            },
+            "removed/rus_Cyrl": {
+              "status": "pass",
+              "same": 300,
+              "diff": 0,
+              "examples": []
+            },
+            "removed/spa_Latn": {
+              "status": "pass",
+              "same": 300,
+              "diff": 0,
+              "examples": []
+            },
+            "signatures": {
+              "status": "pass",
+              "same": 13232,
+              "diff": 0,
+              "examples": []
+            },
+            "signatures/arb_Arab": {
+              "status": "pass",
+              "same": 300,
+              "diff": 0,
+              "examples": []
+            },
+            "signatures/deu_Latn": {
+              "status": "pass",
+              "same": 300,
+              "diff": 0,
+              "examples": []
+            },
+            "signatures/fra_Latn": {
+              "status": "pass",
+              "same": 300,
+              "diff": 0,
+              "examples": []
+            },
+            "signatures/rus_Cyrl": {
+              "status": "pass",
+              "same": 300,
+              "diff": 0,
+              "examples": []
+            },
+            "signatures/spa_Latn": {
+              "status": "pass",
+              "same": 300,
+              "diff": 0,
+              "examples": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "generated_at": "2026-11-06T08:09:16+00:00",
+      "tool": {
+        "name": "pyroid-parity",
+        "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+      },
+      "environment": {
+        "python": "3.15.2",
+        "implementation": "CPython",
+        "free_threaded": true,
+        "gil_enabled": false,
+        "platform": "Linux-6.18.56-125.164.amzn2023.x86_64-x86_64-with-glibc2.34",
+        "machine": "x86_64",
+        "in_docker": false
+      },
+      "manifest_sha256": "c69d5b111fdb56eecb29bbbed1553dcf1da787792c5ca5380cfc2118676889b0",
+      "status": "pass",
+      "suites": {
+        "fasttext": {
+          "status": "pass",
+          "candidate": {
+            "spec": "pyroid.fasttext",
+            "module": "pyroid.fasttext",
+            "dist": "pyroid",
+            "version": "1.0.0.dev0",
+            "adapter": "generic",
+            "is_reference": false,
+            "notes": []
+          },
+          "reference": {
+            "name": "fasttext-predict",
+            "version": "0.9.2.4",
+            "tolerance": 1e-06
+          },
+          "inputs": {
+            "fineweb/fineweb-dev-10k.parquet": "4d6081f32ffcd96e1ebfeabf943e1ec55a138fff96ff8937c83bf855600b5536",
+            "models/lid.176.bin": "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e",
+            "models/lid.176.ftz": "8f3472cfe8738a7b6099e8e999c3cbfae0dcd15696aac7d7738a8039db603e83",
+            "parity/adversarial.parquet": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+            "parity/fasttext-ref.linux-x86_64.parquet": "2b46f9036ba251bc34c8e47f6fd8a6a286efed3671751173d522d0175e55fdf8"
+          },
+          "checks": {
+            "lid.176.bin/adversarial": {
+              "status": "pass",
+              "same": 3232,
+              "diff": 0,
+              "examples": []
+            },
+            "lid.176.bin/dev": {
+              "status": "pass",
+              "same": 10000,
+              "diff": 0,
+              "examples": []
+            },
+            "lid.176.ftz/adversarial": {
+              "status": "pass",
+              "same": 3232,
+              "diff": 0,
+              "examples": []
+            },
+            "lid.176.ftz/dev": {
+              "status": "pass",
+              "same": 10000,
+              "diff": 0,
+              "examples": []
+            },
+            "newline-raises": {
+              "status": "pass",
+              "same": 2,
+              "diff": 0,
+              "examples": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "generated_at": "2026-11-06T08:09:20+00:00",
+      "tool": {
+        "name": "pyroid-parity",
+        "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+      },
+      "environment": {
+        "python": "3.15.2",
+        "implementation": "CPython",
+        "free_threaded": true,
+        "gil_enabled": false,
+        "platform": "Linux-6.18.56-125.164.amzn2023.x86_64-x86_64-with-glibc2.34",
+        "machine": "x86_64",
+        "in_docker": false
+      },
+      "manifest_sha256": "c69d5b111fdb56eecb29bbbed1553dcf1da787792c5ca5380cfc2118676889b0",
+      "status": "pass",
+      "suites": {
+        "filters": {
+          "status": "pass",
+          "candidate": {
+            "spec": "pyroid.filters",
+            "module": "pyroid.filters",
+            "dist": "pyroid",
+            "version": "1.0.0.dev0",
+            "adapter": "pyroid_parity.adapters.filters_pyroid_filters",
+            "is_reference": false,
+            "notes": [
+              "pyroid.filters.apply(texts, [Config(**config)]) -> keep, reason, text",
+              "languages without a native tokenizer: apply(..., python_tokenizer=True)"
+            ]
+          },
+          "reference": {
+            "name": "datatrove",
+            "version": "0.10.1",
+            "tolerance": null
+          },
+          "inputs": {
+            "fineweb/fineweb-dev-10k.parquet": "4d6081f32ffcd96e1ebfeabf943e1ec55a138fff96ff8937c83bf855600b5536",
+            "fineweb2/arb_Arab.parquet": "cab63dc92897685fb832f590ee5a1d3a2a2e5b4e719d7676aa613b0596e4eae2",
+            "fineweb2/cmn_Hani.parquet": "6c4d801c7e049f3f9b05ca3aef608b2e25c1c9495ee49bcea4f937eeddd9064a",
+            "fineweb2/deu_Latn.parquet": "ce8448b8a80053bbfe3ee61a15f7eda42e7223d5876e832ab6735d6a9068dec2",
+            "fineweb2/fra_Latn.parquet": "1d12cf847978e1553a2745189e08a1366c5750a1650464055a3ec8503a2155da",
+            "fineweb2/hin_Deva.parquet": "02881862bd41b27fb27096c537edc5b97485189004c312e13642d6f67d47a436",
+            "fineweb2/jpn_Jpan.parquet": "ff271f2f5e47f0778b7d60eac8d31f6e3453d70b16f285df85c7cc3c66fb6c1b",
+            "fineweb2/rus_Cyrl.parquet": "58078b909d79103ab66b21af92686f0c2f3ce27ac3016d06fec2b5578858982e",
+            "fineweb2/spa_Latn.parquet": "243214b28c35d60001150d01f09f00529e9278fc00e1da9c8c1eea5c5e3e6b69",
+            "parity/adversarial.parquet": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+            "parity/filters-ref.parquet": "702e053aac6033d4b5b6588c87cb91420299e673a313a955a92ceee280ae4976"
+          },
+          "checks": {
+            "c4_quality/adversarial": {
+              "status": "pass",
+              "same": 3232,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality/arb_Arab": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality/deu_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality/dev": {
+              "status": "pass",
+              "same": 10000,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality/fra_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality/rus_Cyrl": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality/spa_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality@fineweb/adversarial": {
+              "status": "pass",
+              "same": 3232,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality@fineweb/arb_Arab": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality@fineweb/deu_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality@fineweb/dev": {
+              "status": "pass",
+              "same": 10000,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality@fineweb/fra_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality@fineweb/rus_Cyrl": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "c4_quality@fineweb/spa_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality/adversarial": {
+              "status": "pass",
+              "same": 3232,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality/arb_Arab": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality/deu_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality/dev": {
+              "status": "pass",
+              "same": 10000,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality/fra_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality/rus_Cyrl": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality/spa_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality@fineweb2/arb_Arab": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality@fineweb2/deu_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality@fineweb2/fra_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality@fineweb2/rus_Cyrl": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "fineweb_quality@fineweb2/spa_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality/adversarial": {
+              "status": "pass",
+              "same": 3232,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality/arb_Arab": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality/deu_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality/dev": {
+              "status": "pass",
+              "same": 10000,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality/fra_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality/rus_Cyrl": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality/spa_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality@fineweb2/arb_Arab": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality@fineweb2/deu_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality@fineweb2/fra_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality@fineweb2/rus_Cyrl": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_quality@fineweb2/spa_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition/adversarial": {
+              "status": "pass",
+              "same": 3232,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition/arb_Arab": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition/deu_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition/dev": {
+              "status": "pass",
+              "same": 10000,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition/fra_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition/rus_Cyrl": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition/spa_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition@fineweb2/arb_Arab": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition@fineweb2/deu_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition@fineweb2/fra_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition@fineweb2/rus_Cyrl": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            },
+            "gopher_repetition@fineweb2/spa_Latn": {
+              "status": "pass",
+              "same": 250,
+              "diff": 0,
+              "examples": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "generated_at": "2026-11-06T08:09:11+00:00",
+      "tool": {
+        "name": "pyroid-parity",
+        "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+      },
+      "environment": {
+        "python": "3.15.2",
+        "implementation": "CPython",
+        "free_threaded": true,
+        "gil_enabled": false,
+        "platform": "Linux-6.18.56-125.164.amzn2023.x86_64-x86_64-with-glibc2.34",
+        "machine": "x86_64",
+        "in_docker": false
+      },
+      "manifest_sha256": "c69d5b111fdb56eecb29bbbed1553dcf1da787792c5ca5380cfc2118676889b0",
+      "status": "pass",
+      "suites": {
+        "ftfy": {
+          "status": "pass",
+          "candidate": {
+            "spec": "pyroid.ftfy",
+            "module": "pyroid.ftfy",
+            "dist": "pyroid",
+            "version": "1.0.0.dev0",
+            "adapter": "generic",
+            "is_reference": false,
+            "notes": []
+          },
+          "reference": {
+            "name": "ftfy",
+            "version": "6.3.1",
+            "tolerance": null
+          },
+          "inputs": {
+            "fineweb/fineweb-dev-10k.parquet": "4d6081f32ffcd96e1ebfeabf943e1ec55a138fff96ff8937c83bf855600b5536",
+            "parity/adversarial.parquet": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+            "parity/ftfy-ref.parquet": "65662c54d2406b5d558a20e2591692f6bff6f68fa3dc0b60188556c1e01fefe9"
+          },
+          "checks": {
+            "api-config": {
+              "status": "pass",
+              "same": 1,
+              "diff": 0,
+              "examples": []
+            },
+            "api-signature": {
+              "status": "pass",
+              "same": 2,
+              "diff": 0,
+              "examples": []
+            },
+            "batch": {
+              "status": "pass",
+              "same": 2003,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-adversarial": {
+              "status": "pass",
+              "same": 3232,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-dev": {
+              "status": "pass",
+              "same": 10000,
+              "diff": 0,
+              "examples": []
+            },
+            "errors": {
+              "status": "pass",
+              "same": 14,
+              "diff": 0,
+              "examples": []
+            },
+            "golden-extra-layer": {
+              "status": "pass",
+              "same": 151,
+              "diff": 0,
+              "examples": []
+            },
+            "golden-fix_encoding": {
+              "status": "pass",
+              "same": 151,
+              "diff": 0,
+              "examples": []
+            },
+            "golden-fix_text": {
+              "status": "pass",
+              "same": 161,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-config-object": {
+              "status": "pass",
+              "same": 2001,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-fix_encoding": {
+              "status": "pass",
+              "same": 2005,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-fix_text": {
+              "status": "pass",
+              "same": 2009,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-fix_text-kwargs": {
+              "status": "pass",
+              "same": 2006,
+              "diff": 0,
+              "examples": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "generated_at": "2026-11-06T08:13:08+00:00",
+      "tool": {
+        "name": "pyroid-parity",
+        "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+      },
+      "environment": {
+        "python": "3.15.2",
+        "implementation": "CPython",
+        "free_threaded": true,
+        "gil_enabled": false,
+        "platform": "Linux-6.18.56-125.164.amzn2023.x86_64-x86_64-with-glibc2.34",
+        "machine": "x86_64",
+        "in_docker": false
+      },
+      "manifest_sha256": "c69d5b111fdb56eecb29bbbed1553dcf1da787792c5ca5380cfc2118676889b0",
+      "status": "pass",
+      "suites": {
+        "json_repair": {
+          "status": "pass",
+          "candidate": {
+            "spec": "pyroid.json_repair",
+            "module": "pyroid.json_repair",
+            "dist": "pyroid",
+            "version": "1.0.0.dev0",
+            "adapter": "generic",
+            "is_reference": false,
+            "notes": []
+          },
+          "reference": {
+            "name": "json_repair",
+            "version": "0.64.5",
+            "tolerance": null
+          },
+          "inputs": {},
+          "checks": {
+            "api-signature": {
+              "status": "pass",
+              "same": 4,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-default": {
+              "status": "pass",
+              "same": 20000,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-ensure_ascii_false": {
+              "status": "pass",
+              "same": 20000,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-indent2": {
+              "status": "pass",
+              "same": 20000,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-inputs": {
+              "status": "pass",
+              "same": 1,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-logging": {
+              "status": "pass",
+              "same": 20000,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-pinned-default": {
+              "status": "pass",
+              "same": 80,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-pinned-ensure_ascii_false": {
+              "status": "pass",
+              "same": 80,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-pinned-indent2": {
+              "status": "pass",
+              "same": 80,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-pinned-logging": {
+              "status": "pass",
+              "same": 80,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-pinned-return_objects": {
+              "status": "pass",
+              "same": 80,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-pinned-skip_json_loads": {
+              "status": "pass",
+              "same": 80,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-pinned-stream_stable": {
+              "status": "pass",
+              "same": 80,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-pinned-strict": {
+              "status": "pass",
+              "same": 80,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-return_objects": {
+              "status": "pass",
+              "same": 20000,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-skip_json_loads": {
+              "status": "pass",
+              "same": 20000,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-stream_stable": {
+              "status": "pass",
+              "same": 20000,
+              "diff": 0,
+              "examples": []
+            },
+            "corpus-strict": {
+              "status": "pass",
+              "same": 20000,
+              "diff": 0,
+              "examples": []
+            },
+            "from_file": {
+              "status": "pass",
+              "same": 2904,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-default": {
+              "status": "pass",
+              "same": 2023,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-ensure_ascii_false": {
+              "status": "pass",
+              "same": 2023,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-indent2": {
+              "status": "pass",
+              "same": 2023,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-loads": {
+              "status": "pass",
+              "same": 2002,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-logging": {
+              "status": "pass",
+              "same": 2023,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-return_objects": {
+              "status": "pass",
+              "same": 2023,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-skip_json_loads": {
+              "status": "pass",
+              "same": 2023,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-stream_stable": {
+              "status": "pass",
+              "same": 2023,
+              "diff": 0,
+              "examples": []
+            },
+            "hypothesis-strict": {
+              "status": "pass",
+              "same": 2023,
+              "diff": 0,
+              "examples": []
+            },
+            "load": {
+              "status": "pass",
+              "same": 2003,
+              "diff": 0,
+              "examples": []
+            },
+            "upstream": {
+              "status": "pass",
+              "same": 516,
+              "diff": 0,
+              "examples": []
+            },
+            "upstream-hash-seed": {
+              "status": "skip",
+              "same": 0,
+              "diff": 0,
+              "examples": [],
+              "skip_reason": "4 recorded calls: the outcome changes with PYTHONHASHSEED"
+            },
+            "upstream-recursion": {
+              "status": "skip",
+              "same": 0,
+              "diff": 0,
+              "examples": [],
+              "skip_reason": "3 recorded calls: the outcome depends on Python's recursion limit and the caller's stack depth (deep nesting)"
+            },
+            "upstream-schema": {
+              "status": "skip",
+              "same": 0,
+              "diff": 0,
+              "examples": [],
+              "skip_reason": "jsonschema is not installed here (json_repair's schema= needs it; it is in the parity dev group)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "generated_at": "2026-11-06T08:11:57+00:00",
+      "tool": {
+        "name": "pyroid-parity",
+        "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+      },
+      "environment": {
+        "python": "3.15.2",
+        "implementation": "CPython",
+        "free_threaded": true,
+        "gil_enabled": false,
+        "platform": "Linux-6.18.56-125.164.amzn2023.x86_64-x86_64-with-glibc2.34",
+        "machine": "x86_64",
+        "in_docker": false
+      },
+      "manifest_sha256": "c69d5b111fdb56eecb29bbbed1553dcf1da787792c5ca5380cfc2118676889b0",
+      "status": "pass",
+      "suites": {
+        "metrics": {
+          "status": "pass",
+          "candidate": {
+            "spec": "pyroid.metrics",
+            "module": "pyroid.metrics",
+            "dist": "pyroid",
+            "version": "1.0.0.dev0",
+            "adapter": "generic",
+            "is_reference": false,
+            "notes": []
+          },
+          "reference": {
+            "name": "rouge-score + sacrebleu",
+            "version": "rouge-score 0.1.2, sacrebleu 2.6.0, nltk 3.10.4",
+            "tolerance": 0.0
+          },
+          "inputs": {
+            "metrics/cnndm-3.0.0-test.parquet": "04e322d2634a96dba76bf9a6294fbbe48e0b36abeae43f13d86ba2c3bebffe4e",
+            "metrics/summeval.parquet": "7ff6f3f4d044223bd6922c5434d27bf28473950346fcfc2a3b7352c19163690e",
+            "metrics/wmt21.parquet": "25a5d22adddb5c87b461e8c8144a185fd08b968e35ec18d800da9daed29b82b5",
+            "parity/metrics-ref.linux-x86_64.parquet": "8107ddcdfb40adc8aa20b8c71e59af7cec2382000333ce558ae8141c947ecd2e"
+          },
+          "checks": {
+            "bleu": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@add-k": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@char": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@eff-order": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@floor": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@holes": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@intl": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@lowercase": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@max-order-2": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@none": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@nosmooth": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@refA": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@trg_lang": {
+              "status": "pass",
+              "same": 126,
+              "diff": 0,
+              "examples": []
+            },
+            "bleu@zh": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "chrf": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "chrf++": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "chrf@beta1": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "chrf@eps": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "chrf@holes": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "chrf@lowercase": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "chrf@refA": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "chrf@whitespace": {
+              "status": "pass",
+              "same": 141,
+              "diff": 0,
+              "examples": []
+            },
+            "live-rouge": {
+              "status": "pass",
+              "same": 2000,
+              "diff": 0,
+              "examples": []
+            },
+            "live-rouge-long": {
+              "status": "pass",
+              "same": 2000,
+              "diff": 0,
+              "examples": []
+            },
+            "rouge@article-stem": {
+              "status": "pass",
+              "same": 2000,
+              "diff": 0,
+              "examples": []
+            },
+            "rouge@article-stem[batch]": {
+              "status": "pass",
+              "same": 2000,
+              "diff": 0,
+              "examples": []
+            },
+            "rouge@cnndm": {
+              "status": "pass",
+              "same": 11490,
+              "diff": 0,
+              "examples": []
+            },
+            "rouge@cnndm-stem": {
+              "status": "pass",
+              "same": 11490,
+              "diff": 0,
+              "examples": []
+            },
+            "rouge@cnndm-stem[batch]": {
+              "status": "pass",
+              "same": 11490,
+              "diff": 0,
+              "examples": []
+            },
+            "rouge@cnndm[batch]": {
+              "status": "pass",
+              "same": 11490,
+              "diff": 0,
+              "examples": []
+            },
+            "rouge@summeval": {
+              "status": "pass",
+              "same": 1600,
+              "diff": 0,
+              "examples": []
+            },
+            "rouge@summeval-multi-stem": {
+              "status": "pass",
+              "same": 1600,
+              "diff": 0,
+              "examples": []
+            },
+            "rouge@summeval[batch]": {
+              "status": "pass",
+              "same": 1600,
+              "diff": 0,
+              "examples": []
+            },
+            "rougeLsum@cnndm-stem": {
+              "status": "pass",
+              "same": 11490,
+              "diff": 0,
+              "examples": []
+            },
+            "rougeLsum@cnndm-stem[batch]": {
+              "status": "pass",
+              "same": 11490,
+              "diff": 0,
+              "examples": []
+            },
+            "sentence_bleu": {
+              "status": "pass",
+              "same": 163000,
+              "diff": 0,
+              "examples": []
+            },
+            "sentence_bleu@multi": {
+              "status": "pass",
+              "same": 163000,
+              "diff": 0,
+              "examples": []
+            },
+            "sentence_bleu@multi[batch]": {
+              "status": "pass",
+              "same": 163000,
+              "diff": 0,
+              "examples": []
+            },
+            "sentence_bleu[batch]": {
+              "status": "pass",
+              "same": 163000,
+              "diff": 0,
+              "examples": []
+            },
+            "sentence_chrf": {
+              "status": "pass",
+              "same": 163000,
+              "diff": 0,
+              "examples": []
+            },
+            "sentence_chrf++": {
+              "status": "pass",
+              "same": 163000,
+              "diff": 0,
+              "examples": []
+            },
+            "sentence_chrf++[batch]": {
+              "status": "pass",
+              "same": 163000,
+              "diff": 0,
+              "examples": []
+            },
+            "sentence_chrf[batch]": {
+              "status": "pass",
+              "same": 163000,
+              "diff": 0,
+              "examples": []
+            },
+            "live-sacrebleu": {
+              "status": "skip",
+              "same": 0,
+              "diff": 0,
+              "examples": [],
+              "skip_reason": "sacrebleu imports lxml, which re-enables the GIL on this build"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

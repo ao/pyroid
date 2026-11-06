@@ -1,0 +1,3 @@
+metrics: exit 0 (reproduces the old pin)
+metrics: 694757 vs 694757 rows (0 only old, 0 only new), 0 of 694757 common rows differ; every case identical
+metrics: 694757 vs 694757 rows (0 only old, 0 only new), 165 of 694757 common rows differ; bleu@intl 1/141 (max 1 ulps, rel 1.23e-16); bleu@char 1/141 (max 1 ulps, rel 2.09e-16); sentence_bleu 81/163000 (max 2 ulps, rel 2.4e-16); sentence_bleu@multi 82/163000 (max 2 ulps, rel 2.4e-16)

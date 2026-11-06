@@ -1,0 +1,1 @@
+{"machine": "aws-c7i.4xlarge", "date": "2026-11-06", "state": "failed", "step": "refs_hwcaps", "done": "bench_dev bench_headline code envs fetch meta refs refs_hwcaps wheels", "failed": "parity", "skipped": "", "updated": "2026-11-06T11:29:38Z", "deadline": "2026-11-06T14:57:27Z", "loadavg": "12.46 6.59 3.95"}

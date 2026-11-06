@@ -1,0 +1,32 @@
+................ss.s..ss...s..ss..                                       [100%]
+==================================== parity ====================================
+dedup     removed                          same=13232    diff=0
+dedup     removed/arb_Arab                 same=300      diff=0
+dedup     removed/deu_Latn                 same=300      diff=0
+dedup     removed/fra_Latn                 same=300      diff=0
+dedup     removed/rus_Cyrl                 same=300      diff=0
+dedup     removed/spa_Latn                 same=300      diff=0
+dedup     sentence_dedup/arb_Arab/fineweb2-lines same=334      diff=0
+dedup     sentence_dedup/arb_Arab/fineweb2-sentences same=334      diff=0
+dedup     sentence_dedup/deu_Latn/fineweb2-lines same=334      diff=0
+dedup     sentence_dedup/deu_Latn/fineweb2-sentences same=334      diff=0
+dedup     sentence_dedup/example_xxhash64/dev same=10000    diff=0
+dedup     sentence_dedup/fra_Latn/fineweb2-lines same=334      diff=0
+dedup     sentence_dedup/fra_Latn/fineweb2-sentences same=334      diff=0
+dedup     sentence_dedup/lines_sha1_32/dev same=10000    diff=0
+dedup     sentence_dedup/rus_Cyrl/fineweb2-lines same=334      diff=0
+dedup     sentence_dedup/rus_Cyrl/fineweb2-sentences same=334      diff=0
+dedup     sentence_dedup/spa_Latn/fineweb2-lines same=334      diff=0
+dedup     sentence_dedup/spa_Latn/fineweb2-sentences same=334      diff=0
+dedup     signatures                       same=13232    diff=0
+dedup     signatures/arb_Arab              same=300      diff=0
+dedup     signatures/deu_Latn              same=300      diff=0
+dedup     signatures/fra_Latn              same=300      diff=0
+dedup     signatures/rus_Cyrl              same=300      diff=0
+dedup     signatures/spa_Latn              same=300      diff=0
+=========================== short test summary info ============================
+SKIPPED [2] parity/tests/test_dedup_more.py:83: needs indic-nlp-library
+SKIPPED [2] parity/tests/test_dedup_multilingual.py:46: datatrove cannot tokenize cmn_Hani here: ImportError: Please install `jieba` to use zh word tokenizer (`pip install jieba`).
+SKIPPED [2] parity/tests/test_dedup_multilingual.py:46: datatrove cannot tokenize hin_Deva here: ImportError: Please install `indicnlp` to use hi word tokenizer (`pip install indic-nlp-library`).
+SKIPPED [2] parity/tests/test_dedup_multilingual.py:46: datatrove cannot tokenize jpn_Jpan here: ImportError: Japanese support requires SudachiPy and SudachiDict-core (https://github.com/WorksApplications/SudachiPy). Install with `pip install sudachipy sudachidict_core` or install spaCy with `pip install spacy[ja]`.
+26 passed, 8 skipped, 1368 deselected in 77.61s (0:01:17)

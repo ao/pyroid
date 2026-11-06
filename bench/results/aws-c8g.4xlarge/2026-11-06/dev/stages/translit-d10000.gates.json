@@ -1,0 +1,6 @@
+{
+ "anyascii 0.3.3": "{\"docs\":10000,\"gate\":\"translit\",\"impl\":\"anyascii\",\"live\":10000,\"mismatches\":0,\"oracle\":\"anyascii 0.3.3\",\"pinned\":0,\"seconds\":2.265}",
+ "pyroid.translit 1.0.0.dev0 anyascii": "{\"docs\":10000,\"gate\":\"translit\",\"impl\":\"pyroid.translit anyascii\",\"live\":10000,\"mismatches\":0,\"oracle\":\"anyascii 0.3.3\",\"pinned\":0,\"seconds\":1.131}",
+ "pyroid.translit 1.0.0.dev0 anyascii [arrow]": "{\"docs\":10000,\"gate\":\"translit\",\"impl\":\"pyroid.translit anyascii [arrow]\",\"live\":10000,\"mismatches\":0,\"oracle\":\"anyascii 0.3.3\",\"pinned\":0,\"seconds\":1.133}",
+ "pyroid.translit 1.0.0.dev0 anyascii per doc": "{\"docs\":10000,\"gate\":\"translit\",\"impl\":\"pyroid.translit anyascii per doc\",\"live\":10000,\"mismatches\":0,\"oracle\":\"anyascii 0.3.3\",\"pinned\":0,\"seconds\":1.103}"
+}

@@ -1,0 +1,15 @@
+/sys/kernel/mm/transparent_hugepage/enabled: always [madvise] never
+/sys/kernel/mm/transparent_hugepage/defrag: always defer defer+madvise [madvise] never
+/sys/devices/system/cpu/smt/active: 0
+/sys/devices/system/cpu/smt/control: notsupported
+/sys/devices/system/cpu/isolated: 
+/proc/sys/kernel/perf_event_paranoid: 2
+nproc: 16
+bench_cpus: 0,1,2,3,4,5,6,7
+loadavg: 0.33 0.18 0.07 1/354 28911
+deadline: 2026-11-06T14:57:42Z
+               total        used        free      shared  buff/cache   available
+Mem:           31490         384       29357           0        1748       30767
+Swap:              0           0           0
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p1  100G  3.7G   97G   4% /

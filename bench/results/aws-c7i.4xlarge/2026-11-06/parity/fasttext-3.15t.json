@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-06T08:09:16+00:00",
+  "tool": {
+    "name": "pyroid-parity",
+    "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+  },
+  "environment": {
+    "python": "3.15.2",
+    "implementation": "CPython",
+    "free_threaded": true,
+    "gil_enabled": false,
+    "platform": "Linux-6.18.56-125.164.amzn2023.x86_64-x86_64-with-glibc2.34",
+    "machine": "x86_64",
+    "in_docker": false
+  },
+  "manifest_sha256": "c69d5b111fdb56eecb29bbbed1553dcf1da787792c5ca5380cfc2118676889b0",
+  "status": "pass",
+  "suites": {
+    "fasttext": {
+      "status": "pass",
+      "candidate": {
+        "spec": "pyroid.fasttext",
+        "module": "pyroid.fasttext",
+        "dist": "pyroid",
+        "version": "1.0.0.dev0",
+        "adapter": "generic",
+        "is_reference": false,
+        "notes": []
+      },
+      "reference": {
+        "name": "fasttext-predict",
+        "version": "0.9.2.4",
+        "tolerance": 1e-06
+      },
+      "inputs": {
+        "fineweb/fineweb-dev-10k.parquet": "4d6081f32ffcd96e1ebfeabf943e1ec55a138fff96ff8937c83bf855600b5536",
+        "models/lid.176.bin": "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e",
+        "models/lid.176.ftz": "8f3472cfe8738a7b6099e8e999c3cbfae0dcd15696aac7d7738a8039db603e83",
+        "parity/adversarial.parquet": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+        "parity/fasttext-ref.linux-x86_64.parquet": "2b46f9036ba251bc34c8e47f6fd8a6a286efed3671751173d522d0175e55fdf8"
+      },
+      "checks": {
+        "lid.176.bin/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "lid.176.bin/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "lid.176.ftz/adversarial": {
+          "status": "pass",
+          "same": 3232,
+          "diff": 0,
+          "examples": []
+        },
+        "lid.176.ftz/dev": {
+          "status": "pass",
+          "same": 10000,
+          "diff": 0,
+          "examples": []
+        },
+        "newline-raises": {
+          "status": "pass",
+          "same": 2,
+          "diff": 0,
+          "examples": []
+        }
+      }
+    }
+  }
+}

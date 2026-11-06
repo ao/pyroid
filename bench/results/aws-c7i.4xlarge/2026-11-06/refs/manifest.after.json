@@ -1,0 +1,874 @@
+{
+  "schema": 1,
+  "files": {
+    "fineweb/fineweb-100k.parquet": {
+      "sha256": "5e184adeeb20c39306fd9afd7156fe5083b4b1af7a1c7ec271207d7e9f70205c",
+      "bytes": 128503776,
+      "rows": 100000,
+      "content_sha256": "1a93378229bbed5bcfa552ef67c9068d0c8d70f56204d40ac62c41fb3616567c",
+      "chars": 307279708,
+      "source": {
+        "repo": "HuggingFaceFW/fineweb",
+        "revision": "9bb295ddab0e05d785b879661af7260fed5140fc",
+        "file": "sample/10BT/000_00000.parquet",
+        "license": "ODC-By 1.0",
+        "rows": "first 100000 in file order"
+      }
+    },
+    "fineweb/fineweb-dev-10k.parquet": {
+      "sha256": "4d6081f32ffcd96e1ebfeabf943e1ec55a138fff96ff8937c83bf855600b5536",
+      "bytes": 12790864,
+      "rows": 10000,
+      "content_sha256": "e60bb40283a10e16123efcef30f0a6db37d6ef25cf7b3b4ce016ce3a743de98e",
+      "chars": 30503959,
+      "source": {
+        "repo": "HuggingFaceFW/fineweb",
+        "revision": "9bb295ddab0e05d785b879661af7260fed5140fc",
+        "file": "sample/10BT/000_00000.parquet",
+        "license": "ODC-By 1.0",
+        "rows": "first 10000 in file order"
+      }
+    },
+    "fineweb2/arb_Arab.parquet": {
+      "sha256": "cab63dc92897685fb832f590ee5a1d3a2a2e5b4e719d7676aa613b0596e4eae2",
+      "bytes": 431276,
+      "rows": 250,
+      "content_sha256": "60c8b35d7561aa04dae1e6c739ceaa6feffc1685c95acf6a308305093c3b66e2",
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/arb_Arab/test/000_00000.parquet",
+        "license": "ODC-By 1.0"
+      }
+    },
+    "fineweb2/cmn_Hani.parquet": {
+      "sha256": "6c4d801c7e049f3f9b05ca3aef608b2e25c1c9495ee49bcea4f937eeddd9064a",
+      "bytes": 494209,
+      "rows": 250,
+      "content_sha256": "01a4d5e9676a95cf68fcf6f57264bfbbeb7eda71fb027f865eedae960e65a1f3",
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/cmn_Hani/test/000_00000.parquet",
+        "license": "ODC-By 1.0"
+      }
+    },
+    "fineweb2/deu_Latn.parquet": {
+      "sha256": "ce8448b8a80053bbfe3ee61a15f7eda42e7223d5876e832ab6735d6a9068dec2",
+      "bytes": 276263,
+      "rows": 250,
+      "content_sha256": "019fa4339ca699cd696fb565d64a96eb497749dfc8834b4f44878e5a87b9f274",
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/deu_Latn/test/000_00000.parquet",
+        "license": "ODC-By 1.0"
+      }
+    },
+    "fineweb2/fra_Latn.parquet": {
+      "sha256": "1d12cf847978e1553a2745189e08a1366c5750a1650464055a3ec8503a2155da",
+      "bytes": 395537,
+      "rows": 250,
+      "content_sha256": "04217e2170f936114f4cfa56f26450d4c99c1dbedfe4b88c56be7053c1eb7f28",
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/fra_Latn/test/000_00000.parquet",
+        "license": "ODC-By 1.0"
+      }
+    },
+    "fineweb2/hin_Deva.parquet": {
+      "sha256": "02881862bd41b27fb27096c537edc5b97485189004c312e13642d6f67d47a436",
+      "bytes": 385557,
+      "rows": 250,
+      "content_sha256": "327048fc7057e0ce05cd3073b4d87c4c835dc72f328830bc643fad361cd7eba3",
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/hin_Deva/test/000_00000.parquet",
+        "license": "ODC-By 1.0"
+      }
+    },
+    "fineweb2/jpn_Jpan.parquet": {
+      "sha256": "ff271f2f5e47f0778b7d60eac8d31f6e3453d70b16f285df85c7cc3c66fb6c1b",
+      "bytes": 371556,
+      "rows": 250,
+      "content_sha256": "21d603d3b24fac68b5490cb0b000e652f8ddc95539cef0a18d7b1694296a324b",
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/jpn_Jpan/test/000_00000.parquet",
+        "license": "ODC-By 1.0"
+      }
+    },
+    "fineweb2/rus_Cyrl.parquet": {
+      "sha256": "58078b909d79103ab66b21af92686f0c2f3ce27ac3016d06fec2b5578858982e",
+      "bytes": 441416,
+      "rows": 250,
+      "content_sha256": "d226c9aad5afe96e3d8b0d2896c273e8ea1adfbec8dd56d82951d679c9d72baa",
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/rus_Cyrl/test/000_00000.parquet",
+        "license": "ODC-By 1.0"
+      }
+    },
+    "fineweb2/spa_Latn.parquet": {
+      "sha256": "243214b28c35d60001150d01f09f00529e9278fc00e1da9c8c1eea5c5e3e6b69",
+      "bytes": 334278,
+      "rows": 250,
+      "content_sha256": "a2b69478a32e7fa177642164bbbb93da64c58f3f8a4e65eeba0eca02b4959fec",
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/spa_Latn/test/000_00000.parquet",
+        "license": "ODC-By 1.0"
+      }
+    },
+    "metrics/cnndm-3.0.0-test.parquet": {
+      "sha256": "04e322d2634a96dba76bf9a6294fbbe48e0b36abeae43f13d86ba2c3bebffe4e",
+      "bytes": 30000471,
+      "rows": 11490,
+      "source": {
+        "repo": "abisee/cnn_dailymail",
+        "revision": "96df5e686bee6baa90b8bee7c28b81fa3fa6223d",
+        "file": "3.0.0/test-00000-of-00001.parquet",
+        "license": "Apache-2.0"
+      }
+    },
+    "metrics/summeval.parquet": {
+      "sha256": "7ff6f3f4d044223bd6922c5434d27bf28473950346fcfc2a3b7352c19163690e",
+      "bytes": 422779,
+      "rows": 100,
+      "source": {
+        "repo": "mteb/summeval",
+        "revision": "bfc121155064afa2d81b5505682ffc0d96f4334c",
+        "file": "data/test-00000-of-00001-35901af5f6649399.parquet",
+        "license": "MIT"
+      }
+    },
+    "metrics/wmt21.parquet": {
+      "sha256": "25a5d22adddb5c87b461e8c8144a185fd08b968e35ec18d800da9daed29b82b5",
+      "bytes": 12002835,
+      "rows": 163000,
+      "systems": 141,
+      "source": {
+        "repo": "wmt-conference/wmt21-news-systems",
+        "revision": "f41750dadbf2ba6ab01ca5380347d253298a3427",
+        "testset": "newstest2021",
+        "langpairs": [
+          "en-de",
+          "de-en",
+          "en-zh",
+          "zh-en",
+          "en-ru",
+          "ru-en",
+          "en-ja",
+          "ja-en"
+        ],
+        "license": "WMT21 shared-task release (research use; not redistributed)"
+      }
+    },
+    "models/lid.176.bin": {
+      "sha256": "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e",
+      "bytes": 131266198,
+      "source": {
+        "url": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin",
+        "license": "CC BY-SA 3.0"
+      }
+    },
+    "models/lid.176.ftz": {
+      "sha256": "8f3472cfe8738a7b6099e8e999c3cbfae0dcd15696aac7d7738a8039db603e83",
+      "bytes": 938013,
+      "source": {
+        "url": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz",
+        "license": "CC BY-SA 3.0"
+      }
+    },
+    "parity/adversarial.parquet": {
+      "sha256": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+      "bytes": 4434803,
+      "rows": 3232,
+      "content_sha256": "7f31c6ab78886fe071422265bb1631c0cd5a553c2987d040d2ff1517afec9813",
+      "seed": 20261105,
+      "generator": "pyroid_parity.refs:build_adversarial",
+      "oracle": {
+        "ftfy": "6.3.1"
+      }
+    },
+    "parity/fasttext-ref.linux-x86_64.parquet": {
+      "sha256": "2b46f9036ba251bc34c8e47f6fd8a6a286efed3671751173d522d0175e55fdf8",
+      "bytes": 1351883,
+      "rows": 26464,
+      "oracle": {
+        "fasttext-predict": "0.9.2.4"
+      },
+      "k": 5,
+      "call": "model.predict(text.replace(\"\\n\", \" \"), k=5, threshold=0.0)",
+      "models": {
+        "lid.176.bin": "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e",
+        "lid.176.ftz": "8f3472cfe8738a7b6099e8e999c3cbfae0dcd15696aac7d7738a8039db603e83"
+      },
+      "platform": "linux-x86_64"
+    },
+    "parity/fasttext-ref.parquet": {
+      "sha256": "209adb5e1f1243dd307a139e0b06580638d9309f22ff93cc88e43ec753085030",
+      "bytes": 1351916,
+      "rows": 26464,
+      "oracle": {
+        "fasttext-predict": "0.9.2.4"
+      },
+      "k": 5,
+      "call": "model.predict(text.replace(\"\\n\", \" \"), k=5, threshold=0.0)",
+      "models": {
+        "lid.176.bin": "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e",
+        "lid.176.ftz": "8f3472cfe8738a7b6099e8e999c3cbfae0dcd15696aac7d7738a8039db603e83"
+      },
+      "platform": "linux-aarch64"
+    },
+    "parity/filters-ml-ref.parquet": {
+      "sha256": "0337a3d4f68a335aacc5f1d6ffec9e030b08ae086551ed6bdd0cf8ab23586df4",
+      "bytes": 1607143,
+      "rows": 10000,
+      "oracle": {
+        "datatrove": "0.10.1",
+        "spacy": "3.8.18"
+      },
+      "languages": [
+        "arb_Arab",
+        "deu_Latn",
+        "fra_Latn",
+        "rus_Cyrl",
+        "spa_Latn"
+      ]
+    },
+    "parity/filters-ref.parquet": {
+      "sha256": "702e053aac6033d4b5b6588c87cb91420299e673a313a955a92ceee280ae4976",
+      "bytes": 13281783,
+      "rows": 66160,
+      "oracle": {
+        "datatrove": "0.10.1",
+        "spacy": "3.8.18"
+      },
+      "cases": {
+        "gopher_repetition": {
+          "class": "GopherRepetitionFilter",
+          "kwargs": {}
+        },
+        "gopher_quality": {
+          "class": "GopherQualityFilter",
+          "kwargs": {}
+        },
+        "c4_quality": {
+          "class": "C4QualityFilter",
+          "kwargs": {}
+        },
+        "c4_quality@fineweb": {
+          "class": "C4QualityFilter",
+          "kwargs": {
+            "filter_no_terminal_punct": false
+          }
+        },
+        "fineweb_quality": {
+          "class": "FineWebQualityFilter",
+          "kwargs": {}
+        }
+      }
+    },
+    "parity/ftfy-ref.parquet": {
+      "sha256": "65662c54d2406b5d558a20e2591692f6bff6f68fa3dc0b60188556c1e01fefe9",
+      "bytes": 16375775,
+      "rows": 13232,
+      "oracle": {
+        "ftfy": "6.3.1"
+      },
+      "call": "ftfy.fix_text(text)",
+      "corpora": [
+        "dev",
+        "adversarial"
+      ]
+    },
+    "parity/metrics-ref.linux-x86_64.parquet": {
+      "sha256": "8107ddcdfb40adc8aa20b8c71e59af7cec2382000333ce558ae8141c947ecd2e",
+      "bytes": 20003089,
+      "rows": 694757,
+      "oracle": {
+        "rouge-score": "0.1.2",
+        "sacrebleu": "2.6.0",
+        "nltk": "3.10.4"
+      },
+      "corpora": [
+        "metrics/cnndm-3.0.0-test.parquet",
+        "metrics/summeval.parquet",
+        "metrics/wmt21.parquet"
+      ],
+      "platform": "linux-x86_64",
+      "cases": {
+        "rouge": {
+          "rouge@cnndm": {
+            "data": "cnndm",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ]
+            },
+            "call": "score"
+          },
+          "rouge@cnndm-stem": {
+            "data": "cnndm",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rouge3",
+                "rouge4",
+                "rougeL",
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "score"
+          },
+          "rougeLsum@cnndm-stem": {
+            "data": "cnndm",
+            "kwargs": {
+              "rouge_types": [
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "score"
+          },
+          "rouge@article-stem": {
+            "data": "article",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "score"
+          },
+          "rouge@summeval": {
+            "data": "summeval",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ]
+            },
+            "call": "score"
+          },
+          "rouge@summeval-multi-stem": {
+            "data": "summeval-multi",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "multi"
+          }
+        },
+        "corpus": {
+          "bleu": {
+            "class": "BLEU",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "bleu@refA": {
+            "class": "BLEU",
+            "kwargs": {},
+            "refs": "A"
+          },
+          "bleu@trg_lang": {
+            "class": "BLEU",
+            "kwargs": {
+              "trg_lang": "<tgt>"
+            },
+            "refs": "all"
+          },
+          "bleu@intl": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "intl"
+            },
+            "refs": "all"
+          },
+          "bleu@char": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "char"
+            },
+            "refs": "A"
+          },
+          "bleu@none": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "none"
+            },
+            "refs": "A"
+          },
+          "bleu@zh": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "zh"
+            },
+            "refs": "all"
+          },
+          "bleu@lowercase": {
+            "class": "BLEU",
+            "kwargs": {
+              "lowercase": true
+            },
+            "refs": "all"
+          },
+          "bleu@floor": {
+            "class": "BLEU",
+            "kwargs": {
+              "smooth_method": "floor",
+              "smooth_value": 0.1
+            },
+            "refs": "A"
+          },
+          "bleu@add-k": {
+            "class": "BLEU",
+            "kwargs": {
+              "smooth_method": "add-k",
+              "smooth_value": 1
+            },
+            "refs": "A"
+          },
+          "bleu@nosmooth": {
+            "class": "BLEU",
+            "kwargs": {
+              "smooth_method": "none"
+            },
+            "refs": "A"
+          },
+          "bleu@eff-order": {
+            "class": "BLEU",
+            "kwargs": {
+              "effective_order": true
+            },
+            "refs": "A"
+          },
+          "bleu@max-order-2": {
+            "class": "BLEU",
+            "kwargs": {
+              "max_ngram_order": 2
+            },
+            "refs": "A"
+          },
+          "bleu@holes": {
+            "class": "BLEU",
+            "kwargs": {},
+            "refs": "holes"
+          },
+          "chrf": {
+            "class": "CHRF",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "chrf@refA": {
+            "class": "CHRF",
+            "kwargs": {},
+            "refs": "A"
+          },
+          "chrf++": {
+            "class": "CHRF",
+            "kwargs": {
+              "word_order": 2
+            },
+            "refs": "all"
+          },
+          "chrf@whitespace": {
+            "class": "CHRF",
+            "kwargs": {
+              "whitespace": true
+            },
+            "refs": "A"
+          },
+          "chrf@beta1": {
+            "class": "CHRF",
+            "kwargs": {
+              "beta": 1
+            },
+            "refs": "A"
+          },
+          "chrf@lowercase": {
+            "class": "CHRF",
+            "kwargs": {
+              "lowercase": true
+            },
+            "refs": "A"
+          },
+          "chrf@eps": {
+            "class": "CHRF",
+            "kwargs": {
+              "eps_smoothing": true
+            },
+            "refs": "all"
+          },
+          "chrf@holes": {
+            "class": "CHRF",
+            "kwargs": {
+              "word_order": 2
+            },
+            "refs": "holes"
+          }
+        },
+        "sentence": {
+          "sentence_bleu": {
+            "call": "sentence_bleu",
+            "kwargs": {},
+            "refs": "A"
+          },
+          "sentence_bleu@multi": {
+            "call": "sentence_bleu",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "sentence_chrf": {
+            "call": "sentence_chrf",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "sentence_chrf++": {
+            "call": "sentence_chrf",
+            "kwargs": {
+              "word_order": 2
+            },
+            "refs": "A"
+          }
+        }
+      }
+    },
+    "parity/metrics-ref.parquet": {
+      "sha256": "8107ddcdfb40adc8aa20b8c71e59af7cec2382000333ce558ae8141c947ecd2e",
+      "bytes": 20003089,
+      "rows": 694757,
+      "oracle": {
+        "rouge-score": "0.1.2",
+        "sacrebleu": "2.6.0",
+        "nltk": "3.10.4"
+      },
+      "corpora": [
+        "metrics/cnndm-3.0.0-test.parquet",
+        "metrics/summeval.parquet",
+        "metrics/wmt21.parquet"
+      ],
+      "cases": {
+        "rouge": {
+          "rouge@cnndm": {
+            "data": "cnndm",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ]
+            },
+            "call": "score"
+          },
+          "rouge@cnndm-stem": {
+            "data": "cnndm",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rouge3",
+                "rouge4",
+                "rougeL",
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "score"
+          },
+          "rougeLsum@cnndm-stem": {
+            "data": "cnndm",
+            "kwargs": {
+              "rouge_types": [
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "score"
+          },
+          "rouge@article-stem": {
+            "data": "article",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "score"
+          },
+          "rouge@summeval": {
+            "data": "summeval",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ]
+            },
+            "call": "score"
+          },
+          "rouge@summeval-multi-stem": {
+            "data": "summeval-multi",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "multi"
+          }
+        },
+        "corpus": {
+          "bleu": {
+            "class": "BLEU",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "bleu@refA": {
+            "class": "BLEU",
+            "kwargs": {},
+            "refs": "A"
+          },
+          "bleu@trg_lang": {
+            "class": "BLEU",
+            "kwargs": {
+              "trg_lang": "<tgt>"
+            },
+            "refs": "all"
+          },
+          "bleu@intl": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "intl"
+            },
+            "refs": "all"
+          },
+          "bleu@char": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "char"
+            },
+            "refs": "A"
+          },
+          "bleu@none": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "none"
+            },
+            "refs": "A"
+          },
+          "bleu@zh": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "zh"
+            },
+            "refs": "all"
+          },
+          "bleu@lowercase": {
+            "class": "BLEU",
+            "kwargs": {
+              "lowercase": true
+            },
+            "refs": "all"
+          },
+          "bleu@floor": {
+            "class": "BLEU",
+            "kwargs": {
+              "smooth_method": "floor",
+              "smooth_value": 0.1
+            },
+            "refs": "A"
+          },
+          "bleu@add-k": {
+            "class": "BLEU",
+            "kwargs": {
+              "smooth_method": "add-k",
+              "smooth_value": 1
+            },
+            "refs": "A"
+          },
+          "bleu@nosmooth": {
+            "class": "BLEU",
+            "kwargs": {
+              "smooth_method": "none"
+            },
+            "refs": "A"
+          },
+          "bleu@eff-order": {
+            "class": "BLEU",
+            "kwargs": {
+              "effective_order": true
+            },
+            "refs": "A"
+          },
+          "bleu@max-order-2": {
+            "class": "BLEU",
+            "kwargs": {
+              "max_ngram_order": 2
+            },
+            "refs": "A"
+          },
+          "bleu@holes": {
+            "class": "BLEU",
+            "kwargs": {},
+            "refs": "holes"
+          },
+          "chrf": {
+            "class": "CHRF",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "chrf@refA": {
+            "class": "CHRF",
+            "kwargs": {},
+            "refs": "A"
+          },
+          "chrf++": {
+            "class": "CHRF",
+            "kwargs": {
+              "word_order": 2
+            },
+            "refs": "all"
+          },
+          "chrf@whitespace": {
+            "class": "CHRF",
+            "kwargs": {
+              "whitespace": true
+            },
+            "refs": "A"
+          },
+          "chrf@beta1": {
+            "class": "CHRF",
+            "kwargs": {
+              "beta": 1
+            },
+            "refs": "A"
+          },
+          "chrf@lowercase": {
+            "class": "CHRF",
+            "kwargs": {
+              "lowercase": true
+            },
+            "refs": "A"
+          },
+          "chrf@eps": {
+            "class": "CHRF",
+            "kwargs": {
+              "eps_smoothing": true
+            },
+            "refs": "all"
+          },
+          "chrf@holes": {
+            "class": "CHRF",
+            "kwargs": {
+              "word_order": 2
+            },
+            "refs": "holes"
+          }
+        },
+        "sentence": {
+          "sentence_bleu": {
+            "call": "sentence_bleu",
+            "kwargs": {},
+            "refs": "A"
+          },
+          "sentence_bleu@multi": {
+            "call": "sentence_bleu",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "sentence_chrf": {
+            "call": "sentence_chrf",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "sentence_chrf++": {
+            "call": "sentence_chrf",
+            "kwargs": {
+              "word_order": 2
+            },
+            "refs": "A"
+          }
+        }
+      },
+      "platform": "linux-aarch64"
+    },
+    "parity/minhash-ml-ref.parquet": {
+      "sha256": "b1477f3fd920f2c0bb5f2c2cf865d56caed420e9526beda1632c687c3ed2226a",
+      "bytes": 1443828,
+      "rows": 1500,
+      "oracle": {
+        "datatrove": "0.10.1",
+        "spacy": "3.8.18",
+        "xxhash": "3.8.2"
+      },
+      "config": {
+        "n_grams": 5,
+        "num_buckets": 14,
+        "hashes_per_bucket": 8,
+        "seed": 1,
+        "hash_fc": "xxhash",
+        "precision": 64
+      },
+      "languages": [
+        "arb_Arab",
+        "deu_Latn",
+        "fra_Latn",
+        "rus_Cyrl",
+        "spa_Latn"
+      ]
+    },
+    "parity/minhash-ref.parquet": {
+      "sha256": "4133f9a18bb5247b43fa8121a5db5326a839c78555f33c27b01acc0c0f33b8aa",
+      "bytes": 11909548,
+      "rows": 13232,
+      "oracle": {
+        "datatrove": "0.10.1",
+        "spacy": "3.8.18",
+        "numpy": "2.5.4"
+      },
+      "config": {
+        "n_grams": 5,
+        "num_buckets": 14,
+        "hashes_per_bucket": 8,
+        "seed": 1,
+        "hash_fc": "sha1",
+        "precision": 64
+      },
+      "removed": 445,
+      "corpora": [
+        "dev",
+        "adversarial"
+      ]
+    }
+  }
+}

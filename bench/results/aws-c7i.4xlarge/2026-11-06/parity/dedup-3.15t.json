@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-06T08:09:22+00:00",
+  "tool": {
+    "name": "pyroid-parity",
+    "git_sha": "f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb"
+  },
+  "environment": {
+    "python": "3.15.2",
+    "implementation": "CPython",
+    "free_threaded": true,
+    "gil_enabled": false,
+    "platform": "Linux-6.18.56-125.164.amzn2023.x86_64-x86_64-with-glibc2.34",
+    "machine": "x86_64",
+    "in_docker": false
+  },
+  "manifest_sha256": "c69d5b111fdb56eecb29bbbed1553dcf1da787792c5ca5380cfc2118676889b0",
+  "status": "pass",
+  "suites": {
+    "dedup": {
+      "status": "pass",
+      "candidate": {
+        "spec": "pyroid.dedup",
+        "module": "pyroid.dedup",
+        "dist": "pyroid",
+        "version": "1.0.0.dev0",
+        "adapter": "pyroid_parity.adapters.dedup_pyroid_dedup",
+        "is_reference": false,
+        "notes": [
+          "pyroid.dedup returns keep masks (True = keep); the adapter inverts them to removed masks",
+          "languages without a native tokenizer: python_tokenizer=True"
+        ]
+      },
+      "reference": {
+        "name": "datatrove",
+        "version": "0.10.1",
+        "tolerance": null
+      },
+      "inputs": {
+        "fineweb/fineweb-dev-10k.parquet": "4d6081f32ffcd96e1ebfeabf943e1ec55a138fff96ff8937c83bf855600b5536",
+        "fineweb2/arb_Arab.parquet": "cab63dc92897685fb832f590ee5a1d3a2a2e5b4e719d7676aa613b0596e4eae2",
+        "fineweb2/cmn_Hani.parquet": "6c4d801c7e049f3f9b05ca3aef608b2e25c1c9495ee49bcea4f937eeddd9064a",
+        "fineweb2/deu_Latn.parquet": "ce8448b8a80053bbfe3ee61a15f7eda42e7223d5876e832ab6735d6a9068dec2",
+        "fineweb2/fra_Latn.parquet": "1d12cf847978e1553a2745189e08a1366c5750a1650464055a3ec8503a2155da",
+        "fineweb2/hin_Deva.parquet": "02881862bd41b27fb27096c537edc5b97485189004c312e13642d6f67d47a436",
+        "fineweb2/jpn_Jpan.parquet": "ff271f2f5e47f0778b7d60eac8d31f6e3453d70b16f285df85c7cc3c66fb6c1b",
+        "fineweb2/rus_Cyrl.parquet": "58078b909d79103ab66b21af92686f0c2f3ce27ac3016d06fec2b5578858982e",
+        "fineweb2/spa_Latn.parquet": "243214b28c35d60001150d01f09f00529e9278fc00e1da9c8c1eea5c5e3e6b69",
+        "parity/adversarial.parquet": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+        "parity/minhash-ref.parquet": "4133f9a18bb5247b43fa8121a5db5326a839c78555f33c27b01acc0c0f33b8aa"
+      },
+      "checks": {
+        "removed": {
+          "status": "pass",
+          "same": 13232,
+          "diff": 0,
+          "examples": []
+        },
+        "removed/arb_Arab": {
+          "status": "pass",
+          "same": 300,
+          "diff": 0,
+          "examples": []
+        },
+        "removed/deu_Latn": {
+          "status": "pass",
+          "same": 300,
+          "diff": 0,
+          "examples": []
+        },
+        "removed/fra_Latn": {
+          "status": "pass",
+          "same": 300,
+          "diff": 0,
+          "examples": []
+        },
+        "removed/rus_Cyrl": {
+          "status": "pass",
+          "same": 300,
+          "diff": 0,
+          "examples": []
+        },
+        "removed/spa_Latn": {
+          "status": "pass",
+          "same": 300,
+          "diff": 0,
+          "examples": []
+        },
+        "signatures": {
+          "status": "pass",
+          "same": 13232,
+          "diff": 0,
+          "examples": []
+        },
+        "signatures/arb_Arab": {
+          "status": "pass",
+          "same": 300,
+          "diff": 0,
+          "examples": []
+        },
+        "signatures/deu_Latn": {
+          "status": "pass",
+          "same": 300,
+          "diff": 0,
+          "examples": []
+        },
+        "signatures/fra_Latn": {
+          "status": "pass",
+          "same": 300,
+          "diff": 0,
+          "examples": []
+        },
+        "signatures/rus_Cyrl": {
+          "status": "pass",
+          "same": 300,
+          "diff": 0,
+          "examples": []
+        },
+        "signatures/spa_Latn": {
+          "status": "pass",
+          "same": 300,
+          "diff": 0,
+          "examples": []
+        }
+      }
+    }
+  }
+}

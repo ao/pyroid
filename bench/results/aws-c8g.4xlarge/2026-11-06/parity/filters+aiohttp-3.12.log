@@ -1,0 +1,445 @@
+aiohttp 3.14.5 requests 2.34.2
+.................FFFF....FF........ssssssss................sssssssssssss [ 78%]
+sss.................                                                     [100%]
+=================================== FAILURES ===================================
+________________________ test_c4_badwords[default-dev] _________________________
+
+case = 'default', corpus = 'dev'
+parity = <pyroid_parity.report.Collector object at 0xffffad24f050>
+
+    @pytest.mark.parametrize("corpus", CORPORA)
+    @pytest.mark.parametrize("case", list(BADWORDS_CASES))
+    def test_c4_badwords(case: str, corpus: str, parity: Any) -> None:
+        c4 = _oracle("datatrove.pipeline.filters.c4_filters")
+        import pyroid.filters as pf
+        from datatrove.data import Document
+    
+        docs = need_corpus(corpus)
+        langs = [
+            BADWORDS_LANG.get(m.split(":", 1)[1], "en") if m.startswith("nonenglish:") else "en"
+            for m in (docs.meta if corpus == "adversarial" else [""] * len(docs))
+        ]
+        kw = BADWORDS_CASES[case]
+        ref = c4.C4BadWordsFilter(**kw)
+        want = []
+        for i, (t, lang) in enumerate(zip(docs.texts, langs, strict=True)):
+>           r = ref.filter(Document(text=t, id=str(i), metadata={"language": lang}))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+parity/tests/test_filters_more.py:102: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/pipeline/filters/c4_filters.py:270: in filter
+    badwords_regex = self._get_badwords(lang)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/pipeline/filters/c4_filters.py:246: in _get_badwords
+    local_path = cached_asset_path_or_download(
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/io.py:404: in cached_asset_path_or_download
+    safely_create_file(local_path, do_download_file)
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/io.py:364: in safely_create_file
+    check_required_dependencies("io", ["fasteners"])
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:35: in check_required_dependencies
+    _raise_error_for_missing_dependencies(step_name, missing_dependencies)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+step_name = 'io', dependencies = {'fasteners': 'fasteners'}
+
+    def _raise_error_for_missing_dependencies(step_name: str, dependencies: dict[str, str]) -> NoReturn:
+        """Helper to raise an ImportError for missing dependencies and prompt the user to install said dependencies
+    
+        Args:
+            step_name: str
+                The name of the step
+            dependencies: dict[str, str]
+                The missing dependencies
+    
+        """
+        dependencies = dict(sorted(dependencies.items()))
+        package_names = list(dependencies)
+        if len(dependencies) > 1:
+            package_names = (
+                f"{','.join('`' + package_name + '`' for package_name in package_names[:-1])} and `{package_names[-1]}`"
+            )
+        else:
+            package_names = f"`{package_names[0]}`"
+>       raise ImportError(
+            f"Please install {package_names} to use {step_name} (`pip install {' '.join(list(dependencies.values()))}`)."
+        )
+E       ImportError: Please install `fasteners` to use io (`pip install fasteners`).
+
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:56: ImportError
+____________________ test_c4_badwords[default-adversarial] _____________________
+
+case = 'default', corpus = 'adversarial'
+parity = <pyroid_parity.report.Collector object at 0xffffad24f050>
+
+    @pytest.mark.parametrize("corpus", CORPORA)
+    @pytest.mark.parametrize("case", list(BADWORDS_CASES))
+    def test_c4_badwords(case: str, corpus: str, parity: Any) -> None:
+        c4 = _oracle("datatrove.pipeline.filters.c4_filters")
+        import pyroid.filters as pf
+        from datatrove.data import Document
+    
+        docs = need_corpus(corpus)
+        langs = [
+            BADWORDS_LANG.get(m.split(":", 1)[1], "en") if m.startswith("nonenglish:") else "en"
+            for m in (docs.meta if corpus == "adversarial" else [""] * len(docs))
+        ]
+        kw = BADWORDS_CASES[case]
+        ref = c4.C4BadWordsFilter(**kw)
+        want = []
+        for i, (t, lang) in enumerate(zip(docs.texts, langs, strict=True)):
+>           r = ref.filter(Document(text=t, id=str(i), metadata={"language": lang}))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+parity/tests/test_filters_more.py:102: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/pipeline/filters/c4_filters.py:270: in filter
+    badwords_regex = self._get_badwords(lang)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/pipeline/filters/c4_filters.py:246: in _get_badwords
+    local_path = cached_asset_path_or_download(
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/io.py:404: in cached_asset_path_or_download
+    safely_create_file(local_path, do_download_file)
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/io.py:364: in safely_create_file
+    check_required_dependencies("io", ["fasteners"])
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:35: in check_required_dependencies
+    _raise_error_for_missing_dependencies(step_name, missing_dependencies)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+step_name = 'io', dependencies = {'fasteners': 'fasteners'}
+
+    def _raise_error_for_missing_dependencies(step_name: str, dependencies: dict[str, str]) -> NoReturn:
+        """Helper to raise an ImportError for missing dependencies and prompt the user to install said dependencies
+    
+        Args:
+            step_name: str
+                The name of the step
+            dependencies: dict[str, str]
+                The missing dependencies
+    
+        """
+        dependencies = dict(sorted(dependencies.items()))
+        package_names = list(dependencies)
+        if len(dependencies) > 1:
+            package_names = (
+                f"{','.join('`' + package_name + '`' for package_name in package_names[:-1])} and `{package_names[-1]}`"
+            )
+        else:
+            package_names = f"`{package_names[0]}`"
+>       raise ImportError(
+            f"Please install {package_names} to use {step_name} (`pip install {' '.join(list(dependencies.values()))}`)."
+        )
+E       ImportError: Please install `fasteners` to use io (`pip install fasteners`).
+
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:56: ImportError
+_____________________ test_c4_badwords[keep_0.3_seed7-dev] _____________________
+
+case = 'keep_0.3_seed7', corpus = 'dev'
+parity = <pyroid_parity.report.Collector object at 0xffffad24f050>
+
+    @pytest.mark.parametrize("corpus", CORPORA)
+    @pytest.mark.parametrize("case", list(BADWORDS_CASES))
+    def test_c4_badwords(case: str, corpus: str, parity: Any) -> None:
+        c4 = _oracle("datatrove.pipeline.filters.c4_filters")
+        import pyroid.filters as pf
+        from datatrove.data import Document
+    
+        docs = need_corpus(corpus)
+        langs = [
+            BADWORDS_LANG.get(m.split(":", 1)[1], "en") if m.startswith("nonenglish:") else "en"
+            for m in (docs.meta if corpus == "adversarial" else [""] * len(docs))
+        ]
+        kw = BADWORDS_CASES[case]
+        ref = c4.C4BadWordsFilter(**kw)
+        want = []
+        for i, (t, lang) in enumerate(zip(docs.texts, langs, strict=True)):
+>           r = ref.filter(Document(text=t, id=str(i), metadata={"language": lang}))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+parity/tests/test_filters_more.py:102: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/pipeline/filters/c4_filters.py:270: in filter
+    badwords_regex = self._get_badwords(lang)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/pipeline/filters/c4_filters.py:246: in _get_badwords
+    local_path = cached_asset_path_or_download(
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/io.py:404: in cached_asset_path_or_download
+    safely_create_file(local_path, do_download_file)
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/io.py:364: in safely_create_file
+    check_required_dependencies("io", ["fasteners"])
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:35: in check_required_dependencies
+    _raise_error_for_missing_dependencies(step_name, missing_dependencies)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+step_name = 'io', dependencies = {'fasteners': 'fasteners'}
+
+    def _raise_error_for_missing_dependencies(step_name: str, dependencies: dict[str, str]) -> NoReturn:
+        """Helper to raise an ImportError for missing dependencies and prompt the user to install said dependencies
+    
+        Args:
+            step_name: str
+                The name of the step
+            dependencies: dict[str, str]
+                The missing dependencies
+    
+        """
+        dependencies = dict(sorted(dependencies.items()))
+        package_names = list(dependencies)
+        if len(dependencies) > 1:
+            package_names = (
+                f"{','.join('`' + package_name + '`' for package_name in package_names[:-1])} and `{package_names[-1]}`"
+            )
+        else:
+            package_names = f"`{package_names[0]}`"
+>       raise ImportError(
+            f"Please install {package_names} to use {step_name} (`pip install {' '.join(list(dependencies.values()))}`)."
+        )
+E       ImportError: Please install `fasteners` to use io (`pip install fasteners`).
+
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:56: ImportError
+_________________ test_c4_badwords[keep_0.3_seed7-adversarial] _________________
+
+case = 'keep_0.3_seed7', corpus = 'adversarial'
+parity = <pyroid_parity.report.Collector object at 0xffffad24f050>
+
+    @pytest.mark.parametrize("corpus", CORPORA)
+    @pytest.mark.parametrize("case", list(BADWORDS_CASES))
+    def test_c4_badwords(case: str, corpus: str, parity: Any) -> None:
+        c4 = _oracle("datatrove.pipeline.filters.c4_filters")
+        import pyroid.filters as pf
+        from datatrove.data import Document
+    
+        docs = need_corpus(corpus)
+        langs = [
+            BADWORDS_LANG.get(m.split(":", 1)[1], "en") if m.startswith("nonenglish:") else "en"
+            for m in (docs.meta if corpus == "adversarial" else [""] * len(docs))
+        ]
+        kw = BADWORDS_CASES[case]
+        ref = c4.C4BadWordsFilter(**kw)
+        want = []
+        for i, (t, lang) in enumerate(zip(docs.texts, langs, strict=True)):
+>           r = ref.filter(Document(text=t, id=str(i), metadata={"language": lang}))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+parity/tests/test_filters_more.py:102: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/pipeline/filters/c4_filters.py:270: in filter
+    badwords_regex = self._get_badwords(lang)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/pipeline/filters/c4_filters.py:246: in _get_badwords
+    local_path = cached_asset_path_or_download(
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/io.py:404: in cached_asset_path_or_download
+    safely_create_file(local_path, do_download_file)
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/io.py:364: in safely_create_file
+    check_required_dependencies("io", ["fasteners"])
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:35: in check_required_dependencies
+    _raise_error_for_missing_dependencies(step_name, missing_dependencies)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+step_name = 'io', dependencies = {'fasteners': 'fasteners'}
+
+    def _raise_error_for_missing_dependencies(step_name: str, dependencies: dict[str, str]) -> NoReturn:
+        """Helper to raise an ImportError for missing dependencies and prompt the user to install said dependencies
+    
+        Args:
+            step_name: str
+                The name of the step
+            dependencies: dict[str, str]
+                The missing dependencies
+    
+        """
+        dependencies = dict(sorted(dependencies.items()))
+        package_names = list(dependencies)
+        if len(dependencies) > 1:
+            package_names = (
+                f"{','.join('`' + package_name + '`' for package_name in package_names[:-1])} and `{package_names[-1]}`"
+            )
+        else:
+            package_names = f"`{package_names[0]}`"
+>       raise ImportError(
+            f"Please install {package_names} to use {step_name} (`pip install {' '.join(list(dependencies.values()))}`)."
+        )
+E       ImportError: Please install `fasteners` to use io (`pip install fasteners`).
+
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:56: ImportError
+______________________ test_url_filter[integrated_lists] _______________________
+
+case = 'integrated_lists'
+parity = <pyroid_parity.report.Collector object at 0xffffad24f050>
+
+    @pytest.mark.parametrize("case", list(URL_CASES))
+    def test_url_filter(case: str, parity: Any) -> None:
+        uf = _oracle("datatrove.pipeline.filters.url_filter")
+        import pyroid.filters as pf
+        from datatrove.data import Document
+    
+        from pyroid_parity import data as D
+    
+        docs = need_corpus("dev")
+        urls = D.read_parquet_columns(D.path(D.CORPORA["dev"]), ["url"])["url"]
+        kw = URL_CASES[case]
+>       ref = uf.URLFilter(**kw)
+              ^^^^^^^^^^^^^^^^^^
+
+parity/tests/test_filters_more.py:150: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/pipeline/base.py:31: in __new__
+    check_required_dependencies(cls.__name__, required_dependencies)
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:35: in check_required_dependencies
+    _raise_error_for_missing_dependencies(step_name, missing_dependencies)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+step_name = 'URLFilter'
+dependencies = {'ahocorasick': 'pyahocorasick', 'fasteners': 'fasteners', 'tldextract': 'tldextract'}
+
+    def _raise_error_for_missing_dependencies(step_name: str, dependencies: dict[str, str]) -> NoReturn:
+        """Helper to raise an ImportError for missing dependencies and prompt the user to install said dependencies
+    
+        Args:
+            step_name: str
+                The name of the step
+            dependencies: dict[str, str]
+                The missing dependencies
+    
+        """
+        dependencies = dict(sorted(dependencies.items()))
+        package_names = list(dependencies)
+        if len(dependencies) > 1:
+            package_names = (
+                f"{','.join('`' + package_name + '`' for package_name in package_names[:-1])} and `{package_names[-1]}`"
+            )
+        else:
+            package_names = f"`{package_names[0]}`"
+>       raise ImportError(
+            f"Please install {package_names} to use {step_name} (`pip install {' '.join(list(dependencies.values()))}`)."
+        )
+E       ImportError: Please install `ahocorasick`,`fasteners` and `tldextract` to use URLFilter (`pip install pyahocorasick fasteners tldextract`).
+
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:56: ImportError
+________________________ test_url_filter[custom_lists] _________________________
+
+case = 'custom_lists'
+parity = <pyroid_parity.report.Collector object at 0xffffad24f050>
+
+    @pytest.mark.parametrize("case", list(URL_CASES))
+    def test_url_filter(case: str, parity: Any) -> None:
+        uf = _oracle("datatrove.pipeline.filters.url_filter")
+        import pyroid.filters as pf
+        from datatrove.data import Document
+    
+        from pyroid_parity import data as D
+    
+        docs = need_corpus("dev")
+        urls = D.read_parquet_columns(D.path(D.CORPORA["dev"]), ["url"])["url"]
+        kw = URL_CASES[case]
+>       ref = uf.URLFilter(**kw)
+              ^^^^^^^^^^^^^^^^^^
+
+parity/tests/test_filters_more.py:150: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/pipeline/base.py:31: in __new__
+    check_required_dependencies(cls.__name__, required_dependencies)
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:35: in check_required_dependencies
+    _raise_error_for_missing_dependencies(step_name, missing_dependencies)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+step_name = 'URLFilter'
+dependencies = {'ahocorasick': 'pyahocorasick', 'fasteners': 'fasteners', 'tldextract': 'tldextract'}
+
+    def _raise_error_for_missing_dependencies(step_name: str, dependencies: dict[str, str]) -> NoReturn:
+        """Helper to raise an ImportError for missing dependencies and prompt the user to install said dependencies
+    
+        Args:
+            step_name: str
+                The name of the step
+            dependencies: dict[str, str]
+                The missing dependencies
+    
+        """
+        dependencies = dict(sorted(dependencies.items()))
+        package_names = list(dependencies)
+        if len(dependencies) > 1:
+            package_names = (
+                f"{','.join('`' + package_name + '`' for package_name in package_names[:-1])} and `{package_names[-1]}`"
+            )
+        else:
+            package_names = f"`{package_names[0]}`"
+>       raise ImportError(
+            f"Please install {package_names} to use {step_name} (`pip install {' '.join(list(dependencies.values()))}`)."
+        )
+E       ImportError: Please install `ahocorasick`,`fasteners` and `tldextract` to use URLFilter (`pip install pyahocorasick fasteners tldextract`).
+
+../../work/venv-parity-312/lib/python3.12/site-packages/datatrove/utils/_import_utils.py:56: ImportError
+==================================== parity ====================================
+filters   c4_quality/adversarial           same=3232     diff=0
+filters   c4_quality/arb_Arab              same=250      diff=0
+filters   c4_quality/deu_Latn              same=250      diff=0
+filters   c4_quality/dev                   same=10000    diff=0
+filters   c4_quality/fra_Latn              same=250      diff=0
+filters   c4_quality/rus_Cyrl              same=250      diff=0
+filters   c4_quality/spa_Latn              same=250      diff=0
+filters   c4_quality@fineweb/adversarial   same=3232     diff=0
+filters   c4_quality@fineweb/arb_Arab      same=250      diff=0
+filters   c4_quality@fineweb/deu_Latn      same=250      diff=0
+filters   c4_quality@fineweb/dev           same=10000    diff=0
+filters   c4_quality@fineweb/fra_Latn      same=250      diff=0
+filters   c4_quality@fineweb/rus_Cyrl      same=250      diff=0
+filters   c4_quality@fineweb/spa_Latn      same=250      diff=0
+filters   fineweb_quality/adversarial      same=3232     diff=0
+filters   fineweb_quality/arb_Arab         same=250      diff=0
+filters   fineweb_quality/deu_Latn         same=250      diff=0
+filters   fineweb_quality/dev              same=10000    diff=0
+filters   fineweb_quality/fra_Latn         same=250      diff=0
+filters   fineweb_quality/rus_Cyrl         same=250      diff=0
+filters   fineweb_quality/spa_Latn         same=250      diff=0
+filters   fineweb_quality@fineweb2/arb_Arab same=250      diff=0
+filters   fineweb_quality@fineweb2/deu_Latn same=250      diff=0
+filters   fineweb_quality@fineweb2/fra_Latn same=250      diff=0
+filters   fineweb_quality@fineweb2/rus_Cyrl same=250      diff=0
+filters   fineweb_quality@fineweb2/spa_Latn same=250      diff=0
+filters   gopher_quality/adversarial       same=3232     diff=0
+filters   gopher_quality/arb_Arab          same=250      diff=0
+filters   gopher_quality/deu_Latn          same=250      diff=0
+filters   gopher_quality/dev               same=10000    diff=0
+filters   gopher_quality/fra_Latn          same=250      diff=0
+filters   gopher_quality/rus_Cyrl          same=250      diff=0
+filters   gopher_quality/spa_Latn          same=250      diff=0
+filters   gopher_quality@fineweb2/arb_Arab same=250      diff=0
+filters   gopher_quality@fineweb2/deu_Latn same=250      diff=0
+filters   gopher_quality@fineweb2/fra_Latn same=250      diff=0
+filters   gopher_quality@fineweb2/rus_Cyrl same=250      diff=0
+filters   gopher_quality@fineweb2/spa_Latn same=250      diff=0
+filters   gopher_repetition/adversarial    same=3232     diff=0
+filters   gopher_repetition/arb_Arab       same=250      diff=0
+filters   gopher_repetition/deu_Latn       same=250      diff=0
+filters   gopher_repetition/dev            same=10000    diff=0
+filters   gopher_repetition/fra_Latn       same=250      diff=0
+filters   gopher_repetition/rus_Cyrl       same=250      diff=0
+filters   gopher_repetition/spa_Latn       same=250      diff=0
+filters   gopher_repetition@fineweb2/arb_Arab same=250      diff=0
+filters   gopher_repetition@fineweb2/deu_Latn same=250      diff=0
+filters   gopher_repetition@fineweb2/fra_Latn same=250      diff=0
+filters   gopher_repetition@fineweb2/rus_Cyrl same=250      diff=0
+filters   gopher_repetition@fineweb2/spa_Latn same=250      diff=0
+filters   pii/all_ips/adversarial          same=3232     diff=0
+filters   pii/all_ips/dev                  same=10000    diff=0
+filters   pii/custom/adversarial           same=3232     diff=0
+filters   pii/custom/dev                   same=10000    diff=0
+filters   pii/default/adversarial          same=3232     diff=0
+filters   pii/default/dev                  same=10000    diff=0
+filters   symbol_lines/default/adversarial same=3232     diff=0
+filters   symbol_lines/default/dev         same=10000    diff=0
+filters   symbol_lines/fineweb2/adversarial same=3232     diff=0
+filters   symbol_lines/fineweb2/dev        same=10000    diff=0
+=========================== short test summary info ============================
+SKIPPED [8] parity/tests/test_filters_multilingual.py:54: datatrove cannot tokenize cmn_Hani here: ImportError: Please install `jieba` to use zh word tokenizer (`pip install jieba`).
+SKIPPED [8] parity/tests/test_filters_multilingual.py:54: datatrove cannot tokenize hin_Deva here: ImportError: Please install `indicnlp` to use hi word tokenizer (`pip install indic-nlp-library`).
+SKIPPED [8] parity/tests/test_filters_multilingual.py:54: datatrove cannot tokenize jpn_Jpan here: ImportError: Japanese support requires SudachiPy and SudachiDict-core (https://github.com/WorksApplications/SudachiPy). Install with `pip install sudachipy sudachidict_core` or install spaCy with `pip install spacy[ja]`.
+FAILED parity/tests/test_filters_more.py::test_c4_badwords[default-dev] - Imp...
+FAILED parity/tests/test_filters_more.py::test_c4_badwords[default-adversarial]
+FAILED parity/tests/test_filters_more.py::test_c4_badwords[keep_0.3_seed7-dev]
+FAILED parity/tests/test_filters_more.py::test_c4_badwords[keep_0.3_seed7-adversarial]
+FAILED parity/tests/test_filters_more.py::test_url_filter[integrated_lists]
+FAILED parity/tests/test_filters_more.py::test_url_filter[custom_lists] - Imp...
+6 failed, 62 passed, 24 skipped, 1310 deselected in 14.11s
+exit 1

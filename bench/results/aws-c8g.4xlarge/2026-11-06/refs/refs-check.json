@@ -1,0 +1,76 @@
+{
+  "environment": {
+    "platform_key": "linux-aarch64",
+    "machine": "aarch64",
+    "python": "3.13.18",
+    "libc": "glibc 2.34",
+    "cpu": "0xd4f",
+    "cpu_flags": [
+      "asimd",
+      "fphp",
+      "sve",
+      "sve2"
+    ]
+  },
+  "manifest": "/opt/pyroid/src/pyroid/bench/manifest.json",
+  "manifest_sha256": "2ee2667b67b407d1e21c7f5bcfd78c761b5207ee56f93681d377e848487ee146",
+  "data": "/opt/pyroid/data",
+  "pins": "/opt/pyroid/pins",
+  "reproduced": true,
+  "checked": [
+    {
+      "rel": "parity/adversarial.parquet",
+      "reproduced": true,
+      "sha256": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
+      "bytes": 4434803
+    },
+    {
+      "rel": "parity/fasttext-ref.parquet",
+      "reproduced": true,
+      "sha256": "209adb5e1f1243dd307a139e0b06580638d9309f22ff93cc88e43ec753085030",
+      "bytes": 1351916
+    },
+    {
+      "rel": "parity/filters-ml-ref.parquet",
+      "reproduced": true,
+      "sha256": "0337a3d4f68a335aacc5f1d6ffec9e030b08ae086551ed6bdd0cf8ab23586df4",
+      "bytes": 1607143
+    },
+    {
+      "rel": "parity/filters-ref.parquet",
+      "reproduced": true,
+      "sha256": "702e053aac6033d4b5b6588c87cb91420299e673a313a955a92ceee280ae4976",
+      "bytes": 13281783
+    },
+    {
+      "rel": "parity/ftfy-ref.parquet",
+      "reproduced": true,
+      "sha256": "65662c54d2406b5d558a20e2591692f6bff6f68fa3dc0b60188556c1e01fefe9",
+      "bytes": 16375775
+    },
+    {
+      "rel": "parity/metrics-ref.parquet",
+      "reproduced": true,
+      "sha256": "8107ddcdfb40adc8aa20b8c71e59af7cec2382000333ce558ae8141c947ecd2e",
+      "bytes": 20003089
+    },
+    {
+      "rel": "parity/minhash-ml-ref.parquet",
+      "reproduced": true,
+      "sha256": "b1477f3fd920f2c0bb5f2c2cf865d56caed420e9526beda1632c687c3ed2226a",
+      "bytes": 1443828
+    },
+    {
+      "rel": "parity/minhash-ref.parquet",
+      "reproduced": true,
+      "sha256": "4133f9a18bb5247b43fa8121a5db5326a839c78555f33c27b01acc0c0f33b8aa",
+      "bytes": 11909548
+    }
+  ],
+  "mismatched": [],
+  "unexpected": [],
+  "missing": [],
+  "repinned": [],
+  "manifest_entries_changed": [],
+  "manifest_sha256_after": "2ee2667b67b407d1e21c7f5bcfd78c761b5207ee56f93681d377e848487ee146"
+}
