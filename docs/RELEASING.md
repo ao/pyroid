@@ -145,7 +145,6 @@ workflow then goes back to build-only.
 Before the 1.0 release, also:
 
 - Replace the "Docker/OrbStack VM, indicative, preliminary" numbers on `docs/benchmarks.md`, `README.md` and
-  the guides with the bare-metal run, and regenerate the hero chart (`docs/assets/consolidated-e2e-{light,dark}.svg`, embedded in `README.md` by absolute raw.githubusercontent.com URL so it also renders on PyPI; the
-  commented-out `<picture>` in `README.md`).
+  the guides with the bare-metal run, and regenerate the hero chart (`docs/assets/consolidated-e2e-{light,dark}.svg`, embedded in `README.md` by absolute raw.githubusercontent.com URL so it also renders on PyPI).
 - Remove the "pyroid 1.0 is not on PyPI yet" notes (`README.md`, `docs/index.md`, `docs/install.md`,
   `docs/llms.txt`).
