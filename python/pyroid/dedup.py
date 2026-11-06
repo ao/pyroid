@@ -410,3 +410,11 @@ class ExactDedup:
 
     def __repr__(self) -> str:
         return f"ExactDedup(normalize={self._normalize!r}, distinct={len(self)})"
+
+
+# ======================================================================================
+# More datatrove 0.10.1 steps: one section each (each extends __all__).
+# ======================================================================================
+
+# ---- SentenceDedup ----
+# ---- end SentenceDedup ----

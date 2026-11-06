@@ -848,5 +848,75 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_run_list, &m)?)?;
     m.add_function(wrap_pyfunction!(_to_list, &m)?)?;
     m.add_function(wrap_pyfunction!(_pack, &m)?)?;
+    register_more(&m)?;
     parent.add_submodule(&m)
 }
+
+// ===========================================================================
+// More datatrove 0.10.1 steps: one inline module per step, each registering
+// its classes and functions on `pyroid._pyroid.filters`.
+// ===========================================================================
+
+fn register_more(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    pii::register(m)?;
+    badwords::register(m)?;
+    url::register(m)?;
+    symbol_lines::register(m)?;
+    unigram::register(m)?;
+    Ok(())
+}
+
+// ---- PIIFormatter ----
+mod pii {
+    use pyo3::prelude::*;
+
+    #[allow(clippy::unnecessary_wraps)] // placeholder
+    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
+        Ok(())
+    }
+}
+// ---- end PIIFormatter ----
+
+// ---- C4BadWordsFilter ----
+mod badwords {
+    use pyo3::prelude::*;
+
+    #[allow(clippy::unnecessary_wraps)] // placeholder
+    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
+        Ok(())
+    }
+}
+// ---- end C4BadWordsFilter ----
+
+// ---- URLFilter ----
+mod url {
+    use pyo3::prelude::*;
+
+    #[allow(clippy::unnecessary_wraps)] // placeholder
+    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
+        Ok(())
+    }
+}
+// ---- end URLFilter ----
+
+// ---- SymbolLinesFormatter ----
+mod symbol_lines {
+    use pyo3::prelude::*;
+
+    #[allow(clippy::unnecessary_wraps)] // placeholder
+    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
+        Ok(())
+    }
+}
+// ---- end SymbolLinesFormatter ----
+
+// ---- UnigramLogProbFilter ----
+mod unigram {
+    use pyo3::prelude::*;
+
+    #[allow(clippy::unnecessary_wraps)] // placeholder
+    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
+        Ok(())
+    }
+}
+// ---- end UnigramLogProbFilter ----

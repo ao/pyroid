@@ -818,3 +818,23 @@ def languages() -> dict[str, Language]:
 
 def english_languages() -> list[str]:
     """The datatrove language codes whose tokenizer is ``SpaCyTokenizer("en")``."""
+
+
+# ======================================================================================
+# More datatrove 0.10.1 steps: one section each (each extends __all__).
+# ======================================================================================
+
+# ---- PIIFormatter ----
+# ---- end PIIFormatter ----
+
+# ---- C4BadWordsFilter ----
+# ---- end C4BadWordsFilter ----
+
+# ---- URLFilter ----
+# ---- end URLFilter ----
+
+# ---- SymbolLinesFormatter ----
+# ---- end SymbolLinesFormatter ----
+
+# ---- UnigramLogProbFilter ----
+# ---- end UnigramLogProbFilter ----

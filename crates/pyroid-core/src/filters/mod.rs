@@ -476,3 +476,12 @@ impl Pipeline {
         })
     }
 }
+
+// ---------------------------------------------------------------------------
+// More datatrove 0.10.1 steps, one module each.
+// ---------------------------------------------------------------------------
+pub mod badwords;
+pub mod pii;
+pub mod symbol_lines;
+pub mod unigram;
+pub mod url;

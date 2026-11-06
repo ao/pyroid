@@ -738,5 +738,27 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_signatures_from_tokens, &m)?)?;
     m.add_function(wrap_pyfunction!(_simplify_text, &m)?)?;
     m.add_function(wrap_pyfunction!(_exact_dedup, &m)?)?;
+    register_more(&m)?;
     parent.add_submodule(&m)
 }
+
+// ===========================================================================
+// More datatrove 0.10.1 steps: one inline module per step, each registering
+// its classes and functions on `pyroid._pyroid.dedup`.
+// ===========================================================================
+
+fn register_more(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    sentence::register(m)?;
+    Ok(())
+}
+
+// ---- SentenceDedup ----
+mod sentence {
+    use pyo3::prelude::*;
+
+    #[allow(clippy::unnecessary_wraps)] // placeholder
+    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
+        Ok(())
+    }
+}
+// ---- end SentenceDedup ----

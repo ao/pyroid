@@ -31,3 +31,6 @@ pub use minhash::MinHasher;
 pub use rng::MERSENNE_PRIME;
 pub use simplify::simplify_text;
 pub use tokenize::{SpacyTokenizer, TokenizeError, WhitespaceTokenizer, WordTokenizer};
+
+// More datatrove 0.10.1 steps.
+pub mod sentence;

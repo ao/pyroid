@@ -912,3 +912,23 @@ def apply(
             texts, configs, "all", threads, python_tokenizer, "filters.apply"
         )
     return FilterResult(keep, reason, text)
+
+
+# ======================================================================================
+# More datatrove 0.10.1 steps: one section each (each extends __all__).
+# ======================================================================================
+
+# ---- PIIFormatter ----
+# ---- end PIIFormatter ----
+
+# ---- C4BadWordsFilter ----
+# ---- end C4BadWordsFilter ----
+
+# ---- URLFilter ----
+# ---- end URLFilter ----
+
+# ---- SymbolLinesFormatter ----
+# ---- end SymbolLinesFormatter ----
+
+# ---- UnigramLogProbFilter ----
+# ---- end UnigramLogProbFilter ----

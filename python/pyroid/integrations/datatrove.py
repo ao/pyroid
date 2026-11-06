@@ -521,3 +521,26 @@ class MinhashDedupSignature(_Step, _dt_minhash.MinhashDedupSignature):
 MinhashDedupSignature.__init__.__signature__ = _signature_of(  # type: ignore[attr-defined]
     _dt_minhash.MinhashDedupSignature, *_EXTRA
 )
+
+
+# ======================================================================================
+# More datatrove 0.10.1 steps: one section each (each extends __all__).
+# ======================================================================================
+
+# ---- PIIFormatter ----
+# ---- end PIIFormatter ----
+
+# ---- C4BadWordsFilter ----
+# ---- end C4BadWordsFilter ----
+
+# ---- URLFilter ----
+# ---- end URLFilter ----
+
+# ---- SymbolLinesFormatter ----
+# ---- end SymbolLinesFormatter ----
+
+# ---- UnigramLogProbFilter ----
+# ---- end UnigramLogProbFilter ----
+
+# ---- SentenceDedup ----
+# ---- end SentenceDedup ----
