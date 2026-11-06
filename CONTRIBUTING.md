@@ -27,7 +27,7 @@ uv venv --python 3.12                # a venv in .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 uv pip install --group dev          # maturin, pytest, ruff, mypy (pinned in pyproject.toml)
 maturin develop --uv                 # compiles the extension (debug build) into .venv
-python -c "import pyroid; print(pyroid.__version__)"
+python -c "import pyroid; print(pyroid.__version__)"   # PEP 440: Cargo.toml's 1.0.0-dev is 1.0.0.dev0
 ```
 
 Re-run `maturin develop --uv` after every Rust change. Add `--release` only when you measure performance: debug

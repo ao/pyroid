@@ -74,6 +74,8 @@ On free-threaded builds, importing pyroid does not re-enable the GIL. See
 $ python -c "import pyroid; print(pyroid.__version__)"
 ```
 
+It prints the installed version as pip shows it (PEP 440, e.g. `1.0.0.dev0`).
+
 If the native extension is missing or was built for another Python, `import pyroid` fails with an
 `ImportError` that says so. pyroid has no pure-Python fallback.
 

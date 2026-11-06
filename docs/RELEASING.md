@@ -69,18 +69,19 @@ After `next` is merged into `main` and pushed (PLAN Phase 4, step 1):
 2. Wait for the build, test and `check distributions` jobs. The run summary lists the 25 files.
 3. Approve the `testpypi` deployment when the run asks for it.
 4. Check the result from a clean venv (versions come from `Cargo.toml`; `1.0.0-dev` is `1.0.0.dev0` on
-   TestPyPI):
+   TestPyPI, and `pyroid.__version__` is that PEP 440 string too):
 
    ```bash
    uv venv /tmp/pyroid-tp && uv pip install --python /tmp/pyroid-tp --index-url https://test.pypi.org/simple/ pyroid==1.0.0.dev0
-   /tmp/pyroid-tp/bin/python -c "import pyroid; print(pyroid.__version__)"
+   /tmp/pyroid-tp/bin/python -c "import pyroid; print(pyroid.__version__)"   # 1.0.0.dev0
    ```
 
    On <https://test.pypi.org/project/pyroid/#files>, each file should show a "Verified" provenance badge
    (PEP 740).
 5. TestPyPI never accepts the same filename twice, even after you delete a release. To dry-run again, change the
-   pre-release version in `Cargo.toml` first (e.g. `1.0.0-dev.1`, then `cargo update --workspace`) in a
-   regular PR.
+   pre-release version in `Cargo.toml` first (e.g. `1.0.0-dev.1`, which is `1.0.0.dev1`; then
+   `cargo update --workspace`) in a regular PR. The version must be one PEP 440 can read (`-alpha.N`,
+   `-beta.N`, `-rc.N`, `-dev.N`): maturin refuses to build any other.
 
 ## 6. Releasing 1.0.0
 

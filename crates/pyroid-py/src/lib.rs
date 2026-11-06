@@ -26,7 +26,12 @@ use pyo3::prelude::*;
 
 #[pymodule(gil_used = false)]
 fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    // The wheel's PEP 440 version (1.0.0-dev is 1.0.0.dev0), as importlib.metadata reports it.
+    let version = env!("CARGO_PKG_VERSION");
+    m.add(
+        "__version__",
+        pyroid_core::version::pep440(version).unwrap_or_else(|| version.to_owned()),
+    )?;
     errors::register(m)?;
     m.add_class::<arrow::Column>()?;
     testing::register(m)?;
