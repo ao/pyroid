@@ -76,7 +76,17 @@ test = [
   # The reference for pyroid.translit.anyascii (ISC). Unidecode (GPL) is never a
   # default dependency: it is only a black-box oracle in an opt-in CI job.
   "anyascii==0.3.3",
+  # The references for pyroid.metrics (versions as in parity/uv.lock): rouge-score and the NLTK it scores
+  # with (Porter stemmer, sent_tokenize), and the regex release whose Unicode tables pyroid.metrics.sacrebleu's
+  # `intl` tokenizer reproduces. sacrebleu itself is in `test-gil`.
+  "rouge-score==0.1.2",
+  "nltk==3.10.4",
+  "regex==2026.9.29",
 ]
+# GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
+# PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds
+# (`uv pip install --group test-gil`); on free-threaded builds the sacrebleu reference tests skip.
+test-gil = ["sacrebleu==2.6.0"]
 # Same pins as .pre-commit-config.yaml (prek runs ruff and mypy from there).
 lint = ["ruff==0.17.3", "mypy==2.4.1", "prek==0.5.10"]
 dev = ["maturin>=1.16,<2.0", { include-group = "test" }, { include-group = "lint" }]

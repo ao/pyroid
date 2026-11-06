@@ -251,6 +251,8 @@ jobs:
           uv pip install --python .venv-test --group test
           if [[ "$free_threaded" == false ]]; then
             uv pip install --python .venv-test --only-binary :all: "$POLARS"
+            # sacrebleu (pyroid.metrics' reference) re-enables the GIL on free-threaded builds (lxml).
+            uv pip install --python .venv-test --group test-gil
           fi
           if [[ "$RUNNER_OS" == Windows ]]; then py=.venv-test/Scripts/python.exe; else py=.venv-test/bin/python; fi
           # PYTHON_GIL stays unset so a module that re-enables the GIL is caught.
