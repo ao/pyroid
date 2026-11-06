@@ -189,8 +189,15 @@ def test_nesting_error() -> None:
     assert jr.repair_json("[1, " * (depth - 1)).startswith("[1, [1, [1, ")
     with pytest.raises(jr.NestingError, match="exceeds the supported parser recursion depth"):
         jr.repair_json("[" * (depth + 1))
-    with pytest.raises(ValueError, match="exceeds the supported parser recursion depth"):
-        jr.loads('{"a": ' * (depth + 1))
+    nested = '{"a": ' * (depth + 1)
+    if sys.version_info >= (3, 12):
+        with pytest.raises(ValueError, match="exceeds the supported parser recursion depth"):
+            jr.loads(nested)
+    else:
+        # 3.11's json.loads, json_repair's first step, raises RecursionError on it first.
+        for f in (jr.loads, ref.loads):
+            with pytest.raises(RecursionError, match="while decoding a JSON object"):
+                f(nested)
     # A valid JSON string result comes from the Rust decoder, which has no depth limit.
     deep = "[" * 100_000 + "]" * 100_000
     assert jr.repair_json(deep) == deep.replace("][", "], [")
