@@ -30,6 +30,15 @@ data. The work happens in Rust, in batches, without the GIL:
 - :class:`MinhashDedupSignature`: ``pyroid.dedup`` signatures, written to the
   same files, byte for byte, so datatrove's ``MinhashDedupBuckets`` ->
   ``MinhashDedupCluster`` -> ``MinhashDedupFilter`` run on them unchanged.
+- :class:`PIIFormatter`, :class:`SymbolLinesFormatter`: ``pyroid.filters``
+  (same text, same replacement rotation).
+- :class:`C4BadWordsFilter`, :class:`URLFilter`: ``pyroid.filters`` (same
+  decisions and reasons; datatrove's own random draws, word lists and
+  blocklists).
+- :class:`SentenceDedupSignature`, :class:`SentenceFindDedups`,
+  :class:`SentenceDedupFilter`, :class:`SentenceDedupBuildIndex`:
+  ``pyroid.dedup``; the same signature, duplicate and index files, byte for
+  byte, and the same documents out.
 
 What differs: per-line statistics of ``C4QualityFilter`` (``line-total``,
 ``line-filter-*``) are not counted, and batched steps also count ``batches``.
@@ -835,9 +844,6 @@ SymbolLinesFormatter.__init__.__signature__ = _signature_of(  # type: ignore[att
     _dt_symbols.SymbolLinesFormatter, *_EXTRA
 )
 # ---- end SymbolLinesFormatter ----
-
-# ---- UnigramLogProbFilter ----
-# ---- end UnigramLogProbFilter ----
 
 # ---- SentenceDedup ----
 # datatrove's sentence dedup: stage 1 and 3 on pyroid.dedup, stage 2 (and the index builder) a

@@ -862,7 +862,6 @@ fn register_more(m: &Bound<'_, PyModule>) -> PyResult<()> {
     badwords::register(m)?;
     url::register(m)?;
     symbol_lines::register(m)?;
-    unigram::register(m)?;
     Ok(())
 }
 
@@ -1907,14 +1906,3 @@ mod symbol_lines {
     }
 }
 // ---- end SymbolLinesFormatter ----
-
-// ---- UnigramLogProbFilter ----
-mod unigram {
-    use pyo3::prelude::*;
-
-    #[allow(clippy::unnecessary_wraps)] // placeholder
-    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
-        Ok(())
-    }
-}
-// ---- end UnigramLogProbFilter ----

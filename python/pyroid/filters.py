@@ -1823,6 +1823,3 @@ def symbol_lines(texts: Any, config: Any = None, /, *, threads: Any = None, **kw
 
 
 # ---- end SymbolLinesFormatter ----
-
-# ---- UnigramLogProbFilter ----
-# ---- end UnigramLogProbFilter ----

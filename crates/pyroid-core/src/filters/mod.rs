@@ -483,5 +483,4 @@ impl Pipeline {
 pub mod badwords;
 pub mod pii;
 pub mod symbol_lines;
-pub mod unigram;
 pub mod url;

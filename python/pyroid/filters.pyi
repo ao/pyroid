@@ -1683,6 +1683,3 @@ def symbol_lines(
 ) -> Column[str]: ...
 
 # ---- end SymbolLinesFormatter ----
-
-# ---- UnigramLogProbFilter ----
-# ---- end UnigramLogProbFilter ----
