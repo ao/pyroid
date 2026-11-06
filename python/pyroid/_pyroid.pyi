@@ -16,6 +16,7 @@ __all__ = [
     "fasttext",
     "filters",
     "ftfy",
+    "json_repair",
     "metrics",
     "text",
     "translit",
@@ -31,6 +32,7 @@ filters: ModuleType
 dedup: ModuleType
 translit: ModuleType
 metrics: ModuleType
+json_repair: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):
