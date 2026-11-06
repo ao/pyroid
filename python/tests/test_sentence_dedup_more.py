@@ -128,7 +128,7 @@ def run_stages(
     fw: int = 1,
     ranks: int = 1,
     index_from: list[str] | None = None,
-    language: str | None = None,
+    language: Any = None,
     **extra: Any,
 ) -> dict[str, Any]:
     """The three stages of ``mod`` (datatrove's module or pyroid's drop-ins) via run()."""
@@ -407,16 +407,26 @@ def test_executor_example_pipeline(tmp_path: Path) -> None:
 def test_window_index_overflow_matches_numpy(tmp_path: Path) -> None:
     text = "\n".join(f"line {i}" for i in range(65_540))
     cfg = dt_config(split_sentences=False, n_sentences=1)
+    seen: list[str] = []
+
+    def stream() -> Any:
+        for i, t in enumerate(["x", text, *(["more"] * 5), text]):
+            seen.append(str(i))
+            yield Document(text=t, id=str(i))
+
     with pytest.raises(OverflowError) as want:
         dt_sd.SentenceDedupSignature(output_folder=str(tmp_path / "a"), config=cfg).run(
-            iter([Document(text="x", id="0"), Document(text=text, id="1")]), 0, 1
+            stream(), 0, 1
         )
+    assert len(seen) == 8  # numpy fails once every document went through
     import pyroid.integrations.datatrove as pdt
 
+    seen.clear()
     with pytest.raises(OverflowError) as got:
-        pdt.SentenceDedupSignature(output_folder=str(tmp_path / "b"), config=cfg).run(
-            iter([Document(text="x", id="0"), Document(text=text, id="1")]), 0, 1
+        pdt.SentenceDedupSignature(output_folder=str(tmp_path / "b"), config=cfg, batch_size=3).run(
+            stream(), 0, 1
         )
+    assert len(seen) == 8
     assert str(got.value) == str(want.value) == "Python integer 65536 out of bounds for uint16"
     assert not (tmp_path / "a").exists()
     assert not (tmp_path / "b").exists()
@@ -523,6 +533,29 @@ def test_unsupported_language_falls_back(tmp_path: Path) -> None:
             pdt, [t.replace(". ", ".\n") for t in texts], lines, tmp_path / "pl", language="fra"
         )
     assert got == want
+
+
+@needs_dt
+@pytest.mark.thread_unsafe
+def test_custom_word_tokenizer_falls_back(tmp_path: Path) -> None:
+    """datatrove also takes a WordTokenizer as ``language``: its code runs (lines: pyroid's)."""
+    from datatrove.utils.word_tokenizers import SpaCyTokenizer  # type: ignore[import-not-found,import-untyped,unused-ignore]
+
+    import pyroid.integrations.datatrove as pdt
+
+    tok = SpaCyTokenizer("en")
+    texts = [*DOCS, "One. Two. Three."]
+    want = run_stages(dt_sd, texts, dt_config(**NO_MIN), tmp_path / "dt", language=tok)
+    pdt._WARNED.clear()
+    with pytest.warns(pyroid.FallbackWarning, match="custom word tokenizer"):
+        got = run_stages(pdt, texts, dt_config(**NO_MIN), tmp_path / "pr", language=tok)
+    assert got == want
+    lines = dt_config(split_sentences=False, **NO_MIN)
+    texts = [t.replace(". ", ".\n") for t in texts]
+    want = run_stages(dt_sd, texts, lines, tmp_path / "dl", language=tok)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pyroid.FallbackWarning)
+        assert run_stages(pdt, texts, lines, tmp_path / "pl", language=tok) == want
 
 
 @needs_dt

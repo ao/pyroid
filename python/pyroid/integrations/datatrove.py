@@ -869,16 +869,23 @@ def _sd_config(step: str, config: Any) -> Any:
         return None
 
 
-def _sd_native(step: str, config: Any, language: str, stage3: bool) -> Any:
-    """The native config for a stage, or ``None`` to run datatrove's code (fallback warned)."""
+def _sd_native(step: str, config: Any, language: Any, stage3: bool) -> Any:
+    """The native config for a stage, or ``None`` to run datatrove's code (fallback warned).
+
+    ``language`` is a datatrove language code or (as datatrove allows) a ``WordTokenizer``;
+    pyroid only tokenizes the English codes, but lines need no tokenizer.
+    """
     import pyroid.dedup as pd
 
     cfg = _sd_config(step, config)
     if cfg is None:
         return None
-    native = pd._native_sent(cfg, language)
+    native = pd._native_sent(cfg, language if isinstance(language, str) else "")
     if native.needs_tokenizer(stage3) and not native.has_tokenizer:
-        _fallback(step, f"language={language!r}")
+        if isinstance(language, str):
+            _fallback(step, f"language={language!r}")
+        else:
+            _fallback(step, "a custom word tokenizer")
         return None
     return native
 
@@ -929,11 +936,19 @@ class SentenceDedupSignature(_SentenceStep, _dt_sd.SentenceDedupSignature):
         import pyroid.dedup as pd
 
         state = pd._native._SentenceState(native)
+        overflow: OverflowError | None = None
         for batch in batched(data, self.batch_size):
             for _ in batch:
                 self.stat_update(StatHints.total)
             with self.track_time("batch"):
-                state.add([d.text for d in batch], threads=self.threads)
+                try:
+                    state.add([d.text for d in batch], threads=self.threads)
+                except OverflowError as e:
+                    # A window index past numpy's <u2: datatrove only fails when it saves
+                    # the signatures, once every document has gone through the pipeline.
+                    overflow = overflow or e
+        if overflow is not None:
+            raise overflow
         for bucket, blob in enumerate(state.signature_files(self.finder_workers)):
             name = f"{bucket:04d}/{rank:05d}{_ExtSD.stage_1_signature}"
             with self.output_folder.open(name, mode="wb") as f:
