@@ -23,6 +23,8 @@ mod object;
 mod paren;
 mod scan;
 mod string;
+mod strip;
+mod tuple;
 
 use std::borrow::Cow;
 
@@ -193,6 +195,20 @@ impl<'a> Parser<'a> {
         };
         let (a, b) = (clamp(a), clamp(b));
         self.s.slice(a, b)
+    }
+
+    /// `[a, b)` clamped to the buffer like a Python slice.
+    fn clamped(&self, a: isize, b: isize) -> (usize, usize) {
+        let n = self.len();
+        let clamp = |x: isize| -> usize {
+            if x < 0 {
+                (n + x).max(0) as usize
+            } else {
+                x.min(n) as usize
+            }
+        };
+        let (a, b) = (clamp(a), clamp(b));
+        (a, b.max(a))
     }
 
     #[inline]

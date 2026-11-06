@@ -2,19 +2,63 @@
 //! `parser_parenthesized.py` and `JSONParser.parse_parenthesized`.
 
 use super::super::value::Value;
+use super::tuple::TupleIndex;
 use super::{Parser, R, is_delim};
+
+/// Chars a tuple scan runs directly before it switches to a [`TupleIndex`].
+const DIRECT_BUDGET: usize = 1024;
+/// Tuple indexes per parse (each covers the scans in one quote state).
+const MAX_TUPLE_INDEXES: usize = 8;
 
 impl Parser<'_> {
     /// `parenthesized_is_explicit_tuple`: whether the `(` at the index starts an
     /// explicit tuple (`()` and `(1,)` do, `(1)` does not).
-    fn parenthesized_is_explicit_tuple(&self) -> bool {
+    ///
+    /// Short scans run directly; long ones are answered by a [`TupleIndex`]
+    /// shared by every nested `(` (json_repair rescans to the end from each).
+    fn parenthesized_is_explicit_tuple(&mut self) -> bool {
+        if let Some(r) = self.explicit_tuple_direct(Some(DIRECT_BUDGET)) {
+            return r;
+        }
+        let q = self.index as usize;
+        // `saw_top_level_content` is set by the first char that is not a space or a
+        // backslash, unless it is `)` or `,`; those end the scan (with `True`).
+        let mut f = q + 1;
+        while f < self.s.len() && (self.s.at(f) == '\\' || self.is_space(self.s.at(f))) {
+            f += 1;
+        }
+        if f >= self.s.len() || matches!(self.s.at(f), ')' | ',') {
+            return true;
+        }
+        let found = self.scan.tuples.iter().position(|ix| ix.covers(q));
+        let ix = match found {
+            Some(k) => &self.scan.tuples[k],
+            None if self.scan.tuples.len() < MAX_TUPLE_INDEXES => {
+                let s = &self.s;
+                match TupleIndex::build(q, s.len(), |i| s.at(i)) {
+                    Some(ix) => {
+                        self.scan.tuples.push(ix);
+                        self.scan.tuples.last().expect("pushed")
+                    }
+                    None => return self.explicit_tuple_direct(None).expect("unbounded"),
+                }
+            }
+            None => return self.explicit_tuple_direct(None).expect("unbounded"),
+        };
+        // With content seen, the scan returns True only when it stops at a `,`.
+        ix.terminator(q).is_some_and(|t| self.s.at(t) == ',')
+    }
+
+    /// The literal scan; `None` if it runs past `budget` chars.
+    fn explicit_tuple_direct(&self, budget: Option<usize>) -> Option<bool> {
         let n = self.len();
         let mut i = self.index + 1;
+        let stop = budget.map_or(n, |b| n.min(i.saturating_add(b as isize)));
         let (mut nested, mut square, mut braces) = (0usize, 0usize, 0usize);
         let mut in_quote: Option<char> = None;
         let mut backslashes = 0usize;
         let mut saw_top_level_content = false;
-        while i < n {
+        while i < stop {
             let Some(ch) = self.char_at(i) else { break };
             if ch == '\\' {
                 backslashes += 1;
@@ -46,7 +90,7 @@ impl Parser<'_> {
                 '(' => nested += 1,
                 ')' => {
                     if top {
-                        return !saw_top_level_content;
+                        return Some(!saw_top_level_content);
                     }
                     nested = nested.saturating_sub(1);
                 }
@@ -54,12 +98,15 @@ impl Parser<'_> {
                 ']' if square > 0 => square -= 1,
                 '{' => braces += 1,
                 '}' if braces > 0 => braces -= 1,
-                ',' if top => return true,
+                ',' if top => return Some(true),
                 _ => {}
             }
             i += 1;
         }
-        !saw_top_level_content
+        if i < n {
+            return None;
+        }
+        Some(!saw_top_level_content)
     }
 
     /// `top_level_parenthesized_can_start_value`: whether a top-level `(` looks

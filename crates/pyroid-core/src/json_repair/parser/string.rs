@@ -336,11 +336,10 @@ impl Parser<'_> {
         if matches!(ch, Some('#' | '/')) {
             return Ok(Entry::Direct(self.parse_comment()?));
         }
-        while let Some(c) = ch {
-            if is_delim(c) || self.props.is_alnum(c) {
-                break;
-            }
-            self.index += 1;
+        if ch.is_some_and(|c| !is_delim(c) && !self.props.is_alnum(c)) {
+            // Skip to the next delimiter or alphanumeric (memoized: unclosed
+            // nesting reruns this skip over the same text at every level).
+            self.index = self.next_delim_or_alnum(self.index as usize) as isize;
             ch = self.cur();
         }
         let Some(c) = ch else {

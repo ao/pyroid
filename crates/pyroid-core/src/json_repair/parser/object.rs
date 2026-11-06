@@ -2,10 +2,14 @@
 //! `parse_object.py` (without schema support: `schema=` is delegated).
 
 use super::super::value::{Object, Value, new_object};
-use super::{Ctx, ParseError, Parser, R, is_delim, opt_delim};
+#[cfg(test)]
+use super::is_delim;
+use super::{Ctx, ParseError, Parser, R, opt_delim};
 
-/// `_strip_comments_for_empty_object_classification(body)`.
-fn strip_comments(body: &[char]) -> Vec<char> {
+/// `_strip_comments_for_empty_object_classification(body)` (reference version;
+/// the parser uses the incremental scans in `strip.rs`).
+#[cfg(test)]
+pub(crate) fn strip_comments(body: &[char]) -> Vec<char> {
     let n = body.len();
     let mut stripped = Vec::with_capacity(n);
     let mut in_quote: Option<char> = None;
@@ -56,11 +60,6 @@ fn strip_comments(body: &[char]) -> Vec<char> {
         i += 1;
     }
     stripped
-}
-
-/// `s.startswith(prefix)` for char slices.
-fn starts_with(s: &[char], prefix: &[char]) -> bool {
-    s.len() >= prefix.len() && s[..prefix.len()] == *prefix
 }
 
 /// `needle in s` for char slices.
@@ -422,11 +421,11 @@ impl Parser<'_> {
         if !obj.is_empty() || self.index - start_index <= 2 {
             return Ok(None);
         }
-        let body = self.slice(start_index, self.index - 1);
-        if self.get_char_at(-1) == Some('}')
-            && strip_comments(&body).iter().all(|&c| self.is_space(c))
-        {
-            return Ok(None);
+        if self.get_char_at(-1) == Some('}') {
+            let (a, b) = self.clamped(start_index, self.index - 1);
+            if !self.stripped_has_content(a, b) {
+                return Ok(None);
+            }
         }
         if self.strict {
             self.log(|| {
@@ -467,50 +466,41 @@ impl Parser<'_> {
 
     /// `_classify_empty_object_repair`.
     fn classify_empty_object_repair(&mut self, start_index: isize) -> EmptyRepair {
-        let attempted: Vec<char> = self.slice(start_index - 1, self.index + 1).to_vec();
-        let mut body: &[char] = attempted.get(1..).unwrap_or(&[]);
-        if body.last() == Some(&'}') {
-            body = &body[..body.len() - 1];
+        // attempted = json_str[start_index - 1 : index + 1]; body = attempted[1:]
+        // without a trailing "}", left-stripped. Index ranges, not copies.
+        let (a0, a1) = self.clamped(start_index - 1, self.index + 1);
+        let mut b0 = (a0 + 1).min(a1);
+        let mut b1 = a1;
+        if b1 > b0 && self.s.at(b1 - 1) == '}' {
+            b1 -= 1;
         }
-        let lstrip = |s: &[char]| -> usize { s.iter().take_while(|&&c| self.is_space(c)).count() };
-        body = &body[lstrip(body)..];
-        if body.is_empty() {
+        while b0 < b1 && self.is_space(self.s.at(b0)) {
+            b0 += 1;
+        }
+        if b0 == b1 {
             return EmptyRepair::Keep;
         }
-        if (starts_with(body, &['\\', '"']) && contains(body, &['\\', '"', ':']))
-            || (starts_with(body, &['\\', '\'']) && contains(body, &['\\', '\'', ':']))
-        {
+        let escaped_key = b1 - b0 >= 2
+            && self.s.at(b0) == '\\'
+            && matches!(self.s.at(b0 + 1), '"' | '\'')
+            && contains(&self.s.slice(b0, b1), &['\\', self.s.at(b0 + 1), ':']);
+        if escaped_key {
+            let attempted = self.s.slice(a0, a1);
             let normalized = replace2(&replace2(&attempted, ['\\', '"'], '"'), ['\\', '\''], '\'');
             self.log(|| {
                 "Parsed object is empty but the input starts like an escaped object key, normalizing and reparsing it as an object".into()
             });
             return EmptyRepair::Object(normalized);
         }
-        let stripped = strip_comments(body);
-        let body = &stripped[lstrip(&stripped)..];
-        if body.is_empty() {
+        // strip_comments(body).lstrip() empty?
+        if !self.stripped_has_content(b0, b1) {
             return EmptyRepair::Keep;
         }
-        let mut in_quote: Option<char> = None;
-        let mut backslashes = 0usize;
-        for &ch in body {
-            if ch == '\\' {
-                backslashes += 1;
-                continue;
-            }
-            if let Some(q) = in_quote {
-                if ch == q && backslashes % 2 == 0 {
-                    in_quote = None;
-                }
-            } else if is_delim(ch) && backslashes % 2 == 0 {
-                in_quote = Some(ch);
-            } else if ch == ':' && backslashes % 2 == 0 {
-                self.log(|| {
-                    "Parsed object is empty but the input still contains an object-style separator, keeping object repair".into()
-                });
-                return EmptyRepair::Keep;
-            }
-            backslashes = 0;
+        if self.stripped_colon(b0).is_some_and(|j| j < b1) {
+            self.log(|| {
+                "Parsed object is empty but the input still contains an object-style separator, keeping object repair".into()
+            });
+            return EmptyRepair::Keep;
         }
         EmptyRepair::Array
     }

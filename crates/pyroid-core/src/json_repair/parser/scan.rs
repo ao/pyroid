@@ -107,12 +107,21 @@ pub(crate) struct Memo {
     /// Positions of the `{`s inserted since `quote_runs` were built (ascending,
     /// current coordinates; a char at current `p` was at `p - #inserts < p`).
     inserts: Vec<usize>,
+    /// Per position: the stripped-body `:` answer (see `strip.rs`; 0 = unknown).
+    pub(crate) colons: Vec<u32>,
+    /// `_prepare_string_entry`'s skip to the next delimiter or alphanumeric.
+    delim_alnum: Option<Span>,
+    /// `parenthesized_is_explicit_tuple` indexes (see `tuple.rs`).
+    pub(crate) tuples: Vec<super::tuple::TupleIndex>,
     /// `_initial_container_has_non_comma_trailing_content()` at index 0.
     pub(crate) initial_container: Option<bool>,
 }
 
 impl Memo {
     pub(crate) fn invalidate(&mut self) {
+        self.tuples.clear();
+        self.colons.clear();
+        self.delim_alnum = None;
         self.unescaped.clear();
         self.quote_runs.clear();
         self.inserts.clear();
@@ -125,6 +134,16 @@ impl Memo {
     /// The buffer got char `c` inserted at `p`, after a non-backslash (so no
     /// backslash run changed): shift every remembered span past `p`.
     pub(crate) fn shift_insert(&mut self, p: usize, c: char, props: CharProps) {
+        self.tuples.clear();
+        self.colons.clear();
+        if let Some(span) = &mut self.delim_alnum {
+            let covers = span.from < p && span.to.is_none_or(|t| t >= p);
+            span.from += usize::from(span.from >= p);
+            span.to = span.to.map(|t| t + usize::from(t >= p));
+            if covers && (super::is_delim(c) || props.is_alnum(c)) {
+                span.to = Some(p);
+            }
+        }
         let shift = |x: usize| if x >= p { x + 1 } else { x };
         for (targets, span) in &mut self.unescaped {
             let covers = span.from < p && span.to.is_none_or(|t| t >= p);
@@ -165,6 +184,32 @@ fn is_quote_target(c: char) -> bool {
 }
 
 impl Parser<'_> {
+    /// First index `>= from` holding a string delimiter or an alphanumeric (or `len`).
+    pub(crate) fn next_delim_or_alnum(&mut self, from: usize) -> usize {
+        let n = self.s.len();
+        let hit = |p: &Self, i: usize| {
+            let c = p.s.at(i);
+            super::is_delim(c) || p.props.is_alnum(c)
+        };
+        if from >= n || hit(self, from) {
+            return from.min(n);
+        }
+        if let Some(span) = self.scan.delim_alnum {
+            if let Some(ans) = span.answer(from) {
+                return ans.unwrap_or(n);
+            }
+        }
+        let mut i = from + 1;
+        while i < n && !hit(self, i) {
+            i += 1;
+        }
+        self.scan.delim_alnum = Some(Span {
+            from,
+            to: (i < n).then_some(i),
+        });
+        i
+    }
+
     /// First index `>= from` that is not a space (or `len`).
     pub(crate) fn next_non_space(&mut self, from: usize) -> usize {
         let n = self.s.len();

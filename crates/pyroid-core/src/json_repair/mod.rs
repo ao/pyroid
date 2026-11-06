@@ -19,7 +19,7 @@ pub mod value;
 
 pub use parser::{LogEntry, MAX_DEPTH, ParseError, ParseOptions};
 
-use chars::{CharProps, InputError};
+use chars::CharProps;
 use dumps::{DumpError, DumpOptions};
 use value::Value;
 
@@ -110,14 +110,17 @@ pub struct Repaired {
 
 /// `repair_json(text, return_objects=True, ...)`: the repaired value.
 ///
-/// `text` may hold remapped surrogates (see [`chars`]); a str that holds a char
-/// in the reserved range is [`RepairError::Unsupported`].
+/// `text` is a Python `str`'s UTF-8: one holding a char in the range reserved
+/// for remapped surrogates is [`RepairError::Unsupported`] (use
+/// [`repair_chars`] for strs with lone surrogates).
 pub fn repair(text: &str, opts: &RepairOptions) -> Result<Repaired, RepairError> {
+    if chars::contains_reserved(text) {
+        return Err(RepairError::Unsupported);
+    }
     if let Some(r) = fast_path(text, opts)? {
         return Ok(r);
     }
-    let chars = chars::chars_from_str(text)
-        .map_err(|InputError::ReservedCodePoint| RepairError::Unsupported)?;
+    let chars: Vec<char> = text.chars().collect();
     repair_chars_parse(&chars, opts)
 }
 
@@ -244,6 +247,14 @@ mod tests {
             ("", ""),
         ] {
             assert_eq!(repair_json(input, &o, &d).as_deref(), Ok(want), "{input:?}");
+        }
+        // Valid JSON too: the reserved range must never reach the fast path.
+        for text in ["\"\u{10f800}\"", "{'a': '\u{10ffff}'}", r#""\udbff\udfff""#] {
+            assert_eq!(
+                repair_json(text, &o, &d),
+                Err(RepairError::Unsupported),
+                "{text:?}"
+            );
         }
         let deep = "[".repeat(super::MAX_DEPTH + 1);
         assert_eq!(
