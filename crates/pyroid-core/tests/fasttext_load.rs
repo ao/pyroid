@@ -1315,6 +1315,54 @@ fn zero_dim_models_with_enormous_row_counts_are_harmless() {
     }
 }
 
+/// Vectors have `dim` floats, and a matrix row stores that many in the file,
+/// but an unsupervised model without words, n-grams or labels has two empty
+/// matrices: its 130-byte file could declare dim 2^31 - 1 and make every word
+/// or sentence vector allocate 8 GiB (found in review for the `fuzz/` target
+/// `fasttext`, where dim 5e7 times out).
+/// Such dims are rejected; small ones still load, with all-zero vectors.
+#[test]
+fn a_dim_without_any_matrix_row_is_capped() {
+    let empty = |dim: i32| {
+        Spec {
+            model: CBOW,
+            loss: NS,
+            words: Vec::new(),
+            labels: Vec::new(),
+            minn: 0,
+            maxn: 0,
+            bucket: 0,
+            dim,
+            ..Spec::default()
+        }
+        .build()
+        .bytes
+    };
+    for dim in [65_537, 50_000_000, i32::MAX] {
+        let bytes = empty(dim);
+        let case = run(&bytes, Depth::Full);
+        assert!(is_invalid(&case.outcome), "dim {dim}: {:?}", case.outcome);
+        assert!(
+            case.peak <= heap_budget(bytes.len()),
+            "dim {dim}: {}",
+            case.peak
+        );
+    }
+    for dim in [1, 100, 65_536] {
+        let bytes = empty(dim);
+        let case = run(&bytes, Depth::Full);
+        assert!(
+            matches!(case.outcome, Outcome::Loaded),
+            "dim {dim}: {:?}",
+            case.outcome
+        );
+        let m = load(&bytes);
+        let zeros = vec![0.0; dim as usize];
+        assert_eq!(m.word_vector("cat").as_ref(), Some(&zeros));
+        assert_eq!(m.sentence_vector("the cat").as_ref(), Ok(&zeros));
+    }
+}
+
 /// Character n-grams cost up to `maxn` hash steps and ids per byte of a
 /// word, and word n-grams `wordNgrams` ids per token: a header with a huge
 /// (or negative, which fastText compares as a huge `size_t`) value would make

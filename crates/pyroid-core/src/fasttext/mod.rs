@@ -90,6 +90,12 @@ pub const MAGIC: i32 = 793_712_314;
 /// `FASTTEXT_VERSION`: the newest format version fastText (and pyroid) reads.
 pub const VERSION: i32 = 12;
 
+/// The largest `dim` of a model with no weights at all (both matrices dense
+/// with 0 rows; fastText could only train one from a file of labels without
+/// a newline, and its vectors are all zeros). Real models store `dim` floats
+/// per matrix row, so their `dim` is bounded by the file size.
+const MAX_UNBACKED_DIM: usize = 1 << 16;
+
 /// One predicted label.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Prediction {
@@ -204,6 +210,19 @@ impl Model {
                     m.cols()
                 )));
             }
+        }
+        // Every vector has `dim` floats, and a matrix row (or a quantizer's
+        // centroids) stores at least that many in the file, except when both
+        // matrices are dense and empty: then a few header bytes could make
+        // every word or sentence vector allocate up to 8 GiB of zeros.
+        let unbacked = [&self.input, &self.output]
+            .iter()
+            .all(|m| m.rows() == 0 && m.as_dense().is_some());
+        if unbacked && dim > MAX_UNBACKED_DIM {
+            return Err(LoadError::Invalid(format!(
+                "dim is {dim} but both matrices are empty (at most {MAX_UNBACKED_DIM} without \
+                 any weights)"
+            )));
         }
         if self.dict.has_negative_pruned_ids() {
             return Err(LoadError::Invalid(
