@@ -1634,15 +1634,31 @@ def test_import_error_without_numpy(run_python: RunPython, zoo: Zoo) -> None:
     proc = run_python(
         f"""
         import sys
-        sys.modules["numpy"] = None  # import numpy raises ImportError
+        import warnings
+        sys.modules["numpy"] = None  # import numpy raises ModuleNotFoundError
         import pyroid, pyroid.text
         assert pyroid.text.normalize_whitespace(" a  b ") == "a b"
         try:
             import pyroid.fasttext
         except ImportError as e:
+            # A ModuleNotFoundError naming numpy, chained to numpy's own.
+            assert type(e) is ModuleNotFoundError and e.name == "numpy", repr(e)
+            cause = e.__cause__
+            assert type(cause) is ModuleNotFoundError and cause.name == "numpy", repr(cause)
             print("module:", e)
         else:
             raise AssertionError("pyroid.fasttext imported without numpy")
+        # So pytest.importorskip skips, without its warning for other ImportErrors.
+        import pytest
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                pytest.importorskip("pyroid.fasttext")
+            except pytest.skip.Exception as e:
+                print("skip:", e)
+            else:
+                raise AssertionError("importorskip did not skip")
+        assert not caught, [str(w.message) for w in caught]
         # The native module fails cleanly too (no rust-numpy panic).
         from pyroid._pyroid import fasttext as native
         m = native.load_model({str(path)!r})
@@ -1666,7 +1682,12 @@ def test_import_error_without_numpy(run_python: RunPython, zoo: Zoo) -> None:
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     lines = proc.stdout.strip().splitlines()
-    assert len(lines) == 7, proc.stdout
+    assert len(lines) == 8, proc.stdout
+    assert lines[0] == (
+        "module: pyroid.fasttext needs numpy: install it with pip install 'pyroid[fasttext]' "
+        "(or pip install numpy)"
+    )
+    assert lines[1].startswith("skip: "), proc.stdout
     assert all("pyroid[fasttext]" in line for line in lines), proc.stdout
 
 
