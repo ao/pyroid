@@ -24,6 +24,9 @@ extend-exclude = [
   "parity/tests/",
   "parity/pyroid_parity/refs.py",
   "parity/pyroid_parity/strategies.py",
+  # cargo-fuzz corpora: arbitrary bytes and generated text, kept exactly as the fuzzers wrote them.
+  "fuzz/corpus/",
+  "fuzz/arrow/corpus/",
   # Transliteration fixtures: accented and romanised words (caf\u00e9, ...). Typos only; the
   # file-fixer hooks still check this file.
   "python/tests/test_translit.py",
