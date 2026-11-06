@@ -108,6 +108,35 @@ def ok(proc: subprocess.CompletedProcess[str]) -> Any:
 # ---------------------------------------------------------------------------
 
 
+def test_pyroid_patch_alias_is_lazy() -> None:
+    # `import pyroid; pyroid.patch(...)` works, and loads pyroid.integrations only when called.
+    warned = ok(
+        child(
+            """
+            import json, sys, warnings
+            import pyroid
+            assert "patch" in pyroid.__all__ and "unpatch" in pyroid.__all__
+            assert pyroid.patch.__module__ == "pyroid"
+            assert not any(m.startswith("pyroid.integrations") for m in sys.modules)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                pyroid.patch("anyascii")
+            import anyascii, pyroid.translit
+            assert anyascii.anyascii is pyroid.translit.anyascii
+            import pyroid.integrations as pi
+            assert pi.patched() == ("anyascii",)
+            pyroid.unpatch()
+            assert pi.patched() == ()
+            assert sys.modules.get("anyascii") is not anyascii  # the shim is gone
+            print(json.dumps([(w.category.__name__, w.filename) for w in caught]))
+            """
+        )
+    )
+    assert warned, "no PatchWarning"
+    assert all(cat == "PatchWarning" for cat, _ in warned), warned
+    assert all(filename == "<string>" for _, filename in warned), warned  # the caller's line
+
+
 def test_names_are_checked_before_anything_is_patched() -> None:
     try:
         with pytest.raises(ValueError, match=r"'ftfy', 'fasttext', 'anyascii'"):

@@ -237,10 +237,14 @@ class _Target:
 
 
 def _caller_stacklevel() -> int:
-    """The ``stacklevel`` that points a warning here at the first frame outside this module."""
+    """The ``stacklevel`` that points a warning here at the first frame outside this module.
+
+    ``pyroid.patch`` (in ``pyroid/__init__.py``) is skipped too, so ``pyroid.patch(...)`` warns
+    at the caller's line like ``pyroid.integrations.patch(...)``.
+    """
     frame = sys._getframe(1)
     level = 1
-    while frame.f_back is not None and frame.f_globals.get("__name__") == __name__:
+    while frame.f_back is not None and frame.f_globals.get("__name__") in (__name__, "pyroid"):
         frame = frame.f_back
         level += 1
     return level
