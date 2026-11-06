@@ -27,7 +27,25 @@ from pyroid_parity import data as D
 CNNDM = "metrics/cnndm-3.0.0-test.parquet"
 SUMMEVAL = "metrics/summeval.parquet"
 WMT21 = "metrics/wmt21.parquet"
-REF = "parity/metrics-ref.parquet"
+
+
+def metrics_ref(platform: str) -> str:
+    """The reference file for a ``data.platform_key()``.
+
+    sacrebleu's BLEU calls ``math.exp``/``math.log``, i.e. the platform's libm, so a few BLEU scores differ in the
+    last bit across CPUs (measured: 165 of the 694,757 results, all BLEU, 1 ulp, linux-x86_64 under Rosetta vs
+    linux-aarch64; ROUGE, chrF and every count are identical). pyroid evaluates sacrebleu's formulas in Python with
+    the same libm, so it matches the oracle of its own platform; each platform pins its own file, as for fastText
+    (``specs.lid_ref``). linux-aarch64 keeps the original name.
+    """
+    return (
+        "parity/metrics-ref.parquet"
+        if platform == "linux-aarch64"
+        else f"parity/metrics-ref.{platform}.parquet"
+    )
+
+
+REF = metrics_ref(D.platform_key())
 ORACLES = ("rouge-score", "sacrebleu", "nltk")
 
 # ------------------------------------------------------------------------------------------------- the cases
@@ -382,6 +400,7 @@ def ref_metrics(pin: bool, workers: int) -> None:
         pin,
         oracle=R.versions(*ORACLES),
         corpora=[CNNDM, SUMMEVAL, WMT21],
+        platform=D.platform_key(),
         cases={
             "rouge": {c: {"data": d, "kwargs": k, "call": h} for c, (d, k, h) in ROUGE_CASES.items()},
             "corpus": {c: {"class": m, "kwargs": k, "refs": r} for c, (m, k, r) in CORPUS_CASES.items()},

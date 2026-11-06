@@ -272,6 +272,273 @@
         "adversarial"
       ]
     },
+    "parity/metrics-ref.linux-x86_64.parquet": {
+      "sha256": "ca0a0068bddc2fc4b4027106bd6ca3e3a363461d60db66c49b02a2ceb2b3413b",
+      "bytes": 20002927,
+      "rows": 694757,
+      "oracle": {
+        "rouge-score": "0.1.2",
+        "sacrebleu": "2.6.0",
+        "nltk": "3.10.4"
+      },
+      "corpora": [
+        "metrics/cnndm-3.0.0-test.parquet",
+        "metrics/summeval.parquet",
+        "metrics/wmt21.parquet"
+      ],
+      "platform": "linux-x86_64",
+      "cases": {
+        "rouge": {
+          "rouge@cnndm": {
+            "data": "cnndm",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ]
+            },
+            "call": "score"
+          },
+          "rouge@cnndm-stem": {
+            "data": "cnndm",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rouge3",
+                "rouge4",
+                "rougeL",
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "score"
+          },
+          "rougeLsum@cnndm-stem": {
+            "data": "cnndm",
+            "kwargs": {
+              "rouge_types": [
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "score"
+          },
+          "rouge@article-stem": {
+            "data": "article",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "score"
+          },
+          "rouge@summeval": {
+            "data": "summeval",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ]
+            },
+            "call": "score"
+          },
+          "rouge@summeval-multi-stem": {
+            "data": "summeval-multi",
+            "kwargs": {
+              "rouge_types": [
+                "rouge1",
+                "rouge2",
+                "rougeL",
+                "rougeLsum"
+              ],
+              "use_stemmer": true
+            },
+            "call": "multi"
+          }
+        },
+        "corpus": {
+          "bleu": {
+            "class": "BLEU",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "bleu@refA": {
+            "class": "BLEU",
+            "kwargs": {},
+            "refs": "A"
+          },
+          "bleu@trg_lang": {
+            "class": "BLEU",
+            "kwargs": {
+              "trg_lang": "<tgt>"
+            },
+            "refs": "all"
+          },
+          "bleu@intl": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "intl"
+            },
+            "refs": "all"
+          },
+          "bleu@char": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "char"
+            },
+            "refs": "A"
+          },
+          "bleu@none": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "none"
+            },
+            "refs": "A"
+          },
+          "bleu@zh": {
+            "class": "BLEU",
+            "kwargs": {
+              "tokenize": "zh"
+            },
+            "refs": "all"
+          },
+          "bleu@lowercase": {
+            "class": "BLEU",
+            "kwargs": {
+              "lowercase": true
+            },
+            "refs": "all"
+          },
+          "bleu@floor": {
+            "class": "BLEU",
+            "kwargs": {
+              "smooth_method": "floor",
+              "smooth_value": 0.1
+            },
+            "refs": "A"
+          },
+          "bleu@add-k": {
+            "class": "BLEU",
+            "kwargs": {
+              "smooth_method": "add-k",
+              "smooth_value": 1
+            },
+            "refs": "A"
+          },
+          "bleu@nosmooth": {
+            "class": "BLEU",
+            "kwargs": {
+              "smooth_method": "none"
+            },
+            "refs": "A"
+          },
+          "bleu@eff-order": {
+            "class": "BLEU",
+            "kwargs": {
+              "effective_order": true
+            },
+            "refs": "A"
+          },
+          "bleu@max-order-2": {
+            "class": "BLEU",
+            "kwargs": {
+              "max_ngram_order": 2
+            },
+            "refs": "A"
+          },
+          "bleu@holes": {
+            "class": "BLEU",
+            "kwargs": {},
+            "refs": "holes"
+          },
+          "chrf": {
+            "class": "CHRF",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "chrf@refA": {
+            "class": "CHRF",
+            "kwargs": {},
+            "refs": "A"
+          },
+          "chrf++": {
+            "class": "CHRF",
+            "kwargs": {
+              "word_order": 2
+            },
+            "refs": "all"
+          },
+          "chrf@whitespace": {
+            "class": "CHRF",
+            "kwargs": {
+              "whitespace": true
+            },
+            "refs": "A"
+          },
+          "chrf@beta1": {
+            "class": "CHRF",
+            "kwargs": {
+              "beta": 1
+            },
+            "refs": "A"
+          },
+          "chrf@lowercase": {
+            "class": "CHRF",
+            "kwargs": {
+              "lowercase": true
+            },
+            "refs": "A"
+          },
+          "chrf@eps": {
+            "class": "CHRF",
+            "kwargs": {
+              "eps_smoothing": true
+            },
+            "refs": "all"
+          },
+          "chrf@holes": {
+            "class": "CHRF",
+            "kwargs": {
+              "word_order": 2
+            },
+            "refs": "holes"
+          }
+        },
+        "sentence": {
+          "sentence_bleu": {
+            "call": "sentence_bleu",
+            "kwargs": {},
+            "refs": "A"
+          },
+          "sentence_bleu@multi": {
+            "call": "sentence_bleu",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "sentence_chrf": {
+            "call": "sentence_chrf",
+            "kwargs": {},
+            "refs": "all"
+          },
+          "sentence_chrf++": {
+            "call": "sentence_chrf",
+            "kwargs": {
+              "word_order": 2
+            },
+            "refs": "A"
+          }
+        }
+      }
+    },
     "parity/metrics-ref.parquet": {
       "sha256": "8107ddcdfb40adc8aa20b8c71e59af7cec2382000333ce558ae8141c947ecd2e",
       "bytes": 20003089,
@@ -536,7 +803,8 @@
             "refs": "A"
           }
         }
-      }
+      },
+      "platform": "linux-aarch64"
     },
     "parity/minhash-ref.parquet": {
       "sha256": "4133f9a18bb5247b43fa8121a5db5326a839c78555f33c27b01acc0c0f33b8aa",

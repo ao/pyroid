@@ -90,6 +90,11 @@ The fastText reference is pinned once per platform (`<sys.platform>-<arch>`, `py
   differently in the last bit. Both pyroid and fastText call the same libm, so they still agree with each other, but
   the CI runner's regenerated file could differ from this pin. If the parity-data job reports a mismatch for this
   file only, re-pin it there (`python -m pyroid_parity.refs fasttext --pin`).
+- **metrics** is pinned per platform the same way (`parity/metrics-ref.parquet` for linux-aarch64,
+  `parity/metrics-ref.linux-x86_64.parquet`; `metrics_cases.metrics_ref`): sacrebleu's BLEU goes through
+  `math.exp`/`math.log`, and 165 of the 694,757 results (all BLEU scores, 1 ulp) differ between linux-aarch64 and
+  linux-x86_64 under Rosetta. ROUGE, chrF and every count are identical. The same glibc caveat applies; re-pin with
+  `python -m pyroid_parity.refs metrics --pin`.
 - Every other reference (adversarial set, ftfy, filters, MinHash) is identical on both platforms.
 
 ## Oracle choices
