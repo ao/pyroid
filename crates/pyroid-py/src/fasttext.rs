@@ -15,7 +15,8 @@ use std::path::PathBuf;
 
 use numpy::{PyArray1, PyArrayMethods};
 use pyo3::exceptions::{
-    PyIndexError, PyOSError, PyRuntimeError, PyTypeError, PyUnicodeEncodeError, PyValueError,
+    PyIndexError, PyMemoryError, PyOSError, PyRuntimeError, PyTypeError, PyUnicodeEncodeError,
+    PyValueError,
 };
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedStr;
@@ -86,6 +87,8 @@ fn load_error(py: Python<'_>, path: &std::path::Path, err: LoadError) -> PyErr {
             }
             None => PyOSError::new_err(format!("{shown}: {e}")),
         },
+        // MemoryError, as fastText's std::bad_alloc becomes in Python (callers fall back on it).
+        e @ LoadError::OutOfMemory { .. } => PyMemoryError::new_err(format!("{shown}: {e}")),
         other => match model_error_type(py) {
             Ok(ty) => PyErr::from_type(ty.clone(), format!("{shown} {other}")),
             Err(e) => e,

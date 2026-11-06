@@ -1121,6 +1121,37 @@ def test_model_error_type() -> None:
     assert ft.ModelError.__module__ == "pyroid.fasttext"
 
 
+@pytest.mark.skipif(
+    not sysconfig.get_platform().startswith("linux"), reason="RLIMIT_AS and /proc are Linux's"
+)
+@pytest.mark.thread_unsafe(reason="runs a subprocess")
+def test_failed_allocation_is_a_memory_error(run_python: RunPython, tmp_path: Path) -> None:
+    # As fastText's std::bad_alloc: fast-langdetect's model="auto" falls back to the small model
+    # on MemoryError. A valid model with a 64 MiB input matrix, loaded under a tighter RLIMIT_AS.
+    path = tmp_path / "big.bin"
+    path.write_bytes(build(Spec(dim=16, bucket=1 << 20, fill_in=0.0, fill_out=0.0)).data)
+    assert ft.load_model(path).get_dimension() == 16
+    proc = run_python(
+        f"""
+        import resource
+        import pyroid.fasttext as ft
+        with open("/proc/self/status") as f:
+            vm = next(int(x.split()[1]) for x in f if x.startswith("VmSize:")) * 1024
+        hard = resource.getrlimit(resource.RLIMIT_AS)[1]
+        resource.setrlimit(resource.RLIMIT_AS, (vm + (24 << 20), hard))
+        try:
+            ft.load_model({str(path)!r})
+        except MemoryError as e:
+            print("MemoryError:", e)
+        else:
+            print("loaded")
+        """
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.startswith("MemoryError:"), proc.stdout
+    assert f"{path}: input matrix: cannot allocate 67" in proc.stdout, proc.stdout
+
+
 def test_missing_file(tmp_path: Path) -> None:
     missing = tmp_path / "missing.bin"
     for path in (missing, str(missing)):

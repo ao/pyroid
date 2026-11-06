@@ -113,7 +113,10 @@ impl<R: Read> Reader<R> {
     pub fn bytes(&mut self, count: u64, what: &'static str) -> Result<Vec<u8>, LoadError> {
         self.require(what, count)?;
         let n = usize::try_from(count).map_err(|_| self.truncated(what, count))?;
-        let mut out = vec![0u8; n];
+        let mut out = Vec::new();
+        out.try_reserve_exact(n)
+            .map_err(|_| LoadError::OutOfMemory { what, bytes: count })?;
+        out.resize(n, 0);
         self.fill(&mut out, what)?;
         Ok(out)
     }
@@ -127,7 +130,7 @@ impl<R: Read> Reader<R> {
         let n = usize::try_from(count).map_err(|_| self.truncated(what, bytes))?;
         let mut out = Vec::new();
         out.try_reserve_exact(n)
-            .map_err(|_| LoadError::Invalid(format!("{what}: cannot allocate {bytes} bytes")))?;
+            .map_err(|_| LoadError::OutOfMemory { what, bytes })?;
         let mut buf = vec![0u8; (1 << 16).min(n * 4)];
         let mut left = n;
         while left > 0 {

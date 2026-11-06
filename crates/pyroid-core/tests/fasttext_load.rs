@@ -635,6 +635,7 @@ impl Outcome {
             Self::Rejected(LoadError::Invalid(_)) => "invalid",
             Self::Rejected(LoadError::WrongFormat { .. }) => "wrong-format",
             Self::Rejected(LoadError::Io(_)) => "io",
+            Self::Rejected(LoadError::OutOfMemory { .. }) => "out-of-memory",
             Self::Panicked(_) => "PANIC",
         }
     }
@@ -1582,7 +1583,10 @@ fn an_overstated_length_cannot_force_an_absurd_allocation() {
     head.truncate(n.offset + n.width);
     let source = head.as_slice().chain(io::repeat(0));
     let res = Model::read(source, u64::MAX);
-    assert!(matches!(res, Err(LoadError::Invalid(_))), "{res:?}");
+    assert!(
+        matches!(res, Err(LoadError::OutOfMemory { what: "input matrix", .. })),
+        "{res:?}"
+    );
 }
 
 #[test]

@@ -40,6 +40,8 @@ def load_model(path: str | os.PathLike[str]) -> Model:
             ids that fastText itself would read out of bounds).
         OSError: The file cannot be opened or read (``FileNotFoundError``,
             ``PermissionError``, ...; fastText raises ``ValueError`` here).
+        MemoryError: A matrix of a valid file does not fit in memory (as
+            fastText's ``std::bad_alloc``).
     """
 
 def tokenize(text: str) -> list[str]:

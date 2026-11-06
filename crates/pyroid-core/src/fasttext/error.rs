@@ -25,6 +25,9 @@ pub enum LoadError {
     /// values, ids outside the matrices. fastText would read out of bounds
     /// or crash on these; pyroid refuses them.
     Invalid(String),
+    /// The file is valid so far, but memory for one of its sections cannot be
+    /// allocated (fastText: `std::bad_alloc`).
+    OutOfMemory { what: &'static str, bytes: u64 },
 }
 
 impl fmt::Display for LoadError {
@@ -58,6 +61,7 @@ impl fmt::Display for LoadError {
                 "is truncated: {what} at byte {offset} needs {need} more bytes, the file has {have}"
             ),
             Self::Invalid(msg) => write!(f, "is not a valid fastText model: {msg}"),
+            Self::OutOfMemory { what, bytes } => write!(f, "{what}: cannot allocate {bytes} bytes"),
         }
     }
 }
