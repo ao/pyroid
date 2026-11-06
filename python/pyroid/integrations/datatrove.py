@@ -875,11 +875,20 @@ def _sd_config(step: str, config: Any) -> Any:
         return None
 
 
+def _sd_tokenizes(language: Any) -> bool:
+    """Does pyroid tokenize ``language`` (a datatrove code) natively?"""
+    import pyroid.filters as pf
+
+    lang = pf.languages().get(language) if isinstance(language, str) else None
+    return lang is not None and lang.native
+
+
 def _sd_native(step: str, config: Any, language: Any, stage3: bool) -> Any:
     """The native config for a stage, or ``None`` to run datatrove's code (fallback warned).
 
     ``language`` is a datatrove language code or (as datatrove allows) a ``WordTokenizer``;
-    pyroid only tokenizes the English codes, but lines need no tokenizer.
+    pyroid tokenizes the codes ``pyroid.filters.languages()`` marks native (lines need no
+    tokenizer); for the others, and for a custom tokenizer, datatrove's own code runs.
     """
     import pyroid.dedup as pd
 
@@ -918,7 +927,8 @@ class SentenceDedupSignature(_SentenceStep, _dt_sd.SentenceDedupSignature):
 
     Writes the same ``{bucket:04d}/{rank:05d}.c4_sig`` files, byte for byte (the
     same buckets, the same empty files), so datatrove's own later stages run on them
-    unchanged. spaCy is not needed. A non-English ``language`` with
+    unchanged. spaCy is not needed. ``language`` is datatrove's: every code pyroid tokenizes
+    natively (``pyroid.filters.languages()``) runs in Rust; another one with
     ``split_sentences=True`` runs datatrove's own code (:class:`pyroid.FallbackWarning`).
     """
 
@@ -929,7 +939,7 @@ class SentenceDedupSignature(_SentenceStep, _dt_sd.SentenceDedupSignature):
             super().__init__(*args, **kwargs)
         except ImportError:
             # datatrove loads its spaCy word tokenizer last; pyroid has its own.
-            if getattr(self, "language", None) not in _english():
+            if not _sd_tokenizes(getattr(self, "language", None)):
                 raise
             self.tokenizer = None
         self._setup(batch_size, threads)
@@ -1019,8 +1029,9 @@ class SentenceDedupFilter(_SentenceStep, _dt_sd.SentenceDedupFilter):
     Reads the same ``.c4_dup`` files and yields the same documents with the same
     texts; the exclusion writer gets the same documents (``>>>`` / ``<<<``-marked
     texts). Only documents with duplicates go to Rust, ``batch_size`` at a time.
-    spaCy is not needed. A non-English ``language`` that needs the tokenizer runs
-    datatrove's own code (:class:`pyroid.FallbackWarning`).
+    spaCy is not needed. ``language`` is datatrove's: a code pyroid does not tokenize
+    natively (``pyroid.filters.languages()``) that needs the tokenizer runs datatrove's own
+    code (:class:`pyroid.FallbackWarning`).
     """
 
     def __init__(
@@ -1034,7 +1045,7 @@ class SentenceDedupFilter(_SentenceStep, _dt_sd.SentenceDedupFilter):
                 self, *args, **kwargs
             )
             bound.apply_defaults()
-            if bound.arguments["language"] not in _english() or not hasattr(self, "config"):
+            if not _sd_tokenizes(bound.arguments["language"]) or not hasattr(self, "config"):
                 raise
             self.tokenizer = None
             self.exclusion_writer = bound.arguments["exclusion_writer"]

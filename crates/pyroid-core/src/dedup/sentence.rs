@@ -320,8 +320,9 @@ impl SentenceDeduper {
     }
 
     fn word_count(&self, text: &str) -> Result<usize, SentenceError> {
+        // `words_cow`: some tokenizers (IndicNLP) build words that are not slices.
         let mut words = Vec::new();
-        self.tokenizer()?.words(text, &mut words)?;
+        self.tokenizer()?.words_cow(text, &mut words)?;
         Ok(words.len())
     }
 

@@ -501,8 +501,8 @@ class SentDedupConfig:
 
     Attributes:
         n_sentences: Sentences per window (C4's three); at least 1.
-        split_sentences: ``True``: spaCy sentences (datatrove's English word
-            tokenizer, ported); ``False``: lines (``str.splitlines()``).
+        split_sentences: ``True``: the language tokenizer's sentences (datatrove's
+            ``span_tokenize``, ported); ``False``: lines (``str.splitlines()``).
         only_dedup_in_index: With index files (the datatrove drop-ins only),
             remove only the windows found in the index. No effect in memory.
         min_doc_words: A document whose text changed is dropped if it has
@@ -560,8 +560,11 @@ def sentence_dedup(
         texts: A str, a list or tuple of str, or an Arrow string array/column.
         config: A :class:`SentDedupConfig`, datatrove's ``SentDedupConfig``, a
             dict of its fields, or ``None`` for the defaults.
-        language: datatrove's language code for the word tokenizer (an
-            English one: ``pyroid.filters.english_languages()``).
+        language: datatrove's language code (as its ``language=``), for the sentence and
+            word tokenizer: any code ``pyroid.filters.languages()`` marks native
+            (spaCy rule-based languages, the whitespace and IndicNLP tokenizers).
+            Codes whose datatrove tokenizer pyroid does not port (jieba, SudachiPy,
+            Stanza, ...) raise ``NotImplementedError``; use the datatrove drop-ins.
         threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
             ``n`` tasks at once; ``1`` runs on the calling thread.
         **kwargs: ``SentDedupConfig`` fields to override, plus ``hash_fc`` and
@@ -573,9 +576,9 @@ def sentence_dedup(
     Raises:
         pyroid.InputError: ``texts`` is not one of the accepted kinds.
         TypeError: An unknown or mistyped config field.
-        ValueError: A config value out of range, or a text of 2**30
-            characters or more (spaCy's E025).
-        NotImplementedError: No word tokenizer for ``language``.
+        ValueError: A config value out of range, ``language`` is not a datatrove
+            code (datatrove's message), or a text of 2**30 characters or more.
+        NotImplementedError: No native word tokenizer for ``language``.
         OverflowError: A document has more than 65,536 sentence windows
             (datatrove's ``<u2`` window index).
         UnicodeEncodeError: A str contains a lone surrogate.

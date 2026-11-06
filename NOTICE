@@ -70,6 +70,100 @@ datatrove 0.10.1 (Apache-2.0), © HuggingFace Inc.; modified." The permutation
 parameters reproduce numpy's legacy RandomState (MT19937 and masked bounded
 integers; numpy is BSD-3-Clause); no numpy code is included.
 
+The further datatrove steps (crates/pyroid-core/src/filters/pii.rs,
+badwords.rs, url.rs, symbol_lines.rs, crates/pyroid-core/src/dedup/sentence.rs,
+their sections of crates/pyroid-py/src/filters.rs and dedup.rs, of
+python/pyroid/filters.py[i] and dedup.py[i], and
+python/pyroid/integrations/datatrove.py) are derivative works of datatrove
+0.10.1 (PIIFormatter, C4BadWordsFilter, URLFilter, SymbolLinesFormatter,
+SentenceDedupSignature, SentenceFindDedups, SentenceDedupFilter and
+SentenceDedupBuildIndex), under the same Apache-2.0 licence, with the same
+file headers.
+
+pyroid ships none of the word lists or blocklists these steps use: the LDNOOBW
+"List of Dirty, Naughty, Obscene, and Otherwise Bad Words" (CC BY 4.0,
+https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words)
+is downloaded at run time from the commits datatrove pins, and URLFilter's
+lists are read from the user or from an installed datatrove.
+
+-------------------------------------------------------------------------------
+numpy (C4BadWordsFilter's random draws)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/filters/badwords.rs reimplements numpy's
+SeedSequence and PCG64 bit generator and Generator.uniform()
+(numpy/random/bit_generator.pyx, _pcg64.pyx, src/pcg64/pcg64.h), so that
+keep_fraction draws match numpy.random.default_rng(seed) bit for bit. PCG64
+is Melissa O'Neill's PCG family (https://www.pcg-random.org). numpy:
+
+    Copyright (c) 2005-2025, NumPy Developers.
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
+
+        * Redistributions of source code must retain the above copyright
+           notice, this list of conditions and the following disclaimer.
+
+        * Redistributions in binary form must reproduce the above
+           copyright notice, this list of conditions and the following
+           disclaimer in the documentation and/or other materials provided
+           with the distribution.
+
+        * Neither the name of the NumPy Developers nor the names of any
+           contributors may be used to endorse or promote products derived
+           from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-------------------------------------------------------------------------------
+tldextract and CPython's ipaddress (URLFilter)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/filters/url.rs ports tldextract 5.4.0's extract_str
+(lenient_netloc, the Public Suffix List trie lookup with wildcard and
+exception rules), https://github.com/john-kurkowski/tldextract; the suffix
+lists themselves come from the user's tldextract at run time. Its IPv6 test
+ports CPython 3.13's ipaddress.IPv6Address parser (Python Software Foundation
+License). tldextract:
+
+    Copyright (c) 2013-2026, John Kurkowski
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, this
+       list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright notice,
+       this list of conditions and the following disclaimer in the documentation
+       and/or other materials provided with the distribution.
+
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+    FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+    CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+    OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 -------------------------------------------------------------------------------
 spaCy
 -------------------------------------------------------------------------------

@@ -517,15 +517,18 @@ def _native_sent(cfg: SentDedupConfig, language: str) -> Any:
     )
 
 
-def _no_tokenizer(language: str) -> NotImplementedError:
-    from pyroid._pyroid import filters as _filters_native
-
+def _no_tokenizer(language: str) -> Exception:
+    """Datatrove's ValueError for an unknown code; else why pyroid can't tokenize it."""
+    try:
+        cls, arg, _ = _filters._backend(language)
+    except ValueError as e:
+        return e
     return NotImplementedError(
-        f"pyroid.dedup has no word tokenizer for language {language!r} yet; supported: the "
-        "codes datatrove tokenizes with SpaCyTokenizer('en'): "
-        + ", ".join(_filters_native.english_languages())
-        + " (split_sentences=False with min_doc_words, min_num_sentences and "
-        "min_words_to_remove_span <= 0 needs no tokenizer)"
+        f"pyroid has no native word tokenizer for language {language!r}: datatrove tokenizes it "
+        f"with {_filters._describe(cls, arg)}, and pyroid's sentence dedup has no Python-tokenizer "
+        "path; run datatrove's steps (pyroid.integrations.datatrove does, with a FallbackWarning). "
+        "pyroid.filters.languages() lists the native codes; split_sentences=False with "
+        "min_doc_words, min_num_sentences and min_words_to_remove_span <= 0 needs no tokenizer"
     )
 
 
@@ -545,8 +548,11 @@ class SentenceDedup:
         self._config = _sent_config(config, kwargs)
         self._language = _sent_language(language)
         self._native = _native_sent(self._config, self._language)
-        if not self._native.has_tokenizer and self._native.needs_tokenizer(True):
-            raise _no_tokenizer(self._language)
+        if not self._native.has_tokenizer:
+            err = _no_tokenizer(self._language)
+            # datatrove loads the tokenizer in __init__: an unknown code always fails.
+            if isinstance(err, ValueError) or self._native.needs_tokenizer(True):
+                raise err
         self._threads = threads
         self._state = _native._SentenceState(self._native, threads=threads)
 

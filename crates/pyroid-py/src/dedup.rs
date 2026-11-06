@@ -777,7 +777,7 @@ mod sentence {
         SentenceError, Signature,
     };
     use pyroid_core::dedup::{HashConfig, HashFn, Precision};
-    use pyroid_core::filters::{FilterError, english_languages};
+    use pyroid_core::filters::FilterError;
     use pyroid_core::par::{self, PoolError};
 
     use super::{NativeNorm, lock, mask_like};
@@ -803,13 +803,13 @@ mod sentence {
         let msg = err.to_string();
         match err {
             SentenceError::Tokenize(FilterError::ZeroDivision) => PyZeroDivisionError::new_err(msg),
-            SentenceError::Tokenize(FilterError::TextTooLong(_))
-            | SentenceError::DuplicateLineIndex => PyValueError::new_err(msg),
-            SentenceError::NoTokenizer => PyNotImplementedError::new_err(format!(
-                "pyroid.dedup has no word tokenizer for this language; supported: the codes \
-                 datatrove tokenizes with SpaCyTokenizer(\"en\"): {}",
-                english_languages().join(", ")
-            )),
+            SentenceError::Tokenize(_) | SentenceError::DuplicateLineIndex => {
+                PyValueError::new_err(msg)
+            }
+            SentenceError::NoTokenizer => PyNotImplementedError::new_err(
+                "pyroid has no native word tokenizer for this language \
+                 (pyroid.filters.languages() lists the native ones)",
+            ),
             SentenceError::SentenceOverflow(_) | SentenceError::DocOverflow(_) => {
                 PyOverflowError::new_err(msg)
             }

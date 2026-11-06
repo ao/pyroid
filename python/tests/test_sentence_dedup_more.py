@@ -515,22 +515,28 @@ def test_drop_in_signatures_and_pickle() -> None:
 def test_unsupported_language_falls_back(tmp_path: Path) -> None:
     import pyroid.integrations.datatrove as pdt
 
-    texts = ["Le chat dort. Il pleut. Il fait froid. Fin."] * 3 + ["Autre chose ici."]
+    # cmn_Hani: datatrove tokenizes it with spaCy + jieba, which pyroid does not port.
+    pytest.importorskip("jieba")
+    texts = ["猫在睡觉。下雨了。天气很冷。结束。"] * 3 + ["别的东西。"]
     cfg = dt_config(**NO_MIN)
-    want = run_stages(dt_sd, texts, cfg, tmp_path / "dt", language="fra")
+    want = run_stages(dt_sd, texts, cfg, tmp_path / "dt", language="cmn_Hani")
     pdt._WARNED.clear()
-    with pytest.warns(pyroid.FallbackWarning, match="language='fra'"):
-        got = run_stages(pdt, texts, cfg, tmp_path / "pr", language="fra")
+    with pytest.warns(pyroid.FallbackWarning, match="language=.cmn_Hani."):
+        got = run_stages(pdt, texts, cfg, tmp_path / "pr", language="cmn_Hani")
     assert got == want
     # Lines need no tokenizer: no fallback, same files.
     lines = dt_config(split_sentences=False, **NO_MIN)
     want = run_stages(
-        dt_sd, [t.replace(". ", ".\n") for t in texts], lines, tmp_path / "dl", language="fra"
+        dt_sd, [t.replace("。", "。\n") for t in texts], lines, tmp_path / "dl", language="cmn_Hani"
     )
     with warnings.catch_warnings():
         warnings.simplefilter("error", pyroid.FallbackWarning)
         got = run_stages(
-            pdt, [t.replace(". ", ".\n") for t in texts], lines, tmp_path / "pl", language="fra"
+            pdt,
+            [t.replace("。", "。\n") for t in texts],
+            lines,
+            tmp_path / "pl",
+            language="cmn_Hani",
         )
     assert got == want
 
@@ -644,9 +650,11 @@ def test_lines_mode() -> None:
 
 
 def test_language_without_tokenizer() -> None:
-    with pytest.raises(NotImplementedError, match="language 'fra'"):
-        dedup.SentenceDedup(language="fra")
-    d = dedup.SentenceDedup(language="fra", split_sentences=False, **NO_MIN)
+    with pytest.raises(NotImplementedError, match="language 'cmn_Hani'"):
+        dedup.SentenceDedup(language="cmn_Hani")
+    with pytest.raises(ValueError, match="doesn't have a tokenizer assigned"):
+        dedup.SentenceDedup(language="xx_not_a_code", split_sentences=False, **NO_MIN)
+    d = dedup.SentenceDedup(language="cmn_Hani", split_sentences=False, **NO_MIN)
     assert d.fit(["a\nb\nc", "a\nb\nc"]) == (["a\nb\nc", ""], [True, False])
 
 
@@ -727,3 +735,52 @@ def test_10k_documents_batched() -> None:
     assert (got_text, got_keep) == (want.text, want.keep)
     assert len(want.text) == 10_000
     assert sum(t is not s for t, s in zip(want.text, texts, strict=True)) > 1000
+
+
+# Natively tokenized languages beyond English: spaCy rule-based (fr, de, ru, es, ar), IndicNLP (hi),
+# and the whitespace tokenizer (zho). datatrove's own tokenizer is the oracle for each.
+ML_SENTENCES = {
+    "fra_Latn": ["Le chat dort sur le tapis.", "Il pleut encore aujourd'hui !",
+                 "Qu'est-ce que c'est ?", "M. Dupont est parti à Paris.",
+                 "Les prix ont augmenté de 3,5 %."],
+    "deu_Latn": ["Die Katze schläft auf der Matte.", "Es regnet schon wieder!", "Wie geht's dir?",
+                 "Dr. Müller ist nach Berlin gefahren.", "Die Preise stiegen um 3,5 %."],
+    "rus_Cyrl": ["Кошка спит на коврике.", "Опять идёт дождь!", "Как дела?",
+                 "Г-н Иванов уехал в Москву.", "Цены выросли на 3,5 %."],
+    "spa_Latn": ["El gato duerme en la alfombra.", "¡Está lloviendo otra vez!", "¿Qué tal?",
+                 "El Sr. García fue a Madrid.", "Los precios subieron un 3,5 %."],
+    "arb_Arab": ["القطة نائمة على السجادة.", "إنها تمطر مرة أخرى!", "كيف حالك؟",
+                 "ذهب السيد أحمد إلى القاهرة.", "ارتفعت الأسعار بنسبة 3,5 %."],
+    "hin_Deva": ["बिल्ली चटाई पर सो रही है।", "फिर से बारिश हो रही है!", "आप कैसे हैं?",
+                 "श्री शर्मा दिल्ली गए।", "कीमतें 3.5 % बढ़ गईं।"],
+    "zho": ["猫 在 睡觉 。", "下雨 了 !", "你 好 吗 ?", "价格 上涨 了 3.5 % 。", "结束 。"],
+}  # fmt: skip
+
+
+@needs_dt
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize("language", list(ML_SENTENCES))
+@settings(max_examples=25, deadline=None, suppress_health_check=list(HealthCheck))
+@given(data=st.data())
+def test_native_languages_match_live_datatrove(
+    language: str, data: st.DataObject, tmp_path_factory: Any
+) -> None:
+    if language == "hin_Deva":
+        pytest.importorskip("indicnlp")
+    import pyroid.integrations.datatrove as pdt
+
+    sents = ML_SENTENCES[language]
+    doc = st.lists(st.sampled_from(sents), min_size=0, max_size=8).map(" ".join)
+    texts = data.draw(st.lists(doc, min_size=1, max_size=6))
+    kw = data.draw(st.sampled_from([NO_MIN, {"min_doc_words": 5, "min_num_sentences": 2}]))
+    cfg = dt_config(**kw)
+    work = tmp_path_factory.mktemp("ml")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pyroid.FallbackWarning)
+        want = run_stages(dt_sd, texts, cfg, work / "dt", language=language)
+        got = run_stages(pdt, texts, cfg, work / "pr", language=language, batch_size=2)
+        assert got == want
+        text, keep = dedup.SentenceDedup(py_config(**kw), language=language).fit(texts)
+    kept = dict(want["kept"])
+    assert keep == [str(i) in kept for i in range(len(texts))]
+    assert [t for t, k in zip(text, keep, strict=True) if k] == [t for _, t in want["kept"]]
