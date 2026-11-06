@@ -482,4 +482,281 @@ class ExactDedup:
 # ======================================================================================
 
 # ---- SentenceDedup ----
+
+from typing import Generic, NamedTuple, TypeVar  # noqa: E402
+
+__all__ += ["SentDedupConfig", "SentenceDedup", "SentenceDedupResult", "sentence_dedup"]
+
+_SentT = TypeVar("_SentT")
+_SentM = TypeVar("_SentM")
+
+_native: Any
+
+def _sent_config(config: object, kwargs: dict[str, Any]) -> SentDedupConfig: ...
+def _native_sent(cfg: SentDedupConfig, language: str) -> Any: ...
+
+@dataclass(frozen=True)
+class SentDedupConfig:
+    """datatrove's ``SentDedupConfig``, with the same fields and defaults.
+
+    Attributes:
+        n_sentences: Sentences per window (C4's three); at least 1.
+        split_sentences: ``True``: spaCy sentences (datatrove's English word
+            tokenizer, ported); ``False``: lines (``str.splitlines()``).
+        only_dedup_in_index: With index files (the datatrove drop-ins only),
+            remove only the windows found in the index. No effect in memory.
+        min_doc_words: A document whose text changed is dropped if it has
+            fewer words (``<= 0``: no minimum).
+        min_num_sentences: A document whose text changed is dropped if it has
+            fewer sentences (``<= 0``: no minimum).
+        min_words_to_remove_span: Restore a removed run whose first sentence
+            has fewer words, as datatrove does: only that first sentence comes
+            back (``<= 0``: never).
+        norm_config: The :class:`TextNormConfig` applied to each sentence
+            before hashing.
+        hash_config: The :class:`HashConfig` of the window hash.
+    """
+
+    n_sentences: int = 3
+    split_sentences: bool = True
+    only_dedup_in_index: bool = True
+    min_doc_words: int = 50
+    min_num_sentences: int = 3
+    min_words_to_remove_span: int = 0
+    norm_config: TextNormConfig = ...
+    hash_config: HashConfig = ...
+
+class SentenceDedupResult(NamedTuple, Generic[_SentT, _SentM]):
+    """What :func:`sentence_dedup` and the :class:`SentenceDedup` methods return.
+
+    Both fields are in the caller's container kind (str/bool, list, tuple, or a
+    :class:`pyroid.Column`; Arrow nulls stay null).
+    """
+
+    text: _SentT
+    """Each document's text with its duplicate windows removed (the original
+    object when nothing was removed). Dropped documents get their text too."""
+    keep: _SentM
+    """``True`` for each document datatrove keeps."""
+
+@overload
+def sentence_dedup(
+    texts: str,
+    config: Any = None,
+    *,
+    language: str = "eng",
+    threads: int | None = None,
+    **kwargs: Any,
+) -> SentenceDedupResult[str, bool]:
+    """The three sentence-dedup stages of datatrove over one corpus.
+
+    ``sentence_dedup(texts, cfg)`` is ``SentenceDedup(cfg).fit(texts)``: the
+    texts and keep decisions of datatrove's ``SentenceDedupSignature`` ->
+    ``SentenceFindDedups`` -> ``SentenceDedupFilter`` run as one task (see
+    :class:`SentenceDedup`). The input is read once.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: A :class:`SentDedupConfig`, datatrove's ``SentDedupConfig``, a
+            dict of its fields, or ``None`` for the defaults.
+        language: datatrove's language code for the word tokenizer (an
+            English one: ``pyroid.filters.english_languages()``).
+        threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+            ``n`` tasks at once; ``1`` runs on the calling thread.
+        **kwargs: ``SentDedupConfig`` fields to override, plus ``hash_fc`` and
+            ``precision``.
+
+    Returns:
+        A :class:`SentenceDedupResult` ``(text, keep)``.
+
+    Raises:
+        pyroid.InputError: ``texts`` is not one of the accepted kinds.
+        TypeError: An unknown or mistyped config field.
+        ValueError: A config value out of range, or a text of 2**30
+            characters or more (spaCy's E025).
+        NotImplementedError: No word tokenizer for ``language``.
+        OverflowError: A document has more than 65,536 sentence windows
+            (datatrove's ``<u2`` window index).
+        UnicodeEncodeError: A str contains a lone surrogate.
+        UnicodeDecodeError: An Arrow row is not valid UTF-8.
+    """
+
+@overload
+def sentence_dedup(
+    texts: list[str],
+    config: Any = None,
+    *,
+    language: str = "eng",
+    threads: int | None = None,
+    **kwargs: Any,
+) -> SentenceDedupResult[list[str], list[bool]]: ...
+@overload
+def sentence_dedup(
+    texts: tuple[str, ...],
+    config: Any = None,
+    *,
+    language: str = "eng",
+    threads: int | None = None,
+    **kwargs: Any,
+) -> SentenceDedupResult[tuple[str, ...], tuple[bool, ...]]: ...
+@overload
+def sentence_dedup(
+    texts: ArrowStrings,
+    config: Any = None,
+    *,
+    language: str = "eng",
+    threads: int | None = None,
+    **kwargs: Any,
+) -> SentenceDedupResult[Column[str], Column[bool]]: ...
+
+class SentenceDedup:
+    """datatrove's sentence-level dedup, in memory and multi-threaded.
+
+    C4's rule ("we discarded all but one of any three-sentence span occurring
+    more than once"), with **the same removals and keep decisions as datatrove
+    0.10.1's** ``SentenceDedupSignature`` -> ``SentenceFindDedups`` ->
+    ``SentenceDedupFilter`` run as one task:
+
+    1. *Signatures* (:meth:`add`). A document's sentences (datatrove's
+       ``sent_tokenize``: spaCy's sentences, stripped, empty ones dropped; or,
+       with ``split_sentences=False``, its lines) each go through
+       :func:`simplify_text`; every window of ``n_sentences`` consecutive
+       ones, joined by a space, is hashed (``hash_fc``) unless it is blank.
+       A document with fewer than ``n_sentences`` sentences has none.
+    2. *Duplicates* (:meth:`duplicates`). For each hash seen more than once,
+       every window but the first (lowest document, then window) is removed.
+    3. *Filter* (:meth:`filter`). The ``n_sentences`` sentences of each
+       removed window are cut out. Sentences are now spaCy's
+       ``span_tokenize`` spans, each with the whitespace before it, which
+       (unlike step 1) include a whitespace-only last sentence; the result is
+       left-stripped (lines are rejoined with newlines). A document whose
+       text changed is dropped if it has fewer than ``min_doc_words`` words
+       or ``min_num_sentences`` sentences; an empty text is always dropped,
+       even with nothing removed, as in datatrove.
+
+    datatrove's quirks are kept: ``min_words_to_remove_span`` only counts,
+    and only restores, the *first* sentence of a removed run.
+
+    Documents are numbered in the order they are added, as datatrove numbers
+    the documents of one task. Add every batch first, then filter them (pass
+    ``start=`` for batches after the first); :meth:`fit` does one corpus in a
+    single call. Only the signatures are kept (16 bytes per window, in Rust).
+    Methods may be called from several threads.
+
+    Example::
+
+        d = SentenceDedup(min_doc_words=50)          # datatrove's example config
+        ranges = [d.add(batch) for batch in batches]
+        for batch, r in zip(batches, ranges):
+            texts, keep = d.filter(batch, start=r.start)
+
+    Known differences from datatrove: a str with a lone surrogate raises
+    ``UnicodeEncodeError`` (so does datatrove, except with
+    ``split_sentences=False`` on a document with fewer than ``n_sentences``
+    lines); ``n_sentences`` below 1 raises
+    ``ValueError``; a hashed window index past 65,535 raises datatrove's
+    ``OverflowError`` (numpy's ``<u2``) when its batch is added, and the
+    batch is not added (datatrove fails when it saves the task's
+    signatures). Index files: use the datatrove drop-ins
+    (:mod:`pyroid.integrations.datatrove`).
+
+    Args:
+        config: As for :func:`sentence_dedup`.
+        language: As for :func:`sentence_dedup`; any code is accepted when no
+            tokenizer is needed (``split_sentences=False`` and the three
+            word/sentence thresholds ``<= 0``).
+        threads: Default ``threads=`` for :meth:`add`, :meth:`filter` and
+            :meth:`fit`.
+        **kwargs: As for :func:`sentence_dedup`.
+    """
+
+    _state: Any
+    def __init__(
+        self,
+        config: Any = None,
+        *,
+        language: str = "eng",
+        threads: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def config(self) -> SentDedupConfig:
+        """The configuration (a :class:`SentDedupConfig`)."""
+
+    @property
+    def language(self) -> str:
+        """The datatrove language code of the word tokenizer."""
+
+    def add(
+        self, texts: str | list[str] | tuple[str, ...] | ArrowStrings, *, threads: int | None = None
+    ) -> range:
+        """Stage 1 for a batch of documents.
+
+        Returns:
+            The indices given to the batch's documents (Arrow nulls get one,
+            and no signatures).
+
+        Raises:
+            OverflowError: A window index past 65,535 (nothing is added).
+        """
+
+    def duplicates(self) -> list[tuple[int, int]]:
+        """Stage 2: the ``(document, window)`` pairs to remove, sorted.
+
+        These are the records of datatrove's ``.c4_dup`` files for the task.
+        """
+
+    @overload
+    def filter(
+        self, texts: str, *, start: int = 0, threads: int | None = None
+    ) -> SentenceDedupResult[str, bool]:
+        """Stage 3 for documents ``start``, ``start + 1``, ... (as added).
+
+        Pass the same documents, in the same order, as to :meth:`add`.
+        Decisions are global, so filter once every batch has been added.
+
+        Returns:
+            A :class:`SentenceDedupResult` ``(text, keep)`` in the caller's
+            kind.
+        """
+
+    @overload
+    def filter(
+        self, texts: list[str], *, start: int = 0, threads: int | None = None
+    ) -> SentenceDedupResult[list[str], list[bool]]: ...
+    @overload
+    def filter(
+        self, texts: tuple[str, ...], *, start: int = 0, threads: int | None = None
+    ) -> SentenceDedupResult[tuple[str, ...], tuple[bool, ...]]: ...
+    @overload
+    def filter(
+        self, texts: ArrowStrings, *, start: int = 0, threads: int | None = None
+    ) -> SentenceDedupResult[Column[str], Column[bool]]: ...
+    @overload
+    def fit(self, texts: str, *, threads: int | None = None) -> SentenceDedupResult[str, bool]:
+        """Replace the documents with ``texts`` and run the three stages on them.
+
+        Returns:
+            A :class:`SentenceDedupResult` ``(text, keep)`` (see
+            :func:`sentence_dedup`).
+        """
+
+    @overload
+    def fit(
+        self, texts: list[str], *, threads: int | None = None
+    ) -> SentenceDedupResult[list[str], list[bool]]: ...
+    @overload
+    def fit(
+        self, texts: tuple[str, ...], *, threads: int | None = None
+    ) -> SentenceDedupResult[tuple[str, ...], tuple[bool, ...]]: ...
+    @overload
+    def fit(
+        self, texts: ArrowStrings, *, threads: int | None = None
+    ) -> SentenceDedupResult[Column[str], Column[bool]]: ...
+    def reset(self) -> None:
+        """Forget every document."""
+
+    def __len__(self) -> int:
+        """Number of documents added."""
+
 # ---- end SentenceDedup ----

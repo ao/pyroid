@@ -417,4 +417,199 @@ class ExactDedup:
 # ======================================================================================
 
 # ---- SentenceDedup ----
+# datatrove's SentenceDedupSignature -> SentenceFindDedups -> SentenceDedupFilter, in memory.
+
+from typing import Generic, NamedTuple, TypeVar  # noqa: E402
+
+__all__ += ["SentDedupConfig", "SentenceDedup", "SentenceDedupResult", "sentence_dedup"]
+
+
+@dataclass(frozen=True)
+class SentDedupConfig:
+    """datatrove's ``SentDedupConfig``, with the same fields and defaults."""
+
+    n_sentences: int = 3
+    split_sentences: bool = True
+    only_dedup_in_index: bool = True
+    min_doc_words: int = 50
+    min_num_sentences: int = 3
+    min_words_to_remove_span: int = 0
+    norm_config: TextNormConfig = field(default_factory=TextNormConfig)
+    hash_config: HashConfig = field(default_factory=HashConfig)
+
+
+_SentT = TypeVar("_SentT")
+_SentM = TypeVar("_SentM")
+
+
+class SentenceDedupResult(NamedTuple, Generic[_SentT, _SentM]):
+    """What :func:`sentence_dedup` and :meth:`SentenceDedup.filter` return: ``(text, keep)``."""
+
+    text: _SentT
+    keep: _SentM
+
+
+_SENT_FIELDS = tuple(f.name for f in fields(SentDedupConfig))
+_SENT_INT_MAX = 2**63 - 1
+
+
+def _threshold(name: str, value: object) -> int:
+    """A threshold that datatrove disables for any value ``<= 0``."""
+    return _int(name, value, -(2**63), _SENT_INT_MAX)
+
+
+def _sent_config(config: object, kwargs: dict[str, Any]) -> SentDedupConfig:
+    """``config`` (pyroid's, datatrove's, a dict or None) with ``kwargs`` applied.
+
+    ``kwargs`` are ``SentDedupConfig`` fields, plus ``hash_fc`` / ``precision`` as
+    shorthands for ``hash_config``.
+    """
+    if config is None:
+        cfg = SentDedupConfig()
+    elif isinstance(config, SentDedupConfig):
+        cfg = config
+    elif isinstance(config, dict):
+        kwargs = {**config, **kwargs}
+        cfg = SentDedupConfig()
+    else:
+        cfg = _from_fields(SentDedupConfig, config, _SENT_FIELDS)
+    if kwargs:
+        hash_kw = {k: kwargs.pop(k) for k in _HASH_FIELDS if k in kwargs}
+        unknown = set(kwargs) - set(_SENT_FIELDS)
+        if unknown:
+            raise TypeError(f"unknown SentDedupConfig fields: {sorted(unknown)}")
+        cfg = replace(cfg, **kwargs)
+        if hash_kw:
+            cfg = replace(cfg, hash_config=replace(_hash_config(cfg.hash_config), **hash_kw))
+    return SentDedupConfig(
+        n_sentences=_int("n_sentences", cfg.n_sentences, 1, 2**31),
+        split_sentences=bool(cfg.split_sentences),
+        only_dedup_in_index=bool(cfg.only_dedup_in_index),
+        min_doc_words=_threshold("min_doc_words", cfg.min_doc_words),
+        min_num_sentences=_threshold("min_num_sentences", cfg.min_num_sentences),
+        min_words_to_remove_span=_threshold(
+            "min_words_to_remove_span", cfg.min_words_to_remove_span
+        ),
+        norm_config=_norm_config(cfg.norm_config),
+        hash_config=_hash_config(cfg.hash_config),
+    )
+
+
+def _sent_language(language: object) -> str:
+    if not isinstance(language, str):
+        raise TypeError(f"language must be a str, not {type(language).__name__}")
+    return language
+
+
+@lru_cache(maxsize=64)
+def _native_sent(cfg: SentDedupConfig, language: str) -> Any:
+    return _native._SentenceConfig(
+        n_sentences=cfg.n_sentences,
+        split_sentences=cfg.split_sentences,
+        only_dedup_in_index=cfg.only_dedup_in_index,
+        min_doc_words=max(cfg.min_doc_words, 0),
+        min_num_sentences=max(cfg.min_num_sentences, 0),
+        min_words_to_remove_span=max(cfg.min_words_to_remove_span, 0),
+        hash_fc=cfg.hash_config.hash_fc,
+        precision=cfg.hash_config.precision,
+        norm=_native_norm(cfg.norm_config),
+        language=language,
+    )
+
+
+def _no_tokenizer(language: str) -> NotImplementedError:
+    from pyroid._pyroid import filters as _filters_native
+
+    return NotImplementedError(
+        f"pyroid.dedup has no word tokenizer for language {language!r} yet; supported: the "
+        "codes datatrove tokenizes with SpaCyTokenizer('en'): "
+        + ", ".join(_filters_native.english_languages())
+        + " (split_sentences=False with min_doc_words, min_num_sentences and "
+        "min_words_to_remove_span <= 0 needs no tokenizer)"
+    )
+
+
+class SentenceDedup:
+    """datatrove's sentence-level dedup, in memory (see ``dedup.pyi``)."""
+
+    __slots__ = ("_config", "_language", "_native", "_state", "_threads")
+
+    def __init__(
+        self,
+        config: Any = None,
+        *,
+        language: str = "eng",
+        threads: int | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self._config = _sent_config(config, kwargs)
+        self._language = _sent_language(language)
+        self._native = _native_sent(self._config, self._language)
+        if not self._native.has_tokenizer and self._native.needs_tokenizer(True):
+            raise _no_tokenizer(self._language)
+        self._threads = threads
+        self._state = _native._SentenceState(self._native, threads=threads)
+
+    @property
+    def config(self) -> SentDedupConfig:
+        """The configuration (a :class:`SentDedupConfig`)."""
+        return self._config
+
+    @property
+    def language(self) -> str:
+        """The datatrove language code of the word tokenizer."""
+        return self._language
+
+    def add(self, texts: Any, *, threads: int | None = None) -> range:
+        """Stage 1 for a batch; returns the indices the documents were given."""
+        start, stop = self._state.add(texts, threads=threads)
+        return range(start, stop)
+
+    def duplicates(self) -> list[tuple[int, int]]:
+        """``(document, window)`` pairs to remove, sorted (stage 2's output)."""
+        return self._state.duplicates().pairs()  # type: ignore[no-any-return]
+
+    def filter(
+        self, texts: Any, *, start: int = 0, threads: int | None = None
+    ) -> SentenceDedupResult[Any, Any]:
+        """Stage 3 for documents ``start``, ``start + 1``, ... (see ``dedup.pyi``)."""
+        first = _int("start", start, 0, _SENT_INT_MAX)
+        text, keep, _, _ = self._state.duplicates().filter(
+            texts,
+            self._native,
+            start=first,
+            threads=self._threads if threads is None else threads,
+        )
+        return SentenceDedupResult(text, keep)
+
+    def fit(self, texts: Any, *, threads: int | None = None) -> SentenceDedupResult[Any, Any]:
+        """Replace the documents with ``texts`` and run the three stages on them."""
+        text, keep = self._state.fit(texts, threads=threads)
+        return SentenceDedupResult(text, keep)
+
+    def reset(self) -> None:
+        """Forget every document."""
+        self._state.reset()
+
+    def __len__(self) -> int:
+        return len(self._state)
+
+    def __repr__(self) -> str:
+        return (
+            f"SentenceDedup({self._config!r}, language={self._language!r}, documents={len(self)})"
+        )
+
+
+def sentence_dedup(
+    texts: Any,
+    config: Any = None,
+    *,
+    language: str = "eng",
+    threads: int | None = None,
+    **kwargs: Any,
+) -> SentenceDedupResult[Any, Any]:
+    """The three sentence-dedup stages of datatrove over one corpus (see ``dedup.pyi``)."""
+    return SentenceDedup(config, language=language, threads=threads, **kwargs).fit(texts)
+
+
 # ---- end SentenceDedup ----
