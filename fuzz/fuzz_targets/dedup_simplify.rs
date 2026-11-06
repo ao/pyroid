@@ -35,6 +35,7 @@ use pyroid_core::dedup::{
     HashConfig, HashFn, MERSENNE_PRIME, MinHasher, MinhashConfig, Precision, TextNormConfig,
     WordTokenizer as _, simplify::simplify_text_into, simplify_text,
 };
+use pyroid_core::filters::tokenizer::SpacyTokenizer;
 use pyroid_core::ftfy::UnicodeVersion;
 use pyroid_core::text::is_py_whitespace;
 
@@ -162,9 +163,9 @@ fn check_minhash(header: &[u8], text: &str, simplified: &str, v: UnicodeVersion)
     let has2 = h.signature(text, &mut sig2).expect("short text");
     assert_eq!(has, has2, "signature presence is not deterministic");
 
-    let words = h.spacy().words(simplified);
+    let words = SpacyTokenizer::english(h.unicode()).words(simplified);
     let mut dwords = Vec::new();
-    h.spacy()
+    SpacyTokenizer::english(h.unicode())
         .word_tokenize(simplified, &mut dwords)
         .expect("short text");
     assert_eq!(dwords, words, "word_tokenize vs words");
@@ -232,8 +233,7 @@ fn dump(header: &[u8], text: &str) {
     let n = config.norm_config;
     let h = MinHasher::new(config, UnicodeVersion::V15_1).expect("valid config");
     let simplified = simplify_text(text, &n, UnicodeVersion::V15_1);
-    let words: Vec<String> = h
-        .spacy()
+    let words: Vec<String> = SpacyTokenizer::english(h.unicode())
         .words(&simplified)
         .iter()
         .map(|w| format!("\"{}\"", hex(w.as_bytes())))

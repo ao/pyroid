@@ -1,4 +1,4 @@
-//! The spaCy-English tokenizer port (`filters::tokenizer::SpacyEnglish`) and
+//! The spaCy-English tokenizer port (`filters::tokenizer::SpacyTokenizer`, English) and
 //! the dedup word tokenizers built on it.
 //!
 //! Input: `[version] text...` (invalid UTF-8 goes through `from_utf8_lossy`).
@@ -27,7 +27,7 @@ use std::sync::{Mutex, OnceLock};
 use libfuzzer_sys::fuzz_target;
 use pyroid_core::dedup::{self, WhitespaceTokenizer, WordTokenizer as _};
 use pyroid_core::filters::WordTokenizer as _;
-use pyroid_core::filters::tokenizer::{SpacyEnglish, Token};
+use pyroid_core::filters::tokenizer::{SpacyTokenizer, Token};
 use pyroid_core::ftfy::UnicodeVersion;
 use pyroid_core::text::is_py_whitespace;
 
@@ -77,7 +77,7 @@ fn check_tokens(text: &str, toks: &[Token]) {
     );
 }
 
-fn check_sentences(sp: &SpacyEnglish, text: &str, toks: &[Token]) {
+fn check_sentences(sp: &SpacyTokenizer, text: &str, toks: &[Token]) {
     let mut ends = Vec::new();
     sp.sentence_ends_in(text, toks, &mut ends);
     assert_eq!(
@@ -139,7 +139,7 @@ fn dump(text: &str) {
             .collect();
         format!("[{}]", items.join(","))
     };
-    let sp = SpacyEnglish::get(UnicodeVersion::V15_1);
+    let sp = SpacyTokenizer::english(UnicodeVersion::V15_1);
     let mut toks = Vec::new();
     sp.tokens(text, &mut toks);
     let texts: Vec<&str> = toks.iter().map(|t| t.text(text)).collect();
@@ -168,7 +168,7 @@ fuzz_target!(|data: &[u8]| {
     let version = VERSIONS[usize::from(v) % VERSIONS.len()];
     let text = String::from_utf8_lossy(body);
     let text: &str = &text;
-    let sp = SpacyEnglish::get(version);
+    let sp = SpacyTokenizer::english(version);
 
     let mut toks = Vec::new();
     sp.tokens(text, &mut toks);
