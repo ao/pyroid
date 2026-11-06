@@ -887,19 +887,14 @@ impl Parser<'_> {
                     }
                 }
                 Some(Ctx::Array) => {
-                    let pair = Targets::two(outer, ']');
-                    let mut even_delimiters = next_c == Some(outer);
-                    let mut next_c = next_c;
-                    while next_c == Some(outer) {
-                        i = self.skip_to_character(pair, i + 1);
-                        next_c = self.get_char_at(i);
-                        if next_c != Some(outer) {
-                            even_delimiters = false;
-                            break;
-                        }
-                        i = self.skip_to_character(pair, i + 1);
-                        next_c = self.get_char_at(i);
-                    }
+                    // json_repair walks the quotes pairwise to the next `]`: an
+                    // even run of `outer` quotes keeps the string open. The walk
+                    // is memoized (one pass per buffer), as it reruns per quote.
+                    let p0 = self.index + i;
+                    let even_delimiters = match self.quote_run_len(outer, p0 as usize) {
+                        Some(k) => k % 2 == 0,
+                        None => self.quote_run_even_slow(outer, i),
+                    };
                     if even_delimiters {
                         self.log(|| {
                             "While parsing a string in Array context, we detected a quoted section that would have closed the string but has a different meaning here, ignoring it".into()
@@ -921,6 +916,25 @@ impl Parser<'_> {
             }
         }
         (false, Some(ch), false)
+    }
+
+    /// The literal pairwise walk of `_handle_right_delimiter_candidate`'s array
+    /// branch, from the quote at offset `i`.
+    fn quote_run_even_slow(&mut self, outer: char, mut i: isize) -> bool {
+        let pair = Targets::two(outer, ']');
+        let mut next_c = self.get_char_at(i);
+        let mut even_delimiters = next_c == Some(outer);
+        while next_c == Some(outer) {
+            i = self.skip_to_character(pair, i + 1);
+            next_c = self.get_char_at(i);
+            if next_c != Some(outer) {
+                even_delimiters = false;
+                break;
+            }
+            i = self.skip_to_character(pair, i + 1);
+            next_c = self.get_char_at(i);
+        }
+        even_delimiters
     }
 
     /// `classify_object_value_comma` (with json_repair's per-string cache).

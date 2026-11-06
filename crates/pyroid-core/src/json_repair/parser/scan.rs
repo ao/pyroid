@@ -98,6 +98,10 @@ impl Span {
 pub(crate) struct Memo {
     unescaped: Vec<(Targets, Span)>,
     non_space: Option<Span>,
+    /// Per quote char: `(position, run length)` for every unescaped quote, where
+    /// the run counts the consecutive unescaped quotes from there up to the
+    /// next unescaped `]` (or the end).
+    quote_runs: Vec<(char, Vec<(u32, u32)>)>,
     /// `_initial_container_has_non_comma_trailing_content()` at index 0.
     pub(crate) initial_container: Option<bool>,
 }
@@ -105,6 +109,7 @@ pub(crate) struct Memo {
 impl Memo {
     pub(crate) fn invalidate(&mut self) {
         self.unescaped.clear();
+        self.quote_runs.clear();
         self.non_space = None;
         self.initial_container = None;
     }
@@ -134,6 +139,48 @@ impl Parser<'_> {
             to: (i < n).then_some(i),
         });
         i
+    }
+
+    /// The number of consecutive `{quote, ']'}` stops that are `quote`, from the
+    /// unescaped `quote` at absolute `p` (json_repair reaches them by repeated
+    /// `skip_to_character([quote, "]"])` from just past each one). `None` if
+    /// `p` is not such a quote.
+    pub(crate) fn quote_run_len(&mut self, quote: char, p: usize) -> Option<u32> {
+        if self.scan.quote_runs.iter().all(|(q, _)| *q != quote) {
+            let runs = self.build_quote_runs(quote);
+            self.scan.quote_runs.push((quote, runs));
+        }
+        let (_, runs) = self.scan.quote_runs.iter().find(|(q, _)| *q == quote)?;
+        let p = u32::try_from(p).ok()?;
+        runs.binary_search_by_key(&p, |&(pos, _)| pos)
+            .ok()
+            .map(|k| runs[k].1)
+    }
+
+    fn build_quote_runs(&self, quote: char) -> Vec<(u32, u32)> {
+        // Stops: `quote` or `]` preceded by an even run of backslashes.
+        let mut stops: Vec<(u32, bool)> = Vec::new();
+        let mut backslashes = 0usize;
+        for (i, &c) in self.s.iter().enumerate() {
+            if c == '\\' {
+                backslashes += 1;
+                continue;
+            }
+            if (c == quote || c == ']') && backslashes % 2 == 0 {
+                stops.push((u32::try_from(i).unwrap_or(u32::MAX), c == quote));
+            }
+            backslashes = 0;
+        }
+        let mut runs = Vec::with_capacity(stops.len());
+        let mut run = 0u32;
+        for &(pos, is_quote) in stops.iter().rev() {
+            run = if is_quote { run + 1 } else { 0 };
+            if is_quote {
+                runs.push((pos, run));
+            }
+        }
+        runs.reverse();
+        runs
     }
 
     /// `skip_to_character` from absolute `p`: the absolute index of the hit.

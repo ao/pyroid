@@ -93,7 +93,7 @@ pub struct ParseOptions {
 }
 
 /// Maximum nesting of containers/comments/fences the parser follows.
-pub const MAX_DEPTH: usize = 10_000;
+pub const MAX_DEPTH: usize = 1_000;
 
 /// Stack the parser may use on the calling thread before it asks for a rerun
 /// on a dedicated thread (see [`ParseError::NeedStack`]).
@@ -120,6 +120,8 @@ pub(crate) struct Parser<'a> {
     /// Address of a local in the entry frame; `None` = no stack budget (big-stack thread).
     stack_base: Option<usize>,
     scan: scan::Memo,
+    /// One slot per object being parsed (`_merge_object_array_continuation`).
+    merge_stats: Vec<Option<object::ListStats>>,
 }
 
 impl<'a> Parser<'a> {
@@ -139,6 +141,7 @@ impl<'a> Parser<'a> {
             depth: 0,
             stack_base,
             scan: scan::Memo::default(),
+            merge_stats: Vec::new(),
         }
     }
 
@@ -617,7 +620,7 @@ impl<'a> Parser<'a> {
 
 /// Stack for the rerun of deep inputs: room for [`MAX_DEPTH`] levels (address
 /// space only; pages are committed as they are touched).
-const BIG_STACK: usize = 1 << 30;
+const BIG_STACK: usize = 256 << 20;
 
 /// Run the parser over `s`: the value and, with `logging`, the repair log.
 pub(crate) fn parse(s: &[char], opts: &ParseOptions) -> R<(Value, Option<Vec<LogEntry>>)> {

@@ -84,6 +84,63 @@ fn replace2(s: &[char], from: [char; 2], to: char) -> Vec<char> {
     out
 }
 
+/// The row statistics of the array `_merge_object_array_continuation` extends.
+#[derive(Clone, Debug)]
+pub(crate) struct ListStats {
+    key: String,
+    /// Length of the array these stats describe.
+    len: usize,
+    /// Number of list items, the first one's length, whether all have that length.
+    lists: usize,
+    first: usize,
+    all_same: bool,
+    /// Number of non-list items at the end.
+    trailing: usize,
+}
+
+impl ListStats {
+    fn compute(key: String, items: &[Value]) -> Self {
+        let mut st = Self {
+            key,
+            len: 0,
+            lists: 0,
+            first: 0,
+            all_same: true,
+            trailing: 0,
+        };
+        for v in items {
+            st.push(v);
+        }
+        st
+    }
+
+    fn push(&mut self, v: &Value) {
+        self.len += 1;
+        if let Value::Array(a) = v {
+            if self.lists == 0 {
+                self.first = a.len();
+            } else if a.len() != self.first {
+                self.all_same = false;
+            }
+            self.lists += 1;
+            self.trailing = 0;
+        } else {
+            self.trailing += 1;
+        }
+    }
+
+    /// After removing the trailing scalars only.
+    fn truncate(&mut self, len: usize) {
+        self.trailing -= self.len - len;
+        self.len = len;
+    }
+
+    /// `expected_len`: the common length of the list items, if any.
+    fn expected_len(&self) -> Option<usize> {
+        (self.lists > 0 && self.all_same).then_some(self.first)
+    }
+}
+
 /// `_classify_empty_object_repair` outcomes (no schema: never `schema_set_object`).
 enum EmptyRepair {
     Keep,
@@ -101,6 +158,7 @@ impl Parser<'_> {
     }
 
     fn parse_object_inner(&mut self) -> R<Value> {
+        self.merge_stats.push(None);
         let mut obj = new_object();
         let start_index = self.index;
         let parsing_object_value = self.ctx_current() == Some(Ctx::ObjectValue);
@@ -170,6 +228,11 @@ impl Parser<'_> {
                     "Parsed value is empty in strict mode while parsing object.",
                 ));
             }
+            if let Some(Some(st)) = self.merge_stats.last() {
+                if st.key == key {
+                    *self.merge_stats.last_mut().expect("checked") = None;
+                }
+            }
             if let Some(old) = obj.insert(key, value) {
                 super::super::value::drop_deep(old);
             }
@@ -185,6 +248,7 @@ impl Parser<'_> {
             }
         }
         self.index += 1;
+        self.merge_stats.pop();
 
         if let Some(v) = self.repair_empty_object_result(&obj, start_index)? {
             return Ok(v);
@@ -243,62 +307,69 @@ impl Parser<'_> {
         let Some(Value::Array(prev_value)) = obj.get_mut(&prev_key) else {
             unreachable!("checked above")
         };
-        let mut list_lengths = prev_value.iter().filter_map(|v| match v {
-            Value::Array(a) => Some(a.len()),
-            _ => None,
-        });
-        let expected_len = match list_lengths.next() {
-            Some(first) if list_lengths.all(|l| l == first) => Some(first),
-            _ => None,
+        // json_repair recomputes the row lengths and pops/re-pushes the trailing
+        // scalars on every continuation (quadratic over many continuations);
+        // the stats are kept up to date instead.
+        let cached = self.merge_stats.last_mut().and_then(Option::take);
+        let mut stats = match cached {
+            Some(st) if st.key == prev_key && st.len == prev_value.len() => st,
+            _ => ListStats::compute(prev_key, prev_value),
         };
-        match expected_len {
+        match stats.expected_len() {
             Some(expected_len) if expected_len > 0 => {
-                let mut tail = Vec::new();
-                while prev_value
-                    .last()
-                    .is_some_and(|v| !matches!(v, Value::Array(_)))
-                {
-                    tail.push(prev_value.pop().expect("non-empty"));
-                }
-                if !tail.is_empty() {
-                    tail.reverse();
-                    if tail.len() % expected_len == 0 {
-                        self.log(|| {
-                            "While parsing an object we found row values without an inner array, grouping them into rows".into()
-                        });
-                        let mut rest = tail.into_iter();
-                        loop {
-                            let row: Vec<Value> = rest.by_ref().take(expected_len).collect();
-                            if row.is_empty() {
-                                break;
-                            }
-                            prev_value.push(Value::Array(row));
+                let t = stats.trailing;
+                if t > 0 && t % expected_len == 0 {
+                    self.log(|| {
+                        "While parsing an object we found row values without an inner array, grouping them into rows".into()
+                    });
+                    let tail: Vec<Value> = prev_value.split_off(prev_value.len() - t);
+                    stats.truncate(prev_value.len());
+                    let mut rest = tail.into_iter();
+                    loop {
+                        let row: Vec<Value> = rest.by_ref().take(expected_len).collect();
+                        if row.is_empty() {
+                            break;
                         }
-                    } else {
-                        prev_value.extend(tail);
+                        let row = Value::Array(row);
+                        stats.push(&row);
+                        prev_value.push(row);
                     }
                 }
+                // Otherwise json_repair pops the trailing scalars and pushes them
+                // back unchanged.
                 if !new_array.is_empty() {
                     if new_array.iter().all(|v| matches!(v, Value::Array(_))) {
                         self.log(|| {
                             "While parsing an object we found additional rows, appending them without flattening".into()
                         });
+                        for v in &new_array {
+                            stats.push(v);
+                        }
                         prev_value.extend(new_array);
                     } else {
-                        prev_value.push(Value::Array(new_array));
+                        let v = Value::Array(new_array);
+                        stats.push(&v);
+                        prev_value.push(v);
                     }
                 }
             }
             _ => {
-                if new_array.len() == 1 && matches!(new_array[0], Value::Array(_)) {
+                let items = if new_array.len() == 1 && matches!(new_array[0], Value::Array(_)) {
                     let Some(Value::Array(inner)) = new_array.pop() else {
                         unreachable!("checked above")
                     };
-                    prev_value.extend(inner);
+                    inner
                 } else {
-                    prev_value.extend(new_array);
+                    new_array
+                };
+                for v in &items {
+                    stats.push(v);
                 }
+                prev_value.extend(items);
             }
+        }
+        if let Some(slot) = self.merge_stats.last_mut() {
+            *slot = Some(stats);
         }
         self.skip_whitespace_and_comments();
         if self.cur() == Some(',') {
