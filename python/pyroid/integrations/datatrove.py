@@ -688,6 +688,104 @@ C4BadWordsFilter.__init__.__signature__ = _signature_of(_dt_c4.C4BadWordsFilter,
 # ---- end C4BadWordsFilter ----
 
 # ---- URLFilter ----
+from datatrove.pipeline.filters import url_filter as _dt_url  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: E402
+
+__all__ += ["URLFilter"]
+
+
+class URLFilter(_Step, _dt_url.URLFilter):
+    """datatrove's ``URLFilter`` (same arguments) on :class:`pyroid.filters.URLFilter`.
+
+    The same keep/drop decisions and ``filter_reason`` strings (``domain``,
+    ``subdomain``, ``url``, ``hard_blacklisted``, ``soft_blacklisted``,
+    ``blacklisted_subword``), from ``doc.metadata["url"]``, ``batch_size`` URLs per
+    pyroid call. The suffix lists are this step's own ``tldextractor``'s (its
+    cached Public Suffix List or tldextract's snapshot), and with
+    ``use_integrated_lists`` the block lists are datatrove's, extracted into
+    datatrove's cache as datatrove does; both are loaded at the first batch, in the
+    worker. pyahocorasick is not needed.
+
+    What differs: a document without a ``url`` raises datatrove's
+    ``AssertionError`` when its batch is filtered (before any document of that batch
+    is passed on); datatrove's per-document ``DeprecationWarning`` from tldextract's
+    ``registered_domain`` (hidden by Python's default filters) is not emitted;
+    ``block_listed_domains`` and the other list attributes hold the constructor's
+    entries only (the integrated lists live in Rust); ``banned_subwords_automaton``
+    is ``None``.
+    """
+
+    _pyroid_requires = ("tldextract", "fasteners")
+
+    def __init__(
+        self, *args: Any, batch_size: int = DEFAULT_BATCH_SIZE, threads: Any = 1, **kwargs: Any
+    ) -> None:
+        # datatrove's __init__, without its pyahocorasick automaton.
+        bound = inspect.signature(_dt_url.URLFilter.__init__).bind(self, *args, **kwargs)
+        bound.apply_defaults()
+        a = bound.arguments
+        _dt_url.BaseFilter.__init__(self, a["exclusion_writer"])
+        from tldextract import TLDExtract
+
+        parse = _dt_url.parse_list
+        self.soft_word_threshold = a["soft_word_threshold"]
+        extra_domains, extra_urls = a["extra_domains"], a["extra_urls"]
+        self.block_listed_domains = (
+            parse(extra_domains, do_normalize=False) if extra_domains else set()
+        )
+        self.block_listed_url = parse(extra_urls, do_normalize=False) if extra_urls else set()
+        self.banned_words = parse(a["banned_words"]) if a["banned_words"] else set()
+        self.banned_subwords = parse(a["banned_subwords"]) if a["banned_subwords"] else set()
+        self.soft_banned_words = parse(a["soft_banned_words"]) if a["soft_banned_words"] else set()
+        self.use_integrated_lists = a["use_integrated_lists"]
+        self._downloaded = False
+        self.tldextractor = TLDExtract()
+        self.banned_subwords_automaton = None
+        self.batch_size = _batch_size(batch_size)
+        self.threads = threads
+        self._pyroid: Any = None
+
+    def download_data(self) -> None:
+        """Build the pyroid filter: the lists, and datatrove's if ``use_integrated_lists``."""
+        if self._pyroid is not None:
+            return
+        import pyroid.filters as pf
+
+        self._pyroid = cast(Any, pf.URLFilter)._from_parsed(
+            self.soft_word_threshold,
+            self.block_listed_domains,
+            self.block_listed_url,
+            self.banned_words,
+            self.banned_subwords,
+            self.soft_banned_words,
+            self.use_integrated_lists,
+            self.tldextractor,
+        )
+        self._downloaded = bool(self.use_integrated_lists)
+
+    def filter(self, doc: Any) -> Any:
+        """One document (datatrove's API); :meth:`filter_batch` batches instead."""
+        return self.filter_batch([doc])[0]
+
+    def filter_batch(self, batch: list[Any]) -> list[Any]:
+        """One pyroid call for the batch's URLs."""
+        self.download_data()
+        urls = []
+        for doc in batch:
+            url = doc.metadata.get("url")
+            assert url, "Document does not have url in its metadata"
+            urls.append(url)
+        reasons = self._pyroid._reasons_any(urls, self.threads)
+        return [True if r is None else (False, r) for r in reasons]
+
+    def __getstate__(self) -> dict[str, Any]:
+        # The native filter is rebuilt in each worker, as datatrove reloads its lists.
+        state = self.__dict__.copy()
+        state["_pyroid"] = None
+        state["_downloaded"] = False
+        return state
+
+
+URLFilter.__init__.__signature__ = _signature_of(_dt_url.URLFilter, *_EXTRA)  # type: ignore[attr-defined]
 # ---- end URLFilter ----
 
 # ---- SymbolLinesFormatter ----
