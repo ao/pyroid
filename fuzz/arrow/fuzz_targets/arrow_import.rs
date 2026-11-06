@@ -524,7 +524,7 @@ fn view_buffers(
     let off = usize::try_from(h.offset).expect("checked");
     let n_var = usize::from(inp.u8() % 4);
     let mut sizes: Vec<i64> = Vec::with_capacity(n_var);
-    let mut datas: Vec<Vec<u8>> = Vec::with_capacity(n_var);
+    let mut var_bufs: Vec<Vec<u8>> = Vec::with_capacity(n_var);
     for _ in 0..n_var {
         let s = inp.u16();
         let size = if s & 0x8000 != 0 {
@@ -532,21 +532,21 @@ fn view_buffers(
         } else {
             i64::from(s % (MAX_VARIADIC_SIZE + 1))
         };
-        datas.push(inp.bytes(usize::try_from(size).unwrap_or(0)));
+        var_bufs.push(inp.bytes(usize::try_from(size).unwrap_or(0)));
         sizes.push(size);
     }
     // Poison before the window: a negative length.
     let mut views: Vec<[u8; VIEW]> = (0..off).map(|_| view(-1, [0; 4], -1, -1)).collect();
     for _ in 0..len {
         let kind = inp.u8() % 6;
-        let eligible: Vec<usize> = (0..n_var).filter(|&b| datas[b].len() > 12).collect();
+        let eligible: Vec<usize> = (0..n_var).filter(|&b| var_bufs[b].len() > 12).collect();
         let v = match kind {
             1 | 2 if !eligible.is_empty() => {
                 let b = eligible[usize::from(inp.u8()) % eligible.len()];
-                let size = datas[b].len();
+                let size = var_bufs[b].len();
                 let n = 13 + usize::from(inp.u16()) % (size - 12);
                 let at = usize::from(inp.u16()) % (size - n + 1);
-                let d = &datas[b][at..at + n];
+                let d = &var_bufs[b][at..at + n];
                 let to_i32 = |x: usize| i32::try_from(x).expect("small");
                 view(to_i32(n), [d[0], d[1], d[2], d[3]], to_i32(b), to_i32(at))
             }
@@ -574,7 +574,7 @@ fn view_buffers(
     };
     slots.push(views_ptr);
     let mut var_ptrs = Vec::with_capacity(n_var);
-    for (b, d) in datas.iter().enumerate() {
+    for (b, d) in var_bufs.iter().enumerate() {
         let p = if h.is_null_slot(2 + b) {
             ptr::null()
         } else {
@@ -611,8 +611,8 @@ fn view_buffers(
             Ok(n) => usize::try_from(b)
                 .ok()
                 .zip(usize::try_from(at).ok())
-                .filter(|&(b, at)| b < n_var && at + n <= datas[b].len())
-                .map(|(b, at)| datas[b][at..at + n].to_vec()),
+                .filter(|&(b, at)| b < n_var && at + n <= var_bufs[b].len())
+                .map(|(b, at)| var_bufs[b][at..at + n].to_vec()),
         };
         ok &= row.is_some();
         rows.push(row);
