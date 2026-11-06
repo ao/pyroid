@@ -20,6 +20,7 @@ pub mod dedup;
 pub mod fasttext;
 pub mod filters;
 pub mod ftfy;
+pub mod json_repair;
 pub mod metrics;
 pub mod par;
 pub mod text;
