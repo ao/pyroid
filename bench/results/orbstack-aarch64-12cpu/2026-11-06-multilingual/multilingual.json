@@ -1,0 +1,366 @@
+{
+ "what": "FineWeb-2 filters (GopherRepetition -> FineWebQuality -> GopherQuality) + MinHash signatures",
+ "label": "Docker/OrbStack VM, indicative",
+ "python": "3.13.18",
+ "machine": "aarch64",
+ "cpus": 12,
+ "loadavg": [
+  16.291015625,
+  12.76025390625,
+  10.30859375
+ ],
+ "rows": [
+  {
+   "lang": "arb_Arab",
+   "docs": 1000,
+   "python_tokenizer": false,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 1000
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 8.225456647494866,
+     "us_per_doc": 8225.456647494866
+    },
+    "datatrove minhash x1": {
+     "s": 6.423659628002497,
+     "us_per_doc": 6423.659628002497
+    },
+    "pyroid filters x1": {
+     "s": 0.14546291199803818,
+     "us_per_doc": 145.46291199803818
+    },
+    "pyroid minhash x1": {
+     "s": 0.13186794800276402,
+     "us_per_doc": 131.86794800276402
+    },
+    "datatrove filters x8": {
+     "s": 1.5491328419957426,
+     "us_per_doc": 1549.1328419957426
+    },
+    "datatrove minhash x8": {
+     "s": 1.497556316498958,
+     "us_per_doc": 1497.556316498958
+    },
+    "pyroid filters x8": {
+     "s": 0.03700261800258886,
+     "us_per_doc": 37.00261800258886
+    },
+    "pyroid minhash x8": {
+     "s": 0.03908171500370372,
+     "us_per_doc": 39.08171500370372
+    }
+   }
+  },
+  {
+   "lang": "cmn_Hani",
+   "docs": 1000,
+   "python_tokenizer": true,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 1000
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 10.975866162501916,
+     "us_per_doc": 10975.866162501916
+    },
+    "datatrove minhash x1": {
+     "s": 8.573135074504535,
+     "us_per_doc": 8573.135074504535
+    },
+    "pyroid filters x1": {
+     "s": 8.802058301997022,
+     "us_per_doc": 8802.058301997022
+    },
+    "pyroid minhash x1": {
+     "s": 9.060052199987695,
+     "us_per_doc": 9060.052199987695
+    },
+    "datatrove filters x8": {
+     "s": 4.2700481139982,
+     "us_per_doc": 4270.0481139982
+    },
+    "datatrove minhash x8": {
+     "s": 2.884565873493557,
+     "us_per_doc": 2884.565873493557
+    },
+    "pyroid filters x8": {
+     "s": 10.570049789006589,
+     "us_per_doc": 10570.049789006589
+    },
+    "pyroid minhash x8": {
+     "s": 7.985769371007336,
+     "us_per_doc": 7985.769371007336
+    }
+   }
+  },
+  {
+   "lang": "deu_Latn",
+   "docs": 1000,
+   "python_tokenizer": false,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 996
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 8.342421645502327,
+     "us_per_doc": 8342.421645502327
+    },
+    "datatrove minhash x1": {
+     "s": 6.488651951498468,
+     "us_per_doc": 6488.651951498468
+    },
+    "pyroid filters x1": {
+     "s": 0.12177751399576664,
+     "us_per_doc": 121.77751399576664
+    },
+    "pyroid minhash x1": {
+     "s": 0.12252027000067756,
+     "us_per_doc": 122.52027000067757
+    },
+    "datatrove filters x8": {
+     "s": 2.0223948464918067,
+     "us_per_doc": 2022.3948464918067
+    },
+    "datatrove minhash x8": {
+     "s": 1.545408296995447,
+     "us_per_doc": 1545.408296995447
+    },
+    "pyroid filters x8": {
+     "s": 0.03743596898857504,
+     "us_per_doc": 37.43596898857504
+    },
+    "pyroid minhash x8": {
+     "s": 0.02833223900233861,
+     "us_per_doc": 28.33223900233861
+    }
+   }
+  },
+  {
+   "lang": "fra_Latn",
+   "docs": 1000,
+   "python_tokenizer": false,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 1000
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 16.852789218995895,
+     "us_per_doc": 16852.789218995895
+    },
+    "datatrove minhash x1": {
+     "s": 12.341868292503932,
+     "us_per_doc": 12341.868292503932
+    },
+    "pyroid filters x1": {
+     "s": 0.19540039099229034,
+     "us_per_doc": 195.40039099229034
+    },
+    "pyroid minhash x1": {
+     "s": 0.19390829700569157,
+     "us_per_doc": 193.90829700569157
+    },
+    "datatrove filters x8": {
+     "s": 3.667569654498948,
+     "us_per_doc": 3667.569654498948
+    },
+    "datatrove minhash x8": {
+     "s": 2.947757580994221,
+     "us_per_doc": 2947.757580994221
+    },
+    "pyroid filters x8": {
+     "s": 0.24571698799263686,
+     "us_per_doc": 245.71698799263686
+    },
+    "pyroid minhash x8": {
+     "s": 0.0708178220083937,
+     "us_per_doc": 70.8178220083937
+    }
+   }
+  },
+  {
+   "lang": "hin_Deva",
+   "docs": 1000,
+   "python_tokenizer": false,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 1000
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 2.513553602999309,
+     "us_per_doc": 2513.553602999309
+    },
+    "datatrove minhash x1": {
+     "s": 1.236526037006115,
+     "us_per_doc": 1236.526037006115
+    },
+    "pyroid filters x1": {
+     "s": 0.12554374200408347,
+     "us_per_doc": 125.54374200408346
+    },
+    "pyroid minhash x1": {
+     "s": 0.12709537699993234,
+     "us_per_doc": 127.09537699993233
+    },
+    "datatrove filters x8": {
+     "s": 0.4741362319982727,
+     "us_per_doc": 474.1362319982727
+    },
+    "datatrove minhash x8": {
+     "s": 0.2729911764981807,
+     "us_per_doc": 272.9911764981807
+    },
+    "pyroid filters x8": {
+     "s": 0.03216672199778259,
+     "us_per_doc": 32.16672199778259
+    },
+    "pyroid minhash x8": {
+     "s": 0.03100850600458216,
+     "us_per_doc": 31.00850600458216
+    }
+   }
+  },
+  {
+   "lang": "jpn_Jpan",
+   "docs": 1000,
+   "python_tokenizer": true,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 1000
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 11.958863981504692,
+     "us_per_doc": 11958.863981504692
+    },
+    "datatrove minhash x1": {
+     "s": 8.267409072999726,
+     "us_per_doc": 8267.409072999726
+    },
+    "pyroid filters x1": {
+     "s": 9.893212728013168,
+     "us_per_doc": 9893.212728013168
+    },
+    "pyroid minhash x1": {
+     "s": 9.507733729988104,
+     "us_per_doc": 9507.733729988104
+    },
+    "datatrove filters x8": {
+     "s": 3.4643709960000706,
+     "us_per_doc": 3464.3709960000706
+    },
+    "datatrove minhash x8": {
+     "s": 2.5861316204973264,
+     "us_per_doc": 2586.1316204973264
+    },
+    "pyroid filters x8": {
+     "s": 12.685186096001416,
+     "us_per_doc": 12685.186096001416
+    },
+    "pyroid minhash x8": {
+     "s": 11.118157350996626,
+     "us_per_doc": 11118.157350996626
+    }
+   }
+  },
+  {
+   "lang": "rus_Cyrl",
+   "docs": 1000,
+   "python_tokenizer": false,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 1000
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 16.478020272006688,
+     "us_per_doc": 16478.020272006688
+    },
+    "datatrove minhash x1": {
+     "s": 14.153995654000028,
+     "us_per_doc": 14153.995654000028
+    },
+    "pyroid filters x1": {
+     "s": 0.45676403799734544,
+     "us_per_doc": 456.76403799734544
+    },
+    "pyroid minhash x1": {
+     "s": 0.3969031599990558,
+     "us_per_doc": 396.9031599990558
+    },
+    "datatrove filters x8": {
+     "s": 4.618953155004419,
+     "us_per_doc": 4618.953155004419
+    },
+    "datatrove minhash x8": {
+     "s": 3.161824827999226,
+     "us_per_doc": 3161.824827999226
+    },
+    "pyroid filters x8": {
+     "s": 0.0833736260101432,
+     "us_per_doc": 83.3736260101432
+    },
+    "pyroid minhash x8": {
+     "s": 0.07605861700722016,
+     "us_per_doc": 76.05861700722016
+    }
+   }
+  },
+  {
+   "lang": "spa_Latn",
+   "docs": 1000,
+   "python_tokenizer": false,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 1000
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 14.552701305001392,
+     "us_per_doc": 14552.701305001392
+    },
+    "datatrove minhash x1": {
+     "s": 10.154251094500069,
+     "us_per_doc": 10154.251094500069
+    },
+    "pyroid filters x1": {
+     "s": 0.21816780300287064,
+     "us_per_doc": 218.16780300287064
+    },
+    "pyroid minhash x1": {
+     "s": 0.1987831959995674,
+     "us_per_doc": 198.7831959995674
+    },
+    "datatrove filters x8": {
+     "s": 2.871648901498702,
+     "us_per_doc": 2871.648901498702
+    },
+    "datatrove minhash x8": {
+     "s": 1.7524474750098307,
+     "us_per_doc": 1752.4474750098307
+    },
+    "pyroid filters x8": {
+     "s": 0.10358393999922555,
+     "us_per_doc": 103.58393999922555
+    },
+    "pyroid minhash x8": {
+     "s": 0.05619657000352163,
+     "us_per_doc": 56.19657000352163
+    }
+   }
+  }
+ ]
+}
