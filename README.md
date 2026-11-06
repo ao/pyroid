@@ -18,8 +18,8 @@ cleaning LLM datasets: the same API, the same output, a fraction of the CPU time
 <!-- TODO(bare-metal): replace with the bare-metal run's chart (bench/consolidate.py writes it to
      charts/consolidated-e2e-{light,dark}.svg) and update the caption. -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/consolidated-e2e-dark.svg">
-  <img alt="Wall time of the FineWeb chain on 10,000 documents: datatrove at 1 and 8 processes, pyroid's stages in datatrove's executor, and pyroid's native chain at 1 and 8 threads" src="docs/assets/consolidated-e2e-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/consolidated-e2e-dark.svg">
+  <img alt="Wall time of the FineWeb chain on 10,000 documents: datatrove at 1 and 8 processes, pyroid's stages in datatrove's executor, and pyroid's native chain at 1 and 8 threads" src="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/consolidated-e2e-light.svg">
 </picture>
 
 <sub>Wall time of the FineWeb chain (ftfy → language ID → 4 quality filters → MinHash dedup) on the
