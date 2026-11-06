@@ -10,6 +10,7 @@ without editing the suites. Every session writes `parity-report.json`, which fee
 | `fasttext` | fasttext-predict 0.9.2.4 on CPython 3.13 | top-5 labels + probs on lid.176.bin and lid.176.ftz for 13.2k docs, live Hypothesis (incl. surrogates, NUL, empty), newline → `ValueError` | labels identical, \|Δp\| ≤ 1e-6 |
 | `filters` | datatrove 0.10.1 (+ spaCy 3.8.18 tokenizer) | Gopher repetition, Gopher quality, C4 (default and FineWeb config), FineWeb quality on 13.2k docs | same keep/drop, same reason string, same rewritten text (C4), same exception |
 | `dedup` | datatrove 0.10.1 MinHash, FineWeb config (sha1/64, 14×8, 5-grams) | 112 signature values per doc; removed-doc set over dev + adversarial (445 removals, mostly injected near-dups) | identical |
+| `metrics` | rouge-score 0.1.2 (+ NLTK 3.10.4 Porter), sacrebleu 2.6.0 | ROUGE-1/2/3/4/L/Lsum on CNN/DM test (11.5k lead-3 vs highlights, 2k whole articles) and SummEval (1.6k system summaries, 11 refs, `score_multi`), with and without stemming; BLEU (13a/intl/char/none/zh/trg_lang, smoothing, lowercase, effective order, max order, `None` reference holes) and chrF/chrF++ per WMT21 system (141 corpora) and per segment (163k); live Hypothesis vs both incumbents (sacrebleu only on GIL builds: it loads lxml, which re-enables the GIL) | identical `repr`/`str`/`format`/signature strings (exact floats) |
 
 ## Plugging in a product track
 
@@ -65,7 +66,8 @@ All inputs and references live in the shared Docker volume `/data` and are pinne
 |---|---|
 | `fineweb/fineweb-dev-10k.parquet` | first 10k rows of FineWeb `sample/10BT/000_00000.parquet` @ `9bb295dd` (ODC-By) |
 | `parity/adversarial.parquet` | 3,232 docs: 2,000 non-English (FineWeb-2 test splits, 8 languages), 600 mojibake/HTML/control variants, 600 near-duplicates of dev docs (edit rates 0–40 %, truncation, append), 32 edge cases (empty, whitespace-only, 5k-char word, …) |
-| `parity/{ftfy,fasttext,filters,minhash}-ref.parquet` | reference outputs; the manifest records the oracle versions |
+| `metrics/cnndm-3.0.0-test.parquet`, `metrics/summeval.parquet`, `metrics/wmt21.parquet` | eval data for the `metrics` suite: CNN/DailyMail 3.0.0 test (Apache-2.0), SummEval (MIT), WMT21 newstest2021 system outputs + references for 8 language pairs (research release, not redistributed) |
+| `parity/{ftfy,fasttext,filters,minhash,metrics}-ref.parquet` | reference outputs; the manifest records the oracle versions |
 
 - **Fetch inputs:** `../bench/fetch.py` (it verifies the inputs it downloads; `--verify-all` checks every pinned file).
 - **Regenerate** (oracle env, Docker): `python -m pyroid_parity.refs all` rebuilds the references and checks each one

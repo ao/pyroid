@@ -21,6 +21,9 @@ filters   one callable per filter name in ``pyroid_parity.specs.FILTER_CASES``:
 dedup     ``minhash_signatures(texts, **config) -> list[list[int] | None]`` (``None`` = no shingles) and
           ``minhash_dedup(texts, **config) -> list[bool]`` (True = removed), with ``config`` from
           ``pyroid_parity.specs.MINHASH_CONFIG``.
+metrics   a package with ``rouge_scorer`` (rouge-score's ``RougeScorer``; optional ``score_batch``) and ``sacrebleu``
+          (``BLEU``/``CHRF`` with ``corpus_score``/``get_signature``, ``sentence_bleu``/``sentence_chrf``; optional
+          ``sentence_bleu_batch``/``sentence_chrf_batch``) submodules; see ``pyroid_parity.metrics_cases``.
 
 Warnings: where a suite compares warnings (the ftfy ``errors`` check), a candidate's
 ``pyroid.FallbackWarning`` (its "delegating to the incumbent" notice, shown once per process; see
@@ -38,8 +41,14 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-SUITES = ("ftfy", "fasttext", "filters", "dedup")
-REFERENCE = {"ftfy": "ftfy", "fasttext": "fasttext", "filters": "datatrove", "dedup": "datatrove"}
+SUITES = ("ftfy", "fasttext", "filters", "dedup", "metrics")
+REFERENCE = {
+    "ftfy": "ftfy",
+    "fasttext": "fasttext",
+    "filters": "datatrove",
+    "dedup": "datatrove",
+    "metrics": "rouge_score",
+}
 # Distribution that provides a module, for version reporting when it differs from the module name.
 DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel")}
 
@@ -226,9 +235,16 @@ class GenericDedup:
         return [bool(x) for x in self.mod.minhash_dedup(texts, **config)]
 
 
+def _generic_metrics(mod: Any) -> Any:
+    from pyroid_parity.metrics_cases import Metrics
+
+    return Metrics.from_package(mod)
+
+
 GENERIC: dict[str, Callable[[Any], Any]] = {
     "ftfy": GenericFtfy,
     "fasttext": GenericFasttext,
     "filters": GenericFilters,
     "dedup": GenericDedup,
+    "metrics": _generic_metrics,
 }

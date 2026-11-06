@@ -14,6 +14,7 @@ Outputs (each pinned in bench/manifest.json with the oracle versions that produc
                                  one file per platform (specs.lid_ref): linux-aarch64 keeps this name
     parity/filters-ref.parquet   case, id, outcome, keep, reason, text_out
     parity/minhash-ref.parquet   id, signature, removed          datatrove MinhashDedup* on dev + adversarial
+    parity/metrics-ref.parquet   case, key, out                  rouge-score + sacrebleu (pyroid_parity.metrics_cases)
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from typing import Any
 
 from pyroid_parity import data as D
 from pyroid_parity import specs
+from pyroid_parity.metrics_cases import ref_metrics  # noqa: F401  (found by main() as ref_<step>)
 
 SEED = 20261105
 OUT = {
@@ -42,6 +44,7 @@ OUT = {
     "fasttext": specs.lid_ref(D.platform_key()),
     "filters": "parity/filters-ref.parquet",
     "dedup": "parity/minhash-ref.parquet",
+    "metrics": "parity/metrics-ref.parquet",
 }
 # Files written by this run that are missing from, or differ from, the manifest (checked when not pinning).
 MISMATCHED: list[str] = []
@@ -499,7 +502,7 @@ def ref_dedup(pin: bool, workers: int) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["adversarial", "ftfy", "fasttext", "filters", "dedup", "all"])
+    ap.add_argument("what", choices=[*OUT, "all"])
     ap.add_argument("--pin", action="store_true")
     ap.add_argument("--workers", type=int, default=min(6, os.cpu_count() or 1))
     a = ap.parse_args()
