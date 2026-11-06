@@ -786,8 +786,7 @@ def apply(
     Returns:
         ``FilterResult(keep, reason, text)``, each in the caller's kind.
 
-    Raises:
-        As for :func:`gopher_quality`.
+    Raises the same exceptions as :func:`gopher_quality`.
     """
 
 class Language(NamedTuple):

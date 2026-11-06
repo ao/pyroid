@@ -235,8 +235,7 @@ def minhash_dedup(
         A mask in the same kind as ``texts``: bool, list, tuple, or a
         :class:`pyroid.Column` of bools (Arrow nulls stay null).
 
-    Raises:
-        As for :func:`minhash_signatures`.
+    Raises the same exceptions as :func:`minhash_signatures`.
     """
 
 @overload
@@ -662,7 +661,7 @@ class SentenceDedup:
     ``OverflowError`` (numpy's ``<u2``) when its batch is added, and the
     batch is not added (datatrove fails when it saves the task's
     signatures). Index files: use the datatrove drop-ins
-    (:mod:`pyroid.integrations.datatrove`).
+    (``pyroid.integrations.datatrove``).
 
     Args:
         config: As for :func:`sentence_dedup`.

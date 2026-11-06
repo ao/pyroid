@@ -158,7 +158,12 @@ class PyroidStubs(griffe.Extension):
             if member.is_alias and not member.target_path.startswith("pyroid"):
                 return member.target_path
             # Re-exports (pyroid.Column is pyroid._pyroid.Column) link to the public path.
-            return path.replace("pyroid._pyroid.", "pyroid.", 1) if path.count(".") == 2 else path
+            public = path.replace("pyroid._pyroid.", "pyroid.", 1) if path.count(".") == 2 else path
+            # mkdocs.yml's `filters: ["!^_"]` keeps private and dunder members (__call__) off the
+            # pages, so there is no anchor to link to.
+            if any(part.startswith("_") for part in public.split(".")):
+                return None
+            return public
         return None
 
     def _rewrite(self, obj: griffe.Object, text: str, pkg: griffe.Module) -> str:
