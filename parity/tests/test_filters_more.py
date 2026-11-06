@@ -121,3 +121,36 @@ def test_symbol_lines(case: str, corpus: str, parity: Any) -> None:
     want = [ref.format(t) for t in docs.texts]
     got = pf.symbol_lines(docs.texts, **kw)
     _record(parity, f"symbol_lines/{case}/{corpus}", docs, got, want)
+
+
+URL_CASES: dict[str, dict[str, Any]] = {
+    "integrated_lists": {},
+    "custom_lists": {
+        "use_integrated_lists": False,
+        "extra_domains": ["example.com", "blogspot.com"],
+        "banned_words": ["news", "blog"],
+        "banned_subwords": ["shop"],
+        "soft_banned_words": ["com", "www", "org"],
+        "soft_word_threshold": 2,
+    },
+}
+
+
+@pytest.mark.parametrize("case", list(URL_CASES))
+def test_url_filter(case: str, parity: Any) -> None:
+    uf = _oracle("datatrove.pipeline.filters.url_filter")
+    import pyroid.filters as pf
+    from datatrove.data import Document
+
+    from pyroid_parity import data as D
+
+    docs = need_corpus("dev")
+    urls = D.read_parquet_columns(D.path(D.CORPORA["dev"]), ["url"])["url"]
+    kw = URL_CASES[case]
+    ref = uf.URLFilter(**kw)
+    want = []
+    for i, u in enumerate(urls):
+        r = ref.filter(Document(text="", id=str(i), metadata={"url": u}))
+        want.append(None if r is True else r[1])
+    got = pf.URLFilter(pf.URLFilterConfig(**kw), tld_extractor=ref.tldextractor).reasons(urls)
+    _record(parity, f"url_filter/{case}/dev", docs, list(got), want)
