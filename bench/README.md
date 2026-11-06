@@ -87,6 +87,32 @@ Thread scaling: pass `BENCH_THREADS` / `RAYON_NUM_THREADS`; workers inherit them
 | `pgo_train.py`, `pgo_build.sh` | profile-guided release wheels: training on headline[10000:20000] (never the benchmarked dev slice), then `-Cprofile-use` |
 | `run_consolidated.sh`, `consolidate.py` | the consolidated benchmark: `run_baselines.sh` with all five pyroid modules on 3.13, pyroid on 3.15t at pools 1 and 8, `chain.py` under hyperfine, then `CONSOLIDATED.md`, `consolidated.json` (docs' benchmarks.json row schema) and light/dark charts, among them the README hero (`charts/hero-{light,dark}.svg`; `--png` / `BENCH_PNG=1` add PNG previews) |
 
+## json_repair (`json_repair_bench.py`)
+
+This script stands alone: it needs only the stdlib and `json-repair==0.64.5`, not the bench uv env.
+json_repair is the oracle and the baseline; every other `--impl` (such as `pyroid.json_repair`) is
+optional and skipped with a warning if it does not import.
+
+```bash
+uv venv -p 3.12 /target/jr-312 && uv pip install --python /target/jr-312 json-repair==0.64.5 dist/pyroid-*.whl
+/target/jr-312/bin/python bench/json_repair_bench.py --impl json_repair --impl pyroid.json_repair --out /target/jr-bench.json
+/target/jr-312/bin/python bench/json_repair_bench.py --list        # the pathological families and their cause
+/target/jr-312/bin/python bench/json_repair_bench.py --impl json_repair --impl json_repair --quick   # gate smoke test
+```
+
+- **Gate first.** For every input, a candidate's `repair_json(s)` must equal json_repair's byte for byte, and its
+  `loads(s)` must be type-exactly equal, including dict key order. A mismatch aborts the run (exit 1).
+- **Sections** (`--sections docs,patho,batch`):
+  - `docs`: seeded ~1 KB and ~1 MB valid and broken LLM/API docs, `repair_json` and `loads`, best and median per call.
+  - `patho`: the super-linear families (truncated long strings, escaped code, markdown in arrays, unescaped
+    quotes, `(1)` list lines, missing `}, {`, continued table rows, four adversarial ones (two of them
+    unclosed nesting, where every level rescans the rest of the input), and four linear controls) at doubling sizes from 2 KiB to 1 MiB, with the log-log slope. Each point runs in a subprocess:
+    a call over `--timeout` (20 s) is killed, and an impl stops doubling after a call over `--stop-after` (10 s).
+  - `batch`: 10k ~1 KB broken docs, json_repair in a loop, plus an 8-thread pool on free-threaded builds,
+    vs the candidate's `repair_json_batch(docs, threads=1|8)`.
+- **Output.** A Markdown summary on stdout and every timing in `--out`, with the machine info, `sys._is_gil_enabled()`
+  and the load average before and after.
+
 ## Inputs (pinned in `manifest.json`, fetched by `fetch.py` into `/data`, ≤ 1.5 GB total; currently 324 MB)
 
 | file | source |
