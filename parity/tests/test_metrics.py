@@ -152,9 +152,9 @@ def oracle_sacrebleu(parity):
 
 
 def _rouge_live(metrics_impl, oracle_rouge, parity, check, kwargs, target, prediction):
-    want = M.outcome(lambda: M.ser_rouge(oracle_rouge.RougeScorer(**kwargs).score(target, prediction)))
+    want = M.outcome(lambda: M.render_rouge(oracle_rouge.RougeScorer(**kwargs).score(target, prediction)))
     got = M.outcome(
-        lambda: M.ser_rouge(metrics_impl.obj.rouge_scorer.RougeScorer(**kwargs).score(target, prediction))
+        lambda: M.render_rouge(metrics_impl.obj.rouge_scorer.RougeScorer(**kwargs).score(target, prediction))
     )
     assert parity.record(SUITE, check, got == want, input=(target, prediction, kwargs), got=got, want=want), (
         got,
@@ -226,7 +226,7 @@ def test_live_corpus_bleu(corpus, kw, metrics_impl, oracle_sacrebleu, parity):
 
     def call(sb):
         m = sb.BLEU(**kw)
-        return M.ser_bleu(m.corpus_score(hyps, refs), str(m.get_signature()))
+        return M.render_bleu(m.corpus_score(hyps, refs), str(m.get_signature()))
 
     _sb_live(metrics_impl, oracle_sacrebleu, parity, "live-corpus_bleu", call)
 
@@ -237,7 +237,7 @@ def test_live_corpus_chrf(corpus, kw, metrics_impl, oracle_sacrebleu, parity):
 
     def call(sb):
         m = sb.CHRF(**kw)
-        return M.ser_chrf(m.corpus_score(hyps, refs), str(m.get_signature()))
+        return M.render_chrf(m.corpus_score(hyps, refs), str(m.get_signature()))
 
     _sb_live(metrics_impl, oracle_sacrebleu, parity, "live-corpus_chrf", call)
 
@@ -253,7 +253,7 @@ def test_live_sentence_bleu(hyp, refs, kw, metrics_impl, oracle_sacrebleu, parit
         oracle_sacrebleu,
         parity,
         "live-sentence_bleu",
-        lambda sb: M.ser_bleu(sb.sentence_bleu(hyp, refs, **kw)),
+        lambda sb: M.render_bleu(sb.sentence_bleu(hyp, refs, **kw)),
     )
 
 
@@ -268,7 +268,7 @@ def test_live_sentence_chrf(hyp, refs, kw, metrics_impl, oracle_sacrebleu, parit
         oracle_sacrebleu,
         parity,
         "live-sentence_chrf",
-        lambda sb: M.ser_chrf(sb.sentence_chrf(hyp, refs, **kw)),
+        lambda sb: M.render_chrf(sb.sentence_chrf(hyp, refs, **kw)),
     )
 
 

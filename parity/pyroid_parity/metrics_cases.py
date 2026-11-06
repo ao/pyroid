@@ -160,12 +160,12 @@ def segment_keys() -> list[str]:
 # ------------------------------------------------------------------------------------------ serialization
 
 
-def ser_rouge(result: dict[str, Any]) -> str:
+def render_rouge(result: dict[str, Any]) -> str:
     """``repr`` of the result dict: types, order, field names and shortest-repr floats."""
     return repr(result)
 
 
-def ser_bleu(score: Any, signature: str | None = None) -> str:
+def render_bleu(score: Any, signature: str | None = None) -> str:
     fields = [
         score.score,
         score.counts,
@@ -188,7 +188,7 @@ def ser_bleu(score: Any, signature: str | None = None) -> str:
     return out
 
 
-def ser_chrf(score: Any, signature: str | None = None) -> str:
+def render_chrf(score: Any, signature: str | None = None) -> str:
     fields = [score.score, score.char_order, score.word_order, score.beta]
     out = "|".join(map(repr, fields)) + "|" + str(score)
     if signature is not None:
@@ -203,7 +203,7 @@ def ser_chrf(score: Any, signature: str | None = None) -> str:
     return out
 
 
-SER = {"BLEU": ser_bleu, "CHRF": ser_chrf, "sentence_bleu": ser_bleu, "sentence_chrf": ser_chrf}
+RENDER = {"BLEU": render_bleu, "CHRF": render_chrf, "sentence_bleu": render_bleu, "sentence_chrf": render_chrf}
 
 
 def outcome(fn: Callable[[], str]) -> str:
@@ -240,13 +240,13 @@ class Metrics:
         scorer = self.rouge_scorer.RougeScorer(**kwargs)
         if how == "multi":
             return [
-                outcome(lambda t=t, p=p: ser_rouge(scorer.score_multi(t, p)))
+                outcome(lambda t=t, p=p: render_rouge(scorer.score_multi(t, p)))
                 for t, p in zip(targets, preds, strict=True)
             ]
         if batch and hasattr(scorer, "score_batch"):
-            return [ser_rouge(r) for r in scorer.score_batch(targets, preds)]
+            return [render_rouge(r) for r in scorer.score_batch(targets, preds)]
         return [
-            outcome(lambda t=t, p=p: ser_rouge(scorer.score(t, p)))
+            outcome(lambda t=t, p=p: render_rouge(scorer.score(t, p)))
             for t, p in zip(targets, preds, strict=True)
         ]
 
@@ -260,14 +260,14 @@ class Metrics:
         def run() -> str:
             metric = getattr(self.sacrebleu, cls_name)(**kwargs)
             score = metric.corpus_score(hyps, refs_for(refs, which))
-            return SER[cls_name](score, str(metric.get_signature()))
+            return RENDER[cls_name](score, str(metric.get_signature()))
 
         return outcome(run)
 
     # sentence level, every segment
     def sentence(self, case: str, hyps: list[str], refs: list[list[str]], batch: bool = False) -> list[str]:
         fn_name, kwargs, which = SENTENCE_CASES[case]
-        ser = SER[fn_name]
+        render = RENDER[fn_name]
         batch_fn = getattr(self.sacrebleu, f"{fn_name}_batch", None)
         if batch and batch_fn is not None:
             # One batch call per run of segments with the same number of references (streams can't have holes
@@ -280,12 +280,12 @@ class Metrics:
                 while j < len(hyps) and (which == "A" or len(refs[j]) == n):
                     j += 1
                 streams = [[r[k] for r in refs[i:j]] for k in range(n)]
-                out += [ser(s) for s in batch_fn(hyps[i:j], streams, **kwargs)]
+                out += [render(s) for s in batch_fn(hyps[i:j], streams, **kwargs)]
                 i = j
             return out
         fn = getattr(self.sacrebleu, fn_name)
         return [
-            outcome(lambda h=h, r=r: ser(fn(h, r[:1] if which == "A" else r, **kwargs)))
+            outcome(lambda h=h, r=r: render(fn(h, r[:1] if which == "A" else r, **kwargs)))
             for h, r in zip(hyps, refs, strict=True)
         ]
 

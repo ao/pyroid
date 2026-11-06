@@ -72,7 +72,7 @@ def _ref_rouge_chunk(bounds: tuple[int, int]) -> list[str]:
     lo, hi = bounds
     scorer = rouge_scorer.RougeScorer(ROUGE_TYPES, use_stemmer=_DATA["stem"])
     return [
-        M.ser_rouge(scorer.score(t, p)) for t, p in zip(_DATA["a"][lo:hi], _DATA["b"][lo:hi], strict=True)
+        M.render_rouge(scorer.score(t, p)) for t, p in zip(_DATA["a"][lo:hi], _DATA["b"][lo:hi], strict=True)
     ]
 
 
@@ -80,12 +80,12 @@ def _ref_sentence_chunk(bounds: tuple[int, int]) -> list[str]:
     import sacrebleu
 
     lo, hi = bounds
-    fn, ser = (
-        (sacrebleu.sentence_bleu, M.ser_bleu)
+    fn, render = (
+        (sacrebleu.sentence_bleu, M.render_bleu)
         if _DATA["metric"] == "bleu"
-        else (sacrebleu.sentence_chrf, M.ser_chrf)
+        else (sacrebleu.sentence_chrf, M.render_chrf)
     )
-    return [ser(fn(h, [r])) for h, r in zip(_DATA["a"][lo:hi], _DATA["b"][lo:hi], strict=True)]
+    return [render(fn(h, [r])) for h, r in zip(_DATA["a"][lo:hi], _DATA["b"][lo:hi], strict=True)]
 
 
 def _ref_stats_chunk(bounds: tuple[int, int]) -> list[list[Any]]:
@@ -125,19 +125,19 @@ def rows(kind: str, n: int, stem: bool) -> list[tuple[str, int, Callable[[], lis
             (
                 "pyroid score() loop",
                 1,
-                lambda: [M.ser_rouge(scorer.score(t, p)) for t, p in zip(a, b, strict=True)],
+                lambda: [M.render_rouge(scorer.score(t, p)) for t, p in zip(a, b, strict=True)],
             ),
-            ("pyroid score_batch", 1, lambda: [M.ser_rouge(r) for r in scorer.score_batch(a, b, threads=1)]),
+            ("pyroid score_batch", 1, lambda: [M.render_rouge(r) for r in scorer.score_batch(a, b, threads=1)]),
             (
                 "pyroid score_batch",
                 PROCS,
-                lambda: [M.ser_rouge(r) for r in scorer.score_batch(a, b, threads=PROCS)],
+                lambda: [M.render_rouge(r) for r in scorer.score_batch(a, b, threads=PROCS)],
             ),
         ]
     metric, level = kind.split("-")  # bleu-sentence, bleu-corpus, chrf-sentence, chrf-corpus
     a, b = mt_data(n)
     _DATA.update(a=a, b=b, metric=metric)
-    ser = M.ser_bleu if metric == "bleu" else M.ser_chrf
+    render = M.render_bleu if metric == "bleu" else M.render_chrf
     if level == "sentence":
         fn = psb.sentence_bleu if metric == "bleu" else psb.sentence_chrf
         batch = psb.sentence_bleu_batch if metric == "bleu" else psb.sentence_chrf_batch
@@ -147,13 +147,13 @@ def rows(kind: str, n: int, stem: bool) -> list[tuple[str, int, Callable[[], lis
             (
                 f"pyroid sentence_{metric}() loop",
                 1,
-                lambda: [ser(fn(h, [r])) for h, r in zip(a, b, strict=True)],
+                lambda: [render(fn(h, [r])) for h, r in zip(a, b, strict=True)],
             ),
-            (f"pyroid sentence_{metric}_batch", 1, lambda: [ser(s) for s in batch(a, [b], threads=1)]),
+            (f"pyroid sentence_{metric}_batch", 1, lambda: [render(s) for s in batch(a, [b], threads=1)]),
             (
                 f"pyroid sentence_{metric}_batch",
                 PROCS,
-                lambda: [ser(s) for s in batch(a, [b], threads=PROCS)],
+                lambda: [render(s) for s in batch(a, [b], threads=PROCS)],
             ),
         ]
 
@@ -167,11 +167,11 @@ def rows(kind: str, n: int, stem: bool) -> list[tuple[str, int, Callable[[], lis
             stats = _pool_map(_ref_stats_chunk, n)
             score = m._aggregate_and_compute(stats)
             m.num_refs = 1  # what corpus_score's reference caching sets (it ran in the workers here)
-        return [ser(score, str(m.get_signature()))]
+        return [render(score, str(m.get_signature()))]
 
     def pyroid_corpus(threads: int) -> list[str]:
         m = psb.BLEU() if metric == "bleu" else psb.CHRF()
-        return [ser(m.corpus_score(a, [b], threads=threads), str(m.get_signature()))]
+        return [render(m.corpus_score(a, [b], threads=threads), str(m.get_signature()))]
 
     return [
         (f"sacrebleu {metric.upper()}.corpus_score", 1, lambda: ref_corpus(1)),
