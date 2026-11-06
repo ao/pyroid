@@ -44,7 +44,7 @@ DATA = Path(os.environ.get("PYROID_DATA", "/data"))
 DEV = DATA / "fineweb" / "fineweb-dev-10k.parquet"
 
 slow = settings(
-    max_examples=30,
+    max_examples=100,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
 )
@@ -214,7 +214,7 @@ norm_configs = st.builds(
 
 
 @needs_dt
-@settings(max_examples=150, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=300, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(
     texts=corpora(),
     n=st.integers(1, 4),
