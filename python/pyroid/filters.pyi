@@ -20,27 +20,72 @@ datatrove filter instance, whose settings are read.
   wins and C4's rewritten text is what later filters see), in one pass with
   one shared tokenization.
 
-Words
------
-datatrove tokenizes English (its default ``language="eng"``) with spaCy 3.8.18
-``spacy.blank("en")`` plus the ``sentencizer``. pyroid ports that tokenizer
-(spaCy's prefix, suffix, infix and URL rules, its 1,347 tokenizer exceptions
-and the special-case matcher, and the sentencizer), so ``split_into_words``
-and ``split_into_sentences`` match. ``language`` accepts every datatrove code
-that maps to ``SpaCyTokenizer("en")`` (:func:`english_languages`: ``"eng"``,
-``"en"`` and proxies such as ``"sco"``); other languages raise
-``NotImplementedError``. Python's ``str`` semantics (``isalpha``,
-``isspace``, ``splitlines``, ``lower``, the ``re`` digit and word classes) follow the
-running interpreter's Unicode version (14.0 to 17.0, CPython 3.11 to 3.15),
-as datatrove's do.
+Words and languages
+-------------------
+datatrove splits text with the word tokenizer of the filter's ``language``
+(``load_word_tokenizer(language)``; the default ``"eng"`` is spaCy 3.8.18's
+``spacy.blank("en")`` plus the ``sentencizer``). ``language`` takes any of
+datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
+:func:`languages` lists them), as datatrove does:
+
+- **Native** (3,999 codes), at Rust speed on every thread:
+
+  - the 3,742 codes datatrove tokenizes with a rule-based
+    ``spacy.blank(code)``: the 57 spaCy languages ``af`` ... ``yo``,
+    including ``xx`` (spaCy's multi-language tokenizer, which datatrove
+    assigns to 1,995 codes such as ``"uzn_Latn"``). pyroid ports spaCy's
+    prefix, suffix, infix and URL rules, each language's tokenizer
+    exceptions, the special-case matcher and the sentencizer;
+  - the 129 codes of ``IndicNLPTokenizer`` (``"hin_Deva"``, ``"ben_Beng"``,
+    ``"urd_Arab"``, ...: indic-nlp-library's ``trivial_tokenize`` and
+    ``sentence_split``);
+  - the 128 codes of ``WhitespaceTokenizer`` (``"kat_Geor"``, ...: spaCy
+    ``xx`` words and datatrove's regex sentence splitter).
+
+  ``split_into_words`` and ``split_into_sentences`` match datatrove's.
+- **Opt-in Python tokenizer** (the other 344 codes): datatrove uses a
+  segmenter pyroid does not port: ``StanzaTokenizer`` (255 codes),
+  ``SpaCyTokenizer("zh")`` (jieba), ``SpaCyTokenizer("ja")`` (SudachiPy),
+  ``SpaCyTokenizer("vi")`` (pyvi), ``ThaiTokenizer``, ``BurmeseTokenizer``,
+  ``TibetanTokenizer``, ``LaoTokenizer``, ``KhmerTokenizer`` and
+  ``KiwiTokenizer`` (see :func:`languages`). Calling a filter with such a code raises
+  ``NotImplementedError`` unless you pass ``python_tokenizer=True``. Then each
+  document is tokenized by **datatrove's own tokenizer, in Python, on the
+  calling thread** (it needs datatrove 0.10.1 and the segmenter installed;
+  ``pyroid.PyroidError`` says what is missing), and the filter math runs in
+  Rust on those words, so the decisions are datatrove's. That path runs at the
+  reference tokenizer's speed (tokenization dominates the filters' cost), only
+  tokenizes the documents that reach a word-based check, and emits one
+  :class:`pyroid.FallbackWarning` per function and language (C4 steps, which
+  run as datatrove's own filter, get their own).
+  ``python_tokenizer=True`` also works for native codes (it then uses
+  datatrove's tokenizer, slower and no more exact); it is only needed for
+  the others.
+- ``language`` may also be a word tokenizer object, as datatrove allows: a
+  datatrove ``WordTokenizer`` instance, or any object with
+  ``word_tokenize(text)`` (and ``span_tokenize(text)`` for C4). It is called
+  in Python as above, and needs no ``python_tokenizer=True``.
+- A code datatrove does not know raises datatrove's ``ValueError``, when the
+  call starts.
+
+On the Python-tokenizer path, a :class:`C4Quality` step (which splits
+sentences with the tokenizer) runs as datatrove's own ``C4QualityFilter``; in
+:func:`apply`, later steps then see (and tokenize) its rewritten text, as in a
+datatrove pipeline.
+
+Python's ``str`` semantics (``isalpha``, ``isspace``, ``splitlines``,
+``lower``, the ``re`` digit and word classes) follow the running interpreter's
+Unicode version (14.0 to 17.0, CPython 3.11 to 3.15), as datatrove's do.
 
 Differences from datatrove
 --------------------------
 - A ``top_n_grams`` / ``dup_n_grams`` size below 1 raises ``ValueError``
   (datatrove loops forever on ``dup_n_grams`` sizes below 1).
 - Values are checked when the call starts: a non-number threshold raises
-  ``TypeError`` before any document is filtered; a failing document raises
-  for the whole batch (the exception names the document).
+  ``TypeError``, and an unknown ``language`` ``ValueError``, before any
+  document is filtered (datatrove raises the latter at the first document
+  that needs words); a failing document raises for the whole batch (the
+  exception names the document).
 - ``exclusion_writer`` is not supported (use the ``*_reasons`` functions).
 - A document with a token that is exactly ``IS_ALPHA`` (e.g. in
   ``"IS_ALPHA."``, not in ``"xIS_ALPHA"``) is tokenized like any other text,
@@ -53,7 +98,16 @@ Differences from datatrove
 """
 
 from collections.abc import Iterable, Sequence
-from typing import Any, Final, NamedTuple, TypedDict, Unpack, overload, type_check_only
+from typing import (
+    Any,
+    Final,
+    NamedTuple,
+    Protocol,
+    TypedDict,
+    Unpack,
+    overload,
+    type_check_only,
+)
 
 from pyroid._pyroid import Column
 from pyroid._typing import ArrowStrings
@@ -66,6 +120,7 @@ __all__ = [
     "FineWebQuality",
     "GopherQuality",
     "GopherRepetition",
+    "Language",
     "apply",
     "c4_lines",
     "c4_quality",
@@ -77,10 +132,23 @@ __all__ = [
     "gopher_quality_reasons",
     "gopher_repetition",
     "gopher_repetition_reasons",
+    "languages",
 ]
 
 DATATROVE_VERSION: Final[str]
 STOP_WORDS: Final[tuple[str, ...]]
+
+@type_check_only
+class _WordTokenizer(Protocol):
+    """A word tokenizer object: a datatrove ``WordTokenizer``, or anything with this method."""
+
+    def word_tokenize(self, text: str, /) -> Sequence[str]: ...
+
+@type_check_only
+class _SentenceTokenizer(_WordTokenizer, Protocol):
+    """A word tokenizer that also splits sentences (what C4 needs)."""
+
+    def span_tokenize(self, text: str, /) -> Sequence[tuple[int, int]]: ...
 
 class GopherQuality(NamedTuple):
     """``GopherQualityFilter``'s parameters and defaults.
@@ -99,7 +167,7 @@ class GopherQuality(NamedTuple):
     max_non_alpha_words_ratio: float | None = 0.8
     min_stop_words: float | None = 2
     stop_words: Iterable[str] | None = None
-    language: str = "eng"
+    language: str | _WordTokenizer = "eng"
 
 class GopherRepetition(NamedTuple):
     """``GopherRepetitionFilter``'s parameters and defaults.
@@ -114,7 +182,7 @@ class GopherRepetition(NamedTuple):
     dup_para_char_frac: float | None = 0.2
     top_n_grams: Sequence[tuple[int, float]] = ...
     dup_n_grams: Sequence[tuple[int, float]] = ...
-    language: str = "eng"
+    language: str | _WordTokenizer = "eng"
 
 class C4Quality(NamedTuple):
     """``C4QualityFilter``'s parameters and defaults.
@@ -134,7 +202,7 @@ class C4Quality(NamedTuple):
     filter_javascript: bool = True
     filter_curly_bracket: bool = True
     filter_policy: bool = True
-    language: str = "eng"
+    language: str | _SentenceTokenizer = "eng"
 
 class FineWebQuality(NamedTuple):
     """``FineWebQualityFilter``'s parameters and defaults.
@@ -149,7 +217,7 @@ class FineWebQuality(NamedTuple):
     short_line_length: int = 30
     char_duplicates_ratio: float = 0.01
     new_line_ratio: float = 0.3
-    language: str = "eng"
+    language: str | _WordTokenizer = "eng"
 
 class FilterResult(NamedTuple):
     """What :func:`apply` returns, each in the caller's container kind."""
@@ -173,7 +241,7 @@ class _GopherQualityKwargs(TypedDict, total=False):
     max_non_alpha_words_ratio: float | None
     min_stop_words: float | None
     stop_words: Iterable[str] | None
-    language: str
+    language: str | _WordTokenizer
 
 @type_check_only
 class _GopherRepetitionKwargs(TypedDict, total=False):
@@ -183,7 +251,7 @@ class _GopherRepetitionKwargs(TypedDict, total=False):
     dup_para_char_frac: float | None
     top_n_grams: Sequence[tuple[int, float]]
     dup_n_grams: Sequence[tuple[int, float]]
-    language: str
+    language: str | _WordTokenizer
 
 @type_check_only
 class _C4QualityKwargs(TypedDict, total=False):
@@ -197,7 +265,7 @@ class _C4QualityKwargs(TypedDict, total=False):
     filter_javascript: bool
     filter_curly_bracket: bool
     filter_policy: bool
-    language: str
+    language: str | _SentenceTokenizer
 
 @type_check_only
 class _FineWebQualityKwargs(TypedDict, total=False):
@@ -208,7 +276,7 @@ class _FineWebQualityKwargs(TypedDict, total=False):
     short_line_length: int
     char_duplicates_ratio: float
     new_line_ratio: float
-    language: str
+    language: str | _WordTokenizer
 
 # ------------------------------------------------------------ Gopher quality
 
@@ -219,6 +287,7 @@ def gopher_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherQualityKwargs],
 ) -> bool:
     """``GopherQualityFilter``: True for each document datatrove keeps.
@@ -229,8 +298,15 @@ def gopher_quality(
         config: A :class:`GopherQuality` (or a datatrove
             ``GopherQualityFilter``); keyword arguments override its fields.
         threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
-            ``n`` tasks at once; ``1`` runs on the calling thread.
-        **kwargs: ``GopherQualityFilter``'s parameters.
+            ``n`` tasks at once; ``1`` runs on the calling thread. On the
+            Python-tokenizer path it applies to the Rust part only.
+        python_tokenizer: Tokenize with datatrove's own tokenizer for
+            ``language``, in Python on the calling thread, and run the filter
+            math in Rust on its words (see "Words and languages" above). Needed
+            for the languages pyroid does not tokenize natively; emits
+            :class:`pyroid.FallbackWarning` once per function and language.
+        **kwargs: ``GopherQualityFilter``'s parameters (``language``: a
+            datatrove language code or a word tokenizer object).
 
     Returns:
         bool, ``list[bool]``, ``tuple[bool, ...]``, or a :class:`pyroid.Column`
@@ -239,10 +315,16 @@ def gopher_quality(
     Raises:
         pyroid.InputError: ``texts`` is not one of the accepted kinds.
         TypeError: A parameter has the wrong type.
-        NotImplementedError: ``language`` is not one pyroid tokenizes.
+        ValueError: datatrove has no tokenizer for ``language`` (datatrove's
+            message), or a document of 2**30 characters or more (spaCy's
+            limit).
+        NotImplementedError: pyroid does not tokenize ``language`` natively
+            and ``python_tokenizer`` is not set (the message names
+            datatrove's tokenizer and what to install).
+        pyroid.PyroidError: The Python-tokenizer path needs datatrove or the
+            tokenizer's package, and it is not installed.
         ZeroDivisionError: As datatrove, e.g. ``min_doc_words=None`` and a
             document without words.
-        ValueError: A document of 2**30 characters or more (spaCy's limit).
         UnicodeEncodeError: A str contains a lone surrogate.
         UnicodeDecodeError: An Arrow row is not valid UTF-8.
     """
@@ -254,6 +336,7 @@ def gopher_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherQualityKwargs],
 ) -> list[bool]: ...
 @overload
@@ -263,6 +346,7 @@ def gopher_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherQualityKwargs],
 ) -> tuple[bool, ...]: ...
 @overload
@@ -272,6 +356,7 @@ def gopher_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherQualityKwargs],
 ) -> Column[bool]: ...
 @overload
@@ -281,6 +366,7 @@ def gopher_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherQualityKwargs],
 ) -> str | None:
     """``GopherQualityFilter``: datatrove's drop reason, ``None`` when kept.
@@ -301,6 +387,7 @@ def gopher_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherQualityKwargs],
 ) -> list[str | None]: ...
 @overload
@@ -310,6 +397,7 @@ def gopher_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherQualityKwargs],
 ) -> tuple[str | None, ...]: ...
 @overload
@@ -319,6 +407,7 @@ def gopher_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherQualityKwargs],
 ) -> Column[str]: ...
 
@@ -331,6 +420,7 @@ def gopher_repetition(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherRepetitionKwargs],
 ) -> bool:
     """``GopherRepetitionFilter``: True for each document datatrove keeps.
@@ -346,6 +436,7 @@ def gopher_repetition(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherRepetitionKwargs],
 ) -> list[bool]: ...
 @overload
@@ -355,6 +446,7 @@ def gopher_repetition(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherRepetitionKwargs],
 ) -> tuple[bool, ...]: ...
 @overload
@@ -364,6 +456,7 @@ def gopher_repetition(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherRepetitionKwargs],
 ) -> Column[bool]: ...
 @overload
@@ -373,6 +466,7 @@ def gopher_repetition_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherRepetitionKwargs],
 ) -> str | None:
     """``GopherRepetitionFilter``: datatrove's drop reason, ``None`` when kept.
@@ -389,6 +483,7 @@ def gopher_repetition_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherRepetitionKwargs],
 ) -> list[str | None]: ...
 @overload
@@ -398,6 +493,7 @@ def gopher_repetition_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherRepetitionKwargs],
 ) -> tuple[str | None, ...]: ...
 @overload
@@ -407,6 +503,7 @@ def gopher_repetition_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_GopherRepetitionKwargs],
 ) -> Column[str]: ...
 
@@ -419,6 +516,7 @@ def c4_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> bool:
     """``C4QualityFilter``'s document decision: True for each document kept.
@@ -435,6 +533,7 @@ def c4_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> list[bool]: ...
 @overload
@@ -444,6 +543,7 @@ def c4_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> tuple[bool, ...]: ...
 @overload
@@ -453,6 +553,7 @@ def c4_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> Column[bool]: ...
 @overload
@@ -462,6 +563,7 @@ def c4_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> str | None:
     """``C4QualityFilter``: datatrove's drop reason, ``None`` when kept.
@@ -476,6 +578,7 @@ def c4_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> list[str | None]: ...
 @overload
@@ -485,6 +588,7 @@ def c4_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> tuple[str | None, ...]: ...
 @overload
@@ -494,6 +598,7 @@ def c4_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> Column[str]: ...
 @overload
@@ -503,6 +608,7 @@ def c4_lines(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> str:
     """``C4QualityFilter``'s line removal: ``doc.text`` after the filter.
@@ -524,6 +630,7 @@ def c4_lines(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> list[str]: ...
 @overload
@@ -533,6 +640,7 @@ def c4_lines(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> tuple[str, ...]: ...
 @overload
@@ -542,6 +650,7 @@ def c4_lines(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_C4QualityKwargs],
 ) -> Column[str]: ...
 
@@ -554,6 +663,7 @@ def fineweb_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_FineWebQualityKwargs],
 ) -> bool:
     """``FineWebQualityFilter``: True for each document datatrove keeps.
@@ -569,6 +679,7 @@ def fineweb_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_FineWebQualityKwargs],
 ) -> list[bool]: ...
 @overload
@@ -578,6 +689,7 @@ def fineweb_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_FineWebQualityKwargs],
 ) -> tuple[bool, ...]: ...
 @overload
@@ -587,6 +699,7 @@ def fineweb_quality(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_FineWebQualityKwargs],
 ) -> Column[bool]: ...
 @overload
@@ -596,6 +709,7 @@ def fineweb_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_FineWebQualityKwargs],
 ) -> str | None:
     """``FineWebQualityFilter``: datatrove's drop reason, ``None`` when kept.
@@ -611,6 +725,7 @@ def fineweb_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_FineWebQualityKwargs],
 ) -> list[str | None]: ...
 @overload
@@ -620,6 +735,7 @@ def fineweb_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_FineWebQualityKwargs],
 ) -> tuple[str | None, ...]: ...
 @overload
@@ -629,6 +745,7 @@ def fineweb_quality_reasons(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
     **kwargs: Unpack[_FineWebQualityKwargs],
 ) -> Column[str]: ...
 
@@ -644,6 +761,7 @@ def apply(
     /,
     *,
     threads: int | None = None,
+    python_tokenizer: bool = False,
 ) -> FilterResult:
     """Run several filters in order, in one pass over each document.
 
@@ -655,11 +773,47 @@ def apply(
     Args:
         texts: As for :func:`gopher_quality`.
         filters: Config objects, or datatrove filter instances (or one of either)
-            (``GopherQualityFilter`` etc.) whose settings are read.
+            (``GopherQualityFilter`` etc.) whose settings are read. Each has its
+            own ``language``.
         threads: As for :func:`gopher_quality`.
+        python_tokenizer: As for :func:`gopher_quality`, for every step.
+            Steps are then run in datatrove's order: consecutive steps with the
+            same tokenizer share one tokenization per document, and a C4 step
+            runs as datatrove's ``C4QualityFilter``, whose rewritten text the
+            later steps tokenize again.
 
     Returns:
         ``FilterResult(keep, reason, text)``, each in the caller's kind.
+
+    Raises:
+        As for :func:`gopher_quality`.
+    """
+
+class Language(NamedTuple):
+    """How datatrove 0.10.1 tokenizes one language code (an entry of :func:`languages`)."""
+
+    tokenizer: str
+    """datatrove's tokenizer class: ``"SpaCyTokenizer"``, ``"StanzaTokenizer"``,
+    ``"IndicNLPTokenizer"``, ``"WhitespaceTokenizer"``, ``"KiwiTokenizer"``, ..."""
+    arg: str
+    """The argument it is built with (a spaCy, Stanza or Indic NLP language code), or ``""``."""
+    native: bool
+    """pyroid tokenizes this code natively; if not, it needs ``python_tokenizer=True``."""
+
+def languages() -> dict[str, Language]:
+    """Every language code datatrove 0.10.1 knows, with its tokenizer.
+
+    The keys are what ``language=`` accepts: datatrove's ``tokenizer_assignment.csv``
+    as ``load_word_tokenizer`` reads it (``"deu_Latn"``, ``"deu"``, ``"de"``, ...).
+    ``pyroid.dedup.languages`` is the same function.
+
+    Example::
+
+        >>> pyroid.filters.languages()["cmn_Hani"]
+        Language(tokenizer='SpaCyTokenizer', arg='zh', native=False)
+
+    Returns:
+        ``{code: Language(tokenizer, arg, native)}``, sorted by code.
     """
 
 def english_languages() -> list[str]:

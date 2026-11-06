@@ -8,8 +8,8 @@ The MinHash pipeline makes **the same removals as datatrove 0.10.1's**
 -> ``MinhashDedupFilter``, in memory and multi-threaded:
 
 1. *Signatures.* Each document is normalised with datatrove's
-   ``simplify_text``, split into words by pyroid's port of spaCy's English
-   tokenizer (datatrove's ``word_tokenize``), and every ``n_grams``-word window is
+   ``simplify_text``, split into words by the word tokenizer of ``language``
+   (datatrove's ``word_tokenize``; spaCy English by default), and every ``n_grams``-word window is
    hashed (``hash_fc``); ``num_buckets * hashes_per_bucket`` permutations
    ``(a * x + b) mod (2**61 - 1)``, with ``a`` and ``b`` drawn from numpy's
    ``RandomState(seed)`` exactly as datatrove draws them, give the signature.
@@ -31,6 +31,23 @@ arguments (``hash_fc=`` and ``precision=`` set ``hash_config``). The default
 is datatrove's default (xxhash/64); FineWeb used
 ``MinhashConfig(hash_config=HashConfig("sha1", 64))``.
 
+Languages
+---------
+``language=`` is ``MinhashDedupSignature(language=...)``: any of datatrove's
+language codes (:func:`languages`), as in ``pyroid.filters``. 3,999 of the
+4,343 codes are tokenized natively, in Rust, on every thread: those datatrove
+tokenizes with a rule-based ``spacy.blank(code)`` (57 spaCy languages, ``xx``
+included), ``IndicNLPTokenizer`` or ``WhitespaceTokenizer``. The other 344
+(Chinese with jieba, Japanese with SudachiPy, Vietnamese with pyvi, Stanza,
+Thai, Kiwi, ...) raise ``NotImplementedError`` unless
+``python_tokenizer=True``: then pyroid's ``simplify_text`` runs in Rust,
+**datatrove's own tokenizer splits each document in Python, on the calling
+thread**, and shingling, MinHash, bucketing and clustering run in Rust on
+those words, with one :class:`pyroid.FallbackWarning` per function and
+language. That path runs at the reference tokenizer's speed. ``language`` may
+also be a word tokenizer object (a datatrove ``WordTokenizer``, or anything
+with ``word_tokenize(text)``), called the same way.
+
 Known differences from datatrove
 --------------------------------
 - A str with a lone surrogate raises ``UnicodeEncodeError`` (pyroid's policy);
@@ -40,6 +57,8 @@ Known differences from datatrove
   ``ValueError`` (datatrove silently produces no signatures or fails later).
 - Index files (``index_folder``, ``create_index_name``,
   ``only_dedup_in_index``) are not supported.
+- An unknown ``language`` raises datatrove's ``ValueError`` when the call
+  starts, as ``MinhashDedupSignature`` does when it is built.
 """
 
 from dataclasses import dataclass
@@ -47,15 +66,20 @@ from typing import Any, Final, overload
 
 from pyroid._pyroid import Column
 from pyroid._typing import ArrowStrings
+from pyroid.filters import Language as Language
+from pyroid.filters import _WordTokenizer
+from pyroid.filters import languages as languages
 
 __all__ = [
     "DATATROVE_VERSION",
     "ExactDedup",
     "HashConfig",
+    "Language",
     "MinHashDedup",
     "MinhashConfig",
     "TextNormConfig",
     "exact_dedup",
+    "languages",
     "minhash_dedup",
     "minhash_signatures",
     "simplify_text",
@@ -64,7 +88,7 @@ __all__ = [
 DATATROVE_VERSION: Final[str]
 _UNICODE_VERSION: Final[str]
 
-def _native_config(cfg: MinhashConfig) -> Any: ...
+def _native_config(cfg: MinhashConfig, language: str | None = None) -> Any: ...
 
 @dataclass(frozen=True)
 class HashConfig:
@@ -125,7 +149,13 @@ class MinhashConfig:
 
 @overload
 def minhash_signatures(
-    texts: str, config: Any = None, *, threads: int | None = None, **kwargs: Any
+    texts: str,
+    config: Any = None,
+    *,
+    threads: int | None = None,
+    language: str | _WordTokenizer = "eng",
+    python_tokenizer: bool = False,
+    **kwargs: Any,
 ) -> list[int] | None:
     """MinHash signature of each document, identical to datatrove's.
 
@@ -140,6 +170,14 @@ def minhash_signatures(
             dict of its fields, or ``None`` for the defaults.
         threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
             ``n`` tasks at once; ``1`` runs on the calling thread.
+        language: datatrove's ``MinhashDedupSignature(language=...)``: the
+            language code whose word tokenizer splits the simplified text (see
+            "Languages" above), or a word tokenizer object.
+        python_tokenizer: Tokenize with datatrove's own tokenizer, in Python
+            on the calling thread (needed for the languages pyroid does not
+            tokenize natively; emits :class:`pyroid.FallbackWarning` once per
+            function and language). ``simplify_text``, shingling and MinHash
+            still run in Rust.
         **kwargs: ``MinhashConfig`` fields to override, plus ``hash_fc`` and
             ``precision``.
 
@@ -148,8 +186,14 @@ def minhash_signatures(
 
     Raises:
         pyroid.InputError: ``texts`` is not one of the accepted kinds.
-        TypeError: An unknown or mistyped config field.
-        ValueError: A config value out of range.
+        TypeError: An unknown or mistyped config field, or a ``language``
+            that is neither a str nor a word tokenizer.
+        ValueError: A config value out of range, or a ``language`` datatrove
+            has no tokenizer for (datatrove's message).
+        NotImplementedError: pyroid does not tokenize ``language`` natively
+            and ``python_tokenizer`` is not set.
+        pyroid.PyroidError: The Python-tokenizer path needs datatrove or the
+            tokenizer's package, and it is not installed.
         UnicodeEncodeError: A str contains a lone surrogate.
         UnicodeDecodeError: An Arrow row is not valid UTF-8.
     """
@@ -160,11 +204,19 @@ def minhash_signatures(
     config: Any = None,
     *,
     threads: int | None = None,
+    language: str | _WordTokenizer = "eng",
+    python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> list[list[int] | None]: ...
 @overload
 def minhash_dedup(
-    texts: str, config: Any = None, *, threads: int | None = None, **kwargs: Any
+    texts: str,
+    config: Any = None,
+    *,
+    threads: int | None = None,
+    language: str | _WordTokenizer = "eng",
+    python_tokenizer: bool = False,
+    **kwargs: Any,
 ) -> bool:
     """Keep mask of datatrove's MinHash dedup over ``texts`` (one corpus).
 
@@ -175,6 +227,8 @@ def minhash_dedup(
         texts: A str, a list or tuple of str, or an Arrow string array/column.
         config: As for :func:`minhash_signatures`.
         threads: As for :func:`minhash_signatures`.
+        language: As for :func:`minhash_signatures`.
+        python_tokenizer: As for :func:`minhash_signatures`.
         **kwargs: As for :func:`minhash_signatures`.
 
     Returns:
@@ -182,24 +236,38 @@ def minhash_dedup(
         :class:`pyroid.Column` of bools (Arrow nulls stay null).
 
     Raises:
-        pyroid.InputError: ``texts`` is not one of the accepted kinds.
-        TypeError: An unknown or mistyped config field.
-        ValueError: A config value out of range.
-        UnicodeEncodeError: A str contains a lone surrogate.
-        UnicodeDecodeError: An Arrow row is not valid UTF-8.
+        As for :func:`minhash_signatures`.
     """
 
 @overload
 def minhash_dedup(
-    texts: list[str], config: Any = None, *, threads: int | None = None, **kwargs: Any
+    texts: list[str],
+    config: Any = None,
+    *,
+    threads: int | None = None,
+    language: str | _WordTokenizer = "eng",
+    python_tokenizer: bool = False,
+    **kwargs: Any,
 ) -> list[bool]: ...
 @overload
 def minhash_dedup(
-    texts: tuple[str, ...], config: Any = None, *, threads: int | None = None, **kwargs: Any
+    texts: tuple[str, ...],
+    config: Any = None,
+    *,
+    threads: int | None = None,
+    language: str | _WordTokenizer = "eng",
+    python_tokenizer: bool = False,
+    **kwargs: Any,
 ) -> tuple[bool, ...]: ...
 @overload
 def minhash_dedup(
-    texts: ArrowStrings, config: Any = None, *, threads: int | None = None, **kwargs: Any
+    texts: ArrowStrings,
+    config: Any = None,
+    *,
+    threads: int | None = None,
+    language: str | _WordTokenizer = "eng",
+    python_tokenizer: bool = False,
+    **kwargs: Any,
 ) -> Column[bool]: ...
 @overload
 def simplify_text(texts: str, config: Any = None, *, threads: int | None = None) -> str:
@@ -295,16 +363,29 @@ class MinHashDedup:
         config: As for :func:`minhash_signatures`.
         threads: Default ``threads=`` for :meth:`add`, :meth:`fit` and the
             clustering.
+        language: As for :func:`minhash_signatures`, for every document added.
+        python_tokenizer: As for :func:`minhash_signatures` (the warning is
+            emitted once, when the index is made).
         **kwargs: As for :func:`minhash_signatures`.
     """
 
     _state: Any
     def __init__(
-        self, config: Any = None, *, threads: int | None = None, **kwargs: Any
+        self,
+        config: Any = None,
+        *,
+        threads: int | None = None,
+        language: str | _WordTokenizer = "eng",
+        python_tokenizer: bool = False,
+        **kwargs: Any,
     ) -> None: ...
     @property
     def config(self) -> MinhashConfig:
         """The configuration (a :class:`MinhashConfig`)."""
+
+    @property
+    def language(self) -> str | _WordTokenizer:
+        """The ``language`` the documents are tokenized for (a code or a tokenizer object)."""
 
     def add(
         self, texts: str | list[str] | tuple[str, ...] | ArrowStrings, *, threads: int | None = None

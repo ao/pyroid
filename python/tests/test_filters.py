@@ -829,11 +829,21 @@ def test_ngram_size_below_one_raises_value_error(key: str, n: int) -> None:
         pf.apply([], [pf.GopherRepetition(**two)])
 
 
-@pytest.mark.parametrize("lang", ["fra", "de", "zh", "", "ENG"])
-def test_unknown_language_raises_not_implemented(lang: str) -> None:
+@pytest.mark.parametrize("lang", ["cmn_Hani", "jpn_Jpan", "vie_Latn", "kaz_Cyrl"])
+def test_language_without_native_tokenizer_raises_not_implemented(lang: str) -> None:
+    # Codes datatrove tokenizes with a segmenter pyroid does not port (jieba,
+    # SudachiPy, pyvi, Stanza); python_tokenizer=True is the opt-in.
     with pytest.raises(NotImplementedError, match="tokenizer"):
         pf.gopher_quality("x", language=lang)
     with pytest.raises(NotImplementedError, match="tokenizer"):
+        pf.apply([], [pf.C4Quality(language=lang)])
+
+
+@pytest.mark.parametrize("lang", ["", "ENG", "xyz_Zzzz"])
+def test_language_unknown_to_datatrove_raises_value_error(lang: str) -> None:
+    with pytest.raises(ValueError, match="tokenizer"):
+        pf.gopher_quality("x", language=lang)
+    with pytest.raises(ValueError, match="tokenizer"):
         pf.apply([], [pf.C4Quality(language=lang)])
 
 
@@ -973,6 +983,7 @@ def test_module_surface() -> None:
             "FineWebQuality",
             "GopherQuality",
             "GopherRepetition",
+            "Language",
             "apply",
             "c4_lines",
             "c4_quality",
@@ -984,6 +995,7 @@ def test_module_surface() -> None:
             "gopher_quality_reasons",
             "gopher_repetition",
             "gopher_repetition_reasons",
+            "languages",
         ]
     )
     for f in [*ALL_FUNCS, pf.apply, pf.english_languages]:
