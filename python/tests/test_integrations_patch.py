@@ -210,7 +210,7 @@ def test_ftfy_shim_with_real_ftfy() -> None:
             assert isinstance(ftfy, types.ModuleType) and type(ftfy) is not types.ModuleType
             assert ftfy.__name__ == "ftfy" and ftfy.__pyroid__ is True
             assert ftfy.__version__ == impl.FTFY_VERSION == "6.3.1"
-            assert real is not ftfy and real.__file__.endswith("ftfy/__init__.py")
+            assert real is not ftfy and real.__file__.endswith(os.path.join("ftfy", "__init__.py"))
             # pyroid's objects themselves (no wrapper), except what pyroid only delegates.
             for name in impl.__all__:
                 want = getattr(real if name in impl.DELEGATED else impl, name)
@@ -796,7 +796,8 @@ def probe(_=None):
 
 if __name__ == "__main__":
     results = {"main": probe()}
-    for method in ("spawn", "forkserver"):
+    # Windows has no forkserver.
+    for method in (m for m in ("spawn", "forkserver") if m in mp.get_all_start_methods()):
         with mp.get_context(method).Pool(2) as pool:
             results[method] = pool.map(probe, range(2))
     code = "import anyascii, ftfy; print(getattr(ftfy, '__pyroid__', 0), anyascii.__pyroid__)"
@@ -812,7 +813,9 @@ def test_run_patches_child_processes_and_warns_once(tmp_path: Path) -> None:
     proc = run_cli(["-p", "ftfy,anyascii", "children.py"], cwd=tmp_path)
     out = ok(proc)
     assert out["main"] == [True, True]
-    assert out["spawn"] == out["forkserver"] == [[True, True], [True, True]]
+    assert out["spawn"] == [[True, True], [True, True]]
+    if sys.platform != "win32":
+        assert out["forkserver"] == [[True, True], [True, True]]
     assert out["subprocess"] == ["True", "True"]
     # Shown by the parent only, not again by each worker (stderr is shared with them).
     assert out["subprocess_stderr"] == ""
