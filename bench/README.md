@@ -85,7 +85,7 @@ Thread scaling: pass `BENCH_THREADS` / `RAYON_NUM_THREADS`; workers inherit them
 | `perf_matrix.py run/table/compare` | candidate-only A/B: every module's rows at pool sizes 1 and 8 (`--per-doc`: Python threads), gated first; `compare A B` flags changes of 5% or more |
 | `chain.py` | the FineWeb chain natively in pyroid, one process, Arrow in, `threads=N`; `--digest --expect D` gates it on `pipeline.py`'s per-doc digest of the datatrove chain |
 | `pgo_train.py`, `pgo_build.sh` | profile-guided release wheels: training on headline[10000:20000] (never the benchmarked dev slice), then `-Cprofile-use` |
-| `run_consolidated.sh`, `consolidate.py` | the consolidated benchmark: `run_baselines.sh` with all five pyroid modules on 3.13, pyroid on 3.15t at pools 1 and 8, `chain.py` under hyperfine, then `CONSOLIDATED.md`, `consolidated.json` (docs' benchmarks.json row schema) and light/dark charts, among them the README hero (`charts/hero-{light,dark}.svg`; `--png` / `BENCH_PNG=1` add PNG previews) |
+| `run_consolidated.sh`, `consolidate.py` | the consolidated benchmark: `run_baselines.sh` with all five pyroid modules on 3.13, pyroid on 3.15t at pools 1 and 8, `chain.py` under hyperfine, then `CONSOLIDATED.md`, `consolidated.json` (docs' benchmarks.json row schema) and light/dark charts, among them the README hero (`charts/hero-{light,dark}.svg`; `--png` / `BENCH_PNG=1` add PNG previews). The dev slice by default; the 100k headline slice with `BENCH_E2E_CORPUS=headline BENCH_EQUIV_DOCS=100000 BENCH_EQUIV_WORKERS=8` (knobs at the top of the script). On AWS EC2, `machine_info.py` reads the instance type from DMI (results under `aws-<instance type>/`) and the labels name the instance, CPU and OS |
 
 ## json_repair (`json_repair_bench.py`)
 

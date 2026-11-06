@@ -30,12 +30,17 @@
 #   BENCH_GATE_LIMIT [0 = all docs], BENCH_GATE_WORKERS [8]
 #   BENCH_E2E_CORPUS [headline], BENCH_E2E_DOCS [0 = all], BENCH_E2E_WORKERS [1 8], BENCH_E2E_RUNS [5],
 #   BENCH_E2E_WARMUP [1], BENCH_E2E_STAGES [all seven stages; "" skips per-stage e2e], BENCH_E2E_STAGE_WORKERS [8]
-#   BENCH_EQUIV_DOCS [10000] (full-chain digest runs; the headline's first 10k = dev, so check-refs covers them)
+#   BENCH_EQUIV_DOCS [10000] (full-chain digest runs; the headline's first 10k = dev, so check-refs covers them;
+#                    later headline docs have no pinned refs: check-refs counts them as no_ref, the digests still
+#                    compare every worker count and the candidate)
+#   BENCH_EQUIV_WORKERS [BENCH_E2E_WORKERS]  worker counts of the full-chain digest runs (8 alone for the 100k
+#                    headline: a 1-worker datatrove digest of 100k docs takes most of an hour)
 #   BENCH_EQUIV_STAGE_CORPUS [parity] (one-stage runs vs refs: dev + adversarial, 13,232 docs)
 #   BENCH_IMPL [""]  space-separated SUITE=MODULE candidates: extra pyperf rows + extra e2e commands
 #                    (translit=MODULE only adds pyperf rows: gates.py and pipeline.py have no translit stage)
 #   BENCH_IMPL_NAME [candidate]  hyperfine name prefix of the candidate e2e commands (charts accent "pyroid*"/"candidate*")
-#   BENCH_SKIP [""]  comma list of steps: gates,stages,memory,equiv,e2e,e2e_stages,charts
+#   BENCH_SKIP [""]  comma list of steps: gates,stages,memory,equiv,e2e,e2e_stages,charts; equiv_stages skips only
+#                    the one-stage runs against the refs (a headline run after a dev run on the same refs)
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -71,6 +76,7 @@ E2E_WARMUP=${BENCH_E2E_WARMUP:-1}
 E2E_STAGES=${BENCH_E2E_STAGES-fix_text lid gopher_repetition gopher_quality c4_quality fineweb_quality minhash}
 E2E_STAGE_WORKERS=${BENCH_E2E_STAGE_WORKERS:-8}
 EQUIV_DOCS=${BENCH_EQUIV_DOCS:-10000}
+EQUIV_WORKERS=${BENCH_EQUIV_WORKERS:-$E2E_WORKERS}
 EQUIV_STAGE_CORPUS=${BENCH_EQUIV_STAGE_CORPUS:-parity}
 IMPL=${BENCH_IMPL:-}
 CAND=${BENCH_IMPL_NAME:-candidate}  # e2e command name for the BENCH_IMPL candidate (e.g. pyroid-0.8.0)
@@ -103,7 +109,8 @@ cfg["resolved"] = {"python": "$PY", "hyperfine": "$HF", "machine": "$MACHINE", "
     "sizes_fast": "$SIZES_FAST", "sizes_slow": "$SIZES_SLOW", "pyperf": "$PYPERF", "memory": "$MEMORY",
     "gate_limit": "$GATE_LIMIT", "e2e_corpus": "$E2E_CORPUS", "e2e_docs": $E2E_N, "e2e_workers": "$E2E_WORKERS",
     "e2e_runs": "$E2E_RUNS", "e2e_warmup": "$E2E_WARMUP", "e2e_stages": "$E2E_STAGES",
-    "e2e_stage_workers": "$E2E_STAGE_WORKERS", "equiv_docs": $EQUIV_N, "impl": "$IMPL", "skip": "$SKIP"}
+    "e2e_stage_workers": "$E2E_STAGE_WORKERS", "equiv_docs": $EQUIV_N, "equiv_workers": "$EQUIV_WORKERS",
+    "impl": "$IMPL", "skip": "$SKIP"}
 open(sys.argv[1], "w").write(json.dumps(cfg, indent=1) + "\n")
 EOF
 
@@ -146,12 +153,12 @@ run_pipe() {  # label, then pipeline args; the summary goes to $EQ
     pin "$PY" pipeline.py "$@" --quiet --label "$label" --summary-log "$EQ" --out "$WORK/$label" >/dev/null
 }
 if ! skip equiv; then
-    for s in $E2E_STAGES; do
+    for s in $(skip equiv_stages || echo "$E2E_STAGES"); do
         log "equivalence: --stages $s on $EQUIV_STAGE_CORPUS at $E2E_STAGE_WORKERS workers vs pinned refs"
         run_pipe "refs-$s" --stages "$s" --corpus "$EQUIV_STAGE_CORPUS" --workers "$E2E_STAGE_WORKERS" --check-refs
     done
     labels=()
-    for w in $E2E_WORKERS; do
+    for w in $EQUIV_WORKERS; do
         log "equivalence: full chain, $E2E_CORPUS[:$EQUIV_N], $w workers (digest + check-refs)"
         run_pipe "digest-w$w" --corpus "$E2E_CORPUS" --docs "$EQUIV_N" --workers "$w" --check-refs
         labels+=("digest-w$w")
