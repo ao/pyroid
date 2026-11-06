@@ -1422,10 +1422,444 @@ mod badwords {
 
 // ---- URLFilter ----
 mod url {
-    use pyo3::prelude::*;
+    //! The native object behind `pyroid.filters.URLFilter`: datatrove's
+    //! `URLFilter` over a batch of URLs, detached, on the shared pool. The
+    //! Python side builds the lists and the suffix trie (from the tldextract
+    //! instance) and gives a resolver for the lookups the kernel defers.
 
-    #[allow(clippy::unnecessary_wraps)] // placeholder
-    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
+    use std::borrow::Cow;
+
+    use pyo3::exceptions::{PyAttributeError, PyOverflowError, PyRuntimeError, PyValueError};
+    use pyo3::prelude::*;
+    use pyo3::pybacked::PyBackedStr;
+    use pyo3::types::{PyBool, PyList, PyString, PyTuple};
+    use pyroid_core::columnar::{BoolBuffers, StringBuffers};
+    use pyroid_core::filters::Reason;
+    use pyroid_core::filters::url::{
+        self as kernel, BuildError, StrSet, SuffixList, UrlError, UrlFilter, UrlLists,
+    };
+    use pyroid_core::ftfy::UnicodeVersion;
+    use pyroid_core::par;
+
+    use crate::arrow::{ArrowStrings, Chunk, Column, ColumnType, StrType, build_error};
+    use crate::batch::map_values;
+    use crate::errors::with_note;
+    use crate::input::{TextInput, Threads, ThreadsArg, texts_and_threads, threads as pool};
+
+    /// `(strings, self_decoding, aliases, nodes, edges, defer_xn)`: see
+    /// `SuffixList::new`.
+    type TrieArg = (
+        Vec<String>,
+        Vec<u32>,
+        Vec<(String, u32)>,
+        Vec<(bool, bool)>,
+        Vec<(u32, u32, u32)>,
+        bool,
+    );
+    /// `(entries, file texts)`: parsed entries, and whole files to parse as
+    /// `parse_list(f, do_normalize=False)` does.
+    type SetArg = (Vec<PyBackedStr>, Vec<PyBackedStr>);
+
+    fn build_set(entries: &[PyBackedStr], texts: &[PyBackedStr]) -> Result<StrSet, BuildError> {
+        let mut set = StrSet::new();
+        set.reserve(entries.len(), entries.iter().map(|e| e.len()).sum());
+        for e in entries {
+            set.insert(e)?;
+        }
+        for t in texts {
+            set.extend_stripped_lines(t)?;
+        }
+        Ok(set)
+    }
+
+    fn build_err(e: BuildError) -> PyErr {
+        match e {
+            BuildError::TooLarge => PyOverflowError::new_err(e.to_string()),
+            BuildError::BadTrie(_) => PyValueError::new_err(e.to_string()),
+        }
+    }
+
+    /// Why one URL could not be filtered.
+    #[derive(Clone, Copy)]
+    enum Bad {
+        Empty,
+        Url(UrlError),
+    }
+
+    /// (chunk, row) of item `i` of an Arrow input.
+    fn locate(a: &ArrowStrings, mut i: usize) -> (usize, usize) {
+        for (c, chunk) in a.chunks.iter().enumerate() {
+            if i < chunk.len() {
+                return (c, i);
+            }
+            i -= chunk.len();
+        }
+        (a.chunks.len(), i)
+    }
+
+    fn which(input: &TextInput, i: usize) -> String {
+        match input {
+            TextInput::Str(_) => "the str".to_owned(),
+            TextInput::List(_) | TextInput::Tuple(_) => format!("the str at index {i}"),
+            TextInput::Arrow(a) => {
+                let (c, r) = locate(a, i);
+                format!("row {r} of chunk {c} of the Arrow input")
+            }
+        }
+    }
+
+    /// Item `i` (not a null: the kernel has seen it).
+    fn url_at(input: &TextInput, i: usize) -> &str {
+        match input {
+            TextInput::Str(s) => s,
+            TextInput::List(d) | TextInput::Tuple(d) => &d[i],
+            TextInput::Arrow(a) => {
+                let (c, r) = locate(a, i);
+                a.chunks[c].get(r).and_then(Result::ok).unwrap_or_default()
+            }
+        }
+    }
+
+    fn str_column<'py, S: AsRef<str> + Sync>(
+        py: Python<'py>,
+        a: &ArrowStrings,
+        vals: &[Option<S>],
+        t: par::Threads,
+        large: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (mut chunks, mut start) = (Vec::new(), 0);
+        for chunk in &a.chunks {
+            let part = &vals[start..start + chunk.len()];
+            start += chunk.len();
+            if large {
+                chunks.push(Chunk::LargeUtf8(
+                    StringBuffers::build(part, t).map_err(build_error)?,
+                ));
+            } else {
+                let built = StringBuffers::build_split(part, t).map_err(build_error)?;
+                chunks.extend(built.into_iter().map(Chunk::Utf8));
+            }
+        }
+        let ty = if large {
+            ColumnType::LargeUtf8
+        } else {
+            ColumnType::Utf8
+        };
+        Ok(Bound::new(py, Column::new(ty, &a.field.name, chunks))?.into_any())
+    }
+
+    fn bool_column<'py>(
+        py: Python<'py>,
+        a: &ArrowStrings,
+        vals: &[Option<bool>],
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (mut chunks, mut start) = (Vec::new(), 0);
+        for chunk in &a.chunks {
+            chunks.push(Chunk::Bool(BoolBuffers::build(
+                &vals[start..start + chunk.len()],
+            )));
+            start += chunk.len();
+        }
+        Ok(Bound::new(py, Column::new(ColumnType::Bool, &a.field.name, chunks))?.into_any())
+    }
+
+    fn seq<'py, T>(
+        py: Python<'py>,
+        input: &TextInput,
+        items: impl ExactSizeIterator<Item = T>,
+    ) -> PyResult<Bound<'py, PyAny>>
+    where
+        T: IntoPyObject<'py>,
+    {
+        Ok(match input {
+            TextInput::Tuple(_) => PyTuple::new(py, items)?.into_any(),
+            _ => PyList::new(py, items)?.into_any(),
+        })
+    }
+
+    /// datatrove 0.10.1's `URLFilter`, built once by `pyroid.filters.URLFilter`.
+    #[pyclass(frozen, module = "pyroid.filters", name = "_URLFilter")]
+    #[derive(Debug)]
+    pub(super) struct NativeUrlFilter {
+        inner: UrlFilter,
+        /// `url -> (top_domain_under_public_suffix, fqdn)` from tldextract,
+        /// for the lookups the kernel defers.
+        resolver: Py<PyAny>,
+    }
+
+    impl NativeUrlFilter {
+        fn error(py: Python<'_>, input: &TextInput, i: usize, e: Bad) -> PyErr {
+            let base = match e {
+                Bad::Empty => PyValueError::new_err(
+                    "empty URL: datatrove's URLFilter asserts that every document has one \
+                     (AssertionError: Document does not have url in its metadata)",
+                ),
+                Bad::Url(e @ UrlError::NoAutomaton) => PyAttributeError::new_err(e.to_string()),
+                Bad::Url(e @ UrlError::Deferred) => PyRuntimeError::new_err(e.to_string()),
+            };
+            with_note(
+                py,
+                base,
+                format!("pyroid.filters.URLFilter: raised by {}", which(input, i)),
+            )
+        }
+
+        fn resolve(&self, py: Python<'_>, url: &str) -> PyResult<(String, String)> {
+            self.resolver.bind(py).call1((url,))?.extract()
+        }
+
+        /// datatrove's verdict per URL (`None` for Arrow nulls, `Some(None)` when kept).
+        #[allow(clippy::option_option)]
+        fn verdicts(
+            &self,
+            py: Python<'_>,
+            input: &TextInput,
+            t: Option<Threads>,
+            allow_empty: bool,
+        ) -> PyResult<Vec<Option<Option<Reason>>>> {
+            let f = &self.inner;
+            let raw = map_values(py, input, t, |s| {
+                if s.is_empty() && !allow_empty {
+                    return Err(Bad::Empty);
+                }
+                f.check(s).map_err(Bad::Url)
+            })?;
+            let mut out = Vec::with_capacity(raw.len());
+            for (i, v) in raw.into_iter().enumerate() {
+                out.push(match v {
+                    None => None,
+                    Some(Ok(r)) => Some(r),
+                    Some(Err(Bad::Url(UrlError::Deferred))) => {
+                        let url = url_at(input, i);
+                        let (rd, fqdn) = self.resolve(py, url)?;
+                        let r = f.check_with_parts(url, &rd, &fqdn);
+                        Some(r.map_err(|e| Self::error(py, input, i, Bad::Url(e)))?)
+                    }
+                    Some(Err(e)) => return Err(Self::error(py, input, i, e)),
+                });
+            }
+            Ok(out)
+        }
+    }
+
+    #[pymethods]
+    impl NativeUrlFilter {
+        /// Built by `pyroid.filters.URLFilter` (see `_from_parsed` there).
+        #[new]
+        #[pyo3(signature = (trie, domains, urls, words, unicode_version, resolver))]
+        fn new(
+            py: Python<'_>,
+            trie: TrieArg,
+            domains: SetArg,
+            urls: SetArg,
+            words: (Vec<String>, Vec<String>, Vec<String>, u64),
+            unicode_version: &str,
+            resolver: Py<PyAny>,
+        ) -> PyResult<Self> {
+            let version =
+                UnicodeVersion::from_unidata_version(unicode_version).ok_or_else(|| {
+                    PyValueError::new_err(format!("unicode_version={unicode_version:?}"))
+                })?;
+            let (strings, self_ids, aliases, nodes, edges, defer_xn) = trie;
+            let (banned_words, soft_banned_words, banned_subwords, min_soft_words) = words;
+            let inner = py
+                .detach(|| -> Result<UrlFilter, BuildError> {
+                    let suffixes =
+                        SuffixList::new(strings, &self_ids, aliases, &nodes, &edges, defer_xn)?;
+                    let lists = UrlLists {
+                        domains: build_set(&domains.0, &domains.1)?,
+                        urls: build_set(&urls.0, &urls.1)?,
+                        banned_words,
+                        soft_banned_words,
+                        banned_subwords,
+                        min_soft_words,
+                    };
+                    Ok(UrlFilter::new(suffixes, lists, version))
+                })
+                .map_err(build_err)?;
+            Ok(Self { inner, resolver })
+        }
+
+        /// datatrove's drop reason per URL (`None` when kept).
+        #[pyo3(signature = (urls, /, *, threads = None, allow_empty = false))]
+        fn reasons<'py>(
+            &self,
+            py: Python<'py>,
+            urls: &Bound<'py, PyAny>,
+            threads: Option<ThreadsArg>,
+            allow_empty: bool,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let (input, t) = texts_and_threads(urls, threads, None)?;
+            let v = self.verdicts(py, &input, t, allow_empty)?;
+            let obj = |r: Option<Reason>| -> Bound<'py, PyAny> {
+                match r {
+                    Some(r) => PyString::intern(py, &r.as_str()).into_any(),
+                    None => py.None().into_bound(py),
+                }
+            };
+            match &input {
+                TextInput::Str(_) => Ok(obj(v[0].flatten())),
+                TextInput::List(_) | TextInput::Tuple(_) => {
+                    seq(py, &input, v.iter().map(|r| obj(r.flatten())))
+                }
+                TextInput::Arrow(a) => {
+                    let vals: Vec<Option<Cow<'static, str>>> =
+                        v.iter().map(|r| r.flatten().map(|r| r.as_str())).collect();
+                    str_column(py, a, &vals, pool(t), false)
+                }
+            }
+        }
+
+        /// True for each URL datatrove keeps.
+        #[pyo3(signature = (urls, /, *, threads = None, allow_empty = false))]
+        fn keep<'py>(
+            &self,
+            py: Python<'py>,
+            urls: &Bound<'py, PyAny>,
+            threads: Option<ThreadsArg>,
+            allow_empty: bool,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let (input, t) = texts_and_threads(urls, threads, None)?;
+            let v = self.verdicts(py, &input, t, allow_empty)?;
+            match &input {
+                TextInput::Str(_) => Ok(PyBool::new(py, v[0].flatten().is_none())
+                    .to_owned()
+                    .into_any()),
+                TextInput::List(_) | TextInput::Tuple(_) => {
+                    seq(py, &input, v.iter().map(|r| r.flatten().is_none()))
+                }
+                TextInput::Arrow(a) => {
+                    let vals: Vec<Option<bool>> =
+                        v.iter().map(|r| r.map(|r| r.is_none())).collect();
+                    bool_column(py, a, &vals)
+                }
+            }
+        }
+
+        /// tldextract's `(top_domain_under_public_suffix, fqdn)` per URL.
+        #[pyo3(signature = (urls, /, *, threads = None))]
+        fn domains<'py>(
+            &self,
+            py: Python<'py>,
+            urls: &Bound<'py, PyAny>,
+            threads: Option<ThreadsArg>,
+        ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+            let (input, t) = texts_and_threads(urls, threads, None)?;
+            let f = &self.inner;
+            let raw = map_values(py, &input, t, |s| {
+                f.domain_parts(s)
+                    .ok()
+                    .map(|p| (p.registered.into_owned(), p.fqdn.into_owned()))
+            })?;
+            let mut v = Vec::with_capacity(raw.len());
+            for (i, p) in raw.into_iter().enumerate() {
+                v.push(match p {
+                    None => None,
+                    Some(Some(p)) => Some(p),
+                    Some(None) => Some(self.resolve(py, url_at(&input, i))?),
+                });
+            }
+            match &input {
+                TextInput::Str(_) => {
+                    let (rd, fqdn) = v.swap_remove(0).unwrap_or_default();
+                    Ok((
+                        PyString::new(py, &rd).into_any(),
+                        PyString::new(py, &fqdn).into_any(),
+                    ))
+                }
+                TextInput::List(_) | TextInput::Tuple(_) => {
+                    let pairs: Vec<(String, String)> = v.into_iter().flatten().collect();
+                    Ok((
+                        seq(py, &input, pairs.iter().map(|p| PyString::new(py, &p.0)))?,
+                        seq(py, &input, pairs.iter().map(|p| PyString::new(py, &p.1)))?,
+                    ))
+                }
+                TextInput::Arrow(a) => {
+                    let large = a.field.ty == StrType::LargeUtf8;
+                    let rd: Vec<Option<&str>> =
+                        v.iter().map(|p| p.as_ref().map(|p| &*p.0)).collect();
+                    let fqdn: Vec<Option<&str>> =
+                        v.iter().map(|p| p.as_ref().map(|p| &*p.1)).collect();
+                    Ok((
+                        str_column(py, a, &rd, pool(t), large)?,
+                        str_column(py, a, &fqdn, pool(t), large)?,
+                    ))
+                }
+            }
+        }
+
+        /// Is `s` a blocked domain?
+        fn contains_domain(&self, s: &str) -> bool {
+            self.inner.domains().contains(s)
+        }
+
+        /// Is `s` a blocked URL?
+        fn contains_url(&self, s: &str) -> bool {
+            self.inner.urls().contains(s)
+        }
+
+        /// Number of blocked domains.
+        #[getter]
+        fn num_domains(&self) -> usize {
+            self.inner.domains().len()
+        }
+
+        /// Number of blocked URLs.
+        #[getter]
+        fn num_urls(&self) -> usize {
+            self.inner.urls().len()
+        }
+
+        /// Bytes held by the domain and URL sets.
+        #[getter]
+        fn heap_bytes(&self) -> usize {
+            self.inner.heap_bytes()
+        }
+
+        /// `(nodes, strings, labels)` of the suffix trie.
+        #[getter]
+        fn trie_size(&self) -> (usize, usize, usize) {
+            let s = self.inner.suffixes();
+            (s.node_count(), s.string_count(), s.label_count())
+        }
+
+        fn __repr__(&self) -> String {
+            format!(
+                "<pyroid.filters native URLFilter: {} domains, {} urls>",
+                self.inner.domains().len(),
+                self.inner.urls().len()
+            )
+        }
+    }
+
+    /// tldextract's `looks_like_ipv6` (for tests).
+    #[pyfunction]
+    #[pyo3(name = "_looks_like_ipv6")]
+    fn looks_like_ipv6(s: &str) -> bool {
+        kernel::looks_like_ipv6(s)
+    }
+
+    /// tldextract's `lenient_netloc` (for tests).
+    #[pyfunction]
+    #[pyo3(name = "_lenient_netloc")]
+    fn lenient_netloc(s: &str) -> String {
+        kernel::lenient_netloc(s).to_owned()
+    }
+
+    /// `s.lower()` as the URL filter computes it (for tests).
+    #[pyfunction]
+    #[pyo3(name = "_py_lower")]
+    fn py_lower(s: &str, unicode_version: &str) -> PyResult<String> {
+        let v = UnicodeVersion::from_unidata_version(unicode_version)
+            .ok_or_else(|| PyValueError::new_err(format!("unicode_version={unicode_version:?}")))?;
+        Ok(kernel::py_lower(s, v).into_owned())
+    }
+
+    pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        m.add_class::<NativeUrlFilter>()?;
+        m.add_function(wrap_pyfunction!(looks_like_ipv6, m)?)?;
+        m.add_function(wrap_pyfunction!(lenient_netloc, m)?)?;
+        m.add_function(wrap_pyfunction!(py_lower, m)?)?;
         Ok(())
     }
 }

@@ -1293,6 +1293,476 @@ def c4_badwords_reasons(
 # ---- end C4BadWordsFilter ----
 
 # ---- URLFilter ----
+import os as _os  # noqa: E402
+import re as _re  # noqa: E402
+import sys as _sys  # noqa: E402
+
+from pyroid._pyroid import PyroidError as _PyroidError  # noqa: E402
+
+__all__ += [
+    "TLDEXTRACT_VERSION",
+    "DatatroveURLLists",
+    "URLFilter",
+    "URLFilterConfig",
+    "datatrove_url_lists",
+    "url_filter",
+    "url_filter_reasons",
+]
+
+#: The tldextract release whose ``extract_str`` the URL filter reproduces.
+TLDEXTRACT_VERSION = "5.4.0"
+
+_URL_ASSET = "url_filterblacklistsv0_3_0.tar.gz"
+_URL_NORMALIZER = _re.compile(r"[^a-zA-Z0-9]+")
+_NEVER = 2**64 - 1
+_NO_AUTOMATON = (
+    "Not an Aho-Corasick automaton yet: call add_word to add some keys and call "
+    "make_automaton to convert the trie to an automaton."
+)
+_warned_tldextract = False
+
+
+def _url_normalize(text: Any, replace: str = "") -> Any:
+    """Normalize as datatrove's ``url_filter.normalize``."""
+    return _URL_NORMALIZER.sub(replace, text).lower()
+
+
+def _parse_list(line: Iterable[Any], do_normalize: bool = True) -> set[Any]:
+    """Parse as datatrove's ``url_filter.parse_list``, verbatim (same results and exceptions)."""
+    return {_url_normalize(x) if do_normalize else x.strip() for x in line if x[0] != "#"}
+
+
+def _text_encoding() -> str:
+    """What ``open(path)`` decodes with (without ``-X warn_default_encoding``'s warning)."""
+    return "utf-8" if _sys.flags.utf8_mode else "locale"
+
+
+def _get_list(path: str, extra: set[Any], do_normalize: bool = True) -> set[Any]:
+    """Read a list file as datatrove's ``url_filter.get_list``."""
+    with open(path, encoding=_text_encoding()) as f:
+        return _parse_list(f, do_normalize).union(extra)
+
+
+def _read_text(path: str) -> str:
+    """The text ``open(path)`` iterates over (newlines translated)."""
+    with open(path, encoding=_text_encoding()) as f:
+        return f.read()
+
+
+def _encodable(s: str) -> bool:
+    """No lone surrogate (pyroid takes UTF-8 strings only)."""
+    if s.isascii():
+        return True
+    try:
+        s.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+class URLFilterConfig(NamedTuple):
+    """``URLFilter``'s parameters and defaults (datatrove 0.10.1)."""
+
+    soft_word_threshold: Any = 2
+    extra_domains: Iterable[str] | None = None
+    extra_urls: Iterable[str] | None = None
+    banned_words: Iterable[str] | None = None
+    banned_subwords: Iterable[str] | None = None
+    soft_banned_words: Iterable[str] | None = None
+    use_integrated_lists: bool = True
+
+
+class DatatroveURLLists(NamedTuple):
+    """The files of datatrove's integrated URL block lists."""
+
+    domains: str
+    urls: str
+    banned_words: str
+    banned_subwords: str
+    soft_banned_words: str
+
+
+def datatrove_url_lists() -> DatatroveURLLists:
+    """Extract datatrove's integrated block lists as datatrove does; return their paths."""
+    try:
+        from datatrove.io import safely_create_file
+        from datatrove.utils._import_utils import ASSETS_PATH
+        from huggingface_hub import cached_assets_path
+    except ImportError as e:
+        raise _PyroidError(
+            "use_integrated_lists=True reads the block lists shipped with datatrove: install "
+            "datatrove==0.10.1, or pass use_integrated_lists=False and your own lists"
+        ) from e
+    import tarfile
+
+    download_dir = cached_assets_path(
+        library_name="datatrove", namespace="filters", subfolder="url_filter"
+    )
+    file_to_lock = _os.path.join(download_dir, _URL_ASSET)
+
+    def do_extract() -> None:
+        with tarfile.open(_os.path.join(ASSETS_PATH, _URL_ASSET), "r:gz") as tar:
+            if hasattr(tarfile, "data_filter"):
+                # The same files as datatrove's bare extractall(), without the
+                # DeprecationWarning of Python 3.12-3.13.
+                tar.extractall(download_dir, filter="data")
+            else:  # pragma: no cover - Python < 3.11.4
+                tar.extractall(download_dir)
+
+    safely_create_file(file_to_lock, do_extract)
+    return DatatroveURLLists(
+        domains=_os.path.join(download_dir, "domains"),
+        urls=_os.path.join(download_dir, "urls"),
+        banned_words=_os.path.join(ASSETS_PATH, "banned_words.txt"),
+        banned_subwords=_os.path.join(ASSETS_PATH, "banned_subwords.txt"),
+        soft_banned_words=_os.path.join(ASSETS_PATH, "soft_banned_words.txt"),
+    )
+
+
+def _min_soft_count(threshold: Any) -> int:
+    """The smallest count ``n`` with ``n >= soft_word_threshold`` true (``_NEVER``: none).
+
+    datatrove compares the (int) number of soft words with the threshold; this asks
+    Python's own ``>=`` (so ints, floats, fractions, NaN, infinities and numpy scalars
+    behave as in datatrove), by bisection over ``[0, 2**63]``.
+    """
+    try:
+        if bool(0 >= threshold):  # noqa: SIM300 - datatrove evaluates `int >= threshold`
+            return 0
+        lo, hi = 0, 2**63
+        if not bool(hi >= threshold):
+            return _NEVER
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            if bool(mid >= threshold):
+                hi = mid
+            else:
+                lo = mid
+    except TypeError as e:
+        raise TypeError(
+            f"soft_word_threshold must compare with an int, not {type(threshold).__name__}"
+        ) from e
+    return hi
+
+
+def _tld_extractor(tld: Any) -> Any:
+    global _warned_tldextract
+    try:
+        import tldextract
+    except ImportError as e:
+        if tld is None:
+            raise _PyroidError(
+                "pyroid.filters.URLFilter needs tldextract (its Public Suffix List and "
+                f"cache): pip install tldextract=={TLDEXTRACT_VERSION}"
+            ) from e
+    else:
+        version = getattr(tldextract, "__version__", None)
+        if version != TLDEXTRACT_VERSION and not _warned_tldextract:
+            _warned_tldextract = True
+            warnings.warn(
+                f"pyroid.filters.URLFilter reproduces tldextract {TLDEXTRACT_VERSION}'s "
+                f"extraction; tldextract {version} is installed, whose may differ",
+                RuntimeWarning,
+                stacklevel=4,
+            )
+        if tld is None:
+            tld = tldextract.TLDExtract()
+    return tld
+
+
+def _decode_label(lowered: str) -> str:
+    """Decode as tldextract 5.4.0's ``_decode_punycode`` does after its ``label.lower()``."""
+    import idna
+
+    if lowered.startswith("xn--"):
+        try:
+            return str(idna.decode(lowered))
+        except (UnicodeError, IndexError):
+            pass
+    return lowered
+
+
+def _suffix_trie(tld: Any) -> tuple[Any, ...]:
+    """The trie ``tld.suffix_index`` walks, and the lowered labels that decode to its keys."""
+    ex = tld._get_tld_extractor()
+    root = (
+        ex.tlds_incl_private_trie if ex.include_psl_private_domains else ex.tlds_excl_private_trie
+    )
+    strings: list[str] = []
+    ids: dict[str, int] = {}
+
+    def intern(s: str) -> int:
+        i = ids.get(s)
+        if i is None:
+            i = ids[s] = len(strings)
+            strings.append(s)
+        return i
+
+    nodes = [(bool(root.end), bool(root.is_private))]
+    edges: list[tuple[int, int, int]] = []
+    stack = [(root, 0)]
+    while stack:
+        node, nid = stack.pop()
+        for key, child in node.matches.items():
+            if not isinstance(key, str) or not _encodable(key):
+                continue  # no label of a UTF-8 URL decodes to it
+            cid = len(nodes)
+            nodes.append((bool(child.end), bool(child.is_private)))
+            edges.append((nid, intern(str(key)), cid))
+            stack.append((child, cid))
+    for s in [s[1:] for s in strings if s.startswith("!")]:
+        intern(s)
+    self_ids = [i for i, s in enumerate(strings) if _decode_label(s) == s]
+    aliases = []
+    for i, s in enumerate(strings):
+        try:
+            a = "xn--" + s.encode("punycode").decode("ascii")
+        except UnicodeError:
+            continue
+        if a != s and _decode_label(a) == s:
+            aliases.append((a, i))
+    # idna >= 3.?: an A-label decodes only if it is the canonical encoding of its U-label.
+    canonical = _decode_label("xn--bbk") != "xn--bbk" and _decode_label("xn---bbk") == "xn---bbk"
+    return strings, self_ids, aliases, nodes, edges, not canonical
+
+
+def _resolver(tld: Any) -> Any:
+    def resolve(url: str) -> tuple[str, str]:
+        r = tld(url)
+        top = getattr(type(r), "top_domain_under_public_suffix", None)  # tldextract >= 5.3
+        if top is None:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                return r.registered_domain, r.fqdn
+        return r.top_domain_under_public_suffix, r.fqdn
+
+    return resolve
+
+
+class URLFilter:
+    """datatrove's ``URLFilter``, built once (block lists, suffix trie): see ``filters.pyi``."""
+
+    config: URLFilterConfig | None
+
+    def __init__(self, config: Any = None, /, *, tld_extractor: Any = None, **kwargs: Any):
+        cfg: URLFilterConfig = _config(URLFilterConfig, config, kwargs)
+        self._build(
+            cfg.soft_word_threshold,
+            _parse_list(cfg.extra_domains, do_normalize=False) if cfg.extra_domains else set(),
+            _parse_list(cfg.extra_urls, do_normalize=False) if cfg.extra_urls else set(),
+            _parse_list(cfg.banned_words) if cfg.banned_words else set(),
+            _parse_list(cfg.banned_subwords) if cfg.banned_subwords else set(),
+            _parse_list(cfg.soft_banned_words) if cfg.soft_banned_words else set(),
+            cfg.use_integrated_lists,
+            tld_extractor,
+        )
+        self.config = cfg
+
+    @classmethod
+    def _from_parsed(
+        cls,
+        soft_word_threshold: Any,
+        domains: set[Any],
+        urls: set[Any],
+        banned_words: set[Any],
+        banned_subwords: set[Any],
+        soft_banned_words: set[Any],
+        use_integrated_lists: Any,
+        tld_extractor: Any,
+    ) -> URLFilter:
+        """From sets already parsed as datatrove's ``__init__`` does (the drop-in step)."""
+        self = cls.__new__(cls)
+        self._build(
+            soft_word_threshold,
+            domains,
+            urls,
+            banned_words,
+            banned_subwords,
+            soft_banned_words,
+            use_integrated_lists,
+            tld_extractor,
+        )
+        self.config = None
+        return self
+
+    def _build(
+        self,
+        threshold: Any,
+        domains: set[Any],
+        urls: set[Any],
+        banned_words: set[Any],
+        banned_subwords: set[Any],
+        soft_banned_words: set[Any],
+        use_integrated_lists: Any,
+        tld_extractor: Any,
+    ) -> None:
+        tld = _tld_extractor(tld_extractor)
+        min_soft = _min_soft_count(threshold)
+        domain_texts: list[str] = []
+        url_texts: list[str] = []
+        if use_integrated_lists:  # datatrove's download_data()
+            paths = datatrove_url_lists()
+            domain_texts.append(_read_text(paths.domains))
+            url_texts.append(_read_text(paths.urls))
+            banned_words = _get_list(paths.banned_words, banned_words)
+            banned_subwords = _get_list(paths.banned_subwords, banned_subwords)
+            soft_banned_words = _get_list(paths.soft_banned_words, soft_banned_words)
+        # Only str entries can equal a str; those with lone surrogates stay here, for
+        # the Python path (URLs pyroid can't take).
+        self._odd_domains = {s for s in domains if isinstance(s, str) and not _encodable(s)}
+        self._odd_urls = {s for s in urls if isinstance(s, str) and not _encodable(s)}
+        self._threshold = threshold
+        self._banned_words = banned_words
+        self._banned_subwords = banned_subwords
+        self._soft_banned_words = soft_banned_words
+        self._tld = tld
+        self._native = _native._URLFilter(
+            _suffix_trie(tld),
+            ([str(s) for s in domains if isinstance(s, str) and _encodable(s)], domain_texts),
+            ([str(s) for s in urls if isinstance(s, str) and _encodable(s)], url_texts),
+            (
+                [str(w) for w in banned_words],
+                [str(w) for w in soft_banned_words],
+                [str(w) for w in banned_subwords],
+                min_soft,
+            ),
+            _unicode_version(),
+            _resolver(tld),
+        )
+
+    def keep(self, urls: Any, /, *, threads: Any = None) -> Any:
+        """True for each URL datatrove keeps."""
+        return self._native.keep(urls, threads=threads)
+
+    def reasons(self, urls: Any, /, *, threads: Any = None) -> Any:
+        """The drop reason (datatrove's) per URL, ``None`` when kept."""
+        return self._native.reasons(urls, threads=threads)
+
+    def domains(self, urls: Any, /, *, threads: Any = None) -> tuple[Any, Any]:
+        """The ``(top_domain_under_public_suffix, fqdn)`` tldextract gives each URL."""
+        rd, fqdn = self._native.domains(urls, threads=threads)
+        return rd, fqdn
+
+    @property
+    def tld_extractor(self) -> Any:
+        """The ``tldextract.TLDExtract`` whose suffix lists are used."""
+        return self._tld
+
+    @property
+    def num_domains(self) -> int:
+        """Number of blocked domains."""
+        return int(self._native.num_domains) + len(self._odd_domains)
+
+    @property
+    def num_urls(self) -> int:
+        """Number of blocked URLs."""
+        return int(self._native.num_urls) + len(self._odd_urls)
+
+    def __repr__(self) -> str:
+        return f"<pyroid.filters.URLFilter: {self.num_domains} domains, {self.num_urls} urls>"
+
+    def _reasons_any(self, urls: list[Any], threads: Any) -> list[str | None]:
+        """Reasons for a datatrove batch: str URLs natively, others in Python.
+
+        Empty URLs are filtered (datatrove asserts them away, unless ``python -O``).
+        """
+        if all(type(u) is str for u in urls):
+            try:
+                out: list[str | None] = self._native.reasons(
+                    urls, threads=threads, allow_empty=True
+                )
+            except UnicodeEncodeError:
+                pass
+            else:
+                return out
+        return [
+            self._native.reasons(u, allow_empty=True)
+            if type(u) is str and _encodable(u)
+            else self._python_reason(u)
+            for u in urls
+        ]
+
+    def _python_reason(self, url: Any) -> str | None:
+        """Run datatrove's ``filter()`` in Python, for a URL the native path can't take."""
+        top, fqdn = _resolver(self._tld)(url)  # raises as datatrove's tldextractor(url)
+        if self._has(top, self._odd_domains, self._native.contains_domain):
+            return "domain"
+        if self._has(fqdn, self._odd_domains, self._native.contains_domain):
+            return "subdomain"
+        if self._has(url, self._odd_urls, self._native.contains_url):
+            return "url"
+        url_words = set(_URL_NORMALIZER.split(url))
+        if any(word in url_words for word in self._banned_words):
+            return "hard_blacklisted"
+        nb_soft_words = sum([word in url_words for word in self._soft_banned_words])
+        if nb_soft_words >= self._threshold:
+            return "soft_blacklisted"
+        normalized_space = _url_normalize(url)
+        if self._banned_subwords:
+            words = [w for w in self._banned_subwords if w]
+            if not words:
+                raise AttributeError(_NO_AUTOMATON)
+            if any(w in normalized_space for w in words):
+                return "blacklisted_subword"
+        return None
+
+    @staticmethod
+    def _has(s: Any, odd: set[Any], native: Any) -> bool:
+        if isinstance(s, str) and _encodable(s):
+            return bool(native(s))
+        return s in odd
+
+
+_url_filters: dict[Any, URLFilter] = {}
+
+
+def _url_key(cfg: URLFilterConfig) -> Any:
+    """A cache key for ``cfg``, or ``None`` (one-shot iterables, unhashable values)."""
+
+    def freeze(v: Any) -> Any:
+        if v is None or isinstance(v, (str, bool, int, float)):
+            return (type(v), v)
+        if isinstance(v, (list, tuple, set, frozenset)):
+            return (frozenset, frozenset(v))  # parse_list only sees the distinct items
+        raise TypeError
+
+    try:
+        key = tuple(freeze(v) for v in cfg)
+        hash(key)
+    except TypeError:
+        return None
+    return key
+
+
+def _url_filter(config: Any, kwargs: dict[str, Any]) -> URLFilter:
+    if isinstance(config, URLFilter):
+        if kwargs:
+            raise TypeError("pass a URLFilter or URLFilter's parameters, not both")
+        return config
+    cfg: URLFilterConfig = _config(URLFilterConfig, config, kwargs)
+    key = _url_key(cfg)
+    f = None if key is None else _url_filters.get(key)
+    if f is None:
+        f = URLFilter(cfg)
+        if key is not None:
+            if len(_url_filters) >= 2:
+                _url_filters.clear()
+            _url_filters[key] = f
+    return f
+
+
+def url_filter(urls: Any, config: Any = None, /, *, threads: Any = None, **kwargs: Any) -> Any:
+    """``URLFilter``: True for each URL datatrove keeps (see ``filters.pyi``)."""
+    return _url_filter(config, kwargs).keep(urls, threads=threads)
+
+
+def url_filter_reasons(
+    urls: Any, config: Any = None, /, *, threads: Any = None, **kwargs: Any
+) -> Any:
+    """``URLFilter``: datatrove's drop reason per URL, ``None`` when kept."""
+    return _url_filter(config, kwargs).reasons(urls, threads=threads)
+
+
 # ---- end URLFilter ----
 
 # ---- SymbolLinesFormatter ----

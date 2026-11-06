@@ -1311,6 +1311,292 @@ def c4_badwords_reasons(
 # ---- end C4BadWordsFilter ----
 
 # ---- URLFilter ----
+__all__ += [
+    "TLDEXTRACT_VERSION",
+    "DatatroveURLLists",
+    "URLFilter",
+    "URLFilterConfig",
+    "datatrove_url_lists",
+    "url_filter",
+    "url_filter_reasons",
+]
+
+#: The tldextract release whose ``extract_str`` the URL filter reproduces.
+TLDEXTRACT_VERSION: Final[str]
+
+class URLFilterConfig(NamedTuple):
+    """datatrove 0.10.1 ``URLFilter``'s parameters and defaults.
+
+    The lists are read as datatrove's ``parse_list`` reads them: entries starting
+    with ``#`` are skipped (the test is ``x[0] != "#"``, so an empty string raises
+    ``IndexError``, as in datatrove); domains and URLs are ``strip()``-ped; words,
+    subwords and soft words are normalized (every character but ``[a-zA-Z0-9]``
+    removed, then lowercased), so ``"--"`` becomes ``""``. A falsy list adds nothing.
+    """
+
+    soft_word_threshold: Any = 2
+    extra_domains: Iterable[str] | None = None
+    extra_urls: Iterable[str] | None = None
+    banned_words: Iterable[str] | None = None
+    banned_subwords: Iterable[str] | None = None
+    soft_banned_words: Iterable[str] | None = None
+    use_integrated_lists: bool = True
+
+@type_check_only
+class _URLFilterKwargs(TypedDict, total=False):
+    soft_word_threshold: float
+    extra_domains: Iterable[str] | None
+    extra_urls: Iterable[str] | None
+    banned_words: Iterable[str] | None
+    banned_subwords: Iterable[str] | None
+    soft_banned_words: Iterable[str] | None
+    use_integrated_lists: bool
+
+class DatatroveURLLists(NamedTuple):
+    """The files of datatrove's integrated URL block lists (see :func:`datatrove_url_lists`)."""
+
+    domains: str
+    urls: str
+    banned_words: str
+    banned_subwords: str
+    soft_banned_words: str
+
+def datatrove_url_lists() -> DatatroveURLLists:
+    """Extract datatrove's integrated URL block lists as datatrove does; return their paths.
+
+    datatrove 0.10.1 ships them in its package (``datatrove/assets``):
+    ``url_filterblacklistsv0_3_0.tar.gz`` (``domains``: 4,558,940 lines; ``urls``:
+    19,587), ``banned_words.txt``, ``banned_subwords.txt`` and
+    ``soft_banned_words.txt``. The archive is extracted once into datatrove's own cache
+    (``huggingface_hub.cached_assets_path("datatrove", "filters", "url_filter")``),
+    under datatrove's lock and ``.completed`` marker, so datatrove and pyroid share
+    one copy. pyroid does not ship these lists: they are not under pyroid's licence.
+
+    Raises:
+        pyroid.PyroidError: datatrove (or huggingface_hub) is not installed.
+        ImportError: fasteners is not installed (datatrove's lock needs it).
+    """
+
+class URLFilter:
+    """datatrove 0.10.1's ``URLFilter``, built once: the same decisions and drop reasons.
+
+    Build it once and reuse it: with the integrated lists it holds 4.56 million
+    blocked domains (about 200 MB, in one Rust string arena with a hash table),
+    and building it takes a second or two. Each URL is checked as datatrove does,
+    in its order, and the first hit is the reason:
+
+    1. ``"domain"``: tldextract's registered domain
+       (``top_domain_under_public_suffix``) is a blocked domain;
+    2. ``"subdomain"``: its FQDN is a blocked domain;
+    3. ``"url"``: the URL itself is blocked;
+    4. ``"hard_blacklisted"``: a word of ``re.split(r"[^a-zA-Z0-9]+", url)`` (case
+       sensitive; ``""`` when the URL starts or ends with another character) is
+       a banned word;
+    5. ``"soft_blacklisted"``: at least ``soft_word_threshold`` distinct words are
+       soft-banned;
+    6. ``"blacklisted_subword"``: a banned subword is a substring of the URL with
+       every character but ``[a-zA-Z0-9]`` removed, lowercased.
+
+    Domains come from tldextract 5.4.0's ``extract_str``, ported to Rust:
+    ``lenient_netloc`` (scheme, userinfo, ``[IPv6]``, port, ``strip()``, trailing
+    dots), U+3002, U+FF0E and U+FF61 as dots, the IPv6 literal test (``ipaddress.IPv6Address``), and
+    the Public Suffix List walk (wildcards such as ``*.ck``, exceptions such as
+    ``!www.ck``), labels lowered with ``str.lower()`` of the running interpreter's
+    Unicode version and ``xn--`` labels decoded as ``idna`` does. The suffix lists
+    are the ones ``tld_extractor`` uses (its cached copy of the Public Suffix List,
+    or tldextract's bundled snapshot), read from it when the filter is built;
+    with its ``include_psl_private_domains`` setting.
+
+    Args:
+        config: A :class:`URLFilterConfig`; keyword arguments override its fields.
+        tld_extractor: A ``tldextract.TLDExtract`` (default: a new
+            ``TLDExtract()``, as datatrove builds).
+        **kwargs: ``URLFilter``'s parameters (see :class:`URLFilterConfig`).
+
+    Raises:
+        TypeError: ``config`` is not a :class:`URLFilterConfig`, or
+            ``soft_word_threshold`` does not compare with an int (datatrove raises
+            this ``TypeError`` at the first URL that reaches the soft-word check).
+        IndexError: A list has an empty string (as datatrove).
+        pyroid.PyroidError: tldextract is not installed, or
+            ``use_integrated_lists=True`` and datatrove is not installed.
+
+    The methods take URLs as a str, a list or tuple of str, or an Arrow string
+    array/column, with ``threads=`` as everywhere in pyroid, and raise
+    ``ValueError`` for an empty URL (datatrove's ``assert url``),
+    ``AttributeError`` as datatrove when the banned subwords are only ``""``
+    (pyahocorasick's automaton then has no words) and a URL reaches that check,
+    ``pyroid.InputError`` for other input kinds, ``UnicodeEncodeError`` for a lone
+    surrogate and ``UnicodeDecodeError`` for invalid UTF-8 in Arrow input.
+    """
+
+    config: URLFilterConfig | None
+    def __init__(
+        self,
+        config: URLFilterConfig | None = None,
+        /,
+        *,
+        tld_extractor: Any = None,
+        **kwargs: Unpack[_URLFilterKwargs],
+    ) -> None: ...
+    @overload
+    def keep(self, urls: str, /, *, threads: int | None = None) -> bool:
+        """True for each URL datatrove keeps.
+
+        Returns:
+            bool, ``list[bool]``, ``tuple[bool, ...]``, or a :class:`pyroid.Column`
+            of bools (nulls stay null), matching ``urls``.
+        """
+
+    @overload
+    def keep(self, urls: list[str], /, *, threads: int | None = None) -> list[bool]: ...
+    @overload
+    def keep(self, urls: tuple[str, ...], /, *, threads: int | None = None) -> tuple[bool, ...]: ...
+    @overload
+    def keep(self, urls: ArrowStrings, /, *, threads: int | None = None) -> Column[bool]: ...
+    @overload
+    def reasons(self, urls: str, /, *, threads: int | None = None) -> str | None:
+        """The drop reason (datatrove's) per URL, ``None`` when kept.
+
+        Reasons: ``domain``, ``subdomain``, ``url``, ``hard_blacklisted``,
+        ``soft_blacklisted``, ``blacklisted_subword``. Arrow input gives a
+        ``string`` :class:`pyroid.Column` (null when kept or null).
+        """
+
+    @overload
+    def reasons(self, urls: list[str], /, *, threads: int | None = None) -> list[str | None]: ...
+    @overload
+    def reasons(
+        self, urls: tuple[str, ...], /, *, threads: int | None = None
+    ) -> tuple[str | None, ...]: ...
+    @overload
+    def reasons(self, urls: ArrowStrings, /, *, threads: int | None = None) -> Column[str]: ...
+    @overload
+    def domains(self, urls: str, /, *, threads: int | None = None) -> tuple[str, str]:
+        """The ``(top_domain_under_public_suffix, fqdn)`` tldextract gives each URL.
+
+        What datatrove looks up in the blocked domains (``registered_domain`` is
+        ``top_domain_under_public_suffix``). Both are ``""`` for IP addresses,
+        hosts without a public suffix, and bare suffixes.
+
+        Returns:
+            A pair, each in the kind of ``urls`` (Arrow: ``large_string`` columns
+            for ``large_string`` input, else ``string``; nulls stay null).
+        """
+
+    @overload
+    def domains(
+        self, urls: list[str], /, *, threads: int | None = None
+    ) -> tuple[list[str], list[str]]: ...
+    @overload
+    def domains(
+        self, urls: tuple[str, ...], /, *, threads: int | None = None
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]: ...
+    @overload
+    def domains(
+        self, urls: ArrowStrings, /, *, threads: int | None = None
+    ) -> tuple[Column[str], Column[str]]: ...
+    @property
+    def tld_extractor(self) -> Any:
+        """The ``tldextract.TLDExtract`` whose suffix lists are used."""
+
+    @property
+    def num_domains(self) -> int:
+        """Number of blocked domains."""
+
+    @property
+    def num_urls(self) -> int:
+        """Number of blocked URLs."""
+
+@overload
+def url_filter(
+    urls: str,
+    config: URLFilterConfig | URLFilter | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_URLFilterKwargs],
+) -> bool:
+    """``URLFilter``: True for each URL datatrove keeps.
+
+    ``config`` is a :class:`URLFilterConfig` (keyword arguments override its
+    fields) or a built :class:`URLFilter`. The last two filters built from configs
+    are cached (configs whose lists are lists, tuples, sets or strings), so repeated
+    calls do not reload the block lists.
+
+    Returns:
+        As :meth:`URLFilter.keep`.
+    """
+
+@overload
+def url_filter(
+    urls: list[str],
+    config: URLFilterConfig | URLFilter | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_URLFilterKwargs],
+) -> list[bool]: ...
+@overload
+def url_filter(
+    urls: tuple[str, ...],
+    config: URLFilterConfig | URLFilter | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_URLFilterKwargs],
+) -> tuple[bool, ...]: ...
+@overload
+def url_filter(
+    urls: ArrowStrings,
+    config: URLFilterConfig | URLFilter | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_URLFilterKwargs],
+) -> Column[bool]: ...
+@overload
+def url_filter_reasons(
+    urls: str,
+    config: URLFilterConfig | URLFilter | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_URLFilterKwargs],
+) -> str | None:
+    """``URLFilter``: datatrove's drop reason per URL, ``None`` when kept.
+
+    Arguments as for :func:`url_filter`; results as :meth:`URLFilter.reasons`.
+    """
+
+@overload
+def url_filter_reasons(
+    urls: list[str],
+    config: URLFilterConfig | URLFilter | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_URLFilterKwargs],
+) -> list[str | None]: ...
+@overload
+def url_filter_reasons(
+    urls: tuple[str, ...],
+    config: URLFilterConfig | URLFilter | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_URLFilterKwargs],
+) -> tuple[str | None, ...]: ...
+@overload
+def url_filter_reasons(
+    urls: ArrowStrings,
+    config: URLFilterConfig | URLFilter | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_URLFilterKwargs],
+) -> Column[str]: ...
+
 # ---- end URLFilter ----
 
 # ---- SymbolLinesFormatter ----
