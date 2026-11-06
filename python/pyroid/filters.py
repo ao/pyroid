@@ -1296,6 +1296,43 @@ def c4_badwords_reasons(
 # ---- end URLFilter ----
 
 # ---- SymbolLinesFormatter ----
+__all__ += ["SymbolLines", "symbol_lines"]
+
+
+class SymbolLines(NamedTuple):
+    """``SymbolLinesFormatter``'s parameters and defaults."""
+
+    symbols_to_remove: Iterable[str] | None = None
+    replace_char: str = ""
+
+
+_symbol_cache: dict[Any, Any] = {}
+
+
+def _symbol_lines_native(cfg: SymbolLines) -> Any:
+    if cfg.symbols_to_remove is None:
+        chars = None
+    else:
+        # datatrove tests `c in set(symbols_to_remove)` per character: only 1-char strings match.
+        chars = sorted({s for s in cfg.symbols_to_remove if isinstance(s, str) and len(s) == 1})
+    if not isinstance(cfg.replace_char, str):
+        raise TypeError(f"replace_char must be a str, not {type(cfg.replace_char).__name__}")
+    key = (None if chars is None else tuple(chars), cfg.replace_char)
+    native = _symbol_cache.get(key)
+    if native is None:
+        native = _native._SymbolLines(chars, cfg.replace_char)
+        if len(_symbol_cache) >= 64:
+            _symbol_cache.clear()
+        _symbol_cache[key] = native
+    return native
+
+
+def symbol_lines(texts: Any, config: Any = None, /, *, threads: Any = None, **kwargs: Any) -> Any:
+    """``SymbolLinesFormatter.format`` per document (see ``filters.pyi``)."""
+    cfg = _config(SymbolLines, config, kwargs)
+    return _symbol_lines_native(cfg).run(texts, threads=threads)
+
+
 # ---- end SymbolLinesFormatter ----
 
 # ---- UnigramLogProbFilter ----

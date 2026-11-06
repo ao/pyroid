@@ -691,6 +691,51 @@ C4BadWordsFilter.__init__.__signature__ = _signature_of(_dt_c4.C4BadWordsFilter,
 # ---- end URLFilter ----
 
 # ---- SymbolLinesFormatter ----
+from datatrove.pipeline.formatters import symbol_lines_remover as _dt_symbols  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: E402
+
+__all__ += ["SymbolLinesFormatter"]
+
+
+class SymbolLinesFormatter(_Step, _dt_symbols.SymbolLinesFormatter):
+    r"""datatrove's ``SymbolLinesFormatter`` (same arguments) on ``pyroid.filters``.
+
+    ``doc.text`` becomes the same text, byte for byte, computed ``batch_size``
+    documents at a time (FineWeb-2 runs it as
+    ``SymbolLinesFormatter(symbols_to_remove=["|"], replace_char="\n")``).
+    """
+
+    def __init__(
+        self, *args: Any, batch_size: int = DEFAULT_BATCH_SIZE, threads: Any = 1, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.batch_size = _batch_size(batch_size)
+        self.threads = threads
+
+    def _native(self) -> Any:
+        import pyroid.filters as pf
+
+        cfg = pf.SymbolLines(list(self.symbols_to_remove), self.replace_char)
+        return cast(Any, pf)._symbol_lines_native(cfg)
+
+    def format(self, text: str) -> str:
+        """One document (datatrove's API); :meth:`run` batches instead."""
+        return cast(str, self._native().run(text))
+
+    def run(self, data: Iterable[Any], rank: int = 0, world_size: int = 1) -> Any:
+        """Rewrite ``doc.text`` of every document, ``batch_size`` at a time."""
+        native = self._native()
+        for batch in batched(data, self.batch_size):
+            with self.track_time("batch"):
+                texts = native.run([d.text for d in batch], threads=self.threads)
+            for doc, text in zip(batch, texts, strict=True):
+                self.stat_update(StatHints.total)
+                doc.text = text
+                yield doc
+
+
+SymbolLinesFormatter.__init__.__signature__ = _signature_of(  # type: ignore[attr-defined]
+    _dt_symbols.SymbolLinesFormatter, *_EXTRA
+)
 # ---- end SymbolLinesFormatter ----
 
 # ---- UnigramLogProbFilter ----

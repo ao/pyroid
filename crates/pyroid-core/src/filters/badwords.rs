@@ -357,6 +357,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unreadable_literal)] // copied from numpy
     fn numpy_default_rng() {
         // numpy 2.5.4: default_rng(seed).bit_generator.state, then three
         // .uniform() draws (as f64 bits). Seeds 0, 1, 42, 2**32 + 5, 2**200 + 7.

@@ -1287,6 +1287,9 @@ mod badwords {
     /// datatrove's drop reason.
     const REASON: &str = "document_removed_with_badwords";
 
+    /// A PCG64 `(state, inc)`.
+    type RngState = (u128, u128);
+
     /// One language's compiled word list.
     #[pyclass(frozen, module = "pyroid.filters", name = "_BadWords")]
     #[derive(Debug)]
@@ -1333,11 +1336,11 @@ mod badwords {
         lang: i64,
         ids: Option<Vec<i64>>,
         keep_fraction: f64,
-        rng: Option<(u128, u128)>,
+        rng: Option<RngState>,
         what: &str,
         unicode_version: &str,
         threads: Option<ThreadsArg>,
-    ) -> PyResult<(Bound<'py, PyAny>, Option<(u128, u128)>)> {
+    ) -> PyResult<(Bound<'py, PyAny>, Option<RngState>)> {
         let (input, threads) = texts_and_threads(texts, threads, None)?;
         let threads = crate::input::threads(threads);
         let v = UnicodeVersion::from_unidata_version(unicode_version).ok_or_else(|| {
@@ -1430,11 +1433,43 @@ mod url {
 
 // ---- SymbolLinesFormatter ----
 mod symbol_lines {
-    use pyo3::prelude::*;
+    //! `SymbolLinesFormatter`: a plain transform.
 
-    #[allow(clippy::unnecessary_wraps)] // placeholder
-    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
-        Ok(())
+    use pyo3::prelude::*;
+    use pyroid_core::filters::symbol_lines::SymbolLines;
+
+    use crate::batch::transform;
+    use crate::input::{ThreadsArg, texts_and_threads};
+
+    /// A `SymbolLinesFormatter` configuration, built once by `pyroid.filters`.
+    #[pyclass(frozen, module = "pyroid.filters", name = "_SymbolLines")]
+    #[derive(Debug)]
+    struct NativeSymbolLines(SymbolLines);
+
+    #[pymethods]
+    impl NativeSymbolLines {
+        /// `symbols`: the one-character entries of `symbols_to_remove`, or
+        /// `None` for datatrove's `PUNCTUATION_SET`.
+        #[new]
+        fn new(symbols: Option<Vec<char>>, replace_char: String) -> Self {
+            Self(SymbolLines::new(symbols, replace_char))
+        }
+
+        /// `format()` per document, in the caller's kind.
+        #[pyo3(signature = (texts, /, *, threads = None))]
+        fn run<'py>(
+            &self,
+            py: Python<'py>,
+            texts: &Bound<'py, PyAny>,
+            threads: Option<ThreadsArg>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let (input, threads) = texts_and_threads(texts, threads, None)?;
+            transform(py, input, threads, |s| self.0.format(s))
+        }
+    }
+
+    pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        m.add_class::<NativeSymbolLines>()
     }
 }
 // ---- end SymbolLinesFormatter ----

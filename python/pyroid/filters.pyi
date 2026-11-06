@@ -1314,6 +1314,88 @@ def c4_badwords_reasons(
 # ---- end URLFilter ----
 
 # ---- SymbolLinesFormatter ----
+__all__ += ["SymbolLines", "symbol_lines"]
+
+class SymbolLines(NamedTuple):
+    r"""``SymbolLinesFormatter``'s parameters and defaults.
+
+    Attributes:
+        symbols_to_remove: The symbols a removed line may consist of (with
+            ``" "``); ``None`` is datatrove's ``PUNCTUATION_SET``.
+        replace_char: What a run of removed lines becomes (``""``: nothing;
+            FineWeb-2 uses ``"\n"``).
+    """
+
+    symbols_to_remove: Iterable[str] | None = None
+    replace_char: str = ""
+
+@type_check_only
+class _SymbolLinesKwargs(TypedDict, total=False):
+    symbols_to_remove: Iterable[str] | None
+    replace_char: str
+
+@overload
+def symbol_lines(
+    texts: str,
+    config: SymbolLines | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_SymbolLinesKwargs],
+) -> str:
+    r"""``SymbolLinesFormatter``: each document without its symbol-only lines.
+
+    As datatrove: over ``text.splitlines()``, a non-blank line made only of
+    ``symbols_to_remove`` and spaces is dropped, a run of them becomes one
+    ``replace_char`` (if not empty), and the kept lines are joined with
+    ``"\n"`` (so ``"\r\n"`` and a trailing newline come out as datatrove's do).
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: A :class:`SymbolLines`; keyword arguments override its fields.
+        threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+            ``n`` tasks at once; ``1`` runs on the calling thread.
+        **kwargs: ``SymbolLinesFormatter``'s parameters.
+
+    Returns:
+        The texts in the caller's kind; a document that comes out equal comes
+        back as the same object (Arrow: a :class:`pyroid.Column`, nulls stay null).
+
+    Raises:
+        pyroid.InputError: ``texts`` is not one of the accepted kinds.
+        TypeError: ``replace_char`` is not a str.
+        UnicodeEncodeError: A str contains a lone surrogate.
+        UnicodeDecodeError: An Arrow row is not valid UTF-8.
+    """
+
+@overload
+def symbol_lines(
+    texts: list[str],
+    config: SymbolLines | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_SymbolLinesKwargs],
+) -> list[str]: ...
+@overload
+def symbol_lines(
+    texts: tuple[str, ...],
+    config: SymbolLines | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_SymbolLinesKwargs],
+) -> tuple[str, ...]: ...
+@overload
+def symbol_lines(
+    texts: ArrowStrings,
+    config: SymbolLines | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_SymbolLinesKwargs],
+) -> Column[str]: ...
+
 # ---- end SymbolLinesFormatter ----
 
 # ---- UnigramLogProbFilter ----
