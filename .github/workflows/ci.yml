@@ -410,6 +410,11 @@ jobs:
       # at parity/uv.lock's versions: regex (datatrove.utils.text), xxhash (its xxhash hashes) and tokenizers
       # (datatrove.pipeline.dedup.minhash imports it).
       ORACLE: datatrove==0.10.1 spacy==3.8.18 regex==2026.9.29 xxhash==3.8.2 tokenizers==0.23.3
+      # datatrove's own word tokenizers for the languages pyroid tokenizes in Python on request (python_tokenizer=True)
+      # and for IndicNLP, which test_{filters,dedup}_multilingual.py compare against. jieba ships only an sdist (pure
+      # Python). xxhash stays < 4 (pinned above): datatrove's xxhash hashes fail on 4.x ("Strings must be encoded").
+      SEGMENTERS: sudachipy==0.7.0 sudachidict-core==20261015 pyvi==0.1.1 pythainlp==5.4.0 indic-nlp-library==0.92
+      SEGMENTERS_SDIST: jieba==0.42.1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -433,16 +438,22 @@ jobs:
           uv pip install --python .venv-oracle --group test
           read -ra oracle <<< "$ORACLE"
           uv pip install --python .venv-oracle --only-binary :all: "${oracle[@]}"
+          read -ra segmenters <<< "$SEGMENTERS"
+          uv pip install --python .venv-oracle --only-binary :all: "${segmenters[@]}"
+          read -ra segmenters_sdist <<< "$SEGMENTERS_SDIST"
+          uv pip install --python .venv-oracle --no-binary :all: "${segmenters_sdist[@]}"
           py=.venv-oracle/bin/python
           # The test modules importorskip these; here a missing oracle is an error, not a skip.
           "$py" -c "import datatrove.data, datatrove.pipeline.dedup.minhash, datatrove.pipeline.filters, datatrove.utils.hashing
           import datatrove.utils.text, datatrove.pipeline.filters.gopher_quality_filter
           from importlib.metadata import version as v
           print(*(f'{d}=={v(d)}' for d in ('pyroid', 'datatrove', 'spacy', 'regex', 'xxhash', 'tokenizers')))"
-          # The pinned-decision tests in test_filters_parity.py need /data; the parity (filters) jobs cover them.
+          # The pinned-decision tests in test_filters_parity.py and the FineWeb-2 slice tests need /data; the parity
+          # (filters, dedup) jobs cover them.
           log="$RUNNER_TEMP/live-oracle.log"
-          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs -k "not pinned" \
-            python/tests/test_filters_parity.py python/tests/test_dedup_datatrove.py | tee "$log"
+          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs -k "not pinned and not fineweb2_slices" \
+            python/tests/test_filters_parity.py python/tests/test_dedup_datatrove.py \
+            python/tests/test_filters_multilingual.py python/tests/test_dedup_multilingual.py | tee "$log"
           if grep '^SKIPPED' "$log"; then echo "::error::live-oracle tests skipped (see above)"; exit 1; fi
 
   msrv:
