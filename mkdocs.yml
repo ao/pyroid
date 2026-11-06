@@ -4,12 +4,12 @@
 # The API reference is generated from the .pyi stubs by mkdocstrings + griffe *without importing*
 # the extension (allow_inspection: false), so no Rust build is needed.
 site_name: pyroid
-site_description: Rust-fast text cleaning for LLM datasets. Drop-in for ftfy, fastText inference and datatrove's quality filters.
+site_description: Rust-fast text cleaning for LLM datasets. Drop-in for ftfy, fastText inference, datatrove's filters and dedup, rouge-score, sacrebleu and json_repair.
 site_url: https://ao.github.io/pyroid/
 repo_url: https://github.com/ao/pyroid
 repo_name: ao/pyroid
 edit_uri: edit/main/docs/
-copyright: Copyright &copy; Andrew Odendaal. MIT License.
+copyright: "Copyright &copy; Andrew Odendaal. Licence: MIT AND Apache-2.0 AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 (see NOTICE)."
 
 theme:
   name: material
@@ -52,6 +52,14 @@ nav:
       - pyroid.filters: guides/filters.md
       - pyroid.dedup: guides/dedup.md
       - pyroid.translit: guides/translit.md
+      - pyroid.metrics: guides/metrics.md
+      - pyroid.json_repair: guides/json_repair.md
+      - Languages: guides/languages.md
+  - Integrations:
+      - The pyroid command line: guides/cli.md
+      - pyroid.patch(): guides/patch.md
+      - datatrove steps: guides/datatrove.md
+      - Hugging Face datasets: guides/huggingface.md
   - Concepts:
       - Inputs and outputs: concepts/inputs.md
       - Threads and free-threading: concepts/threads.md
@@ -65,6 +73,9 @@ nav:
       - pyroid.filters: reference/filters.md
       - pyroid.dedup: reference/dedup.md
       - pyroid.translit: reference/translit.md
+      - pyroid.metrics: reference/metrics.md
+      - pyroid.json_repair: reference/json_repair.md
+      - pyroid.integrations: reference/integrations.md
       - pyroid.text: reference/text.md
   - Compatibility: compatibility.md
   - Benchmarks: benchmarks.md
@@ -99,7 +110,8 @@ plugins:
             show_overloads: true
             overloads_only: true
             members_order: source
-            filters: ["!^_"]
+            # Private names are hidden, except __call__ (the stubs link to it) and __version__.
+            filters: ["!^_", "^__call__$", "^__version__$"]
             show_if_no_docstring: true
             show_source: false
             show_bases: true
