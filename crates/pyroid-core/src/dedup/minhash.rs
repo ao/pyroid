@@ -20,7 +20,8 @@ use twox_hash::{XxHash32, XxHash64};
 use super::config::{ConfigError, HashFn, MinhashConfig, Precision, UnicodeVersion};
 use super::rng::{MERSENNE_PRIME, permutation_parameters};
 use super::simplify::simplify_text;
-use super::tokenize::{SpacyEnglish, TokenizeError, WordTokenizer};
+use super::tokenize::{SpacyTokenizer, TokenizeError, WordTokenizer};
+use crate::filters::WordTokenizer as LanguageTokenizer;
 
 /// SHA-1's initial state.
 const SHA1_H0: [u32; 5] = [
@@ -72,12 +73,14 @@ fn mod_mersenne(x: u64) -> u64 {
 }
 
 /// Everything stage 1 needs for one configuration: the config, the
-/// interpreter's Unicode version and the permutation parameters. Cheap to
-/// share between threads.
+/// interpreter's Unicode version, the word tokenizer (datatrove's for the
+/// documents' language) and the permutation parameters. Cheap to share
+/// between threads.
 #[derive(Clone, Debug)]
 pub struct MinHasher {
     config: MinhashConfig,
     unicode: UnicodeVersion,
+    tokenizer: &'static dyn LanguageTokenizer,
     a: Box<[u64]>,
     b: Box<[u64]>,
 }
@@ -89,6 +92,7 @@ impl MinHasher {
         Ok(Self {
             config,
             unicode,
+            tokenizer: SpacyTokenizer::english(unicode),
             a: a.into_boxed_slice(),
             b: b.into_boxed_slice(),
         })
@@ -193,15 +197,25 @@ impl MinHasher {
         self.signature_from_shingles(&shingles, out)
     }
 
-    /// datatrove's word tokenizer (spaCy English) for this Unicode version.
-    pub fn spacy(&self) -> &'static SpacyEnglish {
-        SpacyEnglish::get(self.unicode)
+    /// Tokenize with `tokenizer` (datatrove's
+    /// `MinhashDedupSignature(language=...)`: [`crate::filters::tokenizer_for`]
+    /// of the language, for this Unicode version). The default is spaCy
+    /// English, datatrove's default language.
+    #[must_use]
+    pub fn with_tokenizer(mut self, tokenizer: &'static dyn LanguageTokenizer) -> Self {
+        self.tokenizer = tokenizer;
+        self
+    }
+
+    /// The word tokenizer [`Self::signature`] uses.
+    pub fn tokenizer(&self) -> &'static dyn LanguageTokenizer {
+        self.tokenizer
     }
 
     /// The whole of stage 1 for one document with datatrove's tokenizer:
-    /// `simplify_text`, spaCy words, shingles, signature.
+    /// `simplify_text`, words, shingles, signature.
     pub fn signature(&self, text: &str, out: &mut [u64]) -> Result<bool, TokenizeError> {
-        self.signature_with(text, self.spacy(), out)
+        self.signature_with(text, self.tokenizer, out)
     }
 
     /// [`Self::signature`] with another word tokenizer.

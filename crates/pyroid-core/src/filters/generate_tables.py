@@ -1,31 +1,45 @@
-"""Generate `tables.rs`: the spaCy English tokenizer rules and datatrove constants.
+"""Generate `tables.rs`: spaCy's tokenizer rules for every language datatrove
+tokenizes with a rule-based `spacy.blank(code)`, plus datatrove constants.
 
 Derived from datatrove 0.10.1 (Apache-2.0), (c) HuggingFace, and spaCy 3.8.18
 (MIT), (c) ExplosionAI GmbH; modified.
 
 Nothing here is transcribed by hand. Everything is read from the objects that
-`spacy.blank("en")` and datatrove build at import time:
+`spacy.blank(code)` and datatrove build at import time:
 
-* the tokenizer's prefix / suffix / infix / URL regexes, parsed with CPython's
-  own regex parser (`re._parser`) into a small AST that the Rust matcher in
-  `regex.rs` walks with `re`'s semantics;
-* the tokenizer exceptions (special cases), with their ORTH pieces;
+* per language, the tokenizer's prefix / suffix / infix / URL / token_match
+  regexes, parsed with CPython's own regex parser (`re._parser`) into a small
+  AST that the Rust matcher in `regex.rs` walks with `re`'s semantics
+  (identical patterns and character classes are shared between languages);
+* per language, the tokenizer exceptions (special cases) with their ORTH
+  pieces, stored as one string (the 176 base exceptions once);
 * the sentencizer's default punctuation characters;
-* datatrove's `PUNCTUATION_SET` and `TERMINAL_PUNCTUATION`.
+* datatrove's `PUNCTUATION_SET`, `TERMINAL_PUNCTUATION` and its whole
+  language -> word tokenizer assignment table.
 
 The patterns are version-independent strings; `\\d`, `\\w` and `\\S` stay
-symbolic (they are resolved per Unicode version at run time).
+symbolic (they are resolved per Unicode version at run time). Characters
+matched case-insensitively (French's `token_match` is `(?iu)`) are expanded
+into explicit sets by asking each CPython's own `re` about every code point
+(`closures` below); a set that differs between Unicode versions is emitted
+once per version.
 
-Usage (inside the pyroid-dev container, in an env with datatrove==0.10.1 and
-spacy==3.8.18; never on the host):
+Usage (inside the pyroid-dev container, never on the host). The main run needs
+an env with datatrove==0.10.1 and spacy==3.8.18; the `closures` step needs
+only the standard library, under every CPython 3.11 ... 3.15:
 
-    python crates/pyroid-core/src/filters/generate_tables.py
+    python crates/pyroid-core/src/filters/generate_tables.py \\
+        --pythons /path/python3.11,/path/python3.12,...,/path/python3.15
 """
 
 # ruff: noqa: PT018, T201, N812  (a build script; C/P are sre's customary aliases)
 
 from __future__ import annotations
 
+import argparse
+import json
+import re
+import subprocess
 import sys
 from pathlib import Path
 from re import _compiler as Compiler  # type: ignore[attr-defined]
@@ -40,6 +54,12 @@ HEADER = (
     "// spaCy 3.8.18 (MIT), (c) ExplosionAI GmbH; modified.\n"
 )
 MAXREPEAT = int(C.MAXREPEAT)
+MAX_CP = 0x110000
+#: The Unicode versions `UnicodeVersion` knows, in its order.
+UNICODE_VERSIONS = ["14.0.0", "15.0.0", "15.1.0", "16.0.0", "17.0.0"]
+#: spaCy languages whose datatrove tokenizer is not the rule-based one:
+#: they need a segmenter (pyvi, jieba, SudachiPy) that pyroid does not port.
+SEGMENTER_LANGUAGES = {"ja": "SudachiPy", "vi": "pyvi", "zh": "jieba"}
 
 
 def rs_char(c: int) -> str:
@@ -92,7 +112,7 @@ CAT_RE = {
 class Class:
     """A character class: explicit code points, symbolic categories, negation."""
 
-    def __init__(self, negate: bool, points: set[int], cats: list[str], src: list) -> None:
+    def __init__(self, negate: bool, points: set[int], cats: list[str], src: list | None) -> None:
         self.negate = negate
         self.points = points
         self.cats = cats
@@ -117,8 +137,6 @@ class Class:
 
     def interpreted(self, ch: str) -> bool:
         """Membership as the Rust side computes it (points, then categories)."""
-        import re
-
         hit = ord(ch) in self.points
         for cat in self.cats:
             hit = hit or re.match(CAT_RE[cat], ch) is not None
@@ -146,13 +164,137 @@ def class_of(items: list) -> Class:
     return Class(negate, points, cats, items)
 
 
+def explicit(points: set[int]) -> Class:
+    """A class of exactly `points` (stored negated when that is smaller)."""
+    if len(points) > MAX_CP // 2:
+        rest = {c for c in range(MAX_CP) if c not in points and not 0xD800 <= c < 0xE000}
+        return Class(True, rest, [], None)
+    return Class(False, points, [], None)
+
+
+# ------------------------------------------------- case-insensitive closures
+
+
+def esc(c: int) -> str:
+    return f"\\U{c:08x}"
+
+
+def ignorecase_src(op, av) -> str:
+    """A pattern for one character node, to compile with re.IGNORECASE."""
+    if op is C.LITERAL:
+        return esc(av)
+    if op is C.NOT_LITERAL:
+        return "[^" + esc(av) + "]"
+    if op is C.ANY:
+        return "."
+    if op is C.CATEGORY:
+        return CAT_RE[CATS[av]]
+    if op is C.IN:
+        parts = []
+        for o, a in av:
+            if o is C.NEGATE:
+                parts.insert(0, "^")
+            elif o is C.LITERAL:
+                parts.append(esc(a))
+            elif o is C.RANGE:
+                parts.append(esc(a[0]) + "-" + esc(a[1]))
+            elif o is C.CATEGORY:
+                parts.append(CAT_RE[CATS[a]])
+            else:
+                raise SystemExit(f"unsupported class item {o}")
+        return "[" + "".join(parts) + "]"
+    raise SystemExit(f"not a character node: {op}")
+
+
+def closures(srcs: list[str]) -> dict:
+    """Run under one interpreter: the code points each `srcs[i]` matches with
+    `re.IGNORECASE` (str patterns, so Unicode), as merged ranges."""
+    import unicodedata
+
+    rxs = [re.compile(s, re.IGNORECASE) for s in srcs]
+    hits: list[set[int]] = [set() for _ in srcs]
+    for cp in range(MAX_CP):
+        if 0xD800 <= cp < 0xE000:
+            continue
+        ch = chr(cp)
+        for i, rx in enumerate(rxs):
+            if rx.fullmatch(ch):
+                hits[i].add(cp)
+    return {
+        "unicode": unicodedata.unidata_version,
+        "python": sys.version.split()[0],
+        "sets": [[list(r) for r in merge(h)] for h in hits],
+    }
+
+
+def run_closures(srcs: list[str], pythons: list[str]) -> list[list[set[int]]]:
+    """`closures(srcs)` under each interpreter: `[src][version] -> points`."""
+    procs = []
+    for py in pythons:
+        p = subprocess.Popen(
+            [py, "-I", str(Path(__file__).resolve()), "closures"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        assert p.stdin is not None
+        p.stdin.write(json.dumps(srcs))
+        p.stdin.close()
+        procs.append(p)
+    by_version: dict[str, list[set[int]]] = {}
+    for p in procs:
+        assert p.stdout is not None
+        data = json.loads(p.stdout.read())
+        assert p.wait() == 0
+        sets = [{c for a, b in rs for c in range(a, b + 1)} for rs in data["sets"]]
+        by_version[data["unicode"]] = sets
+        print(f"closures: Python {data['python']} (Unicode {data['unicode']}), {len(srcs)} sets")
+    missing = [v for v in UNICODE_VERSIONS if v not in by_version]
+    if missing:
+        sys.exit(f"--pythons must cover Unicode {UNICODE_VERSIONS}; missing {missing}")
+    return [[by_version[v][i] for v in UNICODE_VERSIONS] for i in range(len(srcs))]
+
+
 # ------------------------------------------------------------------- AST
 
 
+def char_node(op) -> bool:
+    return op in (C.LITERAL, C.NOT_LITERAL, C.IN, C.ANY, C.CATEGORY)
+
+
+def collect_ignorecase(sp, ignore: bool, out: set[str]) -> None:
+    for op, av in sp:
+        if char_node(op):
+            if ignore:
+                out.add(ignorecase_src(op, av))
+        elif op is C.BRANCH:
+            for b in av[1]:
+                collect_ignorecase(b, ignore, out)
+        elif op is C.SUBPATTERN:
+            collect_ignorecase(av[3], sub_ignore(ignore, av), out)
+        elif op is C.MAX_REPEAT:
+            collect_ignorecase(av[2], ignore, out)
+        elif op in (C.ASSERT, C.ASSERT_NOT):
+            collect_ignorecase(av[1], ignore, out)
+
+
+def sub_ignore(ignore: bool, av) -> bool:
+    _, add, sub, _ = av
+    assert not (add & ~re.IGNORECASE) and not (sub & ~re.IGNORECASE), av
+    if add & re.IGNORECASE:
+        return True
+    if sub & re.IGNORECASE:
+        return False
+    return ignore
+
+
 class Gen:
-    def __init__(self) -> None:
+    def __init__(self, ignorecase: dict[str, list[set[int]]]) -> None:
         self.classes: dict[tuple, tuple[str, Class]] = {}
-        self.lines: list[str] = []
+        self.versioned: dict[tuple, str] = {}
+        self.ignorecase = ignorecase
+        self.statics: dict[str, str] = {}  # pattern source key -> static name
+        self.body: list[str] = []
 
     def cls(self, c: Class) -> str:
         k = c.key()
@@ -161,15 +303,32 @@ class Gen:
             self.classes[k] = (name, c)
         return self.classes[k][0]
 
-    def nodes(self, sp) -> str:
-        return "&[" + ", ".join(self.node(op, av) for op, av in sp) + "]"
+    def nodes(self, sp, ignore: bool) -> str:
+        return "&[" + ", ".join(self.node(op, av, ignore) for op, av in sp) + "]"
 
-    def node(self, op, av) -> str:
+    def ignorecase_node(self, op, av) -> str:
+        sets = self.ignorecase[ignorecase_src(op, av)]
+        names = [self.cls(explicit(s)) for s in sets]
+        if len(set(names)) == 1:
+            return f"Node::In(&{names[0]})"
+        key = tuple(names)
+        if key not in self.versioned:
+            self.versioned[key] = f"V{len(self.versioned)}"
+        return f"Node::InV(&{self.versioned[key]})"
+
+    def node(self, op, av, ignore: bool) -> str:
+        if ignore and char_node(op):
+            return self.ignorecase_node(op, av)
         if op is C.LITERAL:
             return f"Node::Lit({rs_char(av)})"
         if op is C.NOT_LITERAL:
             return (
                 f"Node::In(&{self.cls(Class(True, {av}, [], [(C.NEGATE, None), (C.LITERAL, av)]))})"
+            )
+        if op is C.ANY:
+            # `.` without DOTALL: anything but "\n".
+            return (
+                f"Node::In(&{self.cls(Class(True, {10}, [], [(C.NEGATE, None), (C.LITERAL, 10)]))})"
             )
         if op is C.IN:
             return f"Node::In(&{self.cls(class_of(av))})"
@@ -182,27 +341,54 @@ class Gen:
                 return "Node::Eol"
             raise SystemExit(f"unsupported AT {av}")
         if op is C.BRANCH:
-            return "Node::Branch(&[" + ", ".join(self.nodes(b) for b in av[1]) + "])"
+            return "Node::Branch(&[" + ", ".join(self.nodes(b, ignore) for b in av[1]) + "])"
         if op is C.SUBPATTERN:
-            group, add, sub, body = av
-            assert group is None and not add and not sub, av
-            return "Node::Group(" + self.nodes(body) + ")"
+            # Capturing groups match like non-capturing ones (no backreferences).
+            return "Node::Group(" + self.nodes(av[3], sub_ignore(ignore, av)) + ")"
         if op is C.MAX_REPEAT:
             lo, hi, body = av
+            body, ignore = unwrap_single(body, ignore)
             hi = "u32::MAX" if hi == MAXREPEAT else str(hi)
-            return f"Node::Repeat({lo}, {hi}, {self.nodes(body)})"
+            return f"Node::Repeat({lo}, {hi}, {self.nodes(body, ignore)})"
         if op in (C.ASSERT, C.ASSERT_NOT):
             direction, body = av
             negate = "true" if op is C.ASSERT_NOT else "false"
             if direction == 1:
-                return f"Node::Ahead({negate}, {self.nodes(body)})"
+                return f"Node::Ahead({negate}, {self.nodes(body, ignore)})"
             lo, hi = body.getwidth()
             assert lo == hi, "lookbehind must be fixed-width"
-            return f"Node::Behind({negate}, {lo}, {self.nodes(body)})"
+            return f"Node::Behind({negate}, {lo}, {self.nodes(body, ignore)})"
         raise SystemExit(f"unsupported opcode {op}")
 
+    def pattern(self, kind: str, rx: re.Pattern) -> tuple[str, P.SubPattern, bool]:
+        """The static holding `rx`'s AST (shared between languages)."""
+        parsed = P.parse(rx.pattern, rx.flags)
+        flags = parsed.state.flags
+        assert flags & ~(re.UNICODE | re.IGNORECASE) == 0, flags
+        ignore = bool(flags & re.IGNORECASE)
+        key = (rx.pattern, rx.flags)
+        if key not in self.statics:
+            prefix = kind.upper() + "_"
+            name = f"{prefix}{sum(n.startswith(prefix) for n in self.statics.values())}"
+            self.statics[key] = name
+            self.body.append(f"static {name}: &[Node] = {self.nodes(parsed, ignore)};")
+        return self.statics[key], parsed, ignore
 
-def first_last(sp, last: bool) -> tuple[set[int] | None, bool]:
+    def points(self, op, av, ignore: bool) -> set[int] | None:
+        """Code points a one-character node can match (None: too many to list)."""
+        if ignore:
+            sets = self.ignorecase[ignorecase_src(op, av)]
+            union = set().union(*sets)
+            return None if len(union) > MAX_CP // 2 else union
+        if op is C.LITERAL:
+            return {av}
+        if op is C.IN:
+            c = class_of(av)
+            return None if c.negate or c.cats else c.points
+        return None  # NOT_LITERAL, ANY, CATEGORY
+
+
+def first_last(gen: Gen, sp, last: bool, ignore: bool) -> tuple[set[int] | None, bool]:
     """Code points that can be the first (or last) consumed char; None = any.
 
     Returns (points, nullable). Zero-width nodes are skipped.
@@ -212,19 +398,17 @@ def first_last(sp, last: bool) -> tuple[set[int] | None, bool]:
         items.reverse()
     acc: set[int] = set()
     for op, av in items:
-        if op is C.LITERAL:
-            return acc | {av}, False
-        if op is C.IN:
-            c = class_of(av)
-            if c.negate or c.cats:
+        if char_node(op):
+            pts = gen.points(op, av, ignore)
+            if pts is None:
                 return None, False
-            return acc | c.points, False
+            return acc | pts, False
         if op in (C.AT, C.ASSERT, C.ASSERT_NOT):
             continue
         if op is C.BRANCH:
             nullable = False
             for b in av[1]:
-                pts, n = first_last(b, last)
+                pts, n = first_last(gen, b, last, ignore)
                 if pts is None:
                     return None, False
                 acc |= pts
@@ -234,7 +418,7 @@ def first_last(sp, last: bool) -> tuple[set[int] | None, bool]:
             continue
         if op is C.MAX_REPEAT:
             lo, _, body = av
-            pts, n = first_last(body, last)
+            pts, n = first_last(gen, body, last, ignore)
             if pts is None:
                 return None, False
             acc |= pts
@@ -242,7 +426,7 @@ def first_last(sp, last: bool) -> tuple[set[int] | None, bool]:
                 return acc, False
             continue
         if op is C.SUBPATTERN:
-            pts, n = first_last(av[3], last)
+            pts, n = first_last(gen, av[3], last, sub_ignore(ignore, av))
             if pts is None:
                 return None, False
             acc |= pts
@@ -264,6 +448,38 @@ def alternatives(parsed) -> list:
     return [parsed]
 
 
+def unwrap_single(body, ignore: bool):
+    """A repeat body that is one character node, possibly inside groups,
+    as that node (so the matchers run the repeat as a loop)."""
+    while len(body) == 1 and body[0][0] is C.SUBPATTERN:
+        ignore = sub_ignore(ignore, body[0][1])
+        body = body[0][1][3]
+    if len(body) == 1 and char_node(body[0][0]):
+        return body, ignore
+    return body, ignore
+
+
+def check_repeats(gen: Gen, sp, ignore: bool) -> None:
+    """An unbounded repeat of more than one node runs on the Rust side as a
+    priority NFA, whose empty-loop handling only equals sre's when the body
+    cannot match empty: check that."""
+    for op, av in sp:
+        if op is C.MAX_REPEAT:
+            _, hi, body = av
+            body, ignore2 = unwrap_single(body, ignore)
+            if hi == MAXREPEAT and not (len(body) == 1 and char_node(body[0][0])):
+                _, nullable = first_last(gen, body, last=False, ignore=ignore2)
+                assert not nullable, body
+            check_repeats(gen, body, ignore2)
+        elif op is C.BRANCH:
+            for b in av[1]:
+                check_repeats(gen, b, ignore)
+        elif op is C.SUBPATTERN:
+            check_repeats(gen, av[3], sub_ignore(ignore, av))
+        elif op in (C.ASSERT, C.ASSERT_NOT):
+            check_repeats(gen, av[1], ignore)
+
+
 def emit_class(name: str, c: Class) -> str:
     lo, hi = c.ascii_mask()
     ranges = ", ".join(f"(0x{a:x}, 0x{b:x})" for a, b in merge({p for p in c.points if p >= 128}))
@@ -274,74 +490,162 @@ def emit_class(name: str, c: Class) -> str:
     )
 
 
-def filter_class(name: str, points: set[int] | None) -> str:
-    assert points is not None, name
-    return emit_class(name, Class(False, points, [], None))
+def filter_class(gen: Gen, points: set[int] | None) -> str:
+    """A prefilter class (None: every character)."""
+    if points is None:
+        return gen.cls(Class(True, set(), [], None))
+    return gen.cls(Class(False, points, [], None))
 
 
-def main() -> None:
+# --------------------------------------------------------------- languages
+
+
+def spacy_rules(tok) -> dict[str, tuple[str, ...]]:
+    out = {}
+    for key, attrs in tok.rules.items():
+        pieces = tuple(d[65] if 65 in d else d["ORTH"] for d in attrs)  # ORTH
+        assert "".join(pieces) == key, key
+        assert "\x00" not in key and "\x01" not in key, key
+        out[key] = pieces
+    return out
+
+
+def rules_blob(rules: dict[str, tuple[str, ...]]) -> str:
+    """Rules as one string: rules split by NUL, pieces by U+0001 (a one-piece
+    rule is just its key)."""
+    return "\x00".join("\x01".join(rules[k]) for k in sorted(rules))
+
+
+def extract(code: str):
+    import spacy
+    from spacy.tokenizer import Tokenizer
+
+    nlp = spacy.blank(code)
+    tok = nlp.tokenizer
+    assert type(tok) is Tokenizer, (code, type(tok))
+    assert tok.faster_heuristics, code
+    assert nlp.pipe_names == [], (code, nlp.pipe_names)
+    pats = {}
+    for kind, attr, method in [
+        ("prefix", "prefix_search", "search"),
+        ("suffix", "suffix_search", "search"),
+        ("infix", "infix_finditer", "finditer"),
+        ("url", "url_match", "match"),
+        ("token_match", "token_match", "match"),
+    ]:
+        f = getattr(tok, attr)
+        if f is None:
+            assert kind in ("url", "token_match"), (code, kind)
+            pats[kind] = None
+            continue
+        rx = f.__self__
+        assert isinstance(rx, re.Pattern) and f.__name__ == method, (code, kind, f)
+        pats[kind] = rx
+    return pats, spacy_rules(tok)
+
+
+def main(pythons: list[str]) -> None:
     import spacy
     from datatrove.utils.text import PUNCTUATION_SET, TERMINAL_PUNCTUATION
     from datatrove.utils.word_tokenizers import load_tokenizer_assignments
-
-    english = sorted(
-        k for k, f in load_tokenizer_assignments().items() if f.args == ("SpaCyTokenizer", "en")
-    )
-    assert "eng" in english and "en" in english, english
+    from spacy.attrs import IS_PUNCT
+    from spacy.lang.lex_attrs import is_punct
     from spacy.pipeline.sentencizer import Sentencizer
 
     if spacy.__version__ != "3.8.18":
         sys.exit(f"need spacy 3.8.18, have {spacy.__version__}")
-    nlp = spacy.blank("en")
-    tok = nlp.tokenizer
-    pats = {
-        "PREFIX": tok.prefix_search.__self__,
-        "SUFFIX": tok.suffix_search.__self__,
-        "INFIX": tok.infix_finditer.__self__,
-        "URL": tok.url_match.__self__,
-    }
-    assert tok.token_match is None
-    g = Gen()
-    body: list[str] = []
-    meta: list[str] = []
-    for name, rx in pats.items():
-        parsed = P.parse(rx.pattern, rx.flags)
-        assert rx.flags == 32, rx.flags  # re.UNICODE only
-        body.append(f"pub(crate) static {name}: &[Node] = {g.nodes(parsed)};")
-        if name == "URL":
-            continue
-        alts = alternatives(parsed)
-        firsts: set[int] = set()
-        unbounded_first: set[int] = set()
-        lasts: set[int] = set()
-        max_bounded = 0
-        for alt in alts:
-            pts, nullable = first_last(alt, last=False)
-            assert pts is not None and not nullable, (name, alt)
-            firsts |= pts
-            lo, hi = alt.getwidth()
-            assert lo >= 1, (name, alt)
-            if hi >= MAXREPEAT:
-                unbounded_first |= pts
-            else:
-                max_bounded = max(max_bounded, hi)
-            lp, ln = first_last(alt, last=True)
-            assert lp is not None and not ln
-            lasts |= lp
-        meta.append(filter_class(f"{name}_FIRST", firsts))
-        if name == "SUFFIX":
-            meta.append(filter_class(f"{name}_LAST", lasts))
-            meta.append(filter_class(f"{name}_UNBOUNDED_FIRST", unbounded_first))
-            meta.append(f"pub(crate) const {name}_MAX_BOUNDED: usize = {max_bounded};")
-        ws = [c for c in range(0x110000) if chr(c).isspace() and (c in firsts or c in lasts)]
-        assert not ws, (name, ws)
 
-    rules = tok.rules
-    rule_lines = []
-    for key in sorted(rules):
-        pieces = [d[65] if 65 in d else d["ORTH"] for d in rules[key]]  # ORTH
-        assert "".join(pieces) == key, key
-        rule_lines.append(f"    ({rs_str(key)}, &[{', '.join(rs_str(p) for p in pieces)}]),")
+    assignments = {k: f.args for k, f in load_tokenizer_assignments().items()}
+    assert all(len(a) == 2 for a in assignments.values())
+    backends = sorted(set(assignments.values()))
+    assert len(backends) < 256
+    spacy_codes = sorted(
+        arg for cls, arg in backends if cls == "SpaCyTokenizer" and arg not in SEGMENTER_LANGUAGES
+    )
+    assert "en" in spacy_codes and "xx" in spacy_codes, spacy_codes
+    # WhitespaceTokenizer's words are SpaCyTokenizer("xx").
+
+    langs = {}
+    for code in spacy_codes:
+        langs[code] = extract(code)
+        nlp = spacy.blank(code)
+        # The sentencizer's `is_punct` must be spaCy's default everywhere.
+        assert nlp.vocab.lex_attr_getters[IS_PUNCT] is is_punct, code
+    base = langs["xx"][1]
+
+    # Characters matched case-insensitively, per Unicode version.
+    srcs: set[str] = set()
+    for pats, _ in langs.values():
+        for rx in pats.values():
+            if rx is not None:
+                parsed = P.parse(rx.pattern, rx.flags)
+                collect_ignorecase(parsed, bool(parsed.state.flags & re.IGNORECASE), srcs)
+    ordered = sorted(srcs)
+    ignorecase = dict(zip(ordered, run_closures(ordered, pythons), strict=True)) if ordered else {}
+
+    g = Gen(ignorecase)
+    entries: list[str] = []
+    meta_cache: dict[tuple, dict[str, str]] = {}
+    for code in spacy_codes:
+        pats, rules = langs[code]
+        fields: dict[str, str] = {"code": rs_str(code)}
+        for kind in ["prefix", "suffix", "infix", "url", "token_match"]:
+            rx = pats[kind]
+            if rx is None:
+                fields[kind] = "None"
+                continue
+            name, parsed, ignore = g.pattern(kind, rx)
+            check_repeats(g, parsed, ignore)
+            if kind in ("url", "token_match"):
+                fields[kind] = f"Some({name})"
+                continue
+            fields[kind] = name
+            mkey = (rx.pattern, rx.flags)
+            if mkey not in meta_cache:
+                firsts: set[int] | None = set()
+                unbounded_first: set[int] | None = set()
+                lasts: set[int] | None = set()
+                max_bounded = 0
+                any_nullable = False
+                for alt in alternatives(parsed):
+                    pts, nullable = first_last(g, alt, last=False, ignore=ignore)
+                    if nullable:
+                        # An alternative that can match empty (Catalan infixes
+                        # split after an elision with a lookaround pair; a
+                        # Hungarian unit list has an empty unit): the Rust side
+                        # then skips the first/last-character prefilters.
+                        any_nullable = True
+                        continue
+                    lo, hi = alt.getwidth()
+                    assert lo >= 1, (code, kind, alt)
+                    firsts = None if pts is None or firsts is None else firsts | pts
+                    if hi >= MAXREPEAT:
+                        unbounded_first = (
+                            None
+                            if pts is None or unbounded_first is None
+                            else unbounded_first | pts
+                        )
+                    else:
+                        max_bounded = max(max_bounded, hi)
+                    lp, ln = first_last(g, alt, last=True, ignore=ignore)
+                    assert not ln
+                    lasts = None if lp is None or lasts is None else lasts | lp
+                meta = {"first": filter_class(g, firsts), "nullable": str(any_nullable).lower()}
+                if kind == "suffix":
+                    meta["last"] = filter_class(g, lasts)
+                    meta["unbounded_first"] = filter_class(g, unbounded_first)
+                    meta["max_bounded"] = str(max_bounded)
+                meta_cache[mkey] = meta
+            for k, v in meta_cache[mkey].items():
+                fields[f"{kind}_{k}"] = v if k in ("max_bounded", "nullable") else f"&{v}"
+        with_base = all(rules.get(k) == v for k, v in base.items())
+        own = {k: v for k, v in rules.items() if not (with_base and base.get(k) == v)}
+        fields["base_rules"] = str(with_base).lower()
+        fields["rules"] = rs_str(rules_blob(own))
+        fields["n_rules"] = str(len(rules))
+        entries.append(
+            "    LangData { " + ", ".join(f"{k}: {v}" for k, v in fields.items()) + " },"
+        )
 
     sent = sorted(Sentencizer.default_punct_chars)
     assert all(len(c) == 1 for c in sent)
@@ -349,24 +653,36 @@ def main() -> None:
     import random
 
     rnd = random.Random(0)
-    probe = list(range(0x3000)) + [rnd.randrange(0x3000, 0x110000) for _ in range(20000)]
+    probe = list(range(0x3000)) + [rnd.randrange(0x3000, MAX_CP) for _ in range(20000)]
     probe = [c for c in probe if not 0xD800 <= c < 0xE000]
     for _, c in g.classes.values():
+        if c.src is None:
+            continue
         bad = [hex(x) for x in probe if c.contains(chr(x)) != c.interpreted(chr(x))]
         assert not bad, bad[:10]
     classes = [emit_class(n, c) for n, c in sorted(g.classes.values(), key=lambda x: int(x[0][1:]))]
+    versioned = [
+        f"pub(crate) static {n}: [&Class; 5] = [{', '.join('&' + c for c in key)}];"
+        for key, n in sorted(g.versioned.items(), key=lambda x: int(x[1][1:]))
+    ]
+    backend_index = {b: i for i, b in enumerate(backends)}
     out = [
         HEADER,
-        '//! spaCy 3.8.18 `blank("en")` tokenizer data and datatrove 0.10.1 constants.\n',
+        "//! spaCy 3.8.18 tokenizer data for every rule-based `spacy.blank(code)`",
+        "//! datatrove 0.10.1 uses, and datatrove's constants and tokenizer assignments.\n",
         "#![allow(clippy::unreadable_literal)]\n",
-        "use super::regex::{Cat, Class, Node};\n",
-        "#[rustfmt::skip]\nmod data {\nuse super::{Cat, Class, Node};\n",
+        "use super::regex::{Cat, Class, Node};",
+        "use super::tokenizer::LangData;\n",
+        "#[rustfmt::skip]\nmod data {\nuse super::{Cat, Class, LangData, Node};\n",
         "\n".join(classes),
-        "\n".join(body),
-        "\n".join(meta),
-        "/// Tokenizer exceptions (special cases): `(string, ORTH pieces)`, sorted.",
-        "pub(crate) static RULES: &[(&str, &[&str])] = &[",
-        "\n".join(rule_lines),
+        "\n".join(versioned),
+        "\n".join(g.body),
+        "/// The base tokenizer exceptions (`spacy.lang.tokenizer_exceptions."
+        'BASE_EXCEPTIONS`, as `blank("xx")` has them), in `LangData::rules` form.',
+        f"pub(crate) static BASE_RULES: &str = {rs_str(rules_blob(base))};",
+        "/// Every rule-based spaCy language datatrove uses, sorted by code.",
+        "pub(crate) static LANGS: &[LangData] = &[",
+        "\n".join(entries),
         "];",
         "/// `Sentencizer.default_punct_chars`, sorted.",
         "pub(crate) static SENT_PUNCT: &[char] = &["
@@ -380,15 +696,34 @@ def main() -> None:
         "pub(crate) static TERMINAL_PUNCTUATION: &[char] = &["
         + ", ".join(rs_char(ord(c)) for c in sorted(TERMINAL_PUNCTUATION))
         + "];",
-        '/// datatrove language codes whose word tokenizer is `SpaCyTokenizer("en")`, sorted.',
-        "pub(crate) static ENGLISH_LANGUAGES: &[&str] = &["
-        + ", ".join(rs_str(k) for k in english)
+        "/// datatrove's word tokenizer classes and arguments (`tokenizer_assignment.csv`),"
+        " sorted.",
+        "pub(crate) static BACKENDS: &[(&str, &str)] = &["
+        + ", ".join(f"({rs_str(c)}, {rs_str(a)})" for c, a in backends)
         + "];",
+        "/// Every datatrove language code with its index in `BACKENDS`, sorted by code.",
+        "pub(crate) static LANGUAGES: &[(&str, u8)] = &[",
+        "\n".join(
+            f"    ({rs_str(k)}, {backend_index[assignments[k]]})," for k in sorted(assignments)
+        ),
+        "];",
         "}\npub(crate) use data::*;\n",
     ]
     OUT.write_text("\n".join(out), encoding="utf-8")
-    print(f"wrote {OUT} ({OUT.stat().st_size} bytes): {len(g.classes)} classes, {len(rules)} rules")
+    n_rules = sum(len(r) for _, r in langs.values())
+    print(
+        f"wrote {OUT} ({OUT.stat().st_size} bytes): {len(spacy_codes)} languages, "
+        f"{len(g.classes)} classes ({len(g.versioned)} per-version), {len(g.statics)} patterns, "
+        f"{n_rules} rules, {len(assignments)} language codes"
+    )
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["closures"]:
+        json.dump(closures(json.load(sys.stdin)), sys.stdout)
+    else:
+        ap = argparse.ArgumentParser()
+        ap.add_argument(
+            "--pythons", required=True, help="comma-separated CPython 3.11..3.15 executables"
+        )
+        main(ap.parse_args().pythons.split(","))

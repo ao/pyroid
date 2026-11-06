@@ -13,6 +13,7 @@ extend-exclude = [
   "crates/pyroid-core/src/filters/tables.rs",
   "crates/pyroid-core/src/metrics/sacrebleu/tables.rs",
   "crates/pyroid-core/src/json_repair/tables.rs",
+  "crates/pyroid-core/src/filters/indic_tables.rs",
   # Test data, incumbent fixtures and raw benchmark results: mojibake, confusables, deliberately
   # misspelt and non-English text. Keep in step with the file-fixer excludes in .pre-commit-config.yaml.
   "python/tests/data/",
@@ -38,11 +39,16 @@ extend-exclude = [
   # The Porter stemmer's suffixes and stems ("iz", "ful", "ative", "agre", "controll") and its tests' words.
   "crates/pyroid-core/src/metrics/rouge/porter.rs",
   "python/tests/test_metrics_rouge.py",
+  # Multilingual filter/dedup tests: German, Turkish, Vietnamese ... text and language codes (tha_Thai).
+  "python/tests/test_filters_multilingual.py",
+  "python/tests/test_dedup_multilingual.py",
 ]
 
 [default.extend-words]
 # datatrove's parameter names (line_punct_thr, short_line_thr), kept for drop-in parity.
 thr = "thr"
+# ISO 15924 script codes in datatrove / FineWeb-2 language codes (ben_Beng).
+Beng = "Beng"
 
 [default.extend-identifiers]
 # The arro3 Arrow library (github.com/kylebarron/arro3), not a misspelt "arrow".

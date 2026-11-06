@@ -9,7 +9,7 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use pyo3::exceptions::{PyIndexError, PyValueError};
+use pyo3::exceptions::{PyIndexError, PyNotImplementedError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedStr;
 use pyo3::types::{PyBool, PyList, PyString, PyTuple};
@@ -19,6 +19,7 @@ use pyroid_core::dedup::{
     CapacityError, Clusters, ExactSeen, HashConfig, HashFn, MinHasher, MinhashConfig, Precision,
     SignatureStore, TextNormConfig, TokenizeError, UnicodeVersion, simplify_text,
 };
+use pyroid_core::filters;
 use pyroid_core::par;
 
 use crate::arrow::{Chunk, Column, ColumnType};
@@ -90,8 +91,16 @@ pub struct NativeConfig {
 
 #[pymethods]
 impl NativeConfig {
+    /// `language`: the datatrove code whose tokenizer splits the words
+    /// (`MinhashDedupSignature(language=...)`); `None` is datatrove's
+    /// default, English. It must be one pyroid tokenizes natively (the shim
+    /// checks, and tokenizes the others in Python).
     #[new]
-    #[pyo3(signature = (*, n_grams, num_buckets, hashes_per_bucket, seed, hash_fc, precision, norm))]
+    #[pyo3(signature = (
+        *, n_grams, num_buckets, hashes_per_bucket, seed, hash_fc, precision, norm,
+        language = None
+    ))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         n_grams: usize,
         num_buckets: usize,
@@ -100,6 +109,7 @@ impl NativeConfig {
         hash_fc: &str,
         precision: u32,
         norm: &NativeNorm,
+        language: Option<&str>,
     ) -> PyResult<Self> {
         let hash_fc = HashFn::from_name(hash_fc)
             .ok_or_else(|| PyValueError::new_err(format!("unknown hash_fc {hash_fc:?}")))?;
@@ -113,8 +123,25 @@ impl NativeConfig {
             norm_config: norm.norm,
             hash_config: HashConfig { precision, hash_fc },
         };
-        let hasher = MinHasher::new(config, norm.unicode)
+        let mut hasher = MinHasher::new(config, norm.unicode)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        if let Some(language) = language {
+            let tok =
+                filters::tokenizer_for(language, norm.unicode).ok_or_else(
+                    || match filters::backend(language) {
+                        None => PyValueError::new_err(format!(
+                            "Language '{language}' doesn't have a tokenizer assigned. Pass in a \
+                         WordTokenizer directly or update tokenizer_assignment.csv"
+                        )),
+                        Some(b) => PyNotImplementedError::new_err(format!(
+                            "pyroid has no native word tokenizer for language {language:?} \
+                         (datatrove's {}({:?}))",
+                            b.class, b.arg
+                        )),
+                    },
+                )?;
+            hasher = hasher.with_tokenizer(tok);
+        }
         Ok(Self { hasher })
     }
 
@@ -480,7 +507,8 @@ impl MinHashState {
         .map_err(|e: AddError| e.into_pyerr(py))
     }
 
-    /// Add pre-tokenized documents (a parity-test hook).
+    /// Add pre-tokenized documents (the Python-tokenizer path, and a
+    /// parity-test hook).
     #[pyo3(signature = (tokens, /, *, threads = None))]
     fn _add_tokens(
         &self,
@@ -492,6 +520,38 @@ impl MinHashState {
         let sigs = token_signatures(py, self.hasher(), &docs, threads.or(self.threads))?;
         drop(docs);
         self.append(py, sigs)
+    }
+
+    /// [`Self::fit`] for pre-tokenized documents: replace the index with them
+    /// and return their keep mask as a list (the shim packs it).
+    #[pyo3(signature = (tokens, /, *, threads = None))]
+    fn _fit_tokens<'py>(
+        &self,
+        py: Python<'py>,
+        tokens: &Bound<'py, PyAny>,
+        threads: Option<Threads>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let t = threads.or(self.threads);
+        let docs = token_lists(tokens)?;
+        let sigs = token_signatures(py, self.hasher(), &docs, t)?;
+        drop(docs);
+        let tt = self::threads(t);
+        let keep = py.detach(|| {
+            // A new store, filled outside the lock; the old index stays as
+            // it was if this fails.
+            let mut fresh = MinHashInner {
+                store: SignatureStore::new(self.hasher().config()),
+                clusters: None,
+            };
+            fresh.append(sigs)?;
+            let mut inner = lock(&self.inner);
+            inner.store = fresh.store;
+            inner.clusters = None;
+            inner
+                .clusters(tt)
+                .map_err(|e| PyroidError::new_err(e.to_string()))
+        })?;
+        PyList::new(py, (0..keep.len()).map(|i| keep.is_kept(i)))
     }
 
     /// Replace the index with ``texts``; return their keep mask in the

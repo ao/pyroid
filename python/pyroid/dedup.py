@@ -4,6 +4,8 @@
 The MinHash pipeline makes the same removals as datatrove 0.10.1's
 ``MinhashDedupSignature`` -> ``MinhashDedupBuckets`` -> ``MinhashDedupCluster``
 -> ``MinhashDedupFilter``, in memory. Types and docs are in ``dedup.pyi``.
+The language table and the opt-in Python-tokenizer path are shared with
+``pyroid.filters``.
 """
 
 from __future__ import annotations
@@ -15,17 +17,21 @@ from dataclasses import dataclass, field, fields, replace
 from functools import lru_cache
 from typing import Any
 
+from pyroid import filters as _filters
 from pyroid._pyroid import dedup as _native
 from pyroid._pyroid import ftfy as _ftfy_native
+from pyroid.filters import Language, languages
 
 __all__ = [
     "DATATROVE_VERSION",
     "ExactDedup",
     "HashConfig",
+    "Language",
     "MinHashDedup",
     "MinhashConfig",
     "TextNormConfig",
     "exact_dedup",
+    "languages",
     "minhash_dedup",
     "minhash_signatures",
     "simplify_text",
@@ -179,7 +185,7 @@ def _native_norm(norm: TextNormConfig) -> Any:
 
 
 @lru_cache(maxsize=64)
-def _native_config(cfg: MinhashConfig) -> Any:
+def _native_config(cfg: MinhashConfig, language: str | None = None) -> Any:
     return _native._NativeConfig(
         n_grams=cfg.n_grams,
         num_buckets=cfg.num_buckets,
@@ -188,6 +194,7 @@ def _native_config(cfg: MinhashConfig) -> Any:
         hash_fc=cfg.hash_config.hash_fc,
         precision=cfg.hash_config.precision,
         norm=_native_norm(cfg.norm_config),
+        language=language,
     )
 
 
@@ -199,20 +206,83 @@ def _normalize_arg(normalize: object) -> Any:
     return _native_norm(_norm_config(normalize))
 
 
+_MATH = "shingling and MinHash still run in Rust"
+
+
+def _words_source(language: object, python_tokenizer: object, where: str) -> Any:
+    """``language`` as a native code (``str``), or the Python tokenizer to use.
+
+    Raises datatrove's ``ValueError`` for an unknown code, ``NotImplementedError`` for one
+    pyroid does not tokenize natively without ``python_tokenizer=True``, ``PyroidError``
+    if that path's packages are missing.
+    """
+    lang = _filters._language(language)
+    if isinstance(lang, str) and not python_tokenizer:
+        _filters._native_language(lang, _MATH)
+        return lang
+    tok = _filters._load_tokenizer(lang, where)
+    _filters._warn_tokenizer(where.removeprefix("pyroid."), tok, _MATH)
+    return tok
+
+
+def _python_tokens(
+    texts: Any, cfg: MinhashConfig, tok: Any, threads: int | None, where: str
+) -> tuple[list[list[str]], Any, list[Any]]:
+    """The ``word_tokenize(simplify_text(text))`` of datatrove, per document (``[]`` for nulls).
+
+    Returns the tokens, the documents' shape and the documents (``None`` for Arrow nulls).
+    """
+    docs, shape = _filters._native._to_list(texts, threads=threads)
+    at = [i for i, d in enumerate(docs) if d is not None]
+    present = [docs[i] for i in at]
+    simplified = _native._simplify_text(present, _native_norm(cfg.norm_config), threads=threads)
+    words = iter(_filters._tokenize(tok, simplified, where, at))
+    return [[] if d is None else next(words) for d in docs], shape, docs
+
+
+def _mask(shape: Any, docs: list[Any], keep: list[bool], threads: int | None) -> Any:
+    """``keep`` in the caller's kind (``None`` for Arrow nulls)."""
+    mask = [None if d is None else k for d, k in zip(docs, keep, strict=True)]
+    blank = [None] * len(mask)
+    return _filters._native._pack(shape, "keep", mask, blank, blank, threads=threads)
+
+
 def minhash_signatures(
-    texts: Any, config: Any = None, *, threads: int | None = None, **kwargs: Any
+    texts: Any,
+    config: Any = None,
+    *,
+    threads: int | None = None,
+    language: Any = "eng",
+    python_tokenizer: bool = False,
+    **kwargs: Any,
 ) -> Any:
     """MinHash signature of each document, as datatrove computes it (see ``dedup.pyi``)."""
-    native = _native_config(_minhash_config(config, kwargs))
-    return _native._minhash_signatures(texts, native, threads=threads)
+    cfg = _minhash_config(config, kwargs)
+    src = _words_source(language, python_tokenizer, "pyroid.dedup.minhash_signatures")
+    if isinstance(src, str):
+        return _native._minhash_signatures(texts, _native_config(cfg, src), threads=threads)
+    tokens, _, _ = _python_tokens(texts, cfg, src, threads, "pyroid.dedup.minhash_signatures")
+    sigs = _native._signatures_from_tokens(tokens, _native_config(cfg), threads=threads)
+    return sigs[0] if isinstance(texts, str) else sigs
 
 
 def minhash_dedup(
-    texts: Any, config: Any = None, *, threads: int | None = None, **kwargs: Any
+    texts: Any,
+    config: Any = None,
+    *,
+    threads: int | None = None,
+    language: Any = "eng",
+    python_tokenizer: bool = False,
+    **kwargs: Any,
 ) -> Any:
     """Keep mask of datatrove's MinHash dedup over ``texts`` (see ``dedup.pyi``)."""
-    native = _native_config(_minhash_config(config, kwargs))
-    return _native._MinHashState(native, threads=threads).fit(texts)
+    cfg = _minhash_config(config, kwargs)
+    src = _words_source(language, python_tokenizer, "pyroid.dedup.minhash_dedup")
+    if isinstance(src, str):
+        return _native._MinHashState(_native_config(cfg, src), threads=threads).fit(texts)
+    state = _native._MinHashState(_native_config(cfg), threads=threads)
+    tokens, shape, docs = _python_tokens(texts, cfg, src, threads, "pyroid.dedup.minhash_dedup")
+    return _mask(shape, docs, state._fit_tokens(tokens), threads)
 
 
 def simplify_text(texts: Any, config: Any = None, *, threads: int | None = None) -> Any:
@@ -228,24 +298,53 @@ def exact_dedup(texts: Any, *, normalize: Any = False, threads: int | None = Non
 class MinHashDedup:
     """An in-memory MinHash index with datatrove's decisions (see ``dedup.pyi``)."""
 
-    __slots__ = ("_config", "_state")
+    __slots__ = ("_config", "_language", "_python", "_state", "_tokenizer")
 
-    def __init__(self, config: Any = None, *, threads: int | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        config: Any = None,
+        *,
+        threads: int | None = None,
+        language: Any = "eng",
+        python_tokenizer: bool = False,
+        **kwargs: Any,
+    ) -> None:
         self._config = _minhash_config(config, kwargs)
-        self._state = _native._MinHashState(_native_config(self._config), threads=threads)
+        src = _words_source(language, python_tokenizer, "pyroid.dedup.MinHashDedup")
+        self._language = language
+        self._python = bool(python_tokenizer)
+        self._tokenizer = None if isinstance(src, str) else src
+        native = _native_config(self._config, src if isinstance(src, str) else None)
+        self._state = _native._MinHashState(native, threads=threads)
 
     @property
     def config(self) -> MinhashConfig:
         """The configuration (a :class:`MinhashConfig`)."""
         return self._config
 
+    @property
+    def language(self) -> Any:
+        """The ``language`` documents are tokenized for (a code, or a tokenizer object)."""
+        return self._language
+
     def add(self, texts: Any, *, threads: int | None = None) -> range:
         """Add a batch of documents; returns the indices they were given."""
-        start, stop = self._state.add(texts, threads=threads)
+        if self._tokenizer is not None:
+            tokens, _, _ = _python_tokens(
+                texts, self._config, self._tokenizer, threads, "pyroid.dedup.MinHashDedup.add"
+            )
+            start, stop = self._state._add_tokens(tokens, threads=threads)
+        else:
+            start, stop = self._state.add(texts, threads=threads)
         return range(start, stop)
 
     def fit(self, texts: Any, *, threads: int | None = None) -> Any:
         """Replace the index with ``texts`` and return their keep mask."""
+        if self._tokenizer is not None:
+            tokens, shape, docs = _python_tokens(
+                texts, self._config, self._tokenizer, threads, "pyroid.dedup.MinHashDedup.fit"
+            )
+            return _mask(shape, docs, self._state._fit_tokens(tokens, threads=threads), threads)
         return self._state.fit(texts, threads=threads)
 
     def keep_mask(self) -> list[bool]:
@@ -284,7 +383,9 @@ class MinHashDedup:
         return len(self._state)
 
     def __repr__(self) -> str:
-        return f"MinHashDedup({self._config!r}, documents={len(self)})"
+        lang = "" if self._language == "eng" else f", language={self._language!r}"
+        python = ", python_tokenizer=True" if self._python else ""
+        return f"MinHashDedup({self._config!r}{lang}{python}, documents={len(self)})"
 
 
 class ExactDedup:

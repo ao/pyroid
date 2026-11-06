@@ -9,8 +9,11 @@
 //! - [`FineWebQuality`] (`FineWebQualityFilter`)
 //!
 //! Each config's `Default` is datatrove's default. Words come from a
-//! [`WordTokenizer`]; [`tokenizer::SpacyEnglish`] reproduces datatrove's
-//! English tokenizer (spaCy `blank("en")`), which is the only one so far.
+//! [`WordTokenizer`]; [`tokenizer_for`] gives datatrove's tokenizer for a
+//! language code where pyroid ports it: [`tokenizer::SpacyTokenizer`] (spaCy
+//! `blank(code)` for 57 spaCy languages, `xx` included),
+//! `whitespace::Whitespace` and `indic::IndicNlp`. [`backend`] names the
+//! tokenizer datatrove uses for any code.
 //! Python `str` semantics (code-point lengths, `isspace`, `splitlines`,
 //! `isalpha`, `lower`) are reproduced exactly, per Unicode version.
 
@@ -20,11 +23,13 @@ use std::fmt;
 mod c4;
 mod fineweb;
 mod gopher;
+pub mod indic;
 mod regex;
 mod tables;
 mod text;
 pub mod tokenizer;
 pub(crate) mod unicode;
+pub mod whitespace;
 
 pub use c4::{C4Outcome, C4Quality};
 pub use fineweb::FineWebQuality;
@@ -73,6 +78,13 @@ pub enum FilterError {
     /// Python `ValueError`: spaCy refuses texts of 2**30 characters or more
     /// (`[E025]`).
     TextTooLong(usize),
+    /// Python `ValueError: substring not found`: datatrove's
+    /// `simple_span_tokenize` could not find a sentence in the text (some
+    /// sentence splitters return text that is not a substring).
+    SubstringNotFound,
+    /// A step that tokenizes on its own (C4: per line) ran on pre-tokenized
+    /// words ([`Pipeline::run_with_words`]).
+    NeedsTokenizer,
 }
 
 impl fmt::Display for FilterError {
@@ -83,6 +95,10 @@ impl fmt::Display for FilterError {
                 f,
                 "[E025] String is too long: {n} characters. Max is 2**30."
             ),
+            FilterError::SubstringNotFound => f.write_str("substring not found"),
+            FilterError::NeedsTokenizer => {
+                f.write_str("this filter needs a word tokenizer, not pre-tokenized words")
+            }
         }
     }
 }
@@ -95,8 +111,20 @@ pub trait WordTokenizer: Sync + fmt::Debug {
     /// The Unicode version whose `str` semantics the filters reproduce.
     fn unicode_version(&self) -> UnicodeVersion;
 
-    /// `split_into_words(text)`, appended to `out`.
+    /// `split_into_words(text)`, appended to `out`, for a tokenizer whose
+    /// words are slices of `text`. One whose words may not be (IndicNLP joins
+    /// `"1 , 000"` into `"1,000"`) returns [`FilterError::SubstringNotFound`]
+    /// for such a text: use [`Self::words_cow`].
     fn words<'a>(&self, text: &'a str, out: &mut Vec<&'a str>) -> Result<(), FilterError>;
+
+    /// `split_into_words(text)`, appended to `out`; a word may be a new string.
+    /// This is what the filters and MinHash use.
+    fn words_cow<'a>(&self, text: &'a str, out: &mut Vec<Cow<'a, str>>) -> Result<(), FilterError> {
+        let mut words = Vec::new();
+        self.words(text, &mut words)?;
+        out.extend(words.into_iter().map(Cow::Borrowed));
+        Ok(())
+    }
 
     /// The end byte offsets of the sentences `span_tokenize(text)` yields,
     /// appended to `out` (none for a text without tokens).
@@ -110,7 +138,7 @@ pub trait WordTokenizer: Sync + fmt::Debug {
     }
 }
 
-impl tokenizer::SpacyEnglish {
+impl tokenizer::SpacyTokenizer {
     fn check_len(text: &str) -> Result<(), FilterError> {
         // Characters <= bytes: only count when the bytes could reach the limit.
         if text.len() >= tokenizer::MAX_CHARS {
@@ -123,7 +151,7 @@ impl tokenizer::SpacyEnglish {
     }
 }
 
-impl WordTokenizer for tokenizer::SpacyEnglish {
+impl WordTokenizer for tokenizer::SpacyTokenizer {
     fn unicode_version(&self) -> UnicodeVersion {
         self.version()
     }
@@ -134,6 +162,20 @@ impl WordTokenizer for tokenizer::SpacyEnglish {
             toks.clear();
             self.tokens(text, toks);
             out.extend(toks.iter().filter(|t| !t.space).map(|t| t.text(text)));
+        });
+        Ok(())
+    }
+
+    fn words_cow<'a>(&self, text: &'a str, out: &mut Vec<Cow<'a, str>>) -> Result<(), FilterError> {
+        Self::check_len(text)?;
+        TOKENS.with_borrow_mut(|toks| {
+            toks.clear();
+            self.tokens(text, toks);
+            out.extend(
+                toks.iter()
+                    .filter(|t| !t.space)
+                    .map(|t| Cow::Borrowed(t.text(text))),
+            );
         });
         Ok(())
     }
@@ -154,23 +196,86 @@ thread_local! {
     static TOKENS: std::cell::RefCell<Vec<tokenizer::Token>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
+/// The word tokenizer datatrove 0.10.1 assigns to a language code
+/// (`tokenizer_assignment.csv`, as `load_tokenizer_assignments` reads it).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Backend {
+    /// datatrove's class: `"SpaCyTokenizer"`, `"StanzaTokenizer"`,
+    /// `"IndicNLPTokenizer"`, `"WhitespaceTokenizer"`, `"KiwiTokenizer"`, ...
+    pub class: &'static str,
+    /// The argument it is built with (a spaCy / Stanza / indic-nlp language
+    /// code), or `""`.
+    pub arg: &'static str,
+}
+
+/// The tokenizer datatrove uses for `language` (any of the 4,343 codes it
+/// knows: `"deu_Latn"`, `"deu"`, `"de"`, `"de_Latn"`, ...), or `None` if
+/// datatrove has no tokenizer for it (`load_word_tokenizer` raises).
+pub fn backend(language: &str) -> Option<Backend> {
+    let i = tables::LANGUAGES
+        .binary_search_by(|(code, _)| (*code).cmp(language))
+        .ok()?;
+    let (class, arg) = tables::BACKENDS[usize::from(tables::LANGUAGES[i].1)];
+    Some(Backend { class, arg })
+}
+
+/// Every datatrove language code with its tokenizer, sorted by code.
+pub fn languages() -> impl Iterator<Item = (&'static str, Backend)> {
+    tables::LANGUAGES.iter().map(|&(code, b)| {
+        let (class, arg) = tables::BACKENDS[usize::from(b)];
+        (code, Backend { class, arg })
+    })
+}
+
 /// The datatrove language codes the English tokenizer serves: those whose
 /// `load_word_tokenizer` is `SpaCyTokenizer("en")` (`"eng"`, the filters'
 /// default, `"en"`, and proxies such as `"sco"`).
 pub fn english_languages() -> &'static [&'static str] {
-    tables::ENGLISH_LANGUAGES
+    static ENGLISH: std::sync::LazyLock<Vec<&'static str>> = std::sync::LazyLock::new(|| {
+        languages()
+            .filter(|(_, b)| b.class == "SpaCyTokenizer" && b.arg == "en")
+            .map(|(code, _)| code)
+            .collect()
+    });
+    &ENGLISH
 }
 
-/// The tokenizer for a datatrove language code, if pyroid supports it.
+/// The tokenizer for a datatrove language code, if pyroid ports the one
+/// datatrove uses (see [`backend`] for the others).
 pub fn tokenizer_for(
     language: &str,
     version: UnicodeVersion,
 ) -> Option<&'static dyn WordTokenizer> {
-    tables::ENGLISH_LANGUAGES
-        .binary_search(&language)
-        .ok()
-        .map(|_| tokenizer::SpacyEnglish::get(version) as &dyn WordTokenizer)
+    let b = backend(language)?;
+    match b.class {
+        "SpaCyTokenizer" => {
+            tokenizer::SpacyTokenizer::get(b.arg, version).map(|t| t as &dyn WordTokenizer)
+        }
+        "WhitespaceTokenizer" => Some(std::sync::LazyLock::force(
+            &WHITESPACE[regex::version_index(version)],
+        ) as &dyn WordTokenizer),
+        "IndicNLPTokenizer" => {
+            indic::IndicNlp::get(b.arg, version).map(|t| t as &dyn WordTokenizer)
+        }
+        _ => None,
+    }
 }
+
+/// datatrove's `WhitespaceTokenizer` per Unicode version (words: spaCy `xx`).
+static WHITESPACE: [std::sync::LazyLock<whitespace::Whitespace>; 5] = {
+    fn make(v: UnicodeVersion) -> whitespace::Whitespace {
+        whitespace::Whitespace::new(
+            tokenizer::SpacyTokenizer::get("xx", v).expect("spaCy xx rules"),
+        )
+    }
+    [
+        std::sync::LazyLock::new(|| make(UnicodeVersion::V14_0)),
+        std::sync::LazyLock::new(|| make(UnicodeVersion::V15_0)),
+        std::sync::LazyLock::new(|| make(UnicodeVersion::V15_1)),
+        std::sync::LazyLock::new(|| make(UnicodeVersion::V16_0)),
+        std::sync::LazyLock::new(|| make(UnicodeVersion::V17_0)),
+    ]
+};
 
 /// Words of one document, tokenized at most once and shared by every filter
 /// that needs them.
@@ -178,7 +283,7 @@ pub fn tokenizer_for(
 pub struct Doc<'a, 't> {
     text: &'a str,
     tok: &'t dyn WordTokenizer,
-    words: Option<Vec<&'a str>>,
+    words: Option<Vec<Cow<'a, str>>>,
 }
 
 impl<'a, 't> Doc<'a, 't> {
@@ -188,6 +293,17 @@ impl<'a, 't> Doc<'a, 't> {
             text,
             tok,
             words: None,
+        }
+    }
+
+    /// A document whose words are already known (from a tokenizer that runs
+    /// outside pyroid, such as datatrove's own in Python). `tok` only
+    /// supplies the Unicode version; its `words` is never called.
+    pub fn with_words(text: &'a str, words: Vec<&'a str>, tok: &'t dyn WordTokenizer) -> Self {
+        Self {
+            text,
+            tok,
+            words: Some(words.into_iter().map(Cow::Borrowed).collect()),
         }
     }
 
@@ -202,10 +318,10 @@ impl<'a, 't> Doc<'a, 't> {
     }
 
     /// `split_into_words(text)`, computed on first use.
-    pub fn words(&mut self) -> Result<&[&'a str], FilterError> {
+    pub fn words(&mut self) -> Result<&[Cow<'a, str>], FilterError> {
         if self.words.is_none() {
             let mut w = Vec::new();
-            self.tok.words(self.text, &mut w)?;
+            self.tok.words_cow(self.text, &mut w)?;
             self.words = Some(w);
         }
         Ok(self.words.as_deref().unwrap_or_default())
@@ -262,6 +378,46 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
+    /// [`Self::run`] for a document whose words are already known (tokenized
+    /// outside pyroid: by datatrove's own tokenizer, in Python, for the
+    /// languages pyroid does not port). The text is never rewritten, so the
+    /// pipeline must not contain [`Step::C4Quality`] (C4 tokenizes lines):
+    /// that is [`FilterError::NeedsTokenizer`].
+    pub fn run_with_words<'a>(
+        &self,
+        text: &'a str,
+        words: Vec<&'a str>,
+    ) -> Result<Outcome<'a>, FilterError> {
+        let Some((_, tok)) = self.steps.first() else {
+            return Ok(Outcome {
+                reason: None,
+                step: None,
+                text: Cow::Borrowed(text),
+            });
+        };
+        let mut doc = Doc::with_words(text, words, *tok);
+        for (i, (step, _)) in self.steps.iter().enumerate() {
+            let verdict = match step {
+                Step::GopherQuality(f) => f.filter(&mut doc)?,
+                Step::GopherRepetition(f) => f.filter(&mut doc)?,
+                Step::FineWebQuality(f) => f.filter(&mut doc)?,
+                Step::C4Quality(_) => return Err(FilterError::NeedsTokenizer),
+            };
+            if let Some(r) = verdict {
+                return Ok(Outcome {
+                    reason: Some(r),
+                    step: Some(i),
+                    text: Cow::Borrowed(text),
+                });
+            }
+        }
+        Ok(Outcome {
+            reason: None,
+            step: None,
+            text: Cow::Borrowed(text),
+        })
+    }
+
     /// Run every step on `text`.
     pub fn run<'a>(&self, text: &'a str) -> Result<Outcome<'a>, FilterError> {
         let mut cur: Cow<'a, str> = Cow::Borrowed(text);

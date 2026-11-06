@@ -1,0 +1,555 @@
+{
+ "_source": {
+  "license": "Apache-2.0, (c) HuggingFace",
+  "note": "FineWeb-2 per-language filter settings, converted from YAML unchanged",
+  "path": "configs/<lang>.yml",
+  "repo": "https://github.com/huggingface/fineweb-2",
+  "revision": "d0defb24f193bb9a5a11b8b14524a03c4858e1b6"
+ },
+ "arb_Arab": {
+  "dup_line_frac": 0.304,
+  "dup_n_grams": [
+   [
+    5,
+    0.165
+   ],
+   [
+    6,
+    0.153
+   ],
+   [
+    7,
+    0.142
+   ],
+   [
+    8,
+    0.131
+   ],
+   [
+    9,
+    0.12
+   ],
+   [
+    10,
+    0.109
+   ]
+  ],
+  "language_score": 0.711,
+  "line_punct_thr": 0.143,
+  "max_avg_word_length": 9,
+  "max_non_alpha_words_ratio": 0.787,
+  "min_avg_word_length": 2,
+  "new_line_ratio": 0.189,
+  "stopwords": [
+   "،",
+   "في",
+   "من",
+   "على",
+   "إلى",
+   "عام",
+   "أن",
+   "مع",
+   "أو",
+   "هو",
+   "عن",
+   "التي",
+   "كان",
+   "بين",
+   "ما",
+   "كانت",
+   "هي",
+   "المتحدة",
+   "بعد"
+  ],
+  "top_n_grams": [
+   [
+    2,
+    0.197
+   ],
+   [
+    3,
+    0.172
+   ],
+   [
+    4,
+    0.146
+   ]
+  ]
+ },
+ "cmn_Hani": {
+  "dup_line_frac": 0.287,
+  "dup_n_grams": [
+   [
+    5,
+    0.198
+   ],
+   [
+    6,
+    0.182
+   ],
+   [
+    7,
+    0.167
+   ],
+   [
+    8,
+    0.154
+   ],
+   [
+    9,
+    0.14
+   ],
+   [
+    10,
+    0.127
+   ]
+  ],
+  "language_score": 0.692,
+  "line_punct_thr": 0.106,
+  "max_avg_word_length": 5,
+  "max_non_alpha_words_ratio": 0.735,
+  "min_avg_word_length": 1,
+  "new_line_ratio": 0.178,
+  "stopwords": [
+   "的",
+   "年",
+   "在",
+   "月",
+   "是",
+   "和",
+   "日",
+   "了",
+   "於",
+   "·",
+   "為",
+   "有",
+   "被",
+   "人",
+   "中",
+   "为",
+   "他",
+   "與",
+   "後",
+   "也",
+   "而",
+   "由"
+  ],
+  "top_n_grams": [
+   [
+    2,
+    0.256
+   ],
+   [
+    3,
+    0.201
+   ],
+   [
+    4,
+    0.171
+   ]
+  ]
+ },
+ "deu_Latn": {
+  "dup_line_frac": 0.263,
+  "dup_n_grams": [
+   [
+    5,
+    0.141
+   ],
+   [
+    6,
+    0.134
+   ],
+   [
+    7,
+    0.126
+   ],
+   [
+    8,
+    0.117
+   ],
+   [
+    9,
+    0.108
+   ],
+   [
+    10,
+    0.098
+   ]
+  ],
+  "language_score": 0.821,
+  "line_punct_thr": 0.0,
+  "max_avg_word_length": 15,
+  "max_non_alpha_words_ratio": 0.774,
+  "min_avg_word_length": 0,
+  "new_line_ratio": 0.152,
+  "stopwords": [
+   "der",
+   "und",
+   "die",
+   "in",
+   "von",
+   "im",
+   "den",
+   "des",
+   "mit",
+   "das",
+   "er",
+   "dem",
+   "als",
+   "wurde",
+   "für"
+  ],
+  "top_n_grams": [
+   [
+    2,
+    0.169
+   ],
+   [
+    3,
+    0.153
+   ],
+   [
+    4,
+    0.137
+   ]
+  ]
+ },
+ "fra_Latn": {
+  "dup_line_frac": 0.264,
+  "dup_n_grams": [
+   [
+    5,
+    0.15
+   ],
+   [
+    6,
+    0.141
+   ],
+   [
+    7,
+    0.131
+   ],
+   [
+    8,
+    0.121
+   ],
+   [
+    9,
+    0.111
+   ],
+   [
+    10,
+    0.1
+   ]
+  ],
+  "language_score": 0.824,
+  "line_punct_thr": 0.1,
+  "max_avg_word_length": 11,
+  "max_non_alpha_words_ratio": 0.812,
+  "min_avg_word_length": 2,
+  "new_line_ratio": 0.185,
+  "stopwords": [
+   "de",
+   "la",
+   "le",
+   "et",
+   "à",
+   "en",
+   "l'",
+   "des",
+   "du",
+   "les",
+   "est",
+   "d'",
+   "un",
+   "une",
+   "il",
+   "dans",
+   "par",
+   "au"
+  ],
+  "top_n_grams": [
+   [
+    2,
+    0.161
+   ],
+   [
+    3,
+    0.149
+   ],
+   [
+    4,
+    0.134
+   ]
+  ]
+ },
+ "hin_Deva": {
+  "dup_line_frac": 0.206,
+  "dup_n_grams": [
+   [
+    5,
+    0.135
+   ],
+   [
+    6,
+    0.125
+   ],
+   [
+    7,
+    0.116
+   ],
+   [
+    8,
+    0.108
+   ],
+   [
+    9,
+    0.099
+   ],
+   [
+    10,
+    0.09
+   ]
+  ],
+  "language_score": 0.692,
+  "line_punct_thr": 0.091,
+  "max_avg_word_length": 21,
+  "max_non_alpha_words_ratio": 0.837,
+  "min_avg_word_length": 2,
+  "new_line_ratio": 0.316,
+  "stopwords": [
+   "के",
+   "में",
+   "है",
+   "की",
+   "और",
+   "से",
+   "का",
+   "को",
+   "एक",
+   "हैं",
+   "पर"
+  ],
+  "top_n_grams": [
+   [
+    2,
+    0.208
+   ],
+   [
+    3,
+    0.198
+   ],
+   [
+    4,
+    0.161
+   ]
+  ]
+ },
+ "jpn_Jpan": {
+  "dup_line_frac": 0.328,
+  "dup_n_grams": [
+   [
+    5,
+    0.243
+   ],
+   [
+    6,
+    0.225
+   ],
+   [
+    7,
+    0.207
+   ],
+   [
+    8,
+    0.19
+   ],
+   [
+    9,
+    0.175
+   ],
+   [
+    10,
+    0.159
+   ]
+  ],
+  "language_score": 0.886,
+  "line_punct_thr": 0.096,
+  "max_avg_word_length": 6,
+  "max_non_alpha_words_ratio": 0.759,
+  "min_avg_word_length": 1,
+  "new_line_ratio": 0.13,
+  "stopwords": [
+   "の",
+   "に",
+   "を",
+   "は",
+   "た",
+   "て",
+   "が",
+   "と",
+   "で",
+   "年",
+   "し",
+   "・",
+   "月",
+   "れ",
+   "さ"
+  ],
+  "top_n_grams": [
+   [
+    2,
+    0.239
+   ],
+   [
+    3,
+    0.196
+   ],
+   [
+    4,
+    0.172
+   ]
+  ]
+ },
+ "rus_Cyrl": {
+  "dup_line_frac": 0.322,
+  "dup_n_grams": [
+   [
+    5,
+    0.168
+   ],
+   [
+    6,
+    0.156
+   ],
+   [
+    7,
+    0.145
+   ],
+   [
+    8,
+    0.133
+   ],
+   [
+    9,
+    0.121
+   ],
+   [
+    10,
+    0.109
+   ]
+  ],
+  "language_score": 0.9,
+  "line_punct_thr": 0.231,
+  "max_avg_word_length": 11,
+  "max_non_alpha_words_ratio": 0.713,
+  "min_avg_word_length": 3,
+  "new_line_ratio": 0.139,
+  "stopwords": [
+   "в",
+   "и",
+   "на",
+   "с",
+   "года",
+   "по",
+   "году",
+   "из",
+   "был",
+   "к",
+   "не",
+   "от",
+   "что",
+   "за",
+   "для",
+   "его",
+   "как",
+   "а",
+   "он",
+   "также",
+   "до",
+   "после"
+  ],
+  "top_n_grams": [
+   [
+    2,
+    0.184
+   ],
+   [
+    3,
+    0.164
+   ],
+   [
+    4,
+    0.146
+   ]
+  ]
+ },
+ "spa_Latn": {
+  "dup_line_frac": 0.252,
+  "dup_n_grams": [
+   [
+    5,
+    0.145
+   ],
+   [
+    6,
+    0.136
+   ],
+   [
+    7,
+    0.127
+   ],
+   [
+    8,
+    0.117
+   ],
+   [
+    9,
+    0.108
+   ],
+   [
+    10,
+    0.099
+   ]
+  ],
+  "language_score": 0.84,
+  "line_punct_thr": 0.182,
+  "max_avg_word_length": 14,
+  "max_non_alpha_words_ratio": 0.825,
+  "min_avg_word_length": 3,
+  "new_line_ratio": 0.138,
+  "stopwords": [
+   "de",
+   "la",
+   "en",
+   "el",
+   "y",
+   "a",
+   "que",
+   "del",
+   "los",
+   "se",
+   "por",
+   "un",
+   "con",
+   "una",
+   "las",
+   "su"
+  ],
+  "top_n_grams": [
+   [
+    2,
+    0.156
+   ],
+   [
+    3,
+    0.14
+   ],
+   [
+    4,
+    0.125
+   ]
+  ]
+ }
+}
