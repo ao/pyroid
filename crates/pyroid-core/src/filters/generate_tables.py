@@ -32,7 +32,7 @@ only the standard library, under every CPython 3.11 ... 3.15:
         --pythons /path/python3.11,/path/python3.12,...,/path/python3.15
 """
 
-# ruff: noqa: PT018, T201, N812, S603  (a build script; C/P are sre's customary aliases)
+# ruff: noqa: PT018, T201, N812  (a build script; C/P are sre's customary aliases)
 
 from __future__ import annotations
 
@@ -327,7 +327,9 @@ class Gen:
             )
         if op is C.ANY:
             # `.` without DOTALL: anything but "\n".
-            return f"Node::In(&{self.cls(Class(True, {10}, [], [(C.NEGATE, None), (C.LITERAL, 10)]))})"
+            return (
+                f"Node::In(&{self.cls(Class(True, {10}, [], [(C.NEGATE, None), (C.LITERAL, 10)]))})"
+            )
         if op is C.IN:
             return f"Node::In(&{self.cls(class_of(av))})"
         if op is C.CATEGORY:
@@ -366,7 +368,8 @@ class Gen:
         ignore = bool(flags & re.IGNORECASE)
         key = (rx.pattern, rx.flags)
         if key not in self.statics:
-            name = f"{kind.upper()}_{sum(n.startswith(kind.upper() + '_') for n in self.statics.values())}"
+            prefix = kind.upper() + "_"
+            name = f"{prefix}{sum(n.startswith(prefix) for n in self.statics.values())}"
             self.statics[key] = name
             self.body.append(f"static {name}: &[Node] = {self.nodes(parsed, ignore)};")
         return self.statics[key], parsed, ignore
@@ -618,7 +621,9 @@ def main(pythons: list[str]) -> None:
                     firsts = None if pts is None or firsts is None else firsts | pts
                     if hi >= MAXREPEAT:
                         unbounded_first = (
-                            None if pts is None or unbounded_first is None else unbounded_first | pts
+                            None
+                            if pts is None or unbounded_first is None
+                            else unbounded_first | pts
                         )
                     else:
                         max_bounded = max(max_bounded, hi)
@@ -638,7 +643,9 @@ def main(pythons: list[str]) -> None:
         fields["base_rules"] = str(with_base).lower()
         fields["rules"] = rs_str(rules_blob(own))
         fields["n_rules"] = str(len(rules))
-        entries.append("    LangData { " + ", ".join(f"{k}: {v}" for k, v in fields.items()) + " },")
+        entries.append(
+            "    LangData { " + ", ".join(f"{k}: {v}" for k, v in fields.items()) + " },"
+        )
 
     sent = sorted(Sentencizer.default_punct_chars)
     assert all(len(c) == 1 for c in sent)
@@ -671,7 +678,7 @@ def main(pythons: list[str]) -> None:
         "\n".join(versioned),
         "\n".join(g.body),
         "/// The base tokenizer exceptions (`spacy.lang.tokenizer_exceptions."
-        "BASE_EXCEPTIONS`, as `blank(\"xx\")` has them), in `LangData::rules` form.",
+        'BASE_EXCEPTIONS`, as `blank("xx")` has them), in `LangData::rules` form.',
         f"pub(crate) static BASE_RULES: &str = {rs_str(rules_blob(base))};",
         "/// Every rule-based spaCy language datatrove uses, sorted by code.",
         "pub(crate) static LANGS: &[LangData] = &[",
@@ -689,15 +696,15 @@ def main(pythons: list[str]) -> None:
         "pub(crate) static TERMINAL_PUNCTUATION: &[char] = &["
         + ", ".join(rs_char(ord(c)) for c in sorted(TERMINAL_PUNCTUATION))
         + "];",
-        "/// datatrove's word tokenizer classes and arguments (`tokenizer_assignment.csv`), sorted.",
+        "/// datatrove's word tokenizer classes and arguments (`tokenizer_assignment.csv`),"
+        " sorted.",
         "pub(crate) static BACKENDS: &[(&str, &str)] = &["
         + ", ".join(f"({rs_str(c)}, {rs_str(a)})" for c, a in backends)
         + "];",
         "/// Every datatrove language code with its index in `BACKENDS`, sorted by code.",
         "pub(crate) static LANGUAGES: &[(&str, u8)] = &[",
         "\n".join(
-            f"    ({rs_str(k)}, {backend_index[assignments[k]]}),"
-            for k in sorted(assignments)
+            f"    ({rs_str(k)}, {backend_index[assignments[k]]})," for k in sorted(assignments)
         ),
         "];",
         "}\npub(crate) use data::*;\n",
@@ -716,5 +723,7 @@ if __name__ == "__main__":
         json.dump(closures(json.load(sys.stdin)), sys.stdout)
     else:
         ap = argparse.ArgumentParser()
-        ap.add_argument("--pythons", required=True, help="comma-separated CPython 3.11..3.15 executables")
+        ap.add_argument(
+            "--pythons", required=True, help="comma-separated CPython 3.11..3.15 executables"
+        )
         main(ap.parse_args().pythons.split(","))
