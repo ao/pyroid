@@ -753,11 +753,702 @@ fn register_more(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 // ---- SentenceDedup ----
+/// datatrove's sentence dedup (`SentenceDedupSignature` -> `SentenceFindDedups`
+/// -> `SentenceDedupFilter`): the native side of `pyroid.dedup.SentenceDedup`
+/// and of the datatrove drop-ins. `_SentenceState` holds one task's
+/// signatures; `_SentenceDups` one task's duplicate windows (from the state,
+/// or parsed from `.c4_dup` files) and runs stage 3.
 mod sentence {
-    use pyo3::prelude::*;
+    use std::borrow::Cow;
+    use std::fs::File;
+    use std::io::{self, Read};
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
 
-    #[allow(clippy::unnecessary_wraps)] // placeholder
-    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
+    use pyo3::exceptions::{
+        PyAssertionError, PyNotImplementedError, PyOverflowError, PyValueError, PyZeroDivisionError,
+    };
+    use pyo3::prelude::*;
+    use pyo3::pybacked::{PyBackedBytes, PyBackedStr};
+    use pyo3::types::{PyBytes, PyList, PyNone, PyString, PyTuple};
+    use pyroid_core::columnar::StringBuffers;
+    use pyroid_core::dedup::sentence::{
+        self as core, Duplicates, FileError, Filtered, SentDedupConfig, SentenceDeduper,
+        SentenceError, Signature,
+    };
+    use pyroid_core::dedup::{HashConfig, HashFn, Precision};
+    use pyroid_core::filters::{FilterError, english_languages};
+    use pyroid_core::par::{self, PoolError};
+
+    use super::{NativeNorm, lock, mask_like};
+    use crate::arrow::{Chunk, Column, ColumnType, StrType, build_error};
+    use crate::batch::{BatchError, doc_count};
+    use crate::errors::with_note;
+    use crate::input::{TextInput, Threads, ThreadsArg, texts_and_threads, threads};
+
+    /// A sentence-dedup kernel error (or a batch error), raised once attached.
+    #[derive(Debug)]
+    enum RunError {
+        Batch(BatchError),
+        Doc { index: usize, err: SentenceError },
+    }
+
+    impl From<PoolError> for RunError {
+        fn from(e: PoolError) -> Self {
+            Self::Batch(BatchError::from(e))
+        }
+    }
+
+    fn sentence_err(err: &SentenceError) -> PyErr {
+        let msg = err.to_string();
+        match err {
+            SentenceError::Tokenize(FilterError::ZeroDivision) => PyZeroDivisionError::new_err(msg),
+            SentenceError::Tokenize(FilterError::TextTooLong(_))
+            | SentenceError::DuplicateLineIndex => PyValueError::new_err(msg),
+            SentenceError::NoTokenizer => PyNotImplementedError::new_err(format!(
+                "pyroid.dedup has no word tokenizer for this language; supported: the codes \
+                 datatrove tokenizes with SpaCyTokenizer(\"en\"): {}",
+                english_languages().join(", ")
+            )),
+            SentenceError::SentenceOverflow(_) | SentenceError::DocOverflow(_) => {
+                PyOverflowError::new_err(msg)
+            }
+        }
+    }
+
+    impl RunError {
+        fn into_pyerr(self, py: Python<'_>) -> PyErr {
+            match self {
+                Self::Batch(e) => e.into_pyerr(py),
+                Self::Doc { index, err } => with_note(
+                    py,
+                    sentence_err(&err),
+                    format!("pyroid.dedup: raised by document {index} of the batch"),
+                ),
+            }
+        }
+    }
+
+    fn file_err(py: Python<'_>, e: FileError) -> PyErr {
+        let msg = e.to_string();
+        match e {
+            FileError::Io { file, err } => with_note(
+                py,
+                PyErr::from(err),
+                format!("pyroid.dedup: while reading file {file}"),
+            ),
+            FileError::Truncated { .. } => PyValueError::new_err(msg),
+            FileError::Unsorted { .. } => PyAssertionError::new_err(msg),
+        }
+    }
+
+    /// `f(index, text)` for every document of `input` (`index` counts Arrow
+    /// nulls), in parallel; `None` for Arrow nulls. Pure Rust: call it
+    /// detached.
+    fn map_indexed<'a, R, F>(
+        input: &'a TextInput,
+        t: par::Threads,
+        f: F,
+    ) -> Result<Vec<Option<R>>, RunError>
+    where
+        R: Send,
+        F: Fn(usize, &'a str) -> Result<R, SentenceError> + Sync + Send,
+    {
+        let doc = |index: usize, s: &'a str| {
+            f(index, s)
+                .map(Some)
+                .map_err(|err| RunError::Doc { index, err })
+        };
+        match input {
+            TextInput::Str(s) => Ok(vec![doc(0, s)?]),
+            TextInput::List(d) | TextInput::Tuple(d) => par::try_map(d.len(), t, |i| doc(i, &d[i])),
+            TextInput::Arrow(strings) => {
+                let mut out = Vec::with_capacity(strings.len());
+                let mut base = 0;
+                for (c, chunk) in strings.chunks.iter().enumerate() {
+                    out.extend(par::try_map(chunk.len(), t, |row| match chunk.get(row) {
+                        None => Ok(None),
+                        Some(Ok(s)) => doc(base + row, s),
+                        Some(Err(err)) => Err(RunError::Batch(BatchError::BadUtf8 {
+                            chunk: c,
+                            row,
+                            bytes: chunk.bytes(row).unwrap_or_default().to_vec(),
+                            err,
+                        })),
+                    })?);
+                    base += chunk.len();
+                }
+                Ok(out)
+            }
+        }
+    }
+
+    /// A validated `SentDedupConfig` with the interpreter's Unicode version
+    /// and the language's tokenizer.
+    #[pyclass(frozen, module = "pyroid.dedup", name = "_SentenceConfig")]
+    #[derive(Debug)]
+    pub struct SentenceConfig {
+        kernel: SentenceDeduper,
+    }
+
+    #[pymethods]
+    impl SentenceConfig {
+        #[new]
+        #[pyo3(signature = (
+            *, n_sentences, split_sentences, only_dedup_in_index, min_doc_words,
+            min_num_sentences, min_words_to_remove_span, hash_fc, precision, norm, language
+        ))]
+        #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
+        fn new(
+            n_sentences: usize,
+            split_sentences: bool,
+            only_dedup_in_index: bool,
+            min_doc_words: usize,
+            min_num_sentences: usize,
+            min_words_to_remove_span: usize,
+            hash_fc: &str,
+            precision: u32,
+            norm: &NativeNorm,
+            language: &str,
+        ) -> PyResult<Self> {
+            let hash_fc = HashFn::from_name(hash_fc)
+                .ok_or_else(|| PyValueError::new_err(format!("unknown hash_fc {hash_fc:?}")))?;
+            let precision = Precision::from_bits(precision)
+                .ok_or_else(|| PyValueError::new_err("precision must be 32 or 64"))?;
+            let config = SentDedupConfig {
+                n_sentences,
+                split_sentences,
+                only_dedup_in_index,
+                min_doc_words,
+                min_num_sentences,
+                min_words_to_remove_span,
+                norm_config: norm.norm,
+                hash_config: HashConfig { precision, hash_fc },
+            };
+            let kernel = SentenceDeduper::new(config, norm.unicode, language)
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            Ok(Self { kernel })
+        }
+
+        /// Does pyroid have a word tokenizer for the language?
+        #[getter]
+        fn has_tokenizer(&self) -> bool {
+            self.kernel.has_tokenizer()
+        }
+
+        /// Does stage 1 (``stage3=False``) or stage 3 need the tokenizer?
+        fn needs_tokenizer(&self, stage3: bool) -> bool {
+            self.kernel.config().needs_tokenizer(stage3)
+        }
+
+        fn __repr__(&self) -> String {
+            format!(
+                "<pyroid.dedup native sentence config {:?}>",
+                self.kernel.config()
+            )
+        }
+    }
+
+    fn precision_of(config: &SentenceConfig) -> Precision {
+        config.kernel.config().hash_config.precision
+    }
+
+    #[derive(Debug, Default)]
+    struct StateInner {
+        /// Signatures of every document added (sorted lazily).
+        sigs: Vec<Signature>,
+        docs: usize,
+        dups: Option<Arc<Duplicates>>,
+    }
+
+    /// One task's stage-1 signatures (`pyroid.dedup.SentenceDedup`'s store).
+    #[pyclass(frozen, module = "pyroid.dedup", name = "_SentenceState")]
+    #[derive(Debug)]
+    pub struct SentenceState {
+        config: Py<SentenceConfig>,
+        threads: Option<Threads>,
+        inner: Mutex<StateInner>,
+    }
+
+    #[pymethods]
+    impl SentenceState {
+        #[new]
+        #[pyo3(signature = (config, /, *, threads = None))]
+        fn new(config: Py<SentenceConfig>, threads: Option<Threads>) -> Self {
+            Self {
+                config,
+                threads,
+                inner: Mutex::new(StateInner::default()),
+            }
+        }
+
+        /// Stage 1 for a batch; returns ``(start, stop)``, the indices the
+        /// documents were given (Arrow nulls get one and no signatures). On
+        /// error nothing is added.
+        #[pyo3(signature = (texts, /, *, threads = None))]
+        fn add(
+            &self,
+            py: Python<'_>,
+            texts: &Bound<'_, PyAny>,
+            threads: Option<ThreadsArg>,
+        ) -> PyResult<(usize, usize)> {
+            let (texts, threads) = texts_and_threads(texts, threads, self.threads)?;
+            let t = self::threads(threads.or(self.threads));
+            let kernel = &self.config.get().kernel;
+            py.detach(|| {
+                let hashes = map_indexed(&texts, t, |_, s| {
+                    let mut v = Vec::new();
+                    kernel.hashes(s, &mut v).map(|()| v)
+                })?;
+                // Numbered under the lock, so concurrent batches get disjoint ranges.
+                let mut inner = lock(&self.inner);
+                let start = inner.docs;
+                let mut recs = to_records(&hashes, start)?;
+                inner.sigs.append(&mut recs);
+                inner.docs += hashes.len();
+                inner.dups = None;
+                Ok((start, inner.docs))
+            })
+            .map_err(|e: RunError| e.into_pyerr(py))
+        }
+
+        /// Replace the state with ``texts`` (stage 1 and 2), then run stage
+        /// 3 on the same documents: ``(text, keep)`` in the caller's kind.
+        #[pyo3(signature = (texts, /, *, threads = None))]
+        fn fit<'py>(
+            &self,
+            py: Python<'py>,
+            texts: &Bound<'py, PyAny>,
+            threads: Option<ThreadsArg>,
+        ) -> PyResult<Bound<'py, PyTuple>> {
+            let (texts, threads) = texts_and_threads(texts, threads, self.threads)?;
+            let t = self::threads(threads.or(self.threads));
+            let config = self.config.get();
+            let kernel = &config.kernel;
+            let dups = py
+                .detach(|| {
+                    let hashes = map_indexed(&texts, t, |_, s| {
+                        let mut v = Vec::new();
+                        kernel.hashes(s, &mut v).map(|()| v)
+                    })?;
+                    let mut sigs = to_records(&hashes, 0)?;
+                    let dups = Arc::new(Duplicates::within(&mut sigs));
+                    *lock(&self.inner) = StateInner {
+                        sigs,
+                        docs: hashes.len(),
+                        dups: Some(Arc::clone(&dups)),
+                    };
+                    Ok(dups)
+                })
+                .map_err(|e: RunError| e.into_pyerr(py))?;
+            let out = run_filter(py, &texts, config, &dups, 0, None, false, t)?;
+            PyTuple::new(py, [out.get_item(0)?, out.get_item(1)?])
+        }
+
+        fn __len__(&self, py: Python<'_>) -> usize {
+            py.detach(|| lock(&self.inner).docs)
+        }
+
+        /// Number of signatures stored.
+        #[getter]
+        fn num_signatures(&self, py: Python<'_>) -> usize {
+            py.detach(|| lock(&self.inner).sigs.len())
+        }
+
+        fn reset(&self, py: Python<'_>) {
+            py.detach(|| *lock(&self.inner) = StateInner::default());
+        }
+
+        /// Stage 2 within this task (one datatrove task, any number of
+        /// finder workers).
+        fn duplicates(&self, py: Python<'_>) -> SentenceDups {
+            SentenceDups(py.detach(|| {
+                let mut inner = lock(&self.inner);
+                if let Some(d) = &inner.dups {
+                    return Arc::clone(d);
+                }
+                let d = Arc::new(Duplicates::within(&mut inner.sigs));
+                inner.dups = Some(Arc::clone(&d));
+                d
+            }))
+        }
+
+        /// The bytes of datatrove's ``{bucket:04d}/{rank:05d}.c4_sig`` files,
+        /// for the buckets datatrove creates.
+        fn signature_files<'py>(
+            &self,
+            py: Python<'py>,
+            finder_workers: usize,
+        ) -> PyResult<Bound<'py, PyList>> {
+            if finder_workers == 0 {
+                return Err(PyValueError::new_err("finder_workers must be >= 1"));
+            }
+            let p = precision_of(self.config.get());
+            let files = py.detach(|| {
+                let mut inner = lock(&self.inner);
+                core::signature_files(&mut inner.sigs, p, finder_workers)
+            });
+            PyList::new(py, files.iter().map(|f| PyBytes::new(py, f)))
+        }
+
+        /// ``(hash, doc, window)`` of every signature, sorted (a test hook).
+        fn signatures(&self, py: Python<'_>) -> Vec<(u64, u32, u16)> {
+            py.detach(|| {
+                let mut inner = lock(&self.inner);
+                inner.sigs.sort_unstable();
+                inner.sigs.iter().map(|s| (s.hash, s.doc, s.sent)).collect()
+            })
+        }
+    }
+
+    /// The Python str for a stage-3 text: the original object if unchanged.
+    #[allow(clippy::ptr_arg)] // `Borrowed` (unchanged) vs `Owned` is the signal
+    fn text_obj<'py>(
+        py: Python<'py>,
+        original: &PyBackedStr,
+        out: &Cow<'_, str>,
+    ) -> Bound<'py, PyAny> {
+        match out {
+            Cow::Borrowed(_) => original
+                .into_pyobject(py)
+                .unwrap_or_else(|e| match e {})
+                .into_any(),
+            Cow::Owned(s) => PyString::new(py, s).into_any(),
+        }
+    }
+
+    /// Stage-3 texts in the caller's kind (Arrow nulls stay null).
+    fn texts_like<'py>(
+        py: Python<'py>,
+        input: &TextInput,
+        res: &[Option<Filtered<'_>>],
+        t: par::Threads,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let texts = |docs: &[PyBackedStr]| {
+            docs.iter()
+                .zip(res)
+                .map(|(d, r)| match r {
+                    Some(f) => text_obj(py, d, &f.text),
+                    None => PyNone::get(py).to_owned().into_any(),
+                })
+                .collect::<Vec<_>>()
+        };
+        Ok(match input {
+            TextInput::Str(s) => texts(std::slice::from_ref(s)).remove(0),
+            TextInput::List(d) => PyList::new(py, texts(d))?.into_any(),
+            TextInput::Tuple(d) => PyTuple::new(py, texts(d))?.into_any(),
+            TextInput::Arrow(strings) => {
+                let large = strings.field.ty == StrType::LargeUtf8;
+                let mut chunks = Vec::with_capacity(strings.chunks.len());
+                let mut start = 0;
+                for c in &strings.chunks {
+                    let end = start + c.len();
+                    let vals: Vec<Option<&str>> = res[start..end]
+                        .iter()
+                        .map(|r| r.as_ref().map(|f| &*f.text))
+                        .collect();
+                    if large {
+                        chunks.push(Chunk::LargeUtf8(
+                            StringBuffers::build(&vals, t).map_err(build_error)?,
+                        ));
+                    } else {
+                        let built = StringBuffers::build_split(&vals, t).map_err(build_error)?;
+                        chunks.extend(built.into_iter().map(Chunk::Utf8));
+                    }
+                    start = end;
+                }
+                let ty = if large {
+                    ColumnType::LargeUtf8
+                } else {
+                    ColumnType::Utf8
+                };
+                Bound::new(py, Column::new(ty, &strings.field.name, chunks))?.into_any()
+            }
+        })
+    }
+
+    /// One reader per source: a local file (read in Rust) or bytes.
+    enum Source {
+        File(File),
+        Bytes { data: PyBackedBytes, pos: usize },
+    }
+
+    impl Read for Source {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            match self {
+                Self::File(f) => f.read(buf),
+                Self::Bytes { data, pos } => {
+                    let rest = &data[(*pos).min(data.len())..];
+                    let n = rest.len().min(buf.len());
+                    buf[..n].copy_from_slice(&rest[..n]);
+                    *pos += n;
+                    Ok(n)
+                }
+            }
+        }
+    }
+
+    enum SourceSpec {
+        Path(PathBuf),
+        Bytes(PyBackedBytes),
+    }
+
+    /// `bytes` (contents) or a path (`str` / `os.PathLike`) per source.
+    fn source_specs(objs: &Bound<'_, PyList>) -> PyResult<Vec<SourceSpec>> {
+        objs.iter()
+            .map(|o| {
+                if let Ok(b) = o.extract::<PyBackedBytes>() {
+                    Ok(SourceSpec::Bytes(b))
+                } else {
+                    o.extract::<PathBuf>().map(SourceSpec::Path)
+                }
+            })
+            .collect()
+    }
+
+    fn open_all(specs: Vec<SourceSpec>, first: usize) -> Result<Vec<Source>, FileError> {
+        specs
+            .into_iter()
+            .enumerate()
+            .map(|(i, s)| match s {
+                SourceSpec::Path(p) => {
+                    File::open(p)
+                        .map(Source::File)
+                        .map_err(|err| FileError::Io {
+                            file: first + i,
+                            err,
+                        })
+                }
+                SourceSpec::Bytes(data) => Ok(Source::Bytes { data, pos: 0 }),
+            })
+            .collect()
+    }
+
+    /// One task's duplicate windows; runs stage 3.
+    #[pyclass(frozen, module = "pyroid.dedup", name = "_SentenceDups")]
+    #[derive(Debug)]
+    pub struct SentenceDups(Arc<Duplicates>);
+
+    #[pymethods]
+    impl SentenceDups {
+        /// From the contents of datatrove's ``.c4_dup`` files of one rank.
+        #[staticmethod]
+        fn parse(py: Python<'_>, files: Vec<PyBackedBytes>) -> PyResult<Self> {
+            let d = py
+                .detach(|| {
+                    let slices: Vec<&[u8]> = files.iter().map(|b| &**b).collect();
+                    Duplicates::parse(&slices)
+                })
+                .map_err(|e| file_err(py, e))?;
+            Ok(Self(Arc::new(d)))
+        }
+
+        /// Every ``(doc, window)`` pair, sorted.
+        fn pairs(&self, py: Python<'_>) -> Vec<(u32, u16)> {
+            py.detach(|| self.0.pairs().collect())
+        }
+
+        /// The documents in ``start <= doc < stop`` that have duplicates.
+        fn docs_in(&self, start: usize, stop: usize) -> Vec<u32> {
+            let docs = self.0.docs();
+            let lo = docs.partition_point(|&d| (d as usize) < start);
+            let hi = docs.partition_point(|&d| (d as usize) < stop);
+            docs[lo..hi.max(lo)].to_vec()
+        }
+
+        fn __len__(&self) -> usize {
+            self.0.len()
+        }
+
+        /// Stage 3 over ``texts`` (documents ``start``, ``start + 1``, ... of
+        /// the task, or ``ids``). Returns ``(text, keep, formatted, stats)``:
+        /// text and keep in the caller's kind; with ``details``, the
+        /// exclusion-writer text (``None`` without duplicates) and
+        /// ``(spans, kept)`` per document, else ``None`` twice.
+        #[pyo3(signature = (texts, /, config, *, start = 0, ids = None, details = false, threads = None))]
+        #[allow(clippy::too_many_arguments)]
+        fn filter<'py>(
+            &self,
+            py: Python<'py>,
+            texts: &Bound<'py, PyAny>,
+            config: &SentenceConfig,
+            start: usize,
+            ids: Option<Vec<usize>>,
+            details: bool,
+            threads: Option<ThreadsArg>,
+        ) -> PyResult<Bound<'py, PyTuple>> {
+            let (texts, threads) = texts_and_threads(texts, threads, None)?;
+            let t = self::threads(threads);
+            run_filter(
+                py,
+                &texts,
+                config,
+                &self.0,
+                start,
+                ids.as_deref(),
+                details,
+                t,
+            )
+        }
+    }
+
+    /// One document's `(hash, window)` pairs per document as `.c4_sig`
+    /// records, the first numbered `start`.
+    fn to_records(
+        hashes: &[Option<Vec<(u64, usize)>>],
+        start: usize,
+    ) -> Result<Vec<Signature>, RunError> {
+        let mut recs = Vec::new();
+        for (i, h) in hashes.iter().enumerate() {
+            if let Some(h) = h {
+                core::records(start + i, h, &mut recs)
+                    .map_err(|err| RunError::Doc { index: i, err })?;
+            }
+        }
+        Ok(recs)
+    }
+
+    /// Stage 3 over `texts`: `(text, keep, formatted, stats)` (see
+    /// `_SentenceDups.filter`).
+    #[allow(clippy::too_many_arguments)]
+    fn run_filter<'py>(
+        py: Python<'py>,
+        texts: &TextInput,
+        config: &SentenceConfig,
+        dups: &Duplicates,
+        start: usize,
+        ids: Option<&[usize]>,
+        details: bool,
+        t: par::Threads,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        if let Some(ids) = ids {
+            if ids.len() != doc_count(texts) {
+                return Err(PyValueError::new_err(format!(
+                    "{} ids for {} documents",
+                    ids.len(),
+                    doc_count(texts)
+                )));
+            }
+        }
+        let kernel = &config.kernel;
+        let res = py
+            .detach(|| {
+                map_indexed(texts, t, |i, s| {
+                    let doc = ids.map_or(start + i, |ids| ids[i]);
+                    kernel.filter(s, dups.of_doc(doc))
+                })
+            })
+            .map_err(|e| e.into_pyerr(py))?;
+        let text = texts_like(py, texts, &res, t)?;
+        let keep: Vec<Option<bool>> = res.iter().map(|r| r.as_ref().map(|f| f.keep)).collect();
+        let keep = mask_like(py, texts, &keep)?;
+        let none = || PyNone::get(py).to_owned().into_any();
+        let (formatted, stats) = if details {
+            let formatted = PyList::new(
+                py,
+                res.iter().map(|r| {
+                    r.as_ref()
+                        .and_then(|f| f.formatted.as_deref())
+                        .map_or_else(none, |s| PyString::new(py, s).into_any())
+                }),
+            )?;
+            let stats = PyList::new(
+                py,
+                res.iter()
+                    .map(|r| r.as_ref().map_or((0, 0), |f| (f.spans, f.kept))),
+            )?;
+            (formatted.into_any(), stats.into_any())
+        } else {
+            (none(), none())
+        };
+        PyTuple::new(py, [text, keep, formatted, stats])
+    }
+
+    /// datatrove's ``SentenceFindDedups`` for one finder task: the bucket's
+    /// ``.c4_sig`` files and the index files (local paths or bytes), in
+    /// datatrove's order. Returns each signature file's ``.c4_dup`` bytes.
+    #[pyfunction]
+    #[pyo3(signature = (sigs, index, /, *, precision, only_dedup_in_index))]
+    fn _sentence_find_dups<'py>(
+        py: Python<'py>,
+        sigs: &Bound<'py, PyList>,
+        index: &Bound<'py, PyList>,
+        precision: u32,
+        only_dedup_in_index: bool,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let p = Precision::from_bits(precision)
+            .ok_or_else(|| PyValueError::new_err("precision must be 32 or 64"))?;
+        let (sigs, index) = (source_specs(sigs)?, source_specs(index)?);
+        let n = sigs.len();
+        let out = py
+            .detach(|| {
+                let sigs = open_all(sigs, 0)?;
+                let index = open_all(index, n)?;
+                core::find_duplicates(sigs, index, p, only_dedup_in_index)
+            })
+            .map_err(|e| file_err(py, e))?;
+        PyList::new(py, out.iter().map(|b| PyBytes::new(py, b)))
+    }
+
+    /// datatrove's ``SentenceDedupBuildIndex``: the distinct hashes of the
+    /// ``.c4_sig`` files (local paths or bytes), as index-file bytes.
+    #[pyfunction]
+    #[pyo3(signature = (sigs, /, *, precision))]
+    fn _sentence_build_index<'py>(
+        py: Python<'py>,
+        sigs: &Bound<'py, PyList>,
+        precision: u32,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        let p = Precision::from_bits(precision)
+            .ok_or_else(|| PyValueError::new_err("precision must be 32 or 64"))?;
+        let sigs = source_specs(sigs)?;
+        let out = py
+            .detach(|| core::build_index(open_all(sigs, 0)?, p))
+            .map_err(|e| file_err(py, e))?;
+        Ok(PyBytes::new(py, &out))
+    }
+
+    /// datatrove's ``get_hashes`` per document, as ``(hash, window)`` pairs
+    /// (no range checks); a parity-test hook.
+    #[pyfunction]
+    #[pyo3(signature = (texts, /, config, *, threads = None))]
+    fn _sentence_hashes<'py>(
+        py: Python<'py>,
+        texts: &Bound<'py, PyAny>,
+        config: &SentenceConfig,
+        threads: Option<ThreadsArg>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (texts, threads) = texts_and_threads(texts, threads, None)?;
+        let t = self::threads(threads);
+        let kernel = &config.kernel;
+        let hashes = py
+            .detach(|| {
+                map_indexed(&texts, t, |_, s| {
+                    let mut v = Vec::new();
+                    kernel.hashes(s, &mut v).map(|()| v)
+                })
+            })
+            .map_err(|e| e.into_pyerr(py))?;
+        let mut items = hashes
+            .into_iter()
+            .map(|h| match h {
+                Some(v) => Ok(PyList::new(py, v)?.into_any()),
+                None => Ok(PyNone::get(py).to_owned().into_any()),
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        if let TextInput::Str(_) = texts {
+            return Ok(items.remove(0));
+        }
+        Ok(PyList::new(py, items)?.into_any())
+    }
+
+    pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        m.add_class::<SentenceConfig>()?;
+        m.add_class::<SentenceState>()?;
+        m.add_class::<SentenceDups>()?;
+        m.add_function(wrap_pyfunction!(_sentence_find_dups, m)?)?;
+        m.add_function(wrap_pyfunction!(_sentence_build_index, m)?)?;
+        m.add_function(wrap_pyfunction!(_sentence_hashes, m)?)?;
         Ok(())
     }
 }
