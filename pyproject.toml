@@ -60,19 +60,20 @@ Changelog = "https://github.com/ao/pyroid/blob/main/CHANGELOG.md"
 [dependency-groups]
 # pyarrow is a test-only dependency (Arrow interop tests); pyroid itself has no
 # runtime dependencies. The Arrow tests also run without it, against pyroid's
-# own Arrow exporter.
+# own Arrow exporter. pyarrow and fasttext-predict publish no Windows ARM64 wheels,
+# so they are left out there (release.yml tests the windows-arm64 wheels).
 test = [
   "pytest>=9",
   "packaging>=24",
   "hypothesis>=6.170",
   "pytest-timeout>=2.4",
   "pytest-run-parallel>=0.10",
-  "pyarrow>=18",
+  "pyarrow>=18; sys_platform != 'win32' or platform_machine != 'ARM64'",
   # The reference implementation for pyroid.ftfy's parity tests.
   "ftfy==6.3.1",
   # pyroid.fasttext needs numpy; fasttext-predict is its reference (no wheels past cp313).
   "numpy>=1.26",
-  "fasttext-predict==0.9.2.4; python_version < '3.14'",
+  "fasttext-predict==0.9.2.4; python_version < '3.14' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
   # The reference for pyroid.translit.anyascii (ISC). Unidecode (GPL) is never a
   # default dependency: it is only a black-box oracle in an opt-in CI job.
   "anyascii==0.3.3",
