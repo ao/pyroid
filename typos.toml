@@ -42,6 +42,9 @@ extend-exclude = [
   # Multilingual filter/dedup tests: German, Turkish, Vietnamese ... text and language codes (tha_Thai).
   "python/tests/test_filters_multilingual.py",
   "python/tests/test_dedup_multilingual.py",
+  # The sentence-dedup tests' French, German, Russian ... sentences, and URL tests' made-up punycode labels.
+  "python/tests/test_sentence_dedup_more.py",
+  "python/tests/test_url_more.py",
 ]
 
 [default.extend-words]

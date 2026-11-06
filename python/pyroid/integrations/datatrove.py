@@ -733,7 +733,7 @@ class URLFilter(_Step, _dt_url.URLFilter):
         bound.apply_defaults()
         a = bound.arguments
         _dt_url.BaseFilter.__init__(self, a["exclusion_writer"])
-        from tldextract import TLDExtract
+        from tldextract import TLDExtract  # type: ignore[import-not-found,unused-ignore]
 
         parse = _dt_url.parse_list
         self.soft_word_threshold = a["soft_word_threshold"]

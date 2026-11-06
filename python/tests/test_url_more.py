@@ -328,7 +328,7 @@ def test_domains_examples(url: str, which: str) -> None:
 @examples
 @given(st.one_of(urls(), st.text(_no_surrogates)))
 def test_lenient_netloc_matches(url: str) -> None:
-    from tldextract.remote import lenient_netloc
+    from tldextract.remote import lenient_netloc  # type: ignore[import-not-found,unused-ignore]
 
     assert native._lenient_netloc(url) == lenient_netloc(url)
 
@@ -336,7 +336,7 @@ def test_lenient_netloc_matches(url: str) -> None:
 @examples
 @given(st.one_of(_ipv6, st.text(st.sampled_from("0123456789abcdefABCDEF:.%/gé１"), max_size=50)))
 def test_looks_like_ipv6_matches(s: str) -> None:
-    from tldextract.remote import looks_like_ipv6
+    from tldextract.remote import looks_like_ipv6  # type: ignore[import-not-found,unused-ignore]
 
     assert native._looks_like_ipv6(s) == looks_like_ipv6(s)
 
