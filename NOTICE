@@ -201,6 +201,82 @@ unicodedata.category() "P*" and re \w / \d sets of CPython 3.11-3.15's Unicode
 databases (see "Data derived from CPython and Unicode" above).
 
 -------------------------------------------------------------------------------
+indic-nlp-library and urduhack (IndicNLPTokenizer)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/filters/indic.rs and indic_tables.rs port datatrove's
+IndicNLPTokenizer, that is indic-nlp-library 0.92,
+https://github.com/anoopkunchukuttan/indic_nlp_library (trivial_tokenize,
+sentence_split with is_acronym_abbvr's non-breaking phrases, langinfo's script
+ranges and danda languages, and the Sinhala-to-Devanagari map), and, for Urdu
+sentences, urduhack 1.0.3, https://github.com/urduhack/urduhack (the rule-based
+splitter of tokenization/eos.py and its two word lists), which
+indic-nlp-library calls for "ur". indic_tables.rs is generated from the two
+libraries themselves by crates/pyroid-core/src/filters/generate_indic_tables.py;
+it also holds the str.isnumeric() sets of CPython 3.11-3.15's Unicode databases
+and the \p{Lu} and WhitespaceTokenizer sentence-pattern classes as the regex
+module matches them (see "Data derived from CPython and Unicode" above). The
+differential tests (crates/pyroid-core/tests/filters_indic.rs,
+filters_data/indic/record.py, and the IndicNLP fuzzer and word lists of
+filters_data/oracle.py) derive from the same releases;
+filters_data/indic/golden.jsonl and filters_data/multilingual/golden-indic-*.jsonl
+record what these libraries return on pyroid's own test texts.
+
+Each of these files but the .jsonl recordings carries a header naming
+indic-nlp-library 0.92 (MIT), © Anoop Kunchukuttan, and urduhack 1.0.3 (MIT),
+© Urdu Hack, alongside datatrove 0.10.1 (Apache-2.0), © HuggingFace (see
+above), e.g. indic.rs's "Derived from indic-nlp-library 0.92 (MIT), © Anoop
+Kunchukuttan, urduhack 1.0.3 (MIT), © Urdu Hack, and datatrove 0.10.1
+(Apache-2.0), © HuggingFace; modified."
+
+indic-nlp-library:
+
+    MIT License
+
+    Copyright (c) 2013-present Anoop Kunchukuttan
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
+urduhack:
+
+    MIT License
+
+    Copyright (c) 2018 Urdu Hack
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+-------------------------------------------------------------------------------
 anyascii
 -------------------------------------------------------------------------------
 pyroid.translit (crates/pyroid-core/src/translit/, crates/pyroid-py/src/translit.rs,

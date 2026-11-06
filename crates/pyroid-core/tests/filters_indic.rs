@@ -1,5 +1,6 @@
-// Derived from datatrove 0.10.1 (Apache-2.0), © HuggingFace, and
-// indic-nlp-library 0.92 (MIT), © Anoop Kunchukuttan; modified.
+// Derived from datatrove 0.10.1 (Apache-2.0), © HuggingFace, indic-nlp-library
+// 0.92 (MIT), © Anoop Kunchukuttan, and urduhack 1.0.3 (MIT), © Urdu Hack;
+// modified.
 //! Differential tests: replay what datatrove 0.10.1's `IndicNLPTokenizer`
 //! (indic-nlp-library 0.92, urduhack 1.0.3 for `ur` sentences) really
 //! returns, as recorded by `tests/filters_data/indic/record.py`, and require
