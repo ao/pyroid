@@ -309,6 +309,11 @@ jobs:
       - name: Regenerate and verify the references (python -m pyroid_parity.refs all)
         if: steps.cache.outputs.cache-hit != 'true'
         run: uv run --project parity --frozen python -m pyroid_parity.refs all
+      # json_repair's references are in the repo (parity/data/json_repair-0.64.5/): its own test suite, replayed
+      # as recorded public calls. Re-record them with the pinned json-repair and require the same bytes.
+      - name: Re-record json_repair's test suite and compare (python -m pyroid_parity.json_repair_record --check)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: uv run --project parity --frozen python -m pyroid_parity.json_repair_record --check
       - name: Verify every pinned file before caching (bench/fetch.py --verify-all)
         if: steps.cache.outputs.cache-hit != 'true'
         run: uv run --project bench --frozen --no-default-groups python bench/fetch.py --verify-all
@@ -332,7 +337,7 @@ jobs:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
         # One entry per merged product module pyroid.<suite>. Every suite runs on the free-threaded builds too:
         # without the oracle group they compare against the pinned refs, and live-oracle checks skip in the report.
-        suite: [ftfy, fasttext, filters, dedup, metrics]
+        suite: [ftfy, fasttext, filters, dedup, metrics, json_repair]
         python: ["3.12", "3.14t", "3.15t"]
         # The wheel each interpreter installs (the three flavours the wheels job checks for).
         include:
