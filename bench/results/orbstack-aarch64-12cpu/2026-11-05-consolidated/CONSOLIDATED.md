@@ -42,4 +42,5 @@ pyroid with Arrow input (3.15t, 10k docs): pyroid.ftfy 1.0.0.dev0 fix_text_batch
 
 - `charts/consolidated-e2e-{light,dark}.svg`: the end-to-end table.
 - `charts/consolidated-stages-{light,dark}.svg`: per stage at the incumbents' largest batch (10k fast stages, 1k filters/MinHash), with pyroid's 3.13 and 3.15t rows.
+- `charts/hero-{light,dark}.svg`: the README hero, pyroid's native chain vs datatrove at 1 and 8 workers (copied to `docs/assets/`).
 
