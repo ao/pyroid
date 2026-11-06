@@ -1,15 +1,25 @@
 {
-  "about": "Summary table of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. Interim rows from the module reports (2026-11-05); replace them with the consolidated gated harness table (bench/results/) when it exists, keeping the same fields. Units: microseconds per document, single thread unless 'threads' says otherwise. 'speedup' is copied from the source, never computed.",
-  "label": "Docker/OrbStack VM on Apple Silicon (M3 Pro host, 12 vCPU), indicative, preliminary",
-  "source": "each module's benchmark run, 2026-11-05 (fastText: the harness's gated stage bench)",
+  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'rows', 'label' and 'source' come from bench/results/<machine>/<date>-consolidated/consolidated.json (the label as the docs print it); 'chain' is the end-to-end table of the same run's CONSOLIDATED.md. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
+  "label": "Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative",
+  "source": "bench/results/orbstack-aarch64-12cpu/2026-11-05-consolidated",
+  "chain": [
+    {"run": "pyroid native chain, 8 threads (CPython 3.15t)", "wall_s": "1.61 [1.57–1.71]", "cpu_s": "6.1", "rss_mib": "605", "vs_1_proc": "157.6×", "vs_8_procs": "26.1×"},
+    {"run": "pyroid stages in datatrove's executor, 8 processes (3.13)", "wall_s": "2.85 [2.83–2.92]", "cpu_s": "13.0", "rss_mib": "385", "vs_1_proc": "88.9×", "vs_8_procs": "14.7×"},
+    {"run": "pyroid native chain, 1 thread (CPython 3.15t)", "wall_s": "5.16 [5.15–5.41]", "cpu_s": "5.8", "rss_mib": "503", "vs_1_proc": "49.1×", "vs_8_procs": "8.1×"},
+    {"run": "pyroid stages in datatrove's executor, 1 process (3.13)", "wall_s": "7.48 [7.24–7.52]", "cpu_s": "8.1", "rss_mib": "421", "vs_1_proc": "33.9×", "vs_8_procs": "5.6×"},
+    {"run": "datatrove 0.10.1, 8 processes (CPython 3.13)", "wall_s": "41.93 [41.27–42.18]", "cpu_s": "314.5", "rss_mib": "367", "vs_1_proc": "6.0×", "vs_8_procs": "1.0×"},
+    {"run": "datatrove 0.10.1, 1 process (CPython 3.13)", "wall_s": "253.20 [252.48–253.45]", "cpu_s": "254.3", "rss_mib": "438", "vs_1_proc": "1.0×", "vs_8_procs": "0.2×"}
+  ],
   "rows": [
-    {"module": "ftfy", "call": "fix_text", "input": "FineWeb, first 10k docs; CPython 3.12", "incumbent": "ftfy 6.3.1", "incumbent_us": "969.3", "pyroid_us": "5.8", "speedup": "167×", "check": "parity suites"},
-    {"module": "ftfy", "call": "fix_text", "input": "FineWeb, first 10k docs; CPython 3.15", "incumbent": "ftfy 6.3.1", "incumbent_us": "693.0", "pyroid_us": "7.3", "speedup": "95×", "check": "parity suites"},
-    {"module": "fasttext", "call": "predict, lid.176.bin, k=1", "input": "1,000 FineWeb docs; CPython 3.13", "incumbent": "fasttext-predict 0.9.2.4", "incumbent_us": "389", "pyroid_us": "176", "speedup": "2.2×", "check": "harness gate"},
-    {"module": "fasttext", "call": "predict, lid.176.ftz, k=1", "input": "1,000 FineWeb docs; CPython 3.13", "incumbent": "fasttext-predict 0.9.2.4", "incumbent_us": "650", "pyroid_us": "121", "speedup": "5.4×", "check": "harness gate"},
-    {"module": "filters", "call": "apply, FineWeb's 4 filters", "input": "2,000 FineWeb docs; CPython 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "23,875", "pyroid_us": "277", "speedup": "86×", "check": "output checked before timing"},
-    {"module": "dedup", "call": "minhash_signatures, sha1/64, from raw text", "input": "1,000 FineWeb docs; CPython 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "6,170", "pyroid_us": "94–99", "speedup": "≈64×", "check": "parity suites"},
-    {"module": "translit", "call": "anyascii", "input": "FineWeb, first 10k docs; CPython 3.12", "incumbent": "anyascii 0.3.3", "incumbent_us": "80.8", "pyroid_us": "2.19", "speedup": "37×", "check": "output checked before timing"},
-    {"module": "translit", "call": "unidecode (list)", "input": "FineWeb, first 10k docs; CPython 3.12", "incumbent": "Unidecode 1.4.0", "incumbent_us": "192.0", "pyroid_us": "2.54", "speedup": "76×", "check": "different output by design"}
+    {"module": "ftfy", "call": "fix_text_batch", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "ftfy 6.3.1", "incumbent_us": "834", "pyroid_us": "5.66", "pyroid_us_8_threads": "1.72", "speedup": "147×", "check": "harness gate"},
+    {"module": "fasttext", "call": "predict, lid.176.bin, k=1", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "fasttext-predict 0.9.2.4", "incumbent_us": "290", "pyroid_us": "141", "pyroid_us_8_threads": "20.2", "speedup": "2.1×", "check": "harness gate"},
+    {"module": "fasttext", "call": "predict, lid.176.ftz, k=1", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "fasttext-predict 0.9.2.4", "incumbent_us": "451", "pyroid_us": "105", "pyroid_us_8_threads": "16.0", "speedup": "4.3×", "check": "harness gate"},
+    {"module": "filters", "call": "GopherRepetition", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "7,295", "pyroid_us": "141", "pyroid_us_8_threads": "29.9", "speedup": "52×", "check": "harness gate"},
+    {"module": "filters", "call": "GopherQuality", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,739", "pyroid_us": "79.8", "pyroid_us_8_threads": "16.0", "speedup": "72×", "check": "harness gate"},
+    {"module": "filters", "call": "C4Quality (default)", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,131", "pyroid_us": "48.2", "pyroid_us_8_threads": "16.1", "speedup": "107×", "check": "harness gate"},
+    {"module": "filters", "call": "C4Quality (FineWeb config)", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "6,635", "pyroid_us": "88.2", "pyroid_us_8_threads": "20.0", "speedup": "75×", "check": "harness gate"},
+    {"module": "filters", "call": "FineWebQuality", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,415", "pyroid_us": "67.0", "pyroid_us_8_threads": "14.2", "speedup": "81×", "check": "harness gate"},
+    {"module": "dedup", "call": "MinHash signatures, sha1/64", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,820", "pyroid_us": "91.7", "pyroid_us_8_threads": "22.7", "speedup": "63×", "check": "harness gate"},
+    {"module": "translit", "call": "anyascii", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "anyascii 0.3.3", "incumbent_us": "128", "pyroid_us": "1.62", "pyroid_us_8_threads": "1.00", "speedup": "79×", "check": "harness gate"}
   ]
 }
