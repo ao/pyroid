@@ -7,14 +7,17 @@ files (it keeps the runtime module when both exist, and skips stub members
 whose kind differs, e.g. an attribute at runtime but a function in the stub),
 so this extension:
 
-1. replaces every ``pyroid.<mod>`` that has a ``<mod>.pyi`` with a module
-   visited from the stub alone (statically: nothing is imported);
+1. replaces every ``pyroid.<mod>`` (and ``pyroid.<pkg>.<mod>``, e.g. ``pyroid.metrics.sacrebleu``)
+   that has a ``<mod>.pyi`` with a module visited from the stub alone (statically: nothing is
+   imported);
 2. gives each stub function that only has ``@overload``s (stubs have no
    implementation) a documented entry: the docstring of its first overload,
    with every overload attached (mkdocs.yml shows only the overloads);
 3. turns the Sphinx roles the stubs use (``:func:`x```, ``:class:`pyroid.Column```)
    into mkdocstrings cross-references when the target is documented, and into
-   code spans otherwise, and drops reST's ``::`` literal-block marker.
+   code spans otherwise, and drops reST's ``::`` literal-block marker;
+4. rewrites a ``Raises:`` section that only says "As for :func:`x`." into a sentence
+   (it is not a google-style ``Type: description`` pair).
 """
 
 from __future__ import annotations
@@ -27,6 +30,8 @@ import griffe
 
 _ROLE = re.compile(r":(?:func|class|meth|attr|data|exc|mod|obj):`~?([A-Za-z_][\w.]*)`")
 _LITERAL_MARKER = re.compile(r"::$", re.MULTILINE)
+# A "Raises:" section that only says "As for :func:`x`." (not a google-style "Type: text" pair).
+_RAISES_AS_FOR = re.compile(r"^Raises:\n\s+As for (.+?)\.?$", re.MULTILINE)
 
 
 def _promote_overloads(obj: griffe.Module | griffe.Class) -> None:
@@ -87,6 +92,39 @@ def _members(obj: griffe.Object) -> list[griffe.Object]:
     return out
 
 
+def _swap_stubs(parent: griffe.Module, loader: griffe.GriffeLoader) -> None:
+    """Replace each submodule that has a ``.pyi`` with the stub; recurse into subpackages."""
+    for name, member in list(parent.members.items()):
+        if member.is_alias or not member.is_module:
+            continue
+        path = member.filepath
+        if not isinstance(path, Path):
+            continue
+        stub = path.with_suffix(".pyi")
+        if path.suffix == ".pyi" or not stub.exists():
+            # A package without its own stub (pyroid.metrics): its modules may have stubs.
+            if path.name == "__init__.py":
+                _swap_stubs(member, loader)
+            continue
+        code = stub.read_text(encoding="utf-8")
+        loader.lines_collection[stub] = code.splitlines()
+        module = griffe.visit(
+            name,
+            stub,
+            code,
+            parent=parent,
+            docstring_parser=loader.docstring_parser,
+            docstring_options=loader.docstring_options,
+            lines_collection=loader.lines_collection,
+            modules_collection=loader.modules_collection,
+        )
+        # set_member() would merge the new module into the runtime one: remove it first.
+        old = parent.members.pop(name)
+        parent.set_member(name, module)
+        for alias in old.aliases.values():
+            alias.target = module
+
+
 class PyroidStubs(griffe.Extension):
     """Document pyroid from its stubs, and resolve the stubs' Sphinx roles."""
 
@@ -94,32 +132,7 @@ class PyroidStubs(griffe.Extension):
         """Swap runtime modules for their stubs, then rewrite docstring roles."""
         if pkg.name != "pyroid":
             return
-        for name, member in list(pkg.members.items()):
-            if member.is_alias or not member.is_module:
-                continue
-            path = member.filepath
-            if not isinstance(path, Path):
-                continue
-            stub = path.with_suffix(".pyi")
-            if path.suffix == ".pyi" or not stub.exists():
-                continue
-            code = stub.read_text(encoding="utf-8")
-            loader.lines_collection[stub] = code.splitlines()
-            module = griffe.visit(
-                name,
-                stub,
-                code,
-                parent=pkg,
-                docstring_parser=loader.docstring_parser,
-                docstring_options=loader.docstring_options,
-                lines_collection=loader.lines_collection,
-                modules_collection=loader.modules_collection,
-            )
-            # set_member() would merge the new module into the runtime one: remove it first.
-            old = pkg.members.pop(name)
-            pkg.set_member(name, module)
-            for alias in old.aliases.values():
-                alias.target = module
+        _swap_stubs(pkg, loader)
         _promote_overloads(pkg)
         for obj in [pkg, *_members(pkg)]:
             if obj.docstring is not None:
@@ -137,9 +150,13 @@ class PyroidStubs(griffe.Extension):
             if not path.startswith("pyroid"):
                 continue
             try:
-                pkg.modules_collection.get_member(path)
+                member = pkg.modules_collection.get_member(path)
             except (KeyError, ValueError, griffe.AliasResolutionError):
                 continue
+            # An import of another package (``import runpy`` inside a module) is not documented
+            # here: link to what it imports, which the Python inventory resolves.
+            if member.is_alias and not member.target_path.startswith("pyroid"):
+                return member.target_path
             # Re-exports (pyroid.Column is pyroid._pyroid.Column) link to the public path.
             return path.replace("pyroid._pyroid.", "pyroid.", 1) if path.count(".") == 2 else path
         return None
@@ -150,4 +167,5 @@ class PyroidStubs(griffe.Extension):
             path = self._resolve(obj, target, pkg)
             return f"[`{target}`][{path}]" if path else f"`{target}`"
 
+        text = _RAISES_AS_FOR.sub(r"Raises the same exceptions as \1.", text)
         return _LITERAL_MARKER.sub(":", _ROLE.sub(sub, text))
