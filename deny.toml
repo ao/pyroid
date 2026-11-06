@@ -25,6 +25,8 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "ISC",
+  # Permissive; pyroid itself carries it for a port of CPython's ipaddress parser (see NOTICE).
+  "PSF-2.0",
   "Unicode-3.0",
   "Zlib",
 ]
