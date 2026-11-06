@@ -16,6 +16,7 @@
 )]
 
 mod array;
+mod buf;
 mod comment;
 mod number;
 mod object;
@@ -104,7 +105,7 @@ pub(crate) struct Parser<'a> {
     /// `self.json_str`, as chars. Copied only when one of the two places
     /// json_repair rewrites its input runs (duplicate-key split, escaped-object
     /// normalization).
-    s: Cow<'a, [char]>,
+    s: buf::Buf<'a>,
     /// `self.index`. Signed: json_repair's index arithmetic can dip below 0.
     index: isize,
     ctx: Vec<Ctx>,
@@ -127,7 +128,7 @@ pub(crate) struct Parser<'a> {
 impl<'a> Parser<'a> {
     pub(crate) fn new(s: &'a [char], opts: &ParseOptions, stack_base: Option<usize>) -> Self {
         Self {
-            s: Cow::Borrowed(s),
+            s: buf::Buf::new(s),
             index: 0,
             ctx: Vec::new(),
             deferred: Vec::new(),
@@ -158,13 +159,13 @@ impl<'a> Parser<'a> {
     #[inline]
     fn char_at(&self, i: isize) -> Option<char> {
         if i >= 0 {
-            self.s.get(i as usize).copied()
+            self.s.get(i as usize)
         } else {
             let j = self.len() + i;
             if j < 0 {
                 None
             } else {
-                Some(self.s[j as usize])
+                Some(self.s.at(j as usize))
             }
         }
     }
@@ -180,8 +181,8 @@ impl<'a> Parser<'a> {
         self.get_char_at(0)
     }
 
-    /// `self.json_str[a:b]` (Python slice clamping, non-negative bounds).
-    fn slice(&self, a: isize, b: isize) -> &[char] {
+    /// `self.json_str[a:b]` (Python slice clamping).
+    fn slice(&self, a: isize, b: isize) -> Cow<'_, [char]> {
         let n = self.len();
         let clamp = |x: isize| -> usize {
             if x < 0 {
@@ -191,7 +192,7 @@ impl<'a> Parser<'a> {
             }
         };
         let (a, b) = (clamp(a), clamp(b));
-        if a >= b { &[] } else { &self.s[a..b] }
+        self.s.slice(a, b)
     }
 
     #[inline]
@@ -204,10 +205,17 @@ impl<'a> Parser<'a> {
         c.is_some_and(|c| self.props.is_space(c))
     }
 
-    /// Replace `self.s[a..b]` with `with` (the only buffer mutations).
+    /// Replace `self.json_str[a:b]` with `with` (the only buffer mutations).
     fn splice(&mut self, a: usize, b: usize, with: &[char]) {
-        self.s.to_mut().splice(a..b, with.iter().copied());
-        self.scan.invalidate();
+        let insert_one = a == b && with.len() == 1;
+        let after_backslash = a > 0 && self.s.get(a - 1) == Some('\\');
+        self.s.splice(a, b, with);
+        if insert_one && !after_backslash {
+            // No backslash run changes: the memo only shifts.
+            self.scan.shift_insert(a, with[0], self.props);
+        } else {
+            self.scan.invalidate();
+        }
     }
 
     // ------------------------------------------------------------------
@@ -433,10 +441,10 @@ impl<'a> Parser<'a> {
             return true;
         }
         let mut i = self.index - 1;
-        while i >= 0 && self.is_space(self.s[i as usize]) {
+        while i >= 0 && self.is_space(self.s.at(i as usize)) {
             i -= 1;
         }
-        i >= 0 && self.s[i as usize] == ','
+        i >= 0 && self.s.at(i as usize) == ','
     }
 
     /// `_initial_container_has_non_comma_trailing_content`.
@@ -457,7 +465,7 @@ impl<'a> Parser<'a> {
         let mut in_string = false;
         let mut escaped = false;
         let n = self.s.len();
-        for (i, &ch) in self.s.iter().enumerate() {
+        for (i, ch) in self.s.iter().enumerate() {
             if in_string {
                 if escaped {
                     escaped = false;
@@ -481,10 +489,10 @@ impl<'a> Parser<'a> {
                     }
                     if containers.is_empty() {
                         let mut t = i + 1;
-                        while t < n && self.is_space(self.s[t]) {
+                        while t < n && self.is_space(self.s.at(t)) {
                             t += 1;
                         }
-                        return t < n && self.s[t] != ',';
+                        return t < n && self.s.at(t) != ',';
                     }
                 }
                 _ => {}
@@ -500,7 +508,8 @@ impl<'a> Parser<'a> {
         }
         self.has_tried_valid_json_suffix = true;
         let start = self.index.max(0) as usize;
-        match pyjson::raw_decode(&self.s, start, self.max_int_digits) {
+        let max_int_digits = self.max_int_digits;
+        match pyjson::raw_decode(self.s.contiguous(), start, max_int_digits) {
             Ok((value, end)) => {
                 self.index = end as isize;
                 Ok(Some(value))
@@ -531,7 +540,7 @@ impl<'a> Parser<'a> {
         // Require a single insertion to explain the whole input.
         let mut candidate = Vec::with_capacity(self.s.len() + 1);
         candidate.push('{');
-        candidate.extend_from_slice(&self.s);
+        candidate.extend(self.s.iter());
         let (value, end) = match pyjson::raw_decode(&candidate, 0, self.max_int_digits) {
             Ok(r) => r,
             Err(pyjson::DecodeError::ReservedCodePoint) => return Err(ParseError::Unsupported),

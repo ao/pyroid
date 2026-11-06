@@ -67,7 +67,7 @@ impl Parser<'_> {
     pub(crate) fn top_level_parenthesized_can_start_value(&mut self) -> bool {
         let mut i = self.index - 1;
         while i >= 0 {
-            let ch = self.s[i as usize];
+            let ch = self.s.at(i as usize);
             if ch == '\n' || ch == '\r' {
                 break;
             }
@@ -107,7 +107,7 @@ impl Parser<'_> {
         let mut in_quote: Option<char> = None;
         let mut backslashes = 0usize;
         while i < n {
-            let ch = self.s[i as usize];
+            let ch = self.s.at(i as usize);
             if ch == '\\' {
                 backslashes += 1;
                 i += 1;
@@ -134,7 +134,7 @@ impl Parser<'_> {
                     if nested == 0 && square == 0 && braces == 0 {
                         i += 1;
                         while i < n {
-                            let trailer = self.s[i as usize];
+                            let trailer = self.s.at(i as usize);
                             if trailer == '\n' || trailer == '\r' {
                                 return true;
                             }

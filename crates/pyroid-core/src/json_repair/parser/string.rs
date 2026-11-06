@@ -248,14 +248,16 @@ impl Parser<'_> {
         }
         let start = (self.index + 1).max(0) as usize;
         let end = self.find_plain('"', start)?;
-        if self.s[start..end]
+        if self
+            .s
+            .slice(start, end)
             .iter()
             .any(|&c| matches!(c, '\\' | '\n' | '\r'))
         {
             return None;
         }
         let next_index = self.next_non_space(end + 1);
-        let next_char = self.s.get(next_index).copied();
+        let next_char = self.s.get(next_index);
         let ok = match self.ctx_current() {
             Some(Ctx::ObjectKey) => next_char == Some(':'),
             Some(Ctx::ObjectValue) => matches!(next_char, None | Some(',' | '}')),
@@ -265,7 +267,7 @@ impl Parser<'_> {
         if !ok {
             return None;
         }
-        let value: String = self.s[start..end].iter().collect();
+        let value: String = self.s.slice(start, end).iter().collect();
         self.index = end as isize + 1;
         Some(value)
     }
@@ -313,11 +315,11 @@ impl Parser<'_> {
     /// `parse_json_llm_block`: a value fenced in ```` ```json ... ``` ````.
     fn parse_json_llm_block(&mut self) -> R<Option<Value>> {
         let fence: [char; 7] = ['`', '`', '`', 'j', 's', 'o', 'n'];
-        if self.slice(self.index, self.index + 7) != fence {
+        if *self.slice(self.index, self.index + 7) != fence {
             return Ok(None);
         }
         let i = self.skip_to_character(Targets::one('`'), 7);
-        if self.slice(self.index + i, self.index + i + 3) != ['`', '`', '`'] {
+        if *self.slice(self.index + i, self.index + i + 3) != ['`', '`', '`'] {
             return Ok(None);
         }
         self.index += 7;
@@ -1316,11 +1318,7 @@ impl Parser<'_> {
 
     /// `json_str.find(c, from)` (plain, no escapes): the absolute index.
     fn find_plain(&self, c: char, from: usize) -> Option<usize> {
-        self.s
-            .get(from..)?
-            .iter()
-            .position(|&x| x == c)
-            .map(|p| p + from)
+        (from..self.s.len()).find(|&i| self.s.at(i) == c)
     }
 }
 

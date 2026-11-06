@@ -424,7 +424,7 @@ impl Parser<'_> {
         }
         let body = self.slice(start_index, self.index - 1);
         if self.get_char_at(-1) == Some('}')
-            && strip_comments(body).iter().all(|&c| self.is_space(c))
+            && strip_comments(&body).iter().all(|&c| self.is_space(c))
         {
             return Ok(None);
         }

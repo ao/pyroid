@@ -13,6 +13,7 @@
 //! target after `q` preceded by an even run of backslashes. Only that second
 //! part is memoized (it no longer depends on `p`).
 
+use super::super::chars::CharProps;
 use super::Parser;
 
 /// The chars `skip_to_character` is ever asked for, as a bit set.
@@ -100,8 +101,12 @@ pub(crate) struct Memo {
     non_space: Option<Span>,
     /// Per quote char: `(position, run length)` for every unescaped quote, where
     /// the run counts the consecutive unescaped quotes from there up to the
-    /// next unescaped `]` (or the end).
+    /// next unescaped `]` (or the end). Positions are as when built; `inserts`
+    /// maps them to the current buffer.
     quote_runs: Vec<(char, Vec<(u32, u32)>)>,
+    /// Positions of the `{`s inserted since `quote_runs` were built (ascending,
+    /// current coordinates; a char at current `p` was at `p - #inserts < p`).
+    inserts: Vec<usize>,
     /// `_initial_container_has_non_comma_trailing_content()` at index 0.
     pub(crate) initial_container: Option<bool>,
 }
@@ -110,9 +115,53 @@ impl Memo {
     pub(crate) fn invalidate(&mut self) {
         self.unescaped.clear();
         self.quote_runs.clear();
+        self.inserts.clear();
         self.non_space = None;
         self.initial_container = None;
     }
+}
+
+impl Memo {
+    /// The buffer got char `c` inserted at `p`, after a non-backslash (so no
+    /// backslash run changed): shift every remembered span past `p`.
+    pub(crate) fn shift_insert(&mut self, p: usize, c: char, props: CharProps) {
+        let shift = |x: usize| if x >= p { x + 1 } else { x };
+        for (targets, span) in &mut self.unescaped {
+            let covers = span.from < p && span.to.is_none_or(|t| t >= p);
+            span.from = shift(span.from);
+            span.to = span.to.map(shift);
+            if covers && targets.contains(c) {
+                // The new char is the first unescaped target after `from`.
+                span.to = Some(p);
+            }
+        }
+        if let Some(span) = &mut self.non_space {
+            let covers = span.from < p && span.to.is_none_or(|t| t >= p);
+            span.from = shift(span.from);
+            span.to = span.to.map(shift);
+            if covers && !props.is_space(c) {
+                span.to = Some(p);
+            }
+        }
+        if c == ']' || is_quote_target(c) {
+            self.quote_runs.clear();
+            self.inserts.clear();
+        } else if !self.quote_runs.is_empty() {
+            if self.inserts.last().is_some_and(|&last| last > p) {
+                // Not in ascending order: rebuild on the next query.
+                self.quote_runs.clear();
+                self.inserts.clear();
+            } else {
+                self.inserts.push(p);
+            }
+        }
+        self.initial_container = None;
+    }
+}
+
+/// A char some `quote_runs` table may count.
+fn is_quote_target(c: char) -> bool {
+    matches!(c, '"' | '\'' | '\u{201c}' | '\u{201d}')
 }
 
 impl Parser<'_> {
@@ -122,7 +171,7 @@ impl Parser<'_> {
         if from >= n {
             return from;
         }
-        if !self.props.is_space(self.s[from]) {
+        if !self.props.is_space(self.s.at(from)) {
             return from;
         }
         if let Some(span) = self.scan.non_space {
@@ -131,7 +180,7 @@ impl Parser<'_> {
             }
         }
         let mut i = from + 1;
-        while i < n && self.props.is_space(self.s[i]) {
+        while i < n && self.props.is_space(self.s.at(i)) {
             i += 1;
         }
         self.scan.non_space = Some(Span {
@@ -151,7 +200,9 @@ impl Parser<'_> {
             self.scan.quote_runs.push((quote, runs));
         }
         let (_, runs) = self.scan.quote_runs.iter().find(|(q, _)| *q == quote)?;
-        let p = u32::try_from(p).ok()?;
+        // Back to build coordinates: `p` is not an inserted `{` (it is a quote).
+        let before = self.scan.inserts.partition_point(|&x| x < p);
+        let p = u32::try_from(p - before).ok()?;
         runs.binary_search_by_key(&p, |&(pos, _)| pos)
             .ok()
             .map(|k| runs[k].1)
@@ -161,7 +212,7 @@ impl Parser<'_> {
         // Stops: `quote` or `]` preceded by an even run of backslashes.
         let mut stops: Vec<(u32, bool)> = Vec::new();
         let mut backslashes = 0usize;
-        for (i, &c) in self.s.iter().enumerate() {
+        for (i, c) in self.s.iter().enumerate() {
             if c == '\\' {
                 backslashes += 1;
                 continue;
@@ -188,13 +239,13 @@ impl Parser<'_> {
         let n = self.s.len();
         // q: the first non-backslash at or after p.
         let mut q = p;
-        while q < n && self.s[q] == '\\' {
+        while q < n && self.s.at(q) == '\\' {
             q += 1;
         }
         if q >= n {
             return None;
         }
-        if targets.contains(self.s[q]) && (q - p) % 2 == 0 {
+        if targets.contains(self.s.at(q)) && (q - p) % 2 == 0 {
             return Some(q);
         }
         self.next_target_after_plain(targets, q + 1)
@@ -215,7 +266,7 @@ impl Parser<'_> {
             if i >= n {
                 break None;
             }
-            let ch = self.s[i];
+            let ch = self.s.at(i);
             if ch == '\\' {
                 backslashes += 1;
             } else {
