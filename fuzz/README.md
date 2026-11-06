@@ -26,8 +26,11 @@ each file is the full list.
 | `translit` | replacement length byte, replacement, text | `anyascii`, `unidecode` (drop, replace, keep), `first_missing`, `ascii_prefix_len` and the `*_wtf8` variants against a per-character model; ASCII output where promised; `Borrowed` exactly for ASCII input |
 | `dedup_simplify` | norm-config bits, version, n-grams, buckets, hashes, 4-byte seed, hash bits, text | `simplify_text` vs `simplify_text_into`; `Borrowed` exactly when unchanged; stripped output; idempotence only for the configs where datatrove's `simplify_text` is idempotent; MinHash signature size, presence (iff at least `n_grams` words), determinism, and equality with the token/shingle entry points and a naive `u128` computation |
 
-`fasttext` (and `arrow/`) belong to the fastText/Arrow work and are
-described there.
+| `fasttext` | a `.bin`/`.ftz` model file; its last byte `n` selects the `n % 48` bytes before it as an extra query text (the loader ignores trailing bytes) | `Model::from_bytes`, then `predict`/`predict_into`, `sentence_vector`, `word_vector`, `subwords`, `line`, `line_ids`, `tokenize` and the id lookups on whatever loads: heap ≤ 1 MiB + 300 × file size to load (plus 8 KiB per query byte to infer); errors in fastText's order; ≤ k distinct in-range labels, best first, ≥ threshold, probabilities NaN or in [0, 1 + 2e-5] (hs: (1 + 1e-5)^depth); `predict_into` agrees bit for bit; vectors have `dim` floats. Seeds: tiny synthetic models from the `fasttext_load.rs` builders. Header comment of `fuzz_targets/fasttext.rs` for details |
+
+The Arrow C Data importer target lives in its own cargo-fuzz project,
+[`arrow/`](arrow/README.md), because it compiles pyroid-py's PyO3 sources and
+links libpython.
 
 ### Idempotence of `ftfy.fix_text`
 
