@@ -166,6 +166,7 @@ def rows(kind: str, n: int, stem: bool) -> list[tuple[str, int, Callable[[], lis
         else:
             stats = _pool_map(_ref_stats_chunk, n)
             score = m._aggregate_and_compute(stats)
+            m.num_refs = 1  # what corpus_score's reference caching sets (it ran in the workers here)
         return [ser(score, str(m.get_signature()))]
 
     def pyroid_corpus(threads: int) -> list[str]:
@@ -243,6 +244,7 @@ def main() -> int:
 
     if not getattr(sys, "_is_gil_enabled", lambda: True)():
         sys.exit("run on a GIL build: sacrebleu loads lxml, which re-enables the GIL on free-threaded ones")
+    load_before = os.getloadavg()
     out: list[dict[str, Any]] = []
     for kind in a.workloads.split(","):
         for n in map(int, a.sizes.split(",")):
@@ -259,6 +261,9 @@ def main() -> int:
         "data": {"rouge": M.CNNDM, "mt": M.WMT21},
         "rouge_types": ROUGE_TYPES,
         "reference_processes": PROCS,
+        # Other sessions share the VM: the 1/5/15-minute load averages before and after the run.
+        "loadavg_before": load_before,
+        "loadavg_after": os.getloadavg(),
     }
     (a.out / "metrics.json").write_text(json.dumps({"meta": meta, "results": out}, indent=1) + "\n", "utf-8")
     log(f"wrote {a.out / 'metrics.json'}")

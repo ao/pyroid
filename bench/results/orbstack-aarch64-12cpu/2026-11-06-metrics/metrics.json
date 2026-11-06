@@ -1,0 +1,1882 @@
+{
+ "meta": {
+  "label": "Docker/OrbStack VM, indicative",
+  "python": "3.13.18 (main, Oct 26 2026, 14:07:20) [Clang 23.1.3 ]",
+  "cpus": 12,
+  "pyroid": "1.0.0-dev",
+  "versions": {
+   "rouge-score": "0.1.2",
+   "sacrebleu": "2.6.0",
+   "nltk": "3.10.4",
+   "numpy": "2.5.4",
+   "regex": "2026.9.29"
+  },
+  "data": {
+   "rouge": "metrics/cnndm-3.0.0-test.parquet",
+   "mt": "metrics/wmt21.parquet"
+  },
+  "rouge_types": [
+   "rouge1",
+   "rouge2",
+   "rougeL",
+   "rougeLsum"
+  ],
+  "reference_processes": 8,
+  "loadavg_before": [
+   10.38330078125,
+   18.81640625,
+   18.2041015625
+  ],
+  "loadavg_after": [
+   4.341796875,
+   8.2890625,
+   12.6953125
+  ]
+ },
+ "results": [
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    1.092755842997576,
+    0.8155978819995653,
+    0.8518539350043284
+   ],
+   "wall_median_s": 0.8518539350043284,
+   "per_pair_us": 851.8539350043284,
+   "cpu_s_calling_process": [
+    1.0956689540000002,
+    0.8155999549999997,
+    0.851855413
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    0.23804137301340234,
+    0.25893242699385155,
+    0.20974804800061975
+   ],
+   "wall_median_s": 0.23804137301340234,
+   "per_pair_us": 238.04137301340234,
+   "cpu_s_calling_process": [
+    0.08371637700000001,
+    0.049432753000000496,
+    0.04848224600000073
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid score() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.029323909999220632,
+    0.02174118100083433,
+    0.02027413599716965,
+    0.020114676997764036,
+    0.02116926400049124
+   ],
+   "wall_median_s": 0.02116926400049124,
+   "per_pair_us": 21.16926400049124,
+   "cpu_s_calling_process": [
+    0.029314665999999434,
+    0.02174449999999961,
+    0.02027595799999915,
+    0.02011641600000047,
+    0.021172040999999808
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.022523851002915762,
+    0.021371722003095783,
+    0.022993976992438547,
+    0.022371474988176487,
+    0.020358053006930277
+   ],
+   "wall_median_s": 0.022371474988176487,
+   "per_pair_us": 22.371474988176487,
+   "cpu_s_calling_process": [
+    0.02252883299999997,
+    0.02137525000000018,
+    0.02299875000000018,
+    0.022374957999999445,
+    0.020361040999999247
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.024100980008370243,
+    0.018311005987925455,
+    0.01981059399258811,
+    0.017595295998035,
+    0.016702918001101352
+   ],
+   "wall_median_s": 0.018311005987925455,
+   "per_pair_us": 18.311005987925455,
+   "cpu_s_calling_process": [
+    0.04518100299999972,
+    0.04211371099999983,
+    0.037607090999999926,
+    0.029474506000000567,
+    0.02695341799999973
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 1000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    2.7436965469969437,
+    2.259571948001394,
+    1.9748239119944628
+   ],
+   "wall_median_s": 2.259571948001394,
+   "per_pair_us": 2259.571948001394,
+   "cpu_s_calling_process": [
+    2.7310125330000004,
+    2.2594601999999995,
+    1.9673792829999996
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 1000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    0.47280581899394747,
+    0.3589733550033998,
+    0.3500052480085287
+   ],
+   "wall_median_s": 0.3589733550033998,
+   "per_pair_us": 358.9733550033998,
+   "cpu_s_calling_process": [
+    0.08298441800000056,
+    0.045099623999998784,
+    0.030342252000000514
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 1000,
+   "row": "pyroid score() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.03146224899683148,
+    0.03361417099949904,
+    0.046471121997456066,
+    0.05429776599339675,
+    0.03698159700434189
+   ],
+   "wall_median_s": 0.03698159700434189,
+   "per_pair_us": 36.98159700434189,
+   "cpu_s_calling_process": [
+    0.03146749899999968,
+    0.03361824999999996,
+    0.04647616599999971,
+    0.054301875000000166,
+    0.03698604099999869
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 1000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.030902330996468663,
+    0.029393784992862493,
+    0.03207654200377874,
+    0.0291214930039132,
+    0.02875386699452065
+   ],
+   "wall_median_s": 0.029393784992862493,
+   "per_pair_us": 29.393784992862493,
+   "cpu_s_calling_process": [
+    0.03091029199999973,
+    0.029398708999998746,
+    0.03208141600000047,
+    0.02912524999999988,
+    0.028758250000000984
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 1000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.012733575000311248,
+    0.01589270800468512,
+    0.01257269900816027,
+    0.01559191600244958,
+    0.013446743003441952
+   ],
+   "wall_median_s": 0.013446743003441952,
+   "per_pair_us": 13.446743003441952,
+   "cpu_s_calling_process": [
+    0.032808040000000815,
+    0.03094078899999886,
+    0.032043000999999904,
+    0.029775541999999433,
+    0.031666668999999814
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    15.339526598007069,
+    15.997513316993718,
+    20.77033223900071
+   ],
+   "wall_median_s": 15.997513316993718,
+   "per_pair_us": 1599.7513316993718,
+   "cpu_s_calling_process": [
+    15.337400068,
+    15.949576899,
+    20.439398634
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    4.827524299005745,
+    4.45697998200194,
+    4.193272923992481
+   ],
+   "wall_median_s": 4.45697998200194,
+   "per_pair_us": 445.697998200194,
+   "cpu_s_calling_process": [
+    0.06948904899999775,
+    0.08019421299999863,
+    0.06400820399998963
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid score() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.39624694200756494,
+    0.32198827899992466,
+    0.2911597690108465,
+    0.3897319730021991,
+    0.3883373459975701
+   ],
+   "wall_median_s": 0.3883373459975701,
+   "per_pair_us": 38.83373459975701,
+   "cpu_s_calling_process": [
+    0.3962209990000076,
+    0.3219929570000062,
+    0.29116449899999,
+    0.38972883099999933,
+    0.38834299900000246
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.37832395400619134,
+    0.43632863300445024,
+    0.31620872698840685,
+    0.39387693800381385,
+    0.4276621180033544
+   ],
+   "wall_median_s": 0.39387693800381385,
+   "per_pair_us": 39.387693800381385,
+   "cpu_s_calling_process": [
+    0.3783391230000035,
+    0.4348453329999984,
+    0.31584412599998757,
+    0.39387087299999735,
+    0.40915529000000106
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.41449626299436204,
+    0.2784194150008261,
+    0.20270099901244976,
+    0.24389123400032986,
+    0.14677603299787734
+   ],
+   "wall_median_s": 0.24389123400032986,
+   "per_pair_us": 24.389123400032986,
+   "cpu_s_calling_process": [
+    0.6985579520000016,
+    0.3955625820000108,
+    0.29338503900000035,
+    0.325109702000006,
+    0.28210978899998906
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 10000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    33.07301115700102,
+    31.482244011000148,
+    32.21623504300078
+   ],
+   "wall_median_s": 32.21623504300078,
+   "per_pair_us": 3221.623504300078,
+   "cpu_s_calling_process": [
+    33.066961498,
+    31.474785966,
+    32.178211129000005
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 10000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    5.148827508994145,
+    7.9905240569933085,
+    10.113396383996587
+   ],
+   "wall_median_s": 7.9905240569933085,
+   "per_pair_us": 799.0524056993308,
+   "cpu_s_calling_process": [
+    0.11145195000000285,
+    0.08849495999999135,
+    0.09194378300000494
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 10000,
+   "row": "pyroid score() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.6610791139974026,
+    0.5606462870055111,
+    0.5078542120027123,
+    0.4160233129950939,
+    0.5131022029963788
+   ],
+   "wall_median_s": 0.5131022029963788,
+   "per_pair_us": 51.31022029963788,
+   "cpu_s_calling_process": [
+    0.6376445390000072,
+    0.5542797920000169,
+    0.507249747000003,
+    0.4160250809999866,
+    0.5131042069999978
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 10000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.42075905099045485,
+    0.5770483460073592,
+    0.6047230590047548,
+    0.4029839830036508,
+    0.4973819389997516
+   ],
+   "wall_median_s": 0.4973819389997516,
+   "per_pair_us": 49.73819389997516,
+   "cpu_s_calling_process": [
+    0.4207110409999757,
+    0.5770507900000155,
+    0.6047237470000084,
+    0.40298695600000656,
+    0.4972921650000046
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 10000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.3619721879949793,
+    0.31082983101077843,
+    0.37732024099386763,
+    0.2410758179903496,
+    0.24362170899985358
+   ],
+   "wall_median_s": 0.31082983101077843,
+   "per_pair_us": 31.082983101077843,
+   "cpu_s_calling_process": [
+    0.5721674929999949,
+    0.510648132,
+    0.618913378000002,
+    0.45140191500001947,
+    0.426034288000011
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    178.4919492629997
+   ],
+   "wall_median_s": 178.4919492629997,
+   "per_pair_us": 1784.919492629997,
+   "cpu_s_calling_process": [
+    175.32660637400002
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    34.740534144992125
+   ],
+   "wall_median_s": 34.740534144992125,
+   "per_pair_us": 347.40534144992125,
+   "cpu_s_calling_process": [
+    0.23740355000001045
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid score() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    2.5586865420045797,
+    2.695701001008274,
+    2.6605475559917977
+   ],
+   "wall_median_s": 2.6605475559917977,
+   "per_pair_us": 26.605475559917977,
+   "cpu_s_calling_process": [
+    2.559115908000024,
+    2.696118157000001,
+    2.6609846970000035
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    3.057300793007016,
+    3.0392522729962366,
+    2.6234172289987328
+   ],
+   "wall_median_s": 3.0392522729962366,
+   "per_pair_us": 30.392522729962366,
+   "cpu_s_calling_process": [
+    3.0496127380000075,
+    3.038245864999965,
+    2.6238440320000223
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    1.0980727660062257,
+    1.3827671729959548,
+    1.1788281810004264
+   ],
+   "wall_median_s": 1.1788281810004264,
+   "per_pair_us": 11.788281810004264,
+   "cpu_s_calling_process": [
+    2.775676160000046,
+    3.1492092899999875,
+    2.715103042999999
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 100000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    306.0340545170038
+   ],
+   "wall_median_s": 306.0340545170038,
+   "per_pair_us": 3060.3405451700382,
+   "cpu_s_calling_process": [
+    305.972357172
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 100000,
+   "row": "rouge-score score() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    47.7774961469986
+   ],
+   "wall_median_s": 47.7774961469986,
+   "per_pair_us": 477.774961469986,
+   "cpu_s_calling_process": [
+    0.15658326799996303
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 100000,
+   "row": "pyroid score() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    4.159423994002282,
+    3.8414050090068486,
+    4.030377848001081
+   ],
+   "wall_median_s": 4.030377848001081,
+   "per_pair_us": 40.303778480010806,
+   "cpu_s_calling_process": [
+    4.159443235000026,
+    3.841406652000046,
+    4.024293568999951
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 100000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    4.734717893996276,
+    4.714879330989788,
+    4.331877479999093
+   ],
+   "wall_median_s": 4.714879330989788,
+   "per_pair_us": 47.14879330989788,
+   "cpu_s_calling_process": [
+    4.734729356999992,
+    4.714877731999991,
+    4.331870985000023
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "rouge",
+   "stemmer": true,
+   "pairs": 100000,
+   "row": "pyroid score_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    1.3586929110024357,
+    1.5548465909960214,
+    1.3460920639918186
+   ],
+   "wall_median_s": 1.3586929110024357,
+   "per_pair_us": 13.586929110024357,
+   "cpu_s_calling_process": [
+    4.22070116000009,
+    4.384677200999931,
+    4.812970274999998
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "sacrebleu sentence_bleu() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    0.2643917569948826,
+    0.10944579099304974,
+    0.12699560199689586
+   ],
+   "wall_median_s": 0.12699560199689586,
+   "per_pair_us": 126.99560199689586,
+   "cpu_s_calling_process": [
+    0.25261949900004765,
+    0.1094483740000669,
+    0.12703683299992008
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "sacrebleu sentence_bleu() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    0.12196697099716403,
+    0.07975192299636547,
+    0.0803847999923164
+   ],
+   "wall_median_s": 0.0803847999923164,
+   "per_pair_us": 80.3847999923164,
+   "cpu_s_calling_process": [
+    0.0913578319999715,
+    0.0527723390000574,
+    0.048738463999939086
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid sentence_bleu() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.02232656700653024,
+    0.019450271996902302,
+    0.019265145994722843,
+    0.019459855000604875,
+    0.019281730012153275
+   ],
+   "wall_median_s": 0.019450271996902302,
+   "per_pair_us": 19.450271996902302,
+   "cpu_s_calling_process": [
+    0.02233029199999237,
+    0.01945154099996671,
+    0.01926704199991036,
+    0.019462125000018204,
+    0.0192842080000446
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid sentence_bleu_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.015932892987621017,
+    0.06648599200707395,
+    0.01576160099648405,
+    0.015490851001231931,
+    0.015543018002063036
+   ],
+   "wall_median_s": 0.01576160099648405,
+   "per_pair_us": 15.761600996484049,
+   "cpu_s_calling_process": [
+    0.015935457999944447,
+    0.06645075000005818,
+    0.01576324999996359,
+    0.015493040999899677,
+    0.015546000000085769
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid sentence_bleu_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.012998181002330966,
+    0.012695305995293893,
+    0.012220388991408981,
+    0.011801097003626637,
+    0.013008431007619947
+   ],
+   "wall_median_s": 0.012695305995293893,
+   "per_pair_us": 12.695305995293893,
+   "cpu_s_calling_process": [
+    0.02103129199997511,
+    0.019573165999986486,
+    0.018976790000010624,
+    0.019646626000053402,
+    0.022653339999919808
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "sacrebleu sentence_bleu() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    1.2418239870021353,
+    1.248885495995637,
+    1.2861542039900087
+   ],
+   "wall_median_s": 1.248885495995637,
+   "per_pair_us": 124.88854959956369,
+   "cpu_s_calling_process": [
+    1.2418236620000016,
+    1.2488897869999391,
+    1.2861506200000576
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "sacrebleu sentence_bleu() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    0.29088295399560593,
+    0.2896333700045943,
+    0.3666060399991693
+   ],
+   "wall_median_s": 0.29088295399560593,
+   "per_pair_us": 29.088295399560593,
+   "cpu_s_calling_process": [
+    0.06721079600004032,
+    0.06703253900002437,
+    0.08690991399998893
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid sentence_bleu() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.20658014999935403,
+    0.19818468298763037,
+    0.19664180499967188,
+    0.28608949000772554,
+    0.20614323299378157
+   ],
+   "wall_median_s": 0.20614323299378157,
+   "per_pair_us": 20.614323299378157,
+   "cpu_s_calling_process": [
+    0.20644354099999873,
+    0.19818849900002533,
+    0.1966449990000001,
+    0.28609378999999535,
+    0.20614958299995578
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid sentence_bleu_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.15858368000772316,
+    0.15809813699161168,
+    0.15950493099808227,
+    0.18910658900858834,
+    0.28618657299375627
+   ],
+   "wall_median_s": 0.15950493099808227,
+   "per_pair_us": 15.950493099808227,
+   "cpu_s_calling_process": [
+    0.15858974899992972,
+    0.15810249900005147,
+    0.1595087070001,
+    0.18911016599997765,
+    0.2861904570000888
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid sentence_bleu_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.12230105500202626,
+    0.11698784100008197,
+    0.10868420600309037,
+    0.10577557800570503,
+    0.10702766299073119
+   ],
+   "wall_median_s": 0.10868420600309037,
+   "per_pair_us": 10.868420600309037,
+   "cpu_s_calling_process": [
+    0.18712490500001877,
+    0.18869683000002624,
+    0.17903116599995883,
+    0.16729715799999667,
+    0.1641834160000144
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "sacrebleu sentence_bleu() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    9.740934928995557
+   ],
+   "wall_median_s": 9.740934928995557,
+   "per_pair_us": 97.40934928995557,
+   "cpu_s_calling_process": [
+    9.740829504999965
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "sacrebleu sentence_bleu() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    2.4341081680031493
+   ],
+   "wall_median_s": 2.4341081680031493,
+   "per_pair_us": 24.341081680031493,
+   "cpu_s_calling_process": [
+    0.1681886310000209
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid sentence_bleu() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    2.5020684949995484,
+    2.239728782995371,
+    2.28627820899419
+   ],
+   "wall_median_s": 2.28627820899419,
+   "per_pair_us": 22.862782089941902,
+   "cpu_s_calling_process": [
+    2.5020727809999244,
+    2.2397314920000326,
+    2.28627953299997
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid sentence_bleu_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    2.1119565539993346,
+    1.7945214870123891,
+    1.862479479998001
+   ],
+   "wall_median_s": 1.862479479998001,
+   "per_pair_us": 18.62479479998001,
+   "cpu_s_calling_process": [
+    2.1119718259999445,
+    1.7945272430000614,
+    1.857290785000032
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-sentence",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid sentence_bleu_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    1.2528764999879058,
+    1.327235666991328,
+    1.5281359779910417
+   ],
+   "wall_median_s": 1.327235666991328,
+   "per_pair_us": 13.272356669913279,
+   "cpu_s_calling_process": [
+    1.9108879599999682,
+    1.9019969150000406,
+    2.1203651700000137
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "sacrebleu BLEU.corpus_score",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    0.15939122199779376,
+    0.1148352970049018,
+    0.1044504089950351
+   ],
+   "wall_median_s": 0.1148352970049018,
+   "per_pair_us": 114.8352970049018,
+   "cpu_s_calling_process": [
+    0.15940720800006147,
+    0.11483862400007183,
+    0.10445541600006436
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "sacrebleu BLEU.corpus_score",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    0.10318644999642856,
+    0.09854719499708153,
+    0.10052332199120428
+   ],
+   "wall_median_s": 0.10052332199120428,
+   "per_pair_us": 100.52332199120428,
+   "cpu_s_calling_process": [
+    0.0691452119999667,
+    0.06705174700005045,
+    0.06733691700003419
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid BLEU.corpus_score",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.01010030299948994,
+    0.008183718004147522,
+    0.00814138499845285,
+    0.00798717599536758,
+    0.008082383996224962
+   ],
+   "wall_median_s": 0.00814138499845285,
+   "per_pair_us": 8.14138499845285,
+   "cpu_s_calling_process": [
+    0.009830041999975947,
+    0.008186249999994288,
+    0.008139416999938476,
+    0.007989291999933812,
+    0.008084667000048285
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid BLEU.corpus_score",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.0035495040065143257,
+    0.0029413359879981726,
+    0.0049922560137929395,
+    0.0030139619921101257,
+    0.0027680029888870195
+   ],
+   "wall_median_s": 0.0030139619921101257,
+   "per_pair_us": 3.0139619921101257,
+   "cpu_s_calling_process": [
+    0.01061941599994043,
+    0.010135913999988588,
+    0.011756704000049467,
+    0.00972137799999473,
+    0.010050835000015468
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "sacrebleu BLEU.corpus_score",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    0.8982867239974439,
+    0.88724975301011,
+    0.9362655580043793
+   ],
+   "wall_median_s": 0.8982867239974439,
+   "per_pair_us": 89.82867239974439,
+   "cpu_s_calling_process": [
+    0.898021080000035,
+    0.8872525379999843,
+    0.9362510389998988
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "sacrebleu BLEU.corpus_score",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    0.3104247680021217,
+    0.35319548200641293,
+    0.28544915599923115
+   ],
+   "wall_median_s": 0.3104247680021217,
+   "per_pair_us": 31.04247680021217,
+   "cpu_s_calling_process": [
+    0.08832520900000418,
+    0.09633303999999043,
+    0.08110920499996155
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid BLEU.corpus_score",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.09033576799265575,
+    0.08774984900082927,
+    0.09436939899751451,
+    0.09423706500092521,
+    0.09582919199601747
+   ],
+   "wall_median_s": 0.09423706500092521,
+   "per_pair_us": 9.423706500092521,
+   "cpu_s_calling_process": [
+    0.08991025099999206,
+    0.0877525409999862,
+    0.09437333300002138,
+    0.09424041699992358,
+    0.09583366599997589
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid BLEU.corpus_score",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.031153036004980095,
+    0.0412729209929239,
+    0.03813441800593864,
+    0.04835084699152503,
+    0.05896310799289495
+   ],
+   "wall_median_s": 0.0412729209929239,
+   "per_pair_us": 4.12729209929239,
+   "cpu_s_calling_process": [
+    0.12483566600008089,
+    0.1449072890000025,
+    0.14904254600003242,
+    0.14706129800003964,
+    0.1596624519999068
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "sacrebleu BLEU.corpus_score",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    7.82693997399474
+   ],
+   "wall_median_s": 7.82693997399474,
+   "per_pair_us": 78.2693997399474,
+   "cpu_s_calling_process": [
+    7.823896969999964
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "sacrebleu BLEU.corpus_score",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    1.7163349820039002
+   ],
+   "wall_median_s": 1.7163349820039002,
+   "per_pair_us": 17.163349820039002,
+   "cpu_s_calling_process": [
+    0.2620858699999644
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid BLEU.corpus_score",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.7064250069961417,
+    0.6812360199983232,
+    0.6652571269951295
+   ],
+   "wall_median_s": 0.6812360199983232,
+   "per_pair_us": 6.812360199983232,
+   "cpu_s_calling_process": [
+    0.7064294140000129,
+    0.6812415390000979,
+    0.6652618729999631
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "bleu-corpus",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid BLEU.corpus_score",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.2758258540125098,
+    0.33912742500251625,
+    0.2495111150055891
+   ],
+   "wall_median_s": 0.2758258540125098,
+   "per_pair_us": 2.758258540125098,
+   "cpu_s_calling_process": [
+    0.8290097249999917,
+    0.9742643439999483,
+    0.7793676200000164
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "sacrebleu sentence_chrf() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    0.2762128960021073,
+    0.3135928550036624,
+    0.28050377500767354
+   ],
+   "wall_median_s": 0.28050377500767354,
+   "per_pair_us": 280.50377500767354,
+   "cpu_s_calling_process": [
+    0.27548470600004293,
+    0.31359704099998,
+    0.2805077900000015
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "sacrebleu sentence_chrf() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    0.13068048100103624,
+    0.1279961449909024,
+    0.12896697901305743
+   ],
+   "wall_median_s": 0.12896697901305743,
+   "per_pair_us": 128.96697901305743,
+   "cpu_s_calling_process": [
+    0.08203904600009082,
+    0.07770579499992891,
+    0.08080457599999136
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid sentence_chrf() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.02724386400950607,
+    0.026895613002125174,
+    0.027978739992249757,
+    0.030625159008195624,
+    0.03384699700109195
+   ],
+   "wall_median_s": 0.027978739992249757,
+   "per_pair_us": 27.978739992249757,
+   "cpu_s_calling_process": [
+    0.02724783300004674,
+    0.026898833000018385,
+    0.027982875000020613,
+    0.030665209000062532,
+    0.03385254099998747
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid sentence_chrf_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.0313977860059822,
+    0.0304668680037139,
+    0.022304525002255104,
+    0.021932150004431605,
+    0.02206902499892749
+   ],
+   "wall_median_s": 0.022304525002255104,
+   "per_pair_us": 22.304525002255104,
+   "cpu_s_calling_process": [
+    0.031405708999955095,
+    0.03046674899997015,
+    0.022307166000018697,
+    0.021937665999985256,
+    0.02207175000000916
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid sentence_chrf_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.009747927004355006,
+    0.00951467698905617,
+    0.00937992800027132,
+    0.009402511001098901,
+    0.00903280200145673
+   ],
+   "wall_median_s": 0.009402511001098901,
+   "per_pair_us": 9.402511001098901,
+   "cpu_s_calling_process": [
+    0.026636123999992378,
+    0.022852499999999054,
+    0.022505040999931225,
+    0.021941791000017474,
+    0.02465162400005738
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "sacrebleu sentence_chrf() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    2.8266276119975373,
+    2.813512389009702,
+    2.8240757349994965
+   ],
+   "wall_median_s": 2.8240757349994965,
+   "per_pair_us": 282.40757349994965,
+   "cpu_s_calling_process": [
+    2.8266311979999728,
+    2.8135106140000516,
+    2.8240714480000406
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "sacrebleu sentence_chrf() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    0.6264031659957254,
+    0.5882552900002338,
+    0.6120041090034647
+   ],
+   "wall_median_s": 0.6120041090034647,
+   "per_pair_us": 61.200410900346476,
+   "cpu_s_calling_process": [
+    0.090882707999981,
+    0.09475612100004582,
+    0.1040619110000307
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid sentence_chrf() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.2732916009990731,
+    0.3008978819998447,
+    0.29033728600188624,
+    0.2698166389891412,
+    0.26929213099356275
+   ],
+   "wall_median_s": 0.2732916009990731,
+   "per_pair_us": 27.329160099907313,
+   "cpu_s_calling_process": [
+    0.27329770699998335,
+    0.3009034159999828,
+    0.2903428329999542,
+    0.26981987400006346,
+    0.26928362400008155
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid sentence_chrf_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.2647122830094304,
+    0.2289687370066531,
+    0.22993470200162847,
+    0.22821566800121218,
+    0.2423010499915108
+   ],
+   "wall_median_s": 0.22993470200162847,
+   "per_pair_us": 22.993470200162847,
+   "cpu_s_calling_process": [
+    0.2646951240000135,
+    0.22895141499998317,
+    0.22991679100005058,
+    0.22819770700004938,
+    0.24228508199996668
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid sentence_chrf_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.08393336400331464,
+    0.08771500499278773,
+    0.08286489101010375,
+    0.07593029299459886,
+    0.08031023800140247
+   ],
+   "wall_median_s": 0.08286489101010375,
+   "per_pair_us": 8.286489101010375,
+   "cpu_s_calling_process": [
+    0.2885596619998978,
+    0.24588387300002523,
+    0.22873620799998662,
+    0.230815419999999,
+    0.2570432059999348
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "sacrebleu sentence_chrf() loop",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    22.660701860993868
+   ],
+   "wall_median_s": 22.660701860993868,
+   "per_pair_us": 226.60701860993868,
+   "cpu_s_calling_process": [
+    22.652796448000004
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "sacrebleu sentence_chrf() loop",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    4.360641701001441
+   ],
+   "wall_median_s": 4.360641701001441,
+   "per_pair_us": 43.60641701001441,
+   "cpu_s_calling_process": [
+    0.2620490489999838
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid sentence_chrf() loop",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    2.3420459080080036,
+    2.398939987004269,
+    2.371353984999587
+   ],
+   "wall_median_s": 2.371353984999587,
+   "per_pair_us": 23.71353984999587,
+   "cpu_s_calling_process": [
+    2.3418179080000527,
+    2.3985521600000084,
+    2.37106028300002
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid sentence_chrf_batch",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    2.119853794996743,
+    1.9657722970005125,
+    1.9866463469952578
+   ],
+   "wall_median_s": 1.9866463469952578,
+   "per_pair_us": 19.866463469952578,
+   "cpu_s_calling_process": [
+    2.119651783999984,
+    1.9655279520000022,
+    1.9864438680000376
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-sentence",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid sentence_chrf_batch",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.9146835470019141,
+    0.8551698519877391,
+    0.9398685670021223
+   ],
+   "wall_median_s": 0.9146835470019141,
+   "per_pair_us": 9.146835470019141,
+   "cpu_s_calling_process": [
+    2.0821128690000705,
+    2.057711972999982,
+    2.0959092440000404
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "sacrebleu CHRF.corpus_score",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    0.2783671319921268,
+    0.27427785699546803,
+    0.3479173939995235
+   ],
+   "wall_median_s": 0.2783671319921268,
+   "per_pair_us": 278.3671319921268,
+   "cpu_s_calling_process": [
+    0.27837853999994877,
+    0.27425924900001064,
+    0.34789095700000416
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "sacrebleu CHRF.corpus_score",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    0.14434305600298103,
+    0.14686577999964356,
+    0.14214762600022368
+   ],
+   "wall_median_s": 0.14434305600298103,
+   "per_pair_us": 144.34305600298103,
+   "cpu_s_calling_process": [
+    0.09065628999996989,
+    0.09937195400004839,
+    0.09068796000008206
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid CHRF.corpus_score",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.019455244997516274,
+    0.017675732990028337,
+    0.01787919299385976,
+    0.017581691005034372,
+    0.017416816001059487
+   ],
+   "wall_median_s": 0.017675732990028337,
+   "per_pair_us": 17.675732990028337,
+   "cpu_s_calling_process": [
+    0.01945766599999388,
+    0.017677791999972214,
+    0.017880874999946172,
+    0.01758304199995564,
+    0.017418750000047112
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 1000,
+   "row": "pyroid CHRF.corpus_score",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.005084198011900298,
+    0.005707702002837323,
+    0.005289241002174094,
+    0.004512694009463303,
+    0.0047908210108289495
+   ],
+   "wall_median_s": 0.005084198011900298,
+   "per_pair_us": 5.084198011900298,
+   "cpu_s_calling_process": [
+    0.01935287599997082,
+    0.018848373000082574,
+    0.0202299170000515,
+    0.019575126000063392,
+    0.018056248999982927
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "sacrebleu CHRF.corpus_score",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    3.022755746002076,
+    2.8541735830076504,
+    3.232380078989081
+   ],
+   "wall_median_s": 3.022755746002076,
+   "per_pair_us": 302.2755746002076,
+   "cpu_s_calling_process": [
+    3.022714489000009,
+    2.85415457299996,
+    3.2323574460000373
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "sacrebleu CHRF.corpus_score",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    0.6458262700034538,
+    0.6753829939989373,
+    0.573710201002541
+   ],
+   "wall_median_s": 0.6458262700034538,
+   "per_pair_us": 64.58262700034538,
+   "cpu_s_calling_process": [
+    0.2212466639999775,
+    0.1201387880000766,
+    0.1286909640000431
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid CHRF.corpus_score",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    0.2069537329953164,
+    0.18646181501389947,
+    0.1804412359924754,
+    0.18370067400974222,
+    0.2066521480010124
+   ],
+   "wall_median_s": 0.18646181501389947,
+   "per_pair_us": 18.646181501389947,
+   "cpu_s_calling_process": [
+    0.20636008099995706,
+    0.1854901219999192,
+    0.18032229200002803,
+    0.18277337299991814,
+    0.2046162069999582
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 10000,
+   "row": "pyroid CHRF.corpus_score",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.02933151400065981,
+    0.034784798001055606,
+    0.03466967199346982,
+    0.03825661000155378,
+    0.039089782992959954
+   ],
+   "wall_median_s": 0.034784798001055606,
+   "per_pair_us": 3.4784798001055606,
+   "cpu_s_calling_process": [
+    0.1917392049999762,
+    0.19975687400005881,
+    0.20773612899995442,
+    0.25452499999994416,
+    0.2700235800000428
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "sacrebleu CHRF.corpus_score",
+   "reference": true,
+   "workers": 1,
+   "wall_s": [
+    27.47623617699719
+   ],
+   "wall_median_s": 27.47623617699719,
+   "per_pair_us": 274.7623617699719,
+   "cpu_s_calling_process": [
+    27.444212241999935
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "sacrebleu CHRF.corpus_score",
+   "reference": true,
+   "workers": 8,
+   "wall_s": [
+    5.213375948995235
+   ],
+   "wall_median_s": 5.213375948995235,
+   "per_pair_us": 52.133759489952354,
+   "cpu_s_calling_process": [
+    0.5524703769999633
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid CHRF.corpus_score",
+   "reference": false,
+   "workers": 1,
+   "wall_s": [
+    1.4147462569962954,
+    1.433414080995135,
+    1.4205253760010237
+   ],
+   "wall_median_s": 1.4205253760010237,
+   "per_pair_us": 14.205253760010237,
+   "cpu_s_calling_process": [
+    1.4147428689999515,
+    1.433409410999957,
+    1.4205209530000502
+   ],
+   "gate": "identical to the 1-process reference"
+  },
+  {
+   "workload": "chrf-corpus",
+   "stemmer": false,
+   "pairs": 100000,
+   "row": "pyroid CHRF.corpus_score",
+   "reference": false,
+   "workers": 8,
+   "wall_s": [
+    0.37770640999951866,
+    0.2746624010032974,
+    0.28832152600807603
+   ],
+   "wall_median_s": 0.28832152600807603,
+   "per_pair_us": 2.8832152600807603,
+   "cpu_s_calling_process": [
+    2.0681940770000438,
+    1.4352897009999879,
+    1.4377001610000661
+   ],
+   "gate": "identical to the 1-process reference"
+  }
+ ]
+}
