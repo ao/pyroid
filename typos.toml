@@ -11,11 +11,13 @@ extend-exclude = [
   "Cargo.lock",
   "crates/pyroid-core/src/ftfy/tables.rs",
   "crates/pyroid-core/src/filters/tables.rs",
+  "crates/pyroid-core/src/metrics/sacrebleu/tables.rs",
   # Test data, incumbent fixtures and raw benchmark results: mojibake, confusables, deliberately
   # misspelt and non-English text. Keep in step with the file-fixer excludes in .pre-commit-config.yaml.
   "python/tests/data/",
   "crates/pyroid-core/tests/ftfy_data/",
   "crates/pyroid-core/tests/filters_data/",
+  "crates/pyroid-core/tests/metrics_data/",
   "bench/data/",
   "bench/results/",
   # Charts copied byte for byte from bench/results/ (matplotlib SVGs).
@@ -30,6 +32,9 @@ extend-exclude = [
   # Transliteration fixtures: accented and romanised words (caf\u00e9, ...). Typos only; the
   # file-fixer hooks still check this file.
   "python/tests/test_translit.py",
+  # The Porter stemmer's suffixes and stems ("iz", "ful", "ative", "agre", "controll") and its tests' words.
+  "crates/pyroid-core/src/metrics/rouge/porter.rs",
+  "python/tests/test_metrics_rouge.py",
 ]
 
 [default.extend-words]

@@ -24,6 +24,7 @@ repos:
             python/tests/data/|
             crates/pyroid-core/tests/ftfy_data/|
             crates/pyroid-core/tests/filters_data/|
+            crates/pyroid-core/tests/metrics_data/|
             bench/data/|
             bench/results/|
             docs/assets/.*\.svg$|
