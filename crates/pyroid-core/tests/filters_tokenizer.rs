@@ -50,8 +50,13 @@ enum Expect {
         words: Vec<String>,
         sentences: usize,
     },
-    /// `split_into_words` (`at_words`) or `split_into_sentences` raised.
-    Raise { exc: String, at_words: bool },
+    /// `split_into_words` (`at_words`) or `split_into_sentences` raised;
+    /// `words` when only the sentences raised and the recorder kept them.
+    Raise {
+        exc: String,
+        at_words: bool,
+        words: Option<Vec<String>>,
+    },
 }
 
 /// What replaying one row gave.
@@ -83,6 +88,23 @@ fn show(text: &str) -> String {
     }
 }
 
+fn words_of(v: &Value) -> Result<Vec<String>, String> {
+    v.as_array()
+        .ok_or("\"w\" is not a list")?
+        .iter()
+        .map(|w| {
+            w.as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| "a word is not a string".to_owned())
+        })
+        .collect()
+}
+
+/// Exceptions that say the recording environment lacked a package datatrove
+/// imports for that language (indic-nlp's Urdu sentences need urduhack): not
+/// datatrove's behaviour, so not compared.
+const MISSING_BACKEND: &[&str] = &["ModuleNotFoundError", "ImportError"];
+
 /// Parse one recorded line; `Ok(None)` for an `IS_ALPHA` row.
 fn parse(line: &str) -> Result<Option<Row>, String> {
     let row: Value = serde_json::from_str(line).map_err(|e| format!("bad JSON: {e}"))?;
@@ -100,19 +122,10 @@ fn parse(line: &str) -> Result<Option<Row>, String> {
         Expect::Raise {
             exc: exc.to_owned(),
             at_words: at == "w",
+            words: row.get("w").map(words_of).transpose()?,
         }
     } else {
-        let words = row
-            .get("w")
-            .and_then(Value::as_array)
-            .ok_or("no \"w\"")?
-            .iter()
-            .map(|w| {
-                w.as_str()
-                    .map(str::to_owned)
-                    .ok_or("a word is not a string")
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let words = words_of(row.get("w").ok_or("no \"w\"")?)?;
         let sentences = row
             .get("s")
             .and_then(Value::as_u64)
@@ -147,8 +160,8 @@ fn run(row: &Row) -> Result<Got, String> {
         .ok_or_else(|| format!("pyroid has no tokenizer for {:?}", row.language))?;
     let mut words = Vec::new();
     let words = tok
-        .words(&row.text, &mut words)
-        .map(|()| words.iter().map(|w| (*w).to_owned()).collect())
+        .words_cow(&row.text, &mut words)
+        .map(|()| words.iter().map(ToString::to_string).collect())
         .map_err(|e| py_exception(e).to_owned());
     let sentences = tok
         .count_sentences(&row.text)
@@ -166,12 +179,28 @@ fn compare(row: &Row, got: &Got) -> (bool, bool) {
         Expect::Raise {
             exc,
             at_words: true,
+            ..
         } => (got.0.as_ref().err() == Some(exc), true),
         Expect::Raise {
             exc,
             at_words: false,
-        } => (got.0.is_ok(), got.1.as_ref().err() == Some(exc)),
+            words,
+        } => {
+            let words_ok = match words {
+                Some(w) => got.0.as_ref().is_ok_and(|g| g == w),
+                None => got.0.is_ok(),
+            };
+            let sentences_ok =
+                MISSING_BACKEND.contains(&exc.as_str()) || got.1.as_ref().err() == Some(exc);
+            (words_ok, sentences_ok)
+        }
     }
+}
+
+/// A row with nothing to compare: the recorder's environment lacked a
+/// backend package and kept no words.
+fn uncomparable(row: &Row) -> bool {
+    matches!(&row.expect, Expect::Raise { exc, words: None, .. } if MISSING_BACKEND.contains(&exc.as_str()))
 }
 
 fn outcome(line: &str) -> Outcome {
@@ -180,6 +209,9 @@ fn outcome(line: &str) -> Outcome {
         Ok(None) => return Outcome::SkippedIsAlpha,
         Err(e) => return Outcome::Error(e),
     };
+    if uncomparable(&row) {
+        return Outcome::SkippedIsAlpha;
+    }
     let replayed = panic::catch_unwind(AssertUnwindSafe(|| run(&row)));
     match replayed {
         Ok(Ok(got)) => match compare(&row, &got) {
@@ -254,7 +286,7 @@ fn describe(location: &str, line: &str) -> String {
             )
             .unwrap();
         }
-        Expect::Raise { exc, at_words } => {
+        Expect::Raise { exc, at_words, .. } => {
             let at = if *at_words { "words" } else { "sentences" };
             write!(
                 msg,
@@ -292,7 +324,7 @@ fn replay_file(path: &Path, tally: &mut Tally) {
     tally.rows += replayed;
     tally.skipped += skipped;
     eprintln!(
-        "{}: {replayed} rows replayed, {skipped} IS_ALPHA rows skipped",
+        "{}: {replayed} rows replayed, {skipped} rows skipped (IS_ALPHA, or recorded without a backend package)",
         path.display()
     );
 }
@@ -315,7 +347,7 @@ fn check(files: &[PathBuf]) {
         write!(
             msg,
             "{} rows, {} word mismatches, {} sentence mismatches, {} unreplayable rows \
-             ({} IS_ALPHA rows skipped)",
+             ({} rows skipped (IS_ALPHA, or recorded without a backend package))",
             tally.rows,
             tally.word_mismatches,
             tally.sentence_mismatches,
@@ -326,7 +358,7 @@ fn check(files: &[PathBuf]) {
         panic!("pyroid differs from datatrove:\n{msg}");
     }
     eprintln!(
-        "{} rows match datatrove ({} IS_ALPHA rows skipped)",
+        "{} rows match datatrove ({} rows skipped (IS_ALPHA, or recorded without a backend package))",
         tally.rows, tally.skipped
     );
 }

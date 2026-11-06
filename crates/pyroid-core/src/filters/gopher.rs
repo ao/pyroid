@@ -2,6 +2,7 @@
 //! `GopherQualityFilter` and `GopherRepetitionFilter`
 //! (`datatrove/pipeline/filters/gopher_*_filter.py`).
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
@@ -67,6 +68,7 @@ impl GopherQuality {
         let mut n_non_symbol = 0usize;
         let mut non_symbol_len = 0usize;
         for w in words {
+            let w: &str = w;
             if w.chars().any(|c| !PUNCTUATION.contains(c)) {
                 n_non_symbol += 1;
                 non_symbol_len += py_len(w);
@@ -142,7 +144,7 @@ impl GopherQuality {
                 self.stop_words.iter().map(String::as_str).collect();
             let mut found: HashSet<&str, FxBuildHasher> = HashSet::default();
             for w in words {
-                if let Some(s) = stop.get(w) {
+                if let Some(s) = stop.get(&**w) {
                     found.insert(s);
                     if as_f64(found.len()) >= t {
                         break;
@@ -239,7 +241,7 @@ impl Eq for Seq<'_> {}
 
 /// An n-gram compared as the concatenation `"".join(words)`.
 struct Concat<'w, 'a> {
-    words: &'w [&'a str],
+    words: &'w [Cow<'a, str>],
     hash: u64,
 }
 
@@ -264,7 +266,11 @@ impl Eq for Concat<'_, '_> {}
 
 /// Per-word hashes and lengths, computed once for all n.
 struct WordStats<'w, 'a> {
-    words: &'w [&'a str],
+    words: &'w [Cow<'a, str>],
+    /// Some word contains a space, so `" ".join` of n-grams is not injective
+    /// over word sequences (spaCy exceptions such as Russian "в т.ч." are one
+    /// token): top n-grams are then compared as joined strings.
+    spaced: bool,
     hash: Vec<u64>,
     pow: Vec<u64>,
     chars: Vec<usize>,
@@ -273,23 +279,27 @@ struct WordStats<'w, 'a> {
 }
 
 impl<'w, 'a> WordStats<'w, 'a> {
-    fn new(words: &'w [&'a str]) -> Self {
+    fn new(words: &'w [Cow<'a, str>]) -> Self {
         let mut hash = Vec::with_capacity(words.len());
         let mut pow = Vec::with_capacity(words.len());
         let mut chars = Vec::with_capacity(words.len());
         let mut ids = Vec::with_capacity(words.len());
         let mut intern: HashMap<&str, u32, FxBuildHasher> =
             HashMap::with_capacity_and_hasher(words.len(), FxBuildHasher);
+        let mut spaced = false;
         for w in words {
+            let w: &'w str = w;
             let (h, p) = poly(w);
             hash.push(h);
             pow.push(p);
             chars.push(py_len(w));
+            spaced |= w.as_bytes().contains(&b' ');
             let next = u32::try_from(intern.len()).unwrap_or(u32::MAX);
             ids.push(*intern.entry(w).or_insert(next));
         }
         Self {
             words,
+            spaced,
             hash,
             pow,
             chars,
@@ -318,6 +328,9 @@ impl<'w, 'a> WordStats<'w, 'a> {
         if n > len {
             return None;
         }
+        if self.spaced {
+            return self.top_duplicate_joined(n);
+        }
         let mut counts: HashMap<Seq<'_>, (u32, u32), FxBuildHasher> =
             HashMap::with_capacity_and_hasher(len - n + 1, FxBuildHasher);
         for i in 0..=len - n {
@@ -327,6 +340,27 @@ impl<'w, 'a> WordStats<'w, 'a> {
             };
             let first = u32::try_from(i).unwrap_or(u32::MAX); // spaCy caps texts at 2**30 chars
             counts.entry(key).or_insert((0, first)).0 += 1;
+        }
+        let (count, first) = counts
+            .values()
+            .copied()
+            .max_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)))?;
+        let first = first as usize;
+        let chars: usize = self.chars[first..first + n].iter().sum::<usize>() + (n - 1);
+        Some(chars * count as usize)
+    }
+
+    /// [`Self::top_duplicate`] over the joined n-grams themselves.
+    fn top_duplicate_joined(&self, n: usize) -> Option<usize> {
+        let len = self.words.len();
+        let mut counts: HashMap<String, (u32, u32), FxBuildHasher> =
+            HashMap::with_capacity_and_hasher(len - n + 1, FxBuildHasher);
+        for i in 0..=len - n {
+            let first = u32::try_from(i).unwrap_or(u32::MAX);
+            counts
+                .entry(self.words[i..i + n].join(" "))
+                .or_insert((0, first))
+                .0 += 1;
         }
         let (count, first) = counts
             .values()

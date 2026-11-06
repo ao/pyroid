@@ -706,6 +706,8 @@ pub(crate) struct Alternatives {
     alts: Vec<Engine>,
     /// The pattern starts with `^`: it only matches at 0.
     anchored: bool,
+    /// Every match starts at 0 (the pattern, or each alternative, starts with `^`).
+    all_anchored: bool,
     ascii: Vec<Vec<u16>>,
     /// Alternatives that may start with a non-ASCII character (`None`: any).
     other: Vec<(u16, Option<Vec<FirstItem>>)>,
@@ -747,6 +749,10 @@ impl Alternatives {
                 other.push((i, Some(items)));
             }
         }
+        let all_anchored = anchored
+            || alts
+                .iter()
+                .all(|alt| matches!(alt.first(), Some(Node::Bol)));
         let alts = alts
             .into_iter()
             .map(|alt| {
@@ -760,10 +766,17 @@ impl Alternatives {
         Self {
             alts,
             anchored,
+            all_anchored,
             ascii,
             other,
             nullable: nullable_alts,
         }
+    }
+
+    /// Can a match only start at position 0 (the pattern, or every one of
+    /// its alternatives, starts with `^`)?
+    pub(crate) fn all_anchored(&self) -> bool {
+        self.all_anchored
     }
 
     #[inline]

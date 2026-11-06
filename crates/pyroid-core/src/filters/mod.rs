@@ -23,11 +23,13 @@ use std::fmt;
 mod c4;
 mod fineweb;
 mod gopher;
+pub mod indic;
 mod regex;
 mod tables;
 mod text;
 pub mod tokenizer;
 pub(crate) mod unicode;
+pub mod whitespace;
 
 pub use c4::{C4Outcome, C4Quality};
 pub use fineweb::FineWebQuality;
@@ -109,8 +111,20 @@ pub trait WordTokenizer: Sync + fmt::Debug {
     /// The Unicode version whose `str` semantics the filters reproduce.
     fn unicode_version(&self) -> UnicodeVersion;
 
-    /// `split_into_words(text)`, appended to `out`.
+    /// `split_into_words(text)`, appended to `out`, for a tokenizer whose
+    /// words are slices of `text`. One whose words may not be (IndicNLP joins
+    /// `"1 , 000"` into `"1,000"`) returns [`FilterError::SubstringNotFound`]
+    /// for such a text: use [`Self::words_cow`].
     fn words<'a>(&self, text: &'a str, out: &mut Vec<&'a str>) -> Result<(), FilterError>;
+
+    /// `split_into_words(text)`, appended to `out`; a word may be a new string.
+    /// This is what the filters and MinHash use.
+    fn words_cow<'a>(&self, text: &'a str, out: &mut Vec<Cow<'a, str>>) -> Result<(), FilterError> {
+        let mut words = Vec::new();
+        self.words(text, &mut words)?;
+        out.extend(words.into_iter().map(Cow::Borrowed));
+        Ok(())
+    }
 
     /// The end byte offsets of the sentences `span_tokenize(text)` yields,
     /// appended to `out` (none for a text without tokens).
@@ -148,6 +162,20 @@ impl WordTokenizer for tokenizer::SpacyTokenizer {
             toks.clear();
             self.tokens(text, toks);
             out.extend(toks.iter().filter(|t| !t.space).map(|t| t.text(text)));
+        });
+        Ok(())
+    }
+
+    fn words_cow<'a>(&self, text: &'a str, out: &mut Vec<Cow<'a, str>>) -> Result<(), FilterError> {
+        Self::check_len(text)?;
+        TOKENS.with_borrow_mut(|toks| {
+            toks.clear();
+            self.tokens(text, toks);
+            out.extend(
+                toks.iter()
+                    .filter(|t| !t.space)
+                    .map(|t| Cow::Borrowed(t.text(text))),
+            );
         });
         Ok(())
     }
@@ -223,9 +251,31 @@ pub fn tokenizer_for(
         "SpaCyTokenizer" => {
             tokenizer::SpacyTokenizer::get(b.arg, version).map(|t| t as &dyn WordTokenizer)
         }
+        "WhitespaceTokenizer" => Some(std::sync::LazyLock::force(
+            &WHITESPACE[regex::version_index(version)],
+        ) as &dyn WordTokenizer),
+        "IndicNLPTokenizer" => {
+            indic::IndicNlp::get(b.arg, version).map(|t| t as &dyn WordTokenizer)
+        }
         _ => None,
     }
 }
+
+/// datatrove's `WhitespaceTokenizer` per Unicode version (words: spaCy `xx`).
+static WHITESPACE: [std::sync::LazyLock<whitespace::Whitespace>; 5] = {
+    fn make(v: UnicodeVersion) -> whitespace::Whitespace {
+        whitespace::Whitespace::new(
+            tokenizer::SpacyTokenizer::get("xx", v).expect("spaCy xx rules"),
+        )
+    }
+    [
+        std::sync::LazyLock::new(|| make(UnicodeVersion::V14_0)),
+        std::sync::LazyLock::new(|| make(UnicodeVersion::V15_0)),
+        std::sync::LazyLock::new(|| make(UnicodeVersion::V15_1)),
+        std::sync::LazyLock::new(|| make(UnicodeVersion::V16_0)),
+        std::sync::LazyLock::new(|| make(UnicodeVersion::V17_0)),
+    ]
+};
 
 /// Words of one document, tokenized at most once and shared by every filter
 /// that needs them.
@@ -233,7 +283,7 @@ pub fn tokenizer_for(
 pub struct Doc<'a, 't> {
     text: &'a str,
     tok: &'t dyn WordTokenizer,
-    words: Option<Vec<&'a str>>,
+    words: Option<Vec<Cow<'a, str>>>,
 }
 
 impl<'a, 't> Doc<'a, 't> {
@@ -253,7 +303,7 @@ impl<'a, 't> Doc<'a, 't> {
         Self {
             text,
             tok,
-            words: Some(words),
+            words: Some(words.into_iter().map(Cow::Borrowed).collect()),
         }
     }
 
@@ -268,10 +318,10 @@ impl<'a, 't> Doc<'a, 't> {
     }
 
     /// `split_into_words(text)`, computed on first use.
-    pub fn words(&mut self) -> Result<&[&'a str], FilterError> {
+    pub fn words(&mut self) -> Result<&[Cow<'a, str>], FilterError> {
         if self.words.is_none() {
             let mut w = Vec::new();
-            self.tok.words(self.text, &mut w)?;
+            self.tok.words_cow(self.text, &mut w)?;
             self.words = Some(w);
         }
         Ok(self.words.as_deref().unwrap_or_default())

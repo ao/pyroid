@@ -101,6 +101,8 @@ pub struct SpacyTokenizer {
     /// First characters of the patterns' first tokens.
     pattern_first: CharSet,
     prefix: Alternatives,
+    /// Every prefix alternative starts with `^` (only position 0 can match).
+    prefix_anchored: bool,
     suffix: Alternatives,
     infix: Alternatives,
     url: Option<Nfa>,
@@ -191,13 +193,16 @@ impl SpacyTokenizer {
         }
         load_rules(lang.rules, &mut specials);
         debug_assert_eq!(specials.len(), lang.n_rules, "{}", lang.code);
+        let prefix = Alternatives::new(lang.prefix, false);
+        let prefix_anchored = prefix.all_anchored();
         let mut me = Self {
             lang,
             version,
             specials,
             patterns: HashMap::default(),
             pattern_first: CharSet::new([]),
-            prefix: Alternatives::new(lang.prefix, false),
+            prefix,
+            prefix_anchored,
             suffix: Alternatives::new(lang.suffix, false),
             infix: Alternatives::new(lang.infix, false),
             url: lang.url.map(Nfa::new),
@@ -336,16 +341,39 @@ impl SpacyTokenizer {
     // ---------------------------------------------------------- the regexes
 
     /// `Tokenizer.find_prefix`: byte length of the prefix to split off.
+    #[allow(clippy::many_single_char_names)] // s, c, v, m: as in the other searches
     fn find_prefix(&self, s: &str) -> usize {
         let Some(c) = s.chars().next() else {
             return 0;
         };
-        if !self.lang.prefix_nullable && !self.lang.prefix_first.contains(c, self.version) {
-            return 0;
+        let v = self.version;
+        let m = Matcher { s, v };
+        if self.prefix_anchored {
+            if !self.lang.prefix_nullable && !self.lang.prefix_first.contains(c, v) {
+                return 0;
+            }
+            return self.prefix.match_at(&m, 0, false).unwrap_or(0);
         }
-        self.prefix
-            .match_at(&Matcher { s, v: self.version }, 0, false)
-            .unwrap_or(0)
+        // `prefix_search` is `re.search`: an alternative without `^`
+        // (Indonesian, Malay) can match further in, and spaCy then splits off
+        // that many characters from the start (`match.end() - match.start()`).
+        let found = s
+            .char_indices()
+            .map(|(i, c)| (i, Some(c)))
+            .chain([(s.len(), None)])
+            .find_map(|(pos, c)| {
+                let candidate = self.lang.prefix_nullable
+                    || c.is_some_and(|c| self.lang.prefix_first.contains(c, v));
+                candidate
+                    .then(|| self.prefix.match_at(&m, pos, false))
+                    .flatten()
+                    .map(|end| (pos, end))
+            });
+        let Some((start, end)) = found else {
+            return 0;
+        };
+        let n = s[start..end].chars().count();
+        s.char_indices().nth(n).map_or(s.len(), |(i, _)| i)
     }
 
     /// `suffix_search(s)`: the leftmost match of `(?:...$|...$)`.

@@ -6,6 +6,8 @@
 //! tokenizer (`crate::filters::tokenizer`, shared with the quality filters);
 //! its non-whitespace tokens are exactly datatrove's words.
 
+use std::borrow::Cow;
+
 pub use crate::filters::FilterError as TokenizeError;
 pub use crate::filters::tokenizer::SpacyTokenizer;
 
@@ -16,17 +18,20 @@ pub trait WordTokenizer: Sync {
     ///
     /// Fails only where datatrove's tokenizer raises (spaCy's `E025` for a
     /// text of 2**30 characters or more).
-    fn word_tokenize<'a>(&self, text: &'a str, out: &mut Vec<&'a str>)
-    -> Result<(), TokenizeError>;
+    fn word_tokenize<'a>(
+        &self,
+        text: &'a str,
+        out: &mut Vec<Cow<'a, str>>,
+    ) -> Result<(), TokenizeError>;
 }
 
 impl WordTokenizer for SpacyTokenizer {
     fn word_tokenize<'a>(
         &self,
         text: &'a str,
-        out: &mut Vec<&'a str>,
+        out: &mut Vec<Cow<'a, str>>,
     ) -> Result<(), TokenizeError> {
-        crate::filters::WordTokenizer::words(self, text, out)
+        crate::filters::WordTokenizer::words_cow(self, text, out)
     }
 }
 
@@ -36,9 +41,9 @@ impl WordTokenizer for dyn crate::filters::WordTokenizer {
     fn word_tokenize<'a>(
         &self,
         text: &'a str,
-        out: &mut Vec<&'a str>,
+        out: &mut Vec<Cow<'a, str>>,
     ) -> Result<(), TokenizeError> {
-        self.words(text, out)
+        self.words_cow(text, out)
     }
 }
 
@@ -54,11 +59,12 @@ impl WordTokenizer for WhitespaceTokenizer {
     fn word_tokenize<'a>(
         &self,
         text: &'a str,
-        out: &mut Vec<&'a str>,
+        out: &mut Vec<Cow<'a, str>>,
     ) -> Result<(), TokenizeError> {
         out.extend(
             text.split(crate::text::is_py_whitespace)
-                .filter(|t| !t.is_empty()),
+                .filter(|t| !t.is_empty())
+                .map(Cow::Borrowed),
         );
         Ok(())
     }
