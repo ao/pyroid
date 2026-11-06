@@ -203,6 +203,12 @@ jobs:
           uv venv -p 3.11 "$venv"
           uv pip install --python "$venv" --no-index --no-deps "${wheels[0]}"
           uv pip install --python "$venv" "mypy==${MYPY_VERSION}"
+          # Imported by the stubs (pyroid.fasttext: numpy) and by pyroid.cli and pyroid.integrations at runtime
+          # (pyarrow), so stubtest can import and check them. datatrove is left out (see .stubtest-allowlist).
+          uv pip install --python "$venv" --only-binary :all: numpy pyarrow
+          # pyarrow ships neither py.typed nor stubs (as in pyproject.toml's [tool.mypy] overrides).
+          mypy_config="$RUNNER_TEMP/stubtest-mypy.ini"
+          printf '[mypy]\n\n[mypy-pyarrow.*]\nignore_missing_imports = True\n' > "$mypy_config"
           allowlist=()
           if [[ -f .stubtest-allowlist ]]; then allowlist=(--allowlist "$PWD/.stubtest-allowlist"); fi
           read -ra modules <<< "$STUBTEST_MODULES"
@@ -210,7 +216,7 @@ jobs:
           # (mypy_path = "python") and check the source-tree stubs instead of the wheel's.
           mkdir "$RUNNER_TEMP/stubtest-cwd"
           cd "$RUNNER_TEMP/stubtest-cwd"
-          "$venv/bin/python" -m mypy.stubtest "${modules[@]}" --concise "${allowlist[@]}"
+          "$venv/bin/python" -m mypy.stubtest "${modules[@]}" --concise --mypy-config-file "$mypy_config" "${allowlist[@]}"
 
   test:
     name: pytest (${{ matrix.os }}, ${{ matrix.python }})
