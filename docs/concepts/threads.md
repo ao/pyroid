@@ -64,3 +64,18 @@ far (Docker VM, indicative; [Benchmarks](../benchmarks.md#thread-scaling)):
     1.15 to 0.41 µs per document on Arrow input, but from 1.62 to 1.00 µs on a list. For a list,
     pyroid still builds the output strings one after another on the calling thread. See
     [Benchmarks](../benchmarks.md#thread-scaling).
+
+## What can bring the GIL back
+
+pyroid itself never re-enables the GIL, but a library it hands work to can:
+
+- `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded builds.
+  `pyroid.metrics.sacrebleu` never imports sacrebleu, so it stays GIL-free unless a call is
+  [delegated](fallbacks.md) to the real sacrebleu.
+- With `python_tokenizer=True`, the filters and MinHash call datatrove's own tokenizer in
+  Python on the calling thread, so that part runs at the tokenizer's speed and doesn't scale with
+  `threads=` ([Languages](../guides/languages.md)).
+
+`pyroid.patch("fasttext")` also lets code written for fastText run on 3.15t, where fastText has
+no wheel: fast-langdetect works patched on 3.15t, where its unpatched import fails
+([`pyroid.patch()`](../guides/patch.md)).

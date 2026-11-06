@@ -16,6 +16,7 @@ guide.
 | `pyroid.InputError` | `PyroidError`, `TypeError` | an argument has the wrong type or shape: a non-`str` item (the message names its index), `bytes`, a non-string or dictionary-encoded Arrow column, a struct column or table, a bad `threads=` type |
 | `pyroid.fasttext.ModelError` | `PyroidError`, `ValueError` | a model file is malformed, truncated, or not a fastText model |
 | `pyroid.translit.UnidecodeError` | `PyroidError`, `ValueError` | `unidecode(..., errors="strict")` met a character without a transliteration; has an `index` attribute, like Unidecode's |
+| `pyroid.json_repair.NestingError` | `PyroidError`, `ValueError`, `RecursionError` | broken JSON nested deeper than `pyroid.json_repair.MAX_DEPTH` (1,000) levels (json_repair raises `ValueError` past about 140–330 levels) |
 
 Because `InputError` is a `TypeError`, code that catches `TypeError` for bad arguments keeps
 working.
