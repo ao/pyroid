@@ -53,6 +53,7 @@ uv run --frozen python stages.py --list                                         
 uv run --frozen python stages.py --stage fix_text --docs 1000 --fast -o /target/fix_text.json
 uv run --frozen python pipeline.py --corpus dev --docs 500 --workers 8 --check-refs --out /target/pipe
 uv run --frozen python chart.py e2e results/.../e2e/hyperfine-e2e.json --out /target/e2e --title "..."
+uv run --frozen python chart.py hero $R/e2e/hyperfine-e2e.json $R/ft315t/hyperfine-chain.json --run $R --out /target/hero --png  # R: a consolidated run
 ```
 
 ## Plugging in a pyroid module
@@ -84,7 +85,7 @@ Thread scaling: pass `BENCH_THREADS` / `RAYON_NUM_THREADS`; workers inherit them
 | `perf_matrix.py run/table/compare` | candidate-only A/B: every module's rows at pool sizes 1 and 8 (`--per-doc`: Python threads), gated first; `compare A B` flags changes of 5% or more |
 | `chain.py` | the FineWeb chain natively in pyroid, one process, Arrow in, `threads=N`; `--digest --expect D` gates it on `pipeline.py`'s per-doc digest of the datatrove chain |
 | `pgo_train.py`, `pgo_build.sh` | profile-guided release wheels: training on headline[10000:20000] (never the benchmarked dev slice), then `-Cprofile-use` |
-| `run_consolidated.sh`, `consolidate.py` | the consolidated benchmark: `run_baselines.sh` with all five pyroid modules on 3.13, pyroid on 3.15t at pools 1 and 8, `chain.py` under hyperfine, then `CONSOLIDATED.md`, `consolidated.json` (docs' benchmarks.json row schema) and light/dark charts |
+| `run_consolidated.sh`, `consolidate.py` | the consolidated benchmark: `run_baselines.sh` with all five pyroid modules on 3.13, pyroid on 3.15t at pools 1 and 8, `chain.py` under hyperfine, then `CONSOLIDATED.md`, `consolidated.json` (docs' benchmarks.json row schema) and light/dark charts, among them the README hero (`charts/hero-{light,dark}.svg`; `--png` / `BENCH_PNG=1` add PNG previews) |
 
 ## Inputs (pinned in `manifest.json`, fetched by `fetch.py` into `/data`, ≤ 1.5 GB total; currently 324 MB)
 

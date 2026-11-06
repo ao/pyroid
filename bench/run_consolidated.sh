@@ -11,11 +11,13 @@
 #    (RAYON_NUM_THREADS), suffixed " [3.15t, pool N]" so charts and tables keep them apart.
 # 3. chain.py: the whole chain natively in pyroid on 3.15t at threads=1 and 8; its digest must equal the
 #    datatrove chain's from step 1, then hyperfine times it (taskset $BENCH_CPUS, like the e2e).
-# 4. consolidate.py: CONSOLIDATED.md, consolidated.json and the light/dark charts.
+# 4. consolidate.py: CONSOLIDATED.md, consolidated.json and the light/dark charts, among them the README hero
+#    (charts/hero-{light,dark}.svg; copy it to docs/assets/).
 #
 # Knobs: BENCH_OUT [results/<machine>/<date>-consolidated], BENCH_E2E_RUNS [3], BENCH_CHAIN_RUNS [5],
 #   BENCH_PY313 [/target/venv-bench/bin/python], BENCH_PY315T [/target/venv-b315t/bin/python],
-#   BENCH_SKIP_BASELINES=1 (reuse step 1 in BENCH_OUT), BENCH_PYPERF_FT [-p 5 -n 3 -w 1].
+#   BENCH_SKIP_BASELINES=1 (reuse step 1 in BENCH_OUT), BENCH_PYPERF_FT [-p 5 -n 3 -w 1],
+#   BENCH_PNG=1 (PNG previews next to the charts).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 cd "$HERE"
@@ -76,5 +78,5 @@ pin "$HF" -N --warmup 1 --runs "${BENCH_CHAIN_RUNS:-5}" \
     -n "pyroid chain 3.15t threads=8" "$PY315T $HERE/chain.py --corpus dev --threads 8 --summary-log $FT/chain-runs.jsonl"
 
 log "4/4 consolidate.py"
-"$PY313" consolidate.py "$OUT"
+"$PY313" consolidate.py "$OUT" $([[ "${BENCH_PNG:-0}" == 1 ]] && echo --png)
 log "done: $OUT/CONSOLIDATED.md"

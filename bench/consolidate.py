@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """Consolidated tables and charts for one run_consolidated.sh results folder.
 
-    python consolidate.py results/<machine>/<date>-consolidated
+    python consolidate.py results/<machine>/<date>-consolidated [--png]
 
 Reads (all written by run_consolidated.sh, every row gated before it was timed):
   stages/*.json, e2e/hyperfine-*.json, e2e/equivalence.json   run_baselines.sh on CPython 3.13 (incumbents,
                                                                pyroid at RAYON_NUM_THREADS=1)
   ft315t/stages/*-p{1,8}.json                                  pyroid on CPython 3.15t at pools of 1 and 8
   ft315t/hyperfine-chain.json, ft315t/chain-digest.json        pyroid's native chain (chain.py)
-Writes CONSOLIDATED.md, consolidated.json (rows in docs/data/benchmarks.json's schema) and
-charts/consolidated-{e2e,stages}-{light,dark}.svg. Nothing is estimated: every number is a median of
-measured values in those files.
+Writes CONSOLIDATED.md, consolidated.json (rows in docs/data/benchmarks.json's schema),
+charts/consolidated-{e2e,stages}-{light,dark}.svg and the README hero, charts/hero-{light,dark}.svg
+(``--png``: PNG previews next to each chart). Nothing is estimated: every number is a median of measured
+values in those files.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import shutil
 import statistics
@@ -155,7 +157,12 @@ def trimmed(paths: list[Path], tmp: Path) -> list[str]:
 
 
 def main() -> int:
-    out = Path(sys.argv[1]).resolve()
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("out", type=Path, help="a run_consolidated.sh results folder")
+    ap.add_argument("--png", action="store_true", help="also write PNG previews of the charts")
+    args = ap.parse_args()
+    out: Path = args.out.resolve()
+    png = ["--png"] if args.png else []
     dt = pyperf_rows(sorted((out / "stages").glob("*-d*.json")), "3.13")
     ft_files = sorted((out / "ft315t" / "stages").glob("*.json"))
     ft = pyperf_rows(ft_files, "3.15t")
@@ -273,7 +280,9 @@ def main() -> int:
         ]
     md += ["", "## Charts", "", "- `charts/consolidated-e2e-{light,dark}.svg`: the end-to-end table.",
            ("- `charts/consolidated-stages-{light,dark}.svg`: per stage at the incumbents' largest batch "
-            "(10k fast stages, 1k filters/MinHash), with pyroid's 3.13 and 3.15t rows."), ""]  # fmt: skip
+            "(10k fast stages, 1k filters/MinHash), with pyroid's 3.13 and 3.15t rows."),
+           ("- `charts/hero-{light,dark}.svg`: the README hero, pyroid's native chain vs datatrove at 1 and 8 "
+            "workers (copied to `docs/assets/`)."), ""]  # fmt: skip
     (out / "CONSOLIDATED.md").write_text("\n".join(md) + "\n", "utf-8")
     (out / "consolidated.json").write_text(json.dumps({
         "about": "pyroid consolidated gated benchmark (bench/run_consolidated.sh, bench/consolidate.py). Units: "
@@ -287,15 +296,19 @@ def main() -> int:
     charts.mkdir(exist_ok=True)
     chart = [sys.executable, str(HERE / "chart.py")]
     e2e_files = [str(e2e_json)]
-    subprocess.run([*chart, "e2e", *e2e_files, "--out", str(charts / "consolidated-e2e"), "--title",
+    subprocess.run([*chart, "e2e", *e2e_files, "--out", str(charts / "consolidated-e2e"), *png, "--title",
                     (f"FineWeb chain, 10k docs: datatrove (3.13) vs pyroid (3.13 in datatrove's executor; 3.15t "
                      f"native chain). {LABEL}")], check=True)  # fmt: skip
+    # The hero reads the raw hyperfine files (chart.py's HERO_ROWS match their run names) and the run's metadata.
+    subprocess.run([*chart, "hero", str(out / "e2e" / "hyperfine-e2e.json"),
+                    str(out / "ft315t" / "hyperfine-chain.json"), "--run", str(out), "--out", str(charts / "hero"),
+                    *png], check=True)  # fmt: skip
     picked = [p for p in sorted((out / "stages").glob("*-d*[0-9].json"))]
     picked += [p for p in ft_files if not p.name.endswith(".gates.json")
                and ("-d1000-" in p.name or p.name.startswith(("fix_text", "lid", "translit")))]  # fmt: skip
     tmp = Path(tempfile.mkdtemp(prefix="pyroid-consolidate-"))
     stage_files = trimmed(picked, tmp)
-    subprocess.run([*chart, "stages", *stage_files, "--out", str(charts / "consolidated-stages"), "--title",
+    subprocess.run([*chart, "stages", *stage_files, "--out", str(charts / "consolidated-stages"), *png, "--title",
                     (f"per-doc time at the incumbents' largest batch; pyroid rows without a suffix: CPython 3.13, "
                      f"1 thread; [3.15t, pool N]: free-threaded 3.15t. {LABEL}")], check=True)  # fmt: skip
     shutil.rmtree(tmp)
