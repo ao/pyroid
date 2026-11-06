@@ -27,13 +27,25 @@ DOCS = Path(__file__).resolve().parent.parent
 PAGE = DOCS / "compatibility.md"
 SEED = DOCS / "data" / "parity.json"
 BEGIN, END = "<!-- parity:begin -->", "<!-- parity:end -->"
-ORDER = ["ftfy", "fasttext", "filters", "dedup", "translit"]
+ORDER = [
+    "ftfy",
+    "fasttext",
+    "filters",
+    "dedup",
+    "translit",
+    "metrics",
+    "json_repair",
+    "integrations",
+]
 TITLES = {
     "ftfy": "pyroid.ftfy",
     "fasttext": "pyroid.fasttext",
     "filters": "pyroid.filters",
     "dedup": "pyroid.dedup",
     "translit": "pyroid.translit",
+    "metrics": "pyroid.metrics",
+    "json_repair": "pyroid.json_repair",
+    "integrations": "Integrations: datatrove steps, pyroid clean, pyroid.patch()",
 }
 
 
