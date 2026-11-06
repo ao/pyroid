@@ -33,7 +33,7 @@ def load(path: Path) -> Any:
 
 
 def machines(runs: list[Path]) -> list[str]:
-    keys = ["Model name", "Vendor ID", "CPU(s)", "Thread(s) per core", "Core(s) per socket", "Socket(s)",
+    keys = ["Model name", "BIOS Model name", "Vendor ID", "CPU(s)", "Thread(s) per core", "Core(s) per socket", "Socket(s)",
             "CPU max MHz", "L2 cache", "L3 cache", "NUMA node(s)"]  # fmt: skip
     rows = []
     for r in runs:
@@ -44,7 +44,15 @@ def machines(runs: list[Path]) -> list[str]:
             for f in ("avx2", "fma", "avx512f", "avx512_bf16", "amx_tile", "asimd", "sve", "sve2")
             if f in flags
         ]
-        osr = kv(r / "machine/os-release.txt").get("PRETTY_NAME", "").strip('"')
+        osr = (
+            dict(
+                ln.partition("=")[::2]
+                for ln in (r / "machine/os-release.txt").read_text().splitlines()
+                if "=" in ln
+            )
+            .get("PRETTY_NAME", "")
+            .strip('"')
+        )
         uname = (r / "machine/uname.txt").read_text().split() if (r / "machine/uname.txt").exists() else []
         rows.append(
             [imds.get("instance-type", r.parent.name), imds.get("placement/availability-zone", "")]
@@ -68,7 +76,21 @@ def durations(runs: list[Path]) -> list[str]:
                  [[s, *(v.get(r.parent.name, "") for r in runs)] for s, v in steps.items()])  # fmt: skip
 
 
+def pytest_rc(r: Path, suite: str, py: str) -> str:
+    """The pytest exit code: status.tsv for run.sh's suites, else the log's trailing ``exit N`` line."""
+    st = r / "parity" / "status.tsv"
+    for line in st.read_text().splitlines() if st.exists() else []:
+        f = line.split("\t")
+        if f[:2] == [py, suite]:
+            return f[2]
+    log = r / "parity" / f"{suite}-{py}.log"
+    tail = log.read_text("utf-8", "replace").strip().splitlines()[-1:] if log.exists() else []
+    return tail[0].removeprefix("exit ") if tail and tail[0].startswith("exit ") else "?"
+
+
 def parity(runs: list[Path]) -> list[str]:
+    """One row per report file; ``suite`` is the file's (``filters+aiohttp`` marks a supplementary rerun). Errors
+    before a check is recorded (e.g. a missing oracle dependency) only show in the pytest exit code."""
     rows = []
     for r in runs:
         for p in sorted((r / "parity").glob("*-3.*.json")):
@@ -76,19 +98,26 @@ def parity(runs: list[Path]) -> list[str]:
                 continue
             rep = load(p)
             suite, py = p.stem.rsplit("-", 1)
-            for name, s in rep.get("suites", {}).items():
-                checks = s.get("checks", {}).values()
-                n = {k: sum(c["status"] == k for c in checks) for k in ("pass", "fail", "skip")}
-                rows.append([r.parent.name, py, name, rep.get("status", "?"), n["pass"], n["fail"], n["skip"],
-                             f"{sum(c.get('same', 0) for c in checks):,}", sum(c.get("diff", 0) for c in checks),
-                             "off" if rep.get("environment", {}).get("gil_enabled") is False else "on"])  # fmt: skip
-            if not rep.get("suites"):
-                rows.append(
-                    [r.parent.name, py, suite, rep.get("status", "no report"), "", "", "", "", "", ""]
-                )
-    return table(
-        ["machine", "python", "suite", "status", "checks pass", "fail", "skip", "same", "diff", "GIL"], rows
-    )
+            rc = pytest_rc(r, suite, py)
+            checks = [c for s in rep.get("suites", {}).values() for c in s.get("checks", {}).values()]
+            n = {k: sum(c["status"] == k for c in checks) for k in ("pass", "fail", "skip")}
+            rows.append([r.parent.name, py, suite, rc, rep.get("status", "no report"), n["pass"], n["fail"],
+                         n["skip"], f"{sum(c.get('same', 0) for c in checks):,}", sum(c.get("diff", 0) for c in checks),
+                         "off" if rep.get("environment", {}).get("gil_enabled") is False else "on"])  # fmt: skip
+    head = [
+        "machine",
+        "python",
+        "suite",
+        "pytest rc",
+        "report",
+        "checks pass",
+        "fail",
+        "skip",
+        "same",
+        "diff",
+        "GIL",
+    ]
+    return table(head, rows)
 
 
 def deltas(runs: list[Path]) -> list[str]:
