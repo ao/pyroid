@@ -84,12 +84,19 @@ fn octet(d: &[u8]) -> bool {
 /// find them, appended to `out` as byte ranges.
 pub fn email_matches(text: &str, version: UnicodeVersion, out: &mut Vec<Range<usize>>) {
     let b = text.as_bytes();
+    // A match starts before an `@` (none: nothing to do).
+    let Some(last_at) = memchr::memrchr(b'@', b) else {
+        return;
+    };
     let mut pos = 0;
     while let Some(off) = b
         .get(pos..)
         .and_then(|rest| rest.iter().position(|&c| is_local(c)))
     {
         let s = pos + off;
+        if s >= last_at {
+            break;
+        }
         // `\b`: `\w` differs on the two sides of `s` (the local-part
         // character at `s` is ASCII, so `s` is a char boundary).
         let here = b[s].is_ascii_alphanumeric() || b[s] == b'_';
@@ -191,6 +198,10 @@ fn bracketed(b: &[u8], mut j: usize) -> Option<usize> {
 /// to `out` as byte ranges.
 pub fn ip_matches(text: &str, out: &mut Vec<Range<usize>>) {
     let b = text.as_bytes();
+    // Every match contains a dot.
+    if memchr::memchr(b'.', b).is_none() {
+        return;
+    }
     let mut pos = 0;
     while let Some(off) = b
         .get(pos..)
