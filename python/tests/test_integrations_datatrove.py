@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 
 pytest.importorskip("datatrove")
+pytest.importorskip("regex")  # datatrove.utils.text needs it; datatrove does not declare it
 pytest.importorskip("numpy")
 
 from datatrove.data import Document  # type: ignore[import-not-found,import-untyped,unused-ignore]
