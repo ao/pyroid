@@ -11,4 +11,8 @@ release-please.
 A rewrite: the 0.7.x API is removed (see [Migrating from 0.7](migrating-from-0.7.md)), and pyroid
 becomes a text-cleaning core for LLM datasets: [`pyroid.ftfy`](guides/ftfy.md),
 [`pyroid.fasttext`](guides/fasttext.md), [`pyroid.filters`](guides/filters.md),
-[`pyroid.dedup`](guides/dedup.md) and [`pyroid.translit`](guides/translit.md).
+[`pyroid.dedup`](guides/dedup.md), [`pyroid.translit`](guides/translit.md),
+[`pyroid.metrics`](guides/metrics.md) and [`pyroid.json_repair`](guides/json_repair.md), with
+datatrove's behaviour in [3,999 of its 4,343 languages](guides/languages.md). Integrations: the
+[`pyroid` command line](guides/cli.md), [`pyroid.patch()`](guides/patch.md), drop-in
+[datatrove steps](guides/datatrove.md) and [Hugging Face `datasets` helpers](guides/huggingface.md).

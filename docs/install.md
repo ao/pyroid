@@ -14,13 +14,26 @@ pyroid has **no runtime dependencies**. Extras:
 | Extra | Adds | Needed for |
 |---|---|---|
 | `pyroid[fasttext]` | `numpy>=1.26` | `pyroid.fasttext`, which returns numpy arrays as fastText does. Without numpy, `import pyroid.fasttext` raises an `ImportError` that says how to fix it. |
+| `pyroid[cli]` | `pyarrow>=18`, `numpy>=1.26` | the [`pyroid` command line](guides/cli.md) (Parquet and JSONL in and out, the FineWeb recipe) and `pyroid.integrations.recipes` |
+| `pyroid[datatrove]` | `datatrove>=0.10.1`, `regex`, `tokenizers`, `numpy>=1.26` | the [datatrove drop-in steps](guides/datatrove.md) in `pyroid.integrations.datatrove` (`regex` and `tokenizers` are imported by datatrove's filters but not declared by datatrove) |
+| `pyroid[hf]` | `datasets>=3`, `pyarrow>=18`, `numpy>=1.26` | the [Hugging Face `datasets` helpers](guides/huggingface.md) in `pyroid.integrations.hf` |
 
-Optional libraries pyroid works with but never requires:
+Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
+`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair` and `pyroid.patch()`
+need none of them.
+
+Optional libraries, needed only by the features that use them:
 
 - **pyarrow, polars, pandas, Hugging Face `datasets`** or any other Arrow library: pass their string
   columns straight in ([Inputs and outputs](concepts/inputs.md)).
-- **ftfy** 6.3.1: only for the few ftfy features `pyroid.ftfy` hands back to ftfy
-  ([Fallbacks](concepts/fallbacks.md)). Without it those calls raise `pyroid.PyroidError`.
+- **The incumbents**, only for the few features pyroid hands back to them
+  ([Fallbacks](concepts/fallbacks.md)): ftfy 6.3.1; datatrove 0.10.1 and a language's segmenter
+  (jieba, SudachiPy, ...) for `python_tokenizer=True`; rouge-score, nltk and sacrebleu 2.6.0 for
+  the delegated metrics features; json_repair 0.64.5 for `schema=`. Without them those calls
+  raise `pyroid.PyroidError`.
+- **numpy** for `pyroid.metrics.scoring.BootstrapAggregator`, which runs rouge-score's numpy code.
+- **tldextract** for `pyroid.filters.URLFilter`: its suffix lists are read from a
+  `tldextract.TLDExtract` when the filter is built (the matching itself runs in Rust).
 
 ## Supported platforms
 
@@ -41,13 +54,15 @@ binary and no compiler is needed:
 | Windows | x64, ARM64 | `win_amd64`, `win_arm64` |
 
 That is 24 wheels plus an sdist per release, each tested in a clean virtual environment before
-it is published. Before the first release, wheels have only been built and tested on Linux
-aarch64; the release workflow builds the rest. PyPy and GraalPy are not supported.
+it is published. Before the first release, wheels have been built and tested on Linux aarch64
+and, under emulation, on Linux x86_64; the release workflow builds the rest. PyPy and GraalPy are
+not supported.
 
 !!! note "Where parity has been checked"
-    The parity suites have so far run on Linux aarch64 only. fastText's floating-point rounding
-    and tie order are matched per architecture, and x86-64, macOS and Windows parity is
-    unverified until the first CI run on those platforms
+    Every parity suite has run on Linux aarch64. On Linux x86_64 (under emulation), the ftfy,
+    fastText, filters, dedup and metrics suites gave 0 differences, with fastText's and the
+    metrics' references pinned per platform because the incumbents' own output differs by
+    architecture. macOS, Windows and musl are unverified until the first CI run on them
     ([Compatibility](compatibility.md#platforms)).
 
 On free-threaded builds, importing pyroid does not re-enable the GIL. See
