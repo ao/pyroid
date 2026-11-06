@@ -573,3 +573,6 @@ fn push_strings<O: pyroid_core::columnar::Offset>(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
