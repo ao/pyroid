@@ -13,6 +13,7 @@ import inspect
 import json
 import sys
 import threading
+import types
 import unicodedata
 import warnings
 from concurrent.futures import ThreadPoolExecutor
@@ -253,6 +254,28 @@ def test_delegation_without_ftfy_raises(monkeypatch: pytest.MonkeyPatch) -> None
         candidate.guess_bytes(b"abc")
     # Everything else needs no ftfy at all.
     assert candidate.fix_text("Ã³") == "ó"
+
+
+@pytest.mark.thread_unsafe(reason="monkeypatches sys.modules")
+def test_delegation_sees_through_a_pyroid_shim(monkeypatch: pytest.MonkeyPatch) -> None:
+    # pyroid.integrations.patch("ftfy") puts a shim with pyroid's functions in sys.modules["ftfy"]:
+    # the slow path must use the real ftfy it wraps (__wrapped__), never the shim (it recurses).
+    shim: Any = types.ModuleType("ftfy")
+    shim.__pyroid__ = True
+    shim.__wrapped__ = ftfy
+    shim.__version__ = candidate.FTFY_VERSION
+    shim.fix_text = candidate.fix_text
+    monkeypatch.setitem(sys.modules, "ftfy", shim)
+    monkeypatch.setattr(candidate, "_WARNED", set())
+    with pytest.warns(pyroid.FallbackWarning, match="delegating to ftfy"):
+        got = candidate.fix_text("abc", max_decode_length=5.0)
+    assert got == ftfy.fix_text("abc", max_decode_length=5.0)
+    with pytest.warns(pyroid.FallbackWarning, match="delegating"):
+        got_error = outcome(candidate.fix_text, "x", normalization="nfc")
+    assert got_error == outcome(ftfy.fix_text, "x", normalization="nfc")  # ftfy's ValueError
+    shim.__wrapped__ = None  # the shim of an environment without ftfy
+    with pytest.raises(pyroid.PyroidError, match="not installed"):
+        candidate.fix_text("abc", normalization="XYZ")
 
 
 def test_max_decode_length_below_one_is_refused() -> None:

@@ -257,7 +257,7 @@ def test_ftfy_shim_without_real_ftfy() -> None:
 @needs_ftfy
 def test_ftfy_fallback_reaches_the_real_ftfy_not_the_shim() -> None:
     # pyroid.ftfy's slow path does `import ftfy` at call time; under the patch that is the shim,
-    # whose fix_text is pyroid's again: without the redirect this recursed forever.
+    # whose fix_text is pyroid's again: pyroid.ftfy must use its __wrapped__ (or it recurses).
     ok(
         child(
             """
@@ -266,7 +266,7 @@ def test_ftfy_fallback_reaches_the_real_ftfy_not_the_shim() -> None:
             patch_quietly("ftfy")
             import ftfy
             real = ftfy.__wrapped__
-            assert impl._ftfy is not fallback  # redirected while patched
+            assert impl._ftfy is fallback  # pyroid.ftfy sees through the shim itself
             def calls(fn):
                 with warnings.catch_warnings(record=True) as caught:
                     warnings.simplefilter("always")

@@ -64,7 +64,6 @@ compares module objects) is not redirected; ``importlib.reload`` of a shim is no
 
 from __future__ import annotations
 
-import builtins
 import contextlib
 import importlib
 import importlib.util
@@ -247,68 +246,14 @@ def _caller_stacklevel() -> int:
     return level
 
 
-def _redirect_import(func: types.FunctionType, name: str, real: Any) -> types.FunctionType:
-    """A copy of `func` in which ``import <name>`` gives `real` (``None``: fails), not the shim.
-
-    pyroid.ftfy falls back to the real ftfy with ``import ftfy`` inside ``_ftfy()``; under the
-    patch that import would return the shim and recurse forever. The copy has the same code and
-    the same (live) module globals, so its warnings, stack levels and errors are exactly the
-    unpatched ones; only its builtins differ, by an ``__import__`` that resolves `name` to
-    `real`. A function takes its builtins from ``globals["__builtins__"]`` when it is created, so
-    that entry is swapped for the creation of the copy only (once per patch(), not per call; a
-    function created meanwhile elsewhere in that module would only get the same redirect).
-    """
-
-    def import_(
-        mod: str, glb: Any = None, loc: Any = None, fromlist: Any = (), level: int = 0
-    ) -> Any:
-        if level == 0 and mod == name:
-            if real is None:
-                raise ModuleNotFoundError(f"No module named {name!r}", name=name)
-            return real
-        return builtins.__import__(mod, glb, loc, fromlist, level)
-
-    ns = func.__globals__
-    original = ns.get("__builtins__", builtins)
-    custom = dict(vars(original) if isinstance(original, types.ModuleType) else original)
-    custom["__import__"] = import_
-    ns["__builtins__"] = custom
-    try:
-        copy = types.FunctionType(
-            func.__code__, ns, func.__name__, func.__defaults__, func.__closure__
-        )
-    finally:
-        ns["__builtins__"] = original
-    copy.__kwdefaults__ = func.__kwdefaults__
-    copy.__qualname__ = func.__qualname__
-    copy.__doc__ = func.__doc__
-    copy.__dict__.update(func.__dict__)
-    return copy
-
-
-def _redirect_fallback(impl: types.ModuleType, name: str, real: Any) -> Callable[[], None]:
-    """Point `impl`'s fallback (``impl._<name>()``) at `real`; return the undo."""
-    attr = f"_{name}"
-    original = impl.__dict__.get(attr)
-    if not isinstance(original, types.FunctionType):
-        return lambda: None
-    redirected = _redirect_import(original, name, real)
-    setattr(impl, attr, redirected)
-
-    def undo() -> None:
-        if impl.__dict__.get(attr) is redirected:
-            setattr(impl, attr, original)
-
-    return undo
-
-
 def _build_ftfy(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     # ftfy's helpers that pyroid only delegates (DELEGATED) are the real ones when ftfy is
     # installed (forwarded); without it, pyroid's, which raise PyroidError when called.
     skip = set(impl.DELEGATED) if real is not None else set()
     provided = {n: getattr(impl, n) for n in impl.__all__ if n not in skip}
     shim = _shim("ftfy", real, missing, impl, provided, package=True, version=impl.FTFY_VERSION)
-    return {"ftfy": shim}, [_redirect_fallback(impl, "ftfy", real)]
+    # pyroid.ftfy's own fallback (`_ftfy`) sees through the shim to `__wrapped__`: nothing to undo.
+    return {"ftfy": shim}, []
 
 
 _FALLBACK_WARNED: set[str] = set()
