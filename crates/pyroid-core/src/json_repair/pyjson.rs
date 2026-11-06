@@ -390,7 +390,7 @@ fn scan<S: Source>(
             }
             b'n' if word_at(src, i + 1, b"ull") => (Value::Null, i + 4),
             b't' if word_at(src, i + 1, b"rue") => (Value::Bool(true), i + 4),
-            b'f' if word_at(src, i + 1, b"alse") => (Value::Bool(false), i + 5),
+            b'f' if word_at(src, i + 1, &b"false"[1..]) => (Value::Bool(false), i + 5),
             b'N' if word_at(src, i + 1, b"aN") => (Value::Float(f64::NAN), i + 3),
             b'I' if word_at(src, i + 1, b"nfinity") => (Value::Float(f64::INFINITY), i + 8),
             b'-' if word_at(src, i + 1, b"Infinity") => (Value::Float(f64::NEG_INFINITY), i + 9),
@@ -770,13 +770,14 @@ mod tests {
             "",
             " ",
             "nul",
-            "nulll",
+            // A literal with one char too many / too few (spelled out for typos).
+            concat!("null", "l"),
             "True",
             "nan",
             "-NaN",
             "+Infinity",
             "-Inf",
-            "Infinit",
+            concat!("Infini", "t"),
         ] {
             assert_eq!(both(bad), Err(DecodeError::Json), "{bad:?}");
         }

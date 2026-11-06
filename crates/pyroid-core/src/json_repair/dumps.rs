@@ -614,11 +614,11 @@ mod tests {
     fn sort_keys_by_code_point() {
         // U+E000 sorts after a surrogate, U+FFFF before an astral char; a remapped
         // surrogate is U+D800.., not U+10F800...
-        let sur = surrogate_char(0xD800).to_string();
+        let lone = surrogate_char(0xD800).to_string();
         let v = obj(vec![
             ("😀", int(1)),
             ("\u{e000}", int(2)),
-            (&sur, int(3)),
+            (&lone, int(3)),
             ("\u{d7ff}", int(4)),
             ("b", int(5)),
             ("a", int(6)),

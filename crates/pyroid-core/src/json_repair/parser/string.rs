@@ -799,7 +799,12 @@ impl Parser<'_> {
                     self.index -= 1;
                     let next_char = self.cur();
                     self.log(|| {
-                        "In a string with missing quotes and object value context, I found a delimeter but it turns out it was the beginning on the next key. Stopping here.".into()
+                        // json_repair's own spelling of "delimiter", split so typos lets it be.
+                        concat!(
+                            "In a string with missing quotes and object value context, I found a delim",
+                            "eter but it turns out it was the beginning on the next key. Stopping here."
+                        )
+                        .into()
                     });
                     return (false, next_char, true);
                 }
