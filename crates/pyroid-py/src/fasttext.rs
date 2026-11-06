@@ -147,12 +147,12 @@ fn surrogate_as_type_error(py: Python<'_>, err: PyErr) -> PyErr {
          s.encode('utf-8', 'replace').decode('utf-8')",
     );
     // Keep the note that names the offending item of a batch.
-    if let Ok(notes) = err.value(py).getattr(pyo3::intern!(py, "__notes__"))
-        && let Ok(notes) = notes.cast::<PyList>()
-    {
-        for note in notes.iter() {
-            if let Ok(note) = note.extract::<String>() {
-                let _ = te.add_note(py, note);
+    if let Ok(notes) = err.value(py).getattr(pyo3::intern!(py, "__notes__")) {
+        if let Ok(notes) = notes.cast::<PyList>() {
+            for note in notes.iter() {
+                if let Ok(note) = note.extract::<String>() {
+                    let _ = te.add_note(py, note);
+                }
             }
         }
     }
@@ -199,10 +199,10 @@ fn text_input(
 ) -> PyResult<TextInput> {
     TextInput::extract_with(obj, threads).map_err(|e| {
         let py = obj.py();
-        if e.is_instance_of::<PyUnicodeEncodeError>(py)
-            && let Some(nl) = newline_error(obj, newline_msg)
-        {
-            return nl;
+        if e.is_instance_of::<PyUnicodeEncodeError>(py) {
+            if let Some(nl) = newline_error(obj, newline_msg) {
+                return nl;
+            }
         }
         surrogate_as_type_error(py, e)
     })
