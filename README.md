@@ -88,7 +88,8 @@ Gopher, C4, FineWeb, PII, bad-words, symbol-lines and URL steps, MinHash and sen
   (`.ftz`) faster; transliteration 79× faster than anyascii; ROUGE 59–65× faster than
   rouge-score, corpus BLEU 11× and chrF 19× faster than sacrebleu; json_repair about 30× faster
   on broken JSON, and linear where json_repair is quadratic. Swapping pyroid's steps into
-  datatrove's own pipeline made it 21–24× faster.
+  datatrove's own pipeline made it 21–24× faster on a heavily loaded VM, and 14.7× in the
+  quieter consolidated run.
 - **Same output, checked:** byte-identical to ftfy 6.3.1, bit-identical fastText labels and
   probabilities, datatrove's keep/drop decisions, reasons and dedup files, rouge-score's and
   sacrebleu's scores to the last digit, and json_repair's repairs, on pinned real data and

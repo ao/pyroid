@@ -116,7 +116,8 @@ datatrove's filters, `pyroid.dedup` 63× faster than datatrove on MinHash signat
 `pyroid.translit` 79× faster than anyascii. ROUGE is 59–65× faster than rouge-score, corpus BLEU
 11× and corpus chrF 19× faster than sacrebleu, and `pyroid.json_repair` about 30× faster than
 json_repair on broken JSON. Swapping pyroid's steps into datatrove's own FineWeb pipeline made it
-21–24× faster at 8 processes (*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*).
+14.7× faster at 8 processes in the consolidated run, and 21–24× in later runs on a heavily loaded
+VM (*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*).
 
 ## Why trust the output?
 

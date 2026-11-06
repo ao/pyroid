@@ -20,8 +20,10 @@ Outside that chain, on one thread: ROUGE is 59–65× faster than rouge-score on
 BLEU 11× and corpus chrF 19× faster than sacrebleu; json_repair-compatible repair is about 30×
 faster on broken JSON (1.0–1.7× on valid JSON, which both hand to `json.loads` first); and the
 filters and MinHash are 36–86× faster than datatrove on German, French, Spanish, Russian and
-Arabic and 10–20× on Hindi. With 8 processes, datatrove's own FineWeb pipeline runs 21–24×
-faster with pyroid's steps swapped in ([Other modules, languages and integrations](#other-modules-languages-and-integrations)).
+Arabic and 10–20× on Hindi. With 8 processes, datatrove's own FineWeb pipeline runs 14.7× faster
+with pyroid's stages swapped in ([End to end](#end-to-end-the-fineweb-chain)), and 21–24× in later
+runs of the drop-in steps on a heavily loaded VM, which slows stock datatrove most
+([Other modules, languages and integrations](#other-modules-languages-and-integrations)).
 
 ## End to end: the FineWeb chain
 

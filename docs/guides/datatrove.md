@@ -238,7 +238,10 @@ and 213.4 s for the stock pipeline run in the same minute: **21–24× less wall
 and 16.7× faster. *Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*: the VM was
 heavily shared (load average 18 to 30), which inflates stock datatrove most, so each ratio comes
 from a same-minute pair (stock, then pyroid). pyroid's times include datatrove's executor
-phases, worker start-up, Parquet IO and the 125 MiB model load.
+phases, worker start-up, Parquet IO and the 125 MiB model load. On a quieter VM, the
+consolidated benchmark measured 14.7× for pyroid's stages in datatrove's executor at 8
+processes (2.85 s against 41.93 s; [Benchmarks](../benchmarks.md#end-to-end-the-fineweb-chain)),
+which is the better guide to an unloaded machine.
 
 The newer steps, on the FineWeb dev slice (*Docker/OrbStack VM on Apple Silicon (12 vCPU),
 indicative*; medians of 5 runs for pyroid and 2 for datatrove, load average about 8; datatrove's
