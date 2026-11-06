@@ -99,11 +99,13 @@ task. Multi-worker hash ranges are not needed: one process does all the work.
 
 ## Speed
 
-Signatures from raw text measured about 64× faster than datatrove (0.094–0.099 against 6.17 ms
-per document, tokenization included) and 1.7–1.8× faster than rensa, with datatrove's decisions;
-the whole four-stage pipeline on 10k documents took 1.21 s on one thread against datatrove's
-99.5 s. *Docker/OrbStack VM on Apple Silicon, indicative, preliminary*: see
-[Benchmarks](../benchmarks.md#pyroiddedup).
+MinHash signatures from raw text (sha1/64, tokenization included, the first 1,000 FineWeb
+documents) took 91.7 µs per document on one thread against 5,820 µs for datatrove, 63× faster,
+and 22.7 µs with 8 threads. rensa 0.5.0 took 149–159 µs and datasketch 2.0.0 476 µs per
+document, with other hash families and without datatrove's decisions. *Docker/OrbStack VM on
+Apple Silicon (12 vCPU), indicative*: see [Benchmarks](../benchmarks.md#per-stage). In the
+module's earlier run, the whole four-stage pipeline on 10k documents took 1.21 s on one thread
+against datatrove's 99.5 s (*indicative, preliminary*, [details](../benchmarks.md#pyroiddedup)).
 
 Signatures and removals match datatrove on the parity corpus: all 13,232 signatures and the
 445-document removed set, from raw text ([Compatibility](../compatibility.md#dedup)).

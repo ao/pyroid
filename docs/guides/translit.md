@@ -127,10 +127,13 @@ pyroid never delegates to Unidecode or anyascii, so it never emits `FallbackWarn
 
 ## Speed
 
-Single-threaded on CPython 3.12, `pyroid.translit` measured 12–37× faster than the `anyascii`
-package and 20–86× faster than Unidecode per document (first 10k FineWeb documents: 2.19 µs
-against 80.8 µs for anyascii and 192.0 µs for Unidecode). On free-threaded 3.15t, Arrow input
-scaled 6.1× at 8 threads. *Docker/OrbStack VM on Apple Silicon, indicative, preliminary*: see
-[Benchmarks](../benchmarks.md#pyroidtranslit).
+On the first 10,000 FineWeb documents, `anyascii` took 1.62 µs per document on one thread
+(free-threaded CPython 3.15t) against 128 µs for the `anyascii` 0.3.3 package (CPython 3.13),
+79× faster, and 1.00 µs with 8 threads; on Arrow input, 1.15 µs on one thread and 0.41 µs on 8.
+*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*: see
+[Benchmarks](../benchmarks.md#per-stage). The module's earlier run (CPython 3.12, fresh `str`
+objects) measured 12–37× against the `anyascii` package and 20–86× against Unidecode across
+FineWeb and FineWeb-2 languages, and Arrow input scaled up to 6.1× at 8 threads on 3.15t
+(*indicative, preliminary*, [details](../benchmarks.md#pyroidtranslit)).
 
 API: [`pyroid.translit` reference](../reference/translit.md).

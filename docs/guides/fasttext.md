@@ -122,9 +122,11 @@ pyroid never delegates to fastText, so it never emits `FallbackWarning`.
 
 ## Speed and memory
 
-Single-threaded, pyroid measured 2.2× (`.bin`) and 5.4× (`.ftz`) faster than fasttext-predict
-for `k=1`; one process with eight threads was 13.9× faster than single-threaded fastText on
-`.bin`, holding one model copy instead of eight. *Docker/OrbStack VM on Apple Silicon,
-indicative, preliminary*: see [Benchmarks](../benchmarks.md#pyroidfasttext).
+On the first 10,000 FineWeb documents at `k=1`, pyroid on one thread was 2.1× (`.bin`: 141
+against 290 µs per document) and 4.3× (`.ftz`: 105 against 451 µs) faster than fasttext-predict
+0.9.2.4. With eight threads in one process it took 20.2 µs (`.bin`) and 16.0 µs (`.ftz`),
+holding one model copy instead of eight. *Docker/OrbStack VM on Apple Silicon (12 vCPU),
+indicative*: see [Benchmarks](../benchmarks.md#per-stage); `k=5`, load times and memory are in
+the [module's earlier run](../benchmarks.md#pyroidfasttext).
 
 API: [`pyroid.fasttext` reference](../reference/fasttext.md).

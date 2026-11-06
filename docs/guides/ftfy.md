@@ -107,9 +107,12 @@ And by design:
 
 ## Speed
 
-Single-threaded, on FineWeb documents, `pyroid.ftfy.fix_text` measured 95–167× faster than ftfy
-6.3.1, and 14–95× on FineWeb-2 languages (slowest: Hindi). *Docker/OrbStack VM on Apple Silicon,
-indicative, preliminary*: see [Benchmarks](../benchmarks.md#pyroidftfy).
+On the first 10,000 FineWeb documents, `fix_text_batch` took 5.66 µs per document on one thread
+(free-threaded CPython 3.15t) against 834 µs for ftfy 6.3.1 (CPython 3.13), 147× faster, and
+1.72 µs with 8 threads. *Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*: see
+[Benchmarks](../benchmarks.md#per-stage). On FineWeb-2 languages the module's earlier run
+measured 14–95× single-threaded (slowest: Hindi; *indicative, preliminary*,
+[details](../benchmarks.md#pyroidftfy)).
 
 In a whole datatrove pipeline ftfy is only about 2% of the CPU, so a faster `fix_text` on its own
 barely changes pipeline throughput. It matters where `fix_text` is the hot path: tokenizers that

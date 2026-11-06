@@ -129,9 +129,11 @@ delegates to datatrove, so it never emits `FallbackWarning`.
 
 ## Speed
 
-On one core, FineWeb's four filters through `apply` measured about 86× faster than datatrove
-(0.28 ms against 23.9 ms per document), and single filters 30–105×.
-*Docker/OrbStack VM on Apple Silicon, indicative, preliminary*: see
-[Benchmarks](../benchmarks.md#pyroidfilters).
+On the first 1,000 FineWeb documents, single filters on one thread were 52–107× faster than
+datatrove 0.10.1 (GopherQuality: 79.8 against 5,739 µs per document), and took 14.2–29.9 µs per
+document with 8 threads. *Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*: see
+[Benchmarks](../benchmarks.md#per-stage). FineWeb's four filters chained through `apply`
+measured about 86× faster on one core in the module's earlier run (0.28 against 23.9 ms per
+document; *indicative, preliminary*, [details](../benchmarks.md#pyroidfilters)).
 
 API: [`pyroid.filters` reference](../reference/filters.md).

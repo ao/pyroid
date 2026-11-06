@@ -53,12 +53,14 @@ Python threads each calling pyroid on their own slice. Which is faster depends o
 far (Docker VM, indicative; [Benchmarks](../benchmarks.md#thread-scaling)):
 
 - `pyroid.fasttext`, 10k documents: `predict(batch, threads=8)` took 247 ms, eight Python
-  threads calling `predict(str)` 401 ms.
-- `pyroid.ftfy`: eight Python threads calling `fix_text` scaled 3.2–5.8× over one thread, while
-  `fix_text_batch(threads=8)` scaled 2.4–3.6×, limited by the memory allocator.
+  threads calling `predict(str)` 401 ms (the module's earlier run).
+- `pyroid.ftfy`: in the module's earlier run, eight Python threads calling `fix_text` scaled
+  3.2–5.8× over one thread. In the consolidated run, `fix_text_batch(threads=8)` on 10k FineWeb
+  documents took 1.72 µs per document against 5.66 µs on one thread (list input), and 1.08
+  against 5.16 µs on Arrow input.
 
-!!! note "Thread scaling is still being tuned"
-    Measured speedups at 8 threads over 1 thread range from about 1.3× to 8.3× depending on the
-    module and the input kind, in a shared Docker VM.
-    The ftfy measurements point at the memory allocator, not the kernels, as the limit. See
+!!! note "Arrow input scales best"
+    In the consolidated run (Docker VM, indicative), 8 threads took `translit.anyascii` from
+    1.15 to 0.41 µs per document on Arrow input, but from 1.62 to 1.00 µs on a list. For a list,
+    pyroid still builds the output strings one after another on the calling thread. See
     [Benchmarks](../benchmarks.md#thread-scaling).

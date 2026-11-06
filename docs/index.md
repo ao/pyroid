@@ -6,8 +6,8 @@ including free-threaded 3.14t and 3.15t.
 
 !!! warning "Pre-release"
     pyroid 1.0 is not on PyPI yet; `pip install pyroid` still gives the unrelated 0.7.x toolkit
-    (see [Migrating from 0.7](migrating-from-0.7.md)). Every number on this site is a preliminary
-    measurement in a Docker VM, labelled as such; a bare-metal benchmark run is pending.
+    (see [Migrating from 0.7](migrating-from-0.7.md)). Every number on this site was measured in
+    a Docker VM and is labelled as such; a bare-metal benchmark run is pending.
 
 ## The problem
 
@@ -67,11 +67,13 @@ Prebuilt wheels for Linux (glibc and musl), macOS and Windows, x86-64 and ARM64.
 | [`pyroid.translit`](guides/translit.md) | `anyascii`; a permissive alternative to GPL `Unidecode` | ready | `anyascii`-identical; *not* Unidecode's output |
 
 How fast? Per-module numbers, how they were measured and what they don't show are on the
-[Benchmarks](benchmarks.md) page. In short, single-threaded in a Docker VM: `pyroid.ftfy` is
-95–167× faster than ftfy on FineWeb, `pyroid.fasttext` 1.5–5.4× faster than fastText,
-`pyroid.filters` about 86× faster than datatrove for FineWeb's four filters, `pyroid.dedup`
-about 64× faster than datatrove on MinHash signatures, and `pyroid.translit` 37× faster than
-anyascii (*indicative, preliminary*).
+[Benchmarks](benchmarks.md) page. In short, in a Docker VM: the whole FineWeb chain on 8 threads
+is 26× faster than datatrove on 8 processes, and 49× faster single-threaded, with identical
+output. Per stage, on one thread, `pyroid.ftfy` is 147× faster than ftfy, `pyroid.fasttext`
+2.1–4.3× faster than fastText (fasttext-predict), `pyroid.filters` 52–107× faster than
+datatrove's filters, `pyroid.dedup` 63× faster than datatrove on MinHash signatures, and
+`pyroid.translit` 79× faster than anyascii (*Docker/OrbStack VM on Apple Silicon (12 vCPU),
+indicative*).
 
 ## Why trust the output?
 
