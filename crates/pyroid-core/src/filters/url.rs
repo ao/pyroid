@@ -127,11 +127,20 @@ impl std::error::Error for BuildError {}
 /// An exact set of strings in one byte arena, with an open-addressing table
 /// of 64-bit slots (a 32-bit hash tag and the entry number): 8 bytes of table
 /// per slot, 4 of offset per entry, plus the bytes themselves.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct StrSet {
     bytes: Vec<u8>,
     ends: Vec<u32>,
     slots: Vec<u64>,
+}
+
+impl fmt::Debug for StrSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StrSet")
+            .field("len", &self.len())
+            .field("bytes", &self.bytes.len())
+            .finish_non_exhaustive()
+    }
 }
 
 const TAG: u64 = 0xFFFF_FFFF_0000_0000;
