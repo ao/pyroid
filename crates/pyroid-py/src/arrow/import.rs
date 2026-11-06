@@ -675,3 +675,6 @@ pub fn import(obj: &Bound<'_, PyAny>) -> PyResult<Option<ArrowStrings>> {
     }
     Ok(None)
 }
+
+#[cfg(test)]
+mod tests;
