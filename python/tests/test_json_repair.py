@@ -191,14 +191,19 @@ def test_nesting_error() -> None:
         jr.repair_json("[" * (depth + 1))
     with pytest.raises(ValueError, match="exceeds the supported parser recursion depth"):
         jr.loads('{"a": ' * (depth + 1))
-    # Valid JSON takes the json.loads path, which has no depth limit.
+    # A valid JSON string result comes from the Rust decoder, which has no depth limit.
     deep = "[" * 100_000 + "]" * 100_000
     assert jr.repair_json(deep) == deep.replace("][", "], [")
-    value = jr.loads(deep)
-    for _ in range(100_000 - 1):
-        assert isinstance(value, list)
-        value = value[0]
-    assert value == []
+
+    # Values come from json.loads, as in json_repair (a RecursionError on some Pythons).
+    def outcome(f: Any) -> str:
+        try:
+            f(deep)
+        except RecursionError:
+            return "RecursionError"
+        return "ok"
+
+    assert outcome(jr.loads) == outcome(ref.loads)
 
 
 def test_surrogates_match_json_repair() -> None:
@@ -222,6 +227,8 @@ def test_reserved_code_points_are_delegated() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert jr.repair_json(doc) == ref.repair_json(doc)
+        assert jr.loads('"\U0010f800"') == ref.loads('"\U0010f800"')
+        assert jr.load(io.StringIO('["\U0010ffff"]')) == ["\U0010ffff"]
         assert jr.repair_json('"\\udbff\\udfff"') == ref.repair_json('"\\udbff\\udfff"')
     categories = [w.category for w in caught]
     assert pyroid.FallbackWarning in categories

@@ -259,6 +259,19 @@ def repair_json(
     else:
         dump = _dump_config(json_dumps_args)
         out_mode = _MODE_OBJECTS if dump is _PYTHON_DUMPS else _MODE_STRING
+    if out_mode != _MODE_STRING and not skip_json_loads:
+        # json_repair's own first step. For a value (not a string) CPython's json.loads is the
+        # fastest exact answer; only invalid JSON goes on to the Rust parser.
+        try:
+            value = json.loads(text)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            skip_json_loads = True
+        else:
+            if out_mode == _MODE_LOGGING:
+                return value, []
+            if dump is _PYTHON_DUMPS:
+                return "" if value == "" else json.dumps(value, **json_dumps_args)
+            return value
     result = _native.repair(
         text,
         out_mode,

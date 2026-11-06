@@ -18,12 +18,13 @@ port uses to store lone surrogates).
 
 Differences from json_repair
 ----------------------------
-- Nesting: json_repair raises ``ValueError`` past about 250-330 levels (it depends
-  on ``sys.getrecursionlimit()`` and the caller's stack) and ``RecursionError`` on
-  valid JSON past about 10,000-58,000 levels. pyroid repairs up to
-  :data:`MAX_DEPTH` levels and decodes valid JSON of any depth; deeper broken
-  input raises :class:`NestingError`, which is both a ``ValueError`` and a
-  ``RecursionError``.
+- Nesting: json_repair raises ``ValueError`` past about 140-330 levels of broken
+  input (it depends on ``sys.getrecursionlimit()`` and the caller's stack). pyroid
+  repairs up to :data:`MAX_DEPTH` levels; deeper broken input raises
+  :class:`NestingError`, which is both a ``ValueError`` and a ``RecursionError``.
+  Valid JSON is decoded by ``json.loads`` for objects, as in json_repair (so its
+  ``RecursionError``, past about 10,000 levels on 3.12, is the same), and by
+  pyroid at any depth for string results (json_repair raises there too).
 - ``load``/``from_file`` read the file once (``fd.read()``) instead of in
   ``chunk_length`` pieces; the result is the same, ``chunk_length`` is ignored and
   unseekable streams work.
