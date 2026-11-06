@@ -27,3 +27,18 @@ MINHASH_CONFIG: dict[str, Any] = {
 
 LID_MODELS = {"lid.176.bin": "models/lid.176.bin", "lid.176.ftz": "models/lid.176.ftz"}
 LID_TOPK = 5
+
+
+def lid_ref(platform: str) -> str:
+    """The fastText reference file for a ``data.platform_key()``.
+
+    fasttext-predict's probabilities depend on the CPU it was built for: GCC contracts the quantized-matrix
+    loops into fused multiply-adds on aarch64 but not on baseline x86-64, so ``lid.176.ftz`` differs by up to
+    6e-7 (``lid.176.bin`` is identical). Each platform therefore has its own pinned file; linux-aarch64 keeps
+    the original name.
+    """
+    return (
+        "parity/fasttext-ref.parquet"
+        if platform == "linux-aarch64"
+        else f"parity/fasttext-ref.{platform}.parquet"
+    )

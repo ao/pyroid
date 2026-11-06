@@ -10,7 +10,8 @@ and exits 1 at the end if any differ (or are not pinned), naming them.
 Outputs (each pinned in bench/manifest.json with the oracle versions that produced it):
     parity/adversarial.parquet   id, text, kind, source_id     mojibake / non-English / near-dup / edge docs
     parity/ftfy-ref.parquet      id, fixed                       ftfy.fix_text(text) with default config
-    parity/fasttext-ref.parquet  model, id, labels, probs        top-5, on text.replace("\\n", " ") like datatrove
+    parity/fasttext-ref.parquet  model, id, labels, probs        top-5, on text.replace("\\n", " ") like datatrove;
+                                 one file per platform (specs.lid_ref): linux-aarch64 keeps this name
     parity/filters-ref.parquet   case, id, outcome, keep, reason, text_out
     parity/minhash-ref.parquet   id, signature, removed          datatrove MinhashDedup* on dev + adversarial
 """
@@ -37,7 +38,8 @@ SEED = 20261105
 OUT = {
     "adversarial": "parity/adversarial.parquet",
     "ftfy": "parity/ftfy-ref.parquet",
-    "fasttext": "parity/fasttext-ref.parquet",
+    # Per platform: fasttext-predict's floats depend on the CPU (specs.lid_ref).
+    "fasttext": specs.lid_ref(D.platform_key()),
     "filters": "parity/filters-ref.parquet",
     "dedup": "parity/minhash-ref.parquet",
 }
@@ -343,6 +345,7 @@ def ref_fasttext(pin: bool, workers: int) -> None:
         k=specs.LID_TOPK,
         call='model.predict(text.replace("\\n", " "), k=5, threshold=0.0)',
         models={m: D.load_manifest()["files"][rel]["sha256"] for m, rel in specs.LID_MODELS.items()},
+        platform=D.platform_key(),
     )
 
 

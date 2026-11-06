@@ -1,9 +1,10 @@
 """fastText inference: identical top-k labels, probabilities within 1e-6, same exceptions.
 
-Pinned outputs (``parity/fasttext-ref.parquet``) come from fasttext-predict 0.9.2.4 on CPython 3.13 for
-lid.176.bin and lid.176.ftz, top-5 on ``text.replace("\\n", " ")`` (datatrove's LID preprocessing). They let the
-suite run on interpreters the oracle doesn't install on (3.14, 3.14t, 3.15t); the live-oracle Hypothesis checks
-run wherever ``fasttext`` (fasttext-predict) imports.
+Pinned outputs (``specs.lid_ref``: ``parity/fasttext-ref.parquet`` on linux-aarch64, one file per other platform)
+come from fasttext-predict 0.9.2.4 on CPython 3.13 for lid.176.bin and lid.176.ftz, top-5 on
+``text.replace("\\n", " ")`` (datatrove's LID preprocessing). The oracle's floats depend on the CPU it runs on, so each
+platform compares against its own oracle's output. They let the suite run on interpreters the oracle doesn't install
+on (3.14, 3.14t, 3.15t); the live-oracle Hypothesis checks run wherever ``fasttext`` (fasttext-predict) imports.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from pyroid_parity import data as D
 from pyroid_parity import specs
 from pyroid_parity.plugin import need, need_corpus, reference
 
-REF = "parity/fasttext-ref.parquet"
+REF = specs.lid_ref(D.platform_key())
 ATOL = 1e-6
 MODELS = list(specs.LID_MODELS)
 

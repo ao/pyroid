@@ -2,6 +2,10 @@
 
 Every file the harness reads lives under ``$PYROID_DATA`` (default ``/data``, the shared Docker volume) and is
 pinned in the committed ``bench/manifest.json``. Loaders refuse to return data whose sha256 does not match.
+
+A reference whose bytes depend on the platform the oracle runs on carries ``"platform": "<os>-<arch>"`` (see
+``platform_key``); the manifest then pins one file per platform, and ``load_manifest`` only shows the current
+platform's (README, "Per-platform references").
 """
 
 from __future__ import annotations
@@ -9,6 +13,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
+import sys
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from functools import cache
@@ -43,10 +49,27 @@ def content_sha256(ids: Iterable[str], texts: Iterable[str]) -> str:
     return h.hexdigest()
 
 
-def load_manifest() -> dict[str, Any]:
+_ARCH_ALIASES = {"amd64": "x86_64", "x64": "x86_64", "arm64": "aarch64"}
+
+
+def platform_key() -> str:
+    """``<sys.platform>-<arch>`` of this interpreter, e.g. ``linux-x86_64``, ``linux-aarch64``, ``darwin-aarch64``."""
+    machine = platform.machine().lower()
+    return f"{sys.platform}-{_ARCH_ALIASES.get(machine, machine)}"
+
+
+def _load_all() -> dict[str, Any]:
     if not MANIFEST.exists():
         return {"schema": 1, "files": {}}
     return json.loads(MANIFEST.read_text("utf-8"))
+
+
+def load_manifest() -> dict[str, Any]:
+    """The manifest as seen from this platform: entries pinned for another ``platform`` are left out."""
+    manifest = _load_all()
+    here = platform_key()
+    manifest["files"] = {rel: e for rel, e in manifest["files"].items() if e.get("platform", here) == here}
+    return manifest
 
 
 def save_manifest(manifest: dict[str, Any]) -> None:
@@ -57,7 +80,7 @@ def save_manifest(manifest: dict[str, Any]) -> None:
 def pin(rel: str, **extra: Any) -> dict[str, Any]:
     """Record ``rel``'s sha256 and size (plus ``extra``) in the manifest; returns the entry."""
     path = DATA / rel
-    manifest = load_manifest()
+    manifest = _load_all()  # keeps the other platforms' entries
     entry = {"sha256": sha256_file(path), "bytes": path.stat().st_size, **extra}
     manifest["files"][rel] = entry
     save_manifest(manifest)

@@ -72,6 +72,24 @@ All inputs and references live in the shared Docker volume `/data` and are pinne
   against the manifest, exiting 1 if any differ; add `--pin` to record new hashes instead (adversarial generation is
   seeded and deterministic).
 
+### Per-platform references
+The fastText reference is pinned once per platform (`<sys.platform>-<arch>`, `pyroid_parity.data.platform_key`):
+`parity/fasttext-ref.parquet` for linux-aarch64, `parity/fasttext-ref.linux-x86_64.parquet` for linux-x86_64
+(`specs.lid_ref`). Such manifest entries carry `"platform"`, and `data.load_manifest` (so every loader, the suites,
+`bench/fetch.py --verify-all` and the bench gates) only sees the current platform's.
+- **Why** (measured in Docker, 2026-11-06): fasttext-predict 0.9.2.4's own floats differ by CPU. Its GCC `-O3` build
+  contracts the quantized-matrix loops (`addcode`, `mulcode`, `Vector::norm`) into fused multiply-adds on aarch64,
+  where FMA is baseline, and can't on baseline x86-64. On the 26,464 pinned predictions, x86_64 vs aarch64: labels
+  identical, `lid.176.bin` probabilities bit-identical, `lid.176.ftz` 10,837 of 13,232 docs differ by up to 5.96e-7.
+  pyroid follows the same per-architecture rule (`fasttext::matrix::fused`), and is bit-identical to the oracle of
+  its own platform on all 26,464.
+- **Assumption:** glibc. The x86_64 pin was generated under Rosetta 2 emulation, which exposes FMA but not AVX2, so
+  glibc's libm took its SSE2 paths; a CPU with AVX2 + FMA runs glibc's FMA variants of `exp`/`log`, which can round
+  differently in the last bit. Both pyroid and fastText call the same libm, so they still agree with each other, but
+  the CI runner's regenerated file could differ from this pin. If the parity-data job reports a mismatch for this
+  file only, re-pin it there (`python -m pyroid_parity.refs fasttext --pin`).
+- Every other reference (adversarial set, ftfy, filters, MinHash) is identical on both platforms.
+
 ## Oracle choices
 - **fastText → fasttext-predict 0.9.2.4.**
   - It is the package datatrove's LID loads (`fasttext.FastText._FastText`), built from the unmodified fastText C++ predict path.

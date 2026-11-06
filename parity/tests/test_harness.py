@@ -112,6 +112,46 @@ def test_manifest_entries_are_well_formed():
     assert sum(e["bytes"] for e in files.values()) <= 1_500_000_000  # data + models budget
 
 
+def test_manifest_shows_only_this_platforms_references(tmp_path, monkeypatch):
+    here = D.platform_key()
+    manifest = tmp_path / "manifest.json"
+    entry = {"sha256": "0" * 64, "bytes": 1}
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "files": {
+                    "any.parquet": entry,
+                    "here.parquet": {**entry, "platform": here},
+                    "other.parquet": {**entry, "platform": "plan9-mips"},
+                },
+            }
+        ),
+        "utf-8",
+    )
+    monkeypatch.setattr(D, "MANIFEST", manifest)
+    monkeypatch.setattr(D, "DATA", tmp_path)
+    assert sorted(D.load_manifest()["files"]) == ["any.parquet", "here.parquet"]
+    # Pinning one platform's file keeps the other platforms' entries.
+    (tmp_path / "here.parquet").write_bytes(b"x")
+    D.pin("here.parquet", platform=here)
+    assert sorted(json.loads(manifest.read_text("utf-8"))["files"]) == [
+        "any.parquet",
+        "here.parquet",
+        "other.parquet",
+    ]
+
+
+def test_every_platform_specific_reference_is_named_for_its_platform():
+    from pyroid_parity import specs
+
+    files = D._load_all()["files"]
+    lid = {rel: e["platform"] for rel, e in files.items() if rel.startswith("parity/fasttext-ref")}
+    assert "linux-aarch64" in lid.values() and "linux-x86_64" in lid.values()
+    assert all(specs.lid_ref(p) == rel for rel, p in lid.items())
+    assert all("platform" not in e for rel, e in files.items() if rel not in lid)
+
+
 def test_content_hash_is_format_independent():
     assert D.content_sha256(["a"], ["b"]) == D.content_sha256(iter(["a"]), iter(["b"]))
     assert D.content_sha256(["ab"], ["c"]) != D.content_sha256(
