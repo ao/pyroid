@@ -1297,6 +1297,7 @@ import os as _os  # noqa: E402
 import re as _re  # noqa: E402
 import sys as _sys  # noqa: E402
 
+from pyroid._pyroid import FallbackWarning as _FallbackWarning  # noqa: E402
 from pyroid._pyroid import PyroidError as _PyroidError  # noqa: E402
 
 __all__ += [
@@ -1320,6 +1321,18 @@ _NO_AUTOMATON = (
     "make_automaton to convert the trie to an automaton."
 )
 _warned_tldextract = False
+_url_fallbacks: set[str] = set()
+
+
+def _url_fallback(reason: str) -> None:
+    if reason not in _url_fallbacks:
+        _url_fallbacks.add(reason)
+        warnings.warn(
+            f"pyroid.filters.URLFilter: {reason} is not supported by pyroid; running "
+            "tldextract's own code for them (slow path). This warning is shown once.",
+            _FallbackWarning,
+            stacklevel=4,
+        )
 
 
 def _url_normalize(text: Any, replace: str = "") -> Any:
@@ -1616,8 +1629,11 @@ class URLFilter:
         self._banned_subwords = banned_subwords
         self._soft_banned_words = soft_banned_words
         self._tld = tld
+        trie = _suffix_trie(tld)
+        if trie[-1]:
+            _url_fallback("xn-- labels with an idna lacking the canonical A-label check")
         self._native = _native._URLFilter(
-            _suffix_trie(tld),
+            trie,
             ([str(s) for s in domains if isinstance(s, str) and _encodable(s)], domain_texts),
             ([str(s) for s in urls if isinstance(s, str) and _encodable(s)], url_texts),
             (
@@ -1675,12 +1691,15 @@ class URLFilter:
                 pass
             else:
                 return out
-        return [
-            self._native.reasons(u, allow_empty=True)
-            if type(u) is str and _encodable(u)
-            else self._python_reason(u)
-            for u in urls
-        ]
+        res: list[str | None] = []
+        for u in urls:
+            if type(u) is str and _encodable(u):
+                res.append(self._native.reasons(u, allow_empty=True))
+                continue
+            if isinstance(u, str):
+                _url_fallback("URLs with lone surrogates")
+            res.append(self._python_reason(u))
+        return res
 
     def _python_reason(self, url: Any) -> str | None:
         """Run datatrove's ``filter()`` in Python, for a URL the native path can't take."""

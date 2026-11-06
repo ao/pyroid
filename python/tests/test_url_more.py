@@ -784,6 +784,7 @@ def test_drop_in_signature_and_pickle() -> None:
 
 
 @pytest.mark.parametrize("url", [None, "", 0, b"http://a.com", 5, "http://a.com/\udfff"])
+@pytest.mark.filterwarnings("ignore::pyroid.FallbackWarning")
 def test_drop_in_odd_urls(url: Any) -> None:
     pdt = _pdt()
     dt = _datatrove()(use_integrated_lists=False, banned_words=["porn"])
@@ -800,6 +801,7 @@ def test_drop_in_odd_urls(url: Any) -> None:
     assert got == want
 
 
+@pytest.mark.filterwarnings("ignore::pyroid.FallbackWarning")
 def test_drop_in_surrogate_urls() -> None:
     """URLs with lone surrogates (e.g. from JSON escapes) take the Python path, as datatrove."""
     pdt = _pdt()
@@ -909,3 +911,20 @@ def test_module_namespace() -> None:
         assert name in pf.__all__
     assert pf.TLDEXTRACT_VERSION == tldextract.__version__ == "5.4.0"
     assert repr(_small()).startswith("<pyroid.filters.URLFilter: 2 domains")
+
+
+def test_fallback_warnings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each slow path warns once: lone-surrogate URLs (drop-in), deferred xn-- lookups."""
+    pdt = _pdt()
+    monkeypatch.setattr(pf, "_url_fallbacks", set())
+    step = pdt.URLFilter(use_integrated_lists=False, banned_words=["porn"])
+    step.tldextractor = _tld()
+    with pytest.warns(pyroid.FallbackWarning, match="lone surrogates"):
+        assert step.filter(_docs(["http://a.com/porn\ud800"])[0]) == (False, "hard_blacklisted")
+    real = cast(Any, pf)._suffix_trie
+    monkeypatch.setattr(pf, "_suffix_trie", lambda tld: (*real(tld)[:-1], True))
+    with pytest.warns(pyroid.FallbackWarning, match="canonical A-label"):
+        f = pf.URLFilter(
+            extra_domains=["xn--abc.com"], use_integrated_lists=False, tld_extractor=_tld()
+        )
+    assert f.reasons(["http://xn--abc.com/", "http://a.com"]) == ["domain", None]
