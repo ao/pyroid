@@ -272,7 +272,8 @@ jobs:
   parity-data:
     name: parity data (pinned inputs and references, ${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    # The metrics references (rouge-score + sacrebleu on CNN/DM, SummEval, WMT21) add ~10-25 minutes on a miss.
+    timeout-minutes: 75
     permissions:
       contents: read # checkout (bench/manifest.json, bench/fetch.py, parity/)
     strategy:
@@ -329,7 +330,7 @@ jobs:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
         # One entry per merged product module pyroid.<suite>. Every suite runs on the free-threaded builds too:
         # without the oracle group they compare against the pinned refs, and live-oracle checks skip in the report.
-        suite: [ftfy, fasttext, filters, dedup]
+        suite: [ftfy, fasttext, filters, dedup, metrics]
         python: ["3.12", "3.14t", "3.15t"]
         # The wheel each interpreter installs (the three flavours the wheels job checks for).
         include:
