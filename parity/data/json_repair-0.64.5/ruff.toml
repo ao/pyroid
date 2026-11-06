@@ -1,0 +1,2 @@
+# Vendored from json_repair v0.64.5 (MIT): keep upstream_tests/ byte-identical, never lint or reformat it.
+extend-exclude = ["upstream_tests"]

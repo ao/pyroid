@@ -24,8 +24,13 @@ dedup     ``minhash_signatures(texts, **config) -> list[list[int] | None]`` (``N
 metrics   a package with ``rouge_scorer`` (rouge-score's ``RougeScorer``; optional ``score_batch``) and ``sacrebleu``
           (``BLEU``/``CHRF`` with ``corpus_score``/``get_signature``, ``sentence_bleu``/``sentence_chrf``; optional
           ``sentence_bleu_batch``/``sentence_chrf_batch``) submodules; see ``pyroid_parity.metrics_cases``.
+json_repair  json_repair 0.64.5's own API: ``repair_json(json_str="", return_objects=False,
+          skip_json_loads=False, logging=False, json_fd=None, chunk_length=0, stream_stable=False, strict=False,
+          schema=None, schema_repair_mode="standard", **json_dumps_args)``, ``loads``, ``load`` and ``from_file``
+          with json_repair's signatures. Results must be identical: ``str`` byte for byte, objects and repair logs
+          type-exact (``pyroid_parity.json_repair_compare.same``), exceptions with the same type and message.
 
-Warnings: where a suite compares warnings (the ftfy ``errors`` check), a candidate's
+Warnings: where a suite compares warnings (the ftfy ``errors`` check, every json_repair check), a candidate's
 ``pyroid.FallbackWarning`` (its "delegating to the incumbent" notice, shown once per process; see
 ``docs/dev/MODULES.md``) is left out, so the result does not depend on test order. Every other warning
 category must match the reference's.
@@ -41,13 +46,14 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-SUITES = ("ftfy", "fasttext", "filters", "dedup", "metrics")
+SUITES = ("ftfy", "fasttext", "filters", "dedup", "metrics", "json_repair")
 REFERENCE = {
     "ftfy": "ftfy",
     "fasttext": "fasttext",
     "filters": "datatrove",
     "dedup": "datatrove",
     "metrics": "rouge_score",
+    "json_repair": "json_repair",
 }
 # Distribution that provides a module, for version reporting when it differs from the module name.
 DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel")}
@@ -241,10 +247,24 @@ def _generic_metrics(mod: Any) -> Any:
     return Metrics.from_package(mod)
 
 
+class GenericJsonRepair:
+    """json_repair's four public functions, taken from the module as they are."""
+
+    FUNCTIONS = ("repair_json", "loads", "load", "from_file")
+
+    def __init__(self, mod: Any) -> None:
+        self.mod = mod
+        self.repair_json: Callable[..., Any] = mod.repair_json
+        self.loads: Callable[..., Any] = mod.loads
+        self.load: Callable[..., Any] = mod.load
+        self.from_file: Callable[..., Any] = mod.from_file
+
+
 GENERIC: dict[str, Callable[[Any], Any]] = {
     "ftfy": GenericFtfy,
     "fasttext": GenericFasttext,
     "filters": GenericFilters,
     "dedup": GenericDedup,
     "metrics": _generic_metrics,
+    "json_repair": GenericJsonRepair,
 }

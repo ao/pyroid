@@ -42,3 +42,18 @@ def lid_ref(platform: str) -> str:
         if platform == "linux-aarch64"
         else f"parity/fasttext-ref.{platform}.parquet"
     )
+
+
+# json_repair suite: the pinned version and the option sets every corpus / Hypothesis input is repaired under
+# (keyword arguments of ``repair_json``; ``ensure_ascii`` and ``indent`` are passed on to ``json.dumps``).
+JSON_REPAIR_VERSION = "0.64.5"
+JSON_REPAIR_OPTION_SETS: dict[str, dict[str, Any]] = {
+    "default": {},
+    "return_objects": {"return_objects": True},
+    "logging": {"logging": True},
+    "skip_json_loads": {"skip_json_loads": True},
+    "ensure_ascii_false": {"ensure_ascii": False},
+    "stream_stable": {"stream_stable": True},
+    "strict": {"strict": True},
+    "indent2": {"indent": 2},
+}

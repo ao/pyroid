@@ -9,6 +9,7 @@ license = "MIT"
 # pinned references stored in /data, and against the live oracle wherever the oracle installs.
 dependencies = [
     "ftfy==6.3.1",
+    "json-repair==0.64.5",
     "pytest>=9.2",
     "pytest-timeout>=2.4",
     "hypothesis>=6.170",

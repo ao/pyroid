@@ -1,0 +1,151 @@
+from src.json_repair.json_repair import repair_json
+
+
+def test_parse_object() -> None:
+    assert repair_json('{ "key": "value", "key2": 1, "key3": True }', return_objects=True) == {
+        "key": "value",
+        "key2": 1,
+        "key3": True,
+    }
+    assert repair_json("{", return_objects=True) == {}
+    assert repair_json('{ "key": value, "key2": 1 "key3": null }', return_objects=True) == {
+        "key": "value",
+        "key2": 1,
+        "key3": None,
+    }
+    assert repair_json("   {  }   ") == "{}"
+    assert repair_json("{") == "{}"
+    assert repair_json("}") == ""
+    assert repair_json('{"') == "{}"
+
+
+def test_parse_object_edge_cases() -> None:
+    assert repair_json("{foo: [}") == '{"foo": []}'
+    assert repair_json('{"": "value"') == '{"": "value"}'
+    assert repair_json('{"key": "v"alue"}') == '{"key": "v\\"alue\\""}'
+    assert repair_json('{"value_1": true, COMMENT "value_2": "data"}') == '{"value_1": true, "value_2": "data"}'
+    assert (
+        repair_json('{"value_1": true, SHOULD_NOT_EXIST "value_2": "data" AAAA }')
+        == '{"value_1": true, "value_2": "data"}'
+    )
+    assert repair_json('{"" : true, "key2": "value2"}') == '{"": true, "key2": "value2"}'
+    assert (
+        repair_json("""{""answer"":[{""traits"":''Female aged 60+'',""answer1"":""5""}]}""")
+        == '{"answer": [{"traits": "Female aged 60+", "answer1": "5"}]}'
+    )
+    assert (
+        repair_json('{ "words": abcdef", "numbers": 12345", "words2": ghijkl" }')
+        == '{"words": "abcdef", "numbers": 12345, "words2": "ghijkl"}'
+    )
+    assert (
+        repair_json("""{"number": 1,"reason": "According...""ans": "YES"}""")
+        == '{"number": 1, "reason": "According...", "ans": "YES"}'
+    )
+    assert repair_json("""{ "a" : "{ b": {} }" }""") == '{"a": "{ b"}'
+    assert repair_json("""{"b": "xxxxx" true}""") == '{"b": "xxxxx"}'
+    assert repair_json('{"key": "Lorem "ipsum" s,"}') == '{"key": "Lorem \\"ipsum\\" s,"}'
+    assert repair_json('{"lorem": ipsum, sic, datum.",}') == '{"lorem": "ipsum, sic, datum."}'
+    assert (
+        repair_json('{"lorem": sic tamet. "ipsum": sic tamet, quick brown fox. "sic": ipsum}')
+        == '{"lorem": "sic tamet.", "ipsum": "sic tamet", "sic": "ipsum"}'
+    )
+    assert (
+        repair_json('{"lorem_ipsum": "sic tamet, quick brown fox. }')
+        == '{"lorem_ipsum": "sic tamet, quick brown fox."}'
+    )
+    assert repair_json('{"key":value, " key2":"value2" }') == '{"key": "value", " key2": "value2"}'
+    assert repair_json('{"key":value "key2":"value2" }') == '{"key": "value", "key2": "value2"}'
+    assert (
+        repair_json("{'text': 'words{words in brackets}more words'}")
+        == '{"text": "words{words in brackets}more words"}'
+    )
+    assert repair_json("{text:words{words in brackets}}") == '{"text": "words{words in brackets}"}'
+    assert repair_json("{text:words{words in brackets}m}") == '{"text": "words{words in brackets}m"}'
+    assert repair_json('{"key": "value, value2"```') == '{"key": "value, value2"}'
+    assert repair_json('{"key": "value}```') == '{"key": "value"}'
+    assert repair_json("{key:value,key2:value2}") == '{"key": "value", "key2": "value2"}'
+    assert repair_json('{"key:"value"}') == '{"key": "value"}'
+    assert repair_json('{"key:value}') == '{"key": "value"}'
+    assert (
+        repair_json('[{"lorem": {"ipsum": "sic"}, """" "lorem": {"ipsum": "sic"}]')
+        == '[{"lorem": {"ipsum": "sic"}}, {"lorem": {"ipsum": "sic"}}]'
+    )
+    assert (
+        repair_json('{ "key": ["arrayvalue"], ["arrayvalue1"], ["arrayvalue2"], "key3": "value3" }')
+        == '{"key": ["arrayvalue", "arrayvalue1", "arrayvalue2"], "key3": "value3"}'
+    )
+    assert (
+        repair_json('{ "key": [[1, 2, 3], "a", "b"], [[4, 5, 6], [7, 8, 9]] }')
+        == '{"key": [[1, 2, 3], "a", "b", [4, 5, 6], [7, 8, 9]]}'
+    )
+    assert (
+        repair_json('{ "key": ["arrayvalue"], "key3": "value3", ["arrayvalue1"] }')
+        == '{"key": ["arrayvalue"], "key3": "value3", "arrayvalue1": ""}'
+    )
+    assert (
+        repair_json('{"key": "{\\\\"key\\\\\\":[\\"value\\\\\\"],\\"key2\\":"value2"}"}')
+        == '{"key": "{\\"key\\":[\\"value\\"],\\"key2\\":\\"value2\\"}"}'
+    )
+    assert repair_json('{"key": , "key2": "value2"}') == '{"key": "", "key2": "value2"}'
+    assert (
+        repair_json('{"array":[{"key": "value"], "key2": "value2"}')
+        == '{"array": [{"key": "value"}], "key2": "value2"}'
+    )
+    assert repair_json('[{"key":"value"}},{"key":"value"}]') == '[{"key": "value"}, {"key": "value"}]'
+    assert (
+        repair_json("{'key': ['a':{'duplicated_key': 'duplicated_value', 'duplicated_key': 'duplicated_value'}]}")
+        == '{"key": [{"a": {"duplicated_key": "duplicated_value"}}]}'
+    )
+    assert repair_json('[{"b":"v2","b":"v2"}]', return_objects=True, skip_json_loads=True) == [{"b": "v2"}]
+    assert repair_json("{'item1', 'item2', 'item3'}", return_objects=True, skip_json_loads=True) == [
+        "item1",
+        "item2",
+        "item3",
+    ]
+
+
+def test_parse_object_preserves_backslash_escaped_keys() -> None:
+    raw = '{\\"key\\": \\"value\\"}'
+
+    repaired, logs = repair_json(raw, return_objects=True, skip_json_loads=True, logging=True)
+
+    assert repaired == {"key": "value"}
+    assert any("reparsing it as an object" in entry["text"] for entry in logs)
+    assert repair_json(raw, skip_json_loads=True) == '{"key": "value"}'
+
+
+def test_parse_object_empty_object_classifier_keeps_objectish_inputs() -> None:
+    repaired, logs = repair_json("{:}", return_objects=True, skip_json_loads=True, logging=True)
+
+    assert repaired == {}
+    assert any("object-style separator" in entry["text"] for entry in logs)
+
+    repaired, logs = repair_json("{   }", return_objects=True, skip_json_loads=True, logging=True)
+
+    assert repaired == {}
+    assert logs == []
+
+
+def test_parse_object_empty_object_classifier_keeps_array_fallback_for_backslash_noise() -> None:
+    repaired, logs = repair_json(r"{foo\bar}", return_objects=True, skip_json_loads=True, logging=True)
+
+    assert isinstance(repaired, list)
+    assert any("try to parse this as an array instead" in entry["text"] for entry in logs)
+
+
+def test_parse_object_empty_object_array_fallback_preserves_legacy_key_context() -> None:
+    assert repair_json("[{5}s ", return_objects=True, skip_json_loads=True) == [[5]]
+
+
+def test_parse_object_merge_at_the_end() -> None:
+    assert repair_json('{"key": "value"}, "key2": "value2"}') == '{"key": "value", "key2": "value2"}'
+    assert repair_json('{"key": "value"}, "key2": }') == '{"key": "value", "key2": ""}'
+    assert repair_json('{"key": "value"}, []') == '{"key": "value"}'
+    assert repair_json('{"key": "value"}, ["abc"]') == '[{"key": "value"}, ["abc"]]'
+    assert repair_json('{"key": "value"}, {}') == '{"key": "value"}'
+    assert repair_json('{"key": "value"}, "" : "value2"}') == '{"key": "value", "": "value2"}'
+    assert repair_json('{"key": "value"}, "key2" "value2"}') == '{"key": "value", "key2": "value2"}'
+    assert (
+        repair_json('{"key1": "value1"}, "key2": "value2", "key3": "value3"}')
+        == '{"key1": "value1", "key2": "value2", "key3": "value3"}'
+    )
