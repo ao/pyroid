@@ -12,12 +12,15 @@ extend-exclude = [
   "crates/pyroid-core/src/ftfy/tables.rs",
   "crates/pyroid-core/src/filters/tables.rs",
   "crates/pyroid-core/src/metrics/sacrebleu/tables.rs",
+  "crates/pyroid-core/src/json_repair/tables.rs",
   # Test data, incumbent fixtures and raw benchmark results: mojibake, confusables, deliberately
   # misspelt and non-English text. Keep in step with the file-fixer excludes in .pre-commit-config.yaml.
   "python/tests/data/",
   "crates/pyroid-core/tests/ftfy_data/",
   "crates/pyroid-core/tests/filters_data/",
   "crates/pyroid-core/tests/metrics_data/",
+  # json_repair's own test inputs and its outputs for them, recorded byte for byte.
+  "crates/pyroid-core/src/json_repair/testdata/",
   "bench/data/",
   "bench/results/",
   # Charts copied byte for byte from bench/results/ (matplotlib SVGs).
@@ -52,3 +55,11 @@ extend-glob = ["gates.py"]
 
 [type.bench-gates.extend-identifiers]
 nd = "nd"
+
+# bench/json_repair_bench.py's seeded sample data: the name "Ines" and "caf\u00e9" (an escaped e-acute).
+[type.jr-bench]
+extend-glob = ["json_repair_bench.py"]
+
+[type.jr-bench.extend-words]
+ines = "ines"
+caf = "caf"
