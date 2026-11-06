@@ -11,6 +11,7 @@ on:
   pull_request:
     paths:
       - "crates/pyroid-core/src/translit/**"
+      - "crates/pyroid-py/src/translit.rs"
       - "python/pyroid/translit*"
       - "python/tests/test_translit_unidecode.py"
       - ".github/workflows/oracle-unidecode.yml"
