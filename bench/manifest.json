@@ -125,6 +125,50 @@
         "license": "ODC-By 1.0"
       }
     },
+    "metrics/cnndm-3.0.0-test.parquet": {
+      "sha256": "04e322d2634a96dba76bf9a6294fbbe48e0b36abeae43f13d86ba2c3bebffe4e",
+      "bytes": 30000471,
+      "rows": 11490,
+      "source": {
+        "repo": "abisee/cnn_dailymail",
+        "revision": "96df5e686bee6baa90b8bee7c28b81fa3fa6223d",
+        "file": "3.0.0/test-00000-of-00001.parquet",
+        "license": "Apache-2.0"
+      }
+    },
+    "metrics/summeval.parquet": {
+      "sha256": "7ff6f3f4d044223bd6922c5434d27bf28473950346fcfc2a3b7352c19163690e",
+      "bytes": 422779,
+      "rows": 100,
+      "source": {
+        "repo": "mteb/summeval",
+        "revision": "bfc121155064afa2d81b5505682ffc0d96f4334c",
+        "file": "data/test-00000-of-00001-35901af5f6649399.parquet",
+        "license": "MIT"
+      }
+    },
+    "metrics/wmt21.parquet": {
+      "sha256": "25a5d22adddb5c87b461e8c8144a185fd08b968e35ec18d800da9daed29b82b5",
+      "bytes": 12002835,
+      "rows": 163000,
+      "systems": 141,
+      "source": {
+        "repo": "wmt-conference/wmt21-news-systems",
+        "revision": "f41750dadbf2ba6ab01ca5380347d253298a3427",
+        "testset": "newstest2021",
+        "langpairs": [
+          "en-de",
+          "de-en",
+          "en-zh",
+          "zh-en",
+          "en-ru",
+          "ru-en",
+          "en-ja",
+          "ja-en"
+        ],
+        "license": "WMT21 shared-task release (research use; not redistributed)"
+      }
+    },
     "models/lid.176.bin": {
       "sha256": "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e",
       "bytes": 131266198,

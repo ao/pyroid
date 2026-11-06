@@ -11,6 +11,9 @@ Layout under /data (total budget 1.5 GB):
     fineweb/fineweb-dev-10k.parquet    dev slice: the first 10,000 of those rows
     fineweb2/<lang>.parquet            first rows of FineWeb-2 test splits (non-English adversarial input)
     models/lid.176.bin, lid.176.ftz    fastText language-ID models (CC BY-SA 3.0)
+    metrics/cnndm-3.0.0-test.parquet   CNN/DailyMail 3.0.0 test split, as published (pyroid.metrics ROUGE parity)
+    metrics/summeval.parquet           SummEval: 16 systems' summaries of 100 CNN/DM articles, 11 references each
+    metrics/wmt21.parquet              WMT21 newstest system outputs + references, 8 language pairs (BLEU/chrF)
 
 The parity/ files in the manifest are generated, not fetched: ``python -m pyroid_parity.refs`` writes them and
 verifies what it wrote, so fetch.py checks them only with ``--verify-all``.
@@ -48,9 +51,29 @@ MODELS = {
     "models/lid.176.bin": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin",
     "models/lid.176.ftz": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz",
 }
+# Eval data for the pyroid.metrics parity suite (ROUGE: summarization; BLEU/chrF: machine translation).
+CNNDM = {
+    "repo": "abisee/cnn_dailymail",
+    "revision": "96df5e686bee6baa90b8bee7c28b81fa3fa6223d",
+    "file": "3.0.0/test-00000-of-00001.parquet",
+    "license": "Apache-2.0",
+}
+SUMMEVAL = {
+    "repo": "mteb/summeval",
+    "revision": "bfc121155064afa2d81b5505682ffc0d96f4334c",
+    "file": "data/test-00000-of-00001-35901af5f6649399.parquet",
+    "license": "MIT",
+}
+WMT21 = {
+    "repo": "wmt-conference/wmt21-news-systems",
+    "revision": "f41750dadbf2ba6ab01ca5380347d253298a3427",
+    "testset": "newstest2021",
+    "langpairs": ["en-de", "de-en", "en-zh", "zh-en", "en-ru", "ru-en", "en-ja", "ja-en"],
+    "license": "WMT21 shared-task release (research use; not redistributed)",
+}
 BUDGET = 1_500_000_000
 # Manifest prefix of the files each --only step downloads.
-INPUTS = {"fineweb": "fineweb/", "fineweb2": "fineweb2/", "models": "models/"}
+INPUTS = {"fineweb": "fineweb/", "fineweb2": "fineweb2/", "models": "models/", "metrics": "metrics/"}
 
 
 def log(msg: str) -> None:
@@ -160,6 +183,88 @@ def fetch_models(pin: bool) -> None:
             D.pin(rel, source={"url": url, "license": "CC BY-SA 3.0"})
 
 
+def hf_url(src: dict) -> str:
+    return f"https://huggingface.co/datasets/{src['repo']}/resolve/{src['revision']}/{src['file']}"
+
+
+def wmt21_files() -> dict[str, list[str]]:
+    """Language pair -> [reference files..., system output files...] at the pinned revision (sorted)."""
+    import json
+
+    url = f"https://api.github.com/repos/{WMT21['repo']}/git/trees/{WMT21['revision']}?recursive=1"
+    with urllib.request.urlopen(url, timeout=120) as r:  # pinned commit: the listing cannot change
+        tree = json.load(r)
+    assert not tree.get("truncated"), "GitHub tree listing truncated"
+    out: dict[str, list[str]] = {}
+    for lp in WMT21["langpairs"]:
+        stem = f"{WMT21['testset']}.{lp}"
+        refs = sorted(x["path"] for x in tree["tree"] if x["path"].startswith(f"txt/references/{stem}.ref."))
+        hyps = sorted(
+            x["path"] for x in tree["tree"] if x["path"].startswith(f"txt/system-outputs/{stem}.hyp.")
+        )
+        out[lp] = refs + hyps
+    return out
+
+
+def _lines(raw: bytes) -> list[str]:
+    text = raw.decode("utf-8")
+    return text[:-1].split("\n") if text.endswith("\n") else text.split("\n")
+
+
+def build_wmt21():
+    """One row per (language pair, system, segment): hyp and the references in file order (A, B, C, ...)."""
+    import pyarrow as pa
+
+    rows: dict[str, list] = {"lp": [], "system": [], "seg": [], "hyp": [], "refs": [], "ref_names": []}
+    base = f"https://raw.githubusercontent.com/{WMT21['repo']}/{WMT21['revision']}/"
+    for lp, files in wmt21_files().items():
+        stem = f"{WMT21['testset']}.{lp}"
+        refs, hyps = [], []
+        for path in files:
+            with urllib.request.urlopen(base + path, timeout=120) as r:
+                lines = _lines(r.read())
+            name = path.rsplit("/", 1)[1].removeprefix(stem + ".")
+            (refs if name.startswith("ref.") else hyps).append((name.split(".")[1], lines))
+        n = len(refs[0][1])
+        bad = [nm for nm, lines in refs + hyps if len(lines) != n]
+        assert not bad, f"{lp}: line counts differ from ref {refs[0][0]} ({n}): {bad}"
+        log(f"WMT21 {lp}: {len(hyps)} systems x {n} segments, references {[nm for nm, _ in refs]}")
+        for system, lines in hyps:
+            for i, hyp in enumerate(lines):
+                rows["lp"].append(lp)
+                rows["system"].append(system)
+                rows["seg"].append(i)
+                rows["hyp"].append(hyp)
+                rows["refs"].append([lines_r[i] for _, lines_r in refs])
+                rows["ref_names"].append([nm for nm, _ in refs])
+    return pa.table(rows)
+
+
+def fetch_metrics(pin: bool) -> None:
+    for rel, src in (("metrics/cnndm-3.0.0-test.parquet", CNNDM), ("metrics/summeval.parquet", SUMMEVAL)):
+        if not (D.DATA / rel).exists():
+            log(f"downloading {src['repo']} {src['file']}")
+            download(hf_url(src), D.DATA / rel)
+        if pin:
+            import pyarrow.parquet as pq
+
+            D.pin(rel, rows=pq.ParquetFile(D.DATA / rel).metadata.num_rows, source=src)
+    rel = "metrics/wmt21.parquet"
+    if not (D.DATA / rel).exists():
+        log("WMT21: downloading the newstest2021 references and system outputs from GitHub")
+        write_parquet(build_wmt21(), rel)
+    if pin:
+        import pyarrow.parquet as pq
+
+        t = pq.read_table(D.DATA / rel, columns=["lp", "system", "hyp"])
+        D.pin(
+            rel,
+            rows=t.num_rows,
+            systems=len(set(zip(t.column("lp").to_pylist(), t.column("system").to_pylist(), strict=True))),
+            source=WMT21,
+        )
+
+
 def verify(prefixes: tuple[str, ...] | None = None) -> int:
     """Re-hash the pinned files under ``prefixes`` (all of them for None); returns the number that are bad."""
     manifest = D.load_manifest()
@@ -191,7 +296,7 @@ def main() -> int:
         help="only verify every pinned file against manifest.json, the generated parity/ references included",
     )
     ap.add_argument("--pin", action="store_true", help="(re)write sha256 entries for fetched files")
-    ap.add_argument("--only", default="fineweb,fineweb2,models", help="comma-separated subset")
+    ap.add_argument("--only", default="fineweb,fineweb2,models,metrics", help="comma-separated subset")
     a = ap.parse_args()
     steps = set(a.only.split(","))
     if unknown := steps - INPUTS.keys():
@@ -205,6 +310,8 @@ def main() -> int:
             fetch_fineweb2(a.pin)
         if "models" in steps:
             fetch_models(a.pin)
+        if "metrics" in steps:
+            fetch_metrics(a.pin)
     return 1 if verify(tuple(INPUTS[s] for s in sorted(steps))) else 0
 
 
