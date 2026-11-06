@@ -114,7 +114,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        # ubuntu-24.04-arm (native aarch64) feeds the aarch64 parity leg: the fastText references are per platform.
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -265,17 +266,22 @@ jobs:
 
   # The parity data (pinned inputs + reference outputs, ~310 MB) is regenerated in CI and never published:
   # on a cache miss this job fetches the inputs and reruns the oracles, then caches the verified result.
+  # One cache per architecture. Some references are pinned per platform (the fastText oracle's floats depend on the
+  # CPU; parity/README.md, "Per-platform references"): pyroid_parity.data.load_manifest only shows the runner's own
+  # platform's entries, so `refs all`, `fetch.py --verify-all` and the suites pick linux-x86_64 or linux-aarch64 refs.
   parity-data:
-    name: parity data (pinned inputs and references)
-    runs-on: ubuntu-24.04
+    name: parity data (pinned inputs and references, ${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     permissions:
       contents: read # checkout (bench/manifest.json, bench/fetch.py, parity/)
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
     env:
       # Where pyroid_parity and bench/fetch.py read and write the pinned files (default /data).
       PYROID_DATA: ${{ github.workspace }}/bench/data
-    outputs:
-      key: ${{ steps.cache.outputs.cache-primary-key }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -286,7 +292,8 @@ jobs:
         with:
           path: bench/data
           # The manifest pins every file's sha256; the parity lockfile pins the oracles that produce the refs.
-          key: parity-data-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
+          # The parity jobs rebuild this exact key (keep the two in step).
+          key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
           lookup-only: true
       - if: steps.cache.outputs.cache-hit != 'true'
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -310,14 +317,16 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
   parity:
-    name: parity (${{ matrix.suite }}, ${{ matrix.python }})
+    name: parity (${{ matrix.suite }}, ${{ matrix.python }}, ${{ matrix.runner }})
     needs: [wheels, parity-data]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read # checkout (parity/, bench/manifest.json)
     strategy:
       fail-fast: false
       matrix:
+        # x86_64 and native aarch64: each compares against its own platform's references (see parity-data).
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
         # One entry per merged product module pyroid.<suite>. Every suite runs on the free-threaded builds too:
         # without the oracle group they compare against the pinned refs, and live-oracle checks skip in the report.
         suite: [ftfy, fasttext, filters, dedup]
@@ -341,13 +350,14 @@ jobs:
           enable-cache: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: wheels-ubuntu-24.04
+          name: wheels-${{ matrix.runner }}
           path: dist
-      - name: Restore the parity data
+      - name: Restore the parity data (this architecture's cache)
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bench/data
-          key: ${{ needs.parity-data.outputs.key }}
+          # The key parity-data saved for this runner's architecture.
+          key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
           fail-on-cache-miss: true
       - name: pytest parity/tests -m ${{ matrix.suite }} --impl pyroid.${{ matrix.suite }}
         env:
@@ -374,7 +384,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
-          name: parity-report-${{ matrix.suite }}-${{ matrix.python }}
+          name: parity-report-${{ matrix.suite }}-${{ matrix.python }}-${{ matrix.runner }}
           path: parity-report.json
           if-no-files-found: error
 
@@ -427,10 +437,108 @@ jobs:
             python/tests/test_filters_parity.py python/tests/test_dedup_datatrove.py | tee "$log"
           if grep '^SKIPPED' "$log"; then echo "::error::live-oracle tests skipped (see above)"; exit 1; fi
 
+  msrv:
+    name: MSRV (cargo check on Cargo.toml's rust-version)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # clippy's incompatible_msrv lint sees std APIs but not language features (let chains broke 1.85 once), so the
+      # MSRV gets a real build: both crates, tests and benches included. pyo3's build script needs an interpreter.
+      - name: cargo check --workspace --all-targets with the rust-version toolchain
+        env:
+          PYO3_PYTHON: python3
+        run: |
+          set -euo pipefail
+          msrv=$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)
+          [[ -n "$msrv" ]] || { echo "::error::no rust-version in Cargo.toml"; exit 1; }
+          rustup toolchain install "$msrv" --profile minimal
+          cargo "+$msrv" check --workspace --all-targets --locked
+
+  miri:
+    name: Miri (pyroid-py Arrow FFI unit tests)
+    # Native aarch64, where the tests were validated (simdutf8 takes its NEON path under Miri).
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read # checkout
+    env:
+      # A dated nightly, so a Miri change can't turn CI red on its own; bump it deliberately.
+      NIGHTLY: nightly-2026-11-05
+      PYO3_PYTHON: python3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the nightly toolchain with Miri
+        run: |
+          rustup toolchain install "$NIGHTLY" --profile minimal -c miri -c rust-src
+          cargo "+$NIGHTLY" miri setup
+      # pyroid-py's lib is `test = false` (cargo test --workspace skips it); the arrow/*/tests.rs unit tests never
+      # call into Python (pyo3 is only built: its build script reads PYO3_PYTHON).
+      - name: cargo miri test (Stacked Borrows)
+        run: cargo "+$NIGHTLY" miri test -p pyroid-py --lib --locked -- arrow
+      - name: cargo miri test (Tree Borrows, strict provenance, symbolic alignment)
+        env:
+          MIRIFLAGS: -Zmiri-tree-borrows -Zmiri-strict-provenance -Zmiri-symbolic-alignment-check
+        run: cargo "+$NIGHTLY" miri test -p pyroid-py --lib --locked -- arrow
+
+  # Advisory: deliberately not in ci-ok. A red fuzz smoke flags a crash or a build break in fuzz/ without blocking
+  # merges; the corpora replay first, so a regression on a known input shows up here.
+  fuzz-smoke:
+    name: fuzz smoke (cargo-fuzz, 60 s per target; advisory)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read # checkout (fuzz/ targets and corpora)
+    env:
+      NIGHTLY: nightly-2026-11-05
+      CARGO_FUZZ_VERSION: "0.13.2"
+      # Per target: replay the committed corpus, then fuzz for the rest of the 60 s.
+      FUZZ_ARGS: -max_total_time=60 -rss_limit_mb=2048 -timeout=10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The Arrow target links libpython (it compiles pyroid-py's PyO3 sources); setup-python's builds are shared.
+      - id: py
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install the nightly toolchain and cargo-fuzz
+        run: |
+          rustup toolchain install "$NIGHTLY" --profile minimal
+          cargo install --locked "cargo-fuzz@${CARGO_FUZZ_VERSION}"
+      - name: pyroid-core targets (fuzz/; debug assertions, no sanitizer, as fuzz/README.md)
+        working-directory: fuzz
+        run: |
+          set -euo pipefail
+          read -ra args <<< "$FUZZ_ARGS"
+          mapfile -t targets < <(cargo "+$NIGHTLY" fuzz list)
+          for t in "${targets[@]}"; do
+            echo "::group::$t"
+            cargo "+$NIGHTLY" fuzz run -a -s none "$t" -- "${args[@]}"
+            echo "::endgroup::"
+          done
+      - name: Arrow C Data importer (fuzz/arrow; AddressSanitizer)
+        env:
+          PYO3_PYTHON: ${{ steps.py.outputs.python-path }}
+        run: |
+          set -euo pipefail
+          read -ra args <<< "$FUZZ_ARGS"
+          LD_LIBRARY_PATH=$("$PYO3_PYTHON" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')
+          export LD_LIBRARY_PATH
+          cargo "+$NIGHTLY" fuzz run --fuzz-dir fuzz/arrow arrow_import -- "${args[@]}"
+
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [lint, workflow-lint, supply-chain, rust-test, wheels, stubtest, test, parity-data, parity, live-oracle]
+    # fuzz-smoke is advisory and left out on purpose.
+    needs:
+      [lint, workflow-lint, supply-chain, rust-test, msrv, miri, wheels, stubtest, test, parity-data, parity, live-oracle]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
