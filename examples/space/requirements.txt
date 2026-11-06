@@ -1,0 +1,6 @@
+# pyroid 1.0 is not on PyPI yet: until it is, replace the pyroid line with the URL of a
+# pyroid 1.0 wheel (manylinux, CPython >= 3.11).
+pyroid[hf]>=1.0
+datasets>=5
+gradio>=6,<7
+pyarrow>=18
