@@ -475,8 +475,12 @@ def datatrove_minhash_removed(
     from datatrove.executor import LocalPipelineExecutor
     from datatrove.pipeline.dedup import MinhashDedupCluster, MinhashDedupSignature
     from datatrove.pipeline.dedup.minhash import MinhashDedupBuckets
+    from datatrove.utils.word_tokenizers import load_word_tokenizer
 
     cfg = minhash_config(config)
+    # The executor deep-copies the pipeline: give the signature step a tokenizer that has not loaded
+    # its backend yet (a loaded jieba/SudachiPy spaCy pipeline holds modules, which cannot be copied).
+    load_word_tokenizer.cache_clear()
     docs = [Document(text=t, id=i) for i, t in zip(ids, texts, strict=True)]
     w = str(workdir)
     stages = [
