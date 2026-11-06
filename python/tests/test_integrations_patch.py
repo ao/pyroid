@@ -390,7 +390,12 @@ def test_other_ftfy_version_warns_and_falls_back_to_it() -> None:
 # fasttext
 # ---------------------------------------------------------------------------
 
-TEXTS = ["hello world, this is English", "bonjour tout le monde", "das ist ein Haus", "日本語"]
+TEXTS = [
+    "hello world, this is English",
+    "bonjour tout le monde",
+    "guten Morgen, wie geht es dir",
+    "日本語",
+]
 
 
 @needs_numpy

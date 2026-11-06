@@ -32,7 +32,7 @@ pytestmark = pytest.mark.skipif(not APP.exists(), reason="not a pyroid checkout"
 needs_model = pytest.mark.skipif(not LID_MODEL.exists(), reason=f"no {LID_MODEL}")
 
 ENGLISH = (
-    "The cafÃ© on the corner opened in 1998, and it has been busy ever since.\n"
+    "The naÃ¯ve on the corner opened in 1998, and it has been busy ever since.\n"
     "Every morning a group of retired teachers meets there to read the newspapers and talk about "
     "the news of the day.\n"
     "In the afternoon the room fills with students who come to study after school, because the "
@@ -57,7 +57,7 @@ OTHER_ENGLISH = (
 )
 FRENCH = (
     "La bibliothèque du village a ouvert une nouvelle salle de lecture au printemps dernier, et "
-    "elle ne désemplit pas depuis. Chaque matin, un groupe d'enseignants à la retraite s'y "
+    "elle ne désemplit pas depuis. Chaque matin, des enseignants à la retraite s'y "
     "retrouve pour lire les journaux et discuter des nouvelles du jour."
 )
 DOCS = [ENGLISH, ENGLISH, "short", FRENCH, OTHER_ENGLISH]
@@ -95,7 +95,7 @@ def stage_table(rows: list[list[str]]) -> dict[str, str]:
 def test_clean_text_kept(app: ModuleType) -> None:
     verdict, text, rows = app.clean_text(ENGLISH)
     assert verdict.startswith("**Kept.**")
-    assert text.startswith("The café on the corner")
+    assert text.startswith("The naïve on the corner")
     assert stage_table(rows) == {
         "ftfy": "changed",
         "lid": "pass",
@@ -184,10 +184,10 @@ def test_clean_file(app: ModuleType, out_dir: Path, tmp_path: Path, suffix: str)
         rows = pq.read_table(out_path).to_pylist()
     else:
         lines = out_path.read_text("utf-8").splitlines()
-        assert "café" in lines[0]  # not \u-escaped
+        assert "naïve" in lines[0]  # not \u-escaped
         rows = [json.loads(line) for line in lines]
     assert [r["id"] for r in rows] == [0, 4]
-    assert rows[0]["text"].startswith("The café")
+    assert rows[0]["text"].startswith("The naïve")
     assert rows[0]["language"] == "en"
     assert stats.startswith("**5 documents -> 2 kept (40.0%)**")
     for line in ("| lid | 1 |", "| gopher_quality | 1 |", "| minhash | 1 |", "| `minhash` | 1 |"):

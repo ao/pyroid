@@ -19,7 +19,8 @@ from typing import Any
 import pytest
 
 pytest.importorskip("datatrove")
-pytest.importorskip("regex")  # datatrove.utils.text needs it; datatrove does not declare it
+pytest.importorskip("regex")  # datatrove.pipeline.filters imports regex and tokenizers,
+pytest.importorskip("tokenizers")  # which datatrove does not declare
 pytest.importorskip("numpy")
 
 from datatrove.data import Document  # type: ignore[import-not-found,import-untyped,unused-ignore]
@@ -245,7 +246,7 @@ def test_filter_unsupported_language_falls_back() -> None:
     pytest.importorskip("spacy")
     import datatrove.pipeline.filters as df  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
-    text = "Le chat est sur le tapis. " * 30
+    text = "Le chat dort dans la cuisine. " * 30
     stock = df.GopherQualityFilter(language="fr")
     want = stock.filter(Document(text=text, id="0"))
     pdt._WARNED.clear()

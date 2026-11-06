@@ -237,7 +237,7 @@ Paste a document to see each stage's verdict, or upload a file (parquet or JSONL
 """
 
 EXAMPLES = [
-    "The cafÃ© on the corner opened in 1998.\nIt serves soup and bread at lunch, and there is "
+    "The naÃ¯ve on the corner opened in 1998.\nIt serves soup and bread at lunch, and there is "
     "music on most evenings of the week.\nThe owner bought the building when it was an empty "
     "shop with broken windows, and she repaired the floor and the walls herself.\nMost of the "
     "people who eat there live nearby, and many of them know each other by name.\nOn Sundays "

@@ -47,8 +47,8 @@ needs_dev = pytest.mark.skipif(
 # datasets forks its num_proc workers; CPython warns about fork() in a threaded process.
 fork_ok = pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")
 
-MOJIBAKE = "The cafÃ© opens at nine."
-FIXED = "The café opens at nine."
+MOJIBAKE = "The naÃ¯ve opens at nine."
+FIXED = "The naïve opens at nine."
 
 ENGLISH = (
     "The village library opened a new reading room last spring, and it has been busy ever since.\n"
@@ -77,7 +77,7 @@ ENGLISH_2 = (
 )
 FRENCH = (
     "La bibliothèque du village a ouvert une nouvelle salle de lecture au printemps dernier, et "
-    "elle ne désemplit pas depuis. Chaque matin, un groupe d'enseignants à la retraite s'y "
+    "elle ne désemplit pas depuis. Chaque matin, des enseignants à la retraite s'y "
     "retrouve pour lire les journaux et discuter des nouvelles du jour."
 )
 
@@ -195,7 +195,7 @@ def _python_peak(fn: Any, arg: Any) -> int:
 def test_arrow_batches_build_no_python_strings() -> None:
     """The Arrow path allocates no Python objects per document text (tracemalloc sees
     Python's allocators only; pyroid's buffers are Rust's)."""
-    docs = [f"Doc {i}: the cafÃ© has a long menu. " * 60 for i in range(2000)]
+    docs = [f"Doc {i}: the naÃ¯ve has a long menu. " * 60 for i in range(2000)]
     t = table(docs)  # type: ignore[arg-type]
     text_bytes = t["text"].nbytes
     baseline = _python_peak(lambda x: x["text"].to_pylist(), t)  # what a Python batch costs
@@ -309,7 +309,7 @@ def test_annotate_arrow_equals_python(model: pyroid.fasttext.Model) -> None:
     assert py["keep"] == [True, False, False, False, True]
     assert py["reason"][:4] == [None, "lid", "gopher_quality:gopher_short_doc", "null"]
     assert py["language"][:4] == ["en", "fr", "en", None]
-    assert py["text"][4].startswith("The café")
+    assert py["text"][4].startswith("The naïve")
 
 
 @needs_model
@@ -337,7 +337,7 @@ def test_fineweb_small(model: pyroid.fasttext.Model, fmt: str | None, tmp_path: 
     assert res.annotated.format["type"] == fmt
     kept = res.dataset.with_format(None)[:]
     assert kept["id"] == ["d0", "d5"]
-    assert kept["text"][1].startswith("The café")
+    assert kept["text"][1].startswith("The naïve")
     assert kept["language"] == ["en", "en"]
     assert res.dataset.column_names == ["text", "id", "language", "language_score"]
     ann = res.annotated.with_format(None)[:]

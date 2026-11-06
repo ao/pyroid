@@ -208,7 +208,7 @@ def test_langid(tmp_path: Path) -> None:
     texts = [
         "This is an English sentence about the weather.",
         "Ceci est une phrase en français.",
-        "Das ist ein deutscher Satz.\nMit zwei Zeilen.",
+        "Guten Morgen, wie geht es dir?\nMit zwei Zeilen.",
         "これは日本語の文です。",
     ]
     src = _write(_table(texts, language=["xx"] * 4), tmp_path / "in.parquet")
