@@ -1,6 +1,6 @@
 """Generate the adversarial corpus and the pinned reference outputs in ``/data/parity`` (run in Docker, oracle env).
 
-    python -m pyroid_parity.refs all --pin          # adversarial, ftfy, fasttext, filters, dedup
+    python -m pyroid_parity.refs all --pin          # adversarial, ftfy, fasttext, filters, dedup, filters_ml, dedup_ml
     python -m pyroid_parity.refs filters --pin --workers 6
     python -m pyroid_parity.refs all                # regenerate and verify against bench/manifest.json (CI)
 
@@ -51,7 +51,7 @@ OUT = {
     # Per platform: sacrebleu's BLEU goes through libm's exp/log (metrics_cases.metrics_ref).
     "metrics": METRICS_REF,
 }
-# Per-language references (FineWeb-2 slices, each with its own language); not part of `all`.
+# Per-language references (FineWeb-2 slices, each with its own language); part of `all`.
 OUT_ML = {"filters_ml": "parity/filters-ml-ref.parquet", "dedup_ml": "parity/minhash-ml-ref.parquet"}
 # Files written by this run that are missing from, or differ from, the manifest (checked when not pinning).
 MISMATCHED: list[str] = []
@@ -522,9 +522,10 @@ def ref_dedup(pin: bool, workers: int) -> None:
 
 
 # ------------------------------------------------------------------------------------- per language (FineWeb-2)
-# Not part of ``all``: run ``python -m pyroid_parity.refs filters_ml dedup_ml --pin`` in an oracle env that also
-# has each language's word tokenizer (jieba, sudachipy + sudachidict-core, indic-nlp-library); languages it
-# cannot tokenize are left out of the table and reported.
+# Part of ``all``. A language the oracle env cannot tokenize is left out of the table and reported: the pinned
+# tables come from parity/uv.lock's oracle group (spaCy only, so ar/de/fr/ru/es; jieba, SudachiPy and
+# indic-nlp-library are not in it), which keeps them reproducible in CI. The other slices are checked against
+# datatrove live where it can tokenize them (pyroid_parity.multilingual).
 
 _ML_FILTERS: dict[tuple[str, str], Any] = {}
 
@@ -626,7 +627,7 @@ def main() -> None:
     ap.add_argument("--pin", action="store_true")
     ap.add_argument("--workers", type=int, default=min(6, os.cpu_count() or 1))
     a = ap.parse_args()
-    steps = [s for w in a.what for s in (list(OUT) if w == "all" else [w])]
+    steps = [s for w in a.what for s in ([*OUT, *OUT_ML] if w == "all" else [w])]
     for s in steps:
         t = time.perf_counter()
         log(f"{s} ...")

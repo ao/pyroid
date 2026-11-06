@@ -226,6 +226,22 @@
       },
       "platform": "linux-aarch64"
     },
+    "parity/filters-ml-ref.parquet": {
+      "sha256": "0337a3d4f68a335aacc5f1d6ffec9e030b08ae086551ed6bdd0cf8ab23586df4",
+      "bytes": 1607143,
+      "rows": 10000,
+      "oracle": {
+        "datatrove": "0.10.1",
+        "spacy": "3.8.18"
+      },
+      "languages": [
+        "arb_Arab",
+        "deu_Latn",
+        "fra_Latn",
+        "rus_Cyrl",
+        "spa_Latn"
+      ]
+    },
     "parity/filters-ref.parquet": {
       "sha256": "702e053aac6033d4b5b6588c87cb91420299e673a313a955a92ceee280ae4976",
       "bytes": 13281783,
@@ -805,6 +821,31 @@
         }
       },
       "platform": "linux-aarch64"
+    },
+    "parity/minhash-ml-ref.parquet": {
+      "sha256": "b1477f3fd920f2c0bb5f2c2cf865d56caed420e9526beda1632c687c3ed2226a",
+      "bytes": 1443828,
+      "rows": 1500,
+      "oracle": {
+        "datatrove": "0.10.1",
+        "spacy": "3.8.18",
+        "xxhash": "3.8.2"
+      },
+      "config": {
+        "n_grams": 5,
+        "num_buckets": 14,
+        "hashes_per_bucket": 8,
+        "seed": 1,
+        "hash_fc": "xxhash",
+        "precision": 64
+      },
+      "languages": [
+        "arb_Arab",
+        "deu_Latn",
+        "fra_Latn",
+        "rus_Cyrl",
+        "spa_Latn"
+      ]
     },
     "parity/minhash-ref.parquet": {
       "sha256": "4133f9a18bb5247b43fa8121a5db5326a839c78555f33c27b01acc0c0f33b8aa",
