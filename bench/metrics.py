@@ -127,7 +127,11 @@ def rows(kind: str, n: int, stem: bool) -> list[tuple[str, int, Callable[[], lis
                 1,
                 lambda: [M.render_rouge(scorer.score(t, p)) for t, p in zip(a, b, strict=True)],
             ),
-            ("pyroid score_batch", 1, lambda: [M.render_rouge(r) for r in scorer.score_batch(a, b, threads=1)]),
+            (
+                "pyroid score_batch",
+                1,
+                lambda: [M.render_rouge(r) for r in scorer.score_batch(a, b, threads=1)],
+            ),
             (
                 "pyroid score_batch",
                 PROCS,

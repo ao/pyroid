@@ -203,7 +203,12 @@ def render_chrf(score: Any, signature: str | None = None) -> str:
     return out
 
 
-RENDER = {"BLEU": render_bleu, "CHRF": render_chrf, "sentence_bleu": render_bleu, "sentence_chrf": render_chrf}
+RENDER = {
+    "BLEU": render_bleu,
+    "CHRF": render_chrf,
+    "sentence_bleu": render_bleu,
+    "sentence_chrf": render_chrf,
+}
 
 
 def outcome(fn: Callable[[], str]) -> str:

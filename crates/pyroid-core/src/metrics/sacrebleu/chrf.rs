@@ -303,7 +303,7 @@ fn hyp_ids<V: Hash + Eq + Borrow<str>>(
 ///     factor: 4.0, one_plus_factor: 5.0, eps_smoothing: false,
 /// };
 /// let mut row = [0; 6];
-/// assert!(segment_stats("ab c", &["abd", "abc"], &cfg, &mut row));
+/// assert!(segment_stats("ab c", &["abx", "abc"], &cfg, &mut row));
 /// assert_eq!(row, [3, 3, 3, 2, 2, 2]); // "abc" wins
 /// ```
 pub fn segment_stats(hyp: &str, refs: &[&str], cfg: &ChrfConfig, row: &mut [i64]) -> bool {

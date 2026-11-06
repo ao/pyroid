@@ -686,6 +686,6 @@ def test_api_surface() -> None:
     assert m.num_refs == -1
     assert str(sb.corpus_bleu(["a b"], [["a b"]])).startswith("BLEU = 0.00 100.0/100.0/0.0/0.0")
     assert sb.extract_word_ngrams(["a", "b", "a", "b"], 2) == {"a b": 2, "b a": 1}
-    assert sb.extract_char_ngrams("ab a", 2) == {"ab": 1, "ba": 1}
-    assert sb.extract_char_ngrams("ab a", 2, include_whitespace=True) == {"ab": 1, "b ": 1, " a": 1}
+    assert sb.extract_char_ngrams("xy x", 2) == {"xy": 1, "yx": 1}
+    assert sb.extract_char_ngrams("xy x", 2, include_whitespace=True) == {"xy": 1, "y ": 1, " x": 1}
     assert set(sb.DELEGATED) <= set(sb.__all__)
