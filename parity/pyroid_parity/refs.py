@@ -16,6 +16,8 @@ Outputs (each pinned in bench/manifest.json with the oracle versions that produc
     parity/minhash-ref.parquet   id, signature, removed          datatrove MinhashDedup* on dev + adversarial
     parity/metrics-ref.parquet   case, key, out                  rouge-score + sacrebleu (pyroid_parity.metrics_cases);
                                  one file per platform (metrics_cases.metrics_ref): linux-aarch64 keeps this name
+    parity/filters-ml-ref.parquet  lang, case, id, outcome, ...   per FineWeb-2 slice, its own language (filters_ml)
+    parity/minhash-ml-ref.parquet  lang, id, signature, removed   FineWeb-2 MinhashConfig + near-duplicates (dedup_ml)
 """
 
 from __future__ import annotations
@@ -49,6 +51,8 @@ OUT = {
     # Per platform: sacrebleu's BLEU goes through libm's exp/log (metrics_cases.metrics_ref).
     "metrics": METRICS_REF,
 }
+# Per-language references (FineWeb-2 slices, each with its own language); not part of `all`.
+OUT_ML = {"filters_ml": "parity/filters-ml-ref.parquet", "dedup_ml": "parity/minhash-ml-ref.parquet"}
 # Files written by this run that are missing from, or differ from, the manifest (checked when not pinning).
 MISMATCHED: list[str] = []
 
@@ -419,11 +423,12 @@ def ref_filters(pin: bool, workers: int) -> None:
 # --------------------------------------------------------------------------------------------------- MinHash
 
 
-def minhash_config() -> Any:
+def minhash_config(c: dict[str, Any] | None = None) -> Any:
+    """datatrove's ``MinhashConfig`` for a ``specs.MINHASH_CONFIG``-shaped dict (default: that one)."""
     from datatrove.pipeline.dedup.minhash import MinhashConfig
     from datatrove.utils.hashing import HashConfig
 
-    c = specs.MINHASH_CONFIG
+    c = specs.MINHASH_CONFIG if c is None else c
     return MinhashConfig(
         n_grams=c["n_grams"],
         num_buckets=c["num_buckets"],
@@ -453,8 +458,17 @@ def _sig_chunk(texts: list[str]) -> list[list[int] | None]:
     return out
 
 
-def datatrove_minhash_removed(texts: list[str], ids: list[str], workdir: Path) -> list[bool]:
-    """Run datatrove's four MinHash stages exactly as examples/fineweb.py chains them; return the removed mask."""
+def datatrove_minhash_removed(
+    texts: list[str],
+    ids: list[str],
+    workdir: Path,
+    config: dict[str, Any] | None = None,
+    language: str = "eng",
+) -> list[bool]:
+    """Run datatrove's four MinHash stages exactly as examples/fineweb.py chains them; return the removed mask.
+
+    ``config`` defaults to ``specs.MINHASH_CONFIG``; ``language`` is ``MinhashDedupSignature``'s.
+    """
     import struct
 
     from datatrove.data import Document
@@ -462,11 +476,11 @@ def datatrove_minhash_removed(texts: list[str], ids: list[str], workdir: Path) -
     from datatrove.pipeline.dedup import MinhashDedupCluster, MinhashDedupSignature
     from datatrove.pipeline.dedup.minhash import MinhashDedupBuckets
 
-    cfg = minhash_config()
+    cfg = minhash_config(config)
     docs = [Document(text=t, id=i) for i, t in zip(ids, texts, strict=True)]
     w = str(workdir)
     stages = [
-        ([docs, MinhashDedupSignature(output_folder=f"{w}/sigs", config=cfg)], 1),
+        ([docs, MinhashDedupSignature(output_folder=f"{w}/sigs", config=cfg, language=language)], 1),
         (
             [MinhashDedupBuckets(input_folder=f"{w}/sigs", output_folder=f"{w}/buckets", config=cfg)],
             cfg.num_buckets,
@@ -503,13 +517,112 @@ def ref_dedup(pin: bool, workers: int) -> None:
     )
 
 
+# ------------------------------------------------------------------------------------- per language (FineWeb-2)
+# Not part of ``all``: run ``python -m pyroid_parity.refs filters_ml dedup_ml --pin`` in an oracle env that also
+# has each language's word tokenizer (jieba, sudachipy + sudachidict-core, indic-nlp-library); languages it
+# cannot tokenize are left out of the table and reported.
+
+_ML_FILTERS: dict[tuple[str, str], Any] = {}
+
+
+def _ml_decide(lang: str, case: str, doc_id: str, text: str) -> tuple[Any, ...]:
+    from datatrove.data import Document
+    from datatrove.pipeline import filters as F
+    from datatrove.pipeline.filters.base_filter import get_filter_result
+
+    if (lang, case) not in _ML_FILTERS:
+        _, cls, cfg = specs.fineweb2_filter_cases(lang)[case]
+        _ML_FILTERS[lang, case] = getattr(F, cls)(**cfg)
+    doc = Document(text=text, id=doc_id)
+    try:
+        keep, reason = get_filter_result(_ML_FILTERS[lang, case].filter(doc))
+    except Exception as e:  # noqa: BLE001  exception type is part of parity
+        return ("raise", type(e).__name__)
+    return ("ok", bool(keep), reason, doc.text if doc.text != text else None)
+
+
+def _ml_filters_chunk(job: list[tuple[str, str, str, str]]) -> list[tuple[Any, ...]]:
+    return [_ml_decide(*j) for j in job]
+
+
+def ref_filters_ml(pin: bool, workers: int) -> None:
+    import pyarrow as pa
+
+    from pyroid_parity import multilingual as ML
+
+    rows: dict[str, list[Any]] = {
+        k: [] for k in ("lang", "case", "id", "outcome", "keep", "reason", "text_out")
+    }
+    langs = []
+    for lang in specs.FINEWEB2_LANGUAGES:
+        if problem := ML.oracle_problem(lang):
+            log(f"filters_ml: skipping {lang}: {problem}")
+            continue
+        langs.append(lang)
+        docs = ML.fineweb2(lang)
+        jobs = [(lang, case, i, t) for case in specs.fineweb2_filter_cases(lang) for i, t in docs]
+        for (lg, case, i, _), r in zip(jobs, pmap(_ml_filters_chunk, jobs, workers, chunk=50), strict=True):
+            for k, v in zip(
+                ("lang", "case", "id", "outcome", "keep", "reason", "text_out"),
+                (
+                    lg,
+                    case,
+                    i,
+                    r[0],
+                    r[1] if r[0] == "ok" else None,
+                    r[2] if r[0] == "ok" else r[1],
+                    r[3] if r[0] == "ok" else None,
+                ),
+                strict=True,
+            ):
+                rows[k].append(v)
+    write(
+        pa.table(rows),
+        OUT_ML["filters_ml"],
+        pin,
+        oracle=versions("datatrove", "spacy", "jieba", "sudachipy", "indic-nlp-library"),
+        languages=langs,
+    )
+
+
+def ref_dedup_ml(pin: bool, workers: int) -> None:
+    import pyarrow as pa
+
+    from pyroid_parity import multilingual as ML
+    from pyroid_parity.adapters.dedup_datatrove import DatatroveDedup
+
+    ref = DatatroveDedup()
+    rows: dict[str, list[Any]] = {"lang": [], "id": [], "signature": [], "removed": []}
+    langs = []
+    for lang in specs.FINEWEB2_LANGUAGES:
+        if problem := ML.oracle_problem(lang):
+            log(f"dedup_ml: skipping {lang}: {problem}")
+            continue
+        langs.append(lang)
+        docs = ML.with_near_duplicates(lang)
+        cfg = ML.minhash_config(lang)
+        rows["lang"] += [lang] * len(docs)
+        rows["id"] += docs.ids
+        rows["signature"] += ref.signatures(docs.texts, cfg)
+        rows["removed"] += ref.duplicates(docs.texts, cfg)
+    table = pa.table({**rows, "signature": pa.array(rows["signature"], pa.list_(pa.uint64()))})
+    write(
+        table,
+        OUT_ML["dedup_ml"],
+        pin,
+        oracle=versions("datatrove", "spacy", "jieba", "sudachipy", "indic-nlp-library", "xxhash"),
+        config=specs.MINHASH_CONFIG_FINEWEB2,
+        languages=langs,
+    )
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=[*OUT, "all"])
+    ap.add_argument("what", nargs="+", choices=[*OUT, *OUT_ML, "all"])
     ap.add_argument("--pin", action="store_true")
     ap.add_argument("--workers", type=int, default=min(6, os.cpu_count() or 1))
     a = ap.parse_args()
-    steps = list(OUT) if a.what == "all" else [a.what]
+    steps = [s for w in a.what for s in (list(OUT) if w == "all" else [w])]
     for s in steps:
         t = time.perf_counter()
         log(f"{s} ...")
