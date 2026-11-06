@@ -538,6 +538,7 @@ class SentenceDedupResult(NamedTuple, Generic[_SentT, _SentM]):
     object when nothing was removed). Dropped documents get their text too."""
     keep: _SentM
     """``True`` for each document datatrove keeps."""
+    def __class_getitem__(cls, params: Any) -> Any: ...  # Generic's, as at runtime
 
 @overload
 def sentence_dedup(
