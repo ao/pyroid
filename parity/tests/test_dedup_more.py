@@ -7,6 +7,7 @@ the kept documents and their texts must be the same. Recorded under the ``dedup`
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -64,12 +65,18 @@ def test_sentence_dedup(case: str, parity: Any, tmp_path: Path) -> None:
 
 
 FW2_LANGS = ["deu_Latn", "fra_Latn", "rus_Cyrl", "spa_Latn", "arb_Arab", "hin_Deva"]
+FW2_MODES: dict[str, dict[str, Any]] = {
+    "sentences": {"n_sentences": 3, "min_doc_words": 50},
+    # Lines, with the word tokenizer for min_doc_words but no sentence spans (min_num_sentences=0).
+    "lines": {"n_sentences": 3, "split_sentences": False, "min_doc_words": 50, "min_num_sentences": 0},
+}
 
 
 @pytest.mark.timeout(1200)
+@pytest.mark.parametrize("mode", list(FW2_MODES))
 @pytest.mark.parametrize("language", FW2_LANGS)
-def test_sentence_dedup_fineweb2(language: str, parity: Any, tmp_path: Path) -> None:
-    """The example config on a FineWeb-2 slice, tokenized for its language (pyroid's native tokenizers)."""
+def test_sentence_dedup_fineweb2(language: str, mode: str, parity: Any, tmp_path: Path) -> None:
+    """A FineWeb-2 slice, tokenized for its language (pyroid's native tokenizers)."""
     sd = pytest.importorskip("datatrove.pipeline.dedup.sentence_dedup", reason="needs the oracle group")
     pytest.importorskip("spacy", reason="needs the oracle group")
     if language == "hin_Deva":
@@ -83,27 +90,36 @@ def test_sentence_dedup_fineweb2(language: str, parity: Any, tmp_path: Path) -> 
     texts = D.read_parquet_columns(need(f"fineweb2/{language}.parquet"), ["text"])["text"]
     # Repeat a share of each document's sentences elsewhere so removals are exercised.
     texts = texts + [t[: len(t) // 2] for t in texts[::3]]
-    cfg = sd.SentDedupConfig(n_sentences=3, min_doc_words=50)
+    if mode == "lines":
+        texts = [t.replace(". ", ".\n").replace("। ", "।\n") for t in texts]
+    cfg = sd.SentDedupConfig(**FW2_MODES[mode])
+    check = f"sentence_dedup/{language}/fineweb2-{mode}"
 
     def stream() -> Any:
         return (Document(text=t, id=str(i)) for i, t in enumerate(texts))
 
-    sd.SentenceDedupSignature(output_folder=str(tmp_path / "sig"), config=cfg, language=language).run(
-        stream(), 0, 1
-    )
-    sd.SentenceFindDedups(
-        data_folder=str(tmp_path / "sig"), output_folder=str(tmp_path / "dup"), config=cfg
-    ).run(None, 0, 1)
-    step = sd.SentenceDedupFilter(data_folder=str(tmp_path / "dup"), config=cfg, language=language)
-    kept = {d.id: d.text for d in step.run(stream(), 0, 1)}
+    try:
+        sd.SentenceDedupSignature(output_folder=str(tmp_path / "sig"), config=cfg, language=language).run(
+            stream(), 0, 1
+        )
+        sd.SentenceFindDedups(
+            data_folder=str(tmp_path / "sig"), output_folder=str(tmp_path / "dup"), config=cfg
+        ).run(None, 0, 1)
+        step = sd.SentenceDedupFilter(data_folder=str(tmp_path / "dup"), config=cfg, language=language)
+        kept = {d.id: d.text for d in step.run(stream(), 0, 1)}
+    except ValueError as e:
+        # datatrove's IndicNLP span_tokenize raises "substring not found" when its sentence
+        # splitter rewrites the text, which stops the whole stage: pyroid must raise it too.
+        with pytest.raises(ValueError, match=re.escape(str(e))):
+            pd.sentence_dedup(texts, cfg, language=language)
+        parity.record("dedup", f"{check}/raises", True, case="corpus", input=str(e))
+        return
     want = [kept.get(str(i)) for i in range(len(texts))]
     res = pd.sentence_dedup(texts, cfg, language=language)
     got = [t if k else None for t, k in zip(res.text, res.keep, strict=True)]
     bad = 0
     for i, (text, g, w) in enumerate(zip(texts, got, want, strict=True)):
-        if not parity.record(
-            "dedup", f"sentence_dedup/{language}/fineweb2", g == w, case=str(i), input=text, got=g, want=w
-        ):
+        if not parity.record("dedup", check, g == w, case=str(i), input=text, got=g, want=w):
             bad += 1
     assert bad == 0, f"{bad}/{len(texts)} documents differ"
     assert sum(w is None or w != t for w, t in zip(want, texts, strict=True)) > 0  # something was removed
