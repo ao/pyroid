@@ -389,11 +389,8 @@ fn extra_recordings_match_datatrove() {
 #[test]
 fn multilingual_recordings_match_datatrove() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/filters_data/multilingual");
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        eprintln!("no {}; skipping", dir.display());
-        return;
-    };
-    let mut files: Vec<PathBuf> = entries
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("cannot list {}: {e}", dir.display()))
         .map(|e| e.expect("directory entry").path())
         .filter(|p| p.extension().is_some_and(|x| x == "jsonl"))
         .collect();

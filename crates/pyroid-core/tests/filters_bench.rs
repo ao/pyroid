@@ -47,7 +47,7 @@ fn bench() {
             let mut out = Vec::new();
             for t in &texts {
                 out.clear();
-                wt.words(t, &mut out).unwrap();
+                wt.words_cow(t, &mut out).unwrap();
             }
         }),
     );
@@ -59,7 +59,7 @@ fn bench() {
         "gopher_quality",
         best_of(3, || {
             for t in &texts {
-                gq.filter(&mut Doc::new(t, wt)).unwrap();
+                let _ = gq.filter(&mut Doc::new(t, wt)); // some languages raise (datatrove too)
             }
         }),
     );
@@ -67,7 +67,7 @@ fn bench() {
         "gopher_repetition",
         best_of(3, || {
             for t in &texts {
-                gr.filter(&mut Doc::new(t, wt)).unwrap();
+                let _ = gr.filter(&mut Doc::new(t, wt)); // some languages raise (datatrove too)
             }
         }),
     );
@@ -75,7 +75,7 @@ fn bench() {
         "c4_quality",
         best_of(3, || {
             for t in &texts {
-                c4.filter(t, wt).unwrap();
+                let _ = c4.filter(t, wt);
             }
         }),
     );
@@ -83,7 +83,7 @@ fn bench() {
         "fineweb_quality",
         best_of(3, || {
             for t in &texts {
-                fw.filter(&mut Doc::new(t, wt)).unwrap();
+                let _ = fw.filter(&mut Doc::new(t, wt)); // some languages raise (datatrove too)
             }
         }),
     );
@@ -105,7 +105,7 @@ fn bench() {
         "fineweb chain (4 filters)",
         best_of(3, || {
             for t in &texts {
-                chain.run(t).unwrap();
+                let _ = chain.run(t);
             }
         }),
     );
