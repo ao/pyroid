@@ -18,6 +18,8 @@ extend-exclude = [
   "crates/pyroid-core/tests/filters_data/",
   "bench/data/",
   "bench/results/",
+  # Charts copied byte for byte from bench/results/ (matplotlib SVGs).
+  "docs/assets/*.svg",
   "parity/data/",
   "parity/tests/",
   "parity/pyroid_parity/refs.py",

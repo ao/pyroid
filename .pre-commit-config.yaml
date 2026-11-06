@@ -15,8 +15,9 @@ repos:
       - id: check-added-large-files
         # The bench/ and parity/ lockfiles (~0.5 MB each) are the only files allowed past the 500 KB limit.
         exclude: ^(bench|parity)/uv\.lock$
-      # Test data, incumbent fixtures and raw benchmark results keep their bytes exactly (mojibake,
-      # confusables, odd whitespace). Keep in step with [files] extend-exclude in typos.toml.
+      # Test data, incumbent fixtures, raw benchmark results and the charts copied from them keep
+      # their bytes exactly (mojibake, confusables, odd whitespace). Keep in step with [files]
+      # extend-exclude in typos.toml.
       - id: end-of-file-fixer
         exclude: &data |
           (?x)^(
@@ -25,6 +26,7 @@ repos:
             crates/pyroid-core/tests/filters_data/|
             bench/data/|
             bench/results/|
+            docs/assets/.*\.svg$|
             parity/data/|
             parity/tests/|
             parity/pyroid_parity/(refs|strategies)\.py$
