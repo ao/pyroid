@@ -331,7 +331,7 @@
     </g>
    </g>
    <g id="text_6">
-    <!-- 26× faster -->
+    <!-- 26× faster than 8 processes -->
     <g style="fill: #c9d1d9" transform="translate(236.24 88.74) scale(0.14 -0.14)">
      <defs>
       <path id="b15" d="M1844 884L3897 884L3897 0L506 0L506 884L2209 2388Q2438 2594 2547 2791Q2656 2988 2656 3200Q2656 3528 2436 3728Q2216 3928 1850 3928Q1569 3928 1234 3808Q900 3688 519 3450L519 4475Q925 4609 1322 4679Q1719 4750 2100 4750Q2938 4750 3402 4381Q3866 4013 3866 3353Q3866 2972 3669 2642Q3472 2313 2841 1759L1844 884z" transform="scale(0.015625)"/>
@@ -349,6 +349,23 @@
      <use xlink:href="#b57" transform="translate(428.27 0)"/>
      <use xlink:href="#b48" transform="translate(476.06 0)"/>
      <use xlink:href="#b55" transform="translate(543.89 0)"/>
+     <use xlink:href="#b3" transform="translate(593.2 0)"/>
+     <use xlink:href="#b57" transform="translate(628.02 0)"/>
+     <use xlink:href="#b4b" transform="translate(675.81 0)"/>
+     <use xlink:href="#b44" transform="translate(747 0)"/>
+     <use xlink:href="#b51" transform="translate(814.48 0)"/>
+     <use xlink:href="#b3" transform="translate(885.67 0)"/>
+     <use xlink:href="#b1b" transform="translate(920.48 0)"/>
+     <use xlink:href="#b3" transform="translate(990.06 0)"/>
+     <use xlink:href="#b53" transform="translate(1024.88 0)"/>
+     <use xlink:href="#b55" transform="translate(1096.45 0)"/>
+     <use xlink:href="#b52" transform="translate(1145.77 0)"/>
+     <use xlink:href="#b46" transform="translate(1214.47 0)"/>
+     <use xlink:href="#b48" transform="translate(1273.75 0)"/>
+     <use xlink:href="#b56" transform="translate(1341.58 0)"/>
+     <use xlink:href="#b56" transform="translate(1401.09 0)"/>
+     <use xlink:href="#b48" transform="translate(1460.61 0)"/>
+     <use xlink:href="#b56" transform="translate(1528.44 0)"/>
     </g>
    </g>
    <g id="text_7">
@@ -387,7 +404,7 @@
     </g>
    </g>
    <g id="text_9">
-    <!-- 49× faster -->
+    <!-- 49× faster than 1 process -->
     <g style="fill: #c9d1d9" transform="translate(240.15 120.74) scale(0.14 -0.14)">
      <defs>
       <path id="b17" d="M2356 3675L1038 1722L2356 1722L2356 3675zM2156 4666L3494 4666L3494 1722L4159 1722L4159 850L3494 850L3494 0L2356 0L2356 850L288 850L288 1881L2156 4666z" transform="scale(0.015625)"/>
@@ -403,6 +420,21 @@
      <use xlink:href="#b57" transform="translate(428.27 0)"/>
      <use xlink:href="#b48" transform="translate(476.06 0)"/>
      <use xlink:href="#b55" transform="translate(543.89 0)"/>
+     <use xlink:href="#b3" transform="translate(593.2 0)"/>
+     <use xlink:href="#b57" transform="translate(628.02 0)"/>
+     <use xlink:href="#b4b" transform="translate(675.81 0)"/>
+     <use xlink:href="#b44" transform="translate(747 0)"/>
+     <use xlink:href="#b51" transform="translate(814.48 0)"/>
+     <use xlink:href="#b3" transform="translate(885.67 0)"/>
+     <use xlink:href="#b14" transform="translate(920.48 0)"/>
+     <use xlink:href="#b3" transform="translate(990.06 0)"/>
+     <use xlink:href="#b53" transform="translate(1024.88 0)"/>
+     <use xlink:href="#b55" transform="translate(1096.45 0)"/>
+     <use xlink:href="#b52" transform="translate(1145.77 0)"/>
+     <use xlink:href="#b46" transform="translate(1214.47 0)"/>
+     <use xlink:href="#b48" transform="translate(1273.75 0)"/>
+     <use xlink:href="#b56" transform="translate(1341.58 0)"/>
+     <use xlink:href="#b56" transform="translate(1401.09 0)"/>
     </g>
    </g>
    <g id="text_10">

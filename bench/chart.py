@@ -515,7 +515,9 @@ def chart_hero(a: argparse.Namespace) -> None:
     fs, pad, pitch, bar_h, gap, sep = HERO_PT, 1.5, 32.0, 18.0, 7.0, HERO_PT["row"] * 0.9  # points
     for r in rows:
         r["time"] = secs(r["med"])
-        r["faster"] = f"{times(r['speedup'])} faster" if r["speedup"] else ""
+        # Name the baseline: a bare "26x faster" reads as "than the slowest bar".
+        base = r["vs"].split(" · ")[-1] if r["vs"] else ""
+        r["faster"] = f"{times(r['speedup'])} faster than {base}" if r["speedup"] else ""
         r["hi"] = is_candidate(r["name"])
 
     measure = plt.figure(dpi=72)  # 1 px = 1 pt
