@@ -1,17 +1,21 @@
 """Render the generated tables of docs/benchmarks.md from docs/data/benchmarks.json.
 
-Two blocks, each between its markers:
+Three blocks, each between its markers:
 
 - ``<!-- bench-chain:begin -->`` / ``<!-- bench-chain:end -->``: the end-to-end FineWeb chain,
   from ``chain`` (``run``, ``wall_s``, ``cpu_s``, ``rss_mib``, ``vs_1_proc``, ``vs_8_procs``);
 - ``<!-- bench:begin -->`` / ``<!-- bench:end -->``: one row per stage, from ``rows``
   (``module``, ``call``, ``input``, ``incumbent``, ``incumbent_us``, ``pyroid_us``, ``speedup``,
-  ``check``, and optionally ``pyroid_us_8_threads``).
+  ``check``, and optionally ``pyroid_us_8_threads``);
+- ``<!-- bench-more:begin -->`` / ``<!-- bench-more:end -->``: runs outside the consolidated
+  benchmark (other modules, languages, datatrove steps), from ``more``: groups of ``title``,
+  ``guide``, ``note``, ``columns``, ``rows`` (lists of cells), optional ``footnote``, and their own
+  ``source``.
 
 Every value is a string, copied as it is: nothing is computed here. To publish a new consolidated
 run, copy ``rows``, ``source`` and (as printed) ``label`` from its ``consolidated.json`` and the
 chain table from its ``CONSOLIDATED.md`` into the JSON file (or pass another file with ``--data``)
-and rerun.
+and rerun. ``more`` is copied by hand from each run's results or report.
 
 Usage (stdlib only, any Python 3.11+, from the repository root):
 
@@ -79,19 +83,43 @@ def render_stages(data: dict[str, Any]) -> list[str]:
     return lines
 
 
-BLOCKS: list[tuple[str, Callable[[dict[str, Any]], list[str]]]] = [
-    ("bench-chain", render_chain),
-    ("bench", render_stages),
+def render_more(data: dict[str, Any]) -> list[str]:
+    """Runs outside the consolidated benchmark: one table per group, each with its own source."""
+    lines: list[str] = []
+    for group in data["more"]:
+        guide = GUIDE.format(module=group["guide"])
+        lines += [
+            f"### {group['title']}",
+            "",
+            f"*{data['label']}.* {group['note']} Guide: [{group['guide']}]({guide}).",
+            "",
+            "| " + " | ".join(group["columns"]) + " |",
+            "|---|" + "---:|" * (len(group["columns"]) - 1),
+        ]
+        lines.extend("| " + " | ".join(row) + " |" for row in group["rows"])
+        if group.get("footnote"):
+            lines += ["", group["footnote"]]
+        lines += ["", f"<small>Source: {group['source']}.</small>", ""]
+    return lines[:-1]
+
+
+# (marker name, renderer, whether the consolidated run's source line follows the block)
+BLOCKS: list[tuple[str, Callable[[dict[str, Any]], list[str]], bool]] = [
+    ("bench-chain", render_chain, True),
+    ("bench", render_stages, True),
+    ("bench-more", render_more, False),
 ]
 
 
 def render(page: str, data: dict[str, Any]) -> str:
     """The page with every generated block rewritten."""
-    for name, body in BLOCKS:
+    for name, body, with_source in BLOCKS:
         begin, end = f"<!-- {name}:begin -->", f"<!-- {name}:end -->"
         start, stop = page.index(begin), page.index(end) + len(end)
         lines = [begin, GENERATED, "", *body(data)]
-        lines += ["", f"<small>Source: {data['source']}.</small>", end]
+        if with_source:
+            lines += ["", f"<small>Source: {data['source']}.</small>"]
+        lines.append(end)
         page = page[:start] + "\n".join(lines) + page[stop:]
     return page
 
