@@ -30,4 +30,4 @@ pub use exact::ExactSeen;
 pub use minhash::MinHasher;
 pub use rng::MERSENNE_PRIME;
 pub use simplify::simplify_text;
-pub use tokenize::{SpacyEnglish, TokenizeError, WhitespaceTokenizer, WordTokenizer};
+pub use tokenize::{SpacyTokenizer, TokenizeError, WhitespaceTokenizer, WordTokenizer};

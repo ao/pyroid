@@ -1,14 +1,15 @@
 //! Kernel timings for `pyroid_core::filters` (no Python): run with
 //! `PYROID_FILTERS_BENCH=texts.jsonl cargo test --profile profiling -p pyroid-core --test filters_bench -- --nocapture`
-//! where each line of `texts.jsonl` is a JSON string. Indicative only.
+//! where each line of `texts.jsonl` is a JSON string. `PYROID_FILTERS_BENCH_LANG`
+//! (a datatrove language code, default `eng`) picks the tokenizer. Indicative only.
 
 #![allow(clippy::print_stderr)]
 
 use std::time::Instant;
 
-use pyroid_core::filters::tokenizer::SpacyEnglish;
 use pyroid_core::filters::{
     C4Quality, Doc, FineWebQuality, GopherQuality, GopherRepetition, Pipeline, Step, WordTokenizer,
+    tokenizer_for,
 };
 use pyroid_core::ftfy::UnicodeVersion;
 
@@ -34,8 +35,10 @@ fn bench() {
         .collect();
     #[allow(clippy::cast_precision_loss)]
     let n = texts.len() as f64;
-    let tok = SpacyEnglish::get(UnicodeVersion::V15_1);
-    let wt: &'static dyn WordTokenizer = tok;
+    let lang = std::env::var("PYROID_FILTERS_BENCH_LANG").unwrap_or_else(|_| "eng".to_owned());
+    let wt: &'static dyn WordTokenizer =
+        tokenizer_for(&lang, UnicodeVersion::V15_1).expect("a language pyroid tokenizes");
+    eprintln!("language {lang}, {} docs", texts.len());
     let report = |name: &str, secs: f64| eprintln!("{name:<28} {:>8.1} us/doc", secs / n * 1e6);
 
     report(

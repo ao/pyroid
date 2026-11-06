@@ -1,13 +1,16 @@
 // Derived from datatrove 0.10.1 (Apache-2.0), © HuggingFace, and spaCy 3.8.18
 // (MIT), © ExplosionAI GmbH; modified.
-//! Differential tests: replay what datatrove 0.10.1 really returns for English
-//! `split_into_words` / `split_into_sentences` (spaCy 3.8.18
-//! `spacy.blank("en")` + `sentencizer`), as recorded by
-//! `tests/filters_data/oracle.py`, and require identical results.
+//! Differential tests: replay what datatrove 0.10.1 really returns for
+//! `split_into_words(text, language)` / `split_into_sentences(text, language)`
+//! (spaCy 3.8.18 `spacy.blank(code)` + `sentencizer` for the spaCy languages),
+//! as recorded by `tests/filters_data/oracle.py`, and require identical
+//! results, raised exceptions included.
 //!
-//! * `filters_data/golden-tokenizer.jsonl` (committed): fixed-seed fuzz
-//!   inputs, C4-style lines and short real documents, recorded on CPython
-//!   3.13 (Unicode 15.1).
+//! * `filters_data/golden-tokenizer.jsonl` (committed): English fixed-seed
+//!   fuzz inputs, C4-style lines and short real documents, recorded on
+//!   CPython 3.13 (Unicode 15.1).
+//! * `filters_data/multilingual/*.jsonl` (committed): the same per language
+//!   (`"l"`: the datatrove language code each row was recorded with).
 //! * `PYROID_FILTERS_ORACLE=a.jsonl:b.jsonl` adds more recordings, such as
 //!   corpus and large fuzz runs generated in the dev container.
 //!
@@ -22,7 +25,7 @@ use std::fmt::Write as _;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
-use pyroid_core::filters::tokenizer::SpacyEnglish;
+use pyroid_core::filters::{FilterError, WordTokenizer, tokenizer_for};
 use pyroid_core::ftfy::UnicodeVersion;
 use rayon::prelude::*;
 use serde_json::Value;
@@ -35,9 +38,20 @@ const MAX_SHOWN: usize = 300;
 /// One recorded row.
 struct Row {
     text: String,
+    /// The datatrove language code (`"l"`; `"eng"`, the default, when absent).
+    language: String,
     version: UnicodeVersion,
-    words: Vec<String>,
-    sentences: usize,
+    expect: Expect,
+}
+
+/// What datatrove returned.
+enum Expect {
+    Ok {
+        words: Vec<String>,
+        sentences: usize,
+    },
+    /// `split_into_words` (`at_words`) or `split_into_sentences` raised.
+    Raise { exc: String, at_words: bool },
 }
 
 /// What replaying one row gave.
@@ -76,38 +90,88 @@ fn parse(line: &str) -> Result<Option<Row>, String> {
     if text.contains("IS_ALPHA") {
         return Ok(None);
     }
-    if let Some(exc) = row.get("raise") {
-        let at = row.get("at").unwrap_or(&Value::Null);
-        return Err(format!(
-            "datatrove raised {exc} (in {at}) on {}; not replayable",
-            show(text)
-        ));
-    }
+    let language = row.get("l").and_then(Value::as_str).unwrap_or("eng");
     let unidata = row.get("u").and_then(Value::as_str).ok_or("no \"u\"")?;
     let version = UnicodeVersion::from_unidata_version(unidata)
         .ok_or_else(|| format!("unsupported Unicode version {unidata}"))?;
-    let words = row
-        .get("w")
-        .and_then(Value::as_array)
-        .ok_or("no \"w\"")?
-        .iter()
-        .map(|w| {
-            w.as_str()
-                .map(str::to_owned)
-                .ok_or("a word is not a string")
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let sentences = row
-        .get("s")
-        .and_then(Value::as_u64)
-        .and_then(|n| usize::try_from(n).ok())
-        .ok_or("no \"s\"")?;
+    let expect = if let Some(exc) = row.get("raise") {
+        let exc = exc.as_str().ok_or("\"raise\" is not a string")?;
+        let at = row.get("at").and_then(Value::as_str).ok_or("no \"at\"")?;
+        Expect::Raise {
+            exc: exc.to_owned(),
+            at_words: at == "w",
+        }
+    } else {
+        let words = row
+            .get("w")
+            .and_then(Value::as_array)
+            .ok_or("no \"w\"")?
+            .iter()
+            .map(|w| {
+                w.as_str()
+                    .map(str::to_owned)
+                    .ok_or("a word is not a string")
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let sentences = row
+            .get("s")
+            .and_then(Value::as_u64)
+            .and_then(|n| usize::try_from(n).ok())
+            .ok_or("no \"s\"")?;
+        Expect::Ok { words, sentences }
+    };
     Ok(Some(Row {
         text: text.to_owned(),
+        language: language.to_owned(),
         version,
-        words,
-        sentences,
+        expect,
     }))
+}
+
+/// The Python exception datatrove raises where pyroid returns `e`.
+fn py_exception(e: FilterError) -> &'static str {
+    match e {
+        FilterError::ZeroDivision => "ZeroDivisionError",
+        FilterError::TextTooLong(_)
+        | FilterError::SubstringNotFound
+        | FilterError::NeedsTokenizer => "ValueError",
+    }
+}
+
+/// What pyroid gives for a row: words (or the exception's name) and the
+/// sentence count (or the exception's name).
+type Got = (Result<Vec<String>, String>, Result<usize, String>);
+
+fn run(row: &Row) -> Result<Got, String> {
+    let tok: &dyn WordTokenizer = tokenizer_for(&row.language, row.version)
+        .ok_or_else(|| format!("pyroid has no tokenizer for {:?}", row.language))?;
+    let mut words = Vec::new();
+    let words = tok
+        .words(&row.text, &mut words)
+        .map(|()| words.iter().map(|w| (*w).to_owned()).collect())
+        .map_err(|e| py_exception(e).to_owned());
+    let sentences = tok
+        .count_sentences(&row.text)
+        .map_err(|e| py_exception(e).to_owned());
+    Ok((words, sentences))
+}
+
+/// (words ok, sentences ok) for `got` against the recording.
+fn compare(row: &Row, got: &Got) -> (bool, bool) {
+    match &row.expect {
+        Expect::Ok { words, sentences } => (
+            got.0.as_ref().is_ok_and(|w| w == words),
+            got.1.as_ref().is_ok_and(|s| s == sentences),
+        ),
+        Expect::Raise {
+            exc,
+            at_words: true,
+        } => (got.0.as_ref().err() == Some(exc), true),
+        Expect::Raise {
+            exc,
+            at_words: false,
+        } => (got.0.is_ok(), got.1.as_ref().err() == Some(exc)),
+    }
 }
 
 fn outcome(line: &str) -> Outcome {
@@ -116,20 +180,21 @@ fn outcome(line: &str) -> Outcome {
         Ok(None) => return Outcome::SkippedIsAlpha,
         Err(e) => return Outcome::Error(e),
     };
-    let replayed = panic::catch_unwind(AssertUnwindSafe(|| {
-        let tok = SpacyEnglish::get(row.version);
-        (
-            tok.words(&row.text) == row.words,
-            tok.count_sentences(&row.text) == row.sentences,
-        )
-    }));
+    let replayed = panic::catch_unwind(AssertUnwindSafe(|| run(&row)));
     match replayed {
-        Ok((true, true)) => Outcome::Match,
-        Ok((words_ok, sentences_ok)) => Outcome::Mismatch {
-            words: !words_ok,
-            sentences: !sentences_ok,
+        Ok(Ok(got)) => match compare(&row, &got) {
+            (true, true) => Outcome::Match,
+            (words_ok, sentences_ok) => Outcome::Mismatch {
+                words: !words_ok,
+                sentences: !sentences_ok,
+            },
         },
-        Err(_) => Outcome::Error(format!("pyroid panicked on {}", show(&row.text))),
+        Ok(Err(e)) => Outcome::Error(e),
+        Err(_) => Outcome::Error(format!(
+            "pyroid panicked on {} ({})",
+            show(&row.text),
+            row.language
+        )),
     }
 }
 
@@ -162,29 +227,43 @@ fn describe(location: &str, line: &str) -> String {
     let Ok(Some(row)) = parse(line) else {
         return format!("{location}: unparsable row");
     };
-    let tok = SpacyEnglish::get(row.version);
-    let got = tok.words(&row.text);
-    let got_sentences = tok.count_sentences(&row.text);
-    let want: Vec<&str> = row.words.iter().map(String::as_str).collect();
     let mut msg = format!(
-        "{location} [Unicode {}]\n  text: {}\n",
+        "{location} [{}, Unicode {}]\n  text: {}\n",
+        row.language,
         row.version.as_str(),
         show(&row.text)
     );
-    if got != want {
-        writeln!(msg, "  words: {}", word_diff(&want, &got)).unwrap();
-    }
-    let mark = if got_sentences == row.sentences {
-        ""
-    } else {
-        "  <- differs"
+    let Ok((got_words, got_sentences)) = run(&row) else {
+        return msg + "  (no tokenizer)";
     };
-    write!(
-        msg,
-        "  sentences: datatrove {}, pyroid {got_sentences}{mark}",
-        row.sentences
-    )
-    .unwrap();
+    match &row.expect {
+        Expect::Ok { words, sentences } => {
+            let want: Vec<&str> = words.iter().map(String::as_str).collect();
+            match &got_words {
+                Ok(got) => {
+                    let got: Vec<&str> = got.iter().map(String::as_str).collect();
+                    if got != want {
+                        writeln!(msg, "  words: {}", word_diff(&want, &got)).unwrap();
+                    }
+                }
+                Err(e) => writeln!(msg, "  words: pyroid raised {e}").unwrap(),
+            }
+            write!(
+                msg,
+                "  sentences: datatrove {sentences}, pyroid {got_sentences:?}"
+            )
+            .unwrap();
+        }
+        Expect::Raise { exc, at_words } => {
+            let at = if *at_words { "words" } else { "sentences" };
+            write!(
+                msg,
+                "  datatrove raised {exc} in {at}; pyroid words {:?}, sentences {got_sentences:?}",
+                got_words.as_ref().map(Vec::len)
+            )
+            .unwrap();
+        }
+    }
     msg
 }
 
@@ -270,5 +349,23 @@ fn extra_recordings_match_datatrove() {
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .collect();
+    check(&files);
+}
+
+/// The committed per-language recordings (`filters_data/multilingual/`, one
+/// file per datatrove tokenizer), each row replayed with its own language.
+#[test]
+fn multilingual_recordings_match_datatrove() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/filters_data/multilingual");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        eprintln!("no {}; skipping", dir.display());
+        return;
+    };
+    let mut files: Vec<PathBuf> = entries
+        .map(|e| e.expect("directory entry").path())
+        .filter(|p| p.extension().is_some_and(|x| x == "jsonl"))
+        .collect();
+    files.sort();
+    assert!(!files.is_empty(), "no recordings in {}", dir.display());
     check(&files);
 }

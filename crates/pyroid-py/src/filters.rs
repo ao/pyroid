@@ -167,7 +167,9 @@ impl RunError {
             Self::Filter { at, err } => {
                 let base = match err {
                     FilterError::ZeroDivision => PyZeroDivisionError::new_err(err.to_string()),
-                    FilterError::TextTooLong(_) => PyValueError::new_err(err.to_string()),
+                    FilterError::TextTooLong(_)
+                    | FilterError::SubstringNotFound
+                    | FilterError::NeedsTokenizer => PyValueError::new_err(err.to_string()),
                 };
                 with_note(py, base, format!("pyroid.filters: raised by {at}"))
             }
