@@ -181,3 +181,6 @@ impl Released for FfiStream {
         self.release.is_none()
     }
 }
+
+#[cfg(test)]
+mod tests;
