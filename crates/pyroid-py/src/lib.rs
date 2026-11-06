@@ -16,6 +16,7 @@ mod fasttext;
 mod filters;
 mod ftfy;
 mod input;
+mod metrics;
 mod testing;
 mod text;
 mod translit;
@@ -35,5 +36,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     filters::register(m)?;
     dedup::register(m)?;
     translit::register(m)?;
+    metrics::register(m)?;
     Ok(())
 }

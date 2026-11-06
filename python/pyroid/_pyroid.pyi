@@ -16,6 +16,7 @@ __all__ = [
     "fasttext",
     "filters",
     "ftfy",
+    "metrics",
     "text",
     "translit",
 ]
@@ -29,6 +30,7 @@ fasttext: ModuleType
 filters: ModuleType
 dedup: ModuleType
 translit: ModuleType
+metrics: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):
