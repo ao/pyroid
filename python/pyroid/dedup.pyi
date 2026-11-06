@@ -29,7 +29,7 @@ documents of one task. Configurations are datatrove's: pass a
 :class:`MinhashConfig`, datatrove's own ``MinhashConfig``, a dict, or keyword
 arguments (``hash_fc=`` and ``precision=`` set ``hash_config``). The default
 is datatrove's default (xxhash/64); FineWeb used
-``MinhashConfig(hash_config=HashConfig("sha1", 64))``.
+``MinhashConfig(hash_config=HashConfig(precision=64, hash_fc="sha1"))``.
 
 Languages
 ---------
