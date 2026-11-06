@@ -81,13 +81,20 @@ def test_python_dash_m(tmp_path: Path) -> None:
     assert [json.loads(x)["text"] for x in out.read_text().splitlines()] == ["Unicode", "ascii"]
 
 
+#: The leading bytes of each compressed output (the suffixes `pyroid --help` lists).
+MAGIC = {".gz": b"\x1f\x8b", ".bz2": b"BZh", ".zst": b"\x28\xb5\x2f\xfd", ".lz4": b'\x04"M\x18'}
+
+
 @pytest.mark.parametrize("fmt_in", [".parquet", ".jsonl", ".jsonl.gz"])
-@pytest.mark.parametrize("fmt_out", [".parquet", ".jsonl", ".ndjson.gz", ".json.zst"])
+@pytest.mark.parametrize(
+    "fmt_out", [".parquet", ".jsonl", ".ndjson.gz", ".json.zst", ".jsonl.bz2", ".jsonl.lz4"]
+)
 def test_translit_formats(tmp_path: Path, fmt_in: str, fmt_out: str) -> None:
     texts = ["Ålborg — “quoted” ½", "日本語", "plain", "Ελληνικά"] * 5
     src = _write(_table(texts, n=list(range(len(texts)))), tmp_path / f"in{fmt_in}")
     out = tmp_path / f"out{fmt_out}"
     assert main(["translit", str(src), str(out), "--batch-size", "3"]) == 0
+    assert out.read_bytes().startswith(MAGIC.get(out.suffix, b""))
     t = _read(out)
     assert t.column("text").to_pylist() == pyroid.translit.anyascii(texts)
     assert t.column("n").to_pylist() == list(range(len(texts)))

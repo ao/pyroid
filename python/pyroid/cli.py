@@ -1,8 +1,9 @@
 """The ``pyroid`` command line (also ``python -m pyroid``).
 
 Streams Parquet or JSONL in Arrow batches; input may be a file or a directory
-of files (read in name order). Output is one file; its format follows its name
-(``.parquet``/``.pq``, ``.jsonl``/``.ndjson``/``.json``, optionally ``.gz``/``.zst``).
+of files (read in name order). Output is one file. A file's format follows its
+name: ``.parquet``/``.pq`` is Parquet; ``.jsonl``/``.ndjson``/``.json`` is JSON
+Lines, optionally compressed as ``.gz``, ``.bz2``, ``.zst`` or ``.lz4``.
 
     pyroid clean IN OUT --recipe fineweb [--threads N] [--text-column text]
                  [--excluded DROPPED] [--stats]
@@ -36,6 +37,8 @@ from typing import Any
 import pyroid
 
 RECIPES = ("fineweb",)
+# The suffixes pyroid.integrations._io reads and writes (only JSON Lines can be compressed).
+_FORMATS = ".parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4]"
 
 
 def _need_pyarrow() -> None:
@@ -378,10 +381,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
     def common(p: argparse.ArgumentParser, excluded: bool = True) -> None:
-        p.add_argument("input", help="input .parquet/.jsonl file, or a directory of them")
-        p.add_argument(
-            "output", help="output file (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.zst])"
-        )
+        p.add_argument("input", help=f"input file ({_FORMATS}), or a directory of such files")
+        p.add_argument("output", help=f"output file ({_FORMATS})")
         p.add_argument("--text-column", default="text", help="the text column (default: text)")
         p.add_argument(
             "--threads",
