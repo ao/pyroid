@@ -1012,6 +1012,284 @@ def pii_replace(texts: Any, config: Any = None, /, *, threads: Any = None, **kwa
 # ---- end PIIFormatter ----
 
 # ---- C4BadWordsFilter ----
+__all__ += [
+    "C4_BADWORDS_LANGUAGES",
+    "BadWordsFilter",
+    "BadWordsResult",
+    "C4BadWords",
+    "c4_badwords",
+    "c4_badwords_reasons",
+    "load_c4_badwords",
+]
+
+#: The languages datatrove 0.10.1 has a bad-word list for (``_BADWORDS_LANGS``).
+C4_BADWORDS_LANGUAGES = (
+    "ar", "cs", "da", "de", "en", "eo", "es", "fa", "fi", "fil", "fr", "fr-CA-u-sd-caqc", "hi",
+    "hu", "it", "ja", "kab", "ko", "nl", "no", "pl", "pt", "ru", "sv", "th", "tlh", "tr", "zh",
+)  # fmt: skip
+
+# The LDNOOBW "List of Dirty, Naughty, Obscene, and Otherwise Bad Words" (CC BY 4.0,
+# https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words), at the commits
+# datatrove pins; fetched at run time like datatrove does, never shipped with pyroid.
+_LDNOOBW = "https://raw.githubusercontent.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/"
+_BADWORDS_COMMIT = "5faf2ba42d7b1c0977169ec3611df25a3c08eb13"
+_EN_BADWORDS_COMMIT = "25e679f03d96baa721cde20db9944649e8d0a844"
+_BADWORDS_SHA256 = {
+    "ar": "23dbd9c55257bf2a4965f46664dc7eac04b61ff4eb3571e41f7e964c7c3ed96b",
+    "cs": "90706df86709bade1ca39cf9f9d9836409c674fc3bffcb7525bdd20e59b596bc",
+    "da": "ddb46ab67e955d1a5f49c89c18497d23c3d8d6d2522f3740a5d7583f90e434c6",
+    "de": "ebe44d7772897390e27f7bec412fdcdf0efc294e4db157f8487c4cd8d4fabd55",
+    "en": "a506cbcf8a31935b122299f3bb1d32be6db3d0ad498765d28f365dfc4f4d7b8c",
+    "eo": "0374d76be1dbc77c61362d6e51305e1e4c546b7f734eb96e0bdbad7fd2a6ace1",
+    "es": "073334261cc2e7c08339faefd2f19f9623e8240a0ac18fe2a26c368b897496ce",
+    "fa": "85828629b90fd18a3f6f6efb1934c1294103c33d1c28c0653970adfa179169e9",
+    "fi": "3e0b35b2533ba22fb526d882bea250ddfad907ee7548aacbe15db17e21034c62",
+    "fil": "fb4b43691b1249fee2eca1e66795daedda8e7366d42abcde6553dce611d23d99",
+    "fr": "79763a705e08256b393952852bb63aa903f4485e0ef02f70735f5e50efff213c",
+    "fr-CA-u-sd-caqc": "4a0ef5d55921c91df26676b214d3ac648deef11cfbc4587159ee9aab4085b09a",
+    "hi": "83636e9b7a5260451e09e9e471f81dad9f082d107a82da77047e57d7856ed0cc",
+    "hu": "a6943a971496f16e9a9d59ba6fde146d229699600e9636828d8d34ed9160aff5",
+    "it": "d413f41018d58aa79d2c4809d0161f29ffd5652c4dc34c5b7b9ade680ee5599a",
+    "ja": "f83c4d0843ea6474c17bf171edd72b616b3af403f8613f2cde1bd841faf6f316",
+    "kab": "df7be2ce4a0c80ee717cd7134c90645a8a0f0c0c458a61f927934dbd50eac96d",
+    "ko": "0dd4b74ffea6e3bb35d658e6d8262b53ee99281eaa48ecb515a2065bfcc7f69d",
+    "nl": "8298ba0cdc3ca9a1989c349b8ad0148e4504c2804f2f2fb6c2f52bfb39c5ae71",
+    "no": "e55b46bcec1ea288256924523a997d8d99e124c9aa3e61cbbbfaeca294f745b4",
+    "pl": "98cf824e3692255645c5a72d5913f26fd4f20930f725683b4c96bb312ca5d9b3",
+    "pt": "05ef524b0bb7f83f87257f6ec4dabf70e16b8bb6930f769fb93deaf608ff196d",
+    "ru": "2598adabd2b761733d72a68d8ee4fcc1d2c38f2f85b6ff489985c6ce1d93bf75",
+    "sv": "77f3f99a89bd3b2bde6a654741bacfcb3acca3f5c804af4d8d3fea11e09ea562",
+    "th": "835036d87a3a67738e388cd6de92e3c995c186a1427b4e830fe7b85483c257e7",
+    "tlh": "3c19004e338c0d91d19ba419185279145848b75b2327aa0e3a752c604ad9f59d",
+    "tr": "6c7ae03baee0f3fdc22eed169030567669005dad9a1923e0b571c4bd4f2f2ab5",
+    "zh": "a1d9aa037c8b039ef3b40148b3364ce2ca62ce4a955b7082a16ad99f6cbd1bc0",
+}
+# datatrove's _BADWORDS_ALLOWLIST: removed from every language's list.
+_BADWORDS_ALLOWLIST = {"ja": {"sm", "グロ", "女の子"}, "zh": {"性"}}
+_NO_BOUNDARY = frozenset(("ja", "th", "zh"))  # matched without word separation
+_BADWORDS_REASON = "document_removed_with_badwords"
+
+
+def _cache_dir() -> Any:
+    import os
+    from pathlib import Path
+
+    if d := os.environ.get("PYROID_CACHE_DIR"):
+        return Path(d)
+    base = os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache"
+    return Path(base) / "pyroid"
+
+
+def _badwords_url(language: str) -> str:
+    commit = _EN_BADWORDS_COMMIT if language == "en" else _BADWORDS_COMMIT
+    return f"{_LDNOOBW}{commit}/{language}"
+
+
+def _badwords_file(language: str, cache_dir: Any, download: bool) -> Any:
+    import hashlib
+    import os
+    import tempfile
+    import urllib.request
+    from pathlib import Path
+
+    want = _BADWORDS_SHA256[language]
+    target = Path(cache_dir if cache_dir is not None else _cache_dir()) / "c4_badwords" / language
+    if target.exists():
+        if hashlib.sha256(target.read_bytes()).hexdigest() == want:
+            return target
+        if not download:
+            raise OSError(f"{target}: sha256 differs from the list datatrove pins")
+    elif not download:
+        raise FileNotFoundError(f"no {language!r} bad-word list in {target.parent}")
+    url = _badwords_url(language)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{language}.")
+    try:
+        with os.fdopen(fd, "wb") as out, urllib.request.urlopen(url) as resp:
+            data = resp.read()
+            out.write(data)
+        got = hashlib.sha256(data).hexdigest()
+        if got != want:
+            raise OSError(f"{url}: sha256 {got}, expected {want}")
+        os.replace(tmp, target)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    return target
+
+
+def load_c4_badwords(
+    language: str, *, cache_dir: Any = None, download: bool = True
+) -> frozenset[str]:
+    """Datatrove's word set for ``language`` (see ``filters.pyi``)."""
+    if language not in _BADWORDS_SHA256:
+        raise ValueError(
+            f'There is not badwords list available for "{language}". '
+            f"Set fail_on_missing_language=False to continue anyway."
+        )
+    path = _badwords_file(language, cache_dir, download)
+    # datatrove: `badwords.update(line.strip() for line in f)` (text mode), minus every allowlist.
+    with open(path, encoding="utf-8") as f:
+        words = {line.strip() for line in f}
+    for allow in _BADWORDS_ALLOWLIST.values():
+        words -= allow
+    return frozenset(words)
+
+
+class C4BadWords(NamedTuple):
+    """``C4BadWordsFilter``'s parameters and defaults (``exclusion_writer`` aside)."""
+
+    keep_fraction: float = 0.0
+    fail_on_missing_language: bool = True
+    seed: int | None = None
+    default_language: str = "en"
+
+
+class BadWordsResult(NamedTuple):
+    """What :class:`BadWordsFilter` returns, each in the caller's container kind."""
+
+    keep: Any
+    reason: Any
+
+
+def _seed_words(seed: object) -> list[int]:
+    if seed is None:
+        import secrets
+
+        seed = secrets.randbits(128)  # what numpy's SeedSequence() draws
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise TypeError(f"seed must be an int or None, not {type(seed).__name__}")
+    if seed < 0:
+        raise ValueError("expected non-negative integer")
+    words = []
+    while seed:
+        words.append(seed & 0xFFFFFFFF)
+        seed >>= 32
+    return words or [0]
+
+
+class BadWordsFilter:
+    """A stateful ``C4BadWordsFilter``: see ``filters.pyi``."""
+
+    def __init__(
+        self,
+        config: C4BadWords | None = None,
+        /,
+        *,
+        words: Any = None,
+        cache_dir: Any = None,
+        download: bool = True,
+        **kwargs: Any,
+    ) -> None:
+        cfg = _config(C4BadWords, config, kwargs)
+        if not isinstance(cfg.default_language, str):
+            raise TypeError("default_language must be a str")
+        self.config: C4BadWords = cfg
+        self._keep_fraction = _num("keep_fraction", cfg.keep_fraction)
+        self._words: dict[str, Any] = {} if words is None else dict(words)
+        self._cache_dir = cache_dir
+        self._download = download
+        self._ids_by_lang: dict[str, int] = {}
+        self._native: list[Any] = []
+        self.rng_state: tuple[int, int] = _native._pcg64_seed(_seed_words(cfg.seed))
+
+    def _list(self, language: str) -> int:
+        idx = self._ids_by_lang.get(language)
+        if idx is not None:
+            return idx
+        if language in self._words:
+            words = [w for w in self._words[language] if isinstance(w, str)]
+        elif language in _BADWORDS_SHA256:
+            words = list(
+                load_c4_badwords(language, cache_dir=self._cache_dir, download=self._download)
+            )
+        elif self.config.fail_on_missing_language:
+            raise ValueError(
+                f'There is not badwords list available for "{language}". '
+                f"Set fail_on_missing_language=False to continue anyway."
+            )
+        else:
+            self._ids_by_lang[language] = -1
+            return -1
+        self._native.append(_native._BadWords(words, language not in _NO_BOUNDARY))
+        self._ids_by_lang[language] = idx = len(self._native) - 1
+        return idx
+
+    def _run(self, texts: Any, languages: Any, what: str, threads: Any) -> Any:
+        if languages is None or isinstance(languages, str):
+            lang = self._list(self.config.default_language if languages is None else languages)
+            ids = None
+        else:
+            default = self.config.default_language
+            lang = -1
+            ids = [self._list(default if x is None else x) for x in languages]
+        out, state = _native._badwords_run(
+            texts,
+            self._native,
+            lang,
+            ids,
+            self._keep_fraction,
+            self.rng_state,
+            what,
+            _unicode_version(),
+            threads=threads,
+        )
+        self.rng_state = state
+        return out
+
+    def __call__(self, texts: Any, /, *, languages: Any = None, threads: Any = None) -> Any:
+        """Keep mask and drop reasons, from one pass (one draw per flagged document)."""
+        keep, reason = self._run(texts, languages, "all", threads)
+        return BadWordsResult(keep, reason)
+
+    def keep(self, texts: Any, /, *, languages: Any = None, threads: Any = None) -> Any:
+        """Keep mask (draws like datatrove's ``filter``)."""
+        return self._run(texts, languages, "keep", threads)
+
+    def reasons(self, texts: Any, /, *, languages: Any = None, threads: Any = None) -> Any:
+        """Drop reasons (draws like datatrove's ``filter``)."""
+        return self._run(texts, languages, "reason", threads)
+
+    def found(self, texts: Any, /, *, languages: Any = None, threads: Any = None) -> Any:
+        """Whether each document contains a bad word (no draws)."""
+        return self._run(texts, languages, "found", threads)
+
+    def __repr__(self) -> str:
+        return f"BadWordsFilter({self.config!r})"
+
+
+def c4_badwords(
+    texts: Any,
+    config: Any = None,
+    /,
+    *,
+    languages: Any = None,
+    words: Any = None,
+    threads: Any = None,
+    **kwargs: Any,
+) -> Any:
+    """``C4BadWordsFilter``: True for each kept document (see ``filters.pyi``)."""
+    return BadWordsFilter(config, words=words, **kwargs).keep(
+        texts, languages=languages, threads=threads
+    )
+
+
+def c4_badwords_reasons(
+    texts: Any,
+    config: Any = None,
+    /,
+    *,
+    languages: Any = None,
+    words: Any = None,
+    threads: Any = None,
+    **kwargs: Any,
+) -> Any:
+    """``C4BadWordsFilter``: datatrove's drop reason per document, ``None`` if kept."""
+    return BadWordsFilter(config, words=words, **kwargs).reasons(
+        texts, languages=languages, threads=threads
+    )
+
+
 # ---- end C4BadWordsFilter ----
 
 # ---- URLFilter ----

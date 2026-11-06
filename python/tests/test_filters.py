@@ -974,7 +974,8 @@ def test_ten_thousand_documents() -> None:
 
 
 def test_module_surface() -> None:
-    assert sorted(pf.__all__) == sorted(
+    # The quality filters' names; the further datatrove steps check theirs in test_*_more.py.
+    assert set(pf.__all__).issuperset(
         [
             "DATATROVE_VERSION",
             "STOP_WORDS",

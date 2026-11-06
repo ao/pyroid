@@ -103,6 +103,7 @@ from typing import (
     Final,
     NamedTuple,
     Protocol,
+    TypeAlias,
     TypedDict,
     Unpack,
     overload,
@@ -979,6 +980,334 @@ def pii_replace(
 # ---- end PIIFormatter ----
 
 # ---- C4BadWordsFilter ----
+import os  # noqa: E402
+from collections.abc import Mapping  # noqa: E402
+
+__all__ += [
+    "C4_BADWORDS_LANGUAGES",
+    "BadWordsFilter",
+    "BadWordsResult",
+    "C4BadWords",
+    "c4_badwords",
+    "c4_badwords_reasons",
+    "load_c4_badwords",
+]
+
+C4_BADWORDS_LANGUAGES: Final[tuple[str, ...]]
+"""The 28 languages datatrove 0.10.1 has a word list for (``_BADWORDS_LANGS``)."""
+
+def load_c4_badwords(
+    language: str, *, cache_dir: str | os.PathLike[str] | None = None, download: bool = True
+) -> frozenset[str]:
+    """Datatrove's bad-word set for ``language``.
+
+    The lists are the LDNOOBW "List of Dirty, Naughty, Obscene, and Otherwise
+    Bad Words" (https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words,
+    CC BY 4.0), at the two commits datatrove pins. pyroid does not ship them:
+    like datatrove, it downloads a list the first time it is needed, into
+    ``cache_dir`` (default ``$PYROID_CACHE_DIR``, else ``$XDG_CACHE_HOME/pyroid``,
+    else ``~/.cache/pyroid``) under ``c4_badwords/``, and checks its sha256.
+    The set is built as datatrove builds it: each line ``strip()``-ed, minus
+    every language's allowlist (``sm``, ``グロ``, ``女の子``, ``性``).
+
+    Args:
+        language: One of :data:`C4_BADWORDS_LANGUAGES`.
+        cache_dir: Where the lists are kept.
+        download: Fetch a missing list (else ``FileNotFoundError``).
+
+    Raises:
+        ValueError: No list for ``language`` (datatrove's message).
+        OSError: The download failed, or the file's sha256 is not the pinned one.
+    """
+
+class C4BadWords(NamedTuple):
+    """``C4BadWordsFilter``'s parameters and defaults (``exclusion_writer`` aside).
+
+    Attributes:
+        keep_fraction: The fraction of documents with bad words to keep anyway,
+            decided per document by ``numpy.random.default_rng(seed).uniform()``.
+        fail_on_missing_language: Raise for a language without a list (else keep
+            its documents).
+        seed: ``default_rng``'s seed: a non-negative int, or ``None`` for fresh OS
+            entropy (as numpy).
+        default_language: The language of documents given none.
+    """
+
+    keep_fraction: float = 0.0
+    fail_on_missing_language: bool = True
+    seed: int | None = None
+    default_language: str = "en"
+
+@type_check_only
+class _C4BadWordsKwargs(TypedDict, total=False):
+    keep_fraction: float
+    fail_on_missing_language: bool
+    seed: int | None
+    default_language: str
+
+class BadWordsResult(NamedTuple):
+    """What a :class:`BadWordsFilter` call returns, each in the caller's container kind."""
+
+    keep: Any
+    """True for each kept document."""
+    reason: Any
+    """``"document_removed_with_badwords"`` for each dropped document, else ``None``."""
+
+_Languages: TypeAlias = str | Sequence[str | None] | None
+
+class BadWordsFilter:
+    r"""datatrove's ``C4BadWordsFilter``, keeping its random state across calls.
+
+    A document is dropped when ``doc.text.lower()`` contains a word of its
+    language's list, flanked by non-word characters (``re``'s ``\W``) or the
+    text's ends (``ja``, ``th`` and ``zh`` words match anywhere), unless
+    ``keep_fraction > 0`` and the next ``uniform()`` draw of numpy's
+    ``default_rng(seed)`` is below it. The draws are numpy's PCG64 stream, bit
+    for bit, one per flagged document in document order, continuing across
+    calls (:attr:`rng_state`). The search runs in Rust, in parallel.
+
+    Attributes:
+        config: The :class:`C4BadWords` settings.
+        rng_state: ``(state, inc)`` of the PCG64 generator (as numpy's
+            ``bit_generator.state["state"]``); assignable.
+    """
+
+    config: C4BadWords
+    rng_state: tuple[int, int]
+
+    def __init__(
+        self,
+        config: C4BadWords | None = None,
+        /,
+        *,
+        words: Mapping[str, Iterable[str]] | None = None,
+        cache_dir: str | os.PathLike[str] | None = None,
+        download: bool = True,
+        **kwargs: Unpack[_C4BadWordsKwargs],
+    ) -> None:
+        """A filter whose generator is ``default_rng(seed)``.
+
+        Args:
+            config: A :class:`C4BadWords`; keyword arguments override its fields.
+            words: Word lists to use instead of datatrove's, by language (any
+                language code; matched literally, not lowercased). Languages
+                not given are loaded with :func:`load_c4_badwords` when first needed.
+            cache_dir: As for :func:`load_c4_badwords`.
+            download: As for :func:`load_c4_badwords`.
+            **kwargs: ``C4BadWordsFilter``'s parameters.
+
+        Raises:
+            TypeError: ``seed`` is not an int or ``None``.
+            ValueError: ``seed`` is negative.
+        """
+
+    def __call__(
+        self, texts: Any, /, *, languages: _Languages = None, threads: int | None = None
+    ) -> BadWordsResult:
+        """Filter ``texts``: keep mask and drop reasons from one pass.
+
+        Args:
+            texts: A str, a list or tuple of str, or an Arrow string array/column.
+            languages: Each document's language (datatrove's ``doc.metadata["language"]``):
+                one str for all, or one entry per document (``None``: the default).
+                Default: ``default_language``.
+            threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+                ``n`` tasks at once; ``1`` runs on the calling thread.
+
+        Returns:
+            ``BadWordsResult(keep, reason)`` in the caller's kind (Arrow nulls stay null).
+
+        Raises:
+            ValueError: A language has no list and ``fail_on_missing_language``
+                (datatrove's message), or ``languages`` has the wrong length.
+            OSError: A list could not be downloaded.
+            pyroid.InputError: ``texts`` is not one of the accepted kinds.
+            UnicodeEncodeError: A str contains a lone surrogate.
+            UnicodeDecodeError: An Arrow row is not valid UTF-8.
+        """
+
+    @overload
+    def keep(
+        self, texts: str, /, *, languages: _Languages = None, threads: int | None = None
+    ) -> bool:
+        """The keep mask only (draws as :meth:`__call__`)."""
+
+    @overload
+    def keep(
+        self, texts: list[str], /, *, languages: _Languages = None, threads: int | None = None
+    ) -> list[bool]: ...
+    @overload
+    def keep(
+        self,
+        texts: tuple[str, ...],
+        /,
+        *,
+        languages: _Languages = None,
+        threads: int | None = None,
+    ) -> tuple[bool, ...]: ...
+    @overload
+    def keep(
+        self, texts: ArrowStrings, /, *, languages: _Languages = None, threads: int | None = None
+    ) -> Column[bool]: ...
+    @overload
+    def reasons(
+        self, texts: str, /, *, languages: _Languages = None, threads: int | None = None
+    ) -> str | None:
+        """The drop reasons only (draws as :meth:`__call__`)."""
+
+    @overload
+    def reasons(
+        self, texts: list[str], /, *, languages: _Languages = None, threads: int | None = None
+    ) -> list[str | None]: ...
+    @overload
+    def reasons(
+        self,
+        texts: tuple[str, ...],
+        /,
+        *,
+        languages: _Languages = None,
+        threads: int | None = None,
+    ) -> tuple[str | None, ...]: ...
+    @overload
+    def reasons(
+        self, texts: ArrowStrings, /, *, languages: _Languages = None, threads: int | None = None
+    ) -> Column[str]: ...
+    @overload
+    def found(
+        self, texts: str, /, *, languages: _Languages = None, threads: int | None = None
+    ) -> bool:
+        """Whether each document contains a bad word (no draws; missing lists give False)."""
+
+    @overload
+    def found(
+        self, texts: list[str], /, *, languages: _Languages = None, threads: int | None = None
+    ) -> list[bool]: ...
+    @overload
+    def found(
+        self,
+        texts: tuple[str, ...],
+        /,
+        *,
+        languages: _Languages = None,
+        threads: int | None = None,
+    ) -> tuple[bool, ...]: ...
+    @overload
+    def found(
+        self, texts: ArrowStrings, /, *, languages: _Languages = None, threads: int | None = None
+    ) -> Column[bool]: ...
+
+@overload
+def c4_badwords(
+    texts: str,
+    config: C4BadWords | None = None,
+    /,
+    *,
+    languages: _Languages = None,
+    words: Mapping[str, Iterable[str]] | None = None,
+    threads: int | None = None,
+    **kwargs: Unpack[_C4BadWordsKwargs],
+) -> bool:
+    """``C4BadWordsFilter``: True for each document datatrove keeps.
+
+    A fresh :class:`BadWordsFilter` per call, so the draws start from
+    ``default_rng(seed)``: one call over a whole corpus gives datatrove's
+    decisions. For batches, use one :class:`BadWordsFilter`.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: A :class:`C4BadWords`; keyword arguments override its fields.
+        languages: As for :meth:`BadWordsFilter.__call__`.
+        words: As for :class:`BadWordsFilter`.
+        threads: As for :meth:`BadWordsFilter.__call__`.
+        **kwargs: ``C4BadWordsFilter``'s parameters.
+
+    Returns:
+        A keep mask in the caller's kind.
+    """
+
+@overload
+def c4_badwords(
+    texts: list[str],
+    config: C4BadWords | None = None,
+    /,
+    *,
+    languages: _Languages = None,
+    words: Mapping[str, Iterable[str]] | None = None,
+    threads: int | None = None,
+    **kwargs: Unpack[_C4BadWordsKwargs],
+) -> list[bool]: ...
+@overload
+def c4_badwords(
+    texts: tuple[str, ...],
+    config: C4BadWords | None = None,
+    /,
+    *,
+    languages: _Languages = None,
+    words: Mapping[str, Iterable[str]] | None = None,
+    threads: int | None = None,
+    **kwargs: Unpack[_C4BadWordsKwargs],
+) -> tuple[bool, ...]: ...
+@overload
+def c4_badwords(
+    texts: ArrowStrings,
+    config: C4BadWords | None = None,
+    /,
+    *,
+    languages: _Languages = None,
+    words: Mapping[str, Iterable[str]] | None = None,
+    threads: int | None = None,
+    **kwargs: Unpack[_C4BadWordsKwargs],
+) -> Column[bool]: ...
+@overload
+def c4_badwords_reasons(
+    texts: str,
+    config: C4BadWords | None = None,
+    /,
+    *,
+    languages: _Languages = None,
+    words: Mapping[str, Iterable[str]] | None = None,
+    threads: int | None = None,
+    **kwargs: Unpack[_C4BadWordsKwargs],
+) -> str | None:
+    """``C4BadWordsFilter``: datatrove's drop reason per document, ``None`` when kept.
+
+    As :func:`c4_badwords`, returning ``"document_removed_with_badwords"`` or ``None``.
+    """
+
+@overload
+def c4_badwords_reasons(
+    texts: list[str],
+    config: C4BadWords | None = None,
+    /,
+    *,
+    languages: _Languages = None,
+    words: Mapping[str, Iterable[str]] | None = None,
+    threads: int | None = None,
+    **kwargs: Unpack[_C4BadWordsKwargs],
+) -> list[str | None]: ...
+@overload
+def c4_badwords_reasons(
+    texts: tuple[str, ...],
+    config: C4BadWords | None = None,
+    /,
+    *,
+    languages: _Languages = None,
+    words: Mapping[str, Iterable[str]] | None = None,
+    threads: int | None = None,
+    **kwargs: Unpack[_C4BadWordsKwargs],
+) -> tuple[str | None, ...]: ...
+@overload
+def c4_badwords_reasons(
+    texts: ArrowStrings,
+    config: C4BadWords | None = None,
+    /,
+    *,
+    languages: _Languages = None,
+    words: Mapping[str, Iterable[str]] | None = None,
+    threads: int | None = None,
+    **kwargs: Unpack[_C4BadWordsKwargs],
+) -> Column[str]: ...
+
 # ---- end C4BadWordsFilter ----
 
 # ---- URLFilter ----

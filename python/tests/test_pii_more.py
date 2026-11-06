@@ -288,3 +288,10 @@ def test_drop_in_step_matches_datatrove() -> None:
         assert mine.format("a@b.cc") == stock.format("a@b.cc")
         assert mine.emails_replacer._replace_i == stock.emails_replacer._replace_i
         assert mine.ip_replacer._replace_i == stock.ip_replacer._replace_i
+
+
+def test_module_surface() -> None:
+    names = {"PII", "PII_EMAIL_REPLACEMENT", "PII_IP_REPLACEMENT", "PIIReplacer", "pii_replace"}
+    assert names <= set(pf.__all__)
+    assert pf.pii_replace.__module__ == "pyroid.filters"
+    assert pf.pii_replace.__doc__

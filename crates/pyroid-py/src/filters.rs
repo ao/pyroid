@@ -880,8 +880,8 @@ mod pii {
 
     use pyo3::exceptions::{PyIndexError, PyValueError};
     use pyo3::prelude::*;
-    use pyo3::types::{PyList, PyString, PyTuple};
-    use pyroid_core::columnar::StringBuffers;
+    use pyo3::types::{PyBool, PyList, PyNone, PyString, PyTuple};
+    use pyroid_core::columnar::{BoolBuffers, StringBuffers};
     use pyroid_core::filters::pii;
     use pyroid_core::ftfy::UnicodeVersion;
     use pyroid_core::par;
@@ -970,6 +970,78 @@ mod pii {
         })
     }
 
+    /// Per-document values in the caller's kind: `item` builds one value for
+    /// a str/list/tuple; Arrow gets a column built by `chunk` per input chunk
+    /// (`vals` holds every row, nulls included).
+    fn pack_values<'py, T>(
+        py: Python<'py>,
+        input: &TextInput,
+        vals: &[Option<T>],
+        item: impl Fn(&Option<T>) -> Bound<'py, PyAny>,
+        ty: ColumnType,
+        chunk: impl Fn(&[Option<T>], &mut Vec<Chunk>) -> PyResult<()>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Ok(match input {
+            TextInput::Str(_) => item(&vals[0]),
+            TextInput::List(_) => PyList::new(py, vals.iter().map(&item))?.into_any(),
+            TextInput::Tuple(_) => PyTuple::new(py, vals.iter().map(&item))?.into_any(),
+            TextInput::Arrow(strings) => {
+                let mut chunks = Vec::new();
+                let mut rest = vals;
+                for c in &strings.chunks {
+                    let (rows, tail) = rest.split_at(c.len());
+                    rest = tail;
+                    chunk(rows, &mut chunks)?;
+                }
+                Bound::new(py, Column::new(ty, &strings.field.name, chunks))?.into_any()
+            }
+        })
+    }
+
+    /// A mask in the caller's kind (`None`: an Arrow null).
+    pub(super) fn pack_bools<'py>(
+        py: Python<'py>,
+        input: &TextInput,
+        vals: &[Option<bool>],
+    ) -> PyResult<Bound<'py, PyAny>> {
+        pack_values(
+            py,
+            input,
+            vals,
+            |v| PyBool::new(py, v.unwrap_or(false)).to_owned().into_any(),
+            ColumnType::Bool,
+            |rows, out| {
+                out.push(Chunk::Bool(BoolBuffers::build(rows)));
+                Ok(())
+            },
+        )
+    }
+
+    /// `str | None` per document in the caller's kind (Arrow: a `string`
+    /// column, null for `None` and for null inputs).
+    pub(super) fn pack_reasons<'py>(
+        py: Python<'py>,
+        input: &TextInput,
+        vals: &[Option<&'static str>],
+        threads: par::Threads,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        pack_values(
+            py,
+            input,
+            vals,
+            |v| match v {
+                Some(s) => PyString::new(py, s).into_any(),
+                None => PyNone::get(py).to_owned().into_any(),
+            },
+            ColumnType::Utf8,
+            |rows, out| {
+                let built = StringBuffers::build_split(rows, threads).map_err(build_error)?;
+                out.extend(built.into_iter().map(Chunk::Utf8));
+                Ok(())
+            },
+        )
+    }
+
     /// Each document's start index into a replacement tuple of `len` items,
     /// given how many replacements each makes; and the index after the last.
     fn starts(counts: &[usize], start: usize, len: usize) -> PyResult<(Vec<usize>, usize)> {
@@ -987,7 +1059,7 @@ mod pii {
         Ok((out, cur))
     }
 
-    fn pool_err(py: Python<'_>, e: par::PoolError) -> PyErr {
+    pub(super) fn pool_err(py: Python<'_>, e: par::PoolError) -> PyErr {
         BatchError::from(e).into_pyerr(py)
     }
 
@@ -1199,11 +1271,148 @@ mod pii {
 
 // ---- C4BadWordsFilter ----
 mod badwords {
-    use pyo3::prelude::*;
+    //! `C4BadWordsFilter`: the word search runs detached, in parallel; the
+    //! keep-fraction draws then run in document order on numpy's PCG64.
 
-    #[allow(clippy::unnecessary_wraps)] // placeholder
-    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
-        Ok(())
+    use pyo3::exceptions::PyValueError;
+    use pyo3::prelude::*;
+    use pyo3::types::PyTuple;
+    use pyroid_core::filters::badwords::{BadWords, Pcg64, seed_sequence};
+    use pyroid_core::ftfy::UnicodeVersion;
+    use pyroid_core::par;
+
+    use super::pii::{flat_docs, pack_bools, pack_reasons};
+    use crate::input::{ThreadsArg, texts_and_threads};
+
+    /// datatrove's drop reason.
+    const REASON: &str = "document_removed_with_badwords";
+
+    /// One language's compiled word list.
+    #[pyclass(frozen, module = "pyroid.filters", name = "_BadWords")]
+    #[derive(Debug)]
+    struct NativeBadWords(BadWords);
+
+    #[pymethods]
+    impl NativeBadWords {
+        #[new]
+        fn new(words: Vec<String>, boundaries: bool) -> Self {
+            Self(BadWords::new(&words, boundaries))
+        }
+    }
+
+    /// `(state, inc)` of `numpy.random.default_rng(seed).bit_generator` for
+    /// an int seed given as its 32-bit words, least significant first.
+    #[pyfunction]
+    fn _pcg64_seed(entropy: Vec<u32>) -> (u128, u128) {
+        let g = seed_sequence(&entropy);
+        (g.state, g.inc)
+    }
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Hit {
+        /// No word list for the document's language: kept, no draw.
+        Missing,
+        No,
+        Yes,
+    }
+
+    /// Run the filter. `lists[ids[i]]` (or `lists[lang]` for every
+    /// document when `ids` is `None`) is document `i`'s list; a negative id
+    /// means none (kept). `what` is `"keep"`, `"reason"`, `"all"` (both) or
+    /// `"found"` (whether a word was found; no draws).
+    /// Returns `(result, rng)` with the generator state after the draws.
+    #[pyfunction]
+    #[pyo3(signature = (
+        texts, lists, lang, ids, keep_fraction, rng, what, unicode_version, /, *, threads = None
+    ))]
+    #[allow(clippy::too_many_arguments)] // one native entry point behind the Python API
+    fn _badwords_run<'py>(
+        py: Python<'py>,
+        texts: &Bound<'py, PyAny>,
+        lists: Vec<Py<NativeBadWords>>,
+        lang: i64,
+        ids: Option<Vec<i64>>,
+        keep_fraction: f64,
+        rng: Option<(u128, u128)>,
+        what: &str,
+        unicode_version: &str,
+        threads: Option<ThreadsArg>,
+    ) -> PyResult<(Bound<'py, PyAny>, Option<(u128, u128)>)> {
+        let (input, threads) = texts_and_threads(texts, threads, None)?;
+        let threads = crate::input::threads(threads);
+        let v = UnicodeVersion::from_unidata_version(unicode_version).ok_or_else(|| {
+            PyValueError::new_err(format!("unsupported Unicode version {unicode_version}"))
+        })?;
+        let lists: Vec<&BadWords> = lists.iter().map(|l| &l.get().0).collect();
+        let pick = |i: usize| -> Option<&BadWords> {
+            let id = ids.as_ref().map_or(lang, |ids| ids[i]);
+            usize::try_from(id).ok().and_then(|k| lists.get(k).copied())
+        };
+        let docs = py
+            .detach(|| flat_docs(&input, threads))
+            .map_err(|e| e.into_pyerr(py))?;
+        if ids.as_ref().is_some_and(|ids| ids.len() != docs.len()) {
+            return Err(PyValueError::new_err(
+                "languages must have one entry per document",
+            ));
+        }
+        let hits: Vec<Option<Hit>> = py
+            .detach(|| {
+                par::map(docs.len(), threads, |i| {
+                    docs[i].map(|d| match pick(i) {
+                        None => Hit::Missing,
+                        Some(b) if b.found(d, v) => Hit::Yes,
+                        Some(_) => Hit::No,
+                    })
+                })
+            })
+            .map_err(|e| super::pii::pool_err(py, e))?;
+        let mut gen_state = rng.map(|(state, inc)| Pcg64 { state, inc });
+        if what == "found" {
+            let vals: Vec<Option<bool>> = hits.iter().map(|h| h.map(|h| h == Hit::Yes)).collect();
+            return Ok((pack_bools(py, &input, &vals)?, rng));
+        }
+        // datatrove: `if self.keep_fraction > 0.0 and self.uniform() < self.keep_fraction`.
+        let mut keep = Vec::with_capacity(hits.len());
+        for h in &hits {
+            keep.push(match h {
+                None => None,
+                Some(Hit::Missing | Hit::No) => Some(true),
+                Some(Hit::Yes) => Some(if keep_fraction > 0.0 {
+                    let g = gen_state.as_mut().ok_or_else(|| {
+                        PyValueError::new_err("keep_fraction > 0 needs a generator state")
+                    })?;
+                    g.uniform() < keep_fraction
+                } else {
+                    false
+                }),
+            });
+        }
+        let rng = gen_state.map(|g| (g.state, g.inc));
+        let reasons = || {
+            let vals: Vec<Option<&'static str>> = keep
+                .iter()
+                .map(|k| (*k == Some(false)).then_some(REASON))
+                .collect();
+            pack_reasons(py, &input, &vals, threads)
+        };
+        let out = match what {
+            "keep" => pack_bools(py, &input, &keep)?,
+            "reason" => reasons()?,
+            "all" => PyTuple::new(py, [pack_bools(py, &input, &keep)?, reasons()?])?.into_any(),
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "what must be 'keep', 'reason', 'all' or 'found', not {other:?}"
+                )));
+            }
+        };
+        Ok((out, rng))
+    }
+
+    pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        m.add_class::<NativeBadWords>()?;
+        m.add_function(wrap_pyfunction!(_pcg64_seed, m)?)?;
+        m.add_function(wrap_pyfunction!(_badwords_run, m)?)
     }
 }
 // ---- end C4BadWordsFilter ----

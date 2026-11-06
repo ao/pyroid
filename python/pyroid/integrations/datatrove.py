@@ -588,6 +588,103 @@ PIIFormatter.__init__.__signature__ = _signature_of(_dt_pii.PIIFormatter, *_EXTR
 # ---- end PIIFormatter ----
 
 # ---- C4BadWordsFilter ----
+__all__ += ["C4BadWordsFilter"]
+
+
+class C4BadWordsFilter(_Step, _dt_c4.C4BadWordsFilter):
+    """datatrove's ``C4BadWordsFilter`` (same arguments) on ``pyroid.filters``.
+
+    The word search runs in Rust, ``batch_size`` documents at a time; the
+    lists are loaded exactly as datatrove loads them (its download cache and
+    pinned URLs). Everything else is datatrove's own: ``self.uniform`` (its
+    ``default_rng(seed)``) is drawn once per flagged document in order, and the
+    same statistics are counted. A batch that contains a document whose
+    language has no list raises before any of the batch is yielded (datatrove
+    yields the documents before it first).
+    """
+
+    def __init__(
+        self, *args: Any, batch_size: int = DEFAULT_BATCH_SIZE, threads: Any = 1, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.batch_size = _batch_size(batch_size)
+        self.threads = threads
+        self._pyroid_lists: dict[str, int] = {}
+        self._pyroid_native: list[Any] = []
+
+    def _pyroid_list(self, lang: str) -> int:
+        """Datatrove's ``_get_badwords`` without the regex: an index, or -1 (keep)."""
+        if lang in self._pyroid_lists:
+            return self._pyroid_lists[lang]
+        if lang not in _dt_c4._BADWORDS_LANGS:
+            if self.fail_on_missing_language:
+                raise ValueError(
+                    f'There is not badwords list available for "{lang}". '
+                    f"Set fail_on_missing_language=False to continue anyway."
+                )
+            self._pyroid_lists[lang] = -1
+            return -1
+        local_path = _dt_c4.cached_asset_path_or_download(
+            _dt_c4._BADWORDS_URL + lang if lang != "en" else _dt_c4._EN_BADWORDS_URL,
+            namespace="filters",
+            subfolder="c4_badwords",
+        )
+        badwords: set[str] = set()
+        with open(local_path) as f:  # as datatrove: text mode, locale encoding
+            badwords.update(line.strip() for line in f)
+        for allowlist in _dt_c4._BADWORDS_ALLOWLIST.values():
+            badwords -= allowlist
+        from pyroid._pyroid import filters as _native
+
+        self._pyroid_native.append(
+            _native._BadWords(list(badwords), lang not in ("ja", "th", "zh"))
+        )
+        self._pyroid_lists[lang] = len(self._pyroid_native) - 1
+        return self._pyroid_lists[lang]
+
+    def filter(self, doc: Any) -> Any:
+        """One document (datatrove's API); :meth:`filter_batch` batches instead."""
+        return self.filter_batch([doc])[0]
+
+    def filter_batch(self, batch: list[Any]) -> list[Any]:
+        """One pyroid search for the batch, then datatrove's decision per document."""
+        import pyroid.filters as pf
+        from pyroid._pyroid import filters as _native
+
+        langs = [doc.metadata.get("language", self.default_language) for doc in batch]
+        ids = [self._pyroid_list(lang) for lang in langs]
+        found, _ = _native._badwords_run(
+            [d.text for d in batch],
+            self._pyroid_native,
+            -1,
+            ids,
+            0.0,
+            None,
+            "found",
+            cast(Any, pf)._unicode_version(),
+            threads=self.threads,
+        )
+        out: list[Any] = []
+        for lang, i, hit in zip(langs, ids, found, strict=True):
+            if i < 0:
+                self.stat_update("missing_badwords_lang", f"missing_badwords_lang_{lang}")
+                out.append(True)
+            elif hit:
+                self.stat_update("documents_with_badwords", f"documents_with_badwords_{lang}")
+                if self.keep_fraction > 0.0 and self.uniform() < self.keep_fraction:
+                    self.stat_update(
+                        "document_kept_with_badwords", f"document_kept_with_badwords_{lang}"
+                    )
+                    out.append(True)
+                else:
+                    self.stat_update(f"document_removed_with_badwords_{lang}")
+                    out.append((False, "document_removed_with_badwords"))
+            else:
+                out.append(True)
+        return out
+
+
+C4BadWordsFilter.__init__.__signature__ = _signature_of(_dt_c4.C4BadWordsFilter, *_EXTRA)  # type: ignore[attr-defined]
 # ---- end C4BadWordsFilter ----
 
 # ---- URLFilter ----
