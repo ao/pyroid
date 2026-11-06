@@ -15,18 +15,18 @@ cleaning LLM datasets: the same API, the same output, a fraction of the CPU time
 > toolkit ([see below](#the-07x-releases)). Speed numbers are from a Docker VM (indicative); a
 > bare-metal run is pending.
 
-<!-- TODO(bare-metal): replace with the bare-metal run's chart (bench/consolidate.py writes it to
-     charts/consolidated-e2e-{light,dark}.svg) and update the caption. -->
+<!-- TODO(bare-metal): replace with the bare-metal run's hero (bench/consolidate.py writes it to
+     charts/hero-{light,dark}.svg; copy it to docs/assets/) and update the alt text and caption. -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/consolidated-e2e-dark.svg">
-  <img alt="Wall time of the FineWeb chain on 10,000 documents: datatrove at 1 and 8 processes, pyroid's stages in datatrove's executor, and pyroid's native chain at 1 and 8 threads" src="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/consolidated-e2e-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-dark.svg">
+  <img alt="Wall time to clean 10,000 FineWeb documents with identical output: pyroid takes 1.6 s with 8 threads, 26× faster than datatrove's 42 s with 8 processes, and 5.2 s with 1 thread, 49× faster than datatrove's 253 s with 1 process" src="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-light.svg">
 </picture>
 
 <sub>Wall time of the FineWeb chain (ftfy → language ID → 4 quality filters → MinHash dedup) on the
 first 10,000 documents of the pinned FineWeb slice, with 1 and 8 processes or threads on 8 of 12
 vCPUs. datatrove 0.10.1 (ftfy 6.3.1, fasttext-predict 0.9.2.4, spaCy 3.8.18) on CPython 3.13.18;
-pyroid 1.0.0.dev0 on free-threaded CPython 3.15.2, and on 3.13 inside datatrove's executor. The
-same output document for document. Docker VM, indicative.</sub>
+pyroid 1.0.0.dev0's native chain on free-threaded CPython 3.15.2. The same output document for
+document. Docker VM, indicative.</sub>
 
 ```console
 $ pip install pyroid               # add [fasttext] for pyroid.fasttext (numpy)
