@@ -840,4 +840,297 @@ SymbolLinesFormatter.__init__.__signature__ = _signature_of(  # type: ignore[att
 # ---- end UnigramLogProbFilter ----
 
 # ---- SentenceDedup ----
+# datatrove's sentence dedup: stage 1 and 3 on pyroid.dedup, stage 2 (and the index builder) a
+# merge in Rust. Same files, byte for byte; same documents, texts and exclusion-writer documents.
+
+import contextlib  # noqa: E402
+import dataclasses  # noqa: E402
+from concurrent.futures import ThreadPoolExecutor  # noqa: E402
+
+from datatrove.pipeline.dedup import sentence_dedup as _dt_sd  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: E402
+from datatrove.utils.typeshelper import ExtensionHelperSD as _ExtSD  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: E402
+
+__all__ += [
+    "SentenceDedupBuildIndex",
+    "SentenceDedupFilter",
+    "SentenceDedupSignature",
+    "SentenceFindDedups",
+]
+
+
+def _sd_config(step: str, config: Any) -> Any:
+    """The pyroid ``SentDedupConfig`` for datatrove's, or ``None`` (fallback warned)."""
+    import pyroid.dedup as pd
+
+    try:
+        return pd._sent_config(config, {})
+    except (TypeError, ValueError) as e:
+        _fallback(step, f"this SentDedupConfig ({e})")
+        return None
+
+
+def _sd_native(step: str, config: Any, language: str, stage3: bool) -> Any:
+    """The native config for a stage, or ``None`` to run datatrove's code (fallback warned)."""
+    import pyroid.dedup as pd
+
+    cfg = _sd_config(step, config)
+    if cfg is None:
+        return None
+    native = pd._native_sent(cfg, language)
+    if native.needs_tokenizer(stage3) and not native.has_tokenizer:
+        _fallback(step, f"language={language!r}")
+        return None
+    return native
+
+
+def _sd_source(folder: Any, path: str) -> Any:
+    """A file for the native merge: its local path (read in Rust), else its bytes."""
+    if folder.is_local():
+        return folder.resolve_paths(path)
+    with folder.open(path, "rb") as f:
+        return f.read()
+
+
+class _SentenceStep(_Step):
+    batch_size: int
+    threads: Any
+
+    def _setup(self, batch_size: int, threads: Any) -> None:
+        self.batch_size = _batch_size(batch_size)
+        self.threads = threads
+
+
+class SentenceDedupSignature(_SentenceStep, _dt_sd.SentenceDedupSignature):
+    """datatrove's ``SentenceDedupSignature`` (stage 1) on ``pyroid.dedup``.
+
+    Writes the same ``{bucket:04d}/{rank:05d}.c4_sig`` files, byte for byte (the
+    same buckets, the same empty files), so datatrove's own later stages run on them
+    unchanged. spaCy is not needed. A non-English ``language`` with
+    ``split_sentences=True`` runs datatrove's own code (:class:`pyroid.FallbackWarning`).
+    """
+
+    def __init__(
+        self, *args: Any, batch_size: int = DEFAULT_BATCH_SIZE, threads: Any = 1, **kwargs: Any
+    ) -> None:
+        try:
+            super().__init__(*args, **kwargs)
+        except ImportError:
+            # datatrove loads its spaCy word tokenizer last; pyroid has its own.
+            if getattr(self, "language", None) not in _english():
+                raise
+            self.tokenizer = None
+        self._setup(batch_size, threads)
+
+    def run(self, data: Iterable[Any], rank: int = 0, world_size: int = 1) -> None:
+        """Signatures of this rank's documents, ``batch_size`` at a time; then the files."""
+        native = _sd_native("SentenceDedupSignature", self.config, self.language, stage3=False)
+        if native is None:
+            return super().run(data, rank, world_size)  # type: ignore[no-any-return]
+        import pyroid.dedup as pd
+
+        state = pd._native._SentenceState(native)
+        for batch in batched(data, self.batch_size):
+            for _ in batch:
+                self.stat_update(StatHints.total)
+            with self.track_time("batch"):
+                state.add([d.text for d in batch], threads=self.threads)
+        for bucket, blob in enumerate(state.signature_files(self.finder_workers)):
+            name = f"{bucket:04d}/{rank:05d}{_ExtSD.stage_1_signature}"
+            with self.output_folder.open(name, mode="wb") as f:
+                f.write(blob)
+        return None
+
+
+class SentenceFindDedups(_SentenceStep, _dt_sd.SentenceFindDedups):
+    """datatrove's ``SentenceFindDedups`` (stage 2) as a merge in Rust.
+
+    Reads the same signature (and index) files and writes the same
+    ``{rank:04d}/{stem}.c4_dup`` files, byte for byte; local files are read by
+    Rust directly, remote ones through fsspec. ``batch_size`` and ``threads`` are
+    accepted for uniformity (the merge is one sequential pass).
+    """
+
+    def __init__(
+        self, *args: Any, batch_size: int = DEFAULT_BATCH_SIZE, threads: Any = 1, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._setup(batch_size, threads)
+
+    def run(self, data: Any = None, rank: int = 0, world_size: int = 1) -> None:
+        """Find the duplicate windows of this finder task's hash bucket."""
+        cfg = _sd_config("SentenceFindDedups", self.config)
+        if cfg is None:
+            return super().run(data, rank, world_size)  # type: ignore[no-any-return]
+        import pyroid.dedup as pd
+
+        ext = _ExtSD.stage_1_signature
+        with self.stats.time_stats:
+            if world_size == 1:
+                sig_files = self.data_folder.list_files(glob_pattern="*/*" + ext)
+                if any(not sig_file.startswith("0000/") for sig_file in sig_files):
+                    raise ValueError(
+                        f"{world_size=} but found sig files for different hash buckets. "
+                        "Set tasks=finder_workers"
+                    )
+            else:
+                sig_files = self.data_folder.list_files(
+                    subdirectory=f"{rank:04d}", glob_pattern=ext
+                )
+            index_files = self.index_folder.list_files() if self.index_folder else None
+            out = pd._native._sentence_find_dups(
+                [_sd_source(self.data_folder, f) for f in sig_files],
+                [_sd_source(self.index_folder, f) for f in index_files or ()],
+                precision=cfg.hash_config.precision,
+                only_dedup_in_index=cfg.only_dedup_in_index,
+            )
+            for sig_file, blob in zip(sig_files, out, strict=True):
+                if blob:
+                    stem = sig_file.rsplit("/", 1)[-1].removesuffix(ext)
+                    name = f"{rank:04d}/{stem}{_ExtSD.stage_2_duplicates}"
+                    with self.output_folder.open(name, mode="wb") as f:
+                        f.write(blob)
+        return None
+
+
+class SentenceDedupFilter(_SentenceStep, _dt_sd.SentenceDedupFilter):
+    """datatrove's ``SentenceDedupFilter`` (stage 3) on ``pyroid.dedup``.
+
+    Reads the same ``.c4_dup`` files and yields the same documents with the same
+    texts; the exclusion writer gets the same documents (``>>>`` / ``<<<``-marked
+    texts). Only documents with duplicates go to Rust, ``batch_size`` at a time.
+    spaCy is not needed. A non-English ``language`` that needs the tokenizer runs
+    datatrove's own code (:class:`pyroid.FallbackWarning`).
+    """
+
+    def __init__(
+        self, *args: Any, batch_size: int = DEFAULT_BATCH_SIZE, threads: Any = 1, **kwargs: Any
+    ) -> None:
+        try:
+            super().__init__(*args, **kwargs)
+        except ImportError:
+            # datatrove loads its spaCy word tokenizer before the last two attributes.
+            bound = inspect.signature(_dt_sd.SentenceDedupFilter.__init__).bind(
+                self, *args, **kwargs
+            )
+            bound.apply_defaults()
+            if bound.arguments["language"] not in _english() or not hasattr(self, "config"):
+                raise
+            self.tokenizer = None
+            self.exclusion_writer = bound.arguments["exclusion_writer"]
+            self.language = bound.arguments["language"]
+        self._setup(batch_size, threads)
+
+    def _read_dups(self, rank: int) -> Any:
+        import pyroid.dedup as pd
+
+        folders = self.data_folder.list_files(include_directories=True, recursive=False)
+        ext = _ExtSD.stage_2_duplicates
+        files = [
+            f
+            for f in [f"{folder}/{rank:05d}{ext}" for folder in folders]
+            if self.data_folder.exists(f)
+        ]
+
+        def read(path: str) -> bytes:
+            with self.data_folder.open(path, "rb") as f:
+                data: bytes = f.read()
+            return data
+
+        with ThreadPoolExecutor() as pool:
+            blobs = list(pool.map(read, files))
+        return pd._native._SentenceDups.parse(blobs)
+
+    def run(self, data: Iterable[Any], rank: int = 0, world_size: int = 1) -> Any:
+        """Remove this rank's duplicate windows, ``batch_size`` documents at a time."""
+        native = _sd_native("SentenceDedupFilter", self.config, self.language, stage3=True)
+        if native is None:
+            yield from super().run(data, rank, world_size)
+            return
+        dups = self._read_dups(rank)
+        writer_cm = self.exclusion_writer if self.exclusion_writer else contextlib.nullcontext()
+        with writer_cm as writer:
+            start = 0
+            for batch in batched(data, self.batch_size):
+                ids = dups.docs_in(start, start + len(batch))
+                done: dict[int, Any] = {}
+                if ids:
+                    with self.track_time("batch"):
+                        text, keep, formatted, stats = dups.filter(
+                            [batch[i - start].text for i in ids],
+                            native,
+                            ids=ids,
+                            details=True,
+                            threads=self.threads,
+                        )
+                    done = dict(
+                        zip(ids, zip(text, keep, formatted, stats, strict=True), strict=True)
+                    )
+                for i, doc in enumerate(batch):
+                    self.stat_update(StatHints.total)
+                    r = done.get(start + i)
+                    if r is None:
+                        filtered, kept, original_formatted = doc.text, bool(doc.text), None
+                    else:
+                        filtered, kept, original_formatted, (spans, n_kept) = r
+                        if n_kept < spans:
+                            self.stat_update("removed_sentences", value=spans - n_kept)
+                        self.stat_update("original_sentences", value=spans)
+                    if kept:
+                        self.update_doc_stats(doc)
+                        if filtered != doc.text and writer:
+                            writer.write(
+                                dataclasses.replace(doc, text=original_formatted), rank=rank
+                            )
+                        doc.text = filtered
+                        yield doc
+                    elif writer:
+                        doc.text = original_formatted
+                        writer.write(doc, rank=rank)
+                start += len(batch)
+
+
+class SentenceDedupBuildIndex(_SentenceStep, _dt_sd.SentenceDedupBuildIndex):
+    """datatrove's ``SentenceDedupBuildIndex`` as a merge in Rust (the same index file).
+
+    Like datatrove's own step, it fails (``StopIteration``) on an empty signature file:
+    that case runs datatrove's code. ``batch_size`` and ``threads`` are accepted for
+    uniformity.
+    """
+
+    def __init__(
+        self, *args: Any, batch_size: int = DEFAULT_BATCH_SIZE, threads: Any = 1, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._setup(batch_size, threads)
+
+    def run(self, data: Any = None, rank: int = 0, world_size: int = 1) -> None:
+        """Write the distinct hashes of every signature file."""
+        assert world_size == 1, "SentenceDedupBuildIndex can only run on a single worker."
+        cfg = _sd_config("SentenceDedupBuildIndex", self.config)
+        if cfg is None:
+            return super().run(data, rank, world_size)  # type: ignore[no-any-return]
+        import pyroid.dedup as pd
+
+        sig_files = self.data_folder.list_files(glob_pattern="*/*" + _ExtSD.stage_1_signature)
+        if any(self.data_folder.size(f) == 0 for f in sig_files):
+            # datatrove's `[next(sig_reader) for sig_reader in sig_readers]`: StopIteration.
+            return super().run(data, rank, world_size)  # type: ignore[no-any-return]
+        with self.stats.time_stats:
+            blob = pd._native._sentence_build_index(
+                [_sd_source(self.data_folder, f) for f in sig_files],
+                precision=cfg.hash_config.precision,
+            )
+            with self.output_folder.open(f"{self.index_name}.{_ExtSD.index}", mode="wb") as f:
+                f.write(blob)
+        return None
+
+
+for _sd_cls, _sd_parent in (
+    (SentenceDedupSignature, _dt_sd.SentenceDedupSignature),
+    (SentenceFindDedups, _dt_sd.SentenceFindDedups),
+    (SentenceDedupFilter, _dt_sd.SentenceDedupFilter),
+    (SentenceDedupBuildIndex, _dt_sd.SentenceDedupBuildIndex),
+):
+    cast(Any, _sd_cls.__init__).__signature__ = _signature_of(_sd_parent, *_EXTRA)
+del _sd_cls, _sd_parent
 # ---- end SentenceDedup ----
