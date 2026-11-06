@@ -64,7 +64,13 @@ def header(d: Path) -> str:
     vers = ", ".join(
         f"{k} {v}" for k, v in keys.items() if v and k not in ("psutil", "matplotlib", "pyroid-parity")
     )
-    where = "Docker/OrbStack VM, indicative (not README numbers)" if m.get("virtualized") else "bare metal"
+    cloud = m.get("cloud") or {}
+    if cloud.get("service") == "ec2":
+        where = f"AWS EC2 {cloud.get('instance_type', '?')} (a VM on real hardware, not bare metal)"
+    else:
+        where = (
+            "Docker/OrbStack VM, indicative (not README numbers)" if m.get("virtualized") else "bare metal"
+        )
     after = m.get("after", {})
     lines = [
         f"## Benchmark results: {m['slug']}, {m['before']['timestamp_utc'][:10]}",

@@ -444,8 +444,34 @@ def read_json(p: Path) -> Any:
     return json.loads(p.read_text("utf-8")) if p.exists() else None
 
 
+# lscpu names only the Arm core on Graviton; the instance family's generation names the chip (c8g, m7gd, r6g).
+GRAVITON = {"8": "AWS Graviton4", "7": "AWS Graviton3", "6": "AWS Graviton2"}
+
+
+def ec2_label(m: dict[str, Any]) -> str:
+    """'AWS EC2 c7i.4xlarge (Intel Xeon Platinum 8488C, 16 vCPU), Amazon Linux 2023' from machine.json."""
+    cpu_info = m.get("cpu") or {}
+    lscpu = cpu_info.get("lscpu") or {}
+    model = lscpu.get("Model name", "").strip(" -")
+    itype = m["cloud"].get("instance_type") or "unknown instance type"
+    if lscpu.get("Vendor ID") == "ARM":
+        g = re.fullmatch(r"[a-z]+(\d)g[a-z]*", itype.split(".")[0])
+        chip = GRAVITON.get(g[1]) if g else None
+        cpu = (f"{chip} ({model})" if model else chip) if chip else model
+    else:  # 'Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz' -> 'Intel Xeon Platinum 8375C'
+        cpu = " ".join(re.sub(r"( CPU)? @ .*", "", re.sub(r"\((R|TM)\)", "", model)).split())
+    n = cpu_info.get("cpu_count")
+    inner = ", ".join(p for p in (cpu, n and f"{n} vCPU") if p)
+    osr = m.get("os_release") or {}
+    os_name = " ".join(p for p in (osr.get("NAME"), osr.get("VERSION_ID")) if p)
+    return ", ".join(p for p in (f"AWS EC2 {itype}" + (f" ({inner})" if inner else ""), os_name) if p)
+
+
 def machine_label(m: dict[str, Any]) -> str:
-    """'Docker/OrbStack VM on Apple Silicon, 12 vCPU, indicative' from machine_info.py's machine.json."""
+    """'Docker/OrbStack VM on Apple Silicon, 12 vCPU, indicative' from machine_info.py's machine.json; on AWS EC2
+    ``ec2_label``."""
+    if (m.get("cloud") or {}).get("service") == "ec2":
+        return ec2_label(m)
     cpu_info = m.get("cpu") or {}
     lscpu = cpu_info.get("lscpu") or {}
     model = lscpu.get("Model name", "").strip(" -")

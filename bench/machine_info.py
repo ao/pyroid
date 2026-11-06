@@ -9,6 +9,10 @@ Other sessions may share the VM, so the load average and cgroup memory are recor
 The git sha comes from ``git`` when the repo metadata is reachable, else from ``BENCH_GIT_SHA`` (a git worktree's
 ``.git`` file points outside the container mount, so pass ``BENCH_GIT_SHA=$(git rev-parse HEAD)`` from the host).
 ``HOST_CPU`` may name the physical CPU, which VMs hide (lscpu shows "Model name: -" under OrbStack).
+AWS EC2 is recognised from DMI (``BENCH_DMI_DIR`` [/sys/devices/virtual/dmi/id]; on Nitro ``sys_vendor`` is
+"Amazon EC2", ``product_name`` the instance type, ``board_asset_tag`` the instance id): ``cloud`` in machine.json
+and the slug ``aws-<instance type>``, e.g. aws-c7i.4xlarge. ``os_release`` reads ``BENCH_OS_RELEASE``
+[/etc/os-release]; inside a container that is the image's OS, so mount the host's file there to record the host's.
 """
 
 from __future__ import annotations
@@ -154,7 +158,36 @@ def snapshot() -> dict[str, Any]:
     }
 
 
+def cloud() -> dict[str, Any] | None:
+    """AWS EC2 (Nitro) from DMI, else None."""
+    dmi = Path(os.environ.get("BENCH_DMI_DIR", "/sys/devices/virtual/dmi/id"))
+    if read(dmi / "sys_vendor") != "Amazon EC2":
+        return None
+    return {
+        "provider": "aws",
+        "service": "ec2",
+        "instance_type": read(dmi / "product_name"),
+        "instance_id": read(dmi / "board_asset_tag"),
+    }
+
+
+def os_release() -> dict[str, str] | None:
+    """NAME, VERSION_ID and PRETTY_NAME from os-release(5)."""
+    text = read(Path(os.environ.get("BENCH_OS_RELEASE", "/etc/os-release")))
+    if text is None:
+        return None
+    out = {}
+    for line in text.splitlines():
+        k, _, v = line.partition("=")
+        if k.strip() in ("NAME", "VERSION_ID", "PRETTY_NAME"):
+            out[k.strip()] = v.strip().strip("\"'")
+    return out
+
+
 def slug() -> str:
+    c = cloud()
+    if c and c["instance_type"]:
+        return "aws-" + re.sub(r"[^a-z0-9.]+", "-", c["instance_type"].lower()).strip("-")
     u = platform.uname()
     where = (
         "orbstack"
@@ -169,11 +202,14 @@ def slug() -> str:
 def collect() -> dict[str, Any]:
     u = platform.uname()
     manifest = REPO / "bench" / "manifest.json"
+    ec2 = cloud()
     return {
         "slug": slug(),
         "uname": u._asdict(),
         "dockerenv": Path("/.dockerenv").exists(),
-        "virtualized": "orbstack" in u.release.lower() or Path("/.dockerenv").exists(),
+        "virtualized": "orbstack" in u.release.lower() or Path("/.dockerenv").exists() or ec2 is not None,
+        "cloud": ec2,
+        "os_release": os_release(),
         "host_cpu": os.environ.get("HOST_CPU"),
         "cpu": {
             "model": cpuinfo_model(),
