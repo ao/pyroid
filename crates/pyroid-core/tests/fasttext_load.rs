@@ -1584,7 +1584,13 @@ fn an_overstated_length_cannot_force_an_absurd_allocation() {
     let source = head.as_slice().chain(io::repeat(0));
     let res = Model::read(source, u64::MAX);
     assert!(
-        matches!(res, Err(LoadError::OutOfMemory { what: "input matrix", .. })),
+        matches!(
+            res,
+            Err(LoadError::OutOfMemory {
+                what: "input matrix",
+                ..
+            })
+        ),
         "{res:?}"
     );
 }
