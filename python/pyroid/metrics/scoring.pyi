@@ -26,8 +26,11 @@ import abc
 from collections.abc import Mapping
 from typing import Any, NamedTuple
 
+from typing_extensions import disjoint_base
+
 __all__ = ["AggregateScore", "BaseScorer", "BootstrapAggregator", "Score", "fmeasure"]
 
+@disjoint_base
 class Score(NamedTuple):
     """Tuple containing precision, recall, and f-measure values.
 
@@ -55,6 +58,7 @@ class BaseScorer(metaclass=abc.ABCMeta):
             A dict mapping each score_type (string) to Score object.
         """
 
+@disjoint_base
 class AggregateScore(NamedTuple):
     """Tuple containing confidence intervals for scores."""
 
