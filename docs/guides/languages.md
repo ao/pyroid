@@ -111,11 +111,10 @@ sentence-dedup steps in [`pyroid.integrations.datatrove`](datatrove.md) run data
 for such codes, with a `FallbackWarning`.
 
 !!! note "The datatrove drop-in steps"
-    In `pyroid.integrations.datatrove`, the Gopher, C4, FineWeb and `MinhashDedupSignature`
-    steps run in Rust only for the English codes (`pyroid.filters.english_languages()`); for
-    other languages they run datatrove's own code, with a `FallbackWarning`. The sentence-dedup
-    steps run in Rust for every native code. For other languages at Rust speed, call
-    `pyroid.filters` and `pyroid.dedup` directly.
+    In `pyroid.integrations.datatrove`, the Gopher, C4, FineWeb, `MinhashDedupSignature` and
+    sentence-dedup steps run in Rust for every native code. For the other codes they run
+    datatrove's own code, with a `FallbackWarning`; there is no `python_tokenizer=True` path in
+    the drop-ins. See [the datatrove guide](datatrove.md#languages).
 
 ## Native languages: German and French
 
