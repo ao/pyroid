@@ -868,11 +868,331 @@ fn register_more(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 // ---- PIIFormatter ----
 mod pii {
-    use pyo3::prelude::*;
+    //! `PIIFormatter`: the matches are found and replaced detached, in
+    //! parallel; between the passes the calling thread numbers the
+    //! replacements in document order (datatrove's counters carry over from
+    //! one document to the next) and asks Python's `ipaddress` which
+    //! addresses are global, once per distinct address.
 
-    #[allow(clippy::unnecessary_wraps)] // placeholder
-    pub(super) fn register(_m: &Bound<'_, PyModule>) -> PyResult<()> {
-        Ok(())
+    use std::borrow::Cow;
+    use std::collections::HashMap;
+    use std::ops::Range;
+
+    use pyo3::exceptions::{PyIndexError, PyValueError};
+    use pyo3::prelude::*;
+    use pyo3::types::{PyList, PyString, PyTuple};
+    use pyroid_core::columnar::StringBuffers;
+    use pyroid_core::filters::pii;
+    use pyroid_core::ftfy::UnicodeVersion;
+    use pyroid_core::par;
+
+    use crate::arrow::{Chunk, Column, ColumnType, StrType, build_error};
+    use crate::batch::BatchError;
+    use crate::input::{TextInput, ThreadsArg, texts_and_threads};
+
+    /// Every document of `input` in order (Arrow nulls are `None`), checked
+    /// to be UTF-8.
+    pub(super) fn flat_docs(
+        input: &TextInput,
+        threads: par::Threads,
+    ) -> Result<Vec<Option<&str>>, BatchError> {
+        Ok(match input {
+            TextInput::Str(s) => vec![Some(&**s)],
+            TextInput::List(d) | TextInput::Tuple(d) => d.iter().map(|s| Some(&**s)).collect(),
+            TextInput::Arrow(strings) => {
+                let mut out = Vec::with_capacity(strings.len());
+                for (c, chunk) in strings.chunks.iter().enumerate() {
+                    out.extend(par::try_map(chunk.len(), threads, |row| {
+                        chunk
+                            .get(row)
+                            .transpose()
+                            .map_err(|err| BatchError::BadUtf8 {
+                                chunk: c,
+                                row,
+                                bytes: chunk.bytes(row).unwrap_or_default().to_vec(),
+                                err,
+                            })
+                    })?);
+                }
+                out
+            }
+        })
+    }
+
+    /// The transform result in the caller's kind: `outs[i]` for document
+    /// `i`, `Cow::Borrowed` meaning unchanged (the original object comes
+    /// back), `None` for an Arrow null.
+    pub(super) fn pack_texts<'py>(
+        py: Python<'py>,
+        input: &TextInput,
+        outs: &[Option<Cow<'_, str>>],
+        threads: par::Threads,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let obj = |orig: &pyo3::pybacked::PyBackedStr, out: &Option<Cow<'_, str>>| match out {
+            Some(Cow::Owned(s)) => PyString::new(py, s).into_any(),
+            _ => orig
+                .into_pyobject(py)
+                .unwrap_or_else(|e| match e {})
+                .into_any(),
+        };
+        Ok(match input {
+            TextInput::Str(s) => obj(s, &outs[0]),
+            TextInput::List(d) => {
+                PyList::new(py, d.iter().zip(outs).map(|(s, o)| obj(s, o)))?.into_any()
+            }
+            TextInput::Tuple(d) => {
+                PyTuple::new(py, d.iter().zip(outs).map(|(s, o)| obj(s, o)))?.into_any()
+            }
+            TextInput::Arrow(strings) => {
+                let large = strings.field.ty == StrType::LargeUtf8;
+                let mut chunks = Vec::new();
+                let mut rest = outs;
+                for chunk in &strings.chunks {
+                    let (rows, tail) = rest.split_at(chunk.len());
+                    rest = tail;
+                    if large {
+                        chunks.push(Chunk::LargeUtf8(
+                            StringBuffers::build(rows, threads).map_err(build_error)?,
+                        ));
+                    } else {
+                        let built =
+                            StringBuffers::build_split(rows, threads).map_err(build_error)?;
+                        chunks.extend(built.into_iter().map(Chunk::Utf8));
+                    }
+                }
+                let ty = if large {
+                    ColumnType::LargeUtf8
+                } else {
+                    ColumnType::Utf8
+                };
+                Bound::new(py, Column::new(ty, &strings.field.name, chunks))?.into_any()
+            }
+        })
+    }
+
+    /// Each document's start index into a replacement tuple of `len` items,
+    /// given how many replacements each makes; and the index after the last.
+    fn starts(counts: &[usize], start: usize, len: usize) -> PyResult<(Vec<usize>, usize)> {
+        let mut out = Vec::with_capacity(counts.len());
+        let mut cur = start;
+        for &n in counts {
+            out.push(cur);
+            if n > 0 {
+                if len == 0 {
+                    return Err(PyIndexError::new_err("tuple index out of range"));
+                }
+                cur = (cur + n % len) % len;
+            }
+        }
+        Ok((out, cur))
+    }
+
+    fn pool_err(py: Python<'_>, e: par::PoolError) -> PyErr {
+        BatchError::from(e).into_pyerr(py)
+    }
+
+    /// A `PIIFormatter` configuration, built once by `pyroid.filters`.
+    #[pyclass(frozen, module = "pyroid.filters", name = "_PII")]
+    #[derive(Debug)]
+    pub(super) struct NativePii {
+        remove_emails: bool,
+        remove_ips: bool,
+        email: Vec<String>,
+        ip: Vec<String>,
+        version: UnicodeVersion,
+    }
+
+    #[pymethods]
+    impl NativePii {
+        #[new]
+        fn new(
+            remove_emails: bool,
+            remove_ips: bool,
+            email_replacement: Vec<String>,
+            ip_replacement: Vec<String>,
+            unicode_version: &str,
+        ) -> PyResult<Self> {
+            let version =
+                UnicodeVersion::from_unidata_version(unicode_version).ok_or_else(|| {
+                    PyValueError::new_err(format!("unsupported Unicode version {unicode_version}"))
+                })?;
+            Ok(Self {
+                remove_emails,
+                remove_ips,
+                email: email_replacement,
+                ip: ip_replacement,
+                version,
+            })
+        }
+
+        /// `format()` over a batch, continuing the replacement counters at
+        /// `email_index` / `ip_index`. `validator(addr)` decides whether an
+        /// IP match that parses is replaced (`None`: all of them). Returns
+        /// `(texts, email_index, ip_index)` with the counters afterwards.
+        #[pyo3(signature = (texts, email_index, ip_index, validator, /, *, threads = None))]
+        fn run<'py>(
+            &self,
+            py: Python<'py>,
+            texts: &Bound<'py, PyAny>,
+            email_index: usize,
+            ip_index: usize,
+            validator: Option<Bound<'py, PyAny>>,
+            threads: Option<ThreadsArg>,
+        ) -> PyResult<(Bound<'py, PyAny>, usize, usize)> {
+            let (input, threads) = texts_and_threads(texts, threads, None)?;
+            let threads = crate::input::threads(threads);
+            let docs = py
+                .detach(|| flat_docs(&input, threads))
+                .map_err(|e| e.into_pyerr(py))?;
+            let mut cur: Vec<Option<Cow<'_, str>>> =
+                docs.iter().map(|d| d.map(Cow::Borrowed)).collect();
+            let email_next = if self.remove_emails {
+                self.email_pass(py, &mut cur, email_index, threads)?
+            } else {
+                email_index
+            };
+            let ip_next = if self.remove_ips {
+                self.ip_pass(py, &mut cur, ip_index, validator.as_ref(), threads)?
+            } else {
+                ip_index
+            };
+            let out = pack_texts(py, &input, &cur, threads)?;
+            Ok((out, email_next, ip_next))
+        }
+    }
+
+    impl NativePii {
+        /// Replace the emails in `cur`; returns the next email index.
+        fn email_pass(
+            &self,
+            py: Python<'_>,
+            cur: &mut [Option<Cow<'_, str>>],
+            start: usize,
+            threads: par::Threads,
+        ) -> PyResult<usize> {
+            let v = self.version;
+            let found = py
+                .detach(|| {
+                    par::map(cur.len(), threads, |i| {
+                        let mut m = Vec::new();
+                        if let Some(d) = cur[i].as_deref() {
+                            pii::email_matches(d, v, &mut m);
+                        }
+                        m
+                    })
+                })
+                .map_err(|e| pool_err(py, e))?;
+            let counts: Vec<usize> = found.iter().map(Vec::len).collect();
+            let (at, next) = starts(&counts, start, self.email.len())?;
+            let reps = &self.email;
+            let replaced: Vec<Option<String>> = py
+                .detach(|| {
+                    par::map(cur.len(), threads, |i| {
+                        let d = cur[i].as_deref().filter(|_| counts[i] > 0)?;
+                        pii::replace(d, &found[i], |_| true, reps, at[i])
+                            .ok()
+                            .map(|(t, _)| t.into_owned())
+                    })
+                })
+                .map_err(|e| pool_err(py, e))?;
+            for (c, r) in cur.iter_mut().zip(replaced) {
+                if let Some(t) = r {
+                    *c = Some(Cow::Owned(t));
+                }
+            }
+            Ok(next)
+        }
+
+        /// Replace the IP addresses in `cur` that `validator` accepts (every
+        /// one that parses when it is `None`); returns the next IP index.
+        fn ip_pass(
+            &self,
+            py: Python<'_>,
+            cur: &mut [Option<Cow<'_, str>>],
+            start: usize,
+            validator: Option<&Bound<'_, PyAny>>,
+            threads: par::Threads,
+        ) -> PyResult<usize> {
+            let found: Vec<Vec<(Range<usize>, bool)>> = py
+                .detach(|| {
+                    par::map(cur.len(), threads, |i| {
+                        let Some(t) = cur[i].as_deref() else {
+                            return Vec::new();
+                        };
+                        let mut m = Vec::new();
+                        pii::ip_matches(t, &mut m);
+                        m.into_iter()
+                            .map(|r| {
+                                let parses = pii::parse_ipv4(&t[r.clone()]).is_some();
+                                (r, parses)
+                            })
+                            .collect()
+                    })
+                })
+                .map_err(|e| pool_err(py, e))?;
+            let valid = Self::validate(cur, &found, validator)?;
+            let counts: Vec<usize> = valid
+                .iter()
+                .map(|r| r.iter().filter(|&&b| b).count())
+                .collect();
+            let (at, next) = starts(&counts, start, self.ip.len())?;
+            let reps = &self.ip;
+            let replaced: Vec<Option<String>> = py
+                .detach(|| {
+                    par::map(cur.len(), threads, |i| {
+                        let t = cur[i].as_deref().filter(|_| counts[i] > 0)?;
+                        let ranges: Vec<Range<usize>> =
+                            found[i].iter().map(|(r, _)| r.clone()).collect();
+                        pii::replace(t, &ranges, |k| valid[i][k], reps, at[i])
+                            .ok()
+                            .map(|(t, _)| t.into_owned())
+                    })
+                })
+                .map_err(|e| pool_err(py, e))?;
+            for (c, r) in cur.iter_mut().zip(replaced) {
+                if let Some(t) = r {
+                    *c = Some(Cow::Owned(t));
+                }
+            }
+            Ok(next)
+        }
+
+        /// Which IP candidates are replaced: those that parse, and that
+        /// `validator` accepts (asked once per distinct address).
+        fn validate(
+            cur: &[Option<Cow<'_, str>>],
+            found: &[Vec<(Range<usize>, bool)>],
+            validator: Option<&Bound<'_, PyAny>>,
+        ) -> PyResult<Vec<Vec<bool>>> {
+            let mut cache: HashMap<&str, bool> = HashMap::new();
+            let mut valid = Vec::with_capacity(found.len());
+            for (t, f) in cur.iter().zip(found) {
+                let mut row = Vec::with_capacity(f.len());
+                for (r, parses) in f {
+                    let ok = match (validator, *parses) {
+                        (_, false) => false,
+                        (None, true) => true,
+                        (Some(fun), true) => {
+                            let addr = &t.as_deref().unwrap_or_default()[r.clone()];
+                            if let Some(&b) = cache.get(addr) {
+                                b
+                            } else {
+                                let b = fun.call1((addr,))?.is_truthy()?;
+                                cache.insert(addr, b);
+                                b
+                            }
+                        }
+                    };
+                    row.push(ok);
+                }
+                valid.push(row);
+            }
+            Ok(valid)
+        }
+    }
+
+    pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        m.add_class::<NativePii>()
     }
 }
 // ---- end PIIFormatter ----

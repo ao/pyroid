@@ -477,7 +477,6 @@ class ExactDedup:
     def __len__(self) -> int:
         """Number of distinct texts seen."""
 
-
 # ======================================================================================
 # More datatrove 0.10.1 steps: one section each (each extends __all__).
 # ======================================================================================

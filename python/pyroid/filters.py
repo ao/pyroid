@@ -919,6 +919,96 @@ def apply(
 # ======================================================================================
 
 # ---- PIIFormatter ----
+__all__ += ["PII", "PII_EMAIL_REPLACEMENT", "PII_IP_REPLACEMENT", "PIIReplacer", "pii_replace"]
+
+#: ``PIIFormatter``'s default ``email_replacement``.
+PII_EMAIL_REPLACEMENT = ("email@example.com", "firstname.lastname@example.org")
+#: ``PIIFormatter``'s default ``ip_replacement``.
+PII_IP_REPLACEMENT = (
+    "22.214.171.124",
+    "126.96.36.199",
+    "188.8.131.52",
+    "184.108.40.206",
+    "220.127.116.11",
+    "18.104.22.168",
+)
+
+
+class PII(NamedTuple):
+    """``PIIFormatter``'s parameters and defaults."""
+
+    remove_emails: bool = True
+    remove_ips: bool = True
+    only_remove_public_ips: bool = True
+    email_replacement: tuple[str, ...] | str = PII_EMAIL_REPLACEMENT
+    ip_replacement: tuple[str, ...] | str = PII_IP_REPLACEMENT
+
+
+def _replacements(name: str, v: object) -> list[str]:
+    # datatrove's PIIReplacer: a tuple as is, a str as a 1-tuple, any other iterable as a tuple.
+    items: Iterable[object] = (v,) if isinstance(v, str) else _iterable(name, v)
+    out = []
+    for x in items:
+        if not isinstance(x, str):
+            raise TypeError(f"{name} items must be str, not {type(x).__name__}")
+        out.append(x)
+    return out
+
+
+def _iterable(name: str, v: object) -> Iterable[object]:
+    if not isinstance(v, Iterable):
+        raise TypeError(f"{name} must be a str or an iterable of str, not {type(v).__name__}")
+    return v
+
+
+def _public_ip(addr: str) -> bool:
+    """Datatrove's ``public_ip_validator`` (only called on addresses that parse)."""
+    import ipaddress
+
+    try:
+        return ipaddress.ip_address(addr).is_global
+    except ValueError:
+        return False
+
+
+class PIIReplacer:
+    """A stateful ``PIIFormatter``: see ``filters.pyi``."""
+
+    __slots__ = ("_native", "_validator", "config", "email_index", "ip_index")
+
+    def __init__(self, config: PII | None = None, /, **kwargs: Any) -> None:
+        cfg = _config(PII, config, kwargs)
+        self.config: PII = cfg
+        self._native = _native._PII(
+            bool(cfg.remove_emails),
+            bool(cfg.remove_ips),
+            _replacements("email_replacement", cfg.email_replacement),
+            _replacements("ip_replacement", cfg.ip_replacement),
+            _unicode_version(),
+        )
+        self._validator = _public_ip if cfg.only_remove_public_ips else None
+        self.email_index = 0
+        self.ip_index = 0
+
+    def __call__(self, texts: Any, /, *, threads: Any = None) -> Any:
+        """Rewrite each document of ``texts``, continuing the counters."""
+        out, self.email_index, self.ip_index = self._native.run(
+            texts, self.email_index, self.ip_index, self._validator, threads=threads
+        )
+        return out
+
+    def __repr__(self) -> str:
+        return (
+            f"PIIReplacer({self.config!r}, email_index={self.email_index}, "
+            f"ip_index={self.ip_index})"
+        )
+
+
+def pii_replace(texts: Any, config: Any = None, /, *, threads: Any = None, **kwargs: Any) -> Any:
+    """``PIIFormatter.format`` over ``texts`` (one fresh formatter per call)."""
+    return PIIReplacer(config, **kwargs)(texts, threads=threads)
+
+
 # ---- end PIIFormatter ----
 
 # ---- C4BadWordsFilter ----

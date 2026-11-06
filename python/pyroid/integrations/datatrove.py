@@ -528,6 +528,63 @@ MinhashDedupSignature.__init__.__signature__ = _signature_of(  # type: ignore[at
 # ======================================================================================
 
 # ---- PIIFormatter ----
+from datatrove.pipeline.formatters import pii as _dt_pii  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: E402
+
+__all__ += ["PIIFormatter"]
+
+
+class PIIFormatter(_Step, _dt_pii.PIIFormatter):
+    """datatrove's ``PIIFormatter`` (same arguments and defaults) on ``pyroid.filters``.
+
+    ``doc.text`` gets the same email and IP replacements, byte for byte, in the
+    same rotation: the counters are datatrove's own (``emails_replacer._replace_i``
+    and ``ip_replacer._replace_i``), and whether an address is replaced is asked
+    of datatrove's own validator, once per distinct address and batch. The
+    regexes run in Rust, ``batch_size`` documents at a time.
+    """
+
+    def __init__(
+        self, *args: Any, batch_size: int = DEFAULT_BATCH_SIZE, threads: Any = 1, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        import pyroid.filters as pf
+
+        self._pyroid = pf.PIIReplacer(
+            remove_emails=self.remove_emails,
+            remove_ips=self.remove_ips,
+            email_replacement=tuple(self.emails_replacer.replacements),
+            ip_replacement=tuple(self.ip_replacer.replacements),
+        )
+        self.batch_size = _batch_size(batch_size)
+        self.threads = threads
+
+    def _format_batch(self, texts: list[str]) -> list[str]:
+        native = cast(Any, self._pyroid)._native
+        out, self.emails_replacer._replace_i, self.ip_replacer._replace_i = native.run(
+            texts,
+            self.emails_replacer._replace_i,
+            self.ip_replacer._replace_i,
+            self.ip_replacer.validator,
+            threads=self.threads,
+        )
+        return cast(list[str], out)
+
+    def format(self, text: str) -> str:
+        """One document (datatrove's API); :meth:`run` batches instead."""
+        return self._format_batch([text])[0]
+
+    def run(self, data: Iterable[Any], rank: int = 0, world_size: int = 1) -> Any:
+        """Rewrite ``doc.text`` of every document, ``batch_size`` at a time."""
+        for batch in batched(data, self.batch_size):
+            with self.track_time("batch"):
+                texts = self._format_batch([d.text for d in batch])
+            for doc, text in zip(batch, texts, strict=True):
+                self.stat_update(StatHints.total)
+                doc.text = text
+                yield doc
+
+
+PIIFormatter.__init__.__signature__ = _signature_of(_dt_pii.PIIFormatter, *_EXTRA)  # type: ignore[attr-defined]
 # ---- end PIIFormatter ----
 
 # ---- C4BadWordsFilter ----

@@ -819,12 +819,163 @@ def languages() -> dict[str, Language]:
 def english_languages() -> list[str]:
     """The datatrove language codes whose tokenizer is ``SpaCyTokenizer("en")``."""
 
-
 # ======================================================================================
 # More datatrove 0.10.1 steps: one section each (each extends __all__).
 # ======================================================================================
 
 # ---- PIIFormatter ----
+__all__ += ["PII", "PII_EMAIL_REPLACEMENT", "PII_IP_REPLACEMENT", "PIIReplacer", "pii_replace"]
+
+PII_EMAIL_REPLACEMENT: Final[tuple[str, ...]]
+"""``PIIFormatter``'s default ``email_replacement``."""
+PII_IP_REPLACEMENT: Final[tuple[str, ...]]
+"""``PIIFormatter``'s default ``ip_replacement`` (addresses that did not answer pings)."""
+
+class PII(NamedTuple):
+    """``PIIFormatter``'s parameters and defaults.
+
+    Attributes:
+        remove_emails: Replace email addresses.
+        remove_ips: Replace IPv4 addresses.
+        only_remove_public_ips: Replace only addresses ``ipaddress`` calls
+            ``is_global`` (the running interpreter's tables, as datatrove).
+        email_replacement: Replacements, used in turn (a str is one).
+        ip_replacement: The same for IP addresses.
+    """
+
+    remove_emails: bool = True
+    remove_ips: bool = True
+    only_remove_public_ips: bool = True
+    email_replacement: tuple[str, ...] | str = ...
+    ip_replacement: tuple[str, ...] | str = ...
+
+@type_check_only
+class _PIIKwargs(TypedDict, total=False):
+    remove_emails: bool
+    remove_ips: bool
+    only_remove_public_ips: bool
+    email_replacement: tuple[str, ...] | str
+    ip_replacement: tuple[str, ...] | str
+
+class PIIReplacer:
+    """datatrove's ``PIIFormatter``, keeping its state across calls.
+
+    Each call rewrites a batch of documents exactly as ``PIIFormatter.format``
+    would, one after another: every match of datatrove's email regex becomes
+    the next email replacement, then, in that text, every match of its IPv4
+    regex that ``ipaddress.ip_address`` accepts (and, by default, calls
+    ``is_global``) becomes the next IP replacement. "Next" cycles through each
+    replacement tuple and carries over from one document, and one call, to the
+    next, so feeding a corpus batch by batch gives datatrove's output.
+
+    The matches are found and replaced in Rust, in parallel; the calling
+    thread numbers the replacements and asks ``ipaddress`` about each distinct
+    address once.
+
+    Attributes:
+        config: The :class:`PII` settings.
+        email_index: Index of the next email replacement (datatrove's
+            ``emails_replacer._replace_i``); assignable.
+        ip_index: The same for IP replacements (``ip_replacer._replace_i``).
+    """
+
+    config: PII
+    email_index: int
+    ip_index: int
+
+    def __init__(self, config: PII | None = None, /, **kwargs: Unpack[_PIIKwargs]) -> None:
+        """A formatter whose counters start at 0.
+
+        Args:
+            config: A :class:`PII`; keyword arguments override its fields.
+            **kwargs: ``PIIFormatter``'s parameters.
+
+        Raises:
+            TypeError: A replacement is not a str.
+        """
+
+    @overload
+    def __call__(self, texts: str, /, *, threads: int | None = None) -> str:
+        """Rewrite each document; unchanged documents come back as the same objects.
+
+        Args:
+            texts: A str, a list or tuple of str, or an Arrow string array/column.
+            threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+                ``n`` tasks at once; ``1`` runs on the calling thread.
+
+        Returns:
+            The texts in the caller's kind (a :class:`pyroid.Column` of strings for
+            Arrow input; nulls stay null).
+
+        Raises:
+            pyroid.InputError: ``texts`` is not one of the accepted kinds.
+            IndexError: A match needs a replacement and the tuple is empty (as datatrove).
+            UnicodeEncodeError: A str contains a lone surrogate.
+            UnicodeDecodeError: An Arrow row is not valid UTF-8.
+        """
+
+    @overload
+    def __call__(self, texts: list[str], /, *, threads: int | None = None) -> list[str]: ...
+    @overload
+    def __call__(
+        self, texts: tuple[str, ...], /, *, threads: int | None = None
+    ) -> tuple[str, ...]: ...
+    @overload
+    def __call__(self, texts: ArrowStrings, /, *, threads: int | None = None) -> Column[str]: ...
+
+@overload
+def pii_replace(
+    texts: str,
+    config: PII | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_PIIKwargs],
+) -> str:
+    """``PIIFormatter``: each document's text with emails and IP addresses replaced.
+
+    A fresh formatter per call, so the replacement counters start at 0: one
+    call over a whole corpus gives datatrove's output. To process a corpus in
+    batches, use one :class:`PIIReplacer`.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: A :class:`PII`; keyword arguments override its fields.
+        threads: As for :meth:`PIIReplacer.__call__`.
+        **kwargs: ``PIIFormatter``'s parameters.
+
+    Returns:
+        As :meth:`PIIReplacer.__call__`.
+    """
+
+@overload
+def pii_replace(
+    texts: list[str],
+    config: PII | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_PIIKwargs],
+) -> list[str]: ...
+@overload
+def pii_replace(
+    texts: tuple[str, ...],
+    config: PII | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_PIIKwargs],
+) -> tuple[str, ...]: ...
+@overload
+def pii_replace(
+    texts: ArrowStrings,
+    config: PII | None = None,
+    /,
+    *,
+    threads: int | None = None,
+    **kwargs: Unpack[_PIIKwargs],
+) -> Column[str]: ...
+
 # ---- end PIIFormatter ----
 
 # ---- C4BadWordsFilter ----
