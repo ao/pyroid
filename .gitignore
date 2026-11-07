@@ -27,3 +27,6 @@ parity-report.json
 # Local
 .local
 .DS_Store
+
+# Session scratch (never committed)
+.scratch/
