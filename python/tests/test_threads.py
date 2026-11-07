@@ -243,7 +243,15 @@ def worker(k):
         errors.append(f"worker {k}: {type(e).__name__}: {e}")
 
 def collector():
-    while not stop.is_set():
+    # On free-threaded builds each collection stops the world (twice). Back to
+    # back, they leave the other threads almost no time attached: a worker that
+    # detached (every batch call does) waits for each pause to end, and each
+    # pause waits for every attached thread to be scheduled. On a busy 4-CPU
+    # runner that slows the run 20x or more, past the timeout, with no
+    # deadlock (a pure-Python workload slows the same way). With the 1 ms gap
+    # there are still about a hundred collections a second, landing at
+    # arbitrary points of the workers' calls.
+    while not stop.wait(0.001):
         gc.collect()
 
 g = threading.Thread(target=collector)
