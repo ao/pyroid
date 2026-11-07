@@ -1462,9 +1462,11 @@ def test_header_and_vocabulary(zoo: Zoo, name: str) -> None:
     assert m.words is m.words
     assert m.labels is m.labels
     r = repr(m)
+    # The repr quotes and escapes the path, so a Windows path shows doubled backslashes.
+    quoted_path = '"' + str(entry.path).replace("\\", "\\\\") + '"'
     for part in (
         "pyroid.fasttext.Model",
-        str(entry.path),
+        quoted_path,
         f"dim {synth.spec.dim}",
         f"{len(words)} words",
         f"{len(labels)} labels",
