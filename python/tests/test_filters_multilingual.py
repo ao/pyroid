@@ -105,24 +105,24 @@ def test_languages_table() -> None:
     # The counts the stubs document.
     assert len(langs) == 4343
     native = {c for c, v in langs.items() if v.native}
-    assert len(native) == 3999
+    assert len(native) == 4009
     by_class: dict[str, int] = {}
     for v in langs.values():
         if v.native:
             by_class[v.tokenizer] = by_class.get(v.tokenizer, 0) + 1
     assert by_class == {
-        "SpaCyTokenizer": 3742,
+        "SpaCyTokenizer": 3752,
         "IndicNLPTokenizer": 129,
         "WhitespaceTokenizer": 128,
     }
     spacy_native = {v.arg for v in langs.values() if v.native and v.tokenizer == "SpaCyTokenizer"}
-    assert len(spacy_native) == 57
+    assert len(spacy_native) == 58  # the 57 rule-based languages and zh (jieba)
     assert sum(v.arg == "xx" for v in langs.values()) == 1995
     assert langs["deu_Latn"] == pf.Language("SpaCyTokenizer", "de", True)
     assert langs["uzn_Latn"] == pf.Language("SpaCyTokenizer", "xx", True)
     assert langs["hin_Deva"] == pf.Language("IndicNLPTokenizer", "hi", True)
     assert langs["kat_Geor"] == pf.Language("WhitespaceTokenizer", "", True)
-    assert langs["cmn_Hani"] == pf.Language("SpaCyTokenizer", "zh", False)
+    assert langs["cmn_Hani"] == pf.Language("SpaCyTokenizer", "zh", True)
     assert langs["jpn_Jpan"] == pf.Language("SpaCyTokenizer", "ja", False)
     assert langs["vie_Latn"] == pf.Language("SpaCyTokenizer", "vi", False)
     assert langs["kor_Hang"] == pf.Language("KiwiTokenizer", "", False)
@@ -186,7 +186,6 @@ def test_unknown_language_message_is_datatrove_s() -> None:
 @pytest.mark.parametrize(
     ("lang", "names"),
     [
-        ("cmn_Hani", ['SpaCyTokenizer("zh")', "jieba"]),
         ("jpn_Jpan", ['SpaCyTokenizer("ja")', "SudachiPy", "sudachidict-core"]),
         ("vie_Latn", ['SpaCyTokenizer("vi")', "pyvi"]),
         ("kaz_Cyrl", ['StanzaTokenizer("kk")', "stanza"]),
@@ -1051,10 +1050,10 @@ NATIVE: dict[str, str] = {
     "tur_Latn": "tr",
     "hun_Latn": "hu",
     "hin_Deva": "hi",
+    "cmn_Hani": "zh",
 }
 #: Languages pyroid does not tokenize natively, with the segmenter module datatrove needs.
 FALLBACK: dict[str, tuple[str, str]] = {
-    "cmn_Hani": ("zh", "jieba"),
     "jpn_Jpan": ("ja", "sudachipy"),
     "vie_Latn": ("vi", "pyvi"),
     "tha_Thai": ("th", "pythainlp"),
@@ -1164,6 +1163,10 @@ def configs(kind: str, lang: Any, stops: list[str]) -> list[Any]:
 def _need(lang: str) -> None:
     if pf.languages()[lang].tokenizer == "IndicNLPTokenizer":
         pytest.importorskip("indicnlp")  # datatrove's reference needs it
+    if pf.languages()[lang].arg == "zh":
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # jieba: invalid escapes
+            pytest.importorskip("jieba")  # datatrove's reference needs it
 
 
 @pytest.mark.parametrize("kind", ["gq", "gr", "fw", "c4"])

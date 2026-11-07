@@ -34,13 +34,14 @@ is datatrove's default (xxhash/64); FineWeb used
 Languages
 ---------
 ``language=`` is ``MinhashDedupSignature(language=...)``: any of datatrove's
-language codes (:func:`languages`), as in ``pyroid.filters``. 3,999 of the
+language codes (:func:`languages`), as in ``pyroid.filters``. 4,009 of the
 4,343 codes are tokenized natively, in Rust, on every thread: those datatrove
 tokenizes with a rule-based ``spacy.blank(code)`` (57 spaCy languages, ``xx``
-included), ``IndicNLPTokenizer`` or ``WhitespaceTokenizer``.
+included), spaCy's Chinese tokenizer over jieba (:mod:`pyroid.jieba`),
+``IndicNLPTokenizer`` or ``WhitespaceTokenizer``.
 
-The other 344 (Chinese with jieba, Japanese with SudachiPy, Vietnamese with
-pyvi, Stanza, Thai, Kiwi, ...) raise ``NotImplementedError`` unless
+The other 334 (Japanese with SudachiPy, Vietnamese with pyvi, Stanza, Thai,
+Kiwi, ...) raise ``NotImplementedError`` unless
 ``python_tokenizer=True``. With it, pyroid's ``simplify_text`` runs in Rust,
 datatrove's own tokenizer splits each document in Python on the calling
 thread, and shingling, MinHash, bucketing and clustering run in Rust on those
@@ -562,9 +563,10 @@ def sentence_dedup(
             dict of its fields, or ``None`` for the defaults.
         language: datatrove's language code (as its ``language=``), for the sentence and
             word tokenizer: any code ``pyroid.filters.languages()`` marks native
-            (spaCy rule-based languages, the whitespace and IndicNLP tokenizers).
-            Codes whose datatrove tokenizer pyroid does not port (jieba, SudachiPy,
-            Stanza, ...) raise ``NotImplementedError``; use the datatrove drop-ins.
+            (spaCy rule-based languages, Chinese with jieba, the whitespace and
+            IndicNLP tokenizers). Codes whose datatrove tokenizer pyroid does not
+            port (SudachiPy, Stanza, ...) raise ``NotImplementedError``; use the
+            datatrove drop-ins.
         threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
             ``n`` tasks at once; ``1`` runs on the calling thread.
         **kwargs: ``SentDedupConfig`` fields to override, plus ``hash_fc`` and

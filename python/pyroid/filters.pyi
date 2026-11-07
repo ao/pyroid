@@ -28,7 +28,7 @@ datatrove splits text with the word tokenizer of the filter's ``language``
 datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
 :func:`languages` lists them), as datatrove does:
 
-- Native (3,999 codes), in Rust on every thread:
+- Native (4,009 codes), in Rust on every thread:
 
   - the 3,742 codes datatrove tokenizes with a rule-based
     ``spacy.blank(code)``: the 57 spaCy languages ``af`` ... ``yo``,
@@ -40,15 +40,17 @@ datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
     ``"urd_Arab"``, ...: indic-nlp-library's ``trivial_tokenize`` and
     ``sentence_split``);
   - the 128 codes of ``WhitespaceTokenizer`` (``"kat_Geor"``, ...: spaCy
-    ``xx`` words and datatrove's regex sentence splitter).
+    ``xx`` words and datatrove's regex sentence splitter);
+  - the 10 codes of ``SpaCyTokenizer("zh")`` (``"cmn_Hani"``, ``"yue_Hani"``,
+    ...: spaCy's Chinese tokenizer over jieba 0.42.1 with its default
+    dictionary, ported as :mod:`pyroid.jieba`, plus the sentencizer).
 
   ``split_into_words`` and ``split_into_sentences`` match datatrove's.
-- Python tokenizer, opt-in (the other 344 codes): datatrove uses a
+- Python tokenizer, opt-in (the other 334 codes): datatrove uses a
   segmenter pyroid does not port: ``StanzaTokenizer`` (255 codes),
-  ``SpaCyTokenizer("zh")`` (jieba), ``SpaCyTokenizer("ja")`` (SudachiPy),
-  ``SpaCyTokenizer("vi")`` (pyvi), ``ThaiTokenizer``, ``BurmeseTokenizer``,
-  ``TibetanTokenizer``, ``LaoTokenizer``, ``KhmerTokenizer`` and
-  ``KiwiTokenizer`` (see :func:`languages`). Calling a filter with such a
+  ``SpaCyTokenizer("ja")`` (SudachiPy), ``SpaCyTokenizer("vi")`` (pyvi),
+  ``ThaiTokenizer``, ``BurmeseTokenizer``, ``TibetanTokenizer``,
+  ``LaoTokenizer``, ``KhmerTokenizer`` and ``KiwiTokenizer`` (see :func:`languages`). Calling a filter with such a
   code raises ``NotImplementedError`` unless you pass
   ``python_tokenizer=True``. Then each document is tokenized by datatrove's
   own tokenizer, in Python, on the calling thread. This needs datatrove

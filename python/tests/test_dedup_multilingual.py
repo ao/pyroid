@@ -324,6 +324,10 @@ def families(draw: st.DrawFn, pool: str) -> list[str]:
 def _need(lang: str) -> None:
     if pf.languages()[lang].tokenizer == "IndicNLPTokenizer":
         pytest.importorskip("indicnlp")
+    if pf.languages()[lang].arg == "zh":
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # jieba: invalid escapes
+            pytest.importorskip("jieba")  # datatrove's reference needs it
 
 
 def check(dt: Datatrove, lang: str, texts: list[str], hc: tuple[str, int], n: int) -> None:

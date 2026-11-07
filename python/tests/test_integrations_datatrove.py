@@ -247,6 +247,7 @@ def test_c4_rewrites_kept_text_only() -> None:
 # Native languages, one per word tokenizer kind pyroid ports: spaCy rule-based (Latin, Cyrillic,
 # Arabic scripts), IndicNLP, and WhitespaceTokenizer (spaCy xx words, regex sentences).
 NATIVE_LANGUAGES = {
+    "cmn_Hani": "jieba",
     "fra_Latn": None,
     "deu_Latn": None,
     "rus_Cyrl": None,
@@ -256,6 +257,7 @@ NATIVE_LANGUAGES = {
 }
 FW2 = DATA / "fineweb2"
 CHINESE = "我们今天去公园散步\uff0c天气很好。"  # cmn_Hani: datatrove tokenizes it with jieba
+JAPANESE = "今日は公園を散歩しました\u3001天気がとても良かったです。"  # jpn_Jpan: SudachiPy
 GEORGIAN = [
     "საქართველო მდებარეობს კავკასიაში. დედაქალაქი არის თბილისი, ძველი და ლამაზი ქალაქი.\n",
     "ეს არის მოკლე ტექსტი.\n",
@@ -356,18 +358,18 @@ def test_filters_native_languages_match_datatrove(
 
 @pytest.mark.thread_unsafe
 def test_filter_non_native_language_falls_back() -> None:
-    """A code pyroid does not tokenize (cmn_Hani: jieba) runs datatrove's own code, warned once."""
+    """A code pyroid does not tokenize (jpn_Jpan: SudachiPy) runs datatrove's code, warned once."""
     pytest.importorskip("spacy")
-    pytest.importorskip("jieba")
+    pytest.importorskip("sudachipy")
     import datatrove.pipeline.filters as df  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
-    assert not pyroid.filters.languages()["cmn_Hani"].native
-    text = CHINESE * 30
-    stock = df.GopherQualityFilter(language="cmn_Hani", min_doc_words=5)
+    assert not pyroid.filters.languages()["jpn_Jpan"].native
+    text = JAPANESE * 30
+    stock = df.GopherQualityFilter(language="jpn_Jpan", min_doc_words=5)
     want = stock.filter(Document(text=text, id="0"))
     pdt._WARNED.clear()
-    ours = pdt.GopherQualityFilter(language="cmn_Hani", min_doc_words=5)
-    with pytest.warns(pyroid.FallbackWarning, match="language='cmn_Hani'"):
+    ours = pdt.GopherQualityFilter(language="jpn_Jpan", min_doc_words=5)
+    with pytest.warns(pyroid.FallbackWarning, match="language='jpn_Jpan'"):
         got = ours.filter_batch([Document(text=text, id="0")])
     assert got == [want]
     with warnings.catch_warnings():
@@ -567,21 +569,21 @@ def test_minhash_skip_existing_sigs(tmp_path: Path) -> None:
 
 
 @pytest.mark.thread_unsafe
-@pytest.mark.parametrize("lang", [*sorted(NATIVE_LANGUAGES), "cmn_Hani"])
+@pytest.mark.parametrize("lang", [*sorted(NATIVE_LANGUAGES), "jpn_Jpan"])
 def test_minhash_signature_files_identical_languages(lang: str, tmp_path: Path) -> None:
     """FineWeb-2's MinhashConfig with the language's tokenizer: the same files; native codes warn
-    nothing, cmn_Hani (jieba) runs datatrove's step with a FallbackWarning."""
+    nothing, jpn_Jpan (SudachiPy) runs datatrove's step with a FallbackWarning."""
     pytest.importorskip("spacy")
     pytest.importorskip("xxhash")
     native = pyroid.filters.languages()[lang].native
-    backend = NATIVE_LANGUAGES.get(lang) or (None if native else "jieba")
+    backend = NATIVE_LANGUAGES.get(lang) or (None if native else "sudachipy")
     if backend:
         pytest.importorskip(backend)
     from datatrove.pipeline.dedup import MinhashConfig, MinhashDedupSignature  # type: ignore[import-not-found,import-untyped,unused-ignore]
     from datatrove.utils.hashing import HashConfig  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
     config = MinhashConfig(hash_config=HashConfig(hash_fc="xxhash", precision=64))
-    texts = list(_language_texts(lang)) if native else [CHINESE * k for k in range(1, 40)]
+    texts = list(_language_texts(lang)) if native else [JAPANESE * k for k in range(1, 40)]
     texts += [t[:-3] + "!" for t in texts[4:30]]  # near-duplicates
     MinhashDedupSignature(output_folder=str(tmp_path / "stock"), config=config, language=lang).run(
         iter(_docs(texts)), rank=1, world_size=2
@@ -618,7 +620,7 @@ def test_minhash_native_language_without_datatrove_tokenizer(
 
     monkeypatch.setattr(dt_minhash, "load_word_tokenizer", missing)
     with pytest.raises(ImportError, match="spaCy"):
-        pdt.MinhashDedupSignature(output_folder=str(tmp_path / "x"), language="cmn_Hani")
+        pdt.MinhashDedupSignature(output_folder=str(tmp_path / "x"), language="jpn_Jpan")
     ours = pdt.MinhashDedupSignature(output_folder=str(tmp_path / "ours"), language="fra_Latn")
     assert ours.word_tokenizer is None
     with warnings.catch_warnings():

@@ -515,19 +515,19 @@ def test_drop_in_signatures_and_pickle() -> None:
 def test_unsupported_language_falls_back(tmp_path: Path) -> None:
     import pyroid.integrations.datatrove as pdt
 
-    # cmn_Hani: datatrove tokenizes it with spaCy + jieba, which pyroid does not port.
-    pytest.importorskip("jieba")
-    texts = ["猫在睡觉。下雨了。天气很冷。结束。"] * 3 + ["别的东西。"]
+    # jpn_Jpan: datatrove tokenizes it with spaCy + SudachiPy, which pyroid does not port.
+    pytest.importorskip("sudachipy")
+    texts = ["猫が寝ている。雨が降った。とても寒い。終わり。"] * 3 + ["別のもの。"]
     cfg = dt_config(**NO_MIN)
-    want = run_stages(dt_sd, texts, cfg, tmp_path / "dt", language="cmn_Hani")
+    want = run_stages(dt_sd, texts, cfg, tmp_path / "dt", language="jpn_Jpan")
     pdt._WARNED.clear()
-    with pytest.warns(pyroid.FallbackWarning, match="language=.cmn_Hani."):
-        got = run_stages(pdt, texts, cfg, tmp_path / "pr", language="cmn_Hani")
+    with pytest.warns(pyroid.FallbackWarning, match="language=.jpn_Jpan."):
+        got = run_stages(pdt, texts, cfg, tmp_path / "pr", language="jpn_Jpan")
     assert got == want
     # Lines need no tokenizer: no fallback, same files.
     lines = dt_config(split_sentences=False, **NO_MIN)
     want = run_stages(
-        dt_sd, [t.replace("。", "。\n") for t in texts], lines, tmp_path / "dl", language="cmn_Hani"
+        dt_sd, [t.replace("。", "。\n") for t in texts], lines, tmp_path / "dl", language="jpn_Jpan"
     )
     with warnings.catch_warnings():
         warnings.simplefilter("error", pyroid.FallbackWarning)
@@ -536,7 +536,7 @@ def test_unsupported_language_falls_back(tmp_path: Path) -> None:
             [t.replace("。", "。\n") for t in texts],
             lines,
             tmp_path / "pl",
-            language="cmn_Hani",
+            language="jpn_Jpan",
         )
     assert got == want
 
@@ -650,11 +650,11 @@ def test_lines_mode() -> None:
 
 
 def test_language_without_tokenizer() -> None:
-    with pytest.raises(NotImplementedError, match="language 'cmn_Hani'"):
-        dedup.SentenceDedup(language="cmn_Hani")
+    with pytest.raises(NotImplementedError, match="language 'jpn_Jpan'"):
+        dedup.SentenceDedup(language="jpn_Jpan")
     with pytest.raises(ValueError, match="doesn't have a tokenizer assigned"):
         dedup.SentenceDedup(language="xx_not_a_code", split_sentences=False, **NO_MIN)
-    d = dedup.SentenceDedup(language="cmn_Hani", split_sentences=False, **NO_MIN)
+    d = dedup.SentenceDedup(language="jpn_Jpan", split_sentences=False, **NO_MIN)
     assert d.fit(["a\nb\nc", "a\nb\nc"]) == (["a\nb\nc", ""], [True, False])
 
 
