@@ -291,6 +291,8 @@ jobs:
     env:
       # Where pyroid_parity and bench/fetch.py read and write the pinned files (default /data).
       PYROID_DATA: ${{ github.workspace }}/bench/data
+      # uv's own CPython builds, as in local runs, never an interpreter from the runner's PATH.
+      UV_PYTHON_PREFERENCE: only-managed
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -360,6 +362,9 @@ jobs:
             wheel: cp315-abi3.abi3t
     env:
       PYROID_DATA: ${{ github.workspace }}/bench/data
+      # uv's own CPython builds, as in local runs. Without this the 3.12 legs pick the runner's python3.12
+      # (Ubuntu's 3.12.3), whose tarfile warns differently (see parity/pyproject.toml's filterwarnings).
+      UV_PYTHON_PREFERENCE: only-managed
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
