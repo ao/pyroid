@@ -1,6 +1,18 @@
 # pyroid
 
-> Rust-fast text cleaning for LLM datasets: drop-in replacements for ftfy (`import pyroid.ftfy as ftfy`, byte-identical to ftfy 6.3.1), fastText inference (`pyroid.fasttext.load_model`, same .bin/.ftz files, bit-identical predictions per architecture), datatrove 0.10.1's quality filters (`pyroid.filters`: Gopher, C4, FineWeb, PII, C4 bad words, symbol lines, URL filter; same decisions) and dedup (`pyroid.dedup`: MinHash and sentence dedup; same removals), rouge-score 0.1.2 and sacrebleu 2.6.0 (`pyroid.metrics`: ROUGE, BLEU, chrF, chrF++; identical scores), json_repair 0.64.5 (`pyroid.json_repair`; same output, linear time), and permissive transliteration (`pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output). Integrations: the `pyroid clean IN OUT --recipe fineweb` command line, `pyroid.patch("ftfy", "fasttext")` for code you don't own, datatrove drop-in steps (`pyroid.integrations.datatrove`) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t; no runtime dependencies (extras: `[fasttext]` numpy, `[cli]` pyarrow, `[datatrove]`, `[hf]`). pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
+> Rust ports of the Python libraries used to clean LLM datasets, with the same API and the same output: ftfy, fastText inference, datatrove 0.10.1's quality filters and dedup, rouge-score 0.1.2, sacrebleu 2.6.0 and json_repair 0.64.5, plus permissive transliteration. Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
+
+Modules and what they match:
+
+- `pyroid.ftfy` (`import pyroid.ftfy as ftfy`): byte-identical to ftfy 6.3.1.
+- `pyroid.fasttext` (`pyroid.fasttext.load_model`): the same .bin/.ftz files, bit-identical predictions per architecture.
+- `pyroid.filters`: datatrove's Gopher, C4, FineWeb, PII, C4 bad words, symbol lines and URL filters, with the same decisions.
+- `pyroid.dedup`: datatrove's MinHash and sentence dedup, with the same removals.
+- `pyroid.metrics`: ROUGE, BLEU, chrF and chrF++, with scores identical to rouge-score and sacrebleu.
+- `pyroid.json_repair`: the same output as json_repair, in linear time.
+- `pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output.
+
+Integrations: the `pyroid clean IN OUT --recipe fineweb` command line, `pyroid.patch("ftfy", "fasttext")` for code you don't own, datatrove drop-in steps (`pyroid.integrations.datatrove`) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` (numpy), `[cli]` (pyarrow), `[datatrove]` and `[hf]`.
 
 Conventions shared by every module:
 
@@ -53,6 +65,6 @@ Conventions shared by every module:
 ## Optional
 
 - [Compatibility](https://ao.github.io/pyroid/compatibility/): parity test counts against each incumbent, platforms, hardening
-- [Benchmarks](https://ao.github.io/pyroid/benchmarks/): methodology and numbers (Docker VM, indicative)
+- [Benchmarks](https://ao.github.io/pyroid/benchmarks/): methodology and numbers (AWS EC2 c7i.4xlarge and c8g.4xlarge; metrics, json_repair and the FineWeb-2 languages only in a Docker VM, indicative)
 - [Migrating from 0.7](https://ao.github.io/pyroid/migrating-from-0.7/): the removed 0.x API and its replacements
 - [Changelog](https://github.com/ao/pyroid/blob/main/CHANGELOG.md)

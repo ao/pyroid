@@ -28,6 +28,8 @@ body:
         - pyroid.filters
         - pyroid.dedup
         - pyroid.translit
+        - pyroid.metrics
+        - pyroid.json_repair
         - other
     validations:
       required: true

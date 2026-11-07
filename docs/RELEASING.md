@@ -1,14 +1,14 @@
 # Releasing pyroid
 
-Owner-only instructions. Everything here needs repository-admin or PyPI-owner rights; no automation does it
-for you. Do the one-time setup (sections 1–4 and 8) once, before the first 1.0 push to `main`.
+Owner-only instructions. Everything here needs repository-admin or PyPI-owner rights, and no automation does
+it for you. Do the one-time setup (sections 1–4 and 8) once, before the first 1.0 push to `main`.
 
-How releases work: `.github/workflows/release.yml` runs [release-please](https://github.com/googleapis/release-please)
-on every push to `main`. release-please keeps a release PR open (`chore: release X.Y.Z`) that bumps the version in
-`Cargo.toml`/`Cargo.lock` and updates `CHANGELOG.md` from Conventional Commits. Merging that PR tags `vX.Y.Z`,
-creates the GitHub Release, and the same workflow run then builds 24 wheels and the sdist, tests every wheel in
-a clean venv, attests build provenance, and waits for your approval in the `pypi` environment before publishing
-with Trusted Publishing (no API tokens; PEP 740 attestations are uploaded with the files).
+`.github/workflows/release.yml` runs [release-please](https://github.com/googleapis/release-please) on every
+push to `main`. release-please keeps a release PR open (`chore: release X.Y.Z`) that bumps the version in
+`Cargo.toml`/`Cargo.lock` and updates `CHANGELOG.md` from Conventional Commits. Merging that PR tags `vX.Y.Z`
+and creates the GitHub Release. The same workflow run then builds 24 wheels and the sdist, tests every wheel in
+a clean venv and attests build provenance. It waits for your approval in the `pypi` environment, then
+publishes with Trusted Publishing: no API tokens, and PEP 740 attestations are uploaded with the files.
 
 ## 1. GitHub repository settings
 
@@ -19,9 +19,9 @@ with Trusted Publishing (no API tokens; PEP 740 attestations are uploaded with t
      the release PR with the default `GITHUB_TOKEN`.
 2. **Settings → Secrets and variables → Actions:** delete the old `PYPI_API_TOKEN` secret (0.7.x used it), and
    revoke that token on PyPI (Account settings → API tokens). Nothing in the new workflow uses a token.
-3. **Labels** used by the issue forms: create `parity` (the `bug` and `enhancement` labels exist by default).
-4. **Discussions** (optional): the issue chooser links "Ask a question" to Discussions. Either enable
-   Discussions (Settings → General → Features) or remove that link from `.github/ISSUE_TEMPLATE/config.yml`.
+3. Labels used by the issue forms: create `parity` (the `bug` and `enhancement` labels exist by default).
+4. Discussions (optional): the issue chooser links "Ask a question" to Discussions. Either enable
+   Discussions (**Settings → General → Features**) or remove that link from `.github/ISSUE_TEMPLATE/config.yml`.
 
 ## 2. Environments
 
@@ -40,13 +40,13 @@ secrets. "Prevent self-review" must stay off if you are the only reviewer.
 The publisher must match the workflow exactly: owner `ao`, repository `pyroid`, workflow `release.yml`, and the
 environment name.
 
-- **PyPI** — `pyroid` already exists there (0.7.x), so this is a normal publisher, not a pending one:
+- PyPI: `pyroid` already exists there (0.7.x), so this is a normal publisher, not a pending one.
   <https://pypi.org/manage/project/pyroid/settings/publishing/> → **Add a new publisher → GitHub Actions**:
   owner `ao`, repository `pyroid`, workflow name `release.yml`, environment name `pypi`.
-- **TestPyPI** — `pyroid` doesn't exist on TestPyPI yet (checked 2026-11-05), so register a **pending
-  publisher**: <https://test.pypi.org/manage/account/publishing/> → **Add a new pending publisher**: PyPI project
-  name `pyroid`, owner `ao`, repository `pyroid`, workflow name `release.yml`, environment name `testpypi`. The
-  first successful upload creates the project. (A TestPyPI account is separate from your PyPI account.)
+- TestPyPI: `pyroid` doesn't exist on TestPyPI yet (checked 2026-11-05), so register a pending publisher.
+  <https://test.pypi.org/manage/account/publishing/> → **Add a new pending publisher**: PyPI project name
+  `pyroid`, owner `ao`, repository `pyroid`, workflow name `release.yml`, environment name `testpypi`. The
+  first successful upload creates the project. A TestPyPI account is separate from your PyPI account.
 
 Docs: [adding a publisher](https://docs.pypi.org/trusted-publishers/adding-a-publisher/),
 [pending publishers](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
@@ -63,7 +63,7 @@ support@ataiva.com, the address in the package metadata. Change it if conduct re
 
 ## 5. First release dry run (TestPyPI)
 
-After `next` is merged into `main` and pushed (PLAN Phase 4, step 1):
+After `next` is merged into `main` and pushed:
 
 1. **Actions → Release → Run workflow**, branch `main`, tick **testpypi**.
 2. Wait for the build, test and `check distributions` jobs. The run summary lists the 25 files.
@@ -86,7 +86,7 @@ After `next` is merged into `main` and pushed (PLAN Phase 4, step 1):
 ## 6. Releasing 1.0.0
 
 1. On the first push to `main`, release-please reads the commits since the `v0.7.0` tag and opens
-   **`chore(main): release 1.0.0`**. `release-please-config.json` pins `"release-as": "1.0.0"`, so the first
+   `chore(main): release 1.0.0`. `release-please-config.json` pins `"release-as": "1.0.0"`, so the first
    release is 1.0.0 however the history is merged. The breaking `chore!:` commit would also give 1.0.0, but a
    squash merge could drop its `!`.
 2. Review the PR: the root `Cargo.toml` (`[workspace.package] version`) and the `pyroid-core`/`pyroid-py`
@@ -100,7 +100,7 @@ After `next` is merged into `main` and pushed (PLAN Phase 4, step 1):
 4. Merge the release PR. The `Release` run on `main` tags `v1.0.0`, creates the GitHub Release, builds and tests
    everything, attests provenance, and then waits at **publish to PyPI**. Approve the `pypi` deployment.
 5. Afterwards:
-   - **Remove `"release-as": "1.0.0"`** from `release-please-config.json` (commit `chore: stop pinning
+   - Remove `"release-as": "1.0.0"` from `release-please-config.json` (commit `chore: stop pinning
      release-as`). It is sticky: while it is there, every later release PR proposes 1.0.0 again (verified
      offline with release-please 17.6.0).
    - Check <https://pypi.org/project/pyroid/1.0.0/#files>: 25 files, each with provenance.
@@ -112,24 +112,27 @@ After `next` is merged into `main` and pushed (PLAN Phase 4, step 1):
 Merge PRs with Conventional Commit titles (see CONTRIBUTING.md). `feat` gives a minor bump, `fix`/`perf` a
 patch, and `!`/`BREAKING CHANGE` a major. Merge the release PR when you want to ship, then approve `pypi`.
 
-- **Pre-releases:** add a `Release-As: 1.1.0-rc.1` footer to a commit on `main` (the wheels become `1.1.0rc1`),
-  and use `Release-As: 1.1.0` for the final release.
-- **How the version is bumped:** `release-please-config.json` uses `release-type: simple` with TOML
-  `extra-files`. The `rust` release type can't handle a virtual workspace whose crates use
-  `version.workspace = true`: it throws, and no release PR appears. The extra files update
-  `[workspace.package].version` in `Cargo.toml` and the `pyroid-core` and `pyroid-py` entries in `Cargo.lock`.
-  If you rename a crate or add a workspace crate, add it to the `Cargo.lock` filter, or `--locked` builds fail
-  on the release commit. The log line `file version.txt did not exist` is expected and harmless.
-- **A job failed after the tag was created:** if it was flaky, use **Re-run failed jobs** on the same run (it
-  keeps the release-please outputs, so it can still publish). If the code is broken, fix it on `main` with a
-  `fix:` commit and ship the next patch release; don't move or reuse the tag.
-- **Never** publish from a laptop, and don't add an API token as a fallback.
+For a pre-release, add a `Release-As: 1.1.0-rc.1` footer to a commit on `main` (the wheels become
+`1.1.0rc1`), and use `Release-As: 1.1.0` for the final release.
+
+If a job fails after the tag was created and it was flaky, use **Re-run failed jobs** on the same run. That
+keeps the release-please outputs, so it can still publish. If the code is broken, fix it on `main` with a
+`fix:` commit and ship the next patch release. Don't move or reuse the tag.
+
+Never publish from a laptop, and don't add an API token as a fallback.
+
+How the version is bumped: `release-please-config.json` uses `release-type: simple` with TOML `extra-files`.
+The `rust` release type can't handle a virtual workspace whose crates use `version.workspace = true`: it throws,
+and no release PR appears. The extra files update `[workspace.package].version` in `Cargo.toml` and the
+`pyroid-core` and `pyroid-py` entries in `Cargo.lock`. If you rename a crate or add a workspace crate, add it to
+the `Cargo.lock` filter, or `--locked` builds fail on the release commit. The log line
+`file version.txt did not exist` is expected and harmless.
 
 ## 8. Docs site (GitHub Pages)
 
 `.github/workflows/docs.yml` builds the site (`mkdocs.yml`, sources in `docs/`) on every PR and push, with
-`zensical build --strict` and a `mkdocs build --strict` link check. It **deploys only on a push to `main`, and
-only if the `github-pages` environment exists**: a first job looks the environment up and, if it is missing,
+`zensical build --strict` and a `mkdocs build --strict` link check. It deploys only on a push to `main`, and
+only if the `github-pages` environment exists. A first job looks the environment up and, if it is missing,
 skips the deploy with a notice instead of creating it. Nothing is published until you do this once:
 
 1. **Settings → Pages → Build and deployment → Source: GitHub Actions.** This creates the `github-pages`
@@ -140,12 +143,13 @@ skips the deploy with a notice instead of creating it. Nothing is published unti
    <https://ao.github.io/pyroid/>. The README's Docs, Benchmarks and Compatibility links point there, and 404
    until then.
 
-To stop publishing, set the Pages source back to "Deploy from a branch" (or delete the environment); the
+To stop publishing, set the Pages source back to "Deploy from a branch" (or delete the environment). The
 workflow then goes back to build-only.
 
-Before the 1.0 release, also:
+Before the 1.0 release, also remove the "pyroid 1.0 is not on PyPI yet" notes from `README.md`, `docs/index.md`,
+`docs/install.md`, `docs/llms.txt`, `examples/notebooks/README.md` and its notebook, and
+`examples/space/README.md` and `requirements.txt`.
 
-- Replace the "Docker/OrbStack VM, indicative, preliminary" numbers on `docs/benchmarks.md`, `README.md` and
-  the guides with the bare-metal run, and regenerate the hero chart (`docs/assets/hero-{light,dark}.svg`: copy `charts/hero-{light,dark}.svg` from the run folder `bench/consolidate.py` wrote; embedded in `README.md` by absolute raw.githubusercontent.com URL so it also renders on PyPI).
-- Remove the "pyroid 1.0 is not on PyPI yet" notes (`README.md`, `docs/index.md`, `docs/install.md`,
-  `docs/llms.txt`).
+The README hero (`docs/assets/hero-{light,dark}.svg`) is a copy of `charts/hero-{light,dark}.svg` from the run
+folder that `bench/consolidate.py` wrote; it currently comes from the AWS EC2 c7i.4xlarge dev-slice run of
+2026-11-06. `README.md` embeds it by absolute raw.githubusercontent.com URL, so it also renders on PyPI.

@@ -9,7 +9,7 @@
 $ pip install pyroid
 ```
 
-pyroid has **no runtime dependencies**. Extras:
+pyroid has no runtime dependencies. Extras:
 
 | Extra | Adds | Needed for |
 |---|---|---|
@@ -24,16 +24,20 @@ need none of them.
 
 Optional libraries, needed only by the features that use them:
 
-- **pyarrow, polars, pandas, Hugging Face `datasets`** or any other Arrow library: pass their string
+- pyarrow, polars, pandas, Hugging Face `datasets` or any other Arrow library: pass their string
   columns straight in ([Inputs and outputs](concepts/inputs.md)).
-- **The incumbents**, only for the few features pyroid hands back to them
-  ([Fallbacks](concepts/fallbacks.md)): ftfy 6.3.1; datatrove 0.10.1 and a language's segmenter
-  (jieba, SudachiPy, ...) for `python_tokenizer=True`; rouge-score, nltk and sacrebleu 2.6.0 for
-  the delegated metrics features; json_repair 0.64.5 for `schema=`. Without them those calls
-  raise `pyroid.PyroidError`.
-- **numpy** for `pyroid.metrics.scoring.BootstrapAggregator`, which runs rouge-score's numpy code.
-- **tldextract** for `pyroid.filters.URLFilter`: its suffix lists are read from a
-  `tldextract.TLDExtract` when the filter is built (the matching itself runs in Rust).
+- The incumbents, only for the few features pyroid hands back to them
+  ([Fallbacks](concepts/fallbacks.md)):
+    - ftfy 6.3.1;
+    - datatrove 0.10.1 and a language's segmenter (jieba, SudachiPy, ...) for
+      `python_tokenizer=True`;
+    - rouge-score, nltk and sacrebleu 2.6.0 for the delegated metrics features;
+    - json_repair 0.64.5 for `schema=`.
+
+    Without them, those calls raise `pyroid.PyroidError`.
+- numpy for `pyroid.metrics.scoring.BootstrapAggregator`, which runs rouge-score's numpy code.
+- tldextract for `pyroid.filters.URLFilter`. Its suffix lists are read from a
+  `tldextract.TLDExtract` when the filter is built; the matching itself runs in Rust.
 
 ## Supported platforms
 
@@ -54,15 +58,16 @@ binary and no compiler is needed:
 | Windows | x64, ARM64 | `win_amd64`, `win_arm64` |
 
 That is 24 wheels plus an sdist per release, each tested in a clean virtual environment before
-it is published. Before the first release, wheels have been built and tested on Linux aarch64
-and, under emulation, on Linux x86_64; the release workflow builds the rest. PyPy and GraalPy are
-not supported.
+it is published. Before the first release, the Linux wheels have been built and tested on aarch64
+and x86_64: natively on AWS EC2, and earlier in a Docker VM and under emulation. The release
+workflow builds the rest. PyPy and GraalPy are not supported.
 
 !!! note "Where parity has been checked"
-    Every parity suite has run on Linux aarch64. On Linux x86_64 (under emulation), the ftfy,
-    fastText, filters, dedup and metrics suites gave 0 differences, with fastText's and the
-    metrics' references pinned per platform because the incumbents' own output differs by
-    architecture. macOS, Windows and musl are unverified until the first CI run on them
+    Every parity suite has run on Linux aarch64. The ftfy, fastText, filters, dedup, metrics and
+    json_repair suites also ran natively on AWS EC2, on x86_64 (Intel Sapphire Rapids) and
+    aarch64 (AWS Graviton4), with 0 differences. fastText's and the metrics' references are
+    pinned per platform, because the incumbents' own output can differ by architecture. macOS,
+    Windows and musl are unverified until the first CI run on them
     ([Compatibility](compatibility.md#platforms)).
 
 On free-threaded builds, importing pyroid does not re-enable the GIL. See

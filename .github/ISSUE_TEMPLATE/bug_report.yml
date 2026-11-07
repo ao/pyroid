@@ -7,8 +7,8 @@ body:
     attributes:
       value: |
         Thanks for taking the time to report this.
-        - If pyroid's **output differs from ftfy, fastText or datatrove**, use the **Parity mismatch** form instead.
-        - **Security problems** (memory corruption, segfaults on crafted input, ...) go to [private vulnerability reporting](https://github.com/ao/pyroid/security/advisories/new), not here.
+        - If pyroid's output differs from the library it replaces (ftfy, fastText, datatrove, ...), use the **Parity mismatch** form instead.
+        - Report security problems (memory corruption, segfaults on crafted input, ...) through [private vulnerability reporting](https://github.com/ao/pyroid/security/advisories/new), not here.
   - type: checkboxes
     id: checks
     attributes:

@@ -1,9 +1,9 @@
 # Writing a pyroid module
 
-Every product module (`ftfy`, `fasttext`, `filters`, `dedup`, `translit`) follows the
-same shape as the demonstration module `pyroid.text`. A track touches **only its own
-files plus one registration line per shared file** (two in total), so tracks merge
-without conflicts.
+The modules (`ftfy`, `fasttext`, `filters`, `dedup`, `translit`) follow the same shape as
+the demonstration module `pyroid.text`. A new module touches only its own files
+plus one registration line in each of two shared files, so work on separate modules
+merges without conflicts.
 
 ## Layout
 
@@ -17,7 +17,7 @@ without conflicts.
 
 `python/pyroid/__init__.py` does not import submodules; users write `import pyroid.text`.
 New exception types go in `crates/pyroid-py/src/errors.rs` (subclass `PyroidError`) and are
-re-exported from `__init__.py`/`_pyroid.pyi`; ask the core owner first.
+re-exported from `__init__.py`/`_pyroid.pyi`; ask a maintainer first.
 
 ## API conventions (what users see)
 
@@ -141,7 +141,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
    `pyroid.<mod>` and `pyroid._pyroid`); mypy --strict type-checks the tests against the
    stubs. Allowlist entries go in `.stubtest-allowlist`, each with a reason.
 
-## Checklist for a product track
+## Checklist for a new module
 
 - [ ] Kernels in `pyroid-core/src/<mod>/` with `cargo test` coverage; no Python, no `unsafe`.
 - [ ] `pyroid-py/src/<mod>.rs` uses `transform` / `predicate` / `map_values`; no Python

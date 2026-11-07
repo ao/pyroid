@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        pyroid has a deliberately narrow scope: fast, exact text cleaning for LLM datasets (ftfy-compatible fixing, fastText inference, quality filters, dedup and transliteration). Requests that fit that scope are the most likely to land.
+        pyroid has a deliberately narrow scope: fast, exact text cleaning for LLM datasets (ftfy-compatible fixing, fastText inference, quality filters, dedup, transliteration, evaluation metrics and JSON repair). Requests that fit that scope are the most likely to land.
   - type: textarea
     id: problem
     attributes:

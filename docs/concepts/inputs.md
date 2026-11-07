@@ -1,7 +1,6 @@
 # Inputs and outputs
 
-Every batch function in pyroid follows the same rules, so once you know them for one module you
-know them for all of them.
+Every batch function in pyroid follows the same rules for what it accepts and what it returns.
 
 ## What goes in
 
@@ -24,9 +23,9 @@ The result has the same kind as the input. There are three kinds of function:
 
 | Kind | Examples | Returns |
 |---|---|---|
-| **Transforms** | `ftfy.fix_text_batch`, `filters.c4_lines`, `translit.anyascii` | the new text: `str` → `str`, `list` → `list`, `tuple` → `tuple`, Arrow → `pyroid.Column` of strings (`large_string` for `large_string` input, else `string`) |
-| **Predicates** | `filters.gopher_quality`, `dedup.minhash_dedup`, `text.min_chars` | a mask: `bool`, `list[bool]`, `tuple[bool, ...]`, or a `pyroid.Column` of bools |
-| **Other values** | `filters.gopher_quality_reasons`, `fasttext.Model.predict` | one value per document, as each function documents |
+| Transforms | `ftfy.fix_text_batch`, `filters.c4_lines`, `translit.anyascii` | the new text: `str` → `str`, `list` → `list`, `tuple` → `tuple`, Arrow → `pyroid.Column` of strings (`large_string` for `large_string` input, else `string`) |
+| Predicates | `filters.gopher_quality`, `dedup.minhash_dedup`, `text.min_chars` | a mask: `bool`, `list[bool]`, `tuple[bool, ...]`, or a `pyroid.Column` of bools |
+| Other values | `filters.gopher_quality_reasons`, `fasttext.Model.predict` | one value per document, as each function documents |
 
 ```python
 import pyarrow as pa
@@ -41,14 +40,13 @@ col.to_pylist()  # ['a b', None]
 
 A few details that matter for large corpora:
 
-- **Unchanged documents are the original objects.** If a transform leaves a document as it was,
-  you get back the very same `str` (`out[i] is docs[i]`), so nothing is copied for the common
-  case of already-clean text.
-- **Masks, not filtered lists.** Predicates never build new strings; use the mask to select rows
-  in whatever you are using (`[d for d, k in zip(docs, keep) if k]`,
+- If a transform leaves a document as it was, you get back the very same `str` object
+  (`out[i] is docs[i]`), so nothing is copied for the common case of already-clean text.
+- Predicates return masks, not filtered lists, and never build new strings. Use the mask to
+  select rows in whatever you are using (`[d for d, k in zip(docs, keep) if k]`,
   `table.filter(pa.chunked_array(keep))`, `df.filter(pl.Series(keep))`).
-- **Arrow nulls stay null.** A null document gives a null string from a transform and a null
-  bool from a predicate.
+- Arrow nulls stay null. A null document gives a null string from a transform and a null bool
+  from a predicate.
 
 ## `pyroid.Column`
 

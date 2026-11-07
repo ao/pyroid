@@ -1,8 +1,8 @@
 # Contributing to pyroid
 
 Thanks for helping. pyroid is a Rust core for cleaning LLM text datasets, exposed to Python through PyO3. Every
-module must match its reference implementation exactly (ftfy, fastText, datatrove), so most of the work here is
-about **correctness first, speed second**.
+module must match its reference implementation exactly (ftfy, fastText, datatrove, ...), so correctness comes
+first and speed second.
 
 By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report security problems privately,
 as described in [SECURITY.md](SECURITY.md), never in a public issue.
@@ -97,12 +97,13 @@ timed. Build pyroid in release mode for this (`uv pip install ..` from `bench/`,
 --release`). `bench/README.md` lists the stages and their options.
 
 For a performance PR, attach before and after numbers from the same machine and say what it is (CPU, cores, OS,
-laptop or VM). README numbers come only from dedicated bare-metal runs, never from laptops or VMs.
+laptop or VM). The README's headline numbers come from dedicated AWS EC2 instances (a c7i.4xlarge and a
+c8g.4xlarge), not from laptops or shared VMs, and any other number there says where it was measured.
 
 ## Commits and pull requests
 
 We use [Conventional Commits](https://www.conventionalcommits.org/). Pull requests are squash-merged, so the
-**PR title** is the commit that lands, and [release-please](https://github.com/googleapis/release-please) builds
+PR title is the commit that lands, and [release-please](https://github.com/googleapis/release-please) builds
 the changelog and the next version number from it.
 
 | Type | Use it for | In the changelog? |

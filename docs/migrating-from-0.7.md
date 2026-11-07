@@ -2,7 +2,7 @@
 
 pyroid 1.0 is a different library that keeps the name. The 0.x releases (0.1 to 0.7) were a
 general-purpose toolkit (math, strings, collections, file and network I/O, images, basic machine
-learning). **That API was removed in 1.0**, and nothing from it is carried forward. 1.0 is a
+learning). That API was removed in 1.0, and nothing from it is carried forward. 1.0 is a
 text-cleaning core for LLM datasets.
 
 ## Staying on 0.7

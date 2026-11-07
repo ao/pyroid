@@ -3,10 +3,10 @@
 pyroid's own exceptions all derive from
 [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError). Where a module replaces an
 incumbent, it mostly raises the incumbent's exception types for the same inputs, so existing
-`except` clauses keep working. The exceptions to that rule (for example `OSError` instead of
-fastText's `ValueError` for a missing model file, or `pyroid.InputError`, a `TypeError`, where an
-incumbent raises `AttributeError` for a non-`str` item) are listed under "Differences" in each
-guide.
+`except` clauses keep working. The exceptions to that rule are listed under "Differences" in each
+guide. For example, a missing model file raises `OSError` where fastText raises `ValueError`, and
+a non-`str` item raises `pyroid.InputError` (a `TypeError`) where an incumbent raises
+`AttributeError`.
 
 ## The hierarchy
 
@@ -37,5 +37,5 @@ For a batch, the first failing document raises, and a note on the exception name
 
 A bug in pyroid's Rust code surfaces as `pyo3_runtime.PanicException`, never as a crash of the
 interpreter. It derives from `BaseException`, so a bare `except Exception` does not catch it. It
-always means a pyroid bug; please
+always means a pyroid bug: please
 [report it](https://github.com/ao/pyroid/issues/new/choose) with the input that triggered it.

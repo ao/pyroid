@@ -32,11 +32,13 @@ WMT21 = "metrics/wmt21.parquet"
 def metrics_ref(platform: str) -> str:
     """The reference file for a ``data.platform_key()``.
 
-    sacrebleu's BLEU calls ``math.exp``/``math.log``, i.e. the platform's libm, so a few BLEU scores differ in the
-    last bit across CPUs (measured: 165 of the 694,757 results, all BLEU, 1 ulp, linux-x86_64 under Rosetta vs
-    linux-aarch64; ROUGE, chrF and every count are identical). pyroid evaluates sacrebleu's formulas in Python with
-    the same libm, so it matches the oracle of its own platform; each platform pins its own file, as for fastText
-    (``specs.lid_ref``). linux-aarch64 keeps the original name.
+    sacrebleu's BLEU calls ``math.exp``/``math.log``, i.e. the platform's libm, so a few BLEU scores can differ in
+    the last bits across CPUs. Measured: under Rosetta 2 emulation, 165 of the 694,757 results (all BLEU) differed
+    from linux-aarch64 by 1-2 ulps; ROUGE, chrF and every count were identical. The linux-x86_64 pin now comes from
+    real x86 hardware (EC2 c7i, AVX2+FMA), where it equals the linux-aarch64 one: only Rosetta 2's emulation
+    differed. pyroid evaluates sacrebleu's formulas in Python with the same libm, so it matches the oracle of its own
+    platform; each platform still pins its own file, as for fastText (``specs.lid_ref``). linux-aarch64 keeps the
+    original name.
     """
     return (
         "parity/metrics-ref.parquet"

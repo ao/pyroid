@@ -1,18 +1,18 @@
 # pyroid
 
-**Rust-fast text cleaning for LLM datasets.** Drop-in replacements for ftfy, fastText inference,
-datatrove's quality filters and dedup, rouge-score, sacrebleu and json_repair: the same API, the
-same output, on any CPython from 3.11 to 3.15, including free-threaded 3.14t and 3.15t.
+Text cleaning for LLM datasets, written in Rust. pyroid is a drop-in replacement for ftfy,
+fastText inference, datatrove's quality filters and dedup, rouge-score, sacrebleu and json_repair,
+with the same API and the same output. It runs on CPython 3.11 to 3.15, including free-threaded
+3.14t and 3.15t.
 
 !!! warning "Pre-release"
-    pyroid 1.0 is not on PyPI yet; `pip install pyroid` still gives the unrelated 0.7.x toolkit
-    (see [Migrating from 0.7](migrating-from-0.7.md)). Every number on this site was measured in
-    a Docker VM and is labelled as such; a bare-metal benchmark run is pending.
+    pyroid 1.0 is not on PyPI yet. Until it is, `pip install pyroid` gives the unrelated 0.7.x
+    toolkit ([Migrating from 0.7](migrating-from-0.7.md)).
 
 ## Try it without changing your code
 
 Clean a Parquet or JSONL corpus with datatrove's FineWeb recipe (ftfy, language ID, the four
-quality filters, MinHash dedup), with the same output as datatrove's pipeline:
+quality filters, MinHash dedup). The output is the same as datatrove's pipeline:
 
 ```console
 $ pip install "pyroid[cli]"
@@ -29,7 +29,7 @@ pyroid.patch("ftfy", "fasttext")  # from here on, `import ftfy` gets pyroid.ftfy
 
 import ftfy
 
-ftfy.fix_text("âœ” No problems")  # '✔ No problems', computed by pyroid
+ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")  # 'naïve résumé', computed by pyroid
 ```
 
 See [the command line](guides/cli.md) and [`pyroid.patch()`](guides/patch.md).
@@ -42,10 +42,11 @@ The standard tools for those steps are written in pure Python (ftfy, datatrove's
 MinHash) or ship as C++ extensions that lag behind new Pythons (fastText).
 
 Profiling [datatrove](https://github.com/huggingface/datatrove)'s FineWeb chain on one core shows
-where the time goes: the four quality filters take about **79%** of the CPU and MinHash about
-**18%**, while ftfy is 2.3% and language ID 1%
-([methodology and caveats](benchmarks.md#where-the-cpu-goes)). Both tokenize every document with
-spaCy and then do their own work in Python; pyroid moves both to Rust.
+where the time goes. The four quality filters take about 79% of the CPU and MinHash about 18%,
+while ftfy is 2.3% and language ID 1%. These shares come from the first baseline run, in a
+Docker VM ([method and caveats](benchmarks.md#where-the-cpu-goes)). The filters and MinHash both
+tokenize every document with spaCy and then do their own work in Python. pyroid moves both to
+Rust.
 
 ## 30-second example
 
@@ -54,12 +55,12 @@ import pyroid.ftfy as ftfy  # was: import ftfy
 import pyroid.fasttext as fasttext  # was: import fasttext
 import pyroid.filters as filters  # datatrove's Gopher / C4 / FineWeb filters
 
-docs = ["âœ” No problems", "Some other web page ..."]
+docs = ["naÃ¯ve rÃ©sumÃ©", "Some other web page ..."]
 
-# ["✔ No problems", ...]: the same as [ftfy.fix_text(d) for d in docs], on all cores
+# ["naïve résumé", ...]: the same as [ftfy.fix_text(d) for d in docs], on all cores
 docs = ftfy.fix_text_batch(docs)
 
-# The same .bin / .ftz files. A batch runs without the GIL: [["__label__en"], ["__label__en"]]
+# The same .bin / .ftz files. A batch runs without the GIL: [["__label__fr"], ["__label__en"]]
 model = fasttext.load_model("lid.176.bin")
 labels, probs = model.predict(docs, k=1)
 
@@ -68,7 +69,7 @@ keep = filters.gopher_quality(docs)
 ```
 
 Batch functions take a `str`, a `list` or `tuple` of `str`, or an Arrow string column (pyarrow,
-polars, pandas, Hugging Face `datasets`); text and masks come back in the same kind. See
+polars, pandas, Hugging Face `datasets`). Text and masks come back in the same kind. See
 [Inputs and outputs](concepts/inputs.md).
 
 ## Install
@@ -79,8 +80,9 @@ $ pip install "pyroid[fasttext]"   # adds numpy, which pyroid.fasttext returns a
 $ pip install "pyroid[cli]"        # the pyroid command line (pyarrow)
 ```
 
-`[datatrove]` and `[hf]` add the datatrove steps and the Hugging Face helpers. Prebuilt wheels
-for Linux (glibc and musl), macOS and Windows, x86-64 and ARM64. See [Install](install.md).
+`[datatrove]` and `[hf]` add the datatrove steps and the Hugging Face helpers. There are prebuilt
+wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
+[Install](install.md).
 
 ## What's in it
 
@@ -90,11 +92,11 @@ for Linux (glibc and musl), macOS and Windows, x86-64 and ARM64. See [Install](i
 | [`pyroid.fasttext`](guides/fasttext.md) | [fastText](https://github.com/facebookresearch/fastText) inference (`fasttext`, `fasttext-predict`, ...) | bit-identical labels and probabilities, per architecture ([parity](compatibility.md#fasttext)) |
 | [`pyroid.filters`](guides/filters.md) | [datatrove](https://github.com/huggingface/datatrove) 0.10.1's Gopher, C4 and FineWeb filters, PII formatter, C4 bad words, symbol lines and URL filter | same decisions, reasons and text ([parity](compatibility.md#filters)) |
 | [`pyroid.dedup`](guides/dedup.md) | datatrove 0.10.1's MinHash and sentence dedup | same signatures, removals and files ([parity](compatibility.md#dedup)) |
-| [`pyroid.translit`](guides/translit.md) | `anyascii`; a permissive alternative to GPL `Unidecode` | `anyascii`-identical; *not* Unidecode's output |
+| [`pyroid.translit`](guides/translit.md) | `anyascii`; a permissive alternative to GPL `Unidecode` | identical to `anyascii`; not Unidecode's output |
 | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
 | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, in linear time ([parity](compatibility.md#json_repair)) |
 
-The filters and dedup follow datatrove beyond English too: 3,999 of its 4,343 language codes are
+The filters and dedup follow datatrove beyond English too. 3,999 of its 4,343 language codes are
 tokenized natively, and the rest through datatrove's own tokenizers
 ([Languages](guides/languages.md)).
 
@@ -105,28 +107,45 @@ tokenized natively, and the rest through datatrove's own tokenizers
 | [datatrove steps](guides/datatrove.md) | `pyroid.integrations.datatrove`: datatrove's pipeline steps with the same names and signatures, as a one-import change |
 | [Hugging Face `datasets`](guides/huggingface.md) | `pyroid.integrations.hf`: batched callables for `Dataset.map` and `Dataset.filter`, and the FineWeb recipe |
 
-## How fast?
+## Speed
 
-Per-module numbers, how they were measured and what they don't show are on the
-[Benchmarks](benchmarks.md) page. In short, in a Docker VM: the whole FineWeb chain on 8 threads
-is 26× faster than datatrove on 8 processes, and 49× faster single-threaded, with identical
-output. Per stage, on one thread, `pyroid.ftfy` is 147× faster than ftfy, `pyroid.fasttext`
-2.1–4.3× faster than fastText (fasttext-predict), `pyroid.filters` 52–107× faster than
-datatrove's filters, `pyroid.dedup` 63× faster than datatrove on MinHash signatures, and
-`pyroid.translit` 79× faster than anyascii. ROUGE is 59–65× faster than rouge-score, corpus BLEU
-11× and corpus chrF 19× faster than sacrebleu, and `pyroid.json_repair` about 30× faster than
-json_repair on broken JSON. Swapping pyroid's steps into datatrove's own FineWeb pipeline made it
-14.7× faster at 8 processes in the consolidated run, and 21–24× in later runs on a heavily loaded
-VM (*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*).
+On 100,000 FineWeb documents, pyroid's FineWeb chain is about 27× faster than datatrove on 8
+processes (10.2 s against 272.1 s) and about 56× faster single-threaded (43.4 s against
+2,444.4 s), with identical output. That is on an AWS EC2 c7i.4xlarge (Intel Xeon Platinum 8488C),
+with every run pinned to 8 CPUs. On the 10,000-document dev slice the same ratios are 18× and
+38×. On a c8g.4xlarge (AWS Graviton4), the 100k run gives 29× and 50×.
 
-## Why trust the output?
+Per stage, on the 10k dev slice and the same c7i, pyroid on one thread against the incumbent in
+one process:
 
-Each module is tested differentially against the library it replaces: pinned FineWeb and
-FineWeb-2 documents, pinned evaluation data, the incumbent's own test corpus, and Hypothesis
-fuzzing that includes lone surrogates, mojibake and every option. The counts are on the
-[Compatibility](compatibility.md) page, and every known difference is listed in each guide. All
-suites ran on Linux aarch64, and most also on Linux x86_64 under emulation; macOS and Windows are
-checked in CI before release.
+| Module | Incumbent | Speedup |
+|---|---|---:|
+| `pyroid.ftfy` | ftfy 6.3.1 | 108× |
+| `pyroid.fasttext` | fasttext-predict 0.9.2.4 | 1.6× (`.bin`), 3.6× (`.ftz`) |
+| `pyroid.filters` | datatrove 0.10.1's Gopher, C4 and FineWeb filters | 35–69× |
+| `pyroid.dedup` | datatrove 0.10.1's MinHash signatures | 34× |
+| `pyroid.translit` | anyascii 0.3.3 | 53× |
+
+The other modules have only been measured in a Docker/OrbStack VM on Apple Silicon, so their
+numbers are indicative. ROUGE is 59–65× faster than rouge-score, and corpus BLEU 11× and corpus
+chrF 19× faster than sacrebleu. `pyroid.json_repair` is about 30× faster than json_repair on
+broken JSON. In the same VM, under heavy load, datatrove's own FineWeb pipeline ran 21–24× faster
+at 8 processes with pyroid's steps swapped in. On the c7i, that swap gives 13.6× on the 100k
+slice.
+
+The [Benchmarks](benchmarks.md) page has every number, how it was measured and what it doesn't
+show.
+
+## Correctness
+
+Each module is tested differentially against the library it replaces. The inputs are pinned
+FineWeb and FineWeb-2 documents, pinned evaluation data, the incumbent's own test corpus, and
+Hypothesis fuzzing that includes lone surrogates, mojibake and every option. The counts are on
+the [Compatibility](compatibility.md) page, and every known difference is listed in each guide.
+
+All suites ran on Linux aarch64 in a Docker VM. The ftfy, fastText, filters, dedup, metrics and
+json_repair suites also ran natively on x86_64 and aarch64 on AWS EC2, with 0 differences
+([Platforms](compatibility.md#platforms)). macOS and Windows are checked in CI before release.
 
 pyroid never silently computes something different. Where a module meets an option or input it
 does not port, it hands the call to the real library and says so with a

@@ -10,10 +10,10 @@
 
 ## Reporting a vulnerability
 
-**Please don't open a public issue, discussion or pull request for a vulnerability.**
+Please don't open a public issue, discussion or pull request for a vulnerability.
 
 Report it privately through GitHub's private vulnerability reporting:
-**<https://github.com/ao/pyroid/security/advisories/new>**
+<https://github.com/ao/pyroid/security/advisories/new>
 (or the **Security** tab, then **Report a vulnerability**).
 
 Please include:
@@ -21,7 +21,7 @@ Please include:
 - a minimal reproducer: the input text or file and the call that triggers the problem;
 - what happens (crash, wrong memory access, unexpected file or network access, ...) and what you expected.
 
-We aim to acknowledge a report within 3 business days and to ship a fix within 30 days. We coordinate disclosure with you, publish a GitHub Security Advisory (with a CVE where one applies), and credit you unless you'd rather stay anonymous.
+We aim to acknowledge a report within 3 business days and to ship a fix within 30 days. We coordinate disclosure with you and publish a GitHub Security Advisory, with a CVE where one applies. We credit you unless you'd rather stay anonymous.
 
 ## Scope
 
