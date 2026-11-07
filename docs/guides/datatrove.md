@@ -145,14 +145,14 @@ Every step that tokenizes follows the same rule:
 - `GopherRepetitionFilter`, `GopherQualityFilter`, `C4QualityFilter`, `FineWebQualityFilter`,
   `MinhashDedupSignature`, `SentenceDedupSignature` and `SentenceDedupFilter` run in Rust for
   every code pyroid tokenizes natively. `pyroid.filters.languages()` marks those codes `native`:
-  3,999 of datatrove's 4,343, about 77% of FineWeb-2's bytes. They include English, the spaCy
-  rule-based languages (German, French, Spanish, Russian, Arabic, ...), the IndicNLP languages
-  (Hindi, Bengali, Urdu, ...) and the `WhitespaceTokenizer` ones. Each code gets the word and
-  sentence tokenizer datatrove assigns it, reproduced exactly, so neither spaCy nor
-  indic-nlp-library is needed.
+  4,009 of datatrove's 4,343, about 88% of FineWeb-2's bytes. They include English, the spaCy
+  rule-based languages (German, French, Spanish, Russian, Arabic, ...), Chinese (jieba), the
+  IndicNLP languages (Hindi, Bengali, Urdu, ...) and the `WhitespaceTokenizer` ones. Each code
+  gets the word and sentence tokenizer datatrove assigns it, reproduced exactly, so neither spaCy,
+  jieba nor indic-nlp-library is needed.
 - Any other `language` runs datatrove's own code for that step, with one
   [`pyroid.FallbackWarning`](../concepts/fallbacks.md) per step and language. That covers the codes
-  whose datatrove tokenizer pyroid does not port (Chinese, Japanese, Vietnamese, Thai, the Stanza
+  whose datatrove tokenizer pyroid does not port (Japanese, Vietnamese, Thai, the Stanza
   languages, ...), a code datatrove has no tokenizer for, and a `WordTokenizer` object. The code
   that runs then needs the language's segmenter installed, as datatrove does. The sentence-dedup
   steps warn only when their configuration needs a tokenizer. `SentenceFindDedups` and
@@ -167,9 +167,10 @@ from pyroid.integrations.datatrove import GopherQualityFilter, MinhashDedupSigna
 GopherQualityFilter(language="fra_Latn")  # in Rust: spaCy's French rules
 MinhashDedupSignature(output_folder="sigs", language="hin_Deva")  # in Rust: IndicNLP's tokenizer
 
-step = GopherQualityFilter(language="cmn_Hani")  # datatrove's code (jieba)
+GopherQualityFilter(language="cmn_Hani")  # in Rust: spaCy's Chinese tokenizer over jieba
+step = GopherQualityFilter(language="jpn_Jpan")  # datatrove's code (SudachiPy)
 # At its first batch:
-# FallbackWarning: pyroid.integrations.datatrove.GopherQualityFilter: language='cmn_Hani' is not
+# FallbackWarning: pyroid.integrations.datatrove.GopherQualityFilter: language='jpn_Jpan' is not
 # supported by pyroid; running datatrove's own code (slow path). This warning is shown once.
 ```
 
@@ -253,7 +254,8 @@ runs each FineWeb-2 slice with two near-duplicate copies (750 documents) in data
 The slice goes through three filter chains: FineWeb-2's own per-language settings, datatrove's
 defaults with C4, and the same without C4. Then FineWeb-2's MinHash (xxhash, 64 bits) runs with
 the language. The per-document digest equals the stock pipeline's for German, French, Spanish,
-Russian, Arabic and Hindi (in Rust) and for Chinese and Japanese (datatrove's own code). Where
+Russian, Arabic and Hindi (in Rust) and for Chinese and Japanese (datatrove's own code: these
+runs predate the jieba port, after which Chinese runs in Rust). Where
 stock datatrove fails, pyroid fails the same way, in the same phase: C4 on Hindi raises
 `ValueError("substring not found")` in both. The timing runs below gave the same digests again,
 on 2,000 and 5,000 documents.
@@ -261,7 +263,8 @@ on 2,000 and 5,000 documents.
 Per language and per step against live datatrove, the four quality filters ran with 5
 configurations on 6 native languages (spaCy's rules, IndicNLP, `WhitespaceTokenizer`), with no
 `FallbackWarning`. `MinhashDedupSignature`'s files are byte-identical on the same languages and
-on Chinese (fallback).
+on Chinese. Since the jieba port, Chinese is among the native languages in those checks, with the
+same results.
 
 See [Compatibility](../compatibility.md#integrations).
 
@@ -306,7 +309,8 @@ pyroid's times are mostly datatrove's executor. In one process, pyroid's filter 
 to 1.3 s, 22 to 35× faster than datatrove's (Hindi 9.3×). Its signature phase took 0.6 to 0.8 s,
 21 to 39× faster (Hindi 5.7×). datatrove's MinHash stages 2 to 4, which both runs share, took
 another 0.6 to 0.9 s. Hindi gains least because datatrove's IndicNLP tokenizer is already cheap.
-Chinese and Japanese run datatrove's own code in both pipelines, at datatrove's speed.
+In these runs Chinese and Japanese ran datatrove's own code in both pipelines, at datatrove's
+speed; Japanese still does.
 
 The newer steps were timed on the FineWeb dev slice, with medians of 5 runs for pyroid and 2 for
 datatrove and a load average of about 8. datatrove's 8 processes are a warmed

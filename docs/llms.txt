@@ -11,6 +11,7 @@ Modules and what they match:
 - `pyroid.metrics`: ROUGE, BLEU, chrF and chrF++, with scores identical to rouge-score and sacrebleu.
 - `pyroid.json_repair`: the same output as json_repair, in linear time.
 - `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
+- `pyroid.jieba` (`import pyroid.jieba as jieba`): the same words, offsets and frequencies as jieba 0.42.1, with the default dictionary built in; `lcut(docs, threads=n)` segments a batch in parallel.
 - `pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output.
 
 Integrations: the `pyroid clean IN OUT --recipe fineweb` command line, `pyroid.patch("ftfy", "fasttext")` for code you don't own, datatrove drop-in steps (`pyroid.integrations.datatrove`) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` (numpy), `[cli]` (pyarrow), `[datatrove]` and `[hf]`.
@@ -20,7 +21,7 @@ Conventions shared by every module:
 - Batch functions take a `str`, a `list`/`tuple` of `str`, or an Arrow string column (pyarrow, polars, pandas, HF datasets). Text and masks come back in the same kind (Arrow input gives a `pyroid.Column`, which converts with `pyarrow.chunked_array(col)` or `polars.Series(col)`); `fasttext.Model.predict` on a batch returns lists, and `get_sentence_vector` numpy arrays.
 - Transforms return text (unchanged documents are the original objects); predicates return a keep mask (`list[bool]` for a list), never a filtered list.
 - `threads=None` uses all cores, `threads=n` at most n, `threads=1` the calling thread. Batches release the GIL; free-threaded builds stay GIL-free.
-- Where a module meets an option or input it does not port, it delegates to the real library and emits `pyroid.FallbackWarning` (or raises `pyroid.PyroidError` if that library is missing): some ftfy functions and options, metrics tokenizers such as ja-mecab, json_repair's `schema=`, and the filters' and MinHash's `python_tokenizer=True` path for languages pyroid does not tokenize natively (344 of datatrove's 4,343 codes, e.g. Chinese and Japanese). Otherwise modules raise rather than approximate. Errors: `pyroid.InputError` is a `TypeError`.
+- Where a module meets an option or input it does not port, it delegates to the real library and emits `pyroid.FallbackWarning` (or raises `pyroid.PyroidError` if that library is missing): some ftfy functions and options, metrics tokenizers such as ja-mecab, json_repair's `schema=`, and the filters' and MinHash's `python_tokenizer=True` path for languages pyroid does not tokenize natively (334 of datatrove's 4,343 codes, e.g. Japanese and Vietnamese). Otherwise modules raise rather than approximate. Errors: `pyroid.InputError` is a `TypeError`.
 - To clean many documents with ftfy, prefer `pyroid.ftfy.fix_text_batch(docs)` over a loop of `fix_text`. To run several datatrove filters, use `pyroid.filters.apply(docs, [GopherRepetition(), GopherQuality(), C4Quality(...), FineWebQuality()])`, which returns `FilterResult(keep, reason, text)`. For many ROUGE pairs use `RougeScorer.score_batch`; for many JSON documents `pyroid.json_repair.repair_json_batch`.
 
 ## Docs

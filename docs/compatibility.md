@@ -76,10 +76,11 @@ Reference: datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNL
 | Harness parity suite, 90 checks: Gopher repetition, Gopher quality, C4 (default and FineWeb settings) and FineWeb quality on 13,232 documents; the same filters with each language's settings on 8 FineWeb-2 slices; PII, C4 bad words, symbol lines and the URL filter | 194,784 | 194,784 | 0 |
 | English tokenizer oracle replay (words and sentence counts): FineWeb, FineWeb-2, adversarial, fuzz and Unicode probes, CPython 3.12 to 3.14 (5 IS_ALPHA rows skipped: a spaCy history-dependent bug, see the filters guide) | 964,148 | 964,148 | 0 |
 | Per-language tokenizer goldens: 57 spaCy rule-based languages, the whitespace tokenizer, IndicNLP (hi, ur, bn) and English | 43,146 | 43,146 | 0 |
+| Chinese, native (spaCy's ChineseTokenizer over pyroid.jieba): FineWeb-2 cmn_Hani, the 8 filter cases against live datatrove, 2026-11-07 | 2,000 | 2,000 | 0 |
 | Per-language tokenizer replay: whole FineWeb-2 slices (ar, de, fr, ru, es, hi, with C4 lines), 10k fuzz rows per tokenizer, a 57-language FineWeb-2 smoke set | 662,530 | 662,530 | 0 |
 | IndicNLP tokenizer replay: goldens and 8k fuzz rows per CPython 3.11 to 3.15 | 118,690 | 118,690 | 0 |
 | Whitespace tokenizer replay: goldens and extra rows | 118,990 | 118,990 | 0 |
-| **Total** | **2,102,288** | **2,102,288** | **0** |
+| **Total** | **2,104,288** | **2,104,288** | **0** |
 
 - Hypothesis against live datatrove: 92 tests x 300 examples over script-specific text in 22 native languages and the jieba, SudachiPy, pyvi and PyThaiNLP fallback paths (python_tokenizer=True).
 - The newer steps, input by input: PII on 13,232 documents x 4 configurations, C4 bad words x 5 (per-document languages, seeded keep_fraction), symbol lines x 3, the URL filter on 10,000 FineWeb URLs x 7 configurations and 9,695 URL-like strings, plus Hypothesis against the reference and live datatrove.
@@ -94,7 +95,8 @@ Reference: datatrove 0.10.1 MinHash (FineWeb: sha1, 64-bit, 14 buckets x 8 hashe
 |---|---:|---:|---:|
 | Harness parity suite, 25 checks: MinHash signatures and removal decisions on 13,232 documents (445 removed); FineWeb-2's MinHash on 8 language slices with injected near-duplicates; sentence dedup, 7 configurations on 13,232 documents and 9 on an 8,300-document corpus with injected duplicates | 52,934 | 52,934 | 0 |
 | simplify_text vs datatrove on the corpus documents | 13,232 | 13,232 | 0 |
-| **Total** | **66,166** | **66,166** | **0** |
+| Chinese, native: FineWeb-2 cmn_Hani MinHash signatures and removed set (300 documents with near-duplicates) against live datatrove, 2026-11-07 | 600 | 600 | 0 |
+| **Total** | **66,766** | **66,766** | **0** |
 
 - datatrove's stages 1 to 3 re-run and compared from raw text: every bucket's pairs, the removed ids, cluster ids and sizes are identical for sha1/64 (445 removed) and xxhash/32 (439 removed, 3,146 pairs).
 - Live-datatrove Hypothesis families (case, whitespace, punctuation, edits, swaps; 1-, 2- and 5-grams; 4 hash configurations) and a Python transcription of stages 1 to 3: identical.
@@ -171,6 +173,22 @@ Reference: datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1). Rule: ide
 
 <small>Source: the parity/ datasketch suite (CPython 3.13, release wheel), run on 2026-11-07.</small>
 
+### pyroid.jieba {#jieba}
+
+Reference: jieba 0.42.1. Rule: the same words in the same order (empty strings included), the same offsets, FREQ values, total and exceptions.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| Parity suite on CPython 3.13, 61 checks: FineWeb-2 cmn_Hani and the adversarial set in 9 modes (cut with and without the HMM, full mode, search, tokenize), the batch path, user dictionaries, FREQ | 387,557 | 387,557 | 0 |
+| Rust replay of recorded jieba and datatrove outputs: jieba's test sentences, 2,400 FineWeb-2 excerpts, mixed scripts and whitespace, 2,000 fuzz rows, 16 user-dictionary scenarios, dict.txt.small | 73,236 | 73,236 | 0 |
+| 20,000 FineWeb-2 cmn_Hani training documents (29.5 M characters), 5 modes and the batch path, documents x modes | 120,000 | 120,000 | 0 |
+| **Total** | **580,793** | **580,793** | **0** |
+
+- python/tests: Hypothesis properties against live jieba for every mode, add_word / del_word / suggest_freq / load_userdict sequences, broken and unusual dictionary files and every code point; 656 tests on CPython 3.13, 657 on 3.15t, also under pytest-run-parallel.
+- The route takes math.log of integers: bit-identical on CPython 3.12 to 3.15t for every dictionary frequency, and jieba's recorded outputs are byte-identical on 3.12, 3.13, 3.14 and 3.15.
+
+<small>Source: the parity/ jieba suite, crates/pyroid-core/src/jieba/replay.rs and a 20,000-document replay, run on 2026-11-07.</small>
+
 ### Integrations: datatrove steps, pyroid clean, pyroid.patch() {#integrations}
 
 Reference: datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.patch() stands in for). Rule: the same per-document digest of id, text, language, score, keep, reason and duplicate flag; for patch(), the same call-site output.
@@ -208,6 +226,7 @@ as returning an unchanged string as the same object.
   [from sacrebleu](guides/metrics.md#differences-from-sacrebleu)
 - [Differences from json_repair](guides/json_repair.md#differences-from-json_repair)
 - [Differences from datasketch](guides/datasketch.md#differences-from-datasketch)
+- [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from Unidecode](guides/translit.md#differences-from-unidecode).
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).
@@ -227,8 +246,9 @@ live checks run on GIL builds only.
 ## Languages
 
 The filters and dedup suites cover English and 8 FineWeb-2 languages end to end, and the
-tokenizer replays cover every natively supported datatrove tokenizer: 3,999 of datatrove's 4,343
-language codes. The rest go through datatrove's own Python tokenizers
+tokenizer replays cover every natively supported datatrove tokenizer: 4,009 of datatrove's 4,343
+language codes, Chinese included (its parity is [pyroid.jieba](#jieba)'s). The rest go through
+datatrove's own Python tokenizers
 (`python_tokenizer=True`), so they are datatrove's results by construction. See
 [Languages](guides/languages.md).
 

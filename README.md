@@ -37,6 +37,7 @@ ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'
 | [`pyroid.metrics`](https://ao.github.io/pyroid/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
 | [`pyroid.json_repair`](https://ao.github.io/pyroid/guides/json_repair/) | json_repair 0.64.5 |
 | [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
+| [`pyroid.jieba`](https://ao.github.io/pyroid/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
 
 On 100,000 FineWeb documents, pyroid runs datatrove's FineWeb cleaning chain about 27× faster
 than datatrove on 8 processes and 56× faster on one thread, with identical output (AWS EC2
@@ -119,8 +120,8 @@ import pyroid
 pyroid.patch("ftfy", "fasttext")  # later imports of ftfy and fasttext get pyroid's
 ```
 
-The filters and dedup cover 3,999 of datatrove's 4,343 language codes natively, and the rest
-through datatrove's own tokenizers
+The filters and dedup cover 4,009 of datatrove's 4,343 language codes natively, Chinese included,
+and the rest through datatrove's own tokenizers
 ([languages](https://ao.github.io/pyroid/guides/languages/)).
 
 ## The 0.7.x releases

@@ -13,9 +13,10 @@ becomes a text-cleaning core for LLM datasets.
 
 - Modules: [`pyroid.ftfy`](guides/ftfy.md), [`pyroid.fasttext`](guides/fasttext.md),
   [`pyroid.filters`](guides/filters.md), [`pyroid.dedup`](guides/dedup.md),
-  [`pyroid.translit`](guides/translit.md), [`pyroid.metrics`](guides/metrics.md) and
-  [`pyroid.json_repair`](guides/json_repair.md). The filters and dedup follow datatrove's
-  behaviour in [3,999 of its 4,343 language codes](guides/languages.md).
+  [`pyroid.translit`](guides/translit.md), [`pyroid.metrics`](guides/metrics.md),
+  [`pyroid.json_repair`](guides/json_repair.md) and [`pyroid.jieba`](guides/jieba.md). The
+  filters and dedup follow datatrove's behaviour in
+  [4,009 of its 4,343 language codes](guides/languages.md).
 - Integrations: the [`pyroid` command line](guides/cli.md), [`pyroid.patch()`](guides/patch.md),
   drop-in [datatrove steps](guides/datatrove.md) and
   [Hugging Face `datasets` helpers](guides/huggingface.md).

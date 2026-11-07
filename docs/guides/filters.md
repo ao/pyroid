@@ -17,8 +17,8 @@ that is spaCy 3.8.18's `spacy.blank("en")` plus the sentencizer. Every word coun
 n-gram in the quality filters depends on those tokens. pyroid includes exact ports of datatrove's
 rule-based tokenizers. For 57 languages it ports spaCy's prefix, suffix, infix and URL rules, its
 tokenizer exceptions, the special-case matcher and the sentencizer. It also ports the Indic NLP
-and whitespace tokenizers. Together they cover 3,999 of datatrove's 4,343 language codes
-([Languages](#languages)).
+and whitespace tokenizers, and spaCy's Chinese tokenizer with jieba ([`pyroid.jieba`](jieba.md)).
+Together they cover 4,009 of datatrove's 4,343 language codes ([Languages](#languages)).
 
 ## From a datatrove pipeline
 
@@ -115,12 +115,11 @@ ds = ds.filter(lambda b: F.gopher_quality(b["text"]), batched=True, batch_size=1
 `language` (a field of every quality-filter config) takes any of datatrove's 4,343 language
 codes, as datatrove's `language=` does: `"eng"` (the default), `"deu_Latn"`, `"deu"`, `"de"`, ...
 
-- 3,999 codes are native, tokenized in Rust on every thread. They are the 57 spaCy languages
+- 4,009 codes are native, tokenized in Rust on every thread. They are the 57 spaCy languages
   datatrove tokenizes with a rule-based `spacy.blank(code)` (with `xx`, spaCy's multi-language
-  tokenizer), the Indic NLP languages and datatrove's whitespace tokenizer, and they make up
-  76.8% of FineWeb-2's bytes.
-- The other 344 (Chinese with jieba, Japanese with SudachiPy, Vietnamese with pyvi, Stanza, Thai,
-  Kiwi, ...) raise `NotImplementedError` unless you pass `python_tokenizer=True`. Then
+  tokenizer), Chinese (spaCy's Chinese tokenizer with jieba), the Indic NLP languages and
+  datatrove's whitespace tokenizer, and they make up 88.4% of FineWeb-2's bytes.
+- The other 334 (Japanese with SudachiPy, Vietnamese with pyvi, Stanza, Thai, Kiwi, ...) raise `NotImplementedError` unless you pass `python_tokenizer=True`. Then
   datatrove's own tokenizer splits each document, in Python on the calling thread, and the filter
   math runs in Rust, with a [`FallbackWarning`](../concepts/fallbacks.md).
 - A code datatrove does not know raises datatrove's `ValueError` when the call starts.
@@ -344,8 +343,8 @@ module's preliminary run, at 0.28 against 23.9 ms per document
 ([details](../benchmarks.md#pyroidfilters)).
 
 Beyond English, FineWeb-2's filter chain ran 36–86× faster than datatrove on one thread for the
-native languages measured (Hindi: 20×). Chinese and Japanese on `python_tokenizer=True` ran at
-about datatrove's speed ([Languages](languages.md#speed)).
+native languages measured (Hindi: 20×), and 44× for Chinese. Japanese on `python_tokenizer=True`
+ran at about datatrove's speed ([Languages](languages.md#speed)).
 
 The table times the newer steps on the FineWeb dev slice (10,000 documents). datatrove's step ran
 alone in one process and in a warmed `multiprocessing.Pool(8)`, and pyroid's function at 1 and 8

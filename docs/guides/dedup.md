@@ -16,7 +16,7 @@ Every MinHash step is datatrove's, exactly:
 
 - `simplify_text` normalization, for the interpreter's Unicode version (CPython 3.11 to 3.15);
 - words from the word tokenizer of `language`: spaCy's English by default, with the same ports
-  [`pyroid.filters`](filters.md) uses, native for 3,999 of datatrove's 4,343 language codes;
+  [`pyroid.filters`](filters.md) uses, native for 4,009 of datatrove's 4,343 language codes;
 - `n_grams`-word shingles and the same hash functions;
 - the permutations drawn from numpy's `RandomState(seed)`, as datatrove draws them;
 - the same buckets and the same union-find.
@@ -60,7 +60,7 @@ which is usually, but not always, the cluster's first document.
 
 `language=` is datatrove's `MinhashDedupSignature(language=...)` and
 `SentenceDedupSignature(language=...)`. It takes any of datatrove's language codes
-(`D.languages()`, the same table as `pyroid.filters.languages()`). The 3,999 native codes are
+(`D.languages()`, the same table as `pyroid.filters.languages()`). The 4,009 native codes are
 tokenized in Rust, on every thread:
 
 ```python
@@ -79,7 +79,7 @@ docs = [
 D.minhash_dedup(docs, hash_fc="sha1", language="deu_Latn")  # [True, False, True]
 ```
 
-For MinHash, the other 344 codes (Chinese with jieba, Japanese with SudachiPy, Stanza, Thai, ...)
+For MinHash, the other 334 codes (Japanese with SudachiPy, Vietnamese with pyvi, Stanza, Thai, ...)
 need `python_tokenizer=True`. Then datatrove's own tokenizer splits each document in Python, on
 the calling thread. `simplify_text` still runs in Rust, and so do shingling, MinHash, bucketing
 and clustering on its words, with one [`FallbackWarning`](../concepts/fallbacks.md) per function
@@ -211,7 +211,7 @@ For sentence dedup, from `SentenceDedup`'s documentation:
   signatures).
 - Index files: use the datatrove drop-ins (`pyroid.integrations.datatrove`).
 
-Also for sentence dedup: codes whose datatrove tokenizer pyroid does not port (jieba, SudachiPy,
+Also for sentence dedup: codes whose datatrove tokenizer pyroid does not port (SudachiPy, pyvi,
 Stanza, ...) raise `NotImplementedError`, and `language` must be a code, not a tokenizer object.
 datatrove's quirks are kept. `min_words_to_remove_span` only counts, and only restores, the first
 sentence of a removed run. Stage 1 strips sentences while stage 3 does not, so window indices can
@@ -242,8 +242,8 @@ In the module's preliminary run, the whole four-stage pipeline on 10k documents 
 one thread against datatrove's 99.5 s ([details](../benchmarks.md#pyroiddedup)).
 
 Beyond English, MinHash signatures with FineWeb-2's configuration ran 36–64× faster than
-datatrove on one thread for German, French, Spanish, Russian and Arabic (Hindi: 10×). Chinese and
-Japanese on `python_tokenizer=True` ran at about datatrove's speed (0.9×)
+datatrove on one thread for German, French, Spanish, Russian and Arabic (Hindi: 10×), and 44× for
+Chinese. Japanese on `python_tokenizer=True` ran at about datatrove's speed (0.9×)
 ([Languages](languages.md#speed)).
 
 Sentence dedup ran on the 13,232-document parity corpus with datatrove's example configuration

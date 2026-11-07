@@ -30,8 +30,9 @@ Optional libraries, needed only by the features that use them:
 - The incumbents, only for the few features pyroid hands back to them
   ([Fallbacks](concepts/fallbacks.md)):
     - ftfy 6.3.1;
-    - datatrove 0.10.1 and a language's segmenter (jieba, SudachiPy, ...) for
+    - datatrove 0.10.1 and a language's segmenter (SudachiPy, pyvi, ...) for
       `python_tokenizer=True`;
+    - jieba 0.42.1 for `pyroid.jieba.posseg`, `pyroid.jieba.analyse` and paddle mode;
     - rouge-score, nltk and sacrebleu 2.6.0 for the delegated metrics features;
     - json_repair 0.64.5 for `schema=`;
     - datasketch 2.0.0 for its classes pyroid does not port (`WeightedMinHash`, `HyperLogLog`,

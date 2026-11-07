@@ -90,6 +90,11 @@
           "diff": 0
         },
         {
+          "name": "Chinese, native (spaCy's ChineseTokenizer over pyroid.jieba): FineWeb-2 cmn_Hani, the 8 filter cases against live datatrove, 2026-11-07",
+          "same": 2000,
+          "diff": 0
+        },
+        {
           "name": "Per-language tokenizer replay: whole FineWeb-2 slices (ar, de, fr, ru, es, hi, with C4 lines), 10k fuzz rows per tokenizer, a 57-language FineWeb-2 smoke set",
           "same": 662530,
           "diff": 0
@@ -123,6 +128,11 @@
         {
           "name": "simplify_text vs datatrove on the corpus documents",
           "same": 13232,
+          "diff": 0
+        },
+        {
+          "name": "Chinese, native: FineWeb-2 cmn_Hani MinHash signatures and removed set (300 documents with near-duplicates) against live datatrove, 2026-11-07",
+          "same": 600,
           "diff": 0
         }
       ],
@@ -257,6 +267,32 @@
         "datasketch's own test suite (test_minhash, test_lean_minhash, test_minhash_schemes, test_lsh, test_lshforest, test_lshensemble) passes against pyroid's classes, with Hypothesis and seeded workloads compared against live datasketch: 1,020 tests on CPython 3.12, 3.14t, 3.15 and 3.15t."
       ],
       "source": "the parity/ datasketch suite (CPython 3.13, release wheel), run on 2026-11-07"
+    },
+    "jieba": {
+      "reference": "jieba 0.42.1",
+      "rule": "the same words in the same order (empty strings included), the same offsets, FREQ values, total and exceptions",
+      "checks": [
+        {
+          "name": "Parity suite on CPython 3.13, 61 checks: FineWeb-2 cmn_Hani and the adversarial set in 9 modes (cut with and without the HMM, full mode, search, tokenize), the batch path, user dictionaries, FREQ",
+          "same": 387557,
+          "diff": 0
+        },
+        {
+          "name": "Rust replay of recorded jieba and datatrove outputs: jieba's test sentences, 2,400 FineWeb-2 excerpts, mixed scripts and whitespace, 2,000 fuzz rows, 16 user-dictionary scenarios, dict.txt.small",
+          "same": 73236,
+          "diff": 0
+        },
+        {
+          "name": "20,000 FineWeb-2 cmn_Hani training documents (29.5 M characters), 5 modes and the batch path, documents x modes",
+          "same": 120000,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "python/tests: Hypothesis properties against live jieba for every mode, add_word / del_word / suggest_freq / load_userdict sequences, broken and unusual dictionary files and every code point; 656 tests on CPython 3.13, 657 on 3.15t, also under pytest-run-parallel.",
+        "The route takes math.log of integers: bit-identical on CPython 3.12 to 3.15t for every dictionary frequency, and jieba's recorded outputs are byte-identical on 3.12, 3.13, 3.14 and 3.15."
+      ],
+      "source": "the parity/ jieba suite, crates/pyroid-core/src/jieba/replay.rs and a 20,000-document replay, run on 2026-11-07"
     },
     "integrations": {
       "reference": "datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.patch() stands in for)",

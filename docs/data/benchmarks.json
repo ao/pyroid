@@ -156,9 +156,25 @@
       "source": "bench/results/orbstack-aarch64-12cpu/2026-11-07-datasketch (bench/datasketch_bench.py)"
     },
     {
+      "title": "pyroid.jieba",
+      "guide": "jieba",
+      "note": "µs per document over 1,000 FineWeb-2 cmn_Hani documents (the slice four times, about 1,450 characters each), on free-threaded CPython 3.15t with the GIL off, release wheel, median of 5 runs (2 for jieba), load average 1.5 to 3. Every document's words were first checked against jieba 0.42.1's. jieba's 8 processes are a warmed fork Pool(8); its 8 threads run in parallel on 3.15t.",
+      "columns": ["Run", "lcut", "Speedup", "lcut_for_search", "Speedup"],
+      "rows": [
+        ["jieba, one thread", "3,072", "1×", "2,998", "1×"],
+        ["jieba, 8 threads", "2,245", "1.4×", "2,499", "1.2×"],
+        ["jieba, 8 processes", "584", "5.3×", "895", "3.3×"],
+        ["pyroid `lcut(doc)` per document", "162", "19×", "187", "16×"],
+        ["pyroid `lcut(docs, threads=1)`", "127", "24×", "160", "19×"],
+        ["pyroid `lcut(docs, threads=8)`", "53", "58×", "67", "45×"]
+      ],
+      "footnote": "pyroid builds the Python lists of words on the calling thread (about 35 µs per document), which limits the 8-thread rows. A fresh interpreter reaches its first segmented sentence in 27 ms with pyroid (import included) and about 410 ms with jieba.",
+      "source": "bench/results/orbstack-aarch64-12cpu/2026-11-07-jieba (bench/jieba_bench.py)"
+    },
+    {
       "title": "Languages: FineWeb-2 filters and MinHash",
       "guide": "languages",
-      "note": "µs per document over 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (2 for datatrove). Every timed document was first checked for the same keep/drop, reason and signatures. The filters are FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality) with each language's settings; MinHash computes FineWeb-2's signatures. datatrove's 8 processes are a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16. Chinese and Japanese use datatrove's Python tokenizers (python_tokenizer=True), so they run at those tokenizers' speed, on the calling thread.",
+      "note": "µs per document over 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (2 for datatrove). Every timed document was first checked for the same keep/drop, reason and signatures. The filters are FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality) with each language's settings; MinHash computes FineWeb-2's signatures. datatrove's 8 processes are a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16. Japanese uses datatrove's Python tokenizer (python_tokenizer=True), so it runs at that tokenizer's speed, on the calling thread.",
       "columns": ["Language", "Tokenizer", "datatrove, 1 process: filters / MinHash", "pyroid, 1 thread", "Speedup", "datatrove, 8 processes", "pyroid, 8 threads", "Speedup"],
       "rows": [
         ["German (deu_Latn)", "native", "8,342 / 6,489", "122 / 123", "68× / 53×", "2,022 / 1,545", "37 / 28", "54× / 55×"],
@@ -167,11 +183,11 @@
         ["Russian (rus_Cyrl)", "native", "16,478 / 14,154", "457 / 397", "36× / 36×", "4,619 / 3,162", "83 / 76", "55× / 42×"],
         ["Arabic (arb_Arab)", "native", "8,225 / 6,424", "145 / 132", "57× / 49×", "1,549 / 1,498", "37 / 39", "42× / 38×"],
         ["Hindi (hin_Deva)", "native (IndicNLP)", "2,514 / 1,237", "126 / 127", "20× / 10×", "474 / 273", "32 / 31", "15× / 9×"],
-        ["Chinese (cmn_Hani)", "Python (jieba)", "10,976 / 8,573", "8,802 / 9,060", "1.2× / 0.9×", "4,270 / 2,885", "10,570 / 7,986", "0.4× / 0.4×"],
+        ["Chinese (cmn_Hani)", "native (jieba)†", "10,628 / 7,857", "242 / 178", "44× / 44×", "1,556 / 1,172", "36 / 28", "43× / 42×"],
         ["Japanese (jpn_Jpan)", "Python (SudachiPy)", "11,959 / 8,267", "9,893 / 9,508", "1.2× / 0.9×", "3,464 / 2,586", "12,685 / 11,118", "0.3× / 0.2×"]
       ],
-      "footnote": "\\* An outlier: in this run pyroid was slower with 8 threads than with 1 while the load rose. It needs a rerun before it can be quoted.",
-      "source": "bench/results/orbstack-aarch64-12cpu/2026-11-06-multilingual (bench/multilingual.py)"
+      "footnote": "\\* An outlier: in this run pyroid was slower with 8 threads than with 1 while the load rose. It needs a rerun before it can be quoted. † Rerun on 2026-11-07 with the native Chinese tokenizer (pyroid.jieba), load average 1 to 2; through python_tokenizer=True it had run at 1.2× / 0.9× on one thread and 0.4× with 8.",
+      "source": "bench/results/orbstack-aarch64-12cpu/2026-11-06-multilingual and 2026-11-07-jieba (bench/multilingual.py)"
     },
     {
       "title": "More datatrove steps",

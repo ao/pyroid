@@ -3,14 +3,14 @@
 pyroid's filters and dedup reproduce [datatrove](https://github.com/huggingface/datatrove) 0.10.1
 beyond English. datatrove picks a word tokenizer for each of its 4,343 language codes (its
 `tokenizer_assignment.csv`), and every word count, ratio, n-gram and shingle depends on that
-tokenizer's words. pyroid ports the rule-based tokenizers to Rust. That makes 3,999 of the 4,343
-codes native, 76.8% of FineWeb-2's bytes, with datatrove's decisions ([parity](#parity)) at Rust
-speed on every thread. The other codes use statistical or dictionary segmenters that pyroid does
-not port. For them, `python_tokenizer=True` calls datatrove's own tokenizer and runs the rest in
-Rust.
+tokenizer's words. pyroid ports the rule-based tokenizers, and jieba for Chinese, to Rust. That
+makes 4,009 of the 4,343 codes native, 88.4% of FineWeb-2's bytes, with datatrove's decisions
+([parity](#parity)) at Rust speed on every thread. The other codes use statistical or dictionary
+segmenters that pyroid does not port. For them, `python_tokenizer=True` calls datatrove's own
+tokenizer and runs the rest in Rust.
 
 The largest languages are native: Russian, German, Spanish, French and Arabic together are 48% of
-FineWeb-2's bytes.
+FineWeb-2's bytes, and Chinese another 11.6%.
 
 ## The language table
 
@@ -22,7 +22,8 @@ subsets, 22.9 TB) in those codes:
 | `SpaCyTokenizer(code)`, a rule-based `spacy.blank(code)`: the 57 spaCy languages `af` … `yo`, including `xx`, spaCy's multi-language tokenizer (1,995 codes such as `uzn_Latn`) | 3,742 | 74.8% | native |
 | `IndicNLPTokenizer`: indic-nlp-library's 16 languages (`hi bn ur ta te mr ne ml kn gu si pa or as sa kK`) | 129 | 1.9% | native (words and sentences) |
 | `WhitespaceTokenizer`: spaCy `xx` words and datatrove's regex sentences (such as `kat_Geor`) | 128 | 0.1% | native |
-| `SpaCyTokenizer("zh")` (jieba), `SpaCyTokenizer("ja")` (SudachiPy), `SpaCyTokenizer("vi")` (pyvi) | 30 | 20.4% | `python_tokenizer=True` |
+| `SpaCyTokenizer("zh")`: spaCy's Chinese tokenizer with jieba (such as `cmn_Hani`, `yue_Hani`) | 10 | 11.6% | native ([`pyroid.jieba`](jieba.md)) |
+| `SpaCyTokenizer("ja")` (SudachiPy), `SpaCyTokenizer("vi")` (pyvi) | 20 | 8.7% | `python_tokenizer=True` |
 | `StanzaTokenizer` (255 codes), `ThaiTokenizer` (20), `BurmeseTokenizer` (14), `TibetanTokenizer` (10), `LaoTokenizer` (6), `KhmerTokenizer` (5), `KiwiTokenizer` (4) | 314 | 2.7% | `python_tokenizer=True` |
 | none: FineWeb-2's `und_*` subsets (except `und` and `und_Cyrl`, which datatrove gives `xx`) | — | 0.15% | `ValueError`, as datatrove |
 
@@ -30,12 +31,13 @@ subsets, 22.9 TB) in those codes:
   prefix, suffix, infix and URL rules, each language's tokenizer exceptions, the special-case
   matcher and the sentencizer, extracted from spaCy's own objects (48,032 rules). For the Indic
   languages it ports indic-nlp-library's `trivial_tokenize` and `sentence_split`, and for the
-  whitespace codes datatrove's `WhitespaceTokenizer`. Words and sentences match datatrove's.
-- The `python_tokenizer=True` codes need a segmenter pyroid does not port: jieba (a 349k-word
-  dictionary and an HMM), SudachiPy (a 70 MB dictionary), the statistical models of pyvi, Stanza
-  and khmer-nltk, PyThaiNLP, Kiwi, botok and pyidaungsu. Exact ports of these are not feasible at
-  a reasonable binary size. Without `python_tokenizer=True` these codes raise
-  `NotImplementedError`.
+  whitespace codes datatrove's `WhitespaceTokenizer`. Chinese is spaCy's `ChineseTokenizer` over
+  [`pyroid.jieba`](jieba.md), the port of jieba 0.42.1, with jieba's default dictionary. Words and
+  sentences match datatrove's.
+- The `python_tokenizer=True` codes need a segmenter pyroid does not port: SudachiPy (a 70 MB
+  dictionary), the statistical models of pyvi, Stanza and khmer-nltk, PyThaiNLP, Kiwi, botok and
+  pyidaungsu. Exact ports of these are not feasible at a reasonable binary size. Without
+  `python_tokenizer=True` these codes raise `NotImplementedError`.
 - Codes datatrove does not know raise datatrove's `ValueError` when the call starts.
 
 ## How to choose
@@ -51,8 +53,9 @@ langs = F.languages()  # {code: Language(tokenizer, arg, native)}, sorted by cod
 langs["deu_Latn"]  # Language(tokenizer='SpaCyTokenizer', arg='de', native=True)
 langs["hin_Deva"]  # Language(tokenizer='IndicNLPTokenizer', arg='hi', native=True)
 langs["kat_Geor"]  # Language(tokenizer='WhitespaceTokenizer', arg='', native=True)
-langs["cmn_Hani"]  # Language(tokenizer='SpaCyTokenizer', arg='zh', native=False)
-sum(lang.native for lang in langs.values())  # 3999 (of 4343)
+langs["cmn_Hani"]  # Language(tokenizer='SpaCyTokenizer', arg='zh', native=True)
+langs["jpn_Jpan"]  # Language(tokenizer='SpaCyTokenizer', arg='ja', native=False)
+sum(lang.native for lang in langs.values())  # 4009 (of 4343)
 F.english_languages()[:4]  # ['en', 'en_Latn', 'eng', 'eng_Latn']: SpaCyTokenizer("en")
 ```
 
@@ -163,20 +166,11 @@ D.minhash_dedup(near, language="deu_Latn")  # [True, False, True]
 datatrove's `GopherQualityFilter(language="deu_Latn", stop_words=stop_words)` gives the same two
 reasons, and the same French chain keeps the document. The MinHash signatures are datatrove's.
 
-## The Python tokenizer: Chinese with jieba
+## Chinese
 
-`cmn_Hani` is `SpaCyTokenizer("zh")`, which segments with jieba. Without
-`python_tokenizer=True`, the call says what to do:
-
-```text
-NotImplementedError: pyroid has no native word tokenizer for language 'cmn_Hani': datatrove
-tokenizes it with SpaCyTokenizer("zh") (spaCy's Chinese tokenizer with jieba). Pass
-python_tokenizer=True to tokenize it with datatrove's own tokenizer in Python, on the calling
-thread (needs `pip install datatrove==0.10.1 regex spacy==3.8.18 jieba`); the filter math still
-runs in Rust.
-```
-
-With datatrove 0.10.1, spaCy 3.8.18 and jieba installed:
+`cmn_Hani` and the other `SpaCyTokenizer("zh")` codes are native. datatrove segments them with
+jieba through spaCy, and pyroid runs the same segmentation in Rust, so neither datatrove nor
+jieba is needed:
 
 ```python
 import pyroid.dedup as D
@@ -190,23 +184,55 @@ zh = [
 ]
 zh.append(zh[0].replace("八万", "九万"))  # a near-duplicate
 
-F.fineweb_quality(zh, language="cmn_Hani", python_tokenizer=True)  # [True, True]
-D.minhash_dedup(zh, language="cmn_Hani", python_tokenizer=True)  # [True, False]
+F.fineweb_quality(zh, language="cmn_Hani")  # [True, True]
+D.minhash_dedup(zh, language="cmn_Hani")  # [True, False]
+```
+
+The words are those of jieba 0.42.1 with its default dictionary, as datatrove gets them from an
+unmodified jieba. Words added with `pyroid.jieba.add_word` or `load_userdict` do not change them.
+To tokenize with a customised jieba, pass `python_tokenizer=True` and change jieba itself.
+
+## The Python tokenizer: Japanese with SudachiPy
+
+`jpn_Jpan` is `SpaCyTokenizer("ja")`, which segments with SudachiPy. Without
+`python_tokenizer=True`, the call says what to do:
+
+```text
+NotImplementedError: pyroid has no native word tokenizer for language 'jpn_Jpan': datatrove
+tokenizes it with SpaCyTokenizer("ja") (spaCy's Japanese tokenizer with SudachiPy). Pass
+python_tokenizer=True to tokenize it with datatrove's own tokenizer in Python, on the calling
+thread (needs `pip install datatrove==0.10.1 regex spacy==3.8.18 sudachipy sudachidict-core`);
+the filter math still runs in Rust.
+```
+
+With datatrove 0.10.1, spaCy 3.8.18, SudachiPy and sudachidict-core installed:
+
+```python
+ja = [
+    "この町は川のほとりにあり、昔から商業の中心として栄えてきました。今では約八万人が暮らしています。"
+    "旧市街の通りは狭く、古い家が並び、毎年多くの観光客が訪れます。夏には広場で音楽会が開かれ、"
+    "冬には小さなクリスマスマーケットが立ちます。駅は中心部から近く、近くの大きな町へ電車が定期的に走っています。"
+    "周辺を見て回りたい人は、自転車を借りて川沿いの小道を走ることができます。",
+]
+ja.append(ja[0].replace("八万", "九万"))
+
+F.fineweb_quality(ja, language="jpn_Jpan", python_tokenizer=True)  # [True, True]
+D.minhash_dedup(ja, language="jpn_Jpan", python_tokenizer=True)  # [True, False]
 ```
 
 Each call warns once:
 
 ```text
-FallbackWarning: pyroid.filters.fineweb_quality: tokenizing language 'cmn_Hani' with datatrove's
-SpaCyTokenizer("zh") (spaCy's Chinese tokenizer with jieba) in Python, one document at a time on
-the calling thread; the filter math runs in Rust. Expect the tokenizer's speed, not pyroid's.
+FallbackWarning: pyroid.filters.fineweb_quality: tokenizing language 'jpn_Jpan' with datatrove's
+SpaCyTokenizer("ja") (spaCy's Japanese tokenizer with SudachiPy) in Python, one document at a time
+on the calling thread; the filter math runs in Rust. Expect the tokenizer's speed, not pyroid's.
 This warning is shown once.
 ```
 
 An unknown code raises datatrove's error before any document is read:
 
 ```python
-F.gopher_quality(zh, language="und_Zzzz")
+F.gopher_quality(ja, language="und_Zzzz")
 # ValueError: Language 'und_Zzzz' doesn't have a tokenizer assigned. Pass in a WordTokenizer
 # directly or update tokenizer_assignment.csv
 ```
@@ -222,9 +248,11 @@ the live checks):
 | … and, not committed: whole FineWeb-2 slices (ar, de, fr, ru, es, hi), 10k fuzz rows per tokenizer, a 57-language FineWeb-2 smoke set | 662,530 |
 | IndicNLP replay, with 8k fuzz rows per CPython 3.11–3.15 (each version matches its own) | 118,690 |
 | Whitespace tokenizer replay | 118,990 |
-| Filter suites, 8 FineWeb-2 slices × 8 cases: FineWeb-2's 3 filters with that language's thresholds and stop words, and datatrove's defaults including C4 (Chinese and Japanese through `python_tokenizer=True`) | 16,000 decisions |
+| Filter suites, 8 FineWeb-2 slices × 8 cases: FineWeb-2's 3 filters with that language's thresholds and stop words, and datatrove's defaults including C4 (Japanese through `python_tokenizer=True`) | 16,000 decisions |
 | MinHash with FineWeb-2's configuration (xxhash/64) and the language: signatures and removed set, 8 slices × 300 documents with near-duplicates injected | 2,400 + 2,400 |
 | Hypothesis against live datatrove: script-specific text, 22 native languages and jieba, SudachiPy, pyvi and PyThaiNLP | 92 tests × 300 examples |
+| Chinese, native: the `cmn_Hani` slice's 8 filter cases, and its MinHash signatures and removed set | 2,000 decisions + 300 + 300 |
+| Chinese word segmentation, [`pyroid.jieba`](jieba.md#parity) against jieba 0.42.1 | 580,793 comparisons |
 
 Sentence dedup has FineWeb-2 parity cases on six slices (`deu_Latn`, `fra_Latn`, `rus_Cyrl`,
 `spa_Latn`, `arb_Arab`, `hin_Deva`), for sentences and lines. The Stanza, Kiwi, Khmer, Lao,
@@ -260,22 +288,27 @@ signatures. Release wheel, CPython 3.13, load average 6 to 16:
 | `rus_Cyrl` | native | 16,478 → 457 | 36× / 36× | 55× / 42× |
 | `arb_Arab` | native | 8,225 → 145 | 57× / 49× | 42× / 38× |
 | `hin_Deva` | native (IndicNLP) | 2,514 → 126 | 20× / 10× | 15× / 9× |
-| `cmn_Hani` | `python_tokenizer=True` (jieba) | 10,976 → 8,802 | 1.2× / 0.9× | 0.4× / 0.4× |
+| `cmn_Hani` | native (jieba)† | 10,628 → 242 | 44× / 44× | 43× / 42× |
 | `jpn_Jpan` | `python_tokenizer=True` (SudachiPy) | 11,959 → 9,893 | 1.2× / 0.9× | 0.3× / 0.2× |
 
 \* An outlier: pyroid with 8 threads was slower than with 1 thread in this run (246 µs per
 document) while the load rose. It needs a rerun before it is quoted.
 
+† Measured on 2026-11-07, after the jieba port, at load average 1 to 2. Before it, `cmn_Hani` went
+through `python_tokenizer=True`, at 1.2× / 0.9× on one thread and 0.4× with 8.
+
 The native languages run the filters 36–86× faster than datatrove on one thread (Hindi: 20×).
 The Python-tokenizer path runs at the reference tokenizer's speed (about 1×) and does not scale
-with threads, so datatrove's 8 processes beat it (0.2–0.4×). Adding the languages did not slow
+with threads, so datatrove's 8 processes beat it (0.2–0.3× for Japanese). Adding the languages did not slow
 English down: old and new builds measured within noise on 5,000 FineWeb documents. See
 [Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
 
 ## Binary size
 
 The language tables add 1.11 MB to the release extension module (fat LTO, stripped, aarch64). It
-grew from 3.29 to 4.40 MB, or from 1.20 to 1.46 MB gzipped.
+grew from 3.29 to 4.40 MB, or from 1.20 to 1.46 MB gzipped. Chinese adds
+[`pyroid.jieba`](jieba.md)'s dictionary and HMM tables: 3.0 MB more (5.58 to 8.60 MB), and 1.5 MB
+more in the wheel.
 
 API: [`pyroid.filters` reference](../reference/filters.md),
 [`pyroid.dedup` reference](../reference/dedup.md).
