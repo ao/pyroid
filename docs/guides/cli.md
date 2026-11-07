@@ -9,12 +9,12 @@ $ pyroid clean in.parquet out.parquet --recipe fineweb
 ```
 
 `pyroid clean --recipe fineweb` runs FineWeb's cleaning chain with datatrove 0.10.1's stages,
-settings and order, and keeps **the same documents with the same text** as datatrove's own
-FineWeb pipeline: the per-document digest of a `pyroid clean` run equals the stock pipeline's on
-the 10,000-document FineWeb dev slice and on the 13,232-document parity corpus
+settings and order. It keeps the same documents, with the same text, as datatrove's own FineWeb
+pipeline. The per-document digest of a `pyroid clean` run equals the stock pipeline's on the
+10,000-document FineWeb dev slice and on the 13,232-document parity corpus
 ([parity](../compatibility.md#integrations)).
 
-Files are streamed in Arrow batches: one batch of documents is in memory at a time (MinHash
+Files are streamed in Arrow batches, so one batch of documents is in memory at a time (MinHash
 dedup also keeps its index of the survivors). `python -m pyroid` is the same program.
 
 ## Commands
@@ -23,21 +23,21 @@ dedup also keeps its index of the survivors). `python -m pyroid` is the same pro
 $ pyroid --help
 usage: pyroid [-h] [--version] COMMAND ...
 
-Rust-fast text cleaning for LLM datasets: Parquet/JSONL in and out.
+Clean text datasets for LLM training, in Parquet or JSON Lines files.
 
 positional arguments:
   COMMAND
     clean     run a cleaning recipe (ftfy, LID, quality filters, MinHash)
     langid    add fastText language columns; optionally keep some languages
-    dedup     drop near-duplicates (MinHash, datatrove's) or exact duplicates
+    dedup     drop near-duplicates (datatrove's MinHash) or exact duplicates
     translit  transliterate to ASCII (anyascii data, ISC)
 
 options:
   -h, --help  show this help message and exit
   --version   show program's version number and exit
 
-Also: pyroid run [-p ftfy,fasttext] (SCRIPT | -m MODULE) [ARGS...] runs a program with
-pyroid.integrations.patch() applied.
+pyroid run [-p NAMES] (SCRIPT | -m MODULE) [ARGS...] runs a Python program with
+pyroid.integrations.patch() applied; see 'pyroid run --help'.
 ```
 
 | Command | What it does |
@@ -71,10 +71,9 @@ pyroid clean: 200 in, 170 out, … s
   dropped gopher_quality:gopher_too_many_end_ellipsis          3    1.5%
 ```
 
-(The wall time is elided here; for speed, see [below](#speed).) The kept rows keep every input
-column. The text column holds the cleaned text (after ftfy and C4's line removal), and
-datatrove's `language` and `language_score` columns are set, replacing columns of that name
-(FineWeb's own files have both).
+The wall time is elided here; see [Speed](#speed). The kept rows keep every input column. The
+text column holds the cleaned text (after ftfy and C4's line removal). datatrove's `language` and
+`language_score` columns are set, replacing columns of that name (FineWeb's own files have both).
 
 ```console
 $ pyroid clean --help
@@ -83,6 +82,9 @@ usage: pyroid clean [-h] [--text-column TEXT_COLUMN] [--threads THREADS] [--batc
                     [--overwrite] --recipe {fineweb} [--lid-model LID_MODEL] [--no-dedup]
                     [--tmp-dir TMP_DIR]
                     input output
+
+Run a cleaning recipe and write the kept rows. The fineweb recipe is datatrove's FineWeb chain:
+ftfy, fastText LID, the Gopher, C4 and FineWeb quality filters, then MinHash dedup.
 
 positional arguments:
   input                 input file (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4]), or
@@ -93,20 +95,21 @@ options:
   -h, --help            show this help message and exit
   --text-column TEXT_COLUMN
                         the text column (default: text)
-  --threads THREADS     pyroid threads (default 0: the whole pool, sized by PYROID_NUM_THREADS)
+  --threads THREADS     threads to use (default: 0, the whole pool, sized by $PYROID_NUM_THREADS)
   --batch-size BATCH_SIZE
-                        rows per Arrow batch (default 10000)
+                        rows per Arrow batch (default: 10000)
   --excluded PATH       also write the dropped rows here
-  --stats               print kept/dropped counts by reason
-  --stats-json PATH     write the stats as JSON
+  --stats               print row counts and drops by reason to stderr
+  --stats-json PATH     write the stats to PATH as JSON
   --compression COMPRESSION
                         Parquet compression (default: pyarrow's, snappy)
   --overwrite           replace an existing output file
-  --recipe {fineweb}
+  --recipe {fineweb}    the recipe to run
   --lid-model LID_MODEL
-                        fastText lid.176.bin (default: $PYROID_LID_MODEL or download)
+                        fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a cached
+                        download)
   --no-dedup            skip the MinHash stage
-  --tmp-dir TMP_DIR     where survivors wait for the dedup decision (default: OUT's dir)
+  --tmp-dir TMP_DIR     where rows wait for the MinHash decision (default: OUT's directory)
 ```
 
 `--threads` is pyroid's `threads=` for every stage: omitted or `0` uses the whole thread pool
@@ -168,30 +171,30 @@ Every command takes `--stats` and `--stats-json`.
 
 Which near-duplicate to drop depends on the whole corpus, so `clean` can't write a survivor until
 it has seen every document. Survivors wait in an Arrow IPC file (`.pyroid-*.arrow`) in the output
-file's directory, or in `--tmp-dir`, until the MinHash decision is made; then they are written in
-input order and the spool is deleted, also when the run fails. Plan disk space for the
-survivors there. `--no-dedup` skips MinHash (and the spool): the output is then the chain up to
+file's directory, or in `--tmp-dir`, until the MinHash decision is made. Then they are written in
+input order and the spool is deleted; a failed run deletes it too. Plan disk space for the
+survivors there. `--no-dedup` skips MinHash and the spool, and the output is then the chain up to
 `FineWebQualityFilter`.
 
 ## Inputs and outputs
 
 These rules hold for every command:
 
-- **Input** is a file or a directory. A directory is read as one dataset: every Parquet or JSON
-  Lines file in it (by the suffixes below), in name order (other files are ignored; mixing
-  Parquet and JSONL is an error). JSONL files after the first are parsed with the first file's
+- The input is a file or a directory. A directory is read as one dataset: every Parquet or JSON
+  Lines file in it (by the suffixes below), in name order. Other files are ignored, and mixing
+  Parquet and JSONL is an error. JSONL files after the first are parsed with the first file's
   schema.
-- **Formats** follow the file name, for input and output alike: `.parquet` or `.pq` is Parquet;
+- Formats follow the file name, for input and output alike. `.parquet` or `.pq` is Parquet.
   `.jsonl`, `.ndjson` or `.json` is JSON Lines, one object per line, optionally compressed as
   `.gz`, `.bz2`, `.zst` or `.lz4` (e.g. `docs.jsonl.gz`). `--compression` sets the Parquet codec
   (default: pyarrow's, snappy).
-- **Output** is one file. It is written to `OUT.partial` and renamed to `OUT` when the command
-  finishes, so a failed or interrupted run never leaves a truncated `OUT`; the partial file is
+- The output is one file. It is written to `OUT.partial` and renamed to `OUT` when the command
+  finishes, so a failed or interrupted run never leaves a truncated `OUT`. The partial file is
   removed on failure. An existing `OUT` is not replaced unless you pass `--overwrite`, and an
   output path equal to the input path is refused.
-- **Columns:** `--text-column` names the text column (default `text`); every other column is
-  passed through unchanged.
-- **Batches:** `--batch-size` rows per Arrow batch (default 10,000), across file boundaries.
+- `--text-column` names the text column (default `text`). Every other column is passed through
+  unchanged.
+- `--batch-size` sets the rows per Arrow batch (default 10,000), across file boundaries.
 
 Errors exit with status 1 and a one-line message, for example:
 
@@ -299,10 +302,10 @@ usage: pyroid translit [-h] [--text-column TEXT_COLUMN] [--threads THREADS]
 ```
 
 Transliterates the text column to ASCII with [`pyroid.translit`](translit.md) (anyascii's data,
-ISC): `--mode anyascii` (the default) or `--mode unidecode` with Unidecode's `--errors`
-(`ignore`, `replace`, `strict`, `preserve`; default `ignore`) and `--replace-str` (default `?`).
-`--output-column` writes a new column instead of replacing the text. No row is dropped, so there
-is no `--excluded`.
+ISC). `--mode anyascii` is the default. `--mode unidecode` takes Unidecode's `--errors`
+(`ignore`, `replace`, `strict` or `preserve`; default `ignore`) and `--replace-str` (default
+`?`). `--output-column` writes a new column instead of replacing the text. No row is dropped, so
+there is no `--excluded`.
 
 ```console
 $ pyroid translit names.parquet ascii.jsonl --text-column name --output-column name_ascii
@@ -324,7 +327,7 @@ the program and in the Python processes it starts. It is described with
 `pyroid clean` is a thin driver around `pyroid.integrations.recipes.FineWeb`, which you can use
 directly on Arrow batches (it needs the same `pyroid[cli]` extra). `annotate` runs every stage
 but the dedup on one batch and returns Arrow columns, without building a Python `str` per
-document. Dedup is a property of the whole corpus: feed each batch's survivors, in order, to the
+document. Dedup is a property of the whole corpus. Feed each batch's survivors, in order, to the
 index from `new_dedup`, and read its keep mask at the end.
 
 ```python
@@ -347,10 +350,13 @@ clean = [t for t, k in zip(survivors, keep) if k]
 len(clean)  # 170
 ```
 
-`annotate` returns an `Annotation` of five Arrow columns, one value per input document: `text`
-(as it leaves the chain; for a dropped document, the text the dropping stage saw), `keep`,
-`reason` (`None` or a [`filter_reason`](#dropped-rows-and-filter_reason) value other than
-`minhash`), `language` and `language_score`:
+`annotate` returns an `Annotation` of five Arrow columns, one value per input document:
+
+- `text`, as it leaves the chain; for a dropped document, the text the dropping stage saw;
+- `keep`;
+- `reason`: `None` or a [`filter_reason`](#dropped-rows-and-filter_reason) value other than
+  `minhash`;
+- `language` and `language_score`.
 
 ```python
 ann = FineWeb(lid_model="lid.176.bin", minhash=None).annotate(["Guten Morgen!", None])
@@ -358,12 +364,15 @@ ann.keep.to_pylist()  # [False, False]
 ann.reason.to_pylist()  # ['lid', 'null']
 ```
 
-`FineWeb`'s keyword arguments change the chain: `languages` (default `("en",)`; `None` for any)
-and `language_threshold` (0.65), `ftfy_config` (a `TextFixerConfig`, `None` for ftfy's defaults,
-`False` to skip ftfy), `filters` (`pyroid.filters` configs or datatrove filter instances, in
-order), `minhash` (a dict of `MinhashConfig` fields, a `MinhashConfig`, or `None` for no dedup),
-`lid_model` (a path, a loaded `pyroid.fasttext.Model`, or `None` for the lookup
-[above](#the-language-id-model), loaded on first use) and `threads`.
+`FineWeb`'s keyword arguments change the chain:
+
+- `languages` (default `("en",)`; `None` for any) and `language_threshold` (0.65);
+- `ftfy_config`: a `TextFixerConfig`, `None` for ftfy's defaults, or `False` to skip ftfy;
+- `filters`: `pyroid.filters` configs or datatrove filter instances, in order;
+- `minhash`: a dict of `MinhashConfig` fields, a `MinhashConfig`, or `None` for no dedup;
+- `lid_model`: a path, a loaded `pyroid.fasttext.Model`, or `None` for the lookup
+  [above](#the-language-id-model), loaded on first use;
+- `threads`.
 
 ```python
 import pyroid.filters as F
@@ -373,19 +382,26 @@ recipe = FineWeb(lid_model="lid.176.bin", filters=[F.GopherQuality(min_doc_words
 recipe.stages()  # ['lid', 'gopher_quality', 'minhash']
 ```
 
-`lid_model_path(path=None, *, download=True)` is the model lookup on its own, `MINHASH_CONFIG`
-FineWeb's MinHash settings. The [Hugging Face helpers](huggingface.md) run the same recipe over a
-`datasets.Dataset`.
+`lid_model_path(path=None, *, download=True)` is the model lookup on its own, and
+`MINHASH_CONFIG` holds FineWeb's MinHash settings. The [Hugging Face helpers](huggingface.md) run
+the same recipe over a `datasets.Dataset`.
 
 ## Speed
 
 On the FineWeb dev slice (10,000 documents), `pyroid clean --recipe fineweb` with 8 threads took
-8.7 s and 2.2 s in two runs, against 498.8 s and 213.4 s for stock datatrove 0.10.1's FineWeb
-pipeline with 8 processes run in the same minute: **58× and 99× less wall time**. With one thread
-it took 11.4 s and 7.5 s (44× and 29× against the 8-process runs). *Docker/OrbStack VM on Apple
-Silicon (12 vCPU), indicative*: the VM was heavily shared (load average 18 to 30), which inflates
-stock datatrove most, so each ratio comes from a same-minute pair (stock, then pyroid). pyroid's
-times include interpreter start-up, IO and writing both outputs. See
-[Benchmarks](../benchmarks.md#datatroves-fineweb-pipeline-with-pyroids-steps-swapped-in).
+8.7 s and 2.2 s in two runs. Stock datatrove 0.10.1's FineWeb pipeline with 8 processes, run in
+the same minute, took 498.8 s and 213.4 s, so `pyroid clean` used 58× and 99× less wall time.
+With one thread it took 11.4 s and 7.5 s (44× and 29× against the 8-process runs). These runs
+were on a Docker/OrbStack VM on Apple Silicon, indicative. The VM was heavily shared (load
+average 18 to 30), which inflates stock datatrove most, so each ratio comes from a same-minute
+pair (stock, then pyroid). pyroid's times include interpreter start-up, IO and writing both
+outputs. See [Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
+
+The benchmark's own timings on an AWS c7i.4xlarge (Intel Xeon Platinum 8488C) are the better
+guide to an unloaded machine. They time the same chain run natively in one process (the
+benchmark's `chain.py`, not the command line), with identical output to datatrove. On the dev
+slice it took 1.95 s with 8 threads, 18× faster than datatrove at 8 processes. On 100,000
+FineWeb documents it took 10.2 s, about 27× faster. See
+[Benchmarks](../benchmarks.md#end-to-end-the-fineweb-chain).
 
 API: [`pyroid.integrations.recipes` reference](../reference/integrations.md#recipes).

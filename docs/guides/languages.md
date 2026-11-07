@@ -3,8 +3,8 @@
 pyroid's filters and dedup reproduce [datatrove](https://github.com/huggingface/datatrove) 0.10.1
 beyond English. datatrove picks a word tokenizer for each of its 4,343 language codes (its
 `tokenizer_assignment.csv`), and every word count, ratio, n-gram and shingle depends on that
-tokenizer's words. pyroid ports the rule-based tokenizers to Rust: **3,999 of the 4,343 codes,
-76.8% of FineWeb-2's bytes, are native**, with datatrove's decisions ([parity](#parity)) at Rust
+tokenizer's words. pyroid ports the rule-based tokenizers to Rust. That makes 3,999 of the 4,343
+codes native, 76.8% of FineWeb-2's bytes, with datatrove's decisions ([parity](#parity)) at Rust
 speed on every thread. The other codes use statistical or dictionary segmenters that pyroid does
 not port. For them, `python_tokenizer=True` calls datatrove's own tokenizer and runs the rest in
 Rust.
@@ -26,23 +26,23 @@ subsets, 22.9 TB) in those codes:
 | `StanzaTokenizer` (255 codes), `ThaiTokenizer` (20), `BurmeseTokenizer` (14), `TibetanTokenizer` (10), `LaoTokenizer` (6), `KhmerTokenizer` (5), `KiwiTokenizer` (4) | 314 | 2.7% | `python_tokenizer=True` |
 | none: FineWeb-2's `und_*` subsets (except `und` and `und_Cyrl`, which datatrove gives `xx`) | — | 0.15% | `ValueError`, as datatrove |
 
-- **Native** codes are tokenized in Rust. For the spaCy languages pyroid ports spaCy 3.8.18's
+- Native codes are tokenized in Rust. For the spaCy languages pyroid ports spaCy 3.8.18's
   prefix, suffix, infix and URL rules, each language's tokenizer exceptions, the special-case
   matcher and the sentencizer, extracted from spaCy's own objects (48,032 rules). For the Indic
   languages it ports indic-nlp-library's `trivial_tokenize` and `sentence_split`, and for the
   whitespace codes datatrove's `WhitespaceTokenizer`. Words and sentences match datatrove's.
-- **`python_tokenizer=True`** codes need a segmenter pyroid does not port: jieba (a 349k-word
+- The `python_tokenizer=True` codes need a segmenter pyroid does not port: jieba (a 349k-word
   dictionary and an HMM), SudachiPy (a 70 MB dictionary), the statistical models of pyvi, Stanza
   and khmer-nltk, PyThaiNLP, Kiwi, botok and pyidaungsu. Exact ports of these are not feasible at
   a reasonable binary size. Without `python_tokenizer=True` these codes raise
   `NotImplementedError`.
-- **Codes datatrove does not know** raise datatrove's `ValueError`, when the call starts.
+- Codes datatrove does not know raise datatrove's `ValueError` when the call starts.
 
 ## How to choose
 
 Look the code up in `pyroid.filters.languages()` (the same function is `pyroid.dedup.languages`).
 Its keys are what `language=` accepts, in datatrove's spellings (`"deu_Latn"`, `"deu"`, `"de"`,
-...), and each value says which tokenizer datatrove uses and whether pyroid's is native:
+...). Each value says which tokenizer datatrove uses and whether pyroid's is native:
 
 ```python
 import pyroid.filters as F
@@ -58,20 +58,20 @@ F.english_languages()[:4]  # ['en', 'en_Latn', 'eng', 'eng_Latn']: SpaCyTokenize
 
 Then:
 
-1. **`native=True`**: pass `language=`. Nothing else is needed (no datatrove, no spaCy), and the
+1. If `native=True`, pass `language=`. Nothing else is needed (no datatrove, no spaCy), and the
    work runs in Rust on every thread.
-2. **`native=False`**: pass `language=` and `python_tokenizer=True`, with datatrove 0.10.1 and
-   the segmenter installed (the `NotImplementedError` you get without it gives the `pip install`
-   line). Each document is tokenized by datatrove's own tokenizer, in Python, on the calling
-   thread, so the call runs at that tokenizer's speed and does not scale with `threads=`. On 8
-   cores datatrove's 8 processes can beat it ([Speed](#speed)). For a large corpus in such a
-   language, run several processes, or keep datatrove for those steps.
-3. **Not in the table**: the call raises datatrove's `ValueError`. Pass a code datatrove knows,
-   or a tokenizer object (below).
+2. If `native=False`, pass `language=` and `python_tokenizer=True`, with datatrove 0.10.1 and
+   the segmenter installed. The `NotImplementedError` you get without them gives the
+   `pip install` line. Each document is tokenized by datatrove's own tokenizer, in Python, on the
+   calling thread, so the call runs at that tokenizer's speed and does not scale with
+   `threads=`. On 8 cores datatrove's 8 processes can beat it ([Speed](#speed)). For a large
+   corpus in such a language, run several processes, or keep datatrove for those steps.
+3. If the code is not in the table, the call raises datatrove's `ValueError`. Pass a code
+   datatrove knows, or a tokenizer object (below).
 
 `language=` may also be a word tokenizer object, as datatrove allows: a datatrove `WordTokenizer`
 instance, or any object with `word_tokenize(text)` (and `span_tokenize(text)` for C4). It is
-called in Python, like the `python_tokenizer=True` path and with the same `FallbackWarning`, and
+called in Python, as on the `python_tokenizer=True` path and with the same `FallbackWarning`, but
 needs no `python_tokenizer=True`.
 
 ## What takes `language=`
@@ -88,12 +88,12 @@ needs no `python_tokenizer=True`.
 What `python_tokenizer=True` does, from the modules' documentation (`pyroid/filters.pyi`,
 `pyroid/dedup.pyi`):
 
-- Each document is tokenized by **datatrove's own tokenizer for `language`, in Python, on the
-  calling thread**. It needs datatrove 0.10.1 and the segmenter installed;
+- Each document is tokenized by datatrove's own tokenizer for `language`, in Python, on the
+  calling thread. It needs datatrove 0.10.1 and the segmenter installed, and
   `pyroid.PyroidError` says what is missing.
-- The rest runs in Rust on those words, so the decisions are datatrove's: the filter math, or
-  `simplify_text`, shingling, MinHash, bucketing and clustering. `threads=` applies to the Rust
-  part only.
+- The rest runs in Rust on those words, so the decisions are datatrove's. That is the filter
+  math, or `simplify_text`, shingling, MinHash, bucketing and clustering. `threads=` applies to
+  the Rust part only.
 - The filters only tokenize the documents that reach a word-based check.
 - A `C4Quality` step (which splits sentences with the tokenizer) runs as datatrove's own
   `C4QualityFilter`. In `apply`, later steps then see (and tokenize again) its rewritten text,
@@ -101,10 +101,10 @@ What `python_tokenizer=True` does, from the modules' documentation (`pyroid/filt
   tokenization per document.
 - Each function emits one [`pyroid.FallbackWarning`](../concepts/fallbacks.md) per language
   (C4 steps their own; `MinHashDedup` once, when the index is made).
-- It also works for native codes, where it uses datatrove's tokenizer: slower, and no more
-  exact. It is only needed for the others.
+- It also works for native codes, where it uses datatrove's tokenizer. That is slower and no
+  more exact, so it is only needed for the others.
 
-Sentence dedup has no Python-tokenizer path: a code whose datatrove tokenizer pyroid does not
+Sentence dedup has no Python-tokenizer path. A code whose datatrove tokenizer pyroid does not
 port raises `NotImplementedError`, unless no tokenizer is needed (`split_sentences=False` and
 `min_doc_words`, `min_num_sentences` and `min_words_to_remove_span` all `<= 0`). The datatrove
 sentence-dedup steps in [`pyroid.integrations.datatrove`](datatrove.md) run datatrove's own code
@@ -113,8 +113,8 @@ for such codes, with a `FallbackWarning`.
 !!! note "The datatrove drop-in steps"
     In `pyroid.integrations.datatrove`, the Gopher, C4, FineWeb, `MinhashDedupSignature` and
     sentence-dedup steps run in Rust for every native code. For the other codes they run
-    datatrove's own code, with a `FallbackWarning`; there is no `python_tokenizer=True` path in
-    the drop-ins. See [the datatrove guide](datatrove.md#languages).
+    datatrove's own code, with a `FallbackWarning`. The drop-ins have no `python_tokenizer=True`
+    path. See [the datatrove guide](datatrove.md#languages).
 
 ## Native languages: German and French
 
@@ -161,12 +161,12 @@ D.minhash_dedup(near, language="deu_Latn")  # [True, False, True]
 ```
 
 datatrove's `GopherQualityFilter(language="deu_Latn", stop_words=stop_words)` gives the same two
-reasons, the same French chain keeps the document, and the MinHash signatures are datatrove's.
+reasons, and the same French chain keeps the document. The MinHash signatures are datatrove's.
 
 ## The Python tokenizer: Chinese with jieba
 
 `cmn_Hani` is `SpaCyTokenizer("zh")`, which segments with jieba. Without
-`python_tokenizer=True` the call says what to do:
+`python_tokenizer=True`, the call says what to do:
 
 ```text
 NotImplementedError: pyroid has no native word tokenizer for language 'cmn_Hani': datatrove
@@ -233,24 +233,24 @@ Tibetan and Burmese segmenters were not installed in these runs, so their
 
 Quirks reproduced as datatrove has them:
 
-- **Hindi and Bengali C4:** indic-nlp re-joins sentences with `" "`, so datatrove's
+- In C4 for Hindi and Bengali, indic-nlp re-joins sentences with `" "`, so datatrove's
   `text.index` raises `ValueError` on some documents (9 of 250 real `hin_Deva` documents).
   pyroid raises the same.
-- **Urdu sentences (C4 only)** follow `datatrove[multilingual]`, where indic-nlp imports
-  urduhack. With plain datatrove and indic-nlp-library, datatrove raises `ModuleNotFoundError`
-  for every Urdu sentence call.
+- Urdu sentences (C4 only) follow `datatrove[multilingual]`, where indic-nlp imports urduhack.
+  With plain datatrove and indic-nlp-library, datatrove raises `ModuleNotFoundError` for every
+  Urdu sentence call.
 
 spaCy is quadratic on long glued runs of characters (9.6 s for one 4.7 kB text); pyroid is linear
 there.
 
 ## Speed
 
-FineWeb-2's filter chain (Gopher repetition, FineWeb quality and Gopher quality, with each
-language's settings) and its MinHash signatures, on 1,000 documents per language (each FineWeb-2
-slice four times). "8" is 8 threads for pyroid and a warmed 8-process `Pool` for datatrove.
-Medians of 5 runs (datatrove: 2), with every timed document checked first for the same decisions
-and signatures. Release wheel, CPython 3.13, load average 6 to 16. *Docker/OrbStack VM on Apple
-Silicon (12 vCPU), indicative*:
+These timings come from a Docker/OrbStack VM on Apple Silicon, indicative. They cover FineWeb-2's
+filter chain (Gopher repetition, FineWeb quality and Gopher quality, with each language's
+settings) and its MinHash signatures, on 1,000 documents per language (each FineWeb-2 slice four
+times). "8" is 8 threads for pyroid and a warmed 8-process `Pool` for datatrove. Medians of 5
+runs (datatrove: 2), with every timed document checked first for the same decisions and
+signatures. Release wheel, CPython 3.13, load average 6 to 16:
 
 | Language | Tokenizer | Filters, 1 thread (µs per document, datatrove → pyroid) | Speedup: filters / MinHash, 1 thread | 8 threads vs 8 processes |
 |---|---|--:|--:|--:|
@@ -264,18 +264,18 @@ Silicon (12 vCPU), indicative*:
 | `jpn_Jpan` | `python_tokenizer=True` (SudachiPy) | 11,959 → 9,893 | 1.2× / 0.9× | 0.3× / 0.2× |
 
 \* An outlier: pyroid with 8 threads was slower than with 1 thread in this run (246 µs per
-document) while the load rose; it needs a rerun before it is quoted.
+document) while the load rose. It needs a rerun before it is quoted.
 
 The native languages run the filters 36–86× faster than datatrove on one thread (Hindi: 20×).
 The Python-tokenizer path runs at the reference tokenizer's speed (about 1×) and does not scale
-with threads, so datatrove's 8 processes beat it (0.2–0.4×). Adding the languages did not
-slow English down: old and new builds measured within noise on 5,000 FineWeb documents. See
-[Benchmarks](../benchmarks.md#languages-fineweb-2-filters-and-minhash).
+with threads, so datatrove's 8 processes beat it (0.2–0.4×). Adding the languages did not slow
+English down: old and new builds measured within noise on 5,000 FineWeb documents. See
+[Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
 
 ## Binary size
 
-The language tables add 1.11 MB to the release extension module (fat LTO, stripped, aarch64):
-3.29 to 4.40 MB, or 1.20 to 1.46 MB gzipped.
+The language tables add 1.11 MB to the release extension module (fat LTO, stripped, aarch64). It
+grew from 3.29 to 4.40 MB, or from 1.20 to 1.46 MB gzipped.
 
 API: [`pyroid.filters` reference](../reference/filters.md),
 [`pyroid.dedup` reference](../reference/dedup.md).

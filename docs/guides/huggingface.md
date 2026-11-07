@@ -1,6 +1,6 @@
 # Hugging Face `datasets`
 
-`pyroid.integrations.hf` gives you functions to pass to `Dataset.map` and `Dataset.filter` with
+`pyroid.integrations.hf` has functions to pass to `Dataset.map` and `Dataset.filter` with
 `batched=True`: ftfy, fastText language ID, the Gopher, C4 and FineWeb quality filters, and the
 whole FineWeb recipe with MinHash dedup. On Arrow-format datasets pyroid reads the text column in
 place, without building a Python `str` per document. `hf.fineweb(ds)` keeps the same documents,
@@ -45,9 +45,10 @@ Each returns a callable for `batched=True`:
 | `keep_mask(column="keep")` | `filter` | keeps the rows whose boolean column is true (e.g. `annotate`'s `keep`) |
 
 Each document goes to fastText as one line (newlines become spaces), as in datatrove's
-`LanguageFilter`. `quality_mask` uses only the filters' decision: C4's line removal is not applied
-to the text; `annotate` and `fineweb` give the text as it leaves the chain. `threads` is pyroid's
-`threads=` ([Threads](../concepts/threads.md)): `None` uses the whole thread pool for each batch.
+`LanguageFilter`. `quality_mask` uses only the filters' decision, so C4's line removal is not
+applied to the text. `annotate` and `fineweb` give the text as it leaves the chain. `threads` is
+pyroid's `threads=` ([Threads](../concepts/threads.md)), and `None` uses the whole thread pool for
+each batch.
 
 `annotate`'s `reason` is `None` for a kept document, else `"lid"`,
 `"<stage>:<datatrove reason>"` or `"null"`, as in
@@ -66,15 +67,15 @@ kept.num_rows  # 170
 
 The callables take both kinds of batch that `datasets` passes:
 
-- **Arrow batches** (`ds.with_format("arrow")`, the zero-copy path): the callable gets a
+- With Arrow batches (`ds.with_format("arrow")`, the zero-copy path), the callable gets a
   `pyarrow.Table` and pyroid reads the text column in place. Measured on a 3 MB batch, `fix_text`
-  peaked at 932 bytes of Python heap, with no growth of pyarrow's memory pool. A map
-  callable returns a `pyarrow.Table` with every column of the batch, which `datasets` uses in
-  place of the batch, so `remove_columns=` has no effect: call `.remove_columns()` on the dataset.
-  A filter callable returns a boolean `pyarrow.ChunkedArray`.
-- **Python batches** (the default format): the callable gets the dict of lists and returns a dict
-  of the new or changed columns, which `datasets` merges into the batch, or a `list[bool]` for
-  `filter`.
+  peaked at 932 bytes of Python heap, with no growth of pyarrow's memory pool. A map callable
+  returns a `pyarrow.Table` with every column of the batch, which `datasets` uses in place of the
+  batch. So `remove_columns=` has no effect; call `.remove_columns()` on the dataset instead. A
+  filter callable returns a boolean `pyarrow.ChunkedArray`.
+- With Python batches (the default format), the callable gets the dict of lists. It returns a
+  dict of the new or changed columns, which `datasets` merges into the batch, or a `list[bool]`
+  for `filter`.
 
 `None` texts stay `None`, and filters drop them (an Arrow null in a mask drops the row too). Don't
 pass `input_columns=`: the callables read their column by name.
@@ -85,8 +86,8 @@ ds = ds.map(hf.fix_text(), batched=True)  # a Python-format dataset
 ds.to_dict()  # {'text': ['été 2024', None, 'plain']}
 ```
 
-The callables also work in a streaming `IterableDataset`'s `map` and `filter` (an Arrow-format
-`IterableDataset.filter` needs datasets 5: older versions reject it, whatever the function).
+The callables also work in a streaming `IterableDataset`'s `map` and `filter`. An Arrow-format
+`IterableDataset.filter` needs datasets 5; older versions reject it, whatever the function.
 `fineweb` needs a `Dataset`, because MinHash reads the survivors back.
 
 ## The whole recipe: `fineweb(ds)`
@@ -95,7 +96,7 @@ The callables also work in a streaming `IterableDataset`'s `map` and `filter` (a
 
 1. `ds.map(annotate(...), batched=True)` on Arrow batches: ftfy, language ID (English,
    probability above 0.65) and the four quality filters;
-2. MinHash with datatrove's FineWeb settings over the survivors, read back in dataset order: each
+2. MinHash with datatrove's FineWeb settings over the survivors, read back in dataset order. Each
    cluster of near-duplicates keeps one document, as in datatrove, and the others get
    `reason="minhash"`. This step runs in this process over the whole dataset, so its result does
    not depend on `batch_size` or `num_proc`.
@@ -133,11 +134,11 @@ can also call on Arrow batches yourself.
 
 ## Caching and `num_proc`
 
-The callables pickle by their settings, so `datasets` can fingerprint them (a cached result is
-reused when you run the same map again) and ship them to `num_proc` worker processes, each of
-which loads the fastText model itself. A loaded `pyroid.fasttext.Model` can't be pickled: pass the
-model's path. pyroid already runs every batch on all cores, so `num_proc` rarely helps; if you use
-it, `threads` of about `os.cpu_count() // num_proc` avoids oversubscription.
+The callables pickle by their settings. So `datasets` can fingerprint them, reusing a cached
+result when you run the same map again, and ship them to `num_proc` worker processes, each of
+which loads the fastText model itself. A loaded `pyroid.fasttext.Model` can't be pickled, so pass
+the model's path. pyroid already runs every batch on all cores, so `num_proc` rarely helps. If you
+use it, `threads` of about `os.cpu_count() // num_proc` avoids oversubscription.
 
 `lid_model=None` finds the model as the command line does: `$PYROID_LID_MODEL`, else a cached
 `lid.176.bin`, downloaded once and sha256-checked
@@ -148,23 +149,23 @@ it, `threads` of about `os.cpu_count() // num_proc` avoids oversubscription.
 [`examples/notebooks/clean_fineweb_in_60_seconds.ipynb`](https://github.com/ao/pyroid/blob/main/examples/notebooks/clean_fineweb_in_60_seconds.ipynb)
 streams the first 10,000 documents of FineWeb's `sample-10BT`, runs `hf.fineweb` on them, and
 prints the counts per stage and per reason, the time it took and a few dropped documents per
-stage; then it writes the kept documents to Parquet. It is ready for Colab. pyroid 1.0 is not on
-PyPI yet: until it is, edit its first cell to install a pyroid 1.0 wheel instead of `pyroid[hf]`.
+stage. Then it writes the kept documents to Parquet. It is ready for Colab. pyroid 1.0 is not on
+PyPI yet; until it is, edit its first cell to install a pyroid 1.0 wheel instead of `pyroid[hf]`.
 
 To run it on local files without network, set `PYROID_NOTEBOOK_DATA` (a FineWeb Parquet file),
-`PYROID_LID_MODEL`, and optionally `PYROID_NOTEBOOK_DOCS` and `PYROID_NOTEBOOK_OUT`; pyroid's test
+`PYROID_LID_MODEL`, and optionally `PYROID_NOTEBOOK_DOCS` and `PYROID_NOTEBOOK_OUT`. pyroid's test
 suite executes it that way, headless, and checks the counts against datatrove's pipeline. See the
 notebook's [README](https://github.com/ao/pyroid/blob/main/examples/notebooks/README.md).
 
 ## The Gradio app
 
 [`examples/space/`](https://github.com/ao/pyroid/tree/main/examples/space) is a minimal Gradio
-app, ready for a Hugging Face Space but not deployed. **Paste text** to see what each stage of the
-chain decides for one document (did ftfy change it, the language and its probability, which
-filter dropped it and why), or **upload** a Parquet or JSONL file with a `text` column to run the
-whole recipe on it with `hf.fineweb` and download the cleaned file. Every input is capped for a
-public demo (characters, upload size, rows), and running it locally serves it on
-<http://127.0.0.1:7860> only:
+app, ready for a Hugging Face Space but not deployed. On the **Paste text** tab you see what each
+stage of the chain decides for one document: whether ftfy changed it, the language and its
+probability, and which filter dropped it and why. On the **Upload a file** tab you run the whole
+recipe with `hf.fineweb` on a Parquet or JSONL file with a `text` column, and download the
+cleaned file. Every input is capped for a public demo (characters, upload size, rows). Run
+locally, it serves on <http://127.0.0.1:7860> only:
 
 ```console
 $ pip install -r requirements.txt
@@ -174,7 +175,7 @@ $ python app.py
 ## Speed
 
 The callables call pyroid's batch functions on each `datasets` batch, so they run at the
-modules' speed: see [`pyroid.ftfy`](ftfy.md#speed),
+modules' speed. See [`pyroid.ftfy`](ftfy.md#speed),
 [`pyroid.fasttext`](fasttext.md#speed-and-memory), [`pyroid.filters`](filters.md#speed) and
 [`pyroid.dedup`](dedup.md#speed). This page has no separate timings for them.
 

@@ -12,19 +12,19 @@ pyroid.patch("ftfy", "fasttext")  # before the imports you want redirected
 import fasttext
 import ftfy
 
-ftfy.fix_text("âœ” No problems")  # '✔ No problems', computed by pyroid.ftfy
+ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")  # 'naïve résumé', computed by pyroid.ftfy
 model = fasttext.load_model("lid.176.bin")  # a pyroid.fasttext.Model
 model.predict("Bonjour tout le monde")  # (('__label__fr',), array([0.99457073]))
 ```
 
-After `patch()`, `import ftfy` gives a stand-in module whose functions are **pyroid's own
-function objects**, so a patched call gives exactly what the pyroid module gives
-([`pyroid.ftfy`](ftfy.md) is byte-identical to ftfy 6.3.1, [`pyroid.fasttext`](fasttext.md)
-bit-identical to fastText's predict path) and costs what calling pyroid costs. On three
-unmodified third-party call sites the output was identical patched and unpatched
+After `patch()`, `import ftfy` gives a stand-in module whose functions are pyroid's own function
+objects. A patched call gives exactly what the pyroid module gives and costs what calling pyroid
+costs. [`pyroid.ftfy`](ftfy.md) is byte-identical to ftfy 6.3.1, and
+[`pyroid.fasttext`](fasttext.md) bit-identical to fastText's predict path. On three unmodified
+third-party call sites the output was identical patched and unpatched
 ([below](#verified-call-sites), [parity](../compatibility.md#integrations)).
 
-Nothing happens until you ask: installing pyroid changes no imports (there are no `.pth` files),
+Nothing happens until you ask. Installing pyroid changes no imports (there are no `.pth` files),
 and `patch()` is the only switch. Each patched name emits one
 [`PatchWarning`](#patchwarning) per process, saying what was replaced and how to undo it.
 
@@ -36,10 +36,11 @@ and `patch()` is the only switch. Each patched name emits one
 | `"fasttext"` | [`pyroid.fasttext`](fasttext.md) (fastText 0.9.2's inference, as fasttext-predict 0.9.2.4) | `load_model`, `tokenize`, `fasttext.FastText.load_model`, and `fasttext.FastText._FastText(path)` (which returns a pyroid model) | training (`train_supervised`, ...) and `_FastText()` without a model file |
 | `"anyascii"` | [`pyroid.translit.anyascii`](translit.md) (anyascii 0.3.3) | `anyascii` | the rest of the package |
 
-`fasttext.FastText._FastText(path)` is how datatrove and others load models; `isinstance(model,
-_FastText)` is true for pyroid's models too. Calls that pyroid hands to the real package (an ftfy
-option value the Rust port does not support, `_FastText()` without a model file) go to the real
-one, with the usual one-time [`pyroid.FallbackWarning`](../concepts/fallbacks.md).
+`fasttext.FastText._FastText(path)` is how datatrove and others load models, and
+`isinstance(model, _FastText)` is true for pyroid's models too. Calls that pyroid hands to the
+real package (an ftfy option value the Rust port does not support, `_FastText()` without a model
+file) go to the real one, with the usual one-time
+[`pyroid.FallbackWarning`](../concepts/fallbacks.md).
 
 ### Why there is no `"unidecode"`
 
@@ -62,14 +63,14 @@ pyroid.patch("unidecode")
 `sys.modules["ftfy"]`: a module named like the real one that holds pyroid's functions. So a later
 `import ftfy`, `from ftfy import fix_text` or `import fasttext.FastText` gets the shim, and:
 
-- every attribute the shim does not provide comes from the real package: `ftfy.guess_bytes`,
-  `fasttext.train_supervised`;
-- real submodules keep working, as attributes and as `import ftfy.fixes`: the shim shares the
+- every attribute the shim does not provide comes from the real package, such as
+  `ftfy.guess_bytes` and `fasttext.train_supervised`;
+- real submodules keep working, as attributes and as `import ftfy.fixes`. The shim shares the
   real package's `__path__` and a copy of its `__spec__`, so `importlib.util.find_spec` and
   `importlib.resources` see the real package;
 - `ftfy.__pyroid__` is `True`, `ftfy.__wrapped__` is the real module, and `ftfy.__version__` /
   `anyascii.__version__` are the versions pyroid reproduces (`"6.3.1"`, `"0.3.3"`);
-- **modules that imported the real package before `patch()` keep it.** Call `patch()` before
+- modules that imported the real package before `patch()` keep it, so call `patch()` before
   importing the library whose imports you want redirected.
 
 ```python
@@ -93,10 +94,10 @@ pyroid module behind a name can't be imported (`pyroid.fasttext` needs numpy).
 
 ### Without the real package
 
-The shim also works when the real package is not installed: what pyroid provides works, and any
+The shim also works when the real package is not installed. What pyroid provides works, and any
 other attribute raises an `AttributeError` that says so. `importlib.util.find_spec("fasttext")`
 still finds the shim. This makes libraries usable where the real package has no wheel, such as
-fastText on CPython 3.14+ and on free-threaded builds: fast-langdetect, whose import fails there
+fastText on CPython 3.14+ and on free-threaded builds. fast-langdetect, whose import fails there
 unpatched, works patched on 3.15t. ftfy's delegated functions (`apply_plan`, `explain_unicode`,
 `fix_file`, `guess_bytes`) raise [`pyroid.PyroidError`](../concepts/errors.md) without ftfy.
 
@@ -119,16 +120,16 @@ pyroid.integrations.patched()  # ()
 ```
 
 - `unpatch(*names)` gives `sys.modules` back exactly the entries it had for each name and its
-  submodules before `patch()`: the real module if it had been imported, else no entry
-  (submodules imported meanwhile are dropped, so the next import is fresh). With no names it
-  undoes every patch; names that are not patched are ignored. Modules that imported a shim keep
-  it, and it keeps working.
+  submodules before `patch()`: the real module if it had been imported, else no entry.
+  Submodules imported meanwhile are dropped, so the next import is fresh. With no names it
+  undoes every patch, and names that are not patched are ignored. Modules that imported a shim
+  keep it, and it keeps working.
 - `patched()` returns the names currently patched.
 - `patching(*names)` patches for the duration of a `with` block, and on exit unpatches only the
   names this block patched (a name patched before stays patched).
 
 `pyroid.patch` and `pyroid.unpatch` are `pyroid.integrations.patch` and
-`pyroid.integrations.unpatch`; `patched`, `patching` and `PatchWarning` live in
+`pyroid.integrations.unpatch`. `patched`, `patching` and `PatchWarning` live in
 `pyroid.integrations`. They import nothing until called, and they are thread-safe (one lock).
 
 ## `PatchWarning`
@@ -145,8 +146,8 @@ $ python script.py
   pyroid.patch("ftfy")
 ```
 
-It warns once more if the installed package is another version than the one pyroid reproduces
-(the patched functions then give that version's results, the rest is the installed version's).
+It warns once more if the installed package is another version than the one pyroid reproduces.
+The patched functions then give that version's results, and the rest is the installed version's.
 `PatchWarning` is a `UserWarning`, distinct from `pyroid.FallbackWarning`. To silence it:
 
 ```python
@@ -159,9 +160,9 @@ warnings.simplefilter("ignore", pyroid.integrations.PatchWarning)
 
 ## `pyroid run`: programs and their child processes
 
-`patch()` affects one interpreter. Data pipelines often start more: `multiprocessing` workers,
-`subprocess` calls. `pyroid run` runs a program with the patch applied in it and in every Python
-process it starts, without editing a line:
+`patch()` affects one interpreter. Data pipelines often start more, through `multiprocessing`
+workers or `subprocess` calls. `pyroid run` runs a program with the patch applied in it and in
+every Python process it starts, without editing a line:
 
 ```console
 $ pyroid run -p ftfy,fasttext train.py --epochs 3
@@ -215,16 +216,16 @@ subprocess: True
 
 `pyroid run`:
 
-- patches `NAMES` (comma-separated); without `-p`, the names in `$PYROID_PATCH`, else
-  `ftfy,fasttext` (then skipping `fasttext`, with a `PatchWarning`, if numpy is missing);
+- patches `NAMES` (comma-separated). Without `-p` it patches the names in `$PYROID_PATCH`, else
+  `ftfy,fasttext`, and then skips `fasttext`, with a `PatchWarning`, if numpy is missing;
 - sets `PYROID_PATCH` to those names and puts pyroid's start-up hook directory first on
-  `PYTHONPATH`. The hook is a `sitecustomize.py`, which Python imports at start-up: it applies
+  `PYTHONPATH`. The hook is a `sitecustomize.py`, which Python imports at start-up. It applies
   `$PYROID_PATCH` in every Python process started from there (`multiprocessing` spawn and
   forkserver workers, `subprocess`), then runs the environment's own `sitecustomize`, if there is
   one. Forked workers inherit the patch anyway;
 - runs the target in the same process, as `python SCRIPT ARGS` / `python -m MODULE ARGS` would
-  (`sys.argv`, `sys.path[0]`, `__name__ == "__main__"`), and exits with its exit code: 0 when it
-  finishes, 2 for a usage error or a missing script, 1 when the module can't be found.
+  (`sys.argv`, `sys.path[0]`, `__name__ == "__main__"`). It exits with the target's exit code: 0
+  when it finishes, 2 for a usage error or a missing script, 1 when the module can't be found.
 
 `PatchWarning` is shown once per process tree, not in every worker. The hook does nothing in an
 interpreter that can't import pyroid, nor in one started with `-I` or `-E` (which ignore
@@ -278,7 +279,7 @@ ids = tokenizer(["a photo of a cat", "a diagram"])
 ```
 
 For datatrove itself, use the [drop-in pipeline steps](datatrove.md) rather than patching
-fastText: they batch the whole step, not just the model call.
+fastText. They batch the whole step, not only the model call.
 
 ## Limitations
 
@@ -293,9 +294,9 @@ fastText: they batch the whole step, not just the model call.
 
 ## Speed
 
-A patched call is a call to pyroid's own function, so it runs at the pyroid module's speed: see
+A patched call is a call to pyroid's own function, so it runs at the pyroid module's speed. See
 [`pyroid.ftfy`](ftfy.md#speed) and [`pyroid.fasttext`](fasttext.md#speed-and-memory). Code that
 calls `fix_text` or `predict` one string at a time gets pyroid's single-call speed, not its
-batch speed; to use the batch functions you need to change the calling code.
+batch speed. To use the batch functions you need to change the calling code.
 
 API: [`pyroid.integrations` patch reference](../reference/integrations.md#patch).

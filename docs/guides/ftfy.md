@@ -1,9 +1,9 @@
 # `pyroid.ftfy`: drop-in ftfy
 
 `pyroid.ftfy` is a Rust port of [ftfy](https://github.com/rspeer/python-ftfy) 6.3.1 by Robyn
-Speer. It has ftfy's functions with ftfy's signatures, and its results are **byte-identical to
-ftfy 6.3.1** on the same CPython version, including the explanations and ftfy's own known
-failures ([parity](../compatibility.md#ftfy)).
+Speer. It has ftfy's functions with ftfy's signatures. On the same CPython version its results
+are byte-identical to ftfy 6.3.1, including the explanations and ftfy's own known failures
+([parity](../compatibility.md#ftfy)).
 
 ## Change one import
 
@@ -11,7 +11,7 @@ failures ([parity](../compatibility.md#ftfy)).
 -import ftfy
 +import pyroid.ftfy as ftfy
 
- ftfy.fix_text("âœ” No problems")                 # '✔ No problems'
+ ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")                  # 'naïve résumé'
  ftfy.fix_text("&lt;3", unescape_html=True)        # '<3'
  ftfy.fix_and_explain("schÃ¶n")                    # ExplainedText(text='schön', explanation=[...])
  ftfy.fix_encoding("rÃ©sumÃ©")                     # 'résumé'
@@ -31,8 +31,8 @@ pyroid.ftfy.fix_text(text, config)  # same result as ftfy.fix_text(text, config)
 
 ## Many documents: `fix_text_batch`
 
-`fix_text_batch` is pyroid's addition: `fix_text` over a whole batch on pyroid's thread pool,
-without the GIL. Each result equals `ftfy.fix_text(doc, config, **kwargs)`.
+`fix_text_batch` is pyroid's addition. It runs `fix_text` over a whole batch on pyroid's thread
+pool, without the GIL, and each result equals `ftfy.fix_text(doc, config, **kwargs)`.
 
 ```python
 import pyroid.ftfy as ftfy
@@ -68,10 +68,10 @@ ds = ds.map(lambda b: {"text": ftfy.fix_text_batch(b["text"])}, batched=True, ba
 
 ## Delegated features
 
-These are not ported and are handed to the real ftfy, which must then be installed; the first
-call emits a [`pyroid.FallbackWarning`](../concepts/fallbacks.md):
+These are not ported. They are handed to the real ftfy, which must then be installed, and the
+first call emits a [`pyroid.FallbackWarning`](../concepts/fallbacks.md):
 
-- `apply_plan`, `guess_bytes`, `fix_file`, `explain_unicode` (also listed in
+- `apply_plan`, `guess_bytes`, `fix_file` and `explain_unicode` (also listed in
   `pyroid.ftfy.DELEGATED`);
 - option values the Rust port does not handle: a `normalization` form other than NFC, NFD, NFKC,
   NFKD or `None`, and a non-integer `max_decode_length`.
@@ -82,8 +82,8 @@ command-line tool are not provided.
 
 ## Unicode versions
 
-ftfy's output depends on the Unicode version of the running Python (through `\w`, `\d` and
-normalization of newly assigned characters). pyroid ships tables for Unicode 14.0 to 17.0 and uses
+ftfy's output depends on the Unicode version of the running Python, through `\w`, `\d` and the
+normalization of newly assigned characters. pyroid ships tables for Unicode 14.0 to 17.0 and uses
 the one matching `unicodedata.unidata_version`, so it matches ftfy on every CPython from 3.11 to
 3.15. On a newer Python it warns once (`RuntimeWarning`) and uses the 17.0 tables.
 
@@ -107,14 +107,18 @@ And by design:
 
 ## Speed
 
-On the first 10,000 FineWeb documents, `fix_text_batch` took 5.66 µs per document on one thread
-(free-threaded CPython 3.15t) against 834 µs for ftfy 6.3.1 (CPython 3.13), 147× faster, and
-1.72 µs with 8 threads. *Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*: see
-[Benchmarks](../benchmarks.md#per-stage). On FineWeb-2 languages the module's earlier run
-measured 14–95× single-threaded (slowest: Hindi; *indicative, preliminary*,
+On an AWS c7i.4xlarge (Intel Xeon Platinum 8488C), `fix_text_batch` took 6.70 µs per document on
+one thread over the first 10,000 FineWeb documents. ftfy 6.3.1 took 724 µs, so pyroid was 108×
+faster, and with 8 threads it took 2.06 µs. pyroid ran on free-threaded CPython 3.15t and ftfy on
+CPython 3.13. On a c8g.4xlarge (AWS Graviton4) the speedup was 148×. See
+[Benchmarks](../benchmarks.md#per-stage).
+
+On FineWeb-2 languages, the module's earlier, preliminary run measured 14–95× single-threaded,
+with Hindi the slowest (Docker/OrbStack VM on Apple Silicon, indicative;
 [details](../benchmarks.md#pyroidftfy)).
 
-In a whole datatrove pipeline ftfy is only about 2% of the CPU, so a faster `fix_text` on its own
+In a whole datatrove pipeline ftfy is only about 2% of the CPU
+([Where the CPU goes](../benchmarks.md#where-the-cpu-goes)), so a faster `fix_text` on its own
 barely changes pipeline throughput. It matters where `fix_text` is the hot path: tokenizers that
 call it per string (CLIP-style text encoders), web-scraping cleanup, or ftfy as a standalone pass
 over a corpus.

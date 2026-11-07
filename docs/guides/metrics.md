@@ -4,14 +4,14 @@
 [rouge-score](https://pypi.org/project/rouge-score/) 0.1.2
 (ROUGE-N, ROUGE-L and ROUGE-Lsum, with NLTK 3.10.4's Porter stemmer; © The rouge_score Authors,
 Apache-2.0) and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF and chrF++;
-© Amazon.com, Inc. or its affiliates, Apache-2.0). Scores are **identical to rouge-score 0.1.2
-and sacrebleu 2.6.0**: the same floats bit for bit, the same result types, `str()`, `repr()`,
+© Amazon.com, Inc. or its affiliates, Apache-2.0). Scores are identical to rouge-score 0.1.2 and
+sacrebleu 2.6.0: the same floats bit for bit, the same result types, `str()`, `repr()`,
 `format()` output, signature strings and exceptions ([parity](../compatibility.md#metrics)).
 
 ## Change one import
 
-ROUGE: the four rouge-score modules (`rouge_scorer`, `scoring`, `tokenizers`, `tokenize`) have
-pyroid counterparts of the same names.
+For ROUGE, the four rouge-score modules (`rouge_scorer`, `scoring`, `tokenizers`, `tokenize`)
+have pyroid counterparts of the same names.
 
 ```diff
 -from rouge_score import rouge_scorer, scoring
@@ -24,7 +24,7 @@ pyroid counterparts of the same names.
  #  'rougeL': Score(precision=0.625, recall=0.5555555555555556, fmeasure=0.5882352941176471)}
 ```
 
-BLEU and chrF: one module, `pyroid.metrics.sacrebleu`, with sacrebleu's top-level API.
+BLEU and chrF are in one module, `pyroid.metrics.sacrebleu`, with sacrebleu's top-level API.
 
 ```diff
 -import sacrebleu
@@ -87,7 +87,7 @@ rouge-score calls it, and its tokens are scored in Rust.
 ### Confidence intervals: `BootstrapAggregator`
 
 `scoring.BootstrapAggregator` is rouge-score's code, and it needs numpy, which pyroid does not
-depend on: numpy is imported on the first `aggregate()` call, and without it that call raises
+depend on. numpy is imported on the first `aggregate()` call, and without it that call raises
 `ImportError` with an install hint. It resamples with numpy's global random state, so after the
 same `np.random.seed(...)` it returns the same intervals as rouge-score.
 
@@ -134,12 +134,16 @@ print(sacrebleu.sentence_bleu("The cat sat on the mat.", ["The cat sat on a mat.
 # BLEU = 48.89 85.7/66.7/40.0/25.0 (BP = 1.000 ratio = 1.000 hyp_len = 7 ref_len = 7)
 ```
 
-These run natively: the tokenizers `13a` (the default), `intl`, `zh` (also `trg_lang="zh"`),
-`char` and `none`; every smoothing method; `lowercase`, `force`, `effective_order` and
-`max_ngram_order`; chrF and chrF++ with any `char_order`, `word_order`, `beta`, `whitespace` and
-`eps_smoothing`. Rust computes the integer n-gram statistics; the final formulas
-(`BLEU.compute_bleu`, `CHRF._compute_f_score`) are sacrebleu's Python, so the floats are
-sacrebleu's on every CPython. sacrebleu's log warnings go to the same `sacrebleu` logger.
+These run natively:
+
+- the tokenizers `13a` (the default), `intl`, `zh` (also `trg_lang="zh"`), `char` and `none`;
+- every smoothing method;
+- `lowercase`, `force`, `effective_order` and `max_ngram_order`;
+- chrF and chrF++ with any `char_order`, `word_order`, `beta`, `whitespace` and `eps_smoothing`.
+
+Rust computes the integer n-gram statistics. The final formulas (`BLEU.compute_bleu`,
+`CHRF._compute_f_score`) are sacrebleu's Python, so the floats are sacrebleu's on every CPython.
+sacrebleu's log warnings go to the same `sacrebleu` logger.
 
 ## Many pairs: batches and threads
 
@@ -168,13 +172,13 @@ scores = sacrebleu.sentence_bleu_batch(predictions, refs)  # one BLEUScore per h
 sacrebleu.corpus_chrf(predictions, refs, threads=8)  # threads only changes the speed
 ```
 
-ROUGE needs a `str` per pair, so a null in an Arrow column raises `ValueError`: fill nulls first.
-Pass the references of the `*_batch` functions as streams (`[refs]`); a flat list of `str` raises
+ROUGE needs a `str` per pair, so a null in an Arrow column raises `ValueError`; fill nulls first.
+Pass the references of the `*_batch` functions as streams (`[refs]`). A flat list of `str` raises
 [`pyroid.InputError`](../reference/pyroid.md#pyroid.InputError).
 
 ## Delegated features
 
-These are not ported and are handed to the real library, with a one-time
+These are not ported. They are handed to the real library, with a one-time
 [`pyroid.FallbackWarning`](../concepts/fallbacks.md) per function and reason. If the library is
 not installed, the call raises [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError)
 with an install hint instead.
@@ -195,7 +199,8 @@ bleu.corpus_score(hyps, refs, n_bootstrap=1000)  # sacrebleu's result, and:
 ```
 
 Importing `pyroid.metrics.sacrebleu` never imports sacrebleu; only a delegated call does. This
-matters on free-threaded CPython: `import sacrebleu` loads lxml, which turns the GIL back on.
+matters on free-threaded CPython, where `import sacrebleu` loads lxml, which turns the GIL back
+on.
 Likewise, `pyroid.metrics.rouge_scorer` imports NLTK only when `split_summaries=True` and a
 rougeLsum is scored (rouge-score always imports nltk, absl, numpy and six).
 
@@ -204,7 +209,7 @@ rougeLsum is scored (rouge-score always imports nltk, absl, numpy and six).
 A lone surrogate (U+D800 to U+DFFF) in a target, prediction, hypothesis or reference raises
 `UnicodeEncodeError`, with a note naming the item, as everywhere in pyroid
 ([Lone surrogates](../concepts/inputs.md#lone-surrogates)). rouge-score treats them as
-separators and sacrebleu as ordinary code points. Replace them first:
+separators and sacrebleu as ordinary code points. Replace them first with
 `s.encode("utf-8", "replace").decode("utf-8")`.
 
 ## Differences from rouge-score
@@ -212,7 +217,7 @@ separators and sacrebleu as ordinary code points. Replace them first:
 From the modules' documentation. `pyroid/metrics/rouge_scorer.pyi`:
 
 - Lone surrogates (U+D800..U+DFFF) in a `str` target or prediction raise `UnicodeEncodeError`
-  (with a note) when the default tokenizer is used; rouge-score treats them as separators.
+  (with a note) when the default tokenizer is used. rouge-score treats them as separators.
   Remove them first, e.g. `s.encode("utf-8", "replace").decode("utf-8")`. A custom tokenizer's
   tokens may hold them (those are scored by rouge-score).
 - `RougeScorer` is pyroid's class, a `pyroid.metrics.scoring.BaseScorer`; its scores are
@@ -230,7 +235,7 @@ From the modules' documentation. `pyroid/metrics/rouge_scorer.pyi`:
 `pyroid/metrics/scoring.pyi`:
 
 - numpy is imported when `BootstrapAggregator.aggregate` is first called (it is not a pyroid
-  dependency); without it, `aggregate` raises `ImportError` with an install hint. rouge-score
+  dependency). Without it, `aggregate` raises `ImportError` with an install hint. rouge-score
   imports numpy at import.
 - The classes are pyroid's own: `isinstance(score, rouge_score.scoring.Score)` is false for a
   pyroid `Score` (and vice versa), though they compare equal.
@@ -238,7 +243,7 @@ From the modules' documentation. `pyroid/metrics/rouge_scorer.pyi`:
 `pyroid/metrics/tokenizers.pyi`:
 
 - `DefaultTokenizer` has no `_stemmer` attribute (rouge-score keeps an nltk `PorterStemmer`
-  there); stemming runs in Rust.
+  there). Stemming runs in Rust.
 - A `str` with lone surrogates (U+D800..U+DFFF) raises `UnicodeEncodeError` (rouge-score drops
   them like any other non-alphanumeric character).
 
@@ -246,50 +251,55 @@ From the modules' documentation. `pyroid/metrics/rouge_scorer.pyi`:
 
 - A `str` with lone surrogates (U+D800..U+DFFF) raises `UnicodeEncodeError`.
 - A `stemmer` passed here is called from Python for every token longer than 3, as in
-  rouge-score; `pyroid.metrics.tokenizers.DefaultTokenizer` with `use_stemmer=True` stems in Rust
+  rouge-score. `pyroid.metrics.tokenizers.DefaultTokenizer` with `use_stemmer=True` stems in Rust
   instead.
 
 ## Differences from sacrebleu
 
 From the module's documentation (`pyroid/metrics/sacrebleu.pyi`):
 
-- **Lone surrogates** (`"\ud800"`) in a hypothesis or reference raise `UnicodeEncodeError` (with
-  a note naming the item), as everywhere in pyroid; sacrebleu treats them as code points. Remove
+- Lone surrogates (`"\ud800"`) in a hypothesis or reference raise `UnicodeEncodeError` (with a
+  note naming the item), as everywhere in pyroid. sacrebleu treats them as code points. Remove
   them first, e.g. `s.encode("utf-8", "replace").decode("utf-8")`.
-- **Wrong item types** that sacrebleu's own argument checks let through (a non-str hypothesis
-  after the first, a non-str, non-`None` reference) raise `pyroid.InputError` (a `TypeError`)
-  naming the item, where sacrebleu raises an `AttributeError` from deep inside. sacrebleu's
-  checks themselves (`_check_*_args`) raise the same `TypeError`s with the same messages.
-- **BLEU.tokenizer** is a pyroid tokenizer object for the native tokenizers (`signature()` and
-  `__call__(line)`, the same output as sacrebleu's), sacrebleu's own tokenizer object for the
+- Wrong item types that sacrebleu's own argument checks let through (a non-str hypothesis after
+  the first, a non-str, non-`None` reference) raise `pyroid.InputError` (a `TypeError`) naming
+  the item. sacrebleu raises an `AttributeError` from deep inside. sacrebleu's checks themselves
+  (`_check_*_args`) raise the same `TypeError`s with the same messages.
+- `BLEU.tokenizer` is a pyroid tokenizer object for the native tokenizers (`signature()` and
+  `__call__(line)`, the same output as sacrebleu's), and sacrebleu's own tokenizer object for the
   delegated ones.
-- **Pre-computed references** are held in a native object: changing `max_ngram_order`,
-  `char_order` or `word_order` of a metric after constructing it with `references=` raises
-  `ValueError` (sacrebleu would mix the old reference n-grams with new hypothesis ones).
+- Pre-computed references are held in a native object. Changing `max_ngram_order`, `char_order`
+  or `word_order` of a metric after constructing it with `references=` raises `ValueError`
+  (sacrebleu would mix the old reference n-grams with new hypothesis ones).
 - `sentence_bleu_batch` logs sacrebleu's `effective_order` recommendation once per call, not
   once per sentence.
 
 ## Parity
 
 About 1.39 million comparisons per interpreter, of exact `repr`, `str`, `format()`, JSON and
-signature strings with no tolerance: **0 differences** on CPython 3.12, 3.13, 3.14t and 3.15t.
-The data is real evaluation data, pinned by sha256: CNN/DailyMail 3.0.0 test (11,490 lead-3
-summaries against the highlights, and 2,000 whole articles), SummEval (1,600 summaries from 16
-systems against 11 references each, through `score_multi`) and WMT21 newstest2021 (8 language
-pairs, 141 systems, 163,000 segments, up to 3 references). The Porter stemmer also matches NLTK
-on all 512,136 distinct tokens of a 100k-document FineWeb sample.
+signature strings with no tolerance, found 0 differences on CPython 3.12, 3.13, 3.14t and 3.15t.
+The data is real evaluation data, pinned by sha256:
 
-sacrebleu's own BLEU scores differ by one ulp between aarch64 and x86_64 (the platform's libm
-`exp` and `log`), so the stored references are pinned per platform; pyroid matches sacrebleu on
-both. Details: [Compatibility](../compatibility.md#metrics).
+- CNN/DailyMail 3.0.0 test: 11,490 lead-3 summaries against the highlights, and 2,000 whole
+  articles;
+- SummEval: 1,600 summaries from 16 systems against 11 references each, through `score_multi`;
+- WMT21 newstest2021: 8 language pairs, 141 systems, 163,000 segments, up to 3 references.
+
+The Porter stemmer also matches NLTK on all 512,136 distinct tokens of a 100k-document FineWeb
+sample.
+
+sacrebleu's own BLEU scores depend on the C library's `exp` and `log`, so the stored references
+are pinned per platform. On an AWS c7i.4xlarge, x86_64 gave the same results as aarch64. Under
+Rosetta 2 emulation, 165 of 694,757 BLEU results differed by 1–2 ulps. pyroid matches sacrebleu
+in each case. Details: [Compatibility](../compatibility.md#metrics).
 
 ## Speed
 
-CPython 3.13, release wheel; ROUGE on CNN/DailyMail lead-3 summaries against the highlights
-(rouge1, rouge2, rougeL and rougeLsum; 100k pairs are the 11,490 pairs repeated), BLEU and chrF
-on WMT21 newstest2021 segments with the first reference and default settings. Wall time for
-100,000 pairs; "8 processes" runs the reference library in 8 forked processes, against pyroid
-at `threads=8` in one process. *Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*:
+Wall time for 100,000 pairs, on a Docker/OrbStack VM on Apple Silicon, indicative. CPython 3.13,
+release wheel. ROUGE runs on CNN/DailyMail lead-3 summaries against the highlights, with rouge1,
+rouge2, rougeL and rougeLsum; the 100k pairs are the 11,490 pairs repeated. BLEU and chrF run on
+WMT21 newstest2021 segments with the first reference and default settings. "8 processes" runs the
+reference library in 8 forked processes, against pyroid at `threads=8` in one process:
 
 | Workload, 100k pairs (ms) | Reference, 1 process | pyroid, `threads=1` | Speedup | Reference, 8 processes | pyroid, `threads=8` | Speedup |
 |---|---:|---:|---:|---:|---:|---:|
@@ -301,11 +311,11 @@ at `threads=8` in one process. *Docker/OrbStack VM on Apple Silicon (12 vCPU), i
 | `sentence_chrf_batch` | 22,661 | 1,987 | 11× | 4,361 | 915 | 5× |
 
 One call at a time, `RougeScorer.score` took 21 µs per pair against rouge-score's 852 µs (2.3 ms
-with the stemmer), `sentence_bleu` 20 µs against 127 µs, and `sentence_chrf` 28 µs against
+with the stemmer). `sentence_bleu` took 20 µs against 127 µs, and `sentence_chrf` 28 µs against
 281 µs. Per-sentence BLEU and chrF are dominated by building sacrebleu's Python score objects,
-which pyroid keeps for exactness. Other sessions were loading the VM, so the 8-thread figures
+which pyroid keeps for exactness. Other work was loading the VM, so the 8-thread figures
 understate the scaling. Every timed result was first checked identical to the reference's.
 Results: `bench/results/orbstack-aarch64-12cpu/2026-11-06-metrics/`; see also
-[Benchmarks](../benchmarks.md#pyroidmetrics-rouge-bleu-and-chrf).
+[Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
 
 API: [`pyroid.metrics` reference](../reference/metrics.md).

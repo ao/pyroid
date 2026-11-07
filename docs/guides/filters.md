@@ -3,21 +3,22 @@
 `pyroid.filters` ports these [datatrove](https://github.com/huggingface/datatrove) 0.10.1 steps to
 Rust (datatrove is © Hugging Face, Apache-2.0):
 
-- the quality filters **`GopherQualityFilter`, `GopherRepetitionFilter`, `C4QualityFilter` and
-  `FineWebQualityFilter`**;
-- **`C4BadWordsFilter`** and **`URLFilter`**;
-- the formatters **`PIIFormatter`** and **`SymbolLinesFormatter`**.
+- the quality filters `GopherQualityFilter`, `GopherRepetitionFilter`, `C4QualityFilter` and
+  `FineWebQualityFilter`;
+- `C4BadWordsFilter` and `URLFilter`;
+- the formatters `PIIFormatter` and `SymbolLinesFormatter`.
 
-They keep and drop **the same documents** as datatrove, give the same `filter_reason` strings,
-and leave the same text after C4's line removal, PII replacement and symbol-line removal
+They keep and drop the same documents as datatrove and give the same `filter_reason` strings.
+After C4's line removal, PII replacement and symbol-line removal the text is the same too
 ([parity](../compatibility.md#filters)).
 
-The hard part is the words. datatrove tokenizes each language with its own tokenizer (English:
-spaCy 3.8.18's `spacy.blank("en")` plus the sentencizer), and every word count, ratio and n-gram
-in the quality filters depends on those tokens. pyroid includes exact ports of datatrove's
-rule-based tokenizers: spaCy's prefix, suffix, infix and URL rules, its tokenizer exceptions, the
-special-case matcher and the sentencizer for 57 languages, plus the Indic NLP and whitespace
-tokenizers. They cover 3,999 of datatrove's 4,343 language codes ([Languages](#languages)).
+The hard part is the words. datatrove tokenizes each language with its own tokenizer; for English
+that is spaCy 3.8.18's `spacy.blank("en")` plus the sentencizer. Every word count, ratio and
+n-gram in the quality filters depends on those tokens. pyroid includes exact ports of datatrove's
+rule-based tokenizers. For 57 languages it ports spaCy's prefix, suffix, infix and URL rules, its
+tokenizer exceptions, the special-case matcher and the sentencizer. It also ports the Indic NLP
+and whitespace tokenizers. Together they cover 3,999 of datatrove's 4,343 language codes
+([Languages](#languages)).
 
 ## From a datatrove pipeline
 
@@ -35,9 +36,9 @@ column, a `datasets` batch.
 To keep the datatrove pipeline and swap its steps for pyroid-backed ones instead, see
 [datatrove steps](datatrove.md).
 
-To run several filters, chain them in one call with `apply`, which runs the filters in datatrove's pipeline order:
-a document dropped by one filter is not seen by the next, C4's rewritten text is what later
-filters see, and steps that see the same text tokenize it once.
+To run several filters, chain them in one call with `apply`. It runs them in datatrove's pipeline
+order: a document dropped by one filter is not seen by the next, later filters see C4's rewritten
+text, and steps that see the same text tokenize it once.
 
 ```python
 import pyroid.filters as F
@@ -57,8 +58,8 @@ result.text  # each document's text after the chain (C4 removes lines)
 kept = [t for t, k in zip(result.text, result.keep) if k]
 ```
 
-You can pass datatrove's own filter objects instead of pyroid's configs; their settings are read
-from them:
+You can pass datatrove's own filter objects instead of pyroid's configs, and their settings are
+read from them:
 
 ```python
 from datatrove.pipeline.filters import GopherQualityFilter
@@ -68,8 +69,8 @@ F.apply(texts, [GopherQualityFilter(min_doc_words=100)])
 
 ## One filter at a time
 
-Each filter has three functions, all with datatrove's parameter names and defaults (as keyword
-arguments, or a config object such as `F.GopherQuality(...)`):
+Each filter has three functions, all with datatrove's parameter names and defaults. Pass the
+parameters as keyword arguments or as a config object such as `F.GopherQuality(...)`:
 
 | Function | Returns, per document |
 |---|---|
@@ -90,8 +91,8 @@ values are checked when the call starts, before any document is filtered.
 
 ## Arrow, `datasets` and threads
 
-Predicates return a mask in the input's kind, and Arrow input gives a
-[`pyroid.Column`](../reference/pyroid.md#pyroid.Column) (nulls stay null):
+Predicates return a mask in the input's kind. Arrow input gives a
+[`pyroid.Column`](../reference/pyroid.md#pyroid.Column), and nulls stay null:
 
 ```python
 import pyarrow as pa
@@ -114,30 +115,30 @@ ds = ds.filter(lambda b: F.gopher_quality(b["text"]), batched=True, batch_size=1
 `language` (a field of every quality-filter config) takes any of datatrove's 4,343 language
 codes, as datatrove's `language=` does: `"eng"` (the default), `"deu_Latn"`, `"deu"`, `"de"`, ...
 
-- **3,999 codes are native**, tokenized in Rust on every thread: the 57 spaCy languages
+- 3,999 codes are native, tokenized in Rust on every thread. They are the 57 spaCy languages
   datatrove tokenizes with a rule-based `spacy.blank(code)` (with `xx`, spaCy's multi-language
-  tokenizer), the Indic NLP languages and datatrove's whitespace tokenizer. They are 76.8% of
-  FineWeb-2's bytes.
-- **The other 344** (Chinese with jieba, Japanese with SudachiPy, Vietnamese with pyvi, Stanza,
-  Thai, Kiwi, ...) raise `NotImplementedError` unless you pass `python_tokenizer=True`. Then
+  tokenizer), the Indic NLP languages and datatrove's whitespace tokenizer, and they make up
+  76.8% of FineWeb-2's bytes.
+- The other 344 (Chinese with jieba, Japanese with SudachiPy, Vietnamese with pyvi, Stanza, Thai,
+  Kiwi, ...) raise `NotImplementedError` unless you pass `python_tokenizer=True`. Then
   datatrove's own tokenizer splits each document, in Python on the calling thread, and the filter
   math runs in Rust, with a [`FallbackWarning`](../concepts/fallbacks.md).
-- A code datatrove does not know raises datatrove's `ValueError`, when the call starts.
+- A code datatrove does not know raises datatrove's `ValueError` when the call starts.
 
-`F.languages()` lists every code with its tokenizer and whether pyroid's is native, and
-`F.english_languages()` the codes datatrove tokenizes as English. `language` may also be a word
-tokenizer object (anything with `word_tokenize(text)`, and `span_tokenize(text)` for C4). Python
-string semantics (`isalpha`, `isspace`, `splitlines`, `lower`, `re`'s `\w` and `\d`) follow the
-running interpreter's Unicode version, as datatrove's do.
+`F.languages()` lists every code with its tokenizer and whether pyroid's is native.
+`F.english_languages()` lists the codes datatrove tokenizes as English. `language` may also be a
+word tokenizer object: anything with `word_tokenize(text)`, and `span_tokenize(text)` for C4.
+Python string semantics (`isalpha`, `isspace`, `splitlines`, `lower`, `re`'s `\w` and `\d`)
+follow the running interpreter's Unicode version, as datatrove's do.
 
-The language table, how to choose, examples, parity and per-language speed:
+The language table, how to choose, examples, parity and per-language speed are in
 [Languages](languages.md).
 
 ## PII
 
-`pii_replace` is datatrove's `PIIFormatter`: every match of its email regex becomes the next
-email replacement, then every match of its IPv4 regex that `ipaddress.ip_address` accepts (by
-default only addresses whose `is_global` is true) becomes the next IP replacement.
+`pii_replace` is datatrove's `PIIFormatter`. Every match of its email regex becomes the next
+email replacement. Then every match of its IPv4 regex that `ipaddress.ip_address` accepts becomes
+the next IP replacement; by default only addresses whose `is_global` is true are replaced.
 
 ```python
 import pyroid.filters as F
@@ -172,17 +173,17 @@ pii(["Mail c@d.org or e@f.net."])  # ['Mail firstname.lastname@example.org or em
 pii.email_index  # 1: the next email replacement (datatrove's counter; assignable)
 ```
 
-The matching and replacing run in Rust, in parallel; `ipaddress` is asked about each distinct
+The matching and replacing run in Rust, in parallel. `ipaddress` is asked about each distinct
 address once, on the calling thread, so `is_global` follows the running interpreter's tables, as
 in datatrove. Documents with nothing to replace come back as the original objects.
 
 ## C4 bad words
 
-`c4_badwords` is datatrove's `C4BadWordsFilter`: a document is dropped when its `text.lower()`
-contains a word of its language's list, between non-word characters or the text's ends (Japanese,
-Thai and Chinese words match anywhere). `languages=` gives each document's language, as
-datatrove reads `doc.metadata["language"]` (one code for all, or one per document; the default
-is `default_language="en"`):
+`c4_badwords` is datatrove's `C4BadWordsFilter`. A document is dropped when its `text.lower()`
+contains a word of its language's list, between non-word characters or the text's ends. Japanese,
+Thai and Chinese words match anywhere. `languages=` gives each document's language, as datatrove
+reads `doc.metadata["language"]`: one code for all, or one per document. The default is
+`default_language="en"`:
 
 ```python
 import pyroid.filters as F
@@ -197,17 +198,18 @@ F.c4_badwords(texts, words={"en": ["recipe"]})  # [False, True, True]: your own 
 
 The word lists are the [LDNOOBW](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words)
 lists (CC BY 4.0) at the two commits datatrove pins, for the 28 languages in
-`F.C4_BADWORDS_LANGUAGES`. pyroid does not ship them: like datatrove, it downloads a list the
+`F.C4_BADWORDS_LANGUAGES`. pyroid does not ship them. Like datatrove, it downloads a list the
 first time it is needed and checks its sha256. They are kept under `c4_badwords/` in
 `$PYROID_CACHE_DIR`, else `$XDG_CACHE_HOME/pyroid`, else `~/.cache/pyroid`.
+
 `F.load_c4_badwords("de")` returns one language's set (`download=False` raises
 `FileNotFoundError` instead of fetching), and `words=` replaces the lists for the languages it
 names. A document language with no list raises datatrove's `ValueError` before any document is
-filtered (`fail_on_missing_language=True`, the default); with `False`, its documents are kept.
+filtered (`fail_on_missing_language=True`, the default). With `False`, its documents are kept.
 
 With `keep_fraction > 0`, a flagged document is kept anyway when the next `uniform()` draw of
 numpy's `default_rng(seed)` is below it. pyroid reproduces numpy's PCG64 stream bit for bit, one
-draw per flagged document in document order. `c4_badwords` starts a fresh generator per call; a
+draw per flagged document in document order. `c4_badwords` starts a fresh generator per call. A
 `BadWordsFilter` continues its stream across calls, as one datatrove step does over a corpus:
 
 ```python
@@ -223,11 +225,10 @@ same ten documents.
 
 ## Symbol lines
 
-`symbol_lines` is datatrove's `SymbolLinesFormatter`: over `text.splitlines()`, a non-blank line
-made only of `symbols_to_remove` and spaces is dropped, a run of such lines becomes one
-`replace_char` (if it is not empty), and the kept lines are joined with `"\n"`. The default
-symbols are datatrove's `PUNCTUATION_SET`; FineWeb-2 removes `|` lines and puts a newline in their
-place:
+`symbol_lines` is datatrove's `SymbolLinesFormatter`. Over `text.splitlines()`, a non-blank line
+made only of `symbols_to_remove` and spaces is dropped, and a run of such lines becomes one
+`replace_char` (if it is not empty). The kept lines are joined with `"\n"`. The default symbols
+are datatrove's `PUNCTUATION_SET`. FineWeb-2 removes `|` lines and puts a newline in their place:
 
 ```python
 import pyroid.filters as F
@@ -272,14 +273,14 @@ F.url_filter_reasons(urls, uf)  # the same reasons, from the built filter
 ```
 
 Domains come from tldextract 5.4.0's `extract_str`, ported to Rust, with the suffix lists of a
-`tldextract.TLDExtract` (pass `tld_extractor=`; the default is a new `TLDExtract()`, as datatrove
-builds). tldextract must be installed.
+`tldextract.TLDExtract`. Pass `tld_extractor=`; the default is a new `TLDExtract()`, as datatrove
+builds. tldextract must be installed.
 
 By default (`use_integrated_lists=True`) the filter also uses datatrove's own block lists, so
-datatrove must be installed. pyroid does not ship them (they are not under pyroid's licence):
-`F.datatrove_url_lists()` extracts them from datatrove's package into datatrove's cache, as
-datatrove does, so both share one copy. Build the filter once and reuse it: it holds 4.56 million
-blocked domains (about 200 MB) and takes a second or two to build.
+datatrove must be installed. pyroid does not ship them, because they are not under pyroid's
+licence. `F.datatrove_url_lists()` extracts them from datatrove's package into datatrove's cache,
+as datatrove does, so both share one copy. Build the filter once and reuse it: it holds 4.56
+million blocked domains (about 200 MB) and takes a second or two to build.
 
 ```python
 full = F.URLFilter()  # datatrove's lists (needs datatrove and fasteners installed)
@@ -287,7 +288,7 @@ full.num_domains, full.num_urls  # (4558940, 19587)
 ```
 
 `url_filter(urls, **params)` and `url_filter_reasons` build a filter from a config, or take a
-built one; the last two filters built from configs are cached. Two rare inputs run tldextract's
+built one. The last two filters built from configs are cached. Two rare inputs run tldextract's
 own Python code, with a `FallbackWarning`: URLs with lone surrogates, and `xn--` labels when the
 installed `idna` lacks the canonical A-label check.
 
@@ -297,10 +298,10 @@ From the module's documentation (`pyroid/filters.pyi`):
 
 - A `top_n_grams` / `dup_n_grams` size below 1 raises `ValueError` (datatrove loops forever on
   `dup_n_grams` sizes below 1).
-- Values are checked when the call starts: a non-number threshold raises `TypeError`, and an
-  unknown `language` `ValueError`, before any document is filtered (datatrove raises the latter
-  at the first document that needs words); a failing document raises for the whole batch (the
-  exception names the document).
+- Values are checked when the call starts. A non-number threshold raises `TypeError`, and an
+  unknown `language` `ValueError`, before any document is filtered; datatrove raises the latter
+  at the first document that needs words.
+- A failing document raises for the whole batch, and the exception names the document.
 - `exclusion_writer` is not supported (use the `*_reasons` functions).
 - A document with a token that is exactly `IS_ALPHA` (e.g. in `"IS_ALPHA."`, not in
   `"xIS_ALPHA"`) is tokenized like any other text, as datatrove does the first time in a
@@ -309,41 +310,47 @@ From the module's documentation (`pyroid/filters.pyi`):
   `text.replace("IS_ALPHA", "")` instead, or raises if that still has the token. So datatrove's
   words for these documents depend on what it saw before; pyroid's do not.
 
-For the newer steps (from their tests and report):
+For the newer steps:
 
 - Errors are raised before a batch is processed, where datatrove raises mid-stream: a bad-words
   language with no list (with `fail_on_missing_language`), an empty URL (`ValueError`, where
   datatrove's `URLFilter` fails an assertion), and an empty replacement tuple that a match needs
   (`IndexError`).
-- datatrove's quirks are kept: in `URLFilter`, a whitespace-only list entry puts `""` among the
+- datatrove's quirks are kept. In `URLFilter`, a whitespace-only list entry puts `""` among the
   blocked domains, which drops every URL without a registered domain as `"domain"`, and an
-  empty-string entry raises `IndexError`; in `PIIFormatter`, IP addresses with leading zeros
+  empty-string entry raises `IndexError`. In `PIIFormatter`, IP addresses with leading zeros
   never parse, so they are never replaced.
 - The datatrove drop-in steps have their own notes: see [datatrove steps](datatrove.md).
 
 Also: on a Python newer than Unicode 17.0, pyroid warns once and uses its 17.0 tables. Filtering
 runs in Rust except on the paths that emit a `FallbackWarning`: a Python tokenizer
 (`python_tokenizer=True`, or a tokenizer object as `language`) and the two rare URL inputs. Other
-datatrove filters (`C4ParagraphFilter`, `UnigramLogProbFilter`, ...) are not ported; for
+datatrove filters (`C4ParagraphFilter`, `UnigramLogProbFilter`, ...) are not ported. For
 `UnigramLogProbFilter`, nothing grants rights to its word-frequency data.
 
 ## Speed
 
-On the first 1,000 FineWeb documents, single filters on one thread were 52–107× faster than
-datatrove 0.10.1 (GopherQuality: 79.8 against 5,739 µs per document), and took 14.2–29.9 µs per
-document with 8 threads. *Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*: see
-[Benchmarks](../benchmarks.md#per-stage). FineWeb's four filters chained through `apply`
-measured about 86× faster on one core in the module's earlier run (0.28 against 23.9 ms per
-document; *indicative, preliminary*, [details](../benchmarks.md#pyroidfilters)).
+On an AWS c7i.4xlarge (Intel Xeon Platinum 8488C), over the first 1,000 FineWeb documents, single
+filters on one thread were 35–69× faster than datatrove 0.10.1. GopherQuality, for example, took
+99.9 µs per document against 4,615 µs. With 8 threads the filters took 13.2–26.4 µs per document.
+pyroid ran on free-threaded CPython 3.15t and datatrove on CPython 3.13. On a c8g.4xlarge (AWS
+Graviton4) the range was 41–83×. See [Benchmarks](../benchmarks.md#per-stage).
+
+The rest of this section comes from earlier runs on a Docker/OrbStack VM on Apple Silicon,
+indicative.
+
+FineWeb's four filters chained through `apply` measured about 86× faster on one core in the
+module's preliminary run, at 0.28 against 23.9 ms per document
+([details](../benchmarks.md#pyroidfilters)).
 
 Beyond English, FineWeb-2's filter chain ran 36–86× faster than datatrove on one thread for the
-native languages measured (Hindi: 20×); Chinese and Japanese on `python_tokenizer=True` ran at
+native languages measured (Hindi: 20×). Chinese and Japanese on `python_tokenizer=True` ran at
 about datatrove's speed ([Languages](languages.md#speed)).
 
-The newer steps on the FineWeb dev slice (10,000 documents), datatrove's step alone in one
-process and in a warmed `multiprocessing.Pool(8)`, pyroid's function at 1 and 8 threads. Release
-wheel, CPython 3.13, `taskset -c 0-7`, medians of 5 for pyroid and 2 for datatrove, load average
-about 8. *Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*:
+The table times the newer steps on the FineWeb dev slice (10,000 documents). datatrove's step ran
+alone in one process and in a warmed `multiprocessing.Pool(8)`, and pyroid's function at 1 and 8
+threads. Release wheel, CPython 3.13, `taskset -c 0-7`; medians of 5 for pyroid and 2 for
+datatrove; load average about 8.
 
 | Step | datatrove, 1 process | 8 processes | pyroid, 1 thread | 8 threads | Speedup: 1 thread vs 1 process / 8 threads vs 8 processes |
 |---|--:|--:|--:|--:|--:|
@@ -351,10 +358,11 @@ about 8. *Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative*:
 | `c4_badwords` (`C4BadWordsFilter`) | 6.968 s | 1.312 s | 0.305 s | 0.053 s | 23× / 25× |
 | `symbol_lines` (`SymbolLinesFormatter`, FineWeb-2's settings) | 0.145 s | 0.198 s | 0.028 s | 0.008 s | 5.2× / 25× |
 
-`URLFilter` on 10,000 dev URLs (same VM, load average about 22): 912k URLs/s on one thread, 31×
-datatrove's `filter()` loop (29.4k URLs/s), and 1.72M URLs/s with 8 threads (59× datatrove's
-single process; contention-limited; datatrove at 8 processes was not measured). Building it with
-the integrated lists took 1.44 s and 198 MB more memory, against 2.66 s and 587 MB per process for
-datatrove. See [Benchmarks](../benchmarks.md#more-datatrove-steps).
+`URLFilter` was timed on the 10,000 dev URLs, at a load average of about 22. On one thread it
+checked 912k URLs/s, 31× datatrove's `filter()` loop (29.4k URLs/s). With 8 threads it reached
+1.72M URLs/s, 59× datatrove's single process. That run was limited by contention, and datatrove
+at 8 processes was not measured. Building the filter with the integrated lists took 1.44 s and
+198 MB more memory, against 2.66 s and 587 MB per process for datatrove. See
+[Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
 
 API: [`pyroid.filters` reference](../reference/filters.md).
