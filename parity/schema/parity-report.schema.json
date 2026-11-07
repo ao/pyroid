@@ -41,7 +41,7 @@
         "status": {"$ref": "#/$defs/status"},
         "suites": {
           "type": "object",
-          "propertyNames": {"enum": ["ftfy", "fasttext", "filters", "dedup", "metrics", "json_repair", "datasketch"]},
+          "propertyNames": {"enum": ["ftfy", "fasttext", "filters", "dedup", "metrics", "json_repair", "datasketch", "jieba"]},
           "additionalProperties": {"$ref": "#/$defs/suite"}
         }
       }

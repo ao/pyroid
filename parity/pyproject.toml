@@ -32,6 +32,8 @@ oracle = [
     "tokenizers>=0.22",
     "regex>=2024.11",
     "xxhash>=3.5,<4",
+    # datatrove's Chinese tokenizer (SpaCyTokenizer("zh")) and the reference of the jieba suite.
+    "jieba==0.42.1",
     "fasttext-predict==0.9.2.4; python_version < '3.14'",
     # What datatrove 0.10.1 needs but doesn't install for the steps tests/test_filters_more.py runs live: its
     # `processing` extra for URLFilter (the versions the URLFilter tests were verified with), and aiohttp for fsspec's HTTP download of
@@ -64,6 +66,8 @@ filterwarnings = [
     # datatrove's URLFilter extracts its block lists with tarfile and no filter. CPython 3.12.3
     # (the ubuntu-24.04 runners' python3.12) attributes that warning to tarfile, not the caller.
     "ignore:Python 3.14 will, by default, filter extracted tar archives:DeprecationWarning:tarfile",
+    # jieba 0.42.1 has invalid escapes in non-raw strings ("\\."): a SyntaxWarning when it is compiled.
+    "ignore:invalid escape sequence:SyntaxWarning",
 ]
 timeout = "600"
 

@@ -32,6 +32,8 @@ json_repair  json_repair 0.64.5's own API: ``repair_json(json_str="", return_obj
 datasketch  datasketch 2.0.0's own API: ``MinHash`` (with ``bulk``), ``LeanMinHash``, ``MinHashLSH``,
           ``MinHashLSHForest`` and ``MinHashLSHEnsemble``; optional pyroid-style extensions
           ``minhash_batch(texts, num_perm=, seed=, scheme=, ngram=)`` and ``MinHashLSH.query_batch``.
+jieba     jieba 0.42.1's own module API (``lcut``, ``lcut_for_search``, ``tokenize``, ``Tokenizer``, ``dt``);
+          a candidate whose ``lcut`` also takes a list of str (one list of words per document) gets batch checks.
 
 Warnings: where a suite compares warnings (the ftfy ``errors`` check, every json_repair check), a candidate's
 ``pyroid.FallbackWarning`` (its "delegating to the incumbent" notice, shown once per process; see
@@ -49,7 +51,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-SUITES = ("ftfy", "fasttext", "filters", "dedup", "metrics", "json_repair", "datasketch")
+SUITES = ("ftfy", "fasttext", "filters", "dedup", "metrics", "json_repair", "datasketch", "jieba")
 REFERENCE = {
     "ftfy": "ftfy",
     "fasttext": "fasttext",
@@ -58,6 +60,7 @@ REFERENCE = {
     "metrics": "rouge_score",
     "json_repair": "json_repair",
     "datasketch": "datasketch",
+    "jieba": "jieba",
 }
 # Distribution that provides a module, for version reporting when it differs from the module name.
 DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel")}
@@ -272,6 +275,18 @@ class GenericDatasketch:
         self.notes = [] if hasattr(mod, "minhash_batch") else ["no minhash_batch: those checks skip"]
 
 
+class GenericJieba:
+    """jieba's module API, taken from the module as it is; ``has_batch`` if ``lcut`` takes a list."""
+
+    def __init__(self, mod: Any) -> None:
+        self.mod = mod
+        try:
+            self.has_batch = mod.lcut(["中文", ""]) == [mod.lcut("中文"), []]
+        except Exception:  # noqa: BLE001  jieba itself raises AttributeError for a list
+            self.has_batch = False
+        self.notes = [] if self.has_batch else ["lcut takes no list: batch checks skipped"]
+
+
 GENERIC: dict[str, Callable[[Any], Any]] = {
     "ftfy": GenericFtfy,
     "fasttext": GenericFasttext,
@@ -280,4 +295,5 @@ GENERIC: dict[str, Callable[[Any], Any]] = {
     "metrics": _generic_metrics,
     "json_repair": GenericJsonRepair,
     "datasketch": GenericDatasketch,
+    "jieba": GenericJieba,
 }
