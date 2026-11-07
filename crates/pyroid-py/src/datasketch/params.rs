@@ -71,7 +71,39 @@ fn ensemble_optimal_param(
     })
 }
 
+/// `ensemble_optimal_param` for every `xq` of `xqs` (`MinHashLSHEnsemble`'s
+/// `_init_optimal_params`), one search per task on the shared pool.
+#[pyfunction]
+#[pyo3(signature = (threshold, num_perm, max_r, xqs, false_positive_weight, false_negative_weight, *, threads = None))]
+#[allow(clippy::too_many_arguments)]
+fn ensemble_optimal_params(
+    py: Python<'_>,
+    threshold: f64,
+    num_perm: usize,
+    max_r: usize,
+    xqs: Vec<f64>,
+    false_positive_weight: f64,
+    false_negative_weight: f64,
+    threads: Option<crate::input::Threads>,
+) -> PyResult<Vec<(usize, usize)>> {
+    let threads = crate::input::threads(threads);
+    py.detach(|| {
+        pyroid_core::par::map_tasks(&xqs, threads, |&xq| {
+            params::ensemble_optimal_param(
+                threshold,
+                num_perm,
+                max_r,
+                xq,
+                false_positive_weight,
+                false_negative_weight,
+            )
+        })
+    })
+    .map_err(|e| crate::errors::PyroidError::new_err(e.to_string()))
+}
+
 pub fn add(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(ensemble_optimal_params, m)?)?;
     m.add_function(wrap_pyfunction!(lsh_false_positive, m)?)?;
     m.add_function(wrap_pyfunction!(lsh_false_negative, m)?)?;
     m.add_function(wrap_pyfunction!(lsh_optimal_param, m)?)?;
