@@ -1,0 +1,357 @@
+{
+ "info": {
+  "python": "3.15.2",
+  "implementation": "CPython",
+  "free_threaded": true,
+  "machine": "aarch64",
+  "cpus": 12,
+  "in_docker": true,
+  "versions": {
+   "datasketch": "2.0.0",
+   "numpy": "2.5.4",
+   "pyroid": "1.0.0.dev0"
+  },
+  "corpus": "fineweb/fineweb-dev-10k.parquet",
+  "docs": 10000,
+  "shingles": 5104303,
+  "repeats": 3
+ },
+ "rows": [
+  {
+   "group": "sig/affine32",
+   "row": "datasketch MinHash.bulk",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 3.128125989998807,
+   "items": 10000
+  },
+  {
+   "group": "sig/affine32",
+   "row": "datasketch MinHash.bulk, 8-thread pool",
+   "impl": "datasketch",
+   "threads": 8,
+   "seconds": 2.3067666300048586,
+   "items": 10000
+  },
+  {
+   "group": "sig/affine32",
+   "row": "pyroid MinHash.bulk(threads=1)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.3916531919967383,
+   "items": 10000
+  },
+  {
+   "group": "sig/affine32",
+   "row": "pyroid MinHash.bulk(threads=8)",
+   "impl": "pyroid",
+   "threads": 8,
+   "seconds": 0.14792532300634775,
+   "items": 10000
+  },
+  {
+   "group": "text/affine32",
+   "row": "datasketch shingles + MinHash.bulk (from text)",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 4.427928793011233,
+   "items": 10000
+  },
+  {
+   "group": "text/affine32",
+   "row": "datasketch from text, 8-thread pool",
+   "impl": "datasketch",
+   "threads": 8,
+   "seconds": 2.4326650250004604,
+   "items": 10000
+  },
+  {
+   "group": "text/affine32",
+   "row": "pyroid minhash_batch(texts, threads=1)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.3534471739985747,
+   "items": 10000
+  },
+  {
+   "group": "text/affine32",
+   "row": "pyroid minhash_batch(texts, threads=8)",
+   "impl": "pyroid",
+   "threads": 8,
+   "seconds": 0.05201110900088679,
+   "items": 10000
+  },
+  {
+   "group": "sig/legacy",
+   "row": "datasketch MinHash.bulk",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 4.514949168995372,
+   "items": 10000
+  },
+  {
+   "group": "sig/legacy",
+   "row": "datasketch MinHash.bulk, 8-thread pool",
+   "impl": "datasketch",
+   "threads": 8,
+   "seconds": 2.217648919002386,
+   "items": 10000
+  },
+  {
+   "group": "sig/legacy",
+   "row": "pyroid MinHash.bulk(threads=1)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.7791707149881404,
+   "items": 10000
+  },
+  {
+   "group": "sig/legacy",
+   "row": "pyroid MinHash.bulk(threads=8)",
+   "impl": "pyroid",
+   "threads": 8,
+   "seconds": 0.25806154299061745,
+   "items": 10000
+  },
+  {
+   "group": "text/legacy",
+   "row": "datasketch shingles + MinHash.bulk (from text)",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 5.783372331992723,
+   "items": 10000
+  },
+  {
+   "group": "text/legacy",
+   "row": "datasketch from text, 8-thread pool",
+   "impl": "datasketch",
+   "threads": 8,
+   "seconds": 2.3609037850110326,
+   "items": 10000
+  },
+  {
+   "group": "text/legacy",
+   "row": "pyroid minhash_batch(texts, threads=1)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.5970474309870042,
+   "items": 10000
+  },
+  {
+   "group": "text/legacy",
+   "row": "pyroid minhash_batch(texts, threads=8)",
+   "impl": "pyroid",
+   "threads": 8,
+   "seconds": 0.0916061419993639,
+   "items": 10000
+  },
+  {
+   "group": "sig/affine64",
+   "row": "datasketch MinHash.bulk",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 3.6576613200013526,
+   "items": 10000
+  },
+  {
+   "group": "sig/affine64",
+   "row": "datasketch MinHash.bulk, 8-thread pool",
+   "impl": "datasketch",
+   "threads": 8,
+   "seconds": 2.2731442660005996,
+   "items": 10000
+  },
+  {
+   "group": "sig/affine64",
+   "row": "pyroid MinHash.bulk(threads=1)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.6831892319896724,
+   "items": 10000
+  },
+  {
+   "group": "sig/affine64",
+   "row": "pyroid MinHash.bulk(threads=8)",
+   "impl": "pyroid",
+   "threads": 8,
+   "seconds": 0.22633666699402966,
+   "items": 10000
+  },
+  {
+   "group": "text/affine64",
+   "row": "datasketch shingles + MinHash.bulk (from text)",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 4.925464703992475,
+   "items": 10000
+  },
+  {
+   "group": "text/affine64",
+   "row": "datasketch from text, 8-thread pool",
+   "impl": "datasketch",
+   "threads": 8,
+   "seconds": 2.472333294004784,
+   "items": 10000
+  },
+  {
+   "group": "text/affine64",
+   "row": "pyroid minhash_batch(texts, threads=1)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.5619361499993829,
+   "items": 10000
+  },
+  {
+   "group": "text/affine64",
+   "row": "pyroid minhash_batch(texts, threads=8)",
+   "impl": "pyroid",
+   "threads": 8,
+   "seconds": 0.10217842500424013,
+   "items": 10000
+  },
+  {
+   "group": "lsh/init",
+   "row": "datasketch MinHashLSH(threshold=0.9)",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 0.012996965000638738,
+   "items": 1
+  },
+  {
+   "group": "lsh/init",
+   "row": "pyroid MinHashLSH(threshold=0.9)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.001459167993743904,
+   "items": 1
+  },
+  {
+   "group": "lsh-insert/t0.9",
+   "row": "datasketch insert per doc",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 0.1193040999933146,
+   "items": 10000
+  },
+  {
+   "group": "lsh-insert/t0.9",
+   "row": "pyroid insert per doc",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.015510925004491583,
+   "items": 10000
+  },
+  {
+   "group": "lsh-insert/t0.9",
+   "row": "pyroid insert_batch(threads=1)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.011288131005130708,
+   "items": 10000
+  },
+  {
+   "group": "lsh-insert/t0.9",
+   "row": "pyroid insert_batch(threads=8)",
+   "impl": "pyroid",
+   "threads": 8,
+   "seconds": 0.011178214001120068,
+   "items": 10000
+  },
+  {
+   "group": "lsh-query/t0.9",
+   "row": "datasketch query per doc",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 0.05852415300614666,
+   "items": 10000
+  },
+  {
+   "group": "lsh-query/t0.9",
+   "row": "pyroid query per doc",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.010488671003258787,
+   "items": 10000
+  },
+  {
+   "group": "lsh-query/t0.9",
+   "row": "pyroid query_batch(threads=1)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.0044242109870538116,
+   "items": 10000
+  },
+  {
+   "group": "lsh-query/t0.9",
+   "row": "pyroid query_batch(threads=8)",
+   "impl": "pyroid",
+   "threads": 8,
+   "seconds": 0.00496221000503283,
+   "items": 10000
+  },
+  {
+   "group": "lsh-insert/t0.5",
+   "row": "datasketch insert per doc",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 0.5247051740007009,
+   "items": 10000
+  },
+  {
+   "group": "lsh-insert/t0.5",
+   "row": "pyroid insert per doc",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.04286427098850254,
+   "items": 10000
+  },
+  {
+   "group": "lsh-insert/t0.5",
+   "row": "pyroid insert_batch(threads=1)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.04066331200010609,
+   "items": 10000
+  },
+  {
+   "group": "lsh-insert/t0.5",
+   "row": "pyroid insert_batch(threads=8)",
+   "impl": "pyroid",
+   "threads": 8,
+   "seconds": 0.019196258988813497,
+   "items": 10000
+  },
+  {
+   "group": "lsh-query/t0.5",
+   "row": "datasketch query per doc",
+   "impl": "datasketch",
+   "threads": 1,
+   "seconds": 0.23516665599890985,
+   "items": 10000
+  },
+  {
+   "group": "lsh-query/t0.5",
+   "row": "pyroid query per doc",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.026729930003057234,
+   "items": 10000
+  },
+  {
+   "group": "lsh-query/t0.5",
+   "row": "pyroid query_batch(threads=1)",
+   "impl": "pyroid",
+   "threads": 1,
+   "seconds": 0.01789500899030827,
+   "items": 10000
+  },
+  {
+   "group": "lsh-query/t0.5",
+   "row": "pyroid query_batch(threads=8)",
+   "impl": "pyroid",
+   "threads": 8,
+   "seconds": 0.012330548008321784,
+   "items": 10000
+  }
+ ]
+}
