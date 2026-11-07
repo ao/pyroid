@@ -1,0 +1,58 @@
+{
+ "what": "FineWeb-2 filters (GopherRepetition -> FineWebQuality -> GopherQuality) + MinHash signatures",
+ "label": "Docker/OrbStack VM, indicative",
+ "python": "3.13.18",
+ "machine": "aarch64",
+ "cpus": 12,
+ "loadavg": [
+  1.73291015625,
+  2.1318359375,
+  4.953125
+ ],
+ "rows": [
+  {
+   "lang": "cmn_Hani",
+   "docs": 1000,
+   "python_tokenizer": false,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 1000
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 10.628271947498433,
+     "us_per_doc": 10628.271947498433
+    },
+    "datatrove minhash x1": {
+     "s": 7.85708336350217,
+     "us_per_doc": 7857.08336350217
+    },
+    "pyroid filters x1": {
+     "s": 0.24198420700849965,
+     "us_per_doc": 241.98420700849965
+    },
+    "pyroid minhash x1": {
+     "s": 0.17847571799939033,
+     "us_per_doc": 178.47571799939033
+    },
+    "datatrove filters x8": {
+     "s": 1.5558410369994817,
+     "us_per_doc": 1555.8410369994817
+    },
+    "datatrove minhash x8": {
+     "s": 1.1717768809976405,
+     "us_per_doc": 1171.7768809976405
+    },
+    "pyroid filters x8": {
+     "s": 0.03621491800004151,
+     "us_per_doc": 36.21491800004151
+    },
+    "pyroid minhash x8": {
+     "s": 0.02815272400039248,
+     "us_per_doc": 28.15272400039248
+    }
+   }
+  }
+ ]
+}
