@@ -25,6 +25,7 @@ import random
 import re
 import struct
 import subprocess
+import sys
 import sysconfig
 import threading
 import uuid
@@ -656,8 +657,33 @@ def _outcome(fn: Callable[..., Any], *args: Any) -> Outcome:
         return type(e).__name__, str(e)
 
 
-def _prediction_mismatch(want: Outcome, got: Outcome) -> str | None:
-    """Why pyroid's ``predict(str)`` outcome differs from fastText's, or None."""
+# fastText orders exact ties as its C++ standard library's heap does. pyroid replays libstdc++
+# (Linux), which MSVC matches here; libc++ (macOS) orders ties, and cuts them at k, differently
+# (docs/guides/fasttext.md, "Tie order"). There answers may differ from fastText's in ties only.
+ORACLE_TIE_ORDER_DIFFERS = sys.platform == "darwin"
+
+
+def _only_ties_differ(every: Outcome, got: Outcome) -> bool:
+    """Whether each of ``got``'s labels has the probability fastText gives it in ``every``
+    (its ``predict(line, -1, -1.0)``): then ``got`` differs from fastText's top-k in ties only."""
+    if every[0] != "ok" or got[0] != "ok":
+        return False
+    prob = dict(zip(*every[1], strict=True))
+    labels, probs = got[1]
+    return len(set(labels)) == len(labels) and all(
+        label in prob and abs(prob[label] - float(p)) <= 1e-6
+        for label, p in zip(labels, probs, strict=True)
+    )
+
+
+def _prediction_mismatch(
+    want: Outcome, got: Outcome, every: Callable[[], Outcome] | None = None
+) -> str | None:
+    """Why pyroid's ``predict(str)`` outcome differs from fastText's, or None.
+
+    ``every`` gives fastText's prediction of every label for the same line; with it, labels that
+    differ only in exact-tie order are accepted where ``ORACLE_TIE_ORDER_DIFFERS``.
+    """
     if want[0] != "ok" or got[0] != "ok":
         return None if want == got else f"{want} != {got}"
     (want_labels, want_probs), (labels, probs) = want[1], got[1]
@@ -666,7 +692,14 @@ def _prediction_mismatch(want: Outcome, got: Outcome) -> str | None:
     if probs.dtype != np.float64 or probs.shape != (len(labels),):
         return f"probs {probs.dtype} {probs.shape}"
     if labels != tuple(want_labels):
-        return f"labels {labels} != {want_labels}"
+        ties_only = (
+            ORACLE_TIE_ORDER_DIFFERS
+            and every is not None
+            and len(labels) == len(want_labels)
+            and _only_ties_differ(every(), got)
+        )
+        if not ties_only:
+            return f"labels {labels} != {want_labels}"
     worst = max((abs(float(a) - b) for a, b in zip(probs, want_probs, strict=True)), default=0)
     return None if worst <= 1e-6 else f"|dp| = {worst} ({list(probs)} vs {list(want_probs)})"
 
@@ -715,7 +748,8 @@ def test_oracle_parity_on_the_corpus(oracle: ModuleType, zoo: Zoo, name: str) ->
         for line in CORPUS:
             want = _outcome(ref.predict, line, k, threshold)
             got = _outcome(entry.model.predict, line, k, threshold)
-            why = _prediction_mismatch(want, got)
+            every = functools.partial(_outcome, ref.predict, line, -1, -1.0)
+            why = _prediction_mismatch(want, got, every)
             if why is not None:
                 mismatches.append((line[:60], k, threshold, why))
     assert not mismatches, f"{len(mismatches)} mismatches, e.g. {mismatches[:3]}"
@@ -738,7 +772,8 @@ def test_oracle_parity_hypothesis(
     for line in lines:
         want = _outcome(ref.predict, line, k, threshold)
         got = _outcome(entry.model.predict, line, k, threshold)
-        assert _prediction_mismatch(want, got) is None, (line, want, got)
+        every = functools.partial(_outcome, ref.predict, line, -1, -1.0)
+        assert _prediction_mismatch(want, got, every) is None, (line, want, got)
     _check_batch(entry.model, lines, k, threshold)
 
 
