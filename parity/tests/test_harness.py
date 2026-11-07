@@ -144,12 +144,17 @@ def test_manifest_shows_only_this_platforms_references(tmp_path, monkeypatch):
 
 def test_every_platform_specific_reference_is_named_for_its_platform():
     from pyroid_parity import specs
+    from pyroid_parity.metrics_cases import metrics_ref
 
     files = D._load_all()["files"]
-    lid = {rel: e["platform"] for rel, e in files.items() if rel.startswith("parity/fasttext-ref")}
-    assert "linux-aarch64" in lid.values() and "linux-x86_64" in lid.values()
-    assert all(specs.lid_ref(p) == rel for rel, p in lid.items())
-    assert all("platform" not in e for rel, e in files.items() if rel not in lid)
+    per_platform = {"parity/fasttext-ref": specs.lid_ref, "parity/metrics-ref": metrics_ref}
+    seen = set()
+    for prefix, name_for in per_platform.items():
+        refs = {rel: e["platform"] for rel, e in files.items() if rel.startswith(prefix)}
+        assert "linux-aarch64" in refs.values() and "linux-x86_64" in refs.values(), prefix
+        assert all(name_for(p) == rel for rel, p in refs.items())
+        seen |= refs.keys()
+    assert all("platform" not in e for rel, e in files.items() if rel not in seen)
 
 
 def test_content_hash_is_format_independent():
