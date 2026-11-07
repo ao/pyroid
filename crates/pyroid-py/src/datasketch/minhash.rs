@@ -30,6 +30,10 @@ const DETACH_WORK: usize = 1 << 16;
 /// Token bytes extracted per detached round of `bulk` (bounds the copy).
 const BULK_CHUNK_BYTES: usize = 32 << 20;
 
+/// Token bytes per pipelined round of `bulk` (copied while the pool hashes the
+/// previous round).
+const PIPELINE_ROUND_BYTES: usize = 4 << 20;
+
 fn scheme_arg(name: &str) -> PyResult<Scheme> {
     Scheme::from_name(name).ok_or_else(|| PyValueError::new_err(format!("unknown scheme {name:?}")))
 }
@@ -335,7 +339,60 @@ fn extract_doc(
     Ok(true)
 }
 
+/// Copy documents `start..` into `arena` until it holds about `budget`
+/// bytes; returns the end index. Documents the caller handles go to
+/// `fallback`.
+fn extract_round(
+    arena: &mut Arena,
+    docs: &Bound<'_, PyList>,
+    start: usize,
+    budget: usize,
+    mode: Tokens,
+    fallback: &mut Vec<usize>,
+) -> PyResult<usize> {
+    arena.clear();
+    let n = docs.len();
+    let mut end = start;
+    while end < n && (end == start || arena.bytes.len() < budget) {
+        let doc = docs.get_item(end)?;
+        let first = arena.token_ends.len();
+        if extract_doc(arena, &doc, end, mode)? {
+            arena.docs.push(Some((first, arena.token_ends.len())));
+        } else {
+            arena.docs.push(None);
+            fallback.push(end);
+        }
+        end += 1;
+    }
+    Ok(end)
+}
+
+/// Hash one round's documents into their rows (pure Rust; runs detached).
+fn hash_round<T: Value>(
+    perm: &Permutations,
+    arena: &Arena,
+    rows: &mut [T],
+    bits: Sha1Bits,
+    threads: par::Threads,
+) -> Result<(), BatchError> {
+    par::try_map_rows(rows, perm.len(), threads, |i, row| {
+        if let Some(tokens) = arena.tokens(i) {
+            // The permutations and rows have the scheme's width, and
+            // affine32 runs with 32-bit hashes (checked by the caller).
+            let _ = perm.update_tokens(T::signature(row), bits, tokens);
+        }
+        Ok::<(), BatchError>(())
+    })?;
+    Ok(())
+}
+
 /// Signatures of every document of `docs`, starting from `initial`.
+///
+/// Copying tokens out of the Python objects needs the interpreter and runs
+/// on the calling thread. With more than one thread allowed, rounds are
+/// pipelined: a helper thread waits for the pool to hash round `i` while the
+/// calling thread copies round `i + 1`; the calling thread only waits for the
+/// pool while detached.
 fn bulk_rows<T: Value>(
     py: Python<'_>,
     perm: &Permutations,
@@ -352,37 +409,71 @@ fn bulk_rows<T: Value>(
         out.extend_from_slice(initial);
     }
     let mut fallback = Vec::new();
-    let mut arena = Arena::default();
-    let mut start = 0;
-    while start < n {
-        arena.clear();
-        let mut end = start;
-        while end < n && (end == start || arena.bytes.len() < BULK_CHUNK_BYTES) {
-            let doc = docs.get_item(end)?;
-            let first = arena.token_ends.len();
-            if extract_doc(&mut arena, &doc, end, mode)? {
-                arena.docs.push(Some((first, arena.token_ends.len())));
-            } else {
-                arena.docs.push(None);
-                fallback.push(end);
-            }
-            end += 1;
+    if threads == par::Threads::ONE {
+        let mut arena = Arena::default();
+        let mut start = 0;
+        while start < n {
+            let end = extract_round(
+                &mut arena,
+                docs,
+                start,
+                BULK_CHUNK_BYTES,
+                mode,
+                &mut fallback,
+            )?;
+            let rows = &mut out[start * k..end * k];
+            py.detach(|| hash_round(perm, &arena, rows, bits, threads))
+                .map_err(|e| e.into_pyerr(py))?;
+            start = end;
         }
-        let rows = &mut out[start * k..end * k];
-        let arena = &arena;
-        let result = py.detach(|| {
-            par::try_map_rows(rows, k, threads, |i, row| {
-                if let Some(tokens) = arena.tokens(i) {
-                    // The permutations and rows have the scheme's width, and
-                    // affine32 runs with 32-bit hashes (checked by the caller).
-                    let _ = perm.update_tokens(T::signature(row), bits, tokens);
-                }
-                Ok::<(), BatchError>(())
-            })
-        });
-        result.map_err(|e| e.into_pyerr(py))?;
-        start = end;
+        return Ok((out, fallback));
     }
+    std::thread::scope(|s| -> PyResult<()> {
+        let mut rest: &mut [T] = &mut out;
+        let mut spare = Arena::default();
+        let mut pending: Option<
+            std::thread::ScopedJoinHandle<'_, (Arena, Result<(), BatchError>)>,
+        > = None;
+        let mut start = 0;
+        let finish = |pending: &mut Option<std::thread::ScopedJoinHandle<'_, _>>| -> PyResult<Option<Arena>> {
+            let Some(h) = pending.take() else {
+                return Ok(None);
+            };
+            let joined: std::thread::Result<(Arena, Result<(), BatchError>)> = py.detach(|| h.join());
+            let (arena, res) = joined.unwrap_or_else(|p| std::panic::resume_unwind(p));
+            res.map_err(|e| e.into_pyerr(py))?;
+            Ok(Some(arena))
+        };
+        while start < n {
+            let mut arena = std::mem::take(&mut spare);
+            let end = match extract_round(
+                &mut arena,
+                docs,
+                start,
+                PIPELINE_ROUND_BYTES,
+                mode,
+                &mut fallback,
+            ) {
+                Ok(end) => end,
+                Err(e) => {
+                    finish(&mut pending)?;
+                    return Err(e);
+                }
+            };
+            if let Some(done) = finish(&mut pending)? {
+                spare = done;
+            }
+            let (rows, tail) = std::mem::take(&mut rest).split_at_mut((end - start) * k);
+            rest = tail;
+            pending = Some(s.spawn(move || {
+                let res = hash_round(perm, &arena, rows, bits, threads);
+                (arena, res)
+            }));
+            start = end;
+        }
+        finish(&mut pending)?;
+        Ok(())
+    })?;
     Ok((out, fallback))
 }
 
