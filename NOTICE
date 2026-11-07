@@ -459,7 +459,6 @@ modified." crates/pyroid-core/tests/datasketch_data/params.json holds values
 recorded from scipy and datasketch. scipy's LICENSE.txt reads "Copyright (c)
 2001-2002 Enthought, Inc. 2003, SciPy Developers."; __quadpack.c carries:
 
-
     Copyright (C) 2024 SciPy developers
 
     Redistribution and use in source and binary forms, with or without
