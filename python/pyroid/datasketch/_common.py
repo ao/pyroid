@@ -14,6 +14,17 @@ from typing import Any
 
 from pyroid._pyroid import FallbackWarning, PyroidError
 
+# Every pyroid.datasketch module imports this one first (through the package), so a missing numpy
+# fails here with an install hint, as pyroid.fasttext does.
+try:
+    import numpy as _numpy  # noqa: F401
+except ModuleNotFoundError as exc:
+    raise ModuleNotFoundError(
+        "pyroid.datasketch needs numpy, as datasketch does: "
+        "pip install 'pyroid[datasketch]' (or numpy)",
+        name="numpy",
+    ) from exc
+
 __all__ = [
     "DATASKETCH_VERSION",
     "_SCHEME_AFFINE32",

@@ -14,8 +14,10 @@ files), and :func:`patch` is the only switch::
 
 The names are ``"ftfy"`` (:mod:`pyroid.ftfy`, which reproduces ftfy 6.3.1), ``"fasttext"``
 (:mod:`pyroid.fasttext`: ``load_model``, ``tokenize``, ``FastText._FastText(path)`` and
-``FastText.load_model`` give pyroid models) and ``"anyascii"``
-(:func:`pyroid.translit.anyascii`). There is no ``"unidecode"``:
+``FastText.load_model`` give pyroid models), ``"anyascii"`` (:func:`pyroid.translit.anyascii`)
+and ``"datasketch"`` (:mod:`pyroid.datasketch`, which reproduces datasketch 2.0.0: ``datasketch``
+and its ``minhash``, ``lean_minhash``, ``hashfunc``, ``lsh``, ``lshforest`` and ``lshensemble``
+submodules give pyroid's classes). There is no ``"unidecode"``:
 :func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its output differs
 from Unidecode's.
 
@@ -96,7 +98,7 @@ __all__ = [
 ]
 
 #: The module names :func:`patch` accepts.
-SUPPORTED: tuple[str, ...] = ("ftfy", "fasttext", "anyascii")
+SUPPORTED: tuple[str, ...] = ("ftfy", "fasttext", "anyascii", "datasketch")
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
 DEFAULT_RUN_NAMES: tuple[str, ...] = ("ftfy", "fasttext")
@@ -339,6 +341,36 @@ def _build_anyascii(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     return {"anyascii": shim}, []
 
 
+# datasketch's submodules that pyroid ports, and what each shim provides; the others
+# (storage, weighted_minhash, hyperloglog, b_bit_minhash, ...) stay datasketch's own.
+_DATASKETCH_SUBMODULES: dict[str, tuple[str, ...]] = {
+    "hashfunc": ("sha1_hash32", "sha1_hash64"),
+    "minhash": ("MinHash", "minhash_batch"),
+    "lean_minhash": ("LeanMinHash",),
+    "lsh": ("MinHashLSH", "MinHashLSHInsertionSession", "MinHashLSHDeletionSession"),
+    "lshforest": ("MinHashLSHForest",),
+    "lshensemble": ("MinHashLSHEnsemble",),
+}
+
+
+def _build_datasketch(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    shims: dict[str, types.ModuleType] = {}
+    for sub, names in _DATASKETCH_SUBMODULES.items():
+        sub_impl = importlib.import_module(f"{impl.__name__}.{sub}")
+        full = f"datasketch.{sub}"
+        real_sub = sys.modules.get(full) if real is not None else None
+        sub_missing = missing if real is None else f"the installed datasketch has no {sub} module"
+        provided = {n: getattr(sub_impl, n) for n in names}
+        shims[full] = _shim(full, real_sub, sub_missing, sub_impl, provided, package=False)
+    provided = {n: getattr(impl, n) for n in impl.__all__ if n != "DATASKETCH_VERSION"}
+    provided.update({sub: shims[f"datasketch.{sub}"] for sub in _DATASKETCH_SUBMODULES})
+    top = _shim(
+        "datasketch", real, missing, impl, provided, package=True, version=impl.DATASKETCH_VERSION
+    )
+    # pyroid.datasketch's own fallback (`_common.fallback`) sees through the shim to `__wrapped__`.
+    return {"datasketch": top, **shims}, []
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -365,6 +397,16 @@ _TARGETS: dict[str, _Target] = {
         "pip install anyascii==0.3.3",
         "",
         _build_anyascii,
+    ),
+    "datasketch": _Target(
+        "pyroid.datasketch",
+        "which reproduces datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, MinHashLSHForest "
+        "and MinHashLSHEnsemble",
+        "DATASKETCH_VERSION",
+        "pip install datasketch==2.0.0",
+        " (WeightedMinHash, HyperLogLog, bBitMinHash, HNSW, MinHashLSHBloom, Redis and Cassandra"
+        " storage)",
+        _build_datasketch,
     ),
 }
 
@@ -503,13 +545,13 @@ def patch(*names: str) -> None:
     does nothing; :func:`unpatch` undoes it.
 
     Args:
-        *names: ``"ftfy"``, ``"fasttext"`` and/or ``"anyascii"``.
+        *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"`` and/or ``"datasketch"``.
 
     Raises:
         TypeError: No names were given.
         ValueError: A name is not supported (nothing is patched then).
         ImportError: The pyroid module behind a name cannot be imported (``pyroid.fasttext``
-            needs numpy).
+            and ``pyroid.datasketch`` need numpy).
 
     Warns:
         PatchWarning: Once per process for each name: what was patched and how to undo it;

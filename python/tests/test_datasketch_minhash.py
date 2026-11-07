@@ -18,7 +18,9 @@ import base64
 import io
 import pickle
 import struct
+import subprocess
 import sys
+import textwrap
 import warnings
 from collections.abc import Callable, Iterator
 from types import ModuleType
@@ -1623,3 +1625,26 @@ def test_minhash_batch_rows_are_the_minhash_hashvalues() -> None:
         m = ds.MinHash()
         m.update_batch(shingles(text, 2))
         assert_matrix(row, m.hashvalues)
+
+
+@pytest.mark.thread_unsafe(reason="runs a subprocess")
+def test_import_error_without_numpy() -> None:
+    code = textwrap.dedent(
+        """
+        import sys
+        sys.modules["numpy"] = None  # import numpy raises ModuleNotFoundError
+        import pyroid, pyroid.text
+        try:
+            import pyroid.datasketch
+        except ImportError as e:
+            assert type(e) is ModuleNotFoundError and e.name == "numpy", repr(e)
+            assert type(e.__cause__) is ModuleNotFoundError, repr(e.__cause__)
+            assert "pyroid[datasketch]" in str(e), str(e)
+        else:
+            raise AssertionError("pyroid.datasketch imported without numpy")
+        """
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=120, check=False
+    )
+    assert proc.returncode == 0, proc.stderr

@@ -22,12 +22,7 @@ import warnings
 from collections.abc import Generator, Iterable
 from typing import Any
 
-try:
-    import numpy as np
-except ModuleNotFoundError as exc:  # pragma: no cover - numpy is in every test env
-    raise ModuleNotFoundError(
-        "pyroid.datasketch needs numpy, as datasketch does: pip install numpy", name="numpy"
-    ) from exc
+import numpy as np
 
 from pyroid._pyroid import datasketch as _native
 from pyroid.datasketch._common import (
@@ -136,6 +131,9 @@ def _sha1_bits(hashfunc: Any) -> int:
     if hashfunc is sha1_hash64:
         return 64
     real = sys.modules.get("datasketch.hashfunc")
+    # Under pyroid.patch("datasketch"), the real module is the shim's __wrapped__.
+    if getattr(real, "__pyroid__", False):
+        real = real.__wrapped__  # type: ignore[union-attr]
     if real is not None and getattr(hashfunc, "__module__", None) == "datasketch.hashfunc":
         if hashfunc is getattr(real, "sha1_hash32", None):
             return 32

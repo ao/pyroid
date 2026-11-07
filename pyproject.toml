@@ -39,6 +39,9 @@ dependencies = []
 # pyroid.fasttext returns numpy arrays (as fastText does); without numpy it raises a
 # ModuleNotFoundError (name="numpy") with this install hint.
 fasttext = ["numpy>=1.26"]
+# pyroid.datasketch keeps datasketch's numpy arrays (hashvalues, permutations); without numpy it
+# raises a ModuleNotFoundError (name="numpy") with this install hint.
+datasketch = ["numpy>=1.26"]
 # The `pyroid` command line (Parquet/JSONL streaming, the FineWeb recipe) and
 # pyroid.integrations.recipes.
 cli = ["pyarrow>=18", "numpy>=1.26"]
