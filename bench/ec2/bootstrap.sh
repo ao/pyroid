@@ -6,11 +6,11 @@
 #   bash bootstrap.sh              # on the instance, through `ssm send-command` (see ec2.sh bootstrap)
 #
 # Installs, all under $PYROID_PREFIX [/opt/pyroid] except the dnf packages:
-#   dnf: git gcc gcc-c++ tar zstd (the brief), plus util-linux (lscpu, taskset), procps-ng (free) and diffutils, which the AMI
+#   dnf: git gcc gcc-c++ tar zstd, plus util-linux (lscpu, taskset), procps-ng (free) and diffutils, which the AMI
 #        already has; the amazonlinux:2023 container image does not.
 #   rustup + the $RUST_TOOLCHAIN [stable] toolchain (minimal profile)
-#   uv $UV_VERSION [0.13.7, as in the pyroid-dev image]
-#   CPython via uv: $PYTHONS [3.12.16 3.13.18 3.15.2 3.15.2t, the pyroid-dev image's patch versions]. 3.15 (GIL) is
+#   uv $UV_VERSION [0.13.7]
+#   CPython via uv: $PYTHONS [3.12.16 3.13.18 3.15.2 3.15.2t]. 3.15 (GIL) is
 #        there only because CI builds the cp315-abi3.abi3t wheel with it (maturin picks abi3t from a 3.15 interpreter).
 #   maturin $MATURIN_VERSION [1.16.0, as ci.yml] as a uv tool
 # Writes $PYROID_PREFIX/env.sh (sourced by run.sh) and $PYROID_PREFIX/logs/bootstrap.json (versions).

@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# Mac-side control of the pyroid EC2 run (bench/ec2/README.md). bash 3.2 compatible (macOS /bin/bash); needs aws and jq.
+# Control of the pyroid EC2 run from your own machine (bench/ec2/README.md). bash 3.2 compatible (macOS /bin/bash);
+# needs aws and jq.
+#
+# Configuration (env): PYROID_AWS_PROFILE (required), PYROID_AWS_REGION [us-west-2], PYROID_BENCH_BUCKET (required),
+#   PYROID_BENCH_SG and PYROID_BENCH_VPC (required: a security group with no inbound rules, and its VPC),
+#   PYROID_BRANCH [next] and PYROID_OVERLAY_REF [none] (what `stage` bundles),
+#   PYROID_EC2_LEDGER [$HOME/.pyroid-ec2bench/aws-resources.md] (a log of every launch and termination).
 #
 #   ec2.sh preflight                    read-only checks: identity, SG has no ingress, VPC, subnets, AMIs, profile, bucket
-#   ec2.sh stage                        bundle `next` (+ feat/ec2bench for the tooling overlay) and upload it, the scripts
+#   ec2.sh stage                        bundle $PYROID_BRANCH (+ $PYROID_OVERLAY_REF, if set) and upload it, the scripts
 #                                       (committed versions) and /tmp/pyroid-ec2bench/pins/ to the bucket
 #   ec2.sh launch x86|arm               run-instances (c7i.4xlarge | c8g.4xlarge) with every required guard; logs the row
 #   ec2.sh wait-ssm ID                  until SSM reports the instance Online
@@ -17,25 +23,31 @@
 #   ec2.sh verify                       describe-instances for every launched ID
 #   ec2.sh s3-clean                     delete everything under s3://<bucket>/ec2bench/ (our objects only)
 #
-# Hard rules (the brief): profile primary1, region us-west-2 on every call, not overridable; at most 2 instances; only
-# c7i.4xlarge/c8g.4xlarge; SG sg-<redacted> (no ingress) only; never touch anything not launched here.
+# Safety rules: the profile and region go on every call; at most 2 instances; only c7i.4xlarge/c8g.4xlarge; only the
+# one security group, checked for no ingress before every launch; never touch anything not launched here.
 set -euo pipefail
 
-AWS_ARGS=(--profile primary1 --region us-west-2)
+AWS_ARGS=(--profile "${PYROID_AWS_PROFILE:?set PYROID_AWS_PROFILE to the AWS CLI profile to use}" --region "${PYROID_AWS_REGION:-us-west-2}")
 BUCKET=${PYROID_BENCH_BUCKET:?set PYROID_BENCH_BUCKET to an S3 bucket you own}
 S3=s3://$BUCKET/ec2bench
-SG=sg-<redacted>
-VPC=vpc-<redacted>
+SG=${PYROID_BENCH_SG:-}
+VPC=${PYROID_BENCH_VPC:-}
 INSTANCE_PROFILE=pyroid-bench-profile
-LEDGER=/Users/devel/src/ao/pyroid/.orchestration/aws-resources.md
+LEDGER=${PYROID_EC2_LEDGER:-$HOME/.pyroid-ec2bench/aws-resources.md}
+BRANCH=${PYROID_BRANCH:-next}
+OVERLAY=${PYROID_OVERLAY_REF:-}
 LOCAL=/tmp/pyroid-ec2bench
 REGISTRY=$LOCAL/instances.tsv
 REPO=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
-mkdir -p "$LOCAL"
+mkdir -p "$LOCAL" "$(dirname "$LEDGER")"
 
 aws_() { aws "${AWS_ARGS[@]}" "$@"; }
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 die() { echo "ec2.sh: $*" >&2; exit 1; }
+need_net() {  # preflight and launch only
+    [[ -n $SG ]] || die "set PYROID_BENCH_SG to a security group with no inbound rules"
+    [[ -n $VPC ]] || die "set PYROID_BENCH_VPC to the VPC of that security group"
+}
 itype() { case $1 in x86) echo c7i.4xlarge ;; arm) echo c8g.4xlarge ;; *) die "arch must be x86 or arm" ;; esac; }
 amiarch() { case $1 in x86) echo x86_64 ;; arm) echo arm64 ;; esac; }
 machine_of() { case $1 in x86) echo aws-c7i.4xlarge ;; arm) echo aws-c8g.4xlarge ;; *) echo "$1" ;; esac; }
@@ -51,6 +63,7 @@ check_ours() {  # ID: launched by this script, and tagged as such
 }
 
 cmd_preflight() {
+    need_net
     aws_ sts get-caller-identity --query '[Account,Arn]' --output text
     local ingress
     ingress=$(aws_ ec2 describe-security-groups --group-ids "$SG" --query 'length(SecurityGroups[0].IpPermissions)' --output text)
@@ -76,12 +89,15 @@ cmd_stage() {
     local st=$LOCAL/stage
     rm -rf "$st"
     mkdir -p "$st"
-    git -C "$REPO" rev-parse --verify -q next >/dev/null || die "no branch next"
-    echo "next @ $(git -C "$REPO" rev-parse --short next); feat/ec2bench @ $(git -C "$REPO" rev-parse --short feat/ec2bench)"
-    git -C "$REPO" bundle create "$LOCAL/pyroid-next.bundle" next feat/ec2bench
+    local ref
+    for ref in "$BRANCH" ${OVERLAY:+"$OVERLAY"}; do
+        git -C "$REPO" rev-parse --verify -q "$ref" >/dev/null || die "no branch $ref"
+        echo "$ref @ $(git -C "$REPO" rev-parse --short "$ref")"
+    done
+    git -C "$REPO" bundle create "$LOCAL/pyroid-next.bundle" "$BRANCH" ${OVERLAY:+"$OVERLAY"}
     git -C "$REPO" bundle verify "$LOCAL/pyroid-next.bundle"
     # The committed scripts, not the working tree: what runs on the instance is what the branch says.
-    git -C "$REPO" archive feat/ec2bench bench/ec2 | tar -x -C "$st"
+    git -C "$REPO" archive "${OVERLAY:-$BRANCH}" bench/ec2 | tar -x -C "$st"
     aws_ s3 cp --only-show-errors "$LOCAL/pyroid-next.bundle" "$S3/code/pyroid-next.bundle"
     aws_ s3 cp --only-show-errors --recursive "$st/bench/ec2/" "$S3/code/ec2/"
     if [[ -d $LOCAL/pins ]]; then aws_ s3 cp --only-show-errors --recursive "$LOCAL/pins/" "$S3/pins/"; fi
@@ -102,6 +118,7 @@ ledger_removed() {  # id
 
 cmd_launch() {
     local arch=${1:?x86|arm} t name ami subnet n id ud
+    need_net
     t=$(itype "$arch")
     name=pyroid-bench-$(amiarch "$arch")
     n=$(aws_ ec2 describe-instances --filters Name=tag:project,Values=pyroid-bench \

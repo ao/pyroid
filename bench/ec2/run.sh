@@ -6,9 +6,9 @@
 # Steps, in order (each leaves $STATE/<step>.done; a re-run skips finished steps, so the script is resumable):
 #   meta            lscpu (-e, -J), /proc/cpuinfo, DMI, IMDSv2 identity, glibc hwcaps diagnostics, THP/SMT, versions
 #   code            git clone of $PYROID_BRANCH [next] from the S3 bundle; $PYROID_OVERLAY_PATHS (the bench tooling)
-#                   checked out from $PYROID_OVERLAY_REF [feat/ec2bench] when the bundle carries that branch
+#                   checked out from $PYROID_OVERLAY_REF [none] when it is set and the bundle carries that branch
 #   wheels          maturin release wheels, as ci.yml: cp311-abi3 (built with 3.12) and cp315-abi3.abi3t (with 3.15)
-#   envs            bench env (3.13, bench/uv.lock), 3.15t bench env (as P4's venv-b315t), parity envs 3.13/3.12/3.15t
+#   envs            bench env (3.13, bench/uv.lock), 3.15t bench env (the free-threaded counterpart of the bench env), parity envs 3.13/3.12/3.15t
 #   fetch           bench/fetch.py (pinned inputs, from the upstream URLs) + --verify
 #   refs            python -m pyroid_parity.refs all, json_repair_record --check, then refdiff.py check: mismatches
 #                   against the pins are quantified against the old bytes in $S3/pins/ and re-pinned on the instance
@@ -223,7 +223,7 @@ step_code() {
     git bundle list-heads "$b"
     rm -rf "$SRC"
     git clone --quiet --branch "${PYROID_BRANCH:-next}" "$b" "$SRC"
-    local ov=${PYROID_OVERLAY_REF-feat/ec2bench} ov_sha=""
+    local ov=${PYROID_OVERLAY_REF-} ov_sha=""
     local paths=${PYROID_OVERLAY_PATHS:-bench/ec2 bench/run_consolidated.sh bench/run_baselines.sh bench/consolidate.py bench/chart.py bench/machine_info.py bench/summarize.py}
     if [[ -n $ov ]] && git -C "$SRC" rev-parse -q --verify "origin/$ov" >/dev/null; then
         ov_sha=$(git -C "$SRC" rev-parse "origin/$ov")
@@ -283,7 +283,7 @@ step_envs() {
     uv pip install --python "$PY313" --no-index --no-deps --reinstall "$(wheel abi3)"
     rm -rf "$WORK/venv-b315t"
     uv venv -q -p 3.15t "$WORK/venv-b315t"
-    # The 3.15t bench env as P4 built it (venv-b315t); stages.py/gates.py import datatrove's pure-Python parts.
+    # The 3.15t bench env (venv-b315t); stages.py/gates.py import datatrove's pure-Python parts.
     uv pip install --python "$PY315T" pyperf==2.10.0 pyarrow==26.0.1 numpy==2.5.4 ftfy==6.3.1 datatrove==0.10.1 \
         regex==2026.9.29 psutil anyascii==0.3.3 -e "$SRC/parity"
     uv pip install --python "$PY315T" --no-index --no-deps --reinstall "$(wheel abi3t)"
