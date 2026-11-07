@@ -170,8 +170,13 @@
           "diff": 0
         },
         {
-          "name": "Parity suite on x86_64 under emulation, against the x86_64 reference, live sacrebleu included",
-          "same": 1307887,
+          "name": "Parity suite on x86_64 (AWS EC2 c7i.4xlarge), CPython 3.12, 47 checks, live sacrebleu included, against the x86_64 reference re-pinned there (identical to the aarch64 one)",
+          "same": 1396827,
+          "diff": 0
+        },
+        {
+          "name": "Parity suite on x86_64 (AWS EC2 c7i.4xlarge), free-threaded CPython 3.15t, 44 checks (live sacrebleu skipped)",
+          "same": 1388827,
           "diff": 0
         }
       ],
@@ -179,7 +184,7 @@
         "Data, pinned by sha256: CNN/DailyMail 3.0.0 test (11,490 lead-3 summaries and 2,000 whole articles against the highlights), SummEval (1,600 summaries from 16 systems x 11 references, score_multi), WMT21 newstest2021 (8 language pairs, 141 systems, 163,000 segments, up to 3 references). The reference file holds 694,757 results.",
         "The Porter stemmer matches NLTK on all 512,136 distinct tokens of FineWeb 100k; 28 rouge_types edge cases and 49 sacrebleu error cases match in exception type, message and order."
       ],
-      "source": "the parity/ metrics suite, run on 2026-11-06"
+      "source": "the parity/ metrics suite, run on 2026-11-06 (the x86_64 rows: bench/results/aws-c7i.4xlarge/2026-11-06/parity)"
     },
     "json_repair": {
       "reference": "json_repair 0.64.5",

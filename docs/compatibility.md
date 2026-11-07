@@ -126,13 +126,14 @@ Reference: rouge-score 0.1.2 (with NLTK 3.10.4's Porter stemmer) and sacrebleu 2
 |---|---:|---:|---:|
 | Parity suite on CPython 3.12 (GIL), 47 checks: 6 ROUGE configurations, 22 corpus BLEU/chrF configurations x 141 WMT21 systems, 4 sentence-level ones x 163,000 segments, per-call and batch APIs, live Hypothesis against both libraries | 1,396,827 | 1,396,827 | 0 |
 | Parity suite on free-threaded CPython 3.15t, 44 checks (live sacrebleu skipped: importing it re-enables the GIL) | 1,388,827 | 1,388,827 | 0 |
-| Parity suite on x86_64 under emulation, against the x86_64 reference, live sacrebleu included | 1,307,887 | 1,307,887 | 0 |
-| **Total** | **4,093,541** | **4,093,541** | **0** |
+| Parity suite on x86_64 (AWS EC2 c7i.4xlarge), CPython 3.12, 47 checks, live sacrebleu included, against the x86_64 reference re-pinned there (identical to the aarch64 one) | 1,396,827 | 1,396,827 | 0 |
+| Parity suite on x86_64 (AWS EC2 c7i.4xlarge), free-threaded CPython 3.15t, 44 checks (live sacrebleu skipped) | 1,388,827 | 1,388,827 | 0 |
+| **Total** | **5,571,308** | **5,571,308** | **0** |
 
 - Data, pinned by sha256: CNN/DailyMail 3.0.0 test (11,490 lead-3 summaries and 2,000 whole articles against the highlights), SummEval (1,600 summaries from 16 systems x 11 references, score_multi), WMT21 newstest2021 (8 language pairs, 141 systems, 163,000 segments, up to 3 references). The reference file holds 694,757 results.
 - The Porter stemmer matches NLTK on all 512,136 distinct tokens of FineWeb 100k; 28 rouge_types edge cases and 49 sacrebleu error cases match in exception type, message and order.
 
-<small>Source: the parity/ metrics suite, run on 2026-11-06.</small>
+<small>Source: the parity/ metrics suite, run on 2026-11-06 (the x86_64 rows: bench/results/aws-c7i.4xlarge/2026-11-06/parity).</small>
 
 ### pyroid.json_repair {#json_repair}
 
