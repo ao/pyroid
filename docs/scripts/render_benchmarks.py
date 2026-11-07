@@ -66,7 +66,7 @@ def render_chain(data: dict[str, Any], key: str) -> list[str]:
 
 
 def docs_of(row: dict[str, str]) -> str:
-    """The batch size named in a row's ``input`` ("FineWeb dev, first 1,000 docs; ..."), or the input."""
+    """The batch size in a row's ``input`` ("FineWeb dev, first 1,000 docs; ..."), or the input."""
     found = re.search(r"first ([\d,]+) docs", row["input"])
     return found[1] if found else row["input"]
 

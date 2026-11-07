@@ -23,8 +23,8 @@ In Python, change the import and keep the rest of your code:
 ```python
 import pyroid.ftfy as ftfy  # was: import ftfy
 
-ftfy.fix_text("naÃ¯ve cafÃ©")  # 'naïve café', as ftfy returns it
-ftfy.fix_text_batch(["naÃ¯ve cafÃ©", "ok"])  # ['naïve café', 'ok'], on all cores
+ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")  # 'naïve résumé', as ftfy returns it
+ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'], on all cores
 ```
 
 | Module | Replaces |
