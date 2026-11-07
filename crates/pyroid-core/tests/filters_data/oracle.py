@@ -15,7 +15,7 @@ script records the oracle and `tokenizer_test.rs` replays it.
 `tokenizer_assignment.csv` (a spaCy blank model, the WhitespaceTokenizer, the
 IndicNLPTokenizer, ...) and the fuzzer aims at that language's rules and scripts.
 
-Run inside the pyroid-dev container (never on the host), with a venv holding
+Run on Linux (or in a Linux container), with a venv holding
 datatrove==0.10.1, spacy==3.8.18, regex and pyarrow (plus indic-nlp-library for
 the Indic codes):
 

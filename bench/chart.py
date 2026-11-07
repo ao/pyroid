@@ -7,7 +7,7 @@
     python chart.py hero   results/.../e2e/hyperfine-e2e.json results/.../ft315t/hyperfine-chain.json \
                            --run results/... --out results/.../charts/hero
 
-Each command writes ``<out>-light.svg`` and ``<out>-dark.svg``. Rules (R2 section 5, rule 5 and 6): sorted by
+Each command writes ``<out>-light.svg`` and ``<out>-dark.svg``. Rules (bench/README.md, rules 5 and 6): sorted by
 median time with the fastest on top and never re-ordered by hand; pyroid / candidate rows in the accent
 colour; IQR whiskers; values past ``--xmax`` are drawn to the edge and labelled "> xmax" (never clipped
 silently); ``svg.hashsalt`` and no Date metadata, so re-rendering the same JSON gives byte-identical SVGs.

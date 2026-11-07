@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Download the pinned benchmark/parity inputs into the shared ``/data`` volume (run in Docker, never on the host).
+"""Download the pinned benchmark/parity inputs into ``$PYROID_DATA`` (default ``/data``).
 
-    DX_NAME=harness .orchestration/dx.sh 'cd bench && uv run --frozen python fetch.py'   # fetch + verify the inputs
+    cd bench && uv run --frozen python fetch.py   # fetch + verify the inputs
     ... python fetch.py --verify                 # verify the inputs only (no network)
     ... python fetch.py --verify-all             # verify every pinned file, parity/ references included
     ... python fetch.py --pin                    # first fetch / intentional update: write hashes to manifest.json
@@ -35,7 +35,7 @@ FINEWEB = {
     "file": "sample/10BT/000_00000.parquet",
     "license": "ODC-By 1.0",
 }
-# Content sha256 over id\0text\0... (R2 §5): reproducible across parquet writers. 100k/5k measured by R2.
+# Content sha256 over id\0text\0...: reproducible across parquet writers.
 EXPECTED_CONTENT = {
     100_000: "1a93378229bbed5bcfa552ef67c9068d0c8d70f56204d40ac62c41fb3616567c",
     5_000: "f227def5ef38b53612a8ce2d5a968bd4da21809c714535912599f0388e20a949",

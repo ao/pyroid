@@ -22,7 +22,7 @@ Everything is read from the libraries themselves, never retyped:
 * datatrove (0.10.1): which language codes use `IndicNLPTokenizer` (and with
   which indic-nlp language) and which use `WhitespaceTokenizer`.
 
-Usage (inside the pyroid-dev container; never on the host):
+Usage (Linux or a Linux container; `/target/venv-$v` stands for a venv per CPython version):
 
     # 1. one isnumeric dump per interpreter (no dependencies needed)
     for v in 311 312 313 314 315; do

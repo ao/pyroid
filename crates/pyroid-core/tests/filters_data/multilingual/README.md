@@ -8,7 +8,7 @@ recorded through one representative datatrove language code (`"l"` in every
 row). `../oracle.py` (see its docstring) records them; the English golden is
 `../golden-tokenizer.jsonl`.
 
-Recorded in the pyroid-dev container: CPython 3.13.18 (Unicode 15.1.0),
+Recorded on Linux aarch64: CPython 3.13.18 (Unicode 15.1.0),
 datatrove 0.10.1, spaCy 3.8.18, regex 2026.9.29, pyarrow 26.0.1; the
 `golden-indic-*` files also with indic-nlp-library 0.92 (no urduhack, see
 below).

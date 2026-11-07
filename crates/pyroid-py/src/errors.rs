@@ -12,7 +12,7 @@
 //!   speed differs. See `docs/dev/MODULES.md`.
 //!
 //! Classes report `__module__ == "pyroid"` so they pickle by their public
-//! name. Product tracks add a subclass here with one `create_exception!` (or
+//! name. Each module adds a subclass here with one `create_exception!` (or
 //! `make_type` call for multiple bases) and one line in [`register`].
 
 use pyo3::create_exception;

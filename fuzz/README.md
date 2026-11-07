@@ -5,9 +5,8 @@ This directory is its own Cargo workspace, so the root workspace, its lints
 and its CI jobs never see it. The Arrow import fuzzing in `arrow/` is
 documented in [`arrow/README.md`](arrow/README.md).
 
-Never build or run these on the macOS host: everything runs in the dev
-container (see `.orchestration/dx.sh`), with a nightly toolchain and
-`cargo-fuzz` installed.
+The targets need a nightly Rust toolchain, a C++ compiler (for libFuzzer) and `cargo-fuzz`
+(`rustup toolchain install nightly`, `cargo install cargo-fuzz`). They have been run on Linux.
 
 ## Targets
 
@@ -70,22 +69,24 @@ and a short script then recomputes them with the reference in a CPython
 `anyascii.anyascii`. Texts containing `IS_ALPHA` are skipped for the
 tokenizer (datatrove's documented history effect).
 
-## Running (in Docker)
+## Running
 
-From the worktree root, in the dev container (`DX_NAME=<session>`; the
-toolchain and `cargo-fuzz` come from the session's `env.sh`):
+From the repository root:
 
 ```sh
-DX=/Users/devel/src/ao/pyroid/.orchestration/dx.sh
-DX_NAME=<session> $DX '. /target/env.sh; export CARGO_TARGET_DIR=/target/fuzz; cd fuzz &&
-  cargo +nightly fuzz build -a -s none ftfy &&
-  cargo +nightly fuzz run -a -s none ftfy -- -max_total_time=900 -rss_limit_mb=1536 \
-    -max_len=8192 -timeout=10 -print_final_stats=1'
+cd fuzz
+cargo +nightly fuzz build -a -s none ftfy
+cargo +nightly fuzz run -a -s none ftfy -- -max_total_time=900 -rss_limit_mb=1536 \
+  -max_len=8192 -timeout=10 -print_final_stats=1
 ```
+
+To run them in a Linux container instead, mount the checkout, for example with
+`docker run --rm -it -v "$PWD":/src -w /src rust:latest bash`, and install the nightly toolchain
+and `cargo-fuzz` inside it.
 
 Always name the target (`cargo fuzz build <target>`, `run <target>`). Keep
 runs single-process (no `-jobs`/`-workers`) and the RSS limit at 1.5 GB or
-less: the VM is shared.
+less on a shared machine.
 
 - `-a` turns on debug assertions and overflow checks (off in cargo-fuzz's
   default release build), which is what catches arithmetic bugs.

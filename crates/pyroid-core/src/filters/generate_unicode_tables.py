@@ -16,7 +16,7 @@ the same everywhere, and so is every property on ASCII; lowercasing only
 produces ASCII from A-Z, U+0130 and U+212A), then writes, per property, an
 ASCII mask plus one range table per distinct version (equal tables are shared).
 
-Usage (inside the pyroid-dev container; never on the host):
+Usage (Linux or a Linux container; `/target/venv-$v` stands for a venv per CPython version):
 
     # 1. dump one JSON file per interpreter (one per Unicode version)
     for v in 311 312 313 314 315; do

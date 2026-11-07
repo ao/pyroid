@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Record the machine and environment a results dir was measured on (R2 section 5: disclose hardware).
+"""Record the machine and environment a results dir was measured on: every run discloses its hardware.
 
     python machine_info.py --out results/<machine>/<date>/machine.json   # "before" snapshot
     python machine_info.py --update results/<machine>/<date>/machine.json   # add the "after" snapshot
     python machine_info.py --slug                                       # results dir name, e.g. orbstack-aarch64-12cpu
 
-Other sessions may share the VM, so the load average and cgroup memory are recorded before AND after.
+Other work may share the machine, so the load average and cgroup memory are recorded before AND after.
 The git sha comes from ``git`` when the repo metadata is reachable, else from ``BENCH_GIT_SHA`` (a git worktree's
 ``.git`` file points outside the container mount, so pass ``BENCH_GIT_SHA=$(git rev-parse HEAD)`` from the host).
 ``HOST_CPU`` may name the physical CPU, which VMs hide (lscpu shows "Model name: -" under OrbStack).

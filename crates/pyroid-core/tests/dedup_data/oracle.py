@@ -2,8 +2,8 @@
 
 Derived from datatrove 0.10.1 (Apache-2.0), © HuggingFace Inc.; modified.
 
-Run inside the pyroid-dev container with the parity oracle env (datatrove 0.10.1, spaCy, numpy,
-regex), never on the host:
+Run with the parity oracle env (datatrove 0.10.1, spaCy, numpy, regex), on Linux or in a Linux
+container:
 
     python oracle.py tokens OUT.parquet CORPUS.parquet...
         simplify_text output and spaCy word tokens per doc

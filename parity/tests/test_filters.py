@@ -56,7 +56,7 @@ def test_filter_decisions(case, corpus, filters_impl, parity, request):
 
 
 def test_reason_strings_are_datatrove_names():
-    """Guard the vocabulary product tracks must emit (from the pinned decisions, not hard-coded)."""
+    """Guard the reason vocabulary pyroid must emit (from the pinned decisions, not hard-coded)."""
     t = pq.read_table(need(REF), columns=["case", "reason", "outcome"]).to_pydict()
     reasons = {
         (c, r) for c, r, o in zip(t["case"], t["reason"], t["outcome"], strict=True) if o == "ok" and r

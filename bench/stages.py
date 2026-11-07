@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Per-stage pyperf benchmarks, equivalence-gated before anything is timed (R2 section 5).
+"""Per-stage pyperf benchmarks, equivalence-gated before anything is timed (bench/README.md).
 
     cd bench && uv run --frozen python stages.py --list
     uv run --frozen python stages.py --stage fix_text --docs 1000 --fast -o /target/r/fix_text-d1000.json

@@ -1,8 +1,7 @@
 """Indicative timings for pyroid.text vs pure Python on synthetic documents.
 
 Not the benchmark harness (that lives in ``bench/``): a quick check that the
-core conventions are fast, for the P1-core report. Run it in Docker against a
-release wheel, e.g.::
+core conventions are fast. Run it against a release wheel, for example::
 
     python python/scripts/time_text.py --docs 100000
 

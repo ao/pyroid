@@ -13,7 +13,7 @@ transcribed by hand:
 * `\\s`, `\\w`, `\\d` and the assigned-code-point sets are dumped per Unicode
   version by testing every code point with that interpreter's `re`.
 
-Usage (inside the pyroid-dev container; never on the host):
+Usage (Linux or a Linux container; `/target/venv-$v` stands for a venv per CPython version):
 
     # 1. dump one JSON file per interpreter (one per Unicode version)
     for v in 311 312 313 314 315; do

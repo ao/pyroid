@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Reproducible baseline runner (R2 section 5). Run it INSIDE ONE dx.sh call, from the worktree root:
+# Reproducible baseline runner (the rules in bench/README.md). On Linux, or in one Linux container, from bench/:
 #
-#   DX_NAME=harness .orchestration/dx.sh 'cd bench && UV_PROJECT_ENVIRONMENT=/target/venv-bench \
-#       BENCH_GIT_SHA=<sha from the host> uv run --frozen bash run_baselines.sh'
+#   BENCH_GIT_SHA=$(git rev-parse HEAD) uv run --frozen bash run_baselines.sh
 #
 # Order (equivalence before timing): machine.json -> gates.py (all pinned refs) -> pyperf stages (each gated
 # on its timed docs) -> pyperf --track-memory pass -> pipeline equivalence (one stage at a time vs the refs,
@@ -14,10 +13,10 @@
 #   e2e/hyperfine-stages-w8.json, e2e/runs.jsonl, e2e/equivalence.{jsonl,json}, charts/*-{light,dark}.svg,
 #   SUMMARY.md. Pipeline scratch goes to $BENCH_WORK (default /target/bench-work), never into results.
 #
-# pyperf mode: --fast by default (10 processes x 2 values + 1 warmup each). In this shared VM the dominant
-# noise is other sessions, which more processes do not remove, while every value of a slow datatrove stage
+# pyperf mode: --fast by default (10 processes x 2 values + 1 warmup each). On a shared VM the dominant
+# noise is other work, which more processes do not remove, while every value of a slow datatrove stage
 # costs a full batch (about 10 ms/doc); 20 values give a usable median + IQR. BENCH_RIGOROUS=1 -> --rigorous
-# (40 processes) for a quiet bare-metal run.
+# (40 processes) for a quiet, dedicated machine.
 #
 # Knobs (env, defaults in brackets):
 #   BENCH_OUT, BENCH_WORK, BENCH_MACHINE [machine_info --slug], BENCH_DATE [UTC today], BENCH_OVERWRITE [0]
@@ -50,7 +49,7 @@ HF=${BENCH_HYPERFINE:-$(command -v hyperfine || true)}
 
 err=$("$PY" -c 'import regex, datatrove.pipeline.filters, datatrove.pipeline.dedup, fasttext, ftfy, pyperf, datasketch, rensa, matplotlib' 2>&1) || {
     echo "preflight: the bench env cannot import what the harness needs: ${err##*$'\n'}" >&2
-    echo "  (run inside the bench uv env: UV_PROJECT_ENVIRONMENT=/target/venv-bench uv run --frozen bash run_baselines.sh)" >&2
+    echo "  (run it in the bench uv env, from bench/: uv run --frozen bash run_baselines.sh)" >&2
     exit 2
 }
 

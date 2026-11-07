@@ -1,6 +1,6 @@
 """Hypothesis strategies for ftfy differential fuzzing (importable without pytest).
 
-Hypothesis never generates surrogates by default (R2 measured 0 in 3,000 draws), and a candidate with
+Hypothesis never generates surrogates by default (0 in 3,000 draws, measured), and a candidate with
 ``fix_surrogates`` disabled passes ftfy's whole golden corpus, so lone surrogates and UTF-16 pairs are drawn
 explicitly here. Arrow strings are valid UTF-8, so the pinned parquet corpora cannot contain surrogates either:
 generated input is the only place this behaviour is exercised.

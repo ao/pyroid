@@ -39,7 +39,7 @@ def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
 
 
 def content_sha256(ids: Iterable[str], texts: Iterable[str]) -> str:
-    """R2 §5 content hash: sha256 over ``id\\0text\\0`` for each doc, in order. Format-independent."""
+    """Content hash of a corpus: sha256 over ``id\\0text\\0`` for each doc, in order. Format-independent."""
     h = hashlib.sha256()
     for i, t in zip(ids, texts, strict=True):
         h.update(i.encode("utf-8", "surrogatepass"))

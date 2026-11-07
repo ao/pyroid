@@ -1,6 +1,6 @@
 """Single-thread ftfy 6.3.1 (or pyroid.ftfy) `fix_text` timing on a parquet corpus.
 
-Run in the dev container (never on the host):
+Run on Linux (or in a Linux container):
 
     python bench_ftfy.py /data/fineweb/fineweb-100k.parquet 10000 [ftfy|pyroid.ftfy]
 

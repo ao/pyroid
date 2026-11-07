@@ -2,7 +2,7 @@
 
 Derived from datatrove 0.10.1 (Apache-2.0), (c) HuggingFace; modified.
 
-Run inside the pyroid-dev container (never on the host), in a venv with
+Run on Linux (or in a Linux container), in a venv with
 datatrove==0.10.1, regex==2026.9.29 and pyarrow (for `corpus`):
 
     python record.py golden OUT.jsonl       # the committed recording

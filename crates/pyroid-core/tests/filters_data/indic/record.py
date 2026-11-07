@@ -3,7 +3,7 @@
 Derived from datatrove 0.10.1 (Apache-2.0), (c) HuggingFace, indic-nlp-library 0.92
 (MIT), (c) Anoop Kunchukuttan, and urduhack 1.0.3 (MIT), (c) Urdu Hack; modified.
 
-Run inside the pyroid-dev container (never on the host), in a venv with
+Run on Linux (or in a Linux container), in a venv with
 datatrove==0.10.1, indic-nlp-library (0.92) and pyarrow (for `corpus`):
 
     python record.py golden OUT.jsonl --eos EOS     # the committed recording

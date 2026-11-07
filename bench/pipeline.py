@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end FineWeb-style cleaning on N worker processes (R2 hero benchmark), with an equivalence digest.
+"""End-to-end FineWeb-style cleaning on N worker processes (the end-to-end benchmark behind the README hero), with an equivalence digest.
 
     cd bench && uv run --frozen python pipeline.py --corpus dev --docs 500 --workers 4 --out /target/pipe/w4
     ... pipeline.py --stages lid --corpus parity --workers 8 --check-refs --out /target/pipe/lid   # one stage vs refs

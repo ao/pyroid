@@ -8,7 +8,7 @@ database of the running interpreter. Every table is dumped from CPython itself
 by testing every code point, then written as sorted inclusive ranges; tables
 that are identical in several versions are emitted once and shared.
 
-Usage (inside the pyroid-dev container; never on the host):
+Usage (Linux or a Linux container; `/target/venv-$v` stands for a venv per CPython version):
 
     # 1. dump one JSON file per interpreter (one per Unicode version)
     for v in 3.11 3.12 3.13 3.14 3.15; do

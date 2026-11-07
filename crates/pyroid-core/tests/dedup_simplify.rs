@@ -2,7 +2,7 @@
 //! `dedup::simplify_text` against what CPython computes: datatrove 0.10.1 itself
 //! under CPython 3.13, a vendored copy of `simplify_text` (only `re`, `regex`,
 //! `unicodedata`) under 3.11, 3.12, 3.14 and 3.15. The data is recorded by
-//! `tests/dedup_data/oracle.py` inside the pyroid-dev container:
+//! `tests/dedup_data/oracle.py`, run on Linux:
 //!
 //! - `simplify_py3*.jsonl` (`oracle.py simplify`): random texts under many
 //!   configs. Set `PYROID_SIMPLIFY_EXTRA` to a directory of more such files

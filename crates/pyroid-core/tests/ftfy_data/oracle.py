@@ -2,8 +2,8 @@
 
 Derived from ftfy 6.3.1 (Apache-2.0), © Robyn Speer; modified.
 
-Run inside the pyroid-dev container with an interpreter that has
-`ftfy==6.3.1` installed (never on the host):
+Run on Linux (or in a Linux container) with an interpreter that has
+`ftfy==6.3.1` installed:
 
     python oracle.py golden OUT.jsonl          # ftfy's own test inputs
     python oracle.py fuzz OUT.jsonl N SEED     # N random inputs

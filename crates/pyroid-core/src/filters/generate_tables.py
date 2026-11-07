@@ -24,7 +24,7 @@ into explicit sets by asking each CPython's own `re` about every code point
 (`closures` below); a set that differs between Unicode versions is emitted
 once per version.
 
-Usage (inside the pyroid-dev container, never on the host). The main run needs
+Usage (Linux or a Linux container). The main run needs
 an env with datatrove==0.10.1 and spacy==3.8.18; the `closures` step needs
 only the standard library, under every CPython 3.11 ... 3.15:
 

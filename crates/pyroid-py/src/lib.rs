@@ -5,7 +5,7 @@
 //! ([`batch`]), moves Arrow data across the C Data Interface ([`arrow`], the
 //! only module with `unsafe`), and maps errors to the hierarchy ([`errors`]).
 //!
-//! Product tracks add `src/<mod>.rs` with a `register` function and one line
+//! Each module adds `src/<mod>.rs` with a `register` function and one line
 //! below; see `docs/dev/MODULES.md`.
 
 mod arrow;

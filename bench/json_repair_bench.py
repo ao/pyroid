@@ -1116,7 +1116,7 @@ def main(argv: list[str] | None = None) -> int:
         log(str(e))
         return 1
     finally:
-        # Other sessions may share the VM: the load average before (machine) and after the run.
+        # Other work may share the machine: the load average before (machine) and after the run.
         results["loadavg_after"] = _loadavg()
         if args.out:
             args.out.parent.mkdir(parents=True, exist_ok=True)

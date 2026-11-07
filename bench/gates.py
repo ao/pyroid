@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Equivalence gates (R2 section 5, rule 1): nothing is timed until its output matches the pinned references.
+"""Equivalence gates (bench/README.md, rule 1): nothing is timed until its output matches the pinned references.
 
-    DX_NAME=harness .orchestration/dx.sh 'cd bench && UV_PROJECT_ENVIRONMENT=/target/venv-bench \
-        uv run --frozen python gates.py --workers 8 --out /target/gates.json'          # all suites, dev+adversarial
+    cd bench && uv run --frozen python gates.py --workers 8 --out gates.json      # all suites, dev+adversarial
     ... python gates.py --suite ftfy --impl ftfy=pyroid.ftfy --limit 500                 # + a candidate, 500+500 docs
 
 Gates (each raises ``GateError`` with a clear message, or returns a small dict stored in results metadata):
@@ -14,7 +13,7 @@ lid       same top-k labels and ``|p - p_ref| <= 1e-6`` vs parity/fasttext-ref.p
 filters   each case: same (outcome, keep, reason, text_out) as parity/filters-ref.parquet.
 minhash   datatrove-equivalent signatures == parity/minhash-ref.parquet ``signature``. datasketch / rensa use
           other hash families, so they are gated on near-duplicate detection instead: on the adversarial
-          ``neardup:*`` docs paired with their dev source, ground truth = exact Jaccard of R2-template word
+          ``neardup:*`` docs paired with their dev source, ground truth = exact Jaccard of template word
           5-gram shingles >= 0.8, prediction = estimated Jaccard >= 0.8; precision, recall and mean |J_est - J|
           must stay within ``ESTIMATOR_BOUNDS``.
 
@@ -22,7 +21,7 @@ Docs without a pinned reference (headline docs past the first 10k) are compared 
 (same pinned library) instead; each gate dict reports how many docs were ``pinned`` vs ``live``.
 
 This module also hosts the reference constructors shared by stages.py and pipeline.py (the gated objects
-are the timed objects): pinned-corpus slicing, the R2 shingler, and the datatrove LanguageFilter shim for
+are the timed objects): pinned-corpus slicing, the template shingler, and the datatrove LanguageFilter shim for
 fasttext-predict (see ``PinnedLanguageFilter``).
 """
 
@@ -142,7 +141,7 @@ def sample(n_total: int, limit: int) -> list[int]:
 
 
 def r2_shingles(text: str, n: int = 5) -> set[str]:
-    """R2 template shingler (bench-hygiene.md section 5): lower-cased whitespace words, word n-grams."""
+    """Template shingler for the estimator gates: lower-cased whitespace words, word n-grams."""
     w = text.lower().split()
     return {" ".join(w[i : i + n]) for i in range(max(1, len(w) - n + 1))}
 
@@ -600,7 +599,7 @@ def gate_estimator(
 
 
 def datatrove_estimator_quality() -> dict[str, Any]:
-    """Informational: datatrove's own signature as a Jaccard estimator (its shingles differ from the R2 ones)."""
+    """Informational: datatrove's own signature as a Jaccard estimator (its shingles differ from the template ones)."""
     step = minhash_step()
 
     def sketch(texts: list[str]) -> list[Any]:

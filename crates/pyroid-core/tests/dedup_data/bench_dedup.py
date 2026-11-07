@@ -1,6 +1,6 @@
-"""Indicative timings for pyroid.dedup against datatrove, rensa and datasketch (Docker only).
+"""Indicative timings for pyroid.dedup against datatrove, rensa and datasketch.
 
-Run inside the pyroid-dev container, never on the host, with an env that has the pyroid wheel,
+Run on Linux (or in a Linux container) with an env that has the pyroid wheel,
 pyarrow and (for the incumbent rows) the bench harness's dependencies:
 
     python bench_dedup.py signatures [--docs 1000] [--repeat 7] [--rows a,b,...]

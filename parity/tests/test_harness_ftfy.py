@@ -1,6 +1,6 @@
 """The ftfy suite has teeth: a candidate with ``fix_surrogates`` forced off must fail it.
 
-R2 found such a candidate passes ftfy's entire golden corpus, and the pinned parquet corpora cannot hold
+Such a candidate passes ftfy's entire golden corpus, and the pinned parquet corpora cannot hold
 surrogates (Arrow strings are UTF-8), so only generated input catches it. Both are asserted here.
 """
 
@@ -63,7 +63,7 @@ def test_mutant_fails_the_ftfy_suite(tmp_path: Path) -> None:
     assert hyp["status"] == "fail"
     assert hyp["diff"] > 0
     assert any(SURROGATE_REPR.search(str(e["input"])) for e in hyp["examples"]), hyp["examples"]
-    # What R2 reported: the golden corpus alone does not catch this mutant, nor can the parquet corpora.
+    # The golden corpus alone does not catch this mutant, nor can the parquet corpora.
     assert checks["golden-fix_text"]["status"] == "pass", checks["golden-fix_text"]
     assert checks["golden-fix_encoding"]["status"] == "pass", checks["golden-fix_encoding"]
     for name in ("corpus-dev", "corpus-adversarial"):

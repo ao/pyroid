@@ -26,14 +26,14 @@ The binary links libpython (pyo3 without `extension-module`) but never
 initializes or calls Python. Dependencies: libfuzzer-sys, pyo3 =0.30.1 and
 simdutf8 0.1.5, the versions pyroid-py uses.
 
-## Running (in Docker, never on the macOS host)
+## Running
 
-From the repository root, in the dev container:
+From the repository root, on Linux, with a nightly toolchain, `cargo-fuzz` and a C++ compiler (see
+[`../README.md`](../README.md)) and a CPython 3.12 that has its shared library:
 
 ```sh
-. /target/env.sh                       # nightly, cargo-fuzz, g++
-export PYO3_PYTHON=$PY312              # pyo3's build script reads its config
-export LD_LIBRARY_PATH=/opt/python/cpython-3.12-linux-aarch64-gnu/lib  # libpython3.12.so at run time
+export PYO3_PYTHON=/path/to/python3.12                 # pyo3's build script reads its config
+export LD_LIBRARY_PATH=$(dirname "$PYO3_PYTHON")/../lib  # where libpython3.12.so is, at run time
 cargo +nightly fuzz run --fuzz-dir fuzz/arrow arrow_import -- \
     -max_total_time=1200 -rss_limit_mb=1536 -max_len=16384 -timeout=10
 ```

@@ -1,6 +1,6 @@
 //! Robustness tests for the fastText loader (`pyroid_core::fasttext`).
 //!
-//! A small little-endian writer (a port of the session's `ftwriter.py`)
+//! A small little-endian writer (a port of a small Python model writer)
 //! builds valid synthetic models of every kind; the tests then truncate,
 //! corrupt and mutate them. Every load, and every inference call on a model
 //! that does load, must return (`Ok` or `Err`) without panicking, quickly,

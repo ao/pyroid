@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Profile-guided release wheels: the recipe a release job would follow (Docker only here; never on the host).
+# Profile-guided release wheels: the recipe a release job would follow. Linux only (or a Linux container).
 #
-#   DX_NAME=perf .orchestration/dx.sh 'bash bench/pgo_build.sh /target/wheels/pgo -i python3.12 -i python3.15t'
+#   bash bench/pgo_build.sh dist/pgo -i python3.12 -i python3.15t     # from the repository root
 #
 # 1. instrumented build (rustc -Cprofile-generate) for the given interpreters, installed with `uv pip`
 #    into $PGO_TRAIN_PYTHONS (space-separated interpreters/venv pythons that have pyarrow + pyroid_parity);

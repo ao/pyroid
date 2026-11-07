@@ -84,7 +84,7 @@ def header(d: Path) -> str:
         "",
         (
             f"Load average (1/5/15 min) before: {_load(m['before'])}; after: {_load(after) if after else 'n/a'}. "
-            "Other sessions share this VM."
+            "Other work may share this machine."
         ),
         "",
         f"Versions: {vers}.",

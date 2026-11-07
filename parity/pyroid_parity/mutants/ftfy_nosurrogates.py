@@ -1,6 +1,6 @@
 """ftfy with ``fix_surrogates`` forced off, and no ``fix_text_batch``: ``--impl ftfy=pyroid_parity.mutants.ftfy_nosurrogates``.
 
-R2 found that a candidate like this passes ftfy's whole golden corpus; only generated surrogate input catches it.
+A candidate like this passes ftfy's whole golden corpus; only generated surrogate input catches it.
 The API (signatures, ``TextFixerConfig``) mirrors ftfy 6.3.1 exactly, so the API-mirror checks pass.
 """
 

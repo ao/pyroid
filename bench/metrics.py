@@ -3,9 +3,8 @@
 
 Runs in the parity env (it has the oracles), against an installed pyroid wheel (build it with --release):
 
-    DX_NAME=metrics .orchestration/dx.sh 'cd parity && UV_PROJECT_ENVIRONMENT=/target/venv-parity \
-      uv run --frozen --no-default-groups --with /target/dist/pyroid-*.whl python ../bench/metrics.py \
-      --out ../bench/results/<machine>/<date>-metrics'
+    cd parity && uv run --frozen --no-default-groups --with ../dist/pyroid-*.whl python ../bench/metrics.py \
+      --out ../bench/results/<machine>/<date>-metrics
 
 Workloads (real data, pinned in bench/manifest.json):
 - ROUGE: CNN/DM test, lead-3 vs highlights, ``RougeScorer(["rouge1", "rouge2", "rougeL", "rougeLsum"])`` with and
@@ -265,7 +264,7 @@ def main() -> int:
         "data": {"rouge": M.CNNDM, "mt": M.WMT21},
         "rouge_types": ROUGE_TYPES,
         "reference_processes": PROCS,
-        # Other sessions share the VM: the 1/5/15-minute load averages before and after the run.
+        # Other work may share the machine: the 1/5/15-minute load averages before and after the run.
         "loadavg_before": load_before,
         "loadavg_after": os.getloadavg(),
     }

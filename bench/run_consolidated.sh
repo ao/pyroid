@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The consolidated benchmark: every incumbent and every pyroid module, gated, in one results folder.
-# Run INSIDE ONE dx.sh call from the worktree root, with the pyroid wheel installed in all three envs:
+# Run it on Linux (or in one Linux container) from the repository root, with the pyroid wheel installed in all three
+# envs ($BENCH_PY313, $BENCH_PY315T and the bench env):
 #
-#   DX_NAME=perf .orchestration/dx.sh 'BENCH_GIT_SHA=<sha> bash bench/run_consolidated.sh'
+#   BENCH_GIT_SHA=$(git rev-parse HEAD) bash bench/run_consolidated.sh
 #
 # 1. run_baselines.sh in the oracle env (CPython 3.13, $BENCH_PY313): gates, pyperf stages (incumbents and
 #    pyroid at RAYON_NUM_THREADS=1), memory, pipeline equivalence, hyperfine e2e at 1 and 8 processes for

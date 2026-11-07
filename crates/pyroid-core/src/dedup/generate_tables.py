@@ -9,7 +9,7 @@ Nothing is transcribed by hand: every property is read back from the running int
 * `\\p{Decimal_Number}` as the `regex` module sees it (its own Unicode data, any interpreter).
 * datatrove's `PUNCTUATION` string, from the installed datatrove 0.10.1.
 
-Usage (inside the pyroid-dev container; never on the host):
+Usage (Linux or a Linux container; `/target/venv-$v` stands for a venv per CPython version):
 
     # 1. one dump per interpreter (each needs `regex`; one of them needs datatrove)
     for v in 311 312 parity 314 315; do

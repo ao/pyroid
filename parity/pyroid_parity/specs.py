@@ -1,4 +1,4 @@
-"""Shared constants: filter cases, MinHash config, model files. Product tracks implement against these."""
+"""Shared constants: filter cases, MinHash config, model files. Each module's suite is written against these."""
 
 from __future__ import annotations
 

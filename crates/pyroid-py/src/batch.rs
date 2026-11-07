@@ -1,6 +1,6 @@
 //! The batch helpers every text function goes through.
 //!
-//! Pattern (R2 §2/§5): extract while attached → `py.detach(..)` around the
+//! Pattern: extract while attached → `py.detach(..)` around the
 //! rayon work → re-attach and build the output once, with exact-size
 //! iterators. Kernels are pure Rust closures; they never call Python.
 //!

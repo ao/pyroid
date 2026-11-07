@@ -32,7 +32,7 @@ oracle = [
     "xxhash>=3.5,<4",
     "fasttext-predict==0.9.2.4; python_version < '3.14'",
     # What datatrove 0.10.1 needs but doesn't install for the steps tests/test_filters_more.py runs live: its
-    # `processing` extra for URLFilter (versions as P6 verified), and aiohttp for fsspec's HTTP download of
+    # `processing` extra for URLFilter (the versions the URLFilter tests were verified with), and aiohttp for fsspec's HTTP download of
     # C4BadWordsFilter's word lists.
     "tldextract==5.4.0",
     "pyahocorasick==2.3.1",
