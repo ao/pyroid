@@ -418,7 +418,10 @@ https://github.com/ekzhu/datasketch: its Python classes start from datasketch's
 own source, and its MinHash, LSH and LSH Forest algorithms were ported to Rust.
 Each derived file carries the header "Derived from datasketch 2.0.0 (MIT),
 © 2015 ekzhu; modified." The tests ported from datasketch's test suite
-(python/tests/test_datasketch_upstream_*.py) say so in their header. The
+(python/tests/test_datasketch_upstream_*.py) say so in their header.
+crates/pyroid-core/src/datasketch/params.rs ports datasketch's (b, r) searches;
+crates/pyroid-core/tests/datasketch_data/ holds values recorded from datasketch
+(see "scipy" below). The
 permutation parameters reproduce numpy's legacy RandomState (MT19937 and masked
 bounded integers; numpy is BSD-3-Clause); no numpy code is included.
 
@@ -443,3 +446,45 @@ bounded integers; numpy is BSD-3-Clause); no numpy code is included.
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
+
+-------------------------------------------------------------------------------
+scipy
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/datasketch/quad.rs is a port of scipy 1.18.1's C
+translation of QUADPACK (scipy/integrate/__quadpack.c: dqagse, dqk21, dqpsrt,
+dqelg) and of the finite-limit path of scipy.integrate.quad
+(scipy/integrate/_quadpack_py.py), https://github.com/scipy/scipy. It carries
+the header "Derived from scipy 1.18.1 (BSD-3-Clause), © 2024 SciPy developers;
+modified." crates/pyroid-core/tests/datasketch_data/params.json holds values
+recorded from scipy and datasketch. scipy's LICENSE.txt reads "Copyright (c)
+2001-2002 Enthought, Inc. 2003, SciPy Developers."; __quadpack.c carries:
+
+
+    Copyright (C) 2024 SciPy developers
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    a. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+    b. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+    c. Names of the SciPy Developers may not be used to endorse or promote
+       products derived from this software without specific prior written
+       permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS
+    BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+    THE POSSIBILITY OF SUCH DAMAGE.
+
+QUADPACK itself is by R. Piessens, E. de Doncker-Kapenga, C. Ueberhuber and
+D. Kahaner (1983), distributed through netlib without a licence.

@@ -167,6 +167,7 @@ convention = "google"
 "{python/scripts,bench,parity}/**" = ["T20"]
 "crates/pyroid-core/src/ftfy/generate_tables.py" = ["T20"]
 "crates/pyroid-core/tests/ftfy_data/*.py" = ["T20"]
+"crates/pyroid-core/tests/datasketch_data/*.py" = ["T20"]
 
 [tool.mypy]
 python_version = "3.11"
