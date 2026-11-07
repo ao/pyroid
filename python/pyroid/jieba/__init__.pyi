@@ -23,8 +23,8 @@ pyroid as a prebuilt trie, so loading it takes about 2 ms (jieba: about half a s
 writes no cache file; jieba itself is not needed.
 
 Delegated to the real jieba (it must be installed; otherwise :class:`pyroid.PyroidError`),
-with one :class:`pyroid.FallbackWarning` per feature: :mod:`pyroid.jieba.posseg`
-(part-of-speech tags), :mod:`pyroid.jieba.analyse` (TF-IDF and TextRank keywords),
+with one :class:`pyroid.FallbackWarning` per feature: ``pyroid.jieba.posseg``
+(part-of-speech tags), ``pyroid.jieba.analyse`` (TF-IDF and TextRank keywords),
 paddle mode (``enable_paddle``, ``use_paddle=True``) and :func:`get_dict_file` for the
 default dictionary. Before each delegated call, the words added through pyroid are
 replayed onto jieba's tokenizer, so those features see them.

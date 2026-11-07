@@ -6,7 +6,7 @@
 :class:`Tokenizer` (default or custom dictionary) give the same words as jieba
 0.42.1 for every input. The segmentation runs in Rust; jieba's default
 dictionary is built in, so loading it takes no time and jieba itself is not
-needed. :mod:`pyroid.jieba.posseg`, :mod:`pyroid.jieba.analyse` and paddle mode
+needed. ``pyroid.jieba.posseg``, ``pyroid.jieba.analyse`` and paddle mode
 are forwarded to the real jieba, with a one-time :class:`pyroid.FallbackWarning`
 (:class:`pyroid.PyroidError` if jieba is not installed).
 
