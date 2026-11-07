@@ -103,7 +103,7 @@ def render(suites: dict[str, dict[str, Any]]) -> str:
             "",
             f"### {TITLES[name]} {{#{name}}}",
             "",
-            f"Reference: **{s['reference']}**. Rule: {s['rule']}.",
+            f"Reference: {s['reference']}. Rule: {s['rule']}.",
             "",
             "| Check | Compared | Identical | Different |",
             "|---|---:|---:|---:|",

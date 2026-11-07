@@ -38,7 +38,7 @@ regenerated from their `parity-report.json` files.
 
 ### pyroid.ftfy {#ftfy}
 
-Reference: **ftfy 6.3.1**. Rule: byte-identical output, same exception type.
+Reference: ftfy 6.3.1. Rule: byte-identical output, same exception type.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
@@ -56,7 +56,7 @@ Reference: **ftfy 6.3.1**. Rule: byte-identical output, same exception type.
 
 ### pyroid.fasttext {#fasttext}
 
-Reference: **fasttext-predict 0.9.2.4 (fastText's C++ predict path)**. Rule: same labels, probabilities within 1e-6 (measured: bit-identical).
+Reference: fasttext-predict 0.9.2.4 (fastText's C++ predict path). Rule: same labels, probabilities within 1e-6 (measured: bit-identical).
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
@@ -69,7 +69,7 @@ Reference: **fasttext-predict 0.9.2.4 (fastText's C++ predict path)**. Rule: sam
 
 ### pyroid.filters {#filters}
 
-Reference: **datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNLP, whitespace), tldextract 5.4.0, numpy 2.5.4**. Rule: same keep/drop decision, same filter_reason, same rewritten text, same exception.
+Reference: datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNLP, whitespace), tldextract 5.4.0, numpy 2.5.4. Rule: same keep/drop decision, same filter_reason, same rewritten text, same exception.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
@@ -88,7 +88,7 @@ Reference: **datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: Indic
 
 ### pyroid.dedup {#dedup}
 
-Reference: **datatrove 0.10.1 MinHash (FineWeb: sha1, 64-bit, 14 buckets x 8 hashes, 5-grams; FineWeb-2: xxhash, 64-bit) and sentence dedup**. Rule: identical signatures, removed set, cluster ids and sizes; sentence dedup: byte-identical signature, duplicate and index files.
+Reference: datatrove 0.10.1 MinHash (FineWeb: sha1, 64-bit, 14 buckets x 8 hashes, 5-grams; FineWeb-2: xxhash, 64-bit) and sentence dedup. Rule: identical signatures, removed set, cluster ids and sizes; sentence dedup: byte-identical signature, duplicate and index files.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
@@ -105,7 +105,7 @@ Reference: **datatrove 0.10.1 MinHash (FineWeb: sha1, 64-bit, 14 buckets x 8 has
 
 ### pyroid.translit {#translit}
 
-Reference: **anyascii 0.3.3 (for anyascii()); Unidecode 1.4.0 as a black box (for unidecode()'s errors= semantics only)**. Rule: anyascii(): byte-identical; unidecode(): Unidecode's errors=, exceptions and warnings, on anyascii's data.
+Reference: anyascii 0.3.3 (for anyascii()); Unidecode 1.4.0 as a black box (for unidecode()'s errors= semantics only). Rule: anyascii(): byte-identical; unidecode(): Unidecode's errors=, exceptions and warnings, on anyascii's data.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
@@ -120,7 +120,7 @@ Reference: **anyascii 0.3.3 (for anyascii()); Unidecode 1.4.0 as a black box (fo
 
 ### pyroid.metrics {#metrics}
 
-Reference: **rouge-score 0.1.2 (with NLTK 3.10.4's Porter stemmer) and sacrebleu 2.6.0**. Rule: identical repr, str, format(), JSON and signature strings of every score: no tolerance.
+Reference: rouge-score 0.1.2 (with NLTK 3.10.4's Porter stemmer) and sacrebleu 2.6.0. Rule: identical repr, str, format(), JSON and signature strings of every score: no tolerance.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
@@ -136,7 +136,7 @@ Reference: **rouge-score 0.1.2 (with NLTK 3.10.4's Porter stemmer) and sacrebleu
 
 ### pyroid.json_repair {#json_repair}
 
-Reference: **json_repair 0.64.5**. Rule: the same returned string or object, the same repair log, the same exception.
+Reference: json_repair 0.64.5. Rule: the same returned string or object, the same repair log, the same exception.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
@@ -151,7 +151,7 @@ Reference: **json_repair 0.64.5**. Rule: the same returned string or object, the
 
 ### Integrations: datatrove steps, pyroid clean, pyroid.patch() {#integrations}
 
-Reference: **datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.patch() stands in for)**. Rule: the same per-document digest of id, text, language, score, keep, reason and duplicate flag; for patch(), the same call-site output.
+Reference: datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.patch() stands in for). Rule: the same per-document digest of id, text, language, score, keep, reason and duplicate flag; for patch(), the same call-site output.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
