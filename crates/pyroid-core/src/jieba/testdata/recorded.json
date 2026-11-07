@@ -1,0 +1,51 @@
+{
+  "recorded_with": {
+    "jieba": "0.42.1",
+    "python": "3.13.18",
+    "implementation": "CPython",
+    "unicode": "15.1.0",
+    "datatrove": "0.10.1",
+    "spacy": "3.8.18"
+  },
+  "seed": 20261107,
+  "default_dict": {
+    "len": 498113,
+    "total": 60101967
+  },
+  "sources": {
+    "tests": "jieba 0.42.1 sdist test/*.py and README.md code blocks (MIT)",
+    "fineweb": "HuggingFaceFW/fineweb-2 cmn_Hani, 250 documents (ODC-By 1.0)",
+    "userdict.txt": "jieba 0.42.1 test/userdict.txt (MIT), embedded in oracle.py, sha256 67b204db82ee54172ddffbcdd4d16b8918574d9456b2727a9c17d62c2823f62a",
+    "dict.txt.small": "jieba 0.42.1 extra_dict/dict.txt.small, sha256 479cf8cc37e78bc908ae330d9153375547d4ff7f7d03a1ac4d4908d3677ff664"
+  },
+  "files": {
+    "golden-tests.jsonl": {
+      "rows": 126,
+      "sha256": "88cb8e3d51ad1b54e2e9783ad572b14722fddb9a14fe208c7ab4eb7f66ccd3e3"
+    },
+    "golden-fineweb-1.jsonl": {
+      "rows": 1200,
+      "sha256": "f697db30b35ca2aa4d2fe16d6cbabcf60c16536022cbfa84e68e458cdc3e9c9b"
+    },
+    "golden-fineweb-2.jsonl": {
+      "rows": 1200,
+      "sha256": "b164365ecfc2d1b7bb0764d0fa66144f9e8c2954a90bec36560c5a95a42c5384"
+    },
+    "golden-mixed.jsonl": {
+      "rows": 827,
+      "sha256": "4d7834a09243aab780d11db7c1af3a9476505545f24aa5f81bf4821b9abe0e03"
+    },
+    "golden-fuzz.jsonl": {
+      "rows": 2000,
+      "sha256": "3bcce411dda301e22efcbb5c02f5d838d9dbe60692be40a46b82339d2f72f660"
+    },
+    "golden-scenarios.jsonl": {
+      "rows": 2250,
+      "sha256": "75e8ae701463d430f40dae17829010d399503cfb241cd5eac33cab0bf6107530"
+    },
+    "golden-dict-small.jsonl": {
+      "rows": 386,
+      "sha256": "f6974103c7f3f3eaa6b92221e77bc22d4d75166d172e9b50dbbd6223517de615"
+    }
+  }
+}

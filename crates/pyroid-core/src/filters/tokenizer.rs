@@ -767,7 +767,7 @@ impl SpacyTokenizer {
 }
 
 /// Is `s` one of the sentencizer's punctuation characters?
-fn is_sent_punct(s: &str) -> bool {
+pub(crate) fn is_sent_punct(s: &str) -> bool {
     let mut it = s.chars();
     match (it.next(), it.next()) {
         (Some(c), None) => tables::SENT_PUNCT.binary_search(&c).is_ok(),
