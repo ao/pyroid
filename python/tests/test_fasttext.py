@@ -5,10 +5,10 @@ fastText's format (dense, product-quantized, ``qnorm``, ``qout``, pruned; every
 head; format versions 11 and 12), with weights from a seeded RNG.
 
 - **Live-oracle parity**: every model predicts the same labels and
-  probabilities (|dp| <= 1e-6), and raises the same errors, as fastText's
-  Python package (fasttext-predict 0.9.2.4, ``import fasttext``), on a fixed
-  corpus and on Hypothesis-generated lines. Skipped where the oracle is not
-  installed (it has no free-threaded wheels).
+  probabilities (|dp| <= 1e-6; 1e-4 on macOS, see ``PROB_TOL``), and raises
+  the same errors, as fastText's Python package (fasttext-predict 0.9.2.4,
+  ``import fasttext``), on a fixed corpus and on Hypothesis-generated lines.
+  Skipped where the oracle is not installed (it has no free-threaded wheels).
 - **Reference model**: what fasttext-predict does not expose (vectors,
   matrices, ids, subwords, ``get_line``) is checked against :class:`Ref`, a
   pure-Python copy of fastText's dictionary and float32 arithmetic over the
@@ -657,10 +657,14 @@ def _outcome(fn: Callable[..., Any], *args: Any) -> Outcome:
         return type(e).__name__, str(e)
 
 
-# fastText orders exact ties as its C++ standard library's heap does. pyroid replays libstdc++
-# (Linux), which MSVC matches here; libc++ (macOS) orders ties, and cuts them at k, differently
-# (docs/guides/fasttext.md, "Tie order"). There answers may differ from fastText's in ties only.
-ORACLE_TIE_ORDER_DIFFERS = sys.platform == "darwin"
+# pyroid replays fastText's Linux builds (GCC, libstdc++), which the Windows (MSVC) oracle matched
+# on every case here. fasttext-predict's macOS wheels are built by clang against libc++: exact ties
+# are ordered, and cut at k, differently (docs/guides/fasttext.md, "Tie order"), and dot products
+# round differently in the last bits, which large logits amplify. Measured on macos-15 (arm64):
+# softmax-scaled (scale 20) gives 0.5745614 there, 0.5745577 in pyroid and in fasttext-predict on
+# Linux. There labels may differ in ties and near-ties, and probabilities by up to PROB_TOL.
+ORACLE_BUILD_DIFFERS = sys.platform == "darwin"
+PROB_TOL = 1e-4 if ORACLE_BUILD_DIFFERS else 1e-6
 
 
 def _only_ties_differ(every: Outcome, got: Outcome) -> bool:
@@ -671,7 +675,7 @@ def _only_ties_differ(every: Outcome, got: Outcome) -> bool:
     prob = dict(zip(*every[1], strict=True))
     labels, probs = got[1]
     return len(set(labels)) == len(labels) and all(
-        label in prob and abs(prob[label] - float(p)) <= 1e-6
+        label in prob and abs(prob[label] - float(p)) <= PROB_TOL
         for label, p in zip(labels, probs, strict=True)
     )
 
@@ -682,7 +686,7 @@ def _prediction_mismatch(
     """Why pyroid's ``predict(str)`` outcome differs from fastText's, or None.
 
     ``every`` gives fastText's prediction of every label for the same line; with it, labels that
-    differ only in exact-tie order are accepted where ``ORACLE_TIE_ORDER_DIFFERS``.
+    differ only in tie order are accepted where ``ORACLE_BUILD_DIFFERS``.
     """
     if want[0] != "ok" or got[0] != "ok":
         return None if want == got else f"{want} != {got}"
@@ -693,7 +697,7 @@ def _prediction_mismatch(
         return f"probs {probs.dtype} {probs.shape}"
     if labels != tuple(want_labels):
         ties_only = (
-            ORACLE_TIE_ORDER_DIFFERS
+            ORACLE_BUILD_DIFFERS
             and every is not None
             and len(labels) == len(want_labels)
             and _only_ties_differ(every(), got)
@@ -701,7 +705,7 @@ def _prediction_mismatch(
         if not ties_only:
             return f"labels {labels} != {want_labels}"
     worst = max((abs(float(a) - b) for a, b in zip(probs, want_probs, strict=True)), default=0)
-    return None if worst <= 1e-6 else f"|dp| = {worst} ({list(probs)} vs {list(want_probs)})"
+    return None if worst <= PROB_TOL else f"|dp| = {worst} ({list(probs)} vs {list(want_probs)})"
 
 
 def _notes(exc: BaseException | None) -> str:
