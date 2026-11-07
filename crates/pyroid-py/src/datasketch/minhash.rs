@@ -576,5 +576,193 @@ pub fn add(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bulk, m)?)?;
     m.add_function(wrap_pyfunction!(batch_tokens, m)?)?;
     m.add_function(wrap_pyfunction!(batch_texts, m)?)?;
+    m.add_function(wrap_pyfunction!(lean_pack, m)?)?;
+    m.add_function(wrap_pyfunction!(lean_unpack, m)?)?;
     Ok(())
+}
+
+/// A `struct` byte order: native (with `@`'s alignment) or a standard one.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ByteOrder {
+    /// `@`: native order, native alignment.
+    NativeAligned,
+    /// `=`, `<`, `>`, `!`: standard sizes, no alignment.
+    Standard { big: bool },
+}
+
+fn byte_order(s: &str) -> Option<ByteOrder> {
+    Some(match s {
+        "@" => ByteOrder::NativeAligned,
+        "=" => ByteOrder::Standard {
+            big: cfg!(target_endian = "big"),
+        },
+        "<" => ByteOrder::Standard { big: false },
+        ">" | "!" => ByteOrder::Standard { big: true },
+        _ => return None,
+    })
+}
+
+impl ByteOrder {
+    fn big(self) -> bool {
+        match self {
+            Self::NativeAligned => cfg!(target_endian = "big"),
+            Self::Standard { big } => big,
+        }
+    }
+
+    fn put(self, out: &mut Vec<u8>, le: &[u8]) {
+        if self.big() {
+            out.extend(le.iter().rev());
+        } else {
+            out.extend_from_slice(le);
+        }
+    }
+
+    /// Offset of the first hash value: after `q`, `i` (and `B` for the
+    /// affine formats), aligned to the value size for `@`.
+    fn values_offset(self, affine: bool, value_size: usize) -> usize {
+        let header: usize = if affine { 13 } else { 12 };
+        match self {
+            Self::NativeAligned => header.next_multiple_of(value_size),
+            Self::Standard { .. } => header,
+        }
+    }
+}
+
+/// A contiguous 1-D `T` array's values, or `None`.
+fn contiguous<T: numpy::Element + Copy>(obj: &Bound<'_, PyAny>) -> Option<Vec<T>> {
+    let arr = obj.cast::<PyArray1<T>>().ok()?;
+    let ro = arr.try_readonly().ok()?;
+    ro.as_slice().ok().map(<[T]>::to_vec)
+}
+
+/// `LeanMinHash.serialize`'s bytes (datasketch's `struct.pack_into` layout),
+/// or `None` if `struct` would raise or the state is not canonical (the caller
+/// then runs the `struct` code itself).
+#[pyfunction]
+fn lean_pack<'py>(
+    py: Python<'py>,
+    scheme: &str,
+    seed: i64,
+    hashvalues: &Bound<'py, PyAny>,
+    byteorder: &str,
+) -> Option<Bound<'py, PyBytes>> {
+    let (Some(scheme), Some(order)) = (Scheme::from_name(scheme), byte_order(byteorder)) else {
+        return None;
+    };
+    // Values as little-endian bytes of the serialized width.
+    let (values, size): (Vec<u8>, usize) = match scheme {
+        Scheme::Legacy => {
+            let s = contiguous::<u64>(hashvalues)?;
+            let mut v = Vec::with_capacity(4 * s.len());
+            for x in s {
+                // struct.error ('I' format requires 0 <= number <= 4294967295): `struct` reports it.
+                v.extend_from_slice(&u32::try_from(x).ok()?.to_le_bytes());
+            }
+            (v, 4)
+        }
+        Scheme::Affine32 => {
+            let s = contiguous::<u32>(hashvalues)?;
+            (s.iter().flat_map(|x| x.to_le_bytes()).collect(), 4)
+        }
+        Scheme::Affine64 => {
+            let s = contiguous::<u64>(hashvalues)?;
+            (s.iter().flat_map(|x| x.to_le_bytes()).collect(), 8)
+        }
+    };
+    let n = values.len() / size;
+    let count = i32::try_from(n).ok()?;
+    let affine = scheme != Scheme::Legacy;
+    let offset = order.values_offset(affine, size);
+    let mut out = Vec::with_capacity(offset + values.len());
+    order.put(&mut out, &seed.to_le_bytes());
+    order.put(
+        &mut out,
+        &(if affine { -count } else { count }).to_le_bytes(),
+    );
+    if affine {
+        out.push(if scheme == Scheme::Affine32 { 1 } else { 2 });
+    }
+    out.resize(offset, 0);
+    for v in values.chunks_exact(size) {
+        order.put(&mut out, v);
+    }
+    Some(PyBytes::new(py, &out))
+}
+
+/// `LeanMinHash.deserialize`: `(seed, scheme, hashvalues)` read from `buf`,
+/// or `None` where datasketch's `struct` code would raise (too short, unknown
+/// scheme code): the caller then runs it to raise the same error.
+#[pyfunction]
+fn lean_unpack<'py>(
+    py: Python<'py>,
+    buf: &Bound<'py, PyAny>,
+    byteorder: &str,
+) -> Option<(i64, &'static str, Bound<'py, PyAny>)> {
+    let order = byte_order(byteorder)?;
+    let owned;
+    let data: &[u8] = if let Ok(b) = buf.cast::<PyBytes>() {
+        b.as_bytes()
+    } else if let Ok(b) = buf.cast::<pyo3::types::PyByteArray>() {
+        owned = b.to_vec();
+        &owned
+    } else {
+        return None;
+    };
+    let get = |at: usize, len: usize| -> Option<Vec<u8>> {
+        let mut v = data.get(at..at + len)?.to_vec();
+        if order.big() {
+            v.reverse();
+        }
+        Some(v)
+    };
+    let (Some(seed), Some(count)) = (get(0, 8), get(8, 4)) else {
+        return None;
+    };
+    let seed = i64::from_le_bytes(seed.try_into().unwrap_or_default());
+    let count = i32::from_le_bytes(count.try_into().unwrap_or_default());
+    let (scheme, n) = if count >= 0 {
+        (Scheme::Legacy, count.unsigned_abs() as usize)
+    } else {
+        match data.get(12) {
+            Some(1) => (Scheme::Affine32, count.unsigned_abs() as usize),
+            Some(2) => (Scheme::Affine64, count.unsigned_abs() as usize),
+            _ => return None,
+        }
+    };
+    let size = if scheme == Scheme::Affine64 { 8 } else { 4 };
+    let offset = order.values_offset(scheme != Scheme::Legacy, size);
+    let end = n.checked_mul(size).and_then(|b| b.checked_add(offset))?;
+    let raw = data.get(offset..end)?;
+    let big = order.big();
+    let arr = match scheme {
+        Scheme::Legacy | Scheme::Affine32 => {
+            let vals = raw.chunks_exact(4).map(|c| {
+                let b = [c[0], c[1], c[2], c[3]];
+                if big {
+                    u32::from_be_bytes(b)
+                } else {
+                    u32::from_le_bytes(b)
+                }
+            });
+            if scheme == Scheme::Legacy {
+                PyArray1::from_iter(py, vals.map(u64::from)).into_any()
+            } else {
+                PyArray1::from_iter(py, vals).into_any()
+            }
+        }
+        Scheme::Affine64 => {
+            let vals = raw.chunks_exact(8).map(|c| {
+                let mut b = [0u8; 8];
+                b.copy_from_slice(c);
+                if big {
+                    u64::from_be_bytes(b)
+                } else {
+                    u64::from_le_bytes(b)
+                }
+            });
+            PyArray1::from_iter(py, vals).into_any()
+        }
+    };
+    Some((seed, scheme.name(), arr))
 }

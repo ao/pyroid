@@ -43,7 +43,7 @@ Differences from datasketch
 """
 
 from collections.abc import Callable, Generator, Iterable
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -54,7 +54,7 @@ __all__ = ["MinHash", "minhash_batch"]
 
 hashvalue_byte_size: int
 
-_Scheme = Literal["affine32", "affine64", "legacy"]
+_Scheme: TypeAlias = Literal["affine32", "affine64", "legacy"]
 
 class MinHash:
     """MinHash: estimate the Jaccard similarity and cardinality of sets.
@@ -189,7 +189,7 @@ class MinHash:
     @classmethod
     def generator(
         cls, b: Iterable[Iterable[Any]], *, threads: int | None = None, **minhash_kwargs: Any
-    ) -> Generator[MinHash, None, None]:
+    ) -> Generator[MinHash]:
         """Yield one MinHash per document of `b` (see :meth:`bulk`).
 
         pyroid reads up to 2,048 documents ahead to hash them in parallel; the

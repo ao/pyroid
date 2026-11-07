@@ -16,6 +16,7 @@ from typing import Optional
 
 import numpy as np
 
+from pyroid._pyroid import datasketch as _native
 from pyroid.datasketch.minhash import (
     _SCHEME_AFFINE32,
     _SCHEME_AFFINE64,
@@ -36,6 +37,22 @@ _SCHEME_VALUE_FMTS = {
     _SCHEME_AFFINE32: "I",
     _SCHEME_AFFINE64: "Q",
 }
+
+
+_BYTE_ORDERS = ("@", "=", "<", ">", "!")
+_INT64 = (-(1 << 63), 1 << 63)
+
+
+def _native_unpack(buf, byteorder):
+    """``LeanMinHash.deserialize`` in Rust for bytes/bytearray, or None (then ``struct`` runs)."""
+    if (type(buf) is bytes or type(buf) is bytearray) and byteorder in _BYTE_ORDERS:
+        res = _native.lean_unpack(buf, byteorder)
+        if res is not None:
+            seed, scheme, hashvalues = res
+            lmh = object.__new__(LeanMinHash)
+            lmh._initialize_slots(seed, hashvalues, scheme)
+            return lmh
+    return None
 
 
 class LeanMinHash(MinHash):
@@ -183,6 +200,16 @@ class LeanMinHash(MinHash):
     def _value_fmt(self) -> str:
         return _SCHEME_VALUE_FMTS[self.scheme]
 
+    def _native_pack(self, byteorder):
+        # The serialized bytes from Rust, or None where `struct` would raise or the
+        # state is not canonical (then datasketch's `struct` code runs).
+        seed = self.seed
+        if type(seed) is not int or not _INT64[0] <= seed < _INT64[1]:
+            return None
+        if byteorder not in _BYTE_ORDERS or self.scheme not in _SCHEME_VALUE_FMTS:
+            return None
+        return _native.lean_pack(self.scheme, seed, self.hashvalues, byteorder)
+
     def bytesize(self, byteorder="@") -> int:
         """Compute the byte size after serialization.
 
@@ -261,6 +288,11 @@ class LeanMinHash(MinHash):
         """
         if len(buf) < self.bytesize(byteorder):
             raise ValueError("The buffer does not have enough space for holding this MinHash.")
+        if type(buf) is bytearray:
+            data = self._native_pack(byteorder)
+            if data is not None:
+                buf[: len(data)] = data
+                return
         if self.scheme == _SCHEME_LEGACY:
             fmt = "%sqi%dI" % (byteorder, len(self))
             struct.pack_into(fmt, buf, 0, self.seed, len(self), *self.hashvalues)
@@ -297,6 +329,9 @@ class LeanMinHash(MinHash):
                 lean_minhash = LeanMinHash.deserialize(buf)
 
         """
+        lmh = _native_unpack(buf, byteorder)
+        if lmh is not None:
+            return lmh
         fmt_seed_size = "%sqi" % byteorder
         try:
             seed, num_perm = struct.unpack_from(fmt_seed_size, buf, 0)
@@ -324,6 +359,9 @@ class LeanMinHash(MinHash):
         return lmh
 
     def __getstate__(self):
+        data = self._native_pack("@")
+        if data is not None:
+            return bytearray(data)
         buf = bytearray(self.bytesize())
         if self.scheme == _SCHEME_LEGACY:
             fmt = "qi%dI" % len(self)
@@ -336,6 +374,10 @@ class LeanMinHash(MinHash):
         return buf
 
     def __setstate__(self, buf):
+        lmh = _native_unpack(buf, "@")
+        if lmh is not None:
+            self._initialize_slots(lmh.seed, lmh.hashvalues, lmh.scheme)
+            return
         try:
             seed, num_perm = struct.unpack_from("qi", buf, 0)
         except TypeError:
