@@ -1,139 +1,233 @@
 # Benchmarks
 
-!!! warning "Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative"
-    Every number on this page was measured in a Linux (aarch64) Docker VM under OrbStack on an
-    Apple Silicon host with 12 vCPUs, **while other work shared the machine**. Identical wheels
-    moved by about ±10% between runs on one thread and ±20% on eight, so smaller differences are
-    noise. A run on a quiet bare-metal Linux machine is pending and will replace these numbers.
-    The 100k-document headline run has not been done: the end-to-end numbers are for the first
-    10,000 documents only.
+The numbers on this page come from two AWS EC2 instances, measured on 2026-11-06 at commit
+`f35bd9e4`: a c7i.4xlarge (Intel Xeon Platinum 8488C, Sapphire Rapids) and a c8g.4xlarge (AWS
+Graviton4). Both have 16 vCPUs and run Amazon Linux 2023. They are VMs on real hardware, not bare
+metal. Every timed run was pinned to 8 CPUs; on the c7i that is one thread per core.
+
+datatrove 0.10.1 and the other incumbents ran on CPython 3.13.18, and pyroid on free-threaded
+CPython 3.15.2t, from release wheels built on each machine. The section on
+[other modules](#other-modules-languages-and-integrations) and the [earlier runs](#earlier-runs)
+are from a Docker VM on a Mac and are labelled as such.
 
 ## Summary
 
-On the whole FineWeb chain (ftfy → language ID → four quality filters → MinHash dedup), pyroid
-with 8 threads is **26× faster than datatrove on 8 processes** (1.61 s against 41.93 s for 10,000
-documents), and single-threaded it is **49× faster than datatrove in one process** (5.16 s
-against 253.20 s), with the same output document for document. Stage by stage, on one thread,
-pyroid is 2.1× to 147× faster than the library it replaces.
+On 100,000 FineWeb documents on the c7i.4xlarge, pyroid's FineWeb chain took 10.2 s with 8
+threads, against 272.1 s for datatrove with 8 processes: about 27× faster. On one thread it took
+43.4 s against 2,444.4 s, about 56× faster. The output is the same document for document. On the
+c8g.4xlarge the same comparison gives 29× and 50×.
 
-Outside that chain, on one thread: ROUGE is 59–65× faster than rouge-score on 100k pairs, corpus
-BLEU 11× and corpus chrF 19× faster than sacrebleu; json_repair-compatible repair is about 30×
-faster on broken JSON (1.0–1.7× on valid JSON, which both hand to `json.loads` first); and the
-filters and MinHash are 36–86× faster than datatrove on German, French, Spanish, Russian and
-Arabic and 10–20× on Hindi. With 8 processes, datatrove's own FineWeb pipeline runs 14.7× faster
-with pyroid's stages swapped in ([End to end](#end-to-end-the-fineweb-chain)), and 21–24× in later
-runs of the drop-in steps on a heavily loaded VM, which slows stock datatrove most
-([Other modules, languages and integrations](#other-modules-languages-and-integrations)).
+On the 10,000-document dev slice the ratios are 18× (8 threads against 8 processes) and 38× (one
+thread against one process) on the c7i, and 20× and 45× on the c8g.
+
+Stage by stage, on one thread against one process on the c7i, pyroid is 1.6× (fastText with
+`lid.176.bin`) to 108× (ftfy) faster than the library it replaces. The quality filters are 35–69×
+faster and MinHash signatures 34×.
+
+The 100k datatrove runs and the runs of pyroid's stages in datatrove's executor were timed once
+each, without a warm-up, because a single-process datatrove run takes about 40 minutes. The other
+rows are medians of several runs.
 
 ## End to end: the FineWeb chain
 
-datatrove 0.10.1's FineWeb-style chain over the first 10,000 documents of the pinned FineWeb
-slice: `fix_text` → `LanguageFilter` (English, lid.176.bin) → Gopher repetition → Gopher quality →
-C4 quality (FineWeb settings) → FineWeb quality → MinHash dedup. It ran three ways:
+datatrove 0.10.1's FineWeb-style chain: `fix_text` → `LanguageFilter` (English, lid.176.bin) →
+Gopher repetition → Gopher quality → C4 quality (FineWeb settings) → FineWeb quality → MinHash
+dedup. It ran three ways, each with 1 and 8 workers:
 
-- **datatrove** in its own `LocalPipelineExecutor`, with 1 and 8 processes (CPython 3.13);
-- **pyroid's stages in datatrove's executor**: the same pipeline with every stage swapped for
-  pyroid's, with 1 and 8 processes (CPython 3.13);
-- **pyroid's native chain**: the same steps as pyroid calls in one process, on Arrow input, with
-  `threads=1` and `threads=8` (free-threaded CPython 3.15t;
-  [`bench/chain.py`](https://github.com/ao/pyroid/blob/main/bench/chain.py)).
+- datatrove in its own `LocalPipelineExecutor`, on CPython 3.13;
+- the same pipeline in datatrove's executor with every stage swapped for pyroid's, on CPython 3.13;
+- pyroid's native chain: the same steps as pyroid calls in one process, on Arrow input, with
+  `threads=1` and `threads=8`, on free-threaded CPython 3.15t
+  ([`bench/chain.py`](https://github.com/ao/pyroid/blob/main/bench/chain.py)).
+
+The output is checked with a per-document digest of each document's text, language, score,
+keep/drop decision, reason and duplicate flag. On the dev slice, datatrove and pyroid's stages in
+its executor give the same digest (`ef314b8d…`) with 1 and 8 processes, and so does the native
+chain with 8 threads. On the 100k corpus, the 8-process runs and the native chain with 8 threads
+give `da897999…`. Both machines give the same digests, and pyroid's output never depends on
+`threads`.
+
+Each run is a whole process under hyperfine, so interpreter start-up, imports, model loading and
+reading the input are included. The 8-process rows give each process its own copy of the fastText
+model, and the peak RSS column is for one process, not the total.
+
+### 100,000 documents
+
+The pinned 100,000-document FineWeb slice.
 
 <!-- Image paths are relative to this file: Zensical, which builds the published site, rewrites
      them for the page's URL (mkdocs, the link check, doesn't). Charts: bench/consolidate.py. -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/consolidated-e2e-dark.svg">
-  <img alt="Wall time of the FineWeb chain on 10,000 documents: datatrove at 1 and 8 processes, pyroid's stages in datatrove's executor, and pyroid's native chain at 1 and 8 threads" src="assets/consolidated-e2e-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/consolidated-e2e-100k-dark.svg">
+  <img alt="Wall time of the FineWeb chain on 100,000 documents on AWS EC2 c7i.4xlarge: pyroid's native chain 10.2 s with 8 threads and 43.4 s with 1; pyroid's stages in datatrove's executor 20.0 s and 64.4 s; datatrove 272.1 s with 8 processes and 2,444.4 s with 1" src="assets/consolidated-e2e-100k-light.svg">
 </picture>
 
-<!-- bench-chain:begin -->
+<!-- bench:chain:c7i-100k:begin -->
 <!-- Generated by docs/scripts/render_benchmarks.py from docs/data/benchmarks.json. -->
 
-*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative.* Seconds for the whole chain over the same documents, fastest first.
+c7i.4xlarge, 100,000 documents. Wall seconds for the whole chain, fastest first.
 
 | Run | Wall s, median [IQR] | CPU s | Peak RSS of one process, MiB | vs datatrove, 1 process | vs datatrove, 8 processes |
 |---|---:|---:|---:|---:|---:|
-| pyroid native chain, 8 threads (CPython 3.15t) | 1.61 [1.57–1.71] | 6.1 | 605 | 157.6× | 26.1× |
-| pyroid stages in datatrove's executor, 8 processes (3.13) | 2.85 [2.83–2.92] | 13.0 | 385 | 88.9× | 14.7× |
-| pyroid native chain, 1 thread (CPython 3.15t) | 5.16 [5.15–5.41] | 5.8 | 503 | 49.1× | 8.1× |
-| pyroid stages in datatrove's executor, 1 process (3.13) | 7.48 [7.24–7.52] | 8.1 | 421 | 33.9× | 5.6× |
-| datatrove 0.10.1, 8 processes (CPython 3.13) | 41.93 [41.27–42.18] | 314.5 | 367 | 6.0× | 1.0× |
-| datatrove 0.10.1, 1 process (CPython 3.13) | 253.20 [252.48–253.45] | 254.3 | 438 | 1.0× | 0.2× |
+| pyroid native chain, 8 threads (CPython 3.15t) | 10.17 [10.15–10.23] | 45.3 | 2234 | 240.3× | 26.7× |
+| pyroid stages in datatrove's executor, 8 processes (3.13) | 19.96 (1 run) | 69.7 | 1515 | 122.5× | 13.6× |
+| pyroid native chain, 1 thread (CPython 3.15t) | 43.37 [43.36–43.70] | 44.6 | 2123 | 56.4× | 6.3× |
+| pyroid stages in datatrove's executor, 1 process (3.13) | 64.42 (1 run) | 65.1 | 1621 | 37.9× | 4.2× |
+| datatrove 0.10.1, 8 processes (CPython 3.13) | 272.09 (1 run) | 2122.2 | 449 | 9.0× | 1.0× |
+| datatrove 0.10.1, 1 process (CPython 3.13) | 2444.38 (1 run) | 2445.1 | 725 | 1.0× | 0.1× |
 
-<small>Source: bench/results/orbstack-aarch64-12cpu/2026-11-05-consolidated.</small>
-<!-- bench-chain:end -->
+<small>Source: bench/results/aws-c7i.4xlarge/2026-11-06/headline.</small>
+<!-- bench:chain:c7i-100k:end -->
 
-- **Same output.** The per-document digest of the output (`ef314b8d…`: each document's text,
-  language, score, keep/drop, reason and duplicate flag) is identical for datatrove at 1 and 8
-  processes, for pyroid's stages in datatrove's executor at 1 and 8, and for the native chain at 8
-  threads. pyroid's output never depends on `threads`.
-- **What the time includes.** Each run is a whole process under hyperfine, pinned to 8 of the 12
-  vCPUs: interpreter start-up, imports, model loading and reading the input are all included.
-  The runs in datatrove's executor are the median of 3 and the native chain's of 5, each after a
-  warm-up.
-- The 8-process rows give each process its own copy of the fastText model; the peak RSS column is
-  one process, not the total.
+<!-- bench:chain:c8g-100k:begin -->
+<!-- Generated by docs/scripts/render_benchmarks.py from docs/data/benchmarks.json. -->
+
+c8g.4xlarge, 100,000 documents. Wall seconds for the whole chain, fastest first.
+
+| Run | Wall s, median [IQR] | CPU s | Peak RSS of one process, MiB | vs datatrove, 1 process | vs datatrove, 8 processes |
+|---|---:|---:|---:|---:|---:|
+| pyroid native chain, 8 threads (CPython 3.15t) | 10.16 [10.10–10.17] | 45.7 | 2222 | 229.8× | 29.4× |
+| pyroid stages in datatrove's executor, 8 processes (3.13) | 20.26 (1 run) | 75.5 | 1511 | 115.3× | 14.7× |
+| pyroid native chain, 1 thread (CPython 3.15t) | 46.83 [46.32–47.13] | 47.6 | 2086 | 49.9× | 6.4× |
+| pyroid stages in datatrove's executor, 1 process (3.13) | 69.64 (1 run) | 70.3 | 1608 | 33.5× | 4.3× |
+| datatrove 0.10.1, 8 processes (CPython 3.13) | 298.46 (1 run) | 2335.1 | 447 | 7.8× | 1.0× |
+| datatrove 0.10.1, 1 process (CPython 3.13) | 2334.87 (1 run) | 2335.4 | 700 | 1.0× | 0.1× |
+
+<small>Source: bench/results/aws-c8g.4xlarge/2026-11-06/headline.</small>
+<!-- bench:chain:c8g-100k:end -->
+
+### 10,000 documents
+
+The dev slice: the first 10,000 documents of the 100k slice. datatrove and pyroid's stages in its
+executor are the median of 3 runs, the native chain the median of 5, each after a warm-up.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/consolidated-e2e-dark.svg">
+  <img alt="Wall time of the FineWeb chain on 10,000 documents on AWS EC2 c7i.4xlarge: pyroid's native chain 1.9 s with 8 threads and 5.6 s with 1; pyroid's stages in datatrove's executor 3.2 s and 8.5 s; datatrove 35.4 s with 8 processes and 212.8 s with 1" src="assets/consolidated-e2e-light.svg">
+</picture>
+
+<!-- bench:chain:c7i-dev:begin -->
+<!-- Generated by docs/scripts/render_benchmarks.py from docs/data/benchmarks.json. -->
+
+c7i.4xlarge, 10,000 documents (dev slice). Wall seconds for the whole chain, fastest first.
+
+| Run | Wall s, median [IQR] | CPU s | Peak RSS of one process, MiB | vs datatrove, 1 process | vs datatrove, 8 processes |
+|---|---:|---:|---:|---:|---:|
+| pyroid native chain, 8 threads (CPython 3.15t) | 1.95 [1.90–2.01] | 6.6 | 593 | 109.4× | 18.2× |
+| pyroid stages in datatrove's executor, 8 processes (3.13) | 3.15 [3.14–3.18] | 11.3 | 377 | 67.5× | 11.2× |
+| pyroid native chain, 1 thread (CPython 3.15t) | 5.61 [5.59–5.62] | 6.4 | 509 | 37.9× | 6.3× |
+| pyroid stages in datatrove's executor, 1 process (3.13) | 8.52 [8.48–8.54] | 9.3 | 422 | 25.0× | 4.2× |
+| datatrove 0.10.1, 8 processes (CPython 3.13) | 35.37 [35.24–35.52] | 263.8 | 378 | 6.0× | 1.0× |
+| datatrove 0.10.1, 1 process (CPython 3.13) | 212.76 [210.27–239.77] | 213.5 | 443 | 1.0× | 0.2× |
+
+<small>Source: bench/results/aws-c7i.4xlarge/2026-11-06/dev.</small>
+<!-- bench:chain:c7i-dev:end -->
+
+<!-- bench:chain:c8g-dev:begin -->
+<!-- Generated by docs/scripts/render_benchmarks.py from docs/data/benchmarks.json. -->
+
+c8g.4xlarge, 10,000 documents (dev slice). Wall seconds for the whole chain, fastest first.
+
+| Run | Wall s, median [IQR] | CPU s | Peak RSS of one process, MiB | vs datatrove, 1 process | vs datatrove, 8 processes |
+|---|---:|---:|---:|---:|---:|
+| pyroid native chain, 8 threads (CPython 3.15t) | 1.64 [1.64–1.65] | 5.4 | 604 | 141.5× | 19.6× |
+| pyroid stages in datatrove's executor, 8 processes (3.13) | 2.68 [2.68–2.71] | 9.6 | 351 | 86.8× | 12.0× |
+| pyroid native chain, 1 thread (CPython 3.15t) | 5.15 [5.10–5.16] | 5.6 | 506 | 45.2× | 6.2× |
+| pyroid stages in datatrove's executor, 1 process (3.13) | 7.52 [7.49–7.57] | 8.0 | 414 | 30.9× | 4.3× |
+| datatrove 0.10.1, 8 processes (CPython 3.13) | 32.15 [32.14–32.18] | 239.8 | 366 | 7.2× | 1.0× |
+| datatrove 0.10.1, 1 process (CPython 3.13) | 232.51 [231.77–232.99] | 233.0 | 446 | 1.0× | 0.1× |
+
+<small>Source: bench/results/aws-c8g.4xlarge/2026-11-06/dev.</small>
+<!-- bench:chain:c8g-dev:end -->
 
 ## Per stage
 
+Each stage alone, on the dev slice. The incumbents ran in one process on CPython 3.13, as a
+per-document loop over their largest measured batch: 10,000 documents for `fix_text`, language ID
+and translit, and 1,000 for the filters and MinHash. pyroid made one call over the same documents
+as a `list[str]`, with a pool of 1 or 8 threads. Every row first passed its output gate: identical
+ftfy and anyascii output, the same fastText labels with |Δp| ≤ 1e-6, datatrove's filter decisions
+and text, and datatrove's MinHash signatures.
+
+The same list is reused between timed calls, so CPython's cached UTF-8 form of each `str` is warm.
+The [earlier translit run](#pyroidtranslit) rebuilt the strings every time.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/consolidated-stages-dark.svg">
-  <img alt="Time per document for each stage at the incumbents' largest batch: ftfy, fastText, datatrove's filters and MinHash, anyascii, and pyroid on CPython 3.13 and 3.15t" src="assets/consolidated-stages-light.svg">
+  <img alt="Time per document for each stage on AWS EC2 c7i.4xlarge at the incumbents' largest batch: ftfy, fastText, datatrove's filters and MinHash, anyascii, and pyroid on CPython 3.13 and 3.15t with 1 and 8 threads" src="assets/consolidated-stages-light.svg">
 </picture>
 
-<!-- bench:begin -->
+<!-- bench:stages:c7i-dev:begin -->
 <!-- Generated by docs/scripts/render_benchmarks.py from docs/data/benchmarks.json. -->
 
-*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative.* µs per document. The speedup is pyroid on one thread against the incumbent in one process.
+c7i.4xlarge, 10,000 documents (dev slice). µs per document; the speedup is pyroid on one thread against the incumbent in one process.
 
-| Module | Call | Input | Incumbent | Incumbent µs/doc | pyroid µs/doc, 1 thread | pyroid µs/doc, 8 threads | Speedup | Output |
-|---|---|---|---|---:|---:|---:|---:|---|
-| [`pyroid.ftfy`](guides/ftfy.md) | fix_text_batch | FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13 | ftfy 6.3.1 | 834 | 5.66 | 1.72 | **147×** | harness gate |
-| [`pyroid.fasttext`](guides/fasttext.md) | predict, lid.176.bin, k=1 | FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13 | fasttext-predict 0.9.2.4 | 290 | 141 | 20.2 | **2.1×** | harness gate |
-| [`pyroid.fasttext`](guides/fasttext.md) | predict, lid.176.ftz, k=1 | FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13 | fasttext-predict 0.9.2.4 | 451 | 105 | 16.0 | **4.3×** | harness gate |
-| [`pyroid.filters`](guides/filters.md) | GopherRepetition | FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13 | datatrove 0.10.1 | 7,295 | 141 | 29.9 | **52×** | harness gate |
-| [`pyroid.filters`](guides/filters.md) | GopherQuality | FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13 | datatrove 0.10.1 | 5,739 | 79.8 | 16.0 | **72×** | harness gate |
-| [`pyroid.filters`](guides/filters.md) | C4Quality (default) | FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13 | datatrove 0.10.1 | 5,131 | 48.2 | 16.1 | **107×** | harness gate |
-| [`pyroid.filters`](guides/filters.md) | C4Quality (FineWeb config) | FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13 | datatrove 0.10.1 | 6,635 | 88.2 | 20.0 | **75×** | harness gate |
-| [`pyroid.filters`](guides/filters.md) | FineWebQuality | FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13 | datatrove 0.10.1 | 5,415 | 67.0 | 14.2 | **81×** | harness gate |
-| [`pyroid.dedup`](guides/dedup.md) | MinHash signatures, sha1/64 | FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13 | datatrove 0.10.1 | 5,820 | 91.7 | 22.7 | **63×** | harness gate |
-| [`pyroid.translit`](guides/translit.md) | anyascii | FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13 | anyascii 0.3.3 | 128 | 1.62 | 1.00 | **79×** | harness gate |
+| Module | Call | Docs per call | Incumbent | Incumbent, 1 process | pyroid, 1 thread | pyroid, 8 threads | Speedup |
+|---|---|---:|---|---:|---:|---:|---:|
+| [`pyroid.ftfy`](guides/ftfy.md) | fix_text_batch | 10,000 | ftfy 6.3.1 | 724 | 6.70 | 2.06 | 108× |
+| [`pyroid.fasttext`](guides/fasttext.md) | predict, lid.176.bin, k=1 | 10,000 | fasttext-predict 0.9.2.4 | 185 | 114 | 16.8 | 1.6× |
+| [`pyroid.fasttext`](guides/fasttext.md) | predict, lid.176.ftz, k=1 | 10,000 | fasttext-predict 0.9.2.4 | 373 | 103 | 16.3 | 3.6× |
+| [`pyroid.filters`](guides/filters.md) | GopherRepetition | 1,000 | datatrove 0.10.1 | 6,105 | 174 | 26.4 | 35× |
+| [`pyroid.filters`](guides/filters.md) | GopherQuality | 1,000 | datatrove 0.10.1 | 4,615 | 99.9 | 16.3 | 46× |
+| [`pyroid.filters`](guides/filters.md) | C4Quality (default) | 1,000 | datatrove 0.10.1 | 4,508 | 65.7 | 14.5 | 69× |
+| [`pyroid.filters`](guides/filters.md) | C4Quality (FineWeb config) | 1,000 | datatrove 0.10.1 | 5,967 | 114 | 19.5 | 52× |
+| [`pyroid.filters`](guides/filters.md) | FineWebQuality | 1,000 | datatrove 0.10.1 | 4,287 | 90.8 | 13.2 | 47× |
+| [`pyroid.dedup`](guides/dedup.md) | MinHash signatures, sha1/64 | 1,000 | datatrove 0.10.1 | 4,940 | 146 | 28.0 | 34× |
+| [`pyroid.translit`](guides/translit.md) | anyascii | 10,000 | anyascii 0.3.3 | 92.2 | 1.74 | 1.01 | 53× |
 
-<small>Source: bench/results/orbstack-aarch64-12cpu/2026-11-05-consolidated.</small>
-<!-- bench:end -->
+<small>Source: bench/results/aws-c7i.4xlarge/2026-11-06/dev.</small>
+<!-- bench:stages:c7i-dev:end -->
 
-- **How each side ran.** The incumbents ran in one process on CPython 3.13, as a per-document
-  loop over their largest measured batch (10,000 documents for `fix_text`, language ID and
-  translit; 1,000 for the filters and MinHash). pyroid made one call over the same documents as a
-  `list[str]`, with a pool of 1 or 8 threads. The same list is reused between timed calls, so
-  CPython's cached UTF-8 form of each `str` is warm (the translit run [below](#pyroidtranslit)
-  rebuilt them every time).
-- **Other MinHash libraries.** rensa 0.5.0 took 149 µs/doc (`RMinHash.update`, 112 permutations)
-  and 159 µs/doc (`RMinHash.from_token_sets`), and datasketch 2.0.0 476 µs/doc
-  (`MinHash.bulk`, `num_perm=112`). They use other hash families, so they don't give datatrove's
-  signatures or decisions; they were gated on near-duplicate precision and recall ≥ 0.90 instead.
-- **Larger batches.** With 10,000 documents per call, the filters and MinHash took 72.6–150
-  µs/doc on one thread and 12.6–22.1 µs/doc on 8: larger batches use the pool better.
-- **Arrow input** (10,000 documents, CPython 3.15t): `fix_text_batch` took 5.16 µs/doc on one
-  thread and 1.08 on 8; `translit.anyascii` 1.15 and 0.41.
-- [`CONSOLIDATED.md`](https://github.com/ao/pyroid/blob/main/bench/results/orbstack-aarch64-12cpu/2026-11-05-consolidated/CONSOLIDATED.md)
-  has every row with its interquartile range, pyroid on CPython 3.13, and each incumbent stage
-  alone in datatrove's executor at 8 processes.
+<!-- bench:stages:c8g-dev:begin -->
+<!-- Generated by docs/scripts/render_benchmarks.py from docs/data/benchmarks.json. -->
+
+c8g.4xlarge, 10,000 documents (dev slice). µs per document; the speedup is pyroid on one thread against the incumbent in one process.
+
+| Module | Call | Docs per call | Incumbent | Incumbent, 1 process | pyroid, 1 thread | pyroid, 8 threads | Speedup |
+|---|---|---:|---|---:|---:|---:|---:|
+| [`pyroid.ftfy`](guides/ftfy.md) | fix_text_batch | 10,000 | ftfy 6.3.1 | 818 | 5.54 | 1.64 | 148× |
+| [`pyroid.fasttext`](guides/fasttext.md) | predict, lid.176.bin, k=1 | 10,000 | fasttext-predict 0.9.2.4 | 284 | 116 | 14.4 | 2.4× |
+| [`pyroid.fasttext`](guides/fasttext.md) | predict, lid.176.ftz, k=1 | 10,000 | fasttext-predict 0.9.2.4 | 500 | 89.2 | 13.1 | 5.6× |
+| [`pyroid.filters`](guides/filters.md) | GopherRepetition | 1,000 | datatrove 0.10.1 | 6,494 | 158 | 19.2 | 41× |
+| [`pyroid.filters`](guides/filters.md) | GopherQuality | 1,000 | datatrove 0.10.1 | 5,125 | 92.1 | 9.34 | 56× |
+| [`pyroid.filters`](guides/filters.md) | C4Quality (default) | 1,000 | datatrove 0.10.1 | 4,618 | 55.8 | 9.34 | 83× |
+| [`pyroid.filters`](guides/filters.md) | C4Quality (FineWeb config) | 1,000 | datatrove 0.10.1 | 5,969 | 101 | 11.0 | 59× |
+| [`pyroid.filters`](guides/filters.md) | FineWebQuality | 1,000 | datatrove 0.10.1 | 4,748 | 78.5 | 7.85 | 60× |
+| [`pyroid.dedup`](guides/dedup.md) | MinHash signatures, sha1/64 | 1,000 | datatrove 0.10.1 | 5,541 | 117 | 20.7 | 47× |
+| [`pyroid.translit`](guides/translit.md) | anyascii | 10,000 | anyascii 0.3.3 | 109 | 1.39 | 0.87 | 79× |
+
+<small>Source: bench/results/aws-c8g.4xlarge/2026-11-06/dev.</small>
+<!-- bench:stages:c8g-dev:end -->
+
+On the c7i, with 10,000 documents per call, the filters and MinHash took 92.2–173 µs per document
+on one thread and 12.7–23.9 on 8: larger batches use the pool better. With Arrow input,
+`fix_text_batch` took 6.63 µs per document on one thread and 1.31 on 8, and `translit.anyascii`
+1.79 and 0.60.
+
+Other MinHash libraries use other hash families, so they don't reproduce datatrove's signatures or
+decisions; they were gated on near-duplicate precision and recall ≥ 0.90 instead. On the c7i,
+rensa 0.5.0 took 144 µs per document (`RMinHash.update`, 112 permutations) and 161
+(`RMinHash.from_token_sets`), and datasketch 2.0.0 took 436 (`MinHash.bulk`, `num_perm=112`).
+
+Each run's `CONSOLIDATED.md` has every row with its interquartile range, pyroid on CPython 3.13,
+and each incumbent stage alone in datatrove's executor at 8 processes:
+[c7i](https://github.com/ao/pyroid/blob/main/bench/results/aws-c7i.4xlarge/2026-11-06/dev/CONSOLIDATED.md),
+[c8g](https://github.com/ao/pyroid/blob/main/bench/results/aws-c8g.4xlarge/2026-11-06/dev/CONSOLIDATED.md).
 
 ## Other modules, languages and integrations
 
-These runs come from each track's own benchmark, after the consolidated run: the metrics and
-json_repair modules, the FineWeb-2 languages, the newer datatrove steps, and datatrove's own
-pipeline with pyroid's steps swapped in. Each was gated on identical output before timing, and
-each table gives its conditions, which differ from the consolidated run's (other interpreters,
-batch sizes and, above all, how loaded the shared VM was). Compare rows within a table, not
-across tables.
+These runs are not in the EC2 benchmark yet. They come from each module's own benchmark in a
+Docker VM (OrbStack, Linux aarch64, 12 vCPUs on an Apple Silicon Mac) that other work was also
+using, so treat them as indicative. Each was gated on identical output before timing. Their
+conditions differ from table to table (interpreters, batch sizes, how loaded the VM was), so
+compare rows within a table, not across tables.
 
-<!-- bench-more:begin -->
+<!-- bench:more:all:begin -->
 <!-- Generated by docs/scripts/render_benchmarks.py from docs/data/benchmarks.json. -->
 
 ### pyroid.metrics: ROUGE, BLEU and chrF
 
-*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative.* Milliseconds for the whole workload, median of the runs (1 run for the reference rows over 100k pairs); every row checked identical to the 1-process reference first. CPython 3.13, release wheel, load average 4 to 19 from other sessions. The references in 1 process and in 8 fork processes; pyroid in one process at threads=1 and threads=8. ROUGE: CNN/DailyMail lead-3 against the highlights, rouge1/2/L/Lsum (100k = the 11,490 pairs repeated). BLEU and chrF: WMT21 segments, first reference, default settings. Guide: [metrics](guides/metrics.md).
+Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Milliseconds for the whole workload, median of the runs (a single run for the reference libraries on 100k pairs). Every row was first checked identical to the 1-process reference. The reference libraries ran in 1 process and in 8 forked processes, pyroid in one process with threads=1 and threads=8. CPython 3.13, release wheel; other work kept the load average between 4 and 19. ROUGE scores CNN/DailyMail lead-3 against the highlights with rouge1/2/L/Lsum (the 100k pairs are the 11,490 pairs repeated). BLEU and chrF use WMT21 segments, the first reference and default settings. Guide: [metrics](guides/metrics.md).
 
 | Workload | Pairs | rouge-score / sacrebleu, 1 process | 8 processes | pyroid, threads=1 | threads=8 | Speedup, 1 / 8 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -151,7 +245,7 @@ across tables.
 
 ### pyroid.json_repair
 
-*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative.* Single documents, best per call, CPython 3.12 (3.15t within ±10%); release wheel, load average 16 to 24 from other sessions. json_repair 0.64.5. Guide: [json_repair](guides/json_repair.md).
+Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Single documents, best time per call, json_repair 0.64.5 on CPython 3.12 (3.15t was within ±10%). Release wheel; other work kept the load average between 16 and 24. Guide: [json_repair](guides/json_repair.md).
 
 | Document and call | json_repair | pyroid | Speedup |
 |---|---:|---:|---:|
@@ -167,7 +261,7 @@ across tables.
 
 ### pyroid.json_repair: batches
 
-*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative.* 10,000 broken ~1.2 KB documents, free-threaded CPython 3.15t (GIL off), documents per second. The 8-thread rows are limited by the shared, loaded VM. Guide: [json_repair](guides/json_repair.md).
+Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Documents per second over 10,000 broken documents of about 1.2 KB, on free-threaded CPython 3.15t with the GIL off. The shared, loaded VM limits the 8-thread rows. Guide: [json_repair](guides/json_repair.md).
 
 | Run | Documents/s | vs json_repair in a loop |
 |---|---:|---:|
@@ -181,7 +275,7 @@ across tables.
 
 ### Languages: FineWeb-2 filters and MinHash
 
-*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative.* µs per document. 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (datatrove: 2); every timed document gated first (same keep/drop, reason and signatures). Filters: FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality, with that language's settings); MinHash: FineWeb-2's signatures. datatrove x8: a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16. Chinese and Japanese run datatrove's Python tokenizers (python_tokenizer=True), at their speed and on the calling thread. Guide: [languages](guides/languages.md).
+Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. µs per document over 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (2 for datatrove). Every timed document was first checked for the same keep/drop, reason and signatures. The filters are FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality) with each language's settings; MinHash computes FineWeb-2's signatures. datatrove's 8 processes are a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16. Chinese and Japanese use datatrove's Python tokenizers (python_tokenizer=True), so they run at those tokenizers' speed, on the calling thread. Guide: [languages](guides/languages.md).
 
 | Language | Tokenizer | datatrove, 1 process: filters / MinHash | pyroid, 1 thread | Speedup | datatrove, 8 processes | pyroid, 8 threads | Speedup |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -194,13 +288,13 @@ across tables.
 | Chinese (cmn_Hani) | Python (jieba) | 10,976 / 8,573 | 8,802 / 9,060 | 1.2× / 0.9× | 4,270 / 2,885 | 10,570 / 7,986 | 0.4× / 0.4× |
 | Japanese (jpn_Jpan) | Python (SudachiPy) | 11,959 / 8,267 | 9,893 / 9,508 | 1.2× / 0.9× | 3,464 / 2,586 | 12,685 / 11,118 | 0.3× / 0.2× |
 
-* An outlier: pyroid with 8 threads was slower than with 1 in this run, while the load rose; not to be quoted until rerun.
+\* An outlier: in this run pyroid was slower with 8 threads than with 1 while the load rose. It needs a rerun before it can be quoted.
 
 <small>Source: bench/results/orbstack-aarch64-12cpu/2026-11-06-multilingual (bench/multilingual.py).</small>
 
 ### More datatrove steps
 
-*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative.* FineWeb dev slice, release wheel, CPython 3.13, taskset -c 0-7. datatrove's step alone, in one process and in a warmed multiprocessing.Pool(8); pyroid's native call at 1 and 8 threads. Medians of 5 for pyroid and 2 for datatrove, load average about 8 (URL filter: about 22). Where datatrove at 8 processes was not measured, the 8-thread speedup is against datatrove in one process. Guide: [datatrove](guides/datatrove.md).
+Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Each datatrove step alone on the FineWeb dev slice, in one process and in a warmed multiprocessing.Pool(8), against pyroid's native call at 1 and 8 threads. Medians of 5 runs for pyroid and 2 for datatrove; release wheel, CPython 3.13, taskset -c 0-7, load average about 8 (about 22 for the URL filter). Where datatrove wasn't measured at 8 processes, the 8-thread speedup is against one process. Guide: [datatrove](guides/datatrove.md).
 
 | Step | Workload | datatrove, 1 process | 8 processes | pyroid, 1 thread | 8 threads | Speedup, 1 thread / 8 threads |
 |---|---:|---:|---:|---:|---:|---:|
@@ -210,11 +304,11 @@ across tables.
 | URLFilter (datatrove's `filter()` loop; `pyroid.filters.URLFilter`) | 10,000 URLs | 29.4k URLs/s | — | 912k URLs/s | 1.72M URLs/s | 31× / 59× (vs 1 process) |
 | Sentence dedup, stages 1 and 3 (drop-in steps) | 13,232 documents | 98 docs/s | — | 5,664 docs/s | 10,457 docs/s | 58× / 107× (vs 1 process) |
 
-<small>Source: the P6 datatrove-steps run, 2026-11-06 (scripts not committed).</small>
+<small>Source: a one-off run on 2026-11-06, whose scripts are not in the repository.</small>
 
 ### datatrove's FineWeb pipeline with pyroid's steps swapped in
 
-*Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative.* Whole runs on FineWeb dev (10,000 documents unless noted), wall seconds and user+sys CPU seconds including children (bash time), CPython 3.13, release wheel, taskset -c 0-7. The VM was heavily shared (load average 18 to 30), which inflates stock datatrove most; each ratio comes from a same-minute pair (stock, then pyroid). pyroid's runs include datatrove's executor phases, worker start-up, Parquet IO and the 125 MiB model load; pyroid clean includes interpreter start-up, IO and writing both outputs. All outputs have datatrove's per-document digest. Guide: [datatrove](guides/datatrove.md).
+Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Whole runs on the FineWeb dev slice (10,000 documents unless noted): wall seconds, and user+sys CPU seconds including children, from bash's `time`. CPython 3.13, release wheel, taskset -c 0-7. The VM was heavily shared (load average 18 to 30), which slows stock datatrove the most, so each ratio comes from a pair of runs in the same minute (stock, then pyroid). pyroid's runs include datatrove's executor phases, worker start-up, Parquet IO and loading the 125 MiB model; `pyroid clean` includes interpreter start-up, IO and writing both outputs. Every output has datatrove's per-document digest. Guide: [datatrove](guides/datatrove.md).
 
 | Run | Stock datatrove 0.10.1 | With pyroid | Speedup, wall (CPU) |
 |---|---:|---:|---:|
@@ -224,35 +318,35 @@ across tables.
 | `pyroid clean --recipe fineweb`, 8 threads, vs stock at 8 processes (pairs 1, 2) | 498.8 / 213.4 s | 8.7 / 2.2 s (12.7 / 7.7) | 58× / 99× (54× / 75×) |
 | `pyroid clean`, 1 thread, vs stock at 8 processes | 498.8 / 213.4 s | 11.4 / 7.5 s (11.1 / 7.8) | 44× / 29× |
 
-<small>Source: examples/datatrove/verify.py and the pyroid CLI, timed with bash time on 2026-11-06 (raw timings in the P5 integrations report).</small>
-<!-- bench-more:end -->
+<small>Source: examples/datatrove/verify.py and the pyroid CLI, timed with bash's `time` on 2026-11-06.</small>
+<!-- bench:more:all:end -->
 
 ## Method
 
-The benchmark harness lives in [`bench/`](https://github.com/ao/pyroid/tree/main/bench) and
-follows a few rules, enforced in code:
+The benchmark harness is in [`bench/`](https://github.com/ao/pyroid/tree/main/bench). It
+enforces these rules in code:
 
-1. **Same output before any timing.** Every timed row first passes an equivalence gate against
-   pinned reference outputs: ftfy byte-identical; language ID with the same top-k labels and
+1. Same output before any timing. Every timed row first passes an equivalence gate against pinned
+   reference outputs: ftfy byte-identical; language ID with the same top-k labels and
    |Δp| ≤ 1e-6; filters with the same keep/drop, reason and rewritten text; MinHash with
    identical signatures. A mismatch aborts the run. The end-to-end runs must also give
    datatrove's per-document digest.
-2. **Pinned data.** FineWeb slices of 10k and 100k documents, 8 FineWeb-2 languages, `lid.176.bin`
+2. Pinned data: FineWeb slices of 10k and 100k documents, 8 FineWeb-2 languages, `lid.176.bin`
    and `lid.176.ftz`, and a seeded adversarial set of 3,232 documents, each pinned by sha256 in
    `bench/manifest.json`.
-3. **Stage rows** use [pyperf](https://pyperf.readthedocs.io/): one value is one call over the
-   batch, reported as the median [interquartile range] per document over all of a row's values.
-   Rows with more than one thread are pinned to 8 CPUs.
-4. **End-to-end rows** use [hyperfine](https://github.com/sharkdp/hyperfine) 2.0 over whole
-   processes pinned to 8 CPUs: datatrove's own `LocalPipelineExecutor(tasks=N, workers=N)` with
-   N = 1 and 8, and `bench/chain.py` for pyroid's native chain.
-5. **CPU-seconds and peak memory** are recorded for every row.
-6. Charts are horizontal bars on a linear axis, fastest on top, with incumbents and close rivals
-   named.
+3. Stage rows use [pyperf](https://pyperf.readthedocs.io/). One value is one call over the batch,
+   reported as the median [interquartile range] per document over all of a row's values. Rows
+   with more than one thread are pinned to 8 CPUs.
+4. End-to-end rows use [hyperfine](https://github.com/sharkdp/hyperfine) 2.0 over whole processes
+   pinned to 8 CPUs: datatrove's own `LocalPipelineExecutor(tasks=N, workers=N)` with N = 1 and
+   8, and `bench/chain.py` for pyroid's native chain.
+5. CPU seconds and peak memory are recorded for every row.
+6. Charts are horizontal bars on a linear axis, fastest on top, with the incumbents and close
+   rivals named.
 
-To reproduce, from a checkout on Linux (or in a Linux container), with the pyroid wheel installed
-in a CPython 3.13 environment that has the bench dependencies and in a free-threaded CPython 3.15t
-one (`BENCH_PY313`, `BENCH_PY315T`):
+To reproduce on Linux (or in a Linux container), install the pyroid wheel into a CPython 3.13
+environment that has the bench dependencies and into a free-threaded CPython 3.15t one
+(`BENCH_PY313`, `BENCH_PY315T`), then:
 
 ```console
 $ cd bench
@@ -260,16 +354,16 @@ $ uv run --frozen python fetch.py                     # the pinned inputs
 $ BENCH_GIT_SHA=$(git rev-parse --short HEAD) bash run_consolidated.sh
 ```
 
-It writes `CONSOLIDATED.md`, `consolidated.json` (the source of the tables above) and the charts
+This writes `CONSOLIDATED.md`, `consolidated.json` (the source of the tables above) and the charts
 into `bench/results/<machine>/<date>-consolidated/`. `bench/README.md` documents every option,
-including `BENCH_RIGOROUS=1` for a quiet machine.
+including `BENCH_RIGOROUS=1` for a quiet machine, and
+[`bench/ec2/`](https://github.com/ao/pyroid/tree/main/bench/ec2) has the scripts for the EC2 runs.
 
 ## Where the CPU goes
 
-datatrove 0.10.1's FineWeb-style chain (ftfy → language ID → Gopher repetition → Gopher quality →
-C4 → FineWeb quality → MinHash) on the first 10k FineWeb documents (30.5 M characters),
-CPython 3.13, one process, from the harness's first baseline run (same VM, under heavier load).
-Share of chain = the stage's single-process time over the sum of all stages.
+How datatrove's time splits between the stages, from the harness's first baseline run in the
+Docker VM (CPython 3.13, one process, the first 10k FineWeb documents, 30.5 M characters). The
+share of the chain is the stage's single-process time over the sum of all stages.
 
 | Stage | Incumbent | ms/doc, 1 process | Share of chain |
 |---|---|---:|---:|
@@ -280,27 +374,59 @@ Share of chain = the stage's single-process time over the sum of all stages.
 | filter | `C4QualityFilter` (FineWeb settings) | 8.42 [7.81–8.87] | 21.6% |
 | filter | `FineWebQualityFilter` | 6.54 [6.23–6.99] | 16.8% |
 | MinHash | datatrove `MinhashDedupSignature` | 6.88 [6.72–7.07] | 17.7% |
-| **whole chain** | **datatrove, 1 process** | **39.9** | 100% |
+| whole chain | datatrove, 1 process | 39.9 | 100% |
 
-The four filters are about **79%** of the CPU and MinHash about **18%**; ftfy and language ID
-together are about 3%. Speeding up `fix_text` 10× on its own makes this pipeline about 1.02×
-faster. datatrove tokenizes English with spaCy's `blank("en")` tokenizer for both the filters
-and MinHash; in MinHash, spaCy is about 70% of the cost.
-
-In the consolidated run the whole chain took 253.20 s in one process and 41.93 s at 8 processes
-([End to end](#end-to-end-the-fineweb-chain)). The first baseline run measured a peak of
+The four filters take about 79% of the CPU and MinHash about 18%; ftfy and language ID together
+take about 3%. Making `fix_text` 10× faster on its own would make this pipeline only about 1.02×
+faster. datatrove tokenizes English with spaCy's `blank("en")` tokenizer for both the filters and
+MinHash, and in MinHash spaCy is about 70% of the cost. The same baseline run measured a peak of
 2.36 GiB of anonymous memory at 8 processes.
 
-## Earlier module runs
+On the c7i.4xlarge, datatrove ran the whole chain on the dev slice in 212.8 s in one process and
+35.4 s with 8 ([End to end](#end-to-end-the-fineweb-chain)).
 
-Each module's own benchmark, run before the consolidated one with its own scripts and method,
-for what the consolidated run doesn't cover: other languages, other calls and options, whole
-pipelines and memory. *Docker/OrbStack VM on Apple Silicon, indicative, preliminary.*
+## Thread scaling
+
+One process on free-threaded CPython 3.15t (GIL off), one call over 10,000 FineWeb documents, on
+the c7i.4xlarge (µs per document):
+
+| Module and call | 1 thread | 8 threads |
+|---|---:|---:|
+| `ftfy.fix_text_batch`, list / Arrow | 6.70 / 6.63 | 2.06 / 1.31 |
+| `fasttext` `predict`, `.bin` / `.ftz` | 114 / 103 | 16.8 / 16.3 |
+| `filters`, one filter per call | 92.2–173 | 12.7–23.8 |
+| `dedup.minhash_signatures` | 157 | 23.9 |
+| `translit.anyascii`, list / Arrow | 1.74 / 1.79 | 1.01 / 0.60 |
+
+The earlier module runs in the Docker VM measured these speedups at 8 threads over 1:
+
+| Module and call | 8 threads vs 1 |
+|---|---:|
+| `ftfy.fix_text` from 8 Python threads | 3.2–5.8× |
+| `filters.apply`, FineWeb's 4 filters, list / Arrow | 4.3× / 5.0× |
+| `dedup.MinHashDedup.fit`, 10k / 100k docs | 4.2× / 5.4× |
+| `translit.anyascii`, FineWeb-2 mix (40k docs), Arrow | 6.1× |
+
+Arrow input scales best. With a list on a free-threaded build, pyroid builds each string's UTF-8
+form on the pool (for batches of at least 128 documents and 1 Mi code points), but it still builds
+the output strings one after another on the calling thread. That limits transforms that change
+most documents. A different global allocator (mimalloc) was measured and not adopted.
+
+## Earlier runs
+
+These ran in the Docker VM described [above](#other-modules-languages-and-integrations), before
+the EC2 runs, and cover what the EC2 run doesn't: other languages, other calls and options, whole
+pipelines and memory. They are indicative.
+
+The consolidated run of 2026-11-05 in that VM gave 26× (8 threads against 8 processes) and 49×
+(one thread against one process) on the dev slice; its
+[`CONSOLIDATED.md`](https://github.com/ao/pyroid/blob/main/bench/results/orbstack-aarch64-12cpu/2026-11-05-consolidated/CONSOLIDATED.md)
+has the details. The EC2 numbers above replace it.
 
 ### `pyroid.ftfy`
 
-`fix_text` called once per document (the consolidated run times `fix_text_batch`),
-single-threaded, best of 3, the same documents for both:
+`fix_text` called once per document (the consolidated runs time `fix_text_batch`), on one thread,
+best of 3, the same documents for both:
 
 | Corpus | ftfy 6.3.1 (µs/doc) | pyroid.ftfy (µs/doc) | Speedup |
 |---|---:|---:|---:|
@@ -315,18 +441,19 @@ An identical earlier run of the FineWeb rows gave 71× (3.12) and 93× (3.15).
 
 ### `pyroid.fasttext`
 
-Harness `stages.py` language-ID rows at `k=5` (equivalence-gated; median ms/doc; 1,000 FineWeb
-documents, newlines replaced by spaces, CPython 3.13), against fasttext-predict 0.9.2.4:
+The harness's `stages.py` language-ID rows at `k=5`, against fasttext-predict 0.9.2.4: median ms
+per document, 1,000 FineWeb documents with newlines replaced by spaces, CPython 3.13, gated on
+identical output.
 
 | Model | fasttext-predict | pyroid | Speedup |
 |---|---:|---:|---:|
 | lid.176.bin, k=5 | 0.377 | 0.248 | 1.5× |
 | lid.176.ftz, k=5 | 0.636 | 0.139 | 4.6× |
 
-`load_model` in a fresh process: 50–60 ms (`.bin`) and 4–7 ms (`.ftz`) for pyroid, against
+`load_model` in a fresh process took 50–60 ms (`.bin`) and 4–7 ms (`.ftz`) for pyroid, against
 115–205 ms and 38–68 ms.
 
-**Threads in one process** (free-threaded CPython 3.15t, 10k documents, best of 5, ms):
+Threads in one process (free-threaded CPython 3.15t, 10k documents, best of 5, ms):
 
 | Model | 1 | 2 | 4 | 8 | 8 threads vs single-threaded fastText |
 |---|---:|---:|---:|---:|---:|
@@ -337,21 +464,21 @@ documents, newlines replaced by spaces, CPython 3.13), against fasttext-predict 
 Single-threaded fastText (fasttext-predict, CPython 3.13) took 3,426 ms (`.bin`) and 6,354 ms
 (`.ftz`) for the same 10k documents.
 
-**Memory:** with eight threads in one process, the model and predictions added 132 MiB (`.bin`) or
-1 MiB (`.ftz`), against about 1.04 GiB for eight per-process copies of the model. The whole
-process peaked at 473 MiB, 320 MiB of which was the corpus itself, about 25% of the 1.87 GiB that
+With eight threads in one process, the model and predictions added 132 MiB (`.bin`) or 1 MiB
+(`.ftz`), against about 1.04 GiB for eight per-process copies of the model. The whole process
+peaked at 473 MiB, 320 MiB of which was the corpus itself: about 25% of the 1.87 GiB that
 datatrove's 8-process language-ID stage holds.
 
 ### `pyroid.filters`
 
 FineWeb's four filters chained through `apply`, on one core, CPython 3.13, the first 2,000
 FineWeb documents, median of 5 (datatrove: median of 2), every result checked equal to
-datatrove's before timing: 23,875 µs/doc for datatrove against 277 µs/doc for pyroid on a list
-(363 on Arrow), about **86×**.
+datatrove's before timing: 23,875 µs per document for datatrove against 277 µs for pyroid on a
+list (363 on Arrow), about 86×.
 
 datatrove's chain costs less than the sum of its filters because it caches tokenization between
-them; `apply` shares it too. A separate re-check of three separate filter calls measured 0.43 ms
-per document on one thread, about 52× datatrove, and 0.097 ms per document at 8 threads.
+them, and `apply` shares it too. A separate check of three separate filter calls measured 0.43 ms
+per document on one thread, about 52× datatrove, and 0.097 ms per document with 8 threads.
 
 ### `pyroid.dedup`
 
@@ -373,9 +500,10 @@ input, normalized comparison and streaming state.
 
 ### `pyroid.translit`
 
-Single thread, CPython 3.12, fresh `str` objects rebuilt before every call (CPython caches a
-string's UTF-8 form, which makes repeated runs 1.1–2.9× faster), best of ≥5 runs; pyroid's output
-was checked equal to the anyascii package's on every document first. µs/doc:
+One thread, CPython 3.12, best of at least 5 runs. The `str` objects were rebuilt before every
+call, because CPython caches a string's UTF-8 form and that makes repeated runs 1.1–2.9× faster.
+pyroid's output was first checked equal to the anyascii package's on every document. µs per
+document:
 
 | Corpus | anyascii (Python) | Unidecode 1.4.0 | pyroid `anyascii` (str) | pyroid `unidecode` (list) | Speedup vs anyascii / Unidecode |
 |---|---:|---:|---:|---:|---:|
@@ -388,39 +516,8 @@ On CPython 3.15 (GIL build) the speedups were 11–34× against anyascii and 19�
 Unidecode. `pyroid.translit.unidecode`'s output is not Unidecode's; see
 [how different it is](guides/translit.md#how-different-is-it-from-unidecode).
 
-## Thread scaling
-
-One process, free-threaded CPython 3.15t (GIL off), one call over 10,000 FineWeb documents, from
-the consolidated run (µs/doc):
-
-| Module and call | 1 thread | 8 threads |
-|---|---:|---:|
-| `ftfy.fix_text_batch`, list / Arrow | 5.66 / 5.16 | 1.72 / 1.08 |
-| `fasttext` `predict`, `.bin` / `.ftz` | 141 / 105 | 20.2 / 16.0 |
-| `filters`, one filter per call | 72.6–150 | 12.6–22.1 |
-| `dedup.minhash_signatures` | 107 | 17.1 |
-| `translit.anyascii`, list / Arrow | 1.62 / 1.15 | 1.00 / 0.41 |
-
-From the earlier module runs (*indicative, preliminary*), speedup at 8 threads over 1:
-
-| Module and call | 8 threads vs 1 |
-|---|---:|
-| `ftfy.fix_text` from 8 Python threads | 3.2–5.8× |
-| `filters.apply`, FineWeb's 4 filters, list / Arrow | 4.3× / 5.0× |
-| `dedup.MinHashDedup.fit`, 10k / 100k docs | 4.2× / 5.4× |
-| `translit.anyascii`, FineWeb-2 mix (40k docs), Arrow | 6.1× |
-
-Arrow input scales best. With a list on a free-threaded build, pyroid builds each string's UTF-8
-form on the pool (for batches of at least 128 documents and 1 Mi code points), but the output
-strings are still built one after another on the calling thread, which limits transforms that
-change most documents. A different global allocator (mimalloc) was measured and not adopted.
-
 ## What's pending
 
-- A **bare-metal Linux run** of everything on this page, on a quiet machine, with the harness's
-  rigorous mode. Its numbers will replace these.
-- The **100k-document headline run** of the end-to-end chain (about 70 minutes for each
-  1-process datatrove run in this VM).
-- x86-64 numbers. The x86-64 parity runs were under emulation, where timings mean nothing.
-- The newer modules (metrics, json_repair, the FineWeb-2 languages, the newer datatrove steps) in
-  the consolidated, gated harness run; their numbers above come from each track's own run.
+- The metrics and json_repair modules, the FineWeb-2 languages and the newer datatrove steps in
+  the gated harness on EC2. Their numbers above come from each module's own run in the Docker VM.
+- Runs with more than 8 threads. Every EC2 run used 8 of the 16 vCPUs.

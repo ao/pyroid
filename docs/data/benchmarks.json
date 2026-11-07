@@ -1,32 +1,89 @@
 {
-  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'rows', 'label' and 'source' come from bench/results/<machine>/<date>-consolidated/consolidated.json (the label as the docs print it); 'chain' is the end-to-end table of the same run's CONSOLIDATED.md. 'more' holds runs outside the consolidated benchmark (metrics, json_repair, languages, datatrove steps), each group with its own source, copied by hand from that run's results or report. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
-  "label": "Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative",
-  "source": "bench/results/orbstack-aarch64-12cpu/2026-11-05-consolidated",
-  "chain": [
-    {"run": "pyroid native chain, 8 threads (CPython 3.15t)", "wall_s": "1.61 [1.57–1.71]", "cpu_s": "6.1", "rss_mib": "605", "vs_1_proc": "157.6×", "vs_8_procs": "26.1×"},
-    {"run": "pyroid stages in datatrove's executor, 8 processes (3.13)", "wall_s": "2.85 [2.83–2.92]", "cpu_s": "13.0", "rss_mib": "385", "vs_1_proc": "88.9×", "vs_8_procs": "14.7×"},
-    {"run": "pyroid native chain, 1 thread (CPython 3.15t)", "wall_s": "5.16 [5.15–5.41]", "cpu_s": "5.8", "rss_mib": "503", "vs_1_proc": "49.1×", "vs_8_procs": "8.1×"},
-    {"run": "pyroid stages in datatrove's executor, 1 process (3.13)", "wall_s": "7.48 [7.24–7.52]", "cpu_s": "8.1", "rss_mib": "421", "vs_1_proc": "33.9×", "vs_8_procs": "5.6×"},
-    {"run": "datatrove 0.10.1, 8 processes (CPython 3.13)", "wall_s": "41.93 [41.27–42.18]", "cpu_s": "314.5", "rss_mib": "367", "vs_1_proc": "6.0×", "vs_8_procs": "1.0×"},
-    {"run": "datatrove 0.10.1, 1 process (CPython 3.13)", "wall_s": "253.20 [252.48–253.45]", "cpu_s": "254.3", "rss_mib": "438", "vs_1_proc": "1.0×", "vs_8_procs": "0.2×"}
-  ],
-  "rows": [
-    {"module": "ftfy", "call": "fix_text_batch", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "ftfy 6.3.1", "incumbent_us": "834", "pyroid_us": "5.66", "pyroid_us_8_threads": "1.72", "speedup": "147×", "check": "harness gate"},
-    {"module": "fasttext", "call": "predict, lid.176.bin, k=1", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "fasttext-predict 0.9.2.4", "incumbent_us": "290", "pyroid_us": "141", "pyroid_us_8_threads": "20.2", "speedup": "2.1×", "check": "harness gate"},
-    {"module": "fasttext", "call": "predict, lid.176.ftz, k=1", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "fasttext-predict 0.9.2.4", "incumbent_us": "451", "pyroid_us": "105", "pyroid_us_8_threads": "16.0", "speedup": "4.3×", "check": "harness gate"},
-    {"module": "filters", "call": "GopherRepetition", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "7,295", "pyroid_us": "141", "pyroid_us_8_threads": "29.9", "speedup": "52×", "check": "harness gate"},
-    {"module": "filters", "call": "GopherQuality", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,739", "pyroid_us": "79.8", "pyroid_us_8_threads": "16.0", "speedup": "72×", "check": "harness gate"},
-    {"module": "filters", "call": "C4Quality (default)", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,131", "pyroid_us": "48.2", "pyroid_us_8_threads": "16.1", "speedup": "107×", "check": "harness gate"},
-    {"module": "filters", "call": "C4Quality (FineWeb config)", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "6,635", "pyroid_us": "88.2", "pyroid_us_8_threads": "20.0", "speedup": "75×", "check": "harness gate"},
-    {"module": "filters", "call": "FineWebQuality", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,415", "pyroid_us": "67.0", "pyroid_us_8_threads": "14.2", "speedup": "81×", "check": "harness gate"},
-    {"module": "dedup", "call": "MinHash signatures, sha1/64", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,820", "pyroid_us": "91.7", "pyroid_us_8_threads": "22.7", "speedup": "63×", "check": "harness gate"},
-    {"module": "translit", "call": "anyascii", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "anyascii 0.3.3", "incumbent_us": "128", "pyroid_us": "1.62", "pyroid_us_8_threads": "1.00", "speedup": "79×", "check": "harness gate"}
-  ],
+  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'runs' holds the consolidated EC2 runs: 'label' and 'rows' are copied from each run folder's consolidated.json, 'chain' from the end-to-end table of its CONSOLIDATED.md (with en dashes and ×), 'source' is the folder in this repository and 'caption' is the short name the page prints. 'more' holds runs outside the consolidated benchmark, all in the Docker VM ('more_label'), each group with its own source. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
+  "runs": {
+    "c7i-100k": {
+      "caption": "c7i.4xlarge, 100,000 documents",
+      "label": "AWS EC2 c7i.4xlarge (Intel Xeon Platinum 8488C, 16 vCPU), Amazon Linux 2023; CPython 3.13.18 and 3.15.2t, datatrove 0.10.1",
+      "source": "bench/results/aws-c7i.4xlarge/2026-11-06/headline",
+      "chain": [
+        {"run": "pyroid native chain, 8 threads (CPython 3.15t)", "wall_s": "10.17 [10.15–10.23]", "cpu_s": "45.3", "rss_mib": "2234", "vs_1_proc": "240.3×", "vs_8_procs": "26.7×"},
+        {"run": "pyroid stages in datatrove's executor, 8 processes (3.13)", "wall_s": "19.96 (1 run)", "cpu_s": "69.7", "rss_mib": "1515", "vs_1_proc": "122.5×", "vs_8_procs": "13.6×"},
+        {"run": "pyroid native chain, 1 thread (CPython 3.15t)", "wall_s": "43.37 [43.36–43.70]", "cpu_s": "44.6", "rss_mib": "2123", "vs_1_proc": "56.4×", "vs_8_procs": "6.3×"},
+        {"run": "pyroid stages in datatrove's executor, 1 process (3.13)", "wall_s": "64.42 (1 run)", "cpu_s": "65.1", "rss_mib": "1621", "vs_1_proc": "37.9×", "vs_8_procs": "4.2×"},
+        {"run": "datatrove 0.10.1, 8 processes (CPython 3.13)", "wall_s": "272.09 (1 run)", "cpu_s": "2122.2", "rss_mib": "449", "vs_1_proc": "9.0×", "vs_8_procs": "1.0×"},
+        {"run": "datatrove 0.10.1, 1 process (CPython 3.13)", "wall_s": "2444.38 (1 run)", "cpu_s": "2445.1", "rss_mib": "725", "vs_1_proc": "1.0×", "vs_8_procs": "0.1×"}
+      ]
+    },
+    "c8g-100k": {
+      "caption": "c8g.4xlarge, 100,000 documents",
+      "label": "AWS EC2 c8g.4xlarge (AWS Graviton4, 16 vCPU), Amazon Linux 2023; CPython 3.13.18 and 3.15.2t, datatrove 0.10.1",
+      "source": "bench/results/aws-c8g.4xlarge/2026-11-06/headline",
+      "chain": [
+        {"run": "pyroid native chain, 8 threads (CPython 3.15t)", "wall_s": "10.16 [10.10–10.17]", "cpu_s": "45.7", "rss_mib": "2222", "vs_1_proc": "229.8×", "vs_8_procs": "29.4×"},
+        {"run": "pyroid stages in datatrove's executor, 8 processes (3.13)", "wall_s": "20.26 (1 run)", "cpu_s": "75.5", "rss_mib": "1511", "vs_1_proc": "115.3×", "vs_8_procs": "14.7×"},
+        {"run": "pyroid native chain, 1 thread (CPython 3.15t)", "wall_s": "46.83 [46.32–47.13]", "cpu_s": "47.6", "rss_mib": "2086", "vs_1_proc": "49.9×", "vs_8_procs": "6.4×"},
+        {"run": "pyroid stages in datatrove's executor, 1 process (3.13)", "wall_s": "69.64 (1 run)", "cpu_s": "70.3", "rss_mib": "1608", "vs_1_proc": "33.5×", "vs_8_procs": "4.3×"},
+        {"run": "datatrove 0.10.1, 8 processes (CPython 3.13)", "wall_s": "298.46 (1 run)", "cpu_s": "2335.1", "rss_mib": "447", "vs_1_proc": "7.8×", "vs_8_procs": "1.0×"},
+        {"run": "datatrove 0.10.1, 1 process (CPython 3.13)", "wall_s": "2334.87 (1 run)", "cpu_s": "2335.4", "rss_mib": "700", "vs_1_proc": "1.0×", "vs_8_procs": "0.1×"}
+      ]
+    },
+    "c7i-dev": {
+      "caption": "c7i.4xlarge, 10,000 documents (dev slice)",
+      "label": "AWS EC2 c7i.4xlarge (Intel Xeon Platinum 8488C, 16 vCPU), Amazon Linux 2023; CPython 3.13.18 and 3.15.2t, datatrove 0.10.1",
+      "source": "bench/results/aws-c7i.4xlarge/2026-11-06/dev",
+      "chain": [
+        {"run": "pyroid native chain, 8 threads (CPython 3.15t)", "wall_s": "1.95 [1.90–2.01]", "cpu_s": "6.6", "rss_mib": "593", "vs_1_proc": "109.4×", "vs_8_procs": "18.2×"},
+        {"run": "pyroid stages in datatrove's executor, 8 processes (3.13)", "wall_s": "3.15 [3.14–3.18]", "cpu_s": "11.3", "rss_mib": "377", "vs_1_proc": "67.5×", "vs_8_procs": "11.2×"},
+        {"run": "pyroid native chain, 1 thread (CPython 3.15t)", "wall_s": "5.61 [5.59–5.62]", "cpu_s": "6.4", "rss_mib": "509", "vs_1_proc": "37.9×", "vs_8_procs": "6.3×"},
+        {"run": "pyroid stages in datatrove's executor, 1 process (3.13)", "wall_s": "8.52 [8.48–8.54]", "cpu_s": "9.3", "rss_mib": "422", "vs_1_proc": "25.0×", "vs_8_procs": "4.2×"},
+        {"run": "datatrove 0.10.1, 8 processes (CPython 3.13)", "wall_s": "35.37 [35.24–35.52]", "cpu_s": "263.8", "rss_mib": "378", "vs_1_proc": "6.0×", "vs_8_procs": "1.0×"},
+        {"run": "datatrove 0.10.1, 1 process (CPython 3.13)", "wall_s": "212.76 [210.27–239.77]", "cpu_s": "213.5", "rss_mib": "443", "vs_1_proc": "1.0×", "vs_8_procs": "0.2×"}
+      ],
+      "rows": [
+        {"module": "ftfy", "call": "fix_text_batch", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "ftfy 6.3.1", "incumbent_us": "724", "pyroid_us": "6.70", "pyroid_us_8_threads": "2.06", "speedup": "108×", "check": "harness gate"},
+        {"module": "fasttext", "call": "predict, lid.176.bin, k=1", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "fasttext-predict 0.9.2.4", "incumbent_us": "185", "pyroid_us": "114", "pyroid_us_8_threads": "16.8", "speedup": "1.6×", "check": "harness gate"},
+        {"module": "fasttext", "call": "predict, lid.176.ftz, k=1", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "fasttext-predict 0.9.2.4", "incumbent_us": "373", "pyroid_us": "103", "pyroid_us_8_threads": "16.3", "speedup": "3.6×", "check": "harness gate"},
+        {"module": "filters", "call": "GopherRepetition", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "6,105", "pyroid_us": "174", "pyroid_us_8_threads": "26.4", "speedup": "35×", "check": "harness gate"},
+        {"module": "filters", "call": "GopherQuality", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "4,615", "pyroid_us": "99.9", "pyroid_us_8_threads": "16.3", "speedup": "46×", "check": "harness gate"},
+        {"module": "filters", "call": "C4Quality (default)", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "4,508", "pyroid_us": "65.7", "pyroid_us_8_threads": "14.5", "speedup": "69×", "check": "harness gate"},
+        {"module": "filters", "call": "C4Quality (FineWeb config)", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,967", "pyroid_us": "114", "pyroid_us_8_threads": "19.5", "speedup": "52×", "check": "harness gate"},
+        {"module": "filters", "call": "FineWebQuality", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "4,287", "pyroid_us": "90.8", "pyroid_us_8_threads": "13.2", "speedup": "47×", "check": "harness gate"},
+        {"module": "dedup", "call": "MinHash signatures, sha1/64", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "4,940", "pyroid_us": "146", "pyroid_us_8_threads": "28.0", "speedup": "34×", "check": "harness gate"},
+        {"module": "translit", "call": "anyascii", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "anyascii 0.3.3", "incumbent_us": "92.2", "pyroid_us": "1.74", "pyroid_us_8_threads": "1.01", "speedup": "53×", "check": "harness gate"}
+      ]
+    },
+    "c8g-dev": {
+      "caption": "c8g.4xlarge, 10,000 documents (dev slice)",
+      "label": "AWS EC2 c8g.4xlarge (AWS Graviton4, 16 vCPU), Amazon Linux 2023; CPython 3.13.18 and 3.15.2t, datatrove 0.10.1",
+      "source": "bench/results/aws-c8g.4xlarge/2026-11-06/dev",
+      "chain": [
+        {"run": "pyroid native chain, 8 threads (CPython 3.15t)", "wall_s": "1.64 [1.64–1.65]", "cpu_s": "5.4", "rss_mib": "604", "vs_1_proc": "141.5×", "vs_8_procs": "19.6×"},
+        {"run": "pyroid stages in datatrove's executor, 8 processes (3.13)", "wall_s": "2.68 [2.68–2.71]", "cpu_s": "9.6", "rss_mib": "351", "vs_1_proc": "86.8×", "vs_8_procs": "12.0×"},
+        {"run": "pyroid native chain, 1 thread (CPython 3.15t)", "wall_s": "5.15 [5.10–5.16]", "cpu_s": "5.6", "rss_mib": "506", "vs_1_proc": "45.2×", "vs_8_procs": "6.2×"},
+        {"run": "pyroid stages in datatrove's executor, 1 process (3.13)", "wall_s": "7.52 [7.49–7.57]", "cpu_s": "8.0", "rss_mib": "414", "vs_1_proc": "30.9×", "vs_8_procs": "4.3×"},
+        {"run": "datatrove 0.10.1, 8 processes (CPython 3.13)", "wall_s": "32.15 [32.14–32.18]", "cpu_s": "239.8", "rss_mib": "366", "vs_1_proc": "7.2×", "vs_8_procs": "1.0×"},
+        {"run": "datatrove 0.10.1, 1 process (CPython 3.13)", "wall_s": "232.51 [231.77–232.99]", "cpu_s": "233.0", "rss_mib": "446", "vs_1_proc": "1.0×", "vs_8_procs": "0.1×"}
+      ],
+      "rows": [
+        {"module": "ftfy", "call": "fix_text_batch", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "ftfy 6.3.1", "incumbent_us": "818", "pyroid_us": "5.54", "pyroid_us_8_threads": "1.64", "speedup": "148×", "check": "harness gate"},
+        {"module": "fasttext", "call": "predict, lid.176.bin, k=1", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "fasttext-predict 0.9.2.4", "incumbent_us": "284", "pyroid_us": "116", "pyroid_us_8_threads": "14.4", "speedup": "2.4×", "check": "harness gate"},
+        {"module": "fasttext", "call": "predict, lid.176.ftz, k=1", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "fasttext-predict 0.9.2.4", "incumbent_us": "500", "pyroid_us": "89.2", "pyroid_us_8_threads": "13.1", "speedup": "5.6×", "check": "harness gate"},
+        {"module": "filters", "call": "GopherRepetition", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "6,494", "pyroid_us": "158", "pyroid_us_8_threads": "19.2", "speedup": "41×", "check": "harness gate"},
+        {"module": "filters", "call": "GopherQuality", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,125", "pyroid_us": "92.1", "pyroid_us_8_threads": "9.34", "speedup": "56×", "check": "harness gate"},
+        {"module": "filters", "call": "C4Quality (default)", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "4,618", "pyroid_us": "55.8", "pyroid_us_8_threads": "9.34", "speedup": "83×", "check": "harness gate"},
+        {"module": "filters", "call": "C4Quality (FineWeb config)", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,969", "pyroid_us": "101", "pyroid_us_8_threads": "11.0", "speedup": "59×", "check": "harness gate"},
+        {"module": "filters", "call": "FineWebQuality", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "4,748", "pyroid_us": "78.5", "pyroid_us_8_threads": "7.85", "speedup": "60×", "check": "harness gate"},
+        {"module": "dedup", "call": "MinHash signatures, sha1/64", "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "datatrove 0.10.1", "incumbent_us": "5,541", "pyroid_us": "117", "pyroid_us_8_threads": "20.7", "speedup": "47×", "check": "harness gate"},
+        {"module": "translit", "call": "anyascii", "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13", "incumbent": "anyascii 0.3.3", "incumbent_us": "109", "pyroid_us": "1.39", "pyroid_us_8_threads": "0.87", "speedup": "79×", "check": "harness gate"}
+      ]
+    }
+  },
+  "more_label": "Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative",
   "more": [
     {
       "title": "pyroid.metrics: ROUGE, BLEU and chrF",
       "guide": "metrics",
-      "note": "Milliseconds for the whole workload, median of the runs (1 run for the reference rows over 100k pairs); every row checked identical to the 1-process reference first. CPython 3.13, release wheel, load average 4 to 19 from other sessions. The references in 1 process and in 8 fork processes; pyroid in one process at threads=1 and threads=8. ROUGE: CNN/DailyMail lead-3 against the highlights, rouge1/2/L/Lsum (100k = the 11,490 pairs repeated). BLEU and chrF: WMT21 segments, first reference, default settings.",
+      "note": "Milliseconds for the whole workload, median of the runs (a single run for the reference libraries on 100k pairs). Every row was first checked identical to the 1-process reference. The reference libraries ran in 1 process and in 8 forked processes, pyroid in one process with threads=1 and threads=8. CPython 3.13, release wheel; other work kept the load average between 4 and 19. ROUGE scores CNN/DailyMail lead-3 against the highlights with rouge1/2/L/Lsum (the 100k pairs are the 11,490 pairs repeated). BLEU and chrF use WMT21 segments, the first reference and default settings.",
       "columns": ["Workload", "Pairs", "rouge-score / sacrebleu, 1 process", "8 processes", "pyroid, threads=1", "threads=8", "Speedup, 1 / 8"],
       "rows": [
         ["ROUGE (`score_batch`)", "1,000", "852", "238", "22.4", "18.3", "38× / 13×"],
@@ -44,7 +101,7 @@
     {
       "title": "pyroid.json_repair",
       "guide": "json_repair",
-      "note": "Single documents, best per call, CPython 3.12 (3.15t within ±10%); release wheel, load average 16 to 24 from other sessions. json_repair 0.64.5.",
+      "note": "Single documents, best time per call, json_repair 0.64.5 on CPython 3.12 (3.15t was within ±10%). Release wheel; other work kept the load average between 16 and 24.",
       "columns": ["Document and call", "json_repair", "pyroid", "Speedup"],
       "rows": [
         ["valid JSON, ~1 KB, `repair_json`", "11.3 µs", "6.6 µs", "1.7×"],
@@ -60,7 +117,7 @@
     {
       "title": "pyroid.json_repair: batches",
       "guide": "json_repair",
-      "note": "10,000 broken ~1.2 KB documents, free-threaded CPython 3.15t (GIL off), documents per second. The 8-thread rows are limited by the shared, loaded VM.",
+      "note": "Documents per second over 10,000 broken documents of about 1.2 KB, on free-threaded CPython 3.15t with the GIL off. The shared, loaded VM limits the 8-thread rows.",
       "columns": ["Run", "Documents/s", "vs json_repair in a loop"],
       "rows": [
         ["json_repair, loop", "1,204", "1×"],
@@ -74,7 +131,7 @@
     {
       "title": "Languages: FineWeb-2 filters and MinHash",
       "guide": "languages",
-      "note": "µs per document. 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (datatrove: 2); every timed document gated first (same keep/drop, reason and signatures). Filters: FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality, with that language's settings); MinHash: FineWeb-2's signatures. datatrove x8: a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16. Chinese and Japanese run datatrove's Python tokenizers (python_tokenizer=True), at their speed and on the calling thread.",
+      "note": "µs per document over 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (2 for datatrove). Every timed document was first checked for the same keep/drop, reason and signatures. The filters are FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality) with each language's settings; MinHash computes FineWeb-2's signatures. datatrove's 8 processes are a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16. Chinese and Japanese use datatrove's Python tokenizers (python_tokenizer=True), so they run at those tokenizers' speed, on the calling thread.",
       "columns": ["Language", "Tokenizer", "datatrove, 1 process: filters / MinHash", "pyroid, 1 thread", "Speedup", "datatrove, 8 processes", "pyroid, 8 threads", "Speedup"],
       "rows": [
         ["German (deu_Latn)", "native", "8,342 / 6,489", "122 / 123", "68× / 53×", "2,022 / 1,545", "37 / 28", "54× / 55×"],
@@ -86,13 +143,13 @@
         ["Chinese (cmn_Hani)", "Python (jieba)", "10,976 / 8,573", "8,802 / 9,060", "1.2× / 0.9×", "4,270 / 2,885", "10,570 / 7,986", "0.4× / 0.4×"],
         ["Japanese (jpn_Jpan)", "Python (SudachiPy)", "11,959 / 8,267", "9,893 / 9,508", "1.2× / 0.9×", "3,464 / 2,586", "12,685 / 11,118", "0.3× / 0.2×"]
       ],
-      "footnote": "* An outlier: pyroid with 8 threads was slower than with 1 in this run, while the load rose; not to be quoted until rerun.",
+      "footnote": "\\* An outlier: in this run pyroid was slower with 8 threads than with 1 while the load rose. It needs a rerun before it can be quoted.",
       "source": "bench/results/orbstack-aarch64-12cpu/2026-11-06-multilingual (bench/multilingual.py)"
     },
     {
       "title": "More datatrove steps",
       "guide": "datatrove",
-      "note": "FineWeb dev slice, release wheel, CPython 3.13, taskset -c 0-7. datatrove's step alone, in one process and in a warmed multiprocessing.Pool(8); pyroid's native call at 1 and 8 threads. Medians of 5 for pyroid and 2 for datatrove, load average about 8 (URL filter: about 22). Where datatrove at 8 processes was not measured, the 8-thread speedup is against datatrove in one process.",
+      "note": "Each datatrove step alone on the FineWeb dev slice, in one process and in a warmed multiprocessing.Pool(8), against pyroid's native call at 1 and 8 threads. Medians of 5 runs for pyroid and 2 for datatrove; release wheel, CPython 3.13, taskset -c 0-7, load average about 8 (about 22 for the URL filter). Where datatrove wasn't measured at 8 processes, the 8-thread speedup is against one process.",
       "columns": ["Step", "Workload", "datatrove, 1 process", "8 processes", "pyroid, 1 thread", "8 threads", "Speedup, 1 thread / 8 threads"],
       "rows": [
         ["PIIFormatter", "10,000 documents", "2.885 s", "0.595 s", "0.032 s", "0.019 s", "89× / 31× (vs 8 processes)"],
@@ -101,12 +158,12 @@
         ["URLFilter (datatrove's `filter()` loop; `pyroid.filters.URLFilter`)", "10,000 URLs", "29.4k URLs/s", "—", "912k URLs/s", "1.72M URLs/s", "31× / 59× (vs 1 process)"],
         ["Sentence dedup, stages 1 and 3 (drop-in steps)", "13,232 documents", "98 docs/s", "—", "5,664 docs/s", "10,457 docs/s", "58× / 107× (vs 1 process)"]
       ],
-      "source": "the P6 datatrove-steps run, 2026-11-06 (scripts not committed)"
+      "source": "a one-off run on 2026-11-06, whose scripts are not in the repository"
     },
     {
       "title": "datatrove's FineWeb pipeline with pyroid's steps swapped in",
       "guide": "datatrove",
-      "note": "Whole runs on FineWeb dev (10,000 documents unless noted), wall seconds and user+sys CPU seconds including children (bash time), CPython 3.13, release wheel, taskset -c 0-7. The VM was heavily shared (load average 18 to 30), which inflates stock datatrove most; each ratio comes from a same-minute pair (stock, then pyroid). pyroid's runs include datatrove's executor phases, worker start-up, Parquet IO and the 125 MiB model load; pyroid clean includes interpreter start-up, IO and writing both outputs. All outputs have datatrove's per-document digest.",
+      "note": "Whole runs on the FineWeb dev slice (10,000 documents unless noted): wall seconds, and user+sys CPU seconds including children, from bash's `time`. CPython 3.13, release wheel, taskset -c 0-7. The VM was heavily shared (load average 18 to 30), which slows stock datatrove the most, so each ratio comes from a pair of runs in the same minute (stock, then pyroid). pyroid's runs include datatrove's executor phases, worker start-up, Parquet IO and loading the 125 MiB model; `pyroid clean` includes interpreter start-up, IO and writing both outputs. Every output has datatrove's per-document digest.",
       "columns": ["Run", "Stock datatrove 0.10.1", "With pyroid", "Speedup, wall (CPU)"],
       "rows": [
         ["Executor, 8 processes, pair 1", "498.8 s (691 CPU s)", "steps swapped in: 21.1 s (26.9)", "23.6× (25.7×)"],
@@ -115,7 +172,7 @@
         ["`pyroid clean --recipe fineweb`, 8 threads, vs stock at 8 processes (pairs 1, 2)", "498.8 / 213.4 s", "8.7 / 2.2 s (12.7 / 7.7)", "58× / 99× (54× / 75×)"],
         ["`pyroid clean`, 1 thread, vs stock at 8 processes", "498.8 / 213.4 s", "11.4 / 7.5 s (11.1 / 7.8)", "44× / 29×"]
       ],
-      "source": "examples/datatrove/verify.py and the pyroid CLI, timed with bash time on 2026-11-06 (raw timings in the P5 integrations report)"
+      "source": "examples/datatrove/verify.py and the pyroid CLI, timed with bash's `time` on 2026-11-06"
     }
   ]
 }
