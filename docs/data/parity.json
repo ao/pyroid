@@ -207,6 +207,57 @@
       ],
       "source": "the parity/ json_repair suite, run on 2026-11-06"
     },
+    "datasketch": {
+      "reference": "datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1)",
+      "rule": "identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets",
+      "checks": [
+        {
+          "name": "MinHash.bulk signatures, 128 permutations, for affine32, affine64 and legacy: 100,000 FineWeb documents plus the 3,232-document adversarial set, word 5-gram shingles",
+          "same": 309696,
+          "diff": 0
+        },
+        {
+          "name": "minhash_batch(texts, ngram=5) rows, same corpus and schemes",
+          "same": 309696,
+          "diff": 0
+        },
+        {
+          "name": "LeanMinHash.serialize bytes (and deserialize back), one byte order per scheme",
+          "same": 309696,
+          "diff": 0
+        },
+        {
+          "name": "MinHashLSH (b, r): 20 thresholds x 4 num_perm x 3 weight pairs",
+          "same": 240,
+          "diff": 0
+        },
+        {
+          "name": "Every document's MinHashLSH query result set: threshold 0.9, 0.5, params (32, 4), legacy at 0.8; query and query_batch",
+          "same": 825856,
+          "diff": 0
+        },
+        {
+          "name": "Result sets after removing every 10th key, and key membership",
+          "same": 104232,
+          "diff": 0
+        },
+        {
+          "name": "Two half indexes merged (every 10th document queried); MinHashLSHForest(l=8) top-10 key sets (every 10th document)",
+          "same": 20648,
+          "diff": 0
+        },
+        {
+          "name": "MinHashLSHEnsemble(threshold=0.8, num_part=16) containment result sets (20,000 documents indexed, every 10th queried)",
+          "same": 2000,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "The (b, r) search ports scipy 1.18.1's QUADPACK: all 715,040 LSH and 258,300 LSH Ensemble probabilities it evaluates are bitwise identical to scipy's on aarch64, and all 9,156 grid argmins and 126 ensemble constructions match.",
+        "datasketch's own test suite (test_minhash, test_lean_minhash, test_minhash_schemes, test_lsh, test_lshforest, test_lshensemble) passes against pyroid's classes, with Hypothesis and seeded workloads compared against live datasketch: 1,020 tests on CPython 3.12, 3.14t, 3.15 and 3.15t."
+      ],
+      "source": "the parity/ datasketch suite (CPython 3.13, release wheel), run on 2026-11-07"
+    },
     "integrations": {
       "reference": "datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.patch() stands in for)",
       "rule": "the same per-document digest of id, text, language, score, keep, reason and duplicate flag; for patch(), the same call-site output",

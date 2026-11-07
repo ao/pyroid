@@ -129,6 +129,33 @@
       "source": "bench/json_repair_bench.py, run on 2026-11-06"
     },
     {
+      "title": "pyroid.datasketch: MinHash signatures",
+      "guide": "datasketch",
+      "note": "Seconds for the first 10,000 FineWeb dev documents (5.1 million word 5-gram shingles), 128 permutations, best of 3, on free-threaded CPython 3.15t with the GIL off. datasketch 2.0.0 with numpy 2.5.4; its 8-thread rows split the documents over a thread pool. Every pyroid result was first checked for identical signatures. Load average 7 to 10.",
+      "columns": ["Run", "datasketch, 1 thread", "datasketch, 8 threads", "pyroid, 1 thread", "pyroid, 8 threads"],
+      "rows": [
+        ["`MinHash.bulk`, affine32", "3.13 s", "2.31 s", "0.39 s (8.0×)", "0.15 s (21×)"],
+        ["`MinHash.bulk`, legacy", "4.51 s", "2.22 s", "0.78 s (5.8×)", "0.26 s (17.5×)"],
+        ["`MinHash.bulk`, affine64", "3.66 s", "2.27 s", "0.68 s (5.4×)", "0.23 s (16.2×)"],
+        ["from text: shingling + `bulk` vs `minhash_batch`, affine32", "4.43 s", "2.43 s", "0.35 s (12.5×)", "0.052 s (85×)"]
+      ],
+      "source": "bench/results/orbstack-aarch64-12cpu/2026-11-07-datasketch (bench/datasketch_bench.py)"
+    },
+    {
+      "title": "pyroid.datasketch: MinHashLSH",
+      "guide": "datasketch",
+      "note": "Milliseconds for 10,000 affine32 signatures, 128 permutations, same run. The loop rows call insert or query per document with LeanMinHash objects; the batch rows pass the signature matrix. Every query result set was first checked against datasketch's.",
+      "columns": ["Run", "datasketch, loop", "pyroid, loop", "pyroid batch, 1 thread", "pyroid batch, 8 threads"],
+      "rows": [
+        ["`MinHashLSH(threshold=0.9)`, the (b, r) search", "13.0", "1.5 (8.9×)", "", ""],
+        ["insert, threshold 0.9", "119.3", "15.5 (7.7×)", "11.3 (10.6×)", "11.2 (10.7×)"],
+        ["query, threshold 0.9", "58.5", "10.5 (5.6×)", "4.4 (13.2×)", "5.0 (11.8×)"],
+        ["insert, threshold 0.5", "524.7", "42.9 (12.2×)", "40.7 (12.9×)", "19.2 (27.3×)"],
+        ["query, threshold 0.5", "235.2", "26.7 (8.8×)", "17.9 (13.1×)", "12.3 (19.1×)"]
+      ],
+      "source": "bench/results/orbstack-aarch64-12cpu/2026-11-07-datasketch (bench/datasketch_bench.py)"
+    },
+    {
       "title": "Languages: FineWeb-2 filters and MinHash",
       "guide": "languages",
       "note": "µs per document over 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (2 for datatrove). Every timed document was first checked for the same keep/drop, reason and signatures. The filters are FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality) with each language's settings; MinHash computes FineWeb-2's signatures. datatrove's 8 processes are a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16. Chinese and Japanese use datatrove's Python tokenizers (python_tokenizer=True), so they run at those tokenizers' speed, on the calling thread.",

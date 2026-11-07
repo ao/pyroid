@@ -21,7 +21,7 @@ Example:
     m1, m2 = MinHash(num_perm=128), MinHash(num_perm=128)
     m1.update_batch([b"minhash", b"is", b"a", b"probabilistic", b"data", b"structure"])
     m2.update_batch([b"minhash", b"is", b"a", b"probability", b"data", b"structure"])
-    m1.jaccard(m2)  # 0.71875, as with datasketch
+    m1.jaccard(m2)  # 0.65625, as with datasketch
 
     sigs = MinHash.bulk([[b"a", b"b"], [b"b", b"c"]], num_perm=64, threads=8)
     ```

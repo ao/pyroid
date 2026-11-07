@@ -35,6 +35,7 @@ and `patch()` is the only switch. Each patched name emits one
 | `"ftfy"` | [`pyroid.ftfy`](ftfy.md) (ftfy 6.3.1) | `fix_text`, `fix_text_segment`, `fix_encoding`, `fix_and_explain`, `fix_encoding_and_explain`, `TextFixerConfig`, `ExplainedText`, `ExplanationStep`, the `ftfy` alias, `fix_text_batch` | `apply_plan`, `explain_unicode`, `fix_file`, `guess_bytes`, `ftfy.fixes` and the other submodules |
 | `"fasttext"` | [`pyroid.fasttext`](fasttext.md) (fastText 0.9.2's inference, as fasttext-predict 0.9.2.4) | `load_model`, `tokenize`, `fasttext.FastText.load_model`, and `fasttext.FastText._FastText(path)` (which returns a pyroid model) | training (`train_supervised`, ...) and `_FastText()` without a model file |
 | `"anyascii"` | [`pyroid.translit.anyascii`](translit.md) (anyascii 0.3.3) | `anyascii` | the rest of the package |
+| `"datasketch"` | [`pyroid.datasketch`](datasketch.md) (datasketch 2.0.0) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble`, `sha1_hash32`, `sha1_hash64`, `minhash_batch`, and the `minhash`, `lean_minhash`, `hashfunc`, `lsh`, `lshforest` and `lshensemble` submodules with them | `WeightedMinHash`, `HyperLogLog`, `bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `storage` and the other submodules |
 
 `fasttext.FastText._FastText(path)` is how datatrove and others load models, and
 `isinstance(model, _FastText)` is true for pyroid's models too. Calls that pyroid hands to the
@@ -52,7 +53,8 @@ says so:
 import pyroid
 
 pyroid.patch("unidecode")
-# ValueError: cannot patch 'unidecode': the supported names are 'ftfy', 'fasttext', 'anyascii'
+# ValueError: cannot patch 'unidecode': the supported names are 'ftfy', 'fasttext', 'anyascii',
+# 'datasketch'
 # (pyroid.translit.unidecode transliterates with anyascii's tables, so its output differs from
 # Unidecode's: it is not a drop-in)
 ```
@@ -68,6 +70,9 @@ pyroid.patch("unidecode")
 - real submodules keep working, as attributes and as `import ftfy.fixes`. The shim shares the
   real package's `__path__` and a copy of its `__spec__`, so `importlib.util.find_spec` and
   `importlib.resources` see the real package;
+- `datasketch`'s ported submodules (`datasketch.minhash`, `datasketch.lsh`, ...) get shims of their
+  own, so `from datasketch.lsh import MinHashLSH` gives pyroid's class, and a MinHash pickled by
+  datasketch unpickles as pyroid's;
 - `ftfy.__pyroid__` is `True`, `ftfy.__wrapped__` is the real module, and `ftfy.__version__` /
   `anyascii.__version__` are the versions pyroid reproduces (`"6.3.1"`, `"0.3.3"`);
 - modules that imported the real package before `patch()` keep it, so call `patch()` before
@@ -172,11 +177,11 @@ $ pyroid run -p ftfy,fasttext train.py --epochs 3
 usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
 
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
-`import ftfy` / `import fasttext` / `import anyascii` giving pyroid's drop-ins. The Python
+`import ftfy` / `fasttext` / `anyascii` / `datasketch` giving pyroid's drop-ins. The Python
 processes it starts (multiprocessing workers, subprocesses) are patched too.
 
 options:
-  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii
+  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch
                      (default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
@@ -286,7 +291,7 @@ fastText. They batch the whole step, not only the model call.
 - A shim is not the real module object: code that already holds the real module (imported before
   `patch()`), or compares module objects, is not redirected.
 - `importlib.reload` of a shim is not supported.
-- Only `ftfy`, `fasttext` and `anyascii` can be patched. pyroid's filters and dedup reach
+- Only `ftfy`, `fasttext`, `anyascii` and `datasketch` can be patched. pyroid's filters and dedup reach
   datatrove pipelines through the [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked

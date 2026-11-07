@@ -14,6 +14,7 @@ pyroid has no runtime dependencies. Extras:
 | Extra | Adds | Needed for |
 |---|---|---|
 | `pyroid[fasttext]` | `numpy>=1.26` | `pyroid.fasttext`, which returns numpy arrays as fastText does. Without numpy, `import pyroid.fasttext` raises a `ModuleNotFoundError` for numpy (an `ImportError`) that says how to fix it. |
+| `pyroid[datasketch]` | `numpy>=1.26` | [`pyroid.datasketch`](guides/datasketch.md), whose sketches hold numpy arrays as datasketch's do. Without numpy, `import pyroid.datasketch` raises a `ModuleNotFoundError` for numpy that says how to fix it. |
 | `pyroid[cli]` | `pyarrow>=18`, `numpy>=1.26` | the [`pyroid` command line](guides/cli.md) (Parquet and JSONL in and out, the FineWeb recipe) and `pyroid.integrations.recipes` |
 | `pyroid[datatrove]` | `datatrove>=0.10.1`, `regex`, `tokenizers`, `numpy>=1.26` | the [datatrove drop-in steps](guides/datatrove.md) in `pyroid.integrations.datatrove` (`regex` and `tokenizers` are imported by datatrove's filters but not declared by datatrove) |
 | `pyroid[hf]` | `datasets>=3`, `pyarrow>=18`, `numpy>=1.26` | the [Hugging Face `datasets` helpers](guides/huggingface.md) in `pyroid.integrations.hf` |
@@ -32,7 +33,9 @@ Optional libraries, needed only by the features that use them:
     - datatrove 0.10.1 and a language's segmenter (jieba, SudachiPy, ...) for
       `python_tokenizer=True`;
     - rouge-score, nltk and sacrebleu 2.6.0 for the delegated metrics features;
-    - json_repair 0.64.5 for `schema=`.
+    - json_repair 0.64.5 for `schema=`;
+    - datasketch 2.0.0 for its classes pyroid does not port (`WeightedMinHash`, `HyperLogLog`,
+      ...) and for Redis or Cassandra LSH storage.
 
     Without them, those calls raise `pyroid.PyroidError`.
 - numpy for `pyroid.metrics.scoring.BootstrapAggregator`, which runs rouge-score's numpy code.

@@ -35,6 +35,7 @@ ORDER = [
     "translit",
     "metrics",
     "json_repair",
+    "datasketch",
     "integrations",
 ]
 TITLES = {
@@ -45,6 +46,7 @@ TITLES = {
     "translit": "pyroid.translit",
     "metrics": "pyroid.metrics",
     "json_repair": "pyroid.json_repair",
+    "datasketch": "pyroid.datasketch",
     "integrations": "Integrations: datatrove steps, pyroid clean, pyroid.patch()",
 }
 

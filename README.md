@@ -36,6 +36,7 @@ ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'
 | [`pyroid.translit`](https://ao.github.io/pyroid/guides/translit/) | anyascii; a permissively licensed alternative to Unidecode |
 | [`pyroid.metrics`](https://ao.github.io/pyroid/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
 | [`pyroid.json_repair`](https://ao.github.io/pyroid/guides/json_repair/) | json_repair 0.64.5 |
+| [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
 
 On 100,000 FineWeb documents, pyroid runs datatrove's FineWeb cleaning chain about 27× faster
 than datatrove on 8 processes and 56× faster on one thread, with identical output (AWS EC2
@@ -57,8 +58,8 @@ the same document for document. On the 100k corpus the ratios are 27× and 56×.
 `pyroid.ftfy` is byte-identical to ftfy 6.3.1. `pyroid.fasttext` gives the same labels and
 probabilities as fastText's C++ code on the same CPU architecture. The filters and dedup make
 datatrove's keep/drop decisions, with its reasons and dedup files. The metrics match
-rouge-score's and sacrebleu's scores to the last digit, and `pyroid.json_repair` makes
-json_repair's repairs.
+rouge-score's and sacrebleu's scores to the last digit, `pyroid.json_repair` makes
+json_repair's repairs, and `pyroid.datasketch` gives datasketch's hash values and LSH query results.
 
 Each module is tested against the library it replaces, on pinned real data and with
 property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). The suites
@@ -77,7 +78,8 @@ thread instead of one copy per process.
 
 Wheels are built for CPython 3.11 to 3.15 and free-threaded 3.14t and 3.15t, on Linux (glibc and
 musl), macOS and Windows, for x86-64 and ARM64, and need no compiler. The core has no runtime
-dependencies; `pyroid.fasttext` needs numpy (`pip install "pyroid[fasttext]"`).
+dependencies; `pyroid.fasttext` and `pyroid.datasketch` need numpy (`pip install "pyroid[fasttext]"`,
+`"pyroid[datasketch]"`).
 
 ## Speed by stage
 
@@ -98,14 +100,16 @@ processes on the dev slice and 13.6× on 100k documents.
 The other modules have only been measured in a Docker VM on a Mac so far, so their numbers are
 indicative. On one thread, ROUGE is 59–65× faster than rouge-score, corpus BLEU 11× and chrF 19×
 faster than sacrebleu, and `pyroid.json_repair` about 30× faster than json_repair on broken JSON,
-where it runs in linear time and json_repair in quadratic.
+where it runs in linear time and json_repair in quadratic. `pyroid.datasketch` computes MinHash
+signatures 8× faster than datasketch on one thread and 21× on eight (85× from raw text), and
+MinHashLSH inserts 8–27× and queries 6–19× faster (10,000 FineWeb documents, CPython 3.15t).
 
 ## Integrations
 
 | Entry point | What it does |
 |---|---|
 | [`pyroid clean`](https://ao.github.io/pyroid/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL |
-| [`pyroid.patch()`](https://ao.github.io/pyroid/guides/patch/) | makes `import ftfy`, `import fasttext` and `import anyascii` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](https://ao.github.io/pyroid/guides/patch/) | makes `import ftfy`, `import fasttext`, `import anyascii` and `import datasketch` give pyroid's functions, in code you don't own |
 | [datatrove steps](https://ao.github.io/pyroid/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures |
 | [Hugging Face `datasets`](https://ao.github.io/pyroid/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
 

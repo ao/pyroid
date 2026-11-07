@@ -677,7 +677,7 @@ def _export(names: Sequence[str]) -> None:
 _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
-`import ftfy` / `import fasttext` / `import anyascii` giving pyroid's drop-ins. The Python
+`import ftfy` / `fasttext` / `anyascii` / `datasketch` giving pyroid's drop-ins. The Python
 processes it starts (multiprocessing workers, subprocesses) are patched too.
 
 options:

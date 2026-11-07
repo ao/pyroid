@@ -171,7 +171,7 @@ def test_nothing_is_automatic() -> None:
                 import pyroid.fasttext
             assert "pyroid.integrations._patch" not in sys.modules
             real = {}
-            for name in ("ftfy", "fasttext", "anyascii"):
+            for name in ("ftfy", "fasttext", "anyascii", "datasketch"):
                 try:
                     real[name] = not getattr(importlib.import_module(name), "__pyroid__", False)
                 except ImportError:
