@@ -201,10 +201,10 @@ def fasttext_groups(
         g.differing += 1
         labels_differ = ol != nl
         g.label_diffs += labels_differ
-        po, pn = dict(zip(ol, op, strict=True)), dict(zip(nl, np_, strict=True))
+        old_p, new_p = dict(zip(ol, op, strict=True)), dict(zip(nl, np_, strict=True))
         row_dp, row_ulps, row_ulps32 = 0.0, 0, 0
-        for label, a in po.items():
-            b = pn.get(label)
+        for label, a in old_p.items():
+            b = new_p.get(label)
             if b is None or a == b:
                 continue
             g.probs_differing += 1
