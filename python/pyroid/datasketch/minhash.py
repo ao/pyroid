@@ -555,8 +555,18 @@ class MinHash:
         it = iter(b)
         template: dict[str, Any] | None = None
         while True:
-            docs = list(itertools.islice(it, _BULK_CHUNK))
+            docs: list[Any] = []
+            error: Exception | None = None
+            try:
+                docs.extend(itertools.islice(it, _BULK_CHUNK))
+            except Exception as e:
+                # The documents' own iterator failed. datasketch has yielded a
+                # MinHash for every document before that point: do the same,
+                # then raise.
+                error = e
             if not docs:
+                if error is not None:
+                    raise error
                 return
             if template is None:
                 # datasketch copies `m` for every document: the first copy
@@ -567,10 +577,13 @@ class MinHash:
             )
             if res is None:
                 # Not the canonical state after all: datasketch's own loop.
-                for _b in itertools.chain(docs, it):
+                rest = () if error is not None else it
+                for _b in itertools.chain(docs, rest):
                     _m = m.copy()
                     _m.update_batch(_b)
                     yield _m
+                if error is not None:
+                    raise error
                 return
             rows, fallback = res
             slow = set(fallback)
@@ -584,6 +597,10 @@ class MinHash:
                 _m.__dict__.update(template)
                 _m.hashvalues = rows[i].copy()
                 yield _m
+            if error is not None:
+                raise error
+            if len(docs) < _BULK_CHUNK:
+                return
 
     # NOTE: datasketch drops CuPy device state on pickle, so round-tripped
     # MinHash objects remain portable; pyroid never creates any.
@@ -613,19 +630,19 @@ def minhash_batch(
     """Compute MinHash signatures for many documents at once (see ``minhash.pyi``)."""
     m = MinHash(num_perm=num_perm, seed=seed, scheme=scheme)
     bits = 64 if m.scheme == _SCHEME_AFFINE64 else 32
+    n = operator.index(ngram)
+    if n < 1:
+        raise ValueError(f"ngram must be a positive int, got {n}")
     if (
         isinstance(docs, str)
         or hasattr(docs, "__arrow_c_stream__")
         or hasattr(docs, "__arrow_c_array__")
         or (isinstance(docs, (list, tuple)) and docs and isinstance(docs[0], str))
     ):
-        n = operator.index(ngram)
-        if n < 1:
-            raise ValueError(f"ngram must be a positive int, got {n}")
         return _native.batch_texts(m.scheme, m.permutations, docs, n, threads=threads)
-    if operator.index(ngram) != 1:
-        raise ValueError("ngram applies to texts; token lists are hashed as given")
     if isinstance(docs, (list, tuple)):
+        if n != 1 and docs:
+            raise ValueError("ngram applies to texts; token lists are hashed as given")
         return _native.batch_tokens(
             m.scheme, m.hashvalues, m.permutations, list(docs), bits, threads=threads
         )

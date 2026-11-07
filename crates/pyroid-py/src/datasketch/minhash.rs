@@ -65,9 +65,23 @@ impl Value for u32 {
     }
 }
 
+/// Is `obj` exactly a `numpy.ndarray` (not a subclass such as a masked array,
+/// whose own semantics datasketch's numpy code keeps)?
+fn exact_ndarray(obj: &Bound<'_, PyAny>) -> bool {
+    obj.is_exact_instance_of::<numpy::PyUntypedArray>()
+}
+
+/// A new 1-D array that owns its data (as numpy's own results do).
+fn owned1<'py, T: numpy::Element + Copy>(py: Python<'py>, v: &[T]) -> Bound<'py, PyAny> {
+    PyArray1::from_slice(py, v).into_any()
+}
+
 /// The rows of a `(2, n)` array of `T` as `(a, b)`; `None` unless it is
 /// exactly that (any strides: datasketch's legacy permutations are a transpose).
 fn rows2<T: numpy::Element + Copy>(obj: &Bound<'_, PyAny>) -> Option<(Vec<T>, Vec<T>)> {
+    if !exact_ndarray(obj) {
+        return None;
+    }
     let arr = obj.cast::<PyArray2<T>>().ok()?;
     let ro = arr.try_readonly().ok()?;
     let v = ro.as_array();
@@ -97,6 +111,9 @@ fn read_permutations(scheme: Scheme, obj: &Bound<'_, PyAny>) -> Option<Permutati
 
 /// A contiguous 1-D `T` array of length `n` as a Vec, or `None`.
 fn read_values<T: numpy::Element + Copy>(obj: &Bound<'_, PyAny>, n: usize) -> Option<Vec<T>> {
+    if !exact_ndarray(obj) {
+        return None;
+    }
     let arr = obj.cast::<PyArray1<T>>().ok()?;
     let ro = arr.try_readonly().ok()?;
     let s = ro.as_slice().ok()?;
@@ -148,7 +165,7 @@ fn fold<'py, T: Value>(
     } else {
         run(&mut hv)
     };
-    ok.then(|| PyArray1::from_vec(py, hv).into_any())
+    ok.then(|| owned1(py, &hv))
 }
 
 fn fold_any<'py>(
@@ -167,10 +184,14 @@ fn fold_any<'py>(
 
 /// The SHA1 hashes of `tokens` (a list or tuple of `bytes`), or `None`.
 fn token_hashes(tokens: &Bound<'_, PyAny>, bits: Sha1Bits) -> Option<Vec<u64>> {
-    let hash = |t: Bound<'_, PyAny>| t.cast::<PyBytes>().ok().map(|b| bits.hash(b.as_bytes()));
-    if let Ok(list) = tokens.cast::<PyList>() {
+    let hash = |t: Bound<'_, PyAny>| {
+        t.cast_exact::<PyBytes>()
+            .ok()
+            .map(|b| bits.hash(b.as_bytes()))
+    };
+    if let Ok(list) = tokens.cast_exact::<PyList>() {
         list.iter().map(hash).collect()
-    } else if let Ok(tuple) = tokens.cast::<PyTuple>() {
+    } else if let Ok(tuple) = tokens.cast_exact::<PyTuple>() {
         tuple.iter().map(hash).collect()
     } else {
         None
@@ -188,7 +209,7 @@ fn update_one<'py>(
     bits: u8,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
     let (scheme, bits) = (scheme_arg(scheme)?, bits_arg(bits)?);
-    let Ok(token) = token.cast::<PyBytes>() else {
+    let Ok(token) = token.cast_exact::<PyBytes>() else {
         return Ok(None);
     };
     let h = bits.hash(token.as_bytes());
@@ -299,9 +320,21 @@ fn extract_doc(
     mode: Tokens,
 ) -> PyResult<bool> {
     let py = doc.py();
-    let items: Vec<Bound<'_, PyAny>> = if let Ok(list) = doc.cast::<PyList>() {
+    // MinHash.bulk: only exact lists and tuples (a subclass may iterate differently).
+    let strict = mode == Tokens::BytesOnly;
+    let list = if strict {
+        doc.cast_exact::<PyList>().ok()
+    } else {
+        doc.cast::<PyList>().ok()
+    };
+    let tuple = if strict {
+        doc.cast_exact::<PyTuple>().ok()
+    } else {
+        doc.cast::<PyTuple>().ok()
+    };
+    let items: Vec<Bound<'_, PyAny>> = if let Some(list) = list {
         list.iter().collect()
-    } else if let Ok(tuple) = doc.cast::<PyTuple>() {
+    } else if let Some(tuple) = tuple {
         tuple.iter().collect()
     } else if mode == Tokens::BytesOnly {
         return Ok(false);
@@ -316,7 +349,12 @@ fn extract_doc(
     };
     let (bytes_len, tokens_len) = (arena.bytes.len(), arena.token_ends.len());
     for (j, item) in items.iter().enumerate() {
-        if let Ok(b) = item.cast::<PyBytes>() {
+        let b = if strict {
+            item.cast_exact::<PyBytes>().ok()
+        } else {
+            item.cast::<PyBytes>().ok()
+        };
+        if let Some(b) = b {
             arena.bytes.extend_from_slice(b.as_bytes());
         } else if mode == Tokens::BytesOnly {
             arena.bytes.truncate(bytes_len);
@@ -483,9 +521,18 @@ fn matrix<T: Value>(
     k: usize,
     v: Vec<T>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    let arr =
-        Array2::from_shape_vec((rows, k), v).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    Ok(PyArray2::from_owned_array(py, arr).into_any())
+    // numpy allocates it, so the result owns its data like numpy's own arrays.
+    debug_assert_eq!(v.len(), rows * k);
+    let arr = PyArray2::<T>::zeros(py, [rows, k], false);
+    {
+        let internal =
+            |e: &dyn std::fmt::Display| PyroidError::new_err(format!("pyroid.datasketch: {e}"));
+        let mut rw = arr.try_readwrite().map_err(|e| internal(&e))?;
+        rw.as_slice_mut()
+            .map_err(|e| internal(&e))?
+            .copy_from_slice(&v);
+    }
+    Ok(arr.into_any())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -639,7 +686,7 @@ fn batch_texts<'py>(
             py.detach(|| text_rows(&perm, &input, threads_arg, ngram, bits, &mut out))
                 .map_err(|e| e.into_pyerr(py))?;
             if single {
-                PyArray1::from_vec(py, out).into_any()
+                owned1(py, &out)
             } else {
                 matrix(py, n, k, out)?
             }
@@ -650,7 +697,7 @@ fn batch_texts<'py>(
             py.detach(|| text_rows(&perm, &input, threads_arg, ngram, bits, &mut out))
                 .map_err(|e| e.into_pyerr(py))?;
             if single {
-                PyArray1::from_vec(py, out).into_any()
+                owned1(py, &out)
             } else {
                 matrix(py, n, k, out)?
             }
@@ -722,6 +769,9 @@ impl ByteOrder {
 
 /// A contiguous 1-D `T` array's values, or `None`.
 fn contiguous<T: numpy::Element + Copy>(obj: &Bound<'_, PyAny>) -> Option<Vec<T>> {
+    if !exact_ndarray(obj) {
+        return None;
+    }
     let arr = obj.cast::<PyArray1<T>>().ok()?;
     let ro = arr.try_readonly().ok()?;
     ro.as_slice().ok().map(<[T]>::to_vec)

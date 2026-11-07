@@ -42,7 +42,7 @@ Differences from datasketch
   ``"disable"`` updates, not when the module is imported.
 """
 
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Sequence
 from typing import Any, Literal, TypeAlias
 
 import numpy as np
@@ -55,6 +55,8 @@ __all__ = ["MinHash", "minhash_batch"]
 hashvalue_byte_size: int
 
 _Scheme: TypeAlias = Literal["affine32", "affine64", "legacy"]
+
+def _fmix(hv: Any, width: int) -> Any: ...
 
 class MinHash:
     """MinHash: estimate the Jaccard similarity and cardinality of sets.
@@ -91,6 +93,9 @@ class MinHash:
     hashfunc: Callable[[Any], Any]
     hashvalues: NDArray[Any]
     permutations: Any
+    _gpu_mode: str
+    _a_gpu: Any
+    _b_gpu: Any
     def __init__(
         self,
         num_perm: int = 128,
@@ -200,12 +205,7 @@ class MinHash:
     def __setstate__(self, state: dict[str, Any]) -> None: ...
 
 def minhash_batch(
-    docs: str
-    | list[str]
-    | tuple[str, ...]
-    | ArrowStrings
-    | list[list[bytes | str]]
-    | tuple[list[bytes | str], ...],
+    docs: str | list[str] | tuple[str, ...] | ArrowStrings | Sequence[Sequence[bytes | str]],
     *,
     num_perm: int = 128,
     seed: int = 1,
