@@ -642,4 +642,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # `python -m` runs this file as __main__, a second copy of the module. metrics_cases.ref_metrics imports
+    # pyroid_parity.refs and writes through that copy, so run main() there: its MISMATCHED list then holds every
+    # step's mismatches, and they all reach the exit code.
+    import importlib
+
+    importlib.import_module("pyroid_parity.refs").main()

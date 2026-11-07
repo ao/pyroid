@@ -213,3 +213,44 @@ def test_only_render_writes_the_job_summary(tmp_path, monkeypatch, capsys):
     assert main(["render", str(report)]) == 0
     assert summary.read_text("utf-8").count("### Parity:") == 1
     assert "### Parity:" in capsys.readouterr().out  # and it still prints the table
+
+
+# Stands in for `python -m pyroid_parity.refs metrics`: runpy runs refs.py as __main__, the module copy the bug
+# lived in, while metrics_cases.ref_metrics writes through its own import of pyroid_parity.refs. A stub table
+# replaces the oracle run (minutes) so only the write and the exit code are under test.
+_RUN_REFS_METRICS = """
+import runpy, sys
+import pyarrow as pa
+from pyroid_parity import metrics_cases
+metrics_cases.build_reference = lambda *_: pa.table({"case": ["c"], "key": ["k"], "out": ["o"]})
+sys.argv = ["refs", "metrics", *sys.argv[1:]]
+runpy.run_module("pyroid_parity.refs", run_name="__main__", alter_sys=True)
+"""
+
+
+def test_refs_exit_code_reports_a_mismatch_written_through_another_import(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    from pyroid_parity.metrics_cases import REF
+
+    manifest = tmp_path / "manifest.json"
+    env = {**os.environ, "PYROID_DATA": str(tmp_path / "data"), "PYROID_MANIFEST": str(manifest)}
+
+    def refs_metrics(*args: str) -> subprocess.CompletedProcess[str]:
+        cmd = [sys.executable, "-c", _RUN_REFS_METRICS, *args]
+        return subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=120, check=False)
+
+    pinned = refs_metrics("--pin")
+    assert pinned.returncode == 0, pinned.stdout + pinned.stderr
+    same = refs_metrics()
+    assert same.returncode == 0, same.stdout + same.stderr
+    assert f"verified {REF}" in same.stdout
+
+    files = json.loads(manifest.read_text("utf-8"))
+    files["files"][REF]["sha256"] = "0" * 64
+    manifest.write_text(json.dumps(files), "utf-8")
+    differs = refs_metrics()
+    assert differs.returncode == 1, differs.stdout + differs.stderr
+    assert f"not reproduced (differ from or missing in {manifest}): {REF}" in differs.stderr
