@@ -29,6 +29,9 @@ json_repair  json_repair 0.64.5's own API: ``repair_json(json_str="", return_obj
           schema=None, schema_repair_mode="standard", **json_dumps_args)``, ``loads``, ``load`` and ``from_file``
           with json_repair's signatures. Results must be identical: ``str`` byte for byte, objects and repair logs
           type-exact (``pyroid_parity.json_repair_compare.same``), exceptions with the same type and message.
+datasketch  datasketch 2.0.0's own API: ``MinHash`` (with ``bulk``), ``LeanMinHash``, ``MinHashLSH``,
+          ``MinHashLSHForest`` and ``MinHashLSHEnsemble``; optional pyroid-style extensions
+          ``minhash_batch(texts, num_perm=, seed=, scheme=, ngram=)`` and ``MinHashLSH.query_batch``.
 
 Warnings: where a suite compares warnings (the ftfy ``errors`` check, every json_repair check), a candidate's
 ``pyroid.FallbackWarning`` (its "delegating to the incumbent" notice, shown once per process; see
@@ -46,7 +49,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-SUITES = ("ftfy", "fasttext", "filters", "dedup", "metrics", "json_repair")
+SUITES = ("ftfy", "fasttext", "filters", "dedup", "metrics", "json_repair", "datasketch")
 REFERENCE = {
     "ftfy": "ftfy",
     "fasttext": "fasttext",
@@ -54,6 +57,7 @@ REFERENCE = {
     "dedup": "datatrove",
     "metrics": "rouge_score",
     "json_repair": "json_repair",
+    "datasketch": "datasketch",
 }
 # Distribution that provides a module, for version reporting when it differs from the module name.
 DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel")}
@@ -260,6 +264,14 @@ class GenericJsonRepair:
         self.from_file: Callable[..., Any] = mod.from_file
 
 
+class GenericDatasketch:
+    """A module with datasketch's classes, taken as they are (``mod.MinHash``, ``mod.MinHashLSH``, ...)."""
+
+    def __init__(self, mod: Any) -> None:
+        self.mod = mod
+        self.notes = [] if hasattr(mod, "minhash_batch") else ["no minhash_batch: those checks skip"]
+
+
 GENERIC: dict[str, Callable[[Any], Any]] = {
     "ftfy": GenericFtfy,
     "fasttext": GenericFasttext,
@@ -267,4 +279,5 @@ GENERIC: dict[str, Callable[[Any], Any]] = {
     "dedup": GenericDedup,
     "metrics": _generic_metrics,
     "json_repair": GenericJsonRepair,
+    "datasketch": GenericDatasketch,
 }

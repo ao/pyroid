@@ -39,6 +39,9 @@ dependencies = []
 # pyroid.fasttext returns numpy arrays (as fastText does); without numpy it raises a
 # ModuleNotFoundError (name="numpy") with this install hint.
 fasttext = ["numpy>=1.26"]
+# pyroid.datasketch keeps datasketch's numpy arrays (hashvalues, permutations); without numpy it
+# raises a ModuleNotFoundError (name="numpy") with this install hint.
+datasketch = ["numpy>=1.26"]
 # The `pyroid` command line (Parquet/JSONL streaming, the FineWeb recipe) and
 # pyroid.integrations.recipes.
 cli = ["pyarrow>=18", "numpy>=1.26"]
@@ -85,6 +88,8 @@ test = [
   "regex==2026.9.29",
   # The reference for pyroid.json_repair's parity tests (MIT, pure Python).
   "json-repair==0.64.5",
+  # The reference for pyroid.datasketch's parity tests (MIT; pulls numpy and scipy).
+  "datasketch==2.0.0",
 ]
 # GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
 # PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds
@@ -165,6 +170,7 @@ convention = "google"
 "{python/scripts,bench,parity}/**" = ["T20"]
 "crates/pyroid-core/src/ftfy/generate_tables.py" = ["T20"]
 "crates/pyroid-core/tests/ftfy_data/*.py" = ["T20"]
+"crates/pyroid-core/tests/datasketch_data/*.py" = ["T20"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -177,6 +183,11 @@ files = ["python/pyroid", "python/tests"]
 [[tool.mypy.overrides]]
 # pyarrow 26 ships neither py.typed nor stubs.
 module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# datasketch 2.0.0 (the reference for pyroid.datasketch's tests) ships neither py.typed nor stubs.
+module = ["datasketch", "datasketch.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

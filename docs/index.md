@@ -95,6 +95,7 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 | [`pyroid.translit`](guides/translit.md) | `anyascii`; a permissive alternative to GPL `Unidecode` | identical to `anyascii`; not Unidecode's output |
 | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
 | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, in linear time ([parity](compatibility.md#json_repair)) |
+| [`pyroid.datasketch`](guides/datasketch.md) | [datasketch](https://github.com/ekzhu/datasketch) 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble | same hash values, bytes and query results ([parity](compatibility.md#datasketch)) |
 
 The filters and dedup follow datatrove beyond English too. 3,999 of its 4,343 language codes are
 tokenized natively, and the rest through datatrove's own tokenizers

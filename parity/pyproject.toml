@@ -20,6 +20,8 @@ dependencies = [
     "rouge-score==0.1.2",
     "nltk==3.10.4",
     "sacrebleu==2.6.0",
+    # datasketch suite oracle (MIT; numpy + scipy wheels on 3.12 ... 3.15t).
+    "datasketch==2.0.0",
 ]
 
 [dependency-groups]

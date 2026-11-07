@@ -9,7 +9,7 @@ so this extension:
 
 1. replaces every ``pyroid.<mod>`` (and ``pyroid.<pkg>.<mod>``, e.g. ``pyroid.metrics.sacrebleu``)
    that has a ``<mod>.pyi`` with a module visited from the stub alone (statically: nothing is
-   imported);
+   imported); a package with an ``__init__.pyi`` (``pyroid.datasketch``) keeps its submodules;
 2. gives each stub function that only has ``@overload``s (stubs have no
    implementation) a documented entry: the docstring of its first overload,
    with every overload attached (mkdocs.yml shows only the overloads);
@@ -120,9 +120,18 @@ def _swap_stubs(parent: griffe.Module, loader: griffe.GriffeLoader) -> None:
         )
         # set_member() would merge the new module into the runtime one: remove it first.
         old = parent.members.pop(name)
+        package = path.name == "__init__.py"
+        if package:
+            # A package with its own stub (pyroid.datasketch): keep its submodules, which may
+            # have stubs of their own.
+            for sub_name, sub in old.members.items():
+                if not sub.is_alias and sub.is_module and sub_name not in module.members:
+                    module.set_member(sub_name, sub)
         parent.set_member(name, module)
         for alias in old.aliases.values():
             alias.target = module
+        if package:
+            _swap_stubs(module, loader)
 
 
 class PyroidStubs(griffe.Extension):

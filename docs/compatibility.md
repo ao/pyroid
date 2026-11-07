@@ -150,6 +150,27 @@ Reference: json_repair 0.64.5. Rule: the same returned string or object, the sam
 
 <small>Source: the parity/ json_repair suite, run on 2026-11-06.</small>
 
+### pyroid.datasketch {#datasketch}
+
+Reference: datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1). Rule: identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| MinHash.bulk signatures, 128 permutations, for affine32, affine64 and legacy: 100,000 FineWeb documents plus the 3,232-document adversarial set, word 5-gram shingles | 309,696 | 309,696 | 0 |
+| minhash_batch(texts, ngram=5) rows, same corpus and schemes | 309,696 | 309,696 | 0 |
+| LeanMinHash.serialize bytes (and deserialize back), one byte order per scheme | 309,696 | 309,696 | 0 |
+| MinHashLSH (b, r): 20 thresholds x 4 num_perm x 3 weight pairs | 240 | 240 | 0 |
+| Every document's MinHashLSH query result set: threshold 0.9, 0.5, params (32, 4), legacy at 0.8; query and query_batch | 825,856 | 825,856 | 0 |
+| Result sets after removing every 10th key, and key membership | 104,232 | 104,232 | 0 |
+| Two half indexes merged (every 10th document queried); MinHashLSHForest(l=8) top-10 key sets (every 10th document) | 20,648 | 20,648 | 0 |
+| MinHashLSHEnsemble(threshold=0.8, num_part=16) containment result sets (20,000 documents indexed, every 10th queried) | 2,000 | 2,000 | 0 |
+| **Total** | **1,882,064** | **1,882,064** | **0** |
+
+- The (b, r) search ports scipy 1.18.1's QUADPACK: all 715,040 LSH and 258,300 LSH Ensemble probabilities it evaluates are bitwise identical to scipy's on aarch64, and all 9,156 grid argmins and 126 ensemble constructions match.
+- datasketch's own test suite (test_minhash, test_lean_minhash, test_minhash_schemes, test_lsh, test_lshforest, test_lshensemble) passes against pyroid's classes, with Hypothesis and seeded workloads compared against live datasketch: 1,020 tests on CPython 3.12, 3.14t, 3.15 and 3.15t.
+
+<small>Source: the parity/ datasketch suite (CPython 3.13, release wheel), run on 2026-11-07.</small>
+
 ### Integrations: datatrove steps, pyroid clean, pyroid.patch() {#integrations}
 
 Reference: datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.patch() stands in for). Rule: the same per-document digest of id, text, language, score, keep, reason and duplicate flag; for patch(), the same call-site output.
@@ -186,6 +207,7 @@ as returning an unchanged string as the same object.
 - [Differences from rouge-score](guides/metrics.md#differences-from-rouge-score) and
   [from sacrebleu](guides/metrics.md#differences-from-sacrebleu)
 - [Differences from json_repair](guides/json_repair.md#differences-from-json_repair)
+- [Differences from datasketch](guides/datasketch.md#differences-from-datasketch)
 - [Differences from Unidecode](guides/translit.md#differences-from-unidecode).
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).

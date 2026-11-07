@@ -155,7 +155,7 @@ def test_names_are_checked_before_anything_is_patched() -> None:
         integrations.unpatch()
     assert integrations.patched() == ()
     assert issubclass(integrations.PatchWarning, UserWarning)
-    assert _patch.SUPPORTED == ("ftfy", "fasttext", "anyascii")
+    assert _patch.SUPPORTED == ("ftfy", "fasttext", "anyascii", "datasketch")
     assert (Path(_patch.HOOK_DIR) / "sitecustomize.py").is_file()
 
 
@@ -171,7 +171,7 @@ def test_nothing_is_automatic() -> None:
                 import pyroid.fasttext
             assert "pyroid.integrations._patch" not in sys.modules
             real = {}
-            for name in ("ftfy", "fasttext", "anyascii"):
+            for name in ("ftfy", "fasttext", "anyascii", "datasketch"):
                 try:
                     real[name] = not getattr(importlib.import_module(name), "__pyroid__", False)
                 except ImportError:
@@ -544,21 +544,129 @@ def test_anyascii_shim_without_anyascii() -> None:
     )
 
 
+def real_datasketch_ok() -> bool:
+    if not (installed("datasketch") and installed("numpy")):
+        return False
+    from importlib.metadata import version
+
+    return version("datasketch") == "2.0.0"
+
+
+needs_datasketch = pytest.mark.skipif(not real_datasketch_ok(), reason="needs datasketch 2.0.0")
+
+
+@needs_datasketch
+def test_datasketch_shim_with_real_datasketch() -> None:
+    ok(
+        child(
+            """
+            import pickle
+            import numpy as np
+            import datasketch as early  # imported before patch(): the real one
+            pickled = pickle.dumps(early.MinHash(num_perm=16))  # names datasketch.minhash.MinHash
+            import pyroid.datasketch as impl
+            patch_quietly("datasketch")
+            import datasketch
+            from datasketch import MinHash, MinHashLSH
+            from datasketch.minhash import MinHash as MinHash2
+            from datasketch.lsh import MinHashLSH as LSH2
+            from datasketch.lean_minhash import LeanMinHash
+            from datasketch.lshforest import MinHashLSHForest
+            from datasketch.lshensemble import MinHashLSHEnsemble
+            from datasketch.hashfunc import sha1_hash32
+            real = datasketch.__wrapped__
+            assert real is early and datasketch is sys.modules["datasketch"]
+            assert datasketch.__pyroid__
+            assert datasketch.__version__ == impl.DATASKETCH_VERSION == "2.0.0"
+            assert MinHash is MinHash2 is impl.MinHash and MinHashLSH is LSH2 is impl.MinHashLSH
+            assert LeanMinHash is impl.LeanMinHash and MinHashLSHForest is impl.MinHashLSHForest
+            assert MinHashLSHEnsemble is impl.MinHashLSHEnsemble
+            assert sha1_hash32 is impl.sha1_hash32
+            assert datasketch.minhash_batch is impl.minhash_batch
+            assert datasketch.WeightedMinHashLSH is impl.MinHashLSH
+            for sub in ("minhash", "lean_minhash", "hashfunc", "lsh", "lshforest", "lshensemble"):
+                shim = sys.modules["datasketch." + sub]
+                assert getattr(datasketch, sub) is shim and shim.__pyroid__, sub
+                assert shim.__wrapped__ is getattr(real, sub), sub
+            # What pyroid does not port is datasketch's own, without a FallbackWarning.
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                assert datasketch.HyperLogLog is real.HyperLogLog
+                import datasketch.weighted_minhash
+                from datasketch.storage import DictSetStorage
+                assert datasketch.weighted_minhash is real.weighted_minhash
+                assert datasketch.minhash._mersenne_prime == real.minhash._mersenne_prime
+            assert sys.modules["datasketch.storage"] is real.storage
+            # Same results as the real classes; existing pickles load as pyroid's MinHash.
+            a, b = MinHash(num_perm=16), early.MinHash(num_perm=16)
+            a.update_batch([b"x", b"y"]); b.update_batch([b"x", b"y"])
+            assert np.array_equal(a.hashvalues, b.hashvalues)
+            back = pickle.loads(pickled)
+            assert type(back) is impl.MinHash and back.is_empty() and len(back) == 16
+            lsh = MinHashLSH(threshold=0.5, num_perm=16)
+            lsh.insert("a", a)
+            assert lsh.query(b) == ["a"]
+            # Delegation goes to the real datasketch, never back to the shim.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                delegated = MinHashLSH(threshold=0.5, num_perm=16, hashfunc=lambda x: x)
+            assert type(delegated) is real.MinHashLSH
+            # A hash function from the real datasketch is still recognised (native path).
+            m = MinHash(num_perm=8, hashfunc=real.hashfunc.sha1_hash32)
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                m.update(b"x")
+            assert "pyroid shim" in repr(datasketch)
+            """
+        )
+    )
+
+
+def test_datasketch_shim_without_datasketch() -> None:
+    if not installed("numpy"):
+        pytest.skip("pyroid.datasketch needs numpy")
+    ok(
+        child(
+            """
+            patch_quietly("datasketch")
+            import datasketch
+            from datasketch import MinHash, MinHashLSH
+            from datasketch.minhash import MinHash as MinHash2
+            import pyroid.datasketch as impl
+            assert MinHash is MinHash2 is impl.MinHash and MinHashLSH is impl.MinHashLSH
+            assert datasketch.__wrapped__ is None and datasketch.__version__ == "2.0.0"
+            m = MinHash(num_perm=8)
+            m.update(b"x")
+            lsh = MinHashLSH(threshold=0.5, num_perm=8)
+            lsh.insert(1, m)
+            assert lsh.query(m) == [1]
+            try:
+                datasketch.HyperLogLog
+            except AttributeError as e:
+                assert "not installed" in str(e), e
+            else:
+                raise AssertionError("no AttributeError")
+            """,
+            hide=("datasketch",),
+        )
+    )
+
+
 # ---------------------------------------------------------------------------
 # unpatch, idempotence, warnings
 # ---------------------------------------------------------------------------
 
 SCENARIOS = [
     (name, scenario)
-    for name in ("ftfy", "fasttext", "anyascii")
+    for name in ("ftfy", "fasttext", "anyascii", "datasketch")
     for scenario in ("not imported", "imported", "blocked", "not installed")
 ]
 
 
 @pytest.mark.parametrize(("name", "scenario"), SCENARIOS, ids=[f"{n}-{s}" for n, s in SCENARIOS])
 def test_unpatch_restores_sys_modules_exactly(name: str, scenario: str) -> None:
-    if name == "fasttext" and not installed("numpy"):
-        pytest.skip("pyroid.fasttext needs numpy")
+    if name in ("fasttext", "datasketch") and not installed("numpy"):
+        pytest.skip(f"pyroid.{name} needs numpy")
     if scenario in ("not imported", "imported") and not installed(name):
         pytest.skip(f"needs {name}")
     ok(
@@ -578,7 +686,11 @@ def test_unpatch_restores_sys_modules_exactly(name: str, scenario: str) -> None:
             patch_quietly(name)
             shim = sys.modules[name]
             assert shim.__pyroid__ and pi.patched() == (name,)
-            subs = {"ftfy": ["ftfy.fixes", "ftfy.cli"], "fasttext": ["fasttext.FastText"]}
+            subs = {
+                "ftfy": ["ftfy.fixes", "ftfy.cli"],
+                "fasttext": ["fasttext.FastText"],
+                "datasketch": ["datasketch.minhash", "datasketch.lsh"],
+            }
             for sub in subs.get(name, []):
                 try:
                     importlib.import_module(sub)
@@ -590,7 +702,8 @@ def test_unpatch_restores_sys_modules_exactly(name: str, scenario: str) -> None:
             assert all(after[k] is before[k] for k in before)
             assert pyroid.ftfy._ftfy is fallback and pi.patched() == ()
             # A module that imported the shim keeps a working one.
-            fn = {"ftfy": "fix_text", "fasttext": "tokenize", "anyascii": "anyascii"}[name]
+            fn = {"ftfy": "fix_text", "fasttext": "tokenize", "anyascii": "anyascii",
+                  "datasketch": "minhash_batch"}[name]
             assert callable(getattr(shim, fn))
             """,
             args=(name, scenario),

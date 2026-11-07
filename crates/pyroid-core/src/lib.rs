@@ -17,6 +17,7 @@
 #![forbid(unsafe_code)]
 
 pub mod columnar;
+pub mod datasketch;
 pub mod dedup;
 pub mod fasttext;
 pub mod filters;
