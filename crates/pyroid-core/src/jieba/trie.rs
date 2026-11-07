@@ -342,7 +342,7 @@ mod tests {
         assert_eq!(t.find("a").map(|x| t.freq(x)), Some(1));
         assert_eq!(t.find("ab").map(|x| t.freq(x)), Some(0));
         assert_eq!(t.find("abc").map(|x| t.freq(x)), Some(5));
-        assert_eq!(t.find("abd"), None);
+        assert_eq!(t.find("abx"), None);
         assert_eq!(t.find("bd").map(|x| t.freq(x)), Some(3));
         assert_eq!(t.find("中").map(|x| t.freq(x)), Some(4));
         assert_eq!(t.find("𠀀").map(|x| t.freq(x)), Some(0));

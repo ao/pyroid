@@ -63,9 +63,11 @@ import pyarrow as pa
 import pyroid.jieba as jieba
 
 docs = ["我来到北京清华大学", "他来到了网易杭研大厦"]
-jieba.lcut(docs)  # [['我', '来到', '北京', '清华大学'], ['他', '来到', '了', '网易', '杭研', '大厦']]
+jieba.lcut(docs)
+# [['我', '来到', '北京', '清华大学'], ['他', '来到', '了', '网易', '杭研', '大厦']]
 jieba.lcut(docs, threads=4)  # at most 4 tasks at once; threads=1 runs on the calling thread
-jieba.lcut_for_search(pa.array(["中国科学院", None]))  # [['中国', '科学', '学院', '科学院', '中国科学院'], None]
+jieba.lcut_for_search(pa.array(["中国科学院", None]))
+# [['中国', '科学', '学院', '科学院', '中国科学院'], None]
 ```
 
 `cut_for_search` and `tokenize` take batches the same way. `threads=` is keyword-only. It
@@ -88,7 +90,8 @@ jieba.lcut("李小福是创新办主任")  # ['李小福', '是', '创新办', '
 
 jieba.lcut("如果放到post中将出错。", HMM=False)  # [..., 'post', '中将', '出错', '。']
 jieba.suggest_freq(("中", "将"), tune=True)  # 494, now the frequency of 中将
-jieba.lcut("如果放到post中将出错。", HMM=False)  # ['如果', '放到', 'post', '中', '将', '出错', '。']
+jieba.lcut("如果放到post中将出错。", HMM=False)
+# ['如果', '放到', 'post', '中', '将', '出错', '。']
 
 jieba.del_word("创新办")
 jieba.load_userdict("userdict.txt")  # one "word [freq] [tag]" per line
