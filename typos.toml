@@ -24,6 +24,8 @@ extend-exclude = [
   "crates/pyroid-core/tests/datasketch_data/params.json",
   # json_repair's own test inputs and its outputs for them, recorded byte for byte.
   "crates/pyroid-core/src/json_repair/testdata/",
+  # jieba's and datatrove's recorded outputs (FineWeb-2 excerpts, fuzz, user-dictionary scenarios).
+  "crates/pyroid-core/src/jieba/testdata/",
   "bench/data/",
   "bench/results/",
   # Charts copied byte for byte from bench/results/ (matplotlib SVGs).

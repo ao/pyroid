@@ -13,8 +13,9 @@ repos:
       - id: check-yaml
       - id: check-merge-conflict
       - id: check-added-large-files
-        # The bench/ and parity/ lockfiles (~0.5 MB each) are the only files allowed past the 500 KB limit.
-        exclude: ^(bench|parity)/uv\.lock$
+        # The bench/ and parity/ lockfiles (~0.5 MB each) and jieba's dictionary trie (2.5 MB) are the
+        # only files allowed past the 500 KB limit.
+        exclude: ^((bench|parity)/uv\.lock|crates/pyroid-core/src/jieba/data/dict\.trie)$
       # Test data, incumbent fixtures, raw benchmark results, the charts copied from them and the fuzz
       # corpora keep their bytes exactly (mojibake, confusables, odd whitespace). Keep in step with
       # [files] extend-exclude in typos.toml.
@@ -26,6 +27,7 @@ repos:
             crates/pyroid-core/tests/filters_data/|
             crates/pyroid-core/tests/metrics_data/|
             crates/pyroid-core/src/json_repair/testdata/|
+            crates/pyroid-core/src/jieba/testdata/|
             bench/data/|
             bench/results/|
             docs/assets/.*\.svg$|
