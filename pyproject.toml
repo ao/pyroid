@@ -182,6 +182,11 @@ module = ["pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+# datasketch 2.0.0 (the reference for pyroid.datasketch's tests) ships neither py.typed nor stubs.
+module = ["datasketch", "datasketch.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # polars is typed, but optional in the tests: polars-runtime-32 2.1.0 has no free-threaded
 # wheels, so it is only installed on GIL builds and absent from the mypy hook.
 module = ["polars", "polars.*"]

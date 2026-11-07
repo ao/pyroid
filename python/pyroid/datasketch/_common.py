@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 import warnings
 from types import ModuleType
@@ -77,12 +78,12 @@ def warn_once(key: str, message: str) -> None:
 def fallback(name: str, reason: str) -> ModuleType:
     """Import datasketch to delegate ``name`` to it, warning once; PyroidError if missing."""
     try:
-        import datasketch as real
+        real: ModuleType | None = importlib.import_module("datasketch")
     except ImportError:
         real = None
     # Under a pyroid patch shim, use the real module it wraps, never the shim.
-    if getattr(real, "__pyroid__", False):
-        real = real.__wrapped__  # type: ignore[union-attr]
+    if real is not None and getattr(real, "__pyroid__", False):
+        real = real.__wrapped__
     if real is None:
         raise PyroidError(
             f"pyroid.datasketch.{name}: {reason} is not supported by pyroid's Rust port, and "
