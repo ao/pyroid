@@ -1,4 +1,7 @@
 # Derived from datasketch 2.0.0 (MIT), © 2015 ekzhu; modified.
+# Error messages keep datasketch's %-formatting, so they stay byte-identical and the code
+# stays easy to diff against upstream.
+# ruff: noqa: UP031
 """Helpers shared by the pyroid.datasketch modules (not public API)."""
 
 from __future__ import annotations
@@ -43,8 +46,8 @@ def _check_scheme_consistency(known: str | None, minhash: Any) -> str | None:
         return scheme  # type: ignore[no-any-return]
     if scheme != known:
         raise ValueError(
-            "MinHash scheme %r does not match scheme %r of the MinHash previously given to this index"
-            % (scheme, known)
+            "MinHash scheme %r does not match scheme %r of the MinHash previously given to "
+            "this index" % (scheme, known)
         )
     return known
 
@@ -57,9 +60,7 @@ def _caller_stacklevel() -> int:
     """The stacklevel of the first frame outside pyroid.datasketch."""
     frame = sys._getframe(1)
     level = 1
-    while frame is not None and frame.f_globals.get("__name__", "").startswith(
-        "pyroid.datasketch"
-    ):
+    while frame is not None and frame.f_globals.get("__name__", "").startswith("pyroid.datasketch"):
         frame = frame.f_back  # type: ignore[assignment]
         level += 1
     return level
