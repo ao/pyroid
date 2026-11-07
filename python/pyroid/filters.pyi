@@ -46,17 +46,17 @@ datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
     dictionary, ported as :mod:`pyroid.jieba`, plus the sentencizer).
 
   ``split_into_words`` and ``split_into_sentences`` match datatrove's.
-- Python tokenizer, opt-in (the other 334 codes): datatrove uses a
-  segmenter pyroid does not port: ``StanzaTokenizer`` (255 codes),
+- Python tokenizer, opt-in (the other 334 codes): datatrove uses a segmenter
+  pyroid does not port: ``StanzaTokenizer`` (255 codes),
   ``SpaCyTokenizer("ja")`` (SudachiPy), ``SpaCyTokenizer("vi")`` (pyvi),
   ``ThaiTokenizer``, ``BurmeseTokenizer``, ``TibetanTokenizer``,
-  ``LaoTokenizer``, ``KhmerTokenizer`` and ``KiwiTokenizer`` (see :func:`languages`). Calling a filter with such a
-  code raises ``NotImplementedError`` unless you pass
-  ``python_tokenizer=True``. Then each document is tokenized by datatrove's
-  own tokenizer, in Python, on the calling thread. This needs datatrove
-  0.10.1 and the segmenter installed (``pyroid.PyroidError`` says what is
-  missing). The filter math runs in Rust on those words, so the decisions are
-  datatrove's.
+  ``LaoTokenizer``, ``KhmerTokenizer`` and ``KiwiTokenizer`` (see
+  :func:`languages`). Calling a filter with such a code raises
+  ``NotImplementedError`` unless you pass ``python_tokenizer=True``. Then each
+  document is tokenized by datatrove's own tokenizer, in Python, on the
+  calling thread. This needs datatrove 0.10.1 and the segmenter installed
+  (``pyroid.PyroidError`` says what is missing). The filter math runs in Rust
+  on those words, so the decisions are datatrove's.
 
   This path runs at the reference tokenizer's speed, since tokenization
   dominates the filters' cost. It only tokenizes the documents that reach a

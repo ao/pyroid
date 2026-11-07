@@ -36,17 +36,17 @@ pool, ``n`` for at most ``n`` tasks, ``1`` for the calling thread).
 
 Differences from jieba:
 
-- **Lone surrogates** (``"\ud800"``) raise ``UnicodeEncodeError``, as everywhere in
+- Lone surrogates (``"\ud800"``) raise ``UnicodeEncodeError``, as everywhere in
   pyroid; jieba treats them as characters.
-- **Frequencies** must fit in a signed 64-bit integer (``OverflowError`` otherwise); jieba
+- Frequencies must fit in a signed 64-bit integer (``OverflowError`` otherwise); jieba
   takes any Python int.
-- **cut** is a generator, as in jieba, but it segments the whole input on the first
+- :func:`cut` is a generator, as in jieba, but it segments the whole input on the first
   ``next()``.
-- **FREQ** is a read-only mapping (change it with :func:`add_word`); iterating it lists the
+- ``FREQ`` is a read-only mapping (change it with :func:`add_word`); iterating it lists the
   dictionary's keys in UTF-8 byte order, not file order.
-- **enable_parallel** uses threads instead of processes and also works on Windows.
-- **enable_paddle** does not ``pip install`` paddlepaddle-tiny for you.
-- **Wrong argument types** raise ``TypeError`` (:class:`pyroid.InputError` for the text)
+- :func:`enable_parallel` uses threads instead of processes and also works on Windows.
+- :func:`enable_paddle` does not ``pip install`` paddlepaddle-tiny for you.
+- Wrong argument types raise ``TypeError`` (:class:`pyroid.InputError` for the text)
   where jieba raises ``AttributeError``.
 - There is no ``finalseg`` module; ``del_word`` and ``add_word(word, 0)`` still update the
   process-wide set of words the HMM must split, as jieba's ``Force_Split_Words``.
