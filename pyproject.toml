@@ -85,6 +85,8 @@ test = [
   "regex==2026.9.29",
   # The reference for pyroid.json_repair's parity tests (MIT, pure Python).
   "json-repair==0.64.5",
+  # The reference for pyroid.datasketch's parity tests (MIT; pulls numpy and scipy).
+  "datasketch==2.0.0",
 ]
 # GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
 # PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds

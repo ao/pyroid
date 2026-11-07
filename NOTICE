@@ -407,3 +407,39 @@ behaviour of CPython's json module (json.loads and json.dumps; no CPython code
 is included), and json_repair/tables.rs holds the str.isspace(), isalpha(),
 isdigit() and isalnum() sets of CPython 3.11-3.15's Unicode databases (see
 "Data derived from CPython and Unicode" above).
+
+-------------------------------------------------------------------------------
+datasketch
+-------------------------------------------------------------------------------
+pyroid.datasketch (crates/pyroid-core/src/datasketch/,
+crates/pyroid-py/src/datasketch.rs and crates/pyroid-py/src/datasketch/,
+python/pyroid/datasketch/) is a derivative work of datasketch 2.0.0,
+https://github.com/ekzhu/datasketch: its Python classes start from datasketch's
+own source, and its MinHash, LSH and LSH Forest algorithms were ported to Rust.
+Each derived file carries the header "Derived from datasketch 2.0.0 (MIT),
+© 2015 ekzhu; modified." The tests ported from datasketch's test suite
+(python/tests/test_datasketch_upstream_*.py) say so in their header. The
+permutation parameters reproduce numpy's legacy RandomState (MT19937 and masked
+bounded integers; numpy is BSD-3-Clause); no numpy code is included.
+
+    The MIT License (MIT)
+
+    Copyright (c) 2015 ekzhu
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.

@@ -22,7 +22,12 @@ import warnings
 from collections.abc import Generator, Iterable
 from typing import Any
 
-import numpy as np
+try:
+    import numpy as np
+except ModuleNotFoundError as exc:  # pragma: no cover - numpy is in every test env
+    raise ModuleNotFoundError(
+        "pyroid.datasketch needs numpy, as datasketch does: pip install numpy", name="numpy"
+    ) from exc
 
 from pyroid._pyroid import datasketch as _native
 from pyroid.datasketch._common import (
