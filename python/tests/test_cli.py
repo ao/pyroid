@@ -375,6 +375,15 @@ def strict_unlink(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return removed
 
 
+def _removed_under(removed: list[str], where: Path) -> list[str]:
+    """The spools in ``removed`` that were under ``where``.
+
+    pytest-run-parallel's ``--iterations`` reruns a test with the same fixture values but a fresh
+    ``tmp_path``, so ``strict_unlink`` also holds the earlier runs' spools.
+    """
+    return [p for p in removed if Path(p).is_relative_to(where)]
+
+
 def _spool_tables() -> list[Any]:
     texts = [f"{BASE} {i}" for i in range(9)]
     return [_table(texts[:4]), _table(texts[4:5]), _table(texts[5:])]
@@ -391,7 +400,7 @@ def test_spool_is_closed_before_it_is_removed(tmp_path: Path, strict_unlink: lis
     with spool.reader() as reader:
         batches = [reader.get_batch(i) for i in range(reader.num_record_batches)]
     spool.remove()  # the batches are still referenced here, and must not pin the file
-    assert strict_unlink == [spool.path]
+    assert _removed_under(strict_unlink, tmp_path) == [spool.path]
     assert not list(tmp_path.iterdir())
     assert pa.Table.from_batches(batches).equals(pa.concat_tables(tables))
     spool.remove()  # idempotent
@@ -420,7 +429,7 @@ def test_spool_is_removed_after_a_failure(
 
     with pytest.raises(RuntimeError, match="boom"):
         fail()
-    assert strict_unlink == [spool.path]
+    assert _removed_under(strict_unlink, tmp_path) == [spool.path]
     assert not list(tmp_path.iterdir())
 
 
@@ -456,5 +465,5 @@ def test_clean_removes_its_spool_last(
     else:
         assert main([*args, "--batch-size", "3"]) == 0
         assert pq.read_table(out).num_rows == len(good)  # the exact copy is gone
-    assert len(strict_unlink) == 1
+    assert len(_removed_under(strict_unlink, tmp_path)) == 1
     assert not [p.name for p in out.parent.iterdir() if p.name.startswith(".pyroid-")]
