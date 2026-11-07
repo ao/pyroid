@@ -17,6 +17,7 @@ mod fasttext;
 mod filters;
 mod ftfy;
 mod input;
+mod jieba;
 mod json_repair;
 mod metrics;
 mod testing;
@@ -46,5 +47,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     metrics::register(m)?;
     json_repair::register(m)?;
     datasketch::register(m)?;
+    jieba::register(m)?;
     Ok(())
 }

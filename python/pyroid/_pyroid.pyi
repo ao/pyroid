@@ -17,6 +17,7 @@ __all__ = [
     "fasttext",
     "filters",
     "ftfy",
+    "jieba",
     "json_repair",
     "metrics",
     "text",
@@ -35,6 +36,7 @@ translit: ModuleType
 metrics: ModuleType
 json_repair: ModuleType
 datasketch: ModuleType
+jieba: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):

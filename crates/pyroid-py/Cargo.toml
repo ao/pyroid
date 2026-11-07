@@ -23,6 +23,8 @@ doctest = false
 # 3.14t still needs its own version-specific wheel.
 pyo3 = { workspace = true, features = ["abi3-py311", "abi3t"] }
 pyroid-core.workspace = true
+# pyroid.jieba: the per-call cache of output strs.
+rustc-hash = "2.1"
 # SIMD UTF-8 validation of Arrow rows (several times faster than std).
 simdutf8.workspace = true
 # numpy arrays for pyroid.fasttext (works under abi3-py311 and abi3t).

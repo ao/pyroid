@@ -320,6 +320,7 @@ dependencies = [
  "numpy",
  "pyo3",
  "pyroid-core",
+ "rustc-hash",
  "simdutf8",
 ]
 
