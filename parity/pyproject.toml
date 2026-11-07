@@ -66,7 +66,7 @@ filterwarnings = [
     # datatrove's URLFilter extracts its block lists with tarfile and no filter. CPython 3.12.3
     # (the ubuntu-24.04 runners' python3.12) attributes that warning to tarfile, not the caller.
     "ignore:Python 3.14 will, by default, filter extracted tar archives:DeprecationWarning:tarfile",
-    # jieba 0.42.1 has invalid escapes in non-raw strings ("\\."): a SyntaxWarning when it is compiled.
+    # jieba 0.42.1 has invalid escapes in non-raw strings ("\."): a SyntaxWarning when it is compiled.
     "ignore:invalid escape sequence:SyntaxWarning",
 ]
 timeout = "600"
