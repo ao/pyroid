@@ -81,9 +81,20 @@ fn load_error(py: Python<'_>, path: &std::path::Path, err: LoadError) -> PyErr {
                 // io::Error's Display appends " (os error N)": Python shows the errno itself.
                 let strerror = msg
                     .strip_suffix(&format!(" (os error {code})"))
-                    .unwrap_or(&msg)
-                    .to_owned();
-                PyOSError::new_err((code, strerror, shown.to_string()))
+                    .unwrap_or(&msg);
+                // On Windows the code is a Windows error (5 = ERROR_ACCESS_DENIED), not an errno.
+                // Passed as OSError's winerror, it gives the errno and the subclass
+                // (PermissionError), and CPython's own messages drop the trailing period.
+                #[cfg(windows)]
+                let args = (
+                    code,
+                    strerror.trim_end_matches(['.', ' ']).to_owned(),
+                    shown.to_string(),
+                    code,
+                );
+                #[cfg(not(windows))]
+                let args = (code, strerror.to_owned(), shown.to_string());
+                PyOSError::new_err(args)
             }
             None => PyOSError::new_err(format!("{shown}: {e}")),
         },
