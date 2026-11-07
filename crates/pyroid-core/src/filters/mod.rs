@@ -248,6 +248,10 @@ pub fn tokenizer_for(
 ) -> Option<&'static dyn WordTokenizer> {
     let b = backend(language)?;
     match b.class {
+        // jieba, as spaCy's ChineseTokenizer runs it.
+        "SpaCyTokenizer" if b.arg == "zh" => {
+            Some(crate::jieba::zh::ZhTokenizer::get(version) as &dyn WordTokenizer)
+        }
         "SpaCyTokenizer" => {
             tokenizer::SpacyTokenizer::get(b.arg, version).map(|t| t as &dyn WordTokenizer)
         }
