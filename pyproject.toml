@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "pyroid"
 # Single source: [workspace.package].version in the root Cargo.toml.
 dynamic = ["version"]
-description = "Rust-fast text cleaning for LLM datasets (1.0 rewrite in progress)"
+description = "Rust implementations of ftfy, fastText inference, datatrove's filters and dedup, rouge-score, sacrebleu and json_repair, with the same API and output"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT AND Apache-2.0 AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0"
