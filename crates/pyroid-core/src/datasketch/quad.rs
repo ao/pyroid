@@ -762,9 +762,9 @@ fn dqelg(
         epstab[2 * i + n2_rem] = epstab[2 * i + 2 + n2_rem];
     }
     if *n != starting_n {
-        // `epstab[i] = epstab[indx++]` for i in 0..=n: a forward copy.
-        let indx = starting_n - *n;
-        epstab.copy_within(indx..=indx + *n, 0);
+        // The C copies epstab[first..=first + n] to epstab[0..=n], one by one: a forward copy.
+        let first = starting_n - *n;
+        epstab.copy_within(first..=first + *n, 0);
     }
     if *nres < 4 {
         res3la[*nres - 1] = result;

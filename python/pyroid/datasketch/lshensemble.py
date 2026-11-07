@@ -62,7 +62,7 @@ class MinHashLSHEnsemble:
             `m` times more memory space than a MinHash LSH with the same number of
             sets indexed. The higher the `m` the better the accuracy.
         weights (Tuple[float, float]): Used to adjust the relative importance of
-            minizing false positive and false negative when optimizing
+            minimizing false positive and false negative when optimizing
             for the Containment threshold. Similar to the `weights` parameter
             in :class:`datasketch.MinHashLSH`.
         storage_config (Optional[Dict]): Type of storage service to use for storing

@@ -20,6 +20,8 @@ extend-exclude = [
   "crates/pyroid-core/tests/ftfy_data/",
   "crates/pyroid-core/tests/filters_data/",
   "crates/pyroid-core/tests/metrics_data/",
+  # Hex floats recorded from scipy and datasketch.
+  "crates/pyroid-core/tests/datasketch_data/params.json",
   # json_repair's own test inputs and its outputs for them, recorded byte for byte.
   "crates/pyroid-core/src/json_repair/testdata/",
   "bench/data/",

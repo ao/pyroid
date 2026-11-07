@@ -120,7 +120,7 @@ class LeanMinHash(MinHash):
         seed (optional): The random seed that controls the set of random
             permutation functions generated for this LeanMinHash. This parameter
             must be used together with `hashvalues`.
-        hashvalues (optional): The hash values used to inititialize the state
+        hashvalues (optional): The hash values used to initialize the state
             of the LeanMinHash. This parameter must be used together with
             `seed`.
         scheme (optional): The permutation scheme of the MinHash the

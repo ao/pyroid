@@ -169,7 +169,7 @@ def _compute_best_partitions(num_part, sizes, nfps):
     # Back track to find the best partitions.
     while p > 1:
         # Find the optimal upper bound index of the 2nd right-most partition
-        # givne the number of partitions (p) and upper bound index (u) in this
+        # given the number of partitions (p) and upper bound index (u) in this
         # sub-problem.
         _, u1_best = min((cost[u1, p2i(p)] + nfps[u1 + 1, u], u1) for u1 in range((p - 1) - 1, u))
         partitions.insert(0, (sizes[u1_best + 1], sizes[u]))

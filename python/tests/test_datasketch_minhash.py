@@ -1220,7 +1220,7 @@ def test_lean_operations_match(scheme: Scheme) -> None:
     both(run)
 
 
-def test_lean_from_the_other_librarys_minhash() -> None:
+def test_lean_from_a_minhash_of_the_other_library() -> None:
     for scheme in SCHEMES:
         p, d = MinHash(8, scheme=scheme), ds.MinHash(8, scheme=scheme)
         p.update(b"x")
