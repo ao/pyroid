@@ -1,7 +1,9 @@
 """Record what datatrove 0.10.1 returns for word and sentence splitting.
 
-Derived from datatrove 0.10.1 (Apache-2.0), © HuggingFace, and spaCy 3.8.18
-(MIT), © ExplosionAI GmbH; modified.
+Derived from datatrove 0.10.1 (Apache-2.0), © HuggingFace, spaCy 3.8.18
+(MIT), © ExplosionAI GmbH, and, for the Indic fuzzer's word lists,
+indic-nlp-library 0.92 (MIT), © Anoop Kunchukuttan, and urduhack 1.0.3 (MIT),
+© Urdu Hack; modified.
 
 datatrove's `split_into_words` / `split_into_sentences` (default language
 "eng") run spaCy 3.8.18 `spacy.blank("en")` plus the `sentencizer` pipe. The

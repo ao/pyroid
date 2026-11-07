@@ -1,5 +1,8 @@
 """Generate `indic_tables.rs`, the tables behind `filters::indic` and `filters::whitespace`.
 
+Derived from indic-nlp-library 0.92 (MIT), (c) Anoop Kunchukuttan, urduhack 1.0.3
+(MIT), (c) Urdu Hack, and datatrove 0.10.1 (Apache-2.0), (c) HuggingFace; modified.
+
 Everything is read from the libraries themselves, never retyped:
 
 * `numeric`: `chr(c).isnumeric()` for every code point, one dump per CPython

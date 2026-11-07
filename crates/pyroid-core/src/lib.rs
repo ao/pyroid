@@ -11,6 +11,7 @@
 //! - [`text`]: text kernels (`pyroid.text`, the demonstration module).
 //! - [`dedup`]: MinHash and exact deduplication (`pyroid.dedup`).
 //! - [`metrics`]: ROUGE, BLEU and chrF, exact ports of rouge-score and sacrebleu (`pyroid.metrics`).
+//! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).
 //!
 //! Product tracks add a `src/<mod>/` directory here; see `docs/dev/MODULES.md`.
 #![forbid(unsafe_code)]
@@ -25,3 +26,4 @@ pub mod metrics;
 pub mod par;
 pub mod text;
 pub mod translit;
+pub mod version;

@@ -39,9 +39,11 @@ def test_imports_installed_extension_not_source_tree() -> None:
 
 
 def test_version_matches_distribution_metadata() -> None:
-    assert pyroid.__version__ == _pyroid.__version__
-    # Cargo keeps SemVer (1.0.0-dev); the wheel metadata is PEP 440 (1.0.0.dev0).
-    assert Version(pyroid.__version__) == Version(importlib.metadata.version("pyroid"))
+    # Cargo.toml keeps SemVer (1.0.0-dev); __version__ is the wheel's PEP 440 version (1.0.0.dev0),
+    # as a string, in its normalized form.
+    v = pyroid.__version__
+    assert v == importlib.metadata.version("pyroid") == _pyroid.__version__
+    assert str(Version(v)) == v
 
 
 def test_public_api() -> None:

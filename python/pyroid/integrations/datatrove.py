@@ -40,11 +40,17 @@ data. The work happens in Rust, in batches, without the GIL:
   ``pyroid.dedup``; the same signature, duplicate and index files, byte for
   byte, and the same documents out.
 
+Languages: the filter and MinHash steps take datatrove's ``language`` (a
+datatrove language code such as ``"fra_Latn"``). Every code pyroid tokenizes
+natively, which is 3,999 of datatrove's 4,343 (``pyroid.filters.languages()``,
+``Language.native``), runs in Rust with that language's datatrove tokenizer
+reproduced exactly. Any other code (Chinese, Japanese, Vietnamese, Thai, the
+Stanza languages, ...), a code datatrove has no tokenizer for, or a
+``WordTokenizer`` object runs datatrove's own code for that step, with a
+one-time :class:`pyroid.FallbackWarning`.
+
 What differs: per-line statistics of ``C4QualityFilter`` (``line-total``,
 ``line-filter-*``) are not counted, and batched steps also count ``batches``.
-A language pyroid cannot tokenize (anything but the English codes in
-``pyroid.filters.english_languages()``) runs datatrove's own code, with a
-one-time :class:`pyroid.FallbackWarning`.
 
 Needs datatrove (and numpy for ``LanguageFilter``/``MinhashDedupSignature``):
 ``pip install 'pyroid[datatrove]'``.
@@ -355,7 +361,7 @@ class _QualityFilter(_Step):
         """One ``pyroid.filters.apply`` call for the whole batch."""
         import pyroid.filters as pf
 
-        if self.language not in _english():
+        if not _tokenizes(self.language):
             _fallback(type(self).__name__, f"language={self.language!r}")
             parent: Callable[[Any, Any], Any] = self._datatrove.filter
             return [parent(self, d) for d in batch]
@@ -371,15 +377,20 @@ class _QualityFilter(_Step):
         return out
 
 
-_ENGLISH: list[frozenset[str]] = []
+_NATIVE: list[frozenset[str]] = []
 
 
-def _english() -> frozenset[str]:
-    if not _ENGLISH:
+def _tokenizes(language: object) -> bool:
+    """Does pyroid tokenize ``language`` (a datatrove code, or a tokenizer object) natively?
+
+    True for the codes ``pyroid.filters.languages()`` marks ``native``; False for the others,
+    for codes datatrove has no tokenizer for, and for ``WordTokenizer`` objects.
+    """
+    if not _NATIVE:
         import pyroid.filters as pf
 
-        _ENGLISH.append(frozenset(pf.english_languages()))
-    return _ENGLISH[0]
+        _NATIVE.append(frozenset(code for code, lang in pf.languages().items() if lang.native))
+    return isinstance(language, str) and language in _NATIVE[0]
 
 
 class GopherRepetitionFilter(_QualityFilter, _dt_gr.GopherRepetitionFilter):
@@ -446,7 +457,10 @@ class MinhashDedupSignature(_Step, _dt_minhash.MinhashDedupSignature):
 
     Writes the same ``bucket_XXX/RANK.minhash.sig`` files, byte for byte (the
     sort pass is datatrove's own), so datatrove's later MinHash stages run on
-    them unchanged. spaCy is not needed. Note that datatrove's sort pass logs
+    them unchanged. spaCy is not needed. ``language`` is datatrove's: shingles
+    come from that language's word tokenizer, in Rust for every code pyroid
+    tokenizes natively; another one runs datatrove's own step
+    (:class:`pyroid.FallbackWarning`). Note that datatrove's sort pass logs
     "Found existing sig files ... Skipping sig writing step": pyroid has just
     written them.
     """
@@ -465,7 +479,7 @@ class MinhashDedupSignature(_Step, _dt_minhash.MinhashDedupSignature):
                 self, *args, **kwargs
             )
             bound.apply_defaults()
-            if bound.arguments["language"] not in _english() or not hasattr(self, "_hash_func"):
+            if not _tokenizes(bound.arguments["language"]) or not hasattr(self, "_hash_func"):
                 raise
             self.word_tokenizer = None
             self.skip_existing_sigs = bound.arguments["skip_existing_sigs"]
@@ -491,7 +505,7 @@ class MinhashDedupSignature(_Step, _dt_minhash.MinhashDedupSignature):
             doc_idx = 0
             for batch in batched(data, self.batch_size):
                 sigs = pyroid.dedup.minhash_signatures(
-                    [d.text for d in batch], cfg, threads=self.threads
+                    [d.text for d in batch], cfg, language=self.language, threads=self.threads
                 )
                 for _ in batch:
                     self.stat_update(StatHints.total)
@@ -513,7 +527,7 @@ class MinhashDedupSignature(_Step, _dt_minhash.MinhashDedupSignature):
 
     def run(self, data: Iterable[Any], rank: int = 0, world_size: int = 1) -> None:
         """Write this rank's signatures, then datatrove's own sort-and-verify pass."""
-        if self.language not in _english():
+        if not _tokenizes(self.language):
             _fallback("MinhashDedupSignature", f"language={self.language!r}")
             return super().run(data, rank, world_size)  # type: ignore[no-any-return]
         with self.track_time():
@@ -875,14 +889,6 @@ def _sd_config(step: str, config: Any) -> Any:
         return None
 
 
-def _sd_tokenizes(language: Any) -> bool:
-    """Does pyroid tokenize ``language`` (a datatrove code) natively?"""
-    import pyroid.filters as pf
-
-    lang = pf.languages().get(language) if isinstance(language, str) else None
-    return lang is not None and lang.native
-
-
 def _sd_native(step: str, config: Any, language: Any, stage3: bool) -> Any:
     """The native config for a stage, or ``None`` to run datatrove's code (fallback warned).
 
@@ -939,7 +945,7 @@ class SentenceDedupSignature(_SentenceStep, _dt_sd.SentenceDedupSignature):
             super().__init__(*args, **kwargs)
         except ImportError:
             # datatrove loads its spaCy word tokenizer last; pyroid has its own.
-            if not _sd_tokenizes(getattr(self, "language", None)):
+            if not _tokenizes(getattr(self, "language", None)):
                 raise
             self.tokenizer = None
         self._setup(batch_size, threads)
@@ -1045,7 +1051,7 @@ class SentenceDedupFilter(_SentenceStep, _dt_sd.SentenceDedupFilter):
                 self, *args, **kwargs
             )
             bound.apply_defaults()
-            if not _sd_tokenizes(bound.arguments["language"]) or not hasattr(self, "config"):
+            if not _tokenizes(bound.arguments["language"]) or not hasattr(self, "config"):
                 raise
             self.tokenizer = None
             self.exclusion_writer = bound.arguments["exclusion_writer"]

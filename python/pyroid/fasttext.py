@@ -13,10 +13,12 @@ Needs numpy (``pip install 'pyroid[fasttext]'``). Types and docs are in
 
 try:
     import numpy as _numpy  # noqa: F401  (imported to fail early, with a clear message)
-except ImportError as _exc:  # pragma: no cover - exercised in a numpy-free env
-    raise ImportError(
+except ImportError as _exc:  # pragma: no cover - test_fasttext.py runs this in a subprocess
+    # ModuleNotFoundError naming numpy, as `import numpy` itself raises: pytest.importorskip skips.
+    raise ModuleNotFoundError(
         "pyroid.fasttext needs numpy: install it with pip install 'pyroid[fasttext]' "
-        "(or pip install numpy)"
+        "(or pip install numpy)",
+        name="numpy",
     ) from _exc
 
 from pyroid._pyroid import fasttext as _native

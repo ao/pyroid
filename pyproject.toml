@@ -36,8 +36,8 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-# pyroid.fasttext returns numpy arrays (as fastText does); it raises a clear
-# ImportError without numpy.
+# pyroid.fasttext returns numpy arrays (as fastText does); without numpy it raises a
+# ModuleNotFoundError (name="numpy") with this install hint.
 fasttext = ["numpy>=1.26"]
 # The `pyroid` command line (Parquet/JSONL streaming, the FineWeb recipe) and
 # pyroid.integrations.recipes.

@@ -13,7 +13,7 @@ pyroid has **no runtime dependencies**. Extras:
 
 | Extra | Adds | Needed for |
 |---|---|---|
-| `pyroid[fasttext]` | `numpy>=1.26` | `pyroid.fasttext`, which returns numpy arrays as fastText does. Without numpy, `import pyroid.fasttext` raises an `ImportError` that says how to fix it. |
+| `pyroid[fasttext]` | `numpy>=1.26` | `pyroid.fasttext`, which returns numpy arrays as fastText does. Without numpy, `import pyroid.fasttext` raises a `ModuleNotFoundError` for numpy (an `ImportError`) that says how to fix it. |
 | `pyroid[cli]` | `pyarrow>=18`, `numpy>=1.26` | the [`pyroid` command line](guides/cli.md) (Parquet and JSONL in and out, the FineWeb recipe) and `pyroid.integrations.recipes` |
 | `pyroid[datatrove]` | `datatrove>=0.10.1`, `regex`, `tokenizers`, `numpy>=1.26` | the [datatrove drop-in steps](guides/datatrove.md) in `pyroid.integrations.datatrove` (`regex` and `tokenizers` are imported by datatrove's filters but not declared by datatrove) |
 | `pyroid[hf]` | `datasets>=3`, `pyarrow>=18`, `numpy>=1.26` | the [Hugging Face `datasets` helpers](guides/huggingface.md) in `pyroid.integrations.hf` |
@@ -73,6 +73,8 @@ On free-threaded builds, importing pyroid does not re-enable the GIL. See
 ```console
 $ python -c "import pyroid; print(pyroid.__version__)"
 ```
+
+It prints the installed version as pip shows it (PEP 440, e.g. `1.0.0.dev0`).
 
 If the native extension is missing or was built for another Python, `import pyroid` fails with an
 `ImportError` that says so. pyroid has no pure-Python fallback.

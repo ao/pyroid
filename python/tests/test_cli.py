@@ -81,13 +81,20 @@ def test_python_dash_m(tmp_path: Path) -> None:
     assert [json.loads(x)["text"] for x in out.read_text().splitlines()] == ["Unicode", "ascii"]
 
 
+#: The leading bytes of each compressed output (the suffixes `pyroid --help` lists).
+MAGIC = {".gz": b"\x1f\x8b", ".bz2": b"BZh", ".zst": b"\x28\xb5\x2f\xfd", ".lz4": b'\x04"M\x18'}
+
+
 @pytest.mark.parametrize("fmt_in", [".parquet", ".jsonl", ".jsonl.gz"])
-@pytest.mark.parametrize("fmt_out", [".parquet", ".jsonl", ".ndjson.gz", ".json.zst"])
+@pytest.mark.parametrize(
+    "fmt_out", [".parquet", ".jsonl", ".ndjson.gz", ".json.zst", ".jsonl.bz2", ".jsonl.lz4"]
+)
 def test_translit_formats(tmp_path: Path, fmt_in: str, fmt_out: str) -> None:
     texts = ["Ålborg — “quoted” ½", "日本語", "plain", "Ελληνικά"] * 5
     src = _write(_table(texts, n=list(range(len(texts)))), tmp_path / f"in{fmt_in}")
     out = tmp_path / f"out{fmt_out}"
     assert main(["translit", str(src), str(out), "--batch-size", "3"]) == 0
+    assert out.read_bytes().startswith(MAGIC.get(out.suffix, b""))
     t = _read(out)
     assert t.column("text").to_pylist() == pyroid.translit.anyascii(texts)
     assert t.column("n").to_pylist() == list(range(len(texts)))
@@ -323,3 +330,131 @@ def test_clean_small_no_dedup_and_stats(tmp_path: Path, capsys: pytest.CaptureFi
     out2 = tmp_path / "out2.parquet"
     assert main(["clean", str(src), str(out2), *args[3:], "--no-dedup"]) == 0
     assert pq.read_table(out2).column("id").to_pylist() == ["d0", "d4"]
+
+
+# ---------------------------------------------------------------------- the dedup spool's cleanup
+# Windows can't delete a file this process still has open or memory-mapped (PermissionError),
+# where Linux and macOS can. `strict_unlink` makes os.unlink of pyroid's spool behave the Windows
+# way on Linux (from /proc/self/fd and /proc/self/maps); on Windows the OS itself is the check.
+
+
+def _held(path: str) -> list[str]:
+    """How this process still holds ``path``: open descriptors and memory maps (Linux)."""
+    real = os.path.realpath(path)
+    held = []
+    for fd in os.listdir("/proc/self/fd"):
+        try:
+            if os.readlink(f"/proc/self/fd/{fd}") == real:
+                held.append(f"fd {fd}")
+        except OSError:  # the descriptor listdir itself used, already closed
+            continue
+    with open("/proc/self/maps", encoding="utf-8", errors="replace") as f:
+        held += [f"mapped at {ln.split()[0]}" for ln in f if ln.rstrip("\n").endswith(" " + real)]
+    return held
+
+
+@pytest.fixture
+def strict_unlink(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """The spool paths os.unlink removed; it raises if one was still open or mapped."""
+    linux = Path("/proc/self/maps").exists()
+    if not linux and sys.platform != "win32":
+        pytest.skip("needs /proc (Linux) to see open files and maps, or Windows itself")
+    real_unlink = os.unlink
+    removed: list[str] = []
+
+    def unlink(path: Any, *args: Any, **kwargs: Any) -> None:
+        p = os.fspath(path)
+        if Path(p).name.startswith(".pyroid-"):
+            held = _held(p) if linux else []
+            if held:
+                raise PermissionError(f"{p} is still {', '.join(held)} (Windows refuses this)")
+            removed.append(p)
+        real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "unlink", unlink)
+    return removed
+
+
+def _spool_tables() -> list[Any]:
+    texts = [f"{BASE} {i}" for i in range(9)]
+    return [_table(texts[:4]), _table(texts[4:5]), _table(texts[5:])]
+
+
+@pytest.mark.thread_unsafe  # patches os.unlink
+def test_spool_is_closed_before_it_is_removed(tmp_path: Path, strict_unlink: list[str]) -> None:
+    from pyroid.cli import _Spool
+
+    tables = _spool_tables()
+    spool = _Spool(tmp_path)
+    for t in tables:
+        spool.write(t)
+    with spool.reader() as reader:
+        batches = [reader.get_batch(i) for i in range(reader.num_record_batches)]
+    spool.remove()  # the batches are still referenced here, and must not pin the file
+    assert strict_unlink == [spool.path]
+    assert not list(tmp_path.iterdir())
+    assert pa.Table.from_batches(batches).equals(pa.concat_tables(tables))
+    spool.remove()  # idempotent
+
+
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize("stage", ["writing", "reading"])
+def test_spool_is_removed_after_a_failure(
+    tmp_path: Path, strict_unlink: list[str], stage: str
+) -> None:
+    from pyroid.cli import _Spool
+
+    spool = _Spool(tmp_path)
+
+    def fail() -> None:
+        try:
+            for t in _spool_tables():
+                spool.write(t)
+                if stage == "writing":
+                    raise RuntimeError("boom")  # the IPC writer and its file are still open
+            with spool.reader() as reader:
+                reader.get_batch(0)
+                raise RuntimeError("boom")  # mid-read
+        finally:
+            spool.remove()
+
+    with pytest.raises(RuntimeError, match="boom"):
+        fail()
+    assert strict_unlink == [spool.path]
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize("fail", [False, True])
+def test_clean_removes_its_spool_last(
+    tmp_path: Path, strict_unlink: list[str], monkeypatch: pytest.MonkeyPatch, fail: bool
+) -> None:
+    """``pyroid clean`` with dedup, through the spool: on success, and when writing OUT fails
+    while the spool is being read back."""
+    pytest.importorskip("numpy")
+    if not (DEV.exists() and LID_BIN.exists()):
+        pytest.skip("needs the pinned dev slice and lid.176.bin under $PYROID_DATA")
+    from pyroid.integrations import _io
+    from pyroid.integrations.recipes import FineWeb
+
+    sample = pq.read_table(DEV, columns=["text"]).slice(0, 40).column("text")
+    good = sample.filter(FineWeb(lid_model=str(LID_BIN)).annotate(sample).keep).to_pylist()[:6]
+    texts = [*good, good[0]]  # the exact copy goes in MinHash, after the spool
+    src = _write(_table(texts), tmp_path / "in.parquet")
+    out = tmp_path / "out" / "kept.parquet"
+    out.parent.mkdir()
+    if fail:
+        # With dedup on, OUT is only written while the spool is read back.
+        def write(self: Any, table: Any) -> None:
+            raise RuntimeError("disk full")
+
+        monkeypatch.setattr(_io.Writer, "write", write)
+    args = ["clean", str(src), str(out), "--recipe", "fineweb", "--lid-model", str(LID_BIN)]
+    if fail:
+        with pytest.raises(RuntimeError, match="disk full"):
+            main([*args, "--batch-size", "3"])
+    else:
+        assert main([*args, "--batch-size", "3"]) == 0
+        assert pq.read_table(out).num_rows == len(good)  # the exact copy is gone
+    assert len(strict_unlink) == 1
+    assert not [p.name for p in out.parent.iterdir() if p.name.startswith(".pyroid-")]

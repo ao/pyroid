@@ -85,8 +85,9 @@ usage: pyroid clean [-h] [--text-column TEXT_COLUMN] [--threads THREADS] [--batc
                     input output
 
 positional arguments:
-  input                 input .parquet/.jsonl file, or a directory of them
-  output                output file (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.zst])
+  input                 input file (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4]), or
+                        a directory of such files
+  output                output file (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4])
 
 options:
   -h, --help            show this help message and exit
@@ -157,7 +158,7 @@ counts per stage; for the run above:
   "fineweb_quality": 3
  },
  "wall_s": …,
- "pyroid": "1.0.0-dev"
+ "pyroid": "1.0.0.dev0"
 }
 ```
 
@@ -176,13 +177,14 @@ survivors there. `--no-dedup` skips MinHash (and the spool): the output is then 
 
 These rules hold for every command:
 
-- **Input** is a file or a directory. A directory is read as one dataset: every `.parquet` /
-  `.jsonl` file in it, in name order (other files are ignored; mixing Parquet and JSONL is an
-  error). JSONL files after the first are parsed with the first file's schema.
-- **Formats** follow the file name: `.parquet` or `.pq` is Parquet; `.jsonl`, `.ndjson` or
-  `.json` is JSON Lines, one object per line, optionally compressed as `.gz`, `.bz2`, `.zst` or
-  `.lz4` (e.g. `docs.jsonl.gz`). `--compression` sets the Parquet codec (default: pyarrow's,
-  snappy).
+- **Input** is a file or a directory. A directory is read as one dataset: every Parquet or JSON
+  Lines file in it (by the suffixes below), in name order (other files are ignored; mixing
+  Parquet and JSONL is an error). JSONL files after the first are parsed with the first file's
+  schema.
+- **Formats** follow the file name, for input and output alike: `.parquet` or `.pq` is Parquet;
+  `.jsonl`, `.ndjson` or `.json` is JSON Lines, one object per line, optionally compressed as
+  `.gz`, `.bz2`, `.zst` or `.lz4` (e.g. `docs.jsonl.gz`). `--compression` sets the Parquet codec
+  (default: pyarrow's, snappy).
 - **Output** is one file. It is written to `OUT.partial` and renamed to `OUT` when the command
   finishes, so a failed or interrupted run never leaves a truncated `OUT`; the partial file is
   removed on failure. An existing `OUT` is not replaced unless you pass `--overwrite`, and an

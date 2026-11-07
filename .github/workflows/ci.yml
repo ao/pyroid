@@ -406,16 +406,19 @@ jobs:
   # pyroid.dedup with datatrove itself on generated documents; elsewhere they skip, because datatrove and spaCy are
   # not in the test group (heavy, and no free-threaded wheels).
   live-oracle:
-    name: live datatrove oracle (filters, dedup; Python 3.13)
-    needs: wheels
+    name: live datatrove oracle (filters, dedup, datatrove steps; Python 3.13)
+    needs: [wheels, parity-data]
     runs-on: ubuntu-24.04
     permissions:
       contents: read # checkout (python/tests and pyproject.toml)
     env:
+      # The pinned inputs (FineWeb dev slice, FineWeb-2 slices, lid.176.bin) from parity-data's cache.
+      PYROID_DATA: ${{ github.workspace }}/bench/data
       # datatrove 0.10.1 and spaCy 3.8.18 as pinned by the parity oracle group, plus what datatrove's base install lacks,
       # at parity/uv.lock's versions: regex (datatrove.utils.text), xxhash (its xxhash hashes) and tokenizers
-      # (datatrove.pipeline.dedup.minhash imports it).
-      ORACLE: datatrove==0.10.1 spacy==3.8.18 regex==2026.9.29 xxhash==3.8.2 tokenizers==0.23.3
+      # (datatrove.pipeline.dedup.minhash imports it); orjson for datatrove's JsonlReader/JsonlWriter, which the
+      # LocalPipelineExecutor test in test_integrations_datatrove.py uses.
+      ORACLE: datatrove==0.10.1 spacy==3.8.18 regex==2026.9.29 xxhash==3.8.2 tokenizers==0.23.3 orjson==3.13.0
       # datatrove's own word tokenizers for the languages pyroid tokenizes in Python on request (python_tokenizer=True)
       # and for IndicNLP, which test_{filters,dedup}_multilingual.py compare against. jieba ships only an sdist (pure
       # Python). xxhash stays < 4 (pinned above): datatrove's xxhash hashes fail on 4.x ("Strings must be encoded").
@@ -432,6 +435,13 @@ jobs:
         with:
           name: wheels-ubuntu-24.04
           path: dist
+      - name: Restore the parity data (this architecture's cache)
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          # The key parity-data saved for this runner's architecture.
+          key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
+          fail-on-cache-miss: true
       - name: Install the cp311-abi3 wheel with datatrove and run the live-oracle tests
         env:
           # 300 examples per property (python/tests/conftest.py).
@@ -454,12 +464,16 @@ jobs:
           import datatrove.utils.text, datatrove.pipeline.filters.gopher_quality_filter
           from importlib.metadata import version as v
           print(*(f'{d}=={v(d)}' for d in ('pyroid', 'datatrove', 'spacy', 'regex', 'xxhash', 'tokenizers')))"
-          # The pinned-decision tests in test_filters_parity.py and the FineWeb-2 slice tests need /data; the parity
-          # (filters, dedup) jobs cover them.
+          # The parity (filters, dedup) jobs run the pinned-decision tests of test_filters_parity.py and the FineWeb-2
+          # slice tests.
           log="$RUNNER_TEMP/live-oracle.log"
           "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs -k "not pinned and not fineweb2_slices" \
             python/tests/test_filters_parity.py python/tests/test_dedup_datatrove.py \
             python/tests/test_filters_multilingual.py python/tests/test_dedup_multilingual.py | tee "$log"
+          # pyroid.integrations.datatrove's drop-in steps against datatrove's own, including LocalPipelineExecutor
+          # runs, LanguageFilter on lid.176.bin and the non-English languages (FineWeb-2 slices, IndicNLP, jieba).
+          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs \
+            python/tests/test_integrations_datatrove.py | tee -a "$log"
           if grep '^SKIPPED' "$log"; then echo "::error::live-oracle tests skipped (see above)"; exit 1; fi
 
   msrv:

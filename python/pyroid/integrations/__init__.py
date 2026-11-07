@@ -3,10 +3,12 @@
 Nothing here is imported by ``import pyroid``, and nothing changes behaviour
 until you ask for it.
 
-- :mod:`pyroid.integrations.datatrove`: drop-in datatrove pipeline steps
-  (``FTFYFormatter``, ``LanguageFilter``, the Gopher/C4/FineWeb filters,
-  ``MinhashDedupSignature``) that subclass datatrove's own classes and give
-  the same output.
+- :mod:`pyroid.integrations.datatrove`: 15 drop-in datatrove pipeline steps
+  (``FTFYFormatter``, ``LanguageFilter``, the Gopher/C4/FineWeb quality filters,
+  ``C4BadWordsFilter``, ``URLFilter``, ``PIIFormatter``,
+  ``SymbolLinesFormatter``, ``MinhashDedupSignature`` and the four sentence-dedup
+  steps) that subclass datatrove's own classes and give the same output. The
+  steps that tokenize run in Rust for every language pyroid tokenizes natively.
 - :mod:`pyroid.integrations.recipes`: the FineWeb cleaning chain over Arrow
   batches (what ``pyroid clean --recipe fineweb`` runs).
 - :mod:`pyroid.integrations.hf`: helpers for Hugging Face ``datasets``

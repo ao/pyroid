@@ -1,8 +1,9 @@
 """The ``pyroid`` command line (also ``python -m pyroid``).
 
 Streams Parquet or JSONL in Arrow batches; input may be a file or a directory
-of files (read in name order). Output is one file; its format follows its name
-(``.parquet``/``.pq``, ``.jsonl``/``.ndjson``/``.json``, optionally ``.gz``/``.zst``).
+of files (read in name order). Output is one file. A file's format follows its
+name: ``.parquet``/``.pq`` is Parquet; ``.jsonl``/``.ndjson``/``.json`` is JSON
+Lines, optionally compressed as ``.gz``, ``.bz2``, ``.zst`` or ``.lz4``.
 
     pyroid clean IN OUT --recipe fineweb [--threads N] [--text-column text]
                  [--excluded DROPPED] [--stats]
@@ -23,6 +24,7 @@ columns (replacing any of that name); ``--excluded`` gets the dropped rows with 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -30,12 +32,15 @@ import sys
 import tempfile
 import time
 from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pyroid
 
 RECIPES = ("fineweb",)
+# The suffixes pyroid.integrations._io reads and writes (only JSON Lines can be compressed).
+_FORMATS = ".parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4]"
 
 
 def _need_pyarrow() -> None:
@@ -138,6 +143,60 @@ def _run(a: argparse.Namespace, body: Any) -> int:
 # ------------------------------------------------------------------------------------------ clean
 
 
+class _Spool:
+    """The kept rows waiting for the global MinHash decision: an Arrow IPC file in ``folder``.
+
+    Windows can't delete a file this process still has open or memory-mapped, so the file is
+    read back with plain reads (every batch is a heap copy, never a view of a mapping), and
+    :meth:`remove` closes the writer and its file before unlinking.
+    """
+
+    def __init__(self, folder: Path) -> None:
+        self.folder = folder
+        self.path: str | None = None
+        self._sink: Any = None
+        self._writer: Any = None
+
+    def write(self, table: Any) -> None:
+        """Append ``table`` (the first call creates the file)."""
+        import pyarrow as pa
+
+        if self.path is None:
+            fd, self.path = tempfile.mkstemp(dir=self.folder, prefix=".pyroid-", suffix=".arrow")
+            os.close(fd)
+            self._sink = pa.OSFile(self.path, "wb")
+            self._writer = pa.ipc.new_file(self._sink, table.schema)
+        self._writer.write_table(table)
+
+    def _close(self) -> None:
+        writer, sink, self._writer, self._sink = self._writer, self._sink, None, None
+        try:
+            if writer is not None:
+                writer.close()  # writes the footer; does not close the file
+        finally:
+            if sink is not None:
+                sink.close()
+
+    @contextlib.contextmanager
+    def reader(self) -> Iterator[Any]:
+        """The spooled batches (``RecordBatchFileReader``); the file is open only inside."""
+        import pyarrow as pa
+
+        self._close()
+        if self.path is None:
+            raise RuntimeError("nothing was spooled")
+        with pa.OSFile(self.path, "rb") as f:
+            yield pa.ipc.open_file(f)
+
+    def remove(self) -> None:
+        """Close whatever is still open, then delete the file (again: a no-op)."""
+        try:
+            self._close()
+        finally:
+            if self.path is not None and os.path.exists(self.path):
+                os.unlink(self.path)
+
+
 def _clean(a: argparse.Namespace, files: list[Path], out: Any, excl: Any, stats: Any) -> None:
     import pyarrow as pa
     import pyarrow.compute as pc
@@ -150,7 +209,7 @@ def _clean(a: argparse.Namespace, files: list[Path], out: Any, excl: Any, stats:
         minhash=None if a.no_dedup else recipes.MINHASH_CONFIG,
     )
     dedup = recipe.new_dedup()
-    spool = spool_path = None
+    spool = _Spool(Path(a.tmp_dir) if a.tmp_dir else Path(a.output).resolve().parent)
     try:
         for t in _io.read_tables(files, a.batch_size):
             ann = recipe.annotate(_text(t, a))
@@ -172,22 +231,11 @@ def _clean(a: argparse.Namespace, files: list[Path], out: Any, excl: Any, stats:
                 stats.docs_out += kept.num_rows
                 continue
             dedup.add(kept.column(a.text_column))
-            if spool is None:
-                fd, spool_path = tempfile.mkstemp(
-                    dir=a.tmp_dir or Path(a.output).resolve().parent,
-                    prefix=".pyroid-",
-                    suffix=".arrow",
-                )
-                os.close(fd)
-                spool = pa.ipc.new_file(spool_path, kept.schema)
-            spool.write_table(kept)
-        if dedup is None or spool is None:
+            spool.write(kept)
+        if dedup is None or spool.path is None:
             return
-        spool.close()
-        spool = None
         keep = pa.array(dedup.keep_mask(), pa.bool_())
-        with pa.memory_map(spool_path) as src:
-            reader = pa.ipc.open_file(src)
+        with spool.reader() as reader:
             pos = 0
             for i in range(reader.num_record_batches):
                 b = pa.Table.from_batches([reader.get_batch(i)])
@@ -206,10 +254,7 @@ def _clean(a: argparse.Namespace, files: list[Path], out: Any, excl: Any, stats:
                 stats.removed["minhash"] += b.num_rows - kept_n
         stats.removed = Counter({k: v for k, v in stats.removed.items() if v})
     finally:
-        if spool is not None:
-            spool.close()
-        if spool_path and os.path.exists(spool_path):
-            os.unlink(spool_path)
+        spool.remove()
 
 
 # ----------------------------------------------------------------------------------------- langid
@@ -378,10 +423,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
     def common(p: argparse.ArgumentParser, excluded: bool = True) -> None:
-        p.add_argument("input", help="input .parquet/.jsonl file, or a directory of them")
-        p.add_argument(
-            "output", help="output file (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.zst])"
-        )
+        p.add_argument("input", help=f"input file ({_FORMATS}), or a directory of such files")
+        p.add_argument("output", help=f"output file ({_FORMATS})")
         p.add_argument("--text-column", default="text", help="the text column (default: text)")
         p.add_argument(
             "--threads",
