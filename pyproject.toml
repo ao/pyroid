@@ -90,6 +90,8 @@ test = [
   "json-repair==0.64.5",
   # The reference for pyroid.datasketch's parity tests (MIT; pulls numpy and scipy).
   "datasketch==2.0.0",
+  # The reference for pyroid.jieba and for datatrove's Chinese tokenizer (MIT, pure Python).
+  "jieba==0.42.1",
 ]
 # GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
 # PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds
