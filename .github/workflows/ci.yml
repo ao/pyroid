@@ -304,8 +304,8 @@ jobs:
           # The parity jobs rebuild this exact key (keep the two in step).
           key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
           lookup-only: true
-      - if: steps.cache.outputs.cache-hit != 'true'
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      # Unconditional: the harness self-tests below run on a cache hit too.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: false
       # bench/ and parity/ each pin their interpreter in .python-version (3.13: the oracle env).
@@ -329,6 +329,11 @@ jobs:
         with:
           path: bench/data
           key: ${{ steps.cache.outputs.cache-primary-key }}
+      # The harness's own tests (manifest and per-platform refs, the `refs` exit code, the report, the ftfy mutant).
+      # No parity leg selects them (`-m <suite>`), and they need neither the wheel nor the data. Last, so a failure
+      # here never keeps the verified data out of the cache.
+      - name: Harness self-tests (pytest parity/tests/test_harness*.py)
+        run: uv run --project parity --frozen pytest parity/tests/test_harness.py parity/tests/test_harness_ftfy.py
 
   parity:
     name: parity (${{ matrix.suite }}, ${{ matrix.python }}, ${{ matrix.runner }})
