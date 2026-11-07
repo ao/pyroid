@@ -42,7 +42,7 @@ Example:
 Differences from rouge-score
 ----------------------------
 - Lone surrogates (U+D800..U+DFFF) in a ``str`` target or prediction raise
-  ``UnicodeEncodeError`` (with a note) when the default tokenizer is used;
+  ``UnicodeEncodeError`` (with a note) when the default tokenizer is used.
   rouge-score treats them as separators. Remove them first, e.g.
   ``s.encode("utf-8", "replace").decode("utf-8")``. A custom tokenizer's
   tokens may hold them (those are scored by rouge-score).

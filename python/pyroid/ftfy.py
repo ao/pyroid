@@ -260,8 +260,8 @@ _DEFAULT_EXPLAIN = _native_config(TextFixerConfig())
 def fix_text(text: str, config: TextFixerConfig | None = None, **kwargs: Any) -> str:
     r"""Fix mojibake and other glitches in `text`, like ``ftfy.fix_text``.
 
-        >>> fix_text('âœ” No problems')
-        '✔ No problems'
+        >>> fix_text('naÃ¯ve rÃ©sumÃ©')
+        'naïve résumé'
         >>> fix_text('\uff2c\uff2f\uff35\uff24\u3000\uff2e\uff2f\uff29\uff33\uff25\uff33')
         'LOUD NOISES'
 

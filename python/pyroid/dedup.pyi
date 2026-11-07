@@ -3,25 +3,25 @@
 # the API docs are built from this stub.
 """MinHash near-duplicate and exact deduplication (``pyroid.dedup``).
 
-The MinHash pipeline makes **the same removals as datatrove 0.10.1's**
+The MinHash pipeline makes the same removals as datatrove 0.10.1's
 ``MinhashDedupSignature`` -> ``MinhashDedupBuckets`` -> ``MinhashDedupCluster``
 -> ``MinhashDedupFilter``, in memory and multi-threaded:
 
 1. *Signatures.* Each document is normalised with datatrove's
-   ``simplify_text``, split into words by the word tokenizer of ``language``
-   (datatrove's ``word_tokenize``; spaCy English by default), and every ``n_grams``-word window is
-   hashed (``hash_fc``); ``num_buckets * hashes_per_bucket`` permutations
+   ``simplify_text`` and split into words by the word tokenizer of
+   ``language`` (datatrove's ``word_tokenize``; spaCy English by default).
+   Every ``n_grams``-word window is hashed (``hash_fc``). The signature comes
+   from ``num_buckets * hashes_per_bucket`` permutations
    ``(a * x + b) mod (2**61 - 1)``, with ``a`` and ``b`` drawn from numpy's
-   ``RandomState(seed)`` exactly as datatrove draws them, give the signature.
-   Documents with fewer than ``n_grams`` words have no signature and are
-   always kept.
+   ``RandomState(seed)`` exactly as datatrove draws them. Documents with
+   fewer than ``n_grams`` words have no signature and are always kept.
 2. *Buckets.* Two documents are a duplicate pair when all
    ``hashes_per_bucket`` values of one bucket are equal.
 3. *Clusters.* Pairs are merged with datatrove's union-find (union by size).
-   **The document kept from each cluster is the union-find root**: the root
-   of the larger side wins each merge, and ties go to the earlier document
-   of the pair. That is usually, but not always, the cluster's first
-   document; :meth:`MinHashDedup.clusters` lists the kept one first.
+   The document kept from each cluster is the union-find root: the root of
+   the larger side wins each merge, and ties go to the earlier document of
+   the pair. That is usually, but not always, the cluster's first document;
+   :meth:`MinHashDedup.clusters` lists the kept one first.
 4. *Filter.* Every other member of a cluster is removed.
 
 Documents are numbered in the order they are added, as datatrove numbers the
@@ -37,21 +37,22 @@ Languages
 language codes (:func:`languages`), as in ``pyroid.filters``. 3,999 of the
 4,343 codes are tokenized natively, in Rust, on every thread: those datatrove
 tokenizes with a rule-based ``spacy.blank(code)`` (57 spaCy languages, ``xx``
-included), ``IndicNLPTokenizer`` or ``WhitespaceTokenizer``. The other 344
-(Chinese with jieba, Japanese with SudachiPy, Vietnamese with pyvi, Stanza,
-Thai, Kiwi, ...) raise ``NotImplementedError`` unless
-``python_tokenizer=True``: then pyroid's ``simplify_text`` runs in Rust,
-**datatrove's own tokenizer splits each document in Python, on the calling
-thread**, and shingling, MinHash, bucketing and clustering run in Rust on
-those words, with one :class:`pyroid.FallbackWarning` per function and
-language. That path runs at the reference tokenizer's speed. ``language`` may
-also be a word tokenizer object (a datatrove ``WordTokenizer``, or anything
-with ``word_tokenize(text)``), called the same way.
+included), ``IndicNLPTokenizer`` or ``WhitespaceTokenizer``.
+
+The other 344 (Chinese with jieba, Japanese with SudachiPy, Vietnamese with
+pyvi, Stanza, Thai, Kiwi, ...) raise ``NotImplementedError`` unless
+``python_tokenizer=True``. With it, pyroid's ``simplify_text`` runs in Rust,
+datatrove's own tokenizer splits each document in Python on the calling
+thread, and shingling, MinHash, bucketing and clustering run in Rust on those
+words. Each function emits one :class:`pyroid.FallbackWarning` per language.
+That path runs at the reference tokenizer's speed. ``language`` may also be a
+word tokenizer object (a datatrove ``WordTokenizer``, or anything with
+``word_tokenize(text)``), called the same way.
 
 Known differences from datatrove
 --------------------------------
-- A str with a lone surrogate raises ``UnicodeEncodeError`` (pyroid's policy);
-  datatrove raises it too unless the document has fewer than ``n_grams``
+- A str with a lone surrogate raises ``UnicodeEncodeError`` (pyroid's policy).
+  datatrove raises it too, unless the document has fewer than ``n_grams``
   words.
 - ``n_grams``, ``num_buckets`` or ``hashes_per_bucket`` below 1 raise
   ``ValueError`` (datatrove silently produces no signatures or fails later).
@@ -270,7 +271,7 @@ def minhash_dedup(
 ) -> Column[bool]: ...
 @overload
 def simplify_text(texts: str, config: Any = None, *, threads: int | None = None) -> str:
-    """The normalisation MinHash shingles see: datatrove's ``simplify_text``.
+    """Normalise text with datatrove's ``simplify_text`` (what MinHash shingles see).
 
     Byte-identical to ``datatrove.utils.text.simplify_text`` on the same
     CPython version (its ``unicodedata``) with the ``regex`` module's digit
@@ -616,8 +617,8 @@ class SentenceDedup:
     """datatrove's sentence-level dedup, in memory and multi-threaded.
 
     C4's rule ("we discarded all but one of any three-sentence span occurring
-    more than once"), with **the same removals and keep decisions as datatrove
-    0.10.1's** ``SentenceDedupSignature`` -> ``SentenceFindDedups`` ->
+    more than once"), with the same removals and keep decisions as datatrove
+    0.10.1's ``SentenceDedupSignature`` -> ``SentenceFindDedups`` ->
     ``SentenceDedupFilter`` run as one task:
 
     1. *Signatures* (:meth:`add`). A document's sentences (datatrove's
@@ -653,15 +654,17 @@ class SentenceDedup:
         for batch, r in zip(batches, ranges):
             texts, keep = d.filter(batch, start=r.start)
 
-    Known differences from datatrove: a str with a lone surrogate raises
-    ``UnicodeEncodeError`` (so does datatrove, except with
-    ``split_sentences=False`` on a document with fewer than ``n_sentences``
-    lines); ``n_sentences`` below 1 raises
-    ``ValueError``; a hashed window index past 65,535 raises datatrove's
-    ``OverflowError`` (numpy's ``<u2``) when its batch is added, and the
-    batch is not added (datatrove fails when it saves the task's
-    signatures). Index files: use the datatrove drop-ins
-    (``pyroid.integrations.datatrove``).
+    Known differences from datatrove:
+
+    - A str with a lone surrogate raises ``UnicodeEncodeError`` (so does
+      datatrove, except with ``split_sentences=False`` on a document with
+      fewer than ``n_sentences`` lines).
+    - ``n_sentences`` below 1 raises ``ValueError``.
+    - A hashed window index past 65,535 raises datatrove's ``OverflowError``
+      (numpy's ``<u2``) when its batch is added, and the batch is not added
+      (datatrove fails when it saves the task's signatures).
+    - Index files: use the datatrove drop-ins
+      (``pyroid.integrations.datatrove``).
 
     Args:
         config: As for :func:`sentence_dedup`.

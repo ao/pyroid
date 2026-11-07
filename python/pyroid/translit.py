@@ -1,7 +1,7 @@
 """Unicode to ASCII transliteration, permissively licensed (``pyroid.translit``).
 
-Rust-backed, batched and GIL-free, built on the anyascii 0.3.3 data (ISC
-licence), never on Unidecode's GPL tables. :func:`anyascii` is byte-identical
+Batches run in Rust without the GIL, on the anyascii 0.3.3 data (ISC licence);
+nothing comes from Unidecode's GPL tables. :func:`anyascii` is byte-identical
 to the ``anyascii`` package; :func:`unidecode` has Unidecode's signature and
 ``errors=`` semantics with anyascii's transliterations. Types and docs are in
 ``translit.pyi``. anyascii is Copyright (c) 2020-2025, Hunter WB (ISC License).

@@ -4,29 +4,29 @@
 """A drop-in, Rust-backed replacement for json_repair 0.64.5 (``import pyroid.json_repair``).
 
 ``repair_json``, ``loads``, ``load`` and ``from_file`` take json_repair's
-arguments and return the same strings, objects and repair logs: valid JSON comes
-back as ``json.dumps(json.loads(text))``, broken JSON (LLM output with missing
+arguments and return the same strings, objects and repair logs. Valid JSON comes
+back as ``json.dumps(json.loads(text))``. Broken JSON (LLM output with missing
 quotes, single quotes, comments, trailing commas, truncation, markdown fences,
 prose around it, Python literals, ...) is repaired with json_repair's heuristics,
 ported line by line to Rust. The port runs in linear time on the inputs where
 json_repair's lookaheads are quadratic, and never overflows the stack.
 
-Delegated to the real json_repair, with a one-time ``pyroid.FallbackWarning``
-(``pyroid.PyroidError`` if it is not installed): every ``schema=`` call, non-str
-input, and the rare text holding a char in U+10F800..U+10FFFF (the range the
-port uses to store lone surrogates).
+These are delegated to the real json_repair, with a one-time
+``pyroid.FallbackWarning``: every ``schema=`` call, non-str input, and the rare
+text holding a char in U+10F800..U+10FFFF (the range the port uses to store lone
+surrogates). Without json_repair installed they raise ``pyroid.PyroidError``.
 
 Differences from json_repair
 ----------------------------
-- Nesting: json_repair raises ``ValueError`` past about 140-330 levels of broken
-  input (it depends on ``sys.getrecursionlimit()`` and the caller's stack). pyroid
-  repairs up to :data:`MAX_DEPTH` levels; deeper broken input raises
+- json_repair raises ``ValueError`` past about 140-330 levels of broken input
+  (it depends on ``sys.getrecursionlimit()`` and the caller's stack). pyroid
+  repairs up to :data:`MAX_DEPTH` levels, and deeper broken input raises
   :class:`NestingError`, which is both a ``ValueError`` and a ``RecursionError``.
-  Valid JSON is decoded by ``json.loads`` for objects, as in json_repair (so its
-  ``RecursionError``, past about 10,000 levels on 3.12, is the same), and by
-  pyroid at any depth for string results (json_repair raises there too).
+- Valid JSON is decoded by ``json.loads`` for objects, as in json_repair, so its
+  ``RecursionError`` past about 10,000 levels on 3.12 is the same. For string
+  results pyroid decodes it at any depth (json_repair raises there too).
 - ``load``/``from_file`` read the file once (``fd.read()``) instead of in
-  ``chunk_length`` pieces; the result is the same, ``chunk_length`` is ignored and
+  ``chunk_length`` pieces. The result is the same, ``chunk_length`` is ignored and
   unseekable streams work.
 - json_repair's command line (``python -m json_repair``) is not part of this module.
 """

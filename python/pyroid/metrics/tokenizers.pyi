@@ -16,7 +16,7 @@ Python where rouge-score calls it.
 Differences from rouge-score
 ----------------------------
 - ``DefaultTokenizer`` has no ``_stemmer`` attribute (rouge-score keeps an
-  nltk ``PorterStemmer`` there); stemming runs in Rust.
+  nltk ``PorterStemmer`` there). Stemming runs in Rust.
 - A ``str`` with lone surrogates (U+D800..U+DFFF) raises ``UnicodeEncodeError``
   (rouge-score drops them like any other non-alphanumeric character).
 """

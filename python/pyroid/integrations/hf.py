@@ -1,4 +1,4 @@
-"""pyroid in Hugging Face ``datasets``: ``Dataset.map`` / ``Dataset.filter`` helpers.
+"""``Dataset.map`` and ``Dataset.filter`` helpers for Hugging Face ``datasets``.
 
 Each helper returns a callable for ``batched=True``::
 
@@ -16,23 +16,25 @@ Each helper returns a callable for ``batched=True``::
 
 The callables take both batch kinds ``datasets`` hands out:
 
-- **Arrow batches** (``ds.with_format("arrow")``; the zero-copy path): the
-  callable gets a ``pyarrow.Table`` whose text column pyroid reads in place (no
-  Python ``str`` is built for it). A map callable returns a ``pyarrow.Table``
-  with every column of the batch (``datasets`` replaces the batch with it, so
-  ``remove_columns=`` has no effect: call ``.remove_columns()`` on the dataset);
-  a filter callable returns a boolean ``pyarrow.ChunkedArray``.
-- **Python batches** (the default format): the callable gets the dict of lists
-  and returns a dict of the new or changed columns (which ``datasets`` merges
-  into the batch), or a ``list[bool]`` for ``filter``. ``None`` texts stay
+- Arrow batches (``ds.with_format("arrow")``, the zero-copy path). The
+  callable gets a ``pyarrow.Table`` whose text column pyroid reads in place,
+  without building a Python ``str`` for it. A map callable returns a
+  ``pyarrow.Table`` with every column of the batch. ``datasets`` replaces the
+  batch with it, so ``remove_columns=`` has no effect: call
+  ``.remove_columns()`` on the dataset. A filter callable returns a boolean
+  ``pyarrow.ChunkedArray``.
+- Python batches (the default format). The callable gets the dict of lists
+  and returns a dict of the new or changed columns, which ``datasets`` merges
+  into the batch, or a ``list[bool]`` for ``filter``. ``None`` texts stay
   ``None`` and are dropped by filters.
 
 Arrow nulls are dropped by filters too (a null mask entry drops the row).
 Don't pass ``input_columns=``: the callables read their column by name. They
-work the same in a streaming ``IterableDataset``'s ``map``/``filter`` (an
-Arrow-format ``IterableDataset.filter`` needs datasets 5: older versions reject
-it whatever the function); :func:`fineweb` needs a ``Dataset`` (MinHash reads
-the survivors back). Tested with datasets 3.6, 4.8 and 5.1.
+work the same in a streaming ``IterableDataset``'s ``map`` and ``filter``,
+except that an Arrow-format ``IterableDataset.filter`` needs datasets 5 (older
+versions reject it whatever the function). :func:`fineweb` needs a
+``Dataset``, because MinHash reads the survivors back. Tested with datasets
+3.6, 4.8 and 5.1.
 
 The callables pickle by their settings, so ``datasets`` can fingerprint them
 (cached results are reused) and ship them to ``num_proc`` worker processes,

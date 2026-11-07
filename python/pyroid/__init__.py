@@ -1,12 +1,12 @@
-"""Pyroid: a Rust-fast text-cleaning core for LLM datasets.
+"""Text cleaning for LLM datasets, written in Rust.
 
-Version 1.0 is a ground-up rewrite in progress. The 0.7.x API is gone; it
-lives on the ``legacy`` branch and as the 0.7.x releases on PyPI.
+Version 1.0 is a rewrite from scratch. The 0.7.x API is gone; it lives on the
+``legacy`` branch and as the 0.7.x releases on PyPI.
 
 Functions live in submodules (``import pyroid.text``). Each accepts a ``str``,
-a ``list``/``tuple`` of ``str``, or an Arrow string array/column (anything with
-``__arrow_c_stream__`` or ``__arrow_c_array__``: pyarrow, polars, pandas, HF
-datasets, ...), and returns the same kind; Arrow input gives a
+a ``list`` or ``tuple`` of ``str``, or an Arrow string array or column (anything
+with ``__arrow_c_stream__`` or ``__arrow_c_array__``: pyarrow, polars, pandas,
+HF datasets, ...), and returns the same kind. Arrow input gives a
 :class:`pyroid.Column`.
 """
 

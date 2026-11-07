@@ -16,7 +16,7 @@ scoring``. The classes are ports of rouge-score 0.1.2's, line for line:
 Differences from rouge-score
 ----------------------------
 - numpy is imported when :meth:`BootstrapAggregator.aggregate` is first called
-  (it is not a pyroid dependency); without it, ``aggregate`` raises
+  (it is not a pyroid dependency). Without it, ``aggregate`` raises
   ``ImportError`` with an install hint. rouge-score imports numpy at import.
 - The classes are pyroid's own: ``isinstance(score, rouge_score.scoring.Score)``
   is false for a pyroid ``Score`` (and vice versa), though they compare equal.

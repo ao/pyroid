@@ -28,7 +28,7 @@ datatrove splits text with the word tokenizer of the filter's ``language``
 datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
 :func:`languages` lists them), as datatrove does:
 
-- **Native** (3,999 codes), at Rust speed on every thread:
+- Native (3,999 codes), in Rust on every thread:
 
   - the 3,742 codes datatrove tokenizes with a rule-based
     ``spacy.blank(code)``: the 57 spaCy languages ``af`` ... ``yo``,
@@ -43,24 +43,26 @@ datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
     ``xx`` words and datatrove's regex sentence splitter).
 
   ``split_into_words`` and ``split_into_sentences`` match datatrove's.
-- **Opt-in Python tokenizer** (the other 344 codes): datatrove uses a
+- Python tokenizer, opt-in (the other 344 codes): datatrove uses a
   segmenter pyroid does not port: ``StanzaTokenizer`` (255 codes),
   ``SpaCyTokenizer("zh")`` (jieba), ``SpaCyTokenizer("ja")`` (SudachiPy),
   ``SpaCyTokenizer("vi")`` (pyvi), ``ThaiTokenizer``, ``BurmeseTokenizer``,
   ``TibetanTokenizer``, ``LaoTokenizer``, ``KhmerTokenizer`` and
-  ``KiwiTokenizer`` (see :func:`languages`). Calling a filter with such a code raises
-  ``NotImplementedError`` unless you pass ``python_tokenizer=True``. Then each
-  document is tokenized by **datatrove's own tokenizer, in Python, on the
-  calling thread** (it needs datatrove 0.10.1 and the segmenter installed;
-  ``pyroid.PyroidError`` says what is missing), and the filter math runs in
-  Rust on those words, so the decisions are datatrove's. That path runs at the
-  reference tokenizer's speed (tokenization dominates the filters' cost), only
-  tokenizes the documents that reach a word-based check, and emits one
-  :class:`pyroid.FallbackWarning` per function and language (C4 steps, which
-  run as datatrove's own filter, get their own).
-  ``python_tokenizer=True`` also works for native codes (it then uses
-  datatrove's tokenizer, slower and no more exact); it is only needed for
-  the others.
+  ``KiwiTokenizer`` (see :func:`languages`). Calling a filter with such a
+  code raises ``NotImplementedError`` unless you pass
+  ``python_tokenizer=True``. Then each document is tokenized by datatrove's
+  own tokenizer, in Python, on the calling thread. This needs datatrove
+  0.10.1 and the segmenter installed (``pyroid.PyroidError`` says what is
+  missing). The filter math runs in Rust on those words, so the decisions are
+  datatrove's.
+
+  This path runs at the reference tokenizer's speed, since tokenization
+  dominates the filters' cost. It only tokenizes the documents that reach a
+  word-based check, and emits one :class:`pyroid.FallbackWarning` per function
+  and language (C4 steps, which run as datatrove's own filter, emit their
+  own). ``python_tokenizer=True`` also works for native codes, where it uses
+  datatrove's tokenizer: slower, and no more exact. It is only needed for the
+  others.
 - ``language`` may also be a word tokenizer object, as datatrove allows: a
   datatrove ``WordTokenizer`` instance, or any object with
   ``word_tokenize(text)`` (and ``span_tokenize(text)`` for C4). It is called
@@ -81,11 +83,12 @@ Differences from datatrove
 --------------------------
 - A ``top_n_grams`` / ``dup_n_grams`` size below 1 raises ``ValueError``
   (datatrove loops forever on ``dup_n_grams`` sizes below 1).
-- Values are checked when the call starts: a non-number threshold raises
+- Values are checked when the call starts. A non-number threshold raises
   ``TypeError``, and an unknown ``language`` ``ValueError``, before any
-  document is filtered (datatrove raises the latter at the first document
-  that needs words); a failing document raises for the whole batch (the
-  exception names the document).
+  document is filtered; datatrove raises the latter at the first document
+  that needs words.
+- A failing document raises for the whole batch, and the exception names the
+  document.
 - ``exclusion_writer`` is not supported (use the ``*_reasons`` functions).
 - A document with a token that is exactly ``IS_ALPHA`` (e.g. in
   ``"IS_ALPHA."``, not in ``"xIS_ALPHA"``) is tokenized like any other text,

@@ -12,13 +12,13 @@ Lines, optionally compressed as ``.gz``, ``.bz2``, ``.zst`` or ``.lz4``.
     pyroid translit IN OUT [--mode anyascii|unidecode] [--output-column COL]
     pyroid run [-p ftfy,fasttext] (SCRIPT | -m MODULE) [ARGS...]
 
-``clean --recipe fineweb`` is the benchmark's FineWeb chain
-(``pyroid.integrations.recipes.FineWeb``): ftfy -> fastText LID (en > 0.65) -> Gopher
-repetition/quality, C4 and FineWeb filters (datatrove's decisions) -> MinHash dedup over the
-survivors. Kept rows get the cleaned text and datatrove's ``language`` / ``language_score``
-columns (replacing any of that name); ``--excluded`` gets the dropped rows with a
-``filter_reason`` (``lid``, ``<stage>:<datatrove reason>``, ``minhash``). Needs pyarrow and numpy:
-``pip install 'pyroid[cli]'``.
+``clean --recipe fineweb`` runs the FineWeb chain the benchmarks use
+(``pyroid.integrations.recipes.FineWeb``): ftfy -> fastText LID (en > 0.65) -> the Gopher
+repetition and quality, C4 and FineWeb filters (datatrove's decisions) -> MinHash dedup over
+the survivors. Kept rows get the cleaned text and datatrove's ``language`` and
+``language_score`` columns, replacing any columns of those names. ``--excluded`` gets the
+dropped rows, with a ``filter_reason`` of ``lid``, ``<stage>:<datatrove reason>`` or
+``minhash``. Needs pyarrow and numpy: ``pip install 'pyroid[cli]'``.
 """
 
 from __future__ import annotations
@@ -415,9 +415,9 @@ def build_parser() -> argparse.ArgumentParser:
     """The argument parser (``pyroid run`` is dispatched before it)."""
     ap = argparse.ArgumentParser(
         prog="pyroid",
-        description="Rust-fast text cleaning for LLM datasets: Parquet/JSONL in and out.",
-        epilog="Also: pyroid run [-p ftfy,fasttext] (SCRIPT | -m MODULE) [ARGS...] runs a "
-        "program with pyroid.integrations.patch() applied.",
+        description="Clean text datasets for LLM training, in Parquet or JSON Lines files.",
+        epilog="pyroid run [-p NAMES] (SCRIPT | -m MODULE) [ARGS...] runs a Python program "
+        "with pyroid.integrations.patch() applied; see 'pyroid run --help'.",
     )
     ap.add_argument("--version", action="version", version=f"pyroid {pyroid.__version__}")
     sub = ap.add_subparsers(dest="command", required=True, metavar="COMMAND")
@@ -430,69 +430,119 @@ def build_parser() -> argparse.ArgumentParser:
             "--threads",
             type=_threads,
             default=None,
-            help="pyroid threads (default 0: the whole pool, sized by PYROID_NUM_THREADS)",
+            help="threads to use (default: 0, the whole pool, sized by $PYROID_NUM_THREADS)",
         )
         p.add_argument(
             "--batch-size",
             type=_positive,
             default=10_000,
-            help="rows per Arrow batch (default 10000)",
+            help="rows per Arrow batch (default: 10000)",
         )
         if excluded:
             p.add_argument("--excluded", metavar="PATH", help="also write the dropped rows here")
-        p.add_argument("--stats", action="store_true", help="print kept/dropped counts by reason")
-        p.add_argument("--stats-json", metavar="PATH", help="write the stats as JSON")
+        p.add_argument(
+            "--stats", action="store_true", help="print row counts and drops by reason to stderr"
+        )
+        p.add_argument("--stats-json", metavar="PATH", help="write the stats to PATH as JSON")
         p.add_argument("--compression", help="Parquet compression (default: pyarrow's, snappy)")
         p.add_argument("--overwrite", action="store_true", help="replace an existing output file")
 
-    p = sub.add_parser("clean", help="run a cleaning recipe (ftfy, LID, quality filters, MinHash)")
+    p = sub.add_parser(
+        "clean",
+        help="run a cleaning recipe (ftfy, LID, quality filters, MinHash)",
+        description="Run a cleaning recipe and write the kept rows. The fineweb recipe is "
+        "datatrove's FineWeb chain: ftfy, fastText LID, the Gopher, C4 and FineWeb quality "
+        "filters, then MinHash dedup.",
+    )
     common(p)
-    p.add_argument("--recipe", choices=RECIPES, required=True)
+    p.add_argument("--recipe", choices=RECIPES, required=True, help="the recipe to run")
     p.add_argument(
-        "--lid-model", help="fastText lid.176.bin (default: $PYROID_LID_MODEL or download)"
+        "--lid-model",
+        help="fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a cached download)",
     )
     p.add_argument("--no-dedup", action="store_true", help="skip the MinHash stage")
     p.add_argument(
-        "--tmp-dir", help="where survivors wait for the dedup decision (default: OUT's dir)"
+        "--tmp-dir",
+        help="where rows wait for the MinHash decision (default: OUT's directory)",
     )
     p.set_defaults(body=_clean)
 
     p = sub.add_parser(
-        "langid", help="add fastText language columns; optionally keep some languages"
+        "langid",
+        help="add fastText language columns; optionally keep some languages",
+        description="Add datatrove's language and language_score columns from fastText "
+        "language ID, and optionally keep only some languages.",
     )
     common(p)
-    p.add_argument("--model", help="a fastText model (default: lid.176.bin, as for clean)")
+    p.add_argument("--model", help="fastText model file (default: lid.176.bin, found as for clean)")
     p.add_argument("--keep", metavar="LANGS", help="comma-separated labels to keep, e.g. en,fr")
     p.add_argument(
-        "--min-score", type=float, default=0.65, help="with --keep: datatrove's language_threshold"
+        "--min-score",
+        type=float,
+        default=0.65,
+        help="with --keep: datatrove's language_threshold (default: 0.65)",
     )
     p.add_argument(
-        "--top-k", type=_positive, default=1, help="also add top_languages/_scores lists"
+        "--top-k",
+        type=_positive,
+        default=1,
+        help="if above 1, also add top_languages and top_language_scores (default: 1)",
     )
     p.set_defaults(body=_langid)
 
     p = sub.add_parser(
-        "dedup", help="drop near-duplicates (MinHash, datatrove's) or exact duplicates"
+        "dedup",
+        help="drop near-duplicates (datatrove's MinHash) or exact duplicates",
+        description="Drop near-duplicates with datatrove's MinHash dedup, or exact "
+        "duplicates (keeping the first copy).",
     )
     common(p)
-    p.add_argument("--method", choices=("minhash", "exact"), default="minhash")
     p.add_argument(
-        "--normalize", action="store_true", help="exact: compare simplify_text()-normalized"
+        "--method",
+        choices=("minhash", "exact"),
+        default="minhash",
+        help="dedup method (default: minhash)",
     )
-    g = p.add_argument_group("MinHash (datatrove MinhashConfig; defaults: datatrove's)")
-    g.add_argument("--n-grams", type=_positive)
-    g.add_argument("--num-buckets", type=_positive)
-    g.add_argument("--hashes-per-bucket", type=_positive)
-    g.add_argument("--seed", type=int)
-    g.add_argument("--hash-fc", choices=("xxhash", "sha1"))
-    g.add_argument("--precision", type=int, choices=(32, 64))
+    p.add_argument(
+        "--normalize",
+        action="store_true",
+        help="--method exact: compare texts after datatrove's simplify_text()",
+    )
+    g = p.add_argument_group("MinHash options (datatrove's MinhashConfig fields and defaults)")
+    g.add_argument("--n-grams", type=_positive, help="words per shingle (default: 5)")
+    g.add_argument("--num-buckets", type=_positive, help="LSH bands (default: 14)")
+    g.add_argument("--hashes-per-bucket", type=_positive, help="hashes per band (default: 8)")
+    g.add_argument("--seed", type=int, help="seed of the permutations (default: 1)")
+    g.add_argument(
+        "--hash-fc", choices=("xxhash", "sha1"), help="shingle hash function (default: xxhash)"
+    )
+    g.add_argument(
+        "--precision", type=int, choices=(32, 64), help="shingle hash bits (default: 64)"
+    )
     p.set_defaults(body=_dedup)
 
-    p = sub.add_parser("translit", help="transliterate to ASCII (anyascii data, ISC)")
+    p = sub.add_parser(
+        "translit",
+        help="transliterate to ASCII (anyascii data, ISC)",
+        description="Transliterate the text column to ASCII with anyascii's data (ISC licence).",
+    )
     common(p, excluded=False)
-    p.add_argument("--mode", choices=("anyascii", "unidecode"), default="anyascii")
-    p.add_argument("--errors", default="ignore", help="unidecode: ignore|replace|strict|preserve")
-    p.add_argument("--replace-str", default="?", help="unidecode: replacement for errors=replace")
+    p.add_argument(
+        "--mode",
+        choices=("anyascii", "unidecode"),
+        default="anyascii",
+        help="anyascii (default), or unidecode for Unidecode's errors= handling",
+    )
+    p.add_argument(
+        "--errors",
+        default="ignore",
+        help="--mode unidecode: ignore (default), replace, strict or preserve",
+    )
+    p.add_argument(
+        "--replace-str",
+        default="?",
+        help="--mode unidecode: replacement for --errors replace (default: ?)",
+    )
     p.add_argument("--output-column", help="write here instead of replacing the text column")
     p.set_defaults(body=_translit)
     return ap

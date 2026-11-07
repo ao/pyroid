@@ -20,9 +20,10 @@ The names are ``"ftfy"`` (:mod:`pyroid.ftfy`, which reproduces ftfy 6.3.1), ``"f
 from Unidecode's.
 
 :func:`patch` puts a shim in ``sys.modules[name]``: a module named like the real one whose
-functions are pyroid's (the same objects, so a call costs what calling pyroid costs). It imports
-the real package right away when it is installed (eagerly: the shim needs its ``__path__`` and
-``__spec__`` up front, and loading it later under the shim's name would be fragile), and then:
+functions are pyroid's (the same objects, so a call costs what calling pyroid costs). If the
+real package is installed, :func:`patch` imports it right away, because the shim needs its
+``__path__`` and ``__spec__`` up front (loading it later under the shim's name would be
+fragile). Then:
 
 - every attribute the shim does not provide comes from the real package (module
   ``__getattr__``): ``ftfy.guess_bytes``, ``ftfy.fix_file``, ``fasttext.train_supervised``...;

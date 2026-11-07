@@ -11,29 +11,36 @@ sacrebleu.sentence_bleu_batch(hyps, [refs], threads=8)  # one BLEUScore per pair
 ```
 
 Every score, statistic, ``str()``/``repr()``, ``format()`` output, signature string, exception
-and ``sacrebleu`` log warning is sacrebleu 2.6.0's (``__version__`` is the sacrebleu API
-version reproduced, and the ``version:`` field of signatures). The integer n-gram statistics
-are computed in Rust, in parallel on pyroid's thread pool; the score formulas
+and ``sacrebleu`` log warning is sacrebleu 2.6.0's. ``__version__``, like the ``version:``
+field of signatures, is the sacrebleu API version reproduced. The integer n-gram statistics
+are computed in Rust, in parallel on pyroid's thread pool. The score formulas
 (``BLEU.compute_bleu``, ``CHRF._compute_f_score``), result classes and argument checks are
 sacrebleu's own Python code, so scores are bit-for-bit sacrebleu's on the same interpreter.
-chrF's choice of the best of several references uses a step-for-step Rust port of the
-f-score, with the same operations in the same order.
+To pick the best of several references, chrF uses a step-for-step Rust port of the f-score,
+with the same operations in the same order.
 
-Native: tokenizers ``13a`` (the default), ``intl``, ``zh`` (also via ``trg_lang="zh"``),
-``char`` and ``none``; every smoothing method and value; ``lowercase`` (Python's
-``str.lower()``), ``force``, ``effective_order``, ``max_ngram_order``; several references per
-segment including ``None`` holes (``nrefs:var``); chrF and chrF++ with any ``char_order``,
-``word_order``, ``beta``, ``whitespace`` and ``eps_smoothing``; pre-computed references
-(``BLEU(references=...)``, ``CHRF(references=...)``). Degenerate settings (e.g.
-``max_ngram_order=0``, a non-int order, ``char_order + word_order == 0``) run sacrebleu's own
-code in pure Python, with sacrebleu's results and errors.
+pyroid handles these natively:
 
-Delegated to the real sacrebleu (it must be installed; otherwise :class:`pyroid.PyroidError`
-with an install hint), with one :class:`pyroid.FallbackWarning` per function and reason: the
-``ja-mecab``, ``ko-mecab``, ``spm``, ``flores101``, ``flores200`` and ``spBLEU-1K``
-tokenizers (and ``trg_lang`` ``"ja"``/``"ko"``), ``corpus_score(..., n_bootstrap > 1)``,
-:class:`TER`, :func:`corpus_ter`, :func:`sentence_ter`, :data:`DATASETS` and the test set
-helpers (``DELEGATED``). Importing this module never imports sacrebleu.
+- the tokenizers ``13a`` (the default), ``intl``, ``zh`` (also via ``trg_lang="zh"``),
+  ``char`` and ``none``;
+- every smoothing method and value, ``lowercase`` (Python's ``str.lower()``), ``force``,
+  ``effective_order`` and ``max_ngram_order``;
+- several references per segment, including ``None`` holes (``nrefs:var``);
+- chrF and chrF++ with any ``char_order``, ``word_order``, ``beta``, ``whitespace`` and
+  ``eps_smoothing``;
+- pre-computed references (``BLEU(references=...)``, ``CHRF(references=...)``).
+
+Degenerate settings (e.g. ``max_ngram_order=0``, a non-int order,
+``char_order + word_order == 0``) run sacrebleu's own code in pure Python, with sacrebleu's
+results and errors.
+
+These are delegated to the real sacrebleu, with one :class:`pyroid.FallbackWarning` per
+function and reason: the ``ja-mecab``, ``ko-mecab``, ``spm``, ``flores101``, ``flores200``
+and ``spBLEU-1K`` tokenizers (and ``trg_lang`` ``"ja"``/``"ko"``),
+``corpus_score(..., n_bootstrap > 1)``, :class:`TER`, :func:`corpus_ter`,
+:func:`sentence_ter`, :data:`DATASETS` and the test set helpers (``DELEGATED``). They need
+sacrebleu installed; without it they raise :class:`pyroid.PyroidError` with an install hint.
+Importing this module never imports sacrebleu.
 
 pyroid extensions (keyword-only): ``threads=`` on :func:`corpus_bleu`,
 :func:`raw_corpus_bleu`, :func:`corpus_chrf` and ``corpus_score`` (``None``: the whole pool;
@@ -42,19 +49,19 @@ pyroid extensions (keyword-only): ``threads=`` on :func:`corpus_bleu`,
 
 Differences from sacrebleu:
 
-- **Lone surrogates** (``"\ud800"``) in a hypothesis or reference raise
-  ``UnicodeEncodeError`` (with a note naming the item), as everywhere in pyroid; sacrebleu
+- Lone surrogates (``"\ud800"``) in a hypothesis or reference raise
+  ``UnicodeEncodeError`` (with a note naming the item), as everywhere in pyroid. sacrebleu
   treats them as code points. Remove them first, e.g.
   ``s.encode("utf-8", "replace").decode("utf-8")``.
-- **Wrong item types** that sacrebleu's own argument checks let through (a non-str
-  hypothesis after the first, a non-str, non-``None`` reference) raise
-  :class:`pyroid.InputError` (a ``TypeError``) naming the item, where sacrebleu raises an
-  ``AttributeError`` from deep inside. sacrebleu's checks themselves (``_check_*_args``) raise
-  the same ``TypeError``s with the same messages.
-- **BLEU.tokenizer** is a pyroid tokenizer object for the native tokenizers (``signature()``
-  and ``__call__(line)``, the same output as sacrebleu's), sacrebleu's own tokenizer object for
-  the delegated ones.
-- **Pre-computed references** are held in a native object: changing ``max_ngram_order``,
+- Wrong item types that sacrebleu's own argument checks let through (a non-str hypothesis
+  after the first, a non-str, non-``None`` reference) raise :class:`pyroid.InputError` (a
+  ``TypeError``) naming the item. sacrebleu raises an ``AttributeError`` from deep inside.
+  sacrebleu's checks themselves (``_check_*_args``) raise the same ``TypeError``s with the
+  same messages.
+- ``BLEU.tokenizer`` is a pyroid tokenizer object for the native tokenizers (``signature()``
+  and ``__call__(line)``, the same output as sacrebleu's), and sacrebleu's own tokenizer
+  object for the delegated ones.
+- Pre-computed references are held in a native object. Changing ``max_ngram_order``,
   ``char_order`` or ``word_order`` of a metric after constructing it with ``references=``
   raises ``ValueError`` (sacrebleu would mix the old reference n-grams with new hypothesis
   ones).

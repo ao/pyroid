@@ -2,18 +2,17 @@
 # the API docs are built from this stub.
 """Unicode to ASCII transliteration, permissively licensed (``import pyroid.translit``).
 
-The ``unidecode()`` call you know, without the GPL, batched and fast. Every
-function takes a str, a list or tuple of str, or an Arrow string array/column,
-returns the same kind, and runs batches on pyroid's thread pool without the
-GIL.
+Every function takes a str, a list or tuple of str, or an Arrow string
+array/column, and returns the same kind. Batches run on pyroid's thread pool
+without the GIL.
 
-- :func:`anyascii` is **byte-identical to the ``anyascii`` package 0.3.3**
-  (ISC) on every code point.
-- :func:`unidecode` has **Unidecode 1.4.0's signature and ``errors=``
-  semantics** (``ignore``, ``replace``, ``strict`` with
-  :class:`UnidecodeError` and its ``index``, ``preserve``; the lone-surrogate
-  ``RuntimeWarning``) on top of the same anyascii data. Its output therefore
-  is **not** Unidecode's: see "Differences from Unidecode".
+- :func:`anyascii` is byte-identical to the ``anyascii`` package 0.3.3 (ISC)
+  on every code point.
+- :func:`unidecode` has Unidecode 1.4.0's signature and ``errors=`` semantics
+  (``ignore``, ``replace``, ``strict`` with :class:`UnidecodeError` and its
+  ``index``, ``preserve``; the lone-surrogate ``RuntimeWarning``), on top of
+  the same anyascii data. Its output is therefore not Unidecode's: see
+  "Differences from Unidecode".
 - :func:`is_ascii` is a mask, ``str.isascii()`` per document.
 
 The data comes from anyascii 0.3.3 (Copyright (c) 2020-2025 Hunter WB, ISC
@@ -26,24 +25,24 @@ Which characters have no transliteration
 for: unassigned and private-use code points, lone surrogates, and the
 characters of scripts or blocks anyascii does not cover (for example most
 Tangut, Khitan and some CJK extension ideographs). anyascii's own table lists
-the 123,799 non-ASCII code points it maps, 1,192 of them to the empty string
-on purpose (combining marks, zero-width joiners, variation selectors, emoji
-skin-tone modifiers, Arabic tatweel, silent vowel carriers): those are removed
-in every mode and never raise.
+the 123,799 non-ASCII code points it maps. It maps 1,192 of them to the empty
+string on purpose (combining marks, zero-width joiners, variation selectors,
+emoji skin-tone modifiers, Arabic tatweel, silent vowel carriers); those are
+removed in every mode and never raise.
 
 Differences from Unidecode
 --------------------------
-- **Transliterations differ** (anyascii's are not Unidecode's). For example,
+- The transliterations differ: anyascii's are not Unidecode's. For example,
   CJK ideographs are joined without spaces (``"北京"`` → ``"BeiJing"``, where
   Unidecode gives ``"Bei Jing "``), emoji become ``:shortcodes:`` (Unidecode
   drops them), and many scripts anyascii covers have no Unidecode mapping.
-- **Which characters are missing differs**, so ``errors="strict"`` raises,
+- The characters without a mapping differ, so ``errors="strict"`` raises,
   and ``errors="replace"`` substitutes, on different characters. Unidecode
   has no mapping for 80,814 of the 123,799 non-ASCII code points anyascii
   maps (most of the CJK extensions, emoji and the supplementary planes). No
   assigned character has a Unidecode mapping but no anyascii one.
 - Lists, tuples and Arrow columns are accepted (Unidecode raises
-  ``AttributeError``); other non-str inputs raise :class:`pyroid.InputError`
+  ``AttributeError``). Other non-str inputs raise :class:`pyroid.InputError`
   (a ``TypeError``) instead of ``AttributeError``.
 - For a batch, the first failing document raises, with a note naming it.
 - :class:`UnidecodeError` is pyroid's own class (a ``ValueError`` and a
@@ -135,7 +134,7 @@ def anyascii(string: ArrowStrings, *, threads: int | None = None) -> Column[str]
 def unidecode(
     string: str, errors: str = "ignore", replace_str: str = "?", *, threads: int | None = None
 ) -> str:
-    """Unidecode's ``unidecode()``, with anyascii's transliterations.
+    """Transliterate to ASCII with Unidecode's ``unidecode()`` API and anyascii's data.
 
     ASCII stays as it is; every other character is replaced by anyascii's
     mapping, as in :func:`anyascii`. ``errors`` says what to do with a

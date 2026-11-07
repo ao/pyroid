@@ -10,7 +10,7 @@ Differences from rouge-score
 ----------------------------
 - A ``str`` with lone surrogates (U+D800..U+DFFF) raises ``UnicodeEncodeError``.
 - A ``stemmer`` passed here is called from Python for every token longer than
-  3, as in rouge-score; :class:`pyroid.metrics.tokenizers.DefaultTokenizer`
+  3, as in rouge-score. :class:`pyroid.metrics.tokenizers.DefaultTokenizer`
   with ``use_stemmer=True`` stems in Rust instead.
 """
 

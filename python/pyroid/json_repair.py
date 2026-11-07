@@ -3,10 +3,10 @@
 
 ``repair_json``, ``loads``, ``load`` and ``from_file`` have json_repair's
 signatures and return the same strings and objects. The repair runs in Rust,
-in linear time on the inputs that make json_repair slow; ``schema=`` calls, and
+in linear time on the inputs that make json_repair slow. ``schema=`` calls, and
 the rare inputs the port cannot represent, are delegated to the real
-json_repair with a one-time :class:`pyroid.FallbackWarning` (or raise
-:class:`pyroid.PyroidError` if it is not installed). See ``json_repair.pyi``.
+json_repair with a one-time :class:`pyroid.FallbackWarning`, or raise
+:class:`pyroid.PyroidError` if it is not installed. See ``json_repair.pyi``.
 """
 
 from __future__ import annotations

@@ -3,19 +3,23 @@
 # (datatrove ships no type information: its classes are Any to mypy.)
 """Drop-in datatrove pipeline steps backed by pyroid.
 
-Swap the import, keep the pipeline::
+Change the import and leave the pipeline as it is::
 
     # from datatrove.pipeline.filters import GopherQualityFilter, LanguageFilter
     from pyroid.integrations.datatrove import GopherQualityFilter, LanguageFilter
 
 Each class here subclasses datatrove's own step of the same name and takes the
-same constructor arguments, plus the keyword-only ``batch_size`` (documents per
-pyroid call, default 1000) and ``threads`` (pyroid's ``threads=``, default 1:
-datatrove already runs one task per process; pass ``None`` for pyroid's whole
-thread pool when you run few tasks). The documents that come out are the same
-as with datatrove's step: same ``text``, same ``metadata``, same keep/drop
-decisions and drop reasons, so exclusion writers and later steps see the same
-data. The work happens in Rust, in batches, without the GIL:
+same constructor arguments, plus two keyword-only ones:
+
+- ``batch_size``: documents per pyroid call (default 1000).
+- ``threads``: pyroid's ``threads=`` (default 1, since datatrove already runs
+  one task per process). Pass ``None`` for pyroid's whole thread pool when you
+  run few tasks.
+
+The documents that come out are the same as with datatrove's step: same
+``text``, same ``metadata``, same keep/drop decisions and drop reasons, so
+exclusion writers and later steps see the same data. The work happens in Rust,
+in batches, without the GIL:
 
 - :class:`FTFYFormatter`: ``pyroid.ftfy`` (byte-identical to ftfy 6.3.1; ftfy
   itself is not needed).

@@ -1,7 +1,7 @@
-"""Plug pyroid into the tools people already run.
+"""pyroid for datatrove pipelines, Hugging Face ``datasets`` and existing imports.
 
-Nothing here is imported by ``import pyroid``, and nothing changes behaviour
-until you ask for it.
+``import pyroid`` imports none of this, and nothing changes behaviour until you
+call it.
 
 - :mod:`pyroid.integrations.datatrove`: 15 drop-in datatrove pipeline steps
   (``FTFYFormatter``, ``LanguageFilter``, the Gopher/C4/FineWeb quality filters,

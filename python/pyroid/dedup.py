@@ -286,7 +286,7 @@ def minhash_dedup(
 
 
 def simplify_text(texts: Any, config: Any = None, *, threads: int | None = None) -> Any:
-    """The ``simplify_text`` normalisation of datatrove (see ``dedup.pyi``)."""
+    """Normalise text with datatrove's ``simplify_text`` (see ``dedup.pyi``)."""
     return _native._simplify_text(texts, _native_norm(_norm_config(config)), threads=threads)
 
 
