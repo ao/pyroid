@@ -19,7 +19,7 @@ def _compute_nfp_uniform(l, u, cum_counts, sizes):
     Args:
         l: the lower bound on set sizes.
         u: the upper bound on set sizes.
-        cum_counts: the complete cummulative distribution of set sizes.
+        cum_counts: the complete cumulative distribution of set sizes.
         sizes: the complete domain of set sizes.
 
     Return (float): the expected number of false positives.
@@ -37,7 +37,7 @@ def _compute_nfps_uniform(cum_counts, sizes):
     distribution of set_sizes within each sub-intervals.
 
     Args:
-        cum_counts: the complete cummulative distribution of set sizes.
+        cum_counts: the complete cumulative distribution of set sizes.
         sizes: the complete domain of set sizes.
 
     Return (np.array): the 2-D array of expected number of false positives

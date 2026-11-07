@@ -247,7 +247,7 @@ class MinHash:
             self.hashvalues = self._parse_hashvalues(hashvalues)
         else:
             self.hashvalues = self._init_hashvalues(num_perm)
-        # Initalize permutation function parameters
+        # Initialize permutation function parameters
         if permutations is not None:
             self.permutations = self._parse_permutations(permutations)
         else:

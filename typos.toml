@@ -50,12 +50,16 @@ extend-exclude = [
 ]
 
 [default.extend-words]
+# numpy's ndarray.flags.writeable (pyroid.datasketch keeps cached arrays read-only).
+writeable = "writeable"
 # datatrove's parameter names (line_punct_thr, short_line_thr), kept for drop-in parity.
 thr = "thr"
 # ISO 15924 script codes in datatrove / FineWeb-2 language codes (ben_Beng).
 Beng = "Beng"
 
 [default.extend-identifiers]
+# QUADPACK's variable names, kept in the dqagse port (crates/pyroid-core/src/datasketch/quad.rs).
+correc = "correc"
 # The arro3 Arrow library (github.com/kylebarron/arro3), not a misspelt "arrow".
 arro3 = "arro3"
 

@@ -118,7 +118,7 @@ mod tests {
             "  a  b\tc\n d e\u{3000}f\u{1c}g ",
             "one two three four five six",
             "x  y z",
-            "caf\u{e9} na\u{ef}ve \u{1f600} ok",
+            "\u{e9}t\u{e9} na\u{ef}ve \u{1f600} ok",
             "a\u{85}b\u{a0}c\u{2028}d",
         ];
         for t in texts {

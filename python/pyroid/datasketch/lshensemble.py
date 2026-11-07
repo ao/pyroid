@@ -53,7 +53,7 @@ class MinHashLSHEnsemble:
     Args:
         threshold (float): The Containment threshold between 0.0 and
             1.0. The initialized LSH Ensemble will be optimized for the threshold by
-            minizing the false positive and false negative.
+            minimizing the false positive and false negative.
         num_perm (int): The number of permutation functions used
             by the MinHash to be indexed. For weighted MinHash, this
             is the sample size (`sample_size`).
