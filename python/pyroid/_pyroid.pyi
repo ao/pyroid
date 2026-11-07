@@ -12,6 +12,7 @@ __all__ = [
     "PyroidError",
     "__version__",
     "_testing",
+    "datasketch",
     "dedup",
     "fasttext",
     "filters",
@@ -33,6 +34,7 @@ dedup: ModuleType
 translit: ModuleType
 metrics: ModuleType
 json_repair: ModuleType
+datasketch: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):

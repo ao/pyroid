@@ -10,6 +10,7 @@
 
 mod arrow;
 mod batch;
+mod datasketch;
 mod dedup;
 mod errors;
 mod fasttext;
@@ -44,5 +45,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     translit::register(m)?;
     metrics::register(m)?;
     json_repair::register(m)?;
+    datasketch::register(m)?;
     Ok(())
 }
