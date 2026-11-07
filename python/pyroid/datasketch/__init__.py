@@ -21,12 +21,24 @@ from typing import Any
 from pyroid.datasketch._common import DATASKETCH_VERSION, fallback
 from pyroid.datasketch.hashfunc import sha1_hash32, sha1_hash64
 from pyroid.datasketch.lean_minhash import LeanMinHash
+from pyroid.datasketch.lsh import MinHashLSH
+from pyroid.datasketch.lshensemble import MinHashLSHEnsemble
+from pyroid.datasketch.lshforest import MinHashLSHForest
 from pyroid.datasketch.minhash import MinHash, minhash_batch
+
+# Alias, as in datasketch
+WeightedMinHashLSH = MinHashLSH
+WeightedMinHashLSHForest = MinHashLSHForest
 
 __all__ = [
     "DATASKETCH_VERSION",
     "LeanMinHash",
     "MinHash",
+    "MinHashLSH",
+    "MinHashLSHEnsemble",
+    "MinHashLSHForest",
+    "WeightedMinHashLSH",
+    "WeightedMinHashLSHForest",
     "minhash_batch",
     "sha1_hash32",
     "sha1_hash64",

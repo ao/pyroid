@@ -27,6 +27,8 @@ from pyroid.datasketch.minhash import (
     MinHash,
 )
 
+__all__ = ["LeanMinHash"]
+
 # Byte-format notes: legacy payloads have no scheme field and are identified
 # by a non-negative number-of-hash-values field, while the affine formats
 # store the negated number followed by a scheme code byte. This keeps legacy

@@ -30,6 +30,9 @@ from typing import Any, Final
 from pyroid.datasketch.hashfunc import sha1_hash32 as sha1_hash32
 from pyroid.datasketch.hashfunc import sha1_hash64 as sha1_hash64
 from pyroid.datasketch.lean_minhash import LeanMinHash as LeanMinHash
+from pyroid.datasketch.lsh import MinHashLSH as MinHashLSH
+from pyroid.datasketch.lshensemble import MinHashLSHEnsemble as MinHashLSHEnsemble
+from pyroid.datasketch.lshforest import MinHashLSHForest as MinHashLSHForest
 from pyroid.datasketch.minhash import MinHash as MinHash
 from pyroid.datasketch.minhash import minhash_batch as minhash_batch
 
@@ -37,10 +40,18 @@ __all__ = [
     "DATASKETCH_VERSION",
     "LeanMinHash",
     "MinHash",
+    "MinHashLSH",
+    "MinHashLSHEnsemble",
+    "MinHashLSHForest",
+    "WeightedMinHashLSH",
+    "WeightedMinHashLSHForest",
     "minhash_batch",
     "sha1_hash32",
     "sha1_hash64",
 ]
+
+WeightedMinHashLSH = MinHashLSH
+WeightedMinHashLSHForest = MinHashLSHForest
 
 #: The datasketch release whose results pyroid.datasketch reproduces.
 DATASKETCH_VERSION: Final[str]
