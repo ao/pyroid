@@ -11,6 +11,8 @@
 //! - [`text`]: text kernels (`pyroid.text`, the demonstration module).
 //! - [`dedup`]: MinHash and exact deduplication (`pyroid.dedup`).
 //! - [`metrics`]: ROUGE, BLEU and chrF, exact ports of rouge-score and sacrebleu (`pyroid.metrics`).
+//! - [`sudachi`]: Japanese morphemes as SudachiPy 0.7.0 gives them, from an
+//!   installed SudachiDict (datatrove's Japanese tokenizer in the filters).
 //! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).
 //!
 //! Each module adds a `src/<mod>/` directory here; see `docs/dev/MODULES.md`.
@@ -26,6 +28,7 @@ pub mod jieba;
 pub mod json_repair;
 pub mod metrics;
 pub mod par;
+pub mod sudachi;
 pub mod text;
 pub mod translit;
 pub mod version;

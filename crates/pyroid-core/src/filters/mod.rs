@@ -85,6 +85,9 @@ pub enum FilterError {
     /// A step that tokenizes on its own (C4: per line) ran on pre-tokenized
     /// words ([`Pipeline::run_with_words`]).
     NeedsTokenizer,
+    /// The word tokenizer failed (SudachiPy raises for a text that its
+    /// normalization makes longer than 65,535 bytes).
+    Tokenizer(crate::sudachi::TokenizeError),
 }
 
 impl fmt::Display for FilterError {
@@ -99,6 +102,7 @@ impl fmt::Display for FilterError {
             FilterError::NeedsTokenizer => {
                 f.write_str("this filter needs a word tokenizer, not pre-tokenized words")
             }
+            FilterError::Tokenizer(e) => write!(f, "{e}"),
         }
     }
 }
@@ -129,6 +133,25 @@ pub trait WordTokenizer: Sync + fmt::Debug {
     /// The end byte offsets of the sentences `span_tokenize(text)` yields,
     /// appended to `out` (none for a text without tokens).
     fn sentence_ends(&self, text: &str, out: &mut Vec<usize>) -> Result<(), FilterError>;
+
+    /// `sent_tokenize(text)`: the sentences' texts, stripped, the empty ones
+    /// dropped, appended to `out`.
+    fn sentences<'a>(&self, text: &'a str, out: &mut Vec<&'a str>) -> Result<(), FilterError> {
+        // A sentence's text runs from its first token to its last; the
+        // previous sentence ends at most one space (a token's `whitespace_`)
+        // before that, which `strip()` removes anyway.
+        let mut ends = Vec::new();
+        self.sentence_ends(text, &mut ends)?;
+        let mut start = 0;
+        for end in ends {
+            let s = text::py_strip(&text[start..end]);
+            if !s.is_empty() {
+                out.push(s);
+            }
+            start = end;
+        }
+        Ok(())
+    }
 
     /// `len(split_into_sentences(text))`.
     fn count_sentences(&self, text: &str) -> Result<usize, FilterError> {
@@ -251,6 +274,11 @@ pub fn tokenizer_for(
         // jieba, as spaCy's ChineseTokenizer runs it.
         "SpaCyTokenizer" if b.arg == "zh" => {
             Some(crate::jieba::zh::ZhTokenizer::get(version) as &dyn WordTokenizer)
+        }
+        // SudachiPy, as datatrove's JapaneseTokenizer runs it, once a
+        // dictionary is installed (`sudachi::ja::install`).
+        "SpaCyTokenizer" if b.arg == "ja" => {
+            crate::sudachi::ja::JaTokenizer::get(version).map(|t| t as &dyn WordTokenizer)
         }
         "SpaCyTokenizer" => {
             tokenizer::SpacyTokenizer::get(b.arg, version).map(|t| t as &dyn WordTokenizer)

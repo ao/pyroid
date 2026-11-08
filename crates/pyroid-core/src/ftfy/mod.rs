@@ -32,7 +32,7 @@
 //! [ftfy]: https://github.com/rspeer/python-ftfy
 
 mod badness;
-mod chardata;
+pub(crate) mod chardata;
 mod codecs;
 mod features;
 mod fixes;

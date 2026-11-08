@@ -250,19 +250,7 @@ impl SentenceDeduper {
         out: &mut Vec<&'a str>,
     ) -> Result<(), SentenceError> {
         if self.config.split_sentences {
-            // A sentence's text runs from its first token to its last; the
-            // previous sentence ends at most one space (a token's
-            // `whitespace_`) before that, which `strip()` removes anyway.
-            let mut ends = Vec::new();
-            self.tokenizer()?.sentence_ends(text, &mut ends)?;
-            let mut start = 0;
-            for end in ends {
-                let s = py_strip(&text[start..end]);
-                if !s.is_empty() {
-                    out.push(s);
-                }
-                start = end;
-            }
+            self.tokenizer()?.sentences(text, out)?;
         } else {
             py_splitlines(text, out);
         }

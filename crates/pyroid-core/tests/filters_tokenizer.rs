@@ -147,7 +147,8 @@ fn py_exception(e: FilterError) -> &'static str {
         FilterError::ZeroDivision => "ZeroDivisionError",
         FilterError::TextTooLong(_)
         | FilterError::SubstringNotFound
-        | FilterError::NeedsTokenizer => "ValueError",
+        | FilterError::NeedsTokenizer
+        | FilterError::Tokenizer(_) => "ValueError",
     }
 }
 
