@@ -10,7 +10,7 @@ default-members = ["crates/pyroid-core"]
 # Single source of the version. pyproject.toml reads it via `dynamic = ["version"]`
 # (maturin converts SemVer to PEP 440, e.g. 1.0.0-dev -> 1.0.0.dev0), and `pyroid.__version__`
 # reports the same PEP 440 string (crates/pyroid-core/src/version.rs does maturin's conversion).
-version = "1.0.0-dev"
+version = "1.0.0-rc.1"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT AND Apache-2.0 AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0"
