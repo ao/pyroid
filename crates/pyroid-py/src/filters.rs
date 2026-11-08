@@ -169,6 +169,7 @@ impl NativePipeline {
     #[new]
     #[pyo3(signature = (steps, unicode_version))]
     fn new(
+        py: Python<'_>,
         steps: Vec<(String, Option<String>, Bound<'_, PyDict>)>,
         unicode_version: &str,
     ) -> PyResult<Self> {
@@ -183,13 +184,16 @@ impl NativePipeline {
                 }
                 None => python_words(version),
                 Some(language) => {
+                    crate::sudachi::prepare(py, language)?;
                     filters::tokenizer_for(language, version).ok_or_else(
                         || match filters::backend(language) {
                             None => unknown_language(language),
                             Some(b) => PyNotImplementedError::new_err(format!(
                                 "pyroid has no native word tokenizer for language {language:?} \
-                             (datatrove's {}({:?}))",
-                                b.class, b.arg
+                             (datatrove's {}({:?})){}",
+                                b.class,
+                                b.arg,
+                                crate::sudachi::hint(language)
                             )),
                         },
                     )?
@@ -220,17 +224,19 @@ fn english_languages() -> Vec<&'static str> {
 /// tokenized natively by pyroid)`, sorted by code.
 #[pyfunction]
 fn languages(
+    py: Python<'_>,
     unicode_version: &str,
 ) -> PyResult<Vec<(&'static str, &'static str, &'static str, bool)>> {
     let v = version_arg(unicode_version)?;
+    let ja = crate::sudachi::available(py)?;
     Ok(filters::languages()
         .map(|(code, b)| {
-            (
-                code,
-                b.class,
-                b.arg,
-                filters::tokenizer_for(code, v).is_some(),
-            )
+            let native = if crate::sudachi::is_japanese(code) {
+                ja
+            } else {
+                filters::tokenizer_for(code, v).is_some()
+            };
+            (code, b.class, b.arg, native)
         })
         .collect())
 }
@@ -239,17 +245,17 @@ fn languages(
 /// `None` if datatrove does not know the code.
 #[pyfunction]
 fn backend(
+    py: Python<'_>,
     language: &str,
     unicode_version: &str,
 ) -> PyResult<Option<(&'static str, &'static str, bool)>> {
     let v = version_arg(unicode_version)?;
-    Ok(filters::backend(language).map(|b| {
-        (
-            b.class,
-            b.arg,
-            filters::tokenizer_for(language, v).is_some(),
-        )
-    }))
+    let native = if crate::sudachi::is_japanese(language) {
+        crate::sudachi::available(py)?
+    } else {
+        filters::tokenizer_for(language, v).is_some()
+    };
+    Ok(filters::backend(language).map(|b| (b.class, b.arg, native)))
 }
 
 /// Why a run failed inside the detached region.
@@ -274,7 +280,8 @@ impl RunError {
                     FilterError::ZeroDivision => PyZeroDivisionError::new_err(err.to_string()),
                     FilterError::TextTooLong(_)
                     | FilterError::SubstringNotFound
-                    | FilterError::NeedsTokenizer => PyValueError::new_err(err.to_string()),
+                    | FilterError::NeedsTokenizer
+                    | FilterError::Tokenizer(_) => PyValueError::new_err(err.to_string()),
                 };
                 with_note(py, base, format!("pyroid.filters: raised by {at}"))
             }

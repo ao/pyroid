@@ -20,6 +20,7 @@ mod input;
 mod jieba;
 mod json_repair;
 mod metrics;
+mod sudachi;
 mod testing;
 mod text;
 mod translit;

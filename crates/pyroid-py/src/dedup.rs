@@ -102,6 +102,7 @@ impl NativeConfig {
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
+        py: Python<'_>,
         n_grams: usize,
         num_buckets: usize,
         hashes_per_bucket: usize,
@@ -126,6 +127,7 @@ impl NativeConfig {
         let mut hasher = MinHasher::new(config, norm.unicode)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         if let Some(language) = language {
+            crate::sudachi::prepare(py, language)?;
             let tok =
                 filters::tokenizer_for(language, norm.unicode).ok_or_else(
                     || match filters::backend(language) {
@@ -135,8 +137,10 @@ impl NativeConfig {
                         )),
                         Some(b) => PyNotImplementedError::new_err(format!(
                             "pyroid has no native word tokenizer for language {language:?} \
-                         (datatrove's {}({:?}))",
-                            b.class, b.arg
+                         (datatrove's {}({:?})){}",
+                            b.class,
+                            b.arg,
+                            crate::sudachi::hint(language)
                         )),
                     },
                 )?;
@@ -900,6 +904,7 @@ mod sentence {
         ))]
         #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
         fn new(
+            py: Python<'_>,
             n_sentences: usize,
             split_sentences: bool,
             only_dedup_in_index: bool,
@@ -925,6 +930,7 @@ mod sentence {
                 norm_config: norm.norm,
                 hash_config: HashConfig { precision, hash_fc },
             };
+            crate::sudachi::prepare(py, language)?;
             let kernel = SentenceDeduper::new(config, norm.unicode, language)
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             Ok(Self { kernel })
