@@ -5,7 +5,7 @@ fastText's format (dense, product-quantized, ``qnorm``, ``qout``, pruned; every
 head; format versions 11 and 12), with weights from a seeded RNG.
 
 - **Live-oracle parity**: every model predicts the same labels and
-  probabilities (|dp| <= 1e-6; 1e-4 on macOS, see ``PROB_TOL``), and raises
+  probabilities (|dp| <= 1e-6; 1e-4 on macOS, see ``ORACLE_PROB_TOL``), and raises
   the same errors, as fastText's Python package (fasttext-predict 0.9.2.4,
   ``import fasttext``), on a fixed corpus and on Hypothesis-generated lines.
   Skipped where the oracle is not installed (it has no free-threaded wheels).
@@ -18,9 +18,12 @@ head; format versions 11 and 12), with weights from a seeded RNG.
 """
 
 import functools
+import hashlib
 import importlib
+import json
 import math
 import os
+import platform
 import random
 import re
 import struct
@@ -662,9 +665,11 @@ def _outcome(fn: Callable[..., Any], *args: Any) -> Outcome:
 # are ordered, and cut at k, differently (docs/guides/fasttext.md, "Tie order"), and dot products
 # round differently in the last bits, which large logits amplify. Measured on macos-15 (arm64):
 # softmax-scaled (scale 20) gives 0.5745614 there, 0.5745577 in pyroid and in fasttext-predict on
-# Linux. There labels may differ in ties and near-ties, and probabilities by up to PROB_TOL.
+# Linux. There labels may differ in ties and near-ties, and probabilities by up to ORACLE_PROB_TOL.
+# Only the live-oracle comparisons use it: pyroid's own output is checked bit for bit on every OS
+# (test_zoo_predictions_are_the_pinned_ones).
 ORACLE_BUILD_DIFFERS = sys.platform == "darwin"
-PROB_TOL = 1e-4 if ORACLE_BUILD_DIFFERS else 1e-6
+ORACLE_PROB_TOL = 1e-4 if ORACLE_BUILD_DIFFERS else 1e-6
 
 
 def _only_ties_differ(every: Outcome, got: Outcome) -> bool:
@@ -675,7 +680,7 @@ def _only_ties_differ(every: Outcome, got: Outcome) -> bool:
     prob = dict(zip(*every[1], strict=True))
     labels, probs = got[1]
     return len(set(labels)) == len(labels) and all(
-        label in prob and abs(prob[label] - float(p)) <= PROB_TOL
+        label in prob and abs(prob[label] - float(p)) <= ORACLE_PROB_TOL
         for label, p in zip(labels, probs, strict=True)
     )
 
@@ -705,7 +710,37 @@ def _prediction_mismatch(
         if not ties_only:
             return f"labels {labels} != {want_labels}"
     worst = max((abs(float(a) - b) for a, b in zip(probs, want_probs, strict=True)), default=0)
-    return None if worst <= PROB_TOL else f"|dp| = {worst} ({list(probs)} vs {list(want_probs)})"
+    return (
+        None
+        if worst <= ORACLE_PROB_TOL
+        else f"|dp| = {worst} ({list(probs)} vs {list(want_probs)})"
+    )
+
+
+#: The largest |dp| per (model, k) between pyroid and the oracle, label by label, this session.
+OracleDeltas = dict[tuple[str, int], float]
+
+
+@pytest.fixture(scope="session")
+def oracle_deltas(request: pytest.FixtureRequest) -> OracleDeltas:
+    """Where the live-oracle tests record |dp|; conftest.py prints the largest at the end."""
+    deltas: OracleDeltas = {}
+    setattr(request.config, "_pyroid_fasttext_oracle_deltas", deltas)  # noqa: B010
+    return deltas
+
+
+def _record_delta(deltas: OracleDeltas, name: str, k: int, want: Outcome, got: Outcome) -> None:
+    if want[0] != "ok" or got[0] != "ok":
+        return
+    want_prob = dict(zip(want[1][0], map(float, want[1][1]), strict=True))
+    dps = [
+        abs(float(p) - want_prob[label])
+        for label, p in zip(*got[1], strict=True)
+        if label in want_prob
+    ]
+    dp = max((d for d in dps if not math.isnan(d)), default=0.0)
+    if dp > deltas.get((name, k), -1.0):
+        deltas[(name, k)] = dp
 
 
 def _notes(exc: BaseException | None) -> str:
@@ -744,7 +779,9 @@ def _check_batch(model: ft.Model, lines: list[str], k: int, threshold: float) ->
 
 
 @pytest.mark.parametrize("name", SPECS)
-def test_oracle_parity_on_the_corpus(oracle: ModuleType, zoo: Zoo, name: str) -> None:
+def test_oracle_parity_on_the_corpus(
+    oracle: ModuleType, zoo: Zoo, oracle_deltas: OracleDeltas, name: str
+) -> None:
     entry = zoo[name]
     ref = _oracle_model(str(entry.path))
     mismatches = []
@@ -753,6 +790,7 @@ def test_oracle_parity_on_the_corpus(oracle: ModuleType, zoo: Zoo, name: str) ->
             want = _outcome(ref.predict, line, k, threshold)
             got = _outcome(entry.model.predict, line, k, threshold)
             every = functools.partial(_outcome, ref.predict, line, -1, -1.0)
+            _record_delta(oracle_deltas, name, k, want, got)
             why = _prediction_mismatch(want, got, every)
             if why is not None:
                 mismatches.append((line[:60], k, threshold, why))
@@ -769,7 +807,13 @@ def test_oracle_parity_on_the_corpus(oracle: ModuleType, zoo: Zoo, name: str) ->
     threshold=st.sampled_from(THRESHOLDS),
 )
 def test_oracle_parity_hypothesis(
-    oracle: ModuleType, zoo: Zoo, name: str, lines: list[str], k: int, threshold: float
+    oracle: ModuleType,
+    zoo: Zoo,
+    oracle_deltas: OracleDeltas,
+    name: str,
+    lines: list[str],
+    k: int,
+    threshold: float,
 ) -> None:
     entry = zoo[name]
     ref = _oracle_model(str(entry.path))
@@ -777,6 +821,7 @@ def test_oracle_parity_hypothesis(
         want = _outcome(ref.predict, line, k, threshold)
         got = _outcome(entry.model.predict, line, k, threshold)
         every = functools.partial(_outcome, ref.predict, line, -1, -1.0)
+        _record_delta(oracle_deltas, name, k, want, got)
         assert _prediction_mismatch(want, got, every) is None, (line, want, got)
     _check_batch(entry.model, lines, k, threshold)
 
@@ -865,6 +910,40 @@ def test_oracle_parity_load_errors(oracle: ModuleType, tmp_path: Path) -> None:
     assert want[1].startswith("Invalid model file.")
     with pytest.raises(ft.ModelError, match=r"(?s)Invalid model file\..*issue #332"):
         ft.load_model(path)
+
+
+# ---- 1b. the same predictions on every OS ------------------------------------------------
+# pyroid's floating-point results depend on the architecture (it fuses multiply-adds on aarch64,
+# as GCC builds of fastText do), not on the OS. The digests of every zoo model's predictions on
+# CORPUS x COMBOS were pinned on Linux, where pyroid and fasttext-predict agree to the last bit;
+# macOS and Windows must give the same bytes. Re-pin (on Linux, per architecture) with
+# `python python/tests/test_fasttext.py pin-zoo-digests`.
+
+ZOO_DIGESTS = Path(__file__).with_name("fasttext_zoo_digests.json")
+_MACHINES = {"amd64": "x86_64", "x64": "x86_64", "arm64": "aarch64"}
+ARCH = _MACHINES.get(platform.machine().lower(), platform.machine().lower())
+
+
+def _zoo_digest(entry: Entry) -> dict[str, str]:
+    """sha256 of a zoo model's file, and of every outcome of its CORPUS x COMBOS predictions."""
+    h = hashlib.sha256()
+    for k, threshold in COMBOS:
+        for line in CORPUS:
+            kind, res = _outcome(entry.model.predict, line, k, threshold)
+            if kind == "ok":
+                labels, probs = res
+                res = (labels, [float(p).hex() for p in probs])
+            h.update(repr((kind, res)).encode("utf-8", "surrogatepass") + b"\n")
+    return {"model": hashlib.sha256(entry.synth.data).hexdigest(), "predictions": h.hexdigest()}
+
+
+def test_zoo_predictions_are_the_pinned_ones(zoo: Zoo) -> None:
+    pinned = json.loads(ZOO_DIGESTS.read_text("utf-8")).get(ARCH)
+    if pinned is None:
+        pytest.skip(f"no digests pinned for {ARCH}")
+    got = {name: _zoo_digest(zoo[name]) for name in SPECS}
+    differ = {name: d for name, d in got.items() if d != pinned.get(name)}
+    assert not differ, f"{len(differ)} of {len(got)} models on {sys.platform}-{ARCH}: {differ}"
 
 
 # ---- 2. return types and dtypes ----------------------------------------------------------
@@ -1761,3 +1840,14 @@ def test_tokenize_matches_upstream_where_available() -> None:
 def test_tokenize_rejects_surrogates_like_fasttext() -> None:
     with pytest.raises(TypeError):
         ft.tokenize("a\ud800")
+
+
+if __name__ == "__main__" and sys.argv[1:] == ["pin-zoo-digests"]:
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        _zoo = Zoo(Path(tmp))
+        _all = json.loads(ZOO_DIGESTS.read_text("utf-8")) if ZOO_DIGESTS.exists() else {}
+        _all[ARCH] = {name: _zoo_digest(_zoo[name]) for name in SPECS}
+    ZOO_DIGESTS.write_text(json.dumps(_all, indent=1, sort_keys=True) + "\n", "utf-8")
+    sys.stdout.write(f"pinned {len(_all[ARCH])} models for {ARCH} in {ZOO_DIGESTS}\n")

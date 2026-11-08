@@ -74,3 +74,18 @@ def run_python() -> Callable[..., subprocess.CompletedProcess[str]]:
             )
 
     return run
+
+
+def pytest_terminal_summary(terminalreporter: Any, config: pytest.Config) -> None:
+    """Print the largest pyroid-vs-fastText |dp| that test_fasttext.py's live-oracle tests saw."""
+    deltas: dict[tuple[str, int], float] | None = getattr(
+        config, "_pyroid_fasttext_oracle_deltas", None
+    )
+    if not deltas:
+        return
+    worst = sorted(deltas.items(), key=lambda kv: kv[1], reverse=True)
+    shown = ", ".join(f"{name} k={k}: {dp:.3g}" for (name, k), dp in worst[:5] if dp > 0)
+    terminalreporter.write_line(
+        f"fastText live oracle on {sys.platform}: max |dp| {worst[0][1]:.3g} over "
+        f"{len(deltas)} (model, k) pairs" + (f" ({shown})" if shown else "")
+    )
