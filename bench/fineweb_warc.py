@@ -26,9 +26,10 @@ stock
     datatrove's LanguageFilter unchanged; with it, fastText is fasttext-predict on that model file (the shim of
     ``bench/gates.py``'s PinnedLanguageFilter, for machines that cannot build fasttext-numpy2-wheel).
 pyroid-steps
-    The same executor and stages, with pyroid.integrations.datatrove's drop-ins for URLFilter, Trafilatura
+    The same executor and stages, with pyroid.integrations.datatrove's drop-ins for WarcReader (``--reader warcio``:
+    datatrove's own), URLFilter, Trafilatura
     (``compat=None``: the installed trafilatura's release), LanguageFilter, the four quality filters,
-    MinhashDedupSignature and PIIFormatter; datatrove's reader, writers, MinhashDedupBuckets, MinhashDedupCluster
+    MinhashDedupSignature and PIIFormatter; datatrove's writers, MinhashDedupBuckets, MinhashDedupCluster
     and MinhashDedupFilter. A pyroid.FallbackWarning is an error here.
 native
     No datatrove executor. A pool of N processes, one task per WARC file: the documents of
@@ -516,7 +517,10 @@ def stock_lid(model_path: str | None, exclusion_writer: Any) -> Any:
 
 
 def base_steps(a: argparse.Namespace, out: Path, pyroid_steps: bool) -> list[tuple[str, Any]]:
-    from datatrove.pipeline.readers import WarcReader
+    if pyroid_steps and a.reader == "pyroid":
+        from pyroid.integrations.datatrove import WarcReader
+    else:
+        from datatrove.pipeline.readers import WarcReader
     from datatrove.pipeline.writers.jsonl import JsonlWriter
 
     if pyroid_steps:
@@ -702,6 +706,7 @@ def cmd_datatrove(a: argparse.Namespace, mode: str) -> None:
     steps = base_steps(a, out, pyroid_steps)
     if pyroid_steps:
         traf = dict(steps)["trafilatura"]
+        summary["reader"] = "pyroid WarcReader" if a.reader == "pyroid" else "datatrove WarcReader"
         summary["trafilatura_mode"] = traf._mode()
         if summary["trafilatura_mode"] is None:
             sys.exit(
@@ -1519,6 +1524,13 @@ def main() -> int:
                 choices=("pyroid", "warcio"),
                 default="pyroid",
                 help="pyroid.warc.iter_documents, or warcio + datatrove's process_record [pyroid]",
+            )
+        if mode == "pyroid-steps":
+            p.add_argument(
+                "--reader",
+                choices=("pyroid", "warcio"),
+                default="pyroid",
+                help="pyroid.integrations.datatrove.WarcReader, or datatrove's own [pyroid]",
             )
         if mode == "reader":
             p.add_argument(
