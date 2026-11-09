@@ -347,8 +347,8 @@ module's preliminary run, at 0.28 against 23.9 ms per document
 ([details](../benchmarks.md#pyroidfilters)).
 
 Beyond English, FineWeb-2's filter chain ran 36–86× faster than datatrove on one thread for the
-native languages measured (Hindi: 20×), and 44× for Chinese. Japanese on `python_tokenizer=True`
-ran at about datatrove's speed ([Languages](languages.md#speed)).
+native languages measured (Hindi: 20×), 44× for Chinese and 7.8× for Japanese, where SudachiPy's
+lattice dominates ([Languages](languages.md#speed)).
 
 The table times the newer steps on the FineWeb dev slice (10,000 documents). datatrove's step ran
 alone in one process and in a warmed `multiprocessing.Pool(8)`, and pyroid's function at 1 and 8

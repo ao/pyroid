@@ -346,7 +346,7 @@ signatures. Release wheel, CPython 3.13, load average 6 to 16:
 | `arb_Arab` | native | 8,225 → 145 | 57× / 49× | 42× / 38× |
 | `hin_Deva` | native (IndicNLP) | 2,514 → 126 | 20× / 10× | 15× / 9× |
 | `cmn_Hani` | native (jieba)† | 10,628 → 242 | 44× / 44× | 43× / 42× |
-| `jpn_Jpan` | `python_tokenizer=True` (SudachiPy) | 11,959 → 9,893 | 1.2× / 0.9× | 0.3× / 0.2× |
+| `jpn_Jpan` | native (SudachiPy port)‡ | 11,210 → 1,444 | 7.8× / 6.4× | 9.2× / 6.9× |
 
 \* An outlier: pyroid with 8 threads was slower than with 1 thread in this run (246 µs per
 document) while the load rose. It needs a rerun before it is quoted.
@@ -354,9 +354,17 @@ document) while the load rose. It needs a rerun before it is quoted.
 † Measured on 2026-11-07, after the jieba port, at load average 1 to 2. Before it, `cmn_Hani` went
 through `python_tokenizer=True`, at 1.2× / 0.9× on one thread and 0.4× with 8.
 
-The native languages run the filters 36–86× faster than datatrove on one thread (Hindi: 20×).
-The Python-tokenizer path runs at the reference tokenizer's speed (about 1×) and does not scale
-with threads, so datatrove's 8 processes beat it (0.2–0.3× for Japanese). Adding the languages did not slow
+‡ Measured on 2026-11-09, after the SudachiPy port, at load average 0.6 to 1.9. Before it, `jpn_Jpan`
+went through `python_tokenizer=True`, at 1.2× / 0.9× on one thread and 0.3× / 0.2× with 8.
+Japanese gains less than the other native languages because SudachiPy's lattice dominates on both
+sides: pyroid's whole MinHash (1,151 µs per document, one thread) takes less time than SudachiPy's
+own `tokenize()` call on the same chunks (1,583 µs).
+
+The native languages run the filters 36–86× faster than datatrove on one thread (Hindi: 20×,
+Japanese: 7.8×).
+The Python-tokenizer path runs at the reference tokenizer's speed (about 1×, measured for Chinese
+and Japanese before their ports) and does not scale with threads, so datatrove's 8 processes beat
+it (0.2–0.4×). Adding the languages did not slow
 English down: old and new builds measured within noise on 5,000 FineWeb documents. See
 [Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
 

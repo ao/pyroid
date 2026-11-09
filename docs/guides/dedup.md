@@ -248,9 +248,8 @@ In the module's preliminary run, the whole four-stage pipeline on 10k documents 
 one thread against datatrove's 99.5 s ([details](../benchmarks.md#pyroiddedup)).
 
 Beyond English, MinHash signatures with FineWeb-2's configuration ran 36–64× faster than
-datatrove on one thread for German, French, Spanish, Russian and Arabic (Hindi: 10×), and 44× for
-Chinese. Japanese on `python_tokenizer=True` ran at about datatrove's speed (0.9×)
-([Languages](languages.md#speed)).
+datatrove on one thread for German, French, Spanish, Russian and Arabic (Hindi: 10×), 44× for
+Chinese and 6.4× for Japanese ([Languages](languages.md#speed)).
 
 Sentence dedup ran on the 13,232-document parity corpus with datatrove's example configuration
 (release wheel, CPython 3.13, load average not recorded):

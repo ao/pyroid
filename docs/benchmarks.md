@@ -319,7 +319,7 @@ pyroid builds the Python lists of words on the calling thread (about 35 µs per 
 
 ### Languages: FineWeb-2 filters and MinHash
 
-Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. µs per document over 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (2 for datatrove). Every timed document was first checked for the same keep/drop, reason and signatures. The filters are FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality) with each language's settings; MinHash computes FineWeb-2's signatures. datatrove's 8 processes are a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16. Japanese uses datatrove's Python tokenizer (python_tokenizer=True), so it runs at that tokenizer's speed, on the calling thread. Guide: [languages](guides/languages.md).
+Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. µs per document over 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (2 for datatrove). Every timed document was first checked for the same keep/drop, reason and signatures. The filters are FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality) with each language's settings; MinHash computes FineWeb-2's signatures. datatrove's 8 processes are a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16. Guide: [languages](guides/languages.md).
 
 | Language | Tokenizer | datatrove, 1 process: filters / MinHash | pyroid, 1 thread | Speedup | datatrove, 8 processes | pyroid, 8 threads | Speedup |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -330,11 +330,11 @@ Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. µs per document over
 | Arabic (arb_Arab) | native | 8,225 / 6,424 | 145 / 132 | 57× / 49× | 1,549 / 1,498 | 37 / 39 | 42× / 38× |
 | Hindi (hin_Deva) | native (IndicNLP) | 2,514 / 1,237 | 126 / 127 | 20× / 10× | 474 / 273 | 32 / 31 | 15× / 9× |
 | Chinese (cmn_Hani) | native (jieba)† | 10,628 / 7,857 | 242 / 178 | 44× / 44× | 1,556 / 1,172 | 36 / 28 | 43× / 42× |
-| Japanese (jpn_Jpan) | Python (SudachiPy) | 11,959 / 8,267 | 9,893 / 9,508 | 1.2× / 0.9× | 3,464 / 2,586 | 12,685 / 11,118 | 0.3× / 0.2× |
+| Japanese (jpn_Jpan) | native (SudachiPy port)‡ | 11,210 / 8,546 | 1,444 / 1,331 | 7.8× / 6.4× | 1,768 / 1,384 | 193 / 202 | 9.2× / 6.9× |
 
-\* An outlier: in this run pyroid was slower with 8 threads than with 1 while the load rose. It needs a rerun before it can be quoted. † Rerun on 2026-11-07 with the native Chinese tokenizer (pyroid.jieba), load average 1 to 2; through python_tokenizer=True it had run at 1.2× / 0.9× on one thread and 0.4× with 8.
+\* An outlier: in this run pyroid was slower with 8 threads than with 1 while the load rose. It needs a rerun before it can be quoted. † Rerun on 2026-11-07 with the native Chinese tokenizer (pyroid.jieba), load average 1 to 2; through python_tokenizer=True it had run at 1.2× / 0.9× on one thread and 0.4× with 8. ‡ Rerun on 2026-11-09 with the native Japanese tokenizer (a port of SudachiPy 0.7.0, sudachidict-core 20261015), load average 0.6 to 1.9; through python_tokenizer=True it had run at 1.2× / 0.9× on one thread and 0.3× / 0.2× with 8. SudachiPy's lattice dominates both sides: pyroid's whole MinHash (1,151 µs per document, one thread) takes less than SudachiPy's own tokenize() on the same chunks (1,583 µs).
 
-<small>Source: bench/results/orbstack-aarch64-12cpu/2026-11-06-multilingual and 2026-11-07-jieba (bench/multilingual.py).</small>
+<small>Source: bench/results/orbstack-aarch64-12cpu/2026-11-06-multilingual, 2026-11-07-jieba and 2026-11-09-japanese (bench/multilingual.py).</small>
 
 ### More datatrove steps
 
