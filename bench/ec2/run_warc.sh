@@ -9,12 +9,16 @@
 #
 # Settings (env):
 #   HTMLX_S3        s3:// prefix: code/pyroid.bundle (git bundle) is read from it, results/ written to it (required)
-#   HTMLX_BRANCH    branch to check out of the bundle [feat/trafilatura]
+#   HTMLX_BRANCH    branch to check out of the bundle [feat/warc]
 #   HTMLX_WARCS     WARC files of $HTMLX_CRAWL to process, from the first in its warc.paths.gz [8]
 #   HTMLX_CRAWL     Common Crawl crawl [CC-MAIN-2026-39]
 #   HTMLX_CPUS      CPUs the runs are pinned to (taskset) [0-7: one thread per core on a c7i.4xlarge]
 #   HTMLX_PREFIX    work folder [/opt/htmlx]
-#   HTMLX_STEPS     steps to run (default: all, in the order below); HTMLX_FORCE: steps to redo even if done
+#   HTMLX_STEPS     steps to run (default: all but the 1-worker runs, in the order below); HTMLX_FORCE: steps to
+#                   redo even if done
+#   HTMLX_ONE_WORKER  1: also run native-1, pyroid-1, stock-1 and compare (about 2.5 h more) [0]
+#   HTMLX_PARITY_ARGS  extra pyroid_parity.warc_scale arguments for the parity step, e.g. "--limit 500" [none];
+#                   HTMLX_PARITY_MINUTES [30]: its estimate for the deadline
 #   HTMLX_HOOK      shell commands for the hook step; else the file HTMLX_HOOK_FILE; else $HTMLX_S3/code/hook.sh if
 #                   it exists; else the hook step is skipped. HTMLX_HOOK_MINUTES [60]: its estimate for the deadline.
 #   HTMLX_DEADLINE  epoch seconds to finish by [the scheduled shutdown in /run/systemd/shutdown/scheduled]; a run
@@ -24,8 +28,8 @@
 #   HTMLX_STOCK_ARGS  extra arguments for stock runs only (tests on machines without g++ for fasttext-numpy2-wheel:
 #                   "--lid-model PATH" swaps in fasttext-predict; never on EC2) [none]
 #
-# Steps, most important first (estimates for 8 WARC files on a c7i.4xlarge, from P10's run: stock datatrove at 8
-# workers ~12 min, at 1 worker ~8x that):
+# Steps, most important first (estimates for 8 WARC files on a c7i.4xlarge, from P11's run there: stock datatrove
+# 871 s at 8 workers and 6,976 s at 1, the pyroid modes 104-110 s at 8 and 739-776 s at 1):
 #   code 1 min      dnf git gcc gcc-c++ tar zstd util-linux file-libs; clone $HTMLX_BRANCH from the bundle; machine info
 #   bootstrap 5     bench/ec2/bootstrap.sh with PYTHONS=3.13.18 (rustup, uv, CPython, maturin)
 #   wheel 8         maturin build --release --locked (the cargo target is deleted afterwards)
@@ -35,24 +39,31 @@
 #                   Warms datatrove's caches (URL block lists, lid.176.bin, the Public Suffix List) once.
 #   fetch 5         the WARC files from data.commoncrawl.org (sizes checked against Content-Length) and lid.176.bin
 #                   (sha256 checked)
-#   stock-8 14      fineweb_warc.py stock, 8 workers, datatrove's real LanguageFilter
-#   pyroid-8 4      fineweb_warc.py pyroid-steps, 8 workers
-#   native-8 3      fineweb_warc.py native, 8 workers
-#   compare-8 1-4   digests of the three; if stock-8 lost pages to Trafilatura's timeout, also native --timeouts-of
+#   reader 6        fineweb_warc.py reader: warcio + process_record, pyroid.warc.iter_documents and iter_batches on
+#                   each file, one process on the first CPU of $HTMLX_CPUS; the readers' digests must agree
+#   stock-8 15      fineweb_warc.py stock, 8 workers, datatrove's real LanguageFilter
+#   pyroid-8 2      fineweb_warc.py pyroid-steps, 8 workers
+#   native-8 2      fineweb_warc.py native, 8 workers (reading with pyroid.warc)
+#   cli-8 3         fineweb_warc.py cli: pyroid clean --recipe fineweb-warc --workers 8
+#   compare-8 1-4   digests of the four; if stock-8 lost pages to Trafilatura's timeout, also native --timeouts-of
 #                   stock-8 (native-8x) compared with it
-#   hook ?          $HTMLX_HOOK (the parity scale runs), unpinned; it gets the variables listed at step_hook
-#   native-1 15, pyroid-1 17, stock-1 100       the same at 1 worker
+#   parity 30       parity/pyroid_parity/warc_scale.py over the 8 files: every record and document, warcio 1.8.2
+#                   and datatrove 0.10.1 vs pyroid.warc (8 workers), results in parity/warc-scale.json
+#   hook ?          $HTMLX_HOOK, unpinned; it gets the variables listed at step_hook
+#   native-1 13, pyroid-1 14, stock-1 117       the same at 1 worker (only with HTMLX_ONE_WORKER=1)
 #   compare 1-4     every run against native-8; native-1x (native --timeouts-of stock-1) if stock-1 lost pages
 set -euo pipefail
 
 S3=${HTMLX_S3:?set HTMLX_S3 to the s3:// prefix holding code/pyroid.bundle}
 S3=${S3%/}
-BRANCH=${HTMLX_BRANCH:-feat/trafilatura}
+BRANCH=${HTMLX_BRANCH:-feat/warc}
 NWARC=${HTMLX_WARCS:-8}
 CRAWL=${HTMLX_CRAWL:-CC-MAIN-2026-39}
 CPUS=${HTMLX_CPUS:-0-7}
 W=${HTMLX_PREFIX:-/opt/htmlx}
-STEPS_ALL="code bootstrap wheel envs fetch stock-8 pyroid-8 native-8 compare-8 hook native-1 pyroid-1 stock-1 compare"
+RUNS="reader stock-8 pyroid-8 native-8 cli-8 compare-8 parity hook native-1 pyroid-1 stock-1 compare"
+STEPS_ALL="code bootstrap wheel envs fetch reader stock-8 pyroid-8 native-8 cli-8 compare-8 parity hook"
+if [[ ${HTMLX_ONE_WORKER:-0} == 1 ]]; then STEPS_ALL="$STEPS_ALL native-1 pyroid-1 stock-1 compare"; fi
 STEPS=${HTMLX_STEPS:-$STEPS_ALL}
 FORCE=${HTMLX_FORCE:-}
 LID_SHA256=7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e # pyroid.integrations.recipes.LID_176_SHA256
@@ -137,8 +148,8 @@ wall_of() {  # run name -> its measured wall seconds, or empty
 estimate() {  # run name -> minutes: P10's numbers scaled to $NWARC, then 8x the 8-worker run once it is measured
     local base w
     case $1 in
-        stock-8) base=14 ;; pyroid-8) base=4 ;; native-8 | native-8x | native-1x) base=3 ;;
-        native-1) base=15 ;; pyroid-1) base=17 ;; stock-1) base=100 ;; *) base=10 ;;
+        stock-8) base=15 ;; pyroid-8 | native-8 | native-8x | native-1x) base=2 ;; cli-8) base=3 ;; reader) base=6 ;;
+        native-1) base=13 ;; pyroid-1) base=14 ;; stock-1) base=117 ;; *) base=10 ;;
     esac
     if [[ $1 == *-1 ]] && w=$(wall_of "${1%-1}-8") && [[ -n $w ]]; then
         echo $((w * 8 / 60 + 2))
@@ -285,7 +296,7 @@ run_mode() {  # name mode workers [extra fineweb_warc.py args]
         >"$RES/runs/$name/run.log" 2>&1 || { tail -n 40 "$RES/runs/$name/run.log"; return 1; }
     tail -n 30 "$RES/runs/$name/run.log"
     local f
-    for f in summary.json docs.tsv.gz events.jsonl timing logs; do
+    for f in summary.json docs.tsv.gz events.jsonl timing logs cli-stats.json; do
         [[ -e $W/runs/$name/$f ]] && cp -r "$W/runs/$name/$f" "$RES/runs/$name/"
     done
     rm -rf "$RES/runs/$name"/logs/*/completions
@@ -312,12 +323,38 @@ emulated() {  # stock run -> run native with its lost pages dropped, if it lost 
     compare "compare-$s-emulated" "$s" "$x"
 }
 
+step_reader() {
+    local est first=${CPUS%%[-,]*}
+    est=$(estimate reader)
+    if ! fits "$est"; then skip_step reader "estimated $est min would end within 10 min of the deadline"; return 0; fi
+    rm -rf "$W/runs/reader" "$RES/runs/reader"
+    mkdir -p "$RES/runs/reader"
+    # shellcheck disable=SC2206
+    local extra=(${HTMLX_RUN_ARGS:-})
+    BENCH_LABEL="$(label), CPU $first" BENCH_GIT_SHA=$(git -C "$R" rev-parse HEAD) taskset -c "$first" \
+        "$W/venv-pyroid/bin/python" "$FW" reader --warcs "$W/warc" --out "$W/runs/reader" "${extra[@]}" \
+        >"$RES/runs/reader/run.log" 2>&1 || { tail -n 40 "$RES/runs/reader/run.log"; return 1; }
+    tail -n 30 "$RES/runs/reader/run.log"
+    cp "$W/runs/reader/summary.json" "$RES/runs/reader/"
+}
 step_stock_8() { run_mode stock-8 stock 8; }
 step_pyroid_8() { run_mode pyroid-8 pyroid-steps 8; }
 step_native_8() { run_mode native-8 native 8; }
+step_cli_8() { run_mode cli-8 cli 8; }
 step_compare_8() {
-    compare compare-8 stock-8 pyroid-8 native-8
+    compare compare-8 stock-8 pyroid-8 native-8 cli-8
     emulated stock-8
+}
+step_parity() {
+    local m=${HTMLX_PARITY_MINUTES:-30}
+    if ! fits "$m"; then skip_step parity "estimated $m min would end within 10 min of the deadline"; return 0; fi
+    mkdir -p "$RES/parity"
+    # shellcheck disable=SC2206
+    local extra=(${HTMLX_PARITY_ARGS:-})
+    (cd "$R/parity" && taskset -c "$CPUS" "$W/venv-pyroid/bin/python" -m pyroid_parity.warc_scale \
+        "$RES/parity/warc-scale.json" "$W"/warc/*.warc.gz --impl pyroid.warc --workers 8 "${extra[@]}") \
+        >"$RES/parity/run.log" 2>&1 || { tail -n 40 "$RES/parity/run.log"; return 1; }
+    tail -n 30 "$RES/parity/run.log"
 }
 step_hook() {
     local cmd=${HTMLX_HOOK:-} file
@@ -346,7 +383,7 @@ step_pyroid_1() { run_mode pyroid-1 pyroid-steps 1; }
 step_stock_1() { run_mode stock-1 stock 1; }
 step_compare() {
     # Reference native-8: the pyroid runs must all match it; a stock run that lost pages matches its emulated run.
-    compare compare native-8 pyroid-8 native-1 pyroid-1 stock-8 stock-1
+    compare compare native-8 pyroid-8 cli-8 native-1 pyroid-1 stock-8 stock-1
     emulated stock-1
 }
 
@@ -358,7 +395,7 @@ run_step bootstrap 1
 run_step wheel 1
 run_step envs 1
 run_step fetch 1
-for s in stock-8 pyroid-8 native-8 compare-8 hook native-1 pyroid-1 stock-1 compare; do
+for s in $RUNS; do
     run_step "$s" 0
 done
 du -sh "$W"/* 2>/dev/null | sort -h | tail -n 12 >"$RES/disk.txt" || true

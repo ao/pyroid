@@ -67,18 +67,21 @@ a Linux container with Rust, uv, maturin and the CPythons that `bootstrap.sh` in
 
 ## FineWeb from WARC (`run_warc.sh`)
 One c7i.4xlarge, separate from `ec2.sh`'s flow: the instance gets the script and `HTMLX_S3` (an `s3://` prefix with
-`code/pyroid.bundle`, a git bundle of `HTMLX_BRANCH` [feat/trafilatura]) and runs it as root; its user data sets the
+`code/pyroid.bundle`, a git bundle of `HTMLX_BRANCH` [feat/warc]) and runs it as root; its user data sets the
 shutdown. The header of `run_warc.sh` lists every setting. Steps, most important first, with estimates for 8 WARC
-files from P10's run (stock datatrove ~12 min at 8 workers, ~8x that at 1):
+files from P11's run on a c7i.4xlarge (stock datatrove 871 s at 8 workers and 6,976 s at 1; the pyroid modes
+104-110 s at 8 and 739-776 s at 1):
 
 | step | min | what |
 |---|---:|---|
 | code, bootstrap, wheel, envs, fetch | ~22 | clone; `bootstrap.sh` (CPython 3.13.18 only); release wheel; `venv-stock` (`datatrove[io,processing]==0.10.1` + spaCy 3.8.18) and `venv-pyroid` (its freeze + the wheel); 8 WARC files of CC-MAIN-2026-39 and lid.176.bin |
-| stock-8, pyroid-8, native-8 | 14, 4, 3 | `fineweb_warc.py` in each mode, 8 workers, `taskset -c 0-7` (one thread per core) |
-| compare-8 | 1-4 | the three digests; if stock-8 lost pages to Trafilatura's timeout, `native-8x` (`--timeouts-of stock-8`) too |
-| hook | ? | `HTMLX_HOOK` (or `HTMLX_HOOK_FILE`, or `$HTMLX_S3/code/hook.sh`): the parity scale runs |
-| native-1, pyroid-1, stock-1 | 15, 17, 100 | the same at 1 worker |
-| compare | 1-4 | every run against native-8 (+ `native-1x` if stock-1 lost pages) |
+| reader | 6 | `fineweb_warc.py reader`: warcio + `process_record`, `pyroid.warc.iter_documents` and `iter_batches` on each file, one process on the first CPU of `HTMLX_CPUS`; the readers' digests must agree |
+| stock-8, pyroid-8, native-8, cli-8 | 15, 2, 2, 3 | `fineweb_warc.py` in each mode, 8 workers, `taskset -c 0-7` (one thread per core); `cli` is `pyroid clean --recipe fineweb-warc` |
+| compare-8 | 1-4 | the four digests; if stock-8 lost pages to Trafilatura's timeout, `native-8x` (`--timeouts-of stock-8`) too |
+| parity | 30 | `parity/pyroid_parity/warc_scale.py` over the 8 files, `--impl pyroid.warc --workers 8`: every record and document against warcio 1.8.2 and datatrove 0.10.1, in `results/parity/warc-scale.json` (`HTMLX_PARITY_ARGS` adds arguments) |
+| hook | ? | `HTMLX_HOOK` (or `HTMLX_HOOK_FILE`, or `$HTMLX_S3/code/hook.sh`) |
+| native-1, pyroid-1, stock-1 | 13, 14, 117 | the same at 1 worker, only with `HTMLX_ONE_WORKER=1` |
+| compare | 1-4 | every run against native-8 (+ `native-1x` if stock-1 lost pages), with `HTMLX_ONE_WORKER=1` |
 
 - Each step leaves `/opt/htmlx/state/<step>.done`; starting the script again skips finished steps, and
   `HTMLX_FORCE="stock-8"` redoes one. A run step whose estimate would end within 10 min of the scheduled shutdown is
@@ -88,5 +91,6 @@ files from P10's run (stock datatrove ~12 min at 8 workers, ~8x that at 1):
 - Needs about 15 GB free on the root volume (7.5 GB of WARC files, the Rust toolchain and build, two envs).
 - Tested in the dev container with the setup steps stubbed (a local stand-in for `aws s3 cp`, the setup products
   linked in, `HTMLX_STOCK_ARGS="--lid-model PATH"` because the container cannot build fasttext-numpy2-wheel, and
-  `HTMLX_RUN_ARGS` for small runs). The setup steps themselves follow P10's `research/htmlx/ec2/run.sh`, which ran
-  on AL2023.
+  `HTMLX_RUN_ARGS` for small runs; the reader, native-8, cli-8, compare-8 and parity steps again for P12, with
+  `HTMLX_RUN_ARGS="--limit 40"` and `HTMLX_PARITY_ARGS="--limit 100"`). The setup steps themselves follow P10's
+  `research/htmlx/ec2/run.sh`, which ran on AL2023, and ran there in P11.

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""datatrove's FineWeb pipeline from WARC files, end to end, three ways, with digests of the documents kept.
+"""datatrove's FineWeb pipeline from WARC files, end to end, four ways, with digests of the documents kept.
 
     python fineweb_warc.py stock        --warcs DIR --out OUT --workers N [--lid-model PATH] [--limit N]
     python fineweb_warc.py pyroid-steps --warcs DIR --out OUT --workers N --lid-model PATH [--limit N]
     python fineweb_warc.py native       --warcs DIR --out OUT --workers N --lid-model PATH [--limit N]
-                                        [--timeouts-of RUN]
+                                        [--timeouts-of RUN] [--reader pyroid|warcio]
+    python fineweb_warc.py cli          --warcs DIR --out OUT --workers N --lid-model PATH [--limit N]
+    python fineweb_warc.py reader       --warcs DIR --out OUT [--limit N] [--readers warcio,documents,batches]
     python fineweb_warc.py compare RUN [RUN ...] [--json FILE]
 
 The pipeline is datatrove 0.10.1's ``examples/fineweb.py``: WarcReader -> URLFilter ->
@@ -29,14 +31,24 @@ pyroid-steps
     MinhashDedupSignature and PIIFormatter; datatrove's reader, writers, MinhashDedupBuckets, MinhashDedupCluster
     and MinhashDedupFilter. A pyroid.FallbackWarning is an error here.
 native
-    No datatrove executor. A pool of N processes, one task per WARC file: records through datatrove's own
-    ``process_record`` (the same decoding), ``pyroid.filters.URLFilter``, ``pyroid.trafilatura.extract_batch``
-    (``compat="1.11.0"``, favor_precision=True, include_comments=False, a fresh LRUCache per file) and
-    ``pyroid.integrations.recipes.FineWeb(ftfy_config=False)`` for LID and the filters, writing the same kept and
-    excluded files. Then, in this process, MinHash dedup over every file in file (rank) order, and PII replacement
-    with a fresh replacer per file, as datatrove's per-task step.
+    No datatrove executor. A pool of N processes, one task per WARC file: the documents of
+    ``pyroid.warc.iter_documents`` (``--reader warcio``: warcio over ``gzip.open`` and datatrove's own
+    ``process_record``, the path datatrove takes), then the pieces of ``pyroid.integrations.recipes.FineWebWarc``:
+    ``pyroid.filters.URLFilter``, ``TaskExtractor`` (``pyroid.trafilatura.extract_batch``, ``compat="1.11.0"``,
+    favor_precision=True, include_comments=False, the dedup cache emptied per file) and ``FineWeb(ftfy_config=False)``
+    for LID and the filters, writing the same kept and excluded files. Then, in this process, MinHash dedup over
+    every file in file (rank) order, and PII replacement with a fresh replacer per file, as datatrove's per-task step.
+cli
+    ``pyroid clean FILE... OUT/cli.parquet --recipe fineweb-warc --workers N`` on the same files, in rank order. Its
+    output is the final documents (after PII), so this mode has only the ``after_pii`` digest; ``compare`` checks the
+    digests both runs have.
+reader
+    The reader alone, one file after another in this process: warcio over ``gzip.open`` + datatrove's
+    ``process_record`` (``warcio``), ``pyroid.warc.iter_documents`` (``documents``) and ``pyroid.warc.iter_batches``
+    (``batches``, the rows with a text). Per file and reader: wall and CPU seconds, documents, and a digest of every
+    document's (id, url, date, text), which must be the same for every reader.
 
-Every mode runs one task per WARC file, so the dedup cache, the MinHash order and the PII rotation are the same for
+Every pipeline mode runs one task per WARC file, so the dedup cache, the MinHash order and the PII rotation are the same for
 any N, and the digests must be too.
 
 OUT/summary.json: wall seconds per phase and in total, CPU seconds (getrusage, self + children), peak RSS, seconds
@@ -263,7 +275,8 @@ def print_steps(summary: dict[str, Any]) -> None:
     )
     for k in DIGESTS:
         d = summary["digests"][k]
-        print(f"digest {k}: {d['sha256']} ({d['docs']} docs)")
+        if d is not None:
+            print(f"digest {k}: {d['sha256']} ({d['docs']} docs)")
 
 
 def write_summary(out: Path, summary: dict[str, Any]) -> None:
@@ -781,7 +794,7 @@ class Writers:
 
 
 def _records(path: Path, limit: int) -> Any:
-    """Documents as datatrove's WarcReader makes them: process_record, then the empty-text skip and the limit."""
+    """Documents as datatrove's WarcReader makes them, on warcio: process_record, the empty-text skip, the limit."""
     from datatrove.pipeline.readers.warc import process_record
     from warcio.archiveiterator import ArchiveIterator
 
@@ -797,76 +810,62 @@ def _records(path: Path, limit: int) -> Any:
             yield d
 
 
-class Extractor:
-    """pyroid.trafilatura over one task's pages, with datatrove's per-task cache and its error and timeout drops."""
+def documents(path: Path, limit: int, reader: str) -> Any:
+    """The documents of one WARC file: pyroid.warc (FineWebWarc.documents) or warcio (``--reader warcio``)."""
+    if reader == "warcio":
+        return _records(path, limit)
+    from pyroid.integrations.recipes import FineWebWarc
 
-    def __init__(self, skip: dict[str, str]) -> None:
-        import pyroid.trafilatura as pt
+    return FineWebWarc.documents(path, limit=limit)
 
-        self.pt, self.skip = pt, skip
-        # trafilatura 1.11.0 has one dedup cache, the module-level LRU_TEST: any true `deduplicate` means it, a
-        # pyroid LRUCache included (pyroid.trafilatura follows that in compat="1.11.0"). So the task's cache is
-        # pyroid's LRU_TEST, emptied at the start of each task and after each lost page.
-        self.v111 = EXTRACT_KW["compat"] == "1.11.0"
-        self.cache: Any = True
-        self.events: list[dict[str, Any]] = []
-        self._fresh()
 
-    def _fresh(self) -> None:
-        if self.v111:
-            self.pt.reset_caches()
-        else:
-            self.cache = self.pt.LRUCache(maxsize=self.pt.LRU_SIZE)
+def extractor(skip: dict[str, str]) -> Any:
+    """``recipes.TaskExtractor`` over one task's pages, plus the pages a stock run lost (``--timeouts-of``)."""
+    from pyroid.integrations.recipes import TaskExtractor
 
-    def _snapshot(self) -> Any:
-        return copy.copy(self.pt.LRU_TEST if self.v111 else self.cache)
+    class Extractor(TaskExtractor):  # type: ignore[misc]
+        """datatrove's per-task Trafilatura step (TaskExtractor: the dedup cache, the error drops), and the
+        timeout and dead-child drops of a stock run, emulated: the page is dropped and the cache restarted."""
 
-    def _restore(self, snap: Any) -> None:
-        if self.v111:
-            self.pt.LRU_TEST = snap
-        else:
-            self.cache = snap
+        def __init__(self) -> None:
+            super().__init__(threads=1, **EXTRACT_KW)
+            self.skip = skip
+            self.events: list[dict[str, Any]] = []
 
-    def _batch(self, htmls: list[str]) -> list[Any]:
-        snap = self._snapshot()
-        try:
-            return self.pt.extract_batch(htmls, threads=1, deduplicate=self.cache, **EXTRACT_KW)
-        # Any error kills datatrove's child process: redo the batch page by page from the snapshot, dropping the
-        # page that raises and starting a fresh cache after it, as the next child does.
-        except Exception:  # noqa: BLE001
-            self._restore(snap)
+        def _batch(self, htmls: list[str]) -> list[Any]:
+            return [_BROKEN if isinstance(r, Exception) else r for r in TaskExtractor.__call__(self, htmls)]
+
+        def __call__(self, docs: list[dict[str, Any]], rank: int, pos: int) -> list[Any]:  # type: ignore[override]
             out: list[Any] = []
-            for h in htmls:
-                try:
-                    out.append(self.pt.extract(h, deduplicate=self.cache, **EXTRACT_KW))
-                except Exception:  # noqa: BLE001
-                    out.append(_BROKEN)
-                    self._fresh()
+            i = 0
+            while i < len(docs):
+                j = next((k for k in range(i, len(docs)) if docs[k]["id"] in self.skip), len(docs))
+                if j > i:
+                    out += self._batch([d["text"] for d in docs[i:j]])
+                if j < len(docs):
+                    kind = self.skip[docs[j]["id"]]
+                    out.append(_TIMEOUT)
+                    self.events.append(
+                        {
+                            "rank": rank,
+                            "kind": kind,
+                            "position": pos + j,
+                            "id": docs[j]["id"],
+                            "emulated": True,
+                        }
+                    )
+                    if kind != "clean_error":  # datatrove restarts the child after a timeout or a dead child
+                        self.reset()
+                    j += 1
+                i = j
+            for k, r in enumerate(out):
+                if r is _BROKEN:
+                    self.events.append(
+                        {"rank": rank, "kind": "broken_process", "position": pos + k, "id": docs[k]["id"]}
+                    )
             return out
 
-    def __call__(self, docs: list[dict[str, Any]], rank: int, pos: int) -> list[Any]:
-        out: list[Any] = []
-        i = 0
-        while i < len(docs):
-            j = next((k for k in range(i, len(docs)) if docs[k]["id"] in self.skip), len(docs))
-            if j > i:
-                out += self._batch([d["text"] for d in docs[i:j]])
-            if j < len(docs):
-                kind = self.skip[docs[j]["id"]]
-                out.append(_TIMEOUT)
-                self.events.append(
-                    {"rank": rank, "kind": kind, "position": pos + j, "id": docs[j]["id"], "emulated": True}
-                )
-                if kind != "clean_error":  # datatrove restarts the child after a timeout or a dead child
-                    self._fresh()
-                j += 1
-            i = j
-        for k, r in enumerate(out):
-            if r is _BROKEN:
-                self.events.append(
-                    {"rank": rank, "kind": "broken_process", "position": pos + k, "id": docs[k]["id"]}
-                )
-        return out
+    return Extractor()
 
 
 def native_task(job: tuple[int, str, dict[str, Any]]) -> dict[str, Any]:
@@ -879,15 +878,14 @@ def native_task(job: tuple[int, str, dict[str, Any]]) -> dict[str, Any]:
     meta0 = {"dump": o["dump"], "file_path": path}
     t0 = T()
     if "url" not in _W:
-        import pyroid.filters as pf
-        from pyroid.integrations.recipes import FineWeb
+        from pyroid.integrations.recipes import FineWebWarc
 
-        _W["url"] = pf.URLFilter()
-        _W["recipe"] = FineWeb(lid_model=o["lid_model"], ftfy_config=False, threads=1)
-    secs["url_filter"] += (
-        T() - t0
-    )  # building the filter (datatrove's step loads its lists at the first document)
-    ext = Extractor(o["skip"].get(str(rank), {}))
+        fw = FineWebWarc(lid_model=o["lid_model"], threads=1)
+        _W["url"] = fw.url_filter
+        _W["recipe"] = fw.fineweb  # FineWeb(ftfy_config=False): LID and the four filters
+    # building the filter (datatrove's step loads its lists at the first document)
+    secs["url_filter"] += T() - t0
+    ext = extractor(o["skip"].get(str(rank), {}))
     seen = 0
 
     def process(batch: list[dict[str, Any]]) -> None:
@@ -962,7 +960,7 @@ def native_task(job: tuple[int, str, dict[str, Any]]) -> dict[str, Any]:
             docs[s] += n
 
     batch: list[dict[str, Any]] = []
-    it = _records(Path(o["warcs"], path), o["limit"])
+    it = documents(Path(o["warcs"], path), o["limit"], o["reader"])
     while True:
         t = T()
         d = next(it, None)
@@ -1008,6 +1006,7 @@ def cmd_native(a: argparse.Namespace) -> None:
     files = warc_files(a.warcs)
     out = prepare_out(a.out)
     summary = base_summary(a, "native", files)
+    summary["reader"] = "pyroid.warc.iter_documents" if a.reader == "pyroid" else "warcio + process_record"
     skip = load_skip(a.timeouts_of)
     if a.timeouts_of:
         summary["timeouts_of"] = {"run": a.timeouts_of, "pages": sum(len(v) for v in skip.values())}
@@ -1019,6 +1018,7 @@ def cmd_native(a: argparse.Namespace) -> None:
         "dump": a.dump,
         "batch_size": a.batch_size,
         "skip": skip,
+        "reader": a.reader,
     }
     workers = min(a.workers, len(files))
     phases: dict[str, float] = {}
@@ -1137,6 +1137,218 @@ def cmd_native(a: argparse.Namespace) -> None:
     write_summary(out, summary)
 
 
+# --------------------------------------------------------------------------------------------------- cli
+
+
+def cmd_cli(a: argparse.Namespace) -> None:
+    """``pyroid clean --recipe fineweb-warc`` on the WARC files, in rank order, and its final documents' digest."""
+    import subprocess
+
+    import pyarrow.parquet as pq
+
+    files = warc_files(a.warcs)
+    out = prepare_out(a.out)
+    summary = base_summary(a, "cli", files)
+    stats_json = out / "cli-stats.json"
+    cmd = [
+        sys.executable,
+        "-m",
+        "pyroid",
+        "clean",
+        *(str(Path(a.warcs, f)) for f in files),
+        str(out / "cli.parquet"),
+        "--recipe",
+        "fineweb-warc",
+        "--lid-model",
+        a.lid_model,
+        "--workers",
+        str(min(a.workers, len(files))),
+        "--dump",
+        a.dump,
+        *(["--limit", str(a.limit)] if a.limit != -1 else []),
+        "--stats-json",
+        str(stats_json),
+        "--tmp-dir",
+        str(out / "tmp"),
+    ]
+    summary["command"] = [Path(cmd[0]).name, *cmd[1:]]
+    t0 = T()
+    p = subprocess.run(cmd, check=False)
+    wall = T() - t0
+    if p.returncode != 0:
+        sys.exit(f"pyroid clean failed ({p.returncode})")
+    cpu = rusage()
+    summary["loadavg_end"] = loadavg()
+    st = json.loads(stats_json.read_text())
+    t = pq.read_table(out / "cli.parquet", columns=["id", "text", "file_path"])
+    rank_of = {os.path.abspath(Path(a.warcs, f)): r for r, f in enumerate(files)}
+    after_pii: dict[int, list[tuple[str, str]]] = {}
+    for i, txt, fp in zip(*(t.column(c).to_pylist() for c in ("id", "text", "file_path")), strict=True):
+        after_pii.setdefault(rank_of[fp], []).append((i, txt))
+    flat = [d for r in sorted(after_pii) for d in after_pii[r]]
+    removed: dict[str, int] = st.get("removed", {})
+
+    def dropped(prefix: str) -> int:
+        return sum(v for k, v in removed.items() if k == prefix or k.startswith(prefix + ":"))
+
+    n = st["docs_in"]
+    docs = {"warc_reader": n}
+    for stage in ("url_filter", "trafilatura", "lid", *FILTER_STAGES, "minhash"):
+        n -= dropped(stage)
+        docs["minhash_filter" if stage == "minhash" else stage] = n
+    docs["pii"] = st["docs_out"]
+    with gzip.open(out / "docs.tsv.gz", "wt", encoding="utf-8") as f:
+        f.write("id\trank\tafter_minhash_filter\tafter_pii\n")
+        for r in sorted(after_pii):
+            for i, txt in after_pii[r]:
+                f.write(f"{i}\t{r}\t-\t{short_hash(txt)}\n")
+    summary.update(
+        {
+            "wall_seconds": {"total": round(T() - T_START, 3), "phases": {"cli": round(wall, 3)}},
+            "cpu_seconds": cpu,
+            "maxrss_mib": {"parent": ru_self(), "largest_worker": round(_children_maxrss() / 1024, 1)},
+            "steps": [
+                {"phase": "cli", "step": "pyroid clean", "seconds": round(wall, 3), "docs_out": len(flat)}
+            ],
+            "docs": docs,
+            "cli_stats": st,
+            "trafilatura": {
+                "timeout": 0,
+                "broken_process": removed.get("trafilatura:broken_process", 0),
+                "clean_error": 0,
+                "extracted": None,
+                "forwarded": None,
+                "dropped": removed.get("trafilatura", 0),
+            },
+            "events": 0,
+            "digests": {"after_minhash_filter": None, "after_pii": digest(flat)},
+        }
+    )
+    if not a.keep_outputs:
+        shutil.rmtree(out / "tmp", ignore_errors=True)
+    write_summary(out, summary)
+
+
+def _children_maxrss() -> float:
+    return float(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss)
+
+
+# ------------------------------------------------------------------------------------------------ reader
+
+READERS = ("warcio", "documents", "batches")
+
+
+def _read_warcio(path: Path, limit: int) -> Any:
+    """datatrove's read path: warcio over gzip.open, datatrove's process_record."""
+    from datatrove.pipeline.readers.warc import process_record
+    from warcio.archiveiterator import ArchiveIterator
+
+    with gzip.open(path, "rb") as f:
+        for record in ArchiveIterator(f):
+            d = process_record(record)
+            if d:
+                yield d["id"], d["url"], d["date"], d["text"]
+                limit -= 1
+                if limit == 0:
+                    return
+
+
+def _read_documents(path: Path, limit: int) -> Any:
+    import pyroid.warc as pw
+
+    for _, d in pw.iter_documents(path):
+        yield d["id"], d["url"], d["date"], d["text"]
+        limit -= 1
+        if limit == 0:
+            return
+
+
+def _read_batches(path: Path, limit: int) -> Any:
+    import pyroid.warc as pw
+
+    for b in pw.iter_batches(path):
+        cols = [b.column(c).to_pylist() for c in ("id", "url", "date", "text")]
+        for row in zip(*cols, strict=True):
+            if row[3] is not None:
+                yield row
+                limit -= 1
+                if limit == 0:
+                    return
+
+
+def cmd_reader(a: argparse.Namespace) -> None:
+    """Time each reader on each file, one after another, and check they give the same documents."""
+    files = warc_files(a.warcs)
+    out = prepare_out(a.out)
+    summary = base_summary(a, "reader", files)
+    readers = [r.strip() for r in a.readers.split(",") if r.strip()]
+    bad = [r for r in readers if r not in READERS]
+    if bad:
+        sys.exit(f"unknown readers {bad}: choose from {', '.join(READERS)}")
+    fn = {"warcio": _read_warcio, "documents": _read_documents, "batches": _read_batches}
+    rows, ok = [], True
+    totals = {r: {"wall": 0.0, "cpu": 0.0, "docs": 0} for r in readers}
+    print(f"{'file':<58} {'reader':<10} {'wall s':>8} {'cpu s':>8} {'MB/s':>8} {'docs':>7} digest")
+    for name in files:
+        path = Path(a.warcs, name)
+        size = path.stat().st_size
+        digests = {}
+        for r in readers:
+            h = hashlib.sha256()
+            n = 0
+            error = None
+            c0 = resource.getrusage(resource.RUSAGE_SELF)
+            t0 = T()
+            try:
+                for fields in fn[r](path, a.limit):
+                    for x in fields:
+                        h.update(b"\1" if x is None else _utf8(x) + b"\0")
+                    n += 1
+            except Exception as e:  # noqa: BLE001 - a damaged file: every reader must stop at the same place
+                error = f"{type(e).__name__}: {e}"
+                h.update(_utf8(error))
+            wall = T() - t0
+            c1 = resource.getrusage(resource.RUSAGE_SELF)
+            cpu = c1.ru_utime + c1.ru_stime - c0.ru_utime - c0.ru_stime
+            digests[r] = h.hexdigest()
+            totals[r]["wall"] += wall
+            totals[r]["cpu"] += cpu
+            totals[r]["docs"] += n
+            rows.append(
+                {
+                    "file": name,
+                    "bytes": size,
+                    "reader": r,
+                    "wall_seconds": round(wall, 3),
+                    "cpu_seconds": round(cpu, 3),
+                    "docs": n,
+                    "error": error,
+                    "sha256": digests[r],
+                }
+            )
+            print(
+                f"{name:<58} {r:<10} {wall:>8.2f} {cpu:>8.2f} {size / 1e6 / wall:>8.1f} {n:>7} {digests[r][:12]}"
+            )
+        if len(set(digests.values())) > 1:
+            ok = False
+            print(f"{name}: the readers differ: {digests}")
+    summary.update(
+        {
+            "readers": readers,
+            "files": rows,
+            "totals": {r: {k: round(v, 3) for k, v in t.items()} for r, t in totals.items()},
+            "identical": ok,
+            "loadavg_end": loadavg(),
+        }
+    )
+    (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
+    for r, t in totals.items():
+        print(f"total {r:<10} wall {t['wall']:.1f} s, cpu {t['cpu']:.1f} s, {t['docs']} docs")
+    print("identical" if ok else "DIFFERENT")
+    if not ok:
+        sys.exit(1)
+
+
 # ----------------------------------------------------------------------------------------------- compare
 
 
@@ -1151,8 +1363,9 @@ def doc_diff(ref: Path, run: Path) -> dict[str, Any]:
     only_ref = sorted(set(a) - set(b))
     only_run = sorted(set(b) - set(a))
     both = sorted(set(a) & set(b))
-    filt = [i for i in both if a[i][0] != b[i][0]]
-    pii = [i for i in both if a[i][1] != b[i][1]]
+    # "-": not recorded (a cli run has only the final text)
+    filt = [i for i in both if a[i][0] != b[i][0] and "-" not in (a[i][0], b[i][0])]
+    pii = [i for i in both if a[i][1] != b[i][1] and "-" not in (a[i][1], b[i][1])]
     return {
         "only_in_reference": len(only_ref),
         "only_in_run": len(only_run),
@@ -1185,7 +1398,12 @@ def cmd_compare(a: argparse.Namespace) -> int:
         f"{'after_minhash_filter':<14} {'after_pii':<14} same"
     )
     for p, s in runs:
-        same = {k: s["digests"][k]["sha256"] == ref["digests"][k]["sha256"] for k in DIGESTS}
+        # a digest a run does not have (a cli run: after_minhash_filter) is not compared
+        same = {
+            k: s["digests"][k]["sha256"] == ref["digests"][k]["sha256"]
+            for k in DIGESTS
+            if s["digests"].get(k) and ref["digests"].get(k)
+        }
         lost = s["trafilatura"]["timeout"] + s["trafilatura"]["broken_process"]
         row = {
             "run": p.name,
@@ -1196,7 +1414,7 @@ def cmd_compare(a: argparse.Namespace) -> int:
             "final_docs": s["digests"]["after_pii"]["docs"],
             "trafilatura_lost": lost,
             "timeouts_of": s.get("timeouts_of"),
-            "digests": {k: s["digests"][k]["sha256"] for k in DIGESTS},
+            "digests": {k: (s["digests"].get(k) or {}).get("sha256") for k in DIGESTS},
             "same_as_reference": same,
             "docs": s["docs"],
         }
@@ -1206,8 +1424,8 @@ def cmd_compare(a: argparse.Namespace) -> int:
         rows.append(row)
         print(
             f"{p.name:<26} {s['mode']:<13} {s['workers']:>2} {row['wall_seconds']:>9.1f} {row['cpu_seconds']:>10.1f} "
-            f"{row['final_docs']:>7} {lost:>5} {row['digests'][DIGESTS[0]][:12]:<14} "
-            f"{row['digests'][DIGESTS[1]][:12]:<14} {'yes' if all(same.values()) else 'NO'}"
+            f"{row['final_docs']:>7} {lost:>5} {(row['digests'][DIGESTS[0]] or '-')[:12]:<14} "
+            f"{(row['digests'][DIGESTS[1]] or '-')[:12]:<14} {'yes' if all(same.values()) else 'NO'}"
         )
     for row in rows:
         if "diff" in row:
@@ -1237,7 +1455,7 @@ def cmd_compare(a: argparse.Namespace) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="mode", required=True)
-    for mode in ("stock", "pyroid-steps", "native"):
+    for mode in ("stock", "pyroid-steps", "native", "cli", "reader"):
         p = sub.add_parser(mode)
         p.add_argument("--warcs", required=True, help=f"folder of {GLOB} files, one task each")
         p.add_argument(
@@ -1261,16 +1479,31 @@ def main() -> int:
                 metavar="RUN",
                 help="drop the pages this stock run's Trafilatura step lost, as it did",
             )
+            p.add_argument(
+                "--reader",
+                choices=("pyroid", "warcio"),
+                default="pyroid",
+                help="pyroid.warc.iter_documents, or warcio + datatrove's process_record [pyroid]",
+            )
+        if mode == "reader":
+            p.add_argument(
+                "--readers", default=",".join(READERS), help=f"which readers, in order [{','.join(READERS)}]"
+            )
     p = sub.add_parser("compare")
     p.add_argument("runs", nargs="+", help="run folders; the first is the reference")
     p.add_argument("--json", default=None, help="write the comparison here")
     a = ap.parse_args()
     if a.mode == "compare":
         return cmd_compare(a)
+    if a.mode == "reader":
+        cmd_reader(a)
+        return 0
+    if a.mode in ("native", "cli") and a.lid_model is None:
+        sys.exit(f"{a.mode} needs --lid-model")
     if a.mode == "native":
-        if a.lid_model is None:
-            sys.exit("native needs --lid-model")
         cmd_native(a)
+    elif a.mode == "cli":
+        cmd_cli(a)
     else:
         cmd_datatrove(a, a.mode)
     return 0

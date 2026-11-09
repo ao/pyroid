@@ -119,21 +119,30 @@ uv venv -p 3.12 /target/jr-312 && uv pip install --python /target/jr-312 json-re
 datatrove 0.10.1's `examples/fineweb.py` from Common Crawl WARC files to the deduplicated, PII-replaced output:
 WarcReader, URLFilter, Trafilatura(favour_precision=True), LanguageFilter(languages=["en"]), the Gopher, C4 and
 FineWeb filters with fineweb.py's exclusion writers, then the four MinHash stages (sha1/64, 14 buckets x 8, 5-grams)
-and PIIFormatter. It stands alone (not the bench uv env), in three modes:
+and PIIFormatter. It stands alone (not the bench uv env), in four modes, plus a reader-only timing:
 
 ```bash
 python bench/fineweb_warc.py stock        --warcs W --out O/stock  --workers 8
 python bench/fineweb_warc.py pyroid-steps --warcs W --out O/steps  --workers 8 --lid-model lid.176.bin
 python bench/fineweb_warc.py native       --warcs W --out O/native --workers 8 --lid-model lid.176.bin
-python bench/fineweb_warc.py compare O/stock O/steps O/native     # exit 1 unless the digests are identical
+python bench/fineweb_warc.py cli          --warcs W --out O/cli    --workers 8 --lid-model lid.176.bin
+python bench/fineweb_warc.py compare O/stock O/steps O/native O/cli   # exit 1 unless the digests agree
+python bench/fineweb_warc.py reader       --warcs W --out O/reader   # one process; exit 1 unless the readers agree
 ```
 
 - `stock`: datatrove's own steps on its `LocalPipelineExecutor`, in an env with `datatrove[io,processing]==0.10.1`
   as pip resolves it (trafilatura 1.11.0, fasttext-numpy2-wheel) plus spaCy.
 - `pyroid-steps`: the same executor with `pyroid.integrations.datatrove`'s drop-ins where pyroid has one; the same
   env plus the pyroid wheel.
-- `native`: no executor. `pyroid.trafilatura.extract_batch(compat="1.11.0")`, `pyroid.filters` and the
-  `FineWeb` recipe per WARC file in a process pool, then MinHash and PII over the files in order.
+- `native`: no executor. `pyroid.warc.iter_documents` (`--reader warcio`: warcio and datatrove's `process_record`,
+  to time the old path), then the pieces of `pyroid.integrations.recipes.FineWebWarc` (the URL filter,
+  `TaskExtractor` on `pyroid.trafilatura`, the `FineWeb` recipe without ftfy) per WARC file in a process pool, then
+  MinHash and PII over the files in order.
+- `cli`: `pyroid clean --recipe fineweb-warc` on the same files. Its output is after PII, so `compare` checks only
+  the `after_pii` digest for it.
+- `reader`: the reader alone, file after file in one process: warcio over `gzip.open` + `process_record`,
+  `pyroid.warc.iter_documents` and `pyroid.warc.iter_batches`, each timed (wall and CPU) and digested over every
+  document's id, URL, date and text.
 - Every mode runs one task per WARC file, so the output does not depend on `--workers`. `OUT/summary.json` has wall
   seconds per phase, CPU seconds, peak RSS, seconds and documents per step, and sha256 digests of the documents
   (sorted by id) after MinhashDedupFilter and after PIIFormatter.
