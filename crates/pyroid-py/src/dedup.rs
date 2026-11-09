@@ -127,7 +127,7 @@ impl NativeConfig {
         let mut hasher = MinHasher::new(config, norm.unicode)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         if let Some(language) = language {
-            crate::sudachi::prepare(py, language)?;
+            crate::segmenters::prepare(py, language)?;
             let tok =
                 filters::tokenizer_for(language, norm.unicode).ok_or_else(
                     || match filters::backend(language) {
@@ -140,7 +140,7 @@ impl NativeConfig {
                          (datatrove's {}({:?})){}",
                             b.class,
                             b.arg,
-                            crate::sudachi::hint(language)
+                            crate::segmenters::hint(language)
                         )),
                     },
                 )?;
@@ -931,7 +931,7 @@ mod sentence {
                 norm_config: norm.norm,
                 hash_config: HashConfig { precision, hash_fc },
             };
-            crate::sudachi::prepare(py, language)?;
+            crate::segmenters::prepare(py, language)?;
             let kernel = SentenceDeduper::new(config, norm.unicode, language)
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             Ok(Self { kernel })

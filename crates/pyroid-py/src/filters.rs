@@ -184,7 +184,7 @@ impl NativePipeline {
                 }
                 None => python_words(version),
                 Some(language) => {
-                    crate::sudachi::prepare(py, language)?;
+                    crate::segmenters::prepare(py, language)?;
                     filters::tokenizer_for(language, version).ok_or_else(
                         || match filters::backend(language) {
                             None => unknown_language(language),
@@ -193,7 +193,7 @@ impl NativePipeline {
                              (datatrove's {}({:?})){}",
                                 b.class,
                                 b.arg,
-                                crate::sudachi::hint(language)
+                                crate::segmenters::hint(language)
                             )),
                         },
                     )?
@@ -228,17 +228,10 @@ fn languages(
     unicode_version: &str,
 ) -> PyResult<Vec<(&'static str, &'static str, &'static str, bool)>> {
     let v = version_arg(unicode_version)?;
-    let ja = crate::sudachi::available(py)?;
-    Ok(filters::languages()
-        .map(|(code, b)| {
-            let native = if crate::sudachi::is_japanese(code) {
-                ja
-            } else {
-                filters::tokenizer_for(code, v).is_some()
-            };
-            (code, b.class, b.arg, native)
-        })
-        .collect())
+    let mut native = crate::segmenters::Native::new();
+    filters::languages()
+        .map(|(code, b)| Ok((code, b.class, b.arg, native.get(py, code, v)?)))
+        .collect()
 }
 
 /// datatrove's tokenizer for one code: `(class, argument, native)`, or
@@ -250,11 +243,7 @@ fn backend(
     unicode_version: &str,
 ) -> PyResult<Option<(&'static str, &'static str, bool)>> {
     let v = version_arg(unicode_version)?;
-    let native = if crate::sudachi::is_japanese(language) {
-        crate::sudachi::available(py)?
-    } else {
-        filters::tokenizer_for(language, v).is_some()
-    };
+    let native = crate::segmenters::Native::new().get(py, language, v)?;
     Ok(filters::backend(language).map(|b| (b.class, b.arg, native)))
 }
 

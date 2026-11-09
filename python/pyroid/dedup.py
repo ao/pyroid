@@ -529,11 +529,7 @@ def _no_tokenizer(language: str) -> Exception:
         "path; run datatrove's steps (pyroid.integrations.datatrove does, with a FallbackWarning). "
         "pyroid.filters.languages() lists the native codes; split_sentences=False with "
         "min_doc_words, min_num_sentences and min_words_to_remove_span <= 0 needs no tokenizer"
-        + (
-            "; or install sudachidict-core (20261015 or newer), and pyroid tokenizes it natively"
-            if (cls, arg) == ("SpaCyTokenizer", "ja")
-            else ""
-        )
+        + _filters._DATA_HINTS.get((cls, arg), "").replace(" Or", "; or").rstrip(".")
     )
 
 

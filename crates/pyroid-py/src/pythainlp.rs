@@ -1,0 +1,73 @@
+//! PyThaiNLP's word list and sentence model behind datatrove's Thai tokenizer.
+//!
+//! pyroid does not ship them. It reads the files of the PyThaiNLP the user
+//! installed (`pip install pythainlp`, which datatrove's `ThaiTokenizer`
+//! needs anyway): `corpus/words_th.txt` and `corpus/sentenceseg_crfcut.model`,
+//! the files `pythainlp.tokenize` loads, or those of the directory
+//! `PYROID_PYTHAINLP_CORPUS` names. The package is located without importing
+//! it.
+
+use std::path::PathBuf;
+
+use pyo3::exceptions::{PyOSError, PyValueError};
+use pyo3::prelude::*;
+use pyroid_core::filters;
+use pyroid_core::pythainlp::{self, ThaiError};
+
+/// Whether datatrove tokenizes `language` with `ThaiTokenizer`.
+pub(crate) fn is_thai(language: &str) -> bool {
+    filters::backend(language).is_some_and(|b| b.class == "ThaiTokenizer")
+}
+
+/// `pythainlp/corpus` of the installed package, or `$PYROID_PYTHAINLP_CORPUS`.
+fn corpus_dir(py: Python<'_>) -> PyResult<Option<PathBuf>> {
+    if let Some(p) = std::env::var_os("PYROID_PYTHAINLP_CORPUS") {
+        return Ok(Some(PathBuf::from(p)));
+    }
+    let spec = py
+        .import("importlib.util")?
+        .call_method1("find_spec", ("pythainlp",))?;
+    if spec.is_none() {
+        return Ok(None);
+    }
+    let origin = spec.getattr("origin")?;
+    if origin.is_none() {
+        return Ok(None);
+    }
+    let origin: PathBuf = origin.extract()?;
+    Ok(origin.parent().map(|dir| dir.join("corpus")))
+}
+
+/// Whether the Thai tokenizer can run natively: the corpus is loaded, or
+/// there is one to load.
+pub(crate) fn available(py: Python<'_>) -> PyResult<bool> {
+    Ok(pythainlp::installed().is_some() || corpus_dir(py)?.is_some())
+}
+
+/// Load the corpus files if `language` needs them (once per process). Without
+/// PyThaiNLP this does nothing, and `tokenizer_for` gives no tokenizer.
+pub(crate) fn prepare(py: Python<'_>, language: &str) -> PyResult<()> {
+    if pythainlp::installed().is_some() || !is_thai(language) {
+        return Ok(());
+    }
+    let Some(dir) = corpus_dir(py)? else {
+        return Ok(());
+    };
+    py.detach(|| pythainlp::install(&dir))
+        .map(|_| ())
+        .map_err(|e| match e {
+            ThaiError::Io(path, e) => {
+                PyOSError::new_err(format!("cannot read PyThaiNLP's {}: {e}", path.display()))
+            }
+            ThaiError::Format(m) => PyValueError::new_err(format!("{}: {m}", dir.display())),
+        })
+}
+
+/// The extra hint for a language pyroid could tokenize with PyThaiNLP's data.
+pub(crate) fn hint(language: &str) -> &'static str {
+    if is_thai(language) {
+        "; install pythainlp (5.4.0) to tokenize it natively"
+    } else {
+        ""
+    }
+}

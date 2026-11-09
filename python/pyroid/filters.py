@@ -386,6 +386,13 @@ def _pip(cls: str, arg: str) -> str:
     return f"pip install {_DATATROVE_PIP} {lib}".rstrip()
 
 
+#: What makes a tokenizer native when it is installed (pyroid reads its data at run time).
+_DATA_HINTS: dict[tuple[str, str], str] = {
+    ("SpaCyTokenizer", "ja"): (
+        " Or install sudachidict-core (20261015 or newer), and pyroid tokenizes it natively."
+    ),
+    ("ThaiTokenizer", ""): " Or install pythainlp (5.4.0), and pyroid tokenizes it natively.",
+}
 _NATIVE_OK: set[tuple[str, str]] = set()
 
 
@@ -396,12 +403,8 @@ def _native_language(code: str, math: str = "the filter math still runs in Rust"
         return
     cls, arg, native = _backend(code)
     if not native:
-        # Native once a SudachiDict dictionary is installed.
-        dictionary = (
-            " Or install sudachidict-core (20261015 or newer), and pyroid tokenizes it natively."
-            if (cls, arg) == ("SpaCyTokenizer", "ja")
-            else ""
-        )
+        # Native once a SudachiDict dictionary, or PyThaiNLP, is installed.
+        dictionary = _DATA_HINTS.get((cls, arg), "")
         raise NotImplementedError(
             f"pyroid has no native word tokenizer for language {code!r}: datatrove tokenizes it "
             f"with {_describe(cls, arg)}. Pass python_tokenizer=True to tokenize it with "

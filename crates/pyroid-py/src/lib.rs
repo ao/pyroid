@@ -23,6 +23,8 @@ mod metrics;
 mod nemo;
 mod nemo_modifiers;
 mod nltk;
+mod pythainlp;
+mod segmenters;
 mod sudachi;
 mod testing;
 mod text;
