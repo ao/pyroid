@@ -71,7 +71,8 @@ def dump(path: str) -> None:
         title = unicodedata.category(ch) == "Lt"
         assert ch.istitle() == (upper or title), hex(cp)
         assert not (upper and title), hex(cp)
-        for name, value in (("upper", upper), ("lower", lower), ("title", title), ("digit", ch.isdigit())):
+        values = (("upper", upper), ("lower", lower), ("title", title), ("digit", ch.isdigit()))
+        for name, value in values:
             if value:
                 hits[name].append(cp)
     data = {
@@ -126,7 +127,8 @@ def emit(paths: list[str]) -> None:
             pats = " | ".join(f"UnicodeVersion::{VERSIONS[d['unicode']]}" for d in ds)
             arms.append(f"        {pats} => {name},\n")
         out.append(f"\n/// The `{prop}` table for Unicode version `v` (code points from U+0080).\n")
-        out.append(f"pub(super) fn {prop}(v: UnicodeVersion) -> &'static [(u32, u32)] {{\n    match v {{\n")
+        out.append(f"pub(super) fn {prop}(v: UnicodeVersion) -> &'static [(u32, u32)] {{\n")
+        out.append("    match v {\n")
         out.extend(arms)
         out.append("    }\n}\n")
     dest = HERE / "unicode_tables.rs"

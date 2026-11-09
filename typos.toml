@@ -103,6 +103,8 @@ als = "als"
 mor = "mor"
 # "ontent" from the sed pattern `[Cc]ontent-[Ll]ength` in bench/ec2/run_warc.sh.
 ontent = "ontent"
+# Vietnamese "Nam" (Việt Nam) in test text and examples.
+Nam = "Nam"
 
 [default.extend-identifiers]
 # `import pyroid.nltk as pn` in the tests and benchmarks.

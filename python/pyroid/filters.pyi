@@ -73,8 +73,9 @@ datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
 - Python tokenizer, opt-in (the other 294 codes): datatrove uses a segmenter
   pyroid does not port: ``StanzaTokenizer`` (255 codes),
   ``BurmeseTokenizer``, ``TibetanTokenizer``, ``LaoTokenizer``,
-  ``KhmerTokenizer`` and ``KiwiTokenizer`` (see :func:`languages`). Calling a filter with such a code raises
-  ``NotImplementedError`` unless you pass ``python_tokenizer=True``. Then each
+  ``KhmerTokenizer`` and ``KiwiTokenizer`` (see :func:`languages`). Calling a
+  filter with such a code raises ``NotImplementedError`` unless you pass
+  ``python_tokenizer=True``. Then each
   document is tokenized by datatrove's own tokenizer, in Python, on the
   calling thread. This needs datatrove 0.10.1 and the segmenter installed
   (``pyroid.PyroidError`` says what is missing). The filter math runs in Rust

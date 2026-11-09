@@ -40,11 +40,13 @@ def main() -> None:
 
     assert importlib.metadata.version("pyvi") == "0.1.1", importlib.metadata.version("pyvi")
     spec = importlib.util.find_spec("pyvi")
-    assert spec is not None and spec.origin is not None
+    assert spec is not None
+    assert spec.origin is not None
     models = Path(spec.origin).parent / "models"
     pkl = (models / "pyvi3.pkl").read_bytes()
     assert sha256(pkl) == PKL_SHA256, sha256(pkl)
-    crf = pickle.loads(pkl)  # noqa: S301  (pyvi's own pinned pickle, sha256 checked above)
+    # pyvi's own pinned pickle, its sha256 checked above.
+    crf = pickle.loads(pkl)
     model = Path(crf.modelfile.name).read_bytes()
     assert sha256(model) == MODEL_SHA256, sha256(model)
     assert model[:4] == b"lCRF"
