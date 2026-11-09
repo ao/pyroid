@@ -5,6 +5,9 @@
     python examples/cli/digest.py fineweb-dev-10k.parquet kept.parquet dropped.parquet \
         --expect ef314b8d6ae95cc63c6cfa8b1a3a76ee5bc101eb88a66729beb10ecb7226473b
 
+Several excluded paths (files or directories) are read as one, for runs whose dropped rows
+were written by more than one command (``clean --no-dedup`` then ``dedup filter``).
+
 One JSON line per input doc, in input order, ``[id, text, lang, score (%.6f), keep, reason, dup]``,
 sha256: the format of ``bench/pipeline.py`` (datatrove's chain) and ``bench/chain.py``. ``keep`` =
 passed every filter, ``dup`` = removed by MinHash (``None`` when the doc was dropped earlier).
@@ -35,7 +38,11 @@ def read(path: str, columns: list[str] | None = None) -> pa.Table:
 
 
 def digest(
-    input_path: str, kept: str, excluded: str, id_col: str = "id", text_col: str = "text"
+    input_path: str,
+    kept: str,
+    excluded: str | list[str],
+    id_col: str = "id",
+    text_col: str = "text",
 ) -> str:
     ids = read(input_path, [id_col]).column(id_col).to_pylist()
     rec: dict[Any, list[Any]] = {}
@@ -58,7 +65,8 @@ def digest(
                 rec[i] = [i, text, lang, sc, False, reason, None]
 
     put(read(kept), "kept")
-    put(read(excluded), "excluded")
+    for path in [excluded] if isinstance(excluded, str) else excluded:
+        put(read(path), "excluded")
     missing = [i for i in ids if i not in rec]
     if missing or len(rec) != len(ids):
         raise SystemExit(f"{len(missing)} input docs are in neither output (e.g. {missing[:3]})")
@@ -74,7 +82,7 @@ def main() -> int:
     )
     ap.add_argument("input")
     ap.add_argument("kept")
-    ap.add_argument("excluded")
+    ap.add_argument("excluded", nargs="+", help="the --excluded outputs (several: one per stage)")
     ap.add_argument("--id-column", default="id")
     ap.add_argument("--text-column", default="text")
     ap.add_argument("--expect")

@@ -14,8 +14,9 @@ pipeline. The per-document digest of a `pyroid clean` run equals the stock pipel
 10,000-document FineWeb dev slice and on the 13,232-document parity corpus
 ([parity](../compatibility.md#integrations)).
 
-Files are streamed in Arrow batches, so one batch of documents is in memory at a time (MinHash
-dedup also keeps its index of the survivors). `python -m pyroid` is the same program.
+Files are streamed in Arrow batches, so memory holds about one batch per process, whatever the
+size of the dataset; MinHash dedup sorts its signatures on disk. `python -m pyroid` is the same
+program. For thousands of files and many machines, see [Large datasets](large-datasets.md).
 
 ## Commands
 
@@ -31,6 +32,7 @@ positional arguments:
     langid    add fastText language columns; optionally keep some languages
     dedup     drop near-duplicates (datatrove's MinHash) or exact duplicates
     translit  transliterate to ASCII (anyascii data, ISC)
+    stats     sum the stats of every finished file of a directory OUT (all shards)
 
 options:
   -h, --help  show this help message and exit
@@ -46,6 +48,7 @@ pyroid.integrations.patch() applied; see 'pyroid run --help'.
 | [`pyroid langid`](#pyroid-langid) | adds `language` / `language_score` columns; optionally keeps some languages |
 | [`pyroid dedup`](#pyroid-dedup) | drops near-duplicates (datatrove's MinHash) or exact duplicates |
 | [`pyroid translit`](#pyroid-translit) | transliterates a column to ASCII |
+| [`pyroid stats`](large-datasets.md#many-machines-shard) | sums the counts of every shard of a directory OUT |
 | [`pyroid run`](#pyroid-run) | runs a Python program with `import ftfy` / `import fasttext` redirected to pyroid |
 
 ## `pyroid clean`: the FineWeb recipe
@@ -77,44 +80,59 @@ text column holds the cleaned text (after ftfy and C4's line removal). datatrove
 
 ```console
 $ pyroid clean --help
-usage: pyroid clean [-h] [--text-column TEXT_COLUMN] [--threads THREADS] [--batch-size BATCH_SIZE]
-                    [--excluded PATH] [--stats] [--stats-json PATH] [--compression COMPRESSION]
-                    [--overwrite] --recipe {fineweb} [--lid-model LID_MODEL] [--no-dedup]
-                    [--tmp-dir TMP_DIR]
-                    input output
+usage: pyroid clean [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--threads THREADS]
+                    [--batch-size BATCH_SIZE] [--shard I/N] [--workers N] [--merge] [--format FMT]
+                    [--excluded PATH] [--stats] [--stats-json PATH] [--progress]
+                    [--compression COMPRESSION] [--overwrite] --recipe {fineweb}
+                    [--lid-model LID_MODEL] [--no-dedup] [--tmp-dir TMP_DIR] [--sort-buffer-mb MB]
+                    [IN ...] OUT
 
 Run a cleaning recipe and write the kept rows. The fineweb recipe is datatrove's FineWeb chain:
 ftfy, fastText LID, the Gopher, C4 and FineWeb quality filters, then MinHash dedup.
 
 positional arguments:
-  input                 input file (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4]), or
-                        a directory of such files
-  output                output file (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4])
+  IN                    input files (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4]),
+                        directories, globs or URIs
+  OUT                   output file, or a directory for one output per input file (see --merge)
 
 options:
   -h, --help            show this help message and exit
+  --files-from PATH     read more inputs from PATH, one per line
   --text-column TEXT_COLUMN
                         the text column (default: text)
-  --threads THREADS     threads to use (default: 0, the whole pool, sized by $PYROID_NUM_THREADS)
+  --threads THREADS     threads per process (default: 0, the whole pool, sized by
+                        $PYROID_NUM_THREADS; with --workers, an equal share of the CPUs)
   --batch-size BATCH_SIZE
                         rows per Arrow batch (default: 10000)
-  --excluded PATH       also write the dropped rows here
+  --shard I/N           process input files I, I+N, I+2N, ...
+  --workers N           worker processes, one input file each (default: 1)
+  --merge               with a directory OUT, write one file per shard (part-I-of-N) instead of
+                        one per input file
+  --format FMT          with a directory OUT, the output format: parquet, jsonl, jsonl.gz,
+                        jsonl.bz2, jsonl.zst, jsonl.lz4 (default: each input's)
+  --excluded PATH       also write the dropped rows here (a file, or a directory like OUT)
   --stats               print row counts and drops by reason to stderr
   --stats-json PATH     write the stats to PATH as JSON
+  --progress            show a progress line on stderr
   --compression COMPRESSION
                         Parquet compression (default: pyarrow's, snappy)
-  --overwrite           replace an existing output file
+  --overwrite           redo finished work and replace existing outputs
   --recipe {fineweb}    the recipe to run
   --lid-model LID_MODEL
                         fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a cached
                         download)
-  --no-dedup            skip the MinHash stage
-  --tmp-dir TMP_DIR     where rows wait for the MinHash decision (default: OUT's directory)
+  --no-dedup            skip the MinHash stage (needed with --shard; run the 'pyroid dedup' stages
+                        after)
+  --tmp-dir TMP_DIR     where rows and signatures wait for the MinHash decision (default: next to
+                        OUT)
+  --sort-buffer-mb MB   signatures sorted in memory per process before spilling to disk (default:
+                        64)
 ```
 
 `--threads` is pyroid's `threads=` for every stage: omitted or `0` uses the whole thread pool
 (sized by `PYROID_NUM_THREADS`), `1` runs on one thread ([Threads](../concepts/threads.md)).
-The results do not depend on `--threads` or `--batch-size`.
+The results do not depend on `--threads`, `--batch-size`, `--workers` or `--shard`. The options
+for many files and many machines are described in [Large datasets](large-datasets.md).
 
 ### Dropped rows and `filter_reason`
 
@@ -167,34 +185,37 @@ counts per stage; for the run above:
 
 Every command takes `--stats` and `--stats-json`.
 
-### The MinHash spool
+### The MinHash work directory
 
 Which near-duplicate to drop depends on the whole corpus, so `clean` can't write a survivor until
-it has seen every document. Survivors wait in an Arrow IPC file (`.pyroid-*.arrow`) in the output
-file's directory, or in `--tmp-dir`, until the MinHash decision is made. Then they are written in
-input order and the spool is deleted; a failed run deletes it too. Plan disk space for the
-survivors there. `--no-dedup` skips MinHash and the spool, and the output is then the chain up to
+it has seen every document. Survivors wait in Arrow IPC files, and their MinHash signatures in
+datatrove's on-disk format, in a work directory next to OUT (`.OUT.pyroid/` for a file OUT,
+`OUT/.pyroid/` for a directory), or under `--tmp-dir`. Then the survivors are written in input
+order and the work directory is deleted. Plan disk space there for the survivors plus about 1 KB
+of signatures per survivor. If the run fails or is interrupted, the work directory stays, and the
+same command resumes from it. `--no-dedup` skips MinHash, and the output is then the chain up to
 `FineWebQualityFilter`.
 
 ## Inputs and outputs
 
 These rules hold for every command:
 
-- The input is a file or a directory. A directory is read as one dataset: every Parquet or JSON
-  Lines file in it (by the suffixes below), in name order. Other files are ignored, and mixing
-  Parquet and JSONL is an error. JSONL files after the first are parsed with the first file's
-  schema.
+- The inputs are files, directories (read recursively, in name order), globs or URIs, as
+  [Large datasets](large-datasets.md#inputs) describes. Files without a Parquet or JSONL suffix
+  are ignored, and so are names starting with `.` or `_`. Each file is read with its own schema.
 - Formats follow the file name, for input and output alike. `.parquet` or `.pq` is Parquet.
   `.jsonl`, `.ndjson` or `.json` is JSON Lines, one object per line, optionally compressed as
   `.gz`, `.bz2`, `.zst` or `.lz4` (e.g. `docs.jsonl.gz`). `--compression` sets the Parquet codec
   (default: pyarrow's, snappy).
-- The output is one file. It is written to `OUT.partial` and renamed to `OUT` when the command
-  finishes, so a failed or interrupted run never leaves a truncated `OUT`. The partial file is
-  removed on failure. An existing `OUT` is not replaced unless you pass `--overwrite`, and an
-  output path equal to the input path is refused.
+- OUT is one file when its name has one of these suffixes, holding every kept row in input order.
+  Otherwise it is a directory with one output file per input file, under the same relative name
+  ([layouts](large-datasets.md#output-layout)). Every output is written under a hidden temporary
+  name and renamed when complete, so a failed or interrupted run never leaves a truncated file.
+  An existing OUT file is not replaced unless you pass `--overwrite`, and an output path equal to
+  the input path is refused.
 - `--text-column` names the text column (default `text`). Every other column is passed through
   unchanged.
-- `--batch-size` sets the rows per Arrow batch (default 10,000), across file boundaries.
+- `--batch-size` sets the rows per Arrow batch (default 10,000).
 
 Errors exit with status 1 and a one-line message, for example:
 
@@ -202,7 +223,7 @@ Errors exit with status 1 and a one-line message, for example:
 $ pyroid clean sample.parquet clean.parquet --recipe fineweb
 pyroid: clean.parquet exists (pass --overwrite to replace it)
 $ pyroid clean sample.parquet x.parquet --recipe fineweb --text-column body
-pyroid: no column 'body' (columns: text, id, dump, url, date, file_path, language, language_score, token_count)
+pyroid: sample.parquet: no column 'body' (columns: text, id, dump, url, date, file_path, language, language_score, token_count)
 ```
 
 For errors from reading or writing the files (`FileNotFoundError`, `ValueError`),
@@ -259,12 +280,15 @@ $ pyroid langid sample.parquet tagged.parquet --model lid.176.bin --keep en,fr -
 ## `pyroid dedup`
 
 ```text
-usage: pyroid dedup [-h] [--text-column TEXT_COLUMN] [--threads THREADS] [--batch-size BATCH_SIZE]
-                    [--excluded PATH] [--stats] [--stats-json PATH] [--compression COMPRESSION]
-                    [--overwrite] [--method {minhash,exact}] [--normalize] [--n-grams N_GRAMS]
+usage: pyroid dedup [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--threads THREADS]
+                    [--batch-size BATCH_SIZE] [--shard I/N] [--workers N] [--merge] [--format FMT]
+                    [--excluded PATH] [--stats] [--stats-json PATH] [--progress]
+                    [--compression COMPRESSION] [--overwrite] [--method {minhash,exact}]
+                    [--normalize] [--tmp-dir TMP_DIR] [--n-grams N_GRAMS]
                     [--num-buckets NUM_BUCKETS] [--hashes-per-bucket HASHES_PER_BUCKET]
                     [--seed SEED] [--hash-fc {xxhash,sha1}] [--precision {32,64}]
-                    input output
+                    [--sort-buffer-mb MB]
+                    [IN ...] OUT
 ```
 
 | Option | Meaning |
@@ -276,7 +300,10 @@ usage: pyroid dedup [-h] [--text-column TEXT_COLUMN] [--threads THREADS] [--batc
 
 The `filter_reason` of a dropped row is the method's name (`minhash` or `exact`). `--method
 minhash` reads the input twice (signatures first, then the rows), so it must not change during the
-run; nothing is spooled. FineWeb's own settings are `--hash-fc sha1`.
+run; the signatures are sorted on disk, in the work directory. FineWeb's own settings are
+`--hash-fc sha1`. `--method exact` runs in one process over all inputs in order and writes one
+file. Across machines, run datatrove's four stages one by one: `pyroid dedup signatures`,
+`buckets`, `cluster` and `filter` ([Large datasets](large-datasets.md#minhash-dedup-across-shards)).
 
 ```console
 $ pyroid dedup dups.parquet dedup.jsonl --method exact --stats --excluded dups-out.jsonl

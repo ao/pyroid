@@ -4,9 +4,6 @@
 # at runtime the same subscripting is provided by a native __class_getitem__.
 pyroid._pyroid.Column.__class_getitem__
 
-# `python -m pyroid` runs the CLI on import and exits (__main__.py is unguarded, as Python's docs suggest).
-pyroid.__main__
-
 # Needs datatrove, which the stubtest venv leaves out: the steps subclass datatrove's untyped classes,
 # so mypy sees Any bases and stubtest would report every __init__ and metaclass.
 pyroid.integrations.datatrove

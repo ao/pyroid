@@ -59,6 +59,7 @@ nav:
       - Languages: guides/languages.md
   - Integrations:
       - The pyroid command line: guides/cli.md
+      - Large datasets: guides/large-datasets.md
       - pyroid.patch(): guides/patch.md
       - datatrove steps: guides/datatrove.md
       - Hugging Face datasets: guides/huggingface.md

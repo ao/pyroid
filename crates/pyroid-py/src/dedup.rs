@@ -753,6 +753,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
 
 fn register_more(m: &Bound<'_, PyModule>) -> PyResult<()> {
     sentence::register(m)?;
+    files::register(m)?;
     Ok(())
 }
 
@@ -1459,3 +1460,308 @@ mod sentence {
     }
 }
 // ---- end SentenceDedup ----
+
+// ---- MinHash files ----
+/// datatrove's MinHash stages 1-3 on disk, with its intermediate files byte
+/// for byte (`pyroid_core::dedup::files`): `_SigFileWriter` writes one
+/// rank's `.minhash.sig` files, `_minhash_hash_range` and `_minhash_buckets`
+/// run one bucket worker of stage 2, `_minhash_cluster` runs stage 3. The
+/// `pyroid dedup` CLI drives them.
+mod files {
+    use std::io;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    use pyo3::exceptions::{PyOSError, PyValueError};
+    use pyo3::prelude::*;
+    use pyo3::types::PyDict;
+    use pyroid_core::dedup::TokenizeError;
+    use pyroid_core::dedup::files::{
+        self as core, BucketOptions, ClusterOptions, MinhashFileError, SigFileWriter,
+    };
+
+    use super::{NativeConfig, lock};
+    use crate::batch::{BatchError, doc_count, fill_rows};
+    use crate::errors::{PyroidError, with_note};
+    use crate::input::{Threads, ThreadsArg, texts_and_threads, threads};
+
+    const MIB: usize = 1 << 20;
+
+    /// `OSError(errno, strerror, path)` (Python picks the subclass, e.g.
+    /// `FileNotFoundError`); without an errno, the `io::Error`'s own class
+    /// with the path in the message.
+    fn io_error(py: Python<'_>, path: &Path, err: io::Error) -> PyErr {
+        if let Some(code) = err.raw_os_error() {
+            let built = (|| -> PyResult<PyErr> {
+                let strerror = py.import("os")?.call_method1("strerror", (code,))?;
+                let exc = py
+                    .get_type::<PyOSError>()
+                    .call1((code, strerror, path.as_os_str()))?;
+                Ok(PyErr::from_value(exc))
+            })();
+            if let Ok(e) = built {
+                return e;
+            }
+        }
+        PyErr::from(io::Error::new(
+            err.kind(),
+            format!("{}: {err}", path.display()),
+        ))
+    }
+
+    fn files_err(py: Python<'_>, e: MinhashFileError) -> PyErr {
+        match e {
+            MinhashFileError::Io { path, err } => io_error(py, &path, err),
+            MinhashFileError::Malformed { .. } | MinhashFileError::Invalid(_) => {
+                PyValueError::new_err(e.to_string())
+            }
+            MinhashFileError::Pool(e) => PyroidError::new_err(e.to_string()),
+        }
+    }
+
+    /// Why `_SigFileWriter.add` failed (converted once re-attached).
+    #[derive(Debug)]
+    enum AddError {
+        Batch(BatchError),
+        /// spaCy's E025 on document `.0` of the batch.
+        Tokenize(usize, TokenizeError),
+        Files(MinhashFileError),
+    }
+
+    impl AddError {
+        fn into_pyerr(self, py: Python<'_>) -> PyErr {
+            match self {
+                Self::Batch(e) => e.into_pyerr(py),
+                Self::Tokenize(i, e) => with_note(
+                    py,
+                    PyValueError::new_err(e.to_string()),
+                    format!("pyroid: while tokenizing document {i}"),
+                ),
+                Self::Files(e) => files_err(py, e),
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct WriterInner {
+        /// `None` once finished or aborted.
+        writer: Option<SigFileWriter>,
+        documents: u64,
+        closed: &'static str,
+    }
+
+    impl WriterInner {
+        fn open(&mut self) -> Result<&mut SigFileWriter, MinhashFileError> {
+            let closed = self.closed;
+            self.writer
+                .as_mut()
+                .ok_or_else(|| MinhashFileError::Invalid(closed.to_owned()))
+        }
+    }
+
+    /// Stage 1 for one rank: datatrove's ``MinhashDedupSignature`` writing
+    /// ``folder/bucket_XXX/{rank:05d}.minhash.sig``.
+    #[pyclass(frozen, module = "pyroid.dedup", name = "_SigFileWriter")]
+    #[derive(Debug)]
+    pub struct SigWriter {
+        config: Py<NativeConfig>,
+        threads: Option<Threads>,
+        inner: Mutex<WriterInner>,
+    }
+
+    #[pymethods]
+    impl SigWriter {
+        #[new]
+        #[pyo3(signature = (folder, rank, config, /, *, memory_budget = 256 * MIB, threads = None))]
+        fn new(
+            py: Python<'_>,
+            folder: PathBuf,
+            rank: u32,
+            config: Py<NativeConfig>,
+            memory_budget: usize,
+            threads: Option<Threads>,
+        ) -> PyResult<Self> {
+            let cfg = *config.get().hasher.config();
+            let writer = py
+                .detach(|| SigFileWriter::new(folder, rank, &cfg, memory_budget))
+                .map_err(|e| files_err(py, e))?;
+            Ok(Self {
+                config,
+                threads,
+                inner: Mutex::new(WriterInner {
+                    writer: Some(writer),
+                    documents: 0,
+                    closed: "",
+                }),
+            })
+        }
+
+        /// Add documents (the rank's next ones, in order); returns
+        /// ``(start, stop)``, the document indices they were given.
+        #[pyo3(signature = (texts, /, *, threads = None))]
+        fn add(
+            &self,
+            py: Python<'_>,
+            texts: &Bound<'_, PyAny>,
+            threads: Option<ThreadsArg>,
+        ) -> PyResult<(u64, u64)> {
+            let (texts, call_threads) = texts_and_threads(texts, threads, self.threads)?;
+            let t = call_threads.or(self.threads);
+            let hasher = &self.config.get().hasher;
+            let h = hasher.num_hashes();
+            py.detach(|| {
+                let mut inner = lock(&self.inner);
+                let writer = inner.open().map_err(AddError::Files)?;
+                // The batch's signatures, computed in place, then appended.
+                let mut rows = vec![0u64; doc_count(&texts) * h];
+                let present = fill_rows(&texts, t, &mut rows, h, |s, row| hasher.signature(s, row))
+                    .map_err(AddError::Batch)?
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, r)| match r {
+                        None => Ok(false), // Arrow null: no signature
+                        Some(Ok(has)) => Ok(has),
+                        Some(Err(e)) => Err(AddError::Tokenize(i, e)),
+                    })
+                    .collect::<Result<Vec<bool>, AddError>>()?;
+                let range = writer
+                    .append(&rows, &present, self::threads(t))
+                    .map_err(AddError::Files)?;
+                inner.documents = range.end;
+                Ok((range.start, range.end))
+            })
+            .map_err(|e: AddError| e.into_pyerr(py))
+        }
+
+        /// Write every bucket's file; returns the number of documents added.
+        fn finish(&self, py: Python<'_>) -> PyResult<u64> {
+            let t = threads(self.threads);
+            py.detach(|| {
+                let mut inner = lock(&self.inner);
+                let res = inner.open()?.finish(t);
+                inner.writer = None;
+                inner.closed = if res.is_ok() {
+                    "finish() was already called"
+                } else {
+                    "finish() failed earlier"
+                };
+                res
+            })
+            .map_err(|e| files_err(py, e))
+        }
+
+        /// Remove the temporary files and write nothing; does nothing once
+        /// finished or aborted.
+        fn abort(&self, py: Python<'_>) {
+            py.detach(|| {
+                let mut inner = lock(&self.inner);
+                if let Some(mut w) = inner.writer.take() {
+                    w.abort();
+                    inner.closed = "the writer was aborted";
+                }
+            });
+        }
+
+        /// Documents added so far.
+        #[getter]
+        fn documents(&self, py: Python<'_>) -> u64 {
+            py.detach(|| lock(&self.inner).documents)
+        }
+    }
+
+    /// datatrove's ``get_worker_hash_range``: ``(hash_min, hash_max)`` of
+    /// one bucket worker, from the bucket's first signature file.
+    #[pyfunction]
+    #[pyo3(signature = (first_file, config, bucket_worker, workers_per_bucket, /))]
+    fn _minhash_hash_range(
+        py: Python<'_>,
+        first_file: Option<PathBuf>,
+        config: &NativeConfig,
+        bucket_worker: usize,
+        workers_per_bucket: usize,
+    ) -> PyResult<(u64, u64)> {
+        let cfg = config.hasher.config();
+        py.detach(|| {
+            core::worker_hash_range(
+                first_file.as_deref(),
+                cfg,
+                bucket_worker,
+                workers_per_bucket,
+            )
+        })
+        .map_err(|e| files_err(py, e))
+    }
+
+    /// Stage 2 for one bucket worker: the pairs of ``files`` (one bucket's
+    /// signature files, in datatrove's reader order) written to ``output``;
+    /// returns the number of pairs.
+    #[pyfunction]
+    #[pyo3(signature = (
+        files, output, config, /, *, hash_min = 0, hash_max = None,
+        memory_budget = 64 * MIB, max_open = 512
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn _minhash_buckets(
+        py: Python<'_>,
+        files: Vec<PathBuf>,
+        output: PathBuf,
+        config: &NativeConfig,
+        hash_min: u64,
+        hash_max: Option<u64>,
+        memory_budget: usize,
+        max_open: usize,
+    ) -> PyResult<u64> {
+        let cfg = config.hasher.config();
+        let defaults = BucketOptions::new(cfg);
+        let opts = BucketOptions {
+            hash_min,
+            hash_max: hash_max.unwrap_or(defaults.hash_max),
+            memory_budget,
+            max_open,
+        };
+        py.detach(|| core::minhash_buckets(&files, &output, cfg, &opts))
+            .map_err(|e| files_err(py, e))
+    }
+
+    /// Stage 3: the union-find over the pairs of ``dups`` (in the order
+    /// given), then the ``.remove`` (and ``.clusters`` / ``.sizes``) files in
+    /// ``output_folder``.
+    #[pyfunction]
+    #[pyo3(signature = (
+        dups, output_folder, /, *, save_cluster_id = false, save_cluster_size = false,
+        ignore_index_matches = false
+    ))]
+    #[allow(clippy::fn_params_excessive_bools)]
+    fn _minhash_cluster(
+        py: Python<'_>,
+        dups: Vec<PathBuf>,
+        output_folder: PathBuf,
+        save_cluster_id: bool,
+        save_cluster_size: bool,
+        ignore_index_matches: bool,
+    ) -> PyResult<Bound<'_, PyDict>> {
+        let opts = ClusterOptions {
+            save_cluster_id,
+            save_cluster_size,
+            ignore_index_matches,
+        };
+        let s = py
+            .detach(|| core::minhash_cluster(&dups, &output_folder, opts))
+            .map_err(|e| files_err(py, e))?;
+        let out = PyDict::new(py);
+        out.set_item("nodes", s.nodes)?;
+        out.set_item("removed", s.removed)?;
+        out.set_item("clusters", s.clusters)?;
+        out.set_item("files", s.files)?;
+        Ok(out)
+    }
+
+    pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        m.add_class::<SigWriter>()?;
+        m.add_function(wrap_pyfunction!(_minhash_hash_range, m)?)?;
+        m.add_function(wrap_pyfunction!(_minhash_buckets, m)?)?;
+        m.add_function(wrap_pyfunction!(_minhash_cluster, m)?)?;
+        Ok(())
+    }
+}
+// ---- end MinHash files ----
