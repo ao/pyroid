@@ -13,7 +13,7 @@
   hands to NLTK), with both ``gaps`` and ``discard_empty``; batches as
   lists, tuples and Arrow columns with several ``threads`` values.
 - **Every code point** alone, and inside a few dense templates (every code point below U+3400
-  and every 7th above; all of them with ``PYROID_NLTK_SWEEP=full``), through ``sent_tokenize``,
+  and every 31st above; all of them with ``PYROID_NLTK_SWEEP=full``), through ``sent_tokenize``,
   ``word_tokenize``, both Treebank tokenizers and the detokenizer (in child processes, one per
   core, since NLTK takes minutes for 1.1M calls).
 - **NLTK's own examples**: the inputs and expected outputs of NLTK's doctests
@@ -199,7 +199,7 @@ WORDS = [
     *("the", "The", "THE", "a", "A", "i", "I", "dog", "Smith", "Washington", "and", "And"),
     *("however", "However", "But", "but", "In", "in", "He", "he", "It", "it", "Bach", "word"),
     *("Über", "über", "école", "École", "İzmir", "izmir", "ıssız", "ſtraße", "Straße", "STRASSE"),
-    *("ǅemal", "ǆ", "Σοφία", "ΣΟΦΟΣ", "σοφός", "Москва", "москва", "Ёлка", "日本語", "中文"),
+    *("ǅuro", "ǆ", "Σοφία", "ΣΟΦΟΣ", "σοφός", "Москва", "москва", "Ёлка", "日本語", "中文"),
     *("한국어", "ภาษา", "مرحبا", "שלום", "हिन्दी", "മലയാളം", "😀", "👍🏽", "👨‍👩‍👧", "🇩🇪"),
     *("é", "Äbc", "x²", "ﬁne", "ẞ", "ǰ", "ΐ", "İ̇", "Ⅷ", "ⓐ", "𝐀𝐁", "ꞵ", "Ꞵ"),
     *("ǈ", "ῼ", "ꭰ", "Ꭰ", "ʼn", "ŉ", "Ω", "ω", "ǲ", "ß", "ﬀ", "K", "Å", "ϴ", "ϑ"),
@@ -814,8 +814,11 @@ print(json.dumps({"n": len(inputs), "nbad": len(bad), "bad": bad[:10]}))
 SWEEP_FUNCS = ["sent_tokenize", "word_tokenize", "treebank", "nltkword", "treebank_ptb"]
 SWEEP_FUNCS += ["detokenize", "detokenize_ptb", "regexp", "regexp_spans"]
 #: PYROID_NLTK_SWEEP=full puts every code point in the templates too (NLTK then takes about an
-#: hour of CPU); by default they get every code point below U+3400 and every 7th above.
-SWEEP_SAMPLE = 1 if os.environ.get("PYROID_NLTK_SWEEP") == "full" else 7
+#: hour of CPU), PYROID_NLTK_SWEEP=<n> every n-th above U+3400; by default the templates get every
+#: code point below U+3400 and every 31st above (the Rust replays cover every code point in the
+#: templates; this keeps a CI leg to a few minutes). Each code point alone is always checked.
+_SWEEP_ENV = os.environ.get("PYROID_NLTK_SWEEP", "")
+SWEEP_SAMPLE = 1 if _SWEEP_ENV == "full" else int(_SWEEP_ENV) if _SWEEP_ENV.isdigit() else 31
 
 
 def _sweep(func: str, mode: str) -> None:

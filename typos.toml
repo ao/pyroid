@@ -76,8 +76,15 @@ Beng = "Beng"
 # ISO 639-3 Thai in datatrove / FineWeb-2 codes (tha_Thai), and German "ein" in test text.
 tha = "tha"
 Ein = "Ein"
+# Unicode's general category Nd (decimal digits) in pyroid.nltk's docs; NLTK's MacIntyre contraction
+# pattern "wha(t)(cha)"; and "ned", a piece of "rained" in the output of NLTK's RegexpTokenizer doctest.
+Nd = "Nd"
+wha = "wha"
+ned = "ned"
 
 [default.extend-identifiers]
+# `import pyroid.nltk as pn` in the tests and benchmarks.
+pn = "pn"
 # QUADPACK's variable names, kept in the dqagse port (crates/pyroid-core/src/datasketch/quad.rs).
 correc = "correc"
 # The arro3 Arrow library (github.com/kylebarron/arro3), not a misspelt "arrow".

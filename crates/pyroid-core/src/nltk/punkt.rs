@@ -1837,7 +1837,7 @@ mod tests {
         );
         assert_eq!(match_spaced(". \n .x", ". ."), Some(5));
         assert_eq!(match_spaced("a b", "ab"), Some(3));
-        assert_eq!(match_spaced("ba", "ab"), None);
+        assert_eq!(match_spaced("dc", "cd"), None);
     }
 
     #[test]

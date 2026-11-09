@@ -48,8 +48,10 @@ Checks (suite ``nltk`` in parity-report.json):
                                    BATCH docs a call) vs NLTK per document; skipped for a candidate
                                    that takes no list (NLTK itself)
 
-Without ``--impl`` the candidate is NLTK itself (the first 1000 documents of each corpus unless
-``--parity-limit`` says otherwise), so the checks only show that NLTK is deterministic here.
+A candidate runs on the first 500 documents of each corpus, unless ``--parity-limit`` says
+otherwise (``--parity-limit 0``: every document, about 2 hours). Without ``--impl`` the candidate
+is NLTK itself (the first 1000 documents of each corpus), so the checks only show that NLTK is
+deterministic here.
 """
 
 from __future__ import annotations
@@ -78,6 +80,17 @@ NLTK_VERSION = "3.10.4"
 REGEX_VERSION = "2026.9.29"
 #: Documents per batch call (and per tokenize_sents call).
 BATCH = 1000
+#: Documents per corpus for a candidate when ``--parity-limit`` is not given. Every document of
+#: every corpus takes about 2 hours of NLTK time (14 M comparisons); ``--parity-limit 0`` runs them.
+CANDIDATE_DOCS = 500
+
+
+def _limit(config: pytest.Config, impl: Any) -> int:
+    """``--parity-limit`` if given (0: every document), else ``CANDIDATE_DOCS`` for a candidate."""
+    if config.getoption("--parity-limit") is None and not impl.is_reference:
+        return CANDIDATE_DOCS
+    return effective_limit(config, impl)
+
 
 PUNKT_TAB_URL = "https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/tokenizers/punkt_tab.zip"
 PUNKT_TAB_SHA256 = "e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106"
@@ -374,7 +387,7 @@ def test_punkt(
     prefix = f"{corpus}-{lang}"
     checks = [f"{prefix}-{m}" for m in modes]
     oracle(parity, checks, punkt_problem)
-    ids, texts = _docs(parity, corpus, effective_limit(request.config, nltk_impl), checks)
+    ids, texts = _docs(parity, corpus, _limit(request.config, nltk_impl), checks)
     _uses(parity, corpus)
     mod = nltk_impl.obj.mod
     ref, cand = _RefPunkt(lang), mod.PunktTokenizer(lang)
@@ -459,7 +472,7 @@ def test_treebank(nltk_impl: Any, parity: Collector, request: pytest.FixtureRequ
     """Both word tokenizers, the detokenizer and align_tokens, per document, then in batches."""
     checks = [f"{corpus}-{m}" for m in (*TREEBANK_MODES, "tokenize_sents")]
     oracle(parity, checks)
-    ids, texts = _docs(parity, corpus, effective_limit(request.config, nltk_impl), checks)
+    ids, texts = _docs(parity, corpus, _limit(request.config, nltk_impl), checks)
     _uses(parity, corpus)
     mod = nltk_impl.obj.mod
     tb, nw, detok = mod.TreebankWordTokenizer(), mod.NLTKWordTokenizer(), mod.TreebankWordDetokenizer()
@@ -566,7 +579,7 @@ def test_regexp(
     """
     checks = [f"{corpus}-{m}" for m in ("regexp", "regexp_spans", "regexp_sents")]
     oracle(parity, checks)
-    ids, texts = _docs(parity, corpus, effective_limit(request.config, nltk_impl), checks)
+    ids, texts = _docs(parity, corpus, _limit(request.config, nltk_impl), checks)
     _uses(parity, corpus)
     mod = nltk_impl.obj.mod
     ref_mod = importlib.import_module("nltk.tokenize.regexp")
@@ -601,7 +614,7 @@ def test_regexp_misc(nltk_impl: Any, parity: Collector, request: pytest.FixtureR
     """The subclasses and functions, regexp_tokenize, and patterns pyroid hands to NLTK."""
     checks = [f"{corpus}-{m}" for m in REGEXP_MISC]
     oracle(parity, checks)
-    ids, texts = _docs(parity, corpus, effective_limit(request.config, nltk_impl), checks)
+    ids, texts = _docs(parity, corpus, _limit(request.config, nltk_impl), checks)
     _uses(parity, corpus)
     mod = nltk_impl.obj.mod
     ref_mod = importlib.import_module("nltk.tokenize.regexp")
