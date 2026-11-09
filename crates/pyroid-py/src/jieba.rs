@@ -10,16 +10,19 @@
 //! `Force_Split_Words` is process-wide, as in jieba (`finalseg` keeps one set
 //! for every `Tokenizer`).
 
+use std::hash::BuildHasher;
+use std::ops::Range;
 use std::sync::{Arc, LazyLock, PoisonError, RwLock};
 
 use pyo3::exceptions::{PyOverflowError, PyValueError, PyZeroDivisionError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyString, PyTuple};
+use pyo3::types::{PyDict, PyList, PyString};
 use pyroid_core::jieba::{CutError, DictError, Dictionary, ForceSplit, SuggestError};
-use rustc_hash::FxHashMap;
+use pyroid_core::par::{self, PoolError};
+use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::batch::{DocCost, map_values_cost};
-use crate::errors::with_note;
+use crate::errors::{PyroidError, with_note};
 use crate::input::{TextInput, Threads};
 
 /// `finalseg.Force_Split_Words` (`None` while empty).
@@ -83,39 +86,240 @@ fn span(doc: &str, w: &str) -> Piece {
     Piece::Span(start, start + w.len())
 }
 
-/// The Python strs already made in this call, by text: jieba's output repeats
-/// words, and a cache hit is cheaper than decoding the UTF-8 again. (The
-/// lists then share str objects, which only `is` can tell.)
-type StrCache<'py, 'd> = FxHashMap<&'d str, Bound<'py, PyString>>;
-
-/// Entries the cache keeps before it starts over.
-const STR_CACHE_MAX: usize = 1 << 16;
-
-fn piece_str<'py, 'd>(
-    py: Python<'py>,
-    doc: &'d str,
-    piece: &Piece,
-    cache: &mut StrCache<'py, 'd>,
-) -> Bound<'py, PyString> {
+/// The text of `piece`, a word of `doc`.
+fn piece_text<'d>(doc: &'d str, piece: &'d Piece) -> &'d str {
     match piece {
-        Piece::Span(start, end) => {
-            let word = &doc[*start..*end];
-            if let Some(hit) = cache.get(word) {
-                return hit.clone();
-            }
-            if cache.len() >= STR_CACHE_MAX {
-                cache.clear();
-            }
-            let new = PyString::new(py, word);
-            cache.insert(word, new.clone());
-            new
-        }
-        Piece::Owned(word) => PyString::new(py, word),
+        Piece::Span(start, end) => &doc[*start..*end],
+        Piece::Owned(word) => word,
+    }
+}
+
+/// One output item: a word, or (`tokenize`) a word and its offsets.
+trait Word: Sync {
+    type Object<'py>: IntoPyObject<'py>;
+    fn piece(&self) -> &Piece;
+    /// The Python object, given the word's str.
+    fn object<'py>(&self, s: Bound<'py, PyString>) -> Self::Object<'py>;
+}
+
+impl Word for Piece {
+    type Object<'py> = Bound<'py, PyString>;
+    fn piece(&self) -> &Piece {
+        self
+    }
+    fn object<'py>(&self, s: Bound<'py, PyString>) -> Self::Object<'py> {
+        s
+    }
+}
+
+impl Word for (Piece, usize, usize) {
+    type Object<'py> = (Bound<'py, PyString>, usize, usize);
+    fn piece(&self) -> &Piece {
+        &self.0
+    }
+    fn object<'py>(&self, s: Bound<'py, PyString>) -> Self::Object<'py> {
+        (s, self.1, self.2)
     }
 }
 
 /// What a segmentation call returns per document.
 type DocResult<T> = Option<Result<Vec<T>, CutError>>;
+
+/// Document `i` of a batch and its words, unless it is an Arrow null.
+fn doc_words<'a, 'd, W>(
+    texts: &[Option<&'d str>],
+    results: &'a [DocResult<W>],
+    i: usize,
+) -> Option<(&'d str, &'a [W])> {
+    match (texts[i], &results[i]) {
+        (Some(doc), Some(Ok(words))) => Some((doc, words)),
+        _ => None,
+    }
+}
+
+/// Words per interning task, at least: a batch with fewer than twice this is
+/// interned in one go, without detaching.
+const INTERN_MIN_WORDS_PER_TASK: usize = 1 << 13;
+
+/// The words of documents `docs`, interned: their distinct texts, and every
+/// word in order as an index into `texts`. `by_shard[s]` lists the indices of
+/// the texts of shard `s` (empty with one shard).
+struct Local<'d> {
+    docs: Range<usize>,
+    texts: Vec<&'d str>,
+    ids: Vec<u32>,
+    by_shard: Vec<Vec<u32>>,
+}
+
+/// The shard (of `shards`) a text's batch-wide index is decided in.
+fn shard_of(text: &str, shards: usize) -> usize {
+    // FxHashMap places entries by the low and top bits; the middle ones are free.
+    let h = (FxBuildHasher.hash_one(text) >> 32) % shards as u64;
+    usize::try_from(h).expect("below the shard count")
+}
+
+fn index(n: usize) -> u32 {
+    u32::try_from(n).expect("fewer than 2**32 distinct words")
+}
+
+/// Intern the words of documents `docs` (pure Rust).
+fn intern_local<'d, W: Word>(
+    texts: &[Option<&'d str>],
+    results: &'d [DocResult<W>],
+    docs: Range<usize>,
+    shards: usize,
+) -> Local<'d> {
+    let mut seen: FxHashMap<&'d str, u32> = FxHashMap::default();
+    let mut distinct: Vec<&'d str> = Vec::new();
+    let mut by_shard = vec![Vec::new(); if shards > 1 { shards } else { 0 }];
+    let mut ids = Vec::new();
+    for i in docs.clone() {
+        let Some((doc, words)) = doc_words(texts, results, i) else {
+            continue;
+        };
+        ids.reserve(words.len());
+        for w in words {
+            let text = piece_text(doc, w.piece());
+            let id = *seen.entry(text).or_insert_with(|| {
+                let id = index(distinct.len());
+                distinct.push(text);
+                if shards > 1 {
+                    by_shard[shard_of(text, shards)].push(id);
+                }
+                id
+            });
+            ids.push(id);
+        }
+    }
+    Local {
+        docs,
+        texts: distinct,
+        ids,
+        by_shard,
+    }
+}
+
+/// Shard `s` of a batch's distinct texts: each text of that shard once, and
+/// for each range its texts' indices into `texts` (in `by_shard[s]` order).
+struct Shard<'d> {
+    texts: Vec<&'d str>,
+    of_range: Vec<Vec<u32>>,
+}
+
+fn merge_shard<'d>(locals: &[Local<'d>], s: usize) -> Shard<'d> {
+    let mut seen: FxHashMap<&'d str, u32> = FxHashMap::default();
+    let mut texts = Vec::new();
+    let mut of_range = Vec::with_capacity(locals.len());
+    for local in locals {
+        let mut ids = Vec::with_capacity(local.by_shard[s].len());
+        for &j in &local.by_shard[s] {
+            let text = local.texts[j as usize];
+            ids.push(*seen.entry(text).or_insert_with(|| {
+                texts.push(text);
+                index(texts.len() - 1)
+            }));
+        }
+        of_range.push(ids);
+    }
+    Shard { texts, of_range }
+}
+
+/// The interned words of a batch: its distinct texts, and for each range of
+/// documents its [`Local`] and, with several ranges, the batch-wide index of
+/// each of the range's texts.
+struct Interned<'d> {
+    texts: Vec<&'d str>,
+    parts: Vec<(Local<'d>, Option<Vec<u32>>)>,
+}
+
+/// Each text of `locals` once, in parallel: every range's distinct texts go
+/// to the shard their hash picks, and each shard is merged on its own.
+fn merge(locals: Vec<Local<'_>>, threads: par::Threads) -> Result<Interned<'_>, PoolError> {
+    let ids: Vec<usize> = (0..locals.len()).collect();
+    let shards = par::map_tasks(&ids, threads, |&s| merge_shard(&locals, s))?;
+    let mut offsets = Vec::with_capacity(shards.len());
+    let mut n = 0;
+    for shard in &shards {
+        offsets.push(index(n));
+        n += shard.texts.len();
+    }
+    let remaps = par::map_tasks(&ids, threads, |&r| {
+        let mut remap = vec![0; locals[r].texts.len()];
+        for (s, shard) in shards.iter().enumerate() {
+            for (&j, &k) in locals[r].by_shard[s].iter().zip(&shard.of_range[r]) {
+                remap[j as usize] = offsets[s] + k;
+            }
+        }
+        remap
+    })?;
+    let texts = shards.into_iter().flat_map(|s| s.texts).collect();
+    let parts = locals
+        .into_iter()
+        .zip(remaps.into_iter().map(Some))
+        .collect();
+    Ok(Interned { texts, parts })
+}
+
+/// Up to `n` contiguous ranges of `weights` with about equal sums.
+fn balanced(weights: &[usize], n: usize) -> Vec<Range<usize>> {
+    let share = weights.iter().sum::<usize>().div_ceil(n);
+    let mut out = Vec::with_capacity(n);
+    let (mut start, mut acc) = (0, 0);
+    for (i, &w) in weights.iter().enumerate() {
+        acc += w;
+        if out.len() + 1 < n && acc >= share * (out.len() + 1) {
+            out.push(start..i + 1);
+            start = i + 1;
+        }
+    }
+    if start < weights.len() || out.is_empty() {
+        out.push(start..weights.len());
+    }
+    out
+}
+
+/// The interned words of a batch: a small one on the calling thread, still
+/// attached (with the GIL, detaching again would cost each call a second
+/// hand-off); a larger one detached, on the pool, in contiguous ranges of
+/// about equal word counts, then merged.
+fn intern_batch<'d, W: Word>(
+    py: Python<'_>,
+    texts: &[Option<&'d str>],
+    results: &'d [DocResult<W>],
+    threads: Option<Threads>,
+) -> PyResult<Interned<'d>> {
+    let threads = crate::input::threads(threads);
+    let weights: Vec<usize> = (0..results.len())
+        .map(|i| doc_words(texts, results, i).map_or(0, |(_, w)| w.len()))
+        .collect();
+    let total: usize = weights.iter().sum();
+    let one = |mut local: Local<'d>| Interned {
+        texts: std::mem::take(&mut local.texts),
+        parts: vec![(local, None)],
+    };
+    if total < 2 * INTERN_MIN_WORDS_PER_TASK {
+        return Ok(one(intern_local(texts, results, 0..results.len(), 1)));
+    }
+    let tasks = if threads == par::Threads::ONE {
+        1
+    } else {
+        par::max_tasks(threads)
+            .map_err(|e| PyroidError::new_err(e.to_string()))?
+            .min(total / INTERN_MIN_WORDS_PER_TASK)
+    };
+    let ranges = balanced(&weights, tasks);
+    let shards = ranges.len();
+    py.detach(|| {
+        let mut locals = par::map_tasks(&ranges, threads, |r| {
+            intern_local(texts, results, r.clone(), shards)
+        })?;
+        if locals.len() == 1 {
+            return Ok(one(locals.remove(0)));
+        }
+        merge(locals, threads)
+    })
+    .map_err(|e: PoolError| PyroidError::new_err(e.to_string()))
+}
 
 /// Each document of `x` (`None` for an Arrow null), in input order.
 fn docs(x: &TextInput) -> Vec<Option<&str>> {
@@ -130,47 +334,69 @@ fn docs(x: &TextInput) -> Vec<Option<&str>> {
     }
 }
 
-/// Build the result: a list for a str, else a list with one list per
-/// document (`None` for Arrow nulls). The first failing document raises.
-fn build<'py, 'd, T>(
+/// Build the result: a list of words for a str, else a list with one list per
+/// document (`None` for Arrow nulls). The lowest failing document raises
+/// (for a batch, with a note giving its index).
+///
+/// A batch repeats words, and finding a text again costs less than decoding
+/// its UTF-8 into a new str, so each distinct text of a batch becomes one str
+/// (the lists then share str objects, which only `is` can tell). Finding the
+/// distinct texts is pure Rust, done detached and on the pool for a large
+/// batch; the strs and lists are then made on the calling thread, which owns
+/// them (on free-threaded builds, freeing objects is cheapest there). A single
+/// str repeats too little for that to pay: each word is decoded.
+fn build<'py, W: Word>(
     py: Python<'py>,
-    x: &'d TextInput,
-    results: Vec<DocResult<T>>,
-    item: impl Fn(Python<'py>, &'d str, &T, &mut StrCache<'py, 'd>) -> PyResult<Bound<'py, PyAny>>,
+    x: &TextInput,
+    results: &[DocResult<W>],
+    threads: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let texts = docs(x);
-    let mut cache = StrCache::default();
-    let mut one = |doc: &'d str,
-                   r: Result<Vec<T>, CutError>,
-                   i: Option<usize>|
-     -> PyResult<Bound<'py, PyAny>> {
-        let words = r.map_err(|e| {
-            let err = cut_error(py, e);
-            match i {
-                Some(i) => with_note(
-                    py,
-                    err,
-                    format!("while segmenting the document at index {i}"),
-                ),
-                None => err,
-            }
-        })?;
+    let failed = results.iter().enumerate().find_map(|(i, r)| match r {
+        Some(Err(e)) => Some((i, *e)),
+        _ => None,
+    });
+    if let Some((i, e)) = failed {
+        let err = cut_error(py, e);
+        return Err(match x {
+            TextInput::Str(_) => err,
+            _ => with_note(
+                py,
+                err,
+                format!("while segmenting the document at index {i}"),
+            ),
+        });
+    }
+    if let (TextInput::Str(s), [Some(Ok(words))]) = (x, results) {
         let items = words
             .iter()
-            .map(|w| item(py, doc, w, &mut cache))
-            .collect::<PyResult<Vec<_>>>()?;
-        Ok(PyList::new(py, items)?.into_any())
-    };
-    if let TextInput::Str(s) = x {
-        let r = results.into_iter().next().flatten().expect("one result");
-        return one(s, r, None);
+            .map(|w| w.object(PyString::new(py, piece_text(s, w.piece()))));
+        return Ok(PyList::new(py, items)?.into_any());
     }
-    let mut out = Vec::with_capacity(results.len());
-    for (i, (r, doc)) in results.into_iter().zip(texts).enumerate() {
-        out.push(match (r, doc) {
-            (Some(r), Some(doc)) => one(doc, r, Some(i))?,
-            _ => py.None().into_bound(py),
-        });
+    let texts = docs(x);
+    let interned = intern_batch(py, &texts, results, threads)?;
+    let strs: Vec<Bound<'py, PyString>> = interned
+        .texts
+        .iter()
+        .map(|t| PyString::new(py, t))
+        .collect();
+    let mut out: Vec<Option<Bound<'py, PyList>>> = Vec::with_capacity(results.len());
+    for (local, remap) in &interned.parts {
+        let mut ids: &[u32] = &local.ids;
+        for i in local.docs.clone() {
+            let list = match doc_words(&texts, results, i) {
+                Some((_, words)) => {
+                    let (mine, rest) = ids.split_at(words.len());
+                    ids = rest;
+                    let items = words.iter().zip(mine).map(|(w, &id)| {
+                        let id = remap.as_ref().map_or(id, |m| m[id as usize]);
+                        w.object(strs[id as usize].clone())
+                    });
+                    Some(PyList::new(py, items)?)
+                }
+                None => None,
+            };
+            out.push(list);
+        }
     }
     Ok(PyList::new(py, out)?.into_any())
 }
@@ -312,9 +538,7 @@ impl Native {
                 Ok(out.into_iter().map(|w| span(s, w)).collect())
             }
         })?;
-        build(py, &x, results, |py, doc, p, c| {
-            Ok(piece_str(py, doc, p, c).into_any())
-        })
+        build(py, &x, &results, threads)
     }
 
     /// `jieba.cut_for_search(x, HMM)` as a list (a list of lists for a batch).
@@ -331,9 +555,7 @@ impl Native {
             d.cut_for_search(s, hmm, fs, &mut out)?;
             Ok(out.into_iter().map(|w| span(s, w)).collect())
         })?;
-        build(py, &x, results, |py, doc, p, c| {
-            Ok(piece_str(py, doc, p, c).into_any())
-        })
+        build(py, &x, &results, threads)
     }
 
     /// `jieba.tokenize(x, mode, HMM)` as a list of `(word, start, end)`.
@@ -354,17 +576,7 @@ impl Native {
                 .map(|(w, a, b)| (span(s, w), a, b))
                 .collect())
         })?;
-        build(py, &x, results, |py, doc, (p, a, b), c| {
-            Ok(PyTuple::new(
-                py,
-                [
-                    piece_str(py, doc, p, c).into_any(),
-                    a.into_pyobject(py)?.into_any(),
-                    b.into_pyobject(py)?.into_any(),
-                ],
-            )?
-            .into_any())
-        })
+        build(py, &x, &results, threads)
     }
 
     /// `FREQ[word] = freq; total += freq` and the missing prefixes with 0.

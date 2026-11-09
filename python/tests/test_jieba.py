@@ -7,9 +7,12 @@
   ``large_string``, ``string_view``, sliced, several chunks, or ``_testing.column`` without
   pyarrow) in, one list per document out (``None`` for an Arrow null), for ``lcut``,
   ``lcut_for_search``, ``tokenize``, ``cut`` and ``cut_for_search``.
-- **Threads**: identical results for ``threads=None/1/2/4``; a 10k-document batch under a timeout.
+- **Threads**: identical results for ``threads=None/1/2/4``; a 10k-document batch under a timeout;
+  batches large enough that their words are interned on the pool in several tasks, alone and
+  from several threads with ``gc.collect()`` running.
 - **Errors**: ``InputError`` for non-str items and wrong input types, ``ValueError`` /
-  ``InputError`` for bad ``threads``, ``UnicodeEncodeError`` with a note for lone surrogates.
+  ``InputError`` for bad ``threads``, ``UnicodeEncodeError`` with a note for lone surrogates; a
+  failing batch raises its lowest failing document's error, with a note giving its index.
 - **FREQ**: a read-only mapping, empty until the dictionary loads, then jieba's 498,113 entries.
 - **Delegated**: ``pyroid.jieba.posseg`` and ``pyroid.jieba.analyse`` give jieba's results,
   see the words added through ``pyroid.jieba``, and warn ``pyroid.FallbackWarning`` once per
@@ -23,11 +26,14 @@ from __future__ import annotations
 
 import collections.abc
 import json
+import os
 import subprocess
 import sysconfig
+import tempfile
 import types
 import warnings
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -217,6 +223,88 @@ def test_ten_thousand_documents() -> None:
     assert toks[5000] == list(pj.tokenize(docs[5000], mode="search"))
 
 
+# About 30,000 words: the words of a batch this size are interned on the pool in several tasks
+# (from 16,384 words, at least 8,192 per task).
+LARGE = [DOCS[i % len(DOCS)] * 12 + f"第{i}号" for i in range(400)]
+
+
+@pytest.mark.parametrize("mode", list(MODES))
+def test_large_batches_match_per_document(mode: str) -> None:
+    f = MODES[mode]
+    values: list[str | None] = [None, *LARGE[:150], None, *LARGE[150:], None]
+    want = per_doc(mode, values)
+    col = _testing.column(values, chunks=3)
+    for threads in (None, 1, 2, 8):
+        out = f(LARGE, threads=threads)
+        assert out == [w for w in want if w is not None], threads
+        assert type(out) is list
+        assert all(type(r) is list for r in out)
+        assert f(tuple(LARGE), threads=threads) == out, threads
+        assert f(col, threads=threads) == want, threads
+
+
+@pytest.mark.thread_unsafe(reason="about 600,000 words")
+@pytest.mark.timeout(300)
+def test_many_distinct_words() -> None:
+    """150,000 distinct words, each in two far-apart documents (so in two of the pool's ranges)."""
+    base = [" ".join(f"w{i}x{j}" for j in range(100)) for i in range(1500)]
+    want = [pj.lcut(d) for d in base] * 2
+    assert want[0][:3] == ["w0x0", " ", "w0x1"]
+    for threads in (1, 2, None):
+        assert pj.lcut(base + base, threads=threads) == want, threads
+
+
+GC_STRESS = """
+import gc, threading
+import pyroid.jieba as pj
+
+docs = [f"小明硕士毕业于中国科学院计算所，后在日本京都大学深造{i}" * 8 for i in range(300)]
+want = {
+    "lcut": [pj.lcut(d) for d in docs],
+    "lcut_for_search": [pj.lcut_for_search(d) for d in docs],
+    "tokenize": [list(pj.tokenize(d)) for d in docs],
+}
+errors = []
+stop = threading.Event()
+
+def worker(k):
+    try:
+        for it in range(ROUNDS):
+            threads = [None, 2, 8, 3][(k + it) % 4]
+            for name, f in (("lcut", pj.lcut), ("lcut_for_search", pj.lcut_for_search)):
+                if f(docs, threads=threads) != want[name]:
+                    errors.append(name)
+            if list(pj.tokenize(docs, threads=threads)) != want["tokenize"]:
+                errors.append("tokenize")
+    except BaseException as e:
+        errors.append(f"worker {k}: {type(e).__name__}: {e}")
+
+def collector():
+    while not stop.wait(0.001):
+        gc.collect()
+
+g = threading.Thread(target=collector)
+g.start()
+ws = [threading.Thread(target=worker, args=(k,)) for k in range(6)]
+for w in ws:
+    w.start()
+for w in ws:
+    w.join()
+stop.set()
+g.join()
+assert not errors, errors[:5]
+print("ok")
+"""
+
+
+@pytest.mark.thread_unsafe(reason="runs a subprocess with 7 threads of its own")
+@pytest.mark.timeout(240)
+def test_concurrent_large_batches_with_gc_do_not_deadlock(run_python: RunPython) -> None:
+    r = run_python("ROUNDS = 8\n" + GC_STRESS, timeout=200)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.strip() == "ok"
+
+
 def test_bad_threads() -> None:
     for bad in (0, -1):
         with pytest.raises(ValueError, match="threads must be None or a positive int"):
@@ -241,6 +329,43 @@ def test_wrong_input_type(x: Any) -> None:
     for mode in ("lcut", "lcut_no_hmm", "cut_all", "search", "search_no_hmm", "cut"):
         with pytest.raises(pyroid.InputError):
             MODES[mode](x)
+
+
+def zero_total_tokenizer() -> Any:
+    """Return a tokenizer whose dictionary totals 0, so cutting a word block takes ``log(0)``."""
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "dict.txt")
+        Path(path).write_bytes("北京 5\n大学 -5\n".encode())
+        t = pj.Tokenizer(path)
+        t.initialize()
+    return t
+
+
+LOG_ZERO = "math domain error|expected a positive input"  # math.log(0): CPython < 3.14, 3.14+
+
+
+@pytest.mark.parametrize("bad", [[0], [7, 300], [399], [150, 151]])
+def test_lowest_failing_document_is_reported(bad: list[int]) -> None:
+    t = zero_total_tokenizer()
+    with pytest.raises(ValueError, match=LOG_ZERO) as one:
+        t.lcut("北京大学")
+    assert not hasattr(one.value, "__notes__")
+    docs = ["，" * 100] * 400  # no word block: cut without the dictionary
+    for i in bad:
+        docs[i] = "北京大学"
+    calls: dict[str, Callable[..., Any]] = {
+        "lcut": t.lcut,
+        "lcut_for_search": t.lcut_for_search,
+        "tokenize": lambda x, **kw: list(t.tokenize(x, **kw)),
+    }
+    note = f"while segmenting the document at index {min(bad)}"
+    for name, f in calls.items():
+        for threads in (None, 1, 2, 8):
+            with pytest.raises(ValueError, match=LOG_ZERO) as info:
+                f(docs, threads=threads)
+            assert str(info.value) == str(one.value), (name, threads)
+            assert info.value.__notes__ == [note], (name, threads)
+    assert t.lcut(docs[1:7]) == [["，"] * 100] * 6
 
 
 def test_tokenize_needs_text() -> None:
