@@ -56,6 +56,18 @@ nltk      NLTK 3.10.4's tokenizer API: ``sent_tokenize``, ``word_tokenize``, ``P
           ``BlanklineTokenizer``, ``wordpunct_tokenize`` (``nltk`` itself, or ``nltk.tokenize``); a candidate whose
           ``sent_tokenize`` also takes a list of str gets batch checks.
 
+warc      warcio 1.8.2's reader API: ``ArchiveIterator(fileobj, no_record_parse=False, verify_http=False,
+          arc2warc=False, ensure_http_headers=False, block_size=16384, check_digests=False)``, ``WARCIterator``,
+          ``ARCIterator``, ``StatusAndHeaders``, ``ArcWarcRecord``, ``DigestChecker``, ``ArchiveLoadFailed`` and
+          ``WARCIO_VERSION == "1.8.2"``; records, streams, offsets, messages (stderr, logging) and exceptions as
+          warcio's (``pyroid_parity.warc_compare``). ``iter_documents(source, *, compression="infer")`` yields
+          ``(record index, dict)`` exactly as datatrove 0.10.1's ``WarcReader.read_file`` + ``process_record``
+          (``pyroid_parity.warc_datatrove.reference_documents``); optional ``iter_batches(source, *,
+          batch_size=1000, compression="infer")`` gives Arrow-exportable batches (id, url, date, mime_type,
+          content_type, html, text). ``<top>.integrations.datatrove.WarcReader``, if the package has it, is checked
+          against datatrove's ``WarcReader`` (same arguments, same Documents, same exceptions); a module attribute
+          ``datatrove_reader`` names another class to check (``pyroid_parity.warc_mutant`` has one).
+
 Warnings: where a suite compares warnings (the ftfy ``errors`` check, every json_repair check), a candidate's
 ``pyroid.FallbackWarning`` (its "delegating to the incumbent" notice, shown once per process; see
 ``docs/dev/MODULES.md``) is left out, so the result does not depend on test order. Every other warning
@@ -83,6 +95,7 @@ SUITES = (
     "jieba",
     "trafilatura",
     "nltk",
+    "warc",
 )
 REFERENCE = {
     "ftfy": "ftfy",
@@ -95,6 +108,7 @@ REFERENCE = {
     "jieba": "jieba",
     "trafilatura": "trafilatura",
     "nltk": "nltk",
+    "warc": "warcio",
 }
 # Distribution that provides a module, for version reporting when it differs from the module name.
 DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel")}
@@ -386,6 +400,32 @@ class GenericNltk:
         self.notes = [] if self.has_batch else ["sent_tokenize takes no list: batch checks skipped"]
 
 
+class GenericWarc:
+    """warcio's reader API taken from the module; ``iter_documents`` / ``iter_batches`` / the datatrove step if present."""
+
+    def __init__(self, mod: Any) -> None:
+        from pyroid_parity.warc_compare import exc_namer
+
+        self.mod = mod
+        top = mod.__name__.split(".")[0]
+        self.exc_name = exc_namer(top)
+        self.has_documents = hasattr(mod, "iter_documents")
+        self.has_batches = hasattr(mod, "iter_batches")
+        self.reader_cls: Any = getattr(mod, "datatrove_reader", None)
+        if self.reader_cls is None:
+            try:
+                self.reader_cls = importlib.import_module(f"{top}.integrations.datatrove").WarcReader
+            except (ImportError, AttributeError):
+                self.reader_cls = None
+        self.notes = []
+        if not self.has_documents:
+            self.notes.append("no iter_documents: those checks skip")
+        if not self.has_batches:
+            self.notes.append("no iter_batches: those checks skip")
+        if self.reader_cls is None:
+            self.notes.append(f"no {top}.integrations.datatrove.WarcReader: the WarcReader checks skip")
+
+
 GENERIC: dict[str, Callable[[Any], Any]] = {
     "ftfy": GenericFtfy,
     "fasttext": GenericFasttext,
@@ -397,4 +437,5 @@ GENERIC: dict[str, Callable[[Any], Any]] = {
     "jieba": GenericJieba,
     "trafilatura": GenericTrafilatura,
     "nltk": GenericNltk,
+    "warc": GenericWarc,
 }

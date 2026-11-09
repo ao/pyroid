@@ -13,6 +13,7 @@ without editing the suites. Every run writes `parity-report.json`, which feeds t
 | `metrics` | rouge-score 0.1.2 (+ NLTK 3.10.4 Porter), sacrebleu 2.6.0 | ROUGE-1/2/3/4/L/Lsum on CNN/DM test (11.5k lead-3 vs highlights, 2k whole articles) and SummEval (1.6k system summaries, 11 refs, `score_multi`), with and without stemming; BLEU (13a/intl/char/none/zh/trg_lang, smoothing, lowercase, effective order, max order, `None` reference holes) and chrF/chrF++ per WMT21 system (141 corpora) and per segment (163k); live Hypothesis vs both incumbents (sacrebleu only on GIL builds: it loads lxml, which re-enables the GIL) | identical `repr`/`str`/`format`/signature strings (exact floats) |
 | `json_repair` | json_repair 0.64.5 (live + calls recorded from its own test suite + pinned digests) | 672 public calls from json_repair's 466 upstream tests ([`data/json_repair-0.64.5`](data/json_repair-0.64.5/README.md)), 20k generated broken LLM outputs × 8 option sets, Hypothesis grammar fuzzing with lone surrogates, `loads` / `load` / `from_file` | `str` byte-identical; objects and repair logs type-exact (key order, int vs float, NaN); same exception type and message |
 | `trafilatura` | one mode per release (`--trafilatura-compat`): trafilatura 2.3.1, or 1.11.0 as `datatrove[processing]` resolves it, each with lxml 6.1.3 + justext 3.0.2 (live + pinned digests + calls recorded from its own tests) | 7,192 Common Crawl pages of 3 crawls (2019, 2023, 2026) × 7 `extract` option sets, datatrove's call among them (stateful: dedup in page order), also through `extract_batch`, and 2 `bare_extraction` sets; the public calls of the release's own tests, replayed test by test (2.3.1: 4,553 from 3,938 tests, [`data/trafilatura-2.3.1`](data/trafilatura-2.3.1/README.md); 1.11.0: 633 from 29 tests, [`data/trafilatura-1.11.0`](data/trafilatura-1.11.0/README.md)); Hypothesis grammar-generated HTML; unported options in fresh processes | text byte-identical (`None` is not `""`), `Document` fields identical, same exception type and message; exactly one `pyroid.FallbackWarning` per delegated option, none for the ported ones |
+| `warc` | warcio 1.8.2 (+ brotlicffi 1.2.1.0) and datatrove 0.10.1's `WarcReader` (+ faust-cchardet 3.2.0, python-magic 0.4.27) (live + pinned digests) | 34 Common Crawl slices (WARC of 16 crawls 2013–2026, WET, WAT, the 2012 ARC crawl, truncated, empty; 18.6k records) and warcio's 16 test files, [`data/warcio-1.8.2`](data/warcio-1.8.2/README.md); 1,085 seeded synthetic files (framing, gzip damage, lengths, headers, HTTP, chunked, encodings, digests, ARC, charsets, big records) and Hypothesis WARC streams, each under up to 29 read plans × options × openers (file, BytesIO, unseekable, short reads, `gzip.GzipFile`, datatrove's open); `process_record` dicts, `iter_documents`, `iter_batches`, `WarcReader` runs | every record field, read, offset, stderr / log message and exception (with what follows it) identical, event by event; Documents identical |
 
 ## Plugging in a module
 
@@ -23,6 +24,7 @@ without editing the suites. Every run writes `parity-report.json`, which feeds t
    - `filters`: `gopher_quality(texts, **config) -> (keep, reasons[, texts_out])` and so on, mask-shaped.
    - `dedup`: `minhash_signatures(texts, **config)` and `minhash_dedup(texts, **config) -> removed mask`.
    - `trafilatura`: trafilatura 2.3.1's `extract` and `bare_extraction` (same signatures plus a keyword-only `compat="2.3.1"` last), `reset_caches()` (empties the dedup cache `deduplicate=True` uses) and optionally `extract_batch(htmls, *, threads=None, compat="2.3.1", **kwargs)`; a `pyroid.integrations` shim keeps trafilatura's exact signatures.
+   - `warc`: warcio 1.8.2's reader classes (`ArchiveIterator` and friends, `StatusAndHeaders`, `DigestChecker`, `ArchiveLoadFailed`, `WARCIO_VERSION`), `iter_documents(source, *, compression="infer")` (datatrove's read path) and optionally `iter_batches`; `<top>.integrations.datatrove.WarcReader` is checked against datatrove's.
 
    Function names, configs and the MinHash parameters are in [`pyroid_parity/specs.py`](pyroid_parity/specs.py).
    If your API differs, add an adapter in `pyroid_parity/adapters/<suite>_<module>.py`, which is how datatrove is wrapped.
@@ -76,6 +78,8 @@ All inputs and references live under `$PYROID_DATA` (default `/data`) and are pi
 | `trafilatura/upstream-tests-{2.3.1,1.11.0}.parquet` | Trafilatura's `tests/` at v2.3.1 and v1.11.0, from GitHub |
 | `parity/trafilatura-ref.parquet`, `parity/trafilatura-upstream{,-blobs}.parquet` | 2.3.1's outcome digests per page and option set; its tests' calls and golden outcomes |
 | `parity/trafilatura-1.11.0-{ref,upstream,upstream-blobs}.parquet` | the same for 1.11.0 (`refs trafilatura111 trafilatura111_upstream`, in the `trafilatura111` group) |
+| `warc/cc/*.gz` | 34 Common Crawl byte ranges (86.9 MB): WARC, WET, WAT and ARC files of 17 crawls, on gzip member boundaries or cut on purpose (Common Crawl terms of use; see [`data/warcio-1.8.2`](data/warcio-1.8.2/README.md)) |
+| `warc/warcio-1.8.2/*` | warcio's `test/data` at v1.8.2 (16 files, Apache-2.0) |
 
 - `../bench/fetch.py` fetches the inputs. It verifies the inputs it downloads, and `--verify-all` checks every pinned file.
 - In the oracle env, on Linux, `python -m pyroid_parity.refs all` rebuilds the references and checks each one
@@ -157,6 +161,50 @@ in fresh processes: trafilatura's result with exactly one `pyroid.FallbackWarnin
 - **At scale (not CI):** `python -m pyroid_parity.trafilatura_scale OUT_DIR [--impl pyroid.trafilatura]
   [--compat 1.11.0] --pages N` streams slices of other WARC files of several crawls, compares, and keeps only
   JSON counts (with the mode's group and `--group cc`).
+
+## The warc suite
+`tests/test_warc.py` checks a module with warcio 1.8.2's reader API against warcio itself, and the datatrove level
+against datatrove 0.10.1's `WarcReader`:
+
+```bash
+cd parity
+uv run --frozen --with ../dist/pyroid-*.whl pytest -m warc --impl pyroid.warc
+uv run --frozen --with ../dist/pyroid-*.whl pytest -m warc --impl pyroid.warc --parity-limit 0   # every record
+```
+
+warcio and brotlicffi are core dependencies (pure Python and a cp314t wheel), so the free-threaded legs compare
+against warcio live; datatrove, faust-cchardet and python-magic are the `warc` group (a default group). libmagic
+(Debian/Ubuntu `libmagic1`) is needed for records without `WARC-Identified-Payload-Type`, which datatrove hands to
+`magic.from_buffer`; without it a stub raises at those records on both sides, and the pinned datatrove checks skip.
+
+A run drives each input under a set of `warc_compare.Config`s: iterator options (`no_record_parse`, `verify_http`,
+`arc2warc`, `ensure_http_headers`, `check_digests` False / True / `log` / `raise`, `block_size` 1 to 65536), read
+plans (iterate, `content_stream().read()`, 16 KiB blocks, `raw_stream`, offsets, seeded mixes of `read(n)` /
+`readline(n)` on both streams, early stop) and openers (file, unbuffered file, BytesIO, no `tell`, short reads, a
+logging wrapper, `gzip.GzipFile`, datatrove's `DataFolder.open`). The trace of a run lists every observable thing
+in order; the candidate's must equal warcio's event for event. Common Crawl slices run 12 configs, the other inputs
+29 (31,291 traces per implementation in the default run); the default reads the first 100 records of each slice.
+In Docker on Apple Silicon (indicative), the default run took 113 s as a self-check and 202 s against
+`warc_mutant` without defects, which exercises every live comparison with warcio as the candidate.
+
+- **Pins:** `data/warcio-1.8.2/ref-digests.json` holds warcio's and datatrove's trace digests
+  (`python -m pyroid_parity.warc_pins write`; `check` recomputes them). They were made on CPython 3.13 with zlib
+  1.3.2, brotlicffi 1.2.1.0 and libmagic 5.44 (Debian 12). Checks whose inputs depend on a version that differs
+  here (the synthetic gzip bytes on zlib, libmagic's answers) skip and say why.
+- **Without `--impl`:** the live checks skip (warcio against itself), the pinned ones run, and `mutant` proves that
+  three broken wrappers of warcio are caught.
+- **Proving the harness:** `pyroid_parity.warc_mutant` is a stand-in candidate with warcio's API (`--impl
+  warc=pyroid_parity.warc_mutant`). `python -m pyroid_parity.warc_mutant faithful` runs the whole suite live
+  against it without defects (no check may fail); `prove` turns on one defect per kind of check and exits 1
+  unless each of those checks fails.
+- **Documented difference:** pyroid.warc verifies md5, sha1, sha224, sha256, sha384 and sha512 digests. Other
+  algorithms that hashlib (OpenSSL) knows, such as sha3_256 or blake2b, count as an unknown algorithm in pyroid.
+  `digest-other-algorithms` accepts either outcome and nothing else.
+- **At scale (not CI):** `python -m pyroid_parity.warc_scale OUT.json FILE... --impl pyroid.warc --workers N`
+  compares every record of whole files (both read paths and the datatrove level) as per-record digests, in parallel,
+  and writes counts and the first diffs. On the 100 MB CC-MAIN-2026-39 prefix (8,631 records), warcio against
+  itself took 2.5 s per side for `content_stream()` reads over the raw file (Docker VM on Apple Silicon,
+  indicative).
 
 ## Oracle choices
 - fastText: fasttext-predict 0.9.2.4.
