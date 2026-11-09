@@ -1,0 +1,16 @@
+WARC/1.0
+WARC-Type: warcinfo
+WARC-Record-I26-01-01T00:00:00Z
+Content-Length: 1
+
+i
+
+WARC/1.0
+WARC-Type: response
+WARC-Record-ID: <urn:uuiC-Date: 2026-01-01T00:00:00Z
+Content-Length: 20
+
+HTTP/1.1 200 OK
+
+z
+

@@ -1,0 +1,28 @@
+WARC/1.0
+WARC-Date: 2017-03-06T04:03:53Z
+WARC-Record-ID: <urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>
+WARC-Filename: temp-20170306040353.warc.gz
+WARC-Type: warcinfo
+Content-Type: application/warc-fields
+Content-Length: 249
+
+software: Webrecorder Platform v3.7
+format: WARC File Format 1.0
+creator: temp-MJFXHZ4S
+isPartOf: Temporary%20Collection
+json-metadata: {"title": "Temporary Collection", "size": 2865, "created_at": 1488772924, "type": "collection", "desc": ""}
+
+
+WARC/1.0
+WARC-Date: 2017-03-06T04:03:53Z
+WARC-Record-ID: <urn:uuid:e9a0ee48-0221-11e7-adb1-0242ac120008>
+WARC-Filename: temp-20170306040353.warc.gz
+WARC-Type: warcinfo
+Content-Type: application/warc-fields
+Content-Length: 470
+
+software: Webrecorder Platform v3.7
+format: WARC File Format 1.0
+creator: temp-MJFXHZ4S
+isPartOf: Temporary%20Collection/Recording%20Session
+json-metadata: {"created_at": 1488772924, "type": "recording", "updated_at": 1488773028, "title": "Recording Session", "size": 2865, "pages": [{"url": "htt

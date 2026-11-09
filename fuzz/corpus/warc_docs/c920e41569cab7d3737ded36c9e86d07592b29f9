@@ -1,0 +1,17 @@
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: hZ
+WARC-Record-ID: <urn:uuid:e9a0cecc-0221-11e7-adb1-0242ac120008>
+WARC-Filename: temp-20170306040353.warc.gz
+WARC-Type: warcinfo
+Content-Type: application/warc-fields
+Content-Length:: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: 
+WARC-Payload-Digest: 
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+

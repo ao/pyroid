@@ -1,0 +1,44 @@
+WARC/1.0
+WARC-Type: resource
+WARC-Target-URI: urn:x
+WARC-Record-ID: <urn:uuid:1212f0fe32bfc67fbbe48fdb33d81e81>
+WARC-Date: 2026-01-01T00:00:00Z
+Content-Length:  12 
+
+0123456789ab0123456789ab0123456789ab
+
+WARC/1.0
+WARC-Type: resource
+WARC-Target-URI: urn:x
+WARC-Record-ID: <urn:uuid:1212f0fe32bfc67fbbe48fdb33d81e81>
+WARC-Date: 2026-01-01T00:00:00Z
+Content-Length: +12
+
+0123456789ab0123456789ab0123456789ab
+
+WARC/1.0
+WARC-Type: resource
+WARC-Target-URI: urn:x
+WARC-Record-ID: <urn:uuid:1212f0fe32bfc67fbbe48fdb33d81e81>
+WARC-Date: 2026-01-01T00:00:00Z
+Content-Length: 1_2
+
+0123456789ab0123456789ab0123456789ab
+
+WARC/1.0
+WARC-Type: resource
+WARC-Target-URI: urn:x
+WARC-Record-ID: <urn:uuid:1212f0fe32bfc67fbbe48fdb33d81e81>
+WARC-Date: 2026-01-01T00:00:00Z
+Content-Length: ١٢
+
+0123456789ab0123456789ab0123456789ab
+
+WARC/1.0
+WARC-Type: resource
+WARC-Target-URI: urn:x
+WARC-Record-ID: <urn:uuid:1212f0fe32bfc67fbbe48fdb33d81e81>
+WARC-Date: 2026-01-01T00:00:00Z
+Content-Length: -5
+
+01

@@ -10,6 +10,8 @@ edition = "2024"
 cargo-fuzz = true
 
 [dependencies]
+# warc_reader / warc_docs: gzip members built from the fuzz input.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 libfuzzer-sys = "0.4"
 pyroid-core = { path = "../crates/pyroid-core" }
 
@@ -65,6 +67,20 @@ bench = false
 [[bin]]
 name = "trafilatura_extract"
 path = "fuzz_targets/trafilatura_extract.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "warc_reader"
+path = "fuzz_targets/warc_reader.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "warc_docs"
+path = "fuzz_targets/warc_docs.rs"
 test = false
 doc = false
 bench = false
