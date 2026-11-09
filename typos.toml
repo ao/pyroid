@@ -20,6 +20,7 @@ extend-exclude = [
   "crates/pyroid-core/src/warc/tables.rs",
   # jusText's merged stoplists (100 languages).
   "crates/pyroid-core/src/trafilatura/stoplist.txt",
+  "crates/pyroid-core/src/pyvi/unicode_tables.rs",
   # Test data, incumbent fixtures and raw benchmark results: mojibake, confusables, deliberately
   # misspelt and non-English text. Keep in step with the file-fixer excludes in .pre-commit-config.yaml.
   "python/tests/data/",
@@ -46,6 +47,11 @@ extend-exclude = [
   # outputs (Japanese FineWeb-2 excerpts, every code point, fuzz).
   "crates/pyroid-core/src/sudachi/resources/",
   "crates/pyroid-core/src/sudachi/testdata/",
+  # pyvi's model and Vietnamese word list, copied unmodified, and pyvi's, PyThaiNLP's and
+  # datatrove's recorded outputs (Vietnamese and Thai FineWeb-2 excerpts, every code point, fuzz).
+  "crates/pyroid-core/src/pyvi/data/",
+  "crates/pyroid-core/src/pyvi/testdata/",
+  "crates/pyroid-core/src/pythainlp/testdata/",
   "bench/data/",
   "bench/results/",
   # Charts copied byte for byte from bench/results/ (matplotlib SVGs).

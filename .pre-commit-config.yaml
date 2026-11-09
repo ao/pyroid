@@ -13,9 +13,10 @@ repos:
       - id: check-yaml
       - id: check-merge-conflict
       - id: check-added-large-files
-        # The bench/ and parity/ lockfiles (~0.5 MB each), jieba's dictionary trie (2.5 MB) and the
-        # recorded NLTK Treebank outputs (1.1 MB) are the only files allowed past the 500 KB limit.
-        exclude: ^((bench|parity)/uv\.lock|crates/pyroid-core/src/jieba/data/dict\.trie|crates/pyroid-core/src/nltk/testdata/treebank/golden\.jsonl)$
+        # The bench/ and parity/ lockfiles (~0.5 MB each), jieba's dictionary trie (2.5 MB), the
+        # recorded NLTK Treebank outputs (1.1 MB) and pyvi's CRF model (0.6 MB) are the only files
+        # allowed past the 500 KB limit.
+        exclude: ^((bench|parity)/uv\.lock|crates/pyroid-core/src/jieba/data/dict\.trie|crates/pyroid-core/src/nltk/testdata/treebank/golden\.jsonl|crates/pyroid-core/src/pyvi/data/pyvi3\.crfsuite)$
       # Test data, incumbent fixtures, raw benchmark results, the charts copied from them and the fuzz
       # corpora keep their bytes exactly (mojibake, confusables, odd whitespace). Keep in step with
       # [files] extend-exclude in typos.toml.
@@ -36,6 +37,9 @@ repos:
             crates/pyroid-core/src/nltk/testdata/|
             crates/pyroid-core/src/sudachi/testdata/|
             crates/pyroid-core/src/sudachi/resources/|
+            crates/pyroid-core/src/pyvi/data/|
+            crates/pyroid-core/src/pyvi/testdata/|
+            crates/pyroid-core/src/pythainlp/testdata/|
             bench/data/|
             bench/results/|
             docs/assets/.*\.svg$|
