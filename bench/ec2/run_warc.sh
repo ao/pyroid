@@ -25,6 +25,8 @@
 #                   step whose estimate would end within 10 min of it is skipped (with the reason in run.log)
 #   HTMLX_POWEROFF  1: power off 1 min after the last step [0]
 #   HTMLX_RUN_ARGS  extra fineweb_warc.py arguments for every run, e.g. "--limit 200" (tests) [none]
+#   HTMLX_STOCK_FREEZE  a freeze-stock.txt in the repo (e.g. bench/results/aws-c7i.4xlarge/2026-11-09-warc/) to
+#                   install venv-stock from, instead of resolving datatrove[io,processing]==0.10.1 anew [none]
 #   HTMLX_STOCK_ARGS  extra arguments for stock runs only (tests on machines without g++ for fasttext-numpy2-wheel:
 #                   "--lid-model PATH" swaps in fasttext-predict; never on EC2) [none]
 #
@@ -215,7 +217,12 @@ step_envs() {
     local whl
     whl=$(ls "$W"/dist/pyroid-*.whl | head -n 1)
     uv venv -q --clear -p "$PY" "$W/venv-stock"
-    VIRTUAL_ENV=$W/venv-stock uv pip install -q "datatrove[io,processing]==0.10.1" "spacy==3.8.18"
+    if [[ -n ${HTMLX_STOCK_FREEZE:-} ]]; then
+        # An earlier run's exact env (a freeze-stock.txt under bench/results/), so the stock numbers compare.
+        VIRTUAL_ENV=$W/venv-stock uv pip install -q -r "$R/$HTMLX_STOCK_FREEZE"
+    else
+        VIRTUAL_ENV=$W/venv-stock uv pip install -q "datatrove[io,processing]==0.10.1" "spacy==3.8.18"
+    fi
     VIRTUAL_ENV=$W/venv-stock uv pip freeze >"$RES/freeze-stock.txt"
     grep -q '^trafilatura==1.11.0$' "$RES/freeze-stock.txt" || { log "trafilatura is not 1.11.0"; grep -i trafilatura "$RES/freeze-stock.txt"; return 1; }
     grep -qiE '^fasttext[-_]numpy2[-_]wheel==' "$RES/freeze-stock.txt" || { log "no fasttext-numpy2-wheel"; return 1; }
