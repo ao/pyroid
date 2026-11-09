@@ -262,7 +262,11 @@ def batch_events(
 
 
 def reader_doc_view(doc: Any) -> list[Any]:
-    return [repr(doc.id), text_view(doc.text), repr(doc.metadata), repr(doc.media)]
+    """id, text, metadata (``file_path`` as its file name: runs in other processes use other temporary folders), media."""
+    meta = dict(doc.metadata)
+    if isinstance(meta.get("file_path"), str):
+        meta["file_path"] = ".../" + meta["file_path"].rsplit("/", 1)[-1]
+    return [repr(doc.id), text_view(doc.text), repr(meta), repr(doc.media)]
 
 
 def reader_events(

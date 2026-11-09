@@ -33,6 +33,8 @@ Checks (suite ``warc`` in parity-report.json):
     warcreader                ``<top>.integrations.datatrove.WarcReader(folder, **kw).run()`` == datatrove's
     warcreader-executor       the same through ``LocalPipelineExecutor`` + ``JsonlWriter``
     hypothesis-documents      grammar-generated streams through both datatrove paths
+    patch-warcio              ``<top>.patch("warcio")`` in a fresh process: warcio's names and datatrove's own
+                              WarcReader then give warcio's traces
     api-*                     names, ``WARCIO_VERSION``, signatures; ``StatusAndHeaders``, ``DigestChecker`` and
                               ``ArchiveLoadFailed`` behave as warcio's (Hypothesis on header lists)
     mutant                    (self-check only) deliberately broken warcio wrappers are caught
@@ -930,6 +932,79 @@ def test_api_digest_checker(warc_impl: Any, parity: Collector, kind: Any) -> Non
     got = _checker_outcome(warc_impl.obj.mod, kind)
     want = _checker_outcome(o.mod, kind)
     assert parity.record(SUITE, check, got == want, case=repr(kind), got=got, want=want)
+
+
+# ------------------------------------------------------------------------------------------- patch("warcio")
+
+PATCH_GROUPS = ("warcio-tests", "synth-frame", "synth-encoding", "synth-charset", "synth-arc")
+PATCH_CONFIGS = ("content/file", "random/file", "content/gzipfile", "offsets/bytesio")
+_PATCH_SCRIPT = """
+import importlib, json, sys
+top = sys.argv[1]
+importlib.import_module(top).patch("warcio")
+from pyroid_parity import warc_compare as C, warc_datatrove as T, warc_pins as P
+from pyroid_parity.adapters import warc_warcio
+from datatrove.pipeline.readers import WarcReader
+T.ensure_magic()
+ref = warc_warcio.make()
+out = {"classes": [ref.mod.ArchiveIterator.__module__, ref.mod.ArchiveIterator.__qualname__], "jobs": {}}
+for g in sys.argv[2].split(","):
+    for j in P.jobs(g):
+        if j.config.name in sys.argv[3].split(","):
+            out["jobs"][f"{j.name} [{j.config.name}]"] = P.pair(C.iter_events(ref.mod, j.path, j.config, 0, ref.exc_name))
+    for name, path in P.document_inputs(g):
+        out["jobs"][f"{name} [WarcReader.read_file]"] = P.short(T.read_file_events(WarcReader, path, ref.exc_name))
+print(json.dumps(out))
+"""
+
+
+def test_patch_warcio(warc_impl: Any, parity: Collector) -> None:
+    """``<top>.patch("warcio")`` in a fresh process: warcio's own names and datatrove's own WarcReader then run
+    the candidate, and must give warcio's traces."""
+    check = "patch-warcio"
+    o = oracle()
+    top = warc_impl.obj.mod.__name__.split(".")[0]
+    if warc_impl.is_reference or o is None:
+        skip(parity, check, "candidate is warcio itself" if o else "warcio is not installed")
+    _need_inputs(parity, check)
+    _need_datatrove(parity, check)
+    import importlib
+    import subprocess
+
+    if not callable(getattr(importlib.import_module(top), "patch", None)):
+        skip(parity, check, f"{top} has no patch()")
+    p = subprocess.run(
+        [sys.executable, "-c", _PATCH_SCRIPT, top, ",".join(PATCH_GROUPS), ",".join(PATCH_CONFIGS)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert p.returncode == 0, p.stderr[-3000:]
+    got = json.loads(p.stdout.splitlines()[-1])
+    patched = got["classes"][0].split(".")[0] != "warcio" or got["classes"][1] != "ArchiveIterator"
+    assert parity.record(SUITE, check, patched, case="classes", got=got["classes"]), (
+        f"warcio.archiveiterator.ArchiveIterator is still warcio's after patch: {got['classes']}"
+    )
+    from datatrove.pipeline.readers import WarcReader
+
+    bad = []
+    for g in PATCH_GROUPS:
+        for j in P.jobs(g):
+            if j.config.name in PATCH_CONFIGS:
+                key = f"{j.name} [{j.config.name}]"
+                want = P.pair(C.iter_events(o.mod, j.path, j.config, 0, o.exc_name))
+                if not parity.record(
+                    SUITE, check, got["jobs"].get(key) == want, case=key, got=got["jobs"].get(key), want=want
+                ):
+                    bad.append(key)
+        for name, path in P.document_inputs(g):
+            key = f"{name} [WarcReader.read_file]"
+            want = P.short(T.read_file_events(WarcReader, path, o.exc_name))
+            if not parity.record(
+                SUITE, check, got["jobs"].get(key) == want, case=key, got=got["jobs"].get(key), want=want
+            ):
+                bad.append(key)
+    assert not bad, f"{len(bad)} differ after patch('warcio'), first: {bad[:MAX_DETAIL]}"
 
 
 # ------------------------------------------------------------------------------------------------ mutant
