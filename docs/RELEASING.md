@@ -91,9 +91,9 @@ After `next` is merged into `main` and pushed:
    squash merge could drop its `!`.
 2. Review the PR: the root `Cargo.toml` (`[workspace.package] version`) and the `pyroid-core`/`pyroid-py`
    entries in `Cargo.lock` say `1.0.0`, `.release-please-manifest.json` says `1.0.0`, and `CHANGELOG.md` has the
-   generated 1.0.0 section. The hand-written `## 1.0.0 (unreleased)` stub ends up just below the generated
-   section. Delete the stub in a normal commit on `main` (release-please refreshes the PR), or straight after
-   the release.
+   generated 1.0.0 section. The hand-written `## 1.0.0 (unreleased)` section, the summary of what 1.0 contains,
+   ends up just below the generated one. Move its text under the generated heading and delete its own heading, in
+   a normal commit on `main` (release-please refreshes the PR), or straight after the release.
 3. CI doesn't run on the release PR itself, because PRs opened with `GITHUB_TOKEN` don't trigger workflows.
    That's acceptable: the PR only changes versions and the changelog, and the same build and test matrix runs
    again after the merge, before anything is published. To get checks on the PR anyway, close and reopen it.
