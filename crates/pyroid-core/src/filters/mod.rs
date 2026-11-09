@@ -280,6 +280,10 @@ pub fn tokenizer_for(
         "SpaCyTokenizer" if b.arg == "ja" => {
             crate::sudachi::ja::JaTokenizer::get(version).map(|t| t as &dyn WordTokenizer)
         }
+        // pyvi, as spaCy's VietnameseTokenizer runs it.
+        "SpaCyTokenizer" if b.arg == "vi" => {
+            Some(crate::pyvi::vi::ViTokenizer::get(version) as &dyn WordTokenizer)
+        }
         "SpaCyTokenizer" => {
             tokenizer::SpacyTokenizer::get(b.arg, version).map(|t| t as &dyn WordTokenizer)
         }
