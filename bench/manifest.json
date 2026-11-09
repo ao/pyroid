@@ -185,6 +185,38 @@
         "license": "CC BY-SA 3.0"
       }
     },
+    "models/nemo-quality-dev10k.ftz": {
+      "sha256": "68ae0a772f4c056014a1a41bb6aef8e337230e997c09544fbaced110bb1b4e3e",
+      "bytes": 1748073,
+      "oracle": {
+        "fasttext": "0.9.3",
+        "nemo-curator": "1.4.0"
+      },
+      "recipe": {
+        "train_supervised": {
+          "lr": 0.1,
+          "epoch": 5,
+          "dim": 32,
+          "loss": "softmax",
+          "thread": 1,
+          "seed": 0,
+          "verbose": 0
+        },
+        "quantize": {
+          "cutoff": 50000,
+          "qnorm": true,
+          "retrain": false
+        }
+      },
+      "labels": "__label__hq if the dev document passes all 28 ScoreFilter stages of heuristic_filter_english_pipeline.yaml (recorded keep, no exception), else __label__lq; one line per dev document, in order, prepared with FastTextLabelModifier(label).modify_document(text)",
+      "label_counts": {
+        "__label__hq": 9545,
+        "__label__lq": 455
+      },
+      "train_docs": "fineweb/fineweb-dev-10k.parquet",
+      "trained_on": "linux-aarch64",
+      "generator": "pyroid_parity.nemo_record:quality_model"
+    },
     "parity/adversarial.parquet": {
       "sha256": "f3cb139fc03150f7620a2ebd5066e5d873e79b7b3b3addbc40458f221b842448",
       "bytes": 4434803,
@@ -869,6 +901,707 @@
         "dev",
         "adversarial"
       ]
+    },
+    "parity/nemo-ref.parquet": {
+      "sha256": "16200a3b73d73bbb90e0f8857cb05190fb0fdb767066ebca9b52fc124f56da29",
+      "bytes": 23799333,
+      "rows": 888518,
+      "oracle": {
+        "nemo-curator": "1.4.0",
+        "fasttext": "0.9.3",
+        "ftfy": "6.3.1",
+        "regex": "2026.11.9",
+        "pandas": "3.1.1",
+        "numpy": "2.5.4",
+        "jieba": "0.42.1",
+        "python": "3.12.16"
+      },
+      "hash_seed": "0",
+      "platform": "linux-aarch64",
+      "corpora": [
+        "dev",
+        "adversarial"
+      ],
+      "models": {
+        "lid.176.bin": "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e",
+        "lid.176.ftz": "8f3472cfe8738a7b6099e8e999c3cbfae0dcd15696aac7d7738a8039db603e83",
+        "nemo-quality-dev10k.ftz": "68ae0a772f4c056014a1a41bb6aef8e337230e997c09544fbaced110bb1b4e3e"
+      },
+      "cases": {
+        "non_alpha_numeric": {
+          "class": "NonAlphaNumericFilter",
+          "kwargs": {
+            "max_non_alpha_numeric_to_text_ratio": 0.25
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "symbols_to_words": {
+          "class": "SymbolsToWordsFilter",
+          "kwargs": {
+            "max_symbol_to_word_ratio": 0.1
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "numbers": {
+          "class": "NumbersFilter",
+          "kwargs": {
+            "max_number_to_text_ratio": 0.15
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "urls": {
+          "class": "UrlsFilter",
+          "kwargs": {
+            "max_url_to_text_ratio": 0.2
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "white_space": {
+          "class": "WhiteSpaceFilter",
+          "kwargs": {
+            "max_white_space_ratio": 0.25
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "parentheses": {
+          "class": "ParenthesesFilter",
+          "kwargs": {
+            "max_parentheses_ratio": 0.1
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "boilerplate_string": {
+          "class": "BoilerPlateStringFilter",
+          "kwargs": {
+            "remove_if_at_top_or_bottom": true,
+            "max_boilerplate_string_ratio": 0.4
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeated_lines": {
+          "class": "RepeatedLinesFilter",
+          "kwargs": {
+            "max_repeated_line_fraction": 0.7
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeated_paragraphs": {
+          "class": "RepeatedParagraphsFilter",
+          "kwargs": {
+            "max_repeated_paragraphs_ratio": 0.7
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeated_lines_by_char": {
+          "class": "RepeatedLinesByCharFilter",
+          "kwargs": {
+            "max_repeated_lines_char_ratio": 0.8
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeated_paragraphs_by_char": {
+          "class": "RepeatedParagraphsByCharFilter",
+          "kwargs": {
+            "max_repeated_paragraphs_char_ratio": 0.8
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "word_count": {
+          "class": "WordCountFilter",
+          "kwargs": {
+            "min_words": 50,
+            "max_words": 100000
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "punctuation": {
+          "class": "PunctuationFilter",
+          "kwargs": {
+            "max_num_sentences_without_endmark_ratio": 0.85
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "words_without_alphabets": {
+          "class": "WordsWithoutAlphabetsFilter",
+          "kwargs": {
+            "min_words_with_alphabets": 0.8
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "common_english_words": {
+          "class": "CommonEnglishWordsFilter",
+          "kwargs": {
+            "min_num_common_words": 2,
+            "stop_at_false": true
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "mean_word_length": {
+          "class": "MeanWordLengthFilter",
+          "kwargs": {
+            "max_mean_word_length": 10,
+            "min_mean_word_length": 3
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "long_word": {
+          "class": "LongWordFilter",
+          "kwargs": {
+            "max_word_length": 1000
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "ellipsis": {
+          "class": "EllipsisFilter",
+          "kwargs": {
+            "max_num_lines_ending_with_ellipsis_ratio": 0.3
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_top_ngrams@2": {
+          "class": "RepeatingTopNGramsFilter",
+          "kwargs": {
+            "n": 2,
+            "max_repeating_ngram_ratio": 0.2
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_top_ngrams@3": {
+          "class": "RepeatingTopNGramsFilter",
+          "kwargs": {
+            "n": 3,
+            "max_repeating_ngram_ratio": 0.18
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_top_ngrams@4": {
+          "class": "RepeatingTopNGramsFilter",
+          "kwargs": {
+            "n": 4,
+            "max_repeating_ngram_ratio": 0.16
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_duplicate_ngrams@5": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 5,
+            "max_repeating_duplicate_ngram_ratio": 0.15
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_duplicate_ngrams@6": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 6,
+            "max_repeating_duplicate_ngram_ratio": 0.14
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_duplicate_ngrams@7": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 7,
+            "max_repeating_duplicate_ngram_ratio": 0.13
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_duplicate_ngrams@8": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 8,
+            "max_repeating_duplicate_ngram_ratio": 0.12
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_duplicate_ngrams@9": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 9,
+            "max_repeating_duplicate_ngram_ratio": 0.11
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_duplicate_ngrams@10": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 10,
+            "max_repeating_duplicate_ngram_ratio": 0.1
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "bullets": {
+          "class": "BulletsFilter",
+          "kwargs": {
+            "max_bullet_lines_ratio": 0.9
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "word_count@min80": {
+          "class": "WordCountFilter",
+          "kwargs": {
+            "min_words": 80
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "common_english_words@no_stop": {
+          "class": "CommonEnglishWordsFilter",
+          "kwargs": {
+            "stop_at_false": false
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "common_english_words@min5": {
+          "class": "CommonEnglishWordsFilter",
+          "kwargs": {
+            "min_num_common_words": 5
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_top_ngrams@1": {
+          "class": "RepeatingTopNGramsFilter",
+          "kwargs": {
+            "n": 1
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_duplicate_ngrams@1": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 1
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_duplicate_ngrams@2": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 2
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_duplicate_ngrams@3": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 3
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "repeating_duplicate_ngrams@4": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 4
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "pornographic_urls": {
+          "class": "PornographicUrlsFilter",
+          "kwargs": {},
+          "docs": "all",
+          "rows": 13232
+        },
+        "substring@prefix:The": {
+          "class": "SubstringFilter",
+          "kwargs": {
+            "substring": "The",
+            "position": "prefix"
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "substring@suffix:period": {
+          "class": "SubstringFilter",
+          "kwargs": {
+            "substring": ".",
+            "position": "suffix"
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "substring@any:http": {
+          "class": "SubstringFilter",
+          "kwargs": {
+            "substring": "http://",
+            "position": "any"
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "substring@prefix:empty": {
+          "class": "SubstringFilter",
+          "kwargs": {
+            "substring": "",
+            "position": "prefix"
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "substring@suffix:newline": {
+          "class": "SubstringFilter",
+          "kwargs": {
+            "substring": "\n",
+            "position": "suffix"
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "substring@any:cookies": {
+          "class": "SubstringFilter",
+          "kwargs": {
+            "substring": "cookies",
+            "position": "any"
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "symbols_to_words@zh": {
+          "class": "SymbolsToWordsFilter",
+          "kwargs": {
+            "lang": "zh"
+          },
+          "docs": "zh",
+          "rows": 282
+        },
+        "word_count@zh": {
+          "class": "WordCountFilter",
+          "kwargs": {
+            "lang": "zh"
+          },
+          "docs": "zh",
+          "rows": 282
+        },
+        "words_without_alphabets@zh": {
+          "class": "WordsWithoutAlphabetsFilter",
+          "kwargs": {
+            "lang": "zh"
+          },
+          "docs": "zh",
+          "rows": 282
+        },
+        "mean_word_length@zh": {
+          "class": "MeanWordLengthFilter",
+          "kwargs": {
+            "lang": "zh"
+          },
+          "docs": "zh",
+          "rows": 282
+        },
+        "long_word@zh": {
+          "class": "LongWordFilter",
+          "kwargs": {
+            "lang": "zh"
+          },
+          "docs": "zh",
+          "rows": 282
+        },
+        "repeating_top_ngrams@2-zh": {
+          "class": "RepeatingTopNGramsFilter",
+          "kwargs": {
+            "n": 2,
+            "lang": "zh"
+          },
+          "docs": "zh",
+          "rows": 282
+        },
+        "repeating_duplicate_ngrams@5-zh": {
+          "class": "RepeatingDuplicateNGramsFilter",
+          "kwargs": {
+            "n": 5,
+            "lang": "zh"
+          },
+          "docs": "zh",
+          "rows": 282
+        },
+        "unicode_reformatter": {
+          "class": "UnicodeReformatter",
+          "kwargs": {},
+          "docs": "all",
+          "rows": 13232
+        },
+        "unicode_reformatter@ftfy_defaults": {
+          "class": "UnicodeReformatter",
+          "kwargs": {
+            "config": {}
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "unicode_reformatter@nfkc": {
+          "class": "UnicodeReformatter",
+          "kwargs": {
+            "normalization": "NFKC",
+            "uncurl_quotes": true,
+            "fix_line_breaks": true,
+            "unescape_html": false
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "boilerplate_string_modifier": {
+          "class": "BoilerPlateStringModifier",
+          "kwargs": {},
+          "docs": "all",
+          "rows": 13232
+        },
+        "boilerplate_string_modifier@anywhere": {
+          "class": "BoilerPlateStringModifier",
+          "kwargs": {
+            "remove_if_at_top_or_bottom": false
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "markdown_remover": {
+          "class": "MarkdownRemover",
+          "kwargs": {},
+          "docs": "all",
+          "rows": 13232
+        },
+        "newline_normalizer": {
+          "class": "NewlineNormalizer",
+          "kwargs": {},
+          "docs": "all",
+          "rows": 13232
+        },
+        "quotation_remover": {
+          "class": "QuotationRemover",
+          "kwargs": {},
+          "docs": "all",
+          "rows": 13232
+        },
+        "url_remover": {
+          "class": "UrlRemover",
+          "kwargs": {},
+          "docs": "all",
+          "rows": 13232
+        },
+        "line_remover": {
+          "class": "LineRemover",
+          "kwargs": {
+            "patterns": [
+              "",
+              "* * *",
+              "Post a Comment",
+              "View Single Post",
+              "Click here to view",
+              "Back to top",
+              "Read More »",
+              "Table of Contents",
+              "Terms & Conditions",
+              "Frequently Asked Questions"
+            ]
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "slicer@default": {
+          "class": "Slicer",
+          "kwargs": {},
+          "docs": "all",
+          "rows": 13232
+        },
+        "slicer@int": {
+          "class": "Slicer",
+          "kwargs": {
+            "left": 10,
+            "right": -10
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "slicer@negative-left": {
+          "class": "Slicer",
+          "kwargs": {
+            "left": -200
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "slicer@empty-range": {
+          "class": "Slicer",
+          "kwargs": {
+            "left": 50,
+            "right": 20
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "slicer@strings": {
+          "class": "Slicer",
+          "kwargs": {
+            "left": "the",
+            "right": ".",
+            "include_left": false,
+            "include_right": true
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "slicer@strings-inclusive-nostrip": {
+          "class": "Slicer",
+          "kwargs": {
+            "left": "\n",
+            "right": "\n",
+            "strip": false
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "slicer@strings-exclusive": {
+          "class": "Slicer",
+          "kwargs": {
+            "left": "\n",
+            "right": "\n",
+            "include_left": false,
+            "include_right": false
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "slicer@int-left-string-right": {
+          "class": "Slicer",
+          "kwargs": {
+            "left": 5,
+            "right": "the"
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "slicer@none-left": {
+          "class": "Slicer",
+          "kwargs": {
+            "left": null,
+            "right": 100,
+            "strip": false
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "fasttext_label_modifier": {
+          "class": "FastTextLabelModifier",
+          "kwargs": {
+            "label": "__label__hq"
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "lang_id@lid.176.bin": {
+          "class": "FastTextLangId",
+          "kwargs": {
+            "min_langid_score": 0.3
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "lang_id@lid.176.ftz": {
+          "class": "FastTextLangId",
+          "kwargs": {
+            "min_langid_score": 0.3
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "lang_id@lid.176.bin-en": {
+          "class": "FastTextLangId",
+          "kwargs": {
+            "min_langid_score": 0.3,
+            "lang": "en"
+          },
+          "docs": "all",
+          "rows": 13232
+        },
+        "quality": {
+          "class": "FastTextQualityFilter",
+          "kwargs": {
+            "label": "__label__hq",
+            "alpha": 3,
+            "seed": 42
+          },
+          "docs": "all",
+          "rows": 13232
+        }
+      },
+      "raises": {
+        "symbols_to_words": {
+          "ZeroDivisionError": 7
+        },
+        "repeated_lines": {
+          "ZeroDivisionError": 7
+        },
+        "repeated_lines_by_char": {
+          "ZeroDivisionError": 7
+        },
+        "repeated_paragraphs_by_char": {
+          "ZeroDivisionError": 1
+        },
+        "punctuation": {
+          "ZeroDivisionError": 7
+        },
+        "words_without_alphabets": {
+          "ZeroDivisionError": 7
+        },
+        "mean_word_length": {
+          "ZeroDivisionError": 7
+        },
+        "long_word": {
+          "ValueError": 7
+        },
+        "ellipsis": {
+          "ZeroDivisionError": 7
+        },
+        "bullets": {
+          "ZeroDivisionError": 7
+        },
+        "symbols_to_words@zh": {
+          "ZeroDivisionError": 273
+        },
+        "words_without_alphabets@zh": {
+          "ZeroDivisionError": 7
+        },
+        "mean_word_length@zh": {
+          "ZeroDivisionError": 7
+        },
+        "long_word@zh": {
+          "ValueError": 7
+        }
+      },
+      "quality_keep": "dev then adversarial, one draw per document",
+      "generator": "pyroid_parity.nemo_record:record"
     },
     "parity/trafilatura-1.11.0-ref.parquet": {
       "sha256": "e701cbe40010bac9d66d702e1229e48cbd311b8756fcc12442a48a0971d03929",

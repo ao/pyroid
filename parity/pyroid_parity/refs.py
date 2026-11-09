@@ -26,6 +26,10 @@ Outputs (each pinned in bench/manifest.json with the oracle versions that produc
     parity/trafilatura-1.11.0-{ref,upstream,upstream-blobs}.parquet   the same for trafilatura 1.11.0: steps
                                  trafilatura111 and trafilatura111_upstream, not part of `all` (they need the
                                  trafilatura111 group: `uv run --no-group trafilatura --group trafilatura111`)
+    parity/nemo-ref.parquet      case, id, outcome, type, score, keep, error, message, digest, length, changed
+                                 NeMo Curator 1.4.0's filters, modifiers and fastText stages (pyroid_parity.nemo_record),
+                                 with models/nemo-quality-dev10k.bin; one file per platform (nemo_cases.nemo_ref). Step
+                                 nemo, not part of `all`: it needs the NeMo env (README, "The nemo suite")
 """
 
 from __future__ import annotations
@@ -44,7 +48,7 @@ from pathlib import Path
 from typing import Any
 
 from pyroid_parity import data as D
-from pyroid_parity import specs
+from pyroid_parity import nemo_cases, specs
 from pyroid_parity.metrics_cases import REF as METRICS_REF
 from pyroid_parity.metrics_cases import ref_metrics  # noqa: F401  (found by main() as ref_<step>)
 
@@ -69,6 +73,8 @@ OUT_TRAF111 = {
     "trafilatura111": specs.trafilatura_files("1.11.0")["ref"],
     "trafilatura111_upstream": specs.trafilatura_files("1.11.0")["calls"],
 }
+# NeMo Curator 1.4.0 (pyroid_parity.nemo_record): run in the NeMo env, so not in `all`.
+OUT_NEMO = {"nemo": nemo_cases.nemo_ref(D.platform_key())}
 # Files written by this run that are missing from, or differ from, the manifest (checked when not pinning).
 MISMATCHED: list[str] = []
 
@@ -775,9 +781,15 @@ def ref_trafilatura111_upstream(pin: bool, workers: int) -> None:
     ref_trafilatura_upstream(pin, workers, mode="1.11.0")
 
 
+def ref_nemo(pin: bool, workers: int) -> None:
+    from pyroid_parity import nemo_record
+
+    nemo_record.ref_nemo(pin, workers)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", nargs="+", choices=[*OUT, *OUT_ML, *OUT_TRAF, *OUT_TRAF111, "all"])
+    ap.add_argument("what", nargs="+", choices=[*OUT, *OUT_ML, *OUT_TRAF, *OUT_TRAF111, *OUT_NEMO, "all"])
     ap.add_argument("--pin", action="store_true")
     ap.add_argument("--workers", type=int, default=min(6, os.cpu_count() or 1))
     a = ap.parse_args()
