@@ -46,6 +46,11 @@ trafilatura  trafilatura 2.3.1's ``extract`` and ``bare_extraction`` with its si
           ``commentsbody`` may be lxml elements or ``etree.tostring(element, encoding="unicode")`` strings
           (``pyroid_parity.trafilatura_compare.normalize``). Options pyroid does not port
           (``specs.TRAFILATURA_DELEGATED``) go to trafilatura with exactly one ``pyroid.FallbackWarning``.
+nltk      NLTK 3.10.4's tokenizer API: ``sent_tokenize``, ``word_tokenize``, ``PunktTokenizer``,
+          ``PunktSentenceTokenizer``, ``PunktParameters``, ``TreebankWordTokenizer``, ``NLTKWordTokenizer``,
+          ``TreebankWordDetokenizer``, ``RegexpTokenizer``, ``WordPunctTokenizer``, ``WhitespaceTokenizer``,
+          ``BlanklineTokenizer``, ``wordpunct_tokenize`` (``nltk`` itself, or ``nltk.tokenize``); a candidate whose
+          ``sent_tokenize`` also takes a list of str gets batch checks.
 
 Warnings: where a suite compares warnings (the ftfy ``errors`` check, every json_repair check), a candidate's
 ``pyroid.FallbackWarning`` (its "delegating to the incumbent" notice, shown once per process; see
@@ -73,6 +78,7 @@ SUITES = (
     "datasketch",
     "jieba",
     "trafilatura",
+    "nltk",
 )
 REFERENCE = {
     "ftfy": "ftfy",
@@ -84,6 +90,7 @@ REFERENCE = {
     "datasketch": "datasketch",
     "jieba": "jieba",
     "trafilatura": "trafilatura",
+    "nltk": "nltk",
 }
 # Distribution that provides a module, for version reporting when it differs from the module name.
 DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel")}
@@ -342,6 +349,18 @@ class GenericTrafilatura:
         return [self.extract(h, **kw) for h in htmls]
 
 
+class GenericNltk:
+    """NLTK's tokenizer API, taken from the module as it is; ``has_batch`` if ``sent_tokenize`` takes a list."""
+
+    def __init__(self, mod: Any) -> None:
+        self.mod = mod
+        try:
+            self.has_batch = mod.sent_tokenize(["A b. C d.", ""]) == [mod.sent_tokenize("A b. C d."), []]
+        except Exception:  # noqa: BLE001  NLTK itself raises TypeError for a list
+            self.has_batch = False
+        self.notes = [] if self.has_batch else ["sent_tokenize takes no list: batch checks skipped"]
+
+
 GENERIC: dict[str, Callable[[Any], Any]] = {
     "ftfy": GenericFtfy,
     "fasttext": GenericFasttext,
@@ -352,4 +371,5 @@ GENERIC: dict[str, Callable[[Any], Any]] = {
     "datasketch": GenericDatasketch,
     "jieba": GenericJieba,
     "trafilatura": GenericTrafilatura,
+    "nltk": GenericNltk,
 }
