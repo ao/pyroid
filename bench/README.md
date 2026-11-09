@@ -142,9 +142,6 @@ python bench/fineweb_warc.py compare O/stock O/steps O/native     # exit 1 unles
   `native --timeouts-of O/stock` drops the same pages the same way, for an exact comparison with that run.
 - fasttext-numpy2-wheel 0.9.2 has no cp313 wheels, so it needs g++. Without one, `stock --lid-model` swaps in
   fasttext-predict with `gates.py`'s shim. The EC2 run (`ec2/run_warc.sh`) uses datatrove's own LanguageFilter.
-- pyroid's `PIIFormatter` drop-in cannot be pickled or deep-copied, which datatrove's executor does to every task's
-  pipeline. Until that is fixed, `pyroid-steps` builds it inside each task and says so under `workarounds` in
-  `summary.json`.
 
 ## Inputs (pinned in `manifest.json`, fetched by `fetch.py` into `$PYROID_DATA`, ≤ 1.5 GB total; currently 324 MB)
 
