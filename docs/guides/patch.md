@@ -114,6 +114,7 @@ unpatched, works patched on 3.15t. ftfy's delegated functions (`apply_plan`, `ex
 import pyroid
 import pyroid.integrations
 
+pyroid.unpatch()  # start from nothing patched
 pyroid.patch("ftfy")
 pyroid.integrations.patched()  # ('ftfy',)
 pyroid.unpatch()  # every patched name

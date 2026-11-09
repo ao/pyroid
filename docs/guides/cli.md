@@ -180,7 +180,7 @@ counts per stage; for the run above:
   "fineweb_quality": 3
  },
  "wall_s": …,
- "pyroid": "1.0.0.dev0",
+ "pyroid": "1.0.0rc1",
  "files": 1
 }
 ```

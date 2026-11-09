@@ -69,7 +69,10 @@ takes token lists (`bytes`, or `str` hashed as UTF-8), or texts (`str`, `list[st
 string column), whose tokens are their word `ngram`-grams:
 
 ```python
-" ".join(words[i : i + ngram]).encode("utf-8")  # over words = text.split()
+text, ngram = "a quick brown fox", 2
+words = text.split()
+tokens = [" ".join(words[i : i + ngram]).encode("utf-8") for i in range(len(words) - ngram + 1)]
+# [b'a quick', b'quick brown', b'brown fox']
 ```
 
 A text with fewer than `ngram` words has no tokens, and its row stays at the scheme's maximum

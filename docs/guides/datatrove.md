@@ -11,6 +11,7 @@ executor ([parity](../compatibility.md#integrations)).
 
 ```console
 $ pip install "pyroid[datatrove]"     # datatrove, regex, tokenizers, numpy
+$ pip install orjson                   # for datatrove's JsonlWriter (its `io` extra)
 ```
 
 ## Change one import
@@ -133,7 +134,7 @@ writer, then MinHash with FineWeb's settings. `MinhashDedupSignature` comes from
 `--stock` runs datatrove's own steps for comparison.
 
 ```console
-$ pip install "pyroid[datatrove]"
+$ pip install "pyroid[datatrove]" orjson
 $ python fineweb.py data/ out/ --tasks 2 --workers 2 --lid-model lid.176.bin
 ```
 

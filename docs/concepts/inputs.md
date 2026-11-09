@@ -56,6 +56,10 @@ field), `.null_count`, `.num_chunks` and `.to_pylist()`, and it implements the P
 interface, so any Arrow library takes it without a copy:
 
 ```python
+import polars as pl
+import pyarrow as pa
+import pyroid.text
+
 pa.chunked_array(col)  # pyarrow
 pa.array(col)  # pyarrow, one chunk (concatenates if needed)
 pl.Series(col)  # polars

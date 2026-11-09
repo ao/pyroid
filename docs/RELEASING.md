@@ -68,12 +68,12 @@ After `next` is merged into `main` and pushed:
 1. **Actions → Release → Run workflow**, branch `main`, tick **testpypi**.
 2. Wait for the build, test and `check distributions` jobs. The run summary lists the 25 files.
 3. Approve the `testpypi` deployment when the run asks for it.
-4. Check the result from a clean venv (versions come from `Cargo.toml`; `1.0.0-dev` is `1.0.0.dev0` on
+4. Check the result from a clean venv (versions come from `Cargo.toml`; `1.0.0-rc.1` is `1.0.0rc1` on
    TestPyPI, and `pyroid.__version__` is that PEP 440 string too):
 
    ```bash
-   uv venv /tmp/pyroid-tp && uv pip install --python /tmp/pyroid-tp --index-url https://test.pypi.org/simple/ pyroid==1.0.0.dev0
-   /tmp/pyroid-tp/bin/python -c "import pyroid; print(pyroid.__version__)"   # 1.0.0.dev0
+   uv venv /tmp/pyroid-tp && uv pip install --python /tmp/pyroid-tp --index-url https://test.pypi.org/simple/ pyroid==1.0.0rc1
+   /tmp/pyroid-tp/bin/python -c "import pyroid; print(pyroid.__version__)"   # 1.0.0rc1
    ```
 
    On <https://test.pypi.org/project/pyroid/#files>, each file should show a "Verified" provenance badge

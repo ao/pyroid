@@ -72,7 +72,7 @@ says which:
 ```python
 trafilatura.extract(html, output_format="xml")  # trafilatura's XML, and:
 # FallbackWarning: pyroid.trafilatura.extract: output_format='xml' is not supported by the Rust
-# port; delegating to trafilatura (slow path). This warning is shown once.
+# port; delegating to trafilatura 2.3.1 (slow path). This warning is shown once.
 ```
 
 A pyroid `LRUCache` (or the module cache, for `deduplicate=True`) is lent to a delegated call, so
