@@ -558,6 +558,18 @@ def _json_batches(
         yield from t.to_batches()
 
 
+def _row_groups(pf: Any, columns: list[str] | None) -> Iterator[Any]:
+    """The record batches of a Parquet file, one row group at a time.
+
+    ``ParquetFile.iter_batches`` buffers ahead across row groups: on a 2 GB FineWeb file with a
+    thousand row groups, a process held over 2 GiB. Reading each row group whole holds one.
+    Decoding on one thread keeps the allocator's per-thread caches from growing the RSS to
+    several times what Arrow allocates; the text column dominates, so threads would gain little.
+    """
+    for i in range(pf.num_row_groups):
+        yield from pf.read_row_group(i, columns=columns, use_threads=False).to_batches()
+
+
 def _rebatched(batches: Iterable[Any], batch_size: int) -> Generator[Any, None, int]:
     """Yield tables of exactly ``batch_size`` rows (the last may be shorter); return how many.
 
@@ -616,8 +628,7 @@ def iter_tables(
             if cols is not None:
                 _check_columns(source, schema.names, cols)
                 schema = pa.schema([schema.field(c) for c in cols], metadata=schema.metadata)
-            batches = pf.iter_batches(batch_size=batch_size, columns=cols)
-            if not (yield from _rebatched(batches, batch_size)):
+            if not (yield from _rebatched(_row_groups(pf, cols), batch_size)):
                 yield schema.empty_table()
         return
     with _errors(source), _open_stream(source) as stream:
@@ -660,7 +671,7 @@ def read_tables(paths: Sequence[Path], batch_size: int) -> Generator[pa.Table, N
                     import pyarrow.parquet as pq
 
                     f = stack.enter_context(_open_file(s))
-                    it = stack.enter_context(pq.ParquetFile(f)).iter_batches(batch_size=batch_size)
+                    it = _row_groups(stack.enter_context(pq.ParquetFile(f)), None)
                 else:
                     stream = stack.enter_context(_open_stream(s))
                     it = _json_batches(stream, s, schema=schema)

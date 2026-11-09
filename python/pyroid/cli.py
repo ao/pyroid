@@ -120,6 +120,8 @@ class Layout:
     state_root: Path
     work: Path
     shard_tag: str
+    # Merged Parquet from several files: parts wait as Arrow IPC, so Parquet is encoded once.
+    ipc_parts: bool = False
 
     def outputs(self, src: Any) -> tuple[Path, Path | None]:
         """Per-file mode: the output and excluded paths of input ``src``."""
@@ -135,10 +137,12 @@ class Layout:
         return out, excl
 
     def part(self, index: int, excluded: bool = False) -> Path:
-        """Merged mode: the part file of input ``index`` (in the final format)."""
+        """Merged mode: the part file of input ``index`` (the final format, or Arrow IPC)."""
         final = self.excluded_final if excluded else self.final
         assert final is not None
         sfx = _data_suffix(final.name) or ".parquet"
+        if self.ipc_parts and sfx.lower().endswith((".parquet", ".pq")):
+            sfx = ".arrow"
         return self.work / ("excluded" if excluded else "parts") / f"{index:06d}{sfx}"
 
 
@@ -424,7 +428,7 @@ class FileJob:
     excluded_spool: str | None = None
     sigs: str | None = None
     minhash: dict[str, Any] | None = None
-    sort_buffer: int = 256 << 20
+    sort_buffer: int = 64 << 20
     # stage 4: read the rows from `spool` (else from `source`) and drop those in `removed`
     removed: str | None = None
     cluster_ids: bool = False
@@ -510,7 +514,11 @@ def _read_ipc(path: str) -> Iterator[Any]:
 def _writer(path: str | None, compression: str | None) -> Any:
     from pyroid.integrations import _io
 
-    return _io.Writer(path, compression=compression) if path else None
+    if path is None:
+        return None
+    if path.endswith(".arrow"):
+        return _Ipc(path)  # a part of a merged Parquet output
+    return _io.Writer(path, compression=compression)
 
 
 def _finish(writers: Sequence[tuple[Any, Any]]) -> None:
@@ -761,6 +769,8 @@ def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: b
     fp = _shards.fingerprint(command, _fingerprint_options(options), sources)
     state = _shards.State(layout.state_root, fp)
     mine = shard.take(list(enumerate(sources)))
+    if layout.merge and len(mine) > 1:
+        layout = replace(layout, ipc_parts=True)
     total = sum(s.size or 0 for _, s in mine) or None
     progress = _shards.Progress(
         f"pyroid {command}", len(mine), total, enabled=getattr(a, "progress", False)
@@ -879,13 +889,30 @@ def _move(src: Path, dest: Path) -> None:
         _io.remove(src)
 
 
+def _ipc_schema(path: Path) -> Any:
+    import pyarrow as pa
+
+    with pa.OSFile(str(path), "rb") as f:
+        return pa.ipc.open_file(f).schema
+
+
+def _parquet_row_groups(path: Path) -> Iterator[Any]:
+    """A Parquet file's row groups, one at a time (``iter_batches`` reads far ahead)."""
+    import pyarrow.parquet as pq
+
+    with open(path, "rb") as fh, pq.ParquetFile(fh) as pf:
+        for i in range(pf.num_row_groups):
+            yield pf.read_row_group(i, use_threads=False)
+
+
 def _concat(parts: Sequence[Path], dest: Path, compression: str | None) -> None:
     """Concatenate part files (all in ``dest``'s format) into ``dest``, atomically."""
     from pyroid.integrations import _io
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     present = [p for p in parts if p.exists()]
-    if len(present) == 1:
+    ipc = any(p.suffix == ".arrow" for p in present)
+    if len(present) == 1 and not ipc:
         _move(present[0], dest)
         return
     if _io.file_format(dest) == "jsonl":
@@ -905,15 +932,13 @@ def _concat(parts: Sequence[Path], dest: Path, compression: str | None) -> None:
     import pyarrow.parquet as pq
 
     present = [p for p in present if p.stat().st_size]  # an empty JSONL input leaves 0 bytes
-    schemas = [pq.read_schema(p) for p in present]
+    schemas = [_ipc_schema(p) if ipc else pq.read_schema(p) for p in present]
     schema = pa.unify_schemas(schemas, promote_options="permissive") if schemas else None
     w = _io.Writer(dest, compression=compression)
     try:
         for p in present:
-            with open(p, "rb") as fh:
-                for b in pq.ParquetFile(fh).iter_batches(batch_size=65536):
-                    t = pa.Table.from_batches([b])
-                    w.write(t.cast(schema) if schema is not None else t)
+            for t in _read_ipc(str(p)) if ipc else _parquet_row_groups(p):
+                w.write(t.cast(schema) if schema is not None else t)
         w.close(schema)
     except BaseException:
         w.abort()
@@ -1610,9 +1635,9 @@ def _sort_buffer_arg(p: Any) -> None:
     p.add_argument(
         "--sort-buffer-mb",
         type=_positive,
-        default=256,
+        default=64,
         metavar="MB",
-        help="signatures sorted in memory per process before spilling to disk (default: 256)",
+        help="signatures sorted in memory per process before spilling to disk (default: 64)",
     )
 
 

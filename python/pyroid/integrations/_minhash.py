@@ -36,7 +36,7 @@ SIG_SUFFIX = ".minhash.sig"
 CONFIG_FIELDS = ("n_grams", "num_buckets", "hashes_per_bucket", "seed", "hash_fc", "precision")
 
 #: Signature records sorted in memory before they spill to disk (per writer).
-SORT_BUFFER = 256 << 20
+SORT_BUFFER = 64 << 20
 #: Read buffers of one bucket merge.
 MERGE_BUFFER = 64 << 20
 
