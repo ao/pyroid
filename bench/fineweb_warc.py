@@ -804,20 +804,37 @@ class Extractor:
         import pyroid.trafilatura as pt
 
         self.pt, self.skip = pt, skip
-        self.cache = pt.LRUCache(maxsize=pt.LRU_SIZE)
+        # trafilatura 1.11.0 has one dedup cache, the module-level LRU_TEST: any true `deduplicate` means it, a
+        # pyroid LRUCache included (pyroid.trafilatura follows that in compat="1.11.0"). So the task's cache is
+        # pyroid's LRU_TEST, emptied at the start of each task and after each lost page.
+        self.v111 = EXTRACT_KW["compat"] == "1.11.0"
+        self.cache: Any = True
         self.events: list[dict[str, Any]] = []
+        self._fresh()
 
     def _fresh(self) -> None:
-        self.cache = self.pt.LRUCache(maxsize=self.pt.LRU_SIZE)
+        if self.v111:
+            self.pt.reset_caches()
+        else:
+            self.cache = self.pt.LRUCache(maxsize=self.pt.LRU_SIZE)
+
+    def _snapshot(self) -> Any:
+        return copy.copy(self.pt.LRU_TEST if self.v111 else self.cache)
+
+    def _restore(self, snap: Any) -> None:
+        if self.v111:
+            self.pt.LRU_TEST = snap
+        else:
+            self.cache = snap
 
     def _batch(self, htmls: list[str]) -> list[Any]:
-        snap = copy.copy(self.cache)
+        snap = self._snapshot()
         try:
             return self.pt.extract_batch(htmls, threads=1, deduplicate=self.cache, **EXTRACT_KW)
         # Any error kills datatrove's child process: redo the batch page by page from the snapshot, dropping the
         # page that raises and starting a fresh cache after it, as the next child does.
         except Exception:  # noqa: BLE001
-            self.cache = snap
+            self._restore(snap)
             out: list[Any] = []
             for h in htmls:
                 try:
