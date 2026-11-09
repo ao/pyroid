@@ -360,6 +360,11 @@ impl<S: Source + ?Sized> Source for GzipSource<'_, S> {
             self.file.read(self.raw, n, out)
         }
     }
+
+    /// `GzipFile.tell()`: counts the bytes a failed `read` lost, as CPython does.
+    fn tell(&mut self) -> Result<Option<i64>, Error> {
+        Ok(Some(i64::try_from(self.file.tell()).unwrap_or(i64::MAX)))
+    }
 }
 
 /// Where a `_GzipReader.read` call writes: `BufferedReader`'s own buffer, or the caller's result
