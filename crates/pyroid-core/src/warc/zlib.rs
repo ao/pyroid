@@ -5,6 +5,11 @@
 //! goes to `unused_data`. After an error the stream stays broken: every later call raises
 //! the same error, as zlib's `BAD` mode does (zlib-rs would say "repeated call with bad
 //! state" instead, so the error is remembered here).
+//!
+//! zlib-rs also says "repeated call with bad state" for the first error when its fast path
+//! (`inflate_fast`) finds it: its dispatch loop then sees the bad state and replaces zlib's
+//! message. The stream's input is kept (up to 64 MiB) so that such an error is decoded again
+//! through the slow path, which keeps zlib's message (as `gzipfile` does).
 
 use zlib_rs::{Inflate, InflateError, InflateFlush, Status};
 
@@ -20,6 +25,42 @@ pub const WBITS_RAW: i32 = -15;
 /// Output grows by this much when the buffer is full (CPython's blocks start at 32 KiB).
 const GROW: usize = 64 * 1024;
 
+/// What zlib-rs reports when its fast path found the error (see the module docs).
+const BAD_STATE: &str = "repeated call with bad state";
+/// Input kept per stream to find zlib's message for such an error.
+const KEEP_MAX: usize = 64 << 20;
+/// Output space per call when finding it: below zlib-rs's `INFLATE_FAST_MIN_LEFT` (260), so
+/// the fast path never runs.
+const SLOW_CHUNK: usize = 256;
+
+fn inflate_for(wbits: i32) -> Inflate {
+    match wbits {
+        WBITS_GZIP => Inflate::new(true, 31),
+        WBITS_ZLIB => Inflate::new(true, 15),
+        _ => Inflate::new(false, 15),
+    }
+}
+
+/// zlib's message for the first error in `input` (a stream from its start, read with
+/// `wbits`), decoded by zlib-rs's slow path. `None` if no error shows.
+fn slow_path_message(wbits: i32, input: &[u8]) -> Option<&'static str> {
+    let mut z = inflate_for(wbits);
+    let mut out = [0u8; SLOW_CHUNK];
+    let mut pos = 0usize;
+    loop {
+        let (in0, out0) = (z.total_in(), z.total_out());
+        let r = z.decompress(&input[pos..], &mut out, InflateFlush::SyncFlush);
+        let used = usize::try_from(z.total_in() - in0).ok()?;
+        pos += used;
+        match r {
+            Ok(Status::StreamEnd) => return None,
+            Ok(_) if used == 0 && z.total_out() == out0 => return None,
+            Ok(_) => {}
+            Err(_) => return z.error_message().filter(|m| *m != BAD_STATE),
+        }
+    }
+}
+
 /// A `zlib.decompressobj`.
 pub struct DecompressObj {
     inner: Inflate,
@@ -27,6 +68,10 @@ pub struct DecompressObj {
     unused_data: Vec<u8>,
     /// The sticky error: zlib's return code and message.
     error: Option<(i32, Option<&'static str>)>,
+    wbits: i32,
+    /// All the input so far while it fits in `KEEP_MAX` (`kept_all`), to find zlib's message.
+    seen: Vec<u8>,
+    kept_all: bool,
 }
 
 impl std::fmt::Debug for DecompressObj {
@@ -60,16 +105,14 @@ fn zlib_message(code: i32, msg: Option<&str>) -> String {
 impl DecompressObj {
     /// `zlib.decompressobj(wbits)` for `wbits` 31 (gzip), 15 (zlib) or -15 (raw deflate).
     pub fn new(wbits: i32) -> Self {
-        let inner = match wbits {
-            WBITS_GZIP => Inflate::new(true, 31),
-            WBITS_ZLIB => Inflate::new(true, 15),
-            _ => Inflate::new(false, 15),
-        };
         Self {
-            inner,
+            inner: inflate_for(wbits),
             eof: false,
             unused_data: Vec::new(),
             error: None,
+            wbits,
+            seen: Vec::new(),
+            kept_all: true,
         }
     }
 
@@ -104,6 +147,14 @@ impl DecompressObj {
             self.unused_data.extend_from_slice(data);
             return Ok(());
         }
+        if self.kept_all {
+            if self.seen.len() + data.len() <= KEEP_MAX {
+                self.seen.extend_from_slice(data);
+            } else {
+                self.kept_all = false;
+                self.seen = Vec::new();
+            }
+        }
         let mut pos = 0usize;
         let mut out = *end;
         loop {
@@ -120,6 +171,7 @@ impl DecompressObj {
             match res {
                 Ok(Status::StreamEnd) => {
                     self.eof = true;
+                    self.seen = Vec::new();
                     self.unused_data.extend_from_slice(&data[pos..]);
                     break;
                 }
@@ -134,7 +186,7 @@ impl DecompressObj {
                     let (code, msg) = match e {
                         InflateError::NeedDict { .. } => (2, None),
                         InflateError::StreamError => (-2, self.inner.error_message()),
-                        InflateError::DataError => (-3, self.inner.error_message()),
+                        InflateError::DataError => (-3, self.data_error_message()),
                         InflateError::MemError => (-4, self.inner.error_message()),
                     };
                     self.error = Some((code, msg));
@@ -144,6 +196,16 @@ impl DecompressObj {
         }
         *end = out;
         Ok(())
+    }
+
+    /// zlib's message for a data error: zlib-rs's, unless its fast path replaced it.
+    fn data_error_message(&self) -> Option<&'static str> {
+        let msg = self.inner.error_message();
+        if msg == Some(BAD_STATE) && self.kept_all {
+            slow_path_message(self.wbits, &self.seen).or(msg)
+        } else {
+            msg
+        }
     }
 
     /// `flush()`: no output is ever left (`decompress` returns all of it); with `raises`
