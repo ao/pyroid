@@ -16,7 +16,8 @@ Layout under /data (total budget 1.5 GB):
     metrics/wmt21.parquet              WMT21 newstest system outputs + references, 8 language pairs (BLEU/chrF)
     trafilatura/CC-MAIN-*.parquet      Common Crawl pages (id, url, html) of 3 crawls, as datatrove hands them to
                                        Trafilatura: WARC byte ranges through WarcReader + URLFilter (~150 MB)
-    trafilatura/upstream-tests-2.3.1.parquet   Trafilatura's tests/ at v2.3.1 (path, git blob sha1, bytes)
+    trafilatura/upstream-tests-{2.3.1,1.11.0}.parquet   Trafilatura's tests/ at v2.3.1 and v1.11.0 (path, git blob
+                                       sha1, bytes)
 
 The parity/ files in the manifest are generated, not fetched: ``python -m pyroid_parity.refs`` writes them and
 verifies what it wrote, so fetch.py checks them only with ``--verify-all``.
@@ -121,15 +122,26 @@ TRAFILATURA_CC = {
         },
     },
 }
-# Trafilatura's own tests at the commit tagged v2.3.1, minus the evaluation set (tests/eval/, 135 MB): replayed as
-# golden calls by pyroid_parity.trafilatura_record.
+# Trafilatura's own tests at the commits tagged v2.3.1 and v1.11.0 (one per pyroid.trafilatura mode), minus the
+# evaluation set (tests/eval/, 135 MB) and its data files: replayed as golden calls by pyroid_parity.trafilatura_record.
+_TESTS_LICENSE = "Apache-2.0 (the tests); tests/cache/ holds third-party web pages (not redistributed)"
 TRAFILATURA_TESTS = {
-    "repo": "adbar/trafilatura",
-    "tag": "v2.3.1",
-    "commit": "e2f85c965662c7df26b73290ef175b2c2a5fdca6",
-    "paths": "tests/ except tests/eval/ and tests/evaldata.json",
-    "license": "Apache-2.0 (the tests); tests/cache/ holds third-party web pages (not redistributed)",
+    "2.3.1": {
+        "repo": "adbar/trafilatura",
+        "tag": "v2.3.1",
+        "commit": "e2f85c965662c7df26b73290ef175b2c2a5fdca6",
+        "paths": "tests/ except tests/eval/ and tests/evaldata.json",
+        "license": _TESTS_LICENSE,
+    },
+    "1.11.0": {
+        "repo": "adbar/trafilatura",
+        "tag": "v1.11.0",
+        "commit": "60647e5eeff77df9ef4b7432a936f580736b3075",
+        "paths": "tests/ except tests/eval/, tests/evaldata.json and tests/evaldata.py",
+        "license": _TESTS_LICENSE,
+    },
 }
+_TESTS_LEFT_OUT = {"tests/evaldata.json", "tests/evaldata.py"}
 BUDGET = 1_500_000_000
 # Manifest prefix of the files each --only step downloads.
 INPUTS = {
@@ -359,14 +371,13 @@ def git_blob_sha1(data: bytes) -> str:
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
-def build_trafilatura_tests(rel: str) -> None:
-    """Trafilatura's tests/ at the pinned commit (each file checked against its git blob sha1)."""
+def build_trafilatura_tests(rel: str, src: dict) -> None:
+    """Trafilatura's tests/ at a pinned commit (each file checked against its git blob sha1)."""
     import json
 
     import pyarrow as pa
     import pyarrow.parquet as pq
 
-    src = TRAFILATURA_TESTS
     url = f"https://api.github.com/repos/{src['repo']}/git/trees/{src['commit']}?recursive=1"
     with urllib.request.urlopen(url, timeout=120) as r:  # pinned commit: the listing cannot change
         tree = json.load(r)
@@ -377,7 +388,7 @@ def build_trafilatura_tests(rel: str) -> None:
         if x["type"] == "blob"
         and x["path"].startswith("tests/")
         and not x["path"].startswith("tests/eval/")
-        and x["path"] != "tests/evaldata.json"
+        and x["path"] not in _TESTS_LEFT_OUT
     )
     log(f"Trafilatura {src['tag']} tests: {len(files)} files from GitHub")
     base = f"https://raw.githubusercontent.com/{src['repo']}/{src['commit']}/"
@@ -431,11 +442,12 @@ def fetch_trafilatura(pin: bool) -> None:
         elif content != D.load_manifest()["files"].get(rel, {}).get("content_sha256"):
             sys.exit(f"{rel}: content sha256 {content} differs from the manifest")
         del t, ids, htmls
-    rel = f"trafilatura/upstream-tests-{TRAFILATURA_TESTS['tag'].removeprefix('v')}.parquet"
-    if not (D.DATA / rel).exists():
-        build_trafilatura_tests(rel)
-    if pin:
-        D.pin(rel, rows=pq.ParquetFile(D.DATA / rel).metadata.num_rows, source=TRAFILATURA_TESTS)
+    for version, src in TRAFILATURA_TESTS.items():
+        rel = f"trafilatura/upstream-tests-{version}.parquet"
+        if not (D.DATA / rel).exists():
+            build_trafilatura_tests(rel, src)
+        if pin:
+            D.pin(rel, rows=pq.ParquetFile(D.DATA / rel).metadata.num_rows, source=src)
 
 
 def verify(prefixes: tuple[str, ...] | None = None) -> int:

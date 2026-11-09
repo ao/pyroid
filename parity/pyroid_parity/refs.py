@@ -23,6 +23,9 @@ Outputs (each pinned in bench/manifest.json with the oracle versions that produc
                                  (pyroid_parity.trafilatura_compare.digest of each outcome; no text)
     parity/trafilatura-upstream.parquet (+ -blobs)  Trafilatura's own tests as golden calls
                                  (pyroid_parity.trafilatura_record)
+    parity/trafilatura-1.11.0-{ref,upstream,upstream-blobs}.parquet   the same for trafilatura 1.11.0: steps
+                                 trafilatura111 and trafilatura111_upstream, not part of `all` (they need the
+                                 trafilatura111 group: `uv run --no-group trafilatura --group trafilatura111`)
 """
 
 from __future__ import annotations
@@ -59,8 +62,13 @@ OUT = {
 # Per-language references (FineWeb-2 slices, each with its own language); part of `all`.
 OUT_ML = {"filters_ml": "parity/filters-ml-ref.parquet", "dedup_ml": "parity/minhash-ml-ref.parquet"}
 # The trafilatura suite (needs parity/pyproject.toml's `trafilatura` group); part of `all`.
-TRAFILATURA_REF = "parity/trafilatura-ref.parquet"
-OUT_TRAF = {"trafilatura": TRAFILATURA_REF, "trafilatura_upstream": "parity/trafilatura-upstream.parquet"}
+TRAFILATURA_REF = specs.trafilatura_files("2.3.1")["ref"]
+OUT_TRAF = {"trafilatura": TRAFILATURA_REF, "trafilatura_upstream": specs.trafilatura_files("2.3.1")["calls"]}
+# The trafilatura 1.11.0 mode: run in its own env (`--no-group trafilatura --group trafilatura111`), so not in `all`.
+OUT_TRAF111 = {
+    "trafilatura111": specs.trafilatura_files("1.11.0")["ref"],
+    "trafilatura111_upstream": specs.trafilatura_files("1.11.0")["calls"],
+}
 # Files written by this run that are missing from, or differ from, the manifest (checked when not pinning).
 MISMATCHED: list[str] = []
 
@@ -634,16 +642,22 @@ def ref_dedup_ml(pin: bool, workers: int) -> None:
 _TRAF_PAGES: list[str] = []
 
 
-def _traf_job(job: tuple[str, str, int, int]) -> list[tuple[str, str, int | None, list[str]]]:
+def _traf_sets(mode: str, fn_name: str) -> dict[str, dict[str, Any]]:
+    by_mode = (
+        specs.TRAFILATURA_OPTION_SETS_BY_MODE if fn_name == "extract" else specs.TRAFILATURA_BARE_SETS_BY_MODE
+    )
+    return by_mode[mode]
+
+
+def _traf_job(job: tuple[str, str, str, int, int]) -> list[tuple[str, str, int | None, list[str]]]:
     """(status, digest, text length, warning categories) for pages [start, stop) under one option set."""
     import trafilatura
     from trafilatura.meta import reset_caches
 
     from pyroid_parity import trafilatura_compare as T
 
-    fn_name, option, start, stop = job
-    sets = specs.TRAFILATURA_OPTION_SETS if fn_name == "extract" else specs.TRAFILATURA_BARE_SETS
-    kw = sets[option]
+    mode, fn_name, option, start, stop = job
+    kw = _traf_sets(mode, fn_name)[option]
     fn = getattr(trafilatura, fn_name)
     if specs.trafilatura_stateful(kw):
         reset_caches()  # one file = one datatrove task: its dedup cache starts empty
@@ -664,23 +678,24 @@ def trafilatura_status(o: Any) -> str:
     return next(iter(v)).removeprefix("$") if isinstance(v, dict) and len(v) == 1 else "object"
 
 
-def _traf_check_oracle() -> None:
-    for dist, want in specs.TRAFILATURA_ORACLE.items():
+def _traf_check_oracle(mode: str = "2.3.1") -> None:
+    for dist, want in specs.TRAFILATURA_ORACLES[mode].items():
         if (got := md.version(dist)) != want:
-            sys.exit(f"[refs] trafilatura references need {dist}=={want}, found {got}")
+            group = specs.TRAFILATURA_GROUPS[mode]
+            sys.exit(f"[refs] trafilatura {mode} references need {dist}=={want} (group {group}), found {got}")
 
 
-def ref_trafilatura(pin: bool, workers: int, chunk: int = 50) -> None:
+def ref_trafilatura(pin: bool, workers: int, chunk: int = 50, mode: str = "2.3.1") -> None:
     import multiprocessing as mp
 
     import pyarrow as pa
 
-    _traf_check_oracle()
+    _traf_check_oracle(mode)
     names = ("corpus", "fn", "option", "id", "status", "digest", "length", "warnings")
     rows: dict[str, list[Any]] = {k: [] for k in names}
     counts: dict[str, dict[str, dict[str, int]]] = {}
-    jobs_of = [("extract", o) for o in specs.TRAFILATURA_OPTION_SETS] + [
-        ("bare_extraction", o) for o in specs.TRAFILATURA_BARE_SETS
+    jobs_of = [("extract", o) for o in _traf_sets(mode, "extract")] + [
+        ("bare_extraction", o) for o in _traf_sets(mode, "bare_extraction")
     ]
     for rel in specs.TRAFILATURA_CORPORA:
         cols = D.read_parquet_columns(D.path(rel), ["id", "html"])
@@ -688,18 +703,19 @@ def ref_trafilatura(pin: bool, workers: int, chunk: int = 50) -> None:
         _TRAF_PAGES[:] = cols["html"]
         del cols
         n = len(ids)
-        jobs: list[tuple[str, str, int, int]] = []
+        jobs: list[tuple[str, str, str, int, int]] = []
         for fn_name, option in jobs_of:
-            sets = specs.TRAFILATURA_OPTION_SETS if fn_name == "extract" else specs.TRAFILATURA_BARE_SETS
-            if specs.trafilatura_stateful(sets[option]):
-                jobs.insert(0, (fn_name, option, 0, n))  # in order, in one process; started first (longest)
+            if specs.trafilatura_stateful(_traf_sets(mode, fn_name)[option]):
+                jobs.insert(
+                    0, (mode, fn_name, option, 0, n)
+                )  # in order, in one process; started first (longest)
             else:
-                jobs += [(fn_name, option, i, min(n, i + chunk)) for i in range(0, n, chunk)]
-        log(f"trafilatura {rel}: {n} pages, {len(jobs)} jobs on {workers} workers")
+                jobs += [(mode, fn_name, option, i, min(n, i + chunk)) for i in range(0, n, chunk)]
+        log(f"trafilatura {mode} {rel}: {n} pages, {len(jobs)} jobs on {workers} workers")
         with ProcessPoolExecutor(workers, mp_context=mp.get_context("fork")) as ex:
             results = list(ex.map(_traf_job, jobs))
         per: dict[tuple[str, str], list[tuple[str, str, int | None, list[str]]]] = {}
-        for (fn_name, option, _, _), res in zip(jobs, results, strict=True):
+        for (_, fn_name, option, _, _), res in zip(jobs, results, strict=True):
             per.setdefault((fn_name, option), []).extend(res)
         for fn_name, option in jobs_of:
             res = per[fn_name, option]
@@ -719,35 +735,49 @@ def ref_trafilatura(pin: bool, workers: int, chunk: int = 50) -> None:
             "warnings": pa.array(rows["warnings"], pa.list_(pa.string())),
         }
     )
+    if mode == "2.3.1":
+        oracle = versions("trafilatura", "lxml", "justext", "htmldate", "courlan", "charset-normalizer")
+    else:
+        oracle = versions(*specs.TRAFILATURA_ORACLES[mode])
     write(
         table,
-        TRAFILATURA_REF,
+        specs.trafilatura_files(mode)["ref"],
         pin,
-        oracle=versions("trafilatura", "lxml", "justext", "htmldate", "courlan", "charset-normalizer"),
-        option_sets=specs.TRAFILATURA_OPTION_SETS,
-        bare_sets=specs.TRAFILATURA_BARE_SETS,
+        oracle=oracle,
+        option_sets=_traf_sets(mode, "extract"),
+        bare_sets=_traf_sets(mode, "bare_extraction"),
         corpora={rel: D.load_manifest()["files"][rel]["content_sha256"] for rel in specs.TRAFILATURA_CORPORA},
         statuses=counts,
         stateful="deduplicate=True sets: each file in order through one cache, emptied at its start",
     )
 
 
-def ref_trafilatura_upstream(pin: bool, workers: int) -> None:
+def ref_trafilatura_upstream(pin: bool, workers: int, mode: str = "2.3.1") -> None:
     from pyroid_parity import trafilatura_record as R
 
-    _traf_check_oracle()
-    header, calls, blobs = R.record()
+    _traf_check_oracle(mode)
+    header, calls, blobs = R.record(mode=mode)
     log(
-        f"trafilatura upstream: {header['upstream_tests']} -> {header['calls']} calls "
+        f"trafilatura {mode} upstream: {header['upstream_tests']} -> {header['calls']} calls "
         f"({header['dropped_unreplayable']} dropped), tags {header['tag_counts']}"
     )
-    write(blobs, R.BLOBS, pin, oracle=versions("trafilatura", "lxml", "justext"), source=header["source"])
-    write(calls, R.CALLS, pin, oracle=versions("trafilatura", "lxml", "justext"), **header)
+    files = specs.trafilatura_files(mode)
+    oracle = versions("trafilatura", "lxml", "justext")
+    write(blobs, files["blobs"], pin, oracle=oracle, source=header["source"])
+    write(calls, files["calls"], pin, oracle=oracle, **header)
+
+
+def ref_trafilatura111(pin: bool, workers: int) -> None:
+    ref_trafilatura(pin, workers, mode="1.11.0")
+
+
+def ref_trafilatura111_upstream(pin: bool, workers: int) -> None:
+    ref_trafilatura_upstream(pin, workers, mode="1.11.0")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", nargs="+", choices=[*OUT, *OUT_ML, *OUT_TRAF, "all"])
+    ap.add_argument("what", nargs="+", choices=[*OUT, *OUT_ML, *OUT_TRAF, *OUT_TRAF111, "all"])
     ap.add_argument("--pin", action="store_true")
     ap.add_argument("--workers", type=int, default=min(6, os.cpu_count() or 1))
     a = ap.parse_args()

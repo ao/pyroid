@@ -1,11 +1,13 @@
-"""Record Trafilatura 2.3.1's own test suite as golden public calls (``extract`` and ``bare_extraction``).
+"""Record Trafilatura's own test suite as golden public calls (``extract`` and ``bare_extraction``), per mode.
 
-    python -m pyroid_parity.refs trafilatura_upstream [--pin]   # record, write, check against the manifest
+    python -m pyroid_parity.refs trafilatura_upstream [--pin]      # 2.3.1, in the default env
+    python -m pyroid_parity.refs trafilatura111_upstream [--pin]   # 1.11.0, with the trafilatura111 group
 
-The output goes to ``$PYROID_DATA`` (``parity/trafilatura-upstream.parquet`` and its blob table
-``parity/trafilatura-upstream-blobs.parquet``), not to the repository: the test pages under ``tests/cache/`` are
-third-party web pages. The upstream tests themselves are fetched by ``bench/fetch.py --only trafilatura`` from
-GitHub at the commit tagged v2.3.1 (``trafilatura/upstream-tests-2.3.1.parquet``: path, git blob sha1, bytes).
+The release recorded is the one installed, and it must be one of ``specs.TRAFILATURA_MODES``. The output goes to
+``$PYROID_DATA`` (``specs.trafilatura_files(mode)``: ``calls`` and its blob table ``blobs``), not to the repository:
+the test pages under ``tests/cache/`` are third-party web pages. The upstream tests themselves are fetched by
+``bench/fetch.py --only trafilatura`` from GitHub at the commit of each release tag (``tests``: path, git blob
+sha1, bytes).
 
 How it works:
 
@@ -24,8 +26,9 @@ How it works:
    ``LRU_TEST``, monkeypatch internals, or depend on calls made by earlier tests).
 4. A second replay with ``PYTHONHASHSEED=1`` tags calls whose outcome depends on the hash seed (``hash-seed``).
 
-Not run (``NOT_RUN``): the CLI tests (subprocesses and the CLI's worker pools), downloads (HTTP), feeds, sitemaps
-and spider (no extraction calls) and the evaluation harness (it needs ``tests/eval/``, 923 pages, not fetched).
+Not run (``NOT_RUN_BY_MODE``): the CLI tests (subprocesses and the CLI's worker pools), downloads (HTTP), feeds,
+sitemaps and spider (no extraction calls; in 1.11.0 they go to the network unmocked) and, in 2.3.1, the evaluation
+harness (it needs ``tests/eval/``, 923 pages, not fetched).
 """
 
 from __future__ import annotations
@@ -45,13 +48,19 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from pyroid_parity import specs
 from pyroid_parity import trafilatura_compare as T
 
-TRAFILATURA_VERSION = "2.3.1"
-COMMIT = "e2f85c965662c7df26b73290ef175b2c2a5fdca6"  # tag v2.3.1 of https://github.com/adbar/trafilatura
-UPSTREAM_TESTS = f"trafilatura/upstream-tests-{TRAFILATURA_VERSION}.parquet"
-CALLS = "parity/trafilatura-upstream.parquet"
-BLOBS = "parity/trafilatura-upstream-blobs.parquet"
+TRAFILATURA_VERSION = specs.TRAFILATURA_VERSION  # the default mode
+#: The commits of the release tags in https://github.com/adbar/trafilatura.
+COMMITS = {
+    "2.3.1": "e2f85c965662c7df26b73290ef175b2c2a5fdca6",
+    "1.11.0": "60647e5eeff77df9ef4b7432a936f580736b3075",
+}
+COMMIT = COMMITS[TRAFILATURA_VERSION]
+UPSTREAM_TESTS = specs.trafilatura_files(TRAFILATURA_VERSION)["tests"]
+CALLS = specs.trafilatura_files(TRAFILATURA_VERSION)["calls"]
+BLOBS = specs.trafilatura_files(TRAFILATURA_VERSION)["blobs"]
 PUBLIC = ("extract", "bare_extraction")
 NOT_RUN = {
     "cli_tests.py": "the command-line interface: subprocesses and the CLI's worker pools, not direct calls",
@@ -62,11 +71,25 @@ NOT_RUN = {
     "eval_common_tests.py": "the evaluation harness; it needs tests/eval/ (923 pages, 135 MB), not fetched",
     "eval_gate_tests.py": "the evaluation harness; it needs tests/eval/ (923 pages, 135 MB), not fetched",
 }
+NOT_RUN_BY_MODE = {
+    "2.3.1": NOT_RUN,
+    "1.11.0": {
+        "cli_tests.py": "the command-line interface: subprocesses and the CLI's worker pools, not direct calls",
+        "downloads_tests.py": "HTTP downloads (to the network: 1.11.0's tests mock nothing)",
+        "feeds_tests.py": "feed discovery over the network; no extract or bare_extraction calls",
+        "sitemaps_tests.py": "sitemaps over the network; no extract or bare_extraction calls",
+        "spider_tests.py": "crawling over the network; no extract or bare_extraction calls",
+    },
+}
 TAGS = {
     "tree-input": "the input is an lxml tree, rebuilt node by node for the replay",
     "test-file": "an argument names a file of the upstream tests (settingsfile=), rebuilt for the replay",
     "unreplayable": "an argument could not be stored (dropped from the recording)",
     "extractor-subclass": "options= was a subclass of Extractor; replayed as a plain Extractor",
+    "default-config-mutated": "the tests had changed trafilatura's DEFAULT_CONFIG in place (1.11.0's set "
+    "MIN_OUTPUT_SIZE and MIN_EXTRACTED_SIZE to 0 at import): the call is recorded with the config= it saw",
+    "config-added": "with default-config-mutated: the test passed no config=, the recording adds the one in effect",
+    "pristine-config": "a default-config-mutated call again with trafilatura's own DEFAULT_CONFIG (its own group)",
     "differs-from-test": "the clean replay differs from what the test observed (see step 3)",
     "hash-seed": "the outcome changes with PYTHONHASHSEED",
 }
@@ -113,8 +136,11 @@ def _wrap(name: str, orig: Any, record: bool) -> Any:
             finally:
                 _state.depth -= 1
         tags: set[str] = set()
+        _blobs.default_config_mutated = _default_config_mutated()
         enc_a = [T.encode_arg(a, _blobs, tags) for a in args]
         enc_k = {k: T.encode_arg(v, _blobs, tags) for k, v in kwargs.items()}
+        if _blobs.default_config_mutated:
+            _add_effective_config(orig, args, kwargs, enc_k, tags)
         _state.depth += 1
         try:
             result = orig(*args, **kwargs)
@@ -133,12 +159,49 @@ def _wrap(name: str, orig: Any, record: bool) -> Any:
     return wrapper
 
 
+def _config_state(config: Any) -> dict[str, dict[str, str]]:
+    return {name: dict(section) for name, section in config.items()}
+
+
+_pristine: dict[str, Any] = {}
+
+
+def _default_config_mutated() -> bool:
+    from trafilatura.settings import DEFAULT_CONFIG
+
+    return _config_state(DEFAULT_CONFIG) != _pristine["config"]
+
+
+def _add_effective_config(
+    orig: Any, args: tuple[Any, ...], kwargs: dict[str, Any], enc_k: dict[str, Any], tags: set[str]
+) -> None:
+    """A test changed DEFAULT_CONFIG in place (1.11.0's do, at import): record the config a call that relies on
+    the default actually used, so the replay sees the same thresholds."""
+    from trafilatura.settings import DEFAULT_CONFIG
+
+    sig = inspect.signature(orig)
+    bound = sig.bind_partial(*args, **kwargs).arguments
+    param = sig.parameters.get("config")
+    if param is None or param.default is not DEFAULT_CONFIG:
+        return
+    if not ({"config", "options", "settingsfile"} & set(bound)):
+        enc_k["config"] = T.encode_arg(DEFAULT_CONFIG, _blobs, tags)
+        tags.update(("default-config-mutated", "config-added"))
+    elif "config" in kwargs and kwargs["config"] is DEFAULT_CONFIG:
+        tags.add("default-config-mutated")
+
+
 def _install() -> None:
     import trafilatura
     from trafilatura import core
+    from trafilatura.settings import DEFAULT_CONFIG
+
+    _pristine["config"] = _config_state(DEFAULT_CONFIG)  # before any test module is imported
 
     for name, record in (("extract", True), ("bare_extraction", True), ("extract_with_metadata", False)):
-        orig = getattr(core, name)
+        orig = getattr(core, name, None)
+        if orig is None:  # extract_with_metadata is newer than 1.11.0
+            continue
         w = _wrap(name, orig, record)
         setattr(core, name, w)
         if getattr(trafilatura, name, None) is orig:
@@ -225,11 +288,11 @@ def _replay_subprocess(calls_path: Path, blob_dir: Path, seed: str, tmp: Path) -
 # ===================================================================================== recorder (CLI side)
 
 
-def materialize_tests(dst: Path) -> int:
-    """Write the pinned upstream test files under ``dst`` (``dst/tests/...``); returns the number of files."""
+def materialize_tests(dst: Path, mode: str = TRAFILATURA_VERSION) -> int:
+    """Write a mode's pinned upstream test files under ``dst`` (``dst/tests/...``); returns the number of files."""
     from pyroid_parity import data as D
 
-    cols = D.read_parquet_columns(D.path(UPSTREAM_TESTS), ["path", "data"])
+    cols = D.read_parquet_columns(D.path(specs.trafilatura_files(mode)["tests"]), ["path", "data"])
     for rel, raw in zip(cols["path"], cols["data"], strict=True):
         p = dst / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -237,8 +300,8 @@ def materialize_tests(dst: Path) -> int:
     return len(cols["path"])
 
 
-def run_upstream_suite(tmp: Path, pytest_args: list[str]) -> Path:
-    materialize_tests(tmp)
+def run_upstream_suite(tmp: Path, pytest_args: list[str], mode: str = TRAFILATURA_VERSION) -> Path:
+    materialize_tests(tmp, mode)
     (tmp / "pytest.ini").write_text("[pytest]\npython_files = *_tests.py\npythonpath = .\n", "utf-8")
     raw = tmp / "raw"
     cmd = [
@@ -255,7 +318,7 @@ def run_upstream_suite(tmp: Path, pytest_args: list[str]) -> Path:
         "-p",
         "no:cacheprovider",
         "-q",
-        *[f"--ignore=tests/{name}" for name in NOT_RUN],
+        *[f"--ignore=tests/{name}" for name in NOT_RUN_BY_MODE[mode]],
         *pytest_args,
     ]
     env = {**os.environ, _OUT_ENV: str(raw), _ROOT_ENV: str(tmp), "PYTHONDONTWRITEBYTECODE": "1"}
@@ -266,26 +329,50 @@ def run_upstream_suite(tmp: Path, pytest_args: list[str]) -> Path:
     return raw
 
 
+def _pristine_variants(calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The calls a test made with DEFAULT_CONFIG changed in place, again with trafilatura's own default.
+
+    Each test's variants form a group of their own (test id + " [pristine config]"), appended after every
+    original call, so the originals' dedup sequences are untouched. They have no observed outcome.
+    """
+    out = []
+    for c in calls:
+        if "default-config-mutated" not in c["tags"]:
+            continue
+        kwargs = dict(c["kwargs"])
+        if "config-added" in c["tags"]:
+            del kwargs["config"]
+        else:
+            kwargs["config"] = {"$config": "default"}
+        tags = sorted((set(c["tags"]) - {"default-config-mutated", "config-added"}) | {"pristine-config"})
+        out.append(
+            {**c, "kwargs": kwargs, "tags": tags, "test": c["test"] + " [pristine config]", "observed": None}
+        )
+    return out
+
+
 def _without_warnings(outcome_json: str) -> str:
     j = json.loads(outcome_json)
     j.pop("warnings", None)
     return json.dumps(j, ensure_ascii=True, separators=(",", ":"))
 
 
-def record(pytest_args: list[str] | None = None) -> tuple[dict[str, Any], Any, Any]:
+def record(pytest_args: list[str] | None = None, mode: str | None = None) -> tuple[dict[str, Any], Any, Any]:
     """Run, replay and tag; returns (header, calls table, blobs table) as pyarrow tables."""
     import pyarrow as pa
 
     installed = md.version("trafilatura")
-    if installed != TRAFILATURA_VERSION:
-        raise SystemExit(f"needs trafilatura=={TRAFILATURA_VERSION}, found {installed}")
+    mode = mode or installed
+    if installed != mode or mode not in COMMITS:
+        raise SystemExit(f"recording mode {mode} needs trafilatura=={mode} installed, found {installed}")
     with tempfile.TemporaryDirectory(prefix="pyroid-traf-record-") as d:
         tmp = Path(d)
-        raw = run_upstream_suite(tmp, pytest_args or [])
+        raw = run_upstream_suite(tmp, pytest_args or [], mode)
         summary = json.loads((raw / "summary.json").read_text("utf-8"))
         recorded = [json.loads(line) for line in (raw / "calls.jsonl").read_text("utf-8").splitlines()]
         dropped = sum(1 for c in recorded if "unreplayable" in c["tags"])
         calls = [c for c in recorded if "unreplayable" not in c["tags"]]
+        calls += _pristine_variants(calls)
         kept_path = tmp / "kept.jsonl"
         kept_path.write_text("".join(json.dumps(c, ensure_ascii=True) + "\n" for c in calls), "utf-8")
         with ThreadPoolExecutor(2) as ex:  # two independent processes
@@ -307,7 +394,7 @@ def record(pytest_args: list[str] | None = None) -> tuple[dict[str, Any], Any, A
             tags = set(c["tags"])
             if probe != want:
                 tags.add("hash-seed")
-            if c["observed"] != _without_warnings(want):
+            if c["observed"] is not None and c["observed"] != _without_warnings(want):
                 tags.add("differs-from-test")
             c["tags"], c["outcome"] = sorted(tags), want
             walk(c["args"])
@@ -330,9 +417,13 @@ def record(pytest_args: list[str] | None = None) -> tuple[dict[str, Any], Any, A
     )
     tag_counts = Counter(t for c in calls for t in c["tags"])
     header = {
-        "source": f"trafilatura v{TRAFILATURA_VERSION} tests/ at {COMMIT}",
+        "source": f"trafilatura v{mode} tests/ at {COMMITS[mode]}",
         "python": platform.python_version(),
-        "upstream_tests": {**summary["tests"], "failed_ids": summary["failed"], "not_run": NOT_RUN},
+        "upstream_tests": {
+            **summary["tests"],
+            "failed_ids": summary["failed"],
+            "not_run": NOT_RUN_BY_MODE[mode],
+        },
         "calls": len(calls),
         "dropped_unreplayable": dropped,
         "tests_with_calls": len({c["test"] for c in calls}),
@@ -343,14 +434,16 @@ def record(pytest_args: list[str] | None = None) -> tuple[dict[str, Any], Any, A
     return header, table, blobs
 
 
-def load(root: Path | None = None) -> tuple[list[dict[str, Any]], T.Blobs]:
+def load(root: Path | None = None, mode: str = TRAFILATURA_VERSION) -> tuple[list[dict[str, Any]], T.Blobs]:
     """The pinned recorded calls (``args``/``kwargs``/``outcome`` decoded from JSON) and their blobs.
 
     ``root``: where ``materialize_tests`` rebuilt the upstream tests (calls that name a test file need it).
     """
     from pyroid_parity import data as D
 
-    cols = D.read_parquet_columns(D.path(CALLS), ["index", "test", "fn", "args", "kwargs", "tags", "outcome"])
+    files = specs.trafilatura_files(mode)
+    names = ["index", "test", "fn", "args", "kwargs", "tags", "outcome"]
+    cols = D.read_parquet_columns(D.path(files["calls"]), names)
     calls = [
         {
             "index": i,
@@ -363,7 +456,7 @@ def load(root: Path | None = None) -> tuple[list[dict[str, Any]], T.Blobs]:
         }
         for i, t, fn, a, k, tags, o in zip(*cols.values(), strict=True)
     ]
-    b = D.read_parquet_columns(D.path(BLOBS), ["sha256", "data"])
+    b = D.read_parquet_columns(D.path(files["blobs"]), ["sha256", "data"])
     return calls, T.Blobs(zip(b["sha256"], b["data"], strict=True), root=None if root is None else str(root))
 
 

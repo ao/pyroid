@@ -275,3 +275,160 @@ TRAFILATURA_SIGNATURES: dict[str, tuple[tuple[str, Any], ...]] = {
         ("options", None),
     ),
 }
+
+
+# ----------------------------------------------------------------------------- trafilatura: one mode per release
+# pyroid.trafilatura reproduces several trafilatura releases, chosen per call with ``compat=``. The suite runs one
+# mode at a time (``--trafilatura-compat``, or $PYROID_TRAFILATURA_COMPAT): that release's references, option
+# matrix and recorded upstream calls, against that release as the live oracle (its own dependency group).
+TRAFILATURA_MODES = ("2.3.1", "1.11.0")
+TRAFILATURA_COMPAT_ENV = "PYROID_TRAFILATURA_COMPAT"
+TRAFILATURA_ORACLES: dict[str, dict[str, str]] = {
+    "2.3.1": TRAFILATURA_ORACLE,
+    # what a fresh `pip install datatrove[processing]==0.10.1` resolves
+    "1.11.0": {
+        "trafilatura": "1.11.0",
+        "lxml": "6.1.3",
+        "justext": "3.0.2",
+        "lxml-html-clean": "0.4.6",
+        "charset-normalizer": "3.5.2",
+        "courlan": "1.4.0",
+        "htmldate": "1.11.0",
+    },
+}
+TRAFILATURA_GROUPS = {"2.3.1": "trafilatura", "1.11.0": "trafilatura111"}
+
+
+def trafilatura_mode() -> str:
+    """The mode this process checks: $PYROID_TRAFILATURA_COMPAT, else the default (2.3.1)."""
+    import os
+
+    mode = os.environ.get(TRAFILATURA_COMPAT_ENV) or TRAFILATURA_VERSION
+    if mode not in TRAFILATURA_MODES:
+        raise ValueError(f"{TRAFILATURA_COMPAT_ENV}={mode!r}: not one of {TRAFILATURA_MODES}")
+    return mode
+
+
+# 1.11.0 has no `fast` (its `no_fallback` is the same switch) and takes the rest of 2.3.1's matrix as it is.
+# datatrove's stateful call comes first in both.
+TRAFILATURA_OPTION_SETS_BY_MODE: dict[str, dict[str, dict[str, Any]]] = {
+    "2.3.1": TRAFILATURA_OPTION_SETS,
+    "1.11.0": {
+        "datatrove": {"favor_precision": True, "include_comments": False, "deduplicate": True},
+        "default": {},
+        "no_fallback": {"no_fallback": True},
+        "favor_recall": {"favor_recall": True},
+        "precision_comments": {"favor_precision": True, "include_comments": True},
+        "no_tables": {"include_tables": False},
+        "dedup": {"deduplicate": True},
+    },
+}
+TRAFILATURA_BARE_SETS_BY_MODE: dict[str, dict[str, dict[str, Any]]] = {
+    "2.3.1": TRAFILATURA_BARE_SETS,
+    "1.11.0": TRAFILATURA_BARE_SETS,  # bare_extraction returns a dict there (as_dict=True by default)
+}
+
+# trafilatura 1.11.0's signatures, in the same form; "**kwargs" is a trailing VAR_KEYWORD parameter (1.11.0's
+# extract takes unknown keywords and ignores them, except the old *_output switches, which raise NameError).
+_TRAF111_FILTERS = (
+    ("include_tables", True),
+    ("include_images", False),
+    ("include_formatting", False),
+    ("include_links", False),
+    ("deduplicate", False),
+    ("date_extraction_params", None),
+    ("with_metadata", False),
+    ("only_with_metadata", False),
+    ("max_tree_size", None),
+    ("url_blacklist", None),
+    ("author_blacklist", None),
+)
+_TRAF111_COMMON = (("no_fallback", False), ("favor_precision", False), ("favor_recall", False))
+TRAFILATURA_SIGNATURES_BY_MODE: dict[str, dict[str, tuple[tuple[str, Any], ...]]] = {
+    "2.3.1": TRAFILATURA_SIGNATURES,
+    "1.11.0": {
+        "extract": (
+            ("filecontent", "<required>"),
+            ("url", None),
+            ("record_id", None),
+            *_TRAF111_COMMON,
+            ("include_comments", True),
+            ("output_format", "txt"),
+            ("tei_validation", False),
+            ("target_language", None),
+            *_TRAF111_FILTERS,
+            ("settingsfile", None),
+            ("prune_xpath", None),
+            ("config", "DEFAULT_CONFIG"),
+            ("options", None),
+            ("**kwargs", None),
+        ),
+        "bare_extraction": (
+            ("filecontent", "<required>"),
+            ("url", None),
+            *_TRAF111_COMMON,
+            ("include_comments", True),
+            ("output_format", "python"),
+            ("target_language", None),
+            *_TRAF111_FILTERS,
+            ("as_dict", True),
+            ("prune_xpath", None),
+            ("config", "DEFAULT_CONFIG"),
+            ("options", None),
+        ),
+    },
+}
+
+# Edge cases only one mode has: 1.11.0's extract ignores `fast` (pyroid has the parameter, so the 1.11.0 mode
+# must too), its bare_extraction rejects it.
+TRAFILATURA_EDGE_EXTRA: dict[str, dict[str, dict[str, Any]]] = {
+    "2.3.1": {},
+    "1.11.0": {
+        "fast_ignored": {"fast": True},
+        "bare:fast": {"$fn": "bare_extraction", "fast": True},
+    },
+}
+
+
+# Delegated cases that are not delegated in a mode, because there they do not change the txt output (they are
+# edge cases instead: the release's result, at most one FallbackWarning).
+TRAFILATURA_NOT_DELEGATED: dict[str, dict[str, str]] = {
+    "2.3.1": {},
+    "1.11.0": {
+        "author_blacklist": "1.11.0 applies it only with metadata, and it does not switch metadata on"
+    },
+}
+
+
+def trafilatura_cases(mode: str, group: str) -> dict[str, dict[str, Any]]:
+    """The delegated or edge cases of a mode: those whose options the mode's functions have, plus its extras."""
+    sigs = TRAFILATURA_SIGNATURES_BY_MODE[mode]
+
+    def present(cases: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        out = {}
+        for name, kw in cases.items():
+            params = {n for n, _ in sigs[kw.get("$fn", "extract")]}
+            if all(k.startswith("$") or k in params for k in kw):
+                out[name] = kw
+        return out
+
+    not_delegated = TRAFILATURA_NOT_DELEGATED[mode]
+    delegated = {n: kw for n, kw in present(TRAFILATURA_DELEGATED).items() if n not in not_delegated}
+    if group == "delegated":
+        return delegated
+    moved = {n: TRAFILATURA_DELEGATED[n] for n in not_delegated}
+    return {**present(TRAFILATURA_EDGE_OPTIONS), **moved, **TRAFILATURA_EDGE_EXTRA[mode]}
+
+
+def trafilatura_files(mode: str) -> dict[str, str]:
+    """The pinned files of a mode: refs, recorded upstream calls and blobs, the upstream tests."""
+    if mode == TRAFILATURA_VERSION:  # the first mode's names predate the others
+        prefix = "parity/trafilatura"
+    else:
+        prefix = f"parity/trafilatura-{mode}"
+    return {
+        "ref": f"{prefix}-ref.parquet",
+        "calls": f"{prefix}-upstream.parquet",
+        "blobs": f"{prefix}-upstream-blobs.parquet",
+        "tests": f"trafilatura/upstream-tests-{mode}.parquet",
+    }

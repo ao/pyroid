@@ -41,11 +41,15 @@ trafilatura  trafilatura 2.3.1's ``extract`` and ``bare_extraction`` with its si
           stateful sequence). Optional ``extract_batch(htmls, *, threads=None, compat="2.3.1", **kwargs) ->
           list[str | None]``: the same results as ``extract`` in order, the dedup cache carried through the batch in
           order. ``<top>.integrations.patch("trafilatura")``, if the package has it, must give functions with
-          trafilatura's exact signatures (no ``compat``).
-          ``bare_extraction`` returns an object with trafilatura's ``Document`` attributes; ``body`` and
-          ``commentsbody`` may be lxml elements or ``etree.tostring(element, encoding="unicode")`` strings
+          the installed trafilatura's exact signatures (no ``compat``).
+          ``bare_extraction`` returns an object with trafilatura's ``Document`` attributes (a dict where the
+          release returns one: 1.11.0's ``as_dict=True`` default); ``body`` and ``commentsbody`` may be lxml
+          elements or ``etree.tostring(element, encoding="unicode")`` strings
           (``pyroid_parity.trafilatura_compare.normalize``). Options pyroid does not port
-          (``specs.TRAFILATURA_DELEGATED``) go to trafilatura with exactly one ``pyroid.FallbackWarning``.
+          (``specs.trafilatura_cases(mode, "delegated")``) go to trafilatura with exactly one
+          ``pyroid.FallbackWarning``. The suite checks one mode (``--trafilatura-compat``): ``compat=<mode>`` is
+          passed to every function that takes ``compat``, and in that mode the candidate must behave as that
+          release, whose signature may differ (1.11.0 has no ``fast``; its ``extract`` ignores unknown keywords).
 nltk      NLTK 3.10.4's tokenizer API: ``sent_tokenize``, ``word_tokenize``, ``PunktTokenizer``,
           ``PunktSentenceTokenizer``, ``PunktParameters``, ``TreebankWordTokenizer``, ``NLTKWordTokenizer``,
           ``TreebankWordDetokenizer``, ``RegexpTokenizer``, ``WordPunctTokenizer``, ``WhitespaceTokenizer``,
@@ -320,23 +324,44 @@ class GenericJieba:
 class GenericTrafilatura:
     """trafilatura's ``extract`` / ``bare_extraction``, the dedup reset and a batch call, taken from the module.
 
-    For trafilatura itself ``reset_caches`` is ``trafilatura.meta.reset_caches``. Without ``extract_batch`` the
-    batch checks map ``extract`` in order (and say so in the report).
+    The mode checked (``specs.trafilatura_mode()``) is passed as ``compat=`` to every function that takes it
+    (pyroid.trafilatura), and to none that does not (trafilatura itself, which is one release). For trafilatura
+    itself ``reset_caches`` is ``trafilatura.meta.reset_caches``. Without ``extract_batch`` the batch checks map
+    ``extract`` in order (and say so in the report).
     """
 
     def __init__(self, mod: Any) -> None:
+        from pyroid_parity import specs
+
         self.mod = mod
-        self.extract: Callable[..., Any] = mod.extract
-        self.bare_extraction: Callable[..., Any] = mod.bare_extraction
+        self.mode = specs.trafilatura_mode()
+        self.extract: Callable[..., Any] = self._in_mode(mod.extract)
+        self.bare_extraction: Callable[..., Any] = self._in_mode(mod.bare_extraction)
         reset = getattr(mod, "reset_caches", None)
         if reset is None and mod.__name__ == "trafilatura":
             reset = importlib.import_module("trafilatura.meta").reset_caches
         self._reset: Callable[[], Any] | None = reset
         self.has_reset = reset is not None
         self.has_batch = hasattr(mod, "extract_batch")
-        self.notes = [] if self.has_batch else ["no extract_batch: batch checks map extract"]
+        self._batch = self._in_mode(mod.extract_batch) if self.has_batch else None
+        self.takes_compat = self.extract is not mod.extract
+        self.notes = [f"trafilatura mode {self.mode}"]
+        if self.takes_compat:
+            self.notes.append(f"called with compat={self.mode!r}")
+        if not self.has_batch:
+            self.notes.append("no extract_batch: batch checks map extract")
         if not self.has_reset:
             self.notes.append("no reset_caches(): the stateful (deduplicate=True) checks cannot run")
+
+    def _in_mode(self, fn: Callable[..., Any]) -> Callable[..., Any]:
+        import functools
+        import inspect
+
+        try:
+            params = inspect.signature(fn).parameters
+        except (TypeError, ValueError):
+            return fn
+        return functools.partial(fn, compat=self.mode) if "compat" in params else fn
 
     def reset_caches(self) -> None:
         if self._reset is None:
@@ -344,8 +369,8 @@ class GenericTrafilatura:
         self._reset()
 
     def extract_batch(self, htmls: list[Any], threads: int | None = None, **kw: Any) -> list[str | None]:
-        if self.has_batch:
-            return list(self.mod.extract_batch(htmls, threads=threads, **kw))
+        if self._batch is not None:
+            return list(self._batch(htmls, threads=threads, **kw))
         return [self.extract(h, **kw) for h in htmls]
 
 

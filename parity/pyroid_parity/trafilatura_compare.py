@@ -241,6 +241,22 @@ def _build_tree(nodes: list[Any], html: bool) -> Any:
     return root
 
 
+def _lru_items(lru: Any) -> list[tuple[Any, Any]]:
+    """(key, value) of a trafilatura LRUCache, least recently used first.
+
+    2.3.1 keeps an OrderedDict in that order; 1.11.0 a circular doubly linked list under ``root``, whose links are
+    ``[prev, next, key, value]`` with the least recent one after the root.
+    """
+    root = getattr(lru, "root", None)
+    if root is None:
+        return list(lru.cache.items())
+    out, link = [], root[1]
+    while link is not root:
+        out.append((link[2], link[3]))
+        link = link[1]
+    return out
+
+
 def encode_arg(x: Any, blobs: Blobs, tags: set[str]) -> Any:
     """``x`` as JSON (large strings into ``blobs``); adds ``"unreplayable"`` to ``tags`` when it cannot."""
     t = type(x)
@@ -280,7 +296,7 @@ def encode_arg(x: Any, blobs: Blobs, tags: set[str]) -> Any:
         name = t.__qualname__
         if name == "LRUCache":
             with x.lock:
-                items = [[encode_arg(k, blobs, tags), v] for k, v in x.cache.items()]
+                items = [[encode_arg(k, blobs, tags), v] for k, v in _lru_items(x)]
             return {"$lru": {"maxsize": x.maxsize, "items": items}}
         if name == "Extractor" or any(c.__qualname__ == "Extractor" for c in t.__mro__[1:]):
             if name != "Extractor":
@@ -290,7 +306,7 @@ def encode_arg(x: Any, blobs: Blobs, tags: set[str]) -> Any:
     if mod == "configparser":
         from trafilatura.settings import DEFAULT_CONFIG
 
-        if x is DEFAULT_CONFIG:
+        if x is DEFAULT_CONFIG and not getattr(blobs, "default_config_mutated", False):
             return {"$config": "default"}
         sections = {name: dict(x.items(name, raw=True)) for name in x.sections()}
         return {"$config": {"defaults": dict(x.defaults()), "sections": sections}}
@@ -328,8 +344,8 @@ def decode_arg(x: Any, blobs: Blobs) -> Any:
             from trafilatura.deduplication import LRUCache
 
             lru = LRUCache(maxsize=v["maxsize"])
-            for k, n in v["items"]:
-                lru.cache[decode_arg(k, blobs)] = n
+            for k, n in v["items"]:  # oldest first, so the rebuilt cache has the same order
+                lru.put(decode_arg(k, blobs), n)
             return lru
         if tag == "$config":
             from configparser import ConfigParser

@@ -1,6 +1,9 @@
 """Large-sample trafilatura validation: stream Common Crawl slices, compare, keep only the counts (not CI).
 
-    python -m pyroid_parity.trafilatura_scale OUT_DIR [--impl MODULE] [--pages 20000] [--crawls ...]
+    python -m pyroid_parity.trafilatura_scale OUT_DIR [--impl MODULE] [--compat 1.11.0] [--pages 20000] [--crawls ...]
+
+``--compat`` picks the trafilatura release (mode) checked: the installed trafilatura must be it (with the pins of
+``specs.TRAFILATURA_ORACLES``), its option matrix is used, and a candidate that takes ``compat=`` gets it.
 
 For each crawl, WARC files are picked with a seeded RNG (never the ones the pinned corpus uses), and from each a
 slice of ``--slice-mb`` at a random offset, cut to whole gzip members (``trafilatura_cc``). The slice becomes
@@ -9,9 +12,9 @@ nothing but the JSON summaries stays on disk, so the disk budget is one slice pl
 
 Without ``--impl`` (a reference self-check) trafilatura runs twice in different worker processes and the two
 runs must agree. The second run checks the dedup state handling as well: each stateful set goes through the
-slice in three parts in three processes, with the cache (``trafilatura.deduplication.LRUCache``, passed as
-``deduplicate=``) pickled from one to the next, while the first run uses ``deduplicate=True`` (the module-level
-cache, emptied at the slice start) in one process. With ``--impl`` the candidate runs in this process
+slice in three parts in three processes, the module-level cache (``trafilatura.deduplication.LRU_TEST``) carried
+from one to the next as its (key, count) items, while the first run uses ``deduplicate=True`` with that cache
+emptied at the slice start, in one process. With ``--impl`` the candidate runs in this process
 (``extract_batch`` if it has one, the dedup cache emptied with ``reset_caches()`` at each slice start) against
 trafilatura in the workers.
 
@@ -20,13 +23,15 @@ wall seconds of the oracle and candidate runs), ``summary.json`` (all crawls), `
 counts the pages where the stateful ``datatrove`` set differs from ``precision`` (the same options without dedup):
 how much the cache state matters on that crawl.
 
-Docker (local, indicative)::
+Docker (local, indicative), one OUT_DIR per mode (a rerun with the same OUT_DIR resumes)::
 
-    cd parity && PYROID_DATA=/target/data-parity uv run --frozen --group cc \\
-        python -m pyroid_parity.trafilatura_scale /target/out-parity/scale --pages 20000 --workers 8
+    cd parity && PYROID_DATA=/target/data-parity uv run --frozen --no-default-groups --group trafilatura \\
+        --group cc python -m pyroid_parity.trafilatura_scale /target/out-parity/scale --pages 20000 --workers 8
+    cd parity && PYROID_DATA=/target/data-parity uv run --frozen --no-default-groups --group trafilatura111 \\
+        --group cc python -m pyroid_parity.trafilatura_scale /target/out-parity/scale-111 --compat 1.11.0
 
-EC2 (larger): the same command with the candidate wheel (``--with dist/pyroid-*.whl --impl pyroid.trafilatura``),
-``--pages 200000 --workers $(nproc) --slice-mb 100``.
+With the candidate: ``uv run ... --with dist/pyroid-*.whl python -m pyroid_parity.trafilatura_scale OUT_DIR
+--impl pyroid.trafilatura [--compat 1.11.0] --pages 100000 --workers $(nproc) --slice-mb 100``.
 """
 
 from __future__ import annotations
@@ -62,11 +67,17 @@ PINNED_WARCS = {
     "crawl-data/CC-MAIN-2023-50/segments/1700679099281.67/warc/CC-MAIN-20231128083443-20231128113443-00100.warc.gz",
     "crawl-data/CC-MAIN-2019-35/segments/1566027312025.20/warc/CC-MAIN-20190817203056-20190817225056-00100.warc.gz",
 }
-#: The corpus option sets, plus "precision" (datatrove's options without dedup) for the dedup effect count.
-OPTION_SETS: dict[str, dict[str, Any]] = {
-    **specs.TRAFILATURA_OPTION_SETS,
-    "precision": {"favor_precision": True, "include_comments": False},
-}
+
+
+def option_sets(mode: str) -> dict[str, dict[str, Any]]:
+    """A mode's corpus option sets, plus "precision" (datatrove's options without dedup) for the dedup effect."""
+    return {
+        **specs.TRAFILATURA_OPTION_SETS_BY_MODE[mode],
+        "precision": {"favor_precision": True, "include_comments": False},
+    }
+
+
+OPTION_SETS = option_sets(specs.TRAFILATURA_VERSION)
 CHUNK = 40
 MAX_EXAMPLES = 5
 
@@ -83,34 +94,50 @@ def _row(o: T.Outcome) -> tuple[str, int | None, str]:
     return T.digest(o), T.text_length(o), status
 
 
-def job_stateless(pages: list[str], options: list[str], reverse: bool) -> dict[str, list[tuple[Any, ...]]]:
+def job_stateless(
+    pages: list[str], mode: str, options: list[str], reverse: bool
+) -> dict[str, list[tuple[Any, ...]]]:
     """Every stateless option set on a chunk of pages (``reverse``: visit the pages backwards, a second run)."""
     import trafilatura
 
+    sets = option_sets(mode)
     order = list(range(len(pages)))[::-1] if reverse else list(range(len(pages)))
     out: dict[str, list[Any]] = {o: [None] * len(pages) for o in options}
     for i in order:
         for o in options:
-            out[o][i] = _row(T.capture_call(trafilatura.extract, pages[i], **OPTION_SETS[o]))
+            out[o][i] = _row(T.capture_call(trafilatura.extract, pages[i], **sets[o]))
     return out
 
 
-def job_stateful_global(pages: list[str], option: str) -> list[tuple[Any, ...]]:
+def job_stateful_global(pages: list[str], mode: str, option: str) -> list[tuple[Any, ...]]:
     """A stateful set as datatrove runs it: ``deduplicate=True``, the module-level cache emptied first."""
     import trafilatura
     from trafilatura.meta import reset_caches
 
+    kw = option_sets(mode)[option]
     reset_caches()
-    return [_row(T.capture_call(trafilatura.extract, p, **OPTION_SETS[option])) for p in pages]
+    return [_row(T.capture_call(trafilatura.extract, p, **kw)) for p in pages]
 
 
-def job_stateful_carried(pages: list[str], option: str, cache: Any) -> tuple[Any, list[tuple[Any, ...]]]:
-    """Part of a stateful run with an explicit cache passed in (and returned, pickled, for the next part)."""
+def job_stateful_carried(
+    pages: list[str], mode: str, option: str, items: list[tuple[str, Any]]
+) -> tuple[list[tuple[str, Any]], list[tuple[Any, ...]]]:
+    """Part of a stateful run: the module-level cache restored from ``items`` (least recent first), the pages
+    run with ``deduplicate=True``, and the cache's items returned for the next part (another process)."""
     import trafilatura
+    from trafilatura import deduplication
 
-    kw = {**OPTION_SETS[option], "deduplicate": cache}
-    rows = [_row(T.capture_call(trafilatura.extract, p, **kw)) for p in pages]
-    return cache, rows
+    kw = option_sets(mode)[option]
+    original = deduplication.LRU_TEST
+    cache = deduplication.LRUCache(maxsize=original.maxsize)
+    for key, value in items:
+        cache.put(key, value)
+    deduplication.LRU_TEST = cache  # read at call time by duplicate_test, in 2.3.1 and 1.11.0
+    try:
+        rows = [_row(T.capture_call(trafilatura.extract, p, **kw)) for p in pages]
+    finally:
+        deduplication.LRU_TEST = original
+    return T._lru_items(cache), rows
 
 
 # --------------------------------------------------------------------------------------------- driver side
@@ -160,28 +187,29 @@ def compare_slice(
     pages: list[tuple[str, str, str]],
     where: dict[str, Any],
     tally: Tally,
+    mode: str = specs.TRAFILATURA_VERSION,
 ) -> None:
     htmls = [h for _, _, h in pages]
     n = len(htmls)
-    stateful = [o for o, kw in OPTION_SETS.items() if specs.trafilatura_stateful(kw)]
-    stateless = [o for o in OPTION_SETS if o not in stateful]
+    sets = option_sets(mode)
+    stateful = [o for o, kw in sets.items() if specs.trafilatura_stateful(kw)]
+    stateless = [o for o in sets if o not in stateful]
     chunks = [(i, min(n, i + CHUNK)) for i in range(0, n, CHUNK)]
 
     t0 = time.perf_counter()
-    first_g = {o: pool.submit(job_stateful_global, htmls, o) for o in stateful}
-    first_s = [pool.submit(job_stateless, htmls[a:b], stateless, False) for a, b in chunks]
+    first_g = {o: pool.submit(job_stateful_global, htmls, mode, o) for o in stateful}
+    first_s = [pool.submit(job_stateless, htmls[a:b], mode, stateless, False) for a, b in chunks]
     second: dict[str, list[Any]] = {}
     if candidate is None:
         # Second run: other chunk boundaries, pages visited backwards, stateful sets carried across 3 processes.
         offs = [(i, min(n, i + CHUNK + 7)) for i in range(0, n, CHUNK + 7)]
-        sec_s = [(a, pool.submit(job_stateless, htmls[a:b], stateless, True)) for a, b in offs]
-        from trafilatura.deduplication import LRU_SIZE, LRUCache
-
+        sec_s = [(a, pool.submit(job_stateless, htmls[a:b], mode, stateless, True)) for a, b in offs]
         thirds = [0, n // 3, 2 * n // 3, n]
         for o in stateful:
-            cache, rows = LRUCache(maxsize=LRU_SIZE), []
+            items: list[tuple[str, Any]] = []
+            rows: list[Any] = []
             for a, b in itertools.pairwise(thirds):
-                cache, part = pool.submit(job_stateful_carried, htmls[a:b], o, cache).result()
+                items, part = pool.submit(job_stateful_carried, htmls[a:b], mode, o, items).result()
                 rows += part
             second[o] = rows
         for o in stateless:
@@ -201,7 +229,7 @@ def compare_slice(
 
     cand_s = 0.0
     if candidate is not None:
-        for o, kw in OPTION_SETS.items():
+        for o, kw in sets.items():
             t1 = time.perf_counter()
             if specs.trafilatura_stateful(kw):
                 candidate.reset_caches()
@@ -214,7 +242,7 @@ def compare_slice(
                 outs = [_row(T.capture_call(candidate.extract, h, **kw)) for h in htmls]
             cand_s += time.perf_counter() - t1
             second[o] = outs
-    for o in OPTION_SETS:
+    for o in sets:
         for k, ((doc_id, url, _), a, b) in enumerate(zip(pages, first[o], second[o], strict=True)):
             same = a[0] == b[0]
             ex = None if same else {**where, "page": k, "id": doc_id, "url": url, "first": a, "second": b}
@@ -238,10 +266,26 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--slice-mb", type=float, default=40.0)
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--seed", type=int, default=20261109)
+    ap.add_argument(
+        "--compat",
+        choices=specs.TRAFILATURA_MODES,
+        default=os.environ.get(specs.TRAFILATURA_COMPAT_ENV) or specs.TRAFILATURA_VERSION,
+        help="the trafilatura release checked (default: $PYROID_TRAFILATURA_COMPAT, else 2.3.1)",
+    )
     a = ap.parse_args(argv)
+    mode = a.compat
+    import importlib.metadata as md
+
+    for dist, want in specs.TRAFILATURA_ORACLES[mode].items():
+        if (got := md.version(dist)) != want:
+            group = specs.TRAFILATURA_GROUPS[mode]
+            sys.exit(f"--compat {mode} needs {dist}=={want} (dependency group {group}), found {got}")
+    os.environ[specs.TRAFILATURA_COMPAT_ENV] = mode  # for impl.resolve and the workers
     a.out.mkdir(parents=True, exist_ok=True)
     state_path = a.out / "state.json"
-    state = json.loads(state_path.read_text("utf-8")) if state_path.exists() else {"slices": []}
+    state = json.loads(state_path.read_text("utf-8")) if state_path.exists() else {"slices": [], "mode": mode}
+    if state.get("mode", specs.TRAFILATURA_VERSION) != mode:
+        sys.exit(f"{a.out} holds a run of mode {state.get('mode')}: use another OUT_DIR for {mode}")
     done = {(s["crawl"], s["warc"], s["start"]) for s in state["slices"]}
 
     candidate = None
@@ -272,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
                 del raw
                 where = {"crawl": crawl, "warc": warc, "range": [s.start, s.end]}
                 log(f"{crawl}: {len(pages)} pages from [{s.start:,}, {s.end:,}) of {warc.rsplit('/', 1)[1]}")
-                compare_slice(pool, candidate, pages, where, tally)
+                compare_slice(pool, candidate, pages, where, tally, mode)
                 rec = {
                     "crawl": crawl,
                     "warc": warc,
@@ -307,7 +351,8 @@ def main(argv: list[str] | None = None) -> int:
         t["diff"] for v in summary.values() for t in v.values() if isinstance(t, dict) and "diff" in t
     )
     out = {
-        "mode": "candidate" if a.impl else "reference self-check (trafilatura twice)",
+        "check": "candidate" if a.impl else "reference self-check (trafilatura twice)",
+        "compat": mode,
         "candidate": a.impl,
         "crawls": summary,
         "total": total,

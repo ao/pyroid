@@ -1,8 +1,14 @@
-"""trafilatura parity: the ``--impl`` candidate vs trafilatura 2.3.1 (+ lxml 6.1.3, justext 3.0.2).
+"""trafilatura parity: the ``--impl`` candidate vs one trafilatura release (a mode: ``compat=`` in pyroid).
 
     pytest tests/test_trafilatura.py                                   # self-check (candidate = trafilatura)
-    pytest tests/test_trafilatura.py --impl pyroid.trafilatura         # pyroid vs trafilatura
+    pytest tests/test_trafilatura.py --impl pyroid.trafilatura         # pyroid vs trafilatura 2.3.1
     pytest tests/test_trafilatura.py --impl pyroid.trafilatura --parity-limit 0   # every pinned page
+    uv run --no-group trafilatura --group trafilatura111 \
+        pytest tests/test_trafilatura.py --impl pyroid.trafilatura --trafilatura-compat 1.11.0
+
+The mode (``--trafilatura-compat``, default 2.3.1) picks the references, option matrix and recorded calls
+(``specs.trafilatura_files``, ``specs.TRAFILATURA_OPTION_SETS_BY_MODE``), the live oracle (that release, with
+the exact pins of ``specs.TRAFILATURA_ORACLES``), and the ``compat=`` passed to a candidate that takes it.
 
 Outcomes are compared exactly (``pyroid_parity.trafilatura_compare``): ``extract`` text byte for byte (``None``
 distinct from ``""``), ``bare_extraction`` field by field with ``body``/``commentsbody`` as lxml's XML
@@ -10,26 +16,27 @@ serialization, exceptions by type and message, warnings by category (``pyroid.Fa
 
 Checks (suite ``trafilatura`` in parity-report.json):
     corpus-<option>     ``extract(html, **option)`` on the pinned Common Crawl pages of 3 crawls
-                        (``specs.TRAFILATURA_CORPORA``) == the pinned digests. Options: ``specs.TRAFILATURA_OPTION_SETS``;
+                        (``specs.TRAFILATURA_CORPORA``) == the pinned digests. Options: the mode's option sets;
                         ``datatrove`` and ``dedup`` are stateful: each file runs in order after ``reset_caches()``
     batch-<option>      the same through ``extract_batch`` (64 pages per call, the dedup cache carried across calls)
-    bare-<option>       ``bare_extraction(html, **option)`` on the same pages (``specs.TRAFILATURA_BARE_SETS``)
+    bare-<option>       ``bare_extraction(html, **option)`` on the same pages (the mode's bare sets)
     inputs              the pinned pages and references are the ones in bench/manifest.json
     upstream            calls recorded from Trafilatura's own tests whose options pyroid ports, replayed test by
                         test (``pyroid_parity.trafilatura_record``)
     upstream-delegated  the other recorded calls (formats, metadata, trees, configs, ...): pyroid delegates them
     hypothesis-<option> grammar-generated pages (``trafilatura_strategies``): candidate == live trafilatura
-    delegated-result, delegated-warning   ``specs.TRAFILATURA_DELEGATED`` in a fresh process: trafilatura's
+    delegated-result, delegated-warning   ``specs.trafilatura_cases(mode, "delegated")``, fresh process: its
                         result, and exactly one ``pyroid.FallbackWarning`` over the case's calls
-    edge-result, edge-warning   ``specs.TRAFILATURA_EDGE_OPTIONS``: trafilatura's result, at most one warning
+    edge-result, edge-warning   ``specs.trafilatura_cases(mode, "edge")``: trafilatura's result, at most one warning
     native-result, native-no-fallback   the corpus option sets on the same pages: no FallbackWarning at all
     delegated-no-oracle where trafilatura is not installed, delegated options raise ``pyroid.PyroidError``
     api-signature, api-batch, api-reset   trafilatura's signatures plus ``compat="2.3.1"`` (keyword-only, last);
                         ``extract_batch(htmls, *, threads=None, compat="2.3.1", **kwargs)``; ``reset_caches()``
-    api-shim            ``pyroid.integrations.patch("trafilatura")``: trafilatura's exact signatures, no ``compat``
+    api-shim            ``pyroid.integrations.patch("trafilatura")``: the installed trafilatura's exact signatures
 
 Without ``--impl`` the candidate is trafilatura itself: the pinned checks then verify that this interpreter
-reproduces the references, on the first 100 pages of each file unless ``--parity-limit`` says otherwise.
+reproduces the references, on the first 100 pages of each file (and 100 of the recorded tests, spread over all
+of them) unless ``--parity-limit`` says otherwise.
 Where trafilatura is not installed (the free-threaded CI legs) the live checks skip and say so; the pinned ones
 still run against the candidate.
 """
@@ -63,9 +70,15 @@ from pyroid_parity.report import Collector
 
 SUITE = "trafilatura"
 PARITY = Path(__file__).resolve().parents[1]
-REF = "parity/trafilatura-ref.parquet"
-OPTIONS = list(specs.TRAFILATURA_OPTION_SETS)
-BARE = list(specs.TRAFILATURA_BARE_SETS)
+#: The trafilatura release checked; plugin.py sets $PYROID_TRAFILATURA_COMPAT from --trafilatura-compat.
+MODE = specs.trafilatura_mode()
+FILES = specs.trafilatura_files(MODE)
+REF = FILES["ref"]
+OPTION_SETS = specs.TRAFILATURA_OPTION_SETS_BY_MODE[MODE]
+BARE_SETS = specs.TRAFILATURA_BARE_SETS_BY_MODE[MODE]
+SIGNATURES = specs.TRAFILATURA_SIGNATURES_BY_MODE[MODE]
+OPTIONS = list(OPTION_SETS)
+BARE = list(BARE_SETS)
 CORPORA = list(specs.TRAFILATURA_CORPORA)
 SELF_CHECK_PAGES = 100
 BATCH = 64
@@ -78,14 +91,15 @@ def _crawl(rel: str) -> str:
 
 @cache
 def oracle() -> Any:
-    """trafilatura 2.3.1 if it is installed here (imported only then: lxml re-enables the GIL on 3.14t)."""
+    """The mode's trafilatura if it is installed here (imported only then: lxml re-enables the GIL on 3.14t)."""
     try:
         import trafilatura
     except ImportError:
         return None
-    for dist, want in specs.TRAFILATURA_ORACLE.items():
+    group = specs.TRAFILATURA_GROUPS[MODE]
+    for dist, want in specs.TRAFILATURA_ORACLES[MODE].items():
         got = md.version(dist)
-        assert got == want, f"the trafilatura oracle needs {dist}=={want}, found {got}"
+        assert got == want, f"mode {MODE}: the oracle needs {dist}=={want} (group {group}), found {got}"
     return trafilatura
 
 
@@ -98,7 +112,8 @@ def oracle_reset() -> None:
 def need_oracle(parity: Collector, check: str) -> Any:
     o = oracle()
     if o is None:
-        why = "trafilatura is not installed here (parity group `trafilatura`; not on free-threaded legs)"
+        group = specs.TRAFILATURA_GROUPS[MODE]
+        why = f"trafilatura {MODE} is not installed here (parity group `{group}`; not on free-threaded legs)"
         parity.skip(SUITE, check, why)
         pytest.skip(why)
     return o
@@ -112,7 +127,7 @@ def trafilatura_impl(request: pytest.FixtureRequest) -> Any:
 @pytest.fixture(scope="module", autouse=True)
 def _oracle_info() -> None:
     o = oracle()
-    reference(SUITE, "trafilatura", o.__version__ if o else f"{specs.TRAFILATURA_VERSION} (pinned)", None)
+    reference(SUITE, "trafilatura", o.__version__ if o else f"{MODE} (pinned)", None)
 
 
 def page_limit(request: pytest.FixtureRequest, impl: Any) -> int:
@@ -216,8 +231,8 @@ def test_inputs_are_pinned(parity: Collector) -> None:
     same = pinned == {rel: manifest[rel]["content_sha256"] for rel in CORPORA}
     parity.record(SUITE, "inputs", same, case=REF, got=pinned)
     assert same, f"{REF} was made from other inputs than the pinned corpus"
-    assert manifest[REF]["option_sets"] == specs.TRAFILATURA_OPTION_SETS
-    assert manifest[REF]["bare_sets"] == specs.TRAFILATURA_BARE_SETS
+    assert manifest[REF]["option_sets"] == OPTION_SETS
+    assert manifest[REF]["bare_sets"] == BARE_SETS
 
 
 @pytest.mark.parametrize("option", OPTIONS)
@@ -225,7 +240,7 @@ def test_inputs_are_pinned(parity: Collector) -> None:
 def test_corpus(
     trafilatura_impl: Any, parity: Collector, request: pytest.FixtureRequest, rel: str, option: str
 ) -> None:
-    impl, kw, check = trafilatura_impl, specs.TRAFILATURA_OPTION_SETS[option], f"corpus-{option}"
+    impl, kw, check = trafilatura_impl, OPTION_SETS[option], f"corpus-{option}"
     ref = refs()[rel, "extract", option]
     stateful = _start(impl, parity, check, kw)
     outcomes = (
@@ -264,7 +279,7 @@ def _batched(
 def test_batch(
     trafilatura_impl: Any, parity: Collector, request: pytest.FixtureRequest, rel: str, option: str
 ) -> None:
-    impl, kw, check = trafilatura_impl, specs.TRAFILATURA_OPTION_SETS[option], f"batch-{option}"
+    impl, kw, check = trafilatura_impl, OPTION_SETS[option], f"batch-{option}"
     ref = refs()[rel, "extract", option]
     stateful = _start(impl, parity, check, kw)
     # extract_batch reports no warnings per page: compare against the reference's own warning categories.
@@ -281,7 +296,7 @@ def test_batch(
 def test_bare(
     trafilatura_impl: Any, parity: Collector, request: pytest.FixtureRequest, rel: str, option: str
 ) -> None:
-    impl, kw, check = trafilatura_impl, specs.TRAFILATURA_BARE_SETS[option], f"bare-{option}"
+    impl, kw, check = trafilatura_impl, BARE_SETS[option], f"bare-{option}"
     ref = refs()[rel, "bare_extraction", option]
     stateful = _start(impl, parity, check, kw)
     outcomes = (
@@ -319,14 +334,14 @@ _NATIVE_VALUES: dict[str, tuple[Any, ...] | None] = {
     "settingsfile": (None,),
     "prune_xpath": (None,),
     "options": (None,),
-    "as_dict": (False,),
+    "as_dict": (False,) if MODE == "2.3.1" else (True, False),  # 1.11.0: as_dict=True is the default
     "config": ({"$config": "default"},),
 }
 
 
 def upstream_native(call: dict[str, Any]) -> bool:
     """Whether a recorded call uses only what pyroid ports (str or bytes input, the corpus options, txt)."""
-    names = [n for n, _ in specs.TRAFILATURA_SIGNATURES[call["fn"]]]
+    names = [n for n, _ in SIGNATURES[call["fn"]] if n != "**kwargs"]
     bound = dict(zip(names, call["args"], strict=False)) | call["kwargs"]
     first = bound.pop("filecontent", None)
     if isinstance(first, dict) and not ({"$blob", "$str", "$bytes", "$cat", "$rep"} & set(first)):
@@ -342,14 +357,19 @@ def upstream_native(call: dict[str, Any]) -> bool:
 
 
 @pytest.mark.timeout(3600)  # one test replays all 4,553 calls (about 5 minutes for trafilatura itself)
-def test_upstream(trafilatura_impl: Any, parity: Collector, tmp_path: Path) -> None:
+def test_upstream(
+    trafilatura_impl: Any, parity: Collector, request: pytest.FixtureRequest, tmp_path: Path
+) -> None:
     impl = trafilatura_impl
-    need(R.CALLS)
-    need(R.BLOBS)
-    need(R.UPSTREAM_TESTS)
-    parity.uses(SUITE, R.CALLS, R.BLOBS, R.UPSTREAM_TESTS)
-    R.materialize_tests(tmp_path)  # some calls pass settingsfile= paths into tests/resources/
-    calls, blobs = R.load(tmp_path)
+    for rel in (FILES["calls"], FILES["blobs"], FILES["tests"]):
+        need(rel)
+        parity.uses(SUITE, rel)
+    R.materialize_tests(tmp_path, MODE)  # some calls pass settingsfile= paths into tests/resources/
+    calls, blobs = R.load(tmp_path, MODE)
+    if limit := page_limit(request, impl):  # every k-th recorded test, so a sample still spans all files
+        tests = list(dict.fromkeys(c["test"] for c in calls))
+        keep = set(tests[:: max(1, len(tests) // limit)])
+        calls = [c for c in calls if c["test"] in keep]
     has_oracle = oracle() is not None
     if not impl.obj.has_reset:
         pytest.fail(f"{impl.module} has no reset_caches(): the recorded sequences cannot be replayed")
@@ -419,7 +439,7 @@ EXAMPLES = (
 
 
 def _calls(option: str) -> tuple[str, dict[str, Any]]:
-    return ("bare_extraction", {}) if option == "bare" else ("extract", specs.TRAFILATURA_OPTION_SETS[option])
+    return ("bare_extraction", {}) if option == "bare" else ("extract", OPTION_SETS[option])
 
 
 @pytest.mark.parametrize("option", [*OPTIONS, "bare"])
@@ -459,8 +479,8 @@ def test_hypothesis(trafilatura_impl: Any, parity: Collector, option: str, html:
 # ----------------------------------------------------------------------- delegation, edge options, native sets
 
 CASES = (
-    [("delegated", c) for c in specs.TRAFILATURA_DELEGATED]
-    + [("edge", c) for c in specs.TRAFILATURA_EDGE_OPTIONS]
+    [("delegated", c) for c in specs.trafilatura_cases(MODE, "delegated")]
+    + [("edge", c) for c in specs.trafilatura_cases(MODE, "edge")]
     + [("native", c) for c in OPTIONS]
     + [("native", f"bare:{c}") for c in BARE]
 )
@@ -523,7 +543,7 @@ def test_case(
     assert not diffs, f"{group} {case}: " + "; ".join(diffs)
 
 
-@pytest.mark.parametrize("case", list(specs.TRAFILATURA_DELEGATED))
+@pytest.mark.parametrize("case", list(specs.trafilatura_cases(MODE, "delegated")))
 def test_delegated_without_trafilatura(trafilatura_impl: Any, parity: Collector, case: str) -> None:
     """Without trafilatura installed, pyroid cannot delegate: it raises PyroidError (docs/dev/MODULES.md)."""
     if oracle() is not None:
@@ -533,7 +553,7 @@ def test_delegated_without_trafilatura(trafilatura_impl: Any, parity: Collector,
         pytest.skip("trafilatura is installed")
     if trafilatura_impl.is_reference:
         pytest.skip("the candidate is trafilatura itself")
-    kw = dict(specs.TRAFILATURA_DELEGATED[case])
+    kw = dict(specs.trafilatura_cases(MODE, "delegated")[case])
     fn = kw.pop("$fn", "extract")
     from pyroid_parity.trafilatura_delegate import DOCS
 
@@ -563,8 +583,14 @@ def _shape(fn: Any) -> list[tuple[str, str, Any]]:
     return out
 
 
-def _want_shape(name: str, compat: bool = False) -> list[tuple[str, str, Any]]:
-    shape = [(n, "POSITIONAL_OR_KEYWORD", d) for n, d in specs.TRAFILATURA_SIGNATURES[name]]
+def _want_shape(
+    name: str, compat: bool = False, mode: str = specs.TRAFILATURA_VERSION
+) -> list[tuple[str, str, Any]]:
+    """A release's signature of ``name`` (pyroid's is 2.3.1's, whatever the mode, plus ``compat``)."""
+    shape = [
+        ("kwargs", "VAR_KEYWORD", "<required>") if n == "**kwargs" else (n, "POSITIONAL_OR_KEYWORD", d)
+        for n, d in specs.TRAFILATURA_SIGNATURES_BY_MODE[mode][name]
+    ]
     return [*shape, COMPAT] if compat else shape
 
 
@@ -574,10 +600,10 @@ def test_oracle_signatures_are_pinned() -> None:
         pytest.skip("trafilatura is not installed here")
     from trafilatura.settings import DEFAULT_CONFIG
 
-    for name in specs.TRAFILATURA_SIGNATURES:
+    for name in SIGNATURES:
         fn = getattr(o, name)
         assert inspect.signature(fn).parameters["config"].default is DEFAULT_CONFIG
-        assert _shape(fn) == _want_shape(name)
+        assert _shape(fn) == _want_shape(name, mode=MODE)
 
 
 @pytest.mark.parametrize("name", [*specs.TRAFILATURA_SIGNATURES, "extract_batch", "reset_caches"])
@@ -627,9 +653,11 @@ def test_api_shim(trafilatura_impl: Any, parity: Collector) -> None:
         parity.skip(SUITE, "api-shim", r["skip"])
         pytest.skip(r["skip"])
     diffs = []
-    for name in specs.TRAFILATURA_SIGNATURES:
+    # The installed trafilatura's signatures; where none is installed, the default release's.
+    version = r["real_version"] if r["real_version"] in specs.TRAFILATURA_MODES else specs.TRAFILATURA_VERSION
+    for name in SIGNATURES:
         got = [tuple(x) for x in r["shapes"][name]] if r["shapes"].get(name) is not None else None
-        want = _want_shape(name)
+        want = _want_shape(name, mode=version)
         ok = parity.record(SUITE, "api-shim", got == want, case=name, got=got, want=want)
         if not ok:
             diffs.append(f"{name}: {got} != {want}")

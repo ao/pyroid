@@ -290,8 +290,9 @@ jobs:
     name: parity data (pinned inputs and references, ${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
     # The metrics references (rouge-score + sacrebleu on CNN/DM, SummEval, WMT21) add ~10-25 minutes on a miss, the
-    # trafilatura ones (7,192 Common Crawl pages x 9 option sets, and Trafilatura's own tests recorded) ~10-15.
-    timeout-minutes: 90
+    # trafilatura ones (7,192 Common Crawl pages x 9 option sets and Trafilatura's own tests, for 2.3.1 and for
+    # 1.11.0) ~20-30, the two trafilatura mutant proofs ~5.
+    timeout-minutes: 120
     permissions:
       contents: read # checkout (bench/manifest.json, bench/fetch.py, parity/)
     strategy:
@@ -327,6 +328,13 @@ jobs:
       - name: Regenerate and verify the references (python -m pyroid_parity.refs all)
         if: steps.cache.outputs.cache-hit != 'true'
         run: uv run --project parity --frozen python -m pyroid_parity.refs all
+      # pyroid.trafilatura's 1.11.0 mode: its references come from trafilatura 1.11.0, a dependency group that
+      # conflicts with 2.3.1's default one, so they are their own `refs` steps in that group's env.
+      - name: Regenerate and verify the trafilatura 1.11.0 references (refs trafilatura111 trafilatura111_upstream)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: >-
+          uv run --project parity --frozen --no-group trafilatura --group trafilatura111
+          python -m pyroid_parity.refs trafilatura111 trafilatura111_upstream
       # json_repair's references are in the repo (parity/data/json_repair-0.64.5/): its own test suite, replayed
       # as recorded public calls. Re-record them with the pinned json-repair and require the same bytes.
       - name: Re-record json_repair's test suite and compare (python -m pyroid_parity.json_repair_record --check)
@@ -342,10 +350,16 @@ jobs:
           path: bench/data
           key: ${{ steps.cache.outputs.cache-primary-key }}
       # The harness's own tests (manifest and per-platform refs, the `refs` exit code, the report, the ftfy mutant).
-      # No parity leg selects them (`-m <suite>`), and they need neither the wheel nor the data. Last, so a failure
-      # here never keeps the verified data out of the cache.
+      # No parity leg selects them (`-m <suite>`), and they need no wheel. Last, so a failure here never keeps the
+      # verified data out of the cache. The trafilatura mutant proof, once per mode, needs the data: it runs
+      # (about 2 minutes each) where they were just built, and skips on a cache hit, where nothing is restored.
       - name: Harness self-tests (pytest parity/tests/test_harness*.py)
-        run: uv run --project parity --frozen pytest parity/tests/test_harness.py parity/tests/test_harness_ftfy.py
+        run: |
+          set -euo pipefail
+          uv run --project parity --frozen pytest parity/tests/test_harness.py parity/tests/test_harness_ftfy.py \
+            parity/tests/test_harness_trafilatura.py
+          uv run --project parity --frozen --no-group trafilatura --group trafilatura111 \
+            pytest parity/tests/test_harness_trafilatura.py --trafilatura-compat 1.11.0
 
   parity:
     name: parity (${{ matrix.suite }}, ${{ matrix.python }}, ${{ matrix.runner }})
@@ -360,7 +374,8 @@ jobs:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
         # One entry per merged product module pyroid.<suite>. Every suite runs on the free-threaded builds too:
         # without the oracle group they compare against the pinned refs, and live-oracle checks skip in the report.
-        suite: [ftfy, fasttext, filters, dedup, metrics, json_repair, datasketch, jieba, trafilatura, nltk]
+        # SUITE@VERSION is a suite in another mode: trafilatura@1.11.0 is pyroid.trafilatura's compat="1.11.0".
+        suite: [ftfy, fasttext, filters, dedup, metrics, json_repair, datasketch, jieba, trafilatura, trafilatura@1.11.0, nltk]
         python: ["3.12", "3.14t", "3.15t"]
         # The wheel each interpreter installs (the three flavours the wheels job checks for).
         include:
@@ -401,7 +416,7 @@ jobs:
         with:
           path: bench/data/nltk_data
           key: punkt-tab-parity-e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106
-      - name: pytest parity/tests -m ${{ matrix.suite }} --impl pyroid.${{ matrix.suite }}
+      - name: pytest parity/tests (${{ matrix.suite }})
         env:
           SUITE: ${{ matrix.suite }}
           PY: ${{ matrix.python }}
@@ -422,9 +437,23 @@ jobs:
           # SudachiPy and its 200 MB dictionary only where the jpn_Jpan checks run (filters, dedup); elsewhere,
           # and on free-threaded legs, the Japanese checks skip.
           if [[ "$PY" != *t && ( "$SUITE" == filters || "$SUITE" == dedup ) ]]; then groups+=(--group ja); fi
+          # SUITE@VERSION: the suite in that mode, against that release's references and, on GIL legs, its own
+          # oracle group (each trafilatura release has one; they conflict, and 2.3.1's is a default group).
+          name="${SUITE%@*}"
+          mode=()
+          if [[ "$SUITE" == *@* ]]; then
+            compat="${SUITE#*@}"
+            mode=(--trafilatura-compat "$compat")
+            if [[ "$PY" != *t ]]; then
+              case "$compat" in
+                1.11.0) groups+=(--no-group trafilatura --group trafilatura111) ;;
+                *) echo "::error::no dependency group for trafilatura $compat"; exit 1 ;;
+              esac
+            fi
+          fi
           # PYTHON_GIL stays unset: the report records whether the GIL stayed off.
           uv run --project parity --frozen --python "$PY" "${groups[@]}" \
-            --with "${wheels[0]}" pytest parity/tests -m "$SUITE" --impl "pyroid.$SUITE"
+            --with "${wheels[0]}" pytest parity/tests -m "$name" --impl "pyroid.$name" "${mode[@]}"
       - name: Render parity-report.json to the job summary
         if: ${{ !cancelled() && hashFiles('parity-report.json') != '' }}
         # The only writer of the summary: pytest runs never append to it.

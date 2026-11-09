@@ -12,7 +12,7 @@ without editing the suites. Every run writes `parity-report.json`, which feeds t
 | `dedup` | datatrove 0.10.1 MinHash, FineWeb config (sha1/64, 14×8, 5-grams) | 112 signature values per doc; removed-doc set over dev + adversarial (445 removals, mostly injected near-dups) | identical |
 | `metrics` | rouge-score 0.1.2 (+ NLTK 3.10.4 Porter), sacrebleu 2.6.0 | ROUGE-1/2/3/4/L/Lsum on CNN/DM test (11.5k lead-3 vs highlights, 2k whole articles) and SummEval (1.6k system summaries, 11 refs, `score_multi`), with and without stemming; BLEU (13a/intl/char/none/zh/trg_lang, smoothing, lowercase, effective order, max order, `None` reference holes) and chrF/chrF++ per WMT21 system (141 corpora) and per segment (163k); live Hypothesis vs both incumbents (sacrebleu only on GIL builds: it loads lxml, which re-enables the GIL) | identical `repr`/`str`/`format`/signature strings (exact floats) |
 | `json_repair` | json_repair 0.64.5 (live + calls recorded from its own test suite + pinned digests) | 672 public calls from json_repair's 466 upstream tests ([`data/json_repair-0.64.5`](data/json_repair-0.64.5/README.md)), 20k generated broken LLM outputs × 8 option sets, Hypothesis grammar fuzzing with lone surrogates, `loads` / `load` / `from_file` | `str` byte-identical; objects and repair logs type-exact (key order, int vs float, NaN); same exception type and message |
-| `trafilatura` | trafilatura 2.3.1 + lxml 6.1.3 + justext 3.0.2 (live + pinned digests + calls recorded from its own tests) | 7,192 Common Crawl pages of 3 crawls (2019, 2023, 2026) × 7 `extract` option sets, datatrove's call among them (stateful: dedup in page order), also through `extract_batch`, and 2 `bare_extraction` sets; 4,553 public calls from 3,938 of Trafilatura's own tests, replayed test by test ([`data/trafilatura-2.3.1`](data/trafilatura-2.3.1/README.md)); Hypothesis grammar-generated HTML; unported options in fresh processes | text byte-identical (`None` is not `""`), `Document` fields identical, same exception type and message; exactly one `pyroid.FallbackWarning` per delegated option, none for the ported ones |
+| `trafilatura` | one mode per release (`--trafilatura-compat`): trafilatura 2.3.1, or 1.11.0 as `datatrove[processing]` resolves it, each with lxml 6.1.3 + justext 3.0.2 (live + pinned digests + calls recorded from its own tests) | 7,192 Common Crawl pages of 3 crawls (2019, 2023, 2026) × 7 `extract` option sets, datatrove's call among them (stateful: dedup in page order), also through `extract_batch`, and 2 `bare_extraction` sets; the public calls of the release's own tests, replayed test by test (2.3.1: 4,553 from 3,938 tests, [`data/trafilatura-2.3.1`](data/trafilatura-2.3.1/README.md); 1.11.0: 633 from 29 tests, [`data/trafilatura-1.11.0`](data/trafilatura-1.11.0/README.md)); Hypothesis grammar-generated HTML; unported options in fresh processes | text byte-identical (`None` is not `""`), `Document` fields identical, same exception type and message; exactly one `pyroid.FallbackWarning` per delegated option, none for the ported ones |
 
 ## Plugging in a module
 
@@ -73,8 +73,9 @@ All inputs and references live under `$PYROID_DATA` (default `/data`) and are pi
 | `metrics/cnndm-3.0.0-test.parquet`, `metrics/summeval.parquet`, `metrics/wmt21.parquet` | eval data for the `metrics` suite: CNN/DailyMail 3.0.0 test (Apache-2.0), SummEval (MIT), WMT21 newstest2021 system outputs + references for 8 language pairs (research release, not redistributed) |
 | `parity/{ftfy,fasttext,filters,minhash,metrics}-ref.parquet` | reference outputs; the manifest records the oracle versions |
 | `trafilatura/CC-MAIN-{2026-39,2023-50,2019-35}.parquet` | Common Crawl pages (id, url, html) as datatrove 0.10.1 hands them to Trafilatura: WARC byte ranges through `WarcReader` + `URLFilter` (Common Crawl terms of use; see [`data/trafilatura-2.3.1`](data/trafilatura-2.3.1/README.md)) |
-| `trafilatura/upstream-tests-2.3.1.parquet` | Trafilatura's `tests/` at v2.3.1, from GitHub |
-| `parity/trafilatura-ref.parquet`, `parity/trafilatura-upstream{,-blobs}.parquet` | digests of trafilatura's outcomes per page and option set; its tests' calls and golden outcomes |
+| `trafilatura/upstream-tests-{2.3.1,1.11.0}.parquet` | Trafilatura's `tests/` at v2.3.1 and v1.11.0, from GitHub |
+| `parity/trafilatura-ref.parquet`, `parity/trafilatura-upstream{,-blobs}.parquet` | 2.3.1's outcome digests per page and option set; its tests' calls and golden outcomes |
+| `parity/trafilatura-1.11.0-{ref,upstream,upstream-blobs}.parquet` | the same for 1.11.0 (`refs trafilatura111 trafilatura111_upstream`, in the `trafilatura111` group) |
 
 - `../bench/fetch.py` fetches the inputs. It verifies the inputs it downloads, and `--verify-all` checks every pinned file.
 - In the oracle env, on Linux, `python -m pyroid_parity.refs all` rebuilds the references and checks each one
@@ -116,8 +117,17 @@ another CPU can still differ from its pin. If the parity-data job reports a mism
 re-pin it there (`python -m pyroid_parity.refs fasttext --pin`, or `metrics --pin`).
 
 ## The trafilatura suite
-`tests/test_trafilatura.py`, against trafilatura 2.3.1 with lxml 6.1.3 (libxml2 2.14.6) and justext 3.0.2, the
-`trafilatura` dependency group. Its pages are Common Crawl HTML as datatrove 0.10.1 hands it to Trafilatura
+`tests/test_trafilatura.py` checks one trafilatura release at a time, the mode pyroid.trafilatura reproduces with
+`compat=`. Each mode has its own dependency group, and the groups conflict (`[tool.uv] conflicts`):
+
+| mode | group | oracle | run with |
+|---|---|---|---|
+| 2.3.1 (default) | `trafilatura` (default group) | trafilatura 2.3.1, lxml 6.1.3 (libxml2 2.14.6), justext 3.0.2 | `pytest -m trafilatura --impl pyroid.trafilatura` |
+| 1.11.0 | `trafilatura111` | trafilatura 1.11.0, lxml 6.1.3, justext 3.0.2, lxml-html-clean 0.4.6, charset-normalizer 3.5.2, courlan 1.4.0, htmldate 1.11.0: what a fresh `datatrove[processing]==0.10.1` resolves | `uv run --no-group trafilatura --group trafilatura111 pytest -m trafilatura --impl pyroid.trafilatura --trafilatura-compat 1.11.0` |
+
+`--trafilatura-compat` (or `$PYROID_TRAFILATURA_COMPAT`) picks that release's references, option matrix and
+recorded calls, requires its exact pins in the live oracle, and passes `compat=` to a candidate that takes it.
+Both modes share the pages, Common Crawl HTML as datatrove 0.10.1 hands it to Trafilatura
 (`bench/fetch.py --only trafilatura`, `pyroid_parity.trafilatura_cc`):
 
 | file | crawl | pages | HTML (chars) | on disk |
@@ -126,25 +136,27 @@ re-pin it there (`python -m pyroid_parity.refs fasttext --pin`, or `metrics --pi
 | `trafilatura/CC-MAIN-2023-50.parquet` | CC-MAIN-2023-50, WARC 00100, three 10 MB slices | 926 | 134.2 M | 16.6 MB |
 | `trafilatura/CC-MAIN-2019-35.parquet` | CC-MAIN-2019-35, WARC 00100, three 10 MB slices | 1,589 | 140.0 M | 17.8 MB |
 
-Option sets (`specs.TRAFILATURA_OPTION_SETS`, all with `output_format="txt"`): `datatrove` (`favor_precision=True,
-include_comments=False, deduplicate=True`, datatrove's call), `default`, `fast`, `favor_recall`,
-`precision_comments`, `no_tables` and `dedup` (`deduplicate=True`). The two dedup sets are stateful: each file is one
-datatrove task, run in page order after `reset_caches()`. Pinned references hold a digest per page and set, not
+Option sets (`specs.TRAFILATURA_OPTION_SETS_BY_MODE`, all with `output_format="txt"`): `datatrove`
+(`favor_precision=True, include_comments=False, deduplicate=True`, datatrove's call), `default`, `fast` (1.11.0 has
+no `fast`: `no_fallback` there), `favor_recall`, `precision_comments`, `no_tables` and `dedup` (`deduplicate=True`).
+The two dedup sets are stateful: each file is one datatrove task, run in page order after `reset_caches()`. Pinned references hold a digest per page and set, not
 the text. Options pyroid does not port (other output formats, formatting, links, images, metadata) are checked
 in fresh processes: trafilatura's result with exactly one `pyroid.FallbackWarning`; the ported sets must not warn.
 
-- **Free-threaded legs:** the group installs on 3.14t and 3.15t from wheels (measured on linux-aarch64), but
-  importing lxml re-enables the GIL (htmldate, courlan and justext import it too). CI leaves the group out there:
-  the pinned checks run with the GIL off, and the live ones (Hypothesis, delegation) skip.
+- **CI:** the parity matrix has `trafilatura` and `trafilatura@1.11.0` (a suite in another mode); the GIL legs
+  install that mode's group, and parity-data builds both modes' references.
+- **Free-threaded legs:** the groups install on 3.14t and 3.15t from wheels (measured on linux-aarch64, 2.3.1), but
+  importing lxml re-enables the GIL (htmldate, courlan and justext import it too). CI leaves them out there: the
+  pinned checks run with the GIL off, and the live ones (Hypothesis, delegation) skip.
 - **One pin for all platforms:** the references were made on linux-aarch64. On the first 100 pages of each file
   under all 9 option sets, linux-x86_64 (Rosetta 2 emulation, 2026-11-09) gave the same 2,700 digests; a mismatch
   on real x86 hardware would show in the parity-data job.
 - **Mutant:** `python -m pyroid_parity.trafilatura_mutant` runs the suite against a deliberately broken wrapper
-  and exits 1 unless every check fails.
-- **At scale (not CI):** `python -m pyroid_parity.trafilatura_scale OUT_DIR [--impl pyroid.trafilatura] --pages N`
-  streams slices of other WARC files of several crawls, compares, and keeps only JSON counts (`--group cc`).
-- **Trafilatura 1.11.0** (what `datatrove[processing]` resolves) can be added as a second group declared in
-  `[tool.uv] conflicts` with `trafilatura`, run with `--no-group trafilatura --group <it>`.
+  of the installed trafilatura and exits 1 unless every check fails; `tests/test_harness_trafilatura.py` runs it
+  in the parity-data job, once per mode.
+- **At scale (not CI):** `python -m pyroid_parity.trafilatura_scale OUT_DIR [--impl pyroid.trafilatura]
+  [--compat 1.11.0] --pages N` streams slices of other WARC files of several crawls, compares, and keeps only
+  JSON counts (with the mode's group and `--group cc`).
 
 ## Oracle choices
 - fastText: fasttext-predict 0.9.2.4.

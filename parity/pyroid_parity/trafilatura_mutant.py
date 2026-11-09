@@ -1,13 +1,17 @@
 """A deliberately broken trafilatura candidate: ``--impl trafilatura=pyroid_parity.trafilatura_mutant``.
 
-    python -m pyroid_parity.trafilatura_mutant [N]   # the suite on N pages per file (default 50) against it;
-                                                     # exit 1 unless every check fails
+    python -m pyroid_parity.trafilatura_mutant [N]   # the suite on N pages per file and N recorded tests
+                                                     # (default 25) against it; exit 1 unless every check fails
+
+It runs in the current mode ($PYROID_TRAFILATURA_COMPAT) and wraps whichever trafilatura is installed, so run it
+in that mode's group. ``tests/test_harness_trafilatura.py`` calls ``prove()``.
 
 It wraps trafilatura 2.3.1 with one defect per kind of check, each of the sort a port could ship:
 
 * ``deduplicate=True`` is ignored (stateful corpus and batch checks, the repeated-paragraph Hypothesis example);
 * ``include_tables=False`` is ignored (``corpus-no_tables``, upstream calls that drop tables);
-* RIGHT SINGLE QUOTATION MARK in the output becomes an ASCII apostrophe (every corpus and bare check);
+* RIGHT SINGLE QUOTATION MARK in the output becomes an ASCII apostrophe, and a final period is dropped (every
+  corpus, bare and upstream check);
 * a str with a lone surrogate or a NUL returns None (only generated input has those: ``hypothesis-*``);
 * lxml trees raise TypeError instead of being handed to trafilatura (``edge-tree_input``, ``upstream-delegated``);
 * delegated options go to trafilatura without a FallbackWarning, and markdown comes back as txt (``delegated-*``);
@@ -29,6 +33,7 @@ import subprocess
 import sys
 import tempfile
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -59,15 +64,24 @@ def _delegated(fn: str, kw: dict[str, Any]) -> bool:
     return any(kw.get(k) for k in (*_DELEGATED_FLAGS, "url_blacklist", "author_blacklist"))
 
 
+def _bad_text(text: str) -> str:
+    text = text.replace("\N{RIGHT SINGLE QUOTATION MARK}", "'")
+    return text.removesuffix(".")
+
+
 def _mangle(result: Any) -> Any:
-    fix = "\N{RIGHT SINGLE QUOTATION MARK}"
     if isinstance(result, str):
-        return result.replace(fix, "'")
+        return _bad_text(result)
+    if isinstance(result, dict):  # bare_extraction(as_dict=True), 1.11.0's default
+        return {
+            k: _bad_text(v) if k in ("text", "raw_text") and isinstance(v, str) else v
+            for k, v in result.items()
+        }
     if result is not None and hasattr(result, "text"):
         for attr in ("text", "raw_text"):
             v = getattr(result, attr, None)
             if isinstance(v, str):
-                setattr(result, attr, v.replace(fix, "'"))
+                setattr(result, attr, _bad_text(v))
     return result
 
 
@@ -119,27 +133,51 @@ MODULE = "pyroid_parity.trafilatura_mutant"  # not __name__: that is "__main__" 
 EXEMPT = {"inputs", "delegated-no-oracle", "api-shim"}
 
 
-def expected_checks() -> set[str]:
-    """Every check the suite records against a non-reference candidate where trafilatura is installed."""
+#: Pages per corpus file (and recorded tests) the proof runs on: enough for every defect to show.
+PROOF_LIMIT = 25
+
+
+def expected_checks(mode: str | None = None) -> set[str]:
+    """Every check the suite records against a non-reference candidate where the mode's trafilatura is installed."""
     from pyroid_parity import specs
 
+    mode = mode or specs.trafilatura_mode()
     out = {"inputs", "upstream", "upstream-delegated", "api-signature", "api-batch", "api-reset"}
-    for o in specs.TRAFILATURA_OPTION_SETS:
+    for o in specs.TRAFILATURA_OPTION_SETS_BY_MODE[mode]:
         out |= {f"corpus-{o}", f"batch-{o}", f"hypothesis-{o}"}
-    out |= {f"bare-{o}" for o in specs.TRAFILATURA_BARE_SETS} | {"hypothesis-bare"}
+    out |= {f"bare-{o}" for o in specs.TRAFILATURA_BARE_SETS_BY_MODE[mode]} | {"hypothesis-bare"}
     for g in ("delegated", "edge", "native"):
         out.add(f"{g}-result")
     return out | {"delegated-warning", "edge-warning", "native-no-fallback"}
 
 
-def main(argv: list[str] | None = None) -> int:
+@dataclass
+class Proof:
+    """The suite's verdicts on the mutant: ``ok`` when every check it can fail failed."""
+
+    mode: str
+    returncode: int
+    checks: dict[str, Any]
+    not_caught: list[str]
+    not_run: list[str]
+    output: str
+
+    @property
+    def ok(self) -> bool:
+        return bool(self.checks) and not self.not_caught and not self.not_run and self.returncode == 1
+
+
+def prove(limit: int = PROOF_LIMIT) -> Proof:
+    """Run tests/test_trafilatura.py against this mutant in a subprocess, in the current mode."""
+    from pyroid_parity import specs
+
     parity = Path(__file__).resolve().parents[1]
-    args = argv if argv is not None else sys.argv[1:]
-    limit = args[0] if args else "50"
+    mode = specs.trafilatura_mode()
     with tempfile.TemporaryDirectory(prefix="pyroid-traf-mutant-") as d:
         report = Path(d) / "parity-report.json"
         env = {
             **os.environ,
+            specs.TRAFILATURA_COMPAT_ENV: mode,
             "HYPOTHESIS_PROFILE": "dev",
             "HYPOTHESIS_STORAGE_DIRECTORY": str(Path(d) / "hyp"),
         }
@@ -152,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
             "--impl",
             f"trafilatura={MODULE}",
             "--parity-limit",
-            limit,
+            str(limit),
             "--parity-report",
             str(report),
             "-p",
@@ -161,23 +199,39 @@ def main(argv: list[str] | None = None) -> int:
             "--no-header",
         ]
         proc = subprocess.run(cmd, cwd=parity, env=env, capture_output=True, text=True, check=False)
+        output = proc.stdout[-4000:] + proc.stderr[-4000:]
         if not report.exists():
-            print(proc.stdout[-4000:], proc.stderr[-4000:])
-            return 2
+            return Proof(mode, proc.returncode, {}, [], sorted(expected_checks(mode)), output)
         checks = json.loads(report.read_text("utf-8"))["suites"]["trafilatura"]["checks"]
-    bad = []
-    for name, c in sorted(checks.items()):
-        verdict = "ok (failed, as it must)" if c["status"] == "fail" else "NOT CAUGHT"
-        if name in EXEMPT or name.startswith("upstream-hash-seed"):
-            verdict = "exempt"
-        elif c["status"] != "fail":
-            bad.append(name)
+    not_caught = [
+        n
+        for n, c in sorted(checks.items())
+        if c["status"] != "fail" and n not in EXEMPT and not n.startswith("upstream-hash-seed")
+    ]
+    not_run = sorted(expected_checks(mode) - set(checks))
+    return Proof(mode, proc.returncode, checks, not_caught, not_run, output)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = argv if argv is not None else sys.argv[1:]
+    p = prove(int(args[0]) if args else PROOF_LIMIT)
+    if not p.checks:
+        print(p.output)
+    for name, c in sorted(p.checks.items()):
+        verdict = (
+            "exempt"
+            if name in EXEMPT
+            else "NOT CAUGHT"
+            if name in p.not_caught
+            else "ok (failed, as it must)"
+        )
         print(f"{name:32} {c['status']:5} same={c['same']:<7} diff={c['diff']:<7} {verdict}")
-    missing = sorted(expected_checks() - set(checks))
-    for name in missing:
+    for name in p.not_run:
         print(f"{name:32} -     not recorded                 NOT RUN")
-    print(f"pytest exit {proc.returncode}; {len(checks)} checks, not caught: {bad}, not run: {missing}")
-    return 1 if bad or missing or proc.returncode != 1 else 0
+    print(
+        f"mode {p.mode}; pytest exit {p.returncode}; {len(p.checks)} checks, not caught: {p.not_caught}, not run: {p.not_run}"
+    )
+    return 0 if p.ok else 1
 
 
 if __name__ == "__main__":

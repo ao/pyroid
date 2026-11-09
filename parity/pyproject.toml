@@ -46,14 +46,31 @@ oracle = [
 # datatrove's Japanese tokenizer (SpaCyTokenizer("ja")) and the SudachiDict pyroid reads for jpn_Jpan (a 77 MB
 # wheel): only the filters and dedup legs install it (`--group ja`); without it the Japanese checks skip.
 ja = ["sudachipy==0.7.0", "sudachidict-core==20261015"]
-# The trafilatura suite's oracle (mode 1): the triple pyroid.trafilatura is ported against. It is its own group,
-# not part of `oracle` or `dev`, so that a second group pinning trafilatura 1.11.0 (mode 2, what
-# datatrove[processing] resolves) can be added later and declared in [tool.uv] conflicts; that group then runs
-# with `--no-group trafilatura --group <it>`. Pure Python except lxml, which has cp314t/cp315t wheels.
+# The trafilatura suite's oracles, one group per mode pyroid.trafilatura reproduces (`compat=`). They conflict
+# ([tool.uv] conflicts below): `trafilatura` (2.3.1) is a default group, and the 1.11.0 mode runs with
+# `--no-group trafilatura --group trafilatura111`. Pure Python except lxml, which has cp314t/cp315t wheels.
 trafilatura = ["trafilatura==2.3.1", "lxml==6.1.3", "justext==3.0.2"]
-# datatrove's WarcReader dependencies for pyroid_parity.trafilatura_scale (Common Crawl slices on the fly), at the
-# versions bench/pyproject.toml pins for fetch.py: `uv run --group cc`. Not needed by the suites.
-cc = ["warcio==1.8.2", "faust-cchardet==3.2.0", "python-magic==0.4.27"]
+# Mode 1.11.0: what a fresh `pip install datatrove[processing]==0.10.1` resolves (trafilatura<1.12), pinned exactly.
+trafilatura111 = [
+    "trafilatura==1.11.0",
+    "lxml==6.1.3",
+    "justext==3.0.2",
+    "lxml-html-clean==0.4.6",
+    "charset-normalizer==3.5.2",
+    "courlan==1.4.0",
+    "htmldate==1.11.0",
+]
+# What pyroid_parity.trafilatura_scale needs besides an oracle group (Common Crawl slices through datatrove's
+# WarcReader and URLFilter), at the versions bench/pyproject.toml pins for fetch.py: `uv run --group cc`.
+cc = [
+    "datatrove==0.10.1",
+    "warcio==1.8.2",
+    "faust-cchardet==3.2.0",
+    "python-magic==0.4.27",
+    "tldextract==5.4.0",
+    "pyahocorasick==2.3.1",
+    "fasteners>=0.19",
+]
 dev = [{ include-group = "oracle" }, "jsonschema>=4.25", "ruff>=0.17.3"]
 
 [build-system]
@@ -65,6 +82,7 @@ packages = ["pyroid_parity"]
 
 [tool.uv]
 default-groups = ["dev", "trafilatura"]
+conflicts = [[{ group = "trafilatura" }, { group = "trafilatura111" }]]
 
 [tool.pytest]
 minversion = "9.0"

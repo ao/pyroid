@@ -3,8 +3,8 @@
     python -m pyroid_parity.trafilatura_delegate MODULE GROUP CASE
     python -m pyroid_parity.trafilatura_delegate --shim TOP      # signatures of TOP.integrations' trafilatura shim
 
-``GROUP`` is ``delegated`` (``specs.TRAFILATURA_DELEGATED``), ``edge`` (``specs.TRAFILATURA_EDGE_OPTIONS``) or
-``native`` (``specs.TRAFILATURA_OPTION_SETS`` and ``bare:<name>`` for ``specs.TRAFILATURA_BARE_SETS``).
+``GROUP`` is ``delegated`` or ``edge`` (``specs.trafilatura_cases``) or ``native`` (the corpus option sets and
+``bare:<name>`` for the bare ones), all of the mode in $PYROID_TRAFILATURA_COMPAT (default 2.3.1).
 The candidate gets ``DOCS`` in order with the case's options, each call with fresh argument objects, under
 ``warnings.simplefilter("always")``: pyroid's "once per process, function and reason" rule is its own, so the
 count of ``pyroid.FallbackWarning`` over the calls is what a user sees. A fresh process is the only way to see
@@ -69,15 +69,16 @@ _SHORT = "<html><body><div class='nav'><a href='/a'>A</a></div><p>Too short.</p>
 DOCS = (_ARTICLE, _GERMAN, _SHORT)
 
 
-def case_kwargs(group: str, name: str) -> dict[str, Any]:
-    if group == "delegated":
-        return dict(specs.TRAFILATURA_DELEGATED[name])
-    if group == "edge":
-        return dict(specs.TRAFILATURA_EDGE_OPTIONS[name])
+def case_kwargs(group: str, name: str, mode: str | None = None) -> dict[str, Any]:
+    """A case of the mode checked (``specs.trafilatura_mode()``)."""
+    mode = mode or specs.trafilatura_mode()
+    if group in ("delegated", "edge"):
+        return dict(specs.trafilatura_cases(mode, group)[name])
     if group == "native":
         if name.startswith("bare:"):
-            return {"$fn": "bare_extraction", **specs.TRAFILATURA_BARE_SETS[name.removeprefix("bare:")]}
-        return dict(specs.TRAFILATURA_OPTION_SETS[name])
+            bare = specs.TRAFILATURA_BARE_SETS_BY_MODE[mode][name.removeprefix("bare:")]
+            return {"$fn": "bare_extraction", **bare}
+        return dict(specs.TRAFILATURA_OPTION_SETS_BY_MODE[mode][name])
     raise SystemExit(f"unknown group {group!r}")
 
 
@@ -167,6 +168,7 @@ def run(module: str, group: str, name: str) -> dict[str, Any]:
         "module": module,
         "group": group,
         "case": name,
+        "mode": specs.trafilatura_mode(),
         "trafilatura": trafilatura.__version__,
         "calls": calls,
     }
@@ -191,6 +193,7 @@ def shim_shapes(top: str) -> dict[str, Any]:
         except (ValueError, KeyError) as e:
             return {"skip": f"{top}.integrations has no trafilatura shim: {e}"}
     shim = sys.modules["trafilatura"]
+    real = getattr(shim, "__wrapped__", None)
     try:
         from trafilatura.settings import DEFAULT_CONFIG
     except ImportError:
@@ -210,7 +213,12 @@ def shim_shapes(top: str) -> dict[str, Any]:
                 d = "<required>"
             out.append([p.name, p.kind.name, d])
         shapes[name] = out
-    return {"shapes": shapes, "pyroid": getattr(shim, "__pyroid__", False) is True}
+    real_version = getattr(real, "__version__", None) if real is not None else None
+    return {
+        "shapes": shapes,
+        "pyroid": getattr(shim, "__pyroid__", False) is True,
+        "real_version": real_version,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:

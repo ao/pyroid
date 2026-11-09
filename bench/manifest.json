@@ -870,6 +870,242 @@
         "adversarial"
       ]
     },
+    "parity/trafilatura-1.11.0-ref.parquet": {
+      "sha256": "e701cbe40010bac9d66d702e1229e48cbd311b8756fcc12442a48a0971d03929",
+      "bytes": 2246231,
+      "rows": 64728,
+      "oracle": {
+        "trafilatura": "1.11.0",
+        "lxml": "6.1.3",
+        "justext": "3.0.2",
+        "lxml-html-clean": "0.4.6",
+        "charset-normalizer": "3.5.2",
+        "courlan": "1.4.0",
+        "htmldate": "1.11.0"
+      },
+      "option_sets": {
+        "datatrove": {
+          "favor_precision": true,
+          "include_comments": false,
+          "deduplicate": true
+        },
+        "default": {},
+        "no_fallback": {
+          "no_fallback": true
+        },
+        "favor_recall": {
+          "favor_recall": true
+        },
+        "precision_comments": {
+          "favor_precision": true,
+          "include_comments": true
+        },
+        "no_tables": {
+          "include_tables": false
+        },
+        "dedup": {
+          "deduplicate": true
+        }
+      },
+      "bare_sets": {
+        "precision": {
+          "favor_precision": true,
+          "include_comments": false
+        },
+        "default": {}
+      },
+      "corpora": {
+        "trafilatura/CC-MAIN-2026-39.parquet": "bfc660f8436a05b03aca31092d84de39589f827591b7b93ddcf6288d118c8565",
+        "trafilatura/CC-MAIN-2023-50.parquet": "d988515e3a6c8a8808f35e85933c16de27837553dc15e2457a12f032cb1166a4",
+        "trafilatura/CC-MAIN-2019-35.parquet": "4c3ad45e43a22aff043e1539bc4aacbc24653ce00cd871bbc3c127afd164daf4"
+      },
+      "statuses": {
+        "trafilatura/CC-MAIN-2026-39.parquet": {
+          "extract:datatrove": {
+            "str": 4525,
+            "None": 152
+          },
+          "extract:default": {
+            "str": 4597,
+            "None": 80
+          },
+          "extract:no_fallback": {
+            "str": 4584,
+            "None": 93
+          },
+          "extract:favor_recall": {
+            "str": 4593,
+            "None": 84
+          },
+          "extract:precision_comments": {
+            "str": 4595,
+            "None": 82
+          },
+          "extract:no_tables": {
+            "str": 4595,
+            "None": 82
+          },
+          "extract:dedup": {
+            "str": 4497,
+            "None": 180
+          },
+          "bare_extraction:precision": {
+            "dict": 4595,
+            "None": 64,
+            "raise:AttributeError": 18
+          },
+          "bare_extraction:default": {
+            "dict": 4597,
+            "None": 62,
+            "raise:AttributeError": 18
+          }
+        },
+        "trafilatura/CC-MAIN-2023-50.parquet": {
+          "extract:datatrove": {
+            "str": 901,
+            "None": 25
+          },
+          "extract:default": {
+            "str": 921,
+            "None": 5
+          },
+          "extract:no_fallback": {
+            "str": 919,
+            "None": 7
+          },
+          "extract:favor_recall": {
+            "str": 920,
+            "None": 6
+          },
+          "extract:precision_comments": {
+            "str": 921,
+            "None": 5
+          },
+          "extract:no_tables": {
+            "str": 921,
+            "None": 5
+          },
+          "extract:dedup": {
+            "str": 907,
+            "None": 19
+          },
+          "bare_extraction:precision": {
+            "dict": 921,
+            "raise:AttributeError": 2,
+            "None": 3
+          },
+          "bare_extraction:default": {
+            "dict": 921,
+            "raise:AttributeError": 2,
+            "None": 3
+          }
+        },
+        "trafilatura/CC-MAIN-2019-35.parquet": {
+          "extract:datatrove": {
+            "str": 1528,
+            "None": 61
+          },
+          "extract:default": {
+            "str": 1561,
+            "None": 28
+          },
+          "extract:no_fallback": {
+            "str": 1557,
+            "None": 32
+          },
+          "extract:favor_recall": {
+            "str": 1560,
+            "None": 29
+          },
+          "extract:precision_comments": {
+            "str": 1561,
+            "None": 28
+          },
+          "extract:no_tables": {
+            "str": 1561,
+            "None": 28
+          },
+          "extract:dedup": {
+            "str": 1519,
+            "None": 70
+          },
+          "bare_extraction:precision": {
+            "dict": 1561,
+            "None": 26,
+            "raise:AttributeError": 2
+          },
+          "bare_extraction:default": {
+            "dict": 1561,
+            "None": 26,
+            "raise:AttributeError": 2
+          }
+        }
+      },
+      "stateful": "deduplicate=True sets: each file in order through one cache, emptied at its start"
+    },
+    "parity/trafilatura-1.11.0-upstream-blobs.parquet": {
+      "sha256": "151d415d7c09faaa96642ed286aae33b7d8c24966d4abe8b669616e2952ba220",
+      "bytes": 1981902,
+      "rows": 92,
+      "oracle": {
+        "trafilatura": "1.11.0",
+        "lxml": "6.1.3",
+        "justext": "3.0.2"
+      },
+      "source": "trafilatura v1.11.0 tests/ at 60647e5eeff77df9ef4b7432a936f580736b3075"
+    },
+    "parity/trafilatura-1.11.0-upstream.parquet": {
+      "sha256": "8ad5467d103bdd8305e705b0eedeb653f06ef6fc8a1339158435a35b88b306f9",
+      "bytes": 282159,
+      "rows": 633,
+      "oracle": {
+        "trafilatura": "1.11.0",
+        "lxml": "6.1.3",
+        "justext": "3.0.2"
+      },
+      "source": "trafilatura v1.11.0 tests/ at 60647e5eeff77df9ef4b7432a936f580736b3075",
+      "python": "3.13.18",
+      "upstream_tests": {
+        "passed": 54,
+        "failed": 3,
+        "failed_ids": [
+          "tests/realworld_tests.py::test_extract[False-True]",
+          "tests/unit_tests.py::test_external",
+          "tests/unit_tests.py::test_table_processing"
+        ],
+        "not_run": {
+          "cli_tests.py": "the command-line interface: subprocesses and the CLI's worker pools, not direct calls",
+          "downloads_tests.py": "HTTP downloads (to the network: 1.11.0's tests mock nothing)",
+          "feeds_tests.py": "feed discovery over the network; no extract or bare_extraction calls",
+          "sitemaps_tests.py": "sitemaps over the network; no extract or bare_extraction calls",
+          "spider_tests.py": "crawling over the network; no extract or bare_extraction calls"
+        }
+      },
+      "calls": 633,
+      "dropped_unreplayable": 0,
+      "tests_with_calls": 58,
+      "fn_counts": {
+        "extract": 625,
+        "bare_extraction": 8
+      },
+      "tag_counts": {
+        "config-added": 228,
+        "default-config-mutated": 315,
+        "pristine-config": 315,
+        "tree-input": 128
+      },
+      "tags": {
+        "tree-input": "the input is an lxml tree, rebuilt node by node for the replay",
+        "test-file": "an argument names a file of the upstream tests (settingsfile=), rebuilt for the replay",
+        "unreplayable": "an argument could not be stored (dropped from the recording)",
+        "extractor-subclass": "options= was a subclass of Extractor; replayed as a plain Extractor",
+        "default-config-mutated": "the tests had changed trafilatura's DEFAULT_CONFIG in place (1.11.0's set MIN_OUTPUT_SIZE and MIN_EXTRACTED_SIZE to 0 at import): the call is recorded with the config= it saw",
+        "config-added": "with default-config-mutated: the test passed no config=, the recording adds the one in effect",
+        "pristine-config": "a default-config-mutated call again with trafilatura's own DEFAULT_CONFIG (its own group)",
+        "differs-from-test": "the clean replay differs from what the test observed (see step 3)",
+        "hash-seed": "the outcome changes with PYTHONHASHSEED"
+      }
+    },
     "parity/trafilatura-ref.parquet": {
       "sha256": "96522ee914a5a1d9305226fe09bec4cebb8eaec58d12cdf546dee2d9414dea91",
       "bytes": 2285217,
@@ -1188,6 +1424,18 @@
       },
       "writer": {
         "compression": "zstd"
+      }
+    },
+    "trafilatura/upstream-tests-1.11.0.parquet": {
+      "sha256": "eb4debc2b683337fb395e1a4464834992a721047382ca00b8fe64f223f59cdb5",
+      "bytes": 2455814,
+      "rows": 151,
+      "source": {
+        "repo": "adbar/trafilatura",
+        "tag": "v1.11.0",
+        "commit": "60647e5eeff77df9ef4b7432a936f580736b3075",
+        "paths": "tests/ except tests/eval/, tests/evaldata.json and tests/evaldata.py",
+        "license": "Apache-2.0 (the tests); tests/cache/ holds third-party web pages (not redistributed)"
       }
     },
     "trafilatura/upstream-tests-2.3.1.parquet": {

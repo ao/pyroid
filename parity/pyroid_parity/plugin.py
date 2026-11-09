@@ -4,10 +4,12 @@ pytest parity/tests --impl pyroid.ftfy                    # ftfy suite vs pyroid
 pytest parity/tests -m ftfy --impl pyroid.ftfy             # only the ftfy suite
 pytest parity/tests --impl filters=pyroid.filters --impl dedup=pyroid.dedup
 pytest parity/tests --parity-limit 500                     # quick run on the first 500 docs of each corpus
+pytest parity/tests -m trafilatura --impl pyroid.trafilatura --trafilatura-compat 1.11.0   # another trafilatura mode
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,7 @@ import pytest
 
 from pyroid_parity import data as D
 from pyroid_parity import impl as I
+from pyroid_parity import specs
 from pyroid_parity.report import Collector, write
 
 _COLLECTOR = Collector()
@@ -40,11 +43,23 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help="only the first N docs of each corpus (0 = all). Default: all for candidates; reference "
         "self-checks of the slow suites (filters, dedup) sample SELF_CHECK_DOCS",
     )
+    g.addoption(
+        "--trafilatura-compat",
+        default=None,
+        metavar="VERSION",
+        help="the trafilatura mode to check (compat= of pyroid.trafilatura): its references, recorded calls and "
+        "option matrix, against that release as the live oracle. Default: $PYROID_TRAFILATURA_COMPAT, else 2.3.1",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
     for s in I.SUITES:
         config.addinivalue_line("markers", f"{s}: {s} parity suite")
+    if compat := config.getoption("--trafilatura-compat"):
+        if compat not in specs.TRAFILATURA_MODES:
+            raise pytest.UsageError(f"--trafilatura-compat {compat!r}: not one of {specs.TRAFILATURA_MODES}")
+        # An environment variable, so that the suite's subprocesses check the same mode.
+        os.environ[specs.TRAFILATURA_COMPAT_ENV] = compat
     config._parity_impls = I.parse_specs(config.getoption("--impl"))  # type: ignore[attr-defined]
 
 
