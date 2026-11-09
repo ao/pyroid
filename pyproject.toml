@@ -100,6 +100,8 @@ test = [
   "datasketch==2.0.0",
   # The reference for pyroid.jieba and for datatrove's Chinese tokenizer (MIT, pure Python).
   "jieba==0.42.1",
+  # The reference for pyroid.warc (Apache-2.0, pure Python).
+  "warcio==1.8.2",
 ]
 # GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
 # PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds
@@ -110,6 +112,9 @@ test-gil = [
   "trafilatura==2.3.1",
   "lxml==6.1.3",
   "justext==3.0.2",
+  # warcio decodes `Content-Encoding: br` only with brotlicffi installed (pyroid.warc follows it); cffi
+  # wheels for free-threaded builds are not guaranteed, so GIL builds only.
+  "brotlicffi==1.2.1.0",
 ]
 # The reference for pyroid.trafilatura's compat="1.11.0" mode: trafilatura 1.11.0 as
 # datatrove[processing]==0.10.1 resolves it. GIL builds only (lxml), and instead of test-gil's

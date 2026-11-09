@@ -481,7 +481,9 @@ jobs:
       # at parity/uv.lock's versions: regex (datatrove.utils.text), xxhash (its xxhash hashes) and tokenizers
       # (datatrove.pipeline.dedup.minhash imports it); orjson for datatrove's JsonlReader/JsonlWriter, which the
       # LocalPipelineExecutor test in test_integrations_datatrove.py uses.
-      ORACLE: datatrove==0.10.1 spacy==3.8.18 regex==2026.9.29 xxhash==3.8.2 tokenizers==0.23.3 orjson==3.13.0
+      # warcio and the decoders datatrove's WarcReader imports (faust-cchardet, python-magic over the runner's libmagic),
+      # tldextract and fasteners for URLFilter: the WarcReader step, patch("warcio") and the fineweb-warc recipe tests.
+      ORACLE: datatrove==0.10.1 spacy==3.8.18 regex==2026.9.29 xxhash==3.8.2 tokenizers==0.23.3 orjson==3.13.0 warcio==1.8.2 faust-cchardet==3.2.0 python-magic==0.4.27 tldextract==5.4.0 fasteners==0.20
       # datatrove's own word tokenizers for the languages pyroid tokenizes in Python on request (python_tokenizer=True)
       # and for IndicNLP, which test_{filters,dedup}_multilingual.py compare against. jieba ships only an sdist (pure
       # Python). xxhash stays < 4 (pinned above): datatrove's xxhash hashes fail on 4.x ("Strings must be encoded").
@@ -539,7 +541,8 @@ jobs:
           # runs, LanguageFilter on lid.176.bin and the non-English languages (FineWeb-2 slices, IndicNLP, jieba), and
           # the Trafilatura step against datatrove's sandboxed one.
           "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs \
-            python/tests/test_integrations_datatrove.py python/tests/test_trafilatura_datatrove.py | tee -a "$log"
+            python/tests/test_integrations_datatrove.py python/tests/test_trafilatura_datatrove.py \
+            python/tests/test_datatrove_warc.py python/tests/test_patch_warc.py python/tests/test_cli_warc.py | tee -a "$log"
           if grep '^SKIPPED' "$log"; then echo "::error::live-oracle tests skipped (see above)"; exit 1; fi
       # pyroid.trafilatura's 1.11.0 mode against trafilatura 1.11.0, in its own venv: the pins a fresh
       # datatrove[processing]==0.10.1 resolves ([dependency-groups] test-trafilatura-111; never together with test-gil),
