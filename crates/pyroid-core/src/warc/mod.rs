@@ -13,9 +13,11 @@
 //! Memory stays bounded by the block size and what the caller reads: nothing is allocated
 //! from a header value (`Content-Length`, chunk sizes).
 mod archive;
+pub mod brotli;
 mod buffered;
 mod digest;
 mod fast;
+pub mod gzipfile;
 mod headers;
 mod pystr;
 mod record;
