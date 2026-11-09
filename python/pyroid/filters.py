@@ -396,12 +396,18 @@ def _native_language(code: str, math: str = "the filter math still runs in Rust"
         return
     cls, arg, native = _backend(code)
     if not native:
+        # Native once a SudachiDict dictionary is installed.
+        dictionary = (
+            " Or install sudachidict-core (20261015 or newer), and pyroid tokenizes it natively."
+            if (cls, arg) == ("SpaCyTokenizer", "ja")
+            else ""
+        )
         raise NotImplementedError(
             f"pyroid has no native word tokenizer for language {code!r}: datatrove tokenizes it "
             f"with {_describe(cls, arg)}. Pass python_tokenizer=True to tokenize it with "
             "datatrove's own tokenizer in Python, on the calling thread "
             f"(needs `{_pip(cls, arg)}`); "
-            f"{math}."
+            f"{math}.{dictionary}"
         )
     _NATIVE_OK.add((code, version))
 
