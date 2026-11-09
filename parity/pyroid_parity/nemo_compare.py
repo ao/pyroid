@@ -580,10 +580,19 @@ def _quality_keep(
         tally.add(check, g == w, case=i, input=t, got=g, want=w)
 
 
-def integration_classes(cand: Candidate, tally: Tally) -> None:
-    """``integration-classes``: every class exists, subclasses NeMo's, and has NeMo's constructor signature."""
-    import inspect
+#: Extra constructor parameters seen on integration classes (keyword-only, with a default), per class.
+EXTRA_PARAMETERS: dict[str, list[str]] = {}
 
+
+def integration_classes(cand: Candidate, tally: Tally) -> None:
+    """``integration-classes``: every class exists, subclasses NeMo's, and takes NeMo's constructor arguments.
+
+    Parameters are compared by name, kind and default, in order (annotations are left out: a string annotation
+    and the type it names are the same parameter). NeMo's stages are dataclasses whose ``__init__`` NeMo wraps
+    as ``(*args, **kwargs)``, so their init fields are compared instead. A class may add parameters only as
+    keyword-only ones with a default (every NeMo call then means the same); those are listed in
+    ``EXTRA_PARAMETERS``, and the check's case names them.
+    """
     check = "integration-classes"
     if cand.integration is None:
         tally.skip(check, cand.integration_reason)
@@ -595,15 +604,43 @@ def integration_classes(cand: Candidate, tally: Tally) -> None:
             tally.add(check, False, case=name, got=None, want=f"{nemo.__module__}.{name}")
             continue
         sub = isinstance(cls, type) and issubclass(cls, nemo)
-        got_sig, want_sig = _signature(inspect, cls), _signature(inspect, nemo)
-        tally.add(check, sub and got_sig == want_sig, case=name, got=(sub, got_sig), want=(True, want_sig))
+        want = parameters(nemo)
+        got = parameters(cls)
+        names = {p[0] for p in want}
+        extra = [p for p in got if p[0] not in names and p[1] == "KEYWORD_ONLY" and p[2] is not None]
+        if extra:
+            EXTRA_PARAMETERS[name] = [f"{p[0]}={p[2]}" for p in extra]
+            got = [p for p in got if p not in extra]
+        case = f"{name} (+ {', '.join(EXTRA_PARAMETERS[name])})" if extra else name
+        tally.add(check, sub and got == want, case=case, got=(sub, got), want=(True, want))
 
 
-def _signature(inspect: Any, cls: type) -> str:
+def parameters(cls: type) -> list[tuple[str, str, str | None]]:
+    """``(name, kind, repr of the default or None)`` of each constructor parameter."""
+    import dataclasses
+    import inspect
+
+    if dataclasses.is_dataclass(cls):
+        out = []
+        for f in dataclasses.fields(cls):
+            if not f.init:
+                continue
+            if f.default is not dataclasses.MISSING:
+                default: str | None = repr(f.default)
+            elif f.default_factory is not dataclasses.MISSING:
+                default = f"<factory {f.default_factory()!r}>"
+            else:
+                default = None
+            out.append((f.name, "KEYWORD_ONLY" if f.kw_only is True else "POSITIONAL_OR_KEYWORD", default))
+        return out
     try:
-        return str(inspect.signature(cls))
+        sig = inspect.signature(cls)
     except (TypeError, ValueError) as e:
-        return f"<{type(e).__name__}>"
+        return [(f"<{type(e).__name__}>", "", None)]
+    return [
+        (p.name, p.kind.name, None if p.default is p.empty else repr(p.default))
+        for p in sig.parameters.values()
+    ]
 
 
 # ------------------------------------------------------------------------------- live: NeMo's stages
