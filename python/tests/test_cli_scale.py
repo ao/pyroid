@@ -582,3 +582,114 @@ def test_clean_resumes_after_a_failure_and_cleans_up(
     assert reasons["d7"].startswith("gopher")
     assert sorted(p.name for p in out.parent.iterdir()) == ["dropped.parquet", "kept.parquet"]
     assert any(p.endswith(".arrow") for p in strict_fs)  # the spools were removed after closing
+
+
+# --------------------------------------------------------------------- resume edge cases (review)
+
+
+def test_rerun_after_losing_an_output_still_dedups(tmp_path: Path) -> None:
+    """The work directory is gone after a finished run; redoing one file must redo the MinHash
+    decision, not skip it."""
+    docs = _corpus(300, seed=7)
+    src = _shards(tmp_path, docs, [100, 100, 100])
+    out = tmp_path / "out"
+    assert main(["dedup", str(src), str(out)]) == 0
+    want = _expected(docs)
+    assert [r["id"] for r in _rows(out)] == want
+    (out / "part-001.parquet").unlink()
+    assert main(["dedup", str(src), str(out)]) == 0
+    assert [r["id"] for r in _rows(out)] == want
+
+
+def test_rerun_with_other_outputs_redoes_them(tmp_path: Path) -> None:
+    src = _shards(tmp_path, [f"doc {i}" for i in range(6)], [3, 3])
+    out = tmp_path / "out"
+    assert main(["translit", str(src), str(out)]) == 0
+    assert main(["translit", str(src), str(out), "--format", "jsonl"]) == 0
+    assert sorted(p.name for p in out.glob("*.jsonl")) == ["part-000.jsonl", "part-001.jsonl"]
+    x1, x2 = tmp_path / "x1", tmp_path / "x2"
+    args = ["langid", str(src), str(tmp_path / "l"), "--keep", "zz"]
+    assert main([*args, "--excluded", str(x1)]) == 0
+    assert main([*args, "--excluded", str(x2)]) == 0
+    assert len(_rows(x2)) == 6
+
+
+@pytest.mark.thread_unsafe  # patches the translit step
+def test_records_survive_a_move(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Records hold paths relative to OUT and inputs by name: another mount point resumes."""
+    import pyroid.cli as cli
+
+    a = tmp_path / "a"
+    src = _shards(a, [f"doc {i}" for i in range(6)], [3, 3])
+    assert main(["translit", str(src), str(a / "out")]) == 0
+    b = tmp_path / "b"
+    a.rename(b)
+    calls: list[int] = []
+    real = cli._STEPS["translit"]
+
+    def counted(t: Any, o: Any) -> Any:
+        calls.append(1)
+        return real(t, o)
+
+    monkeypatch.setitem(cli._STEPS, "translit", counted)
+    assert main(["translit", str(b / "in"), str(b / "out")]) == 0
+    assert calls == []  # nothing redone
+
+
+@pytest.mark.thread_unsafe  # patches the translit step
+def test_finished_merge_is_not_redone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import pyroid.cli as cli
+
+    src = _shards(tmp_path, [f"doc {i}" for i in range(6)], [3, 3])
+    out = tmp_path / "out"
+    assert main(["translit", str(src), str(out), "--merge"]) == 0
+    calls: list[int] = []
+    real = cli._STEPS["translit"]
+
+    def counted(t: Any, o: Any) -> Any:
+        calls.append(1)
+        return real(t, o)
+
+    monkeypatch.setitem(cli._STEPS, "translit", counted)
+    assert main(["translit", str(src), str(out), "--merge"]) == 0
+    assert calls == []
+    assert len(_rows(out / "part-00000-of-00001.parquet")) == 6
+
+
+def test_empty_spool_and_starting_shards(tmp_path: Path) -> None:
+    from pyroid.cli import _check_out, _Ipc, _read_ipc
+
+    p = str(tmp_path / "s.arrow")
+    _Ipc(p).close(None)  # an empty JSONL input: no rows, no schema
+    assert os.path.getsize(p) == 0
+    assert list(_read_ipc(p)) == []
+    # another shard is creating OUT/.pyroid right now: OUT is still ours
+    out = tmp_path / "out"
+    (out / ".pyroid").mkdir(parents=True)
+    a = pytest.importorskip("argparse").Namespace(output=str(out), excluded=None, merge=False)
+    from pyroid.cli import _layout
+    from pyroid.integrations._shards import Shard
+
+    _check_out(_layout(a, [], Shard(), excluded=False), False, [])
+
+
+@pytest.mark.thread_unsafe  # reads stderr
+def test_stages_refuse_lost_or_unfinished_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    docs = _corpus(60, seed=8)
+    src = _shards(tmp_path, docs, [30, 30])
+    sigs, dups, rem = tmp_path / "sigs", tmp_path / "dups", tmp_path / "rem"
+    assert main(["dedup", "signatures", str(src), str(sigs)]) == 0
+    (sigs / "bucket_003" / "00001.minhash.sig").unlink()
+    assert main(["dedup", "buckets", str(sigs), str(dups)]) == 1
+    assert "1 signature files for 2 input files" in capsys.readouterr().err
+    # a cluster stage that did not finish: REMOVED has .pyroid but no run.json
+    (rem / ".pyroid").mkdir(parents=True)
+    with pytest.raises(SystemExit, match="incomplete"):
+        main(["dedup", "filter", str(src), str(tmp_path / "o"), "--removed", str(rem)])
+    # a folder with no lists at all (datatrove's, when nothing is a duplicate) warns
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert main(["dedup", "filter", str(src), str(tmp_path / "o2"), "--removed", str(empty)]) == 0
+    assert "no .remove files" in capsys.readouterr().err

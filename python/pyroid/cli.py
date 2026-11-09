@@ -213,8 +213,9 @@ def _check_out(layout: Layout, overwrite: bool, sources: Sequence[Any]) -> None:
         if excl is not None and excl.exists() and not overwrite and not layout.state_root.exists():
             raise SystemExit(f"pyroid: {excl} exists (pass --overwrite to replace it)")
     if layout.out_dir is not None and layout.out_dir.is_dir() and not overwrite:
-        ours = (layout.state_root / "run.json").exists() or (layout.state_root / "done").is_dir()
-        if not ours and any(layout.out_dir.iterdir()):
+        # Another shard may be creating .pyroid right now: a directory with it is ours.
+        ours = layout.state_root.exists()
+        if not ours and any(p.name != ".pyroid" for p in layout.out_dir.iterdir()):
             raise SystemExit(
                 f"pyroid: {layout.out_dir} is not empty and was not written by pyroid "
                 "(pass --overwrite to write into it anyway)"
@@ -430,6 +431,20 @@ class FileJob:
     cluster_sizes: bool = False
 
 
+def _job_outputs(job: FileJob) -> list[str]:
+    """Every file a job writes: recorded when it is done, and checked when a run resumes."""
+    if job.removed is not None:  # stage 4 reads the spools; it writes only the outputs
+        return [p for p in (job.out, job.excluded) if p]
+    out = [p for p in (job.out, job.excluded, job.spool, job.excluded_spool) if p]
+    if job.sigs is not None:
+        assert job.minhash is not None
+        out += [
+            os.path.join(job.sigs, f"bucket_{b:03d}", f"{job.rank:05d}.minhash.sig")
+            for b in range(job.minhash["num_buckets"])
+        ]
+    return out
+
+
 class _Ipc:
     """An Arrow IPC file (LZ4) that rows wait in.
 
@@ -456,7 +471,8 @@ class _Ipc:
         from pyroid.integrations import _io
 
         if self._writer is None:
-            if schema is None:
+            if schema is None:  # no rows and no schema (an empty JSONL input): an empty file
+                _io.atomic_write_bytes(self.path, b"")
                 return
             self.write(schema.empty_table())
         writer, sink, self._writer, self._sink = self._writer, self._sink, None, None
@@ -483,7 +499,7 @@ def _read_ipc(path: str) -> Iterator[Any]:
     """The tables of an IPC spool (nothing if it does not exist); the file is closed after."""
     import pyarrow as pa
 
-    if not os.path.exists(path):
+    if not os.path.exists(path) or not os.path.getsize(path):
         return
     with pa.OSFile(path, "rb") as f:
         reader = pa.ipc.open_file(f)
@@ -568,7 +584,7 @@ def _unit_rows(job: FileJob, report: Callable[[int], None]) -> dict[str, Any]:
         "input": job.source.uri,
         "size": job.source.size,
         "rank": job.rank,
-        "outputs": [p for p in (job.out, job.excluded, job.spool, job.excluded_spool) if p],
+        "outputs": _job_outputs(job),
         "wall_s": round(time.perf_counter() - t0, 3),
         "stats": {"docs_in": n_in, "docs_out": n_out, "removed": dict(stats)},
     }
@@ -590,6 +606,10 @@ def _unit_filter(job: FileJob, report: Callable[[int], None]) -> dict[str, Any]:
         job.removed, job.rank, cluster_ids=job.cluster_ids, cluster_sizes=job.cluster_sizes
     )
     out, excl = _writer(job.out, o.compression), _writer(job.excluded, o.compression)
+    if job.spool is not None and not os.path.exists(job.spool):
+        raise FileNotFoundError(
+            f"{job.spool}: the survivors of this file are gone; rerun with --overwrite"
+        )
     tables = (
         _read_ipc(job.spool) if job.spool is not None else _io.iter_tables(job.source, o.batch_size)
     )
@@ -640,7 +660,7 @@ def _unit_filter(job: FileJob, report: Callable[[int], None]) -> dict[str, Any]:
         "input": job.source.uri,
         "size": job.source.size,
         "rank": job.rank,
-        "outputs": [p for p in (job.out, job.excluded) if p],
+        "outputs": _job_outputs(job),
         "wall_s": round(time.perf_counter() - t0, 3),
         "stats": stats,
     }
@@ -678,7 +698,7 @@ def _unit_signatures(job: FileJob, report: Callable[[int], None]) -> dict[str, A
         "input": job.source.uri,
         "size": job.source.size,
         "rank": job.rank,
-        "outputs": [],
+        "outputs": _job_outputs(job),
         "wall_s": round(time.perf_counter() - t0, 3),
         "stats": {"docs_in": n, "docs_out": n, "removed": {}},
     }
@@ -766,15 +786,33 @@ def _file_units(
 ) -> list[Any]:
     from pyroid.integrations import _shards
 
-    return [
-        _shards.Unit(key=keys(rank), label=src.uri, size=src.size, payload=make(rank, src))
-        for rank, src in run.mine
-    ]
+    units = []
+    for rank, src in run.mine:
+        job = make(rank, src)
+        outputs = tuple(_job_outputs(job))
+        units.append(_shards.Unit(keys(rank), src.uri, src.size, job, outputs))
+    return units
+
+
+def _merged_outputs(run: Run) -> list[str]:
+    lay = run.layout
+    return [str(p) for p in (lay.final, lay.excluded_final) if p is not None]
+
+
+def _merged_done(run: Run) -> bool:
+    """A merged output of this shard is complete: its parts are gone and need not be redone."""
+    lay = run.layout
+    key = f"merged-{lay.shard_tag}"
+    return (
+        lay.merge and not run.a.overwrite and run.state.is_done(key, outputs=_merged_outputs(run))
+    )
 
 
 def _execute(run: Run, units: Sequence[Any], fn: Any) -> None:
     from pyroid.integrations import _shards
 
+    if _merged_done(run):
+        return
     todo = _shards.pending(run.state, units, overwrite=run.a.overwrite)
     run.progress.done_units = len(units) - len(todo)
     for _ in _shards.run_units(
@@ -809,7 +847,7 @@ def _merge_parts(run: Run) -> None:
     lay = run.layout
     assert lay.final is not None
     key = f"merged-{lay.shard_tag}"
-    if not run.a.overwrite and run.state.is_done(key):
+    if _merged_done(run):
         return
     ranks = [r for r, _ in run.mine]
     _concat([lay.part(r) for r in ranks], lay.final, run.options.compression)
@@ -947,6 +985,8 @@ def _staged(
     from pyroid.integrations import _shards
 
     a = run.a
+    if _merged_done(run):
+        return
     finals = _file_units(run, lambda r: _final_key(run, r), last)
     fresh = not a.overwrite and not run.state.stale(u.key for u in finals)
     if fresh and all(run.state.is_done(u.key, u.size) for u in finals):
@@ -1022,16 +1062,23 @@ def _minhash_middle(
 ) -> None:
     """Stages 2 and 3 in this process (all buckets, in parallel threads)."""
     from pyroid._pyroid import dedup as _native
-    from pyroid.integrations import _minhash
+    from pyroid.integrations import _io, _minhash
 
-    if not run.a.overwrite and run.state.is_done("minhash"):
+    if not run.a.overwrite and run.state.is_done("minhash", outputs=[str(removed)]):
         return
     units = _minhash.bucket_units(cfg["num_buckets"], 0, 1)
     conc = min(len(units), threads or os.cpu_count() or 1)
     max_open = _minhash.open_files_limit(conc)
+    n = len(run.sources)
+
+    def bucket(u: Any) -> int:
+        return _minhash.run_bucket(sigs, dups, u, cfg, max_open=max_open, expected=n)
+
     with cf.ThreadPoolExecutor(conc) as pool:
-        list(pool.map(lambda u: _minhash.run_bucket(sigs, dups, u, cfg, max_open=max_open), units))
+        list(pool.map(bucket, units))
     removed.mkdir(parents=True, exist_ok=True)
+    for old in removed.iterdir():  # lists of an earlier, unfinished attempt
+        _io.remove(old)
     res = _native._minhash_cluster(_minhash.dups_files(dups), str(removed))
     run.state.mark("minhash", {"outputs": [str(removed)], "cluster": res})
 
@@ -1247,9 +1294,17 @@ def _stage_buckets(a: argparse.Namespace) -> int:
     cfg = _stage_cfg(a, meta, sigs)
     shard = _shards.Shard.parse(a.shard) if a.shard else _shards.Shard()
     units = _minhash.bucket_units(cfg["num_buckets"], shard.index, shard.count)
-    info = {"minhash": cfg, "inputs": (meta or {}).get("inputs"), "sigs": str(sigs.resolve())}
+    # The signatures, by their own run's fingerprint (or by file names and sizes, for
+    # datatrove's), never by path: a machine with another mount point resumes the same run.
+    ident = (meta or {}).get("fingerprint") or _shards.folder_digest(sigs, "bucket_*/*.minhash.sig")
+    inputs = (meta or {}).get("inputs")
+    info = {"minhash": cfg, "inputs": inputs, "sigs": ident}
     state = _simple_state(out, "dedup buckets", info)
-    todo = [u for u in units if a.overwrite or not state.is_done(u.key)]
+
+    def dest(u: Any) -> str:
+        return str(out / _minhash.dups_name(u.bucket, u.worker))
+
+    todo = [u for u in units if a.overwrite or not state.is_done(u.key, outputs=[dest(u)])]
     if state.stale(u.key for u in units) and not a.overwrite:
         raise SystemExit(
             f"pyroid dedup buckets: {out} holds buckets of other signatures; pass --overwrite"
@@ -1259,9 +1314,12 @@ def _stage_buckets(a: argparse.Namespace) -> int:
     max_open = _minhash.open_files_limit(conc)
     state.write_run({"stage": "buckets", **info})
 
+    expected = inputs.get("count") if inputs else None
+
     def one(u: Any) -> int:
-        n = _minhash.run_bucket(sigs, out, u, cfg, max_open=max_open)
-        state.mark(u.key, {"pairs": n, "workers_per_bucket": u.workers_per_bucket})
+        n = _minhash.run_bucket(sigs, out, u, cfg, max_open=max_open, expected=expected)
+        record = {"pairs": n, "workers_per_bucket": u.workers_per_bucket, "outputs": [dest(u)]}
+        state.mark(u.key, record)
         return n
 
     with cf.ThreadPoolExecutor(conc) as pool:
@@ -1280,7 +1338,7 @@ def _stage_buckets(a: argparse.Namespace) -> int:
 
 def _stage_cluster(a: argparse.Namespace) -> int:
     from pyroid._pyroid import dedup as _native
-    from pyroid.integrations import _minhash
+    from pyroid.integrations import _io, _minhash, _shards
 
     dups, out = Path(a.dups), Path(a.output)
     if not dups.is_dir():
@@ -1289,15 +1347,25 @@ def _stage_cluster(a: argparse.Namespace) -> int:
     cfg = _stage_cfg(a, meta, dups)
     files = _minhash.dups_files(dups)
     if meta is not None:
-        done = dups / ".pyroid" / "done"
-        recs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(done.glob("*.json"))]
-        wpb = {r.get("workers_per_bucket", 1) for r in recs}
-        want = cfg["num_buckets"] * (max(wpb) if wpb else 1)
-        if len(wpb) > 1 or len(recs) < want:
+        # Only the bucket tasks of the run that wrote DUPS/.pyroid/run.json count.
+        recs = [
+            r
+            for r in _shards.State(dups / ".pyroid", "").records()
+            if r.get("fingerprint") == meta.get("fingerprint")
+        ]
+        wpb = {int(r.get("workers_per_bucket", 1)) for r in recs}
+        if len(wpb) > 1:
+            raise SystemExit(
+                f"pyroid dedup cluster: {dups} mixes buckets split {sorted(wpb)} ways; rerun "
+                "'pyroid dedup buckets' into an empty directory"
+            )
+        want = cfg["num_buckets"] * (wpb.pop() if wpb else 1)
+        if len(recs) < want:
             raise SystemExit(
                 f"pyroid dedup cluster: {dups} is incomplete: {len(recs)} of {want} bucket "
                 "tasks are done (run every 'pyroid dedup buckets' shard first)"
             )
+        files = sorted(str(dups / f"{r['key']}.dups") for r in recs)
     if len(files) % cfg["num_buckets"]:
         raise SystemExit(
             f"pyroid dedup cluster: {len(files)} .dups files is not a multiple of "
@@ -1305,6 +1373,10 @@ def _stage_cluster(a: argparse.Namespace) -> int:
         )
     t0 = time.perf_counter()
     out.mkdir(parents=True, exist_ok=True)
+    _io.remove(out / ".pyroid" / "run.json")  # written again only once this run is complete
+    for old in out.iterdir():  # an earlier cluster run's lists must not survive this one
+        if old.suffix in (".remove", ".clusters", ".sizes") and old.stem.isdigit():
+            _io.remove(old)
     res = _native._minhash_cluster(
         files,
         str(out),
@@ -1312,7 +1384,8 @@ def _stage_cluster(a: argparse.Namespace) -> int:
         save_cluster_size=a.save_cluster_size,
         ignore_index_matches=a.ignore_index_matches,
     )
-    info = {"minhash": cfg, "inputs": (meta or {}).get("inputs")}
+    ident = (meta or {}).get("fingerprint") or _shards.folder_digest(dups, "*.dups")
+    info = {"minhash": cfg, "inputs": (meta or {}).get("inputs"), "dups": ident}
     state = _simple_state(out, "dedup cluster", info)
     state.write_run({"stage": "cluster", **info, "cluster": res})
     state.mark("cluster", {"cluster": res})
@@ -1330,16 +1403,28 @@ def _stage_cluster(a: argparse.Namespace) -> int:
 
 
 def _stage_filter(a: argparse.Namespace) -> int:
-    from pyroid.integrations import _minhash
+    from pyroid.integrations import _minhash, _shards
 
     removed = Path(a.removed)
     if not removed.is_dir():
         raise SystemExit(f"pyroid dedup filter: --removed {removed}: no such directory")
     meta = _stage_meta(removed)
+    if meta is None and (removed / ".pyroid").is_dir():
+        raise SystemExit(
+            f"pyroid dedup filter: {removed} is incomplete (the cluster stage did not finish); "
+            "run 'pyroid dedup cluster' again"
+        )
+    lists = ("*.remove", "*.clusters", "*.sizes")
+    if meta is None and not any(removed.glob("*.remove")):
+        sys.stderr.write(
+            f"pyroid dedup filter: {removed} has no .remove files: no document is removed\n"
+        )
+    # REMOVED by its cluster run's fingerprint (or its files, for datatrove's), never by path
+    ident = (meta or {}).get("fingerprint") or _shards.folder_digest(removed, *lists)
     o = _options(
         a,
         "dedup filter",
-        removed=str(removed.resolve()),
+        removed=ident,
         cluster_ids=a.load_cluster_ids,
         cluster_sizes=a.load_cluster_sizes,
     )

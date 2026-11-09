@@ -141,10 +141,20 @@ def run_bucket(
     *,
     max_open: int,
     memory: int = MERGE_BUFFER,
+    expected: int | None = None,
 ) -> int:
-    """Stage 2 for one unit; returns the pairs written."""
+    """Stage 2 for one unit; returns the pairs written.
+
+    ``expected``: the number of input files, when known; a bucket with another number of
+    signature files is an error (a lost or partly copied signatures folder).
+    """
     native = native_config(cfg)
     files = sig_files(sigs, unit.bucket)
+    if expected is not None and len(files) != expected:
+        raise ValueError(
+            f"{Path(sigs) / f'bucket_{unit.bucket:03d}'}: {len(files)} signature files for "
+            f"{expected} input files"
+        )
     first = files[0] if files else None
     lo, hi = _native._minhash_hash_range(first, native, unit.worker, unit.workers_per_bucket)
     dest = Path(out) / dups_name(unit.bucket, unit.worker)

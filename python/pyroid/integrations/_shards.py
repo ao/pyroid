@@ -70,18 +70,32 @@ class Shard:
 
 
 def fingerprint(command: str, options: Mapping[str, Any], sources: Sequence[_io.Source]) -> str:
-    """A short hash of what decides a run's outputs (not how it is split or scheduled)."""
+    """A short hash of what decides a run's outputs (not how it is split or scheduled).
+
+    Inputs count by name (relative to their IN) and size, not by absolute path or URI, so a
+    machine that mounts the same data elsewhere resumes the same run.
+    """
     blob = json.dumps(
         {
             "command": command,
             "options": dict(sorted(options.items())),
-            "inputs": [[s.uri, s.size] for s in sources],
+            "inputs": [[s.name, s.size] for s in sources],
             "pyroid": pyroid.__version__,
         },
         sort_keys=True,
         default=str,
     )
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def folder_digest(folder: str | os.PathLike[str], *patterns: str) -> str:
+    """A short hash of the names and sizes of the files matching ``patterns`` under ``folder``."""
+    root = Path(folder)
+    h = hashlib.sha256()
+    names = sorted({p for pat in patterns for p in root.glob(pat) if p.is_file()})
+    for p in names:
+        h.update(f"{p.relative_to(root).as_posix()}\t{p.stat().st_size}\n".encode())
+    return h.hexdigest()[:16]
 
 
 # ------------------------------------------------------------------------------------------ state
@@ -93,7 +107,11 @@ class StateError(Exception):
 
 @dataclass
 class State:
-    """The ``done`` records and ``run.json`` of one output (see the module docstring)."""
+    """The ``done`` records and ``run.json`` of one output (see the module docstring).
+
+    Records store output paths relative to the directory that holds the state (OUT, or the
+    directory of a file OUT) when they are inside it, so they stay valid on another mount.
+    """
 
     root: Path
     fingerprint: str
@@ -101,6 +119,16 @@ class State:
     @property
     def done_dir(self) -> Path:
         return self.root / "done"
+
+    def _store(self, path: str) -> str:
+        base = os.path.abspath(self.root.parent)
+        p = os.path.abspath(path)
+        if os.path.commonpath([base, p]) == base:
+            return Path(os.path.relpath(p, base)).as_posix()
+        return p
+
+    def _load(self, path: str) -> str:
+        return os.path.normpath(os.path.join(os.path.abspath(self.root.parent), path))
 
     def record(self, key: str) -> dict[str, Any] | None:
         """The record of unit ``key``, or None (missing or unreadable)."""
@@ -110,14 +138,24 @@ class State:
             return None
         return data if isinstance(data, dict) else None
 
-    def is_done(self, key: str, size: int | None = None) -> bool:
-        """True if ``key`` finished in a run with this fingerprint (and the input size matches)."""
+    def is_done(
+        self, key: str, size: int | None = None, outputs: Sequence[str] | None = None
+    ) -> bool:
+        """True if ``key`` finished in a run with this fingerprint and its outputs still exist.
+
+        ``size``: the input's size now (a different recorded size means the input changed).
+        ``outputs``: the paths the unit writes now; a record of other paths (another
+        ``--format`` or ``--excluded``) is not done.
+        """
         r = self.record(key)
         if r is None or r.get("fingerprint") != self.fingerprint:
             return False
         if size is not None and r.get("size") not in (None, size):
             return False
-        return all(Path(p).exists() for p in r.get("outputs", []))
+        recorded = [self._load(p) for p in r.get("outputs", [])]
+        if outputs is not None and sorted(recorded) != sorted(self._load(p) for p in outputs):
+            return False
+        return all(os.path.exists(p) for p in recorded)
 
     def stale(self, keys: Iterable[str]) -> list[str]:
         """The keys whose record comes from a run with another fingerprint."""
@@ -131,6 +169,8 @@ class State:
     def mark(self, key: str, record: Mapping[str, Any]) -> None:
         """Record ``key`` as finished (after its outputs are in place)."""
         data = {"fingerprint": self.fingerprint, **record}
+        if "outputs" in data:
+            data["outputs"] = [self._store(p) for p in data["outputs"]]
         _io.atomic_write_text(self.done_dir / f"{key}.json", json.dumps(data, indent=1) + "\n")
 
     def forget(self, keys: Iterable[str]) -> None:
@@ -181,7 +221,7 @@ def pending(
     if overwrite:
         state.forget(keys)
         return list(units)
-    return [u for u in units if not state.is_done(u.key, u.size)]
+    return [u for u in units if not state.is_done(u.key, u.size, u.outputs)]
 
 
 # ------------------------------------------------------------------------------------------ stats
@@ -335,17 +375,30 @@ class Unit:
     label: str
     size: int | None
     payload: Any
+    outputs: tuple[str, ...] | None = None  # what the unit writes (checked against its record)
 
 
 Report = Callable[[int], None]
 UnitFn = Callable[[Any, Report], dict[str, Any]]
 
 _queue: Any = None  # the worker processes' progress queue (set by _init_worker)
+_interrupted = False  # set in a worker by Ctrl-C: queued units then fail at once
+
+
+def _on_sigint(signum: int, frame: Any) -> None:
+    global _interrupted
+    _interrupted = True
+    raise KeyboardInterrupt
 
 
 def _init_worker(threads: int | None, queue: Any) -> None:
     global _queue
     _queue = queue
+    import signal
+
+    # Ctrl-C reaches every process of the group: the running unit aborts (its outputs are
+    # dropped), and the units already handed to this worker must not start afterwards.
+    signal.signal(signal.SIGINT, _on_sigint)
     if threads is not None:
         # Before pyroid's pool is first used in this process (it is built lazily).
         os.environ["PYROID_NUM_THREADS"] = str(threads)
@@ -364,6 +417,8 @@ def _report_to_queue(n: int) -> None:
 
 
 def _call(fn: UnitFn, payload: Any) -> dict[str, Any]:
+    if _interrupted:
+        raise KeyboardInterrupt
     return fn(payload, _report_to_queue)
 
 
@@ -425,6 +480,7 @@ def run_units(
         futures = {pool.submit(_call, fn, u.payload): u for u in units}
         waiting = set(futures)
         failure: tuple[Unit, BaseException] | None = None
+        broken: list[str] = []  # the units a dead worker process took down
         try:
             while waiting:
                 done, waiting = cf.wait(waiting, timeout=0.5, return_when=cf.FIRST_COMPLETED)
@@ -437,6 +493,8 @@ def run_units(
                     u = futures[f]
                     exc = f.exception()
                     if exc is not None:
+                        if isinstance(exc, cf.process.BrokenProcessPool):
+                            broken.append(u.label)
                         if failure is None:
                             failure = (u, exc)
                             for g in waiting:
@@ -448,11 +506,17 @@ def run_units(
                 if failure is not None:
                     waiting = {g for g in waiting if not g.cancelled()}
         except BaseException:
-            for g in futures:
-                g.cancel()
+            pool.shutdown(wait=True, cancel_futures=True)  # the running units abort on Ctrl-C
             raise
         if failure is not None:
             u, exc = failure
+            if broken:
+                shown = ", ".join(broken[:5]) + (", ..." if len(broken) > 5 else "")
+                exc.add_note(
+                    "a worker process exited (killed, or out of memory?) while processing one "
+                    f"of: {shown}"
+                )
+                raise exc
             raise _noted(exc, u.label)
 
 
