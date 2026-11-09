@@ -62,11 +62,12 @@ fn reference(data: &[u8]) -> (Vec<Expected>, Option<String>) {
         if let Err(e) = a.stream_read(&mut cs, &mut src, None, &mut content) {
             return (out, Some(format!("{e:?}")));
         }
-        let pick = |name: &str, key: &str, err: &'static str| {
-            match h.get_header(name).filter(|v| !v.is_empty()) {
-                Some(v) => Ok(v.to_owned()),
-                None => h.dict_get(key).map(str::to_owned).ok_or(err),
-            }
+        let pick = |name: &str, key: &str, err: &'static str| match h
+            .get_header(name)
+            .filter(|v| !v.is_empty())
+        {
+            Some(v) => Ok(v.to_owned()),
+            None => h.dict_get(key).map(str::to_owned).ok_or(err),
         };
         out.push(Expected {
             index: index - 1,
@@ -82,7 +83,11 @@ fuzz_target!(|input: &[u8]| {
     let Some((&flags, data)) = input.split_first() else {
         return;
     };
-    let data = if flags & 1 != 0 { gz(data) } else { data.to_vec() };
+    let data = if flags & 1 != 0 {
+        gz(data)
+    } else {
+        data.to_vec()
+    };
     let (want, want_err) = reference(&data);
     let mut src = ReadSource(&data[..]);
     let mut r = DocReader::new(ReaderOptions::default(), 0);
