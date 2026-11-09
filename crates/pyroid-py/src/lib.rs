@@ -23,6 +23,7 @@ mod metrics;
 mod sudachi;
 mod testing;
 mod text;
+mod trafilatura;
 mod translit;
 
 use pyo3::prelude::*;
@@ -49,5 +50,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     json_repair::register(m)?;
     datasketch::register(m)?;
     jieba::register(m)?;
+    trafilatura::register(m)?;
     Ok(())
 }

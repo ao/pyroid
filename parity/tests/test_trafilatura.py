@@ -37,6 +37,7 @@ still run against the candidate.
 from __future__ import annotations
 
 import concurrent.futures
+import importlib
 import importlib.metadata as md
 import inspect
 import json
@@ -89,8 +90,9 @@ def oracle() -> Any:
 
 
 def oracle_reset() -> None:
-    if (o := oracle()) is not None:
-        o.meta.reset_caches()
+    if oracle() is not None:
+        # trafilatura/__init__.py does not import .meta; with pyroid as the candidate nothing else has.
+        importlib.import_module("trafilatura.meta").reset_caches()
 
 
 def need_oracle(parity: Collector, check: str) -> Any:

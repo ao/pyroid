@@ -49,6 +49,7 @@ datatrove's, and the steps mix freely.
 | `SentenceFindDedups` | `datatrove.pipeline.dedup.SentenceFindDedups` (stage 2) | a merge in Rust; the same `.c4_dup` files |
 | `SentenceDedupFilter` | `datatrove.pipeline.dedup.SentenceDedupFilter` (stage 3) | [`pyroid.dedup`](dedup.md); the same documents and exclusion-writer documents |
 | `SentenceDedupBuildIndex` | `datatrove.pipeline.dedup.sentence_dedup.SentenceDedupBuildIndex` | a merge in Rust; the same index file |
+| `Trafilatura` | `datatrove.pipeline.extractors.Trafilatura` | [`pyroid.trafilatura`](trafilatura.md), byte-identical to trafilatura 2.3.1, in the task's process (no child process, no timeout; see [the step's differences](trafilatura.md#the-datatrove-step)) |
 
 MinHash stages 2 to 4 (`MinhashDedupBuckets`, `MinhashDedupCluster`, `MinhashDedupFilter`) are
 not replaced. Keep datatrove's, which read pyroid's signature files unchanged; they were 2 to 3%

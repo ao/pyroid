@@ -1,0 +1,249 @@
+# `pyroid.trafilatura`: drop-in Trafilatura
+
+`pyroid.trafilatura` is a Rust port of the text extraction of
+[Trafilatura](https://github.com/adbar/trafilatura) 2.3.1 by Adrien Barbaresi (Apache-2.0).
+Trafilatura turns a web page into its main text, without the navigation, footers, ads and other
+boilerplate; datatrove's `Trafilatura` step, and so FineWeb, use it. The whole path is ported,
+including the parts Trafilatura delegates: libxml2 2.14.6's HTML parser as lxml 6.1.3 drives it,
+the readability fallback Trafilatura vendors, and jusText 3.0.2. The text comes out the same, byte
+for byte, as Trafilatura 2.3.1 with lxml 6.1.3 and jusText 3.0.2
+([parity](#parity)), about 8 times faster on one thread, and in parallel without the GIL.
+
+```bash
+pip install pyroid
+```
+
+pyroid has no dependencies. trafilatura is only needed for the [delegated options](#delegated-options).
+
+## Change one import
+
+```diff
+-import trafilatura
++import pyroid.trafilatura as trafilatura
+
+ html = "<html><body><article><p>" + "Some words. " * 30 + "</p></article></body></html>"
+ trafilatura.extract(html)                    # 'Some words. Some words. ...'
+ trafilatura.extract(html, favor_precision=True, include_comments=False, deduplicate=True)
+```
+
+`extract`, `bare_extraction` and `extract_with_metadata` have trafilatura 2.3.1's parameters, in
+the same order, with the same defaults. The one addition is the keyword-only `compat`
+([versions](#versions)). Code you cannot edit can use [`pyroid.patch("trafilatura")`](#pyroidpatchtrafilatura).
+
+## What runs in Rust
+
+- Input: a `str` (lone surrogates included), or `bytes` that are valid UTF-8 and not compressed.
+- `output_format="txt"` for `extract`, and `"python"` for `bare_extraction`.
+- `fast` (and the deprecated `no_fallback`, with trafilatura's `DeprecationWarning`),
+  `favor_precision`, `favor_recall`, `include_comments`, `include_tables`.
+- `deduplicate`: `True`, or a [`pyroid.trafilatura.LRUCache`](#deduplication).
+- `url`, `record_id`, `tei_validation` and `date_extraction_params`, which do not change the text
+  output; `max_tree_size` raises trafilatura's `ValueError`.
+- `config` and `settingsfile`: the size settings (`MIN_EXTRACTED_SIZE`, `MIN_OUTPUT_SIZE`,
+  `MIN_OUTPUT_COMM_SIZE`, `MIN_DUPLCHECK_SIZE`, `MAX_REPETITIONS`, `MAX_TREE_SIZE`) are read as
+  trafilatura reads them, with the same errors for bad values.
+- The interpreter's Unicode version (CPython 3.11 to 3.15), as trafilatura's `str` methods and
+  NFC normalization see it.
+
+Other input types give `None`, as in trafilatura. Pages trafilatura rejects (too short, not
+HTML, duplicates) give `None` too, and a page with a `&#` reference of more than 4,300 digits
+raises CPython's `ValueError`, as trafilatura does.
+
+## Delegated options
+
+These go to the installed trafilatura, which must be version 2.3.1. The first call per function
+and reason emits a [`pyroid.FallbackWarning`](../concepts/fallbacks.md); without trafilatura, or
+with another version, the call raises [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError)
+and says which:
+
+- the other output formats (`xml`, `xmltei`, `json`, `csv`, `html`, `markdown`);
+- `include_formatting=True`, `include_links=True`, `include_images=True`;
+- metadata: `with_metadata`, `only_with_metadata`, a non-empty `url_blacklist` or
+  `author_blacklist`, and `extract_with_metadata` (always delegated);
+- `target_language` and `prune_xpath`;
+- `options=` a `trafilatura.settings.Extractor`, and `deduplicate=` a
+  `trafilatura.deduplication.LRUCache`;
+- an lxml tree or an HTTP response as input, and bytes that are compressed or not UTF-8;
+- a negative size setting in `config`, and a `sys.set_int_max_str_digits()` limit other than 4300.
+
+```python
+trafilatura.extract(html, output_format="xml")  # trafilatura's XML, and:
+# FallbackWarning: pyroid.trafilatura.extract: output_format='xml' is not supported by the Rust
+# port; delegating to trafilatura (slow path). This warning is shown once.
+```
+
+A pyroid `LRUCache` (or the module cache, for `deduplicate=True`) is lent to a delegated call, so
+a run that mixes native and delegated calls deduplicates as one trafilatura run would.
+
+## Deduplication
+
+`deduplicate=True` reads and updates one module-level cache, `pyroid.trafilatura.LRU_TEST`, of
+`LRU_SIZE` (4,096) entries, as trafilatura's `trafilatura.deduplication.LRU_TEST`.
+`reset_caches()` empties it, as `trafilatura.meta.reset_caches()` does. Pass a
+`pyroid.trafilatura.LRUCache` instead to keep a run's state apart:
+
+```python
+import pyroid.trafilatura as trafilatura
+
+cache = trafilatura.LRUCache(maxsize=4096)
+texts = [trafilatura.extract(page, deduplicate=cache) for page in pages]
+cache.maxsize, len(cache.cache)  # cache.cache is a read-only copy of the entries
+```
+
+`LRUCache` has trafilatura's methods (`get`, `put`, `increment`, `clear`) and is always true. It
+is safe to share between threads: an extraction holds it for the whole page, so extractions
+through one cache run one at a time. It pickles and copies with its entries. Keys are str without
+lone surrogates.
+
+## Many pages: `extract_batch`
+
+`extract_batch` is pyroid's addition. It runs `extract` over a list or tuple of pages on pyroid's
+thread pool, without the GIL, and returns the results in order:
+
+```python
+texts = trafilatura.extract_batch(pages, favor_precision=True, include_comments=False)
+texts = trafilatura.extract_batch(pages, threads=4)  # at most 4 tasks at once
+```
+
+`extract_batch(pages, **kwargs)` always equals `[extract(page, **kwargs) for page in pages]`.
+Without `deduplicate`, the pages are extracted in parallel. With `deduplicate=True` or an
+`LRUCache`, they are parsed in parallel, but extracted one after the other in page order through
+the cache, so the results, and the cache afterwards, are the loop's; such a batch gains less from
+threads ([speed](#speed)). A batch with an item that is not a `str`, or with a delegated option
+or `no_fallback`, runs that loop. An error raises for the whole batch, with a note naming the
+page.
+
+## `bare_extraction`
+
+`bare_extraction` returns a `pyroid.trafilatura.Document` with trafilatura's `Document` fields:
+`text`, `raw_text` (the same string), `comments` (with `include_comments`), `body` and
+`commentsbody`, and `None` in the metadata fields, as trafilatura without metadata extraction.
+When trafilatura 2.3.1 is installed, the class is a subclass of `trafilatura.settings.Document`
+(trafilatura is imported the first time it is used; on free-threaded CPython that import
+re-enables the GIL, as lxml does, while `extract` and `extract_batch` never import trafilatura or
+lxml). `body` and `commentsbody` are built as lxml
+elements from their XML when first read; without lxml they are the XML strings
+(`etree.tostring(element, encoding="unicode")`). `as_dict()` and the deprecated `as_dict=True`
+work as in trafilatura, and a `Document` pickles (its trees as XML).
+
+## Versions
+
+pyroid reproduces one combination per mode, selected with `compat=`:
+
+| `compat` | trafilatura | lxml | libxml2 | jusText |
+|---|---|---|---|---|
+| `"2.3.1"` (the default) | 2.3.1 | 6.1.3 | 2.14.6 (bundled in lxml's wheels) | 3.0.2 |
+
+`pyroid.trafilatura.TRAFILATURA_VERSIONS` lists the modes and `REPRODUCED_VERSIONS` the versions
+behind each. Another version of trafilatura or lxml can extract different text from the same page.
+trafilatura 1.11.0, what `datatrove[processing]` 0.10.1 installs, is planned as a second mode.
+
+## The datatrove step
+
+`pyroid.integrations.datatrove.Trafilatura` replaces datatrove 0.10.1's `Trafilatura` extractor
+(`pip install 'pyroid[datatrove]'`):
+
+```diff
+-from datatrove.pipeline.extractors import Trafilatura
++from pyroid.integrations.datatrove import Trafilatura
+
+ pipeline = [
+     WarcReader(...),
+     URLFilter(),
+     Trafilatura(favour_precision=True),
+     ...
+ ]
+```
+
+It takes datatrove's arguments with their defaults (`favour_precision=True`,
+`include_images=False`, `timeout=1`, `deduplicate=True`, and `**kwargs` passed to `extract`),
+plus three keyword-only ones:
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `compat` | `None` | the trafilatura release to reproduce. `None`: the installed trafilatura's version if pyroid reproduces it; pyroid's default if trafilatura is not installed; for any other installed version, datatrove's own step runs the documents (with one `FallbackWarning`) |
+| `batch_size` | `128` | documents per pyroid call |
+| `threads` | `1` | pyroid's `threads=` ([Threads](../concepts/threads.md)) |
+
+A stock `datatrove[processing]` install has trafilatura 1.11.0, which pyroid does not reproduce
+yet: with `compat=None` the step then runs datatrove's own code. Install trafilatura 2.3.1, or
+pass `compat="2.3.1"`, to run pyroid.
+
+The documents out, their text, and the statistics (`total`, `extracted`, `forwarded`, `dropped`,
+`doc_len`) are datatrove's. The step runs in the task's process, so it differs from datatrove's
+in these ways:
+
+- There is no child process and no timeout. A page datatrove gives up on after `timeout`
+  seconds (counted as `timeout`, and followed by a fresh child with an empty dedup cache) gets its
+  text here.
+- With `deduplicate=True` the dedup cache is a fresh `LRUCache` per `run()`, that is per task,
+  as datatrove's per-task child process has a fresh `LRU_TEST`.
+- Errors are counted as datatrove counts them. A page whose extraction raises kills datatrove's
+  child, so it is `broken_process`, and the rest of the task continues with an empty dedup cache,
+  as datatrove's next child does. Arguments that make `extract("")` raise (datatrove's warm-up
+  call, for example a keyword `extract` does not take) make every page `timeout`.
+- Time is tracked per batch, not per document.
+
+## `pyroid.patch("trafilatura")`
+
+```python
+import pyroid
+
+pyroid.patch("trafilatura")
+from trafilatura import extract  # pyroid's, with trafilatura's exact signature
+```
+
+The patch puts shims in `sys.modules` for `trafilatura` and `trafilatura.core` (`extract`,
+`bare_extraction`, `extract_with_metadata`), `trafilatura.deduplication` (`LRUCache`,
+`LRU_TEST`) and `trafilatura.meta` (`reset_caches`, which empties pyroid's cache too). Everything
+else comes from the installed trafilatura. The shim's functions have exactly the installed
+trafilatura's signatures, without `compat`, and `config` defaults to its `DEFAULT_CONFIG`. The
+mode follows the installed version when pyroid reproduces it; otherwise a `PatchWarning` says
+that the patched functions give trafilatura 2.3.1's results. datatrove's own `Trafilatura` step
+does `from trafilatura import extract` in its child process, so a patch made before the pipeline
+starts (or `pyroid run -p trafilatura`) reaches it. See [`pyroid.patch()`](patch.md).
+
+## Differences from trafilatura
+
+From the module's documentation (`pyroid/trafilatura.pyi`):
+
+- Trafilatura's log messages (`logging.getLogger("trafilatura")`) are not emitted.
+- `config` defaults to `pyroid.trafilatura.DEFAULT_CONFIG`, not
+  `trafilatura.settings.DEFAULT_CONFIG`: changing trafilatura's object changes nothing here
+  (under `pyroid.patch` the shim's functions do default to trafilatura's object).
+- `LRUCache` keys are str without lone surrogates, and its `cache` is a read-only copy.
+- `bare_extraction`'s `body` and `commentsbody` become lxml elements when first read, and are the
+  XML strings without lxml.
+
+And by design, the [delegated options](#delegated-options) need trafilatura 2.3.1 installed.
+
+## Parity
+
+On the 4,677 Common Crawl pages of the development sample (CC-MAIN-2026-39, as datatrove's
+`WarcReader` and `URLFilter` give them), every page gives trafilatura 2.3.1's text in 4 option
+sets (datatrove's call; without dedup; `fast`; `fast` with dedup), both page by page and through
+`extract_batch`: 0 differences in 37,416 comparisons, with dedup runs in page order. The test
+suite (`python/tests/test_trafilatura*.py`) also compares pyroid with trafilatura on pages from a
+Hypothesis tag grammar and on Common Crawl pages cut, spliced and with junk inserted, in 7 option
+sets, `bare_extraction` field by field, the dedup cache's contents after each sequence, every
+delegated option (one `FallbackWarning`, trafilatura's result), and the datatrove step against
+datatrove's own, statistics included. The parity suite (`parity/`, run on 2026-11-09 on CPython
+3.13) found 0 differences on its 3 pinned corpora of 7,192 Common Crawl pages in 7 option sets
+and 2 `bare_extraction` sets, and on Trafilatura's own test suite replayed as 2,669 native and
+1,884 delegated calls; details on the [Compatibility](../compatibility.md) page.
+
+## Speed
+
+Measured on 1,000 Common Crawl pages (157,000 characters each on average) on a Docker/OrbStack
+VM on Apple Silicon (12 vCPUs, load 2 to 4), CPython 3.13, indicative:
+
+| Call | trafilatura 2.3.1 | pyroid | Speedup |
+|---|---:|---:|---:|
+| `extract(page)`, one page at a time | 29.9 ms/page | 4.0 ms/page | 7.5× |
+| `extract_batch`, 1 / 4 / 8 threads | | 3.7 / 0.97 / 0.50 ms/page | 8× / 31× / 60× |
+| datatrove's call (`favor_precision`, `deduplicate=True`), one at a time | 26.0 ms/page | 3.2 ms/page | 8.2× |
+| the same with `extract_batch`, 1 / 4 / 8 threads | | 2.9 / 2.0 / 2.0 ms/page | 9× / 13× / 13× |
+| datatrove's `Trafilatura` step, one task | 26.9 ms/page | 3.2 ms/page (`threads=1`), 2.1 ms/page (`threads=8`) | 8.3×, 13× |
+
+With deduplication, extraction runs in page order, so threads only parse ahead and the gain
+stops at about 1.5×. A datatrove pipeline gets its parallelism from running one task per core.

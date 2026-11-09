@@ -4,12 +4,12 @@
 # The API reference is generated from the .pyi stubs by mkdocstrings + griffe *without importing*
 # the extension (allow_inspection: false), so no Rust build is needed.
 site_name: pyroid
-site_description: Rust-fast text cleaning for LLM datasets. Drop-in for ftfy, fastText inference, datatrove's filters and dedup, rouge-score, sacrebleu and json_repair.
+site_description: Rust-fast text cleaning for LLM datasets. Drop-in for ftfy, fastText inference, datatrove's filters and dedup, Trafilatura, rouge-score, sacrebleu and json_repair.
 site_url: https://ao.github.io/pyroid/
 repo_url: https://github.com/ao/pyroid
 repo_name: ao/pyroid
 edit_uri: edit/main/docs/
-copyright: "Copyright &copy; Andrew Odendaal. Licence: MIT AND Apache-2.0 AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 (see NOTICE)."
+copyright: "Copyright &copy; Andrew Odendaal. Licence: MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 (see NOTICE)."
 
 theme:
   name: material
@@ -56,6 +56,7 @@ nav:
       - pyroid.json_repair: guides/json_repair.md
       - pyroid.datasketch: guides/datasketch.md
       - pyroid.jieba: guides/jieba.md
+      - pyroid.trafilatura: guides/trafilatura.md
       - Languages: guides/languages.md
   - Integrations:
       - The pyroid command line: guides/cli.md
@@ -80,6 +81,7 @@ nav:
       - pyroid.json_repair: reference/json_repair.md
       - pyroid.datasketch: reference/datasketch.md
       - pyroid.jieba: reference/jieba.md
+      - pyroid.trafilatura: reference/trafilatura.md
       - pyroid.integrations: reference/integrations.md
       - pyroid.text: reference/text.md
   - Compatibility: compatibility.md

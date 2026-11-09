@@ -21,6 +21,7 @@ __all__ = [
     "json_repair",
     "metrics",
     "text",
+    "trafilatura",
     "translit",
 ]
 
@@ -37,6 +38,7 @@ metrics: ModuleType
 json_repair: ModuleType
 datasketch: ModuleType
 jieba: ModuleType
+trafilatura: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):

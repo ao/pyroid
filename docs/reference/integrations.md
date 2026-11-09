@@ -59,6 +59,7 @@ arguments plus the keyword-only `batch_size` and `threads` (and `model_path` for
         - SentenceFindDedups
         - SentenceDedupFilter
         - SentenceDedupBuildIndex
+        - Trafilatura
 
 ## `pyroid.integrations.hf` {#hf}
 

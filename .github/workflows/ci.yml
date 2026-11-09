@@ -351,7 +351,7 @@ jobs:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
         # One entry per merged product module pyroid.<suite>. Every suite runs on the free-threaded builds too:
         # without the oracle group they compare against the pinned refs, and live-oracle checks skip in the report.
-        suite: [ftfy, fasttext, filters, dedup, metrics, json_repair, datasketch, jieba]
+        suite: [ftfy, fasttext, filters, dedup, metrics, json_repair, datasketch, jieba, trafilatura]
         python: ["3.12", "3.14t", "3.15t"]
         # The wheel each interpreter installs (the three flavours the wheels job checks for).
         include:
@@ -469,6 +469,8 @@ jobs:
           # Only the wheel built above: no index, no sdist fallback, no deps.
           uv pip install --python .venv-oracle --no-index --no-deps --no-build --find-links dist pyroid
           uv pip install --python .venv-oracle --group test
+          # trafilatura 2.3.1, lxml 6.1.3 and jusText 3.0.2 (with sacrebleu) for the Trafilatura step test below.
+          uv pip install --python .venv-oracle --group test-gil
           read -ra oracle <<< "$ORACLE"
           uv pip install --python .venv-oracle --only-binary :all: "${oracle[@]}"
           read -ra segmenters <<< "$SEGMENTERS"
@@ -488,9 +490,10 @@ jobs:
             python/tests/test_filters_parity.py python/tests/test_dedup_datatrove.py \
             python/tests/test_filters_multilingual.py python/tests/test_dedup_multilingual.py | tee "$log"
           # pyroid.integrations.datatrove's drop-in steps against datatrove's own, including LocalPipelineExecutor
-          # runs, LanguageFilter on lid.176.bin and the non-English languages (FineWeb-2 slices, IndicNLP, jieba).
+          # runs, LanguageFilter on lid.176.bin and the non-English languages (FineWeb-2 slices, IndicNLP, jieba), and
+          # the Trafilatura step against datatrove's sandboxed one.
           "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs \
-            python/tests/test_integrations_datatrove.py | tee -a "$log"
+            python/tests/test_integrations_datatrove.py python/tests/test_trafilatura_datatrove.py | tee -a "$log"
           if grep '^SKIPPED' "$log"; then echo "::error::live-oracle tests skipped (see above)"; exit 1; fi
 
   msrv:

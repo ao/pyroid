@@ -156,12 +156,13 @@ does not port, it hands the call to the real library and says so with a
 ## Licence
 
 pyroid's own code is MIT. The parts ported from other projects keep their licences, so the
-package's licence expression is `MIT AND Apache-2.0 AND BSD-3-Clause AND ISC AND PSF-2.0 AND
-Unicode-3.0`:
+package's licence expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND
+PSF-2.0 AND Unicode-3.0`:
 
-- Apache-2.0 for the ftfy, datatrove, rouge-score, NLTK (Porter stemmer) and sacrebleu ports;
-- MIT for the spaCy, indic-nlp-library, urduhack and json_repair ports;
-- BSD-3-Clause for numpy's random generator and tldextract;
+- Apache-2.0 for the ftfy, datatrove, rouge-score, NLTK (Porter stemmer), sacrebleu and Trafilatura ports;
+- MIT for the spaCy, indic-nlp-library, urduhack, json_repair and libxml2 (HTML parser) ports;
+- BSD-2-Clause for the jusText port and its stoplists;
+- BSD-3-Clause for numpy's random generator, tldextract and lxml;
 - PSF-2.0 for CPython's `ipaddress`;
 - ISC for anyascii's data;
 - Unicode-3.0 for Unicode Character Database data.

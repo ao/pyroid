@@ -17,7 +17,10 @@ The names are ``"ftfy"`` (:mod:`pyroid.ftfy`, which reproduces ftfy 6.3.1), ``"f
 ``FastText.load_model`` give pyroid models), ``"anyascii"`` (:func:`pyroid.translit.anyascii`)
 and ``"datasketch"`` (:mod:`pyroid.datasketch`, which reproduces datasketch 2.0.0: ``datasketch``
 and its ``minhash``, ``lean_minhash``, ``hashfunc``, ``lsh``, ``lshforest`` and ``lshensemble``
-submodules give pyroid's classes). There is no ``"unidecode"``:
+submodules give pyroid's classes) and ``"trafilatura"`` (:mod:`pyroid.trafilatura`, which reproduces
+trafilatura 2.3.1: ``extract``, ``bare_extraction`` and ``extract_with_metadata`` of ``trafilatura``
+and ``trafilatura.core``, ``trafilatura.deduplication.LRUCache`` / ``LRU_TEST`` and
+``trafilatura.meta.reset_caches``). There is no ``"unidecode"``:
 :func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its output differs
 from Unidecode's.
 
@@ -98,7 +101,7 @@ __all__ = [
 ]
 
 #: The module names :func:`patch` accepts.
-SUPPORTED: tuple[str, ...] = ("ftfy", "fasttext", "anyascii", "datasketch")
+SUPPORTED: tuple[str, ...] = ("ftfy", "fasttext", "anyascii", "datasketch", "trafilatura")
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
 DEFAULT_RUN_NAMES: tuple[str, ...] = ("ftfy", "fasttext")
@@ -237,6 +240,8 @@ class _Target:
     pip: str  # how to install the real package
     rest: str  # examples of what the real package still provides, for the warning
     build: Callable[[types.ModuleType, Any, str], _Built]
+    # impl attribute: the real versions pyroid reproduces as modes (no version warning for them)
+    modes_attr: str | None = None
 
 
 def _caller_stacklevel() -> int:
@@ -371,6 +376,53 @@ def _build_datasketch(impl: types.ModuleType, real: Any, missing: str) -> _Built
     return {"datasketch": top, **shims}, []
 
 
+def _build_trafilatura(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    # The mode is the installed trafilatura's version when pyroid reproduces it, else the
+    # default (_announce warns). The functions have that version's exact signature (no compat=).
+    found = getattr(real, "__version__", None) if real is not None else None
+    mode = found if found in impl.TRAFILATURA_VERSIONS else impl.TRAFILATURA_VERSION
+    # Their config= default is the real trafilatura.settings.DEFAULT_CONFIG (of that version).
+    settings = getattr(real, "settings", None) if found == mode else None
+    config = getattr(settings, "DEFAULT_CONFIG", None)
+    api = impl._api(mode, config)
+
+    def real_sub(name: str) -> Any:
+        if real is None:
+            return None
+        module = sys.modules.get(f"trafilatura.{name}")
+        if module is None:
+            try:
+                module = importlib.import_module(f"trafilatura.{name}")
+            except ImportError:
+                return None
+        return module
+
+    def sub(name: str, provided: dict[str, Any]) -> _Shim:
+        module = real_sub(name)
+        sub_missing = missing if real is None else f"the installed trafilatura has no {name} module"
+        return _shim(f"trafilatura.{name}", module, sub_missing, impl, provided, package=False)
+
+    real_reset = getattr(real_sub("meta"), "reset_caches", None)
+
+    def reset_caches() -> None:
+        """``trafilatura.meta.reset_caches()``, emptying pyroid's dedup cache too."""
+        impl.reset_caches()
+        if real_reset is not None:
+            real_reset()
+
+    shims = {
+        "trafilatura.core": sub("core", dict(api)),
+        "trafilatura.deduplication": sub(
+            "deduplication", {"LRUCache": impl.LRUCache, "LRU_TEST": impl.LRU_TEST}
+        ),
+        "trafilatura.meta": sub("meta", {"reset_caches": reset_caches}),
+    }
+    provided = {**api, **{key.rpartition(".")[2]: shim for key, shim in shims.items()}}
+    top = _shim("trafilatura", real, missing, impl, provided, package=True, version=mode)
+    # pyroid.trafilatura's own fallback (`_real_module`) sees through the shim to `__wrapped__`.
+    return {"trafilatura": top, **shims}, []
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -407,6 +459,17 @@ _TARGETS: dict[str, _Target] = {
         " (WeightedMinHash, HyperLogLog, bBitMinHash, HNSW, MinHashLSHBloom, Redis and Cassandra"
         " storage)",
         _build_datasketch,
+    ),
+    "trafilatura": _Target(
+        "pyroid.trafilatura",
+        "which reproduces trafilatura 2.3.1's extract and bare_extraction; options it does not "
+        "port go to the installed trafilatura",
+        "TRAFILATURA_VERSION",
+        "pip install trafilatura==2.3.1",
+        " (metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the "
+        "other submodules)",
+        _build_trafilatura,
+        modes_attr="TRAFILATURA_VERSIONS",
     ),
 }
 
@@ -489,7 +552,8 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
         )
     expected = getattr(impl, target.version_attr) if target.version_attr else None
     found = getattr(real, "__version__", None)
-    if real is not None and expected is not None and found != expected:
+    modes = getattr(impl, target.modes_attr) if target.modes_attr else ()
+    if real is not None and expected is not None and found != expected and found not in modes:
         key = f"{name}:version"
         if key not in _WARNED:
             _WARNED.add(key)
@@ -545,7 +609,8 @@ def patch(*names: str) -> None:
     does nothing; :func:`unpatch` undoes it.
 
     Args:
-        *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"`` and/or ``"datasketch"``.
+        *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"`` and/or
+            ``"trafilatura"``.
 
     Raises:
         TypeError: No names were given.
@@ -677,8 +742,8 @@ def _export(names: Sequence[str]) -> None:
 _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
-`import ftfy` / `fasttext` / `anyascii` / `datasketch` giving pyroid's drop-ins. The Python
-processes it starts (multiprocessing workers, subprocesses) are patched too.
+`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` giving pyroid's
+drop-ins. The Python processes it starts (multiprocessing workers, subprocesses) are patched too.
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}

@@ -38,6 +38,7 @@ ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'
 | [`pyroid.json_repair`](https://ao.github.io/pyroid/guides/json_repair/) | json_repair 0.64.5 |
 | [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
 | [`pyroid.jieba`](https://ao.github.io/pyroid/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
+| [`pyroid.trafilatura`](https://ao.github.io/pyroid/guides/trafilatura/) | Trafilatura 2.3.1's text extraction (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
 
 On 100,000 FineWeb documents, pyroid runs datatrove's FineWeb cleaning chain about 27× faster
 than datatrove on 8 processes and 56× faster on one thread, with identical output (AWS EC2
@@ -60,7 +61,8 @@ the same document for document. On the 100k corpus the ratios are 27× and 56×.
 probabilities as fastText's C++ code on the same CPU architecture. The filters and dedup make
 datatrove's keep/drop decisions, with its reasons and dedup files. The metrics match
 rouge-score's and sacrebleu's scores to the last digit, `pyroid.json_repair` makes
-json_repair's repairs, and `pyroid.datasketch` gives datasketch's hash values and LSH query results.
+json_repair's repairs, `pyroid.datasketch` gives datasketch's hash values and LSH query results,
+and `pyroid.trafilatura` extracts the same text as Trafilatura 2.3.1, byte for byte.
 
 Each module is tested against the library it replaces, on pinned real data and with
 property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). The suites
@@ -104,6 +106,8 @@ faster than sacrebleu, and `pyroid.json_repair` about 30× faster than json_repa
 where it runs in linear time and json_repair in quadratic. `pyroid.datasketch` computes MinHash
 signatures 8× faster than datasketch on one thread and 21× on eight (85× from raw text), and
 MinHashLSH inserts 8–27× and queries 6–19× faster (10,000 FineWeb documents, CPython 3.15t).
+`pyroid.trafilatura.extract` is about 7.5× faster than Trafilatura with its default options and
+8× faster for datatrove's call (1,000 Common Crawl pages, one thread, CPython 3.13).
 
 ## Integrations
 
@@ -160,11 +164,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 pyroid's own code is MIT. The ported parts keep their licences, so the package's licence
-expression is `MIT AND Apache-2.0 AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0`:
+expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0`:
 
-- Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK's Porter stemmer and sacrebleu;
-- MIT: ported from spaCy, indic-nlp-library, urduhack and json_repair;
-- BSD-3-Clause: numpy's random generator (for C4 bad words) and tldextract;
+- Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK's Porter stemmer, sacrebleu and Trafilatura;
+- MIT: ported from spaCy, indic-nlp-library, urduhack, json_repair and libxml2 (the HTML parser);
+- BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists);
+- BSD-3-Clause: numpy's random generator (for C4 bad words), tldextract and lxml;
 - PSF-2.0: CPython's `ipaddress` (IPv6 parsing);
 - ISC: anyascii's transliteration data;
 - Unicode-3.0: data from the Unicode Character Database.
