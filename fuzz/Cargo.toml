@@ -55,5 +55,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "html_parse"
+path = "fuzz_targets/html_parse.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
 members = ["."]
