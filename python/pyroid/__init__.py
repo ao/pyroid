@@ -35,7 +35,7 @@ __version__: str = _pyroid.__version__
 
 
 def patch(*names: str) -> None:
-    """Make ``import ftfy``, ``fasttext``, ``anyascii``, ``datasketch``, ``trafilatura`` use pyroid.
+    """Make ``import <name>`` give pyroid's drop-in, for each of `names`.
 
     ``pyroid.patch("ftfy", "fasttext")`` is :func:`pyroid.integrations.patch`: explicit,
     reversible ``sys.modules`` shims (see there). Nothing is imported until it is called.

@@ -17,10 +17,11 @@ The names are ``"ftfy"`` (:mod:`pyroid.ftfy`, which reproduces ftfy 6.3.1), ``"f
 ``FastText.load_model`` give pyroid models), ``"anyascii"`` (:func:`pyroid.translit.anyascii`)
 and ``"datasketch"`` (:mod:`pyroid.datasketch`, which reproduces datasketch 2.0.0: ``datasketch``
 and its ``minhash``, ``lean_minhash``, ``hashfunc``, ``lsh``, ``lshforest`` and ``lshensemble``
-submodules give pyroid's classes) and ``"trafilatura"`` (:mod:`pyroid.trafilatura`, which reproduces
+submodules give pyroid's classes), ``"trafilatura"`` (:mod:`pyroid.trafilatura`, which reproduces
 trafilatura 2.3.1: ``extract``, ``bare_extraction`` and ``extract_with_metadata`` of ``trafilatura``
 and ``trafilatura.core``, ``trafilatura.deduplication.LRUCache`` / ``LRU_TEST`` and
-``trafilatura.meta.reset_caches``). There is no ``"unidecode"``:
+``trafilatura.meta.reset_caches``) and ``"nltk"`` (:mod:`pyroid.nltk`, which reproduces NLTK
+3.10.4's tokenizers). There is no ``"unidecode"``:
 :func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its output differs
 from Unidecode's.
 
@@ -64,6 +65,15 @@ any. The same works by hand, with no ``pyroid run``::
 The hook warns once per process tree, not in every worker. It does nothing in an interpreter that
 cannot import pyroid, nor in one started with ``-I`` or ``-E`` (``PYTHONPATH`` is ignored there).
 
+``"nltk"`` works differently when NLTK is installed: no shim, but ``sent_tokenize``,
+``word_tokenize``, ``punkt_model_available``, ``PunktSentenceTokenizer``, ``PunktTokenizer``,
+``TreebankWordTokenizer``, ``NLTKWordTokenizer`` and ``TreebankWordDetokenizer`` are replaced by
+pyroid's on NLTK's own modules (``nltk``, ``nltk.tokenize`` and the ``punkt``, ``treebank`` and
+``destructive`` submodules), so code calling ``nltk.word_tokenize(...)`` gets pyroid's, and
+:func:`unpatch` puts NLTK's back. Everything else (``PunktTrainer``, the taggers, corpora, other
+tokenizers, rouge-score's Porter stemmer) stays NLTK's. Without NLTK, ``nltk`` and those
+submodules are shims providing just these names.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -101,7 +111,7 @@ __all__ = [
 ]
 
 #: The module names :func:`patch` accepts.
-SUPPORTED: tuple[str, ...] = ("ftfy", "fasttext", "anyascii", "datasketch", "trafilatura")
+SUPPORTED: tuple[str, ...] = ("ftfy", "fasttext", "anyascii", "datasketch", "trafilatura", "nltk")
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
 DEFAULT_RUN_NAMES: tuple[str, ...] = ("ftfy", "fasttext")
@@ -423,6 +433,104 @@ def _build_trafilatura(impl: types.ModuleType, real: Any, missing: str) -> _Buil
     return {"trafilatura": top, **shims}, []
 
 
+# What patch("nltk") swaps: pyroid.nltk's names, set on NLTK's own modules (by module).
+_NLTK_SWAPS: dict[str, tuple[str, ...]] = {
+    "nltk": (
+        "sent_tokenize",
+        "word_tokenize",
+        "punkt_model_available",
+        "PunktSentenceTokenizer",
+        "PunktTokenizer",
+        "TreebankWordTokenizer",
+        "TreebankWordDetokenizer",
+        "NLTKWordTokenizer",
+        "wordpunct_tokenize",
+        "WordPunctTokenizer",
+        "RegexpTokenizer",
+        "WhitespaceTokenizer",
+        "BlanklineTokenizer",
+        "regexp_tokenize",
+        "blankline_tokenize",
+    ),
+    "nltk.tokenize": (
+        "sent_tokenize",
+        "word_tokenize",
+        "punkt_model_available",
+        "PunktSentenceTokenizer",
+        "PunktTokenizer",
+        "TreebankWordTokenizer",
+        "TreebankWordDetokenizer",
+        "NLTKWordTokenizer",
+        "wordpunct_tokenize",
+        "WordPunctTokenizer",
+        "RegexpTokenizer",
+        "WhitespaceTokenizer",
+        "BlanklineTokenizer",
+        "regexp_tokenize",
+        "blankline_tokenize",
+    ),
+    "nltk.tokenize.punkt": ("PunktSentenceTokenizer", "PunktTokenizer"),
+    "nltk.tokenize.regexp": (
+        "RegexpTokenizer",
+        "WhitespaceTokenizer",
+        "BlanklineTokenizer",
+        "WordPunctTokenizer",
+        "regexp_tokenize",
+        "blankline_tokenize",
+        "wordpunct_tokenize",
+    ),
+    "nltk.tokenize.treebank": ("TreebankWordTokenizer", "TreebankWordDetokenizer"),
+    "nltk.tokenize.destructive": ("NLTKWordTokenizer",),
+}
+
+
+def _build_nltk(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    from pyroid.nltk import _delegate
+
+    if real is None:  # no NLTK: shims providing pyroid.nltk's names
+        shims: dict[str, types.ModuleType] = {}
+        for mod, names in reversed(_NLTK_SWAPS.items()):
+            provided: dict[str, Any] = {n: getattr(impl, n) for n in names}
+            provided.update({k.rpartition(".")[2]: v for k, v in shims.items() if k.rpartition(".")[0] == mod})
+            shims[mod] = _shim(mod, None, missing, impl, provided, package=mod.count(".") < 2)
+        return shims, []
+    # NLTK installed: set pyroid's objects on NLTK's modules, keeping the originals for the
+    # fallbacks (pyroid.nltk._delegate.ORIGINALS) and for unpatch().
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for mod, names in _NLTK_SWAPS.items():
+        module = importlib.import_module(mod)
+        for n in names:
+            original = module.__dict__.get(n, _MISSING)
+            saved.append((module, n, original))
+            if original is not _MISSING:
+                _delegate.ORIGINALS.setdefault(f"{mod}:{n}", original)
+            setattr(module, n, getattr(impl, n))
+    tokenizer_i = getattr(importlib.import_module("nltk.tokenize.api"), "TokenizerI", None)
+    if isinstance(tokenizer_i, type) and hasattr(tokenizer_i, "register"):
+        for cls in (
+            "PunktSentenceTokenizer",
+            "TreebankWordTokenizer",
+            "TreebankWordDetokenizer",
+            "NLTKWordTokenizer",
+            "RegexpTokenizer",
+        ):
+            tokenizer_i.register(getattr(impl, cls))  # isinstance(tok, TokenizerI) stays true
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+        _delegate.ORIGINALS.clear()
+        # NLTK's lru-cached PunktTokenizer per language may hold tokenizers made while patched.
+        cached = getattr(sys.modules.get("nltk.tokenize"), "_get_punkt_tokenizer", None)
+        if hasattr(cached, "cache_clear"):
+            cached.cache_clear()
+
+    return {}, [undo]
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -471,6 +579,15 @@ _TARGETS: dict[str, _Target] = {
         _build_trafilatura,
         modes_attr="TRAFILATURA_VERSIONS",
     ),
+    "nltk": _Target(
+        "pyroid.nltk",
+        "NLTK 3.10.4's sent_tokenize, word_tokenize, PunktSentenceTokenizer, PunktTokenizer, "
+        "TreebankWordTokenizer, NLTKWordTokenizer, TreebankWordDetokenizer and the regexp tokenizers",
+        "NLTK_VERSION",
+        "pip install nltk==3.10.4",
+        " (training, tagging, corpora, the other tokenizers)",
+        _build_nltk,
+    ),
 }
 
 
@@ -482,7 +599,7 @@ _TARGETS: dict[str, _Target] = {
 @dataclass
 class _Active:
     shims: dict[str, types.ModuleType]
-    saved: dict[str, Any]  # sys.modules entries for name and name.* before patch()
+    saved: dict[str, Any] | None  # sys.modules entries for name and name.* (None: not touched)
     undo: list[Callable[[], None]] = field(default_factory=list)
 
 
@@ -536,15 +653,22 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
     target = _TARGETS[name]
     if name not in _WARNED:
         _WARNED.add(name)
+        what = f"`import {name}` now gives pyroid's drop-in"
         if real is None:
             rest = f"Everything else{target.rest} is unavailable: {missing} ({target.pip})."
+        elif name == "nltk":
+            what = "the installed nltk now uses pyroid's drop-ins"
+            rest = (
+                f"Everything else{target.rest} is still nltk's own. Names imported from nltk "
+                "before this call (from nltk import word_tokenize) keep nltk's objects."
+            )
         else:
             rest = (
                 f"Everything else{target.rest} still comes from the installed {name}. Modules "
                 f"that imported {name} before this call keep the real one."
             )
         warnings.warn(
-            f"pyroid.integrations.patch: `import {name}` now gives pyroid's drop-in "
+            f"pyroid.integrations.patch: {what} "
             f"({target.impl}, {target.reproduces}). {rest} Undo with "
             f"pyroid.integrations.unpatch({name!r}). This warning is shown once.",
             PatchWarning,
@@ -585,12 +709,17 @@ def _install(name: str, *, warn: bool) -> None:
             _restore(name, saved, [])
             raise
         sys.modules.update(shims)  # the other runtime changes (undo) are already in place
-        _ACTIVE[name] = _Active(shims, saved, undo)
+        # Attributes swapped on the real modules (no shims): sys.modules stays as it is.
+        _ACTIVE[name] = _Active(shims, saved if shims else None, undo)
         if warn:
             _announce(name, impl, real, missing)
 
 
-def _restore(name: str, saved: dict[str, Any], undo: list[Callable[[], None]]) -> None:
+def _restore(name: str, saved: dict[str, Any] | None, undo: list[Callable[[], None]]) -> None:
+    if saved is None:
+        for step in reversed(undo):
+            step()
+        return
     for key in sys.modules.copy():
         if _owned(key, name) and key not in saved:
             sys.modules.pop(key, None)
@@ -609,8 +738,8 @@ def patch(*names: str) -> None:
     does nothing; :func:`unpatch` undoes it.
 
     Args:
-        *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"`` and/or
-            ``"trafilatura"``.
+        *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
+            ``"trafilatura"`` and/or ``"nltk"``.
 
     Raises:
         TypeError: No names were given.
@@ -742,8 +871,9 @@ def _export(names: Sequence[str]) -> None:
 _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
-`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` giving pyroid's
-drop-ins. The Python processes it starts (multiprocessing workers, subprocesses) are patched too.
+`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` giving
+pyroid's drop-ins. The Python processes it starts (multiprocessing workers, subprocesses) are
+patched too.
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}
