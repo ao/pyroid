@@ -46,6 +46,14 @@ oracle = [
 # datatrove's Japanese tokenizer (SpaCyTokenizer("ja")) and the SudachiDict pyroid reads for jpn_Jpan (a 77 MB
 # wheel): only the filters and dedup legs install it (`--group ja`); without it the Japanese checks skip.
 ja = ["sudachipy==0.7.0", "sudachidict-core==20261015"]
+# The trafilatura suite's oracle (mode 1): the triple pyroid.trafilatura is ported against. It is its own group,
+# not part of `oracle` or `dev`, so that a second group pinning trafilatura 1.11.0 (mode 2, what
+# datatrove[processing] resolves) can be added later and declared in [tool.uv] conflicts; that group then runs
+# with `--no-group trafilatura --group <it>`. Pure Python except lxml, which has cp314t/cp315t wheels.
+trafilatura = ["trafilatura==2.3.1", "lxml==6.1.3", "justext==3.0.2"]
+# datatrove's WarcReader dependencies for pyroid_parity.trafilatura_scale (Common Crawl slices on the fly), at the
+# versions bench/pyproject.toml pins for fetch.py: `uv run --group cc`. Not needed by the suites.
+cc = ["warcio==1.8.2", "faust-cchardet==3.2.0", "python-magic==0.4.27"]
 dev = [{ include-group = "oracle" }, "jsonschema>=4.25", "ruff>=0.17.3"]
 
 [build-system]
@@ -56,7 +64,7 @@ build-backend = "hatchling.build"
 packages = ["pyroid_parity"]
 
 [tool.uv]
-default-groups = ["dev"]
+default-groups = ["dev", "trafilatura"]
 
 [tool.pytest]
 minversion = "9.0"

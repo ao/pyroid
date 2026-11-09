@@ -138,3 +138,140 @@ def fineweb2_filter_cases(lang: str) -> dict[str, tuple[str, str, dict[str, Any]
 # FineWeb-2's MinhashConfig (fineweb-2-pipeline.py: HashConfig("xxhash", 64), 14 buckets x 8, 5-grams); the
 # language is MinhashDedupSignature's, passed as ``language`` next to these keys.
 MINHASH_CONFIG_FINEWEB2: dict[str, Any] = {**MINHASH_CONFIG, "hash_fc": "xxhash", "precision": 64}
+
+
+# ------------------------------------------------------------------------------------------------ trafilatura
+# The trafilatura suite's oracle (parity/pyproject.toml, group `trafilatura`): pyroid.trafilatura is an exact port
+# of this triple, so the suite refuses to compare against any other.
+TRAFILATURA_VERSION = "2.3.1"
+TRAFILATURA_ORACLE = {"trafilatura": TRAFILATURA_VERSION, "lxml": "6.1.3", "justext": "3.0.2"}
+
+# The pinned real-page corpus (bench/fetch.py --only trafilatura), in this order. Each file is one datatrove task:
+# a dedup option set starts each file with an empty cache.
+TRAFILATURA_CORPORA = (
+    "trafilatura/CC-MAIN-2026-39.parquet",
+    "trafilatura/CC-MAIN-2023-50.parquet",
+    "trafilatura/CC-MAIN-2019-35.parquet",
+)
+
+# The corpus option matrix: name -> extract(html, **kwargs), output "txt". "datatrove" is datatrove 0.10.1's call
+# (its Trafilatura step: favour_precision=True, deduplicate=True). Sets with deduplicate=True are stateful: the
+# pages of a file run in order through one dedup cache (Trafilatura's module-level LRU_TEST), emptied first.
+TRAFILATURA_OPTION_SETS: dict[str, dict[str, Any]] = {
+    "datatrove": {"favor_precision": True, "include_comments": False, "deduplicate": True},
+    "default": {},
+    "fast": {"fast": True},
+    "favor_recall": {"favor_recall": True},
+    "precision_comments": {"favor_precision": True, "include_comments": True},
+    "no_tables": {"include_tables": False},
+    "dedup": {"deduplicate": True},
+}
+# bare_extraction(html, **kwargs) on the corpus, compared field by field (pyroid_parity.trafilatura_compare).
+TRAFILATURA_BARE_SETS: dict[str, dict[str, Any]] = {
+    "precision": {"favor_precision": True, "include_comments": False},
+    "default": {},
+}
+
+
+def trafilatura_stateful(kwargs: dict[str, Any]) -> bool:
+    """Whether a call with these kwargs reads and updates the dedup cache."""
+    return kwargs.get("deduplicate") is True
+
+
+# Options pyroid.trafilatura does not port. A call with any of them must go to trafilatura itself: pyroid warns
+# with exactly one pyroid.FallbackWarning (per process, function and reason) and returns trafilatura's result.
+# Values starting with "$" are built at run time by pyroid_parity.trafilatura_delegate (objects that need
+# trafilatura or lxml).
+TRAFILATURA_DELEGATED: dict[str, dict[str, Any]] = {
+    "output_format=xml": {"output_format": "xml"},
+    "output_format=xmltei": {"output_format": "xmltei"},
+    "output_format=json": {"output_format": "json"},
+    "output_format=markdown": {"output_format": "markdown"},
+    "output_format=csv": {"output_format": "csv"},
+    "output_format=html": {"output_format": "html"},
+    "include_formatting": {"include_formatting": True},
+    "include_links": {"include_links": True},
+    "include_images": {"include_images": True},
+    "with_metadata": {"with_metadata": True},
+    "only_with_metadata": {"only_with_metadata": True},
+    "url_blacklist": {"url_blacklist": {"https://example.org/blocked"}},
+    "author_blacklist": {"author_blacklist": {"Jane Doe"}},
+    "bare:with_metadata": {"$fn": "bare_extraction", "with_metadata": True},
+    "bare:output_format=xml": {"$fn": "bare_extraction", "output_format": "xml"},
+}
+# Options outside the corpus matrix that pyroid may port or hand to trafilatura: the result must be
+# trafilatura's, with at most one FallbackWarning.
+TRAFILATURA_EDGE_OPTIONS: dict[str, dict[str, Any]] = {
+    "target_language": {"target_language": "en"},
+    "prune_xpath": {"prune_xpath": "//p[1]"},
+    "prune_xpath_list": {"prune_xpath": ["//p[1]", "//table"]},
+    "config": {"config": "$config:MIN_EXTRACTED_SIZE=10,MIN_OUTPUT_SIZE=5"},
+    "settingsfile": {"settingsfile": "$settingsfile:MIN_OUTPUT_SIZE=1000"},
+    "options": {"options": "$extractor:precision"},
+    "dedup_cache_object": {"deduplicate": "$lrucache:2"},
+    "tree_input": {"$input": "tree"},
+    "bytes_input": {"$input": "utf-8-bytes"},
+    "latin1_bytes_input": {"$input": "latin-1-bytes"},
+    "url": {"url": "https://example.org/article/1"},
+    "record_id": {"record_id": "0001"},
+    "tei_validation": {"tei_validation": True},
+    "no_fallback": {"no_fallback": True},
+    "max_tree_size": {"max_tree_size": 100},
+    "precision_and_recall": {"favor_precision": True, "favor_recall": True},
+    "include_formatting=False": {"include_formatting": False},
+    "output_format=txt": {"output_format": "txt"},
+    "output_format=python": {"output_format": "python"},
+    "output_format=bogus": {"output_format": "bogus"},
+    "bare:as_dict": {"$fn": "bare_extraction", "as_dict": True},
+}
+
+# trafilatura 2.3.1's public signatures: (name, default) of every parameter, all positional-or-keyword, in order.
+# "<required>" has no default; "DEFAULT_CONFIG" is trafilatura.settings.DEFAULT_CONFIG (a candidate may use None).
+_TRAF_COMMON = (
+    ("fast", False),
+    ("no_fallback", False),
+    ("favor_precision", False),
+    ("favor_recall", False),
+    ("include_comments", True),
+)
+_TRAF_FILTERS = (
+    ("include_tables", True),
+    ("include_images", False),
+    ("include_formatting", None),
+    ("include_links", False),
+    ("deduplicate", False),
+    ("date_extraction_params", None),
+    ("with_metadata", False),
+    ("only_with_metadata", False),
+    ("max_tree_size", None),
+    ("url_blacklist", None),
+    ("author_blacklist", None),
+)
+TRAFILATURA_SIGNATURES: dict[str, tuple[tuple[str, Any], ...]] = {
+    "extract": (
+        ("filecontent", "<required>"),
+        ("url", None),
+        ("record_id", None),
+        *_TRAF_COMMON,
+        ("output_format", "txt"),
+        ("tei_validation", False),
+        ("target_language", None),
+        *_TRAF_FILTERS,
+        ("settingsfile", None),
+        ("prune_xpath", None),
+        ("config", "DEFAULT_CONFIG"),
+        ("options", None),
+    ),
+    "bare_extraction": (
+        ("filecontent", "<required>"),
+        ("url", None),
+        *_TRAF_COMMON,
+        ("output_format", "python"),
+        ("target_language", None),
+        *_TRAF_FILTERS,
+        ("as_dict", False),
+        ("prune_xpath", None),
+        ("config", "DEFAULT_CONFIG"),
+        ("options", None),
+    ),
+}

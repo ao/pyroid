@@ -232,6 +232,7 @@ as returning an unchanged string as the same object.
 - [Differences from json_repair](guides/json_repair.md#differences-from-json_repair)
 - [Differences from datasketch](guides/datasketch.md#differences-from-datasketch)
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
+- [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)
 - [Differences from Unidecode](guides/translit.md#differences-from-unidecode).
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).

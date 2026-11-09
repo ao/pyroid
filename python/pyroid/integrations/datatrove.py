@@ -43,6 +43,8 @@ in batches, without the GIL:
   :class:`SentenceDedupFilter`, :class:`SentenceDedupBuildIndex`:
   ``pyroid.dedup``; the same signature, duplicate and index files, byte for
   byte, and the same documents out.
+- :class:`Trafilatura`: ``pyroid.trafilatura`` (byte-identical to trafilatura 2.3.1;
+  in this process, with no timeout).
 
 Languages: the filter and MinHash steps take datatrove's ``language`` (a
 datatrove language code such as ``"fra_Latn"``). Every code pyroid tokenizes
@@ -1177,3 +1179,200 @@ for _sd_cls, _sd_parent in (
     cast(Any, _sd_cls.__init__).__signature__ = _signature_of(_sd_parent, *_EXTRA)
 del _sd_cls, _sd_parent
 # ---- end SentenceDedup ----
+
+# ---- Trafilatura ----
+from datatrove.pipeline.extractors import trafilatura as _dt_traf  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: E402
+from datatrove.utils.logging import logger as _dt_logger  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: E402
+
+__all__ += ["Trafilatura"]
+
+#: Default ``batch_size`` of :class:`Trafilatura`: HTML pages are large, so batches are smaller.
+TRAFILATURA_BATCH_SIZE = 128
+_TIMEOUT = object()  # a page datatrove's step would count as "timeout"
+
+
+def _installed_trafilatura() -> str | None:
+    """The installed trafilatura's version (not imported), or None."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("trafilatura")
+    except PackageNotFoundError:
+        return None
+
+
+class Trafilatura(_Step, _dt_traf.Trafilatura):
+    """datatrove's ``Trafilatura`` extractor (same arguments and defaults) on pyroid.trafilatura.
+
+    ``doc.text`` becomes ``trafilatura.extract(doc.text, favor_precision=favour_precision,
+    include_comments=False, deduplicate=deduplicate, **kwargs)``, byte for byte, computed in
+    this process ``batch_size`` documents at a time; the same documents are forwarded and
+    dropped, with the same statistics (``total``, ``extracted``, ``forwarded``, ``dropped``,
+    ``doc_len``). Errors count as datatrove counts them: a page whose extraction raises is
+    ``broken_process`` (it kills datatrove's child process, and the next child starts with an
+    empty dedup cache, so the rest of the task does here too), and arguments that make
+    ``trafilatura.extract("")`` raise (datatrove's warm-up call) make every page ``timeout``.
+    Trafilatura itself is not needed.
+
+    Extra keyword-only arguments: ``compat``, the trafilatura release to reproduce (``None``:
+    the installed trafilatura's version when pyroid reproduces it, or pyroid's default when
+    trafilatura is not installed; for any other installed version the documents go to
+    datatrove's own step, with a one-time :class:`pyroid.FallbackWarning`), ``batch_size`` and
+    ``threads``.
+
+    What differs: there is no child process and no ``timeout`` (pages datatrove gives up on
+    after ``timeout`` seconds, counting ``timeout`` and restarting its dedup cache, get their
+    text here). With ``deduplicate=True`` the dedup cache is a fresh
+    :class:`pyroid.trafilatura.LRUCache` per :meth:`run`, i.e. per task, as datatrove's per-task
+    child process has a fresh one. Time is tracked per batch.
+    """
+
+    def __init__(
+        self,
+        favour_precision: bool = True,
+        include_images: bool = False,
+        timeout: float = 1,
+        deduplicate: Any = True,
+        *,
+        compat: str | None = None,
+        batch_size: int = TRAFILATURA_BATCH_SIZE,
+        threads: Any = 1,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(favour_precision, include_images, timeout, deduplicate, **kwargs)
+        import pyroid.trafilatura as pt
+
+        if compat is not None:
+            cast(Any, pt)._mode(compat)  # ValueError for a release pyroid does not reproduce
+        self.compat = compat
+        self.batch_size = _batch_size(batch_size)
+        self.threads = threads
+        self._datatrove = False  # running datatrove's own step (see run)
+
+    def _mode(self) -> str | None:
+        """The release to reproduce, or None to run datatrove's own step."""
+        import pyroid.trafilatura as pt
+
+        if self.compat is not None:
+            return self.compat
+        installed = _installed_trafilatura()
+        if installed is None:
+            return pt.TRAFILATURA_VERSION
+        return installed if installed in pt.TRAFILATURA_VERSIONS else None
+
+    def _call_kwargs(self, deduplicate: Any) -> dict[str, Any]:
+        """The keyword arguments datatrove passes to ``trafilatura.extract``."""
+
+        def extract(**kw: Any) -> dict[str, Any]:  # named for datatrove's TypeError messages
+            return kw
+
+        return extract(
+            favor_precision=self.favour_precision,
+            include_comments=False,
+            deduplicate=deduplicate,
+            **self.kwargs,
+        )
+
+    def extract(self, text: str) -> str:
+        """One document (datatrove's API); :meth:`run` batches instead."""
+        if self._datatrove:
+            return cast(str, _dt_traf.Trafilatura.extract(self, text))
+        import pyroid.trafilatura as pt
+
+        mode = self._mode() or pt.TRAFILATURA_VERSION
+        return cast(str, pt.extract(text, **self._call_kwargs(self.deduplicate), compat=mode))
+
+    def _task_cache(self) -> Any:
+        """``deduplicate`` for one task: a fresh cache for ``True``, else the argument."""
+        import pyroid.trafilatura as pt
+
+        dedup = self.deduplicate
+        if not dedup or isinstance(dedup, pt.LRUCache) or cast(Any, pt)._is_real_lru(dedup):
+            return dedup
+        return pt.LRUCache(maxsize=pt.LRU_SIZE)
+
+    def _batch(self, texts: list[Any], kwargs: dict[str, Any], mode: str) -> tuple[list[Any], Any]:
+        """The results for `texts` (exceptions in place) and the kwargs for the next batch.
+
+        A page whose extraction raises kills datatrove's child process, and the next child starts
+        with an empty dedup cache: so does the rest of the task here, when the cache is the task's.
+        """
+        import pyroid.trafilatura as pt
+
+        many = cast(Any, pt)._extract_many
+        fresh = kwargs["deduplicate"] is not self.deduplicate  # the task's own cache
+        out: list[Any] = []
+        while True:
+            results = many(texts, kwargs, self.threads, mode, raise_errors=False)
+            bad = next((i for i, r in enumerate(results) if isinstance(r, Exception)), None)
+            if bad is None or not fresh:
+                return out + results, kwargs
+            out += results[: bad + 1]
+            kwargs = {**kwargs, "deduplicate": pt.LRUCache(maxsize=pt.LRU_SIZE)}
+            texts = texts[bad + 1 :]
+            if not texts:
+                return out, kwargs
+
+    def run(self, data: Iterable[Any], rank: int = 0, world_size: int = 1) -> Any:
+        """Extract the text of every document, ``batch_size`` at a time."""
+        import pyroid.trafilatura as pt
+
+        mode = self._mode()
+        if mode is None:
+            _fallback(
+                "Trafilatura",
+                f"trafilatura {_installed_trafilatura()} (pyroid reproduces "
+                f"{', '.join(pt.TRAFILATURA_VERSIONS)})",
+            )
+            self._datatrove = True
+            try:
+                yield from super().run(data, rank, world_size)
+            finally:
+                self._datatrove = False
+            return
+        kwargs: dict[str, Any] | None = None
+        warmed = False
+        for batch in batched(data, self.batch_size):
+            with self.track_time("batch"):
+                if not warmed:
+                    # datatrove's child calls extract("") before its first page; if that raises,
+                    # no child ever starts and every page times out
+                    warmed = True
+                    try:
+                        kwargs = self._call_kwargs(self._task_cache())
+                        cast(Any, pt)._extract_many([""], kwargs, 1, mode, raise_errors=True)
+                    except Exception:
+                        kwargs = None
+                if kwargs is None:
+                    results: list[Any] = [_TIMEOUT] * len(batch)
+                else:
+                    results, kwargs = self._batch([d.text for d in batch], kwargs, mode)
+            for doc, text in zip(batch, results, strict=True):
+                self.stat_update(StatHints.total)
+                if text is _TIMEOUT:
+                    self.stat_update("timeout")
+                    _dt_logger.warning("⏰ Timeout while cleaning record text. Skipping record.")
+                    continue
+                if isinstance(text, Exception):
+                    self.stat_update("broken_process")
+                    _dt_logger.warning(
+                        "Process died unexpectedly, will create new process for next document"
+                    )
+                    continue
+                self.stat_update("extracted")
+                doc.text = text
+                if doc.text:
+                    self.stat_update(StatHints.forwarded)
+                    self.update_doc_stats(doc)
+                    yield doc
+                else:
+                    self.stat_update(StatHints.dropped)
+
+
+Trafilatura.__init__.__signature__ = _signature_of(  # type: ignore[attr-defined]
+    _dt_traf.Trafilatura,
+    inspect.Parameter("compat", inspect.Parameter.KEYWORD_ONLY, default=None),
+    inspect.Parameter("batch_size", inspect.Parameter.KEYWORD_ONLY, default=TRAFILATURA_BATCH_SIZE),
+    inspect.Parameter("threads", inspect.Parameter.KEYWORD_ONLY, default=1),
+)
+# ---- end Trafilatura ----

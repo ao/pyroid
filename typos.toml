@@ -14,12 +14,21 @@ extend-exclude = [
   "crates/pyroid-core/src/metrics/sacrebleu/tables.rs",
   "crates/pyroid-core/src/json_repair/tables.rs",
   "crates/pyroid-core/src/filters/indic_tables.rs",
+  "crates/pyroid-core/src/html/tables.rs",
+  "crates/pyroid-core/src/html/entities.rs",
+  "crates/pyroid-core/src/trafilatura/tables.rs",
+  # jusText's merged stoplists (100 languages).
+  "crates/pyroid-core/src/trafilatura/stoplist.txt",
   # Test data, incumbent fixtures and raw benchmark results: mojibake, confusables, deliberately
   # misspelt and non-English text. Keep in step with the file-fixer excludes in .pre-commit-config.yaml.
   "python/tests/data/",
   "crates/pyroid-core/tests/ftfy_data/",
   "crates/pyroid-core/tests/filters_data/",
   "crates/pyroid-core/tests/metrics_data/",
+  # lxml's trees and errors for generated and real HTML (crates/pyroid-core/tests/html_lxml.rs).
+  "crates/pyroid-core/tests/html_data/",
+  # Trafilatura's outputs for generated pages under CPython 3.11-3.15.
+  "crates/pyroid-core/tests/trafilatura_data/",
   # Hex floats recorded from scipy and datasketch.
   "crates/pyroid-core/tests/datasketch_data/params.json",
   # json_repair's own test inputs and its outputs for them, recorded byte for byte.

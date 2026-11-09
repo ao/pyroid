@@ -14,6 +14,9 @@ Layout under /data (total budget 1.5 GB):
     metrics/cnndm-3.0.0-test.parquet   CNN/DailyMail 3.0.0 test split, as published (pyroid.metrics ROUGE parity)
     metrics/summeval.parquet           SummEval: 16 systems' summaries of 100 CNN/DM articles, 11 references each
     metrics/wmt21.parquet              WMT21 newstest system outputs + references, 8 language pairs (BLEU/chrF)
+    trafilatura/CC-MAIN-*.parquet      Common Crawl pages (id, url, html) of 3 crawls, as datatrove hands them to
+                                       Trafilatura: WARC byte ranges through WarcReader + URLFilter (~150 MB)
+    trafilatura/upstream-tests-2.3.1.parquet   Trafilatura's tests/ at v2.3.1 (path, git blob sha1, bytes)
 
 The parity/ files in the manifest are generated, not fetched: ``python -m pyroid_parity.refs`` writes them and
 verifies what it wrote, so fetch.py checks them only with ``--verify-all``.
@@ -24,6 +27,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -71,9 +75,70 @@ WMT21 = {
     "langpairs": ["en-de", "de-en", "en-zh", "zh-en", "en-ru", "ru-en", "en-ja", "ja-en"],
     "license": "WMT21 shared-task release (research use; not redistributed)",
 }
+# The trafilatura suite's real pages: Common Crawl WARC slices (byte ranges on gzip member boundaries, sha256 of
+# the raw bytes) through datatrove 0.10.1's WarcReader + URLFilter (pyroid_parity.trafilatura_cc). One file per
+# crawl; slices from 20 %, 40 % and 60 % into the older WARC files, whose records are sorted by host.
+_CC26 = "crawl-data/CC-MAIN-2026-39/segments/1788492699475.64/warc/CC-MAIN-20260904131603-20260904161603-00100.warc.gz"
+_CC23 = "crawl-data/CC-MAIN-2023-50/segments/1700679099281.67/warc/CC-MAIN-20231128083443-20231128113443-00100.warc.gz"
+_CC19 = "crawl-data/CC-MAIN-2019-35/segments/1566027312025.20/warc/CC-MAIN-20190817203056-20190817225056-00100.warc.gz"
+TRAFILATURA_CC = {
+    "trafilatura/CC-MAIN-2026-39.parquet": {
+        "crawl": "CC-MAIN-2026-39",
+        "warc": _CC26,
+        "slices": [(0, 196_203_906, "c76da056343574fa5e309fefe519a842251d11338cc4c64629743f6f0aab96a2")],
+        # pyarrow's defaults, as P10 wrote /target/cc/sample.parquet: this file is that one, byte for byte.
+        "writer": {"compression": "zstd"},
+        "p10": "the P10 sample (sha256 a9cadd81...): eval = rows 0-1999, dev = 2000-2999, hold = 3000-4676",
+    },
+    "trafilatura/CC-MAIN-2023-50.parquet": {
+        "crawl": "CC-MAIN-2023-50",
+        "warc": _CC23,
+        "slices": [
+            (240_083_421, 250_072_163, "2ec2d4641d1421a6a8ac52fe374b719b1127e1fbe4e9f574832ec1d7c54b8bc4"),
+            (480_170_626, 490_135_704, "7fe3bd35631b1fec6c7d7b6f4304f4d0e446cbe8fa15672463e63e3285bd58b4"),
+            (720_221_902, 730_161_499, "a6050c1149500acd8a9681c37aeb4dafd973ec2d5fbb69e5fcdab11a43a845bc"),
+        ],
+        "writer": {
+            "compression": "zstd",
+            "compression_level": 9,
+            "row_group_size": 5_000,
+            "write_statistics": False,
+        },
+    },
+    "trafilatura/CC-MAIN-2019-35.parquet": {
+        "crawl": "CC-MAIN-2019-35",
+        "warc": _CC19,
+        "slices": [
+            (213_435_718, 223_416_245, "925ecf76671b41386f3bda7fa02cf3031c748d8d7904e994899ca35a8c17b2f3"),
+            (426_878_038, 436_635_070, "3ec0c1fee4072538d66928e5f0571ebdb953514d4a10d1f5269c0db382f3a282"),
+            (640_340_436, 650_284_519, "93a6028a2152ee4e8f1b6ad8e2af69c2b1b46ff02e83a9c22c6e32033ab9b2d4"),
+        ],
+        "writer": {
+            "compression": "zstd",
+            "compression_level": 9,
+            "row_group_size": 5_000,
+            "write_statistics": False,
+        },
+    },
+}
+# Trafilatura's own tests at the commit tagged v2.3.1, minus the evaluation set (tests/eval/, 135 MB): replayed as
+# golden calls by pyroid_parity.trafilatura_record.
+TRAFILATURA_TESTS = {
+    "repo": "adbar/trafilatura",
+    "tag": "v2.3.1",
+    "commit": "e2f85c965662c7df26b73290ef175b2c2a5fdca6",
+    "paths": "tests/ except tests/eval/ and tests/evaldata.json",
+    "license": "Apache-2.0 (the tests); tests/cache/ holds third-party web pages (not redistributed)",
+}
 BUDGET = 1_500_000_000
 # Manifest prefix of the files each --only step downloads.
-INPUTS = {"fineweb": "fineweb/", "fineweb2": "fineweb2/", "models": "models/", "metrics": "metrics/"}
+INPUTS = {
+    "fineweb": "fineweb/",
+    "fineweb2": "fineweb2/",
+    "models": "models/",
+    "metrics": "metrics/",
+    "trafilatura": "trafilatura/",
+}
 
 
 def log(msg: str) -> None:
@@ -265,6 +330,114 @@ def fetch_metrics(pin: bool) -> None:
         )
 
 
+def build_cc_pages(rel: str, spec: dict) -> None:
+    """Fetch the slices of one crawl, run datatrove's reader and URL filter, write (id, url, html)."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from pyroid_parity import trafilatura_cc as CC
+
+    pages = CC.Pages()
+    rows: dict[str, list[str]] = {"id": [], "url": [], "html": []}
+    for start, end, sha in spec["slices"]:
+        log(f"{spec['crawl']}: bytes [{start:,}, {end:,}) of {spec['warc'].rsplit('/', 1)[1]}")
+        n = len(rows["id"])
+        for doc_id, url, html in pages(CC.fetch(CC.Slice(spec["crawl"], spec["warc"], start, end, sha))):
+            rows["id"].append(doc_id)
+            rows["url"].append(url)
+            rows["html"].append(html)
+        log(f"{spec['crawl']}: {len(rows['id']) - n} pages")
+    out = D.DATA / rel
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".tmp")
+    pq.write_table(pa.table(rows), tmp, **spec["writer"])
+    tmp.replace(out)
+
+
+def git_blob_sha1(data: bytes) -> str:
+    import hashlib
+
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def build_trafilatura_tests(rel: str) -> None:
+    """Trafilatura's tests/ at the pinned commit (each file checked against its git blob sha1)."""
+    import json
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    src = TRAFILATURA_TESTS
+    url = f"https://api.github.com/repos/{src['repo']}/git/trees/{src['commit']}?recursive=1"
+    with urllib.request.urlopen(url, timeout=120) as r:  # pinned commit: the listing cannot change
+        tree = json.load(r)
+    assert not tree.get("truncated"), "GitHub tree listing truncated"
+    files = sorted(
+        (x["path"], x["sha"])
+        for x in tree["tree"]
+        if x["type"] == "blob"
+        and x["path"].startswith("tests/")
+        and not x["path"].startswith("tests/eval/")
+        and x["path"] != "tests/evaldata.json"
+    )
+    log(f"Trafilatura {src['tag']} tests: {len(files)} files from GitHub")
+    base = f"https://raw.githubusercontent.com/{src['repo']}/{src['commit']}/"
+    datas = []
+    for path, sha in files:
+        with urllib.request.urlopen(base + urllib.parse.quote(path), timeout=120) as r:
+            data = r.read()
+        if git_blob_sha1(data) != sha:
+            sys.exit(f"{path}: git blob sha1 differs from the tree at {src['commit']}")
+        datas.append(data)
+    table = pa.table(
+        {"path": [p for p, _ in files], "git_sha1": [s for _, s in files], "data": datas},
+        schema=pa.schema([("path", pa.string()), ("git_sha1", pa.string()), ("data", pa.binary())]),
+    )
+    out = D.DATA / rel
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".tmp")
+    pq.write_table(
+        table, tmp, compression="zstd", compression_level=9, row_group_size=5_000, write_statistics=False
+    )
+    tmp.replace(out)
+
+
+def fetch_trafilatura(pin: bool) -> None:
+    import pyarrow.parquet as pq
+
+    for rel, spec in TRAFILATURA_CC.items():
+        if not (D.DATA / rel).exists():
+            build_cc_pages(rel, spec)
+        t = pq.read_table(D.DATA / rel, columns=["id", "html"])
+        ids, htmls = t.column("id").to_pylist(), t.column("html").to_pylist()
+        content = D.content_sha256(ids, htmls)
+        if pin:
+            from pyroid_parity import trafilatura_cc as CC
+
+            D.pin(
+                rel,
+                rows=len(ids),
+                content_sha256=content,
+                chars=sum(map(len, htmls)),
+                source={
+                    "crawl": spec["crawl"],
+                    "warc": CC.CC_DATA + spec["warc"],
+                    "slices": [list(s) for s in spec["slices"]],
+                    "pipeline": CC.PIPELINE,
+                    "license": CC.LICENSE,
+                    **({"p10": spec["p10"]} if "p10" in spec else {}),
+                },
+                writer=spec["writer"],
+            )
+        elif content != D.load_manifest()["files"].get(rel, {}).get("content_sha256"):
+            sys.exit(f"{rel}: content sha256 {content} differs from the manifest")
+        del t, ids, htmls
+    rel = f"trafilatura/upstream-tests-{TRAFILATURA_TESTS['tag'].removeprefix('v')}.parquet"
+    if not (D.DATA / rel).exists():
+        build_trafilatura_tests(rel)
+    if pin:
+        D.pin(rel, rows=pq.ParquetFile(D.DATA / rel).metadata.num_rows, source=TRAFILATURA_TESTS)
+
+
 def verify(prefixes: tuple[str, ...] | None = None) -> int:
     """Re-hash the pinned files under ``prefixes`` (all of them for None); returns the number that are bad."""
     manifest = D.load_manifest()
@@ -296,7 +469,9 @@ def main() -> int:
         help="only verify every pinned file against manifest.json, the generated parity/ references included",
     )
     ap.add_argument("--pin", action="store_true", help="(re)write sha256 entries for fetched files")
-    ap.add_argument("--only", default="fineweb,fineweb2,models,metrics", help="comma-separated subset")
+    ap.add_argument(
+        "--only", default="fineweb,fineweb2,models,metrics,trafilatura", help="comma-separated subset"
+    )
     a = ap.parse_args()
     steps = set(a.only.split(","))
     if unknown := steps - INPUTS.keys():
@@ -312,6 +487,8 @@ def main() -> int:
             fetch_models(a.pin)
         if "metrics" in steps:
             fetch_metrics(a.pin)
+        if "trafilatura" in steps:
+            fetch_trafilatura(a.pin)
     return 1 if verify(tuple(INPUTS[s] for s in sorted(steps))) else 0
 
 

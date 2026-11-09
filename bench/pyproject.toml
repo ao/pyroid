@@ -20,6 +20,15 @@ dependencies = [
     "pyarrow==26.0.1",
     "numpy==2.5.4",
     "huggingface-hub==2.4.0",
+    # fetch.py builds the trafilatura corpus with datatrove's WarcReader and URLFilter (pyroid_parity.trafilatura_cc):
+    # their dependencies, at the versions the P10 sample was built with. cchardet's guess decides non-UTF-8 pages.
+    "warcio==1.8.2",
+    "faust-cchardet==3.2.0",
+    "tldextract==5.4.0",
+    "pyahocorasick==2.3.1",
+    "fasteners==0.20",
+    # datatrove checks that the python-magic distribution is installed; libmagic is only loaded if it is called.
+    "python-magic==0.4.27",
     "pyperf==2.10.0",
     "astral-dev-toolchain-hyperfine==2.0.0; sys_platform == 'linux'",
     "psutil>=7",
