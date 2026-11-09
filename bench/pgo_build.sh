@@ -24,7 +24,9 @@ if [[ -z "${LLVM_PROFDATA:-}" ]]; then
     LLVM_PROFDATA=$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/llvm-profdata
 fi
 if [[ $STEPS == *,instrument,* ]]; then
-    RUSTFLAGS="-Cprofile-generate=$PGO/raw" maturin build --release --locked --out "$PGO/gen" "$@"
+    # Build scripts and proc macros are instrumented too when there is no --target, and write their own
+    # profiles at build time: they go to build-raw, which is never merged. Training writes to raw.
+    RUSTFLAGS="-Cprofile-generate=$PGO/build-raw" maturin build --release --locked --out "$PGO/gen" "$@"
 fi
 if [[ $STEPS == *,train,* ]]; then
     if [[ ! -f "$CORPUS/MANIFEST.json" ]]; then
