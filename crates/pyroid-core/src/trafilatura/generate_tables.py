@@ -20,6 +20,13 @@ Usage (Linux or the dev container), one interpreter per supported Unicode versio
 
 STOPLIST_DIR is `justext/stoplists` of an installed justext 3.0.2. `emit` writes tables.rs and
 stoplist.txt next to this file.
+
+trafilatura 1.11.0 reads its stoplist from `trafilatura/data/jt-stopwords-pickle.lzma`
+instead; this checks it holds the same words as stoplist.txt (so 1.11.0 needs no data file of
+its own):
+
+    /target/venv-t111/bin/python -I generate_tables.py jt-pickle STOPLIST_DIR \\
+        .../site-packages/trafilatura/data/jt-stopwords-pickle.lzma
 """
 
 from __future__ import annotations
@@ -159,6 +166,28 @@ def rs_ranges(name: str, rs: list[list[int]]) -> str:
     return f"pub(super) static {name}: [(u32, u32); {len(rs)}] = [{body}];\n"
 
 
+def jt_pickle(stoplist_dir: str, pickle_path: str) -> None:
+    """trafilatura 1.11.0 feeds jusText its own `data/jt-stopwords-pickle.lzma`; the words
+    classify_paragraphs keeps from it (lower-cased) are stoplist.txt, and jusText's merged
+    stoplists: both releases read the one file."""
+    import lzma
+    import pickle
+
+    with lzma.open(pickle_path, "rb") as f:
+        jt = pickle.load(f)  # trusted: the file shipped in the trafilatura 1.11.0 wheel
+    from_pickle = {w.lower() for w in jt}
+    words: set[str] = set()
+    for name in sorted(os.listdir(stoplist_dir)):
+        if name.endswith(".txt"):
+            data = Path(stoplist_dir, name).read_bytes()
+            words.update(w.decode("utf8").lower() for w in data.splitlines())
+    words = {w.lower() for w in words}
+    committed = set((HERE / "stoplist.txt").read_text(encoding="utf-8").split("\n")) - {""}
+    assert from_pickle == words == committed, (len(from_pickle), len(words), len(committed))
+    print(f"{type(jt).__name__} of {len(jt)} words in the pickle: {len(from_pickle)} lower-cased, "
+          f"equal to jusText's merged stoplists and stoplist.txt")
+
+
 def emit(paths: list[str]) -> None:
     recs = {}
     for p in paths:
@@ -236,5 +265,7 @@ def emit(paths: list[str]) -> None:
 if __name__ == "__main__":
     if sys.argv[1] == "dump":
         dump(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "jt-pickle":
+        jt_pickle(sys.argv[2], sys.argv[3])
     else:
         emit(sys.argv[2:])

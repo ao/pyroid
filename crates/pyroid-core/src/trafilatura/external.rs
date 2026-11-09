@@ -185,7 +185,8 @@ impl Ctx<'_> {
         self.basic_cleaning(tree);
         let body = self.d.element(t::BODY);
         // try_justext: make_paragraphs and the classification run in `try`; they assign nothing
-        let good = super::justext::good_paragraphs(&self.d, tree, self.v);
+        let good =
+            super::justext::good_paragraphs(&self.d, tree, self.v, &super::justext::JT_2_3_1);
         for text in good {
             let e = self.d.sub_element(body, t::P);
             self.set_text(e, Some(text));

@@ -14,7 +14,8 @@
 //!   `pyroid.trafilatura`.
 //! - [`metrics`]: ROUGE, BLEU and chrF, exact ports of rouge-score and sacrebleu (`pyroid.metrics`).
 //! - [`nltk`]: NLTK 3.10.4's Punkt sentence splitter and Treebank word tokenizers (`pyroid.nltk`).
-//! - [`trafilatura`]: Trafilatura 2.3.1's text extraction, ported exactly (`pyroid.trafilatura`).
+//! - [`trafilatura`]: Trafilatura 2.3.1's and 1.11.0's text extraction, ported exactly
+//!   (`pyroid.trafilatura`).
 //! - [`sudachi`]: Japanese morphemes as SudachiPy 0.7.0 gives them, from an
 //!   installed SudachiDict (datatrove's Japanese tokenizer in the filters).
 //! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).

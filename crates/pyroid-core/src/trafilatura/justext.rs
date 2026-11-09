@@ -1,8 +1,9 @@
 // Derived from jusText 3.0.2 (BSD-2-Clause), © Jan Pomikalek; modified.
 //! jusText as trafilatura.external.try_justext runs it: ParagraphMaker over `lxml.sax.saxify`,
-//! classify_paragraphs(..., 50, 150, 0.1, 0.2, 0.25, no_headings=True) and
-//! revise_paragraph_classification(..., 150), with every stoplist merged
-//! (external.jt_stoplist_init).
+//! classify_paragraphs with the release's thresholds ([`JtParams`]; 2.3.1: 50, 150, 0.1, 0.2,
+//! 0.25; 1.11.0: 50, 200, 0.1, 0.2, 0.2; both no_headings=True) and
+//! revise_paragraph_classification, with every stoplist merged (2.3.1's
+//! external.jt_stoplist_init; 1.11.0 loads the same words from its pickle).
 
 use std::sync::LazyLock;
 
@@ -194,11 +195,36 @@ enum Class {
     Bad,
 }
 
+/// The classify_paragraphs thresholds a Trafilatura release passes (no_headings=True, so
+/// revise_paragraph_classification's max_heading_distance plays no part).
+#[derive(Clone, Copy, Debug)]
+pub struct JtParams {
+    pub length_low: usize,
+    pub length_high: usize,
+    pub stopwords_low: f64,
+    pub stopwords_high: f64,
+    pub max_link_density: f64,
+}
+
+/// trafilatura 2.3.1: classify_paragraphs(..., 50, 150, 0.1, 0.2, 0.25, True).
+pub const JT_2_3_1: JtParams = JtParams {
+    length_low: 50,
+    length_high: 150,
+    stopwords_low: 0.1,
+    stopwords_high: 0.2,
+    max_link_density: 0.25,
+};
+
 /// classify_paragraphs then revise_paragraph_classification (headings off).
 #[allow(clippy::if_same_then_else, clippy::cast_precision_loss)]
-fn classify(ps: &[Paragraph], v: UnicodeVersion) -> Vec<Class> {
-    let (length_low, length_high, stop_low, stop_high, max_ld) =
-        (50usize, 150usize, 0.1, 0.2, 0.25);
+fn classify(ps: &[Paragraph], v: UnicodeVersion, jp: &JtParams) -> Vec<Class> {
+    let (length_low, length_high, stop_low, stop_high, max_ld) = (
+        jp.length_low,
+        jp.length_high,
+        jp.stopwords_low,
+        jp.stopwords_high,
+        jp.max_link_density,
+    );
     let stoplist = &*STOPLIST;
     let mut ct = Vec::with_capacity(ps.len());
     for p in ps {
@@ -302,12 +328,17 @@ fn classify(ps: &[Paragraph], v: UnicodeVersion) -> Vec<Class> {
 }
 
 /// The texts of the paragraphs jusText keeps, in order.
-pub fn good_paragraphs(d: &Document, root: NodeId, v: UnicodeVersion) -> Vec<String> {
+pub fn good_paragraphs(
+    d: &Document,
+    root: NodeId,
+    v: UnicodeVersion,
+    jp: &JtParams,
+) -> Vec<String> {
     let mut pm = ParagraphMaker::default();
     pm.start_new(d);
     saxify(d, root, &mut pm);
     pm.start_new(d);
-    let classes = classify(&pm.paragraphs, v);
+    let classes = classify(&pm.paragraphs, v, jp);
     pm.paragraphs
         .into_iter()
         .zip(classes)

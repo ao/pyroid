@@ -1,10 +1,15 @@
-"""Hand-written pages for the rare paths of trafilatura 2.3.1 (tests/trafilatura_edge.rs).
+"""Hand-written pages for the rare paths of trafilatura 2.3.1 and 1.11.0
+(tests/trafilatura_edge.rs).
 
     /target/venv-dt/bin/python -I edge_cases.py edge.json
+    /target/venv-t111/bin/python -I edge_cases.py edge-1.11.0.json
 
 Each page runs through trafilatura.extract and bare_extraction with several option sets; the
 fixture keeps the pages (as surrogatepass UTF-8 in hex where they hold lone surrogates) and the
-results: the text, None, or the name of the exception extract raises.
+results: the text, None, or the exception extract raises (2.3.1: its type; 1.11.0: "Type:
+message"). 1.11.0 also runs the pages of CASES_111, for paths only it has (its baseline's
+AttributeError, the int() of a row span in xmltotxt, the TypeErrors it catches); it takes
+`no_fallback` for `fast`, and its commentsbody is None without comments.
 """
 
 import json
@@ -12,6 +17,9 @@ import sys
 
 import trafilatura
 from lxml import etree
+
+V1 = trafilatura.__version__.startswith("1.")
+
 
 OPTION_SETS = {
     "default": {},
@@ -114,30 +122,100 @@ CASES = {
 }
 
 
+CASES_111 = {
+    "json-ld body of one paragraph": page(
+        "<div><p>Short teaser.</p></div>", ld({"@type": "Article", "articleBody": f"<p>{LONG}</p>"})
+    ),
+    "json-ld body of two paragraphs": page(
+        "<div><p>Short teaser.</p></div>", ld({"@type": "Article", "articleBody": f"<p>{LONG}</p><p>{LONG}</p>"})
+    ),
+    "json-ld body is a number": page("<div><p>Short teaser.</p></div>", ld({"@type": "Article", "articleBody": 5})),
+    "json-ld body is zero": page("<div><p>Short teaser.</p></div>", ld({"@type": "Article", "articleBody": 0.0})),
+    "json-ld body is a list": page("<div><p>Short teaser.</p></div>", ld({"@type": "Article", "articleBody": [LONG]})),
+    "json-ld body with a lone surrogate": page(
+        "<div><p>Short teaser.</p></div>",
+        '<script type="application/ld+json">{"articleBody": "' + LONG + ' \\udc80 end"}</script>',
+    ),
+    "json-ld body with a control character": page(
+        "<div><p>Short teaser.</p></div>",
+        '<script type="application/ld+json">{"articleBody": "' + LONG + ' \\u0001 end"}</script>',
+    ),
+    "json-ld bodies then an article": page(
+        f"<article><p>{LONG}</p></article>",
+        ld({"@type": "Article", "articleBody": "Tiny."}) + ld({"articleBody": "Also tiny."}),
+    ),
+    "row with a bad span in a code block": page(
+        f"<article><p>{LONG}</p><pre lang='x'><row span='abc'></row></pre><p>{LONG}</p></article>"
+    ),
+    "row with a spaced span in a code block": page(
+        f"<article><p>{LONG}</p><pre lang='x'><row span=' 3 '></row><row span='1_0'></row></pre><p>{LONG}</p></article>"
+    ),
+    "colspan past sys.maxsize": page(
+        f"<article><p>{LONG}</p><table><tr><td colspan='99999999999999999999'>cell one</td></tr>"
+        f"<tr><td>cell two</td></tr></table><p>{LONG}</p></article>"
+    ),
+    "colspan too large to allocate": page(
+        f"<article><p>{LONG}</p><table><tr><th colspan='4611686018427387904'>head</th></tr>"
+        f"<tr><td>cell</td></tr></table><p>{LONG}</p></article>"
+    ),
+    "colspan not a number": page(f"<article><p>{LONG}</p><table><tr><td colspan='2x'>a</td></tr></table></article>"),
+    "colspans with header rows": page(
+        f"<article><p>{LONG}</p><table><tr><th>a</th><th colspan='+2'>b</th></tr><tr><td>1</td><td>2</td></tr>"
+        f"<tr><td colspan='-1'>3</td></tr></table><p>{LONG}</p></article>"
+    ),
+    "hi without rend in a paragraph": page(f"<article><p>{LONG} <hi>x</hi> end</p><p>{LONG}</p></article>"),
+    "attribute with a colon in a list item": page(
+        f"<article><p>{LONG}</p><ul><li>Item <x data:y='1'>sub</x> long enough text here</li><li>two</li></ul><p>{LONG}</p></article>"
+    ),
+    "doctype with a slash": '<!DOCTYPE a/b>x/><html><body><article><p>' + LONG + "</p></article></body></html>",
+    "raw control characters": page(f"<article><p>{LONG}\x01 \x0c tail</p><p>{LONG}\x1f</p></article>"),
+    "formatting outside paragraphs": page(f"<div><p>{LONG}</p><b>bold words</b><span>span words {LONG}</span></div>"),
+}
+
+
+def kwargs(kw, bare):
+    kw = dict(kw)
+    if V1:
+        if "fast" in kw:
+            kw["no_fallback"] = kw.pop("fast")
+        if bare:
+            kw["as_dict"] = False
+    return kw
+
+
+def raised(err):
+    return {"raises": f"{type(err).__name__}: {err}" if V1 else type(err).__name__}
+
+
+def tostr(e):
+    return None if e is None else etree.tostring(e, encoding="unicode")
+
+
 def main():
     out = []
-    for name, html in CASES.items():
+    cases = {**CASES, **CASES_111} if V1 else CASES
+    for name, html in cases.items():
         rec = {"name": name, "html": html.encode("utf-8", "surrogatepass").hex(), "extract": {}, "bare": {}}
         for k, kw in OPTION_SETS.items():
             try:
-                rec["extract"][k] = trafilatura.extract(html, **kw)
+                rec["extract"][k] = trafilatura.extract(html, **kwargs(kw, False))
             except Exception as err:
-                rec["extract"][k] = {"raises": type(err).__name__}
+                rec["extract"][k] = raised(err)
             try:
-                d = trafilatura.bare_extraction(html, **kw)
+                d = trafilatura.bare_extraction(html, **kwargs(kw, True))
                 rec["bare"][k] = None if d is None else {
                     "text": d.text, "raw_text": d.raw_text, "comments": d.comments,
-                    "body": etree.tostring(d.body, encoding="unicode"),
-                    "commentsbody": etree.tostring(d.commentsbody, encoding="unicode"),
+                    "body": tostr(d.body), "commentsbody": tostr(d.commentsbody),
                 }
             except Exception as err:
-                rec["bare"][k] = {"raises": type(err).__name__}
+                rec["bare"][k] = raised(err)
         out.append(rec)
     with open(sys.argv[1], "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=True, indent=0)
     nulls = sum(v is None for r in out for v in r["extract"].values())
     raises = sum(isinstance(v, dict) for r in out for v in r["extract"].values())
-    print(f"{len(out)} pages x {len(OPTION_SETS)} option sets: {nulls} None, {raises} raised -> {sys.argv[1]}")
+    print(f"trafilatura {trafilatura.__version__}: {len(out)} pages x {len(OPTION_SETS)} option sets: "
+          f"{nulls} None, {raises} raised -> {sys.argv[1]}")
 
 
 if __name__ == "__main__":

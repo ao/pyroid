@@ -1,12 +1,14 @@
 // Derived from trafilatura 2.3.1 (Apache-2.0), © Adrien Barbaresi; modified.
-//! Corpus parity with Trafilatura 2.3.1 (ignored by default; run in release mode).
+//! Corpus parity with Trafilatura 2.3.1 or 1.11.0 (ignored by default; run in release mode).
 //!
 //! Inputs: `$PYROID_HTMLX_DATA/<split>/raw.bin` (the HTML strings datatrove passes, u32 LE count
 //! then u32 LE length + surrogatepass UTF-8 per document) and references written by
 //! `tests/trafilatura_data/ref.py` in `$PYROID_TRAF_REFS/<split><py>/<mode>.jsonl` (`extract`) and
-//! `<mode>.bare.jsonl` (`bare_extraction`). `PYROID_TRAF_SPLIT` (default `dev`),
-//! `PYROID_TRAF_PY` (`311`..`315`, default `313`: picks the Unicode version) and
-//! `PYROID_TRAF_MODES` (comma-separated, default all) select the run.
+//! `<mode>.bare.jsonl` (`bare_extraction`), or the `.sha1` digests of `ref.py --hash`.
+//! `PYROID_TRAF_SPLIT` (default `dev`), `PYROID_TRAF_PY` (`311`..`315`, default `313`: picks the
+//! Unicode version), `PYROID_TRAF_MODES` (comma-separated, default all) and
+//! `PYROID_TRAF_VERSION` (`2.3.1`, the default, or `1.11.0`, whose references are in
+//! `<split><py>-1.11.0/`) select the run. Exceptions are compared by type and message.
 //!
 //! ```text
 //! PYROID_HTMLX_DATA=/target/cc PYROID_TRAF_REFS=/target/out-traf/refs \
@@ -20,13 +22,62 @@
     clippy::too_many_lines
 )] // a test harness
 
+use std::fmt::Write as _;
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::Instant;
 
 use pyroid_core::ftfy::UnicodeVersion;
-use pyroid_core::trafilatura::{self, Focus, LruCache, Options};
+use pyroid_core::trafilatura::{self, Focus, LruCache, Options, PyError, Version};
 use serde_json::Value;
+
+/// Python's `repr()` of a str, near enough for the literals of int() errors (ASCII and
+/// printable text; other characters escaped as CPython would for non-printables).
+fn py_repr(s: &str) -> String {
+    let q = if s.contains('\'') && !s.contains('"') {
+        '"'
+    } else {
+        '\''
+    };
+    let mut out = String::from(q);
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\t' => out.push_str("\\t"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            c if c == q => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if (c as u32) < 0x20 || (0x7f..0xa1).contains(&(c as u32)) => {
+                let _ = write!(out, "\\x{:02x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push(q);
+    out
+}
+
+/// `f"{type(e).__name__}: {e}"` for an exception the port reports.
+fn py_message(e: &PyError) -> String {
+    match e {
+        PyError::IntMaxStrDigits { digits } => format!(
+            "ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has \
+             {digits} digits; use sys.set_int_max_str_digits() to increase the limit"
+        ),
+        PyError::IntLiteral { literal } => {
+            let r: String = py_repr(literal).chars().take(200).collect();
+            format!("ValueError: invalid literal for int() with base 10: {r}")
+        }
+        PyError::Overflow { message } => format!("OverflowError: {message}"),
+        PyError::Memory => "MemoryError: ".into(),
+        PyError::NoneAttribute { attr } => {
+            format!("AttributeError: 'NoneType' object has no attribute '{attr}'")
+        }
+    }
+}
 
 const MODES: &[&str] = &[
     "datatrove",
@@ -42,8 +93,9 @@ const MODES: &[&str] = &[
 ];
 
 /// (options, deduplicate) for a reference mode of ref.py.
-fn mode(name: &str, v: UnicodeVersion) -> (Options, bool) {
+fn mode(name: &str, v: UnicodeVersion, version: Version) -> (Options, bool) {
     let d = Options {
+        version,
         unicode: v,
         ..Options::default()
     };
@@ -125,6 +177,9 @@ fn digest(rec: &Value) -> String {
     let Some(o) = rec.as_object() else {
         return "None".into();
     };
+    if let Some(Value::String(e)) = o.get("error") {
+        return format!("!{e}");
+    }
     let mut h = Sha1::new();
     for k in ["text", "raw_text", "comments", "body", "commentsbody"] {
         match o.get(k) {
@@ -174,15 +229,20 @@ fn corpus_parity() {
         |_| MODES.iter().map(|s| (*s).to_owned()).collect(),
         |m| m.split(',').map(str::to_owned).collect(),
     );
+    let (version, vdir) = match std::env::var("PYROID_TRAF_VERSION").as_deref() {
+        Err(_) | Ok("2.3.1") => (Version::V2_3_1, String::new()),
+        Ok("1.11.0") => (Version::V1_11_0, "-1.11.0".to_owned()),
+        Ok(x) => panic!("PYROID_TRAF_VERSION {x}"),
+    };
     let docs = read_bin(&PathBuf::from(&data).join(&split).join("raw.bin"));
-    let refdir = PathBuf::from(&refs).join(format!("{split}{py}"));
+    let refdir = PathBuf::from(&refs).join(format!("{split}{py}{vdir}"));
     let mut failed = 0usize;
     for m in &modes {
         let (bare, name) = match m.strip_suffix(".bare") {
             Some(n) => (true, n),
             None => (false, m.as_str()),
         };
-        let (opts, dedup) = mode(name, v);
+        let (opts, dedup) = mode(name, v, version);
         let stem = if bare {
             format!("{name}.bare")
         } else {
@@ -208,15 +268,21 @@ fn corpus_parity() {
         for (i, html) in docs.iter().enumerate() {
             let lru = if dedup { Some(&mut cache) } else { None };
             let got: Value = if bare {
-                match trafilatura::bare_extraction(html, &opts, lru).expect("no exception") {
-                    None => Value::Null,
-                    Some(x) => serde_json::json!({
+                match trafilatura::bare_extraction(html, &opts, lru) {
+                    Err(e) => serde_json::json!({ "error": py_message(&e) }),
+                    Ok(None) => Value::Null,
+                    Ok(Some(x)) => serde_json::json!({
                         "text": x.text, "raw_text": x.raw_text, "comments": x.comments,
-                        "body": x.body, "commentsbody": x.commentsbody,
+                        "body": x.body,
+                        // "" stands for None (1.11.0 without comments)
+                        "commentsbody": if x.commentsbody.is_empty() { Value::Null } else { Value::String(x.commentsbody) },
                     }),
                 }
             } else {
-                serde_json::json!({ "text": trafilatura::extract(html, &opts, lru).expect("no exception") })
+                match trafilatura::extract(html, &opts, lru) {
+                    Ok(t) => serde_json::json!({ "text": t }),
+                    Err(e) => serde_json::json!({ "error": py_message(&e) }),
+                }
             };
             let got = if hashed {
                 Value::String(digest(&got))

@@ -327,16 +327,74 @@ pub fn xml_valid(s: &str) -> bool {
 }
 
 /// A Python exception that escapes the code being ported (it is not caught there).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PyError {
     /// `ValueError` from `int()` of more than 4300 decimal digits (`html.unescape` of a long
-    /// `&#...` reference): "Exceeds the limit (4300 digits) for integer string conversion: value
-    /// has {digits} digits; use sys.set_int_max_str_digits() to increase the limit".
+    /// `&#...` reference; for 1.11.0 also a table row's `span`): "Exceeds the limit (4300
+    /// digits) for integer string conversion: value has {digits} digits; use
+    /// sys.set_int_max_str_digits() to increase the limit".
     IntMaxStrDigits { digits: usize },
+    /// 1.11.0 only: `ValueError` from `int(row.get("span"))` in xmltotxt, CPython's
+    /// `"invalid literal for int() with base 10: %.200R"` (the repr of `literal`, cut to 200
+    /// characters).
+    IntLiteral { literal: String },
+    /// 1.11.0 only: `OverflowError(message)` from xmltotxt's `"|" * n` for a huge row span.
+    Overflow { message: &'static str },
+    /// 1.11.0 only: `MemoryError()`: xmltotxt would build a string of more than 2**26
+    /// characters for a row span (or more than 2**28 bytes in all), which CPython may still
+    /// manage; the port stops there.
+    Memory,
+    /// 1.11.0 only: `AttributeError(f"'NoneType' object has no attribute '{attr}'")`: from the
+    /// baseline when a JSON-LD articleBody with `<p>` does not load as HTML (`text_content`),
+    /// and from bare_extraction when the page does not (`source`: its `except` clause reads
+    /// `options.source` before options exist).
+    NoneAttribute { attr: &'static str },
 }
 
 /// `sys.get_int_max_str_digits()` default: `int()` of a longer decimal string raises.
 const INT_MAX_STR_DIGITS: usize = 4300;
+
+/// Why `int(s)` raises ValueError.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntError {
+    /// "invalid literal for int() with base 10: ..."
+    Invalid,
+    /// More than 4300 digits (the count is in the message).
+    TooManyDigits(usize),
+}
+
+/// `int(s)` for a str: surrounding whitespace, an optional sign, decimal digits of any script
+/// with single underscores between them. Values past the i128 range saturate (callers only
+/// compare them with small numbers or with `sys.maxsize`).
+pub fn py_int(s: &str, v: UnicodeVersion) -> Result<i128, IntError> {
+    let s = strip(s);
+    let (neg, digits) = match s.as_bytes().first() {
+        Some(b'-') => (true, &s[1..]),
+        Some(b'+') => (false, &s[1..]),
+        _ => (false, s),
+    };
+    if digits.is_empty()
+        || digits.starts_with('_')
+        || digits.ends_with('_')
+        || digits.contains("__")
+    {
+        return Err(IntError::Invalid);
+    }
+    let mut n: i128 = 0;
+    let mut count = 0usize;
+    for c in digits.chars() {
+        if c == '_' {
+            continue;
+        }
+        let d = decimal_value(c, v).ok_or(IntError::Invalid)?;
+        count += 1;
+        n = n.saturating_mul(10).saturating_add(i128::from(d));
+    }
+    if count > INT_MAX_STR_DIGITS {
+        return Err(IntError::TooManyDigits(count));
+    }
+    Ok(if neg { -n } else { n })
+}
 
 /// `html.unescape(s)`.
 pub fn html_unescape(s: &str) -> Result<Cow<'_, str>, PyError> {

@@ -3,6 +3,13 @@
 //! `trafilatura.bare_extraction`), for Trafilatura 2.3.1 with lxml 6.1.3 (libxml2 2.14.6) and
 //! jusText 3.0.2: the same text, byte for byte, for the options it supports.
 //!
+//! [`Version::V1_11_0`] reproduces Trafilatura 1.11.0 as a fresh `datatrove[processing]==0.10.1`
+//! install resolves it (uv, CPython 3.12 and 3.13): trafilatura 1.11.0, lxml 6.1.3 (libxml2
+//! 2.14.6), justext 3.0.2, lxml-html-clean 0.4.6, charset-normalizer 3.5.2, courlan 1.4.0,
+//! htmldate 1.11.0. Its jusText stoplist (`data/jt-stopwords-pickle.lzma`) holds the same
+//! words as jusText 3.0.2's merged stoplists, so both releases read `stoplist.txt`
+//! (`generate_tables.py` checks the pickle against it).
+//!
 //! ```
 //! use pyroid_core::trafilatura::{extract, LruCache, Options};
 //!
@@ -25,6 +32,8 @@
 //! Trafilatura): `include_formatting`, `include_links`, `include_images`, `url`,
 //! `target_language`, `with_metadata`, `prune_xpath`, output formats other than `txt` / python.
 //!
+//! The same options for 1.11.0 (where `fast` is `no_fallback`).
+//!
 //! Input is the HTML as a Python `str`, encoded with `"surrogatepass"` (UTF-8, lone surrogates
 //! as three bytes each). The module keeps no state: the dedup cache is the caller's.
 
@@ -46,11 +55,12 @@ mod pystr;
 mod readability;
 #[rustfmt::skip]
 mod tables;
+mod v1_11;
 mod xmlout;
 mod xpaths;
 
 pub use dedup::{LRU_SIZE, LruCache};
-pub use load::{load_html, repair_faulty_html};
+pub use load::{load_html, load_html_for, repair_faulty_html, repair_faulty_html_for};
 pub use pystr::PyError;
 
 use crate::ftfy::UnicodeVersion;
@@ -64,6 +74,9 @@ pub enum Version {
     /// trafilatura 2.3.1 (with lxml 6.1.3 / libxml2 2.14.6 and jusText 3.0.2).
     #[default]
     V2_3_1,
+    /// trafilatura 1.11.0 (with lxml 6.1.3 / libxml2 2.14.6 and jusText 3.0.2), the release
+    /// datatrove 0.10.1 installs.
+    V1_11_0,
 }
 
 /// `favor_precision` / `favor_recall` (settings.Extractor.focus).
@@ -151,25 +164,26 @@ pub struct Extraction {
     pub comments: Option<String>,
     /// `lxml.etree.tostring(document.body, encoding="unicode")`.
     pub body: String,
-    /// `lxml.etree.tostring(document.commentsbody, encoding="unicode")`.
+    /// `lxml.etree.tostring(document.commentsbody, encoding="unicode")`; empty where it is
+    /// None (1.11.0 without `include_comments`: a serialized tree is never empty).
     pub commentsbody: String,
 }
 
 /// `trafilatura.extract(html, ...)` with `output_format="txt"`: the text, or `None` where
-/// Trafilatura returns None. `Err` where Trafilatura raises (a `ValueError` from `int()` of
-/// more than 4300 digits in `html.unescape` of the output).
+/// Trafilatura returns None. `Err` where Trafilatura raises (see [`PyError`]; for 2.3.1 only a
+/// `ValueError` from `int()` of more than 4300 digits in `html.unescape` of the output).
 pub fn extract(
     html: &[u8],
     opts: &Options,
     dedup: Option<&mut LruCache>,
 ) -> Result<Option<String>, PyError> {
-    let Some(doc) = load_html(html) else {
+    let Some(doc) = load_html_for(html, opts.version) else {
         return Ok(None);
     };
     extract_tree(doc, opts, dedup)
 }
 
-/// [`extract`] on a tree from [`load_html`] (`trafilatura.extract(tree)`).
+/// [`extract`] on a tree from [`load_html_for`] (`trafilatura.extract(tree)`).
 pub fn extract_tree(
     doc: Document,
     opts: &Options,
@@ -180,14 +194,36 @@ pub fn extract_tree(
     }
     let mut cx = Ctx::new(doc, opts, dedup);
     let root = cx.d.root;
-    let Some(r) = cx.bare(root) else {
-        return Ok(None);
+    let s = match opts.version {
+        Version::V2_3_1 => {
+            let Some(r) = cx.bare(root) else {
+                return Ok(None);
+            };
+            // determine_returnstring: f"{xmltotxt(body)}\n{xmltotxt(commentsbody)}".strip()
+            let body = xmlout::xmltotxt(&cx.d, r.body, cx.v)?;
+            let comments = match r.commentsbody {
+                Some(cb) => xmlout::xmltotxt(&cx.d, cb, cx.v)?,
+                None => String::new(),
+            };
+            pystr::strip(&format!("{body}\n{comments}")).to_owned()
+        }
+        Version::V1_11_0 => {
+            let Some(r) = v1_11::V11::new(&mut cx).bare(root)? else {
+                return Ok(None);
+            };
+            // 1.11.0 strips only when there is a comments body
+            let body = v1_11::xmltotxt(&cx.d, r.body, cx.v)?;
+            match r.commentsbody {
+                Some(cb) => {
+                    let comments = v1_11::xmltotxt(&cx.d, cb, cx.v)?;
+                    pystr::strip(&format!("{body}\n{comments}")).to_owned()
+                }
+                None => body,
+            }
+        }
     };
-    // determine_returnstring: f"{xmltotxt(body)}\n{xmltotxt(commentsbody)}".strip(), NFC
-    let body = xmlout::xmltotxt(&cx.d, r.body, cx.v)?;
-    let comments = xmlout::xmltotxt(&cx.d, r.commentsbody, cx.v)?;
-    let s = format!("{body}\n{comments}");
-    Ok(Some(pystr::nfc(pystr::strip(&s), cx.v).into_owned()))
+    // normalize_unicode: NFC
+    Ok(Some(pystr::nfc(&s, cx.v).into_owned()))
 }
 
 /// `trafilatura.bare_extraction(html, ...)` (output_format "python"), or `None`.
@@ -196,13 +232,21 @@ pub fn bare_extraction(
     opts: &Options,
     dedup: Option<&mut LruCache>,
 ) -> Result<Option<Extraction>, PyError> {
-    let Some(doc) = load_html(html) else {
-        return Ok(None);
+    let Some(doc) = load_html_for(html, opts.version) else {
+        return match opts.version {
+            Version::V2_3_1 => Ok(None),
+            // `raise ValueError` for the empty tree, then `except ...: LOGGER.warning(...,
+            // options.source)` while `options` is still None
+            Version::V1_11_0 => Err(PyError::NoneAttribute { attr: "source" }),
+        };
     };
     bare_extraction_tree(doc, opts, dedup)
 }
 
-/// [`bare_extraction`] on a tree from [`load_html`].
+/// xml.xmltotxt of one release.
+type ToTxt = fn(&Document, NodeId, UnicodeVersion) -> Result<String, PyError>;
+
+/// [`bare_extraction`] on a tree from [`load_html_for`].
 pub fn bare_extraction_tree(
     doc: Document,
     opts: &Options,
@@ -213,32 +257,43 @@ pub fn bare_extraction_tree(
     }
     let mut cx = Ctx::new(doc, opts, dedup);
     let root = cx.d.root;
-    let Some(r) = cx.bare(root) else {
-        return Ok(None);
+    let (r, totxt): (Bodies, ToTxt) = match opts.version {
+        Version::V2_3_1 => match cx.bare(root) {
+            Some(r) => (r, xmlout::xmltotxt),
+            None => return Ok(None),
+        },
+        Version::V1_11_0 => match v1_11::V11::new(&mut cx).bare(root)? {
+            Some(r) => (r, v1_11::xmltotxt),
+            None => return Ok(None),
+        },
     };
-    let text = xmlout::xmltotxt(&cx.d, r.body, cx.v)?;
-    let (comments, commentsbody) = if opts.comments {
-        (
-            Some(xmlout::xmltotxt(&cx.d, r.commentsbody, cx.v)?),
-            r.commentsbody,
-        )
-    } else {
+    let text = totxt(&cx.d, r.body, cx.v)?;
+    let (comments, commentsbody) = match (opts.comments, r.commentsbody, opts.version) {
+        (true, Some(cb), _) => (
+            Some(totxt(&cx.d, cb, cx.v)?),
+            xmlout::tostring_xml(&cx.d, cb),
+        ),
         // Document() default: an empty <body/>
-        (None, cx.d.element(t::BODY))
+        (_, _, Version::V2_3_1) => {
+            let empty = cx.d.element(t::BODY);
+            (None, xmlout::tostring_xml(&cx.d, empty))
+        }
+        // Document() default: None
+        (_, _, Version::V1_11_0) => (None, String::new()),
     };
     Ok(Some(Extraction {
         raw_text: text.clone(),
         text,
         comments,
         body: xmlout::tostring_xml(&cx.d, r.body),
-        commentsbody: xmlout::tostring_xml(&cx.d, commentsbody),
+        commentsbody,
     }))
 }
 
-/// The bodies trafilatura_sequence returns.
+/// The bodies bare_extraction converts (`commentsbody` is None in 1.11.0 without comments).
 struct Bodies {
     body: NodeId,
-    commentsbody: NodeId,
+    commentsbody: Option<NodeId>,
 }
 
 /// Extraction state for one document: the arena holding every tree involved, the options, the
@@ -397,7 +452,7 @@ impl<'a> Ctx<'a> {
         }
         Some(Bodies {
             body: postbody,
-            commentsbody,
+            commentsbody: Some(commentsbody),
         })
     }
 

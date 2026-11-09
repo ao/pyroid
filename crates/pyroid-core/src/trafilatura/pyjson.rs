@@ -20,7 +20,8 @@ type Map = IndexMap<String, Value, FxBuildHasher>;
 pub enum Value {
     Null,
     Bool(bool),
-    Number,
+    /// A number, by its truth value (`bool(x)`: not zero; NaN and infinities are true).
+    Number(bool),
     Str(String),
     List(Vec<Value>),
     /// A dict: insertion order, a repeated key keeps its first position and its last value.
@@ -123,8 +124,9 @@ impl Parser<'_> {
         }
     }
 
-    /// _match_number_unicode at `i`: the index after the number.
-    fn number(&self, i: usize) -> Result<usize, Error> {
+    /// _match_number_unicode at `i`: the index after the number, and whether it is not zero
+    /// (a float literal as `float()` rounds it: `1e-400` is zero).
+    fn number(&self, i: usize) -> Result<(usize, bool), Error> {
         let s = self.s;
         let mut j = i;
         if s.get(j) == Some(&'-') {
@@ -166,7 +168,15 @@ impl Parser<'_> {
         if !is_float && int_digits > 4300 {
             return Err(Error);
         }
-        Ok(j)
+        let nonzero = if is_float {
+            let lit: String = s[i..j].iter().collect();
+            lit.parse::<f64>().is_ok_and(|x| x != 0.0)
+        } else {
+            s[int_start..int_start + int_digits]
+                .iter()
+                .any(|&c| c != '0')
+        };
+        Ok((j, nonzero))
     }
 
     fn lit(&self, i: usize, w: &str) -> bool {
@@ -228,10 +238,13 @@ impl Parser<'_> {
                 Some('n') if self.lit(i, "null") => (Value::Null, i + 4),
                 Some('t') if self.lit(i, "true") => (Value::Bool(true), i + 4),
                 Some('f') if self.lit(i, "false") => (Value::Bool(false), i + 5),
-                Some('N') if self.lit(i, "NaN") => (Value::Number, i + 3),
-                Some('I') if self.lit(i, "Infinity") => (Value::Number, i + 8),
-                Some('-') if self.lit(i, "-Infinity") => (Value::Number, i + 9),
-                Some('-' | '0'..='9') => (Value::Number, self.number(i)?),
+                Some('N') if self.lit(i, "NaN") => (Value::Number(true), i + 3),
+                Some('I') if self.lit(i, "Infinity") => (Value::Number(true), i + 8),
+                Some('-') if self.lit(i, "-Infinity") => (Value::Number(true), i + 9),
+                Some('-' | '0'..='9') => {
+                    let (j, nonzero) = self.number(i)?;
+                    (Value::Number(nonzero), j)
+                }
                 _ => return Err(Error),
             };
             // hand the value to the enclosing containers, closing those that end here
@@ -288,6 +301,32 @@ impl Parser<'_> {
             }
         }
     }
+}
+
+/// Whether `s` holds a lone surrogate (one of the private-use characters standing for them).
+pub fn has_surrogate(s: &str) -> bool {
+    s.chars().any(|c| ('\u{F0000}'..='\u{F07FF}').contains(&c))
+}
+
+/// `s.encode("utf-8", "surrogatepass")` for the Python string `s` stands for.
+pub fn to_wtf8(s: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(s.len());
+    for c in s.chars() {
+        let u = u32::from(c);
+        if (0xF0000..=0xF07FF).contains(&u) {
+            let sur = 0xD800 + (u - 0xF0000);
+            // three bytes, as UTF-8 would write a code point in this range
+            out.extend_from_slice(&[
+                0xE0 | u8::try_from(sur >> 12).unwrap_or(0),
+                0x80 | u8::try_from((sur >> 6) & 0x3F).unwrap_or(0),
+                0x80 | u8::try_from(sur & 0x3F).unwrap_or(0),
+            ]);
+        } else {
+            let mut b = [0u8; 4];
+            out.extend_from_slice(c.encode_utf8(&mut b).as_bytes());
+        }
+    }
+    out
 }
 
 /// `json.loads(s, strict=strict)`.
@@ -378,6 +417,18 @@ mod tests {
         assert!(loads(&"[".repeat(2000), false).is_err());
         assert!(loads(r#""\x""#, false).is_err());
         assert!(loads(r#""\u12""#, false).is_err());
+        let v = loads("[0, -0, 0.0, 1e-400, 1, 0.5, 1e400, -0e5, NaN]", true).unwrap();
+        let Value::List(l) = v else { panic!() };
+        let truth: Vec<bool> = l.iter().map(|x| matches!(x, Value::Number(true))).collect();
+        assert_eq!(
+            truth,
+            [false, false, false, false, true, true, true, false, true]
+        );
+        assert!(has_surrogate("a\u{F0000}"));
+        assert_eq!(
+            to_wtf8("a\u{F0000}\u{F07FF}é"),
+            b"a\xed\xa0\x80\xed\xbf\xbf\xc3\xa9"
+        );
     }
 
     #[test]

@@ -15,7 +15,9 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use pyo3::exceptions::{PyUnicodeEncodeError, PyValueError};
+use pyo3::exceptions::{
+    PyAttributeError, PyMemoryError, PyOverflowError, PyUnicodeEncodeError, PyValueError,
+};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyInt, PyList, PyString, PyTuple, PyType};
 use pyroid_core::ftfy::UnicodeVersion;
@@ -327,15 +329,37 @@ fn input<'py>(html: &Bound<'py, PyAny>) -> PyResult<Option<Input<'py>>> {
     ))
 }
 
-/// The exception Trafilatura raises: CPython's ValueError for `int()` past
+/// The exception Trafilatura raises, as CPython words it: ValueError for `int()` past
 /// `sys.get_int_max_str_digits()` (4300; the shim delegates other limits), in `html.unescape`
-/// of a numeric character reference.
-fn py_error(e: PyError) -> PyErr {
+/// of a numeric character reference or (1.11.0) of a table row's span, and for an invalid span
+/// literal; OverflowError and MemoryError for 1.11.0's `"|" * span`; AttributeError where
+/// 1.11.0 reads an attribute of None.
+fn py_error(py: Python<'_>, e: PyError) -> PyErr {
     match e {
         PyError::IntMaxStrDigits { digits } => PyValueError::new_err(format!(
             "Exceeds the limit (4300 digits) for integer string conversion: value has {digits} \
              digits; use sys.set_int_max_str_digits() to increase the limit"
         )),
+        PyError::IntLiteral { literal } => {
+            // "invalid literal for int() with base 10: %.200R": the repr, cut to 200 characters
+            let repr = PyString::new(py, &literal)
+                .repr()
+                .map_or_else(|_| String::new(), |r| r.to_string());
+            let repr: String = repr.chars().take(200).collect();
+            PyValueError::new_err(format!("invalid literal for int() with base 10: {repr}"))
+        }
+        PyError::Overflow { message } => PyOverflowError::new_err(message),
+        // the port's bound on the repeated string; CPython may still build it
+        PyError::Memory => PyMemoryError::new_err(()),
+        PyError::NoneAttribute { attr } => {
+            let err =
+                PyAttributeError::new_err(format!("'NoneType' object has no attribute '{attr}'"));
+            // as CPython sets them on the AttributeError it raises
+            let value = err.value(py);
+            let _ = value.setattr("name", attr);
+            let _ = value.setattr("obj", py.None());
+            err
+        }
     }
 }
 
@@ -369,7 +393,7 @@ fn extract<'py>(
     let bytes = inp.as_bytes();
     let o = &opts.0;
     let r = detached(py, cache.map(Bound::get), |c| core::extract(bytes, o, c));
-    match r.map_err(py_error)? {
+    match r.map_err(|e| py_error(py, e))? {
         None => Ok(py.None().into_bound(py)),
         Some(s) => Ok(PyString::new(py, &s).into_any()),
     }
@@ -393,7 +417,7 @@ fn bare_extraction<'py>(
     let r = detached(py, cache.map(Bound::get), |c| {
         core::bare_extraction(bytes, o, c)
     });
-    match r.map_err(py_error)? {
+    match r.map_err(|e| py_error(py, e))? {
         None => Ok(py.None().into_bound(py)),
         Some(x) => {
             let comments = x.comments.map(|c| PyString::new(py, &c));
@@ -596,11 +620,11 @@ fn extract_batch<'py>(
             Err(e) if raise_errors => {
                 return Err(with_note(
                     py,
-                    py_error(e),
+                    py_error(py, e),
                     format!("pyroid: while extracting the document at index {i}"),
                 ));
             }
-            Err(e) => py_error(e).into_value(py).into_bound(py).into_any(),
+            Err(e) => py_error(py, e).into_value(py).into_bound(py).into_any(),
         });
     }
     PyList::new(py, list)

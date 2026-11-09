@@ -1,25 +1,26 @@
 //! `pyroid_core::trafilatura`: `load_html`, `extract` and `bare_extraction` on arbitrary HTML,
-//! with options from the first input byte.
+//! with options from the first input byte, for each supported Trafilatura release.
 //!
 //! Input: `[options] html...`. Bits of the options byte: 0-1 the focus (0 balanced,
 //! 1 precision, 2 recall, 3 balanced), 2 `include_comments` off, 3 `fast`, 4
 //! `include_tables` off, 5 deduplicate, 6-7 pick one of four Unicode versions. All zero:
 //! `trafilatura.extract(html)` with CPython 3.15's Unicode 17. The HTML is the rest of the input
 //! as given (`load_html` takes surrogatepass UTF-8; other bytes are rejected, as no Python str
-//! produces them) and, when it is not valid UTF-8, its lossy decoding too.
+//! produces them) and, when it is not valid UTF-8, its lossy decoding too. Every input runs as
+//! 2.3.1 and as 1.11.0.
 //!
 //! Checked, besides "no panic" (and bounded time and memory, by libFuzzer):
 //! - deterministic: the same results twice;
-//! - `extract` equals `nfc(strip(bare.text + "\n" + xmltotxt(commentsbody)))` the way
-//!   determine_returnstring builds it: without comments, `extract` is `bare.text` stripped
-//!   and normalized, so they agree on None and on the text being empty;
+//! - `extract` agrees with `bare_extraction` the way determine_returnstring builds it: without
+//!   comments, `extract` is `bare.text` normalized (and, for 2.3.1, stripped), so they agree
+//!   on None and on the text being empty;
 //! - with deduplicate, the cache never holds more than its 4096 entries.
 
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
 use pyroid_core::ftfy::UnicodeVersion;
-use pyroid_core::trafilatura::{self, Focus, LruCache, Options};
+use pyroid_core::trafilatura::{self, Focus, LruCache, Options, Version};
 
 const VERSIONS: [UnicodeVersion; 4] = [
     UnicodeVersion::V17_0,
@@ -28,13 +29,14 @@ const VERSIONS: [UnicodeVersion; 4] = [
     UnicodeVersion::V14_0,
 ];
 
-fn options(b: u8) -> (Options, bool) {
+fn options(b: u8, version: Version) -> (Options, bool) {
     let focus = match b & 3 {
         1 => Focus::Precision,
         2 => Focus::Recall,
         _ => Focus::Balanced,
     };
     let opts = Options {
+        version,
         focus,
         comments: b & 4 == 0,
         fast: b & 8 != 0,
@@ -67,12 +69,11 @@ fn run(html: &[u8], opts: &Options, dedup: bool) {
         match (&a, &bare) {
             (Ok(None), Ok(None)) | (Err(_), _) | (_, Err(_)) => {}
             (Ok(Some(t)), Ok(Some(x))) => {
-                assert_eq!(
-                    t.is_empty(),
-                    x.text
-                        .trim_matches(pyroid_core::text::is_py_whitespace)
-                        .is_empty()
-                );
+                let text = match opts.version {
+                    Version::V2_3_1 => x.text.trim_matches(pyroid_core::text::is_py_whitespace),
+                    _ => x.text.as_str(),
+                };
+                assert_eq!(t.is_empty(), text.is_empty());
             }
             (a, b) => panic!("extract {a:?} but bare_extraction {b:?}"),
         }
@@ -83,11 +84,13 @@ fuzz_target!(|data: &[u8]| {
     let Some((&b, html)) = data.split_first() else {
         return;
     };
-    let (opts, dedup) = options(b);
-    let _ = trafilatura::load_html(html);
-    run(html, &opts, dedup);
-    if std::str::from_utf8(html).is_err() {
-        let lossy = String::from_utf8_lossy(html);
-        run(lossy.as_bytes(), &opts, dedup);
+    for version in [Version::V2_3_1, Version::V1_11_0] {
+        let (opts, dedup) = options(b, version);
+        let _ = trafilatura::load_html_for(html, version);
+        run(html, &opts, dedup);
+        if std::str::from_utf8(html).is_err() {
+            let lossy = String::from_utf8_lossy(html);
+            run(lossy.as_bytes(), &opts, dedup);
+        }
     }
 });

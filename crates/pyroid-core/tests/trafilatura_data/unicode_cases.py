@@ -12,6 +12,15 @@ strings for `str.lower()` (with the final sigma), `remove_control_characters`, N
 HTML pages whose extracted text depends on the version (new letters, digits, unassigned
 characters, decomposed sequences). `record` runs CPython and trafilatura 2.3.1 on them;
 `merge` writes the committed fixture: inputs and, per Unicode version, the outputs.
+
+The pages of trafilatura 1.11.0 (unicode-1.11.0.json), on the same inputs:
+
+    python3 -I unicode_cases.py inputs unicode.json inputs.json
+    for v in 311 312 314 315; do
+        /target/venv-t111-$v/bin/python -I unicode_cases.py record inputs.json out-$v.json
+    done
+    /target/venv-t111/bin/python -I unicode_cases.py record inputs.json out-313.json
+    python3 -I unicode_cases.py merge inputs.json out-*.json unicode-1.11.0.json
 """
 
 import json
@@ -127,31 +136,45 @@ def record(inp, out):
     import trafilatura
     from trafilatura.utils import remove_control_characters
 
+    v1 = trafilatura.__version__.startswith("1.")
     with open(inp, encoding="utf-8") as f:
         cases = json.load(f)
+
+    def kw(k):
+        # 1.11.0 calls `fast` no_fallback
+        return {("no_fallback" if v1 and a == "fast" else a): b for a, b in OPTION_SETS[k].items()}
+
     rec = {
         "unicode": unicodedata.unidata_version,
         "python": sys.version.split()[0],
+        "trafilatura": trafilatura.__version__,
         "lower": [s.lower() for s in cases["lower"]],
         "printable": [remove_control_characters(s) for s in cases["printable"]],
         "nfc": [unicodedata.normalize("NFC", s) for s in cases["nfc"]],
-        "pages": {k: [trafilatura.extract(p, **kw) for p in cases["pages"]] for k, kw in OPTION_SETS.items()},
+        "pages": {k: [trafilatura.extract(p, **kw(k)) for p in cases["pages"]] for k in OPTION_SETS},
     }
     with open(out, "w", encoding="utf-8") as f:
         json.dump(rec, f, ensure_ascii=True)
-    print(f"{rec['python']} (Unicode {rec['unicode']}) -> {out}")
+    print(f"trafilatura {rec['trafilatura']}, {rec['python']} (Unicode {rec['unicode']}) -> {out}")
 
 
 def merge(inp, outs, final):
+    """The fixture; for trafilatura 1.11.0 (unicode-1.11.0.json) only the pages, as the string
+    vectors are CPython's alone and in unicode.json already."""
     with open(inp, encoding="utf-8") as f:
         cases = json.load(f)
     per = {}
     for p in outs:
         with open(p, encoding="utf-8") as f:
             r = json.load(f)
-        per[r["unicode"]] = {k: r[k] for k in ("python", "lower", "printable", "nfc", "pages")}
+        per[r["unicode"]] = r
     assert sorted(per) == VERSIONS, sorted(per)
-    for key in ("lower", "printable", "nfc"):
+    v1 = all(r.get("trafilatura", "2").startswith("1.") for r in per.values())
+    keys = ("pages",) if v1 else ("lower", "printable", "nfc", "pages")
+    per = {v: {k: r[k] for k in ("python", *keys)} for v, r in per.items()}
+    if v1:
+        cases = {"pages": cases["pages"]}
+    for key in keys[:-1]:
         n = sum(len({json.dumps(per[v][key][i]) for v in VERSIONS}) > 1 for i in range(len(cases[key])))
         print(f"{key}: {n} of {len(cases[key])} differ between versions")
     for k in OPTION_SETS:
@@ -161,7 +184,16 @@ def merge(inp, outs, final):
         json.dump({"inputs": cases, "outputs": per}, f, ensure_ascii=True, indent=0)
 
 
+def inputs(fixture, out):
+    "The inputs of a committed fixture (to record another trafilatura release on them)."
+    with open(fixture, encoding="utf-8") as f:
+        cases = json.load(f)["inputs"]
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(cases, f, ensure_ascii=True)
+
+
 if __name__ == "__main__":
     {"build": lambda: build(sys.argv[2], sys.argv[3]),
      "record": lambda: record(sys.argv[2], sys.argv[3]),
+     "inputs": lambda: inputs(sys.argv[2], sys.argv[3]),
      "merge": lambda: merge(sys.argv[2], sys.argv[3:-1], sys.argv[-1])}[sys.argv[1]]()

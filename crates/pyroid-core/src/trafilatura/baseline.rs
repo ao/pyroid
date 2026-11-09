@@ -238,7 +238,7 @@ impl Ctx<'_> {
                 // iterating a str or a dict yields strings, never a dict
                 Value::Str(_) | Value::Dict(_) => {}
                 // iterating anything else raises TypeError, outside the `try`
-                Value::Null | Value::Bool(_) | Value::Number => {
+                Value::Null | Value::Bool(_) | Value::Number(_) => {
                     self.raise();
                     return;
                 }

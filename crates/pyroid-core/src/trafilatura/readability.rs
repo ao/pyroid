@@ -48,22 +48,22 @@ fn xpath_nonblank(s: &str) -> bool {
 
 /// The readability candidates, in dict insertion order.
 #[derive(Default)]
-struct Candidates {
-    order: Vec<NodeId>,
-    score: HashMap<NodeId, f64>,
+pub(super) struct Candidates {
+    pub(super) order: Vec<NodeId>,
+    pub(super) score: HashMap<NodeId, f64>,
 }
 
 /// An `AssertionError` (drop_tree on an element without parent) or another exception:
 /// try_readability's `except Exception`.
-struct Failed;
+pub(super) struct Failed;
 
 impl Ctx<'_> {
-    fn text_length(&self, e: NodeId) -> usize {
+    pub(super) fn text_length(&self, e: NodeId) -> usize {
         py_len(&trim(&self.d.text_content(e)))
     }
 
     /// lxml.html drop_tree.
-    fn drop_tree(&mut self, e: NodeId) -> Result<(), Failed> {
+    pub(super) fn drop_tree(&mut self, e: NodeId) -> Result<(), Failed> {
         if self.d.parent(e).is_none() {
             return Err(Failed);
         }
@@ -72,7 +72,7 @@ impl Ctx<'_> {
     }
 
     #[allow(clippy::cast_precision_loss)]
-    fn get_link_density(&self, e: NodeId) -> f64 {
+    pub(super) fn get_link_density(&self, e: NodeId) -> f64 {
         let total = match self.text_length(e) {
             0 => 1,
             n => n,
@@ -85,7 +85,7 @@ impl Ctx<'_> {
         links as f64 / total as f64
     }
 
-    fn class_weight(&self, e: NodeId) -> f64 {
+    pub(super) fn class_weight(&self, e: NodeId) -> f64 {
         let mut w = 0.0;
         for a in [t::CLASS, t::ID] {
             let Some(v) = self.d.attr(e, a).filter(|s| !s.is_empty()) else {
@@ -134,7 +134,7 @@ impl Ctx<'_> {
     }
 
     /// `fragment_fromstring("<tag/>")`: a new element that stays a child of the fragment's body.
-    fn fragment_element(&mut self, tag: Name) -> NodeId {
+    pub(super) fn fragment_element(&mut self, tag: Name) -> NodeId {
         let holder = self.d.element(t::BODY);
         self.d.sub_element(holder, tag)
     }
@@ -190,7 +190,7 @@ impl Ctx<'_> {
         Ok(())
     }
 
-    fn score_paragraphs(&mut self, doc: NodeId) -> Candidates {
+    pub(super) fn score_paragraphs(&mut self, doc: NodeId) -> Candidates {
         let mut c = Candidates::default();
         for e in self
             .d
@@ -232,7 +232,7 @@ impl Ctx<'_> {
         c
     }
 
-    fn get_article(&mut self, c: &Candidates, best: NodeId, best_score: f64) -> NodeId {
+    pub(super) fn get_article(&mut self, c: &Candidates, best: NodeId, best_score: f64) -> NodeId {
         let threshold = (best_score * 0.2).max(10.0);
         let output = self.fragment_element(t::DIV);
         let siblings = match self.d.parent(best) {
