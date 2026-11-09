@@ -1,0 +1,5 @@
+reference: stock-8
+run                        mode           w    wall s      cpu s   final  lost after_minhash_filter after_pii      same
+stock-8                    stock          8     870.8     6759.0   23503    74 a844ec39ead3   12656e56fb88   yes
+native-8x                  native         8     108.7      797.0   23503    74 a844ec39ead3   12656e56fb88   yes
+identical

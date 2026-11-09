@@ -99,7 +99,11 @@ one process:
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
 
 With pyroid's stages swapped into datatrove's own executor, the pipeline ran 11.2× faster at 8
-processes on the dev slice and 13.6× on 100k documents.
+processes on the dev slice and 13.6× on 100k documents. From WARC files, with text extraction
+included, datatrove's FineWeb pipeline ran 8.4× faster with pyroid's steps at 8 processes (104 s
+instead of 871 s for 171,595 Common Crawl pages) and 9.0× faster at one process, with the same
+documents kept apart from the pages stock datatrove drops at its 1 s extraction timeout
+([details](https://ao.github.io/pyroid/guides/trafilatura/#speed)).
 
 The other modules have only been measured in a Docker VM on a Mac so far, so their numbers are
 indicative. On one thread, ROUGE is 59–65× faster than rouge-score, corpus BLEU 11× and chrF 19×

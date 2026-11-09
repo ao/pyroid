@@ -302,3 +302,24 @@ trafilatura release:
 
 With deduplication, extraction runs in page order, so threads only parse ahead and the gain
 stops at about 1.5×. A datatrove pipeline gets its parallelism from running one task per core.
+
+### datatrove's FineWeb pipeline from WARC files
+
+`bench/fineweb_warc.py` runs datatrove 0.10.1's `examples/fineweb.py` (WARC reader, URL filter,
+Trafilatura, language ID, the quality filters, MinHash dedup, PII) on 8 WARC files of
+CC-MAIN-2026-39 (171,595 HTML records), as stock datatrove with trafilatura 1.11.0, with
+pyroid's drop-in steps in datatrove's executor, and as a native pyroid chain. AWS EC2
+c7i.4xlarge (Intel Xeon Platinum 8488C), CPython 3.13.18, 8 workers on 8 cores or 1 worker:
+
+| Run | 8 workers | 1 worker |
+|---|---:|---:|
+| stock datatrove | 871 s | 6,976 s |
+| datatrove with pyroid's steps | 104 s (8.4×) | 776 s (9.0×) |
+| native pyroid chain | 110 s | 739 s (9.4×) |
+
+The Trafilatura step took 5,543 s of stock datatrove's 6,759 CPU seconds at 8 workers, and 514 s
+with pyroid. Stock datatrove dropped 69 pages at its 1 s per-page timeout at 8 workers and 80 at 1
+worker, so its own two runs kept different documents (23,503 and 23,501). pyroid has no timeout and
+kept 23,505 in every run. With the pages stock datatrove dropped left out the same way, the native
+chain's final documents equal stock datatrove's byte for byte for both runs. The results are in
+`bench/results/aws-c7i.4xlarge/2026-11-09-warc/`.

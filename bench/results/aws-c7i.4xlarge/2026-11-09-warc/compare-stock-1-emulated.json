@@ -1,0 +1,69 @@
+{
+ "reference": "stock-1",
+ "identical": true,
+ "runs": [
+  {
+   "run": "stock-1",
+   "mode": "stock",
+   "workers": 1,
+   "wall_seconds": 6975.774,
+   "cpu_seconds": 6928.089,
+   "final_docs": 23501,
+   "trafilatura_lost": 85,
+   "timeouts_of": null,
+   "digests": {
+    "after_minhash_filter": "419f358b5d21213909b4e95fab96890c85beac1e62190ac1c13038a208ac9e0d",
+    "after_pii": "86c5cc5dbacb4036ce08acc373e5cfcee55ea7dd47031eef2a5e8efc10d66a94"
+   },
+   "same_as_reference": {
+    "after_minhash_filter": true,
+    "after_pii": true
+   },
+   "docs": {
+    "warc_reader": 171595,
+    "url_filter": 170446,
+    "trafilatura": 164774,
+    "lid": 58454,
+    "gopher_repetition": 46583,
+    "gopher_quality": 31427,
+    "c4_quality": 28660,
+    "fineweb_quality": 24792,
+    "minhash_filter": 23501,
+    "pii": 23501
+   }
+  },
+  {
+   "run": "native-1x",
+   "mode": "native",
+   "workers": 8,
+   "wall_seconds": 105.082,
+   "cpu_seconds": 770.208,
+   "final_docs": 23501,
+   "trafilatura_lost": 85,
+   "timeouts_of": {
+    "run": "/opt/htmlx/runs/stock-1",
+    "pages": 85
+   },
+   "digests": {
+    "after_minhash_filter": "419f358b5d21213909b4e95fab96890c85beac1e62190ac1c13038a208ac9e0d",
+    "after_pii": "86c5cc5dbacb4036ce08acc373e5cfcee55ea7dd47031eef2a5e8efc10d66a94"
+   },
+   "same_as_reference": {
+    "after_minhash_filter": true,
+    "after_pii": true
+   },
+   "docs": {
+    "warc_reader": 171595,
+    "url_filter": 170446,
+    "trafilatura": 164774,
+    "lid": 58454,
+    "gopher_repetition": 46583,
+    "gopher_quality": 31427,
+    "c4_quality": 28660,
+    "fineweb_quality": 24792,
+    "minhash_filter": 23501,
+    "pii": 23501
+   }
+  }
+ ]
+}
