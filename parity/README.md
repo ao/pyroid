@@ -14,6 +14,7 @@ without editing the suites. Every run writes `parity-report.json`, which feeds t
 | `json_repair` | json_repair 0.64.5 (live + calls recorded from its own test suite + pinned digests) | 672 public calls from json_repair's 466 upstream tests ([`data/json_repair-0.64.5`](data/json_repair-0.64.5/README.md)), 20k generated broken LLM outputs × 8 option sets, Hypothesis grammar fuzzing with lone surrogates, `loads` / `load` / `from_file` | `str` byte-identical; objects and repair logs type-exact (key order, int vs float, NaN); same exception type and message |
 | `trafilatura` | one mode per release (`--trafilatura-compat`): trafilatura 2.3.1, or 1.11.0 as `datatrove[processing]` resolves it, each with lxml 6.1.3 + justext 3.0.2 (live + pinned digests + calls recorded from its own tests) | 7,192 Common Crawl pages of 3 crawls (2019, 2023, 2026) × 7 `extract` option sets, datatrove's call among them (stateful: dedup in page order), also through `extract_batch`, and 2 `bare_extraction` sets; the public calls of the release's own tests, replayed test by test (2.3.1: 4,553 from 3,938 tests, [`data/trafilatura-2.3.1`](data/trafilatura-2.3.1/README.md); 1.11.0: 633 from 29 tests, [`data/trafilatura-1.11.0`](data/trafilatura-1.11.0/README.md)); Hypothesis grammar-generated HTML; unported options in fresh processes | text byte-identical (`None` is not `""`), `Document` fields identical, same exception type and message; exactly one `pyroid.FallbackWarning` per delegated option, none for the ported ones |
 | `warc` | warcio 1.8.2 (+ brotlicffi 1.2.1.0) and datatrove 0.10.1's `WarcReader` (+ faust-cchardet 3.2.0, python-magic 0.4.27) (live + pinned digests) | 34 Common Crawl slices (WARC of 16 crawls 2013–2026, WET, WAT, the 2012 ARC crawl, truncated, empty; 18.6k records) and warcio's 16 test files, [`data/warcio-1.8.2`](data/warcio-1.8.2/README.md); 1,085 seeded synthetic files (framing, gzip damage, lengths, headers, HTTP, chunked, encodings, digests, ARC, charsets, big records) and Hypothesis WARC streams, each under up to 29 read plans × options × openers (file, BytesIO, unseekable, short reads, `gzip.GzipFile`, datatrove's open); `process_record` dicts, `iter_documents`, `iter_batches`, `WarcReader` runs | every record field, read, offset, stderr / log message and exception (with what follows it) identical, event by event; Documents identical |
+| `nemo` | NeMo Curator 1.4.0 on CPython 3.12 (live + pinned outputs, recorded with `PYTHONHASHSEED=0`) | the 28 ScoreFilter stages of NeMo's `heuristic_filter_english_pipeline.yaml` and 22 other filter configs, 20 modifier configs, FastTextLangId (lid.176.bin/.ftz) and FastTextQualityFilter on dev + adversarial ([`data/nemo-curator-1.4.0`](data/nemo-curator-1.4.0/README.md)); str, list and Arrow calls; pyroid's NeMo classes per document and inside NeMo's ScoreFilter / Score / Filter / Modify stages; live Hypothesis per filter and modifier; NeMo's own pipelines stock vs pyroid's stages (`pyroid_parity.nemo_pipeline`, not pytest) | score `repr` and type identical, float64/int64 batches, same stage dtypes, same exception type, output digests identical |
 
 ## Plugging in a module
 
@@ -207,6 +208,45 @@ and 420 s, every check passing.
   and writes counts and the first diffs. On the 100 MB CC-MAIN-2026-39 prefix (8,631 records), warcio against
   itself took 2.5 s per side for `content_stream()` reads over the raw file (Docker VM on Apple Silicon,
   indicative).
+## The nemo suite
+NeMo Curator 1.4.0 is not in this project's dependency groups: it requires Python < 3.14, and its own
+dependencies include torch, transformers, datasets and mecab-python3, which its CPU text stages do not import. It
+is installed without them in a separate env, CPython 3.12 in Docker (Linux):
+
+```bash
+uv venv -p 3.12 /target/parity/venv && P=/target/parity/venv/bin/python
+uv pip install -p $P --no-deps nemo_curator-1.4.0.tar.gz         # the sdist from PyPI
+uv pip install -p $P fasttext-0.9.3-cp312-cp312-linux_aarch64.whl  # pip wheel --no-build-isolation fasttext==0.9.3, g++ 12
+uv pip install -p $P numpy==2.5.4 pandas==3.1.1 pyarrow==26.0.1 regex==2026.11.9 ftfy==6.3.1 jieba==0.42.1 \
+  loguru fsspec hydra-core==1.3.8 omegaconf "ray[data]==2.60.0" cosmos-xenna==0.2.0 platformdirs requests \
+  pytest pytest-timeout hypothesis
+uv pip install -p $P --no-deps dist/pyroid-*.whl                    # the candidate
+```
+
+```bash
+cd parity
+PYROID_DATA=... python -m pyroid_parity.refs nemo [--pin]                 # the references (re-runs with PYTHONHASHSEED=0)
+python -m pytest tests/test_nemo.py --impl pyroid.nemo                    # suite nemo
+python -m pyroid_parity.nemo_pipeline all                                 # NeMo's pipelines, stock vs pyroid
+```
+
+- **Pinned files:** `parity/nemo-ref.parquet` (linux-aarch64; it holds fastText floats, so another platform pins
+  its own) and `models/nemo-quality-dev10k.ftz`, the quality model the `nemo` step trains with fasttext 0.9.3
+  ([`data/nemo-curator-1.4.0`](data/nemo-curator-1.4.0/README.md)). The step is not part of `refs all`.
+- **Hash seed:** RepeatingTopNGramsFilter breaks ties between the most frequent n-grams in `set` iteration order,
+  which follows the string hash seed: two stock runs of the same pipeline give different scores. The references
+  are recorded with `PYTHONHASHSEED=0`, under which the tie order is the same on CPython 3.12 to 3.15t. The suite
+  runs the pinned checks of those cases in a subprocess with that seed when the test process has another;
+  `nemo_pipeline` sets it before Ray starts.
+- **Free-threaded legs:** on 3.14t and 3.15t the parity env has no NeMo, so the pinned checks of `pyroid.nemo` run
+  and the live, integration and stage checks skip with the reason.
+- **Self-check:** without `--impl` the candidate is NeMo itself, on the first 1000 documents of each corpus and the
+  adversarial edge cases (`--parity-limit 0` for all: 296 checks pass in 12 min).
+- **Pipelines:** `pyroid_parity.nemo_pipeline` runs `heuristic_filter_english_pipeline.yaml` (through hydra, with
+  ParquetReader) and a fastText + modifier pipeline, stock, with every `_target_` pointed at
+  `pyroid.integrations.nemo_curator`, and after `pyroid.patch("nemo_curator")`, on one Ray cluster of 4 CPUs at a
+  time, and compares kept ids, columns, dtypes and every cell; see its docstring. Three stock runs of each gave
+  identical outputs (2026-11-10).
 
 ## Oracle choices
 - fastText: fasttext-predict 0.9.2.4.
