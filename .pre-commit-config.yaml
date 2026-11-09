@@ -28,6 +28,9 @@ repos:
             crates/pyroid-core/tests/metrics_data/|
             crates/pyroid-core/tests/html_data/|
             crates/pyroid-core/tests/trafilatura_data/|
+            crates/pyroid-core/tests/data/warc/|
+            crates/pyroid-core/tests/warc_gzipfile_data/|
+            crates/pyroid-core/src/warc/tables\.rs$|
             crates/pyroid-core/src/json_repair/testdata/|
             crates/pyroid-core/src/jieba/testdata/|
             crates/pyroid-core/src/nltk/testdata/|
