@@ -1,5 +1,5 @@
 {
-  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'runs' holds the consolidated EC2 runs: 'label' and 'rows' are copied from each run folder's consolidated.json, 'chain' from the end-to-end table of its CONSOLIDATED.md (with en dashes and ×), 'source' is the folder in this repository and 'caption' is the short name the page prints. 'more' holds runs outside the consolidated benchmark, all in the Docker VM ('more_label'), each group with its own source. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
+  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'runs' holds the consolidated EC2 runs: 'label' and 'rows' are copied from each run folder's consolidated.json, 'chain' from the end-to-end table of its CONSOLIDATED.md (with en dashes and ×), 'source' is the folder in this repository and 'caption' is the short name the page prints. 'more' holds runs outside the consolidated benchmark, all in the Docker VM ('more_label'), each group with its own source. 'tables' holds hand-entered tables with columns of their own (the WARC run), each with its caption and source. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
   "runs": {
     "c7i-100k": {
       "caption": "c7i.4xlarge, 100,000 documents",
@@ -188,6 +188,20 @@
       "source": "bench/results/orbstack-aarch64-12cpu/2026-11-09-nltk (bench/nltk_bench.py)"
     },
     {
+      "title": "pyroid.trafilatura",
+      "guide": "trafilatura",
+      "note": "Milliseconds per page over 1,000 pages of the CC-MAIN-2026-39 development sample (157,000 characters each on average), CPython 3.13, release wheel, load average 2 to 4. Each mode against its own trafilatura release, with lxml 6.1.3 and jusText 3.0.2, and every page's text first checked identical. datatrove's call is `favor_precision=True, include_comments=False, deduplicate=True`; with dedup, pages are extracted in page order, so threads only parse ahead.",
+      "columns": ["Call", "`compat=\"2.3.1\"`", "trafilatura 2.3.1", "Speedup", "`compat=\"1.11.0\"`", "trafilatura 1.11.0", "Speedup"],
+      "rows": [
+        ["`extract(page)`, one page at a time", "4.4", "31.6", "7.2×", "2.7", "23.4", "8.6×"],
+        ["`extract_batch`, 1 / 4 / 8 threads", "4.1 / 0.99 / 0.50", "", "", "2.7 / 0.68 / 0.33", "", ""],
+        ["datatrove's call, one page at a time", "3.5", "27.3", "7.8×", "3.0", "32.4", "10.8×"],
+        ["datatrove's call through `extract_batch`, 1 / 4 / 8 threads", "3.4 / 2.0 / 2.0", "", "", "2.9 / 2.1 / 2.1", "", ""],
+        ["datatrove's `Trafilatura` step, one task, `threads=1` / `threads=8`, against datatrove's own step", "3.0 / 2.1", "26.3", "8.7×", "2.9 / 2.2", "32.9", "11×"]
+      ],
+      "source": "the trafilatura port's timing runs on 2026-11-09, whose scripts are not in the repository"
+    },
+    {
       "title": "Languages: FineWeb-2 filters and MinHash",
       "guide": "languages",
       "note": "µs per document over 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (2 for datatrove). Every timed document was first checked for the same keep/drop, reason and signatures. The filters are FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality) with each language's settings; MinHash computes FineWeb-2's signatures. datatrove's 8 processes are a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16.",
@@ -233,5 +247,21 @@
       ],
       "source": "examples/datatrove/verify.py and the pyroid CLI, timed with bash's `time` on 2026-11-06"
     }
-  ]
+  ],
+  "tables": {
+    "c7i-warc": {
+      "caption": "AWS EC2 c7i.4xlarge (Intel Xeon Platinum 8488C, 16 vCPU), Amazon Linux 2023, every run on CPUs 0 to 7; CPython 3.13.18, datatrove 0.10.1 with trafilatura 1.11.0, and a pyroid release wheel built on the instance. 8 WARC files of CC-MAIN-2026-39 (7.5 GB, 171,595 HTML records), one task per file. Each run was timed once; fastest first. CPU s is user+sys including the worker processes. The Trafilatura column is the time datatrove's statistics give that step, summed over tasks.",
+      "columns": ["Run", "Wall s", "vs stock datatrove, same workers", "CPU s", "Trafilatura step, s", "Pages dropped at the 1 s timeout", "Documents kept", "Peak RSS of the largest process, MiB"],
+      "rows": [
+        ["datatrove with pyroid's steps, 8 workers", "104.0", "8.4×", "792", "514", "0", "23,505", "1,206"],
+        ["native pyroid chain, 8 workers", "110.3", "7.9×", "808", "526", "0", "23,505", "874"],
+        ["native pyroid chain, 1 worker", "738.7", "9.4×", "740", "487", "0", "23,505", "885"],
+        ["datatrove with pyroid's steps, 1 worker", "775.9", "9.0×", "777", "506", "0", "23,505", "1,229"],
+        ["stock datatrove, 8 workers", "870.8", "1.0×", "6,759", "5,543", "69", "23,503", "965"],
+        ["stock datatrove, 1 worker", "6,975.8", "1.0×", "6,928", "5,720", "80", "23,501", "982"]
+      ],
+      "footnote": "In every run, 5 more pages are lost because trafilatura 1.11.0 itself raises on them: datatrove's child process dies, and pyroid's step counts them as `broken_process` and drops them the same way.",
+      "source": "bench/fineweb_warc.py and bench/ec2/run_warc.sh, run on 2026-11-09 (bench/results/aws-c7i.4xlarge/2026-11-09-warc: runs/*/summary.json and compare*.txt)"
+    }
+  }
 }

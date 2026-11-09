@@ -10,6 +10,8 @@ Each block sits between ``<!-- bench:KIND:KEY:begin -->`` and ``<!-- bench:KIND:
 - ``more``: runs outside the consolidated benchmark (other modules, languages, datatrove steps),
   from ``more``: groups of ``title``, ``guide``, ``note``, ``columns``, ``rows`` (lists of cells),
   optional ``footnote``, and their own ``source``. ``KEY`` is unused (write ``all``).
+- ``table``: one hand-entered table, ``tables[KEY]``: ``caption``, ``columns``, ``rows`` (lists of
+  cells), optional ``footnote``, and ``source``.
 
 Every value is a string, copied as it is: nothing is computed here. To publish a new consolidated
 run, add it under ``runs`` with ``rows`` and ``label`` copied from its ``consolidated.json``, the
@@ -127,10 +129,26 @@ def render_more(data: dict[str, Any], key: str) -> list[str]:
     return lines[:-1]
 
 
+def render_table(data: dict[str, Any], key: str) -> list[str]:
+    """One hand-entered table (a run with columns of its own), with its caption and source."""
+    table = data["tables"][key]
+    lines = [
+        table["caption"],
+        "",
+        "| " + " | ".join(table["columns"]) + " |",
+        "|---|" + "---:|" * (len(table["columns"]) - 1),
+    ]
+    lines.extend("| " + " | ".join(row) + " |" for row in table["rows"])
+    if table.get("footnote"):
+        lines += ["", table["footnote"]]
+    return [*lines, "", source(table["source"])]
+
+
 RENDERERS: dict[str, Callable[[dict[str, Any], str], list[str]]] = {
     "chain": render_chain,
     "stages": render_stages,
     "more": render_more,
+    "table": render_table,
 }
 
 
