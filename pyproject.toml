@@ -220,6 +220,12 @@ mypy_path = "python"
 files = ["python/pyroid", "python/tests"]
 
 [[tool.mypy.overrides]]
+# pyroid.integrations.nemo_curator and its tests: NeMo Curator 1.4.0 ships no py.typed, and the
+# mypy hook installs neither it nor pandas (pandas-stubs is not a dependency).
+module = ["nemo_curator", "nemo_curator.*", "pandas", "pandas.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # pyarrow 26 ships neither py.typed nor stubs.
 module = ["pyarrow", "pyarrow.*"]
 ignore_missing_imports = true

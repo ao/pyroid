@@ -57,16 +57,16 @@ from typing import Any, Literal, NamedTuple
 
 import numpy as np
 import pandas as pd
-from nemo_curator.stages import base as _nc_base  # type: ignore[import-not-found,unused-ignore]
-from nemo_curator.stages.text.filters import doc_filter as _nc_doc_filter  # type: ignore[import-not-found,unused-ignore]
-from nemo_curator.stages.text.filters import score_filter as _nc_sf  # type: ignore[import-not-found,unused-ignore]
-from nemo_curator.stages.text.filters.heuristic import string as _nc_hs  # type: ignore[import-not-found,unused-ignore]
-from nemo_curator.stages.text.filters.heuristic.repetition import repetition as _nc_hr  # type: ignore[import-not-found,unused-ignore]
-from nemo_curator.stages.text.modifiers import doc_modifier as _nc_doc_modifier  # type: ignore[import-not-found,unused-ignore]
-from nemo_curator.stages.text.modifiers import modifier as _nc_modifier  # type: ignore[import-not-found,unused-ignore]
-from nemo_curator.stages.text.modifiers import string as _nc_ms  # type: ignore[import-not-found,unused-ignore]
-from nemo_curator.stages.text.modifiers.fasttext import fasttext_label as _nc_ftl  # type: ignore[import-not-found,unused-ignore]
-from nemo_curator.stages.text.utils import constants as _nc_constants  # type: ignore[import-not-found,unused-ignore]
+from nemo_curator.stages import base as _nc_base
+from nemo_curator.stages.text.filters import doc_filter as _nc_doc_filter
+from nemo_curator.stages.text.filters import score_filter as _nc_sf
+from nemo_curator.stages.text.filters.heuristic import string as _nc_hs
+from nemo_curator.stages.text.filters.heuristic.repetition import repetition as _nc_hr
+from nemo_curator.stages.text.modifiers import doc_modifier as _nc_doc_modifier
+from nemo_curator.stages.text.modifiers import modifier as _nc_modifier
+from nemo_curator.stages.text.modifiers import string as _nc_ms
+from nemo_curator.stages.text.modifiers.fasttext import fasttext_label as _nc_ftl
+from nemo_curator.stages.text.utils import constants as _nc_constants
 
 import pyroid
 import pyroid.ftfy
@@ -442,7 +442,7 @@ class _OneDoc:
 # --- fastText -------------------------------------------------------------------------------------
 
 try:
-    from nemo_curator.stages.text.filters.fasttext import fasttext_filters as _nc_ft  # type: ignore[import-not-found,unused-ignore]
+    from nemo_curator.stages.text.filters.fasttext import fasttext_filters as _nc_ft
 
     _LangIdBase: Any = _nc_ft.FastTextLangId
     _QualityBase: Any = _nc_ft.FastTextQualityFilter
@@ -474,7 +474,7 @@ class FastTextQualityFilter(_QualityBase):
         self._model_path = model_path
         self._label = label
         self._alpha = alpha
-        self._seed = np.random.seed(seed)  # type: ignore[func-returns-value]
+        self._seed = np.random.seed(seed)
         self._name = "fasttext_quality_filter"
 
     def model_check_or_download(self) -> None:
@@ -555,22 +555,21 @@ class FastTextLangId(_LangIdBase):
             # NeMo parses its score strings with eval(); literal_eval gives the same values for
             # every string score_document makes and never runs code from a score column.
             score_lang = ast.literal_eval(score)
-            score = score_lang[0]
+            value: Any = score_lang[0]
             lang = score_lang[1].casefold()
         else:
             msg = "score must be a string convertible to list"
             raise TypeError(msg)
-        return self._keep(score, lang)
-
-    def _keep(self, score: float, lang: str) -> bool:
         if self._lang_code:
-            lang_filter = self._lang_code.casefold()
-            if "_" in lang_filter:
-                language_matches = lang == lang_filter
-            else:
-                language_matches = lang.split("_", maxsplit=1)[0] == lang_filter
-            return bool(score >= self._cutoff and language_matches)
-        return bool(score >= self._cutoff)
+            return bool(value >= self._cutoff and self._lang_matches(lang))
+        return bool(value >= self._cutoff)
+
+    def _lang_matches(self, lang: str) -> bool:
+        """NeMo's language test for a casefolded label (``lang`` given)."""
+        lang_filter = str(self._lang_code).casefold()
+        if "_" in lang_filter:
+            return bool(lang == lang_filter)
+        return bool(lang.split("_", maxsplit=1)[0] == lang_filter)
 
 
 def _fasttext_model(f: Any, attr: str) -> Any:
@@ -582,7 +581,7 @@ def _fasttext_model(f: Any, attr: str) -> Any:
 
 def _langid_batch(
     f: FastTextLangId, series: pd.Series, threads: int | None
-) -> tuple[pd.Series, np.ndarray] | None:
+) -> tuple[pd.Series, np.ndarray | None] | None:
     model = _fasttext_model(f, "_fasttext_langid_model")
     texts = _texts(series) if model is not None and len(series) else None
     if texts is None:
@@ -597,9 +596,11 @@ def _langid_batch(
     else:
         # keep_document parses back exactly these floats and strings (repr round-trips): decide once
         # per distinct language, then compare the scores as arrays.
-        codes, uniq = pd.factorize(pd.Series(langs, dtype=object))
-        matches = np.array([f._keep(f._cutoff, str(lang).casefold()) for lang in uniq], dtype=bool)
-        keep = (probs >= f._cutoff) & matches[codes]
+        keep = probs >= f._cutoff
+        if f._lang_code:
+            codes, uniq = pd.factorize(pd.Series(langs, dtype=object))
+            matches = np.array([f._lang_matches(str(lang).casefold()) for lang in uniq], dtype=bool)
+            keep &= matches[codes]
     return _like_apply(series, strings), keep
 
 
@@ -927,7 +928,7 @@ class FastTextLabelModifier(_OneModify, _nc_ftl.FastTextLabelModifier):
 
 
 try:
-    from nemo_curator.stages.text.modifiers.unicode import unicode_reformatter as _nc_ur  # type: ignore[import-not-found,unused-ignore]
+    from nemo_curator.stages.text.modifiers.unicode import unicode_reformatter as _nc_ur
 
     _UnicodeBase: Any = _nc_ur.UnicodeReformatter
 except ImportError:  # ftfy is not installed: NeMo's module imports it at the top
