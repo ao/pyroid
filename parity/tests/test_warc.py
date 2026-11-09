@@ -28,8 +28,8 @@ Checks (suite ``warc`` in parity-report.json):
     iter-documents-<group>    ``iter_documents(path)`` == datatrove's read path (``warc_datatrove``)
     iter-documents-fileobj    ``iter_documents(file object, compression="gzip" / None)``
     documents-<group>-pinned  datatrove's read path == the pinned digests (same libmagic only)
-    batches-documents         ``iter_batches`` rows with text == the documents; ``batches-columns``: their html,
-                              mime_type and content_type; ``batches-rows``: the rows without text
+    batches-rows              ``iter_batches`` rows (all columns) == datatrove's view of them; ``batches-exception``;
+                              ``batches-documents``: the rows with text are the documents
     warcreader                ``<top>.integrations.datatrove.WarcReader(folder, **kw).run()`` == datatrove's
     warcreader-executor       the same through ``LocalPipelineExecutor`` + ``JsonlWriter``
     hypothesis-documents      grammar-generated streams through both datatrove paths
@@ -493,13 +493,6 @@ def test_documents_pinned(parity: Collector, request: pytest.FixtureRequest, gro
     assert not bad, f"datatrove's read path differs from the pins on {bad[:MAX_DETAIL]}"
 
 
-def _reference_rows(path: Path) -> list[list[Any]] | None:
-    try:
-        return list(T.reference_rows(path))
-    except Exception:  # noqa: BLE001
-        return None
-
-
 BATCH_GROUPS = [
     "cc",
     "warcio-tests",
@@ -516,7 +509,13 @@ BATCH_GROUPS = [
 def test_batches(
     warc_impl: Any, parity: Collector, request: pytest.FixtureRequest, group: str, batch_size: int
 ) -> None:
-    """Whole files; for the Common Crawl slices every fifth one unless ``--parity-limit 0``."""
+    """Whole files; for the Common Crawl slices every fifth one unless ``--parity-limit 0``.
+
+    ``batches-rows``: every row, all seven columns, == ``warc_datatrove.reference_rows`` (url / date null where
+    datatrove's fallback raises KeyError, as pyroid.warc documents; the rows before any other exception);
+    ``batches-exception``: the exception that ends the batches; ``batches-documents``: the rows with text are,
+    in order, datatrove's documents (up to where datatrove raises).
+    """
     _need_inputs(parity, "batches-documents")
     _need_datatrove(parity, "batches-documents")
     cand = warc_impl.obj
@@ -527,46 +526,34 @@ def test_batches(
     inputs = P.document_inputs(group)
     if P.limited(group) and record_limit(request) != 0:
         inputs = inputs[::5]
+
+    def ends(events: list[C.Event]) -> list[Any]:
+        return [e[2:4] for e in events if len(e) > 1 and e[0] == "next" and e[1] == "raise"]
+
     for name, path in inputs:
+        case = f"{name} [{batch_size}]"
         got = T.batch_events(cand.mod, path, batch_size, cand.exc_name)
         rows = [r for e in got if e[0] == "item" for r in e[4]]
-        got_end = [e for e in got if e[0] != "item"]
+        ref = T.events_of(lambda path=path: T.reference_rows(path), lambda r: [r], ref_name)
+        ref_rows = [e[2] for e in ref if e[0] == "item"]
+        if not parity.record(
+            SUITE, "batches-rows", rows == ref_rows, case=case, got=rows[:2], want=ref_rows[:2]
+        ):
+            k = next((i for i, (a, b) in enumerate(zip(rows, ref_rows, strict=False)) if a != b), None)
+            diffs.append(f"{case}: rows differ (first at {k}; {len(rows)} vs {len(ref_rows)})")
+        g_exc, w_exc = ends(got), ends(ref)
+        if not parity.record(SUITE, "batches-exception", g_exc == w_exc, case=case, got=g_exc, want=w_exc):
+            diffs.append(f"{case}: exception {g_exc} vs {w_exc}")
         docs = T.events_of(lambda path=path: T.reference_documents(path), T.doc_view, ref_name)
-        want_docs = [e for e in docs if e[0] == "item"]
-        want_end = [e for e in docs if e[0] not in ("item",)]
-        # Rows with text, in order, are the documents (id, url, date, text).
+        want_text = [[e[5]["id"], e[5]["url"], e[5]["date"], e[4]] for e in docs if e[0] == "item"]
         with_text = [[r[0], r[1], r[2], r[6]] for r in rows if r[6] is not None]
-        want_text = [[e[5]["id"], e[5]["url"], e[5]["date"], e[4]] for e in want_docs]
-        ok = with_text == want_text[: len(with_text)] and (
-            len(with_text) == len(want_text) or any(e[1] == "raise" for e in want_end if len(e) > 1)
+        ok = with_text[: len(want_text)] == want_text and (
+            len(with_text) == len(want_text) or bool(ends(docs))
         )
         if not parity.record(
-            SUITE,
-            "batches-documents",
-            ok,
-            case=f"{name} [{batch_size}]",
-            got=with_text[:3],
-            want=want_text[:3],
+            SUITE, "batches-documents", ok, case=case, got=with_text[:3], want=want_text[:3]
         ):
-            diffs.append(
-                f"{name} [{batch_size}]: {len(with_text)} rows with text, {len(want_text)} documents"
-            )
-        g_exc = [e[2:4] for e in got_end if len(e) > 1 and e[1] == "raise" and e[0] == "next"]
-        w_exc = [e[2:4] for e in want_end if len(e) > 1 and e[1] == "raise" and e[0] == "next"]
-        if not parity.record(SUITE, "batches-exception", g_exc == w_exc, case=name, got=g_exc, want=w_exc):
-            diffs.append(f"{name}: exception {g_exc} vs {w_exc}")
-        ref_rows = _reference_rows(path)
-        if ref_rows is None:  # it raises: the documents check covers the exception
-            continue
-        full = [r for r in ref_rows if r[6] is not None]
-        got_full = [r for r in rows if r[6] is not None]
-        if not parity.record(
-            SUITE, "batches-columns", got_full == full, case=name, got=got_full[:2], want=full[:2]
-        ):
-            diffs.append(f"{name}: columns of the rows with text differ")
-        parity.record(
-            SUITE, "batches-rows", len(rows) == len(ref_rows), case=name, got=len(rows), want=len(ref_rows)
-        )
+            diffs.append(f"{case}: {len(with_text)} rows with text, {len(want_text)} documents")
     assert not diffs, "\n".join(diffs[:MAX_DETAIL])
 
 
@@ -628,7 +615,7 @@ def test_warcreader(warc_impl: Any, parity: Collector, folder: str) -> None:
     if warc_impl.is_reference:
         skip(parity, check, "candidate is warcio itself: both readers are datatrove's")
     if cand.reader_cls is None:
-        skip(parity, check, "the candidate package has no integrations.datatrove.WarcReader")
+        skip(parity, check, getattr(cand, "reader_missing", "no integrations.datatrove.WarcReader"))
     folders = reader_folders()
     if folder not in folders:
         skip(parity, check, "pinned warc inputs missing here")
@@ -748,7 +735,12 @@ def test_api_signature(warc_impl: Any, parity: Collector, name: str) -> None:
             skip(parity, check, "no iter_documents")
         want: Any = [("source", "POSITIONAL_OR_KEYWORD", empty), ("compression", "KEYWORD_ONLY", "'infer'")]
         got = _params(mod.iter_documents)
-        ok = got == want
+        # Extensions are fine as keyword-only parameters with defaults (pyroid.warc: iterator_cls=).
+        ok = (
+            isinstance(got, list)
+            and got[:2] == want
+            and all(k == "KEYWORD_ONLY" and d != empty for _, k, d in got[2:])
+        )
     elif name == "iter_batches":
         if not hasattr(mod, name):
             skip(parity, check, "no iter_batches")

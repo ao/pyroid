@@ -412,18 +412,22 @@ class GenericWarc:
         self.has_documents = hasattr(mod, "iter_documents")
         self.has_batches = hasattr(mod, "iter_batches")
         self.reader_cls: Any = getattr(mod, "datatrove_reader", None)
+        self.reader_missing = f"{top}.integrations.datatrove has no WarcReader"
         if self.reader_cls is None:
             try:
                 self.reader_cls = importlib.import_module(f"{top}.integrations.datatrove").WarcReader
-            except (ImportError, AttributeError):
+            except AttributeError:
                 self.reader_cls = None
+            except ImportError as e:
+                self.reader_cls = None
+                self.reader_missing = f"{top}.integrations.datatrove does not import here: {e}"
         self.notes = []
         if not self.has_documents:
             self.notes.append("no iter_documents: those checks skip")
         if not self.has_batches:
             self.notes.append("no iter_batches: those checks skip")
         if self.reader_cls is None:
-            self.notes.append(f"no {top}.integrations.datatrove.WarcReader: the WarcReader checks skip")
+            self.notes.append(f"{self.reader_missing}: the WarcReader checks skip")
 
 
 GENERIC: dict[str, Callable[[Any], Any]] = {

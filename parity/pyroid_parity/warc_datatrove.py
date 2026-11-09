@@ -170,8 +170,9 @@ def reference_rows(path: Path) -> Iterator[list[Any]]:
 
     Those are the response and conversion records whose ``WARC-Identified-Payload-Type`` is missing or one
     datatrove keeps. Columns: id, url, date (``process_record``'s, or the WARC headers' when it gives no
-    document), mime_type (the WARC payload type), content_type (the HTTP Content-Type), html (the content
-    stream), text (``process_record``'s text, or None).
+    document; None where its ``dict(headers)["uri"]`` / ``["archive-date"]`` fallback raises KeyError, as
+    pyroid.warc documents), mime_type (the WARC payload type), content_type (the HTTP Content-Type), html (the
+    content stream), text (``process_record``'s text, or None).
     """
     from datatrove.pipeline.readers.warc import process_record
     from warcio.archiveiterator import ArchiveIterator
@@ -191,8 +192,8 @@ def reference_rows(path: Path) -> Iterator[list[Any]]:
             d = process_record(proxy)
             yield [
                 repr(d["id"] if d else rec.rec_headers.get("WARC-Record-ID")),
-                repr(d["url"] if d else rec.rec_headers.get("WARC-Target-URI")),
-                repr(d["date"] if d else rec.rec_headers.get("WARC-Date")),
+                repr(row_value(d["url"]) if d else fallback(rec.rec_headers, "WARC-Target-URI", "uri")),
+                repr(row_value(d["date"]) if d else fallback(rec.rec_headers, "WARC-Date", "archive-date")),
                 repr(mime),
                 repr(ctype),
                 bytes_view(html),
@@ -200,12 +201,42 @@ def reference_rows(path: Path) -> Iterator[list[Any]]:
             ]
 
 
+_MISSING = "\0pyroid-parity: datatrove raises KeyError here"
+
+
+def fallback(h: Any, name: str, key: str) -> Any:
+    """``process_record``'s url / date rule for a record it gives no document for: the header, else
+    ``dict(headers)[key]``, else None (where datatrove would raise KeyError)."""
+    return h.get(name, None) or dict(h.headers).get(key)
+
+
+def row_value(v: Any) -> Any:
+    """A row's url / date: None where datatrove's fallback raises KeyError."""
+    return None if v == _MISSING else v
+
+
+class _Headers:
+    """A record's WARC headers as ``process_record`` reads them, with ``uri`` / ``archive-date`` for its
+    ``dict(headers)[...]`` fallbacks when the record has none (``iter_batches`` documents nulls there)."""
+
+    def __init__(self, h: Any) -> None:
+        self._h = h
+        have = dict(h.headers)
+        self.headers = list(h.headers) + [(k, _MISSING) for k in ("uri", "archive-date") if k not in have]
+
+    def get(self, name: str, default: Any = None) -> Any:
+        return self._h.get(name, default)
+
+    def __getitem__(self, name: str) -> Any:
+        return self._h[name]
+
+
 class _Replay:
     """A record whose content stream replays bytes already read (``process_record`` reads it once)."""
 
     def __init__(self, rec: Any, data: bytes) -> None:
         self.rec_type = rec.rec_type
-        self.rec_headers = rec.rec_headers
+        self.rec_headers = _Headers(rec.rec_headers)
         self.http_headers = rec.http_headers
         self._data = data
 

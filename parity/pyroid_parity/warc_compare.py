@@ -28,6 +28,10 @@ Events are lists of str / int / bool / None, so a trace is JSON and its sha256 c
 in the ``io`` channel (``fh.tell()`` after each record, the read calls of the ``logged`` opener) are compared
 separately: they show how an implementation consumes its source, which users see only through ``tell()``.
 
+Streams are recorded by what they are, not by class: ``content_stream()`` is either the record's ``raw_stream``
+itself or a decoder (warcio's ``LimitReader`` / ``ChunkedDataReader`` and pyroid's ``RawStream`` / ``ContentStream``
+are implementation details).
+
 ``arc2warc`` gives converted ARC records a fresh ``uuid4`` record ID; those IDs are checked for shape and
 replaced by ``<urn:uuid:*>`` before comparing.
 """
@@ -462,7 +466,9 @@ def run_plan(step: Step, it: Any, rec: Any, cfg: Config, i: int, mask: bool) -> 
         step("cs.read", lambda: rec.content_stream().read(), chunk)
         return
     if plan == "blocks":
-        ok, cs = step("cs.new", rec.content_stream, lambda s: type(s).__name__)
+        ok, cs = step(
+            "cs.new", rec.content_stream, lambda s: "raw_stream" if s is rec.raw_stream else "decoder"
+        )
         n = 0
         while ok:
             ok, b = step("cs.read", lambda: cs.read(16384), chunk)
@@ -502,7 +508,9 @@ def run_plan(step: Step, it: Any, rec: Any, cfg: Config, i: int, mask: bool) -> 
         )
         n = rng.choice(SIZES)
         if op in ("cs.read", "cs.readline", "cs.new") and (op == "cs.new" or not cs):
-            ok, s = step("cs.new", rec.content_stream, lambda s: type(s).__name__)
+            ok, s = step(
+                "cs.new", rec.content_stream, lambda s: "raw_stream" if s is rec.raw_stream else "decoder"
+            )
             cs[:] = [s] if ok else []
             if op == "cs.new" or not ok:
                 continue

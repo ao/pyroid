@@ -274,8 +274,12 @@ def _batches(source: Any, batch_size: int, compression: Any) -> Iterator[Any]:
             html = rec.content_stream().read()
             d = process_record(T._Replay(rec, html))
             rows["id"].append(d["id"] if d else rec.rec_headers.get("WARC-Record-ID"))
-            rows["url"].append(d["url"] if d else rec.rec_headers.get("WARC-Target-URI"))
-            rows["date"].append(d["date"] if d else rec.rec_headers.get("WARC-Date"))
+            rows["url"].append(
+                T.row_value(d["url"]) if d else T.fallback(rec.rec_headers, "WARC-Target-URI", "uri")
+            )
+            rows["date"].append(
+                T.row_value(d["date"]) if d else T.fallback(rec.rec_headers, "WARC-Date", "archive-date")
+            )
             rows["mime_type"].append(None if "batches" in ACTIVE else mime)
             rows["content_type"].append(
                 rec.http_headers.get_header("Content-Type") if rec.http_headers else None
