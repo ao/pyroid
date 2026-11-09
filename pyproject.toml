@@ -46,8 +46,10 @@ datasketch = ["numpy>=1.26"]
 # pyroid.integrations.recipes.
 cli = ["pyarrow>=18", "numpy>=1.26"]
 # pyroid.integrations.datatrove: drop-in steps; they reproduce datatrove 0.10.1. regex and
-# tokenizers: datatrove.pipeline.filters imports them, but datatrove does not declare them.
-datatrove = ["datatrove>=0.10.1", "regex", "tokenizers", "numpy>=1.26"]
+# tokenizers: datatrove.pipeline.filters imports them, but datatrove does not declare them. orjson:
+# datatrove's JsonlWriter and JsonlReader need it (datatrove's `io` extra, with no floor); 3.2 added
+# the OPT_APPEND_NEWLINE its writer passes.
+datatrove = ["datatrove>=0.10.1", "regex", "tokenizers", "numpy>=1.26", "orjson>=3.2"]
 # pyroid.integrations.hf: Hugging Face datasets helpers.
 hf = ["datasets>=3", "pyarrow>=18", "numpy>=1.26"]
 

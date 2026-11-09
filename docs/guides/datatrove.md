@@ -10,8 +10,7 @@ FineWeb pipeline gives the same per-document digest as the stock pipeline in dat
 executor ([parity](../compatibility.md#integrations)).
 
 ```console
-$ pip install "pyroid[datatrove]"     # datatrove, regex, tokenizers, numpy
-$ pip install orjson                   # for datatrove's JsonlWriter (its `io` extra)
+$ pip install "pyroid[datatrove]"     # datatrove, regex, tokenizers, numpy, orjson
 ```
 
 ## Change one import
@@ -134,7 +133,7 @@ writer, then MinHash with FineWeb's settings. `MinhashDedupSignature` comes from
 `--stock` runs datatrove's own steps for comparison.
 
 ```console
-$ pip install "pyroid[datatrove]" orjson
+$ pip install "pyroid[datatrove]"
 $ python fineweb.py data/ out/ --tasks 2 --workers 2 --lid-model lid.176.bin
 ```
 
