@@ -8,6 +8,7 @@
 use memchr::memmem;
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use super::pyhash::{self, HashKey, PySet};
 use super::text::{ScoreError, Splitter, paragraphs, ratio, sentences};
 use crate::filters::text::py_len;
 
@@ -90,11 +91,12 @@ fn intern<'a>(words: impl Iterator<Item = &'a str>) -> (Vec<&'a str>, Vec<u32>) 
 /// `RepeatingTopNGramsFilter`'s result for one document.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TopNGram {
-    /// NeMo's score: the most frequent n-gram is unique, or there are fewer than `n` words.
+    /// NeMo's score: the most frequent n-gram is unique, there are fewer than `n` words, or
+    /// the tie was resolved with the interpreter's hash key.
     Score(f64),
     /// Several n-grams share the top count. NeMo takes the first of them in the iteration
-    /// order of `set(ngrams)`, which depends on the process's string hash seed, so the
-    /// caller picks it in Python.
+    /// order of `set(ngrams)`, which depends on the process's string hash seed; without the
+    /// key the caller picks it in Python.
     Tied(Tie),
 }
 
@@ -124,14 +126,54 @@ pub fn top_ngram_score(text: &str, words: &[&str]) -> f64 {
     ratio(k * py_len(&joined), nchar)
 }
 
+/// The first n-gram of `set(ngrams)`'s iteration order with `top` occurrences, as CPython
+/// orders it with `key`. `uniq` holds `(count, first start)` per distinct n-gram, in order of
+/// first occurrence (the order `set()` inserts them; repeats change nothing).
+fn first_in_set_order(
+    key: HashKey,
+    words: &[&str],
+    ids: &[u32],
+    n: usize,
+    uniq: &[(usize, usize)],
+    top: usize,
+) -> usize {
+    // hash(word), once per distinct word.
+    let mut word_hash: Vec<Option<i64>> = Vec::new();
+    let mut buf = Vec::new();
+    for (&w, &id) in words.iter().zip(ids) {
+        let id = id as usize;
+        if id >= word_hash.len() {
+            word_hash.resize(id + 1, None);
+        }
+        if word_hash[id].is_none() {
+            word_hash[id] = Some(pyhash::str_hash(key, w, &mut buf));
+        }
+    }
+    let lane = |id: &u32| word_hash[*id as usize].expect("every word is hashed");
+    let mut set = PySet::new();
+    for (k, &(_, start)) in uniq.iter().enumerate() {
+        let hash = pyhash::tuple_hash(ids[start..start + n].iter().map(lane));
+        let item = u32::try_from(k).expect("fewer than 2**32 distinct n-grams");
+        // The n-grams are distinct: an equal hash is a collision, never the same tuple.
+        set.add(item, hash, |_, _| false);
+    }
+    set.iter()
+        .map(|k| uniq[k as usize])
+        .find(|&(count, _)| count == top)
+        .map_or(0, |(_, start)| start)
+}
+
 /// `RepeatingTopNGramsFilter(n)`: the share of characters the most frequent word n-gram
 /// covers (`" ".join(ngram)` removed from `text`); 1.0 below `n` words.
 ///
-/// `n < 1` gives no n-grams, and NeMo's `max()` raises ValueError.
+/// When several n-grams share the top count, NeMo takes the first in `set(ngrams)` order:
+/// with the interpreter's hash `key` that is resolved here, else the document comes back
+/// [`TopNGram::Tied`]. `n < 1` gives no n-grams, and NeMo's `max()` raises ValueError.
 pub fn repeating_top_ngrams(
     text: &str,
     n: i64,
     splitter: Splitter,
+    key: Option<HashKey>,
 ) -> Result<TopNGram, ScoreError> {
     if n < 1 {
         return Err(ScoreError::EmptyMax);
@@ -141,23 +183,37 @@ pub fn repeating_top_ngrams(
     if words.len() < n {
         return Ok(TopNGram::Score(1.0));
     }
-    // (count, first start) per distinct window.
-    let mut counts: FxHashMap<&[u32], (usize, usize)> = FxHashMap::default();
-    counts.reserve(ids.len() - n + 1);
+    // (count, first start) per distinct window, in order of first occurrence.
+    let mut index: FxHashMap<&[u32], usize> = FxHashMap::default();
+    index.reserve(ids.len() - n + 1);
+    let mut uniq: Vec<(usize, usize)> = Vec::new();
     for (i, w) in ids.windows(n).enumerate() {
-        counts.entry(w).or_insert((0, i)).0 += 1;
+        let next = uniq.len();
+        let k = *index.entry(w).or_insert(next);
+        if k == next {
+            uniq.push((0, i));
+        }
+        uniq[k].0 += 1;
     }
-    let top = counts.values().map(|&(c, _)| c).max().unwrap_or(0);
-    let mut starts: Vec<usize> = counts
-        .values()
+    let top = uniq.iter().map(|&(c, _)| c).max().unwrap_or(0);
+    let mut tied = uniq.iter().filter(|&&(c, _)| c == top);
+    let first = tied.next().map_or(0, |&(_, s)| s);
+    if tied.next().is_none() {
+        return Ok(TopNGram::Score(top_ngram_score(
+            text,
+            &words[first..first + n],
+        )));
+    }
+    if let Some(key) = key {
+        let s = first_in_set_order(key, &words, &ids, n, &uniq, top);
+        return Ok(TopNGram::Score(top_ngram_score(text, &words[s..s + n])));
+    }
+    let starts: Vec<usize> = uniq
+        .iter()
         .filter(|&&(c, _)| c == top)
         .map(|&(_, s)| s)
         .collect();
-    if let [s] = starts[..] {
-        return Ok(TopNGram::Score(top_ngram_score(text, &words[s..s + n])));
-    }
-    let all = starts.len() == counts.len();
-    starts.sort_unstable();
+    let all = starts.len() == uniq.len();
     Ok(TopNGram::Tied(Tie {
         count: top,
         starts: (!all).then_some(starts),
@@ -228,38 +284,112 @@ mod tests {
         // "a b" twice, every other bigram once: unique top.
         let t = "a b a b c";
         assert_eq!(
-            repeating_top_ngrams(t, 2, WS),
+            repeating_top_ngrams(t, 2, WS, None),
             Ok(TopNGram::Score(6.0 / 9.0))
         );
         // The joined n-gram is searched in the text: different spacing does not count,
         // occurrences inside other words do.
         assert_eq!(
-            repeating_top_ngrams("x y\tx y xx yy", 2, WS),
+            repeating_top_ngrams("x y\tx y xx yy", 2, WS, None),
             Ok(TopNGram::Score(9.0 / 13.0))
         );
-        assert_eq!(repeating_top_ngrams("a b", 3, WS), Ok(TopNGram::Score(1.0)));
-        assert_eq!(repeating_top_ngrams("", 1, WS), Ok(TopNGram::Score(1.0)));
-        assert_eq!(repeating_top_ngrams("a", 0, WS), Err(ScoreError::EmptyMax));
-        assert_eq!(repeating_top_ngrams("", -3, WS), Err(ScoreError::EmptyMax));
         assert_eq!(
-            repeating_top_ngrams("a b c", 2, WS),
+            repeating_top_ngrams("a b", 3, WS, None),
+            Ok(TopNGram::Score(1.0))
+        );
+        assert_eq!(
+            repeating_top_ngrams("", 1, WS, None),
+            Ok(TopNGram::Score(1.0))
+        );
+        assert_eq!(
+            repeating_top_ngrams("a", 0, WS, None),
+            Err(ScoreError::EmptyMax)
+        );
+        assert_eq!(
+            repeating_top_ngrams("", -3, WS, None),
+            Err(ScoreError::EmptyMax)
+        );
+        assert_eq!(
+            repeating_top_ngrams("a b c", 2, WS, None),
             Ok(TopNGram::Tied(Tie {
                 count: 1,
                 starts: None
             }))
         );
         assert_eq!(
-            repeating_top_ngrams("a b a b c d c d e", 2, WS),
+            repeating_top_ngrams("a b a b c d c d e", 2, WS, None),
             Ok(TopNGram::Tied(Tie {
                 count: 2,
                 starts: Some(vec![0, 4])
             }))
         );
-        assert_eq!(repeating_top_ngrams("x", 1, WS), Ok(TopNGram::Score(1.0)));
         assert_eq!(
-            repeating_top_ngrams("x x y", 1, WS),
+            repeating_top_ngrams("x", 1, WS, None),
+            Ok(TopNGram::Score(1.0))
+        );
+        assert_eq!(
+            repeating_top_ngrams("x x y", 1, WS, None),
             Ok(TopNGram::Score(2.0 / 5.0))
         );
+    }
+
+    #[test]
+    fn top_ngram_ties_with_seed_0() {
+        // `PYTHONHASHSEED=0`: NeMo's RepeatingTopNGramsFilter(n).score_document(t) (the key is
+        // then all zeros).
+        let key = HashKey::from_secret(&[0; 16]);
+        let w300: String = (0..300)
+            .map(|i| format!("w{i}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let cases: [(&str, [f64; 3]); 6] = [
+            ("a b c", [0.2, 0.6, 1.0]),
+            (
+                "a b a b c d c d e",
+                [
+                    0.117_647_058_823_529_41,
+                    0.352_941_176_470_588_26,
+                    0.294_117_647_058_823_54,
+                ],
+            ),
+            (
+                "the cat the dog the cat the dog",
+                [
+                    0.387_096_774_193_548_4,
+                    0.451_612_903_225_806_44,
+                    0.709_677_419_354_838_7,
+                ],
+            ),
+            (
+                "x y z x y z q",
+                [
+                    0.153_846_153_846_153_85,
+                    0.461_538_461_538_461_56,
+                    0.769_230_769_230_769_3,
+                ],
+            ),
+            (
+                "中文 é 😀 中文 é 😀 a",
+                [0.133_333_333_333_333_33, 0.4, 0.8],
+            ),
+            (
+                &w300,
+                [
+                    0.002_879_769_618_430_525_4,
+                    0.006_479_481_641_468_682_5,
+                    0.007_919_366_450_683_946,
+                ],
+            ),
+        ];
+        for (text, want) in cases {
+            for (n, &w) in (1..).zip(&want) {
+                assert_eq!(
+                    repeating_top_ngrams(text, n, WS, key),
+                    Ok(TopNGram::Score(w)),
+                    "{text:?} {n}"
+                );
+            }
+        }
     }
 
     #[test]

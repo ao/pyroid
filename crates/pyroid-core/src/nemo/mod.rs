@@ -5,12 +5,14 @@
 //! - [`filters`]: `string.py`'s filters (ratios over characters, words and lines).
 //! - [`repetition`]: the repeated lines / paragraphs and n-gram filters.
 //! - [`fasttext`]: the lines NeMo's fastText filters predict on.
+//! - [`pyhash`]: CPython's str and tuple hashes and `set` order, for the top n-gram ties.
 //! - [`text`]: the word splitters, sentences, paragraphs and Python `str` semantics they share;
 //!   [`tables`] holds `[[:alpha:]]` as read from the `regex` module (`generate_tables.py`).
 
 pub mod fasttext;
 pub mod filters;
 pub mod modifiers;
+pub mod pyhash;
 pub mod repetition;
 pub mod tables;
 pub mod text;
