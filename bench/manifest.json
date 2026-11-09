@@ -1449,6 +1449,708 @@
         "paths": "tests/ except tests/eval/ and tests/evaldata.json",
         "license": "Apache-2.0 (the tests); tests/cache/ holds third-party web pages (not redistributed)"
       }
+    },
+    "warc/cc/CC-MAIN-2012.arc.gz": {
+      "sha256": "36c0c2c241e56b5d3eef676352215eafbd453e21efd27303d2a49ed51dc0dfed",
+      "bytes": 3145261,
+      "source": {
+        "crawl": "CC-MAIN-2012",
+        "kind": "arc",
+        "url": "https://data.commoncrawl.org/parse-output/segment/1346823845675/1346864469604_0.arc.gz",
+        "range": [
+          0,
+          3145261
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2013-20.warc.gz": {
+      "sha256": "7eff517036dc2b1a8478bb5d13da77841eac494bd6a89d92fa87fce21dc9f3fe",
+      "bytes": 3145455,
+      "source": {
+        "crawl": "CC-MAIN-2013-20",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2013-20/segments/1368696381249/warc/CC-MAIN-20130516092621-00001-ip-10-60-113-184.ec2.internal.warc.gz",
+        "range": [
+          0,
+          3145455
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2013-20.warc.wet.gz": {
+      "sha256": "6d8f02cfa46bccd61ed408101d4ac61330f59c23c7e0418f4fda8f8a2684da79",
+      "bytes": 2097128,
+      "source": {
+        "crawl": "CC-MAIN-2013-20",
+        "kind": "wet",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2013-20/segments/1368696381249/wet/CC-MAIN-20130516092621-00001-ip-10-60-113-184.ec2.internal.warc.wet.gz",
+        "range": [
+          0,
+          2097128
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2013-48-tail.warc.gz": {
+      "sha256": "e4d5c70b068271a24171fbd4e20650c9ea790094d1b6ea07da88c6963344faab",
+      "bytes": 2097152,
+      "source": {
+        "crawl": "CC-MAIN-2013-48",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2013-48/segments/1386163035819/warc/CC-MAIN-20131204131715-00001-ip-10-33-133-15.ec2.internal.warc.gz",
+        "range": [
+          0,
+          2097152
+        ],
+        "cut": "tail",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2013-48.warc.gz": {
+      "sha256": "199d7145d27050aa7de7dc8996c4bda981444120687ac7960bd8223f0caf1bef",
+      "bytes": 3145322,
+      "source": {
+        "crawl": "CC-MAIN-2013-48",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2013-48/segments/1386163035819/warc/CC-MAIN-20131204131715-00001-ip-10-33-133-15.ec2.internal.warc.gz",
+        "range": [
+          0,
+          3145322
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2013-48.warc.wat.gz": {
+      "sha256": "91957da5a5d8fa1adedb866bcd64b9a52513ee73222a0fe107e9dba1ae591449",
+      "bytes": 2093301,
+      "source": {
+        "crawl": "CC-MAIN-2013-48",
+        "kind": "wat",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2013-48/segments/1386163035819/wat/CC-MAIN-20131204131715-00001-ip-10-33-133-15.ec2.internal.warc.wat.gz",
+        "range": [
+          0,
+          2093301
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2014-15.warc.gz": {
+      "sha256": "ea0351c25ef12e77a095281e86b9ff519408adc534dafc4a04e836d84840f91a",
+      "bytes": 3139705,
+      "source": {
+        "crawl": "CC-MAIN-2014-15",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2014-15/segments/1397609521512.15/warc/CC-MAIN-20140416005201-00001-ip-10-147-4-33.ec2.internal.warc.gz",
+        "range": [
+          0,
+          3139705
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2015-27-empty.warc.gz": {
+      "sha256": "f971cd04f2e7dce570059d8a61b09b326f8a5b9b00e4105f30e42ecff569282c",
+      "bytes": 431,
+      "source": {
+        "crawl": "CC-MAIN-2015-27",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2015-27/segments/1435375090820.0/warc/CC-MAIN-20150627031810-00001-ip-10-179-60-89.ec2.internal.warc.gz",
+        "range": [
+          0,
+          431
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2015-27.warc.gz": {
+      "sha256": "ef1c925f6bbd624fee8122c66549645e2f40e3c484bff823e9c24b6c1c7d1e39",
+      "bytes": 3131085,
+      "source": {
+        "crawl": "CC-MAIN-2015-27",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2015-27/segments/1435375094690.4/warc/CC-MAIN-20150627031814-00039-ip-10-179-60-89.ec2.internal.warc.gz",
+        "range": [
+          0,
+          3131085
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2016-40.warc.gz": {
+      "sha256": "25b40b0b7852f5eba8b9860c07681ab62cff7ffc7a9bfe5e2e7c219af63992b9",
+      "bytes": 3130069,
+      "source": {
+        "crawl": "CC-MAIN-2016-40",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2016-40/segments/1474738659496.36/warc/CC-MAIN-20160924173739-00001-ip-10-143-35-109.ec2.internal.warc.gz",
+        "range": [
+          0,
+          3130069
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2016-40.warc.wet.gz": {
+      "sha256": "bce75e997075f1f07a1559fb25450fb612d44d83dfde2c4348a1a28b8ddff35c",
+      "bytes": 2095705,
+      "source": {
+        "crawl": "CC-MAIN-2016-40",
+        "kind": "wet",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2016-40/segments/1474738659496.36/wet/CC-MAIN-20160924173739-00001-ip-10-143-35-109.ec2.internal.warc.wet.gz",
+        "range": [
+          0,
+          2095705
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2017-30-mid.warc.gz": {
+      "sha256": "9641a3a23956f2406027f068dae98b7cbecc28ee963ca231f633727e3b933361",
+      "bytes": 3125362,
+      "source": {
+        "crawl": "CC-MAIN-2017-30",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2017-30/segments/1500549423183.57/warc/CC-MAIN-20170720121902-20170720141902-00001.warc.gz",
+        "range": [
+          351163653,
+          354289015
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2017-30.warc.gz": {
+      "sha256": "9db6d6e377a45d8de81efdab4b9cf9e73f5ed824291ad0fc73cb569fbfc88a86",
+      "bytes": 3145471,
+      "source": {
+        "crawl": "CC-MAIN-2017-30",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2017-30/segments/1500549423183.57/warc/CC-MAIN-20170720121902-20170720141902-00001.warc.gz",
+        "range": [
+          0,
+          3145471
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2018-30.warc.gz": {
+      "sha256": "3a2bc2b00b1bfee8475b30f543e01798719325e8bb9f067b4999ec108a2edf11",
+      "bytes": 3142087,
+      "source": {
+        "crawl": "CC-MAIN-2018-30",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2018-30/segments/1531676588961.14/warc/CC-MAIN-20180715183800-20180715203800-00001.warc.gz",
+        "range": [
+          0,
+          3142087
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2018-30.warc.wat.gz": {
+      "sha256": "c687f2f5140958d657f6ed35adc0d4bdeab4a86c6fef0a9dd5f56dfe90f1d7e0",
+      "bytes": 2091266,
+      "source": {
+        "crawl": "CC-MAIN-2018-30",
+        "kind": "wat",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2018-30/segments/1531676588961.14/wat/CC-MAIN-20180715183800-20180715203800-00001.warc.wat.gz",
+        "range": [
+          0,
+          2091266
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2018-51.warc.gz": {
+      "sha256": "fbe12e42462142211ca065cbf00ae4f488aa6e6e37e8e4f312bbda63a2e9b56f",
+      "bytes": 3131767,
+      "source": {
+        "crawl": "CC-MAIN-2018-51",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2018-51/segments/1544376823009.19/warc/CC-MAIN-20181209185547-20181209211547-00001.warc.gz",
+        "range": [
+          0,
+          3131767
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2019-35.warc.gz": {
+      "sha256": "4b818ca4446037d2c2885ea1307fe66b27650f482e8b4e0d4db3d0153f372e19",
+      "bytes": 3076371,
+      "source": {
+        "crawl": "CC-MAIN-2019-35",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2019-35/segments/1566027312025.20/warc/CC-MAIN-20190817203056-20190817225056-00001.warc.gz",
+        "range": [
+          0,
+          3076371
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2019-35.warc.wet.gz": {
+      "sha256": "7660e3ae5af1e19c151ab3223214a3f7124de44cc66006eb0cc55564c18b67ef",
+      "bytes": 2093426,
+      "source": {
+        "crawl": "CC-MAIN-2019-35",
+        "kind": "wet",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2019-35/segments/1566027312025.20/wet/CC-MAIN-20190817203056-20190817225056-00001.warc.wet.gz",
+        "range": [
+          0,
+          2093426
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2020-50.warc.gz": {
+      "sha256": "901facb7328e88ed8da8a81b210562b2833f6f6435fb9148e769c73490ec15f9",
+      "bytes": 3141670,
+      "source": {
+        "crawl": "CC-MAIN-2020-50",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2020-50/segments/1606141163411.0/warc/CC-MAIN-20201123153826-20201123183826-00001.warc.gz",
+        "range": [
+          0,
+          3141670
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2021-49-mid.warc.gz": {
+      "sha256": "057a5c1860dcbb8bd035527c43ec1694ea8234fb86f5a95dbedbd13c7f141887",
+      "bytes": 2914025,
+      "source": {
+        "crawl": "CC-MAIN-2021-49",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2021-49/segments/1637964358074.14/warc/CC-MAIN-20211126224056-20211127014056-00001.warc.gz",
+        "range": [
+          492141861,
+          495055886
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2021-49.warc.gz": {
+      "sha256": "2bf52c536c611145f547daa42928985ef0a296508b7ecdd35447d98e72569f2f",
+      "bytes": 3139531,
+      "source": {
+        "crawl": "CC-MAIN-2021-49",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2021-49/segments/1637964358074.14/warc/CC-MAIN-20211126224056-20211127014056-00001.warc.gz",
+        "range": [
+          0,
+          3139531
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2022-49-tail.warc.gz": {
+      "sha256": "fffa751e66835e6e4c575822d9b75a7e3d41844f229236ddddc4b675fd7bf8ea",
+      "bytes": 2079582,
+      "source": {
+        "crawl": "CC-MAIN-2022-49",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2022-49/segments/1669446706285.92/warc/CC-MAIN-20221126080725-20221126110725-00001.warc.gz",
+        "range": [
+          470690814,
+          472770396
+        ],
+        "cut": "tail",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2022-49.warc.gz": {
+      "sha256": "42d3c48b7d1a741b31438bc88763d90f9de9774e7e14aa38980208e66a9367cc",
+      "bytes": 3086273,
+      "source": {
+        "crawl": "CC-MAIN-2022-49",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2022-49/segments/1669446706285.92/warc/CC-MAIN-20221126080725-20221126110725-00001.warc.gz",
+        "range": [
+          0,
+          3086273
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2022-49.warc.wat.gz": {
+      "sha256": "885205d2b0dec82e5ed965af6f8ce74a32a4b1ca7170b59da5d69af7f1cc136b",
+      "bytes": 2095292,
+      "source": {
+        "crawl": "CC-MAIN-2022-49",
+        "kind": "wat",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2022-49/segments/1669446706285.92/wat/CC-MAIN-20221126080725-20221126110725-00001.warc.wat.gz",
+        "range": [
+          0,
+          2095292
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2023-50.warc.gz": {
+      "sha256": "9aabf8429f909af7deee908c71cc5e6a94dbbf8ef7eb381eb96d4216c6f9f62d",
+      "bytes": 3018771,
+      "source": {
+        "crawl": "CC-MAIN-2023-50",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2023-50/segments/1700679099281.67/warc/CC-MAIN-20231128083443-20231128113443-00001.warc.gz",
+        "range": [
+          0,
+          3018771
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2023-50.warc.wet.gz": {
+      "sha256": "8e31dd214b0b593b00f80272a8200f4c4b198e9108b3bb6fc248e4f69371a6c6",
+      "bytes": 2094949,
+      "source": {
+        "crawl": "CC-MAIN-2023-50",
+        "kind": "wet",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2023-50/segments/1700679099281.67/wet/CC-MAIN-20231128083443-20231128113443-00001.warc.wet.gz",
+        "range": [
+          0,
+          2094949
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2024-51-head.warc.gz": {
+      "sha256": "534c3ea3cf4babf3123a9b661317a0444b8dafddde359f0912a289e45dc33cfd",
+      "bytes": 234182,
+      "source": {
+        "crawl": "CC-MAIN-2024-51",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-51/segments/1733066035857.0/warc/CC-MAIN-20241201162023-20241201192023-00001.warc.gz",
+        "range": [
+          401245087,
+          401479269
+        ],
+        "cut": "head",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2024-51.warc.gz": {
+      "sha256": "7499fcea03dba26aabb5f0814ab68a7002b4ca958265675b239cdde0d4f5c39c",
+      "bytes": 3144386,
+      "source": {
+        "crawl": "CC-MAIN-2024-51",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-51/segments/1733066035857.0/warc/CC-MAIN-20241201162023-20241201192023-00001.warc.gz",
+        "range": [
+          0,
+          3144386
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2025-51-mid.warc.gz": {
+      "sha256": "b6e3c421c30f1cc5dcd16c32b5c753e4e1e00e8b7b3eb9cb8405eee649efe150",
+      "bytes": 3037704,
+      "source": {
+        "crawl": "CC-MAIN-2025-51",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2025-51/segments/1764871306713.64/warc/CC-MAIN-20251204191828-20251204221828-00001.warc.gz",
+        "range": [
+          351503007,
+          354540711
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2025-51.warc.gz": {
+      "sha256": "523a3ec0bdb797ab994e12dca37c717173322eca003eeaecee893614079c1017",
+      "bytes": 3132790,
+      "source": {
+        "crawl": "CC-MAIN-2025-51",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2025-51/segments/1764871306713.64/warc/CC-MAIN-20251204191828-20251204221828-00001.warc.gz",
+        "range": [
+          0,
+          3132790
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2026-43-tail.warc.wet.gz": {
+      "sha256": "52bf541bf843bfb6e731e5a5d72b917c65b606c1bd8e27a5fa53ff1a05fdda87",
+      "bytes": 1572864,
+      "source": {
+        "crawl": "CC-MAIN-2026-43",
+        "kind": "wet",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2026-43/segments/1791170053823.21/wet/CC-MAIN-20261005105623-20261005135623-00001.warc.wet.gz",
+        "range": [
+          0,
+          1572864
+        ],
+        "cut": "tail",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2026-43.warc.gz": {
+      "sha256": "d910e3c704a14cffd22a4562e9a6a51c6086d46e8876cf741015d5c92d9b96ae",
+      "bytes": 2959691,
+      "source": {
+        "crawl": "CC-MAIN-2026-43",
+        "kind": "warc",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2026-43/segments/1791170053823.21/warc/CC-MAIN-20261005105623-20261005135623-00001.warc.gz",
+        "range": [
+          0,
+          2959691
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2026-43.warc.wat.gz": {
+      "sha256": "e309e64e1f0c7252e9bcefd1afaa81d93aacd55110b9303ea011eda72e48555a",
+      "bytes": 2096660,
+      "source": {
+        "crawl": "CC-MAIN-2026-43",
+        "kind": "wat",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2026-43/segments/1791170053823.21/wat/CC-MAIN-20261005105623-20261005135623-00001.warc.wat.gz",
+        "range": [
+          0,
+          2096660
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/cc/CC-MAIN-2026-43.warc.wet.gz": {
+      "sha256": "ab791d3a9fadc724a2ecdef12d7945b86574dd8967efc87c214e9ece75ba4d39",
+      "bytes": 2096290,
+      "source": {
+        "crawl": "CC-MAIN-2026-43",
+        "kind": "wet",
+        "url": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2026-43/segments/1791170053823.21/wet/CC-MAIN-20261005105623-20261005135623-00001.warc.wet.gz",
+        "range": [
+          0,
+          2096290
+        ],
+        "cut": "members",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      }
+    },
+    "warc/warcio-1.8.2/bad.arc": {
+      "sha256": "e83988ef0e46f9b8eadd13278d18a3f4e5b8ab41cb0a51dc2764f0500028e196",
+      "bytes": 331,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/bad.arc",
+        "git_sha1": "9de4160070adf25bf3dda8d79944c5dbe66dce2a",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example-bad-non-chunked.warc.gz": {
+      "sha256": "2fb33d4b5c6fb2739fbe7d46c60e72b432a44facb456134f0125d5e8faf6d74a",
+      "bytes": 2113,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example-bad-non-chunked.warc.gz",
+        "git_sha1": "0c81fbaa298920befb660433650ba33beb841c76",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example-bad.warc.gz.bad": {
+      "sha256": "1031dd5e89139b2195863a934aa2d27e2a525c675ad90bf3ccab470953f46e22",
+      "bytes": 1950,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example-bad.warc.gz.bad",
+        "git_sha1": "95d2c415b4d792cd7fab3f0141dd224c7d9b08f6",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example-digest.warc": {
+      "sha256": "bfaf8596b743a8fc018abe7fd47f8e63598dd126f77cebe7142dd896c09f96cd",
+      "bytes": 3672,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example-digest.warc",
+        "git_sha1": "ebda679663bdeeeed548f0077d35fd444eb2ee17",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example-iana.org-chunked.warc": {
+      "sha256": "539c746feb63bd12da81375485e906115b874899d68e4f190f5d70d1785c3933",
+      "bytes": 8831,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example-iana.org-chunked.warc",
+        "git_sha1": "f544e6a300b551cebf19c5d6a56fdd0ee1583eec",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example-resource.warc.gz": {
+      "sha256": "9d3f830f757a3733d56de5b76b5a3ccabb5de4cfdfed2559205b9c719ee6cbdb",
+      "bytes": 1779,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example-resource.warc.gz",
+        "git_sha1": "91737eeebb0e62e5308753786cfe9373f5653f2f",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example-space-in-target-uri.warc.gz": {
+      "sha256": "86e0039c4dadb395a1ba1101b964e2524771bbadd9837af1fd1f3ef1c873b5f4",
+      "bytes": 583,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example-space-in-target-uri.warc.gz",
+        "git_sha1": "8a63c18962330cd08f31399c36bfa90ecc4873f6",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example-space-in-url.arc": {
+      "sha256": "477418dd57d018092a4b6f23de8bfc335f46e67df04ed7f52318c59c04b095de",
+      "bytes": 1873,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example-space-in-url.arc",
+        "git_sha1": "da248a83219a382534f1673b9af1ee4c58b795c1",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example-trunc.warc": {
+      "sha256": "2f14d2a2ff6ce39a2f76ecd806a838793c33a8a3bd8d1f02868de65b1e1ef908",
+      "bytes": 3370,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example-trunc.warc",
+        "git_sha1": "6a1e7351529d61b3c626edc6a63e6ca0667d1845",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example-wget-bad-target-uri.warc.gz": {
+      "sha256": "46c5ac2c893a5e2036b45821ca373fcb3c57bb4de69ea47bb5a18878248a1fa0",
+      "bytes": 3267,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example-wget-bad-target-uri.warc.gz",
+        "git_sha1": "8193195023377a3f0692303ebaa0f912db07f146",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example-wrong-chunks.warc.gz": {
+      "sha256": "1f563e1b9ac122efff45b3002928ff873bd84db64dd70b1b00c81dd1a1875160",
+      "bytes": 1575,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example-wrong-chunks.warc.gz",
+        "git_sha1": "4ec5cafd167deffb1e0e5c997c45fb2a10cb5cd4",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example.arc": {
+      "sha256": "433c37ee6dd684849ecde16d566f65545c93fd8d0b3297c1735eb76f0a0cf496",
+      "bytes": 1808,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example.arc",
+        "git_sha1": "2024e9c25fc636ce59e88b63145fae770faecebd",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example.arc.gz": {
+      "sha256": "d6d0d772521e89dc461235ddbefae4888a20a47b1c0a45e69ec8ec086f4d3c7c",
+      "bytes": 1027,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example.arc.gz",
+        "git_sha1": "bc959cf183aefc78d5e7fd630bbb906494ee190d",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example.warc": {
+      "sha256": "5cc2724ab2969d5fd00a9b9293cce2a50ba0471ea03822e03f513715171ca0d3",
+      "bytes": 5120,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example.warc",
+        "git_sha1": "3d0f5ed822eddc34153575f50d672960ea0fd65f",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/example.warc.gz": {
+      "sha256": "5144459799b3bcb894d5143e0d8171c20c591a41733608e8392346e95e0bcf6b",
+      "bytes": 3816,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/example.warc.gz",
+        "git_sha1": "ed255396bf2f34d5e740e574d86f0f752864c9eb",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
+    },
+    "warc/warcio-1.8.2/post-test.warc.gz": {
+      "sha256": "4a889c4d15f5624557f5fad4026b4346f33c514f0aae1e18c7823b4c6943dce4",
+      "bytes": 3593,
+      "source": {
+        "repo": "webrecorder/warcio",
+        "tag": "v1.8.2",
+        "commit": "b9036802318d20a2dec8d58e56a8dacb543fa3ef",
+        "path": "test/data/post-test.warc.gz",
+        "git_sha1": "b9cc1f48102154696b7d95c36ade930003556a8f",
+        "license": "Apache-2.0 (warcio's test files, https://github.com/webrecorder/warcio)"
+      }
     }
   }
 }

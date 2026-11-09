@@ -18,6 +18,9 @@ Layout under /data (total budget 1.5 GB):
                                        Trafilatura: WARC byte ranges through WarcReader + URLFilter (~150 MB)
     trafilatura/upstream-tests-{2.3.1,1.11.0}.parquet   Trafilatura's tests/ at v2.3.1 and v1.11.0 (path, git blob
                                        sha1, bytes)
+    warc/cc/*.gz                       Common Crawl byte ranges (~80 MB): WARC files of 16 crawls (2013-2026), WET, WAT, the
+                                       2012 ARC crawl, truncated and empty ones (pyroid_parity.warc_corpus)
+    warc/warcio-1.8.2/*                warcio's test files at v1.8.2 (Apache-2.0)
 
 The parity/ files in the manifest are generated, not fetched: ``python -m pyroid_parity.refs`` writes them and
 verifies what it wrote, so fetch.py checks them only with ``--verify-all``.
@@ -150,6 +153,7 @@ INPUTS = {
     "models": "models/",
     "metrics": "metrics/",
     "trafilatura": "trafilatura/",
+    "warc": "warc/",
 }
 
 
@@ -450,6 +454,13 @@ def fetch_trafilatura(pin: bool) -> None:
             D.pin(rel, rows=pq.ParquetFile(D.DATA / rel).metadata.num_rows, source=src)
 
 
+def fetch_warc(pin: bool) -> None:
+    """The warc suite's inputs: Common Crawl slices and warcio's test files, each checked on download."""
+    from pyroid_parity import warc_corpus
+
+    warc_corpus.fetch(pin, log)
+
+
 def verify(prefixes: tuple[str, ...] | None = None) -> int:
     """Re-hash the pinned files under ``prefixes`` (all of them for None); returns the number that are bad."""
     manifest = D.load_manifest()
@@ -482,7 +493,7 @@ def main() -> int:
     )
     ap.add_argument("--pin", action="store_true", help="(re)write sha256 entries for fetched files")
     ap.add_argument(
-        "--only", default="fineweb,fineweb2,models,metrics,trafilatura", help="comma-separated subset"
+        "--only", default="fineweb,fineweb2,models,metrics,trafilatura,warc", help="comma-separated subset"
     )
     a = ap.parse_args()
     steps = set(a.only.split(","))
@@ -501,6 +512,8 @@ def main() -> int:
             fetch_metrics(a.pin)
         if "trafilatura" in steps:
             fetch_trafilatura(a.pin)
+        if "warc" in steps:
+            fetch_warc(a.pin)
     return 1 if verify(tuple(INPUTS[s] for s in sorted(steps))) else 0
 
 

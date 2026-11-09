@@ -22,6 +22,10 @@ dependencies = [
     "sacrebleu==2.6.0",
     # datasketch suite oracle (MIT; numpy + scipy wheels on 3.12 ... 3.15t).
     "datasketch==2.0.0",
+    # warc suite oracle: pure Python, so the free-threaded legs compare pyroid.warc against it live. warcio
+    # decodes Content-Encoding br only when brotlicffi >= 1.2.1.0 imports; brotlicffi has no 3.15 wheels.
+    "warcio==1.8.2",
+    "brotlicffi==1.2.1.0; python_version < '3.15'",
 ]
 
 [dependency-groups]
@@ -60,13 +64,18 @@ trafilatura111 = [
     "courlan==1.4.0",
     "htmldate==1.11.0",
 ]
+# The warc suite's datatrove level (WarcReader, process_record): datatrove 0.10.1 and what its reader imports.
+# python-magic needs libmagic (libmagic1) at run time; without it the checks that reach libmagic skip.
+# faust-cchardet has no 3.15 wheels.
+warc = [
+    "datatrove==0.10.1",
+    "faust-cchardet==3.2.0; python_version < '3.15'",
+    "python-magic==0.4.27",
+]
 # What pyroid_parity.trafilatura_scale needs besides an oracle group (Common Crawl slices through datatrove's
 # WarcReader and URLFilter), at the versions bench/pyproject.toml pins for fetch.py: `uv run --group cc`.
 cc = [
-    "datatrove==0.10.1",
-    "warcio==1.8.2",
-    "faust-cchardet==3.2.0",
-    "python-magic==0.4.27",
+    { include-group = "warc" },
     "tldextract==5.4.0",
     "pyahocorasick==2.3.1",
     "fasteners>=0.19",
@@ -81,7 +90,7 @@ build-backend = "hatchling.build"
 packages = ["pyroid_parity"]
 
 [tool.uv]
-default-groups = ["dev", "trafilatura"]
+default-groups = ["dev", "trafilatura", "warc"]
 conflicts = [[{ group = "trafilatura" }, { group = "trafilatura111" }]]
 
 [tool.pytest]
@@ -110,4 +119,6 @@ extend-select = ["I", "B", "UP", "PERF", "PT", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 # Mojibake, confusables, control and bidi characters are the test data here.
 "pyroid_parity/{refs,strategies}.py" = ["RUF001", "RUF003", "PLE2502", "PLE2515"]
+# Confusable letters, Unicode whitespace and other scripts are the test data of the warc generators.
+"pyroid_parity/warc_{synth,strategies}.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/**" = ["RUF001", "RUF003", "RUF012", "PLE2502", "PLE2515", "PT018"]
