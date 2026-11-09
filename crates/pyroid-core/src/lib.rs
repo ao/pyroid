@@ -18,6 +18,7 @@
 //!   (`pyroid.trafilatura`).
 //! - [`sudachi`]: Japanese morphemes as SudachiPy 0.7.0 gives them, from an
 //!   installed SudachiDict (datatrove's Japanese tokenizer in the filters).
+//! - [`warc`]: warcio 1.8.2's WARC/ARC reader, ported exactly (`pyroid.warc`).
 //! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).
 //!
 //! Each module adds a `src/<mod>/` directory here; see `docs/dev/MODULES.md`.
@@ -40,3 +41,4 @@ pub mod text;
 pub mod trafilatura;
 pub mod translit;
 pub mod version;
+pub mod warc;

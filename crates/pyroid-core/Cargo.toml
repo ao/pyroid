@@ -14,15 +14,23 @@ crate-type = ["rlib"]
 
 [dependencies]
 any_ascii = "0.3.3"
+# pyroid.warc: zlib.decompressobj emulation (zlib-rs directly for zlib's error codes; flate2 for the gzip
+# helper). Both pure Rust.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 # pyroid.json_repair objects: insertion-ordered maps with dict semantics.
 indexmap = { version = "2.14", default-features = false }
 memchr = "2.7"
+# pyroid.warc: WARC-Block-Digest / WARC-Payload-Digest checks (with sha1 below).
+md-5 = { version = "0.11", default-features = false }
 rustc-hash = "2.1"
 rayon.workspace = true
+sha2 = { version = "0.11", default-features = false }
 # MinHash shingle hashes, as datatrove's HashConfig(hash_fc="sha1" | "xxhash").
 sha1 = { version = "0.11.0", default-features = false }
+simdutf8.workspace = true
 twox-hash = { version = "2.1.2", default-features = false, features = ["xxhash32", "xxhash64", "xxhash3_128"] }
 unicode-normalization = "0.1.26"
+zlib-rs = { version = "0.6", default-features = false, features = ["rust-allocator"] }
 
 [dev-dependencies]
 serde_json = "1.0.140"
