@@ -114,6 +114,38 @@ uv venv -p 3.12 /target/jr-312 && uv pip install --python /target/jr-312 json-re
 - Output: a Markdown summary on stdout and every timing in `--out`, with the machine info, `sys._is_gil_enabled()`
   and the load average before and after.
 
+## FineWeb from WARC files (`fineweb_warc.py`)
+
+datatrove 0.10.1's `examples/fineweb.py` from Common Crawl WARC files to the deduplicated, PII-replaced output:
+WarcReader, URLFilter, Trafilatura(favour_precision=True), LanguageFilter(languages=["en"]), the Gopher, C4 and
+FineWeb filters with fineweb.py's exclusion writers, then the four MinHash stages (sha1/64, 14 buckets x 8, 5-grams)
+and PIIFormatter. It stands alone (not the bench uv env), in three modes:
+
+```bash
+python bench/fineweb_warc.py stock        --warcs W --out O/stock  --workers 8
+python bench/fineweb_warc.py pyroid-steps --warcs W --out O/steps  --workers 8 --lid-model lid.176.bin
+python bench/fineweb_warc.py native       --warcs W --out O/native --workers 8 --lid-model lid.176.bin
+python bench/fineweb_warc.py compare O/stock O/steps O/native     # exit 1 unless the digests are identical
+```
+
+- `stock`: datatrove's own steps on its `LocalPipelineExecutor`, in an env with `datatrove[io,processing]==0.10.1`
+  as pip resolves it (trafilatura 1.11.0, fasttext-numpy2-wheel) plus spaCy.
+- `pyroid-steps`: the same executor with `pyroid.integrations.datatrove`'s drop-ins where pyroid has one; the same
+  env plus the pyroid wheel.
+- `native`: no executor. `pyroid.trafilatura.extract_batch(compat="1.11.0")`, `pyroid.filters` and the
+  `FineWeb` recipe per WARC file in a process pool, then MinHash and PII over the files in order.
+- Every mode runs one task per WARC file, so the output does not depend on `--workers`. `OUT/summary.json` has wall
+  seconds per phase, CPU seconds, peak RSS, seconds and documents per step, and sha256 digests of the documents
+  (sorted by id) after MinhashDedupFilter and after PIIFormatter.
+- datatrove's Trafilatura step gives up on a page after 1 s and restarts its child process, which empties the dedup
+  cache, so `stock` can lose pages on a slow or loaded machine. It records them in `OUT/events.jsonl`;
+  `native --timeouts-of O/stock` drops the same pages the same way, for an exact comparison with that run.
+- fasttext-numpy2-wheel 0.9.2 has no cp313 wheels, so it needs g++. Without one, `stock --lid-model` swaps in
+  fasttext-predict with `gates.py`'s shim. The EC2 run (`ec2/run_warc.sh`) uses datatrove's own LanguageFilter.
+- pyroid's `PIIFormatter` drop-in cannot be pickled or deep-copied, which datatrove's executor does to every task's
+  pipeline. Until that is fixed, `pyroid-steps` builds it inside each task and says so under `workarounds` in
+  `summary.json`.
+
 ## Inputs (pinned in `manifest.json`, fetched by `fetch.py` into `$PYROID_DATA`, ≤ 1.5 GB total; currently 324 MB)
 
 | file | source |

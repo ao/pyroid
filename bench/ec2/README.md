@@ -19,6 +19,7 @@ Results are labelled with the instance, the CPU and the OS ("AWS EC2 c7i.4xlarge
 | `run.sh` | the instance, as root | the run, as resumable steps (header comment): meta → code → wheels → envs → fetch → refs → parity → bench_dev → bench_headline → refs_hwcaps. Packs and uploads results after every step |
 | `refdiff.py` | the instance (parity env) | `check`: regenerated refs vs the manifest, delta against the old pinned bytes, re-pin on the instance; `diff OLD NEW` |
 | `summary.py` | your machine, after `collect` | Markdown tables (machines, step durations, parity, ref deltas, e2e, per stage) from the collected run folders |
+| `run_warc.sh` | the instance, as root | the FineWeb-from-WARC benchmark (`../fineweb_warc.py`), on its own: see below |
 
 ## Safety
 - Only `c7i.4xlarge`/`c8g.4xlarge`, at most 2 at a time; `--client-token` makes a repeated `launch` idempotent.
@@ -63,3 +64,29 @@ $E terminate $X; $E terminate $A; $E verify; $E s3-clean
 files (symlinked instead of downloaded; regenerated refs replace the links, never the targets). With small knobs
 (`WHEEL_PROFILE=dev`, `REFS_WHAT=fasttext`, `PARITY_LIMIT=200`, tiny `BENCH_*` sizes) the whole of `run.sh` runs in
 a Linux container with Rust, uv, maturin and the CPythons that `bootstrap.sh` installs, and `bootstrap.sh` plus the build/env steps in an `amazonlinux:2023` container.
+
+## FineWeb from WARC (`run_warc.sh`)
+One c7i.4xlarge, separate from `ec2.sh`'s flow: the instance gets the script and `HTMLX_S3` (an `s3://` prefix with
+`code/pyroid.bundle`, a git bundle of `HTMLX_BRANCH` [feat/trafilatura]) and runs it as root; its user data sets the
+shutdown. The header of `run_warc.sh` lists every setting. Steps, most important first, with estimates for 8 WARC
+files from P10's run (stock datatrove ~12 min at 8 workers, ~8x that at 1):
+
+| step | min | what |
+|---|---:|---|
+| code, bootstrap, wheel, envs, fetch | ~22 | clone; `bootstrap.sh` (CPython 3.13.18 only); release wheel; `venv-stock` (`datatrove[io,processing]==0.10.1` + spaCy 3.8.18) and `venv-pyroid` (its freeze + the wheel); 8 WARC files of CC-MAIN-2026-39 and lid.176.bin |
+| stock-8, pyroid-8, native-8 | 14, 4, 3 | `fineweb_warc.py` in each mode, 8 workers, `taskset -c 0-7` (one thread per core) |
+| compare-8 | 1-4 | the three digests; if stock-8 lost pages to Trafilatura's timeout, `native-8x` (`--timeouts-of stock-8`) too |
+| hook | ? | `HTMLX_HOOK` (or `HTMLX_HOOK_FILE`, or `$HTMLX_S3/code/hook.sh`): the parity scale runs |
+| native-1, pyroid-1, stock-1 | 15, 17, 100 | the same at 1 worker |
+| compare | 1-4 | every run against native-8 (+ `native-1x` if stock-1 lost pages) |
+
+- Each step leaves `/opt/htmlx/state/<step>.done`; starting the script again skips finished steps, and
+  `HTMLX_FORCE="stock-8"` redoes one. A run step whose estimate would end within 10 min of the scheduled shutdown is
+  skipped, with the reason in `run.log`.
+- After every step `/opt/htmlx/results/` (summaries, per-document hashes, timing records, datatrove's logs, the
+  comparisons, `status.json`, `run.log`) is copied to `$HTMLX_S3/results/`. The run outputs stay on the instance.
+- Needs about 15 GB free on the root volume (7.5 GB of WARC files, the Rust toolchain and build, two envs).
+- Tested in the dev container with the setup steps stubbed (a local stand-in for `aws s3 cp`, the setup products
+  linked in, `HTMLX_STOCK_ARGS="--lid-model PATH"` because the container cannot build fasttext-numpy2-wheel, and
+  `HTMLX_RUN_ARGS` for small runs). The setup steps themselves follow P10's `research/htmlx/ec2/run.sh`, which ran
+  on AL2023.
