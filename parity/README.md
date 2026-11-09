@@ -185,7 +185,8 @@ logging wrapper, `gzip.GzipFile`, datatrove's `DataFolder.open`). The trace of a
 in order; the candidate's must equal warcio's event for event. Common Crawl slices run 12 configs, the other inputs
 29 (31,291 traces per implementation in the default run); the default reads the first 100 records of each slice.
 In Docker on Apple Silicon (indicative), the default run took 113 s as a self-check and 202 s against
-`warc_mutant` without defects, which exercises every live comparison with warcio as the candidate.
+`warc_mutant` without defects, which exercises every live comparison with warcio as the candidate; with
+`--parity-limit 0`, 168 s and 488 s.
 
 - **Pins:** `data/warcio-1.8.2/ref-digests.json` holds warcio's and datatrove's trace digests
   (`python -m pyroid_parity.warc_pins write`; `check` recomputes them). They were made on CPython 3.13 with zlib
