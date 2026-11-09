@@ -279,7 +279,7 @@ def _text(table: Any, column: str) -> Any:
 
 
 def _check_text_column(sources: Sequence[Any], column: str) -> None:
-    """Fail early (exit 2) when the first input has no text column."""
+    """Fail early (exit 1, with the message) when the first input has no text column."""
     from pyroid.integrations import _io
 
     if not sources:
