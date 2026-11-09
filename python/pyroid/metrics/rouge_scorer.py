@@ -6,10 +6,10 @@
 nltk 3.10.4's) and scoring run in Rust. What needs the interpreter stays in
 Python, exactly where rouge-score runs it: a custom ``tokenizer`` is called
 from Python (its tokens are scored in Rust), and ``split_summaries=True``
-splits rougeLsum sentences with ``nltk.sent_tokenize`` (with a one-time
-:class:`pyroid.FallbackWarning`). Tokens that are not lists of str (from a
-custom tokenizer) are scored by the real rouge-score, also with a one-time
-``FallbackWarning``.
+splits rougeLsum sentences with :func:`pyroid.nltk.sent_tokenize`, the Rust
+port of ``nltk.sent_tokenize`` (it reads NLTK's ``punkt_tab`` model). Tokens
+that are not lists of str (from a custom tokenizer) are scored by the real
+rouge-score, with a one-time :class:`pyroid.FallbackWarning`.
 
 ``RougeScorer.score_batch`` (a pyroid extension) scores many pairs at once on
 pyroid's thread pool.
@@ -78,23 +78,24 @@ def _rouge_score(reason: str) -> Any:
     return real
 
 
-def _sent_tokenize() -> Any:
-    """``nltk.sent_tokenize`` for ``split_summaries=True`` (warns once), or PyroidError."""
+def _sent_tokenize(text: Any) -> list[str]:
+    """``nltk.sent_tokenize(text)`` for ``split_summaries=True``: pyroid.nltk's Punkt port.
+
+    The model is NLTK's English ``punkt_tab`` (``LookupError`` if it is not installed). Text
+    that is not a str goes to NLTK itself, which raises for it as rouge-score would.
+    """
+    if type(text) is str:
+        from pyroid.nltk import sent_tokenize
+
+        return sent_tokenize(text)  # type: ignore[no-any-return]
     try:
         import nltk
     except ImportError:
         raise PyroidError(
-            "pyroid.metrics.rouge_scorer: split_summaries=True splits rougeLsum sentences "
-            "with nltk.sent_tokenize, and nltk is not installed "
-            "(pip install nltk, then nltk.download('punkt_tab'))"
+            "pyroid.metrics.rouge_scorer: split_summaries=True got a text that is not a str, "
+            "which only nltk.sent_tokenize handles, and nltk is not installed"
         ) from None
-    _warn_once(
-        "split_summaries",
-        "pyroid.metrics.rouge_scorer: with split_summaries=True, rougeLsum sentence "
-        "splitting runs in Python via nltk.sent_tokenize (slow path); scoring stays in "
-        "Rust. This warning is shown once.",
-    )
-    return nltk.sent_tokenize
+    return nltk.sent_tokenize(text)  # type: ignore[no-any-return]
 
 
 _TOKENS_REASON = "tokens that are not lists of str (from a custom tokenizer)"
@@ -266,11 +267,15 @@ class RougeScorer(scoring.BaseScorer):
                 predictions = _texts(predictions, "predictions")
                 if _all_str(targets) and _all_str(predictions):
                     _check_lengths(targets, predictions)
-                    target_sents = []
-                    prediction_sents = []
-                    for t, p in zip(targets, predictions, strict=True):
-                        target_sents.append(self._sentences(t))
-                        prediction_sents.append(self._sentences(p))
+                    from pyroid.nltk import sent_tokenize
+
+                    target_sents = [
+                        [s for s in d if len(s)] for d in sent_tokenize(list(targets), threads=threads)
+                    ]
+                    prediction_sents = [
+                        [s for s in d if len(s)]
+                        for d in sent_tokenize(list(predictions), threads=threads)
+                    ]
                     result = _native.rouge_score_batch(
                         types,
                         targets,
@@ -296,7 +301,7 @@ class RougeScorer(scoring.BaseScorer):
     def _sentences(self, text: Any) -> list[Any]:
         """rouge-score's ``get_sents``: rougeLsum's sentences of ``text``."""
         # Without split_summaries, sentences are assumed to be separated by newline.
-        sents = _sent_tokenize()(text) if self._split_summaries else _ensure_str(text).split("\n")
+        sents = _sent_tokenize(text) if self._split_summaries else _ensure_str(text).split("\n")
         return [x for x in sents if len(x)]
 
     def _score_split(self, target: str, prediction: str, use_stemmer: bool) -> Any:

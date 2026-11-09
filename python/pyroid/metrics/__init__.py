@@ -12,8 +12,7 @@ Scores are exactly the incumbents' (same floats, same result types):
   ``sentence_bleu_batch``/``sentence_chrf_batch`` are pyroid extensions.
 
 What the Rust ports do not cover (MeCab/SentencePiece tokenizers, bootstrap
-resampling, TER, ``split_summaries=True`` sentence splitting) is handed to the
-incumbent with a one-time :class:`pyroid.FallbackWarning`.
+resampling, TER) is handed to the incumbent with a one-time :class:`pyroid.FallbackWarning`.
 
 Submodules are imported on demand (``import pyroid.metrics.sacrebleu``).
 """

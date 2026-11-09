@@ -20,9 +20,9 @@ in Python, exactly where rouge-score runs it:
   with a one-time :class:`pyroid.FallbackWarning`
   (:class:`pyroid.PyroidError` if rouge-score is not installed);
 - ``split_summaries=True`` splits rougeLsum sentences with
-  ``nltk.sent_tokenize`` (one-time ``FallbackWarning``; ``PyroidError`` if
-  nltk is missing; nltk's ``LookupError`` for missing ``punkt_tab`` data
-  propagates as in rouge-score).
+  :func:`pyroid.nltk.sent_tokenize`, the Rust port of ``nltk.sent_tokenize``
+  (the same sentences; it reads NLTK's ``punkt_tab`` model, and a missing model
+  raises ``LookupError`` as in rouge-score).
 
 :meth:`RougeScorer.score_batch` (a pyroid extension) scores many pairs at once
 on pyroid's thread pool.
@@ -56,8 +56,9 @@ Differences from rouge-score
   ``ValueError("attempt to get argmax of an empty sequence")``).
 - "Using default tokenizer." is logged at INFO level with :mod:`logging`
   (logger ``pyroid.metrics.rouge_scorer``), not with absl.
-- nltk is imported only when ``split_summaries=True`` and a rougeLsum is
-  scored; rouge-score always imports nltk, absl, numpy and six.
+- nltk is not needed. With ``split_summaries=True`` it is imported, if
+  installed, to find the ``punkt_tab`` model; rouge-score always imports nltk,
+  absl, numpy and six.
 """
 
 from collections.abc import Iterable, Sequence
@@ -103,7 +104,7 @@ class RougeScorer(scoring.BaseScorer):
 
         - ``rouge1`` .. ``rouge9``: n-gram based scoring.
         - ``rougeL``: longest common subsequence based scoring.
-        - ``rougeLsum``: summary-level LCS over sentences (lines, or nltk
+        - ``rougeLsum``: summary-level LCS over sentences (lines, or Punkt
           sentences with ``split_summaries``).
 
         Types are checked when scoring, as in rouge-score.
@@ -115,7 +116,7 @@ class RougeScorer(scoring.BaseScorer):
                 DefaultTokenizer, but other tokenizers might or might not choose to
                 use this.
             split_summaries: whether to add newlines between sentences for rougeLsum
-                (sentences are split with ``nltk.sent_tokenize``).
+                (sentences are split with :func:`pyroid.nltk.sent_tokenize`).
             tokenizer: Tokenizer object which has a tokenize() method. A falsy
                 value means the default tokenizer.
         """
@@ -168,8 +169,8 @@ class RougeScorer(scoring.BaseScorer):
 
         Element ``i`` equals ``self.score(targets[i], predictions[i])``. With the
         default tokenizer and a list/tuple of rouge type strs, every pair is
-        tokenized and scored in Rust in parallel (nltk still splits sentences
-        in Python with ``split_summaries=True``). Otherwise (a custom tokenizer,
+        tokenized and scored in Rust in parallel (with ``split_summaries=True``,
+        sentences are split in parallel too). Otherwise (a custom tokenizer,
         list items that are not ``str``) the pairs are scored one by one with
         :meth:`score`.
 

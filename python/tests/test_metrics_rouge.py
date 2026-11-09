@@ -60,8 +60,8 @@ def porter() -> Any:
 
 
 @pytest.fixture(scope="module")
-def punkt() -> Any:
-    """nltk with its punkt_tab sentence data, or skip."""
+def punkt(punkt_tab: Any) -> Any:
+    """nltk with its punkt_tab sentence data (installed, or fetched by the punkt_tab fixture), or skip."""
     nltk = pytest.importorskip("nltk")
     try:
         nltk.data.find("tokenizers/punkt_tab/english/")
@@ -653,39 +653,43 @@ def test_split_summaries_match(ref: Any, punkt: Any, pa: Any) -> None:
         assert [canon(d) for d in ours.score_batch(pa.array(targets), predictions)] == want
 
 
-@pytest.mark.thread_unsafe(reason="global one-time-warning state")
-def test_split_summaries_warns_once(punkt: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(rouge_scorer, "_WARNED", set())
+def test_split_summaries_runs_natively(punkt: Any) -> None:
+    # pyroid.nltk splits the sentences: no FallbackWarning.
     scorer = rouge_scorer.RougeScorer(["rougeLsum"], split_summaries=True)
-    with pytest.warns(pyroid.FallbackWarning, match="nltk.sent_tokenize") as record:
-        scorer.score("A b. C d.", "C d. A b.")
-    assert len(record) == 1
-    assert record[0].filename == __file__
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        scorer.score("A b. C d.", "C d. A b.")
-        # No nltk needed without a rougeLsum.
+        assert scorer.score("A b. C d.", "C d. A b.")["rougeLsum"].fmeasure == 1.0
         rouge_scorer.RougeScorer(["rouge1"], split_summaries=True).score("a. b.", "a.")
 
 
 @pytest.mark.thread_unsafe(reason="monkeypatches sys.modules")
-def test_split_summaries_without_nltk(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_split_summaries_without_nltk(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    # Without nltk, pyroid.nltk looks for punkt_tab on NLTK's default path.
     monkeypatch.setitem(sys.modules, "nltk", None)
+    monkeypatch.setenv("NLTK_DATA", str(tmp_path))
+    monkeypatch.setattr(sys, "prefix", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    import pyroid.nltk
+
+    pyroid.nltk._get_punkt_tokenizer.cache_clear()
     scorer = rouge_scorer.RougeScorer(["rougeLsum"], split_summaries=True)
-    with pytest.raises(pyroid.PyroidError, match="punkt_tab"):
+    if any(os.path.isdir(f"{d}/tokenizers/punkt_tab") for d in ("/usr/share/nltk_data", "/usr/local/share/nltk_data", "/usr/lib/nltk_data", "/usr/local/lib/nltk_data")):
+        pytest.skip("a system-wide punkt_tab is installed")
+    with pytest.raises(LookupError, match="punkt_tab"):
         scorer.score("a. b.", "a.")
+    pyroid.nltk._get_punkt_tokenizer.cache_clear()
     assert list(rouge_scorer.RougeScorer(["rouge1"], split_summaries=True).score("a", "a"))
 
 
 @pytest.mark.thread_unsafe(reason="monkeypatches nltk")
 @pytest.mark.filterwarnings("ignore::pyroid.FallbackWarning")
 def test_split_summaries_lookup_error_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
-    nltk = pytest.importorskip("nltk")
+    import pyroid.nltk
 
     def missing(text: str, language: str = "english") -> list[str]:
         raise LookupError("Resource 'punkt_tab' not found.")
 
-    monkeypatch.setattr(nltk, "sent_tokenize", missing)
+    monkeypatch.setattr(pyroid.nltk, "sent_tokenize", missing)
     with pytest.raises(LookupError, match="punkt_tab"):
         rouge_scorer.RougeScorer(["rougeLsum", "rougeX"], split_summaries=True).score("a", "b")
     # An invalid type before the rougeLsum raises first, as in rouge-score.
