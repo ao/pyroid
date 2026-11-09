@@ -4,6 +4,7 @@
     cd bench && uv run --frozen python fetch.py   # fetch + verify the inputs
     ... python fetch.py --verify                 # verify the inputs only (no network)
     ... python fetch.py --verify-all             # verify every pinned file, parity/ references included
+                                                 # (the opt-in fineweb2-train files only with --only)
     ... python fetch.py --pin                    # first fetch / intentional update: write hashes to manifest.json
 
 Layout under /data (total budget 1.5 GB):
@@ -165,6 +166,8 @@ BUDGET = 1_500_000_000
 # The --only steps; each downloads the pinned files under its directory (see step_of).
 STEPS = ("fineweb", "fineweb2", "fineweb2-train", "models", "metrics", "trafilatura", "warc")
 DEFAULT_STEPS = "fineweb,fineweb2,models,metrics,trafilatura,warc"
+# Steps whose files are fetched (and verified) only when --only names them.
+OPT_IN_STEPS = frozenset(set(STEPS) - set(DEFAULT_STEPS.split(",")))
 
 
 def step_of(rel: str) -> str | None:
@@ -506,7 +509,7 @@ def fetch_warc(pin: bool) -> None:
     warc_corpus.fetch(pin, log)
 
 
-def verify(steps: set[str] | None = None, skip: tuple[str, ...] = ()) -> int:
+def verify(steps: set[str] | set[str | None] | None = None, skip: tuple[str, ...] = ()) -> int:
     """Re-hash the pinned files of ``steps`` (all of them for None), except those under ``skip``;
     returns the number that are bad."""
     manifest = D.load_manifest()
@@ -539,7 +542,8 @@ def main() -> int:
     ap.add_argument(
         "--verify-all",
         action="store_true",
-        help="only verify every pinned file against manifest.json, the generated parity/ references included",
+        help="only verify every pinned file against manifest.json, the generated parity/ references included"
+        " (the opt-in steps' files only when --only names them)",
     )
     ap.add_argument(
         "--except",
@@ -556,7 +560,9 @@ def main() -> int:
     if unknown := steps - set(STEPS):
         ap.error(f"--only: unknown step(s) {sorted(unknown)}; choose from {list(STEPS)}")
     if a.verify_all:
-        return 1 if verify(skip=tuple(a.skip)) else 0
+        # step_of() is None for the generated parity/ files.
+        wanted: set[str | None] = {*(set(STEPS) - OPT_IN_STEPS), *(steps & OPT_IN_STEPS), None}
+        return 1 if verify(wanted, skip=tuple(a.skip)) else 0
     if not a.verify:
         if "fineweb" in steps:
             fetch_fineweb(a.pin)
