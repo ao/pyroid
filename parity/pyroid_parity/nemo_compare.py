@@ -842,6 +842,26 @@ def _filter_stage(c: Any, P: Any, df: Any, tally: Tally, check: str) -> None:
     )
 
 
+def stage_on_texts(cand: Candidate, case: str, texts: Sequence[str], tally: Tally, check: str) -> None:
+    """The stage variants of ``stage`` on a DocumentBatch whose text column is object dtype holding ``texts``
+    (strs an Arrow column cannot hold, such as lone surrogates), against NeMo's stock stages."""
+    import pandas as pd
+
+    c = C.ALL_CASES[case]
+    variants, stocks = _stage_variants(c, cand.integration, None)
+    df = pd.DataFrame(
+        {"id": [f"#{k}" for k in range(len(texts))], "text": pd.Series(list(texts), dtype=object)}
+    )
+    want_of: dict[str, Outcome] = {}
+    for name, (mk_got, key) in variants.items():
+        if key not in want_of:
+            want_of[key] = _run(stocks[key], df)
+        diff = frame_diff(_run(mk_got, df), want_of[key])
+        tally.add(
+            check, diff is None, case=f"stage:{name}", input=list(texts), got=diff, want="the stock frame"
+        )
+
+
 # ------------------------------------------------------------------------------------- subprocess entry
 
 

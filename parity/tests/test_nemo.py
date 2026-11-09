@@ -24,9 +24,14 @@ Checks (suite ``nemo``; ``<case>`` is a key of ``nemo_cases.ALL_CASES``):
                            values; a batch with a document NeMo raises on must raise the same type
     hypothesis-<case>      live: NeMo vs the candidate's functions on generated text (str and batch calls)
     hypothesis-integration-<case>   live: NeMo vs the integration's class
-    hypothesis-surrogates-<case>, hypothesis-surrogates-integration-<case>   the same on documents with lone
-                           surrogates (a str can hold them, a reader's Arrow column cannot), apart, so that a
-                           difference there does not hide one on ordinary text
+    hypothesis-surrogates-<case>   live: documents with lone surrogates (a str can hold them, a reader's Arrow
+                           column cannot), checked apart from ordinary text. pyroid's kernel functions raise
+                           UnicodeEncodeError for them, in str and list calls (the convention of every pyroid
+                           module); anything else is a difference. For NeMo itself and ``ftfy.fix_text`` the
+                           result must be NeMo's
+    hypothesis-surrogates-integration-<case>   the integration on those documents must give NeMo's result
+                           exactly: score_document / keep_document / modify_document, and the stage variants of
+                           stage-<case> on a DocumentBatch whose text column is object dtype
     config-edges           live: options at the edges (n=0, an unknown position, lang in upper case, ...)
     oracle-version         live: the installed NeMo is 1.4.0
 
@@ -194,6 +199,33 @@ def _integration_or_skip(impl: Any, parity: Collector, case: str, check: str) ->
 
 #: Generated text: ordinary documents, and documents with lone surrogates (checked apart).
 TEXTS = {"text": ("hypothesis-", S.batch), "surrogates": ("hypothesis-surrogates-", S.batch_surrogates)}
+SURROGATE_ERROR = ("raise", "UnicodeEncodeError")
+
+
+def _raises_on_surrogates(cand: Any, fn_name: str) -> bool:
+    """A pyroid kernel function raises UnicodeEncodeError for a str holding a lone surrogate (the convention of
+    every pyroid module). NeMo itself (the self-check) and ``ftfy.fix_text`` (pyroid.ftfy follows ftfy there)
+    are compared with NeMo instead."""
+    return not cand.is_nemo and fn_name != "ftfy.fix_text"
+
+
+def _check_surrogate_error(
+    fn: Any, fnb: Any, texts: list[str], kw: dict[str, Any], t: NC.Tally, check: str
+) -> None:
+    """Every str call and the list call must raise UnicodeEncodeError."""
+    for x in texts:
+        try:
+            fn(x, **kw)
+            g: tuple[Any, ...] = ("ok",)
+        except Exception as e:  # noqa: BLE001
+            g = ("raise", type(e).__name__)
+        t.add(check, g == SURROGATE_ERROR, case="str", input=x, got=g, want=SURROGATE_ERROR)
+    try:
+        fnb(list(texts), **kw)
+        g = ("ok",)
+    except Exception as e:  # noqa: BLE001
+        g = ("raise", type(e).__name__)
+    t.add(check, g == SURROGATE_ERROR, case="list", input=texts, got=g, want=SURROGATE_ERROR)
 
 
 @pytest.mark.parametrize("text", list(TEXTS))
@@ -216,7 +248,9 @@ def test_hypothesis_filter(case: str, text: str, nemo_impl: Any, parity: Collect
     def prop(texts: list[str]) -> None:
         t = NC.Tally()
         want = [NC.score_outcome(ref.score_document, x, {}) for x in texts]
-        if fn is not None:
+        if fn is not None and text == "surrogates" and _raises_on_surrogates(cand, c.fn):
+            _check_surrogate_error(fn, fn, texts, c.kwargs, t, check)
+        elif fn is not None:
             got = [NC.score_outcome(fn, x, c.kwargs) for x in texts]
             if any(NC._zh_unsupported(c, g) for g in got):
                 parity.skip(SUITE, check, f"{cand.name}.{c.fn} raises NotImplementedError for lang='zh'")
@@ -246,6 +280,8 @@ def test_hypothesis_filter(case: str, text: str, nemo_impl: Any, parity: Collect
                 if g[0] == "ok" and w[0] == "ok":
                     gk, wk = integ.keep_document(gv), ref.keep_document(ref.score_document(x))
                     t.add(icheck, gk == wk, case="keep_document", input=x, got=gk, want=wk)
+            if text == "surrogates":
+                NC.stage_on_texts(cand, case, texts, t, icheck)
         t.replay(parity)
         assert not (t.diff(check) or t.diff(icheck)), [t.summary(k) for k in (check, icheck) if t.diff(k)]
 
@@ -272,7 +308,9 @@ def test_hypothesis_modifier(case: str, text: str, nemo_impl: Any, parity: Colle
     def prop(texts: list[str]) -> None:
         t = NC.Tally()
         want = [NC.text_outcome(ref.modify_document, x, {}) for x in texts]
-        if fn is not None:
+        if fn is not None and text == "surrogates" and _raises_on_surrogates(cand, c.fn):
+            _check_surrogate_error(fn, fnb, texts, c.kwargs, t, check)
+        elif fn is not None:
             for x, w in zip(texts, want, strict=True):
                 g = NC.text_outcome(fn, x, c.kwargs)
                 t.add(check, g == w, case="str", input=x, got=g, want=w)
@@ -284,6 +322,8 @@ def test_hypothesis_modifier(case: str, text: str, nemo_impl: Any, parity: Colle
             for x, w in zip(texts, want, strict=True):
                 g = NC.text_outcome(integ.modify_document, x, {})
                 t.add(icheck, g == w, case="modify_document", input=x, got=g, want=w)
+            if text == "surrogates":
+                NC.stage_on_texts(cand, case, texts, t, icheck)
         t.replay(parity)
         assert not (t.diff(check) or t.diff(icheck)), [t.summary(k) for k in (check, icheck) if t.diff(k)]
 
