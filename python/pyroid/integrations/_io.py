@@ -15,8 +15,10 @@ import fnmatch
 import importlib
 import json
 import os
+import queue
 import re
 import secrets
+import threading
 import time
 import urllib.request
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
@@ -620,6 +622,55 @@ def iter_tables(
     if batch_size < 1:
         raise ValueError(f"batch_size must be at least 1, not {batch_size}")
     cols = None if columns is None else list(columns)
+    yield from _prefetched(_tables(source, batch_size, cols))
+
+
+def _prefetched(gen: Generator[Any, None, None]) -> Generator[Any, None, None]:
+    """Yield what ``gen`` yields, running it in a thread one item ahead of the consumer.
+
+    Reading and decoding the next batch (pyarrow releases the GIL) then overlap with the work on
+    this one, while memory holds at most two batches more. The thread closes ``gen``, and so its
+    file, before this generator returns, fails or is closed.
+    """
+    q: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
+    stop = threading.Event()
+
+    def put(item: tuple[str, Any]) -> bool:
+        while not stop.is_set():
+            try:
+                q.put(item, timeout=0.05)
+            except queue.Full:
+                continue
+            return True
+        return False
+
+    def work() -> None:
+        try:
+            for item in gen:
+                if not put(("item", item)):
+                    return
+            put(("end", None))
+        except BaseException as e:  # handed to the consumer, raised there
+            put(("error", e))
+        finally:
+            gen.close()
+
+    t = threading.Thread(target=work, name="pyroid-reader", daemon=True)
+    t.start()
+    try:
+        while True:
+            kind, item = q.get()
+            if kind == "error":
+                raise item
+            if kind == "end":
+                return
+            yield item
+    finally:
+        stop.set()
+        t.join()
+
+
+def _tables(source: Source, batch_size: int, cols: list[str] | None) -> Generator[Any, None, None]:
     if source.format == "parquet":
         import pyarrow.parquet as pq
 
