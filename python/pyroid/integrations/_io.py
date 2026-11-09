@@ -575,7 +575,9 @@ def _row_groups(pf: Any, columns: list[str] | None) -> Iterator[Any]:
 def _rebatched(batches: Iterable[Any], batch_size: int) -> Generator[Any, None, int]:
     """Yield tables of exactly ``batch_size`` rows (the last may be shorter); return how many.
 
-    Closing this generator closes ``batches`` too (and so the files a generator there holds).
+    Each table is one contiguous chunk: pyroid's kernels run slower on a batch stitched from
+    many small row groups. Closing this generator closes ``batches`` too (and so the files a
+    generator there holds).
     """
     pending: list[Any] = []
     rows = n = 0
@@ -587,7 +589,7 @@ def _rebatched(batches: Iterable[Any], batch_size: int) -> Generator[Any, None, 
             rows += b.num_rows
             while rows >= batch_size:
                 t = pa.Table.from_batches(pending)
-                yield t.slice(0, batch_size)
+                yield t.slice(0, batch_size).combine_chunks()
                 n += 1
                 rest = t.slice(batch_size)
                 pending, rows = rest.to_batches(), rest.num_rows
@@ -596,7 +598,7 @@ def _rebatched(batches: Iterable[Any], batch_size: int) -> Generator[Any, None, 
         if close is not None:
             close()
     if rows:
-        yield pa.Table.from_batches(pending)
+        yield pa.Table.from_batches(pending).combine_chunks()
         n += 1
     return n
 
