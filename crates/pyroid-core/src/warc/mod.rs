@@ -119,7 +119,7 @@ impl std::error::Error for Error {}
 /// A raw byte stream: one call = one Python `stream.read(n)`.
 pub trait Source {
     /// One call = one Python `stream.read(n)`: append at most `n` bytes to `out`; appending
-    /// nothing means EOF.
+    /// nothing means EOF. `n == usize::MAX` stands for `read(-1)` (a negative `block_size`).
     fn read(&mut self, n: usize, out: &mut Vec<u8>) -> Result<(), Error>;
 }
 
