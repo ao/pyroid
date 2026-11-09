@@ -94,7 +94,7 @@ fn run_plan(
     match plan {
         "none" | "offsets" => return Ok(None),
         "raw" => a.raw_read(&rec.raw, src, None, &mut out)?,
-        "content" => {
+        "content" | "stale" => {
             let mut cs = a.content_stream(rec);
             a.stream_read(&mut cs, src, None, &mut out)?;
         }
@@ -173,6 +173,7 @@ fn run_case(case: &Value) -> Value {
     let mut events = Vec::new();
     let mut error = Value::Null;
     let mut count = 0usize;
+    let mut prev: Option<Record> = None;
     loop {
         let rec = match a.next_record(&mut src) {
             Ok(Some(r)) => r,
@@ -197,12 +198,31 @@ fn run_case(case: &Value) -> Value {
             "length": rec.length.as_ref().map(int_str),
             "payload_length": int_str(&rec.payload_length),
         });
-        let res = (|| -> Result<(), Error> {
+        let early = (|| -> Result<(), Error> {
             if plan == "offsets" {
                 let off = a.get_record_offset(&mut src)?;
                 let len = a.get_record_length(&mut src)?;
                 r["early"] = json!([off, len]);
             }
+            if plan == "stale"
+                && let Some(p) = &prev
+            {
+                // reads of the previous record's streams after the iterator moved on
+                let mut raw = Vec::new();
+                a.raw_read(&p.raw, &mut src, Some(50), &mut raw)?;
+                let mut cs = a.content_stream(p);
+                let mut content = Vec::new();
+                a.stream_read(&mut cs, &mut src, Some(20), &mut content)?;
+                r["stale"] = json!([summary(&raw), summary(&content), a.raw_tell(&p.raw)]);
+            }
+            Ok(())
+        })();
+        if let Err(e) = early {
+            drain(&mut a, count, &mut events);
+            error = err_json(&e);
+            break;
+        }
+        let res = (|| -> Result<(), Error> {
             if let Some(data) = run_plan(&mut a, &mut src, &rec, plan)? {
                 r["content"] = summary(&data);
             }
@@ -217,6 +237,7 @@ fn run_case(case: &Value) -> Value {
         r["passed"] = json!(dc.passed);
         r["problems"] = json!(dc.problems);
         records.push(r);
+        prev = Some(rec);
         drain(&mut a, count, &mut events);
         if let Err(e) = res {
             error = err_json(&e);
@@ -319,4 +340,95 @@ fn matches_warcio() {
             shown.join("\n\n")
         );
     }
+}
+
+fn sha1_hex(b: &[u8]) -> String {
+    use sha1::Digest as _;
+    sha1::Sha1::digest(b)
+        .iter()
+        .fold(String::new(), |mut s, x| {
+            let _ = write!(s, "{x:02x}");
+            s
+        })
+}
+
+/// `DocReader` against datatrove 0.10.1's `process_record` loop over `open(path, "rb")`
+/// (with a `magic` that rejects everything, as libmagic is not in the dev image). Documents
+/// whose bytes are not UTF-8 go through cchardet in datatrove, so only their metadata is
+/// compared.
+#[test]
+fn matches_datatrove() {
+    let mut gz = Vec::new();
+    std::fs::File::open(data_dir().join("expected.json.gz"))
+        .unwrap()
+        .read_to_end(&mut gz)
+        .unwrap();
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(&gz[..])
+        .read_to_string(&mut text)
+        .unwrap();
+    let expected: Value = serde_json::from_str(&text).unwrap();
+    let mut kept = 0;
+    for entry in expected["datatrove"].as_array().unwrap() {
+        let file = entry["file"].as_str().unwrap();
+        let want_docs = entry["docs"].as_array().unwrap();
+        let mut src = ReadSource(std::fs::File::open(data_dir().join(file)).unwrap());
+        let mut reader = pyroid_core::warc::DocReader::new(ReaderOptions::default(), 0);
+        let mut next = 0;
+        let mut error = Value::Null;
+        loop {
+            match reader.next_doc(&mut src) {
+                Ok(None) => break,
+                Err(e) => {
+                    error = err_json(&e);
+                    break;
+                }
+                Ok(Some(d)) => {
+                    if d.mime_type.is_none() {
+                        continue; // magic.from_buffer
+                    }
+                    let meta = |url: &str, date: &str| json!([d.index, d.id, url, date]);
+                    if !d.utf8 {
+                        // cchardet decides; compare what does not depend on it
+                        if let Some(w) = want_docs.get(next)
+                            && w[0] == json!(d.index)
+                        {
+                            let (Ok(url), Ok(date)) = (d.url, d.date) else {
+                                panic!("{file}: {d:?}")
+                            };
+                            assert_eq!(
+                                meta(url, date),
+                                json!(w.as_array().unwrap()[..4]),
+                                "{file}"
+                            );
+                            next += 1;
+                        }
+                        continue;
+                    }
+                    let url = match d.url {
+                        Ok(u) => u,
+                        Err(k) => {
+                            error = json!(["KeyError", k]);
+                            break;
+                        }
+                    };
+                    let date = match d.date {
+                        Ok(v) => v,
+                        Err(k) => {
+                            error = json!(["KeyError", k]);
+                            break;
+                        }
+                    };
+                    let mut got = meta(url, date);
+                    got.as_array_mut().unwrap().push(json!(sha1_hex(d.content)));
+                    assert_eq!(Some(&got), want_docs.get(next), "{file}");
+                    next += 1;
+                    kept += 1;
+                }
+            }
+        }
+        assert_eq!(next, want_docs.len(), "{file}: documents left");
+        assert_eq!(error, entry["error"], "{file}");
+    }
+    assert!(kept >= 10, "{kept}");
 }

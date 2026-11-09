@@ -186,6 +186,44 @@ def synth():
         b"bad line\n"
     )
     files["synth.arc"] = arc
+
+    def raw_record(fields, block):
+        h = b"WARC/1.0\r\n" + b"".join(k + b": " + v + b"\r\n" for k, v in fields)
+        return h + b"Content-Length: %d\r\n\r\n" % len(block) + block + b"\r\n\r\n"
+
+    def ipt(rec_type, mime, block, uri=b"http://example.com/p", rid=b"<urn:uuid:1>", date=b"2026-01-02T00:00:00Z", extra=()):
+        f = [(b"WARC-Type", rec_type)]
+        if uri is not None:
+            f.append((b"WARC-Target-URI", uri))
+        if rid is not None:
+            f.append((b"WARC-Record-ID", rid))
+        if date is not None:
+            f.append((b"WARC-Date", date))
+        if mime is not None:
+            f.append((b"WARC-Identified-Payload-Type", mime))
+        return raw_record(f + list(extra), block)
+
+    page = http_response(HTML, [b"Content-Type: text/html; charset=utf-8"])
+    dt = [
+        raw_record([(b"WARC-Type", b"warcinfo"), (b"WARC-Record-ID", b"<urn:uuid:0>")], b"software: synth\r\n"),
+        ipt(b"request", None, b"GET /p HTTP/1.1\r\nHost: example.com\r\n\r\n"),
+        ipt(b"response", b"text/html", page),
+        ipt(b"response", b"application/xhtml+xml", http_response(gz(HTML), [b"Content-Encoding: gzip"]), rid=None),
+        ipt(b"response", b"text/plain", http_response(b"plain text")),
+        ipt(b"conversion", b"text/plain", b"converted text", uri=None, date=None, extra=[(b"uri", b"http://a/"), (b"archive-date", b"2020"), (b"uri", b"http://b/")]),
+        ipt(b"response", b"text/html", http_response("café ".encode("latin-1") * 50)),
+        ipt(b"response", b"image/png", http_response(b"\x89PNG")),
+        ipt(b"response", None, http_response(b"<html>no payload type</html>")),
+        ipt(b"metadata", b"text/html", b"meta"),
+        ipt(b"response", b"text/html", http_response(chunked(HTML, [100, 2000]), [b"Transfer-Encoding: chunked"]), date=b"", extra=[(b"archive-date", b"1999")]),
+        ipt(b"conversion", b"text/html", b"<p>conv</p>", uri=b"", extra=[(b"uri", b"urn:fallback")]),
+        ipt(b"response", b"text/html", http_response(b"\xff\xfe\x00bad")),
+        ipt(b"resource", b"text/html", b"<html>resource</html>"),
+    ]
+    files["datatrove.warc"] = b"".join(dt)
+    files["datatrove.warc.gz"] = b"".join(gz(r) for r in dt)
+    files["datatrove-uri.warc"] = dt[2] + ipt(b"conversion", b"text/html", b"<p>x</p>", uri=None) + dt[2]
+    files["datatrove-date.warc"] = dt[2] + ipt(b"conversion", b"text/html", b"<p>x</p>", date=None) + dt[2]
     for name, data in files.items():
         with open(os.path.join(SYNTH, name), "wb") as f:
             f.write(data)
@@ -233,6 +271,8 @@ CHUNKS = [1, 2, 3, 5, 8, 13, 16384]
 def run_plan(rec, plan):
     if plan in ("none", "offsets"):
         return None
+    if plan == "stale":
+        plan = "content"
     if plan == "raw":
         return rec.raw_stream.read()
     s = rec.content_stream()
@@ -270,7 +310,7 @@ def run(path, opts, plan, cls="ArchiveIterator", offset=0):
     log.propagate = False
     old_err, sys.stderr = sys.stderr, Err(events, counter)
     records, error = [], None
-    it = None
+    it = prev = None
     try:
         with open(os.path.join(HERE, path), "rb") as fh:
             fh.seek(offset)
@@ -288,6 +328,10 @@ def run(path, opts, plan, cls="ArchiveIterator", offset=0):
                 }
                 if plan == "offsets":
                     r["early"] = [it.get_record_offset(), it.get_record_length()]
+                if plan == "stale" and prev is not None:
+                    # reads of the previous record's streams after the iterator moved on
+                    r["stale"] = [summary(prev.raw_stream.read(50)), summary(prev.content_stream().read(20)), prev.raw_stream.tell()]
+                prev = rec
                 try:
                     data = run_plan(rec, plan)
                     if data is not None:
@@ -312,11 +356,39 @@ def run(path, opts, plan, cls="ArchiveIterator", offset=0):
     }
 
 
+def run_datatrove(path):
+    """datatrove 0.10.1's WarcReader.read_file loop over open(path, "rb").
+
+    libmagic is not in the dev image: magic.from_buffer answers a type datatrove drops, so
+    records without WARC-Identified-Payload-Type are skipped (the Rust test leaves those to
+    the bindings).
+    """
+    import types
+
+    sys.modules["magic"] = types.SimpleNamespace(from_buffer=lambda b, mime=True: "application/x-unknown")
+    from datatrove.pipeline.readers.warc import process_record
+
+    old_err, sys.stderr = sys.stderr, io.StringIO()
+    docs, error = [], None
+    try:
+        with open(os.path.join(HERE, path), "rb") as fh:
+            for ri, record in enumerate(ArchiveIterator(fh)):
+                d = process_record(record)
+                if d:
+                    text = d["text"].encode("utf-8", "surrogatepass")
+                    docs.append([ri, d["id"], d["url"], d["date"], hashlib.sha1(text).hexdigest()])
+    except Exception as e:  # noqa: BLE001
+        error = [type(e).__name__, str(e)]
+    finally:
+        sys.stderr = old_err
+    return {"docs": docs, "error": error}
+
+
 def main():
     fixtures = sorted(f for f in os.listdir(HERE) if f.startswith(("example", "bad", "post")))
     fixtures += synth()
     cases = []
-    plans = ["none", "content", "chunks", "lines", "lines7", "raw", "offsets"]
+    plans = ["none", "content", "chunks", "lines", "lines7", "raw", "offsets", "stale"]
     for f in fixtures:
         for plan in plans:
             cases.append({"file": f, "opts": {}, "plan": plan})
@@ -336,7 +408,13 @@ def main():
     cases.append({"file": "example-digest.warc", "opts": {"check_digests": True}, "plan": "none", "offset": 922})
     for c in cases:
         c.update(run(c["file"], c["opts"], c["plan"], c.get("cls", "ArchiveIterator"), c.get("offset", 0)))
-    out = {"warcio": importlib.metadata.version("warcio"), "python": sys.version.split()[0], "cases": cases}
+    docs = [dict(file=f, **run_datatrove(f)) for f in fixtures]
+    out = {
+        "warcio": importlib.metadata.version("warcio"),
+        "python": sys.version.split()[0],
+        "cases": cases,
+        "datatrove": docs,
+    }
     data = json.dumps(out, separators=(",", ":"), sort_keys=True).encode() + b"\n"
     with open(os.path.join(HERE, "expected.json.gz"), "wb") as f:
         f.write(gzip.compress(data, 9, mtime=0))
