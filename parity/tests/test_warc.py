@@ -179,6 +179,12 @@ def test_oracle_versions(parity: Collector) -> None:
 
 
 def test_inputs(parity: Collector) -> None:
+    if not P.HAVE_DATATROVE:
+        parity.skip(
+            SUITE,
+            "datatrove-opener",
+            "datatrove is not installed: configs reading through DataFolder.open are left out",
+        )
     gone = W.missing()
     if gone:
         skip(

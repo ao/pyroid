@@ -21,6 +21,7 @@ import argparse
 import atexit
 import hashlib
 import importlib.metadata as md
+import importlib.util
 import json
 import shutil
 import sys
@@ -57,8 +58,19 @@ class Job:
     config: C.Config
 
 
+# The "datatrove" opener reads through datatrove's DataFolder.open: without datatrove (the free-threaded legs) those
+# configs are left out.
+HAVE_DATATROVE = importlib.util.find_spec("datatrove") is not None
+
+
 def configs_for(gz: bool, configs: tuple[C.Config, ...], big: bool = False) -> list[C.Config]:
-    return [c for c in configs if (gz or not c.needs_gzip) and not (big and c.name in C.SLOW)]
+    return [
+        c
+        for c in configs
+        if (gz or not c.needs_gzip)
+        and not (big and c.name in C.SLOW)
+        and (HAVE_DATATROVE or c.opener != "datatrove")
+    ]
 
 
 def env() -> dict[str, Any]:
