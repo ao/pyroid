@@ -136,7 +136,7 @@ pub trait WordTokenizer: Sync + fmt::Debug {
 
     /// `sent_tokenize(text)`: the sentences' texts, stripped, the empty ones
     /// dropped, appended to `out`.
-    fn sentences<'a>(&self, text: &'a str, out: &mut Vec<&'a str>) -> Result<(), FilterError> {
+    fn sentences<'a>(&self, text: &'a str, out: &mut Vec<Cow<'a, str>>) -> Result<(), FilterError> {
         // A sentence's text runs from its first token to its last; the
         // previous sentence ends at most one space (a token's `whitespace_`)
         // before that, which `strip()` removes anyway.
@@ -146,7 +146,7 @@ pub trait WordTokenizer: Sync + fmt::Debug {
         for end in ends {
             let s = text::py_strip(&text[start..end]);
             if !s.is_empty() {
-                out.push(s);
+                out.push(Cow::Borrowed(s));
             }
             start = end;
         }

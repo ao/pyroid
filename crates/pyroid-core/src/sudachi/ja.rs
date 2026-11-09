@@ -22,6 +22,7 @@
 //!
 //! The dictionary is the one [`install`]ed in this process.
 
+use std::borrow::Cow;
 use std::ops::Range;
 use std::sync::{Mutex, OnceLock};
 
@@ -253,22 +254,60 @@ impl JaTokenizer {
         out.push((toks[start].start, last.end));
     }
 
+    /// `SpaCyTokenizer._do_tokenize`: each chunk and its morpheme surfaces.
+    ///
+    /// When any chunk fails (SudachiPy's input limit) and the text contains
+    /// `"IS_ALPHA"`, datatrove tokenizes every chunk again with that string
+    /// removed; the chunks are then new strings.
+    fn chunks(text: &str) -> Result<Vec<Chunk<'_>>, FilterError> {
+        let ranges = chunk_text_on_bytes(text, CHUNK);
+        let mut out = Vec::with_capacity(ranges.len());
+        let mut failed = None;
+        for r in &ranges {
+            let mut surfaces = Vec::new();
+            if let Err(e) = Self::surfaces(&text[r.clone()], &mut surfaces) {
+                failed = Some(e);
+                break;
+            }
+            out.push(Chunk {
+                at: Some(r.start),
+                text: Cow::Borrowed(&text[r.clone()]),
+                surfaces,
+            });
+        }
+        let Some(e) = failed else {
+            return Ok(out);
+        };
+        if !text.contains("IS_ALPHA") {
+            return Err(e);
+        }
+        out.clear();
+        for r in ranges {
+            let t = text[r].replace("IS_ALPHA", "");
+            let mut surfaces = Vec::new();
+            Self::surfaces(&t, &mut surfaces)?;
+            out.push(Chunk {
+                at: None,
+                text: Cow::Owned(t),
+                surfaces,
+            });
+        }
+        Ok(out)
+    }
+
     /// Each chunk's sentences (byte ranges in the chunk), in order.
-    fn chunk_sentences(
+    fn chunk_sentences<'a>(
         &self,
-        text: &str,
-        mut f: impl FnMut(Range<usize>, &[(usize, usize)]),
+        text: &'a str,
+        mut f: impl FnMut(&Chunk<'a>, &[(usize, usize)]),
     ) -> Result<(), FilterError> {
-        let (mut surfaces, mut toks, mut sents) = (Vec::new(), Vec::new(), Vec::new());
-        for chunk in chunk_text_on_bytes(text, CHUNK) {
-            let c = &text[chunk.clone()];
-            surfaces.clear();
+        let (mut toks, mut sents) = (Vec::new(), Vec::new());
+        for chunk in Self::chunks(text)? {
             toks.clear();
             sents.clear();
-            Self::surfaces(c, &mut surfaces)?;
-            Self::doc_tokens(c, &surfaces, &mut toks);
-            self.sentences_in(c, &toks, &mut sents);
-            f(chunk, &sents);
+            Self::doc_tokens(&chunk.text, &chunk.surfaces, &mut toks);
+            self.sentences_in(&chunk.text, &toks, &mut sents);
+            f(&chunk, &sents);
         }
         Ok(())
     }
@@ -284,7 +323,7 @@ impl JaTokenizer {
             } else {
                 0
             };
-            let c = &text[chunk];
+            let c = &*chunk.text;
             // Byte offsets of the chunk to its characters, in one pass.
             let (mut at_b, mut at_c) = (0usize, 0usize);
             let mut chars = |b: usize| {
@@ -301,9 +340,37 @@ impl JaTokenizer {
     }
 }
 
+/// One chunk `_do_tokenize` tokenizes.
+struct Chunk<'a> {
+    /// Its byte offset in the text, unless it is a retry's new string.
+    at: Option<usize>,
+    text: Cow<'a, str>,
+    /// Byte ranges of its non-empty morphemes.
+    surfaces: Vec<Range<usize>>,
+}
+
+impl<'a> Chunk<'a> {
+    /// `self.text[r]`, borrowed from the document when the chunk is a slice of
+    /// it.
+    fn slice(&self, doc: &'a str, r: Range<usize>) -> Cow<'a, str> {
+        match self.at {
+            Some(at) => Cow::Borrowed(&doc[at + r.start..at + r.end]),
+            None => Cow::Owned(self.text[r].to_owned()),
+        }
+    }
+}
+
 /// Characters in `s`.
 fn n_chars(s: &str) -> usize {
     s.chars().count()
+}
+
+/// [`py_strip`] of a borrowed or owned string.
+fn strip_cow(s: Cow<'_, str>) -> Cow<'_, str> {
+    match s {
+        Cow::Borrowed(b) => Cow::Borrowed(py_strip(b)),
+        Cow::Owned(o) => Cow::Owned(py_strip(&o).to_owned()),
+    }
 }
 
 impl WordTokenizer for JaTokenizer {
@@ -312,14 +379,23 @@ impl WordTokenizer for JaTokenizer {
     }
 
     fn words<'a>(&self, text: &'a str, out: &mut Vec<&'a str>) -> Result<(), FilterError> {
-        let mut surfaces = Vec::new();
-        for chunk in chunk_text_on_bytes(text, CHUNK) {
-            surfaces.clear();
-            Self::surfaces(&text[chunk.clone()], &mut surfaces)?;
-            for r in &surfaces {
-                let w = &text[chunk.start + r.start..chunk.start + r.end];
-                if !is_space_word(w) {
-                    out.push(py_strip(w));
+        let mut words = Vec::new();
+        self.words_cow(text, &mut words)?;
+        for w in words {
+            match w {
+                Cow::Borrowed(w) => out.push(w),
+                // datatrove's retry without "IS_ALPHA": not slices of `text`.
+                Cow::Owned(_) => return Err(FilterError::SubstringNotFound),
+            }
+        }
+        Ok(())
+    }
+
+    fn words_cow<'a>(&self, text: &'a str, out: &mut Vec<Cow<'a, str>>) -> Result<(), FilterError> {
+        for chunk in Self::chunks(text)? {
+            for r in &chunk.surfaces {
+                if !is_space_word(&chunk.text[r.clone()]) {
+                    out.push(strip_cow(chunk.slice(text, r.clone())));
                 }
             }
         }
@@ -328,19 +404,22 @@ impl WordTokenizer for JaTokenizer {
 
     fn sentence_ends(&self, text: &str, out: &mut Vec<usize>) -> Result<(), FilterError> {
         let mut chunks = 0usize;
+        let mut borrowed = true;
         let mut ends = Vec::new();
         self.chunk_sentences(text, |chunk, sents| {
             chunks += 1;
-            ends.extend(sents.iter().map(|s| chunk.start + s.1));
+            borrowed &= chunk.at.is_some();
+            ends.extend(sents.iter().map(|s| s.1));
         })?;
-        if chunks <= 1 {
-            // One chunk: the spans are the chunk's own.
+        if chunks <= 1 && borrowed {
+            // One chunk of the text: the spans are the chunk's own.
             out.extend(ends);
             return Ok(());
         }
         let mut spans = Vec::new();
         self.spans(text, &mut spans)?;
-        // `span_tokenize`'s ends are characters of `text`: back to bytes.
+        // `span_tokenize`'s ends are characters, and datatrove uses them as
+        // characters of `text`: back to bytes.
         let mut bounds = text
             .char_indices()
             .map(|(i, _)| i)
@@ -357,11 +436,11 @@ impl WordTokenizer for JaTokenizer {
         Ok(())
     }
 
-    fn sentences<'a>(&self, text: &'a str, out: &mut Vec<&'a str>) -> Result<(), FilterError> {
+    fn sentences<'a>(&self, text: &'a str, out: &mut Vec<Cow<'a, str>>) -> Result<(), FilterError> {
         // `sent_tokenize`: each sentence's own text (chunk-relative), stripped.
         self.chunk_sentences(text, |chunk, sents| {
             for &(s, e) in sents {
-                let t = py_strip(&text[chunk.start + s..chunk.start + e]);
+                let t = strip_cow(chunk.slice(text, s..e));
                 if !t.is_empty() {
                     out.push(t);
                 }

@@ -247,12 +247,14 @@ impl SentenceDeduper {
     pub fn sentences<'a>(
         &self,
         text: &'a str,
-        out: &mut Vec<&'a str>,
+        out: &mut Vec<Cow<'a, str>>,
     ) -> Result<(), SentenceError> {
         if self.config.split_sentences {
             self.tokenizer()?.sentences(text, out)?;
         } else {
-            py_splitlines(text, out);
+            let mut lines = Vec::new();
+            py_splitlines(text, &mut lines);
+            out.extend(lines.into_iter().map(Cow::Borrowed));
         }
         Ok(())
     }
