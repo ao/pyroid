@@ -12,6 +12,7 @@
 //! [`UnicodeVersion`].
 
 mod chars;
+pub mod punkt;
 
 pub use crate::ftfy::UnicodeVersion;
 pub use chars::lower;

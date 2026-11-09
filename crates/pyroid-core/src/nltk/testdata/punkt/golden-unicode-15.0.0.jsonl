@@ -1,0 +1,152 @@
+{"v":"15.0.0","t":"Ask the dr. ʕord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. ʕord","dr.","ʕord",1,0,1,false,2,0,0,null]],"w":["Ask","the","dr.","ʕord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. ʕord here.","s":[0,13],"n":"=s","b":false,"g":"=s","d":[[1,"J. ʕord","j.","ʕord",0,1,1,false,2,0,4,false]],"w":["J.","ʕord","here."],"ks":[3]}
+{"v":"15.0.0","t":"Go ʕbc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"ʕbc. then","ʕbc.","then",0,0,0,false,0,0,0,true]],"w":["Go","ʕbc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go ʕbc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"ʕbc. Then","ʕbc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","ʕbc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"ʕ. ʕord","s":[0,7],"n":"=s","b":false,"g":"=s","d":[[1,"ʕ. ʕord","ʕ.","ʕord",0,1,1,false,2,0,4,false]],"w":["ʕ.","ʕord"],"ks":[2]}
+{"v":"15.0.0","t":"Mr. ʕ","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. ʕ","mr.","ʕ",1,0,0,false,0,0,0,null]],"w":["Mr.","ʕ"],"ks":[2]}
+{"v":"15.0.0","t":"3. ʕord","s":[0,7],"n":"=s","b":false,"g":"=s","d":[[1,"3. ʕord","##number##","ʕord",0,0,1,false,2,0,4,false]],"w":["3.","ʕord"],"ks":[2]}
+{"v":"15.0.0","t":"The ʕʕ. ʕord. ...  ʕord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"ʕʕ. ʕord.","ʕʕ.","ʕord.",0,0,1,false,2,0,0,true],[12,"ʕord. ...","ʕord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  ʕord","...","ʕord",0,0,1,false,2,0,0,null]],"w":["The","ʕʕ.","ʕord.","...","ʕord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. Ᲊord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. Ᲊord","dr.","Ᲊord",1,0,0,"unknown",4,0,0,null]],"w":["Ask","the","dr.","Ᲊord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. Ᲊord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. Ᲊord","j.","Ᲊord",0,1,0,"unknown",4,0,0,true]],"w":["J.","Ᲊord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go Ᲊbc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"Ᲊbc. then","Ᲊbc.","then",0,0,0,false,0,0,0,true]],"w":["Go","Ᲊbc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go Ᲊbc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"Ᲊbc. Then","Ᲊbc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","Ᲊbc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Ᲊ. Ᲊord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"Ᲊ. Ᲊord","Ᲊ.","Ᲊord",0,1,0,"unknown",4,0,0,true]],"w":["Ᲊ.","Ᲊord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. Ᲊ","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. Ᲊ","mr.","Ᲊ",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","Ᲊ"],"ks":[2]}
+{"v":"15.0.0","t":"3. Ᲊord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. Ᲊord","##number##","Ᲊord",0,0,0,"unknown",4,0,0,true]],"w":["3.","Ᲊord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ᲉᲉ. Ᲊord. ...  Ᲊord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"ᲉᲉ. Ᲊord.","ᲉᲉ.","Ᲊord.",0,0,0,"unknown",4,0,0,true],[12,"Ᲊord. ...","Ᲊord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  Ᲊord","...","Ᲊord",0,0,0,"unknown",4,0,0,null]],"w":["The","ᲉᲉ.","Ᲊord.","...","Ᲊord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. ᲊord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. ᲊord","dr.","ᲊord",1,0,1,"unknown",20,0,0,null]],"w":["Ask","the","dr.","ᲊord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. ᲊord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. ᲊord","j.","ᲊord",0,1,1,"unknown",20,0,0,true]],"w":["J.","ᲊord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go ᲊbc. then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"ᲊbc. then","ᲊbc.","then",1,0,0,false,0,0,0,null]],"w":["Go","ᲊbc.","then","more."],"ks":[4]}
+{"v":"15.0.0","t":"Go ᲊbc. Then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"ᲊbc. Then","ᲊbc.","then",1,0,0,"unknown",0,0,0,null]],"w":["Go","ᲊbc.","Then","more."],"ks":[4]}
+{"v":"15.0.0","t":"ᲊ. ᲊord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"ᲊ. ᲊord","ᲊ.","ᲊord",0,1,1,"unknown",20,0,0,true]],"w":["ᲊ.","ᲊord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. ᲊ","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. ᲊ","mr.","ᲊ",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","ᲊ"],"ks":[2]}
+{"v":"15.0.0","t":"3. ᲊord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. ᲊord","##number##","ᲊord",0,0,1,"unknown",20,0,0,true]],"w":["3.","ᲊord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ᲊᲊ. ᲊord. ...  ᲊord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"ᲊᲊ. ᲊord.","ᲊᲊ.","ᲊord.",0,0,1,"unknown",20,0,0,true],[12,"ᲊord. ...","ᲊord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  ᲊord","...","ᲊord",0,0,1,"unknown",20,0,0,null]],"w":["The","ᲊᲊ.","ᲊord.","...","ᲊord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. Ɤord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. Ɤord","dr.","Ɤord",1,0,0,"unknown",0,0,0,null]],"w":["Ask","the","dr.","Ɤord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. Ɤord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. Ɤord","j.","Ɤord",0,1,0,"unknown",0,0,0,true]],"w":["J.","Ɤord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go Ɤbc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"Ɤbc. then","Ɤbc.","then",0,0,0,false,0,0,0,true]],"w":["Go","Ɤbc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go Ɤbc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"Ɤbc. Then","Ɤbc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","Ɤbc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Ɤ. Ɤord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"Ɤ. Ɤord","Ɤ.","Ɤord",0,1,0,"unknown",0,0,0,true]],"w":["Ɤ.","Ɤord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. Ɤ","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. Ɤ","mr.","Ɤ",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","Ɤ"],"ks":[2]}
+{"v":"15.0.0","t":"3. Ɤord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. Ɤord","##number##","Ɤord",0,0,0,"unknown",0,0,0,true]],"w":["3.","Ɤord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ꟋꟋ. Ɤord. ...  Ɤord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"ꟋꟋ. Ɤord.","ꟋꟋ.","Ɤord.",0,0,0,"unknown",0,0,0,true],[12,"Ɤord. ...","Ɤord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  Ɤord","...","Ɤord",0,0,0,"unknown",0,0,0,null]],"w":["The","ꟋꟋ.","Ɤord.","...","Ɤord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. Ꟍord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. Ꟍord","dr.","Ꟍord",1,0,0,"unknown",32,0,0,null]],"w":["Ask","the","dr.","Ꟍord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. Ꟍord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. Ꟍord","j.","Ꟍord",0,1,0,"unknown",32,0,0,true]],"w":["J.","Ꟍord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go Ꟍbc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"Ꟍbc. then","Ꟍbc.","then",0,0,0,false,0,0,0,true]],"w":["Go","Ꟍbc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go Ꟍbc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"Ꟍbc. Then","Ꟍbc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","Ꟍbc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Ꟍ. Ꟍord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"Ꟍ. Ꟍord","Ꟍ.","Ꟍord",0,1,0,"unknown",32,0,0,true]],"w":["Ꟍ.","Ꟍord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. Ꟍ","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. Ꟍ","mr.","Ꟍ",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","Ꟍ"],"ks":[2]}
+{"v":"15.0.0","t":"3. Ꟍord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. Ꟍord","##number##","Ꟍord",0,0,0,"unknown",32,0,0,true]],"w":["3.","Ꟍord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ꟌꟌ. Ꟍord. ...  Ꟍord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"ꟌꟌ. Ꟍord.","ꟌꟌ.","Ꟍord.",0,0,0,"unknown",32,0,0,true],[12,"Ꟍord. ...","Ꟍord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  Ꟍord","...","Ꟍord",0,0,0,"unknown",32,0,0,null]],"w":["The","ꟌꟌ.","Ꟍord.","...","Ꟍord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. ꟍord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. ꟍord","dr.","ꟍord",1,0,1,"unknown",2,0,0,null]],"w":["Ask","the","dr.","ꟍord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. ꟍord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. ꟍord","j.","ꟍord",0,1,1,"unknown",2,0,0,true]],"w":["J.","ꟍord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go ꟍbc. then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"ꟍbc. then","ꟍbc.","then",1,0,0,false,0,0,0,null]],"w":["Go","ꟍbc.","then","more."],"ks":[4]}
+{"v":"15.0.0","t":"Go ꟍbc. Then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"ꟍbc. Then","ꟍbc.","then",1,0,0,"unknown",0,0,0,null]],"w":["Go","ꟍbc.","Then","more."],"ks":[4]}
+{"v":"15.0.0","t":"ꟍ. ꟍord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"ꟍ. ꟍord","ꟍ.","ꟍord",0,1,1,"unknown",2,0,0,true]],"w":["ꟍ.","ꟍord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. ꟍ","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. ꟍ","mr.","ꟍ",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","ꟍ"],"ks":[2]}
+{"v":"15.0.0","t":"3. ꟍord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. ꟍord","##number##","ꟍord",0,0,1,"unknown",2,0,0,true]],"w":["3.","ꟍord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ꟍꟍ. ꟍord. ...  ꟍord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"ꟍꟍ. ꟍord.","ꟍꟍ.","ꟍord.",0,0,1,"unknown",2,0,0,true],[12,"ꟍord. ...","ꟍord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  ꟍord","...","ꟍord",0,0,1,"unknown",2,0,0,null]],"w":["The","ꟍꟍ.","ꟍord.","...","ꟍord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. ꟎ord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. ꟎ord","dr.","꟎ord",1,0,0,"unknown",4,0,0,null]],"w":["Ask","the","dr.","꟎ord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. ꟎ord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. ꟎ord","j.","꟎ord",0,1,0,"unknown",4,0,0,true]],"w":["J.","꟎ord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go ꟎bc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"꟎bc. then","꟎bc.","then",0,0,0,false,0,0,0,true]],"w":["Go","꟎bc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go ꟎bc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"꟎bc. Then","꟎bc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","꟎bc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"꟎. ꟎ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"꟎. ꟎ord","꟎.","꟎ord",0,1,0,"unknown",4,0,0,true]],"w":["꟎.","꟎ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. ꟎","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. ꟎","mr.","꟎",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","꟎"],"ks":[2]}
+{"v":"15.0.0","t":"3. ꟎ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. ꟎ord","##number##","꟎ord",0,0,0,"unknown",4,0,0,true]],"w":["3.","꟎ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ꟎꟎. ꟎ord. ...  ꟎ord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"꟎꟎. ꟎ord.","꟎꟎.","꟎ord.",0,0,0,"unknown",4,0,0,true],[12,"꟎ord. ...","꟎ord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  ꟎ord","...","꟎ord",0,0,0,"unknown",4,0,0,null]],"w":["The","꟎꟎.","꟎ord.","...","꟎ord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. ꟏ord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. ꟏ord","dr.","꟏ord",1,0,1,"unknown",20,0,0,null]],"w":["Ask","the","dr.","꟏ord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. ꟏ord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. ꟏ord","j.","꟏ord",0,1,1,"unknown",20,0,0,true]],"w":["J.","꟏ord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go ꟏bc. then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"꟏bc. then","꟏bc.","then",1,0,0,false,0,0,0,null]],"w":["Go","꟏bc.","then","more."],"ks":[4]}
+{"v":"15.0.0","t":"Go ꟏bc. Then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"꟏bc. Then","꟏bc.","then",1,0,0,"unknown",0,0,0,null]],"w":["Go","꟏bc.","Then","more."],"ks":[4]}
+{"v":"15.0.0","t":"꟏. ꟏ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"꟏. ꟏ord","꟏.","꟏ord",0,1,1,"unknown",20,0,0,true]],"w":["꟏.","꟏ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. ꟏","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. ꟏","mr.","꟏",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","꟏"],"ks":[2]}
+{"v":"15.0.0","t":"3. ꟏ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. ꟏ord","##number##","꟏ord",0,0,1,"unknown",20,0,0,true]],"w":["3.","꟏ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ꟏꟏. ꟏ord. ...  ꟏ord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"꟏꟏. ꟏ord.","꟏꟏.","꟏ord.",0,0,1,"unknown",20,0,0,true],[12,"꟏ord. ...","꟏ord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  ꟏ord","...","꟏ord",0,0,1,"unknown",20,0,0,null]],"w":["The","꟏꟏.","꟏ord.","...","꟏ord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. ꟒ord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. ꟒ord","dr.","꟒ord",1,0,0,"unknown",0,0,0,null]],"w":["Ask","the","dr.","꟒ord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. ꟒ord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. ꟒ord","j.","꟒ord",0,1,0,"unknown",0,0,0,true]],"w":["J.","꟒ord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go ꟒bc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"꟒bc. then","꟒bc.","then",0,0,0,false,0,0,0,true]],"w":["Go","꟒bc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go ꟒bc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"꟒bc. Then","꟒bc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","꟒bc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"꟒. ꟒ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"꟒. ꟒ord","꟒.","꟒ord",0,1,0,"unknown",0,0,0,true]],"w":["꟒.","꟒ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. ꟒","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. ꟒","mr.","꟒",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","꟒"],"ks":[2]}
+{"v":"15.0.0","t":"3. ꟒ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. ꟒ord","##number##","꟒ord",0,0,0,"unknown",0,0,0,true]],"w":["3.","꟒ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ꟒꟒. ꟒ord. ...  ꟒ord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"꟒꟒. ꟒ord.","꟒꟒.","꟒ord.",0,0,0,"unknown",0,0,0,true],[12,"꟒ord. ...","꟒ord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  ꟒ord","...","꟒ord",0,0,0,"unknown",0,0,0,null]],"w":["The","꟒꟒.","꟒ord.","...","꟒ord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. Ꟛord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. Ꟛord","dr.","Ꟛord",1,0,0,"unknown",32,0,0,null]],"w":["Ask","the","dr.","Ꟛord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. Ꟛord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. Ꟛord","j.","Ꟛord",0,1,0,"unknown",32,0,0,true]],"w":["J.","Ꟛord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go Ꟛbc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"Ꟛbc. then","Ꟛbc.","then",0,0,0,false,0,0,0,true]],"w":["Go","Ꟛbc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go Ꟛbc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"Ꟛbc. Then","Ꟛbc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","Ꟛbc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Ꟛ. Ꟛord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"Ꟛ. Ꟛord","Ꟛ.","Ꟛord",0,1,0,"unknown",32,0,0,true]],"w":["Ꟛ.","Ꟛord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. Ꟛ","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. Ꟛ","mr.","Ꟛ",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","Ꟛ"],"ks":[2]}
+{"v":"15.0.0","t":"3. Ꟛord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. Ꟛord","##number##","Ꟛord",0,0,0,"unknown",32,0,0,true]],"w":["3.","Ꟛord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ꟚꟚ. Ꟛord. ...  Ꟛord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"ꟚꟚ. Ꟛord.","ꟚꟚ.","Ꟛord.",0,0,0,"unknown",32,0,0,true],[12,"Ꟛord. ...","Ꟛord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  Ꟛord","...","Ꟛord",0,0,0,"unknown",32,0,0,null]],"w":["The","ꟚꟚ.","Ꟛord.","...","Ꟛord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. ꟛord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. ꟛord","dr.","ꟛord",1,0,1,"unknown",2,0,0,null]],"w":["Ask","the","dr.","ꟛord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. ꟛord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. ꟛord","j.","ꟛord",0,1,1,"unknown",2,0,0,true]],"w":["J.","ꟛord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go ꟛbc. then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"ꟛbc. then","ꟛbc.","then",1,0,0,false,0,0,0,null]],"w":["Go","ꟛbc.","then","more."],"ks":[4]}
+{"v":"15.0.0","t":"Go ꟛbc. Then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"ꟛbc. Then","ꟛbc.","then",1,0,0,"unknown",0,0,0,null]],"w":["Go","ꟛbc.","Then","more."],"ks":[4]}
+{"v":"15.0.0","t":"ꟛ. ꟛord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"ꟛ. ꟛord","ꟛ.","ꟛord",0,1,1,"unknown",2,0,0,true]],"w":["ꟛ.","ꟛord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. ꟛ","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. ꟛ","mr.","ꟛ",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","ꟛ"],"ks":[2]}
+{"v":"15.0.0","t":"3. ꟛord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. ꟛord","##number##","ꟛord",0,0,1,"unknown",2,0,0,true]],"w":["3.","ꟛord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ꟛꟛ. ꟛord. ...  ꟛord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"ꟛꟛ. ꟛord.","ꟛꟛ.","ꟛord.",0,0,1,"unknown",2,0,0,true],[12,"ꟛord. ...","ꟛord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  ꟛord","...","ꟛord",0,0,1,"unknown",2,0,0,null]],"w":["The","ꟛꟛ.","ꟛord.","...","ꟛord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. Ƛord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. Ƛord","dr.","Ƛord",1,0,0,"unknown",4,0,0,null]],"w":["Ask","the","dr.","Ƛord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. Ƛord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. Ƛord","j.","Ƛord",0,1,0,"unknown",4,0,0,true]],"w":["J.","Ƛord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go Ƛbc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"Ƛbc. then","Ƛbc.","then",0,0,0,false,0,0,0,true]],"w":["Go","Ƛbc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go Ƛbc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"Ƛbc. Then","Ƛbc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","Ƛbc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Ƛ. Ƛord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"Ƛ. Ƛord","Ƛ.","Ƛord",0,1,0,"unknown",4,0,0,true]],"w":["Ƛ.","Ƛord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. Ƛ","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. Ƛ","mr.","Ƛ",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","Ƛ"],"ks":[2]}
+{"v":"15.0.0","t":"3. Ƛord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. Ƛord","##number##","Ƛord",0,0,0,"unknown",4,0,0,true]],"w":["3.","Ƛord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ꟜꟜ. Ƛord. ...  Ƛord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"ꟜꟜ. Ƛord.","ꟜꟜ.","Ƛord.",0,0,0,"unknown",4,0,0,true],[12,"Ƛord. ...","Ƛord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  Ƛord","...","Ƛord",0,0,0,"unknown",4,0,0,null]],"w":["The","ꟜꟜ.","Ƛord.","...","Ƛord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. ꟱ord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. ꟱ord","dr.","꟱ord",1,0,1,"unknown",20,0,0,null]],"w":["Ask","the","dr.","꟱ord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. ꟱ord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. ꟱ord","j.","꟱ord",0,1,1,"unknown",20,0,0,true]],"w":["J.","꟱ord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go ꟱bc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"꟱bc. then","꟱bc.","then",0,0,0,false,0,0,0,true]],"w":["Go","꟱bc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go ꟱bc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"꟱bc. Then","꟱bc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","꟱bc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"꟱. ꟱ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"꟱. ꟱ord","꟱.","꟱ord",0,1,1,"unknown",20,0,0,true]],"w":["꟱.","꟱ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. ꟱","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. ꟱","mr.","꟱",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","꟱"],"ks":[2]}
+{"v":"15.0.0","t":"3. ꟱ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. ꟱ord","##number##","꟱ord",0,0,1,"unknown",20,0,0,true]],"w":["3.","꟱ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The ꟱꟱. ꟱ord. ...  ꟱ord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"꟱꟱. ꟱ord.","꟱꟱.","꟱ord.",0,0,1,"unknown",20,0,0,true],[12,"꟱ord. ...","꟱ord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  ꟱ord","...","꟱ord",0,0,1,"unknown",20,0,0,null]],"w":["The","꟱꟱.","꟱ord.","...","꟱ord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. 𐵐ord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. 𐵐ord","dr.","𐵐ord",1,0,0,"unknown",0,0,0,null]],"w":["Ask","the","dr.","𐵐ord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. 𐵐ord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. 𐵐ord","j.","𐵐ord",0,1,0,"unknown",0,0,0,true]],"w":["J.","𐵐ord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go 𐵐bc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"𐵐bc. then","𐵐bc.","then",0,0,0,false,0,0,0,true]],"w":["Go","𐵐bc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go 𐵐bc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"𐵐bc. Then","𐵐bc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","𐵐bc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"𐵐. 𐵐ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"𐵐. 𐵐ord","𐵐.","𐵐ord",0,1,0,"unknown",0,0,0,true]],"w":["𐵐.","𐵐ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. 𐵐","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. 𐵐","mr.","𐵐",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","𐵐"],"ks":[2]}
+{"v":"15.0.0","t":"3. 𐵐ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. 𐵐ord","##number##","𐵐ord",0,0,0,"unknown",0,0,0,true]],"w":["3.","𐵐ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The 𐵐𐵐. 𐵐ord. ...  𐵐ord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"𐵐𐵐. 𐵐ord.","𐵐𐵐.","𐵐ord.",0,0,0,"unknown",0,0,0,true],[12,"𐵐ord. ...","𐵐ord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  𐵐ord","...","𐵐ord",0,0,0,"unknown",0,0,0,null]],"w":["The","𐵐𐵐.","𐵐ord.","...","𐵐ord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. 𐵰ord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. 𐵰ord","dr.","𐵰ord",1,0,1,"unknown",32,0,0,null]],"w":["Ask","the","dr.","𐵰ord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. 𐵰ord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. 𐵰ord","j.","𐵰ord",0,1,1,"unknown",32,0,0,true]],"w":["J.","𐵰ord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go 𐵰bc. then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"𐵰bc. then","𐵰bc.","then",1,0,0,false,0,0,0,null]],"w":["Go","𐵰bc.","then","more."],"ks":[4]}
+{"v":"15.0.0","t":"Go 𐵰bc. Then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"𐵰bc. Then","𐵰bc.","then",1,0,0,"unknown",0,0,0,null]],"w":["Go","𐵰bc.","Then","more."],"ks":[4]}
+{"v":"15.0.0","t":"𐵰. 𐵰ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"𐵰. 𐵰ord","𐵰.","𐵰ord",0,1,1,"unknown",32,0,0,true]],"w":["𐵰.","𐵰ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. 𐵰","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. 𐵰","mr.","𐵰",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","𐵰"],"ks":[2]}
+{"v":"15.0.0","t":"3. 𐵰ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. 𐵰ord","##number##","𐵰ord",0,0,1,"unknown",32,0,0,true]],"w":["3.","𐵰ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The 𐵰𐵰. 𐵰ord. ...  𐵰ord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"𐵰𐵰. 𐵰ord.","𐵰𐵰.","𐵰ord.",0,0,1,"unknown",32,0,0,true],[12,"𐵰ord. ...","𐵰ord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  𐵰ord","...","𐵰ord",0,0,1,"unknown",32,0,0,null]],"w":["The","𐵰𐵰.","𐵰ord.","...","𐵰ord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. 𖺠ord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. 𖺠ord","dr.","𖺠ord",1,0,0,"unknown",2,0,0,null]],"w":["Ask","the","dr.","𖺠ord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. 𖺠ord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. 𖺠ord","j.","𖺠ord",0,1,0,"unknown",2,0,0,true]],"w":["J.","𖺠ord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go 𖺠bc. then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"𖺠bc. then","𖺠bc.","then",0,0,0,false,0,0,0,true]],"w":["Go","𖺠bc.","then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"Go 𖺠bc. Then more.","s":[0,7,8,18],"n":"=s","b":true,"g":"=s","d":[[6,"𖺠bc. Then","𖺠bc.","then",0,0,0,"unknown",0,0,0,true]],"w":["Go","𖺠bc.","Then","more."],"ks":[2,2]}
+{"v":"15.0.0","t":"𖺠. 𖺠ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"𖺠. 𖺠ord","𖺠.","𖺠ord",0,1,0,"unknown",2,0,0,true]],"w":["𖺠.","𖺠ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. 𖺠","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. 𖺠","mr.","𖺠",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","𖺠"],"ks":[2]}
+{"v":"15.0.0","t":"3. 𖺠ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. 𖺠ord","##number##","𖺠ord",0,0,0,"unknown",2,0,0,true]],"w":["3.","𖺠ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The 𖺠𖺠. 𖺠ord. ...  𖺠ord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"𖺠𖺠. 𖺠ord.","𖺠𖺠.","𖺠ord.",0,0,0,"unknown",2,0,0,true],[12,"𖺠ord. ...","𖺠ord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  𖺠ord","...","𖺠ord",0,0,0,"unknown",2,0,0,null]],"w":["The","𖺠𖺠.","𖺠ord.","...","𖺠ord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. 𖺻ord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. 𖺻ord","dr.","𖺻ord",1,0,1,"unknown",4,0,0,null]],"w":["Ask","the","dr.","𖺻ord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. 𖺻ord here.","s":[0,2,3,13],"n":"=s","b":true,"g":"=s","d":[[1,"J. 𖺻ord","j.","𖺻ord",0,1,1,"unknown",4,0,0,true]],"w":["J.","𖺻ord","here."],"ks":[1,2]}
+{"v":"15.0.0","t":"Go 𖺻bc. then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"𖺻bc. then","𖺻bc.","then",1,0,0,false,0,0,0,null]],"w":["Go","𖺻bc.","then","more."],"ks":[4]}
+{"v":"15.0.0","t":"Go 𖺻bc. Then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"𖺻bc. Then","𖺻bc.","then",1,0,0,"unknown",0,0,0,null]],"w":["Go","𖺻bc.","Then","more."],"ks":[4]}
+{"v":"15.0.0","t":"𖺻. 𖺻ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"𖺻. 𖺻ord","𖺻.","𖺻ord",0,1,1,"unknown",4,0,0,true]],"w":["𖺻.","𖺻ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"Mr. 𖺻","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. 𖺻","mr.","𖺻",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","𖺻"],"ks":[2]}
+{"v":"15.0.0","t":"3. 𖺻ord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. 𖺻ord","##number##","𖺻ord",0,0,1,"unknown",4,0,0,true]],"w":["3.","𖺻ord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The 𖺻𖺻. 𖺻ord. ...  𖺻ord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"𖺻𖺻. 𖺻ord.","𖺻𖺻.","𖺻ord.",0,0,1,"unknown",4,0,0,true],[12,"𖺻ord. ...","𖺻ord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  𖺻ord","...","𖺻ord",0,0,1,"unknown",4,0,0,null]],"w":["The","𖺻𖺻.","𖺻ord.","...","𖺻ord"],"ks":[2,1,2]}
+{"v":"15.0.0","t":"Ask the dr. Aord here.","s":[0,11,12,22],"n":"=s","b":true,"g":"=s","d":[[10,"dr. Aord","dr.","aord",1,0,1,"unknown",0,0,3,true]],"w":["Ask","the","dr.","Aord","here."],"ks":[3,2]}
+{"v":"15.0.0","t":"J. Aord here.","s":[0,13],"n":"=s","b":false,"g":"=s","d":[[1,"J. Aord","j.","aord",0,1,1,"unknown",0,0,5,false]],"w":["J.","Aord","here."],"ks":[3]}
+{"v":"15.0.0","t":"Go Abc. then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"Abc. then","abc.","then",1,0,0,false,0,0,0,null]],"w":["Go","Abc.","then","more."],"ks":[4]}
+{"v":"15.0.0","t":"Go Abc. Then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"Abc. Then","abc.","then",1,0,0,"unknown",0,0,0,null]],"w":["Go","Abc.","Then","more."],"ks":[4]}
+{"v":"15.0.0","t":"A. Aord","s":[0,7],"n":"=s","b":false,"g":"=s","d":[[1,"A. Aord","a.","aord",0,1,1,"unknown",0,0,5,false]],"w":["A.","Aord"],"ks":[2]}
+{"v":"15.0.0","t":"Mr. A","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. A","mr.","a",1,0,0,"unknown",0,0,0,null]],"w":["Mr.","A"],"ks":[2]}
+{"v":"15.0.0","t":"3. Aord","s":[0,2,3,7],"n":"=s","b":true,"g":"=s","d":[[1,"3. Aord","##number##","aord",0,0,1,"unknown",0,0,0,true]],"w":["3.","Aord"],"ks":[1,1]}
+{"v":"15.0.0","t":"The AA. Aord. ...  Aord","s":[0,7,8,13,14,17,19,23],"n":"=s","b":true,"g":"=s","d":[[6,"AA. Aord.","aa.","aord.",0,0,1,"unknown",0,0,0,true],[12,"Aord. ...","aord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  Aord","...","aord",0,0,1,"unknown",0,0,3,true]],"w":["The","AA.","Aord.","...","Aord"],"ks":[2,1,1,1]}
+{"v":"15.0.0","t":"Ask the dr. aord here.","s":[0,22],"n":"=s","b":false,"g":"=s","d":[[10,"dr. aord","dr.","aord",1,0,1,false,0,0,0,null]],"w":["Ask","the","dr.","aord","here."],"ks":[5]}
+{"v":"15.0.0","t":"J. aord here.","s":[0,13],"n":"=s","b":false,"g":"=s","d":[[1,"J. aord","j.","aord",0,1,1,false,0,0,4,false]],"w":["J.","aord","here."],"ks":[3]}
+{"v":"15.0.0","t":"Go abc. then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"abc. then","abc.","then",1,0,0,false,0,0,0,null]],"w":["Go","abc.","then","more."],"ks":[4]}
+{"v":"15.0.0","t":"Go abc. Then more.","s":[0,18],"n":"=s","b":false,"g":"=s","d":[[6,"abc. Then","abc.","then",1,0,0,"unknown",0,0,0,null]],"w":["Go","abc.","Then","more."],"ks":[4]}
+{"v":"15.0.0","t":"a. aord","s":[0,7],"n":"=s","b":false,"g":"=s","d":[[1,"a. aord","a.","aord",0,1,1,false,0,0,4,false]],"w":["a.","aord"],"ks":[2]}
+{"v":"15.0.0","t":"Mr. a","s":[0,5],"n":"=s","b":false,"g":"=s","d":[[2,"Mr. a","mr.","a",1,0,0,false,0,0,0,null]],"w":["Mr.","a"],"ks":[2]}
+{"v":"15.0.0","t":"3. aord","s":[0,7],"n":"=s","b":false,"g":"=s","d":[[1,"3. aord","##number##","aord",0,0,1,false,0,0,4,false]],"w":["3.","aord"],"ks":[2]}
+{"v":"15.0.0","t":"The aa. Aord. ...  aord","s":[0,7,8,13,14,23],"n":"=s","b":true,"g":"=s","d":[[6,"aa. Aord.","aa.","aord.",0,0,1,"unknown",0,0,0,true],[12,"Aord. ...","aord.","...",0,0,0,"unknown",0,0,0,true],[16,"...  aord","...","aord",0,0,1,false,0,0,0,null]],"w":["The","aa.","Aord.","...","aord"],"ks":[2,1,2]}
