@@ -22,13 +22,13 @@ pub struct LitSet {
 }
 
 impl LitSet {
-    pub fn new(lits: &[&'static str]) -> Self {
+    pub fn new(literals: &[&'static str]) -> Self {
         let mut s = LitSet {
             anchored: Vec::new(),
             by_first: vec![Vec::new(); 256],
             first: [false; 256],
         };
-        for l in lits {
+        for l in literals {
             if let Some(a) = l.strip_prefix('^') {
                 s.anchored.push(a.as_bytes());
             } else if let Some(&b) = l.as_bytes().first() {

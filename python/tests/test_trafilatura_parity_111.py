@@ -41,10 +41,10 @@ if _FOUND != _WANT:
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")  # urllib3's DependencyWarning (SOCKS) when trafilatura loads
-    import trafilatura  # type: ignore[import-untyped,unused-ignore]
-    import trafilatura.deduplication  # type: ignore[import-untyped,unused-ignore]
-    import trafilatura.meta  # type: ignore[import-untyped,unused-ignore]
-    import trafilatura.settings  # type: ignore[import-untyped,unused-ignore]
+    import trafilatura  # type: ignore[import-not-found,import-untyped,unused-ignore]
+    import trafilatura.deduplication  # type: ignore[import-not-found,import-untyped,unused-ignore]
+    import trafilatura.meta  # type: ignore[import-not-found,import-untyped,unused-ignore]
+    import trafilatura.settings  # type: ignore[import-not-found,import-untyped,unused-ignore]
     from lxml import etree  # type: ignore[import-untyped,unused-ignore]
     from lxml import html as lxml_html  # type: ignore[import-untyped,unused-ignore]
 

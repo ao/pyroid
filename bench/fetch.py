@@ -392,15 +392,15 @@ def build_trafilatura_tests(rel: str, src: dict) -> None:
     )
     log(f"Trafilatura {src['tag']} tests: {len(files)} files from GitHub")
     base = f"https://raw.githubusercontent.com/{src['repo']}/{src['commit']}/"
-    datas = []
+    blobs = []
     for path, sha in files:
         with urllib.request.urlopen(base + urllib.parse.quote(path), timeout=120) as r:
             data = r.read()
         if git_blob_sha1(data) != sha:
             sys.exit(f"{path}: git blob sha1 differs from the tree at {src['commit']}")
-        datas.append(data)
+        blobs.append(data)
     table = pa.table(
-        {"path": [p for p, _ in files], "git_sha1": [s for _, s in files], "data": datas},
+        {"path": [p for p, _ in files], "git_sha1": [s for _, s in files], "data": blobs},
         schema=pa.schema([("path", pa.string()), ("git_sha1", pa.string()), ("data", pa.binary())]),
     )
     out = D.DATA / rel

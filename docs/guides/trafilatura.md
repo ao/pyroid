@@ -150,8 +150,9 @@ lxml can extract different text from the same page.
 ```python
 import pyroid.trafilatura as trafilatura
 
-trafilatura.extract(html, favor_precision=True, include_comments=False, deduplicate=True,
-                    compat="1.11.0")  # what datatrove 0.10.1's Trafilatura step gets
+trafilatura.extract(
+    html, favor_precision=True, include_comments=False, deduplicate=True, compat="1.11.0"
+)  # what datatrove 0.10.1's Trafilatura step gets
 trafilatura.extract_batch(pages, no_fallback=True, compat="1.11.0")
 ```
 

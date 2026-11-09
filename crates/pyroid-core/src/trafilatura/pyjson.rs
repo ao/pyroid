@@ -314,12 +314,12 @@ pub fn to_wtf8(s: &str) -> Vec<u8> {
     for c in s.chars() {
         let u = u32::from(c);
         if (0xF0000..=0xF07FF).contains(&u) {
-            let sur = 0xD800 + (u - 0xF0000);
+            let surrogate = 0xD800 + (u - 0xF0000);
             // three bytes, as UTF-8 would write a code point in this range
             out.extend_from_slice(&[
-                0xE0 | u8::try_from(sur >> 12).unwrap_or(0),
-                0x80 | u8::try_from((sur >> 6) & 0x3F).unwrap_or(0),
-                0x80 | u8::try_from(sur & 0x3F).unwrap_or(0),
+                0xE0 | u8::try_from(surrogate >> 12).unwrap_or(0),
+                0x80 | u8::try_from((surrogate >> 6) & 0x3F).unwrap_or(0),
+                0x80 | u8::try_from(surrogate & 0x3F).unwrap_or(0),
             ]);
         } else {
             let mut b = [0u8; 4];

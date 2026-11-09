@@ -550,9 +550,9 @@ impl Document {
             .find(|&a| self.is_element(a) && set.contains(self.tag(a)))
     }
 
-    pub fn is_ancestor_or_self(&self, anc: NodeId, mut id: NodeId) -> bool {
+    pub fn is_ancestor_or_self(&self, ancestor: NodeId, mut id: NodeId) -> bool {
         loop {
-            if id == anc {
+            if id == ancestor {
                 return true;
             }
             match self.parent(id) {

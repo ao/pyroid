@@ -26,6 +26,8 @@ repos:
             crates/pyroid-core/tests/ftfy_data/|
             crates/pyroid-core/tests/filters_data/|
             crates/pyroid-core/tests/metrics_data/|
+            crates/pyroid-core/tests/html_data/|
+            crates/pyroid-core/tests/trafilatura_data/|
             crates/pyroid-core/src/json_repair/testdata/|
             crates/pyroid-core/src/jieba/testdata/|
             crates/pyroid-core/src/nltk/testdata/|

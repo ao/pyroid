@@ -17,6 +17,8 @@ sha1 digest per document instead (MODE.sha1 / MODE.bare.sha1). A call that raise
 as_dict=False.
 """
 
+# ruff: noqa: T201  (a recording script: it reports on stdout)
+
 import hashlib
 import json
 import struct
@@ -35,7 +37,12 @@ MODES = {
     "datatrove": {"favor_precision": True, "include_comments": False, "deduplicate": True},
     "nodedup": {"favor_precision": True, "include_comments": False},
     "fast": {"favor_precision": True, "include_comments": False, "fast": True},
-    "fastdedup": {"favor_precision": True, "include_comments": False, "fast": True, "deduplicate": True},
+    "fastdedup": {
+        "favor_precision": True,
+        "include_comments": False,
+        "fast": True,
+        "deduplicate": True,
+    },
     # trafilatura's own defaults and the option sets standalone users call
     "default": {},
     "default_fast": {"fast": True},
@@ -117,9 +124,12 @@ def main():
                 rec = run(html, kw, bare)
                 f.write((digest(rec) if hashed else json.dumps(rec)) + "\n")
         dt = time.perf_counter() - t0
-        print(f"trafilatura {trafilatura.__version__}, {sys.version.split()[0]} (Unicode "
-              f"{unicodedata.unidata_version}) {mode}{' bare' if bare else ''}: "
-              f"{len(docs)} docs, {dt:.1f} s, {1000 * dt / len(docs):.2f} ms/doc", flush=True)
+        print(
+            f"trafilatura {trafilatura.__version__}, {sys.version.split()[0]} (Unicode "
+            f"{unicodedata.unidata_version}) {mode}{' bare' if bare else ''}: "
+            f"{len(docs)} docs, {dt:.1f} s, {1000 * dt / len(docs):.2f} ms/doc",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":

@@ -81,6 +81,16 @@ Ein = "Ein"
 Nd = "Nd"
 wha = "wha"
 ned = "ned"
+# "caf\u00e9" and "Caf\xe9", e-acute escaped (bench/json_repair_bench.py's sample data and the
+# Latin-1 page of the trafilatura parity tests).
+caf = "caf"
+# German "ist" and "als" in the German sample page of parity/pyroid_parity/trafilatura_delegate.py.
+ist = "ist"
+als = "als"
+# "mor", one of the made-up syllables of the vocabulary in python/tests/test_dedup_files.py.
+mor = "mor"
+# "ontent" from the sed pattern `[Cc]ontent-[Ll]ength` in bench/ec2/run_warc.sh.
+ontent = "ontent"
 
 [default.extend-identifiers]
 # `import pyroid.nltk as pn` in the tests and benchmarks.
@@ -89,6 +99,9 @@ pn = "pn"
 correc = "correc"
 # The arro3 Arrow library (github.com/kylebarron/arro3), not a misspelt "arrow".
 arro3 = "arro3"
+# jusText, the paragraph classifier Trafilatura falls back on (github.com/miso-belica/jusText); typos
+# would otherwise split it into "jus" + "Text".
+jusText = "jusText"
 
 # bench/gates.py names near-duplicate pairs `nd` (not a misspelt "and"). typos matches file types by file name
 # only, so this type covers files named gates.py; there is one, and every other word in it is still checked.
@@ -98,10 +111,9 @@ extend-glob = ["gates.py"]
 [type.bench-gates.extend-identifiers]
 nd = "nd"
 
-# bench/json_repair_bench.py's seeded sample data: the name "Ines" and "caf\u00e9" (an escaped e-acute).
+# bench/json_repair_bench.py's seeded sample data: the name "Ines".
 [type.jr-bench]
 extend-glob = ["json_repair_bench.py"]
 
 [type.jr-bench.extend-words]
 ines = "ines"
-caf = "caf"

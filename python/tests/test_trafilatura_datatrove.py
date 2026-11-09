@@ -48,7 +48,7 @@ if INSTALLED not in ("2.3.1", "1.11.0"):
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")  # urllib3's DependencyWarning (SOCKS) when trafilatura loads
-    import trafilatura  # type: ignore[import-untyped,unused-ignore]
+    import trafilatura  # type: ignore[import-not-found,import-untyped,unused-ignore]
     from datatrove.data import Document  # type: ignore[import-not-found,import-untyped,unused-ignore]
     from datatrove.pipeline.extractors import Trafilatura as StockTrafilatura  # type: ignore[import-not-found,import-untyped,unused-ignore]
 

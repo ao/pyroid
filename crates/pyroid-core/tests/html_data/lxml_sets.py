@@ -35,6 +35,8 @@ Derived from the P10 prototype's py/port_fuzz.py, port_cases.py, dump_lxml.py an
 port_bench.py.
 """
 
+# ruff: noqa: T201  (a recording script: it reports on stdout)
+
 from __future__ import annotations
 
 import argparse
@@ -110,7 +112,7 @@ def load_html_traced(html: str) -> tuple[etree._Element | None, str, str]:
         tree = tu.fromstring(s, parser=tu.HTML_PARSER)
     except ValueError:
         tree, path, fallback = tu.fromstring_bytes(s), "bytes", True
-    except Exception:  # noqa: BLE001  (as load_html: logged, tree stays None)
+    except Exception:  # as load_html: logged, tree stays None
         pass
     if (tree is None or len(tree) < 1) and not fallback:
         tree, path = tu.fromstring_bytes(s), "bytes"
@@ -129,7 +131,9 @@ def write_set(out: Path, docs: list[str]) -> None:
             ref is not None and tree is not None and etree.tostring(ref) == etree.tostring(tree)
         )
         if not same:
-            raise SystemExit(f"doc {i}: load_html_traced disagrees with trafilatura.utils.load_html")
+            raise SystemExit(
+                f"doc {i}: load_html_traced disagrees with trafilatura.utils.load_html"
+            )
         raws.append(html)
         reps.append(s)
         lines.append(json.dumps(["D", i]))
@@ -138,35 +142,214 @@ def write_set(out: Path, docs: list[str]) -> None:
         meta.append({"index": i, "path": path, "root": None if tree is None else tree.tag})
     write_bin(out / "raw.bin", raws)
     write_bin(out / "repaired.bin", reps)
-    (out / "lxml.tree").write_text("\n".join(lines) + "\n", encoding="utf-8", errors="surrogatepass")
+    (out / "lxml.tree").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8", errors="surrogatepass"
+    )
     (out / "meta.jsonl").write_text("".join(json.dumps(m) + "\n" for m in meta))
     paths = [m["path"] for m in meta]
-    print(f"{len(docs)} docs -> {out}; str {paths.count('str')}, bytes {paths.count('bytes')}, "
-          f"no tree {sum(m['root'] is None for m in meta)}")
+    print(
+        f"{len(docs)} docs -> {out}; str {paths.count('str')}, bytes {paths.count('bytes')}, "
+        f"no tree {sum(m['root'] is None for m in meta)}"
+    )
 
 
 # ---- generator (the paths real pages rarely take) -----------------------------------------
 
-TAGS = (
-    "a abbr address area b base basefont big blockquote body br button caption center col colgroup dd del div dl "
-    "dt em embed fieldset font form frame frameset h1 h2 h3 head hr html i iframe img input ins isindex kbd label "
-    "legend li link listing map menu meta noembed noframes noscript object ol optgroup option p param plaintext pre "
-    "q s samp script select small span strike strong style sub sup table tbody td textarea tfoot th thead title tr "
-    "tt u ul var xmp section article nav main header footer source wbr svg math template picture figure"
-).split()
+TAGS = [
+    "a",
+    "abbr",
+    "address",
+    "area",
+    "b",
+    "base",
+    "basefont",
+    "big",
+    "blockquote",
+    "body",
+    "br",
+    "button",
+    "caption",
+    "center",
+    "col",
+    "colgroup",
+    "dd",
+    "del",
+    "div",
+    "dl",
+    "dt",
+    "em",
+    "embed",
+    "fieldset",
+    "font",
+    "form",
+    "frame",
+    "frameset",
+    "h1",
+    "h2",
+    "h3",
+    "head",
+    "hr",
+    "html",
+    "i",
+    "iframe",
+    "img",
+    "input",
+    "ins",
+    "isindex",
+    "kbd",
+    "label",
+    "legend",
+    "li",
+    "link",
+    "listing",
+    "map",
+    "menu",
+    "meta",
+    "noembed",
+    "noframes",
+    "noscript",
+    "object",
+    "ol",
+    "optgroup",
+    "option",
+    "p",
+    "param",
+    "plaintext",
+    "pre",
+    "q",
+    "s",
+    "samp",
+    "script",
+    "select",
+    "small",
+    "span",
+    "strike",
+    "strong",
+    "style",
+    "sub",
+    "sup",
+    "table",
+    "tbody",
+    "td",
+    "textarea",
+    "tfoot",
+    "th",
+    "thead",
+    "title",
+    "tr",
+    "tt",
+    "u",
+    "ul",
+    "var",
+    "xmp",
+    "section",
+    "article",
+    "nav",
+    "main",
+    "header",
+    "footer",
+    "source",
+    "wbr",
+    "svg",
+    "math",
+    "template",
+    "picture",
+    "figure",
+]
 RAW = ["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes"]
 ENTS = [
-    "&amp;", "&amp", "&ampx", "&lt", "&gt;", "&nbsp;", "&nbsp", "&copy2020", "&notin;", "&notit;", "&not",
-    "&NotEqualTilde;", "&CounterClockwiseContourIntegral;", "&quot", "&apos;", "&foo;", "&", "&#", "&#x", "&#x;",
-    "&#65;", "&#65", "&#x41;", "&#X41", "&#0;", "&#128;", "&#x80;", "&#x9f;", "&#xD800;", "&#55357;&#56832;",
-    "&#x110000;", "&#99999999999;", "&#1;", "&#x0B;", "&#13;", "&#x1F600;", "&eacute", "&Eacute;", "&amp;amp;",
-    "&lt;script&gt;", "&AMP;", "&Amp;", "&ngE;", "&nGt;", "&bne;", "&fjlig;", "&#xFFFE;", "&#xfffF;",
+    "&amp;",
+    "&amp",
+    "&ampx",
+    "&lt",
+    "&gt;",
+    "&nbsp;",
+    "&nbsp",
+    "&copy2020",
+    "&notin;",
+    "&notit;",
+    "&not",
+    "&NotEqualTilde;",
+    "&CounterClockwiseContourIntegral;",
+    "&quot",
+    "&apos;",
+    "&foo;",
+    "&",
+    "&#",
+    "&#x",
+    "&#x;",
+    "&#65;",
+    "&#65",
+    "&#x41;",
+    "&#X41",
+    "&#0;",
+    "&#128;",
+    "&#x80;",
+    "&#x9f;",
+    "&#xD800;",
+    "&#55357;&#56832;",
+    "&#x110000;",
+    "&#99999999999;",
+    "&#1;",
+    "&#x0B;",
+    "&#13;",
+    "&#x1F600;",
+    "&eacute",
+    "&Eacute;",
+    "&amp;amp;",
+    "&lt;script&gt;",
+    "&AMP;",
+    "&Amp;",
+    "&ngE;",
+    "&nGt;",
+    "&bne;",
+    "&fjlig;",
+    "&#xFFFE;",
+    "&#xfffF;",
 ]
-WORDS = ["hello", "world", "x", "Grüße", "café", "中文", "ال", "\U0001f600",
-         " ", "  ", "\t", "\n", "\r\n", "\r", " \r ", " ", "​", "\x7f", "\x85", "\x9f", "﻿",
-         "﷐", "\U0010fffd", "-", "--", "->", "<", "< b", "<3", "<>", "a<b", "a&b", ">", "\"", "'", "=", "/",
-         "\x01", "\x0b", "\x1f"]
-SPACE = [" ", "  ", "\n", "\t", "\r\n", "\r", " ", "　", ""]
+WORDS = [
+    "hello",
+    "world",
+    "x",
+    "Grüße",
+    "café",
+    "中文",
+    "ال",
+    "\U0001f600",
+    " ",
+    "  ",
+    "\t",
+    "\n",
+    "\r\n",
+    "\r",
+    " \r ",
+    " ",  # noqa: RUF001  (a no-break space on purpose)
+    "​",
+    "\x7f",
+    "\x85",
+    "\x9f",
+    "﻿",
+    "﷐",
+    "\U0010fffd",
+    "-",
+    "--",
+    "->",
+    "<",
+    "< b",
+    "<3",
+    "<>",
+    "a<b",
+    "a&b",
+    ">",
+    '"',
+    "'",
+    "=",
+    "/",
+    "\x01",
+    "\x0b",
+    "\x1f",
+]
+SPACE = [" ", "  ", "\n", "\t", "\r\n", "\r", " ", "　", ""]  # noqa: RUF001  (a no-break space on purpose)
 
 
 class Gen:
@@ -202,8 +385,28 @@ class Gen:
     def attrs(self) -> str:
         out = []
         for _ in range(self.r.choice([0, 0, 1, 1, 2, 3, 5, 20])):
-            n = self.pick(["class", "id", "href", "CLASS", "checked", "selected", "data-x", "x", "=x", "\"a", "on",
-                           "disabled", "nowrap", "a" * 120, "été", "xml:lang", "/", "lang"])
+            n = self.pick(
+                [
+                    "class",
+                    "id",
+                    "href",
+                    "CLASS",
+                    "checked",
+                    "selected",
+                    "data-x",
+                    "x",
+                    "=x",
+                    '"a',
+                    "on",
+                    "disabled",
+                    "nowrap",
+                    "a" * 120,
+                    "été",
+                    "xml:lang",
+                    "/",
+                    "lang",
+                ]
+            )
             if self.r.random() < 0.7:
                 out.append(n + self.pick(["=", " = ", "= ", "=\n"]) + self.attr_value())
             else:
@@ -223,18 +426,52 @@ class Gen:
         return "".join(self.pick(WORDS + ENTS + SPACE) for _ in range(self.r.randint(1, 6)))
 
     def misc(self) -> str:
-        return self.pick([
-            "<!-- c -->", "<!---->", "<!-->", "<!--->", "<!-- a --!> b", "<!-- x", "<!x>", "<?php echo 1 ?>",
-            "<!DOCTYPE html>", "<!doctype HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"x\">", "<![CDATA[x]]>",
-            "<!-- <script> -->", "<!--x--y-->", "<!DOCTYPE html SYSTEM 'a'>", "<!DOCTYPE x PUBLIC>",
-        ])
+        return self.pick(
+            [
+                "<!-- c -->",
+                "<!---->",
+                "<!-->",
+                "<!--->",
+                "<!-- a --!> b",
+                "<!-- x",
+                "<!x>",
+                "<?php echo 1 ?>",
+                "<!DOCTYPE html>",
+                '<!doctype HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "x">',
+                "<![CDATA[x]]>",
+                "<!-- <script> -->",
+                "<!--x--y-->",
+                "<!DOCTYPE html SYSTEM 'a'>",
+                "<!DOCTYPE x PUBLIC>",
+            ]
+        )
 
     def raw(self) -> str:
         t = self.pick(RAW)
-        body = "".join(self.pick([
-            "var a = 1 < 2;", "<!--", "-->", "<script>", "</script >", "</scriptx>", "</SCRIPT>", f"</{t}", "&amp;",
-            "<b>", "</b>", "\r\n", "x", "--", "<!-- <script> </script> -->", f"</{t.upper()}>", "\x00",
-        ]) for _ in range(self.r.randint(0, 6)))
+        body = "".join(
+            self.pick(
+                [
+                    "var a = 1 < 2;",
+                    "<!--",
+                    "-->",
+                    "<script>",
+                    "</script >",
+                    "</scriptx>",
+                    "</SCRIPT>",
+                    f"</{t}",
+                    "&amp;",
+                    "<b>",
+                    "</b>",
+                    "\r\n",
+                    "x",
+                    "--",
+                    "<!-- <script> </script> -->",
+                    f"</{t.upper()}>",
+                    "\x00",
+                ]
+            )
+            for _ in range(self.r.randint(0, 6))
+        )
         close = self.pick([f"</{t}>", f"</{t}>", f"</{t.upper()} >", f"</{t}/>", ""])
         return f"<{t}{self.attrs()}>" + body + close
 
@@ -258,8 +495,23 @@ class Gen:
             elif r < 0.97:
                 out.append(self.raw())
             else:
-                out.append(self.pick(["<html>", "</html>", "<body>", "</body>", "<head>", "</head>", "<html/>",
-                                      "<body/>", "<head/>", "<html lang=x>", "<body class=y>"]))
+                out.append(
+                    self.pick(
+                        [
+                            "<html>",
+                            "</html>",
+                            "<body>",
+                            "</body>",
+                            "<head>",
+                            "</head>",
+                            "<html/>",
+                            "<body/>",
+                            "<head/>",
+                            "<html lang=x>",
+                            "<body class=y>",
+                        ]
+                    )
+                )
         return "".join(out)
 
     def doc(self) -> str:
@@ -272,20 +524,33 @@ class Gen:
         elif r < 0.2:
             prefix = "﻿"
         elif r < 0.5:
-            prefix = self.pick(["<!DOCTYPE html>", "<!doctype html>\n", " \n<!DOCTYPE html PUBLIC \"x\" \"y\">",
-                                "<!DOCTYPE html/>\n", "< ! DOCTYPE html x/y>"])
+            prefix = self.pick(
+                [
+                    "<!DOCTYPE html>",
+                    "<!doctype html>\n",
+                    ' \n<!DOCTYPE html PUBLIC "x" "y">',
+                    "<!DOCTYPE html/>\n",
+                    "< ! DOCTYPE html x/y>",
+                ]
+            )
         shape = self.r.random()
         if shape < 0.4:
-            body = (self.pick(["<html>", "<HTML lang=en>", "<html>\n", "<html/>\n"])
-                    + self.pick(["", "<head>", "<head><title>t</title>"])
-                    + self.content(self.r.randint(1, 40))
-                    + self.pick(["", "</html>", "</body></html>", "</html>\n<script>x</script>", "</html>tail"]))
+            body = (
+                self.pick(["<html>", "<HTML lang=en>", "<html>\n", "<html/>\n"])
+                + self.pick(["", "<head>", "<head><title>t</title>"])
+                + self.content(self.r.randint(1, 40))
+                + self.pick(
+                    ["", "</html>", "</body></html>", "</html>\n<script>x</script>", "</html>tail"]
+                )
+            )
         elif shape < 0.7:
             body = self.content(self.r.randint(1, 40))
         elif shape < 0.8:
             body = "<html><body>" + self.nest() + self.content(5)
         else:
-            body = self.pick(["<div>", "<p>", "<span>", "", "<b>"]) + self.content(self.r.randint(1, 12))
+            body = self.pick(["<div>", "<p>", "<span>", "", "<b>"]) + self.content(
+                self.r.randint(1, 12)
+            )
         s = prefix + self.pick(SPACE) + body
         q = self.r.random()
         if q < 0.05:
@@ -321,7 +586,9 @@ def mutate(g: Gen, s: str) -> str:
         elif op < 0.7:
             s = s[: max(j, 1)]
         elif op < 0.8:
-            k = r.choice([1990, 1995, 1998, 1999, 2000, 2001, 997, 998, 999, 1000, 1001, 3999, 4000]) + r.randint(-3, 3)
+            k = r.choice(
+                [1990, 1995, 1998, 1999, 2000, 2001, 997, 998, 999, 1000, 1001, 3999, 4000]
+            ) + r.randint(-3, 3)
             s = s[:k] + r.choice(["\ud800", "\udc00", "\U0001f600", "\U0001f600", "\ud83d"]) + s[k:]
         elif op < 0.85:
             s = "﻿" + s
@@ -364,7 +631,13 @@ CASES = [
     "<p>a&#11;b</p><body>x</body>",
     "<div>" * 300 + "deep",
     "<html><body>" + "<font>" * 260 + "x",
-    "", "   ", "\n\t", "<!-- only a comment -->", "<!DOCTYPE html>", "<html>", "</p>",
+    "",
+    "   ",
+    "\n\t",
+    "<!-- only a comment -->",
+    "<!DOCTYPE html>",
+    "<html>",
+    "</p>",
     "<p>a</p><body>&#1;x</body><body>y</body>",
     "<body>a</body>&#xFFFE;<body>b</body>",
     "<head></head><body><p>x</body>tail<body>t2</body>",
@@ -387,7 +660,7 @@ def cmd_cases(a) -> None:
 def fromstring_result(x: str | bytes) -> dict:
     try:
         el = fromstring(x, parser=tu.HTML_PARSER)
-    except Exception as e:  # noqa: BLE001  (the exception class is the result)
+    except Exception as e:  # the exception class is the result
         return {"error": type(e).__name__, "message": str(e)}
     lines: list[str] = []
     dump(el, lines, root=True)
@@ -411,8 +684,11 @@ def cmd_fixture(a) -> None:
             docs.append(d)
     with open(a.out, "w", encoding="utf-8") as f:
         for d in docs:
-            rec = {"input": text_or_hex(d), "str": fromstring_result(d),
-                   "bytes": fromstring_result(d.encode("utf-8", "surrogatepass"))}
+            rec = {
+                "input": text_or_hex(d),
+                "str": fromstring_result(d),
+                "bytes": fromstring_result(d.encode("utf-8", "surrogatepass")),
+            }
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     print(f"{len(docs)} documents -> {a.out}")
 
@@ -424,38 +700,68 @@ M = 10_000_000
 
 def large_specs() -> list[tuple[str, list[tuple[str, int]]]]:
     """(label, segments): the document is the concatenation of segment * count."""
-    s: list[tuple[str, list[tuple[str, int]]]] = []
     near = [-4096, -300, -64, 0, 64, 300, 4096]
-    for d in near + [-20_000, 20_000]:
-        s.append((f"text {d:+}", [("<html><body><p>", 1), ("a", M + d), ("</p><p>after</p>", 1)]))
+    s: list[tuple[str, list[tuple[str, int]]]] = [
+        (f"text {d:+}", [("<html><body><p>", 1), ("a", M + d), ("</p><p>after</p>", 1)])
+        for d in [*near, -20_000, 20_000]
+    ]
     for d in near:
-        s.append((f"attr dq {d:+}", [("<div title=\"", 1), ("v", M + d), ("\">x</div><p>after", 1)]))
-        s.append((f"attr unquoted {d:+}", [("<div title=", 1), ("v", M + d), (" id=a>x</div><p>after", 1)]))
+        s.append((f"attr dq {d:+}", [('<div title="', 1), ("v", M + d), ('">x</div><p>after', 1)]))
+        s.append(
+            (
+                f"attr unquoted {d:+}",
+                [("<div title=", 1), ("v", M + d), (" id=a>x</div><p>after", 1)],
+            )
+        )
         s.append((f"comment {d:+}", [("<p>a</p><!--", 1), ("c", M + d), ("--><p>after", 1)]))
         s.append((f"script {d:+}", [("<script>", 1), ("x", M + d), ("</script><p>after", 1)]))
         s.append((f"blanks in tag {d:+}", [("<p>a</p><div", 1), (" ", M + d), ("id=x>y</div>", 1)]))
         s.append((f"leading blanks {d:+}", [(" ", M + d), ("<p>x", 1)]))
-        s.append((f"bogus doctype {d:+}", [("<!DOCTYPE html x", 1), ("y", M + d), ("><p>after", 1)]))
+        s.append(
+            (f"bogus doctype {d:+}", [("<!DOCTYPE html x", 1), ("y", M + d), ("><p>after", 1)])
+        )
     for d in (-4096, 0, 4096, 40_000):
         # Text with line feeds and multi-byte characters: libxml2's accelerator stops at both.
-        s.append((f"text lf {d:+}", [("<p>", 1), ("abcdefghi\n", (M + d) // 10), ("</p><p>after", 1)]))
+        s.append(
+            (f"text lf {d:+}", [("<p>", 1), ("abcdefghi\n", (M + d) // 10), ("</p><p>after", 1)])
+        )
         s.append((f"text latin1 {d:+}", [("<p>", 1), ("é", (M + d) // 2), ("</p><p>after", 1)]))
         s.append((f"text ucs2 {d:+}", [("<p>", 1), ("€", (M + d) // 3), ("</p><p>after", 1)]))
-        s.append((f"text ucs4 {d:+}", [("<p>", 1), ("\U0001f600", (M + d) // 4), ("</p><p>after", 1)]))
-        s.append((f"attr ucs2 {d:+}", [("<a href='", 1), ("€", (M + d) // 3), ("'>x</a><p>after", 1)]))
+        s.append(
+            (f"text ucs4 {d:+}", [("<p>", 1), ("\U0001f600", (M + d) // 4), ("</p><p>after", 1)])
+        )
+        s.append(
+            (f"attr ucs2 {d:+}", [("<a href='", 1), ("€", (M + d) // 3), ("'>x</a><p>after", 1)])
+        )
     # Many tokens, none large: no limit is reached.
     s.append(("small tokens", [("<p class=x>abc &amp; def</p>\n", 450_000)]))
     s.append(("small tokens ucs2", [("<p>€&amp;</p>", 1_100_000)]))
     # Text node over 10 MB built from many chunks: "Text node too long".
-    s.append(("text node limit", [("<p>", 1), ("a" * 999 + "&amp;", 10_050), ("</p><p>after</p>", 1)]))
+    s.append(
+        ("text node limit", [("<p>", 1), ("a" * 999 + "&amp;", 10_050), ("</p><p>after</p>", 1)])
+    )
     # Attribute value over 10 MB in many chunks: "value too long", the parse goes on.
-    s.append(("attr value too long", [("<div title='", 1), ("v" * 999 + "&amp;", 10_050), ("'>x</div><p>after", 1)]))
+    s.append(
+        (
+            "attr value too long",
+            [("<div title='", 1), ("v" * 999 + "&amp;", 10_050), ("'>x</div><p>after", 1)],
+        )
+    )
     # A lone surrogate past the first read in a large str, and right before the limit.
-    s.append(("surrogate early", [("<p>", 1), ("a", 5000), ("\ud800", 1), ("b", M + 1000), ("</p>", 1)]))
+    s.append(
+        ("surrogate early", [("<p>", 1), ("a", 5000), ("\ud800", 1), ("b", M + 1000), ("</p>", 1)])
+    )
     s.append(("surrogate late", [("<p>", 1), ("€", M // 3 + 100), ("\udc00", 1), ("x</p>", 1)]))
-    s.append(("surrogate past limit", [("<p>", 1), ("a", M + 50_000), ("\ud800", 1), ("</p><p>z", 1)]))
+    s.append(
+        ("surrogate past limit", [("<p>", 1), ("a", M + 50_000), ("\ud800", 1), ("</p><p>z", 1)])
+    )
     # A deep then wide document with the limit reached in a later text run.
-    s.append(("after many elements", [("<div><span>x</span></div>", 200_000), ("<p>", 1), ("t", M), ("</p>z", 1)]))
+    s.append(
+        (
+            "after many elements",
+            [("<div><span>x</span></div>", 200_000), ("<p>", 1), ("t", M), ("</p>z", 1)],
+        )
+    )
     return s
 
 
@@ -466,15 +772,18 @@ def sweep_specs() -> list[tuple[str, list[tuple[str, int]]]]:
         s.append((f"text {d:+}", [("<html><body><p>", 1), ("a", M + d), ("</p><p>after</p>", 1)]))
         s.append((f"script {d:+}", [("<script>", 1), ("x", M + d), ("</script><p>after", 1)]))
     for d in range(-8, 73):
-        s.append((f"attr dq {d:+}", [("<div title=\"", 1), ("v", M + d), ("\">x</div><p>after", 1)]))
+        s.append((f"attr dq {d:+}", [('<div title="', 1), ("v", M + d), ('">x</div><p>after', 1)]))
         s.append((f"comment {d:+}", [("<p>a</p><!--", 1), ("c", M + d), ("--><p>after", 1)]))
-    for d in range(-64, 65, 2):
-        s.append((f"leading blanks {d:+}", [(" ", M + d), ("<p>x", 1)]))
+    s.extend((f"leading blanks {d:+}", [(" ", M + d), ("<p>x", 1)]) for d in range(-64, 65, 2))
     for d in range(256, 4160, 64):
         s.append((f"blanks in tag {d:+}", [("<p>a</p><div", 1), (" ", M + d), ("id=x>y</div>", 1)]))
-        s.append((f"bogus doctype {d:+}", [("<!DOCTYPE html x", 1), ("y", M + d), ("><p>after", 1)]))
-    for d in range(-4200, 200, 100):
-        s.append((f"text ucs2 {d:+}", [("<p>", 1), ("€", (M + d) // 3), ("</p><p>after", 1)]))
+        s.append(
+            (f"bogus doctype {d:+}", [("<!DOCTYPE html x", 1), ("y", M + d), ("><p>after", 1)])
+        )
+    s.extend(
+        (f"text ucs2 {d:+}", [("<p>", 1), ("€", (M + d) // 3), ("</p><p>after", 1)])
+        for d in range(-4200, 200, 100)
+    )
     return s
 
 
@@ -510,7 +819,9 @@ def cmd_hashes(a) -> None:
             if tree is not None:
                 lines: list[str] = []
                 dump(tree, lines, root=True)
-                digest = hashlib.sha1(("\n".join(lines) + "\n").encode("utf-8", "surrogatepass")).hexdigest()
+                digest = hashlib.sha1(
+                    ("\n".join(lines) + "\n").encode("utf-8", "surrogatepass")
+                ).hexdigest()
             f.write(json.dumps({"index": i, "path": path, "sha1": digest}) + "\n")
     print(f"hashes -> {out}")
 
@@ -535,16 +846,21 @@ def cmd_bench(a) -> None:
         t0 = clock()
         for i, s in enumerate(docs):
             t = clock()
-            try:
+            # As load_html: some documents raise. A plain try rather than contextlib.suppress,
+            # which would add its own cost to the timed call.
+            try:  # noqa: SIM105
                 fromstring(s, parser=tu.HTML_PARSER)
-            except Exception:  # noqa: BLE001, S110  (as load_html: some documents raise)
+            except Exception:
                 pass
             per_doc[i] = min(per_doc[i], clock() - t)
         total = clock() - t0
         best = min(best, total)
         print(f"run {r}: {total:.3f} s total, {1e3 * total / len(docs):.3f} ms/doc")
-    print(f"lxml: {len(docs)} docs, {nbytes / 1e6:.1f} MB; best run {best:.3f} s = "
-          f"{1e3 * best / len(docs):.3f} ms/doc; sum of per-doc minima {1e3 * sum(per_doc) / len(docs):.3f} ms/doc")
+    print(
+        f"lxml: {len(docs)} docs, {nbytes / 1e6:.1f} MB; best run {best:.3f} s = "
+        f"{1e3 * best / len(docs):.3f} ms/doc; "
+        f"sum of per-doc minima {1e3 * sum(per_doc) / len(docs):.3f} ms/doc"
+    )
 
 
 def main() -> None:
@@ -554,7 +870,9 @@ def main() -> None:
     p.add_argument("outdir")
     p.add_argument("--count", type=int, default=20000)
     p.add_argument("--seed", type=int, default=1)
-    p.add_argument("--mutate", help="SETDIR whose raw.bin documents are mutated instead of generating")
+    p.add_argument(
+        "--mutate", help="SETDIR whose raw.bin documents are mutated instead of generating"
+    )
     p.set_defaults(f=cmd_fuzz)
     p = sub.add_parser("cases")
     p.add_argument("outdir")
@@ -566,7 +884,9 @@ def main() -> None:
     p.set_defaults(f=cmd_fixture)
     p = sub.add_parser("large")
     p.add_argument("out")
-    p.add_argument("--sweep", action="store_true", help="every length around each threshold instead")
+    p.add_argument(
+        "--sweep", action="store_true", help="every length around each threshold instead"
+    )
     p.set_defaults(f=cmd_large)
     p = sub.add_parser("hashes")
     p.add_argument("setdir")

@@ -29,6 +29,8 @@ its own):
         .../site-packages/trafilatura/data/jt-stopwords-pickle.lzma
 """
 
+# ruff: noqa: T201  (a build script: it reports what it wrote on stdout)
+
 from __future__ import annotations
 
 import hashlib
@@ -184,8 +186,10 @@ def jt_pickle(stoplist_dir: str, pickle_path: str) -> None:
     words = {w.lower() for w in words}
     committed = set((HERE / "stoplist.txt").read_text(encoding="utf-8").split("\n")) - {""}
     assert from_pickle == words == committed, (len(from_pickle), len(words), len(committed))
-    print(f"{type(jt).__name__} of {len(jt)} words in the pickle: {len(from_pickle)} lower-cased, "
-          f"equal to jusText's merged stoplists and stoplist.txt")
+    print(
+        f"{type(jt).__name__} of {len(jt)} words in the pickle: {len(from_pickle)} lower-cased, "
+        f"equal to jusText's merged stoplists and stoplist.txt"
+    )
 
 
 def emit(paths: list[str]) -> None:
@@ -196,12 +200,21 @@ def emit(paths: list[str]) -> None:
         recs[r["unicode"]] = r
     assert sorted(recs) == VERSIONS, sorted(recs)
     first = recs[VERSIONS[0]]
-    for key in ("space", "lines", "icase", "html5", "invalid_charrefs", "invalid_codepoints", "stoplist_sha256"):
+    for key in (
+        "space",
+        "lines",
+        "icase",
+        "html5",
+        "invalid_charrefs",
+        "invalid_codepoints",
+        "stoplist_sha256",
+    ):
         for v in VERSIONS:
             assert recs[v][key] == first[key], (key, v)
     space = first["space"]
-    assert space == [9, 10, 11, 12, 13, 28, 29, 30, 31, 32, 133, 160, 5760, *range(0x2000, 0x200B),
-                     0x2028, 0x2029, 0x202F, 0x205F, 0x3000], space
+    want_space = [9, 10, 11, 12, 13, 28, 29, 30, 31, 32, 133, 160, 5760]
+    want_space += [*range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000]
+    assert space == want_space, space
     assert first["lines"] == [10, 11, 12, 13, 28, 29, 30, 133, 0x2028, 0x2029], first["lines"]
     out = [HEADER, "//! Per-Unicode-version string tables and jusText's merged stoplist size.\n\n"]
     out.append("#![allow(clippy::unreadable_literal)]\n\n")
@@ -213,12 +226,15 @@ def emit(paths: list[str]) -> None:
         extra += [(cp, letter) for cp in cps if cp not in want]
     assert all(cp >= 0x80 for cp, _ in extra), extra
     body = ", ".join(f"(0x{cp:x}, b'{letter}')" for cp, letter in sorted(extra))
-    out.append("/// Non-ASCII characters `re.IGNORECASE` matches with an ASCII letter (same in every version).\n")
+    out.append(
+        "/// Non-ASCII characters `re.IGNORECASE` matches with an ASCII letter (same in every "
+        "version).\n"
+    )
     out.append(f"pub(super) static ICASE_EXTRA: [(u32, u8); {len(extra)}] = [{body}];\n\n")
     # str.lower(): one table, each entry with the first version it appears in
-    allk = sorted({int(k) for v in VERSIONS for k in recs[v]["lower"]})
+    all_cps = sorted({int(k) for v in VERSIONS for k in recs[v]["lower"]})
     entries = []
-    for cp in allk:
+    for cp in all_cps:
         vals = [recs[v]["lower"].get(str(cp)) for v in VERSIONS]
         firstv = next(i for i, x in enumerate(vals) if x is not None)
         assert all(x is not None for x in vals[firstv:]), hex(cp)
@@ -231,8 +247,11 @@ def emit(paths: list[str]) -> None:
     out.append("/// `str.lower()` of non-ASCII characters other than U+03A3, with the index (in\n")
     out.append("/// `UnicodeVersion` order, 0 = 14.0) of the first version that has the mapping.\n")
     out.append(f"pub(super) static LOWER: [(u32, &str, u8); {len(entries)}] = [{body}];\n\n")
-    for key, doc in (("printable", "`str.isprintable()`"), ("cased", "Cased (final-sigma rule)"),
-                     ("case_ignorable", "Case_Ignorable (final-sigma rule)")):
+    for key, doc in (
+        ("printable", "`str.isprintable()`"),
+        ("cased", "Cased (final-sigma rule)"),
+        ("case_ignorable", "Case_Ignorable (final-sigma rule)"),
+    ):
         # share identical tables between versions
         seen: dict[str, str] = {}
         for v in VERSIONS:
@@ -252,14 +271,22 @@ def emit(paths: list[str]) -> None:
     out.append(f"pub(super) static HTML5: [(&str, &str); {len(ents)}] = [{body}];\n")
     body = ", ".join(f'(0x{k:x}, "{esc(x)}")' for k, x in first["invalid_charrefs"])
     out.append("/// `html._invalid_charrefs`, sorted.\n")
-    out.append(f"pub(super) static INVALID_CHARREFS: [(u32, &str); {len(first['invalid_charrefs'])}] = [{body}];\n")
+    out.append(
+        f"pub(super) static INVALID_CHARREFS: [(u32, &str); {len(first['invalid_charrefs'])}] "
+        f"= [{body}];\n"
+    )
     body = ", ".join(f"0x{c:x}" for c in first["invalid_codepoints"])
     out.append("/// `html._invalid_codepoints`, sorted.\n")
-    out.append(f"pub(super) static INVALID_CODEPOINTS: [u32; {len(first['invalid_codepoints'])}] = [{body}];\n")
+    out.append(
+        f"pub(super) static INVALID_CODEPOINTS: [u32; {len(first['invalid_codepoints'])}] "
+        f"= [{body}];\n"
+    )
     (HERE / "tables.rs").write_text("".join(out), encoding="utf-8")
     (HERE / "stoplist.txt").write_text(first["stoplist"], encoding="utf-8")
-    print(f"wrote tables.rs ({len(entries)} lower mappings, {len(ents)} entities) and stoplist.txt "
-          f"({first['stoplist'].count(chr(10))} words, sha256 {first['stoplist_sha256'][:12]})")
+    print(
+        f"wrote tables.rs ({len(entries)} lower mappings, {len(ents)} entities) and stoplist.txt "
+        f"({first['stoplist'].count(chr(10))} words, sha256 {first['stoplist_sha256'][:12]})"
+    )
 
 
 if __name__ == "__main__":
