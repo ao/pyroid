@@ -27,9 +27,9 @@ they are faster inside NeMo's own stages as well:
 - :class:`FastTextLangId` and :class:`FastTextQualityFilter`, which load their model with
   :mod:`pyroid.fasttext` (``fasttext``, which needs a C++ compiler to install, is not needed);
 - :class:`UnicodeReformatter` (:mod:`pyroid.ftfy`; ftfy is not needed), and the string
-  modifiers :class:`BoilerPlateStringModifier`, :class:`MarkdownRemover`,
-  :class:`NewlineNormalizer`, :class:`QuotationRemover`, :class:`UrlRemover`,
-  :class:`LineRemover`, :class:`Slicer` and :class:`FastTextLabelModifier`.
+  modifiers ``BoilerPlateStringModifier``, ``MarkdownRemover``,
+  ``NewlineNormalizer``, ``QuotationRemover``, ``UrlRemover``,
+  ``LineRemover``, ``Slicer`` and ``FastTextLabelModifier``.
 
 The output is the same as with NeMo's code: the same scores (same values and pandas dtypes), the
 same kept rows, the same text, and the same exception where NeMo raises one (for a document NeMo's
