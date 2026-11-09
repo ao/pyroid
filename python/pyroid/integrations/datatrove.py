@@ -45,6 +45,9 @@ in batches, without the GIL:
   byte, and the same documents out.
 - :class:`Trafilatura`: ``pyroid.trafilatura`` (byte-identical to the installed trafilatura,
   1.11.0 as datatrove installs it, or 2.3.1; in this process, with no timeout).
+- :class:`WarcReader`: ``pyroid.warc.iter_documents`` (warcio 1.8.2's parsing, the gzip
+  layer and datatrove's ``process_record`` in Rust; the same documents and errors; warcio is
+  not needed). It takes datatrove's arguments only.
 
 Languages: the filter and MinHash steps take datatrove's ``language`` (a
 datatrove language code such as ``"fra_Latn"``). Every code pyroid tokenizes
@@ -69,7 +72,7 @@ import inspect
 import warnings
 from collections import deque
 from collections.abc import Callable, Iterable
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from datatrove.pipeline.dedup import minhash as _dt_minhash  # type: ignore[import-not-found,import-untyped,unused-ignore]
 from datatrove.pipeline.filters import c4_filters as _dt_c4  # type: ignore[import-not-found,import-untyped,unused-ignore]
@@ -162,7 +165,8 @@ class _Step:
     which would demand e.g. ftfy or ``fasttext-numpy2-wheel`` that we don't use.
     """
 
-    _pyroid_requires: tuple[str, ...] = ()
+    # module names, or (module, distribution) pairs, as datatrove's _requires_dependencies
+    _pyroid_requires: tuple[str | tuple[str, str], ...] = ()
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Any:
         if cls._pyroid_requires:
@@ -1411,3 +1415,120 @@ Trafilatura.__init__.__signature__ = _signature_of(  # type: ignore[attr-defined
     inspect.Parameter("threads", inspect.Parameter.KEYWORD_ONLY, default=1),
 )
 # ---- end Trafilatura ----
+
+# ---- WarcReader ----
+from datatrove.pipeline.readers import warc as _dt_warc  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: E402
+
+__all__ += ["WarcReader"]
+
+_GZIP_IS_CPYTHON: list[bool] = []
+
+
+def _fsspec_gzip_is_cpython() -> bool:
+    """Whether fsspec opens ``.gz`` with CPython's ``gzip.GzipFile`` (not python-isal's)."""
+    if not _GZIP_IS_CPYTHON:
+        import gzip
+        import io
+
+        from fsspec.compression import compr  # type: ignore[import-not-found,import-untyped,unused-ignore]
+
+        opener = compr.get("gzip")
+        try:
+            ok = opener is not None and type(opener(io.BytesIO(b""), mode="r")) is gzip.GzipFile
+        except Exception:  # an opener we don't know: datatrove's own open
+            ok = False
+        _GZIP_IS_CPYTHON.append(ok)
+    return _GZIP_IS_CPYTHON[0]
+
+
+def _iterator_cls() -> Any:
+    """The iterator class whose ``ArchiveLoadFailed`` and logger the reader uses.
+
+    warcio's ``ArchiveIterator`` as ``patch("warcio")`` makes it (warcio's exception and logger),
+    or pyroid's own when warcio is not installed.
+    """
+    import importlib.util
+
+    import pyroid.warc as pw
+
+    if importlib.util.find_spec("warcio") is None:
+        return pw.ArchiveIterator
+    from pyroid.integrations._patch import _warcio_classes
+
+    return _warcio_classes(pw)["ArchiveIterator"]
+
+
+class WarcReader(_Step, _dt_warc.WarcReader):
+    """datatrove's ``WarcReader`` (same arguments and defaults) on ``pyroid.warc.iter_documents``.
+
+    Each file is read as datatrove's ``read_file`` reads it, with warcio's parsing, the
+    decompression and ``process_record`` in Rust: the same documents (``text``, ``id``,
+    ``metadata``: ``url``, ``date``, ``file_path`` and ``default_metadata``), the same records
+    skipped, and the same exceptions, warnings and stderr messages at the same document, for
+    gzip and plain files, on the local filesystem and on any other fsspec filesystem
+    (``ArchiveLoadFailed`` is warcio's class, as datatrove raises it, when warcio is installed).
+    ``limit``, ``skip``, sharding and the statistics are datatrove's own code. The page text is
+    decoded as datatrove decodes it: UTF-8, else ``cchardet``'s guess; ``python-magic`` is called
+    only for records without ``WARC-Identified-Payload-Type``. warcio itself is not needed.
+
+    How a file is read: a local ``.gz`` (``compression="infer"`` or ``"gzip"``) or plain file is
+    opened and read in Rust without the GIL, with the gzip layer reproducing CPython's
+    ``gzip.GzipFile`` (datatrove reads through it); on another filesystem the file is opened
+    with ``data_folder.open(path, "rb", compression=None)`` and that same emulation runs over it.
+    Any other compression (``"zstd"``, an inferred ``.bz2``, ...), and ``.gz`` when fsspec's
+    gzip opener is not CPython's (python-isal installed), use datatrove's own
+    ``data_folder.open(..., compression=...)``, read as is.
+
+    What differs: time is tracked per document, including the reading of the records before
+    it, plus once per file for the records after the last document (datatrove times each
+    record's ``process_record``).
+    """
+
+    _pyroid_requires = (("cchardet", "faust-cchardet"), ("magic", "python-magic"))
+
+    def _plan(self, filepath: str) -> tuple[str, Literal["gzip"] | None]:
+        """How to read `filepath`: ``("path" | "file" | "datatrove", compression)``."""
+        compression = self.compression
+        if compression == "infer":
+            from fsspec.utils import infer_compression  # type: ignore[import-not-found,import-untyped,unused-ignore]
+
+            compression = infer_compression(filepath)
+        if compression not in (None, "gzip") or (
+            compression == "gzip" and not _fsspec_gzip_is_cpython()
+        ):
+            return "datatrove", None
+        how = "path" if self.data_folder.is_local() else "file"
+        return how, ("gzip" if compression == "gzip" else None)
+
+    def read_file(self, filepath: str) -> Any:
+        """Yield the documents of one WARC file (datatrove's ``read_file``)."""
+        import contextlib
+
+        import pyroid.warc as pw
+
+        how, compression = self._plan(filepath)
+        with contextlib.ExitStack() as stack:
+            source: Any
+            if how == "path":
+                source = self.data_folder.resolve_paths(filepath)
+            elif how == "file":
+                source = stack.enter_context(
+                    self.data_folder.open(filepath, "rb", compression=None)
+                )
+            else:
+                source = stack.enter_context(
+                    self.data_folder.open(filepath, "rb", compression=self.compression)
+                )
+            docs = pw.iter_documents(source, compression=compression, iterator_cls=_iterator_cls())
+            while True:
+                with self.track_time():
+                    item = next(docs, None)
+                    if item is None:
+                        break
+                    ri, extracted = item
+                    document = self.get_document_from_dict(extracted, filepath, ri)
+                if document:
+                    yield document
+
+
+# ---- end WarcReader ----

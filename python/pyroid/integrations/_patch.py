@@ -21,8 +21,9 @@ submodules give pyroid's classes), ``"trafilatura"`` (:mod:`pyroid.trafilatura`,
 reproduces trafilatura 2.3.1 or 1.11.0, following the installed release: ``extract``,
 ``bare_extraction`` and (2.3.1) ``extract_with_metadata`` of ``trafilatura`` and
 ``trafilatura.core``, ``trafilatura.deduplication.LRUCache`` / ``LRU_TEST`` and
-``trafilatura.meta.reset_caches``) and ``"nltk"`` (:mod:`pyroid.nltk`, which reproduces NLTK
-3.10.4's tokenizers). There is no ``"unidecode"``:
+``trafilatura.meta.reset_caches``), ``"nltk"`` (:mod:`pyroid.nltk`, which reproduces NLTK
+3.10.4's tokenizers) and ``"warcio"`` (:mod:`pyroid.warc`, which reproduces warcio 1.8.2's
+``ArchiveIterator``, ``WARCIterator`` and ``ARCIterator``). There is no ``"unidecode"``:
 :func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its output differs
 from Unidecode's.
 
@@ -75,6 +76,17 @@ pyroid's on NLTK's own modules (``nltk``, ``nltk.tokenize`` and the ``punkt``, `
 tokenizers, rouge-score's Porter stemmer) stays NLTK's. Without NLTK, ``nltk`` and those
 submodules are shims providing just these names.
 
+``"warcio"`` works the same way. With warcio installed, ``ArchiveIterator`` (on ``warcio`` and
+``warcio.archiveiterator``), ``WARCIterator`` and ``ARCIterator`` (on ``warcio.archiveiterator``)
+become subclasses of pyroid's iterators whose records are warcio's own classes: the headers are
+warcio's ``StatusAndHeaders``, the record a subclass of warcio's ``ArcWarcRecord`` (with pyroid's
+``content_stream()``), the digest checker warcio's ``DigestChecker``, the errors warcio's
+``ArchiveLoadFailed`` and ``StatusAndHeadersParserException``, and the warnings go to warcio's
+``warcio.recordloader`` logger. datatrove's ``WarcReader`` imports ``ArchiveIterator`` from
+``warcio.archiveiterator`` when it opens each file, so a patched process reads WARC files with
+pyroid in stock datatrove. Without warcio, ``warcio`` and ``warcio.archiveiterator`` are shims
+holding :mod:`pyroid.warc`'s classes.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -112,7 +124,15 @@ __all__ = [
 ]
 
 #: The module names :func:`patch` accepts.
-SUPPORTED: tuple[str, ...] = ("ftfy", "fasttext", "anyascii", "datasketch", "trafilatura", "nltk")
+SUPPORTED: tuple[str, ...] = (
+    "ftfy",
+    "fasttext",
+    "anyascii",
+    "datasketch",
+    "trafilatura",
+    "nltk",
+    "warcio",
+)
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
 DEFAULT_RUN_NAMES: tuple[str, ...] = ("ftfy", "fasttext")
@@ -253,6 +273,8 @@ class _Target:
     build: Callable[[types.ModuleType, Any, str], _Built]
     # impl attribute: the real versions pyroid reproduces as modes (no version warning for them)
     modes_attr: str | None = None
+    # the installed version, from the real module (default: its __version__)
+    installed: Callable[[Any], str | None] | None = None
 
 
 def _caller_stacklevel() -> int:
@@ -538,6 +560,119 @@ def _build_nltk(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     return {}, [undo]
 
 
+# What patch("warcio") swaps on warcio's own modules (warcio 1.8.2's names; warcio itself only
+# re-exports ArchiveIterator).
+_WARCIO_SWAPS: dict[str, tuple[str, ...]] = {
+    "warcio": ("ArchiveIterator",),
+    "warcio.archiveiterator": ("ArchiveIterator", "WARCIterator", "ARCIterator"),
+}
+# pyroid's iterator classes over warcio's record, header and exception classes: built once per
+# process, so iterators from an earlier patch() stay instances of the patched names.
+_WARCIO_CLASSES: dict[str, type] = {}
+
+
+def _warcio_classes(impl: types.ModuleType) -> dict[str, type]:
+    """``ArchiveIterator``, ``WARCIterator``, ``ARCIterator`` making warcio's own records."""
+    if _WARCIO_CLASSES:
+        return _WARCIO_CLASSES
+    from warcio import (  # type: ignore[import-not-found,import-untyped,unused-ignore]
+        digestverifyingreader,
+        exceptions,
+        recordloader,
+        statusandheaders,
+    )
+
+    # type() takes __module__ (this module) and __qualname__ (the name) from here.
+    record = type(
+        "ArcWarcRecord",
+        (recordloader.ArcWarcRecord,),
+        {
+            "__doc__": "warcio's ``ArcWarcRecord`` with pyroid's ``content_stream()``.",
+            "content_stream": impl.ArcWarcRecord.content_stream,
+        },
+    )
+    base = type(
+        "ArchiveIterator",
+        (impl.ArchiveIterator,),
+        {
+            "__doc__": "warcio's ``ArchiveIterator`` (same arguments) on "
+            ":class:`pyroid.warc.ArchiveIterator`, making warcio's own records.",
+            "record_cls": record,
+            "headers_cls": statusandheaders.StatusAndHeaders,
+            "digest_checker_cls": digestverifyingreader.DigestChecker,
+            "archive_load_failed": exceptions.ArchiveLoadFailed,
+            "parser_exception": statusandheaders.StatusAndHeadersParserException,
+            "logger": recordloader.logger,
+        },
+    )
+    _WARCIO_CLASSES["ArcWarcRecord"] = record
+    _WARCIO_CLASSES["ArchiveIterator"] = base
+    for name, fmt in (("WARCIterator", "warc"), ("ARCIterator", "arc")):
+        doc = f"warcio's ``{name}`` on pyroid's iterator."
+        _WARCIO_CLASSES[name] = type(name, (base,), {"__doc__": doc, "_known_format": fmt})
+    return _WARCIO_CLASSES
+
+
+def _build_warcio(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if real is None:  # no warcio: shims providing pyroid.warc's classes
+        sub = _shim(
+            "warcio.archiveiterator",
+            None,
+            missing,
+            impl,
+            {
+                "ArchiveIterator": impl.ArchiveIterator,
+                "WARCIterator": impl.WARCIterator,
+                "ARCIterator": impl.ARCIterator,
+                "ArchiveLoadFailed": impl.ArchiveLoadFailed,
+            },
+            package=False,
+        )
+        top = _shim(
+            "warcio",
+            None,
+            missing,
+            impl,
+            {
+                "ArchiveIterator": impl.ArchiveIterator,
+                "StatusAndHeaders": impl.StatusAndHeaders,
+                "archiveiterator": sub,
+            },
+            package=True,
+        )
+        return {"warcio": top, "warcio.archiveiterator": sub}, []
+    classes = _warcio_classes(impl)
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for mod, names in _WARCIO_SWAPS.items():
+        module = importlib.import_module(mod)
+        for n in names:
+            saved.append((module, n, module.__dict__.get(n, _MISSING)))
+            setattr(module, n, classes[n])
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
+def _distribution_version(name: str) -> Callable[[Any], str | None]:
+    """The installed version of distribution `name` (for packages without ``__version__``)."""
+
+    def installed(real: Any) -> str | None:
+        from importlib.metadata import PackageNotFoundError, version
+
+        try:
+            return version(name)
+        except PackageNotFoundError:
+            return None
+
+    return installed
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -596,7 +731,19 @@ _TARGETS: dict[str, _Target] = {
         " (training, tagging, corpora, the other tokenizers)",
         _build_nltk,
     ),
+    "warcio": _Target(
+        "pyroid.warc",
+        "which reproduces warcio 1.8.2's ArchiveIterator, WARCIterator and ARCIterator",
+        "WARCIO_VERSION",
+        "pip install warcio==1.8.2",
+        " (WARCWriter, capture_http, the indexer, the checker, the command line)",
+        _build_warcio,
+        installed=_distribution_version("warcio"),
+    ),
 }
+
+# Names patched by setting pyroid's objects on the installed package's own modules (no shims).
+_SWAPPED = ("nltk", "warcio")
 
 
 # ---------------------------------------------------------------------------
@@ -664,11 +811,15 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
         what = f"`import {name}` now gives pyroid's drop-in"
         if real is None:
             rest = f"Everything else{target.rest} is unavailable: {missing} ({target.pip})."
-        elif name == "nltk":
-            what = "the installed nltk now uses pyroid's drop-ins"
+        elif name in _SWAPPED:
+            what = f"the installed {name} now uses pyroid's drop-ins"
+            example = {
+                "nltk": "from nltk import word_tokenize",
+                "warcio": "from warcio.archiveiterator import ArchiveIterator",
+            }[name]
             rest = (
-                f"Everything else{target.rest} is still nltk's own. Names imported from nltk "
-                "before this call (from nltk import word_tokenize) keep nltk's objects."
+                f"Everything else{target.rest} is still {name}'s own. Names imported from "
+                f"{name} before this call ({example}) keep {name}'s objects."
             )
         else:
             rest = (
@@ -683,7 +834,12 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
             stacklevel=_caller_stacklevel(),
         )
     expected = getattr(impl, target.version_attr) if target.version_attr else None
-    found = getattr(real, "__version__", None)
+    if real is None:
+        found = None
+    elif target.installed is not None:
+        found = target.installed(real)
+    else:
+        found = getattr(real, "__version__", None)
     modes = getattr(impl, target.modes_attr) if target.modes_attr else ()
     if real is not None and expected is not None and found != expected and found not in modes:
         key = f"{name}:version"
@@ -747,7 +903,7 @@ def patch(*names: str) -> None:
 
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
-            ``"trafilatura"`` and/or ``"nltk"``.
+            ``"trafilatura"``, ``"nltk"`` and/or ``"warcio"``.
 
     Raises:
         TypeError: No names were given.
@@ -879,9 +1035,9 @@ def _export(names: Sequence[str]) -> None:
 _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
-`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` giving
-pyroid's drop-ins. The Python processes it starts (multiprocessing workers, subprocesses) are
-patched too.
+`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
+`warcio` giving pyroid's drop-ins. The Python processes it starts (multiprocessing
+workers, subprocesses) are patched too.
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}
