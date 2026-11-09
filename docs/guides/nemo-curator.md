@@ -112,7 +112,11 @@ nemo.remove_markdown("**bold** [link](https://x)")  # 'bold https://x'
 ```
 
 NeMo's keep rule for each score is in the function's docstring (for example, `WordCountFilter`
-keeps a document when `min_words <= score <= max_words`).
+keeps a document when `min_words <= score <= max_words`). One difference from NeMo's code: a str
+with a lone surrogate raises `UnicodeEncodeError`, as everywhere in pyroid
+([Errors](../concepts/errors.md)); the classes of `pyroid.integrations.nemo_curator` run NeMo's
+code for such a document instead (Arrow string columns, which NeMo's Parquet reader gives, cannot
+hold one).
 
 ## Speed
 
