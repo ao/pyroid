@@ -101,7 +101,8 @@ def test_report_validates_and_renders():
     assert rep["status"] == "fail" and rep["suites"]["ftfy"]["checks"]["hypothesis"]["diff"] == 1
     assert rep["suites"]["dedup"]["status"] == "skip"
     json.dumps(rep, ensure_ascii=False)  # lone surrogates are repr()'d, so the report is valid JSON
-    assert "❌ fail" in render(rep)
+    md = render(rep)
+    assert "### Parity: FAIL, " in md and "| hypothesis | FAIL | 0 | 1 |" in md and "| removed | skip |" in md
 
 
 def test_manifest_entries_are_well_formed():
