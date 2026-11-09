@@ -334,7 +334,7 @@ def set_order_mismatch(words: list[str], n: int, key: bytes) -> int:
     ngrams = list(zip(*[words[i:] for i in range(n)], strict=False))
     first = dict(zip(reversed(ngrams), reversed(range(len(ngrams))), strict=True))
     want = [first[g] for g in set(ngrams)]
-    return int(_nemo._native._ngram_set_order(ngrams, key) != want)
+    return int(_nemo._native._ngram_set_order(words, n, key) != want)
 
 
 # ---- the score functions and their NeMo classes ----------------------------------------

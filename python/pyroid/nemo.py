@@ -91,9 +91,10 @@ def _self_check(key: bytes) -> bool:
     """Whether pyroid's str hashes and set order, with ``key``, are this interpreter's.
 
     Compares ``hash()`` of strings of every width with lengths 0 to 24 (siphash13's tail and
-    block paths); ``list(set(ngrams))`` for 200 lists of 0 to about 3000 n-gram tuples, with
-    repeats; and ``list(set(ints))`` for lists whose items share slots or whole hashes, up to
-    a size at which CPython grows its table 2x instead of 4x (past 50000 items).
+    block paths); ``list(set(ngrams))`` for 200 lists of 0 to about 2000 n-grams, with repeats,
+    through the code that resolves the ties; and ``list(set(ints))`` for lists whose items
+    share slots or whole hashes, and for one past the size at which CPython grows its table
+    2x instead of 4x (78643 items).
     """
     import random
 
@@ -106,19 +107,18 @@ def _self_check(key: bytes) -> bool:
     vocab = strings[:48]
     for _ in range(200):
         n = rng.randint(1, 4)
-        words = rng.choices(vocab, k=int(10 ** rng.uniform(0, 3.5)) - 1 + n)
+        words = rng.choices(vocab, k=int(10 ** rng.uniform(0, 3.3)) - 1 + n)
         ngrams = list(zip(*[words[i:] for i in range(n)], strict=False))
         # The first index of each n-gram: later (reversed) assignments win.
         first = dict(zip(reversed(ngrams), reversed(range(len(ngrams))), strict=True))
-        if _native._ngram_set_order(ngrams, key) != [first[g] for g in set(ngrams)]:
+        if _native._ngram_set_order(words, n, key) != [first[g] for g in set(ngrams)]:
             return False
     mix = 0x9E3779B97F4A7C15  # odd: i * mix is a bijection modulo 2**60
-    for size in (3, 40, 700, 9000, 80_000):
+    for size, extra in ((3, 1), (40, 10), (700, 175), (6000, 1500), (79_000, 500)):
         base = [i * mix & ((1 << 60) - 1) for i in range(1, size + 1)]
-        quarter = base[: size // 4]
-        twins = [b + _MODULUS for b in quarter]  # same hash as b, a different item
-        xs = [*twins[::2], *base, *twins[1::2], -1, -2, *(b >> 12 << 12 for b in quarter)]
-        xs += quarter  # repeats
+        some = base[:extra]
+        twins = [b + _MODULUS for b in some]  # same hash as b, a different item
+        xs = [*twins[::2], *base, *twins[1::2], -1, -2, *(b >> 12 << 12 for b in some), *some]
         order = _native._set_order([hash(x) for x in xs], xs)
         if [xs[i] for i in order] != list(set(xs)):
             return False

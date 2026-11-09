@@ -489,24 +489,14 @@ fn str_hashes(strings: Vec<PyBackedStr>, hash_key: &[u8]) -> PyResult<Vec<i64>> 
         .collect())
 }
 
-/// ``list(set(ngrams))`` for a list of tuples of str, as the index of each distinct tuple's
-/// first occurrence, from CPython's hash key.
+/// ``list(set(ngrams))`` for ``ngrams = list(zip(*[words[i:] for i in range(n)]))``, as the
+/// index of each distinct n-gram's first occurrence, from CPython's hash key: the code that
+/// resolves ``_repeating_top_ngrams``' ties.
 #[pyfunction(name = "_ngram_set_order")]
-fn ngram_set_order(ngrams: Vec<Vec<PyBackedStr>>, hash_key: &[u8]) -> PyResult<Vec<usize>> {
+fn ngram_set_order(words: Vec<PyBackedStr>, n: usize, hash_key: &[u8]) -> PyResult<Vec<usize>> {
     let key = parse_key(hash_key)?;
-    if u32::try_from(ngrams.len()).is_err() {
-        return Err(PyValueError::new_err("too many n-grams"));
-    }
-    let mut buf = Vec::new();
-    let hashes: Vec<i64> = ngrams
-        .iter()
-        .map(|g| pyhash::tuple_hash(g.iter().map(|w| pyhash::str_hash(key, w, &mut buf))))
-        .collect();
-    let same = |a: usize, b: usize| {
-        ngrams[a].len() == ngrams[b].len()
-            && ngrams[a].iter().zip(&ngrams[b]).all(|(x, y)| **x == **y)
-    };
-    Ok(pyhash::set_order(&hashes, same))
+    let words: Vec<&str> = words.iter().map(|w| &**w).collect();
+    Ok(r::ngram_set_order(key, &words, n))
 }
 
 /// ``list(set(items))`` for items with these ``hashes`` that are equal when their ``keys``

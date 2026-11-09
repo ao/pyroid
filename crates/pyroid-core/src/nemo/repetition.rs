@@ -126,17 +126,33 @@ pub fn top_ngram_score(text: &str, words: &[&str]) -> f64 {
     ratio(k * py_len(&joined), nchar)
 }
 
-/// The first n-gram of `set(ngrams)`'s iteration order with `top` occurrences, as CPython
-/// orders it with `key`. `uniq` holds `(count, first start)` per distinct n-gram, in order of
-/// first occurrence (the order `set()` inserts them; repeats change nothing).
-fn first_in_set_order(
+/// `(count, first start)` per distinct window of `n` ids, in order of first occurrence.
+fn count_windows(ids: &[u32], n: usize) -> Vec<(usize, usize)> {
+    let mut index: FxHashMap<&[u32], usize> = FxHashMap::default();
+    index.reserve(ids.len().saturating_sub(n) + 1);
+    let mut uniq: Vec<(usize, usize)> = Vec::new();
+    for (i, w) in ids.windows(n).enumerate() {
+        let next = uniq.len();
+        let k = *index.entry(w).or_insert(next);
+        if k == next {
+            uniq.push((0, i));
+        }
+        uniq[k].0 += 1;
+    }
+    uniq
+}
+
+/// The distinct n-grams `uniq` (as from [`count_windows`]) in the iteration order of
+/// `set(ngrams)` as CPython builds it with `key`, as indices into `uniq`. `set()` inserts the
+/// n-grams in list order and a repeat changes nothing, so inserting the first occurrences in
+/// order gives the same table.
+fn set_order_of(
     key: HashKey,
     words: &[&str],
     ids: &[u32],
     n: usize,
     uniq: &[(usize, usize)],
-    top: usize,
-) -> usize {
+) -> impl Iterator<Item = usize> {
     // hash(word), once per distinct word.
     let mut word_hash: Vec<Option<i64>> = Vec::new();
     let mut buf = Vec::new();
@@ -157,10 +173,23 @@ fn first_in_set_order(
         // The n-grams are distinct: an equal hash is a collision, never the same tuple.
         set.add(item, hash, |_, _| false);
     }
-    set.iter()
-        .map(|k| uniq[k as usize])
-        .find(|&(count, _)| count == top)
-        .map_or(0, |(_, start)| start)
+    let order: Vec<usize> = set.iter().map(|k| k as usize).collect();
+    order.into_iter()
+}
+
+/// `list(set(ngrams))` for the n-grams of `words` (`n >= 1`), with CPython's hash `key`: the
+/// start of each distinct n-gram's first occurrence, in the set's iteration order. The same
+/// code resolves [`repeating_top_ngrams`]' ties; `pyroid.nemo` checks it against the
+/// interpreter's own sets before it passes the key.
+pub fn ngram_set_order(key: HashKey, words: &[&str], n: usize) -> Vec<usize> {
+    let (words, ids) = intern(words.iter().copied());
+    if n == 0 || words.len() < n {
+        return Vec::new();
+    }
+    let uniq = count_windows(&ids, n);
+    set_order_of(key, &words, &ids, n, &uniq)
+        .map(|k| uniq[k].1)
+        .collect()
 }
 
 /// `RepeatingTopNGramsFilter(n)`: the share of characters the most frequent word n-gram
@@ -183,18 +212,7 @@ pub fn repeating_top_ngrams(
     if words.len() < n {
         return Ok(TopNGram::Score(1.0));
     }
-    // (count, first start) per distinct window, in order of first occurrence.
-    let mut index: FxHashMap<&[u32], usize> = FxHashMap::default();
-    index.reserve(ids.len() - n + 1);
-    let mut uniq: Vec<(usize, usize)> = Vec::new();
-    for (i, w) in ids.windows(n).enumerate() {
-        let next = uniq.len();
-        let k = *index.entry(w).or_insert(next);
-        if k == next {
-            uniq.push((0, i));
-        }
-        uniq[k].0 += 1;
-    }
+    let uniq = count_windows(&ids, n);
     let top = uniq.iter().map(|&(c, _)| c).max().unwrap_or(0);
     let mut tied = uniq.iter().filter(|&&(c, _)| c == top);
     let first = tied.next().map_or(0, |&(_, s)| s);
@@ -205,7 +223,11 @@ pub fn repeating_top_ngrams(
         )));
     }
     if let Some(key) = key {
-        let s = first_in_set_order(key, &words, &ids, n, &uniq, top);
+        // The first n-gram with the top count in set order.
+        let s = set_order_of(key, &words, &ids, n, &uniq)
+            .map(|k| uniq[k])
+            .find(|&(count, _)| count == top)
+            .map_or(first, |(_, start)| start);
         return Ok(TopNGram::Score(top_ngram_score(text, &words[s..s + n])));
     }
     let starts: Vec<usize> = uniq
