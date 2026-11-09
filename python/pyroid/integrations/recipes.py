@@ -1,7 +1,7 @@
-"""Cleaning recipes over Arrow batches: the FineWeb chain, natively in pyroid.
+"""Cleaning recipes: the FineWeb chain, natively in pyroid.
 
 :class:`FineWeb` is the chain the pyroid benchmark gates against datatrove
-(``bench/chain.py``), as a reusable object::
+(``bench/chain.py``), over Arrow batches, as a reusable object::
 
     ftfy.fix_text (ftfy's default config)
     -> LanguageFilter(languages=["en"], language_threshold=0.65), fastText lid.176.bin
@@ -15,21 +15,27 @@ of the whole corpus: feed the survivors of each batch, in order, to the index
 from :meth:`FineWeb.new_dedup` and read its keep mask at the end. This is what
 ``pyroid clean --recipe fineweb`` does.
 
+:class:`FineWebWarc` is datatrove's ``examples/fineweb.py`` from WARC files (``pyroid clean
+--recipe fineweb-warc``): :mod:`pyroid.warc` reads the pages, then the URL filter,
+:class:`TaskExtractor` (datatrove's Trafilatura step), :class:`FineWeb` without ftfy, MinHash and
+PII replacement.
+
 Needs pyarrow and numpy (``pip install 'pyroid[cli]'``).
 """
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import os
 import re
 import shutil
 import tempfile
 import urllib.request
-from collections.abc import Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -39,12 +45,19 @@ import pyroid.fasttext
 import pyroid.filters as pf
 import pyroid.ftfy
 
+if TYPE_CHECKING:
+    from pyroid.warc import Document
+
 __all__ = [
+    "FINEWEB_TRAFILATURA",
     "LID_176_SHA256",
     "LID_176_URL",
     "MINHASH_CONFIG",
     "Annotation",
     "FineWeb",
+    "FineWebWarc",
+    "TaskExtractor",
+    "WarcAnnotation",
     "lid_model_path",
 ]
 
@@ -371,3 +384,239 @@ class FineWeb:
             language=pa.chunked_array([pa.array(lang, pa.string())]),
             language_score=pa.chunked_array([pa.array(score, pa.float64())]),
         )
+
+
+# ------------------------------------------------------------------------------ FineWeb from WARC
+
+#: What datatrove 0.10.1's ``Trafilatura(favour_precision=True)`` step passes to
+#: ``trafilatura.extract`` in ``examples/fineweb.py``, and the trafilatura release
+#: ``datatrove[processing]==0.10.1`` installs (``compat``).
+FINEWEB_TRAFILATURA: dict[str, Any] = {
+    "compat": "1.11.0",
+    "favor_precision": True,
+    "include_comments": False,
+}
+
+
+class TaskExtractor:
+    """datatrove's ``Trafilatura`` step over the pages of one task, on :mod:`pyroid.trafilatura`.
+
+    Make one per datatrove task (in FineWeb, one per WARC file): it starts with an empty dedup
+    cache, as the step's child process does. Called on a list of HTML pages, it returns for each
+    the extracted text (``None`` or ``""`` when there is none: the step drops those), or the
+    exception its extraction raised. datatrove's child process dies on such a page (the step
+    counts ``broken_process`` and drops it) and the next child starts with an empty cache, so the
+    cache is emptied after it here too. Pages are extracted in order: the dedup cache depends on
+    it.
+
+    Args:
+        threads: ``threads=`` of :func:`pyroid.trafilatura.extract_batch` (with deduplication
+            the pages are still extracted in order; threads parse ahead).
+        **kwargs: ``trafilatura.extract`` arguments over :data:`FINEWEB_TRAFILATURA`. With
+            ``compat="1.11.0"`` the dedup cache is :data:`pyroid.trafilatura.LRU_TEST`, as
+            trafilatura 1.11.0 has only its module-level cache; with ``"2.3.1"``, an
+            ``LRUCache`` of the task.
+    """
+
+    def __init__(self, *, threads: int | None = 1, **kwargs: Any) -> None:
+        import pyroid.trafilatura as pt
+
+        self._pt: Any = pt
+        self.kwargs = {**FINEWEB_TRAFILATURA, **kwargs}
+        self.threads = threads
+        self._module_cache = self.kwargs.get("compat") == "1.11.0"
+        self.cache: Any = True
+        self.reset()
+
+    def reset(self) -> None:
+        """Empty the dedup cache (a new datatrove child process)."""
+        if self._module_cache:
+            self._pt.reset_caches()
+        else:
+            self.cache = self._pt.LRUCache(maxsize=self._pt.LRU_SIZE)
+
+    def _snapshot(self) -> Any:
+        return copy.copy(self._pt.LRU_TEST if self._module_cache else self.cache)
+
+    def _restore(self, snap: Any) -> None:
+        if self._module_cache:
+            self._pt.LRU_TEST = snap
+        else:
+            self.cache = snap
+
+    def __call__(self, htmls: Sequence[str]) -> list[Any]:
+        """The extracted text of each page (``str``/``None``), or the exception it raised."""
+        pt = self._pt
+        pages = list(htmls)
+        snap = self._snapshot()
+        try:
+            return list(
+                pt.extract_batch(pages, threads=self.threads, deduplicate=self.cache, **self.kwargs)
+            )
+        except Exception:  # redone page by page below
+            self._restore(snap)
+        # Redo the batch page by page from the snapshot: the page that raises is dropped and the
+        # cache starts afresh after it, as datatrove's next child process does.
+        out: list[Any] = []
+        for page in pages:
+            try:
+                out.append(pt.extract(page, deduplicate=self.cache, **self.kwargs))
+            except Exception as e:
+                out.append(e)
+                self.reset()
+        return out
+
+
+@dataclass(frozen=True)
+class WarcAnnotation:
+    """What :meth:`FineWebWarc.annotate` returns: one value per input document.
+
+    Attributes:
+        text: The text as it leaves the chain; for a dropped document, the text the dropping
+            stage saw (the HTML for the URL filter and Trafilatura).
+        keep: True if the document survived every stage but MinHash.
+        reason: ``None`` if kept, else ``"url_filter:<reason>"``, ``"trafilatura"`` (no text
+            extracted), ``"trafilatura:broken_process"`` (the extraction raised), ``"lid"`` or
+            ``"<stage>:<datatrove reason>"``.
+        language: fastText's top label (``None`` before the LID stage).
+        language_score: Its probability.
+    """
+
+    text: list[str]
+    keep: list[bool]
+    reason: list[str | None]
+    language: list[str | None]
+    language_score: list[float | None]
+
+    def __len__(self) -> int:
+        return len(self.keep)
+
+
+class FineWebWarc:
+    """datatrove ``examples/fineweb.py`` from WARC files, stage for stage as datatrove 0.10.1.
+
+    Per WARC file (one datatrove task each)::
+
+        WarcReader (pyroid.warc.iter_documents: warcio's parsing, datatrove's process_record)
+        -> URLFilter() -> Trafilatura(favour_precision=True), trafilatura 1.11.0
+        -> LanguageFilter(languages=["en"], language_threshold=0.65)
+        -> GopherRepetitionFilter() -> GopherQualityFilter()
+        -> C4QualityFilter(filter_no_terminal_punct=False) -> FineWebQualityFilter()
+
+    then MinHash dedup (:data:`MINHASH_CONFIG`) over the survivors of every file, in file
+    order, and ``PIIFormatter()`` on what is left, a fresh rotation per file. :meth:`documents`,
+    :meth:`annotate` (with a :meth:`new_task` extractor per file), :meth:`new_dedup` and
+    :meth:`new_pii` are the pieces; ``pyroid clean --recipe fineweb-warc`` runs them.
+
+    Args:
+        lid_model: As :class:`FineWeb`'s.
+        threads: Default ``threads=`` for every stage (``None``: the whole pool).
+        url_filter: A :class:`pyroid.filters.URLFilter` (default: ``URLFilter()``, built at
+            first use: it needs tldextract and datatrove's block lists).
+        trafilatura: ``trafilatura.extract`` arguments over :data:`FINEWEB_TRAFILATURA`.
+    """
+
+    name = "fineweb-warc"
+
+    def __init__(
+        self,
+        *,
+        lid_model: Any = None,
+        threads: int | None = 1,
+        url_filter: Any = None,
+        trafilatura: dict[str, Any] | None = None,
+    ) -> None:
+        self._url_filter = url_filter
+        self.fineweb = FineWeb(lid_model=lid_model, ftfy_config=False, threads=threads)
+        self.trafilatura = {**FINEWEB_TRAFILATURA, **(trafilatura or {})}
+        self.threads = threads
+        self.minhash = MINHASH_CONFIG
+
+    @property
+    def url_filter(self) -> pf.URLFilter:
+        """The :class:`pyroid.filters.URLFilter` (built on first use)."""
+        if self._url_filter is None:
+            self._url_filter = pf.URLFilter()
+        return cast(pf.URLFilter, self._url_filter)
+
+    def stages(self) -> list[str]:
+        """Stage names, in order."""
+        return ["url_filter", "trafilatura", *self.fineweb.stages(), "pii"]
+
+    @staticmethod
+    def documents(
+        source: Any, *, compression: Literal["infer", "gzip"] | None = "infer", limit: int = -1
+    ) -> Iterator[Document]:
+        """The documents of one WARC file, as datatrove's ``WarcReader`` makes them.
+
+        ``{"text", "id", "url", "date"}`` per document, from :func:`pyroid.warc.iter_documents`;
+        documents with an empty text are skipped and at most ``limit`` are read (``-1``: all),
+        as ``WarcReader`` does within one task.
+        """
+        import pyroid.warc as pw
+
+        n = 0
+        for _, doc in pw.iter_documents(source, compression=compression):
+            if not doc.get("text"):
+                continue
+            if limit != -1 and n >= limit:
+                return
+            n += 1
+            yield doc
+
+    def new_task(self) -> TaskExtractor:
+        """The Trafilatura step of one task (one per WARC file, in the file's order)."""
+        return TaskExtractor(threads=self.threads, **self.trafilatura)
+
+    def new_dedup(self, *, threads: int | None = None) -> pyroid.dedup.MinHashDedup | None:
+        """A fresh MinHash index for the survivors of every file, in file order."""
+        return self.fineweb.new_dedup(threads=self.threads if threads is None else threads)
+
+    @staticmethod
+    def new_pii() -> pf.PIIReplacer:
+        """``PIIFormatter()`` for one file (one task): its replacement rotation starts at 0."""
+        return pf.PIIReplacer()
+
+    def annotate(
+        self, docs: Sequence[Mapping[str, Any]], task: TaskExtractor, *, threads: int | None = None
+    ) -> WarcAnnotation:
+        """Run the URL filter, Trafilatura, LID and the quality filters on one batch.
+
+        Args:
+            docs: Documents of one file, in order (:meth:`documents`).
+            task: That file's :meth:`new_task`.
+            threads: Overrides the recipe's ``threads``.
+        """
+        t = self.threads if threads is None else threads
+        n = len(docs)
+        text: list[str] = [d["text"] for d in docs]
+        keep = [False] * n
+        reason: list[str | None] = [None] * n
+        language: list[str | None] = [None] * n
+        score: list[float | None] = [None] * n
+        url_reasons = self.url_filter.reasons([d["url"] for d in docs], threads=t)
+        live = [i for i, r in enumerate(url_reasons) if r is None]
+        for i, r in enumerate(url_reasons):
+            if r is not None:
+                reason[i] = f"url_filter:{r}"
+        extracted: list[int] = []
+        for i, r in zip(live, task([text[i] for i in live]), strict=True):
+            if isinstance(r, Exception):
+                reason[i] = "trafilatura:broken_process"
+            elif not r:
+                reason[i] = "trafilatura"
+            else:
+                text[i] = r
+                extracted.append(i)
+        if extracted:
+            ann = self.fineweb.annotate([text[i] for i in extracted], threads=t)
+            columns = (
+                ann.text.to_pylist(),
+                ann.keep.to_pylist(),
+                ann.reason.to_pylist(),
+                ann.language.to_pylist(),
+                ann.language_score.to_pylist(),
+            )
+            for i, txt, k, r, lg, sc in zip(extracted, *columns, strict=True):
+                text[i], keep[i], reason[i], language[i], score[i] = txt, k, r, lg, sc
+        return WarcAnnotation(text, keep, reason, language, score)

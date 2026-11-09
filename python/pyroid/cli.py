@@ -6,6 +6,7 @@ follows its name: ``.parquet``/``.pq`` is Parquet; ``.jsonl``/``.ndjson``/``.jso
 Lines, optionally compressed as ``.gz``, ``.bz2``, ``.zst`` or ``.lz4``.
 
     pyroid clean IN... OUT --recipe fineweb [--shard I/N] [--workers N] [--excluded DROPPED]
+    pyroid clean IN.warc.gz... OUT --recipe fineweb-warc [--dump NAME] [--limit N]
     pyroid langid IN... OUT [--model lid.176.bin] [--keep en,fr --min-score 0.65] [--top-k K]
     pyroid dedup IN... OUT [--method minhash|exact] [--normalize] [--excluded DROPPED]
     pyroid dedup signatures IN... SIGS  ->  buckets SIGS DUPS  ->  cluster DUPS REMOVED
@@ -27,6 +28,16 @@ the survivors. Kept rows get the cleaned text and datatrove's ``language`` and
 ``language_score`` columns, replacing any columns of those names. ``--excluded`` gets the
 dropped rows, with a ``filter_reason`` of ``lid``, ``<stage>:<datatrove reason>``, ``null`` or
 ``minhash``. Needs pyarrow and numpy: ``pip install 'pyroid[cli]'``.
+
+``clean --recipe fineweb-warc`` runs datatrove's ``examples/fineweb.py`` on WARC files
+(``pyroid.integrations.recipes.FineWebWarc``): the pages as datatrove's ``WarcReader`` reads them
+(``pyroid.warc``) -> URL filter -> Trafilatura (trafilatura 1.11.0, as datatrove installs it) ->
+fastText LID -> the Gopher, C4 and FineWeb filters -> MinHash dedup over every file in order ->
+PII replacement, one rotation per file. IN are WARC, ARC or WET files (``.gz`` or plain); the
+output has ``text``, ``id``, ``dump`` (with ``--dump``), ``url``, ``date``, ``file_path``,
+``language`` and ``language_score``, one row per kept document. Also needs datatrove (its URL
+block lists), tldextract and fasteners: ``pip install 'pyroid[cli,warc,datatrove]' tldextract
+fasteners``.
 """
 
 from __future__ import annotations
@@ -34,6 +45,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures as cf
 import contextlib
+import itertools
 import json
 import math
 import os
@@ -48,7 +60,13 @@ from typing import Any
 
 import pyroid
 
-RECIPES = ("fineweb",)
+RECIPES = ("fineweb", "fineweb-warc")
+WARC_RECIPE = "fineweb-warc"
+# What --recipe fineweb-warc finds in a directory or glob: WARC, ARC and WET files, plain or gzip.
+_WARC_SUFFIXES = (".warc", ".arc", ".wet")
+# fineweb-warc gathers its kept and dropped rows into tables of about this size before writing.
+_WARC_FLUSH_ROWS = 10_000
+_WARC_FLUSH_BYTES = 64 << 20
 # The suffixes pyroid.integrations._io reads and writes (only JSON Lines can be compressed).
 _FORMATS = ".parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4]"
 _OUT_FORMATS = ("parquet", "jsonl", "jsonl.gz", "jsonl.bz2", "jsonl.zst", "jsonl.lz4")
@@ -128,6 +146,11 @@ class Layout:
         from pyroid.integrations import _io
 
         assert self.out_dir is not None
+        if src.format == "warc":  # a/x.warc.gz -> a/x.parquet
+            assert self.suffix is not None
+            name = _io.safe_relpath(_warc_stem(src.name) + self.suffix)
+            out = self.out_dir / name
+            return out, self.excluded_dir / name if self.excluded_dir is not None else None
         out = _io.output_path(self.out_dir, src, self.suffix)
         excl = (
             _io.output_path(self.excluded_dir, src, self.suffix)
@@ -250,12 +273,17 @@ def _options(a: argparse.Namespace, command: str, **extra: Any) -> Options:
     return Options(
         command=command,
         text_column=a.text_column,
-        batch_size=a.batch_size,
+        batch_size=a.batch_size or _default_batch(a),
         threads=a.threads,
         compression=getattr(a, "compression", None),
         excluded=bool(getattr(a, "excluded", None)),
         extra=extra,
     )
+
+
+def _default_batch(a: argparse.Namespace) -> int:
+    """--batch-size when not given: 10000 rows, or 256 pages for --recipe fineweb-warc."""
+    return 256 if getattr(a, "recipe", None) == WARC_RECIPE else 10_000
 
 
 def _fingerprint_options(o: Options) -> dict[str, Any]:
@@ -613,6 +641,8 @@ def _unit_filter(job: FileJob, report: Callable[[int], None]) -> dict[str, Any]:
     removal = _minhash.Removal(
         job.removed, job.rank, cluster_ids=job.cluster_ids, cluster_sizes=job.cluster_sizes
     )
+    # fineweb-warc: PIIFormatter after the MinHash filter, a fresh rotation per file (task)
+    pii = _warc_pii() if o.extra.get("recipe") == WARC_RECIPE else None
     out, excl = _writer(job.out, o.compression), _writer(job.excluded, o.compression)
     if job.spool is not None and not os.path.exists(job.spool):
         raise FileNotFoundError(
@@ -631,6 +661,8 @@ def _unit_filter(job: FileJob, report: Callable[[int], None]) -> dict[str, Any]:
         for t, keep, _ in _minhash.iter_kept(tables, removal):
             n = t.num_rows
             kept = t.filter(keep)
+            if pii is not None and kept.num_rows:
+                kept = _pii_text(kept, pii, o.threads)
             n_in += n
             n_out += kept.num_rows
             schema = kept.schema
@@ -714,6 +746,351 @@ def _unit_signatures(job: FileJob, report: Callable[[int], None]) -> dict[str, A
     return result
 
 
+# ================================================================================ fineweb-warc
+
+
+def _is_warc(name: str) -> bool:
+    return name.lower().removesuffix(".gz").endswith(_WARC_SUFFIXES)
+
+
+def _warc_stem(name: str) -> str:
+    """``a/x.warc.gz`` -> ``a/x`` (output names keep the rest of the input's name)."""
+    low = name.lower()
+    if low.endswith(".gz"):
+        name, low = name[:-3], low[:-3]
+    for ext in _WARC_SUFFIXES:
+        if low.endswith(ext):
+            return name[: -len(ext)]
+    return name
+
+
+def _no_warc(spec: str) -> FileNotFoundError:
+    return FileNotFoundError(f"{spec}: no WARC files (.warc, .arc or .wet, optionally .gz)")
+
+
+def _warc_sources(specs: Sequence[str], exclude: Sequence[Path]) -> list[Any]:
+    """The WARC files ``specs`` name, found as ``_io.resolve_inputs`` finds Parquet and JSONL.
+
+    Files, directories (recursively), globs and URIs; each spec's files sorted by name. A file
+    named directly is taken whatever its suffix.
+    """
+    from pyroid.integrations import _io
+
+    excluded = [_io._canon(os.path.abspath(os.fspath(e))) for e in exclude]
+    out: list[Any] = []
+    seen: set[str] = set()
+    for spec in specs:
+        if not os.path.exists(spec) and _io._URI.match(spec) and spec[:7].lower() != "file://":
+            found = _warc_uri_sources(spec)
+        else:
+            path = _io._file_uri_path(spec) if spec[:7].lower() == "file://" else spec
+            found = _warc_local_sources(path, excluded)
+        for key, src in found:
+            if key in seen:
+                raise ValueError(f"{src.uri}: listed twice")
+            seen.add(key)
+            out.append(src)
+    return out
+
+
+def _warc_local_sources(spec: str, excluded: Sequence[str]) -> list[tuple[str, Any]]:
+    from pyroid.integrations import _io
+
+    p = Path(spec)
+    if p.exists() or not _io._MAGIC.search(spec):
+        if not p.exists():
+            raise FileNotFoundError(f"{spec}: no such file or directory")
+        if not p.is_dir():
+            absolute = os.path.abspath(spec)
+            key = os.path.join(_io._canon(os.path.dirname(absolute)), os.path.normcase(p.name))
+            if _io._excluded(key, excluded):
+                raise _no_warc(spec)
+            return [(key, _io.Source(spec, p.name, p.stat().st_size, "warc", None, absolute))]
+        found = _warc_walk(spec, None, excluded)
+    else:
+        parts = p.parts
+        i = next(i for i, part in enumerate(parts) if _io._MAGIC.search(part))
+        found = _warc_walk(str(Path(*parts[:i])) if i else "", _io._Glob(parts[i:]), excluded)
+    if not found:
+        raise _no_warc(spec)
+    return found
+
+
+def _warc_walk(root: str, glob: Any, excluded: Sequence[str]) -> list[tuple[str, Any]]:
+    """The WARC files below the local directory ``root`` (``_io._walk``'s rules), by name."""
+    from pyroid.integrations import _io
+
+    base = os.path.abspath(root or os.curdir)
+    real = _io._canon(base)
+    found: list[tuple[str, Any]] = []
+    if _io._excluded(real, excluded):
+        return found
+    stack = [("", real, base)]
+    visited = {real}
+    while stack:
+        rel, real_dir, abs_dir = stack.pop()
+        try:
+            entries = os.scandir(abs_dir)
+        except (FileNotFoundError, NotADirectoryError):
+            if rel:
+                raise
+            break
+        with entries:
+            for e in entries:
+                if e.name.startswith((".", "_")):
+                    continue
+                r = f"{rel}/{e.name}" if rel else e.name
+                if e.is_dir():
+                    if glob is not None and not glob.may_match_below(r):
+                        continue
+                    sub = _io._canon(e.path) if e.is_symlink() else os.path.join(real_dir, e.name)
+                    sub = os.path.normcase(sub)
+                    if sub in visited or _io._excluded(sub, excluded):
+                        continue
+                    visited.add(sub)
+                    stack.append((r, sub, e.path))
+                elif e.is_file() and _is_warc(e.name) and (glob is None or glob(r)):
+                    key = os.path.join(real_dir, os.path.normcase(e.name))
+                    if not _io._excluded(key, excluded):
+                        uri = os.path.join(root, *r.split("/"))
+                        src = _io.Source(uri, r, e.stat().st_size, "warc", None, e.path)
+                        found.append((key, src))
+    found.sort(key=lambda kv: kv[1].name)
+    return found
+
+
+def _warc_uri_sources(spec: str) -> list[tuple[str, Any]]:
+    from pyroid.integrations import _io
+
+    glob: Any = None
+    root = spec
+    head, sep, rest = spec.rpartition("://")
+    web = head.lower() in ("http", "https")
+    if sep and not web:
+        parts = rest.split("/")
+        for i, part in enumerate(parts):
+            if _io._MAGIC.search(part):
+                root, glob = head + sep + "/".join(parts[:i]), _io._Glob(parts[i:])
+                break
+    fs, path = _io._filesystem(root, spec)
+    kind, size, canon = _io._info(fs, path)
+    if glob is None:
+        if kind is None:
+            raise FileNotFoundError(f"{spec}: no such file or directory")
+        if kind == "file":
+            name = (spec.split("?", 1)[0] if web else spec).rstrip("/").rsplit("/", 1)[-1]
+            return [(_io._key(fs, path), _io.Source(spec, name, size, "warc", fs, path))]
+    elif kind != "directory":
+        raise _no_warc(spec)
+    prefix = canon if not canon or canon.endswith("/") else canon + "/"
+    base = root if root.endswith("/") else root + "/"
+    found: list[tuple[str, Any]] = []
+    for p, n in _io._find(fs, canon):
+        if not p.startswith(prefix):
+            raise ValueError(f"{spec}: the listing returned {p}, which is not under {canon}")
+        rel = p[len(prefix) :]
+        comps = rel.split("/")
+        if any(c.startswith((".", "_")) or not c for c in comps) or not _is_warc(comps[-1]):
+            continue
+        if glob is not None and not glob(rel):
+            continue
+        found.append((_io._key(fs, p), _io.Source(base + rel, rel, n, "warc", fs, p)))
+    if not found:
+        raise _no_warc(spec)
+    found.sort(key=lambda kv: kv[1].name)
+    return found
+
+
+@contextlib.contextmanager
+def _warc_open(src: Any) -> Iterator[tuple[Any, str | None]]:
+    """What :func:`pyroid.warc.iter_documents` reads for ``src``, and its compression.
+
+    A local file is read by path (in Rust, without the GIL; ``.gz`` through the emulation of
+    ``gzip.GzipFile``, as datatrove reads it); a remote one through a file object.
+    """
+    from pyroid.integrations import _io
+
+    fs = src._fs
+    if fs is None:
+        yield src._path, "infer"
+        return
+    gz = "gzip" if src.name.lower().endswith(".gz") else None
+    f = (
+        fs.fs.open(src._path, "rb")
+        if isinstance(fs, _io._Fsspec)
+        else fs.open_input_stream(src._path)
+    )
+    with f:
+        yield f, gz
+
+
+def _warc_recipe(o: Options) -> Any:
+    from pyroid.integrations import recipes
+
+    key = (WARC_RECIPE, o.extra.get("lid_model"), o.threads)
+    r = _CACHE.get(key)
+    if r is None:
+        r = _CACHE[key] = recipes.FineWebWarc(lid_model=o.extra.get("lid_model"), threads=o.threads)
+    return r
+
+
+def _warc_pii() -> Any:
+    from pyroid.integrations import recipes
+
+    return recipes.FineWebWarc.new_pii()
+
+
+def _pii_text(t: Any, pii: Any, threads: int | None) -> Any:
+    import pyarrow as pa
+
+    from pyroid.integrations import _io
+
+    return _io.set_column(t, "text", pa.chunked_array(pii(t.column("text"), threads=threads)))
+
+
+def _warc_schema(dump: bool, excluded: bool) -> Any:
+    """The columns of fineweb-warc's output (datatrove's metadata order), and ``filter_reason``."""
+    import pyarrow as pa
+
+    s = pa.string()
+    names = ["text", "id", *(["dump"] if dump else []), "url", "date", "file_path", "language"]
+    fields = [pa.field(n, s) for n in names] + [pa.field("language_score", pa.float64())]
+    if excluded:
+        fields.append(pa.field("filter_reason", s))
+    return pa.schema(fields)
+
+
+def _warc_table(
+    docs: Sequence[dict[str, Any]],
+    ann: Any,
+    rows: Sequence[int],
+    file_path: str,
+    dump: str | None,
+    schema: Any,
+) -> Any:
+    """Rows ``rows`` of one annotated batch, as a table of ``schema``."""
+    import pyarrow as pa
+
+    cols: dict[str, list[Any]] = {
+        "text": [ann.text[i] for i in rows],
+        "id": [docs[i]["id"] for i in rows],
+        "url": [docs[i]["url"] for i in rows],
+        "date": [docs[i]["date"] for i in rows],
+        "file_path": [file_path] * len(rows),
+        "language": [ann.language[i] for i in rows],
+        "language_score": [ann.language_score[i] for i in rows],
+        "dump": [dump] * len(rows),
+        "filter_reason": [ann.reason[i] for i in rows],
+    }
+    return pa.table({n: pa.array(cols[n], schema.field(n).type) for n in schema.names}, schema)
+
+
+class _Gather:
+    """Tables gathered into one of about ``_WARC_FLUSH_ROWS`` rows (or bytes) before ``sink``.
+
+    A WARC batch keeps few rows: written one by one, they would make tiny Parquet row groups.
+    """
+
+    def __init__(self, sink: Callable[[Any], None]) -> None:
+        self.sink = sink
+        self.parts: list[Any] = []
+        self.rows = self.nbytes = 0
+
+    def add(self, t: Any) -> None:
+        if not t.num_rows:
+            return
+        self.parts.append(t)
+        self.rows += t.num_rows
+        self.nbytes += t.nbytes
+        if self.rows >= _WARC_FLUSH_ROWS or self.nbytes >= _WARC_FLUSH_BYTES:
+            self.flush()
+
+    def flush(self) -> None:
+        if self.parts:
+            import pyarrow as pa
+
+            t = pa.concat_tables(self.parts)
+            self.parts, self.rows, self.nbytes = [], 0, 0
+            self.sink(t)
+
+
+def _unit_warc(job: FileJob, report: Callable[[int], None]) -> dict[str, Any]:
+    """fineweb-warc on one WARC file: up to the filters (MinHash phase 1), or to PII (no dedup)."""
+    o = job.options
+    x = o.extra
+    recipe = _warc_recipe(o)
+    task = recipe.new_task()  # the file's Trafilatura dedup cache starts empty, as in datatrove
+    dump = x.get("dump")
+    schema = _warc_schema(dump is not None, False)
+    excl_schema = _warc_schema(dump is not None, True)
+    stats: Counter[str] = Counter()
+    n_in = n_out = 0
+    t0 = time.perf_counter()
+    if job.spool is not None:
+        out: Any = _Ipc(job.spool)
+        excl: Any = _Ipc(job.excluded_spool) if job.excluded_spool else None
+    else:
+        out, excl = _writer(job.out, o.compression), _writer(job.excluded, o.compression)
+    sig = None
+    if job.sigs is not None:
+        from pyroid._pyroid import dedup as _native
+        from pyroid.integrations import _minhash
+
+        assert job.minhash is not None
+        sig = _native._SigFileWriter(
+            job.sigs,
+            job.rank,
+            _minhash.native_config(job.minhash),
+            memory_budget=job.sort_buffer,
+            threads=o.threads,
+        )
+    pii = _warc_pii() if sig is None else None  # with MinHash, PII comes after it (stage 4)
+
+    def write_kept(t: Any) -> None:
+        if sig is not None:
+            sig.add(t.column("text"), threads=o.threads)
+        out.write(_pii_text(t, pii, o.threads) if pii is not None else t)
+
+    kept = _Gather(write_kept)
+    dropped = _Gather(excl.write) if excl is not None else None
+    file_path = job.source._path if job.source._fs is None else job.source.uri
+    try:
+        with _warc_open(job.source) as (source, compression):
+            docs = recipe.documents(source, compression=compression, limit=x.get("limit", -1))
+            while batch := list(itertools.islice(docs, o.batch_size)):
+                ann = recipe.annotate(batch, task)
+                keep = [i for i, k in enumerate(ann.keep) if k]
+                kept.add(_warc_table(batch, ann, keep, file_path, dump, schema))
+                drop = [i for i, k in enumerate(ann.keep) if not k]
+                if dropped is not None:
+                    dropped.add(_warc_table(batch, ann, drop, file_path, dump, excl_schema))
+                stats.update(ann.reason[i] for i in drop)
+                n_in += len(batch)
+                n_out += len(keep)
+                report(len(batch))
+        kept.flush()
+        if dropped is not None:
+            dropped.flush()
+        if sig is not None:
+            sig.finish()
+        out.close(schema)
+        if excl is not None:
+            excl.close(excl_schema)
+    except BaseException:
+        _abort(out, excl, sig)
+        raise
+    result = {
+        "input": job.source.uri,
+        "size": job.source.size,
+        "rank": job.rank,
+        "outputs": _job_outputs(job),
+        "wall_s": round(time.perf_counter() - t0, 3),
+        "stats": {"docs_in": n_in, "docs_out": n_out, "removed": dict(stats)},
+    }
+    job.state.mark(job.key, result)
+    return result
+
+
 # ====================================================================================== the runs
 
 
@@ -742,6 +1119,8 @@ def _sources(a: argparse.Namespace, exclude: Sequence[Path]) -> list[Any]:
         specs += [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
     if not specs:
         raise SystemExit("pyroid: no input (give IN paths or --files-from)")
+    if getattr(a, "recipe", None) == WARC_RECIPE:
+        return _warc_sources(specs, [p for p in exclude if p is not None])
     return _io.resolve_inputs(specs, exclude=[p for p in exclude if p is not None])
 
 
@@ -987,10 +1366,12 @@ def _final_key(run: Run, rank: int) -> str:
 def _rowwise(a: argparse.Namespace, command: str, **extra: Any) -> int:
     o = _options(a, command, **extra)
     run = _start(a, command, o, excluded=command != "translit")
-    _check_text_column([s for _, s in run.mine], o.text_column)
+    warc = extra.get("recipe") == WARC_RECIPE
+    if not warc:
+        _check_text_column([s for _, s in run.mine], o.text_column)
     _record_run(run)
     units = _file_units(run, lambda r: _final_key(run, r), lambda r, s: _out_job(run, r, s))
-    _execute(run, units, _unit_rows)
+    _execute(run, units, _unit_warc if warc else _unit_rows)
     _finalize(run, keep_state=False)
     return 0
 
@@ -1040,7 +1421,13 @@ def _staged(
 def _cmd_clean(a: argparse.Namespace) -> int:
     from pyroid.integrations import _minhash, recipes
 
-    extra = {"recipe": a.recipe, "lid_model": a.lid_model, "dedup": not a.no_dedup}
+    extra: dict[str, Any] = {"recipe": a.recipe, "lid_model": a.lid_model, "dedup": not a.no_dedup}
+    warc = a.recipe == WARC_RECIPE
+    if warc:
+        _check_warc(a)
+        extra.update(dump=a.dump, limit=a.limit)
+    elif a.dump is not None or a.limit != -1:
+        raise SystemExit("pyroid clean: --dump and --limit apply to --recipe fineweb-warc")
     if a.no_dedup:
         return _rowwise(a, "clean", **extra)
     if getattr(a, "shard", None) and not a.shard.endswith("/1"):
@@ -1052,7 +1439,8 @@ def _cmd_clean(a: argparse.Namespace) -> int:
     cfg = _minhash.config_dict(recipes.MINHASH_CONFIG)
     o = _options(a, "clean", **extra, minhash=cfg)
     run = _start(a, "clean", o)
-    _check_text_column([s for _, s in run.mine], o.text_column)
+    if not warc:
+        _check_text_column([s for _, s in run.mine], o.text_column)
     _record_run(run, minhash=cfg)
     work = run.layout.work
 
@@ -1077,9 +1465,25 @@ def _cmd_clean(a: argparse.Namespace) -> int:
     def last(rank: int, src: Any) -> FileJob:
         return replace(_out_job(run, rank, src), removed=str(work / "removed"), **spools(rank))
 
-    _staged(run, first, _unit_rows, last, cfg)
+    _staged(run, first, _unit_warc if warc else _unit_rows, last, cfg)
     _finalize(run, keep_state=False)
     return 0
+
+
+def _check_warc(a: argparse.Namespace) -> None:
+    """fineweb-warc's dependencies (exit 1 with an install hint), and its output format."""
+    import importlib.util
+
+    need = ("datatrove", "tldextract", "fasteners")
+    missing = ", ".join(m for m in need if importlib.util.find_spec(m) is None)
+    if missing:
+        raise SystemExit(
+            f"pyroid clean --recipe {WARC_RECIPE}: needs {missing} (the URL filter "
+            "reads datatrove's block lists): pip install 'pyroid[cli,warc,datatrove]' "
+            "tldextract fasteners"
+        )
+    if not getattr(a, "format", None) and not _is_file_out(a.output):
+        a.format = "parquet"  # per-file outputs: a WARC input has no table format to keep
 
 
 def _minhash_middle(
@@ -1544,12 +1948,15 @@ def _shard(s: str) -> str:
     return s
 
 
-def _io_args(p: argparse.ArgumentParser, *, out: str = "OUT", out_help: str | None = None) -> None:
+def _io_args(
+    p: argparse.ArgumentParser, *, out: str = "OUT", out_help: str | None = None, warc: bool = False
+) -> None:
+    formats = f"{_FORMATS}; fineweb-warc: .warc, .arc, .wet[.gz]" if warc else _FORMATS
     p.add_argument(
         "input",
         nargs="*",
         metavar="IN",
-        help=f"input files ({_FORMATS}), directories, globs or URIs",
+        help=f"input files ({formats}), directories, globs or URIs",
     )
     p.add_argument(
         "output",
@@ -1569,7 +1976,10 @@ def _run_args(p: argparse.ArgumentParser, *, excluded: bool = True, merge: bool 
         "with --workers, an equal share of the CPUs)",
     )
     p.add_argument(
-        "--batch-size", type=_positive, default=10_000, help="rows per Arrow batch (default: 10000)"
+        "--batch-size",
+        type=_positive,
+        default=None,
+        help="rows per Arrow batch (default: 10000; --recipe fineweb-warc: pages per batch, 256)",
     )
     p.add_argument(
         "--shard", type=_shard, metavar="I/N", help="process input files I, I+N, I+2N, ..."
@@ -1594,7 +2004,7 @@ def _run_args(p: argparse.ArgumentParser, *, excluded: bool = True, merge: bool 
             metavar="FMT",
             help="with a directory OUT, the output format: "
             + ", ".join(_OUT_FORMATS)
-            + " (default: each input's)",
+            + " (default: each input's; parquet for WARC inputs)",
         )
     if excluded:
         p.add_argument(
@@ -1654,14 +2064,33 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "clean",
-        help="run a cleaning recipe (ftfy, LID, quality filters, MinHash)",
+        help="run a cleaning recipe (ftfy, LID, quality filters, MinHash; or FineWeb from WARC)",
         description="Run a cleaning recipe and write the kept rows. The fineweb recipe is "
-        "datatrove's FineWeb chain: ftfy, fastText LID, the Gopher, C4 and FineWeb quality "
-        "filters, then MinHash dedup.",
+        "datatrove's FineWeb chain on text: ftfy, fastText LID, the Gopher, C4 and FineWeb "
+        "quality filters, then MinHash dedup. The fineweb-warc recipe is datatrove's "
+        "examples/fineweb.py on WARC files: datatrove's WarcReader, URL filter, Trafilatura, "
+        "fastText LID, the same filters, MinHash dedup, then PII replacement.",
     )
-    _io_args(p)
+    _io_args(p, warc=True)
     _run_args(p)
-    p.add_argument("--recipe", choices=RECIPES, required=True, help="the recipe to run")
+    p.add_argument(
+        "--recipe",
+        choices=RECIPES,
+        required=True,
+        help="fineweb (Parquet or JSONL text) or fineweb-warc (WARC, ARC or WET files)",
+    )
+    p.add_argument(
+        "--dump",
+        metavar="NAME",
+        help="fineweb-warc: add a dump column holding NAME (datatrove's default_metadata)",
+    )
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=-1,
+        metavar="N",
+        help="fineweb-warc: read at most N documents per WARC file (WarcReader's limit)",
+    )
     p.add_argument(
         "--lid-model",
         help="fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a cached download)",

@@ -52,6 +52,12 @@ cli = ["pyarrow>=18", "numpy>=1.26"]
 datatrove = ["datatrove>=0.10.1", "regex", "tokenizers", "numpy>=1.26", "orjson>=3.2"]
 # pyroid.integrations.hf: Hugging Face datasets helpers.
 hf = ["datasets>=3", "pyarrow>=18", "numpy>=1.26"]
+# datatrove's page decoding in pyroid.warc.iter_documents/iter_batches, the WarcReader drop-in and
+# `pyroid clean --recipe fineweb-warc`: faust-cchardet guesses the charset of pages that are not
+# UTF-8, python-magic (with the libmagic system library) types records that have no
+# WARC-Identified-Payload-Type. Both are imported only when a record needs them, as datatrove
+# does; pyroid.warc.ArchiveIterator needs neither.
+warc = ["faust-cchardet", "python-magic"]
 
 [project.scripts]
 pyroid = "pyroid.cli:main"
