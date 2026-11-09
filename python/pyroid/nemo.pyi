@@ -606,9 +606,10 @@ def repeating_top_ngrams(
 
     When several n-grams share the top count, NeMo takes the first of them in the iteration
     order of a Python ``set``, which depends on the process's string hash seed
-    (``PYTHONHASHSEED``). For those documents this function builds the same set in Python, so
-    the result is the one NeMo gives in the same process; with a fixed ``PYTHONHASHSEED`` it is
-    the same in every run.
+    (``PYTHONHASHSEED``). The result is the one NeMo gives in the same process; with a fixed
+    ``PYTHONHASHSEED`` it is the same in every run. On 64-bit CPython (siphash13) pyroid reads
+    the process's hash key and reproduces the set's order in Rust, after checking its hashes
+    and set order against the interpreter once; elsewhere it builds the same set in Python.
 
     Args:
         texts: A str, a list or tuple of str, or an Arrow string array/column.

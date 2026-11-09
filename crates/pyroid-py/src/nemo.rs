@@ -20,6 +20,7 @@ use pyroid_core::fasttext::PredictError;
 use pyroid_core::json_repair::dumps::float_repr;
 use pyroid_core::nemo::fasttext as nft;
 use pyroid_core::nemo::filters as f;
+use pyroid_core::nemo::pyhash::{self, HashKey};
 use pyroid_core::nemo::repetition::{self as r, TopNGram};
 use pyroid_core::nemo::text::{ScoreError, Splitter};
 
@@ -421,19 +422,25 @@ fn doc_object<'py>(py: Python<'py>, input: &TextInput, i: usize) -> Bound<'py, P
 /// index of each tied n-gram (``None``: every n-gram is tied); ``words`` is the document's
 /// words for ``lang="zh"`` (``None``: ``text.strip().split()``). ``pyroid.nemo`` picks
 /// among the tied n-grams with NeMo's own ``set`` order.
+///
+/// With ``hash_key`` (the first 16 bytes of ``_Py_HashSecret``, which ``pyroid.nemo`` has
+/// checked against this interpreter), ties are resolved here, in ``set`` order as CPython
+/// builds it, and no document comes back tied.
 #[pyfunction(name = "_repeating_top_ngrams")]
-#[pyo3(signature = (texts, /, n = 2, *, lang = "en", threads = None))]
+#[pyo3(signature = (texts, /, n = 2, *, lang = "en", threads = None, hash_key = None))]
 fn repeating_top_ngrams_native<'py>(
     py: Python<'py>,
     texts: &Bound<'py, PyAny>,
     n: i64,
     lang: &str,
     threads: Option<ThreadsArg>,
+    hash_key: Option<&[u8]>,
 ) -> PyResult<Bound<'py, PyTuple>> {
     let sp = splitter(lang)?;
+    let key = hash_key.map(parse_key).transpose()?;
     let (input, threads) = docs(py, texts, threads)?;
     let results = map_values_cost(py, &input, threads, DocCost::Light, |s| {
-        r::repeating_top_ngrams(s, n, sp)
+        r::repeating_top_ngrams(s, n, sp, key)
     })?;
     let tops = values(py, &input, results, score_error)?;
     let mut scores = Vec::with_capacity(tops.len());
@@ -463,6 +470,55 @@ fn repeating_top_ngrams_native<'py>(
     }
     let scores = output(py, &input, scores)?;
     PyTuple::new(py, [scores, PyList::new(py, ties)?.into_any()])
+}
+
+fn parse_key(secret: &[u8]) -> PyResult<HashKey> {
+    HashKey::from_secret(secret)
+        .ok_or_else(|| PyValueError::new_err("hash_key must hold at least 16 bytes"))
+}
+
+/// ``hash(s)`` for each str, from CPython's hash key (``pyroid.nemo`` compares these with
+/// ``hash()`` before it uses the key).
+#[pyfunction(name = "_str_hashes")]
+fn str_hashes(strings: Vec<PyBackedStr>, hash_key: &[u8]) -> PyResult<Vec<i64>> {
+    let key = parse_key(hash_key)?;
+    let mut buf = Vec::new();
+    Ok(strings
+        .iter()
+        .map(|s| pyhash::str_hash(key, s, &mut buf))
+        .collect())
+}
+
+/// ``list(set(ngrams))`` for a list of tuples of str, as the index of each distinct tuple's
+/// first occurrence, from CPython's hash key.
+#[pyfunction(name = "_ngram_set_order")]
+fn ngram_set_order(ngrams: Vec<Vec<PyBackedStr>>, hash_key: &[u8]) -> PyResult<Vec<usize>> {
+    let key = parse_key(hash_key)?;
+    if u32::try_from(ngrams.len()).is_err() {
+        return Err(PyValueError::new_err("too many n-grams"));
+    }
+    let mut buf = Vec::new();
+    let hashes: Vec<i64> = ngrams
+        .iter()
+        .map(|g| pyhash::tuple_hash(g.iter().map(|w| pyhash::str_hash(key, w, &mut buf))))
+        .collect();
+    let same = |a: usize, b: usize| {
+        ngrams[a].len() == ngrams[b].len()
+            && ngrams[a].iter().zip(&ngrams[b]).all(|(x, y)| **x == **y)
+    };
+    Ok(pyhash::set_order(&hashes, same))
+}
+
+/// ``list(set(items))`` for items with these ``hashes`` that are equal when their ``keys``
+/// are, as the index of each distinct item's first occurrence.
+#[pyfunction(name = "_set_order")]
+fn set_order(hashes: Vec<i64>, keys: Vec<i64>) -> PyResult<Vec<usize>> {
+    if hashes.len() != keys.len() || u32::try_from(hashes.len()).is_err() {
+        return Err(PyValueError::new_err(
+            "hashes and keys must have the same length, below 2**32",
+        ));
+    }
+    Ok(pyhash::set_order(&hashes, |a, b| keys[a] == keys[b]))
 }
 
 // ---- fastText stages ---------------------------------------------------------------------
@@ -642,6 +698,9 @@ fn add(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(long_word, m)?)?;
     m.add_function(wrap_pyfunction!(ellipsis, m)?)?;
     m.add_function(wrap_pyfunction!(repeating_top_ngrams_native, m)?)?;
+    m.add_function(wrap_pyfunction!(str_hashes, m)?)?;
+    m.add_function(wrap_pyfunction!(ngram_set_order, m)?)?;
+    m.add_function(wrap_pyfunction!(set_order, m)?)?;
     m.add_function(wrap_pyfunction!(repeating_duplicate_ngrams, m)?)?;
     m.add_function(wrap_pyfunction!(bullets, m)?)?;
     m.add_function(wrap_pyfunction!(pornographic_urls, m)?)?;

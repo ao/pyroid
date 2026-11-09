@@ -55,6 +55,8 @@ with warnings.catch_warnings():
     with contextlib.suppress(ImportError):
         importlib.import_module("jieba")
 
+#: pyroid.nemo, for its private helpers (not in the stub).
+_nemo: Any = importlib.import_module("pyroid.nemo")
 FREE_THREADED = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
 DATA = Path(os.environ.get("PYROID_DATA", "/data"))
 HERE = Path(__file__).resolve()
@@ -315,6 +317,24 @@ def tie_corpus(seed: int, n_docs: int = 300) -> list[str]:
         k = rng.randrange(1, 60)
         docs.append("".join(rng.choice(vocab) + rng.choice(seps) for _ in range(k)))
     return docs
+
+
+#: Characters of every PEP 393 width (1, 2 and 4 bytes per character), for the hash checks.
+_WIDTH_CHARS = "ab~\x00\x7f\x80\xe9\xff\u0100\u4e2d\ud7ff\uffff\U0001f600\U0010ffff"
+
+
+def random_word(rng: random.Random) -> str:
+    """A short word whose widest character is of a random PEP 393 width."""
+    pool = _WIDTH_CHARS[: rng.choice((3, 8, 12, len(_WIDTH_CHARS)))]
+    return "".join(rng.choices(pool, k=rng.randrange(1, 12)))
+
+
+def set_order_mismatch(words: list[str], n: int, key: bytes) -> int:
+    """1 if pyroid's simulated ``list(set(ngrams))`` differs from this process's, else 0."""
+    ngrams = list(zip(*[words[i:] for i in range(n)], strict=False))
+    first = dict(zip(reversed(ngrams), reversed(range(len(ngrams))), strict=True))
+    want = [first[g] for g in set(ngrams)]
+    return int(_nemo._native._ngram_set_order(ngrams, key) != want)
 
 
 # ---- the score functions and their NeMo classes ----------------------------------------
@@ -621,7 +641,7 @@ def test_reference_is_nemos_code(live: Any) -> None:
 # ---- RepeatingTopNGramsFilter's ties ---------------------------------------------------
 
 _SEED_SCRIPT = """
-import importlib.util, json, sys
+import importlib.util, json, random, sys
 spec = importlib.util.spec_from_file_location("_pyroid_test_nemo_child", sys.argv[1])
 t = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = t
@@ -633,7 +653,8 @@ impls = {"reference": t.reference()}
 live = t.live_nemo()
 if live is not None:
     impls["nemo"] = live
-out = {"impls": sorted(impls), "scores": {}, "mismatches": {}}
+key = nemo._hash_key()
+out = {"impls": sorted(impls), "key": key is not None, "scores": {}, "mismatches": {}}
 for n in (1, 2, 3, 4):
     batch = [float(x) for x in nemo.repeating_top_ngrams(docs, n)]
     one = [nemo.repeating_top_ngrams(d, n) for d in docs]
@@ -643,19 +664,35 @@ for n in (1, 2, 3, 4):
         want = [f.score_document(d) for d in docs]
         bad = sum(a != w for a, w in zip(batch, want)) + sum(a != w for a, w in zip(one, want))
         out["mismatches"][f"{name}-{n}"] = bad
+    # The Python path (no key) gives the same.
+    scores, ties = nemo._native._repeating_top_ngrams(docs, n)
+    for i, text, starts, words in ties:
+        scores[i] = nemo._tied_score(text, n, starts, words)
+    out["mismatches"][f"fallback-{n}"] = sum(a != float(b) for a, b in zip(batch, scores))
+# The simulated set order against this process's own sets, on random n-gram lists.
+if key is not None:
+    rng = random.Random(sys.argv[3])
+    bad = 0
+    for _ in range(int(sys.argv[4])):
+        n = rng.randint(1, 4)
+        vocab = [t.random_word(rng) for _ in range(rng.randint(1, 80))]
+        words = rng.choices(vocab, k=rng.randrange(0, 3000) + n - 1)
+        bad += t.set_order_mismatch(words, n, key)
+    out["mismatches"]["set-order"] = bad
 print(json.dumps(out))
 """
 
 
 @pytest.mark.thread_unsafe(reason="runs subprocesses")
 def test_ties_follow_the_hash_seed(ref: Any) -> None:
-    """Tied documents get NeMo's score whatever the process's hash seed is."""
+    """Tied documents get NeMo's score whatever the process's hash seed is, on the Rust path
+    (the process's key) and on the Python one; the simulated set order is the process's."""
     seeds = ["0", *(str(random.SystemRandom().randrange(1, 2**32)) for _ in range(4))]
     runs = []
     for seed in seeds:
         env = {**os.environ, "PYTHONHASHSEED": seed}
         proc = subprocess.run(
-            [sys.executable, "-P", "-c", _SEED_SCRIPT, str(HERE), "7"],
+            [sys.executable, "-P", "-c", _SEED_SCRIPT, str(HERE), "7", seed, "60"],
             env=env,
             capture_output=True,
             text=True,
@@ -665,6 +702,7 @@ def test_ties_follow_the_hash_seed(ref: Any) -> None:
         assert proc.returncode == 0, proc.stderr
         out = json.loads(proc.stdout)
         assert set(out["mismatches"].values()) == {0}, (seed, out["mismatches"])
+        assert out["key"] == CPYTHON_SIPHASH, seed
         if live_nemo() is not None:
             assert out["impls"] == ["nemo", "reference"]
         runs.append(out["scores"])
@@ -690,6 +728,101 @@ def test_tied_documents_in_every_container(pa: Any, ref: Any) -> None:
             pa.array(["x", *docs]).slice(1),
         ):
             assert as_reprs(case, nemo.repeating_top_ngrams(kind, n)) == want
+
+
+# ---- the ties in Rust: CPython's hashes and set order ---------------------------------
+
+#: Interpreters on which pyroid reads the hash key and resolves ties in Rust.
+CPYTHON_SIPHASH = (
+    sys.implementation.name == "cpython"
+    and sys.hash_info.algorithm == "siphash13"
+    and sys.hash_info.cutoff == 0
+    and sys.hash_info.hash_bits == 64
+)
+
+
+def _key() -> bytes:
+    key: bytes | None = _nemo._hash_key()
+    if key is None:
+        pytest.skip("pyroid resolves ties in Python on this interpreter")
+    return key
+
+
+def test_hash_key_is_used_where_it_can_be() -> None:
+    assert (_nemo._hash_key() is not None) == CPYTHON_SIPHASH
+
+
+@given(
+    strings=st.lists(st.one_of(st.text(CHARS), st.text(st.sampled_from(_WIDTH_CHARS))), max_size=8)
+)
+def test_str_hashes_are_pythons(strings: list[str]) -> None:
+    assert _nemo._native._str_hashes(strings, _key()) == [hash(s) for s in strings]
+
+
+_vocab_words = st.one_of(
+    st.sampled_from(("a", "b", "ab", "é", "中", "\U0001f600", "")), st.text(CHARS, max_size=4)
+)
+
+
+@given(words=st.lists(_vocab_words, max_size=400), n=st.integers(1, 4))
+def test_ngram_set_order_is_pythons(words: list[str], n: int) -> None:
+    assert set_order_mismatch(words, n, _key()) == 0
+
+
+_MODULUS = (1 << 61) - 1
+_colliding_ints = st.one_of(
+    st.integers(-(2**62), 2**62),
+    st.sampled_from((0, 1, -1, -2, 8, 16, _MODULUS, _MODULUS + 1, -_MODULUS, 2 * _MODULUS)),
+    st.integers(0, 2**20).map(lambda x: x << 40),
+    st.integers(0, 2**20).map(lambda x: x + _MODULUS),
+)
+
+
+@given(xs=st.lists(_colliding_ints, max_size=500))
+def test_set_order_with_colliding_hashes(xs: list[int]) -> None:
+    """Items sharing slot bits or whole hashes (``hash(x + 2**61 - 1) == hash(x)``)."""
+    order = _nemo._native._set_order([hash(x) for x in xs], xs)
+    assert [xs[i] for i in order] == list(set(xs))
+
+
+@pytest.mark.thread_unsafe(reason="large sets")
+@pytest.mark.parametrize("size", [0, 4, 5, 19, 20, 76, 77, 4915, 4916, 78_642, 78_643, 100_000])
+def test_set_order_across_resizes(size: int) -> None:
+    """Sizes on both sides of each table growth (5 of 8 slots, ..., and the 2x rule)."""
+    key = _key()
+    rng = random.Random(size)
+    xs = [rng.getrandbits(62) - (1 << 61) for _ in range(size)]
+    order = _nemo._native._set_order([hash(x) for x in xs], xs)
+    assert [xs[i] for i in order] == list(set(xs))
+    words = [f"w{i}" for i in range(size)] + ["w0"] * 3
+    assert set_order_mismatch(words, 1, key) == 0
+
+
+@pytest.mark.thread_unsafe(reason="monkeypatches pyroid.nemo")
+def test_python_path_gives_the_same_scores(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without the key (it cannot be read, or the check fails) ties are resolved in Python,
+    with the same scores."""
+    docs = tie_corpus(11, 200)
+    want = {n: nemo.repeating_top_ngrams(docs, n) for n in (1, 2, 3, 4)}
+    key = _nemo._hash_key()
+    if key is not None:
+        assert _nemo._self_check(key)
+        assert not _nemo._self_check(bytes([key[0] ^ 1]) + key[1:])
+
+    def unreadable() -> bytes:
+        raise ValueError("symbol not found")
+
+    monkeypatch.setattr(_nemo, "_secret", unreadable)
+    assert _nemo._hash_key.__wrapped__() is None
+    monkeypatch.setattr(_nemo, "_hash_key", lambda: None)
+    for n, scores in want.items():
+        assert np.array_equal(nemo.repeating_top_ngrams(docs, n), scores), n
+        assert [nemo.repeating_top_ngrams(d, n) for d in docs[:30]] == scores[:30].tolist()
+
+
+def test_bad_hash_key_is_refused() -> None:
+    with pytest.raises(ValueError, match="16 bytes"):
+        _nemo._native._repeating_top_ngrams(["a b a b"], 2, hash_key=b"short")
 
 
 # ---- containers, nulls, errors, threads ------------------------------------------------
