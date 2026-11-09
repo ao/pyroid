@@ -1,4 +1,4 @@
-"""pyroid for datatrove pipelines, Hugging Face ``datasets`` and existing imports.
+"""pyroid for datatrove and NeMo Curator pipelines, Hugging Face ``datasets`` and existing imports.
 
 ``import pyroid`` imports none of this, and nothing changes behaviour until you
 call it.
@@ -9,6 +9,10 @@ call it.
   ``SymbolLinesFormatter``, ``MinhashDedupSignature`` and the four sentence-dedup
   steps) that subclass datatrove's own classes and give the same output. The
   steps that tokenize run in Rust for every language pyroid tokenizes natively.
+- :mod:`pyroid.integrations.nemo_curator`: NeMo Curator 1.4.0's ``ScoreFilter``, ``Score``,
+  ``Filter`` and ``Modify`` stages, its 23 heuristic filters, two fastText filters,
+  ``UnicodeReformatter`` and string modifiers, subclassing NeMo's classes, with the same output,
+  one pyroid call per batch.
 - :mod:`pyroid.integrations.recipes`: the FineWeb cleaning chain over Arrow
   batches (what ``pyroid clean --recipe fineweb`` runs).
 - :mod:`pyroid.integrations.hf`: helpers for Hugging Face ``datasets``

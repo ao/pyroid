@@ -50,6 +50,9 @@ cli = ["pyarrow>=18", "numpy>=1.26"]
 # datatrove's JsonlWriter and JsonlReader need it (datatrove's `io` extra, with no floor); 3.2 added
 # the OPT_APPEND_NEWLINE its writer passes.
 datatrove = ["datatrove>=0.10.1", "regex", "tokenizers", "numpy>=1.26", "orjson>=3.2"]
+# pyroid.nemo returns numpy arrays of scores. pyroid.integrations.nemo_curator also needs NeMo Curator
+# 1.4.0 (CPython 3.11-3.13), which this extra does not pull in: it brings torch and Ray.
+nemo = ["numpy>=1.26"]
 # pyroid.integrations.hf: Hugging Face datasets helpers.
 hf = ["datasets>=3", "pyarrow>=18", "numpy>=1.26"]
 # datatrove's page decoding in pyroid.warc.iter_documents/iter_batches, the WarcReader drop-in and
