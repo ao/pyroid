@@ -25,22 +25,23 @@ NEMO_CURATOR_VERSION: Final[str]
 # --- filter scores and fastText helpers -------------------------------------------------------
 
 # --- string modifiers ---------------------------------------------------------------------------
-# Each takes a str, a list or tuple of str, or an Arrow string array/column, and returns the same kind
-# (a pyroid.Column for Arrow input); unchanged documents come back as the original objects and Arrow
-# nulls stay null.
+# Each takes a str, a list or tuple of str, or an Arrow string array/column, and returns the same
+# kind (a pyroid.Column for Arrow input); unchanged documents come back as the original objects
+# and Arrow nulls stay null.
 
 @overload
 def remove_boilerplate_strings(
     x: str, /, *, remove_if_at_top_or_bottom: bool = True, threads: int | None = None
 ) -> str:
-    """Drop boilerplate paragraphs, as ``BoilerPlateStringModifier`` does.
+    r"""Drop boilerplate paragraphs, as ``BoilerPlateStringModifier`` does.
 
-    Paragraphs are ``text.split("\\n\\n")``. A paragraph containing "lorem ipsum" (any case) makes the
-    document empty. A paragraph with one of NeMo's policy strings ("terms of use", "privacy policy",
-    "uses cookies", ...) is boilerplate: with ``remove_if_at_top_or_bottom=False`` it makes the document
-    empty; with ``True`` the boilerplate paragraphs are removed when they form one block at the top or
-    the bottom of the document, and the document is left as it is otherwise (also when every paragraph
-    is boilerplate).
+    Paragraphs are ``text.split("\n\n")``. A paragraph containing "lorem ipsum" (any case)
+    makes the document empty. A paragraph with one of NeMo's policy strings ("terms of use",
+    "privacy policy", "uses cookies", ...) is boilerplate: with
+    ``remove_if_at_top_or_bottom=False`` it makes the document empty; with ``True`` the
+    boilerplate paragraphs are removed when they form one block at the top or the bottom of the
+    document, and the document is left as it is otherwise (also when every paragraph is
+    boilerplate).
 
     Args:
         x: The documents.
@@ -90,10 +91,10 @@ def remove_markdown(x: tuple[str, ...], /, *, threads: int | None = None) -> tup
 def remove_markdown(x: ArrowStrings, /, *, threads: int | None = None) -> Column[str]: ...
 @overload
 def normalize_newlines(x: str, /, *, threads: int | None = None) -> str:
-    """Shorten newline runs, as ``NewlineNormalizer`` does.
+    r"""Shorten newline runs, as ``NewlineNormalizer`` does.
 
-    Three or more ``\\n`` in a row become ``\\n\\n``; then three or more ``\\r\\n`` in a row become
-    ``\\r\\n\\r\\n``.
+    Three or more ``\n`` in a row become ``\n\n``; then three or more ``\r\n`` in a row become
+    ``\r\n\r\n``.
 
     Args:
         x: The documents.
@@ -113,8 +114,9 @@ def normalize_newlines(x: ArrowStrings, /, *, threads: int | None = None) -> Col
 def remove_quotation(x: str, /, *, threads: int | None = None) -> str:
     """Remove the quotes around a quoted document, as ``QuotationRemover`` does.
 
-    A document that starts and ends with ``"`` and has more than 2 characters after ``strip()`` loses
-    its first and last character, unless it contains a newline and its first line ends with ``"``.
+    A document that starts and ends with ``"`` and has more than 2 characters after
+    ``strip()`` loses its first and last character, unless it contains a newline and its first
+    line ends with ``"``.
 
     Args:
         x: The documents.
@@ -132,10 +134,10 @@ def remove_quotation(x: tuple[str, ...], /, *, threads: int | None = None) -> tu
 def remove_quotation(x: ArrowStrings, /, *, threads: int | None = None) -> Column[str]: ...
 @overload
 def remove_urls(x: str, /, *, threads: int | None = None) -> str:
-    """Delete URLs, as ``UrlRemover`` does.
+    r"""Delete URLs, as ``UrlRemover`` does.
 
-    The same as ``re.sub(r"https?://\\S+|www\\.\\S+", "", text, flags=re.IGNORECASE)``, including
-    ``re``'s case rules (``ſ``, U+017F, matches ``s``).
+    The same as ``re.sub(r"https?://\S+|www\.\S+", "", text, flags=re.IGNORECASE)``, including
+    ``re``'s case rules (U+017F LATIN SMALL LETTER LONG S matches ``s``).
 
     Args:
         x: The documents.
@@ -153,9 +155,9 @@ def remove_urls(x: tuple[str, ...], /, *, threads: int | None = None) -> tuple[s
 def remove_urls(x: ArrowStrings, /, *, threads: int | None = None) -> Column[str]: ...
 @overload
 def remove_lines(x: str, /, patterns: Sequence[str], *, threads: int | None = None) -> str:
-    """Drop the lines equal to one of ``patterns``, as ``LineRemover(patterns)`` does.
+    r"""Drop the lines equal to one of ``patterns``, as ``LineRemover(patterns)`` does.
 
-    Lines are ``text.split("\\n")``; a line is dropped when it equals a pattern exactly.
+    Lines are ``text.split("\n")``; a line is dropped when it equals a pattern exactly.
 
     Args:
         x: The documents.
@@ -192,9 +194,10 @@ def slice_text(
 ) -> str:
     """Slice each document, as ``Slicer(left, right, include_left, include_right, strip)`` does.
 
-    An int bound is a Python slice index (in characters). A str ``left`` starts the slice at its first
-    occurrence (after it when ``include_left`` is false), a str ``right`` ends it at its last occurrence
-    (after it when ``include_right`` is true); the result is ``""`` when either string is missing.
+    An int bound is a Python slice index (in characters). A str ``left`` starts the slice at its
+    first occurrence (after it when ``include_left`` is false), a str ``right`` ends it at its
+    last occurrence (after it when ``include_right`` is true); the result is ``""`` when either
+    string is missing.
     ``None`` means the start or the end. ``strip`` strips the result.
 
     Args:
@@ -248,9 +251,9 @@ def slice_text(
 ) -> Column[str]: ...
 @overload
 def fasttext_label(x: str, /, label: object, *, threads: int | None = None) -> str:
-    """Prefix each document with a fastText label, as ``FastTextLabelModifier(label)`` does.
+    r"""Prefix each document with a fastText label, as ``FastTextLabelModifier(label)`` does.
 
-    The result is ``f"{label} {text}"`` after replacing ``\\n`` and ``__label__`` in the text by
+    The result is ``f"{label} {text}"`` after replacing ``\n`` and ``__label__`` in the text by
     spaces. Every document changes.
 
     Args:
@@ -269,4 +272,6 @@ def fasttext_label(
     x: tuple[str, ...], /, label: object, *, threads: int | None = None
 ) -> tuple[str, ...]: ...
 @overload
-def fasttext_label(x: ArrowStrings, /, label: object, *, threads: int | None = None) -> Column[str]: ...
+def fasttext_label(
+    x: ArrowStrings, /, label: object, *, threads: int | None = None
+) -> Column[str]: ...
