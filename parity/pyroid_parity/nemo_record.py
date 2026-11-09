@@ -16,9 +16,9 @@ that order; the ``lang="zh"`` cases on the adversarial set's Mandarin and edge-c
 - FastTextLangId (lid.176.bin, lid.176.ftz): the score string; FastTextQualityFilter: the score, and ``keep``
   from one filter built with ``seed=42`` and called once per document in order (numpy's global RNG).
 
-The quality model is trained here with fasttext 0.9.3 on the dev slice (``nemo_cases.QUALITY_RECIPE`` and
-``QUALITY_LABEL_RULE``: the labels are NeMo's own heuristic pipeline decisions) and pinned as
-``models/nemo-quality-dev10k.bin``. Without ``--pin`` the model is retrained and compared with the pin, and
+The quality model is trained here with fasttext 0.9.3 on the dev slice (``nemo_cases.QUALITY_RECIPE``, then
+``QUALITY_QUANTIZE``; ``QUALITY_LABEL_RULE``: the labels are NeMo's own heuristic pipeline decisions) and pinned
+as ``models/nemo-quality-dev10k.ftz``. Without ``--pin`` the model is retrained and compared with the pin, and
 the pinned model scores the documents.
 """
 
