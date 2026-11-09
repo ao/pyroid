@@ -20,6 +20,7 @@ __all__ = [
     "jieba",
     "json_repair",
     "metrics",
+    "nltk",
     "text",
     "trafilatura",
     "translit",
@@ -38,6 +39,7 @@ metrics: ModuleType
 json_repair: ModuleType
 datasketch: ModuleType
 jieba: ModuleType
+nltk: ModuleType
 trafilatura: ModuleType
 _testing: ModuleType
 

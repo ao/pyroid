@@ -20,6 +20,7 @@ mod input;
 mod jieba;
 mod json_repair;
 mod metrics;
+mod nltk;
 mod sudachi;
 mod testing;
 mod text;
@@ -47,6 +48,7 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     dedup::register(m)?;
     translit::register(m)?;
     metrics::register(m)?;
+    nltk::register(m)?;
     json_repair::register(m)?;
     datasketch::register(m)?;
     jieba::register(m)?;
