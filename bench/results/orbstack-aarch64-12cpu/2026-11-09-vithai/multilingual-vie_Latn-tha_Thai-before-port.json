@@ -1,0 +1,102 @@
+{
+ "what": "FineWeb-2 filters (GopherRepetition -> FineWebQuality -> GopherQuality) + MinHash signatures",
+ "label": "Docker/OrbStack VM, indicative",
+ "python": "3.13.18",
+ "machine": "aarch64",
+ "cpus": 12,
+ "loadavg": [
+  23.5439453125,
+  18.34521484375,
+  11.63671875
+ ],
+ "rows": [
+  {
+   "lang": "vie_Latn",
+   "docs": 1000,
+   "python_tokenizer": true,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 1000
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 39.59312814599252,
+     "us_per_doc": 39593.12814599252
+    },
+    "datatrove minhash x1": {
+     "s": 31.43175361500471,
+     "us_per_doc": 31431.753615004705
+    },
+    "pyroid filters x1": {
+     "s": 26.47864586900687,
+     "us_per_doc": 26478.64586900687
+    },
+    "pyroid minhash x1": {
+     "s": 20.981071863003308,
+     "us_per_doc": 20981.071863003308
+    },
+    "datatrove filters x8": {
+     "s": 7.048194333008723,
+     "us_per_doc": 7048.194333008723
+    },
+    "datatrove minhash x8": {
+     "s": 4.946665284020128,
+     "us_per_doc": 4946.665284020128
+    },
+    "pyroid filters x8": {
+     "s": 17.168146855023224,
+     "us_per_doc": 17168.146855023224
+    },
+    "pyroid minhash x8": {
+     "s": 22.121878262987593,
+     "us_per_doc": 22121.878262987593
+    }
+   }
+  },
+  {
+   "lang": "tha_Thai",
+   "docs": 1000,
+   "python_tokenizer": true,
+   "gate": {
+    "filters": true,
+    "minhash": true,
+    "kept": 976
+   },
+   "timings": {
+    "datatrove filters x1": {
+     "s": 13.411530715005938,
+     "us_per_doc": 13411.530715005938
+    },
+    "datatrove minhash x1": {
+     "s": 12.672528327006148,
+     "us_per_doc": 12672.528327006148
+    },
+    "pyroid filters x1": {
+     "s": 9.193307629990159,
+     "us_per_doc": 9193.307629990159
+    },
+    "pyroid minhash x1": {
+     "s": 7.970151521003572,
+     "us_per_doc": 7970.151521003572
+    },
+    "datatrove filters x8": {
+     "s": 5.545684824988712,
+     "us_per_doc": 5545.684824988712
+    },
+    "datatrove minhash x8": {
+     "s": 5.027284608979244,
+     "us_per_doc": 5027.284608979244
+    },
+    "pyroid filters x8": {
+     "s": 9.12591011202312,
+     "us_per_doc": 9125.91011202312
+    },
+    "pyroid minhash x8": {
+     "s": 7.592531461996259,
+     "us_per_doc": 7592.531461996259
+    }
+   }
+  }
+ ]
+}
