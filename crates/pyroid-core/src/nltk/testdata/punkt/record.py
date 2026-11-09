@@ -39,6 +39,10 @@ A generator that raised is ``{"e": type, "m": message, "y": what it yielded}``
 records have the same rows, without ``p``.
 """
 
+# A recording script: it reports on stdout, and its inputs are deliberately confusable text
+# (curly quotes, look-alike letters) in long literal lines.
+# ruff: noqa: T201, RUF001, RUF005, E501, PERF401
+
 import json
 import os
 import random
@@ -334,7 +338,9 @@ SPACES = [
     "\x85", "\xa0", "\u1680", "\u2000", "\u2028", "\u2029", "\u202f", "\u205f", "\u3000",
     "\u200b", "\u180e", "\ufeff",
 ]  # fmt: skip
-FOLLOWERS = NON_WORD + SPACES + ["", "x", "X", ".", "..", "--", "-", ",", "?", "!", "1", "\u0301", "²"]
+FOLLOWERS = (
+    NON_WORD + SPACES + ["", "x", "X", ".", "..", "--", "-", ",", "?", "!", "1", "\u0301", "²"]
+)
 
 
 def adversarial():
@@ -448,7 +454,12 @@ def fuzz_texts(seed, n):
 def token_lists(seed, n):
     rng = random.Random(seed)
     words, punct, _ = fuzz_pool()
-    pool = words + punct + [w + "." for w in words] + ["", "\n", "12\n", "a.\n", "..\n", "Mr.\n", " ", ". ."]
+    pool = (
+        words
+        + punct
+        + [w + "." for w in words]
+        + ["", "\n", "12\n", "a.\n", "..\n", "Mr.\n", " ", ". ."]
+    )
     out = [
         ["Mr.", ""],
         ["Dr.", "", "x"],
@@ -617,7 +628,9 @@ UNICODE_LOWER = {
 
 def unicode_params():
     p = punkt.PunktParameters()
-    p.abbrev_types = {"dr", "mr"} | {UNICODE_LOWER.get(c, c) + "bc" for c in UNICODE_CHARS if c in UNICODE_LOWER}
+    p.abbrev_types = {"dr", "mr"} | {
+        UNICODE_LOWER.get(c, c) + "bc" for c in UNICODE_CHARS if c in UNICODE_LOWER
+    }
     p.sent_starters = {UNICODE_LOWER.get(c, c) + "ord" for c in UNICODE_CHARS[::2]}
     for i, c in enumerate(UNICODE_CHARS):
         lc = UNICODE_LOWER.get(c, c)
@@ -644,7 +657,9 @@ def unicode_texts():
 
 def cmd_unicode(out_dir):
     params = unicode_params()
-    with open(os.path.join(out_dir, "params-unicode.json"), "w", encoding="utf-8", newline="\n") as f:
+    with open(
+        os.path.join(out_dir, "params-unicode.json"), "w", encoding="utf-8", newline="\n"
+    ) as f:
         json.dump(params_to_json(params), f, ensure_ascii=False, separators=(",", ":"))
         f.write("\n")
     tok = tokenizer(params)
@@ -706,7 +721,10 @@ def cmd_pretrained(out_dir, n):
             docs = [t for t, _ in NLTK_ENGLISH_EXPECTED] + NLTK_TEXTS + adversarial() + docs
         else:
             docs = NLTK_TEXTS + docs
-        rows = [record_text(tok, t, debug=i % 4 == 0, legacy=i % 4 == 0, words=False) for i, t in enumerate(docs)]
+        rows = [
+            record_text(tok, t, debug=i % 4 == 0, legacy=i % 4 == 0, words=False)
+            for i, t in enumerate(docs)
+        ]
         write_jsonl(os.path.join(out_dir, f"{lang}.jsonl"), rows)
 
 
@@ -765,8 +783,12 @@ def cmd_fuzz(out_dir, n, seed):
     rows = []
     for i, k in enumerate(token_lists(seed + 2, n // 4)):
         p = list(params)[i % len(params)]
-        rows.append({"p": p, "v": unicodedata.unidata_version, **record_tokens(tokenizer(params[p]), k)})
-    write_jsonl(os.path.join(out_dir, f"golden-tokensbig-{unicodedata.unidata_version}.jsonl"), rows)
+        rows.append(
+            {"p": p, "v": unicodedata.unidata_version, **record_tokens(tokenizer(params[p]), k)}
+        )
+    write_jsonl(
+        os.path.join(out_dir, f"golden-tokensbig-{unicodedata.unidata_version}.jsonl"), rows
+    )
 
 
 def main(argv):

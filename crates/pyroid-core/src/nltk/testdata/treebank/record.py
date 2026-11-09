@@ -49,6 +49,10 @@ Every file starts with a header line: {"kind": "rows" | "codepoints" |
 * "regexp-codepoints": as "codepoints", with the "regexp" fields in "r".
 """
 
+# A recording script: it reports on stdout, and its inputs are deliberately confusable text
+# (curly quotes, look-alike letters) in long literal lines.
+# ruff: noqa: T201, RUF001, RUF005, E501, PERF401
+
 import argparse
 import json
 import multiprocessing
@@ -125,7 +129,7 @@ def outcome(f):
     """A flat span list, or the exception NLTK raised."""
     try:
         return [x for span in f() for x in span]
-    except Exception as e:  # noqa: BLE001 - the exception kind is the result
+    except Exception as e:
         return {"e": type(e).__name__, "m": str(e)}
 
 
@@ -174,27 +178,183 @@ def row(text, edits=()):
 
 # Pieces for edited token lists and for the fuzz texts.
 TOKEN_PIECES = [
-    '"', "''", "``", "`", "'", "'''", "(", ")", "[", "]", "{", "}", "<", ">",
-    "-LRB-", "-RRB-", "-LSB-", "-RSB-", "-LCB-", "-RCB-", "--", "-", "...", "..",
-    ".", ",", ":", ";", "!", "?", "#", "$", "%", "&", "@", "*", "n't", "N'T",
-    "'s", "'S", "'m", "'M", "'d", "'D", "'ll", "'LL", "'re", "'RE", "'ve", "'VE",
-    "can", "not", "Can", "NOT", "d", "'ye", "gim", "me", "gon", "na", "got", "ta",
-    "lem", "more", "'n", "wan", "'t", "is", "was", "'T", "IS", "WAS", "a", "b",
-    "x", "1", "2", "", " ", "\t", "\n", "\x1c", "\x85", "\xa0", "\u3000", "a b",
-    "a\tb", "\u00ab", "\u00bb", "\u201c", "\u201d", "\u2018", "\u2019", "\u201e",
-    "\u2013", "\u2014", "\u017f", "\u0130", "\u0131", "\u0301", "\u00b2",
-    "\u0663", "\u00e9", ".'", '."', ",'", ',"', "'.", "$5", "#1",
+    '"',
+    "''",
+    "``",
+    "`",
+    "'",
+    "'''",
+    "(",
+    ")",
+    "[",
+    "]",
+    "{",
+    "}",
+    "<",
+    ">",
+    "-LRB-",
+    "-RRB-",
+    "-LSB-",
+    "-RSB-",
+    "-LCB-",
+    "-RCB-",
+    "--",
+    "-",
+    "...",
+    "..",
+    ".",
+    ",",
+    ":",
+    ";",
+    "!",
+    "?",
+    "#",
+    "$",
+    "%",
+    "&",
+    "@",
+    "*",
+    "n't",
+    "N'T",
+    "'s",
+    "'S",
+    "'m",
+    "'M",
+    "'d",
+    "'D",
+    "'ll",
+    "'LL",
+    "'re",
+    "'RE",
+    "'ve",
+    "'VE",
+    "can",
+    "not",
+    "Can",
+    "NOT",
+    "d",
+    "'ye",
+    "gim",
+    "me",
+    "gon",
+    "na",
+    "got",
+    "ta",
+    "lem",
+    "more",
+    "'n",
+    "wan",
+    "'t",
+    "is",
+    "was",
+    "'T",
+    "IS",
+    "WAS",
+    "a",
+    "b",
+    "x",
+    "1",
+    "2",
+    "",
+    " ",
+    "\t",
+    "\n",
+    "\x1c",
+    "\x85",
+    "\xa0",
+    "\u3000",
+    "a b",
+    "a\tb",
+    "\u00ab",
+    "\u00bb",
+    "\u201c",
+    "\u201d",
+    "\u2018",
+    "\u2019",
+    "\u201e",
+    "\u2013",
+    "\u2014",
+    "\u017f",
+    "\u0130",
+    "\u0131",
+    "\u0301",
+    "\u00b2",
+    "\u0663",
+    "\u00e9",
+    ".'",
+    '."',
+    ",'",
+    ',"',
+    "'.",
+    "$5",
+    "#1",
 ]
 
 TEXT_PIECES = TOKEN_PIECES + [
-    "cannot", "CanNot", "d'ye", "gimme", "gonna", "gotta", "lemme", "more'n",
-    "wanna", "'tis", "'Twas", "'TIS", "don't", "DON'T", "can't", "I'm", "it's",
-    "they'll", "we've", "you're", "he'd", "O'Neil", "'90s", "rock'n'roll",
-    "3:00", "1,000", "3.88", "e.g.", "U.S.", "Dr.", "a.", "b?", "c!", " ",
-    "  ", "\r\n", "\x0b", "\x0c", "\x1d", "\x1e", "\x1f", "\u2028", "\u2029",
-    "\u200b", "\u2012", "\u2015", "word", "Word", "WORD", "_", "\u00a0",
-    "g\u0130mme", "g\u0131mme", "'t\u0130s", "'ti\u017f", "\u017f", "'\u017f",
-    "a\u0301", "\u0301'", "'\u0301", "x\u00b2", "\u00b2x", "\u0660", "\U0001f600",
+    "cannot",
+    "CanNot",
+    "d'ye",
+    "gimme",
+    "gonna",
+    "gotta",
+    "lemme",
+    "more'n",
+    "wanna",
+    "'tis",
+    "'Twas",
+    "'TIS",
+    "don't",
+    "DON'T",
+    "can't",
+    "I'm",
+    "it's",
+    "they'll",
+    "we've",
+    "you're",
+    "he'd",
+    "O'Neil",
+    "'90s",
+    "rock'n'roll",
+    "3:00",
+    "1,000",
+    "3.88",
+    "e.g.",
+    "U.S.",
+    "Dr.",
+    "a.",
+    "b?",
+    "c!",
+    " ",
+    "  ",
+    "\r\n",
+    "\x0b",
+    "\x0c",
+    "\x1d",
+    "\x1e",
+    "\x1f",
+    "\u2028",
+    "\u2029",
+    "\u200b",
+    "\u2012",
+    "\u2015",
+    "word",
+    "Word",
+    "WORD",
+    "_",
+    "\u00a0",
+    "g\u0130mme",
+    "g\u0131mme",
+    "'t\u0130s",
+    "'ti\u017f",
+    "\u017f",
+    "'\u017f",
+    "a\u0301",
+    "\u0301'",
+    "'\u0301",
+    "x\u00b2",
+    "\u00b2x",
+    "\u0660",
+    "\U0001f600",
 ]
 
 NLTK_SENTENCES = [
@@ -203,11 +363,11 @@ NLTK_SENTENCES = [
     "hi, my name can't hello,",
     "Good muffins cost $3.88 (roughly 3,36 euros)\nin New York.  Please buy me\ntwo of them.\nThanks.",
     "Good muffins cost $3.88\nin New (York).  Please (buy) me\ntwo of them.\n(Thanks).",
-    "The DUP is similar to the \"religious right\" in the United States and takes a hardline stance on social issues",
+    'The DUP is similar to the "religious right" in the United States and takes a hardline stance on social issues',
     "The DUP is similar to the \"religious right\" in the United States and takes a ``hardline'' stance on social issues",
     "I said, \"I'd like to buy some ''good muffins\" which cost $3.88\n each in New (York).\"",
     "On a $50,000 mortgage of 30 years at 8 percent, the monthly payment would be $366.88.",
-    "\"We beat some pretty good teams to get here,\" Slocum said.",
+    '"We beat some pretty good teams to get here," Slocum said.',
     "Well, we couldn't have this predictable, cliche-ridden, \"Touched by an Angel\" (a show creator John Masius worked on) wanna-be if she didn't.",
     "I cannot cannot work under these conditions!",
     "The company spent $30,000,000 last year.",
@@ -219,9 +379,9 @@ NLTK_SENTENCES = [
     "It's more'n enough.",
     "\u00abNow that I can do.\u00bb",
     "The unicode 201C and 201D \u201cLEFT(RIGHT) DOUBLE QUOTATION MARK\u201d is also OPEN_PUNCT and CLOSE_PUNCT.",
-    "How \"are\" you?",
+    'How "are" you?',
     "Hello (world)",
-    "<A sentence> with (many) [kinds] of {parentheses}. \"Sometimes it's inside (quotes)\". (\"Sometimes the otherway around\").",
+    '<A sentence> with (many) [kinds] of {parentheses}. "Sometimes it\'s inside (quotes)". ("Sometimes the otherway around").',
     "Sentence ending with (parentheses)",
     "(Sentence) starting with parentheses.",
     "I've",
@@ -249,51 +409,225 @@ NLTK_SENTENCES = [
 
 DETOK_LISTS = [
     ["hello", ",", "i", "ca", "n't", "feel", "my", "feet", "!", "Help", "!", "!"],
-    ["hello", ",", "i", "can't", "feel", ";", "my", "feet", "!", "Help", "!", "!",
-     "He", "said", ":", "Help", ",", "help", "?", "!"],
-    ["Hello", ",", "world", "."], ["I", "'m", "sure", "."], ["You", "'ll", "see", "."],
-    ["I", "do", "n't", "know", "."], ["``", "Hello", "''"],
-    ["He", "said", "``", "hi", "''", "."], ["``", "Yes", ",", "''", "he", "said", "."],
-    ["The", "dog", "'s", "bone", "."], ["-LRB-", "hello", "-RRB-"], ["foo", "--", "bar"],
-    ["`", "Hello", "'"], ["``", "Shippers", "are", "saying", "`", "the", "party", "'s",
-     "over", ",", "'", "''", "said", "Mr.", "LaLonde", "."],
-    ["word", ",", "'", "''"], ["a", ";", "b"], ["a", ":", "b"], ["we", "'ve", "seen", "."],
-    ["who", "'d", "know", "."], ["word", ".", "''"], ["word", ",", "''"], ["word", "!", "''"],
-    ["word", "?", "''"], ["``", "A", "B", "C", "''"], ["``", "Hi", ",", "''", "said", "Jo", "."],
-    ["a", ",", "b"], ["a", "."], ["``", "a", "''"],
+    [
+        "hello",
+        ",",
+        "i",
+        "can't",
+        "feel",
+        ";",
+        "my",
+        "feet",
+        "!",
+        "Help",
+        "!",
+        "!",
+        "He",
+        "said",
+        ":",
+        "Help",
+        ",",
+        "help",
+        "?",
+        "!",
+    ],
+    ["Hello", ",", "world", "."],
+    ["I", "'m", "sure", "."],
+    ["You", "'ll", "see", "."],
+    ["I", "do", "n't", "know", "."],
+    ["``", "Hello", "''"],
+    ["He", "said", "``", "hi", "''", "."],
+    ["``", "Yes", ",", "''", "he", "said", "."],
+    ["The", "dog", "'s", "bone", "."],
+    ["-LRB-", "hello", "-RRB-"],
+    ["foo", "--", "bar"],
+    ["`", "Hello", "'"],
+    [
+        "``",
+        "Shippers",
+        "are",
+        "saying",
+        "`",
+        "the",
+        "party",
+        "'s",
+        "over",
+        ",",
+        "'",
+        "''",
+        "said",
+        "Mr.",
+        "LaLonde",
+        ".",
+    ],
+    ["word", ",", "'", "''"],
+    ["a", ";", "b"],
+    ["a", ":", "b"],
+    ["we", "'ve", "seen", "."],
+    ["who", "'d", "know", "."],
+    ["word", ".", "''"],
+    ["word", ",", "''"],
+    ["word", "!", "''"],
+    ["word", "?", "''"],
+    ["``", "A", "B", "C", "''"],
+    ["``", "Hi", ",", "''", "said", "Jo", "."],
+    ["a", ",", "b"],
+    ["a", "."],
+    ["``", "a", "''"],
     ["Lorem", "ipsum", "dolor", "sit", "amet", ".", "consectetur", "adipiscing", "elit", "."],
     ["I", "called", "Dr.", "Jones", ".", "I", "called", "Dr.", "Jones", "."],
-    ["wait", "...", "what"], [], [""], [" "], ["", ""],
-    ["can", "not"], ["Can", "\tNOT"], ["d", "'ye"], ["gim", "me"], ["gon", "na"],
-    ["got", "ta"], ["lem", "me"], ["more", "'n"], ["wan", "na"], ["wan", "na", "x"],
-    ["wan", "na\x1c"], ["wan", "na\x85"], ["'t", "is"], ["'T", "WAS"], ["x", "'t", "is", "y"],
-    ["can\u3000not"], ["CAN", "NOT"], ["can", "not", "can", "not"], ["\u0130t", "'s"],
-    ["'t", "i\u017f"], ["'t", "\u0130s"], ["g\u0130m", "me"], ["\u0301can", "not"],
-    ["can", "not\u0301"], ["\u00b2can", "not"],
+    ["wait", "...", "what"],
+    [],
+    [""],
+    [" "],
+    ["", ""],
+    ["can", "not"],
+    ["Can", "\tNOT"],
+    ["d", "'ye"],
+    ["gim", "me"],
+    ["gon", "na"],
+    ["got", "ta"],
+    ["lem", "me"],
+    ["more", "'n"],
+    ["wan", "na"],
+    ["wan", "na", "x"],
+    ["wan", "na\x1c"],
+    ["wan", "na\x85"],
+    ["'t", "is"],
+    ["'T", "WAS"],
+    ["x", "'t", "is", "y"],
+    ["can\u3000not"],
+    ["CAN", "NOT"],
+    ["can", "not", "can", "not"],
+    ["\u0130t", "'s"],
+    ["'t", "i\u017f"],
+    ["'t", "\u0130s"],
+    ["g\u0130m", "me"],
+    ["\u0301can", "not"],
+    ["can", "not\u0301"],
+    ["\u00b2can", "not"],
 ]
 
 
 def adversarial():
     out = []
-    quotes = ['"', "''", "``", "`", "'", "'''", '""', "```", "````", "\u00ab", "\u00bb",
-              "\u201c", "\u201d", "\u2018", "\u2019", "\u201e", "' '", "'\"", "\"'", "`'"]
-    places = ["{q}a b", "a {q}b", "a{q} b", "a b{q}", "({q}a)", "[{q}a", "<{q}a", "{{{q}a",
-              "a.{q}", "a.{q} ", "a{q}.", "{q}", "a {q} b", "{q}{q}a{q}{q}", "{q}.",
-              " {q}", "{q} ", "a{q}s b", "a{q}ll b", "x {q}tis", "{q}\n", "a, {q}b{q}, c",
-              "{q}Hello,{q} he said{q}.", "{q}{q}", "a{q}", "{q}a", ". {q}a"]
+    quotes = [
+        '"',
+        "''",
+        "``",
+        "`",
+        "'",
+        "'''",
+        '""',
+        "```",
+        "````",
+        "\u00ab",
+        "\u00bb",
+        "\u201c",
+        "\u201d",
+        "\u2018",
+        "\u2019",
+        "\u201e",
+        "' '",
+        "'\"",
+        "\"'",
+        "`'",
+    ]
+    places = [
+        "{q}a b",
+        "a {q}b",
+        "a{q} b",
+        "a b{q}",
+        "({q}a)",
+        "[{q}a",
+        "<{q}a",
+        "{{{q}a",
+        "a.{q}",
+        "a.{q} ",
+        "a{q}.",
+        "{q}",
+        "a {q} b",
+        "{q}{q}a{q}{q}",
+        "{q}.",
+        " {q}",
+        "{q} ",
+        "a{q}s b",
+        "a{q}ll b",
+        "x {q}tis",
+        "{q}\n",
+        "a, {q}b{q}, c",
+        "{q}Hello,{q} he said{q}.",
+        "{q}{q}",
+        "a{q}",
+        "{q}a",
+        ". {q}a",
+    ]
     for q in quotes:
         for p in places:
             out.append(p.replace("{q}", q))
-    clitics = ["'s", "'S", "'m", "'M", "'d", "'D", "'ll", "'LL", "'re", "'RE", "'ve", "'VE",
-               "n't", "N'T", "N't", "n'T", "'Ll", "'rE", "'\u017f", "'\u0130", "'\u0131",
-               "'t", "'T", "'n", "'nt", "'em", "'"]
+    clitics = [
+        "'s",
+        "'S",
+        "'m",
+        "'M",
+        "'d",
+        "'D",
+        "'ll",
+        "'LL",
+        "'re",
+        "'RE",
+        "'ve",
+        "'VE",
+        "n't",
+        "N'T",
+        "N't",
+        "n'T",
+        "'Ll",
+        "'rE",
+        "'\u017f",
+        "'\u0130",
+        "'\u0131",
+        "'t",
+        "'T",
+        "'n",
+        "'nt",
+        "'em",
+        "'",
+    ]
     for c in clitics:
-        for p in ["x{c} y", "x{c}", "{c} y", "{c}", "x {c} y", "x{c}.", "x{c},", "x{c}{c} y",
-                  "'{c}x", "x{c}\n", "x{c}\ty", "x{c}\u00a0y", "\u0301{c} y", "x\u0301{c} y",
-                  "x{c}\u0301 y", "_{c} y", "1{c} y", "\u00b2{c} y"]:
+        for p in [
+            "x{c} y",
+            "x{c}",
+            "{c} y",
+            "{c}",
+            "x {c} y",
+            "x{c}.",
+            "x{c},",
+            "x{c}{c} y",
+            "'{c}x",
+            "x{c}\n",
+            "x{c}\ty",
+            "x{c}\u00a0y",
+            "\u0301{c} y",
+            "x\u0301{c} y",
+            "x{c}\u0301 y",
+            "_{c} y",
+            "1{c} y",
+            "\u00b2{c} y",
+        ]:
             out.append(p.replace("{c}", c))
-    words = ["cannot", "d'ye", "gimme", "gonna", "gotta", "lemme", "more'n", "wanna",
-             "'tis", "'twas"]
+    words = [
+        "cannot",
+        "d'ye",
+        "gimme",
+        "gonna",
+        "gotta",
+        "lemme",
+        "more'n",
+        "wanna",
+        "'tis",
+        "'twas",
+    ]
 
     def variants(w):
         vs = {w, w.upper(), w.title(), w.capitalize(), w.swapcase()}
@@ -307,49 +641,261 @@ def adversarial():
         return sorted(vs)
 
     # Each variant in "{w}", "x {w} y" and six of the other places.
-    word_places = [" {w} ", "{w}.", "({w})", "\"{w}\"", "'{w}'", "{w}x", "x{w}",
-                   "\u0301{w}", "{w}\u0301", "\u00b2{w}", "{w}\u00b2", "_{w}", "{w}_", "1{w}",
-                   "{w}1", "{w}-be", "-{w}", "{w}\n", "\u0660{w}", "\u00aa{w}", "{w}\u2160",
-                   "\u02b0{w}", "{w}\u0903", "x '{w}", "x {w}'"]
+    word_places = [
+        " {w} ",
+        "{w}.",
+        "({w})",
+        '"{w}"',
+        "'{w}'",
+        "{w}x",
+        "x{w}",
+        "\u0301{w}",
+        "{w}\u0301",
+        "\u00b2{w}",
+        "{w}\u00b2",
+        "_{w}",
+        "{w}_",
+        "1{w}",
+        "{w}1",
+        "{w}-be",
+        "-{w}",
+        "{w}\n",
+        "\u0660{w}",
+        "\u00aa{w}",
+        "{w}\u2160",
+        "\u02b0{w}",
+        "{w}\u0903",
+        "x '{w}",
+        "x {w}'",
+    ]
     rng = random.Random(7)
     for w in words:
         for v in variants(w):
             for p in ["{w}", "x {w} y"] + rng.sample(word_places, 6):
                 out.append(p.replace("{w}", v))
-    for ws in ["\x1c", "\x1d", "\x1e", "\x1f", "\x85", "\xa0", "\n", "\t", "\u2028",
-               "\u3000", "\u200b", "\u180e", "\ufeff", ""]:
-        out += [f"wanna{ws}", f"wanna{ws}x", f"x wanna{ws}", f"WanNa{ws}be", f"can{ws}not",
-                f"'t{ws}is", f"a.{ws}", f"a{ws}.", f"a,{ws}", f"a.){ws}", f"a.'{ws}x",
-                f"a{ws}'s", f"a{ws}b", f"{ws}", f"{ws}{ws}", f"''{ws}.", f"a{ws}--{ws}b",
-                f"(a{ws}b)", f"\"{ws}a{ws}\""]
+    for ws in [
+        "\x1c",
+        "\x1d",
+        "\x1e",
+        "\x1f",
+        "\x85",
+        "\xa0",
+        "\n",
+        "\t",
+        "\u2028",
+        "\u3000",
+        "\u200b",
+        "\u180e",
+        "\ufeff",
+        "",
+    ]:
+        out += [
+            f"wanna{ws}",
+            f"wanna{ws}x",
+            f"x wanna{ws}",
+            f"WanNa{ws}be",
+            f"can{ws}not",
+            f"'t{ws}is",
+            f"a.{ws}",
+            f"a{ws}.",
+            f"a,{ws}",
+            f"a.){ws}",
+            f"a.'{ws}x",
+            f"a{ws}'s",
+            f"a{ws}b",
+            f"{ws}",
+            f"{ws}{ws}",
+            f"''{ws}.",
+            f"a{ws}--{ws}b",
+            f"(a{ws}b)",
+            f'"{ws}a{ws}"',
+        ]
     k = 0
-    for end in ["", " ", "\t", "\n", "\x0b", "\x0c", "\r", "\x1c", "\x85", "\xa0", "\u2028",
-                "\u3000", "  ", " \n", "\n ", "\n\n", "\r\n", " \x1c", "\x1c ", "\n\x1c"]:
-        for closers in ["", ")", "]", "}", ">", '"', "'", "\u00bb", "\u201d", "\u2019",
-                        ") )", ")'\"", "'\u2019", " )", ") ", '"\u00bb', ")x", ".", ")."]:
-            forms = [f"a.{closers}{end}", f"a..{closers}{end}", f".{closers}{end}",
-                     f"a,{closers}{end}", f"a:{closers}{end}", f"Dr. X.{closers}{end}"]
+    for end in [
+        "",
+        " ",
+        "\t",
+        "\n",
+        "\x0b",
+        "\x0c",
+        "\r",
+        "\x1c",
+        "\x85",
+        "\xa0",
+        "\u2028",
+        "\u3000",
+        "  ",
+        " \n",
+        "\n ",
+        "\n\n",
+        "\r\n",
+        " \x1c",
+        "\x1c ",
+        "\n\x1c",
+    ]:
+        for closers in [
+            "",
+            ")",
+            "]",
+            "}",
+            ">",
+            '"',
+            "'",
+            "\u00bb",
+            "\u201d",
+            "\u2019",
+            ") )",
+            ")'\"",
+            "'\u2019",
+            " )",
+            ") ",
+            '"\u00bb',
+            ")x",
+            ".",
+            ").",
+        ]:
+            forms = [
+                f"a.{closers}{end}",
+                f"a..{closers}{end}",
+                f".{closers}{end}",
+                f"a,{closers}{end}",
+                f"a:{closers}{end}",
+                f"Dr. X.{closers}{end}",
+            ]
             out += [forms[0], forms[1 + k % 5]]
             k += 1
-    out += ["a..", "a...", "a....", "a.....", "a......", "a.. b", "... a", "a ... b",
-            ". . .", "a...b", "a. . .", "a...\n", "...", "..", ".", "a.b.c.", "e.g. x",
-            "U.S.A.", "a .", "a . ", "a.\u2026", "\u2026", "a\u2026b"]
-    out += ["\u2012", "\u2013", "\u2014", "\u2015", "\u2011", "\u2010", "\u2212", "--",
-            "---", "----", "-----", "-", "a--b", "a\u2014b", "a - b", "a -- b", "--a--",
-            "a\u2012\u2015b", "-LRB-", "-RRB-", "(-LRB-)", "a-LRB-b"]
-    out += ["a\u0301's", "\u0301'a", "'\u0301a", "x'\u0301", "can\u0301not", "'\u0301",
-            "\u0301'", "e\u0301'll", "'e\u0301tude", "na\u0308ive's"]
-    out += ["\u00b2cannot", "cannot\u00b2", "a,\u00b2", "a:\u00b2", ",\u00b2", "a,\u0663",
-            "a,1", "a:1", "3:00", "1,000", "a, 1", ",1", ":1", "a,\u00bd", "a,\u2160",
-            "a,\U0001d7ce", "a:\u0966"]
+    out += [
+        "a..",
+        "a...",
+        "a....",
+        "a.....",
+        "a......",
+        "a.. b",
+        "... a",
+        "a ... b",
+        ". . .",
+        "a...b",
+        "a. . .",
+        "a...\n",
+        "...",
+        "..",
+        ".",
+        "a.b.c.",
+        "e.g. x",
+        "U.S.A.",
+        "a .",
+        "a . ",
+        "a.\u2026",
+        "\u2026",
+        "a\u2026b",
+    ]
+    out += [
+        "\u2012",
+        "\u2013",
+        "\u2014",
+        "\u2015",
+        "\u2011",
+        "\u2010",
+        "\u2212",
+        "--",
+        "---",
+        "----",
+        "-----",
+        "-",
+        "a--b",
+        "a\u2014b",
+        "a - b",
+        "a -- b",
+        "--a--",
+        "a\u2012\u2015b",
+        "-LRB-",
+        "-RRB-",
+        "(-LRB-)",
+        "a-LRB-b",
+    ]
+    out += [
+        "a\u0301's",
+        "\u0301'a",
+        "'\u0301a",
+        "x'\u0301",
+        "can\u0301not",
+        "'\u0301",
+        "\u0301'",
+        "e\u0301'll",
+        "'e\u0301tude",
+        "na\u0308ive's",
+    ]
+    out += [
+        "\u00b2cannot",
+        "cannot\u00b2",
+        "a,\u00b2",
+        "a:\u00b2",
+        ",\u00b2",
+        "a,\u0663",
+        "a,1",
+        "a:1",
+        "3:00",
+        "1,000",
+        "a, 1",
+        ",1",
+        ":1",
+        "a,\u00bd",
+        "a,\u2160",
+        "a,\U0001d7ce",
+        "a:\u0966",
+    ]
     for b in "()[]{}<>":
-        out += [f"{b}", f"a{b}b", f" {b} ", f"{b}{b}", f"a.{b}", f"{b}\"a", f"{b}''a"]
-    out += ["(a)", "[a]", "{a}", "<a>", "((a))", "a (b) c.", "[a.]", "(a.)", "{\"a\"}",
-            "-LRB- a -RRB-", "-LSB-", "-RSB-", "-LCB-", "-RCB-"]
-    out += ["", " ", "\t", "\n", "\x1c", "\x85", "\u3000", " \x1c ", "\x1c\x1d\x1e\x1f",
-            "\u200b", "\ufeff", "\r\n"]
-    out += ["a;b", "@a", "#1", "$5", "50%", "a&b", "a*b", "a?b", "a!b", "a?!", "?", "!",
-            "a ; b", "a@b.com", "#$%&;@", "**", "a*", "*a*"]
+        out += [f"{b}", f"a{b}b", f" {b} ", f"{b}{b}", f"a.{b}", f'{b}"a', f"{b}''a"]
+    out += [
+        "(a)",
+        "[a]",
+        "{a}",
+        "<a>",
+        "((a))",
+        "a (b) c.",
+        "[a.]",
+        "(a.)",
+        '{"a"}',
+        "-LRB- a -RRB-",
+        "-LSB-",
+        "-RSB-",
+        "-LCB-",
+        "-RCB-",
+    ]
+    out += [
+        "",
+        " ",
+        "\t",
+        "\n",
+        "\x1c",
+        "\x85",
+        "\u3000",
+        " \x1c ",
+        "\x1c\x1d\x1e\x1f",
+        "\u200b",
+        "\ufeff",
+        "\r\n",
+    ]
+    out += [
+        "a;b",
+        "@a",
+        "#1",
+        "$5",
+        "50%",
+        "a&b",
+        "a*b",
+        "a?b",
+        "a!b",
+        "a?!",
+        "?",
+        "!",
+        "a ; b",
+        "a@b.com",
+        "#$%&;@",
+        "**",
+        "a*",
+        "*a*",
+    ]
     return list(dict.fromkeys(out))
 
 
@@ -448,8 +994,9 @@ def golden(out_dir):
 
 def large_row(args):
     text, with_edits = args
-    return json.dumps(row(text, edits_for(text, "large", 2) if with_edits else ()),
-                      ensure_ascii=False)
+    return json.dumps(
+        row(text, edits_for(text, "large", 2) if with_edits else ()), ensure_ascii=False
+    )
 
 
 def large(out_dir, docs, fw2_docs, whole_docs):
@@ -475,8 +1022,17 @@ def large(out_dir, docs, fw2_docs, whole_docs):
 
 # The code point templates; RE_TEMPLATES are those that depend on `re`.
 TEMPLATES = [
-    "a{c}b", "{c}'s", "'{c}", "{c}.", "{c}cannot{c}", "{c}``", "g{c}mme x 'ti{c}",
-    "can{c}not", "wanna{c}", "x{c}'t{c}is", "{c}\"",
+    "a{c}b",
+    "{c}'s",
+    "'{c}",
+    "{c}.",
+    "{c}cannot{c}",
+    "{c}``",
+    "g{c}mme x 'ti{c}",
+    "can{c}not",
+    "wanna{c}",
+    "x{c}'t{c}is",
+    '{c}"',
 ]
 RE_TEMPLATES = ["{c}cannot{c}", "g{c}mme x 'ti{c}", "can{c}not", "wanna{c}", "x{c}'t{c}is"]
 
@@ -546,8 +1102,12 @@ def codepoints(out_dir, mode, templates=None, suffix=""):
                     else:
                         ranges.append([a, b])
             for key, ranges in groups.items():
-                f.write(json.dumps({"tpl": tpl, "r": json.loads(key), "cps": ranges},
-                                   ensure_ascii=False) + "\n")
+                f.write(
+                    json.dumps(
+                        {"tpl": tpl, "r": json.loads(key), "cps": ranges}, ensure_ascii=False
+                    )
+                    + "\n"
+                )
             print(f"{tpl!r}: {len(groups)} results", file=sys.stderr)
 
 
@@ -556,8 +1116,14 @@ def codepoints(out_dir, mode, templates=None, suffix=""):
 
 # The RegexpTokenizer patterns pyroid runs natively (nltk::regexp::Pattern).
 REGEXP_PATTERNS = [
-    r"\w+", r"\w+|[^\w\s]+", r"\w+|\$[\d\.]+|\S+", r"[\w']+", r"\S+", r"\s+",
-    r"[a-zA-Z]+", r"(?:(?<!\s)\s*)?\n\s*\n\s*",
+    r"\w+",
+    r"\w+|[^\w\s]+",
+    r"\w+|\$[\d\.]+|\S+",
+    r"[\w']+",
+    r"\S+",
+    r"\s+",
+    r"[a-zA-Z]+",
+    r"(?:(?<!\s)\s*)?\n\s*\n\s*",
 ]
 LINE_MODES = ["discard", "keep", "discard-eof"]
 
@@ -570,29 +1136,66 @@ def regexp_fields(text):
     """The "regexp" record of `text` (without "t")."""
     r = {}
     # gaps=False: findall and span_tokenize, per pattern.
-    r["f"] = [[RegexpTokenizer(p).tokenize(text), flat(RegexpTokenizer(p).span_tokenize(text))]
-              for p in REGEXP_PATTERNS]
-    # gaps=True with discard_empty True and False: tokenize and span_tokenize.
-    r["g"] = [[f(RegexpTokenizer(p, gaps=True, discard_empty=d))
-               for d in (True, False)
-               for f in (lambda t: t.tokenize(text), lambda t: flat(t.span_tokenize(text)))]
-              for p in REGEXP_PATTERNS]
-    r["named"] = [
-        wordpunct_tokenize(text), flat(WordPunctTokenizer().span_tokenize(text)),
-        WhitespaceTokenizer().tokenize(text), flat(WhitespaceTokenizer().span_tokenize(text)),
-        blankline_tokenize(text), flat(BlanklineTokenizer().span_tokenize(text)),
-        SpaceTokenizer().tokenize(text), flat(SpaceTokenizer().span_tokenize(text)),
-        TabTokenizer().tokenize(text), flat(TabTokenizer().span_tokenize(text)),
+    r["f"] = [
+        [RegexpTokenizer(p).tokenize(text), flat(RegexpTokenizer(p).span_tokenize(text))]
+        for p in REGEXP_PATTERNS
     ]
-    r["lines"] = [[LineTokenizer(m).tokenize(text), flat(LineTokenizer(m).span_tokenize(text))]
-                  for m in LINE_MODES]
+    # gaps=True with discard_empty True and False: tokenize and span_tokenize.
+    r["g"] = [
+        [
+            f(RegexpTokenizer(p, gaps=True, discard_empty=d))
+            for d in (True, False)
+            for f in (lambda t: t.tokenize(text), lambda t: flat(t.span_tokenize(text)))
+        ]
+        for p in REGEXP_PATTERNS
+    ]
+    r["named"] = [
+        wordpunct_tokenize(text),
+        flat(WordPunctTokenizer().span_tokenize(text)),
+        WhitespaceTokenizer().tokenize(text),
+        flat(WhitespaceTokenizer().span_tokenize(text)),
+        blankline_tokenize(text),
+        flat(BlanklineTokenizer().span_tokenize(text)),
+        SpaceTokenizer().tokenize(text),
+        flat(SpaceTokenizer().span_tokenize(text)),
+        TabTokenizer().tokenize(text),
+        flat(TabTokenizer().span_tokenize(text)),
+    ]
+    r["lines"] = [
+        [LineTokenizer(m).tokenize(text), flat(LineTokenizer(m).span_tokenize(text))]
+        for m in LINE_MODES
+    ]
     return r
 
 
 REGEXP_PIECES = TEXT_PIECES + [
-    "\n", "\n\n", "\n \n", " \n\t\n ", "\r\n\r\n", "\\n", "\t\t", "\x0b", "\x0c", "\x1c\n",
-    "\n\x1c\n", " ", " ", "\x85\n", "$", "$1", "$.", "$3.88", "$٣", "x$",
-    "'x'", "can't", "ABC", "Àb", "a_b", "²", "\U0001d7ce",
+    "\n",
+    "\n\n",
+    "\n \n",
+    " \n\t\n ",
+    "\r\n\r\n",
+    "\\n",
+    "\t\t",
+    "\x0b",
+    "\x0c",
+    "\x1c\n",
+    "\n\x1c\n",
+    " ",
+    " ",
+    "\x85\n",
+    "$",
+    "$1",
+    "$.",
+    "$3.88",
+    "$٣",
+    "x$",
+    "'x'",
+    "can't",
+    "ABC",
+    "Àb",
+    "a_b",
+    "²",
+    "\U0001d7ce",
 ]
 
 
@@ -601,9 +1204,30 @@ def regexp_texts():
         "Good muffins cost $3.88\nin New York.  Please buy me\ntwo of them.\n\nThanks.",
         "Alas, it has not rained today. When, do you think, will it rain again?",
         "<p>Although this is <b>not</b> the case here, we must not relax our vigilance!</p>",
-        "a\tb c\n\t d", "", " ", "\n", "\n\n", "a\n\nb", "a \n \n b", "\n\na", "a\n\n",
-        "a\n \t\n", "a\n\x1c\nb", "a\n\x85\n", "a  \n\nb\n\n\nc", "a\nb", "a\n  \n\nb", "a\n \n",
-        "a\\nb", "a\nb\n", "\n a \n", "a  b", " a", "a ", "  ", "$abc a$1 $3.88, ,abc",
+        "a\tb c\n\t d",
+        "",
+        " ",
+        "\n",
+        "\n\n",
+        "a\n\nb",
+        "a \n \n b",
+        "\n\na",
+        "a\n\n",
+        "a\n \t\n",
+        "a\n\x1c\nb",
+        "a\n\x85\n",
+        "a  \n\nb\n\n\nc",
+        "a\nb",
+        "a\n  \n\nb",
+        "a\n \n",
+        "a\\nb",
+        "a\nb\n",
+        "\n a \n",
+        "a  b",
+        " a",
+        "a ",
+        "  ",
+        "$abc a$1 $3.88, ,abc",
     ]
     rng = random.Random(3)
     for _ in range(200):
