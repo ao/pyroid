@@ -398,6 +398,9 @@ jobs:
           # live-oracle checks skip, and say so in the report; the checks against the pinned refs still run.
           groups=()
           if [[ "$PY" == *t ]]; then groups=(--no-default-groups); fi
+          # SudachiPy and its 200 MB dictionary only where the jpn_Jpan checks run (filters, dedup); elsewhere,
+          # and on free-threaded legs, the Japanese checks skip.
+          if [[ "$PY" != *t && ( "$SUITE" == filters || "$SUITE" == dedup ) ]]; then groups+=(--group ja); fi
           # PYTHON_GIL stays unset: the report records whether the GIL stayed off.
           uv run --project parity --frozen --python "$PY" "${groups[@]}" \
             --with "${wheels[0]}" pytest parity/tests -m "$SUITE" --impl "pyroid.$SUITE"

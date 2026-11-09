@@ -2034,11 +2034,13 @@ dev = [
     { name = "regex" },
     { name = "ruff" },
     { name = "spacy" },
-    { name = "sudachidict-core" },
-    { name = "sudachipy" },
     { name = "tldextract" },
     { name = "tokenizers" },
     { name = "xxhash" },
+]
+ja = [
+    { name = "sudachidict-core" },
+    { name = "sudachipy" },
 ]
 oracle = [
     { name = "aiohttp" },
@@ -2049,8 +2051,6 @@ oracle = [
     { name = "pyahocorasick" },
     { name = "regex" },
     { name = "spacy" },
-    { name = "sudachidict-core" },
-    { name = "sudachipy" },
     { name = "tldextract" },
     { name = "tokenizers" },
     { name = "xxhash" },
@@ -2083,11 +2083,13 @@ dev = [
     { name = "regex", specifier = ">=2024.11" },
     { name = "ruff", specifier = ">=0.17.3" },
     { name = "spacy", specifier = "==3.8.18" },
-    { name = "sudachidict-core", specifier = "==20261015" },
-    { name = "sudachipy", specifier = "==0.7.0" },
     { name = "tldextract", specifier = "==5.4.0" },
     { name = "tokenizers", specifier = ">=0.22" },
     { name = "xxhash", specifier = ">=3.5,<4" },
+]
+ja = [
+    { name = "sudachidict-core", specifier = "==20261015" },
+    { name = "sudachipy", specifier = "==0.7.0" },
 ]
 oracle = [
     { name = "aiohttp", specifier = ">=3.11" },
@@ -2098,8 +2100,6 @@ oracle = [
     { name = "pyahocorasick", specifier = "==2.3.1" },
     { name = "regex", specifier = ">=2024.11" },
     { name = "spacy", specifier = "==3.8.18" },
-    { name = "sudachidict-core", specifier = "==20261015" },
-    { name = "sudachipy", specifier = "==0.7.0" },
     { name = "tldextract", specifier = "==5.4.0" },
     { name = "tokenizers", specifier = ">=0.22" },
     { name = "xxhash", specifier = ">=3.5,<4" },

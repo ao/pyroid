@@ -34,9 +34,6 @@ oracle = [
     "xxhash>=3.5,<4",
     # datatrove's Chinese tokenizer (SpaCyTokenizer("zh")) and the reference of the jieba suite.
     "jieba==0.42.1",
-    # datatrove's Japanese tokenizer (SpaCyTokenizer("ja")): SudachiPy and the dictionary pyroid reads.
-    "sudachipy==0.7.0",
-    "sudachidict-core==20261015",
     "fasttext-predict==0.9.2.4; python_version < '3.14'",
     # What datatrove 0.10.1 needs but doesn't install for the steps tests/test_filters_more.py runs live: its
     # `processing` extra for URLFilter (the versions the URLFilter tests were verified with), and aiohttp for fsspec's HTTP download of
@@ -46,6 +43,9 @@ oracle = [
     "fasteners>=0.19",
     "aiohttp>=3.11",
 ]
+# datatrove's Japanese tokenizer (SpaCyTokenizer("ja")) and the SudachiDict pyroid reads for jpn_Jpan (a 77 MB
+# wheel): only the filters and dedup legs install it (`--group ja`); without it the Japanese checks skip.
+ja = ["sudachipy==0.7.0", "sudachidict-core==20261015"]
 dev = [{ include-group = "oracle" }, "jsonschema>=4.25", "ruff>=0.17.3"]
 
 [build-system]
