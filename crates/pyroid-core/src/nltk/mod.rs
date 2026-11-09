@@ -13,6 +13,8 @@
 
 mod chars;
 pub mod punkt;
+pub mod regexp;
+pub mod treebank;
 
 pub use crate::ftfy::UnicodeVersion;
 pub use chars::lower;

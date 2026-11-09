@@ -13,9 +13,9 @@ repos:
       - id: check-yaml
       - id: check-merge-conflict
       - id: check-added-large-files
-        # The bench/ and parity/ lockfiles (~0.5 MB each) and jieba's dictionary trie (2.5 MB) are the
-        # only files allowed past the 500 KB limit.
-        exclude: ^((bench|parity)/uv\.lock|crates/pyroid-core/src/jieba/data/dict\.trie)$
+        # The bench/ and parity/ lockfiles (~0.5 MB each), jieba's dictionary trie (2.5 MB) and the
+        # recorded NLTK Treebank outputs (1.1 MB) are the only files allowed past the 500 KB limit.
+        exclude: ^((bench|parity)/uv\.lock|crates/pyroid-core/src/jieba/data/dict\.trie|crates/pyroid-core/src/nltk/testdata/treebank/golden\.jsonl)$
       # Test data, incumbent fixtures, raw benchmark results, the charts copied from them and the fuzz
       # corpora keep their bytes exactly (mojibake, confusables, odd whitespace). Keep in step with
       # [files] extend-exclude in typos.toml.
@@ -28,6 +28,7 @@ repos:
             crates/pyroid-core/tests/metrics_data/|
             crates/pyroid-core/src/json_repair/testdata/|
             crates/pyroid-core/src/jieba/testdata/|
+            crates/pyroid-core/src/nltk/testdata/|
             crates/pyroid-core/src/sudachi/testdata/|
             crates/pyroid-core/src/sudachi/resources/|
             bench/data/|
