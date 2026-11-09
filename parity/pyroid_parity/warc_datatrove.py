@@ -40,6 +40,10 @@ class MagicMissing(RuntimeError):
     """Raised by the stub ``magic.from_buffer`` where libmagic is not installed."""
 
 
+# Named as the stub module's, so that every implementation's trace names it the same (``magic.MagicMissing``).
+MagicMissing.__module__ = "magic"
+
+
 def ensure_magic() -> str | None:
     """libmagic's version if python-magic works here; otherwise install the stub and return None."""
     try:
