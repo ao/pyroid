@@ -30,7 +30,7 @@ Optional libraries, needed only by the features that use them:
 - The incumbents, only for the few features pyroid hands back to them
   ([Fallbacks](concepts/fallbacks.md)):
     - ftfy 6.3.1;
-    - datatrove 0.10.1 and a language's segmenter (SudachiPy, pyvi, ...) for
+    - datatrove 0.10.1 and a language's segmenter (pyvi, Stanza, ...) for
       `python_tokenizer=True`;
     - jieba 0.42.1 for `pyroid.jieba.posseg`, `pyroid.jieba.analyse` and paddle mode;
     - rouge-score, nltk and sacrebleu 2.6.0 for the delegated metrics features;
@@ -42,6 +42,11 @@ Optional libraries, needed only by the features that use them:
 - numpy for `pyroid.metrics.scoring.BootstrapAggregator`, which runs rouge-score's numpy code.
 - tldextract for `pyroid.filters.URLFilter`. Its suffix lists are read from a
   `tldextract.TLDExtract` when the filter is built; the matching itself runs in Rust.
+- sudachidict-core (20261015 or newer) for native Japanese in `pyroid.filters` and
+  `pyroid.dedup`: `pip install sudachidict-core`. pyroid does not ship the dictionary (its
+  `system.dic` is 202 MB): it reads the installed one, or the file that `PYROID_SUDACHI_DICT`
+  names, without importing SudachiPy. Without it the Japanese codes need
+  `python_tokenizer=True` ([Languages](guides/languages.md#japanese)).
 
 ## Supported platforms
 

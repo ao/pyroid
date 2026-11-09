@@ -17,8 +17,9 @@ that is spaCy 3.8.18's `spacy.blank("en")` plus the sentencizer. Every word coun
 n-gram in the quality filters depends on those tokens. pyroid includes exact ports of datatrove's
 rule-based tokenizers. For 57 languages it ports spaCy's prefix, suffix, infix and URL rules, its
 tokenizer exceptions, the special-case matcher and the sentencizer. It also ports the Indic NLP
-and whitespace tokenizers, and spaCy's Chinese tokenizer with jieba ([`pyroid.jieba`](jieba.md)).
-Together they cover 4,009 of datatrove's 4,343 language codes ([Languages](#languages)).
+and whitespace tokenizers, spaCy's Chinese tokenizer with jieba ([`pyroid.jieba`](jieba.md)), and
+datatrove's Japanese tokenizer with SudachiPy, which reads an installed SudachiDict dictionary.
+Together they cover 4,013 of datatrove's 4,343 language codes ([Languages](#languages)).
 
 ## From a datatrove pipeline
 
@@ -115,11 +116,14 @@ ds = ds.filter(lambda b: F.gopher_quality(b["text"]), batched=True, batch_size=1
 `language` (a field of every quality-filter config) takes any of datatrove's 4,343 language
 codes, as datatrove's `language=` does: `"eng"` (the default), `"deu_Latn"`, `"deu"`, `"de"`, ...
 
-- 4,009 codes are native, tokenized in Rust on every thread. They are the 57 spaCy languages
+- 4,013 codes are native, tokenized in Rust on every thread. They are the 57 spaCy languages
   datatrove tokenizes with a rule-based `spacy.blank(code)` (with `xx`, spaCy's multi-language
-  tokenizer), Chinese (spaCy's Chinese tokenizer with jieba), the Indic NLP languages and
-  datatrove's whitespace tokenizer, and they make up 88.4% of FineWeb-2's bytes.
-- The other 334 (Japanese with SudachiPy, Vietnamese with pyvi, Stanza, Thai, Kiwi, ...) raise `NotImplementedError` unless you pass `python_tokenizer=True`. Then
+  tokenizer), Chinese (spaCy's Chinese tokenizer with jieba), Japanese (datatrove's tokenizer
+  with SudachiPy), the Indic NLP languages and datatrove's whitespace tokenizer, and they make up
+  95.6% of FineWeb-2's bytes. Japanese needs a SudachiDict dictionary:
+  `pip install sudachidict-core`, or the `system.dic` that `PYROID_SUDACHI_DICT` names
+  ([Japanese](languages.md#japanese)). Without one, 4,009 codes (88.4%) are native.
+- The other 330 (Vietnamese with pyvi, Stanza, Thai, Kiwi, ...) raise `NotImplementedError` unless you pass `python_tokenizer=True`. Then
   datatrove's own tokenizer splits each document, in Python on the calling thread, and the filter
   math runs in Rust, with a [`FallbackWarning`](../concepts/fallbacks.md).
 - A code datatrove does not know raises datatrove's `ValueError` when the call starts.

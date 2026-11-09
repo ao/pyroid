@@ -28,7 +28,8 @@ datatrove splits text with the word tokenizer of the filter's ``language``
 datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
 :func:`languages` lists them), as datatrove does:
 
-- Native (4,009 codes), in Rust on every thread:
+- Native (4,013 codes; 4,009 without a Japanese dictionary), in Rust on every
+  thread:
 
   - the 3,742 codes datatrove tokenizes with a rule-based
     ``spacy.blank(code)``: the 57 spaCy languages ``af`` ... ``yo``,
@@ -43,12 +44,20 @@ datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
     ``xx`` words and datatrove's regex sentence splitter);
   - the 10 codes of ``SpaCyTokenizer("zh")`` (``"cmn_Hani"``, ``"yue_Hani"``,
     ...: spaCy's Chinese tokenizer over jieba 0.42.1 with its default
-    dictionary, ported as :mod:`pyroid.jieba`, plus the sentencizer).
+    dictionary, ported as :mod:`pyroid.jieba`, plus the sentencizer);
+  - the 4 codes of ``SpaCyTokenizer("ja")`` (``"jpn_Jpan"``, ...: datatrove's
+    Japanese tokenizer, SudachiPy 0.7.0 in split mode A, ported to Rust, plus
+    the sentencizer), when a SudachiDict dictionary is installed. pyroid does
+    not ship one (it is about 200 MB): it reads the ``system.dic`` of an
+    installed ``sudachidict-core`` (``pip install sudachidict-core``, the
+    dictionary datatrove uses), or the file ``PYROID_SUDACHI_DICT`` names,
+    once per process, the first time a filter needs it. Without one, these
+    codes take the Python-tokenizer path below.
 
   ``split_into_words`` and ``split_into_sentences`` match datatrove's.
-- Python tokenizer, opt-in (the other 334 codes): datatrove uses a segmenter
+- Python tokenizer, opt-in (the other 330 codes): datatrove uses a segmenter
   pyroid does not port: ``StanzaTokenizer`` (255 codes),
-  ``SpaCyTokenizer("ja")`` (SudachiPy), ``SpaCyTokenizer("vi")`` (pyvi),
+  ``SpaCyTokenizer("vi")`` (pyvi),
   ``ThaiTokenizer``, ``BurmeseTokenizer``, ``TibetanTokenizer``,
   ``LaoTokenizer``, ``KhmerTokenizer`` and ``KiwiTokenizer`` (see
   :func:`languages`). Calling a filter with such a code raises

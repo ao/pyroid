@@ -16,7 +16,8 @@ becomes a text-cleaning core for LLM datasets.
   [`pyroid.translit`](guides/translit.md), [`pyroid.metrics`](guides/metrics.md),
   [`pyroid.json_repair`](guides/json_repair.md) and [`pyroid.jieba`](guides/jieba.md). The
   filters and dedup follow datatrove's behaviour in
-  [4,009 of its 4,343 language codes](guides/languages.md).
+  [4,013 of its 4,343 language codes](guides/languages.md) natively (Japanese with an installed
+  SudachiDict dictionary).
 - Integrations: the [`pyroid` command line](guides/cli.md), [`pyroid.patch()`](guides/patch.md),
   drop-in [datatrove steps](guides/datatrove.md) and
   [Hugging Face `datasets` helpers](guides/huggingface.md).

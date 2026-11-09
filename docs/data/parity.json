@@ -71,7 +71,7 @@
       "source": "python/tests/test_fasttext_parity.py and the parity/ fastText suite, run on 2026-11-05"
     },
     "filters": {
-      "reference": "datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNLP, whitespace), tldextract 5.4.0, numpy 2.5.4",
+      "reference": "datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNLP, whitespace, SudachiPy 0.7.0 with sudachidict-core 20261015), tldextract 5.4.0, numpy 2.5.4",
       "rule": "same keep/drop decision, same filter_reason, same rewritten text, same exception",
       "checks": [
         {
@@ -95,6 +95,21 @@
           "diff": 0
         },
         {
+          "name": "Japanese, native (datatrove's JapaneseTokenizer over the Rust port of SudachiPy 0.7.0): FineWeb-2 jpn_Jpan, the 8 filter cases against live datatrove, 2026-11-09",
+          "same": 2000,
+          "diff": 0
+        },
+        {
+          "name": "Japanese tokenizer, Rust replay of the committed recordings: SudachiPy morphemes for 4,567 texts (special cases, FineWeb-2 lines, fuzz, a code-point sample), datatrove's word_tokenize, span_tokenize and sent_tokenize for 4,205 texts (54 documents over 40,000 bytes, with chosen chunk boundaries), 1,911 chunk_text_on_bytes cases and the spaCy tag of all 1,558 POS (every tag in spaCy's TAG_MAP), 2026-11-09",
+          "same": 12241,
+          "diff": 0
+        },
+        {
+          "name": "Japanese tokenizer replay, not committed: every code point (69,504 rows each for morphemes and datatrove), the FineWeb-2 jpn_Jpan test slice (7,809 lines, 250 documents) and the first 20,000 jpn_Jpan training documents (32.5 M characters: 610,624 lines with 18,879,619 morphemes; datatrove's words and spans of the 20,000 documents, 134 over 40,000 bytes), 2026-11-09",
+          "same": 777691,
+          "diff": 0
+        },
+        {
           "name": "Per-language tokenizer replay: whole FineWeb-2 slices (ar, de, fr, ru, es, hi, with C4 lines), 10k fuzz rows per tokenizer, a 57-language FineWeb-2 smoke set",
           "same": 662530,
           "diff": 0
@@ -112,9 +127,10 @@
       ],
       "notes": [
         "Hypothesis against live datatrove: 92 tests x 300 examples over script-specific text in 22 native languages and the jieba, SudachiPy, pyvi and PyThaiNLP fallback paths (python_tokenizer=True).",
+        "Japanese, native: Hypothesis property tests against live datatrove (python/tests/test_filters_japanese.py).",
         "The newer steps, input by input: PII on 13,232 documents x 4 configurations, C4 bad words x 5 (per-document languages, seeded keep_fraction), symbol lines x 3, the URL filter on 10,000 FineWeb URLs x 7 configurations and 9,695 URL-like strings, plus Hypothesis against the reference and live datatrove."
       ],
-      "source": "the parity/ filters suite (after the last rebase, 2026-11-06), crates/pyroid-core/tests/filters_tokenizer.rs and the multilingual replays, run on 2026-11-05 and 2026-11-06"
+      "source": "the parity/ filters suite (after the last rebase, 2026-11-06), crates/pyroid-core/tests/filters_tokenizer.rs, crates/pyroid-core/src/sudachi/replay.rs and the multilingual replays, run on 2026-11-05 and 2026-11-06"
     },
     "dedup": {
       "reference": "datatrove 0.10.1 MinHash (FineWeb: sha1, 64-bit, 14 buckets x 8 hashes, 5-grams; FineWeb-2: xxhash, 64-bit) and sentence dedup",
@@ -132,6 +148,11 @@
         },
         {
           "name": "Chinese, native: FineWeb-2 cmn_Hani MinHash signatures and removed set (300 documents with near-duplicates) against live datatrove, 2026-11-07",
+          "same": 600,
+          "diff": 0
+        },
+        {
+          "name": "Japanese, native: FineWeb-2 jpn_Jpan MinHash signatures and removed set (300 documents with near-duplicates) against live datatrove, 2026-11-09",
           "same": 600,
           "diff": 0
         }

@@ -16,7 +16,8 @@ Every MinHash step is datatrove's, exactly:
 
 - `simplify_text` normalization, for the interpreter's Unicode version (CPython 3.11 to 3.15);
 - words from the word tokenizer of `language`: spaCy's English by default, with the same ports
-  [`pyroid.filters`](filters.md) uses, native for 4,009 of datatrove's 4,343 language codes;
+  [`pyroid.filters`](filters.md) uses, native for 4,013 of datatrove's 4,343 language codes
+  (Japanese with an installed SudachiDict dictionary);
 - `n_grams`-word shingles and the same hash functions;
 - the permutations drawn from numpy's `RandomState(seed)`, as datatrove draws them;
 - the same buckets and the same union-find.
@@ -60,8 +61,8 @@ which is usually, but not always, the cluster's first document.
 
 `language=` is datatrove's `MinhashDedupSignature(language=...)` and
 `SentenceDedupSignature(language=...)`. It takes any of datatrove's language codes
-(`D.languages()`, the same table as `pyroid.filters.languages()`). The 4,009 native codes are
-tokenized in Rust, on every thread:
+(`D.languages()`, the same table as `pyroid.filters.languages()`). The native codes (4,013 with a
+Japanese dictionary installed, 4,009 without) are tokenized in Rust, on every thread:
 
 ```python
 import pyroid.dedup as D
@@ -79,8 +80,13 @@ docs = [
 D.minhash_dedup(docs, hash_fc="sha1", language="deu_Latn")  # [True, False, True]
 ```
 
-For MinHash, the other 334 codes (Japanese with SudachiPy, Vietnamese with pyvi, Stanza, Thai, ...)
-need `python_tokenizer=True`. Then datatrove's own tokenizer splits each document in Python, on
+Japanese (`SpaCyTokenizer("ja")`, SudachiPy ported to Rust) is native when a SudachiDict
+dictionary is installed: `pip install sudachidict-core`, or the `system.dic` that
+`PYROID_SUDACHI_DICT` names ([Languages](languages.md#japanese)). Without one, Japanese is one of
+the codes below.
+
+For MinHash, the other 330 codes (Vietnamese with pyvi, Stanza, Thai, Kiwi, ...) need
+`python_tokenizer=True`. Then datatrove's own tokenizer splits each document in Python, on
 the calling thread. `simplify_text` still runs in Rust, and so do shingling, MinHash, bucketing
 and clustering on its words, with one [`FallbackWarning`](../concepts/fallbacks.md) per function
 and language. That path runs at the tokenizer's speed. `language` may also be a word tokenizer
@@ -211,9 +217,9 @@ For sentence dedup, from `SentenceDedup`'s documentation:
   signatures).
 - Index files: use the datatrove drop-ins (`pyroid.integrations.datatrove`).
 
-Also for sentence dedup: codes whose datatrove tokenizer pyroid does not port (SudachiPy, pyvi,
-Stanza, ...) raise `NotImplementedError`, and `language` must be a code, not a tokenizer object.
-datatrove's quirks are kept. `min_words_to_remove_span` only counts, and only restores, the first
+Also for sentence dedup: codes whose datatrove tokenizer pyroid does not port (pyvi, Stanza, ...,
+and Japanese without a SudachiDict dictionary) raise `NotImplementedError`, and `language` must be
+a code, not a tokenizer object. datatrove's quirks are kept. `min_words_to_remove_span` only counts, and only restores, the first
 sentence of a removed run. Stage 1 strips sentences while stage 3 does not, so window indices can
 shift.
 

@@ -46,10 +46,11 @@ in batches, without the GIL:
 
 Languages: the filter and MinHash steps take datatrove's ``language`` (a
 datatrove language code such as ``"fra_Latn"``). Every code pyroid tokenizes
-natively, which is 3,999 of datatrove's 4,343 (``pyroid.filters.languages()``,
-``Language.native``), runs in Rust with that language's datatrove tokenizer
-reproduced exactly. Any other code (Chinese, Japanese, Vietnamese, Thai, the
-Stanza languages, ...), a code datatrove has no tokenizer for, or a
+natively, which is 4,013 of datatrove's 4,343 with a SudachiDict dictionary
+installed and 4,009 without (``pyroid.filters.languages()``, ``Language.native``),
+runs in Rust with that language's datatrove tokenizer reproduced exactly. Any
+other code (Vietnamese, Thai, the Stanza languages, Japanese without a
+dictionary, ...), a code datatrove has no tokenizer for, or a
 ``WordTokenizer`` object runs datatrove's own code for that step, with a
 one-time :class:`pyroid.FallbackWarning`.
 

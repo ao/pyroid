@@ -32,9 +32,11 @@ nltk, sacrebleu, json_repair), it raises `pyroid.PyroidError` and says what to i
 
 datatrove 0.10.1 assigns every language code a word tokenizer. pyroid reproduces the rule-based
 ones in Rust: spaCy's tokenizer for 57 languages, IndicNLP and the whitespace tokenizer, plus
-spaCy's Chinese tokenizer with jieba, which together cover 4,009 of datatrove's 4,343 codes. The
-other 334 codes use statistical or dictionary segmenters (SudachiPy for Japanese, pyvi, Stanza,
-Thai, Khmer and others) that pyroid does not port. For those, pass `python_tokenizer=True` to the filters or to MinHash:
+spaCy's Chinese tokenizer with jieba and datatrove's Japanese tokenizer with SudachiPy (which
+reads an installed SudachiDict dictionary), which together cover 4,013 of datatrove's 4,343
+codes. The other 330 codes use statistical or dictionary segmenters (pyvi, Stanza, Thai, Khmer
+and others) that pyroid does not port. For those, and for Japanese without a dictionary, pass
+`python_tokenizer=True` to the filters or to MinHash:
 
 - each document is tokenized by datatrove's own tokenizer, in Python, on the calling thread
   (datatrove 0.10.1 and the segmenter must be installed);
