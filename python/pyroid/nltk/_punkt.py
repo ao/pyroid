@@ -45,6 +45,11 @@ REASON_INITIAL_WITH_SPECIAL_ORTHOGRAPHIC_HEURISTIC = "initial + special orthogra
 # ---------------------------------------------------------------------------
 
 
+#: Bumped by every change to a pyroid parameter container or PunktParameters attribute, so a
+#: tokenizer can tell in O(1) that nothing changed since its last call.
+_GEN = [0]
+
+
 class _Set(set[Any]):
     """A set that counts its changes, so a tokenizer sees in-place edits of its parameters."""
 
@@ -63,6 +68,7 @@ def _counting_set_method(name: str) -> Any:
 
     def method(self: _Set, *args: Any) -> Any:
         self._gen += 1
+        _GEN[0] += 1
         return base(self, *args)
 
     method.__name__ = name
@@ -105,6 +111,7 @@ def _counting_dict_method(name: str) -> Any:
 
     def method(self: _Ortho, *args: Any, **kwargs: Any) -> Any:
         self._gen += 1
+        _GEN[0] += 1
         return base(self, *args, **kwargs)
 
     method.__name__ = name
@@ -137,6 +144,7 @@ class PunktParameters:
         elif name == "ortho_context" and type(value) is defaultdict and value.default_factory is int:
             value = _Ortho(value)
         object.__setattr__(self, name, value)
+        _GEN[0] += 1
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         for name, value in state.items():
@@ -413,6 +421,7 @@ class PunktSentenceTokenizer:
         self._Token = token_cls
         self._params = PunktParameters()
         self._cache: tuple[Any, Any] | None = None  # (key, native Punkt or None)
+        self._fast: tuple[Any, ...] | None = None  # what _impl checks first
         if train_text:
             self._params = self.train(train_text, verbose)
 
@@ -427,6 +436,7 @@ class PunktSentenceTokenizer:
     def __getstate__(self) -> dict[str, Any]:
         state = dict(self.__dict__)
         state["_cache"] = None  # the native tokenizer is rebuilt on first use
+        state["_fast"] = None
         return state
 
     def train(self, train_text: Any, verbose: bool = False) -> Any:
@@ -447,7 +457,31 @@ class PunktSentenceTokenizer:
 
     def _impl(self) -> Any:
         """The native Punkt for the current parameters, or None (then NLTK runs)."""
-        params = self._params
+        params = self.__dict__["_params_"]
+        lang_vars = self._lang_vars
+        fast = self._fast
+        if (
+            fast is not None
+            and fast[0] is params
+            and fast[1] is lang_vars
+            and fast[2] == _GEN[0]
+            and fast[3] is getattr(lang_vars, "sent_end_chars", None)
+            and fast[4] is self._Token
+        ):
+            return fast[5]
+        native = self._impl_slow(params)
+        tracked = isinstance(params, PunktParameters) and all(
+            isinstance(c, (_Set, _Ortho, frozenset))
+            for c in (params.abbrev_types, params.collocations, params.sent_starters, params.ortho_context)
+        )
+        self._fast = (
+            (params, lang_vars, _GEN[0], getattr(lang_vars, "sent_end_chars", None), self._Token, native)
+            if tracked and not getattr(lang_vars, "__dict__", None)
+            else None
+        )
+        return native
+
+    def _impl_slow(self, params: Any) -> Any:
         end_chars = _native_end_chars(self._lang_vars) if self._Token is _DEFAULT_TOKEN else None
         fp = _fingerprint(params) if end_chars is not None else None
         key = (id(params), fp, end_chars)
