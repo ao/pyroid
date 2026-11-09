@@ -29,6 +29,7 @@ Curator itself where it is installed.
 # mypy: ignore-errors
 
 import re
+import warnings
 from collections.abc import Callable
 
 import regex
@@ -103,7 +104,9 @@ def get_word_splitter(language: str) -> Callable[[str], list[str]]:
 
     if language == "zh":
         try:
-            import jieba
+            with warnings.catch_warnings():  # jieba 0.42.1 has invalid escapes (SyntaxWarning)
+                warnings.simplefilter("ignore")
+                import jieba
         except ImportError:  # pyroid.jieba reproduces jieba 0.42.1's cut()
             import pyroid.jieba as jieba
 

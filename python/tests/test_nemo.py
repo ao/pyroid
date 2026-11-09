@@ -28,6 +28,7 @@ import subprocess
 import sys
 import sysconfig
 import types
+import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,6 +47,13 @@ import pyroid
 import pyroid.fasttext as ft
 import pyroid.nemo as nemo
 from pyroid._pyroid import _testing
+
+with warnings.catch_warnings():
+    # jieba 0.42.1 (the reference for lang="zh") has invalid escape sequences: a SyntaxWarning
+    # when first compiled. Import it once here, not in a test.
+    warnings.simplefilter("ignore")
+    with contextlib.suppress(ImportError):
+        importlib.import_module("jieba")
 
 FREE_THREADED = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
 DATA = Path(os.environ.get("PYROID_DATA", "/data"))
@@ -89,7 +97,12 @@ _FASTTEXT_MODULE = "nemo_curator.stages.text.filters.fasttext.fasttext_filters"
 
 @functools.cache
 def live_nemo() -> Any | None:
-    """NeMo Curator's own filter classes, or None where it is not installed."""
+    """NeMo Curator's own filter classes, or None where it is not installed.
+
+    ``PYROID_NEMO_LIVE=0`` leaves NeMo out even where it is installed.
+    """
+    if os.environ.get("PYROID_NEMO_LIVE") == "0":
+        return None
     modules: list[types.ModuleType] = []
     try:
         modules = [importlib.import_module(m) for m in _FILTER_MODULES]
