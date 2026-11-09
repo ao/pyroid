@@ -13,6 +13,7 @@
 //! - [`html`]: an HTML parser with lxml 6.1.3's trees (a port of libxml2 2.14.6's), for
 //!   `pyroid.trafilatura`.
 //! - [`metrics`]: ROUGE, BLEU and chrF, exact ports of rouge-score and sacrebleu (`pyroid.metrics`).
+//! - [`nemo`]: NeMo Curator 1.4.0's CPU text heuristics and string modifiers (`pyroid.nemo`).
 //! - [`nltk`]: NLTK 3.10.4's Punkt sentence splitter and Treebank word tokenizers (`pyroid.nltk`).
 //! - [`trafilatura`]: Trafilatura 2.3.1's and 1.11.0's text extraction, ported exactly
 //!   (`pyroid.trafilatura`).
@@ -34,6 +35,7 @@ pub mod html;
 pub mod jieba;
 pub mod json_repair;
 pub mod metrics;
+pub mod nemo;
 pub mod nltk;
 pub mod par;
 pub mod sudachi;
