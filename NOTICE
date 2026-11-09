@@ -606,8 +606,9 @@ Trafilatura (pyroid.trafilatura)
 The extraction port (crates/pyroid-core/src/trafilatura/, crates/pyroid-core/tests/trafilatura_*,
 crates/pyroid-py/src/trafilatura.rs, python/pyroid/trafilatura.py, python/pyroid/trafilatura.pyi
 and the Trafilatura step in python/pyroid/integrations/datatrove.py) is a derivative work of
-Trafilatura 2.3.1, https://github.com/adbar/trafilatura. python/pyroid/trafilatura.py embeds
-Trafilatura's settings.cfg unmodified:
+Trafilatura 2.3.1 and 1.11.0, https://github.com/adbar/trafilatura (the 1.11.0 mode is in
+crates/pyroid-core/src/trafilatura/v1_11/). python/pyroid/trafilatura.py embeds both releases'
+settings.cfg unmodified:
 
     Copyright Adrien Barbaresi and contributors
 

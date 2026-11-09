@@ -23,12 +23,15 @@ from pyroid.integrations import _patch
 pytestmark = pytest.mark.thread_unsafe(reason="subprocesses")
 
 FREE_THREADED = not getattr(sys, "_is_gil_enabled", lambda: True)()
-HAVE_REAL = (
-    not FREE_THREADED
-    and importlib.util.find_spec("trafilatura") is not None
-    and importlib.metadata.version("trafilatura") == "2.3.1"
+INSTALLED = (
+    importlib.metadata.version("trafilatura")
+    if not FREE_THREADED and importlib.util.find_spec("trafilatura") is not None
+    else None
 )
-needs_real = pytest.mark.skipif(not HAVE_REAL, reason="needs trafilatura 2.3.1 (GIL builds)")
+needs_real = pytest.mark.skipif(INSTALLED != "2.3.1", reason="needs trafilatura 2.3.1 (GIL builds)")
+needs_real_111 = pytest.mark.skipif(
+    INSTALLED != "1.11.0", reason="needs trafilatura 1.11.0 (GIL builds)"
+)
 
 PRELUDE = """\
 import importlib.util, inspect, json, sys, warnings
@@ -151,27 +154,33 @@ def test_shim_without_trafilatura(run_python: Callable[..., Any]) -> None:
     )
 
 
-def test_shim_with_another_trafilatura_version(
-    run_python: Callable[..., Any], tmp_path: Path
-) -> None:
+def fake_trafilatura(tmp_path: Path, version: str) -> Path:
+    """A fake trafilatura `version` package (its own extract and reset_caches) on a new path."""
     fake = tmp_path / "site" / "trafilatura"
     fake.mkdir(parents=True)
     (fake / "__init__.py").write_text(
-        '__version__ = "1.11.0"\nfrom . import core, meta, deduplication, settings\n'
+        f'__version__ = "{version}"\nfrom . import core, meta, deduplication, settings\n'
         "def html2txt(s):\n    return 'fake'\n"
     )
-    (fake / "core.py").write_text("def extract(*a, **k):\n    return 'fake 1.11'\n")
+    (fake / "core.py").write_text("def extract(*a, **k):\n    return 'fake extract'\n")
     (fake / "meta.py").write_text("CALLS = []\ndef reset_caches():\n    CALLS.append(1)\n")
     (fake / "deduplication.py").write_text("class LRUCache:\n    pass\n")
     (fake / "settings.py").write_text("DEFAULT_CONFIG = None\n")
+    return fake.parent
+
+
+def test_shim_with_another_trafilatura_version(
+    run_python: Callable[..., Any], tmp_path: Path
+) -> None:
+    site = fake_trafilatura(tmp_path, "1.10.0")
     out = child(
         run_python,
         f"""
-        sys.path.insert(0, {str(fake.parent)!r})
+        sys.path.insert(0, {str(site)!r})
         caught = patch("trafilatura")
         import trafilatura, pyroid, pyroid.trafilatura as pt
         real = trafilatura.__wrapped__
-        assert real.__version__ == "1.11.0" and trafilatura.__version__ == "2.3.1"
+        assert real.__version__ == "1.10.0" and trafilatura.__version__ == "2.3.1"
         assert trafilatura.extract(PAGE) == pt.extract(PAGE)  # trafilatura 2.3.1's result
         assert trafilatura.html2txt("x") == "fake"
         trafilatura.meta.reset_caches()
@@ -179,7 +188,7 @@ def test_shim_with_another_trafilatura_version(
         try:
             trafilatura.extract(PAGE, output_format="xml")
         except pyroid.PyroidError as e:
-            assert "installed trafilatura is 1.11.0, not 2.3.1" in str(e), e
+            assert "installed trafilatura is 1.10.0, not 2.3.1" in str(e), e
         else:
             raise AssertionError("no PyroidError")
         print(json.dumps(caught))
@@ -187,6 +196,69 @@ def test_shim_with_another_trafilatura_version(
     )
     assert [c for c, _ in out] == ["PatchWarning", "PatchWarning"]
     assert (
-        "the installed trafilatura is 1.11.0, but pyroid.trafilatura reproduces trafilatura "
+        "the installed trafilatura is 1.10.0, but pyroid.trafilatura reproduces trafilatura "
         "2.3.1: the patched functions give trafilatura 2.3.1's results"
     ) in out[1][1]
+
+
+def test_shim_follows_trafilatura_111(run_python: Callable[..., Any], tmp_path: Path) -> None:
+    site = fake_trafilatura(tmp_path, "1.11.0")
+    out = child(
+        run_python,
+        f"""
+        sys.path.insert(0, {str(site)!r})
+        caught = patch("trafilatura")
+        import trafilatura, trafilatura.core, pyroid.trafilatura as pt
+        assert trafilatura.__wrapped__.__version__ == "1.11.0"
+        assert trafilatura.__version__ == "1.11.0"
+        api = pt._api("1.11.0")
+        for name in ("extract", "bare_extraction"):
+            assert shape(getattr(trafilatura, name))[:-1] == shape(api[name])[:-1], name
+            assert getattr(trafilatura.core, name) is getattr(trafilatura, name)
+        assert "fast" not in inspect.signature(trafilatura.extract).parameters
+        assert trafilatura.extract(PAGE, fast=True) == pt.extract(PAGE, compat="1.11.0")
+        assert isinstance(trafilatura.bare_extraction(PAGE), dict)  # 1.11.0's as_dict=True
+        assert not hasattr(trafilatura, "extract_with_metadata")  # forwarded: the fake has none
+        print(json.dumps(caught))
+        """,
+    )
+    assert [c for c, _ in out] == ["PatchWarning"]  # 1.11.0 is a mode: no version warning
+
+
+@needs_real_111
+def test_shim_with_real_trafilatura_111(run_python: Callable[..., Any]) -> None:
+    out = child(
+        run_python,
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            import trafilatura as early
+        caught = patch("trafilatura")
+        import trafilatura, trafilatura.core, trafilatura.meta
+        import pyroid.trafilatura as pt
+        real = trafilatura.__wrapped__
+        assert real is early and real.__version__ == "1.11.0" == trafilatura.__version__
+        # exactly 1.11.0's signatures, config defaulting to its DEFAULT_CONFIG
+        for name in ("extract", "bare_extraction"):
+            assert shape(getattr(trafilatura, name)) == shape(getattr(real, name)), name
+            assert getattr(trafilatura.core, name) is getattr(trafilatura, name)
+        default = inspect.signature(trafilatura.extract).parameters["config"].default
+        assert default is real.settings.DEFAULT_CONFIG
+        assert not hasattr(trafilatura, "extract_with_metadata")
+        assert trafilatura.process_record is real.process_record
+        assert trafilatura.extract(PAGE) == real.extract(PAGE)
+        assert trafilatura.extract(PAGE, fast=True) == real.extract(PAGE, fast=True)
+        assert trafilatura.bare_extraction(PAGE)["text"] == real.bare_extraction(PAGE)["text"]
+        trafilatura.meta.reset_caches()
+        assert [trafilatura.extract(PAGE, deduplicate=True) is None for _ in range(4)] == [
+            real.extract(PAGE, deduplicate=True) is None for _ in range(4)
+        ]
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            xml = trafilatura.extract(PAGE, output_format="xml")
+        assert xml == real.extract(PAGE, output_format="xml")
+        assert [x.category.__name__ for x in w] == ["FallbackWarning"], w
+        print(json.dumps(caught))
+        """,
+    )
+    assert [c for c, _ in out] == ["PatchWarning"]

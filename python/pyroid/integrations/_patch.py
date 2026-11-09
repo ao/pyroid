@@ -17,9 +17,10 @@ The names are ``"ftfy"`` (:mod:`pyroid.ftfy`, which reproduces ftfy 6.3.1), ``"f
 ``FastText.load_model`` give pyroid models), ``"anyascii"`` (:func:`pyroid.translit.anyascii`)
 and ``"datasketch"`` (:mod:`pyroid.datasketch`, which reproduces datasketch 2.0.0: ``datasketch``
 and its ``minhash``, ``lean_minhash``, ``hashfunc``, ``lsh``, ``lshforest`` and ``lshensemble``
-submodules give pyroid's classes), ``"trafilatura"`` (:mod:`pyroid.trafilatura`, which reproduces
-trafilatura 2.3.1: ``extract``, ``bare_extraction`` and ``extract_with_metadata`` of ``trafilatura``
-and ``trafilatura.core``, ``trafilatura.deduplication.LRUCache`` / ``LRU_TEST`` and
+submodules give pyroid's classes), ``"trafilatura"`` (:mod:`pyroid.trafilatura`, which
+reproduces trafilatura 2.3.1 or 1.11.0, following the installed release: ``extract``,
+``bare_extraction`` and (2.3.1) ``extract_with_metadata`` of ``trafilatura`` and
+``trafilatura.core``, ``trafilatura.deduplication.LRUCache`` / ``LRU_TEST`` and
 ``trafilatura.meta.reset_caches``) and ``"nltk"`` (:mod:`pyroid.nltk`, which reproduces NLTK
 3.10.4's tokenizers). There is no ``"unidecode"``:
 :func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its output differs
@@ -576,8 +577,8 @@ _TARGETS: dict[str, _Target] = {
     ),
     "trafilatura": _Target(
         "pyroid.trafilatura",
-        "which reproduces trafilatura 2.3.1's extract and bare_extraction; options it does not "
-        "port go to the installed trafilatura",
+        "which reproduces the extract and bare_extraction of trafilatura 2.3.1 or 1.11.0, "
+        "following the installed release; options it does not port go to the installed one",
         "TRAFILATURA_VERSION",
         "pip install trafilatura==2.3.1",
         " (metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the "

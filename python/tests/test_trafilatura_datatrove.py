@@ -3,9 +3,11 @@
 
 The stock step runs trafilatura in a child process (forked from here, so trafilatura is imported
 here first, with its import-time warnings silenced). Both steps get the same pages and arguments;
-the documents out, ``doc.text``, and every statistic except time must be equal. The ``compat``
-branches are covered with the installed trafilatura 2.3.1 (native) and with the installed version
-reported as 1.11.0 (datatrove's own step runs, with one FallbackWarning).
+the documents out, ``doc.text``, and every statistic except time must be equal. It runs with
+trafilatura 2.3.1 or 1.11.0 installed (stock datatrove installs 1.11.0), and the step follows the
+installed release. The other ``compat`` branches: trafilatura reported as not installed (pyroid
+runs 2.3.1) and as a release pyroid does not reproduce (datatrove's own step runs, with one
+FallbackWarning).
 """
 
 from __future__ import annotations
@@ -33,11 +35,16 @@ if FREE_THREADED:
     pytest.skip(
         "datatrove's step needs trafilatura (lxml re-enables the GIL)", allow_module_level=True
     )
-if (
-    importlib.util.find_spec("trafilatura") is None
-    or importlib.metadata.version("trafilatura") != "2.3.1"
-):
-    pytest.skip("needs trafilatura 2.3.1 for datatrove's own step", allow_module_level=True)
+INSTALLED = (
+    importlib.metadata.version("trafilatura")
+    if importlib.util.find_spec("trafilatura") is not None
+    else None
+)
+if INSTALLED not in ("2.3.1", "1.11.0"):
+    pytest.skip(
+        f"needs trafilatura 2.3.1 or 1.11.0 for datatrove's own step, found {INSTALLED}",
+        allow_module_level=True,
+    )
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")  # urllib3's DependencyWarning (SOCKS) when trafilatura loads
@@ -143,7 +150,8 @@ CASES: dict[str, dict[str, Any]] = {
     "recall_side": {"favour_precision": False},
     "no_dedup": {"deduplicate": False},
     "no_tables": {"include_tables": False},
-    "fast": {"fast": True},
+    "fast": {"fast": True},  # 2.3.1's switch; 1.11.0's extract ignores the keyword
+    "no_fallback_111": {"no_fallback": True},  # 1.11.0's switch (2.3.1 warns: not compared)
 }
 
 
@@ -151,6 +159,8 @@ CASES: dict[str, dict[str, Any]] = {
 @pytest.mark.parametrize("case", list(CASES))
 @pytest.mark.parametrize("threads", [1, None])
 def test_matches_datatrove(case: str, threads: int | None) -> None:
+    if case == "no_fallback_111" and INSTALLED != "1.11.0":
+        pytest.skip("no_fallback warns (DeprecationWarning) in 2.3.1")
     texts = pages()
     kwargs = CASES[case]
     want = stock(kwargs, texts)
@@ -163,12 +173,22 @@ def test_matches_datatrove(case: str, threads: int | None) -> None:
 
 def test_warm_up_failure_times_out() -> None:
     texts = [tp.PAGES["article"], tp.PAGES["table"]]
-    # a keyword trafilatura.extract does not take: datatrove's child dies in its warm-up call
-    # extract(""), so every page waits for the timeout (1 s here)
-    want = run(StockTrafilatura(timeout=1, bogus=1), texts)
-    got = run(pdt.Trafilatura(timeout=1, bogus=1), texts)
+    # a keyword trafilatura.extract rejects (2.3.1: TypeError; 1.11.0: NameError for this one):
+    # datatrove's child dies in its warm-up call extract(""), so every page waits for the
+    # timeout (1 s here)
+    want = run(StockTrafilatura(timeout=1, csv_output=True), texts)
+    got = run(pdt.Trafilatura(timeout=1, csv_output=True), texts)
     assert got == want
     assert got[1]["timeout"] == 2
+
+
+def test_unknown_keyword() -> None:
+    texts = [tp.PAGES["article"], tp.PAGES["table"]]
+    # 2.3.1 rejects it (every page times out, as above); 1.11.0's extract(**kwargs) ignores it
+    want = run(StockTrafilatura(timeout=1, bogus=1), texts)
+    assert run(pdt.Trafilatura(timeout=1, bogus=1), texts) == want
+    if INSTALLED == "1.11.0":
+        assert want[1]["forwarded"] == 2
 
 
 def test_raising_page_restarts_the_cache() -> None:
@@ -192,11 +212,12 @@ def test_delegated_option_runs_trafilatura(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_fresh_cache_per_run() -> None:
     texts = [tp.PAGES["repeated"]] * 4 + [tp.PAGES["article"]] * 4
+    before = list(pt.LRU_TEST.cache.items())
     step = pdt.Trafilatura()
     first = run(step, texts)[0]
     assert "3" not in [d for d, _ in first]  # the 4th copy is a duplicate
     assert [(d.id, d.text) for d in step.run(docs(texts))] == first  # a new task, a new cache
-    assert not pt.LRU_TEST.cache  # the module cache is not used
+    assert list(pt.LRU_TEST.cache.items()) == before  # the module cache is not used
     assert first == stock({}, texts)[0]
 
 
@@ -205,25 +226,27 @@ def test_compat_follows_installed_version(monkeypatch: pytest.MonkeyPatch) -> No
     want = stock({}, texts)
     monkeypatch.setattr(pt, "_WARNED", set())
     monkeypatch.setattr(pdt, "_WARNED", set())
-    # trafilatura 2.3.1 is installed: pyroid runs, no warning
+    # the installed release (stock datatrove installs 1.11.0): pyroid reproduces it, no warning
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert run(pdt.Trafilatura(timeout=60), texts) == want
-    # not installed: pyroid's default release
+        assert run(pdt.Trafilatura(timeout=60, compat=INSTALLED), texts) == want  # explicit
+    # not installed: pyroid's default release, 2.3.1
+    default = run(pdt.Trafilatura(timeout=60, compat="2.3.1"), texts)
     monkeypatch.setattr(pdt, "_installed_trafilatura", lambda: None)
-    assert run(pdt.Trafilatura(timeout=60), texts) == want
-    # a release pyroid does not reproduce (stock datatrove installs 1.11.0): datatrove's own step,
-    # here running the installed 2.3.1 in its child process
-    monkeypatch.setattr(pdt, "_installed_trafilatura", lambda: "1.11.0")
+    assert run(pdt.Trafilatura(timeout=60), texts) == default
+    if INSTALLED == "2.3.1":
+        assert default == want
+    # a release pyroid does not reproduce: datatrove's own step, here running the installed one
+    # in its child process
+    monkeypatch.setattr(pdt, "_installed_trafilatura", lambda: "9.9.9")
     step = pdt.Trafilatura(timeout=60)
     with pytest.warns(
-        pyroid.FallbackWarning, match=r"trafilatura 1\.11\.0 \(pyroid reproduces 2\.3\.1\)"
+        pyroid.FallbackWarning,
+        match=r"trafilatura 9\.9\.9 \(pyroid reproduces 2\.3\.1, 1\.11\.0\)",
     ):
         assert run(step, texts) == want
     assert step._datatrove is False
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        assert run(pdt.Trafilatura(timeout=60, compat="2.3.1"), texts) == want  # explicit: pyroid
 
 
 def test_single_document_api() -> None:
@@ -233,8 +256,9 @@ def test_single_document_api() -> None:
 
 
 @pytest.mark.timeout(900)
-def test_executor_end_to_end(tmp_path: Path) -> None:
-    """LocalPipelineExecutor, 2 tasks: the same JSONL out, stock vs pyroid."""
+@pytest.mark.parametrize("workers", [1, 2])
+def test_executor_end_to_end(tmp_path: Path, workers: int) -> None:
+    """LocalPipelineExecutor, 2 tasks (deep-copied at 1 worker, pickled at 2): same JSONL out."""
     pytest.importorskip("orjson")
     from datatrove.executor import LocalPipelineExecutor  # type: ignore[import-not-found,import-untyped,unused-ignore]
     from datatrove.pipeline.readers import JsonlReader  # type: ignore[import-not-found,import-untyped,unused-ignore]
@@ -252,7 +276,7 @@ def test_executor_end_to_end(tmp_path: Path) -> None:
         LocalPipelineExecutor(
             pipeline=[JsonlReader(str(src)), step, JsonlWriter(str(tmp_path / name))],
             tasks=2,
-            workers=1,
+            workers=workers,
             logging_dir=str(tmp_path / f"{name}-logs"),
         ).run()
         import gzip

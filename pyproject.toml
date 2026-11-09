@@ -103,6 +103,18 @@ test-gil = [
   "lxml==6.1.3",
   "justext==3.0.2",
 ]
+# The reference for pyroid.trafilatura's compat="1.11.0" mode: trafilatura 1.11.0 as
+# datatrove[processing]==0.10.1 resolves it. GIL builds only (lxml), and instead of test-gil's
+# trafilatura 2.3.1, never with it: `uv pip install --group test-trafilatura-111`.
+test-trafilatura-111 = [
+  "trafilatura==1.11.0",
+  "lxml==6.1.3",
+  "justext==3.0.2",
+  "lxml-html-clean==0.4.6",
+  "charset-normalizer==3.5.2",
+  "courlan==1.4.0",
+  "htmldate==1.11.0",
+]
 # Same pins as .pre-commit-config.yaml (prek runs ruff and mypy from there).
 lint = ["ruff==0.17.3", "mypy==2.4.1", "prek==0.5.10"]
 dev = ["maturin>=1.16,<2.0", { include-group = "test" }, { include-group = "lint" }]

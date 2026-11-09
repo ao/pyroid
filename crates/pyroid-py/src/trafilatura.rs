@@ -60,14 +60,29 @@ fn check_threads(threads: Option<Threads>) -> bool {
 /// The Trafilatura releases the port reproduces.
 #[pyfunction]
 fn supported_versions() -> Vec<&'static str> {
-    vec!["2.3.1"]
+    vec!["2.3.1", "1.11.0"]
 }
 
 fn version_of(v: &str) -> Option<Version> {
     match v {
         "2.3.1" => Some(Version::V2_3_1),
+        "1.11.0" => Some(Version::V1_11_0),
         _ => None,
     }
+}
+
+/// Whether trafilatura `version`'s `load_html` gives a tree for `html` (a str or UTF-8 bytes).
+#[pyfunction]
+fn loads(html: &Bound<'_, PyAny>, version: &str) -> PyResult<bool> {
+    let version = version_of(version)
+        .ok_or_else(|| PyValueError::new_err(format!("no trafilatura mode {version:?}")))?;
+    let Some(inp) = input(html)? else {
+        return Ok(false);
+    };
+    let bytes = inp.as_bytes();
+    Ok(html
+        .py()
+        .detach(|| core::load_html_for(bytes, version).is_some()))
 }
 
 // ------------------------------------------------------------------------------------ options
@@ -400,7 +415,8 @@ fn extract<'py>(
 }
 
 /// `trafilatura.bare_extraction(html, ...)` with output "python": `(text, comments, body,
-/// commentsbody)` (the XML of the two trees), `None`, or `NotImplemented` as for [`extract`].
+/// commentsbody)` (the XML of the two trees; `commentsbody` is `None` where trafilatura 1.11.0
+/// leaves it unset), `None`, or `NotImplemented` as for [`extract`].
 #[pyfunction]
 #[pyo3(signature = (html, opts, cache = None))]
 fn bare_extraction<'py>(
@@ -427,7 +443,12 @@ fn bare_extraction<'py>(
                     PyString::new(py, &x.text).into_any(),
                     comments.map_or_else(|| py.None().into_bound(py), Bound::into_any),
                     PyString::new(py, &x.body).into_any(),
-                    PyString::new(py, &x.commentsbody).into_any(),
+                    // "" is None (1.11.0 without include_comments)
+                    if x.commentsbody.is_empty() {
+                        py.None().into_bound(py)
+                    } else {
+                        PyString::new(py, &x.commentsbody).into_any()
+                    },
                 ],
             )?
             .into_any())
@@ -511,7 +532,9 @@ fn cached_batch(
         return Ok(out);
     }
     let round = (ROUND_PER_WORKER * tasks).min(n);
-    let mut cur: Vec<Option<Document>> = dynamic_map(round, threads, |i| core::load_html(docs[i]))?;
+    let mut cur: Vec<Option<Document>> = dynamic_map(round, threads, |i| {
+        core::load_html_for(docs[i], opts.version)
+    })?;
     let mut start = 0;
     let cache = Mutex::new(cache);
     let workers: Vec<usize> = (0..tasks).collect();
@@ -548,7 +571,7 @@ fn cached_batch(
                 if idx >= next_len {
                     break;
                 }
-                let doc = core::load_html(docs[end + idx]);
+                let doc = core::load_html_for(docs[end + idx], opts.version);
                 *next[idx].lock().unwrap_or_else(PoisonError::into_inner) = doc;
             }
             res
@@ -637,6 +660,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(supported_unicode_versions, &m)?)?;
     m.add_function(wrap_pyfunction!(supported_versions, &m)?)?;
     m.add_function(wrap_pyfunction!(is_utf8, &m)?)?;
+    m.add_function(wrap_pyfunction!(loads, &m)?)?;
     m.add_function(wrap_pyfunction!(check_threads, &m)?)?;
     m.add_function(wrap_pyfunction!(extract, &m)?)?;
     m.add_function(wrap_pyfunction!(bare_extraction, &m)?)?;

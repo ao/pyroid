@@ -1,14 +1,15 @@
-# Derived from trafilatura 2.3.1 (Apache-2.0), © Adrien Barbaresi; modified.
+# Derived from trafilatura 2.3.1 and 1.11.0 (Apache-2.0), © Adrien Barbaresi; modified.
 # Type stubs for pyroid.trafilatura: the signatures of trafilatura 2.3.1. The module docstring is
 # kept here on purpose: the API docs are built from this stub.
-"""A drop-in, Rust-backed replacement for trafilatura 2.3.1's text extraction.
+"""A drop-in, Rust-backed replacement for trafilatura's text extraction (2.3.1 and 1.11.0).
 
 :func:`extract` and :func:`bare_extraction` take trafilatura 2.3.1's arguments, with its
 defaults, and return the same text, byte for byte. The whole path is ported to Rust: trafilatura's
 ``load_html`` and HTML repair, libxml2 2.14.6's HTML parser as lxml 6.1.3 drives it, the tree
 cleaning, the main extractor, the readability and jusText 3.0.2 comparisons, the baseline and
 recall fallbacks, deduplication and the text output. Nothing is imported from trafilatura or
-lxml on that path.
+lxml on that path. ``compat="1.11.0"`` reproduces trafilatura 1.11.0 instead, the release
+datatrove 0.10.1 installs (see below).
 
 Native: a ``str`` page (lone surrogates included), or ``bytes`` that are valid UTF-8 and not
 compressed; ``output_format="txt"`` (``"python"`` for :func:`bare_extraction`); ``fast`` /
@@ -27,6 +28,33 @@ tree or a response object as input, bytes that are compressed or not UTF-8, a ne
 setting, and ``sys.set_int_max_str_digits()`` limits other than 4300. Without trafilatura, or
 with another version of it, these raise ``pyroid.PyroidError`` and say why.
 
+trafilatura 1.11.0 (``compat="1.11.0"``)
+----------------------------------------
+The same options run natively, with 1.11.0's behaviour; the delegated ones go to an installed
+trafilatura 1.11.0 (``PyroidError`` without it, or with another version). Where 1.11.0 differs:
+
+- It has no ``fast``: :func:`extract` ignores it (1.11.0's ``extract`` takes ``**kwargs``) and
+  :func:`bare_extraction` raises its ``TypeError`` for a true value. Its ``no_fallback`` is the
+  same switch, without a ``DeprecationWarning``.
+- ``max_tree_size`` works (its ``len(body)`` check) instead of raising; ``author_blacklist`` does
+  not need metadata, so it has no effect here.
+- ``deduplicate`` is a flag: any true value, an :class:`LRUCache` included, uses the module cache
+  :data:`LRU_TEST`, as 1.11.0 always uses its own.
+- ``config`` wins over ``settingsfile`` (which is read only with ``config=None``, and then on its
+  own); the default ``config`` stands for 1.11.0's settings.cfg (``DEFAULT_CONFIGS["1.11.0"]``).
+- :func:`bare_extraction` raises 1.11.0's ``AttributeError`` (``'NoneType' object has no
+  attribute 'source'``) for a page that does not load, as 1.11.0 does when called directly; its
+  ``commentsbody`` is ``None`` without ``include_comments``.
+- There is no ``extract_with_metadata`` (``compat="1.11.0"`` raises ``ValueError``).
+- :func:`bare_extraction`'s ``as_dict`` defaults to ``True``, as in 1.11.0. :func:`extract`
+  ignores keywords it does not know, and raises 1.11.0's ``NameError`` for the old
+  ``csv_output`` / ``json_output`` / ``tei_output`` / ``xml_output``, as 1.11.0's
+  ``extract(**kwargs)`` does (its signature is shown as 2.3.1's; in 2.3.1 mode unknown keywords
+  raise ``TypeError``).
+- Positional arguments follow this module's (2.3.1's) order: pass 1.11.0's options by
+  keyword. ``pyroid.patch("trafilatura")`` with trafilatura 1.11.0 installed gives functions
+  with 1.11.0's exact signatures.
+
 Differences from trafilatura
 ----------------------------
 - Trafilatura's log messages (``logging.getLogger("trafilatura")``) are not emitted.
@@ -44,6 +72,7 @@ from typing import Any, Final, Literal, final, overload
 
 __all__ = [
     "DEFAULT_CONFIG",
+    "DEFAULT_CONFIGS",
     "DELEGATED",
     "LRU_SIZE",
     "LRU_TEST",
@@ -63,13 +92,15 @@ TRAFILATURA_VERSION: Final[str]
 """The trafilatura release reproduced by default (``"2.3.1"``, the default of ``compat=``)."""
 
 TRAFILATURA_VERSIONS: Final[tuple[str, ...]]
-"""The trafilatura releases pyroid reproduces, one ``compat=`` mode each: ``("2.3.1",)``."""
+"""The trafilatura releases pyroid reproduces, one ``compat=`` mode each (2.3.1 and 1.11.0)."""
 
 REPRODUCED_VERSIONS: Final[Mapping[str, Mapping[str, str]]]
 """For each mode, the exact library versions it reproduces together.
 
-``{"2.3.1": {"trafilatura": "2.3.1", "lxml": "6.1.3", "libxml2": "2.14.6", "justext": "3.0.2"}}``
-(libxml2 2.14.6 is the one bundled in lxml 6.1.3's wheels).
+``"2.3.1"``: trafilatura 2.3.1, lxml 6.1.3, libxml2 2.14.6 (bundled in lxml 6.1.3's wheels),
+justext 3.0.2. ``"1.11.0"``: trafilatura 1.11.0, lxml 6.1.3, libxml2 2.14.6, justext 3.0.2, and
+lxml-html-clean 0.4.6, charset-normalizer 3.5.2, courlan 1.4.0 and htmldate 1.11.0, as
+``pip install datatrove[processing]==0.10.1`` resolves them (these four do not change the text).
 """
 
 DELEGATED: Final[tuple[str, ...]]
@@ -80,6 +111,10 @@ LRU_SIZE: Final[int]
 
 DEFAULT_CONFIG: Final[ConfigParser]
 """``trafilatura.settings.DEFAULT_CONFIG``: trafilatura 2.3.1's settings.cfg values."""
+
+DEFAULT_CONFIGS: Final[Mapping[str, ConfigParser]]
+"""Each mode's ``trafilatura.settings.DEFAULT_CONFIG`` (``DEFAULT_CONFIGS["2.3.1"]`` is
+:data:`DEFAULT_CONFIG`). With ``compat="1.11.0"`` the default ``config`` stands for 1.11.0's."""
 
 @final
 class LRUCache:
@@ -137,6 +172,12 @@ class Document:
     are ``None``, as in trafilatura without metadata extraction. ``body`` and ``commentsbody``
     are parsed into lxml elements when first read (they are the strings
     ``etree.tostring(element, encoding="unicode")`` gives when lxml is not installed).
+
+    With ``compat="1.11.0"`` the result is a subclass of trafilatura 1.11.0's ``Document``
+    (when 1.11.0 is installed) or of a class with its fields: its constructor takes no
+    arguments, setting an unknown attribute does nothing, and ``commentsbody`` is ``None``
+    without ``include_comments``. A tree that holds control characters (1.11.0 keeps them, and
+    lxml cannot build such a tree from Python) stays its XML string.
     """
 
     title: str | None
@@ -264,7 +305,8 @@ def extract(
         config: A ``ConfigParser`` with trafilatura's settings (default :data:`DEFAULT_CONFIG`).
         options: A ``trafilatura.settings.Extractor`` is delegated; other values are ignored, as
             in trafilatura.
-        compat: The trafilatura release to reproduce, one of :data:`TRAFILATURA_VERSIONS`.
+        compat: The trafilatura release to reproduce, one of :data:`TRAFILATURA_VERSIONS`
+            (``"1.11.0"``: see the module docstring for how its arguments differ).
 
     Returns:
         The text, or ``None`` where trafilatura returns ``None`` (nothing extracted, too short,
@@ -380,11 +422,12 @@ def extract_with_metadata(
 ) -> Any:
     """``trafilatura.extract_with_metadata``: always delegated (metadata extraction).
 
-    Returns trafilatura's ``Document``. Needs trafilatura (``compat``'s version); a pyroid
-    :class:`LRUCache` passed as ``deduplicate`` is lent to it and updated.
+    Returns trafilatura's ``Document``. Needs trafilatura 2.3.1; a pyroid :class:`LRUCache`
+    passed as ``deduplicate`` is lent to it and updated.
 
     Raises:
         pyroid.PyroidError: trafilatura is not installed, or is another version.
+        ValueError: ``compat="1.11.0"`` (trafilatura 1.11.0 has no ``extract_with_metadata``).
     """
 
 def extract_batch(

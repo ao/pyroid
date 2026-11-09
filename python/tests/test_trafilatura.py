@@ -89,7 +89,22 @@ def no_trafilatura(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_constants() -> None:
     assert pt.TRAFILATURA_VERSION == "2.3.1"
-    assert pt.TRAFILATURA_VERSIONS == ("2.3.1",)
+    assert pt.TRAFILATURA_VERSIONS == ("2.3.1", "1.11.0")
+    assert dict(pt.REPRODUCED_VERSIONS["1.11.0"]) == {
+        "trafilatura": "1.11.0",
+        "lxml": "6.1.3",
+        "libxml2": "2.14.6",
+        "justext": "3.0.2",
+        "lxml-html-clean": "0.4.6",
+        "charset-normalizer": "3.5.2",
+        "courlan": "1.4.0",
+        "htmldate": "1.11.0",
+    }
+    assert pt.DEFAULT_CONFIGS["2.3.1"] is pt.DEFAULT_CONFIG
+    old = pt.DEFAULT_CONFIGS["1.11.0"]["DEFAULT"]
+    assert old["MIN_EXTRACTED_COMM_SIZE"] == "1"
+    assert "MAX_TREE_SIZE" not in old
+    assert old["SLEEP_TIME"] == "5"
     assert dict(pt.REPRODUCED_VERSIONS["2.3.1"]) == {
         "trafilatura": "2.3.1",
         "lxml": "6.1.3",
@@ -207,8 +222,8 @@ def test_extract_batch_signature() -> None:
 def test_compat_values() -> None:
     page = PAGES["article"]
     assert pt.extract(page, compat="2.3.1") == pt.extract(page)
-    for bad in ("1.11.0", "2.3", 231, None):
-        with pytest.raises(ValueError, match=r"compat must be one of '2\.3\.1'"):
+    for bad in ("1.10.0", "2.3", 231, None):
+        with pytest.raises(ValueError, match=r"compat must be one of '2\.3\.1', '1\.11\.0'"):
             pt.extract(page, compat=bad)  # type: ignore[arg-type]
         with pytest.raises(ValueError, match="compat must be one of"):
             pt.bare_extraction(page, compat=bad)  # type: ignore[arg-type]
@@ -716,9 +731,261 @@ def test_import_and_extract_keep_the_gil_disabled(run_python: Callable[..., Any]
         assert pt.extract_batch([page] * 300, favor_precision=True)[0]
         assert pt.extract_batch([page] * 300, deduplicate=pt.LRUCache(10))[0]
         assert pt.bare_extraction(page).text
+        pt.reset_caches()
+        assert pt.extract_batch([page] * 300, deduplicate=True, compat="1.11.0")[0]
+        assert pt.bare_extraction(page, as_dict=False, compat="1.11.0").text  # no tree parsed
         assert "lxml" not in sys.modules
         print(getattr(sys, "_is_gil_enabled", lambda: True)())
         """
     )
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == str(not FREE_THREADED)
+
+
+# --------------------------------------------------------------------------- compat="1.11.0"
+
+V111 = "1.11.0"
+PINNED_111: dict[str, str] = tp.PINNED_111
+OPTION_SETS_111: dict[str, dict[str, Any]] = tp.OPTION_SETS_111
+
+
+@pytest.mark.thread_unsafe(reason="deduplicate=True uses the module-level cache")
+@pytest.mark.parametrize("page", list(PAGES))
+def test_pinned_outcomes_111(page: str) -> None:
+    got = []
+    for kwargs in OPTION_SETS_111.values():
+        pt.reset_caches()
+        got.append(digest(outcome(pt.extract, PAGES[page], compat=V111, **kwargs)))
+    assert got == PINNED_111[page].split()
+
+
+def test_111_arguments() -> None:
+    page = PAGES["article"]
+    text = pt.extract(page, compat=V111)
+    assert text is not None
+    # 1.11.0's extract has no `fast` (it takes **kwargs): ignored; `no_fallback` is the switch
+    assert pt.extract(page, fast=True, compat=V111) == text
+    assert (
+        pt.extract(page, no_fallback=True, compat=V111)
+        == pt.extract_batch([page], no_fallback=True, compat=V111)[0]
+    )
+    with pytest.raises(TypeError, match="unexpected keyword argument 'fast'"):
+        pt.bare_extraction(page, fast=True, compat=V111)
+    # max_tree_size is a limit, not an error; author_blacklist needs no metadata
+    assert pt.extract(page, max_tree_size=1, compat=V111) is None
+    assert pt.extract(page, max_tree_size=10_000, compat=V111) == text
+    assert pt.extract(page, author_blacklist={"Jane"}, compat=V111) == text
+    with pytest.raises(ValueError, match=r"compat must be one of '2\.3\.1'"):
+        pt.extract_with_metadata(page, compat=V111)
+
+
+def test_111_config_and_settingsfile(tmp_path: Path) -> None:
+    page = PAGES["article"]
+    text = pt.extract(page, compat=V111)
+    small = configparser.ConfigParser()
+    small.read_dict({"DEFAULT": dict(pt.DEFAULT_CONFIGS[V111]["DEFAULT"])})
+    small.set("DEFAULT", "MIN_OUTPUT_SIZE", "100000")
+    small.set("DEFAULT", "MIN_OUTPUT_COMM_SIZE", "100000")
+    path = tmp_path / "settings.cfg"
+    with path.open("w") as f:
+        small.write(f)
+    # 1.11.0's use_config(settingsfile, config): config wins, the file is read with config=None
+    assert pt.extract(page, settingsfile=str(path), compat=V111) == text
+    assert pt.extract(page, settingsfile=str(path), config=None, compat=V111) is None  # type: ignore[arg-type]
+    with pytest.raises(FileNotFoundError):
+        pt.extract(page, settingsfile=str(tmp_path / "no.cfg"), config=None, compat=V111)  # type: ignore[arg-type]
+    # 2.3.1's settings.cfg has no MIN_EXTRACTED_COMM_SIZE, which 1.11.0 reads
+    two = configparser.ConfigParser()
+    two.read_dict({"DEFAULT": dict(pt.DEFAULT_CONFIG["DEFAULT"])})
+    with pytest.raises(configparser.NoOptionError, match="min_extracted_comm_size"):
+        pt.extract(page, config=two, compat=V111)
+
+
+def test_111_bare_extraction() -> None:
+    # 1.11.0's as_dict defaults to True
+    assert isinstance(pt.bare_extraction(PAGES["article"], compat=V111), dict)
+    doc = pt.bare_extraction(PAGES["article"], as_dict=False, compat=V111)
+    assert doc is not None
+    assert type(doc).__name__ == "Document"
+    assert type(doc).__qualname__ == "_Document_1_11_0"
+    assert type(doc) is cast(Any, pt)._Document_1_11_0
+    assert doc.text == ARTICLE_TEXT
+    assert doc.comments == ARTICLE_COMMENTS[1:]
+    no_comments = pt.bare_extraction(
+        PAGES["article"], include_comments=False, as_dict=False, compat=V111
+    )
+    assert no_comments is not None
+    assert no_comments.commentsbody is None  # 1.11.0's Document() default
+    as_dict = pt.bare_extraction(PAGES["article"], as_dict=True, compat=V111)
+    assert isinstance(as_dict, dict)
+    assert as_dict["text"] == ARTICLE_TEXT
+    # our own object: nothing untrusted is unpickled
+    back = pickle.loads(pickle.dumps(doc))
+    assert type(back) is type(doc)
+    assert _xml(back.body) == _xml(doc.body)
+    # bare_extraction on a page that does not load: 1.11.0's `options.source` on None
+    for bad in ("", PAGES["fragment"], 123):
+        with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'source'"):
+            pt.bare_extraction(bad, compat=V111)
+    with pytest.raises(AttributeError, match="'dict' object has no attribute 'source'"):
+        pt.bare_extraction("", options={"x": 1}, compat=V111)
+
+
+@pytest.mark.thread_unsafe(reason="the module-level dedup cache")
+def test_111_dedup_is_a_flag() -> None:
+    page = PAGES["repeated"]
+    pt.reset_caches()
+    mine = pt.LRUCache(64)
+    seq = [pt.extract(page, deduplicate=mine, compat=V111) for _ in range(4)]
+    assert not mine.cache  # 1.11.0 has no per-call cache: the module one is used
+    assert pt.LRU_TEST.cache
+    pt.reset_caches()
+    assert seq == [pt.extract(page, deduplicate=True, compat=V111) for _ in range(4)]
+    pt.reset_caches()
+
+
+@pytest.mark.thread_unsafe(reason="the module-level dedup cache")
+@pytest.mark.parametrize("kwargs", list(OPTION_SETS_111.values()), ids=list(OPTION_SETS_111))
+@pytest.mark.parametrize("threads", [None, 1, 3])
+def test_111_batch_equals_loop(kwargs: dict[str, Any], threads: int | None) -> None:
+    pages = _batch_pages()
+    pt.reset_caches()
+    loop = [pt.extract(p, compat=V111, **kwargs) for p in pages]
+    loop_cache = list(pt.LRU_TEST.cache.items())
+    pt.reset_caches()
+    assert pt.extract_batch(pages, threads=threads, compat=V111, **kwargs) == loop
+    assert list(pt.LRU_TEST.cache.items()) == loop_cache
+    pt.reset_caches()
+
+
+def test_111_extract_keywords() -> None:
+    page = PAGES["article"]
+    # extract(**kwargs) in 1.11.0: unknown keywords are ignored, the old *_output names raise
+    assert pt.extract(page, compat=V111, bogus=1) == pt.extract(page, compat=V111)  # type: ignore[call-arg]
+    with pytest.raises(NameError, match="use output_format instead"):
+        pt.extract(page, compat=V111, json_output=True)  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match="unexpected keyword argument 'bogus'"):
+        pt.extract(page, bogus=1)  # type: ignore[call-arg]
+    assert "kwargs" not in inspect.signature(pt.extract).parameters  # shown as 2.3.1's
+
+
+def test_111_batch_keywords() -> None:
+    pages = [PAGES["article"], PAGES["table"]]
+    want = [pt.extract(p, compat=V111) for p in pages]
+    # 1.11.0's extract ignores unknown keywords, and 2.3.1's fast
+    assert pt.extract_batch(pages, compat=V111, bogus=1, fast=True) == want
+    with pytest.raises(NameError, match="use output_format instead"):
+        pt.extract_batch(pages, compat=V111, csv_output=True)
+
+
+@pytest.mark.thread_unsafe(reason="hides trafilatura in sys.modules")
+@pytest.mark.parametrize("case", list(tp.DELEGATED_CALLS_111))
+def test_111_delegation_without_trafilatura_raises(case: str, no_trafilatura: None) -> None:
+    fn, kwargs = tp.DELEGATED_CALLS_111[case]
+    arg: Any = [PAGES["article"]] if fn == "extract_batch" else PAGES["article"]
+    with pytest.raises(pyroid.PyroidError, match=r"pip install trafilatura==1\.11\.0"):
+        getattr(pt, fn)(arg, compat=V111, **kwargs)
+
+
+@pytest.mark.thread_unsafe(reason="replaces trafilatura in sys.modules")
+def test_111_delegation_to_another_version_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = types.ModuleType("trafilatura")
+    fake.__version__ = "2.3.1"  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "trafilatura", fake)
+    with pytest.raises(pyroid.PyroidError, match=r"installed trafilatura is 2\.3\.1, not 1\.11\.0"):
+        pt.extract(PAGES["article"], output_format="xml", compat=V111)
+
+
+# trafilatura 1.11.0's signatures (the shim's functions): (name, default), positional-or-keyword.
+SIGNATURES_111: dict[str, list[tuple[str, Any]]] = {
+    "extract": [
+        ("filecontent", inspect.Parameter.empty),
+        ("url", None),
+        ("record_id", None),
+        ("no_fallback", False),
+        ("favor_precision", False),
+        ("favor_recall", False),
+        ("include_comments", True),
+        ("output_format", "txt"),
+        ("tei_validation", False),
+        ("target_language", None),
+        ("include_tables", True),
+        ("include_images", False),
+        ("include_formatting", False),
+        ("include_links", False),
+        ("deduplicate", False),
+        ("date_extraction_params", None),
+        ("with_metadata", False),
+        ("only_with_metadata", False),
+        ("max_tree_size", None),
+        ("url_blacklist", None),
+        ("author_blacklist", None),
+        ("settingsfile", None),
+        ("prune_xpath", None),
+        ("config", "DEFAULT_CONFIG"),
+        ("options", None),
+    ],
+    "bare_extraction": [
+        ("filecontent", inspect.Parameter.empty),
+        ("url", None),
+        ("no_fallback", False),
+        ("favor_precision", False),
+        ("favor_recall", False),
+        ("include_comments", True),
+        ("output_format", "python"),
+        ("target_language", None),
+        ("include_tables", True),
+        ("include_images", False),
+        ("include_formatting", False),
+        ("include_links", False),
+        ("deduplicate", False),
+        ("date_extraction_params", None),
+        ("with_metadata", False),
+        ("only_with_metadata", False),
+        ("max_tree_size", None),
+        ("url_blacklist", None),
+        ("author_blacklist", None),
+        ("as_dict", True),
+        ("prune_xpath", None),
+        ("config", "DEFAULT_CONFIG"),
+        ("options", None),
+    ],
+}
+
+
+def test_111_shim_signatures() -> None:
+    api = cast(Any, pt)._api(V111)
+    assert sorted(api) == ["bare_extraction", "extract"]
+    for name, params in SIGNATURES_111.items():
+        want = [(n, "POSITIONAL_OR_KEYWORD", d) for n, d in params]
+        if name == "extract":
+            want.append(("kwargs", "VAR_KEYWORD", inspect.Parameter.empty))
+        assert shape(api[name]) == want, name
+        default = inspect.signature(api[name]).parameters["config"].default
+        assert default is pt.DEFAULT_CONFIGS[V111]
+    page = PAGES["article"]
+    assert api["extract"](page, fast=True, bogus=1) == pt.extract(page, compat=V111)
+    assert isinstance(api["bare_extraction"](page), dict)  # as_dict=True by default
+    with pytest.raises(NameError):
+        api["extract"](page, xml_output=True)
+
+
+@pytest.mark.parametrize(
+    "xml",
+    [
+        "<body><p></p><p/><p>a</p></body>",
+        '<head rend="h1">The the the.</head>\n',
+        "<body><p>x &amp; y &lt;z&gt;</p><!-- a <c> comment --><p></p>tail</body> &amp; tail",
+        '<body><cell role="head"></cell><list rend="ul"><item></item><item/></list></body>',
+    ],
+)
+def test_trees_round_trip(xml: str) -> None:
+    etree = pytest.importorskip("lxml.etree")
+    element = cast(Any, pt)._from_xml(xml)
+    assert etree.tostring(element, encoding="unicode") == xml
+
+
+def test_trees_with_control_characters_stay_xml() -> None:
+    pytest.importorskip("lxml.etree")
+    xml = "<body><p>the &#xFFFD;</p></body>"  # tostring of a tree holding "\x1f"
+    assert cast(Any, pt)._from_xml(xml) == xml

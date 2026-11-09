@@ -541,6 +541,20 @@ jobs:
           "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs \
             python/tests/test_integrations_datatrove.py python/tests/test_trafilatura_datatrove.py | tee -a "$log"
           if grep '^SKIPPED' "$log"; then echo "::error::live-oracle tests skipped (see above)"; exit 1; fi
+      # pyroid.trafilatura's 1.11.0 mode against trafilatura 1.11.0, in its own venv: the pins a fresh
+      # datatrove[processing]==0.10.1 resolves ([dependency-groups] test-trafilatura-111; never together with test-gil),
+      # plus datatrove for the Trafilatura step test. The 2.3.1-only tests skip here.
+      - name: trafilatura 1.11.0 mode (pyroid.trafilatura compat="1.11.0", the datatrove step on stock datatrove)
+        run: |
+          set -euo pipefail
+          uv venv -p 3.13 .venv-t111
+          uv pip install --python .venv-t111 --no-index --no-deps --no-build --find-links dist pyroid
+          uv pip install --python .venv-t111 --group test --group test-trafilatura-111
+          uv pip install --python .venv-t111 --only-binary :all: datatrove==0.10.1 tokenizers==0.23.3 regex==2026.9.29 orjson==3.13.0
+          py=.venv-t111/bin/python
+          "$py" -c "from importlib.metadata import version as v; print(*(f'{d}=={v(d)}' for d in ('pyroid', 'trafilatura', 'lxml', 'justext', 'datatrove')))"
+          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs python/tests/test_trafilatura_parity_111.py \
+            python/tests/test_trafilatura.py python/tests/test_trafilatura_patch.py python/tests/test_trafilatura_datatrove.py
 
   msrv:
     name: MSRV (cargo check on Cargo.toml's rust-version)

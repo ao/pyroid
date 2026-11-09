@@ -43,8 +43,8 @@ in batches, without the GIL:
   :class:`SentenceDedupFilter`, :class:`SentenceDedupBuildIndex`:
   ``pyroid.dedup``; the same signature, duplicate and index files, byte for
   byte, and the same documents out.
-- :class:`Trafilatura`: ``pyroid.trafilatura`` (byte-identical to trafilatura 2.3.1;
-  in this process, with no timeout).
+- :class:`Trafilatura`: ``pyroid.trafilatura`` (byte-identical to the installed trafilatura,
+  1.11.0 as datatrove installs it, or 2.3.1; in this process, with no timeout).
 
 Languages: the filter and MinHash steps take datatrove's ``language`` (a
 datatrove language code such as ``"fra_Latn"``). Every code pyroid tokenizes
@@ -577,19 +577,33 @@ class PIIFormatter(_Step, _dt_pii.PIIFormatter):
         self, *args: Any, batch_size: int = DEFAULT_BATCH_SIZE, threads: Any = 1, **kwargs: Any
     ) -> None:
         super().__init__(*args, **kwargs)
-        import pyroid.filters as pf
-
-        self._pyroid = pf.PIIReplacer(
-            remove_emails=self.remove_emails,
-            remove_ips=self.remove_ips,
-            email_replacement=tuple(self.emails_replacer.replacements),
-            ip_replacement=tuple(self.ip_replacer.replacements),
-        )
+        self._pyroid: Any = None
+        self._replacer()  # check the replacements now, as datatrove's own __init__ does
         self.batch_size = _batch_size(batch_size)
         self.threads = threads
 
+    def _replacer(self) -> Any:
+        """The native replacer, built on first use (and again after unpickling)."""
+        if self._pyroid is None:
+            import pyroid.filters as pf
+
+            self._pyroid = pf.PIIReplacer(
+                remove_emails=self.remove_emails,
+                remove_ips=self.remove_ips,
+                email_replacement=tuple(self.emails_replacer.replacements),
+                ip_replacement=tuple(self.ip_replacer.replacements),
+            )
+        return self._pyroid
+
+    def __getstate__(self) -> dict[str, Any]:
+        # The native replacer does not pickle (datatrove deep-copies or pickles steps to its
+        # workers): it is rebuilt from the same settings; the rotation counters travel along.
+        state = self.__dict__.copy()
+        state["_pyroid"] = None
+        return state
+
     def _format_batch(self, texts: list[str]) -> list[str]:
-        native = cast(Any, self._pyroid)._native
+        native = cast(Any, self._replacer())._native
         out, self.emails_replacer._replace_i, self.ip_replacer._replace_i = native.run(
             texts,
             self.emails_replacer._replace_i,
@@ -671,6 +685,14 @@ class C4BadWordsFilter(_Step, _dt_c4.C4BadWordsFilter):
         )
         self._pyroid_lists[lang] = len(self._pyroid_native) - 1
         return self._pyroid_lists[lang]
+
+    def __getstate__(self) -> dict[str, Any]:
+        # The native word lists do not pickle: they are reloaded in the worker, as datatrove
+        # reloads its own.
+        state = self.__dict__.copy()
+        state["_pyroid_lists"] = {}
+        state["_pyroid_native"] = []
+        return state
 
     def filter(self, doc: Any) -> Any:
         """One document (datatrove's API); :meth:`filter_batch` batches instead."""
@@ -1215,10 +1237,10 @@ class Trafilatura(_Step, _dt_traf.Trafilatura):
     Trafilatura itself is not needed.
 
     Extra keyword-only arguments: ``compat``, the trafilatura release to reproduce (``None``:
-    the installed trafilatura's version when pyroid reproduces it, or pyroid's default when
-    trafilatura is not installed; for any other installed version the documents go to
-    datatrove's own step, with a one-time :class:`pyroid.FallbackWarning`), ``batch_size`` and
-    ``threads``.
+    the installed trafilatura's version when pyroid reproduces it, which includes the 1.11.0 that
+    ``datatrove[processing]`` installs, or pyroid's default, 2.3.1, when trafilatura is not
+    installed; for any other installed version the documents go to datatrove's own step, with a
+    one-time :class:`pyroid.FallbackWarning`), ``batch_size`` and ``threads``.
 
     What differs: there is no child process and no ``timeout`` (pages datatrove gives up on
     after ``timeout`` seconds, counting ``timeout`` and restarting its dedup cache, get their
@@ -1280,19 +1302,31 @@ class Trafilatura(_Step, _dt_traf.Trafilatura):
         import pyroid.trafilatura as pt
 
         mode = self._mode() or pt.TRAFILATURA_VERSION
-        return cast(str, pt.extract(text, **self._call_kwargs(self.deduplicate), compat=mode))
+        many = cast(Any, pt)._extract_many
+        kwargs = self._call_kwargs(self.deduplicate)
+        return cast(str, many([text], kwargs, 1, mode, raise_errors=True)[0])
 
-    def _task_cache(self) -> Any:
-        """``deduplicate`` for one task: a fresh cache for ``True``, else the argument."""
+    def _task_cache(self, mode: str) -> Any:
+        """The dedup cache of one task, or None when ``deduplicate`` names its own cache.
+
+        It stands for trafilatura's module-level cache, which datatrove's per-task child process
+        has fresh. trafilatura 2.3.1 also takes a cache as ``deduplicate``: that one is used.
+        """
         import pyroid.trafilatura as pt
 
         dedup = self.deduplicate
-        if not dedup or isinstance(dedup, pt.LRUCache) or cast(Any, pt)._is_real_lru(dedup):
-            return dedup
+        if not dedup:
+            return None
+        if mode == pt.TRAFILATURA_VERSION and (
+            isinstance(dedup, pt.LRUCache) or cast(Any, pt)._is_real_lru(dedup)
+        ):
+            return None
         return pt.LRUCache(maxsize=pt.LRU_SIZE)
 
-    def _batch(self, texts: list[Any], kwargs: dict[str, Any], mode: str) -> tuple[list[Any], Any]:
-        """The results for `texts` (exceptions in place) and the kwargs for the next batch.
+    def _batch(
+        self, texts: list[Any], kwargs: dict[str, Any], mode: str, cache: Any
+    ) -> tuple[list[Any], Any]:
+        """The results for `texts` (exceptions in place) and the task cache for the next batch.
 
         A page whose extraction raises kills datatrove's child process, and the next child starts
         with an empty dedup cache: so does the rest of the task here, when the cache is the task's.
@@ -1300,18 +1334,17 @@ class Trafilatura(_Step, _dt_traf.Trafilatura):
         import pyroid.trafilatura as pt
 
         many = cast(Any, pt)._extract_many
-        fresh = kwargs["deduplicate"] is not self.deduplicate  # the task's own cache
         out: list[Any] = []
         while True:
-            results = many(texts, kwargs, self.threads, mode, raise_errors=False)
+            results = many(texts, kwargs, self.threads, mode, raise_errors=False, task_cache=cache)
             bad = next((i for i, r in enumerate(results) if isinstance(r, Exception)), None)
-            if bad is None or not fresh:
-                return out + results, kwargs
+            if bad is None or cache is None:
+                return out + results, cache
             out += results[: bad + 1]
-            kwargs = {**kwargs, "deduplicate": pt.LRUCache(maxsize=pt.LRU_SIZE)}
+            cache = pt.LRUCache(maxsize=pt.LRU_SIZE)
             texts = texts[bad + 1 :]
             if not texts:
-                return out, kwargs
+                return out, cache
 
     def run(self, data: Iterable[Any], rank: int = 0, world_size: int = 1) -> Any:
         """Extract the text of every document, ``batch_size`` at a time."""
@@ -1331,6 +1364,7 @@ class Trafilatura(_Step, _dt_traf.Trafilatura):
                 self._datatrove = False
             return
         kwargs: dict[str, Any] | None = None
+        cache = self._task_cache(mode)
         warmed = False
         for batch in batched(data, self.batch_size):
             with self.track_time("batch"):
@@ -1339,14 +1373,15 @@ class Trafilatura(_Step, _dt_traf.Trafilatura):
                     # no child ever starts and every page times out
                     warmed = True
                     try:
-                        kwargs = self._call_kwargs(self._task_cache())
+                        kwargs = self._call_kwargs(self.deduplicate)
                         cast(Any, pt)._extract_many([""], kwargs, 1, mode, raise_errors=True)
                     except Exception:
                         kwargs = None
                 if kwargs is None:
                     results: list[Any] = [_TIMEOUT] * len(batch)
                 else:
-                    results, kwargs = self._batch([d.text for d in batch], kwargs, mode)
+                    texts = [d.text for d in batch]
+                    results, cache = self._batch(texts, kwargs, mode, cache)
             for doc, text in zip(batch, results, strict=True):
                 self.stat_update(StatHints.total)
                 if text is _TIMEOUT:

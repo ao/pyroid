@@ -189,3 +189,38 @@ DELEGATED_CALLS: dict[str, tuple[str, dict[str, Any]]] = {
     "metadata": ("extract_with_metadata", {}),
     "batch:include_links": ("extract_batch", {"include_links": True}),
 }
+
+
+#: OPTION_SETS for trafilatura 1.11.0, which has no ``fast``: its switch is ``no_fallback``.
+OPTION_SETS_111: dict[str, dict[str, Any]] = {
+    name: ({"no_fallback": True} if kw == {"fast": True} else kw)
+    for name, kw in OPTION_SETS.items()
+}
+
+#: Calls compat="1.11.0" hands to trafilatura 1.11.0 (it has no ``extract_with_metadata``).
+DELEGATED_CALLS_111: dict[str, tuple[str, dict[str, Any]]] = {
+    case: call
+    for case, call in DELEGATED_CALLS.items()
+    if case not in ("metadata", "author_blacklist")  # 1.11.0 needs no metadata for author_blacklist
+}
+
+#: PINNED for trafilatura 1.11.0 and OPTION_SETS_111 (recorded with trafilatura 1.11.0).
+PINNED_111: dict[str, str] = {
+    "article": "d119fce5158a00b7 e90d03e86dc7299d d119fce5158a00b7 d119fce5158a00b7 "
+    "d119fce5158a00b7 e90d03e86dc7299d d119fce5158a00b7",
+    "table": "b3d4525cf85e19a1 b3d4525cf85e19a1 b3d4525cf85e19a1 b3d4525cf85e19a1 "
+    "4851a5a9b709d295 b3d4525cf85e19a1 b3d4525cf85e19a1",
+    "forum": "86bfa0473983dfbf b01b425079df9572 86bfa0473983dfbf 86bfa0473983dfbf "
+    "86bfa0473983dfbf b01b425079df9572 86bfa0473983dfbf",
+    "short": " ".join(["56f6710b5e381c93"] * 7),
+    "empty": " ".join(["9c63cb0c2c90900a"] * 7),
+    "not_html": " ".join(["9c63cb0c2c90900a"] * 7),
+    "fragment": " ".join(["9c63cb0c2c90900a"] * 7),
+    "surrogate": " ".join(["5c2faeb38fd026a0"] * 7),
+    "controls": " ".join(["9c63cb0c2c90900a"] * 7),
+    "faulty_html": " ".join(["58d72e5a0863c917"] * 7),
+    "bom": "5db3ec12c75f9954 19901e145035859c 5db3ec12c75f9954 5db3ec12c75f9954 "
+    "5db3ec12c75f9954 19901e145035859c 5db3ec12c75f9954",
+    "repeated": " ".join(["0e967eaa3b84bbee"] * 7),
+    "entities": " ".join(["7c1191c8dea18f6c"] * 7),
+}

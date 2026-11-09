@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import copy
 import functools
+import importlib
+import importlib.util
 import inspect
 import os
 import pickle
@@ -712,3 +714,77 @@ def _read_jsonl(p: Path) -> list[str]:
     opener = gzip.open if p.suffix == ".gz" else open
     with opener(p, "rt", encoding="utf-8") as f:
         return [line.rstrip("\n") for line in f]
+
+
+_dt_pii: Any = importlib.import_module("datatrove.pipeline.formatters.pii")
+
+
+def test_steps_pickle_and_deepcopy() -> None:
+    """datatrove deep-copies the pipeline for each task (1 worker) and pickles it (more)."""
+    steps: list[Any] = [
+        pdt.FTFYFormatter(),
+        pdt.PIIFormatter(),
+        pdt.SymbolLinesFormatter(symbols_to_remove=["|"]),
+        pdt.GopherRepetitionFilter(),
+        pdt.GopherQualityFilter(),
+        pdt.C4QualityFilter(),
+        pdt.FineWebQualityFilter(),
+        pdt.C4BadWordsFilter(),
+        pdt.LanguageFilter(languages=["en"], model_path="/nonexistent/lid.176.bin"),
+    ]
+    if importlib.util.find_spec("tldextract") is not None:
+        steps.append(pdt.URLFilter(use_integrated_lists=False))
+    texts = [t for t in _texts(20) if t.strip()][:8]
+    for s in steps:
+        for _ in range(2):  # before and after a run
+            # our own freshly built objects: nothing untrusted is unpickled
+            assert type(pickle.loads(pickle.dumps(s))) is type(s)
+            assert type(copy.deepcopy(s)) is type(s)
+            if isinstance(s, (pdt.LanguageFilter, pdt.C4BadWordsFilter)):
+                break  # they need a model or a download to run
+            docs = [
+                Document(text=t, id=str(i), metadata={"url": "https://example.org/a"})
+                for i, t in enumerate(texts)
+            ]
+            list(s.run(docs))
+
+
+def test_pii_formatter_survives_pickling() -> None:
+    texts = ["mail a@b.com and 8.8.8.8 or c@d.org and 1.1.1.1"] * 5
+    ours = pdt.PIIFormatter()
+    first = [d.text for d in ours.run(_docs(texts[:2]))]
+    copied = pickle.loads(pickle.dumps(ours))  # our own object
+    stock = _dt_pii.PIIFormatter()
+    want = [d.text for d in stock.run(_docs(texts))]
+    assert first + [d.text for d in copied.run(_docs(texts[2:]))] == want  # rotation carried over
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_executor_pii_formatter(tmp_path: Path, workers: int) -> None:
+    """PIIFormatter in LocalPipelineExecutor (deep-copied at 1 worker, pickled at 2)."""
+    pytest.importorskip("orjson")
+    from datatrove.executor import LocalPipelineExecutor  # type: ignore[import-not-found,import-untyped,unused-ignore]
+    from datatrove.pipeline.readers import JsonlReader  # type: ignore[import-not-found,import-untyped,unused-ignore]
+    from datatrove.pipeline.writers import JsonlWriter  # type: ignore[import-not-found,import-untyped,unused-ignore]
+
+    src = tmp_path / "in"
+    src.mkdir()
+    import json
+
+    texts = [f"doc {i}: write to user{i}@example.org from 10.0.0.{i} " * 3 for i in range(40)]
+    for shard in range(2):
+        with open(src / f"{shard}.jsonl", "w", encoding="utf-8") as f:
+            for i, t in enumerate(texts[shard::2]):
+                f.write(json.dumps({"text": t, "id": f"{shard}-{i}"}) + "\n")
+
+    def run(step: Any, name: str) -> list[str]:
+        LocalPipelineExecutor(
+            pipeline=[JsonlReader(str(src)), step, JsonlWriter(str(tmp_path / name))],
+            tasks=2,
+            workers=workers,
+            logging_dir=str(tmp_path / f"{name}-logs"),
+        ).run()
+        files = sorted((tmp_path / name).glob("*.jsonl*"))
+        return [line for p in files for line in _read_jsonl(p)]
+
+    assert run(pdt.PIIFormatter(), "ours") == run(_dt_pii.PIIFormatter(), "stock")
