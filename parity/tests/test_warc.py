@@ -33,6 +33,7 @@ Checks (suite ``warc`` in parity-report.json):
     warcreader                ``<top>.integrations.datatrove.WarcReader(folder, **kw).run()`` == datatrove's
     warcreader-executor       the same through ``LocalPipelineExecutor`` + ``JsonlWriter``
     hypothesis-documents      grammar-generated streams through both datatrove paths
+    path-input                ``ArchiveIterator(path)`` (an extension) == warcio over ``open(path, "rb")``
     patch-warcio              ``<top>.patch("warcio")`` in a fresh process: warcio's names and datatrove's own
                               WarcReader then give warcio's traces
     api-*                     names, ``WARCIO_VERSION``, signatures; ``StatusAndHeaders``, ``DigestChecker`` and
@@ -924,6 +925,44 @@ def test_api_digest_checker(warc_impl: Any, parity: Collector, kind: Any) -> Non
     got = _checker_outcome(warc_impl.obj.mod, kind)
     want = _checker_outcome(o.mod, kind)
     assert parity.record(SUITE, check, got == want, case=repr(kind), got=got, want=want)
+
+
+PATH_GROUPS = ("warcio-tests", "synth-frame", "synth-trunc", "synth-flip", "synth-length", "synth-big")
+PATH_CONFIGS = ("content/file", "random/file", "iterate/file", "digests-log/file")
+
+
+def test_path_input(warc_impl: Any, parity: Collector) -> None:
+    """An extension: ``ArchiveIterator(path)`` (read in Rust) gives warcio's records over ``open(path, "rb")``.
+
+    Main events only: with a path there is no file object whose ``tell()`` the ``io`` channel could show.
+    """
+    import dataclasses
+
+    check = "path-input"
+    o = oracle()
+    if warc_impl.is_reference or o is None:
+        skip(parity, check, "candidate is warcio itself" if o else "warcio is not installed")
+    _need_inputs(parity, check)
+    cand = warc_impl.obj
+    probe = next(iter(P.document_inputs("warcio-tests")))[1]
+    try:
+        cand.mod.ArchiveIterator(str(probe)).close()
+    except TypeError as e:
+        skip(parity, check, f"ArchiveIterator takes no path: {e}")
+    diffs: list[str] = []
+    for g in PATH_GROUPS:
+        for job in P.jobs(g):
+            if job.config.name not in PATH_CONFIGS:
+                continue
+            by_path = dataclasses.replace(job.config, opener="path")
+            got = C.split(C.iter_events(cand.mod, job.path, by_path, 0, cand.exc_name))[0]
+            want = C.split(C.iter_events(o.mod, job.path, job.config, 0, o.exc_name))[0]
+            d = C.first_diff(got, want)
+            case = f"{job.name} [{job.config.name}]"
+            if not parity.record(SUITE, check, d is None, case=case, got=d and d.got, want=d and d.want):
+                diffs.append(f"{case}: event {d.index}: got {d.got!r:.300} want {d.want!r:.300}")  # type: ignore[union-attr]
+                save_repro(job.name, job.path, by_path.name + " (path)", check, d)
+    assert not diffs, f"{len(diffs)} differ, first:\n" + "\n".join(diffs[:MAX_DETAIL])
 
 
 # ------------------------------------------------------------------------------------------- patch("warcio")

@@ -204,6 +204,9 @@ def datatrove_open(path: Path, compression: str | None = "infer") -> Any:
 @contextlib.contextmanager
 def opened(path: Path, cfg: Config, log: list[Event]) -> Iterator[Any]:
     o = cfg.opener
+    if o == "path":  # pyroid.warc reads a path in Rust (an extension; warcio takes file objects only)
+        yield str(path)
+        return
     if o == "datatrove":
         with datatrove_open(path) as f:
             yield f
