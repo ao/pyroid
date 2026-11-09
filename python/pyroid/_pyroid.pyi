@@ -24,6 +24,7 @@ __all__ = [
     "text",
     "trafilatura",
     "translit",
+    "warc",
 ]
 
 __version__: Final[str]
@@ -41,6 +42,7 @@ datasketch: ModuleType
 jieba: ModuleType
 nltk: ModuleType
 trafilatura: ModuleType
+warc: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):
@@ -71,7 +73,7 @@ class Column(Generic[_T_co]):
 
     def __len__(self) -> int: ...
     @property
-    def type(self) -> Literal["string", "large_string", "bool"]:
+    def type(self) -> Literal["string", "large_string", "bool", "large_binary"]:
         """Arrow type name."""
 
     @property
