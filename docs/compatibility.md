@@ -13,10 +13,11 @@ do. The metrics are compared as the strings they print, with no tolerance. The i
 - Pinned real documents: the first 10,000 FineWeb documents, 8 FineWeb-2 languages, and a seeded
   adversarial set of 3,232 documents (mojibake, near-duplicates, edge cases), all fixed by
   sha256. The metrics use pinned evaluation data instead: CNN/DailyMail, SummEval and the WMT21
-  system outputs.
+  system outputs. Trafilatura uses 7,192 pinned Common Crawl pages from 3 crawls, as datatrove's
+  WARC reader and URL filter pass them on.
 - The incumbent's own test corpus, where it has one. For ftfy that is its 161 golden cases,
-  including its 10 known failures, which pyroid reproduces too. json_repair's test suite is
-  replayed call by call.
+  including its 10 known failures, which pyroid reproduces too. The test suites of json_repair
+  and Trafilatura are replayed call by call.
 - Property-based fuzzing with [Hypothesis](https://hypothesis.readthedocs.io/), with strategies
   that reach lone surrogates, every option value and every documented edge case. Hypothesis
   never generates surrogates by default; these strategies do.
@@ -28,7 +29,7 @@ broken builds (for example ftfy without surrogate-pair joining) fail them.
 
 ## Results
 
-The counts below are from each module's test runs on 2026-11-05 and 2026-11-06, in a
+The counts below are from each module's test runs between 2026-11-05 and 2026-11-09, in a
 Docker/OrbStack VM on linux/aarch64 unless a row says otherwise. The native runs on AWS EC2 are
 under [Platforms](#platforms). Once CI runs the parity suites on every platform, this section is
 regenerated from their `parity-report.json` files.
@@ -194,6 +195,30 @@ Reference: jieba 0.42.1. Rule: the same words in the same order (empty strings i
 
 <small>Source: the parity/ jieba suite, crates/pyroid-core/src/jieba/replay.rs and a 20,000-document replay, run on 2026-11-07.</small>
 
+### pyroid.trafilatura {#trafilatura}
+
+Reference: trafilatura 2.3.1 with lxml 6.1.3 (libxml2 2.14.6) and jusText 3.0.2; for compat="1.11.0", trafilatura 1.11.0 with the releases a fresh datatrove[processing]==0.10.1 install resolves (lxml 6.1.3, jusText 3.0.2, lxml-html-clean 0.4.6, charset-normalizer 3.5.2, courlan 1.4.0, htmldate 1.11.0). Rule: extract text byte for byte (None distinct from ""), bare_extraction field by field, the same exceptions (type and message) and warnings.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| 2.3.1: extract on the 7,192 pinned Common Crawl pages of 3 crawls (CC-MAIN-2026-39, 2023-50, 2019-35), 7 option sets (datatrove's call and the stateful dedup sets run in page order) | 50,344 | 50,344 | 0 |
+| 2.3.1: bare_extraction on the same pages, field by field, 2 option sets | 14,384 | 14,384 | 0 |
+| 2.3.1: Hypothesis pages from a tag grammar against live trafilatura, 8 option sets x 210 examples | 1,680 | 1,680 | 0 |
+| 2.3.1: Trafilatura's own test suite replayed call by call, 2,669 native and 1,884 delegated calls | 4,553 | 4,553 | 0 |
+| 2.3.1 on x86_64 (AWS EC2 c7i.4xlarge): 27,585 pages of CC-MAIN-2026-43 (21,977) and CC-MAIN-2025-08 (5,608), 8 option sets | 220,680 | 220,680 | 0 |
+| 1.11.0: extract on the same 7,192 pinned pages, 7 option sets | 50,344 | 50,344 | 0 |
+| 1.11.0: bare_extraction on the same pages, 2 option sets | 14,384 | 14,384 | 0 |
+| 1.11.0: Hypothesis pages against live trafilatura 1.11.0, 8 option sets x 210 examples | 1,680 | 1,680 | 0 |
+| 1.11.0: Trafilatura 1.11.0's own tests replayed, 108 native and 525 delegated calls | 633 | 633 | 0 |
+| 1.11.0 on x86_64 (AWS EC2 c7i.4xlarge): the same 27,585 pages, 8 option sets | 220,680 | 220,680 | 0 |
+| **Total** | **579,362** | **579,362** | **0** |
+
+- The suite also checks every delegated option (trafilatura's result and exactly one FallbackWarning), trafilatura's exact signatures plus compat=, extract_batch against the loop, and pyroid.patch("trafilatura")'s signatures for the installed release: 109 tests passed for 2.3.1 and 111 for 1.11.0.
+- The Rust core's own check, before the parity suite: 4,677 pages of the CC-MAIN-2026-39 development sample in 10 option sets, extract and bare_extraction, on CPython 3.13 (the dev split also on 3.12 and 3.15), and Unicode 14.0 to 17.0 vectors; 151 extra edge pages for 1.11.0, including a family with control characters. Identical in both modes.
+- python/tests/test_trafilatura*.py: 544 tests against trafilatura 2.3.1, and 395 against trafilatura 1.11.0 in its own environment, including the datatrove Trafilatura step against datatrove's own step, statistics included.
+
+<small>Source: the parity/ trafilatura suite in both modes (CPython 3.13, run on 2026-11-09), and parity/pyroid_parity/trafilatura_scale.py on AWS EC2 c7i.4xlarge (bench/results/aws-c7i.4xlarge/2026-11-09-warc/scale).</small>
+
 ### pyroid.nltk {#nltk}
 
 Reference: NLTK 3.10.4 (with regex 2026.9.29). Rule: the same sentences, tokens and offsets, str for str, and the same exceptions (type and message).
@@ -226,13 +251,20 @@ Reference: datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.p
 | pyroid.patch(): open_clip 3.3.0's ViT-B-32 tokenizer, token ids patched against unpatched | 592 | 592 | 0 |
 | pyroid.patch(): fast-langdetect 1.1.0, lite model | 600 | 600 | 0 |
 | pyroid.patch(): datatrove's FT176LID(k=3) against fasttext-predict | 592 | 592 | 0 |
-| **Total** | **68,248** | **68,248** | **0** |
+| pyroid clean on the parity corpus split into 5 files: one process, --workers 2, and --shard I/3 with the four cross-shard MinHash stages (signatures, buckets, cluster, filter): digest c0c6b746..., 3 runs | 39,696 | 39,696 | 0 |
+| pyroid clean on the FineWeb 100k slice in 16 files, 4 shards x 2 workers and the four stages: digest da897999..., as datatrove's chain | 100,000 | 100,000 | 0 |
+| datatrove's FineWeb pipeline from 8 WARC files of CC-MAIN-2026-39 (171,595 HTML records) on AWS EC2 c7i.4xlarge: pyroid's native chain, with the pages stock datatrove lost at 8 workers left out, against stock datatrove at 8 workers, final documents after MinHash and after PII | 23,503 | 23,503 | 0 |
+| The same against stock datatrove at 1 worker, with that run's lost pages left out | 23,501 | 23,501 | 0 |
+| **Total** | **254,948** | **254,948** | **0** |
 
 - Per-step tests against live datatrove (67 tests, 313 documents): every step's result, reason, rewritten text and metadata at several batch sizes and thread counts; MinhashDedupSignature's files are byte-identical, and datatrove's stages 2 to 4 on them remove the same documents.
 - The FineWeb recipe in Python (recipes.FineWeb, whole corpus and 777-document batches) and hf.fineweb (also with num_proc=2) give digest ef314b8d... on FineWeb dev too.
+- From WARC, without leaving any pages out: pyroid's steps in datatrove's executor and the native chain keep the same 23,505 documents at 8 and at 1 worker (digest d0e2ad48...). That is 2 more than stock datatrove at 8 workers, both pages stock datatrove gave up on, with 0 text differences. Stock datatrove stops extracting a page after 1 s and drops it, and which pages hit that limit changes between runs, so its own two runs kept different sets (23,503 and 23,501). pyroid has no timeout and gave the same documents in every run. The 5 pages on which trafilatura 1.11.0 itself raises are dropped by both (datatrove's child process dies on them; pyroid's step counts them as broken_process).
+- Cross-shard MinHash files: pyroid's .minhash.sig, .dups, .remove, .clusters and .sizes files are byte-identical to datatrove 0.10.1's (4 configurations, empty ranks, spills, 1 and 2 workers per bucket), and datatrove's own stages 1 to 3 on the same cleaned 100k files write the same bytes.
+- On AWS EC2 c7i.4xlarge, 4,188,430 FineWeb documents (sample/10BT, files 000 to 003) gave the same kept (3,547,373) and excluded documents in one process, with --workers 4, with 4 shards and the four stages, and when resumed after a Ctrl-C.
 - The newer drop-ins (PIIFormatter, C4BadWordsFilter, SymbolLinesFormatter, URLFilter, sentence dedup) are counted under pyroid.filters and pyroid.dedup above.
 
-<small>Source: python/tests/test_integrations_*.py, test_cli.py and examples/datatrove/verify.py, run on 2026-11-06.</small>
+<small>Source: python/tests/test_integrations_*.py, test_cli.py, test_cli_scale.py, test_dedup_files.py and examples/datatrove/verify.py (2026-11-06 to 2026-11-09), and bench/fineweb_warc.py on AWS EC2 c7i.4xlarge (bench/results/aws-c7i.4xlarge/2026-11-09-warc, 2026-11-09).</small>
 <!-- parity:end -->
 
 ## Known differences
@@ -274,13 +306,15 @@ The filters and dedup suites cover English and 8 FineWeb-2 languages end to end,
 tokenizer replays cover every natively supported datatrove tokenizer: 4,013 of datatrove's 4,343
 language codes, Chinese included (its parity is [pyroid.jieba](#jieba)'s) and Japanese (the
 SudachiPy and datatrove replays under [pyroid.filters](#filters)). The rest go through
-datatrove's own Python tokenizers
-(`python_tokenizer=True`), so they are datatrove's results by construction. See
+datatrove's own Python tokenizers (`python_tokenizer=True`), so they are datatrove's results by construction. See
 [Languages](guides/languages.md).
 
 ## Platforms
 
-Every suite on this page ran on Linux aarch64, in a Docker/OrbStack VM on Apple Silicon.
+Every suite on this page ran on Linux aarch64, in a Docker/OrbStack VM on Apple Silicon. The
+Trafilatura scale runs and the WARC pipeline comparison ran on x86_64, on an AWS EC2 c7i.4xlarge,
+on 2026-11-09 (their rows under [pyroid.trafilatura](#trafilatura) and
+[Integrations](#integrations)).
 
 ### Linux x86_64 and aarch64 on AWS EC2
 
