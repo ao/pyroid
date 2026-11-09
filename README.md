@@ -50,6 +50,7 @@ ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'
 | [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
 | [`pyroid.jieba`](https://ao.github.io/pyroid/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
 | [`pyroid.nltk`](https://ao.github.io/pyroid/guides/nltk/) | NLTK 3.10.4's `sent_tokenize` (Punkt), `word_tokenize` and Treebank tokenizers |
+| [`pyroid.warc`](https://ao.github.io/pyroid/guides/warc/) | warcio 1.8.2's WARC/ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading (`WarcReader`) |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-dark.svg">
@@ -72,6 +73,8 @@ extracts the same text as Trafilatura 2.3.1 or 1.11.0, byte for byte. The metric
 rouge-score's and sacrebleu's scores to the last digit, `pyroid.json_repair` makes json_repair's
 repairs, `pyroid.datasketch` gives datasketch's hash values and LSH query results, and
 `pyroid.jieba` and `pyroid.nltk` give jieba's and NLTK's words, sentences and offsets.
+`pyroid.warc` reads the same records, documents and errors as warcio 1.8.2 and datatrove's
+WARC reader.
 
 Each module is tested against the library it replaces, on pinned real data and with
 property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). Every suite
@@ -137,9 +140,9 @@ corpus, interpreter and source.
 
 | Entry point | What it does |
 |---|---|
-| [`pyroid clean`](https://ao.github.io/pyroid/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL |
+| [`pyroid clean`](https://ao.github.io/pyroid/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files |
 | [Large datasets](https://ao.github.io/pyroid/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
-| [`pyroid.patch()`](https://ao.github.io/pyroid/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura` and `nltk` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](https://ao.github.io/pyroid/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk` and `warcio` give pyroid's functions, in code you don't own |
 | [datatrove steps](https://ao.github.io/pyroid/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
 | [Hugging Face `datasets`](https://ao.github.io/pyroid/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
 
@@ -192,7 +195,7 @@ pyroid's own code is MIT. The ported parts keep their licences, so the package's
 expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0`:
 
 - Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK (the Porter stemmer and the
-  tokenizers), sacrebleu, Trafilatura and SudachiPy;
+  tokenizers), sacrebleu, Trafilatura, SudachiPy and warcio;
 - MIT: ported from spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (with its
   dictionary) and libxml2 (the HTML parser);
 - BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists);

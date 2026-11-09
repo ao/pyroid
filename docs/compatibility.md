@@ -267,6 +267,23 @@ Reference: datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.p
 <small>Source: python/tests/test_integrations_*.py, test_cli.py, test_cli_scale.py, test_dedup_files.py and examples/datatrove/verify.py (2026-11-06 to 2026-11-09), and bench/fineweb_warc.py on AWS EC2 c7i.4xlarge (bench/results/aws-c7i.4xlarge/2026-11-09-warc, 2026-11-09).</small>
 <!-- parity:end -->
 
+### pyroid.warc {#warc}
+
+Reference: warcio 1.8.2 and datatrove 0.10.1's `WarcReader` (with faust-cchardet 3.2.0,
+python-magic 0.4.27 and brotlicffi 1.2.1.0), live. Rule: event by event, the same records,
+headers, payloads, offsets, `fh.read()` and `fh.tell()` calls, digest results, stderr writes, log
+warnings and exceptions (type and message), and the same documents out of datatrove's reader; for
+`pyroid.patch("warcio")`, the same traces from warcio's own names and datatrove's own reader.
+
+TODO(P12-parity): the counts of the parity/ warc suite (Common Crawl slices of 16 crawls,
+warcio's own test files, seeded synthetic families) and of `pyroid_parity.warc_scale` over 8
+whole CC-MAIN-2026-39 files (AWS EC2 c7i.4xlarge).
+
+- CPython's `gzip.GzipFile` read path, as datatrove reads `.warc.gz` files, is emulated per
+  interpreter: it gave CPython's bytes and errors on all 4,910 cases on CPython 3.11 to 3.15.
+- The known differences are in the guide: [digest algorithm names](guides/warc.md#differences-from-warcio)
+  and damaged brotli streams (41 of 2,296 corruption cases).
+
 ## Known differences
 
 Each guide lists its module's deliberate differences. Most are edge cases (inputs on which the
@@ -284,6 +301,7 @@ as returning an unchanged string as the same object.
 - [Differences from datasketch](guides/datasketch.md#differences-from-datasketch)
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)
+- [Differences from warcio](guides/warc.md#differences-from-warcio)
 - [Differences from Unidecode](guides/translit.md#differences-from-unidecode).
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).

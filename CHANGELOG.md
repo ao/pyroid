@@ -25,6 +25,7 @@ removed. It stays installable as `pip install "pyroid<1"`, its source is on the
 | `pyroid.datasketch` | datasketch 2.0.0's `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest` and `MinHashLSHEnsemble` |
 | `pyroid.jieba` | jieba 0.42.1's word segmentation, with its default dictionary and user dictionaries |
 | `pyroid.nltk` | NLTK 3.10.4's Punkt sentence tokenizer, `word_tokenize`, the Treebank tokenizers and detokenizer, and the common regexp tokenizers |
+| `pyroid.warc` | warcio 1.8.2's WARC and ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading, including CPython's `gzip.GzipFile` read path |
 
 The filters and dedup tokenize 4,013 of datatrove's 4,343 language codes natively, with
 datatrove's tokenizer for each: spaCy's rule-based tokenizers, IndicNLP, the whitespace tokenizer,
@@ -34,15 +35,15 @@ an installed sudachidict-core dictionary). The other codes run datatrove's own t
 
 ### Integrations
 
-- The `pyroid` command line: `clean` (datatrove's FineWeb pipeline over Parquet or JSONL),
-  `langid`, `dedup`, `translit`, `stats` and `run`. Inputs can be many files, directories, globs,
+- The `pyroid` command line: `clean` (datatrove's FineWeb pipeline over Parquet or JSONL, or
+  from WARC files with `--recipe fineweb-warc`), `langid`, `dedup`, `translit`, `stats` and `run`. Inputs can be many files, directories, globs,
   and `s3://`, `gs://`, `hf://` or other fsspec URIs; `--workers` and `--shard I/N` split the
   work; runs resume after a stop; `pyroid dedup signatures`, `buckets`, `cluster` and `filter` run
   MinHash dedup across shards in datatrove's file format.
 - `pyroid.patch()` and `pyroid run -p`: `import ftfy`, `fasttext`, `anyascii`, `datasketch`,
-  `trafilatura` and `nltk` give pyroid's functions.
-- `pyroid.integrations.datatrove`: 16 drop-in datatrove steps with datatrove's names and
-  arguments, `Trafilatura` among them.
+  `trafilatura`, `nltk` and `warcio` give pyroid's functions.
+- `pyroid.integrations.datatrove`: 17 drop-in datatrove steps with datatrove's names and
+  arguments, `Trafilatura` and `WarcReader` among them.
 - `pyroid.integrations.hf` (Hugging Face `datasets`) and `pyroid.integrations.recipes.FineWeb`.
 
 ### Shared behaviour
@@ -53,7 +54,7 @@ an installed sudachidict-core dictionary). The other codes run datatrove's own t
   `pyroid.FallbackWarning`, or raises.
 - Wheels for CPython 3.11 to 3.15 and free-threaded 3.14t and 3.15t, on Linux (glibc and musl),
   macOS and Windows, x86-64 and ARM64. No runtime dependencies; the extras are `[fasttext]`,
-  `[datasketch]`, `[cli]`, `[datatrove]` and `[hf]`.
+  `[datasketch]`, `[cli]`, `[datatrove]`, `[hf]` and `[warc]`.
 - Licence expression `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0
   AND Unicode-3.0`: pyroid's own code is MIT, and the ported parts keep their licences (NOTICE
   lists them).

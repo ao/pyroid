@@ -29,7 +29,7 @@ Clean text datasets for LLM training, in Parquet or JSON Lines files.
 
 positional arguments:
   COMMAND
-    clean     run a cleaning recipe (ftfy, LID, quality filters, MinHash)
+    clean     run a cleaning recipe (ftfy, LID, quality filters, MinHash; or FineWeb from WARC)
     langid    add fastText language columns; optionally keep some languages
     dedup     drop near-duplicates (datatrove's MinHash) or exact duplicates
     translit  transliterate to ASCII (anyascii data, ISC)
@@ -46,6 +46,7 @@ pyroid.integrations.patch() applied; see 'pyroid run --help'.
 | Command | What it does |
 |---|---|
 | [`pyroid clean`](#pyroid-clean-the-fineweb-recipe) | ftfy, fastText language ID, the Gopher, C4 and FineWeb quality filters, MinHash dedup |
+| [`pyroid clean --recipe fineweb-warc`](#pyroid-clean-fineweb-from-warc-files) | datatrove's `examples/fineweb.py` from WARC files: the reader, URL filter, Trafilatura, language ID, the same filters, MinHash, PII |
 | [`pyroid langid`](#pyroid-langid) | adds `language` / `language_score` columns; optionally keeps some languages |
 | [`pyroid dedup`](#pyroid-dedup) | drops near-duplicates (datatrove's MinHash) or exact duplicates |
 | [`pyroid translit`](#pyroid-translit) | transliterates a column to ASCII |
@@ -84,16 +85,19 @@ $ pyroid clean --help
 usage: pyroid clean [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--threads THREADS]
                     [--batch-size BATCH_SIZE] [--shard I/N] [--workers N] [--merge] [--format FMT]
                     [--excluded PATH] [--stats] [--stats-json PATH] [--progress]
-                    [--compression COMPRESSION] [--overwrite] --recipe {fineweb}
-                    [--lid-model LID_MODEL] [--no-dedup] [--tmp-dir TMP_DIR] [--sort-buffer-mb MB]
+                    [--compression COMPRESSION] [--overwrite] --recipe {fineweb,fineweb-warc}
+                    [--dump NAME] [--limit N] [--lid-model LID_MODEL] [--no-dedup]
+                    [--tmp-dir TMP_DIR] [--sort-buffer-mb MB]
                     [IN ...] OUT
 
-Run a cleaning recipe and write the kept rows. The fineweb recipe is datatrove's FineWeb chain:
-ftfy, fastText LID, the Gopher, C4 and FineWeb quality filters, then MinHash dedup.
+Run a cleaning recipe and write the kept rows. The fineweb recipe is datatrove's FineWeb chain on
+text: ftfy, fastText LID, the Gopher, C4 and FineWeb quality filters, then MinHash dedup. The
+fineweb-warc recipe is datatrove's examples/fineweb.py on WARC files: datatrove's WarcReader, URL
+filter, Trafilatura, fastText LID, the same filters, MinHash dedup, then PII replacement.
 
 positional arguments:
-  IN                    input files (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4]),
-                        directories, globs or URIs
+  IN                    input files (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4];
+                        fineweb-warc: .warc, .arc, .wet[.gz]), directories, globs or URIs
   OUT                   output file, or a directory for one output per input file (see --merge)
 
 options:
@@ -104,13 +108,15 @@ options:
   --threads THREADS     threads per process (default: 0, the whole pool, sized by
                         $PYROID_NUM_THREADS; with --workers, an equal share of the CPUs)
   --batch-size BATCH_SIZE
-                        rows per Arrow batch (default: 10000)
+                        rows per Arrow batch (default: 10000; --recipe fineweb-warc: pages per
+                        batch, 256)
   --shard I/N           process input files I, I+N, I+2N, ...
   --workers N           worker processes, one input file each (default: 1)
   --merge               with a directory OUT, write one file per shard (part-I-of-N) instead of
                         one per input file
   --format FMT          with a directory OUT, the output format: parquet, jsonl, jsonl.gz,
-                        jsonl.bz2, jsonl.zst, jsonl.lz4 (default: each input's)
+                        jsonl.bz2, jsonl.zst, jsonl.lz4 (default: each input's; parquet for WARC
+                        inputs)
   --excluded PATH       also write the dropped rows here (a file, or a directory like OUT)
   --stats               print row counts and drops by reason to stderr
   --stats-json PATH     write the stats to PATH as JSON
@@ -118,7 +124,11 @@ options:
   --compression COMPRESSION
                         Parquet compression (default: pyarrow's, snappy)
   --overwrite           redo finished work and replace existing outputs
-  --recipe {fineweb}    the recipe to run
+  --recipe {fineweb,fineweb-warc}
+                        fineweb (Parquet or JSONL text) or fineweb-warc (WARC, ARC or WET files)
+  --dump NAME           fineweb-warc: add a dump column holding NAME (datatrove's
+                        default_metadata)
+  --limit N             fineweb-warc: read at most N documents per WARC file (WarcReader's limit)
   --lid-model LID_MODEL
                         fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a cached
                         download)
@@ -198,6 +208,59 @@ order and the work directory is deleted. Plan disk space there for the survivors
 of signatures per survivor. If the run fails or is interrupted, the work directory stays, and the
 same command resumes from it. `--no-dedup` skips MinHash, and the output is then the chain up to
 `FineWebQualityFilter`.
+
+## `pyroid clean`: FineWeb from WARC files
+
+The `fineweb-warc` recipe is datatrove's `examples/fineweb.py`, from Common Crawl WARC files to
+the deduplicated, PII-replaced documents, with no datatrove executor:
+
+1. the documents datatrove's `WarcReader` reads, as [`pyroid.warc`](warc.md) reads them: HTML
+   (and WET text) records, decoded as datatrove decodes them;
+2. `URLFilter()`, with datatrove's block lists;
+3. `Trafilatura(favour_precision=True)`: [`pyroid.trafilatura`](trafilatura.md) as trafilatura
+   1.11.0, the release `datatrove[processing]` installs, with its dedup cache emptied for each
+   input file, as datatrove's per-task step empties it;
+4. `LanguageFilter(languages=["en"], language_threshold=0.65)` and the four quality filters of
+   the `fineweb` recipe (FineWeb has no ftfy step);
+5. MinHash dedup over the survivors of every file, in input order, with FineWeb's settings;
+6. `PIIFormatter()` on what is left, with a fresh replacement rotation for each file.
+
+Each input file is one datatrove task, so the output does not depend on `--workers`. On two WARC
+files of FineWeb pages, the final documents (ids and texts) are those of the benchmark's native
+chain reading the files with warcio and datatrove's own `process_record`
+(`bench/fineweb_warc.py native --reader warcio`).
+
+```console
+$ pip install "pyroid[cli,warc,datatrove]" tldextract fasteners
+$ pyroid clean warc/ fineweb.parquet --recipe fineweb-warc --lid-model lid.176.bin \
+      --dump CC-MAIN-2026-39 --workers 8 --stats
+```
+
+- IN: WARC, ARC or WET files, gzip (one member per record, as Common Crawl writes them) or
+  plain. A directory or glob gives its `.warc`, `.arc` and `.wet` files, with or without `.gz`;
+  a file named directly is read whatever its name. URIs (`s3://`, `hf://`, ...) are read through
+  fsspec.
+- OUT: one file (Parquet or JSONL), or a directory with one Parquet file per input
+  (`CC-MAIN-...-00000.warc.gz` gives `CC-MAIN-...-00000.parquet`; `--format` picks another).
+- Columns: `text`, `id`, `dump` (with `--dump NAME`), `url`, `date`, `file_path`, `language`
+  and `language_score`, the metadata datatrove's writer keeps, in its order. One row per kept
+  document.
+- `--excluded` gets the dropped documents with a `filter_reason`: `url_filter:<reason>`
+  (`url_filter:domain`, ...), `trafilatura` (no text extracted), `trafilatura:broken_process`
+  (the extraction raised; datatrove's child process dies on such a page), `lid`,
+  `<stage>:<datatrove reason>` as for the `fineweb` recipe, and `minhash`. Their `text` is the
+  text the dropping stage saw: the HTML for the URL filter and Trafilatura.
+- `--limit N` reads at most N documents per file (datatrove's `WarcReader(limit=N)` with one
+  task per file). `--batch-size` is the pages per extraction batch (default 256).
+- `--no-dedup` skips MinHash, as for `fineweb`. PII replacement still runs, on each file's
+  survivors, so later `pyroid dedup` stages see the replaced text (datatrove's MinHash runs before
+  PII).
+- Needs datatrove (for the URL block lists), tldextract and fasteners, as datatrove's URL filter
+  does, and faust-cchardet and python-magic (with the libmagic library) for the decoding, as
+  datatrove's reader does. trafilatura, warcio and spaCy are not needed.
+
+TODO(P12-EC2): wall and CPU time on 8 CC-MAIN-2026-39 WARC files (AWS EC2 c7i.4xlarge), against
+stock datatrove.
 
 ## Inputs and outputs
 
@@ -418,6 +481,22 @@ recipe.stages()  # ['lid', 'gopher_quality', 'minhash']
 `lid_model_path(path=None, *, download=True)` is the model lookup on its own, and
 `MINHASH_CONFIG` holds FineWeb's MinHash settings. The [Hugging Face helpers](huggingface.md) run
 the same recipe over a `datasets.Dataset`.
+
+`FineWebWarc` holds the pieces of the `fineweb-warc` recipe: `documents(path, limit=-1)` (the
+reader), `new_task()` (a `TaskExtractor`, one per WARC file: datatrove's Trafilatura step with
+its own dedup cache), `annotate(docs, task)` (the URL filter, Trafilatura, LID and the quality
+filters on one batch of documents, as Python lists), `new_dedup()` and `new_pii()` (one per file):
+
+```python
+from pyroid.integrations.recipes import FineWebWarc
+
+recipe = FineWebWarc(lid_model="lid.176.bin")
+task = recipe.new_task()
+docs = list(recipe.documents("CC-MAIN-20260920-00000.warc.gz", limit=100))
+ann = recipe.annotate(docs, task)
+kept = [(d["id"], t) for d, t, k in zip(docs, ann.text, ann.keep) if k]
+```
+
 
 ## Speed
 

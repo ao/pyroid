@@ -60,6 +60,7 @@ arguments plus the keyword-only `batch_size` and `threads` (and `model_path` for
         - SentenceDedupFilter
         - SentenceDedupBuildIndex
         - Trafilatura
+        - WarcReader
 
 ## `pyroid.integrations.hf` {#hf}
 
@@ -94,3 +95,7 @@ arguments plus the keyword-only `batch_size` and `threads` (and `model_path` for
         - lid_model_path
         - Annotation
         - FineWeb
+        - FINEWEB_TRAFILATURA
+        - FineWebWarc
+        - WarcAnnotation
+        - TaskExtractor

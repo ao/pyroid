@@ -14,9 +14,10 @@ Modules and what they match:
 - `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
 - `pyroid.jieba` (`import pyroid.jieba as jieba`): the same words, offsets and frequencies as jieba 0.42.1, with the default dictionary built in; `lcut(docs, threads=n)` segments a batch in parallel.
 - `pyroid.nltk` (`import pyroid.nltk as nltk`): the same sentences, tokens and offsets as NLTK 3.10.4's `sent_tokenize` (Punkt, with the user's installed `punkt_tab` models), `word_tokenize`, Treebank tokenizers and detokenizer, and regexp tokenizers for common patterns; `sent_tokenize(docs, threads=n)` and `word_tokenize(docs, threads=n)` run a batch in parallel; `pyroid.patch("nltk")` swaps them into an installed NLTK.
+- `pyroid.warc` (`from pyroid.warc import ArchiveIterator`): warcio 1.8.2's WARC/ARC reader with the same records, headers, payloads, offsets, exceptions and messages; `ArchiveIterator(path)` reads without the GIL; `iter_documents(path)` is datatrove 0.10.1's `WarcReader` loop (`process_record`: id, url, date, text), `iter_batches(path)` the same as Arrow record batches; `pyroid.patch("warcio")` swaps the iterator into an installed warcio, so stock datatrove reads with it. Known differences: `check_digests` knows md5, sha1, sha224, sha256, sha384, sha512 only; corrupt brotli streams may decode further than libbrotli.
 - `pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output.
 
-Integrations: the `pyroid clean IN OUT --recipe fineweb` command line (many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs, resumable runs, `pyroid dedup signatures|buckets|cluster|filter` for MinHash across shards), `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `trafilatura`, `nltk`), datatrove drop-in steps (`pyroid.integrations.datatrove`, `Trafilatura` included; it has no 1 s timeout, so results do not vary between runs) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` (numpy), `[cli]` (pyarrow), `[datatrove]` and `[hf]`.
+Integrations: the `pyroid clean IN OUT --recipe fineweb` command line (`--recipe fineweb-warc` from WARC files; many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs, resumable runs, `pyroid dedup signatures|buckets|cluster|filter` for MinHash across shards), `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`), datatrove drop-in steps (`pyroid.integrations.datatrove`, `WarcReader` included, `Trafilatura` included; it has no 1 s timeout, so results do not vary between runs) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` (numpy), `[cli]` (pyarrow), `[datatrove]` and `[hf]`.
 
 Conventions shared by every module:
 
@@ -48,13 +49,14 @@ Conventions shared by every module:
 - [pyroid.jieba](https://ao.github.io/pyroid/guides/jieba/): drop-in jieba 0.42.1, batches, user dictionaries, differences from jieba
 - [pyroid.trafilatura](https://ao.github.io/pyroid/guides/trafilatura/): drop-in Trafilatura 2.3.1 and 1.11.0, how to choose a mode, `extract_batch`, the datatrove step, differences
 - [pyroid.nltk](https://ao.github.io/pyroid/guides/nltk/): drop-in NLTK 3.10.4 Punkt, Treebank and regexp tokenizers, punkt_tab models, differences from NLTK
+- [pyroid.warc](https://ao.github.io/pyroid/guides/warc/): drop-in warcio 1.8.2 `ArchiveIterator`, datatrove's WARC documents (`iter_documents`, `iter_batches`), `patch("warcio")`, differences from warcio
 - [Languages](https://ao.github.io/pyroid/guides/languages/): which datatrove language codes are native, which need `python_tokenizer=True`, how to choose
 
 ## Integrations
 
 - [The pyroid command line](https://ao.github.io/pyroid/guides/cli/): `pyroid clean`, `langid`, `dedup`, `translit`, `run`; every option
 - [Large datasets](https://ao.github.io/pyroid/guides/large-datasets/): thousands of files, `--workers`, `--shard`, remote inputs, resuming, MinHash dedup across shards
-- [pyroid.patch()](https://ao.github.io/pyroid/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura` or `nltk` to pyroid in code you don't own
+- [pyroid.patch()](https://ao.github.io/pyroid/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk` or `warcio` to pyroid in code you don't own
 - [datatrove steps](https://ao.github.io/pyroid/guides/datatrove/): drop-in datatrove pipeline steps with the same names and signatures
 - [Hugging Face datasets](https://ao.github.io/pyroid/guides/huggingface/): batched callables for `Dataset.map`/`filter`, the FineWeb recipe
 
@@ -72,6 +74,7 @@ Conventions shared by every module:
 - [pyroid.jieba](https://ao.github.io/pyroid/reference/jieba/)
 - [pyroid.trafilatura](https://ao.github.io/pyroid/reference/trafilatura/)
 - [pyroid.nltk](https://ao.github.io/pyroid/reference/nltk/)
+- [pyroid.warc](https://ao.github.io/pyroid/reference/warc/)
 - [pyroid.integrations](https://ao.github.io/pyroid/reference/integrations/)
 - [pyroid.text](https://ao.github.io/pyroid/reference/text/)
 

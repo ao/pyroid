@@ -1,6 +1,6 @@
 # datatrove: drop-in pipeline steps
 
-`pyroid.integrations.datatrove` has drop-in replacements for 16 of
+`pyroid.integrations.datatrove` has drop-in replacements for 17 of
 [datatrove](https://github.com/huggingface/datatrove) 0.10.1's pipeline steps (datatrove is
 © Hugging Face, Apache-2.0). Each one subclasses datatrove's own step of the same name and takes
 the same constructor arguments. It gives the same documents: the same `text`, `metadata`,
@@ -50,6 +50,7 @@ datatrove's, and the steps mix freely.
 | `SentenceDedupFilter` | `datatrove.pipeline.dedup.SentenceDedupFilter` (stage 3) | [`pyroid.dedup`](dedup.md); the same documents and exclusion-writer documents |
 | `SentenceDedupBuildIndex` | `datatrove.pipeline.dedup.sentence_dedup.SentenceDedupBuildIndex` | a merge in Rust; the same index file |
 | `Trafilatura` | `datatrove.pipeline.extractors.Trafilatura` | [`pyroid.trafilatura`](trafilatura.md), byte-identical to the installed trafilatura release (1.11.0 in a stock `datatrove[processing]` install, or 2.3.1; 2.3.1 when trafilatura is not installed), in the task's process (no child process, no timeout; see [the step's differences](trafilatura.md#the-datatrove-step)) |
+| `WarcReader` | `datatrove.pipeline.readers.WarcReader` | [`pyroid.warc.iter_documents`](warc.md): warcio 1.8.2's parsing, CPython's `gzip.GzipFile` and datatrove's `process_record`, in Rust (warcio isn't needed; faust-cchardet and python-magic are, as for datatrove's) |
 
 MinHash stages 2 to 4 (`MinhashDedupBuckets`, `MinhashDedupCluster`, `MinhashDedupFilter`) are
 not replaced. Keep datatrove's, which read pyroid's signature files unchanged; they were 2 to 3%
@@ -66,6 +67,16 @@ trafilatura or `fasttext-numpy2-wheel`, and `LanguageFilter` needs no `fasteners
 `model_path` is given. Without trafilatura installed, `Trafilatura` runs the 2.3.1 mode; pass
 `compat="1.11.0"` to match a stock `datatrove[processing]` install.
 `URLFilter` needs tldextract and fasteners, as datatrove's does.
+
+`WarcReader` takes datatrove's arguments only (no `batch_size` or `threads`). A local `.gz` or
+plain file is opened and read in Rust without the GIL; on another fsspec filesystem the file is
+opened with `data_folder.open(path, "rb", compression=None)` and read through the same `GzipFile`
+emulation. Other compressions (`zstd`, an inferred `.bz2`, ...), and `.gz` when python-isal
+replaces fsspec's gzip opener, use datatrove's own `data_folder.open(..., compression=...)`. The
+documents, the exceptions (`ArchiveLoadFailed` is warcio's class when warcio is installed) and
+warcio's log warnings are datatrove's, at the same document; `limit`, `skip`, sharding and the
+statistics are datatrove's own code. To keep datatrove's own reader and still read with pyroid,
+[`pyroid.patch("warcio")`](warc.md#pyroidpatchwarcio) swaps warcio's `ArchiveIterator`.
 
 ## Extra arguments
 
@@ -221,7 +232,9 @@ Also:
 - Urdu sentences (`C4QualityFilter`) follow `datatrove[multilingual]`, where indic-nlp imports
   urduhack. With plain datatrove and indic-nlp-library, datatrove's own step raises
   `ModuleNotFoundError`.
-- The steps' timing statistics are per batch, not per document.
+- The steps' timing statistics are per batch, not per document. `WarcReader` times each
+  document, including the reading of the records before it, plus once per file for the records
+  after the last document (datatrove times each record's `process_record`).
 - With a datatrove other than 0.10.1 installed, importing the module gives one `RuntimeWarning`:
   the steps reproduce 0.10.1's decisions.
 - datatrove's quirks are reproduced, not fixed. For instance, sentence dedup's stage 1 strips

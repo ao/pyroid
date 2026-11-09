@@ -18,10 +18,11 @@ pyroid has no runtime dependencies. Extras:
 | `pyroid[cli]` | `pyarrow>=18`, `numpy>=1.26` | the [`pyroid` command line](guides/cli.md) (Parquet and JSONL in and out, the FineWeb recipe) and `pyroid.integrations.recipes` |
 | `pyroid[datatrove]` | `datatrove>=0.10.1`, `regex`, `tokenizers`, `numpy>=1.26`, `orjson>=3.2` | the [datatrove drop-in steps](guides/datatrove.md) in `pyroid.integrations.datatrove` (`regex` and `tokenizers` are imported by datatrove's filters but not declared by datatrove; `orjson` is for its JSONL reader and writer, from datatrove's `io` extra) |
 | `pyroid[hf]` | `datasets>=3`, `pyarrow>=18`, `numpy>=1.26` | the [Hugging Face `datasets` helpers](guides/huggingface.md) in `pyroid.integrations.hf` |
+| `pyroid[warc]` | `faust-cchardet`, `python-magic` | datatrove's page decoding in [`pyroid.warc.iter_documents`](guides/warc.md), its `WarcReader` drop-in and `pyroid clean --recipe fineweb-warc`: faust-cchardet guesses the charset of pages that are not UTF-8, and python-magic (which needs the libmagic library) types records without `WARC-Identified-Payload-Type`. Both are imported only when a record needs them, as datatrove imports them. `pyroid.warc.ArchiveIterator` needs neither. |
 
 Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
 `pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.trafilatura`,
-`pyroid.nltk`, `pyroid.jieba` and `pyroid.patch()` need none of them.
+`pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader and `pyroid.patch()` need none of them.
 
 Optional libraries, needed only by the features that use them:
 

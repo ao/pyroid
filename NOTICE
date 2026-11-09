@@ -360,6 +360,44 @@ public text (FineWeb, ODC-By 1.0) and on parameters NLTK's PunktTrainer learned
 from that text; they contain no part of the punkt_tab models.
 
 -------------------------------------------------------------------------------
+warcio (pyroid.warc)
+-------------------------------------------------------------------------------
+The WARC reader (crates/pyroid-core/src/warc/: archive.rs, buffered.rs,
+digest.rs, headers.rs, record.rs, stream.rs and mod.rs; crates/pyroid-py/src/warc.rs;
+python/pyroid/warc/__init__.py, _records.py and __init__.pyi) is a derivative
+work of warcio 1.8.2, https://github.com/webrecorder/warcio: archiveiterator.py,
+recordloader.py (ArcWarcRecord, ArcWarcRecordLoader and the ARC header
+parsers), bufferedreaders.py, limitreader.py, digestverifyingreader.py,
+statusandheaders.py, exceptions.py, timeutils.timestamp_to_iso_date and the
+parts of utils.py they use:
+
+    Warcio
+    Copyright 2017-2020 Webrecorder Software LLC, Rhizome, and Contributors.
+    Authored by Ilya Kreymer
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+Each ported file carries a header naming warcio 1.8.2 (Apache-2.0) and the
+files it ports. pyroid.integrations._patch.patch("warcio") subclasses warcio's
+own classes at run time; no warcio code is included for it.
+
+crates/pyroid-core/src/warc/fast.rs and pyroid.warc.iter_documents follow
+datatrove 0.10.1's WarcReader.read_file and process_record
+(src/datatrove/pipeline/readers/warc.py, Apache-2.0, © HuggingFace Inc.), as
+does pyroid.integrations.datatrove.WarcReader.
+
+crates/pyroid-core/src/warc/gzipfile.rs, zlib.rs and pystr.rs reproduce the
+read path of CPython 3.11-3.15's gzip.GzipFile and io.BufferedReader, the zlib
+module's decompressobj and error messages, and the str, bytes and int
+behaviour warcio relies on; digest.rs reproduces the parts of base64 and
+binascii it uses. CPython is distributed under the Python Software Foundation
+License (PSF-2.0). crates/pyroid-core/src/warc/tables.rs is generated from
+CPython's unicodedata (Unicode License v3). crates/pyroid-core/src/warc/brotli.rs
+reproduces the behaviour of brotlicffi 1.2.1.0's Decompressor
+(https://github.com/python-hyper/brotlicffi, MIT) over the brotli-decompressor
+crate; no brotlicffi code is included.
+
+-------------------------------------------------------------------------------
 sacrebleu (pyroid.metrics BLEU and chrF)
 -------------------------------------------------------------------------------
 The BLEU and chrF port (crates/pyroid-core/src/metrics/sacrebleu/,

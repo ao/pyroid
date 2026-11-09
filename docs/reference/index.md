@@ -18,7 +18,8 @@ source.
 | [`pyroid.jieba`](jieba.md) | jieba 0.42.1's API: `cut`, `lcut`, `cut_for_search`, `tokenize`, `add_word`, `load_userdict`, `Tokenizer`, ... |
 | [`pyroid.trafilatura`](trafilatura.md) | `extract`, `bare_extraction`, `extract_with_metadata`, `extract_batch`, `Document`, `LRUCache`, `reset_caches`, the `compat=` modes 2.3.1 and 1.11.0 |
 | [`pyroid.nltk`](nltk.md) | NLTK 3.10.4's `sent_tokenize`, `word_tokenize`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer` |
-| [`pyroid.integrations`](integrations.md) | the datatrove steps, the Hugging Face helpers, the FineWeb recipe, `patch` and friends |
+| [`pyroid.warc`](warc.md) | warcio 1.8.2's `ArchiveIterator`, `WARCIterator`, `ARCIterator`, `StatusAndHeaders`, `ArcWarcRecord`, `ArchiveLoadFailed`; datatrove's WARC loop: `iter_documents`, `iter_batches` |
+| [`pyroid.integrations`](integrations.md) | the datatrove steps (`WarcReader` included), the Hugging Face helpers, the FineWeb recipes, `patch` and friends |
 | [`pyroid.text`](text.md) | `normalize_whitespace`, `min_chars`: small examples of pyroid's conventions |
 
 Batch functions are listed with one signature per input kind (`str`, `list`, `tuple`, Arrow);

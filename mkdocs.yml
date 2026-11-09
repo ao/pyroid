@@ -58,6 +58,7 @@ nav:
       - pyroid.jieba: guides/jieba.md
       - pyroid.trafilatura: guides/trafilatura.md
       - pyroid.nltk: guides/nltk.md
+      - pyroid.warc: guides/warc.md
       - Languages: guides/languages.md
   - Integrations:
       - The pyroid command line: guides/cli.md
@@ -84,6 +85,7 @@ nav:
       - pyroid.jieba: reference/jieba.md
       - pyroid.trafilatura: reference/trafilatura.md
       - pyroid.nltk: reference/nltk.md
+      - pyroid.warc: reference/warc.md
       - pyroid.integrations: reference/integrations.md
       - pyroid.text: reference/text.md
   - Compatibility: compatibility.md

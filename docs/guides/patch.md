@@ -38,6 +38,7 @@ and `patch()` is the only switch. Each patched name emits one
 | `"datasketch"` | [`pyroid.datasketch`](datasketch.md) (datasketch 2.0.0) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble`, `sha1_hash32`, `sha1_hash64`, `minhash_batch`, the `WeightedMinHashLSH` and `WeightedMinHashLSHForest` aliases, and the `minhash`, `lean_minhash`, `hashfunc`, `lsh`, `lshforest` and `lshensemble` submodules with them | `WeightedMinHash`, `HyperLogLog`, `bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `storage` and the other submodules |
 | `"trafilatura"` | [`pyroid.trafilatura`](trafilatura.md) (trafilatura 2.3.1 or 1.11.0, following the installed release) | `extract`, `bare_extraction`, with 2.3.1 `extract_with_metadata` (delegated), with the installed release's signatures, in `trafilatura` and `trafilatura.core`, `trafilatura.deduplication.LRUCache` and `LRU_TEST`, `trafilatura.meta.reset_caches` | metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the other submodules |
 | `"nltk"` | [`pyroid.nltk`](nltk.md) (NLTK 3.10.4's tokenizers) | `sent_tokenize`, `word_tokenize`, `punkt_model_available`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer`, `wordpunct_tokenize`, `regexp_tokenize`, `blankline_tokenize`, `RegexpTokenizer`, `WordPunctTokenizer`, `WhitespaceTokenizer`, `BlanklineTokenizer`, on `nltk`, `nltk.tokenize` and its `punkt`, `treebank`, `destructive` and `regexp` modules | everything else: `PunktTrainer`, the taggers, corpora, stemmers, the other tokenizers |
+| `"warcio"` | [`pyroid.warc`](warc.md) (warcio 1.8.2's reader) | `ArchiveIterator` (on `warcio` and `warcio.archiveiterator`), `WARCIterator` and `ARCIterator` (on `warcio.archiveiterator`), making warcio's own `StatusAndHeaders`, `ArcWarcRecord` (a subclass, with pyroid's `content_stream()`), `DigestChecker` and `ArchiveLoadFailed` | `WARCWriter`, `capture_http`, the indexer, the checker, the command line |
 
 `fasttext.FastText._FastText(path)` is how datatrove and others load models, and
 `isinstance(model, _FastText)` is true for pyroid's models too. Calls that pyroid hands to the
@@ -56,7 +57,7 @@ import pyroid
 
 pyroid.patch("unidecode")
 # ValueError: cannot patch 'unidecode': the supported names are 'ftfy', 'fasttext', 'anyascii',
-# 'datasketch', 'trafilatura', 'nltk'
+# 'datasketch', 'trafilatura', 'nltk', 'warcio'
 # (pyroid.translit.unidecode transliterates with anyascii's tables, so its output differs from
 # Unidecode's: it is not a drop-in)
 ```
@@ -181,12 +182,12 @@ $ pyroid run -p ftfy,fasttext train.py --epochs 3
 usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
 
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
-`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` giving
-pyroid's drop-ins. The Python processes it starts (multiprocessing workers, subprocesses) are
-patched too.
+`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
+`warcio` giving pyroid's drop-ins. The Python processes it starts (multiprocessing
+workers, subprocesses) are patched too.
 
 options:
-  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, trafilatura, nltk
+  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, trafilatura, nltk, warcio
                      (default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
@@ -297,12 +298,21 @@ as rouge-score) calls pyroid's, and `unpatch("nltk")` puts NLTK's objects back. 
 before `patch()` (`from nltk import word_tokenize`) keeps NLTK's function. Without NLTK, `nltk`
 and those submodules are shims with just these names.
 
+`"warcio"` works the same way. With warcio installed, its `ArchiveIterator`, `WARCIterator`
+and `ARCIterator` become subclasses of [`pyroid.warc`](warc.md)'s iterators that make warcio's
+own record, header and exception classes and log to warcio's logger, so the records, errors and
+warnings are the ones warcio gives. datatrove's `WarcReader` imports `ArchiveIterator` from
+`warcio.archiveiterator` each time it opens a file, so a patched process (or `pyroid run -p
+warcio`) reads WARC files with pyroid in stock datatrove. Without warcio, `warcio` and
+`warcio.archiveiterator` are shims holding pyroid.warc's classes.
+
 ## Limitations
 
 - A shim is not the real module object: code that already holds the real module (imported before
   `patch()`), or compares module objects, is not redirected.
 - `importlib.reload` of a shim is not supported.
-- Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura` and `nltk` can be patched. pyroid's filters and dedup reach
+- Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk` and `warcio` can be
+  patched. pyroid's filters and dedup reach
   datatrove pipelines through the [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked
