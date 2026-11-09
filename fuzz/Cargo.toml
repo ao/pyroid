@@ -62,5 +62,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "trafilatura_extract"
+path = "fuzz_targets/trafilatura_extract.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
 members = ["."]
