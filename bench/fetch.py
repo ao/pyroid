@@ -10,6 +10,7 @@ Layout under /data (total budget 1.5 GB):
     fineweb/fineweb-100k.parquet       headline slice: first 100,000 rows of FineWeb sample/10BT/000_00000.parquet
     fineweb/fineweb-dev-10k.parquet    dev slice: the first 10,000 of those rows
     fineweb2/<lang>.parquet            first rows of FineWeb-2 test splits (non-English adversarial input)
+    fineweb2/<lang>-train-20k.parquet  first 20,000 rows of a FineWeb-2 train file (--only fineweb2-train)
     models/lid.176.bin, lid.176.ftz    fastText language-ID models (CC BY-SA 3.0)
     metrics/cnndm-3.0.0-test.parquet   CNN/DailyMail 3.0.0 test split, as published (pyroid.metrics ROUGE parity)
     metrics/summeval.parquet           SummEval: 16 systems' summaries of 100 CNN/DM articles, 11 references each
@@ -53,8 +54,23 @@ FINEWEB2 = {
     "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
     "license": "ODC-By 1.0",
     "rows": 250,
-    "langs": ["fra_Latn", "deu_Latn", "spa_Latn", "rus_Cyrl", "cmn_Hani", "jpn_Jpan", "arb_Arab", "hin_Deva"],
+    "langs": [
+        "fra_Latn",
+        "deu_Latn",
+        "spa_Latn",
+        "rus_Cyrl",
+        "cmn_Hani",
+        "jpn_Jpan",
+        "arb_Arab",
+        "hin_Deva",
+        "vie_Latn",
+        "tha_Thai",
+    ],
 }
+# Larger inputs for the uncommitted word-tokenizer recordings (fetched only with --only fineweb2-train):
+# the first rows of the first train file, at the same revision.
+FINEWEB2_TRAIN = {"rows": 20_000, "langs": ["vie_Latn", "tha_Thai"]}
+TRAIN_SUFFIX = f"-train-{FINEWEB2_TRAIN['rows'] // 1000}k.parquet"
 MODELS = {
     "models/lid.176.bin": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin",
     "models/lid.176.ftz": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz",
@@ -146,15 +162,17 @@ TRAFILATURA_TESTS = {
 }
 _TESTS_LEFT_OUT = {"tests/evaldata.json", "tests/evaldata.py"}
 BUDGET = 1_500_000_000
-# Manifest prefix of the files each --only step downloads.
-INPUTS = {
-    "fineweb": "fineweb/",
-    "fineweb2": "fineweb2/",
-    "models": "models/",
-    "metrics": "metrics/",
-    "trafilatura": "trafilatura/",
-    "warc": "warc/",
-}
+# The --only steps; each downloads the pinned files under its directory (see step_of).
+STEPS = ("fineweb", "fineweb2", "fineweb2-train", "models", "metrics", "trafilatura", "warc")
+DEFAULT_STEPS = "fineweb,fineweb2,models,metrics,trafilatura,warc"
+
+
+def step_of(rel: str) -> str | None:
+    """The --only step that downloads the pinned file ``rel``; None for the generated parity/ files."""
+    top = rel.split("/", 1)[0]
+    if top == "fineweb2" and rel.endswith(TRAIN_SUFFIX):
+        return "fineweb2-train"
+    return top if top in STEPS else None
 
 
 def log(msg: str) -> None:
@@ -242,6 +260,33 @@ def fetch_fineweb2(pin: bool) -> None:
                     "revision": FINEWEB2["revision"],
                     "file": f"data/{lang}/test/000_00000.parquet",
                     "license": FINEWEB2["license"],
+                },
+            )
+
+
+def fetch_fineweb2_train(pin: bool) -> None:
+    n = FINEWEB2_TRAIN["rows"]
+    for lang in FINEWEB2_TRAIN["langs"]:
+        rel = f"fineweb2/{lang}{TRAIN_SUFFIX}"
+        file = f"data/{lang}/train/000_00000.parquet"
+        if not (D.DATA / rel).exists():
+            log(f"FineWeb-2 {lang}: first {n} rows of {file} (~45 MB of row groups)")
+            t = range_read(FINEWEB2["repo"], FINEWEB2["revision"], file, n)
+            write_parquet(t.select(["id", "text"]), rel)
+        if pin:
+            cols = D.read_parquet_columns(D.DATA / rel, ["id", "text"])
+            assert len(cols["id"]) == n
+            D.pin(
+                rel,
+                rows=n,
+                content_sha256=D.content_sha256(cols["id"], cols["text"]),
+                chars=sum(map(len, cols["text"])),
+                source={
+                    "repo": FINEWEB2["repo"],
+                    "revision": FINEWEB2["revision"],
+                    "file": file,
+                    "license": FINEWEB2["license"],
+                    "rows": f"first {n} in file order",
                 },
             )
 
@@ -461,14 +506,14 @@ def fetch_warc(pin: bool) -> None:
     warc_corpus.fetch(pin, log)
 
 
-def verify(prefixes: tuple[str, ...] | None = None, skip: tuple[str, ...] = ()) -> int:
-    """Re-hash the pinned files under ``prefixes`` (all of them for None), except those under ``skip``;
+def verify(steps: set[str] | None = None, skip: tuple[str, ...] = ()) -> int:
+    """Re-hash the pinned files of ``steps`` (all of them for None), except those under ``skip``;
     returns the number that are bad."""
     manifest = D.load_manifest()
     files = {
         r: e
         for r, e in manifest["files"].items()
-        if (prefixes is None or r.startswith(prefixes)) and not (skip and r.startswith(skip))
+        if (steps is None or step_of(r) in steps) and not (skip and r.startswith(skip))
     }
     bad, checked = 0, 0
     for rel, entry in files.items():
@@ -505,13 +550,11 @@ def main() -> int:
         help="with --verify-all: leave out the pinned files under PREFIX (built and checked elsewhere)",
     )
     ap.add_argument("--pin", action="store_true", help="(re)write sha256 entries for fetched files")
-    ap.add_argument(
-        "--only", default="fineweb,fineweb2,models,metrics,trafilatura,warc", help="comma-separated subset"
-    )
+    ap.add_argument("--only", default=DEFAULT_STEPS, help=f"comma-separated subset of {', '.join(STEPS)}")
     a = ap.parse_args()
     steps = set(a.only.split(","))
-    if unknown := steps - INPUTS.keys():
-        ap.error(f"--only: unknown step(s) {sorted(unknown)}; choose from {sorted(INPUTS)}")
+    if unknown := steps - set(STEPS):
+        ap.error(f"--only: unknown step(s) {sorted(unknown)}; choose from {list(STEPS)}")
     if a.verify_all:
         return 1 if verify(skip=tuple(a.skip)) else 0
     if not a.verify:
@@ -519,6 +562,8 @@ def main() -> int:
             fetch_fineweb(a.pin)
         if "fineweb2" in steps:
             fetch_fineweb2(a.pin)
+        if "fineweb2-train" in steps:
+            fetch_fineweb2_train(a.pin)
         if "models" in steps:
             fetch_models(a.pin)
         if "metrics" in steps:
@@ -527,7 +572,7 @@ def main() -> int:
             fetch_trafilatura(a.pin)
         if "warc" in steps:
             fetch_warc(a.pin)
-    return 1 if verify(tuple(INPUTS[s] for s in sorted(steps))) else 0
+    return 1 if verify(steps) else 0
 
 
 if __name__ == "__main__":

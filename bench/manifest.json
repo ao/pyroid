@@ -125,6 +125,58 @@
         "license": "ODC-By 1.0"
       }
     },
+    "fineweb2/tha_Thai-train-20k.parquet": {
+      "sha256": "48d35e7ef7712393568ad26dabb0f0ed41a572acf3deab6f2f489af9a953323d",
+      "bytes": 39213857,
+      "rows": 20000,
+      "content_sha256": "46b6a08f9df95243e94f692ab198817b2d4289651f74097d767165c213a565a3",
+      "chars": 60121242,
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/tha_Thai/train/000_00000.parquet",
+        "license": "ODC-By 1.0",
+        "rows": "first 20000 in file order"
+      }
+    },
+    "fineweb2/tha_Thai.parquet": {
+      "sha256": "2af08b6227c6ae87066dab7d8babde549b01dd2f083f0b5c8b35b69f30befa0f",
+      "bytes": 457171,
+      "rows": 250,
+      "content_sha256": "405dd9352bcff75e81bcb7b88e94e89654b82ee9f35932b7547bd5354693ca63",
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/tha_Thai/test/000_00000.parquet",
+        "license": "ODC-By 1.0"
+      }
+    },
+    "fineweb2/vie_Latn-train-20k.parquet": {
+      "sha256": "82a8fc586320cfb81a72fb68f2f5df9c899723d9ac116cc26ce87bc5ddd64f18",
+      "bytes": 38888314,
+      "rows": 20000,
+      "content_sha256": "f8799823d4d6458c3bda745b2f6343ddf5585dbc5a5b7ddb87e7eedc3809e5cc",
+      "chars": 90925787,
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/vie_Latn/train/000_00000.parquet",
+        "license": "ODC-By 1.0",
+        "rows": "first 20000 in file order"
+      }
+    },
+    "fineweb2/vie_Latn.parquet": {
+      "sha256": "1dcd2a6e19a643eb379abe99f7d250e10094c9542235d567ae371dbd50a28ecd",
+      "bytes": 455309,
+      "rows": 250,
+      "content_sha256": "d3a44e5de98e5fc7df15fa287786218cb18b85055747166234366f62735fe754",
+      "source": {
+        "repo": "HuggingFaceFW/fineweb-2",
+        "revision": "af9c13333eb981300149d5ca60a8e9d659b276b9",
+        "file": "data/vie_Latn/test/000_00000.parquet",
+        "license": "ODC-By 1.0"
+      }
+    },
     "metrics/cnndm-3.0.0-test.parquet": {
       "sha256": "04e322d2634a96dba76bf9a6294fbbe48e0b36abeae43f13d86ba2c3bebffe4e",
       "bytes": 30000471,

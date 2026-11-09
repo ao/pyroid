@@ -159,7 +159,8 @@ python bench/fineweb_warc.py reader       --warcs W --out O/reader   # one proce
 |---|---|
 | `fineweb/fineweb-100k.parquet` | headline slice: first 100,000 rows of `HuggingFaceFW/fineweb@9bb295ddab0e05d785b879661af7260fed5140fc` `sample/10BT/000_00000.parquet`. Content sha256 `1a933782…` |
 | `fineweb/fineweb-dev-10k.parquet` | dev slice: its first 10,000 rows |
-| `fineweb2/<lang>.parquet` | first 250 rows of the FineWeb-2 test split (`af9c1333…`) for fra, deu, spa, rus, cmn, jpn, arb, hin |
+| `fineweb2/<lang>.parquet` | first 250 rows of the FineWeb-2 test split (`af9c1333…`) for fra, deu, spa, rus, cmn, jpn, arb, hin, vie, tha |
+| `fineweb2/<lang>-train-20k.parquet` | first 20,000 rows of the first FineWeb-2 train file, for vie and tha (only with `--only fineweb2-train`; the Vietnamese and Thai tokenizer recordings) |
 | `models/lid.176.{bin,ftz}` | fastText language ID (`dl.fbaipublicfiles.com`), CC BY-SA 3.0 |
 | `parity/*.parquet` | adversarial set and reference outputs from `python -m pyroid_parity.refs all --pin` |
 
