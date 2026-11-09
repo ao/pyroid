@@ -55,6 +55,15 @@ nltk      NLTK 3.10.4's tokenizer API: ``sent_tokenize``, ``word_tokenize``, ``P
           ``TreebankWordDetokenizer``, ``RegexpTokenizer``, ``WordPunctTokenizer``, ``WhitespaceTokenizer``,
           ``BlanklineTokenizer``, ``wordpunct_tokenize`` (``nltk`` itself, or ``nltk.tokenize``); a candidate whose
           ``sent_tokenize`` also takes a list of str gets batch checks.
+nemo      ``pyroid.nemo``'s API for NeMo Curator 1.4.0 (``pyroid_parity.nemo_cases`` names the function of every
+          case): one function per heuristic filter, ``f(texts, **options)`` with a str (-> the Python float/int
+          NeMo's ``score_document`` returns) or a list of str / pyarrow array (-> numpy float64/int64), raising
+          NeMo's exception type for the first document that raises; one function per modifier (str -> str, list ->
+          list); ``fasttext_lang_id(model, texts) -> (scores, langs)``, ``lang_id_strings(scores, langs)`` and
+          ``fasttext_quality(model, texts, label)`` with ``<top>.fasttext.load_model`` models; UnicodeReformatter
+          through ``<top>.ftfy.fix_text`` (``fix_text_batch``). ``<top>.integrations.nemo_curator``, when it imports
+          (it needs nemo_curator), is checked too: NeMo's class names and constructor signatures, per-document
+          methods, and NeMo's stages run with its classes. ``nemo_curator`` itself is the reference.
 
 warc      warcio 1.8.2's reader API: ``ArchiveIterator(fileobj, no_record_parse=False, verify_http=False,
           arc2warc=False, ensure_http_headers=False, block_size=16384, check_digests=False)``, ``WARCIterator``,
@@ -96,6 +105,7 @@ SUITES = (
     "trafilatura",
     "nltk",
     "warc",
+    "nemo",
 )
 REFERENCE = {
     "ftfy": "ftfy",
@@ -109,6 +119,7 @@ REFERENCE = {
     "trafilatura": "trafilatura",
     "nltk": "nltk",
     "warc": "warcio",
+    "nemo": "nemo_curator",
 }
 # Distribution that provides a module, for version reporting when it differs from the module name.
 DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel")}
@@ -430,6 +441,13 @@ class GenericWarc:
             self.notes.append(f"{self.reader_missing}: the WarcReader checks skip")
 
 
+def _generic_nemo(mod: Any) -> Any:
+    """``nemo_compare.Candidate``: the module's functions (NeMo's own classes for ``nemo_curator``)."""
+    from pyroid_parity.nemo_compare import Candidate
+
+    return Candidate(mod)
+
+
 GENERIC: dict[str, Callable[[Any], Any]] = {
     "ftfy": GenericFtfy,
     "fasttext": GenericFasttext,
@@ -442,4 +460,5 @@ GENERIC: dict[str, Callable[[Any], Any]] = {
     "trafilatura": GenericTrafilatura,
     "nltk": GenericNltk,
     "warc": GenericWarc,
+    "nemo": _generic_nemo,
 }

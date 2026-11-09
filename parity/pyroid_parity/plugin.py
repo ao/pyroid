@@ -150,6 +150,11 @@ def metrics_impl(request: pytest.FixtureRequest) -> I.Impl:
     return _impl(request, "metrics")
 
 
+@pytest.fixture(scope="session")
+def nemo_impl(request: pytest.FixtureRequest) -> I.Impl:
+    return _impl(request, "nemo")
+
+
 def reference(suite: str, name: str, version: str | None, tolerance: float | None = None) -> None:
     """Record which oracle (and tolerance) a suite's pinned outputs came from."""
     _COLLECTOR.references[suite] = {"name": name, "version": version, "tolerance": tolerance}
