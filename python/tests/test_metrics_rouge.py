@@ -17,7 +17,7 @@ import sys
 import sysconfig
 import warnings
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from hypothesis import HealthCheck, example, given, settings
@@ -61,7 +61,7 @@ def porter() -> Any:
 
 @pytest.fixture(scope="module")
 def punkt(punkt_tab: Any) -> Any:
-    """nltk with its punkt_tab sentence data (installed, or fetched by the punkt_tab fixture), or skip."""
+    """nltk with its punkt_tab sentence data (installed, or from the punkt_tab fixture), or skip."""
     nltk = pytest.importorskip("nltk")
     try:
         nltk.data.find("tokenizers/punkt_tab/english/")
@@ -671,13 +671,21 @@ def test_split_summaries_without_nltk(monkeypatch: pytest.MonkeyPatch, tmp_path:
     monkeypatch.setenv("HOME", str(tmp_path))
     import pyroid.nltk
 
-    pyroid.nltk._get_punkt_tokenizer.cache_clear()
+    cast(Any, pyroid.nltk)._get_punkt_tokenizer.cache_clear()
     scorer = rouge_scorer.RougeScorer(["rougeLsum"], split_summaries=True)
-    if any(os.path.isdir(f"{d}/tokenizers/punkt_tab") for d in ("/usr/share/nltk_data", "/usr/local/share/nltk_data", "/usr/lib/nltk_data", "/usr/local/lib/nltk_data")):
+    if any(
+        os.path.isdir(f"{d}/tokenizers/punkt_tab")
+        for d in (
+            "/usr/share/nltk_data",
+            "/usr/local/share/nltk_data",
+            "/usr/lib/nltk_data",
+            "/usr/local/lib/nltk_data",
+        )
+    ):
         pytest.skip("a system-wide punkt_tab is installed")
     with pytest.raises(LookupError, match="punkt_tab"):
         scorer.score("a. b.", "a.")
-    pyroid.nltk._get_punkt_tokenizer.cache_clear()
+    cast(Any, pyroid.nltk)._get_punkt_tokenizer.cache_clear()
     assert list(rouge_scorer.RougeScorer(["rouge1"], split_summaries=True).score("a", "a"))
 
 
