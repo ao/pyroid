@@ -62,6 +62,9 @@ writeable = "writeable"
 thr = "thr"
 # ISO 15924 script codes in datatrove / FineWeb-2 language codes (ben_Beng).
 Beng = "Beng"
+# ISO 639-3 Thai in datatrove / FineWeb-2 codes (tha_Thai), and German "ein" in test text.
+tha = "tha"
+Ein = "Ein"
 
 [default.extend-identifiers]
 # QUADPACK's variable names, kept in the dqagse port (crates/pyroid-core/src/datasketch/quad.rs).
