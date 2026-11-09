@@ -43,12 +43,14 @@ impl std::fmt::Display for TokenizeError {
         match self {
             TokenizeError::InputTooLong(n, max) => write!(
                 f,
-                "Tokenization error: Input is too long, it can't be more than {max} bytes, was {n}"
+                "Error during tokenization: Input is too long, it can't be more than {max} bytes, was {n}"
             ),
             TokenizeError::EosBosDisconnect => {
-                f.write_str("Tokenization error: EOS isn't connected to BOS")
+                f.write_str("Error during tokenization: EOS isn't connected to BOS")
             }
-            TokenizeError::Internal => f.write_str("Tokenization error: invalid dictionary data"),
+            TokenizeError::Internal => {
+                f.write_str("Error during tokenization: invalid dictionary data")
+            }
         }
     }
 }

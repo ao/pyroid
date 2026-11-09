@@ -471,18 +471,28 @@ impl Dic {
         })
     }
 
-    /// A dictionary word's headword (`StringsCache::headword`).
-    pub fn headword(&self, word_id: u32) -> Result<String, DicError> {
+    /// The UTF-16 code units of a dictionary word's headword.
+    fn headword_units(&self, word_id: u32) -> Result<&[u8], DicError> {
         let e = self.entry(word_id).ok_or_else(|| bad("word id"))?;
         let ptr = u32_at(e, 8).ok_or_else(|| bad("word info"))?;
         let (length, offset) = decode_string_pointer(ptr);
         let strings = &self.data[self.strings.clone()];
         let start = (offset as usize) * 2;
         let end = start + (length as usize) * 2;
-        let b = strings
-            .get(start..end)
-            .ok_or_else(|| bad("string pointer"))?;
-        decode_utf16(b).ok_or_else(|| bad("utf-16 string"))
+        strings.get(start..end).ok_or_else(|| bad("string pointer"))
+    }
+
+    /// A dictionary word's headword (`StringsCache::headword`).
+    pub fn headword(&self, word_id: u32) -> Result<String, DicError> {
+        decode_utf16(self.headword_units(word_id)?).ok_or_else(|| bad("utf-16 string"))
+    }
+
+    /// The headword's only byte, if it is one ASCII character.
+    pub fn headword_ascii(&self, word_id: u32) -> Result<Option<u8>, DicError> {
+        Ok(match self.headword_units(word_id)? {
+            &[lo, 0] if lo < 0x80 => Some(lo),
+            _ => None,
+        })
     }
 }
 

@@ -26,6 +26,10 @@ extend-exclude = [
   "crates/pyroid-core/src/json_repair/testdata/",
   # jieba's and datatrove's recorded outputs (FineWeb-2 excerpts, fuzz, user-dictionary scenarios).
   "crates/pyroid-core/src/jieba/testdata/",
+  # SudachiPy's resource files, copied unmodified, and SudachiPy's and datatrove's recorded
+  # outputs (Japanese FineWeb-2 excerpts, every code point, fuzz).
+  "crates/pyroid-core/src/sudachi/resources/",
+  "crates/pyroid-core/src/sudachi/testdata/",
   "bench/data/",
   "bench/results/",
   # Charts copied byte for byte from bench/results/ (matplotlib SVGs).

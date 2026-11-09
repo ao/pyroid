@@ -272,6 +272,33 @@ impl JaTokenizer {
         }
         Ok(())
     }
+
+    /// datatrove's `span_tokenize(text)`: `(start, end)` character offsets,
+    /// appended to `out`. A chunk's spans are offset by the previous span's
+    /// end, not by the chunk's start, as datatrove does.
+    pub fn spans(&self, text: &str, out: &mut Vec<(usize, usize)>) -> Result<(), FilterError> {
+        let first = out.len();
+        self.chunk_sentences(text, |chunk, sents| {
+            let start = if out.len() > first {
+                out[out.len() - 1].1
+            } else {
+                0
+            };
+            let c = &text[chunk];
+            // Byte offsets of the chunk to its characters, in one pass.
+            let (mut at_b, mut at_c) = (0usize, 0usize);
+            let mut chars = |b: usize| {
+                at_c += n_chars(&c[at_b..b]);
+                at_b = b;
+                at_c
+            };
+            for &(s, e) in sents {
+                let s = chars(s);
+                let e = chars(e);
+                out.push((start + s, start + e));
+            }
+        })
+    }
 }
 
 /// Characters in `s`.
@@ -300,36 +327,28 @@ impl WordTokenizer for JaTokenizer {
     }
 
     fn sentence_ends(&self, text: &str, out: &mut Vec<usize>) -> Result<(), FilterError> {
-        // `span_tokenize`: `start + sent.end_char`, `start` being the previous
-        // span's end (in characters), not the chunk's offset.
-        let mut chunks: Vec<(Range<usize>, Vec<usize>)> = Vec::new();
+        let mut chunks = 0usize;
+        let mut ends = Vec::new();
         self.chunk_sentences(text, |chunk, sents| {
-            chunks.push((chunk, sents.iter().map(|s| s.1).collect()));
+            chunks += 1;
+            ends.extend(sents.iter().map(|s| chunk.start + s.1));
         })?;
-        if chunks.len() <= 1 {
-            out.extend(chunks.into_iter().flat_map(|(_, ends)| ends));
+        if chunks <= 1 {
+            // One chunk: the spans are the chunk's own.
+            out.extend(ends);
             return Ok(());
         }
-        // Character offsets, then back to bytes of `text`.
-        let mut ends_c: Vec<usize> = Vec::new();
-        for (chunk, ends) in &chunks {
-            let start = ends_c.last().copied().unwrap_or(0);
-            let c = &text[chunk.clone()];
-            let (mut at_b, mut at_c) = (0usize, 0usize);
-            for &e in ends {
-                at_c += n_chars(&c[at_b..e]);
-                at_b = e;
-                ends_c.push(start + at_c);
-            }
-        }
-        let mut it = text
+        let mut spans = Vec::new();
+        self.spans(text, &mut spans)?;
+        // `span_tokenize`'s ends are characters of `text`: back to bytes.
+        let mut bounds = text
             .char_indices()
             .map(|(i, _)| i)
             .chain(std::iter::once(text.len()));
-        let mut at = 0usize; // chars consumed from `it`
+        let mut at = 0usize; // characters consumed from `bounds`
         let mut byte = 0usize;
-        for e in ends_c {
-            for b in it.by_ref().take(e + 1 - at) {
+        for (_, e) in spans {
+            for b in bounds.by_ref().take(e + 1 - at) {
                 byte = b;
             }
             at = e + 1;

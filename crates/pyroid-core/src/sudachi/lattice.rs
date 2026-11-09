@@ -237,6 +237,29 @@ impl PathNode {
             Norm::Unused => return Err(TokenizeError::Internal),
         })
     }
+
+    /// The normalized form's only byte, if it is one ASCII character (what
+    /// `JoinNumericPlugin` compares with `","` and `"."`), without building
+    /// the string.
+    fn normalized_ascii(
+        &self,
+        dic: &Dictionary,
+        input: &Input,
+    ) -> Result<Option<u8>, TokenizeError> {
+        let one = |s: &str| match s.as_bytes() {
+            &[b] => Some(b),
+            _ => None,
+        };
+        Ok(match &self.norm {
+            Norm::Word(w) => dic
+                .dic
+                .headword_ascii(*w)
+                .map_err(|_| TokenizeError::Internal)?,
+            Norm::Text(a, b) => one(&input.modified[*a..*b]),
+            Norm::Owned(s) => one(s),
+            Norm::Unused => return Err(TokenizeError::Internal),
+        })
+    }
 }
 
 /// One morpheme: a byte range of the original text, its POS and word id.
@@ -542,15 +565,17 @@ fn join_numeric(
         i += 1;
         let node = &path[i as usize];
         let ctypes = input.cat_of_range(node.begin..node.end);
-        let s = node.normalized_form(dic, input)?;
+        // `s.len() == 1`: the normalized form is one ASCII character.
+        let one = node.normalized_ascii(dic, input)?;
         if ctypes & (cat::NUMERIC | cat::KANJINUMERIC) != 0
-            || (comma_as_digit && s == ",")
-            || (period_as_digit && s == ".")
+            || (comma_as_digit && one == Some(b','))
+            || (period_as_digit && one == Some(b'.'))
         {
             if begin_idx < 0 {
                 parser.clear();
                 begin_idx = i;
             }
+            let s = node.normalized_form(dic, input)?;
             for c in s.chars() {
                 if !parser.append(c) {
                     if begin_idx >= 0 {
@@ -568,12 +593,7 @@ fn join_numeric(
             }
             continue;
         }
-        let c = if s.len() == 1 {
-            char::from(s.as_bytes()[0])
-        } else {
-            char::MAX
-        };
-        drop(s);
+        let c = one.map_or(char::MAX, char::from);
         if begin_idx >= 0 {
             if parser.done() {
                 join_numeric_concat(
@@ -586,11 +606,10 @@ fn join_numeric(
                 )?;
                 i = begin_idx + 1;
             } else {
-                let ss = path[i as usize - 1].normalized_form(dic, input)?;
-                if (parser.error_state == NumError::Comma && ss == ",")
-                    || (parser.error_state == NumError::Point && ss == ".")
+                let ss = path[i as usize - 1].normalized_ascii(dic, input)?;
+                if (parser.error_state == NumError::Comma && ss == Some(b','))
+                    || (parser.error_state == NumError::Point && ss == Some(b'.'))
                 {
-                    drop(ss);
                     join_numeric_concat(
                         dic,
                         input,
@@ -616,11 +635,10 @@ fn join_numeric(
         if parser.done() {
             join_numeric_concat(dic, input, &mut path, begin_idx as usize, len, &mut parser)?;
         } else {
-            let ss = path[len - 1].normalized_form(dic, input)?;
-            if (parser.error_state == NumError::Comma && ss == ",")
-                || (parser.error_state == NumError::Point && ss == ".")
+            let ss = path[len - 1].normalized_ascii(dic, input)?;
+            if (parser.error_state == NumError::Comma && ss == Some(b','))
+                || (parser.error_state == NumError::Point && ss == Some(b'.'))
             {
-                drop(ss);
                 join_numeric_concat(
                     dic,
                     input,
