@@ -39,6 +39,7 @@ ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'
 | [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
 | [`pyroid.jieba`](https://ao.github.io/pyroid/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
 | [`pyroid.trafilatura`](https://ao.github.io/pyroid/guides/trafilatura/) | Trafilatura 2.3.1's text extraction (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
+| [`pyroid.nltk`](https://ao.github.io/pyroid/guides/nltk/) | NLTK 3.10.4's `sent_tokenize` (Punkt), `word_tokenize` and Treebank tokenizers |
 
 On 100,000 FineWeb documents, pyroid runs datatrove's FineWeb cleaning chain about 27× faster
 than datatrove on 8 processes and 56× faster on one thread, with identical output (AWS EC2

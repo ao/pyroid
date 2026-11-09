@@ -317,6 +317,23 @@ pyroid builds the Python lists of words on the calling thread (about 35 µs per 
 
 <small>Source: bench/results/orbstack-aarch64-12cpu/2026-11-07-jieba (bench/jieba_bench.py).</small>
 
+### pyroid.nltk
+
+Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. µs per document over the first 1,000 documents of the FineWeb dev slice (3,018 characters each on average), English model, release wheels, median of 5 runs (2 for NLTK), load average 3 to 5. Every document's output was first checked against NLTK 3.10.4's. NLTK's 8 processes are a warmed fork Pool(8); its 8 threads run in parallel only on 3.15t. Guide: [nltk](guides/nltk.md).
+
+| Run | sent_tokenize, 3.13 | word_tokenize, 3.13 | sent_tokenize, 3.15t | word_tokenize, 3.15t |
+|---|---:|---:|---:|---:|
+| NLTK, one thread | 651 | 3,576 | 592 | 3,513 |
+| NLTK, 8 threads | 4,102 | 25,633 | 259 | 1,244 |
+| NLTK, 8 processes | 197 | 593 | 117 | 724 |
+| pyroid, one call per document | 10.9 (60×) | 117 (31×) | 11.2 (53×) | 105 (33×) |
+| pyroid, batch, `threads=1` | 10.4 (63×) | 92 (39×) | 10.5 (56×) | 96 (37×) |
+| pyroid, batch, `threads=8` | 5.6 (116×) | 44 (82×) | 5.0 (118×) | 43 (81×) |
+
+Speedups are against NLTK on one thread. pyroid builds the Python lists of sentences and tokens on the calling thread, which limits the 8-thread rows; against NLTK on 8 processes they are 35× (sent_tokenize) and 14× (word_tokenize) on 3.13. The first sentence in a fresh interpreter takes 177 ms with pyroid and 203 ms with NLTK on 3.13: pyroid imports NLTK to find the model when NLTK is installed.
+
+<small>Source: bench/results/orbstack-aarch64-12cpu/2026-11-09-nltk (bench/nltk_bench.py).</small>
+
 ### Languages: FineWeb-2 filters and MinHash
 
 Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. µs per document over 1,000 documents per language (each FineWeb-2 slice four times), median of 5 runs (2 for datatrove). Every timed document was first checked for the same keep/drop, reason and signatures. The filters are FineWeb-2's chain (Gopher repetition, FineWeb quality, Gopher quality) with each language's settings; MinHash computes FineWeb-2's signatures. datatrove's 8 processes are a warmed fork Pool(8). CPython 3.13, release wheel, load average 6 to 16. Guide: [languages](guides/languages.md).

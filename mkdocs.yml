@@ -57,6 +57,7 @@ nav:
       - pyroid.datasketch: guides/datasketch.md
       - pyroid.jieba: guides/jieba.md
       - pyroid.trafilatura: guides/trafilatura.md
+      - pyroid.nltk: guides/nltk.md
       - Languages: guides/languages.md
   - Integrations:
       - The pyroid command line: guides/cli.md
@@ -82,6 +83,7 @@ nav:
       - pyroid.datasketch: reference/datasketch.md
       - pyroid.jieba: reference/jieba.md
       - pyroid.trafilatura: reference/trafilatura.md
+      - pyroid.nltk: reference/nltk.md
       - pyroid.integrations: reference/integrations.md
       - pyroid.text: reference/text.md
   - Compatibility: compatibility.md

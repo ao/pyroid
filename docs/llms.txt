@@ -1,6 +1,6 @@
 # pyroid
 
-> Rust ports of the Python libraries used to clean LLM datasets, with the same API and the same output: ftfy, fastText inference, datatrove 0.10.1's quality filters and dedup, rouge-score 0.1.2, sacrebleu 2.6.0, json_repair 0.64.5 and datasketch 2.0.0, plus permissive transliteration. Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
+> Rust ports of the Python libraries used to clean LLM datasets, with the same API and the same output: ftfy, fastText inference, datatrove 0.10.1's quality filters and dedup, rouge-score 0.1.2, sacrebleu 2.6.0, json_repair 0.64.5, datasketch 2.0.0, jieba 0.42.1 and NLTK 3.10.4's tokenizers, plus permissive transliteration. Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
 
 Modules and what they match:
 
@@ -12,6 +12,7 @@ Modules and what they match:
 - `pyroid.json_repair`: the same output as json_repair, in linear time.
 - `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
 - `pyroid.jieba` (`import pyroid.jieba as jieba`): the same words, offsets and frequencies as jieba 0.42.1, with the default dictionary built in; `lcut(docs, threads=n)` segments a batch in parallel.
+- `pyroid.nltk` (`import pyroid.nltk as nltk`): the same sentences, tokens and offsets as NLTK 3.10.4's `sent_tokenize` (Punkt, with the user's installed `punkt_tab` models), `word_tokenize`, Treebank tokenizers and detokenizer, and regexp tokenizers for common patterns; `sent_tokenize(docs, threads=n)` and `word_tokenize(docs, threads=n)` run a batch in parallel; `pyroid.patch("nltk")` swaps them into an installed NLTK.
 - `pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output.
 
 Integrations: the `pyroid clean IN OUT --recipe fineweb` command line, `pyroid.patch("ftfy", "fasttext")` for code you don't own, datatrove drop-in steps (`pyroid.integrations.datatrove`) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` (numpy), `[cli]` (pyarrow), `[datatrove]` and `[hf]`.

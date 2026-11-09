@@ -194,6 +194,25 @@ Reference: jieba 0.42.1. Rule: the same words in the same order (empty strings i
 
 <small>Source: the parity/ jieba suite, crates/pyroid-core/src/jieba/replay.rs and a 20,000-document replay, run on 2026-11-07.</small>
 
+### pyroid.nltk {#nltk}
+
+Reference: NLTK 3.10.4 (with regex 2026.9.29). Rule: the same sentences, tokens and offsets, str for str, and the same exceptions (type and message).
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| Parity suite on CPython 3.13, 1,045 checks, every document: Punkt in all 19 punkt_tab models on FineWeb (dev 10k), FineWeb-2 (the 4 pinned 250-document slices, and 5,000 documents in each of 14 more languages) and the adversarial set, realign on and off, spans, word_tokenize, both Treebank tokenizers with and without PTB brackets, their spans, detokenize round trips, the regexp tokenizers, the batch paths | 14,174,241 | 14,174,241 | 0 |
+| All 19 punkt_tab models on 39,618 FineWeb and FineWeb-2 documents (848,037 sentences, 208,349 decisions), Rust replay | 178,282 | 178,282 | 0 |
+| Rust replay of recorded Punkt outputs: NLTK's examples, adversarial text, fuzz, FineWeb excerpts with parameters PunktTrainer learned from FineWeb, and the case rules of CPython 3.12 to 3.15 | 37,936 | 37,936 | 0 |
+| Rust replay of recorded Treebank, NLTKWordTokenizer, detokenizer and align_tokens outputs: NLTK's examples, adversarial text, fuzz | 39,599 | 39,599 | 0 |
+| The same functions on every sentence of 5,000 FineWeb documents and up to 1,000 documents of each of 27 FineWeb-2 files (600,372 texts), Rust replay | 5,713,962 | 5,713,962 | 0 |
+| Every code point (surrogates excepted) in 13 Treebank templates, 6 of them also on Unicode 15.0, 16.0 and 17.0, and in the regexp tokenizers' templates, Rust replay | 149,016,576 | 149,016,576 | 0 |
+| **Total** | **169,160,596** | **169,160,596** | **0** |
+
+- python/tests: Hypothesis properties and NLTK's doctest examples against live NLTK for every ported function, every code point alone and in templates, batches (list, tuple, Arrow), parameters and their in-place edits, model loading with and without NLTK, fallbacks and pyroid.patch("nltk"); 1,088 tests on CPython 3.13 and 3.15t, also under pytest-run-parallel, with the GIL off on 3.15t.
+- Character classes: regex 2026.9.29's \w, \d and \s and CPython 3.11 to 3.15's isupper / islower are dumped code point by code point; the rules hard-coded in Rust (regex's \s, both engines' (?i) letters) are checked on each interpreter.
+
+<small>Source: the parity/ nltk suite, crates/pyroid-core/src/nltk/testdata/ replays and their large uncommitted recordings, run on 2026-11-09.</small>
+
 ### Integrations: datatrove steps, pyroid clean, pyroid.patch() {#integrations}
 
 Reference: datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.patch() stands in for). Rule: the same per-document digest of id, text, language, score, keep, reason and duplicate flag; for patch(), the same call-site output.

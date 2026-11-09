@@ -35,6 +35,7 @@ and `patch()` is the only switch. Each patched name emits one
 | `"ftfy"` | [`pyroid.ftfy`](ftfy.md) (ftfy 6.3.1) | `fix_text`, `fix_text_segment`, `fix_encoding`, `fix_and_explain`, `fix_encoding_and_explain`, `TextFixerConfig`, `ExplainedText`, `ExplanationStep`, the `ftfy` alias, `fix_text_batch` | `apply_plan`, `explain_unicode`, `fix_file`, `guess_bytes`, `ftfy.fixes` and the other submodules |
 | `"fasttext"` | [`pyroid.fasttext`](fasttext.md) (fastText 0.9.2's inference, as fasttext-predict 0.9.2.4) | `load_model`, `tokenize`, `fasttext.FastText.load_model`, and `fasttext.FastText._FastText(path)` (which returns a pyroid model) | training (`train_supervised`, ...) and `_FastText()` without a model file |
 | `"anyascii"` | [`pyroid.translit.anyascii`](translit.md) (anyascii 0.3.3) | `anyascii` | the rest of the package |
+| `"nltk"` | [`pyroid.nltk`](nltk.md) (NLTK 3.10.4's tokenizers) | `sent_tokenize`, `word_tokenize`, `punkt_model_available`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer`, `wordpunct_tokenize`, `regexp_tokenize`, `blankline_tokenize`, `RegexpTokenizer`, `WordPunctTokenizer`, `WhitespaceTokenizer`, `BlanklineTokenizer`, on `nltk`, `nltk.tokenize` and its `punkt`, `treebank`, `destructive` and `regexp` modules | everything else: `PunktTrainer`, the taggers, corpora, stemmers, the other tokenizers |
 | `"datasketch"` | [`pyroid.datasketch`](datasketch.md) (datasketch 2.0.0) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble`, `sha1_hash32`, `sha1_hash64`, `minhash_batch`, and the `minhash`, `lean_minhash`, `hashfunc`, `lsh`, `lshforest` and `lshensemble` submodules with them | `WeightedMinHash`, `HyperLogLog`, `bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `storage` and the other submodules |
 | `"trafilatura"` | [`pyroid.trafilatura`](trafilatura.md) (trafilatura 2.3.1) | `extract`, `bare_extraction`, `extract_with_metadata` (delegated) in `trafilatura` and `trafilatura.core`, `trafilatura.deduplication.LRUCache` and `LRU_TEST`, `trafilatura.meta.reset_caches` | metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the other submodules |
 
@@ -287,12 +288,18 @@ ids = tokenizer(["a photo of a cat", "a diagram"])
 For datatrove itself, use the [drop-in pipeline steps](datatrove.md) rather than patching
 fastText. They batch the whole step, not only the model call.
 
+`"nltk"` works differently when NLTK is installed. There is no shim: the names above are
+replaced on NLTK's own modules, so `nltk.word_tokenize(text)` (in your code, or in a library such
+as rouge-score) calls pyroid's, and `unpatch("nltk")` puts NLTK's objects back. A name imported
+before `patch()` (`from nltk import word_tokenize`) keeps NLTK's function. Without NLTK, `nltk`
+and those submodules are shims with just these names.
+
 ## Limitations
 
 - A shim is not the real module object: code that already holds the real module (imported before
   `patch()`), or compares module objects, is not redirected.
 - `importlib.reload` of a shim is not supported.
-- Only `ftfy`, `fasttext`, `anyascii` and `datasketch` can be patched. pyroid's filters and dedup reach
+- Only `ftfy`, `fasttext`, `anyascii`, `datasketch` and `nltk` can be patched. pyroid's filters and dedup reach
   datatrove pipelines through the [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked

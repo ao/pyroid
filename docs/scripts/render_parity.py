@@ -37,6 +37,7 @@ ORDER = [
     "json_repair",
     "datasketch",
     "jieba",
+    "nltk",
     "integrations",
 ]
 TITLES = {
@@ -49,6 +50,7 @@ TITLES = {
     "json_repair": "pyroid.json_repair",
     "datasketch": "pyroid.datasketch",
     "jieba": "pyroid.jieba",
+    "nltk": "pyroid.nltk",
     "integrations": "Integrations: datatrove steps, pyroid clean, pyroid.patch()",
 }
 
