@@ -3,16 +3,16 @@
 pyroid's filters and dedup reproduce [datatrove](https://github.com/huggingface/datatrove) 0.10.1
 beyond English. datatrove picks a word tokenizer for each of its 4,343 language codes (its
 `tokenizer_assignment.csv`), and every word count, ratio, n-gram and shingle depends on that
-tokenizer's words. pyroid ports the rule-based tokenizers, jieba for Chinese and SudachiPy for
-Japanese to Rust. That makes 4,013 of the 4,343 codes native, 95.6% of FineWeb-2's bytes, with
-datatrove's decisions ([parity](#parity)), in Rust on every thread. Japanese needs a SudachiDict
-dictionary installed ([Japanese](#japanese)); without one, 4,009 codes (88.4%) are native. The
-other 330 codes (334 without the dictionary) use statistical or dictionary segmenters that pyroid
-does not port. For them, `python_tokenizer=True` calls datatrove's own tokenizer and runs the rest
-in Rust.
+tokenizer's words. pyroid ports the rule-based tokenizers, jieba for Chinese, SudachiPy for
+Japanese, pyvi for Vietnamese and PyThaiNLP's tokenizers for Thai to Rust. That makes 4,049 of the
+4,343 codes native, 98.5% of FineWeb-2's bytes, with datatrove's decisions ([parity](#parity)), in
+Rust on every thread. Japanese needs a SudachiDict dictionary installed ([Japanese](#japanese))
+and Thai needs PyThaiNLP ([Thai](#thai)); without either, 4,025 codes (89.9%) are native. The
+other 294 codes (318 without either) use statistical segmenters that pyroid does not port. For
+them, `python_tokenizer=True` calls datatrove's own tokenizer and runs the rest in Rust.
 
 The largest languages are native: Russian, German, Spanish, French and Arabic together are 48% of
-FineWeb-2's bytes, Chinese another 11.6% and Japanese 7.2%.
+FineWeb-2's bytes, Chinese another 11.6%, Japanese 7.2%, Vietnamese 1.5% and Thai 1.3%.
 
 ## The language table
 
@@ -26,8 +26,9 @@ subsets, 22.9 TB) in those codes:
 | `WhitespaceTokenizer`: spaCy `xx` words and datatrove's regex sentences (such as `kat_Geor`) | 128 | 0.1% | native |
 | `SpaCyTokenizer("zh")`: spaCy's Chinese tokenizer with jieba (such as `cmn_Hani`, `yue_Hani`) | 10 | 11.6% | native ([`pyroid.jieba`](jieba.md)) |
 | `SpaCyTokenizer("ja")`: spaCy's Japanese pipeline with datatrove's SudachiPy tokenizer (`ja`, `ja_Jpan`, `jpn`, `jpn_Jpan`) | 4 | 7.2% | native with an installed SudachiDict ([Japanese](#japanese)), else `python_tokenizer=True` |
-| `SpaCyTokenizer("vi")`: spaCy's Vietnamese tokenizer with pyvi (such as `vie_Latn`) | 16 | 1.5% | `python_tokenizer=True` |
-| `StanzaTokenizer` (255 codes), `ThaiTokenizer` (20), `BurmeseTokenizer` (14), `TibetanTokenizer` (10), `LaoTokenizer` (6), `KhmerTokenizer` (5), `KiwiTokenizer` (4) | 314 | 2.7% | `python_tokenizer=True` |
+| `SpaCyTokenizer("vi")`: spaCy's Vietnamese tokenizer with pyvi (such as `vie_Latn`) | 16 | 1.5% | native ([Vietnamese](#vietnamese)) |
+| `ThaiTokenizer`: PyThaiNLP's newmm words and crfcut sentences (such as `tha_Thai`) | 20 | 1.3% | native with PyThaiNLP installed ([Thai](#thai)), else `python_tokenizer=True` |
+| `StanzaTokenizer` (255 codes), `BurmeseTokenizer` (14), `TibetanTokenizer` (10), `LaoTokenizer` (6), `KhmerTokenizer` (5), `KiwiTokenizer` (4) | 294 | 1.4% | `python_tokenizer=True` |
 | none: FineWeb-2's `und_*` subsets (except `und` and `und_Cyrl`, which datatrove gives `xx`) | — | 0.15% | `ValueError`, as datatrove |
 
 - Native codes are tokenized in Rust. For the spaCy languages pyroid ports spaCy 3.8.18's
@@ -38,11 +39,16 @@ subsets, 22.9 TB) in those codes:
   [`pyroid.jieba`](jieba.md), the port of jieba 0.42.1, with jieba's default dictionary.
   Japanese is datatrove's `JapaneseTokenizer` (SudachiPy in split mode A) and the sentencizer,
   over a port of SudachiPy 0.7.0's tokenizer that reads an installed SudachiDict dictionary.
-  Words and sentences match datatrove's.
-- The `python_tokenizer=True` codes need a segmenter pyroid does not port: the statistical models
-  of pyvi, Stanza and khmer-nltk, PyThaiNLP, Kiwi, botok and pyidaungsu. Exact ports of these are
-  not feasible at a reasonable binary size. Without `python_tokenizer=True` these codes raise
-  `NotImplementedError`, and so do the Japanese codes when no dictionary is installed.
+  Vietnamese is spaCy's `VietnameseTokenizer` with pyvi 0.1.1: its syllable pattern, its CRF
+  (pyvi's model and n-gram list are bundled) and its rules for joining syllables into words. Thai
+  is PyThaiNLP 5.4.0's newmm (maximal matching over its word list, within Thai character clusters)
+  and crfcut (a CRF over newmm's words), reading the installed PyThaiNLP's word list and sentence
+  model. Both CRFs run on a Rust reader of CRFsuite's model files. Words and sentences match
+  datatrove's.
+- The `python_tokenizer=True` codes need a segmenter pyroid does not port: Stanza's neural
+  models, Kiwi, khmer-nltk, LaoNLP, botok and pyidaungsu. Without `python_tokenizer=True` these
+  codes raise `NotImplementedError`, and so do the Japanese codes when no dictionary is installed
+  and the Thai codes without PyThaiNLP.
 - Codes datatrove does not know raise datatrove's `ValueError` when the call starts.
 
 ## How to choose
@@ -50,7 +56,8 @@ subsets, 22.9 TB) in those codes:
 Look the code up in `pyroid.filters.languages()` (the same function is `pyroid.dedup.languages`).
 Its keys are what `language=` accepts, in datatrove's spellings (`"deu_Latn"`, `"deu"`, `"de"`,
 ...). Each value says which tokenizer datatrove uses and whether pyroid's is native (here with a
-Japanese dictionary installed; without one, `jpn_Jpan` is `native=False` and the sum is 4009):
+Japanese dictionary and PyThaiNLP installed; without the dictionary the 4 Japanese codes are
+`native=False`, and without PyThaiNLP the 20 Thai codes):
 
 ```python
 import pyroid.filters as F
@@ -61,8 +68,10 @@ langs["hin_Deva"]  # Language(tokenizer='IndicNLPTokenizer', arg='hi', native=Tr
 langs["kat_Geor"]  # Language(tokenizer='WhitespaceTokenizer', arg='', native=True)
 langs["cmn_Hani"]  # Language(tokenizer='SpaCyTokenizer', arg='zh', native=True)
 langs["jpn_Jpan"]  # Language(tokenizer='SpaCyTokenizer', arg='ja', native=True)
-langs["vie_Latn"]  # Language(tokenizer='SpaCyTokenizer', arg='vi', native=False)
-sum(lang.native for lang in langs.values())  # 4013 (of 4343)
+langs["vie_Latn"]  # Language(tokenizer='SpaCyTokenizer', arg='vi', native=True)
+langs["tha_Thai"]  # Language(tokenizer='ThaiTokenizer', arg='', native=True)
+langs["kaz_Cyrl"]  # Language(tokenizer='StanzaTokenizer', arg='kk', native=False)
+sum(lang.native for lang in langs.values())  # 4049 (of 4343)
 F.english_languages()[:4]  # ['en', 'en_Latn', 'eng', 'eng_Latn']: SpaCyTokenizer("en")
 ```
 
@@ -73,7 +82,8 @@ Then:
 2. If `native=False`, pass `language=` and `python_tokenizer=True`, with datatrove 0.10.1 and
    the segmenter installed. The `NotImplementedError` you get without them gives the
    `pip install` line. (For the Japanese codes, `pip install sudachidict-core` makes them native
-   instead.) Each document is tokenized by datatrove's own tokenizer, in Python, on the
+   instead, and for the Thai codes `pip install pythainlp`.) Each document is tokenized by
+   datatrove's own tokenizer, in Python, on the
    calling thread, so the call runs at that tokenizer's speed and does not scale with
    `threads=`. On 8 cores datatrove's 8 processes can beat it ([Speed](#speed)). For a large
    corpus in such a language, run several processes, or keep datatrove for those steps.
@@ -246,24 +256,21 @@ whose normalization passes 65,535 bytes), datatrove raises `sudachipy.errors.Sud
 pyroid raises `ValueError` with the same message.
 
 Without a dictionary these codes are not native: they raise `NotImplementedError`, whose message
-says to install sudachidict-core, unless you pass `python_tokenizer=True` as in the next section.
+says to install sudachidict-core, unless you pass `python_tokenizer=True` as in
+[the Python tokenizer](#the-python-tokenizer-khmer-with-khmer-nltk) section.
 
-## The Python tokenizer: Vietnamese with pyvi
+## Vietnamese
 
-`vie_Latn` is `SpaCyTokenizer("vi")`, which segments with pyvi. Without
-`python_tokenizer=True`, the call says what to do:
-
-```text
-NotImplementedError: pyroid has no native word tokenizer for language 'vie_Latn': datatrove
-tokenizes it with SpaCyTokenizer("vi") (spaCy's Vietnamese tokenizer with pyvi). Pass
-python_tokenizer=True to tokenize it with datatrove's own tokenizer in Python, on the calling
-thread (needs `pip install datatrove==0.10.1 regex spacy==3.8.18 pyvi`); the filter math still
-runs in Rust.
-```
-
-With datatrove 0.10.1, spaCy 3.8.18 and pyvi installed:
+`vie_Latn` and the other `SpaCyTokenizer("vi")` codes are native, with nothing to install.
+datatrove segments them with spaCy's `VietnameseTokenizer`, which labels syllables with pyvi
+0.1.1's CRF and joins them into words (`"Việt Nam"`, `"Hồ Chí Minh"`). pyroid ports the syllable
+pattern, pyvi's features and spaCy's joining rules to Rust and bundles pyvi's model and n-gram
+list (MIT, 1 MB), so neither datatrove, spaCy, pyvi nor scikit-learn is needed:
 
 ```python
+import pyroid.dedup as D
+import pyroid.filters as F
+
 vi = [
     "Thị trấn nằm bên bờ sông và từ thời Trung cổ đã là nơi buôn bán quan trọng của các thương "
     "nhân đến từ nhiều nước. Ngày nay ở đây có khoảng tám mươi nghìn người sinh sống. Khu phố cổ "
@@ -274,31 +281,104 @@ vi = [
 ]
 vi.append(vi[0].replace("dọc bờ sông", "dọc bờ hồ"))  # a near-duplicate
 
-F.fineweb_quality(vi, language="vie_Latn", python_tokenizer=True)  # [True, True]
-D.minhash_dedup(vi, language="vie_Latn", python_tokenizer=True)  # [True, False]
+F.fineweb_quality(vi, language="vie_Latn")  # [True, True]
+D.minhash_dedup(vi, language="vie_Latn")  # [True, False]
+```
+
+Case tests and lowercasing in pyvi's features follow the running interpreter's Unicode version,
+as they do in Python.
+
+## Thai
+
+`tha_Thai` and the other `ThaiTokenizer` codes are native when PyThaiNLP is installed. datatrove
+splits words with PyThaiNLP's `newmm-safe` (maximal matching over its word list, within Thai
+character clusters, in chunks for long texts) and sentences with `crfcut` (a CRF over newmm's
+words). pyroid ports both, and the CRFsuite tagger crfcut uses, to Rust. It does not ship
+PyThaiNLP's word list (`words_th.txt`, CC0) or sentence model (`sentenceseg_crfcut.model`,
+CC-BY-4.0): it reads those of the installed `pythainlp`, which datatrove's Thai tokenizer needs
+anyway, so the words follow the word list of the PyThaiNLP you have:
+
+```console
+$ pip install pythainlp
+```
+
+```python
+import pyroid.dedup as D
+import pyroid.filters as F
+
+th = [
+    "เมืองนี้ตั้งอยู่ริมแม่น้ำ และเป็นศูนย์กลางการค้าที่สำคัญมาตั้งแต่สมัยโบราณ "
+    "ปัจจุบันมีผู้คนอาศัยอยู่ราวแปดหมื่นคน ย่านเมืองเก่ามีถนนแคบและบ้านเรือนเก่าแก่ "
+    "ซึ่งดึงดูดนักท่องเที่ยวจำนวนมากทุกปี ในฤดูร้อนมีการแสดงดนตรีที่ลานกลางเมือง "
+    "ส่วนในฤดูหนาวมีตลาดคริสต์มาสเล็ก ๆ สถานีรถไฟอยู่ไม่ไกลจากใจกลางเมือง "
+    "และมีรถไฟวิ่งไปยังเมืองใหญ่ในภูมิภาคเป็นประจำ "
+    "ผู้ที่อยากสำรวจพื้นที่โดยรอบสามารถเช่าจักรยานและปั่นไปตามทางเลียบแม่น้ำได้",
+]
+th.append(th[0].replace("แปดหมื่น", "เก้าหมื่น"))  # a near-duplicate
+
+# Thai lines rarely end in punctuation; FineWeb-2 turns that check off for Thai.
+F.fineweb_quality(th, language="tha_Thai", line_punct_thr=0)  # [True, True]
+D.minhash_dedup(th, language="tha_Thai")  # [True, False]
+```
+
+pyroid finds the package without importing it and reads `corpus/words_th.txt` and
+`corpus/sentenceseg_crfcut.model` once per process (5.6 MB), the first time a filter
+pipeline, MinHash or sentence dedup is built for a Thai code. If `PYROID_PYTHAINLP_CORPUS` is
+set, the files of the directory it names are read instead. A file that cannot be read raises
+`OSError`, and a model that is not a CRFsuite model `ValueError`. The algorithms are PyThaiNLP
+5.4.0's, and parity was checked with PyThaiNLP 5.4.0 ([Parity](#parity)); newer releases change
+the word list, which pyroid then reads.
+
+Without PyThaiNLP these codes are not native: they raise `NotImplementedError`, whose message says
+to install pythainlp. (datatrove's own Thai tokenizer also needs python-crfsuite for its
+sentences; pyroid does not.)
+
+## The Python tokenizer: Khmer with khmer-nltk
+
+`khm_Khmr` is `KhmerTokenizer()`, which segments with khmer-nltk's CRF. pyroid does not port it.
+Without `python_tokenizer=True`, the call says what to do:
+
+```text
+NotImplementedError: pyroid has no native word tokenizer for language 'khm_Khmr': datatrove
+tokenizes it with KhmerTokenizer() (khmer-nltk). Pass python_tokenizer=True to tokenize it with
+datatrove's own tokenizer in Python, on the calling thread (needs `pip install datatrove==0.10.1
+regex khmer-nltk`); the filter math still runs in Rust.
+```
+
+With datatrove 0.10.1 and khmer-nltk 1.6 installed:
+
+```python
+km = [
+    "ភ្នំពេញជារាជធានីនៃប្រទេសកម្ពុជា។ ទីក្រុងនេះស្ថិតនៅលើច្រាំងទន្លេមេគង្គ និងទន្លេសាប។ "
+    "ប្រជាជនជាច្រើនរស់នៅទីនេះ ហើយភ្ញៀវទេសចរមកលេងរៀងរាល់ឆ្នាំ។",
+]
+km.append(km[0].replace("រៀងរាល់ឆ្នាំ", "ជារៀងរាល់ឆ្នាំ"))  # a near-duplicate
+
+F.fineweb_quality(km, language="khm_Khmr", python_tokenizer=True)  # [True, True]
+D.minhash_dedup(km, language="khm_Khmr", python_tokenizer=True)  # [True, False]
 ```
 
 Each call warns once:
 
 ```text
-FallbackWarning: pyroid.filters.fineweb_quality: tokenizing language 'vie_Latn' with datatrove's
-SpaCyTokenizer("vi") (spaCy's Vietnamese tokenizer with pyvi) in Python, one document at a time on
-the calling thread; the filter math runs in Rust. Expect the tokenizer's speed, not pyroid's.
-This warning is shown once.
+FallbackWarning: pyroid.filters.fineweb_quality: tokenizing language 'khm_Khmr' with datatrove's
+KhmerTokenizer() (khmer-nltk) in Python, one document at a time on the calling thread; the filter
+math runs in Rust. Expect the tokenizer's speed, not pyroid's. This warning is shown once.
 ```
 
 An unknown code raises datatrove's error before any document is read:
 
 ```python
-F.gopher_quality(vi, language="und_Zzzz")
+F.gopher_quality(km, language="und_Zzzz")
 # ValueError: Language 'und_Zzzz' doesn't have a tokenizer assigned. Pass in a WordTokenizer
 # directly or update tokenizer_assignment.csv
 ```
 
 ## Parity
 
-Every check below found 0 differences against datatrove 0.10.1 (spaCy 3.8.18, and SudachiPy 0.7.0
-with sudachidict-core 20261015 for Japanese; CPython 3.13 for the live checks):
+Every check below found 0 differences against datatrove 0.10.1 (spaCy 3.8.18; SudachiPy 0.7.0 with
+sudachidict-core 20261015 for Japanese; pyvi 0.1.1 for Vietnamese; PyThaiNLP 5.4.0 with
+python-crfsuite 0.9.12 for Thai; CPython 3.13 for the live checks):
 
 | Check | Rows |
 |---|--:|
@@ -314,15 +394,27 @@ with sudachidict-core 20261015 for Japanese; CPython 3.13 for the live checks):
 | Japanese, native: the `jpn_Jpan` slice's 8 filter cases, and its MinHash signatures and removed set | 2,000 decisions + 300 + 300 |
 | Japanese tokenizer replay, committed recordings: SudachiPy's morphemes for 4,567 texts (special cases, FineWeb-2 lines, fuzz, a code-point sample), datatrove's words, spans and sentences for 4,205 texts (54 documents over 40,000 bytes), 1,911 `chunk_text_on_bytes` cases, the spaCy tag of all 1,558 POS | 12,241 |
 | … and, not committed: every code point, the FineWeb-2 `jpn_Jpan` test slice (7,809 lines, 250 documents) and the first 20,000 training documents (32.5 M characters: 610,624 lines with 18,879,619 morphemes, and the documents' words and spans) | 777,691 |
+| Vietnamese and Thai, native: the `vie_Latn` and `tha_Thai` slices' 8 filter cases each, and their MinHash signatures and removed sets | 4,000 decisions + 600 + 600 |
+| Vietnamese tokenizer replay, committed recordings: syllables, CRF labels, pyvi's words, and datatrove's words, spans and sentences for 4,697 texts (special cases, FineWeb-2 documents, fuzz, a code-point sample) | 4,697 |
+| … and, not committed: every code point, the `vie_Latn` test slice and the first 20,000 training documents (90.9 M characters), 151.5 M compared items | 94,392 |
+| Thai tokenizer replay, committed recordings: character clusters, newmm with and without safe mode, crfcut's words and labels, and datatrove's words, spans and sentences for 3,165 texts (special cases, FineWeb-2 documents, fuzz, long texts, a code-point sample) | 3,165 |
+| … and, not committed: every code point, the `tha_Thai` test slice, the first 20,000 training documents (60.1 M characters), documents of 100k to 200k characters, synthetic dictionaries that reach newmm's 50-edge cutoff, and CPython 3.13 to 3.15 | 122,667 |
 
 Japanese also has 12 Hypothesis properties against live datatrove
 (`python/tests/test_filters_japanese.py`): 628 examples per run, and 11 of them also at 300
-examples each.
+examples each. Vietnamese and Thai have 80 tests against live datatrove
+(`python/tests/test_filters_vithai.py`): every filter, FineWeb-2's chains, words, sentence dedup
+and MinHash, with 1,046 Hypothesis examples per run (5,230 in CI).
 
 Sentence dedup has FineWeb-2 parity cases on six slices (`deu_Latn`, `fra_Latn`, `rus_Cyrl`,
-`spa_Latn`, `arb_Arab`, `hin_Deva`), for sentences and lines. The Stanza, Kiwi, Khmer, Lao,
-Tibetan and Burmese segmenters were not installed in these runs, so their
-`python_tokenizer=True` path is untested. See [Compatibility](../compatibility.md#filters).
+`spa_Latn`, `arb_Arab`, `hin_Deva`), for sentences and lines, and Vietnamese and Thai are checked
+against datatrove's three stages in `test_filters_vithai.py`. The Stanza, Kiwi, Lao, Tibetan and
+Burmese segmenters were not installed in these runs, so their `python_tokenizer=True` path is
+untested; Khmer's ran for the example above. See [Compatibility](../compatibility.md#filters).
+
+Vietnamese words follow spaCy's quirk with a token that is exactly `IS_ALPHA` as the other spaCy
+tokenizers do: pyroid gives what datatrove gives the first time in a process (see
+[the filters guide](filters.md)).
 
 Quirks reproduced as datatrove has them:
 
@@ -355,6 +447,8 @@ signatures. Release wheel, CPython 3.13, load average 6 to 16:
 | `hin_Deva` | native (IndicNLP) | 2,514 → 126 | 20× / 10× | 15× / 9× |
 | `cmn_Hani` | native (jieba)† | 10,628 → 242 | 44× / 44× | 43× / 42× |
 | `jpn_Jpan` | native (SudachiPy port)‡ | 11,210 → 1,444 | 7.8× / 6.4× | 9.2× / 6.9× |
+| `vie_Latn` | native (pyvi port)§ | 18,203 → 839 | 22× / 25× | 27× / 34× |
+| `tha_Thai` | native (PyThaiNLP port)§ | 9,045 → 704 | 13× / 15× | 14× / 10× |
 
 \* An outlier: pyroid with 8 threads was slower than with 1 thread in this run (246 µs per
 document) while the load rose. It needs a rerun before it is quoted.
@@ -368,11 +462,18 @@ Japanese gains less than the other native languages because SudachiPy's lattice 
 sides: pyroid's whole MinHash (1,151 µs per document, one thread) takes less time than SudachiPy's
 own `tokenize()` call on the same chunks (1,583 µs).
 
-The native languages run the filters 36–86× faster than datatrove on one thread (Hindi: 20×,
-Japanese: 7.8×).
-The Python-tokenizer path runs at the reference tokenizer's speed (about 1×, measured for Chinese
-and Japanese before their ports) and does not scale with threads, so datatrove's 8 processes beat
-it (0.2–0.4×). Adding the languages did not slow
+§ Measured on 2026-11-09, after the pyvi and PyThaiNLP ports, at load average 2.1 at the start
+(7.4 after the 8-worker runs). Before them, both went through `python_tokenizer=True`, at 1.5× /
+1.5× (Vietnamese) and 1.5× / 1.6× (Thai) on one thread and 0.4× / 0.2× and 0.6× / 0.7× with 8;
+that run overlapped other builds on the VM (load average 3.5 to 23), so only its ratios are given.
+The FineWeb-2 Vietnamese documents are long (4,278 characters on average); tokenizing them takes
+about 320 µs per document of pyroid's 839.
+
+The native languages run the filters 36–86× faster than datatrove on one thread (Vietnamese: 22×,
+Hindi: 20×, Thai: 13×, Japanese: 7.8×).
+The Python-tokenizer path runs at about the reference tokenizer's speed (1.2–1.5×, measured for
+Chinese, Japanese, Vietnamese and Thai before their ports) and does not scale with threads, so
+datatrove's 8 processes beat it (0.2–0.7×). Adding the languages did not slow
 English down: old and new builds measured within noise on 5,000 FineWeb documents. See
 [Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
 
@@ -384,6 +485,9 @@ grew from 3.29 to 4.40 MB, or from 1.20 to 1.46 MB gzipped. Chinese adds
 more in the wheel. Japanese adds the SudachiPy port and SudachiPy's resource files (`char.def`,
 `unk.def`, `rewrite.def`, Apache-2.0), but not the dictionary: the release extension module
 (aarch64, abi3) grew from 9.19 to 9.32 MB, and the wheel by 65 KB.
+Vietnamese and Thai add the CRFsuite reader, the two ports and pyvi's bundled model and word list
+(0.99 MB of it), but not PyThaiNLP's data: the release extension module grew from 9.32 to 10.44 MB
+(+1.12 MB), and the wheel from 4.02 to 4.45 MB.
 
 API: [`pyroid.filters` reference](../reference/filters.md),
 [`pyroid.dedup` reference](../reference/dedup.md).

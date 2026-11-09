@@ -31,7 +31,7 @@ Optional libraries, needed only by the features that use them:
 - The incumbents, only for the few features pyroid hands back to them
   ([Fallbacks](concepts/fallbacks.md)):
     - ftfy 6.3.1;
-    - datatrove 0.10.1 and a language's segmenter (pyvi, Stanza, ...) for
+    - datatrove 0.10.1 and a language's segmenter (Stanza, Kiwi, ...) for
       `python_tokenizer=True`;
     - trafilatura 2.3.1 (or 1.11.0 with `compat="1.11.0"`) for the delegated extraction options
       (other output formats, metadata, links, ...);

@@ -154,9 +154,10 @@ import pyroid
 pyroid.patch("ftfy", "fasttext")  # later imports of ftfy and fasttext get pyroid's
 ```
 
-The filters and dedup cover 4,013 of datatrove's 4,343 language codes natively, Chinese included,
-and Japanese with an installed SudachiDict dictionary (`pip install sudachidict-core`). The rest
-go through datatrove's own tokenizers
+The filters and dedup cover 4,049 of datatrove's 4,343 language codes natively, Chinese and
+Vietnamese included, Japanese with an installed SudachiDict dictionary (`pip install
+sudachidict-core`) and Thai with an installed PyThaiNLP (`pip install pythainlp`). The rest go
+through datatrove's own tokenizers
 ([languages](https://ao.github.io/pyroid/guides/languages/)).
 
 ## The 0.7.x releases

@@ -106,9 +106,9 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 | [`pyroid.nltk`](guides/nltk.md) | [NLTK](https://www.nltk.org) 3.10.4's `sent_tokenize` (Punkt), `word_tokenize`, Treebank and regexp tokenizers | same sentences, tokens and offsets ([parity](compatibility.md#nltk)) |
 | [`pyroid.warc`](guides/warc.md) | [warcio](https://github.com/webrecorder/warcio) 1.8.2's WARC/ARC reader, and datatrove 0.10.1's WARC reading | same records, documents, exceptions and messages ([parity](compatibility.md#warc)) |
 
-The filters and dedup follow datatrove beyond English too. 4,013 of its 4,343 language codes are
-tokenized natively (Japanese with an installed SudachiDict dictionary), and the rest through
-datatrove's own tokenizers ([Languages](guides/languages.md)).
+The filters and dedup follow datatrove beyond English too. 4,049 of its 4,343 language codes are
+tokenized natively (Japanese with an installed SudachiDict dictionary, Thai with an installed
+PyThaiNLP), and the rest through datatrove's own tokenizers ([Languages](guides/languages.md)).
 
 | Integration | What it does |
 |---|---|

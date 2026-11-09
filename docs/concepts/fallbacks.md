@@ -37,10 +37,12 @@ says what to install.
 
 datatrove 0.10.1 assigns every language code a word tokenizer. pyroid reproduces the rule-based
 ones in Rust: spaCy's tokenizer for 57 languages, IndicNLP and the whitespace tokenizer, plus
-spaCy's Chinese tokenizer with jieba and datatrove's Japanese tokenizer with SudachiPy (which
-reads an installed SudachiDict dictionary), which together cover 4,013 of datatrove's 4,343
-codes. The other 330 codes use statistical or dictionary segmenters (pyvi, Stanza, Thai, Khmer
-and others) that pyroid does not port. For those, and for Japanese without a dictionary, pass
+spaCy's Chinese tokenizer with jieba, datatrove's Japanese tokenizer with SudachiPy (which reads
+an installed SudachiDict dictionary), spaCy's Vietnamese tokenizer with pyvi and datatrove's Thai
+tokenizer with PyThaiNLP (which reads an installed PyThaiNLP), which together cover 4,049 of
+datatrove's 4,343 codes. The other 294 codes use statistical or dictionary segmenters (Stanza,
+Kiwi, Khmer and others) that pyroid does not port. For those, and for Japanese without a
+dictionary or Thai without PyThaiNLP, pass
 `python_tokenizer=True` to the filters or to MinHash:
 
 - each document is tokenized by datatrove's own tokenizer, in Python, on the calling thread

@@ -162,17 +162,18 @@ Every step that tokenizes follows the same rule:
 - `GopherRepetitionFilter`, `GopherQualityFilter`, `C4QualityFilter`, `FineWebQualityFilter`,
   `MinhashDedupSignature`, `SentenceDedupSignature` and `SentenceDedupFilter` run in Rust for
   every code pyroid tokenizes natively. `pyroid.filters.languages()` marks those codes `native`:
-  4,013 of datatrove's 4,343, 95.6% of FineWeb-2's bytes, with sudachidict-core installed
-  (4,009 and 88.4% without it). They include English, the spaCy rule-based languages (German,
-  French, Spanish, Russian, Arabic, ...), Chinese (jieba), Japanese (SudachiPy, with the
-  SudachiDict dictionary of `pip install sudachidict-core`), the IndicNLP languages (Hindi,
-  Bengali, Urdu, ...) and the `WhitespaceTokenizer` ones. Each code gets the word and sentence
-  tokenizer datatrove assigns it, reproduced exactly, so neither spaCy, jieba, SudachiPy nor
-  indic-nlp-library is needed.
+  4,049 of datatrove's 4,343, about 98% of FineWeb-2's bytes (4,025 and 90% without a Japanese
+  dictionary and PyThaiNLP). They include English, the spaCy rule-based languages (German, French,
+  Spanish, Russian, Arabic, ...), Chinese (jieba), Japanese (SudachiPy, with the SudachiDict
+  dictionary of `pip install sudachidict-core`), Vietnamese (pyvi), Thai (PyThaiNLP's newmm and
+  crfcut, with the word list and model of an installed `pythainlp`), the IndicNLP languages
+  (Hindi, Bengali, Urdu, ...) and the `WhitespaceTokenizer` ones. Each code gets the word and
+  sentence tokenizer datatrove assigns it, reproduced exactly, so neither spaCy, jieba, SudachiPy,
+  pyvi, python-crfsuite nor indic-nlp-library is needed.
 - Any other `language` runs datatrove's own code for that step, with one
   [`pyroid.FallbackWarning`](../concepts/fallbacks.md) per step and language. That covers the codes
-  whose datatrove tokenizer pyroid does not port (Vietnamese, Thai, the Stanza languages, ...,
-  and Japanese without a dictionary), a code datatrove has no tokenizer for, and a
+  whose datatrove tokenizer pyroid does not port (the Stanza languages, Korean, Khmer, ...,
+  Japanese without a dictionary and Thai without PyThaiNLP), a code datatrove has no tokenizer for, and a
   `WordTokenizer` object. The code that runs then needs the language's segmenter installed, as
   datatrove does. The sentence-dedup steps warn only when their configuration needs a tokenizer. `SentenceFindDedups` and
   `SentenceDedupBuildIndex` only merge files and take no `language`.
@@ -188,9 +189,11 @@ MinhashDedupSignature(output_folder="sigs", language="hin_Deva")  # in Rust: Ind
 
 GopherQualityFilter(language="cmn_Hani")  # in Rust: spaCy's Chinese tokenizer over jieba
 GopherQualityFilter(language="jpn_Jpan")  # in Rust with sudachidict-core installed: SudachiPy
-step = GopherQualityFilter(language="vie_Latn")  # datatrove's code (pyvi)
+GopherQualityFilter(language="vie_Latn")  # in Rust: spaCy's Vietnamese tokenizer with pyvi
+GopherQualityFilter(language="tha_Thai")  # in Rust with pythainlp installed: newmm and crfcut
+step = GopherQualityFilter(language="kaz_Cyrl")  # datatrove's code (Stanza)
 # At its first batch:
-# FallbackWarning: pyroid.integrations.datatrove.GopherQualityFilter: language='vie_Latn' is not
+# FallbackWarning: pyroid.integrations.datatrove.GopherQualityFilter: language='kaz_Cyrl' is not
 # supported by pyroid; running datatrove's own code (slow path). This warning is shown once.
 ```
 

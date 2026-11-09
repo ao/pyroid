@@ -71,7 +71,7 @@
       "source": "python/tests/test_fasttext_parity.py and the parity/ fastText suite, run on 2026-11-05"
     },
     "filters": {
-      "reference": "datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNLP, whitespace, SudachiPy 0.7.0 with sudachidict-core 20261015), tldextract 5.4.0, numpy 2.5.4",
+      "reference": "datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNLP, whitespace, SudachiPy 0.7.0 with sudachidict-core 20261015, pyvi 0.1.1, PyThaiNLP 5.4.0 with python-crfsuite 0.9.12), tldextract 5.4.0, numpy 2.5.4",
       "rule": "same keep/drop decision, same filter_reason, same rewritten text, same exception",
       "checks": [
         {
@@ -110,6 +110,31 @@
           "diff": 0
         },
         {
+          "name": "Vietnamese and Thai, native (spaCy's VietnameseTokenizer over the Rust port of pyvi 0.1.1; datatrove's ThaiTokenizer over the Rust port of PyThaiNLP 5.4.0): FineWeb-2 vie_Latn and tha_Thai, the 8 filter cases each against live datatrove, 2026-11-09",
+          "same": 4000,
+          "diff": 0
+        },
+        {
+          "name": "Vietnamese tokenizer, Rust replay of the committed recordings: syllables, CRF labels, pyvi_tokenize and datatrove's word_tokenize, span_tokenize and sent_tokenize for 4,697 texts (special cases, FineWeb-2 documents, fuzz, a code-point sample), 2026-11-09",
+          "same": 4697,
+          "diff": 0
+        },
+        {
+          "name": "Vietnamese tokenizer replay, not committed: every code point (69,504 rows), the FineWeb-2 vie_Latn test slice (250 documents), all cases and fuzz, and the first 20,000 vie_Latn training documents (90.9 M characters); 151.5 M compared syllables, labels, words, spans and sentences, 2026-11-09",
+          "same": 94392,
+          "diff": 0
+        },
+        {
+          "name": "Thai tokenizer, Rust replay of the committed recordings: character clusters, newmm with and without safe mode, crfcut's words and raw labels, and datatrove's word_tokenize, span_tokenize and sent_tokenize for 3,165 texts (special cases, FineWeb-2 documents, fuzz, long texts, a code-point sample), 2026-11-09",
+          "same": 3165,
+          "diff": 0
+        },
+        {
+          "name": "Thai tokenizer replay, not committed: every code point (69,504 rows), the FineWeb-2 tha_Thai test slice (250 documents), all cases, fuzz and 45 long texts, the first 20,000 tha_Thai training documents (60.1 M characters), and 29,806 more rows (random text, 6 documents of 100k to 200k characters, 6,000 rows over synthetic dictionaries where newmm's 50-edge cutoff fires, and digits new in Unicode 16.0 and 17.0 under CPython 3.13 to 3.15), 2026-11-09",
+          "same": 122667,
+          "diff": 0
+        },
+        {
           "name": "Per-language tokenizer replay: whole FineWeb-2 slices (ar, de, fr, ru, es, hi, with C4 lines), 10k fuzz rows per tokenizer, a 57-language FineWeb-2 smoke set",
           "same": 662530,
           "diff": 0
@@ -128,9 +153,10 @@
       "notes": [
         "Hypothesis against live datatrove: 92 tests x 300 examples over script-specific text in 22 native languages and the jieba, SudachiPy, pyvi and PyThaiNLP fallback paths (python_tokenizer=True).",
         "Japanese, native: 12 Hypothesis properties against live datatrove (python/tests/test_filters_japanese.py, 628 examples per run; 11 of them also at 300 examples each).",
+        "Vietnamese and Thai, native: 80 tests against live datatrove (python/tests/test_filters_vithai.py: every filter, FineWeb-2's chains, words, sentence dedup and MinHash, on generated and FineWeb-2 text; 1,046 Hypothesis examples per run, 5,230 with the ci profile).",
         "The newer steps, input by input: PII on 13,232 documents x 4 configurations, C4 bad words x 5 (per-document languages, seeded keep_fraction), symbol lines x 3, the URL filter on 10,000 FineWeb URLs x 7 configurations and 9,695 URL-like strings, plus Hypothesis against the reference and live datatrove."
       ],
-      "source": "the parity/ filters suite (after the last rebase, 2026-11-06), crates/pyroid-core/tests/filters_tokenizer.rs, crates/pyroid-core/src/sudachi/replay.rs and the multilingual replays, run on 2026-11-05 and 2026-11-06"
+      "source": "the parity/ filters suite (after the last rebase, 2026-11-06; vie_Latn and tha_Thai 2026-11-09), crates/pyroid-core/tests/filters_tokenizer.rs, crates/pyroid-core/src/{sudachi,pyvi,pythainlp}/replay.rs and the multilingual replays, run on 2026-11-05, 2026-11-06 and 2026-11-09"
     },
     "dedup": {
       "reference": "datatrove 0.10.1 MinHash (FineWeb: sha1, 64-bit, 14 buckets x 8 hashes, 5-grams; FineWeb-2: xxhash, 64-bit) and sentence dedup",
@@ -154,6 +180,11 @@
         {
           "name": "Japanese, native: FineWeb-2 jpn_Jpan MinHash signatures and removed set (300 documents with near-duplicates) against live datatrove, 2026-11-09",
           "same": 600,
+          "diff": 0
+        },
+        {
+          "name": "Vietnamese and Thai, native: FineWeb-2 vie_Latn and tha_Thai MinHash signatures and removed set (300 documents each, with near-duplicates) against live datatrove, 2026-11-09",
+          "same": 1200,
           "diff": 0
         }
       ],
