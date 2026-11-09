@@ -26,7 +26,7 @@ mod gopher;
 pub mod indic;
 mod regex;
 mod tables;
-mod text;
+pub(crate) mod text;
 pub mod tokenizer;
 pub(crate) mod unicode;
 pub mod whitespace;
