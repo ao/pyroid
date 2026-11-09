@@ -12,6 +12,27 @@
 //!
 //! Memory stays bounded by the block size and what the caller reads: nothing is allocated
 //! from a header value (`Content-Length`, chunk sizes).
+mod archive;
+mod buffered;
+mod digest;
+mod fast;
+mod headers;
+mod pystr;
+mod record;
+mod stream;
+mod zlib;
+
+pub use archive::{ArchiveReader, ReaderOptions};
+pub use buffered::{BUFF_SIZE, DecompType, Decompressor, DecompressorFactory};
+pub use digest::{DigestChecker, DigestKind};
+pub use fast::{
+    Doc, DocReader, KEY_ERROR_ARCHIVE_DATE, KEY_ERROR_URI, Rows, VarColumn, magic_mime_ok,
+};
+pub use headers::{StatusAndHeaders, make_warc_id};
+pub use record::{Format, PyIntValue, Record};
+pub use stream::{ContentStream, Decoder, RawHandle, RawStream};
+pub use zlib::DecompressObj;
+
 use std::any::Any;
 use std::fmt;
 use std::io;
@@ -40,6 +61,10 @@ pub enum PyExc {
     /// `binascii.Error` (a `ValueError` subclass): base16/base64 digest values that do not
     /// decode, with `check_digests`.
     BinasciiError,
+    /// `TypeError` (`get_record_offset()` before any record).
+    TypeError,
+    /// `OverflowError`: a read size past `sys.maxsize` (from a huge `Content-Length`).
+    OverflowError,
     /// `warcio.statusandheaders.StatusAndHeadersParserException`: an HTTP status line that
     /// does not start with a known protocol or verb, with `verify_http=True`. Its
     /// `statusline` attribute is kept by the reader (`parser_exception_statusline`).

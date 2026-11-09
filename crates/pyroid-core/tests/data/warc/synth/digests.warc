@@ -1,0 +1,190 @@
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha1:5R4YMXIB3CXR7K5SM6LN6NLZZS5T2SG2
+WARC-Payload-Digest: sha1:6B7FVAKWCPC2X3O4JNUCER5EYQWYVFO7
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha1:ec79865d01d8af1fabb26796df3579ccbb3d48da
+WARC-Payload-Digest: SHA-1:8H5agVYTxavt3EtoIkekxC2Kld8=
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha256:S3ED5VFOJ6UJRFKSWLXO26SNGLJVXN6ZUU6ZHONPQUPR74ISSRXA====
+WARC-Payload-Digest: sha2-256:I59Z7VXnN8dxR89VrQwbAwttfudIp0JpUvm4UtWpNeU=
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: md5:7EA2EB2460D1218F101E192D388ADA87
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha512:+qn9oCFKSDLU0cgO//nI7+J/+kMHNUKLg3N1EZi3JCQNkY0Ls4Vhg1n9RswVvQFQlZvcFC69Bg9oTJgbWAogVg==
+WARC-Payload-Digest: sha384:CVYCZBLKC422VQOJK4ERGCKRY4Y6LYQGH2CTHTTW3DKGVX7APLQ7LV56O7DBH4JISP7CRFYY77FCW===
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha224:05A2B6BBC0E962208ADA9177A5A9C6413B7523B74225D6919CF076A5
+WARC-Payload-Digest: sha1:WRONG
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha3_256:abc
+WARC-Payload-Digest: nocolon
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha1:5R4YMXIB3CXR7K5SM6LN6NLZZS5T2SGA
+WARC-Payload-Digest: sha1:@@@@
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha1:ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha1:QQ==QUJD
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha1:éééééééééééééééééééééééééééééééééééééééé
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: revisit
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:4abd44a2ec5077c62a66d192f5644d7d>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha1:5R4YMXIB3CXR7K5SM6LN6NLZZS5T2SG2
+WARC-Payload-Digest: sha1:6B7FVAKWCPC2X3O4JNUCER5EYQWYVFO7
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:4a29c94a50b68c0a55f140fcee1b5f2a>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: sha1:OP3ZUEAEIGC5QPO47I7DR5X4KB6IV5TP
+WARC-Payload-Digest: sha1:3I42H3S6NNFQ2MSVX7XZKYAYSCX5QBYJ
+Content-Length: 19
+
+HTTP/1.1 200 OK
+
+
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:56ec09ec44ba9a90172700f9209f1d6f>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Block-Digest: 
+WARC-Payload-Digest: 
+Content-Length: 26
+
+HTTP/1.1 200 OK
+
+payload
+

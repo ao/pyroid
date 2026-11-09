@@ -14,9 +14,11 @@ crate-type = ["rlib"]
 
 [dependencies]
 any_ascii = "0.3.3"
-# pyroid.warc: zlib.decompressobj emulation (zlib-rs directly for zlib's error codes; flate2 for the gzip
-# helper). Both pure Rust.
-flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+# pyroid.warc: brotlicffi's Decompressor (Content-Encoding: br).
+brotli-decompressor = "5"
+# pyroid.warc: zlib.decompressobj and gzip.GzipFile emulation (zlib-rs directly for zlib's error
+# codes). Pure Rust; runtime_detection / std turn on zlib-rs's AVX2 inflate and PCLMUL crc32.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs", "runtime_detection"] }
 # pyroid.json_repair objects: insertion-ordered maps with dict semantics.
 indexmap = { version = "2.14", default-features = false }
 memchr = "2.7"
@@ -30,7 +32,7 @@ sha1 = { version = "0.11.0", default-features = false }
 simdutf8.workspace = true
 twox-hash = { version = "2.1.2", default-features = false, features = ["xxhash32", "xxhash64", "xxhash3_128"] }
 unicode-normalization = "0.1.26"
-zlib-rs = { version = "0.6", default-features = false, features = ["rust-allocator"] }
+zlib-rs = { version = "0.6.8", default-features = false, features = ["rust-allocator", "std"] }
 
 [dev-dependencies]
 serde_json = "1.0.140"
