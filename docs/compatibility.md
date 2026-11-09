@@ -86,7 +86,7 @@ Reference: datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNL
 | **Total** | **2,896,220** | **2,896,220** | **0** |
 
 - Hypothesis against live datatrove: 92 tests x 300 examples over script-specific text in 22 native languages and the jieba, SudachiPy, pyvi and PyThaiNLP fallback paths (python_tokenizer=True).
-- Japanese, native: Hypothesis property tests against live datatrove (python/tests/test_filters_japanese.py).
+- Japanese, native: 12 Hypothesis properties against live datatrove (python/tests/test_filters_japanese.py, 628 examples per run; 11 of them also at 300 examples each).
 - The newer steps, input by input: PII on 13,232 documents x 4 configurations, C4 bad words x 5 (per-document languages, seeded keep_fraction), symbol lines x 3, the URL filter on 10,000 FineWeb URLs x 7 configurations and 9,695 URL-like strings, plus Hypothesis against the reference and live datatrove.
 
 <small>Source: the parity/ filters suite (after the last rebase, 2026-11-06), crates/pyroid-core/tests/filters_tokenizer.rs, crates/pyroid-core/src/sudachi/replay.rs and the multilingual replays, run on 2026-11-05 and 2026-11-06.</small>

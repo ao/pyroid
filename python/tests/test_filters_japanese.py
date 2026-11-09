@@ -503,13 +503,36 @@ OFF = dd.TextNormConfig(
 )
 
 
+def same_error(reference: Any, candidate: Any) -> Any:
+    """``reference()``, after checking ``candidate()`` raises too when SudachiPy's input limit
+    stops datatrove (pyroid raises ValueError where datatrove raises SudachiError).
+
+    Returns ``None`` in that case.
+    """
+    try:
+        return reference()
+    except Exception as e:
+        if type(e).__name__ != "SudachiError" or "Input is too long" not in str(e):
+            raise
+    with pytest.raises(ValueError, match="Input is too long"):
+        candidate()
+    return None
+
+
 def same_words(ref: Reference, text: str) -> None:
     """pyroid's words for ``text.strip()`` are datatrove's, in order.
 
     Without normalization ``simplify_text`` only strips, and a MinHash with ``n_grams`` the
     number of words has one shingle: the hash of all the words joined.
     """
-    words = ref.tok.word_tokenize(text.strip())
+    try:
+        words = ref.tok.word_tokenize(text.strip())
+    except Exception as e:
+        if type(e).__name__ != "SudachiError" or "Input is too long" not in str(e):
+            raise
+        with pytest.raises(ValueError, match="Input is too long"):
+            dd.minhash_signatures(text, language=JA)
+        return
     cfg = dd.MinhashConfig(n_grams=max(len(words), 1), norm_config=OFF, num_buckets=1)
     got = dd.minhash_signatures(text, cfg, language=JA)
     assert got == dd.minhash_signatures(text, cfg, language=ref.tok), (len(words), text[:200])
@@ -533,10 +556,15 @@ def sentence_hashes(texts: list[str], n: int, norm: Any) -> None:
     step = SENT.dt_sd.SentenceDedupSignature(
         output_folder="/nonexistent", config=SENT.dt_config(("xxhash", 64), norm, **kw), language=JA
     )
-    want = [
-        [(h, s) for h, _, s in step.get_hashes(SENT.Document(text=t, id="x"), 0)] for t in texts
-    ]
     native = dd._native_sent(SENT.py_config(("xxhash", 64), norm, **kw), JA)
+    want = same_error(
+        lambda: [
+            [(h, s) for h, _, s in step.get_hashes(SENT.Document(text=t, id="x"), 0)] for t in texts
+        ],
+        lambda: dd._native._sentence_hashes(texts, native),
+    )
+    if want is None:
+        return
     got = [[tuple(x) for x in doc] for doc in dd._native._sentence_hashes(texts, native)]
     assert got == want
 
@@ -604,7 +632,14 @@ def stages(sd: Any, texts: list[str], kw: dict[str, Any], work: Path) -> None:
     cfg = sd.dt_config(**kw)
     with warnings.catch_warnings():
         warnings.simplefilter("error", pyroid.FallbackWarning)
-        want = sd.run_stages(sd.dt_sd, texts, cfg, work / "dt", language=JA)
+        want = same_error(
+            lambda: sd.run_stages(sd.dt_sd, texts, cfg, work / "dt", language=JA),
+            lambda: dd.SentenceDedup(sd.py_config(**kw), language=JA).fit(texts),
+        )
+        if want is None:
+            with pytest.raises(ValueError, match="Input is too long"):
+                sd.run_stages(pdt, texts, cfg, work / "pr", language=JA, batch_size=2)
+            return
         got = sd.run_stages(pdt, texts, cfg, work / "pr", language=JA, batch_size=2)
         text, keep = dd.SentenceDedup(sd.py_config(**kw), language=JA).fit(texts)
     for key in ("sig", "dup", "excl"):
@@ -690,8 +725,12 @@ def test_minhash_of_long_documents_matches_datatrove(
     n = data.draw(st.sampled_from([1, 3, 5]), label="n_grams")
     kw: dict[str, Any] = {"n_grams": n, "num_buckets": 6, "hashes_per_bucket": 2}
     texts = [doc, doc[: len(doc) // 2] + "。" + doc[len(doc) // 2 :]]
-    want = dt_minhash.signatures(dt_minhash.config("xxhash", 64, **kw), JA, texts)
-    assert dd.minhash_signatures(texts, dd.MinhashConfig(**kw), language=JA) == want
+    want = same_error(
+        lambda: dt_minhash.signatures(dt_minhash.config("xxhash", 64, **kw), JA, texts),
+        lambda: dd.minhash_signatures(texts, dd.MinhashConfig(**kw), language=JA),
+    )
+    if want is not None:
+        assert dd.minhash_signatures(texts, dd.MinhashConfig(**kw), language=JA) == want
 
 
 def test_python_tokenizer_is_identical(ref: Reference) -> None:

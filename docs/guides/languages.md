@@ -308,8 +308,9 @@ with sudachidict-core 20261015 for Japanese; CPython 3.13 for the live checks):
 | Japanese tokenizer replay, committed recordings: SudachiPy's morphemes for 4,567 texts (special cases, FineWeb-2 lines, fuzz, a code-point sample), datatrove's words, spans and sentences for 4,205 texts (54 documents over 40,000 bytes), 1,911 `chunk_text_on_bytes` cases, the spaCy tag of all 1,558 POS | 12,241 |
 | … and, not committed: every code point, the FineWeb-2 `jpn_Jpan` test slice (7,809 lines, 250 documents) and the first 20,000 training documents (32.5 M characters: 610,624 lines with 18,879,619 morphemes, and the documents' words and spans) | 777,691 |
 
-Japanese also has Hypothesis property tests against live datatrove
-(`python/tests/test_filters_japanese.py`).
+Japanese also has 12 Hypothesis properties against live datatrove
+(`python/tests/test_filters_japanese.py`): 628 examples per run, and 11 of them also at 300
+examples each.
 
 Sentence dedup has FineWeb-2 parity cases on six slices (`deu_Latn`, `fra_Latn`, `rus_Cyrl`,
 `spa_Latn`, `arb_Arab`, `hin_Deva`), for sentences and lines. The Stanza, Kiwi, Khmer, Lao,
