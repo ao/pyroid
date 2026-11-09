@@ -22,6 +22,9 @@
 //! - [`warc`]: warcio 1.8.2's WARC/ARC reader, ported exactly (`pyroid.warc`).
 //! - [`pyvi`]: Vietnamese words as spaCy's tokenizer gets them from pyvi 0.1.1
 //!   (datatrove's Vietnamese tokenizer in the filters).
+//! - [`pythainlp`]: Thai words and sentences as PyThaiNLP 5.4.0 gives them,
+//!   from an installed PyThaiNLP's word list and sentence model (datatrove's
+//!   Thai tokenizer in the filters).
 //! - [`crfsuite`]: CRFsuite model files and Viterbi tagging, for pyvi and
 //!   PyThaiNLP's sentence model.
 //! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).
@@ -43,6 +46,7 @@ pub mod metrics;
 pub mod nemo;
 pub mod nltk;
 pub mod par;
+pub mod pythainlp;
 pub mod pyvi;
 pub mod sudachi;
 pub mod text;

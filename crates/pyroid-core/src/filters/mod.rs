@@ -12,8 +12,10 @@
 //! [`WordTokenizer`]; [`tokenizer_for`] gives datatrove's tokenizer for a
 //! language code where pyroid ports it: [`tokenizer::SpacyTokenizer`] (spaCy
 //! `blank(code)` for 57 spaCy languages, `xx` included),
-//! `whitespace::Whitespace` and `indic::IndicNlp`. [`backend`] names the
-//! tokenizer datatrove uses for any code.
+//! `whitespace::Whitespace`, `indic::IndicNlp`, and the segmenters behind
+//! spaCy's Chinese, Japanese and Vietnamese tokenizers and datatrove's Thai one
+//! (`jieba::zh`, `sudachi::ja`, `pyvi::vi`, `pythainlp::th`). [`backend`]
+//! names the tokenizer datatrove uses for any code.
 //! Python `str` semantics (code-point lengths, `isspace`, `splitlines`,
 //! `isalpha`, `lower`) are reproduced exactly, per Unicode version.
 
@@ -292,6 +294,11 @@ pub fn tokenizer_for(
         ) as &dyn WordTokenizer),
         "IndicNLPTokenizer" => {
             indic::IndicNlp::get(b.arg, version).map(|t| t as &dyn WordTokenizer)
+        }
+        // PyThaiNLP's newmm-safe and crfcut, once its word list and model are
+        // installed (`pythainlp::install`).
+        "ThaiTokenizer" => {
+            crate::pythainlp::th::ThTokenizer::get(version).map(|t| t as &dyn WordTokenizer)
         }
         _ => None,
     }
