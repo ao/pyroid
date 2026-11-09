@@ -29,13 +29,28 @@ pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 pytest.importorskip("numpy")
 
-from test_datatrove_warc import (  # noqa: E402
-    html,
-    metadata,
-    request,
-    response,
-    warcinfo,
-    write_warc,
+
+def _sibling(name: str) -> Any:
+    """A sibling test module, imported by path (the suite runs without python/tests on sys.path)."""
+    key = f"_pyroid_test_{name}"
+    if key not in sys.modules:
+        spec = importlib.util.spec_from_file_location(key, Path(__file__).with_name(f"{name}.py"))
+        assert spec is not None
+        assert spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[key] = mod
+        spec.loader.exec_module(mod)
+    return sys.modules[key]
+
+
+_dw = _sibling("test_datatrove_warc")
+html, metadata, request, response, warcinfo, write_warc = (
+    _dw.html,
+    _dw.metadata,
+    _dw.request,
+    _dw.response,
+    _dw.warcinfo,
+    _dw.write_warc,
 )
 
 from pyroid.cli import main  # noqa: E402
@@ -68,7 +83,8 @@ GERMAN = (
 
 def _page(text: str, title: str) -> bytes:
     paras = [htmllib.escape(line) for line in text.split("\n") if line.strip()]
-    return html(htmllib.escape(title), *paras).encode()
+    page: str = html(htmllib.escape(title), *paras)
+    return page.encode()
 
 
 def _corpus(folder: Path, n: int = 120) -> list[Path]:

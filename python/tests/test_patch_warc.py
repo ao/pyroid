@@ -12,6 +12,7 @@ test runs in a fresh interpreter.
 from __future__ import annotations
 
 import gzip
+import importlib.util
 import json
 import os
 import subprocess
@@ -21,9 +22,30 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from test_datatrove_warc import big_records, response, sample_records, write_warc
 
 from pyroid.integrations import _patch
+
+
+def _sibling(name: str) -> Any:
+    """A sibling test module, imported by path (the suite runs without python/tests on sys.path)."""
+    key = f"_pyroid_test_{name}"
+    if key not in sys.modules:
+        spec = importlib.util.spec_from_file_location(key, Path(__file__).with_name(f"{name}.py"))
+        assert spec is not None
+        assert spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[key] = mod
+        spec.loader.exec_module(mod)
+    return sys.modules[key]
+
+
+_dw = _sibling("test_datatrove_warc")
+big_records, response, sample_records, write_warc = (
+    _dw.big_records,
+    _dw.response,
+    _dw.sample_records,
+    _dw.write_warc,
+)
 
 pytestmark = pytest.mark.thread_unsafe(reason="subprocesses and process-wide import state")
 
