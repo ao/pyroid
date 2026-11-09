@@ -270,7 +270,8 @@ class RougeScorer(scoring.BaseScorer):
                     from pyroid.nltk import sent_tokenize
 
                     target_sents = [
-                        [s for s in d if len(s)] for d in sent_tokenize(list(targets), threads=threads)
+                        [s for s in d if len(s)]
+                        for d in sent_tokenize(list(targets), threads=threads)
                     ]
                     prediction_sents = [
                         [s for s in d if len(s)]

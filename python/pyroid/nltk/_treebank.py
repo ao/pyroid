@@ -7,7 +7,7 @@ import importlib.util
 import re
 import warnings
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, ClassVar
 
 from pyroid._pyroid import nltk as _native
 from pyroid.nltk import _delegate
@@ -18,7 +18,11 @@ from pyroid.nltk._punkt import UNICODE_VERSION
 _U = re.UNICODE
 _SOURCES: dict[str, dict[str, Any]] = {
     "treebank": {
-        "STARTING_QUOTES": [(r"^\"", 0, r"``"), (r"(``)", 0, r" \1 "), (r"([ \(\[{<])(\"|\'{2})", 0, r"\1 `` ")],
+        "STARTING_QUOTES": [
+            (r"^\"", 0, r"``"),
+            (r"(``)", 0, r" \1 "),
+            (r"([ \(\[{<])(\"|\'{2})", 0, r"\1 `` "),
+        ],
         "PUNCTUATION": [
             (r"([:,])([^\d])", 0, r" \1 \2"),
             (r"([:,])$", 0, r" \1 "),
@@ -47,14 +51,14 @@ _SOURCES: dict[str, dict[str, Any]] = {
     },
     "destructive": {
         "STARTING_QUOTES": [
-            ("([«“‘„]|[`]+)", _U, r" \1 "),
+            ("([\u00ab\u201c\u2018\u201e]|[`]+)", _U, r" \1 "),
             (r"^\"", 0, r"``"),
             (r"(``)", 0, r" \1 "),
             (r"([ \(\[{<])(\"|\'{2})", 0, r"\1 `` "),
             (r"(?i)(?<!\w)(\')(?!(?:re|ve|ll|m|t|s|d|n)\b)(?=\w)", _U, r"\1 "),
         ],
         "ENDING_QUOTES": [
-            ("([»”’])", _U, r" \1 "),
+            ("([\u00bb\u201d\u2019])", _U, r" \1 "),
             (r"''", 0, " '' "),
             (r'"', 0, " '' "),
             (r"\s+", 0, " "),
@@ -62,12 +66,12 @@ _SOURCES: dict[str, dict[str, Any]] = {
             (r"([^' ])('ll|'LL|'re|'RE|'ve|'VE|n't|N'T) ", 0, r"\1 \2 "),
         ],
         "PUNCTUATION": [
-            (r'([^\.])(\.)([\]\)}>"\'' "»”’ " r"]*+)\s*$", _U, r"\1 \2 \3 "),
+            (r'([^\.])(\.)([\]\)}>"\'' "\u00bb\u201d\u2019 " r"]*+)\s*$", _U, r"\1 \2 \3 "),
             (r"([:,])([^\d])", 0, r" \1 \2"),
             (r"([:,])$", 0, r" \1 "),
             (r"\.{2,}", _U, r" \g<0> "),
             (r"[;@#$%&]", 0, r" \g<0> "),
-            (r"[‒-―]", _U, r" \g<0> "),
+            (r"[\u2012-\u2015]", _U, r" \g<0> "),
             (r'([^\.])(\.)([\]\)}>"\']*)\s*$', 0, r"\1 \2\3 "),
             (r"[?!]", 0, r" \g<0> "),
             (r"([^'])' ", 0, r"\1 ' "),
@@ -102,9 +106,9 @@ _CONTRACTIONS4 = [r"(?i)\b(whad)(dd)(ya)\b", r"(?i)\b(wha)(t)(cha)\b"]
 class MacIntyreContractions:
     """List of contractions adapted from Robert MacIntyre's tokenizer (NLTK's)."""
 
-    CONTRACTIONS2 = list(_CONTRACTIONS2)
-    CONTRACTIONS3 = list(_CONTRACTIONS3)
-    CONTRACTIONS4 = list(_CONTRACTIONS4)
+    CONTRACTIONS2: ClassVar[list[str]] = list(_CONTRACTIONS2)
+    CONTRACTIONS3: ClassVar[list[str]] = list(_CONTRACTIONS3)
+    CONTRACTIONS4: ClassVar[list[str]] = list(_CONTRACTIONS4)
 
 
 def _engine() -> Any:
@@ -138,7 +142,9 @@ class _Patterns:
                     self.value = [re.compile(p) for p in srcs]
             else:
                 eng = _engine()
-                src = _SOURCES[self.table][self.name] if self.table != "detok" else _DETOK[self.name]
+                src = (
+                    _SOURCES[self.table][self.name] if self.table != "detok" else _DETOK[self.name]
+                )
                 if isinstance(src, tuple):
                     self.value = (eng.compile(src[0], src[1]), src[2])
                 else:
@@ -200,7 +206,7 @@ _TOKENIZER_ATTRS = (
 
 
 def _overridden(obj: Any, base: type, names: tuple[str, ...]) -> list[str]:
-    """The pattern attributes that `obj`'s subclass or instance replaces, or that were edited in place."""
+    """The pattern attributes `obj`'s class or instance replaces, or that were edited in place."""
     out = [n for n in names if n in getattr(obj, "__dict__", {})]
     for n in names:
         desc = vars(base).get(n)
@@ -227,7 +233,7 @@ class _WordTokenizer:
 
     def _twin(self) -> Any:
         """None, or an NLTK tokenizer with this instance's changed patterns."""
-        changed = _overridden(self, self._base(), _TOKENIZER_ATTRS + ("_contractions",))
+        changed = _overridden(self, self._base(), (*_TOKENIZER_ATTRS, "_contractions"))
         if not changed:
             return None
         cls = _delegate.attr(self._nltk_path, f"{type(self).__name__} with changed patterns")
@@ -257,7 +263,10 @@ class _WordTokenizer:
         if twin is not None:
             if isinstance(text, str):
                 return twin.tokenize(text, convert_parentheses)
-            return [None if t is None else twin.tokenize(t, convert_parentheses) for t in _native.texts(text)]
+            return [
+                None if t is None else twin.tokenize(t, convert_parentheses)
+                for t in _native.texts(text)
+            ]
         return _native.treebank(
             text, self._flavor_nltk, bool(convert_parentheses), UNICODE_VERSION, threads=threads
         )
@@ -288,15 +297,15 @@ class TreebankWordTokenizer(_WordTokenizer):
     """NLTK's ``TreebankWordTokenizer`` (the Penn Treebank sed script's rules), in Rust."""
 
     _nltk_path = "nltk.tokenize.treebank:TreebankWordTokenizer"
-    STARTING_QUOTES = _Patterns("treebank", "STARTING_QUOTES")
-    PUNCTUATION = _Patterns("treebank", "PUNCTUATION")
-    PARENS_BRACKETS = _Patterns("treebank", "PARENS_BRACKETS")
-    CONVERT_PARENTHESES = _Patterns("treebank", "CONVERT_PARENTHESES")
-    DOUBLE_DASHES = _Patterns("treebank", "DOUBLE_DASHES")
-    ENDING_QUOTES = _Patterns("treebank", "ENDING_QUOTES")
+    STARTING_QUOTES: Any = _Patterns("treebank", "STARTING_QUOTES")
+    PUNCTUATION: Any = _Patterns("treebank", "PUNCTUATION")
+    PARENS_BRACKETS: Any = _Patterns("treebank", "PARENS_BRACKETS")
+    CONVERT_PARENTHESES: Any = _Patterns("treebank", "CONVERT_PARENTHESES")
+    DOUBLE_DASHES: Any = _Patterns("treebank", "DOUBLE_DASHES")
+    ENDING_QUOTES: Any = _Patterns("treebank", "ENDING_QUOTES")
     _contractions = MacIntyreContractions()
-    CONTRACTIONS2 = _Patterns("treebank", "CONTRACTIONS2")
-    CONTRACTIONS3 = _Patterns("treebank", "CONTRACTIONS3")
+    CONTRACTIONS2: Any = _Patterns("treebank", "CONTRACTIONS2")
+    CONTRACTIONS3: Any = _Patterns("treebank", "CONTRACTIONS3")
 
     def _base(self) -> type:
         return TreebankWordTokenizer
@@ -307,15 +316,15 @@ class NLTKWordTokenizer(_WordTokenizer):
 
     _flavor_nltk = True
     _nltk_path = "nltk.tokenize.destructive:NLTKWordTokenizer"
-    STARTING_QUOTES = _Patterns("destructive", "STARTING_QUOTES")
-    ENDING_QUOTES = _Patterns("destructive", "ENDING_QUOTES")
-    PUNCTUATION = _Patterns("destructive", "PUNCTUATION")
-    PARENS_BRACKETS = _Patterns("destructive", "PARENS_BRACKETS")
-    CONVERT_PARENTHESES = _Patterns("destructive", "CONVERT_PARENTHESES")
-    DOUBLE_DASHES = _Patterns("destructive", "DOUBLE_DASHES")
+    STARTING_QUOTES: Any = _Patterns("destructive", "STARTING_QUOTES")
+    ENDING_QUOTES: Any = _Patterns("destructive", "ENDING_QUOTES")
+    PUNCTUATION: Any = _Patterns("destructive", "PUNCTUATION")
+    PARENS_BRACKETS: Any = _Patterns("destructive", "PARENS_BRACKETS")
+    CONVERT_PARENTHESES: Any = _Patterns("destructive", "CONVERT_PARENTHESES")
+    DOUBLE_DASHES: Any = _Patterns("destructive", "DOUBLE_DASHES")
     _contractions = MacIntyreContractions()
-    CONTRACTIONS2 = _Patterns("destructive", "CONTRACTIONS2")
-    CONTRACTIONS3 = _Patterns("destructive", "CONTRACTIONS3")
+    CONTRACTIONS2: Any = _Patterns("destructive", "CONTRACTIONS2")
+    CONTRACTIONS3: Any = _Patterns("destructive", "CONTRACTIONS3")
 
     def _base(self) -> type:
         return NLTKWordTokenizer
@@ -338,14 +347,14 @@ class TreebankWordDetokenizer:
     """NLTK's ``TreebankWordDetokenizer``: undo the Treebank tokenizer's padding, in Rust."""
 
     _contractions = MacIntyreContractions()
-    CONTRACTIONS2 = _Patterns("detok", "CONTRACTIONS2")
-    CONTRACTIONS3 = _Patterns("detok", "CONTRACTIONS3")
-    ENDING_QUOTES = _Patterns("detok", "ENDING_QUOTES")
-    DOUBLE_DASHES = _Patterns("detok", "DOUBLE_DASHES")
-    CONVERT_PARENTHESES = _Patterns("detok", "CONVERT_PARENTHESES")
-    PARENS_BRACKETS = _Patterns("detok", "PARENS_BRACKETS")
-    PUNCTUATION = _Patterns("detok", "PUNCTUATION")
-    STARTING_QUOTES = _Patterns("detok", "STARTING_QUOTES")
+    CONTRACTIONS2: Any = _Patterns("detok", "CONTRACTIONS2")
+    CONTRACTIONS3: Any = _Patterns("detok", "CONTRACTIONS3")
+    ENDING_QUOTES: Any = _Patterns("detok", "ENDING_QUOTES")
+    DOUBLE_DASHES: Any = _Patterns("detok", "DOUBLE_DASHES")
+    CONVERT_PARENTHESES: Any = _Patterns("detok", "CONVERT_PARENTHESES")
+    PARENS_BRACKETS: Any = _Patterns("detok", "PARENS_BRACKETS")
+    PUNCTUATION: Any = _Patterns("detok", "PUNCTUATION")
+    STARTING_QUOTES: Any = _Patterns("detok", "STARTING_QUOTES")
 
     def tokenize(self, tokens: list[str], convert_parentheses: bool = False) -> str:
         """Join `tokens` into text, undoing the tokenizer's padding."""
@@ -359,7 +368,7 @@ class TreebankWordDetokenizer:
             for n in changed:
                 setattr(twin, n, getattr(self, n))
             return twin.tokenize(tokens, convert_parentheses)  # type: ignore[no-any-return]
-        return _native.detokenize(tokens, bool(convert_parentheses))  # type: ignore[no-any-return]
+        return _native.detokenize(list(tokens), bool(convert_parentheses))  # type: ignore[no-any-return]
 
     def detokenize(self, tokens: list[str], convert_parentheses: bool = False) -> str:
         """Duck-typing the abstract *tokenize()*."""
@@ -372,4 +381,4 @@ def align_tokens(tokens: list[str], sentence: str) -> list[tuple[int, int]]:
     Raises:
         ValueError: A token is not in `sentence` after the previous one.
     """
-    return _native.align_tokens(tokens, sentence)  # type: ignore[no-any-return]
+    return _native.align_tokens(list(tokens), sentence)  # type: ignore[no-any-return]

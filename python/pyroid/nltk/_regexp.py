@@ -14,7 +14,7 @@ _DEFAULT_FLAGS = re.UNICODE | re.MULTILINE | re.DOTALL
 
 
 class RegexpTokenizer:
-    """NLTK's ``RegexpTokenizer``: the matches of a pattern, or the text between them.
+    r"""NLTK's ``RegexpTokenizer``: the matches of a pattern, or the text between them.
 
     Common patterns run in Rust: ``\\w+``, ``\\w+|[^\\w\\s]+``, ``\\w+|\\$[\\d\\.]+|\\S+``,
     ``[\\w']+``, ``\\S+``, ``\\s+``, ``[a-zA-Z]+`` and the blank-line pattern, spelled exactly so,
@@ -44,7 +44,12 @@ class RegexpTokenizer:
 
     def _native(self) -> bool:
         p, f = self._pattern, self._flags
-        return type(p) is str and isinstance(f, int) and 0 <= f < 1 << 32 and _native.regexp_native(p, int(f))
+        return (
+            type(p) is str
+            and isinstance(f, int)
+            and 0 <= f < 1 << 32
+            and _native.regexp_native(p, int(f))
+        )
 
     def _nltk(self) -> Any:
         cls = _delegate.attr(
@@ -60,7 +65,12 @@ class RegexpTokenizer:
                 return twin.tokenize(text)
             return [None if t is None else twin.tokenize(t) for t in _native.texts(text)]
         return _native.regexp_tokenize(
-            text, self._pattern, bool(self._gaps), bool(self._discard_empty), int(self._flags), threads=threads
+            text,
+            self._pattern,
+            bool(self._gaps),
+            bool(self._discard_empty),
+            int(self._flags),
+            threads=threads,
         )
 
     def span_tokenize(self, text: str) -> Iterator[tuple[int, int]]:
@@ -91,7 +101,7 @@ class RegexpTokenizer:
 
 
 class WhitespaceTokenizer(RegexpTokenizer):
-    """Split on whitespace runs (NLTK's ``WhitespaceTokenizer``, ``\\s+`` with ``gaps=True``)."""
+    r"""Split on whitespace runs (NLTK's ``WhitespaceTokenizer``, ``\\s+`` with ``gaps=True``)."""
 
     def __init__(self) -> None:
         RegexpTokenizer.__init__(self, r"\s+", gaps=True)
@@ -105,7 +115,7 @@ class BlanklineTokenizer(RegexpTokenizer):
 
 
 class WordPunctTokenizer(RegexpTokenizer):
-    """Split into runs of word characters and runs of other non-space characters (``\\w+|[^\\w\\s]+``)."""
+    r"""Split into runs of word characters and of other non-space characters (``\w+|[^\w\s]+``)."""
 
     def __init__(self) -> None:
         RegexpTokenizer.__init__(self, r"\w+|[^\w\s]+")

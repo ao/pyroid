@@ -491,7 +491,9 @@ def _build_nltk(impl: types.ModuleType, real: Any, missing: str) -> _Built:
         shims: dict[str, types.ModuleType] = {}
         for mod, names in reversed(_NLTK_SWAPS.items()):
             provided: dict[str, Any] = {n: getattr(impl, n) for n in names}
-            provided.update({k.rpartition(".")[2]: v for k, v in shims.items() if k.rpartition(".")[0] == mod})
+            provided.update(
+                {k.rpartition(".")[2]: v for k, v in shims.items() if k.rpartition(".")[0] == mod}
+            )
             shims[mod] = _shim(mod, None, missing, impl, provided, package=mod.count(".") < 2)
         return shims, []
     # NLTK installed: set pyroid's objects on NLTK's modules, keeping the originals for the
@@ -524,9 +526,13 @@ def _build_nltk(impl: types.ModuleType, real: Any, missing: str) -> _Built:
                 setattr(module, n, original)
         _delegate.ORIGINALS.clear()
         # NLTK's lru-cached PunktTokenizer per language may hold tokenizers made while patched.
-        cached = getattr(sys.modules.get("nltk.tokenize"), "_get_punkt_tokenizer", None)
-        if hasattr(cached, "cache_clear"):
-            cached.cache_clear()
+        cache_clear = getattr(
+            getattr(sys.modules.get("nltk.tokenize"), "_get_punkt_tokenizer", None),
+            "cache_clear",
+            None,
+        )
+        if cache_clear is not None:
+            cache_clear()
 
     return {}, [undo]
 
@@ -582,7 +588,8 @@ _TARGETS: dict[str, _Target] = {
     "nltk": _Target(
         "pyroid.nltk",
         "NLTK 3.10.4's sent_tokenize, word_tokenize, PunktSentenceTokenizer, PunktTokenizer, "
-        "TreebankWordTokenizer, NLTKWordTokenizer, TreebankWordDetokenizer and the regexp tokenizers",
+        "TreebankWordTokenizer, NLTKWordTokenizer, TreebankWordDetokenizer and the regexp "
+        "tokenizers",
         "NLTK_VERSION",
         "pip install nltk==3.10.4",
         " (training, tagging, corpora, the other tokenizers)",

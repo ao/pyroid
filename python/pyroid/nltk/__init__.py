@@ -5,10 +5,10 @@
 ``punkt_tab`` models), :func:`word_tokenize`, :class:`TreebankWordTokenizer`,
 :class:`NLTKWordTokenizer` and :class:`TreebankWordDetokenizer` give the same results as
 NLTK 3.10.4. NLTK itself is optional; the ``punkt_tab`` data is not bundled
-(``nltk.download('punkt_tab')``). :func:`wordpunct_tokenize`, :class:`RegexpTokenizer` (for common patterns),
-:class:`WhitespaceTokenizer` and :class:`BlanklineTokenizer` too. Training (``PunktTrainer``),
-other patterns and anything else not ported
-is handed to NLTK with a one-time :class:`pyroid.FallbackWarning`.
+(``nltk.download('punkt_tab')``). So do :func:`wordpunct_tokenize`, :class:`RegexpTokenizer`
+(for common patterns), :class:`WhitespaceTokenizer` and :class:`BlanklineTokenizer`. Training
+(``PunktTrainer``), other patterns and anything else not ported is handed to NLTK with a
+one-time :class:`pyroid.FallbackWarning`.
 
 Beyond NLTK, the tokenizers also take a list or tuple of str, or an Arrow string column,
 and return one list per document, computed in parallel on pyroid's shared thread pool

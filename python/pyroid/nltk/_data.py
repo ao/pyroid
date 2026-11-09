@@ -50,7 +50,8 @@ def punkt_language(lang: Any) -> str:
     """
     if not isinstance(lang, str):
         raise TypeError(f"A Punkt language name is a str, not {type(lang).__name__!r}")
-    lang = str.__str__(lang)
+    name: str = str.__str__(lang)
+    lang = name
     if (
         not lang
         or not all(char.isalnum() or char in "-_" for char in lang)
@@ -58,7 +59,7 @@ def punkt_language(lang: Any) -> str:
         or _is_windows_device_name(lang)
     ):
         raise ValueError(f"Invalid Punkt language name: {lang!r}")
-    return lang
+    return name
 
 
 def _rm_nl(s: str) -> str:
@@ -137,7 +138,7 @@ def _candidates(lang: str, paths: list[str]) -> Iterator[Any]:
         elif not root or os.path.isdir(root):
             d = os.path.join(root, rel)
             if os.path.isdir(d):
-                yield lambda name, d=d: open(os.path.join(d, name), encoding="utf-8")
+                yield lambda name, d=d: open(os.path.join(d, name), encoding="utf-8")  # noqa: SIM115
     for root in paths:
         z = os.path.join(root, "tokenizers", "punkt_tab.zip")
         if (not root or os.path.isdir(root)) and os.path.isfile(z):
@@ -186,7 +187,10 @@ def _not_found(lang: str, paths: list[str]) -> LookupError:
 def nltk_available() -> bool:
     """Whether NLTK can be imported (without importing it)."""
     if "nltk" in sys.modules:
-        return sys.modules["nltk"] is not None
+        mod = sys.modules["nltk"]
+        if getattr(mod, "__pyroid__", False):  # pyroid.patch("nltk")'s shim
+            return getattr(mod, "__wrapped__", None) is not None
+        return mod is not None
     try:
         return importlib.util.find_spec("nltk") is not None
     except (ImportError, ValueError):
@@ -200,9 +204,8 @@ def load(lang: str) -> RawParams:
         LookupError: The model, or one of its four files, is not installed.
     """
     if nltk_available():
-        from nltk.data import find
-        from nltk.tokenize.punkt import load_punkt_params
-
+        find: Any = importlib.import_module("nltk.data").find
+        load_punkt_params: Any = importlib.import_module("nltk.tokenize.punkt").load_punkt_params
         p = load_punkt_params(find(f"tokenizers/punkt_tab/{lang}/"))
         return RawParams(p.collocations, p.sent_starters, p.abbrev_types, p.ortho_context)
     paths = default_paths()

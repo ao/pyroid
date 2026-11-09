@@ -16,10 +16,10 @@ nltk.TreebankWordDetokenizer().detokenize(["I", "ca", "n't", "go", "."])  # "I c
 :class:`PunktTokenizer`, :class:`TreebankWordTokenizer`, :class:`NLTKWordTokenizer`,
 :class:`TreebankWordDetokenizer`, :func:`align_tokens`, :func:`wordpunct_tokenize`,
 :class:`RegexpTokenizer` (for common patterns), :class:`WhitespaceTokenizer` and
-:class:`BlanklineTokenizer` give NLTK 3.10.4's results, str for str and offset for offset. NLTK runs its patterns with the third-party ``regex`` module
-(``nltk.redos``) and, around them, Python's ``str`` methods; both are reproduced: ``regex``
-2026.9.29's character classes, and ``str.lower()`` / ``isupper()`` / ``islower()`` of the
-running CPython (3.11 to 3.15).
+:class:`BlanklineTokenizer` give NLTK 3.10.4's results, str for str and offset for offset.
+NLTK runs its patterns with the third-party ``regex`` module (``nltk.redos``) and, around them,
+Python's ``str`` methods; both are reproduced: ``regex`` 2026.9.29's character classes, and
+``str.lower()`` / ``isupper()`` / ``islower()`` of the running CPython (3.11 to 3.15).
 
 The Punkt models are NLTK's ``punkt_tab`` data, which pyroid does not bundle (it has no
 licence): install it with ``nltk.download('punkt_tab')`` or
@@ -52,11 +52,17 @@ Differences from NLTK:
   installed, NLTK can differ on characters whose properties changed between the two.
 - Looking up an unseen word in ``PunktParameters.ortho_context`` does not add a 0 entry to
   it (NLTK's ``defaultdict`` grows with every new word it tokenizes).
+- An NLTK ``PunktParameters`` given to a tokenizer is copied (into a pyroid
+  :class:`PunktParameters`, which ``tok._params`` returns); edit it through ``tok._params``,
+  since later edits of the NLTK object are not seen.
+- NLTK compiles a ``PunktLanguageVars`` object's patterns at first use, so it keeps using the
+  old ``sent_end_chars`` in part of the algorithm after they are changed; pyroid uses the new
+  ones throughout.
 """
 
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Sequence
-from typing import Any, Final, overload
+from typing import Any, Final, TypeAlias, overload
 
 from pyroid._typing import ArrowStrings
 
@@ -93,7 +99,7 @@ REGEX_VERSION: Final[str]
 UNICODE_VERSION: Final[str]
 """This CPython's ``unicodedata.unidata_version``, which ``str`` case tests follow."""
 
-_Batch = list[str] | tuple[str, ...]
+_Batch: TypeAlias = list[str] | tuple[str, ...]
 
 DEBUG_DECISION_FMT: Final[str]
 REASON_DEFAULT_DECISION: Final[str]
@@ -259,7 +265,7 @@ class PunktSentenceTokenizer:
         token_cls: Any = ...,
     ) -> None: ...
     def train(self, train_text: Any, verbose: bool = False) -> Any:
-        """Return parameters trained on `train_text` (with NLTK), or `train_text` if it is not a str."""
+        """Return parameters trained on `train_text` (with NLTK), or `train_text` if not a str."""
 
     @overload
     def tokenize(
@@ -314,7 +320,9 @@ class PunktSentenceTokenizer:
     def span_tokenize(
         self, text: ArrowStrings, realign_boundaries: bool = True, *, threads: int | None = None
     ) -> list[list[tuple[int, int]] | None]: ...
-    def tokenize_sents(self, strings: Sequence[str], *, threads: int | None = None) -> list[list[str]]:
+    def tokenize_sents(
+        self, strings: Sequence[str], *, threads: int | None = None
+    ) -> list[list[str]]:
         """:meth:`tokenize` of each string (in parallel)."""
 
     def span_tokenize_sents(
@@ -441,7 +449,9 @@ class _WordTokenizer:
             ValueError: A token cannot be found in `text`, as in NLTK.
         """
 
-    def tokenize_sents(self, strings: Sequence[str], *, threads: int | None = None) -> list[list[str]]:
+    def tokenize_sents(
+        self, strings: Sequence[str], *, threads: int | None = None
+    ) -> list[list[str]]:
         """:meth:`tokenize` of each string (in parallel)."""
 
     def span_tokenize_sents(self, strings: Sequence[str]) -> Iterator[list[tuple[int, int]]]:
@@ -491,7 +501,6 @@ def align_tokens(tokens: Sequence[str], sentence: str) -> list[tuple[int, int]]:
         ValueError: A token is not in `sentence` after the previous one.
     """
 
-
 class RegexpTokenizer:
     r"""NLTK's ``RegexpTokenizer``: the matches of a pattern, or the text between them.
 
@@ -513,23 +522,27 @@ class RegexpTokenizer:
     ) -> None: ...
     @overload
     def tokenize(self, text: str, *, threads: int | None = None) -> list[str]:
-        """The tokens of `text`; for a batch (as for :func:`sent_tokenize`), one list per document."""
+        """The tokens of `text`; for a batch (as for :func:`sent_tokenize`), one list per doc."""
 
     @overload
     def tokenize(self, text: _Batch, *, threads: int | None = None) -> list[list[str]]: ...
     @overload
-    def tokenize(self, text: ArrowStrings, *, threads: int | None = None) -> list[list[str] | None]: ...
+    def tokenize(
+        self, text: ArrowStrings, *, threads: int | None = None
+    ) -> list[list[str] | None]: ...
     def span_tokenize(self, text: str) -> Iterator[tuple[int, int]]:
         """The ``(start, end)`` offsets of the tokens in `text` (a generator, as NLTK's)."""
 
-    def tokenize_sents(self, strings: Sequence[str], *, threads: int | None = None) -> list[list[str]]:
+    def tokenize_sents(
+        self, strings: Sequence[str], *, threads: int | None = None
+    ) -> list[list[str]]:
         """:meth:`tokenize` of each string (in parallel)."""
 
     def span_tokenize_sents(self, strings: Sequence[str]) -> Iterator[list[tuple[int, int]]]:
         """:meth:`span_tokenize` of each string, as lists."""
 
 class WhitespaceTokenizer(RegexpTokenizer):
-    r"""Split `text` at runs of whitespace (``\s+`` with ``gaps=True``; the ``regex`` module's ``\s``)."""
+    r"""Split `text` at runs of whitespace (``\s+`` with ``gaps=True``, ``regex``'s ``\s``)."""
 
     def __init__(self) -> None: ...
 
@@ -539,7 +552,10 @@ class BlanklineTokenizer(RegexpTokenizer):
     def __init__(self) -> None: ...
 
 class WordPunctTokenizer(RegexpTokenizer):
-    r"""Split `text` into runs of word characters and runs of other non-space characters (``\w+|[^\w\s]+``)."""
+    r"""Split `text` into runs of word characters and of other non-space characters.
+
+    The pattern is ``\w+|[^\w\s]+``.
+    """
 
     def __init__(self) -> None: ...
 
@@ -550,7 +566,9 @@ def wordpunct_tokenize(text: str, *, threads: int | None = None) -> list[str]:
 @overload
 def wordpunct_tokenize(text: _Batch, *, threads: int | None = None) -> list[list[str]]: ...
 @overload
-def wordpunct_tokenize(text: ArrowStrings, *, threads: int | None = None) -> list[list[str] | None]: ...
+def wordpunct_tokenize(
+    text: ArrowStrings, *, threads: int | None = None
+) -> list[list[str] | None]: ...
 @overload
 def blankline_tokenize(text: str, *, threads: int | None = None) -> list[str]:
     """:meth:`BlanklineTokenizer.tokenize`."""
@@ -558,7 +576,9 @@ def blankline_tokenize(text: str, *, threads: int | None = None) -> list[str]:
 @overload
 def blankline_tokenize(text: _Batch, *, threads: int | None = None) -> list[list[str]]: ...
 @overload
-def blankline_tokenize(text: ArrowStrings, *, threads: int | None = None) -> list[list[str] | None]: ...
+def blankline_tokenize(
+    text: ArrowStrings, *, threads: int | None = None
+) -> list[list[str] | None]: ...
 def regexp_tokenize(
     text: Any, pattern: Any, gaps: bool = False, discard_empty: bool = True, flags: int = ...
 ) -> Any:

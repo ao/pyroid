@@ -14,3 +14,8 @@ pyroid.integrations._patch.__all__
 
 # A string-form TypeAlias: the runtime value is the annotation string, mypy sees the Union.
 pyroid.integrations.hf.LidModel
+
+# pyroid.nltk's change-counting set and defaultdict: their mutating methods are generated in a loop
+# (each bumps a counter, then calls the base method), so mypy sees the base signatures.
+pyroid.nltk._punkt._Set\..*
+pyroid.nltk._punkt._Ortho\..*

@@ -118,7 +118,16 @@ def _counting_dict_method(name: str) -> Any:
     return method
 
 
-for _name in ("__setitem__", "__delitem__", "clear", "pop", "popitem", "setdefault", "update", "__ior__"):
+for _name in (
+    "__setitem__",
+    "__delitem__",
+    "clear",
+    "pop",
+    "popitem",
+    "setdefault",
+    "update",
+    "__ior__",
+):
     setattr(_Ortho, _name, _counting_dict_method(_name))
 
 
@@ -141,7 +150,9 @@ class PunktParameters:
         # changes, so tokenizers see later in-place edits made through this object.
         if name in _SET_ATTRS and type(value) is set:
             value = _Set(value)
-        elif name == "ortho_context" and type(value) is defaultdict and value.default_factory is int:
+        elif (
+            name == "ortho_context" and type(value) is defaultdict and value.default_factory is int
+        ):
             value = _Ortho(value)
         object.__setattr__(self, name, value)
         _GEN[0] += 1
@@ -187,12 +198,20 @@ _SET_ATTRS = frozenset({"abbrev_types", "collocations", "sent_starters"})
 
 
 def _adopt(params: Any) -> Any:
-    """`params` as a pyroid PunktParameters (a copy of NLTK's or another duck-typed object whose
-    tables are sets and a ``defaultdict(int)``), else `params` itself (it then runs in NLTK)."""
+    """`params` as a pyroid PunktParameters, or `params` itself (it then runs in NLTK).
+
+    NLTK's PunktParameters, or any object whose tables are sets and a ``defaultdict(int)``, is
+    copied into a pyroid one.
+    """
     if isinstance(params, PunktParameters):
         return params
     try:
-        tables = (params.abbrev_types, params.collocations, params.sent_starters, params.ortho_context)
+        tables = (
+            params.abbrev_types,
+            params.collocations,
+            params.sent_starters,
+            params.ortho_context,
+        )
     except AttributeError:
         return params
     ab, co, ss, oc = tables
@@ -274,9 +293,22 @@ class PunktLanguageVars:
 #: Names a PunktLanguageVars subclass may override and still run in Rust.
 _NATIVE_LANG_ATTRS = frozenset({"sent_end_chars", "internal_punctuation"})
 _PLAIN_CLASS_ATTRS = frozenset(
-    {"__module__", "__qualname__", "__doc__", "__slots__", "__dict__", "__weakref__", "__firstlineno__",
-     "__static_attributes__", "__annotations__", "__annotate__", "__annotate_func__", "__annotations_cache__",
-     "__orig_bases__", "__parameters__"}
+    {
+        "__module__",
+        "__qualname__",
+        "__doc__",
+        "__slots__",
+        "__dict__",
+        "__weakref__",
+        "__firstlineno__",
+        "__static_attributes__",
+        "__annotations__",
+        "__annotate__",
+        "__annotate_func__",
+        "__annotations_cache__",
+        "__orig_bases__",
+        "__parameters__",
+    }
 )
 
 
@@ -307,10 +339,13 @@ def _native_end_chars(lang_vars: Any) -> str | None:
     """``lang_vars.sent_end_chars`` as a str of distinct chars, or None if Rust cannot run it."""
     if lang_vars is None:
         return ".?!"
-    if not isinstance(lang_vars, _base_lang_classes()) or _lang_overrides(lang_vars) - _NATIVE_LANG_ATTRS:
+    if (
+        not isinstance(lang_vars, _base_lang_classes())
+        or _lang_overrides(lang_vars) - _NATIVE_LANG_ATTRS
+    ):
         return None
-    chars = lang_vars.sent_end_chars
-    if not isinstance(chars, (tuple, list)) or not all(type(c) is str and len(c) == 1 for c in chars):
+    chars: Any = getattr(lang_vars, "sent_end_chars", None)
+    if type(chars) is not tuple or not all(type(c) is str and len(c) == 1 for c in chars):
         return None
     if not chars:  # NLTK's pattern "[]" does not compile: let NLTK raise its error
         return None
@@ -336,13 +371,26 @@ def _nltk_lang_vars(lang_vars: Any) -> Any:
 # The tokenizers
 # ---------------------------------------------------------------------------
 
-_DEFAULT_TOKEN = object()
+
+class _DefaultToken:
+    """The ``token_cls`` default (NLTK's PunktToken); one instance, kept by pickle and copy."""
+
+    def __reduce__(self) -> str:
+        return "_DEFAULT_TOKEN"
+
+
+_DEFAULT_TOKEN = _DefaultToken()
 
 
 def _fingerprint(params: Any) -> tuple[Any, ...] | None:
     """What identifies `params`' contents cheaply, or None if Rust cannot use them."""
     try:
-        ab, co, ss, oc = params.abbrev_types, params.collocations, params.sent_starters, params.ortho_context
+        ab, co, ss, oc = (
+            params.abbrev_types,
+            params.collocations,
+            params.sent_starters,
+            params.ortho_context,
+        )
     except AttributeError:
         return None
     if not all(isinstance(c, (set, frozenset)) for c in (ab, co, ss)):
@@ -406,8 +454,6 @@ class PunktSentenceTokenizer:
         lang_vars: Any = None,
         token_cls: Any = _DEFAULT_TOKEN,
     ) -> None:
-        if lang_vars is None:
-            lang_vars = PunktLanguageVars()
         if not isinstance(self, PunktSentenceTokenizer):
             # NLTK's own PunktTokenizer.__init__ calls the module's PunktSentenceTokenizer,
             # which is this class while pyroid.patch("nltk") is active: run NLTK's.
@@ -417,6 +463,8 @@ class PunktSentenceTokenizer:
             kwargs = {} if token_cls is _DEFAULT_TOKEN else {"token_cls": token_cls}
             original.__init__(self, train_text, verbose, lang_vars, **kwargs)
             return
+        if lang_vars is None:
+            lang_vars = PunktLanguageVars()
         self._lang_vars = lang_vars
         self._Token = token_cls
         self._params = PunktParameters()
@@ -472,10 +520,22 @@ class PunktSentenceTokenizer:
         native = self._impl_slow(params)
         tracked = isinstance(params, PunktParameters) and all(
             isinstance(c, (_Set, _Ortho, frozenset))
-            for c in (params.abbrev_types, params.collocations, params.sent_starters, params.ortho_context)
+            for c in (
+                params.abbrev_types,
+                params.collocations,
+                params.sent_starters,
+                params.ortho_context,
+            )
         )
         self._fast = (
-            (params, lang_vars, _GEN[0], getattr(lang_vars, "sent_end_chars", None), self._Token, native)
+            (
+                params,
+                lang_vars,
+                _GEN[0],
+                getattr(lang_vars, "sent_end_chars", None),
+                self._Token,
+                native,
+            )
             if tracked and not getattr(lang_vars, "__dict__", None)
             else None
         )
@@ -527,8 +587,10 @@ class PunktSentenceTokenizer:
     def span_tokenize(
         self, text: Any, realign_boundaries: bool = True, *, threads: int | None = None
     ) -> Any:
-        """The ``(start, end)`` offsets of the sentences: a generator for a str, as NLTK's
-        (a list of lists of tuples for a batch)."""
+        """The ``(start, end)`` offsets of the sentences.
+
+        A generator for a str, as NLTK's; a list of lists of tuples for a batch.
+        """
         if isinstance(text, str):
             return self._span_gen(text, realign_boundaries)
         native = self._impl()
@@ -684,7 +746,9 @@ def load_punkt_params(lang_dir: Any) -> PunktParameters:
         return _from_raw(_data._parse(open_file))
     load = _delegate.attr("nltk.tokenize.punkt:load_punkt_params", "load_punkt_params")
     raw = load(lang_dir)
-    return _from_raw(_data.RawParams(raw.collocations, raw.sent_starters, raw.abbrev_types, raw.ortho_context))
+    return _from_raw(
+        _data.RawParams(raw.collocations, raw.sent_starters, raw.abbrev_types, raw.ortho_context)
+    )
 
 
 DEBUG_DECISION_FMT = """Text: {text!r} (at offset {period_index})
@@ -707,4 +771,6 @@ def format_debug_decision(d: dict[str, Any]) -> str:
 
 def PunktTrainer(*args: Any, **kwargs: Any) -> Any:  # noqa: N802  NLTK's class name
     """NLTK's ``PunktTrainer`` (training is not ported; :class:`pyroid.FallbackWarning`)."""
-    return _delegate.attr("nltk.tokenize.punkt:PunktTrainer", "PunktTrainer (training)")(*args, **kwargs)
+    return _delegate.attr("nltk.tokenize.punkt:PunktTrainer", "PunktTrainer (training)")(
+        *args, **kwargs
+    )
