@@ -160,10 +160,14 @@ def _nltk_finds_punkt_tab() -> bool | None:
 
 
 def _punkt_cache_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """``$PYROID_DATA/nltk_data`` if it can be written (CI caches it), else a session tmp dir."""
+    """Where to download punkt_tab (the first writable of these).
+
+    ``$PYROID_NLTK_DATA`` (CI caches it), ``$PYROID_DATA/nltk_data``, else a session tmp dir.
+    """
+    nltk_data = os.environ.get("PYROID_NLTK_DATA")
     data = os.environ.get("PYROID_DATA")
-    if data:
-        d = Path(data) / "nltk_data"
+    if nltk_data or data:
+        d = Path(nltk_data) if nltk_data else Path(str(data)) / "nltk_data"
         try:
             (d / "tokenizers").mkdir(parents=True, exist_ok=True)
         except OSError:
@@ -222,7 +226,8 @@ def punkt_tab(tmp_path_factory: pytest.TempPathFactory) -> PunktTab:
 
     The installed models if ``nltk.data.find("tokenizers/punkt_tab/english/")`` finds them
     (without NLTK: if NLTK's default search path has them). Otherwise punkt_tab.zip is
-    downloaded once into ``$PYROID_DATA/nltk_data`` (or a session tmp dir), its sha256
+    downloaded once into ``$PYROID_NLTK_DATA``, ``$PYROID_DATA/nltk_data`` or a session tmp dir,
+    its sha256
     checked, and that directory put first on ``NLTK_DATA`` and ``nltk.data.path``. Skips if
     the models are not installed and the download fails (offline).
     """

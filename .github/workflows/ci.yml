@@ -240,10 +240,19 @@ jobs:
         with:
           name: wheels-${{ matrix.os }}
           path: dist
+      # NLTK's punkt_tab models for pyroid.nltk's tests (not redistributable, so not in the repo): the
+      # punkt_tab fixture downloads the zip into PYROID_NLTK_DATA on a miss and checks its sha256, which
+      # the key carries (PUNKT_TAB_SHA256 in python/tests/conftest.py).
+      - name: Cache NLTK's punkt_tab models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/nltk_data
+          key: punkt-tab-${{ runner.os }}-e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106
       - name: Install the built wheel into a clean venv and run pytest
         shell: bash
         env:
           PY: ${{ matrix.python }}
+          PYROID_NLTK_DATA: ${{ runner.temp }}/nltk_data
           # Optional extra for the dataframe tests. polars-runtime-32 2.1.0 ships only cp311-abi3
           # wheels, so it installs on GIL builds (3.11, 3.15) and is skipped on 3.14t and 3.15t.
           POLARS: polars==2.1.0
@@ -384,6 +393,14 @@ jobs:
           # The key parity-data saved for this runner's architecture.
           key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
           fail-on-cache-miss: true
+      # The nltk suite downloads NLTK's punkt_tab models into bench/data/nltk_data on a miss and checks
+      # their sha256, which the key carries (PUNKT_TAB_SHA256 in parity/tests/test_nltk.py).
+      - name: Cache NLTK's punkt_tab models
+        if: matrix.suite == 'nltk'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data/nltk_data
+          key: punkt-tab-parity-e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106
       - name: pytest parity/tests -m ${{ matrix.suite }} --impl pyroid.${{ matrix.suite }}
         env:
           SUITE: ${{ matrix.suite }}
