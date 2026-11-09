@@ -687,3 +687,27 @@ the HTMLParser options), https://lxml.de:
     BSD 3-Clause License (see LICENSES/BSD-3-Clause-lxml.txt).
 
 No libxml2 or lxml code is linked into pyroid; both are ports.
+
+-------------------------------------------------------------------------------
+NeMo Curator (pyroid.nemo, pyroid.integrations.nemo_curator)
+-------------------------------------------------------------------------------
+The NeMo Curator port (crates/pyroid-core/src/nemo/, crates/pyroid-py/src/nemo.rs,
+crates/pyroid-py/src/nemo_modifiers.rs, python/pyroid/nemo.py, python/pyroid/nemo.pyi
+and python/pyroid/integrations/nemo_curator.py) is a derivative work of NeMo Curator
+1.4.0, https://github.com/NVIDIA-NeMo/Curator: its heuristic document filters, its
+fastText filters, its Unicode and string modifiers, and its ScoreFilter, Score,
+Filter and Modify stages (nemo_curator/stages/text/). The policy strings, ellipsis
+marks, bullet characters and character classes of
+nemo_curator/stages/text/utils/constants.py are reproduced in the Rust code.
+python/tests/_nemo_reference.py and python/tests/test_nemo_modifiers.py copy NeMo
+Curator's score_document and modify_document code as the tests' reference.
+
+    Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+Each ported file carries the header "Derived from NeMo Curator 1.4.0 (Apache-2.0),
+© NVIDIA CORPORATION; modified." The Alphabetic table behind
+NeMo's regex.compile("[[:alpha:]]") was generated from the regex module
+(Apache-2.0 / CNRI-Python; its Unicode Character Database data is under the
+Unicode License v3) by a generate_tables.py script in crates/pyroid-core/src/nemo/.

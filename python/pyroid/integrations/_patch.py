@@ -87,6 +87,13 @@ warcio's ``StatusAndHeaders``, the record a subclass of warcio's ``ArcWarcRecord
 pyroid in stock datatrove. Without warcio, ``warcio`` and ``warcio.archiveiterator`` are shims
 holding :mod:`pyroid.warc`'s classes.
 
+``"nemo_curator"`` works like ``"nltk"``, and needs NeMo Curator installed: the stages
+``ScoreFilter``, ``Score``, ``Filter`` and ``Modify``, the heuristic and fastText filters,
+``UnicodeReformatter`` and the string modifiers of :mod:`pyroid.integrations.nemo_curator` are
+set on NeMo's own modules (``nemo_curator.stages.text.filters`` and the modules that define
+them), so pipelines built afterwards, including from NeMo's YAML configs, use them. Ray workers
+need no patch: the stages they receive are pyroid's classes.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -132,6 +139,7 @@ SUPPORTED: tuple[str, ...] = (
     "trafilatura",
     "nltk",
     "warcio",
+    "nemo_curator",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -659,6 +667,99 @@ def _build_warcio(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     return {}, [undo]
 
 
+# What patch("nemo_curator") swaps: pyroid.integrations.nemo_curator's classes, set on NeMo
+# Curator's own modules (where each class is defined and where it is re-exported).
+_NEMO_STRING_FILTERS = (
+    "BoilerPlateStringFilter",
+    "BulletsFilter",
+    "CommonEnglishWordsFilter",
+    "EllipsisFilter",
+    "LongWordFilter",
+    "MeanWordLengthFilter",
+    "NonAlphaNumericFilter",
+    "NumbersFilter",
+    "ParenthesesFilter",
+    "PornographicUrlsFilter",
+    "PunctuationFilter",
+    "SubstringFilter",
+    "SymbolsToWordsFilter",
+    "UrlsFilter",
+    "WhiteSpaceFilter",
+    "WordCountFilter",
+    "WordsWithoutAlphabetsFilter",
+)
+_NEMO_REPETITION_FILTERS = (
+    "RepeatedLinesByCharFilter",
+    "RepeatedLinesFilter",
+    "RepeatedParagraphsByCharFilter",
+    "RepeatedParagraphsFilter",
+    "RepeatingDuplicateNGramsFilter",
+    "RepeatingTopNGramsFilter",
+)
+_NEMO_STRING_MODIFIERS = {
+    "c4": "BoilerPlateStringModifier",
+    "line_remover": "LineRemover",
+    "markdown_remover": "MarkdownRemover",
+    "newline_normalizer": "NewlineNormalizer",
+    "quotation_remover": "QuotationRemover",
+    "slicer": "Slicer",
+    "url_remover": "UrlRemover",
+}
+_T = "nemo_curator.stages.text"
+_NEMO_SWAPS: dict[str, tuple[str, ...]] = {
+    f"{_T}.filters": ("ScoreFilter", "Score", "Filter"),
+    f"{_T}.filters.score_filter": ("ScoreFilter", "Score", "Filter"),
+    f"{_T}.filters.heuristic": _NEMO_STRING_FILTERS,
+    f"{_T}.filters.heuristic.string": _NEMO_STRING_FILTERS,
+    f"{_T}.filters.heuristic.repetition": _NEMO_REPETITION_FILTERS,
+    f"{_T}.filters.heuristic.repetition.repetition": _NEMO_REPETITION_FILTERS,
+    f"{_T}.filters.fasttext": ("FastTextLangId", "FastTextQualityFilter"),
+    f"{_T}.filters.fasttext.fasttext_filters": ("FastTextLangId", "FastTextQualityFilter"),
+    f"{_T}.modifiers": ("Modify", *_NEMO_STRING_MODIFIERS.values()),
+    f"{_T}.modifiers.modifier": ("Modify",),
+    f"{_T}.modifiers.string": tuple(_NEMO_STRING_MODIFIERS.values()),
+    **{f"{_T}.modifiers.string.{m}": (c,) for m, c in _NEMO_STRING_MODIFIERS.items()},
+    f"{_T}.modifiers.unicode": ("UnicodeReformatter",),
+    f"{_T}.modifiers.unicode.unicode_reformatter": ("UnicodeReformatter",),
+    f"{_T}.modifiers.fasttext": ("FastTextLabelModifier",),
+    f"{_T}.modifiers.fasttext.fasttext_label": ("FastTextLabelModifier",),
+}
+del _T
+
+
+def _build_nemo_curator(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if real is None:
+        raise ImportError(f"patch('nemo_curator') needs NeMo Curator: {missing}")
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    added: list[tuple[str, Any]] = []
+    for mod, names in _NEMO_SWAPS.items():
+        try:
+            module = importlib.import_module(mod)
+        except ImportError:
+            # NeMo's fastText and ftfy modules import fasttext / ftfy at the top; pyroid's classes
+            # need neither, so a module named like NeMo's provides them (for YAML `_target_`s).
+            module = types.ModuleType(mod, f"pyroid's drop-ins for {mod} (pyroid.patch)")
+            added.append((mod, sys.modules.get(mod, _MISSING)))
+            sys.modules[mod] = module
+        for n in names:
+            saved.append((module, n, module.__dict__.get(n, _MISSING)))
+            setattr(module, n, getattr(impl, n))
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+        for mod, previous in reversed(added):
+            if previous is _MISSING:
+                sys.modules.pop(mod, None)
+            else:
+                sys.modules[mod] = previous
+
+    return {}, [undo]
+
+
 def _distribution_version(name: str) -> Callable[[Any], str | None]:
     """The installed version of distribution `name` (for packages without ``__version__``)."""
 
@@ -740,10 +841,19 @@ _TARGETS: dict[str, _Target] = {
         _build_warcio,
         installed=_distribution_version("warcio"),
     ),
+    "nemo_curator": _Target(
+        "pyroid.integrations.nemo_curator",
+        "whose ScoreFilter, Score, Filter and Modify stages, heuristic filters, fastText filters, "
+        "UnicodeReformatter and string modifiers reproduce NeMo Curator 1.4.0's",
+        "NEMO_CURATOR_VERSION",
+        "pip install nemo-curator==1.4.0",
+        " (readers, writers, deduplication, classifiers, the other stages)",
+        _build_nemo_curator,
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio")
+_SWAPPED = ("nltk", "warcio", "nemo_curator")
 
 
 # ---------------------------------------------------------------------------
@@ -816,6 +926,7 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
             example = {
                 "nltk": "from nltk import word_tokenize",
                 "warcio": "from warcio.archiveiterator import ArchiveIterator",
+                "nemo_curator": "from nemo_curator.stages.text.filters import ScoreFilter",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
@@ -903,7 +1014,7 @@ def patch(*names: str) -> None:
 
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
-            ``"trafilatura"``, ``"nltk"`` and/or ``"warcio"``.
+            ``"trafilatura"``, ``"nltk"``, ``"warcio"`` and/or ``"nemo_curator"``.
 
     Raises:
         TypeError: No names were given.
