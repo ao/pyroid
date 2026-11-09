@@ -24,6 +24,9 @@ Checks (suite ``nemo``; ``<case>`` is a key of ``nemo_cases.ALL_CASES``):
                            values; a batch with a document NeMo raises on must raise the same type
     hypothesis-<case>      live: NeMo vs the candidate's functions on generated text (str and batch calls)
     hypothesis-integration-<case>   live: NeMo vs the integration's class
+    hypothesis-surrogates-<case>, hypothesis-surrogates-integration-<case>   the same on documents with lone
+                           surrogates (a str can hold them, a reader's Arrow column cannot), apart, so that a
+                           difference there does not hide one on ordinary text
     config-edges           live: options at the edges (n=0, an unknown position, lang in upper case, ...)
     oracle-version         live: the installed NeMo is 1.4.0
 
@@ -181,8 +184,7 @@ def _candidate_obj(impl: Any, case: str) -> Any:
     return c.make(cls)
 
 
-def _integration_or_skip(impl: Any, parity: Collector, case: str) -> Any:
-    check = f"hypothesis-integration-{case}"
+def _integration_or_skip(impl: Any, parity: Collector, case: str, check: str) -> Any:
     obj = _candidate_obj(impl, case)
     if obj is None:
         why = impl.obj.integration_reason or f"{impl.obj.integration_name} has no {C.ALL_CASES[case].nemo}"
@@ -190,21 +192,27 @@ def _integration_or_skip(impl: Any, parity: Collector, case: str) -> Any:
     return obj
 
 
+#: Generated text: ordinary documents, and documents with lone surrogates (checked apart).
+TEXTS = {"text": ("hypothesis-", S.batch), "surrogates": ("hypothesis-surrogates-", S.batch_surrogates)}
+
+
+@pytest.mark.parametrize("text", list(TEXTS))
 @pytest.mark.parametrize("case", FILTERS)
-def test_hypothesis_filter(case: str, nemo_impl: Any, parity: Collector) -> None:
-    check, icheck = f"hypothesis-{case}", f"hypothesis-integration-{case}"
+def test_hypothesis_filter(case: str, text: str, nemo_impl: Any, parity: Collector) -> None:
+    prefix, strategy = TEXTS[text]
+    check, icheck = f"{prefix}{case}", f"{prefix}integration-{case}"
     live(parity, check)
     c = C.FILTER_CASES[case]
     cand = nemo_impl.obj
     fn = cand.fn(c.fn)
     if fn is None:
         parity.skip(SUITE, check, cand.missing(c.fn))
-    integ = _integration_or_skip(nemo_impl, parity, case)
+    integ = _integration_or_skip(nemo_impl, parity, case, icheck)
     if fn is None and integ is None:
         pytest.skip(cand.missing(c.fn))
     ref = _nemo(case)
 
-    @given(texts=S.batch)
+    @given(texts=strategy)
     def prop(texts: list[str]) -> None:
         t = NC.Tally()
         want = [NC.score_outcome(ref.score_document, x, {}) for x in texts]
@@ -244,21 +252,23 @@ def test_hypothesis_filter(case: str, nemo_impl: Any, parity: Collector) -> None
     prop()
 
 
+@pytest.mark.parametrize("text", list(TEXTS))
 @pytest.mark.parametrize("case", MODIFIERS)
-def test_hypothesis_modifier(case: str, nemo_impl: Any, parity: Collector) -> None:
-    check, icheck = f"hypothesis-{case}", f"hypothesis-integration-{case}"
+def test_hypothesis_modifier(case: str, text: str, nemo_impl: Any, parity: Collector) -> None:
+    prefix, strategy = TEXTS[text]
+    check, icheck = f"{prefix}{case}", f"{prefix}integration-{case}"
     live(parity, check)
     c = C.MODIFIER_CASES[case]
     cand = nemo_impl.obj
     fn, fnb = cand.fn(c.fn), cand.fn_batch(c.fn)
     if fn is None:
         parity.skip(SUITE, check, cand.missing(c.fn))
-    integ = _integration_or_skip(nemo_impl, parity, case)
+    integ = _integration_or_skip(nemo_impl, parity, case, icheck)
     if fn is None and integ is None:
         pytest.skip(cand.missing(c.fn))
     ref = _nemo(case)
 
-    @given(texts=S.batch)
+    @given(texts=strategy)
     def prop(texts: list[str]) -> None:
         t = NC.Tally()
         want = [NC.text_outcome(ref.modify_document, x, {}) for x in texts]
@@ -298,12 +308,12 @@ def test_hypothesis_fasttext(case: str, nemo_impl: Any, parity: Collector) -> No
             model = cand.fasttext_model(path)
         except LookupError as e:
             parity.skip(SUITE, check, str(e))
-    integ = _integration_or_skip(nemo_impl, parity, case)
+    integ = _integration_or_skip(nemo_impl, parity, case, icheck)
     if model is None and integ is None:
         pytest.skip(f"{cand.name}: no fastText functions and no integration class")
     ref = _nemo(case)
 
-    @given(texts=S.batch_no_surrogates)
+    @given(texts=S.batch)
     def prop(texts: list[str]) -> None:
         t = NC.Tally()
         want = [NC.score_outcome(ref.score_document, x, {}) for x in texts]

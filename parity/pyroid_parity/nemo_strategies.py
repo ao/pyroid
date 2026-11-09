@@ -164,8 +164,17 @@ _surrogates = st.text(st.characters(categories=("Cs", "Ll", "Zs", "Nd", "Po")), 
 
 #: One document, without lone surrogates.
 document = st.one_of(_line, _repeated(), st.lists(_piece, max_size=40).map("".join))
-#: One document, lone surrogates allowed in one branch.
-document_any = st.one_of(document, _surrogates)
+#: One document with at least one lone surrogate.
+document_surrogates = st.one_of(
+    _surrogates.filter(lambda s: any("\ud800" <= c <= "\udfff" for c in s)),
+    st.builds(
+        lambda a, s, b: a + s + b,
+        document,
+        st.text(st.characters(categories=("Cs",)), min_size=1, max_size=3),
+        document,
+    ),
+)
 #: A batch of 1-4 documents (str API and batch API compared on the same inputs).
-batch = st.lists(document_any, min_size=1, max_size=4)
-batch_no_surrogates = st.lists(document, min_size=1, max_size=4)
+batch = st.lists(document, min_size=1, max_size=4)
+#: A batch of 1-4 documents, each with a lone surrogate.
+batch_surrogates = st.lists(document_surrogates, min_size=1, max_size=4)
