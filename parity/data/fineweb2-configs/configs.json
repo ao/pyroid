@@ -551,5 +551,128 @@
     0.125
    ]
   ]
+ },
+ "tha_Thai": {
+  "dup_line_frac": 0.349,
+  "dup_n_grams": [
+   [
+    5,
+    0.185
+   ],
+   [
+    6,
+    0.168
+   ],
+   [
+    7,
+    0.152
+   ],
+   [
+    8,
+    0.137
+   ],
+   [
+    9,
+    0.124
+   ],
+   [
+    10,
+    0.111
+   ]
+  ],
+  "language_score": 0.9,
+  "line_punct_thr": 0.0,
+  "max_avg_word_length": 10,
+  "max_non_alpha_words_ratio": 0.9,
+  "min_avg_word_length": 2,
+  "new_line_ratio": 0.153,
+  "stopwords": [
+   "ใน",
+   "ที่",
+   "และ",
+   "ของ",
+   "เป็น",
+   "มี",
+   "การ",
+   "ได้"
+  ],
+  "top_n_grams": [
+   [
+    2,
+    0.221
+   ],
+   [
+    3,
+    0.197
+   ],
+   [
+    4,
+    0.162
+   ]
+  ]
+ },
+ "vie_Latn": {
+  "dup_line_frac": 0.293,
+  "dup_n_grams": [
+   [
+    5,
+    0.178
+   ],
+   [
+    6,
+    0.163
+   ],
+   [
+    7,
+    0.15
+   ],
+   [
+    8,
+    0.136
+   ],
+   [
+    9,
+    0.124
+   ],
+   [
+    10,
+    0.111
+   ]
+  ],
+  "language_score": 0.802,
+  "line_punct_thr": 0.333,
+  "max_avg_word_length": 11,
+  "max_non_alpha_words_ratio": 0.803,
+  "min_avg_word_length": 3,
+  "new_line_ratio": 0.103,
+  "stopwords": [
+   "là",
+   "và",
+   "của",
+   "một",
+   "được",
+   "trong",
+   "năm",
+   "các",
+   "có",
+   "loài",
+   "này",
+   "đã",
+   "người"
+  ],
+  "top_n_grams": [
+   [
+    2,
+    0.223
+   ],
+   [
+    3,
+    0.197
+   ],
+   [
+    4,
+    0.171
+   ]
+  ]
  }
 }
