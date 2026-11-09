@@ -463,7 +463,7 @@ def test_hypothesis(trafilatura_impl: Any, parity: Collector, option: str, html:
         impl.obj.reset_caches()
     got = T.capture_call(getattr(impl.obj, fn), html, **kw)
     if stateful:
-        o.meta.reset_caches()
+        oracle_reset()
     want = T.capture_call(getattr(o, fn), html, **kw)
     same = parity.record(
         SUITE,
