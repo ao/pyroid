@@ -8,6 +8,10 @@ pyroid._pyroid.Column.__class_getitem__
 # so mypy sees Any bases and stubtest would report every __init__ and metaclass.
 pyroid.integrations.datatrove
 
+# Needs NeMo Curator (CPython 3.11-3.13, with torch and Ray), which the stubtest venv leaves out, for the
+# same reason: the stages and filters subclass its untyped classes.
+pyroid.integrations.nemo_curator
+
 # A false positive: mypy records the class `_FastText`, defined inside a function, as a public module
 # name (`_FastText@<line>`), so the stub-side names never match the runtime __all__.
 pyroid.integrations._patch.__all__

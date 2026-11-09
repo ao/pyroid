@@ -56,17 +56,17 @@ from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple
 
 import numpy as np
-import pandas as pd
-from nemo_curator.stages import base as _nc_base
-from nemo_curator.stages.text.filters import doc_filter as _nc_doc_filter
-from nemo_curator.stages.text.filters import score_filter as _nc_sf
-from nemo_curator.stages.text.filters.heuristic import string as _nc_hs
-from nemo_curator.stages.text.filters.heuristic.repetition import repetition as _nc_hr
-from nemo_curator.stages.text.modifiers import doc_modifier as _nc_doc_modifier
-from nemo_curator.stages.text.modifiers import modifier as _nc_modifier
-from nemo_curator.stages.text.modifiers import string as _nc_ms
-from nemo_curator.stages.text.modifiers.fasttext import fasttext_label as _nc_ftl
-from nemo_curator.stages.text.utils import constants as _nc_constants
+import pandas as pd  # type: ignore[import-not-found,import-untyped,unused-ignore]
+from nemo_curator.stages import base as _nc_base  # type: ignore[import-not-found,import-untyped,unused-ignore]
+from nemo_curator.stages.text.filters import doc_filter as _nc_doc_filter  # type: ignore[import-not-found,import-untyped,unused-ignore]
+from nemo_curator.stages.text.filters import score_filter as _nc_sf  # type: ignore[import-not-found,import-untyped,unused-ignore]
+from nemo_curator.stages.text.filters.heuristic import string as _nc_hs  # type: ignore[import-not-found,import-untyped,unused-ignore]
+from nemo_curator.stages.text.filters.heuristic.repetition import repetition as _nc_hr  # type: ignore[import-not-found,import-untyped,unused-ignore]
+from nemo_curator.stages.text.modifiers import doc_modifier as _nc_doc_modifier  # type: ignore[import-not-found,import-untyped,unused-ignore]
+from nemo_curator.stages.text.modifiers import modifier as _nc_modifier  # type: ignore[import-not-found,import-untyped,unused-ignore]
+from nemo_curator.stages.text.modifiers import string as _nc_ms  # type: ignore[import-not-found,import-untyped,unused-ignore]
+from nemo_curator.stages.text.modifiers.fasttext import fasttext_label as _nc_ftl  # type: ignore[import-not-found,import-untyped,unused-ignore]
+from nemo_curator.stages.text.utils import constants as _nc_constants  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
 import pyroid
 import pyroid.ftfy
@@ -442,7 +442,7 @@ class _OneDoc:
 # --- fastText -------------------------------------------------------------------------------------
 
 try:
-    from nemo_curator.stages.text.filters.fasttext import fasttext_filters as _nc_ft
+    from nemo_curator.stages.text.filters.fasttext import fasttext_filters as _nc_ft  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
     _LangIdBase: Any = _nc_ft.FastTextLangId
     _QualityBase: Any = _nc_ft.FastTextQualityFilter
@@ -928,7 +928,7 @@ class FastTextLabelModifier(_OneModify, _nc_ftl.FastTextLabelModifier):
 
 
 try:
-    from nemo_curator.stages.text.modifiers.unicode import unicode_reformatter as _nc_ur
+    from nemo_curator.stages.text.modifiers.unicode import unicode_reformatter as _nc_ur  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
     _UnicodeBase: Any = _nc_ur.UnicodeReformatter
 except ImportError:  # ftfy is not installed: NeMo's module imports it at the top
