@@ -54,7 +54,7 @@ def _tied_score(text: str, n: int, starts: list[int] | None, words: list[str] | 
     """
     if words is None:
         words = text.strip().split()
-    ngrams = list(zip(*[words[i:] for i in range(n)]))
+    ngrams = list(zip(*[words[i:] for i in range(n)], strict=False))
     unique = set(ngrams)
     if starts is None:  # every n-gram is tied
         top = next(iter(unique))
@@ -67,7 +67,7 @@ def _tied_score(text: str, n: int, starts: list[int] | None, words: list[str] | 
 
 
 def repeating_top_ngrams(
-    texts: Any, n: int = 2, *, lang: str = "en", threads: int | None = None
+    texts: Any, /, n: int = 2, *, lang: str = "en", threads: int | None = None
 ) -> Any:
     """``RepeatingTopNGramsFilter(n)``'s score; see ``nemo.pyi``."""
     scores, ties = _native._repeating_top_ngrams(texts, n, lang=lang, threads=threads)

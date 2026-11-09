@@ -25,7 +25,7 @@ jieba is not installed, and ``"ja"`` raises ImportError without MeCab, as NeMo d
 Curator itself where it is installed.
 """
 
-# ruff: noqa: ANN001, ANN201, ANN202, D101, D102, D103, D107, PLR2004, RUF001, SIM114, RET505
+# ruff: noqa: RUF001
 # mypy: ignore-errors
 
 import re

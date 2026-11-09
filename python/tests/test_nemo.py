@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import ast
+import contextlib
 import functools
 import importlib
 import importlib.util
@@ -103,10 +104,8 @@ def live_nemo() -> Any | None:
                 pkg.__path__ = [str(root.joinpath(*name.split(".")[1:]))]
                 sys.modules[name] = pkg
         modules = [importlib.import_module(m) for m in _FILTER_MODULES]
-    try:
+    with contextlib.suppress(ImportError):  # fastText is not installed
         modules.append(importlib.import_module(_FASTTEXT_MODULE))
-    except ImportError:  # fastText is not installed
-        pass
     ns = types.SimpleNamespace()
     for module in modules:
         for key, value in vars(module).items():
@@ -164,7 +163,7 @@ PIECES = (
     "Read More..",
     "•",
     "‣",
-    "⁃",
+    "\u2043",
     "⁌",
     "⁍",
     "∙",
@@ -320,42 +319,47 @@ class Case:
     integer: bool = False
 
 
+def _filter(name: str, *args: Any, **kwargs: Any) -> Callable[[Any], Any]:
+    """Build NeMo's filter ``name(*args, **kwargs)`` from a module namespace."""
+    return lambda module: getattr(module, name)(*args, **kwargs)
+
+
 def _cases() -> list[Case]:
     n = nemo
     cases = [
-        Case("non_alpha_numeric", lambda m: m.NonAlphaNumericFilter(), n.non_alpha_numeric),
-        Case("symbols_to_words", lambda m: m.SymbolsToWordsFilter(), n.symbols_to_words),
-        Case("numbers", lambda m: m.NumbersFilter(), n.numbers),
-        Case("urls", lambda m: m.UrlsFilter(), n.urls),
-        Case("white_space", lambda m: m.WhiteSpaceFilter(), n.white_space),
-        Case("parentheses", lambda m: m.ParenthesesFilter(), n.parentheses),
-        Case("boilerplate_string", lambda m: m.BoilerPlateStringFilter(), n.boilerplate_string),
-        Case("repeated_lines", lambda m: m.RepeatedLinesFilter(), n.repeated_lines),
-        Case("repeated_paragraphs", lambda m: m.RepeatedParagraphsFilter(), n.repeated_paragraphs),
+        Case("non_alpha_numeric", _filter("NonAlphaNumericFilter"), n.non_alpha_numeric),
+        Case("symbols_to_words", _filter("SymbolsToWordsFilter"), n.symbols_to_words),
+        Case("numbers", _filter("NumbersFilter"), n.numbers),
+        Case("urls", _filter("UrlsFilter"), n.urls),
+        Case("white_space", _filter("WhiteSpaceFilter"), n.white_space),
+        Case("parentheses", _filter("ParenthesesFilter"), n.parentheses),
+        Case("boilerplate_string", _filter("BoilerPlateStringFilter"), n.boilerplate_string),
+        Case("repeated_lines", _filter("RepeatedLinesFilter"), n.repeated_lines),
+        Case("repeated_paragraphs", _filter("RepeatedParagraphsFilter"), n.repeated_paragraphs),
         Case(
             "repeated_lines_by_char",
-            lambda m: m.RepeatedLinesByCharFilter(),
+            _filter("RepeatedLinesByCharFilter"),
             n.repeated_lines_by_char,
         ),
         Case(
             "repeated_paragraphs_by_char",
-            lambda m: m.RepeatedParagraphsByCharFilter(),
+            _filter("RepeatedParagraphsByCharFilter"),
             n.repeated_paragraphs_by_char,
         ),
-        Case("word_count", lambda m: m.WordCountFilter(), n.word_count, integer=True),
-        Case("punctuation", lambda m: m.PunctuationFilter(), n.punctuation),
+        Case("word_count", _filter("WordCountFilter"), n.word_count, integer=True),
+        Case("punctuation", _filter("PunctuationFilter"), n.punctuation),
         Case(
             "words_without_alphabets",
-            lambda m: m.WordsWithoutAlphabetsFilter(),
+            _filter("WordsWithoutAlphabetsFilter"),
             n.words_without_alphabets,
         ),
-        Case("mean_word_length", lambda m: m.MeanWordLengthFilter(), n.mean_word_length),
-        Case("long_word", lambda m: m.LongWordFilter(), n.long_word, integer=True),
-        Case("ellipsis", lambda m: m.EllipsisFilter(), n.ellipsis),
-        Case("bullets", lambda m: m.BulletsFilter(), n.bullets),
+        Case("mean_word_length", _filter("MeanWordLengthFilter"), n.mean_word_length),
+        Case("long_word", _filter("LongWordFilter"), n.long_word, integer=True),
+        Case("ellipsis", _filter("EllipsisFilter"), n.ellipsis),
+        Case("bullets", _filter("BulletsFilter"), n.bullets),
         Case(
             "pornographic_urls",
-            lambda m: m.PornographicUrlsFilter(),
+            _filter("PornographicUrlsFilter"),
             n.pornographic_urls,
             integer=True,
         ),
@@ -364,41 +368,47 @@ def _cases() -> list[Case]:
         cases.append(
             Case(
                 f"common_english_words[{cutoff}-{stop}]",
-                lambda m, c=cutoff, s=stop: m.CommonEnglishWordsFilter(c, s),
+                _filter("CommonEnglishWordsFilter", cutoff, stop),
                 functools.partial(
                     n.common_english_words, min_num_common_words=cutoff, stop_at_false=stop
                 ),
                 integer=True,
             )
         )
-    for k in (1, 2, 3, 4):
-        cases.append(
-            Case(
-                f"repeating_top_ngrams[{k}]",
-                lambda m, k=k: m.RepeatingTopNGramsFilter(k),
-                functools.partial(n.repeating_top_ngrams, n=k),
-            )
+    cases.extend(
+        Case(
+            f"repeating_top_ngrams[{k}]",
+            _filter("RepeatingTopNGramsFilter", k),
+            functools.partial(n.repeating_top_ngrams, n=k),
         )
-    for k in (0, -1, 1, 2, 3, 5):
-        cases.append(
-            Case(
-                f"repeating_duplicate_ngrams[{k}]",
-                lambda m, k=k: m.RepeatingDuplicateNGramsFilter(k),
-                functools.partial(n.repeating_duplicate_ngrams, n=k),
-            )
+        for k in (1, 2, 3, 4)
+    )
+    cases.extend(
+        Case(
+            f"repeating_duplicate_ngrams[{k}]",
+            _filter("RepeatingDuplicateNGramsFilter", k),
+            functools.partial(n.repeating_duplicate_ngrams, n=k),
         )
+        for k in (0, -1, 1, 2, 3, 5)
+    )
     cases.append(
         Case(
             "repeating_top_ngrams[0]",
-            lambda m: m.RepeatingTopNGramsFilter(0),
+            _filter("RepeatingTopNGramsFilter", 0),
             functools.partial(n.repeating_top_ngrams, n=0),
         )
     )
-    for sub, pos in (("a", "prefix"), ("", "suffix"), ("the", "any"), ("\n", "any"), ("é", "suffix")):
+    for sub, pos in (
+        ("a", "prefix"),
+        ("", "suffix"),
+        ("the", "any"),
+        ("\n", "any"),
+        ("é", "suffix"),
+    ):
         cases.append(
             Case(
                 f"substring[{sub!r}-{pos}]",
-                lambda m, s=sub, p=pos: m.SubstringFilter(s, p),
+                _filter("SubstringFilter", sub, pos),
                 functools.partial(n.substring, substring=sub, position=pos),
                 integer=True,
             )
@@ -412,39 +422,39 @@ def _zh_cases() -> list[Case]:
     return [
         Case(
             "zh-symbols_to_words",
-            lambda m: m.SymbolsToWordsFilter(lang="zh"),
+            _filter("SymbolsToWordsFilter", lang="zh"),
             functools.partial(n.symbols_to_words, **zh),
         ),
         Case(
             "zh-word_count",
-            lambda m: m.WordCountFilter(lang="ZH"),
+            _filter("WordCountFilter", lang="ZH"),
             functools.partial(n.word_count, lang="ZH"),
             integer=True,
         ),
         Case(
             "zh-words_without_alphabets",
-            lambda m: m.WordsWithoutAlphabetsFilter(lang="zh"),
+            _filter("WordsWithoutAlphabetsFilter", lang="zh"),
             functools.partial(n.words_without_alphabets, **zh),
         ),
         Case(
             "zh-mean_word_length",
-            lambda m: m.MeanWordLengthFilter(lang="zh"),
+            _filter("MeanWordLengthFilter", lang="zh"),
             functools.partial(n.mean_word_length, **zh),
         ),
         Case(
             "zh-long_word",
-            lambda m: m.LongWordFilter(lang="zh"),
+            _filter("LongWordFilter", lang="zh"),
             functools.partial(n.long_word, **zh),
             integer=True,
         ),
         Case(
             "zh-repeating_top_ngrams[2]",
-            lambda m: m.RepeatingTopNGramsFilter(2, lang="zh"),
+            _filter("RepeatingTopNGramsFilter", 2, lang="zh"),
             functools.partial(n.repeating_top_ngrams, n=2, **zh),
         ),
         Case(
             "zh-repeating_duplicate_ngrams[2]",
-            lambda m: m.RepeatingDuplicateNGramsFilter(2, lang="zh"),
+            _filter("RepeatingDuplicateNGramsFilter", 2, lang="zh"),
             functools.partial(n.repeating_duplicate_ngrams, n=2, **zh),
         ),
     ]
@@ -461,7 +471,7 @@ Outcome = tuple[str, str]
 def nemo_outcome(filt: Any, text: str) -> Outcome:
     try:
         value = filt.score_document(text)
-    except Exception as exc:  # noqa: BLE001 - the type is the outcome
+    except Exception as exc:
         return ("raise", type(exc).__name__)
     return ("ok", repr(value))
 
@@ -469,7 +479,7 @@ def nemo_outcome(filt: Any, text: str) -> Outcome:
 def scalar_outcome(case: Case, text: str) -> Outcome:
     try:
         value = case.pyroid(text)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return ("raise", type(exc).__name__)
     assert type(value) is (int if case.integer else float), (case.name, value)
     return ("ok", repr(value))
@@ -653,7 +663,11 @@ def test_tied_documents_in_every_container(pa: Any, ref: Any) -> None:
     docs = tie_corpus(3, 40)
     for n in (1, 2, 3):
         want = [repr(ref.RepeatingTopNGramsFilter(n).score_document(d)) for d in docs]
-        case = Case("t", lambda m: None, functools.partial(nemo.repeating_top_ngrams, n=n))
+        case = Case(
+            "t",
+            _filter("RepeatingTopNGramsFilter", n),
+            functools.partial(nemo.repeating_top_ngrams, n=n),
+        )
         for kind in (
             docs,
             tuple(docs),
@@ -672,7 +686,12 @@ def test_result_types(pa: Any) -> None:
     assert nemo.word_count("a b") == 2
     assert type(nemo.word_count("a b")) is int
     assert nemo.white_space("a b") == 1 / 3
-    for kind in (["a b", ""], ("a b", ""), pa.array(["a b", ""]), pa.chunked_array([["a b"], [""]])):
+    for kind in (
+        ["a b", ""],
+        ("a b", ""),
+        pa.array(["a b", ""]),
+        pa.chunked_array([["a b"], [""]]),
+    ):
         counts = nemo.word_count(kind)
         assert counts.dtype == np.int64
         assert counts.tolist() == [2, 0]
@@ -682,8 +701,7 @@ def test_result_types(pa: Any) -> None:
     assert nemo.word_count([]).dtype == np.int64
     assert nemo.repeating_top_ngrams([]).dtype == np.float64
     assert nemo.repeating_top_ngrams(()).shape == (0,)
-    scores, langs = nemo.lang_id_strings([], []), []
-    assert scores == langs
+    assert nemo.lang_id_strings([], []) == []
 
 
 def test_arrow_types(pa: Any) -> None:
@@ -715,7 +733,7 @@ def test_arrow_nulls_raise(pa: Any) -> None:
 
 
 def test_errors() -> None:
-    with pytest.raises(ZeroDivisionError, match="^division by zero$") as zd:
+    with pytest.raises(ZeroDivisionError, match=r"^division by zero$") as zd:
         nemo.repeated_lines("")
     assert not getattr(zd.value, "__notes__", None)
     with pytest.raises(ValueError, match=r"^max\(\) iterable argument is empty$"):
@@ -730,13 +748,13 @@ def test_errors() -> None:
     with pytest.raises(
         ValueError, match=r"^Invalid position: middle\. Must be one of: prefix, suffix, any\.$"
     ):
-        nemo.substring([], "a", "middle")
+        nemo.substring([], "a", "middle")  # type: ignore[call-overload]
     with pytest.raises(ValueError, match="Invalid position: 3"):
-        nemo.substring("a", "a", 3)
+        nemo.substring("a", "a", 3)  # type: ignore[call-overload]
     with pytest.raises(pyroid.InputError, match="index 1"):
-        nemo.numbers(["a", 1])
+        nemo.numbers(["a", 1])  # type: ignore[list-item]
     with pytest.raises(pyroid.InputError):
-        nemo.numbers(b"a")
+        nemo.numbers(b"a")  # type: ignore[call-overload]
     with pytest.raises(UnicodeEncodeError):
         nemo.numbers(["a", "\ud800"])
     with pytest.raises(ValueError, match="threads"):
@@ -756,10 +774,10 @@ def test_threads_give_the_same_results() -> None:
     for case in CASES:
         try:
             base = case.pyroid(docs)
-        except Exception as exc:  # noqa: BLE001 - every setting must raise the same
-            for t in (1, 2, 3):
+        except Exception as exc:
+            for setting in (1, 2, 3):
                 with pytest.raises(type(exc)):
-                    case.pyroid(docs, threads=t)
+                    case.pyroid(docs, threads=setting)
             continue
         for t in (None, 1, 2, 3):
             assert np.array_equal(case.pyroid(docs, threads=t), base), (case.name, t)
@@ -770,7 +788,9 @@ def test_threads_give_the_same_results() -> None:
 def test_10k_documents(ref: Any) -> None:
     rng = random.Random(10)
     docs = [
-        "\n".join(" ".join(rng.choice(_WORDS) for _ in range(rng.randrange(1, 30))) for _ in range(5))
+        "\n".join(
+            " ".join(rng.choice(_WORDS) for _ in range(rng.randrange(1, 30))) for _ in range(5)
+        )
         for _ in range(10_000)
     ]
     sample = rng.sample(range(len(docs)), 100)
@@ -823,7 +843,9 @@ def test_alpha_table_is_regex() -> None:
     if regex.__version__ not in ("2026.9.29", "2026.11.9"):
         pytest.skip(f"the table records regex 2026.9.29, not {regex.__version__}")
     alpha = regex.compile("[[:alpha:]]")
-    chars = [chr(cp) for cp in range(0x110000) if not 0xD800 <= cp < 0xE000 and not chr(cp).isspace()]
+    chars = [
+        chr(cp) for cp in range(0x110000) if not 0xD800 <= cp < 0xE000 and not chr(cp).isspace()
+    ]
     got = nemo.words_without_alphabets(chars).tolist()
     assert got == [1.0 if alpha.search(c) else 0.0 for c in chars]
 
@@ -882,7 +904,7 @@ def lang_id_outcome(filt: Any, text: str) -> Outcome:
 def pyroid_lang_id(model: ft.Model, text: str) -> Outcome:
     try:
         score, lang = nemo.fasttext_lang_id(model, text)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return ("raise", type(exc).__name__)
     assert type(score) is float
     assert type(lang) is str
@@ -892,7 +914,7 @@ def pyroid_lang_id(model: ft.Model, text: str) -> Outcome:
 def pyroid_quality(model: ft.Model, text: str, label: str) -> Outcome:
     try:
         score = nemo.fasttext_quality(model, text, label)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return ("raise", type(exc).__name__)
     assert type(score) is float
     return ("ok", repr(score))
@@ -919,7 +941,9 @@ def test_fasttext_batches(ref: Any, ft_model: ft.Model, docs: list[str]) -> None
         if fail_id:
             with pytest.raises(IndexError) as info:
                 nemo.fasttext_lang_id(ft_model, kind)
-            assert info.value.__notes__ == [f"pyroid: raised for the document at index {fail_id[0]}"]
+            assert info.value.__notes__ == [
+                f"pyroid: raised for the document at index {fail_id[0]}"
+            ]
         else:
             scores, langs = nemo.fasttext_lang_id(ft_model, kind, threads=2)
             assert scores.dtype == np.float64
@@ -942,7 +966,7 @@ def test_fasttext_errors(ft_model: ft.Model, pa: Any) -> None:
     with pytest.raises(ValueError, match="index 1 is null"):
         nemo.fasttext_quality(ft_model, pa.array(["the", None]))
     with pytest.raises(TypeError):
-        nemo.fasttext_lang_id("not a model", "the")  # type: ignore[arg-type]
+        nemo.fasttext_lang_id("not a model", "the")  # type: ignore[call-overload]
     # NeMo replaces newlines before predicting, so fastText never sees one.
     assert nemo.fasttext_lang_id(ft_model, "the\ncat\n")[1] in {"hq", "lq", "o'k", "xx", "é"}
 
@@ -972,10 +996,8 @@ def test_fasttext_live(which: str, ft_path: Path, ft_model: ft.Model, ref: Any) 
     impls: list[tuple[Any, Any]] = [(ref, model)]
     live = live_nemo()
     oracle: Any = None
-    try:
+    with contextlib.suppress(ImportError):
         oracle = importlib.import_module("fasttext")
-    except ImportError:
-        pass
     if oracle is not None:
         ft_oracle = oracle.load_model(str(path))
         impls.append((ref, ft_oracle))
@@ -999,7 +1021,8 @@ def test_fasttext_live(which: str, ft_path: Path, ft_model: ft.Model, ref: Any) 
                 assert repr(float(quality[i])) == repr(qual.score_document(t))
 
 
-_lang = st.one_of(st.sampled_from(("en", "o'k", 'a"b', "a\\b", "é", "\t", "x\x7f")),
+_lang = st.one_of(
+    st.sampled_from(("en", "o'k", 'a"b', "a\\b", "é", "\t", "x\x7f")),
     st.text(st.one_of(CHARS, st.characters(categories=["Cs"]))),
 )
 
