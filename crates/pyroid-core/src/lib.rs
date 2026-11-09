@@ -20,12 +20,15 @@
 //! - [`sudachi`]: Japanese morphemes as SudachiPy 0.7.0 gives them, from an
 //!   installed SudachiDict (datatrove's Japanese tokenizer in the filters).
 //! - [`warc`]: warcio 1.8.2's WARC/ARC reader, ported exactly (`pyroid.warc`).
+//! - [`crfsuite`]: CRFsuite model files and Viterbi tagging, for pyvi and
+//!   PyThaiNLP's sentence model.
 //! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).
 //!
 //! Each module adds a `src/<mod>/` directory here; see `docs/dev/MODULES.md`.
 #![forbid(unsafe_code)]
 
 pub mod columnar;
+pub mod crfsuite;
 pub mod datasketch;
 pub mod dedup;
 pub mod fasttext;
