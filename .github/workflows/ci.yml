@@ -449,9 +449,12 @@ jobs:
           # page digests and recorded upstream calls with the GIL off, and the live checks skip.
           groups=()
           if [[ "$PY" == *t ]]; then groups=(--no-default-groups); fi
-          # SudachiPy and its 200 MB dictionary only where the jpn_Jpan checks run (filters, dedup); elsewhere,
-          # and on free-threaded legs, the Japanese checks skip.
-          if [[ "$PY" != *t && ( "$SUITE" == filters || "$SUITE" == dedup ) ]]; then groups+=(--group ja); fi
+          # SudachiPy and its 200 MB dictionary, pyvi (with scikit-learn) and PyThaiNLP (with python-crfsuite) only
+          # where the jpn_Jpan, vie_Latn and tha_Thai checks run (filters, dedup); elsewhere, and on free-threaded
+          # legs, those checks skip. (python-crfsuite 0.9.12 has no cp315 wheels.)
+          if [[ "$PY" != *t && ( "$SUITE" == filters || "$SUITE" == dedup ) ]]; then
+            groups+=(--group ja --group vi --group th)
+          fi
           # SUITE@VERSION: the suite in that mode, against that release's references and, on GIL legs, its own
           # oracle group (each trafilatura release has one; they conflict, and 2.3.1's is a default group).
           name="${SUITE%@*}"
@@ -499,10 +502,14 @@ jobs:
       # warcio and the decoders datatrove's WarcReader imports (faust-cchardet, python-magic over the runner's libmagic),
       # tldextract and fasteners for URLFilter: the WarcReader step, patch("warcio") and the fineweb-warc recipe tests.
       ORACLE: datatrove==0.10.1 spacy==3.8.18 regex==2026.9.29 xxhash==3.8.2 tokenizers==0.23.3 orjson==3.13.0 warcio==1.8.2 faust-cchardet==3.2.0 python-magic==0.4.27 tldextract==5.4.0 fasteners==0.20
-      # datatrove's own word tokenizers for the languages pyroid tokenizes in Python on request (python_tokenizer=True)
-      # and for IndicNLP, which test_{filters,dedup}_multilingual.py compare against. jieba ships only an sdist (pure
+      # datatrove's own word tokenizers that test_{filters,dedup}_multilingual.py and test_filters_vithai.py compare
+      # against (pyroid also runs them in Python on request, python_tokenizer=True): SudachiPy with its dictionary,
+      # pyvi, PyThaiNLP with python-crfsuite (its crfcut sentences; pyvi pulls it too, pinned here) and IndicNLP.
+      # pyroid reads the installed PyThaiNLP's corpus, so tha_Thai is native here. jieba ships only an sdist (pure
       # Python). xxhash stays < 4 (pinned above): datatrove's xxhash hashes fail on 4.x ("Strings must be encoded").
-      SEGMENTERS: sudachipy==0.7.0 sudachidict-core==20261015 pyvi==0.1.1 pythainlp==5.4.0 indic-nlp-library==0.92
+      SEGMENTERS: >-
+        sudachipy==0.7.0 sudachidict-core==20261015 pyvi==0.1.1 pythainlp==5.4.0 python-crfsuite==0.9.12
+        indic-nlp-library==0.92
       SEGMENTERS_SDIST: jieba==0.42.1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -546,12 +553,16 @@ jobs:
           import datatrove.utils.text, datatrove.pipeline.filters.gopher_quality_filter
           from importlib.metadata import version as v
           print(*(f'{d}=={v(d)}' for d in ('pyroid', 'datatrove', 'spacy', 'regex', 'xxhash', 'tokenizers')))"
+          # Vietnamese and Thai run natively against datatrove here: the wheel must find PyThaiNLP's corpus.
+          "$py" -c "import pyroid.filters as pf; langs = pf.languages()
+          assert langs['vie_Latn'].native and langs['tha_Thai'].native, (langs['vie_Latn'], langs['tha_Thai'])"
           # The parity (filters, dedup) jobs run the pinned-decision tests of test_filters_parity.py and the FineWeb-2
-          # slice tests.
+          # slice tests of test_{filters,dedup}_multilingual.py; test_filters_vithai.py reads the slices itself.
           log="$RUNNER_TEMP/live-oracle.log"
           "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs -k "not pinned and not fineweb2_slices" \
             python/tests/test_filters_parity.py python/tests/test_dedup_datatrove.py \
-            python/tests/test_filters_multilingual.py python/tests/test_dedup_multilingual.py | tee "$log"
+            python/tests/test_filters_multilingual.py python/tests/test_dedup_multilingual.py \
+            python/tests/test_filters_vithai.py | tee "$log"
           # pyroid.integrations.datatrove's drop-in steps against datatrove's own, including LocalPipelineExecutor
           # runs, LanguageFilter on lid.176.bin and the non-English languages (FineWeb-2 slices, IndicNLP, jieba), and
           # the Trafilatura step against datatrove's sandboxed one.

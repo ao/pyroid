@@ -3,8 +3,8 @@
 The reference is datatrove 0.10.1 itself with each slice's own language. It comes from the pinned
 ``parity/filters-ml-ref.parquet`` / ``parity/minhash-ml-ref.parquet`` when they are pinned in the manifest
 (``python -m pyroid_parity.refs filters_ml dedup_ml --pin``), else from datatrove live when it (and the
-language's word tokenizer: spaCy for ar/de/fr/ru/es, jieba for zh, SudachiPy for ja, indic-nlp-library for hi)
-imports, else the check is skipped with the reason.
+language's word tokenizer: spaCy for ar/de/fr/ru/es, jieba for zh, SudachiPy for ja, indic-nlp-library for hi,
+pyvi for vi, PyThaiNLP and python-crfsuite for th) imports, else the check is skipped with the reason.
 """
 
 from __future__ import annotations
@@ -61,11 +61,13 @@ def minhash_config(lang: str) -> dict[str, Any]:
 
 
 def oracle_problem(lang: str) -> str | None:
-    """Why datatrove cannot tokenize ``lang`` here, or None if it can."""
+    """Why datatrove cannot tokenize ``lang`` here (words and sentences), or None if it can."""
     try:
         from datatrove.utils.text import split_into_words
+        from datatrove.utils.word_tokenizers import load_word_tokenizer
 
         split_into_words("Probe 1.", lang)
+        load_word_tokenizer(lang).span_tokenize("Probe 1. Probe 2.")  # PyThaiNLP's needs python-crfsuite
     except Exception as e:  # noqa: BLE001  missing backend packages surface as many types
         return f"datatrove cannot tokenize {lang} here: {type(e).__name__}: {e}"
     return None

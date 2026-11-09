@@ -80,6 +80,12 @@ cc = [
     "pyahocorasick==2.3.1",
     "fasteners>=0.19",
 ]
+# datatrove's Vietnamese tokenizer (SpaCyTokenizer("vi"): pyvi, which pulls scikit-learn and sklearn-crfsuite)
+# and its Thai one (ThaiTokenizer: PyThaiNLP's newmm words and crfcut sentences, which need python-crfsuite).
+# pyroid ships pyvi's data and reads the installed PyThaiNLP's. Only the filters and dedup legs install them
+# (`--group vi --group th`); without them the vie_Latn and tha_Thai checks skip.
+vi = ["pyvi==0.1.1"]
+th = ["pythainlp==5.4.0", "python-crfsuite==0.9.12"]
 dev = [{ include-group = "oracle" }, "jsonschema>=4.25", "ruff>=0.17.3"]
 
 [build-system]

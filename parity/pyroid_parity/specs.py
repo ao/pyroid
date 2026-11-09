@@ -65,7 +65,8 @@ JSON_REPAIR_OPTION_SETS: dict[str, dict[str, Any]] = {
 # --------------------------------------------------------------------------------------------- FineWeb-2
 # The FineWeb-2 slices pinned in bench/manifest.json (``fineweb2/<code>.parquet``, 250 docs each). A FineWeb-2
 # subset's name is its datatrove language code: datatrove tokenizes it with the word tokenizer that
-# ``tokenizer_assignment.csv`` assigns that code (spaCy ar/de/fr/ru/es; jieba zh, SudachiPy ja, IndicNLP hi).
+# ``tokenizer_assignment.csv`` assigns that code (spaCy ar/de/fr/ru/es; jieba zh, SudachiPy ja, IndicNLP hi,
+# pyvi vi, PyThaiNLP th).
 FINEWEB2_LANGUAGES = (
     "arb_Arab",
     "cmn_Hani",
@@ -75,6 +76,8 @@ FINEWEB2_LANGUAGES = (
     "jpn_Jpan",
     "rus_Cyrl",
     "spa_Latn",
+    "tha_Thai",
+    "vie_Latn",
 )
 
 FINEWEB2_CONFIGS_FILE = Path(__file__).resolve().parents[1] / "data" / "fineweb2-configs" / "configs.json"
