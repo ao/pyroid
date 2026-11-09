@@ -2034,6 +2034,8 @@ dev = [
     { name = "regex" },
     { name = "ruff" },
     { name = "spacy" },
+    { name = "sudachidict-core" },
+    { name = "sudachipy" },
     { name = "tldextract" },
     { name = "tokenizers" },
     { name = "xxhash" },
@@ -2047,6 +2049,8 @@ oracle = [
     { name = "pyahocorasick" },
     { name = "regex" },
     { name = "spacy" },
+    { name = "sudachidict-core" },
+    { name = "sudachipy" },
     { name = "tldextract" },
     { name = "tokenizers" },
     { name = "xxhash" },
@@ -2079,6 +2083,8 @@ dev = [
     { name = "regex", specifier = ">=2024.11" },
     { name = "ruff", specifier = ">=0.17.3" },
     { name = "spacy", specifier = "==3.8.18" },
+    { name = "sudachidict-core", specifier = "==20261015" },
+    { name = "sudachipy", specifier = "==0.7.0" },
     { name = "tldextract", specifier = "==5.4.0" },
     { name = "tokenizers", specifier = ">=0.22" },
     { name = "xxhash", specifier = ">=3.5,<4" },
@@ -2092,6 +2098,8 @@ oracle = [
     { name = "pyahocorasick", specifier = "==2.3.1" },
     { name = "regex", specifier = ">=2024.11" },
     { name = "spacy", specifier = "==3.8.18" },
+    { name = "sudachidict-core", specifier = "==20261015" },
+    { name = "sudachipy", specifier = "==0.7.0" },
     { name = "tldextract", specifier = "==5.4.0" },
     { name = "tokenizers", specifier = ">=0.22" },
     { name = "xxhash", specifier = ">=3.5,<4" },
@@ -2752,6 +2760,37 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/67/7f/1d0de55f383b09253c0b150f5c213a4dbc479657a57759210499b8a88451/srsly-2.5.6-cp315-cp315t-musllinux_1_2_x86_64.whl", hash = "sha256:9331a14c6c730996ae6e15531613591827f8a99ab05b3fa810737a8ebeb93943", size = 1289858, upload-time = "2026-11-03T23:37:48.481Z" },
     { url = "https://files.pythonhosted.org/packages/02/6f/0acd01bac5aef46b311d4c913c1e98500e0e85ad49567f48df9451cbbd67/srsly-2.5.6-cp315-cp315t-win_amd64.whl", hash = "sha256:d128b32a7f8604f910123b9989c9fb00916d006c7a88e48ee8b827646b68f047", size = 685461, upload-time = "2026-11-03T23:37:49.8Z" },
     { url = "https://files.pythonhosted.org/packages/44/e1/bc84abe32f2d2d73f8fed3f08c7e97b64513021b5d3127546b34ff977075/srsly-2.5.6-cp315-cp315t-win_arm64.whl", hash = "sha256:2ce8dae6cd66c88b6ec60de07b218c4d845f459278f048868a642b60c43d4266", size = 678942, upload-time = "2026-11-03T23:37:51.417Z" },
+]
+
+[[package]]
+name = "sudachidict-core"
+version = "20261015"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "sudachipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/70/04/4e8698fcb26999fc9381911aea95a4c861e219c098476b784f54a0cd5c36/sudachidict_core-20261015.tar.gz", hash = "sha256:32d2bfc1491b82659959d28f79eb7c034d3a57d77f7610c3d2ea834151d15d23", size = 9157, upload-time = "2026-10-15T08:32:33.402Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3d/6a/9dddc36e33ff7f86e394315a77b90d0f41bfd161e011d77a8397662d53e0/sudachidict_core-20261015-py3-none-any.whl", hash = "sha256:6d7774b518e64c88a0578975d569590b3dae3b3c834f166486aa611879ee9d98", size = 76937301, upload-time = "2026-10-15T08:37:35.957Z" },
+]
+
+[[package]]
+name = "sudachipy"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fc/1d/b34702f38a8bd34972836538d222209095d5aba7faff79d56bce3fb2640c/sudachipy-0.7.0.tar.gz", hash = "sha256:14a2505e7d086fe9da64c0048d8e2de13cdded3aac4f1e047929cef51dba338c", size = 304664, upload-time = "2026-09-24T01:34:56.238Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/44/aa/47edbec02618803ac8ef8f1561b233760bbd266fb040ba9d4d577a5f1773/sudachipy-0.7.0-cp310-abi3-macosx_10_12_universal2.whl", hash = "sha256:6be34e856c99498e990904f7155e1a102f675cf5edfdaf7a396f26d71ce4b333", size = 3147103, upload-time = "2026-09-24T01:34:43.053Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/b3/2117420a05b2785ce561912baff01dd7872f5bca6b60dce49dc592a9f600/sudachipy-0.7.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:907eadc1db305f9bc6e502a9acf9ff1ac871cd8d4ac3a2e0aaba3ddc60e93b2a", size = 1622350, upload-time = "2026-09-24T01:34:44.636Z" },
+    { url = "https://files.pythonhosted.org/packages/88/11/3b740eea1796d1ce6f7bdaa1f5470685dbcbfcacf751f3aa06d9da72856f/sudachipy-0.7.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:0e60cefd3a7a9680206ae160bf86d266d0d60e434adac2384f8c7a6dfb0f3ba7", size = 1561984, upload-time = "2026-09-24T01:34:45.761Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/12/5455c3e4afea272c1ef0995c489dc9c2a6ead2a6d980822a53ae879a2042/sudachipy-0.7.0-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:68be139f5d7f053eba16fd3f792e4ef0c6bfed81a1b63e68b4544c7159296034", size = 1720464, upload-time = "2026-09-24T01:34:46.92Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/2d/b2c2511b3627032e81ef1626d6bce4506efacc7b698ca0e70cf6b4345e86/sudachipy-0.7.0-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:dfc90631aa2276d2165e1995bc94b56c9f5bc27b875f43fb7d67e4a3b7346d4f", size = 1758941, upload-time = "2026-09-24T01:34:47.986Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/a1/03e40b0eadbdd48ed47aef7aaf27d4703f5cc225750872af1a26de08ec2b/sudachipy-0.7.0-cp310-abi3-win_amd64.whl", hash = "sha256:8d0429db2d02d408daa7dccd062a6d8c2984a07f8e448b49a3ea694377617658", size = 1515929, upload-time = "2026-09-24T01:34:49.307Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/f7/580ece6a559e0cad8a9a3fff36bbd478e335e125c96c1910abe20f3b6bc2/sudachipy-0.7.0-cp314-cp314t-macosx_10_15_universal2.whl", hash = "sha256:1bf2254ee6357e0defa498630f188fefa8a543b82887077cfb1596bc3e8d4840", size = 3139240, upload-time = "2026-09-24T01:34:50.418Z" },
+    { url = "https://files.pythonhosted.org/packages/62/20/4475da1e0393bef7d136f91214d560730006d2a4792e585003b17f2779e1/sudachipy-0.7.0-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:efd56375584dec9523fe9a26daa69da02a70ae2f2c22d25248e65a4998cae8e1", size = 1626313, upload-time = "2026-09-24T01:34:51.665Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/75/952595fe7fa84a8f90cbe8f94a7cb5210642f166ec0ec1d7d808abef978e/sudachipy-0.7.0-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:9446eba17985b1d14926afc6312fb0367687ab1b5397fa65d7e2cdd1745451c9", size = 1549814, upload-time = "2026-09-24T01:34:52.708Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/39/5e138a2f949bf3af45951980382adc69d0d975448e604dc1801325f0008a/sudachipy-0.7.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:f1e24f71a71816dcbc6fb759a5819cca5d603a4d49b7ade63dd0fe49468ed22c", size = 1712756, upload-time = "2026-09-24T01:34:53.813Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/f4/2df0f7a5dce327d82c451be96151afa8f7e3324a3a8d71845eec5be26f3e/sudachipy-0.7.0-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:c8306eab503d891e394fb21156e417c2f9f54cc39f56dddb8cf2b40620d470fa", size = 1750689, upload-time = "2026-09-24T01:34:55.08Z" },
 ]
 
 [[package]]
