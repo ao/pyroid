@@ -1,8 +1,8 @@
 # `pyroid.integrations`
 
 Plug-ins for the tools you already run. `import pyroid` imports none of them, and each needs an
-extra: `pyroid[datatrove]`, `pyroid[hf]` or `pyroid[cli]` (for `recipes`). Guides:
-[datatrove steps](../guides/datatrove.md), [Hugging Face `datasets`](../guides/huggingface.md),
+extra: `pyroid[datatrove]`, `pyroid[nemo]`, `pyroid[hf]` or `pyroid[cli]` (for `recipes`). Guides:
+[datatrove steps](../guides/datatrove.md), [NeMo Curator stages](../guides/nemo-curator.md), [Hugging Face `datasets`](../guides/huggingface.md),
 [the command line](../guides/cli.md), [`pyroid.patch()`](../guides/patch.md).
 
 These modules have no stubs: this page is generated from their source.
@@ -61,6 +61,26 @@ arguments plus the keyword-only `batch_size` and `threads` (and `model_path` for
         - SentenceDedupBuildIndex
         - Trafilatura
         - WarcReader
+
+## `pyroid.integrations.nemo_curator` {#nemo_curator}
+
+Each class subclasses NeMo Curator 1.4.0's class of the same name and takes its arguments; the
+stages also take the keyword `threads`.
+
+::: pyroid.integrations.nemo_curator
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_bases: false
+      show_if_no_docstring: false
+      members:
+        - ScoreFilter
+        - Score
+        - Filter
+        - Modify
+        - FastTextLangId
+        - FastTextQualityFilter
+        - UnicodeReformatter
 
 ## `pyroid.integrations.hf` {#hf}
 

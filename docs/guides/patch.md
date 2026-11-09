@@ -57,7 +57,7 @@ import pyroid
 
 pyroid.patch("unidecode")
 # ValueError: cannot patch 'unidecode': the supported names are 'ftfy', 'fasttext', 'anyascii',
-# 'datasketch', 'trafilatura', 'nltk', 'warcio'
+# 'datasketch', 'trafilatura', 'nltk', 'warcio', 'nemo_curator'
 # (pyroid.translit.unidecode transliterates with anyascii's tables, so its output differs from
 # Unidecode's: it is not a drop-in)
 ```
@@ -183,11 +183,11 @@ usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
 
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
-`warcio` giving pyroid's drop-ins. The Python processes it starts (multiprocessing
-workers, subprocesses) are patched too.
+`warcio` / `nemo_curator` giving pyroid's drop-ins. The Python processes it starts
+(multiprocessing workers, subprocesses) are patched too.
 
 options:
-  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, trafilatura, nltk, warcio
+  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, trafilatura, nltk, warcio, nemo_curator
                      (default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
@@ -311,9 +311,9 @@ warcio`) reads WARC files with pyroid in stock datatrove. Without warcio, `warci
 - A shim is not the real module object: code that already holds the real module (imported before
   `patch()`), or compares module objects, is not redirected.
 - `importlib.reload` of a shim is not supported.
-- Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk` and `warcio` can be
-  patched. pyroid's filters and dedup reach
-  datatrove pipelines through the [drop-in steps](datatrove.md) instead.
+- Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator`
+  can be patched. pyroid's filters and dedup reach datatrove pipelines through the
+  [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked
   children inherit them).
