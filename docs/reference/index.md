@@ -16,6 +16,7 @@ source.
 | [`pyroid.json_repair`](json_repair.md) | `repair_json`, `loads`, `load`, `from_file`, `repair_json_batch`, `NestingError` |
 | [`pyroid.datasketch`](datasketch.md) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble` (datasketch's modules), `minhash_batch` |
 | [`pyroid.jieba`](jieba.md) | jieba 0.42.1's API: `cut`, `lcut`, `cut_for_search`, `tokenize`, `add_word`, `load_userdict`, `Tokenizer`, ... |
+| [`pyroid.trafilatura`](trafilatura.md) | `extract`, `bare_extraction`, `extract_with_metadata`, `extract_batch`, `Document`, `LRUCache`, `reset_caches`, the `compat=` modes 2.3.1 and 1.11.0 |
 | [`pyroid.nltk`](nltk.md) | NLTK 3.10.4's `sent_tokenize`, `word_tokenize`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer` |
 | [`pyroid.integrations`](integrations.md) | the datatrove steps, the Hugging Face helpers, the FineWeb recipe, `patch` and friends |
 | [`pyroid.text`](text.md) | `normalize_whitespace`, `min_chars`: small examples of pyroid's conventions |

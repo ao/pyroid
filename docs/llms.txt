@@ -1,6 +1,6 @@
 # pyroid
 
-> Rust ports of the Python libraries used to clean LLM datasets, with the same API and the same output: ftfy, fastText inference, datatrove 0.10.1's quality filters and dedup, rouge-score 0.1.2, sacrebleu 2.6.0, json_repair 0.64.5, datasketch 2.0.0, jieba 0.42.1 and NLTK 3.10.4's tokenizers, plus permissive transliteration. Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
+> Rust ports of the Python libraries used to clean LLM datasets, with the same API and the same output: ftfy, fastText inference, datatrove 0.10.1's quality filters and dedup, Trafilatura 2.3.1 and 1.11.0, rouge-score 0.1.2, sacrebleu 2.6.0, json_repair 0.64.5, datasketch 2.0.0, jieba 0.42.1 and NLTK 3.10.4's tokenizers, plus permissive transliteration. From WARC files, datatrove's FineWeb pipeline runs 8.4x faster with pyroid's steps (104 s vs 871 s, 8 workers, AWS EC2 c7i.4xlarge). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
 
 Modules and what they match:
 
@@ -8,6 +8,7 @@ Modules and what they match:
 - `pyroid.fasttext` (`pyroid.fasttext.load_model`): the same .bin/.ftz files, bit-identical predictions per architecture.
 - `pyroid.filters`: datatrove's Gopher, C4, FineWeb, PII, C4 bad words, symbol lines and URL filters, with the same decisions.
 - `pyroid.dedup`: datatrove's MinHash and sentence dedup, with the same removals.
+- `pyroid.trafilatura` (`import pyroid.trafilatura as trafilatura`): the same text as Trafilatura 2.3.1 (the default) or 1.11.0 (`compat="1.11.0"`, the release `datatrove[processing]==0.10.1` installs), byte for byte; `extract_batch(pages, threads=n)` runs pages in parallel; other output formats and metadata are delegated to the installed trafilatura.
 - `pyroid.metrics`: ROUGE, BLEU, chrF and chrF++, with scores identical to rouge-score and sacrebleu.
 - `pyroid.json_repair`: the same output as json_repair, in linear time.
 - `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
@@ -15,7 +16,7 @@ Modules and what they match:
 - `pyroid.nltk` (`import pyroid.nltk as nltk`): the same sentences, tokens and offsets as NLTK 3.10.4's `sent_tokenize` (Punkt, with the user's installed `punkt_tab` models), `word_tokenize`, Treebank tokenizers and detokenizer, and regexp tokenizers for common patterns; `sent_tokenize(docs, threads=n)` and `word_tokenize(docs, threads=n)` run a batch in parallel; `pyroid.patch("nltk")` swaps them into an installed NLTK.
 - `pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output.
 
-Integrations: the `pyroid clean IN OUT --recipe fineweb` command line, `pyroid.patch("ftfy", "fasttext")` for code you don't own, datatrove drop-in steps (`pyroid.integrations.datatrove`) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` (numpy), `[cli]` (pyarrow), `[datatrove]` and `[hf]`.
+Integrations: the `pyroid clean IN OUT --recipe fineweb` command line (many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs, resumable runs, `pyroid dedup signatures|buckets|cluster|filter` for MinHash across shards), `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `trafilatura`, `nltk`), datatrove drop-in steps (`pyroid.integrations.datatrove`, `Trafilatura` included; it has no 1 s timeout, so results do not vary between runs) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` (numpy), `[cli]` (pyarrow), `[datatrove]` and `[hf]`.
 
 Conventions shared by every module:
 
@@ -44,12 +45,16 @@ Conventions shared by every module:
 - [pyroid.metrics](https://ao.github.io/pyroid/guides/metrics/): drop-in rouge-score and sacrebleu (BLEU, chrF), batch scoring, differences
 - [pyroid.json_repair](https://ao.github.io/pyroid/guides/json_repair/): drop-in json_repair, `repair_json_batch`, differences from json_repair
 - [pyroid.datasketch](https://ao.github.io/pyroid/guides/datasketch/): drop-in datasketch 2.0.0 (MinHash, LeanMinHash, MinHashLSH, LSH Forest, LSH Ensemble), `minhash_batch`, differences from datasketch
+- [pyroid.jieba](https://ao.github.io/pyroid/guides/jieba/): drop-in jieba 0.42.1, batches, user dictionaries, differences from jieba
+- [pyroid.trafilatura](https://ao.github.io/pyroid/guides/trafilatura/): drop-in Trafilatura 2.3.1 and 1.11.0, how to choose a mode, `extract_batch`, the datatrove step, differences
+- [pyroid.nltk](https://ao.github.io/pyroid/guides/nltk/): drop-in NLTK 3.10.4 Punkt, Treebank and regexp tokenizers, punkt_tab models, differences from NLTK
 - [Languages](https://ao.github.io/pyroid/guides/languages/): which datatrove language codes are native, which need `python_tokenizer=True`, how to choose
 
 ## Integrations
 
 - [The pyroid command line](https://ao.github.io/pyroid/guides/cli/): `pyroid clean`, `langid`, `dedup`, `translit`, `run`; every option
-- [pyroid.patch()](https://ao.github.io/pyroid/guides/patch/): redirect `import ftfy` / `import fasttext` / `import anyascii` to pyroid in code you don't own
+- [Large datasets](https://ao.github.io/pyroid/guides/large-datasets/): thousands of files, `--workers`, `--shard`, remote inputs, resuming, MinHash dedup across shards
+- [pyroid.patch()](https://ao.github.io/pyroid/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura` or `nltk` to pyroid in code you don't own
 - [datatrove steps](https://ao.github.io/pyroid/guides/datatrove/): drop-in datatrove pipeline steps with the same names and signatures
 - [Hugging Face datasets](https://ao.github.io/pyroid/guides/huggingface/): batched callables for `Dataset.map`/`filter`, the FineWeb recipe
 
@@ -64,12 +69,15 @@ Conventions shared by every module:
 - [pyroid.metrics](https://ao.github.io/pyroid/reference/metrics/)
 - [pyroid.json_repair](https://ao.github.io/pyroid/reference/json_repair/)
 - [pyroid.datasketch](https://ao.github.io/pyroid/reference/datasketch/)
+- [pyroid.jieba](https://ao.github.io/pyroid/reference/jieba/)
+- [pyroid.trafilatura](https://ao.github.io/pyroid/reference/trafilatura/)
+- [pyroid.nltk](https://ao.github.io/pyroid/reference/nltk/)
 - [pyroid.integrations](https://ao.github.io/pyroid/reference/integrations/)
 - [pyroid.text](https://ao.github.io/pyroid/reference/text/)
 
 ## Optional
 
 - [Compatibility](https://ao.github.io/pyroid/compatibility/): parity test counts against each incumbent, platforms, hardening
-- [Benchmarks](https://ao.github.io/pyroid/benchmarks/): methodology and numbers (AWS EC2 c7i.4xlarge and c8g.4xlarge; metrics, json_repair and the FineWeb-2 languages only in a Docker VM, indicative)
+- [Benchmarks](https://ao.github.io/pyroid/benchmarks/): methodology and numbers (AWS EC2 c7i.4xlarge and c8g.4xlarge, including the FineWeb pipeline from WARC files; the other modules and the FineWeb-2 languages only in a Docker VM, indicative)
 - [Migrating from 0.7](https://ao.github.io/pyroid/migrating-from-0.7/): the removed 0.x API and its replacements
 - [Changelog](https://github.com/ao/pyroid/blob/main/CHANGELOG.md)
