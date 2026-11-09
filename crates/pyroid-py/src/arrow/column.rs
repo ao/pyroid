@@ -13,7 +13,7 @@ use std::sync::{Arc, OnceLock};
 
 use pyo3::exceptions::PyOverflowError;
 use pyo3::prelude::*;
-use pyo3::types::{PyCapsule, PyList, PyString, PyTuple, PyType};
+use pyo3::types::{PyBytes, PyCapsule, PyList, PyString, PyTuple, PyType};
 use pyroid_core::columnar::{BoolBuffers, BuildError, StringBuffers};
 
 use super::ffi::{FLAG_NULLABLE, FfiArray, FfiSchema, FfiStream};
@@ -26,14 +26,17 @@ pub enum ColumnType {
     Utf8,
     LargeUtf8,
     Bool,
+    /// `large_binary` (`pyroid.warc`'s `html` column).
+    LargeBinary,
 }
 
 impl ColumnType {
-    fn format(self) -> &'static CStr {
+    pub(super) fn format(self) -> &'static CStr {
         match self {
             Self::Utf8 => c"u",
             Self::LargeUtf8 => c"U",
             Self::Bool => c"b",
+            Self::LargeBinary => c"Z",
         }
     }
 
@@ -42,6 +45,7 @@ impl ColumnType {
             Self::Utf8 => "string",
             Self::LargeUtf8 => "large_string",
             Self::Bool => "bool",
+            Self::LargeBinary => "large_binary",
         }
     }
 }
@@ -52,13 +56,15 @@ pub enum Chunk {
     Utf8(StringBuffers<i32>),
     LargeUtf8(StringBuffers<i64>),
     Bool(BoolBuffers),
+    /// The `large_utf8` layout holding any bytes.
+    LargeBinary(StringBuffers<i64>),
 }
 
 impl Chunk {
-    fn len(&self) -> usize {
+    pub(super) fn len(&self) -> usize {
         match self {
             Self::Utf8(b) => b.len,
-            Self::LargeUtf8(b) => b.len,
+            Self::LargeUtf8(b) | Self::LargeBinary(b) => b.len,
             Self::Bool(b) => b.len,
         }
     }
@@ -66,7 +72,7 @@ impl Chunk {
     fn null_count(&self) -> usize {
         match self {
             Self::Utf8(b) => b.null_count,
-            Self::LargeUtf8(b) => b.null_count,
+            Self::LargeUtf8(b) | Self::LargeBinary(b) => b.null_count,
             Self::Bool(b) => b.null_count,
         }
     }
@@ -88,14 +94,22 @@ impl Chunk {
                 null_count: 0,
             }),
             ColumnType::Bool => Self::Bool(BoolBuffers::build(&[])),
+            ColumnType::LargeBinary => Self::LargeBinary(StringBuffers {
+                len: 0,
+                offsets: vec![0],
+                data: Vec::new(),
+                validity: None,
+                null_count: 0,
+            }),
         }
     }
 
-    fn ty(&self) -> ColumnType {
+    pub(super) fn ty(&self) -> ColumnType {
         match self {
             Self::Utf8(_) => ColumnType::Utf8,
             Self::LargeUtf8(_) => ColumnType::LargeUtf8,
             Self::Bool(_) => ColumnType::Bool,
+            Self::LargeBinary(_) => ColumnType::LargeBinary,
         }
     }
 }
@@ -149,6 +163,20 @@ impl Column {
         }
     }
 
+    /// A column of `ty` over chunks that something else also holds (no copy).
+    pub fn from_shared(ty: ColumnType, name: &str, chunks: Vec<Arc<Chunk>>) -> Self {
+        debug_assert!(chunks.iter().all(|c| c.ty() == ty));
+        let name = CString::new(name.replace('\0', "")).unwrap_or_default();
+        Self {
+            inner: Arc::new(ColumnData {
+                ty,
+                name,
+                chunks: chunks.into_iter().filter(|c| c.len() > 0).collect(),
+                joined: OnceLock::new(),
+            }),
+        }
+    }
+
     /// The whole column as one chunk (concatenating if needed).
     fn single_chunk(&self) -> PyResult<Arc<Chunk>> {
         let chunks = &self.inner.chunks;
@@ -173,6 +201,12 @@ impl Column {
                     ColumnType::Bool => Chunk::Bool(BoolBuffers::concat(
                         &many.iter().map(|c| as_bool(c)).collect::<Vec<_>>(),
                     )),
+                    ColumnType::LargeBinary => Chunk::LargeBinary(
+                        StringBuffers::concat(
+                            &many.iter().map(|c| as_large_binary(c)).collect::<Vec<_>>(),
+                        )
+                        .map_err(build_error)?,
+                    ),
                 };
                 Ok(Arc::clone(
                     self.inner.joined.get_or_init(|| Arc::new(joined)),
@@ -203,6 +237,13 @@ fn as_bool(c: &Chunk) -> &BoolBuffers {
     }
 }
 
+fn as_large_binary(c: &Chunk) -> &StringBuffers<i64> {
+    match c {
+        Chunk::LargeBinary(b) => b,
+        _ => unreachable!("column chunks share one type"),
+    }
+}
+
 fn to_i64(n: usize) -> i64 {
     i64::try_from(n).expect("Rust allocations are at most isize::MAX")
 }
@@ -213,7 +254,7 @@ struct SchemaPrivate {
     name: CString,
 }
 
-fn export_schema(ty: ColumnType, name: &CStr) -> FfiSchema {
+pub(super) fn export_schema(ty: ColumnType, name: &CStr) -> FfiSchema {
     let private = Box::new(SchemaPrivate {
         name: name.to_owned(),
     });
@@ -261,7 +302,7 @@ fn validity_ptr(v: Option<&Vec<u8>>) -> *const c_void {
     v.map_or(ptr::null(), |v| v.as_ptr().cast())
 }
 
-fn export_array(chunk: Arc<Chunk>) -> FfiArray {
+pub(super) fn export_array(chunk: Arc<Chunk>) -> FfiArray {
     let (n_buffers, buffers) = match &*chunk {
         Chunk::Utf8(b) => (
             3,
@@ -271,7 +312,7 @@ fn export_array(chunk: Arc<Chunk>) -> FfiArray {
                 b.data.as_ptr().cast(),
             ],
         ),
-        Chunk::LargeUtf8(b) => (
+        Chunk::LargeUtf8(b) | Chunk::LargeBinary(b) => (
             3,
             [
                 validity_ptr(b.validity.as_ref()),
@@ -426,7 +467,7 @@ fn export_stream(column: &Arc<ColumnData>) -> FfiStream {
 
 /// An exported struct on its way into a capsule.
 #[repr(transparent)]
-struct Exported<T>(T);
+pub(super) struct Exported<T>(T);
 
 // SAFETY: exported structs point only at memory owned through their private
 // data (Rust allocations behind `Arc`, never mutated), and their release
@@ -442,7 +483,7 @@ unsafe impl Send for Exported<FfiStream> {}
 /// A capsule owning `value`. Its pointer is the address of the struct
 /// (`Exported` is `repr(transparent)`), which is what consumers expect. If no
 /// consumer moves the struct out, dropping the capsule releases it.
-fn capsule<'py, T: 'static>(
+pub(super) fn capsule<'py, T: 'static>(
     py: Python<'py>,
     value: T,
     name: &'static CStr,
@@ -537,6 +578,14 @@ impl Column {
                 Chunk::Bool(b) => {
                     for i in 0..b.len {
                         out.append(b.get(i))?;
+                    }
+                }
+                Chunk::LargeBinary(b) => {
+                    for i in 0..b.len {
+                        match b.get(i) {
+                            None => out.append(py.None())?,
+                            Some(bytes) => out.append(PyBytes::new(py, bytes))?,
+                        }
                     }
                 }
             }

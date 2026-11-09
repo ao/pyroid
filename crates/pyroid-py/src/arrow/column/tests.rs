@@ -151,7 +151,7 @@ fn export_array_utf8_and_large_utf8_fields() {
                 b.offsets.as_ptr().cast::<c_void>(),
                 b.data.as_ptr(),
             ),
-            Chunk::Bool(_) => unreachable!(),
+            Chunk::Bool(_) | Chunk::LargeBinary(_) => unreachable!(),
         };
         let bufs = buffers(&array);
         assert_eq!(bufs[0], validity.as_ref().unwrap().as_ptr().cast());

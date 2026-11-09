@@ -26,6 +26,7 @@ mod testing;
 mod text;
 mod trafilatura;
 mod translit;
+mod warc;
 
 use pyo3::prelude::*;
 
@@ -53,5 +54,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     datasketch::register(m)?;
     jieba::register(m)?;
     trafilatura::register(m)?;
+    warc::register(m)?;
     Ok(())
 }
