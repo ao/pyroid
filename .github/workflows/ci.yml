@@ -280,8 +280,9 @@ jobs:
   parity-data:
     name: parity data (pinned inputs and references, ${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
-    # The metrics references (rouge-score + sacrebleu on CNN/DM, SummEval, WMT21) add ~10-25 minutes on a miss.
-    timeout-minutes: 75
+    # The metrics references (rouge-score + sacrebleu on CNN/DM, SummEval, WMT21) add ~10-25 minutes on a miss, the
+    # trafilatura ones (7,192 Common Crawl pages x 9 option sets, and Trafilatura's own tests recorded) ~10-15.
+    timeout-minutes: 90
     permissions:
       contents: read # checkout (bench/manifest.json, bench/fetch.py, parity/)
     strategy:
@@ -396,6 +397,9 @@ jobs:
           [[ ${#wheels[@]} -eq 1 ]] || { echo "::error::expected one ${WHEEL_TAG} wheel, found ${#wheels[@]}"; exit 1; }
           # The oracle group (datatrove, spaCy, fasttext-predict) has no free-threaded wheels. Without it the
           # live-oracle checks skip, and say so in the report; the checks against the pinned refs still run.
+          # The trafilatura group (trafilatura, lxml, justext) does install on 3.14t/3.15t, but importing lxml
+          # re-enables the GIL, so those legs leave it out too: pyroid.trafilatura is checked against the pinned
+          # page digests and recorded upstream calls with the GIL off, and the live checks skip.
           groups=()
           if [[ "$PY" == *t ]]; then groups=(--no-default-groups); fi
           # SudachiPy and its 200 MB dictionary only where the jpn_Jpan checks run (filters, dedup); elsewhere,

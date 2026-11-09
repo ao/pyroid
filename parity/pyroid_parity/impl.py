@@ -34,6 +34,18 @@ datasketch  datasketch 2.0.0's own API: ``MinHash`` (with ``bulk``), ``LeanMinHa
           ``minhash_batch(texts, num_perm=, seed=, scheme=, ngram=)`` and ``MinHashLSH.query_batch``.
 jieba     jieba 0.42.1's own module API (``lcut``, ``lcut_for_search``, ``tokenize``, ``Tokenizer``, ``dt``);
           a candidate whose ``lcut`` also takes a list of str (one list of words per document) gets batch checks.
+trafilatura  trafilatura 2.3.1's ``extract`` and ``bare_extraction`` with its signatures plus one keyword-only
+          ``compat="2.3.1"`` (the version mode) as the last parameter (``config`` may default to ``None`` for
+          trafilatura's ``DEFAULT_CONFIG``), and ``reset_caches()``, which empties the module-level dedup cache that
+          ``deduplicate=True`` reads and updates (``trafilatura.meta.reset_caches``; the suites call it before every
+          stateful sequence). Optional ``extract_batch(htmls, *, threads=None, compat="2.3.1", **kwargs) ->
+          list[str | None]``: the same results as ``extract`` in order, the dedup cache carried through the batch in
+          order. ``<top>.integrations.patch("trafilatura")``, if the package has it, must give functions with
+          trafilatura's exact signatures (no ``compat``).
+          ``bare_extraction`` returns an object with trafilatura's ``Document`` attributes; ``body`` and
+          ``commentsbody`` may be lxml elements or ``etree.tostring(element, encoding="unicode")`` strings
+          (``pyroid_parity.trafilatura_compare.normalize``). Options pyroid does not port
+          (``specs.TRAFILATURA_DELEGATED``) go to trafilatura with exactly one ``pyroid.FallbackWarning``.
 
 Warnings: where a suite compares warnings (the ftfy ``errors`` check, every json_repair check), a candidate's
 ``pyroid.FallbackWarning`` (its "delegating to the incumbent" notice, shown once per process; see
@@ -51,7 +63,17 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-SUITES = ("ftfy", "fasttext", "filters", "dedup", "metrics", "json_repair", "datasketch", "jieba")
+SUITES = (
+    "ftfy",
+    "fasttext",
+    "filters",
+    "dedup",
+    "metrics",
+    "json_repair",
+    "datasketch",
+    "jieba",
+    "trafilatura",
+)
 REFERENCE = {
     "ftfy": "ftfy",
     "fasttext": "fasttext",
@@ -61,6 +83,7 @@ REFERENCE = {
     "json_repair": "json_repair",
     "datasketch": "datasketch",
     "jieba": "jieba",
+    "trafilatura": "trafilatura",
 }
 # Distribution that provides a module, for version reporting when it differs from the module name.
 DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel")}
@@ -287,6 +310,38 @@ class GenericJieba:
         self.notes = [] if self.has_batch else ["lcut takes no list: batch checks skipped"]
 
 
+class GenericTrafilatura:
+    """trafilatura's ``extract`` / ``bare_extraction``, the dedup reset and a batch call, taken from the module.
+
+    For trafilatura itself ``reset_caches`` is ``trafilatura.meta.reset_caches``. Without ``extract_batch`` the
+    batch checks map ``extract`` in order (and say so in the report).
+    """
+
+    def __init__(self, mod: Any) -> None:
+        self.mod = mod
+        self.extract: Callable[..., Any] = mod.extract
+        self.bare_extraction: Callable[..., Any] = mod.bare_extraction
+        reset = getattr(mod, "reset_caches", None)
+        if reset is None and mod.__name__ == "trafilatura":
+            reset = importlib.import_module("trafilatura.meta").reset_caches
+        self._reset: Callable[[], Any] | None = reset
+        self.has_reset = reset is not None
+        self.has_batch = hasattr(mod, "extract_batch")
+        self.notes = [] if self.has_batch else ["no extract_batch: batch checks map extract"]
+        if not self.has_reset:
+            self.notes.append("no reset_caches(): the stateful (deduplicate=True) checks cannot run")
+
+    def reset_caches(self) -> None:
+        if self._reset is None:
+            raise ImplError(f"{self.mod.__name__} has no reset_caches()")
+        self._reset()
+
+    def extract_batch(self, htmls: list[Any], threads: int | None = None, **kw: Any) -> list[str | None]:
+        if self.has_batch:
+            return list(self.mod.extract_batch(htmls, threads=threads, **kw))
+        return [self.extract(h, **kw) for h in htmls]
+
+
 GENERIC: dict[str, Callable[[Any], Any]] = {
     "ftfy": GenericFtfy,
     "fasttext": GenericFasttext,
@@ -296,4 +351,5 @@ GENERIC: dict[str, Callable[[Any], Any]] = {
     "json_repair": GenericJsonRepair,
     "datasketch": GenericDatasketch,
     "jieba": GenericJieba,
+    "trafilatura": GenericTrafilatura,
 }

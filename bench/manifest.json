@@ -869,6 +869,338 @@
         "dev",
         "adversarial"
       ]
+    },
+    "parity/trafilatura-ref.parquet": {
+      "sha256": "96522ee914a5a1d9305226fe09bec4cebb8eaec58d12cdf546dee2d9414dea91",
+      "bytes": 2285217,
+      "rows": 64728,
+      "oracle": {
+        "trafilatura": "2.3.1",
+        "lxml": "6.1.3",
+        "justext": "3.0.2",
+        "htmldate": "1.11.0",
+        "courlan": "1.4.0",
+        "charset-normalizer": "3.5.2"
+      },
+      "option_sets": {
+        "datatrove": {
+          "favor_precision": true,
+          "include_comments": false,
+          "deduplicate": true
+        },
+        "default": {},
+        "fast": {
+          "fast": true
+        },
+        "favor_recall": {
+          "favor_recall": true
+        },
+        "precision_comments": {
+          "favor_precision": true,
+          "include_comments": true
+        },
+        "no_tables": {
+          "include_tables": false
+        },
+        "dedup": {
+          "deduplicate": true
+        }
+      },
+      "bare_sets": {
+        "precision": {
+          "favor_precision": true,
+          "include_comments": false
+        },
+        "default": {}
+      },
+      "corpora": {
+        "trafilatura/CC-MAIN-2026-39.parquet": "bfc660f8436a05b03aca31092d84de39589f827591b7b93ddcf6288d118c8565",
+        "trafilatura/CC-MAIN-2023-50.parquet": "d988515e3a6c8a8808f35e85933c16de27837553dc15e2457a12f032cb1166a4",
+        "trafilatura/CC-MAIN-2019-35.parquet": "4c3ad45e43a22aff043e1539bc4aacbc24653ce00cd871bbc3c127afd164daf4"
+      },
+      "statuses": {
+        "trafilatura/CC-MAIN-2026-39.parquet": {
+          "extract:datatrove": {
+            "str": 4081,
+            "None": 596
+          },
+          "extract:default": {
+            "str": 4575,
+            "None": 102
+          },
+          "extract:fast": {
+            "str": 4568,
+            "None": 109
+          },
+          "extract:favor_recall": {
+            "str": 4576,
+            "None": 101
+          },
+          "extract:precision_comments": {
+            "str": 4188,
+            "None": 489
+          },
+          "extract:no_tables": {
+            "str": 4570,
+            "None": 107
+          },
+          "extract:dedup": {
+            "str": 4454,
+            "None": 223
+          },
+          "bare_extraction:precision": {
+            "document": 4175,
+            "None": 502
+          },
+          "bare_extraction:default": {
+            "document": 4575,
+            "None": 102
+          }
+        },
+        "trafilatura/CC-MAIN-2023-50.parquet": {
+          "extract:datatrove": {
+            "None": 131,
+            "str": 795
+          },
+          "extract:default": {
+            "str": 915,
+            "None": 11
+          },
+          "extract:fast": {
+            "str": 915,
+            "None": 11
+          },
+          "extract:favor_recall": {
+            "str": 917,
+            "None": 9
+          },
+          "extract:precision_comments": {
+            "None": 105,
+            "str": 821
+          },
+          "extract:no_tables": {
+            "str": 915,
+            "None": 11
+          },
+          "extract:dedup": {
+            "str": 881,
+            "None": 45
+          },
+          "bare_extraction:precision": {
+            "None": 109,
+            "document": 817
+          },
+          "bare_extraction:default": {
+            "document": 915,
+            "None": 11
+          }
+        },
+        "trafilatura/CC-MAIN-2019-35.parquet": {
+          "extract:datatrove": {
+            "str": 1414,
+            "None": 175
+          },
+          "extract:default": {
+            "str": 1571,
+            "None": 18
+          },
+          "extract:fast": {
+            "str": 1570,
+            "None": 19
+          },
+          "extract:favor_recall": {
+            "str": 1571,
+            "None": 18
+          },
+          "extract:precision_comments": {
+            "str": 1453,
+            "None": 136
+          },
+          "extract:no_tables": {
+            "str": 1570,
+            "None": 19
+          },
+          "extract:dedup": {
+            "str": 1512,
+            "None": 77
+          },
+          "bare_extraction:precision": {
+            "document": 1449,
+            "None": 140
+          },
+          "bare_extraction:default": {
+            "document": 1571,
+            "None": 18
+          }
+        }
+      },
+      "stateful": "deduplicate=True sets: each file in order through one cache, emptied at its start"
+    },
+    "parity/trafilatura-upstream-blobs.parquet": {
+      "sha256": "5ce6aafcc8039a4553141f9a337eeacee49fcf4ecc0f2648c81880acb3e6415f",
+      "bytes": 2812785,
+      "rows": 120,
+      "oracle": {
+        "trafilatura": "2.3.1",
+        "lxml": "6.1.3",
+        "justext": "3.0.2"
+      },
+      "source": "trafilatura v2.3.1 tests/ at e2f85c965662c7df26b73290ef175b2c2a5fdca6"
+    },
+    "parity/trafilatura-upstream.parquet": {
+      "sha256": "a34ca23376594f5b53752c57628b40479a5c53bc0d95c8bdda9ee64891822108",
+      "bytes": 605310,
+      "rows": 4553,
+      "oracle": {
+        "trafilatura": "2.3.1",
+        "lxml": "6.1.3",
+        "justext": "3.0.2"
+      },
+      "source": "trafilatura v2.3.1 tests/ at e2f85c965662c7df26b73290ef175b2c2a5fdca6",
+      "python": "3.13.18",
+      "upstream_tests": {
+        "passed": 4189,
+        "xfailed": 37,
+        "skipped": 2,
+        "failed_ids": [],
+        "not_run": {
+          "cli_tests.py": "the command-line interface: subprocesses and the CLI's worker pools, not direct calls",
+          "downloads_tests.py": "HTTP downloads",
+          "feeds_tests.py": "feed discovery; no extract or bare_extraction calls",
+          "sitemaps_tests.py": "sitemaps; no extract or bare_extraction calls",
+          "spider_tests.py": "crawling; no extract or bare_extraction calls",
+          "eval_common_tests.py": "the evaluation harness; it needs tests/eval/ (923 pages, 135 MB), not fetched",
+          "eval_gate_tests.py": "the evaluation harness; it needs tests/eval/ (923 pages, 135 MB), not fetched"
+        }
+      },
+      "calls": 4553,
+      "dropped_unreplayable": 0,
+      "tests_with_calls": 3938,
+      "fn_counts": {
+        "extract": 4540,
+        "bare_extraction": 13
+      },
+      "tag_counts": {
+        "differs-from-test": 2,
+        "test-file": 2,
+        "tree-input": 101
+      },
+      "tags": {
+        "tree-input": "the input is an lxml tree, rebuilt node by node for the replay",
+        "test-file": "an argument names a file of the upstream tests (settingsfile=), rebuilt for the replay",
+        "unreplayable": "an argument could not be stored (dropped from the recording)",
+        "extractor-subclass": "options= was a subclass of Extractor; replayed as a plain Extractor",
+        "differs-from-test": "the clean replay differs from what the test observed (see step 3)",
+        "hash-seed": "the outcome changes with PYTHONHASHSEED"
+      }
+    },
+    "trafilatura/CC-MAIN-2019-35.parquet": {
+      "sha256": "f3ead768c25788377ec2959d23fd0ac4bdc7cd364fb32c4af53f988231642d53",
+      "bytes": 17824570,
+      "rows": 1589,
+      "content_sha256": "4c3ad45e43a22aff043e1539bc4aacbc24653ce00cd871bbc3c127afd164daf4",
+      "chars": 140005314,
+      "source": {
+        "crawl": "CC-MAIN-2019-35",
+        "warc": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2019-35/segments/1566027312025.20/warc/CC-MAIN-20190817203056-20190817225056-00100.warc.gz",
+        "slices": [
+          [
+            213435718,
+            223416245,
+            "925ecf76671b41386f3bda7fa02cf3031c748d8d7904e994899ca35a8c17b2f3"
+          ],
+          [
+            426878038,
+            436635070,
+            "3ec0c1fee4072538d66928e5f0571ebdb953514d4a10d1f5269c0db382f3a282"
+          ],
+          [
+            640340436,
+            650284519,
+            "93a6028a2152ee4e8f1b6ad8e2af69c2b1b46ff02e83a9c22c6e32033ab9b2d4"
+          ]
+        ],
+        "pipeline": "datatrove 0.10.1 WarcReader.read_file (process_record) + URLFilter(), as in examples/fineweb.py; TLDExtract on tldextract's bundled public suffix list",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      },
+      "writer": {
+        "compression": "zstd",
+        "compression_level": 9,
+        "row_group_size": 5000,
+        "write_statistics": false
+      }
+    },
+    "trafilatura/CC-MAIN-2023-50.parquet": {
+      "sha256": "920ffde7c61676d4ba426ce62b2d4e05fd5b2b50f06d75544458c905f5349c5d",
+      "bytes": 16648724,
+      "rows": 926,
+      "content_sha256": "d988515e3a6c8a8808f35e85933c16de27837553dc15e2457a12f032cb1166a4",
+      "chars": 134232798,
+      "source": {
+        "crawl": "CC-MAIN-2023-50",
+        "warc": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2023-50/segments/1700679099281.67/warc/CC-MAIN-20231128083443-20231128113443-00100.warc.gz",
+        "slices": [
+          [
+            240083421,
+            250072163,
+            "2ec2d4641d1421a6a8ac52fe374b719b1127e1fbe4e9f574832ec1d7c54b8bc4"
+          ],
+          [
+            480170626,
+            490135704,
+            "7fe3bd35631b1fec6c7d7b6f4304f4d0e446cbe8fa15672463e63e3285bd58b4"
+          ],
+          [
+            720221902,
+            730161499,
+            "a6050c1149500acd8a9681c37aeb4dafd973ec2d5fbb69e5fcdab11a43a845bc"
+          ]
+        ],
+        "pipeline": "datatrove 0.10.1 WarcReader.read_file (process_record) + URLFilter(), as in examples/fineweb.py; TLDExtract on tldextract's bundled public suffix list",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages"
+      },
+      "writer": {
+        "compression": "zstd",
+        "compression_level": 9,
+        "row_group_size": 5000,
+        "write_statistics": false
+      }
+    },
+    "trafilatura/CC-MAIN-2026-39.parquet": {
+      "sha256": "a9cadd817fc7fbe502485c67e12c2397dde2c95ca61fba460c57eff09f8b1a29",
+      "bytes": 112891459,
+      "rows": 4677,
+      "content_sha256": "bfc660f8436a05b03aca31092d84de39589f827591b7b93ddcf6288d118c8565",
+      "chars": 618641288,
+      "source": {
+        "crawl": "CC-MAIN-2026-39",
+        "warc": "https://data.commoncrawl.org/crawl-data/CC-MAIN-2026-39/segments/1788492699475.64/warc/CC-MAIN-20260904131603-20260904161603-00100.warc.gz",
+        "slices": [
+          [
+            0,
+            196203906,
+            "c76da056343574fa5e309fefe519a842251d11338cc4c64629743f6f0aab96a2"
+          ]
+        ],
+        "pipeline": "datatrove 0.10.1 WarcReader.read_file (process_record) + URLFilter(), as in examples/fineweb.py; TLDExtract on tldextract's bundled public suffix list",
+        "license": "Common Crawl terms of use (https://commoncrawl.org/terms-of-use); third-party web pages",
+        "p10": "the P10 sample (sha256 a9cadd81...): eval = rows 0-1999, dev = 2000-2999, hold = 3000-4676"
+      },
+      "writer": {
+        "compression": "zstd"
+      }
+    },
+    "trafilatura/upstream-tests-2.3.1.parquet": {
+      "sha256": "a662eb4f8c7eb374446351ab4cc44f1403f9e30f183669bc5fbc443cbda05672",
+      "bytes": 2621189,
+      "rows": 158,
+      "source": {
+        "repo": "adbar/trafilatura",
+        "tag": "v2.3.1",
+        "commit": "e2f85c965662c7df26b73290ef175b2c2a5fdca6",
+        "paths": "tests/ except tests/eval/ and tests/evaldata.json",
+        "license": "Apache-2.0 (the tests); tests/cache/ holds third-party web pages (not redistributed)"
+      }
     }
   }
 }
