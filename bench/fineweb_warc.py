@@ -45,8 +45,9 @@ cli
 reader
     The reader alone, one file after another in this process: warcio over ``gzip.open`` + datatrove's
     ``process_record`` (``warcio``), ``pyroid.warc.iter_documents`` (``documents``) and ``pyroid.warc.iter_batches``
-    (``batches``, the rows with a text). Per file and reader: wall and CPU seconds, documents, and a digest of every
-    document's (id, url, date, text), which must be the same for every reader.
+    (``batches``, the rows with a text). Per file and reader: wall and CPU seconds of a pass that only counts the
+    documents, then (unless ``--no-check``) an untimed pass digesting every document's (id, url, date, text), which
+    must give the same digest for every reader.
 
 Every pipeline mode runs one task per WARC file, so the dedup cache, the MinHash order and the PII rotation are the same for
 any N, and the digests must be too.
@@ -1276,8 +1277,46 @@ def _read_batches(path: Path, limit: int) -> Any:
                     return
 
 
+def _count(reader: str, path: Path, limit: int) -> int:
+    """The documents one reader reads from ``path``: its own work only, the timed pass."""
+    if reader == "batches":  # the Arrow batches as they come (no conversion to Python objects)
+        import pyroid.warc as pw
+
+        n = 0
+        for b in pw.iter_batches(path):
+            n += b.num_rows - b.column("text").null_count
+            if limit != -1 and n >= limit:
+                return limit
+        return n
+    fn = _read_warcio if reader == "warcio" else _read_documents
+    n = 0
+    for _ in fn(path, limit):
+        n += 1
+    return n
+
+
+def _digest_of(reader: str, path: Path, limit: int) -> tuple[str, int, str | None]:
+    """sha256 over every document's (id, url, date, text), the count, and the error it ended with."""
+    fn = {"warcio": _read_warcio, "documents": _read_documents, "batches": _read_batches}[reader]
+    h = hashlib.sha256()
+    n = 0
+    error = None
+    try:
+        for fields in fn(path, limit):
+            for x in fields:
+                h.update(b"\1" if x is None else _utf8(x) + b"\0")
+            n += 1
+    except Exception as e:  # noqa: BLE001 - a damaged file: every reader must stop at the same place
+        error = f"{type(e).__name__}: {e}"
+        h.update(_utf8(error))
+    return h.hexdigest(), n, error
+
+
 def cmd_reader(a: argparse.Namespace) -> None:
-    """Time each reader on each file, one after another, and check they give the same documents."""
+    """Time each reader on each file, one after another, then check they give the same documents.
+
+    The timed pass only counts the documents; the check (a second, untimed pass) digests them.
+    """
     files = warc_files(a.warcs)
     out = prepare_out(a.out)
     summary = base_summary(a, "reader", files)
@@ -1285,7 +1324,6 @@ def cmd_reader(a: argparse.Namespace) -> None:
     bad = [r for r in readers if r not in READERS]
     if bad:
         sys.exit(f"unknown readers {bad}: choose from {', '.join(READERS)}")
-    fn = {"warcio": _read_warcio, "documents": _read_documents, "batches": _read_batches}
     rows, ok = [], True
     totals = {r: {"wall": 0.0, "cpu": 0.0, "docs": 0} for r in readers}
     print(f"{'file':<58} {'reader':<10} {'wall s':>8} {'cpu s':>8} {'MB/s':>8} {'docs':>7} digest")
@@ -1294,26 +1332,21 @@ def cmd_reader(a: argparse.Namespace) -> None:
         size = path.stat().st_size
         digests = {}
         for r in readers:
-            h = hashlib.sha256()
-            n = 0
             error = None
             c0 = resource.getrusage(resource.RUSAGE_SELF)
             t0 = T()
             try:
-                for fields in fn[r](path, a.limit):
-                    for x in fields:
-                        h.update(b"\1" if x is None else _utf8(x) + b"\0")
-                    n += 1
-            except Exception as e:  # noqa: BLE001 - a damaged file: every reader must stop at the same place
-                error = f"{type(e).__name__}: {e}"
-                h.update(_utf8(error))
+                n = _count(r, path, a.limit)
+            except Exception as e:  # noqa: BLE001 - recorded; the check pass compares them
+                n, error = -1, f"{type(e).__name__}: {e}"
             wall = T() - t0
             c1 = resource.getrusage(resource.RUSAGE_SELF)
             cpu = c1.ru_utime + c1.ru_stime - c0.ru_utime - c0.ru_stime
-            digests[r] = h.hexdigest()
+            sha, docs, err = (None, n, error) if a.no_check else _digest_of(r, path, a.limit)
+            digests[r] = sha
             totals[r]["wall"] += wall
             totals[r]["cpu"] += cpu
-            totals[r]["docs"] += n
+            totals[r]["docs"] += docs
             rows.append(
                 {
                     "file": name,
@@ -1321,30 +1354,32 @@ def cmd_reader(a: argparse.Namespace) -> None:
                     "reader": r,
                     "wall_seconds": round(wall, 3),
                     "cpu_seconds": round(cpu, 3),
-                    "docs": n,
-                    "error": error,
-                    "sha256": digests[r],
+                    "docs": docs,
+                    "error": err,
+                    "sha256": sha,
                 }
             )
             print(
-                f"{name:<58} {r:<10} {wall:>8.2f} {cpu:>8.2f} {size / 1e6 / wall:>8.1f} {n:>7} {digests[r][:12]}"
+                f"{name:<58} {r:<10} {wall:>8.2f} {cpu:>8.2f} {size / 1e6 / wall:>8.1f} {docs:>7} "
+                f"{(sha or '-')[:12]}"
             )
-        if len(set(digests.values())) > 1:
+        if not a.no_check and len(set(digests.values())) > 1:
             ok = False
             print(f"{name}: the readers differ: {digests}")
     summary.update(
         {
             "readers": readers,
+            "checked": not a.no_check,
             "files": rows,
             "totals": {r: {k: round(v, 3) for k, v in t.items()} for r, t in totals.items()},
-            "identical": ok,
+            "identical": ok if not a.no_check else None,
             "loadavg_end": loadavg(),
         }
     )
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     for r, t in totals.items():
         print(f"total {r:<10} wall {t['wall']:.1f} s, cpu {t['cpu']:.1f} s, {t['docs']} docs")
-    print("identical" if ok else "DIFFERENT")
+    print("not checked" if a.no_check else "identical" if ok else "DIFFERENT")
     if not ok:
         sys.exit(1)
 
@@ -1489,6 +1524,7 @@ def main() -> int:
             p.add_argument(
                 "--readers", default=",".join(READERS), help=f"which readers, in order [{','.join(READERS)}]"
             )
+            p.add_argument("--no-check", action="store_true", help="time only: skip the digest pass")
     p = sub.add_parser("compare")
     p.add_argument("runs", nargs="+", help="run folders; the first is the reference")
     p.add_argument("--json", default=None, help="write the comparison here")

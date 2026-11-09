@@ -39,8 +39,9 @@
 #                   Warms datatrove's caches (URL block lists, lid.176.bin, the Public Suffix List) once.
 #   fetch 5         the WARC files from data.commoncrawl.org (sizes checked against Content-Length) and lid.176.bin
 #                   (sha256 checked)
-#   reader 6        fineweb_warc.py reader: warcio + process_record, pyroid.warc.iter_documents and iter_batches on
-#                   each file, one process on the first CPU of $HTMLX_CPUS; the readers' digests must agree
+#   reader 10       fineweb_warc.py reader: warcio + process_record, pyroid.warc.iter_documents and iter_batches on
+#                   each file, one process on the first CPU of $HTMLX_CPUS (a timed pass, then a digest pass: the
+#                   readers' digests must agree)
 #   stock-8 15      fineweb_warc.py stock, 8 workers, datatrove's real LanguageFilter
 #   pyroid-8 2      fineweb_warc.py pyroid-steps, 8 workers
 #   native-8 2      fineweb_warc.py native, 8 workers (reading with pyroid.warc)
@@ -148,7 +149,7 @@ wall_of() {  # run name -> its measured wall seconds, or empty
 estimate() {  # run name -> minutes: P10's numbers scaled to $NWARC, then 8x the 8-worker run once it is measured
     local base w
     case $1 in
-        stock-8) base=15 ;; pyroid-8 | native-8 | native-8x | native-1x) base=2 ;; cli-8) base=3 ;; reader) base=6 ;;
+        stock-8) base=15 ;; pyroid-8 | native-8 | native-8x | native-1x) base=2 ;; cli-8) base=3 ;; reader) base=10 ;;
         native-1) base=13 ;; pyroid-1) base=14 ;; stock-1) base=117 ;; *) base=10 ;;
     esac
     if [[ $1 == *-1 ]] && w=$(wall_of "${1%-1}-8") && [[ -n $w ]]; then

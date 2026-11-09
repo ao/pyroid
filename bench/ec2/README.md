@@ -75,7 +75,7 @@ files from P11's run on a c7i.4xlarge (stock datatrove 871 s at 8 workers and 6,
 | step | min | what |
 |---|---:|---|
 | code, bootstrap, wheel, envs, fetch | ~22 | clone; `bootstrap.sh` (CPython 3.13.18 only); release wheel; `venv-stock` (`datatrove[io,processing]==0.10.1` + spaCy 3.8.18) and `venv-pyroid` (its freeze + the wheel); 8 WARC files of CC-MAIN-2026-39 and lid.176.bin |
-| reader | 6 | `fineweb_warc.py reader`: warcio + `process_record`, `pyroid.warc.iter_documents` and `iter_batches` on each file, one process on the first CPU of `HTMLX_CPUS`; the readers' digests must agree |
+| reader | 10 | `fineweb_warc.py reader`: warcio + `process_record`, `pyroid.warc.iter_documents` and `iter_batches` on each file, one process on the first CPU of `HTMLX_CPUS`; a timed pass that counts the documents, then a digest pass: the readers' digests must agree |
 | stock-8, pyroid-8, native-8, cli-8 | 15, 2, 2, 3 | `fineweb_warc.py` in each mode, 8 workers, `taskset -c 0-7` (one thread per core); `cli` is `pyroid clean --recipe fineweb-warc` |
 | compare-8 | 1-4 | the four digests; if stock-8 lost pages to Trafilatura's timeout, `native-8x` (`--timeouts-of stock-8`) too |
 | parity | 30 | `parity/pyroid_parity/warc_scale.py` over the 8 files, `--impl pyroid.warc --workers 8`: every record and document against warcio 1.8.2 and datatrove 0.10.1, in `results/parity/warc-scale.json` (`HTMLX_PARITY_ARGS` adds arguments) |

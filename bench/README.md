@@ -141,8 +141,9 @@ python bench/fineweb_warc.py reader       --warcs W --out O/reader   # one proce
 - `cli`: `pyroid clean --recipe fineweb-warc` on the same files. Its output is after PII, so `compare` checks only
   the `after_pii` digest for it.
 - `reader`: the reader alone, file after file in one process: warcio over `gzip.open` + `process_record`,
-  `pyroid.warc.iter_documents` and `pyroid.warc.iter_batches`, each timed (wall and CPU) and digested over every
-  document's id, URL, date and text.
+  `pyroid.warc.iter_documents` and `pyroid.warc.iter_batches`, each timed (wall and CPU) on a pass that only counts
+  the documents, then digested over every document's id, URL, date and text on a second, untimed pass
+  (`--no-check` skips it).
 - Every mode runs one task per WARC file, so the output does not depend on `--workers`. `OUT/summary.json` has wall
   seconds per phase, CPU seconds, peak RSS, seconds and documents per step, and sha256 digests of the documents
   (sorted by id) after MinhashDedupFilter and after PIIFormatter.
