@@ -143,6 +143,14 @@ The second row is what a fresh `pip install 'datatrove[processing]==0.10.1'` res
 behind each, and `DEFAULT_CONFIGS` each release's settings.cfg. Another version of trafilatura or
 lxml can extract different text from the same page.
 
+### Choosing a mode
+
+| Use | `compat` |
+|---|---|
+| Direct calls, and code written for trafilatura 2.3.1 | `"2.3.1"`, the default |
+| Output that must match a stock `datatrove[processing]==0.10.1` install, such as a FineWeb-style pipeline checked against stock datatrove | `"1.11.0"` |
+| The [datatrove step](#the-datatrove-step) and [`pyroid.patch("trafilatura")`](#pyroidpatchtrafilatura) | leave it at `None`: they follow the installed trafilatura, so a stock datatrove install gets 1.11.0 |
+
 ## trafilatura 1.11.0
 
 `compat="1.11.0"` runs trafilatura 1.11.0's extraction:
@@ -317,9 +325,14 @@ c7i.4xlarge (Intel Xeon Platinum 8488C), CPython 3.13.18, 8 workers on 8 cores o
 | datatrove with pyroid's steps | 104 s (8.4×) | 776 s (9.0×) |
 | native pyroid chain | 110 s | 739 s (9.4×) |
 
-The Trafilatura step took 5,543 s of stock datatrove's 6,759 CPU seconds at 8 workers, and 514 s
-with pyroid. Stock datatrove dropped 69 pages at its 1 s per-page timeout at 8 workers and 80 at 1
-worker, so its own two runs kept different documents (23,503 and 23,501). pyroid has no timeout and
-kept 23,505 in every run. With the pages stock datatrove dropped left out the same way, the native
-chain's final documents equal stock datatrove's byte for byte for both runs. The results are in
+The Trafilatura step took 5,543 s of stock datatrove's 6,759 CPU seconds at 8 workers, and 514 of
+792 with pyroid's steps. Of the steps still in Python, the largest is datatrove's WARC reader
+(warcio): 154 of those 792 CPU seconds.
+
+Stock datatrove gives up on a page after a 1 s timeout, so which pages it drops varies between
+runs: 69 at 8 workers and 80 at 1 worker, and the two runs kept 23,503 and 23,501 documents.
+pyroid has no timeout and kept 23,505 in every run, with the same final documents from its steps
+and from the native chain. With the pages stock datatrove dropped left out the same way, the
+native chain's final documents are byte-identical to stock datatrove's, for both stock runs. Both
+also drop the 5 pages on which trafilatura 1.11.0 itself raises. The results are in
 `bench/results/aws-c7i.4xlarge/2026-11-09-warc/`.

@@ -25,7 +25,7 @@ IN can be any mix of:
 - URIs: `s3://bucket/prefix/`, `gs://bucket/*.parquet`,
   `hf://datasets/HuggingFaceFW/fineweb/sample/10BT/*.parquet`, read through fsspec when it is
   installed (with `s3fs`, `gcsfs` or `huggingface_hub` for those schemes), otherwise through
-  pyarrow's own S3 and GCS filesystems;
+  pyarrow's own S3 and GCS filesystems; any other URI fsspec can open works too;
 - `--files-from list.txt`: one of the above per line.
 
 Files are listed, then sorted by name within each IN, and each file's position in that list is its
@@ -33,14 +33,14 @@ Files are listed, then sorted by name within each IN, and each file's position i
 row group at a time, and the next batch is read while the current one is processed: memory holds
 about one row group and two batches per process.
 
-OUT is a local path (or a shared filesystem such as NFS, EFS or Lustre). Outputs are not written to
-object stores directly.
+OUT, and the folders of the [MinHash stages](#minhash-dedup-across-shards), are local paths (or a
+shared filesystem such as NFS, EFS or Lustre). Outputs are not written to object stores directly.
 
 ## Output layout
 
 | OUT | What is written |
 |---|---|
-| `out.parquet`, `out.jsonl.gz`, ... (a data suffix) | one file with every kept row, in input order |
+| `out.parquet`, `out.jsonl.gz`, ... (a data suffix) | one file with every kept row, in input order; with `--shard`, one per shard: `out-00003-of-00016.parquet` |
 | `out/` (a directory) | one file per input file, same relative name; `--format` changes the format |
 | `out/ --merge` | one file per shard: `out/part-00000-of-00001.parquet` |
 
@@ -115,7 +115,8 @@ $ pyroid dedup filter /mnt/shared/clean/ /mnt/shared/final/ --removed /mnt/share
 ```
 
 Each stage checks that the one before it finished on every shard, and that the MinHash settings
-and the input list match. Every stage resumes like the per-file commands.
+and the input list match. `signatures`, `buckets` and `filter` resume like the per-file
+commands; `cluster` runs whole again.
 
 The folders have datatrove 0.10.1's layout and byte format (`bucket_XXX/RANK.minhash.sig`,
 `BUCKET_WORKER.dups`, `RANK.remove`), so either tool can run any stage on the other's files. The
@@ -147,12 +148,12 @@ process (GNU `time`).
 | the same with `--workers 4`, a directory OUT | 349 s | 1.0 GiB per worker |
 | `clean --no-dedup --shard I/4`, one shard (one file) | 64-67 s | 1.2 GiB |
 | `dedup signatures --shard I/4`, one shard | 17 s | 0.8 GiB |
-| `dedup buckets --shard I/2`, seven buckets | 0.4 s | 0.1 GiB |
+| `dedup buckets --shard I/2`, seven buckets | 0.4 s | not recorded |
 | `dedup cluster` | 0.2 s | 75 MiB |
 | `dedup filter --shard I/4`, one shard | 25-27 s | 0.7 GiB |
 | `clean --no-dedup --workers 4` of two files read from `hf://` | 135 s | 1.0 GiB |
 
-Every layout kept the same 3,547,373 documents with the same text (7,748 MinHash removals), and
+Every layout kept the same 3,547,373 documents with the same text, and
 the `hf://` run equals the same two files read from disk. The shards above ran one after another
 on one machine; on four machines the stages would add up to about 110 s (65 + 17 + 0.4 + 0.2 +
 27 s, not measured as such). A run stopped with Ctrl-C after

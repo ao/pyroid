@@ -35,7 +35,7 @@ The names `patch()` accepts, `pyroid run`'s defaults, and the start-up hook's di
 
 Each step subclasses datatrove's step of the same name; its constructor takes datatrove's
 arguments plus the keyword-only `batch_size` and `threads` (and `model_path` for
-`LanguageFilter`).
+`LanguageFilter`, `compat` for `Trafilatura`).
 
 ::: pyroid.integrations.datatrove
     options:

@@ -35,8 +35,8 @@ and `patch()` is the only switch. Each patched name emits one
 | `"ftfy"` | [`pyroid.ftfy`](ftfy.md) (ftfy 6.3.1) | `fix_text`, `fix_text_segment`, `fix_encoding`, `fix_and_explain`, `fix_encoding_and_explain`, `TextFixerConfig`, `ExplainedText`, `ExplanationStep`, the `ftfy` alias, `fix_text_batch` | `apply_plan`, `explain_unicode`, `fix_file`, `guess_bytes`, `ftfy.fixes` and the other submodules |
 | `"fasttext"` | [`pyroid.fasttext`](fasttext.md) (fastText 0.9.2's inference, as fasttext-predict 0.9.2.4) | `load_model`, `tokenize`, `fasttext.FastText.load_model`, and `fasttext.FastText._FastText(path)` (which returns a pyroid model) | training (`train_supervised`, ...) and `_FastText()` without a model file |
 | `"anyascii"` | [`pyroid.translit.anyascii`](translit.md) (anyascii 0.3.3) | `anyascii` | the rest of the package |
-| `"datasketch"` | [`pyroid.datasketch`](datasketch.md) (datasketch 2.0.0) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble`, `sha1_hash32`, `sha1_hash64`, `minhash_batch`, and the `minhash`, `lean_minhash`, `hashfunc`, `lsh`, `lshforest` and `lshensemble` submodules with them | `WeightedMinHash`, `HyperLogLog`, `bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `storage` and the other submodules |
-| `"trafilatura"` | [`pyroid.trafilatura`](trafilatura.md) (trafilatura 2.3.1) | `extract`, `bare_extraction`, `extract_with_metadata` (delegated) in `trafilatura` and `trafilatura.core`, `trafilatura.deduplication.LRUCache` and `LRU_TEST`, `trafilatura.meta.reset_caches` | metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the other submodules |
+| `"datasketch"` | [`pyroid.datasketch`](datasketch.md) (datasketch 2.0.0) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble`, `sha1_hash32`, `sha1_hash64`, `minhash_batch`, the `WeightedMinHashLSH` and `WeightedMinHashLSHForest` aliases, and the `minhash`, `lean_minhash`, `hashfunc`, `lsh`, `lshforest` and `lshensemble` submodules with them | `WeightedMinHash`, `HyperLogLog`, `bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `storage` and the other submodules |
+| `"trafilatura"` | [`pyroid.trafilatura`](trafilatura.md) (trafilatura 2.3.1 or 1.11.0, following the installed release) | `extract`, `bare_extraction`, with 2.3.1 `extract_with_metadata` (delegated), with the installed release's signatures, in `trafilatura` and `trafilatura.core`, `trafilatura.deduplication.LRUCache` and `LRU_TEST`, `trafilatura.meta.reset_caches` | metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the other submodules |
 | `"nltk"` | [`pyroid.nltk`](nltk.md) (NLTK 3.10.4's tokenizers) | `sent_tokenize`, `word_tokenize`, `punkt_model_available`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer`, `wordpunct_tokenize`, `regexp_tokenize`, `blankline_tokenize`, `RegexpTokenizer`, `WordPunctTokenizer`, `WhitespaceTokenizer`, `BlanklineTokenizer`, on `nltk`, `nltk.tokenize` and its `punkt`, `treebank`, `destructive` and `regexp` modules | everything else: `PunktTrainer`, the taggers, corpora, stemmers, the other tokenizers |
 
 `fasttext.FastText._FastText(path)` is how datatrove and others load models, and
@@ -153,8 +153,9 @@ $ python script.py
   pyroid.patch("ftfy")
 ```
 
-It warns once more if the installed package is another version than the one pyroid reproduces.
-The patched functions then give that version's results, and the rest is the installed version's.
+It warns once more if the installed package is a version pyroid does not reproduce (for
+trafilatura, neither 2.3.1 nor 1.11.0). The patched functions then still give the reproduced
+version's results (trafilatura 2.3.1's for trafilatura), and the rest is the installed version's.
 `PatchWarning` is a `UserWarning`, distinct from `pyroid.FallbackWarning`. To silence it:
 
 ```python

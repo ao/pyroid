@@ -21,12 +21,17 @@ So the result is always the incumbent's. The warning tells you that this call to
 | `pyroid.filters` | with `python_tokenizer=True`, the tokenization of a language pyroid does not tokenize natively (see below); the filter math stays in Rust. On that path a `C4Quality` step runs as datatrove's own `C4QualityFilter` | such a language without `python_tokenizer=True` raises `NotImplementedError`; other unsupported parameters raise (e.g. `exclusion_writer`) |
 | `pyroid.dedup` | MinHash with `python_tokenizer=True`, as for the filters: datatrove's tokenizer splits the words, everything else stays in Rust | without it, such a language raises `NotImplementedError`; sentence dedup has no Python-tokenizer path |
 | `pyroid.translit` | never | — |
-| `pyroid.metrics` | ROUGE: tokens from a custom tokenizer that are not lists of `str` (to rouge-score), and `split_summaries=True`'s sentence split (to `nltk.sent_tokenize`; scoring stays native). sacrebleu: the `ja-mecab`, `ko-mecab`, `spm`, `flores101`, `flores200` and `spBLEU-1K` tokenizers, `n_bootstrap > 1`, TER, `DATASETS` and the test-set helpers (`pyroid.metrics.sacrebleu.DELEGATED`) | — |
+| `pyroid.metrics` | ROUGE: tokens from a custom tokenizer that are not lists of `str` (to rouge-score). sacrebleu: the `ja-mecab`, `ko-mecab`, `spm`, `flores101`, `flores200` and `spBLEU-1K` tokenizers, `n_bootstrap > 1`, TER, `DATASETS` and the test-set helpers (`pyroid.metrics.sacrebleu.DELEGATED`) | — |
 | `pyroid.json_repair` | `schema=` calls, non-`str` input, and text holding a character in U+10F800..U+10FFFF (the range the port uses to store lone surrogates) | `repair_json_batch` on Arrow input raises `PyroidError` for those characters instead of delegating (pass a list) |
-| `pyroid.integrations.datatrove` | a `language` the step can't tokenize natively runs datatrove's own code for that step | — |
+| `pyroid.trafilatura` | the other output formats, `include_formatting`, `include_links`, `include_images`, metadata (`with_metadata`, `url_blacklist`, `extract_with_metadata`, ...), `target_language`, `prune_xpath`, `options=`, a trafilatura `LRUCache`, an lxml tree or HTTP response as input, bytes that are compressed or not UTF-8 ([the list](../guides/trafilatura.md#delegated-options)) | the installed trafilatura must be the mode's release (2.3.1, or 1.11.0 with `compat="1.11.0"`); without it, or with another version, these calls raise `PyroidError` |
+| `pyroid.nltk` | Punkt training (`PunktTrainer`, `PunktSentenceTokenizer(train_text)`), a custom `token_cls`, a `PunktLanguageVars` subclass that changes more than `sent_end_chars`, parameters that are not sets of `str`, `dump()` and saving parameters, a Treebank tokenizer whose patterns were changed, a `RegexpTokenizer` pattern that is not one of the native ones | — |
+| `pyroid.jieba` | `pyroid.jieba.posseg`, `pyroid.jieba.analyse`, paddle mode, and `get_dict_file()` for the default dictionary | — |
+| `pyroid.datasketch` | the classes pyroid does not port (`bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `WeightedMinHash`, `HyperLogLog`, ...), Redis and Cassandra storage, and a `hashfunc` other than `sha1_hash32`/`sha1_hash64` (called from Python for each token; the permutations stay in Rust) | — |
+| `pyroid.integrations.datatrove` | a `language` the step can't tokenize natively runs datatrove's own code for that step, and `Trafilatura` with an installed trafilatura release that pyroid does not reproduce runs datatrove's own step | — |
 
 Without the library a call needs (ftfy, datatrove and the language's segmenter, rouge-score,
-nltk, sacrebleu, json_repair), it raises `pyroid.PyroidError` and says what to install.
+nltk, sacrebleu, json_repair, trafilatura, jieba, datasketch), it raises `pyroid.PyroidError` and
+says what to install.
 
 ## `python_tokenizer=True`
 
@@ -71,5 +76,6 @@ a Python whose `unicodedata` is newer than the Unicode tables pyroid ships (17.0
 ## `pyroid.patch()` warns too
 
 [`pyroid.patch()`](../guides/patch.md) is not a fallback but the opposite: it makes code that
-imports ftfy, fastText or anyascii get pyroid's functions instead. It announces that with its
-own `PatchWarning`, once per process for each patched name, so you can tell the two apart.
+imports ftfy, fastText, anyascii, datasketch, trafilatura or NLTK get pyroid's functions instead.
+It announces that with its own `PatchWarning`, once per process for each patched name, so you can
+tell the two apart.

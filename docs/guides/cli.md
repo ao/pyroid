@@ -14,9 +14,10 @@ pipeline. The per-document digest of a `pyroid clean` run equals the stock pipel
 10,000-document FineWeb dev slice and on the 13,232-document parity corpus
 ([parity](../compatibility.md#integrations)).
 
-Files are streamed in Arrow batches, so memory holds about one batch per process, whatever the
-size of the dataset; MinHash dedup sorts its signatures on disk. `python -m pyroid` is the same
-program. For thousands of files and many machines, see [Large datasets](large-datasets.md).
+Files are streamed in Arrow batches, so memory holds about one row group and two batches per
+process, whatever the size of the dataset; MinHash dedup sorts its signatures on disk.
+`python -m pyroid` is the same program. For thousands of files and many machines, see
+[Large datasets](large-datasets.md).
 
 ## Commands
 
@@ -49,7 +50,7 @@ pyroid.integrations.patch() applied; see 'pyroid run --help'.
 | [`pyroid dedup`](#pyroid-dedup) | drops near-duplicates (datatrove's MinHash) or exact duplicates |
 | [`pyroid translit`](#pyroid-translit) | transliterates a column to ASCII |
 | [`pyroid stats`](large-datasets.md#many-machines-shard) | sums the counts of every shard of a directory OUT |
-| [`pyroid run`](#pyroid-run) | runs a Python program with `import ftfy` / `import fasttext` redirected to pyroid |
+| [`pyroid run`](#pyroid-run) | runs a Python program with `import ftfy` / `import fasttext` (or the modules `-p` names) redirected to pyroid |
 
 ## `pyroid clean`: the FineWeb recipe
 
@@ -179,11 +180,13 @@ counts per stage; for the run above:
   "fineweb_quality": 3
  },
  "wall_s": …,
- "pyroid": "1.0.0.dev0"
+ "pyroid": "1.0.0.dev0",
+ "files": 1
 }
 ```
 
-Every command takes `--stats` and `--stats-json`.
+`clean`, `langid`, `dedup` (and its four stages) and `translit` take `--stats` and
+`--stats-json`.
 
 ### The MinHash work directory
 
@@ -252,11 +255,12 @@ To run without network, download the model once and point `PYROID_LID_MODEL` at 
 ## `pyroid langid`
 
 ```text
-usage: pyroid langid [-h] [--text-column TEXT_COLUMN] [--threads THREADS]
-                     [--batch-size BATCH_SIZE] [--excluded PATH] [--stats] [--stats-json PATH]
+usage: pyroid langid [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--threads THREADS]
+                     [--batch-size BATCH_SIZE] [--shard I/N] [--workers N] [--merge]
+                     [--format FMT] [--excluded PATH] [--stats] [--stats-json PATH] [--progress]
                      [--compression COMPRESSION] [--overwrite] [--model MODEL] [--keep LANGS]
                      [--min-score MIN_SCORE] [--top-k TOP_K]
-                     input output
+                     [IN ...] OUT
 ```
 
 Adds fastText's top label (without `__label__`) as `language` and its probability as
@@ -268,7 +272,7 @@ Adds fastText's top label (without `__label__`) as `language` and its probabilit
 | `--model MODEL` | a fastText model file (`.bin` or `.ftz`); default: `lid.176.bin`, found as [above](#the-language-id-model) |
 | `--keep LANGS` | keep only documents in these languages, comma-separated (`en,fr`); without it, every row but null texts is kept |
 | `--min-score MIN_SCORE` | with `--keep`: datatrove's `language_threshold` (default 0.65); a document is kept if one of the languages has a probability above it |
-| `--top-k K` | also add `top_languages` and `top_language_scores`: lists of the `K` best labels and their probabilities |
+| `--top-k TOP_K` | above 1: also add `top_languages` and `top_language_scores`, lists of the `TOP_K` best labels and their probabilities |
 
 With `--keep`, dropped rows go to `--excluded` with `filter_reason` `lid` (or `null` for a null
 text).
@@ -320,12 +324,13 @@ With `--normalize`, `"hello world"` counts as a repeat of `"Hello, world!"` too.
 ## `pyroid translit`
 
 ```text
-usage: pyroid translit [-h] [--text-column TEXT_COLUMN] [--threads THREADS]
-                       [--batch-size BATCH_SIZE] [--stats] [--stats-json PATH]
+usage: pyroid translit [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--threads THREADS]
+                       [--batch-size BATCH_SIZE] [--shard I/N] [--workers N] [--merge]
+                       [--format FMT] [--stats] [--stats-json PATH] [--progress]
                        [--compression COMPRESSION] [--overwrite] [--mode {anyascii,unidecode}]
                        [--errors ERRORS] [--replace-str REPLACE_STR]
                        [--output-column OUTPUT_COLUMN]
-                       input output
+                       [IN ...] OUT
 ```
 
 Transliterates the text column to ASCII with [`pyroid.translit`](translit.md) (anyascii's data,
@@ -345,8 +350,9 @@ $ cat ascii.jsonl
 ## `pyroid run`
 
 `pyroid run [-p NAMES] (SCRIPT | -m MODULE) [ARGS...]` runs a Python program with
-`import ftfy` / `import fasttext` (and optionally `import anyascii`) giving pyroid's drop-ins, in
-the program and in the Python processes it starts. It is described with
+`import ftfy` / `import fasttext` giving pyroid's drop-ins, in the program and in the Python
+processes it starts; `-p` picks the modules from `ftfy`, `fasttext`, `anyascii`, `datasketch`,
+`trafilatura` and `nltk`. It is described with
 [`pyroid.patch()`](patch.md#pyroid-run-programs-and-their-child-processes).
 
 ## From Python: `pyroid.integrations.recipes`

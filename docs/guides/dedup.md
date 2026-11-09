@@ -57,6 +57,11 @@ Decisions are global, so a later batch can change which document of a cluster is
 final once every batch is in. The kept document of each cluster is datatrove's union-find root,
 which is usually, but not always, the cluster's first document.
 
+For a corpus spread over many files or machines, `pyroid dedup signatures | buckets | cluster |
+filter` runs datatrove's four stages through files, with datatrove's file layout and bytes, and
+removes the same documents as one in-memory pass
+([Large datasets](large-datasets.md#minhash-dedup-across-shards)).
+
 ## Languages
 
 `language=` is datatrove's `MinhashDedupSignature(language=...)` and
@@ -219,9 +224,9 @@ For sentence dedup, from `SentenceDedup`'s documentation:
 
 Also for sentence dedup: codes whose datatrove tokenizer pyroid does not port (pyvi, Stanza, ...,
 and Japanese without a SudachiDict dictionary) raise `NotImplementedError`, and `language` must be
-a code, not a tokenizer object. datatrove's quirks are kept. `min_words_to_remove_span` only counts, and only restores, the first
-sentence of a removed run. Stage 1 strips sentences while stage 3 does not, so window indices can
-shift.
+a code, not a tokenizer object. datatrove's quirks are kept. `min_words_to_remove_span` only
+counts, and only restores, the first sentence of a removed run. Stage 1 strips sentences while
+stage 3 does not, so window indices can shift.
 
 Also: `simplify_text`'s decimal-digit class comes from `regex` 2026.9.29's data, which another
 `regex` release could change. On a Python newer than Unicode 17.0, pyroid warns once and uses its
@@ -229,7 +234,8 @@ Also: `simplify_text`'s decimal-digit class comes from `regex` 2026.9.29's data,
 tokenizer object as `language`), which emits `FallbackWarning`.
 
 Documents are numbered in the order they are added, as datatrove numbers the documents of one
-task. Multi-worker hash ranges are not needed: one process does all the work.
+task. The in-memory API needs no multi-worker hash ranges, since one process does all the work;
+the `pyroid dedup` stages split buckets by hash range as datatrove does.
 
 ## Speed
 

@@ -1,6 +1,6 @@
 # datatrove: drop-in pipeline steps
 
-`pyroid.integrations.datatrove` has drop-in replacements for 15 of
+`pyroid.integrations.datatrove` has drop-in replacements for 16 of
 [datatrove](https://github.com/huggingface/datatrove) 0.10.1's pipeline steps (datatrove is
 © Hugging Face, Apache-2.0). Each one subclasses datatrove's own step of the same name and takes
 the same constructor arguments. It gives the same documents: the same `text`, `metadata`,
@@ -49,17 +49,22 @@ datatrove's, and the steps mix freely.
 | `SentenceFindDedups` | `datatrove.pipeline.dedup.SentenceFindDedups` (stage 2) | a merge in Rust; the same `.c4_dup` files |
 | `SentenceDedupFilter` | `datatrove.pipeline.dedup.SentenceDedupFilter` (stage 3) | [`pyroid.dedup`](dedup.md); the same documents and exclusion-writer documents |
 | `SentenceDedupBuildIndex` | `datatrove.pipeline.dedup.sentence_dedup.SentenceDedupBuildIndex` | a merge in Rust; the same index file |
-| `Trafilatura` | `datatrove.pipeline.extractors.Trafilatura` | [`pyroid.trafilatura`](trafilatura.md), byte-identical to trafilatura 2.3.1, in the task's process (no child process, no timeout; see [the step's differences](trafilatura.md#the-datatrove-step)) |
+| `Trafilatura` | `datatrove.pipeline.extractors.Trafilatura` | [`pyroid.trafilatura`](trafilatura.md), byte-identical to the installed trafilatura release (1.11.0 in a stock `datatrove[processing]` install, or 2.3.1; 2.3.1 when trafilatura is not installed), in the task's process (no child process, no timeout; see [the step's differences](trafilatura.md#the-datatrove-step)) |
 
 MinHash stages 2 to 4 (`MinhashDedupBuckets`, `MinhashDedupCluster`, `MinhashDedupFilter`) are
 not replaced. Keep datatrove's, which read pyroid's signature files unchanged; they were 2 to 3%
-of the pipeline's wall time with pyroid's steps at 8 workers. To deduplicate in memory instead of
-through files, use [`pyroid.dedup`](dedup.md) directly. The native APIs of every step are in
+of the pipeline's wall time with pyroid's steps at 8 workers. Outside datatrove, `pyroid dedup
+signatures | buckets | cluster | filter` runs the four stages on the command line with datatrove's
+file layout and bytes ([Large datasets](large-datasets.md#minhash-dedup-across-shards)). To
+deduplicate in memory instead of through files, use [`pyroid.dedup`](dedup.md) directly. The
+native APIs of every step are in
 [`filters.md`](filters.md) and [`dedup.md`](dedup.md).
 
 The drop-ins need fewer packages than datatrove's steps. The filters, MinHash and sentence dedup
-need no spaCy for the languages pyroid tokenizes ([below](#languages)). No step needs ftfy or
-`fasttext-numpy2-wheel`, and `LanguageFilter` needs no `fasteners` when `model_path` is given.
+need no spaCy for the languages pyroid tokenizes ([below](#languages)). No step needs ftfy,
+trafilatura or `fasttext-numpy2-wheel`, and `LanguageFilter` needs no `fasteners` when
+`model_path` is given. Without trafilatura installed, `Trafilatura` runs the 2.3.1 mode; pass
+`compat="1.11.0"` to match a stock `datatrove[processing]` install.
 `URLFilter` needs tldextract and fasteners, as datatrove's does.
 
 ## Extra arguments
@@ -146,12 +151,13 @@ Every step that tokenizes follows the same rule:
 - `GopherRepetitionFilter`, `GopherQualityFilter`, `C4QualityFilter`, `FineWebQualityFilter`,
   `MinhashDedupSignature`, `SentenceDedupSignature` and `SentenceDedupFilter` run in Rust for
   every code pyroid tokenizes natively. `pyroid.filters.languages()` marks those codes `native`:
-  4,013 of datatrove's 4,343, about 96% of FineWeb-2's bytes (4,009 and 88% without a Japanese
-  dictionary). They include English, the spaCy rule-based languages (German, French, Spanish,
-  Russian, Arabic, ...), Chinese (jieba), Japanese (SudachiPy, with the SudachiDict dictionary of
-  `pip install sudachidict-core`), the IndicNLP languages (Hindi, Bengali, Urdu, ...) and the
-  `WhitespaceTokenizer` ones. Each code gets the word and sentence tokenizer datatrove assigns
-  it, reproduced exactly, so neither spaCy, jieba, SudachiPy nor indic-nlp-library is needed.
+  4,013 of datatrove's 4,343, 95.6% of FineWeb-2's bytes, with sudachidict-core installed
+  (4,009 and 88.4% without it). They include English, the spaCy rule-based languages (German,
+  French, Spanish, Russian, Arabic, ...), Chinese (jieba), Japanese (SudachiPy, with the
+  SudachiDict dictionary of `pip install sudachidict-core`), the IndicNLP languages (Hindi,
+  Bengali, Urdu, ...) and the `WhitespaceTokenizer` ones. Each code gets the word and sentence
+  tokenizer datatrove assigns it, reproduced exactly, so neither spaCy, jieba, SudachiPy nor
+  indic-nlp-library is needed.
 - Any other `language` runs datatrove's own code for that step, with one
   [`pyroid.FallbackWarning`](../concepts/fallbacks.md) per step and language. That covers the codes
   whose datatrove tokenizer pyroid does not port (Vietnamese, Thai, the Stanza languages, ...,
@@ -251,6 +257,14 @@ The newer steps were checked with these configurations:
 All of these found 0 differences, and there are property-based tests against live datatrove as
 well.
 
+From WARC files, datatrove's full FineWeb pipeline with `URLFilter`, `Trafilatura`,
+`LanguageFilter`, the quality filters, `MinhashDedupSignature` and `PIIFormatter` swapped in kept
+every document stock datatrove kept, with the same text, plus 2 pages stock datatrove had dropped
+at its 1 s Trafilatura timeout (AWS EC2 c7i.4xlarge, 8 WARC files of CC-MAIN-2026-39). pyroid's
+native chain gives the same documents as these steps, and with those pages left out the same way
+its documents are byte-identical to stock datatrove's
+([details](trafilatura.md#datatroves-fineweb-pipeline-from-warc-files)).
+
 Per language,
 [`examples/datatrove/verify_fineweb2.py`](https://github.com/ao/pyroid/blob/main/examples/datatrove/verify_fineweb2.py)
 runs each FineWeb-2 slice with two near-duplicate copies (750 documents) in datatrove's executor.
@@ -281,6 +295,12 @@ documents). Stock datatrove took 35.4 s, so the wall time was 11.2× less. On th
 Both sides ran on CPython 3.13 with datatrove 0.10.1, and the per-document digest was
 datatrove's in every run. On a c8g.4xlarge (AWS Graviton4) the ratios were 12.0× and 14.7×. See
 [Benchmarks](../benchmarks.md#end-to-end-the-fineweb-chain).
+
+From WARC files, with `Trafilatura` in the chain, the same c7i.4xlarge ran the pipeline on 8 WARC
+files (171,595 HTML records) in 104 s at 8 workers with pyroid's steps, against 871 s for stock
+datatrove (8.4×), and in 776 s against 6,976 s at 1 worker (9.0×). Trafilatura was 5,543 of stock
+datatrove's 6,759 CPU seconds at 8 workers
+([details](trafilatura.md#datatroves-fineweb-pipeline-from-warc-files)).
 
 The rest of this section comes from earlier runs on a Docker/OrbStack VM on Apple Silicon,
 indicative. The VM was shared with other work, so the EC2 figures above are the better guide to

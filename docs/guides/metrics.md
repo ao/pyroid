@@ -183,9 +183,7 @@ These are not ported. They are handed to the real library, with a one-time
 not installed, the call raises [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError)
 with an install hint instead.
 
-- ROUGE: a custom tokenizer whose tokens are not lists of `str` (scored by rouge-score), and
-  `split_summaries=True` (rougeLsum's sentences are split with `nltk.sent_tokenize`; the scoring
-  stays in Rust).
+- ROUGE: a custom tokenizer whose tokens are not lists of `str` (scored by rouge-score).
 - sacrebleu: the `ja-mecab`, `ko-mecab`, `spm`, `flores101`, `flores200` and `spBLEU-1K`
   tokenizers (and `trg_lang` `"ja"` or `"ko"`), `corpus_score(..., n_bootstrap > 1)`, `TER`,
   `corpus_ter`, `sentence_ter`, `DATASETS` and the test-set helpers (listed in
@@ -201,8 +199,10 @@ bleu.corpus_score(hyps, refs, n_bootstrap=1000)  # sacrebleu's result, and:
 Importing `pyroid.metrics.sacrebleu` never imports sacrebleu; only a delegated call does. This
 matters on free-threaded CPython, where `import sacrebleu` loads lxml, which turns the GIL back
 on.
-Likewise, `pyroid.metrics.rouge_scorer` imports NLTK only when `split_summaries=True` and a
-rougeLsum is scored (rouge-score always imports nltk, absl, numpy and six).
+Likewise, `pyroid.metrics.rouge_scorer` does not need NLTK. With `split_summaries=True`,
+rougeLsum's sentences are split by [`pyroid.nltk`](nltk.md)'s Punkt port, which reads NLTK's
+`punkt_tab` model and imports NLTK, if installed, only to find it (rouge-score always imports
+nltk, absl, numpy and six).
 
 ## Lone surrogates
 
@@ -229,8 +229,8 @@ From the modules' documentation. `pyroid/metrics/rouge_scorer.pyi`:
   for no targets is numpy's `ValueError("attempt to get argmax of an empty sequence")`).
 - "Using default tokenizer." is logged at INFO level with `logging` (logger
   `pyroid.metrics.rouge_scorer`), not with absl.
-- nltk is imported only when `split_summaries=True` and a rougeLsum is scored; rouge-score always
-  imports nltk, absl, numpy and six.
+- nltk is not needed. With `split_summaries=True` it is imported, if installed, to find the
+  `punkt_tab` model; rouge-score always imports nltk, absl, numpy and six.
 
 `pyroid/metrics/scoring.pyi`:
 

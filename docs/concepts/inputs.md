@@ -75,6 +75,8 @@ has to concatenate past 2 GiB (use `pa.chunked_array(col)` instead).
 A Python `str` can hold lone surrogates (`"\ud800"`), which are not valid Unicode and cannot be
 encoded to UTF-8. Most pyroid functions raise `UnicodeEncodeError` for them, with a note naming
 the document. Where the incumbent handles them, pyroid does too: `pyroid.ftfy` fixes them exactly
-as ftfy does, `pyroid.json_repair` repairs text with them as json_repair does, and
-`pyroid.translit.unidecode` warns and drops them as Unidecode does. `pyroid.metrics` raises,
-where rouge-score and sacrebleu accept them. Each function's reference entry says which.
+as ftfy does, `pyroid.json_repair` repairs text with them as json_repair does,
+`pyroid.trafilatura` extracts from pages that hold them as trafilatura does, and
+`pyroid.translit.unidecode` warns and drops them as Unidecode does. `pyroid.metrics`,
+`pyroid.nltk` and `pyroid.jieba` raise, where rouge-score, sacrebleu, NLTK and jieba accept them.
+Each function's reference entry says which.

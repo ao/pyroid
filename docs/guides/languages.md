@@ -7,8 +7,9 @@ tokenizer's words. pyroid ports the rule-based tokenizers, jieba for Chinese and
 Japanese to Rust. That makes 4,013 of the 4,343 codes native, 95.6% of FineWeb-2's bytes, with
 datatrove's decisions ([parity](#parity)), in Rust on every thread. Japanese needs a SudachiDict
 dictionary installed ([Japanese](#japanese)); without one, 4,009 codes (88.4%) are native. The
-other codes use statistical or dictionary segmenters that pyroid does not port. For them,
-`python_tokenizer=True` calls datatrove's own tokenizer and runs the rest in Rust.
+other 330 codes (334 without the dictionary) use statistical or dictionary segmenters that pyroid
+does not port. For them, `python_tokenizer=True` calls datatrove's own tokenizer and runs the rest
+in Rust.
 
 The largest languages are native: Russian, German, Spanish, French and Arabic together are 48% of
 FineWeb-2's bytes, Chinese another 11.6% and Japanese 7.2%.
@@ -235,8 +236,14 @@ sudachidict-core wheel is 77 MB). pyroid reads the `system.dic` of the installed
 without importing it or SudachiPy. If `PYROID_SUDACHI_DICT` is set, the file it names is read
 instead. The dictionary is read once per process, into memory (about 200 MB), the first time a
 filter pipeline, MinHash or sentence dedup is built for a Japanese code. A dictionary in an older
-format raises `ValueError`, and a path that cannot be read `OSError`. Parity was checked with
-sudachidict-core 20261015 ([Parity](#parity)).
+format raises `ValueError`, and a path that cannot be read `OSError`. `languages()` does not open
+the file, so with `PYROID_SUDACHI_DICT` naming a file that cannot be read, the Japanese codes still
+show `native=True` and the datatrove steps do not fall back to datatrove's code. Parity was
+checked with sudachidict-core 20261015 ([Parity](#parity)).
+
+One error differs in type: where SudachiPy's input limit stops datatrove (a 40,000-byte chunk
+whose normalization passes 65,535 bytes), datatrove raises `sudachipy.errors.SudachiError` and
+pyroid raises `ValueError` with the same message.
 
 Without a dictionary these codes are not native: they raise `NotImplementedError`, whose message
 says to install sudachidict-core, unless you pass `python_tokenizer=True` as in the next section.
@@ -299,7 +306,7 @@ with sudachidict-core 20261015 for Japanese; CPython 3.13 for the live checks):
 | … and, not committed: whole FineWeb-2 slices (ar, de, fr, ru, es, hi), 10k fuzz rows per tokenizer, a 57-language FineWeb-2 smoke set | 662,530 |
 | IndicNLP replay, with 8k fuzz rows per CPython 3.11–3.15 (each version matches its own) | 118,690 |
 | Whitespace tokenizer replay | 118,990 |
-| Filter suites, 8 FineWeb-2 slices × 8 cases: FineWeb-2's 3 filters with that language's thresholds and stop words, and datatrove's defaults including C4 (Japanese through `python_tokenizer=True`) | 16,000 decisions |
+| Filter suites, 8 FineWeb-2 slices × 8 cases: FineWeb-2's 3 filters with that language's thresholds and stop words, and datatrove's defaults including C4 | 16,000 decisions |
 | MinHash with FineWeb-2's configuration (xxhash/64) and the language: signatures and removed set, 8 slices × 300 documents with near-duplicates injected | 2,400 + 2,400 |
 | Hypothesis against live datatrove: script-specific text, 22 native languages and jieba, SudachiPy, pyvi and PyThaiNLP | 92 tests × 300 examples |
 | Chinese, native: the `cmn_Hani` slice's 8 filter cases, and its MinHash signatures and removed set | 2,000 decisions + 300 + 300 |

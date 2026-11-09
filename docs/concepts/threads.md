@@ -75,6 +75,10 @@ pyroid itself never re-enables the GIL, but a library it hands work to can:
 - `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded builds.
   `pyroid.metrics.sacrebleu` never imports sacrebleu, so it stays GIL-free unless a call is
   [delegated](fallbacks.md) to the real sacrebleu.
+- `pyroid.trafilatura.extract` and `extract_batch` never import trafilatura or lxml. A delegated
+  option does, and so does `bare_extraction` when trafilatura is installed (its `Document`
+  subclasses trafilatura's) or when its `body` is read as an lxml element; lxml re-enables the
+  GIL.
 - With `python_tokenizer=True`, the filters and MinHash call datatrove's own tokenizer in
   Python on the calling thread, so that part runs at the tokenizer's speed and doesn't scale with
   `threads=` ([Languages](../guides/languages.md)).

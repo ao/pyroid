@@ -20,8 +20,8 @@ pyroid has no runtime dependencies. Extras:
 | `pyroid[hf]` | `datasets>=3`, `pyarrow>=18`, `numpy>=1.26` | the [Hugging Face `datasets` helpers](guides/huggingface.md) in `pyroid.integrations.hf` |
 
 Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
-`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair` and `pyroid.patch()`
-need none of them.
+`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.trafilatura`,
+`pyroid.nltk`, `pyroid.jieba` and `pyroid.patch()` need none of them.
 
 Optional libraries, needed only by the features that use them:
 
@@ -32,21 +32,27 @@ Optional libraries, needed only by the features that use them:
     - ftfy 6.3.1;
     - datatrove 0.10.1 and a language's segmenter (pyvi, Stanza, ...) for
       `python_tokenizer=True`;
+    - trafilatura 2.3.1 (or 1.11.0 with `compat="1.11.0"`) for the delegated extraction options
+      (other output formats, metadata, links, ...);
+    - nltk 3.10.4 for Punkt training and the other `pyroid.nltk` features it hands back;
     - jieba 0.42.1 for `pyroid.jieba.posseg`, `pyroid.jieba.analyse` and paddle mode;
-    - rouge-score, nltk and sacrebleu 2.6.0 for the delegated metrics features;
+    - rouge-score 0.1.2 and sacrebleu 2.6.0 for the delegated metrics features;
     - json_repair 0.64.5 for `schema=`;
     - datasketch 2.0.0 for its classes pyroid does not port (`WeightedMinHash`, `HyperLogLog`,
       ...) and for Redis or Cassandra LSH storage.
 
     Without them, those calls raise `pyroid.PyroidError`.
+- NLTK's `punkt_tab` data for `pyroid.nltk`'s Punkt and ROUGE's `split_summaries=True`
+  (`python -m nltk.downloader punkt_tab`; pyroid does not bundle it, [details](guides/nltk.md)).
 - numpy for `pyroid.metrics.scoring.BootstrapAggregator`, which runs rouge-score's numpy code.
 - tldextract for `pyroid.filters.URLFilter`. Its suffix lists are read from a
   `tldextract.TLDExtract` when the filter is built; the matching itself runs in Rust.
 - sudachidict-core (20261015 or newer) for native Japanese in `pyroid.filters` and
   `pyroid.dedup`: `pip install sudachidict-core`. pyroid does not ship the dictionary (its
   `system.dic` is 202 MB): it reads the installed one, or the file that `PYROID_SUDACHI_DICT`
-  names, without importing SudachiPy. Without it the Japanese codes need
-  `python_tokenizer=True` ([Languages](guides/languages.md#japanese)).
+  names, without importing SudachiPy. With it, 4,013 of datatrove's 4,343 language codes are
+  native; without it, 4,009, and the Japanese codes need `python_tokenizer=True`
+  ([Languages](guides/languages.md#japanese)).
 
 ## Supported platforms
 
@@ -74,7 +80,9 @@ workflow builds the rest. PyPy and GraalPy are not supported.
 !!! note "Where parity has been checked"
     Every parity suite has run on Linux aarch64. The ftfy, fastText, filters, dedup, metrics and
     json_repair suites also ran natively on AWS EC2, on x86_64 (Intel Sapphire Rapids) and
-    aarch64 (AWS Graviton4), with 0 differences. fastText's and the metrics' references are
+    aarch64 (AWS Graviton4), with 0 differences. `pyroid.trafilatura` matched trafilatura on
+    27,585 Common Crawl pages in 8 option sets, in both modes, on x86_64 (AWS EC2 c7i.4xlarge).
+    fastText's and the metrics' references are
     pinned per platform, because the incumbents' own output can differ by architecture. macOS,
     Windows and musl are unverified until the first CI run on them
     ([Compatibility](compatibility.md#platforms)).

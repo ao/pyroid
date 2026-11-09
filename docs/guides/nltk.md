@@ -2,7 +2,8 @@
 
 `pyroid.nltk` is a Rust port of the sentence and word tokenizers of [NLTK](https://www.nltk.org)
 3.10.4 (Apache-2.0): Punkt (`sent_tokenize`, `PunktSentenceTokenizer`, `PunktTokenizer`),
-`word_tokenize` and the Treebank tokenizers and detokenizer. It returns the same sentences,
+`word_tokenize`, the Treebank tokenizers and detokenizer, and the common
+[regular-expression tokenizers](#regular-expression-tokenizers). It returns the same sentences,
 tokens and offsets as NLTK 3.10.4 for every input ([parity](../compatibility.md#nltk)), several
 times faster on one thread, and batches run in parallel.
 
@@ -73,6 +74,9 @@ tok.tokenize("Sales rose approx. 4%. The dept. agreed.")
 `sentences_from_text_legacy` and `debug_decisions` are there too. A `PunktLanguageVars` subclass
 that changes `sent_end_chars` (for example to add `"…"`) still runs in Rust.
 
+ROUGE in [`pyroid.metrics`](metrics.md) uses this port for `split_summaries=True`, so rougeLsum's
+sentence split runs in Rust too.
+
 ## Words
 
 `word_tokenize` splits the Punkt sentences with `NLTKWordTokenizer`, NLTK's improved Treebank
@@ -90,6 +94,26 @@ nltk.TreebankWordDetokenizer().detokenize(["I", "ca", "n't", "go", "."])  # "I c
 ```
 
 `convert_parentheses=True` gives the Penn Treebank symbols (`-LRB-`, `-RRB-`, ...), as in NLTK.
+`align_tokens(tokens, sentence)` gives the offsets of tokens found one after another.
+
+## Regular-expression tokenizers
+
+`RegexpTokenizer`, `WhitespaceTokenizer`, `BlanklineTokenizer`, `WordPunctTokenizer`,
+`regexp_tokenize`, `wordpunct_tokenize` and `blankline_tokenize` are NLTK's, with `gaps`,
+`discard_empty` and `span_tokenize`:
+
+```python
+import pyroid.nltk as nltk
+
+nltk.wordpunct_tokenize("Good muffins cost $3.88\nin New York.")
+# ['Good', 'muffins', 'cost', '$', '3', '.', '88', 'in', 'New', 'York', '.']
+nltk.RegexpTokenizer(r"\w+|\$[\d\.]+|\S+").tokenize("Good muffins cost $3.88\nin New York.")
+# ['Good', 'muffins', 'cost', '$3.88', 'in', 'New', 'York', '.']
+```
+
+These patterns run in Rust when spelled exactly so, with no flags beyond NLTK's default
+`re.UNICODE | re.MULTILINE | re.DOTALL`: `\w+`, `\w+|[^\w\s]+`, `\w+|\$[\d\.]+|\S+`, `[\w']+`,
+`\S+`, `\s+`, `[a-zA-Z]+` and `BlanklineTokenizer`'s. Any other pattern runs in NLTK.
 
 ## Many documents
 
@@ -120,9 +144,10 @@ These are handed to NLTK 3.10.4, which must then be installed. The first call em
   overrides more than `sent_end_chars`; parameters that are not sets of str.
 - `dump`, `PunktTokenizer.save_params` and `save_dir`.
 - A Treebank tokenizer or detokenizer whose pattern lists were edited or overridden.
+- A `RegexpTokenizer` pattern that is not one of the native ones.
 
-The other NLTK tokenizers (`TweetTokenizer`, `RegexpTokenizer`, `ToktokTokenizer`, ...) are not in
-`pyroid.nltk`; keep using NLTK's.
+The other NLTK tokenizers (`TweetTokenizer`, `ToktokTokenizer`, ...) are not in `pyroid.nltk`;
+keep using NLTK's.
 
 ## Differences from NLTK
 
@@ -135,6 +160,11 @@ The other NLTK tokenizers (`TweetTokenizer`, `RegexpTokenizer`, `ToktokTokenizer
   changed between the two releases.
 - Tokenizing does not add a 0 entry to `PunktParameters.ortho_context` for each unseen word, as
   NLTK's `defaultdict` does.
+- An NLTK `PunktParameters` given to a tokenizer is copied, so edit it through `tok._params`;
+  later edits of NLTK's object are not seen.
+- NLTK compiles a `PunktLanguageVars` object's patterns at first use and keeps the old
+  `sent_end_chars` in part of the algorithm after they change; pyroid uses the new ones
+  throughout.
 
 ## Parity
 

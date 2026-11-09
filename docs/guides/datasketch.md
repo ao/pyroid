@@ -45,8 +45,8 @@ datasketch before 2.0.0. `hashvalues` is a numpy array of the scheme's dtype (`u
   function is called from Python for every value, as in datasketch, with a one-time
   `pyroid.FallbackWarning`; the permutations still run in Rust when it returns ints in range.
 - The permutation parameters are drawn as datasketch draws them with numpy's legacy
-  `RandomState`, in Rust, and cached per seed, so creating a `MinHash` takes about 2 µs instead of
-  150 µs (850 µs for `"legacy"`).
+  `RandomState`, in Rust, and cached per seed, so creating a `MinHash` is 65 to 240 times faster
+  than with datasketch (Docker/OrbStack VM, indicative).
 - `jaccard`, `count`, `merge`, `union`, `copy`, `digest`, `is_empty`, `clear` and pickling are
   datasketch's code. A `MinHash` pickled by datasketch unpickles under `pyroid.patch("datasketch")`.
 
@@ -95,7 +95,8 @@ are.
 
 The index takes any object with `hashvalues`, `len()` and `scheme`: pyroid's or datasketch's
 `MinHash` and `LeanMinHash`, and datasketch's `WeightedMinHash`. Schemes cannot be mixed in one
-index, as in datasketch.
+index, as in datasketch. `WeightedMinHashLSH` and `WeightedMinHashLSHForest` are aliases of
+`MinHashLSH` and `MinHashLSHForest`, as in datasketch.
 
 `insert_batch(keys, minhashes, check_duplication=True, threads=None)` and
 `query_batch(minhashes, threads=None)` are pyroid's additions. `minhashes` is a list of sketches
