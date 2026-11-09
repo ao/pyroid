@@ -9,6 +9,7 @@ The sets only grow from one version to the next (checked), so the table is the u
 ranges, each tagged with the first version that has it.
 """
 
+import itertools
 import json
 import subprocess
 import sys
@@ -37,7 +38,7 @@ def expand(ranges):
 def main():
     dumps = [json.loads(subprocess.check_output([py, "-I", "-c", DUMP])) for py in sys.argv[1:]]
     sets = [expand(d["ranges"]) for d in dumps]
-    for a, b in zip(sets, sets[1:]):
+    for a, b in itertools.pairwise(sets):
         assert a <= b, "a later version drops printable code points"
     first = {}
     for i, s in enumerate(sets):

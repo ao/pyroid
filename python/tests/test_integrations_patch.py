@@ -155,7 +155,15 @@ def test_names_are_checked_before_anything_is_patched() -> None:
         integrations.unpatch()
     assert integrations.patched() == ()
     assert issubclass(integrations.PatchWarning, UserWarning)
-    assert _patch.SUPPORTED == ("ftfy", "fasttext", "anyascii", "datasketch", "trafilatura", "nltk", "warcio")
+    assert _patch.SUPPORTED == (
+        "ftfy",
+        "fasttext",
+        "anyascii",
+        "datasketch",
+        "trafilatura",
+        "nltk",
+        "warcio",
+    )
     assert (Path(_patch.HOOK_DIR) / "sitecustomize.py").is_file()
 
 

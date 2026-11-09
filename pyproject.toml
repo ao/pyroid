@@ -204,6 +204,9 @@ convention = "google"
 "crates/pyroid-core/src/ftfy/generate_tables.py" = ["T20"]
 "crates/pyroid-core/tests/ftfy_data/*.py" = ["T20"]
 "crates/pyroid-core/tests/datasketch_data/*.py" = ["T20"]
+"crates/pyroid-core/src/warc/generate_tables.py" = ["T20"]
+# warcio's oracle for tests/warc_oracle.rs: raw WARC bytes on long lines, a KELVIN SIGN on purpose.
+"crates/pyroid-core/tests/data/warc/gen.py" = ["T20", "RUF001", "E501", "PERF401"]
 
 [tool.mypy]
 python_version = "3.11"
