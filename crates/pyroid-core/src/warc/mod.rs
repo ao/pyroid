@@ -123,6 +123,14 @@ pub trait Source {
     /// One call = one Python `stream.read(n)`: append at most `n` bytes to `out`; appending
     /// nothing means EOF. `n == usize::MAX` stands for `read(-1)` (a negative `block_size`).
     fn read(&mut self, n: usize, out: &mut Vec<u8>) -> Result<(), Error>;
+
+    /// `fh.tell()`, called where warcio calls it (`read_to_end`, the "Record not followed by
+    /// newline" warning). `Ok(None)`: the reader's own count, the initial `tell` plus every byte
+    /// `read` returned (what a plain file and warcio's `UnseekableYetTellable` give). A source
+    /// whose position can differ (`gzip.GzipFile` after a failed read) returns its own.
+    fn tell(&mut self) -> Result<Option<i64>, Error> {
+        Ok(None)
+    }
 }
 
 /// A [`Source`] over any [`io::Read`] (a local file, a byte slice): `read(n)` returns what

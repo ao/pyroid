@@ -246,3 +246,28 @@ fn doc_reader_keeps_what_datatrove_keeps() {
     assert_eq!(rows.mime_type.get(1), None);
     assert_eq!(rows.key_error, [Some("'archive-date'"); 2]);
 }
+
+/// A source with its own `tell()` (as `gzip.GzipFile` after a failed read).
+struct Telling<'a>(ReadSource<&'a [u8]>, i64);
+
+impl Source for Telling<'_> {
+    fn read(&mut self, n: usize, out: &mut Vec<u8>) -> Result<(), Error> {
+        self.0.read(n, out)
+    }
+
+    fn tell(&mut self) -> Result<Option<i64>, Error> {
+        Ok(Some(self.1))
+    }
+}
+
+#[test]
+fn source_tell_is_used_for_offsets() {
+    let data = three_records();
+    let mut src = Telling(ReadSource(&data[..]), 100_000);
+    let mut a = ArchiveReader::new(ReaderOptions::default(), 0);
+    let _ = a.next_record(&mut src).unwrap().unwrap();
+    a.read_to_end(&mut src).unwrap();
+    // offset = fh.tell() - rem_length() - len(next_line)
+    let rest = data.len() - record("warcinfo", "urn:a", b"info").len();
+    assert_eq!(a.offset(), 100_000 - i64::try_from(rest).unwrap());
+}

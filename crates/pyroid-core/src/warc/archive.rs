@@ -373,7 +373,7 @@ impl ArchiveReader {
                 empty_size += i64::try_from(line.len()).expect("line");
                 if stripped != 0 {
                     // if first line is not blank, likely content-length was invalid
-                    let err_offset = self.top.tell - self.rem_length() - empty_size;
+                    let err_offset = self.fh_tell(src)? - self.rem_length() - empty_size;
                     self.msgs.push(Message::Stderr(format!(
                         "    WARNING: Record not followed by newline, perhaps Content-Length is invalid\n    Offset: {}\n    Remainder: {}\n",
                         err_offset,
@@ -386,6 +386,11 @@ impl ArchiveReader {
             }
             return Ok((Some(line), empty_size));
         }
+    }
+
+    /// `self.fh.tell()`.
+    fn fh_tell(&self, src: &mut dyn Source) -> Result<i64, Error> {
+        Ok(src.tell()?.unwrap_or(self.top.tell))
     }
 
     fn rem_length(&self) -> i64 {
@@ -406,7 +411,7 @@ impl ArchiveReader {
         lock(&raw).read_all(&mut self.top, src, &mut self.msgs)?;
         let (next_line, empty_size) = self.consume_blanklines(src)?;
         self.next_line = next_line;
-        self.offset = self.top.tell - self.rem_length();
+        self.offset = self.fh_tell(src)? - self.rem_length();
         if let Some(l) = &self.next_line {
             self.offset -= i64::try_from(l.len()).expect("line");
         }
