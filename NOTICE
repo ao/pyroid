@@ -744,3 +744,132 @@ Each ported file carries the header "Derived from NeMo Curator 1.4.0 (Apache-2.0
 NeMo's regex.compile("[[:alpha:]]") was generated from the regex module
 (Apache-2.0 / CNRI-Python; its Unicode Character Database data is under the
 Unicode License v3) by a generate_tables.py script in crates/pyroid-core/src/nemo/.
+CRFsuite and python-crfsuite (the CRF tagger behind Vietnamese and Thai)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/crfsuite/ is a derivative work of CRFsuite 0.12.2,
+http://www.chokkan.org/software/crfsuite/, as bundled with python-crfsuite
+0.9.12, https://github.com/scrapinghub/python-crfsuite (PyPI sdist
+python_crfsuite-0.9.12.tar.gz, sha256
+db37fccc3bd8f0c49c28a7697ca79c89d67b3fd5bf119122866169240ac4c480): the reader
+of its crf1d model files and CQDB string databases, the state and transition
+scores and the Viterbi decoder were rewritten in Rust, and python-crfsuite's
+conversion of Python features to attributes is followed. The file carries the
+header "Derived from CRFsuite 0.12.2 (BSD-3-Clause), © 2007-2010 Naoaki Okazaki,
+and python-crfsuite 0.9.12 (MIT), © 2014-2017 ScrapingHub Inc. and
+contributors; modified."
+
+    The BSD license.
+
+    Copyright (c) 2007-2010, Naoaki Okazaki
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+        * Redistributions of source code must retain the above copyright
+          notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright
+          notice, this list of conditions and the following disclaimer in the
+          documentation and/or other materials provided with the distribution.
+        * Neither the names of the authors nor the names of its contributors
+          may be used to endorse or promote products derived from this
+          software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+    OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    MIT License
+
+    Copyright (c) 2014-2017 ScrapingHub Inc. and contributors.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+-------------------------------------------------------------------------------
+pyvi (the Vietnamese word tokenizer)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/pyvi/ is a derivative work of pyvi 0.1.1,
+https://github.com/trungtv/pyvi: the syllable pattern, the CRF features of
+pyvi/ViTokenizer.py and the way spaCy 3.8.18's VietnameseTokenizer (MIT,
+described above) runs them were rewritten in Rust. Each ported file carries the
+header "Derived from pyvi 0.1.1 (MIT), © 2016 Viet-Trung Tran, ...; modified."
+
+The bundled data comes from the same release (PyPI wheel
+pyvi-0.1.1-py2.py3-none-any.whl, sha256
+e5e9e0e40ea1a556af12646c6b754f065342c86f1dfe84785ba926e1190c0bb7), whose MIT
+license below covers its models:
+
+- crates/pyroid-core/src/pyvi/data/pyvi3.crfsuite is the CRFsuite model file
+  stored in pyvi/models/pyvi3.pkl (sha256
+  6cdd73aee04b6a4ad7320ca85d27d931a7ef870cfdd41beb148e86bdb8aca134), byte for
+  byte (sha256 4716a0e60bbb16135917cce8440351f9790309879dd8f069c773070da9a3e0c1).
+- crates/pyroid-core/src/pyvi/data/words.txt is pyvi/models/words.txt,
+  unmodified (sha256
+  517743d27e71d43343e4b8e9e89015cdc68d84ebe1d48106449e501d918ece4a).
+
+Both are written by crates/pyroid-core/src/pyvi/generate.py.
+
+    The MIT License (MIT)
+    Copyright (c) 2016 Viet-Trung Tran
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of
+    this software and associated documentation files (the "Software"), to deal in
+    the Software without restriction, including without limitation the rights to
+    use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+    the Software, and to permit persons to whom the Software is furnished to do so,
+    subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+    FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+    COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+-------------------------------------------------------------------------------
+PyThaiNLP (the Thai word tokenizer)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/pythainlp/ (except replay.rs) is a derivative work of
+PyThaiNLP 5.4.0, https://github.com/PyThaiNLP/pythainlp (© 2016-2026 PyThaiNLP
+Project, Apache License 2.0, a copy of which is in LICENSES/Apache-2.0.txt):
+newmm with its safe mode and Thai character clusters (pythainlp/tokenize/
+newmm.py, tcc_p.py), the dictionary trie (pythainlp/util/trie.py), the
+post-processing of word_tokenize (pythainlp/tokenize/_utils.py) and crfcut's
+features and sentence rules (pythainlp/tokenize/crfcut.py) were rewritten in
+Rust. Each ported file carries the header "Derived from PyThaiNLP 5.4.0
+(Apache-2.0), © 2016-2026 PyThaiNLP Project, ...; modified."
+
+pyroid does not ship PyThaiNLP's word list or sentence model. It reads
+corpus/words_th.txt (CC0-1.0) and corpus/sentenceseg_crfcut.model (CC-BY-4.0)
+from the PyThaiNLP the user installs. The test recordings in
+crates/pyroid-core/src/pythainlp/testdata/ hold PyThaiNLP's and datatrove's
+output on test texts; neither file is included.
+
+crates/pyroid-core/src/pythainlp/th.rs also follows datatrove 0.10.1's
+ThaiTokenizer (Apache-2.0), described above.

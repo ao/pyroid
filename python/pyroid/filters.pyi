@@ -28,8 +28,9 @@ datatrove splits text with the word tokenizer of the filter's ``language``
 datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
 :func:`languages` lists them), as datatrove does:
 
-- Native (4,013 codes; 4,009 without a Japanese dictionary), in Rust on every
-  thread:
+- Native (4,049 codes with a Japanese dictionary and PyThaiNLP installed;
+  4,029 without PyThaiNLP, 4,045 without the dictionary, 4,025 without
+  either), in Rust on every thread:
 
   - the 3,742 codes datatrove tokenizes with a rule-based
     ``spacy.blank(code)``: the 57 spaCy languages ``af`` ... ``yo``,
@@ -57,14 +58,22 @@ datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
     (a 40,000-byte chunk whose normalization passes 65,535 bytes), datatrove
     raises ``sudachipy.errors.SudachiError``, which is not a ``ValueError``;
     pyroid raises ``ValueError`` with the same message.
-
+  - the 16 codes of ``SpaCyTokenizer("vi")`` (``"vie_Latn"``, ...: spaCy's
+    Vietnamese tokenizer with pyvi 0.1.1, its CRF model ported to Rust and
+    bundled, plus the sentencizer);
+  - the 20 codes of ``ThaiTokenizer`` (``"tha_Thai"``, ...: PyThaiNLP 5.4.0's
+    ``newmm-safe`` words and ``crfcut`` sentences, ported to Rust), when
+    PyThaiNLP is installed. pyroid reads its word list and sentence model
+    (``corpus/words_th.txt``, ``corpus/sentenceseg_crfcut.model``) from the
+    installed ``pythainlp`` (``pip install pythainlp``, which datatrove's
+    Thai tokenizer needs anyway), or from the directory
+    ``PYROID_PYTHAINLP_CORPUS`` names, once per process. Without it, these
+    codes take the Python-tokenizer path below.
   ``split_into_words`` and ``split_into_sentences`` match datatrove's.
-- Python tokenizer, opt-in (the other 330 codes): datatrove uses a segmenter
+- Python tokenizer, opt-in (the other 294 codes): datatrove uses a segmenter
   pyroid does not port: ``StanzaTokenizer`` (255 codes),
-  ``SpaCyTokenizer("vi")`` (pyvi),
-  ``ThaiTokenizer``, ``BurmeseTokenizer``, ``TibetanTokenizer``,
-  ``LaoTokenizer``, ``KhmerTokenizer`` and ``KiwiTokenizer`` (see
-  :func:`languages`). Calling a filter with such a code raises
+  ``BurmeseTokenizer``, ``TibetanTokenizer``, ``LaoTokenizer``,
+  ``KhmerTokenizer`` and ``KiwiTokenizer`` (see :func:`languages`). Calling a filter with such a code raises
   ``NotImplementedError`` unless you pass ``python_tokenizer=True``. Then each
   document is tokenized by datatrove's own tokenizer, in Python, on the
   calling thread. This needs datatrove 0.10.1 and the segmenter installed

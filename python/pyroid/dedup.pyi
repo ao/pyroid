@@ -34,19 +34,22 @@ is datatrove's default (xxhash/64); FineWeb used
 Languages
 ---------
 ``language=`` is ``MinhashDedupSignature(language=...)``: any of datatrove's
-language codes (:func:`languages`), as in ``pyroid.filters``. 4,013 of the
+language codes (:func:`languages`), as in ``pyroid.filters``. Up to 4,049 of the
 4,343 codes are tokenized natively, in Rust, on every thread: those datatrove
 tokenizes with a rule-based ``spacy.blank(code)`` (57 spaCy languages, ``xx``
-included), spaCy's Chinese tokenizer over jieba (:mod:`pyroid.jieba`),
-``IndicNLPTokenizer`` or ``WhitespaceTokenizer``, and Japanese
-(``SpaCyTokenizer("ja")``, SudachiPy ported to Rust) when a SudachiDict
-dictionary is installed (``pip install sudachidict-core``, or the
-``system.dic`` that ``PYROID_SUDACHI_DICT`` names; see ``pyroid.filters``).
-Without one, Japanese is one of the codes below.
+included), spaCy's Chinese tokenizer over jieba (:mod:`pyroid.jieba`), spaCy's
+Vietnamese tokenizer with pyvi, ``IndicNLPTokenizer`` or
+``WhitespaceTokenizer``; Japanese (``SpaCyTokenizer("ja")``, SudachiPy ported
+to Rust) when a SudachiDict dictionary is installed (``pip install
+sudachidict-core``, or the ``system.dic`` that ``PYROID_SUDACHI_DICT``
+names); and Thai (``ThaiTokenizer``, PyThaiNLP's newmm and crfcut ported to
+Rust) when PyThaiNLP is installed (``pip install pythainlp``, or the corpus
+directory ``PYROID_PYTHAINLP_CORPUS`` names); see ``pyroid.filters``.
+Without them, Japanese and Thai are among the codes below.
 Where SudachiPy's input limit stops datatrove, pyroid raises ``ValueError``
 with SudachiPy's message, not ``sudachipy.errors.SudachiError``.
 
-The other 330 (Vietnamese with pyvi, Stanza, Thai, Kiwi, ...) raise
+The other 294 (Stanza, Kiwi, Khmer, ...) raise
 ``NotImplementedError`` unless
 ``python_tokenizer=True``. With it, pyroid's ``simplify_text`` runs in Rust,
 datatrove's own tokenizer splits each document in Python on the calling
@@ -569,10 +572,11 @@ def sentence_dedup(
             dict of its fields, or ``None`` for the defaults.
         language: datatrove's language code (as its ``language=``), for the sentence and
             word tokenizer: any code ``pyroid.filters.languages()`` marks native
-            (spaCy rule-based languages, Chinese with jieba, Japanese with an
-            installed SudachiDict, the whitespace and IndicNLP tokenizers).
-            Codes whose datatrove tokenizer pyroid does not port (pyvi, Stanza,
-            ...) raise ``NotImplementedError``; use the datatrove drop-ins.
+            (spaCy rule-based languages, Chinese with jieba, Vietnamese with pyvi,
+            Japanese with an installed SudachiDict, Thai with an installed
+            PyThaiNLP, the whitespace and IndicNLP tokenizers). Codes whose
+            datatrove tokenizer pyroid does not port (Stanza, Kiwi, ...) raise
+            ``NotImplementedError``; use the datatrove drop-ins.
         threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
             ``n`` tasks at once; ``1`` runs on the calling thread.
         **kwargs: ``SentDedupConfig`` fields to override, plus ``hash_fc`` and
