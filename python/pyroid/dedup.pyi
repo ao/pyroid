@@ -43,6 +43,8 @@ included), spaCy's Chinese tokenizer over jieba (:mod:`pyroid.jieba`),
 dictionary is installed (``pip install sudachidict-core``, or the
 ``system.dic`` that ``PYROID_SUDACHI_DICT`` names; see ``pyroid.filters``).
 Without one, Japanese is one of the codes below.
+Where SudachiPy's input limit stops datatrove, pyroid raises ``ValueError``
+with SudachiPy's message, not ``sudachipy.errors.SudachiError``.
 
 The other 330 (Vietnamese with pyvi, Stanza, Thai, Kiwi, ...) raise
 ``NotImplementedError`` unless

@@ -53,6 +53,10 @@ datatrove's 4,343 codes (``"deu_Latn"``, ``"deu"``, ``"de"``, ...;
     dictionary datatrove uses), or the file ``PYROID_SUDACHI_DICT`` names,
     once per process, the first time a filter needs it. Without one, these
     codes take the Python-tokenizer path below.
+    One error differs in type: where SudachiPy's input limit stops datatrove
+    (a 40,000-byte chunk whose normalization passes 65,535 bytes), datatrove
+    raises ``sudachipy.errors.SudachiError``, which is not a ``ValueError``;
+    pyroid raises ``ValueError`` with the same message.
 
   ``split_into_words`` and ``split_into_sentences`` match datatrove's.
 - Python tokenizer, opt-in (the other 330 codes): datatrove uses a segmenter

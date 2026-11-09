@@ -540,7 +540,7 @@ and util.get_words_and_spaces (MIT) and datatrove 0.10.1's SpaCyTokenizer
 -------------------------------------------------------------------------------
 SudachiPy / sudachi.rs (the Japanese word tokenizer)
 -------------------------------------------------------------------------------
-crates/pyroid-core/src/sudachi/ and crates/pyroid-py/src/sudachi.rs are a
+crates/pyroid-core/src/sudachi/ (except ja.rs and replay.rs) is a
 derivative work of SudachiPy 0.7.0, https://github.com/WorksApplications/sudachi.rs
 (© 2021-2026 Works Applications Co., Ltd., Apache License 2.0, a copy of which
 is in LICENSES/Apache-2.0.txt): the dictionary reader, the input-text, OOV and
@@ -556,7 +556,11 @@ resources/), under the same licence.
 
 pyroid does not ship a Sudachi dictionary. It reads the SudachiDict system
 dictionary the user installs (sudachidict-core, Apache License 2.0,
-https://github.com/WorksApplications/SudachiDict).
+https://github.com/WorksApplications/SudachiDict). The test recordings in
+crates/pyroid-core/src/sudachi/testdata/ hold SudachiPy's output with
+sudachidict-core 20261015 (word and POS ids), and tags.json its POS table (1,558
+part-of-speech names); no lexicon, connection matrix or other dictionary file
+is included.
 
 crates/pyroid-core/src/sudachi/ja.rs also follows datatrove 0.10.1's
 SpaCyTokenizer and datatrove.utils.japanese_tokenizer (Apache-2.0) and spaCy
