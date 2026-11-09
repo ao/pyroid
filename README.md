@@ -10,6 +10,16 @@
 pyroid is a Rust implementation of the Python libraries used to clean LLM training data and score
 model output, with the same API and the same output.
 
+From Common Crawl WARC files to deduplicated documents, datatrove's FineWeb pipeline runs 8.4×
+faster with pyroid's steps: 104 s instead of 871 s on 8 workers, for 171,595 pages in 8 WARC files
+of CC-MAIN-2026-39 on AWS EC2 c7i.4xlarge
+([benchmarks](https://ao.github.io/pyroid/benchmarks/#from-warc-files-datatroves-fineweb-pipeline)).
+It keeps the same documents, apart from the pages stock datatrove drops at its 1 s extraction
+timeout.
+
+On 100,000 FineWeb documents, with the text already extracted, pyroid's cleaning chain is 27×
+faster than datatrove on 8 processes and 56× on one (also AWS EC2 c7i.4xlarge).
+
 ```console
 $ pip install "pyroid[cli]"
 $ pyroid clean in.parquet out.parquet --recipe fineweb   # datatrove's FineWeb pipeline
@@ -33,45 +43,48 @@ ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'
 | [`pyroid.fasttext`](https://ao.github.io/pyroid/guides/fasttext/) | fastText inference (fasttext, fasttext-wheel, fasttext-predict) |
 | [`pyroid.filters`](https://ao.github.io/pyroid/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
 | [`pyroid.dedup`](https://ao.github.io/pyroid/guides/dedup/) | datatrove 0.10.1's MinHash and sentence dedup |
+| [`pyroid.trafilatura`](https://ao.github.io/pyroid/guides/trafilatura/) | Trafilatura's text extraction: 2.3.1, or 1.11.0 as datatrove 0.10.1 installs it (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
 | [`pyroid.translit`](https://ao.github.io/pyroid/guides/translit/) | anyascii; a permissively licensed alternative to Unidecode |
 | [`pyroid.metrics`](https://ao.github.io/pyroid/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
 | [`pyroid.json_repair`](https://ao.github.io/pyroid/guides/json_repair/) | json_repair 0.64.5 |
 | [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
 | [`pyroid.jieba`](https://ao.github.io/pyroid/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
-| [`pyroid.trafilatura`](https://ao.github.io/pyroid/guides/trafilatura/) | Trafilatura 2.3.1's text extraction (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
 | [`pyroid.nltk`](https://ao.github.io/pyroid/guides/nltk/) | NLTK 3.10.4's `sent_tokenize` (Punkt), `word_tokenize` and Treebank tokenizers |
-
-On 100,000 FineWeb documents, pyroid runs datatrove's FineWeb cleaning chain about 27× faster
-than datatrove on 8 processes and 56× faster on one thread, with identical output (AWS EC2
-c7i.4xlarge; [benchmarks](https://ao.github.io/pyroid/benchmarks/)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-dark.svg">
   <img alt="Wall time to clean the 10,000-document FineWeb dev slice with identical output on AWS EC2 c7i.4xlarge: pyroid takes 1.9 s with 8 threads, 18× faster than datatrove's 35 s with 8 processes, and 5.6 s with 1 thread, 38× faster than datatrove's 213 s with 1 process" src="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-light.svg">
 </picture>
 
-<sub>The FineWeb chain (ftfy, fastText language ID, the Gopher, C4 and FineWeb quality filters,
-MinHash dedup) on the first 10,000 documents of the pinned FineWeb slice, with 1 and 8 processes
-or threads pinned to 8 CPUs. datatrove 0.10.1 (ftfy 6.3.1, fasttext-predict 0.9.2.4, spaCy
-3.8.18) on CPython 3.13.18; pyroid's native chain on free-threaded CPython 3.15.2. The output is
-the same document for document. On the 100k corpus the ratios are 27× and 56×.</sub>
+<sub>The FineWeb chain without text extraction (ftfy, fastText language ID, the Gopher, C4 and
+FineWeb quality filters, MinHash dedup) on the first 10,000 documents of the pinned FineWeb slice,
+with 1 and 8 processes or threads pinned to 8 CPUs. datatrove 0.10.1 (ftfy 6.3.1,
+fasttext-predict 0.9.2.4, spaCy 3.8.18) on CPython 3.13.18; pyroid's native chain on free-threaded
+CPython 3.15.2. The output is the same document for document. On the 100k corpus the ratios are
+27× and 56×.</sub>
 
 ## Same output, checked
 
 `pyroid.ftfy` is byte-identical to ftfy 6.3.1. `pyroid.fasttext` gives the same labels and
 probabilities as fastText's C++ code on the same CPU architecture. The filters and dedup make
-datatrove's keep/drop decisions, with its reasons and dedup files. The metrics match
-rouge-score's and sacrebleu's scores to the last digit, `pyroid.json_repair` makes
-json_repair's repairs, `pyroid.datasketch` gives datasketch's hash values and LSH query results,
-and `pyroid.trafilatura` extracts the same text as Trafilatura 2.3.1, byte for byte.
+datatrove's keep/drop decisions, with its reasons and dedup files, and `pyroid.trafilatura`
+extracts the same text as Trafilatura 2.3.1 or 1.11.0, byte for byte. The metrics match
+rouge-score's and sacrebleu's scores to the last digit, `pyroid.json_repair` makes json_repair's
+repairs, `pyroid.datasketch` gives datasketch's hash values and LSH query results, and
+`pyroid.jieba` and `pyroid.nltk` give jieba's and NLTK's words, sentences and offsets.
 
 Each module is tested against the library it replaces, on pinned real data and with
-property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). The suites
-run on Linux x86_64 and aarch64, including natively on AWS EC2 (c7i.4xlarge and c8g.4xlarge);
-macOS and Windows are checked in CI before each release.
+property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). Every suite
+runs on Linux aarch64. The ftfy, fastText, filters, dedup, metrics and json_repair suites also ran
+natively on AWS EC2 x86_64 and aarch64 (c7i.4xlarge and c8g.4xlarge), and the Trafilatura pages
+on x86_64. macOS and Windows are checked in CI before each release.
 
 Where a module meets an option or input it doesn't port, it hands the call to the real library
 with a `pyroid.FallbackWarning`, or raises. It never returns a different result silently.
+
+pyroid's results don't depend on the number of threads or workers, or on how loaded the machine
+is. Stock datatrove's do: its Trafilatura step gives up on a page after 1 s, so two runs over the
+same WARC files can keep different documents. pyroid has no timeout.
 
 ## Differences from the originals
 
@@ -98,29 +111,36 @@ one process:
 | `dedup`, MinHash signatures | datatrove 0.10.1 | 34× |
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
 
-With pyroid's stages swapped into datatrove's own executor, the pipeline ran 11.2× faster at 8
-processes on the dev slice and 13.6× on 100k documents. From WARC files, with text extraction
-included, datatrove's FineWeb pipeline ran 8.4× faster with pyroid's steps at 8 processes (104 s
-instead of 871 s for 171,595 Common Crawl pages) and 9.0× faster at one process, with the same
-documents kept apart from the pages stock datatrove drops at its 1 s extraction timeout
-([details](https://ao.github.io/pyroid/guides/trafilatura/#speed)).
+With pyroid's stages swapped into datatrove's own executor, the chain ran 11.2× faster at 8
+processes on the dev slice and 13.6× on 100k documents. From WARC files, where text extraction
+takes most of the time, the whole pipeline ran 8.4× faster at 8 workers and 9.0× at one.
 
-The other modules have only been measured in a Docker VM on a Mac so far, so their numbers are
-indicative. On one thread, ROUGE is 59–65× faster than rouge-score, corpus BLEU 11× and chrF 19×
-faster than sacrebleu, and `pyroid.json_repair` about 30× faster than json_repair on broken JSON,
-where it runs in linear time and json_repair in quadratic. `pyroid.datasketch` computes MinHash
-signatures 8× faster than datasketch on one thread and 21× on eight (85× from raw text), and
-MinHashLSH inserts 8–27× and queries 6–19× faster (10,000 FineWeb documents, CPython 3.15t).
-`pyroid.trafilatura.extract` is about 7.5× faster than Trafilatura with its default options and
-8× faster for datatrove's call (1,000 Common Crawl pages, one thread, CPython 3.13).
+The other modules have only been measured in a Docker VM on a Mac so far, so these numbers are
+indicative (one thread unless stated):
+
+| pyroid | Against | Speedup |
+|---|---|---:|
+| `trafilatura.extract`, default options (`compat="2.3.1"` / `"1.11.0"`) | Trafilatura 2.3.1 / 1.11.0 | 7.2× / 8.6× |
+| `metrics`, ROUGE | rouge-score 0.1.2 | 59–65× |
+| `metrics`, corpus BLEU / chrF | sacrebleu 2.6.0 | 11× / 19× |
+| `json_repair.repair_json`, broken JSON | json_repair 0.64.5 | about 30× |
+| `datasketch`, MinHash signatures, 1 / 8 threads | datasketch 2.0.0 | 8× / 21× |
+| `jieba.lcut`, a batch, 1 / 8 threads | jieba 0.42.1 | 24× / 58× |
+| `nltk.sent_tokenize` / `word_tokenize` | NLTK 3.10.4 | 60× / 31× |
+| `filters`, FineWeb-2 settings, Chinese / Japanese | datatrove 0.10.1 | 44× / 7.8× |
+
+`pyroid.json_repair` runs in linear time where json_repair takes quadratic time, so its lead grows
+with the input. The [benchmarks page](https://ao.github.io/pyroid/benchmarks/) gives each row's
+corpus, interpreter and source.
 
 ## Integrations
 
 | Entry point | What it does |
 |---|---|
 | [`pyroid clean`](https://ao.github.io/pyroid/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL |
-| [`pyroid.patch()`](https://ao.github.io/pyroid/guides/patch/) | makes `import ftfy`, `import fasttext`, `import anyascii` and `import datasketch` give pyroid's functions, in code you don't own |
-| [datatrove steps](https://ao.github.io/pyroid/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures |
+| [Large datasets](https://ao.github.io/pyroid/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
+| [`pyroid.patch()`](https://ao.github.io/pyroid/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura` and `nltk` give pyroid's functions, in code you don't own |
+| [datatrove steps](https://ao.github.io/pyroid/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
 | [Hugging Face `datasets`](https://ao.github.io/pyroid/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
 
 ```python
@@ -171,10 +191,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 pyroid's own code is MIT. The ported parts keep their licences, so the package's licence
 expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0`:
 
-- Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK's Porter stemmer, sacrebleu and Trafilatura;
-- MIT: ported from spaCy, indic-nlp-library, urduhack, json_repair and libxml2 (the HTML parser);
+- Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK (the Porter stemmer and the
+  tokenizers), sacrebleu, Trafilatura and SudachiPy;
+- MIT: ported from spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (with its
+  dictionary) and libxml2 (the HTML parser);
 - BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists);
-- BSD-3-Clause: numpy's random generator (for C4 bad words), tldextract and lxml;
+- BSD-3-Clause: numpy's random generator (for C4 bad words), scipy's QUADPACK integration (for
+  MinHashLSH's parameters), tldextract and lxml;
 - PSF-2.0: CPython's `ipaddress` (IPv6 parsing);
 - ISC: anyascii's transliteration data;
 - Unicode-3.0: data from the Unicode Character Database.
