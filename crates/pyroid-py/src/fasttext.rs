@@ -107,7 +107,7 @@ fn load_error(py: Python<'_>, path: &std::path::Path, err: LoadError) -> PyErr {
     }
 }
 
-fn predict_error(e: PredictError) -> PyErr {
+pub(crate) fn predict_error(e: PredictError) -> PyErr {
     match e {
         PredictError::NaN => PyRuntimeError::new_err(e.message()),
         _ => PyValueError::new_err(e.message()),
@@ -253,7 +253,7 @@ fn f32_matrix(
 /// thread-safe: share one model across threads.
 #[pyclass(frozen, module = "pyroid.fasttext", name = "Model")]
 pub struct Model {
-    inner: ft::Model,
+    pub(crate) inner: ft::Model,
     path: PathBuf,
     /// Label strs, decoded once; `None` if not valid UTF-8 (decoded per call
     /// with the caller's `on_unicode_error`).

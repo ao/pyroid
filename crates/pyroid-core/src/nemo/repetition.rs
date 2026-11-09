@@ -9,7 +9,7 @@ use memchr::memmem;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::text::{ScoreError, Splitter, paragraphs, ratio, sentences};
-use crate::filters::text::{py_len, py_strip};
+use crate::filters::text::py_len;
 
 /// Counts over `items`: how many, how many distinct, and their lengths (code points).
 struct Repeats {
@@ -137,7 +137,7 @@ pub fn repeating_top_ngrams(
         return Err(ScoreError::EmptyMax);
     }
     let n = usize::try_from(n).unwrap_or(usize::MAX);
-    let (words, ids) = intern(splitter.words(py_strip(text)));
+    let (words, ids) = intern(splitter.doc_words(text));
     if words.len() < n {
         return Ok(TopNGram::Score(1.0));
     }
@@ -174,7 +174,7 @@ pub fn repeating_duplicate_ngrams(text: &str, n: i64, splitter: Splitter) -> f64
         return score(0);
     }
     let n = usize::try_from(n).unwrap_or(usize::MAX);
-    let (words, ids) = intern(splitter.words(py_strip(text)));
+    let (words, ids) = intern(splitter.doc_words(text));
     if words.len() < n {
         return 1.0;
     }

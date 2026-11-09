@@ -59,17 +59,28 @@ pub enum Splitter {
 }
 
 impl Splitter {
-    /// The splitter for `lang`, already lowercased with Python's `str.lower()` as
-    /// `get_word_splitter` does. `None` for `"ja"` (MeCab), which pyroid does not port.
-    pub fn for_lang(lowered: &str) -> Option<Self> {
-        match lowered {
-            "zh" => Some(Self::Jieba),
-            "ja" => None,
-            _ => Some(Self::Whitespace),
+    /// `get_word_splitter(lang)`, which compares `lang.lower()` with `"zh"` and `"ja"`.
+    /// `None` for `"ja"` (MeCab), which pyroid does not port.
+    ///
+    /// The only non-ASCII characters whose `lower()` holds ASCII are U+0130 (`"i̇"`) and
+    /// U+212A (`"k"`), so `lang.lower() == "zh"` exactly when `lang` is `"zh"` in any
+    /// ASCII case.
+    pub fn for_lang(lang: &str) -> Option<Self> {
+        if lang.eq_ignore_ascii_case("zh") {
+            Some(Self::Jieba)
+        } else if lang.eq_ignore_ascii_case("ja") {
+            None
+        } else {
+            Some(Self::Whitespace)
         }
     }
 
-    /// The words of `text`, in order (`self(text)` in NeMo).
+    /// The words NeMo's filters see for a document: `splitter(text.strip())`.
+    pub fn doc_words(self, text: &str) -> Words<'_> {
+        self.words(py_strip(text))
+    }
+
+    /// The words of `text`, in order (`splitter(text)` in NeMo).
     pub fn words(self, text: &str) -> Words<'_> {
         match self {
             Self::Whitespace => Words::Split(split(text)),
@@ -269,6 +280,9 @@ mod tests {
     fn splitters() {
         assert_eq!(Splitter::for_lang("zh"), Some(Splitter::Jieba));
         assert_eq!(Splitter::for_lang("ja"), None);
+        assert_eq!(Splitter::for_lang("ZH"), Some(Splitter::Jieba));
+        assert_eq!(Splitter::for_lang("jA"), None);
+        assert_eq!(Splitter::for_lang("\u{212A}a"), Some(Splitter::Whitespace));
         assert_eq!(Splitter::for_lang("en"), Some(Splitter::Whitespace));
         assert_eq!(Splitter::for_lang(""), Some(Splitter::Whitespace));
         let words: Vec<&str> = Splitter::Jieba.words("我来到北京清华大学 ok").collect();

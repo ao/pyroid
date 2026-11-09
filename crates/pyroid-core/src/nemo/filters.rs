@@ -133,7 +133,7 @@ fn hash_runs(word: &str) -> usize {
 /// A word that strips to `""` (jieba's whitespace words) divides by zero, as in NeMo.
 pub fn symbols_to_words(text: &str, splitter: Splitter) -> Result<f64, ScoreError> {
     let (mut words, mut symbols) = (0usize, 0usize);
-    for w in splitter.words(py_strip(text)) {
+    for w in splitter.doc_words(text) {
         words += 1;
         let word = py_strip(w);
         let len = py_len(word);
@@ -290,7 +290,7 @@ pub fn boilerplate_string(text: &str) -> f64 {
 
 /// `WordCountFilter`: the number of words.
 pub fn word_count(text: &str, splitter: Splitter) -> usize {
-    splitter.words(py_strip(text)).count()
+    splitter.doc_words(text).count()
 }
 
 /// `PunctuationFilter`: the share of sentences whose stripped text does not end with one of
@@ -331,7 +331,7 @@ pub fn is_regex_alpha(c: char) -> bool {
 /// character.
 pub fn words_without_alphabets(text: &str, splitter: Splitter) -> Result<f64, ScoreError> {
     let (mut total, mut alpha) = (0usize, 0usize);
-    for w in splitter.words(py_strip(text)) {
+    for w in splitter.doc_words(text) {
         total += 1;
         alpha += usize::from(w.chars().any(is_regex_alpha));
     }
@@ -358,7 +358,7 @@ pub fn common_english_words(text: &str, min_num_common_words: i64, stop_at_false
 /// `MeanWordLengthFilter`: the mean length (code points) of the non-empty words.
 pub fn mean_word_length(text: &str, splitter: Splitter) -> Result<f64, ScoreError> {
     let (mut n, mut sum) = (0usize, 0usize);
-    for w in splitter.words(py_strip(text)) {
+    for w in splitter.doc_words(text) {
         let len = py_len(w);
         if len > 0 {
             n += 1;
@@ -374,7 +374,7 @@ pub fn mean_word_length(text: &str, splitter: Splitter) -> Result<f64, ScoreErro
 /// `LongWordFilter`: the length of the longest word.
 pub fn long_word(text: &str, splitter: Splitter) -> Result<usize, ScoreError> {
     splitter
-        .words(py_strip(text))
+        .doc_words(text)
         .map(py_len)
         .max()
         .ok_or(ScoreError::EmptyMax)
