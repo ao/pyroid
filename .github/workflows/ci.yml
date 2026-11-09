@@ -357,7 +357,7 @@ jobs:
         run: |
           set -euo pipefail
           uv run --project parity --frozen pytest parity/tests/test_harness.py parity/tests/test_harness_ftfy.py \
-            parity/tests/test_harness_trafilatura.py
+            parity/tests/test_harness_trafilatura.py parity/tests/test_harness_warc.py
           uv run --project parity --frozen --no-group trafilatura --group trafilatura111 \
             pytest parity/tests/test_harness_trafilatura.py --trafilatura-compat 1.11.0
 
@@ -375,7 +375,7 @@ jobs:
         # One entry per merged product module pyroid.<suite>. Every suite runs on the free-threaded builds too:
         # without the oracle group they compare against the pinned refs, and live-oracle checks skip in the report.
         # SUITE@VERSION is a suite in another mode: trafilatura@1.11.0 is pyroid.trafilatura's compat="1.11.0".
-        suite: [ftfy, fasttext, filters, dedup, metrics, json_repair, datasketch, jieba, trafilatura, trafilatura@1.11.0, nltk]
+        suite: [ftfy, fasttext, filters, dedup, metrics, json_repair, datasketch, jieba, trafilatura, trafilatura@1.11.0, nltk, warc]
         python: ["3.12", "3.14t", "3.15t"]
         # The wheel each interpreter installs (the three flavours the wheels job checks for).
         include:
