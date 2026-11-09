@@ -259,6 +259,82 @@ impl PySet {
     }
 }
 
+/// The first empty slot of `hash`'s probe sequence (`set_add_entry` and `set_insert_clean`
+/// probe the same slots).
+#[inline]
+fn place(slots: &mut [u32], item: u32, hash: i64) {
+    let mask = slots.len() - 1;
+    let mut perturb = hash as u64 as usize;
+    let mut i = perturb & mask;
+    loop {
+        let probes = if i + LINEAR_PROBES <= mask {
+            LINEAR_PROBES
+        } else {
+            0
+        };
+        if let Some(slot) = slots[i..=i + probes].iter_mut().find(|x| **x == EMPTY) {
+            *slot = item;
+            return;
+        }
+        perturb >>= PERTURB_SHIFT;
+        i = i.wrapping_mul(5).wrapping_add(1).wrapping_add(perturb) & mask;
+    }
+}
+
+/// [`PySet`] for items known to be pairwise distinct, as `set()` meets a document's distinct
+/// n-grams in order of first occurrence. `set_add_entry` then stops at the first empty slot
+/// of the probe sequence (an equal hash is a collision, never a match), so the slots hold
+/// only items and each item's hash is kept once, by item. Items are numbered from 0 in the
+/// order they are added.
+#[derive(Clone, Debug)]
+pub struct DistinctSet {
+    slots: Vec<u32>,
+    hashes: Vec<i64>,
+}
+
+impl Default for DistinctSet {
+    fn default() -> Self {
+        Self {
+            slots: vec![EMPTY; MINSIZE],
+            hashes: Vec::new(),
+        }
+    }
+}
+
+impl DistinctSet {
+    /// Empty it, keeping its buffers.
+    pub fn clear(&mut self) {
+        self.slots.clear();
+        self.slots.resize(MINSIZE, EMPTY);
+        self.hashes.clear();
+    }
+
+    /// Add the next item, which has `hash` and equals none of the items before it.
+    pub fn add(&mut self, hash: i64) {
+        let item = u32::try_from(self.hashes.len()).expect("fewer than 2**32 items");
+        self.hashes.push(hash);
+        let mask = self.slots.len() - 1;
+        place(&mut self.slots, item, hash);
+        let used = self.hashes.len();
+        if used * 5 >= mask * 3 {
+            let mut size = MINSIZE;
+            let min_used = if used > 50_000 { used * 2 } else { used * 4 };
+            while size <= min_used {
+                size <<= 1;
+            }
+            let old = std::mem::replace(&mut self.slots, vec![EMPTY; size]);
+            for item in old.into_iter().filter(|&x| x != EMPTY) {
+                place(&mut self.slots, item, self.hashes[item as usize]);
+            }
+        }
+    }
+
+    /// The items in iteration order (slot order).
+    pub fn iter(&self) -> impl Iterator<Item = u32> + '_ {
+        self.slots.iter().copied().filter(|&x| x != EMPTY)
+    }
+}
+
 /// The order `list(set(xs))` gives, for items with `hashes` (in list order) that are equal
 /// when `same(a, b)`: the index of each distinct item's first occurrence.
 pub fn set_order(hashes: &[i64], same: impl Fn(usize, usize) -> bool) -> Vec<usize> {
@@ -309,6 +385,35 @@ mod tests {
         let got: Vec<i64> = order.iter().map(|&i| xs[i]).collect();
         // Five items fill 8 slots past 3/5: the table grows to 32 (mask 31) on the fifth.
         assert_eq!(got, [0, 3, 5, 13, -2]);
+    }
+
+    #[test]
+    fn distinct_set_is_a_pyset_of_distinct_items() {
+        let mut state = 99u64;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            state
+        };
+        let mut set = DistinctSet::default();
+        for size in [0usize, 1, 4, 5, 19, 20, 77, 78, 300, 4916, 78_643, 100_000] {
+            // Random hashes, some equal (collisions of distinct items) and some sharing slots.
+            let hashes: Vec<i64> = (0..size)
+                .map(|i| match next() % 4 {
+                    0 if i > 0 => (next() % 64) as i64,
+                    1 => ((next() >> 40) << 20) as i64,
+                    _ => next() as i64,
+                })
+                .collect();
+            set.clear();
+            let mut py = PySet::new();
+            for (i, &h) in hashes.iter().enumerate() {
+                set.add(h);
+                py.add(u32::try_from(i).unwrap(), h, |_, _| false);
+            }
+            assert!(set.iter().eq(py.iter()), "{size}");
+        }
     }
 
     #[test]

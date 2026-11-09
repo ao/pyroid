@@ -5,12 +5,17 @@
 //! N-grams are windows over word ids: each distinct word gets a `u32`, and a window is
 //! hashed as its slice of ids (FxHash), so a document's words are hashed once.
 
-use memchr::memmem;
-use rustc_hash::{FxHashMap, FxHashSet};
+use std::cell::RefCell;
+use std::hash::Hasher;
+use std::ops::ControlFlow;
 
-use super::pyhash::{self, HashKey, PySet};
-use super::text::{ScoreError, Splitter, paragraphs, ratio, sentences};
-use crate::filters::text::py_len;
+use memchr::memmem;
+use rustc_hash::{FxHashSet, FxHasher};
+
+use super::pyhash::{self, DistinctSet, HashKey};
+use super::text::{
+    ScoreError, Splitter, char_len, for_each_word_span, paragraphs, ratio, sentences,
+};
 
 /// Counts over `items`: how many, how many distinct, and their lengths (code points).
 struct Repeats {
@@ -29,7 +34,7 @@ fn repeats<'a>(items: impl Iterator<Item = &'a str>) -> Repeats {
         distinct_chars: 0,
     };
     for s in items {
-        let len = py_len(s);
+        let len = char_len(s);
         r.total += 1;
         r.chars += len;
         if seen.insert(s) {
@@ -75,17 +80,199 @@ pub fn repeated_paragraphs_by_char(text: &str) -> Result<f64, ScoreError> {
     Ok(ratio(r.distinct_chars, r.chars))
 }
 
-/// A document's words and their ids (equal words, equal ids).
-fn intern<'a>(words: impl Iterator<Item = &'a str>) -> (Vec<&'a str>, Vec<u32>) {
-    let mut table: FxHashMap<&str, u32> = FxHashMap::default();
-    let mut list = Vec::new();
-    let mut ids = Vec::new();
-    for w in words {
-        let next = u32::try_from(table.len()).expect("fewer than 2**32 distinct words");
-        ids.push(*table.entry(w).or_insert(next));
-        list.push(w);
+/// The words of the n-gram filters: byte ranges of a document, or a list of str.
+trait WordList {
+    fn count(&self) -> usize;
+    fn word(&self, i: usize) -> &str;
+}
+
+/// Words as byte ranges of `text`.
+struct Spans<'a> {
+    text: &'a str,
+    spans: &'a [(usize, usize)],
+}
+
+impl WordList for Spans<'_> {
+    #[inline]
+    fn count(&self) -> usize {
+        self.spans.len()
     }
-    (list, ids)
+
+    #[inline]
+    fn word(&self, i: usize) -> &str {
+        let (a, b) = self.spans[i];
+        &self.text[a..b]
+    }
+}
+
+impl WordList for [&str] {
+    #[inline]
+    fn count(&self) -> usize {
+        self.len()
+    }
+
+    #[inline]
+    fn word(&self, i: usize) -> &str {
+        self[i]
+    }
+}
+
+/// Per-thread buffers of the n-gram filters, reused from one document to the next.
+#[derive(Debug, Default)]
+struct Scratch {
+    /// Each word's byte range in the document.
+    spans: Vec<(usize, usize)>,
+    /// Each word's hash (equal words, equal hashes).
+    word_hash: Vec<u64>,
+    /// Each window's hash.
+    win_hash: Vec<u64>,
+    /// The open-addressing table of distinct windows: 0 when empty, else index + 1 in `uniq`.
+    slots: Vec<u32>,
+    /// `(count, first start)` per distinct window, in order of first occurrence.
+    uniq: Vec<(usize, usize)>,
+    /// CPython's `hash()` of each word (the tie-break only).
+    lanes: Vec<i64>,
+    /// The distinct windows as CPython's `set` holds them (the tie-break only).
+    set: DistinctSet,
+    /// Scratch for [`pyhash::str_hash`].
+    buf: Vec<u8>,
+}
+
+thread_local! {
+    static SCRATCH: RefCell<Scratch> = RefCell::new(Scratch::default());
+}
+
+/// Run `f` with this thread's [`Scratch`] (fresh buffers if it is in use or gone).
+fn with_scratch<R>(f: impl FnOnce(&mut Scratch) -> R) -> R {
+    let mut f = Some(f);
+    let done = SCRATCH
+        .try_with(|s| {
+            s.try_borrow_mut()
+                .ok()
+                .map(|mut s| (f.take().expect("called once"))(&mut s))
+        })
+        .ok()
+        .flatten();
+    match done {
+        Some(r) => r,
+        None => (f.take().expect("not called yet"))(&mut Scratch::default()),
+    }
+}
+
+/// The document's words (NeMo's `splitter(text.strip())`) as byte ranges of `text`.
+fn word_spans(text: &str, splitter: Splitter, spans: &mut Vec<(usize, usize)>) {
+    spans.clear();
+    match splitter {
+        Splitter::Whitespace => for_each_word_span(text, |a, b, _| {
+            spans.push((a, b));
+            ControlFlow::Continue(())
+        }),
+        Splitter::Jieba => {
+            // jieba's words are slices of the stripped text, so of `text`.
+            let base = text.as_ptr() as usize;
+            for w in splitter.doc_words(text) {
+                let start = w.as_ptr() as usize - base;
+                spans.push((start, start + w.len()));
+            }
+        }
+    }
+}
+
+/// The multiplier of the rolling window hash (odd).
+const ROLL: u64 = 0x9E37_79B9_7F4A_7C15;
+
+/// `hash[i] = Σ_j word_hash[i + j] · ROLL^(n - 1 - j)` for every window of `n` words, rolled
+/// from one window to the next.
+fn window_hashes(word_hash: &[u64], n: usize, out: &mut Vec<u64>) {
+    out.clear();
+    if word_hash.len() < n || n == 0 {
+        return;
+    }
+    let lead = (1..n).fold(1u64, |p, _| p.wrapping_mul(ROLL));
+    let mut h = word_hash[..n]
+        .iter()
+        .fold(0u64, |h, &x| h.wrapping_mul(ROLL).wrapping_add(x));
+    out.reserve(word_hash.len() - n + 1);
+    out.push(h);
+    for i in n..word_hash.len() {
+        h = h
+            .wrapping_sub(word_hash[i - n].wrapping_mul(lead))
+            .wrapping_mul(ROLL)
+            .wrapping_add(word_hash[i]);
+        out.push(h);
+    }
+}
+
+/// A word's hash: equal words, equal hashes.
+#[inline]
+fn word_hash(w: &str) -> u64 {
+    let mut h = FxHasher::default();
+    h.write(w.as_bytes());
+    h.finish()
+}
+
+/// The table slot a window hash starts probing at.
+#[inline]
+fn slot_of(h: u64, mask: usize) -> usize {
+    // The high half of a multiply mixes every bit of `h`; `mask` is below 2**32 in practice.
+    #[allow(clippy::cast_possible_truncation)]
+    let mixed = ((h ^ (h >> 29)).wrapping_mul(0xBF58_476D_1CE4_E5B9) >> 32) as usize;
+    mixed & mask
+}
+
+/// Windows `a` and `b` of `n` words are equal: the same words (hashes first, then bytes).
+#[inline]
+fn same_window<W: WordList + ?Sized>(
+    words: &W,
+    hash: &[u64],
+    a: usize,
+    b: usize,
+    n: usize,
+) -> bool {
+    (0..n).all(|j| hash[a + j] == hash[b + j])
+        && (0..n).all(|j| words.word(a + j) == words.word(b + j))
+}
+
+/// Count the distinct windows of `n` words (`n >= 1`, at most the number of words) into
+/// `s.uniq`, in order of first occurrence, calling `each(i, repeat)` for every window `i` in
+/// order (`repeat`: an equal window came before). Windows are told apart by their words,
+/// never by their hashes alone.
+fn tally_windows<W: WordList + ?Sized>(
+    words: &W,
+    n: usize,
+    s: &mut Scratch,
+    mut each: impl FnMut(usize, bool),
+) {
+    s.word_hash.clear();
+    s.word_hash
+        .extend((0..words.count()).map(|i| word_hash(words.word(i))));
+    window_hashes(&s.word_hash, n, &mut s.win_hash);
+    let windows = s.win_hash.len();
+    let size = (windows * 2).next_power_of_two().max(16);
+    s.slots.clear();
+    s.slots.resize(size, 0);
+    let mask = size - 1;
+    s.uniq.clear();
+    for window in 0..windows {
+        let hash = s.win_hash[window];
+        let mut slot = slot_of(hash, mask);
+        let repeat = loop {
+            let entry = s.slots[slot];
+            if entry == 0 {
+                s.slots[slot] = u32::try_from(s.uniq.len() + 1).expect("fewer than 2**32 windows");
+                s.uniq.push((1, window));
+                break false;
+            }
+            let seen = entry as usize - 1;
+            let start = s.uniq[seen].1;
+            if s.win_hash[start] == hash && same_window(words, &s.word_hash, start, window, n) {
+                s.uniq[seen].0 += 1;
+                break true;
+            }
+            slot = (slot + 1) & mask;
+        };
+        each(window, repeat);
+    }
 }
 
 /// `RepeatingTopNGramsFilter`'s result for one document.
@@ -114,7 +301,7 @@ pub struct Tie {
 /// `text.replace(joined, "")` removes, over `len(text)`.
 pub fn top_ngram_score(text: &str, words: &[&str]) -> f64 {
     let joined = words.join(" ");
-    let nchar = py_len(text);
+    let nchar = char_len(text);
     if nchar == 0 {
         return 1.0;
     }
@@ -123,58 +310,47 @@ pub fn top_ngram_score(text: &str, words: &[&str]) -> f64 {
     }
     // `str.replace` removes non-overlapping occurrences, left to right.
     let k = memmem::find_iter(text.as_bytes(), joined.as_bytes()).count();
-    ratio(k * py_len(&joined), nchar)
+    ratio(k * char_len(&joined), nchar)
 }
 
-/// `(count, first start)` per distinct window of `n` ids, in order of first occurrence.
-fn count_windows(ids: &[u32], n: usize) -> Vec<(usize, usize)> {
-    let mut index: FxHashMap<&[u32], usize> = FxHashMap::default();
-    index.reserve(ids.len().saturating_sub(n) + 1);
-    let mut uniq: Vec<(usize, usize)> = Vec::new();
-    for (i, w) in ids.windows(n).enumerate() {
-        let next = uniq.len();
-        let k = *index.entry(w).or_insert(next);
-        if k == next {
-            uniq.push((0, i));
-        }
-        uniq[k].0 += 1;
+/// The distinct n-grams `s.uniq` (as [`tally_windows`] leaves them) as CPython's `set(ngrams)`
+/// holds them with `key`. `set()` inserts the n-grams in list order and a repeat changes
+/// nothing, so inserting the first occurrences in order gives the same table.
+///
+/// Fills `s.set` (its items are indices into `s.uniq`); `s.word_hash` and `s.uniq` are
+/// [`tally_windows`]' and `s.slots` is reused.
+fn build_set<W: WordList + ?Sized>(key: HashKey, words: &W, n: usize, s: &mut Scratch) {
+    // hash(word), once per distinct word (words with equal hashes are compared).
+    let count = words.count();
+    let size = (count * 2).next_power_of_two().max(16);
+    s.slots.clear();
+    s.slots.resize(size, 0);
+    let mask = size - 1;
+    s.lanes.clear();
+    for word in 0..count {
+        let hash = s.word_hash[word];
+        let mut slot = slot_of(hash, mask);
+        let lane = loop {
+            let entry = s.slots[slot];
+            if entry == 0 {
+                s.slots[slot] = u32::try_from(word + 1).expect("fewer than 2**32 words");
+                break pyhash::str_hash(key, words.word(word), &mut s.buf);
+            }
+            let seen = entry as usize - 1;
+            if s.word_hash[seen] == hash && words.word(seen) == words.word(word) {
+                break s.lanes[seen];
+            }
+            slot = (slot + 1) & mask;
+        };
+        s.lanes.push(lane);
     }
-    uniq
-}
-
-/// The distinct n-grams `uniq` (as from [`count_windows`]) in the iteration order of
-/// `set(ngrams)` as CPython builds it with `key`, as indices into `uniq`. `set()` inserts the
-/// n-grams in list order and a repeat changes nothing, so inserting the first occurrences in
-/// order gives the same table.
-fn set_order_of(
-    key: HashKey,
-    words: &[&str],
-    ids: &[u32],
-    n: usize,
-    uniq: &[(usize, usize)],
-) -> impl Iterator<Item = usize> {
-    // hash(word), once per distinct word.
-    let mut word_hash: Vec<Option<i64>> = Vec::new();
-    let mut buf = Vec::new();
-    for (&w, &id) in words.iter().zip(ids) {
-        let id = id as usize;
-        if id >= word_hash.len() {
-            word_hash.resize(id + 1, None);
-        }
-        if word_hash[id].is_none() {
-            word_hash[id] = Some(pyhash::str_hash(key, w, &mut buf));
-        }
-    }
-    let lane = |id: &u32| word_hash[*id as usize].expect("every word is hashed");
-    let mut set = PySet::new();
-    for (k, &(_, start)) in uniq.iter().enumerate() {
-        let hash = pyhash::tuple_hash(ids[start..start + n].iter().map(lane));
-        let item = u32::try_from(k).expect("fewer than 2**32 distinct n-grams");
+    s.set.clear();
+    for &(_, start) in &s.uniq {
         // The n-grams are distinct: an equal hash is a collision, never the same tuple.
-        set.add(item, hash, |_, _| false);
+        s.set.add(pyhash::tuple_hash(
+            s.lanes[start..start + n].iter().copied(),
+        ));
     }
-    let order: Vec<usize> = set.iter().map(|k| k as usize).collect();
-    order.into_iter()
 }
 
 /// `list(set(ngrams))` for the n-grams of `words` (`n >= 1`), with CPython's hash `key`: the
@@ -182,14 +358,14 @@ fn set_order_of(
 /// code resolves [`repeating_top_ngrams`]' ties; `pyroid.nemo` checks it against the
 /// interpreter's own sets before it passes the key.
 pub fn ngram_set_order(key: HashKey, words: &[&str], n: usize) -> Vec<usize> {
-    let (words, ids) = intern(words.iter().copied());
     if n == 0 || words.len() < n {
         return Vec::new();
     }
-    let uniq = count_windows(&ids, n);
-    set_order_of(key, &words, &ids, n, &uniq)
-        .map(|k| uniq[k].1)
-        .collect()
+    with_scratch(|s| {
+        tally_windows(words, n, s, |_, _| {});
+        build_set(key, words, n, s);
+        s.set.iter().map(|k| s.uniq[k as usize].1).collect()
+    })
 }
 
 /// `RepeatingTopNGramsFilter(n)`: the share of characters the most frequent word n-gram
@@ -208,74 +384,107 @@ pub fn repeating_top_ngrams(
         return Err(ScoreError::EmptyMax);
     }
     let n = usize::try_from(n).unwrap_or(usize::MAX);
-    let (words, ids) = intern(splitter.doc_words(text));
-    if words.len() < n {
-        return Ok(TopNGram::Score(1.0));
+    Ok(with_scratch(|s| {
+        let mut spans = std::mem::take(&mut s.spans);
+        word_spans(text, splitter, &mut spans);
+        let words = Spans {
+            text,
+            spans: &spans,
+        };
+        let result = top_ngrams_of(text, &words, n, key, s);
+        s.spans = spans;
+        result
+    }))
+}
+
+/// [`repeating_top_ngrams`] for the words of `text`.
+fn top_ngrams_of(
+    text: &str,
+    words: &Spans<'_>,
+    n: usize,
+    key: Option<HashKey>,
+    s: &mut Scratch,
+) -> TopNGram {
+    if words.count() < n {
+        return TopNGram::Score(1.0);
     }
-    let uniq = count_windows(&ids, n);
-    let top = uniq.iter().map(|&(c, _)| c).max().unwrap_or(0);
-    let mut tied = uniq.iter().filter(|&&(c, _)| c == top);
+    tally_windows(words, n, s, |_, _| {});
+    let score_at = |start: usize| {
+        let g: Vec<&str> = (start..start + n).map(|j| words.word(j)).collect();
+        TopNGram::Score(top_ngram_score(text, &g))
+    };
+    let top = s.uniq.iter().map(|&(c, _)| c).max().unwrap_or(0);
+    let mut tied = s.uniq.iter().filter(|&&(c, _)| c == top);
     let first = tied.next().map_or(0, |&(_, s)| s);
     if tied.next().is_none() {
-        return Ok(TopNGram::Score(top_ngram_score(
-            text,
-            &words[first..first + n],
-        )));
+        return score_at(first);
     }
     if let Some(key) = key {
         // The first n-gram with the top count in set order.
-        let s = set_order_of(key, &words, &ids, n, &uniq)
-            .map(|k| uniq[k])
+        build_set(key, words, n, s);
+        let start = s
+            .set
+            .iter()
+            .map(|k| s.uniq[k as usize])
             .find(|&(count, _)| count == top)
             .map_or(first, |(_, start)| start);
-        return Ok(TopNGram::Score(top_ngram_score(text, &words[s..s + n])));
+        return score_at(start);
     }
+    let uniq = &s.uniq;
     let starts: Vec<usize> = uniq
         .iter()
         .filter(|&&(c, _)| c == top)
         .map(|&(_, s)| s)
         .collect();
     let all = starts.len() == uniq.len();
-    Ok(TopNGram::Tied(Tie {
+    TopNGram::Tied(Tie {
         count: top,
         starts: (!all).then_some(starts),
-    }))
+    })
 }
 
 /// `RepeatingDuplicateNGramsFilter(n)`: the share of characters in n-grams that occurred
 /// before (overlapping n-grams counted once, with the spaces between their words); 1.0
 /// below `n` words. `n < 1` gives no n-grams: 0.0 (1.0 for `""`).
 pub fn repeating_duplicate_ngrams(text: &str, n: i64, splitter: Splitter) -> f64 {
-    let nchar = py_len(text);
+    let nchar = char_len(text);
     let score = |dup: usize| if nchar > 0 { ratio(dup, nchar) } else { 1.0 };
     if n < 1 {
         return score(0);
     }
     let n = usize::try_from(n).unwrap_or(usize::MAX);
-    let (words, ids) = intern(splitter.doc_words(text));
-    if words.len() < n {
-        return 1.0;
-    }
-    let lens: Vec<usize> = words.iter().map(|w| py_len(w)).collect();
-    let mut counts: FxHashMap<&[u32], u32> = FxHashMap::default();
-    counts.reserve(ids.len() - n + 1);
-    let (mut dup, mut overlap) = (0usize, 0usize);
-    for (i, w) in ids.windows(n).enumerate() {
-        let c = counts.entry(w).or_insert(0);
-        *c += 1;
-        if *c > 1 {
-            // The words not counted yet, and the spaces before them.
-            dup += lens[i + overlap..i + n].iter().sum::<usize>() + (n - overlap).min(n - 1);
-            overlap = n;
-        }
-        overlap = overlap.saturating_sub(1);
-    }
-    score(dup)
+    with_scratch(|s| {
+        let mut spans = std::mem::take(&mut s.spans);
+        word_spans(text, splitter, &mut spans);
+        let words = Spans {
+            text,
+            spans: &spans,
+        };
+        let result = if words.count() < n {
+            1.0
+        } else {
+            let (mut dup, mut overlap) = (0usize, 0usize);
+            tally_windows(&words, n, s, |i, repeat| {
+                if repeat {
+                    // The words not counted yet (each word is counted at most once), and the
+                    // spaces before them.
+                    let chars: usize = (i + overlap..i + n).map(|j| char_len(words.word(j))).sum();
+                    dup += chars + (n - overlap).min(n - 1);
+                    overlap = n;
+                }
+                overlap = overlap.saturating_sub(1);
+            });
+            score(dup)
+        };
+        s.spans = spans;
+        result
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::nemo::text::split;
 
     const WS: Splitter = Splitter::Whitespace;
 
@@ -410,6 +619,90 @@ mod tests {
                     Ok(TopNGram::Score(w)),
                     "{text:?} {n}"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn ngram_kernels_match_a_direct_implementation() {
+        // NeMo's code, with a HashMap of word vectors, on documents from a small vocabulary
+        // (many repeats, ties and probe chains).
+        let vocab = [
+            "a", "b", "ab", "é", "中文", "a b", "x", "#", "\u{3000}", "ab ",
+        ];
+        let mut state = 0x1234_5678_u64;
+        let mut next = |m: usize| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            usize::try_from(state >> 33).unwrap() % m
+        };
+        for _ in 0..400 {
+            let len = next(200);
+            let text: String = (0..len)
+                .map(|_| vocab[next(vocab.len())])
+                .collect::<Vec<_>>()
+                .join(" ");
+            let words: Vec<&str> = split(&text).collect();
+            for n in 1..=6 {
+                // RepeatingDuplicateNGramsFilter.
+                let want = if words.len() < n {
+                    1.0
+                } else {
+                    let mut counts: std::collections::HashMap<&[&str], usize> =
+                        std::collections::HashMap::default();
+                    let (mut dup, mut overlap) = (0usize, 0usize);
+                    for i in 0..=words.len() - n {
+                        let c = counts.entry(&words[i..i + n]).or_insert(0);
+                        *c += 1;
+                        if *c > 1 {
+                            dup += words[i + overlap..i + n]
+                                .iter()
+                                .map(|w| w.chars().count())
+                                .sum::<usize>()
+                                + (n - overlap).min(n - 1);
+                            overlap = n;
+                        }
+                        overlap = overlap.saturating_sub(1);
+                    }
+                    ratio(dup, text.chars().count())
+                };
+                let n64 = i64::try_from(n).unwrap();
+                assert_eq!(
+                    repeating_duplicate_ngrams(&text, n64, WS),
+                    want,
+                    "{text:?} {n}"
+                );
+                // RepeatingTopNGramsFilter: the counts and the tied first starts.
+                if words.len() < n {
+                    continue;
+                }
+                let mut counts: Vec<(&[&str], usize, usize)> = Vec::new();
+                for i in 0..=words.len() - n {
+                    match counts.iter_mut().find(|(g, _, _)| *g == &words[i..i + n]) {
+                        Some(e) => e.1 += 1,
+                        None => counts.push((&words[i..i + n], 1, i)),
+                    }
+                }
+                let top = counts.iter().map(|e| e.1).max().unwrap();
+                let starts: Vec<usize> =
+                    counts.iter().filter(|e| e.1 == top).map(|e| e.2).collect();
+                let got = repeating_top_ngrams(&text, n64, WS, None).unwrap();
+                if let [s] = starts[..] {
+                    assert_eq!(
+                        got,
+                        TopNGram::Score(top_ngram_score(&text, &words[s..s + n]))
+                    );
+                } else {
+                    let all = starts.len() == counts.len();
+                    assert_eq!(
+                        got,
+                        TopNGram::Tied(Tie {
+                            count: top,
+                            starts: (!all).then_some(starts)
+                        })
+                    );
+                }
             }
         }
     }
