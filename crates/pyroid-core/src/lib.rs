@@ -13,6 +13,7 @@
 //! - [`html`]: an HTML parser with lxml 6.1.3's trees (a port of libxml2 2.14.6's), for
 //!   `pyroid.trafilatura`.
 //! - [`metrics`]: ROUGE, BLEU and chrF, exact ports of rouge-score and sacrebleu (`pyroid.metrics`).
+//! - [`nltk`]: NLTK 3.10.4's Punkt sentence splitter and Treebank word tokenizers (`pyroid.nltk`).
 //! - [`trafilatura`]: Trafilatura 2.3.1's text extraction, ported exactly (`pyroid.trafilatura`).
 //! - [`sudachi`]: Japanese morphemes as SudachiPy 0.7.0 gives them, from an
 //!   installed SudachiDict (datatrove's Japanese tokenizer in the filters).
@@ -31,6 +32,7 @@ pub mod html;
 pub mod jieba;
 pub mod json_repair;
 pub mod metrics;
+pub mod nltk;
 pub mod par;
 pub mod sudachi;
 pub mod text;
