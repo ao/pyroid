@@ -580,9 +580,19 @@ impl V11<'_, '_> {
                 continue;
             }
             // `subtree.xpath('//p//text()')`: the whole document, the copy's or the page's (a
-            // subtree removed by the link-density pass still belongs to the page)
-            let doc_root = if is_copy { subtree } else { self.d.top(tree) };
-            let (any_p, plen) = super::super::xpaths::p_text(&self.d, doc_root);
+            // subtree removed by the link-density pass still belongs to the page, and so do
+            // its top-level elements after the first)
+            let roots = if is_copy {
+                vec![subtree]
+            } else {
+                self.doc_roots(tree)
+            };
+            let (mut any_p, mut plen) = (false, 0);
+            for r in roots {
+                let (a, n) = super::super::xpaths::p_text(&self.d, r);
+                any_p |= a;
+                plen += n;
+            }
             let factor = if self.focus == super::Focus::Precision {
                 1
             } else {

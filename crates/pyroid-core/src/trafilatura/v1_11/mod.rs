@@ -189,14 +189,37 @@ impl<'c, 'a> V11<'c, 'a> {
         tree
     }
 
+    /// The top-level elements of the document holding `x`, in document order: lxml's `//`
+    /// searches all of them, and libxml2's HTML parser puts what follows `</html>` in a second
+    /// root element. (Copies and removed subtrees have no top-level siblings here, as lxml's
+    /// copies have none.)
+    pub(crate) fn doc_roots(&self, x: NodeId) -> Vec<NodeId> {
+        let mut first = self.d.top(x);
+        while let Some(p) = self.d.prev(first) {
+            first = p;
+        }
+        let mut out = vec![first];
+        while let Some(n) = self.d.next(out[out.len() - 1]) {
+            out.push(n);
+        }
+        out
+    }
+
+    /// `//*` matching `m` in the document of `x`, in document order.
+    pub(crate) fn doc_iter(&self, x: NodeId, m: &Matcher) -> Vec<NodeId> {
+        let mut out = Vec::new();
+        for r in self.doc_roots(x) {
+            out.extend(self.d.iter_vec(r, m, true));
+        }
+        out
+    }
+
     /// htmlprocessing.prune_html: `//processing-instruction()|//*[not(node())]` over the whole
     /// document, deleting the CUT_EMPTY_ELEMS among them.
     fn prune_html(&mut self, tree: NodeId) {
-        let top = self.d.top(tree);
         let cut = TagSet::of(self.p.cut_empty_elems);
         let empties: Vec<NodeId> = self
-            .d
-            .iter_vec(top, &Matcher::AnyElement, true)
+            .doc_iter(tree, &Matcher::AnyElement)
             .into_iter()
             .filter(|&e| {
                 self.d.text(e).is_none() && self.d.len(e) == 0 && cut.contains(self.d.tag(e))

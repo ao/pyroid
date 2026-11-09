@@ -8,7 +8,8 @@ Each page runs through trafilatura.extract and bare_extraction with several opti
 fixture keeps the pages (as surrogatepass UTF-8 in hex where they hold lone surrogates) and the
 results: the text, None, or the exception extract raises (2.3.1: its type; 1.11.0: "Type:
 message"). 1.11.0 also runs the pages of CASES_111, for paths only it has (its baseline's
-AttributeError, the int() of a row span in xmltotxt, the TypeErrors it catches); it takes
+AttributeError, the int() of a row span in xmltotxt, the TypeErrors it catches, and characters
+lxml refuses to assign in every place the extraction copies text from); it takes
 `no_fallback` for `fast`, and its commentsbody is None without comments.
 """
 
@@ -170,7 +171,53 @@ CASES_111 = {
     "doctype with a slash": '<!DOCTYPE a/b>x/><html><body><article><p>' + LONG + "</p></article></body></html>",
     "raw control characters": page(f"<article><p>{LONG}\x01 \x0c tail</p><p>{LONG}\x1f</p></article>"),
     "formatting outside paragraphs": page(f"<div><p>{LONG}</p><b>bold words</b><span>span words {LONG}</span></div>"),
+    # 1.11.0 keeps control characters through its repair: lxml's ValueError on assigning them
+    # can come from any step that copies text, and where it is caught decides the result
+    "control character after </html>": (
+        "<html><body>the<article><p>Trafilatura keeps the main text of a page and drops the navigation, "
+        "the footer and the other boilerplate around it. This paragraph is long enough to count as "
+        "content, and it mentions Café, naïve, Zürich and 日本語 so that the encodings stay honest.</p>"
+        "<div>the<div></html></div><div></div>\x08</div></article></body></html>"
+    ),
 }
+
+# the same characters in every place the extraction copies text from
+BAD_CHARS = {"bs": "\x08", "ff": "\x0c", "nul": "\x00", "fffe": "\ufffe", "sur": "\udc80"}
+BAD_PLACES = {
+    "p text": lambda x: page(f"<article><p>{LONG}{x} tail</p><p>{LONG}</p></article>"),
+    "between paragraphs": lambda x: page(f"<article><p>{LONG}</p>{x}<p>{LONG}</p></article>"),
+    "span in p": lambda x: page(f"<article><p>{LONG} <span>a{x}b</span> end</p></article>"),
+    "bold in p": lambda x: page(f"<article><p>{LONG} <b>bold {x}</b> end</p></article>"),
+    "link in div": lambda x: page(f"<article><div><a href='/x'>link{x}</a> {LONG}</div></article>"),
+    "list item": lambda x: page(f"<article><p>{LONG}</p><ul><li>item{x} one</li><li>two</li></ul></article>"),
+    "list item attribute": lambda x: page(
+        f"<article><p>{LONG}</p><ul><li>Item <x data-y='a{x}b'>sub</x> text long enough</li></ul></article>"
+    ),
+    "heading": lambda x: page(f"<article><h2>Title{x}</h2><p>{LONG}</p></article>"),
+    "table cell": lambda x: page(f"<article><p>{LONG}</p><table><tr><td>cell{x}</td><td>b</td></tr></table></article>"),
+    "blockquote": lambda x: page(f"<article><p>{LONG}</p><blockquote>quote{x}</blockquote></article>"),
+    "pre": lambda x: page(f"<article><p>{LONG}</p><pre>code {x}</pre></article>"),
+    "div text": lambda x: page(f"<article><div>{LONG}{x}</div></article>"),
+    "tail of an empty span": lambda x: page(f"<article><p>{LONG}</p><span></span>{x}<p>{LONG}</p></article>"),
+    "tail of a removed nav": lambda x: page(f"<article><p>{LONG}</p><nav>menu</nav>{x} tail</article>"),
+    "after </html>": lambda x: page(f"<article><p>{LONG}</p></article>") + f"<div></div>{x}",
+    "comments": lambda x: page(f"<article><p>{LONG}</p></article><div id='comments'><p>comment{x} here</p></div>"),
+    "title": lambda x: page(f"<article><p>{LONG}</p></article>", title=f"t{x}"),
+    "class attribute": lambda x: page(f"<article class='a{x}b'><p>{LONG}</p></article>"),
+    "body text": lambda x: page(f"{x}<article><p>{LONG}</p></article>"),
+    "readability page": lambda x: page(
+        "<div><a href='/'>Home</a> <a href='/b'>Blog</a></div>"
+        + "".join(f"<div class='para'>{LONG} sentence {i}, with commas, and more.</div>{x if i == 2 else ''}" for i in range(4))
+    ),
+    "short page": lambda x: page(f"<div><p>Short {x} teaser.</p></div>"),
+}
+FAMILY = set()
+# (three option sets each: the fixture stays small)
+FAMILY_SETS = ("default", "precision", "fast")
+for _place, _make in BAD_PLACES.items():
+    for _cname, _char in BAD_CHARS.items():
+        CASES_111[f"{_cname} in {_place}"] = _make(_char)
+        FAMILY.add(f"{_cname} in {_place}")
 
 
 def kwargs(kw, bare):
@@ -197,6 +244,8 @@ def main():
     for name, html in cases.items():
         rec = {"name": name, "html": html.encode("utf-8", "surrogatepass").hex(), "extract": {}, "bare": {}}
         for k, kw in OPTION_SETS.items():
+            if name in FAMILY and k not in FAMILY_SETS:
+                continue
             try:
                 rec["extract"][k] = trafilatura.extract(html, **kwargs(kw, False))
             except Exception as err:

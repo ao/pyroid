@@ -152,8 +152,7 @@ impl V11<'_, '_> {
             t::FOOTER,
             t::SECTION,
         ];
-        let top = self.d.top(node);
-        let mut list = self.d.iter_vec(top, &Matcher::tags(&tags), true);
+        let mut list = self.doc_iter(node, &Matcher::tags(&tags));
         list.reverse();
         for e in list {
             let weight = self.class_weight(e);
