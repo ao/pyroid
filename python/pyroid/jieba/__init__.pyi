@@ -19,8 +19,8 @@ maximum-probability route (the same floating-point operations and tie-breaking),
 BMES HMM for unknown words (``HMM=True``) are ported step for step, as are ``add_word``,
 ``del_word``, ``suggest_freq``, ``load_userdict``'s line format and ``Tokenizer`` with a
 custom dictionary file. The default dictionary (jieba's ``dict.txt``, MIT) is built into
-pyroid as a prebuilt trie, so loading it takes about 2 ms (jieba: about half a second) and
-writes no cache file; jieba itself is not needed.
+pyroid as a prebuilt trie, so loading it takes about 3 ms (jieba: about 0.4 s, with or without
+its cache file) and writes no cache file; jieba itself is not needed.
 
 Delegated to the real jieba (it must be installed; otherwise :class:`pyroid.PyroidError`),
 with one :class:`pyroid.FallbackWarning` per feature: ``pyroid.jieba.posseg``
