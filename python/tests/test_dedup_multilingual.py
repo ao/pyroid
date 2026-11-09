@@ -294,7 +294,7 @@ def _filters_suite() -> Any:
 _SUITE = _filters_suite()
 POOLS: dict[str, list[str]] = _SUITE.POOLS
 NATIVE: dict[str, str] = _SUITE.NATIVE
-#: The languages of the python_tokenizer=True tests (Japanese among them, native or not).
+#: The languages of the python_tokenizer=True tests (vi, th and ja; native or not).
 PYTHON_PATH: dict[str, tuple[str, tuple[str, ...]]] = _SUITE.PYTHON_PATH
 
 
@@ -335,6 +335,12 @@ def _need(lang: str) -> None:
     if pf.languages()[lang].arg == "ja":
         pytest.importorskip("sudachipy")  # datatrove's reference needs SudachiPy and its dictionary
         pytest.importorskip("sudachidict_core")
+    if pf.languages()[lang].arg == "vi":
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # pyvi: invalid escapes
+            pytest.importorskip("pyvi")  # datatrove's reference needs pyvi
+    if pf.languages()[lang].tokenizer == "ThaiTokenizer":
+        pytest.importorskip("pythainlp")
 
 
 def check(
@@ -412,6 +418,7 @@ def test_python_tokenizer_on_native_language_is_identical(dt: Datatrove) -> None
 DATA = Path(os.environ.get("PYROID_PARITY_DATA", "/data"))
 SLICES = [
     "arb_Arab", "cmn_Hani", "deu_Latn", "fra_Latn", "hin_Deva", "jpn_Jpan", "rus_Cyrl", "spa_Latn",
+    "tha_Thai", "vie_Latn",
 ]  # fmt: skip
 
 
@@ -425,7 +432,9 @@ def test_fineweb2_slices_match_datatrove(dt: Datatrove, lang: str) -> None:
     if python:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            pytest.importorskip({"cmn_Hani": "jieba", "jpn_Jpan": "sudachipy"}[lang])
+            pytest.importorskip(
+                {"cmn_Hani": "jieba", "jpn_Jpan": "sudachipy", "tha_Thai": "pythainlp"}[lang]
+            )
     _need(lang)
     table = pq.read_table(path, columns=["text"])
     texts: list[str] = table.column("text").to_pylist()

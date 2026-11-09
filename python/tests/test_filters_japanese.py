@@ -302,7 +302,9 @@ def test_japanese_codes() -> None:
     for code in CODES:
         assert langs[code] == pf.Language("SpaCyTokenizer", "ja", DICTIONARY), code
         assert dd.languages()[code].native is DICTIONARY
-    assert sum(v.native for v in langs.values()) == (4013 if DICTIONARY else 4009)
+    # 4,025 native codes, plus the twenty Thai ones when pyroid finds PyThaiNLP.
+    thai = 20 * FILTERS.pythainlp_corpus()
+    assert sum(v.native for v in langs.values()) == 4025 + 4 * DICTIONARY + thai
 
 
 DOCS = [
@@ -1057,7 +1059,8 @@ sys.modules["sudachidict_core"] = None  # not installed
 import importlib.util
 langs = pf.languages()
 assert not any(langs[c].native for c in ("ja", "ja_Jpan", "jpn", "jpn_Jpan")), langs["jpn_Jpan"]
-assert sum(v.native for v in langs.values()) == 4009
+thai = "PYROID_PYTHAINLP_CORPUS" in os.environ or importlib.util.find_spec("pythainlp") is not None
+assert sum(v.native for v in langs.values()) == 4025 + 20 * thai
 for code, call in calls:
     try:
         call()

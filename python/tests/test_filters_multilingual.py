@@ -7,9 +7,10 @@
 - The Python-tokenizer path with a duck-typed tokenizer (no datatrove needed): container
   kinds, Arrow nulls and types, identity of unchanged texts, ``threads=``, the warning.
 - Live datatrove (``pytest.importorskip``): Hypothesis documents in each script, every filter
-  and ``apply`` chains, for native languages (pyroid's own tokenizers) and for the segmenters
-  installed (SudachiPy, pyvi, PyThaiNLP: ``python_tokenizer=True``). Japanese is native when
-  pyroid finds a SudachiDict; test_filters_japanese.py covers it.
+  and ``apply`` chains, for native languages (pyroid's own tokenizers) and, through
+  ``python_tokenizer=True``, datatrove's tokenizers with the segmenters installed (SudachiPy,
+  pyvi, PyThaiNLP). Vietnamese is always native, Japanese and Thai when pyroid finds a
+  SudachiDict or PyThaiNLP; test_filters_japanese.py and test_filters_vithai.py cover them.
 - The FineWeb-2 slices (``$PYROID_PARITY_DATA/fineweb2/<lang>.parquet``, default ``/data``)
   with FineWeb-2's own per-language filter settings, against live datatrove.
 
@@ -107,28 +108,39 @@ def sudachi_dictionary() -> bool:
     return spec is not None and spec.origin is not None
 
 
+def pythainlp_corpus() -> bool:
+    """Whether pyroid finds PyThaiNLP's corpus as it looks for it (Thai is then native)."""
+    if "PYROID_PYTHAINLP_CORPUS" in os.environ:
+        return True
+    spec = importlib.util.find_spec("pythainlp")
+    return spec is not None and spec.origin is not None
+
+
 def test_languages_table() -> None:
     langs = pf.languages()
     assert isinstance(langs, dict)
     assert list(langs) == sorted(langs)
     assert all(isinstance(v, pf.Language) for v in langs.values())
-    # The counts the stubs document: the four Japanese codes are native with a dictionary.
+    # The counts the stubs document: 4,025 native codes, and the four Japanese ones with a
+    # SudachiDict, the twenty Thai ones with PyThaiNLP.
     ja = sudachi_dictionary()
+    th = pythainlp_corpus()
     assert len(langs) == 4343
     native = {c for c, v in langs.items() if v.native}
-    assert len(native) == (4013 if ja else 4009)
+    assert len(native) == 4025 + 4 * ja + 20 * th
     by_class: dict[str, int] = {}
     for v in langs.values():
         if v.native:
             by_class[v.tokenizer] = by_class.get(v.tokenizer, 0) + 1
     assert by_class == {
-        "SpaCyTokenizer": 3756 if ja else 3752,
+        "SpaCyTokenizer": 3768 + 4 * ja,
         "IndicNLPTokenizer": 129,
         "WhitespaceTokenizer": 128,
+        **({"ThaiTokenizer": 20} if th else {}),
     }
     spacy_native = {v.arg for v in langs.values() if v.native and v.tokenizer == "SpaCyTokenizer"}
-    # The 57 rule-based languages, zh (jieba) and, with a dictionary, ja (SudachiPy).
-    assert len(spacy_native) == (59 if ja else 58)
+    # The 57 rule-based languages, zh (jieba), vi (pyvi) and, with a dictionary, ja (SudachiPy).
+    assert len(spacy_native) == 59 + ja
     assert sum(v.arg == "xx" for v in langs.values()) == 1995
     assert langs["deu_Latn"] == pf.Language("SpaCyTokenizer", "de", True)
     assert langs["uzn_Latn"] == pf.Language("SpaCyTokenizer", "xx", True)
@@ -136,7 +148,8 @@ def test_languages_table() -> None:
     assert langs["kat_Geor"] == pf.Language("WhitespaceTokenizer", "", True)
     assert langs["cmn_Hani"] == pf.Language("SpaCyTokenizer", "zh", True)
     assert langs["jpn_Jpan"] == pf.Language("SpaCyTokenizer", "ja", ja)
-    assert langs["vie_Latn"] == pf.Language("SpaCyTokenizer", "vi", False)
+    assert langs["vie_Latn"] == pf.Language("SpaCyTokenizer", "vi", True)
+    assert langs["tha_Thai"] == pf.Language("ThaiTokenizer", "", th)
     assert langs["kor_Hang"] == pf.Language("KiwiTokenizer", "", False)
     assert langs["kaz_Cyrl"] == pf.Language("StanzaTokenizer", "kk", False)
     eng = {c for c, v in langs.items() if (v.tokenizer, v.arg) == ("SpaCyTokenizer", "en")}
@@ -198,11 +211,12 @@ def test_unknown_language_message_is_datatrove_s() -> None:
 @pytest.mark.parametrize(
     ("lang", "names"),
     [
-        # jpn_Jpan without a dictionary: test_filters_japanese.py.
-        ("vie_Latn", ['SpaCyTokenizer("vi")', "pyvi"]),
+        # jpn_Jpan without a dictionary: test_filters_japanese.py; tha_Thai without PyThaiNLP:
+        # test_filters_vithai.py.
         ("kaz_Cyrl", ['StanzaTokenizer("kk")', "stanza"]),
         ("kor_Hang", ["KiwiTokenizer()", "kiwipiepy"]),
-        ("tha_Thai", ["ThaiTokenizer()", "pythainlp"]),
+        ("khm_Khmr", ["KhmerTokenizer()", "khmer-nltk"]),
+        ("mya_Mymr", ["BurmeseTokenizer()", "pyidaungsu"]),
     ],
 )
 def test_non_native_language_needs_opt_in(lang: str, names: list[str]) -> None:
@@ -1064,15 +1078,13 @@ NATIVE: dict[str, str] = {
     "hin_Deva": "hi",
     "cmn_Hani": "zh",
 }
-#: Languages pyroid never tokenizes natively, with the segmenter module datatrove needs.
-FALLBACK: dict[str, tuple[str, str]] = {
-    "vie_Latn": ("vi", "pyvi"),
-    "tha_Thai": ("th", "pythainlp"),
-}
-#: The languages of the ``python_tokenizer=True`` tests, with the modules datatrove's tokenizer
-#: needs: those, and Japanese (native when pyroid finds a SudachiDict, which datatrove needs too).
+#: The languages of the ``python_tokenizer=True`` tests: those whose datatrove tokenizer needs a
+#: segmenter (the modules), each with its word pool. Vietnamese is native too, Thai and Japanese
+#: when pyroid finds PyThaiNLP or a SudachiDict (which datatrove needs too).
 PYTHON_PATH: dict[str, tuple[str, tuple[str, ...]]] = {
-    **{lang: (pool, (module,)) for lang, (pool, module) in FALLBACK.items()},
+    "vie_Latn": ("vi", ("pyvi",)),
+    # crfcut, PyThaiNLP's sentence splitter, needs python-crfsuite.
+    "tha_Thai": ("th", ("pythainlp", "pycrfsuite")),
     "jpn_Jpan": ("ja", ("sudachipy", "sudachidict_core")),
 }
 _OTHER = [w for pool in ("de", "cyr", "ar", "zh", "el", "hi") for w in POOLS[pool][:6]]
@@ -1081,7 +1093,8 @@ _OTHER = [w for pool in ("de", "cyr", "ar", "zh", "el", "hi") for w in POOLS[poo
 def test_test_languages_are_what_they_say() -> None:
     langs = pf.languages()
     assert all(langs[c].native for c in NATIVE)
-    assert not any(langs[c].native for c in FALLBACK)
+    assert langs["vie_Latn"].native
+    assert langs["tha_Thai"].native is pythainlp_corpus()
     assert langs["jpn_Jpan"].native is sudachi_dictionary()
 
 
@@ -1188,6 +1201,13 @@ def _need(lang: str) -> None:
     if pf.languages()[lang].arg == "ja":
         pytest.importorskip("sudachipy")  # datatrove's reference needs SudachiPy and its dictionary
         pytest.importorskip("sudachidict_core")
+    if pf.languages()[lang].arg == "vi":
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # pyvi: invalid escapes
+            pytest.importorskip("pyvi")  # datatrove's reference needs pyvi
+    if pf.languages()[lang].tokenizer == "ThaiTokenizer":
+        pytest.importorskip("pythainlp")  # and PyThaiNLP, whose sentences need python-crfsuite
+        pytest.importorskip("pycrfsuite")
 
 
 @pytest.mark.parametrize("kind", ["gq", "gr", "fw", "c4"])
@@ -1303,8 +1323,8 @@ def test_mixed_native_and_python_steps(dt: Datatrove, python_langs: list[str]) -
     assert [candidate(chain, d, python_tokenizer=False) for d in docs] == want
     res = pf.apply(docs, chain)
     assert [("ok", *r) for r in zip(*res, strict=True)] == want
-    # Without the instance, a non-native code needs the opt-in (jpn_Jpan with a dictionary is
-    # native, and gives the instance's results).
+    # Without the instance, a non-native code needs the opt-in; a native one (vie_Latn, and
+    # jpn_Jpan or tha_Thai with their data) gives the instance's results.
     by_code = [chain[0], pf.GopherQuality(language=lang, min_doc_words=2)]
     if pf.languages()[lang].native:
         assert pf.apply(docs, by_code) == pf.apply(docs, [chain[0], chain[1]])
@@ -1439,6 +1459,31 @@ FINEWEB2: dict[str, dict[str, Any]] = {
             "за", "для", "его", "как", "а", "он", "также", "до", "после",
         ],
     },
+    "tha_Thai": {
+        "dup_line_frac": 0.349,
+        "top_n_grams": ((2, 0.221), (3, 0.197), (4, 0.162)),
+        "dup_n_grams": ((5, 0.185), (6, 0.168), (7, 0.152), (8, 0.137), (9, 0.124), (10, 0.111)),
+        "line_punct_thr": 0.0,
+        "new_line_ratio": 0.153,
+        "max_avg_word_length": 10,
+        "min_avg_word_length": 2,
+        "max_non_alpha_words_ratio": 0.9,
+        "stopwords": ["ใน", "ที่", "และ", "ของ", "เป็น", "มี", "การ", "ได้"],
+    },
+    "vie_Latn": {
+        "dup_line_frac": 0.293,
+        "top_n_grams": ((2, 0.223), (3, 0.197), (4, 0.171)),
+        "dup_n_grams": ((5, 0.178), (6, 0.163), (7, 0.15), (8, 0.136), (9, 0.124), (10, 0.111)),
+        "line_punct_thr": 0.333,
+        "new_line_ratio": 0.103,
+        "max_avg_word_length": 11,
+        "min_avg_word_length": 3,
+        "max_non_alpha_words_ratio": 0.803,
+        "stopwords": [
+            "là", "và", "của", "một", "được", "trong", "năm", "các", "có", "loài", "này", "đã",
+            "người",
+        ],
+    },
     "spa_Latn": {
         "dup_line_frac": 0.252,
         "top_n_grams": ((2, 0.156), (3, 0.14), (4, 0.125)),
@@ -1501,7 +1546,7 @@ def test_fineweb2_slices_match_datatrove(dt: Datatrove, lang: str) -> None:
     texts = fineweb2_texts(lang)
     python = not pf.languages()[lang].native
     if python:
-        module = {"cmn_Hani": "jieba", "jpn_Jpan": "sudachipy"}[lang]
+        module = {"cmn_Hani": "jieba", "jpn_Jpan": "sudachipy", "tha_Thai": "pythainlp"}[lang]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             pytest.importorskip(module)

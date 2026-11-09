@@ -510,35 +510,67 @@ def test_drop_in_signatures_and_pickle() -> None:
         pdt.SentenceDedupFilter(data_folder="/nonexistent", batch_size=0)
 
 
-@needs_dt
-@pytest.mark.thread_unsafe
-def test_unsupported_language_falls_back(tmp_path: Path) -> None:
-    import pyroid.integrations.datatrove as pdt
+#: PyThaiNLP hidden from pyroid but not from datatrove: datatrove's Thai tokenizer is loaded (and
+#: cached by load_word_tokenizer) first, then importlib.util.find_spec, which pyroid looks for
+#: PyThaiNLP with, no longer finds it. tha_Thai is then a code pyroid does not tokenize.
+HIDE_THAI_FROM_PYROID = """
+import importlib.util
+from datatrove.utils.word_tokenizers import load_word_tokenizer
+load_word_tokenizer("tha_Thai")
+_find_spec = importlib.util.find_spec
+importlib.util.find_spec = lambda name, package=None: (
+    None if name == "pythainlp" else _find_spec(name, package)
+)
+import pyroid.filters
+assert not pyroid.filters.languages()["tha_Thai"].native
+"""
 
-    # vie_Latn: datatrove tokenizes it with spaCy + pyvi, which pyroid does not port.
-    pytest.importorskip("pyvi")
-    texts = ["Con mèo đang ngủ. Trời mưa rồi. Rất lạnh. Hết."] * 3 + ["Một thứ khác."]
-    cfg = dt_config(**NO_MIN)
-    want = run_stages(dt_sd, texts, cfg, tmp_path / "dt", language="vie_Latn")
-    pdt._WARNED.clear()
-    with pytest.warns(pyroid.FallbackWarning, match="language=.vie_Latn."):
-        got = run_stages(pdt, texts, cfg, tmp_path / "pr", language="vie_Latn")
+FALLS_BACK = """
+import importlib.util as iu, tempfile, warnings
+from pathlib import Path
+import pyroid
+import pyroid.integrations.datatrove as pdt
+spec = iu.spec_from_file_location("_pyroid_sentence_dedup_more", MODULE)
+m = iu.module_from_spec(spec)
+spec.loader.exec_module(m)
+texts = ["แมวนอนอยู่. ฝนตกอีกแล้ว. หนาวมาก. จบ."] * 3 + ["อีกเรื่องหนึ่ง."]
+cfg = m.dt_config(**m.NO_MIN)
+with tempfile.TemporaryDirectory() as tmp:
+    work = Path(tmp)
+    want = m.run_stages(m.dt_sd, texts, cfg, work / "dt", language="tha_Thai")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        got = m.run_stages(pdt, texts, cfg, work / "pr", language="tha_Thai")
+    fallbacks = [str(w.message) for w in caught if w.category is pyroid.FallbackWarning]
+    assert fallbacks, [str(w.message) for w in caught]
+    assert all("language='tha_Thai'" in f for f in fallbacks), fallbacks
     assert got == want
+    assert [t for _, t in want["kept"]] != texts  # the repeats are removed
     # Lines need no tokenizer: no fallback, same files.
-    lines = dt_config(split_sentences=False, **NO_MIN)
-    want = run_stages(
-        dt_sd, [t.replace(". ", ".\n") for t in texts], lines, tmp_path / "dl", language="vie_Latn"
-    )
+    lines = m.dt_config(split_sentences=False, **m.NO_MIN)
+    by_line = [t.replace(". ", ".\\n") for t in texts]
+    want = m.run_stages(m.dt_sd, by_line, lines, work / "dl", language="tha_Thai")
     with warnings.catch_warnings():
         warnings.simplefilter("error", pyroid.FallbackWarning)
-        got = run_stages(
-            pdt,
-            [t.replace(". ", ".\n") for t in texts],
-            lines,
-            tmp_path / "pl",
-            language="vie_Latn",
-        )
+        got = m.run_stages(pdt, by_line, lines, work / "pl", language="tha_Thai")
     assert got == want
+print("ok")
+"""
+
+
+@needs_dt
+@pytest.mark.thread_unsafe
+def test_unsupported_language_falls_back(run_python: Any) -> None:
+    """A code pyroid does not tokenize: the drop-ins run datatrove's code, with a warning.
+
+    In a child interpreter where pyroid does not find PyThaiNLP and datatrove does.
+    """
+    pytest.importorskip("pythainlp")
+    pytest.importorskip("pycrfsuite")  # PyThaiNLP's sentence splitter
+    code = HIDE_THAI_FROM_PYROID + f"MODULE = {__file__!r}\n" + FALLS_BACK
+    r = run_python(code, timeout=300)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines()[-1] == "ok", r.stdout
 
 
 @needs_dt
@@ -650,12 +682,13 @@ def test_lines_mode() -> None:
 
 
 def test_language_without_tokenizer() -> None:
-    # vie_Latn: pyvi, which pyroid does not port (jpn_Jpan: test_filters_japanese.py).
-    with pytest.raises(NotImplementedError, match="language 'vie_Latn'"):
-        dedup.SentenceDedup(language="vie_Latn")
+    # kaz_Cyrl: Stanza, which pyroid does not port (jpn_Jpan and tha_Thai without their data:
+    # test_filters_japanese.py, test_filters_vithai.py).
+    with pytest.raises(NotImplementedError, match="language 'kaz_Cyrl'"):
+        dedup.SentenceDedup(language="kaz_Cyrl")
     with pytest.raises(ValueError, match="doesn't have a tokenizer assigned"):
         dedup.SentenceDedup(language="xx_not_a_code", split_sentences=False, **NO_MIN)
-    d = dedup.SentenceDedup(language="vie_Latn", split_sentences=False, **NO_MIN)
+    d = dedup.SentenceDedup(language="kaz_Cyrl", split_sentences=False, **NO_MIN)
     assert d.fit(["a\nb\nc", "a\nb\nc"]) == (["a\nb\nc", ""], [True, False])
 
 

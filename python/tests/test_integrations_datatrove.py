@@ -248,23 +248,24 @@ def test_c4_rewrites_kept_text_only() -> None:
 
 # Native languages, one per word tokenizer kind pyroid ports: spaCy rule-based (Latin, Cyrillic,
 # Arabic scripts), jieba, SudachiPy (with the dictionary installed, which datatrove needs too),
-# IndicNLP, and WhitespaceTokenizer (spaCy xx words, regex sentences). The value is the module
+# pyvi, PyThaiNLP (installed, which datatrove needs too; its sentences need python-crfsuite),
+# IndicNLP, and WhitespaceTokenizer (spaCy xx words, regex sentences). The value is the modules
 # datatrove's reference needs.
-NATIVE_LANGUAGES = {
-    "cmn_Hani": "jieba",
-    "jpn_Jpan": "sudachidict_core",
-    "fra_Latn": None,
-    "deu_Latn": None,
-    "rus_Cyrl": None,
-    "arb_Arab": None,
-    "hin_Deva": "indicnlp",
-    "kat_Geor": None,
+NATIVE_LANGUAGES: dict[str, tuple[str, ...]] = {
+    "cmn_Hani": ("jieba",),
+    "jpn_Jpan": ("sudachidict_core",),
+    "vie_Latn": ("pyvi",),
+    "tha_Thai": ("pythainlp", "pycrfsuite"),
+    "fra_Latn": (),
+    "deu_Latn": (),
+    "rus_Cyrl": (),
+    "arb_Arab": (),
+    "hin_Deva": ("indicnlp",),
+    "kat_Geor": (),
 }
-# Codes pyroid never tokenizes natively: the segmenter datatrove needs, and a text.
-NON_NATIVE = {
-    "vie_Latn": ("pyvi", "Hôm nay chúng tôi đi dạo trong công viên, trời rất đẹp. "),
-    "tha_Thai": ("pythainlp", "วันนี้เราไปเดินเล่นในสวนสาธารณะ อากาศดีมาก "),
-}
+# tha_Thai with PyThaiNLP hidden from pyroid, not from datatrove: a code pyroid does not
+# tokenize, whose datatrove tokenizer runs here.
+THAI_SAMPLE = "วันนี้เราไปเดินเล่นในสวนสาธารณะ อากาศดีมาก "
 FW2 = DATA / "fineweb2"
 CHINESE = "我们今天去公园散步\uff0c天气很好。"  # cmn_Hani: datatrove tokenizes it with jieba
 GEORGIAN = [
@@ -279,6 +280,19 @@ JAPANESE = [
     "私たちは毎日日本語を勉強して、本を読みます。なぜなら、とても面白いからです。\n",
     "・項目その一\n・項目その二\n",
 ]
+VIETNAMESE = [
+    "Hà Nội là một thành phố lớn. Thành phố có khoảng 8,4 triệu dân vào năm 2024.\n",
+    "Đây là một câu ngắn.\n",
+    "Chúng tôi học tiếng Việt mỗi ngày và đọc sách, vì điều đó rất thú vị.\n",
+    "• Mục thứ nhất\n• Mục thứ hai\n",
+]
+THAI = [
+    "กรุงเทพมหานครเป็นเมืองหลวงของประเทศไทย มีประชากรประมาณ 10,539,000 คน\n",
+    "นี่คือประโยคสั้น.\n",
+    "เราเรียนภาษาไทยทุกวันและอ่านหนังสือ เพราะว่ามันน่าสนใจมาก!\n",
+    "• ข้อที่หนึ่ง\n• ข้อที่สอง\n",
+]
+LINES = {"jpn_Jpan": JAPANESE, "vie_Latn": VIETNAMESE, "tha_Thai": THAI}
 # datatrove's Japanese tokenizer calls SudachiPy 0.7's deprecated Dictionary.create() (once).
 SUDACHI_DEPRECATION = pytest.mark.filterwarnings(
     "ignore:Dictionary.create\\(\\) is deprecated:DeprecationWarning"
@@ -299,7 +313,7 @@ def _language_texts(lang: str) -> tuple[str, ...]:
         out += ["\n".join(t.split(". ")) for t in sample[10:20]]
         out += [t.split("\n")[0] + "\n" + t.split("\n")[0] * 3 for t in sample[20:30]]
     else:
-        lines = JAPANESE if lang == "jpn_Jpan" else GEORGIAN
+        lines = LINES.get(lang, GEORGIAN)
         out += [
             "".join(lines[i % len(lines)] for i in range(k, k + n))
             for k in range(4)
@@ -349,7 +363,7 @@ def test_filters_native_languages_match_datatrove(
 ) -> None:
     """Native non-English codes run in Rust (no FallbackWarning) with datatrove's results."""
     pytest.importorskip("spacy")
-    if backend := NATIVE_LANGUAGES[lang]:
+    for backend in NATIVE_LANGUAGES[lang]:
         pytest.importorskip(backend)
     import datatrove.pipeline.filters as df  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
@@ -377,27 +391,93 @@ def test_filters_native_languages_match_datatrove(
     assert len({w[0] for w in want if not isinstance(w[0], type)}) > 1  # kept and dropped docs
 
 
-@pytest.mark.thread_unsafe
-@pytest.mark.parametrize("lang", sorted(NON_NATIVE))
-def test_filter_non_native_language_falls_back(lang: str) -> None:
-    """A code pyroid does not tokenize (pyvi, PyThaiNLP) runs datatrove's code, warned once."""
-    pytest.importorskip("spacy")
-    module, sample = NON_NATIVE[lang]
-    pytest.importorskip(module)
-    import datatrove.pipeline.filters as df  # type: ignore[import-not-found,import-untyped,unused-ignore]
+#: PyThaiNLP hidden from pyroid but not from datatrove: datatrove's Thai tokenizer is loaded (and
+#: cached by load_word_tokenizer) first, then importlib.util.find_spec, which pyroid looks for
+#: PyThaiNLP with, no longer finds it.
+HIDE_THAI_FROM_PYROID = """
+import importlib.util
+from datatrove.utils.word_tokenizers import load_word_tokenizer
+load_word_tokenizer("tha_Thai")
+_find_spec = importlib.util.find_spec
+importlib.util.find_spec = lambda name, package=None: (
+    None if name == "pythainlp" else _find_spec(name, package)
+)
+import pyroid.filters
+assert not pyroid.filters.languages()["tha_Thai"].native
+"""
 
-    assert not pyroid.filters.languages()[lang].native
-    text = sample * 30
-    stock = df.GopherQualityFilter(language=lang, min_doc_words=5)
-    want = stock.filter(Document(text=text, id="0"))
-    pdt._WARNED.clear()
-    ours = pdt.GopherQualityFilter(language=lang, min_doc_words=5)
-    with pytest.warns(pyroid.FallbackWarning, match=f"language='{lang}'"):
-        got = ours.filter_batch([Document(text=text, id="0")])
-    assert got == [want]
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        ours.filter_batch([Document(text=text, id="1")])  # once per process
+THAI_FALLS_BACK = """
+import warnings
+from pathlib import Path
+import pyroid
+import datatrove.pipeline.filters as df
+from datatrove.data import Document
+from datatrove.pipeline.dedup import MinhashConfig, MinhashDedupSignature
+from datatrove.utils.hashing import HashConfig
+from pyroid.integrations import datatrove as pdt
+
+
+def fallbacks(caught):
+    return [str(w.message) for w in caught if w.category is pyroid.FallbackWarning]
+
+
+text = SAMPLE * 30
+stock = df.GopherQualityFilter(language="tha_Thai", min_doc_words=5)
+want = stock.filter(Document(text=text, id="0"))
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    ours = pdt.GopherQualityFilter(language="tha_Thai", min_doc_words=5)
+    got = ours.filter_batch([Document(text=text, id="0")])
+    ours.filter_batch([Document(text=text, id="1")])  # warned once per process
+fb = fallbacks(caught)
+assert len(fb) == 1 and "language='tha_Thai'" in fb[0], fb
+assert got == [want], (got, want)
+
+# MinHash with FineWeb-2's MinhashConfig: datatrove's step, the same files, one warning.
+config = MinhashConfig(hash_config=HashConfig(hash_fc="xxhash", precision=64))
+texts = [SAMPLE * k for k in range(1, 40)]
+texts += [t[:-3] + "!" for t in texts[4:30]]  # near-duplicates
+
+
+def docs():
+    return iter(Document(text=t, id=str(i)) for i, t in enumerate(texts))
+
+
+def files(root):
+    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*.minhash.sig"))}
+
+
+MinhashDedupSignature(
+    output_folder=str(WORK / "stock"), config=config, language="tha_Thai"
+).run(docs(), rank=1, world_size=2)
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    pdt.MinhashDedupSignature(
+        output_folder=str(WORK / "ours"), config=config, language="tha_Thai", batch_size=17
+    ).run(docs(), rank=1, world_size=2)
+assert len(fallbacks(caught)) == 1, fallbacks(caught)
+stock, ours = files(WORK / "stock"), files(WORK / "ours")
+assert len(stock) == config.num_buckets, sorted(stock)
+assert stock == ours
+print("ok")
+"""
+
+
+@pytest.mark.thread_unsafe
+def test_non_native_language_falls_back(run_python: Any, tmp_path: Path) -> None:
+    """A code pyroid does not tokenize runs datatrove's code, warned once: tha_Thai in a child
+    interpreter where pyroid does not find PyThaiNLP and datatrove does."""
+    pytest.importorskip("spacy")
+    pytest.importorskip("xxhash")
+    pytest.importorskip("pythainlp")
+    code = (
+        HIDE_THAI_FROM_PYROID
+        + f"SAMPLE = {THAI_SAMPLE!r}\nWORK = __import__('pathlib').Path({str(tmp_path)!r})\n"
+        + THAI_FALLS_BACK
+    )
+    r = run_python(code, timeout=300)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines()[-1] == "ok", r.stdout
 
 
 @pytest.mark.thread_unsafe
@@ -593,24 +673,20 @@ def test_minhash_skip_existing_sigs(tmp_path: Path) -> None:
 
 @pytest.mark.thread_unsafe
 @SUDACHI_DEPRECATION
-@pytest.mark.parametrize("lang", [*sorted(NATIVE_LANGUAGES), *sorted(NON_NATIVE)])
+@pytest.mark.parametrize("lang", sorted(NATIVE_LANGUAGES))
 def test_minhash_signature_files_identical_languages(lang: str, tmp_path: Path) -> None:
-    """FineWeb-2's MinhashConfig with the language's tokenizer: the same files; native codes warn
-    nothing, the others (pyvi, PyThaiNLP) run datatrove's step with a FallbackWarning."""
+    """FineWeb-2's MinhashConfig with the language's tokenizer: the same files, and no
+    FallbackWarning (a code pyroid does not tokenize: test_non_native_language_falls_back)."""
     pytest.importorskip("spacy")
     pytest.importorskip("xxhash")
-    backend = NATIVE_LANGUAGES[lang] if lang in NATIVE_LANGUAGES else NON_NATIVE[lang][0]
-    if backend:
+    for backend in NATIVE_LANGUAGES[lang]:
         pytest.importorskip(backend)
-    native = pyroid.filters.languages()[lang].native
-    assert native is (lang in NATIVE_LANGUAGES)
+    assert pyroid.filters.languages()[lang].native
     from datatrove.pipeline.dedup import MinhashConfig, MinhashDedupSignature  # type: ignore[import-not-found,import-untyped,unused-ignore]
     from datatrove.utils.hashing import HashConfig  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
     config = MinhashConfig(hash_config=HashConfig(hash_fc="xxhash", precision=64))
-    texts = (
-        list(_language_texts(lang)) if native else [NON_NATIVE[lang][1] * k for k in range(1, 40)]
-    )
+    texts = list(_language_texts(lang))
     texts += [t[:-3] + "!" for t in texts[4:30]]  # near-duplicates
     MinhashDedupSignature(output_folder=str(tmp_path / "stock"), config=config, language=lang).run(
         iter(_docs(texts)), rank=1, world_size=2
@@ -622,7 +698,7 @@ def test_minhash_signature_files_identical_languages(lang: str, tmp_path: Path) 
             output_folder=str(tmp_path / "ours"), config=config, language=lang, batch_size=17
         ).run(iter(_docs(texts)), rank=1, world_size=2)
     fallbacks = [w for w in caught if w.category is pyroid.FallbackWarning]
-    assert len(fallbacks) == (0 if native else 1)
+    assert not fallbacks
     stock, ours = _sig_files(tmp_path / "stock"), _sig_files(tmp_path / "ours")
     assert len(stock) == config.num_buckets
     assert stock == ours
@@ -647,7 +723,7 @@ def test_minhash_native_language_without_datatrove_tokenizer(
 
     monkeypatch.setattr(dt_minhash, "load_word_tokenizer", missing)
     with pytest.raises(ImportError, match="spaCy"):
-        pdt.MinhashDedupSignature(output_folder=str(tmp_path / "x"), language="vie_Latn")
+        pdt.MinhashDedupSignature(output_folder=str(tmp_path / "x"), language="kaz_Cyrl")
     ours = pdt.MinhashDedupSignature(output_folder=str(tmp_path / "ours"), language="fra_Latn")
     assert ours.word_tokenizer is None
     with warnings.catch_warnings():
