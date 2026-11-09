@@ -245,9 +245,12 @@ def test_c4_rewrites_kept_text_only() -> None:
 # ------------------------------------------------------------------------------------ languages
 
 # Native languages, one per word tokenizer kind pyroid ports: spaCy rule-based (Latin, Cyrillic,
-# Arabic scripts), IndicNLP, and WhitespaceTokenizer (spaCy xx words, regex sentences).
+# Arabic scripts), jieba, SudachiPy (with the dictionary installed, which datatrove needs too),
+# IndicNLP, and WhitespaceTokenizer (spaCy xx words, regex sentences). The value is the module
+# datatrove's reference needs.
 NATIVE_LANGUAGES = {
     "cmn_Hani": "jieba",
+    "jpn_Jpan": "sudachidict_core",
     "fra_Latn": None,
     "deu_Latn": None,
     "rus_Cyrl": None,
@@ -255,15 +258,29 @@ NATIVE_LANGUAGES = {
     "hin_Deva": "indicnlp",
     "kat_Geor": None,
 }
+# Codes pyroid never tokenizes natively: the segmenter datatrove needs, and a text.
+NON_NATIVE = {
+    "vie_Latn": ("pyvi", "Hôm nay chúng tôi đi dạo trong công viên, trời rất đẹp. "),
+    "tha_Thai": ("pythainlp", "วันนี้เราไปเดินเล่นในสวนสาธารณะ อากาศดีมาก "),
+}
 FW2 = DATA / "fineweb2"
 CHINESE = "我们今天去公园散步\uff0c天气很好。"  # cmn_Hani: datatrove tokenizes it with jieba
-JAPANESE = "今日は公園を散歩しました\u3001天気がとても良かったです。"  # jpn_Jpan: SudachiPy
 GEORGIAN = [
     "საქართველო მდებარეობს კავკასიაში. დედაქალაქი არის თბილისი, ძველი და ლამაზი ქალაქი.\n",
     "ეს არის მოკლე ტექსტი.\n",
     "ჩვენ ვსწავლობთ ქართულ ენას და ვკითხულობთ წიგნებს ყოველ დღე, რადგან ეს საინტერესოა.\n",
     "• პუნქტი ერთი\n• პუნქტი ორი\n",
 ]
+JAPANESE = [
+    "東京は日本の首都です。人口は約1,400万人で、2024年も増えました。\n",
+    "これは短い文です。\n",
+    "私たちは毎日日本語を勉強して、本を読みます。なぜなら、とても面白いからです。\n",
+    "・項目その一\n・項目その二\n",
+]
+# datatrove's Japanese tokenizer calls SudachiPy 0.7's deprecated Dictionary.create() (once).
+SUDACHI_DEPRECATION = pytest.mark.filterwarnings(
+    "ignore:Dictionary.create\\(\\) is deprecated:DeprecationWarning"
+)
 
 
 @functools.cache
@@ -280,8 +297,9 @@ def _language_texts(lang: str) -> tuple[str, ...]:
         out += ["\n".join(t.split(". ")) for t in sample[10:20]]
         out += [t.split("\n")[0] + "\n" + t.split("\n")[0] * 3 for t in sample[20:30]]
     else:
+        lines = JAPANESE if lang == "jpn_Jpan" else GEORGIAN
         out += [
-            "".join(GEORGIAN[i % len(GEORGIAN)] for i in range(k, k + n))
+            "".join(lines[i % len(lines)] for i in range(k, k + n))
             for k in range(4)
             for n in (1, 3, 12, 40)
         ]
@@ -321,6 +339,7 @@ LANGUAGE_FILTER_CASES = [
 
 
 @pytest.mark.thread_unsafe
+@SUDACHI_DEPRECATION
 @pytest.mark.parametrize("lang", sorted(NATIVE_LANGUAGES))
 @pytest.mark.parametrize(("name", "kwargs"), LANGUAGE_FILTER_CASES)
 def test_filters_native_languages_match_datatrove(
@@ -357,19 +376,21 @@ def test_filters_native_languages_match_datatrove(
 
 
 @pytest.mark.thread_unsafe
-def test_filter_non_native_language_falls_back() -> None:
-    """A code pyroid does not tokenize (jpn_Jpan: SudachiPy) runs datatrove's code, warned once."""
+@pytest.mark.parametrize("lang", sorted(NON_NATIVE))
+def test_filter_non_native_language_falls_back(lang: str) -> None:
+    """A code pyroid does not tokenize (pyvi, PyThaiNLP) runs datatrove's code, warned once."""
     pytest.importorskip("spacy")
-    pytest.importorskip("sudachipy")
+    module, sample = NON_NATIVE[lang]
+    pytest.importorskip(module)
     import datatrove.pipeline.filters as df  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
-    assert not pyroid.filters.languages()["jpn_Jpan"].native
-    text = JAPANESE * 30
-    stock = df.GopherQualityFilter(language="jpn_Jpan", min_doc_words=5)
+    assert not pyroid.filters.languages()[lang].native
+    text = sample * 30
+    stock = df.GopherQualityFilter(language=lang, min_doc_words=5)
     want = stock.filter(Document(text=text, id="0"))
     pdt._WARNED.clear()
-    ours = pdt.GopherQualityFilter(language="jpn_Jpan", min_doc_words=5)
-    with pytest.warns(pyroid.FallbackWarning, match="language='jpn_Jpan'"):
+    ours = pdt.GopherQualityFilter(language=lang, min_doc_words=5)
+    with pytest.warns(pyroid.FallbackWarning, match=f"language='{lang}'"):
         got = ours.filter_batch([Document(text=text, id="0")])
     assert got == [want]
     with warnings.catch_warnings():
@@ -569,21 +590,25 @@ def test_minhash_skip_existing_sigs(tmp_path: Path) -> None:
 
 
 @pytest.mark.thread_unsafe
-@pytest.mark.parametrize("lang", [*sorted(NATIVE_LANGUAGES), "jpn_Jpan"])
+@SUDACHI_DEPRECATION
+@pytest.mark.parametrize("lang", [*sorted(NATIVE_LANGUAGES), *sorted(NON_NATIVE)])
 def test_minhash_signature_files_identical_languages(lang: str, tmp_path: Path) -> None:
     """FineWeb-2's MinhashConfig with the language's tokenizer: the same files; native codes warn
-    nothing, jpn_Jpan (SudachiPy) runs datatrove's step with a FallbackWarning."""
+    nothing, the others (pyvi, PyThaiNLP) run datatrove's step with a FallbackWarning."""
     pytest.importorskip("spacy")
     pytest.importorskip("xxhash")
-    native = pyroid.filters.languages()[lang].native
-    backend = NATIVE_LANGUAGES.get(lang) or (None if native else "sudachipy")
+    backend = NATIVE_LANGUAGES[lang] if lang in NATIVE_LANGUAGES else NON_NATIVE[lang][0]
     if backend:
         pytest.importorskip(backend)
+    native = pyroid.filters.languages()[lang].native
+    assert native is (lang in NATIVE_LANGUAGES)
     from datatrove.pipeline.dedup import MinhashConfig, MinhashDedupSignature  # type: ignore[import-not-found,import-untyped,unused-ignore]
     from datatrove.utils.hashing import HashConfig  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
     config = MinhashConfig(hash_config=HashConfig(hash_fc="xxhash", precision=64))
-    texts = list(_language_texts(lang)) if native else [JAPANESE * k for k in range(1, 40)]
+    texts = (
+        list(_language_texts(lang)) if native else [NON_NATIVE[lang][1] * k for k in range(1, 40)]
+    )
     texts += [t[:-3] + "!" for t in texts[4:30]]  # near-duplicates
     MinhashDedupSignature(output_folder=str(tmp_path / "stock"), config=config, language=lang).run(
         iter(_docs(texts)), rank=1, world_size=2
@@ -620,7 +645,7 @@ def test_minhash_native_language_without_datatrove_tokenizer(
 
     monkeypatch.setattr(dt_minhash, "load_word_tokenizer", missing)
     with pytest.raises(ImportError, match="spaCy"):
-        pdt.MinhashDedupSignature(output_folder=str(tmp_path / "x"), language="jpn_Jpan")
+        pdt.MinhashDedupSignature(output_folder=str(tmp_path / "x"), language="vie_Latn")
     ours = pdt.MinhashDedupSignature(output_folder=str(tmp_path / "ours"), language="fra_Latn")
     assert ours.word_tokenizer is None
     with warnings.catch_warnings():

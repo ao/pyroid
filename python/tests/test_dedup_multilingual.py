@@ -277,8 +277,8 @@ def dt(tmp_path_factory: pytest.TempPathFactory) -> Datatrove:
     return Datatrove(tmp_path_factory.mktemp("datatrove"))
 
 
-def _pools() -> tuple[dict[str, list[str]], dict[str, str], dict[str, tuple[str, str]]]:
-    """The script pools and languages of test_filters_multilingual (one source of truth)."""
+def _filters_suite() -> Any:
+    """test_filters_multilingual: its script pools and languages (one source of truth)."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
@@ -288,10 +288,14 @@ def _pools() -> tuple[dict[str, list[str]], dict[str, str], dict[str, tuple[str,
     assert spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod.POOLS, mod.NATIVE, mod.FALLBACK
+    return mod
 
 
-POOLS, NATIVE, FALLBACK = _pools()
+_SUITE = _filters_suite()
+POOLS: dict[str, list[str]] = _SUITE.POOLS
+NATIVE: dict[str, str] = _SUITE.NATIVE
+#: The languages of the python_tokenizer=True tests (Japanese among them, native or not).
+PYTHON_PATH: dict[str, tuple[str, tuple[str, ...]]] = _SUITE.PYTHON_PATH
 
 
 @st.composite
@@ -328,10 +332,25 @@ def _need(lang: str) -> None:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  # jieba: invalid escapes
             pytest.importorskip("jieba")  # datatrove's reference needs it
+    if pf.languages()[lang].arg == "ja":
+        pytest.importorskip("sudachipy")  # datatrove's reference needs SudachiPy and its dictionary
+        pytest.importorskip("sudachidict_core")
 
 
-def check(dt: Datatrove, lang: str, texts: list[str], hc: tuple[str, int], n: int) -> None:
-    python = not pf.languages()[lang].native
+def check(
+    dt: Datatrove,
+    lang: str,
+    texts: list[str],
+    hc: tuple[str, int],
+    n: int,
+    python: bool | None = None,
+) -> None:
+    """pyroid's signatures and removals for ``texts`` are datatrove's.
+
+    ``python``: tokenize with ``python_tokenizer=True`` (default: when ``lang`` is not native).
+    """
+    if python is None:
+        python = not pf.languages()[lang].native
     kw: dict[str, Any] = {"n_grams": n, "num_buckets": 6, "hashes_per_bucket": 2}
     ref = dt.config(*hc, **kw)
     cfg = dd.MinhashConfig(hash_config=dd.HashConfig(hc[1], hc[0]), **kw)
@@ -360,31 +379,24 @@ def test_native_languages_match_datatrove(dt: Datatrove, data: st.DataObject) ->
 
 
 @pytest.fixture(scope="module")
-def fallback_langs() -> list[str]:
-    out = []
-    for lang, (_, module) in FALLBACK.items():
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            try:
-                __import__(module)
-            except ImportError:
-                continue
-        out.append(lang)
+def python_langs() -> list[str]:
+    """The ``PYTHON_PATH`` languages whose segmenter (and dictionary) is installed."""
+    out = [lang for lang, (_, modules) in PYTHON_PATH.items() if _SUITE.installed(modules)]
     if not out:
-        pytest.skip("no fallback segmenter installed (jieba, sudachipy, pyvi, pythainlp)")
+        pytest.skip("no segmenter installed (sudachipy + sudachidict-core, pyvi, pythainlp)")
     return out
 
 
 @slow
 @given(data=st.data())
 def test_python_tokenizer_matches_datatrove(
-    dt: Datatrove, fallback_langs: list[str], data: st.DataObject
+    dt: Datatrove, python_langs: list[str], data: st.DataObject
 ) -> None:
-    lang = data.draw(st.sampled_from(fallback_langs), label="language")
-    texts = data.draw(families(FALLBACK[lang][0]), label="texts")
+    lang = data.draw(st.sampled_from(python_langs), label="language")
+    texts = data.draw(families(PYTHON_PATH[lang][0]), label="texts")
     hc = data.draw(st.sampled_from(HASHES), label="hash")
     n = data.draw(st.sampled_from([1, 2, 5]), label="n_grams")
-    check(dt, lang, texts, hc, n)
+    check(dt, lang, texts, hc, n, python=True)
 
 
 def test_python_tokenizer_on_native_language_is_identical(dt: Datatrove) -> None:

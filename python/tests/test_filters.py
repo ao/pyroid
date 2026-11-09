@@ -829,10 +829,11 @@ def test_ngram_size_below_one_raises_value_error(key: str, n: int) -> None:
         pf.apply([], [pf.GopherRepetition(**two)])
 
 
-@pytest.mark.parametrize("lang", ["jpn_Jpan", "vie_Latn", "kaz_Cyrl"])
+@pytest.mark.parametrize("lang", ["tha_Thai", "vie_Latn", "kaz_Cyrl"])
 def test_language_without_native_tokenizer_raises_not_implemented(lang: str) -> None:
-    # Codes datatrove tokenizes with a segmenter pyroid does not port (SudachiPy,
-    # pyvi, Stanza); python_tokenizer=True is the opt-in.
+    # Codes datatrove tokenizes with a segmenter pyroid does not port (PyThaiNLP,
+    # pyvi, Stanza); python_tokenizer=True is the opt-in. (Japanese depends on
+    # the dictionary: test_filters_japanese.py.)
     with pytest.raises(NotImplementedError, match="tokenizer"):
         pf.gopher_quality("x", language=lang)
     with pytest.raises(NotImplementedError, match="tokenizer"):

@@ -515,28 +515,28 @@ def test_drop_in_signatures_and_pickle() -> None:
 def test_unsupported_language_falls_back(tmp_path: Path) -> None:
     import pyroid.integrations.datatrove as pdt
 
-    # jpn_Jpan: datatrove tokenizes it with spaCy + SudachiPy, which pyroid does not port.
-    pytest.importorskip("sudachipy")
-    texts = ["猫が寝ている。雨が降った。とても寒い。終わり。"] * 3 + ["別のもの。"]
+    # vie_Latn: datatrove tokenizes it with spaCy + pyvi, which pyroid does not port.
+    pytest.importorskip("pyvi")
+    texts = ["Con mèo đang ngủ. Trời mưa rồi. Rất lạnh. Hết."] * 3 + ["Một thứ khác."]
     cfg = dt_config(**NO_MIN)
-    want = run_stages(dt_sd, texts, cfg, tmp_path / "dt", language="jpn_Jpan")
+    want = run_stages(dt_sd, texts, cfg, tmp_path / "dt", language="vie_Latn")
     pdt._WARNED.clear()
-    with pytest.warns(pyroid.FallbackWarning, match="language=.jpn_Jpan."):
-        got = run_stages(pdt, texts, cfg, tmp_path / "pr", language="jpn_Jpan")
+    with pytest.warns(pyroid.FallbackWarning, match="language=.vie_Latn."):
+        got = run_stages(pdt, texts, cfg, tmp_path / "pr", language="vie_Latn")
     assert got == want
     # Lines need no tokenizer: no fallback, same files.
     lines = dt_config(split_sentences=False, **NO_MIN)
     want = run_stages(
-        dt_sd, [t.replace("。", "。\n") for t in texts], lines, tmp_path / "dl", language="jpn_Jpan"
+        dt_sd, [t.replace(". ", ".\n") for t in texts], lines, tmp_path / "dl", language="vie_Latn"
     )
     with warnings.catch_warnings():
         warnings.simplefilter("error", pyroid.FallbackWarning)
         got = run_stages(
             pdt,
-            [t.replace("。", "。\n") for t in texts],
+            [t.replace(". ", ".\n") for t in texts],
             lines,
             tmp_path / "pl",
-            language="jpn_Jpan",
+            language="vie_Latn",
         )
     assert got == want
 
@@ -650,11 +650,12 @@ def test_lines_mode() -> None:
 
 
 def test_language_without_tokenizer() -> None:
-    with pytest.raises(NotImplementedError, match="language 'jpn_Jpan'"):
-        dedup.SentenceDedup(language="jpn_Jpan")
+    # vie_Latn: pyvi, which pyroid does not port (jpn_Jpan: test_filters_japanese.py).
+    with pytest.raises(NotImplementedError, match="language 'vie_Latn'"):
+        dedup.SentenceDedup(language="vie_Latn")
     with pytest.raises(ValueError, match="doesn't have a tokenizer assigned"):
         dedup.SentenceDedup(language="xx_not_a_code", split_sentences=False, **NO_MIN)
-    d = dedup.SentenceDedup(language="jpn_Jpan", split_sentences=False, **NO_MIN)
+    d = dedup.SentenceDedup(language="vie_Latn", split_sentences=False, **NO_MIN)
     assert d.fit(["a\nb\nc", "a\nb\nc"]) == (["a\nb\nc", ""], [True, False])
 
 
@@ -738,7 +739,8 @@ def test_10k_documents_batched() -> None:
 
 
 # Natively tokenized languages beyond English: spaCy rule-based (fr, de, ru, es, ar), IndicNLP (hi),
-# and the whitespace tokenizer (zho). datatrove's own tokenizer is the oracle for each.
+# the whitespace tokenizer (zho) and SudachiPy (ja, with SudachiDict-core installed). datatrove's
+# own tokenizer is the oracle for each.
 ML_SENTENCES = {
     "fra_Latn": ["Le chat dort sur le tapis.", "Il pleut encore aujourd'hui !",
                  "Qu'est-ce que c'est ?", "M. Dupont est parti à Paris.",
@@ -754,6 +756,8 @@ ML_SENTENCES = {
     "hin_Deva": ["बिल्ली चटाई पर सो रही है।", "फिर से बारिश हो रही है!", "आप कैसे हैं?",
                  "श्री शर्मा दिल्ली गए।", "कीमतें 3.5 % बढ़ गईं।"],
     "zho": ["猫 在 睡觉 。", "下雨 了 !", "你 好 吗 ?", "价格 上涨 了 3.5 % 。", "结束 。"],
+    "jpn_Jpan": ["猫がマットの上で寝ている。", "また雨が降っている！", "元気ですか？",
+                 "田中さんは東京へ行った。", "価格は３．５％上がった。"],
 }  # fmt: skip
 
 
@@ -767,6 +771,8 @@ def test_native_languages_match_live_datatrove(
 ) -> None:
     if language == "hin_Deva":
         pytest.importorskip("indicnlp")
+    if language == "jpn_Jpan":
+        pytest.importorskip("sudachidict_core")  # datatrove's reference needs it; pyroid finds it
     import pyroid.integrations.datatrove as pdt
 
     sents = ML_SENTENCES[language]

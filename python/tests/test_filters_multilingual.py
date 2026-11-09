@@ -8,7 +8,8 @@
   kinds, Arrow nulls and types, identity of unchanged texts, ``threads=``, the warning.
 - Live datatrove (``pytest.importorskip``): Hypothesis documents in each script, every filter
   and ``apply`` chains, for native languages (pyroid's own tokenizers) and for the segmenters
-  installed (jieba, SudachiPy, pyvi, PyThaiNLP: ``python_tokenizer=True``).
+  installed (SudachiPy, pyvi, PyThaiNLP: ``python_tokenizer=True``). Japanese is native when
+  pyroid finds a SudachiDict; test_filters_japanese.py covers it.
 - The FineWeb-2 slices (``$PYROID_PARITY_DATA/fineweb2/<lang>.parquet``, default ``/data``)
   with FineWeb-2's own per-language filter settings, against live datatrove.
 
@@ -21,6 +22,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+import importlib.util
 import os
 import threading
 import warnings
@@ -97,33 +99,43 @@ WHAT: dict[Callable[..., Any], int] = {
 # ---- the language table ----------------------------------------------------------
 
 
+def sudachi_dictionary() -> bool:
+    """Whether pyroid finds a SudachiDict as it looks for one (Japanese is then native)."""
+    if "PYROID_SUDACHI_DICT" in os.environ:
+        return True
+    spec = importlib.util.find_spec("sudachidict_core")
+    return spec is not None and spec.origin is not None
+
+
 def test_languages_table() -> None:
     langs = pf.languages()
     assert isinstance(langs, dict)
     assert list(langs) == sorted(langs)
     assert all(isinstance(v, pf.Language) for v in langs.values())
-    # The counts the stubs document.
+    # The counts the stubs document: the four Japanese codes are native with a dictionary.
+    ja = sudachi_dictionary()
     assert len(langs) == 4343
     native = {c for c, v in langs.items() if v.native}
-    assert len(native) == 4009
+    assert len(native) == (4013 if ja else 4009)
     by_class: dict[str, int] = {}
     for v in langs.values():
         if v.native:
             by_class[v.tokenizer] = by_class.get(v.tokenizer, 0) + 1
     assert by_class == {
-        "SpaCyTokenizer": 3752,
+        "SpaCyTokenizer": 3756 if ja else 3752,
         "IndicNLPTokenizer": 129,
         "WhitespaceTokenizer": 128,
     }
     spacy_native = {v.arg for v in langs.values() if v.native and v.tokenizer == "SpaCyTokenizer"}
-    assert len(spacy_native) == 58  # the 57 rule-based languages and zh (jieba)
+    # The 57 rule-based languages, zh (jieba) and, with a dictionary, ja (SudachiPy).
+    assert len(spacy_native) == (59 if ja else 58)
     assert sum(v.arg == "xx" for v in langs.values()) == 1995
     assert langs["deu_Latn"] == pf.Language("SpaCyTokenizer", "de", True)
     assert langs["uzn_Latn"] == pf.Language("SpaCyTokenizer", "xx", True)
     assert langs["hin_Deva"] == pf.Language("IndicNLPTokenizer", "hi", True)
     assert langs["kat_Geor"] == pf.Language("WhitespaceTokenizer", "", True)
     assert langs["cmn_Hani"] == pf.Language("SpaCyTokenizer", "zh", True)
-    assert langs["jpn_Jpan"] == pf.Language("SpaCyTokenizer", "ja", False)
+    assert langs["jpn_Jpan"] == pf.Language("SpaCyTokenizer", "ja", ja)
     assert langs["vie_Latn"] == pf.Language("SpaCyTokenizer", "vi", False)
     assert langs["kor_Hang"] == pf.Language("KiwiTokenizer", "", False)
     assert langs["kaz_Cyrl"] == pf.Language("StanzaTokenizer", "kk", False)
@@ -186,7 +198,7 @@ def test_unknown_language_message_is_datatrove_s() -> None:
 @pytest.mark.parametrize(
     ("lang", "names"),
     [
-        ("jpn_Jpan", ['SpaCyTokenizer("ja")', "SudachiPy", "sudachidict-core"]),
+        # jpn_Jpan without a dictionary: test_filters_japanese.py.
         ("vie_Latn", ['SpaCyTokenizer("vi")', "pyvi"]),
         ("kaz_Cyrl", ['StanzaTokenizer("kk")', "stanza"]),
         ("kor_Hang", ["KiwiTokenizer()", "kiwipiepy"]),
@@ -1052,11 +1064,16 @@ NATIVE: dict[str, str] = {
     "hin_Deva": "hi",
     "cmn_Hani": "zh",
 }
-#: Languages pyroid does not tokenize natively, with the segmenter module datatrove needs.
+#: Languages pyroid never tokenizes natively, with the segmenter module datatrove needs.
 FALLBACK: dict[str, tuple[str, str]] = {
-    "jpn_Jpan": ("ja", "sudachipy"),
     "vie_Latn": ("vi", "pyvi"),
     "tha_Thai": ("th", "pythainlp"),
+}
+#: The languages of the ``python_tokenizer=True`` tests, with the modules datatrove's tokenizer
+#: needs: those, and Japanese (native when pyroid finds a SudachiDict, which datatrove needs too).
+PYTHON_PATH: dict[str, tuple[str, tuple[str, ...]]] = {
+    **{lang: (pool, (module,)) for lang, (pool, module) in FALLBACK.items()},
+    "jpn_Jpan": ("ja", ("sudachipy", "sudachidict_core")),
 }
 _OTHER = [w for pool in ("de", "cyr", "ar", "zh", "el", "hi") for w in POOLS[pool][:6]]
 
@@ -1065,6 +1082,7 @@ def test_test_languages_are_what_they_say() -> None:
     langs = pf.languages()
     assert all(langs[c].native for c in NATIVE)
     assert not any(langs[c].native for c in FALLBACK)
+    assert langs["jpn_Jpan"].native is sudachi_dictionary()
 
 
 def _words(pool: str) -> st.SearchStrategy[str]:
@@ -1167,6 +1185,9 @@ def _need(lang: str) -> None:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  # jieba: invalid escapes
             pytest.importorskip("jieba")  # datatrove's reference needs it
+    if pf.languages()[lang].arg == "ja":
+        pytest.importorskip("sudachipy")  # datatrove's reference needs SudachiPy and its dictionary
+        pytest.importorskip("sudachidict_core")
 
 
 @pytest.mark.parametrize("kind", ["gq", "gr", "fw", "c4"])
@@ -1216,20 +1237,24 @@ def test_native_chains_match_datatrove(dt: Datatrove, data: st.DataObject) -> No
     check(dt, chain, docs, python_tokenizer=False)
 
 
-@pytest.fixture(scope="module")
-def fallback_langs() -> list[str]:
-    """The fallback languages whose segmenter is installed (imported quietly once)."""
-    out = []
-    for lang, (_, module) in FALLBACK.items():
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            try:
+def installed(modules: Sequence[str]) -> bool:
+    """Whether ``modules`` import (quietly: segmenters warn on import)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            for module in modules:
                 __import__(module)
-            except ImportError:
-                continue
-        out.append(lang)
+        except ImportError:
+            return False
+    return True
+
+
+@pytest.fixture(scope="module")
+def python_langs() -> list[str]:
+    """The ``PYTHON_PATH`` languages whose segmenter (and dictionary) is installed."""
+    out = [lang for lang, (_, modules) in PYTHON_PATH.items() if installed(modules)]
     if not out:
-        pytest.skip("no fallback segmenter installed (jieba, sudachipy, pyvi, pythainlp)")
+        pytest.skip("no segmenter installed (sudachipy + sudachidict-core, pyvi, pythainlp)")
     return out
 
 
@@ -1237,10 +1262,10 @@ def fallback_langs() -> list[str]:
 @examples
 @given(data=st.data())
 def test_python_tokenizer_matches_datatrove(
-    dt: Datatrove, fallback_langs: list[str], kind: str, data: st.DataObject
+    dt: Datatrove, python_langs: list[str], kind: str, data: st.DataObject
 ) -> None:
-    lang = data.draw(st.sampled_from(fallback_langs), label="language")
-    pool = FALLBACK[lang][0]
+    lang = data.draw(st.sampled_from(python_langs), label="language")
+    pool = PYTHON_PATH[lang][0]
     cfg = data.draw(st.sampled_from(configs(kind, lang, POOLS[pool][:4])), label="config")
     docs = data.draw(st.lists(documents(pool), min_size=1, max_size=3), label="docs")
     check(dt, [cfg], docs, python_tokenizer=True)
@@ -1249,20 +1274,20 @@ def test_python_tokenizer_matches_datatrove(
 @examples
 @given(data=st.data())
 def test_python_tokenizer_chains_match_datatrove(
-    dt: Datatrove, fallback_langs: list[str], data: st.DataObject
+    dt: Datatrove, python_langs: list[str], data: st.DataObject
 ) -> None:
-    lang = data.draw(st.sampled_from(fallback_langs), label="language")
-    pool = FALLBACK[lang][0]
+    lang = data.draw(st.sampled_from(python_langs), label="language")
+    pool = PYTHON_PATH[lang][0]
     chain = data.draw(st.sampled_from(CHAINS))(lang, POOLS[pool][:4])
     docs = data.draw(st.lists(documents(pool), min_size=1, max_size=3), label="docs")
     check(dt, chain, docs, python_tokenizer=True)
 
 
-def test_mixed_native_and_python_steps(dt: Datatrove, fallback_langs: list[str]) -> None:
+def test_mixed_native_and_python_steps(dt: Datatrove, python_langs: list[str]) -> None:
     """Native steps and Python-tokenizer steps in one chain, in datatrove's order."""
-    lang = fallback_langs[0]
+    lang = python_langs[0]
     tok = dt.wt.load_word_tokenizer(lang)  # a datatrove WordTokenizer instance
-    pool = FALLBACK[lang][0]
+    pool = PYTHON_PATH[lang][0]
     docs = [
         "\n".join(" ".join(POOLS[pool][i : i + 6]) + "." for i in range(0, 12, 2)),
         "Ein Satz mit Wörtern. Und noch einer!\n" + " ".join(POOLS[pool]) + ".",
@@ -1278,9 +1303,14 @@ def test_mixed_native_and_python_steps(dt: Datatrove, fallback_langs: list[str])
     assert [candidate(chain, d, python_tokenizer=False) for d in docs] == want
     res = pf.apply(docs, chain)
     assert [("ok", *r) for r in zip(*res, strict=True)] == want
-    # Without the instance, the non-native code needs the opt-in.
-    with pytest.raises(NotImplementedError):
-        pf.apply(docs, [chain[0], pf.GopherQuality(language=lang)])
+    # Without the instance, a non-native code needs the opt-in (jpn_Jpan with a dictionary is
+    # native, and gives the instance's results).
+    by_code = [chain[0], pf.GopherQuality(language=lang, min_doc_words=2)]
+    if pf.languages()[lang].native:
+        assert pf.apply(docs, by_code) == pf.apply(docs, [chain[0], chain[1]])
+    else:
+        with pytest.raises(NotImplementedError):
+            pf.apply(docs, by_code)
 
 
 def test_tokenizer_objects_match_datatrove(dt: Datatrove) -> None:
