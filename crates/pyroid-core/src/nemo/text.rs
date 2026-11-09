@@ -3,6 +3,8 @@
 //! splitters (`get_word_splitter`), `get_sentences`, `get_paragraphs`, and the Python `str`
 //! operations the filters apply, with CPython's semantics.
 
+use std::ops::ControlFlow;
+
 use crate::filters::text::py_strip;
 use crate::jieba::{Dictionary, ForceSplit};
 
@@ -49,6 +51,34 @@ pub(crate) fn ratio(a: usize, b: usize) -> f64 {
     a as f64 / b as f64
 }
 
+/// The number of bytes of `b` for which `pred` holds. Counts 255 bytes at a time in `u8`
+/// lanes, which the compiler vectorizes for a branch-free `pred`.
+#[inline]
+pub(crate) fn count_bytes(b: &[u8], pred: impl Fn(u8) -> bool) -> usize {
+    b.chunks(255)
+        .map(|chunk| {
+            usize::from(
+                chunk
+                    .iter()
+                    .fold(0u8, |acc, &c| acc.wrapping_add(u8::from(pred(c)))),
+            )
+        })
+        .sum()
+}
+
+/// A UTF-8 continuation byte (`0b10xx_xxxx`).
+#[inline]
+pub(crate) fn is_continuation(c: u8) -> bool {
+    (c & 0xC0) == 0x80
+}
+
+/// `len(s)`: the number of code points (bytes that are not continuation bytes).
+#[inline]
+pub(crate) fn char_len(s: &str) -> usize {
+    let b = s.as_bytes();
+    b.len() - count_bytes(b, is_continuation)
+}
+
 /// NeMo's `get_word_splitter(lang)`, for the languages pyroid ports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Splitter {
@@ -77,7 +107,27 @@ impl Splitter {
 
     /// The words NeMo's filters see for a document: `splitter(text.strip())`.
     pub fn doc_words(self, text: &str) -> Words<'_> {
-        self.words(py_strip(text))
+        match self {
+            // `text.strip().split()` is `text.split()`.
+            Self::Whitespace => Words::Split(split(text)),
+            Self::Jieba => self.words(py_strip(text)),
+        }
+    }
+
+    /// Each of [`Self::doc_words`] with its length in code points, in order.
+    #[inline]
+    pub fn for_each_word<'a>(self, text: &'a str, mut f: impl FnMut(&'a str, usize)) {
+        match self {
+            Self::Whitespace => for_each_word_span(text, |a, b, chars| {
+                f(&text[a..b], chars);
+                ControlFlow::Continue(())
+            }),
+            Self::Jieba => {
+                for w in self.doc_words(text) {
+                    f(w, char_len(w));
+                }
+            }
+        }
     }
 
     /// The words of `text`, in order (`splitter(text)` in NeMo).
@@ -116,16 +166,34 @@ impl<'a> Iterator for Words<'a> {
     }
 }
 
-/// Byte length of the `str.isspace()` character starting at byte `i` of `b` (valid
-/// UTF-8, `i` any byte position), or 0. A continuation byte is never a whitespace start.
-#[inline]
-fn space_len(b: &[u8], i: usize) -> usize {
-    let c = b[i];
-    if c < 0x80 {
-        return usize::from(matches!(c, b'\t'..=b'\r' | 0x1c..=b' '));
+/// What a byte can be for [`split`]: part of a word, an ASCII whitespace character, or the
+/// lead byte of a character that may be whitespace (U+0085 and U+00A0 start with C2,
+/// U+1680 with E1, U+2000..=U+205F with E2, U+3000 with E3).
+const WORD: u8 = 0;
+const SPACE: u8 = 1;
+const MAYBE: u8 = 2;
+
+#[allow(clippy::cast_possible_truncation)] // c < 256
+static SPACE_CLASS: [u8; 256] = {
+    let mut t = [WORD; 256];
+    let mut c = 0;
+    while c < 256 {
+        t[c] = match c as u8 {
+            b'\t'..=b'\r' | 0x1c..=b' ' => SPACE,
+            0xC2 | 0xE1 | 0xE2 | 0xE3 => MAYBE,
+            _ => WORD,
+        };
+        c += 1;
     }
+    t
+};
+
+/// Byte length of the whitespace character whose lead byte (C2, E1, E2 or E3) is at `i`,
+/// or 0 if that character is not whitespace. `b` is valid UTF-8.
+#[inline]
+fn multi_space_len(b: &[u8], i: usize) -> usize {
     // U+0085, U+00A0, U+1680, U+2000..=U+200A, U+2028, U+2029, U+202F, U+205F, U+3000.
-    match c {
+    match b[i] {
         0xC2 if matches!(b[i + 1], 0x85 | 0xA0) => 2,
         0xE1 if b[i + 1] == 0x9A && b[i + 2] == 0x80 => 3,
         0xE2 if matches!(
@@ -137,6 +205,187 @@ fn space_len(b: &[u8], i: usize) -> usize {
         }
         0xE3 if b[i + 1] == 0x80 && b[i + 2] == 0x80 => 3,
         _ => 0,
+    }
+}
+
+/// Byte length of the `str.isspace()` character starting at byte `i` of `b` (valid
+/// UTF-8, `i` any byte position), or 0. A continuation byte is never a whitespace start.
+#[cfg(test)]
+fn space_len(b: &[u8], i: usize) -> usize {
+    match SPACE_CLASS[usize::from(b[i])] {
+        WORD => 0,
+        SPACE => 1,
+        _ => multi_space_len(b, i),
+    }
+}
+
+// ---- 64-byte blocks as bit masks (SWAR: eight bytes per u64, no `unsafe`) ----------------
+
+const LO: u64 = 0x0101_0101_0101_0101;
+const HI: u64 = 0x8080_8080_8080_8080;
+const LOW7: u64 = 0x7F7F_7F7F_7F7F_7F7F;
+
+/// 0x80 in each byte of `x` whose value is below `k` (`k <= 0x80`), exactly: no carry
+/// crosses a byte.
+#[inline]
+const fn bytes_below(x: u64, k: u8) -> u64 {
+    !(((x & LOW7).wrapping_add(LO * (0x80 - k as u64))) | x) & HI
+}
+
+/// 0x80 in each byte of `x` equal to `v`, exactly.
+#[inline]
+const fn bytes_equal(x: u64, v: u8) -> u64 {
+    let y = x ^ (LO * v as u64);
+    !(((y & LOW7).wrapping_add(LOW7)) | y) & HI
+}
+
+/// The eight 0x80 flags of `m` as the bits of a byte (byte `j` to bit `j`).
+#[inline]
+fn flags_to_bits(m: u64) -> u64 {
+    (m >> 7).wrapping_mul(0x0102_0408_1020_4080) >> 56
+}
+
+/// Bit masks of 64 bytes: ASCII whitespace, possible lead bytes of multi-byte whitespace
+/// (C2, E1, E2, E3), and UTF-8 continuation bytes.
+#[inline]
+fn classify(block: &[u8; 64]) -> (u64, u64, u64) {
+    let (mut space, mut maybe, mut cont) = (0u64, 0u64, 0u64);
+    for (i, chunk) in block.chunks_exact(8).enumerate() {
+        let x = u64::from_le_bytes(chunk.try_into().expect("8 bytes"));
+        // \t..=\r and \x1c..=' '.
+        let sp = (bytes_below(x, 0x0E) & !bytes_below(x, 0x09))
+            | (bytes_below(x, 0x21) & !bytes_below(x, 0x1C));
+        space |= flags_to_bits(sp) << (8 * i);
+        if x & HI != 0 {
+            let mb = bytes_equal(x, 0xC2)
+                | bytes_equal(x, 0xE1)
+                | bytes_equal(x, 0xE2)
+                | bytes_equal(x, 0xE3);
+            maybe |= flags_to_bits(mb) << (8 * i);
+            // 0b10xx_xxxx: bit 7 set, bit 6 (moved to bit 7 by the shift) clear.
+            cont |= flags_to_bits(x & !(x << 1) & HI) << (8 * i);
+        }
+    }
+    (space, maybe, cont)
+}
+
+/// One 64-byte block of a str (see [`for_each_block`]).
+#[derive(Clone, Copy, Debug)]
+struct Block {
+    /// Bytes of whitespace characters (`str.isspace()`), multi-byte ones included.
+    space: u64,
+    /// UTF-8 continuation bytes.
+    cont: u64,
+    /// Bytes that exist (the last block may be short).
+    valid: u64,
+}
+
+/// `f(base, block)` for each 64-byte block of `s` from byte `base`, until `f` breaks.
+fn for_each_block(s: &str, mut f: impl FnMut(usize, Block) -> ControlFlow<()>) {
+    let bytes = s.as_bytes();
+    let mut carry = 0u64; // whitespace bytes that run into the next block
+    let mut base = 0;
+    while base < bytes.len() {
+        let len = (bytes.len() - base).min(64);
+        let (space, maybe, cont) = if let Some(block) = bytes[base..].first_chunk::<64>() {
+            classify(block)
+        } else {
+            // The short last block, padded with spaces.
+            let mut block = [b' '; 64];
+            block[..len].copy_from_slice(&bytes[base..]);
+            classify(&block)
+        };
+        let valid = if len == 64 {
+            u64::MAX
+        } else {
+            (1u64 << len) - 1
+        };
+        let mut space = space | carry;
+        carry = 0;
+        let mut leads = maybe & valid;
+        while leads != 0 {
+            let at = leads.trailing_zeros() as usize;
+            leads &= leads - 1;
+            let width = multi_space_len(bytes, base + at);
+            if width > 0 {
+                let bits = ((1u128 << width) - 1) << at;
+                #[allow(clippy::cast_possible_truncation)] // the two halves of 128 bits
+                {
+                    space |= bits as u64;
+                    carry |= (bits >> 64) as u64;
+                }
+            }
+        }
+        if f(base, Block { space, cont, valid }).is_break() {
+            return;
+        }
+        base += len;
+    }
+}
+
+/// `len(s.split())`: the number of words, counted from the blocks' word starts.
+pub(crate) fn count_words(s: &str) -> usize {
+    let (mut n, mut prev) = (0usize, 0u64);
+    for_each_block(s, |_, blk| {
+        let word = !blk.space & blk.valid;
+        n += (word & !((word << 1) | prev)).count_ones() as usize;
+        prev = word >> 63;
+        ControlFlow::Continue(())
+    });
+    n
+}
+
+/// `(len(s.split()), sum(len(w) for w in s.split()))`: every non-whitespace character is in
+/// exactly one word.
+pub(crate) fn count_words_and_chars(s: &str) -> (usize, usize) {
+    let (mut n, mut chars, mut prev) = (0usize, 0usize, 0u64);
+    for_each_block(s, |_, blk| {
+        let word = !blk.space & blk.valid;
+        n += (word & !((word << 1) | prev)).count_ones() as usize;
+        chars += (word & !blk.cont).count_ones() as usize;
+        prev = word >> 63;
+        ControlFlow::Continue(())
+    });
+    (n, chars)
+}
+
+/// Each word of `s.split()` in order: `f(start, end, chars)` with its byte range and length
+/// in code points, until `f` breaks.
+pub(crate) fn for_each_word_span(
+    s: &str,
+    mut f: impl FnMut(usize, usize, usize) -> ControlFlow<()>,
+) {
+    // The open word's start and the continuation bytes before it.
+    let mut open = (0usize, 0usize);
+    let (mut cont_before, mut prev) = (0usize, 0u64);
+    let mut stopped = false;
+    for_each_block(s, |base, blk| {
+        let word = !blk.space & blk.valid;
+        let shifted = (word << 1) | prev;
+        let starts = word & !shifted;
+        // Bytes right after a word that are not word bytes (padding included).
+        let ends = !word & shifted;
+        let mut edges = starts | ends;
+        while edges != 0 {
+            let k = edges.trailing_zeros() as usize;
+            let bit = 1u64 << k;
+            edges &= edges - 1;
+            let at = base + k;
+            let conts = cont_before + (blk.cont & (bit - 1)).count_ones() as usize;
+            if starts & bit != 0 {
+                open = (at, conts);
+            } else if f(open.0, at, at - open.0 - (conts - open.1)).is_break() {
+                stopped = true;
+                return ControlFlow::Break(());
+            }
+        }
+        cont_before += (blk.cont & blk.valid).count_ones() as usize;
+        prev = word >> 63;
+        ControlFlow::Continue(())
+    });
+    // A word that runs to the end of a full last block.
+    if !stopped && prev == 1 {
+        let _ = f(open.0, s.len(), s.len() - open.0 - (cont_before - open.1));
     }
 }
 
@@ -152,29 +401,57 @@ pub struct Split<'a> {
     pos: usize,
 }
 
-impl<'a> Iterator for Split<'a> {
-    type Item = &'a str;
-
-    fn next(&mut self) -> Option<&'a str> {
+impl Split<'_> {
+    /// The next word's byte range and length in code points.
+    #[inline]
+    pub fn next_counted(&mut self) -> Option<(usize, usize, usize)> {
         let b = self.s.as_bytes();
         let mut i = self.pos;
+        // Skip whitespace.
         loop {
-            if i >= b.len() {
-                self.pos = i;
-                return None;
-            }
-            match space_len(b, i) {
-                0 => break,
-                n => i += n,
+            let &c = b.get(i)?;
+            match SPACE_CLASS[usize::from(c)] {
+                WORD => break,
+                SPACE => i += 1,
+                _ => match multi_space_len(b, i) {
+                    0 => break,
+                    n => i += n,
+                },
             }
         }
+        // `b[start]` starts a word: a word byte, or the lead of a character that is not
+        // whitespace (its continuation bytes are word bytes).
         let start = i;
-        while i < b.len() && space_len(b, i) == 0 {
+        let mut continuations = 0;
+        i += 1;
+        while let Some(&c) = b.get(i) {
+            match SPACE_CLASS[usize::from(c)] {
+                WORD => {}
+                SPACE => break,
+                _ if multi_space_len(b, i) > 0 => break,
+                _ => {}
+            }
+            continuations += usize::from(is_continuation(c));
             i += 1;
         }
         self.pos = i;
-        // `start` and `i` are character boundaries: whitespace starts, or the ends.
-        Some(&self.s[start..i])
+        Some((start, i, i - start - continuations))
+    }
+
+    /// The next word's byte range.
+    #[inline]
+    pub fn next_span(&mut self) -> Option<(usize, usize)> {
+        self.next_counted().map(|(a, b, _)| (a, b))
+    }
+}
+
+impl<'a> Iterator for Split<'a> {
+    type Item = &'a str;
+
+    #[inline]
+    fn next(&mut self) -> Option<&'a str> {
+        // Both ends are character boundaries: whitespace starts, or the ends of `s`.
+        self.next_span().map(|(a, b)| &self.s[a..b])
     }
 }
 
@@ -232,6 +509,110 @@ mod tests {
             for i in 1..n {
                 assert_eq!(space_len(&buf[..n + 2], i), 0, "{c:?} at {i}");
             }
+        }
+    }
+
+    #[test]
+    fn swar_predicates_are_exact() {
+        // Every byte value in every lane, next to bytes that could carry into it.
+        for v in 0..=255u8 {
+            for lane in 0..8 {
+                for fill in [0x00u8, 0x7F, 0x80, 0xFF, v] {
+                    let mut bytes = [fill; 8];
+                    bytes[lane] = v;
+                    let x = u64::from_le_bytes(bytes);
+                    for k in [0x00, 0x09, 0x0E, 0x1C, 0x21, 0x80] {
+                        let got = flags_to_bits(bytes_below(x, k));
+                        let want = (0..8).fold(0, |m, j| m | (u64::from(bytes[j] < k) << j));
+                        assert_eq!(got, want, "below {k:#x}: {bytes:?}");
+                    }
+                    for e in [0xC2, 0xE1, 0xE2, 0xE3, 0x00, 0x80] {
+                        let got = flags_to_bits(bytes_equal(x, e));
+                        let want = (0..8).fold(0, |m, j| m | (u64::from(bytes[j] == e) << j));
+                        assert_eq!(got, want, "equal {e:#x}: {bytes:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn split_matches_a_char_split() {
+        // Whitespace of every width next to non-whitespace characters with the same lead
+        // bytes (C2, E1, E2, E3), and lengths in code points.
+        let pieces = [
+            " ",
+            "\t",
+            "\u{1c}",
+            "\u{85}",
+            "\u{a0}",
+            "\u{a9}",
+            "\u{1680}",
+            "\u{1681}",
+            "\u{2000}",
+            "\u{200a}",
+            "\u{200b}",
+            "\u{2010}",
+            "\u{2028}",
+            "\u{202f}",
+            "\u{205f}",
+            "\u{2060}",
+            "\u{3000}",
+            "\u{3001}",
+            "a",
+            "é",
+            "中",
+            "\u{1f600}",
+            "\u{0}",
+        ];
+        let mut state = 7u64;
+        let mut next = |m: usize| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            usize::try_from(state >> 33).unwrap() % m
+        };
+        for _ in 0..3000 {
+            // Up to ~600 bytes: words and multi-byte whitespace across 64-byte blocks.
+            let mut s = String::new();
+            for _ in 0..next(160) {
+                // Runs of one piece make long words and long whitespace.
+                let piece = pieces[next(pieces.len())];
+                for _ in 0..=next(3) * next(3) {
+                    s.push_str(piece);
+                }
+            }
+            let want: Vec<&str> = s
+                .split(is_py_whitespace)
+                .filter(|w| !w.is_empty())
+                .collect();
+            assert_eq!(split(&s).collect::<Vec<_>>(), want, "{s:?}");
+            let mut words = split(&s);
+            let mut counted = Vec::new();
+            while let Some((a, b, chars)) = words.next_counted() {
+                assert_eq!(chars, s[a..b].chars().count());
+                counted.push(&s[a..b]);
+            }
+            assert_eq!(counted, want);
+            assert_eq!(char_len(&s), s.chars().count());
+            // The block functions.
+            let mut spans = Vec::new();
+            for_each_word_span(&s, |a, b, chars| {
+                assert_eq!(chars, s[a..b].chars().count(), "{s:?}");
+                spans.push(&s[a..b]);
+                ControlFlow::Continue(())
+            });
+            assert_eq!(spans, want, "{s:?}");
+            let chars: usize = want.iter().map(|w| w.chars().count()).sum();
+            assert_eq!(count_words(&s), want.len(), "{s:?}");
+            assert_eq!(count_words_and_chars(&s), (want.len(), chars), "{s:?}");
+            // Stopping early.
+            let mut first = None;
+            for_each_word_span(&s, |a, b, _| {
+                first = Some(&s[a..b]);
+                ControlFlow::Break(())
+            });
+            assert_eq!(first, want.first().copied());
         }
     }
 

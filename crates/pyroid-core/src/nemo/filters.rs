@@ -9,8 +9,11 @@ use std::sync::LazyLock;
 use memchr::memmem::{self, Finder};
 
 use super::tables::ALPHA;
-use super::text::{ScoreError, Splitter, project_lower, ratio, sentences, split};
-use crate::filters::text::{py_len, py_strip};
+use super::text::{
+    ScoreError, Splitter, char_len, count_bytes, count_words, count_words_and_chars, project_lower,
+    ratio, sentences, split,
+};
+use crate::filters::text::py_strip;
 
 /// `ellipsis_marks`.
 pub const ELLIPSIS_MARKS: [&str; 8] = [
@@ -94,27 +97,44 @@ static BOILERPLATE: LazyLock<Boilerplate> = LazyLock::new(|| {
 
 /// `x in white_space_list` for an ASCII byte (`"\b"` is U+0008).
 #[inline]
+#[allow(clippy::needless_bitwise_bool)] // branch-free, so the count vectorizes
 fn is_listed_space(b: u8) -> bool {
-    matches!(b, b'\t' | b'\n' | b'\r' | 0x08 | b' ')
+    (b == b'\t') | (b == b'\n') | (b == b'\r') | (b == 0x08) | (b == b' ')
 }
 
 /// A score over the code point count: `count / nchar if nchar > 0 else 1.0`.
 #[inline]
 fn per_char(text: &str, count: usize) -> f64 {
-    match py_len(text) {
+    match char_len(text) {
         0 => 1.0,
         n => ratio(count, n),
     }
 }
 
+/// An ASCII letter, without branches.
+#[inline]
+fn is_ascii_letter(b: u8) -> bool {
+    (b | 0x20).wrapping_sub(b'a') < 26
+}
+
+/// `[a-zA-Z0-9\n?!,.]`, without branches (so the count vectorizes).
+#[inline]
+#[allow(clippy::needless_bitwise_bool)]
+fn is_alnum_class(b: u8) -> bool {
+    is_ascii_letter(b)
+        | (b.wrapping_sub(b'0') < 10)
+        | (b == b'\n')
+        | (b == b'?')
+        | (b == b'!')
+        | (b == b',')
+        | (b == b'.')
+}
+
 /// `NonAlphaNumericFilter`: `(nchar - len(regex_alphanum.findall(text))) / nchar`, 1.0 if empty.
 pub fn non_alpha_numeric(text: &str) -> f64 {
     // `[a-zA-Z0-9\n?!,.]` is ASCII: count bytes.
-    let k = text
-        .bytes()
-        .filter(|&b| matches!(b, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'\n' | b'?' | b'!' | b',' | b'.'))
-        .count();
-    match py_len(text) {
+    let k = count_bytes(text.as_bytes(), is_alnum_class);
+    match char_len(text) {
         0 => 1.0,
         n => ratio(n - k, n),
     }
@@ -132,27 +152,61 @@ fn hash_runs(word: &str) -> usize {
 ///
 /// A word that strips to `""` (jieba's whitespace words) divides by zero, as in NeMo.
 pub fn symbols_to_words(text: &str, splitter: Splitter) -> Result<f64, ScoreError> {
-    let (mut words, mut symbols) = (0usize, 0usize);
-    for w in splitter.doc_words(text) {
-        words += 1;
-        let word = py_strip(w);
-        let len = py_len(word);
-        if len == 0 {
-            return Err(ScoreError::ZeroDivision);
-        }
-        if ELLIPSIS_MARKS.contains(&word) || ratio(hash_runs(word), len) > 0.5 {
-            symbols += 1;
+    if splitter == Splitter::Whitespace {
+        // A word of `text.split()` has no space, so the only marks it can be hold "..", "…"
+        // or "»", and a word that is mostly `#` holds a `#`. Without them no word counts.
+        let b = text.as_bytes();
+        let marks = memmem::find(b, b"..").is_some()
+            || memmem::find(b, "\u{2026}".as_bytes()).is_some()
+            || memmem::find(b, "\u{bb}".as_bytes()).is_some();
+        if !marks && memchr::memchr(b'#', b).is_none() {
+            return match count_words(text) {
+                0 => Err(ScoreError::ZeroDivision),
+                words => Ok(ratio(0, words)),
+            };
         }
     }
-    if words == 0 {
+    let (mut words, mut symbols, mut empty) = (0usize, 0usize, false);
+    splitter.for_each_word(text, |w, chars| {
+        words += 1;
+        // `w.strip()`: a word of `text.split()` has no whitespace to strip.
+        let (word, len) = match splitter {
+            Splitter::Whitespace => (w, chars),
+            Splitter::Jieba => {
+                let s = py_strip(w);
+                (s, char_len(s))
+            }
+        };
+        if len == 0 {
+            // NeMo divides by zero here; later words cannot change that.
+            empty = true;
+        } else if !empty {
+            symbols += usize::from(is_symbol_word(word, len));
+        }
+    });
+    if empty || words == 0 {
         return Err(ScoreError::ZeroDivision);
     }
     Ok(ratio(symbols, words))
 }
 
+/// `word in ellipsis_marks or len(regex_hash.findall(word)) / len(word) > 0.5` for a
+/// non-empty `word` of `len` code points.
+#[inline]
+fn is_symbol_word(word: &str, len: usize) -> bool {
+    let b = word.as_bytes();
+    // Every mark starts with one of these bytes ("…" with E2).
+    let mark =
+        matches!(b[0], b'.' | b'[' | b'(' | b'-' | b'r' | 0xE2) && ELLIPSIS_MARKS.contains(&word);
+    mark || (memchr::memchr(b'#', b).is_some() && ratio(hash_runs(word), len) > 0.5)
+}
+
 /// `NumbersFilter`: `len(regex_digit.findall(text)) / nchar` (`[[:digit:]]` is ASCII 0-9).
 pub fn numbers(text: &str) -> f64 {
-    per_char(text, text.bytes().filter(u8::is_ascii_digit).count())
+    per_char(
+        text,
+        count_bytes(text.as_bytes(), |b| b.wrapping_sub(b'0') < 10),
+    )
 }
 
 /// `regex_url`'s unit at byte `i`: one URL character, or `%` and two hex digits. Its length.
@@ -235,23 +289,21 @@ pub fn urls(text: &str) -> f64 {
 
 /// `WhiteSpaceFilter`: characters in `white_space_list` over all characters.
 pub fn white_space(text: &str) -> f64 {
-    per_char(text, text.bytes().filter(|&b| is_listed_space(b)).count())
+    per_char(text, count_bytes(text.as_bytes(), is_listed_space))
 }
 
 /// `ParenthesesFilter`: `{ } ⟨ ⟩ [ ] ( )` over all characters.
+#[allow(clippy::needless_bitwise_bool)] // branch-free, so the count vectorizes
 pub fn parentheses(text: &str) -> f64 {
     let b = text.as_bytes();
-    let k = b
-        .iter()
-        .enumerate()
-        .filter(|&(i, &c)| match c {
-            b'{' | b'}' | b'[' | b']' | b'(' | b')' => true,
-            // U+27E8 / U+27E9 are E2 9F A8 / E2 9F A9 (a lead byte has its continuations).
-            0xE2 => b[i + 1] == 0x9F && matches!(b[i + 2], 0xA8 | 0xA9),
-            _ => false,
-        })
+    let ascii = count_bytes(b, |c| {
+        (c == b'{') | (c == b'}') | (c == b'[') | (c == b']') | (c == b'(') | (c == b')')
+    });
+    // U+27E8 / U+27E9 are E2 9F A8 / E2 9F A9 (a lead byte has its continuations).
+    let angles = memmem::find_iter(b, &[0xE2, 0x9F])
+        .filter(|&i| matches!(b[i + 2], 0xA8 | 0xA9))
         .count();
-    per_char(text, k)
+    per_char(text, ascii + angles)
 }
 
 /// `BoilerPlateStringFilter`: 1.0 if a paragraph contains `"lorem ipsum"`, else the share
@@ -290,7 +342,10 @@ pub fn boilerplate_string(text: &str) -> f64 {
 
 /// `WordCountFilter`: the number of words.
 pub fn word_count(text: &str, splitter: Splitter) -> usize {
-    splitter.doc_words(text).count()
+    match splitter {
+        Splitter::Whitespace => count_words(text),
+        Splitter::Jieba => splitter.doc_words(text).count(),
+    }
 }
 
 /// `PunctuationFilter`: the share of sentences whose stripped text does not end with one of
@@ -327,14 +382,23 @@ pub fn is_regex_alpha(c: char) -> bool {
         .is_ok()
 }
 
+/// `regex_alpha.search(word)`: an ASCII letter, or a non-ASCII `[[:alpha:]]` character.
+#[inline]
+fn has_alpha(word: &str) -> bool {
+    if word.bytes().any(is_ascii_letter) {
+        return true;
+    }
+    !word.is_ascii() && word.chars().any(|c| !c.is_ascii() && is_regex_alpha(c))
+}
+
 /// `WordsWithoutAlphabetsFilter`: the share of words with at least one `[[:alpha:]]`
 /// character.
 pub fn words_without_alphabets(text: &str, splitter: Splitter) -> Result<f64, ScoreError> {
     let (mut total, mut alpha) = (0usize, 0usize);
-    for w in splitter.doc_words(text) {
+    splitter.for_each_word(text, |w, _| {
         total += 1;
-        alpha += usize::from(w.chars().any(is_regex_alpha));
-    }
+        alpha += usize::from(has_alpha(w));
+    });
     if total == 0 {
         return Err(ScoreError::ZeroDivision);
     }
@@ -346,7 +410,8 @@ pub fn words_without_alphabets(text: &str, splitter: Splitter) -> Result<f64, Sc
 /// `min_num_common_words` (checked after every word).
 pub fn common_english_words(text: &str, min_num_common_words: i64, stop_at_false: bool) -> u64 {
     let mut count: u64 = 0;
-    for w in split(py_strip(text)) {
+    // `text.strip().split()` is `text.split()`.
+    for w in split(text) {
         count += u64::from(COMMON_ENGLISH_WORDS.contains(&w));
         if stop_at_false && i128::from(count) >= i128::from(min_num_common_words) {
             return count;
@@ -357,14 +422,20 @@ pub fn common_english_words(text: &str, min_num_common_words: i64, stop_at_false
 
 /// `MeanWordLengthFilter`: the mean length (code points) of the non-empty words.
 pub fn mean_word_length(text: &str, splitter: Splitter) -> Result<f64, ScoreError> {
-    let (mut n, mut sum) = (0usize, 0usize);
-    for w in splitter.doc_words(text) {
-        let len = py_len(w);
-        if len > 0 {
-            n += 1;
-            sum += len;
+    let (n, sum) = match splitter {
+        // Words of `split()` are never empty, and hold every non-whitespace character.
+        Splitter::Whitespace => count_words_and_chars(text),
+        Splitter::Jieba => {
+            let (mut n, mut sum) = (0usize, 0usize);
+            splitter.for_each_word(text, |_, len| {
+                if len > 0 {
+                    n += 1;
+                    sum += len;
+                }
+            });
+            (n, sum)
         }
-    }
+    };
     if n == 0 {
         return Err(ScoreError::ZeroDivision);
     }
@@ -373,11 +444,11 @@ pub fn mean_word_length(text: &str, splitter: Splitter) -> Result<f64, ScoreErro
 
 /// `LongWordFilter`: the length of the longest word.
 pub fn long_word(text: &str, splitter: Splitter) -> Result<usize, ScoreError> {
-    splitter
-        .doc_words(text)
-        .map(py_len)
-        .max()
-        .ok_or(ScoreError::EmptyMax)
+    let mut longest: Option<usize> = None;
+    splitter.for_each_word(text, |_, len| {
+        longest = Some(longest.map_or(len, |m| m.max(len)));
+    });
+    longest.ok_or(ScoreError::EmptyMax)
 }
 
 /// The longest ellipsis mark, in characters (`"read more.."`).
