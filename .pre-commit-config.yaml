@@ -1,6 +1,4 @@
 # Git hooks for prek (https://github.com/j178/prek); also readable by pre-commit.
-            crates/pyroid-core/src/sudachi/testdata/|
-            crates/pyroid-core/src/sudachi/resources/|
 #   Install the git hook:  uvx prek@0.5.10 install
 #   Run every hook:        uvx prek@0.5.10 run --all-files      (the CI `lint` job runs exactly this)
 # Remote hooks are pinned to commit SHAs; update them with `uvx prek@0.5.10 update --freeze`.
@@ -30,6 +28,8 @@ repos:
             crates/pyroid-core/tests/metrics_data/|
             crates/pyroid-core/src/json_repair/testdata/|
             crates/pyroid-core/src/jieba/testdata/|
+            crates/pyroid-core/src/sudachi/testdata/|
+            crates/pyroid-core/src/sudachi/resources/|
             bench/data/|
             bench/results/|
             docs/assets/.*\.svg$|
