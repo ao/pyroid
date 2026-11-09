@@ -1,0 +1,43 @@
+{
+ "what": "NLTK 3.10.4 vs pyroid.nltk on FineWeb (fineweb-dev-10k, first --docs documents)",
+ "label": "Docker/OrbStack VM, indicative",
+ "python": "3.15.2",
+ "gil_enabled": false,
+ "machine": "aarch64",
+ "cpus": 12,
+ "loadavg": [
+  3.53515625,
+  4.19482421875,
+  7.2646484375
+ ],
+ "docs": 1000,
+ "chars": 3018370,
+ "rows": {
+  "sent_tokenize": {
+   "gate": true,
+   "us_per_doc": {
+    "nltk x1": 591.8,
+    "pyroid loop x1": 11.2,
+    "pyroid batch x1": 10.5,
+    "pyroid batch x8": 5.0,
+    "nltk threads x8": 258.9,
+    "nltk processes x8": 116.5
+   }
+  },
+  "word_tokenize": {
+   "gate": true,
+   "us_per_doc": {
+    "nltk x1": 3513.4,
+    "pyroid loop x1": 105.4,
+    "pyroid batch x1": 95.9,
+    "pyroid batch x8": 43.4,
+    "nltk threads x8": 1243.5,
+    "nltk processes x8": 723.6
+   }
+  }
+ },
+ "load_ms": {
+  "pyroid": 275.5,
+  "nltk": 253.2
+ }
+}
