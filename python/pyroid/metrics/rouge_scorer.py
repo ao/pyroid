@@ -23,7 +23,7 @@ import sys
 import warnings
 from typing import Any
 
-from pyroid._pyroid import FallbackWarning, PyroidError
+from pyroid._pyroid import FallbackWarning, InputError, PyroidError
 from pyroid._pyroid import metrics as _native
 from pyroid.metrics import scoring, tokenizers
 from pyroid.metrics.tokenize import _ensure_str
@@ -149,10 +149,28 @@ def _argmax(values: list[Any]) -> int:
 
 
 def _texts(texts: Any, name: str) -> Any:
-    """A batch argument as a Python sequence (Arrow arrays become a list of str)."""
+    """A batch argument as a Python sequence (Arrow arrays become a list, None for nulls)."""
     if isinstance(texts, (list, tuple)):
         return texts
-    return _native.rouge_texts(texts, name)
+    return _native.batch_texts(texts, name)
+
+
+def _first_none(texts: Any) -> int | None:
+    """The index of the first item that is ``None`` (by identity: items may be anything)."""
+    for i, t in enumerate(texts):
+        if t is None:
+            return i
+    return None
+
+
+def _check_no_none(texts: Any, name: str) -> None:
+    """Raise :class:`pyroid.InputError` for a list or tuple holding ``None``."""
+    if isinstance(texts, (list, tuple)):
+        i = _first_none(texts)
+        if i is not None:
+            err = InputError(f"expected str at index {i}, got NoneType")
+            err.add_note(f"while processing {name!r}")
+            raise err
 
 
 def _all_str(texts: Any) -> bool:
@@ -160,6 +178,36 @@ def _all_str(texts: Any) -> bool:
     if isinstance(texts, (list, tuple)):
         return all(type(t) is str for t in texts)
     return True
+
+
+def _all_str_or_null(texts: Any) -> bool:
+    """:func:`_all_str` for the result of :func:`_texts`, where ``None`` is an Arrow null."""
+    return all(t is None or type(t) is str for t in texts)
+
+
+def _without_nulls(targets: Any, predictions: Any) -> tuple[Any, Any, list[int] | None]:
+    """The pairs with no ``None`` (an Arrow null) on either side, and their indices.
+
+    The indices are None when every pair is kept.
+    """
+    if _first_none(targets) is None and _first_none(predictions) is None:
+        return targets, predictions, None
+    keep = [
+        i
+        for i, (t, p) in enumerate(zip(targets, predictions, strict=True))
+        if t is not None and p is not None
+    ]
+    return [targets[i] for i in keep], [predictions[i] for i in keep], keep
+
+
+def _with_nulls(results: list[Any], keep: list[int] | None, n: int) -> list[Any]:
+    """``results`` of the kept pairs back in place, ``None`` for the others."""
+    if keep is None:
+        return results
+    out: list[Any] = [None] * n
+    for i, r in zip(keep, results, strict=True):
+        out[i] = r
+    return out
 
 
 class RougeScorer(scoring.BaseScorer):
@@ -252,11 +300,13 @@ class RougeScorer(scoring.BaseScorer):
 
     def score_batch(
         self, targets: Any, predictions: Any, *, threads: int | None = None
-    ) -> list[dict[Any, scoring.Score]]:
+    ) -> list[dict[Any, scoring.Score] | None]:
         """``[self.score(t, p) for t, p in zip(targets, predictions)]``, in parallel.
 
         Not part of rouge-score; see ``rouge_scorer.pyi``.
         """
+        _check_no_none(targets, "targets")
+        _check_no_none(predictions, "predictions")
         types = self.rouge_types
         tokenizer = self._tokenizer
         if _valid_types(types) and type(tokenizer) is _DefaultTokenizer:
@@ -265,27 +315,22 @@ class RougeScorer(scoring.BaseScorer):
             if self._split_summaries and "rougeLsum" in types:
                 targets = _texts(targets, "targets")
                 predictions = _texts(predictions, "predictions")
-                if _all_str(targets) and _all_str(predictions):
+                if _all_str_or_null(targets) and _all_str_or_null(predictions):
                     _check_lengths(targets, predictions)
+                    ts, ps, keep = _without_nulls(targets, predictions)
                     from pyroid.nltk import sent_tokenize
 
                     target_sents = [
-                        [s for s in d if len(s)]
-                        for d in sent_tokenize(list(targets), threads=threads)
+                        [s for s in d if len(s)] for d in sent_tokenize(list(ts), threads=threads)
                     ]
                     prediction_sents = [
-                        [s for s in d if len(s)]
-                        for d in sent_tokenize(list(predictions), threads=threads)
+                        [s for s in d if len(s)] for d in sent_tokenize(list(ps), threads=threads)
                     ]
                     result = _native.rouge_score_batch(
-                        types,
-                        targets,
-                        predictions,
-                        stem,
-                        target_sents,
-                        prediction_sents,
-                        threads=threads,
+                        types, ts, ps, stem, target_sents, prediction_sents, threads=threads
                     )
+                    if result is not None:
+                        result = _with_nulls(result, keep, len(targets))
             elif _all_str(targets) and _all_str(predictions):
                 result = _native.rouge_score_batch(
                     types, targets, predictions, stem, threads=threads
@@ -297,7 +342,9 @@ class RougeScorer(scoring.BaseScorer):
         targets = _texts(targets, "targets")
         predictions = _texts(predictions, "predictions")
         _check_lengths(targets, predictions)
-        return [self.score(t, p) for t, p in zip(targets, predictions, strict=True)]
+        ts, ps, keep = _without_nulls(targets, predictions)
+        scores = [self.score(t, p) for t, p in zip(ts, ps, strict=True)]
+        return _with_nulls(scores, keep, len(targets))
 
     def _sentences(self, text: Any) -> list[Any]:
         """rouge-score's ``get_sents``: rougeLsum's sentences of ``text``."""

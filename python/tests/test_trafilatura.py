@@ -28,6 +28,7 @@ from hypothesis import strategies as st
 
 import pyroid
 import pyroid.trafilatura as pt
+from pyroid._pyroid import _testing
 
 FREE_THREADED = not getattr(sys, "_is_gil_enabled", lambda: True)()
 
@@ -604,22 +605,72 @@ def test_batch_own_cache_equals_loop(threads: int | None) -> None:
 
 def test_batch_mixed_items_run_the_loop() -> None:
     page = PAGES["article"]
-    items: list[Any] = [page, page.encode(), None, 3, page]
+    items: list[Any] = [page, page.encode(), 3, page]
     want = [pt.extract(x) for x in items]
     assert pt.extract_batch(items) == want
 
 
+def test_batch_none_in_a_list_raises() -> None:
+    for items in ([PAGES["article"], None], (None,)):
+        with pytest.raises(pyroid.InputError, match="expected str at index") as info:
+            pt.extract_batch(items)  # type: ignore[arg-type]
+        assert isinstance(info.value, TypeError)
+        assert f"index {len(items) - 1}," in str(info.value)
+        assert "while processing 'htmls'" in getattr(info.value, "__notes__", [])
+
+
+@pytest.mark.thread_unsafe(reason="the module-level dedup cache")
+@pytest.mark.filterwarnings('ignore:"no_fallback" will be removed:DeprecationWarning')
+@pytest.mark.parametrize("kwargs", [{}, {"deduplicate": True}, {"no_fallback": True}])
+def test_batch_input_kinds(pa: Any, kwargs: dict[str, Any]) -> None:
+    # str gives extract()'s result; list, tuple and Arrow give a list, with None for Arrow nulls.
+    pages: list[str | None] = [*list(PAGES.values())[:4], None, PAGES["article"], None]
+    dense = [p for p in pages if p is not None]
+    pt.reset_caches()
+    loop = [pt.extract(p, **kwargs) for p in dense]
+    want = iter(loop)
+    with_nulls = [None if p is None else next(want) for p in pages]
+    pt.reset_caches()
+    assert pt.extract_batch(dense[0], **kwargs) == loop[0]
+    pt.reset_caches()
+    assert pt.extract_batch(tuple(dense), **kwargs) == loop
+    for col in (
+        pa.array(pages, pa.string()),
+        pa.chunked_array([pages[:3], pages[3:]], pa.large_string()),
+        _testing.column(pages, chunks=2),
+    ):
+        pt.reset_caches()
+        got = pt.extract_batch(col, threads=2, **kwargs)
+        assert type(got) is list
+        assert got == with_nulls
+    pt.reset_caches()
+    assert pt.extract_batch(pa.array(dense), **kwargs) == loop
+    assert pt.extract_batch(pa.array([None, None], pa.string()), **kwargs) == [None, None]
+    pt.reset_caches()
+
+
+def test_batch_arrow_error_note_names_the_row(pa: Any) -> None:
+    bad = f"<html><body><p>{tp.PARAGRAPH} &amp;#{'1' * 4400};</p></body></html>"
+    with pytest.raises(ValueError, match="Exceeds the limit") as info:
+        pt.extract_batch(pa.array([None, PAGES["article"], None, bad]))
+    assert "pyroid: while extracting the document at index 3" in info.value.__notes__
+    with pytest.raises(pyroid.InputError) as err:
+        pt.extract_batch(pa.array([1, 2]))
+    assert "while processing 'htmls'" in err.value.__notes__
+
+
 def test_batch_errors() -> None:
-    with pytest.raises(pyroid.InputError, match="list or tuple"):
-        pt.extract_batch("<html></html>")
-    with pytest.raises(pyroid.InputError, match="list or tuple"):
-        pt.extract_batch(iter([PAGES["article"]]))  # type: ignore[arg-type]
+    with pytest.raises(pyroid.InputError, match="list or tuple of str, or an Arrow") as info:
+        pt.extract_batch(iter([PAGES["article"]]))  # type: ignore[call-overload]
+    assert "while processing 'htmls'" in info.value.__notes__
+    with pytest.raises(ValueError, match="threads"):
+        pt.extract_batch(iter([PAGES["article"]]), threads=0)  # type: ignore[call-overload]
     with pytest.raises(TypeError, match="extract\\(\\) got an unexpected keyword argument 'nope'"):
         pt.extract_batch([PAGES["article"]], nope=1)
     with pytest.raises(ValueError, match="threads must be None or a positive int, got 0"):
         pt.extract_batch([PAGES["article"]], threads=0)
     with pytest.raises(pyroid.InputError, match="threads must be"):
-        pt.extract_batch([PAGES["article"]], threads=1.5)  # type: ignore[arg-type]
+        pt.extract_batch([PAGES["article"]], threads=1.5)  # type: ignore[call-overload]
     with pytest.raises(ValueError, match="max_tree_size"):
         pt.extract_batch([PAGES["article"]], max_tree_size=3)
     assert pt.extract_batch([]) == []

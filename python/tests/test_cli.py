@@ -147,10 +147,55 @@ def test_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert out.read_text() == "keep me"
     assert main(["translit", str(src), str(out), "--overwrite"]) == 0
     assert main(["translit", str(src), str(tmp_path / "out.csv")]) == 1
-    assert "unknown format" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "unknown format" in err
+    assert "end OUT with / to make it a directory" in err
     assert main(["translit", str(tmp_path / "missing.parquet"), str(tmp_path / "o.parquet")]) == 1
     with pytest.raises(SystemExit):
         main(["clean", str(src), str(tmp_path / "o.parquet")])  # --recipe is required
+    with pytest.raises(SystemExit, match=r"in\.parquet is both an input and an output"):
+        main(["translit", str(src), str(src), "--overwrite"])
+
+
+@pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and the environment")
+def test_missing_optional_dependency_is_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ImportError from a command exits 1 with one line that says what to install."""
+    import pyroid.cli as cli
+
+    monkeypatch.delenv("PYROID_DEBUG", raising=False)
+    src = _write(_table(["x"]), tmp_path / "in.parquet")
+    args = ["translit", str(src), str(tmp_path / "o.parquet")]
+    cases = [
+        (
+            ModuleNotFoundError("No module named 'cchardet'", name="cchardet"),
+            "No module named 'cchardet' (pip install 'pyroid[warc]')",
+        ),
+        (
+            ImportError("failed to find libmagic.  Check your installation"),
+            "failed to find libmagic.  Check your installation (python-magic needs the libmagic "
+            "library, e.g. apt install libmagic1)",
+        ),
+        (
+            ModuleNotFoundError("No module named 'tldextract.cache'", name="tldextract.cache"),
+            "No module named 'tldextract.cache' (pip install tldextract)",
+        ),
+        (ModuleNotFoundError("x needs y (pip install y)", name="y"), "x needs y (pip install y)"),
+        (ModuleNotFoundError("No module named 'zzz'", name="zzz"), "No module named 'zzz'"),
+    ]
+    for err, line in cases:
+
+        def body(a: Any, err: ImportError = err) -> int:
+            raise err
+
+        monkeypatch.setattr(cli, "_cmd_translit", body)
+        assert main(args) == 1
+        assert capsys.readouterr().err == f"pyroid translit: {line}\n"
+    with monkeypatch.context() as m:  # undone at once: pytest-run-parallel repeats the test
+        m.setenv("PYROID_DEBUG", "1")
+        with pytest.raises(ModuleNotFoundError, match="zzz"):
+            main(args)
 
 
 # ----------------------------------------------------------------------------------------- dedup
@@ -298,6 +343,20 @@ def test_clean_fineweb_is_digest_identical_to_the_chain(
     t = _read(out)
     assert t.column_names == pq.read_schema(DEV).names  # language/_score replaced in place
     assert not list(tmp_path.glob(".pyroid-*"))  # the dedup spool is gone
+
+
+def test_clean_with_no_survivor_keeps_the_columns(tmp_path: Path) -> None:
+    """When the filters drop every row, the output still has the input's columns."""
+    pytest.importorskip("numpy")
+    if not LID_BIN.exists():
+        pytest.skip("needs lid.176.bin")
+    src = _write(_table(["too short"], url=["https://example.org/"]), tmp_path / "in.parquet")
+    for out, extra in [("o.parquet", []), ("o2.parquet", ["--no-dedup"])]:
+        args = ["clean", str(src), str(tmp_path / out), "--recipe", "fineweb", "--lid-model"]
+        assert main([*args, str(LID_BIN), *extra]) == 0
+        t = pq.read_table(tmp_path / out)
+        assert t.num_rows == 0
+        assert t.column_names == ["id", "text", "url", "language", "language_score"], extra
 
 
 def test_clean_small_no_dedup_and_stats(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

@@ -34,13 +34,14 @@ positional arguments:
     dedup     drop near-duplicates (datatrove's MinHash) or exact duplicates
     translit  transliterate to ASCII (anyascii data, ISC)
     stats     sum the stats of every finished file of a directory OUT (all shards)
+    run       run a Python program with pyroid.patch() applied (see 'pyroid run --help')
 
 options:
   -h, --help  show this help message and exit
   --version   show program's version number and exit
 
-pyroid run [-p NAMES] (SCRIPT | -m MODULE) [ARGS...] runs a Python program with
-pyroid.integrations.patch() applied; see 'pyroid run --help'.
+Across machines, 'pyroid dedup signatures', 'buckets', 'cluster' and 'filter' run datatrove's four
+MinHash stages; see 'pyroid dedup --help'.
 ```
 
 | Command | What it does |
@@ -206,8 +207,9 @@ datatrove's on-disk format, in a work directory next to OUT (`.OUT.pyroid/` for 
 `OUT/.pyroid/` for a directory), or under `--tmp-dir`. Then the survivors are written in input
 order and the work directory is deleted. Plan disk space there for the survivors plus about 1 KB
 of signatures per survivor. If the run fails or is interrupted, the work directory stays, and the
-same command resumes from it. `--no-dedup` skips MinHash, and the output is then the chain up to
-`FineWebQualityFilter`.
+same command resumes from it. Under `--tmp-dir` the work directory is created with mode 0700, and
+pyroid refuses to reuse one that is a link, belongs to another user or is writable by others.
+`--no-dedup` skips MinHash, and the output is then the chain up to `FineWebQualityFilter`.
 
 ## `pyroid clean`: FineWeb from WARC files
 
@@ -293,9 +295,17 @@ $ pyroid clean sample.parquet x.parquet --recipe fineweb --text-column body
 pyroid: sample.parquet: no column 'body' (columns: text, id, dump, url, date, file_path, language, language_score, token_count)
 ```
 
-For errors from reading or writing the files (`FileNotFoundError`, `ValueError`),
-`PYROID_DEBUG=1` shows the traceback instead. Bad options exit with status 2 (argparse's usage
-error).
+A missing optional dependency also exits with status 1, naming what to install:
+
+```console
+$ pyroid clean warc/ clean.parquet --recipe fineweb-warc
+pyroid clean: failed to find libmagic.  Check your installation (python-magic needs the libmagic library, e.g. apt install libmagic1)
+  (while processing warc/CC-MAIN-00000.warc.gz)
+```
+
+For errors from reading or writing the files (`FileNotFoundError`, `ValueError`) and missing
+dependencies (`ImportError`), `PYROID_DEBUG=1` shows the traceback instead. Bad options exit with
+status 2 (argparse's usage error).
 
 A directory of shards in, compressed JSONL out, two threads:
 
@@ -416,7 +426,7 @@ $ cat ascii.jsonl
 `pyroid run [-p NAMES] (SCRIPT | -m MODULE) [ARGS...]` runs a Python program with
 `import ftfy` / `import fasttext` giving pyroid's drop-ins, in the program and in the Python
 processes it starts; `-p` picks the modules from `ftfy`, `fasttext`, `anyascii`, `datasketch`,
-`trafilatura` and `nltk`. It is described with
+`trafilatura`, `nltk`, `warcio` and `nemo_curator`. It is described with
 [`pyroid.patch()`](patch.md#pyroid-run-programs-and-their-child-processes).
 
 ## From Python: `pyroid.integrations.recipes`
@@ -501,20 +511,10 @@ kept = [(d["id"], t) for d, t, k in zip(docs, ann.text, ann.keep) if k]
 
 ## Speed
 
-On the FineWeb dev slice (10,000 documents), `pyroid clean --recipe fineweb` with 8 threads took
-8.7 s and 2.2 s in two runs. Stock datatrove 0.10.1's FineWeb pipeline with 8 processes, run in
-the same minute, took 498.8 s and 213.4 s, so `pyroid clean` used 58× and 99× less wall time.
-With one thread it took 11.4 s and 7.5 s (44× and 29× against the 8-process runs). These runs
-were on a Docker/OrbStack VM on Apple Silicon, indicative. The VM was heavily shared (load
-average 18 to 30), which inflates stock datatrove most, so each ratio comes from a same-minute
-pair (stock, then pyroid). pyroid's times include interpreter start-up, IO and writing both
-outputs. See [Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
-
-The benchmark's own timings on an AWS c7i.4xlarge (Intel Xeon Platinum 8488C) are the better
-guide to an unloaded machine. They time the same chain run natively in one process (the
-benchmark's `chain.py`, not the command line), with identical output to datatrove. On the dev
-slice it took 1.95 s with 8 threads, 18× faster than datatrove at 8 processes. On 100,000
-FineWeb documents it took 10.2 s, about 27× faster. See
-[Benchmarks](../benchmarks.md#end-to-end-the-fineweb-chain).
+On an AWS c7i.4xlarge (Intel Xeon Platinum 8488C), the FineWeb chain that `pyroid clean --recipe
+fineweb` runs took 1.95 s with 8 threads on the dev slice (10,000 documents), 18× faster than
+datatrove at 8 processes, and 10.2 s on 100,000 FineWeb documents, about 27× faster, with the
+same output. These are the benchmark's timings of the chain run in one process (its `chain.py`),
+not of the command line. See [Benchmarks](../benchmarks.md#end-to-end-the-fineweb-chain).
 
 API: [`pyroid.integrations.recipes` reference](../reference/integrations.md#recipes).

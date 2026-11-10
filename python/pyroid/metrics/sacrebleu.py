@@ -33,6 +33,7 @@ from typing import Any, ClassVar, NoReturn
 
 from pyroid._pyroid import FallbackWarning, InputError, PyroidError
 from pyroid._pyroid import metrics as _native
+from pyroid._typing import ArrowStrings
 
 __all__ = [
     "BLEU",
@@ -1249,15 +1250,17 @@ class BLEU(Metric):
 
     def _sentence_score_batch(
         self, hypotheses: Any, references: Any, threads: int | None
-    ) -> list[BLEUScore]:
+    ) -> list[BLEUScore | None]:
         """``sentence_score(hypotheses[i], [r[i] for r in references])`` for every ``i``."""
         hyps, streams = _batch_args(hypotheses, references)
         if not self.effective_order:
             sacrelogger.warning(
                 "It is recommended to enable `effective_order` for sentence-level BLEU."
             )
+        n = len(hyps)
+        hyps, streams, keep = _without_nulls(hyps, streams)
         if not hyps:
-            return []
+            return [None] * n
         if _native_order(self.max_ngram_order):
             rows = self._statistics(hyps, streams, True, threads)[1]
         else:
@@ -1266,7 +1269,7 @@ class BLEU(Metric):
                 for i, h in enumerate(hyps)
             ]
         assert rows is not None
-        return [self._compute_score_from_stats(row) for row in rows]
+        return _with_nulls([self._compute_score_from_stats(row) for row in rows], keep, n)
 
 
 # ---------------------------------------------------------------------------
@@ -1603,11 +1606,13 @@ class CHRF(Metric):
 
     def _sentence_score_batch(
         self, hypotheses: Any, references: Any, threads: int | None
-    ) -> list[CHRFScore]:
+    ) -> list[CHRFScore | None]:
         """``sentence_score(hypotheses[i], [r[i] for r in references])`` for every ``i``."""
         hyps, streams = _batch_args(hypotheses, references)
+        n = len(hyps)
+        hyps, streams, keep = _without_nulls(hyps, streams)
         if not hyps:
-            return []
+            return [None] * n
         if self._native_factors() is not None:
             rows = self._statistics(hyps, streams, True, threads)[1]
         else:
@@ -1616,26 +1621,56 @@ class CHRF(Metric):
                 for i, h in enumerate(hyps)
             ]
         assert rows is not None
-        return [self._compute_score_from_stats(row) for row in rows]
+        return _with_nulls([self._compute_score_from_stats(row) for row in rows], keep, n)
+
+
+def _is_arrow(x: Any) -> bool:
+    return not isinstance(x, (str, list, tuple)) and (
+        hasattr(x, "__arrow_c_stream__") or hasattr(x, "__arrow_c_array__")
+    )
+
+
+def _input_error(message: str, name: str) -> InputError:
+    err = InputError(message)
+    err.add_note(f"while processing {name!r}")
+    return err
 
 
 def _batch_args(hypotheses: Any, references: Any) -> tuple[Any, list[Any]]:
-    """Checked arguments of the ``sentence_*_batch`` functions."""
-    if isinstance(hypotheses, str) or not isinstance(hypotheses, Sequence):
-        raise InputError(
-            f"hypotheses must be a sequence of str, got {type(hypotheses).__qualname__}"
-        )
+    """Checked arguments of the ``sentence_*_batch`` functions.
+
+    Arrow columns become lists, with ``None`` for each null.
+    """
+    if _is_arrow(hypotheses):
+        hyps = _native.batch_texts(hypotheses, "hypotheses")
+    else:
+        if isinstance(hypotheses, str) or not isinstance(hypotheses, Sequence):
+            raise _input_error(
+                "hypotheses must be a sequence of str or an Arrow string array, got "
+                f"{type(hypotheses).__qualname__}",
+                "hypotheses",
+            )
+        hyps = _seq(hypotheses)
+        for i, h in enumerate(hyps):
+            if h is None:
+                raise _input_error(f"hypotheses[{i}] must be a str, got NoneType", "hypotheses")
     if isinstance(references, str) or not isinstance(references, Sequence):
-        raise InputError(
+        raise _input_error(
             "references must be a sequence of reference streams (references[k][i] is the "
-            f"k-th reference of hypothesis i), got {type(references).__qualname__}"
+            f"k-th reference of hypothesis i), got {type(references).__qualname__}",
+            "references",
         )
-    hyps = _seq(hypotheses)
+    references = [
+        _native.batch_texts(s, f"references[{k}]") if _is_arrow(s) else s
+        for k, s in enumerate(references)
+    ]
     for k, s in enumerate(references):
         if isinstance(s, str) or not isinstance(s, Sequence):
-            raise InputError(
-                f"references[{k}] must be a sequence of str or None (one per hypothesis), got "
-                f"{type(s).__qualname__}; with one reference per hypothesis, pass [refs]"
+            raise _input_error(
+                f"references[{k}] must be a sequence of str or None (one per hypothesis) or an "
+                f"Arrow string array, got {type(s).__qualname__}; with one reference per "
+                "hypothesis, pass [refs]",
+                "references",
             )
     streams = _streams(references)
     if not streams:
@@ -1646,6 +1681,27 @@ def _batch_args(hypotheses: Any, references: Any) -> tuple[Any, list[Any]]:
                 f"references[{k}] has {len(s)} references, but there are {len(hyps)} hypotheses"
             )
     return hyps, streams
+
+
+def _without_nulls(hyps: Any, streams: list[Any]) -> tuple[Any, list[Any], list[int] | None]:
+    """The segments whose hypothesis is not ``None`` (an Arrow null), and their indices.
+
+    The indices are None when every segment is kept.
+    """
+    keep = [i for i, h in enumerate(hyps) if h is not None]
+    if len(keep) == len(hyps):
+        return hyps, streams, None
+    return [hyps[i] for i in keep], [[s[i] for i in keep] for s in streams], keep
+
+
+def _with_nulls(scores: list[Any], keep: list[int] | None, n: int) -> list[Any]:
+    """``scores`` of the kept segments back in place, ``None`` for the others."""
+    if keep is None:
+        return scores
+    out: list[Any] = [None] * n
+    for i, s in zip(keep, scores, strict=True):
+        out[i] = s
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1739,8 +1795,8 @@ def sentence_bleu(
 
 
 def sentence_bleu_batch(
-    hypotheses: Sequence[str],
-    references: Sequence[Sequence[str | None]],
+    hypotheses: Sequence[str] | ArrowStrings,
+    references: Sequence[Sequence[str | None] | ArrowStrings],
     smooth_method: str = "exp",
     smooth_value: float | None = None,
     lowercase: bool = False,
@@ -1748,7 +1804,7 @@ def sentence_bleu_batch(
     use_effective_order: bool = True,
     *,
     threads: int | None = None,
-) -> list[BLEUScore]:
+) -> list[BLEUScore | None]:
     """:func:`sentence_bleu` of every hypothesis at once, on pyroid's thread pool.
 
     See ``sacrebleu.pyi`` for the arguments.
@@ -1814,8 +1870,8 @@ def sentence_chrf(
 
 
 def sentence_chrf_batch(
-    hypotheses: Sequence[str],
-    references: Sequence[Sequence[str | None]],
+    hypotheses: Sequence[str] | ArrowStrings,
+    references: Sequence[Sequence[str | None] | ArrowStrings],
     char_order: int = CHRF.CHAR_ORDER,
     word_order: int = CHRF.WORD_ORDER,
     beta: int = CHRF.BETA,
@@ -1823,7 +1879,7 @@ def sentence_chrf_batch(
     eps_smoothing: bool = False,
     *,
     threads: int | None = None,
-) -> list[CHRFScore]:
+) -> list[CHRFScore | None]:
     """:func:`sentence_chrf` of every hypothesis at once, on pyroid's thread pool.
 
     See ``sacrebleu.pyi`` for the arguments.

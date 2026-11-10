@@ -19,7 +19,7 @@ use pyroid_core::translit::{self as kernel, Missing, MissingAt, MissingWtf8, Uni
 
 use crate::batch::{BatchError, map_values, predicate, transform};
 use crate::errors::{input_error, type_name, with_note};
-use crate::input::{TextInput, Threads, threads};
+use crate::input::{TextInput, Threads, arg_note, text_arg, threads};
 
 /// `errors=`: Unidecode checks the value only when it meets a character
 /// without a transliteration, so an invalid value is kept until then.
@@ -229,7 +229,7 @@ fn anyascii<'py>(
     string: &Bound<'py, PyAny>,
     threads: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    match TextInput::extract_with(string, threads) {
+    match text_arg(string, threads, "string") {
         Ok(input) => transform(py, input, threads, kernel::anyascii),
         Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) && may_hold_surrogates(string) => {
             let strs = Strs::collect(string)?;
@@ -267,7 +267,7 @@ fn unidecode<'py>(
     threads: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let (mode, replace) = (errors.0, replace_str.0);
-    let input = match TextInput::extract_with(string, threads) {
+    let input = match text_arg(string, threads, "string") {
         Ok(input) => input,
         Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) && may_hold_surrogates(string) => {
             return unidecode_wtf8(py, string, &mode, &replace, threads);
@@ -358,10 +358,11 @@ impl<'py> Strs<'py> {
         let mut strs = Vec::with_capacity(items.len());
         for (i, item) in items.iter().enumerate() {
             let Ok(s) = item.cast::<PyString>() else {
-                return Err(input_error(
+                let err = input_error(
                     py,
                     format!("expected str at index {i}, got {}", type_name(item)),
-                ));
+                );
+                return Err(arg_note(py, err, "string"));
             };
             strs.push(s.clone());
         }
@@ -531,10 +532,11 @@ fn is_ascii<'py>(
         let mut mask = Vec::with_capacity(items.len());
         for (i, item) in items.iter().enumerate() {
             let Ok(s) = item.cast::<PyString>() else {
-                return Err(input_error(
+                let err = input_error(
                     py,
                     format!("expected str at index {i}, got {}", type_name(item)),
-                ));
+                );
+                return Err(arg_note(py, err, "string"));
             };
             mask.push(str_isascii(s)?);
         }
@@ -546,7 +548,7 @@ fn is_ascii<'py>(
     }
     predicate(
         py,
-        string.extract::<TextInput>()?,
+        text_arg(string, threads, "string")?,
         threads,
         kernel::is_ascii,
     )

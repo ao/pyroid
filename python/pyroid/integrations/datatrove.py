@@ -69,6 +69,7 @@ Needs datatrove (and numpy for ``LanguageFilter``/``MinhashDedupSignature``):
 from __future__ import annotations
 
 import inspect
+import sys
 import warnings
 from collections import deque
 from collections.abc import Callable, Iterable
@@ -125,6 +126,18 @@ def _check_datatrove_version() -> None:
 _check_datatrove_version()
 
 
+def _caller_stacklevel() -> int:
+    """``stacklevel`` for warnings.warn that points at the first frame outside pyroid."""
+    frame = sys._getframe(1)
+    level = 1
+    while frame.f_back is not None and str(frame.f_globals.get("__name__", "")).startswith(
+        "pyroid."
+    ):
+        frame = frame.f_back
+        level += 1
+    return level
+
+
 def _fallback(step: str, reason: str) -> None:
     key = f"{step}:{reason}"
     if key not in _WARNED:
@@ -133,7 +146,7 @@ def _fallback(step: str, reason: str) -> None:
             f"pyroid.integrations.datatrove.{step}: {reason} is not supported by pyroid; "
             "running datatrove's own code (slow path). This warning is shown once.",
             pyroid.FallbackWarning,
-            stacklevel=3,
+            stacklevel=_caller_stacklevel(),
         )
 
 

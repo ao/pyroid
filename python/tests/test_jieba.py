@@ -320,8 +320,11 @@ def test_bad_threads() -> None:
 @pytest.mark.parametrize("item", [1, None, b"bytes", 2.5, ["nested"]])
 @pytest.mark.parametrize("mode", list(MODES))
 def test_non_str_item(mode: str, item: Any) -> None:
-    with pytest.raises(pyroid.InputError, match="at index 1"):
+    with pytest.raises(pyroid.InputError, match="at index 1") as info:
         MODES[mode](["好的", item])
+    # The note names the parameter of jieba's function: tokenize(unicode_sentence), cut(sentence).
+    arg = "unicode_sentence" if mode.startswith("tokenize") else "sentence"
+    assert f"while processing {arg!r}" in getattr(info.value, "__notes__", [])
 
 
 @pytest.mark.parametrize("x", [5, {"a": 1}, {"a"}, iter(["a"])])
@@ -530,6 +533,27 @@ def test_enable_parallel(processnum: int | None) -> None:
     assert pj.cut == pj.dt.cut
     assert pj.cut_for_search == pj.dt.cut_for_search
     assert list(pj.cut(text)) == want["cut"]
+
+
+@pytest.mark.thread_unsafe(reason="enable_parallel replaces module globals")
+def test_enable_parallel_rejects_bad_processnum() -> None:
+    """jieba's ``Pool(processnum)`` raises at ``enable_parallel``; so does pyroid, and nothing
+    changes."""
+    bad: list[tuple[Any, type[Exception], str]] = [
+        (0, ValueError, "Number of processes must be at least 1"),
+        (-2, ValueError, "Number of processes must be at least 1"),
+        (2.5, TypeError, "'float' object cannot be interpreted as an integer"),
+        ("2", TypeError, "'<' not supported"),
+    ]
+    for processnum, exc, msg in bad:
+        with pytest.raises(exc, match=msg):
+            pj.enable_parallel(processnum)
+        assert pj.cut == pj.dt.cut
+    pj.enable_parallel(True)  # Pool(True) is one process
+    try:
+        assert list(pj.cut("我来到北京清华大学")) == pj.lcut("我来到北京清华大学")
+    finally:
+        pj.disable_parallel()
 
 
 def test_enable_parallel_matches_jieba_split() -> None:

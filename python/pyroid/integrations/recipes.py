@@ -410,15 +410,16 @@ class TaskExtractor:
     it.
 
     Args:
-        threads: ``threads=`` of :func:`pyroid.trafilatura.extract_batch` (with deduplication
-            the pages are still extracted in order; threads parse ahead).
+        threads: ``threads=`` of :func:`pyroid.trafilatura.extract_batch` (``None``: the whole
+            pool; with deduplication the pages are still extracted in order; threads parse
+            ahead).
         **kwargs: ``trafilatura.extract`` arguments over :data:`FINEWEB_TRAFILATURA`. With
             ``compat="1.11.0"`` the dedup cache is :data:`pyroid.trafilatura.LRU_TEST`, as
             trafilatura 1.11.0 has only its module-level cache; with ``"2.3.1"``, an
             ``LRUCache`` of the task.
     """
 
-    def __init__(self, *, threads: int | None = 1, **kwargs: Any) -> None:
+    def __init__(self, *, threads: int | None = None, **kwargs: Any) -> None:
         import pyroid.trafilatura as pt
 
         self._pt: Any = pt
@@ -522,7 +523,7 @@ class FineWebWarc:
         self,
         *,
         lid_model: Any = None,
-        threads: int | None = 1,
+        threads: int | None = None,
         url_filter: Any = None,
         trafilatura: dict[str, Any] | None = None,
     ) -> None:

@@ -734,3 +734,76 @@ def test_merge_temp_files_do_not_follow_planted_symlinks(
         cli._move(src, out / "moved.jsonl")  # the final rename fails here, by construction
     assert victim.read_text() == "keep me"
     assert not any(p.name.endswith(".copy.partial") and not p.is_symlink() for p in out.iterdir())
+
+
+def _tmp_work(tmp: Path, out: Path) -> Path:
+    """The work directory ``--tmp-dir tmp`` gives a file OUT (unsharded)."""
+    import argparse
+
+    import pyroid.cli as cli
+    from pyroid.integrations._shards import Shard
+
+    ns = argparse.Namespace(tmp_dir=str(tmp))
+    return cli._work(ns, out.parent / f".{out.name}.pyroid", Shard())
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_tmp_dir_work_dir_ignores_planted_part_links(tmp_path: Path) -> None:
+    """The audit's repro: a part file planted as a symlink in a reused work dir is replaced."""
+    for i, text in enumerate(["héllo wörld " * 20, "other text " * 20]):
+        _write(_table([text], i), tmp_path / f"{i}.parquet")
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep me")
+    shared = tmp_path / "shared"
+    out = tmp_path / "out2" / "res.parquet"
+    work = _tmp_work(shared, out)
+    (work / "parts").mkdir(parents=True)
+    (work / "parts" / "000000.arrow.partial").symlink_to(victim)
+    ins = [str(tmp_path / "0.parquet"), str(tmp_path / "1.parquet")]
+    assert main(["dedup", *ins, str(out), "--tmp-dir", str(shared)]) == 0
+    assert victim.read_text() == "keep me"
+    assert len(_rows(out)) == 2
+    assert not work.exists()
+
+
+@pytest.mark.skipif(not hasattr(os, "geteuid"), reason="POSIX owners and modes")
+def test_tmp_dir_refuses_work_dirs_others_control(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A new work dir is 0700; a reused one must be the user's directory, closed to others."""
+    import pyroid.cli as cli
+
+    _write(_table(["some text " * 20]), tmp_path / "0.parquet")
+    shared = tmp_path / "shared"
+    out = tmp_path / "out" / "res.parquet"
+    work = _tmp_work(shared, out)
+    args = ["dedup", str(tmp_path / "0.parquet"), str(out), "--tmp-dir", str(shared)]
+
+    cli._private_work(work)
+    assert work.stat().st_mode & 0o777 == 0o700
+    work.chmod(0o755)
+    cli._private_work(work)  # the user's own, read-only for others: reused and tightened
+    assert work.stat().st_mode & 0o777 == 0o700
+
+    work.chmod(0o777)
+    with pytest.raises(SystemExit, match="writable by other users"):
+        main(args)
+    work.chmod(0o700)
+    monkeypatch.setattr(os, "geteuid", lambda: work.stat().st_uid + 1)
+    with pytest.raises(SystemExit, match="belongs to another user"):
+        main(args)
+    monkeypatch.undo()
+    work.rmdir()
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir(mode=0o700)
+    work.symlink_to(elsewhere, target_is_directory=True)
+    with pytest.raises(SystemExit, match="is not a directory pyroid made"):
+        main(args)
+    work.unlink()
+    work.write_text("")
+    with pytest.raises(SystemExit, match="is not a directory pyroid made"):
+        main(args)
+    work.unlink()
+    assert main(args) == 0
+    assert len(_rows(out)) == 1

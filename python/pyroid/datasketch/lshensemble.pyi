@@ -32,6 +32,8 @@ from numpy.typing import NDArray
 from pyroid.datasketch.lsh import MinHashLSH
 from pyroid.datasketch.minhash import MinHash
 
+__all__ = ["MinHashLSHEnsemble"]
+
 logger: logging.Logger
 
 def _false_positive_probability(threshold: float, b: int, r: int, xq: float) -> float: ...

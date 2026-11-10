@@ -85,11 +85,20 @@ jobs:
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
-          tool: cargo-deny@0.20.2,cargo-shear@1.14.0
+          tool: cargo-deny@0.20.2,cargo-shear@1.14.0,cargo-about@0.9.3
       - name: cargo deny (advisories, licenses, bans, sources; config in deny.toml)
         run: cargo deny --locked check
       - name: cargo shear (unused dependencies, unlinked .rs files)
         run: cargo shear --locked --deny-warnings
+      - name: cargo about (LICENSES/THIRD-PARTY-RUST.txt matches Cargo.lock; config in about.toml)
+        run: |
+          set -euo pipefail
+          cargo about generate --locked --fail -m crates/pyroid-py/Cargo.toml -c about.toml about.hbs \
+            | sed 's/[[:space:]]*$//' > LICENSES/THIRD-PARTY-RUST.txt
+          if ! git diff --exit-code -- LICENSES/THIRD-PARTY-RUST.txt; then
+            echo "::error file=LICENSES/THIRD-PARTY-RUST.txt::out of date with Cargo.lock; regenerate it with the command in about.toml and commit it"
+            exit 1
+          fi
 
   rust-test:
     name: cargo test (pyroid-core)

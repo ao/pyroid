@@ -15,6 +15,8 @@ from pyroid.datasketch.lshensemble_partition import optimal_partitions
 from pyroid.datasketch.minhash import MinHash
 from pyroid.datasketch.storage import _random_name
 
+__all__ = ["MinHashLSHEnsemble"]
+
 logger = logging.getLogger(__name__)
 
 

@@ -828,6 +828,23 @@ def replace(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
     _retry(os.replace, src, dst)
 
 
+def commit(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+    """:func:`replace`, then sync ``dst``'s directory so the rename survives a crash (POSIX)."""
+    replace(src, dst)
+    if os.name != "posix":
+        return  # Windows has no directory handles to sync
+    try:
+        fd = os.open(os.path.dirname(os.path.abspath(dst)), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass  # some filesystems refuse to sync a directory
+    finally:
+        os.close(fd)
+
+
 def remove(path: str | os.PathLike[str], *, missing_ok: bool = True) -> None:
     """Delete the file ``path``, retrying while Windows reports it in use."""
     try:
@@ -852,6 +869,20 @@ def _sibling(path: Path, ext: str) -> tuple[Path, int]:
     raise FileExistsError(f"{path}: no free name for a temporary file next to it")
 
 
+def create_new(path: str | os.PathLike[str]) -> int:
+    """Create ``path`` as a new, empty file and return a descriptor open for writing.
+
+    A file already at ``path`` (an earlier run's leftover, or a planted symlink) is unlinked
+    first; O_EXCL then guarantees the descriptor is a file this call made, never a link target.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_BINARY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        return os.open(path, flags, 0o666)  # the umask applies, as for any new file
+    except FileExistsError:
+        remove(path)
+        return os.open(path, flags, 0o666)
+
+
 def _fsync(path: Path) -> None:
     fd = os.open(path, os.O_RDWR | _O_BINARY)  # Windows flushes only a writable handle
     try:
@@ -870,7 +901,7 @@ def atomic_write_bytes(path: str | os.PathLike[str], data: bytes) -> None:
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
-        replace(tmp, p)
+        commit(tmp, p)
     except BaseException:
         with contextlib.suppress(OSError):
             remove(tmp)
@@ -971,7 +1002,7 @@ class Writer:
             tmp = self.tmp
             assert tmp is not None
             _fsync(tmp)
-            replace(tmp, self.path)
+            commit(tmp, self.path)
         except BaseException:
             self.abort()
             raise

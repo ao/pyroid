@@ -10,20 +10,8 @@
 pyroid is a Rust implementation of the Python libraries used to clean LLM training data and score
 model output, with the same API and the same output.
 
-From Common Crawl WARC files to deduplicated documents, datatrove's FineWeb pipeline runs 9.5×
-faster with pyroid's steps in datatrove (89.4 s instead of 848.3 s on 8 workers), and
-`pyroid clean --recipe fineweb-warc` runs it 10.7× faster (79.6 s), for 171,595 pages in 8 WARC
-files of CC-MAIN-2026-39 on AWS EC2 c7i.4xlarge
-([benchmarks](https://ao.github.io/pyroid/benchmarks/#from-warc-files-datatroves-fineweb-pipeline)).
-Both keep the same documents, apart from the pages stock datatrove drops at its 1 s extraction
-timeout.
-
-On 100,000 FineWeb documents, with the text already extracted, pyroid's cleaning chain is 27×
-faster than datatrove on 8 processes and 56× on one (also AWS EC2 c7i.4xlarge).
-
 ```console
-$ pip install "pyroid[cli]"
-$ pyroid clean in.parquet out.parquet --recipe fineweb   # datatrove's FineWeb pipeline
+$ pip install pyroid
 ```
 
 pyroid 1.0 is not on PyPI yet. Until it is, `pip install pyroid` installs the unrelated 0.7.x
@@ -53,17 +41,9 @@ ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'
 | [`pyroid.nltk`](https://ao.github.io/pyroid/guides/nltk/) | NLTK 3.10.4's `sent_tokenize` (Punkt), `word_tokenize` and Treebank tokenizers |
 | [`pyroid.warc`](https://ao.github.io/pyroid/guides/warc/) | warcio 1.8.2's WARC/ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading (`WarcReader`) |
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-dark.svg">
-  <img alt="Wall time to clean the 10,000-document FineWeb dev slice with identical output on AWS EC2 c7i.4xlarge: pyroid takes 1.9 s with 8 threads, 18× faster than datatrove's 35 s with 8 processes, and 5.6 s with 1 thread, 38× faster than datatrove's 213 s with 1 process" src="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-light.svg">
-</picture>
-
-<sub>The FineWeb chain without text extraction (ftfy, fastText language ID, the Gopher, C4 and
-FineWeb quality filters, MinHash dedup) on the first 10,000 documents of the pinned FineWeb slice,
-with 1 and 8 processes or threads pinned to 8 CPUs. datatrove 0.10.1 (ftfy 6.3.1,
-fasttext-predict 0.9.2.4, spaCy 3.8.18) on CPython 3.13.18; pyroid's native chain on free-threaded
-CPython 3.15.2. The output is the same document for document. On the 100k corpus the ratios are
-27× and 56×.</sub>
+On 100,000 FineWeb documents, pyroid's version of datatrove's FineWeb cleaning chain is 27× faster
+than datatrove on 8 processes, with the same output (AWS EC2 c7i.4xlarge,
+[benchmarks](https://ao.github.io/pyroid/benchmarks/)).
 
 ## Same output, checked
 
@@ -102,10 +82,37 @@ musl), macOS and Windows, for x86-64 and ARM64, and need no compiler. The core h
 dependencies; `pyroid.fasttext` and `pyroid.datasketch` need numpy (`pip install "pyroid[fasttext]"`,
 `"pyroid[datasketch]"`).
 
-## Speed by stage
+## Speed
 
-AWS EC2 c7i.4xlarge, the 10,000-document dev slice, pyroid on one thread against the incumbent in
-one process:
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-dark.svg">
+  <img alt="Wall time to clean the 10,000-document FineWeb dev slice with identical output on AWS EC2 c7i.4xlarge: pyroid takes 1.9 s with 8 threads, 18× faster than datatrove's 35 s with 8 processes, and 5.6 s with 1 thread, 38× faster than datatrove's 213 s with 1 process" src="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-light.svg">
+</picture>
+
+<sub>The FineWeb chain without text extraction (ftfy, fastText language ID, the Gopher, C4 and
+FineWeb quality filters, MinHash dedup) on the first 10,000 documents of the pinned FineWeb slice,
+with 1 and 8 processes or threads pinned to 8 CPUs. datatrove 0.10.1 (ftfy 6.3.1,
+fasttext-predict 0.9.2.4, spaCy 3.8.18) on CPython 3.13.18; pyroid's native chain on free-threaded
+CPython 3.15.2. The output is the same document for document. On the 100k corpus the ratios are
+27× and 56×.</sub>
+
+`pyroid clean` runs that chain as one command over Parquet or JSONL files:
+
+```console
+$ pip install "pyroid[cli]"
+$ pyroid clean in.parquet out.parquet --recipe fineweb   # datatrove's FineWeb pipeline
+```
+
+From Common Crawl WARC files to deduplicated documents, datatrove's FineWeb pipeline runs 9.5×
+faster with pyroid's steps in datatrove (89.4 s instead of 848.3 s on 8 workers), and
+`pyroid clean --recipe fineweb-warc` runs it 10.7× faster (79.6 s), for 171,595 pages in 8 WARC
+files of CC-MAIN-2026-39 on AWS EC2 c7i.4xlarge
+([benchmarks](https://ao.github.io/pyroid/benchmarks/#from-warc-files-datatroves-fineweb-pipeline)).
+Both keep the same documents, apart from the pages stock datatrove drops at its 1 s extraction
+timeout.
+
+By stage, on AWS EC2 c7i.4xlarge with the 10,000-document dev slice, pyroid on one thread against
+the incumbent in one process:
 
 | pyroid | Against | Speedup |
 |---|---|---:|
@@ -116,9 +123,7 @@ one process:
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
 
 With pyroid's stages swapped into datatrove's own executor, the chain ran 11.2× faster at 8
-processes on the dev slice and 13.6× on 100k documents. From WARC files, where text extraction
-takes most of the time, the whole pipeline ran 9.5× faster at 8 workers with pyroid's steps, the
-WARC reader included, and 10.7× as `pyroid clean --recipe fineweb-warc`.
+processes on the dev slice and 13.6× on 100k documents.
 
 The other modules have only been measured in a Docker VM on a Mac so far, so these numbers are
 indicative (one thread unless stated):
@@ -134,8 +139,8 @@ indicative (one thread unless stated):
 | `nltk.sent_tokenize` / `word_tokenize` | NLTK 3.10.4 | 60× / 31× |
 | `filters`, FineWeb-2 settings, Chinese / Japanese | datatrove 0.10.1 | 44× / 7.8× |
 
-`pyroid.json_repair` runs in linear time where json_repair takes quadratic time, so its lead grows
-with the input. The [benchmarks page](https://ao.github.io/pyroid/benchmarks/) gives each row's
+`pyroid.json_repair` stays linear on 13 input families where json_repair takes quadratic time, so
+its lead grows with the input. The [benchmarks page](https://ao.github.io/pyroid/benchmarks/) gives each row's
 corpus, interpreter and source.
 
 ## Integrations
@@ -195,7 +200,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 pyroid's own code is MIT. The ported parts keep their licences, so the package's licence
-expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0`:
+expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND
+Zlib`:
 
 - Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK (the Porter stemmer and the
   tokenizers), sacrebleu, Trafilatura, SudachiPy and warcio;
@@ -207,5 +213,8 @@ expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND 
 - PSF-2.0: CPython's `ipaddress` (IPv6 parsing);
 - ISC: anyascii's transliteration data;
 - Unicode-3.0: data from the Unicode Character Database.
+- Zlib: zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.
 
 See [LICENSE](LICENSE), [LICENSES/](LICENSES) and [NOTICE](NOTICE), which lists the ported files.
+[LICENSES/THIRD-PARTY-RUST.txt](LICENSES/THIRD-PARTY-RUST.txt) has the licences of the Rust crates the
+extension links.

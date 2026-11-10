@@ -23,14 +23,23 @@ Differences from rouge-score
 """
 
 import abc
+import sys
 from collections.abc import Mapping
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, TypeVar
 
-from typing_extensions import disjoint_base
+_T = TypeVar("_T")
+
+# A namedtuple subclass whose instances keep a __dict__ (as rouge-score's do) is a disjoint base
+# on CPython 3.11 but not on 3.12+, where the dict is managed outside the instance layout.
+if sys.version_info >= (3, 12):
+    def _disjoint_base_before_312(cls: _T) -> _T: ...
+
+else:
+    from typing_extensions import disjoint_base as _disjoint_base_before_312
 
 __all__ = ["AggregateScore", "BaseScorer", "BootstrapAggregator", "Score", "fmeasure"]
 
-@disjoint_base
+@_disjoint_base_before_312
 class Score(NamedTuple):
     """Tuple containing precision, recall, and f-measure values.
 
@@ -58,7 +67,7 @@ class BaseScorer(metaclass=abc.ABCMeta):
             A dict mapping each score_type (string) to Score object.
         """
 
-@disjoint_base
+@_disjoint_base_before_312
 class AggregateScore(NamedTuple):
     """Tuple containing confidence intervals for scores."""
 

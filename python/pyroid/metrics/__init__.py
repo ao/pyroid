@@ -16,3 +16,10 @@ resampling, TER) is handed to the incumbent with a one-time :class:`pyroid.Fallb
 
 Submodules are imported on demand (``import pyroid.metrics.sacrebleu``).
 """
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # what __all__ names, for type checkers and stubtest; still imported on demand
+    from pyroid.metrics import rouge_scorer, sacrebleu, scoring, tokenize, tokenizers
+
+__all__ = ["rouge_scorer", "sacrebleu", "scoring", "tokenize", "tokenizers"]

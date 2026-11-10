@@ -261,6 +261,45 @@ where
     }
 }
 
+/// Every document of `input` as UTF-8, in order (`None` for an Arrow null).
+pub fn rows(input: &TextInput) -> Result<Vec<Option<&str>>, BatchError> {
+    Ok(match input {
+        TextInput::Str(s) => vec![Some(&**s)],
+        TextInput::List(d) | TextInput::Tuple(d) => d.iter().map(|s| Some(&**s)).collect(),
+        TextInput::Arrow(strings) => {
+            let mut out = Vec::with_capacity(strings.len());
+            for (c, chunk) in strings.chunks.iter().enumerate() {
+                for row in 0..chunk.len() {
+                    out.push(match chunk.get(row) {
+                        None => None,
+                        Some(Ok(s)) => Some(s),
+                        Some(Err(err)) => {
+                            return Err(BatchError::BadUtf8 {
+                                chunk: c,
+                                row,
+                                bytes: chunk.bytes(row).unwrap_or_default().to_vec(),
+                                err,
+                            });
+                        }
+                    });
+                }
+            }
+            out
+        }
+    })
+}
+
+/// The documents of `input` as a Python list, for the paths that process
+/// them one by one in Python: the original str objects for a str, list or
+/// tuple; new strs for Arrow, and `None` for each Arrow null.
+pub fn to_list<'py>(py: Python<'py>, input: &TextInput) -> PyResult<Bound<'py, PyList>> {
+    match input {
+        TextInput::Str(s) => PyList::new(py, [s]),
+        TextInput::List(docs) | TextInput::Tuple(docs) => PyList::new(py, docs),
+        TextInput::Arrow(_) => PyList::new(py, rows(input).map_err(|e| e.into_pyerr(py))?),
+    }
+}
+
 /// Number of documents in `input` (a str is one; Arrow nulls count).
 pub fn doc_count(input: &TextInput) -> usize {
     match input {

@@ -1340,7 +1340,7 @@ def _url_fallback(reason: str) -> None:
             f"pyroid.filters.URLFilter: {reason} is not supported by pyroid; running "
             "tldextract's own code for them (slow path). This warning is shown once.",
             _FallbackWarning,
-            stacklevel=4,
+            stacklevel=_caller_stacklevel(),
         )
 
 

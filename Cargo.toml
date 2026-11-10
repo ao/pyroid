@@ -13,7 +13,7 @@ default-members = ["crates/pyroid-core"]
 version = "1.0.0-rc.1"
 edition = "2024"
 rust-version = "1.85"
-license = "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0"
+license = "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib"
 authors = ["Andrew Odendaal"]
 repository = "https://github.com/ao/pyroid"
 

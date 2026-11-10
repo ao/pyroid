@@ -19,7 +19,7 @@ use pyroid_core::par;
 
 use crate::batch::{BatchError, transform};
 use crate::errors::{input_error, type_name};
-use crate::input::{TextInput, Threads, threads};
+use crate::input::{Threads, arg_note, text_arg, threads};
 
 /// Documents at least this long are fixed with the interpreter detached.
 const DETACH_BYTES: usize = crate::batch::SINGLE_DOC_DETACH_BYTES;
@@ -320,7 +320,7 @@ fn fix_text_batch<'py>(
     threads: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let cfg = &config.0;
-    match TextInput::extract_with(texts, threads) {
+    match text_arg(texts, threads, "texts") {
         Ok(input) => transform(py, input, threads, |s| kernel::fix_text(s, cfg)),
         // Lone surrogates are valid ftfy input (it repairs them), but have no
         // UTF-8 form for `TextInput`; take the surrogatepass route instead.
@@ -352,10 +352,11 @@ fn with_surrogates<'py>(
     let mut strs = Vec::with_capacity(items.len());
     for (i, item) in items.iter().enumerate() {
         let Ok(s) = item.cast::<PyString>() else {
-            return Err(input_error(
+            let err = input_error(
                 py,
                 format!("expected str at index {i}, got {}", type_name(item)),
-            ));
+            );
+            return Err(arg_note(py, err, "texts"));
         };
         strs.push(s.clone());
     }

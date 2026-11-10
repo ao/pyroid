@@ -2,8 +2,8 @@
 
 Text cleaning for LLM datasets, written in Rust. pyroid is a drop-in replacement for ftfy,
 fastText inference, datatrove's quality filters and dedup, Trafilatura, NLTK's tokenizers, jieba,
-datasketch, rouge-score, sacrebleu and json_repair, with the same API and the same output. It runs
-on CPython 3.11 to 3.15, including free-threaded 3.14t and 3.15t.
+datasketch, warcio, rouge-score, sacrebleu and json_repair, with the same API and the same output.
+It runs on CPython 3.11 to 3.15, including free-threaded 3.14t and 3.15t.
 
 !!! warning "Pre-release"
     pyroid 1.0 is not on PyPI yet. Until it is, `pip install pyroid` gives the unrelated 0.7.x
@@ -100,7 +100,7 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 | [`pyroid.trafilatura`](guides/trafilatura.md) | [Trafilatura](https://github.com/adbar/trafilatura)'s text extraction, 2.3.1 or 1.11.0 (the release datatrove 0.10.1 installs), with lxml 6.1.3's HTML parser and jusText 3.0.2 | the same text, byte for byte ([parity](compatibility.md#trafilatura)) |
 | [`pyroid.translit`](guides/translit.md) | `anyascii`; a permissive alternative to GPL `Unidecode` | identical to `anyascii`; not Unidecode's output |
 | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
-| [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, in linear time ([parity](compatibility.md#json_repair)) |
+| [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
 | [`pyroid.datasketch`](guides/datasketch.md) | [datasketch](https://github.com/ekzhu/datasketch) 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble | same hash values, bytes and query results ([parity](compatibility.md#datasketch)) |
 | [`pyroid.jieba`](guides/jieba.md) | [jieba](https://github.com/fxsjy/jieba) 0.42.1 | same words, offsets and frequencies ([parity](compatibility.md#jieba)) |
 | [`pyroid.nltk`](guides/nltk.md) | [NLTK](https://www.nltk.org) 3.10.4's `sent_tokenize` (Punkt), `word_tokenize`, Treebank and regexp tokenizers | same sentences, tokens and offsets ([parity](compatibility.md#nltk)) |
@@ -177,7 +177,7 @@ step drops whichever pages take more than 1 s.
 
 pyroid's own code is MIT. The parts ported from other projects keep their licences, so the
 package's licence expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND
-PSF-2.0 AND Unicode-3.0`:
+PSF-2.0 AND Unicode-3.0 AND Zlib`:
 
 - Apache-2.0 for the ftfy, datatrove, rouge-score, NLTK (Porter stemmer and tokenizers),
   sacrebleu, Trafilatura, SudachiPy and warcio ports;
@@ -188,6 +188,8 @@ PSF-2.0 AND Unicode-3.0`:
 - PSF-2.0 for CPython's `ipaddress`;
 - ISC for anyascii's data;
 - Unicode-3.0 for Unicode Character Database data.
+- Zlib for zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.
 
 The [NOTICE](https://github.com/ao/pyroid/blob/main/NOTICE) file lists the ported files, and the
-licence texts are in [LICENSES/](https://github.com/ao/pyroid/tree/main/LICENSES).
+licence texts are in [LICENSES/](https://github.com/ao/pyroid/tree/main/LICENSES), with
+those of the Rust crates the extension links in `THIRD-PARTY-RUST.txt` there.

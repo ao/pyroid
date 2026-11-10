@@ -26,9 +26,13 @@ git clone https://github.com/ao/pyroid && cd pyroid
 uv venv --python 3.12                # a venv in .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 uv pip install --group dev          # maturin, pytest, ruff, mypy (pinned in pyproject.toml)
+uv pip install --group test-gil     # the sacrebleu, Trafilatura and lxml references (GIL builds only)
 maturin develop --uv                 # compiles the extension (debug build) into .venv
 python -c "import pyroid; print(pyroid.__version__)"   # PEP 440: Cargo.toml's 1.0.0-dev is 1.0.0.dev0
 ```
+
+Without `test-gil`, the reference tests for `pyroid.metrics.sacrebleu`, `pyroid.trafilatura` and the HTML
+parser skip. Don't install it into a free-threaded venv: lxml re-enables the GIL there.
 
 Re-run `maturin develop --uv` after every Rust change. Add `--release` only when you measure performance: debug
 builds are much slower.
@@ -55,6 +59,9 @@ mypy python/pyroid                   # the public API is typed through .pyi stub
 
 CI runs the same checks on Linux, macOS and Windows, on CPython 3.11, 3.14t, 3.15 and 3.15t, against the built
 wheel rather than the source tree.
+
+After changing `Cargo.lock`, regenerate `LICENSES/THIRD-PARTY-RUST.txt` with the cargo-about 0.9.3 command at the
+top of `about.toml`; CI fails when the file is out of date.
 
 ## Pinned test data
 

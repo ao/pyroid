@@ -65,10 +65,12 @@ Differences from trafilatura
   become lxml elements when first read (the XML strings when lxml is not installed).
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from configparser import ConfigParser
 from types import MappingProxyType
 from typing import Any, Final, Literal, final, overload
+
+from pyroid._typing import ArrowStrings
 
 __all__ = [
     "DEFAULT_CONFIG",
@@ -430,13 +432,14 @@ def extract_with_metadata(
         ValueError: ``compat="1.11.0"`` (trafilatura 1.11.0 has no ``extract_with_metadata``).
     """
 
+@overload
 def extract_batch(
-    htmls: Sequence[str],
+    htmls: str,
     *,
     threads: int | None = None,
     compat: str = "2.3.1",
     **kwargs: Any,
-) -> list[str | None]:
+) -> str | None:
     """:func:`extract` over many pages, in order, on pyroid's thread pool without the GIL.
 
     Not part of trafilatura. ``extract_batch(htmls, **kwargs)`` equals
@@ -444,20 +447,33 @@ def extract_batch(
     ``deduplicate=False`` the pages are extracted in parallel; with ``True`` or an
     :class:`LRUCache` they are parsed in parallel and extracted one after the other in order
     through the cache, so the result (and the cache afterwards) is the loop's. A batch that holds
-    a non-str item, or uses a delegated option or ``no_fallback``, runs that loop.
+    a non-str item (``bytes``, as :func:`extract` takes them), or uses a delegated option or
+    ``no_fallback``, runs that loop.
 
     Args:
-        htmls: A list or tuple of pages (str).
+        htmls: A list or tuple of pages (str), an Arrow string array/column (pyarrow, polars,
+            ``pyroid.Column``, ...), or one page (str).
         threads: ``None`` uses pyroid's whole thread pool; ``n`` at most ``n`` tasks at once;
             ``1`` the calling thread only.
         compat: As for :func:`extract`.
         **kwargs: :func:`extract`'s keyword arguments.
 
     Returns:
-        One text or ``None`` per page, in order.
+        A list (also for a tuple or Arrow input) with one text or ``None`` per page, in order;
+        ``None`` for each Arrow null. For a str, ``extract(htmls, **kwargs)``.
 
     Raises:
         ValueError: As for :func:`extract` (the note names the page); ``threads <= 0``.
         TypeError: An argument :func:`extract` does not take.
-        pyroid.InputError: ``htmls`` is not a list or tuple.
+        pyroid.InputError: ``htmls`` is not a str, list, tuple or Arrow string column, or a list
+            or tuple holds ``None`` (the message gives its index).
     """
+
+@overload
+def extract_batch(
+    htmls: list[str] | tuple[str, ...] | ArrowStrings,
+    *,
+    threads: int | None = None,
+    compat: str = "2.3.1",
+    **kwargs: Any,
+) -> list[str | None]: ...

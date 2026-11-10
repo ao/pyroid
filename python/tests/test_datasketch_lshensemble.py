@@ -99,3 +99,15 @@ def test_errors_match() -> None:
     m = MinHash()
     with pytest.raises(ValueError, match="Set size must be positive"):
         e.index(iter([(1, m, 0)]))
+
+
+def test_module_all() -> None:
+    import pyroid.datasketch.lshensemble as ens
+    import pyroid.datasketch.lshensemble_partition as part
+
+    assert ens.__all__ == ["MinHashLSHEnsemble"]
+    assert part.__all__ == ["optimal_partitions"]
+    for mod in (ens, part):
+        ns: dict[str, Any] = {}
+        exec(f"from {mod.__name__} import *", ns)
+        assert sorted(k for k in ns if not k.startswith("__")) == mod.__all__

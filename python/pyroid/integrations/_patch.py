@@ -302,7 +302,7 @@ def _caller_stacklevel() -> int:
 def _build_ftfy(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     # ftfy's helpers that pyroid only delegates (DELEGATED) are the real ones when ftfy is
     # installed (forwarded); without it, pyroid's, which raise PyroidError when called.
-    skip = set(impl.DELEGATED) if real is not None else set()
+    skip = {"FTFY_VERSION", *(impl.DELEGATED if real is not None else ())}
     provided = {n: getattr(impl, n) for n in impl.__all__ if n not in skip}
     shim = _shim("ftfy", real, missing, impl, provided, package=True, version=impl.FTFY_VERSION)
     # pyroid.ftfy's own fallback (`_ftfy`) sees through the shim to `__wrapped__`: nothing to undo.
@@ -1200,6 +1200,10 @@ def _parse_run(argv: Sequence[str]) -> _Parsed | None:
     raise _UsageError("give a SCRIPT or -m MODULE to run")
 
 
+def _show_run_warning(message: Warning | str, category: type[Warning], *_: Any, **__: Any) -> None:
+    sys.stderr.write(f"pyroid run: {category.__name__}: {message}\n")
+
+
 def run(argv: Sequence[str]) -> int:
     """``pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]``: run a target with patches.
 
@@ -1251,7 +1255,11 @@ def run(argv: Sequence[str]) -> int:
         sys.stderr.write(f"pyroid run: can't open file {path!r}: No such file or directory\n")
         return 2
     try:
-        done = _apply(names, lenient=lenient)
+        # The PatchWarnings have no line of the user's to point at (pyroid run is the caller):
+        # show them as plain lines. The warning filters (-W, PYTHONWARNINGS) still apply.
+        with warnings.catch_warnings():
+            warnings.showwarning = _show_run_warning
+            done = _apply(names, lenient=lenient)
     except ImportError as exc:
         sys.stderr.write(f"pyroid run: error: cannot patch: {exc}\n")
         return 2

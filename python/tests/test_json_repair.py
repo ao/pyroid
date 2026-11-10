@@ -325,8 +325,9 @@ def test_batch_errors() -> None:
     with pytest.raises(ValueError, match="Missing ':'") as info:
         jr.repair_json_batch(["{}", '{"a" 1}'], strict=True, skip_json_loads=True)
     assert any("index 1" in note for note in info.value.__notes__)
-    with pytest.raises(pyroid.InputError, match="index 1"):
+    with pytest.raises(pyroid.InputError, match="index 1") as err:
         jr.repair_json_batch(["{}", 3])  # type: ignore[list-item]
+    assert "while processing 'texts'" in err.value.__notes__
     with pytest.raises(jr.NestingError):
         jr.repair_json_batch(["[1]", "[" * (jr.MAX_DEPTH + 1)])
     with pytest.raises(ValueError, match="threads"):

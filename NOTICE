@@ -875,3 +875,10 @@ output on test texts; neither file is included.
 
 crates/pyroid-core/src/pythainlp/th.rs also follows datatrove 0.10.1's
 ThaiTokenizer (Apache-2.0), described above.
+
+Rust crates in the extension module
+-------------------------------------------------------------------------------
+The extension module (pyroid._pyroid) is built from the Rust crates listed in
+LICENSES/THIRD-PARTY-RUST.txt, each under the licence given there; the file
+reproduces the copyright and licence text each crate ships. It is generated
+from Cargo.lock by cargo-about (about.toml).

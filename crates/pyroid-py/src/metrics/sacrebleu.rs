@@ -28,7 +28,7 @@ use pyroid_core::par::PoolError;
 
 use crate::batch::SINGLE_DOC_DETACH_BYTES;
 use crate::errors::{PyroidError, input_error, type_name, with_note};
-use crate::input::{Threads, threads};
+use crate::input::{Threads, arg_note, threads};
 
 fn pool_error(e: PoolError) -> PyErr {
     PyroidError::new_err(e.to_string())
@@ -39,6 +39,11 @@ fn tokenizer(name: &str) -> PyResult<Tokenizer> {
         .ok_or_else(|| PyValueError::new_err(format!("not a native tokenizer: {name:?}")))
 }
 
+/// The argument an item belongs to: `hypotheses` for `hypotheses[3]`.
+fn arg_of(what: &str) -> &str {
+    what.split('[').next().unwrap_or(what)
+}
+
 /// The items of a list or tuple (what the Python side always passes).
 fn items<'py>(obj: &Bound<'py, PyAny>, what: &str) -> PyResult<Vec<Bound<'py, PyAny>>> {
     if let Ok(list) = obj.cast::<PyList>() {
@@ -47,13 +52,16 @@ fn items<'py>(obj: &Bound<'py, PyAny>, what: &str) -> PyResult<Vec<Bound<'py, Py
     if let Ok(tuple) = obj.cast::<PyTuple>() {
         return Ok(tuple.iter().collect());
     }
-    Err(input_error(
-        obj.py(),
+    let py = obj.py();
+    let err = input_error(
+        py,
         format!("{what} must be a list or tuple, got {}", type_name(obj)),
-    ))
+    );
+    Err(arg_note(py, err, arg_of(what)))
 }
 
-/// `PyBackedStr` of a str item, or `None` for `None` when `none_ok`.
+/// `PyBackedStr` of a str item, or `None` for `None` when `none_ok`. Errors
+/// get the note naming the argument (`while processing 'hypotheses'`).
 fn backed(
     item: &Bound<'_, PyAny>,
     none_ok: bool,
@@ -65,24 +73,27 @@ fn backed(
     }
     let Ok(s) = item.cast::<PyString>() else {
         let want = if none_ok { "a str or None" } else { "a str" };
-        return Err(input_error(
+        let what = what();
+        let err = input_error(
             py,
-            format!("{} must be {want}, got {}", what(), type_name(item)),
-        ));
+            format!("{what} must be {want}, got {}", type_name(item)),
+        );
+        return Err(arg_note(py, err, arg_of(&what)));
     };
     PyBackedStr::try_from(s.clone()).map(Some).map_err(|err| {
         if !err.is_instance_of::<PyUnicodeEncodeError>(py) {
             return err;
         }
-        with_note(
+        let what = what();
+        let err = with_note(
             py,
             err,
             format!(
-                "pyroid: {} contains a lone surrogate (U+D800..U+DFFF), which has no UTF-8 \
-                 encoding. Remove or replace it first, e.g. s.encode('utf-8', 'replace').decode('utf-8').",
-                what()
+                "pyroid: {what} contains a lone surrogate (U+D800..U+DFFF), which has no UTF-8 \
+                 encoding. Remove or replace it first, e.g. s.encode('utf-8', 'replace').decode('utf-8')."
             ),
-        )
+        );
+        arg_note(py, err, arg_of(&what))
     })
 }
 

@@ -114,7 +114,10 @@ def _is_file_out(out: str) -> bool:
     if p.suffix:
         from pyroid.integrations import _io
 
-        _io.file_format(p)  # raises "unknown format" for e.g. out.csv
+        try:
+            _io.file_format(p)  # raises "unknown format" for e.g. out.csv
+        except ValueError as e:
+            raise ValueError(f"{e} (end OUT with / to make it a directory)") from None
     return False
 
 
@@ -231,6 +234,37 @@ def _work(a: argparse.Namespace, state_root: Path, shard: Any) -> Path:
     return state_root / f"work-{shard.tag}"
 
 
+def _private_work(path: Path) -> None:
+    """Create the work directory ``path`` under ``--tmp-dir``, or check the one a run left.
+
+    Its name is predictable and ``--tmp-dir`` may be shared, so a directory or link that someone
+    else put there could make pyroid write through planted links. The directory is made with
+    mode 0700; a reused one must be a real directory (not a link or junction) and, on POSIX,
+    belong to the effective user and not be writable by others. On Windows the directory
+    inherits the ACL of ``--tmp-dir`` (``%TEMP%`` is per-user).
+    """
+    import stat
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.mkdir(path, 0o700)
+        return
+    except FileExistsError:
+        pass
+    hint = "remove it, or pass another --tmp-dir"
+    st = os.lstat(path)
+    # Windows: a reparse tag with the name-surrogate bit (a symlink, a junction) points elsewhere.
+    if not stat.S_ISDIR(st.st_mode) or getattr(st, "st_reparse_tag", 0) & 0x20000000:
+        raise SystemExit(f"pyroid: {path} is not a directory pyroid made ({hint})")
+    if hasattr(os, "geteuid"):
+        if st.st_uid != os.geteuid():
+            raise SystemExit(f"pyroid: {path} belongs to another user ({hint})")
+        if st.st_mode & 0o022:
+            raise SystemExit(f"pyroid: {path} is writable by other users ({hint})")
+        if st.st_mode & 0o077:
+            os.chmod(path, 0o700)
+
+
 def _check_out(layout: Layout, overwrite: bool, sources: Sequence[Any]) -> None:
     """Refuse to replace files a previous, unrelated command wrote."""
     if layout.merge and layout.final is not None and layout.out_dir is None:
@@ -250,7 +284,7 @@ def _check_out(layout: Layout, overwrite: bool, sources: Sequence[Any]) -> None:
     outs = [p for p in (layout.final, layout.excluded_final) if p is not None]
     for s in sources:
         if "://" not in s.uri and any(Path(s.uri).resolve() == p.resolve() for p in outs):
-            raise SystemExit("pyroid: an output path is the input path")
+            raise SystemExit(f"pyroid: {s.uri} is both an input and an output")
 
 
 # ======================================================================================== options
@@ -491,9 +525,13 @@ class _Ipc:
     def write(self, table: Any) -> None:
         import pyarrow as pa
 
+        from pyroid.integrations import _io
+
         if self._writer is None:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-            self._sink = pa.OSFile(self.path + ".partial", "wb")
+            # Written through the descriptor of a file made here, never through a planted link.
+            fh = open(_io.create_new(self.path + ".partial"), "wb", buffering=1 << 20)  # noqa: SIM115
+            self._sink = pa.PythonFile(fh, mode="w")
             opts = pa.ipc.IpcWriteOptions(compression="lz4")
             self._writer = pa.ipc.new_file(self._sink, table.schema, options=opts)
         self._writer.write_table(table)
@@ -676,6 +714,8 @@ def _unit_filter(job: FileJob, report: Callable[[int], None]) -> dict[str, Any]:
                     excl_schema = dups.schema
                 excl.write(dups)
             report(n)
+        if schema is None and job.spool is not None and os.path.getsize(job.spool):
+            schema = _ipc_schema(Path(job.spool))  # no survivor: still the spool's columns
         out.close(schema)
         if excl is not None:
             if excl_schema is None and schema is not None:
@@ -1134,10 +1174,12 @@ def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: b
     exclude = [p for p in (out, excl, tmp) if p is not None]
     for spec in getattr(a, "input", []):
         if "://" not in spec and any(Path(spec).resolve() == p.resolve() for p in exclude):
-            raise SystemExit("pyroid: an output path is the input path")
+            raise SystemExit(f"pyroid: {spec} is both an input and an output (or --tmp-dir)")
     sources = _sources(a, exclude)
     layout = _layout(a, sources, shard, excluded=excluded)
     _check_out(layout, a.overwrite, sources)
+    if tmp is not None:
+        _private_work(layout.work)
     if layout.out_dir is not None and not layout.merge:
         seen: dict[Path, str] = {}
         for s in sources:
@@ -1265,7 +1307,7 @@ def _move(src: Path, dest: Path) -> None:
                 shutil.copyfileobj(g, f, 1 << 20)
                 f.flush()
                 os.fsync(f.fileno())
-            _io.replace(tmp, dest)
+            _io.commit(tmp, dest)
         except BaseException:
             _io.remove(tmp)
             raise
@@ -1308,7 +1350,7 @@ def _concat(parts: Sequence[Path], dest: Path, compression: str | None) -> None:
                         shutil.copyfileobj(g, f, 1 << 20)
                 f.flush()
                 os.fsync(f.fileno())
-            _io.replace(tmp, dest)
+            _io.commit(tmp, dest)
         except BaseException:
             _io.remove(tmp)
             raise
@@ -2062,8 +2104,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="pyroid",
         description="Clean text datasets for LLM training, in Parquet or JSON Lines files.",
-        epilog="pyroid run [-p NAMES] (SCRIPT | -m MODULE) [ARGS...] runs a Python program "
-        "with pyroid.integrations.patch() applied; see 'pyroid run --help'.",
+        epilog="Across machines, 'pyroid dedup signatures', 'buckets', 'cluster' and 'filter' "
+        "run datatrove's four MinHash stages; see 'pyroid dedup --help'.",
     )
     ap.add_argument("--version", action="version", version=f"pyroid {pyroid.__version__}")
     sub = ap.add_subparsers(dest="command", required=True, metavar="COMMAND")
@@ -2199,6 +2241,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("output", metavar="OUT", help="a directory OUT of clean, langid, dedup, ...")
     p.add_argument("--json", metavar="PATH", help="write the JSON to PATH instead of stdout")
     p.set_defaults(body=_cmd_stats)
+    # Listed for --help only: main() hands `pyroid run ...` to pyroid.integrations.run first.
+    sub.add_parser(
+        "run",
+        help="run a Python program with pyroid.patch() applied (see 'pyroid run --help')",
+        add_help=False,
+    )
     return ap
 
 
@@ -2293,12 +2341,40 @@ def main(argv: list[str] | None = None) -> int:
         return int(a.body(a))
     except _shards.StateError as e:
         raise SystemExit(f"pyroid {a.command}: {e}") from None
-    except (FileNotFoundError, ValueError) as e:
+    except (FileNotFoundError, ValueError, ImportError) as e:
         if os.environ.get("PYROID_DEBUG"):
             raise
+        msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
         notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
-        print(f"pyroid {a.command}: {e}{notes}", file=sys.stderr)  # noqa: T201
+        print(f"pyroid {a.command}: {msg}{notes}", file=sys.stderr)  # noqa: T201
         return 1
+
+
+# What installs a module the commands import only when they need it (top-level name: pip args).
+_INSTALL = {
+    "numpy": "'pyroid[cli]'",
+    "pyarrow": "'pyroid[cli]'",
+    "cchardet": "'pyroid[warc]'",
+    "magic": "'pyroid[warc]'",
+    "datatrove": "'pyroid[datatrove]'",
+    "orjson": "'pyroid[datatrove]'",
+    "regex": "'pyroid[datatrove]'",
+    "tokenizers": "'pyroid[datatrove]'",
+    "datasets": "'pyroid[hf]'",
+    "tldextract": "tldextract",
+    "fasteners": "fasteners",
+}
+
+
+def _import_hint(e: ImportError) -> str:
+    """The message of a missing optional dependency, with what installs it."""
+    msg = str(e)
+    if "pip install" in msg:
+        return msg
+    if "libmagic" in msg:
+        return f"{msg} (python-magic needs the libmagic library, e.g. apt install libmagic1)"
+    pip = _INSTALL.get((e.name or "").partition(".")[0])
+    return f"{msg} (pip install {pip})" if pip else msg
 
 
 if __name__ == "__main__":

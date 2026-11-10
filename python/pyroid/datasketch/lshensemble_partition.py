@@ -10,6 +10,8 @@ with all boundaries inclusive, using set size distribution.
 
 import numpy as np
 
+__all__ = ["optimal_partitions"]
+
 
 def _compute_nfp_uniform(l, u, cum_counts, sizes):
     """Computes the expected number of false positives caused by using
