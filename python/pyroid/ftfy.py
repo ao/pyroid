@@ -23,6 +23,7 @@ from pyroid._pyroid import ftfy as _native
 
 __all__ = [
     "DELEGATED",
+    "FTFY_VERSION",
     "ExplainedText",
     "ExplanationStep",
     "TextFixerConfig",
@@ -295,7 +296,9 @@ def fix_text_batch(
     Accepts a str, a list or tuple of str, or an Arrow string array/column and
     returns the same kind (a :class:`pyroid.Column` for Arrow); documents that
     need no fixing come back as the original objects. Every result equals
-    ``ftfy.fix_text(doc, config, **kwargs)``. See ``ftfy.pyi`` for details.
+    ``ftfy.fix_text(doc, config, **kwargs)``. Options the Rust port does not handle are
+    delegated to ftfy for str, list and tuple input, and raise :class:`pyroid.PyroidError` for
+    Arrow input.
     """
     if config is None and not kwargs:
         return _native.fix_text_batch(texts, _DEFAULT_QUIET, threads=threads)

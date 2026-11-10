@@ -222,6 +222,9 @@ def test_ftfy_shim_with_real_ftfy() -> None:
             assert real is not ftfy and real.__file__.endswith(os.path.join("ftfy", "__init__.py"))
             # pyroid's objects themselves (no wrapper), except what pyroid only delegates.
             for name in impl.__all__:
+                if name == "FTFY_VERSION":  # pyroid's own name: the shim has ftfy's __version__
+                    assert not hasattr(ftfy, name)
+                    continue
                 want = getattr(real if name in impl.DELEGATED else impl, name)
                 assert getattr(ftfy, name) is want, name
             assert fix_text is impl.fix_text and ftfy.ftfy is impl.fix_text

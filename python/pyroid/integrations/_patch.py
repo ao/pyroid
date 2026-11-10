@@ -302,7 +302,7 @@ def _caller_stacklevel() -> int:
 def _build_ftfy(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     # ftfy's helpers that pyroid only delegates (DELEGATED) are the real ones when ftfy is
     # installed (forwarded); without it, pyroid's, which raise PyroidError when called.
-    skip = set(impl.DELEGATED) if real is not None else set()
+    skip = {"FTFY_VERSION", *(impl.DELEGATED if real is not None else ())}
     provided = {n: getattr(impl, n) for n in impl.__all__ if n not in skip}
     shim = _shim("ftfy", real, missing, impl, provided, package=True, version=impl.FTFY_VERSION)
     # pyroid.ftfy's own fallback (`_ftfy`) sees through the shim to `__wrapped__`: nothing to undo.
