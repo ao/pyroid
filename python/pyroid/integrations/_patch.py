@@ -1200,9 +1200,7 @@ def _parse_run(argv: Sequence[str]) -> _Parsed | None:
     raise _UsageError("give a SCRIPT or -m MODULE to run")
 
 
-def _show_run_warning(
-    message: Warning | str, category: type[Warning], *_: Any, **__: Any
-) -> None:
+def _show_run_warning(message: Warning | str, category: type[Warning], *_: Any, **__: Any) -> None:
     sys.stderr.write(f"pyroid run: {category.__name__}: {message}\n")
 
 

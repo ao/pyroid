@@ -916,7 +916,8 @@ def test_module_namespace() -> None:
 def test_fallback_warning_points_at_the_caller(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(pf, "_url_fallbacks", set())
     with pytest.warns(pyroid.FallbackWarning, match="lone surrogates") as record:
-        assert _small()._reasons_any(["http://a.com/porn\ud800"], None) == ["hard_blacklisted"]
+        reasons = cast(Any, _small())._reasons_any(["http://a.com/porn\ud800"], None)
+    assert reasons == ["hard_blacklisted"]
     assert [w.filename for w in record] == [__file__]
 
 
