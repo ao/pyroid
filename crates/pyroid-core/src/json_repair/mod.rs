@@ -262,4 +262,42 @@ mod tests {
             Err(RepairError::Parse(ParseError::Depth))
         );
     }
+
+    /// A deep valid prefix (`raw_decode` builds it without a depth limit) that the parser
+    /// then fails on or discards must be dropped iteratively: a recursive drop of a million
+    /// levels overflowed the stack and killed the process.
+    #[test]
+    fn deep_valid_prefix_is_dropped_without_recursion() {
+        const N: usize = 1_000_000;
+        let deep = format!("{}{}", "[".repeat(N), "]".repeat(N));
+        let mut strict = opts();
+        strict.strict = true;
+        let cases = [
+            // `parse()` errors on the second top-level value, holding the first.
+            (format!("{deep} {}", "[".repeat(2000)), opts()),
+            // Strict mode rejects a second top-level value.
+            (format!("{deep} 1"), strict),
+            // `try_parse_missing_opening_object` decodes `{` + input, then declines it.
+            (format!("\"a\": {deep}}} }}"), opts()),
+        ];
+        // An 8 MiB stack, like CPython's main thread on Linux.
+        std::thread::Builder::new()
+            .stack_size(8 << 20)
+            .spawn(move || {
+                let d = DumpOptions::default();
+                for (text, o) in &cases {
+                    // Any outcome but a crash; the strict case raises json_repair's error.
+                    let _ = repair_json(text, o, &d);
+                }
+                assert_eq!(
+                    repair_json(&cases[1].0, &cases[1].1, &d),
+                    Err(RepairError::Parse(ParseError::Strict(
+                        "Multiple top-level JSON elements found in strict mode."
+                    )))
+                );
+            })
+            .expect("spawn")
+            .join()
+            .expect("no panic");
+    }
 }
