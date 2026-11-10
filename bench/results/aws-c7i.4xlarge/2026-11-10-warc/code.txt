@@ -1,0 +1,3 @@
+branch: feat/warc
+sha: 060af33acd4933c44a92d72f41e701e8d1a34c6f
+subject: test(warc): import test_datatrove_warc by path, as the suite runs with --import-mode=importlib

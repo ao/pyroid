@@ -1,0 +1,193 @@
+{
+ "mode": "native",
+ "label": "AWS EC2 c7i.4xlarge (Intel(R) Xeon(R) Platinum 8488C, 16 vCPU), Amazon Linux 2023.12.20261109, CPUs 0-7",
+ "git_sha": "060af33acd4933c44a92d72f41e701e8d1a34c6f",
+ "workers": 8,
+ "tasks": 8,
+ "limit": -1,
+ "warcs": [
+  {
+   "name": "CC-MAIN-20260904131603-20260904161603-00000.warc.gz",
+   "bytes": 938695574
+  },
+  {
+   "name": "CC-MAIN-20260904131603-20260904161603-00001.warc.gz",
+   "bytes": 950350257
+  },
+  {
+   "name": "CC-MAIN-20260904131603-20260904161603-00002.warc.gz",
+   "bytes": 958855601
+  },
+  {
+   "name": "CC-MAIN-20260904131603-20260904161603-00003.warc.gz",
+   "bytes": 942991395
+  },
+  {
+   "name": "CC-MAIN-20260904131603-20260904161603-00004.warc.gz",
+   "bytes": 904292267
+  },
+  {
+   "name": "CC-MAIN-20260904131603-20260904161603-00005.warc.gz",
+   "bytes": 954106462
+  },
+  {
+   "name": "CC-MAIN-20260904131603-20260904161603-00006.warc.gz",
+   "bytes": 922779209
+  },
+  {
+   "name": "CC-MAIN-20260904131603-20260904161603-00007.warc.gz",
+   "bytes": 969247966
+  }
+ ],
+ "cpus": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "loadavg_start": "6.71 8.32 6.27 1/282 34143",
+ "libmagic": true,
+ "versions": {
+  "python": "3.13.18",
+  "datatrove": "0.10.1",
+  "trafilatura": "1.11.0",
+  "lxml": "6.1.3",
+  "justext": "3.0.2",
+  "courlan": "1.4.0",
+  "htmldate": "1.11.0",
+  "warcio": "1.8.2",
+  "faust-cchardet": "3.2.0",
+  "python-magic": "0.4.27",
+  "tldextract": "5.4.0",
+  "pyahocorasick": "2.3.1",
+  "spacy": "3.8.18",
+  "fasttext-numpy2-wheel": "0.9.2",
+  "fasttext-predict": null,
+  "fasteners": "0.20",
+  "orjson": "3.13.0",
+  "numpy": "2.5.4",
+  "pyarrow": "26.0.1",
+  "pyroid": "1.0.0rc1"
+ },
+ "reader": "pyroid.warc.iter_documents",
+ "loadavg_end": "6.86 8.05 6.37 1/295 34294",
+ "wall_seconds": {
+  "total": 90.39,
+  "phases": {
+   "base": 82.709,
+   "dedup": 1.626,
+   "pii": 5.928
+  }
+ },
+ "cpu_seconds": {
+  "total": 650.294,
+  "self_user": 11.39,
+  "self_sys": 0.189,
+  "children_user": 631.631,
+  "children_sys": 7.084
+ },
+ "maxrss_mib": {
+  "parent": 479.5,
+  "largest_worker": 1077.8
+ },
+ "steps": [
+  {
+   "phase": "base",
+   "step": "warc_reader",
+   "seconds": 68.506,
+   "docs_out": 171595,
+   "tasks": 8
+  },
+  {
+   "phase": "base",
+   "step": "url_filter",
+   "seconds": 13.777,
+   "docs_out": 170446,
+   "tasks": 8
+  },
+  {
+   "phase": "base",
+   "step": "trafilatura",
+   "seconds": 464.991,
+   "docs_out": 164854,
+   "tasks": 8
+  },
+  {
+   "phase": "base",
+   "step": "lid_and_filters",
+   "seconds": 47.914,
+   "docs_out": 24797,
+   "tasks": 8
+  },
+  {
+   "phase": "base",
+   "step": "writers",
+   "seconds": 49.012,
+   "docs_out": 0,
+   "tasks": 8
+  },
+  {
+   "phase": "dedup",
+   "step": "reader",
+   "seconds": 0.675,
+   "docs_out": 24797,
+   "tasks": 1
+  },
+  {
+   "phase": "dedup",
+   "step": "minhash",
+   "seconds": 0.951,
+   "docs_out": 23505,
+   "tasks": 1
+  },
+  {
+   "phase": "pii",
+   "step": "pii",
+   "seconds": 0.052,
+   "docs_out": 23505,
+   "tasks": 1
+  },
+  {
+   "phase": "pii",
+   "step": "writer",
+   "seconds": 5.861,
+   "docs_out": 23505,
+   "tasks": 1
+  }
+ ],
+ "docs": {
+  "warc_reader": 171595,
+  "url_filter": 170446,
+  "trafilatura": 164854,
+  "lid": 58477,
+  "gopher_repetition": 46596,
+  "gopher_quality": 31435,
+  "c4_quality": 28666,
+  "fineweb_quality": 24797,
+  "minhash_filter": 23505,
+  "pii": 23505
+ },
+ "trafilatura": {
+  "timeout": 0,
+  "broken_process": 5,
+  "clean_error": 0,
+  "extracted": 170441,
+  "forwarded": 164854,
+  "dropped": 5587
+ },
+ "events": 5,
+ "digests": {
+  "after_minhash_filter": {
+   "sha256": "d0e2ad4807f0aa7eb685e4d1f46d6f2bb0e6fcf48015734aa42c5bf148864d8a",
+   "docs": 23505
+  },
+  "after_pii": {
+   "sha256": "0a35ff32512d26169cfb49c8f49edd2c81745c8731ca4dbec2abe802d6343bd5",
+   "docs": 23505
+  }
+ }
+}

@@ -1,0 +1,622 @@
+{
+ "tool": "pyroid_parity.warc_scale",
+ "impl": "pyroid.warc",
+ "configs": [
+  "content/file",
+  "content/datatrove",
+  "random/file",
+  "digests-log/file"
+ ],
+ "documents": true,
+ "limit": 0,
+ "workers": 16,
+ "python": "3.13.18",
+ "machine": "x86_64",
+ "cpus": 16,
+ "started": "2026-11-10T00:35:59Z",
+ "seconds_wall": 340.9,
+ "status": "pass",
+ "counts": {
+  "files": 7,
+  "jobs": 42,
+  "by_status": {
+   "same": 42
+  },
+  "records": 641832,
+  "documents": 193823,
+  "bytes": 2977853099,
+  "seconds_ref": 1591.5,
+  "seconds_cand": 1129.9
+ },
+ "first_diffs": [],
+ "jobs": [
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20130516092621-00001-ip-10-60-113-184.ec2.internal.warc.wet.gz",
+   "kind": "records",
+   "job": "content/file",
+   "bytes": 152803589,
+   "seconds_ref": 7.688,
+   "seconds_cand": 5.181,
+   "records": 54396,
+   "chunks": [
+    54397,
+    54397
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20130516092621-00001-ip-10-60-113-184.ec2.internal.warc.wet.gz",
+   "kind": "records",
+   "job": "digests-log/file",
+   "bytes": 152803589,
+   "seconds_ref": 9.019,
+   "seconds_cand": 5.281,
+   "records": 54396,
+   "chunks": [
+    54397,
+    54397
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20130516092621-00001-ip-10-60-113-184.ec2.internal.warc.wet.gz",
+   "kind": "records",
+   "job": "content/datatrove",
+   "bytes": 152803589,
+   "seconds_ref": 8.74,
+   "seconds_cand": 7.138,
+   "records": 54396,
+   "chunks": [
+    54397,
+    54397
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20130516092621-00001-ip-10-60-113-184.ec2.internal.warc.wet.gz",
+   "kind": "records",
+   "job": "random/file",
+   "bytes": 152803589,
+   "seconds_ref": 9.275,
+   "seconds_cand": 6.737,
+   "records": 54396,
+   "chunks": [
+    54397,
+    54397
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20231128083443-20231128113443-00001.warc.wet.gz",
+   "kind": "records",
+   "job": "content/file",
+   "bytes": 111673742,
+   "seconds_ref": 5.104,
+   "seconds_cand": 3.248,
+   "records": 36075,
+   "chunks": [
+    36076,
+    36076
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20231128083443-20231128113443-00001.warc.wet.gz",
+   "kind": "records",
+   "job": "content/datatrove",
+   "bytes": 111673742,
+   "seconds_ref": 6.553,
+   "seconds_cand": 5.55,
+   "records": 36075,
+   "chunks": [
+    36076,
+    36076
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20231128083443-20231128113443-00001.warc.wet.gz",
+   "kind": "records",
+   "job": "random/file",
+   "bytes": 111673742,
+   "seconds_ref": 6.253,
+   "seconds_cand": 4.21,
+   "records": 36075,
+   "chunks": [
+    36076,
+    36076
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20231128083443-20231128113443-00001.warc.wet.gz",
+   "kind": "records",
+   "job": "digests-log/file",
+   "bytes": 111673742,
+   "seconds_ref": 6.417,
+   "seconds_cand": 3.885,
+   "records": 36075,
+   "chunks": [
+    36076,
+    36076
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20160924173739-00001-ip-10-143-35-109.ec2.internal.warc.gz",
+   "kind": "records",
+   "job": "content/file",
+   "bytes": 1050835549,
+   "seconds_ref": 40.617,
+   "seconds_cand": 25.914,
+   "records": 167419,
+   "chunks": [
+    167420,
+    167420
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20190817203056-20190817225056-00001.warc.gz",
+   "kind": "records",
+   "job": "content/file",
+   "bytes": 1048779866,
+   "seconds_ref": 41.582,
+   "seconds_cand": 26.456,
+   "records": 158527,
+   "chunks": [
+    158528,
+    158528
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20190817203056-20190817225056-00001.warc.gz",
+   "kind": "records",
+   "job": "random/file",
+   "bytes": 1048779866,
+   "seconds_ref": 45.114,
+   "seconds_cand": 27.176,
+   "records": 158527,
+   "chunks": [
+    158528,
+    158528
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20160924173739-00001-ip-10-143-35-109.ec2.internal.warc.gz",
+   "kind": "records",
+   "job": "random/file",
+   "bytes": 1050835549,
+   "seconds_ref": 45.455,
+   "seconds_cand": 28.434,
+   "records": 167419,
+   "chunks": [
+    167420,
+    167420
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20190817203056-20190817225056-00001.warc.gz",
+   "kind": "documents",
+   "job": "iter_documents",
+   "bytes": 1048779866,
+   "seconds_ref": 52.355,
+   "seconds_cand": 29.705,
+   "documents": 51876,
+   "chunks": [
+    51877,
+    51877
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20160924173739-00001-ip-10-143-35-109.ec2.internal.warc.gz",
+   "kind": "records",
+   "job": "digests-log/file",
+   "bytes": 1050835549,
+   "seconds_ref": 51.17,
+   "seconds_cand": 32.798,
+   "records": 167419,
+   "chunks": [
+    167420,
+    167420
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20190817203056-20190817225056-00001.warc.gz",
+   "kind": "records",
+   "job": "digests-log/file",
+   "bytes": 1048779866,
+   "seconds_ref": 53.276,
+   "seconds_cand": 33.213,
+   "records": 158527,
+   "chunks": [
+    158528,
+    158528
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20160924173739-00001-ip-10-143-35-109.ec2.internal.warc.gz",
+   "kind": "records",
+   "job": "content/datatrove",
+   "bytes": 1050835549,
+   "seconds_ref": 47.509,
+   "seconds_cand": 40.76,
+   "records": 167419,
+   "chunks": [
+    167420,
+    167420
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20190817203056-20190817225056-00001.warc.gz",
+   "kind": "records",
+   "job": "content/datatrove",
+   "bytes": 1048779866,
+   "seconds_ref": 51.15,
+   "seconds_cand": 44.49,
+   "records": 158527,
+   "chunks": [
+    158528,
+    158528
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20190817203056-20190817225056-00001.warc.gz",
+   "kind": "documents",
+   "job": "process_record",
+   "bytes": 1048779866,
+   "seconds_ref": 52.629,
+   "seconds_cand": 46.656,
+   "documents": 51876,
+   "chunks": [
+    51877,
+    51877
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20180715183800-20180715203800-00001.warc.wat.gz",
+   "kind": "documents",
+   "job": "iter_documents",
+   "bytes": 356879964,
+   "seconds_ref": 14.617,
+   "seconds_cand": 3.928,
+   "documents": 0,
+   "chunks": [
+    1,
+    1
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20261005105623-20261005135623-00001.warc.wat.gz",
+   "kind": "records",
+   "job": "content/file",
+   "bytes": 156511770,
+   "seconds_ref": 9.327,
+   "seconds_cand": 5.348,
+   "records": 65942,
+   "chunks": [
+    65943,
+    65943
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20180715183800-20180715203800-00001.warc.wat.gz",
+   "kind": "records",
+   "job": "content/file",
+   "bytes": 356879964,
+   "seconds_ref": 21.259,
+   "seconds_cand": 13.893,
+   "records": 153200,
+   "chunks": [
+    153201,
+    153201
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/1346864469604_0.arc.gz",
+   "kind": "records",
+   "job": "content/file",
+   "bytes": 100368619,
+   "seconds_ref": 2.016,
+   "seconds_cand": 1.337,
+   "records": 6273,
+   "chunks": [
+    6274,
+    6274
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/1346864469604_0.arc.gz",
+   "kind": "records",
+   "job": "content/datatrove",
+   "bytes": 100368619,
+   "seconds_ref": 0.002,
+   "seconds_cand": 0.001,
+   "records": 1,
+   "chunks": [
+    2,
+    2
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20261005105623-20261005135623-00001.warc.wat.gz",
+   "kind": "records",
+   "job": "content/datatrove",
+   "bytes": 156511770,
+   "seconds_ref": 10.34,
+   "seconds_cand": 8.591,
+   "records": 65942,
+   "chunks": [
+    65943,
+    65943
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20180715183800-20180715203800-00001.warc.wat.gz",
+   "kind": "records",
+   "job": "digests-log/file",
+   "bytes": 356879964,
+   "seconds_ref": 20.637,
+   "seconds_cand": 12.774,
+   "records": 153200,
+   "chunks": [
+    153201,
+    153201
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/1346864469604_0.arc.gz",
+   "kind": "documents",
+   "job": "iter_documents",
+   "bytes": 100368619,
+   "seconds_ref": 0.003,
+   "seconds_cand": 0.0,
+   "documents": 0,
+   "chunks": [
+    1,
+    1
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/1346864469604_0.arc.gz",
+   "kind": "documents",
+   "job": "process_record",
+   "bytes": 100368619,
+   "seconds_ref": 0.001,
+   "seconds_cand": 0.0,
+   "documents": 0,
+   "chunks": [
+    1,
+    1
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/1346864469604_0.arc.gz",
+   "kind": "records",
+   "job": "random/file",
+   "bytes": 100368619,
+   "seconds_ref": 2.026,
+   "seconds_cand": 1.357,
+   "records": 6273,
+   "chunks": [
+    6274,
+    6274
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20180715183800-20180715203800-00001.warc.wat.gz",
+   "kind": "documents",
+   "job": "process_record",
+   "bytes": 356879964,
+   "seconds_ref": 14.383,
+   "seconds_cand": 10.656,
+   "documents": 0,
+   "chunks": [
+    1,
+    1
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20261005105623-20261005135623-00001.warc.wat.gz",
+   "kind": "documents",
+   "job": "iter_documents",
+   "bytes": 156511770,
+   "seconds_ref": 6.533,
+   "seconds_cand": 1.813,
+   "documents": 0,
+   "chunks": [
+    1,
+    1
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/1346864469604_0.arc.gz",
+   "kind": "records",
+   "job": "digests-log/file",
+   "bytes": 100368619,
+   "seconds_ref": 1.903,
+   "seconds_cand": 1.205,
+   "records": 6273,
+   "chunks": [
+    6274,
+    6274
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20261005105623-20261005135623-00001.warc.wat.gz",
+   "kind": "documents",
+   "job": "process_record",
+   "bytes": 156511770,
+   "seconds_ref": 6.456,
+   "seconds_cand": 3.492,
+   "documents": 0,
+   "chunks": [
+    1,
+    1
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20180715183800-20180715203800-00001.warc.wat.gz",
+   "kind": "records",
+   "job": "content/datatrove",
+   "bytes": 356879964,
+   "seconds_ref": 25.12,
+   "seconds_cand": 18.872,
+   "records": 153200,
+   "chunks": [
+    153201,
+    153201
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20180715183800-20180715203800-00001.warc.wat.gz",
+   "kind": "records",
+   "job": "random/file",
+   "bytes": 356879964,
+   "seconds_ref": 24.062,
+   "seconds_cand": 15.952,
+   "records": 153200,
+   "chunks": [
+    153201,
+    153201
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20261005105623-20261005135623-00001.warc.wat.gz",
+   "kind": "records",
+   "job": "digests-log/file",
+   "bytes": 156511770,
+   "seconds_ref": 9.631,
+   "seconds_cand": 3.616,
+   "records": 65942,
+   "chunks": [
+    65943,
+    65943
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20261005105623-20261005135623-00001.warc.wat.gz",
+   "kind": "records",
+   "job": "random/file",
+   "bytes": 156511770,
+   "seconds_ref": 10.844,
+   "seconds_cand": 6.425,
+   "records": 65942,
+   "chunks": [
+    65943,
+    65943
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20160924173739-00001-ip-10-143-35-109.ec2.internal.warc.gz",
+   "kind": "documents",
+   "job": "iter_documents",
+   "bytes": 1050835549,
+   "seconds_ref": 130.965,
+   "seconds_cand": 75.912,
+   "documents": 51863,
+   "chunks": [
+    51864,
+    51864
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20160924173739-00001-ip-10-143-35-109.ec2.internal.warc.gz",
+   "kind": "documents",
+   "job": "process_record",
+   "bytes": 1050835549,
+   "seconds_ref": 132.215,
+   "seconds_cand": 90.826,
+   "documents": 51863,
+   "chunks": [
+    51864,
+    51864
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20231128083443-20231128113443-00001.warc.wet.gz",
+   "kind": "documents",
+   "job": "iter_documents",
+   "bytes": 111673742,
+   "seconds_ref": 123.282,
+   "seconds_cand": 93.772,
+   "documents": 35981,
+   "chunks": [
+    35982,
+    35982
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20231128083443-20231128113443-00001.warc.wet.gz",
+   "kind": "documents",
+   "job": "process_record",
+   "bytes": 111673742,
+   "seconds_ref": 124.017,
+   "seconds_cand": 96.591,
+   "documents": 35981,
+   "chunks": [
+    35982,
+    35982
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20130516092621-00001-ip-10-60-113-184.ec2.internal.warc.wet.gz",
+   "kind": "documents",
+   "job": "iter_documents",
+   "bytes": 152803589,
+   "seconds_ref": 181.077,
+   "seconds_cand": 141.72,
+   "documents": 54103,
+   "chunks": [
+    54104,
+    54104
+   ],
+   "status": "same"
+  },
+  {
+   "file": "/opt/htmlx/warc-parity/whole/CC-MAIN-20130516092621-00001-ip-10-60-113-184.ec2.internal.warc.wet.gz",
+   "kind": "documents",
+   "job": "process_record",
+   "bytes": 152803589,
+   "seconds_ref": 180.91,
+   "seconds_cand": 144.997,
+   "documents": 54103,
+   "chunks": [
+    54104,
+    54104
+   ],
+   "status": "same"
+  }
+ ]
+}

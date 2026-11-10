@@ -1,0 +1,9 @@
+nproc: 16
+cpus: 0-7 (cores: 8 distinct)
+6.18.56-126.188.amzn2023.x86_64
+"Amazon Linux 2023.12.20261109"
+               total        used        free      shared  buff/cache   available
+Mem:           31554         482       30121           0         950       30685
+Swap:              0           0           0
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p1  100G  3.1G   97G   4% /
