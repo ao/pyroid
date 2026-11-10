@@ -828,6 +828,23 @@ def replace(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
     _retry(os.replace, src, dst)
 
 
+def commit(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+    """:func:`replace`, then sync ``dst``'s directory so the rename survives a crash (POSIX)."""
+    replace(src, dst)
+    if os.name != "posix":
+        return  # Windows has no directory handles to sync
+    try:
+        fd = os.open(os.path.dirname(os.path.abspath(dst)), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass  # some filesystems refuse to sync a directory
+    finally:
+        os.close(fd)
+
+
 def remove(path: str | os.PathLike[str], *, missing_ok: bool = True) -> None:
     """Delete the file ``path``, retrying while Windows reports it in use."""
     try:
@@ -884,7 +901,7 @@ def atomic_write_bytes(path: str | os.PathLike[str], data: bytes) -> None:
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
-        replace(tmp, p)
+        commit(tmp, p)
     except BaseException:
         with contextlib.suppress(OSError):
             remove(tmp)
@@ -985,7 +1002,7 @@ class Writer:
             tmp = self.tmp
             assert tmp is not None
             _fsync(tmp)
-            replace(tmp, self.path)
+            commit(tmp, self.path)
         except BaseException:
             self.abort()
             raise

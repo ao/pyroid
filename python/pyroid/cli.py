@@ -1302,7 +1302,7 @@ def _move(src: Path, dest: Path) -> None:
                 shutil.copyfileobj(g, f, 1 << 20)
                 f.flush()
                 os.fsync(f.fileno())
-            _io.replace(tmp, dest)
+            _io.commit(tmp, dest)
         except BaseException:
             _io.remove(tmp)
             raise
@@ -1345,7 +1345,7 @@ def _concat(parts: Sequence[Path], dest: Path, compression: str | None) -> None:
                         shutil.copyfileobj(g, f, 1 << 20)
                 f.flush()
                 os.fsync(f.fileno())
-            _io.replace(tmp, dest)
+            _io.commit(tmp, dest)
         except BaseException:
             _io.remove(tmp)
             raise

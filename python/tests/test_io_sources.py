@@ -705,6 +705,31 @@ def test_atomic_write(tmp_path: Path) -> None:
         assert out.stat().st_mode == ref.stat().st_mode
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Windows has no directory handles to sync")
+@pytest.mark.thread_unsafe  # patches os.fsync
+def test_renames_are_synced_to_the_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After the rename, the directory is synced too, so the new name survives a crash."""
+    import stat
+
+    synced: list[str] = []
+    real = os.fsync
+
+    def fsync(fd: int) -> None:
+        synced.append("dir" if stat.S_ISDIR(os.fstat(fd).st_mode) else "file")
+        real(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    _io.atomic_write_text(tmp_path / "stats.json", "{}")
+    assert synced == ["file", "dir"]
+    synced.clear()
+    w = _io.Writer(tmp_path / "out.jsonl")
+    w.write(pa.table({"text": ["a"]}))
+    w.close()
+    assert synced == ["file", "dir"]
+
+
 @pytest.mark.thread_unsafe  # patches os.replace
 def test_atomic_write_uses_a_hidden_sibling(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
