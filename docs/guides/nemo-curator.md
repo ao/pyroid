@@ -97,6 +97,15 @@ their `score_document` and `modify_document` run pyroid's kernel for one documen
   `paragraphs` or `ngrams`; modifiers with several input fields. Subclasses of NeMo's or pyroid's
   filters run their own `score_document`.
 
+## Parity
+
+Against NeMo Curator 1.4.0 on FineWeb's dev slice and pyroid's adversarial set (13,232
+documents, `parity/`, suite `nemo`): 578 checks and 3.7 million comparisons, with 0 differences:
+every filter score and exception, every modifier output, the fastText scores, the stages'
+DataFrames, and Hypothesis-generated text. NeMo's own pipelines, run with stock stages and with
+pyroid's (YAML targets rewritten, or `pyroid.patch`), give byte-identical output. Linux aarch64,
+CPython 3.12; the pinned references also pass on 3.14t and 3.15t, where NeMo does not install.
+
 ## `pyroid.nemo`
 
 The kernels, without NeMo: one function per filter, returning what `score_document` returns, and
