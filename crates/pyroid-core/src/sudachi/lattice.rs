@@ -579,10 +579,15 @@ fn join_numeric(
             for c in s.chars() {
                 if !parser.append(c) {
                     if begin_idx >= 0 {
-                        if parser.error_state == NumError::Comma {
+                        // sudachi.rs restarts the run with commas (periods) no longer digits
+                        // even when they already were not; that restart repeats the same
+                        // state forever (a numeric word whose normalized form starts with
+                        // "," does it), so here the run just ends, as on other errors. Inputs
+                        // sudachi.rs finishes are unaffected.
+                        if parser.error_state == NumError::Comma && comma_as_digit {
                             comma_as_digit = false;
                             i = begin_idx - 1;
-                        } else if parser.error_state == NumError::Point {
+                        } else if parser.error_state == NumError::Point && period_as_digit {
                             period_as_digit = false;
                             i = begin_idx - 1;
                         }
@@ -774,4 +779,56 @@ fn split_a(
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::super::Dictionary;
+
+    /// A dictionary the `sudachi_dic` fuzz target found (its input layout, `[n] text dic`;
+    /// the dictionary lacks the bulk of its connection matrix, which the target appends as
+    /// zeros): there "1" is word 45, whose normalized form is ",". sudachi.rs's
+    /// `JoinNumericPlugin` fails on that comma at the start of the run, restarts the run
+    /// with commas no longer digits (which they already were not), and so loops forever.
+    #[test]
+    fn join_numeric_ends_a_run_it_cannot_restart() {
+        let input = include_bytes!("testdata/join-numeric-loop.bin");
+        let (&n, rest) = input.split_first().expect("input");
+        let (_, dic) = rest.split_at(usize::from(n));
+        let mut file = vec![0u8; dic.len() + 72_000_000];
+        file[..dic.len()].copy_from_slice(dic);
+        let d = Dictionary::from_bytes(file).expect("the dictionary loads");
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut out = Vec::new();
+            let r = d.tokenize("東京都に住む1,234人", &mut out);
+            tx.send((r, out)).expect("send");
+        });
+        let (r, out) = rx
+            .recv_timeout(Duration::from_secs(60))
+            .expect("tokenize returns");
+        assert_eq!(r, Ok(()));
+        let got: Vec<(usize, usize, u16, u32)> = out
+            .iter()
+            .map(|m| (m.begin, m.end, m.pos_id, m.word_id))
+            .collect();
+        let oov = |pos: u16| 0xf000_0000 | u32::from(pos);
+        // "1" and "," stay word 45: no numeric run is joined there.
+        assert_eq!(
+            got,
+            [
+                (0, 3, 2, oov(2)),
+                (3, 9, 2, oov(2)),
+                (9, 12, 2, oov(2)),
+                (12, 15, 2, oov(2)),
+                (15, 18, 2, oov(2)),
+                (18, 19, 11, 45),
+                (19, 20, 11, 45),
+                (20, 23, 1, oov(1)),
+                (23, 26, 2, oov(2)),
+            ]
+        );
+    }
 }
