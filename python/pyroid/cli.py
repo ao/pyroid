@@ -231,6 +231,37 @@ def _work(a: argparse.Namespace, state_root: Path, shard: Any) -> Path:
     return state_root / f"work-{shard.tag}"
 
 
+def _private_work(path: Path) -> None:
+    """Create the work directory ``path`` under ``--tmp-dir``, or check the one a run left.
+
+    Its name is predictable and ``--tmp-dir`` may be shared, so a directory or link that someone
+    else put there could make pyroid write through planted links. The directory is made with
+    mode 0700; a reused one must be a real directory (not a link or junction) and, on POSIX,
+    belong to the effective user and not be writable by others. On Windows the directory
+    inherits the ACL of ``--tmp-dir`` (``%TEMP%`` is per-user).
+    """
+    import stat
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.mkdir(path, 0o700)
+        return
+    except FileExistsError:
+        pass
+    hint = "remove it, or pass another --tmp-dir"
+    st = os.lstat(path)
+    # Windows: a reparse tag with the name-surrogate bit (a symlink, a junction) points elsewhere.
+    if not stat.S_ISDIR(st.st_mode) or getattr(st, "st_reparse_tag", 0) & 0x20000000:
+        raise SystemExit(f"pyroid: {path} is not a directory pyroid made ({hint})")
+    if hasattr(os, "geteuid"):
+        if st.st_uid != os.geteuid():
+            raise SystemExit(f"pyroid: {path} belongs to another user ({hint})")
+        if st.st_mode & 0o022:
+            raise SystemExit(f"pyroid: {path} is writable by other users ({hint})")
+        if st.st_mode & 0o077:
+            os.chmod(path, 0o700)
+
+
 def _check_out(layout: Layout, overwrite: bool, sources: Sequence[Any]) -> None:
     """Refuse to replace files a previous, unrelated command wrote."""
     if layout.merge and layout.final is not None and layout.out_dir is None:
@@ -491,9 +522,13 @@ class _Ipc:
     def write(self, table: Any) -> None:
         import pyarrow as pa
 
+        from pyroid.integrations import _io
+
         if self._writer is None:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-            self._sink = pa.OSFile(self.path + ".partial", "wb")
+            # Written through the descriptor of a file made here, never through a planted link.
+            fh = open(_io.create_new(self.path + ".partial"), "wb", buffering=1 << 20)  # noqa: SIM115
+            self._sink = pa.PythonFile(fh, mode="w")
             opts = pa.ipc.IpcWriteOptions(compression="lz4")
             self._writer = pa.ipc.new_file(self._sink, table.schema, options=opts)
         self._writer.write_table(table)
@@ -1138,6 +1173,8 @@ def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: b
     sources = _sources(a, exclude)
     layout = _layout(a, sources, shard, excluded=excluded)
     _check_out(layout, a.overwrite, sources)
+    if tmp is not None:
+        _private_work(layout.work)
     if layout.out_dir is not None and not layout.merge:
         seen: dict[Path, str] = {}
         for s in sources:

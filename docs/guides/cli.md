@@ -206,8 +206,9 @@ datatrove's on-disk format, in a work directory next to OUT (`.OUT.pyroid/` for 
 `OUT/.pyroid/` for a directory), or under `--tmp-dir`. Then the survivors are written in input
 order and the work directory is deleted. Plan disk space there for the survivors plus about 1 KB
 of signatures per survivor. If the run fails or is interrupted, the work directory stays, and the
-same command resumes from it. `--no-dedup` skips MinHash, and the output is then the chain up to
-`FineWebQualityFilter`.
+same command resumes from it. Under `--tmp-dir` the work directory is created with mode 0700, and
+pyroid refuses to reuse one that is a link, belongs to another user or is writable by others.
+`--no-dedup` skips MinHash, and the output is then the chain up to `FineWebQualityFilter`.
 
 ## `pyroid clean`: FineWeb from WARC files
 

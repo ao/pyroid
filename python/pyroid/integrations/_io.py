@@ -852,6 +852,20 @@ def _sibling(path: Path, ext: str) -> tuple[Path, int]:
     raise FileExistsError(f"{path}: no free name for a temporary file next to it")
 
 
+def create_new(path: str | os.PathLike[str]) -> int:
+    """Create ``path`` as a new, empty file and return a descriptor open for writing.
+
+    A file already at ``path`` (an earlier run's leftover, or a planted symlink) is unlinked
+    first; O_EXCL then guarantees the descriptor is a file this call made, never a link target.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_BINARY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        return os.open(path, flags, 0o666)  # the umask applies, as for any new file
+    except FileExistsError:
+        remove(path)
+        return os.open(path, flags, 0o666)
+
+
 def _fsync(path: Path) -> None:
     fd = os.open(path, os.O_RDWR | _O_BINARY)  # Windows flushes only a writable handle
     try:
