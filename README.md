@@ -198,8 +198,8 @@ expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND 
 
 - Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK (the Porter stemmer and the
   tokenizers), sacrebleu, Trafilatura, SudachiPy and warcio;
-- MIT: ported from spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (with its
-  dictionary) and libxml2 (the HTML parser);
+- MIT: ported from fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba
+  (with its dictionary) and libxml2 (the HTML parser);
 - BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists);
 - BSD-3-Clause: numpy's random generator (for C4 bad words), scipy's QUADPACK integration (for
   MinHashLSH's parameters), tldextract and lxml;
