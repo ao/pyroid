@@ -19,10 +19,18 @@ pyroid has no runtime dependencies. Extras:
 | `pyroid[datatrove]` | `datatrove>=0.10.1`, `regex`, `tokenizers`, `numpy>=1.26`, `orjson>=3.2` | the [datatrove drop-in steps](guides/datatrove.md) in `pyroid.integrations.datatrove` (`regex` and `tokenizers` are imported by datatrove's filters but not declared by datatrove; `orjson` is for its JSONL reader and writer, from datatrove's `io` extra) |
 | `pyroid[hf]` | `datasets>=3`, `pyarrow>=18`, `numpy>=1.26` | the [Hugging Face `datasets` helpers](guides/huggingface.md) in `pyroid.integrations.hf` |
 | `pyroid[warc]` | `faust-cchardet`, `python-magic` | datatrove's page decoding in [`pyroid.warc.iter_documents`](guides/warc.md), its `WarcReader` drop-in and `pyroid clean --recipe fineweb-warc`: faust-cchardet guesses the charset of pages that are not UTF-8, and python-magic (which needs the libmagic library) types records without `WARC-Identified-Payload-Type`. Both are imported only when a record needs them, as datatrove imports them. `pyroid.warc.ArchiveIterator` needs neither. |
+| `pyroid[nemo]` | `numpy>=1.26` | [`pyroid.nemo`](guides/nemo-curator.md), which returns numpy arrays of scores. NeMo Curator itself is not pulled in. |
+| `pyroid[all]` | all of the above | everything; on CPython 3.15 it leaves out `datatrove`, `hf` and `warc` (see below) |
 
 Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
 `pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.trafilatura`,
 `pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader and `pyroid.patch()` need none of them.
+
+Some dependencies of the `datatrove`, `hf` and `warc` extras (orjson, tokenizers, PyYAML and
+faust-cchardet) publish no wheels for CPython 3.15 and 3.15t yet, and orjson none for 3.14t. There
+pip builds them from source: faust-cchardet needs a C++ compiler, and orjson and tokenizers a Rust
+toolchain. `pyroid[all]` skips those three extras on 3.15; name them to build them anyway.
+pyroid's own wheels cover every interpreter below.
 
 Optional libraries, needed only by the features that use them:
 
@@ -104,7 +112,13 @@ If the native extension is missing or was built for another Python, `import pyro
 
 ## Build from source
 
-You need a Rust toolchain and [maturin](https://www.maturin.rs/) 1.16 or newer:
+Where no wheel fits (or with `pip install --no-binary pyroid pyroid`), pip builds the sdist. That
+needs no Rust install: if `cargo` is not on `PATH`, maturin first downloads a Rust toolchain
+(about 580 MB, into `~/.cache/puccinialin`), so the build needs network access and takes a few
+minutes.
+
+To build a checkout, you need a Rust toolchain and [maturin](https://www.maturin.rs/) 1.16 or
+newer:
 
 ```console
 $ git clone https://github.com/ao/pyroid && cd pyroid

@@ -9,7 +9,7 @@ dynamic = ["version"]
 description = "Rust implementations of ftfy, fastText inference, datatrove's filters and dedup, Trafilatura, rouge-score, sacrebleu and json_repair, with the same API and output"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0"
+license = "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib"
 license-files = ["LICENSE", "LICENSES/*", "NOTICE"]
 authors = [{ name = "Andrew Odendaal" }]
 keywords = ["llm", "dataset", "text-cleaning", "rust", "pyo3"]
@@ -61,6 +61,13 @@ hf = ["datasets>=3", "pyarrow>=18", "numpy>=1.26"]
 # WARC-Identified-Payload-Type. Both are imported only when a record needs them, as datatrove
 # does; pyroid.warc.ArchiveIterator needs neither.
 warc = ["faust-cchardet", "python-magic"]
+# Every extra above. datatrove, hf and warc pull in orjson, tokenizers, PyYAML and faust-cchardet,
+# which publish no CPython 3.15 wheels yet, so on 3.15 they are left out here (they build from
+# source when named, e.g. "pyroid[datatrove]"). nemo_curator itself is never included (see nemo).
+all = [
+  "pyroid[fasttext,datasketch,cli,nemo]",
+  "pyroid[datatrove,hf,warc]; python_version < '3.15'",
+]
 
 [project.scripts]
 pyroid = "pyroid.cli:main"
