@@ -18,6 +18,7 @@ import ast
 import contextlib
 import functools
 import importlib
+import importlib.metadata
 import importlib.util
 import json
 import math
@@ -1142,7 +1143,11 @@ def test_fasttext_live(which: str, ft_path: Path, ft_model: ft.Model, ref: Any) 
     impls: list[tuple[Any, Any]] = [(ref, model)]
     live = live_nemo()
     oracle: Any = None
-    with contextlib.suppress(ImportError):
+    # NeMo pins fasttext 0.9.3. fasttext-predict (the test group's fastText) installs a `fasttext`
+    # module too, but its predict() on a list returns another shape, which NeMo's code cannot
+    # unpack: compare with fasttext itself only.
+    with contextlib.suppress(ImportError, importlib.metadata.PackageNotFoundError):
+        importlib.metadata.version("fasttext")
         oracle = importlib.import_module("fasttext")
     if oracle is not None:
         ft_oracle = oracle.load_model(str(path))
