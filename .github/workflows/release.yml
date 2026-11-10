@@ -14,6 +14,16 @@
 # Built in two maturin runs (`-i 3.11 3.14t`, then `-i 3.15`): with all three in one run maturin picks abi3t
 # for the whole build and 3.11 gets a version-specific cp311-cp311 wheel instead of cp311-abi3.
 #
+# Profile-guided optimisation (PGO), on by default: each wheel job builds the three wheels instrumented
+# (rustc -Cprofile-generate), runs bench/pgo_train.py with them on its own runner (natively, never under
+# emulation: Linux glibc on the host, musllinux in Alpine, macOS and Windows on the host) for each
+# interpreter in PGO_TRAIN_PYTHONS, merges the profiles with the llvm-profdata of the same rustc, and builds
+# the published wheels with -Cprofile-use. The training inputs (bench/pgo_corpus.py: FineWeb and FineWeb-2
+# rows that no benchmark times) are fetched once, by the pgo-corpus job. Every platform has its own native
+# runner, so there are no universal2 macOS wheels: x86_64 and arm64 macOS wheels are built and trained
+# separately. To build without PGO: `pgo: false` on a manual run, or set the repository variable
+# PYROID_PGO=off (it also applies to release runs on push).
+#
 # Owner setup (trusted publishers, environments, release-please permissions): docs/RELEASING.md.
 name: Release
 
@@ -28,6 +38,10 @@ on:
         description: Publish the built distributions to TestPyPI (dry run, needs approval in `testpypi`)
         type: boolean
         default: false
+      pgo:
+        description: Build the wheels with profile-guided optimisation (false gives plain release builds)
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -45,6 +59,11 @@ env:
   UV_VERSION: "0.13.7"
   # Junk guard for the sdist (source + Cargo.lock + Unicode tables); raise it deliberately if needed.
   SDIST_MAX_BYTES: "5000000"
+  # PGO on or off for this run (see the top of this file). The pgo-corpus job's `if` repeats the expression,
+  # because a job-level `if` cannot read `env`.
+  PGO: ${{ vars.PYROID_PGO != 'off' && (github.event_name != 'workflow_dispatch' || inputs.pgo) }}
+  # The interpreters each wheel job trains with: one per wheel flavour, and 3.15 both with and without the GIL.
+  PGO_TRAIN_PYTHONS: 3.12 3.14t 3.15 3.15t
 
 jobs:
   release-please:
@@ -68,13 +87,49 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+  pgo-corpus:
+    name: PGO training inputs
+    needs: release-please
+    # As `wheels`, and only when PGO is on (the expression of env.PGO).
+    if: >-
+      ${{ !cancelled() && (github.event_name != 'push' || needs.release-please.outputs.release_created == 'true')
+      && vars.PYROID_PGO != 'off' && (github.event_name != 'workflow_dispatch' || inputs.pgo) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read # checkout (bench/, parity/)
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      # FineWeb rows 10000:20000 and FineWeb-2 test rows 250:500 from the pinned revisions (each checked by the
+      # content hash of the rows before it), and the fastText models (checked against bench/manifest.json).
+      - name: Fetch the pinned training inputs (bench/pgo_corpus.py)
+        run: uv run --project bench --frozen --no-default-groups python bench/pgo_corpus.py --out pgo-corpus
+      - name: Upload the training inputs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pgo-corpus
+          path: pgo-corpus/
+          if-no-files-found: error
+          retention-days: 1
+
   wheels:
     name: wheels (${{ matrix.platform.id }})
-    needs: release-please
-    # On push, build only for a release; on PRs and manual runs, always.
-    if: ${{ !cancelled() && (github.event_name != 'push' || needs.release-please.outputs.release_created == 'true') }}
+    needs: [release-please, pgo-corpus]
+    # On push, build only for a release; on PRs and manual runs, always. pgo-corpus is skipped when PGO is off.
+    if: >-
+      ${{ !cancelled() && (github.event_name != 'push' || needs.release-please.outputs.release_created == 'true')
+      && needs.pgo-corpus.result != 'failure' }}
     runs-on: ${{ matrix.platform.runner }}
-    timeout-minutes: 90
+    # A PGO job builds every wheel twice and trains in between.
+    timeout-minutes: 150
     permissions:
       contents: read
     strategy:
@@ -85,9 +140,10 @@ jobs:
           # for glibc, and maturin-action's ghcr.io/rust-cross/rust-musl-cross image for musllinux_1_2.
           - { id: manylinux-x86_64, runner: ubuntu-24.04, target: x86_64, manylinux: "2014" }
           - { id: manylinux-aarch64, runner: ubuntu-24.04-arm, target: aarch64, manylinux: "2014" }
-          - { id: musllinux-x86_64, runner: ubuntu-24.04, target: x86_64, manylinux: musllinux_1_2 }
-          - { id: musllinux-aarch64, runner: ubuntu-24.04-arm, target: aarch64, manylinux: musllinux_1_2 }
-          # macos-15-intel is the last x86_64 macOS image (until August 2027); then cross-build on arm64.
+          - { id: musllinux-x86_64, runner: ubuntu-24.04, target: x86_64, manylinux: musllinux_1_2, musl: true }
+          - { id: musllinux-aarch64, runner: ubuntu-24.04-arm, target: aarch64, manylinux: musllinux_1_2, musl: true }
+          # macos-15-intel is the last x86_64 macOS image (until August 2027); then cross-build on arm64, and
+          # train the x86_64 wheels under Rosetta 2 or build them with `pgo: false`.
           - { id: macos-x86_64, runner: macos-15-intel, target: x86_64 }
           - { id: macos-arm64, runner: macos-15, target: aarch64 }
           - { id: windows-x64, runner: windows-2025, target: x64 }
@@ -120,25 +176,127 @@ jobs:
         with:
           python-version: "3.15"
 
+      # One rustc for the whole job: "stable" is resolved once, so the instrumented build, llvm-profdata and
+      # the final build use the same rustc and LLVM even if a Rust release lands while the job runs.
+      - name: Pin the Rust toolchain for this job
+        id: rust
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --no-self-update
+          version=$(rustc +stable --version | cut -d' ' -f2)
+          rustup toolchain install "$version" --profile minimal --component llvm-tools --no-self-update
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # PGO step 1: the same two maturin runs as below (same arguments, so the same symbol names), instrumented.
+      # The training writes its profiles to pgo/raw (LLVM_PROFILE_FILE); pgo/build-raw only catches profiles of
+      # instrumented build scripts or proc macros (none with an explicit --target), so they are never merged.
+      - name: Download the PGO training inputs
+        if: env.PGO == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pgo-corpus
+          path: pgo/corpus
+      - name: Build instrumented cp311-abi3 and cp314t wheels (PGO)
+        if: env.PGO == 'true'
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        env:
+          RUSTFLAGS: -Cprofile-generate=${{ github.workspace }}/pgo/build-raw
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          target: ${{ matrix.platform.target }}
+          manylinux: ${{ matrix.platform.manylinux || 'auto' }}
+          rust-toolchain: ${{ steps.rust.outputs.version }}
+          args: >-
+            --release --locked --out pgo/gen -i
+            ${{ runner.os == 'Linux' && '3.11 3.14t' || format('{0} {1}', steps.py311.outputs.python-path, steps.py314t.outputs.python-path) }}
+      - name: Build instrumented cp315-abi3.abi3t wheel (PGO)
+        if: env.PGO == 'true'
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        env:
+          RUSTFLAGS: -Cprofile-generate=${{ github.workspace }}/pgo/build-raw
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          target: ${{ matrix.platform.target }}
+          manylinux: ${{ matrix.platform.manylinux || 'auto' }}
+          rust-toolchain: ${{ steps.rust.outputs.version }}
+          args: >-
+            --release --locked --out pgo/gen -i
+            ${{ runner.os == 'Linux' && '3.15' || steps.py315.outputs.python-path }}
+
+      # PGO step 2: train on this runner. The manylinux wheels run on the Ubuntu host; the musllinux ones in
+      # Alpine (uv's image, as in the test job), with the checkout mounted so the raw profiles land in pgo/raw.
+      - name: Set up uv (PGO training)
+        if: env.PGO == 'true'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - name: Train the instrumented wheels (PGO)
+        if: env.PGO == 'true' && !matrix.platform.musl
+        run: |
+          # shellcheck disable=SC2086 # a list of interpreters
+          sh bench/pgo_train.sh pgo/gen pgo/corpus pgo/raw $PGO_TRAIN_PYTHONS
+      - name: Train the instrumented wheels in Alpine (PGO)
+        if: env.PGO == 'true' && matrix.platform.musl
+        env:
+          ALPINE_IMAGE: ghcr.io/astral-sh/uv:0.13.7-alpine@sha256:a788290ce829958f18bcea1dfd9fb5dcf4bfb22f6380b52c9322f9d91e86b117
+        run: |
+          docker run --rm -e PGO_TRAIN_PYTHONS -v "$PWD:/src" -w /src "$ALPINE_IMAGE" \
+            sh -euc 'sh bench/pgo_train.sh pgo/gen pgo/corpus pgo/raw $PGO_TRAIN_PYTHONS'
+
+      # PGO step 3: one profile for both maturin runs, merged by the llvm-profdata of the job's rustc.
+      - name: Merge the profiles (PGO)
+        if: env.PGO == 'true'
+        env:
+          TOOLCHAIN: ${{ steps.rust.outputs.version }}
+          PLATFORM: ${{ matrix.platform.id }}
+        run: |
+          set -euo pipefail
+          sysroot=$(rustc +"$TOOLCHAIN" --print sysroot)
+          if command -v cygpath > /dev/null; then sysroot=$(cygpath -u "$sysroot"); fi
+          host=$(rustc +"$TOOLCHAIN" -vV | sed -n 's/^host: //p')
+          profdata="$sysroot/lib/rustlib/$host/bin/llvm-profdata"
+          "$profdata" merge -o pgo/merged.profdata pgo/raw
+          "$profdata" show pgo/merged.profdata > pgo/show.txt
+          cat pgo/show.txt
+          functions=$(sed -n 's/^Total functions: //p' pgo/show.txt)
+          if [ "${functions:-0}" -lt 1000 ]; then
+            echo "::error::the merged profile covers only ${functions:-0} functions"
+            exit 1
+          fi
+          {
+            echo "### PGO profile ($PLATFORM)"
+            echo
+            echo '```'
+            echo "raw profiles: $(find pgo/raw -name '*.profraw' | wc -l | tr -d ' ') ($PGO_TRAIN_PYTHONS)"
+            cat pgo/show.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The published wheels: with -Cprofile-use when PGO is on, plain release builds when it is off.
       # Two maturin runs on purpose (same as ci.yml): maturin picks one stable-ABI family per run, and a
       # 3.15 interpreter in the same run switches it to abi3t, turning 3.11 into a cp311-cp311 wheel.
       - name: Build cp311-abi3 and cp314t wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        env:
+          RUSTFLAGS: ${{ env.PGO == 'true' && format('-Cprofile-use={0}/pgo/merged.profdata', github.workspace) || '' }}
         with:
           maturin-version: ${{ env.MATURIN_VERSION }}
           target: ${{ matrix.platform.target }}
           manylinux: ${{ matrix.platform.manylinux || 'auto' }} # ignored off Linux
-          rust-toolchain: stable # same toolchain in containers and on macOS/Windows hosts
+          rust-toolchain: ${{ steps.rust.outputs.version }} # same toolchain in containers and on macOS/Windows hosts
           args: >-
             --release --locked --out dist -i
             ${{ runner.os == 'Linux' && '3.11 3.14t' || format('{0} {1}', steps.py311.outputs.python-path, steps.py314t.outputs.python-path) }}
       - name: Build cp315-abi3.abi3t wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        env:
+          RUSTFLAGS: ${{ env.PGO == 'true' && format('-Cprofile-use={0}/pgo/merged.profdata', github.workspace) || '' }}
         with:
           maturin-version: ${{ env.MATURIN_VERSION }}
           target: ${{ matrix.platform.target }}
           manylinux: ${{ matrix.platform.manylinux || 'auto' }}
-          rust-toolchain: stable
+          rust-toolchain: ${{ steps.rust.outputs.version }}
           args: >-
             --release --locked --out dist -i
             ${{ runner.os == 'Linux' && '3.15' || steps.py315.outputs.python-path }}

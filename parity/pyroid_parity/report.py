@@ -174,11 +174,15 @@ def validate(report: dict[str, Any]) -> list[str]:
     return [f"{'/'.join(map(str, e.absolute_path))}: {e.message}" for e in v.iter_errors(report)]
 
 
+# Plain text, so the tables read the same in a terminal, a log and a GitHub job summary.
+STATUS_TEXT = {"pass": "ok", "fail": "FAIL", "skip": "skip"}
+
+
 def render(report: dict[str, Any]) -> str:
     env = report["environment"]
     py = f"{env['implementation']} {env['python']}{'t' if env['free_threaded'] else ''} ({env['machine']})"
     lines = [
-        f"### Parity: **{report['status']}** · {py}",
+        f"### Parity: {STATUS_TEXT[report['status']]}, {py}",
         "",
         "| suite | candidate | reference | check | status | same | diff |",
         "|---|---|---|---|---|---:|---:|",
@@ -187,9 +191,8 @@ def render(report: dict[str, Any]) -> str:
         cand = f"{s['candidate'].get('module', '?')} {s['candidate'].get('version') or ''}".strip()
         ref = f"{s['reference'].get('name', '?')} {s['reference'].get('version') or ''}".strip()
         for check, c in s["checks"].items():
-            mark = {"pass": "✅", "fail": "❌", "skip": "⏭️"}[c["status"]]
             lines.append(
-                f"| {name} | {cand} | {ref} | {check} | {mark} {c['status']} | {c['same']} | {c['diff']} |"
+                f"| {name} | {cand} | {ref} | {check} | {STATUS_TEXT[c['status']]} | {c['same']} | {c['diff']} |"
             )
     fails = [
         (n, ch, c) for n, s in report["suites"].items() for ch, c in s["checks"].items() if c["examples"]
