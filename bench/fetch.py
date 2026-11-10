@@ -461,10 +461,15 @@ def fetch_warc(pin: bool) -> None:
     warc_corpus.fetch(pin, log)
 
 
-def verify(prefixes: tuple[str, ...] | None = None) -> int:
-    """Re-hash the pinned files under ``prefixes`` (all of them for None); returns the number that are bad."""
+def verify(prefixes: tuple[str, ...] | None = None, skip: tuple[str, ...] = ()) -> int:
+    """Re-hash the pinned files under ``prefixes`` (all of them for None), except those under ``skip``;
+    returns the number that are bad."""
     manifest = D.load_manifest()
-    files = {r: e for r, e in manifest["files"].items() if prefixes is None or r.startswith(prefixes)}
+    files = {
+        r: e
+        for r, e in manifest["files"].items()
+        if (prefixes is None or r.startswith(prefixes)) and not (skip and r.startswith(skip))
+    }
     bad, checked = 0, 0
     for rel, entry in files.items():
         p = D.DATA / rel
@@ -491,6 +496,14 @@ def main() -> int:
         action="store_true",
         help="only verify every pinned file against manifest.json, the generated parity/ references included",
     )
+    ap.add_argument(
+        "--except",
+        dest="skip",
+        action="append",
+        default=[],
+        metavar="PREFIX",
+        help="with --verify-all: leave out the pinned files under PREFIX (built and checked elsewhere)",
+    )
     ap.add_argument("--pin", action="store_true", help="(re)write sha256 entries for fetched files")
     ap.add_argument(
         "--only", default="fineweb,fineweb2,models,metrics,trafilatura,warc", help="comma-separated subset"
@@ -500,7 +513,7 @@ def main() -> int:
     if unknown := steps - INPUTS.keys():
         ap.error(f"--only: unknown step(s) {sorted(unknown)}; choose from {sorted(INPUTS)}")
     if a.verify_all:
-        return 1 if verify() else 0
+        return 1 if verify(skip=tuple(a.skip)) else 0
     if not a.verify:
         if "fineweb" in steps:
             fetch_fineweb(a.pin)

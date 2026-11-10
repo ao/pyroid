@@ -340,9 +340,13 @@ jobs:
       - name: Re-record json_repair's test suite and compare (python -m pyroid_parity.json_repair_record --check)
         if: steps.cache.outputs.cache-hit != 'true'
         run: uv run --project parity --frozen python -m pyroid_parity.json_repair_record --check
+      # The nemo references need NeMo Curator and fasttext 0.9.3 (a C++ build): the nemo job builds, checks and
+      # caches them, so they are left out here.
       - name: Verify every pinned file before caching (bench/fetch.py --verify-all)
         if: steps.cache.outputs.cache-hit != 'true'
-        run: uv run --project bench --frozen --no-default-groups python bench/fetch.py --verify-all
+        run: >-
+          uv run --project bench --frozen --no-default-groups python bench/fetch.py --verify-all
+          --except parity/nemo-ref --except models/nemo-quality
       - name: Save the parity data cache
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -375,7 +379,7 @@ jobs:
         # One entry per merged product module pyroid.<suite>. Every suite runs on the free-threaded builds too:
         # without the oracle group they compare against the pinned refs, and live-oracle checks skip in the report.
         # SUITE@VERSION is a suite in another mode: trafilatura@1.11.0 is pyroid.trafilatura's compat="1.11.0".
-        suite: [ftfy, fasttext, filters, dedup, metrics, json_repair, datasketch, jieba, trafilatura, trafilatura@1.11.0, nltk, warc]
+        suite: [ftfy, fasttext, filters, dedup, metrics, json_repair, datasketch, jieba, trafilatura, trafilatura@1.11.0, nltk, warc, nemo]
         python: ["3.12", "3.14t", "3.15t"]
         # The wheel each interpreter installs (the three flavours the wheels job checks for).
         include:
@@ -416,6 +420,17 @@ jobs:
         with:
           path: bench/data/nltk_data
           key: punkt-tab-parity-e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106
+      # The nemo references need NeMo Curator, so the nemo job builds them (on aarch64, where they are pinned) and
+      # caches them under this key; restored here when it has. Without them the pinned nemo checks skip and say
+      # so, as on x86_64 (no x86_64 pin yet).
+      - name: Restore the nemo references
+        if: matrix.suite == 'nemo'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            bench/data/parity/nemo-ref.parquet
+            bench/data/models/nemo-quality-dev10k.ftz
+          key: nemo-refs-${{ runner.arch }}-16200a3b73d73bbb-68ae0a772f4c0567
       - name: pytest parity/tests (${{ matrix.suite }})
         env:
           SUITE: ${{ matrix.suite }}
@@ -559,6 +574,106 @@ jobs:
           "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs python/tests/test_trafilatura_parity_111.py \
             python/tests/test_trafilatura.py python/tests/test_trafilatura_patch.py python/tests/test_trafilatura_datatrove.py
 
+  # NeMo Curator 1.4.0 itself, live: pyroid.nemo and pyroid.integrations.nemo_curator against NeMo's own code on
+  # generated text (Hypothesis), per document and through NeMo's stages. NeMo needs Python < 3.14, and its fastText
+  # filters need fasttext 0.9.3, which PyPI ships as an sdist only (it builds with g++). The env is
+  # parity/README.md's ("The nemo suite"): NeMo without its own dependencies (torch, transformers, datasets,
+  # mecab-python3), which its CPU text stages do not import. The job also builds the nemo references (`refs nemo`,
+  # checked against bench/manifest.json's pins) and caches them for the parity legs. linux-aarch64 only: the
+  # references (fastText floats) and the quality model are pinned there.
+  nemo:
+    name: live NeMo Curator 1.4.0 (Python 3.12, ubuntu-24.04-arm)
+    needs: [wheels, parity-data]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    permissions:
+      contents: read # checkout (parity/, python/tests, bench/manifest.json)
+    env:
+      PYROID_DATA: ${{ github.workspace }}/bench/data
+      PYROID_LID_MODEL: ${{ github.workspace }}/bench/data/models/lid.176.ftz
+      PYROID_FINEWEB_DEV: ${{ github.workspace }}/bench/data/fineweb/fineweb-dev-10k.parquet
+      UV_PYTHON_PREFERENCE: only-managed
+      # What NeMo's text stages and its executor import, at the versions the references were recorded with
+      # (the "oracle" of parity/nemo-ref.parquet in bench/manifest.json), plus the test tools at parity/uv.lock's versions.
+      NEMO_DEPS: numpy==2.5.4 pandas==3.1.1 pyarrow==26.0.1 regex==2026.11.9 ftfy==6.3.1 jieba==0.42.1 loguru fsspec hydra-core==1.3.8 omegaconf ray[data]==2.60.0 cosmos-xenna==0.2.0 tqdm platformdirs requests pytest==9.2.0 pytest-timeout==2.4.0 hypothesis==6.170.14 jsonschema==4.26.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-ubuntu-24.04-arm
+          path: dist
+      - name: Restore the parity data (this architecture's cache)
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
+          fail-on-cache-miss: true
+      # fasttext 0.9.3 has no wheels; only this job compiles it.
+      - name: Install g++
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends g++
+      - name: The NeMo env (parity/README.md, "The nemo suite")
+        run: |
+          set -euo pipefail
+          uv venv -p 3.12 "$RUNNER_TEMP/nemo"
+          py="$RUNNER_TEMP/nemo/bin/python"
+          uv pip install --python "$py" --no-deps nemo-curator==1.4.0
+          # fasttext's setup.py imports pybind11 (and numpy) at build time.
+          uv pip install --python "$py" pybind11 setuptools wheel numpy==2.5.4
+          uv pip install --python "$py" --no-build-isolation fasttext==0.9.3
+          read -ra deps <<< "$NEMO_DEPS"
+          uv pip install --python "$py" "${deps[@]}"
+          # Only the wheel built above: no index, no sdist fallback, no deps.
+          uv pip install --python "$py" --no-index --no-deps --no-build --find-links dist pyroid
+          "$py" -c "import nemo_curator.stages.text.filters, fasttext, pyroid.integrations.nemo_curator
+          from importlib.metadata import version as v
+          print(*(f'{d}=={v(d)}' for d in ('pyroid', 'nemo-curator', 'fasttext', 'pandas', 'ray')))"
+          echo "NEMO_PY=$py" >> "$GITHUB_ENV"
+      # The cache key carries the two pinned sha256s (bench/manifest.json): change it when they are re-pinned.
+      - id: nemo-refs
+        name: Restore the nemo references
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            bench/data/parity/nemo-ref.parquet
+            bench/data/models/nemo-quality-dev10k.ftz
+          key: nemo-refs-${{ runner.arch }}-16200a3b73d73bbb-68ae0a772f4c0567
+      - name: Build and verify the nemo references (python -m pyroid_parity.refs nemo)
+        if: steps.nemo-refs.outputs.cache-hit != 'true'
+        working-directory: parity
+        run: '"$NEMO_PY" -m pyroid_parity.refs nemo --workers 4'
+      - name: Save the nemo references
+        if: steps.nemo-refs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            bench/data/parity/nemo-ref.parquet
+            bench/data/models/nemo-quality-dev10k.ftz
+          key: ${{ steps.nemo-refs.outputs.cache-primary-key }}
+      - name: pyroid's NeMo tests with NeMo installed (python/tests)
+        run: |
+          set -euo pipefail
+          "$NEMO_PY" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs python/tests/test_nemo.py \
+            python/tests/test_nemo_modifiers.py python/tests/test_integrations_nemo_curator.py \
+            python/tests/test_nemo_curator_patch.py
+      - name: The nemo parity suite with live NeMo (pinned and live checks)
+        working-directory: parity
+        run: '"$NEMO_PY" -m pytest tests/test_nemo.py --impl pyroid.nemo'
+      - name: Render parity-report.json to the job summary
+        if: ${{ !cancelled() && hashFiles('parity/parity-report.json') != '' }}
+        working-directory: parity
+        run: '"$NEMO_PY" -m pyroid_parity.report render parity-report.json'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: parity-report-nemo-live-3.12-ubuntu-24.04-arm
+          path: parity/parity-report.json
+          if-no-files-found: error
+
   msrv:
     name: MSRV (cargo check on Cargo.toml's rust-version)
     runs-on: ubuntu-24.04
@@ -660,7 +775,7 @@ jobs:
     if: always()
     # fuzz-smoke is advisory and left out on purpose.
     needs:
-      [lint, workflow-lint, supply-chain, rust-test, msrv, miri, wheels, stubtest, test, parity-data, parity, live-oracle]
+      [lint, workflow-lint, supply-chain, rust-test, msrv, miri, wheels, stubtest, test, parity-data, parity, live-oracle, nemo]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
