@@ -773,6 +773,22 @@ def test_default_tokenizer_matches(ref_tokenizers: Any, text: str) -> None:
         ).tokenize(text)
 
 
+def test_package_all() -> None:
+    # `from pyroid.metrics import *` gives the submodules.
+    import pyroid.metrics
+
+    assert pyroid.metrics.__all__ == [
+        "rouge_scorer",
+        "sacrebleu",
+        "scoring",
+        "tokenize",
+        "tokenizers",
+    ]
+    ns: dict[str, Any] = {}
+    exec("from pyroid.metrics import *", ns)
+    assert sorted(k for k in ns if not k.startswith("__")) == pyroid.metrics.__all__
+
+
 def test_tokenizers_module() -> None:
     assert isinstance(tokenizers.DefaultTokenizer(), tokenizers.Tokenizer)
     assert tokenizers.DefaultTokenizer(use_stemmer=False).tokenize("this is a test") == [

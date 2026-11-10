@@ -4,6 +4,8 @@
 
 from typing import Any
 
+__all__ = ["optimal_partitions"]
+
 def optimal_partitions(sizes: Any, counts: Any, num_part: int) -> list[tuple[int, int]]:
     """Return `num_part` ``(lower, upper)`` set-size intervals that minimise false positives.
 
