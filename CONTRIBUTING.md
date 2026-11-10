@@ -56,6 +56,9 @@ mypy python/pyroid                   # the public API is typed through .pyi stub
 CI runs the same checks on Linux, macOS and Windows, on CPython 3.11, 3.14t, 3.15 and 3.15t, against the built
 wheel rather than the source tree.
 
+After changing `Cargo.lock`, regenerate `LICENSES/THIRD-PARTY-RUST.txt` with the cargo-about 0.9.3 command at the
+top of `about.toml`; CI fails when the file is out of date.
+
 ## Pinned test data
 
 The parity suites and benchmarks read pinned corpora (FineWeb slices) and models (fastText `lid.176`) from
