@@ -1241,6 +1241,7 @@ def test_missing_model_without_nltk(no_nltk: Path) -> None:
     msg = str(info.value)
     assert "Resource 'punkt_tab' not found." in msg
     assert "nltk.download('punkt_tab')" in msg
+    assert "pip install nltk" in msg  # the downloader needs NLTK
     assert "Attempted to load 'tokenizers/punkt_tab/english/'" in msg
     assert repr(str(no_nltk)) in msg  # the search path is listed
     with pytest.raises(LookupError, match="punkt_tab"):

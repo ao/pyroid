@@ -175,8 +175,9 @@ def _not_found(lang: str, paths: list[str]) -> LookupError:
         "  >>> import nltk\n"
         "  >>> nltk.download('punkt_tab')\n"
         "  \n"
-        "  (pyroid reads NLTK's punkt_tab models; NLTK itself is not installed, so its default"
-        " search path was used.)\n"
+        "  (pyroid reads NLTK's punkt_tab models. NLTK is not installed, so NLTK's default search\n"
+        "  path was used. Install NLTK to run the downloader (pip install nltk), or unpack\n"
+        "  punkt_tab.zip from nltk_data into tokenizers/ in one of the directories below.)\n"
         f"\n  Attempted to load '{resource}'\n"
         "\n  Searched in:" + "".join(f"\n    - {d!r}" for d in paths)
     )
