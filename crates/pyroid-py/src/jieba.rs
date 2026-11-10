@@ -285,17 +285,17 @@ impl Native {
         .map_err(dict_error)
     }
 
-    /// `jieba.cut(x, cut_all, HMM)` as a list; a list of lists for a batch.
-    #[pyo3(signature = (x, /, cut_all = false, hmm = true, *, threads = None))]
+    /// `jieba.cut(sentence, cut_all, HMM)` as a list; a list of lists for a batch.
+    #[pyo3(signature = (sentence, /, cut_all = false, hmm = true, *, threads = None))]
     fn cut<'py>(
         &self,
         py: Python<'py>,
-        x: TextInput,
+        sentence: TextInput,
         cut_all: bool,
         hmm: bool,
         threads: Option<Threads>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let results = self.run(py, &x, threads, |d, fs, s| {
+        let results = self.run(py, &sentence, threads, |d, fs, s| {
             if cut_all {
                 let mut out = Vec::new();
                 d.cut_all(s, &mut out);
@@ -312,41 +312,41 @@ impl Native {
                 Ok(out.into_iter().map(|w| span(s, w)).collect())
             }
         })?;
-        build(py, &x, results, |py, doc, p, c| {
+        build(py, &sentence, results, |py, doc, p, c| {
             Ok(piece_str(py, doc, p, c).into_any())
         })
     }
 
-    /// `jieba.cut_for_search(x, HMM)` as a list (a list of lists for a batch).
-    #[pyo3(signature = (x, /, hmm = true, *, threads = None))]
+    /// `jieba.cut_for_search(sentence, HMM)` as a list (a list of lists for a batch).
+    #[pyo3(signature = (sentence, /, hmm = true, *, threads = None))]
     fn cut_for_search<'py>(
         &self,
         py: Python<'py>,
-        x: TextInput,
+        sentence: TextInput,
         hmm: bool,
         threads: Option<Threads>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let results = self.run(py, &x, threads, |d, fs, s| {
+        let results = self.run(py, &sentence, threads, |d, fs, s| {
             let mut out = Vec::new();
             d.cut_for_search(s, hmm, fs, &mut out)?;
             Ok(out.into_iter().map(|w| span(s, w)).collect())
         })?;
-        build(py, &x, results, |py, doc, p, c| {
+        build(py, &sentence, results, |py, doc, p, c| {
             Ok(piece_str(py, doc, p, c).into_any())
         })
     }
 
-    /// `jieba.tokenize(x, mode, HMM)` as a list of `(word, start, end)`.
-    #[pyo3(signature = (x, /, search = false, hmm = true, *, threads = None))]
+    /// `jieba.tokenize(unicode_sentence, mode, HMM)` as a list of `(word, start, end)`.
+    #[pyo3(signature = (unicode_sentence, /, search = false, hmm = true, *, threads = None))]
     fn tokenize<'py>(
         &self,
         py: Python<'py>,
-        x: TextInput,
+        unicode_sentence: TextInput,
         search: bool,
         hmm: bool,
         threads: Option<Threads>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let results = self.run(py, &x, threads, |d, fs, s| {
+        let results = self.run(py, &unicode_sentence, threads, |d, fs, s| {
             let mut out = Vec::new();
             d.tokenize(s, search, hmm, fs, &mut out)?;
             Ok(out
@@ -354,7 +354,7 @@ impl Native {
                 .map(|(w, a, b)| (span(s, w), a, b))
                 .collect())
         })?;
-        build(py, &x, results, |py, doc, (p, a, b), c| {
+        build(py, &unicode_sentence, results, |py, doc, (p, a, b), c| {
             Ok(PyTuple::new(
                 py,
                 [

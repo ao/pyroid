@@ -599,6 +599,14 @@ def enable_parallel(processnum: int | None = None) -> None:
     As in jieba, only those two functions change (on :data:`dt`). pyroid uses
     threads, at most ``processnum`` (the whole pool by default), and works on
     every platform; the words are the same.
+
+    Args:
+        processnum: The most threads to cut with; ``None`` for the whole pool.
+
+    Raises:
+        ValueError: ``processnum`` is below 1 (``"Number of processes must be
+            at least 1"``, as jieba's ``multiprocessing.Pool``).
+        TypeError: ``processnum`` is not an int (as jieba's ``Pool``).
     """
 
 def disable_parallel() -> None:

@@ -18,6 +18,7 @@ segmented in parallel on pyroid's shared thread pool (``threads=``).
 from __future__ import annotations
 
 import logging
+import operator
 import os
 import re
 import threading
@@ -586,6 +587,11 @@ def enable_parallel(processnum: int | None = None) -> None:
     """
     global _parallel_threads, cut, cut_for_search
     dt.check_initialized()
+    if processnum is not None:
+        # jieba's multiprocessing.Pool(processnum) raises these, here and not at the next cut.
+        if processnum < 1:
+            raise ValueError("Number of processes must be at least 1")
+        processnum = operator.index(processnum)
     _parallel_threads = processnum
     cut = _pcut
     cut_for_search = _pcut_for_search
