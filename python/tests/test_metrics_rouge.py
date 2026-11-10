@@ -581,12 +581,66 @@ def test_score_batch_pyarrow(pa: Any) -> None:
         assert [canon(d) for d in scorer.score_batch(col, pa.array(predictions))] == want
 
 
-def test_score_batch_arrow_nulls(pa: Any) -> None:
-    scorer = rouge_scorer.RougeScorer(["rouge1"])
-    with pytest.raises(ValueError, match=r"predictions\[1\] is null"):
-        scorer.score_batch(["a", "b"], pa.array(["a", None]))
-    with pytest.raises(ValueError, match=r"targets\[0\] is null"):
-        scorer.score_batch(_testing.column([None]), ["x"])
+@pytest.mark.filterwarnings("ignore::pyroid.FallbackWarning")
+@pytest.mark.parametrize(
+    "kwargs",
+    [{}, {"split_summaries": True}, {"tokenizer": Whitespace()}],
+    ids=["native", "split_summaries", "custom_tokenizer"],
+)
+def test_score_batch_arrow_nulls_give_none(
+    pa: Any, request: pytest.FixtureRequest, kwargs: dict[str, Any]
+) -> None:
+    # An Arrow null on either side gives None for that pair; the other pairs are as score().
+    if kwargs.get("split_summaries"):
+        request.getfixturevalue("punkt")
+    targets = ["The cat sat. It ran.", None, "a b c", "x", None]
+    predictions = ["the cat ran. It sat.", "b c", None, "x y", None]
+    scorer = rouge_scorer.RougeScorer(["rouge1", "rougeLsum"], **kwargs)
+    want: list[Any] = [
+        None if t is None or p is None else canon(scorer.score(t, p))
+        for t, p in zip(targets, predictions, strict=True)
+    ]
+    for t_col, p_col in [
+        (pa.array(targets), pa.array(predictions)),
+        (pa.chunked_array([targets[:2], targets[2:]]), _testing.column(predictions)),
+    ]:
+        got = scorer.score_batch(t_col, p_col, threads=2)
+        assert [None if d is None else canon(d) for d in got] == want
+    assert scorer.score_batch(pa.array([None, None], pa.string()), ["a", "b"]) == [None, None]
+
+
+@pytest.mark.filterwarnings("ignore::pyroid.FallbackWarning")
+@pytest.mark.parametrize(
+    "kwargs",
+    [{}, {"split_summaries": True}, {"tokenizer": Whitespace()}],
+    ids=["native", "split_summaries", "custom_tokenizer"],
+)
+def test_score_batch_none_in_a_list_raises(kwargs: dict[str, Any]) -> None:
+    scorer = rouge_scorer.RougeScorer(["rouge1", "rougeLsum"], **kwargs)
+    with pytest.raises(pyroid.InputError, match="expected str at index 1, got NoneType") as info:
+        scorer.score_batch(["a", "b"], ["a", None])  # type: ignore[list-item]
+    assert isinstance(info.value, TypeError)
+    assert "while processing 'predictions'" in getattr(info.value, "__notes__", [])
+    with pytest.raises(pyroid.InputError, match="index 0") as info:
+        scorer.score_batch((None, "b"), ("a", "b"))  # type: ignore[arg-type]
+    assert "while processing 'targets'" in getattr(info.value, "__notes__", [])
+
+
+def test_score_batch_input_kinds(pa: Any) -> None:
+    # A list for every input kind; a single str is rejected (score() takes one pair).
+    targets, predictions = pairs(20, seed=6)
+    scorer = rouge_scorer.RougeScorer(["rouge2", "rougeL"])
+    want = [canon(scorer.score(t, p)) for t, p in zip(targets, predictions, strict=True)]
+    for t, p in [
+        (targets, predictions),
+        (tuple(targets), tuple(predictions)),
+        (pa.array(targets), pa.array(predictions, pa.large_string())),
+    ]:
+        got = scorer.score_batch(t, p)
+        assert type(got) is list
+        assert [None if d is None else canon(d) for d in got] == want
+    with pytest.raises(pyroid.InputError, match="not a single str"):
+        scorer.score_batch(["a"], "a")
 
 
 def test_score_batch_errors() -> None:
@@ -598,7 +652,7 @@ def test_score_batch_errors() -> None:
     with pytest.raises(pyroid.InputError, match="not a single str"):
         scorer.score_batch("abc", ["a"])
     with pytest.raises(pyroid.InputError):
-        scorer.score_batch(["a"], 3)  # type: ignore[arg-type]
+        scorer.score_batch(["a"], 3)  # type: ignore[call-overload]
     with pytest.raises(ValueError, match="threads"):
         scorer.score_batch(["a"], ["a"], threads=0)
     with pytest.raises(ValueError, match="threads"):

@@ -537,6 +537,60 @@ def test_wrong_item_types_raise_input_error() -> None:
         sb.corpus_bleu(5, [["a"]])  # type: ignore[arg-type]
 
 
+def _summaries(scores: list[Any]) -> list[Any]:
+    return [None if s is None else summary(s) for s in scores]
+
+
+@pytest.mark.parametrize("which", ["bleu", "chrf"])
+@pytest.mark.parametrize("kw", [{}, {"lowercase": True}, {"tokenize": "none"}, {"eps": True}])
+def test_sentence_batch_input_kinds(pa: Any, which: str, kw: dict[str, Any]) -> None:
+    # str, list, tuple of str or Arrow in; always a list out; Arrow nulls give None.
+    if which == "bleu":
+        if "eps" in kw:
+            kw = {"smooth_method": "floor"}
+        batch: Callable[..., Any] = sb.sentence_bleu_batch
+        one: Callable[..., Any] = sb.sentence_bleu
+    else:
+        kw = {"eps_smoothing": True} if "eps" in kw else {"word_order": 2}
+        batch, one = sb.sentence_chrf_batch, sb.sentence_chrf
+    hyps: list[str | None] = ["The cat sat .", None, "a b c d", "", None, "x Y z"]
+    refs: list[list[str | None]] = [
+        ["the cat sat .", "b", None, "", "q", "x y"],
+        ["a cat", None, "a b c", "", None, None],
+    ]
+    want = [
+        None if h is None else summary(one(h, [r[i] for r in refs if r[i] is not None], **kw))
+        for i, h in enumerate(hyps)
+    ]
+    full = [i for i, h in enumerate(hyps) if h is not None]
+    dense = [hyps[i] for i in full]
+    dense_refs = [[r[i] for i in full] for r in refs]
+    assert _summaries(batch(dense, dense_refs, **kw)) == [want[i] for i in full]
+    assert _summaries(batch(tuple(dense), [tuple(r) for r in dense_refs], **kw)) == [
+        want[i] for i in full
+    ]
+    for h_col, r_cols in [
+        (pa.array(hyps, pa.string()), [pa.array(r, pa.string()) for r in refs]),
+        (pa.chunked_array([hyps[:3], hyps[3:]], pa.large_string()), [refs[0], pa.array(refs[1])]),
+    ]:
+        got = batch(h_col, r_cols, threads=2, **kw)
+        assert type(got) is list
+        assert _summaries(got) == want
+    assert batch(pa.array([None, None], pa.string()), [["a", "b"]], **kw) == [None, None]
+    with pytest.raises(pyroid.InputError, match="hypotheses must be a sequence"):
+        batch("a b", [["a b"]], **kw)
+
+
+@pytest.mark.parametrize("kw", [{}, {"lowercase": True}, {"tokenize": "none"}])
+def test_sentence_batch_none_hypothesis_raises(kw: dict[str, Any]) -> None:
+    for batch in (sb.sentence_bleu_batch, sb.sentence_chrf_batch):
+        args = {} if batch is sb.sentence_chrf_batch else kw
+        with pytest.raises(pyroid.InputError, match=r"hypotheses\[1\] must be a str") as info:
+            batch(["a", None], [["a", "b"]], **args)  # type: ignore[list-item]
+        assert isinstance(info.value, TypeError)
+        assert "while processing 'hypotheses'" in getattr(info.value, "__notes__", [])
+
+
 def test_changed_orders_after_caching_raise() -> None:
     m = sb.BLEU(references=[["a b"]])
     m.max_ngram_order = 2

@@ -72,7 +72,9 @@ Differences from sacrebleu:
 from abc import ABCMeta
 from collections import Counter
 from collections.abc import KeysView, Mapping, Sequence
-from typing import IO, Any, ClassVar, Final, Protocol
+from typing import IO, Any, ClassVar, Final, Protocol, overload
+
+from pyroid._typing import ArrowStrings
 
 __all__ = [
     "BLEU",
@@ -580,9 +582,10 @@ def sentence_bleu(
         The score.
     """
 
+@overload
 def sentence_bleu_batch(
     hypotheses: Sequence[str],
-    references: Sequence[Sequence[str | None]],
+    references: Sequence[Sequence[str | None] | ArrowStrings],
     smooth_method: str = "exp",
     smooth_value: float | None = None,
     lowercase: bool = False,
@@ -596,10 +599,13 @@ def sentence_bleu_batch(
     Element ``i`` equals ``sentence_bleu(hypotheses[i], [r[i] for r in references], ...)``.
 
     Args:
-        hypotheses: The hypothesis strings.
+        hypotheses: The hypothesis strings: a list or tuple of str, or an Arrow string
+            array/column (pyarrow, polars, ``pyroid.Column``, ...). Not a single str: use
+            :func:`sentence_bleu` for one hypothesis.
         references: Reference streams, as for :func:`corpus_bleu`: ``references[k][i]`` is
             the k-th reference of hypothesis i (``None`` for a missing one). Every stream
-            must have one entry per hypothesis.
+            must have one entry per hypothesis. A stream may be an Arrow string column, whose
+            nulls are missing references.
         smooth_method: ``"floor"``, ``"add-k"``, ``"exp"`` or ``"none"``.
         smooth_value: The value for ``floor`` and ``add-k`` (None: the default).
         lowercase: Lowercase the data.
@@ -609,14 +615,29 @@ def sentence_bleu_batch(
             ``1`` the calling thread.
 
     Returns:
-        One score per hypothesis.
+        A list (for any input kind) with one score per hypothesis, and ``None`` for a null
+        in an Arrow ``hypotheses`` column.
 
     Raises:
-        pyroid.InputError: ``references`` is not a sequence of streams (e.g. a flat list of
-            str: pass ``[refs]``).
+        pyroid.InputError: ``hypotheses`` is not a sequence of str or an Arrow string column,
+            or a list or tuple of hypotheses holds ``None`` (the message gives its index), or
+            ``references`` is not a sequence of streams (e.g. a flat list of str: pass
+            ``[refs]``).
         ValueError: No streams, or a stream's length differs from the hypotheses'.
     """
 
+@overload
+def sentence_bleu_batch(
+    hypotheses: ArrowStrings,
+    references: Sequence[Sequence[str | None] | ArrowStrings],
+    smooth_method: str = "exp",
+    smooth_value: float | None = None,
+    lowercase: bool = False,
+    tokenize: str = "13a",
+    use_effective_order: bool = True,
+    *,
+    threads: int | None = None,
+) -> list[BLEUScore | None]: ...
 def corpus_chrf(
     hypotheses: Sequence[str],
     references: Sequence[Sequence[str | None]],
@@ -672,9 +693,10 @@ def sentence_chrf(
         The score.
     """
 
+@overload
 def sentence_chrf_batch(
     hypotheses: Sequence[str],
-    references: Sequence[Sequence[str | None]],
+    references: Sequence[Sequence[str | None] | ArrowStrings],
     char_order: int = 6,
     word_order: int = 0,
     beta: int = 2,
@@ -688,7 +710,7 @@ def sentence_chrf_batch(
     Element ``i`` equals ``sentence_chrf(hypotheses[i], [r[i] for r in references], ...)``.
 
     Args:
-        hypotheses: The hypothesis strings.
+        hypotheses: The hypothesis strings, as for :func:`sentence_bleu_batch`.
         references: Reference streams (see :func:`sentence_bleu_batch`).
         char_order: Character n-gram order.
         word_order: Word n-gram order. If equals to 2, the metric is referred to as chrF++.
@@ -700,13 +722,26 @@ def sentence_chrf_batch(
             ``1`` the calling thread.
 
     Returns:
-        One score per hypothesis.
+        A list (for any input kind) with one score per hypothesis, and ``None`` for a null
+        in an Arrow ``hypotheses`` column.
 
     Raises:
-        pyroid.InputError: ``references`` is not a sequence of streams.
+        pyroid.InputError: As for :func:`sentence_bleu_batch`.
         ValueError: No streams, or a stream's length differs from the hypotheses'.
     """
 
+@overload
+def sentence_chrf_batch(
+    hypotheses: ArrowStrings,
+    references: Sequence[Sequence[str | None] | ArrowStrings],
+    char_order: int = 6,
+    word_order: int = 0,
+    beta: int = 2,
+    remove_whitespace: bool = True,
+    eps_smoothing: bool = False,
+    *,
+    threads: int | None = None,
+) -> list[CHRFScore | None]: ...
 def extract_word_ngrams(tokens: list[str], n: int) -> Counter[str]:
     """Counts of the word n-grams of order ``n`` of ``tokens`` (joined with spaces).
 

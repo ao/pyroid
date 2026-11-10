@@ -11,7 +11,8 @@
 //! - `rouge_stem(word)`: nltk's Porter `stem` for an ASCII word (tests only).
 //! - `rouge_score(types, target, prediction, use_stemmer, target_sentences=None,
 //!   prediction_sentences=None)`: `RougeScorer.score` with the default tokenizer.
-//! - `rouge_score_batch(...)`: the same over many pairs, on the shared pool.
+//! - `rouge_score_batch(...)`: the same over many pairs, on the shared pool
+//!   (`None` for a pair with an Arrow null).
 //! - `rouge_score_tokens(jobs, *, threads=None)`: scores from token lists.
 //!
 //! The scoring functions return `None` for `rouge_types` they can't parse
@@ -26,7 +27,8 @@ use pyo3::types::{PyDict, PyFloat, PyList, PyString, PyTuple};
 use pyroid_core::metrics::rouge::{self as kernel, RougeType, Score, Scorer, TypeError};
 use pyroid_core::par;
 
-use crate::batch::{BatchError, DocCost, detach_one};
+use super::batch_arg;
+use crate::batch::{BatchError, DocCost, detach_one, rows};
 use crate::errors::{input_error, type_name};
 use crate::input::{TextInput, Threads, ThreadsArg, text_arg};
 
@@ -217,23 +219,6 @@ fn rouge_score<'py>(
     Ok(Some(builder.dict(&keys, &results)?))
 }
 
-/// A batch argument: a list/tuple of str or an Arrow string array (not a str).
-fn batch_texts(
-    obj: &Bound<'_, PyAny>,
-    threads_arg: Option<Threads>,
-    name: &str,
-) -> PyResult<TextInput> {
-    if obj.is_instance_of::<PyString>() {
-        return Err(input_error(
-            obj.py(),
-            format!(
-                "{name} must be a list or tuple of str or an Arrow string array, not a single str"
-            ),
-        ));
-    }
-    text_arg(obj, threads_arg, name)
-}
-
 fn batch_len(input: &TextInput) -> usize {
     match input {
         TextInput::Str(_) => 1,
@@ -242,63 +227,10 @@ fn batch_len(input: &TextInput) -> usize {
     }
 }
 
-/// Why a batch failed while detached.
-enum Fail {
-    Batch(BatchError),
-    Null { side: &'static str, index: usize },
-}
-
-fn null_error(side: &str, index: usize) -> PyErr {
-    PyValueError::new_err(format!(
-        "score_batch: {side}[{index}] is null; ROUGE needs a str for every pair \
-         (fill nulls first, e.g. pyarrow.compute.fill_null(column, \"\"))"
-    ))
-}
-
-impl From<BatchError> for Fail {
-    fn from(e: BatchError) -> Self {
-        Self::Batch(e)
-    }
-}
-
-/// Every document of `input` as UTF-8 (`None` for an Arrow null).
-fn rows(input: &TextInput) -> Result<Vec<Option<&str>>, BatchError> {
-    Ok(match input {
-        TextInput::Str(s) => vec![Some(&**s)],
-        TextInput::List(d) | TextInput::Tuple(d) => d.iter().map(|s| Some(&**s)).collect(),
-        TextInput::Arrow(strings) => {
-            let mut out = Vec::with_capacity(strings.len());
-            for (c, chunk) in strings.chunks.iter().enumerate() {
-                for row in 0..chunk.len() {
-                    out.push(match chunk.get(row) {
-                        None => None,
-                        Some(Ok(s)) => Some(s),
-                        Some(Err(err)) => {
-                            return Err(BatchError::BadUtf8 {
-                                chunk: c,
-                                row,
-                                bytes: chunk.bytes(row).unwrap_or_default().to_vec(),
-                                err,
-                            });
-                        }
-                    });
-                }
-            }
-            out
-        }
-    })
-}
-
-fn non_null<'a>(rows: Vec<Option<&'a str>>, side: &'static str) -> Result<Vec<&'a str>, Fail> {
-    rows.into_iter()
-        .enumerate()
-        .map(|(index, r)| r.ok_or(Fail::Null { side, index }))
-        .collect()
-}
-
 /// `[RougeScorer(...).score(t, p) for t, p in zip(targets, predictions)]`
 /// with the default tokenizer, on the shared pool; `None` if `rouge_types`
-/// need rouge-score's Python loop.
+/// need rouge-score's Python loop. A pair with an Arrow null on either side
+/// gives `None`.
 #[pyfunction]
 #[pyo3(signature = (rouge_types, targets, predictions, use_stemmer, target_sentences = None, prediction_sentences = None, *, threads = None))]
 #[allow(clippy::too_many_arguments)]
@@ -317,8 +249,8 @@ fn rouge_score_batch<'py>(
     };
     let builder = ScoreBuilder::get(py)?;
     let for_texts = ThreadsArg::for_texts(threads.as_ref());
-    let targets = batch_texts(targets, for_texts, "targets")?;
-    let predictions = batch_texts(predictions, for_texts, "predictions")?;
+    let targets = batch_arg(targets, for_texts, "targets")?;
+    let predictions = batch_arg(predictions, for_texts, "predictions")?;
     let t = crate::input::threads(ThreadsArg::resolve(threads)?);
     let n = batch_len(&targets);
     if batch_len(&predictions) != n {
@@ -340,42 +272,24 @@ fn rouge_score_batch<'py>(
     };
     let scorer = Scorer::new(types, use_stemmer);
     let results = py
-        .detach(|| -> Result<Vec<Vec<Score>>, Fail> {
-            let tr = non_null(rows(&targets)?, "targets")?;
-            let pr = non_null(rows(&predictions)?, "predictions")?;
-            par::map(n, t, |i| {
+        .detach(|| -> Result<Vec<Option<Vec<Score>>>, BatchError> {
+            let tr = rows(&targets)?;
+            let pr = rows(&predictions)?;
+            Ok(par::map(n, t, |i| {
+                let (target, prediction) = (tr[i]?, pr[i]?);
                 let s = sentences.map(|(ts, ps)| (ts[i].as_slice(), ps[i].as_slice()));
-                score_one(&scorer, tr[i], pr[i], s)
-            })
-            .map_err(|e| Fail::Batch(e.into()))
+                Some(score_one(&scorer, target, prediction, s))
+            })?)
         })
-        .map_err(|e| match e {
-            Fail::Batch(e) => e.into_pyerr(py),
-            Fail::Null { side, index } => null_error(side, index),
-        })?;
+        .map_err(|e| e.into_pyerr(py))?;
     let dicts = results
         .iter()
-        .map(|s| builder.dict(&keys, s))
+        .map(|s| match s {
+            Some(s) => Ok(builder.dict(&keys, s)?.into_any()),
+            None => Ok(py.None().into_bound(py)),
+        })
         .collect::<PyResult<Vec<_>>>()?;
     Ok(Some(PyList::new(py, dicts)?))
-}
-
-/// The documents of a batch argument (a list/tuple of str or an Arrow string
-/// array) as a list of str, for the paths that process them in Python.
-/// Arrow nulls raise `ValueError` as in `rouge_score_batch`.
-#[pyfunction]
-fn rouge_texts<'py>(
-    py: Python<'py>,
-    texts: &Bound<'py, PyAny>,
-    name: &str,
-) -> PyResult<Bound<'py, PyList>> {
-    let input = batch_texts(texts, None, name)?;
-    let docs = rows(&input).map_err(|e| e.into_pyerr(py))?;
-    let mut out = Vec::with_capacity(docs.len());
-    for (i, d) in docs.into_iter().enumerate() {
-        out.push(PyString::new(py, d.ok_or_else(|| null_error(name, i))?));
-    }
-    PyList::new(py, out)
 }
 
 /// A token list (exact list or tuple of str instances) as UTF-8; `None` if
@@ -490,6 +404,5 @@ pub fn add(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rouge_score, m)?)?;
     m.add_function(wrap_pyfunction!(rouge_score_batch, m)?)?;
     m.add_function(wrap_pyfunction!(rouge_score_tokens, m)?)?;
-    m.add_function(wrap_pyfunction!(rouge_texts, m)?)?;
     Ok(())
 }

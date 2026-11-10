@@ -62,7 +62,7 @@ Differences from rouge-score
 """
 
 from collections.abc import Iterable, Sequence
-from typing import Any, Final, Protocol, type_check_only
+from typing import Any, Final, Protocol, overload, type_check_only
 
 from pyroid._typing import ArrowStrings
 from pyroid.metrics import scoring
@@ -158,10 +158,11 @@ class RougeScorer(scoring.BaseScorer):
                 surrogate (default tokenizer).
         """
 
+    @overload
     def score_batch(
         self,
-        targets: Sequence[str] | ArrowStrings,
-        predictions: Sequence[str] | ArrowStrings,
+        targets: Sequence[str],
+        predictions: Sequence[str],
         *,
         threads: int | None = None,
     ) -> list[dict[str, scoring.Score]]:
@@ -177,25 +178,36 @@ class RougeScorer(scoring.BaseScorer):
         Args:
             targets: The targets: a list or tuple of str, or an Arrow string
                 array/column (``string``, ``large_string`` or ``string_view``;
-                pyarrow, polars, ``pyroid.Column``, ...).
+                pyarrow, polars, ``pyroid.Column``, ...). Not a single str:
+                use :meth:`score` for one pair.
             predictions: The predictions, as for ``targets``, of the same length.
             threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at
                 most ``n`` tasks at once; ``1`` runs on the calling thread.
 
         Returns:
-            One ``dict[str, Score]`` per pair, in order.
+            A list (for any input kind) with one ``dict[str, Score]`` per pair,
+            in order, and ``None`` for a pair with an Arrow null on either side.
 
         Raises:
-            ValueError: ``targets`` and ``predictions`` differ in length, an
-                Arrow value is null (ROUGE needs a str per pair: fill nulls
-                first), or a rouge type is invalid (raised before any pair is
-                scored, even for an empty batch).
+            ValueError: ``targets`` and ``predictions`` differ in length, or a
+                rouge type is invalid (raised before any pair is scored, even
+                for an empty batch).
             pyroid.InputError: ``targets`` or ``predictions`` is not a list,
-                tuple or Arrow string array (a single str is rejected), or
+                tuple or Arrow string array (a single str is rejected), a list
+                or tuple holds ``None`` (the message gives its index), or
                 ``threads`` is not an int.
             UnicodeEncodeError: A str holds a lone surrogate.
             UnicodeDecodeError: An Arrow value is not valid UTF-8.
         """
+
+    @overload
+    def score_batch(
+        self,
+        targets: Sequence[str] | ArrowStrings,
+        predictions: Sequence[str] | ArrowStrings,
+        *,
+        threads: int | None = None,
+    ) -> list[dict[str, scoring.Score] | None]: ...
 
     _tokenizer: Any
     _split_summaries: Any
