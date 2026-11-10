@@ -100,8 +100,9 @@ lone surrogates.
 
 ## Many pages: `extract_batch`
 
-`extract_batch` is pyroid's addition. It runs `extract` over a list or tuple of pages on pyroid's
-thread pool, without the GIL, and returns the results in order:
+`extract_batch` is pyroid's addition. It runs `extract` over a list or tuple of pages, or an
+Arrow string column (a null gives `None`), on pyroid's thread pool, without the GIL, and returns
+the results in order, as a list (for a single str, `extract`'s result):
 
 ```python
 texts = trafilatura.extract_batch(pages, favor_precision=True, include_comments=False)
