@@ -2,8 +2,8 @@
 
 Text cleaning for LLM datasets, written in Rust. pyroid is a drop-in replacement for ftfy,
 fastText inference, datatrove's quality filters and dedup, Trafilatura, NLTK's tokenizers, jieba,
-datasketch, rouge-score, sacrebleu and json_repair, with the same API and the same output. It runs
-on CPython 3.11 to 3.15, including free-threaded 3.14t and 3.15t.
+datasketch, warcio, rouge-score, sacrebleu and json_repair, with the same API and the same output.
+It runs on CPython 3.11 to 3.15, including free-threaded 3.14t and 3.15t.
 
 !!! warning "Pre-release"
     pyroid 1.0 is not on PyPI yet. Until it is, `pip install pyroid` gives the unrelated 0.7.x

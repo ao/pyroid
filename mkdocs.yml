@@ -4,7 +4,7 @@
 # The API reference is generated from the .pyi stubs by mkdocstrings + griffe *without importing*
 # the extension (allow_inspection: false), so no Rust build is needed.
 site_name: pyroid
-site_description: Rust-fast text cleaning for LLM datasets. Drop-in for ftfy, fastText inference, datatrove's filters and dedup, Trafilatura, NLTK's tokenizers, jieba, datasketch, rouge-score, sacrebleu and json_repair.
+site_description: Text cleaning for LLM datasets, written in Rust. Drop-in replacements for ftfy, fastText inference, datatrove's filters and dedup, Trafilatura, NLTK's tokenizers, jieba, datasketch, warcio, rouge-score, sacrebleu and json_repair, with the same output.
 site_url: https://ao.github.io/pyroid/
 repo_url: https://github.com/ao/pyroid
 repo_name: ao/pyroid
