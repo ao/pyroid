@@ -177,7 +177,7 @@ step drops whichever pages take more than 1 s.
 
 pyroid's own code is MIT. The parts ported from other projects keep their licences, so the
 package's licence expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND
-PSF-2.0 AND Unicode-3.0`:
+PSF-2.0 AND Unicode-3.0 AND Zlib`:
 
 - Apache-2.0 for the ftfy, datatrove, rouge-score, NLTK (Porter stemmer and tokenizers),
   sacrebleu, Trafilatura, SudachiPy and warcio ports;
@@ -188,6 +188,8 @@ PSF-2.0 AND Unicode-3.0`:
 - PSF-2.0 for CPython's `ipaddress`;
 - ISC for anyascii's data;
 - Unicode-3.0 for Unicode Character Database data.
+- Zlib for zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.
 
 The [NOTICE](https://github.com/ao/pyroid/blob/main/NOTICE) file lists the ported files, and the
-licence texts are in [LICENSES/](https://github.com/ao/pyroid/tree/main/LICENSES).
+licence texts are in [LICENSES/](https://github.com/ao/pyroid/tree/main/LICENSES), with
+those of the Rust crates the extension links in `THIRD-PARTY-RUST.txt` there.

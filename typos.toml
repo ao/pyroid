@@ -9,6 +9,7 @@ extend-exclude = [
   ".git/",
   # Generated.
   "Cargo.lock",
+  "LICENSES/THIRD-PARTY-RUST.txt",
   "crates/pyroid-core/src/ftfy/tables.rs",
   "crates/pyroid-core/src/filters/tables.rs",
   "crates/pyroid-core/src/metrics/sacrebleu/tables.rs",

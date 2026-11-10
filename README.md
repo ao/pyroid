@@ -194,7 +194,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 pyroid's own code is MIT. The ported parts keep their licences, so the package's licence
-expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0`:
+expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND
+Zlib`:
 
 - Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK (the Porter stemmer and the
   tokenizers), sacrebleu, Trafilatura, SudachiPy and warcio;
@@ -206,5 +207,8 @@ expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND 
 - PSF-2.0: CPython's `ipaddress` (IPv6 parsing);
 - ISC: anyascii's transliteration data;
 - Unicode-3.0: data from the Unicode Character Database.
+- Zlib: zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.
 
 See [LICENSE](LICENSE), [LICENSES/](LICENSES) and [NOTICE](NOTICE), which lists the ported files.
+[LICENSES/THIRD-PARTY-RUST.txt](LICENSES/THIRD-PARTY-RUST.txt) has the licences of the Rust crates the
+extension links.
