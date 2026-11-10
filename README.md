@@ -10,11 +10,12 @@
 pyroid is a Rust implementation of the Python libraries used to clean LLM training data and score
 model output, with the same API and the same output.
 
-From Common Crawl WARC files to deduplicated documents, datatrove's FineWeb pipeline runs 8.4×
-faster with pyroid's steps: 104 s instead of 871 s on 8 workers, for 171,595 pages in 8 WARC files
-of CC-MAIN-2026-39 on AWS EC2 c7i.4xlarge
+From Common Crawl WARC files to deduplicated documents, datatrove's FineWeb pipeline runs 9.5×
+faster with pyroid's steps in datatrove (89.4 s instead of 848.3 s on 8 workers), and
+`pyroid clean --recipe fineweb-warc` runs it 10.7× faster (79.6 s), for 171,595 pages in 8 WARC
+files of CC-MAIN-2026-39 on AWS EC2 c7i.4xlarge
 ([benchmarks](https://ao.github.io/pyroid/benchmarks/#from-warc-files-datatroves-fineweb-pipeline)).
-It keeps the same documents, apart from the pages stock datatrove drops at its 1 s extraction
+Both keep the same documents, apart from the pages stock datatrove drops at its 1 s extraction
 timeout.
 
 On 100,000 FineWeb documents, with the text already extracted, pyroid's cleaning chain is 27×
@@ -80,7 +81,7 @@ Each module is tested against the library it replaces, on pinned real data and w
 property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). Every suite
 runs on Linux aarch64. The ftfy, fastText, filters, dedup, metrics and json_repair suites also ran
 natively on AWS EC2 x86_64 and aarch64 (c7i.4xlarge and c8g.4xlarge), and the Trafilatura pages
-on x86_64. macOS and Windows are checked in CI before each release.
+and the warc suite on x86_64. macOS and Windows are checked in CI before each release.
 
 Where a module meets an option or input it doesn't port, it hands the call to the real library
 with a `pyroid.FallbackWarning`, or raises. It never returns a different result silently.
@@ -116,7 +117,8 @@ one process:
 
 With pyroid's stages swapped into datatrove's own executor, the chain ran 11.2× faster at 8
 processes on the dev slice and 13.6× on 100k documents. From WARC files, where text extraction
-takes most of the time, the whole pipeline ran 8.4× faster at 8 workers and 9.0× at one.
+takes most of the time, the whole pipeline ran 9.5× faster at 8 workers with pyroid's steps, the
+WARC reader included, and 10.7× as `pyroid clean --recipe fineweb-warc`.
 
 The other modules have only been measured in a Docker VM on a Mac so far, so these numbers are
 indicative (one thread unless stated):

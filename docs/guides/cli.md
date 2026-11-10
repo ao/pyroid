@@ -259,8 +259,9 @@ $ pyroid clean warc/ fineweb.parquet --recipe fineweb-warc --lid-model lid.176.b
   does, and faust-cchardet and python-magic (with the libmagic library) for the decoding, as
   datatrove's reader does. trafilatura, warcio and spaCy are not needed.
 
-TODO(P12-EC2): wall and CPU time on 8 CC-MAIN-2026-39 WARC files (AWS EC2 c7i.4xlarge), against
-stock datatrove.
+On 8 CC-MAIN-2026-39 WARC files (AWS EC2 c7i.4xlarge, `--workers 8`), the recipe took 79.6 s
+(600 CPU s), where stock datatrove 0.10.1 took 848.3 s (6,593 CPU s), and kept the same documents
+as datatrove with pyroid's steps ([details](warc.md#speed)).
 
 ## Inputs and outputs
 

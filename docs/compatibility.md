@@ -275,9 +275,18 @@ headers, payloads, offsets, `fh.read()` and `fh.tell()` calls, digest results, s
 warnings and exceptions (type and message), and the same documents out of datatrove's reader; for
 `pyroid.patch("warcio")`, the same traces from warcio's own names and datatrove's own reader.
 
-TODO(P12-parity): the counts of the parity/ warc suite (Common Crawl slices of 16 crawls,
-warcio's own test files, seeded synthetic families) and of `pyroid_parity.warc_scale` over 8
-whole CC-MAIN-2026-39 files (AWS EC2 c7i.4xlarge).
+The `parity/` warc suite (`pytest -m warc --impl pyroid.warc --parity-limit 0`) compares 31,291
+record traces per implementation, under up to 29 iterator options, read plans and openers, over
+34 Common Crawl slices of 16 crawls from 2013 to 2026 (WARC, WET, WAT and a 2012 ARC file; 86.9
+MB), warcio's 16 test files, 1,085 seeded synthetic files in 13 families (framing, truncation,
+bit flips, lengths, headers, HTTP, chunked, encodings, record types, digests, ARC, charsets, big
+records), 120 variants of the slices and Hypothesis-generated WARC streams, plus datatrove's
+`process_record`, `WarcReader` and executor runs: no differences, in a Docker VM (aarch64,
+CPython 3.13, and 3.14t with the GIL off) and natively on AWS EC2 c7i.4xlarge (x86_64). On that
+machine, `pyroid_parity.warc_scale` compared every record and document of 15 whole files (8
+CC-MAIN-2026-39 WARC files; WARC files of 2016-40 and 2019-35, WET files of 2013-20 and 2023-50,
+WAT files of 2018-30 and 2026-43, and the 2012 ARC file): 1,169,108 records and 366,199 documents
+in 74 jobs, all the same.
 
 - CPython's `gzip.GzipFile` read path, as datatrove reads `.warc.gz` files, is emulated per
   interpreter: it gave CPython's bytes and errors on all 4,910 cases on CPython 3.11 to 3.15.

@@ -151,8 +151,29 @@ the iterator's arguments are read once (changing `it.no_record_parse` later has 
 
 ## Speed
 
-TODO(P12-EC2): the reader alone and FineWeb end to end, on 8 Common Crawl files, from
-`bench/fineweb_warc.py reader` and `cli` on AWS EC2.
+On AWS EC2 c7i.4xlarge (Intel Xeon Platinum 8488C), CPython 3.13.18, over 8 CC-MAIN-2026-39 WARC
+files (7.5 GB, 172,376 HTML documents), from `bench/fineweb_warc.py reader` on one core:
 
-On 100 MB of a CC-MAIN-2026-39 WARC file (Docker VM, indicative), `iter_documents` took 0.67 s,
-where warcio over `gzip.open` with datatrove's `process_record` took 2.2 s.
+| reader | CPU s | per file |
+|---|---:|---:|
+| warcio 1.8.2 over `gzip.open`, datatrove's `process_record` | 132.1 | 16.5 |
+| `pyroid.warc.iter_documents` | 64.5 | 8.1 |
+| `pyroid.warc.iter_batches` | 85.1 | 10.6 |
+
+All three gave the same documents. Part of the time is the same in each: cchardet's guess for
+the pages that are not UTF-8, and making the Python strings.
+
+datatrove's FineWeb pipeline over the same files, end to end at 8 processes on the same machine
+(`bench/fineweb_warc.py`; results in `bench/results/aws-c7i.4xlarge/2026-11-10-warc/`):
+
+| run | wall s | CPU s | documents kept |
+|---|---:|---:|---:|
+| stock datatrove 0.10.1 | 848.3 | 6,593 | 23,503 |
+| datatrove with pyroid's steps, `WarcReader` included | 89.4 | 678 | 23,505 |
+| `pyroid clean --recipe fineweb-warc --workers 8` | 79.6 | 600 | 23,505 |
+
+At one process, datatrove with pyroid's steps took 640.5 s and the bench's native chain
+(`bench/fineweb_warc.py native`) 607.8 s, with the same documents.
+
+The two documents stock datatrove did not keep are pages its 1 s extraction timeout dropped. With
+those pages left out the same way, pyroid's documents equal stock datatrove's byte for byte.
