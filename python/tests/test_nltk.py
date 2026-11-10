@@ -231,10 +231,12 @@ def test_pyarrow(pa: Any, func: Callable[..., Any], type_name: str) -> None:
 def test_pyarrow_table(pa: Any, punkt_tab: Any) -> None:
     table = pa.table({"text": DOCS, "n": list(range(len(DOCS)))})
     assert pn.sent_tokenize(table.column("text")) == [pn.sent_tokenize(d) for d in DOCS]
-    with pytest.raises(pyroid.InputError):
+    with pytest.raises(pyroid.InputError) as info:
         pn.sent_tokenize(table)
-    with pytest.raises(pyroid.InputError):
+    assert "while processing 'text'" in info.value.__notes__
+    with pytest.raises(pyroid.InputError) as info:
         pn.TreebankWordTokenizer().tokenize(table)
+    assert "while processing 'text'" in info.value.__notes__
 
 
 def test_batch_spans_are_lists_of_tuples(punkt_tab: Any) -> None:

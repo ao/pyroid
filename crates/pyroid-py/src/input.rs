@@ -255,6 +255,12 @@ fn backed_range(
     })
 }
 
+/// `err` with the note PyO3 adds to the errors of converting argument `name`
+/// (`while processing '<name>'`), for arguments a function converts itself.
+pub fn arg_note(py: Python<'_>, err: PyErr, name: &str) -> PyErr {
+    with_note(py, err, format!("while processing '{name}'"))
+}
+
 /// [`TextInput::extract_with`] for a `#[pyfunction]` argument `name` taken as
 /// `&Bound<PyAny>` (so extraction can see `threads=`): errors get the note
 /// PyO3 adds to argument errors (`while processing '<name>'`).
@@ -263,8 +269,7 @@ pub fn text_arg(
     threads_arg: Option<Threads>,
     name: &str,
 ) -> PyResult<TextInput> {
-    TextInput::extract_with(obj, threads_arg)
-        .map_err(|e| with_note(obj.py(), e, format!("while processing '{name}'")))
+    TextInput::extract_with(obj, threads_arg).map_err(|e| arg_note(obj.py(), e, name))
 }
 
 impl TextInput {

@@ -23,7 +23,7 @@ use pyroid_core::par;
 
 use crate::batch::{BatchError, SINGLE_DOC_DETACH_BYTES, transform};
 use crate::errors::{PyroidError, input_error, type_name, with_note};
-use crate::input::{TextInput, Threads};
+use crate::input::{Threads, arg_note, text_arg};
 
 /// The interpreter's Unicode tables (set once by the shim at import).
 static PROPS: OnceLock<CharProps> = OnceLock::new();
@@ -473,10 +473,11 @@ fn repair_batch<'py>(
         .enumerate()
         .map(|(i, item)| {
             item.cast::<PyString>().cloned().map_err(|_| {
-                input_error(
+                let err = input_error(
                     py,
                     format!("expected str at index {i}, got {}", type_name(item)),
-                )
+                );
+                arg_note(py, err, "texts")
             })
         })
         .collect::<PyResult<_>>()?;
@@ -512,7 +513,7 @@ fn arrow_batch<'py>(
     dump: &DumpOptions,
     threads_arg: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let input = TextInput::extract_with(texts, threads_arg)?;
+    let input = text_arg(texts, threads_arg, "texts")?;
     // A failing row is remembered and raised once the batch is done.
     let failed: Mutex<Option<RepairError>> = Mutex::new(None);
     let column = transform(py, input, threads_arg, |s| {

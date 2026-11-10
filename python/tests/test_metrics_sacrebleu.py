@@ -523,10 +523,12 @@ def test_lone_surrogates_raise() -> None:
 
 
 def test_wrong_item_types_raise_input_error() -> None:
-    with pytest.raises(pyroid.InputError, match=r"hypotheses\[1\]"):
+    with pytest.raises(pyroid.InputError, match=r"hypotheses\[1\]") as info:
         sb.corpus_bleu(["a", 5], [["a", "b"]])  # type: ignore[list-item]
-    with pytest.raises(pyroid.InputError, match=r"references\[0\]\[1\]"):
+    assert "while processing 'hypotheses'" in info.value.__notes__
+    with pytest.raises(pyroid.InputError, match=r"references\[0\]\[1\]") as info:
         sb.corpus_chrf(["a", "b"], [["a", b"b"]])  # type: ignore[list-item]
+    assert "while processing 'references'" in info.value.__notes__
     with pytest.raises(pyroid.InputError, match="pass \\[refs\\]"):
         sb.sentence_bleu_batch(["a", "b"], ["a", "b"])
     with pytest.raises(ValueError, match="2 hypotheses"):

@@ -698,11 +698,16 @@ def test_non_str_item_names_the_index(
 @pytest.mark.parametrize("fn", [tr.anyascii, tr.is_ascii], ids=["anyascii", "is_ascii"])
 def test_non_str_item_with_lone_surrogates(fn: Callable[..., Any]) -> None:
     after: list[Any] = ["a\ud800", "ok", 3]
-    with pytest.raises(pyroid.InputError, match="index 2"):
+    with pytest.raises(pyroid.InputError, match="index 2") as info:
         fn(after)
+    assert "while processing 'string'" in _notes(info.value)
     before: list[Any] = ["ok", None, "a\ud800"]
-    with pytest.raises(pyroid.InputError, match="index 1"):
+    with pytest.raises(pyroid.InputError, match="index 1") as info:
         fn(tuple(before))
+    assert "while processing 'string'" in _notes(info.value)
+    with pytest.raises(pyroid.InputError) as info:
+        fn(3)
+    assert "while processing 'string'" in _notes(info.value)
 
 
 @all_funcs

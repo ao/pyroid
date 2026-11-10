@@ -26,7 +26,7 @@ use pyroid_core::fasttext::{self as ft, LoadError, PredictError, Prediction};
 
 use crate::batch::{DocCost, map_values, map_values_cost};
 use crate::errors::{PyroidError, with_note};
-use crate::input::{TextInput, Threads};
+use crate::input::{TextInput, Threads, arg_note};
 
 /// `get_line` result for one document: its word tokens and known labels.
 type LineTokens = (Vec<String>, Vec<String>);
@@ -200,9 +200,10 @@ fn newline_error(obj: &Bound<'_, PyAny>, msg: &'static str) -> Option<PyErr> {
     ))
 }
 
-/// The documents of a `predict`-like call. fastText's Python layer looks for
-/// `"\n"` in every line before the C++ conversion rejects a lone surrogate,
-/// so a newline anywhere wins over a surrogate anywhere.
+/// The documents of a `predict`-like call (argument `text`). fastText's
+/// Python layer looks for `"\n"` in every line before the C++ conversion
+/// rejects a lone surrogate, so a newline anywhere wins over a surrogate
+/// anywhere. Other errors get the note PyO3 adds to argument errors.
 fn text_input(
     obj: &Bound<'_, PyAny>,
     newline_msg: &'static str,
@@ -215,7 +216,7 @@ fn text_input(
                 return nl;
             }
         }
-        surrogate_as_type_error(py, e)
+        arg_note(py, surrogate_as_type_error(py, e), "text")
     })
 }
 

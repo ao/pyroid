@@ -95,11 +95,13 @@ def test_lone_surrogates_are_fixed_like_ftfy() -> None:
 
 @pytest.mark.parametrize("bad", [b"bytes", 3, None, ["ok", 3], ("ok", b"x"), {"a"}])
 def test_wrong_types_raise_input_error(bad: Any) -> None:
-    with pytest.raises(pyroid.InputError):
+    with pytest.raises(pyroid.InputError) as info:
         candidate.fix_text_batch(bad)
+    assert "while processing 'texts'" in info.value.__notes__
     surrogate_and_bad: list[Any] = ["\udc00", 3]
-    with pytest.raises(pyroid.InputError, match="index 1"):
+    with pytest.raises(pyroid.InputError, match="index 1") as info:
         candidate.fix_text_batch(surrogate_and_bad)
+    assert "while processing 'texts'" in info.value.__notes__
 
 
 @pytest.mark.parametrize("large", [False, True])

@@ -180,20 +180,20 @@ impl Punkt {
     }
 
     /// The sentences of each document (`span_tokenize` slices).
-    #[pyo3(signature = (x, /, realign = true, *, threads = None))]
+    #[pyo3(signature = (text, /, realign = true, *, threads = None))]
     fn sentences<'py>(
         &self,
         py: Python<'py>,
-        x: TextInput,
+        text: TextInput,
         realign: bool,
         threads: Option<Threads>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let results = map_values_cost(py, &x, threads, DocCost::Light, |s| {
+        let results = map_values_cost(py, &text, threads, DocCost::Light, |s| {
             self.inner.span_tokenize(s, realign)
         })?;
-        let texts = docs(&x);
+        let texts = docs(&text);
         let mut strs = Strs::new(py);
-        per_doc(py, &x, &results, |i, spans| {
+        per_doc(py, &text, &results, |i, spans| {
             let doc = texts[i].unwrap_or_default();
             // text[s:e] in Python: empty when the span is empty or inverted.
             let items: Vec<_> = spans
@@ -205,18 +205,18 @@ impl Punkt {
     }
 
     /// `span_tokenize` of each document, in code point offsets.
-    #[pyo3(signature = (x, /, realign = true, *, threads = None))]
+    #[pyo3(signature = (text, /, realign = true, *, threads = None))]
     fn spans<'py>(
         &self,
         py: Python<'py>,
-        x: TextInput,
+        text: TextInput,
         realign: bool,
         threads: Option<Threads>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let results = map_values_cost(py, &x, threads, DocCost::Light, |s| {
+        let results = map_values_cost(py, &text, threads, DocCost::Light, |s| {
             char_spans(s, self.inner.span_tokenize(s, realign))
         })?;
-        per_doc(py, &x, &results, |_, spans| span_list(py, spans))
+        per_doc(py, &text, &results, |_, spans| span_list(py, spans))
     }
 
     /// `text_contains_sentbreak(text)`.
@@ -254,16 +254,16 @@ impl Punkt {
         Ok((PyList::new(py, items)?, exc))
     }
 
-    /// `word_tokenize(x)`: the sentences, then `NLTKWordTokenizer` on each.
-    #[pyo3(signature = (x, /, *, threads = None))]
+    /// `word_tokenize(text)`: the sentences, then `NLTKWordTokenizer` on each.
+    #[pyo3(signature = (text, /, *, threads = None))]
     fn word_tokenize<'py>(
         &self,
         py: Python<'py>,
-        x: TextInput,
+        text: TextInput,
         threads: Option<Threads>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let v = self.version;
-        let results = map_values_cost(py, &x, threads, DocCost::Light, |s| {
+        let results = map_values_cost(py, &text, threads, DocCost::Light, |s| {
             let mut out = Tokens::new();
             for sent in self.inner.tokenize(s, true) {
                 let text = treebank::tokenize_text(sent, Flavor::Nltk, false, v);
@@ -274,7 +274,7 @@ impl Punkt {
             out
         })?;
         let mut strs = Strs::new(py);
-        per_doc(py, &x, &results, |_, t| t.list(&mut strs))
+        per_doc(py, &text, &results, |_, t| t.list(&mut strs))
     }
 }
 
@@ -318,19 +318,22 @@ fn decision<'py>(py: Python<'py>, d: &Decision, at: usize) -> PyResult<Bound<'py
     Ok(PyTuple::new(py, items)?.into_any())
 }
 
-/// The documents of `x` as strs (`None` for Arrow nulls), for the calls the
+/// The documents of `text` as strs (`None` for Arrow nulls), for the calls the
 /// package hands to NLTK one document at a time.
 #[pyfunction]
-fn texts(x: TextInput) -> Vec<Option<String>> {
-    docs(&x).into_iter().map(|d| d.map(str::to_owned)).collect()
+fn texts(text: TextInput) -> Vec<Option<String>> {
+    docs(&text)
+        .into_iter()
+        .map(|d| d.map(str::to_owned))
+        .collect()
 }
 
 /// `TreebankWordTokenizer().tokenize` (`nltk=False`) or `NLTKWordTokenizer().tokenize`.
 #[pyfunction]
-#[pyo3(name = "treebank", signature = (x, nltk, convert_parentheses, unicode_version, /, *, threads = None))]
+#[pyo3(name = "treebank", signature = (text, nltk, convert_parentheses, unicode_version, /, *, threads = None))]
 fn treebank_tokenize<'py>(
     py: Python<'py>,
-    x: TextInput,
+    text: TextInput,
     nltk: bool,
     convert_parentheses: bool,
     unicode_version: &str,
@@ -338,12 +341,12 @@ fn treebank_tokenize<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let v = version(unicode_version)?;
     let f = flavor(nltk);
-    let results = map_values_cost(py, &x, threads, DocCost::Light, |s| {
+    let results = map_values_cost(py, &text, threads, DocCost::Light, |s| {
         treebank::tokenize_text(s, f, convert_parentheses, v)
     })?;
     let mut strs = Strs::new(py);
-    per_doc(py, &x, &results, |_, text: &String| {
-        let items: Vec<_> = treebank::tokens(text).map(|t| strs.get(t)).collect();
+    per_doc(py, &text, &results, |_, tokenized: &String| {
+        let items: Vec<_> = treebank::tokens(tokenized).map(|t| strs.get(t)).collect();
         Ok(PyList::new(py, items)?.into_any())
     })
 }
@@ -402,13 +405,13 @@ fn regexp_native(pattern: &str, flags: u32) -> bool {
     regexp::Pattern::from_regex(pattern, flags).is_some()
 }
 
-/// `RegexpTokenizer(pattern, gaps, discard_empty, flags).tokenize(x)` for a
+/// `RegexpTokenizer(pattern, gaps, discard_empty, flags).tokenize(text)` for a
 /// native pattern (`regexp_native`).
 #[pyfunction]
-#[pyo3(signature = (x, pattern, gaps, discard_empty, flags, /, *, threads = None))]
+#[pyo3(signature = (text, pattern, gaps, discard_empty, flags, /, *, threads = None))]
 fn regexp_tokenize<'py>(
     py: Python<'py>,
-    x: TextInput,
+    text: TextInput,
     pattern: &str,
     gaps: bool,
     discard_empty: bool,
@@ -416,7 +419,7 @@ fn regexp_tokenize<'py>(
     threads: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let tok = regexp_tokenizer(pattern, gaps, discard_empty, flags)?;
-    let results = map_values_cost(py, &x, threads, DocCost::Light, |s| {
+    let results = map_values_cost(py, &text, threads, DocCost::Light, |s| {
         let mut out = Tokens::new();
         for t in tok.tokenize(s) {
             out.push(t);
@@ -424,7 +427,7 @@ fn regexp_tokenize<'py>(
         out
     })?;
     let mut strs = Strs::new(py);
-    per_doc(py, &x, &results, |_, t| t.list(&mut strs))
+    per_doc(py, &text, &results, |_, t| t.list(&mut strs))
 }
 
 /// `RegexpTokenizer(...).span_tokenize(text)` for a native pattern, in code
