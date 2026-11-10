@@ -139,8 +139,8 @@ indicative (one thread unless stated):
 | `nltk.sent_tokenize` / `word_tokenize` | NLTK 3.10.4 | 60× / 31× |
 | `filters`, FineWeb-2 settings, Chinese / Japanese | datatrove 0.10.1 | 44× / 7.8× |
 
-`pyroid.json_repair` runs in linear time where json_repair takes quadratic time, so its lead grows
-with the input. The [benchmarks page](https://ao.github.io/pyroid/benchmarks/) gives each row's
+`pyroid.json_repair` stays linear on 13 input families where json_repair takes quadratic time, so
+its lead grows with the input. The [benchmarks page](https://ao.github.io/pyroid/benchmarks/) gives each row's
 corpus, interpreter and source.
 
 ## Integrations

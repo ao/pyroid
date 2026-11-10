@@ -5,7 +5,7 @@
 missing quotes, single quotes, comments, trailing commas, truncation, markdown fences, prose
 around it, Python literals. Its parser is ported line by line, so pyroid returns the same
 strings, objects and repair logs as json_repair 0.64.5 ([parity](../compatibility.md#json_repair)).
-It also runs in linear time on the inputs where json_repair's lookaheads are quadratic, and deep
+It also stays linear on 13 input families where json_repair's lookaheads are quadratic, and deep
 nesting never overflows the stack.
 
 ## Change one import
@@ -133,7 +133,7 @@ json_repair.repair_json(b"{'a': 1")  # json_repair's result, and:
 
 json_repair's command line (`python -m json_repair`) and its internal modules are not provided.
 
-## Linear time on pathological input
+## Pathological input
 
 json_repair has lookaheads and string copies that make some inputs quadratic. The port keeps
 every heuristic but memoizes those scans, and stays linear on all 13 super-linear input families
@@ -149,6 +149,11 @@ on a Docker/OrbStack VM on Apple Silicon, indicative:
 | `single_quoted_apostrophes` (pairwise quote walk) | 2.04 / 1.05 | 64 KB: 15.9 s → 2.2 ms |
 | `records_missing_separators` (input rebuilt per split) | 1.47 / 0.97 | 1 MB: 6.1 s → 40 ms |
 | `nested_open_containers` (adversarial, `{[` × 60) | O(depth·n) / 1.02 | 512 KB: 12.5 s → 9.2 ms |
+
+These families come from reading json_repair's code. Fuzzing found one more that is quadratic in
+both: a 62-character run of garbage, repeated, takes pyroid 8, 32, 127 and 511 ms at 7,936, 15,872,
+31,744 and 63,488 characters, and json_repair 4.6 s at 15,872 and 18.4 s at 31,744 (Docker/OrbStack
+VM, indicative).
 
 ## Differences from json_repair
 
