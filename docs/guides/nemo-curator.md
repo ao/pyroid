@@ -120,4 +120,34 @@ hold one).
 
 ## Speed
 
-Numbers are added with the benchmark run.
+Measured in Docker (OrbStack VM on a Mac, aarch64, 12 vCPUs), CPython 3.12, NeMo Curator 1.4.0,
+pyroid release build; indicative, not a dedicated machine. Every timed output was first checked
+equal to NeMo's. Numbers and scripts: `bench/results/orbstack-aarch64-12cpu/2026-11-10-nemo/`,
+`bench/nemo_bench.py`, `bench/nemo_pipeline_bench.py`.
+
+Per stage, one CPU, FineWeb's dev slice (10,000 documents, batches of 1,000), NeMo's stage with
+NeMo's filter against pyroid's stage with the same NeMo filter (`threads=1`):
+
+| stage | NeMo | pyroid | |
+|---|---:|---:|---:|
+| the 28 filter stages of `heuristic_filter_english_pipeline.yaml`, in a row | 31.4 s | 1.89 s | 16.7x |
+| `RepeatingTopNGramsFilter`, n = 2, 3, 4 | 3.1 to 3.8 s | 0.22 to 0.31 s | 12 to 14x |
+| `RepeatingDuplicateNGramsFilter`, n = 5 to 10 | 1.5 to 1.9 s | 0.12 s | 12 to 16x |
+| the character-ratio filters (`NonAlphaNumeric`, `WhiteSpace`, `WordsWithoutAlphabets`, ...) | 0.2 to 2.3 s | 9 to 52 ms | 19 to 126x |
+| `UnicodeReformatter` (NeMo's defaults) | 5.0 s | 44 ms | 114x |
+| the string modifiers of NeMo's modifier benchmark | 0.04 to 1.2 s | 7 to 149 ms | 3 to 48x |
+| `FastTextLangId` (lid.176.bin) | 2.06 s | 1.46 s | 1.4x |
+
+fastText's own inference takes most of `FastTextLangId`'s time either way.
+
+The whole YAML pipeline in NeMo's executor (`XennaExecutor`, batch mode, a Ray cluster of 1 or 8
+CPUs), 100,000 FineWeb documents in 64 Parquet files, 95,774 kept by both:
+
+| CPUs | NeMo, wall | pyroid, wall | NeMo, stage time | pyroid, stage time |
+|---:|---:|---:|---:|---:|
+| 1 | 377 s | 88 s | 321 s | 24 s |
+| 8 | 139 s | 80 s | 537 s | 55 s |
+
+Stage time is the sum of NeMo's per-stage `process_time` over all workers. With pyroid most of the
+wall time is the executor's own: starting and stopping workers for each of the 28 stages took 65
+to 75 s here, whatever the stages do, so the end-to-end gain grows with the amount of data per run.

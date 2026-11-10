@@ -98,6 +98,8 @@ def run_one(variant: str, cpus: int) -> dict[str, Any]:
         wall = time.perf_counter() - t0
     finally:
         client.stop()
+        # Workers can outlive the cluster; leftovers would skew (or OOM) the next run.
+        subprocess.run(["ray", "stop", "--force"], capture_output=True, check=False)
     frames = [t.to_pandas() for t in tasks]
     rows = sorted((r.id, r.text) for f in frames for r in f[["id", "text"]].itertuples())
     digest = hashlib.sha256("\0".join(f"{i}\1{t}" for i, t in rows).encode()).hexdigest()
@@ -117,6 +119,38 @@ def run_one(variant: str, cpus: int) -> dict[str, Any]:
     }
 
 
+def quiet(limit: float = 3.0, wait_s: int = 1800) -> tuple[float, float, float]:
+    """Wait (up to ``wait_s``) for the 1-minute load average to drop below ``limit``; return it."""
+    t0 = time.time()
+    while os.getloadavg()[0] >= limit and time.time() - t0 < wait_s:
+        time.sleep(15)
+    return os.getloadavg()
+
+
+def meta() -> dict[str, Any]:
+    return {
+        "where": "Docker (OrbStack VM), indicative",
+        "machine": platform.machine(),
+        "python": platform.python_version(),
+        "nproc": os.cpu_count(),
+        "nemo_curator": md.version("nemo-curator"),
+        "pyroid": md.version("pyroid"),
+        "executor": "XennaExecutor(execution_mode=batch, cpu_allocation_percentage=1.0)",
+        "input": f"FineWeb sample/10BT, {sum(1 for _ in (STATE / 'in').glob('*.parquet'))} parquet files",
+    }
+
+
+def report(runs: list[dict[str, Any]], out: str | None) -> None:
+    for r in runs:
+        print(f"{r['cpus']} cpus {r['variant']:7} wall {r['wall_s']:8.1f} s  stages {r['stage_process_s']:8.1f} s  kept {r['kept']}")
+    for cpus in sorted({r["cpus"] for r in runs}):
+        digests = {r["digest"] for r in runs if r["cpus"] == cpus}
+        if len(digests) != 1:
+            sys.exit(f"{cpus} cpus: pyroid's kept documents differ from NeMo's")
+    if out:
+        Path(out).write_text(json.dumps({"meta": meta(), "runs": runs}, indent=1))
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -126,6 +160,10 @@ def main() -> None:
     r = sub.add_parser("run")
     r.add_argument("--variant", choices=("stock", "pyroid"), required=True)
     r.add_argument("--cpus", type=int, default=8)
+    r.add_argument("--json-out", help="also write the result here")
+    m = sub.add_parser("report", help="combine --json-out files, check the digests, write --out")
+    m.add_argument("files", nargs="+")
+    m.add_argument("--out")
     a = sub.add_parser("all")
     a.add_argument("--cpus", type=int, nargs="+", default=[1, 8])
     a.add_argument("--out")
@@ -133,20 +171,28 @@ def main() -> None:
     if args.cmd == "split":
         split(args.docs, args.files)
     elif args.cmd == "run":
-        print(json.dumps(run_one(args.variant, args.cpus)))
+        load = quiet()
+        rec = run_one(args.variant, args.cpus)
+        rec["loadavg_before"] = load
+        print(json.dumps(rec))
+        if args.json_out:
+            Path(args.json_out).write_text(json.dumps(rec))
+    elif args.cmd == "report":
+        report([json.loads(Path(f).read_text()) for f in args.files], args.out)
     else:
         results = []
         env = {**os.environ, "PYTHONHASHSEED": "0"}
         for cpus in args.cpus:
             for variant in ("stock", "pyroid"):
-                load = os.getloadavg()
-                out = subprocess.run(
-                    [sys.executable, __file__, "run", "--variant", variant, "--cpus", str(cpus)],
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
+                load = quiet()
+                cmd = [sys.executable, __file__, "run", "--variant", variant, "--cpus", str(cpus)]
+                for attempt in (1, 2):  # a Ray cluster start can fail transiently
+                    out = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
+                    if out.returncode == 0:
+                        break
+                    print(f"{cpus} cpus {variant}: attempt {attempt} failed:", out.stderr[-2000:], file=sys.stderr)
+                else:
+                    sys.exit(f"{cpus} cpus {variant}: failed twice")
                 rec = json.loads(out.stdout.strip().splitlines()[-1])
                 rec["loadavg_before"] = load
                 results.append(rec)

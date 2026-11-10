@@ -148,7 +148,7 @@ def main() -> None:
             nc_filters.ScoreFilter(FastTextLangId(args.model, 0.3)),
             ours.ScoreFilter(ours.FastTextLangId(args.model, 0.3), threads=args.threads),
         )
-    # The 25 heuristic stages of the YAML as one chain of stages, batch by batch.
+    # The 28 filter stages of the YAML as one chain of stages, batch by batch.
     chain_stock = [nc_filters.ScoreFilter(m()) for _, m in heuristic_stages()]
     chain_ours = [ours.ScoreFilter(m(), threads=args.threads) for _, m in heuristic_stages()]
 
