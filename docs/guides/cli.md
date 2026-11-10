@@ -511,20 +511,10 @@ kept = [(d["id"], t) for d, t, k in zip(docs, ann.text, ann.keep) if k]
 
 ## Speed
 
-On the FineWeb dev slice (10,000 documents), `pyroid clean --recipe fineweb` with 8 threads took
-8.7 s and 2.2 s in two runs. Stock datatrove 0.10.1's FineWeb pipeline with 8 processes, run in
-the same minute, took 498.8 s and 213.4 s, so `pyroid clean` used 58× and 99× less wall time.
-With one thread it took 11.4 s and 7.5 s (44× and 29× against the 8-process runs). These runs
-were on a Docker/OrbStack VM on Apple Silicon, indicative. The VM was heavily shared (load
-average 18 to 30), which inflates stock datatrove most, so each ratio comes from a same-minute
-pair (stock, then pyroid). pyroid's times include interpreter start-up, IO and writing both
-outputs. See [Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
-
-The benchmark's own timings on an AWS c7i.4xlarge (Intel Xeon Platinum 8488C) are the better
-guide to an unloaded machine. They time the same chain run natively in one process (the
-benchmark's `chain.py`, not the command line), with identical output to datatrove. On the dev
-slice it took 1.95 s with 8 threads, 18× faster than datatrove at 8 processes. On 100,000
-FineWeb documents it took 10.2 s, about 27× faster. See
-[Benchmarks](../benchmarks.md#end-to-end-the-fineweb-chain).
+On an AWS c7i.4xlarge (Intel Xeon Platinum 8488C), the FineWeb chain that `pyroid clean --recipe
+fineweb` runs took 1.95 s with 8 threads on the dev slice (10,000 documents), 18× faster than
+datatrove at 8 processes, and 10.2 s on 100,000 FineWeb documents, about 27× faster, with the
+same output. These are the benchmark's timings of the chain run in one process (its `chain.py`),
+not of the command line. See [Benchmarks](../benchmarks.md#end-to-end-the-fineweb-chain).
 
 API: [`pyroid.integrations.recipes` reference](../reference/integrations.md#recipes).
