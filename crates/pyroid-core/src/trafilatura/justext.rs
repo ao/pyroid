@@ -269,39 +269,36 @@ fn classify(ps: &[Paragraph], v: UnicodeVersion, jp: &JtParams) -> Vec<Class> {
         };
         ct.push(c);
     }
-    let neighbour = |ct: &[Class], i: usize, ignore_neargood: bool, forward: bool| -> Class {
-        let mut j = i;
-        loop {
-            if forward {
-                j += 1;
-                if j >= ct.len() {
-                    return Class::Bad;
-                }
-            } else {
-                if j == 0 {
-                    return Class::Bad;
-                }
-                j -= 1;
-            }
-            let c = ct[j];
-            if c == Class::Good || c == Class::Bad || (c == Class::NearGood && !ignore_neargood) {
-                return c;
-            }
-        }
-    };
+    revise(&mut ct);
+    ct
+}
+
+/// revise_paragraph_classification with no_headings=True: the short paragraphs, then the
+/// near-good ones, take a class from their neighbours.
+///
+/// jusText's _get_neighbour walks from a paragraph to the nearest one of the classes it stops
+/// on, which is quadratic over a run of short paragraphs (a page of many small blocks). The
+/// same answers come from one pass each way (see `neighbours`).
+fn revise(ct: &mut [Class]) {
+    let good_bad = |c: Class| c == Class::Good || c == Class::Bad;
+    let not_short = |c: Class| c != Class::Short;
+    // classify short: the loop reads the classes from before it (new_classes is applied after)
+    let prev_gb = neighbours(ct, good_bad, false);
+    let next_gb = neighbours(ct, good_bad, true);
+    let prev_ns = neighbours(ct, not_short, false);
+    let next_ns = neighbours(ct, not_short, true);
     let mut new_classes: Vec<(usize, Class)> = Vec::new();
     for i in 0..ct.len() {
         if ct[i] != Class::Short {
             continue;
         }
-        let prev = neighbour(&ct, i, true, false);
-        let next = neighbour(&ct, i, true, true);
+        let (prev, next) = (prev_gb[i], next_gb[i]);
         let c = if prev == Class::Good && next == Class::Good {
             Class::Good
         } else if prev == Class::Bad && next == Class::Bad {
             Class::Bad
-        } else if (prev == Class::Bad && neighbour(&ct, i, false, false) == Class::NearGood)
-            || (next == Class::Bad && neighbour(&ct, i, false, true) == Class::NearGood)
+        } else if (prev == Class::Bad && prev_ns[i] == Class::NearGood)
+            || (next == Class::Bad && next_ns[i] == Class::NearGood)
         {
             Class::Good
         } else {
@@ -312,19 +309,42 @@ fn classify(ps: &[Paragraph], v: UnicodeVersion, jp: &JtParams) -> Vec<Class> {
     for (i, c) in new_classes {
         ct[i] = c;
     }
-    for i in 0..ct.len() {
-        if ct[i] != Class::NearGood {
-            continue;
+    // revise neargood: this loop updates the classes as it goes. The paragraphs after the current
+    // one are not updated yet, so the next neighbours come from the classes the loop starts with;
+    // the previous neighbour is the nearest good or bad class before it, updated ones included.
+    let next_gb = neighbours(ct, good_bad, true);
+    let mut prev = Class::Bad;
+    for (c, &next) in ct.iter_mut().zip(&next_gb) {
+        if *c == Class::NearGood {
+            *c = if prev == Class::Bad && next == Class::Bad {
+                Class::Bad
+            } else {
+                Class::Good
+            };
         }
-        let prev = neighbour(&ct, i, true, false);
-        let next = neighbour(&ct, i, true, true);
-        ct[i] = if prev == Class::Bad && next == Class::Bad {
-            Class::Bad
-        } else {
-            Class::Good
-        };
+        if good_bad(*c) {
+            prev = *c;
+        }
     }
-    ct
+}
+
+/// jusText's _get_neighbour for every paragraph: the class of the nearest paragraph before it
+/// (after it with `forward`) whose class `stops` on, or bad when there is none.
+fn neighbours(ct: &[Class], stops: impl Fn(Class) -> bool, forward: bool) -> Vec<Class> {
+    let mut out = vec![Class::Bad; ct.len()];
+    let mut seen = Class::Bad;
+    let mut visit = |i: usize| {
+        out[i] = seen;
+        if stops(ct[i]) {
+            seen = ct[i];
+        }
+    };
+    if forward {
+        (0..ct.len()).rev().for_each(&mut visit);
+    } else {
+        (0..ct.len()).for_each(&mut visit);
+    }
+    out
 }
 
 /// The texts of the paragraphs jusText keeps, in order.
@@ -345,4 +365,140 @@ pub fn good_paragraphs(
         .filter(|(_, c)| *c == Class::Good)
         .map(|(p, _)| p.text)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// revise_paragraph_classification as jusText writes it, _get_neighbour walking to the
+    /// nearest paragraph of a class it stops on (this module's code before `neighbours`).
+    fn revise_walking(ct: &mut [Class]) {
+        let neighbour = |ct: &[Class], i: usize, ignore_neargood: bool, forward: bool| -> Class {
+            let mut j = i;
+            loop {
+                if forward {
+                    j += 1;
+                    if j >= ct.len() {
+                        return Class::Bad;
+                    }
+                } else {
+                    if j == 0 {
+                        return Class::Bad;
+                    }
+                    j -= 1;
+                }
+                let c = ct[j];
+                if c == Class::Good || c == Class::Bad || (c == Class::NearGood && !ignore_neargood)
+                {
+                    return c;
+                }
+            }
+        };
+        let mut new_classes: Vec<(usize, Class)> = Vec::new();
+        for i in 0..ct.len() {
+            if ct[i] != Class::Short {
+                continue;
+            }
+            let prev = neighbour(ct, i, true, false);
+            let next = neighbour(ct, i, true, true);
+            let c = if prev == Class::Good && next == Class::Good {
+                Class::Good
+            } else if prev == Class::Bad && next == Class::Bad {
+                Class::Bad
+            } else if (prev == Class::Bad && neighbour(ct, i, false, false) == Class::NearGood)
+                || (next == Class::Bad && neighbour(ct, i, false, true) == Class::NearGood)
+            {
+                Class::Good
+            } else {
+                Class::Bad
+            };
+            new_classes.push((i, c));
+        }
+        for (i, c) in new_classes {
+            ct[i] = c;
+        }
+        for i in 0..ct.len() {
+            if ct[i] != Class::NearGood {
+                continue;
+            }
+            let prev = neighbour(ct, i, true, false);
+            let next = neighbour(ct, i, true, true);
+            ct[i] = if prev == Class::Bad && next == Class::Bad {
+                Class::Bad
+            } else {
+                Class::Good
+            };
+        }
+    }
+
+    const ALL: [Class; 4] = [Class::Short, Class::NearGood, Class::Good, Class::Bad];
+
+    fn check(ct: &[Class]) {
+        let (mut a, mut b) = (ct.to_vec(), ct.to_vec());
+        revise(&mut a);
+        revise_walking(&mut b);
+        assert_eq!(a, b, "classes {ct:?}");
+    }
+
+    #[test]
+    fn revise_matches_walking_exhaustive() {
+        // every sequence of up to 8 classes
+        for n in 0..=8u32 {
+            for code in 0..4usize.pow(n) {
+                let ct: Vec<Class> = (0..n).map(|k| ALL[(code >> (2 * k)) & 3]).collect();
+                check(&ct);
+            }
+        }
+    }
+
+    #[test]
+    fn revise_matches_walking_random() {
+        // xorshift64; long runs of one class are likely with the skewed draws
+        let mut s: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut next = move || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s
+        };
+        for _ in 0..3000 {
+            let n = usize::try_from(next() % 300).unwrap();
+            let skew = next() % 4;
+            let ct: Vec<Class> = (0..n)
+                .map(|_| {
+                    let r = next();
+                    if r % 8 < 5 {
+                        ALL[usize::try_from(skew).unwrap()]
+                    } else {
+                        ALL[usize::try_from((r >> 8) % 4).unwrap()]
+                    }
+                })
+                .collect();
+            check(&ct);
+        }
+    }
+
+    #[test]
+    fn revise_is_linear() {
+        // A million short, then near-good, paragraphs between two good ones: the walking version
+        // reads about 10^12 classes for the first and 5 * 10^11 for the second, this one a few
+        // million. The deadline is far from both.
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for fill in [Class::Short, Class::NearGood] {
+                let mut ct = vec![fill; 1_000_002];
+                ct[0] = Class::Good;
+                ct[1_000_001] = Class::Good;
+                revise(&mut ct);
+                let _ = tx.send(ct.iter().all(|&c| c == Class::Good));
+            }
+        });
+        for _ in 0..2 {
+            let all_good = rx
+                .recv_timeout(std::time::Duration::from_secs(30))
+                .expect("revise_paragraph_classification is not linear in the paragraphs");
+            assert!(all_good);
+        }
+    }
 }
