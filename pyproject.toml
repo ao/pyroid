@@ -14,7 +14,7 @@ license-files = ["LICENSE", "LICENSES/*", "NOTICE"]
 authors = [{ name = "Andrew Odendaal" }]
 keywords = ["llm", "dataset", "text-cleaning", "rust", "pyo3"]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
   "Operating System :: MacOS",
