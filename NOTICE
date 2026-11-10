@@ -744,3 +744,11 @@ Each ported file carries the header "Derived from NeMo Curator 1.4.0 (Apache-2.0
 NeMo's regex.compile("[[:alpha:]]") was generated from the regex module
 (Apache-2.0 / CNRI-Python; its Unicode Character Database data is under the
 Unicode License v3) by a generate_tables.py script in crates/pyroid-core/src/nemo/.
+
+-------------------------------------------------------------------------------
+Rust crates in the extension module
+-------------------------------------------------------------------------------
+The extension module (pyroid._pyroid) is built from the Rust crates listed in
+LICENSES/THIRD-PARTY-RUST.txt, each under the licence given there; the file
+reproduces the copyright and licence text each crate ships. It is generated
+from Cargo.lock by cargo-about (about.toml).

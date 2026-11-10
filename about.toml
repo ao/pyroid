@@ -1,0 +1,59 @@
+# cargo-about 0.9 configuration (https://embarkstudios.github.io/cargo-about/) for
+# LICENSES/THIRD-PARTY-RUST.txt, the licences of the Rust crates in pyroid._pyroid. Regenerate it
+# after changing Cargo.lock (needs network: the alloc-stdlib clarification below fetches a file):
+#   cargo about generate --locked --fail -m crates/pyroid-py/Cargo.toml -c about.toml about.hbs \
+#     | sed 's/[[:space:]]*$//' > LICENSES/THIRD-PARTY-RUST.txt
+# sed drops trailing spaces in some crates' licence files, which the trailing-whitespace hook
+# would otherwise strip. CI (the `supply-chain` job in .github/workflows/ci.yml) regenerates the
+# file and fails if it differs.
+
+# The licences pyroid relies on, in order of preference. Keep this list in step with the
+# licence expression in pyproject.toml and Cargo.toml: a crate that needs a licence not listed
+# here fails the generation, and the expression then needs that licence too.
+# For "MIT OR Apache-2.0" pyroid takes MIT, whose text carries the crate's copyright line.
+# BSD-3-Clause comes before MIT for brotli-decompressor ("BSD-3-Clause/MIT"), which ships only
+# its BSD-3-Clause text.
+accepted = [
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MIT",
+  "Unicode-3.0",
+  "Zlib",
+  "Apache-2.0",
+]
+
+# The targets pyroid ships wheels for (.github/workflows/release.yml).
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "aarch64-unknown-linux-musl",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+  "aarch64-pc-windows-msvc",
+]
+
+# Normal dependencies only: no build-dependencies, no dev-dependencies, and not pyroid's own
+# crates (publish = false; pyroid's licences are in LICENSE, LICENSES/ and NOTICE).
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+private = { ignore = true }
+
+# The crate ships no licence file. Its LICENSE is at the root of its repository, at the commit
+# the crate was published from (.cargo_vcs_info.json); it is the same text as alloc-no-stdlib's.
+[alloc-stdlib.clarify]
+license = "BSD-3-Clause"
+git = [
+  { path = "LICENSE", checksum = "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae" },
+]
+
+# The crate also ships pyo3-runtime/LICENSE-MIT and pyo3-runtime/LICENSE-APACHE, copies of the
+# top-level files; without this pyo3 would be listed twice.
+[pyo3.clarify]
+license = "MIT OR Apache-2.0"
+files = [
+  { path = "LICENSE-MIT", license = "MIT", checksum = "afcbe3b2e6b37172b5a9ca869ee4c0b8cdc09316e5d4384864154482c33e5af6" },
+  { path = "LICENSE-APACHE", license = "Apache-2.0", checksum = "32c76dbe0e73d79100d5ece77c158399f2e2541bc5c78548a4ba45c1cb53c5c9" },
+]
