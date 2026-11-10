@@ -164,6 +164,7 @@ def test_missing_optional_dependency_is_one_line(
     """An ImportError from a command exits 1 with one line that says what to install."""
     import pyroid.cli as cli
 
+    monkeypatch.delenv("PYROID_DEBUG", raising=False)
     src = _write(_table(["x"]), tmp_path / "in.parquet")
     args = ["translit", str(src), str(tmp_path / "o.parquet")]
     cases = [
@@ -191,9 +192,10 @@ def test_missing_optional_dependency_is_one_line(
         monkeypatch.setattr(cli, "_cmd_translit", body)
         assert main(args) == 1
         assert capsys.readouterr().err == f"pyroid translit: {line}\n"
-    monkeypatch.setenv("PYROID_DEBUG", "1")
-    with pytest.raises(ModuleNotFoundError, match="zzz"):
-        main(args)
+    with monkeypatch.context() as m:  # undone at once: pytest-run-parallel repeats the test
+        m.setenv("PYROID_DEBUG", "1")
+        with pytest.raises(ModuleNotFoundError, match="zzz"):
+            main(args)
 
 
 # ----------------------------------------------------------------------------------------- dedup
