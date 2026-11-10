@@ -147,7 +147,9 @@ def test_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert out.read_text() == "keep me"
     assert main(["translit", str(src), str(out), "--overwrite"]) == 0
     assert main(["translit", str(src), str(tmp_path / "out.csv")]) == 1
-    assert "unknown format" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "unknown format" in err
+    assert "end OUT with / to make it a directory" in err
     assert main(["translit", str(tmp_path / "missing.parquet"), str(tmp_path / "o.parquet")]) == 1
     with pytest.raises(SystemExit):
         main(["clean", str(src), str(tmp_path / "o.parquet")])  # --recipe is required

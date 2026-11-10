@@ -114,7 +114,10 @@ def _is_file_out(out: str) -> bool:
     if p.suffix:
         from pyroid.integrations import _io
 
-        _io.file_format(p)  # raises "unknown format" for e.g. out.csv
+        try:
+            _io.file_format(p)  # raises "unknown format" for e.g. out.csv
+        except ValueError as e:
+            raise ValueError(f"{e} (end OUT with / to make it a directory)") from None
     return False
 
 
