@@ -294,9 +294,17 @@ $ pyroid clean sample.parquet x.parquet --recipe fineweb --text-column body
 pyroid: sample.parquet: no column 'body' (columns: text, id, dump, url, date, file_path, language, language_score, token_count)
 ```
 
-For errors from reading or writing the files (`FileNotFoundError`, `ValueError`),
-`PYROID_DEBUG=1` shows the traceback instead. Bad options exit with status 2 (argparse's usage
-error).
+A missing optional dependency also exits with status 1, naming what to install:
+
+```console
+$ pyroid clean warc/ clean.parquet --recipe fineweb-warc
+pyroid clean: failed to find libmagic.  Check your installation (python-magic needs the libmagic library, e.g. apt install libmagic1)
+  (while processing warc/CC-MAIN-00000.warc.gz)
+```
+
+For errors from reading or writing the files (`FileNotFoundError`, `ValueError`) and missing
+dependencies (`ImportError`), `PYROID_DEBUG=1` shows the traceback instead. Bad options exit with
+status 2 (argparse's usage error).
 
 A directory of shards in, compressed JSONL out, two threads:
 

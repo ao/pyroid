@@ -2330,12 +2330,40 @@ def main(argv: list[str] | None = None) -> int:
         return int(a.body(a))
     except _shards.StateError as e:
         raise SystemExit(f"pyroid {a.command}: {e}") from None
-    except (FileNotFoundError, ValueError) as e:
+    except (FileNotFoundError, ValueError, ImportError) as e:
         if os.environ.get("PYROID_DEBUG"):
             raise
+        msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
         notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
-        print(f"pyroid {a.command}: {e}{notes}", file=sys.stderr)  # noqa: T201
+        print(f"pyroid {a.command}: {msg}{notes}", file=sys.stderr)  # noqa: T201
         return 1
+
+
+# What installs a module the commands import only when they need it (top-level name: pip args).
+_INSTALL = {
+    "numpy": "'pyroid[cli]'",
+    "pyarrow": "'pyroid[cli]'",
+    "cchardet": "'pyroid[warc]'",
+    "magic": "'pyroid[warc]'",
+    "datatrove": "'pyroid[datatrove]'",
+    "orjson": "'pyroid[datatrove]'",
+    "regex": "'pyroid[datatrove]'",
+    "tokenizers": "'pyroid[datatrove]'",
+    "datasets": "'pyroid[hf]'",
+    "tldextract": "tldextract",
+    "fasteners": "fasteners",
+}
+
+
+def _import_hint(e: ImportError) -> str:
+    """The message of a missing optional dependency, with what installs it."""
+    msg = str(e)
+    if "pip install" in msg:
+        return msg
+    if "libmagic" in msg:
+        return f"{msg} (python-magic needs the libmagic library, e.g. apt install libmagic1)"
+    pip = _INSTALL.get((e.name or "").partition(".")[0])
+    return f"{msg} (pip install {pip})" if pip else msg
 
 
 if __name__ == "__main__":

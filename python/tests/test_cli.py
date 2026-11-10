@@ -153,6 +153,45 @@ def test_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         main(["clean", str(src), str(tmp_path / "o.parquet")])  # --recipe is required
 
 
+@pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and the environment")
+def test_missing_optional_dependency_is_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ImportError from a command exits 1 with one line that says what to install."""
+    import pyroid.cli as cli
+
+    src = _write(_table(["x"]), tmp_path / "in.parquet")
+    args = ["translit", str(src), str(tmp_path / "o.parquet")]
+    cases = [
+        (
+            ModuleNotFoundError("No module named 'cchardet'", name="cchardet"),
+            "No module named 'cchardet' (pip install 'pyroid[warc]')",
+        ),
+        (
+            ImportError("failed to find libmagic.  Check your installation"),
+            "failed to find libmagic.  Check your installation (python-magic needs the libmagic "
+            "library, e.g. apt install libmagic1)",
+        ),
+        (
+            ModuleNotFoundError("No module named 'tldextract.cache'", name="tldextract.cache"),
+            "No module named 'tldextract.cache' (pip install tldextract)",
+        ),
+        (ModuleNotFoundError("x needs y (pip install y)", name="y"), "x needs y (pip install y)"),
+        (ModuleNotFoundError("No module named 'zzz'", name="zzz"), "No module named 'zzz'"),
+    ]
+    for err, line in cases:
+
+        def body(a: Any, err: ImportError = err) -> int:
+            raise err
+
+        monkeypatch.setattr(cli, "_cmd_translit", body)
+        assert main(args) == 1
+        assert capsys.readouterr().err == f"pyroid translit: {line}\n"
+    monkeypatch.setenv("PYROID_DEBUG", "1")
+    with pytest.raises(ModuleNotFoundError, match="zzz"):
+        main(args)
+
+
 # ----------------------------------------------------------------------------------------- dedup
 
 
