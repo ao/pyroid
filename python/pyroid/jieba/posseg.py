@@ -12,6 +12,8 @@ from typing import Any
 
 from pyroid.jieba import _delegate
 
+__all__ = ["POSTokenizer", "cut", "lcut"]
+
 
 def _posseg() -> Any:
     return _delegate.submodule("posseg")
@@ -38,4 +40,7 @@ def POSTokenizer(tokenizer: Any = None) -> Any:  # noqa: N802  jieba's class nam
 
 
 def __getattr__(name: str) -> Any:
+    # Private and dunder lookups (hasattr, help(), star imports, stubtest) must not import jieba.
+    if name.startswith("_"):
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     return getattr(_posseg(), name)

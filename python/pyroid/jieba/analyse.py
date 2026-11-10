@@ -12,6 +12,8 @@ from typing import Any
 
 from pyroid.jieba import _delegate
 
+__all__ = ["extract_tags", "set_idf_path", "set_stop_words", "textrank"]
+
 
 def _analyse() -> Any:
     return _delegate.submodule("analyse")
@@ -38,4 +40,7 @@ def set_stop_words(stop_words_path: str) -> None:
 
 
 def __getattr__(name: str) -> Any:
+    # Private and dunder lookups (hasattr, help(), star imports, stubtest) must not import jieba.
+    if name.startswith("_"):
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     return getattr(_analyse(), name)

@@ -595,3 +595,19 @@ def test_jieba_patterns() -> None:
     for name in ("re_userdict", "re_eng", "re_han_default", "re_skip_default"):
         assert getattr(pj, name).pattern == getattr(jieba, name).pattern, name
         assert getattr(pj, name).flags == getattr(jieba, name).flags, name
+
+
+def test_delegated_submodules_answer_dunder_lookups_without_jieba() -> None:
+    """hasattr, help() and star imports on posseg/analyse never import (or need) jieba."""
+    import pydoc
+
+    import pyroid.jieba.analyse as an
+    import pyroid.jieba.posseg as pseg
+
+    for mod, names in ((pseg, {"cut", "lcut", "POSTokenizer"}), (an, {"extract_tags", "textrank"})):
+        assert not hasattr(mod, "__wrapped__")  # no PyroidError, no FallbackWarning
+        assert names <= set(mod.__all__)
+        assert pydoc.render_doc(mod)
+        ns: dict[str, object] = {}
+        exec(f"from {mod.__name__} import *", ns)
+        assert names <= ns.keys()
