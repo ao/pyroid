@@ -120,12 +120,12 @@ datatrove's own tokenizers ([Languages](guides/languages.md)).
 
 ## Speed
 
-From Common Crawl WARC files to deduplicated documents, datatrove's FineWeb pipeline ran 8.4×
-faster with pyroid's steps in datatrove's executor: 104.0 s against 870.8 s with 8 workers, and
-775.9 s against 6,975.8 s with one (9.0×). That is 8 WARC files of CC-MAIN-2026-39 (171,595 HTML
-records) on an AWS EC2 c7i.4xlarge (Intel Xeon Platinum 8488C), pinned to 8 CPUs. The kept
-documents are the same once the pages stock datatrove drops at its 1 s extraction timeout are
-left out too ([From WARC files](benchmarks.md#from-warc-files-datatroves-fineweb-pipeline)).
+From Common Crawl WARC files to deduplicated documents, datatrove's FineWeb pipeline ran 9.5×
+faster with pyroid's steps in datatrove's executor, pyroid's WARC reader included: 89.4 s against
+848.3 s with 8 workers, and `pyroid clean --recipe fineweb-warc` took 79.6 s (10.7×). That is 8
+WARC files of CC-MAIN-2026-39 (171,595 HTML records) on an AWS EC2 c7i.4xlarge (Intel Xeon
+Platinum 8488C), pinned to 8 CPUs. The kept documents are the same once the pages stock datatrove
+drops at its 1 s extraction timeout are left out too ([From WARC files](benchmarks.md#from-warc-files-datatroves-fineweb-pipeline)).
 
 On 100,000 FineWeb documents, whose text is already extracted, pyroid's FineWeb chain is about
 27× faster than datatrove on 8 processes (10.2 s against 272.1 s) and about 56× faster

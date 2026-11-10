@@ -1,6 +1,6 @@
 # pyroid
 
-> Rust ports of the Python libraries used to clean LLM datasets, with the same API and the same output: ftfy, fastText inference, datatrove 0.10.1's quality filters and dedup, Trafilatura 2.3.1 and 1.11.0, rouge-score 0.1.2, sacrebleu 2.6.0, json_repair 0.64.5, datasketch 2.0.0, jieba 0.42.1 and NLTK 3.10.4's tokenizers, plus permissive transliteration. From WARC files, datatrove's FineWeb pipeline runs 8.4x faster with pyroid's steps (104 s vs 871 s, 8 workers, AWS EC2 c7i.4xlarge). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
+> Rust ports of the Python libraries used to clean LLM datasets, with the same API and the same output: ftfy, fastText inference, datatrove 0.10.1's quality filters and dedup, Trafilatura 2.3.1 and 1.11.0, rouge-score 0.1.2, sacrebleu 2.6.0, json_repair 0.64.5, datasketch 2.0.0, jieba 0.42.1 and NLTK 3.10.4's tokenizers, plus permissive transliteration. From WARC files, datatrove's FineWeb pipeline runs 9.5x faster with pyroid's steps, WARC reader included (89.4 s vs 848.3 s, 8 workers, AWS EC2 c7i.4xlarge), and 10.7x as `pyroid clean --recipe fineweb-warc` (79.6 s). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
 
 Modules and what they match:
 

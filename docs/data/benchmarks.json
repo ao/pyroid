@@ -1,5 +1,5 @@
 {
-  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'runs' holds the consolidated EC2 runs: 'label' and 'rows' are copied from each run folder's consolidated.json, 'chain' from the end-to-end table of its CONSOLIDATED.md (with en dashes and ×), 'source' is the folder in this repository and 'caption' is the short name the page prints. 'more' holds runs outside the consolidated benchmark, all in the Docker VM ('more_label'), each group with its own source. 'tables' holds hand-entered tables with columns of their own (the WARC run), each with its caption and source. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
+  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'runs' holds the consolidated EC2 runs: 'label' and 'rows' are copied from each run folder's consolidated.json, 'chain' from the end-to-end table of its CONSOLIDATED.md (with en dashes and ×), 'source' is the folder in this repository and 'caption' is the short name the page prints. 'more' holds runs outside the consolidated benchmark, all in the Docker VM ('more_label'), each group with its own source. 'tables' holds hand-entered tables with columns of their own (the WARC runs), each with its caption and source. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
   "runs": {
     "c7i-100k": {
       "caption": "c7i.4xlarge, 100,000 documents",
@@ -262,6 +262,30 @@
       ],
       "footnote": "In every run, 5 more pages are lost because trafilatura 1.11.0 itself raises on them: datatrove's child process dies, and pyroid's step counts them as `broken_process` and drops them the same way.",
       "source": "bench/fineweb_warc.py and bench/ec2/run_warc.sh, run on 2026-11-09 (bench/results/aws-c7i.4xlarge/2026-11-09-warc: runs/*/summary.json and compare*.txt)"
+    },
+    "c7i-warc-pyroid-reader": {
+      "caption": "AWS EC2 c7i.4xlarge (Intel Xeon Platinum 8488C, 16 vCPU), Amazon Linux 2023, every run on CPUs 0 to 7; CPython 3.13.18, datatrove 0.10.1 with trafilatura 1.11.0 (the package versions of the 2026-11-09 run, installed from its freeze), and a pyroid release wheel built on the instance. The same 8 WARC files of CC-MAIN-2026-39 (7.5 GB, 171,595 HTML records), one task per file. Each run was timed once; fastest first. CPU s is user+sys including the worker processes. The step columns are the time datatrove's statistics, or the native chain's own timers, give each step, summed over tasks; the command line reports no per-step times.",
+      "columns": ["Run", "Wall s", "vs stock datatrove", "CPU s", "WARC reader step, s", "Trafilatura step, s", "Pages dropped at the 1 s timeout", "Documents kept", "Peak RSS of the largest process, MiB"],
+      "rows": [
+        ["`pyroid clean --recipe fineweb-warc`, 8 workers", "79.6", "10.7×", "600", "–", "–", "0", "23,505", "1,192"],
+        ["datatrove with pyroid's steps, `WarcReader` included, 8 workers", "89.4", "9.5×", "678", "71", "487", "0", "23,505", "1,224"],
+        ["native pyroid chain, 8 workers", "90.4", "9.4×", "650", "69", "465", "0", "23,505", "1,078"],
+        ["stock datatrove, 8 workers", "848.3", "1.0×", "6,593", "170", "5,403", "68", "23,503", "966"]
+      ],
+      "footnote": "In every run, 5 more pages are lost because trafilatura 1.11.0 itself raises on them, as in the 2026-11-09 run. At 1 worker, datatrove with pyroid's steps took 640.5 s and the native chain 607.8 s, with the same 23,505 documents; stock datatrove was not re-run at 1 worker.",
+      "source": "bench/fineweb_warc.py and bench/ec2/run_warc.sh, run on 2026-11-10 (bench/results/aws-c7i.4xlarge/2026-11-10-warc: runs/*/summary.json and compare*.txt)"
+    },
+    "c7i-warc-reader-only": {
+      "caption": "The same machine and files, one process on CPU 0: each reader over each file, timed on a pass that only counts the documents, then checked on a second pass that digests them (id, url, date, text). Every reader gave the same 172,376 documents: the pages `process_record` returns, before datatrove skips the 781 with no text.",
+      "columns": ["Reader", "CPU s", "vs warcio", "Per file, s"],
+      "rows": [
+        ["`pyroid.warc.iter_documents`", "64.5", "2.0×", "8.1"],
+        ["`pyroid.warc.iter_batches` (Arrow)", "85.1", "1.6×", "10.6"],
+        ["warcio 1.8.2 over `gzip.open`, datatrove's `process_record`", "132.1", "1.0×", "16.5"]
+      ],
+      "footnote": "Part of the time is the same for every reader: faust-cchardet's guess for the pages that are not valid UTF-8, and making the Python strings.",
+      "source": "bench/fineweb_warc.py reader, run on 2026-11-10 (bench/results/aws-c7i.4xlarge/2026-11-10-warc/runs/reader/summary.json)"
+
     }
   }
 }
