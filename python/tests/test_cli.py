@@ -341,6 +341,20 @@ def test_clean_fineweb_is_digest_identical_to_the_chain(
     assert not list(tmp_path.glob(".pyroid-*"))  # the dedup spool is gone
 
 
+def test_clean_with_no_survivor_keeps_the_columns(tmp_path: Path) -> None:
+    """When the filters drop every row, the output still has the input's columns."""
+    pytest.importorskip("numpy")
+    if not LID_BIN.exists():
+        pytest.skip("needs lid.176.bin")
+    src = _write(_table(["too short"], url=["https://example.org/"]), tmp_path / "in.parquet")
+    for out, extra in [("o.parquet", []), ("o2.parquet", ["--no-dedup"])]:
+        args = ["clean", str(src), str(tmp_path / out), "--recipe", "fineweb", "--lid-model"]
+        assert main([*args, str(LID_BIN), *extra]) == 0
+        t = pq.read_table(tmp_path / out)
+        assert t.num_rows == 0
+        assert t.column_names == ["id", "text", "url", "language", "language_score"], extra
+
+
 def test_clean_small_no_dedup_and_stats(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     pytest.importorskip("numpy")
     if not (DEV.exists() and LID_BIN.exists()):

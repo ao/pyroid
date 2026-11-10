@@ -711,6 +711,8 @@ def _unit_filter(job: FileJob, report: Callable[[int], None]) -> dict[str, Any]:
                     excl_schema = dups.schema
                 excl.write(dups)
             report(n)
+        if schema is None and job.spool is not None and os.path.getsize(job.spool):
+            schema = _ipc_schema(Path(job.spool))  # no survivor: still the spool's columns
         out.close(schema)
         if excl is not None:
             if excl_schema is None and schema is not None:
