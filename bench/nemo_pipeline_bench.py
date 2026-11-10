@@ -142,7 +142,9 @@ def meta() -> dict[str, Any]:
 
 def report(runs: list[dict[str, Any]], out: str | None) -> None:
     for r in runs:
-        print(f"{r['cpus']} cpus {r['variant']:7} wall {r['wall_s']:8.1f} s  stages {r['stage_process_s']:8.1f} s  kept {r['kept']}")
+        print(
+            f"{r['cpus']} cpus {r['variant']:7} wall {r['wall_s']:8.1f} s  stages {r['stage_process_s']:8.1f} s  kept {r['kept']}"
+        )
     for cpus in sorted({r["cpus"] for r in runs}):
         digests = {r["digest"] for r in runs if r["cpus"] == cpus}
         if len(digests) != 1:
@@ -190,7 +192,11 @@ def main() -> None:
                     out = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
                     if out.returncode == 0:
                         break
-                    print(f"{cpus} cpus {variant}: attempt {attempt} failed:", out.stderr[-2000:], file=sys.stderr)
+                    print(
+                        f"{cpus} cpus {variant}: attempt {attempt} failed:",
+                        out.stderr[-2000:],
+                        file=sys.stderr,
+                    )
                 else:
                     sys.exit(f"{cpus} cpus {variant}: failed twice")
                 rec = json.loads(out.stdout.strip().splitlines()[-1])

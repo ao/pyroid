@@ -46,7 +46,7 @@ Or patch NeMo's modules before the pipeline is built, and leave the code and the
 ```python
 import pyroid
 
-pyroid.patch("nemo_curator")   # undo with pyroid.unpatch("nemo_curator")
+pyroid.patch("nemo_curator")  # undo with pyroid.unpatch("nemo_curator")
 ```
 
 The rest of the pipeline (readers, writers, the executor, stages pyroid does not replace) stays
@@ -116,8 +116,8 @@ tuple of str, or an Arrow string array, like the rest of pyroid ([Inputs](../con
 ```python
 import pyroid.nemo as nemo
 
-nemo.word_count(["one two", "three"])               # array([2, 1])
-nemo.repeating_duplicate_ngrams(docs, 5)            # NeMo's score per document
+nemo.word_count(["one two", "three"])  # array([2, 1])
+nemo.repeating_duplicate_ngrams(docs, 5)  # NeMo's score per document
 nemo.remove_markdown("**bold** [link](https://x)")  # 'bold https://x'
 ```
 
