@@ -51,9 +51,12 @@ Optional libraries, needed only by the features that use them:
 - sudachidict-core (20261015 or newer) for native Japanese in `pyroid.filters` and
   `pyroid.dedup`: `pip install sudachidict-core`. pyroid does not ship the dictionary (its
   `system.dic` is 202 MB): it reads the installed one, or the file that `PYROID_SUDACHI_DICT`
-  names, without importing SudachiPy. With it, 4,013 of datatrove's 4,343 language codes are
-  native; without it, 4,009, and the Japanese codes need `python_tokenizer=True`
+  names, without importing SudachiPy. Without it the Japanese codes need `python_tokenizer=True`
   ([Languages](guides/languages.md#japanese)).
+- pythainlp for native Thai in `pyroid.filters` and `pyroid.dedup`: `pip install pythainlp`.
+  pyroid reads its word list and sentence model (or the corpus directory that
+  `PYROID_PYTHAINLP_CORPUS` names) without importing it. With both, 4,049 of datatrove's 4,343
+  language codes are native; without either, 4,025 ([Languages](guides/languages.md#thai)).
 
 ## Supported platforms
 

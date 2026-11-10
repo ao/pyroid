@@ -70,7 +70,7 @@ Reference: fasttext-predict 0.9.2.4 (fastText's C++ predict path). Rule: same la
 
 ### pyroid.filters {#filters}
 
-Reference: datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNLP, whitespace, SudachiPy 0.7.0 with sudachidict-core 20261015), tldextract 5.4.0, numpy 2.5.4. Rule: same keep/drop decision, same filter_reason, same rewritten text, same exception.
+Reference: datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNLP, whitespace, SudachiPy 0.7.0 with sudachidict-core 20261015, pyvi 0.1.1, PyThaiNLP 5.4.0 with python-crfsuite 0.9.12), tldextract 5.4.0, numpy 2.5.4. Rule: same keep/drop decision, same filter_reason, same rewritten text, same exception.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
@@ -81,16 +81,22 @@ Reference: datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNL
 | Japanese, native (datatrove's JapaneseTokenizer over the Rust port of SudachiPy 0.7.0): FineWeb-2 jpn_Jpan, the 8 filter cases against live datatrove, 2026-11-09 | 2,000 | 2,000 | 0 |
 | Japanese tokenizer, Rust replay of the committed recordings: SudachiPy morphemes for 4,567 texts (special cases, FineWeb-2 lines, fuzz, a code-point sample), datatrove's word_tokenize, span_tokenize and sent_tokenize for 4,205 texts (54 documents over 40,000 bytes, with chosen chunk boundaries), 1,911 chunk_text_on_bytes cases and the spaCy tag of all 1,558 POS (every tag in spaCy's TAG_MAP), 2026-11-09 | 12,241 | 12,241 | 0 |
 | Japanese tokenizer replay, not committed: every code point (69,504 rows each for morphemes and datatrove), the FineWeb-2 jpn_Jpan test slice (7,809 lines, 250 documents) and the first 20,000 jpn_Jpan training documents (32.5 M characters: 610,624 lines with 18,879,619 morphemes; datatrove's words and spans of the 20,000 documents, 134 over 40,000 bytes), 2026-11-09 | 777,691 | 777,691 | 0 |
+| Vietnamese and Thai, native (spaCy's VietnameseTokenizer over the Rust port of pyvi 0.1.1; datatrove's ThaiTokenizer over the Rust port of PyThaiNLP 5.4.0): FineWeb-2 vie_Latn and tha_Thai, the 8 filter cases each against live datatrove, 2026-11-09 | 4,000 | 4,000 | 0 |
+| Vietnamese tokenizer, Rust replay of the committed recordings: syllables, CRF labels, pyvi_tokenize and datatrove's word_tokenize, span_tokenize and sent_tokenize for 4,697 texts (special cases, FineWeb-2 documents, fuzz, a code-point sample), 2026-11-09 | 4,697 | 4,697 | 0 |
+| Vietnamese tokenizer replay, not committed: every code point (69,504 rows), the FineWeb-2 vie_Latn test slice (250 documents), all cases and fuzz, and the first 20,000 vie_Latn training documents (90.9 M characters); 151.5 M compared syllables, labels, words, spans and sentences, 2026-11-09 | 94,392 | 94,392 | 0 |
+| Thai tokenizer, Rust replay of the committed recordings: character clusters, newmm with and without safe mode, crfcut's words and raw labels, and datatrove's word_tokenize, span_tokenize and sent_tokenize for 3,165 texts (special cases, FineWeb-2 documents, fuzz, long texts, a code-point sample), 2026-11-09 | 3,165 | 3,165 | 0 |
+| Thai tokenizer replay, not committed: every code point (69,504 rows), the FineWeb-2 tha_Thai test slice (250 documents), all cases, fuzz and 45 long texts, the first 20,000 tha_Thai training documents (60.1 M characters), and 29,806 more rows (random text, 6 documents of 100k to 200k characters, 6,000 rows over synthetic dictionaries where newmm's 50-edge cutoff fires, and digits new in Unicode 16.0 and 17.0 under CPython 3.13 to 3.15), 2026-11-09 | 122,667 | 122,667 | 0 |
 | Per-language tokenizer replay: whole FineWeb-2 slices (ar, de, fr, ru, es, hi, with C4 lines), 10k fuzz rows per tokenizer, a 57-language FineWeb-2 smoke set | 662,530 | 662,530 | 0 |
 | IndicNLP tokenizer replay: goldens and 8k fuzz rows per CPython 3.11 to 3.15 | 118,690 | 118,690 | 0 |
 | Whitespace tokenizer replay: goldens and extra rows | 118,990 | 118,990 | 0 |
-| **Total** | **2,896,220** | **2,896,220** | **0** |
+| **Total** | **3,125,141** | **3,125,141** | **0** |
 
 - Hypothesis against live datatrove: 92 tests x 300 examples over script-specific text in 22 native languages and the jieba, SudachiPy, pyvi and PyThaiNLP fallback paths (python_tokenizer=True).
 - Japanese, native: 12 Hypothesis properties against live datatrove (python/tests/test_filters_japanese.py, 628 examples per run; 11 of them also at 300 examples each).
+- Vietnamese and Thai, native: 80 tests against live datatrove (python/tests/test_filters_vithai.py: every filter, FineWeb-2's chains, words, sentence dedup and MinHash, on generated and FineWeb-2 text; 1,046 Hypothesis examples per run, 5,230 with the ci profile).
 - The newer steps, input by input: PII on 13,232 documents x 4 configurations, C4 bad words x 5 (per-document languages, seeded keep_fraction), symbol lines x 3, the URL filter on 10,000 FineWeb URLs x 7 configurations and 9,695 URL-like strings, plus Hypothesis against the reference and live datatrove.
 
-<small>Source: the parity/ filters suite (after the last rebase, 2026-11-06), crates/pyroid-core/tests/filters_tokenizer.rs, crates/pyroid-core/src/sudachi/replay.rs and the multilingual replays, run on 2026-11-05 and 2026-11-06.</small>
+<small>Source: the parity/ filters suite (after the last rebase, 2026-11-06; vie_Latn and tha_Thai 2026-11-09), crates/pyroid-core/tests/filters_tokenizer.rs, crates/pyroid-core/src/{sudachi,pyvi,pythainlp}/replay.rs and the multilingual replays, run on 2026-11-05, 2026-11-06 and 2026-11-09.</small>
 
 ### pyroid.dedup {#dedup}
 
@@ -102,7 +108,8 @@ Reference: datatrove 0.10.1 MinHash (FineWeb: sha1, 64-bit, 14 buckets x 8 hashe
 | simplify_text vs datatrove on the corpus documents | 13,232 | 13,232 | 0 |
 | Chinese, native: FineWeb-2 cmn_Hani MinHash signatures and removed set (300 documents with near-duplicates) against live datatrove, 2026-11-07 | 600 | 600 | 0 |
 | Japanese, native: FineWeb-2 jpn_Jpan MinHash signatures and removed set (300 documents with near-duplicates) against live datatrove, 2026-11-09 | 600 | 600 | 0 |
-| **Total** | **67,366** | **67,366** | **0** |
+| Vietnamese and Thai, native: FineWeb-2 vie_Latn and tha_Thai MinHash signatures and removed set (300 documents each, with near-duplicates) against live datatrove, 2026-11-09 | 1,200 | 1,200 | 0 |
+| **Total** | **68,566** | **68,566** | **0** |
 
 - datatrove's stages 1 to 3 re-run and compared from raw text: every bucket's pairs, the removed ids, cluster ids and sizes are identical for sha1/64 (445 removed) and xxhash/32 (439 removed, 3,146 pairs).
 - Live-datatrove Hypothesis families (case, whitespace, punctuation, edits, swaps; 1-, 2- and 5-grams; 4 hash configurations) and a Python transcription of stages 1 to 3: identical.

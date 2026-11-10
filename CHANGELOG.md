@@ -27,11 +27,12 @@ removed. It stays installable as `pip install "pyroid<1"`, its source is on the
 | `pyroid.nltk` | NLTK 3.10.4's Punkt sentence tokenizer, `word_tokenize`, the Treebank tokenizers and detokenizer, and the common regexp tokenizers |
 | `pyroid.warc` | warcio 1.8.2's WARC and ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading, including CPython's `gzip.GzipFile` read path |
 
-The filters and dedup tokenize 4,013 of datatrove's 4,343 language codes natively, with
+The filters and dedup tokenize 4,049 of datatrove's 4,343 language codes natively, with
 datatrove's tokenizer for each: spaCy's rule-based tokenizers, IndicNLP, the whitespace tokenizer,
-spaCy's Chinese tokenizer over jieba, and datatrove's Japanese tokenizer over SudachiPy 0.7.0 (with
-an installed sudachidict-core dictionary). The other codes run datatrove's own tokenizer with
-`python_tokenizer=True`.
+spaCy's Chinese tokenizer over jieba, datatrove's Japanese tokenizer over SudachiPy 0.7.0 (with
+an installed sudachidict-core dictionary), spaCy's Vietnamese tokenizer over pyvi 0.1.1, and
+datatrove's Thai tokenizer over PyThaiNLP 5.4.0 (with an installed pythainlp). The other codes run
+datatrove's own tokenizer with `python_tokenizer=True`.
 
 ### Integrations
 
