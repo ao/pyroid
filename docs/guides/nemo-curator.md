@@ -105,6 +105,7 @@ every filter score and exception, every modifier output, the fastText scores, th
 DataFrames, and Hypothesis-generated text. NeMo's own pipelines, run with stock stages and with
 pyroid's (YAML targets rewritten, or `pyroid.patch`), give byte-identical output. Linux aarch64,
 CPython 3.12; the pinned references also pass on 3.14t and 3.15t, where NeMo does not install.
+The counts are on the [Compatibility](../compatibility.md#nemo) page.
 
 ## `pyroid.nemo`
 

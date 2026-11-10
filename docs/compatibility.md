@@ -238,6 +238,29 @@ Reference: NLTK 3.10.4 (with regex 2026.9.29). Rule: the same sentences, tokens 
 
 <small>Source: the parity/ nltk suite, crates/pyroid-core/src/nltk/testdata/ replays and their large uncommitted recordings, run on 2026-11-09.</small>
 
+### pyroid.nemo and pyroid.integrations.nemo_curator {#nemo}
+
+Reference: NeMo Curator 1.4.0 on CPython 3.12 (pandas 3.1.1, regex 2026.11.9, ftfy 6.3.1, jieba 0.42.1, fasttext 0.9.3 built with g++ 12). Rule: the same score (repr and type), the same exception type and the same modified text; for the stages, the same DataFrame (values, dtypes, index).
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| Parity suite on CPython 3.12 against live NeMo, every document of FineWeb dev 10k and the adversarial set: the scores, exceptions and modifier outputs of 74 filter, modifier and fastText cases, one str call per document | 875,286 | 875,286 | 0 |
+| The same cases as list and Arrow batches (float64 or int64 arrays; the exception of the first document that raises) | 1,630,796 | 1,630,796 | 0 |
+| pyroid.integrations.nemo_curator's filters and modifiers per document (score_document, keep_document, modify_document) | 888,556 | 888,556 | 0 |
+| NeMo's ScoreFilter, Score, Filter and Modify with pyroid's and NeMo's classes mixed, against NeMo's stages | 606 | 606 | 0 |
+| Hypothesis against live NeMo, 200 examples per filter and modifier, for pyroid.nemo and for the integration's classes | 116,646 | 116,646 | 0 |
+| Lone surrogates: pyroid.nemo raises UnicodeEncodeError (pyroid's rule); the integration's classes and stages give NeMo's result | 175,542 | 175,542 | 0 |
+| NeMo's own pipelines (heuristic_filter_english_pipeline.yaml; fastText language ID with the modifier benchmark's stages) in its Xenna executor, stock against YAML targets rewritten and against pyroid.patch("nemo_curator"): every output row, column and dtype | 47,056 | 47,056 | 0 |
+| The YAML pipeline on 100,000 FineWeb documents at 1 and 8 CPUs: the same 95,774 kept documents (id and text) | 191,548 | 191,548 | 0 |
+| **Total** | **3,926,036** | **3,926,036** | **0** |
+
+- NeMo's RepeatingTopNGramsFilter breaks ties between equally frequent n-grams in Python set order, which follows the process's string hash seed, so its own scores change from run to run unless PYTHONHASHSEED is fixed (the references use 0); pyroid makes the choice NeMo makes in the same process.
+- The pinned checks also pass on CPython 3.14t and 3.15t with the GIL off; NeMo does not install there, so the live checks skip.
+- python/tests: Hypothesis properties of every score function and modifier against NeMo's code (copied, so they run without NeMo) and against live NeMo; the stages on Arrow, string[pyarrow], str and object columns; the batch paths never call NeMo's per-row methods; pyroid.patch("nemo_curator") with hydra configs. 517 tests on CPython 3.12 with NeMo, 167 on 3.15t, also under pytest-run-parallel.
+- Not ported: NeMo Curator 1.4.0's exact and fuzzy deduplication run on GPUs only (cuDF), and it has no CPU PII stage.
+
+<small>Source: the parity/ nemo suite (parity-report of 2026-11-10, linux/aarch64), parity/pyroid_parity/nemo_pipeline.py and bench/nemo_pipeline_bench.py.</small>
+
 ### Integrations: datatrove steps, pyroid clean, pyroid.patch() {#integrations}
 
 Reference: datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.patch() stands in for). Rule: the same per-document digest of id, text, language, score, keep, reason and duplicate flag; for patch(), the same call-site output.
