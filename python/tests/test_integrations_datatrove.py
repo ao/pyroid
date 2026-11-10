@@ -410,11 +410,12 @@ def test_filter_unknown_language_falls_back_to_datatrove_error() -> None:
     pdt._WARNED.clear()
     ours = pdt.GopherQualityFilter(language="und_Zzzz")
     with (
-        pytest.warns(pyroid.FallbackWarning, match="language='und_Zzzz'"),
+        pytest.warns(pyroid.FallbackWarning, match="language='und_Zzzz'") as record,
         pytest.raises(ValueError, match="doesn't have a tokenizer assigned") as got,
     ):
         ours.filter_batch([Document(text="a b c", id="0")])
     assert str(got.value) == str(stock.value)
+    assert [w.filename for w in record] == [__file__]  # the warning points at this line
 
 
 # ------------------------------------------------------------------------------------------- LID

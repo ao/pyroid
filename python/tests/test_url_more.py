@@ -913,14 +913,22 @@ def test_module_namespace() -> None:
     assert repr(_small()).startswith("<pyroid.filters.URLFilter: 2 domains")
 
 
+def test_fallback_warning_points_at_the_caller(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pf, "_url_fallbacks", set())
+    with pytest.warns(pyroid.FallbackWarning, match="lone surrogates") as record:
+        assert _small()._reasons_any(["http://a.com/porn\ud800"], None) == ["hard_blacklisted"]
+    assert [w.filename for w in record] == [__file__]
+
+
 def test_fallback_warnings(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each slow path warns once: lone-surrogate URLs (drop-in), deferred xn-- lookups."""
     pdt = _pdt()
     monkeypatch.setattr(pf, "_url_fallbacks", set())
     step = pdt.URLFilter(use_integrated_lists=False, banned_words=["porn"])
     step.tldextractor = _tld()
-    with pytest.warns(pyroid.FallbackWarning, match="lone surrogates"):
+    with pytest.warns(pyroid.FallbackWarning, match="lone surrogates") as record:
         assert step.filter(_docs(["http://a.com/porn\ud800"])[0]) == (False, "hard_blacklisted")
+    assert [w.filename for w in record] == [__file__]  # through the datatrove step too
     real = cast(Any, pf)._suffix_trie
     monkeypatch.setattr(pf, "_suffix_trie", lambda tld: (*real(tld)[:-1], True))
     with pytest.warns(pyroid.FallbackWarning, match="canonical A-label"):
