@@ -25,9 +25,9 @@ use pyroid_core::html::tree::Document;
 use pyroid_core::par::{self, PoolError};
 use pyroid_core::trafilatura::{self as core, Focus, LruCache, Options, PyError, Version};
 
-use crate::batch::BatchError;
+use crate::batch::{BatchError, to_list};
 use crate::errors::{input_error, type_name, with_note};
-use crate::input::Threads;
+use crate::input::{Threads, text_arg};
 
 /// The Unicode versions the port has tables for (`unicodedata.unidata_version` spelling).
 #[pyfunction]
@@ -55,6 +55,13 @@ fn is_utf8(data: &Bound<'_, PyBytes>) -> bool {
 #[pyo3(signature = (*, threads = None))]
 fn check_threads(threads: Option<Threads>) -> bool {
     threads.is_some()
+}
+
+/// The pages of an Arrow string column handed to `extract_batch`, as a list of str (`None`
+/// for each null).
+#[pyfunction]
+fn arrow_pages<'py>(htmls: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyList>> {
+    to_list(htmls.py(), &text_arg(htmls, None, "htmls")?)
 }
 
 /// The Trafilatura releases the port reproduces.
@@ -662,6 +669,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(is_utf8, &m)?)?;
     m.add_function(wrap_pyfunction!(loads, &m)?)?;
     m.add_function(wrap_pyfunction!(check_threads, &m)?)?;
+    m.add_function(wrap_pyfunction!(arrow_pages, &m)?)?;
     m.add_function(wrap_pyfunction!(extract, &m)?)?;
     m.add_function(wrap_pyfunction!(bare_extraction, &m)?)?;
     m.add_function(wrap_pyfunction!(extract_batch, &m)?)?;

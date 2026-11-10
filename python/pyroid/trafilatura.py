@@ -17,12 +17,13 @@ import contextvars
 import importlib
 import importlib.util
 import inspect
+import re
 import sys
 import threading
 import unicodedata
 import warnings
 import zlib
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from html import unescape as _unescape
 from pathlib import Path
 from types import MappingProxyType
@@ -1472,14 +1473,53 @@ def _extract_many_in(
 
 
 def extract_batch(
-    htmls: Sequence[str],
+    htmls: Any,
     *,
     threads: int | None = None,
     compat: str = TRAFILATURA_VERSION,
     **kwargs: Any,
-) -> list[str | None]:
+) -> Any:
     """:func:`extract` over many pages, on pyroid's thread pool; see ``trafilatura.pyi``."""
-    return _extract_many(htmls, kwargs, threads, compat, raise_errors=True)
+    from pyroid._pyroid import InputError
+
+    if isinstance(htmls, str):
+        return _extract_many([htmls], kwargs, threads, compat, raise_errors=True)[0]
+    if isinstance(htmls, (list, tuple)):
+        for i, html in enumerate(htmls):
+            if html is None:
+                err = InputError(f"expected str at index {i}, got NoneType")
+                err.add_note("while processing 'htmls'")
+                raise err
+        return _extract_many(htmls, kwargs, threads, compat, raise_errors=True)
+    if not (hasattr(htmls, "__arrow_c_stream__") or hasattr(htmls, "__arrow_c_array__")):
+        _native.check_threads(threads=threads)
+        err = InputError(
+            "htmls must be a str, a list or tuple of str, or an Arrow string array, got "
+            f"{type(htmls).__name__}"
+        )
+        err.add_note("while processing 'htmls'")
+        raise err
+    pages = _native.arrow_pages(htmls)
+    keep = [i for i, h in enumerate(pages) if h is not None]
+    if len(keep) == len(pages):
+        return _extract_many(pages, kwargs, threads, compat, raise_errors=True)
+    try:
+        texts = _extract_many([pages[i] for i in keep], kwargs, threads, compat, raise_errors=True)
+    except Exception as e:  # its note names the page by its index among the non-null ones
+        notes = getattr(e, "__notes__", [])
+        for k, note in enumerate(notes):
+            m = _PAGE_NOTE.fullmatch(note) if isinstance(note, str) else None
+            if m is not None:
+                notes[k] = f"{m[1]}{keep[int(m[2])]}"
+        raise
+    out: list[str | None] = [None] * len(pages)
+    for i, text in zip(keep, texts, strict=True):
+        out[i] = text
+    return out
+
+
+#: The note ``_native.extract_batch`` adds to an error, naming the page.
+_PAGE_NOTE = re.compile(r"(pyroid: while extracting the document at index )(\d+)")
 
 
 # ---------------------------------------------------------------------------
