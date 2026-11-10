@@ -251,6 +251,17 @@ pub fn drop_deep(value: Value) {
     }
 }
 
+/// Values held while the parser can still fail, dropped with [`drop_deep`] on every path
+/// (including `?` returns): they may come from `raw_decode`, which has no depth limit.
+#[derive(Debug, Default)]
+pub(crate) struct DeepVec(pub(crate) Vec<Value>);
+
+impl Drop for DeepVec {
+    fn drop(&mut self) {
+        drop_deep(Value::Array(std::mem::take(&mut self.0)));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

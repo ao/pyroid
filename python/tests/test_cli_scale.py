@@ -693,3 +693,44 @@ def test_stages_refuse_lost_or_unfinished_files(
     empty.mkdir()
     assert main(["dedup", "filter", str(src), str(tmp_path / "o2"), "--removed", str(empty)]) == 0
     assert "no .remove files" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_merge_temp_files_do_not_follow_planted_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The temporary files of a merge are new files: a symlink at an old fixed name is ignored."""
+    import errno
+
+    import pyroid.cli as cli
+    from pyroid.integrations import _io
+
+    for i, text in enumerate(["héllo", "wörld"]):
+        (tmp_path / f"{i}.jsonl").write_text(json.dumps({"text": text}) + "\n", encoding="utf-8")
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep me")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / ".res.jsonl.concat.partial").symlink_to(victim)
+    ins = [str(tmp_path / "0.jsonl"), str(tmp_path / "1.jsonl")]
+    assert main(["translit", *ins, str(out / "res.jsonl")]) == 0
+    assert victim.read_text() == "keep me"
+    assert not (out / "res.jsonl").is_symlink()
+    assert len(_rows(out / "res.jsonl")) == 2
+
+    # Across filesystems (--tmp-dir elsewhere) _move copies: the same holds for its copy.
+    (out / ".moved.jsonl.copy.partial").symlink_to(victim)
+    real = _io.replace
+
+    def cross_device(src: Any, dst: Any) -> None:
+        if Path(dst).name == "moved.jsonl":
+            raise OSError(errno.EXDEV, "cross-device link")
+        real(src, dst)
+
+    monkeypatch.setattr(_io, "replace", cross_device)
+    src = tmp_path / "spool.jsonl"
+    src.write_text('{"text": "x"}\n')
+    with pytest.raises(OSError, match="cross-device"):
+        cli._move(src, out / "moved.jsonl")  # the final rename fails here, by construction
+    assert victim.read_text() == "keep me"
+    assert not any(p.name.endswith(".copy.partial") and not p.is_symlink() for p in out.iterdir())

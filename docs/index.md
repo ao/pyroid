@@ -180,9 +180,9 @@ package's licence expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-C
 PSF-2.0 AND Unicode-3.0`:
 
 - Apache-2.0 for the ftfy, datatrove, rouge-score, NLTK (Porter stemmer and tokenizers),
-  sacrebleu, Trafilatura and SudachiPy ports;
-- MIT for the spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (and its
-  dictionary) and libxml2 (HTML parser) ports;
+  sacrebleu, Trafilatura, SudachiPy and warcio ports;
+- MIT for the fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (and
+  its dictionary) and libxml2 (HTML parser) ports;
 - BSD-2-Clause for the jusText port and its stoplists;
 - BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract and lxml;
 - PSF-2.0 for CPython's `ipaddress`;

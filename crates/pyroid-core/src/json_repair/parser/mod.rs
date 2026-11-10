@@ -413,7 +413,8 @@ impl<'a> Parser<'a> {
             return Ok(first);
         }
         self.log(|| "The parser returned early, checking if there's more json elements".into());
-        let mut json = vec![first];
+        // `first` and `j` may be deep `raw_decode` values: drop them iteratively on every path.
+        let mut json = super::value::DeepVec(vec![first]);
         while self.index < self.len() {
             self.ctx.clear();
             self.deferred.clear();
@@ -424,30 +425,31 @@ impl<'a> Parser<'a> {
                 self.log(|| {
                     "Multiple top-level JSON elements found in strict mode, raising an error".into()
                 });
+                super::value::drop_deep(j);
                 return Err(ParseError::Strict(
                     "Multiple top-level JSON elements found in strict mode.",
                 ));
             }
             if j.truthy() {
-                let last = json.last().expect("never empty");
+                let last = json.0.last().expect("never empty");
                 if !is_comma_separated && super::value::is_same_object(last, &j) {
                     // Treat repeated objects as updates: keep the newest value.
-                    super::value::drop_deep(json.pop().expect("never empty"));
+                    super::value::drop_deep(json.0.pop().expect("never empty"));
                 } else if !last.truthy() {
-                    super::value::drop_deep(json.pop().expect("never empty"));
+                    super::value::drop_deep(json.0.pop().expect("never empty"));
                 }
-                json.push(j);
+                json.0.push(j);
             } else {
                 self.index += 1;
             }
         }
-        if json.len() == 1 {
+        if json.0.len() == 1 {
             self.log(|| {
                 "There were no more elements, returning the element without the array".into()
             });
-            return Ok(json.pop().expect("one element"));
+            return Ok(json.0.pop().expect("one element"));
         }
-        Ok(Value::Array(json))
+        Ok(Value::Array(std::mem::take(&mut json.0)))
     }
 
     /// `_next_top_level_value_is_comma_separated`.
@@ -563,13 +565,16 @@ impl<'a> Parser<'a> {
             // Decoder limits (such as oversized integers) also decline.
             Err(_) => return Ok(None),
         };
+        // `value` has no depth limit: drop it iteratively when declining it.
         if candidate[end..]
             .iter()
             .any(|c| !matches!(c, ' ' | '\t' | '\r' | '\n'))
         {
+            super::value::drop_deep(value);
             return Ok(None);
         }
         if self.strict {
+            super::value::drop_deep(value);
             return Err(ParseError::Strict(
                 "Missing opening object brace in strict mode.",
             ));

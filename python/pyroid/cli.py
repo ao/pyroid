@@ -1258,9 +1258,13 @@ def _move(src: Path, dest: Path) -> None:
     except OSError as e:
         if e.errno != errno.EXDEV:
             raise
-        tmp = dest.with_name(f".{dest.name}.copy.partial")
+        # An O_EXCL sibling with a random name: a planted symlink is never written through.
+        tmp, fd = _io._sibling(dest, ".copy.partial")
         try:
-            shutil.copyfile(src, tmp)
+            with open(fd, "wb") as f, open(src, "rb") as g:
+                shutil.copyfileobj(g, f, 1 << 20)
+                f.flush()
+                os.fsync(f.fileno())
             _io.replace(tmp, dest)
         except BaseException:
             _io.remove(tmp)
@@ -1296,12 +1300,14 @@ def _concat(parts: Sequence[Path], dest: Path, compression: str | None) -> None:
         return
     if _io.file_format(dest) == "jsonl":
         # JSON Lines, plain or as gzip, bz2, zstd or lz4 frames, concatenates as bytes.
-        tmp = dest.with_name(f".{dest.name}.concat.partial")
+        tmp, fd = _io._sibling(dest, ".concat.partial")  # O_EXCL, as in _move
         try:
-            with open(tmp, "wb") as f:
+            with open(fd, "wb") as f:
                 for p in present:
                     with open(p, "rb") as g:
                         shutil.copyfileobj(g, f, 1 << 20)
+                f.flush()
+                os.fsync(f.fileno())
             _io.replace(tmp, dest)
         except BaseException:
             _io.remove(tmp)
