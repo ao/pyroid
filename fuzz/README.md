@@ -30,6 +30,27 @@ each file is the full list.
 | `warc_reader` | options byte (ArchiveIterator flags, `check_digests` mode, gzip members with an optional flipped byte, `WARCIterator`), block-size byte, 4 read-plan bytes, data | `warc::ArchiveReader` in both modes: no panic; heap under 64 MiB + 4 KiB per input byte (nothing allocated from `Content-Length`, chunk sizes or `block_size`); the same records, contents, messages and error twice; content streams read in the plan's chunk sizes give the bytes, messages and outcome of one `read()`. Header comment of `fuzz_targets/warc_reader.rs` for details |
 | `warc_docs` | flags byte (gzip as one member per 256 bytes), data | `warc::DocReader` (datatrove's `process_record` path) against `ArchiveReader`: the same kept records in order, index, content bytes, UTF-8 flag, id/url/date with datatrove's fallbacks, and final error; `Rows` holds what was pushed. Exactness against warcio is checked by `crates/pyroid-core/tests/warc_oracle.rs` |
 | `trafilatura_extract` | options byte (focus, comments, fast, tables, dedup, Unicode version), HTML | `trafilatura::load_html`, `extract` and `bare_extraction`: no panic, deterministic, `extract` equals the strip + NFC of `bare_extraction`'s text and comments as `determine_returnstring` builds them, the dedup cache stays within its 4096 entries |
+| `json_repair` | 5 option bytes (`repair_json` flags and Unicode tables, `json.dumps` options, digit limit, repeat count `e`), strings `a` and `b`, text; with `e > 0` the text is `pre + a * 2^e + mid + b * 2^e + post` (up to 512 KiB of repeats), so a small input nests 2^18 deep. Size bounds: header comment of `fuzz_targets/json_repair.rs` | `repair`, `repair_chars`, `repair_json` and `dumps_result`: no panic or stack overflow at any depth; deterministic; the str and char paths agree; `logging` changes only the log (empty on the `json.loads` fast path); `Strict`, `Int` and `Dump` errors only with strict mode, a digit limit or `allow_nan=False`; the output is `""` or JSON that `json.loads` takes and that repairs to itself |
+| `sudachi_dic` | text length byte, text (at most 32 bytes), a `SudachiBinaryDic` file, loaded as given and with 72 MB of zeros appended (a loadable dictionary needs a 5968 x 5968 connection matrix) | `Dictionary::from_bytes`, then `tokenize`: header comment and signature, POS ids; morphemes are contiguous byte ranges on char boundaries; OOV word ids carry their POS; deterministic, also after another text. Seeds: small dictionaries the target writes with `PYROID_FUZZ_SEEDS=<dir>`. Bounds: header comment of `fuzz_targets/sudachi_dic.rs` |
+| `jieba_dict` | flags byte (HMM off, a main dictionary up to the first NUL, load twice), text length byte, text, user dictionary | `from_entries`, and `load_userdict`'s lines (`re_userdict`) through `add_word` and `suggest_freq`: words keep their last frequency and their prefixes, `total` and `len(FREQ)` add up, `FREQ.items()` agrees with `get`; `cut` fails only for a zero total, else its words are non-empty and join to the text; `tokenize` offsets; `cut_for_search` equals `tokenize(mode="search")`; `get_DAG`'s shape; deterministic |
+
+### Bounded inputs
+
+Three targets limit what they run, so that a run is not spent on costs the
+reference libraries have too:
+
+- json_repair 0.64.5's parser rescans the rest of the text in places, so some
+  inputs take time quadratic in their length, in json_repair as in pyroid (a
+  62-byte unit of garbage repeated to 31,744 characters: 18.4 s in json_repair
+  and 1.9 s in pyroid 1.0.0rc1, Docker/OrbStack VM, linux/arm64), and with
+  `logging` the log grows the same way. `json_repair` turns logging off past
+  8 KiB and skips texts over 16 KiB unless their repeated middle is valid JSON.
+- A Sudachi trie value can list any number of word entries, each a lattice node
+  wherever it matches, so tokenizing is quadratic in them. `sudachi_dic` only
+  tokenizes when the word-id table is at most 128 bytes and the text at most 32
+  bytes.
+- jieba keeps every prefix of every word in `FREQ`, so a word costs memory
+  quadratic in its length; run `jieba_dict` with `-max_len=4096`.
 
 The Arrow C Data importer target lives in its own cargo-fuzz project,
 [`arrow/`](arrow/README.md), because it compiles pyroid-py's PyO3 sources and
@@ -106,9 +127,10 @@ less on a shared machine.
   Turn the minimised input into a regression test in `crates/pyroid-core`
   before fixing; artifacts are gitignored.
 - Shrink a corpus after a long run: `cargo +nightly fuzz cmin -a -s none <target>`.
-  Keep each committed corpus under about 1 MB: add `-- -max_len=2048` to
-  truncate the few long inputs (the ftfy and filters corpora were cut that
-  way, losing 1.5% and 3% of their features).
+  Keep each committed corpus small (most are under 1 MB): add
+  `-- -max_len=2048` to truncate the few long inputs (the ftfy, filters and
+  trafilatura_extract corpora were cut that way, losing 1.5%, 3% and 2.7% of
+  their features; the pages of trafilatura_extract still take 2.9 MB).
 - Coverage: `cargo +nightly fuzz coverage <target>` (writes `coverage/`,
   gitignored).
 
@@ -117,7 +139,14 @@ less on a shared machine.
 `corpus/<target>/` holds the minimised corpora (`cargo fuzz cmin`), started
 from small real inputs: ftfy's own test cases, the tokenizer and
 `simplify_text` golden files under `crates/pyroid-core/tests/`, and a few
-synthetic documents and multilingual strings. File names are content hashes;
+synthetic documents and multilingual strings. The newer ones started from
+the lxml `fromstring` cases and the Trafilatura edge-case and Unicode pages
+under `crates/pyroid-core/tests/` (`html_parse`, `trafilatura_extract`),
+json_repair's own test inputs plus deep nesting (`json_repair`), jieba's
+recorded scenarios and test sentences and its example user dictionary
+(`jieba_dict`), and the dictionaries `sudachi_dic` writes with
+`PYROID_FUZZ_SEEDS` (`sudachi_dic`); each was fuzzed for 10 minutes before
+`cmin`. File names are content hashes;
 the files are raw fuzz inputs (header bytes, then text), so they are binary
 and must be left alone by whitespace and spelling hooks.
 

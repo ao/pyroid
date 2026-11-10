@@ -85,5 +85,26 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "json_repair"
+path = "fuzz_targets/json_repair.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sudachi_dic"
+path = "fuzz_targets/sudachi_dic.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "jieba_dict"
+path = "fuzz_targets/jieba_dict.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
 members = ["."]
