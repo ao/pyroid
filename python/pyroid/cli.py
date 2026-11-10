@@ -281,7 +281,7 @@ def _check_out(layout: Layout, overwrite: bool, sources: Sequence[Any]) -> None:
     outs = [p for p in (layout.final, layout.excluded_final) if p is not None]
     for s in sources:
         if "://" not in s.uri and any(Path(s.uri).resolve() == p.resolve() for p in outs):
-            raise SystemExit("pyroid: an output path is the input path")
+            raise SystemExit(f"pyroid: {s.uri} is both an input and an output")
 
 
 # ======================================================================================== options
@@ -1169,7 +1169,7 @@ def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: b
     exclude = [p for p in (out, excl, tmp) if p is not None]
     for spec in getattr(a, "input", []):
         if "://" not in spec and any(Path(spec).resolve() == p.resolve() for p in exclude):
-            raise SystemExit("pyroid: an output path is the input path")
+            raise SystemExit(f"pyroid: {spec} is both an input and an output (or --tmp-dir)")
     sources = _sources(a, exclude)
     layout = _layout(a, sources, shard, excluded=excluded)
     _check_out(layout, a.overwrite, sources)
@@ -2099,8 +2099,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="pyroid",
         description="Clean text datasets for LLM training, in Parquet or JSON Lines files.",
-        epilog="pyroid run [-p NAMES] (SCRIPT | -m MODULE) [ARGS...] runs a Python program "
-        "with pyroid.integrations.patch() applied; see 'pyroid run --help'.",
+        epilog="Across machines, 'pyroid dedup signatures', 'buckets', 'cluster' and 'filter' "
+        "run datatrove's four MinHash stages; see 'pyroid dedup --help'.",
     )
     ap.add_argument("--version", action="version", version=f"pyroid {pyroid.__version__}")
     sub = ap.add_subparsers(dest="command", required=True, metavar="COMMAND")
@@ -2236,6 +2236,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("output", metavar="OUT", help="a directory OUT of clean, langid, dedup, ...")
     p.add_argument("--json", metavar="PATH", help="write the JSON to PATH instead of stdout")
     p.set_defaults(body=_cmd_stats)
+    # Listed for --help only: main() hands `pyroid run ...` to pyroid.integrations.run first.
+    sub.add_parser(
+        "run",
+        help="run a Python program with pyroid.patch() applied (see 'pyroid run --help')",
+        add_help=False,
+    )
     return ap
 
 

@@ -151,6 +151,8 @@ def test_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["translit", str(tmp_path / "missing.parquet"), str(tmp_path / "o.parquet")]) == 1
     with pytest.raises(SystemExit):
         main(["clean", str(src), str(tmp_path / "o.parquet")])  # --recipe is required
+    with pytest.raises(SystemExit, match=r"in\.parquet is both an input and an output"):
+        main(["translit", str(src), str(src), "--overwrite"])
 
 
 @pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and the environment")

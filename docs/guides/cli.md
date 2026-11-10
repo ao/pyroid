@@ -34,13 +34,14 @@ positional arguments:
     dedup     drop near-duplicates (datatrove's MinHash) or exact duplicates
     translit  transliterate to ASCII (anyascii data, ISC)
     stats     sum the stats of every finished file of a directory OUT (all shards)
+    run       run a Python program with pyroid.patch() applied (see 'pyroid run --help')
 
 options:
   -h, --help  show this help message and exit
   --version   show program's version number and exit
 
-pyroid run [-p NAMES] (SCRIPT | -m MODULE) [ARGS...] runs a Python program with
-pyroid.integrations.patch() applied; see 'pyroid run --help'.
+Across machines, 'pyroid dedup signatures', 'buckets', 'cluster' and 'filter' run datatrove's four
+MinHash stages; see 'pyroid dedup --help'.
 ```
 
 | Command | What it does |
@@ -425,7 +426,7 @@ $ cat ascii.jsonl
 `pyroid run [-p NAMES] (SCRIPT | -m MODULE) [ARGS...]` runs a Python program with
 `import ftfy` / `import fasttext` giving pyroid's drop-ins, in the program and in the Python
 processes it starts; `-p` picks the modules from `ftfy`, `fasttext`, `anyascii`, `datasketch`,
-`trafilatura` and `nltk`. It is described with
+`trafilatura`, `nltk`, `warcio` and `nemo_curator`. It is described with
 [`pyroid.patch()`](patch.md#pyroid-run-programs-and-their-child-processes).
 
 ## From Python: `pyroid.integrations.recipes`

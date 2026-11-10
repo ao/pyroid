@@ -846,6 +846,8 @@ def test_run_script(tmp_path: Path) -> None:
     assert out["env"] == "ftfy"
     assert out["hook"] == _patch.HOOK_DIR
     assert proc.stderr.count("PatchWarning") == 1, proc.stderr
+    # A plain line: under pyroid run there is no user code for a warning location to point at.
+    assert proc.stderr.startswith("pyroid run: PatchWarning: pyroid.integrations.patch: ")
 
 
 def test_run_module(tmp_path: Path) -> None:
