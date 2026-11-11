@@ -540,9 +540,11 @@ jobs:
           from packaging.version import Version
 
           FLAVOURS = ("cp311-abi3", "cp314-cp314t", "cp315-abi3.abi3t")
+          # Matched against the platform tags sorted: the manylinux wheels carry two, in either order
+          # (run 43008668947 had manylinux2014_x86_64.manylinux_2_17_x86_64).
           PLATFORMS = {
-              "manylinux2014 x86_64": r"manylinux_2_17_x86_64\.manylinux2014_x86_64",
-              "manylinux2014 aarch64": r"manylinux_2_17_aarch64\.manylinux2014_aarch64",
+              "manylinux2014 x86_64": r"manylinux2014_x86_64\.manylinux_2_17_x86_64",
+              "manylinux2014 aarch64": r"manylinux2014_aarch64\.manylinux_2_17_aarch64",
               "musllinux_1_2 x86_64": r"musllinux_1_2_x86_64",
               "musllinux_1_2 aarch64": r"musllinux_1_2_aarch64",
               "macOS x86_64": r"macosx_\d+_\d+_x86_64",
@@ -558,7 +560,8 @@ jobs:
                   name, version, _, _ = parse_wheel_filename(f)
                   parts = f[: -len(".whl")].split("-")
                   flavour = "-".join(parts[2:4])
-                  platform = next((k for k, rx in PLATFORMS.items() if re.fullmatch(rx, parts[-1])), None)
+                  tags = ".".join(sorted(parts[-1].split(".")))
+                  platform = next((k for k, rx in PLATFORMS.items() if re.fullmatch(rx, tags)), None)
                   if name != "pyroid" or len(parts) != 5 or flavour not in FLAVOURS or platform is None:
                       errors.append(f"unexpected wheel: {f}")
                       continue
