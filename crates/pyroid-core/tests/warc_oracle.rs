@@ -204,9 +204,7 @@ fn run_case(case: &Value) -> Value {
                 let len = a.get_record_length(&mut src)?;
                 r["early"] = json!([off, len]);
             }
-            if plan == "stale"
-                && let Some(p) = &prev
-            {
+            if let Some(p) = prev.as_ref().filter(|_| plan == "stale") {
                 // reads of the previous record's streams after the iterator moved on
                 let mut raw = Vec::new();
                 a.raw_read(&p.raw, &mut src, Some(50), &mut raw)?;
@@ -390,9 +388,7 @@ fn matches_datatrove() {
                     let meta = |url: &str, date: &str| json!([d.index, d.id, url, date]);
                     if !d.utf8 {
                         // cchardet decides; compare what does not depend on it
-                        if let Some(w) = want_docs.get(next)
-                            && w[0] == json!(d.index)
-                        {
+                        if let Some(w) = want_docs.get(next).filter(|w| w[0] == json!(d.index)) {
                             let (Ok(url), Ok(date)) = (d.url, d.date) else {
                                 panic!("{file}: {d:?}")
                             };

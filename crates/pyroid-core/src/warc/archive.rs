@@ -561,11 +561,12 @@ impl ArchiveReader {
             if loaded {
                 http_headers = Some(std::mem::take(http));
             }
-            if let Some(l) = &length
-                && *l != PyInt::Small(0)
-                && http_headers
-                    .as_ref()
-                    .is_some_and(StatusAndHeaders::is_truthy)
+            let truthy_http = http_headers
+                .as_ref()
+                .is_some_and(StatusAndHeaders::is_truthy);
+            if let Some(l) = length
+                .as_ref()
+                .filter(|l| **l != PyInt::Small(0) && truthy_http)
             {
                 let used = raw.tell(&self.top) - start;
                 let v = match l {

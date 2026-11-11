@@ -92,8 +92,10 @@ impl DocReader {
                 Some("conversion") => true,
                 _ => continue,
             };
-            if let Some(m) = rec.rec_headers.get_lower("warc-identified-payload-type")
-                && !mime_ok(m, conversion)
+            if rec
+                .rec_headers
+                .get_lower("warc-identified-payload-type")
+                .is_some_and(|m| !mime_ok(m, conversion))
             {
                 continue;
             }

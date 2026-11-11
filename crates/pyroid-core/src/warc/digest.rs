@@ -398,9 +398,7 @@ impl Verifier {
         checker: &mut DigestChecker,
         msgs: &mut Vec<Message>,
     ) -> Result<(), Error> {
-        if self.payload_on
-            && let Some(h) = self.payload.as_mut()
-        {
+        if let Some(h) = self.payload.as_mut().filter(|_| self.payload_on) {
             h.update(buff);
         }
         if let Some(h) = self.block.as_mut() {
