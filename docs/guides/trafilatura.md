@@ -136,13 +136,18 @@ pyroid reproduces one combination of releases per mode, selected with `compat=`:
 
 | `compat` | trafilatura | lxml | libxml2 | jusText | Also as resolved (no effect on the text) |
 |---|---|---|---|---|---|
-| `"2.3.1"` (the default) | 2.3.1 | 6.1.3 | 2.14.6 (bundled in lxml's wheels) | 3.0.2 | |
+| `"2.3.1"` (the default) | 2.3.1 | 6.1.3 | 2.14.6 (bundled in lxml's Linux and macOS wheels) | 3.0.2 | |
 | `"1.11.0"` | 1.11.0 | 6.1.3 | 2.14.6 | 3.0.2 | lxml-html-clean 0.4.6, charset-normalizer 3.5.2, courlan 1.4.0, htmldate 1.11.0 |
 
 The second row is what a fresh `pip install 'datatrove[processing]==0.10.1'` resolves.
 `pyroid.trafilatura.TRAFILATURA_VERSIONS` lists the modes, `REPRODUCED_VERSIONS` the versions
 behind each, and `DEFAULT_CONFIGS` each release's settings.cfg. Another version of trafilatura or
 lxml can extract different text from the same page.
+
+lxml 6.1.3's Windows wheels bundle libxml2 2.11.9, whose HTML parser builds different trees for
+some pages (it drops `&#0;`, for one), so Trafilatura itself extracts some pages differently on
+Windows. pyroid parses as libxml2 2.14.6 on every platform, and the tests that compare it with
+Trafilatura run only where lxml has 2.14.6.
 
 ### Choosing a mode
 

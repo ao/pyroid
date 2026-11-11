@@ -121,6 +121,12 @@ keeps the release-please outputs, so it can still publish. If the code is broken
 
 Never publish from a laptop, and don't add an API token as a fallback.
 
+The wheels are built with profile-guided optimization (PGO). To build a run without it, start the workflow
+by hand with `pgo: false`, or set the repository variable `PYROID_PGO=off` (this also covers release runs
+on push). A platform whose matrix entry sets `no_pgo: true` always builds plain wheels. windows-arm64 does,
+because llvm-profdata could not read the profiles its instrumented wheels wrote ("symbol name is empty").
+Remove `no_pgo` there once that is fixed.
+
 How the version is bumped: `release-please-config.json` uses `release-type: simple` with TOML `extra-files`.
 The `rust` release type can't handle a virtual workspace whose crates use `version.workspace = true`: it throws,
 and no release PR appears. The extra files update `[workspace.package].version` in `Cargo.toml` and the

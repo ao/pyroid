@@ -414,6 +414,15 @@ multiply-adds that baseline x86-64 can't. pyroid reproduces each architecture's 
 the fastText reference is pinned per platform, and pyroid's x86_64 output is bit-identical to
 x86_64 fasttext-predict 0.9.2.4 on all 26,464 pinned predictions (`max |Δp| = 0`).
 
+The C library matters as well. pyroid calls the platform's `exp`, `expf` and `log`, as fastText
+does, and glibc, musl, Apple's libm and Windows' UCRT round some of them differently: on GitHub's
+runners (2026-11-10), 39 of the 54 test-zoo models gave other digests on macOS arm64, 16 on macOS
+x86_64 and 14 on Windows x64, with the same model files. So the zoo digests are pinned per OS, C
+library and architecture; on each platform they were the same for every Python version and for the
+PGO release wheels. On Windows x64, pyroid matched fasttext-predict to the last bit over 316
+(model, k) pairs. On macOS the largest difference was 1.91e-6, on a test model with weights scaled
+by 20, where fasttext-predict's clang build rounds its dot products differently.
+
 The metrics reference is pinned per platform the same way, because sacrebleu's BLEU calls the C
 library's `exp` and `log`. Its difference came only from Rosetta 2's emulated CPU, which has
 SSE4.2, FMA and BMI2 but no AVX or AVX2, so glibc took other `exp`/`log` paths there. On the c7i,

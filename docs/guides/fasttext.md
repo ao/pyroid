@@ -5,12 +5,15 @@ inference (fastText is © Facebook, Inc., MIT License). It loads the same `.bin`
 `.ftz` model files. Its labels and probabilities are bit-identical to fastText's C++ predict path,
 as built in fasttext-predict 0.9.2.4 ([parity](../compatibility.md#fasttext)).
 
-!!! note "Verified on Linux x86-64 and aarch64 so far"
-    pyroid reproduces the C++ code's floating-point operations exactly, including which
-    multiply-adds are fused, and these differ by architecture. Parity on macOS and Windows is
-    unverified until the CI runs there. Different builds of fastText itself differ slightly too:
-    fasttext-numpy2-wheel's probabilities were up to 1.79e-7 away from fasttext-predict's on the
-    same inputs.
+!!! note "Results differ slightly between platforms"
+    pyroid reproduces the C++ code's floating-point operations, including which multiply-adds
+    are fused, and calls the C library's `exp`, `expf` and `log` as fastText does. Both vary by
+    platform, so the last bits of a probability depend on the architecture and the C library.
+    On Linux (glibc) and Windows x64, pyroid matches fasttext-predict bit for bit. On macOS,
+    fasttext-predict's clang build rounds its dot products differently: the largest difference
+    on GitHub's runners was 1.91e-6, on a test model with weights scaled by 20. Different builds
+    of fastText itself differ too: fasttext-numpy2-wheel's probabilities were up to 1.79e-7 away
+    from fasttext-predict's on the same inputs.
 
 Besides speed, there are two reasons to switch. pyroid has wheels for CPython 3.11–3.15 and
 free-threaded 3.14t/3.15t on Linux (glibc and musl), macOS and Windows, so it installs without a
