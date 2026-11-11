@@ -672,8 +672,9 @@ def test_api(trafilatura_impl: Any, parity: Collector, name: str) -> None:
 
 def test_api_shim(trafilatura_impl: Any, parity: Collector) -> None:
     """``<top>.integrations.patch("trafilatura")`` gives a module whose functions have trafilatura's exact
-    signatures: no ``compat``, and ``config`` defaulting to trafilatura's own ``DEFAULT_CONFIG`` object (``None``
-    only where trafilatura is not installed). Checked in a fresh process, which the patch then does not leak from.
+    signatures: no ``compat``, and ``config`` defaulting to trafilatura's own ``DEFAULT_CONFIG`` object (where
+    trafilatura is not installed, to the candidate's own default). Checked in a fresh process, which the patch then
+    does not leak from.
     """
     impl = trafilatura_impl
     if impl.is_reference:
