@@ -10,7 +10,9 @@
 # Knobs: PGO_VENVS [<raw-dir>/../venvs], PGO_KEEP_VENVS=1 (keep each venv after its run),
 #        PGO_TRAIN_ARGS (extra pgo_train.py arguments).
 # Needs uv. Installs numpy, pyarrow (not on Windows ARM64, where it has no wheels) and sudachidict-core
-# (Japanese is trained only with SudachiDict installed).
+# (Japanese is trained only with SudachiDict installed). sudachidict-core goes in without its SudachiPy
+# dependency: pyroid reads the dictionary file and never imports SudachiPy, which has no musllinux wheels
+# (so in Alpine it would be built from source, which needs Rust and a C compiler).
 set -eu
 WHEELS=$1
 CORPUS=$2
@@ -21,7 +23,8 @@ VENVS=${PGO_VENVS:-$RAW/../venvs}
 LLVM_PROFILE_FILE="$RAW/%m_%p.profraw"
 export LLVM_PROFILE_FILE
 # The training pins, as bench/uv.lock and parity/pyproject.toml pin them.
-DEPS="numpy==2.5.4 sudachidict-core==20261015"
+DEPS="numpy==2.5.4"
+SUDACHIDICT="sudachidict-core==20261015"
 ARROW="pyarrow==26.0.1; sys_platform != 'win32' or platform_machine != 'ARM64'"
 for py in "$@"; do
     case "$py" in
@@ -41,6 +44,7 @@ for py in "$@"; do
     if [ -x "$venv/Scripts/python.exe" ]; then python=$venv/Scripts/python.exe; else python=$venv/bin/python; fi
     # shellcheck disable=SC2086 # DEPS is a list of requirement words
     uv pip install -q --python "$python" $DEPS "$ARROW"
+    uv pip install -q --python "$python" --no-deps "$SUDACHIDICT"
     uv pip install -q --python "$python" --no-index --no-deps "$wheel"
     echo "pgo_train.sh: Python $py with $(basename "$wheel")"
     # shellcheck disable=SC2086 # PGO_TRAIN_ARGS is a list of words
