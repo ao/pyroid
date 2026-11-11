@@ -249,16 +249,23 @@ fn unique_tag() -> String {
 }
 
 /// A new, empty directory `parent/{prefix}-{unique}`.
+///
+/// Other writers remove `parent` when they leave it empty, at any time. So
+/// either step can fail with `AlreadyExists` or `NotFound`, `create_dir_all`
+/// included: it reports `AlreadyExists` when its `mkdir` fails because the
+/// directory exists and the directory is gone again by the time it checks.
+/// Both are retried.
 fn make_temp_dir(parent: &Path, prefix: &str) -> Result<PathBuf> {
     let mut tries = 0;
     loop {
-        fs::create_dir_all(parent).map_err(io_at(parent))?;
         let dir = parent.join(format!("{prefix}-{}", unique_tag()));
-        match fs::create_dir(&dir) {
+        let made = fs::create_dir_all(parent)
+            .map_err(|e| (parent.to_path_buf(), e))
+            .and_then(|()| fs::create_dir(&dir).map_err(|e| (dir.clone(), e)));
+        match made {
             Ok(()) => return Ok(dir),
-            // A clash, or another writer removed `parent` meanwhile: retry.
-            Err(e)
-                if tries < 8
+            Err((_, e))
+                if tries < 64
                     && matches!(
                         e.kind(),
                         io::ErrorKind::AlreadyExists | io::ErrorKind::NotFound
@@ -266,7 +273,7 @@ fn make_temp_dir(parent: &Path, prefix: &str) -> Result<PathBuf> {
             {
                 tries += 1;
             }
-            Err(err) => return Err(MinhashFileError::Io { path: dir, err }),
+            Err((path, err)) => return Err(MinhashFileError::Io { path, err }),
         }
     }
 }
@@ -1633,6 +1640,27 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn temp_dirs_survive_writers_removing_the_parent() {
+        // Each thread makes a temporary folder and removes it and, as a finished
+        // writer does, the shared parent when that is empty. Before the retry
+        // covered create_dir_all, a thread could get AlreadyExists for the parent.
+        let dir = TestDir::new("racing-tmp");
+        let parent = dir.path(SIG_TMP_DIR);
+        std::thread::scope(|s| {
+            for t in 0..8 {
+                let parent = &parent;
+                s.spawn(move || {
+                    for _ in 0..2_000 {
+                        let tmp = make_temp_dir(parent, &format!("t{t}")).unwrap();
+                        fs::remove_dir(&tmp).unwrap();
+                        let _ = fs::remove_dir(parent);
+                    }
+                });
+            }
+        });
     }
 
     struct Rng(u64);
