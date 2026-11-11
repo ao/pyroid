@@ -15,6 +15,7 @@ import platform
 import random
 import subprocess
 import sys
+import sysconfig
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,10 @@ LID_BIN = DATA / "models" / "lid.176.bin"
 
 #: Peak RSS bounds, MiB. The interpreter with pyarrow and pyroid loaded is about 100 MiB.
 BOUND_STREAM = 300
+if sysconfig.get_config_var("Py_GIL_DISABLED"):
+    # Free-threaded CPython's allocator (mimalloc, a heap per thread) holds more: translit peaked at
+    # 307 MiB on one of GitHub's ubuntu-24.04 3.14t legs (run 43008668757), under 300 on the others.
+    BOUND_STREAM = 360
 BOUND_DEDUP = 400  # plus the 64 MiB sort buffer the tests pass
 BOUND_CLEAN = 900  # plus the LID model (lid.176.bin is 125 MiB on disk)
 if sys.platform == "darwin" and platform.machine() == "arm64":
