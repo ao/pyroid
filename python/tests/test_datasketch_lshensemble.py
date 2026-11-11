@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import platform
+import sys
 from typing import Any
 
 import numpy as np
@@ -45,16 +47,28 @@ def test_optimal_params_match(threshold: float, num_perm: int) -> None:
                 assert _optimal_param(threshold, num_perm, m, xq, *w) == want
 
 
+#: scipy's macOS arm64 wheels build QUADPACK with fused multiply-adds (647 in scipy 1.18.1's
+#: _quadpack; its manylinux aarch64 build, which pyroid's port follows, has none), so there the
+#: integrals can differ in the last bits. Elsewhere they are equal.
+QUAD_FUSED = sys.platform == "darwin" and platform.machine() == "arm64"
+
+
+def same_integral(ours: float, theirs: float) -> bool:
+    return ours == pytest.approx(theirs, rel=1e-12, abs=1e-15) if QUAD_FUSED else ours == theirs
+
+
 @pytest.mark.parametrize(("b", "r"), [(1, 1), (4, 8), (32, 4), (128, 1)])
 def test_probabilities_match(b: int, r: int) -> None:
     for t in (0.0, 0.3, 0.8, 1.0):
         for xq in (0.0067, 0.5, 1.0, 2.0, 148.4):
-            assert _false_positive_probability(t, b, r, xq) == ds_ens._false_positive_probability(
-                t, b, r, xq
-            )
-            assert _false_negative_probability(t, b, r, xq) == ds_ens._false_negative_probability(
-                t, b, r, xq
-            )
+            assert same_integral(
+                _false_positive_probability(t, b, r, xq),
+                ds_ens._false_positive_probability(t, b, r, xq),
+            ), (t, b, r, xq)
+            assert same_integral(
+                _false_negative_probability(t, b, r, xq),
+                ds_ens._false_negative_probability(t, b, r, xq),
+            ), (t, b, r, xq)
 
 
 @pytest.mark.parametrize("scheme", ["affine32", "legacy"])
