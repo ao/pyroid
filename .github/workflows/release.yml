@@ -22,7 +22,8 @@
 # rows that no benchmark times) are fetched once, by the pgo-corpus job. Every platform has its own native
 # runner, so there are no universal2 macOS wheels: x86_64 and arm64 macOS wheels are built and trained
 # separately. To build without PGO: `pgo: false` on a manual run, or set the repository variable
-# PYROID_PGO=off (it also applies to release runs on push).
+# PYROID_PGO=off (it also applies to release runs on push). A platform whose matrix entry sets `no_pgo`
+# always builds plain release wheels (windows-arm64, see its entry).
 #
 # Owner setup (trusted publishers, environments, release-please permissions): docs/RELEASING.md.
 name: Release
@@ -147,7 +148,16 @@ jobs:
           - { id: macos-x86_64, runner: macos-15-intel, target: x86_64 }
           - { id: macos-arm64, runner: macos-15, target: aarch64 }
           - { id: windows-x64, runner: windows-2025, target: x64 }
-          - { id: windows-arm64, runner: windows-11-arm, target: aarch64 }
+          # No PGO: the profiles its instrumented wheels write are unreadable to llvm-profdata ("malformed
+          # instrumentation profile data: symbol name is empty", all 4 of them, in run 42813274649), while
+          # windows-x64 merges fine.
+          - { id: windows-arm64, runner: windows-11-arm, target: aarch64, no_pgo: true }
+    # PGO for this job: the run's setting (env.PGO above, repeated: a job's env cannot read `env`), off where
+    # the matrix entry sets no_pgo.
+    env:
+      PGO: >-
+        ${{ vars.PYROID_PGO != 'off' && (github.event_name != 'workflow_dispatch' || inputs.pgo)
+        && !matrix.platform.no_pgo }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
