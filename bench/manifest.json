@@ -1840,8 +1840,8 @@
       "source": "trafilatura v1.11.0 tests/ at 60647e5eeff77df9ef4b7432a936f580736b3075"
     },
     "parity/trafilatura-1.11.0-upstream.parquet": {
-      "sha256": "8ad5467d103bdd8305e705b0eedeb653f06ef6fc8a1339158435a35b88b306f9",
-      "bytes": 282159,
+      "sha256": "1a9f2ee45b89f3e24cb372791f388bd6b3828449b43555ef35d7776f90956a12",
+      "bytes": 282162,
       "rows": 633,
       "oracle": {
         "trafilatura": "1.11.0",
@@ -2069,8 +2069,8 @@
       "source": "trafilatura v2.3.1 tests/ at e2f85c965662c7df26b73290ef175b2c2a5fdca6"
     },
     "parity/trafilatura-upstream.parquet": {
-      "sha256": "a34ca23376594f5b53752c57628b40479a5c53bc0d95c8bdda9ee64891822108",
-      "bytes": 605310,
+      "sha256": "810ad17585de0b03044f0195df0ccb5914af279f81871fd866a15245a3354c1f",
+      "bytes": 605306,
       "rows": 4553,
       "oracle": {
         "trafilatura": "2.3.1",
@@ -2111,6 +2111,9 @@
         "test-file": "an argument names a file of the upstream tests (settingsfile=), rebuilt for the replay",
         "unreplayable": "an argument could not be stored (dropped from the recording)",
         "extractor-subclass": "options= was a subclass of Extractor; replayed as a plain Extractor",
+        "default-config-mutated": "the tests had changed trafilatura's DEFAULT_CONFIG in place (1.11.0's set MIN_OUTPUT_SIZE and MIN_EXTRACTED_SIZE to 0 at import): the call is recorded with the config= it saw",
+        "config-added": "with default-config-mutated: the test passed no config=, the recording adds the one in effect",
+        "pristine-config": "a default-config-mutated call again with trafilatura's own DEFAULT_CONFIG (its own group)",
         "differs-from-test": "the clean replay differs from what the test observed (see step 3)",
         "hash-seed": "the outcome changes with PYTHONHASHSEED"
       }

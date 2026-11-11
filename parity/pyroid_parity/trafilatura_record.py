@@ -45,6 +45,7 @@ import tempfile
 import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +59,20 @@ COMMITS = {
     "1.11.0": "60647e5eeff77df9ef4b7432a936f580736b3075",
 }
 COMMIT = COMMITS[TRAFILATURA_VERSION]
+
+#: Stands for the day of the run in the stored calls. Trafilatura stamps each document with the day it was
+#: extracted (``filedate``), and its tests pass ``date_params`` whose ``max_date`` is that day, so a recording
+#: that kept the date would reproduce, and replay, only on the day it was made. ``record`` writes this token
+#: for the day (or days, past midnight) it ran; ``load`` puts back the day it runs on.
+TODAY = "$today"
+
+
+def _undate(s: str, days: set[str]) -> str:
+    for d in days:
+        s = s.replace(d, TODAY)
+    return s
+
+
 UPSTREAM_TESTS = specs.trafilatura_files(TRAFILATURA_VERSION)["tests"]
 CALLS = specs.trafilatura_files(TRAFILATURA_VERSION)["calls"]
 BLOBS = specs.trafilatura_files(TRAFILATURA_VERSION)["blobs"]
@@ -365,6 +380,7 @@ def record(pytest_args: list[str] | None = None, mode: str | None = None) -> tup
     mode = mode or installed
     if installed != mode or mode not in COMMITS:
         raise SystemExit(f"recording mode {mode} needs trafilatura=={mode} installed, found {installed}")
+    days = {date.today().isoformat()}
     with tempfile.TemporaryDirectory(prefix="pyroid-traf-record-") as d:
         tmp = Path(d)
         raw = run_upstream_suite(tmp, pytest_args or [], mode)
@@ -399,6 +415,7 @@ def record(pytest_args: list[str] | None = None, mode: str | None = None) -> tup
             c["tags"], c["outcome"] = sorted(tags), want
             walk(c["args"])
             walk(c["kwargs"])
+        days.add(date.today().isoformat())
         blob_keys = sorted(used)
         blobs = pa.table(
             {"sha256": blob_keys, "data": [(raw / "blobs" / k).read_bytes() for k in blob_keys]},
@@ -409,10 +426,10 @@ def record(pytest_args: list[str] | None = None, mode: str | None = None) -> tup
             "index": list(range(len(calls))),
             "test": [c["test"] for c in calls],
             "fn": [c["fn"] for c in calls],
-            "args": [json.dumps(c["args"], ensure_ascii=True) for c in calls],
-            "kwargs": [json.dumps(c["kwargs"], ensure_ascii=True) for c in calls],
+            "args": [_undate(json.dumps(c["args"], ensure_ascii=True), days) for c in calls],
+            "kwargs": [_undate(json.dumps(c["kwargs"], ensure_ascii=True), days) for c in calls],
             "tags": [c["tags"] for c in calls],
-            "outcome": [c["outcome"] for c in calls],
+            "outcome": [_undate(c["outcome"], days) for c in calls],
         }
     )
     tag_counts = Counter(t for c in calls for t in c["tags"])
@@ -438,8 +455,11 @@ def load(root: Path | None = None, mode: str = TRAFILATURA_VERSION) -> tuple[lis
     """The pinned recorded calls (``args``/``kwargs``/``outcome`` decoded from JSON) and their blobs.
 
     ``root``: where ``materialize_tests`` rebuilt the upstream tests (calls that name a test file need it).
+    The recording day's token (``TODAY``) becomes today's date, as a fresh run of the tests would see it.
     """
     from pyroid_parity import data as D
+
+    today = date.today().isoformat()
 
     files = specs.trafilatura_files(mode)
     names = ["index", "test", "fn", "args", "kwargs", "tags", "outcome"]
@@ -449,10 +469,10 @@ def load(root: Path | None = None, mode: str = TRAFILATURA_VERSION) -> tuple[lis
             "index": i,
             "test": t,
             "fn": fn,
-            "args": json.loads(a),
-            "kwargs": json.loads(k),
+            "args": json.loads(a.replace(TODAY, today)),
+            "kwargs": json.loads(k.replace(TODAY, today)),
             "tags": list(tags),
-            "outcome": o,
+            "outcome": o.replace(TODAY, today),
         }
         for i, t, fn, a, k, tags, o in zip(*cols.values(), strict=True)
     ]
