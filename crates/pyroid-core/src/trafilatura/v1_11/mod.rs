@@ -585,4 +585,19 @@ mod tests {
         );
         assert_eq!(v111(&b).as_deref(), Some(want.as_str()));
     }
+
+    /// sanitize_tree's `strip_tags(cleaned_tree, *sanitization_list)` on a tag name with a
+    /// control character (1.11.0's repair keeps them): lxml raises ValueError, and the page is
+    /// discarded (trafilatura 1.11.0, lxml 6.1.3, CPython 3.12).
+    #[test]
+    fn a_control_character_in_a_tag_name_discards_the_readability_result() {
+        let c = "<!DOCTYPE html><p style=\"display:none\">The the the.The the the the.</p><p>The \
+                 the the.The the the. <A\u{1f} The the the.</p>";
+        assert_eq!(v111(c), None);
+        // the same page with a space instead: readability's text
+        assert_eq!(
+            v111(&c.replace('\u{1f}', " ")).as_deref(),
+            Some("The the the.The the the the.\nThe the the.The the the.")
+        );
+    }
 }

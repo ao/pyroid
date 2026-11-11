@@ -157,11 +157,24 @@ impl V11<'_, '_> {
         }
         let valid = TagSet::of(TEI_VALID_TAGS);
         let mut strip = TagSet::default();
+        let mut unencodable = false;
         for e in self.d.iter_vec(cleaned, &Matcher::AnyElement, true) {
             let g = self.d.tag(e);
             if !valid.contains(g) {
                 strip.insert(g);
+                // lxml encodes each name strip_tags gets (`_utf8`) and raises ValueError on an
+                // ASCII control character but TAB, LF and CR; 1.11.0's repair keeps them, so a
+                // tag name can hold one
+                unencodable |= self
+                    .d
+                    .name(g)
+                    .bytes()
+                    .any(|b| b < 0x20 && !matches!(b, b'\t' | b'\n' | b'\r'));
             }
+        }
+        if unencodable {
+            self.raise();
+            return (cleaned, String::new(), 0);
         }
         self.d.strip_tags(cleaned, &Matcher::Tags(strip));
         let text = trim(&self.d.itertext_join(cleaned, " "));

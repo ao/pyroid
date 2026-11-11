@@ -500,6 +500,11 @@ EXAMPLES = (
         "<a href='/a'>&amp;</a>The the the.<b>The the the the the the the the the the the the the the the the "
         "the the the the the.The the the the the the the the the the the the the river through."
     ),
+    # A control character in a tag name (1.11.0 keeps them): its sanitize_tree's strip_tags raises.
+    (
+        '<!DOCTYPE html><p style="display:none">The the the.The the the the.</p><p>The the the.The the the. '
+        "<A\x1f The the the.</p>"
+    ),
 )
 
 
@@ -521,6 +526,7 @@ def _calls(option: str) -> tuple[str, dict[str, Any]]:
 @example(html=EXAMPLES[9])
 @example(html=EXAMPLES[10])
 @example(html=EXAMPLES[11])
+@example(html=EXAMPLES[12])
 def test_hypothesis(trafilatura_impl: Any, parity: Collector, option: str, html: str) -> None:
     o = need_oracle(parity, f"hypothesis-{option}")
     impl = trafilatura_impl
