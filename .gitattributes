@@ -1,0 +1,5 @@
+# Check out every file exactly as committed, on every OS. GitHub's Windows runners set
+# core.autocrlf=true, which would add a CR to each line of the data files the crates embed
+# (include_str!, e.g. trafilatura's stoplist.txt) and of the test inputs; some WARC and ARC
+# fixtures need their CRLFs as they are.
+* -text
