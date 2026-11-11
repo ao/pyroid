@@ -352,13 +352,24 @@ _NATIVE_VALUES: dict[str, tuple[Any, ...] | None] = {
 }
 
 
-def upstream_native(call: dict[str, Any]) -> bool:
-    """Whether a recorded call uses only what pyroid ports (str or bytes input, the corpus options, txt)."""
+def upstream_native(call: dict[str, Any], blobs: T.Blobs) -> bool:
+    """Whether a recorded call uses only what pyroid ports (str or UTF-8 bytes input, the corpus options, txt).
+
+    pyroid hands bytes that are not UTF-8 to trafilatura (they need its charset detection), so those calls are
+    delegated ones: where trafilatura is not installed they raise ``pyroid.PyroidError`` and are not compared.
+    """
     names = [n for n, _ in SIGNATURES[call["fn"]] if n != "**kwargs"]
     bound = dict(zip(names, call["args"], strict=False)) | call["kwargs"]
     first = bound.pop("filecontent", None)
     if isinstance(first, dict) and not ({"$blob", "$str", "$bytes", "$cat", "$rep"} & set(first)):
         return False
+    if isinstance(first, dict):
+        raw = T.decode_arg(first, blobs)
+        if isinstance(raw, bytes):
+            try:
+                raw.decode("utf-8")
+            except UnicodeDecodeError:
+                return False
     fmt = bound.pop("output_format", "txt" if call["fn"] == "extract" else "python")
     if fmt != ("txt" if call["fn"] == "extract" else "python"):
         return False
@@ -395,7 +406,7 @@ def test_upstream(
             impl.obj.reset_caches()
             if not impl.is_reference:
                 oracle_reset()
-        name = "upstream" if upstream_native(c) else "upstream-delegated"
+        name = "upstream" if upstream_native(c, blobs) else "upstream-delegated"
         encoded = json.dumps([c["args"], c["kwargs"]])
         needs_objects = any(f'"{tag}"' in encoded for tag in ("$tree", "$lru", "$extractor"))
         if not has_oracle and (name == "upstream-delegated" or needs_objects):
