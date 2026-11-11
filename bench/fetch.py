@@ -171,10 +171,14 @@ OPT_IN_STEPS = frozenset(set(STEPS) - set(DEFAULT_STEPS.split(",")))
 
 
 def step_of(rel: str) -> str | None:
-    """The --only step that downloads the pinned file ``rel``; None for the generated parity/ files."""
+    """The --only step that downloads the pinned file ``rel``; None for the generated files: the
+    parity/ references and the models no step downloads (models/nemo-quality-dev10k.ftz, which the
+    nemo step of pyroid_parity trains)."""
     top = rel.split("/", 1)[0]
     if top == "fineweb2" and rel.endswith(TRAIN_SUFFIX):
         return "fineweb2-train"
+    if top == "models" and rel not in MODELS:
+        return None
     return top if top in STEPS else None
 
 
@@ -560,7 +564,7 @@ def main() -> int:
     if unknown := steps - set(STEPS):
         ap.error(f"--only: unknown step(s) {sorted(unknown)}; choose from {list(STEPS)}")
     if a.verify_all:
-        # step_of() is None for the generated parity/ files.
+        # step_of() is None for the generated files (parity/ references, the nemo model).
         wanted: set[str | None] = {*(set(STEPS) - OPT_IN_STEPS), *(steps & OPT_IN_STEPS), None}
         return 1 if verify(wanted, skip=tuple(a.skip)) else 0
     if not a.verify:
