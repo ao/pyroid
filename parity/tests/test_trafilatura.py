@@ -380,6 +380,16 @@ def upstream_native(call: dict[str, Any], blobs: T.Blobs) -> bool:
     return True
 
 
+def _config_default(impl: Any) -> Any:
+    """The candidate's default for ``config``: where trafilatura is not installed, it replays the recorded
+    calls that passed trafilatura's own ``DEFAULT_CONFIG``."""
+    try:
+        p = inspect.signature(impl.obj.mod.extract).parameters.get("config")
+    except (TypeError, ValueError):
+        return None
+    return None if p is None or p.default is inspect.Parameter.empty else p.default
+
+
 @pytest.mark.timeout(3600)  # one test replays all 4,553 calls (about 5 minutes for trafilatura itself)
 def test_upstream(
     trafilatura_impl: Any, parity: Collector, request: pytest.FixtureRequest, tmp_path: Path
@@ -390,6 +400,7 @@ def test_upstream(
         parity.uses(SUITE, rel)
     R.materialize_tests(tmp_path, MODE)  # some calls pass settingsfile= paths into tests/resources/
     calls, blobs = R.load(tmp_path, MODE)
+    blobs.default_config = _config_default(impl)
     if limit := page_limit(request, impl):  # every k-th recorded test, so a sample still spans all files
         tests = list(dict.fromkeys(c["test"] for c in calls))
         keep = set(tests[:: max(1, len(tests) // limit)])
