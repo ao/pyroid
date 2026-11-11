@@ -38,7 +38,7 @@ Without ``--impl`` the candidate is trafilatura itself: the pinned checks then v
 reproduces the references, on the first 100 pages of each file (and 100 of the recorded tests, spread over all
 of them) unless ``--parity-limit`` says otherwise.
 Where trafilatura is not installed (the free-threaded CI legs) the live checks skip and say so; the pinned ones
-still run against the candidate.
+still run against the candidate, with the GIL off (lxml is kept unimported there: ``_gil_stays_off``).
 """
 
 from __future__ import annotations
@@ -141,6 +141,23 @@ def trafilatura_impl(request: pytest.FixtureRequest) -> Any:
 def _oracle_info() -> None:
     o = oracle()
     reference(SUITE, "trafilatura", o.__version__ if o else f"{MODE} (pinned)", None)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _gil_stays_off(_oracle_info: None) -> Iterator[None]:
+    """Where the GIL is off and trafilatura is not installed (the free-threaded CI legs), keep lxml unimported.
+
+    lxml 6.1.3 re-enables the GIL when imported (with a RuntimeWarning, which would land in the outcome of the
+    first call that reads a tree), and sacrebleu, a core parity dependency, installs it. Without lxml,
+    pyroid.trafilatura's ``body`` and ``commentsbody`` are their XML strings, which ``trafilatura_compare``
+    normalizes as it does lxml trees, so the pinned digests apply unchanged; GIL builds check the lxml trees.
+    """
+    if getattr(sys, "_is_gil_enabled", lambda: True)() or oracle() is not None or "lxml" in sys.modules:
+        yield
+        return
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "lxml", None)  # `from lxml import etree` raises ImportError
+        yield
 
 
 def page_limit(request: pytest.FixtureRequest, impl: Any) -> int:
