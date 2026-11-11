@@ -228,6 +228,20 @@ def _edit(rng: random.Random, words: list[str], rate: float) -> list[str]:
     return out
 
 
+#: The FineWeb-2 test slices the adversarial corpus is built from. Its pin predates the vie_Latn
+#: and tha_Thai slices and the opt-in ``-train-20k`` files, so a new manifest entry must not join it.
+ADVERSARIAL_FINEWEB2 = (
+    "arb_Arab",
+    "cmn_Hani",
+    "deu_Latn",
+    "fra_Latn",
+    "hin_Deva",
+    "jpn_Jpan",
+    "rus_Cyrl",
+    "spa_Latn",
+)
+
+
 def build_adversarial(pin: bool) -> None:
     import ftfy.bad_codecs  # noqa: F401  registers sloppy-windows-*
     import pyarrow as pa
@@ -238,9 +252,8 @@ def build_adversarial(pin: bool) -> None:
 
     # 1. non-English: FineWeb-2 test-split docs as-is
     fw2: list[tuple[str, str, str]] = []
-    for rel in sorted(k for k in D.load_manifest()["files"] if k.startswith("fineweb2/")):
-        lang = Path(rel).stem
-        cols = D.read_parquet_columns(D.path(rel), ["id", "text"])
+    for lang in ADVERSARIAL_FINEWEB2:
+        cols = D.read_parquet_columns(D.path(f"fineweb2/{lang}.parquet"), ["id", "text"])
         for i, (did, text) in enumerate(zip(cols["id"], cols["text"], strict=True)):
             fw2.append((lang, did, text))
             rows.append((f"adv-fw2-{lang}-{i:04d}", text, f"nonenglish:{lang}", did))
