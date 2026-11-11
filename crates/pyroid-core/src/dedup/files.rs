@@ -254,7 +254,9 @@ fn unique_tag() -> String {
 /// either step can fail with `AlreadyExists` or `NotFound`, `create_dir_all`
 /// included: it reports `AlreadyExists` when its `mkdir` fails because the
 /// directory exists and the directory is gone again by the time it checks.
-/// Both are retried.
+/// macOS can also give `InvalidInput` (EINVAL) for a `mkdir` under a
+/// directory being removed (GitHub's macos-15 runners). All three are
+/// retried.
 fn make_temp_dir(parent: &Path, prefix: &str) -> Result<PathBuf> {
     let mut tries = 0;
     loop {
@@ -268,7 +270,9 @@ fn make_temp_dir(parent: &Path, prefix: &str) -> Result<PathBuf> {
                 if tries < 64
                     && matches!(
                         e.kind(),
-                        io::ErrorKind::AlreadyExists | io::ErrorKind::NotFound
+                        io::ErrorKind::AlreadyExists
+                            | io::ErrorKind::NotFound
+                            | io::ErrorKind::InvalidInput
                     ) =>
             {
                 tries += 1;
