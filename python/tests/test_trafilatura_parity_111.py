@@ -48,6 +48,15 @@ with warnings.catch_warnings():
     from lxml import etree  # type: ignore[import-untyped,unused-ignore]
     from lxml import html as lxml_html  # type: ignore[import-untyped,unused-ignore]
 
+# As in test_trafilatura_parity.py: lxml 6.1.3's Windows wheels bundle libxml2 2.11.9, not the
+# 2.14.6 whose HTML parser pyroid.trafilatura reproduces.
+_LIBXML2 = (2, 14, 6)
+if etree.LIBXML_VERSION != _LIBXML2:
+    pytest.skip(
+        f"needs lxml built with libxml2 {_LIBXML2}, found {etree.LIBXML_VERSION}",
+        allow_module_level=True,
+    )
+
 from hypothesis import example, given, settings  # noqa: E402
 from hypothesis import strategies as st  # noqa: E402
 

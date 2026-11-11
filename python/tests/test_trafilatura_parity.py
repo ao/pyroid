@@ -53,6 +53,16 @@ with warnings.catch_warnings():
     from lxml import etree  # type: ignore[import-untyped,unused-ignore]
     from lxml import html as lxml_html  # type: ignore[import-untyped,unused-ignore]
 
+# pyroid.trafilatura parses HTML as libxml2 2.14.6 does (lxml 6.1.3's Linux and macOS wheels). Its
+# Windows wheels bundle libxml2 2.11.9, whose HTML parser builds other trees (it drops "&#0;", and
+# raises on a str with a lone surrogate), so the comparison needs 2.14.6.
+_LIBXML2 = (2, 14, 6)
+if etree.LIBXML_VERSION != _LIBXML2:
+    pytest.skip(
+        f"needs lxml built with libxml2 {_LIBXML2}, found {etree.LIBXML_VERSION}",
+        allow_module_level=True,
+    )
+
 from hypothesis import example, given, settings  # noqa: E402
 from hypothesis import strategies as st  # noqa: E402
 
