@@ -109,6 +109,19 @@ def oracle_reset() -> None:
         importlib.import_module("trafilatura.meta").reset_caches()
 
 
+def oracle_dedup_reset() -> None:
+    """Empty trafilatura's dedup cache, ``trafilatura.deduplication.LRU_TEST`` (both releases), and nothing else.
+
+    That cache is the only state ``deduplicate=True`` reads. ``meta.reset_caches()`` also empties memo caches,
+    which do not change results, and ends with a full ``gc.collect()``, which walks the whole heap. Under the
+    ci profile (2,000 examples) Hypothesis keeps the choice sequences of a property's examples alive, about
+    1.6 million objects on these pages, so that collection grew to 1.1-1.9 s per example (Docker VM) and the
+    two stateful properties ran past pytest-timeout's 600 s.
+    """
+    if oracle() is not None:
+        importlib.import_module("trafilatura.deduplication").LRU_TEST.clear()
+
+
 def need_oracle(parity: Collector, check: str) -> Any:
     o = oracle()
     if o is None:
@@ -463,7 +476,7 @@ def test_hypothesis(trafilatura_impl: Any, parity: Collector, option: str, html:
         impl.obj.reset_caches()
     got = T.capture_call(getattr(impl.obj, fn), html, **kw)
     if stateful:
-        oracle_reset()
+        oracle_dedup_reset()  # per example: not oracle_reset() and its gc.collect()
     want = T.capture_call(getattr(o, fn), html, **kw)
     same = parity.record(
         SUITE,
