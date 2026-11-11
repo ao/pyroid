@@ -487,6 +487,19 @@ EXAMPLES = (
     "\N{ZERO WIDTH NO-BREAK SPACE}<html><body><div class='comments'><p>"
     + "c " * 200
     + "</p></div></body></html>",
+    # Fragments whose root (the body's only element) is a tag tree_cleaning removes: 1.11.0's
+    # absolute prune_html XPath then searches the page without it, so its empty <p> stay.
+    (
+        '<form id=post class="post><h1 style="display:none">The the the the river straße http://example.org/x. '
+        "The the the the the the the the the the river river straße http://example.org/x. The the the the the "
+        "river river through http://example.org/x. The the the the the the the the the the the.<p></p>"
+        "<section>The the the."
+    ),
+    (
+        "<aside>The the the.The the the.The the the the the the the the the the the the.<p><p>The the the.<div>"
+        "<a href='/a'>&amp;</a>The the the.<b>The the the the the the the the the the the the the the the the "
+        "the the the the the.The the the the the the the the the the the the the river through."
+    ),
 )
 
 
@@ -506,6 +519,8 @@ def _calls(option: str) -> tuple[str, dict[str, Any]]:
 @example(html=EXAMPLES[7])
 @example(html=EXAMPLES[8])
 @example(html=EXAMPLES[9])
+@example(html=EXAMPLES[10])
+@example(html=EXAMPLES[11])
 def test_hypothesis(trafilatura_impl: Any, parity: Collector, option: str, html: str) -> None:
     o = need_oracle(parity, f"hypothesis-{option}")
     impl = trafilatura_impl

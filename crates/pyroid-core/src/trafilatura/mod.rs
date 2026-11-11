@@ -311,6 +311,11 @@ pub(crate) struct Ctx<'a> {
     /// A Python exception is propagating: the code since the raise is discarded at the next
     /// `try` (or by bare_extraction), and touches no shared state (the cache) meanwhile.
     pub raised: bool,
+    /// 1.11.0: each tree root that tree_cleaning has removed from its page (a fragment's root
+    /// whose tag it cleans: the loaded page's, or readability's re-parsed summary's), with the
+    /// page's top element. lxml's `//` on an element removed from its document still searches
+    /// that document, which no longer holds the element.
+    pub removed_roots: Vec<(NodeId, NodeId)>,
 }
 
 impl<'a> Ctx<'a> {
@@ -329,6 +334,7 @@ impl<'a> Ctx<'a> {
             lru,
             strict,
             raised: false,
+            removed_roots: Vec::new(),
         }
     }
 

@@ -174,11 +174,17 @@ impl<'c, 'a> V11<'c, 'a> {
         } else {
             None
         };
+        let page = self.d.top(tree);
         for &g in &cleaning {
             let mut it = Iter::new(&self.d, tree, Matcher::tags(&[g]), true);
             while let Some(e) = it.next(&self.d) {
                 self.delete_element(e, true);
             }
+        }
+        // `tree.iter(...)` includes the tree: a fragment's root (lxml.html.fromstring returns
+        // the body's only element, still in the page) is removed from the page like the rest
+        if page != tree && self.d.parent(tree).is_none() {
+            self.removed_roots.push((tree, page));
         }
         if let Some(c) = tcopy {
             if self.find_desc(tree, t::P).is_none() {
@@ -191,10 +197,14 @@ impl<'c, 'a> V11<'c, 'a> {
 
     /// The top-level elements of the document holding `x`, in document order: lxml's `//`
     /// searches all of them, and libxml2's HTML parser puts what follows `</html>` in a second
-    /// root element. (Copies and removed subtrees have no top-level siblings here, as lxml's
-    /// copies have none.)
+    /// root element. (Copies have no top-level siblings here, as lxml's copies have none.) An
+    /// element removed from its document still belongs to it: for a root tree_cleaning removed
+    /// ([`Ctx::removed_roots`]) that is its page, without the root.
     pub(crate) fn doc_roots(&self, x: NodeId) -> Vec<NodeId> {
         let mut first = self.d.top(x);
+        if let Some(&(_, page)) = self.removed_roots.iter().find(|&&(r, _)| r == first) {
+            first = self.d.top(page);
+        }
         while let Some(p) = self.d.prev(first) {
             first = p;
         }
@@ -527,5 +537,52 @@ impl<'c, 'a> V11<'c, 'a> {
         for e in xpaths::basic_clean(&self.d, tree) {
             self.delete_element(e, true);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{Options, Version, extract};
+    use crate::ftfy::UnicodeVersion;
+
+    const S: &str =
+        "The the the the the the the the the the the the the the the the the the the the the.";
+    const URL: &str = "The the the the river straße http://example.org/x.";
+
+    fn v111(html: &str) -> Option<String> {
+        let o = Options {
+            version: Version::V1_11_0,
+            unicode: UnicodeVersion::V15_1,
+            ..Options::default()
+        };
+        extract(html.as_bytes(), &o, None).unwrap()
+    }
+
+    /// A fragment whose root is a tag tree_cleaning removes (`<form>`, `<aside>`): lxml's
+    /// `//*[not(node())]` in prune_html then searches the page without it, so its empty
+    /// paragraphs stay (trafilatura 1.11.0, lxml 6.1.3, CPython 3.12).
+    #[test]
+    fn a_removed_root_keeps_its_empty_paragraphs() {
+        // the unclosed quote keeps the text in the form; the empty <p> splits jusText's
+        // paragraphs, the baseline finds no <body>, and the page is discarded
+        let a = format!(
+            "<form id=post class=\"post><h1 style=\"display:none\">{URL} The the the the the the \
+             the the the the river river straße http://example.org/x. The the the the the river \
+             river through http://example.org/x. The the the the the the the the the the the.\
+             <p></p><section>The the the."
+        );
+        assert_eq!(v111(&a), None);
+        // the empty <p> from <p><p> stays in the body and becomes a line break
+        let b = format!(
+            "<aside>The the the.The the the.The the the the the the the the the the the the.<p><p>\
+             The the the.<div><a href='/a'>&amp;</a>The the the.<b>{S}The the the the the the \
+             the the the the the the the river through."
+        );
+        let want = format!(
+            "The the the.The the the.The the the the the the the the the the the the.\nThe the \
+             the.\n&The the the.\n{S}The the the the the the the the the the the the the river \
+             through."
+        );
+        assert_eq!(v111(&b).as_deref(), Some(want.as_str()));
     }
 }
