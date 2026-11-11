@@ -157,11 +157,20 @@ module-name = "pyroid._pyroid"
 python-source = "python"
 locked = true
 strip = true
-# Ship the tests in the sdist (for downstream packagers), not in wheels.
-include = [{ path = "python/tests/**/*.py", format = "sdist" }]
-# Keep the sdist small: crate sources, Cargo.lock, pyproject, README, LICENSE,
-# python/pyroid and python/tests. Never ship locally built extensions.
+# Ship the Python tests in the sdist (for downstream packagers), with their pytest.ini and
+# pinned digests, not in wheels.
+include = [
+  { path = "python/tests/**/*.py", format = "sdist" },
+  { path = "python/tests/pytest.ini", format = "sdist" },
+  { path = "python/tests/*.json", format = "sdist" },
+]
+# Keep the sdist small (release.yml checks it is under 5 MB): crate sources and the data they
+# embed, Cargo.lock, pyproject, README, LICENSE, python/pyroid and python/tests. The Rust tests
+# and their golden files (about 20 MB) stay in the repository: building needs none of them.
+# Never ship locally built extensions.
 exclude = [
+  { path = "crates/*/tests/**", format = "sdist" },
+  { path = "crates/*/src/**/testdata/**", format = "sdist" },
   { path = "python/pyroid/*.so", format = ["sdist", "wheel"] },
   { path = "python/pyroid/*.pyd", format = ["sdist", "wheel"] },
   { path = "python/pyroid/*.dylib", format = ["sdist", "wheel"] },
