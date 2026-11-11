@@ -27,7 +27,6 @@ Derived files (plain, recompressed, re-chunked versions of the pinned ones) are 
 from __future__ import annotations
 
 import argparse
-import gzip
 import hashlib
 import io
 import sys
@@ -391,8 +390,11 @@ def split_members(data: bytes) -> list[bytes]:
 
 
 def gz(data: bytes, level: int = 6) -> bytes:
-    """``gzip.compress`` with mtime 0 (deterministic bytes for a given zlib)."""
-    return gzip.compress(data, compresslevel=level, mtime=0)
+    """``gzip.compress`` with mtime 0, as CPython 3.13+ writes it on every Python (deterministic bytes
+    for a given zlib; 3.12 keeps zlib's OS byte 3 in the header, 3.13 writes 255)."""
+    out = bytearray(zlib.compress(data, level=level, wbits=31))
+    out[9] = 255
+    return bytes(out)
 
 
 def derived(inp: Input, out_dir: Path) -> list[Input]:

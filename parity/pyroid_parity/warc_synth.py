@@ -41,7 +41,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import gzip
 import hashlib
 import random
 import re
@@ -300,7 +299,14 @@ def base_records(rng: random.Random, n_pages: int = 3) -> list[bytes]:
 
 
 def gz(data: bytes, level: int = 6) -> bytes:
-    return gzip.compress(data, compresslevel=level, mtime=0)
+    """``gzip.compress(data, level, mtime=0)`` as CPython 3.13+ writes it, on every Python.
+
+    3.12 keeps zlib's OS byte (3, Unix) in the header and 3.13 writes 255 (unknown), so the pinned
+    inputs would otherwise depend on the interpreter.
+    """
+    out = bytearray(zlib.compress(data, level=level, wbits=31))
+    out[9] = 255
+    return bytes(out)
 
 
 def per_record(records: Sequence[bytes], level: int = 6) -> bytes:
