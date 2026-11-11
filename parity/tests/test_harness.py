@@ -144,15 +144,21 @@ def test_manifest_shows_only_this_platforms_references(tmp_path, monkeypatch):
 
 
 def test_every_platform_specific_reference_is_named_for_its_platform():
-    from pyroid_parity import specs
+    from pyroid_parity import nemo_cases, specs
     from pyroid_parity.metrics_cases import metrics_ref
 
     files = D._load_all()["files"]
-    per_platform = {"parity/fasttext-ref": specs.lid_ref, "parity/metrics-ref": metrics_ref}
+    both = {"linux-aarch64", "linux-x86_64"}
+    # (file name for a platform, the platforms that must be pinned). The nemo job runs on linux-aarch64 only.
+    per_platform = {
+        "parity/fasttext-ref": (specs.lid_ref, both),
+        "parity/metrics-ref": (metrics_ref, both),
+        "parity/nemo-ref": (nemo_cases.nemo_ref, {"linux-aarch64"}),
+    }
     seen = set()
-    for prefix, name_for in per_platform.items():
+    for prefix, (name_for, required) in per_platform.items():
         refs = {rel: e["platform"] for rel, e in files.items() if rel.startswith(prefix)}
-        assert "linux-aarch64" in refs.values() and "linux-x86_64" in refs.values(), prefix
+        assert required <= set(refs.values()), prefix
         assert all(name_for(p) == rel for rel, p in refs.items())
         seen |= refs.keys()
     assert all("platform" not in e for rel, e in files.items() if rel not in seen)
