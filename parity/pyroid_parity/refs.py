@@ -557,10 +557,12 @@ def ref_dedup(pin: bool, workers: int) -> None:
 
 
 # ------------------------------------------------------------------------------------- per language (FineWeb-2)
-# Part of ``all``. A language the oracle env cannot tokenize is left out of the table and reported: the pinned
-# tables come from parity/uv.lock's oracle group (spaCy only, so ar/de/fr/ru/es; jieba, SudachiPy and
-# indic-nlp-library are not in it), which keeps them reproducible in CI. The other slices are checked against
-# datatrove live where it can tokenize them (pyroid_parity.multilingual).
+# Part of ``all``. The pinned tables cover the languages spaCy tokenizes (ar/de/fr/ru/es), so CI reproduces them
+# from parity/uv.lock's oracle group alone. The list is fixed: jieba joined the oracle group later (for the jieba
+# suite), and a table that took every language the env can tokenize would then gain cmn_Hani and miss its pin. A
+# listed language the env cannot tokenize is left out and reported, so the table differs from its pin. The other
+# slices are checked against datatrove live where it can tokenize them (pyroid_parity.multilingual).
+ML_REF_LANGUAGES = ("arb_Arab", "deu_Latn", "fra_Latn", "rus_Cyrl", "spa_Latn")
 
 _ML_FILTERS: dict[tuple[str, str], Any] = {}
 
@@ -594,7 +596,7 @@ def ref_filters_ml(pin: bool, workers: int) -> None:
         k: [] for k in ("lang", "case", "id", "outcome", "keep", "reason", "text_out")
     }
     langs = []
-    for lang in specs.FINEWEB2_LANGUAGES:
+    for lang in ML_REF_LANGUAGES:
         if problem := ML.oracle_problem(lang):
             log(f"filters_ml: skipping {lang}: {problem}")
             continue
@@ -634,7 +636,7 @@ def ref_dedup_ml(pin: bool, workers: int) -> None:
     ref = DatatroveDedup()
     rows: dict[str, list[Any]] = {"lang": [], "id": [], "signature": [], "removed": []}
     langs = []
-    for lang in specs.FINEWEB2_LANGUAGES:
+    for lang in ML_REF_LANGUAGES:
         if problem := ML.oracle_problem(lang):
             log(f"dedup_ml: skipping {lang}: {problem}")
             continue
