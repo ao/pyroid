@@ -405,7 +405,9 @@ jobs:
     needs: wheels
     if: ${{ !cancelled() && needs.wheels.result != 'skipped' }}
     runs-on: ${{ matrix.platform.runner }}
-    timeout-minutes: 20
+    # The slowest legs: macos-15-intel took 19 minutes on 3.11 and 3.15, and its free-threaded legs were
+    # 65% through pytest at 20 (run 42813274649). pytest-timeout still stops any single test at 300 s.
+    timeout-minutes: 45
     permissions:
       contents: read
     strategy:
