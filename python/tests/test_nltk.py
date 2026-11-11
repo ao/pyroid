@@ -1081,6 +1081,34 @@ def test_return_str_deprecation(name: str, return_str: Any) -> None:
     assert all(w.filename == __file__ for w in got)
 
 
+def test_pattern_tables_compile_once_across_threads() -> None:
+    """Concurrent first reads of a pattern table leave it unchanged. They used to be able to keep
+    one thread's list beside another's snapshot, so every later call took NLTK's slow path."""
+    from pyroid.nltk._treebank import _Patterns
+
+    names = [
+        ("treebank", "STARTING_QUOTES"),
+        ("destructive", "PUNCTUATION"),
+        ("detok", "CONTRACTIONS2"),
+    ]
+    for _ in range(50):
+        tables = [_Patterns(table, name) for table, name in names]
+        start = threading.Barrier(8)
+        seen: list[list[int]] = []
+
+        def read(tables: list[_Patterns], start: threading.Barrier, seen: list[list[int]]) -> None:
+            start.wait()
+            seen.append([id(t.__get__(None, None)) for t in tables])
+
+        threads = [threading.Thread(target=read, args=(tables, start, seen)) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len({tuple(ids) for ids in seen}) == 1
+        assert not any(t.mutated() for t in tables)
+
+
 # ---- models -------------------------------------------------------------------------------
 
 

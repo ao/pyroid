@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import threading
 import warnings
 from collections.abc import Iterator
 from typing import Any, ClassVar
@@ -122,35 +123,40 @@ class _Patterns:
         self.table, self.name = table, name
         self.value: Any = None
         self.snapshot: Any = None
+        self._lock = threading.Lock()
 
     def mutated(self) -> bool:
         """Whether the list was changed in place (`.append`, item assignment, ...)."""
-        if not isinstance(self.value, list):
+        value = self.value  # published after the snapshot (see __get__)
+        if not isinstance(value, list):
             return False
-        return len(self.value) != len(self.snapshot) or any(
-            a is not b for a, b in zip(self.value, self.snapshot, strict=True)
+        return len(value) != len(self.snapshot) or any(
+            a is not b for a, b in zip(value, self.snapshot, strict=True)
         )
 
     def __get__(self, obj: Any, owner: Any = None) -> Any:
         if self.value is None:
-            if self.name.startswith("CONTRACTIONS"):
-                srcs = _CONTRACTIONS2 if self.name == "CONTRACTIONS2" else _CONTRACTIONS3
-                if self.table == "detok":
-                    eng = _engine()
-                    self.value = [eng.compile(p.replace("(?#X)", r"\s")) for p in srcs]
-                else:  # NLTK's tokenizers compile these with the standard re
-                    self.value = [re.compile(p) for p in srcs]
-            else:
-                eng = _engine()
-                src = (
-                    _SOURCES[self.table][self.name] if self.table != "detok" else _DETOK[self.name]
-                )
-                if isinstance(src, tuple):
-                    self.value = (eng.compile(src[0], src[1]), src[2])
-                else:
-                    self.value = [(eng.compile(p, f), r) for p, f, r in src]
-            self.snapshot = tuple(self.value) if isinstance(self.value, list) else None
+            # One thread compiles. Without the lock, two first accesses could each store a list and
+            # leave the snapshot of one beside the other, and mutated() would then stay True.
+            with self._lock:
+                if self.value is None:
+                    value = self._compile()
+                    self.snapshot = tuple(value) if isinstance(value, list) else None
+                    self.value = value
         return self.value
+
+    def _compile(self) -> Any:
+        if self.name.startswith("CONTRACTIONS"):
+            srcs = _CONTRACTIONS2 if self.name == "CONTRACTIONS2" else _CONTRACTIONS3
+            if self.table == "detok":
+                eng = _engine()
+                return [eng.compile(p.replace("(?#X)", r"\s")) for p in srcs]
+            return [re.compile(p) for p in srcs]  # NLTK's tokenizers compile these with re
+        eng = _engine()
+        src = _SOURCES[self.table][self.name] if self.table != "detok" else _DETOK[self.name]
+        if isinstance(src, tuple):
+            return (eng.compile(src[0], src[1]), src[2])
+        return [(eng.compile(p, f), r) for p, f, r in src]
 
 
 _DETOK: dict[str, Any] = {
