@@ -67,10 +67,18 @@ def run_python() -> Callable[..., subprocess.CompletedProcess[str]]:
                 child_env.pop(key, None)
             else:
                 child_env[key] = value
-        cmd = [sys.executable, "-I", *args, "-c", textwrap.dedent(code)]
+        # The child's stdio and our decoding are UTF-8 on every OS: on Windows before 3.15 both
+        # would be the ANSI code page (cp1252 on the runners), which cannot print CJK text. -I
+        # ignores PYTHONIOENCODING, so this is UTF-8 mode (the default from 3.15).
+        cmd = [sys.executable, "-I", "-X", "utf8", *args, "-c", textwrap.dedent(code)]
         try:
             return subprocess.run(
-                cmd, env=child_env, capture_output=True, text=True, timeout=timeout, check=False
+                cmd,
+                env=child_env,
+                capture_output=True,
+                encoding="utf-8",
+                timeout=timeout,
+                check=False,
             )
         except subprocess.TimeoutExpired as exc:
             pytest.fail(
