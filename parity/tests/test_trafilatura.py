@@ -38,7 +38,7 @@ Without ``--impl`` the candidate is trafilatura itself: the pinned checks then v
 reproduces the references, on the first 100 pages of each file (and 100 of the recorded tests, spread over all
 of them) unless ``--parity-limit`` says otherwise.
 Where trafilatura is not installed (the free-threaded CI legs) the live checks skip and say so; the pinned ones
-still run against the candidate.
+still run against the candidate, with the GIL off (lxml is kept unimported there: ``_gil_stays_off``).
 """
 
 from __future__ import annotations
@@ -109,6 +109,19 @@ def oracle_reset() -> None:
         importlib.import_module("trafilatura.meta").reset_caches()
 
 
+def oracle_dedup_reset() -> None:
+    """Empty trafilatura's dedup cache, ``trafilatura.deduplication.LRU_TEST`` (both releases), and nothing else.
+
+    That cache is the only state ``deduplicate=True`` reads. ``meta.reset_caches()`` also empties memo caches,
+    which do not change results, and ends with a full ``gc.collect()``, which walks the whole heap. Under the
+    ci profile (2,000 examples) Hypothesis keeps the choice sequences of a property's examples alive, about
+    1.6 million objects on these pages, so that collection grew to 1.1-1.9 s per example (Docker VM) and the
+    two stateful properties ran past pytest-timeout's 600 s.
+    """
+    if oracle() is not None:
+        importlib.import_module("trafilatura.deduplication").LRU_TEST.clear()
+
+
 def need_oracle(parity: Collector, check: str) -> Any:
     o = oracle()
     if o is None:
@@ -128,6 +141,23 @@ def trafilatura_impl(request: pytest.FixtureRequest) -> Any:
 def _oracle_info() -> None:
     o = oracle()
     reference(SUITE, "trafilatura", o.__version__ if o else f"{MODE} (pinned)", None)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _gil_stays_off(_oracle_info: None) -> Iterator[None]:
+    """Where the GIL is off and trafilatura is not installed (the free-threaded CI legs), keep lxml unimported.
+
+    lxml 6.1.3 re-enables the GIL when imported (with a RuntimeWarning, which would land in the outcome of the
+    first call that reads a tree), and sacrebleu, a core parity dependency, installs it. Without lxml,
+    pyroid.trafilatura's ``body`` and ``commentsbody`` are their XML strings, which ``trafilatura_compare``
+    normalizes as it does lxml trees, so the pinned digests apply unchanged; GIL builds check the lxml trees.
+    """
+    if getattr(sys, "_is_gil_enabled", lambda: True)() or oracle() is not None or "lxml" in sys.modules:
+        yield
+        return
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "lxml", None)  # `from lxml import etree` raises ImportError
+        yield
 
 
 def page_limit(request: pytest.FixtureRequest, impl: Any) -> int:
@@ -339,13 +369,24 @@ _NATIVE_VALUES: dict[str, tuple[Any, ...] | None] = {
 }
 
 
-def upstream_native(call: dict[str, Any]) -> bool:
-    """Whether a recorded call uses only what pyroid ports (str or bytes input, the corpus options, txt)."""
+def upstream_native(call: dict[str, Any], blobs: T.Blobs) -> bool:
+    """Whether a recorded call uses only what pyroid ports (str or UTF-8 bytes input, the corpus options, txt).
+
+    pyroid hands bytes that are not UTF-8 to trafilatura (they need its charset detection), so those calls are
+    delegated ones: where trafilatura is not installed they raise ``pyroid.PyroidError`` and are not compared.
+    """
     names = [n for n, _ in SIGNATURES[call["fn"]] if n != "**kwargs"]
     bound = dict(zip(names, call["args"], strict=False)) | call["kwargs"]
     first = bound.pop("filecontent", None)
     if isinstance(first, dict) and not ({"$blob", "$str", "$bytes", "$cat", "$rep"} & set(first)):
         return False
+    if isinstance(first, dict):
+        raw = T.decode_arg(first, blobs)
+        if isinstance(raw, bytes):
+            try:
+                raw.decode("utf-8")
+            except UnicodeDecodeError:
+                return False
     fmt = bound.pop("output_format", "txt" if call["fn"] == "extract" else "python")
     if fmt != ("txt" if call["fn"] == "extract" else "python"):
         return False
@@ -354,6 +395,16 @@ def upstream_native(call: dict[str, Any]) -> bool:
         if allowed is not None and v not in allowed:
             return False
     return True
+
+
+def _config_default(impl: Any) -> Any:
+    """The candidate's default for ``config``: where trafilatura is not installed, it replays the recorded
+    calls that passed trafilatura's own ``DEFAULT_CONFIG``."""
+    try:
+        p = inspect.signature(impl.obj.mod.extract).parameters.get("config")
+    except (TypeError, ValueError):
+        return None
+    return None if p is None or p.default is inspect.Parameter.empty else p.default
 
 
 @pytest.mark.timeout(3600)  # one test replays all 4,553 calls (about 5 minutes for trafilatura itself)
@@ -366,6 +417,7 @@ def test_upstream(
         parity.uses(SUITE, rel)
     R.materialize_tests(tmp_path, MODE)  # some calls pass settingsfile= paths into tests/resources/
     calls, blobs = R.load(tmp_path, MODE)
+    blobs.default_config = _config_default(impl)
     if limit := page_limit(request, impl):  # every k-th recorded test, so a sample still spans all files
         tests = list(dict.fromkeys(c["test"] for c in calls))
         keep = set(tests[:: max(1, len(tests) // limit)])
@@ -382,7 +434,7 @@ def test_upstream(
             impl.obj.reset_caches()
             if not impl.is_reference:
                 oracle_reset()
-        name = "upstream" if upstream_native(c) else "upstream-delegated"
+        name = "upstream" if upstream_native(c, blobs) else "upstream-delegated"
         encoded = json.dumps([c["args"], c["kwargs"]])
         needs_objects = any(f'"{tag}"' in encoded for tag in ("$tree", "$lru", "$extractor"))
         if not has_oracle and (name == "upstream-delegated" or needs_objects):
@@ -435,6 +487,24 @@ EXAMPLES = (
     "\N{ZERO WIDTH NO-BREAK SPACE}<html><body><div class='comments'><p>"
     + "c " * 200
     + "</p></div></body></html>",
+    # Fragments whose root (the body's only element) is a tag tree_cleaning removes: 1.11.0's
+    # absolute prune_html XPath then searches the page without it, so its empty <p> stay.
+    (
+        '<form id=post class="post><h1 style="display:none">The the the the river straße http://example.org/x. '
+        "The the the the the the the the the the river river straße http://example.org/x. The the the the the "
+        "river river through http://example.org/x. The the the the the the the the the the the.<p></p>"
+        "<section>The the the."
+    ),
+    (
+        "<aside>The the the.The the the.The the the the the the the the the the the the.<p><p>The the the.<div>"
+        "<a href='/a'>&amp;</a>The the the.<b>The the the the the the the the the the the the the the the the "
+        "the the the the the.The the the the the the the the the the the the the river through."
+    ),
+    # A control character in a tag name (1.11.0 keeps them): its sanitize_tree's strip_tags raises.
+    (
+        '<!DOCTYPE html><p style="display:none">The the the.The the the the.</p><p>The the the.The the the. '
+        "<A\x1f The the the.</p>"
+    ),
 )
 
 
@@ -454,6 +524,9 @@ def _calls(option: str) -> tuple[str, dict[str, Any]]:
 @example(html=EXAMPLES[7])
 @example(html=EXAMPLES[8])
 @example(html=EXAMPLES[9])
+@example(html=EXAMPLES[10])
+@example(html=EXAMPLES[11])
+@example(html=EXAMPLES[12])
 def test_hypothesis(trafilatura_impl: Any, parity: Collector, option: str, html: str) -> None:
     o = need_oracle(parity, f"hypothesis-{option}")
     impl = trafilatura_impl
@@ -463,7 +536,7 @@ def test_hypothesis(trafilatura_impl: Any, parity: Collector, option: str, html:
         impl.obj.reset_caches()
     got = T.capture_call(getattr(impl.obj, fn), html, **kw)
     if stateful:
-        oracle_reset()
+        oracle_dedup_reset()  # per example: not oracle_reset() and its gc.collect()
     want = T.capture_call(getattr(o, fn), html, **kw)
     same = parity.record(
         SUITE,
@@ -637,8 +710,9 @@ def test_api(trafilatura_impl: Any, parity: Collector, name: str) -> None:
 
 def test_api_shim(trafilatura_impl: Any, parity: Collector) -> None:
     """``<top>.integrations.patch("trafilatura")`` gives a module whose functions have trafilatura's exact
-    signatures: no ``compat``, and ``config`` defaulting to trafilatura's own ``DEFAULT_CONFIG`` object (``None``
-    only where trafilatura is not installed). Checked in a fresh process, which the patch then does not leak from.
+    signatures: no ``compat``, and ``config`` defaulting to trafilatura's own ``DEFAULT_CONFIG`` object (where
+    trafilatura is not installed, to the candidate's own default). Checked in a fresh process, which the patch then
+    does not leak from.
     """
     impl = trafilatura_impl
     if impl.is_reference:

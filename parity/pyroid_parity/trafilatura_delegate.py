@@ -177,7 +177,8 @@ def run(module: str, group: str, name: str) -> dict[str, Any]:
 def shim_shapes(top: str) -> dict[str, Any]:
     """Signatures of ``extract`` / ``bare_extraction`` in the module ``<top>.integrations.patch("trafilatura")``
     puts in ``sys.modules``, as (name, kind, default) with ``config``'s default as "DEFAULT_CONFIG" only for
-    trafilatura's own object (or for None where trafilatura is not installed)."""
+    trafilatura's own object. Where trafilatura is not installed there is none: the shim's default is then
+    ``<top>.trafilatura``'s own (its ``extract``'s default, ``None`` included)."""
     import importlib
     import inspect
     import warnings
@@ -186,6 +187,14 @@ def shim_shapes(top: str) -> dict[str, Any]:
         integrations = importlib.import_module(f"{top}.integrations")
     except ImportError as e:
         return {"skip": f"{top}.integrations is not importable: {e}"}
+    try:  # before the patch, which puts the shim at sys.modules["trafilatura"]
+        from trafilatura.settings import DEFAULT_CONFIG
+    except ImportError:
+        try:
+            own = importlib.import_module(f"{top}.trafilatura").extract
+            DEFAULT_CONFIG = inspect.signature(own).parameters["config"].default
+        except (ImportError, AttributeError, KeyError):
+            DEFAULT_CONFIG = None
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
@@ -194,10 +203,6 @@ def shim_shapes(top: str) -> dict[str, Any]:
             return {"skip": f"{top}.integrations has no trafilatura shim: {e}"}
     shim = sys.modules["trafilatura"]
     real = getattr(shim, "__wrapped__", None)
-    try:
-        from trafilatura.settings import DEFAULT_CONFIG
-    except ImportError:
-        DEFAULT_CONFIG = None
     shapes: dict[str, Any] = {}
     for name in specs.TRAFILATURA_SIGNATURES:
         fn = getattr(shim, name, None)

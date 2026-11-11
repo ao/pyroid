@@ -294,9 +294,31 @@ impl V11<'_, '_> {
         match r {
             Ok(Ok(summary)) => {
                 let doc = crate::html::lxml::fromstring_bytes(summary.as_bytes()).ok()?;
-                Some(self.d.import(&doc, doc.root))
+                Some(self.import_in_page(&doc, doc.root))
             }
             _ => Some(self.d.element(t::DIV)),
         }
+    }
+
+    /// `x` of another document, imported with its page: the root lxml.html.fromstring returns
+    /// for a fragment (the body's only element) is still in the parsed page, so sanitize_tree's
+    /// tree_cleaning removes it from that page, as for the loaded tree.
+    fn import_in_page(&mut self, src: &crate::html::tree::Document, x: NodeId) -> NodeId {
+        let top = src.top(x);
+        // child positions from the top down to `x`
+        let mut path = Vec::new();
+        let mut n = x;
+        while let Some(p) = src.parent(n) {
+            path.push(src.children(p).position(|c| c == n).unwrap_or(0));
+            n = p;
+        }
+        let mut y = self.d.import(src, top);
+        for &i in path.iter().rev() {
+            match self.d.children(y).nth(i) {
+                Some(c) => y = c,
+                None => break,
+            }
+        }
+        y
     }
 }

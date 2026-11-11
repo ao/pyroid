@@ -165,12 +165,15 @@ class Blobs:
     """Content-addressed store for large ``str`` / ``bytes`` arguments (sha256 -> bytes).
 
     ``root`` is the directory the upstream tests run from (recording) or were rebuilt in (replay): a str argument
-    naming a file under it is stored as ``{"$testfile": relative path}``.
+    naming a file under it is stored as ``{"$testfile": relative path}``. ``default_config`` is what
+    ``{"$config": "default"}`` replays as where trafilatura is not installed: the candidate's own default for
+    ``config`` (``None`` only if the candidate's is).
     """
 
     def __init__(self, items: Iterable[tuple[str, bytes]] = (), root: str | None = None) -> None:
         self.data: dict[str, bytes] = dict(items)
         self.root = root
+        self.default_config: Any = None
 
     def put(self, raw: bytes) -> str:
         key = hashlib.sha256(raw).hexdigest()
@@ -353,8 +356,10 @@ def decode_arg(x: Any, blobs: Blobs) -> Any:
             if v == "default":
                 try:
                     from trafilatura.settings import DEFAULT_CONFIG
-                except ImportError:  # no trafilatura here: None stands for its default (impl.py's contract)
-                    return None
+                except ImportError:
+                    # No trafilatura here: the candidate's own default stands for trafilatura's. Not None,
+                    # unless that is the candidate's default: 1.11.0's bare_extraction raises on config=None.
+                    return blobs.default_config
                 return DEFAULT_CONFIG
             cp = ConfigParser()
             cp.read_dict({"DEFAULT": v["defaults"], **v["sections"]})
