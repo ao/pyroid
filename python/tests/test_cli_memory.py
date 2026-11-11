@@ -11,6 +11,7 @@ runs only with ``PYROID_TEST_SCALE=1``.
 from __future__ import annotations
 
 import os
+import platform
 import random
 import subprocess
 import sys
@@ -38,6 +39,12 @@ LID_BIN = DATA / "models" / "lid.176.bin"
 BOUND_STREAM = 300
 BOUND_DEDUP = 400  # plus the 64 MiB sort buffer the tests pass
 BOUND_CLEAN = 900  # plus the LID model (lid.176.bin is 125 MiB on disk)
+if sys.platform == "darwin" and platform.machine() == "arm64":
+    # The dedup commands' peak is higher on macOS arm64 (16 KiB pages, and its malloc keeps freed
+    # memory resident longer, probably): GitHub's macos-15 runners measured 407 and 427 MiB on two
+    # of eight legs, where Linux aarch64 gives 306 (one pass) and 260 (signatures), and macOS
+    # x86_64 stays under 400. The bound is still fixed, so a peak that grows with N still fails.
+    BOUND_DEDUP = 512
 
 VOCAB = [
     "the",
