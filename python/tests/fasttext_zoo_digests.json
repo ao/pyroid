@@ -1,5 +1,441 @@
 {
- "aarch64": {
+ "darwin-aarch64": {
+  "cbow-no-eos": {
+   "model": "f6708531c60c7c25b074b4c98e616e5ab6bb8bce801155906d97b05961188359",
+   "predictions": "1bfb3eb0313e1310d5a5981b423cf7d68f5a9440e6e5c5fffe1c5c9c8a844ab1"
+  },
+  "cbow-ns": {
+   "model": "382df577798459322de1c985721d3c3e72e75d4b3e675a7e53659bcc84a0475d",
+   "predictions": "bd173a845017b7db0e4ad9d0d8f3a4c4916e2956d20777352ce92e2f6067047f"
+  },
+  "hs-dense": {
+   "model": "df49f905434d125666730f60b5193d89c67d809a237d2a744cca18e8f173d3b9",
+   "predictions": "8285b043d4b494113ac7a6f359cde0138c6976f50ea01a1ccf150e2e85b092a2"
+  },
+  "hs-equal-counts": {
+   "model": "5c60c15933f715a1f40675e6fee607a68d762e2ca8da75b9ba0c7d0402d915b6",
+   "predictions": "0589f585fbb76e0b0f6e155ddd939d8c56bcb816eb366deaef2ea11b19a6001c"
+  },
+  "hs-many-labels": {
+   "model": "96f440ca1d6d822a39df68888971c88e7cfaafc0072f1a81591b32b9c44f8c30",
+   "predictions": "b0a83181fdbfbc5de0c3ee8f4dce78c5fb0816a7c66b52438d623c959d43d6c3"
+  },
+  "hs-no-subwords": {
+   "model": "25608e40532e7bb98f3792399b0c5d83c12e30aa39d1fc57b8e7e8227132a7a5",
+   "predictions": "1fd6cdaf6cfb164e898aff433bd2f6580e4bff236b7ff41f04da3cd9f36981e3"
+  },
+  "hs-one-label": {
+   "model": "1d2c316fe3dde3c31eb8ed35c53dae5bab8a00ec78fa317557366a3f726e1939",
+   "predictions": "80f05b74609671e761c5f1372bbcd9dd36fa0fc88161911a1f632d486d1215a3"
+  },
+  "hs-pruned": {
+   "model": "17129ac1c3e97952a05d90d4b0c10155fbf1abcfe7cd81964f5fc4cc3d759f8d",
+   "predictions": "1da3475c40ffcf5f88bdca1cb0a0bd5db163fb69508c72d36d8208320ce407e6"
+  },
+  "hs-qnorm": {
+   "model": "8c5b45e937719df7feab19854fceb5684116f87b61d81e73c6f380a6ed23c745",
+   "predictions": "80cdf7f98a3dffe05a071df0ef807adfda3a9dc0e8baf84d6de0c5e18645a395"
+  },
+  "hs-qnorm-qout": {
+   "model": "89e8ae42a6b75067bf19d23d6c45d3776c57351b335e0ddf506e60603fb04a4a",
+   "predictions": "068ebfa7006237c99d4f290512570b7dc5067b9cb1cd70e7ada4fd4ab0e361d0"
+  },
+  "hs-qout": {
+   "model": "441324b6e87590d47b20f3bfc681f6f231b72efbfd64143192bda015133b3e8d",
+   "predictions": "36cd801cab30d928d87595c60ccbf54a0aaa05ae6c771e16d0477c36008e0635"
+  },
+  "hs-quant": {
+   "model": "d5871be7a8d641a186a56bc05b31e2c2fde79b2a6c88197559ed57c206452d65",
+   "predictions": "dc1cda0e29c7887b72ff51f4208b62cb4d1db264eafa37c1f9c4367cd6d8a64e"
+  },
+  "hs-scaled": {
+   "model": "4749cdbc64e4c9bf1ce6456672255137e97e251f006d7f1741349e2263895e5b",
+   "predictions": "b52d793bedf47158c8c1aff5f8e1f48df588cabe39c0e2f2cee9410b42b2d585"
+  },
+  "hs-unicode-quant": {
+   "model": "437cbf8c75e3c504afab8da83fa9479dfc4916440780ea84864649e28da963bf",
+   "predictions": "1a9d13c7d03eea280dd79bd7237cfdb0d8b34b255be27d9879f1609c12280140"
+  },
+  "hs-v11-quant": {
+   "model": "f100f66898a71f108470bf99e904512fe565a189df2d6643dcfcd0f959cdcce4",
+   "predictions": "146e1a56f9c8038ffd961b3df11b6a84203fde9926d410a94ac3c052cac786aa"
+  },
+  "hs-zero-in": {
+   "model": "df1059eeb730618332e9c6e03ac26bf652a95f4a20badb1386089003840d294e",
+   "predictions": "312fa5cf7dbba2398a0f602c875b46e7c75061d05d136bfdaf6cfb2f58ad58b8"
+  },
+  "hs-zero-out": {
+   "model": "444a57549a8e136922459825963f8c20c982aa21066af5ef1a91fc5b90c513d2",
+   "predictions": "312fa5cf7dbba2398a0f602c875b46e7c75061d05d136bfdaf6cfb2f58ad58b8"
+  },
+  "ns-dense": {
+   "model": "c46395dea0b039fe666a0995a3a27a73b465dafde314c0c0a63ed40164749dce",
+   "predictions": "8ed46dffebd2b5ebfb008d7fd6d979593b0b6a012ca47baab2872b5f33d22ef2"
+  },
+  "ns-pruned": {
+   "model": "ad03b97526b2925cf26d972e878a0695a729ed28c79ce0ede269cebe1d6102e9",
+   "predictions": "0d85b4d94c4d0370422cc878f226b88f435e1af2c8ba70e005767b606ce5db0f"
+  },
+  "ns-qnorm": {
+   "model": "68033d946e673002738b3a224a145f5c277d911f9ec52dad85bb02e88a9b0553",
+   "predictions": "5076164ba33a9d0ab021ce1f93857cd42a82805879ceee361d7ec453ea0d3077"
+  },
+  "ns-qnorm-qout": {
+   "model": "73790141018df661a538b33ff47ffc00b990839c23c9140e68cacdf039386049",
+   "predictions": "a94a8e46d729d142d6a1e9ed535fc6e9f14a4d0618a65a146dc7614528f16285"
+  },
+  "ns-qout": {
+   "model": "78bea15516ac565826d0f69a39420b9b60a1e1824f0dd63fd2362111f156fa2f",
+   "predictions": "24e1dcb6ec22505c9a1aaba44e61412121ddbb91ec9a2c99f663af0edce98782"
+  },
+  "ns-quant": {
+   "model": "623547375485b8da0b7fb67ca29d6ebbd7104c6ac4b986258b08b0a05766a630",
+   "predictions": "18155ebc41e4e6891f5a11702872af31e7d630a6d1cdfa886d9b6620f2f287c6"
+  },
+  "ns-zero": {
+   "model": "b27d9b25c8e995379e88eefc40cbc1ad690ea7564c261c55408019d7e6079025",
+   "predictions": "f2b226440b1e484d51c14943b6c34a154b44ba4dca16f2b24d8e13749f41deeb"
+  },
+  "ova-dense": {
+   "model": "d242880ee2680a91a0461a45c491e56b415330589b1f5edb3faa80e31604b872",
+   "predictions": "a313f442e5c74fe38e02de98b25f108d34e401f2d5530c51bde47cf0b2c27660"
+  },
+  "ova-dim1": {
+   "model": "c96a1475c6381cc513f7eeaa6fa7123d9de0168ad4c4d924f79f9b28d9aa6438",
+   "predictions": "47a5d482af3c2848dd0e6f222bf88c343a818f42e03524cc80e357f3025fc1a9"
+  },
+  "ova-many-labels": {
+   "model": "ab0eb00cb0cf0e3da035fdf05ba6730f8551fb68f2a12734a22d08c1c79fcfc5",
+   "predictions": "6077dfec42dbb2046d2f007cf9acfd12752241d8ea909233b5f54c5a75b40bf6"
+  },
+  "ova-one-label": {
+   "model": "0786d8bb6da923ca4fd14e69785f89480ad9a98218c22f7f77214a149ce34a04",
+   "predictions": "882cce9a7e63dfe0114e19990ce7ba346cff40da5f12b97efc2ec039b01c0e56"
+  },
+  "ova-pruned": {
+   "model": "29360b5893d779285c97e054637aad19a25c28c4521b67c1421120e1449016e6",
+   "predictions": "7ebac59d82a70e0bfb91785bda2189984f221ac17b014604a9ce90b4df897076"
+  },
+  "ova-qnorm": {
+   "model": "438fdde76eccd7cc10680ee92ff1b37e7c3631d3bdfd3fd35b4d42a451480dcb",
+   "predictions": "9b67f54b3a11e8d4ad196a09b966575ed7aa7dc315b4ac6539572a4064b4ea47"
+  },
+  "ova-qnorm-qout": {
+   "model": "8f824b7b09c76c0768cf4268ddbb92e29fd74436222f3186090e828f08cff6e3",
+   "predictions": "b0becbf9fd48acbb77107ada95b336152d1cf8f1164dafa1f6da9a0237957f4b"
+  },
+  "ova-qout": {
+   "model": "656c68180d5a6b9a958e311b7b97b189c6c2c338d800580e51cf911b9b137772",
+   "predictions": "63389ebd31e24fc7b0a4f29cda67be5a082f66226a004dc96b1932569eabfb6b"
+  },
+  "ova-quant": {
+   "model": "6c79d0479eecd42ae3b7b955d82e07f5c1763c78be3d87943d8d44ff42c5222f",
+   "predictions": "94778c5ee0f1f6d3b9430a1b3f0010981043e5f48a7f5a1d9282ae1bd60053b5"
+  },
+  "ova-scaled": {
+   "model": "2e4d65194ce2944e00340ca4f7fed301f0ef9994ca5e92322189e5cf0ed120ed",
+   "predictions": "f676122e2501e06490b5e80698a358c6c3e17efade96eb7103d5a96183cd709f"
+  },
+  "ova-zero-out": {
+   "model": "b9bbffc3f18f5e8ce01d78390fba06f928361d413fbcfd3e30b3ddea3731ca63",
+   "predictions": "f2b226440b1e484d51c14943b6c34a154b44ba4dca16f2b24d8e13749f41deeb"
+  },
+  "sg-hs": {
+   "model": "5b3652cbf1ce6456d166b43b5d1e4906effd2fe2a4255e0d5f2e91a33f65c49c",
+   "predictions": "bd173a845017b7db0e4ad9d0d8f3a4c4916e2956d20777352ce92e2f6067047f"
+  },
+  "softmax-dense": {
+   "model": "0d71d5f0ad0c5e848d55b2bcb2286595ca6c813f76a09bae5ba87328af5f702d",
+   "predictions": "1bb8ad48fbddd5ebe00a168524c587c7fc91d234d020ce3359c7dbda7e6fb7f7"
+  },
+  "softmax-dsub3": {
+   "model": "3c0e624adc4d87566a75851064e020b1a2d89776e4f3bba4dc0e8d46c3a785e6",
+   "predictions": "4b1b08ce0be3c389afca16cf4275f002de3e035c5072ae44c29b7b7aabbdfea3"
+  },
+  "softmax-many-labels": {
+   "model": "c7a6ef848ee4afb8aa58627c7b4fea2fb5a53f09479cb9e194a36c5b7a4c628f",
+   "predictions": "c8411fb1ad91ac9bad624a758d497788e7f1a588aece8748e59e6d20b27a2137"
+  },
+  "softmax-minn3-big-bucket": {
+   "model": "656d9d1a903749c167238c210c477b5fe488af7fe414e0a2f8e36bd5f95d3830",
+   "predictions": "7940878e8669ecebf09af4ececbec5b2e5876a237a329892e0e97540383b4149"
+  },
+  "softmax-no-eos": {
+   "model": "c831d20f773fc78bd5f59a59401c91a229c063ebe5d58418e277b20ff33793bf",
+   "predictions": "88c3ec557f4f1e6c2eb4e59a56f27dd18db136408e67902d68bcbc0735d99d42"
+  },
+  "softmax-no-subwords": {
+   "model": "cf08c4aac0d3d67304df03aa89683c7593330e17d676510a2f8a17bedd0d2655",
+   "predictions": "b48a49793297a0003127fca17034e91656ebcdf752bdf5d6f0aa31ba702803b3"
+  },
+  "softmax-one-label": {
+   "model": "0e86991b24bfdc436827baa3a451b4d24e9768a78aa6d50b7a8a4a8f6abde3ac",
+   "predictions": "c2e53f0760ca66b7eef1b63a8913e63c3ec769e62a46c9669837cc1c069ac534"
+  },
+  "softmax-pruned": {
+   "model": "eddcb5e0a6154563e50f66df1a353b277be6ba8b72e18e75c7f2a47c5de516ae",
+   "predictions": "ad6a3bf9a8ad861c74d822ddd0548ff40b0f821266fdc44375cbc01e24a9e7bd"
+  },
+  "softmax-pruned-empty": {
+   "model": "c573feea0815f5a75a04592e6b6e110fbded5e20e3d7ddf9d0b7f7907503f7c8",
+   "predictions": "18ca0bf1c076d8c6b23620495e8e23551c02ff762a0280822d319b5e0599cce1"
+  },
+  "softmax-qnorm": {
+   "model": "73dfc49f906260932156bb695ab757bb3a3548a143ad6f79bb5bf587a636ac4a",
+   "predictions": "daf8d6aee0b31e77402a20214cee848a34294d459abf4d835e51fd99672a01f7"
+  },
+  "softmax-qnorm-qout": {
+   "model": "34bdbe7b085eb09bd4392e6322968ec6f7c4452cfae4954c07ead03fd3568808",
+   "predictions": "6410baa8634101b15b42b738b1b7c33267a37a754c3727c9b6e3d00e5bee2ac5"
+  },
+  "softmax-qout": {
+   "model": "29b95018d4f1e760b6382467e24d6aa699726d1a4bc1b2b176ad98a4ff53607d",
+   "predictions": "52a63f1faec971c3262a114ebbd0908b670e89f4650f26ce058909ff2b59492d"
+  },
+  "softmax-quant": {
+   "model": "687b3722c601752f1dbf9ea4ca346df153d7205d6f062ec27882c976124461be",
+   "predictions": "5508f3bb83542ef1fee6190a75c26146cca8ba970f758f401cbfc0e6722c4499"
+  },
+  "softmax-scaled": {
+   "model": "3ca5c8d461ed0caf2341c692717103505b4851ecd19653428bb2dc46d504a7ff",
+   "predictions": "b89acef50f213534936ad179150b280bfc569b35fe1bcf9e7d101e7c53e794a7"
+  },
+  "softmax-unicode": {
+   "model": "48e4d32d8cc8ee6b74401d0efd86bf1568c21b5349723fa886ea5e81e5873ef0",
+   "predictions": "f9b68059c7cd56736423f3f7f7ca4619909fbaf2ee02ad673a88b0623d30d403"
+  },
+  "softmax-v11": {
+   "model": "2445743241a25420844ab3ff797c0594cfbd4985eee96a5ec129d99fd117181e",
+   "predictions": "1085f1311a8bf573332a9614dcaa89c720542e8cc404a3333acb1ef8444e6f2b"
+  },
+  "softmax-zero-in": {
+   "model": "c16c5691b57800caa5035e5eb55b539b1c272dd4742dbde7b53b058a27e724bc",
+   "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
+  },
+  "softmax-zero-quant": {
+   "model": "124449fcd824f046e1350366a2d58e66245fb12fd183063d972d0704ab170c4e",
+   "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
+  }
+ },
+ "darwin-x86_64": {
+  "cbow-no-eos": {
+   "model": "f6708531c60c7c25b074b4c98e616e5ab6bb8bce801155906d97b05961188359",
+   "predictions": "1bfb3eb0313e1310d5a5981b423cf7d68f5a9440e6e5c5fffe1c5c9c8a844ab1"
+  },
+  "cbow-ns": {
+   "model": "382df577798459322de1c985721d3c3e72e75d4b3e675a7e53659bcc84a0475d",
+   "predictions": "bd173a845017b7db0e4ad9d0d8f3a4c4916e2956d20777352ce92e2f6067047f"
+  },
+  "hs-dense": {
+   "model": "df49f905434d125666730f60b5193d89c67d809a237d2a744cca18e8f173d3b9",
+   "predictions": "c3d9ac7304bc5caaecc70407277b7592374cedca280b3210618d1c463adfcad9"
+  },
+  "hs-equal-counts": {
+   "model": "5c60c15933f715a1f40675e6fee607a68d762e2ca8da75b9ba0c7d0402d915b6",
+   "predictions": "024ae6fa3893c8b48484e412584081b3a1e0c780ea46ca220ff19bf81f1f7ee9"
+  },
+  "hs-many-labels": {
+   "model": "96f440ca1d6d822a39df68888971c88e7cfaafc0072f1a81591b32b9c44f8c30",
+   "predictions": "8d2ab1f7f0ff78a3dccbc593b143405a0a820821e808b05333dcc6f22b487c79"
+  },
+  "hs-no-subwords": {
+   "model": "25608e40532e7bb98f3792399b0c5d83c12e30aa39d1fc57b8e7e8227132a7a5",
+   "predictions": "1fd6cdaf6cfb164e898aff433bd2f6580e4bff236b7ff41f04da3cd9f36981e3"
+  },
+  "hs-one-label": {
+   "model": "1d2c316fe3dde3c31eb8ed35c53dae5bab8a00ec78fa317557366a3f726e1939",
+   "predictions": "80f05b74609671e761c5f1372bbcd9dd36fa0fc88161911a1f632d486d1215a3"
+  },
+  "hs-pruned": {
+   "model": "17129ac1c3e97952a05d90d4b0c10155fbf1abcfe7cd81964f5fc4cc3d759f8d",
+   "predictions": "c3f48af0463453c1f7db2964dd562843bfe4094da09e436da20c2c04dd2f958f"
+  },
+  "hs-qnorm": {
+   "model": "8c5b45e937719df7feab19854fceb5684116f87b61d81e73c6f380a6ed23c745",
+   "predictions": "fcb3f35f0b0f3703e09d7f444ab4b99b735b0a88aed5f405867baa429c344e2f"
+  },
+  "hs-qnorm-qout": {
+   "model": "89e8ae42a6b75067bf19d23d6c45d3776c57351b335e0ddf506e60603fb04a4a",
+   "predictions": "d23e4cdcdf2dd19328dd6e85a87fcd17053d94540bd09a671503572ad4d6d39a"
+  },
+  "hs-qout": {
+   "model": "441324b6e87590d47b20f3bfc681f6f231b72efbfd64143192bda015133b3e8d",
+   "predictions": "b12fef918bec531fea47ac96885e762ccd38210d5195e849c98849d111906560"
+  },
+  "hs-quant": {
+   "model": "d5871be7a8d641a186a56bc05b31e2c2fde79b2a6c88197559ed57c206452d65",
+   "predictions": "a3bbc12631a25492c5e744290a7f87b3002bd0f97ef4c31067418a93d1c40de2"
+  },
+  "hs-scaled": {
+   "model": "4749cdbc64e4c9bf1ce6456672255137e97e251f006d7f1741349e2263895e5b",
+   "predictions": "648e5361301f2133e1dbd63db8367b9e3ce59f1e218268fac44c5787cc32f0d5"
+  },
+  "hs-unicode-quant": {
+   "model": "437cbf8c75e3c504afab8da83fa9479dfc4916440780ea84864649e28da963bf",
+   "predictions": "dc46c89ba05a5092c385b9fb2d91e740060d3e65ead509c30bbc78dfdb18c97b"
+  },
+  "hs-v11-quant": {
+   "model": "f100f66898a71f108470bf99e904512fe565a189df2d6643dcfcd0f959cdcce4",
+   "predictions": "8c3a58ce996ccb0d7f12c744152cbaa156fb115bcfdfe75b365ab60595f2ca7a"
+  },
+  "hs-zero-in": {
+   "model": "df1059eeb730618332e9c6e03ac26bf652a95f4a20badb1386089003840d294e",
+   "predictions": "312fa5cf7dbba2398a0f602c875b46e7c75061d05d136bfdaf6cfb2f58ad58b8"
+  },
+  "hs-zero-out": {
+   "model": "444a57549a8e136922459825963f8c20c982aa21066af5ef1a91fc5b90c513d2",
+   "predictions": "312fa5cf7dbba2398a0f602c875b46e7c75061d05d136bfdaf6cfb2f58ad58b8"
+  },
+  "ns-dense": {
+   "model": "c46395dea0b039fe666a0995a3a27a73b465dafde314c0c0a63ed40164749dce",
+   "predictions": "8d3c81c5ca44c3afb220faed6adf7307de12c3edf43c004eab0fbecc48023b63"
+  },
+  "ns-pruned": {
+   "model": "ad03b97526b2925cf26d972e878a0695a729ed28c79ce0ede269cebe1d6102e9",
+   "predictions": "e6cf83990ff6423f1291f4cff095d2bc5cd8805e77a5af259c390702e5a444e5"
+  },
+  "ns-qnorm": {
+   "model": "68033d946e673002738b3a224a145f5c277d911f9ec52dad85bb02e88a9b0553",
+   "predictions": "178e79be71392193e2483aba31e23c07cc5490bfc0258fec6882e4ccc63d4c46"
+  },
+  "ns-qnorm-qout": {
+   "model": "73790141018df661a538b33ff47ffc00b990839c23c9140e68cacdf039386049",
+   "predictions": "10368d3696075ab24edd4ebfd0b422c81cfc3f92985764135ce0e2086c4e1c70"
+  },
+  "ns-qout": {
+   "model": "78bea15516ac565826d0f69a39420b9b60a1e1824f0dd63fd2362111f156fa2f",
+   "predictions": "2b397a218adaa9987d5327969ed641d0e8f4c17fa1df78aa20f0e818433040e6"
+  },
+  "ns-quant": {
+   "model": "623547375485b8da0b7fb67ca29d6ebbd7104c6ac4b986258b08b0a05766a630",
+   "predictions": "c614af4202a48ac2bfbd9fe371d2889b2df6f39fe35e4870b502a4c781741b08"
+  },
+  "ns-zero": {
+   "model": "b27d9b25c8e995379e88eefc40cbc1ad690ea7564c261c55408019d7e6079025",
+   "predictions": "f2b226440b1e484d51c14943b6c34a154b44ba4dca16f2b24d8e13749f41deeb"
+  },
+  "ova-dense": {
+   "model": "d242880ee2680a91a0461a45c491e56b415330589b1f5edb3faa80e31604b872",
+   "predictions": "df2924f1c28af5f4b0fb5b4fbc88b6a02d0ce701e7526ae26516dde34ef19ba9"
+  },
+  "ova-dim1": {
+   "model": "c96a1475c6381cc513f7eeaa6fa7123d9de0168ad4c4d924f79f9b28d9aa6438",
+   "predictions": "8be9d6c842000e887f58f5db2c8bab3e6b69c29eac199f907ebf051387ff21f8"
+  },
+  "ova-many-labels": {
+   "model": "ab0eb00cb0cf0e3da035fdf05ba6730f8551fb68f2a12734a22d08c1c79fcfc5",
+   "predictions": "d451956b06319644c7c5b5876283af2887f1713092af1aee1c74571ff637c737"
+  },
+  "ova-one-label": {
+   "model": "0786d8bb6da923ca4fd14e69785f89480ad9a98218c22f7f77214a149ce34a04",
+   "predictions": "882cce9a7e63dfe0114e19990ce7ba346cff40da5f12b97efc2ec039b01c0e56"
+  },
+  "ova-pruned": {
+   "model": "29360b5893d779285c97e054637aad19a25c28c4521b67c1421120e1449016e6",
+   "predictions": "479022b6e7c2fa3d1cec4aaceccc2f1e13b56c516d3fdd7dd5719676b4a4fc15"
+  },
+  "ova-qnorm": {
+   "model": "438fdde76eccd7cc10680ee92ff1b37e7c3631d3bdfd3fd35b4d42a451480dcb",
+   "predictions": "c108727ee749717bbd4c91056a644257f0f1c0b56e4c9a139cfbd2d476818145"
+  },
+  "ova-qnorm-qout": {
+   "model": "8f824b7b09c76c0768cf4268ddbb92e29fd74436222f3186090e828f08cff6e3",
+   "predictions": "5e869754f8769fe47a5504031cb04997f7c2305c3318f76492f916015ce11e33"
+  },
+  "ova-qout": {
+   "model": "656c68180d5a6b9a958e311b7b97b189c6c2c338d800580e51cf911b9b137772",
+   "predictions": "42b6056e3f8d0446638789356b06ce8516d5aae38cad78d7b1fe5d2c3733d5e1"
+  },
+  "ova-quant": {
+   "model": "6c79d0479eecd42ae3b7b955d82e07f5c1763c78be3d87943d8d44ff42c5222f",
+   "predictions": "b2049100780c2be15b92f6239f5af8ca79dcbaf1d033a641b706e7f562dbcba2"
+  },
+  "ova-scaled": {
+   "model": "2e4d65194ce2944e00340ca4f7fed301f0ef9994ca5e92322189e5cf0ed120ed",
+   "predictions": "99f35d09057bbb2f209f8b1bc2f587ce2604e99ff9658b06483c0e50afd81aed"
+  },
+  "ova-zero-out": {
+   "model": "b9bbffc3f18f5e8ce01d78390fba06f928361d413fbcfd3e30b3ddea3731ca63",
+   "predictions": "f2b226440b1e484d51c14943b6c34a154b44ba4dca16f2b24d8e13749f41deeb"
+  },
+  "sg-hs": {
+   "model": "5b3652cbf1ce6456d166b43b5d1e4906effd2fe2a4255e0d5f2e91a33f65c49c",
+   "predictions": "bd173a845017b7db0e4ad9d0d8f3a4c4916e2956d20777352ce92e2f6067047f"
+  },
+  "softmax-dense": {
+   "model": "0d71d5f0ad0c5e848d55b2bcb2286595ca6c813f76a09bae5ba87328af5f702d",
+   "predictions": "98fccf78f196aaee36c3869ec762685e0f5f8bc1d07c2ad86dac7051542c07ec"
+  },
+  "softmax-dsub3": {
+   "model": "3c0e624adc4d87566a75851064e020b1a2d89776e4f3bba4dc0e8d46c3a785e6",
+   "predictions": "cb74f0a6b6739feba65ab4ac701809500982e8a462d54d8d265c774ac4952b89"
+  },
+  "softmax-many-labels": {
+   "model": "c7a6ef848ee4afb8aa58627c7b4fea2fb5a53f09479cb9e194a36c5b7a4c628f",
+   "predictions": "5925e765c2aa87450c74fc4934847198850746804b3f02a58824ccea5b301b65"
+  },
+  "softmax-minn3-big-bucket": {
+   "model": "656d9d1a903749c167238c210c477b5fe488af7fe414e0a2f8e36bd5f95d3830",
+   "predictions": "e9301bc07d08e9645ef8bb3d1712977fdcc9c616829781e9928c7da84fe91818"
+  },
+  "softmax-no-eos": {
+   "model": "c831d20f773fc78bd5f59a59401c91a229c063ebe5d58418e277b20ff33793bf",
+   "predictions": "34c58dd61d1436d620d1a0cabe1f52d64cab195a92a23e9b9e7b39ec91376d2b"
+  },
+  "softmax-no-subwords": {
+   "model": "cf08c4aac0d3d67304df03aa89683c7593330e17d676510a2f8a17bedd0d2655",
+   "predictions": "895ced92c05a7267ca3ae799d37437e9a8b78f005b0f2392a89ba369e4ecf6d2"
+  },
+  "softmax-one-label": {
+   "model": "0e86991b24bfdc436827baa3a451b4d24e9768a78aa6d50b7a8a4a8f6abde3ac",
+   "predictions": "c2e53f0760ca66b7eef1b63a8913e63c3ec769e62a46c9669837cc1c069ac534"
+  },
+  "softmax-pruned": {
+   "model": "eddcb5e0a6154563e50f66df1a353b277be6ba8b72e18e75c7f2a47c5de516ae",
+   "predictions": "d20e8bd2722f768145ace57ddf737f3bd4744c43ede1b6a8530d598a1a992ab6"
+  },
+  "softmax-pruned-empty": {
+   "model": "c573feea0815f5a75a04592e6b6e110fbded5e20e3d7ddf9d0b7f7907503f7c8",
+   "predictions": "dd273395fb2cfb953c54c53eb3fef8b606d2b66486114b724ceddf48b41167ea"
+  },
+  "softmax-qnorm": {
+   "model": "73dfc49f906260932156bb695ab757bb3a3548a143ad6f79bb5bf587a636ac4a",
+   "predictions": "bed07a2e9e7aa7ed6eaf10c3467a39dea6db82af8e37d7c1805bf61c5b729eb5"
+  },
+  "softmax-qnorm-qout": {
+   "model": "34bdbe7b085eb09bd4392e6322968ec6f7c4452cfae4954c07ead03fd3568808",
+   "predictions": "3f13f6fb5a1091f639c2c5eeb588233524eca4141fbb3328b49b67ea1cb30c4a"
+  },
+  "softmax-qout": {
+   "model": "29b95018d4f1e760b6382467e24d6aa699726d1a4bc1b2b176ad98a4ff53607d",
+   "predictions": "596cc8489412d77bf8e33bbe5f4d049d7307e7cc913a63c589cada1a73a67e38"
+  },
+  "softmax-quant": {
+   "model": "687b3722c601752f1dbf9ea4ca346df153d7205d6f062ec27882c976124461be",
+   "predictions": "04ea9ac0104151147eb22a8ca9b653db97fb4b53b4cc5f996b11b26cac4b05d7"
+  },
+  "softmax-scaled": {
+   "model": "3ca5c8d461ed0caf2341c692717103505b4851ecd19653428bb2dc46d504a7ff",
+   "predictions": "b89acef50f213534936ad179150b280bfc569b35fe1bcf9e7d101e7c53e794a7"
+  },
+  "softmax-unicode": {
+   "model": "48e4d32d8cc8ee6b74401d0efd86bf1568c21b5349723fa886ea5e81e5873ef0",
+   "predictions": "0eee77618352030c49880ca74609649831c2070c7dfb858647a66d0cb3c95bf2"
+  },
+  "softmax-v11": {
+   "model": "2445743241a25420844ab3ff797c0594cfbd4985eee96a5ec129d99fd117181e",
+   "predictions": "4381b87601884c795c2d579ba47af1c6a38de1dfdb59d7b977eceddcfd9105b3"
+  },
+  "softmax-zero-in": {
+   "model": "c16c5691b57800caa5035e5eb55b539b1c272dd4742dbde7b53b058a27e724bc",
+   "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
+  },
+  "softmax-zero-quant": {
+   "model": "124449fcd824f046e1350366a2d58e66245fb12fd183063d972d0704ab170c4e",
+   "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
+  }
+ },
+ "linux-aarch64": {
   "cbow-no-eos": {
    "model": "f6708531c60c7c25b074b4c98e616e5ab6bb8bce801155906d97b05961188359",
    "predictions": "1bfb3eb0313e1310d5a5981b423cf7d68f5a9440e6e5c5fffe1c5c9c8a844ab1"
@@ -217,7 +653,225 @@
    "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
   }
  },
- "x86_64": {
+ "linux-musl-aarch64": {
+  "cbow-no-eos": {
+   "model": "f6708531c60c7c25b074b4c98e616e5ab6bb8bce801155906d97b05961188359",
+   "predictions": "1bfb3eb0313e1310d5a5981b423cf7d68f5a9440e6e5c5fffe1c5c9c8a844ab1"
+  },
+  "cbow-ns": {
+   "model": "382df577798459322de1c985721d3c3e72e75d4b3e675a7e53659bcc84a0475d",
+   "predictions": "bd173a845017b7db0e4ad9d0d8f3a4c4916e2956d20777352ce92e2f6067047f"
+  },
+  "hs-dense": {
+   "model": "df49f905434d125666730f60b5193d89c67d809a237d2a744cca18e8f173d3b9",
+   "predictions": "b36d478f628ab105ba05c1a55fb74324120c5b824821a75e254ca18136e1f0fe"
+  },
+  "hs-equal-counts": {
+   "model": "5c60c15933f715a1f40675e6fee607a68d762e2ca8da75b9ba0c7d0402d915b6",
+   "predictions": "024ae6fa3893c8b48484e412584081b3a1e0c780ea46ca220ff19bf81f1f7ee9"
+  },
+  "hs-many-labels": {
+   "model": "96f440ca1d6d822a39df68888971c88e7cfaafc0072f1a81591b32b9c44f8c30",
+   "predictions": "03e5356f7041b93b1421c43773f72e11644982847dd99a26bbed1301f5778afb"
+  },
+  "hs-no-subwords": {
+   "model": "25608e40532e7bb98f3792399b0c5d83c12e30aa39d1fc57b8e7e8227132a7a5",
+   "predictions": "1fd6cdaf6cfb164e898aff433bd2f6580e4bff236b7ff41f04da3cd9f36981e3"
+  },
+  "hs-one-label": {
+   "model": "1d2c316fe3dde3c31eb8ed35c53dae5bab8a00ec78fa317557366a3f726e1939",
+   "predictions": "80f05b74609671e761c5f1372bbcd9dd36fa0fc88161911a1f632d486d1215a3"
+  },
+  "hs-pruned": {
+   "model": "17129ac1c3e97952a05d90d4b0c10155fbf1abcfe7cd81964f5fc4cc3d759f8d",
+   "predictions": "9420544bfa79f8510da40e791a66478709bc44dfc01120a3dc67e3a4b4a04ba3"
+  },
+  "hs-qnorm": {
+   "model": "8c5b45e937719df7feab19854fceb5684116f87b61d81e73c6f380a6ed23c745",
+   "predictions": "c51591fabc5f951d8c54a80b7b6da5b20ce50198bf389f538cecae66acbf9626"
+  },
+  "hs-qnorm-qout": {
+   "model": "89e8ae42a6b75067bf19d23d6c45d3776c57351b335e0ddf506e60603fb04a4a",
+   "predictions": "d144a340e0ce2a9f93db660225786cbe1e79229054aa7d0b87d79e151ced7932"
+  },
+  "hs-qout": {
+   "model": "441324b6e87590d47b20f3bfc681f6f231b72efbfd64143192bda015133b3e8d",
+   "predictions": "655ae72452a7f0b559fa8c8cf57de2ce8341ee950dead47acf248297514148c4"
+  },
+  "hs-quant": {
+   "model": "d5871be7a8d641a186a56bc05b31e2c2fde79b2a6c88197559ed57c206452d65",
+   "predictions": "a3bbc12631a25492c5e744290a7f87b3002bd0f97ef4c31067418a93d1c40de2"
+  },
+  "hs-scaled": {
+   "model": "4749cdbc64e4c9bf1ce6456672255137e97e251f006d7f1741349e2263895e5b",
+   "predictions": "225966f0c33127ebc80f30d501402984ad2cd8590708add8566545d02f128329"
+  },
+  "hs-unicode-quant": {
+   "model": "437cbf8c75e3c504afab8da83fa9479dfc4916440780ea84864649e28da963bf",
+   "predictions": "dc46c89ba05a5092c385b9fb2d91e740060d3e65ead509c30bbc78dfdb18c97b"
+  },
+  "hs-v11-quant": {
+   "model": "f100f66898a71f108470bf99e904512fe565a189df2d6643dcfcd0f959cdcce4",
+   "predictions": "146e1a56f9c8038ffd961b3df11b6a84203fde9926d410a94ac3c052cac786aa"
+  },
+  "hs-zero-in": {
+   "model": "df1059eeb730618332e9c6e03ac26bf652a95f4a20badb1386089003840d294e",
+   "predictions": "312fa5cf7dbba2398a0f602c875b46e7c75061d05d136bfdaf6cfb2f58ad58b8"
+  },
+  "hs-zero-out": {
+   "model": "444a57549a8e136922459825963f8c20c982aa21066af5ef1a91fc5b90c513d2",
+   "predictions": "312fa5cf7dbba2398a0f602c875b46e7c75061d05d136bfdaf6cfb2f58ad58b8"
+  },
+  "ns-dense": {
+   "model": "c46395dea0b039fe666a0995a3a27a73b465dafde314c0c0a63ed40164749dce",
+   "predictions": "8d3c81c5ca44c3afb220faed6adf7307de12c3edf43c004eab0fbecc48023b63"
+  },
+  "ns-pruned": {
+   "model": "ad03b97526b2925cf26d972e878a0695a729ed28c79ce0ede269cebe1d6102e9",
+   "predictions": "e6cf83990ff6423f1291f4cff095d2bc5cd8805e77a5af259c390702e5a444e5"
+  },
+  "ns-qnorm": {
+   "model": "68033d946e673002738b3a224a145f5c277d911f9ec52dad85bb02e88a9b0553",
+   "predictions": "178e79be71392193e2483aba31e23c07cc5490bfc0258fec6882e4ccc63d4c46"
+  },
+  "ns-qnorm-qout": {
+   "model": "73790141018df661a538b33ff47ffc00b990839c23c9140e68cacdf039386049",
+   "predictions": "10368d3696075ab24edd4ebfd0b422c81cfc3f92985764135ce0e2086c4e1c70"
+  },
+  "ns-qout": {
+   "model": "78bea15516ac565826d0f69a39420b9b60a1e1824f0dd63fd2362111f156fa2f",
+   "predictions": "2b397a218adaa9987d5327969ed641d0e8f4c17fa1df78aa20f0e818433040e6"
+  },
+  "ns-quant": {
+   "model": "623547375485b8da0b7fb67ca29d6ebbd7104c6ac4b986258b08b0a05766a630",
+   "predictions": "c614af4202a48ac2bfbd9fe371d2889b2df6f39fe35e4870b502a4c781741b08"
+  },
+  "ns-zero": {
+   "model": "b27d9b25c8e995379e88eefc40cbc1ad690ea7564c261c55408019d7e6079025",
+   "predictions": "f2b226440b1e484d51c14943b6c34a154b44ba4dca16f2b24d8e13749f41deeb"
+  },
+  "ova-dense": {
+   "model": "d242880ee2680a91a0461a45c491e56b415330589b1f5edb3faa80e31604b872",
+   "predictions": "df2924f1c28af5f4b0fb5b4fbc88b6a02d0ce701e7526ae26516dde34ef19ba9"
+  },
+  "ova-dim1": {
+   "model": "c96a1475c6381cc513f7eeaa6fa7123d9de0168ad4c4d924f79f9b28d9aa6438",
+   "predictions": "8be9d6c842000e887f58f5db2c8bab3e6b69c29eac199f907ebf051387ff21f8"
+  },
+  "ova-many-labels": {
+   "model": "ab0eb00cb0cf0e3da035fdf05ba6730f8551fb68f2a12734a22d08c1c79fcfc5",
+   "predictions": "d451956b06319644c7c5b5876283af2887f1713092af1aee1c74571ff637c737"
+  },
+  "ova-one-label": {
+   "model": "0786d8bb6da923ca4fd14e69785f89480ad9a98218c22f7f77214a149ce34a04",
+   "predictions": "882cce9a7e63dfe0114e19990ce7ba346cff40da5f12b97efc2ec039b01c0e56"
+  },
+  "ova-pruned": {
+   "model": "29360b5893d779285c97e054637aad19a25c28c4521b67c1421120e1449016e6",
+   "predictions": "479022b6e7c2fa3d1cec4aaceccc2f1e13b56c516d3fdd7dd5719676b4a4fc15"
+  },
+  "ova-qnorm": {
+   "model": "438fdde76eccd7cc10680ee92ff1b37e7c3631d3bdfd3fd35b4d42a451480dcb",
+   "predictions": "c108727ee749717bbd4c91056a644257f0f1c0b56e4c9a139cfbd2d476818145"
+  },
+  "ova-qnorm-qout": {
+   "model": "8f824b7b09c76c0768cf4268ddbb92e29fd74436222f3186090e828f08cff6e3",
+   "predictions": "5e869754f8769fe47a5504031cb04997f7c2305c3318f76492f916015ce11e33"
+  },
+  "ova-qout": {
+   "model": "656c68180d5a6b9a958e311b7b97b189c6c2c338d800580e51cf911b9b137772",
+   "predictions": "42b6056e3f8d0446638789356b06ce8516d5aae38cad78d7b1fe5d2c3733d5e1"
+  },
+  "ova-quant": {
+   "model": "6c79d0479eecd42ae3b7b955d82e07f5c1763c78be3d87943d8d44ff42c5222f",
+   "predictions": "b2049100780c2be15b92f6239f5af8ca79dcbaf1d033a641b706e7f562dbcba2"
+  },
+  "ova-scaled": {
+   "model": "2e4d65194ce2944e00340ca4f7fed301f0ef9994ca5e92322189e5cf0ed120ed",
+   "predictions": "99f35d09057bbb2f209f8b1bc2f587ce2604e99ff9658b06483c0e50afd81aed"
+  },
+  "ova-zero-out": {
+   "model": "b9bbffc3f18f5e8ce01d78390fba06f928361d413fbcfd3e30b3ddea3731ca63",
+   "predictions": "f2b226440b1e484d51c14943b6c34a154b44ba4dca16f2b24d8e13749f41deeb"
+  },
+  "sg-hs": {
+   "model": "5b3652cbf1ce6456d166b43b5d1e4906effd2fe2a4255e0d5f2e91a33f65c49c",
+   "predictions": "bd173a845017b7db0e4ad9d0d8f3a4c4916e2956d20777352ce92e2f6067047f"
+  },
+  "softmax-dense": {
+   "model": "0d71d5f0ad0c5e848d55b2bcb2286595ca6c813f76a09bae5ba87328af5f702d",
+   "predictions": "98fccf78f196aaee36c3869ec762685e0f5f8bc1d07c2ad86dac7051542c07ec"
+  },
+  "softmax-dsub3": {
+   "model": "3c0e624adc4d87566a75851064e020b1a2d89776e4f3bba4dc0e8d46c3a785e6",
+   "predictions": "f86d28deb3fd67cac6dd47f863037a0513bd78ecf158174699120f6f3965267b"
+  },
+  "softmax-many-labels": {
+   "model": "c7a6ef848ee4afb8aa58627c7b4fea2fb5a53f09479cb9e194a36c5b7a4c628f",
+   "predictions": "deee5207422e3044b39600dd772c4f42363ef39eb47f17d2e188045b41d6ff79"
+  },
+  "softmax-minn3-big-bucket": {
+   "model": "656d9d1a903749c167238c210c477b5fe488af7fe414e0a2f8e36bd5f95d3830",
+   "predictions": "e9301bc07d08e9645ef8bb3d1712977fdcc9c616829781e9928c7da84fe91818"
+  },
+  "softmax-no-eos": {
+   "model": "c831d20f773fc78bd5f59a59401c91a229c063ebe5d58418e277b20ff33793bf",
+   "predictions": "7ec38015cea28b6b57fad11bfb3bdc2cf508a99f96099bf2659bc5d32d3c5198"
+  },
+  "softmax-no-subwords": {
+   "model": "cf08c4aac0d3d67304df03aa89683c7593330e17d676510a2f8a17bedd0d2655",
+   "predictions": "895ced92c05a7267ca3ae799d37437e9a8b78f005b0f2392a89ba369e4ecf6d2"
+  },
+  "softmax-one-label": {
+   "model": "0e86991b24bfdc436827baa3a451b4d24e9768a78aa6d50b7a8a4a8f6abde3ac",
+   "predictions": "c2e53f0760ca66b7eef1b63a8913e63c3ec769e62a46c9669837cc1c069ac534"
+  },
+  "softmax-pruned": {
+   "model": "eddcb5e0a6154563e50f66df1a353b277be6ba8b72e18e75c7f2a47c5de516ae",
+   "predictions": "423300c5afa4a859f5f72ea0f2dd3620c6b041dc123ba759dfb765cf2935d82d"
+  },
+  "softmax-pruned-empty": {
+   "model": "c573feea0815f5a75a04592e6b6e110fbded5e20e3d7ddf9d0b7f7907503f7c8",
+   "predictions": "7311c97286601432a8d9b8856c7a45e6b150ec5a219fe978de8a802e53f5ae76"
+  },
+  "softmax-qnorm": {
+   "model": "73dfc49f906260932156bb695ab757bb3a3548a143ad6f79bb5bf587a636ac4a",
+   "predictions": "a856328ccd14c9d1a2f300bd061c445a10e46aa6bbbc62182c4cd87bad70e71a"
+  },
+  "softmax-qnorm-qout": {
+   "model": "34bdbe7b085eb09bd4392e6322968ec6f7c4452cfae4954c07ead03fd3568808",
+   "predictions": "343821faf835a2f987ae54e0b349d270ab71e64bbb42396d4814de0c4d9eab86"
+  },
+  "softmax-qout": {
+   "model": "29b95018d4f1e760b6382467e24d6aa699726d1a4bc1b2b176ad98a4ff53607d",
+   "predictions": "e121fd089aa73e4f21f1d4e5b73714a5a9f73b0e5869da523eaab2ad55833085"
+  },
+  "softmax-quant": {
+   "model": "687b3722c601752f1dbf9ea4ca346df153d7205d6f062ec27882c976124461be",
+   "predictions": "bdc5bfabfa08c5dc0f7f617b954d5fdf5aec88740531090d95e2a5873ff13ffb"
+  },
+  "softmax-scaled": {
+   "model": "3ca5c8d461ed0caf2341c692717103505b4851ecd19653428bb2dc46d504a7ff",
+   "predictions": "b89acef50f213534936ad179150b280bfc569b35fe1bcf9e7d101e7c53e794a7"
+  },
+  "softmax-unicode": {
+   "model": "48e4d32d8cc8ee6b74401d0efd86bf1568c21b5349723fa886ea5e81e5873ef0",
+   "predictions": "e77aaf1faa2ab943685513c0951f027f9205aaf4c6edae5d948cbe5006677163"
+  },
+  "softmax-v11": {
+   "model": "2445743241a25420844ab3ff797c0594cfbd4985eee96a5ec129d99fd117181e",
+   "predictions": "a00da1572b8b97c9bae2443fcbfd40ebb16ec8d29c84afc70b40c47b78494449"
+  },
+  "softmax-zero-in": {
+   "model": "c16c5691b57800caa5035e5eb55b539b1c272dd4742dbde7b53b058a27e724bc",
+   "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
+  },
+  "softmax-zero-quant": {
+   "model": "124449fcd824f046e1350366a2d58e66245fb12fd183063d972d0704ab170c4e",
+   "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
+  }
+ },
+ "linux-musl-x86_64": {
   "cbow-no-eos": {
    "model": "f6708531c60c7c25b074b4c98e616e5ab6bb8bce801155906d97b05961188359",
    "predictions": "1bfb3eb0313e1310d5a5981b423cf7d68f5a9440e6e5c5fffe1c5c9c8a844ab1"
@@ -421,6 +1075,442 @@
   "softmax-unicode": {
    "model": "48e4d32d8cc8ee6b74401d0efd86bf1568c21b5349723fa886ea5e81e5873ef0",
    "predictions": "e77aaf1faa2ab943685513c0951f027f9205aaf4c6edae5d948cbe5006677163"
+  },
+  "softmax-v11": {
+   "model": "2445743241a25420844ab3ff797c0594cfbd4985eee96a5ec129d99fd117181e",
+   "predictions": "a00da1572b8b97c9bae2443fcbfd40ebb16ec8d29c84afc70b40c47b78494449"
+  },
+  "softmax-zero-in": {
+   "model": "c16c5691b57800caa5035e5eb55b539b1c272dd4742dbde7b53b058a27e724bc",
+   "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
+  },
+  "softmax-zero-quant": {
+   "model": "124449fcd824f046e1350366a2d58e66245fb12fd183063d972d0704ab170c4e",
+   "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
+  }
+ },
+ "linux-x86_64": {
+  "cbow-no-eos": {
+   "model": "f6708531c60c7c25b074b4c98e616e5ab6bb8bce801155906d97b05961188359",
+   "predictions": "1bfb3eb0313e1310d5a5981b423cf7d68f5a9440e6e5c5fffe1c5c9c8a844ab1"
+  },
+  "cbow-ns": {
+   "model": "382df577798459322de1c985721d3c3e72e75d4b3e675a7e53659bcc84a0475d",
+   "predictions": "bd173a845017b7db0e4ad9d0d8f3a4c4916e2956d20777352ce92e2f6067047f"
+  },
+  "hs-dense": {
+   "model": "df49f905434d125666730f60b5193d89c67d809a237d2a744cca18e8f173d3b9",
+   "predictions": "b36d478f628ab105ba05c1a55fb74324120c5b824821a75e254ca18136e1f0fe"
+  },
+  "hs-equal-counts": {
+   "model": "5c60c15933f715a1f40675e6fee607a68d762e2ca8da75b9ba0c7d0402d915b6",
+   "predictions": "024ae6fa3893c8b48484e412584081b3a1e0c780ea46ca220ff19bf81f1f7ee9"
+  },
+  "hs-many-labels": {
+   "model": "96f440ca1d6d822a39df68888971c88e7cfaafc0072f1a81591b32b9c44f8c30",
+   "predictions": "9f14df897d4b86b48d99e9d0029c93a007026e4f178d03e064e67bfe56a896d0"
+  },
+  "hs-no-subwords": {
+   "model": "25608e40532e7bb98f3792399b0c5d83c12e30aa39d1fc57b8e7e8227132a7a5",
+   "predictions": "1fd6cdaf6cfb164e898aff433bd2f6580e4bff236b7ff41f04da3cd9f36981e3"
+  },
+  "hs-one-label": {
+   "model": "1d2c316fe3dde3c31eb8ed35c53dae5bab8a00ec78fa317557366a3f726e1939",
+   "predictions": "80f05b74609671e761c5f1372bbcd9dd36fa0fc88161911a1f632d486d1215a3"
+  },
+  "hs-pruned": {
+   "model": "17129ac1c3e97952a05d90d4b0c10155fbf1abcfe7cd81964f5fc4cc3d759f8d",
+   "predictions": "9420544bfa79f8510da40e791a66478709bc44dfc01120a3dc67e3a4b4a04ba3"
+  },
+  "hs-qnorm": {
+   "model": "8c5b45e937719df7feab19854fceb5684116f87b61d81e73c6f380a6ed23c745",
+   "predictions": "f25ca0e51b1d7921dc79b901efe39bc079834d2a4f81dbbe50be8ece743db828"
+  },
+  "hs-qnorm-qout": {
+   "model": "89e8ae42a6b75067bf19d23d6c45d3776c57351b335e0ddf506e60603fb04a4a",
+   "predictions": "d23e4cdcdf2dd19328dd6e85a87fcd17053d94540bd09a671503572ad4d6d39a"
+  },
+  "hs-qout": {
+   "model": "441324b6e87590d47b20f3bfc681f6f231b72efbfd64143192bda015133b3e8d",
+   "predictions": "b12fef918bec531fea47ac96885e762ccd38210d5195e849c98849d111906560"
+  },
+  "hs-quant": {
+   "model": "d5871be7a8d641a186a56bc05b31e2c2fde79b2a6c88197559ed57c206452d65",
+   "predictions": "a3bbc12631a25492c5e744290a7f87b3002bd0f97ef4c31067418a93d1c40de2"
+  },
+  "hs-scaled": {
+   "model": "4749cdbc64e4c9bf1ce6456672255137e97e251f006d7f1741349e2263895e5b",
+   "predictions": "225966f0c33127ebc80f30d501402984ad2cd8590708add8566545d02f128329"
+  },
+  "hs-unicode-quant": {
+   "model": "437cbf8c75e3c504afab8da83fa9479dfc4916440780ea84864649e28da963bf",
+   "predictions": "dc46c89ba05a5092c385b9fb2d91e740060d3e65ead509c30bbc78dfdb18c97b"
+  },
+  "hs-v11-quant": {
+   "model": "f100f66898a71f108470bf99e904512fe565a189df2d6643dcfcd0f959cdcce4",
+   "predictions": "8c3a58ce996ccb0d7f12c744152cbaa156fb115bcfdfe75b365ab60595f2ca7a"
+  },
+  "hs-zero-in": {
+   "model": "df1059eeb730618332e9c6e03ac26bf652a95f4a20badb1386089003840d294e",
+   "predictions": "312fa5cf7dbba2398a0f602c875b46e7c75061d05d136bfdaf6cfb2f58ad58b8"
+  },
+  "hs-zero-out": {
+   "model": "444a57549a8e136922459825963f8c20c982aa21066af5ef1a91fc5b90c513d2",
+   "predictions": "312fa5cf7dbba2398a0f602c875b46e7c75061d05d136bfdaf6cfb2f58ad58b8"
+  },
+  "ns-dense": {
+   "model": "c46395dea0b039fe666a0995a3a27a73b465dafde314c0c0a63ed40164749dce",
+   "predictions": "8d3c81c5ca44c3afb220faed6adf7307de12c3edf43c004eab0fbecc48023b63"
+  },
+  "ns-pruned": {
+   "model": "ad03b97526b2925cf26d972e878a0695a729ed28c79ce0ede269cebe1d6102e9",
+   "predictions": "e6cf83990ff6423f1291f4cff095d2bc5cd8805e77a5af259c390702e5a444e5"
+  },
+  "ns-qnorm": {
+   "model": "68033d946e673002738b3a224a145f5c277d911f9ec52dad85bb02e88a9b0553",
+   "predictions": "178e79be71392193e2483aba31e23c07cc5490bfc0258fec6882e4ccc63d4c46"
+  },
+  "ns-qnorm-qout": {
+   "model": "73790141018df661a538b33ff47ffc00b990839c23c9140e68cacdf039386049",
+   "predictions": "10368d3696075ab24edd4ebfd0b422c81cfc3f92985764135ce0e2086c4e1c70"
+  },
+  "ns-qout": {
+   "model": "78bea15516ac565826d0f69a39420b9b60a1e1824f0dd63fd2362111f156fa2f",
+   "predictions": "2b397a218adaa9987d5327969ed641d0e8f4c17fa1df78aa20f0e818433040e6"
+  },
+  "ns-quant": {
+   "model": "623547375485b8da0b7fb67ca29d6ebbd7104c6ac4b986258b08b0a05766a630",
+   "predictions": "c614af4202a48ac2bfbd9fe371d2889b2df6f39fe35e4870b502a4c781741b08"
+  },
+  "ns-zero": {
+   "model": "b27d9b25c8e995379e88eefc40cbc1ad690ea7564c261c55408019d7e6079025",
+   "predictions": "f2b226440b1e484d51c14943b6c34a154b44ba4dca16f2b24d8e13749f41deeb"
+  },
+  "ova-dense": {
+   "model": "d242880ee2680a91a0461a45c491e56b415330589b1f5edb3faa80e31604b872",
+   "predictions": "df2924f1c28af5f4b0fb5b4fbc88b6a02d0ce701e7526ae26516dde34ef19ba9"
+  },
+  "ova-dim1": {
+   "model": "c96a1475c6381cc513f7eeaa6fa7123d9de0168ad4c4d924f79f9b28d9aa6438",
+   "predictions": "8be9d6c842000e887f58f5db2c8bab3e6b69c29eac199f907ebf051387ff21f8"
+  },
+  "ova-many-labels": {
+   "model": "ab0eb00cb0cf0e3da035fdf05ba6730f8551fb68f2a12734a22d08c1c79fcfc5",
+   "predictions": "d451956b06319644c7c5b5876283af2887f1713092af1aee1c74571ff637c737"
+  },
+  "ova-one-label": {
+   "model": "0786d8bb6da923ca4fd14e69785f89480ad9a98218c22f7f77214a149ce34a04",
+   "predictions": "882cce9a7e63dfe0114e19990ce7ba346cff40da5f12b97efc2ec039b01c0e56"
+  },
+  "ova-pruned": {
+   "model": "29360b5893d779285c97e054637aad19a25c28c4521b67c1421120e1449016e6",
+   "predictions": "479022b6e7c2fa3d1cec4aaceccc2f1e13b56c516d3fdd7dd5719676b4a4fc15"
+  },
+  "ova-qnorm": {
+   "model": "438fdde76eccd7cc10680ee92ff1b37e7c3631d3bdfd3fd35b4d42a451480dcb",
+   "predictions": "c108727ee749717bbd4c91056a644257f0f1c0b56e4c9a139cfbd2d476818145"
+  },
+  "ova-qnorm-qout": {
+   "model": "8f824b7b09c76c0768cf4268ddbb92e29fd74436222f3186090e828f08cff6e3",
+   "predictions": "5e869754f8769fe47a5504031cb04997f7c2305c3318f76492f916015ce11e33"
+  },
+  "ova-qout": {
+   "model": "656c68180d5a6b9a958e311b7b97b189c6c2c338d800580e51cf911b9b137772",
+   "predictions": "42b6056e3f8d0446638789356b06ce8516d5aae38cad78d7b1fe5d2c3733d5e1"
+  },
+  "ova-quant": {
+   "model": "6c79d0479eecd42ae3b7b955d82e07f5c1763c78be3d87943d8d44ff42c5222f",
+   "predictions": "b2049100780c2be15b92f6239f5af8ca79dcbaf1d033a641b706e7f562dbcba2"
+  },
+  "ova-scaled": {
+   "model": "2e4d65194ce2944e00340ca4f7fed301f0ef9994ca5e92322189e5cf0ed120ed",
+   "predictions": "99f35d09057bbb2f209f8b1bc2f587ce2604e99ff9658b06483c0e50afd81aed"
+  },
+  "ova-zero-out": {
+   "model": "b9bbffc3f18f5e8ce01d78390fba06f928361d413fbcfd3e30b3ddea3731ca63",
+   "predictions": "f2b226440b1e484d51c14943b6c34a154b44ba4dca16f2b24d8e13749f41deeb"
+  },
+  "sg-hs": {
+   "model": "5b3652cbf1ce6456d166b43b5d1e4906effd2fe2a4255e0d5f2e91a33f65c49c",
+   "predictions": "bd173a845017b7db0e4ad9d0d8f3a4c4916e2956d20777352ce92e2f6067047f"
+  },
+  "softmax-dense": {
+   "model": "0d71d5f0ad0c5e848d55b2bcb2286595ca6c813f76a09bae5ba87328af5f702d",
+   "predictions": "98fccf78f196aaee36c3869ec762685e0f5f8bc1d07c2ad86dac7051542c07ec"
+  },
+  "softmax-dsub3": {
+   "model": "3c0e624adc4d87566a75851064e020b1a2d89776e4f3bba4dc0e8d46c3a785e6",
+   "predictions": "558c3bddad45d95813cf4fa447048d5157faffcc52b231fe33e29e5e7d0ba16c"
+  },
+  "softmax-many-labels": {
+   "model": "c7a6ef848ee4afb8aa58627c7b4fea2fb5a53f09479cb9e194a36c5b7a4c628f",
+   "predictions": "c93551fea3aad04827c96ba46fc21f899637cb31d0abc7126287f7a330ad1858"
+  },
+  "softmax-minn3-big-bucket": {
+   "model": "656d9d1a903749c167238c210c477b5fe488af7fe414e0a2f8e36bd5f95d3830",
+   "predictions": "e9301bc07d08e9645ef8bb3d1712977fdcc9c616829781e9928c7da84fe91818"
+  },
+  "softmax-no-eos": {
+   "model": "c831d20f773fc78bd5f59a59401c91a229c063ebe5d58418e277b20ff33793bf",
+   "predictions": "7ec38015cea28b6b57fad11bfb3bdc2cf508a99f96099bf2659bc5d32d3c5198"
+  },
+  "softmax-no-subwords": {
+   "model": "cf08c4aac0d3d67304df03aa89683c7593330e17d676510a2f8a17bedd0d2655",
+   "predictions": "895ced92c05a7267ca3ae799d37437e9a8b78f005b0f2392a89ba369e4ecf6d2"
+  },
+  "softmax-one-label": {
+   "model": "0e86991b24bfdc436827baa3a451b4d24e9768a78aa6d50b7a8a4a8f6abde3ac",
+   "predictions": "c2e53f0760ca66b7eef1b63a8913e63c3ec769e62a46c9669837cc1c069ac534"
+  },
+  "softmax-pruned": {
+   "model": "eddcb5e0a6154563e50f66df1a353b277be6ba8b72e18e75c7f2a47c5de516ae",
+   "predictions": "423300c5afa4a859f5f72ea0f2dd3620c6b041dc123ba759dfb765cf2935d82d"
+  },
+  "softmax-pruned-empty": {
+   "model": "c573feea0815f5a75a04592e6b6e110fbded5e20e3d7ddf9d0b7f7907503f7c8",
+   "predictions": "7311c97286601432a8d9b8856c7a45e6b150ec5a219fe978de8a802e53f5ae76"
+  },
+  "softmax-qnorm": {
+   "model": "73dfc49f906260932156bb695ab757bb3a3548a143ad6f79bb5bf587a636ac4a",
+   "predictions": "df197c0a7ba97f79884cbd9b6d10490a86012f61277c6b3b32e7f8ccf9f53337"
+  },
+  "softmax-qnorm-qout": {
+   "model": "34bdbe7b085eb09bd4392e6322968ec6f7c4452cfae4954c07ead03fd3568808",
+   "predictions": "79c2a7d59bf2cb648cd4d19502676c8e0649c62d35d983023ef77d4de6dfdc14"
+  },
+  "softmax-qout": {
+   "model": "29b95018d4f1e760b6382467e24d6aa699726d1a4bc1b2b176ad98a4ff53607d",
+   "predictions": "9bd708001a9d8ea8eeda09018852d6f40b3504adbc5afe5e2043b9fb7c6598eb"
+  },
+  "softmax-quant": {
+   "model": "687b3722c601752f1dbf9ea4ca346df153d7205d6f062ec27882c976124461be",
+   "predictions": "bdc5bfabfa08c5dc0f7f617b954d5fdf5aec88740531090d95e2a5873ff13ffb"
+  },
+  "softmax-scaled": {
+   "model": "3ca5c8d461ed0caf2341c692717103505b4851ecd19653428bb2dc46d504a7ff",
+   "predictions": "b89acef50f213534936ad179150b280bfc569b35fe1bcf9e7d101e7c53e794a7"
+  },
+  "softmax-unicode": {
+   "model": "48e4d32d8cc8ee6b74401d0efd86bf1568c21b5349723fa886ea5e81e5873ef0",
+   "predictions": "e77aaf1faa2ab943685513c0951f027f9205aaf4c6edae5d948cbe5006677163"
+  },
+  "softmax-v11": {
+   "model": "2445743241a25420844ab3ff797c0594cfbd4985eee96a5ec129d99fd117181e",
+   "predictions": "a00da1572b8b97c9bae2443fcbfd40ebb16ec8d29c84afc70b40c47b78494449"
+  },
+  "softmax-zero-in": {
+   "model": "c16c5691b57800caa5035e5eb55b539b1c272dd4742dbde7b53b058a27e724bc",
+   "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
+  },
+  "softmax-zero-quant": {
+   "model": "124449fcd824f046e1350366a2d58e66245fb12fd183063d972d0704ab170c4e",
+   "predictions": "c98512878fa4edad0696fb21a0ff8e9d79dad71f7092c5a48cb60dcabd6757f1"
+  }
+ },
+ "win32-x86_64": {
+  "cbow-no-eos": {
+   "model": "f6708531c60c7c25b074b4c98e616e5ab6bb8bce801155906d97b05961188359",
+   "predictions": "1bfb3eb0313e1310d5a5981b423cf7d68f5a9440e6e5c5fffe1c5c9c8a844ab1"
+  },
+  "cbow-ns": {
+   "model": "382df577798459322de1c985721d3c3e72e75d4b3e675a7e53659bcc84a0475d",
+   "predictions": "bd173a845017b7db0e4ad9d0d8f3a4c4916e2956d20777352ce92e2f6067047f"
+  },
+  "hs-dense": {
+   "model": "df49f905434d125666730f60b5193d89c67d809a237d2a744cca18e8f173d3b9",
+   "predictions": "c3d9ac7304bc5caaecc70407277b7592374cedca280b3210618d1c463adfcad9"
+  },
+  "hs-equal-counts": {
+   "model": "5c60c15933f715a1f40675e6fee607a68d762e2ca8da75b9ba0c7d0402d915b6",
+   "predictions": "024ae6fa3893c8b48484e412584081b3a1e0c780ea46ca220ff19bf81f1f7ee9"
+  },
+  "hs-many-labels": {
+   "model": "96f440ca1d6d822a39df68888971c88e7cfaafc0072f1a81591b32b9c44f8c30",
+   "predictions": "6faee2052a7b034bdaa220ccf8ea9053936380d1d066c489e4dbb367de002e0c"
+  },
+  "hs-no-subwords": {
+   "model": "25608e40532e7bb98f3792399b0c5d83c12e30aa39d1fc57b8e7e8227132a7a5",
+   "predictions": "f67399b2a68285959b72313da7b67910c47fa4216b91060b6b09731f829d8e9c"
+  },
+  "hs-one-label": {
+   "model": "1d2c316fe3dde3c31eb8ed35c53dae5bab8a00ec78fa317557366a3f726e1939",
+   "predictions": "80f05b74609671e761c5f1372bbcd9dd36fa0fc88161911a1f632d486d1215a3"
+  },
+  "hs-pruned": {
+   "model": "17129ac1c3e97952a05d90d4b0c10155fbf1abcfe7cd81964f5fc4cc3d759f8d",
+   "predictions": "251b2167bb07d44c0fe31ca73eeb83c173accba105367a4cc69991e9d37972f0"
+  },
+  "hs-qnorm": {
+   "model": "8c5b45e937719df7feab19854fceb5684116f87b61d81e73c6f380a6ed23c745",
+   "predictions": "39a8bafa23a13ae643106ec50c2de4af00b5aee9fd03c219267b06b2af0f373d"
+  },
+  "hs-qnorm-qout": {
+   "model": "89e8ae42a6b75067bf19d23d6c45d3776c57351b335e0ddf506e60603fb04a4a",
+   "predictions": "d23e4cdcdf2dd19328dd6e85a87fcd17053d94540bd09a671503572ad4d6d39a"
+  },
+  "hs-qout": {
+   "model": "441324b6e87590d47b20f3bfc681f6f231b72efbfd64143192bda015133b3e8d",
+   "predictions": "b12fef918bec531fea47ac96885e762ccd38210d5195e849c98849d111906560"
+  },
+  "hs-quant": {
+   "model": "d5871be7a8d641a186a56bc05b31e2c2fde79b2a6c88197559ed57c206452d65",
+   "predictions": "a3bbc12631a25492c5e744290a7f87b3002bd0f97ef4c31067418a93d1c40de2"
+  },
+  "hs-scaled": {
+   "model": "4749cdbc64e4c9bf1ce6456672255137e97e251f006d7f1741349e2263895e5b",
+   "predictions": "2397b1a24f81f2dda3944f4cab7926e73a3e78806a69bcd174192dd6d8877f07"
+  },
+  "hs-unicode-quant": {
+   "model": "437cbf8c75e3c504afab8da83fa9479dfc4916440780ea84864649e28da963bf",
+   "predictions": "dc46c89ba05a5092c385b9fb2d91e740060d3e65ead509c30bbc78dfdb18c97b"
+  },
+  "hs-v11-quant": {
+   "model": "f100f66898a71f108470bf99e904512fe565a189df2d6643dcfcd0f959cdcce4",
+   "predictions": "8c3a58ce996ccb0d7f12c744152cbaa156fb115bcfdfe75b365ab60595f2ca7a"
+  },
+  "hs-zero-in": {
+   "model": "df1059eeb730618332e9c6e03ac26bf652a95f4a20badb1386089003840d294e",
+   "predictions": "312fa5cf7dbba2398a0f602c875b46e7c75061d05d136bfdaf6cfb2f58ad58b8"
+  },
+  "hs-zero-out": {
+   "model": "444a57549a8e136922459825963f8c20c982aa21066af5ef1a91fc5b90c513d2",
+   "predictions": "312fa5cf7dbba2398a0f602c875b46e7c75061d05d136bfdaf6cfb2f58ad58b8"
+  },
+  "ns-dense": {
+   "model": "c46395dea0b039fe666a0995a3a27a73b465dafde314c0c0a63ed40164749dce",
+   "predictions": "8d3c81c5ca44c3afb220faed6adf7307de12c3edf43c004eab0fbecc48023b63"
+  },
+  "ns-pruned": {
+   "model": "ad03b97526b2925cf26d972e878a0695a729ed28c79ce0ede269cebe1d6102e9",
+   "predictions": "e6cf83990ff6423f1291f4cff095d2bc5cd8805e77a5af259c390702e5a444e5"
+  },
+  "ns-qnorm": {
+   "model": "68033d946e673002738b3a224a145f5c277d911f9ec52dad85bb02e88a9b0553",
+   "predictions": "178e79be71392193e2483aba31e23c07cc5490bfc0258fec6882e4ccc63d4c46"
+  },
+  "ns-qnorm-qout": {
+   "model": "73790141018df661a538b33ff47ffc00b990839c23c9140e68cacdf039386049",
+   "predictions": "10368d3696075ab24edd4ebfd0b422c81cfc3f92985764135ce0e2086c4e1c70"
+  },
+  "ns-qout": {
+   "model": "78bea15516ac565826d0f69a39420b9b60a1e1824f0dd63fd2362111f156fa2f",
+   "predictions": "2b397a218adaa9987d5327969ed641d0e8f4c17fa1df78aa20f0e818433040e6"
+  },
+  "ns-quant": {
+   "model": "623547375485b8da0b7fb67ca29d6ebbd7104c6ac4b986258b08b0a05766a630",
+   "predictions": "c614af4202a48ac2bfbd9fe371d2889b2df6f39fe35e4870b502a4c781741b08"
+  },
+  "ns-zero": {
+   "model": "b27d9b25c8e995379e88eefc40cbc1ad690ea7564c261c55408019d7e6079025",
+   "predictions": "f2b226440b1e484d51c14943b6c34a154b44ba4dca16f2b24d8e13749f41deeb"
+  },
+  "ova-dense": {
+   "model": "d242880ee2680a91a0461a45c491e56b415330589b1f5edb3faa80e31604b872",
+   "predictions": "df2924f1c28af5f4b0fb5b4fbc88b6a02d0ce701e7526ae26516dde34ef19ba9"
+  },
+  "ova-dim1": {
+   "model": "c96a1475c6381cc513f7eeaa6fa7123d9de0168ad4c4d924f79f9b28d9aa6438",
+   "predictions": "8be9d6c842000e887f58f5db2c8bab3e6b69c29eac199f907ebf051387ff21f8"
+  },
+  "ova-many-labels": {
+   "model": "ab0eb00cb0cf0e3da035fdf05ba6730f8551fb68f2a12734a22d08c1c79fcfc5",
+   "predictions": "d451956b06319644c7c5b5876283af2887f1713092af1aee1c74571ff637c737"
+  },
+  "ova-one-label": {
+   "model": "0786d8bb6da923ca4fd14e69785f89480ad9a98218c22f7f77214a149ce34a04",
+   "predictions": "882cce9a7e63dfe0114e19990ce7ba346cff40da5f12b97efc2ec039b01c0e56"
+  },
+  "ova-pruned": {
+   "model": "29360b5893d779285c97e054637aad19a25c28c4521b67c1421120e1449016e6",
+   "predictions": "479022b6e7c2fa3d1cec4aaceccc2f1e13b56c516d3fdd7dd5719676b4a4fc15"
+  },
+  "ova-qnorm": {
+   "model": "438fdde76eccd7cc10680ee92ff1b37e7c3631d3bdfd3fd35b4d42a451480dcb",
+   "predictions": "c108727ee749717bbd4c91056a644257f0f1c0b56e4c9a139cfbd2d476818145"
+  },
+  "ova-qnorm-qout": {
+   "model": "8f824b7b09c76c0768cf4268ddbb92e29fd74436222f3186090e828f08cff6e3",
+   "predictions": "5e869754f8769fe47a5504031cb04997f7c2305c3318f76492f916015ce11e33"
+  },
+  "ova-qout": {
+   "model": "656c68180d5a6b9a958e311b7b97b189c6c2c338d800580e51cf911b9b137772",
+   "predictions": "42b6056e3f8d0446638789356b06ce8516d5aae38cad78d7b1fe5d2c3733d5e1"
+  },
+  "ova-quant": {
+   "model": "6c79d0479eecd42ae3b7b955d82e07f5c1763c78be3d87943d8d44ff42c5222f",
+   "predictions": "b2049100780c2be15b92f6239f5af8ca79dcbaf1d033a641b706e7f562dbcba2"
+  },
+  "ova-scaled": {
+   "model": "2e4d65194ce2944e00340ca4f7fed301f0ef9994ca5e92322189e5cf0ed120ed",
+   "predictions": "99f35d09057bbb2f209f8b1bc2f587ce2604e99ff9658b06483c0e50afd81aed"
+  },
+  "ova-zero-out": {
+   "model": "b9bbffc3f18f5e8ce01d78390fba06f928361d413fbcfd3e30b3ddea3731ca63",
+   "predictions": "f2b226440b1e484d51c14943b6c34a154b44ba4dca16f2b24d8e13749f41deeb"
+  },
+  "sg-hs": {
+   "model": "5b3652cbf1ce6456d166b43b5d1e4906effd2fe2a4255e0d5f2e91a33f65c49c",
+   "predictions": "bd173a845017b7db0e4ad9d0d8f3a4c4916e2956d20777352ce92e2f6067047f"
+  },
+  "softmax-dense": {
+   "model": "0d71d5f0ad0c5e848d55b2bcb2286595ca6c813f76a09bae5ba87328af5f702d",
+   "predictions": "98fccf78f196aaee36c3869ec762685e0f5f8bc1d07c2ad86dac7051542c07ec"
+  },
+  "softmax-dsub3": {
+   "model": "3c0e624adc4d87566a75851064e020b1a2d89776e4f3bba4dc0e8d46c3a785e6",
+   "predictions": "cb74f0a6b6739feba65ab4ac701809500982e8a462d54d8d265c774ac4952b89"
+  },
+  "softmax-many-labels": {
+   "model": "c7a6ef848ee4afb8aa58627c7b4fea2fb5a53f09479cb9e194a36c5b7a4c628f",
+   "predictions": "cf98100d8c5dfb45dc5eca230ce3aeb4a3ef95b5c4c86168fad7e41de2e43471"
+  },
+  "softmax-minn3-big-bucket": {
+   "model": "656d9d1a903749c167238c210c477b5fe488af7fe414e0a2f8e36bd5f95d3830",
+   "predictions": "e9301bc07d08e9645ef8bb3d1712977fdcc9c616829781e9928c7da84fe91818"
+  },
+  "softmax-no-eos": {
+   "model": "c831d20f773fc78bd5f59a59401c91a229c063ebe5d58418e277b20ff33793bf",
+   "predictions": "42c309f7bde2d0c36db51cf63e210a0d8d9ecb65db5937b50e0724390e1c39a7"
+  },
+  "softmax-no-subwords": {
+   "model": "cf08c4aac0d3d67304df03aa89683c7593330e17d676510a2f8a17bedd0d2655",
+   "predictions": "895ced92c05a7267ca3ae799d37437e9a8b78f005b0f2392a89ba369e4ecf6d2"
+  },
+  "softmax-one-label": {
+   "model": "0e86991b24bfdc436827baa3a451b4d24e9768a78aa6d50b7a8a4a8f6abde3ac",
+   "predictions": "c2e53f0760ca66b7eef1b63a8913e63c3ec769e62a46c9669837cc1c069ac534"
+  },
+  "softmax-pruned": {
+   "model": "eddcb5e0a6154563e50f66df1a353b277be6ba8b72e18e75c7f2a47c5de516ae",
+   "predictions": "d20e8bd2722f768145ace57ddf737f3bd4744c43ede1b6a8530d598a1a992ab6"
+  },
+  "softmax-pruned-empty": {
+   "model": "c573feea0815f5a75a04592e6b6e110fbded5e20e3d7ddf9d0b7f7907503f7c8",
+   "predictions": "7311c97286601432a8d9b8856c7a45e6b150ec5a219fe978de8a802e53f5ae76"
+  },
+  "softmax-qnorm": {
+   "model": "73dfc49f906260932156bb695ab757bb3a3548a143ad6f79bb5bf587a636ac4a",
+   "predictions": "bed07a2e9e7aa7ed6eaf10c3467a39dea6db82af8e37d7c1805bf61c5b729eb5"
+  },
+  "softmax-qnorm-qout": {
+   "model": "34bdbe7b085eb09bd4392e6322968ec6f7c4452cfae4954c07ead03fd3568808",
+   "predictions": "e2f29f8a588e64d5ca9c8d3c952bee095b0e0615c2326a827d0c4b3c7c7bd3f9"
+  },
+  "softmax-qout": {
+   "model": "29b95018d4f1e760b6382467e24d6aa699726d1a4bc1b2b176ad98a4ff53607d",
+   "predictions": "9bd708001a9d8ea8eeda09018852d6f40b3504adbc5afe5e2043b9fb7c6598eb"
+  },
+  "softmax-quant": {
+   "model": "687b3722c601752f1dbf9ea4ca346df153d7205d6f062ec27882c976124461be",
+   "predictions": "34dedc03d346a4ceab95f66fd2a563b7e0dee36edd8010c84c382af4c1de59a1"
+  },
+  "softmax-scaled": {
+   "model": "3ca5c8d461ed0caf2341c692717103505b4851ecd19653428bb2dc46d504a7ff",
+   "predictions": "b89acef50f213534936ad179150b280bfc569b35fe1bcf9e7d101e7c53e794a7"
+  },
+  "softmax-unicode": {
+   "model": "48e4d32d8cc8ee6b74401d0efd86bf1568c21b5349723fa886ea5e81e5873ef0",
+   "predictions": "06d2a6c02daaed69df826d89ccda80f3dfbc41d05ab8cb4b29fdfc9e26a5b09a"
   },
   "softmax-v11": {
    "model": "2445743241a25420844ab3ff797c0594cfbd4985eee96a5ec129d99fd117181e",

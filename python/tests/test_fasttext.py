@@ -912,16 +912,22 @@ def test_oracle_parity_load_errors(oracle: ModuleType, tmp_path: Path) -> None:
         ft.load_model(path)
 
 
-# ---- 1b. the same predictions on every OS ------------------------------------------------
+# ---- 1b. the same predictions on every run of a platform ----------------------------------
 # pyroid's floating-point results depend on the architecture (it fuses multiply-adds on aarch64,
-# as GCC builds of fastText do), not on the OS. The digests of every zoo model's predictions on
-# CORPUS x COMBOS were pinned on Linux, where pyroid and fasttext-predict agree to the last bit;
-# macOS and Windows must give the same bytes. Re-pin (on Linux, per architecture) with
-# `python python/tests/test_fasttext.py pin-zoo-digests`.
+# as GCC builds of fastText do) and on the C library's exp, expf and log, which it calls as
+# fastText does: glibc, musl, Apple's libm and the UCRT round some results differently (musl's
+# exp and log differ from glibc's on some f32 inputs, expf does not). So the digests of every
+# zoo model's predictions on CORPUS x COMBOS are pinned per platform: on Linux (glibc), where
+# pyroid and fasttext-predict agree to the last bit; musl in Alpine; macOS and Windows from
+# GitHub's runners, where every Python version and the PGO wheels gave the same digests. Pin a
+# platform on it with `python python/tests/test_fasttext.py pin-zoo-digests`.
 
 ZOO_DIGESTS = Path(__file__).with_name("fasttext_zoo_digests.json")
 _MACHINES = {"amd64": "x86_64", "x64": "x86_64", "arm64": "aarch64"}
 ARCH = _MACHINES.get(platform.machine().lower(), platform.machine().lower())
+_MUSL = "musl" in (sysconfig.get_config_var("SOABI") or "")
+#: The key of this platform's digests: "linux-x86_64", "linux-musl-aarch64", "win32-x86_64", ...
+ZOO_PLATFORM = f"{sys.platform}{'-musl' if _MUSL else ''}-{ARCH}"
 
 
 def _zoo_digest(entry: Entry) -> dict[str, str]:
@@ -938,12 +944,12 @@ def _zoo_digest(entry: Entry) -> dict[str, str]:
 
 
 def test_zoo_predictions_are_the_pinned_ones(zoo: Zoo) -> None:
-    pinned = json.loads(ZOO_DIGESTS.read_text("utf-8")).get(ARCH)
+    pinned = json.loads(ZOO_DIGESTS.read_text("utf-8")).get(ZOO_PLATFORM)
     if pinned is None:
-        pytest.skip(f"no digests pinned for {ARCH}")
+        pytest.skip(f"no digests pinned for {ZOO_PLATFORM}")
     got = {name: _zoo_digest(zoo[name]) for name in SPECS}
     differ = {name: d for name, d in got.items() if d != pinned.get(name)}
-    assert not differ, f"{len(differ)} of {len(got)} models on {sys.platform}-{ARCH}: {differ}"
+    assert not differ, f"{len(differ)} of {len(got)} models on {ZOO_PLATFORM}: {differ}"
 
 
 # ---- 2. return types and dtypes ----------------------------------------------------------
@@ -1848,6 +1854,7 @@ if __name__ == "__main__" and sys.argv[1:] == ["pin-zoo-digests"]:
     with tempfile.TemporaryDirectory() as tmp:
         _zoo = Zoo(Path(tmp))
         _all = json.loads(ZOO_DIGESTS.read_text("utf-8")) if ZOO_DIGESTS.exists() else {}
-        _all[ARCH] = {name: _zoo_digest(_zoo[name]) for name in SPECS}
+        _all[ZOO_PLATFORM] = {name: _zoo_digest(_zoo[name]) for name in SPECS}
     ZOO_DIGESTS.write_text(json.dumps(_all, indent=1, sort_keys=True) + "\n", "utf-8")
-    sys.stdout.write(f"pinned {len(_all[ARCH])} models for {ARCH} in {ZOO_DIGESTS}\n")
+    n_pinned = len(_all[ZOO_PLATFORM])
+    sys.stdout.write(f"pinned {n_pinned} models for {ZOO_PLATFORM} in {ZOO_DIGESTS}\n")
