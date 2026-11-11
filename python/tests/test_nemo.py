@@ -813,12 +813,15 @@ def test_python_path_gives_the_same_scores(monkeypatch: pytest.MonkeyPatch) -> N
     def unreadable() -> bytes:
         raise ValueError("symbol not found")
 
-    monkeypatch.setattr(_nemo, "_secret", unreadable)
-    assert _nemo._hash_key.__wrapped__() is None
-    monkeypatch.setattr(_nemo, "_hash_key", lambda: None)
-    for n, scores in want.items():
-        assert np.array_equal(nemo.repeating_top_ngrams(docs, n), scores), n
-        assert [nemo.repeating_top_ngrams(d, n) for d in docs[:30]] == scores[:30].tolist()
+    # Undone at once: pytest-run-parallel's --iterations reuses this monkeypatch fixture, so a
+    # setattr kept until teardown would still be there when the next iteration starts.
+    with monkeypatch.context() as m:
+        m.setattr(_nemo, "_secret", unreadable)
+        assert _nemo._hash_key.__wrapped__() is None
+        m.setattr(_nemo, "_hash_key", lambda: None)
+        for n, scores in want.items():
+            assert np.array_equal(nemo.repeating_top_ngrams(docs, n), scores), n
+            assert [nemo.repeating_top_ngrams(d, n) for d in docs[:30]] == scores[:30].tolist()
 
 
 def test_bad_hash_key_is_refused() -> None:
