@@ -6,6 +6,7 @@ import gzip
 import json
 import os
 import random
+import struct
 import sys
 from pathlib import Path
 from typing import Any
@@ -601,6 +602,24 @@ def test_rerun_after_losing_an_output_still_dedups(tmp_path: Path) -> None:
     assert [r["id"] for r in _rows(out)] == want
 
 
+def _tiny_lid_model(path: Path) -> Path:
+    """A two-label supervised fastText model (softmax, no subwords), so ``langid`` runs without
+    downloading lid.176.bin."""
+    dim, words, labels = 2, [b"doc"], [b"__label__en", b"__label__fr"]
+    out = struct.pack("<ii", 793_712_314, 12)
+    # Args: dim ws epoch minCount neg wordNgrams loss(softmax) model(sup) bucket minn maxn
+    # lrUpdateRate t.
+    out += struct.pack("<12id", dim, 5, 5, 1, 5, 1, 3, 3, 0, 0, 0, 100, 1e-4)
+    out += struct.pack("<iiiqq", len(words) + len(labels), len(words), len(labels), 10, -1)
+    out += b"".join(w + b"\0" + struct.pack("<qb", 10, 0) for w in words)
+    out += b"".join(x + b"\0" + struct.pack("<qb", 5, 1) for x in labels)
+    for rows in (len(words), len(labels)):
+        out += struct.pack("<?qq", False, rows, dim)
+        out += struct.pack(f"<{rows * dim}f", *(0.25 * (i + 1) for i in range(rows * dim)))
+    path.write_bytes(out)
+    return path
+
+
 def test_rerun_with_other_outputs_redoes_them(tmp_path: Path) -> None:
     src = _shards(tmp_path, [f"doc {i}" for i in range(6)], [3, 3])
     out = tmp_path / "out"
@@ -608,7 +627,8 @@ def test_rerun_with_other_outputs_redoes_them(tmp_path: Path) -> None:
     assert main(["translit", str(src), str(out), "--format", "jsonl"]) == 0
     assert sorted(p.name for p in out.glob("*.jsonl")) == ["part-000.jsonl", "part-001.jsonl"]
     x1, x2 = tmp_path / "x1", tmp_path / "x2"
-    args = ["langid", str(src), str(tmp_path / "l"), "--keep", "zz"]
+    model = _tiny_lid_model(tmp_path / "lid.bin")
+    args = ["langid", str(src), str(tmp_path / "l"), "--keep", "zz", "--model", str(model)]
     assert main([*args, "--excluded", str(x1)]) == 0
     assert main([*args, "--excluded", str(x2)]) == 0
     assert len(_rows(x2)) == 6
