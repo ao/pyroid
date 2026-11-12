@@ -7,82 +7,45 @@
 
 [Docs](https://ao.github.io/pyroid/) | [Benchmarks](https://ao.github.io/pyroid/benchmarks/) | [Compatibility](https://ao.github.io/pyroid/compatibility/)
 
-pyroid is a Rust implementation of the Python libraries used to clean LLM training data and score
-model output, with the same API and the same output.
+pyroid reimplements popular Python libraries in Rust. Each module has the API of the library it
+replaces and gives the same output, and most of them run many times faster.
 
 ```console
 $ pip install pyroid
 ```
 
-pyroid 1.0 is not on PyPI yet. Until it is, `pip install pyroid` installs the unrelated 0.7.x
-toolkit ([see below](#the-07x-releases)).
-
 In Python, change the import and keep the rest of your code:
 
 ```python
 import pyroid.ftfy as ftfy  # was: import ftfy
+import pyroid.json_repair as json_repair  # was: import json_repair
 
 ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")  # 'naïve résumé', as ftfy returns it
 ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'], on all cores
+json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}', as json_repair returns it
 ```
 
-| Module | Replaces |
-|---|---|
-| [`pyroid.ftfy`](https://ao.github.io/pyroid/guides/ftfy/) | ftfy 6.3.1 |
-| [`pyroid.fasttext`](https://ao.github.io/pyroid/guides/fasttext/) | fastText inference (fasttext, fasttext-wheel, fasttext-predict) |
-| [`pyroid.filters`](https://ao.github.io/pyroid/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
-| [`pyroid.dedup`](https://ao.github.io/pyroid/guides/dedup/) | datatrove 0.10.1's MinHash and sentence dedup |
-| [`pyroid.trafilatura`](https://ao.github.io/pyroid/guides/trafilatura/) | Trafilatura's text extraction: 2.3.1, or 1.11.0 as datatrove 0.10.1 installs it (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
-| [`pyroid.translit`](https://ao.github.io/pyroid/guides/translit/) | anyascii; a permissively licensed alternative to Unidecode |
-| [`pyroid.metrics`](https://ao.github.io/pyroid/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
-| [`pyroid.json_repair`](https://ao.github.io/pyroid/guides/json_repair/) | json_repair 0.64.5 |
-| [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
-| [`pyroid.jieba`](https://ao.github.io/pyroid/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
-| [`pyroid.nltk`](https://ao.github.io/pyroid/guides/nltk/) | NLTK 3.10.4's `sent_tokenize` (Punkt), `word_tokenize` and Treebank tokenizers |
-| [`pyroid.warc`](https://ao.github.io/pyroid/guides/warc/) | warcio 1.8.2's WARC/ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading (`WarcReader`) |
+| Area | Module | Replaces |
+|---|---|---|
+| Text and encoding | [`pyroid.ftfy`](https://ao.github.io/pyroid/guides/ftfy/) | ftfy 6.3.1 |
+| | [`pyroid.translit`](https://ao.github.io/pyroid/guides/translit/) | anyascii 0.3.3; a permissively licensed alternative to Unidecode |
+| Language ID and NLP | [`pyroid.fasttext`](https://ao.github.io/pyroid/guides/fasttext/) | fastText 0.9.2 inference (fasttext, fasttext-wheel, fasttext-predict) |
+| | [`pyroid.nltk`](https://ao.github.io/pyroid/guides/nltk/) | NLTK 3.10.4's `sent_tokenize` (Punkt), `word_tokenize` and Treebank tokenizers |
+| | [`pyroid.jieba`](https://ao.github.io/pyroid/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
+| Web and archives | [`pyroid.trafilatura`](https://ao.github.io/pyroid/guides/trafilatura/) | Trafilatura's text extraction: 2.3.1, or 1.11.0 as datatrove 0.10.1 installs it (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
+| | [`pyroid.warc`](https://ao.github.io/pyroid/guides/warc/) | warcio 1.8.2's WARC/ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading (`WarcReader`) |
+| Dedup and similarity | [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
+| | [`pyroid.dedup`](https://ao.github.io/pyroid/guides/dedup/) | datatrove 0.10.1's MinHash and sentence dedup |
+| Quality filters | [`pyroid.filters`](https://ao.github.io/pyroid/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
+| Evaluation | [`pyroid.metrics`](https://ao.github.io/pyroid/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
+| JSON | [`pyroid.json_repair`](https://ao.github.io/pyroid/guides/json_repair/) | json_repair 0.64.5 |
 
-On 100,000 FineWeb documents, pyroid's version of datatrove's FineWeb cleaning chain is 27× faster
-than datatrove on 8 processes, with the same output (AWS EC2 c7i.4xlarge,
-[benchmarks](https://ao.github.io/pyroid/benchmarks/)).
+## Example: cleaning LLM training data
 
-## Same output, checked
-
-`pyroid.ftfy` is byte-identical to ftfy 6.3.1. `pyroid.fasttext` gives the same labels and
-probabilities as fastText's C++ code on the same CPU architecture. The filters and dedup make
-datatrove's keep/drop decisions, with its reasons and dedup files, and `pyroid.trafilatura`
-extracts the same text as Trafilatura 2.3.1 or 1.11.0, byte for byte. The metrics match
-rouge-score's and sacrebleu's scores to the last digit, `pyroid.json_repair` makes json_repair's
-repairs, `pyroid.datasketch` gives datasketch's hash values and LSH query results, and
-`pyroid.jieba` and `pyroid.nltk` give jieba's and NLTK's words, sentences and offsets.
-`pyroid.warc` reads the same records, documents and errors as warcio 1.8.2 and datatrove's
-WARC reader.
-
-Each module is tested against the library it replaces, on pinned real data and with
-property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). Every suite
-runs on Linux aarch64. The ftfy, fastText, filters, dedup, metrics and json_repair suites also ran
-natively on AWS EC2 x86_64 and aarch64 (c7i.4xlarge and c8g.4xlarge), and the Trafilatura pages
-and the warc suite on x86_64. macOS and Windows are checked in CI before each release.
-
-Where a module meets an option or input it doesn't port, it hands the call to the real library
-with a `pyroid.FallbackWarning`, or raises. It never returns a different result silently.
-
-pyroid's results don't depend on the number of threads or workers, or on how loaded the machine
-is. Stock datatrove's do: its Trafilatura step gives up on a page after 1 s, so two runs over the
-same WARC files can keep different documents. pyroid has no timeout.
-
-## Differences from the originals
-
-Batch functions take a `str`, a `list` of `str` or an Arrow column (pyarrow, polars, Hugging Face
-`datasets`), and return text and masks in the same kind. They release the GIL and run on all
-cores, so you use threads instead of worker processes, and one loaded fastText model serves every
-thread instead of one copy per process.
-
-Wheels are built for CPython 3.11 to 3.15 and free-threaded 3.14t and 3.15t, on Linux (glibc and
-musl), macOS and Windows, for x86-64 and ARM64, and need no compiler. The core has no runtime
-dependencies; `pyroid.fasttext` and `pyroid.datasketch` need numpy (`pip install "pyroid[fasttext]"`,
-`"pyroid[datasketch]"`).
-
-## Speed
+The largest measured gains are in cleaning text for LLM training, where several of these
+libraries run one after another. On 100,000 FineWeb documents on AWS EC2 c7i.4xlarge, pyroid's
+version of datatrove's FineWeb cleaning chain is 27× faster than datatrove on 8 processes, with
+the same output.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-dark.svg">
@@ -111,8 +74,52 @@ files of CC-MAIN-2026-39 on AWS EC2 c7i.4xlarge
 Both keep the same documents, apart from the pages stock datatrove drops at its 1 s extraction
 timeout.
 
-By stage, on AWS EC2 c7i.4xlarge with the 10,000-document dev slice, pyroid on one thread against
-the incumbent in one process:
+With pyroid's stages swapped into datatrove's own executor, the chain without text extraction ran
+11.2× faster at 8 processes on the dev slice and 13.6× on 100k documents.
+
+## Same output, checked
+
+`pyroid.ftfy` is byte-identical to ftfy 6.3.1. `pyroid.fasttext` gives the same labels and
+probabilities as fastText's C++ code, bit for bit on Linux (glibc) and Windows x64; on macOS the
+probabilities can differ in the last bits. The filters and dedup make
+datatrove's keep/drop decisions, with its reasons and dedup files, and `pyroid.trafilatura`
+extracts the same text as Trafilatura 2.3.1 or 1.11.0, byte for byte. The metrics match
+rouge-score's and sacrebleu's scores to the last digit, `pyroid.json_repair` makes json_repair's
+repairs, `pyroid.datasketch` gives datasketch's hash values and LSH query results, and
+`pyroid.jieba` and `pyroid.nltk` give jieba's and NLTK's words, sentences and offsets.
+`pyroid.warc` reads the same records, documents and errors as warcio 1.8.2 and datatrove's
+WARC reader.
+
+Each module is tested against the library it replaces, on pinned real data and with
+property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). CI runs
+every parity suite on Linux x86_64 and aarch64. The ftfy, fastText, filters, dedup, metrics and
+json_repair suites also ran natively on AWS EC2 x86_64 and aarch64 (c7i.4xlarge and c8g.4xlarge),
+and the Trafilatura pages and the warc suite on x86_64. On macOS, Windows and musl Linux, every
+release's wheels pass pyroid's test suite before they are published.
+
+Where a module meets an option or input it doesn't port, it hands the call to the real library
+with a `pyroid.FallbackWarning`, or raises. It never returns a different result silently.
+
+pyroid's results don't depend on the number of threads or workers, or on how loaded the machine
+is. Stock datatrove's do: its Trafilatura step gives up on a page after 1 s, so two runs over the
+same WARC files can keep different documents. pyroid has no timeout.
+
+## Differences from the originals
+
+Batch functions take a `str`, a `list` of `str` or an Arrow column (pyarrow, polars, Hugging Face
+`datasets`), and return text and masks in the same kind. They release the GIL and run on all
+cores, so you use threads instead of worker processes, and one loaded fastText model serves every
+thread instead of one copy per process.
+
+Wheels are built for CPython 3.11 to 3.15 and free-threaded 3.14t and 3.15t, on Linux (glibc and
+musl), macOS and Windows, for x86-64 and ARM64, and need no compiler. The core has no runtime
+dependencies; `pyroid.fasttext` and `pyroid.datasketch` need numpy (`pip install "pyroid[fasttext]"`,
+`"pyroid[datasketch]"`).
+
+## Speed by module
+
+On AWS EC2 c7i.4xlarge, with the 10,000-document FineWeb dev slice, pyroid on one thread against
+the library it replaces in one process:
 
 | pyroid | Against | Speedup |
 |---|---|---:|
@@ -121,9 +128,6 @@ the incumbent in one process:
 | `filters`, Gopher, C4 and FineWeb quality | datatrove 0.10.1 | 35–69× |
 | `dedup`, MinHash signatures | datatrove 0.10.1 | 34× |
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
-
-With pyroid's stages swapped into datatrove's own executor, the chain ran 11.2× faster at 8
-processes on the dev slice and 13.6× on 100k documents.
 
 The other modules have only been measured in a Docker VM on a Mac so far, so these numbers are
 indicative (one thread unless stated):
@@ -167,8 +171,9 @@ through datatrove's own tokenizers
 
 ## The 0.7.x releases
 
-pyroid 1.0 is a rewrite. The previous general-purpose toolkit (0.1 to 0.7) is not carried
-forward, and the 1.0 API is incompatible with it.
+pyroid 1.0 is a rewrite, and its API is incompatible with 0.1 to 0.7. Those releases tried to make
+Python faster with new general-purpose helpers, most of which ran in Python. 1.0 replaces existing
+libraries exactly instead, so it speeds up code that uses them, not Python in general.
 
 - 0.7.x stays installable from PyPI: `pip install "pyroid<1"`.
 - Its source is kept on the [`legacy`](https://github.com/ao/pyroid/tree/legacy) branch.
@@ -195,7 +200,7 @@ The code is laid out as follows:
 - `parity/`: differential tests against the incumbents;
 - `docs/`: the documentation.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](https://github.com/ao/pyroid/blob/main/CONTRIBUTING.md).
 
 ## License
 
@@ -212,9 +217,11 @@ Zlib`:
   MinHashLSH's parameters), tldextract and lxml;
 - PSF-2.0: CPython's `ipaddress` (IPv6 parsing);
 - ISC: anyascii's transliteration data;
-- Unicode-3.0: data from the Unicode Character Database.
+- Unicode-3.0: data from the Unicode Character Database;
 - Zlib: zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.
 
-See [LICENSE](LICENSE), [LICENSES/](LICENSES) and [NOTICE](NOTICE), which lists the ported files.
-[LICENSES/THIRD-PARTY-RUST.txt](LICENSES/THIRD-PARTY-RUST.txt) has the licences of the Rust crates the
-extension links.
+See [LICENSE](https://github.com/ao/pyroid/blob/main/LICENSE),
+[LICENSES/](https://github.com/ao/pyroid/tree/main/LICENSES) and
+[NOTICE](https://github.com/ao/pyroid/blob/main/NOTICE), which lists the ported files.
+[LICENSES/THIRD-PARTY-RUST.txt](https://github.com/ao/pyroid/blob/main/LICENSES/THIRD-PARTY-RUST.txt)
+has the licences of the Rust crates the extension links.
