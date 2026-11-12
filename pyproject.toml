@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "pyroid"
 # Single source: [workspace.package].version in the root Cargo.toml.
 dynamic = ["version"]
-description = "Rust versions of popular Python libraries with the same API and output, and faster: ftfy, json_repair, datasketch, NLTK's tokenizers, jieba, Trafilatura, warcio, fastText, datatrove, rouge-score, sacrebleu"
+description = "Faster Rust versions of ftfy, fastText, Trafilatura, datatrove, json_repair and other popular Python libraries, with the same API and output"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib"
