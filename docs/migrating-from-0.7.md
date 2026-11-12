@@ -2,8 +2,12 @@
 
 pyroid 1.0 is a different library that keeps the name. The 0.x releases (0.1 to 0.7) were a
 general-purpose toolkit (math, strings, collections, file and network I/O, images, basic machine
-learning). That API was removed in 1.0, and nothing from it is carried forward. 1.0 is a
-text-cleaning core for LLM datasets.
+learning). That API was removed in 1.0, and nothing from it is carried forward.
+
+0.7 tried to make Python faster with new general-purpose helpers, most of which ran in Python.
+1.0 does it by replacing popular libraries such as ftfy, NLTK's tokenizers and json_repair
+exactly, with Rust versions of the same API and output, so it speeds up code that uses those
+libraries, not Python in general.
 
 ## Staying on 0.7
 
@@ -46,4 +50,5 @@ standard library or a mainstream package is a like-for-like replacement:
 
 ## Starting with 1.0
 
-See the [guides](guides/ftfy.md) for what 1.0 does, and [Install](install.md) for its wheels.
+See [the home page](index.md) for the libraries 1.0 replaces, and [Install](install.md) for its
+wheels.
