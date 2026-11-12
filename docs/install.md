@@ -1,13 +1,10 @@
 # Install
 
-!!! warning "Pre-release"
-    pyroid 1.0 is not on PyPI yet. Until it is, `pip install pyroid` installs 0.7.x, an unrelated
-    older toolkit ([Migrating from 0.7](migrating-from-0.7.md)). To try 1.0 now, build it from a
-    checkout (below).
-
 ```console
 $ pip install pyroid
 ```
+
+To stay on the unrelated 0.7.x toolkit, pin `pyroid<1` ([Migrating from 0.7](migrating-from-0.7.md)).
 
 pyroid has no runtime dependencies. Extras:
 
@@ -84,20 +81,20 @@ binary and no compiler is needed:
 | macOS | x86-64, arm64 | `macosx` |
 | Windows | x64, ARM64 | `win_amd64`, `win_arm64` |
 
-That is 24 wheels plus an sdist per release, each tested in a clean virtual environment before
-it is published. Before the first release, the Linux wheels have been built and tested on aarch64
-and x86_64: natively on AWS EC2, and earlier in a Docker VM and under emulation. The release
-workflow builds the rest. PyPy and GraalPy are not supported.
+That is 24 wheels plus an sdist per release. Before a release is published, the release
+workflow installs each wheel in a clean virtual environment and runs pyroid's test suite with it,
+on CPython 3.11, 3.14t, 3.15 and 3.15t, on every platform above. PyPy and GraalPy are not
+supported.
 
 !!! note "Where parity has been checked"
-    Every parity suite has run on Linux aarch64. The ftfy, fastText, filters, dedup, metrics and
+    Every parity suite has run on Linux aarch64, and CI runs each one on Linux x86_64 and
+    aarch64. The ftfy, fastText, filters, dedup, metrics and
     json_repair suites also ran natively on AWS EC2, on x86_64 (Intel Sapphire Rapids) and
     aarch64 (AWS Graviton4), with 0 differences. `pyroid.trafilatura` matched trafilatura on
     27,585 Common Crawl pages in 8 option sets, in both modes, on x86_64 (AWS EC2 c7i.4xlarge).
-    fastText's and the metrics' references are
-    pinned per platform, because the incumbents' own output can differ by architecture. macOS,
-    Windows and musl are unverified until the first CI run on them
-    ([Compatibility](compatibility.md#platforms)).
+    fastText's and the metrics' references are pinned per platform, because the incumbents' own
+    output can differ by architecture and C library. On macOS, Windows and musl, the test suite
+    runs but the parity suites don't ([Compatibility](compatibility.md#platforms)).
 
 On free-threaded builds, importing pyroid does not re-enable the GIL. See
 [Threads and free-threading](concepts/threads.md).
@@ -108,7 +105,7 @@ On free-threaded builds, importing pyroid does not re-enable the GIL. See
 $ python -c "import pyroid; print(pyroid.__version__)"
 ```
 
-It prints the installed version as pip shows it (PEP 440, e.g. `1.0.0rc1`).
+It prints the installed version as pip shows it (PEP 440, e.g. `1.0.0`).
 
 If the native extension is missing or was built for another Python, `import pyroid` fails with an
 `ImportError` that says so. pyroid has no pure-Python fallback.

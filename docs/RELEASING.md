@@ -152,10 +152,6 @@ skips the deploy with a notice instead of creating it. Nothing is published unti
 To stop publishing, set the Pages source back to "Deploy from a branch" (or delete the environment). The
 workflow then goes back to build-only.
 
-Before the 1.0 release, also remove the "pyroid 1.0 is not on PyPI yet" notes from `README.md`, `docs/index.md`,
-`docs/install.md`, `docs/llms.txt`, `examples/notebooks/README.md` and its notebook, and
-`examples/space/README.md` and `requirements.txt`.
-
 The README hero (`docs/assets/hero-{light,dark}.svg`) is a copy of `charts/hero-{light,dark}.svg` from the run
 folder that `bench/consolidate.py` wrote; it currently comes from the AWS EC2 c7i.4xlarge dev-slice run of
 2026-11-06. `README.md` embeds it by absolute raw.githubusercontent.com URL, so it also renders on PyPI.

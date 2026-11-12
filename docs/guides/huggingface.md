@@ -149,8 +149,7 @@ use it, `threads` of about `os.cpu_count() // num_proc` avoids oversubscription.
 [`examples/notebooks/clean_fineweb_in_60_seconds.ipynb`](https://github.com/ao/pyroid/blob/main/examples/notebooks/clean_fineweb_in_60_seconds.ipynb)
 streams the first 10,000 documents of FineWeb's `sample-10BT`, runs `hf.fineweb` on them, and
 prints the counts per stage and per reason, the time it took and a few dropped documents per
-stage. Then it writes the kept documents to Parquet. It is ready for Colab. pyroid 1.0 is not on
-PyPI yet; until it is, edit its first cell to install a pyroid 1.0 wheel instead of `pyroid[hf]`.
+stage. Then it writes the kept documents to Parquet. It is ready for Colab.
 
 To run it on local files without network, set `PYROID_NOTEBOOK_DATA` (a FineWeb Parquet file),
 `PYROID_LID_MODEL`, and optionally `PYROID_NOTEBOOK_DOCS` and `PYROID_NOTEBOOK_OUT`. pyroid's test

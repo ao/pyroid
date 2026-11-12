@@ -12,9 +12,6 @@ writes the kept documents to parquet.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ao/pyroid/blob/main/examples/notebooks/clean_fineweb_in_60_seconds.ipynb)
 
-pyroid 1.0 is not on PyPI yet: until it is, edit the first code cell to install a pyroid
-1.0 wheel instead of `pyroid[hf]`.
-
 ### Run it locally, offline
 
 Environment variables point the notebook at local files (and skip the install cell):

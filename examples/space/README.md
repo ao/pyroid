@@ -52,6 +52,3 @@ On first use the app downloads fastText's language ID model `lid.176.bin` (131 M
 CC BY-SA 3.0, by Facebook AI Research) into `~/.cache/pyroid` and checks its sha256. To
 use a copy you already have, set `PYROID_LID_MODEL=/path/to/lid.176.bin`. Set
 `PYROID_SPACE_THREADS` to cap pyroid's threads (default: every CPU).
-
-pyroid 1.0 is not on PyPI yet: until it is, replace the `pyroid` line of
-`requirements.txt` with the URL of a pyroid 1.0 wheel.
