@@ -3,3 +3,14 @@
 # (include_str!, e.g. trafilatura's stoplist.txt) and of the test inputs; some WARC and ARC
 # fixtures need their CRLFs as they are.
 * -text
+
+# GitHub's language statistics (linguist). Test inputs, recorded references, fuzz corpora and
+# benchmark results are data, not source, and parity/data also holds third-party files
+# (json_repair's own test suite).
+parity/data/** linguist-vendored
+crates/pyroid-core/tests/data/** linguist-vendored
+crates/pyroid-core/tests/*_data/** linguist-vendored
+crates/pyroid-core/src/*/testdata/** linguist-vendored
+fuzz/corpus/** linguist-vendored
+fuzz/arrow/corpus/** linguist-vendored
+bench/results/** linguist-generated
