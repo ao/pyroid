@@ -1,23 +1,23 @@
 # pyroid
 
-> Rust ports of the Python libraries used to clean LLM datasets, with the same API and the same output: ftfy, fastText inference, datatrove 0.10.1's quality filters and dedup, Trafilatura 2.3.1 and 1.11.0, rouge-score 0.1.2, sacrebleu 2.6.0, json_repair 0.64.5, datasketch 2.0.0, jieba 0.42.1 and NLTK 3.10.4's tokenizers, plus permissive transliteration. From WARC files, datatrove's FineWeb pipeline runs 9.5x faster with pyroid's steps, WARC reader included (89.4 s vs 848.3 s, 8 workers, AWS EC2 c7i.4xlarge), and 10.7x as `pyroid clean --recipe fineweb-warc` (79.6 s). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. pyroid 1.0 is not on PyPI yet; `pip install pyroid` currently gives the unrelated 0.7.x toolkit.
+> pyroid reimplements popular Python libraries in Rust, with the same API and the same output; most of its modules run many times faster than the library they replace. Text and encoding: ftfy 6.3.1, anyascii 0.3.3. Language ID and NLP: fastText inference, NLTK 3.10.4's tokenizers, jieba 0.42.1. Web and archives: Trafilatura 2.3.1 and 1.11.0, warcio 1.8.2. Dedup and similarity: datasketch 2.0.0, datatrove 0.10.1's MinHash and sentence dedup. Quality filters: datatrove 0.10.1's. Evaluation: rouge-score 0.1.2, sacrebleu 2.6.0. JSON: json_repair 0.64.5. Install with `pip install pyroid` and change the import (`import pyroid.ftfy as ftfy`). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. The largest measured gains are in cleaning LLM training data: from WARC files, datatrove's FineWeb pipeline runs 9.5x faster with pyroid's steps, WARC reader included (89.4 s vs 848.3 s, 8 workers, AWS EC2 c7i.4xlarge), and 10.7x as `pyroid clean --recipe fineweb-warc` (79.6 s).
 
 Modules and what they match:
 
 - `pyroid.ftfy` (`import pyroid.ftfy as ftfy`): byte-identical to ftfy 6.3.1.
-- `pyroid.fasttext` (`pyroid.fasttext.load_model`): the same .bin/.ftz files, bit-identical predictions per architecture.
-- `pyroid.filters`: datatrove's Gopher, C4, FineWeb, PII, C4 bad words, symbol lines and URL filters, with the same decisions.
-- `pyroid.dedup`: datatrove's MinHash and sentence dedup, with the same removals.
+- `pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output.
+- `pyroid.fasttext` (`pyroid.fasttext.load_model`): the same .bin/.ftz files, bit-identical predictions on Linux (glibc) and Windows x64 (on macOS the probabilities can differ in the last bits).
+- `pyroid.nltk` (`import pyroid.nltk as nltk`): the same sentences, tokens and offsets as NLTK 3.10.4's `sent_tokenize` (Punkt, with the user's installed `punkt_tab` models), `word_tokenize`, Treebank tokenizers and detokenizer, and regexp tokenizers for common patterns; `sent_tokenize(docs, threads=n)` and `word_tokenize(docs, threads=n)` run a batch in parallel; `pyroid.patch("nltk")` swaps them into an installed NLTK.
+- `pyroid.jieba` (`import pyroid.jieba as jieba`): the same words, offsets and frequencies as jieba 0.42.1, with the default dictionary built in; `lcut(docs, threads=n)` segments a batch in parallel.
 - `pyroid.trafilatura` (`import pyroid.trafilatura as trafilatura`): the same text as Trafilatura 2.3.1 (the default) or 1.11.0 (`compat="1.11.0"`, the release `datatrove[processing]==0.10.1` installs), byte for byte; `extract_batch(pages, threads=n)` runs pages in parallel; other output formats and metadata are delegated to the installed trafilatura.
+- `pyroid.warc` (`from pyroid.warc import ArchiveIterator`): warcio 1.8.2's WARC/ARC reader with the same records, headers, payloads, offsets, exceptions and messages; `ArchiveIterator(path)` reads without the GIL; `iter_documents(path)` is datatrove 0.10.1's `WarcReader` loop (`process_record`: id, url, date, text), `iter_batches(path)` the same as Arrow record batches; `pyroid.patch("warcio")` swaps the iterator into an installed warcio, so stock datatrove reads with it. Known differences: `check_digests` knows md5, sha1, sha224, sha256, sha384, sha512 only; corrupt brotli streams may decode further than libbrotli.
+- `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
+- `pyroid.dedup`: datatrove's MinHash and sentence dedup, with the same removals.
+- `pyroid.filters`: datatrove's Gopher, C4, FineWeb, PII, C4 bad words, symbol lines and URL filters, with the same decisions.
 - `pyroid.metrics`: ROUGE, BLEU, chrF and chrF++, with scores identical to rouge-score and sacrebleu.
 - `pyroid.json_repair`: the same output as json_repair, in linear time.
-- `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
-- `pyroid.jieba` (`import pyroid.jieba as jieba`): the same words, offsets and frequencies as jieba 0.42.1, with the default dictionary built in; `lcut(docs, threads=n)` segments a batch in parallel.
-- `pyroid.nltk` (`import pyroid.nltk as nltk`): the same sentences, tokens and offsets as NLTK 3.10.4's `sent_tokenize` (Punkt, with the user's installed `punkt_tab` models), `word_tokenize`, Treebank tokenizers and detokenizer, and regexp tokenizers for common patterns; `sent_tokenize(docs, threads=n)` and `word_tokenize(docs, threads=n)` run a batch in parallel; `pyroid.patch("nltk")` swaps them into an installed NLTK.
-- `pyroid.warc` (`from pyroid.warc import ArchiveIterator`): warcio 1.8.2's WARC/ARC reader with the same records, headers, payloads, offsets, exceptions and messages; `ArchiveIterator(path)` reads without the GIL; `iter_documents(path)` is datatrove 0.10.1's `WarcReader` loop (`process_record`: id, url, date, text), `iter_batches(path)` the same as Arrow record batches; `pyroid.patch("warcio")` swaps the iterator into an installed warcio, so stock datatrove reads with it. Known differences: `check_digests` knows md5, sha1, sha224, sha256, sha384, sha512 only; corrupt brotli streams may decode further than libbrotli.
-- `pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output.
 
-Integrations: the `pyroid clean IN OUT --recipe fineweb` command line (`--recipe fineweb-warc` from WARC files; many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs, resumable runs, `pyroid dedup signatures|buckets|cluster|filter` for MinHash across shards), `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`), datatrove drop-in steps (`pyroid.integrations.datatrove`, `WarcReader` included, `Trafilatura` included; it has no 1 s timeout, so results do not vary between runs) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` (numpy), `[cli]` (pyarrow), `[datatrove]` and `[hf]`.
+Integrations: the `pyroid clean IN OUT --recipe fineweb` command line (`--recipe fineweb-warc` from WARC files; many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs, resumable runs, `pyroid dedup signatures|buckets|cluster|filter` for MinHash across shards), `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`), datatrove drop-in steps (`pyroid.integrations.datatrove`, `WarcReader` included, `Trafilatura` included; it has no 1 s timeout, so results do not vary between runs) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` and `[datasketch]` (numpy), `[cli]` (pyarrow), `[datatrove]`, `[hf]`, `[warc]`, `[nemo]` and `[all]`.
 
 Conventions shared by every module:
 
@@ -29,7 +29,7 @@ Conventions shared by every module:
 
 ## Docs
 
-- [Home](https://ao.github.io/pyroid/): what pyroid is, the two zero-code entry points, the 30-second example
+- [Home](https://ao.github.io/pyroid/): what pyroid is, the modules by area, `pyroid.patch()`, the LLM data example
 - [Install](https://ao.github.io/pyroid/install/): extras, wheels and platforms
 - [Inputs and outputs](https://ao.github.io/pyroid/concepts/inputs/): str/list/tuple/Arrow in, the same kind out; masks; nulls
 - [Threads and free-threading](https://ao.github.io/pyroid/concepts/threads/): `threads=`, the GIL, 3.14t/3.15t
