@@ -1,0 +1,46 @@
+........................................................................ [ 10%]
+.............................sss........................................ [ 20%]
+........................................................................ [ 30%]
+........................................................................ [ 40%]
+........................................................................ [ 51%]
+........................................................................ [ 61%]
+........................................................................ [ 71%]
+...............ssss..................................................... [ 81%]
+........................................................................ [ 92%]
+........................................................                 [100%]
+==================================== parity ====================================
+json_repair api-signature                    same=4        diff=0
+json_repair corpus-default                   same=20000    diff=0
+json_repair corpus-ensure_ascii_false        same=20000    diff=0
+json_repair corpus-indent2                   same=20000    diff=0
+json_repair corpus-inputs                    same=1        diff=0
+json_repair corpus-logging                   same=20000    diff=0
+json_repair corpus-pinned-default            same=80       diff=0
+json_repair corpus-pinned-ensure_ascii_false same=80       diff=0
+json_repair corpus-pinned-indent2            same=80       diff=0
+json_repair corpus-pinned-logging            same=80       diff=0
+json_repair corpus-pinned-return_objects     same=80       diff=0
+json_repair corpus-pinned-skip_json_loads    same=80       diff=0
+json_repair corpus-pinned-stream_stable      same=80       diff=0
+json_repair corpus-pinned-strict             same=80       diff=0
+json_repair corpus-return_objects            same=20000    diff=0
+json_repair corpus-skip_json_loads           same=20000    diff=0
+json_repair corpus-stream_stable             same=20000    diff=0
+json_repair corpus-strict                    same=20000    diff=0
+json_repair from_file                        same=2904     diff=0
+json_repair hypothesis-default               same=2023     diff=0
+json_repair hypothesis-ensure_ascii_false    same=2023     diff=0
+json_repair hypothesis-indent2               same=2023     diff=0
+json_repair hypothesis-loads                 same=2002     diff=0
+json_repair hypothesis-logging               same=2023     diff=0
+json_repair hypothesis-return_objects        same=2023     diff=0
+json_repair hypothesis-skip_json_loads       same=2023     diff=0
+json_repair hypothesis-stream_stable         same=2023     diff=0
+json_repair hypothesis-strict                same=2023     diff=0
+json_repair load                             same=2003     diff=0
+json_repair upstream                         same=516      diff=0
+json_repair upstream-schema                  same=149      diff=0
+=========================== short test summary info ============================
+SKIPPED [3] parity/tests/test_json_repair.py:113: recursion: the outcome depends on Python's recursion limit and the caller's stack depth (deep nesting)
+SKIPPED [4] parity/tests/test_json_repair.py:113: hash-seed: the outcome changes with PYTHONHASHSEED
+697 passed, 7 skipped, 698 deselected in 67.68s (0:01:07)

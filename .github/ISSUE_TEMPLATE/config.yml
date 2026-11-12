@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/ao/pyroid/security/advisories/new
+    about: Please report vulnerabilities privately, not in a public issue. See SECURITY.md.
+  - name: Ask a question
+    url: https://github.com/ao/pyroid/discussions
+    about: Usage questions and ideas that aren't a concrete bug or feature request.
+  - name: pyroid 0.7.x (legacy)
+    url: https://github.com/ao/pyroid/tree/legacy
+    about: The 0.7.x API is frozen on the legacy branch and isn't maintained. Issues about it will be closed.

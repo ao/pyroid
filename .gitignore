@@ -1,8 +1,32 @@
-__pycache__
-target
-*.pyc
-*.pyo
+# Rust
+target/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
 *.pyd
-.venv
+*.dylib
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# Docs: the site `zensical build` / `mkdocs build` writes from mkdocs.yml
+/site/
+
+# Benchmark data is fetched into the shared volume, never committed
+/bench/data/
+# Written to the current directory by the parity suites (pytest parity/tests)
+parity-report.json
+
+# Local
 .local
 .DS_Store
+
+# Session scratch (never committed)
+.scratch/

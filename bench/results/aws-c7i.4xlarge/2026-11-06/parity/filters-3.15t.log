@@ -1,0 +1,57 @@
+...........ssssssssssssssss........ssssssss................sssssssssssss [ 78%]
+sss.................                                                     [100%]
+==================================== parity ====================================
+filters   c4_quality/adversarial           same=3232     diff=0
+filters   c4_quality/arb_Arab              same=250      diff=0
+filters   c4_quality/deu_Latn              same=250      diff=0
+filters   c4_quality/dev                   same=10000    diff=0
+filters   c4_quality/fra_Latn              same=250      diff=0
+filters   c4_quality/rus_Cyrl              same=250      diff=0
+filters   c4_quality/spa_Latn              same=250      diff=0
+filters   c4_quality@fineweb/adversarial   same=3232     diff=0
+filters   c4_quality@fineweb/arb_Arab      same=250      diff=0
+filters   c4_quality@fineweb/deu_Latn      same=250      diff=0
+filters   c4_quality@fineweb/dev           same=10000    diff=0
+filters   c4_quality@fineweb/fra_Latn      same=250      diff=0
+filters   c4_quality@fineweb/rus_Cyrl      same=250      diff=0
+filters   c4_quality@fineweb/spa_Latn      same=250      diff=0
+filters   fineweb_quality/adversarial      same=3232     diff=0
+filters   fineweb_quality/arb_Arab         same=250      diff=0
+filters   fineweb_quality/deu_Latn         same=250      diff=0
+filters   fineweb_quality/dev              same=10000    diff=0
+filters   fineweb_quality/fra_Latn         same=250      diff=0
+filters   fineweb_quality/rus_Cyrl         same=250      diff=0
+filters   fineweb_quality/spa_Latn         same=250      diff=0
+filters   fineweb_quality@fineweb2/arb_Arab same=250      diff=0
+filters   fineweb_quality@fineweb2/deu_Latn same=250      diff=0
+filters   fineweb_quality@fineweb2/fra_Latn same=250      diff=0
+filters   fineweb_quality@fineweb2/rus_Cyrl same=250      diff=0
+filters   fineweb_quality@fineweb2/spa_Latn same=250      diff=0
+filters   gopher_quality/adversarial       same=3232     diff=0
+filters   gopher_quality/arb_Arab          same=250      diff=0
+filters   gopher_quality/deu_Latn          same=250      diff=0
+filters   gopher_quality/dev               same=10000    diff=0
+filters   gopher_quality/fra_Latn          same=250      diff=0
+filters   gopher_quality/rus_Cyrl          same=250      diff=0
+filters   gopher_quality/spa_Latn          same=250      diff=0
+filters   gopher_quality@fineweb2/arb_Arab same=250      diff=0
+filters   gopher_quality@fineweb2/deu_Latn same=250      diff=0
+filters   gopher_quality@fineweb2/fra_Latn same=250      diff=0
+filters   gopher_quality@fineweb2/rus_Cyrl same=250      diff=0
+filters   gopher_quality@fineweb2/spa_Latn same=250      diff=0
+filters   gopher_repetition/adversarial    same=3232     diff=0
+filters   gopher_repetition/arb_Arab       same=250      diff=0
+filters   gopher_repetition/deu_Latn       same=250      diff=0
+filters   gopher_repetition/dev            same=10000    diff=0
+filters   gopher_repetition/fra_Latn       same=250      diff=0
+filters   gopher_repetition/rus_Cyrl       same=250      diff=0
+filters   gopher_repetition/spa_Latn       same=250      diff=0
+filters   gopher_repetition@fineweb2/arb_Arab same=250      diff=0
+filters   gopher_repetition@fineweb2/deu_Latn same=250      diff=0
+filters   gopher_repetition@fineweb2/fra_Latn same=250      diff=0
+filters   gopher_repetition@fineweb2/rus_Cyrl same=250      diff=0
+filters   gopher_repetition@fineweb2/spa_Latn same=250      diff=0
+=========================== short test summary info ============================
+SKIPPED [16] parity/tests/test_filters_more.py:49: datatrove (parity oracle group) is not installed
+SKIPPED [24] parity/tests/test_filters_multilingual.py:52: parity/filters-ml-ref.parquet is not pinned and datatrove is not installed
+52 passed, 40 skipped, 1310 deselected in 3.74s

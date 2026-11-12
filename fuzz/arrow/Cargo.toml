@@ -1,0 +1,30 @@
+# cargo-fuzz project for pyroid-py's hand-rolled Arrow C Data importer
+# (crates/pyroid-py/src/arrow/{ffi,import}.rs). pyroid-py is a PyO3 cdylib, so
+# the target compiles those source files verbatim through #[path] modules
+# instead of depending on the crate. Its own workspace: neither the root nor
+# the fuzz/ workspace sees it. See README.md.
+[package]
+name = "pyroid-fuzz-arrow"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+# The versions crates/pyroid-py builds against. No extension-module/abi3
+# features: the binary links libpython, but never initializes or calls it.
+pyo3 = "=0.30.1"
+simdutf8 = "0.1.5"
+
+[[bin]]
+name = "arrow_import"
+path = "fuzz_targets/arrow_import.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

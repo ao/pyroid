@@ -1,0 +1,3 @@
+{
+ "pyroid.filters 1.0.0.dev0 apply([GopherQuality]) direct [3.15t, pool 1]": "{\"case\":\"gopher_quality\",\"docs\":10000,\"gate\":\"filter\",\"impl\":\"pyroid.filters direct\",\"live\":0,\"mismatches\":0,\"pinned\":10000,\"ref_kept\":8461,\"seconds\":1.018}"
+}

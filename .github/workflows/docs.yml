@@ -1,0 +1,92 @@
+name: docs
+
+# Builds the docs site (mkdocs.yml) on every PR and push, strictly: Zensical builds it, and
+# `mkdocs build --strict` checks links, anchors and nav. On a push to main, and only once the owner
+# has created the `github-pages` environment (Settings -> Pages -> Source: GitHub Actions; see
+# docs/RELEASING.md), the site is deployed to GitHub Pages. Without the environment, the deploy
+# job is skipped and the workflow still passes.
+on:
+  pull_request:
+  push:
+    branches: [main, next]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: build (zensical --strict, mkdocs --strict link check)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - name: Install the docs dependency group (no Rust build, the API pages come from the .pyi stubs)
+        run: |
+          uv venv -p 3.13 .venv-docs
+          uv pip install --python .venv-docs --group docs
+      - name: Generated tables match docs/data/ (parity.json, benchmarks.json)
+        run: |
+          .venv-docs/bin/python docs/scripts/render_parity.py --check
+          .venv-docs/bin/python docs/scripts/render_benchmarks.py --check
+      - name: Build the site (Zensical, strict)
+        run: .venv-docs/bin/zensical build --clean --strict
+      - name: Check links, anchors and nav (mkdocs, strict)
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+        run: .venv-docs/bin/mkdocs build --strict --site-dir "$RUNNER_TEMP/site-mkdocs"
+      - name: Upload the site for GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  pages-environment:
+    name: is the github-pages environment set up?
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read # GET /repos/{owner}/{repo}/environments/github-pages
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Look up the environment (a missing one skips the deploy instead of creating it)
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh api "repos/${REPO}/environments/github-pages" --silent; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No github-pages environment: the docs were built but not deployed (see docs/RELEASING.md)."
+          fi
+
+  deploy:
+    name: deploy to GitHub Pages
+    needs: [build, pages-environment]
+    if: needs.pages-environment.outputs.exists == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write # deploy to Pages
+      id-token: write # deploy-pages proves the deployment's origin with an OIDC token
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

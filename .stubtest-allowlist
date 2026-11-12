@@ -1,0 +1,25 @@
+# mypy.stubtest allowlist (CI job `stubtest`). Keep it short; justify every entry.
+
+# The stub declares Column as Generic[_T_co] so Column[str] / Column[bool] type-check;
+# at runtime the same subscripting is provided by a native __class_getitem__.
+pyroid._pyroid.Column.__class_getitem__
+
+# Needs datatrove, which the stubtest venv leaves out: the steps subclass datatrove's untyped classes,
+# so mypy sees Any bases and stubtest would report every __init__ and metaclass.
+pyroid.integrations.datatrove
+
+# Needs NeMo Curator (CPython 3.11-3.13, with torch and Ray), which the stubtest venv leaves out, for the
+# same reason: the stages and filters subclass its untyped classes.
+pyroid.integrations.nemo_curator
+
+# A false positive: mypy records the class `_FastText`, defined inside a function, as a public module
+# name (`_FastText@<line>`), so the stub-side names never match the runtime __all__.
+pyroid.integrations._patch.__all__
+
+# A string-form TypeAlias: the runtime value is the annotation string, mypy sees the Union.
+pyroid.integrations.hf.LidModel
+
+# pyroid.nltk's change-counting set and defaultdict: their mutating methods are generated in a loop
+# (each bumps a counter, then calls the base method), so mypy sees the base signatures.
+pyroid.nltk._punkt._Set\..*
+pyroid.nltk._punkt._Ortho\..*

@@ -1,0 +1,5 @@
+reference: stock-1
+run                        mode           w    wall s      cpu s   final  lost after_minhash_filter after_pii      same
+stock-1                    stock          1    6975.8     6928.1   23501    85 419f358b5d21   86c5cc5dbacb   yes
+native-1x                  native         8     105.1      770.2   23501    85 419f358b5d21   86c5cc5dbacb   yes
+identical

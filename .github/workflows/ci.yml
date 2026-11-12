@@ -1,0 +1,808 @@
+name: CI
+
+on:
+  push:
+    branches: [main, next]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  MATURIN_VERSION: v1.16.0
+  # The hook versions (ruff, mypy, typos, ...) are pinned in .pre-commit-config.yaml.
+  PREK_VERSION: "0.5.10"
+  # For stubtest; keep in step with .pre-commit-config.yaml and [dependency-groups] lint.
+  MYPY_VERSION: "2.4.1"
+
+jobs:
+  lint:
+    name: "lint (prek: rustfmt, clippy, ruff, mypy, typos, file checks)"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal -c clippy -c rustfmt && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - name: Run every prek hook on every file
+        run: uvx "prek@${PREK_VERSION}" run --all-files --show-diff-on-failure --color always
+
+  workflow-lint:
+    name: workflow lint (zizmor, actionlint)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: zizmor@1.32.0,shellcheck@0.11.0
+      - name: zizmor --pedantic (reads .github/zizmor.yml when present)
+        env:
+          # Enables the online audits (impostor commits, ref/version mismatches, known-vulnerable actions).
+          GH_TOKEN: ${{ github.token }}
+        # --strict-collection: a workflow that fails to parse is an error, not a warning.
+        run: zizmor --pedantic --strict-collection --format github .
+      - name: actionlint (with shellcheck)
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+          # From actionlint_1.7.12_checksums.txt in the v1.7.12 GitHub release.
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -sSfL -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          shellcheck --version
+          "$RUNNER_TEMP/actionlint" -color -shellcheck "$(command -v shellcheck)"
+
+  supply-chain:
+    name: supply chain (cargo-deny, cargo-shear)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-deny@0.20.2,cargo-shear@1.14.0,cargo-about@0.9.3
+      - name: cargo deny (advisories, licenses, bans, sources; config in deny.toml)
+        run: cargo deny --locked check
+      - name: cargo shear (unused dependencies, unlinked .rs files)
+        run: cargo shear --locked --deny-warnings
+      - name: cargo about (LICENSES/THIRD-PARTY-RUST.txt matches Cargo.lock; config in about.toml)
+        run: |
+          set -euo pipefail
+          cargo about generate --locked --fail -m crates/pyroid-py/Cargo.toml -c about.toml about.hbs \
+            | sed 's/[[:space:]]*$//' > LICENSES/THIRD-PARTY-RUST.txt
+          if ! git diff --exit-code -- LICENSES/THIRD-PARTY-RUST.txt; then
+            echo "::error file=LICENSES/THIRD-PARTY-RUST.txt::out of date with Cargo.lock; regenerate it with the command in about.toml and commit it"
+            exit 1
+          fi
+
+  rust-test:
+    name: cargo test (pyroid-core)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: cargo test
+        run: cargo test -p pyroid-core --locked
+
+  wheels:
+    name: wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read # checkout
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-24.04-arm (native aarch64) feeds the aarch64 parity leg: the fastText references are per platform.
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Linux builds run inside the manylinux container, which has its own
+      # interpreters; macOS and Windows build on the host.
+      - id: py311
+        if: runner.os != 'Linux'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - id: py314t
+        if: runner.os != 'Linux'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14t"
+      - id: py315
+        if: runner.os != 'Linux'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15"
+      # Two maturin invocations on purpose: maturin picks one ABI per run, and a
+      # 3.15 interpreter in the same run switches it to abi3t, which turns the
+      # 3.11 build into a version-specific cp311-cp311 wheel instead of abi3.
+      - name: Build cp311-abi3 and cp314t wheels
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          manylinux: auto
+          args: >-
+            --release --locked --out dist -i
+            ${{ runner.os == 'Linux' && '3.11 3.14t' || format('{0} {1}', steps.py311.outputs.python-path, steps.py314t.outputs.python-path) }}
+      - name: Build cp315-abi3.abi3t wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          manylinux: auto
+          args: >-
+            --release --locked --out dist -i
+            ${{ runner.os == 'Linux' && '3.15' || steps.py315.outputs.python-path }}
+      - name: Check that exactly the three wheel flavours were built
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -l dist
+          for pattern in '-cp311-abi3-' '-cp314-cp314t-' '-cp315-abi3.abi3t-'; do
+            n=$(find dist -name "pyroid-*${pattern}*.whl" | wc -l)
+            [[ "$n" -eq 1 ]] || { echo "::error::expected one *${pattern}* wheel, found $n"; exit 1; }
+          done
+          [[ "$(find dist -name '*.whl' | wc -l)" -eq 3 ]]
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  stubtest:
+    name: stubtest (cp311-abi3 wheel, Python 3.11)
+    needs: wheels
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout (for .stubtest-allowlist, if present)
+    env:
+      # Modules whose stubs are checked against the installed runtime (space-separated).
+      # stubtest recurses into submodules, so `pyroid` covers pyroid.text and pyroid._pyroid;
+      # listing a package together with its submodules fails in mypy 2.4.1 ("Duplicate module").
+      STUBTEST_MODULES: pyroid
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-ubuntu-24.04
+          path: dist
+      - name: Install the cp311-abi3 wheel and run stubtest
+        run: |
+          set -euo pipefail
+          mapfile -t wheels < <(find dist -maxdepth 1 -name 'pyroid-*-cp311-abi3-*.whl')
+          [[ ${#wheels[@]} -eq 1 ]] || { echo "::error::expected one cp311-abi3 wheel, found ${#wheels[@]}"; exit 1; }
+          venv="$RUNNER_TEMP/venv-stubtest"
+          uv venv -p 3.11 "$venv"
+          uv pip install --python "$venv" --no-index --no-deps "${wheels[0]}"
+          uv pip install --python "$venv" "mypy==${MYPY_VERSION}"
+          # Imported by the stubs (pyroid.fasttext: numpy) and by pyroid.cli and pyroid.integrations at runtime
+          # (pyarrow), so stubtest can import and check them. datatrove is left out (see .stubtest-allowlist).
+          uv pip install --python "$venv" --only-binary :all: numpy pyarrow
+          # pyarrow ships neither py.typed nor stubs (as in pyproject.toml's [tool.mypy] overrides).
+          mypy_config="$RUNNER_TEMP/stubtest-mypy.ini"
+          printf '[mypy]\n\n[mypy-pyarrow.*]\nignore_missing_imports = True\n' > "$mypy_config"
+          allowlist=()
+          if [[ -f .stubtest-allowlist ]]; then allowlist=(--allowlist "$PWD/.stubtest-allowlist"); fi
+          read -ra modules <<< "$STUBTEST_MODULES"
+          # Run from an empty directory: in the checkout, mypy would read pyproject.toml
+          # (mypy_path = "python") and check the source-tree stubs instead of the wheel's.
+          mkdir "$RUNNER_TEMP/stubtest-cwd"
+          cd "$RUNNER_TEMP/stubtest-cwd"
+          "$venv/bin/python" -m mypy.stubtest "${modules[@]}" --concise --mypy-config-file "$mypy_config" "${allowlist[@]}"
+
+  test:
+    name: pytest (${{ matrix.os }}, ${{ matrix.python }})
+    needs: wheels
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read # checkout (for python/tests and pyproject.toml)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        python: ["3.11", "3.14t", "3.15", "3.15t"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist
+      # NLTK's punkt_tab models for pyroid.nltk's tests (not redistributable, so not in the repo): the
+      # punkt_tab fixture downloads the zip into PYROID_NLTK_DATA on a miss and checks its sha256, which
+      # the key carries (PUNKT_TAB_SHA256 in python/tests/conftest.py).
+      - name: Cache NLTK's punkt_tab models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/nltk_data
+          key: punkt-tab-${{ runner.os }}-e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106
+      - name: Install the built wheel into a clean venv and run pytest
+        shell: bash
+        env:
+          PY: ${{ matrix.python }}
+          PYROID_NLTK_DATA: ${{ runner.temp }}/nltk_data
+          # Optional extra for the dataframe tests. polars-runtime-32 2.1.0 ships only cp311-abi3
+          # wheels, so it installs on GIL builds (3.11, 3.15) and is skipped on 3.14t and 3.15t.
+          POLARS: polars==2.1.0
+        run: |
+          set -euo pipefail
+          if [[ "$PY" == *t ]]; then free_threaded=true; else free_threaded=false; fi
+          uv venv -p "$PY" .venv-test
+          # Only the wheel built above: no index, no sdist fallback, no deps.
+          uv pip install --python .venv-test --no-index --no-deps --no-build --find-links dist pyroid
+          # The test dependencies: [dependency-groups] test in ./pyproject.toml.
+          uv pip install --python .venv-test --group test
+          if [[ "$free_threaded" == false ]]; then
+            uv pip install --python .venv-test --only-binary :all: "$POLARS"
+            # sacrebleu (pyroid.metrics' reference) re-enables the GIL on free-threaded builds (lxml).
+            uv pip install --python .venv-test --group test-gil
+          fi
+          if [[ "$RUNNER_OS" == Windows ]]; then py=.venv-test/Scripts/python.exe; else py=.venv-test/bin/python; fi
+          # PYTHON_GIL stays unset so a module that re-enables the GIL is caught.
+          "$py" -c "import sys, pyroid._pyroid as m; print(sys.version); print(m.__file__)"
+          # importlib mode keeps python/ off sys.path; test_smoke also asserts
+          # that the extension was loaded from site-packages.
+          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib python/tests
+          if [[ "$free_threaded" == true ]]; then
+            # Second pass (pytest-run-parallel): each test runs on one thread per CPU at once, 3 times.
+            "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib \
+              --parallel-threads=auto --iterations=3 python/tests
+          fi
+
+  # The parity data (pinned inputs + reference outputs, ~310 MB) is regenerated in CI and never published:
+  # on a cache miss this job fetches the inputs and reruns the oracles, then caches the verified result.
+  # One cache per architecture. Some references are pinned per platform (the fastText oracle's floats depend on the
+  # CPU; parity/README.md, "Per-platform references"): pyroid_parity.data.load_manifest only shows the runner's own
+  # platform's entries, so `refs all`, `fetch.py --verify-all` and the suites pick linux-x86_64 or linux-aarch64 refs.
+  parity-data:
+    name: parity data (pinned inputs and references, ${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    # The metrics references (rouge-score + sacrebleu on CNN/DM, SummEval, WMT21) add ~10-25 minutes on a miss, the
+    # trafilatura ones (7,192 Common Crawl pages x 9 option sets and Trafilatura's own tests, for 2.3.1 and for
+    # 1.11.0) ~20-30, the two trafilatura mutant proofs ~5.
+    timeout-minutes: 120
+    permissions:
+      contents: read # checkout (bench/manifest.json, bench/fetch.py, parity/)
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    env:
+      # Where pyroid_parity and bench/fetch.py read and write the pinned files (default /data).
+      PYROID_DATA: ${{ github.workspace }}/bench/data
+      # uv's own CPython builds, as in local runs, never an interpreter from the runner's PATH.
+      UV_PYTHON_PREFERENCE: only-managed
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: cache
+        name: Look up the parity data cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          # The manifest pins every file's sha256; the parity lockfile pins the oracles that produce the refs.
+          # The parity jobs rebuild this exact key (keep the two in step).
+          key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
+          lookup-only: true
+      # Unconditional: the harness self-tests below run on a cache hit too.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      # bench/ and parity/ each pin their interpreter in .python-version (3.13: the oracle env).
+      - name: Fetch and verify the pinned inputs (bench/fetch.py)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: uv run --project bench --frozen --no-default-groups python bench/fetch.py
+      - name: Regenerate and verify the references (python -m pyroid_parity.refs all)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: uv run --project parity --frozen python -m pyroid_parity.refs all
+      # pyroid.trafilatura's 1.11.0 mode: its references come from trafilatura 1.11.0, a dependency group that
+      # conflicts with 2.3.1's default one, so they are their own `refs` steps in that group's env.
+      - name: Regenerate and verify the trafilatura 1.11.0 references (refs trafilatura111 trafilatura111_upstream)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: >-
+          uv run --project parity --frozen --no-group trafilatura --group trafilatura111
+          python -m pyroid_parity.refs trafilatura111 trafilatura111_upstream
+      # json_repair's references are in the repo (parity/data/json_repair-0.64.5/): its own test suite, replayed
+      # as recorded public calls. Re-record them with the pinned json-repair and require the same bytes.
+      - name: Re-record json_repair's test suite and compare (python -m pyroid_parity.json_repair_record --check)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: uv run --project parity --frozen python -m pyroid_parity.json_repair_record --check
+      # The nemo references need NeMo Curator and fasttext 0.9.3 (a C++ build): the nemo job builds, checks and
+      # caches them, so they are left out here.
+      - name: Verify every pinned file before caching (bench/fetch.py --verify-all)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: >-
+          uv run --project bench --frozen --no-default-groups python bench/fetch.py --verify-all
+          --except parity/nemo-ref --except models/nemo-quality
+      - name: Save the parity data cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      # The harness's own tests (manifest and per-platform refs, the `refs` exit code, the report, the ftfy mutant).
+      # No parity leg selects them (`-m <suite>`), and they need no wheel. Last, so a failure here never keeps the
+      # verified data out of the cache. The trafilatura mutant proof, once per mode, needs the data: it runs
+      # (about 2 minutes each) where they were just built, and skips on a cache hit, where nothing is restored.
+      - name: Harness self-tests (pytest parity/tests/test_harness*.py)
+        run: |
+          set -euo pipefail
+          uv run --project parity --frozen pytest parity/tests/test_harness.py parity/tests/test_harness_ftfy.py \
+            parity/tests/test_harness_trafilatura.py parity/tests/test_harness_warc.py
+          uv run --project parity --frozen --no-group trafilatura --group trafilatura111 \
+            pytest parity/tests/test_harness_trafilatura.py --trafilatura-compat 1.11.0
+
+  parity:
+    name: parity (${{ matrix.suite }}, ${{ matrix.python }}, ${{ matrix.runner }})
+    needs: [wheels, parity-data]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read # checkout (parity/, bench/manifest.json)
+    strategy:
+      fail-fast: false
+      matrix:
+        # x86_64 and native aarch64: each compares against its own platform's references (see parity-data).
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        # One entry per merged product module pyroid.<suite>. Every suite runs on the free-threaded builds too:
+        # without the oracle group they compare against the pinned refs, and live-oracle checks skip in the report.
+        # SUITE@VERSION is a suite in another mode: trafilatura@1.11.0 is pyroid.trafilatura's compat="1.11.0".
+        suite: [ftfy, fasttext, filters, dedup, metrics, json_repair, datasketch, jieba, trafilatura, trafilatura@1.11.0, nltk, warc, nemo]
+        python: ["3.12", "3.14t", "3.15t"]
+        # The wheel each interpreter installs (the three flavours the wheels job checks for).
+        include:
+          - python: "3.12"
+            wheel: cp311-abi3
+          - python: "3.14t"
+            wheel: cp314-cp314t
+          - python: "3.15t"
+            wheel: cp315-abi3.abi3t
+    env:
+      PYROID_DATA: ${{ github.workspace }}/bench/data
+      # uv's own CPython builds, as in local runs. Without this the 3.12 legs pick the runner's python3.12
+      # (Ubuntu's 3.12.3), whose tarfile warns differently (see parity/pyproject.toml's filterwarnings).
+      UV_PYTHON_PREFERENCE: only-managed
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-${{ matrix.runner }}
+          path: dist
+      - name: Restore the parity data (this architecture's cache)
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          # The key parity-data saved for this runner's architecture.
+          key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
+          fail-on-cache-miss: true
+      # The nltk suite downloads NLTK's punkt_tab models into bench/data/nltk_data on a miss and checks
+      # their sha256, which the key carries (PUNKT_TAB_SHA256 in parity/tests/test_nltk.py).
+      - name: Cache NLTK's punkt_tab models
+        if: matrix.suite == 'nltk'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data/nltk_data
+          key: punkt-tab-parity-e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106
+      # The nemo references need NeMo Curator, so the nemo job builds them (on aarch64, where they are pinned) and
+      # caches them under this key; restored here when it has. Without them the pinned nemo checks skip and say
+      # so, as on x86_64 (no x86_64 pin yet).
+      - name: Restore the nemo references
+        if: matrix.suite == 'nemo'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            bench/data/parity/nemo-ref.parquet
+            bench/data/models/nemo-quality-dev10k.ftz
+          key: nemo-refs-${{ runner.arch }}-16200a3b73d73bbb-68ae0a772f4c0567
+      - name: pytest parity/tests (${{ matrix.suite }})
+        env:
+          SUITE: ${{ matrix.suite }}
+          PY: ${{ matrix.python }}
+          WHEEL_TAG: ${{ matrix.wheel }}
+          # 2000 examples per Hypothesis property (the default dev profile runs 200).
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          mapfile -t wheels < <(find dist -maxdepth 1 -name "pyroid-*-${WHEEL_TAG}-*.whl")
+          [[ ${#wheels[@]} -eq 1 ]] || { echo "::error::expected one ${WHEEL_TAG} wheel, found ${#wheels[@]}"; exit 1; }
+          # The oracle group (datatrove, spaCy, fasttext-predict) has no free-threaded wheels. Without it the
+          # live-oracle checks skip, and say so in the report; the checks against the pinned refs still run.
+          # The trafilatura group (trafilatura, lxml, justext) does install on 3.14t/3.15t, but importing lxml
+          # re-enables the GIL, so those legs leave it out too: pyroid.trafilatura is checked against the pinned
+          # page digests and recorded upstream calls with the GIL off, and the live checks skip.
+          groups=()
+          if [[ "$PY" == *t ]]; then groups=(--no-default-groups); fi
+          # SudachiPy and its 200 MB dictionary, pyvi (with scikit-learn) and PyThaiNLP (with python-crfsuite) only
+          # where the jpn_Jpan, vie_Latn and tha_Thai checks run (filters, dedup); elsewhere, and on free-threaded
+          # legs, those checks skip. (python-crfsuite 0.9.12 has no cp315 wheels.)
+          if [[ "$PY" != *t && ( "$SUITE" == filters || "$SUITE" == dedup ) ]]; then
+            groups+=(--group ja --group vi --group th)
+          fi
+          # SUITE@VERSION: the suite in that mode, against that release's references and, on GIL legs, its own
+          # oracle group (each trafilatura release has one; they conflict, and 2.3.1's is a default group).
+          name="${SUITE%@*}"
+          mode=()
+          if [[ "$SUITE" == *@* ]]; then
+            compat="${SUITE#*@}"
+            mode=(--trafilatura-compat "$compat")
+            if [[ "$PY" != *t ]]; then
+              case "$compat" in
+                1.11.0) groups+=(--no-group trafilatura --group trafilatura111) ;;
+                *) echo "::error::no dependency group for trafilatura $compat"; exit 1 ;;
+              esac
+            fi
+          fi
+          # PYTHON_GIL stays unset: the report records whether the GIL stayed off.
+          uv run --project parity --frozen --python "$PY" "${groups[@]}" \
+            --with "${wheels[0]}" pytest parity/tests -m "$name" --impl "pyroid.$name" "${mode[@]}"
+      - name: Render parity-report.json to the job summary
+        if: ${{ !cancelled() && hashFiles('parity-report.json') != '' }}
+        # The only writer of the summary: pytest runs never append to it.
+        run: parity/.venv/bin/python -m pyroid_parity.report render parity-report.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: parity-report-${{ matrix.suite }}-${{ matrix.python }}-${{ matrix.runner }}
+          path: parity-report.json
+          if-no-files-found: error
+
+  # The parity jobs compare against pinned datatrove outputs. These Hypothesis tests compare pyroid.filters and
+  # pyroid.dedup with datatrove itself on generated documents; elsewhere they skip, because datatrove and spaCy are
+  # not in the test group (heavy, and no free-threaded wheels).
+  live-oracle:
+    name: live datatrove oracle (filters, dedup, datatrove steps; Python 3.13)
+    needs: [wheels, parity-data]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout (python/tests and pyproject.toml)
+    env:
+      # The pinned inputs (FineWeb dev slice, FineWeb-2 slices, lid.176.bin) from parity-data's cache.
+      PYROID_DATA: ${{ github.workspace }}/bench/data
+      # datatrove 0.10.1 and spaCy 3.8.18 as pinned by the parity oracle group, plus what datatrove's base install lacks,
+      # at parity/uv.lock's versions: regex (datatrove.utils.text), xxhash (its xxhash hashes) and tokenizers
+      # (datatrove.pipeline.dedup.minhash imports it); orjson for datatrove's JsonlReader/JsonlWriter, which the
+      # LocalPipelineExecutor test in test_integrations_datatrove.py uses.
+      # warcio and the decoders datatrove's WarcReader imports (faust-cchardet, python-magic over the runner's libmagic),
+      # tldextract and fasteners for URLFilter: the WarcReader step, patch("warcio") and the fineweb-warc recipe tests.
+      ORACLE: datatrove==0.10.1 spacy==3.8.18 regex==2026.9.29 xxhash==3.8.2 tokenizers==0.23.3 orjson==3.13.0 warcio==1.8.2 faust-cchardet==3.2.0 python-magic==0.4.27 tldextract==5.4.0 fasteners==0.20
+      # datatrove's own word tokenizers that test_{filters,dedup}_multilingual.py and test_filters_vithai.py compare
+      # against (pyroid also runs them in Python on request, python_tokenizer=True): SudachiPy with its dictionary,
+      # pyvi, PyThaiNLP with python-crfsuite (its crfcut sentences; pyvi pulls it too, pinned here) and IndicNLP.
+      # pyroid reads the installed PyThaiNLP's corpus, so tha_Thai is native here. jieba ships only an sdist (pure
+      # Python). xxhash stays < 4 (pinned above): datatrove's xxhash hashes fail on 4.x ("Strings must be encoded").
+      SEGMENTERS: >-
+        sudachipy==0.7.0 sudachidict-core==20261015 pyvi==0.1.1 pythainlp==5.4.0 python-crfsuite==0.9.12
+        indic-nlp-library==0.92
+      SEGMENTERS_SDIST: jieba==0.42.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-ubuntu-24.04
+          path: dist
+      - name: Restore the parity data (this architecture's cache)
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          # The key parity-data saved for this runner's architecture.
+          key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
+          fail-on-cache-miss: true
+      - name: Install the cp311-abi3 wheel with datatrove and run the live-oracle tests
+        env:
+          # 300 examples per property (python/tests/conftest.py).
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          uv venv -p 3.13 .venv-oracle
+          # Only the wheel built above: no index, no sdist fallback, no deps.
+          uv pip install --python .venv-oracle --no-index --no-deps --no-build --find-links dist pyroid
+          uv pip install --python .venv-oracle --group test
+          # trafilatura 2.3.1, lxml 6.1.3 and jusText 3.0.2 (with sacrebleu) for the Trafilatura step test below.
+          uv pip install --python .venv-oracle --group test-gil
+          read -ra oracle <<< "$ORACLE"
+          uv pip install --python .venv-oracle --only-binary :all: "${oracle[@]}"
+          read -ra segmenters <<< "$SEGMENTERS"
+          uv pip install --python .venv-oracle --only-binary :all: "${segmenters[@]}"
+          read -ra segmenters_sdist <<< "$SEGMENTERS_SDIST"
+          uv pip install --python .venv-oracle --no-binary :all: "${segmenters_sdist[@]}"
+          py=.venv-oracle/bin/python
+          # The test modules importorskip these; here a missing oracle is an error, not a skip.
+          "$py" -c "import datatrove.data, datatrove.pipeline.dedup.minhash, datatrove.pipeline.filters, datatrove.utils.hashing
+          import datatrove.utils.text, datatrove.pipeline.filters.gopher_quality_filter
+          from importlib.metadata import version as v
+          print(*(f'{d}=={v(d)}' for d in ('pyroid', 'datatrove', 'spacy', 'regex', 'xxhash', 'tokenizers')))"
+          # Vietnamese and Thai run natively against datatrove here: the wheel must find PyThaiNLP's corpus.
+          "$py" -c "import pyroid.filters as pf; langs = pf.languages()
+          assert langs['vie_Latn'].native and langs['tha_Thai'].native, (langs['vie_Latn'], langs['tha_Thai'])"
+          # The parity (filters, dedup) jobs run the pinned-decision tests of test_filters_parity.py and the FineWeb-2
+          # slice tests of test_{filters,dedup}_multilingual.py; test_filters_vithai.py reads the slices itself.
+          log="$RUNNER_TEMP/live-oracle.log"
+          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs -k "not pinned and not fineweb2_slices" \
+            python/tests/test_filters_parity.py python/tests/test_dedup_datatrove.py \
+            python/tests/test_filters_multilingual.py python/tests/test_dedup_multilingual.py \
+            python/tests/test_filters_vithai.py | tee "$log"
+          # pyroid.integrations.datatrove's drop-in steps against datatrove's own, including LocalPipelineExecutor
+          # runs, LanguageFilter on lid.176.bin and the non-English languages (FineWeb-2 slices, IndicNLP, jieba), and
+          # the Trafilatura step against datatrove's sandboxed one.
+          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs \
+            python/tests/test_integrations_datatrove.py python/tests/test_trafilatura_datatrove.py \
+            python/tests/test_datatrove_warc.py python/tests/test_patch_warc.py python/tests/test_cli_warc.py | tee -a "$log"
+          if grep '^SKIPPED' "$log"; then echo "::error::live-oracle tests skipped (see above)"; exit 1; fi
+      # pyroid.trafilatura's 1.11.0 mode against trafilatura 1.11.0, in its own venv: the pins a fresh
+      # datatrove[processing]==0.10.1 resolves ([dependency-groups] test-trafilatura-111; never together with test-gil),
+      # plus datatrove for the Trafilatura step test. The 2.3.1-only tests skip here.
+      - name: trafilatura 1.11.0 mode (pyroid.trafilatura compat="1.11.0", the datatrove step on stock datatrove)
+        run: |
+          set -euo pipefail
+          uv venv -p 3.13 .venv-t111
+          uv pip install --python .venv-t111 --no-index --no-deps --no-build --find-links dist pyroid
+          uv pip install --python .venv-t111 --group test --group test-trafilatura-111
+          uv pip install --python .venv-t111 --only-binary :all: datatrove==0.10.1 tokenizers==0.23.3 regex==2026.9.29 orjson==3.13.0
+          py=.venv-t111/bin/python
+          "$py" -c "from importlib.metadata import version as v; print(*(f'{d}=={v(d)}' for d in ('pyroid', 'trafilatura', 'lxml', 'justext', 'datatrove')))"
+          "$py" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs python/tests/test_trafilatura_parity_111.py \
+            python/tests/test_trafilatura.py python/tests/test_trafilatura_patch.py python/tests/test_trafilatura_datatrove.py
+
+  # NeMo Curator 1.4.0 itself, live: pyroid.nemo and pyroid.integrations.nemo_curator against NeMo's own code on
+  # generated text (Hypothesis), per document and through NeMo's stages. NeMo needs Python < 3.14, and its fastText
+  # filters need fasttext 0.9.3, which PyPI ships as an sdist only (it builds with g++). The env is
+  # parity/README.md's ("The nemo suite"): NeMo without its own dependencies (torch, transformers, datasets,
+  # mecab-python3), which its CPU text stages do not import. The job also builds the nemo references (`refs nemo`,
+  # checked against bench/manifest.json's pins) and caches them for the parity legs. linux-aarch64 only: the
+  # references (fastText floats) and the quality model are pinned there.
+  nemo:
+    name: live NeMo Curator 1.4.0 (Python 3.12, ubuntu-24.04-arm)
+    needs: [wheels, parity-data]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    permissions:
+      contents: read # checkout (parity/, python/tests, bench/manifest.json)
+    env:
+      PYROID_DATA: ${{ github.workspace }}/bench/data
+      PYROID_LID_MODEL: ${{ github.workspace }}/bench/data/models/lid.176.ftz
+      PYROID_FINEWEB_DEV: ${{ github.workspace }}/bench/data/fineweb/fineweb-dev-10k.parquet
+      UV_PYTHON_PREFERENCE: only-managed
+      # What NeMo's text stages and its executor import, at the versions the references were recorded with
+      # (the "oracle" of parity/nemo-ref.parquet in bench/manifest.json), plus the test tools at parity/uv.lock's versions.
+      NEMO_DEPS: numpy==2.5.4 pandas==3.1.1 pyarrow==26.0.1 regex==2026.11.9 ftfy==6.3.1 jieba==0.42.1 loguru fsspec hydra-core==1.3.8 omegaconf ray[data]==2.60.0 cosmos-xenna==0.2.0 tqdm platformdirs requests pytest==9.2.0 pytest-timeout==2.4.0 hypothesis==6.170.14 jsonschema==4.26.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-ubuntu-24.04-arm
+          path: dist
+      - name: Restore the parity data (this architecture's cache)
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
+          fail-on-cache-miss: true
+      # fasttext 0.9.3 has no wheels; only this job compiles it.
+      - name: Install g++
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends g++
+      - name: The NeMo env (parity/README.md, "The nemo suite")
+        run: |
+          set -euo pipefail
+          uv venv -p 3.12 "$RUNNER_TEMP/nemo"
+          py="$RUNNER_TEMP/nemo/bin/python"
+          uv pip install --python "$py" --no-deps nemo-curator==1.4.0
+          # fasttext's setup.py imports pybind11 (and numpy) at build time.
+          uv pip install --python "$py" pybind11 setuptools wheel numpy==2.5.4
+          uv pip install --python "$py" --no-build-isolation fasttext==0.9.3
+          read -ra deps <<< "$NEMO_DEPS"
+          uv pip install --python "$py" "${deps[@]}"
+          # Only the wheel built above: no index, no sdist fallback, no deps.
+          uv pip install --python "$py" --no-index --no-deps --no-build --find-links dist pyroid
+          "$py" -c "import nemo_curator.stages.text.filters, fasttext, pyroid.integrations.nemo_curator
+          from importlib.metadata import version as v
+          print(*(f'{d}=={v(d)}' for d in ('pyroid', 'nemo-curator', 'fasttext', 'pandas', 'ray')))"
+          echo "NEMO_PY=$py" >> "$GITHUB_ENV"
+      # The cache key carries the two pinned sha256s (bench/manifest.json): change it when they are re-pinned.
+      - id: nemo-refs
+        name: Restore the nemo references
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            bench/data/parity/nemo-ref.parquet
+            bench/data/models/nemo-quality-dev10k.ftz
+          key: nemo-refs-${{ runner.arch }}-16200a3b73d73bbb-68ae0a772f4c0567
+      - name: Build and verify the nemo references (python -m pyroid_parity.refs nemo)
+        if: steps.nemo-refs.outputs.cache-hit != 'true'
+        working-directory: parity
+        run: '"$NEMO_PY" -m pyroid_parity.refs nemo --workers 4'
+      - name: Save the nemo references
+        if: steps.nemo-refs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            bench/data/parity/nemo-ref.parquet
+            bench/data/models/nemo-quality-dev10k.ftz
+          key: ${{ steps.nemo-refs.outputs.cache-primary-key }}
+      - name: pyroid's NeMo tests with NeMo installed (python/tests)
+        run: |
+          set -euo pipefail
+          "$NEMO_PY" -m pytest -q -p no:cacheprovider --import-mode=importlib -rs python/tests/test_nemo.py \
+            python/tests/test_nemo_modifiers.py python/tests/test_integrations_nemo_curator.py \
+            python/tests/test_nemo_curator_patch.py
+      - name: The nemo parity suite with live NeMo (pinned and live checks)
+        working-directory: parity
+        run: '"$NEMO_PY" -m pytest tests/test_nemo.py --impl pyroid.nemo'
+      - name: Render parity-report.json to the job summary
+        if: ${{ !cancelled() && hashFiles('parity/parity-report.json') != '' }}
+        working-directory: parity
+        run: '"$NEMO_PY" -m pyroid_parity.report render parity-report.json'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: parity-report-nemo-live-3.12-ubuntu-24.04-arm
+          path: parity/parity-report.json
+          if-no-files-found: error
+
+  msrv:
+    name: MSRV (cargo check on Cargo.toml's rust-version)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # clippy's incompatible_msrv lint sees std APIs but not language features (let chains broke 1.85 once), so the
+      # MSRV gets a real build: both crates, tests and benches included. pyo3's build script needs an interpreter.
+      - name: cargo check --workspace --all-targets with the rust-version toolchain
+        env:
+          PYO3_PYTHON: python3
+        run: |
+          set -euo pipefail
+          msrv=$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)
+          [[ -n "$msrv" ]] || { echo "::error::no rust-version in Cargo.toml"; exit 1; }
+          rustup toolchain install "$msrv" --profile minimal
+          cargo "+$msrv" check --workspace --all-targets --locked
+
+  miri:
+    name: Miri (pyroid-py Arrow FFI unit tests)
+    # Native aarch64, where the tests were validated (simdutf8 takes its NEON path under Miri).
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read # checkout
+    env:
+      # A dated nightly, so a Miri change can't turn CI red on its own; bump it deliberately.
+      NIGHTLY: nightly-2026-11-05
+      PYO3_PYTHON: python3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the nightly toolchain with Miri
+        run: |
+          rustup toolchain install "$NIGHTLY" --profile minimal -c miri -c rust-src
+          cargo "+$NIGHTLY" miri setup
+      # pyroid-py's lib is `test = false` (cargo test --workspace skips it); the arrow/*/tests.rs unit tests never
+      # call into Python (pyo3 is only built: its build script reads PYO3_PYTHON).
+      - name: cargo miri test (Stacked Borrows)
+        run: cargo "+$NIGHTLY" miri test -p pyroid-py --lib --locked -- arrow
+      - name: cargo miri test (Tree Borrows, strict provenance, symbolic alignment)
+        env:
+          MIRIFLAGS: -Zmiri-tree-borrows -Zmiri-strict-provenance -Zmiri-symbolic-alignment-check
+        run: cargo "+$NIGHTLY" miri test -p pyroid-py --lib --locked -- arrow
+
+  # Advisory: deliberately not in ci-ok. A red fuzz smoke flags a crash or a build break in fuzz/ without blocking
+  # merges; the corpora replay first, so a regression on a known input shows up here.
+  fuzz-smoke:
+    name: fuzz smoke (cargo-fuzz, 60 s per target; advisory)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read # checkout (fuzz/ targets and corpora)
+    env:
+      NIGHTLY: nightly-2026-11-05
+      CARGO_FUZZ_VERSION: "0.13.2"
+      # Per target: replay the committed corpus, then fuzz for the rest of the 60 s.
+      FUZZ_ARGS: -max_total_time=60 -rss_limit_mb=2048 -timeout=10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The Arrow target links libpython (it compiles pyroid-py's PyO3 sources); setup-python's builds are shared.
+      - id: py
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install the nightly toolchain and cargo-fuzz
+        run: |
+          rustup toolchain install "$NIGHTLY" --profile minimal
+          cargo install --locked "cargo-fuzz@${CARGO_FUZZ_VERSION}"
+      - name: pyroid-core targets (fuzz/; debug assertions, no sanitizer, as fuzz/README.md)
+        working-directory: fuzz
+        run: |
+          set -euo pipefail
+          read -ra args <<< "$FUZZ_ARGS"
+          mapfile -t targets < <(cargo "+$NIGHTLY" fuzz list)
+          for t in "${targets[@]}"; do
+            echo "::group::$t"
+            cargo "+$NIGHTLY" fuzz run -a -s none "$t" -- "${args[@]}"
+            echo "::endgroup::"
+          done
+      - name: Arrow C Data importer (fuzz/arrow; AddressSanitizer)
+        env:
+          PYO3_PYTHON: ${{ steps.py.outputs.python-path }}
+        run: |
+          set -euo pipefail
+          read -ra args <<< "$FUZZ_ARGS"
+          LD_LIBRARY_PATH=$("$PYO3_PYTHON" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')
+          export LD_LIBRARY_PATH
+          cargo "+$NIGHTLY" fuzz run --fuzz-dir fuzz/arrow arrow_import -- "${args[@]}"
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    # fuzz-smoke is advisory and left out on purpose.
+    needs:
+      [lint, workflow-lint, supply-chain, rust-test, msrv, miri, wheels, stubtest, test, parity-data, parity, live-oracle, nemo]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Require every job to have succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            if [[ "$r" != success ]]; then echo "::error::a required job finished with: $r"; exit 1; fi
+          done

@@ -1,0 +1,576 @@
+{
+  "about": "Seed data for docs/compatibility.md, rendered by docs/scripts/render_parity.py. Entered by hand from each module's test runs (2026-11-05 to 2026-11-09, Docker/OrbStack VM, linux/aarch64 unless a check says otherwise). Once CI publishes parity-report.json, render from that with --report.",
+  "suites": {
+    "ftfy": {
+      "reference": "ftfy 6.3.1",
+      "rule": "byte-identical output, same exception type",
+      "checks": [
+        {
+          "name": "Golden cases (ftfy's test_cases.json and re-garbled variants, doctests), 8 call shapes, replayed on Unicode 14.0 to 17.0",
+          "same": 74950,
+          "diff": 0
+        },
+        {
+          "name": "Fuzz: random corner-case mix, half with lone surrogates, random options, 5 Unicode versions",
+          "same": 500000,
+          "diff": 0
+        },
+        {
+          "name": "Realistic mojibake (1 to 2 layers, CESU-8, partial, lossy), 5 Unicode versions",
+          "same": 1151345,
+          "diff": 0
+        },
+        {
+          "name": "Combining sequences, jamo, Indic scripts, new characters, all 4 normalization forms",
+          "same": 2199550,
+          "diff": 0
+        },
+        {
+          "name": "Real documents: FineWeb dev 10k, FineWeb-2 (8 languages), adversarial set, 5 Unicode versions",
+          "same": 76160,
+          "diff": 0
+        },
+        {
+          "name": "Real documents: FineWeb 100k on Unicode 15.0 and 17.0",
+          "same": 200000,
+          "diff": 0
+        },
+        {
+          "name": "Replay after the final rebase, fresh seeds",
+          "same": 649606,
+          "diff": 0
+        },
+        {
+          "name": "Python Hypothesis, deep profile, on CPython 3.12 and 3.15t",
+          "same": 120000,
+          "diff": 0
+        }
+      ],
+      "source": "the Rust oracle replay (crates/pyroid-core/tests/ftfy_oracle.rs) and python/tests/test_ftfy_parity.py, run on 2026-11-05"
+    },
+    "fasttext": {
+      "reference": "fasttext-predict 0.9.2.4 (fastText's C++ predict path)",
+      "rule": "same labels, probabilities within 1e-6 (measured: bit-identical)",
+      "checks": [
+        {
+          "name": "Pinned lid.176.bin and lid.176.ftz predictions, top-5, FineWeb dev 10k and adversarial set (str, list and Arrow paths)",
+          "same": 26464,
+          "diff": 0
+        },
+        {
+          "name": "Synthetic models vs the live oracle: 52 configurations (4 losses, dense, quantized, pruned, word n-grams)",
+          "same": 63024,
+          "diff": 0
+        },
+        {
+          "name": "Dense softmax and hierarchical softmax, dimensions 1 to 33",
+          "same": 26664,
+          "diff": 0
+        }
+      ],
+      "source": "python/tests/test_fasttext_parity.py and the parity/ fastText suite, run on 2026-11-05"
+    },
+    "filters": {
+      "reference": "datatrove 0.10.1 with spaCy 3.8.18 (and its other tokenizers: IndicNLP, whitespace, SudachiPy 0.7.0 with sudachidict-core 20261015, pyvi 0.1.1, PyThaiNLP 5.4.0 with python-crfsuite 0.9.12), tldextract 5.4.0, numpy 2.5.4",
+      "rule": "same keep/drop decision, same filter_reason, same rewritten text, same exception",
+      "checks": [
+        {
+          "name": "Harness parity suite, 90 checks: Gopher repetition, Gopher quality, C4 (default and FineWeb settings) and FineWeb quality on 13,232 documents; the same filters with each language's settings on 8 FineWeb-2 slices; PII, C4 bad words, symbol lines and the URL filter",
+          "same": 194784,
+          "diff": 0
+        },
+        {
+          "name": "English tokenizer oracle replay (words and sentence counts): FineWeb, FineWeb-2, adversarial, fuzz and Unicode probes, CPython 3.12 to 3.14 (5 IS_ALPHA rows skipped: a spaCy history-dependent bug, see the filters guide)",
+          "same": 964148,
+          "diff": 0
+        },
+        {
+          "name": "Per-language tokenizer goldens: 57 spaCy rule-based languages, the whitespace tokenizer, IndicNLP (hi, ur, bn) and English",
+          "same": 43146,
+          "diff": 0
+        },
+        {
+          "name": "Chinese, native (spaCy's ChineseTokenizer over pyroid.jieba): FineWeb-2 cmn_Hani, the 8 filter cases against live datatrove, 2026-11-07",
+          "same": 2000,
+          "diff": 0
+        },
+        {
+          "name": "Japanese, native (datatrove's JapaneseTokenizer over the Rust port of SudachiPy 0.7.0): FineWeb-2 jpn_Jpan, the 8 filter cases against live datatrove, 2026-11-09",
+          "same": 2000,
+          "diff": 0
+        },
+        {
+          "name": "Japanese tokenizer, Rust replay of the committed recordings: SudachiPy morphemes for 4,567 texts (special cases, FineWeb-2 lines, fuzz, a code-point sample), datatrove's word_tokenize, span_tokenize and sent_tokenize for 4,205 texts (54 documents over 40,000 bytes, with chosen chunk boundaries), 1,911 chunk_text_on_bytes cases and the spaCy tag of all 1,558 POS (every tag in spaCy's TAG_MAP), 2026-11-09",
+          "same": 12241,
+          "diff": 0
+        },
+        {
+          "name": "Japanese tokenizer replay, not committed: every code point (69,504 rows each for morphemes and datatrove), the FineWeb-2 jpn_Jpan test slice (7,809 lines, 250 documents) and the first 20,000 jpn_Jpan training documents (32.5 M characters: 610,624 lines with 18,879,619 morphemes; datatrove's words and spans of the 20,000 documents, 134 over 40,000 bytes), 2026-11-09",
+          "same": 777691,
+          "diff": 0
+        },
+        {
+          "name": "Vietnamese and Thai, native (spaCy's VietnameseTokenizer over the Rust port of pyvi 0.1.1; datatrove's ThaiTokenizer over the Rust port of PyThaiNLP 5.4.0): FineWeb-2 vie_Latn and tha_Thai, the 8 filter cases each against live datatrove, 2026-11-09",
+          "same": 4000,
+          "diff": 0
+        },
+        {
+          "name": "Vietnamese tokenizer, Rust replay of the committed recordings: syllables, CRF labels, pyvi_tokenize and datatrove's word_tokenize, span_tokenize and sent_tokenize for 4,697 texts (special cases, FineWeb-2 documents, fuzz, a code-point sample), 2026-11-09",
+          "same": 4697,
+          "diff": 0
+        },
+        {
+          "name": "Vietnamese tokenizer replay, not committed: every code point (69,504 rows), the FineWeb-2 vie_Latn test slice (250 documents), all cases and fuzz, and the first 20,000 vie_Latn training documents (90.9 M characters); 151.5 M compared syllables, labels, words, spans and sentences, 2026-11-09",
+          "same": 94392,
+          "diff": 0
+        },
+        {
+          "name": "Thai tokenizer, Rust replay of the committed recordings: character clusters, newmm with and without safe mode, crfcut's words and raw labels, and datatrove's word_tokenize, span_tokenize and sent_tokenize for 3,165 texts (special cases, FineWeb-2 documents, fuzz, long texts, a code-point sample), 2026-11-09",
+          "same": 3165,
+          "diff": 0
+        },
+        {
+          "name": "Thai tokenizer replay, not committed: every code point (69,504 rows), the FineWeb-2 tha_Thai test slice (250 documents), all cases, fuzz and 45 long texts, the first 20,000 tha_Thai training documents (60.1 M characters), and 29,806 more rows (random text, 6 documents of 100k to 200k characters, 6,000 rows over synthetic dictionaries where newmm's 50-edge cutoff fires, and digits new in Unicode 16.0 and 17.0 under CPython 3.13 to 3.15), 2026-11-09",
+          "same": 122667,
+          "diff": 0
+        },
+        {
+          "name": "Per-language tokenizer replay: whole FineWeb-2 slices (ar, de, fr, ru, es, hi, with C4 lines), 10k fuzz rows per tokenizer, a 57-language FineWeb-2 smoke set",
+          "same": 662530,
+          "diff": 0
+        },
+        {
+          "name": "IndicNLP tokenizer replay: goldens and 8k fuzz rows per CPython 3.11 to 3.15",
+          "same": 118690,
+          "diff": 0
+        },
+        {
+          "name": "Whitespace tokenizer replay: goldens and extra rows",
+          "same": 118990,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "Hypothesis against live datatrove: 92 tests x 300 examples over script-specific text in 22 native languages and the jieba, SudachiPy, pyvi and PyThaiNLP fallback paths (python_tokenizer=True).",
+        "Japanese, native: 12 Hypothesis properties against live datatrove (python/tests/test_filters_japanese.py, 628 examples per run; 11 of them also at 300 examples each).",
+        "Vietnamese and Thai, native: 80 tests against live datatrove (python/tests/test_filters_vithai.py: every filter, FineWeb-2's chains, words, sentence dedup and MinHash, on generated and FineWeb-2 text; 1,046 Hypothesis examples per run, 5,230 with the ci profile).",
+        "The newer steps, input by input: PII on 13,232 documents x 4 configurations, C4 bad words x 5 (per-document languages, seeded keep_fraction), symbol lines x 3, the URL filter on 10,000 FineWeb URLs x 7 configurations and 9,695 URL-like strings, plus Hypothesis against the reference and live datatrove."
+      ],
+      "source": "the parity/ filters suite (after the last rebase, 2026-11-06; vie_Latn and tha_Thai 2026-11-09), crates/pyroid-core/tests/filters_tokenizer.rs, crates/pyroid-core/src/{sudachi,pyvi,pythainlp}/replay.rs and the multilingual replays, run on 2026-11-05, 2026-11-06 and 2026-11-09"
+    },
+    "dedup": {
+      "reference": "datatrove 0.10.1 MinHash (FineWeb: sha1, 64-bit, 14 buckets x 8 hashes, 5-grams; FineWeb-2: xxhash, 64-bit) and sentence dedup",
+      "rule": "identical signatures, removed set, cluster ids and sizes; sentence dedup: byte-identical signature, duplicate and index files",
+      "checks": [
+        {
+          "name": "Harness parity suite, 25 checks: MinHash signatures and removal decisions on 13,232 documents (445 removed); FineWeb-2's MinHash on 8 language slices with injected near-duplicates; sentence dedup, 7 configurations on 13,232 documents and 9 on an 8,300-document corpus with injected duplicates",
+          "same": 52934,
+          "diff": 0
+        },
+        {
+          "name": "simplify_text vs datatrove on the corpus documents",
+          "same": 13232,
+          "diff": 0
+        },
+        {
+          "name": "Chinese, native: FineWeb-2 cmn_Hani MinHash signatures and removed set (300 documents with near-duplicates) against live datatrove, 2026-11-07",
+          "same": 600,
+          "diff": 0
+        },
+        {
+          "name": "Japanese, native: FineWeb-2 jpn_Jpan MinHash signatures and removed set (300 documents with near-duplicates) against live datatrove, 2026-11-09",
+          "same": 600,
+          "diff": 0
+        },
+        {
+          "name": "Vietnamese and Thai, native: FineWeb-2 vie_Latn and tha_Thai MinHash signatures and removed set (300 documents each, with near-duplicates) against live datatrove, 2026-11-09",
+          "same": 1200,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "datatrove's stages 1 to 3 re-run and compared from raw text: every bucket's pairs, the removed ids, cluster ids and sizes are identical for sha1/64 (445 removed) and xxhash/32 (439 removed, 3,146 pairs).",
+        "Live-datatrove Hypothesis families (case, whitespace, punctuation, edits, swaps; 1-, 2- and 5-grams; 4 hash configurations) and a Python transcription of stages 1 to 3: identical.",
+        "simplify_text: CRC digests over all 1,112,064 code points x 13 configurations x 5 Unicode versions identical.",
+        "Sentence dedup: datatrove's three stages re-run on pyroid's files give the same documents and exclusion documents; Hypothesis 300 examples against the reference and 100 three-stage runs against live datatrove."
+      ],
+      "source": "the parity/ dedup suite (after the last rebase, 2026-11-06) and python/tests/test_dedup_parity.py, run on 2026-11-05 and 2026-11-06"
+    },
+    "translit": {
+      "reference": "anyascii 0.3.3 (for anyascii()); Unidecode 1.4.0 as a black box (for unidecode()'s errors= semantics only)",
+      "rule": "anyascii(): byte-identical; unidecode(): Unidecode's errors=, exceptions and warnings, on anyascii's data",
+      "checks": [
+        {
+          "name": "anyascii() vs the anyascii package, every code point U+0000 to U+10FFFF (lists, single strings, chunked, Arrow)",
+          "same": 1114112,
+          "diff": 0
+        },
+        {
+          "name": "Documents: FineWeb dev 10k, FineWeb-2 8 x 250 and FineWeb 100k (list, Arrow, unidecode), on CPython 3.12, 3.15 and 3.15t",
+          "same": 112000,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "The generated table matches the anyascii package on all 1,112,064 non-surrogate code points, and the kernel matches the any_ascii crate on every scalar in all 4 errors= modes.",
+        "unidecode() vs Unidecode 1.4.0, black box: 194 tests over the alphabets both libraries map (every errors= mode, replace_str edge cases, invalid errors, messages, args, index, warning order, batches) pass. The transliterations themselves differ by design; see the translit guide."
+      ],
+      "source": "python/tests/test_translit_parity.py, test_translit_unidecode.py and the module's agreement run, 2026-11-05"
+    },
+    "metrics": {
+      "reference": "rouge-score 0.1.2 (with NLTK 3.10.4's Porter stemmer) and sacrebleu 2.6.0",
+      "rule": "identical repr, str, format(), JSON and signature strings of every score: no tolerance",
+      "checks": [
+        {
+          "name": "Parity suite on CPython 3.12 (GIL), 47 checks: 6 ROUGE configurations, 22 corpus BLEU/chrF configurations x 141 WMT21 systems, 4 sentence-level ones x 163,000 segments, per-call and batch APIs, live Hypothesis against both libraries",
+          "same": 1396827,
+          "diff": 0
+        },
+        {
+          "name": "Parity suite on free-threaded CPython 3.15t, 44 checks (live sacrebleu skipped: importing it re-enables the GIL)",
+          "same": 1388827,
+          "diff": 0
+        },
+        {
+          "name": "Parity suite on x86_64 (AWS EC2 c7i.4xlarge), CPython 3.12, 47 checks, live sacrebleu included, against the x86_64 reference re-pinned there (identical to the aarch64 one)",
+          "same": 1396827,
+          "diff": 0
+        },
+        {
+          "name": "Parity suite on x86_64 (AWS EC2 c7i.4xlarge), free-threaded CPython 3.15t, 44 checks (live sacrebleu skipped)",
+          "same": 1388827,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "Data, pinned by sha256: CNN/DailyMail 3.0.0 test (11,490 lead-3 summaries and 2,000 whole articles against the highlights), SummEval (1,600 summaries from 16 systems x 11 references, score_multi), WMT21 newstest2021 (8 language pairs, 141 systems, 163,000 segments, up to 3 references). The reference file holds 694,757 results.",
+        "The Porter stemmer matches NLTK on all 512,136 distinct tokens of FineWeb 100k; 28 rouge_types edge cases and 49 sacrebleu error cases match in exception type, message and order."
+      ],
+      "source": "the parity/ metrics suite, run on 2026-11-06 (the x86_64 rows: bench/results/aws-c7i.4xlarge/2026-11-06/parity)"
+    },
+    "json_repair": {
+      "reference": "json_repair 0.64.5",
+      "rule": "the same returned string or object, the same repair log, the same exception",
+      "checks": [
+        {
+          "name": "Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 672 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file",
+          "same": 184403,
+          "diff": 0
+        },
+        {
+          "name": "Parity suite on free-threaded CPython 3.15t (the 149 schema= replays skipped: no jsonschema)",
+          "same": 184254,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "Skipped by design: 4 calls whose result depends on the hash seed and 3 that depend on the recursion limit.",
+        "The Rust kernel also replays 451 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k."
+      ],
+      "source": "the parity/ json_repair suite, run on 2026-11-06"
+    },
+    "datasketch": {
+      "reference": "datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1)",
+      "rule": "identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets",
+      "checks": [
+        {
+          "name": "MinHash.bulk signatures, 128 permutations, for affine32, affine64 and legacy: 100,000 FineWeb documents plus the 3,232-document adversarial set, word 5-gram shingles",
+          "same": 309696,
+          "diff": 0
+        },
+        {
+          "name": "minhash_batch(texts, ngram=5) rows, same corpus and schemes",
+          "same": 309696,
+          "diff": 0
+        },
+        {
+          "name": "LeanMinHash.serialize bytes (and deserialize back), one byte order per scheme",
+          "same": 309696,
+          "diff": 0
+        },
+        {
+          "name": "MinHashLSH (b, r): 20 thresholds x 4 num_perm x 3 weight pairs",
+          "same": 240,
+          "diff": 0
+        },
+        {
+          "name": "Every document's MinHashLSH query result set: threshold 0.9, 0.5, params (32, 4), legacy at 0.8; query and query_batch",
+          "same": 825856,
+          "diff": 0
+        },
+        {
+          "name": "Result sets after removing every 10th key, and key membership",
+          "same": 104232,
+          "diff": 0
+        },
+        {
+          "name": "Two half indexes merged (every 10th document queried); MinHashLSHForest(l=8) top-10 key sets (every 10th document)",
+          "same": 20648,
+          "diff": 0
+        },
+        {
+          "name": "MinHashLSHEnsemble(threshold=0.8, num_part=16) containment result sets (20,000 documents indexed, every 10th queried)",
+          "same": 2000,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "The (b, r) search ports scipy 1.18.1's QUADPACK: all 715,040 LSH and 258,300 LSH Ensemble probabilities it evaluates are bitwise identical to scipy's on aarch64, and all 9,156 grid argmins and 126 ensemble constructions match.",
+        "datasketch's own test suite (test_minhash, test_lean_minhash, test_minhash_schemes, test_lsh, test_lshforest, test_lshensemble) passes against pyroid's classes, with Hypothesis and seeded workloads compared against live datasketch: 1,020 tests on CPython 3.12, 3.14t, 3.15 and 3.15t."
+      ],
+      "source": "the parity/ datasketch suite (CPython 3.13, release wheel), run on 2026-11-07"
+    },
+    "jieba": {
+      "reference": "jieba 0.42.1",
+      "rule": "the same words in the same order (empty strings included), the same offsets, FREQ values, total and exceptions",
+      "checks": [
+        {
+          "name": "Parity suite on CPython 3.13, 61 checks: FineWeb-2 cmn_Hani and the adversarial set in 9 modes (cut with and without the HMM, full mode, search, tokenize), the batch path, user dictionaries, FREQ",
+          "same": 387557,
+          "diff": 0
+        },
+        {
+          "name": "Rust replay of recorded jieba and datatrove outputs: jieba's test sentences, 2,400 FineWeb-2 excerpts, mixed scripts and whitespace, 2,000 fuzz rows, 16 user-dictionary scenarios, dict.txt.small",
+          "same": 73236,
+          "diff": 0
+        },
+        {
+          "name": "20,000 FineWeb-2 cmn_Hani training documents (29.5 M characters), 5 modes and the batch path, documents x modes",
+          "same": 120000,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "python/tests: Hypothesis properties against live jieba for every mode, add_word / del_word / suggest_freq / load_userdict sequences, broken and unusual dictionary files and every code point; 656 tests on CPython 3.13, 657 on 3.15t, also under pytest-run-parallel.",
+        "The route takes math.log of integers: bit-identical on CPython 3.12 to 3.15t for every dictionary frequency, and jieba's recorded outputs are byte-identical on 3.12, 3.13, 3.14 and 3.15."
+      ],
+      "source": "the parity/ jieba suite, crates/pyroid-core/src/jieba/replay.rs and a 20,000-document replay, run on 2026-11-07"
+    },
+    "nltk": {
+      "reference": "NLTK 3.10.4 (with regex 2026.9.29)",
+      "rule": "the same sentences, tokens and offsets, str for str, and the same exceptions (type and message)",
+      "checks": [
+        {
+          "name": "Parity suite on CPython 3.13, 1,045 checks, every document: Punkt in all 19 punkt_tab models on FineWeb (dev 10k), FineWeb-2 (the 4 pinned 250-document slices, and 5,000 documents in each of 14 more languages) and the adversarial set, realign on and off, spans, word_tokenize, both Treebank tokenizers with and without PTB brackets, their spans, detokenize round trips, the regexp tokenizers, the batch paths",
+          "same": 14174241,
+          "diff": 0
+        },
+        {
+          "name": "All 19 punkt_tab models on 39,618 FineWeb and FineWeb-2 documents (848,037 sentences, 208,349 decisions), Rust replay",
+          "same": 178282,
+          "diff": 0
+        },
+        {
+          "name": "Rust replay of recorded Punkt outputs: NLTK's examples, adversarial text, fuzz, FineWeb excerpts with parameters PunktTrainer learned from FineWeb, and the case rules of CPython 3.12 to 3.15",
+          "same": 37936,
+          "diff": 0
+        },
+        {
+          "name": "Rust replay of recorded Treebank, NLTKWordTokenizer, detokenizer and align_tokens outputs: NLTK's examples, adversarial text, fuzz",
+          "same": 39599,
+          "diff": 0
+        },
+        {
+          "name": "The same functions on every sentence of 5,000 FineWeb documents and up to 1,000 documents of each of 27 FineWeb-2 files (600,372 texts), Rust replay",
+          "same": 5713962,
+          "diff": 0
+        },
+        {
+          "name": "Every code point (surrogates excepted) in 13 Treebank templates, 6 of them also on Unicode 15.0, 16.0 and 17.0, and in the regexp tokenizers' templates, Rust replay",
+          "same": 149016576,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "python/tests: Hypothesis properties and NLTK's doctest examples against live NLTK for every ported function, every code point alone and in templates, batches (list, tuple, Arrow), parameters and their in-place edits, model loading with and without NLTK, fallbacks and pyroid.patch(\"nltk\"); 1,088 tests on CPython 3.13 and 3.15t, also under pytest-run-parallel, with the GIL off on 3.15t.",
+        "Character classes: regex 2026.9.29's \\w, \\d and \\s and CPython 3.11 to 3.15's isupper / islower are dumped code point by code point; the rules hard-coded in Rust (regex's \\s, both engines' (?i) letters) are checked on each interpreter."
+      ],
+      "source": "the parity/ nltk suite, crates/pyroid-core/src/nltk/testdata/ replays and their large uncommitted recordings, run on 2026-11-09"
+    },
+    "nemo": {
+      "reference": "NeMo Curator 1.4.0 on CPython 3.12 (pandas 3.1.1, regex 2026.11.9, ftfy 6.3.1, jieba 0.42.1, fasttext 0.9.3 built with g++ 12)",
+      "rule": "the same score (repr and type), the same exception type and the same modified text; for the stages, the same DataFrame (values, dtypes, index)",
+      "checks": [
+        {
+          "name": "Parity suite on CPython 3.12 against live NeMo, every document of FineWeb dev 10k and the adversarial set: the scores, exceptions and modifier outputs of 74 filter, modifier and fastText cases, one str call per document",
+          "same": 875286,
+          "diff": 0
+        },
+        {
+          "name": "The same cases as list and Arrow batches (float64 or int64 arrays; the exception of the first document that raises)",
+          "same": 1630796,
+          "diff": 0
+        },
+        {
+          "name": "pyroid.integrations.nemo_curator's filters and modifiers per document (score_document, keep_document, modify_document)",
+          "same": 888556,
+          "diff": 0
+        },
+        {
+          "name": "NeMo's ScoreFilter, Score, Filter and Modify with pyroid's and NeMo's classes mixed, against NeMo's stages",
+          "same": 606,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis against live NeMo, 200 examples per filter and modifier, for pyroid.nemo and for the integration's classes",
+          "same": 116646,
+          "diff": 0
+        },
+        {
+          "name": "Lone surrogates: pyroid.nemo raises UnicodeEncodeError (pyroid's rule); the integration's classes and stages give NeMo's result",
+          "same": 175542,
+          "diff": 0
+        },
+        {
+          "name": "NeMo's own pipelines (heuristic_filter_english_pipeline.yaml; fastText language ID with the modifier benchmark's stages) in its Xenna executor, stock against YAML targets rewritten and against pyroid.patch(\"nemo_curator\"): every output row, column and dtype",
+          "same": 47056,
+          "diff": 0
+        },
+        {
+          "name": "The YAML pipeline on 100,000 FineWeb documents at 1 and 8 CPUs: the same 95,774 kept documents (id and text)",
+          "same": 191548,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "NeMo's RepeatingTopNGramsFilter breaks ties between equally frequent n-grams in Python set order, which follows the process's string hash seed, so its own scores change from run to run unless PYTHONHASHSEED is fixed (the references use 0); pyroid makes the choice NeMo makes in the same process.",
+        "The pinned checks also pass on CPython 3.14t and 3.15t with the GIL off; NeMo does not install there, so the live checks skip.",
+        "python/tests: Hypothesis properties of every score function and modifier against NeMo's code (copied, so they run without NeMo) and against live NeMo; the stages on Arrow, string[pyarrow], str and object columns; the batch paths never call NeMo's per-row methods; pyroid.patch(\"nemo_curator\") with hydra configs. 517 tests on CPython 3.12 with NeMo, 167 on 3.15t, also under pytest-run-parallel.",
+        "Not ported: NeMo Curator 1.4.0's exact and fuzzy deduplication run on GPUs only (cuDF), and it has no CPU PII stage."
+      ],
+      "source": "the parity/ nemo suite (parity-report of 2026-11-10, linux/aarch64), parity/pyroid_parity/nemo_pipeline.py and bench/nemo_pipeline_bench.py"
+    },
+    "integrations": {
+      "reference": "datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.patch() stands in for)",
+      "rule": "the same per-document digest of id, text, language, score, keep, reason and duplicate flag; for patch(), the same call-site output",
+      "checks": [
+        {
+          "name": "pyroid's datatrove steps in datatrove's LocalPipelineExecutor (8 workers), FineWeb dev 10k: digest ef314b8d...",
+          "same": 10000,
+          "diff": 0
+        },
+        {
+          "name": "The same on the parity corpus (FineWeb dev and the adversarial set): digest c0c6b746...",
+          "same": 13232,
+          "diff": 0
+        },
+        {
+          "name": "pyroid clean --recipe fineweb on FineWeb dev, 3 runs (Parquet to Parquet; JSONL to JSONL.gz at 1 and 8 threads)",
+          "same": 30000,
+          "diff": 0
+        },
+        {
+          "name": "pyroid clean on the parity corpus, 2,500-row batches",
+          "same": 13232,
+          "diff": 0
+        },
+        {
+          "name": "pyroid.patch(): open_clip 3.3.0's ViT-B-32 tokenizer, token ids patched against unpatched",
+          "same": 592,
+          "diff": 0
+        },
+        {
+          "name": "pyroid.patch(): fast-langdetect 1.1.0, lite model",
+          "same": 600,
+          "diff": 0
+        },
+        {
+          "name": "pyroid.patch(): datatrove's FT176LID(k=3) against fasttext-predict",
+          "same": 592,
+          "diff": 0
+        },
+        {
+          "name": "pyroid clean on the parity corpus split into 5 files: one process, --workers 2, and --shard I/3 with the four cross-shard MinHash stages (signatures, buckets, cluster, filter): digest c0c6b746..., 3 runs",
+          "same": 39696,
+          "diff": 0
+        },
+        {
+          "name": "pyroid clean on the FineWeb 100k slice in 16 files, 4 shards x 2 workers and the four stages: digest da897999..., as datatrove's chain",
+          "same": 100000,
+          "diff": 0
+        },
+        {
+          "name": "datatrove's FineWeb pipeline from 8 WARC files of CC-MAIN-2026-39 (171,595 HTML records) on AWS EC2 c7i.4xlarge: pyroid's native chain, with the pages stock datatrove lost at 8 workers left out, against stock datatrove at 8 workers, final documents after MinHash and after PII",
+          "same": 23503,
+          "diff": 0
+        },
+        {
+          "name": "The same against stock datatrove at 1 worker, with that run's lost pages left out",
+          "same": 23501,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "Per-step tests against live datatrove (67 tests, 313 documents): every step's result, reason, rewritten text and metadata at several batch sizes and thread counts; MinhashDedupSignature's files are byte-identical, and datatrove's stages 2 to 4 on them remove the same documents.",
+        "The FineWeb recipe in Python (recipes.FineWeb, whole corpus and 777-document batches) and hf.fineweb (also with num_proc=2) give digest ef314b8d... on FineWeb dev too.",
+        "From WARC, without leaving any pages out: pyroid's steps in datatrove's executor and the native chain keep the same 23,505 documents at 8 and at 1 worker (digest d0e2ad48...). That is 2 more than stock datatrove at 8 workers, both pages stock datatrove gave up on, with 0 text differences. Stock datatrove stops extracting a page after 1 s and drops it, and which pages hit that limit changes between runs, so its own two runs kept different sets (23,503 and 23,501). pyroid has no timeout and gave the same documents in every run. The 5 pages on which trafilatura 1.11.0 itself raises are dropped by both (datatrove's child process dies on them; pyroid's step counts them as broken_process).",
+        "Cross-shard MinHash files: pyroid's .minhash.sig, .dups, .remove, .clusters and .sizes files are byte-identical to datatrove 0.10.1's (4 configurations, empty ranks, spills, 1 and 2 workers per bucket), and datatrove's own stages 1 to 3 on the same cleaned 100k files write the same bytes.",
+        "On AWS EC2 c7i.4xlarge, 4,188,430 FineWeb documents (sample/10BT, files 000 to 003) gave the same kept (3,547,373) and excluded documents in one process, with --workers 4, with 4 shards and the four stages, and when resumed after a Ctrl-C.",
+        "The newer drop-ins (PIIFormatter, C4BadWordsFilter, SymbolLinesFormatter, URLFilter, sentence dedup) are counted under pyroid.filters and pyroid.dedup above."
+      ],
+      "source": "python/tests/test_integrations_*.py, test_cli.py, test_cli_scale.py, test_dedup_files.py and examples/datatrove/verify.py (2026-11-06 to 2026-11-09), and bench/fineweb_warc.py on AWS EC2 c7i.4xlarge (bench/results/aws-c7i.4xlarge/2026-11-09-warc, 2026-11-09)"
+    },
+    "trafilatura": {
+      "reference": "trafilatura 2.3.1 with lxml 6.1.3 (libxml2 2.14.6) and jusText 3.0.2; for compat=\"1.11.0\", trafilatura 1.11.0 with the releases a fresh datatrove[processing]==0.10.1 install resolves (lxml 6.1.3, jusText 3.0.2, lxml-html-clean 0.4.6, charset-normalizer 3.5.2, courlan 1.4.0, htmldate 1.11.0)",
+      "rule": "extract text byte for byte (None distinct from \"\"), bare_extraction field by field, the same exceptions (type and message) and warnings",
+      "checks": [
+        {
+          "name": "2.3.1: extract on the 7,192 pinned Common Crawl pages of 3 crawls (CC-MAIN-2026-39, 2023-50, 2019-35), 7 option sets (datatrove's call and the stateful dedup sets run in page order)",
+          "same": 50344,
+          "diff": 0
+        },
+        {
+          "name": "2.3.1: bare_extraction on the same pages, field by field, 2 option sets",
+          "same": 14384,
+          "diff": 0
+        },
+        {
+          "name": "2.3.1: Hypothesis pages from a tag grammar against live trafilatura, 8 option sets x 210 examples",
+          "same": 1680,
+          "diff": 0
+        },
+        {
+          "name": "2.3.1: Trafilatura's own test suite replayed call by call, 2,669 native and 1,884 delegated calls",
+          "same": 4553,
+          "diff": 0
+        },
+        {
+          "name": "2.3.1 on x86_64 (AWS EC2 c7i.4xlarge): 27,585 pages of CC-MAIN-2026-43 (21,977) and CC-MAIN-2025-08 (5,608), 8 option sets",
+          "same": 220680,
+          "diff": 0
+        },
+        {
+          "name": "1.11.0: extract on the same 7,192 pinned pages, 7 option sets",
+          "same": 50344,
+          "diff": 0
+        },
+        {
+          "name": "1.11.0: bare_extraction on the same pages, 2 option sets",
+          "same": 14384,
+          "diff": 0
+        },
+        {
+          "name": "1.11.0: Hypothesis pages against live trafilatura 1.11.0, 8 option sets x 210 examples",
+          "same": 1680,
+          "diff": 0
+        },
+        {
+          "name": "1.11.0: Trafilatura 1.11.0's own tests replayed, 108 native and 525 delegated calls",
+          "same": 633,
+          "diff": 0
+        },
+        {
+          "name": "1.11.0 on x86_64 (AWS EC2 c7i.4xlarge): the same 27,585 pages, 8 option sets",
+          "same": 220680,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "The suite also checks every delegated option (trafilatura's result and exactly one FallbackWarning), trafilatura's exact signatures plus compat=, extract_batch against the loop, and pyroid.patch(\"trafilatura\")'s signatures for the installed release: 109 tests passed for 2.3.1 and 111 for 1.11.0.",
+        "The Rust core's own check, before the parity suite: 4,677 pages of the CC-MAIN-2026-39 development sample in 10 option sets, extract and bare_extraction, on CPython 3.13 (the dev split also on 3.12 and 3.15), and Unicode 14.0 to 17.0 vectors; 151 extra edge pages for 1.11.0, including a family with control characters. Identical in both modes.",
+        "python/tests/test_trafilatura*.py: 544 tests against trafilatura 2.3.1, and 395 against trafilatura 1.11.0 in its own environment, including the datatrove Trafilatura step against datatrove's own step, statistics included."
+      ],
+      "source": "the parity/ trafilatura suite in both modes (CPython 3.13, run on 2026-11-09), and parity/pyroid_parity/trafilatura_scale.py on AWS EC2 c7i.4xlarge (bench/results/aws-c7i.4xlarge/2026-11-09-warc/scale)"
+    }
+  }
+}

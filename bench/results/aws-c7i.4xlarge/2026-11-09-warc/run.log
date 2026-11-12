@@ -1,0 +1,390 @@
+[warc 15:00:27] start: branch feat/trafilatura, 8 WARC files of CC-MAIN-2026-39, CPUs 0-7, deadline 2026-11-09T20:59:59Z
+[warc 15:00:27] === code (load 0.26 0.06 0.02; 98G free)
+
+Installed:
+  annobin-docs-12.69-1.amzn2023.0.1.noarch                                      
+  annobin-plugin-gcc-12.69-1.amzn2023.0.1.x86_64                                
+  cpp-11.5.0-5.amzn2023.0.5.x86_64                                              
+  gc-8.0.4-5.amzn2023.0.2.x86_64                                                
+  gcc-11.5.0-5.amzn2023.0.5.x86_64                                              
+  gcc-c++-11.5.0-5.amzn2023.0.5.x86_64                                          
+  gcc-plugin-annobin-11.5.0-5.amzn2023.0.5.x86_64                               
+  git-2.50.1-1.amzn2023.0.1.x86_64                                              
+  git-core-2.50.1-1.amzn2023.0.1.x86_64                                         
+  git-core-doc-2.50.1-1.amzn2023.0.1.noarch                                     
+  glibc-devel-2.34-231.amzn2023.0.5.x86_64                                      
+  glibc-headers-x86-2.34-231.amzn2023.0.5.noarch                                
+  guile22-2.2.7-2.amzn2023.0.3.x86_64                                           
+  kernel6.18-headers-1:6.18.56-125.164.amzn2023.x86_64                          
+  libmpc-1.2.1-2.amzn2023.0.2.x86_64                                            
+  libstdc++-devel-11.5.0-5.amzn2023.0.5.x86_64                                  
+  libtool-ltdl-2.4.7-1.amzn2023.0.3.x86_64                                      
+  libxcrypt-devel-4.4.33-7.amzn2023.x86_64                                      
+  make-1:4.3-5.amzn2023.0.2.x86_64                                              
+  perl-Error-1:0.17030-2.amzn2023.0.1.noarch                                    
+  perl-File-Find-1.37-477.amzn2023.0.11.noarch                                  
+  perl-Git-2.50.1-1.amzn2023.0.1.noarch                                         
+  perl-TermReadKey-2.38-9.amzn2023.0.3.x86_64                                   
+  perl-lib-0.65-477.amzn2023.0.11.x86_64                                        
+
+branch: feat/trafilatura
+sha: 7a535c2b47f948032089d9a05b59c15b723c35c4
+subject: feat(trafilatura): compat="1.11.0", and the datatrove step follows the installed trafilatura
+nproc: 16
+cpus: 0-7 (cores: 8 distinct)
+6.18.56-125.164.amzn2023.x86_64
+"Amazon Linux 2023.12.20261102"
+               total        used        free      shared  buff/cache   available
+Mem:           31554         637       29987           0         929       30531
+Swap:              0           0           0
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p1  100G  3.1G   97G   4% /
+[warc 15:00:53] === code: ok (26 s)
+[warc 15:00:53] === bootstrap (load 0.67 0.17 0.06; 97G free)
+Python 3.13.18
+[warc 15:01:04] === bootstrap: ok (11 s)
+[warc 15:01:04] === wheel (load 0.88 0.23 0.08; 97G free)
+-rw-r--r--. 1 root root 5205505 Nov  9 15:02 /opt/htmlx/dist/pyroid-1.0.0rc1-cp311-abi3-manylinux_2_34_x86_64.whl
+[warc 15:02:37] === wheel: ok (93 s)
+[warc 15:02:38] === envs (load 1.00 0.46 0.18; 97G free)
+Using Python 3.13.18 environment at: /opt/htmlx/venv-stock
+Using Python 3.13.18 environment at: /opt/htmlx/venv-pyroid
+2026-11-09 15:03:18.174 | INFO     | datatrove.pipeline.filters.url_filter:do_extract:87 - 💥 Extracting url filter blacklists...
+2026-11-09 15:03:18.460 | INFO     | datatrove.pipeline.filters.url_filter:do_extract:90 - 💥 Extracted url filter blacklists.
+2026-11-09 15:03:21.088 | INFO     | datatrove.io:do_download_file:400 - ⬇️ Downloading fast-text language identifier model from "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"...
+↓ Downloading lid.176.bin:   0%|          | 0.00/125M [00:00<?, ?B/s]url block lists: 4558940 domains
+psl: ExtractResult(subdomain='www', domain='example', suffix='co.uk', is_private=False)
+↓ Downloading lid.176.bin:  15%|█▌        | 19.0M/125M [00:00<00:00, 199MB/s]↓ Downloading lid.176.bin:  42%|████▏     | 52.3M/125M [00:00<00:00, 287MB/s]↓ Downloading lid.176.bin:  69%|██████▉   | 86.2M/125M [00:00<00:00, 318MB/s]↓ Downloading lid.176.bin:  93%|█████████▎| 116M/125M [00:00<00:00, 315MB/s] ↓ Downloading lid.176.bin: 100%|██████████| 125M/125M [00:00<00:00, 306MB/s]
+2026-11-09 15:03:21.609 | INFO     | datatrove.io:do_download_file:402 - ⬇️ Downloaded fast-text language identifier model to "/opt/htmlx/hf/assets/datatrove/lid/ft176/https:__dl.fbaipublicfiles.com_fasttext_supervised-models_lid.176.bin".
+datatrove lid.176.bin: 7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e
+pyroid 1.0.0rc1 Trafilatura drop-in mode: 1.11.0
+[warc 15:03:25] === envs: ok (47 s)
+[warc 15:03:26] === fetch (load 1.81 0.74 0.29; 96G free)
+total 7364584
+-rw-r--r--. 1 root root 938695574 Nov  9 15:03 CC-MAIN-20260904131603-20260904161603-00000.warc.gz
+-rw-r--r--. 1 root root 950350257 Nov  9 15:03 CC-MAIN-20260904131603-20260904161603-00001.warc.gz
+-rw-r--r--. 1 root root 958855601 Nov  9 15:03 CC-MAIN-20260904131603-20260904161603-00002.warc.gz
+-rw-r--r--. 1 root root 942991395 Nov  9 15:03 CC-MAIN-20260904131603-20260904161603-00003.warc.gz
+-rw-r--r--. 1 root root 904292267 Nov  9 15:03 CC-MAIN-20260904131603-20260904161603-00004.warc.gz
+-rw-r--r--. 1 root root 954106462 Nov  9 15:03 CC-MAIN-20260904131603-20260904161603-00005.warc.gz
+-rw-r--r--. 1 root root 922779209 Nov  9 15:03 CC-MAIN-20260904131603-20260904161603-00006.warc.gz
+-rw-r--r--. 1 root root 969247966 Nov  9 15:03 CC-MAIN-20260904131603-20260904161603-00007.warc.gz
+lid.176.bin: 7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e
+[warc 15:03:49] === fetch: ok (23 s)
+[warc 15:03:50] === stock-8 (load 2.41 0.95 0.37; 89G free)
+[warc 15:03:51] stock-8: stock, 8 workers, CPUs 0-7, estimated 14 min
+
+Total Runtime: 0 seconds
+
+TIMED: timed
+TIMED: timed
+TIMED: timed
+TIMED: timed
+TIMED: timed
+phase:step                            seconds   share   docs out
+base:warc_reader                        175.3    2.6%     171595
+base:url_filter                          42.6    0.6%     170446
+base:trafilatura                       5543.2   81.9%     164785
+base:lid                                109.1    1.6%      58461
+base:gopher_repetition                  326.6    4.8%      46587
+base:gopher_quality                      16.6    0.2%      31430
+base:c4_quality                         231.0    3.4%      28662
+base:fineweb_quality                    133.3    2.0%      24794
+base:writer                               8.2    0.1%      24794
+mh1:reader                                1.9    0.0%      24794
+mh1:minhash_signature                   166.2    2.5%          0
+mh2:minhash_buckets                       0.8    0.0%          0
+mh3:minhash_cluster                       0.0    0.0%          0
+mh4:reader                                1.1    0.0%      24794
+mh4:minhash_filter                        0.1    0.0%      23503
+mh4:tee                                   0.2              23503
+mh4:pii                                   8.0    0.1%      23503
+mh4:writer                                6.7    0.1%      23503
+wall 870.8 s (base 845.4, mh1 21.8, mh2 0.2, mh3 0.0, mh4 2.2); cpu 6759.0 s
+digest after_minhash_filter: a844ec39ead37cf5d2d21188a3a57cdbc54ba11fc36e22ec8a65f27dc8daee5b (23503 docs)
+digest after_pii: 12656e56fb880ccd51f2245c29273f4ab3b2497720ef1a7c147e57e8b04dc87b (23503 docs)
+[warc 15:18:23] === stock-8: ok (873 s)
+[warc 15:18:24] === pyroid-8 (load 6.52 8.66 6.01; 89G free)
+[warc 15:18:25] pyroid-8: pyroid-steps, 8 workers, CPUs 0-7, estimated 4 min
+
+Total Runtime: 0 seconds
+
+TIMED: timed
+TIMED: timed
+TIMED: timed
+TIMED: timed
+TIMED: timed
+phase:step                            seconds   share   docs out
+base:warc_reader                        154.0   19.5%     171595
+base:url_filter                          12.4    1.6%     170446
+base:trafilatura                        513.9   65.1%     164854
+base:lid                                 61.8    7.8%      58477
+base:gopher_repetition                   11.0    1.4%      46596
+base:gopher_quality                       6.6    0.8%      31435
+base:c4_quality                           4.3    0.5%      28666
+base:fineweb_quality                      3.8    0.5%      24797
+base:writer                               6.7    0.8%      24797
+mh1:reader                                1.0    0.1%      24797
+mh1:minhash_signature                     5.3    0.7%          0
+mh2:minhash_buckets                       0.8    0.1%          0
+mh3:minhash_cluster                       0.0    0.0%          0
+mh4:reader                                1.0    0.1%      24797
+mh4:minhash_filter                        0.1    0.0%      23505
+mh4:tee                                   0.1              23505
+mh4:pii                                   0.1    0.0%      23505
+mh4:writer                                6.5    0.8%      23505
+wall 104.0 s (base 101.0, mh1 0.9, mh2 0.2, mh3 0.0, mh4 1.1); cpu 792.1 s
+digest after_minhash_filter: d0e2ad4807f0aa7eb685e4d1f46d6f2bb0e6fcf48015734aa42c5bf148864d8a (23505 docs)
+digest after_pii: 0a35ff32512d26169cfb49c8f49edd2c81745c8731ca4dbec2abe802d6343bd5 (23505 docs)
+[warc 15:20:11] === pyroid-8: ok (107 s)
+[warc 15:20:13] === native-8 (load 6.99 8.29 6.19; 89G free)
+[warc 15:20:14] native-8: native, 8 workers, CPUs 0-7, estimated 3 min
+phase:step                            seconds   share   docs out
+base:warc_reader                        155.2   19.8%     171595
+base:url_filter                          14.1    1.8%     170446
+base:trafilatura                        502.5   64.1%     164828
+base:lid_and_filters                     51.7    6.6%      24796
+base:writers                             52.3    6.7%          0
+dedup:reader                              0.7    0.1%      24796
+dedup:minhash                             1.1    0.1%      23505
+pii:pii                                   0.1    0.0%      23505
+pii:writer                                6.3    0.8%      23505
+wall 108.2 s (base 99.9, dedup 1.9, pii 6.3); cpu 783.2 s
+digest after_minhash_filter: e0354de06ac80d88b658fa61a457d50bd7c92528400ce30c06b7a5a02f5b1bc2 (23505 docs)
+digest after_pii: b812293fe6b0b00a00e5f7366dfda98bca670cc69d92b5aecf2d3dcf81bac9e3 (23505 docs)
+[warc 15:22:03] === native-8: ok (110 s)
+[warc 15:22:04] === compare-8 (load 6.29 7.85 6.28; 89G free)
+reference: stock-8
+run                        mode           w    wall s      cpu s   final  lost after_minhash_filter after_pii      same
+stock-8                    stock          8     870.8     6759.0   23503    74 a844ec39ead3   12656e56fb88   yes
+pyroid-8                   pyroid-steps   8     104.0      792.1   23505     5 d0e2ad4807f0   0a35ff32512d   NO
+native-8                   native         8     108.2      783.2   23505     5 e0354de06ac8   b812293fe6b0   NO
+pyroid-8 vs stock-8: {"only_in_reference": 0, "only_in_run": 2, "text_differs_after_minhash_filter": 0, "text_differs_after_pii": 0, "examples": {"only_in_reference": [], "only_in_run": ["<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>", "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>"], "text_differs_after_minhash_filter": [], "text_differs_after_pii": []}}
+  document counts differ from stage trafilatura on: trafilatura 164785 vs 164854, lid 58461 vs 58477, gopher_repetition 46587 vs 46596, gopher_quality 31430 vs 31435, c4_quality 28662 vs 28666, fineweb_quality 24794 vs 24797, minhash_filter 23503 vs 23505, pii 23503 vs 23505
+native-8 vs stock-8: {"only_in_reference": 3, "only_in_run": 5, "text_differs_after_minhash_filter": 6, "text_differs_after_pii": 6, "examples": {"only_in_reference": ["<urn:uuid:01a06cb3-8897-724e-8b7a-b9be74727178>", "<urn:uuid:01a06cbe-6842-76e1-a5db-c751dc9fec93>", "<urn:uuid:01a06ce3-7b50-76dc-b01d-89e22b88e96a>"], "only_in_run": ["<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>", "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>", "<urn:uuid:01a06cd5-f57d-760c-b635-f52170d92b5a>", "<urn:uuid:01a06ce8-5d29-738a-a9ed-9ae0976d7416>", "<urn:uuid:01a06cea-e2a9-7efb-bb58-840b006c0f8c>"], "text_differs_after_minhash_filter": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"], "text_differs_after_pii": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"]}}
+  document counts differ from stage trafilatura on: trafilatura 164785 vs 164828, lid 58461 vs 58464, gopher_repetition 46587 vs 46591, gopher_quality 31430 vs 31432, c4_quality 28662 vs 28663, fineweb_quality 24794 vs 24796, minhash_filter 23503 vs 23505, pii 23503 vs 23505
+note: stock-8 lost pages to datatrove's Trafilatura timeout or a dead child process; compare them with `native --timeouts-of <stock run>` instead
+DIFFERENT
+[warc 15:22:06] stock-8 lost 74 pages to Trafilatura's timeout or a dead child: native-8x drops the same pages
+[warc 15:22:06] native-8x: native, 8 workers, CPUs 0-7, estimated 3 min
+phase:step                            seconds   share   docs out
+base:warc_reader                        156.4   20.5%     171595
+base:url_filter                          10.3    1.3%     170446
+base:trafilatura                        493.6   64.7%     164785
+base:lid_and_filters                     43.4    5.7%      24794
+base:writers                             51.9    6.8%          0
+dedup:reader                              0.7    0.1%      24794
+dedup:minhash                             1.0    0.1%      23503
+pii:pii                                   0.0    0.0%      23503
+pii:writer                                6.2    0.8%      23503
+wall 104.9 s (base 96.8, dedup 1.7, pii 6.2); cpu 768.2 s
+digest after_minhash_filter: 143ad16ce358532d987892675385f93773faad644c5cd4d7cfb3ca64c0ee7810 (23503 docs)
+digest after_pii: 3a97c2c989b31496c20a4425f9c8d026dc5ede6f037afde2a5239d470983551f (23503 docs)
+reference: stock-8
+run                        mode           w    wall s      cpu s   final  lost after_minhash_filter after_pii      same
+stock-8                    stock          8     870.8     6759.0   23503    74 a844ec39ead3   12656e56fb88   yes
+native-8x                  native         8     104.9      768.2   23503    74 143ad16ce358   3a97c2c989b3   NO
+native-8x vs stock-8: {"only_in_reference": 0, "only_in_run": 0, "text_differs_after_minhash_filter": 2, "text_differs_after_pii": 2, "examples": {"only_in_reference": [], "only_in_run": [], "text_differs_after_minhash_filter": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"], "text_differs_after_pii": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"]}}
+  document counts differ from stage gopher_repetition on: gopher_repetition 46587 vs 46586
+note: stock-8 lost pages to datatrove's Trafilatura timeout or a dead child process; compare them with `native --timeouts-of <stock run>` instead
+DIFFERENT
+[warc 15:23:51] === compare-8: ok (107 s)
+[warc 15:23:53] === hook (load 7.17 7.80 6.44; 89G free)
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/opt/htmlx/repo/parity/pyroid_parity/trafilatura_scale.py", line 366, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/opt/htmlx/repo/parity/pyroid_parity/trafilatura_scale.py", line 319, in main
+    compare_slice(pool, candidate, pages, where, tally, mode)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/htmlx/repo/parity/pyroid_parity/trafilatura_scale.py", line 221, in compare_slice
+    first: dict[str, list[Any]] = {o: f.result() for o, f in first_g.items()}
+                                      ~~~~~~~~^^
+  File "/opt/pyroid/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/concurrent/futures/_base.py", line 455, in result
+    self._condition.wait(timeout)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/opt/pyroid/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/threading.py", line 359, in wait
+    waiter.acquire()
+    ~~~~~~~~~~~~~~^^
+KeyboardInterrupt
+[warc 16:42:42] === hook: ok (4729 s)
+[warc 16:42:44] === native-1 (load 10.35 6.24 5.58; 88G free)
+[warc 16:42:45] native-1: native, 1 workers, CPUs 0-7, estimated 16 min
+phase:step                            seconds   share   docs out
+base:warc_reader                        148.8   20.2%     171595
+base:url_filter                           1.4    0.2%     170446
+base:trafilatura                        486.5   65.9%     164854
+base:lid_and_filters                     40.3    5.5%      24797
+base:writers                             49.9    6.8%          0
+dedup:reader                              0.7    0.1%      24797
+dedup:minhash                             4.2    0.6%      23505
+pii:pii                                   0.1    0.0%      23505
+pii:writer                                6.0    0.8%      23505
+wall 738.7 s (base 727.5, dedup 4.9, pii 6.1); cpu 740.2 s
+digest after_minhash_filter: d0e2ad4807f0aa7eb685e4d1f46d6f2bb0e6fcf48015734aa42c5bf148864d8a (23505 docs)
+digest after_pii: 0a35ff32512d26169cfb49c8f49edd2c81745c8731ca4dbec2abe802d6343bd5 (23505 docs)
+[warc 16:55:05] === native-1: ok (741 s)
+[warc 16:55:06] === pyroid-1 (load 1.00 1.43 3.04; 88G free)
+[warc 16:55:08] pyroid-1: pyroid-steps, 1 workers, CPUs 0-7, estimated 15 min
+
+Total Runtime: 0 seconds
+
+TIMED: timed
+TIMED: timed
+TIMED: timed
+TIMED: timed
+TIMED: timed
+phase:step                            seconds   share   docs out
+base:warc_reader                        150.2   19.4%     171595
+base:url_filter                          12.1    1.6%     170446
+base:trafilatura                        506.5   65.4%     164854
+base:lid                                 59.9    7.7%      58477
+base:gopher_repetition                   10.6    1.4%      46596
+base:gopher_quality                       6.3    0.8%      31435
+base:c4_quality                           4.2    0.5%      28666
+base:fineweb_quality                      3.7    0.5%      24797
+base:writer                               6.5    0.8%      24797
+mh1:reader                                1.0    0.1%      24797
+mh1:minhash_signature                     4.9    0.6%          0
+mh2:minhash_buckets                       0.8    0.1%          0
+mh3:minhash_cluster                       0.0    0.0%          0
+mh4:reader                                1.0    0.1%      24797
+mh4:minhash_filter                        0.1    0.0%      23505
+mh4:tee                                   0.2              23505
+mh4:pii                                   0.1    0.0%      23505
+mh4:writer                                6.3    0.8%      23505
+wall 775.9 s (base 760.5, mh1 6.0, mh2 0.9, mh3 0.1, mh4 7.8); cpu 776.6 s
+digest after_minhash_filter: d0e2ad4807f0aa7eb685e4d1f46d6f2bb0e6fcf48015734aa42c5bf148864d8a (23505 docs)
+digest after_pii: 0a35ff32512d26169cfb49c8f49edd2c81745c8731ca4dbec2abe802d6343bd5 (23505 docs)
+[warc 17:08:05] === pyroid-1: ok (779 s)
+[warc 17:08:07] === stock-1 (load 1.00 1.03 1.86; 88G free)
+[warc 17:08:09] stock-1: stock, 1 workers, CPUs 0-7, estimated 118 min
+
+Total Runtime: 0 seconds
+
+TIMED: timed
+TIMED: timed
+TIMED: timed
+TIMED: timed
+TIMED: timed
+phase:step                            seconds   share   docs out
+base:warc_reader                        180.8    2.6%     171595
+base:url_filter                          44.1    0.6%     170446
+base:trafilatura                       5720.4   82.1%     164774
+base:lid                                118.8    1.7%      58454
+base:gopher_repetition                  329.5    4.7%      46583
+base:gopher_quality                      17.4    0.3%      31427
+base:c4_quality                         234.0    3.4%      28660
+base:fineweb_quality                    135.6    1.9%      24792
+base:writer                               8.4    0.1%      24792
+mh1:reader                                2.2    0.0%      24792
+mh1:minhash_signature                   162.1    2.3%          0
+mh2:minhash_buckets                       0.8    0.0%          0
+mh3:minhash_cluster                       0.0    0.0%          0
+mh4:reader                                1.2    0.0%      24792
+mh4:minhash_filter                        0.1    0.0%      23501
+mh4:tee                                   0.2              23501
+mh4:pii                                   8.0    0.1%      23501
+mh4:writer                                6.6    0.1%      23501
+wall 6975.8 s (base 6793.3, mh1 164.9, mh2 0.9, mh3 0.0, mh4 16.1); cpu 6928.1 s
+digest after_minhash_filter: 419f358b5d21213909b4e95fab96890c85beac1e62190ac1c13038a208ac9e0d (23501 docs)
+digest after_pii: 86c5cc5dbacb4036ce08acc373e5cfcee55ea7dd47031eef2a5e8efc10d66a94 (23501 docs)
+[warc 19:04:27] === stock-1: ok (6980 s)
+[warc 19:04:29] === compare (load 1.00 1.00 1.00; 88G free)
+reference: native-8
+run                        mode           w    wall s      cpu s   final  lost after_minhash_filter after_pii      same
+native-8                   native         8     108.2      783.2   23505     5 e0354de06ac8   b812293fe6b0   yes
+pyroid-8                   pyroid-steps   8     104.0      792.1   23505     5 d0e2ad4807f0   0a35ff32512d   NO
+native-1                   native         1     738.7      740.2   23505     5 d0e2ad4807f0   0a35ff32512d   NO
+pyroid-1                   pyroid-steps   1     775.9      776.6   23505     5 d0e2ad4807f0   0a35ff32512d   NO
+stock-8                    stock          8     870.8     6759.0   23503    74 a844ec39ead3   12656e56fb88   NO
+stock-1                    stock          1    6975.8     6928.1   23501    85 419f358b5d21   86c5cc5dbacb   NO
+pyroid-8 vs native-8: {"only_in_reference": 3, "only_in_run": 3, "text_differs_after_minhash_filter": 6, "text_differs_after_pii": 6, "examples": {"only_in_reference": ["<urn:uuid:01a06cd5-f57d-760c-b635-f52170d92b5a>", "<urn:uuid:01a06ce8-5d29-738a-a9ed-9ae0976d7416>", "<urn:uuid:01a06cea-e2a9-7efb-bb58-840b006c0f8c>"], "only_in_run": ["<urn:uuid:01a06cb3-8897-724e-8b7a-b9be74727178>", "<urn:uuid:01a06cbe-6842-76e1-a5db-c751dc9fec93>", "<urn:uuid:01a06ce3-7b50-76dc-b01d-89e22b88e96a>"], "text_differs_after_minhash_filter": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"], "text_differs_after_pii": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"]}}
+  document counts differ from stage trafilatura on: trafilatura 164828 vs 164854, lid 58464 vs 58477, gopher_repetition 46591 vs 46596, gopher_quality 31432 vs 31435, c4_quality 28663 vs 28666, fineweb_quality 24796 vs 24797
+native-1 vs native-8: {"only_in_reference": 3, "only_in_run": 3, "text_differs_after_minhash_filter": 6, "text_differs_after_pii": 6, "examples": {"only_in_reference": ["<urn:uuid:01a06cd5-f57d-760c-b635-f52170d92b5a>", "<urn:uuid:01a06ce8-5d29-738a-a9ed-9ae0976d7416>", "<urn:uuid:01a06cea-e2a9-7efb-bb58-840b006c0f8c>"], "only_in_run": ["<urn:uuid:01a06cb3-8897-724e-8b7a-b9be74727178>", "<urn:uuid:01a06cbe-6842-76e1-a5db-c751dc9fec93>", "<urn:uuid:01a06ce3-7b50-76dc-b01d-89e22b88e96a>"], "text_differs_after_minhash_filter": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"], "text_differs_after_pii": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"]}}
+  document counts differ from stage trafilatura on: trafilatura 164828 vs 164854, lid 58464 vs 58477, gopher_repetition 46591 vs 46596, gopher_quality 31432 vs 31435, c4_quality 28663 vs 28666, fineweb_quality 24796 vs 24797
+pyroid-1 vs native-8: {"only_in_reference": 3, "only_in_run": 3, "text_differs_after_minhash_filter": 6, "text_differs_after_pii": 6, "examples": {"only_in_reference": ["<urn:uuid:01a06cd5-f57d-760c-b635-f52170d92b5a>", "<urn:uuid:01a06ce8-5d29-738a-a9ed-9ae0976d7416>", "<urn:uuid:01a06cea-e2a9-7efb-bb58-840b006c0f8c>"], "only_in_run": ["<urn:uuid:01a06cb3-8897-724e-8b7a-b9be74727178>", "<urn:uuid:01a06cbe-6842-76e1-a5db-c751dc9fec93>", "<urn:uuid:01a06ce3-7b50-76dc-b01d-89e22b88e96a>"], "text_differs_after_minhash_filter": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"], "text_differs_after_pii": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"]}}
+  document counts differ from stage trafilatura on: trafilatura 164828 vs 164854, lid 58464 vs 58477, gopher_repetition 46591 vs 46596, gopher_quality 31432 vs 31435, c4_quality 28663 vs 28666, fineweb_quality 24796 vs 24797
+stock-8 vs native-8: {"only_in_reference": 5, "only_in_run": 3, "text_differs_after_minhash_filter": 6, "text_differs_after_pii": 6, "examples": {"only_in_reference": ["<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>", "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>", "<urn:uuid:01a06cd5-f57d-760c-b635-f52170d92b5a>", "<urn:uuid:01a06ce8-5d29-738a-a9ed-9ae0976d7416>", "<urn:uuid:01a06cea-e2a9-7efb-bb58-840b006c0f8c>"], "only_in_run": ["<urn:uuid:01a06cb3-8897-724e-8b7a-b9be74727178>", "<urn:uuid:01a06cbe-6842-76e1-a5db-c751dc9fec93>", "<urn:uuid:01a06ce3-7b50-76dc-b01d-89e22b88e96a>"], "text_differs_after_minhash_filter": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"], "text_differs_after_pii": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"]}}
+  document counts differ from stage trafilatura on: trafilatura 164828 vs 164785, lid 58464 vs 58461, gopher_repetition 46591 vs 46587, gopher_quality 31432 vs 31430, c4_quality 28663 vs 28662, fineweb_quality 24796 vs 24794, minhash_filter 23505 vs 23503, pii 23505 vs 23503
+stock-1 vs native-8: {"only_in_reference": 7, "only_in_run": 3, "text_differs_after_minhash_filter": 6, "text_differs_after_pii": 6, "examples": {"only_in_reference": ["<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>", "<urn:uuid:01a06cc8-ea1e-7691-b164-d806160b3c86>", "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>", "<urn:uuid:01a06cd5-f57d-760c-b635-f52170d92b5a>", "<urn:uuid:01a06ce8-5d29-738a-a9ed-9ae0976d7416>"], "only_in_run": ["<urn:uuid:01a06cb3-8897-724e-8b7a-b9be74727178>", "<urn:uuid:01a06cbe-6842-76e1-a5db-c751dc9fec93>", "<urn:uuid:01a06ce3-7b50-76dc-b01d-89e22b88e96a>"], "text_differs_after_minhash_filter": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"], "text_differs_after_pii": ["<urn:uuid:01a06cbc-6e3b-7035-8d3a-6021ea90ffd0>", "<urn:uuid:01a06cc1-3baf-728e-a502-9fd158e481e4>", "<urn:uuid:01a06cc6-a169-7784-bafa-dee42797ff28>", "<urn:uuid:01a06ccb-036b-7795-8d59-05bbcd0803fb>", "<urn:uuid:01a06d01-2d70-7eb9-80b1-bba934771fa9>"]}}
+  document counts differ from stage trafilatura on: trafilatura 164828 vs 164774, lid 58464 vs 58454, gopher_repetition 46591 vs 46583, gopher_quality 31432 vs 31427, c4_quality 28663 vs 28660, fineweb_quality 24796 vs 24792, minhash_filter 23505 vs 23501, pii 23505 vs 23501
+note: stock-8, stock-1 lost pages to datatrove's Trafilatura timeout or a dead child process; compare them with `native --timeouts-of <stock run>` instead
+DIFFERENT
+[warc 19:04:32] stock-1 lost 85 pages to Trafilatura's timeout or a dead child: native-1x drops the same pages
+[warc 19:04:32] native-1x: native, 8 workers, CPUs 0-7, estimated 3 min
+phase:step                            seconds   share   docs out
+base:warc_reader                        155.9   20.4%     171595
+base:url_filter                          10.8    1.4%     170446
+base:trafilatura                        496.0   64.8%     164774
+base:lid_and_filters                     43.5    5.7%      24792
+base:writers                             51.8    6.8%          0
+dedup:reader                              0.7    0.1%      24792
+dedup:minhash                             1.0    0.1%      23501
+pii:pii                                   0.0    0.0%      23501
+pii:writer                                6.1    0.8%      23501
+wall 105.1 s (base 97.0, dedup 1.7, pii 6.2); cpu 770.2 s
+digest after_minhash_filter: 419f358b5d21213909b4e95fab96890c85beac1e62190ac1c13038a208ac9e0d (23501 docs)
+digest after_pii: 86c5cc5dbacb4036ce08acc373e5cfcee55ea7dd47031eef2a5e8efc10d66a94 (23501 docs)
+reference: stock-1
+run                        mode           w    wall s      cpu s   final  lost after_minhash_filter after_pii      same
+stock-1                    stock          1    6975.8     6928.1   23501    85 419f358b5d21   86c5cc5dbacb   yes
+native-1x                  native         8     105.1      770.2   23501    85 419f358b5d21   86c5cc5dbacb   yes
+identical
+[warc 19:06:18] === compare: ok (109 s)
+[warc 19:06:22] done
+[warc 19:07:25] start: branch feat/trafilatura, 8 WARC files of CC-MAIN-2026-39, CPUs 0-7, deadline 2026-11-09T20:59:59Z
+[warc 19:07:28] done
+[warc 19:08:13] start: branch feat/trafilatura, 8 WARC files of CC-MAIN-2026-39, CPUs 0-7, deadline 2026-11-09T20:59:59Z
+[warc 19:08:13] === native-8 (load 0.83 1.93 1.48; 88G free)
+[warc 19:08:16] native-8: native, 8 workers, CPUs 0-7, estimated 3 min
+phase:step                            seconds   share   docs out
+base:warc_reader                        160.0   19.9%     171595
+base:url_filter                          11.0    1.4%     170446
+base:trafilatura                        525.9   65.4%     164854
+base:lid_and_filters                     44.8    5.6%      24797
+base:writers                             53.8    6.7%          0
+dedup:reader                              0.7    0.1%      24797
+dedup:minhash                             1.0    0.1%      23505
+pii:pii                                   0.0    0.0%      23505
+pii:writer                                6.2    0.8%      23505
+wall 110.3 s (base 102.2, dedup 1.7, pii 6.3); cpu 808.3 s
+digest after_minhash_filter: d0e2ad4807f0aa7eb685e4d1f46d6f2bb0e6fcf48015734aa42c5bf148864d8a (23505 docs)
+digest after_pii: 0a35ff32512d26169cfb49c8f49edd2c81745c8731ca4dbec2abe802d6343bd5 (23505 docs)
+[warc 19:10:07] === native-8: ok (114 s)
+[warc 19:10:09] === compare-8 (load 5.82 3.58 2.14; 88G free)
+reference: stock-8
+run                        mode           w    wall s      cpu s   final  lost after_minhash_filter after_pii      same
+stock-8                    stock          8     870.8     6759.0   23503    74 a844ec39ead3   12656e56fb88   yes
+pyroid-8                   pyroid-steps   8     104.0      792.1   23505     5 d0e2ad4807f0   0a35ff32512d   NO
+native-8                   native         8     110.3      808.3   23505     5 d0e2ad4807f0   0a35ff32512d   NO
+pyroid-8 vs stock-8: {"only_in_reference": 0, "only_in_run": 2, "text_differs_after_minhash_filter": 0, "text_differs_after_pii": 0, "examples": {"only_in_reference": [], "only_in_run": ["<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>", "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>"], "text_differs_after_minhash_filter": [], "text_differs_after_pii": []}}
+  document counts differ from stage trafilatura on: trafilatura 164785 vs 164854, lid 58461 vs 58477, gopher_repetition 46587 vs 46596, gopher_quality 31430 vs 31435, c4_quality 28662 vs 28666, fineweb_quality 24794 vs 24797, minhash_filter 23503 vs 23505, pii 23503 vs 23505
+native-8 vs stock-8: {"only_in_reference": 0, "only_in_run": 2, "text_differs_after_minhash_filter": 0, "text_differs_after_pii": 0, "examples": {"only_in_reference": [], "only_in_run": ["<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>", "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>"], "text_differs_after_minhash_filter": [], "text_differs_after_pii": []}}
+  document counts differ from stage trafilatura on: trafilatura 164785 vs 164854, lid 58461 vs 58477, gopher_repetition 46587 vs 46596, gopher_quality 31430 vs 31435, c4_quality 28662 vs 28666, fineweb_quality 24794 vs 24797, minhash_filter 23503 vs 23505, pii 23503 vs 23505
+note: stock-8 lost pages to datatrove's Trafilatura timeout or a dead child process; compare them with `native --timeouts-of <stock run>` instead
+DIFFERENT
+[warc 19:10:12] stock-8 lost 74 pages to Trafilatura's timeout or a dead child: native-8x drops the same pages
+[warc 19:10:12] native-8x: native, 8 workers, CPUs 0-7, estimated 3 min
+phase:step                            seconds   share   docs out
+base:warc_reader                        161.7   20.4%     171595
+base:url_filter                          10.6    1.3%     170446
+base:trafilatura                        513.9   64.8%     164785
+base:lid_and_filters                     44.7    5.6%      24794
+base:writers                             53.6    6.8%          0
+dedup:reader                              0.7    0.1%      24794
+dedup:minhash                             1.0    0.1%      23503
+pii:pii                                   0.0    0.0%      23503
+pii:writer                                6.3    0.8%      23503
+wall 108.7 s (base 100.5, dedup 1.7, pii 6.3); cpu 797.0 s
+digest after_minhash_filter: a844ec39ead37cf5d2d21188a3a57cdbc54ba11fc36e22ec8a65f27dc8daee5b (23503 docs)
+digest after_pii: 12656e56fb880ccd51f2245c29273f4ab3b2497720ef1a7c147e57e8b04dc87b (23503 docs)
+reference: stock-8
+run                        mode           w    wall s      cpu s   final  lost after_minhash_filter after_pii      same
+stock-8                    stock          8     870.8     6759.0   23503    74 a844ec39ead3   12656e56fb88   yes
+native-8x                  native         8     108.7      797.0   23503    74 a844ec39ead3   12656e56fb88   yes
+identical
+[warc 19:12:01] === compare-8: ok (112 s)

@@ -1,0 +1,23 @@
+WARC/1.0
+WARC-Type: warcinfo
+WARC-Record-ID: <urn:uuid:e7faeb2168995149bf463476ae02c296>
+WARC-Date: 2026-01-01T00:00:00Z
+Content-Length: 4
+
+info
+
+WARC/1.0
+WARC-Type: resource
+WARC-Target-URI: urn:z
+
+all the rest
+
+WARC/1.0
+WARC-Type: resource
+WARC-Target-URI: urn:w
+WARC-Record-ID: <urn:uuid:409d8230013ecc0453c2f32144aa7894>
+WARC-Date: 2026-01-01T00:00:00Z
+Content-Length: 10
+
+never seen
+

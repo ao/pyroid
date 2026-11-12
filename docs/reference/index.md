@@ -1,0 +1,28 @@
+# API reference
+
+Generated from pyroid's type stubs (the `.pyi` files shipped in the wheel), which are also what
+your type checker and IDE read. The integrations have no stubs; their pages come from the Python
+source.
+
+| Module | Contents |
+|---|---|
+| [`pyroid`](pyroid.md) | `PyroidError`, `InputError`, `FallbackWarning`, `Column`, `patch`, `unpatch` |
+| [`pyroid.ftfy`](ftfy.md) | ftfy 6.3.1's API, plus `fix_text_batch` |
+| [`pyroid.fasttext`](fasttext.md) | `load_model`, `Model`, `ModelError`, `tokenize` |
+| [`pyroid.filters`](filters.md) | datatrove's Gopher, C4 and FineWeb filters, `apply`, PII, C4 bad words, symbol lines, `URLFilter`, `languages` |
+| [`pyroid.dedup`](dedup.md) | `minhash_dedup`, `MinHashDedup`, `sentence_dedup`, `SentenceDedup`, `exact_dedup`, `ExactDedup`, `minhash_signatures`, `simplify_text`, datatrove's config classes |
+| [`pyroid.translit`](translit.md) | `anyascii`, `unidecode`, `is_ascii`, `UnidecodeError` |
+| [`pyroid.metrics`](metrics.md) | `rouge_scorer`, `scoring`, `tokenizers`, `tokenize` (rouge-score's modules) and `sacrebleu` |
+| [`pyroid.json_repair`](json_repair.md) | `repair_json`, `loads`, `load`, `from_file`, `repair_json_batch`, `NestingError` |
+| [`pyroid.datasketch`](datasketch.md) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble` (datasketch's modules), `minhash_batch` |
+| [`pyroid.jieba`](jieba.md) | jieba 0.42.1's API: `cut`, `lcut`, `cut_for_search`, `tokenize`, `add_word`, `load_userdict`, `Tokenizer`, ... |
+| [`pyroid.trafilatura`](trafilatura.md) | `extract`, `bare_extraction`, `extract_with_metadata`, `extract_batch`, `Document`, `LRUCache`, `reset_caches`, the `compat=` modes 2.3.1 and 1.11.0 |
+| [`pyroid.nltk`](nltk.md) | NLTK 3.10.4's `sent_tokenize`, `word_tokenize`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer` |
+| [`pyroid.warc`](warc.md) | warcio 1.8.2's `ArchiveIterator`, `WARCIterator`, `ARCIterator`, `StatusAndHeaders`, `ArcWarcRecord`, `ArchiveLoadFailed`; datatrove's WARC loop: `iter_documents`, `iter_batches` |
+| [`pyroid.integrations`](integrations.md) | the datatrove steps (`WarcReader` included), the Hugging Face helpers, the FineWeb recipes, `patch` and friends |
+| [`pyroid.text`](text.md) | `normalize_whitespace`, `min_chars`: small examples of pyroid's conventions |
+
+Batch functions are listed with one signature per input kind (`str`, `list`, `tuple`, Arrow);
+their parameter tables give each parameter's types across all of them. The conventions they share are in
+[Inputs and outputs](../concepts/inputs.md), [Threads](../concepts/threads.md) and
+[Errors](../concepts/errors.md).

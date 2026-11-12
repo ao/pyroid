@@ -1,0 +1,10 @@
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <u1-01T00:00: 0Z
+Content-Length: 15
+
+NOTHTTP 200
+
+
+

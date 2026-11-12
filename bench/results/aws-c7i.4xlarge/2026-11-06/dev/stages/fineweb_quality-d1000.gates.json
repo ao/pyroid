@@ -1,0 +1,6 @@
+{
+ "datatrove 0.10.1 FineWebQualityFilter()": "{\"case\":\"fineweb_quality\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"datatrove fineweb_quality\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":994,\"seconds\":1.413}",
+ "pyroid.filters 1.0.0.dev0 apply([FineWebQuality]) direct": "{\"case\":\"fineweb_quality\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters direct\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":994,\"seconds\":0.075}",
+ "pyroid.filters 1.0.0.dev0 fineweb_quality": "{\"case\":\"fineweb_quality\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters fineweb_quality\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":994,\"seconds\":0.082}",
+ "pyroid.filters 1.0.0.dev0 fineweb_quality_reasons per doc": "{\"case\":\"fineweb_quality\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters fineweb_quality_reasons per doc\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":994,\"seconds\":0.085}"
+}

@@ -1,0 +1,241 @@
+{
+ "meta": {
+  "where": "Docker (OrbStack VM), indicative",
+  "machine": "aarch64",
+  "python": "3.12.16",
+  "nproc": 12,
+  "loadavg_start": [
+   1.04443359375,
+   1.3447265625,
+   2.41943359375
+  ],
+  "loadavg_end": [
+   1.06884765625,
+   1.1884765625,
+   2.08642578125
+  ],
+  "pyroid": "1.0.0rc1",
+  "docs": 10000,
+  "batch": 1000,
+  "threads": 1,
+  "hash_seed": "0"
+ },
+ "rows": [
+  {
+   "stage": "NonAlphaNumericFilter",
+   "nemo_s": 1.4691802929737605,
+   "pyroid_s": 0.018776688986690715,
+   "speedup": 78.24490750286934
+  },
+  {
+   "stage": "SymbolsToWordsFilter",
+   "nemo_s": 1.3949005810136441,
+   "pyroid_s": 0.05231956101488322,
+   "speedup": 26.661167524261913
+  },
+  {
+   "stage": "NumbersFilter",
+   "nemo_s": 0.20721124100964516,
+   "pyroid_s": 0.009018302982440218,
+   "speedup": 22.976744229275926
+  },
+  {
+   "stage": "UrlsFilter",
+   "nemo_s": 0.03997487999731675,
+   "pyroid_s": 0.009533385979011655,
+   "speedup": 4.193146074786434
+  },
+  {
+   "stage": "WhiteSpaceFilter",
+   "nemo_s": 1.430016288999468,
+   "pyroid_s": 0.011338762997183949,
+   "speedup": 126.11748648019378
+  },
+  {
+   "stage": "ParenthesesFilter",
+   "nemo_s": 0.186805967008695,
+   "pyroid_s": 0.009999386995332316,
+   "speedup": 18.681741900368042
+  },
+  {
+   "stage": "BoilerPlateStringFilter",
+   "nemo_s": 0.40955856000073254,
+   "pyroid_s": 0.04014858798473142,
+   "speedup": 10.201070088853147
+  },
+  {
+   "stage": "RepeatedLinesFilter",
+   "nemo_s": 0.0715431249991525,
+   "pyroid_s": 0.025968862988520414,
+   "speedup": 2.7549579290698354
+  },
+  {
+   "stage": "RepeatedParagraphsFilter",
+   "nemo_s": 0.07503650401486084,
+   "pyroid_s": 0.0250319879851304,
+   "speedup": 2.9976246416958303
+  },
+  {
+   "stage": "RepeatedLinesByCharFilter",
+   "nemo_s": 0.08793093499843962,
+   "pyroid_s": 0.026012613001512364,
+   "speedup": 3.380319193359289
+  },
+  {
+   "stage": "RepeatedParagraphsByCharFilter",
+   "nemo_s": 0.0740904190170113,
+   "pyroid_s": 0.018554896989371628,
+   "speedup": 3.9930385525422643
+  },
+  {
+   "stage": "WordCountFilter",
+   "nemo_s": 0.1957986030029133,
+   "pyroid_s": 0.01813385501736775,
+   "speedup": 10.797406443108024
+  },
+  {
+   "stage": "PunctuationFilter",
+   "nemo_s": 0.06807724499958567,
+   "pyroid_s": 0.019532814010744914,
+   "speedup": 3.4852758523240266
+  },
+  {
+   "stage": "WordsWithoutAlphabetsFilter",
+   "nemo_s": 2.3252368300163653,
+   "pyroid_s": 0.04418409301433712,
+   "speedup": 52.62610752837811
+  },
+  {
+   "stage": "CommonEnglishWordsFilter",
+   "nemo_s": 0.21597962599480525,
+   "pyroid_s": 0.010368887014919892,
+   "speedup": 20.829586211522034
+  },
+  {
+   "stage": "MeanWordLengthFilter",
+   "nemo_s": 0.3442517750081606,
+   "pyroid_s": 0.014579600014258176,
+   "speedup": 23.611880618912608
+  },
+  {
+   "stage": "LongWordFilter",
+   "nemo_s": 0.3424262320040725,
+   "pyroid_s": 0.039084420015569776,
+   "speedup": 8.761195173618098
+  },
+  {
+   "stage": "EllipsisFilter",
+   "nemo_s": 0.5335957449860871,
+   "pyroid_s": 0.0293127850163728,
+   "speedup": 18.203515793127284
+  },
+  {
+   "stage": "RepeatingTopNGramsFilter n=2",
+   "nemo_s": 3.103963820001809,
+   "pyroid_s": 0.22037950600497425,
+   "speedup": 14.0846300832154
+  },
+  {
+   "stage": "RepeatingTopNGramsFilter n=3",
+   "nemo_s": 3.4836785120132845,
+   "pyroid_s": 0.26571080900612287,
+   "speedup": 13.110789602590119
+  },
+  {
+   "stage": "RepeatingTopNGramsFilter n=4",
+   "nemo_s": 3.7554344109958038,
+   "pyroid_s": 0.3091700680088252,
+   "speedup": 12.146824028542781
+  },
+  {
+   "stage": "RepeatingDuplicateNGramsFilter n=5",
+   "nemo_s": 1.499743183987448,
+   "pyroid_s": 0.1245648610056378,
+   "speedup": 12.039857564000892
+  },
+  {
+   "stage": "RepeatingDuplicateNGramsFilter n=6",
+   "nemo_s": 1.5564998170011677,
+   "pyroid_s": 0.11831212701508775,
+   "speedup": 13.155877222988941
+  },
+  {
+   "stage": "RepeatingDuplicateNGramsFilter n=7",
+   "nemo_s": 1.61349224098376,
+   "pyroid_s": 0.11795729599543847,
+   "speedup": 13.678613326692021
+  },
+  {
+   "stage": "RepeatingDuplicateNGramsFilter n=8",
+   "nemo_s": 1.6726686999900267,
+   "pyroid_s": 0.1248230260098353,
+   "speedup": 13.40032166707952
+  },
+  {
+   "stage": "RepeatingDuplicateNGramsFilter n=9",
+   "nemo_s": 1.8572561419859994,
+   "pyroid_s": 0.11712013100623153,
+   "speedup": 15.85770205369034
+  },
+  {
+   "stage": "RepeatingDuplicateNGramsFilter n=10",
+   "nemo_s": 1.778199655993376,
+   "pyroid_s": 0.11667871600366198,
+   "speedup": 15.240137335223734
+  },
+  {
+   "stage": "BulletsFilter",
+   "nemo_s": 0.1735008069954347,
+   "pyroid_s": 0.014312626008177176,
+   "speedup": 12.122220401504878
+  },
+  {
+   "stage": "BoilerPlateStringModifier",
+   "nemo_s": 0.42551739400369115,
+   "pyroid_s": 0.1489868749922607,
+   "speedup": 2.8560730200280737
+  },
+  {
+   "stage": "MarkdownRemover",
+   "nemo_s": 0.3506842700007837,
+   "pyroid_s": 0.0160502880171407,
+   "speedup": 21.849095145599563
+  },
+  {
+   "stage": "NewlineNormalizer",
+   "nemo_s": 1.1635084559966344,
+   "pyroid_s": 0.02440784900682047,
+   "speedup": 47.669438452831564
+  },
+  {
+   "stage": "QuotationRemover",
+   "nemo_s": 0.04295954600092955,
+   "pyroid_s": 0.007471646007616073,
+   "speedup": 5.749676303874621
+  },
+  {
+   "stage": "UnicodeReformatter",
+   "nemo_s": 5.00667421601247,
+   "pyroid_s": 0.0439850430120714,
+   "speedup": 113.82674366462304
+  },
+  {
+   "stage": "UrlRemover",
+   "nemo_s": 0.7268590099993162,
+   "pyroid_s": 0.1130557680153288,
+   "speedup": 6.429207662370346
+  },
+  {
+   "stage": "FastTextLangId (lid.176.bin)",
+   "nemo_s": 2.061856196000008,
+   "pyroid_s": 1.4610337920021266,
+   "speedup": 1.4112310114159268
+  },
+  {
+   "stage": "heuristic_filter_english_pipeline",
+   "nemo_s": 31.41156592601328,
+   "pyroid_s": 1.8850170489749871,
+   "speedup": 16.66380998680829
+  }
+ ]
+}

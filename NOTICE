@@ -1,0 +1,884 @@
+pyroid
+Copyright (c) 2025 Andrew Odendaal
+pyroid is licensed under the MIT License (see LICENSE), except for the parts
+listed below.
+
+-------------------------------------------------------------------------------
+ftfy
+-------------------------------------------------------------------------------
+The ftfy port (crates/pyroid-core/src/ftfy/, crates/pyroid-py/src/ftfy.rs,
+python/pyroid/ftfy.py and python/pyroid/ftfy.pyi) is a derivative work of
+ftfy 6.3.1, https://github.com/rspeer/python-ftfy:
+
+    Copyright 2023 Robyn Speer
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+A copy of the Apache License 2.0 is in LICENSES/Apache-2.0.txt. Each ported
+file carries the header "Derived from ftfy 6.3.1 (Apache-2.0), © Robyn Speer;
+modified." The ftfy algorithms were rewritten in Rust; character tables were
+regenerated from ftfy's own data by generate_tables.py.
+
+crates/pyroid-core/tests/ftfy_data/test_cases.json is copied unmodified from
+ftfy 6.3.1 (tests/test_cases.json, Apache-2.0).
+
+-------------------------------------------------------------------------------
+Data derived from CPython and Unicode
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/ftfy/tables.rs and unicode_tables.rs also contain data
+extracted from CPython 3.11-3.15 (the html.entities HTML5 entity list, the
+single-byte codec tables, and the regex character classes \s, \w and \d of each
+CPython's Unicode database). CPython is distributed under the Python Software
+Foundation License; the Unicode Character Database is distributed under the
+Unicode License v3 (Unicode-3.0).
+
+-------------------------------------------------------------------------------
+fastText (pyroid.fasttext)
+-------------------------------------------------------------------------------
+pyroid.fasttext (crates/pyroid-core/src/fasttext/, crates/pyroid-py/src/fasttext.rs,
+python/pyroid/fasttext.py and python/pyroid/fasttext.pyi) is a derivative work of
+fastText, https://github.com/facebookresearch/fastText: its model format and
+inference code (args.cc, dictionary.cc, densematrix.cc, quantmatrix.cc,
+productquantizer.cc, loss.cc, model.cc and fasttext.cc) were translated to Rust.
+Each file in crates/pyroid-core/src/fasttext/ and crates/pyroid-py/src/fasttext.rs
+carries a header naming fastText and its licence.
+
+    MIT License
+
+    Copyright (c) 2016-present, Facebook, Inc.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+-------------------------------------------------------------------------------
+datatrove
+-------------------------------------------------------------------------------
+The quality-filter port (crates/pyroid-core/src/filters/,
+crates/pyroid-py/src/filters.rs, python/pyroid/filters.py and
+python/pyroid/filters.pyi) is a derivative work of datatrove 0.10.1,
+https://github.com/huggingface/datatrove (GopherQualityFilter,
+GopherRepetitionFilter, C4QualityFilter, FineWebQualityFilter and the text
+utilities they use):
+
+    Copyright 2023 HuggingFace
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+Each ported file carries the header "Derived from datatrove 0.10.1
+(Apache-2.0), © HuggingFace; modified." datatrove's punctuation tables were
+extracted from datatrove itself by crates/pyroid-core/src/filters/generate_tables.py.
+
+The MinHash deduplication port (crates/pyroid-core/src/dedup/,
+crates/pyroid-core/tests/dedup_data/, crates/pyroid-py/src/dedup.rs,
+python/pyroid/dedup.py and python/pyroid/dedup.pyi) is a derivative work of
+datatrove 0.10.1 (MinhashDedupSignature, MinhashDedupBuckets,
+MinhashDedupCluster, MinhashDedupFilter and simplify_text), under the same
+Apache-2.0 licence. Each ported file carries the header "Derived from
+datatrove 0.10.1 (Apache-2.0), © HuggingFace Inc.; modified." The permutation
+parameters reproduce numpy's legacy RandomState (MT19937 and masked bounded
+integers; numpy is BSD-3-Clause); no numpy code is included.
+
+The further datatrove steps (crates/pyroid-core/src/filters/pii.rs,
+badwords.rs, url.rs, symbol_lines.rs, crates/pyroid-core/src/dedup/sentence.rs,
+their sections of crates/pyroid-py/src/filters.rs and dedup.rs, of
+python/pyroid/filters.py[i] and dedup.py[i], and
+python/pyroid/integrations/datatrove.py) are derivative works of datatrove
+0.10.1 (PIIFormatter, C4BadWordsFilter, URLFilter, SymbolLinesFormatter,
+SentenceDedupSignature, SentenceFindDedups, SentenceDedupFilter and
+SentenceDedupBuildIndex), under the same Apache-2.0 licence, with the same
+file headers.
+
+pyroid ships none of the word lists or blocklists these steps use: the LDNOOBW
+"List of Dirty, Naughty, Obscene, and Otherwise Bad Words" (CC BY 4.0,
+https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words)
+is downloaded at run time from the commits datatrove pins, and URLFilter's
+lists are read from the user or from an installed datatrove.
+
+-------------------------------------------------------------------------------
+numpy (C4BadWordsFilter's random draws)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/filters/badwords.rs reimplements numpy's
+SeedSequence and PCG64 bit generator and Generator.uniform()
+(numpy/random/bit_generator.pyx, _pcg64.pyx, src/pcg64/pcg64.h), so that
+keep_fraction draws match numpy.random.default_rng(seed) bit for bit. PCG64
+is Melissa O'Neill's PCG family (https://www.pcg-random.org). numpy:
+
+    Copyright (c) 2005-2025, NumPy Developers.
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
+
+        * Redistributions of source code must retain the above copyright
+           notice, this list of conditions and the following disclaimer.
+
+        * Redistributions in binary form must reproduce the above
+           copyright notice, this list of conditions and the following
+           disclaimer in the documentation and/or other materials provided
+           with the distribution.
+
+        * Neither the name of the NumPy Developers nor the names of any
+           contributors may be used to endorse or promote products derived
+           from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-------------------------------------------------------------------------------
+tldextract and CPython's ipaddress (URLFilter)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/filters/url.rs ports tldextract 5.4.0's extract_str
+(lenient_netloc, the Public Suffix List trie lookup with wildcard and
+exception rules), https://github.com/john-kurkowski/tldextract; the suffix
+lists themselves come from the user's tldextract at run time. Its IPv6 test
+ports CPython 3.13's ipaddress.IPv6Address parser (Python Software Foundation
+License). tldextract:
+
+    Copyright (c) 2013-2026, John Kurkowski
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, this
+       list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright notice,
+       this list of conditions and the following disclaimer in the documentation
+       and/or other materials provided with the distribution.
+
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+    FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+    CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+    OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-------------------------------------------------------------------------------
+spaCy
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/filters/tokenizer.rs, regex.rs and tables.rs port the
+English tokenizer and sentencizer of spaCy 3.8.18, https://github.com/explosion/spaCy.
+tables.rs holds spaCy's tokenizer rules (prefix, suffix, infix and URL
+patterns, tokenizer exceptions, sentencizer punctuation), extracted from spaCy
+by generate_tables.py. spaCy's URL pattern credits https://mathiasbynens.be/demo/url-regex
+and https://gist.github.com/dperini/729294 (Diego Perini, MIT License).
+
+    The MIT License (MIT)
+
+    Copyright (C) 2016-2024 ExplosionAI GmbH, 2016 spaCy GmbH, 2015 Matthew Honnibal
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
+crates/pyroid-core/src/filters/unicode_tables.rs contains the str.isalpha(),
+unicodedata.category() "P*" and re \w / \d sets of CPython 3.11-3.15's Unicode
+databases (see "Data derived from CPython and Unicode" above).
+
+-------------------------------------------------------------------------------
+indic-nlp-library and urduhack (IndicNLPTokenizer)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/filters/indic.rs and indic_tables.rs port datatrove's
+IndicNLPTokenizer, that is indic-nlp-library 0.92,
+https://github.com/anoopkunchukuttan/indic_nlp_library (trivial_tokenize,
+sentence_split with is_acronym_abbvr's non-breaking phrases, langinfo's script
+ranges and danda languages, and the Sinhala-to-Devanagari map), and, for Urdu
+sentences, urduhack 1.0.3, https://github.com/urduhack/urduhack (the rule-based
+splitter of tokenization/eos.py and its two word lists), which
+indic-nlp-library calls for "ur". indic_tables.rs is generated from the two
+libraries themselves by crates/pyroid-core/src/filters/generate_indic_tables.py;
+it also holds the str.isnumeric() sets of CPython 3.11-3.15's Unicode databases
+and the \p{Lu} and WhitespaceTokenizer sentence-pattern classes as the regex
+module matches them (see "Data derived from CPython and Unicode" above). The
+differential tests (crates/pyroid-core/tests/filters_indic.rs,
+filters_data/indic/record.py, and the IndicNLP fuzzer and word lists of
+filters_data/oracle.py) derive from the same releases;
+filters_data/indic/golden.jsonl and filters_data/multilingual/golden-indic-*.jsonl
+record what these libraries return on pyroid's own test texts.
+
+Each of these files but the .jsonl recordings carries a header naming
+indic-nlp-library 0.92 (MIT), © Anoop Kunchukuttan, and urduhack 1.0.3 (MIT),
+© Urdu Hack, alongside datatrove 0.10.1 (Apache-2.0), © HuggingFace (see
+above), e.g. indic.rs's "Derived from indic-nlp-library 0.92 (MIT), © Anoop
+Kunchukuttan, urduhack 1.0.3 (MIT), © Urdu Hack, and datatrove 0.10.1
+(Apache-2.0), © HuggingFace; modified."
+
+indic-nlp-library:
+
+    MIT License
+
+    Copyright (c) 2013-present Anoop Kunchukuttan
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
+urduhack:
+
+    MIT License
+
+    Copyright (c) 2018 Urdu Hack
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+-------------------------------------------------------------------------------
+anyascii
+-------------------------------------------------------------------------------
+pyroid.translit (crates/pyroid-core/src/translit/, crates/pyroid-py/src/translit.rs,
+python/pyroid/translit.py and python/pyroid/translit.pyi) transliterates with
+the anyascii 0.3.3 data, https://github.com/anyascii/anyascii, through the
+any_ascii crate 0.3.3 (statically linked into the extension module).
+crates/pyroid-core/src/translit/tables.rs is generated from anyascii's
+table.tsv (tag 0.3.3) by generate_tables.py:
+
+    Copyright (c) 2020-2025, Hunter WB <hunterwb.com>
+
+    Permission to use, copy, modify, and/or distribute this software for any
+    purpose with or without fee is hereby granted, provided that the above
+    copyright notice and this permission notice appear in all copies.
+
+The full ISC License text is in LICENSES/ISC-anyascii.txt. pyroid.translit
+contains no code or data from Unidecode (GPL); Unidecode's name and the
+behaviour of its errors= parameter are only matched at the API level.
+
+-------------------------------------------------------------------------------
+rouge-score and NLTK (pyroid.metrics ROUGE)
+-------------------------------------------------------------------------------
+The ROUGE port (crates/pyroid-core/src/metrics/rouge/, crates/pyroid-py/src/metrics/rouge.rs,
+python/pyroid/metrics/rouge_scorer.py, scoring.py, tokenizers.py, tokenize.py
+and their .pyi stubs, crates/pyroid-core/tests/metrics_rouge.rs and
+crates/pyroid-core/tests/metrics_data/rouge_*) is a derivative work of
+rouge-score 0.1.2,
+https://github.com/google-research/google-research/tree/master/rouge:
+
+    Copyright 2022 The rouge_score Authors.
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+Each ported file carries the header "Derived from rouge-score 0.1.2
+(Apache-2.0), © The rouge_score Authors; modified." scoring.BootstrapAggregator is ported
+verbatim (it calls numpy, which is not bundled).
+
+The Porter stemmer (crates/pyroid-core/src/metrics/rouge/porter.rs) is a port of
+nltk/stem/porter.py from NLTK 3.10.4, https://www.nltk.org, in its default
+NLTK_EXTENSIONS mode, the stemmer rouge-score uses:
+
+    Copyright (C) 2001-2026 NLTK Project
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+The algorithm is Martin Porter's, "An algorithm for suffix stripping",
+Program 14.3 (1980): 130-137.
+
+-------------------------------------------------------------------------------
+NLTK tokenizers (pyroid.nltk)
+-------------------------------------------------------------------------------
+The tokenizer port (crates/pyroid-core/src/nltk/, crates/pyroid-py/src/nltk.rs,
+python/pyroid/nltk/ and its .pyi stub) is a derivative work of NLTK 3.10.4,
+https://www.nltk.org (sdist sha256
+44679f4e9220abfd496d2c8cdb22f8425ccbe557604f9aa5cacb1c44003dabc1): the Punkt
+sentence tokenizer (nltk/tokenize/punkt.py, nltk/tabdata.py), the Treebank
+tokenizers and detokenizer (nltk/tokenize/treebank.py, destructive.py,
+util.py), sent_tokenize and word_tokenize (nltk/tokenize/__init__.py) and the
+model search path (nltk/data.py):
+
+    Copyright (C) 2001-2026 NLTK Project
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+Each ported file carries the header "Derived from NLTK 3.10.4 (Apache-2.0),
+© 2001-2026 NLTK Project; modified." The Punkt algorithm is Kiss, Tibor and
+Strunk, Jan (2006): Unsupervised Multilingual Sentence Boundary Detection.
+Computational Linguistics 32: 485-525. The Treebank rules follow Robert
+MacIntyre's tokenizer.sed for the Penn Treebank.
+
+crates/pyroid-core/src/nltk/tables.rs is generated by generate_tables.py from
+the character classes of the regex module 2026.9.29 (Apache-2.0 / CNRI-Python;
+its Unicode Character Database data is under the Unicode License v3) and from
+CPython's str methods; it holds code point ranges only.
+
+The pretrained Punkt models (nltk_data's punkt_tab) are not included: their
+licence is unstated (nltk_data's DATASET-LICENSES.md lists them as having no
+licence attribute). pyroid reads the copy the user installs. The test
+recordings under crates/pyroid-core/src/nltk/testdata/ are outputs of NLTK on
+public text (FineWeb, ODC-By 1.0) and on parameters NLTK's PunktTrainer learned
+from that text; they contain no part of the punkt_tab models.
+
+-------------------------------------------------------------------------------
+warcio (pyroid.warc)
+-------------------------------------------------------------------------------
+The WARC reader (crates/pyroid-core/src/warc/: archive.rs, buffered.rs,
+digest.rs, headers.rs, record.rs, stream.rs and mod.rs; crates/pyroid-py/src/warc.rs;
+python/pyroid/warc/__init__.py, _records.py and __init__.pyi) is a derivative
+work of warcio 1.8.2, https://github.com/webrecorder/warcio: archiveiterator.py,
+recordloader.py (ArcWarcRecord, ArcWarcRecordLoader and the ARC header
+parsers), bufferedreaders.py, limitreader.py, digestverifyingreader.py,
+statusandheaders.py, exceptions.py, timeutils.timestamp_to_iso_date and the
+parts of utils.py they use:
+
+    Warcio
+    Copyright 2017-2020 Webrecorder Software LLC, Rhizome, and Contributors.
+    Authored by Ilya Kreymer
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+Each ported file carries a header naming warcio 1.8.2 (Apache-2.0) and the
+files it ports. pyroid.integrations._patch.patch("warcio") subclasses warcio's
+own classes at run time; no warcio code is included for it.
+
+crates/pyroid-core/src/warc/fast.rs and pyroid.warc.iter_documents follow
+datatrove 0.10.1's WarcReader.read_file and process_record
+(src/datatrove/pipeline/readers/warc.py, Apache-2.0, © HuggingFace Inc.), as
+does pyroid.integrations.datatrove.WarcReader.
+
+crates/pyroid-core/src/warc/gzipfile.rs, zlib.rs and pystr.rs reproduce the
+read path of CPython 3.11-3.15's gzip.GzipFile and io.BufferedReader, the zlib
+module's decompressobj and error messages, and the str, bytes and int
+behaviour warcio relies on; digest.rs reproduces the parts of base64 and
+binascii it uses. CPython is distributed under the Python Software Foundation
+License (PSF-2.0). crates/pyroid-core/src/warc/tables.rs is generated from
+CPython's unicodedata (Unicode License v3). crates/pyroid-core/src/warc/brotli.rs
+reproduces the behaviour of brotlicffi 1.2.1.0's Decompressor
+(https://github.com/python-hyper/brotlicffi, MIT) over the brotli-decompressor
+crate; no brotlicffi code is included.
+
+-------------------------------------------------------------------------------
+sacrebleu (pyroid.metrics BLEU and chrF)
+-------------------------------------------------------------------------------
+The BLEU and chrF port (crates/pyroid-core/src/metrics/sacrebleu/,
+crates/pyroid-py/src/metrics/sacrebleu.rs, python/pyroid/metrics/sacrebleu.py
+and sacrebleu.pyi) is a derivative work of sacrebleu 2.6.0,
+https://github.com/mjpost/sacrebleu:
+
+    Copyright 2017--2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+Each ported file carries the header "Derived from sacrebleu 2.6.0
+(Apache-2.0), © Amazon.com, Inc. or its affiliates; modified." The
+Unicode property tables of the `intl` tokenizer were generated from the regex
+module (Apache-2.0 / CNRI-Python; its Unicode Character Database data is under
+the Unicode License v3) by crates/pyroid-core/src/metrics/sacrebleu/generate_tables.py.
+
+The `zh` tokenizer's Chinese character ranges (in
+crates/pyroid-core/src/metrics/sacrebleu/tables.rs) come from sacrebleu's
+tokenizers/tokenizer_zh.py, which carries this notice:
+
+    MIT License
+    Copyright (c) 2017 - Shujian Huang <huangsj@nju.edu.cn>
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+-------------------------------------------------------------------------------
+json_repair
+-------------------------------------------------------------------------------
+pyroid.json_repair (crates/pyroid-core/src/json_repair/,
+crates/pyroid-py/src/json_repair.rs, python/pyroid/json_repair.py and
+python/pyroid/json_repair.pyi) is a derivative work of json_repair 0.64.5,
+https://github.com/mangiucugna/json_repair: its parser (json_parser.py,
+parse_*.py, parser_parenthesized.py and parse_string_helpers/) was ported line
+by line to Rust. Each ported file carries the header "Derived from json_repair
+0.64.5 (MIT), © Stefano Baccianella; modified." The test suite vendored under
+parity/data/json_repair-0.64.5/ is copied from the same release.
+
+    MIT License
+
+    Copyright (c) 2023 Stefano Baccianella
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
+crates/pyroid-core/src/json_repair/pyjson.rs and dumps.rs reproduce the
+behaviour of CPython's json module (json.loads and json.dumps; no CPython code
+is included), and json_repair/tables.rs holds the str.isspace(), isalpha(),
+isdigit() and isalnum() sets of CPython 3.11-3.15's Unicode databases (see
+"Data derived from CPython and Unicode" above).
+
+-------------------------------------------------------------------------------
+datasketch
+-------------------------------------------------------------------------------
+pyroid.datasketch (crates/pyroid-core/src/datasketch/,
+crates/pyroid-py/src/datasketch.rs and crates/pyroid-py/src/datasketch/,
+python/pyroid/datasketch/) is a derivative work of datasketch 2.0.0,
+https://github.com/ekzhu/datasketch: its Python classes start from datasketch's
+own source, and its MinHash, LSH and LSH Forest algorithms were ported to Rust.
+Each derived file carries the header "Derived from datasketch 2.0.0 (MIT),
+© 2015 ekzhu; modified." The tests ported from datasketch's test suite
+(python/tests/test_datasketch_upstream_*.py) say so in their header.
+crates/pyroid-core/src/datasketch/params.rs ports datasketch's (b, r) searches;
+crates/pyroid-core/tests/datasketch_data/ holds values recorded from datasketch
+(see "scipy" below). The
+permutation parameters reproduce numpy's legacy RandomState (MT19937 and masked
+bounded integers; numpy is BSD-3-Clause); no numpy code is included.
+
+    The MIT License (MIT)
+
+    Copyright (c) 2015 ekzhu
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
+-------------------------------------------------------------------------------
+scipy
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/datasketch/quad.rs is a port of scipy 1.18.1's C
+translation of QUADPACK (scipy/integrate/__quadpack.c: dqagse, dqk21, dqpsrt,
+dqelg) and of the finite-limit path of scipy.integrate.quad
+(scipy/integrate/_quadpack_py.py), https://github.com/scipy/scipy. It carries
+the header "Derived from scipy 1.18.1 (BSD-3-Clause), © 2024 SciPy developers;
+modified." crates/pyroid-core/tests/datasketch_data/params.json holds values
+recorded from scipy and datasketch. scipy's LICENSE.txt reads "Copyright (c)
+2001-2002 Enthought, Inc. 2003, SciPy Developers."; __quadpack.c carries:
+
+    Copyright (C) 2024 SciPy developers
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    a. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+    b. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+    c. Names of the SciPy Developers may not be used to endorse or promote
+       products derived from this software without specific prior written
+       permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS
+    BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+    THE POSSIBILITY OF SUCH DAMAGE.
+
+QUADPACK itself is by R. Piessens, E. de Doncker-Kapenga, C. Ueberhuber and
+D. Kahaner (1983), distributed through netlib without a licence.
+
+-------------------------------------------------------------------------------
+jieba (pyroid.jieba and the Chinese word tokenizer)
+-------------------------------------------------------------------------------
+pyroid.jieba (crates/pyroid-core/src/jieba/, crates/pyroid-py/src/jieba.rs and
+python/pyroid/jieba/) is a derivative work of jieba 0.42.1,
+https://github.com/fxsjy/jieba: its segmentation (jieba/__init__.py and
+jieba/finalseg/) was rewritten in Rust, and its Python API in python/pyroid/jieba/.
+Each ported file carries the header "Derived from jieba 0.42.1 (MIT), © 2013 Sun
+Junyi; modified."
+
+The bundled data comes from the same release (PyPI sdist jieba-0.42.1.tar.gz,
+sha256 055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2), whose
+MIT license below covers the dictionary as well:
+
+- crates/pyroid-core/src/jieba/data/dict.trie is jieba's default dictionary
+  (jieba/dict.txt, 349,046 lines, sha256
+  7197c3211ddd98962b036cdf40324d1ea2bfaa12bd028e68faa70111a88e12a8), stored as a
+  serialized character trie of its words and their prefixes with each word's
+  frequency (the part-of-speech column is not kept). It is written by the
+  regenerate test in crates/pyroid-core/src/jieba/tests.rs.
+- crates/pyroid-core/src/jieba/data/hmm.bin holds the probabilities of
+  jieba/finalseg/prob_start.py, prob_trans.py and prob_emit.py, bit for bit,
+  written by crates/pyroid-core/src/jieba/generate.py.
+
+crates/pyroid-core/src/jieba/zh.rs also follows spaCy 3.8.18's ChineseTokenizer
+and util.get_words_and_spaces (MIT) and datatrove 0.10.1's SpaCyTokenizer
+(Apache-2.0), both described above.
+
+    The MIT License (MIT)
+
+    Copyright (c) 2013 Sun Junyi
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of
+    this software and associated documentation files (the "Software"), to deal in
+    the Software without restriction, including without limitation the rights to
+    use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+    the Software, and to permit persons to whom the Software is furnished to do so,
+    subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+    FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+    COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+-------------------------------------------------------------------------------
+SudachiPy / sudachi.rs (the Japanese word tokenizer)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/sudachi/ (except ja.rs and replay.rs) is a
+derivative work of SudachiPy 0.7.0, https://github.com/WorksApplications/sudachi.rs
+(© 2021-2026 Works Applications Co., Ltd., Apache License 2.0, a copy of which
+is in LICENSES/Apache-2.0.txt): the dictionary reader, the input-text, OOV and
+path-rewrite plugins of its default configuration, the lattice and the A-unit
+split of sudachi.rs were rewritten in Rust. Each ported file carries the header
+"Derived from sudachi.rs 0.7.0 (Apache-2.0), © Works Applications Co., Ltd.;
+modified."
+
+crates/pyroid-core/src/sudachi/resources/char.def, unk.def and rewrite.def are
+copied unmodified from the same release (PyPI sdist sudachipy-0.7.0.tar.gz,
+sha256 14a2505e7d086fe9da64c0048d8e2de13cdded3aac4f1e047929cef51dba338c,
+resources/), under the same licence.
+
+pyroid does not ship a Sudachi dictionary. It reads the SudachiDict system
+dictionary the user installs (sudachidict-core, Apache License 2.0,
+https://github.com/WorksApplications/SudachiDict). The test recordings in
+crates/pyroid-core/src/sudachi/testdata/ hold SudachiPy's output with
+sudachidict-core 20261015 (word and POS ids), and tags.json its POS table (1,558
+part-of-speech names); no lexicon, connection matrix or other dictionary file
+is included.
+
+crates/pyroid-core/src/sudachi/ja.rs also follows datatrove 0.10.1's
+SpaCyTokenizer and datatrove.utils.japanese_tokenizer (Apache-2.0) and spaCy
+3.8.18's Japanese tokenizer and sentencizer (MIT), both described above.
+
+-------------------------------------------------------------------------------
+Trafilatura (pyroid.trafilatura)
+-------------------------------------------------------------------------------
+The extraction port (crates/pyroid-core/src/trafilatura/, crates/pyroid-core/tests/trafilatura_*,
+crates/pyroid-py/src/trafilatura.rs, python/pyroid/trafilatura.py, python/pyroid/trafilatura.pyi
+and the Trafilatura step in python/pyroid/integrations/datatrove.py) is a derivative work of
+Trafilatura 2.3.1 and 1.11.0, https://github.com/adbar/trafilatura (the 1.11.0 mode is in
+crates/pyroid-core/src/trafilatura/v1_11/). python/pyroid/trafilatura.py embeds both releases'
+settings.cfg unmodified:
+
+    Copyright Adrien Barbaresi and contributors
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+Trafilatura's readability_lxml.py, which the port follows, is itself a fork of
+readability-lxml (https://github.com/buriy/python-readability, Apache-2.0),
+a Python port of arc90's Readability. Each ported file carries a header such as
+"Derived from trafilatura 2.3.1 (Apache-2.0), © Adrien Barbaresi; modified."
+
+The paragraph classifier (crates/pyroid-core/src/trafilatura/justext.rs) ports
+jusText 3.0.2, https://github.com/miso-belica/jusText, and embeds the merged
+jusText stoplists that Trafilatura uses (crates/pyroid-core/src/trafilatura/stoplist.txt,
+generated by generate_tables.py from jusText 3.0.2's 100 stoplists):
+
+    Copyright (c) 2011, Jan Pomikalek
+    Copyright (c) 2013, Michal Belica
+
+    BSD 2-Clause License (see LICENSES/BSD-2-Clause-justext.txt).
+
+-------------------------------------------------------------------------------
+libxml2 and lxml (pyroid's HTML parser)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/html/ (and crates/pyroid-core/tests/html_*) is a Rust port of the HTML parser of libxml2 2.14.6
+(HTMLparser.c and the parts of SAX2.c, parserInternals.c, entities.c and
+html5ent.inc it uses), https://gitlab.gnome.org/GNOME/libxml2:
+
+    Copyright (C) 1998-2012 Daniel Veillard.  All Rights Reserved.
+    Copyright (C) The Libxml2 Contributors.
+
+    MIT License (see LICENSES/MIT-libxml2.txt).
+
+It also reproduces how lxml 6.1.3 drives that parser (lxml.html.fromstring and
+the HTMLParser options), https://lxml.de:
+
+    Copyright (c) 2004 Infrae. All rights reserved.
+
+    BSD 3-Clause License (see LICENSES/BSD-3-Clause-lxml.txt).
+
+No libxml2 or lxml code is linked into pyroid; both are ports.
+
+-------------------------------------------------------------------------------
+NeMo Curator (pyroid.nemo, pyroid.integrations.nemo_curator)
+-------------------------------------------------------------------------------
+The NeMo Curator port (crates/pyroid-core/src/nemo/, crates/pyroid-py/src/nemo.rs,
+crates/pyroid-py/src/nemo_modifiers.rs, python/pyroid/nemo.py, python/pyroid/nemo.pyi
+and python/pyroid/integrations/nemo_curator.py) is a derivative work of NeMo Curator
+1.4.0, https://github.com/NVIDIA-NeMo/Curator: its heuristic document filters, its
+fastText filters, its Unicode and string modifiers, and its ScoreFilter, Score,
+Filter and Modify stages (nemo_curator/stages/text/). The policy strings, ellipsis
+marks, bullet characters and character classes of
+nemo_curator/stages/text/utils/constants.py are reproduced in the Rust code.
+python/tests/_nemo_reference.py and python/tests/test_nemo_modifiers.py copy NeMo
+Curator's score_document and modify_document code as the tests' reference.
+
+    Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
+
+    Licensed under the Apache License, Version 2.0 (see LICENSES/Apache-2.0.txt).
+
+Each ported file carries the header "Derived from NeMo Curator 1.4.0 (Apache-2.0),
+© NVIDIA CORPORATION; modified." The Alphabetic table behind
+NeMo's regex.compile("[[:alpha:]]") was generated from the regex module
+(Apache-2.0 / CNRI-Python; its Unicode Character Database data is under the
+Unicode License v3) by a generate_tables.py script in crates/pyroid-core/src/nemo/.
+
+-------------------------------------------------------------------------------
+CRFsuite and python-crfsuite (the CRF tagger behind Vietnamese and Thai)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/crfsuite/ is a derivative work of CRFsuite 0.12.2,
+http://www.chokkan.org/software/crfsuite/, as bundled with python-crfsuite
+0.9.12, https://github.com/scrapinghub/python-crfsuite (PyPI sdist
+python_crfsuite-0.9.12.tar.gz, sha256
+db37fccc3bd8f0c49c28a7697ca79c89d67b3fd5bf119122866169240ac4c480): the reader
+of its crf1d model files and CQDB string databases, the state and transition
+scores and the Viterbi decoder were rewritten in Rust, and python-crfsuite's
+conversion of Python features to attributes is followed. The file carries the
+header "Derived from CRFsuite 0.12.2 (BSD-3-Clause), © 2007-2010 Naoaki Okazaki,
+and python-crfsuite 0.9.12 (MIT), © 2014-2017 ScrapingHub Inc. and
+contributors; modified."
+
+    The BSD license.
+
+    Copyright (c) 2007-2010, Naoaki Okazaki
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+        * Redistributions of source code must retain the above copyright
+          notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright
+          notice, this list of conditions and the following disclaimer in the
+          documentation and/or other materials provided with the distribution.
+        * Neither the names of the authors nor the names of its contributors
+          may be used to endorse or promote products derived from this
+          software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+    OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    MIT License
+
+    Copyright (c) 2014-2017 ScrapingHub Inc. and contributors.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+-------------------------------------------------------------------------------
+pyvi (the Vietnamese word tokenizer)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/pyvi/ is a derivative work of pyvi 0.1.1,
+https://github.com/trungtv/pyvi: the syllable pattern, the CRF features of
+pyvi/ViTokenizer.py and the way spaCy 3.8.18's VietnameseTokenizer (MIT,
+described above) runs them were rewritten in Rust. Each ported file carries the
+header "Derived from pyvi 0.1.1 (MIT), © 2016 Viet-Trung Tran, ...; modified."
+
+The bundled data comes from the same release (PyPI wheel
+pyvi-0.1.1-py2.py3-none-any.whl, sha256
+e5e9e0e40ea1a556af12646c6b754f065342c86f1dfe84785ba926e1190c0bb7), whose MIT
+license below covers its models:
+
+- crates/pyroid-core/src/pyvi/data/pyvi3.crfsuite is the CRFsuite model file
+  stored in pyvi/models/pyvi3.pkl (sha256
+  6cdd73aee04b6a4ad7320ca85d27d931a7ef870cfdd41beb148e86bdb8aca134), byte for
+  byte (sha256 4716a0e60bbb16135917cce8440351f9790309879dd8f069c773070da9a3e0c1).
+- crates/pyroid-core/src/pyvi/data/words.txt is pyvi/models/words.txt,
+  unmodified (sha256
+  517743d27e71d43343e4b8e9e89015cdc68d84ebe1d48106449e501d918ece4a).
+
+Both are written by crates/pyroid-core/src/pyvi/generate.py.
+
+    The MIT License (MIT)
+    Copyright (c) 2016 Viet-Trung Tran
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of
+    this software and associated documentation files (the "Software"), to deal in
+    the Software without restriction, including without limitation the rights to
+    use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+    the Software, and to permit persons to whom the Software is furnished to do so,
+    subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+    FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+    COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+-------------------------------------------------------------------------------
+PyThaiNLP (the Thai word tokenizer)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/pythainlp/ (except replay.rs) is a derivative work of
+PyThaiNLP 5.4.0, https://github.com/PyThaiNLP/pythainlp (© 2016-2026 PyThaiNLP
+Project, Apache License 2.0, a copy of which is in LICENSES/Apache-2.0.txt):
+newmm with its safe mode and Thai character clusters (pythainlp/tokenize/
+newmm.py, tcc_p.py), the dictionary trie (pythainlp/util/trie.py), the
+post-processing of word_tokenize (pythainlp/tokenize/_utils.py) and crfcut's
+features and sentence rules (pythainlp/tokenize/crfcut.py) were rewritten in
+Rust. Each ported file carries the header "Derived from PyThaiNLP 5.4.0
+(Apache-2.0), © 2016-2026 PyThaiNLP Project, ...; modified."
+
+pyroid does not ship PyThaiNLP's word list or sentence model. It reads
+corpus/words_th.txt (CC0-1.0) and corpus/sentenceseg_crfcut.model (CC-BY-4.0)
+from the PyThaiNLP the user installs. The test recordings in
+crates/pyroid-core/src/pythainlp/testdata/ hold PyThaiNLP's and datatrove's
+output on test texts; neither file is included.
+
+crates/pyroid-core/src/pythainlp/th.rs also follows datatrove 0.10.1's
+ThaiTokenizer (Apache-2.0), described above.
+
+Rust crates in the extension module
+-------------------------------------------------------------------------------
+The extension module (pyroid._pyroid) is built from the Rust crates listed in
+LICENSES/THIRD-PARTY-RUST.txt, each under the licence given there; the file
+reproduces the copyright and licence text each crate ships. It is generated
+from Cargo.lock by cargo-about (about.toml).

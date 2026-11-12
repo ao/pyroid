@@ -1,0 +1,16 @@
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+binary: rustc
+commit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67
+commit-date: 2026-10-13
+host: x86_64-unknown-linux-gnu
+release: 1.99.1
+LLVM version: 23.1.1
+cargo 1.99.1 (5f94df478 2026-08-27)
+uv 0.13.7 (x86_64-unknown-linux-gnu)
+maturin 1.16.0
+gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-5)
+ldd (GNU libc) 2.34
+cpython-3.15.2-linux-x86_64-gnu                 /opt/pyroid/python/cpython-3.15-linux-x86_64-gnu/bin/python3.15
+cpython-3.15.2+freethreaded-linux-x86_64-gnu    /opt/pyroid/python/cpython-3.15+freethreaded-linux-x86_64-gnu/bin/python3.15t
+cpython-3.13.18-linux-x86_64-gnu                /opt/pyroid/python/cpython-3.13-linux-x86_64-gnu/bin/python3.13
+cpython-3.12.16-linux-x86_64-gnu                /opt/pyroid/python/cpython-3.12-linux-x86_64-gnu/bin/python3.12

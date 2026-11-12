@@ -1,0 +1,110 @@
+# cargo-fuzz targets for pyroid-core (run in Docker; see README.md). A separate
+# workspace: the root workspace and its CI jobs (clippy, cargo-deny) never see it.
+[package]
+name = "pyroid-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+# warc_reader / warc_docs: gzip members built from the fuzz input.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+libfuzzer-sys = "0.4"
+pyroid-core = { path = "../crates/pyroid-core" }
+
+[[bin]]
+name = "ftfy"
+path = "fuzz_targets/ftfy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filters"
+path = "fuzz_targets/filters.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tokenizer"
+path = "fuzz_targets/tokenizer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "translit"
+path = "fuzz_targets/translit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dedup_simplify"
+path = "fuzz_targets/dedup_simplify.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fasttext"
+path = "fuzz_targets/fasttext.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "html_parse"
+path = "fuzz_targets/html_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "trafilatura_extract"
+path = "fuzz_targets/trafilatura_extract.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "warc_reader"
+path = "fuzz_targets/warc_reader.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "warc_docs"
+path = "fuzz_targets/warc_docs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "json_repair"
+path = "fuzz_targets/json_repair.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sudachi_dic"
+path = "fuzz_targets/sudachi_dic.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "jieba_dict"
+path = "fuzz_targets/jieba_dict.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

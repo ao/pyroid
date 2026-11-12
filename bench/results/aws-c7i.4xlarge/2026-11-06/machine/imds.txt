@@ -1,0 +1,6 @@
+instance-id: i-<redacted>
+instance-type: c7i.4xlarge
+ami-id: ami-09f02015912e773f7
+placement/availability-zone: us-west-2a
+placement/region: us-west-2
+instance-life-cycle: on-demand

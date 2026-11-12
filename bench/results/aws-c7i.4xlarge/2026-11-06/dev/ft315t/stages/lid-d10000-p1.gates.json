@@ -1,0 +1,6 @@
+{
+ "pyroid.fasttext 1.0.0.dev0 lid.176.bin k=1 batch [3.15t, pool 1]": "{\"docs\":10000,\"gate\":\"lid\",\"impl\":\"pyroid.fasttext lid.176.bin k=1 batch\",\"k\":1,\"live\":0,\"max_abs_dp\":0.0,\"mismatches\":0,\"model\":\"lid.176.bin\",\"pinned\":10000,\"seconds\":1.283,\"tol\":1e-06}",
+ "pyroid.fasttext 1.0.0.dev0 lid.176.bin k=5 batch [3.15t, pool 1]": "{\"docs\":10000,\"gate\":\"lid\",\"impl\":\"pyroid.fasttext lid.176.bin k=5 batch\",\"k\":5,\"live\":0,\"max_abs_dp\":0.0,\"mismatches\":0,\"model\":\"lid.176.bin\",\"pinned\":10000,\"seconds\":1.232,\"tol\":1e-06}",
+ "pyroid.fasttext 1.0.0.dev0 lid.176.ftz k=1 batch [3.15t, pool 1]": "{\"docs\":10000,\"gate\":\"lid\",\"impl\":\"pyroid.fasttext lid.176.ftz k=1 batch\",\"k\":1,\"live\":0,\"max_abs_dp\":0.0,\"mismatches\":0,\"model\":\"lid.176.ftz\",\"pinned\":10000,\"seconds\":1.069,\"tol\":1e-06}",
+ "pyroid.fasttext 1.0.0.dev0 lid.176.ftz k=5 batch [3.15t, pool 1]": "{\"docs\":10000,\"gate\":\"lid\",\"impl\":\"pyroid.fasttext lid.176.ftz k=5 batch\",\"k\":5,\"live\":0,\"max_abs_dp\":0.0,\"mismatches\":0,\"model\":\"lid.176.ftz\",\"pinned\":10000,\"seconds\":1.127,\"tol\":1e-06}"
+}

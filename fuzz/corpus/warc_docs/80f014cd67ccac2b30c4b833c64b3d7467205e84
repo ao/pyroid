@@ -1,0 +1,35 @@
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: <http://example.com/a b>
+WARC-Record-ID:034c8c75c60c>
+WARC-Date: 2026-01-01T00:00:00Z
+Content-Length: 21
+
+POï¬† /x HTTP/1.1
+
+
+
+WARC/1.0
+WARC-Type: revisit
+WARC-Target-URI: htcom/
+WARC-RecC-Type: response
+WARC-Target-U×I: http://example.com/
+WARC-Record-ID: <urn:uuid:e96ed5ba7bb58e502128264dbdb2ca53>
+WARC-Date: 2026-01-01T00:00:00Z
+Content-Length: 13
+
+
+not headers
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARc52527abaad22fe0dcd79>
+WARC-Date: 2026-01-01T00:00:00Z
+Content-Length: 21
+
+   
+HTTP/1.1 200
+
+
+

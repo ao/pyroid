@@ -1,0 +1,117 @@
+{
+ "crawl": "CC-MAIN-2025-08",
+ "slices": [
+  {
+   "crawl": "CC-MAIN-2025-08",
+   "warc": "crawl-data/CC-MAIN-2025-08/segments/1738832262974.94/warc/CC-MAIN-20250219003812-20250219033812-00028.warc.gz",
+   "start": 498118223,
+   "range": [
+    498128049,
+    598111583
+   ],
+   "sha256": "3b6c5fcb12dcf8af7bca0b8764cf6116f6201f61e372fce99fa26a0865a18a36",
+   "pages": 2697
+  },
+  {
+   "crawl": "CC-MAIN-2025-08",
+   "warc": "crawl-data/CC-MAIN-2025-08/segments/1738831951830.78/warc/CC-MAIN-20250213211008-20250214001008-00145.warc.gz",
+   "start": 523695114,
+   "range": [
+    523697425,
+    623659413
+   ],
+   "sha256": "db3df441fc353d07fb393834f7755e7ccc760b44d210e345830cbbe681aa2aa9",
+   "pages": 2911
+  }
+ ],
+ "options": {
+  "datatrove": {
+   "pages": 5608,
+   "same": 5608,
+   "diff": 0,
+   "statuses": {
+    "str": 5486,
+    "None": 122
+   },
+   "examples": []
+  },
+  "default": {
+   "pages": 5608,
+   "same": 5608,
+   "diff": 0,
+   "statuses": {
+    "str": 5557,
+    "None": 51
+   },
+   "examples": []
+  },
+  "no_fallback": {
+   "pages": 5608,
+   "same": 5608,
+   "diff": 0,
+   "statuses": {
+    "str": 5556,
+    "None": 52
+   },
+   "examples": []
+  },
+  "favor_recall": {
+   "pages": 5608,
+   "same": 5608,
+   "diff": 0,
+   "statuses": {
+    "str": 5554,
+    "None": 54
+   },
+   "examples": []
+  },
+  "precision_comments": {
+   "pages": 5608,
+   "same": 5608,
+   "diff": 0,
+   "statuses": {
+    "str": 5556,
+    "None": 52
+   },
+   "examples": []
+  },
+  "no_tables": {
+   "pages": 5608,
+   "same": 5608,
+   "diff": 0,
+   "statuses": {
+    "str": 5559,
+    "None": 49
+   },
+   "examples": []
+  },
+  "dedup": {
+   "pages": 5608,
+   "same": 5608,
+   "diff": 0,
+   "statuses": {
+    "str": 5437,
+    "None": 171
+   },
+   "examples": []
+  },
+  "precision": {
+   "pages": 5608,
+   "same": 5608,
+   "diff": 0,
+   "statuses": {
+    "str": 5556,
+    "None": 52
+   },
+   "examples": []
+  },
+  "_dedup_effect": {
+   "pages": 5608,
+   "differs": 123
+  },
+  "_seconds": {
+   "oracle_wall": 246.2352626639995,
+   "candidate_wall": 180.8591390340007
+  }
+ }
+}

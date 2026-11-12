@@ -1,0 +1,6 @@
+{
+ "ftfy 6.3.1": "{\"docs\":1000,\"gate\":\"ftfy\",\"impl\":\"ftfy\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"seconds\":0.296}",
+ "pyroid.ftfy 1.0.0.dev0 fix_text per doc": "{\"docs\":1000,\"gate\":\"ftfy\",\"impl\":\"pyroid.ftfy fix_text per doc\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"seconds\":0.005}",
+ "pyroid.ftfy 1.0.0.dev0 fix_text_batch": "{\"docs\":1000,\"gate\":\"ftfy\",\"impl\":\"pyroid.ftfy fix_text_batch\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"seconds\":0.006}",
+ "pyroid.ftfy 1.0.0.dev0 fix_text_batch [arrow]": "{\"docs\":1000,\"gate\":\"ftfy\",\"impl\":\"pyroid.ftfy fix_text_batch [arrow]\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"seconds\":0.007}"
+}

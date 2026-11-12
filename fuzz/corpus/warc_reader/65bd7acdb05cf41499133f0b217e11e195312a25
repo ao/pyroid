@@ -1,0 +1,14 @@
+2WARC/1.0
+WARC-Type: request
+WARC-Record-ID: <urn:uuid:a9c5c23a-0221-11e7-8fe3-0242ac120007>
+WARC-Target-URI: http://example.com/
+WARC-Date: 2017-03-06T04:02:06^
+WARC-Concurrent-To: <urn:uuid:a9c51e3e-0221-11e7-bf66-0242ac120005>
+WARC-Block-Digest: sha0:Z6W6WEQQQI-03-06T04:02:06^
+WARC-Concurrent-To: <urn:uuid:a9c51e3e-0221-11e7-bf66-0242Ψac120005>
+WARC-Block-Digest: sha0:Z6.wΡ?w)9Cϋ:sύ?=}\™Ejηνώέ»`Σªω»λ»ZζUc-―ΟΪΤ3ϋA²ΰι‹G¥ΩξψKf¥ιΉΓΊ+―–όο©·¨ώGοΕυ/οχz›OοΉ£?)?όΡϋΞVτηΌkΗj·[ϋΟ5.9τίΒuΞ«]ƒ[άK_{΄όπ;ΟZ}sfχs	a­NϊBχ΄NkΝMξώSώKά'ϋγγγγγγγγγγγγγγγγγγγγγγγγγγγγγγγγγγ2WARC/1.0
+WARC-Type: request
+WARC-Record-ID: <urn:uuid:a9c5c23a-0221-11e7-8fe3-0242ac120007>
+WARC-Target-URI: http://example.com/
+WARC-Date: 2017-03-06T04:02:06^
+WARC-Concurrent-To: <urn:uuid:a9c51e3e-0221-11e7-bf66-0242ac120005>

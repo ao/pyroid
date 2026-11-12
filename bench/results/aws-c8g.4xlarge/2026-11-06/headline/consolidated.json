@@ -1,0 +1,62 @@
+{
+ "about": "pyroid consolidated gated benchmark (bench/run_consolidated.sh, bench/consolidate.py). Units: microseconds per document; pyroid_us is one thread (pool of 1) on CPython 3.15t, pyroid_us_8_threads a pool of 8; incumbents run one process on CPython 3.13.",
+ "label": "AWS EC2 c8g.4xlarge (AWS Graviton4, 16 vCPU), Amazon Linux 2023; CPython 3.13.18 and 3.15.2t, datatrove 0.10.1",
+ "source": "/opt/pyroid/results/aws-c8g.4xlarge/2026-11-06/headline",
+ "rows": [],
+ "e2e": [
+  {
+   "name": "datatrove 0.10.1, 1 process (CPython 3.13)",
+   "med": 2334.868650469,
+   "q1": 2334.868650469,
+   "q3": 2334.868650469,
+   "cpu": 2335.432453,
+   "rss_mib": 699.99609375,
+   "runs": 1
+  },
+  {
+   "name": "pyroid stages in datatrove's executor, 1 process (3.13)",
+   "med": 69.635415166,
+   "q1": 69.635415166,
+   "q3": 69.635415166,
+   "cpu": 70.304485,
+   "rss_mib": 1608.36328125,
+   "runs": 1
+  },
+  {
+   "name": "datatrove 0.10.1, 8 processes (CPython 3.13)",
+   "med": 298.464156792,
+   "q1": 298.464156792,
+   "q3": 298.464156792,
+   "cpu": 2335.094628,
+   "rss_mib": 446.5703125,
+   "runs": 1
+  },
+  {
+   "name": "pyroid stages in datatrove's executor, 8 processes (3.13)",
+   "med": 20.255167313,
+   "q1": 20.255167313,
+   "q3": 20.255167313,
+   "cpu": 75.52176899999999,
+   "rss_mib": 1511.0390625,
+   "runs": 1
+  },
+  {
+   "name": "pyroid native chain, 1 thread (CPython 3.15t)",
+   "med": 46.834813165,
+   "q1": 46.3163930875,
+   "q3": 47.1303233365,
+   "cpu": 47.61291,
+   "rss_mib": 2086.26171875,
+   "runs": 5
+  },
+  {
+   "name": "pyroid native chain, 8 threads (CPython 3.15t)",
+   "med": 10.160459109,
+   "q1": 10.103892116499999,
+   "q3": 10.1664529605,
+   "cpu": 45.724601,
+   "rss_mib": 2221.78125,
+   "runs": 5
+  }
+ ]
+}

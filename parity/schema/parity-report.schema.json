@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ao/pyroid/parity/schema/parity-report.schema.json",
+  "title": "pyroid parity report",
+  "description": "One pytest session of the parity suites: which implementation was compared to which pinned reference, on which pinned inputs, and how many comparisons were byte-identical (or within tolerance).",
+  "oneOf": [{"$ref": "#/$defs/report"}, {"$ref": "#/$defs/merged"}],
+  "$defs": {
+    "status": {"enum": ["pass", "fail", "skip"]},
+    "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "merged": {
+      "type": "object",
+      "required": ["schema_version", "status", "runs"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {"const": 1},
+        "status": {"$ref": "#/$defs/status"},
+        "runs": {"type": "array", "items": {"$ref": "#/$defs/report"}, "minItems": 1}
+      }
+    },
+    "report": {
+      "type": "object",
+      "required": ["schema_version", "generated_at", "tool", "environment", "manifest_sha256", "status", "suites"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {"const": 1},
+        "generated_at": {"type": "string", "format": "date-time"},
+        "tool": {
+          "type": "object", "required": ["name", "git_sha"],
+          "properties": {"name": {"const": "pyroid-parity"}, "git_sha": {"type": ["string", "null"]}}
+        },
+        "environment": {
+          "type": "object",
+          "required": ["python", "implementation", "free_threaded", "gil_enabled", "platform", "machine", "in_docker"],
+          "properties": {
+            "python": {"type": "string"}, "implementation": {"type": "string"},
+            "free_threaded": {"type": "boolean"}, "gil_enabled": {"type": "boolean"},
+            "platform": {"type": "string"}, "machine": {"type": "string"}, "in_docker": {"type": "boolean"}
+          }
+        },
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "status": {"$ref": "#/$defs/status"},
+        "suites": {
+          "type": "object",
+          "propertyNames": {"enum": ["ftfy", "fasttext", "filters", "dedup", "metrics", "json_repair", "datasketch", "jieba", "trafilatura", "nltk", "nemo"]},
+          "additionalProperties": {"$ref": "#/$defs/suite"}
+        }
+      }
+    },
+    "suite": {
+      "type": "object",
+      "required": ["status", "candidate", "reference", "inputs", "checks"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "candidate": {
+          "type": "object",
+          "description": "The --impl under test.",
+          "properties": {
+            "spec": {"type": "string"}, "module": {"type": "string"}, "dist": {"type": ["string", "null"]},
+            "version": {"type": ["string", "null"]}, "adapter": {"type": "string"},
+            "is_reference": {"type": "boolean", "description": "true = harness self-check (reference vs its own pinned outputs)"},
+            "notes": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "reference": {
+          "type": "object",
+          "description": "The oracle the pinned outputs came from.",
+          "properties": {"name": {"type": "string"}, "version": {"type": ["string", "null"]}, "tolerance": {"type": ["number", "null"]}}
+        },
+        "inputs": {
+          "type": "object", "description": "Pinned files read by this suite -> sha256 from bench/manifest.json.",
+          "additionalProperties": {"$ref": "#/$defs/sha256"}
+        },
+        "checks": {"type": "object", "additionalProperties": {"$ref": "#/$defs/check"}}
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": ["status", "same", "diff", "examples"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "same": {"type": "integer", "minimum": 0},
+        "diff": {"type": "integer", "minimum": 0},
+        "skip_reason": {"type": "string"},
+        "examples": {
+          "type": "array", "maxItems": 5,
+          "items": {
+            "type": "object", "required": ["case", "input", "got", "want"],
+            "properties": {"case": {"type": ["string", "null"]}, "input": {}, "got": {}, "want": {}}
+          }
+        }
+      }
+    }
+  }
+}

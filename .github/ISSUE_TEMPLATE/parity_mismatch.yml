@@ -1,0 +1,77 @@
+name: Parity mismatch
+description: pyroid's output differs from the reference implementation (ftfy, fastText, datatrove, ...).
+title: "parity: "
+labels: [parity]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        pyroid aims to match its reference implementations exactly: byte-identical output for `pyroid.ftfy`, the same labels and probabilities within 1e-6 for `pyroid.fasttext`, and the same keep/drop decisions for the filters and dedup. A difference is a bug unless it's listed as a known difference in the docs.
+
+        Please give the exact input. Paste it as a Python literal (for example the output of `print(repr(text))` or `print(ascii(text))`) so that invisible characters, unusual whitespace and surrogates survive copy and paste.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and this hasn't been reported.
+          required: true
+        - label: I used the reference version that pyroid targets (see the docs), or I say below which one I used.
+          required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - pyroid.ftfy
+        - pyroid.fasttext
+        - pyroid.filters
+        - pyroid.dedup
+        - pyroid.translit
+        - pyroid.metrics
+        - pyroid.json_repair
+        - other
+    validations:
+      required: true
+  - type: input
+    id: incumbent
+    attributes:
+      label: Reference implementation and version
+      description: The package you compared against, with its exact version (`pip show <package>`), plus the model file and its sha256 for fastText.
+      placeholder: ftfy 6.3.1
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: Input
+      description: The exact input as a Python literal, plus the call with all options, e.g. `pyroid.ftfy.fix_text(text, normalization="NFC")`.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected (reference output)
+      description: The reference implementation's output, as `repr()`.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: got
+    attributes:
+      label: Got (pyroid output)
+      description: pyroid's output for the same input, as `repr()`.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: |
+        Paste the output of:
+        `python -c "import platform, sys, sysconfig, pyroid; print(pyroid.__version__, sys.version, platform.platform(), 'free-threaded' if sysconfig.get_config_var('Py_GIL_DISABLED') else 'gil')"`
+      render: text
+    validations:
+      required: true

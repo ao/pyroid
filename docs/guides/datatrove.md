@@ -1,0 +1,372 @@
+# datatrove: drop-in pipeline steps
+
+`pyroid.integrations.datatrove` has drop-in replacements for 17 of
+[datatrove](https://github.com/huggingface/datatrove) 0.10.1's pipeline steps (datatrove is
+© Hugging Face, Apache-2.0). Each one subclasses datatrove's own step of the same name and takes
+the same constructor arguments. It gives the same documents: the same `text`, `metadata`,
+keep/drop decisions and `filter_reason`s, so exclusion writers and later steps see the same data.
+The work runs in Rust, in batches, without the GIL. With the steps swapped in, datatrove's
+FineWeb pipeline gives the same per-document digest as the stock pipeline in datatrove's own
+executor ([parity](../compatibility.md#integrations)).
+
+```console
+$ pip install "pyroid[datatrove]"     # datatrove, regex, tokenizers, numpy, orjson
+```
+
+## Change one import
+
+```diff
+-from datatrove.pipeline.filters import GopherQualityFilter, LanguageFilter
++from pyroid.integrations.datatrove import GopherQualityFilter, LanguageFilter
+
+ pipeline = [
+     reader,
+     LanguageFilter(exclusion_writer=JsonlWriter("removed/lid")),
+     GopherQualityFilter(exclusion_writer=JsonlWriter("removed/gopher")),
+     writer,
+ ]
+```
+
+The rest of the pipeline (readers, writers, the executor, steps pyroid does not replace) stays
+datatrove's, and the steps mix freely.
+
+## The steps
+
+| pyroid step | datatrove's step | Runs on |
+|---|---|---|
+| `FTFYFormatter` | `datatrove.pipeline.formatters.FTFYFormatter` | [`pyroid.ftfy`](ftfy.md), byte-identical to ftfy 6.3.1 (ftfy isn't needed) |
+| `PIIFormatter` | `datatrove.pipeline.formatters.PIIFormatter` | pyroid's email and IP matchers ([`filters.md`](filters.md)); datatrove's own replacement counters and IP validator |
+| `SymbolLinesFormatter` | `datatrove.pipeline.formatters.SymbolLinesFormatter` | [`pyroid.filters`](filters.md) |
+| `LanguageFilter` | `datatrove.pipeline.filters.LanguageFilter` | one batched [`pyroid.fasttext`](fasttext.md) prediction per batch; datatrove's own `filter()` code makes the decision and the metadata |
+| `URLFilter` | `datatrove.pipeline.filters.URLFilter` | [`pyroid.filters.URLFilter`](filters.md), with this step's own `tldextract` suffix list and datatrove's block lists (pyahocorasick isn't needed) |
+| `GopherRepetitionFilter` | `datatrove.pipeline.filters.GopherRepetitionFilter` | [`pyroid.filters`](filters.md) (spaCy isn't needed) |
+| `GopherQualityFilter` | `datatrove.pipeline.filters.GopherQualityFilter` | the same |
+| `C4QualityFilter` | `datatrove.pipeline.filters.C4QualityFilter` | the same, with C4's line removal |
+| `FineWebQualityFilter` | `datatrove.pipeline.filters.FineWebQualityFilter` | the same |
+| `C4BadWordsFilter` | `datatrove.pipeline.filters.C4BadWordsFilter` | pyroid's word search; datatrove's word lists (loaded as datatrove loads them) and its random draws for `keep_fraction` |
+| `MinhashDedupSignature` | `datatrove.pipeline.dedup.MinhashDedupSignature` (MinHash stage 1) | [`pyroid.dedup`](dedup.md) signatures, written to the same files, byte for byte |
+| `SentenceDedupSignature` | `datatrove.pipeline.dedup.SentenceDedupSignature` (stage 1) | [`pyroid.dedup`](dedup.md); the same `.c4_sig` files, byte for byte |
+| `SentenceFindDedups` | `datatrove.pipeline.dedup.SentenceFindDedups` (stage 2) | a merge in Rust; the same `.c4_dup` files |
+| `SentenceDedupFilter` | `datatrove.pipeline.dedup.SentenceDedupFilter` (stage 3) | [`pyroid.dedup`](dedup.md); the same documents and exclusion-writer documents |
+| `SentenceDedupBuildIndex` | `datatrove.pipeline.dedup.sentence_dedup.SentenceDedupBuildIndex` | a merge in Rust; the same index file |
+| `Trafilatura` | `datatrove.pipeline.extractors.Trafilatura` | [`pyroid.trafilatura`](trafilatura.md), byte-identical to the installed trafilatura release (1.11.0 in a stock `datatrove[processing]` install, or 2.3.1; 2.3.1 when trafilatura is not installed), in the task's process (no child process, no timeout; see [the step's differences](trafilatura.md#the-datatrove-step)) |
+| `WarcReader` | `datatrove.pipeline.readers.WarcReader` | [`pyroid.warc.iter_documents`](warc.md): warcio 1.8.2's parsing, CPython's `gzip.GzipFile` and datatrove's `process_record`, in Rust (warcio isn't needed; faust-cchardet and python-magic are, as for datatrove's) |
+
+MinHash stages 2 to 4 (`MinhashDedupBuckets`, `MinhashDedupCluster`, `MinhashDedupFilter`) are
+not replaced. Keep datatrove's, which read pyroid's signature files unchanged; they were 2 to 3%
+of the pipeline's wall time with pyroid's steps at 8 workers. Outside datatrove, `pyroid dedup
+signatures | buckets | cluster | filter` runs the four stages on the command line with datatrove's
+file layout and bytes ([Large datasets](large-datasets.md#minhash-dedup-across-shards)). To
+deduplicate in memory instead of through files, use [`pyroid.dedup`](dedup.md) directly. The
+native APIs of every step are in
+[`filters.md`](filters.md) and [`dedup.md`](dedup.md).
+
+The drop-ins need fewer packages than datatrove's steps. The filters, MinHash and sentence dedup
+need no spaCy for the languages pyroid tokenizes ([below](#languages)). No step needs ftfy,
+trafilatura or `fasttext-numpy2-wheel`, and `LanguageFilter` needs no `fasteners` when
+`model_path` is given. Without trafilatura installed, `Trafilatura` runs the 2.3.1 mode; pass
+`compat="1.11.0"` to match a stock `datatrove[processing]` install.
+`URLFilter` needs tldextract and fasteners, as datatrove's does.
+
+`WarcReader` takes datatrove's arguments only (no `batch_size` or `threads`). A local `.gz` or
+plain file is opened and read in Rust without the GIL; on another fsspec filesystem the file is
+opened with `data_folder.open(path, "rb", compression=None)` and read through the same `GzipFile`
+emulation. Other compressions (`zstd`, an inferred `.bz2`, ...), and `.gz` when python-isal
+replaces fsspec's gzip opener, use datatrove's own `data_folder.open(..., compression=...)`. The
+documents, the exceptions (`ArchiveLoadFailed` is warcio's class when warcio is installed) and
+warcio's log warnings are datatrove's, at the same document; `limit`, `skip`, sharding and the
+statistics are datatrove's own code. To keep datatrove's own reader and still read with pyroid,
+[`pyroid.patch("warcio")`](warc.md#pyroidpatchwarcio) swaps warcio's `ArchiveIterator`.
+
+## Extra arguments
+
+Every step takes datatrove's constructor arguments plus these keyword-only ones
+(`inspect.signature` and `help()` show them):
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `batch_size` | `1000` | documents per pyroid call |
+| `threads` | `1` | pyroid's `threads=` ([Threads](../concepts/threads.md)). datatrove already runs one task per process, so each step uses one thread by default; pass `None` for pyroid's whole thread pool when you run few tasks |
+| `model_path` | `None` | `LanguageFilter` only: a local `lid.176.bin` (or a GlotLID `.bin` with `backend="glotlid"`); `None` downloads the model into datatrove's cache, as datatrove does |
+
+`SentenceFindDedups` and `SentenceDedupBuildIndex` are one sequential merge each; they accept
+`batch_size` and `threads` for uniformity.
+
+## A small run
+
+datatrove steps are callables over a stream of documents, so you can try them without an
+executor:
+
+```python
+from datatrove.data import Document
+
+from pyroid.integrations.datatrove import (
+    FTFYFormatter,
+    GopherQualityFilter,
+    LanguageFilter,
+    PIIFormatter,
+)
+
+story = (
+    "The town council met on Tuesday evening to discuss the plans for the new library. "
+    "Residents asked about the cost, the opening hours and the parking, and the mayor said "
+    "that the building would open in the spring of next year if the weather allowed it. "
+    "Questions can be sent to the clerk at clerk@example-town.org before the next meeting, "
+    "which will be held in the school hall on the first Monday of the month."
+)
+docs = [
+    Document(text=story.replace("town council", "townâ€™s council"), id="0"),
+    Document(text="Too short to keep.", id="1"),
+]
+gopher = GopherQualityFilter()
+steps = [FTFYFormatter(), PIIFormatter(), LanguageFilter(model_path="lid.176.bin"), gopher]
+data = iter(docs)
+for step in steps:
+    data = step(data)  # a datatrove step is a callable over a stream of documents
+kept = list(data)
+[d.id for d in kept]  # ['0']
+kept[0].text[:30]  # 'The town’s council met on Tues'
+"email@example.com" in kept[0].text  # True: PIIFormatter's first replacement
+kept[0].metadata  # {'language': 'en', 'language_score': 0.9667896628379822}
+gopher.stats.to_dict()["stats"]
+# {'batches': 1, 'total': 2, 'forwarded': 1, 'doc_len': {'total': 405, 'mean': 405.0},
+#  'dropped': 1, 'dropped_gopher_short_doc': 1}
+```
+
+## A full pipeline
+
+[`examples/datatrove/fineweb.py`](https://github.com/ao/pyroid/blob/main/examples/datatrove/fineweb.py)
+is datatrove's FineWeb pipeline after text extraction (`examples/fineweb.py` in datatrove's
+repository), on pyroid's steps, in datatrove's `LocalPipelineExecutor`. It runs `LanguageFilter`
+and the Gopher repetition and quality, C4 and FineWeb quality filters, each with an exclusion
+writer, then MinHash with FineWeb's settings. `MinhashDedupSignature` comes from pyroid and stages
+2 to 4 from datatrove. The only difference from the stock pipeline is the import block, and
+`--stock` runs datatrove's own steps for comparison.
+
+```console
+$ pip install "pyroid[datatrove]"
+$ python fineweb.py data/ out/ --tasks 2 --workers 2 --lid-model lid.176.bin
+```
+
+The input is a folder of Parquet or JSONL files with a `text` column. The kept documents end up
+in `out/output`, and the dropped ones in `out/removed/<stage>` with their `filter_reason`.
+[`examples/datatrove/verify.py`](https://github.com/ao/pyroid/blob/main/examples/datatrove/verify.py)
+runs the benchmark's chain with the steps swapped in and checks its digest (it needs a pyroid
+checkout and the benchmark data).
+
+## Languages
+
+The steps take datatrove's `language` argument, a datatrove language code such as `"fra_Latn"`.
+Every step that tokenizes follows the same rule:
+
+- `GopherRepetitionFilter`, `GopherQualityFilter`, `C4QualityFilter`, `FineWebQualityFilter`,
+  `MinhashDedupSignature`, `SentenceDedupSignature` and `SentenceDedupFilter` run in Rust for
+  every code pyroid tokenizes natively. `pyroid.filters.languages()` marks those codes `native`:
+  4,049 of datatrove's 4,343, about 98% of FineWeb-2's bytes (4,025 and 90% without a Japanese
+  dictionary and PyThaiNLP). They include English, the spaCy rule-based languages (German, French,
+  Spanish, Russian, Arabic, ...), Chinese (jieba), Japanese (SudachiPy, with the SudachiDict
+  dictionary of `pip install sudachidict-core`), Vietnamese (pyvi), Thai (PyThaiNLP's newmm and
+  crfcut, with the word list and model of an installed `pythainlp`), the IndicNLP languages
+  (Hindi, Bengali, Urdu, ...) and the `WhitespaceTokenizer` ones. Each code gets the word and
+  sentence tokenizer datatrove assigns it, reproduced exactly, so neither spaCy, jieba, SudachiPy,
+  pyvi, python-crfsuite nor indic-nlp-library is needed.
+- Any other `language` runs datatrove's own code for that step, with one
+  [`pyroid.FallbackWarning`](../concepts/fallbacks.md) per step and language. That covers the codes
+  whose datatrove tokenizer pyroid does not port (the Stanza languages, Korean, Khmer, ...,
+  Japanese without a dictionary and Thai without PyThaiNLP), a code datatrove has no tokenizer for, and a
+  `WordTokenizer` object. The code that runs then needs the language's segmenter installed, as
+  datatrove does. The sentence-dedup steps warn only when their configuration needs a tokenizer. `SentenceFindDedups` and
+  `SentenceDedupBuildIndex` only merge files and take no `language`.
+- `C4BadWordsFilter` uses each document's `language` metadata to pick datatrove's word list, as
+  datatrove does. `LanguageFilter`, `URLFilter`, `PIIFormatter`, `SymbolLinesFormatter` and
+  `FTFYFormatter` do not depend on a tokenizer.
+
+```python
+from pyroid.integrations.datatrove import GopherQualityFilter, MinhashDedupSignature
+
+GopherQualityFilter(language="fra_Latn")  # in Rust: spaCy's French rules
+MinhashDedupSignature(output_folder="sigs", language="hin_Deva")  # in Rust: IndicNLP's tokenizer
+
+GopherQualityFilter(language="cmn_Hani")  # in Rust: spaCy's Chinese tokenizer over jieba
+GopherQualityFilter(language="jpn_Jpan")  # in Rust with sudachidict-core installed: SudachiPy
+GopherQualityFilter(language="vie_Latn")  # in Rust: spaCy's Vietnamese tokenizer with pyvi
+GopherQualityFilter(language="tha_Thai")  # in Rust with pythainlp installed: newmm and crfcut
+step = GopherQualityFilter(language="kaz_Cyrl")  # datatrove's code (Stanza)
+# At its first batch:
+# FallbackWarning: pyroid.integrations.datatrove.GopherQualityFilter: language='kaz_Cyrl' is not
+# supported by pyroid; running datatrove's own code (slow path). This warning is shown once.
+```
+
+The [Languages](languages.md) guide lists the codes and their tokenizers, and what takes
+`language=` in pyroid's own APIs.
+
+## Differences from datatrove
+
+From the module's documentation (`pyroid/integrations/datatrove.py`):
+
+- Per-line statistics of `C4QualityFilter` (`line-total`, `line-filter-*`) are not counted, and
+  batched steps also count `batches`.
+- A language that pyroid does not tokenize natively runs datatrove's own code for that step,
+  with a one-time `pyroid.FallbackWarning`. The same goes for a code datatrove has no tokenizer
+  for, and for a `WordTokenizer` object (see [Languages](#languages)).
+
+And from the steps' documentation:
+
+- `MinhashDedupSignature`: datatrove's sort pass logs "Found existing sig files ... Skipping sig
+  writing step": pyroid has just written them.
+- `C4BadWordsFilter`: a batch that contains a document whose language has no list raises before
+  any of the batch is yielded (datatrove yields the documents before it first).
+- `URLFilter`: a document without a `url` raises datatrove's `AssertionError` when its batch is
+  filtered, before any document of that batch is passed on. datatrove's per-document
+  `DeprecationWarning` from tldextract's `registered_domain` (hidden by Python's default filters)
+  is not emitted. `block_listed_domains` and the other list attributes hold the constructor's
+  entries only, since the integrated lists live in Rust, and `banned_subwords_automaton` is
+  `None`.
+- `SentenceDedupBuildIndex`: like datatrove's own step, it fails (`StopIteration`) on an empty
+  signature file; that case runs datatrove's code.
+
+Also:
+
+- Errors are raised before a batch is processed, where datatrove raises mid-stream: a bad-words
+  language with no list (with `fail_on_missing_language`), an empty URL, an empty replacement
+  tuple. The same goes for the errors datatrove's tokenizers raise, which pyroid reproduces. For
+  example, `C4QualityFilter` on Hindi raises datatrove's `ValueError("substring not found")` for
+  the documents where IndicNLP's sentence splitter rewrites the text.
+- Urdu sentences (`C4QualityFilter`) follow `datatrove[multilingual]`, where indic-nlp imports
+  urduhack. With plain datatrove and indic-nlp-library, datatrove's own step raises
+  `ModuleNotFoundError`.
+- The steps' timing statistics are per batch, not per document. `WarcReader` times each
+  document, including the reading of the records before it, plus once per file for the records
+  after the last document (datatrove times each record's `process_record`).
+- With a datatrove other than 0.10.1 installed, importing the module gives one `RuntimeWarning`:
+  the steps reproduce 0.10.1's decisions.
+- datatrove's quirks are reproduced, not fixed. For instance, sentence dedup's stage 1 strips
+  sentences while stage 3 doesn't, so window indices can shift, and a blank `URLFilter` list
+  entry drops every URL without a registered domain.
+
+## Parity
+
+datatrove's FineWeb chain was run in its own `LocalPipelineExecutor` with 8 workers, with
+`FTFYFormatter`, `LanguageFilter`, the four quality filters and `MinhashDedupSignature` swapped
+for pyroid's. Its per-document digest of id, text, language, score, keep, reason and duplicate
+flag equals the stock pipeline's: `ef314b8d…` on the 10,000-document FineWeb dev slice and
+`c0c6b746…` on the 13,232-document parity corpus (dev plus adversarial documents).
+
+Each step was also checked against live datatrove, in 67 tests on 313 documents:
+
+- `FTFYFormatter` with 3 configs at batch sizes 1, 7 and 1,000;
+- the four filters with 8 configs at 3 batch and thread settings (same result, reason, rewritten
+  text and metadata);
+- `LanguageFilter` with 7 configs;
+- `MinhashDedupSignature`, whose files are byte-identical; datatrove's stages 2 to 4 on them
+  remove the same documents.
+
+The newer steps were checked with these configurations:
+
+- `PIIFormatter` (4 configs), `C4BadWordsFilter` (5) and `SymbolLinesFormatter` (3) on the
+  13,232 documents;
+- `URLFilter` on the 10,000 dev URLs with 7 configs;
+- sentence dedup on the 13,232 documents with 7 configs and on an 8,300-document corpus with
+  injected duplicates with 9. The signature, duplicate and index files are byte-identical, with
+  the same documents and exclusion documents.
+
+All of these found 0 differences, and there are property-based tests against live datatrove as
+well.
+
+From WARC files, datatrove's full FineWeb pipeline with `URLFilter`, `Trafilatura`,
+`LanguageFilter`, the quality filters, `MinhashDedupSignature` and `PIIFormatter` swapped in kept
+every document stock datatrove kept, with the same text, plus 2 pages stock datatrove had dropped
+at its 1 s Trafilatura timeout (AWS EC2 c7i.4xlarge, 8 WARC files of CC-MAIN-2026-39). pyroid's
+native chain gives the same documents as these steps, and with those pages left out the same way
+its documents are byte-identical to stock datatrove's
+([details](trafilatura.md#datatroves-fineweb-pipeline-from-warc-files)).
+
+Per language,
+[`examples/datatrove/verify_fineweb2.py`](https://github.com/ao/pyroid/blob/main/examples/datatrove/verify_fineweb2.py)
+runs each FineWeb-2 slice with two near-duplicate copies (750 documents) in datatrove's executor.
+The slice goes through three filter chains: FineWeb-2's own per-language settings, datatrove's
+defaults with C4, and the same without C4. Then FineWeb-2's MinHash (xxhash, 64 bits) runs with
+the language. The per-document digest equals the stock pipeline's for German, French, Spanish,
+Russian, Arabic and Hindi (in Rust) and for Chinese and Japanese (datatrove's own code: these
+runs predate the jieba and SudachiPy ports, after which Chinese, and Japanese with a dictionary,
+run in Rust). Where
+stock datatrove fails, pyroid fails the same way, in the same phase: C4 on Hindi raises
+`ValueError("substring not found")` in both. The timing runs below gave the same digests again,
+on 2,000 and 5,000 documents.
+
+Per language and per step against live datatrove, the four quality filters ran with 5
+configurations on 6 native languages (spaCy's rules, IndicNLP, `WhitespaceTokenizer`), with no
+`FallbackWarning`. `MinhashDedupSignature`'s files are byte-identical on the same languages and
+on Chinese. Since the jieba port, Chinese is among the native languages in those checks, with the
+same results.
+
+See [Compatibility](../compatibility.md#integrations).
+
+## Speed
+
+On an AWS c7i.4xlarge (Intel Xeon Platinum 8488C), the benchmark's FineWeb chain with pyroid's
+stages in datatrove's executor took 3.15 s at 8 processes on the FineWeb dev slice (10,000
+documents). Stock datatrove took 35.4 s, so the wall time was 11.2× less. On the pinned
+100,000-document slice the times were 20.0 s and 272.1 s, 13.6× less (datatrove ran once there).
+Both sides ran on CPython 3.13 with datatrove 0.10.1, and the per-document digest was
+datatrove's in every run. On a c8g.4xlarge (AWS Graviton4) the ratios were 12.0× and 14.7×. See
+[Benchmarks](../benchmarks.md#end-to-end-the-fineweb-chain).
+
+From WARC files, with `Trafilatura` in the chain, a c7i.4xlarge ran the pipeline on 8 WARC files
+(171,595 HTML records) in 89.4 s at 8 workers with pyroid's steps, `WarcReader` included, against
+848.3 s for stock datatrove (9.5×); with datatrove's reader the first run took 104 s against 871 s
+(8.4×), and 776 s against 6,976 s at 1 worker (9.0×). Trafilatura was 5,543 of stock datatrove's
+6,759 CPU seconds at 8 workers ([details](../benchmarks.md#from-warc-files-datatroves-fineweb-pipeline)).
+
+
+The rest of this section comes from earlier runs on a Docker/OrbStack VM on Apple Silicon,
+indicative. The VM was shared with other work, so the EC2 figures above are the better guide to
+an unloaded machine.
+
+With the steps swapped in, datatrove's FineWeb pipeline on the dev slice (datatrove's executor,
+8 processes) took 21.1 s and 10.2 s in two runs. The stock pipeline, run in the same minute, took
+498.8 s and 213.4 s. That is 21–24× less wall time (23.6× and 20.9×), and 25.7× and 22.9× less
+CPU time. In one process, on the first 2,000 documents, the pipeline was 17.6× and 16.7× faster.
+The load average was 18 to 30, which inflates stock datatrove most, so each ratio comes from a
+same-minute pair (stock, then pyroid). pyroid's times include datatrove's executor phases, worker
+start-up, Parquet IO and the 125 MiB model load.
+
+The table runs FineWeb-2's own pipeline per language, stock and with the steps swapped in, in
+datatrove's executor: its step-5 filters with the language's settings, then MinHash with the
+language. That is all five executor phases, Parquet in and out, on each FineWeb-2 slice with
+near-duplicate copies. Release build, CPython 3.13. The load average was 10 to 28, so each ratio
+comes from a back-to-back pair; at 8 processes the second pair ran pyroid first.
+
+| Language | 1 process, 2,000 documents: datatrove / pyroid | Speedup | 8 processes, 5,000 documents: datatrove / pyroid, two pairs | Speedup |
+|---|---:|---:|---:|---:|
+| German (`deu_Latn`) | 36.3 s / 2.21 s | 16× | 25.9 s / 1.97 s; 27.5 s / 2.48 s | 13×; 11× |
+| French (`fra_Latn`) | 75.0 s / 2.70 s | 28× | 66.3 s / 5.71 s; 45.0 s / 2.47 s | 12×; 18× |
+| Spanish (`spa_Latn`) | 50.8 s / 2.36 s | 22× | 31.5 s / 2.55 s; 17.8 s / 2.10 s | 12×; 8.5× |
+| Russian (`rus_Cyrl`) | 65.2 s / 2.49 s | 26× | 31.4 s / 2.11 s; 38.3 s / 1.94 s | 15×; 20× |
+| Arabic (`arb_Arab`) | 44.6 s / 2.69 s | 17× | 21.5 s / 1.67 s; 24.8 s / 4.16 s | 13×; 6.0× |
+| Hindi (`hin_Deva`, IndicNLP) | 10.5 s / 1.94 s | 5.4× | 9.2 s / 3.38 s; 5.5 s / 1.36 s | 2.7×; 4.1× |
+
+pyroid's times are mostly datatrove's executor. In one process, pyroid's filter phase took 0.7
+to 1.3 s, 22 to 35× faster than datatrove's (Hindi 9.3×). Its signature phase took 0.6 to 0.8 s,
+21 to 39× faster (Hindi 5.7×). datatrove's MinHash stages 2 to 4, which both runs share, took
+another 0.6 to 0.9 s. Hindi gains least because datatrove's IndicNLP tokenizer is already cheap.
+In these runs Chinese and Japanese ran datatrove's own code in both pipelines, at datatrove's
+speed; Japanese still does when no SudachiDict dictionary is installed.
+
+The newer steps were timed on the FineWeb dev slice, with medians of 5 runs for pyroid and 2 for
+datatrove and a load average of about 8. datatrove's 8 processes are a warmed
+`multiprocessing.Pool(8)`:
+
+| Step | datatrove, 1 process | datatrove, 8 processes | pyroid, 1 thread | pyroid, 8 threads | Speedup, 1 / 8 threads (vs 8 processes) |
+|---|---:|---:|---:|---:|---:|
+| PIIFormatter, 10,000 documents | 2.885 s | 0.595 s | 0.032 s | 0.019 s | 89× / 31× |
+| C4BadWordsFilter, 10,000 documents | 6.968 s | 1.312 s | 0.305 s | 0.053 s | 23× / 25× |
+| SymbolLinesFormatter (FineWeb-2's settings), 10,000 documents | 0.145 s | 0.198 s | 0.028 s | 0.008 s | 5.2× / 25× |
+
+These time datatrove's step alone and pyroid's native call. The drop-in steps themselves were
+timed on the same VM too. `URLFilter.run()` passed 242k documents/s against datatrove's 27k, at a
+load average of about 22. Sentence dedup's stages 1 and 3 ran at 5,664 documents/s on one thread
+and 10,457 on eight, against datatrove's 98 in one process (58× and 107×, on the 13,232
+documents). See [Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
+
+API: [`pyroid.integrations.datatrove` reference](../reference/integrations.md#datatrove).

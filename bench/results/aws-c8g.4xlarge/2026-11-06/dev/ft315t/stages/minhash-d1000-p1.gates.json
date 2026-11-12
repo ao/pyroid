@@ -1,0 +1,4 @@
+{
+ "pyroid.dedup 1.0.0.dev0 MinHashDedup.fit direct [3.15t, pool 1]": "{\"docs\":13232,\"gate\":\"minhash_dedup\",\"impl\":\"pyroid.dedup MinHashDedup.fit\",\"live\":0,\"mismatches\":0,\"pinned\":13232,\"removed\":445,\"seconds\":1.899}",
+ "pyroid.dedup 1.0.0.dev0 minhash_signatures direct [3.15t, pool 1]": "{\"docs\":1000,\"gate\":\"minhash_signature\",\"impl\":\"pyroid.dedup direct\",\"live\":0,\"mismatches\":0,\"num_perm\":112,\"pinned\":1000,\"seconds\":0.256}"
+}

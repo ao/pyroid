@@ -1,0 +1,21 @@
+WARC/1.0
+WARC-Type:r esponse
+WARττττττττττC-TargetΒΈ	DΒ¦Γ-URI: <http://example.com/a b>
+WARC-Record-ID: <urn:uuid:de221f28b22fc716f4e14632c95a1b24>
+WARC-Date: 2026-01-01T00:00:00Z
+WARC-Target-URI: <http://example.com/second>
+Multi: a
+   b
+WARC-Blocβ„ª-Digest: sha1:x
+Content-Length: 87
+
+HTTP/1.1 200 OK
+X-Lo200 OK
+
+y
+
+WARC/1.0
+WARC-Type: request1 200
+
+
+

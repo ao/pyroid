@@ -1,0 +1,44 @@
+{
+ "what": "jieba 0.42.1 vs pyroid.jieba on FineWeb-2 cmn_Hani (250 docs x repeat)",
+ "label": "Docker/OrbStack VM, indicative",
+ "python": "3.13.18",
+ "gil_enabled": true,
+ "machine": "aarch64",
+ "cpus": 12,
+ "loadavg": [
+  2.32861328125,
+  2.45849609375,
+  5.32763671875
+ ],
+ "docs": 1000,
+ "chars": 1447656,
+ "rows": {
+  "lcut": {
+   "gate": true,
+   "us_per_doc": {
+    "jieba x1": 2768.3315510003013,
+    "pyroid loop x1": 158.01827100222,
+    "pyroid batch x1": 117.20185699232388,
+    "pyroid batch x8": 48.98625399800949,
+    "jieba threads x8": 3053.477869500057,
+    "jieba processes x8": 472.3522744970978
+   }
+  },
+  "lcut_for_search": {
+   "gate": true,
+   "us_per_doc": {
+    "jieba x1": 3278.494406498794,
+    "pyroid loop x1": 215.42019599291962,
+    "pyroid batch x1": 171.30491300486028,
+    "pyroid batch x8": 67.99814700207207,
+    "jieba threads x8": 3191.4749069983372,
+    "jieba processes x8": 642.6137445087079
+   }
+  }
+ },
+ "load_ms": {
+  "pyroid": 16.4,
+  "jieba (cache file present)": 422.1,
+  "jieba (no cache file)": 413.6
+ }
+}

@@ -1,0 +1,6 @@
+{
+ "datatrove 0.10.1 GopherRepetitionFilter()": "{\"case\":\"gopher_repetition\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"datatrove gopher_repetition\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":997,\"seconds\":2.024}",
+ "pyroid.filters 1.0.0.dev0 apply([GopherRepetition]) direct": "{\"case\":\"gopher_repetition\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters direct\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":997,\"seconds\":0.163}",
+ "pyroid.filters 1.0.0.dev0 gopher_repetition": "{\"case\":\"gopher_repetition\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters gopher_repetition\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":997,\"seconds\":0.173}",
+ "pyroid.filters 1.0.0.dev0 gopher_repetition_reasons per doc": "{\"case\":\"gopher_repetition\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters gopher_repetition_reasons per doc\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":997,\"seconds\":0.182}"
+}

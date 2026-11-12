@@ -1,0 +1,12 @@
+532K	/opt/htmlx/tldextract
+5.5M	/opt/htmlx/dist
+7.0M	/opt/htmlx/results
+30M	/opt/htmlx/pyroid.bundle
+126M	/opt/htmlx/lid.176.bin
+159M	/opt/htmlx/repo
+245M	/opt/htmlx/hf
+278M	/opt/htmlx/runs
+682M	/opt/htmlx/venv-stock
+697M	/opt/htmlx/venv-pyroid
+893M	/opt/htmlx/warc-parity
+7.1G	/opt/htmlx/warc

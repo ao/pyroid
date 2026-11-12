@@ -1,0 +1,3 @@
+{
+ "pyroid.filters 1.0.0.dev0 apply([C4Quality]) direct [3.15t, pool 1]": "{\"case\":\"c4_quality\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters direct\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":854,\"seconds\":0.25}"
+}

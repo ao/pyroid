@@ -1,0 +1,11 @@
+reference: stock-8
+run                        mode           w    wall s      cpu s   final  lost after_minhash_filter after_pii      same
+stock-8                    stock          8     870.8     6759.0   23503    74 a844ec39ead3   12656e56fb88   yes
+pyroid-8                   pyroid-steps   8     104.0      792.1   23505     5 d0e2ad4807f0   0a35ff32512d   NO
+native-8                   native         8     110.3      808.3   23505     5 d0e2ad4807f0   0a35ff32512d   NO
+pyroid-8 vs stock-8: {"only_in_reference": 0, "only_in_run": 2, "text_differs_after_minhash_filter": 0, "text_differs_after_pii": 0, "examples": {"only_in_reference": [], "only_in_run": ["<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>", "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>"], "text_differs_after_minhash_filter": [], "text_differs_after_pii": []}}
+  document counts differ from stage trafilatura on: trafilatura 164785 vs 164854, lid 58461 vs 58477, gopher_repetition 46587 vs 46596, gopher_quality 31430 vs 31435, c4_quality 28662 vs 28666, fineweb_quality 24794 vs 24797, minhash_filter 23503 vs 23505, pii 23503 vs 23505
+native-8 vs stock-8: {"only_in_reference": 0, "only_in_run": 2, "text_differs_after_minhash_filter": 0, "text_differs_after_pii": 0, "examples": {"only_in_reference": [], "only_in_run": ["<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>", "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>"], "text_differs_after_minhash_filter": [], "text_differs_after_pii": []}}
+  document counts differ from stage trafilatura on: trafilatura 164785 vs 164854, lid 58461 vs 58477, gopher_repetition 46587 vs 46596, gopher_quality 31430 vs 31435, c4_quality 28662 vs 28666, fineweb_quality 24794 vs 24797, minhash_filter 23503 vs 23505, pii 23503 vs 23505
+note: stock-8 lost pages to datatrove's Trafilatura timeout or a dead child process; compare them with `native --timeouts-of <stock run>` instead
+DIFFERENT

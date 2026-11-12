@@ -1,0 +1,3 @@
+{
+ "datatrove 0.10.1 GopherQualityFilter()": "{\"case\":\"gopher_quality\",\"docs\":100,\"gate\":\"filter\",\"impl\":\"datatrove gopher_quality\",\"live\":0,\"mismatches\":0,\"pinned\":100,\"ref_kept\":83,\"seconds\":1.458}"
+}

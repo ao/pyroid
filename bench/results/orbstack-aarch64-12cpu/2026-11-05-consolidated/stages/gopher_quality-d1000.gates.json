@@ -1,0 +1,6 @@
+{
+ "datatrove 0.10.1 GopherQualityFilter()": "{\"case\":\"gopher_quality\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"datatrove gopher_quality\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":844,\"seconds\":1.894}",
+ "pyroid.filters 1.0.0.dev0 apply([GopherQuality]) direct": "{\"case\":\"gopher_quality\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters direct\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":844,\"seconds\":0.078}",
+ "pyroid.filters 1.0.0.dev0 gopher_quality": "{\"case\":\"gopher_quality\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters gopher_quality\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":844,\"seconds\":0.082}",
+ "pyroid.filters 1.0.0.dev0 gopher_quality_reasons per doc": "{\"case\":\"gopher_quality\",\"docs\":1000,\"gate\":\"filter\",\"impl\":\"pyroid.filters gopher_quality_reasons per doc\",\"live\":0,\"mismatches\":0,\"pinned\":1000,\"ref_kept\":844,\"seconds\":0.09}"
+}

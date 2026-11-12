@@ -1,0 +1,13 @@
+--- /opt/pyroid/results/aws-c7i.4xlarge/2026-11-06/refs/manifest.before.json	2026-11-06 08:04:00.861714196 +0000
++++ /opt/pyroid/results/aws-c7i.4xlarge/2026-11-06/refs/manifest.after.json	2026-11-06 08:08:44.052821662 +0000
+@@ -289,8 +289,8 @@
+       ]
+     },
+     "parity/metrics-ref.linux-x86_64.parquet": {
+-      "sha256": "ca0a0068bddc2fc4b4027106bd6ca3e3a363461d60db66c49b02a2ceb2b3413b",
+-      "bytes": 20002927,
++      "sha256": "8107ddcdfb40adc8aa20b8c71e59af7cec2382000333ce558ae8141c947ecd2e",
++      "bytes": 20003089,
+       "rows": 694757,
+       "oracle": {
+         "rouge-score": "0.1.2",

@@ -1,0 +1,58 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+🍹 Building a mixed python/rust project
+🐍 Found CPython 3.15 at /opt/pyroid/python/cpython-3.15-linux-aarch64-gnu/bin/python3.15
+🔗 Found pyo3 bindings with abi3t support
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling target-lexicon v0.13.5
+   Compiling autocfg v1.5.1
+   Compiling libc v0.2.191
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling crossbeam-utils v0.8.23
+   Compiling typenum v1.20.1
+   Compiling crossbeam-epoch v0.9.21
+   Compiling crossbeam-deque v0.8.8
+   Compiling pyo3-macros-backend v0.30.1
+   Compiling heck v0.5.0
+   Compiling rayon-core v1.13.0
+   Compiling rawpointer v0.2.1
+   Compiling equivalent v1.0.3
+   Compiling either v1.19.0
+   Compiling cfg-if v1.0.5
+   Compiling tinyvec v1.13.3
+   Compiling once_cell v1.21.4
+   Compiling rustc-hash v2.1.3
+   Compiling hashbrown v0.17.1
+   Compiling twox-hash v2.1.5
+   Compiling any_ascii v0.3.3
+   Compiling memchr v2.8.3
+   Compiling simdutf8 v0.1.5
+   Compiling num-traits v0.2.19
+   Compiling matrixmultiply v0.3.11
+   Compiling unicode-normalization v0.1.26
+   Compiling pyo3-build-config v0.30.1
+   Compiling hybrid-array v0.4.15
+   Compiling indexmap v2.14.2
+   Compiling syn v3.0.9
+   Compiling num-complex v0.4.6
+   Compiling num-integer v0.1.47
+   Compiling cpufeatures v0.3.1
+   Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.12.1
+   Compiling pyo3-ffi v0.30.1
+   Compiling pyo3 v0.30.1
+   Compiling numpy v0.30.0
+   Compiling rayon v1.12.0
+   Compiling ndarray v0.17.2
+   Compiling digest v0.11.3
+   Compiling sha1 v0.11.0
+   Compiling pyroid-core v1.0.0-dev (/opt/pyroid/src/pyroid/crates/pyroid-core)
+   Compiling pyo3-macros v0.30.1
+   Compiling pyroid-py v1.0.0-dev (/opt/pyroid/src/pyroid/crates/pyroid-py)
+    Finished `release` profile [optimized] target(s) in 54.91s
+📦 Built wheel for abi3t Python ≥ 3.15 to /opt/pyroid/work/dist/pyroid-1.0.0.dev0-cp315-abi3.abi3t-manylinux_2_34_aarch64.whl

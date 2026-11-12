@@ -1,0 +1,170 @@
+{
+ "reference": "stock-8",
+ "identical": false,
+ "runs": [
+  {
+   "run": "stock-8",
+   "mode": "stock",
+   "workers": 8,
+   "wall_seconds": 848.267,
+   "cpu_seconds": 6593.014,
+   "final_docs": 23503,
+   "trafilatura_lost": 73,
+   "timeouts_of": null,
+   "digests": {
+    "after_minhash_filter": "a844ec39ead37cf5d2d21188a3a57cdbc54ba11fc36e22ec8a65f27dc8daee5b",
+    "after_pii": "12656e56fb880ccd51f2245c29273f4ab3b2497720ef1a7c147e57e8b04dc87b"
+   },
+   "same_as_reference": {
+    "after_minhash_filter": true,
+    "after_pii": true
+   },
+   "docs": {
+    "warc_reader": 171595,
+    "url_filter": 170446,
+    "trafilatura": 164786,
+    "lid": 58462,
+    "gopher_repetition": 46587,
+    "gopher_quality": 31430,
+    "c4_quality": 28662,
+    "fineweb_quality": 24794,
+    "minhash_filter": 23503,
+    "pii": 23503
+   }
+  },
+  {
+   "run": "pyroid-8",
+   "mode": "pyroid-steps",
+   "workers": 8,
+   "wall_seconds": 89.408,
+   "cpu_seconds": 677.696,
+   "final_docs": 23505,
+   "trafilatura_lost": 5,
+   "timeouts_of": null,
+   "digests": {
+    "after_minhash_filter": "d0e2ad4807f0aa7eb685e4d1f46d6f2bb0e6fcf48015734aa42c5bf148864d8a",
+    "after_pii": "0a35ff32512d26169cfb49c8f49edd2c81745c8731ca4dbec2abe802d6343bd5"
+   },
+   "same_as_reference": {
+    "after_minhash_filter": false,
+    "after_pii": false
+   },
+   "docs": {
+    "warc_reader": 171595,
+    "url_filter": 170446,
+    "trafilatura": 164854,
+    "lid": 58477,
+    "gopher_repetition": 46596,
+    "gopher_quality": 31435,
+    "c4_quality": 28666,
+    "fineweb_quality": 24797,
+    "minhash_filter": 23505,
+    "pii": 23505
+   },
+   "diff": {
+    "only_in_reference": 0,
+    "only_in_run": 2,
+    "text_differs_after_minhash_filter": 0,
+    "text_differs_after_pii": 0,
+    "examples": {
+     "only_in_reference": [],
+     "only_in_run": [
+      "<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>",
+      "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>"
+     ],
+     "text_differs_after_minhash_filter": [],
+     "text_differs_after_pii": []
+    }
+   }
+  },
+  {
+   "run": "native-8",
+   "mode": "native",
+   "workers": 8,
+   "wall_seconds": 90.39,
+   "cpu_seconds": 650.294,
+   "final_docs": 23505,
+   "trafilatura_lost": 5,
+   "timeouts_of": null,
+   "digests": {
+    "after_minhash_filter": "d0e2ad4807f0aa7eb685e4d1f46d6f2bb0e6fcf48015734aa42c5bf148864d8a",
+    "after_pii": "0a35ff32512d26169cfb49c8f49edd2c81745c8731ca4dbec2abe802d6343bd5"
+   },
+   "same_as_reference": {
+    "after_minhash_filter": false,
+    "after_pii": false
+   },
+   "docs": {
+    "warc_reader": 171595,
+    "url_filter": 170446,
+    "trafilatura": 164854,
+    "lid": 58477,
+    "gopher_repetition": 46596,
+    "gopher_quality": 31435,
+    "c4_quality": 28666,
+    "fineweb_quality": 24797,
+    "minhash_filter": 23505,
+    "pii": 23505
+   },
+   "diff": {
+    "only_in_reference": 0,
+    "only_in_run": 2,
+    "text_differs_after_minhash_filter": 0,
+    "text_differs_after_pii": 0,
+    "examples": {
+     "only_in_reference": [],
+     "only_in_run": [
+      "<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>",
+      "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>"
+     ],
+     "text_differs_after_minhash_filter": [],
+     "text_differs_after_pii": []
+    }
+   }
+  },
+  {
+   "run": "cli-8",
+   "mode": "cli",
+   "workers": 8,
+   "wall_seconds": 79.577,
+   "cpu_seconds": 600.32,
+   "final_docs": 23505,
+   "trafilatura_lost": 5,
+   "timeouts_of": null,
+   "digests": {
+    "after_minhash_filter": null,
+    "after_pii": "0a35ff32512d26169cfb49c8f49edd2c81745c8731ca4dbec2abe802d6343bd5"
+   },
+   "same_as_reference": {
+    "after_pii": false
+   },
+   "docs": {
+    "warc_reader": 171595,
+    "url_filter": 170446,
+    "trafilatura": 164854,
+    "lid": 58477,
+    "gopher_repetition": 46596,
+    "gopher_quality": 31435,
+    "c4_quality": 28666,
+    "fineweb_quality": 24797,
+    "minhash_filter": 23505,
+    "pii": 23505
+   },
+   "diff": {
+    "only_in_reference": 0,
+    "only_in_run": 2,
+    "text_differs_after_minhash_filter": 0,
+    "text_differs_after_pii": 0,
+    "examples": {
+     "only_in_reference": [],
+     "only_in_run": [
+      "<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>",
+      "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>"
+     ],
+     "text_differs_after_minhash_filter": [],
+     "text_differs_after_pii": []
+    }
+   }
+  }
+ ]
+}

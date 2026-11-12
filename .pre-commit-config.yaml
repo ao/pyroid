@@ -1,0 +1,92 @@
+# Git hooks for prek (https://github.com/j178/prek); also readable by pre-commit.
+#   Install the git hook:  uvx prek@0.5.10 install
+#   Run every hook:        uvx prek@0.5.10 run --all-files      (the CI `lint` job runs exactly this)
+# Remote hooks are pinned to commit SHAs; update them with `uvx prek@0.5.10 update --freeze`.
+# Needs on PATH: uv, and a Rust toolchain with rustfmt and clippy.
+minimum_prek_version: "0.5.10"
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # frozen: v6.0.0
+    hooks:
+      - id: check-toml
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        # The bench/ and parity/ lockfiles (~0.5 MB each), jieba's dictionary trie (2.5 MB), the
+        # recorded NLTK Treebank outputs (1.1 MB) and pyvi's CRF model (0.6 MB) are the only files
+        # allowed past the 500 KB limit.
+        exclude: ^((bench|parity)/uv\.lock|crates/pyroid-core/src/jieba/data/dict\.trie|crates/pyroid-core/src/nltk/testdata/treebank/golden\.jsonl|crates/pyroid-core/src/pyvi/data/pyvi3\.crfsuite)$
+      # Test data, incumbent fixtures, raw benchmark results, the charts copied from them and the fuzz
+      # corpora keep their bytes exactly (mojibake, confusables, odd whitespace). Keep in step with
+      # [files] extend-exclude in typos.toml.
+      - id: end-of-file-fixer
+        exclude: &data |
+          (?x)^(
+            python/tests/data/|
+            crates/pyroid-core/tests/ftfy_data/|
+            crates/pyroid-core/tests/filters_data/|
+            crates/pyroid-core/tests/metrics_data/|
+            crates/pyroid-core/tests/html_data/|
+            crates/pyroid-core/tests/trafilatura_data/|
+            crates/pyroid-core/tests/data/warc/|
+            crates/pyroid-core/tests/warc_gzipfile_data/|
+            crates/pyroid-core/src/warc/tables\.rs$|
+            crates/pyroid-core/src/json_repair/testdata/|
+            crates/pyroid-core/src/jieba/testdata/|
+            crates/pyroid-core/src/nltk/testdata/|
+            crates/pyroid-core/src/sudachi/testdata/|
+            crates/pyroid-core/src/sudachi/resources/|
+            crates/pyroid-core/src/pyvi/data/|
+            crates/pyroid-core/src/pyvi/testdata/|
+            crates/pyroid-core/src/pythainlp/testdata/|
+            bench/data/|
+            bench/results/|
+            docs/assets/.*\.svg$|
+            parity/data/|
+            parity/tests/|
+            parity/pyroid_parity/(refs|strategies)\.py$|
+            fuzz/corpus/|
+            fuzz/arrow/corpus/
+          )
+      - id: trailing-whitespace
+        exclude: *data
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: 25bcf95026b96e2dd3c0aec3090c3d6ef6ca2e6c # frozen: v0.17.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/crate-ci/typos
+    rev: 4c8b7f51ca60df14e3c5ca82770dfbbe6c3dae85 # frozen: v1.52.0
+    hooks:
+      # Report only: never auto-"correct" text in a text-cleaning library. Excludes are in typos.toml.
+      - id: typos
+        args: [--force-exclude]
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --workspace --all-targets --locked -- -D warnings
+        language: system
+        files: \.rs$|(^|/)(Cargo\.toml|Cargo\.lock|clippy\.toml)$
+        pass_filenames: false
+        require_serial: true
+      # Strict mypy over python/pyroid and python/tests (config in pyproject.toml), with the
+      # third-party packages the tests import. Keep in step with [dependency-groups] test.
+      - id: mypy
+        name: mypy --strict
+        entry: uvx --with pytest --with packaging --with hypothesis --with pyarrow --with ftfy==6.3.1 --with numpy mypy@2.4.1
+        language: system
+        files: \.pyi?$|^pyproject\.toml$
+        pass_filenames: false
+        require_serial: true

@@ -1,0 +1,173 @@
+{
+ "about": "pyroid consolidated gated benchmark (bench/run_consolidated.sh, bench/consolidate.py). Units: microseconds per document; pyroid_us is one thread (pool of 1) on CPython 3.15t, pyroid_us_8_threads a pool of 8; incumbents run one process on CPython 3.13.",
+ "label": "AWS EC2 c8g.4xlarge (AWS Graviton4, 16 vCPU), Amazon Linux 2023; CPython 3.13.18 and 3.15.2t, datatrove 0.10.1",
+ "source": "/opt/pyroid/results/aws-c8g.4xlarge/2026-11-06/dev",
+ "rows": [
+  {
+   "module": "ftfy",
+   "call": "fix_text_batch",
+   "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13",
+   "incumbent": "ftfy 6.3.1",
+   "incumbent_us": "818",
+   "pyroid_us": "5.54",
+   "pyroid_us_8_threads": "1.64",
+   "speedup": "148×",
+   "check": "harness gate"
+  },
+  {
+   "module": "fasttext",
+   "call": "predict, lid.176.bin, k=1",
+   "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13",
+   "incumbent": "fasttext-predict 0.9.2.4",
+   "incumbent_us": "284",
+   "pyroid_us": "116",
+   "pyroid_us_8_threads": "14.4",
+   "speedup": "2.4×",
+   "check": "harness gate"
+  },
+  {
+   "module": "fasttext",
+   "call": "predict, lid.176.ftz, k=1",
+   "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13",
+   "incumbent": "fasttext-predict 0.9.2.4",
+   "incumbent_us": "500",
+   "pyroid_us": "89.2",
+   "pyroid_us_8_threads": "13.1",
+   "speedup": "5.6×",
+   "check": "harness gate"
+  },
+  {
+   "module": "filters",
+   "call": "GopherRepetition",
+   "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13",
+   "incumbent": "datatrove 0.10.1",
+   "incumbent_us": "6,494",
+   "pyroid_us": "158",
+   "pyroid_us_8_threads": "19.2",
+   "speedup": "41×",
+   "check": "harness gate"
+  },
+  {
+   "module": "filters",
+   "call": "GopherQuality",
+   "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13",
+   "incumbent": "datatrove 0.10.1",
+   "incumbent_us": "5,125",
+   "pyroid_us": "92.1",
+   "pyroid_us_8_threads": "9.34",
+   "speedup": "56×",
+   "check": "harness gate"
+  },
+  {
+   "module": "filters",
+   "call": "C4Quality (default)",
+   "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13",
+   "incumbent": "datatrove 0.10.1",
+   "incumbent_us": "4,618",
+   "pyroid_us": "55.8",
+   "pyroid_us_8_threads": "9.34",
+   "speedup": "83×",
+   "check": "harness gate"
+  },
+  {
+   "module": "filters",
+   "call": "C4Quality (FineWeb config)",
+   "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13",
+   "incumbent": "datatrove 0.10.1",
+   "incumbent_us": "5,969",
+   "pyroid_us": "101",
+   "pyroid_us_8_threads": "11.0",
+   "speedup": "59×",
+   "check": "harness gate"
+  },
+  {
+   "module": "filters",
+   "call": "FineWebQuality",
+   "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13",
+   "incumbent": "datatrove 0.10.1",
+   "incumbent_us": "4,748",
+   "pyroid_us": "78.5",
+   "pyroid_us_8_threads": "7.85",
+   "speedup": "60×",
+   "check": "harness gate"
+  },
+  {
+   "module": "dedup",
+   "call": "MinHash signatures, sha1/64",
+   "input": "FineWeb dev, first 1,000 docs; pyroid on CPython 3.15t, incumbent on 3.13",
+   "incumbent": "datatrove 0.10.1",
+   "incumbent_us": "5,541",
+   "pyroid_us": "117",
+   "pyroid_us_8_threads": "20.7",
+   "speedup": "47×",
+   "check": "harness gate"
+  },
+  {
+   "module": "translit",
+   "call": "anyascii",
+   "input": "FineWeb dev, first 10,000 docs; pyroid on CPython 3.15t, incumbent on 3.13",
+   "incumbent": "anyascii 0.3.3",
+   "incumbent_us": "109",
+   "pyroid_us": "1.39",
+   "pyroid_us_8_threads": "0.87",
+   "speedup": "79×",
+   "check": "harness gate"
+  }
+ ],
+ "e2e": [
+  {
+   "name": "datatrove 0.10.1, 1 process (CPython 3.13)",
+   "med": 232.510197433,
+   "q1": 231.766381414,
+   "q3": 232.993297167,
+   "cpu": 233.003676,
+   "rss_mib": 446.5,
+   "runs": 3
+  },
+  {
+   "name": "pyroid stages in datatrove's executor, 1 process (3.13)",
+   "med": 7.522101176,
+   "q1": 7.486198355,
+   "q3": 7.5724100530000005,
+   "cpu": 8.016888999999999,
+   "rss_mib": 414.4921875,
+   "runs": 3
+  },
+  {
+   "name": "datatrove 0.10.1, 8 processes (CPython 3.13)",
+   "med": 32.154243423,
+   "q1": 32.136850785,
+   "q3": 32.17540153,
+   "cpu": 239.78452800000002,
+   "rss_mib": 366.3515625,
+   "runs": 3
+  },
+  {
+   "name": "pyroid stages in datatrove's executor, 8 processes (3.13)",
+   "med": 2.679146242,
+   "q1": 2.675040759,
+   "q3": 2.709695584,
+   "cpu": 9.573544,
+   "rss_mib": 351.19921875,
+   "runs": 3
+  },
+  {
+   "name": "pyroid native chain, 1 thread (CPython 3.15t)",
+   "med": 5.147454162,
+   "q1": 5.1017590395,
+   "q3": 5.1612073945,
+   "cpu": 5.638276,
+   "rss_mib": 506.2734375,
+   "runs": 5
+  },
+  {
+   "name": "pyroid native chain, 8 threads (CPython 3.15t)",
+   "med": 1.643744096,
+   "q1": 1.6393370655,
+   "q3": 1.645093111,
+   "cpu": 5.447539,
+   "rss_mib": 604.47265625,
+   "runs": 5
+  }
+ ]
+}

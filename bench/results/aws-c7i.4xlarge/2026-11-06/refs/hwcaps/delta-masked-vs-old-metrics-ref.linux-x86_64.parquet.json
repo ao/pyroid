@@ -1,0 +1,578 @@
+{
+  "kind": "metrics",
+  "key": [
+    "case",
+    "key"
+  ],
+  "old": {
+    "path": "/opt/pyroid/pins/metrics-ref.linux-x86_64.parquet",
+    "sha256": "ca0a0068bddc2fc4b4027106bd6ca3e3a363461d60db66c49b02a2ceb2b3413b",
+    "bytes": 20002927,
+    "rows": 694757
+  },
+  "new": {
+    "path": "/opt/pyroid/data-hwcaps/parity/metrics-ref.linux-x86_64.parquet",
+    "sha256": "ca0a0068bddc2fc4b4027106bd6ca3e3a363461d60db66c49b02a2ceb2b3413b",
+    "bytes": 20002927,
+    "rows": 694757
+  },
+  "identical_bytes": true,
+  "schema_equal": true,
+  "rows_common": 694757,
+  "rows_only_old": 0,
+  "rows_only_new": 0,
+  "rows_differing": 0,
+  "duplicate_keys": {
+    "old": 0,
+    "new": 0
+  },
+  "examples_only_old": [],
+  "examples_only_new": [],
+  "cases": {
+    "rouge@cnndm": {
+      "rows": 11490,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "rouge@cnndm-stem": {
+      "rows": 11490,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "rougeLsum@cnndm-stem": {
+      "rows": 11490,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "rouge@article-stem": {
+      "rows": 2000,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "rouge@summeval": {
+      "rows": 1600,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "rouge@summeval-multi-stem": {
+      "rows": 1600,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@refA": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@trg_lang": {
+      "rows": 126,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@intl": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@char": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@none": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@zh": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@lowercase": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@floor": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@add-k": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@nosmooth": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@eff-order": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@max-order-2": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "bleu@holes": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "chrf": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "chrf@refA": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "chrf++": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "chrf@whitespace": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "chrf@beta1": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "chrf@lowercase": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "chrf@eps": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "chrf@holes": {
+      "rows": 141,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "sentence_bleu": {
+      "rows": 163000,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "sentence_bleu@multi": {
+      "rows": 163000,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "sentence_chrf": {
+      "rows": 163000,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    },
+    "sentence_chrf++": {
+      "rows": 163000,
+      "rows_differing": 0,
+      "rows_floats_only": 0,
+      "rows_text_differing": 0,
+      "floats_differing": 0,
+      "max_abs": 0.0,
+      "max_rel": 0.0,
+      "max_ulps": 0,
+      "ulps": {
+        "float64": {
+          "max": 0,
+          "counts": {}
+        }
+      },
+      "examples": []
+    }
+  },
+  "summary": "metrics: 694757 vs 694757 rows (0 only old, 0 only new), 0 of 694757 common rows differ; every case identical"
+}

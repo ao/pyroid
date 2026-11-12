@@ -1,0 +1,5 @@
+sys_vendor: Amazon EC2
+product_name: c8g.4xlarge
+board_asset_tag: i-<redacted>
+bios_vendor: Amazon EC2
+bios_version: 1.0

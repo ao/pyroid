@@ -1,0 +1,10 @@
+NEXT                        LEFT        LAST                        PASSED  UNIT                              ACTIVATES
+Fri 2026-11-06 08:01:13 UTC 39s left    Fri 2026-11-06 08:00:08 UTC 24s ago refresh-policy-routes@ens34.timer refresh-policy-routes@ens34.service
+Fri 2026-11-06 08:10:00 UTC 9min left   Fri 2026-11-06 08:00:08 UTC 24s ago sysstat-collect.timer             sysstat-collect.service
+Fri 2026-11-06 08:12:37 UTC 12min left  -                           -       systemd-tmpfiles-clean.timer      systemd-tmpfiles-clean.service
+Sat 2026-11-07 00:00:00 UTC 15h left    -                           -       logrotate.timer                   logrotate.service
+Sat 2026-11-07 00:07:00 UTC 16h left    -                           -       sysstat-summary.timer             sysstat-summary.service
+Sat 2026-11-07 04:03:35 UTC 20h left    -                           -       update-motd.timer                 update-motd.service
+Wed 2026-11-11 09:52:17 UTC 5 days left -                           -       fstrim.timer                      fstrim.service
+
+7 timers listed.

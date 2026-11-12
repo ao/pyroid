@@ -1,0 +1,134 @@
+# typos (https://github.com/crate-ci/typos) configuration. Run: typos
+# typos never checks its own config candidates (Cargo.toml, pyproject.toml, typos.toml).
+# Only genuine false positives go in [default.extend-words] / [default.extend-identifiers].
+
+[files]
+# Check dotfiles too (.github/, .pre-commit-config.yaml), but not git's internals.
+ignore-hidden = false
+extend-exclude = [
+  ".git/",
+  # Generated.
+  "Cargo.lock",
+  "LICENSES/THIRD-PARTY-RUST.txt",
+  "crates/pyroid-core/src/ftfy/tables.rs",
+  "crates/pyroid-core/src/filters/tables.rs",
+  "crates/pyroid-core/src/metrics/sacrebleu/tables.rs",
+  "crates/pyroid-core/src/json_repair/tables.rs",
+  "crates/pyroid-core/src/filters/indic_tables.rs",
+  "crates/pyroid-core/src/html/tables.rs",
+  "crates/pyroid-core/src/html/entities.rs",
+  "crates/pyroid-core/src/trafilatura/tables.rs",
+  "crates/pyroid-core/src/warc/tables.rs",
+  # jusText's merged stoplists (100 languages).
+  "crates/pyroid-core/src/trafilatura/stoplist.txt",
+  "crates/pyroid-core/src/pyvi/unicode_tables.rs",
+  # Test data, incumbent fixtures and raw benchmark results: mojibake, confusables, deliberately
+  # misspelt and non-English text. Keep in step with the file-fixer excludes in .pre-commit-config.yaml.
+  "python/tests/data/",
+  "crates/pyroid-core/tests/ftfy_data/",
+  "crates/pyroid-core/tests/filters_data/",
+  "crates/pyroid-core/tests/metrics_data/",
+  # lxml's trees and errors for generated and real HTML (crates/pyroid-core/tests/html_lxml.rs).
+  "crates/pyroid-core/tests/html_data/",
+  # Trafilatura's outputs for generated pages under CPython 3.11-3.15.
+  "crates/pyroid-core/tests/trafilatura_data/",
+  # WARC files (warcio's own test files, generated variants) and warcio's, CPython's gzip and
+  # brotlicffi's recorded outputs for them.
+  "crates/pyroid-core/tests/data/warc/",
+  "crates/pyroid-core/tests/warc_gzipfile_data/",
+  # Hex floats recorded from scipy and datasketch.
+  "crates/pyroid-core/tests/datasketch_data/params.json",
+  # json_repair's own test inputs and its outputs for them, recorded byte for byte.
+  "crates/pyroid-core/src/json_repair/testdata/",
+  # jieba's and datatrove's recorded outputs (FineWeb-2 excerpts, fuzz, user-dictionary scenarios).
+  "crates/pyroid-core/src/jieba/testdata/",
+  # NLTK's recorded outputs (FineWeb and FineWeb-2 excerpts, adversarial text, fuzz, every code point).
+  "crates/pyroid-core/src/nltk/testdata/",
+  # SudachiPy's resource files, copied unmodified, and SudachiPy's and datatrove's recorded
+  # outputs (Japanese FineWeb-2 excerpts, every code point, fuzz).
+  "crates/pyroid-core/src/sudachi/resources/",
+  "crates/pyroid-core/src/sudachi/testdata/",
+  # pyvi's model and Vietnamese word list, copied unmodified, and pyvi's, PyThaiNLP's and
+  # datatrove's recorded outputs (Vietnamese and Thai FineWeb-2 excerpts, every code point, fuzz).
+  "crates/pyroid-core/src/pyvi/data/",
+  "crates/pyroid-core/src/pyvi/testdata/",
+  "crates/pyroid-core/src/pythainlp/testdata/",
+  "bench/data/",
+  "bench/results/",
+  # Charts copied byte for byte from bench/results/ (matplotlib SVGs).
+  "docs/assets/*.svg",
+  "parity/data/",
+  "parity/tests/",
+  "parity/pyroid_parity/refs.py",
+  "parity/pyroid_parity/strategies.py",
+  # cargo-fuzz corpora: arbitrary bytes and generated text, kept exactly as the fuzzers wrote them.
+  "fuzz/corpus/",
+  "fuzz/arrow/corpus/",
+  # Transliteration fixtures: accented and romanised words (caf\u00e9, ...). Typos only; the
+  # file-fixer hooks still check this file.
+  "python/tests/test_translit.py",
+  # The Porter stemmer's suffixes and stems ("iz", "ful", "ative", "agre", "controll") and its tests' words.
+  "crates/pyroid-core/src/metrics/rouge/porter.rs",
+  "python/tests/test_metrics_rouge.py",
+  # Multilingual filter/dedup tests: German, Turkish, Vietnamese ... text and language codes (tha_Thai).
+  "python/tests/test_filters_multilingual.py",
+  "python/tests/test_dedup_multilingual.py",
+  "python/tests/test_filters_vithai.py",
+  # The sentence-dedup tests' French, German, Russian ... sentences, and URL tests' made-up punycode labels.
+  "python/tests/test_sentence_dedup_more.py",
+  "python/tests/test_url_more.py",
+]
+
+[default.extend-words]
+# numpy's ndarray.flags.writeable (pyroid.datasketch keeps cached arrays read-only).
+writeable = "writeable"
+# datatrove's parameter names (line_punct_thr, short_line_thr), kept for drop-in parity.
+thr = "thr"
+# ISO 15924 script codes in datatrove / FineWeb-2 language codes (ben_Beng).
+Beng = "Beng"
+# ISO 639-3 Thai in datatrove / FineWeb-2 codes (tha_Thai), and German "ein" in test text.
+tha = "tha"
+Ein = "Ein"
+# Unicode's general category Nd (decimal digits) in pyroid.nltk's docs; NLTK's MacIntyre contraction
+# pattern "wha(t)(cha)"; and "ned", a piece of "rained" in the output of NLTK's RegexpTokenizer doctest.
+Nd = "Nd"
+wha = "wha"
+ned = "ned"
+# "caf\u00e9" and "Caf\xe9", e-acute escaped (bench/json_repair_bench.py's sample data and the
+# Latin-1 page of the trafilatura parity tests).
+caf = "caf"
+# German "ist" and "als" in the German sample page of parity/pyroid_parity/trafilatura_delegate.py.
+ist = "ist"
+als = "als"
+# "mor", one of the made-up syllables of the vocabulary in python/tests/test_dedup_files.py.
+mor = "mor"
+# "ontent" from the sed pattern `[Cc]ontent-[Ll]ength` in bench/ec2/run_warc.sh.
+ontent = "ontent"
+# Vietnamese "Nam" (Việt Nam) in test text and examples.
+Nam = "Nam"
+
+[default.extend-identifiers]
+# `import pyroid.nltk as pn` in the tests and benchmarks.
+pn = "pn"
+# QUADPACK's variable names, kept in the dqagse port (crates/pyroid-core/src/datasketch/quad.rs).
+correc = "correc"
+# The arro3 Arrow library (github.com/kylebarron/arro3), not a misspelt "arrow".
+arro3 = "arro3"
+# jusText, the paragraph classifier Trafilatura falls back on (github.com/miso-belica/jusText); typos
+# would otherwise split it into "jus" + "Text".
+jusText = "jusText"
+
+# bench/gates.py names near-duplicate pairs `nd` (not a misspelt "and"). typos matches file types by file name
+# only, so this type covers files named gates.py; there is one, and every other word in it is still checked.
+[type.bench-gates]
+extend-glob = ["gates.py"]
+
+[type.bench-gates.extend-identifiers]
+nd = "nd"
+
+# bench/json_repair_bench.py's seeded sample data: the name "Ines".
+[type.jr-bench]
+extend-glob = ["json_repair_bench.py"]
+
+[type.jr-bench.extend-words]
+ines = "ines"

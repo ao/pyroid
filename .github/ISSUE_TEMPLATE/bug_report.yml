@@ -1,0 +1,52 @@
+name: Bug report
+description: A crash, an exception that shouldn't happen, a packaging or install problem, or a slowdown.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+        - If pyroid's output differs from the library it replaces (ftfy, fastText, datatrove, ...), use the **Parity mismatch** form instead.
+        - Report security problems (memory corruption, segfaults on crafted input, ...) through [private vulnerability reporting](https://github.com/ao/pyroid/security/advisories/new), not here.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and this hasn't been reported.
+          required: true
+        - label: I can reproduce this with the latest pyroid release.
+          required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproducible example
+      description: The smallest self-contained script that shows the problem, including the input.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Traceback or error output
+      description: The full output, if any. For a crash, include the output of `python -X faulthandler your_script.py`.
+      render: text
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: |
+        Paste the output of:
+        `python -c "import platform, sys, sysconfig, pyroid; print(pyroid.__version__, sys.version, platform.platform(), 'free-threaded' if sysconfig.get_config_var('Py_GIL_DISABLED') else 'gil')"`
+        and say how you installed pyroid (pip/uv wheel from PyPI, from source, ...).
+      render: text
+    validations:
+      required: true

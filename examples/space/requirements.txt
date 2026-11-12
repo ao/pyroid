@@ -1,0 +1,4 @@
+pyroid[hf]>=1.0
+datasets>=5
+gradio>=6,<7
+pyarrow>=18

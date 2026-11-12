@@ -1,0 +1,11 @@
+@ÿ2WARC/1.0
+WARC-Type: response
+WARC-Target-URI: http://example.com/
+WARC-Record-ID: <urn:uuid:9e129f721f3ec465a1f92b0594d27f1b>
+WARC-Date: 2026-01-01T00:00:00Z
+Co5
+
+NOTHTTP 200
+
+
+

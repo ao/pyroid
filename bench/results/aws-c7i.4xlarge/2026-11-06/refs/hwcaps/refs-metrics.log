@@ -1,0 +1,4 @@
+[refs 11:27:41] metrics ...
+[refs 11:29:30] wrote parity/metrics-ref.linux-x86_64.parquet: 694757 rows, 20.0 MB
+[refs 11:29:30] verified parity/metrics-ref.linux-x86_64.parquet against the manifest
+[refs 11:29:30] metrics done in 109 s

@@ -1,487 +1,220 @@
-# 📌 Pyroid: Python on Rust-Powered Steroids
+# pyroid
 
-[![Tests](https://github.com/ao/pyroid/actions/workflows/tests.yml/badge.svg)](https://github.com/ao/pyroid/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/pyroid)](https://pypi.org/project/pyroid/)
+[![Python versions](https://img.shields.io/pypi/pyversions/pyroid)](https://pypi.org/project/pyroid/)
+[![License](https://img.shields.io/pypi/l/pyroid)](https://github.com/ao/pyroid/blob/main/LICENSE)
+[![CI](https://github.com/ao/pyroid/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ao/pyroid/actions/workflows/ci.yml)
 
-⚡ Blazing fast Rust-powered utilities to eliminate Python's performance bottlenecks.
+[Docs](https://ao.github.io/pyroid/) | [Benchmarks](https://ao.github.io/pyroid/benchmarks/) | [Compatibility](https://ao.github.io/pyroid/compatibility/)
 
-## 🔹 Why Pyroid?
+pyroid reimplements popular Python libraries in Rust, with the same API and the same output. Most
+of its modules are many times faster than the library they replace.
 
-- ✅ **Rust-powered acceleration** for CPU-heavy tasks
-- ✅ **Simplified architecture** with minimal dependencies
-- ✅ **Domain-driven design** for better organization
-- ✅ **Easy Python imports**—just `pip install pyroid`
-- ✅ **Modular toolkit** with optional features
-- ✅ **Optimized async operations** with unified runtime
-- ✅ **Zero-copy buffer protocol** for efficient memory usage
-- ✅ **Parallel processing** for high-throughput workloads
-
-## 📋 Table of Contents
-
-- [📌 Pyroid: Python on Rust-Powered Steroids](#-pyroid-python-on-rust-powered-steroids)
-  - [🔹 Why Pyroid?](#-why-pyroid)
-  - [📋 Table of Contents](#-table-of-contents)
-  - [💻 Installation](#-installation)
-  - [🚀 Feature Overview](#-feature-overview)
-    - [Core Features](#core-features)
-    - [Module Overview](#module-overview)
-  - [🔧 Feature Flags](#-feature-flags)
-  - [Usage Examples](#usage-examples)
-    - [Math Operations](#math-operations)
-    - [String Processing](#string-processing)
-    - [DataFrame Operations](#dataframe-operations)
-    - [Collection Operations](#collection-operations)
-    - [File I/O Operations](#file-io-operations)
-    - [Network Operations](#network-operations)
-    - [Async Operations](#async-operations)
-    - [Image Processing](#image-processing)
-    - [Machine Learning](#machine-learning)
-  - [📊 Performance Considerations](#-performance-considerations)
-  - [Building from Source](#building-from-source)
-  - [Running Benchmarks and Examples](#running-benchmarks-and-examples)
-  - [🔧 Requirements](#-requirements)
-  - [📄 License](#-license)
-  - [👥 Contributing](#-contributing)
-
-## 💻 Installation
-
-```bash
-pip install pyroid
+```console
+$ pip install pyroid
 ```
 
-For development installation:
+Change the import. The output is the same:
 
-```bash
-git clone https://github.com/ao/pyroid.git
-cd pyroid
-python build_and_install.py
+```python
+import pyroid.ftfy as ftfy  # was: import ftfy
+import pyroid.json_repair as json_repair  # was: import json_repair
+
+ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")  # 'naïve résumé'
+ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'], on all cores
+json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 ```
 
-This script will:
-1. Check if Rust is installed and install it if needed
-2. Build the Rust code with optimizations
-3. Install the Python package in development mode
+| Area | Module | Replaces |
+|---|---|---|
+| Text and encoding | [`pyroid.ftfy`](https://ao.github.io/pyroid/guides/ftfy/) | ftfy 6.3.1 |
+| | [`pyroid.translit`](https://ao.github.io/pyroid/guides/translit/) | anyascii 0.3.3; a permissively licensed alternative to Unidecode |
+| Language ID and NLP | [`pyroid.fasttext`](https://ao.github.io/pyroid/guides/fasttext/) | fastText 0.9.2 inference (fasttext, fasttext-wheel, fasttext-predict) |
+| | [`pyroid.nltk`](https://ao.github.io/pyroid/guides/nltk/) | NLTK 3.10.4's `sent_tokenize` (Punkt), `word_tokenize` and Treebank tokenizers |
+| | [`pyroid.jieba`](https://ao.github.io/pyroid/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
+| Web and archives | [`pyroid.trafilatura`](https://ao.github.io/pyroid/guides/trafilatura/) | Trafilatura's text extraction: 2.3.1, or 1.11.0 as datatrove 0.10.1 installs it (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
+| | [`pyroid.warc`](https://ao.github.io/pyroid/guides/warc/) | warcio 1.8.2's WARC/ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading (`WarcReader`) |
+| Dedup and similarity | [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
+| | [`pyroid.dedup`](https://ao.github.io/pyroid/guides/dedup/) | datatrove 0.10.1's MinHash and sentence dedup |
+| Quality filters | [`pyroid.filters`](https://ao.github.io/pyroid/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
+| | [`pyroid.nemo`](https://ao.github.io/pyroid/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
+| Evaluation | [`pyroid.metrics`](https://ao.github.io/pyroid/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
+| JSON | [`pyroid.json_repair`](https://ao.github.io/pyroid/guides/json_repair/) | json_repair 0.64.5 |
 
-## 🚀 Feature Overview
+## Example: cleaning LLM training data
 
-Pyroid provides high-performance implementations across multiple domains:
+The end-to-end benchmarks run datatrove's FineWeb pipeline. Without text extraction, that is a
+chain of ftfy, fastText language ID, the Gopher, C4 and FineWeb quality filters and MinHash dedup.
+On 100,000 FineWeb documents on AWS EC2 c7i.4xlarge, pyroid's version of the chain is 27× faster
+than datatrove on 8 processes, with the same output.
 
-### Core Features
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-dark.svg">
+  <img alt="Wall time to clean the 10,000-document FineWeb dev slice with identical output on AWS EC2 c7i.4xlarge: pyroid takes 1.9 s with 8 threads, 18× faster than datatrove's 35 s with 8 processes, and 5.6 s with 1 thread, 38× faster than datatrove's 213 s with 1 process" src="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-light.svg">
+</picture>
 
-- **Simplified Architecture**: Minimal external dependencies for better maintainability
-- **Domain-Driven Design**: Organized by functionality domains
-- **Pythonic API**: Easy to use from Python with familiar interfaces
-- **Memory Efficiency**: Optimized memory usage for large datasets
-- **Cross-Platform**: Works on Windows, macOS, and Linux
-- **Unified Async Runtime**: Shared Tokio runtime for all async operations
-- **Zero-Copy Buffer Protocol**: Efficient memory management without copying
-- **GIL-Aware Scheduling**: Optimized task scheduling with Python's GIL
-- **Parallel Processing**: Efficient batch processing with adaptive sizing
+<sub>The chain without text extraction, on the first 10,000 documents of the pinned FineWeb slice,
+with 1 and 8 processes or threads pinned to 8 CPUs. datatrove 0.10.1 (ftfy 6.3.1,
+fasttext-predict 0.9.2.4, spaCy 3.8.18) on CPython 3.13.18; pyroid's native chain on free-threaded
+CPython 3.15.2. Same output, document for document. On the 100k corpus the ratios are 27× and
+56×.</sub>
 
-### Module Overview
+`pyroid clean` runs the chain over Parquet or JSONL files:
 
-| Module | Description | Key Functions |
-|--------|-------------|--------------|
-| Math | Numerical computations | `vector_operations`, `matrix_operations`, `statistics` |
-| String | Text processing | `reverse`, `base64_encode`, `base64_decode` |
-| Data | Collection and DataFrame operations | `filter`, `map`, `reduce`, `dataframe_apply` |
-| I/O | File and network operations | `read_file`, `write_file`, `http_get`, `http_post` |
-| Image | Basic image manipulation | `create_image`, `to_grayscale`, `resize`, `blur` |
-| ML | Basic machine learning | `kmeans`, `linear_regression`, `normalize`, `distance_matrix` |
-| Core | Core functionality | `runtime`, `buffer`, `parallel` |
-
-## 🔧 Feature Flags
-
-Pyroid uses feature flags to allow selective compilation of components:
-
-| Feature Flag | Description | Default |
-|--------------|-------------|---------|
-| `math` | Math operations | Enabled |
-| `text` | Text processing | Enabled |
-| `data` | Collection and DataFrame operations | Enabled |
-| `io` | File and network operations | Enabled |
-| `image` | Basic image processing | Enabled |
-| `ml` | Basic machine learning | Enabled |
-
-To compile with only specific features, modify your `Cargo.toml`:
-
-```toml
-[dependencies]
-pyroid = { version = "0.1.0", default-features = false, features = ["math", "data"] }
+```console
+$ pip install "pyroid[cli]"
+$ pyroid clean in.parquet out.parquet --recipe fineweb   # datatrove's FineWeb pipeline
 ```
 
-## Usage Examples
+pyroid's stages also drop into datatrove's own executor. There the chain runs 11.2× faster at 8
+processes on the dev slice, and 13.6× on 100k documents.
 
-### Math Operations
+From Common Crawl WARC files, the pipeline also extracts the text with Trafilatura. On 8 WARC files
+of CC-MAIN-2026-39 (171,595 pages), on a c7i.4xlarge with 8 workers, stock datatrove took 848.3 s.
+With pyroid's steps in datatrove it took 89.4 s (9.5×), and `pyroid clean --recipe fineweb-warc`
+took 79.6 s (10.7×). Both keep the same documents as stock datatrove, apart from the pages it
+drops at its 1 s extraction timeout
+([benchmarks](https://ao.github.io/pyroid/benchmarks/#from-warc-files-datatroves-fineweb-pipeline)).
+
+## Same output, checked
+
+Each module is tested against the library it replaces, on pinned real data and with
+property-based fuzzing. The comparisons are exact: `pyroid.ftfy` is byte-identical to ftfy 6.3.1,
+and the metrics match rouge-score and sacrebleu to the last digit. fastText's labels and
+probabilities are bit-identical to its C++ code on Linux (glibc) and Windows x64; on macOS the
+probabilities can differ in the last bits. The
+[compatibility page](https://ao.github.io/pyroid/compatibility/) has the counts for every module,
+and each guide lists its known differences.
+
+CI runs the `parity/` suites on Linux x86_64 and aarch64, and most of them have also run natively
+on AWS EC2 ([platforms](https://ao.github.io/pyroid/compatibility/#platforms)). On macOS, Windows
+and musl Linux, every release's wheels pass pyroid's test suite before they are published.
+
+Where a module doesn't port an option or input, it hands the call to the real library with a
+`pyroid.FallbackWarning`, or raises.
+
+Results don't depend on the number of threads or workers, or on how loaded the machine is. Stock
+datatrove's do: its Trafilatura step gives up on a page after 1 s, so two runs over the same WARC
+files can keep different documents. pyroid has no timeout.
+
+## Differences from the originals
+
+Batch functions take a `str`, a `list` of `str` or an Arrow column (pyarrow, polars, Hugging Face
+`datasets`) and return text and masks in the same kind. They release the GIL and run on all
+cores, so threads replace worker processes, and every thread shares one loaded fastText model
+instead of a copy per process.
+
+Wheels cover CPython 3.11 to 3.15 and free-threaded 3.14t and 3.15t, on Linux (glibc and musl),
+macOS and Windows, for x86-64 and ARM64, so no compiler is needed. The core has no runtime
+dependencies; `pyroid.fasttext` and `pyroid.datasketch` need numpy (`pip install "pyroid[fasttext]"`,
+`"pyroid[datasketch]"`).
+
+## Speed by module
+
+pyroid on one thread against the library it replaces in one process, on the 10,000-document
+FineWeb dev slice, AWS EC2 c7i.4xlarge:
+
+| pyroid | Against | Speedup |
+|---|---|---:|
+| `ftfy.fix_text_batch` | ftfy 6.3.1 | 108× |
+| `fasttext` `predict`, `lid.176.bin` / `lid.176.ftz` | fasttext-predict 0.9.2.4 | 1.6× / 3.6× |
+| `filters`, Gopher, C4 and FineWeb quality | datatrove 0.10.1 | 35–69× |
+| `dedup`, MinHash signatures | datatrove 0.10.1 | 34× |
+| `translit.anyascii` | anyascii 0.3.3 | 53× |
+
+The other modules have only been measured in a Docker VM on a Mac, so treat these as indicative
+(one thread unless stated):
+
+| pyroid | Against | Speedup |
+|---|---|---:|
+| `trafilatura.extract`, default options (`compat="2.3.1"` / `"1.11.0"`) | Trafilatura 2.3.1 / 1.11.0 | 7.2× / 8.6× |
+| `metrics`, ROUGE | rouge-score 0.1.2 | 59–65× |
+| `metrics`, corpus BLEU / chrF | sacrebleu 2.6.0 | 11× / 19× |
+| `json_repair.repair_json`, broken JSON | json_repair 0.64.5 | about 30× |
+| `datasketch`, MinHash signatures, 1 / 8 threads | datasketch 2.0.0 | 8× / 21× |
+| `jieba.lcut`, a batch, 1 / 8 threads | jieba 0.42.1 | 24× / 58× |
+| `nltk.sent_tokenize` / `word_tokenize` | NLTK 3.10.4 | 60× / 31× |
+| `filters`, FineWeb-2 settings, Chinese / Japanese | datatrove 0.10.1 | 44× / 7.8× |
+
+`pyroid.json_repair` stays linear on 13 input families where json_repair is quadratic, so the gap
+grows with the input. The [benchmarks page](https://ao.github.io/pyroid/benchmarks/) has each
+row's corpus, interpreter and source.
+
+## Integrations
+
+| Entry point | What it does |
+|---|---|
+| [`pyroid clean`](https://ao.github.io/pyroid/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files |
+| [Large datasets](https://ao.github.io/pyroid/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
+| [`pyroid.patch()`](https://ao.github.io/pyroid/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
+| [datatrove steps](https://ao.github.io/pyroid/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
+| [NeMo Curator stages](https://ao.github.io/pyroid/guides/nemo-curator/) | NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, the heuristic filters, the modifiers) with the same classes and arguments |
+| [Hugging Face `datasets`](https://ao.github.io/pyroid/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
 
 ```python
 import pyroid
 
-# Vector operations
-v1 = pyroid.math.Vector([1, 2, 3])
-v2 = pyroid.math.Vector([4, 5, 6])
-v3 = v1 + v2
-print(f"Vector sum: {v3}")
-print(f"Dot product: {v1.dot(v2)}")
-
-# Matrix operations
-m1 = pyroid.math.Matrix([[1, 2], [3, 4]])
-m2 = pyroid.math.Matrix([[5, 6], [7, 8]])
-m3 = m1 * m2
-print(f"Matrix product: {m3}")
-
-# Statistical functions
-numbers = [1, 2, 3, 4, 5]
-mean = pyroid.math.stats.mean(numbers)
-median = pyroid.math.stats.median(numbers)
-std_dev = pyroid.math.stats.calc_std(numbers)
-print(f"Mean: {mean}, Median: {median}, StdDev: {std_dev}")
+pyroid.patch("ftfy", "fasttext")  # later imports of ftfy and fasttext get pyroid's
 ```
 
-### String Processing
+The filters and dedup tokenize 4,049 of datatrove's 4,343 language codes natively, Chinese and
+Vietnamese included. Native Japanese needs `pip install sudachidict-core`, and native Thai
+`pip install pythainlp`. The rest go through datatrove's own tokenizers
+([languages](https://ao.github.io/pyroid/guides/languages/)).
 
-```python
-import pyroid
+## The 0.7.x releases
 
-# Basic string operations
-text = "Hello, world!"
-reversed_text = pyroid.text.reverse(text)
-uppercase = pyroid.text.to_uppercase(text)
-lowercase = pyroid.text.to_lowercase(text)
+pyroid 1.0 is a rewrite, and its API is incompatible with 0.1 to 0.7. Those releases tried to make
+Python faster with general-purpose helpers, most of which ran in Python. 1.0 replaces existing
+libraries exactly, so it speeds up code that uses them, not Python in general.
 
-# Base64 encoding/decoding
-encoded = pyroid.text.base64_encode(text)
-decoded = pyroid.text.base64_decode(encoded)
-print(f"Original: {text}")
-print(f"Encoded: {encoded}")
-print(f"Decoded: {decoded}")
+0.7.x is still on PyPI (`pip install "pyroid<1"`), and its source is on the
+[`legacy`](https://github.com/ao/pyroid/tree/legacy) branch.
+[Migrating from 0.7](https://ao.github.io/pyroid/migrating-from-0.7/) lists replacements.
+
+## Development
+
+The extension is built with [maturin](https://www.maturin.rs/):
+
+```console
+$ uv venv && source .venv/bin/activate
+$ uv pip install maturin --group test
+$ maturin develop --uv     # builds pyroid._pyroid into the venv (editable)
+$ pytest python/tests
+$ cargo test               # pure-Rust core (crates/pyroid-core)
 ```
 
-### DataFrame Operations
-
-```python
-import pyroid
-
-# Create a DataFrame
-df = pyroid.data.DataFrame({
-    'id': [1, 2, 3, 4, 5],
-    'name': ['Alice', 'Bob', 'Charlie', 'David', 'Eve'],
-    'age': [25, 30, 35, 40, 45]
-})
-
-# Apply a function to each column
-result = pyroid.data.apply(df, lambda x: x * 2, axis=0)
-print(f"DataFrame: {df}")
-print(f"Applied function: {result}")
-
-# Group by and aggregate
-grouped = pyroid.data.groupby_aggregate(df, "age", {"name": "count"})
-print(f"Grouped by age: {grouped}")
-```
-
-### Collection Operations
-
-```python
-import pyroid
-
-# Filter a list
-numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-even_numbers = pyroid.data.filter(numbers, lambda x: x % 2 == 0)
-print(f"Even numbers: {even_numbers}")
-
-# Map a function over a list
-squared = pyroid.data.map(numbers, lambda x: x * x)
-print(f"Squared numbers: {squared}")
-
-# Reduce a list
-sum_result = pyroid.data.reduce(numbers, lambda x, y: x + y)
-print(f"Sum: {sum_result}")
-
-# Sort a list
-unsorted = [5, 2, 8, 1, 9, 3]
-sorted_list = pyroid.data.sort(unsorted, reverse=True)  # Note: supports reverse parameter
-print(f"Sorted (descending): {sorted_list}")
-```
-
-### File I/O Operations
-
-```python
-import pyroid
-
-# Read a file
-content = pyroid.io.read_file("example.txt")
-print(f"File content length: {len(content)}")
-
-# Write a file
-pyroid.io.write_file("output.txt", "Hello, world!")  # Note: string, not bytes
-
-# Read multiple files
-files = ["file1.txt", "file2.txt", "file3.txt"]
-contents = pyroid.io.read_files(files)
-print(f"Read multiple files: {contents}")
-```
-
-### Network Operations
-
-```python
-import pyroid
-
-# Make a GET request
-response = pyroid.io.get("https://example.com")
-print(f"HTTP GET response length: {len(response)}")
-
-# Note: POST requests might not be implemented in the current version
-# If you need to make POST requests, check the documentation for the latest API
-```
-
-### Async Operations
-
-```python
-import asyncio
-import pyroid
-from pyroid.core import runtime, buffer, parallel
-
-async def main():
-    # Initialize the runtime
-    runtime.init()
-    print(f"Runtime initialized with {runtime.get_worker_threads()} worker threads")
-    
-    # Create an AsyncClient for HTTP operations
-    client = pyroid.AsyncClient()
-    
-    # Fetch a URL asynchronously
-    response = await client.fetch("https://example.com")
-    print(f"Status code: {response['status']}")
-    
-    # Fetch multiple URLs concurrently
-    urls = [f"https://example.com/{i}" for i in range(10)]
-    responses = await client.fetch_many(urls, concurrency=5)
-    print(f"Fetched {len(responses)} URLs")
-    
-    # Async file operations
-    file_reader = pyroid.AsyncFileReader("example.txt")
-    content = await file_reader.read_all()
-    print(f"File content length: {len(content)}")
-    
-    # Zero-copy buffer operations
-    zero_copy_buffer = buffer.ZeroCopyBuffer(1024)  # 1KB buffer
-    data = zero_copy_buffer.get_data()
-    # Modify data...
-    zero_copy_buffer.set_data(data)
-    
-    # Parallel processing
-    processor = parallel.BatchProcessor(batch_size=1000, adaptive=True)
-    items = list(range(1000000))
-    
-    def process_item(x):
-        return x * x
-    
-    results = processor.map(items, process_item)
-    print(f"Processed {len(results)} items")
-
-# Run the async main function
-asyncio.run(main())
-```
-
-For a more comprehensive example, see `examples/optimized_async_example.py`.
-
-### Image Processing
-
-```python
-import pyroid
-
-# Create a new image (width, height, channels)
-img = pyroid.image.basic.create_image(100, 100, 3)
-
-# Set some pixels
-for x in range(50):
-    for y in range(50):
-        img.set_pixel(x, y, [255, 0, 0])  # Red square
-
-for x in range(50, 100):
-    for y in range(50, 100):
-        img.set_pixel(x, y, [0, 0, 255])  # Blue square
-
-# Apply operations
-grayscale_img = img.to_grayscale()
-resized_img = img.resize(200, 200)
-blurred_img = img.blur(2)
-brightened_img = img.adjust_brightness(1.5)
-
-# Get image data
-width = img.width
-height = img.height
-channels = img.channels
-data = img.data
-```
-
-### Machine Learning
-
-```python
-import pyroid
-
-# K-means clustering
-data = [
-    [1.0, 2.0], [1.5, 1.8], [5.0, 8.0],
-    [8.0, 8.0], [1.0, 0.6], [9.0, 11.0]
-]
-kmeans_result = pyroid.ml.basic.kmeans(data, k=2)
-print(f"K-means centroids: {kmeans_result['centroids']}")
-print(f"K-means clusters: {kmeans_result['clusters']}")
-
-# Linear regression
-# Note: Linear regression expects X as 2D array and y as 1D array
-X = [[1, 1], [1, 2], [2, 2], [2, 3]]
-y = [6, 8, 9, 11]
-regression_result = pyroid.ml.basic.linear_regression(X, y)
-print(f"Linear regression coefficients: {regression_result['coefficients']}")
-print(f"Linear regression intercept: {regression_result['intercept']}")
-print(f"Linear regression R-squared: {regression_result['r_squared']}")
-
-# Data normalization
-normalized_data = pyroid.ml.basic.normalize(data, method="min-max")
-print(f"Normalized data (min-max): {normalized_data}")
-
-# Distance matrix
-distance_matrix = pyroid.ml.basic.distance_matrix(data, metric="euclidean")
-print(f"Distance matrix shape: {len(distance_matrix)}x{len(distance_matrix[0])}")
-```
-
-## 📊 Performance Considerations
-
-Pyroid offers significant performance improvements over pure Python:
-
-- **Math operations**: Optimized vector and matrix operations
-- **String processing**: Efficient string manipulation and base64 encoding/decoding
-- **Data operations**: Improved collection operations and DataFrame handling
-- **I/O operations**: Efficient file and network operations with async support
-- **Image processing**: Basic image manipulation without external dependencies
-- **Machine learning**: Simple ML algorithms implemented in pure Rust
-- **Async operations**: High-performance async operations with unified runtime
-- **Zero-copy buffers**: Efficient memory management without copying
-- **Parallel processing**: Batch processing with adaptive sizing for optimal performance
-
-For detailed benchmarks and performance comparisons between Pyroid's Rust implementation and Python alternatives, see our [Performance Comparison](docs/performance_comparison.md) document. Our benchmarks show that Pyroid's Rust implementation can be **up to 15,000x faster** than equivalent Python code for certain operations, with performance advantages that scale dramatically with data size.
-
-> **Note**: The Python fallback implementations are provided only for development and testing when the Rust components cannot be built. For production use, the Rust implementation is essential to achieve the performance benefits.
-
-## Building from Source
-
-To build pyroid from source, you need:
-
-1. **Rust** (1.70.0 or later)
-2. **Python** (3.8 or later)
-3. **Cargo** (comes with Rust)
-
-The easiest way to build and install pyroid is to use the provided script:
-
-```bash
-python build_and_install.py
-```
-
-Alternatively, you can build manually:
-
-```bash
-# Build the Rust code
-cargo build --release
-
-# Install the Python package in development mode
-pip install -e .
-```
-
-For performance-critical applications, consider using the following optimizations:
-
-1. **Verify Rust Implementation**: Ensure you're using the high-performance Rust implementation
-   ```bash
-   python check_implementation.py
-   ```
-
-2. **Run Python Tests**: Ensure the Python fallback implementations work correctly
-   ```bash
-   python run_tests.py
-   ```
-
-3. **Run Rust Tests**: Ensure the Rust implementations work correctly
-   ```bash
-   # Run all Rust tests
-   cargo test --test test_rust_*
-   
-   # Or run specific module tests
-   cargo test --test test_rust_core    # Core functionality tests
-   cargo test --test test_rust_math    # Math operations tests
-   cargo test --test test_rust_data    # Data operations tests
-   cargo test --test test_rust_text    # Text operations tests
-   cargo test --test test_rust_io      # I/O operations tests
-   cargo test --test test_rust_image   # Image operations tests
-   cargo test --test test_rust_impl    # ML operations tests
-   ```
-
-   For detailed information about the Rust tests, see [Rust Tests Documentation](docs/rust_tests.md).
-
-2. **Unified Runtime**: Initialize the runtime once at the start of your application
-   ```python
-   from pyroid.core import runtime
-   runtime.init()
-   ```
-
-3. **Zero-Copy Buffers**: Use zero-copy buffers for large data transfers
-   ```python
-   from pyroid.core import buffer
-   zero_copy_buffer = buffer.ZeroCopyBuffer(size)
-   ```
-
-4. **Parallel Processing**: Use batch processing for CPU-intensive operations
-   ```python
-   from pyroid.core import parallel
-   processor = parallel.BatchProcessor(adaptive=True)
-   results = processor.map(items, process_function)
-   ```
-
-5. **Concurrency Control**: Adjust concurrency levels based on your workload
-   ```python
-   client = pyroid.AsyncClient()
-   responses = await client.fetch_many(urls, concurrency=optimal_value)
-   ```
-
-## Running Benchmarks and Examples
-
-To run the benchmarks and see the performance improvements:
-
-```bash
-# Build and install pyroid first
-python build_and_install.py
-
-# Run the async benchmarks
-python -m benchmarks.run_benchmarks --size small --suite async --no-dashboard
-
-# Run the high-throughput benchmark
-python -m benchmarks.run_benchmarks --size small --suite high-throughput --no-dashboard
-```
-
-To run the example demonstrating all the optimized features:
-
-```bash
-# Build and install pyroid first
-python build_and_install.py
-
-# Run the example
-python examples/optimized_async_example.py
-```
-
-## 🔧 Requirements
-
-- Python 3.8+
-- Supported platforms: Windows, macOS, Linux
-
-## 📄 License
-
-MIT
-
-## 👥 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Layout:
+
+- `crates/pyroid-core`: pure Rust, no Python;
+- `crates/pyroid-py`: the PyO3 bindings, built as `pyroid._pyroid`;
+- `python/pyroid`: the typed Python package;
+- `bench/`: the benchmark harness;
+- `parity/`: differential tests against the incumbents;
+- `docs/`: the documentation.
+
+See [CONTRIBUTING.md](https://github.com/ao/pyroid/blob/main/CONTRIBUTING.md).
+
+## License
+
+pyroid's own code is MIT. The ported parts keep their licences, so the package's licence
+expression is
+`MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib`:
+
+- Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK (the Porter stemmer and the
+  tokenizers), sacrebleu, Trafilatura, SudachiPy and warcio;
+- MIT: ported from fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba
+  (with its dictionary) and libxml2 (the HTML parser);
+- BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists);
+- BSD-3-Clause: numpy's random generator (for C4 bad words), scipy's QUADPACK integration (for
+  MinHashLSH's parameters), tldextract and lxml;
+- PSF-2.0: CPython's `ipaddress` (IPv6 parsing);
+- ISC: anyascii's transliteration data;
+- Unicode-3.0: data from the Unicode Character Database;
+- Zlib: zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.
+
+See [LICENSE](https://github.com/ao/pyroid/blob/main/LICENSE),
+[LICENSES/](https://github.com/ao/pyroid/tree/main/LICENSES) and
+[NOTICE](https://github.com/ao/pyroid/blob/main/NOTICE), which lists the ported files.
+[LICENSES/THIRD-PARTY-RUST.txt](https://github.com/ao/pyroid/blob/main/LICENSES/THIRD-PARTY-RUST.txt)
+has the licences of the Rust crates the extension links.

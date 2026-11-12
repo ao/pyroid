@@ -1,0 +1,40 @@
+WARC/1.0
+WARC-Type: warcinfo
+WARC-Record-ID: <urn:uuid:0>
+Content-Length: 16
+
+software: synth
+
+
+WARC/1.0
+WARC-Type: request
+WARC-Target-URI: http://example.com/p
+WARC-Record-ID: <urn:uuid:1>
+WARC-Date: 2026-01-02T00:00:00Z
+Content-Length: 38
+
+GET /p HTTP/1.1
+Host: example.com
+
+
+
+WARC/1.0
+WARC-Type: response
+WARC-Target-URI: ht:e/t/pxample.com/p
+WARC-Record-ID: <urn:uuid:1>
+WARC-Date: 2026-01-02T00:00:00Z
+WARC-Identified-Payload-Type: text/html
+Content-Length: 1914
+
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+
+<html><head><title>t</title></head><body>caf�fa � éccafé café café café café café café café café café café café café café café café café café café café café café café café café cafécafé café café café café café café café café café café café café café café café café café café café café ca-ID: <urn:uuid:1>
+WARC-Date: 2026-01-02T00:00:00Z
+Content-Length: 47
+
+HTTP/1.1 200 OK
+
+<html>no payload type</html>
+
+WARC

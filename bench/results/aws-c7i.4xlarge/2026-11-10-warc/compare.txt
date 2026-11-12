@@ -1,0 +1,12 @@
+reference: native-8
+run                        mode           w    wall s      cpu s   final  lost after_minhash_filter after_pii      same
+native-8                   native         8      90.4      650.3   23505     5 d0e2ad4807f0   0a35ff32512d   yes
+pyroid-8                   pyroid-steps   8      89.4      677.7   23505     5 d0e2ad4807f0   0a35ff32512d   yes
+cli-8                      cli            8      79.6      600.3   23505     5 -              0a35ff32512d   yes
+native-1                   native         1     607.8      609.4   23505     5 d0e2ad4807f0   0a35ff32512d   yes
+pyroid-1                   pyroid-steps   1     640.5      641.2   23505     5 d0e2ad4807f0   0a35ff32512d   yes
+stock-8                    stock          8     848.3     6593.0   23503    73 a844ec39ead3   12656e56fb88   NO
+stock-8 vs native-8: {"only_in_reference": 2, "only_in_run": 0, "text_differs_after_minhash_filter": 0, "text_differs_after_pii": 0, "examples": {"only_in_reference": ["<urn:uuid:01a06caa-ecf0-71a2-8d78-d7ceff05f0b7>", "<urn:uuid:01a06cd5-a2f7-7797-b7fb-186b1fc69b75>"], "only_in_run": [], "text_differs_after_minhash_filter": [], "text_differs_after_pii": []}}
+  document counts differ from stage trafilatura on: trafilatura 164854 vs 164786, lid 58477 vs 58462, gopher_repetition 46596 vs 46587, gopher_quality 31435 vs 31430, c4_quality 28666 vs 28662, fineweb_quality 24797 vs 24794, minhash_filter 23505 vs 23503, pii 23505 vs 23503
+note: stock-8 lost pages to datatrove's Trafilatura timeout or a dead child process; compare them with `native --timeouts-of <stock run>` instead
+DIFFERENT

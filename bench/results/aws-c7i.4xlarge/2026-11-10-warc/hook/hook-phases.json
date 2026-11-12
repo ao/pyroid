@@ -1,0 +1,6 @@
+{
+  "env": {"status": "ok", "seconds": 8},
+  "corpus": {"status": "ok", "seconds": 25},
+  "suite": {"status": "ok", "seconds": 517},
+  "scale": {"status": "ok", "seconds": 403}
+}

@@ -1,0 +1,35 @@
+branch: next
+sha: f35bd9e4cbc0e75cd5066fc722c826c52dfce8cb
+subject: build: licence expression adds BSD-3-Clause and PSF-2.0 for the numpy, tldextract and ipaddress ports
+overlay_ref: feat/ec2bench
+overlay_sha: 2a286e8482d6972d50ffae0f35b4c141a97f6ef5
+overlay_paths: bench/ec2 bench/run_consolidated.sh bench/run_baselines.sh bench/consolidate.py bench/chart.py bench/machine_info.py bench/summarize.py
+status:
+M  bench/chart.py
+M  bench/consolidate.py
+A  bench/ec2/README.md
+A  bench/ec2/bootstrap.sh
+A  bench/ec2/ec2.sh
+A  bench/ec2/refdiff.py
+A  bench/ec2/run.sh
+A  bench/ec2/summary.py
+A  bench/ec2/user-data.sh
+M  bench/machine_info.py
+M  bench/run_baselines.sh
+M  bench/run_consolidated.sh
+M  bench/summarize.py
+diffstat vs HEAD:
+ bench/chart.py            |  28 ++-
+ bench/consolidate.py      | 271 +++++++++++++--------
+ bench/ec2/README.md       |  61 +++++
+ bench/ec2/bootstrap.sh    | 114 +++++++++
+ bench/ec2/ec2.sh          | 292 ++++++++++++++++++++++
+ bench/ec2/refdiff.py      | 601 ++++++++++++++++++++++++++++++++++++++++++++++
+ bench/ec2/run.sh          | 536 +++++++++++++++++++++++++++++++++++++++++
+ bench/ec2/summary.py      | 173 +++++++++++++
+ bench/ec2/user-data.sh    |   8 +
+ bench/machine_info.py     |  38 ++-
+ bench/run_baselines.sh    |  17 +-
+ bench/run_consolidated.sh |  93 +++++--
+ bench/summarize.py        |   8 +-
+ 13 files changed, 2104 insertions(+), 136 deletions(-)

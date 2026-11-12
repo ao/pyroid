@@ -1,0 +1,113 @@
+    Updating crates.io index
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+ Downloading crates ...
+  Downloaded cfg-if v1.0.5
+  Downloaded hybrid-array v0.4.15
+  Downloaded autocfg v1.5.1
+  Downloaded digest v0.11.3
+  Downloaded pyo3-macros v0.30.1
+  Downloaded crypto-common v0.2.2
+  Downloaded heck v0.5.0
+  Downloaded block-buffer v0.12.1
+  Downloaded sha1 v0.11.0
+  Downloaded equivalent v1.0.3
+  Downloaded rawpointer v0.2.1
+  Downloaded cpufeatures v0.3.1
+  Downloaded crossbeam-epoch v0.9.21
+  Downloaded num-integer v0.1.47
+  Downloaded itoa v1.0.18
+  Downloaded crossbeam-deque v0.8.8
+  Downloaded num-complex v0.4.6
+  Downloaded once_cell v1.21.4
+  Downloaded either v1.19.0
+  Downloaded rustc-hash v2.1.3
+  Downloaded simdutf8 v0.1.5
+  Downloaded target-lexicon v0.13.5
+  Downloaded zmij v1.0.23
+  Downloaded crossbeam-utils v0.8.23
+  Downloaded quote v1.0.47
+  Downloaded twox-hash v2.1.5
+  Downloaded unicode-ident v1.0.27
+  Downloaded num-traits v0.2.19
+  Downloaded pyo3-build-config v0.30.1
+  Downloaded matrixmultiply v0.3.11
+  Downloaded proc-macro2 v1.0.107
+  Downloaded tinyvec v1.13.3
+  Downloaded serde_core v1.0.229
+  Downloaded rayon-core v1.13.0
+  Downloaded portable-atomic-util v0.2.8
+  Downloaded serde_derive v1.0.229
+  Downloaded serde v1.0.229
+  Downloaded typenum v1.20.1
+  Downloaded pyo3-macros-backend v0.30.1
+  Downloaded memchr v2.8.3
+  Downloaded numpy v0.30.0
+  Downloaded pyo3-ffi v0.30.1
+  Downloaded indexmap v2.14.2
+  Downloaded hashbrown v0.17.1
+  Downloaded serde_json v1.0.154
+  Downloaded unicode-normalization v0.1.26
+  Downloaded rayon v1.12.0
+  Downloaded portable-atomic v1.15.0
+  Downloaded ndarray v0.17.2
+  Downloaded any_ascii v0.3.3
+  Downloaded syn v3.0.9
+  Downloaded libc v0.2.191
+  Downloaded pyo3 v0.30.1
+🍹 Building a mixed python/rust project
+🐍 Found CPython 3.12 at /opt/pyroid/python/cpython-3.12-linux-aarch64-gnu/bin/python3.12
+🔗 Found pyo3 bindings with abi3-py3.11 support
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on shared package cache
+   Compiling target-lexicon v0.13.5
+   Compiling autocfg v1.5.1
+   Compiling libc v0.2.191
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.27
+   Compiling crossbeam-utils v0.8.23
+   Compiling quote v1.0.47
+   Compiling typenum v1.20.1
+   Compiling crossbeam-epoch v0.9.21
+   Compiling pyo3-macros-backend v0.30.1
+   Compiling crossbeam-deque v0.8.8
+   Compiling heck v0.5.0
+   Compiling rayon-core v1.13.0
+   Compiling rawpointer v0.2.1
+   Compiling cfg-if v1.0.5
+   Compiling tinyvec v1.13.3
+   Compiling once_cell v1.21.4
+   Compiling rustc-hash v2.1.3
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.3
+   Compiling either v1.19.0
+   Compiling any_ascii v0.3.3
+   Compiling memchr v2.8.3
+   Compiling twox-hash v2.1.5
+   Compiling simdutf8 v0.1.5
+   Compiling num-traits v0.2.19
+   Compiling matrixmultiply v0.3.11
+   Compiling unicode-normalization v0.1.26
+   Compiling pyo3-build-config v0.30.1
+   Compiling hybrid-array v0.4.15
+   Compiling syn v3.0.9
+   Compiling indexmap v2.14.2
+   Compiling pyo3-ffi v0.30.1
+   Compiling pyo3 v0.30.1
+   Compiling numpy v0.30.0
+   Compiling cpufeatures v0.3.1
+   Compiling block-buffer v0.12.1
+   Compiling crypto-common v0.2.2
+   Compiling num-complex v0.4.6
+   Compiling num-integer v0.1.47
+   Compiling rayon v1.12.0
+   Compiling ndarray v0.17.2
+   Compiling digest v0.11.3
+   Compiling sha1 v0.11.0
+   Compiling pyroid-core v1.0.0-dev (/opt/pyroid/src/pyroid/crates/pyroid-core)
+   Compiling pyo3-macros v0.30.1
+   Compiling pyroid-py v1.0.0-dev (/opt/pyroid/src/pyroid/crates/pyroid-py)
+    Finished `release` profile [optimized] target(s) in 54.79s
+📦 Built wheel for abi3 Python ≥ 3.11 to /opt/pyroid/work/dist/pyroid-1.0.0.dev0-cp311-abi3-manylinux_2_34_aarch64.whl

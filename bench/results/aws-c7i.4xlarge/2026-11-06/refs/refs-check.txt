@@ -1,0 +1,4 @@
+MISMATCH (expected, linux-x86_64) parity/metrics-ref.linux-x86_64.parquet: ca0a0068bddc 20002927 B -> 8107ddcdfb40 20003089 B; metrics: 694757 vs 694757 rows (0 only old, 0 only new), 165 of 694757 common rows differ; bleu@intl 1/141 (max 1 ulps, rel 1.23e-16); bleu@char 1/141 (max 1 ulps, rel 2.09e-16); sentence_bleu 81/163000 (max 2 ulps, rel 2.4e-16); sentence_bleu@multi 82/163000 (max 2 ulps, rel 2.4e-16)
+REPINNED parity/metrics-ref.linux-x86_64.parquet: changed bytes, sha256
+check linux-x86_64: 8 checked, 7 reproduced, 1 mismatched (0 unexpected), 0 missing, 1 repinned; reproduced=False
+wrote /opt/pyroid/results/aws-c7i.4xlarge/2026-11-06/refs/refs-check.json
