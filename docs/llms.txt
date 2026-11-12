@@ -1,31 +1,41 @@
 # pyroid
 
-> pyroid reimplements popular Python libraries in Rust, with the same API and the same output; most of its modules run many times faster than the library they replace. Text and encoding: ftfy 6.3.1, anyascii 0.3.3. Language ID and NLP: fastText inference, NLTK 3.10.4's tokenizers, jieba 0.42.1. Web and archives: Trafilatura 2.3.1 and 1.11.0, warcio 1.8.2. Dedup and similarity: datasketch 2.0.0, datatrove 0.10.1's MinHash and sentence dedup. Quality filters: datatrove 0.10.1's Gopher, C4, FineWeb, PII and URL filters, NeMo Curator 1.4.0's heuristic filters. Evaluation: rouge-score 0.1.2, sacrebleu 2.6.0. JSON: json_repair 0.64.5. Install with `pip install pyroid` and change the import (`import pyroid.ftfy as ftfy`). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. The end-to-end measurements are in cleaning LLM training data: from WARC files, datatrove's FineWeb pipeline runs 9.5x faster with pyroid's steps, WARC reader included (89.4 s vs 848.3 s, 8 workers, AWS EC2 c7i.4xlarge), and 10.7x as `pyroid clean --recipe fineweb-warc` (79.6 s).
+> pyroid reimplements popular Python libraries in Rust, with the same API and the same output. Most of its modules run many times faster than the library they replace. Install with `pip install pyroid` and change the import (`import pyroid.ftfy as ftfy`). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t.
+
+The end-to-end benchmarks are on cleaning LLM training data. From WARC files, datatrove's FineWeb pipeline runs 9.5x faster with pyroid's steps, WARC reader included (89.4 s vs 848.3 s, 8 workers, AWS EC2 c7i.4xlarge), and 10.7x as `pyroid clean --recipe fineweb-warc` (79.6 s).
 
 Modules and what they match:
 
 - `pyroid.ftfy` (`import pyroid.ftfy as ftfy`): byte-identical to ftfy 6.3.1.
 - `pyroid.translit`: `anyascii()` byte-identical to anyascii 0.3.3; `unidecode()` with Unidecode's signature and errors= semantics but anyascii's output.
-- `pyroid.fasttext` (`pyroid.fasttext.load_model`): the same .bin/.ftz files, bit-identical predictions on Linux (glibc) and Windows x64 (on macOS the probabilities can differ in the last bits).
+- `pyroid.fasttext` (`pyroid.fasttext.load_model`): fastText inference on the same .bin/.ftz files, bit-identical predictions on Linux (glibc) and Windows x64 (on macOS the probabilities can differ in the last bits).
 - `pyroid.nltk` (`import pyroid.nltk as nltk`): the same sentences, tokens and offsets as NLTK 3.10.4's `sent_tokenize` (Punkt, with the user's installed `punkt_tab` models), `word_tokenize`, Treebank tokenizers and detokenizer, and regexp tokenizers for common patterns; `sent_tokenize(docs, threads=n)` and `word_tokenize(docs, threads=n)` run a batch in parallel; `pyroid.patch("nltk")` swaps them into an installed NLTK.
 - `pyroid.jieba` (`import pyroid.jieba as jieba`): the same words, offsets and frequencies as jieba 0.42.1, with the default dictionary built in; `lcut(docs, threads=n)` segments a batch in parallel.
 - `pyroid.trafilatura` (`import pyroid.trafilatura as trafilatura`): the same text as Trafilatura 2.3.1 (the default) or 1.11.0 (`compat="1.11.0"`, the release `datatrove[processing]==0.10.1` installs), byte for byte; `extract_batch(pages, threads=n)` runs pages in parallel; other output formats and metadata are delegated to the installed trafilatura.
 - `pyroid.warc` (`from pyroid.warc import ArchiveIterator`): warcio 1.8.2's WARC/ARC reader with the same records, headers, payloads, offsets, exceptions and messages; `ArchiveIterator(path)` reads without the GIL; `iter_documents(path)` is datatrove 0.10.1's `WarcReader` loop (`process_record`: id, url, date, text), `iter_batches(path)` the same as Arrow record batches; `pyroid.patch("warcio")` swaps the iterator into an installed warcio, so stock datatrove reads with it. Known differences: `check_digests` knows md5, sha1, sha224, sha256, sha384, sha512 only; corrupt brotli streams may decode further than libbrotli.
 - `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
-- `pyroid.dedup`: datatrove's MinHash and sentence dedup, with the same removals.
-- `pyroid.filters`: datatrove's Gopher, C4, FineWeb, PII, C4 bad words, symbol lines and URL filters, with the same decisions.
+- `pyroid.dedup`: datatrove 0.10.1's MinHash and sentence dedup, with the same removals.
+- `pyroid.filters`: datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad words, symbol lines and URL filters, with the same decisions.
 - `pyroid.nemo`: NeMo Curator 1.4.0's heuristic document filters and string modifiers as functions (the scores `score_document` returns, the text `modify_document` returns), without NeMo; `pyroid.integrations.nemo_curator` has the stages.
-- `pyroid.metrics`: ROUGE, BLEU, chrF and chrF++, with scores identical to rouge-score and sacrebleu.
-- `pyroid.json_repair`: the same output as json_repair, in linear time.
+- `pyroid.metrics`: ROUGE, BLEU, chrF and chrF++, with scores identical to rouge-score 0.1.2 and sacrebleu 2.6.0.
+- `pyroid.json_repair`: the same output as json_repair 0.64.5, in linear time.
 
-Integrations: the `pyroid clean IN OUT --recipe fineweb` command line (`--recipe fineweb-warc` from WARC files; many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs, resumable runs, `pyroid dedup signatures|buckets|cluster|filter` for MinHash across shards), `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`), datatrove drop-in steps (`pyroid.integrations.datatrove`, `WarcReader` included, `Trafilatura` included; it has no 1 s timeout, so results do not vary between runs) NeMo Curator 1.4.0 drop-in CPU text stages (`pyroid.integrations.nemo_curator`: `ScoreFilter`, `Score`, `Filter`, `Modify`, the heuristic and fastText filters, the modifiers) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` and `[datasketch]` (numpy), `[cli]` (pyarrow), `[datatrove]`, `[hf]`, `[warc]`, `[nemo]` and `[all]`.
+Integrations:
+
+- `pyroid clean IN OUT --recipe fineweb`, the command line (`--recipe fineweb-warc` from WARC files). It takes many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs and resumable runs; `pyroid dedup signatures|buckets|cluster|filter` runs MinHash dedup across shards.
+- `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`).
+- `pyroid.integrations.datatrove`: drop-in datatrove steps, `WarcReader` and `Trafilatura` included. Its `Trafilatura` has no 1 s timeout, so results do not vary between runs.
+- `pyroid.integrations.nemo_curator`: drop-in NeMo Curator 1.4.0 CPU text stages (`ScoreFilter`, `Score`, `Filter`, `Modify`, the heuristic and fastText filters, the modifiers).
+- `pyroid.integrations.hf`: Hugging Face `datasets` helpers.
+
+There are no runtime dependencies; the extras are `[fasttext]` and `[datasketch]` (numpy), `[cli]` (pyarrow), `[datatrove]`, `[hf]`, `[warc]`, `[nemo]` and `[all]`.
 
 Conventions shared by every module:
 
 - Batch functions take a `str`, a `list`/`tuple` of `str`, or an Arrow string column (pyarrow, polars, pandas, HF datasets). Text and masks come back in the same kind (Arrow input gives a `pyroid.Column`, which converts with `pyarrow.chunked_array(col)` or `polars.Series(col)`); `fasttext.Model.predict` on a batch returns lists, and `get_sentence_vector` numpy arrays.
-- Transforms return text (unchanged documents are the original objects); predicates return a keep mask (`list[bool]` for a list), never a filtered list.
+- Transforms return text (unchanged documents are the original objects); predicates return a keep mask (`list[bool]` for a list), not a filtered list.
 - `threads=None` uses all cores, `threads=n` at most n, `threads=1` the calling thread. Batches release the GIL; free-threaded builds stay GIL-free.
-- Where a module meets an option or input it does not port, it delegates to the real library and emits `pyroid.FallbackWarning` (or raises `pyroid.PyroidError` if that library is missing): some ftfy functions and options, metrics tokenizers such as ja-mecab, json_repair's `schema=`, and the filters' and MinHash's `python_tokenizer=True` path for languages pyroid does not tokenize natively (294 of datatrove's 4,343 codes, e.g. the Stanza languages and Korean; also the 4 Japanese codes unless a SudachiDict dictionary is installed with `pip install sudachidict-core`, and the 20 Thai codes unless PyThaiNLP is installed with `pip install pythainlp`). Otherwise modules raise rather than approximate. Errors: `pyroid.InputError` is a `TypeError`.
+- Where a module meets an option or input it does not port, it delegates to the real library and emits `pyroid.FallbackWarning`, or raises `pyroid.PyroidError` if that library is missing. That covers some ftfy functions and options, metrics tokenizers such as ja-mecab, json_repair's `schema=`, and the filters' and MinHash's `python_tokenizer=True` path for the 294 of datatrove's 4,343 language codes pyroid does not tokenize natively (e.g. the Stanza languages and Korean). The 4 Japanese codes take that path too unless a SudachiDict dictionary is installed (`pip install sudachidict-core`), and the 20 Thai codes unless PyThaiNLP is (`pip install pythainlp`). Otherwise modules raise rather than approximate. `pyroid.InputError` is a `TypeError`.
 - To clean many documents with ftfy, prefer `pyroid.ftfy.fix_text_batch(docs)` over a loop of `fix_text`. To run several datatrove filters, use `pyroid.filters.apply(docs, [GopherRepetition(), GopherQuality(), C4Quality(...), FineWebQuality()])`, which returns `FilterResult(keep, reason, text)`. For many ROUGE pairs use `RougeScorer.score_batch`; for many JSON documents `pyroid.json_repair.repair_json_batch`.
 
 ## Docs
