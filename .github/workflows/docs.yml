@@ -1,10 +1,14 @@
 name: docs
 
 # Builds the docs site (mkdocs.yml) on every PR and push, strictly: Zensical builds it, and
-# `mkdocs build --strict` checks links, anchors and nav. On a push to main, and only once the owner
-# has created the `github-pages` environment (Settings -> Pages -> Source: GitHub Actions; see
-# docs/RELEASING.md), the site is deployed to GitHub Pages. Without the environment, the deploy
-# job is skipped and the workflow still passes.
+# `mkdocs build --strict` checks links, anchors and nav. Nothing here publishes the site: the docs
+# live at https://ataiva.com/open-source/pyroid/docs/, built from the pyroid-docs-<version>.tar.gz
+# asset that release.yml attaches to each GitHub Release (see docs/RELEASING.md section 8).
+#
+# GitHub Pages (https://ao.github.io/pyroid/, the old address) gets only a redirect stub,
+# .github/pages-redirect/index.html, served as index.html and 404.html so that every old path
+# lands on the same path under ataiva.com. It deploys on a push to main, and only if the
+# `github-pages` environment exists; without it the deploy job is skipped and the workflow passes.
 on:
   pull_request:
   push:
@@ -44,11 +48,18 @@ jobs:
         env:
           NO_MKDOCS_2_WARNING: "1"
         run: .venv-docs/bin/mkdocs build --strict --site-dir "$RUNNER_TEMP/site-mkdocs"
-      - name: Upload the site for GitHub Pages
+      - name: Assemble the redirect stub for GitHub Pages (index.html and 404.html)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/pages"
+          cp .github/pages-redirect/index.html "$RUNNER_TEMP/pages/index.html"
+          cp .github/pages-redirect/index.html "$RUNNER_TEMP/pages/404.html"
+      - name: Upload the redirect stub for GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: site
+          path: ${{ runner.temp }}/pages
 
   pages-environment:
     name: is the github-pages environment set up?
@@ -69,11 +80,11 @@ jobs:
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No github-pages environment: the docs were built but not deployed (see docs/RELEASING.md)."
+            echo "::notice::No github-pages environment: the redirect stub was not deployed (see docs/RELEASING.md)."
           fi
 
   deploy:
-    name: deploy to GitHub Pages
+    name: deploy the redirect stub to GitHub Pages
     needs: [build, pages-environment]
     if: needs.pages-environment.outputs.exists == 'true'
     runs-on: ubuntu-24.04

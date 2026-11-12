@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  The page GitHub Pages serves at https://ao.github.io/pyroid/, as both index.html and 404.html (see
+  .github/workflows/docs.yml). The docs moved to https://ataiva.com/open-source/pyroid/docs/, and GitHub
+  Pages can't send a 301, so this page sends the browser on, keeping the path: /pyroid/guides/ftfy/
+  goes to /open-source/pyroid/docs/guides/ftfy/. Without JavaScript, the meta refresh goes to the docs home.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pyroid docs have moved</title>
+<meta name="robots" content="noindex">
+<link rel="canonical" href="https://ataiva.com/open-source/pyroid/docs/">
+<script>
+  (function () {
+    var base = "https://ataiva.com/open-source/pyroid/docs/";
+    var path = window.location.pathname.replace(/^\/pyroid(\/|$)/, "").replace(/^\/+/, "");
+    if (path === "index.html") {
+      path = "";
+    }
+    window.location.replace(base + path + window.location.search + window.location.hash);
+  })();
+</script>
+<meta http-equiv="refresh" content="0; url=https://ataiva.com/open-source/pyroid/docs/">
+</head>
+<body>
+<p>The pyroid docs have moved to
+<a href="https://ataiva.com/open-source/pyroid/docs/">https://ataiva.com/open-source/pyroid/docs/</a>.</p>
+</body>
+</html>
