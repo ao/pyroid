@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/pypi/l/pyroid)](https://github.com/ao/pyroid/blob/main/LICENSE)
 [![CI](https://github.com/ao/pyroid/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ao/pyroid/actions/workflows/ci.yml)
 
-[Docs](https://ao.github.io/pyroid/) | [Benchmarks](https://ao.github.io/pyroid/benchmarks/) | [Compatibility](https://ao.github.io/pyroid/compatibility/)
+[Docs](https://ataiva.com/open-source/pyroid/docs/) | [Benchmarks](https://ataiva.com/open-source/pyroid/docs/benchmarks/) | [Compatibility](https://ataiva.com/open-source/pyroid/docs/compatibility/)
 
 pyroid reimplements popular Python libraries in Rust, with the same API and the same output. Most
 of its modules are many times faster than the library they replace.
@@ -27,19 +27,19 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 
 | Area | Module | Replaces |
 |---|---|---|
-| Text and encoding | [`pyroid.ftfy`](https://ao.github.io/pyroid/guides/ftfy/) | ftfy 6.3.1 |
-| | [`pyroid.translit`](https://ao.github.io/pyroid/guides/translit/) | anyascii 0.3.3; a permissively licensed alternative to Unidecode |
-| Language ID and NLP | [`pyroid.fasttext`](https://ao.github.io/pyroid/guides/fasttext/) | fastText 0.9.2 inference (fasttext, fasttext-wheel, fasttext-predict) |
-| | [`pyroid.nltk`](https://ao.github.io/pyroid/guides/nltk/) | NLTK 3.10.4's `sent_tokenize` (Punkt), `word_tokenize` and Treebank tokenizers |
-| | [`pyroid.jieba`](https://ao.github.io/pyroid/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
-| Web and archives | [`pyroid.trafilatura`](https://ao.github.io/pyroid/guides/trafilatura/) | Trafilatura's text extraction: 2.3.1, or 1.11.0 as datatrove 0.10.1 installs it (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
-| | [`pyroid.warc`](https://ao.github.io/pyroid/guides/warc/) | warcio 1.8.2's WARC/ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading (`WarcReader`) |
-| Dedup and similarity | [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
-| | [`pyroid.dedup`](https://ao.github.io/pyroid/guides/dedup/) | datatrove 0.10.1's MinHash and sentence dedup |
-| Quality filters | [`pyroid.filters`](https://ao.github.io/pyroid/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
-| | [`pyroid.nemo`](https://ao.github.io/pyroid/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
-| Evaluation | [`pyroid.metrics`](https://ao.github.io/pyroid/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
-| JSON | [`pyroid.json_repair`](https://ao.github.io/pyroid/guides/json_repair/) | json_repair 0.64.5 |
+| Text and encoding | [`pyroid.ftfy`](https://ataiva.com/open-source/pyroid/docs/guides/ftfy/) | ftfy 6.3.1 |
+| | [`pyroid.translit`](https://ataiva.com/open-source/pyroid/docs/guides/translit/) | anyascii 0.3.3; a permissively licensed alternative to Unidecode |
+| Language ID and NLP | [`pyroid.fasttext`](https://ataiva.com/open-source/pyroid/docs/guides/fasttext/) | fastText 0.9.2 inference (fasttext, fasttext-wheel, fasttext-predict) |
+| | [`pyroid.nltk`](https://ataiva.com/open-source/pyroid/docs/guides/nltk/) | NLTK 3.10.4's `sent_tokenize` (Punkt), `word_tokenize` and Treebank tokenizers |
+| | [`pyroid.jieba`](https://ataiva.com/open-source/pyroid/docs/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
+| Web and archives | [`pyroid.trafilatura`](https://ataiva.com/open-source/pyroid/docs/guides/trafilatura/) | Trafilatura's text extraction: 2.3.1, or 1.11.0 as datatrove 0.10.1 installs it (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
+| | [`pyroid.warc`](https://ataiva.com/open-source/pyroid/docs/guides/warc/) | warcio 1.8.2's WARC/ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading (`WarcReader`) |
+| Dedup and similarity | [`pyroid.datasketch`](https://ataiva.com/open-source/pyroid/docs/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
+| | [`pyroid.dedup`](https://ataiva.com/open-source/pyroid/docs/guides/dedup/) | datatrove 0.10.1's MinHash and sentence dedup |
+| Quality filters | [`pyroid.filters`](https://ataiva.com/open-source/pyroid/docs/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
+| | [`pyroid.nemo`](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
+| Evaluation | [`pyroid.metrics`](https://ataiva.com/open-source/pyroid/docs/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
+| JSON | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.5 |
 
 ## Example: cleaning LLM training data
 
@@ -74,7 +74,7 @@ of CC-MAIN-2026-39 (171,595 pages), on a c7i.4xlarge with 8 workers, stock datat
 With pyroid's steps in datatrove it took 89.4 s (9.5×), and `pyroid clean --recipe fineweb-warc`
 took 79.6 s (10.7×). Both keep the same documents as stock datatrove, apart from the pages it
 drops at its 1 s extraction timeout
-([benchmarks](https://ao.github.io/pyroid/benchmarks/#from-warc-files-datatroves-fineweb-pipeline)).
+([benchmarks](https://ataiva.com/open-source/pyroid/docs/benchmarks/#from-warc-files-datatroves-fineweb-pipeline)).
 
 ## Same output, checked
 
@@ -83,11 +83,11 @@ property-based fuzzing. The comparisons are exact: `pyroid.ftfy` is byte-identic
 and the metrics match rouge-score and sacrebleu to the last digit. fastText's labels and
 probabilities are bit-identical to its C++ code on Linux (glibc) and Windows x64; on macOS the
 probabilities can differ in the last bits. The
-[compatibility page](https://ao.github.io/pyroid/compatibility/) has the counts for every module,
+[compatibility page](https://ataiva.com/open-source/pyroid/docs/compatibility/) has the counts for every module,
 and each guide lists its known differences.
 
 CI runs the `parity/` suites on Linux x86_64 and aarch64, and most of them have also run natively
-on AWS EC2 ([platforms](https://ao.github.io/pyroid/compatibility/#platforms)). On macOS, Windows
+on AWS EC2 ([platforms](https://ataiva.com/open-source/pyroid/docs/compatibility/#platforms)). On macOS, Windows
 and musl Linux, every release's wheels pass pyroid's test suite before they are published.
 
 Where a module doesn't port an option or input, it hands the call to the real library with a
@@ -137,19 +137,19 @@ The other modules have only been measured in a Docker VM on a Mac, so treat thes
 | `filters`, FineWeb-2 settings, Chinese / Japanese | datatrove 0.10.1 | 44× / 7.8× |
 
 `pyroid.json_repair` stays linear on 13 input families where json_repair is quadratic, so the gap
-grows with the input. The [benchmarks page](https://ao.github.io/pyroid/benchmarks/) has each
+grows with the input. The [benchmarks page](https://ataiva.com/open-source/pyroid/docs/benchmarks/) has each
 row's corpus, interpreter and source.
 
 ## Integrations
 
 | Entry point | What it does |
 |---|---|
-| [`pyroid clean`](https://ao.github.io/pyroid/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files |
-| [Large datasets](https://ao.github.io/pyroid/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
-| [`pyroid.patch()`](https://ao.github.io/pyroid/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
-| [datatrove steps](https://ao.github.io/pyroid/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
-| [NeMo Curator stages](https://ao.github.io/pyroid/guides/nemo-curator/) | NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, the heuristic filters, the modifiers) with the same classes and arguments |
-| [Hugging Face `datasets`](https://ao.github.io/pyroid/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
+| [`pyroid clean`](https://ataiva.com/open-source/pyroid/docs/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files |
+| [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
+| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
+| [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
+| [NeMo Curator stages](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/) | NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, the heuristic filters, the modifiers) with the same classes and arguments |
+| [Hugging Face `datasets`](https://ataiva.com/open-source/pyroid/docs/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
 
 ```python
 import pyroid
@@ -160,7 +160,7 @@ pyroid.patch("ftfy", "fasttext")  # later imports of ftfy and fasttext get pyroi
 The filters and dedup tokenize 4,049 of datatrove's 4,343 language codes natively, Chinese and
 Vietnamese included. Native Japanese needs `pip install sudachidict-core`, and native Thai
 `pip install pythainlp`. The rest go through datatrove's own tokenizers
-([languages](https://ao.github.io/pyroid/guides/languages/)).
+([languages](https://ataiva.com/open-source/pyroid/docs/guides/languages/)).
 
 ## The 0.7.x releases
 
@@ -170,7 +170,7 @@ libraries exactly, so it speeds up code that uses them, not Python in general.
 
 0.7.x is still on PyPI (`pip install "pyroid<1"`), and its source is on the
 [`legacy`](https://github.com/ao/pyroid/tree/legacy) branch.
-[Migrating from 0.7](https://ao.github.io/pyroid/migrating-from-0.7/) lists replacements.
+[Migrating from 0.7](https://ataiva.com/open-source/pyroid/docs/migrating-from-0.7/) lists replacements.
 
 ## Development
 
