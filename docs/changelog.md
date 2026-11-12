@@ -8,12 +8,13 @@ release-please.
 
 ## 1.0.0
 
-pyroid 1.0 is a rewrite: Rust versions of popular Python libraries, each with the API and the
-output of the release it names, and most of them many times faster. Cleaning LLM training data is
-where it has been measured end to end. The 0.7.x API is removed: 0.7 added general-purpose helpers
-that mostly ran in Python, while 1.0 speeds up code that uses the libraries it replaces. 0.7.x
-stays installable as `pip install "pyroid<1"`, its source is on the
-[`legacy`](https://github.com/ao/pyroid/tree/legacy) branch, and
+pyroid 1.0 is a rewrite. It has Rust versions of popular Python libraries, each with the API and
+output of the release named below, and most are many times faster. The end-to-end benchmarks are
+on cleaning LLM training data.
+
+The 0.7.x API is removed. 0.7 added general-purpose helpers that mostly ran in Python; 1.0 speeds
+up code that uses the libraries it replaces. 0.7.x stays installable with `pip install "pyroid<1"`,
+and its source is on the [`legacy`](https://github.com/ao/pyroid/tree/legacy) branch.
 [Migrating from 0.7](migrating-from-0.7.md) lists replacements.
 
 ### Modules
@@ -45,18 +46,20 @@ run datatrove's own tokenizer with `python_tokenizer=True`.
 ### Integrations
 
 - The [`pyroid` command line](guides/cli.md): `clean` (datatrove's FineWeb pipeline over Parquet
-  or JSONL, or from WARC files with `--recipe fineweb-warc`), `langid`, `dedup`, `translit`, `stats` and `run`. Inputs can be many files,
-  directories, globs, and `s3://`, `gs://`, `hf://` or other fsspec URIs; `--workers` and
-  `--shard I/N` split the work ([Large datasets](guides/large-datasets.md)); runs resume after a
-  stop; `pyroid dedup signatures`, `buckets`, `cluster` and `filter` run MinHash dedup across
-  shards in datatrove's file format.
+  or JSONL, or from WARC files with `--recipe fineweb-warc`), `langid`, `dedup`, `translit`,
+  `stats` and `run`. Inputs can be many files, directories, globs, and `s3://`, `gs://`, `hf://`
+  or other fsspec URIs. `--workers` and `--shard I/N` split the work
+  ([Large datasets](guides/large-datasets.md)), and runs resume after a stop.
+  `pyroid dedup signatures`, `buckets`, `cluster` and `filter` run MinHash dedup across shards in
+  datatrove's file format.
 - [`pyroid.patch()`](guides/patch.md) and `pyroid run -p`: `import ftfy`, `fasttext`, `anyascii`,
   `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions.
 - [`pyroid.integrations.datatrove`](guides/datatrove.md): 17 drop-in datatrove steps with
   datatrove's names and arguments, `Trafilatura` and `WarcReader` among them.
-- [`pyroid.integrations.nemo_curator`](guides/nemo-curator.md): NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, `Score`, `Filter`, `Modify`, the 23
-  heuristic filters, the two fastText filters, `UnicodeReformatter` and the string modifiers),
-  subclassing NeMo's classes with the same arguments.
+- [`pyroid.integrations.nemo_curator`](guides/nemo-curator.md): NeMo Curator 1.4.0's CPU text
+  stages (`ScoreFilter`, `Score`, `Filter`, `Modify`, the 23 heuristic filters, the two fastText
+  filters, `UnicodeReformatter` and the string modifiers), subclassing NeMo's classes with the
+  same arguments.
 - [`pyroid.integrations.hf`](guides/huggingface.md) (Hugging Face `datasets`) and
   `pyroid.integrations.recipes.FineWeb`.
 
@@ -69,6 +72,6 @@ run datatrove's own tokenizer with `python_tokenizer=True`.
 - Wheels for CPython 3.11 to 3.15 and free-threaded 3.14t and 3.15t, on Linux (glibc and musl),
   macOS and Windows, x86-64 and ARM64. No runtime dependencies; the extras are `[fasttext]`,
   `[datasketch]`, `[cli]`, `[datatrove]`, `[hf]`, `[warc]`, `[nemo]` and `[all]`.
-- Licence expression `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0
-  AND Unicode-3.0 AND Zlib`: pyroid's own code is MIT, and the ported parts keep their
-  licences ([NOTICE](https://github.com/ao/pyroid/blob/main/NOTICE) lists them).
+- pyroid's own code is MIT, and the ported parts keep their licences
+  ([NOTICE](https://github.com/ao/pyroid/blob/main/NOTICE) lists them). The licence expression is
+  `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib`.
