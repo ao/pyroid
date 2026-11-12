@@ -5,9 +5,8 @@ general-purpose toolkit (math, strings, collections, file and network I/O, image
 learning). That API was removed in 1.0, and nothing from it is carried forward.
 
 0.7 tried to make Python faster with new general-purpose helpers, most of which ran in Python.
-1.0 does it by replacing popular libraries such as ftfy, NLTK's tokenizers and json_repair
-exactly, with Rust versions of the same API and output, so it speeds up code that uses those
-libraries, not Python in general.
+1.0 has Rust versions of popular libraries such as ftfy, NLTK's tokenizers and json_repair, with
+the same API and output. It speeds up code that uses those libraries, not Python in general.
 
 ## Staying on 0.7
 
@@ -28,7 +27,7 @@ dependencies = ["pyroid<1"]
 ## Moving off 0.7
 
 An audit before the rewrite found that 0.7's public functions ran in Python, not Rust, so the
-standard library or a mainstream package is a like-for-like replacement:
+standard library or a mainstream package replaces them like for like:
 
 | 0.7 | Use instead |
 |---|---|

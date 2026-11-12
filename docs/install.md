@@ -54,8 +54,8 @@ Optional libraries, needed only by the features that use them:
 - tldextract for `pyroid.filters.URLFilter`. Its suffix lists are read from a
   `tldextract.TLDExtract` when the filter is built; the matching itself runs in Rust.
 - sudachidict-core (20261015 or newer) for native Japanese in `pyroid.filters` and
-  `pyroid.dedup`: `pip install sudachidict-core`. pyroid does not ship the dictionary (its
-  `system.dic` is 202 MB): it reads the installed one, or the file that `PYROID_SUDACHI_DICT`
+  `pyroid.dedup`: `pip install sudachidict-core`. pyroid does not ship the dictionary, whose
+  `system.dic` is 202 MB. It reads the installed one, or the file that `PYROID_SUDACHI_DICT`
   names, without importing SudachiPy. Without it the Japanese codes need `python_tokenizer=True`
   ([Languages](guides/languages.md#japanese)).
 - pythainlp for native Thai in `pyroid.filters` and `pyroid.dedup`: `pip install pythainlp`.
@@ -65,8 +65,7 @@ Optional libraries, needed only by the features that use them:
 
 ## Supported platforms
 
-Each release has three wheels per platform, so every supported interpreter gets a prebuilt
-binary and no compiler is needed:
+Each release has three wheels per platform, which cover every supported interpreter:
 
 | Wheel | Installs on |
 |---|---|
@@ -81,16 +80,16 @@ binary and no compiler is needed:
 | macOS | x86-64, arm64 | `macosx` |
 | Windows | x64, ARM64 | `win_amd64`, `win_arm64` |
 
-That is 24 wheels plus an sdist per release. Before a release is published, the release
-workflow installs each wheel in a clean virtual environment and runs pyroid's test suite with it,
-on CPython 3.11, 3.14t, 3.15 and 3.15t, on every platform above. PyPy and GraalPy are not
-supported.
+That is 24 wheels plus an sdist per release, and no compiler is needed. Before a release is
+published, the release workflow installs each wheel in a clean virtual environment and runs
+pyroid's test suite with it, on CPython 3.11, 3.14t, 3.15 and 3.15t, on every platform above. PyPy
+and GraalPy are not supported.
 
 !!! note "Where parity has been checked"
     Every parity suite has run on Linux aarch64, and CI runs the `parity/` suites on Linux x86_64
-    and aarch64. The ftfy, fastText, filters, dedup, metrics and
-    json_repair suites also ran natively on AWS EC2, on x86_64 (Intel Sapphire Rapids) and
-    aarch64 (AWS Graviton4), with 0 differences. `pyroid.trafilatura` matched trafilatura on
+    and aarch64. The ftfy, fastText, filters, dedup, metrics and json_repair suites also ran
+    natively on AWS EC2, on x86_64 (Intel Sapphire Rapids) and aarch64 (AWS Graviton4), with 0
+    differences. `pyroid.trafilatura` matched trafilatura on
     27,585 Common Crawl pages in 8 option sets, in both modes, on x86_64 (AWS EC2 c7i.4xlarge).
     fastText's and the metrics' references are pinned per platform, because the incumbents' own
     output can differ by architecture and C library. On macOS, Windows and musl, the release
@@ -128,5 +127,6 @@ $ uv pip install maturin
 $ maturin develop --uv --release      # builds pyroid._pyroid into the venv
 ```
 
-Without `--release` you get an unoptimized debug build, which is much slower. [`CONTRIBUTING.md`](https://github.com/ao/pyroid/blob/main/CONTRIBUTING.md)
-covers the test and lint setup.
+Without `--release` you get a much slower debug build.
+[`CONTRIBUTING.md`](https://github.com/ao/pyroid/blob/main/CONTRIBUTING.md) covers the test and
+lint setup.
