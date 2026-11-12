@@ -6,13 +6,13 @@ build-backend = "maturin"
 name = "pyroid"
 # Single source: [workspace.package].version in the root Cargo.toml.
 dynamic = ["version"]
-description = "Rust implementations of ftfy, fastText inference, datatrove's filters and dedup, Trafilatura, NLTK's tokenizers, jieba, datasketch, warcio, rouge-score, sacrebleu and json_repair, with the same API and output"
+description = "Rust versions of popular Python libraries with the same API and output, and faster: ftfy, json_repair, datasketch, NLTK's tokenizers, jieba, Trafilatura, warcio, fastText, datatrove, rouge-score, sacrebleu"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib"
 license-files = ["LICENSE", "LICENSES/*", "NOTICE"]
 authors = [{ name = "Andrew Odendaal" }]
-keywords = ["llm", "dataset", "text-cleaning", "rust", "pyo3"]
+keywords = ["rust", "pyo3", "ftfy", "json-repair", "datasketch", "minhash", "nltk", "jieba", "tokenizer", "trafilatura", "web-scraping", "warc", "fasttext", "datatrove", "rouge", "bleu", "nlp", "text-cleaning", "deduplication", "llm"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -29,7 +29,13 @@ classifiers = [
   "Programming Language :: Python :: Free Threading :: 2 - Beta",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Rust",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: System :: Archiving",
   "Topic :: Text Processing",
+  "Topic :: Text Processing :: Filters",
+  "Topic :: Text Processing :: Linguistic",
+  "Topic :: Text Processing :: Markup :: HTML",
   "Typing :: Typed",
 ]
 # No runtime dependencies.
@@ -74,6 +80,7 @@ pyroid = "pyroid.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ao/pyroid"
+Documentation = "https://ao.github.io/pyroid/"
 Repository = "https://github.com/ao/pyroid"
 Issues = "https://github.com/ao/pyroid/issues"
 Changelog = "https://github.com/ao/pyroid/blob/main/CHANGELOG.md"
