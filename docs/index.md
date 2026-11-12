@@ -1,26 +1,25 @@
 # pyroid
 
-Text cleaning for LLM datasets, written in Rust. pyroid is a drop-in replacement for ftfy,
-fastText inference, datatrove's quality filters and dedup, Trafilatura, NLTK's tokenizers, jieba,
-datasketch, warcio, rouge-score, sacrebleu and json_repair, with the same API and the same output.
-It runs on CPython 3.11 to 3.15, including free-threaded 3.14t and 3.15t.
-
-!!! warning "Pre-release"
-    pyroid 1.0 is not on PyPI yet. Until it is, `pip install pyroid` gives the unrelated 0.7.x
-    toolkit ([Migrating from 0.7](migrating-from-0.7.md)).
-
-## Try it without changing your code
-
-Clean a Parquet or JSONL corpus with datatrove's FineWeb recipe (ftfy, language ID, the four
-quality filters, MinHash dedup). The output is the same as datatrove's pipeline:
+pyroid reimplements popular Python libraries in Rust. Each module has the API of the library it
+replaces and gives the same output, and most of them run many times faster. It runs on CPython
+3.11 to 3.15, including free-threaded 3.14t and 3.15t.
 
 ```console
-$ pip install "pyroid[cli]"
-$ pyroid clean in.parquet out.parquet --recipe fineweb
+$ pip install pyroid
+```
+
+Change the import and keep the rest of your code:
+
+```python
+import pyroid.ftfy as ftfy  # was: import ftfy
+import pyroid.json_repair as json_repair  # was: import json_repair
+
+ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")  # 'naïve résumé', as ftfy returns it
+json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}', as json_repair returns it
 ```
 
 Or make code you don't own (a tokenizer, a language detector, a pipeline) use pyroid wherever it
-imports ftfy or fastText:
+imports one of these libraries:
 
 ```python
 import pyroid
@@ -32,9 +31,26 @@ import ftfy
 ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")  # 'naïve résumé', computed by pyroid
 ```
 
-See [the command line](guides/cli.md) and [`pyroid.patch()`](guides/patch.md).
+See [`pyroid.patch()`](guides/patch.md).
 
-## The problem
+## What's in it
+
+| Area | Module | Replaces | Identical output? |
+|---|---|---|---|
+| Text and encoding | [`pyroid.ftfy`](guides/ftfy.md) | [ftfy](https://github.com/rspeer/python-ftfy) 6.3.1 | byte-identical ([parity](compatibility.md#ftfy)) |
+|  | [`pyroid.translit`](guides/translit.md) | `anyascii` 0.3.3; a permissive alternative to GPL `Unidecode` | identical to `anyascii`; not Unidecode's output |
+| Language ID and NLP | [`pyroid.fasttext`](guides/fasttext.md) | [fastText](https://github.com/facebookresearch/fastText) inference (`fasttext`, `fasttext-predict`, ...) | bit-identical labels and probabilities on Linux (glibc) and Windows x64; on macOS the probabilities can differ in the last bits ([parity](compatibility.md#fasttext)) |
+|  | [`pyroid.nltk`](guides/nltk.md) | [NLTK](https://www.nltk.org) 3.10.4's `sent_tokenize` (Punkt), `word_tokenize`, Treebank and regexp tokenizers | same sentences, tokens and offsets ([parity](compatibility.md#nltk)) |
+|  | [`pyroid.jieba`](guides/jieba.md) | [jieba](https://github.com/fxsjy/jieba) 0.42.1 | same words, offsets and frequencies ([parity](compatibility.md#jieba)) |
+| Web and archives | [`pyroid.trafilatura`](guides/trafilatura.md) | [Trafilatura](https://github.com/adbar/trafilatura)'s text extraction, 2.3.1 or 1.11.0 (the release datatrove 0.10.1 installs), with lxml 6.1.3's HTML parser and jusText 3.0.2 | the same text, byte for byte ([parity](compatibility.md#trafilatura)) |
+|  | [`pyroid.warc`](guides/warc.md) | [warcio](https://github.com/webrecorder/warcio) 1.8.2's WARC/ARC reader, and datatrove 0.10.1's WARC reading | same records, documents, exceptions and messages ([parity](compatibility.md#warc)) |
+| Dedup and similarity | [`pyroid.datasketch`](guides/datasketch.md) | [datasketch](https://github.com/ekzhu/datasketch) 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble | same hash values, bytes and query results ([parity](compatibility.md#datasketch)) |
+|  | [`pyroid.dedup`](guides/dedup.md) | datatrove 0.10.1's MinHash and sentence dedup | same signatures, removals and files ([parity](compatibility.md#dedup)) |
+| Quality filters | [`pyroid.filters`](guides/filters.md) | [datatrove](https://github.com/huggingface/datatrove) 0.10.1's Gopher, C4 and FineWeb filters, PII formatter, C4 bad words, symbol lines and URL filter | same decisions, reasons and text ([parity](compatibility.md#filters)) |
+| Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
+| JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
+
+## Example: cleaning LLM training data
 
 Building a pretraining or fine-tuning corpus means running every document through the same few
 steps: fix broken Unicode, identify the language, drop low-quality pages, remove near-duplicates.
@@ -53,7 +69,15 @@ costs more than all the others together: on 8 Common Crawl WARC files, stock dat
 of its 6,759 CPU seconds in it (AWS EC2 c7i.4xlarge, 8 workers). pyroid ports that step too
 ([`pyroid.trafilatura`](guides/trafilatura.md)).
 
-## 30-second example
+Clean a Parquet or JSONL corpus with datatrove's FineWeb recipe (ftfy, language ID, the four
+quality filters, MinHash dedup). The output is the same as datatrove's pipeline:
+
+```console
+$ pip install "pyroid[cli]"
+$ pyroid clean in.parquet out.parquet --recipe fineweb
+```
+
+See [the command line](guides/cli.md). In Python, the same steps are a few modules:
 
 ```python
 import pyroid.ftfy as ftfy  # was: import ftfy
@@ -77,6 +101,10 @@ Batch functions take a `str`, a `list` or `tuple` of `str`, or an Arrow string c
 polars, pandas, Hugging Face `datasets`). Text and masks come back in the same kind. See
 [Inputs and outputs](concepts/inputs.md).
 
+The filters and dedup follow datatrove beyond English too. 4,049 of its 4,343 language codes are
+tokenized natively (Japanese with an installed SudachiDict dictionary, Thai with an installed
+PyThaiNLP), and the rest through datatrove's own tokenizers ([Languages](guides/languages.md)).
+
 ## Install
 
 ```console
@@ -89,26 +117,7 @@ $ pip install "pyroid[cli]"        # the pyroid command line (pyarrow)
 wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 [Install](install.md).
 
-## What's in it
-
-| Module | Replaces | Identical output? |
-|---|---|---|
-| [`pyroid.ftfy`](guides/ftfy.md) | [ftfy](https://github.com/rspeer/python-ftfy) 6.3.1 | byte-identical ([parity](compatibility.md#ftfy)) |
-| [`pyroid.fasttext`](guides/fasttext.md) | [fastText](https://github.com/facebookresearch/fastText) inference (`fasttext`, `fasttext-predict`, ...) | bit-identical labels and probabilities, per architecture ([parity](compatibility.md#fasttext)) |
-| [`pyroid.filters`](guides/filters.md) | [datatrove](https://github.com/huggingface/datatrove) 0.10.1's Gopher, C4 and FineWeb filters, PII formatter, C4 bad words, symbol lines and URL filter | same decisions, reasons and text ([parity](compatibility.md#filters)) |
-| [`pyroid.dedup`](guides/dedup.md) | datatrove 0.10.1's MinHash and sentence dedup | same signatures, removals and files ([parity](compatibility.md#dedup)) |
-| [`pyroid.trafilatura`](guides/trafilatura.md) | [Trafilatura](https://github.com/adbar/trafilatura)'s text extraction, 2.3.1 or 1.11.0 (the release datatrove 0.10.1 installs), with lxml 6.1.3's HTML parser and jusText 3.0.2 | the same text, byte for byte ([parity](compatibility.md#trafilatura)) |
-| [`pyroid.translit`](guides/translit.md) | `anyascii`; a permissive alternative to GPL `Unidecode` | identical to `anyascii`; not Unidecode's output |
-| [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
-| [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
-| [`pyroid.datasketch`](guides/datasketch.md) | [datasketch](https://github.com/ekzhu/datasketch) 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble | same hash values, bytes and query results ([parity](compatibility.md#datasketch)) |
-| [`pyroid.jieba`](guides/jieba.md) | [jieba](https://github.com/fxsjy/jieba) 0.42.1 | same words, offsets and frequencies ([parity](compatibility.md#jieba)) |
-| [`pyroid.nltk`](guides/nltk.md) | [NLTK](https://www.nltk.org) 3.10.4's `sent_tokenize` (Punkt), `word_tokenize`, Treebank and regexp tokenizers | same sentences, tokens and offsets ([parity](compatibility.md#nltk)) |
-| [`pyroid.warc`](guides/warc.md) | [warcio](https://github.com/webrecorder/warcio) 1.8.2's WARC/ARC reader, and datatrove 0.10.1's WARC reading | same records, documents, exceptions and messages ([parity](compatibility.md#warc)) |
-
-The filters and dedup follow datatrove beyond English too. 4,049 of its 4,343 language codes are
-tokenized natively (Japanese with an installed SudachiDict dictionary, Thai with an installed
-PyThaiNLP), and the rest through datatrove's own tokenizers ([Languages](guides/languages.md)).
+## Integrations
 
 | Integration | What it does |
 |---|---|
@@ -162,10 +171,11 @@ incumbent's own test corpus, and Hypothesis fuzzing that includes lone surrogate
 every option. The counts are on the [Compatibility](compatibility.md) page, and every known
 difference is listed in each guide.
 
-All suites ran on Linux aarch64 in a Docker VM. The ftfy, fastText, filters, dedup, metrics and
-json_repair suites also ran natively on x86_64 and aarch64 on AWS EC2, and the Trafilatura pages
-on x86_64, with 0 differences ([Platforms](compatibility.md#platforms)). macOS and Windows are
-checked in CI before release.
+All suites ran on Linux aarch64 in a Docker VM, and CI runs every suite on Linux x86_64 and
+aarch64. The ftfy, fastText, filters, dedup, metrics and json_repair suites also ran natively on
+x86_64 and aarch64 on AWS EC2, and the Trafilatura pages on x86_64, with 0 differences
+([Platforms](compatibility.md#platforms)). On macOS, Windows and musl Linux, every release's
+wheels pass pyroid's test suite before they are published.
 
 pyroid never silently computes something different. Where a module meets an option or input it
 does not port, it hands the call to the real library and says so with a
@@ -187,7 +197,7 @@ PSF-2.0 AND Unicode-3.0 AND Zlib`:
 - BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract and lxml;
 - PSF-2.0 for CPython's `ipaddress`;
 - ISC for anyascii's data;
-- Unicode-3.0 for Unicode Character Database data.
+- Unicode-3.0 for Unicode Character Database data;
 - Zlib for zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.
 
 The [NOTICE](https://github.com/ao/pyroid/blob/main/NOTICE) file lists the ported files, and the
