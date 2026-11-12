@@ -50,6 +50,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "FINEWEB_TRAFILATURA",
+    "LID_176_MIRRORS",
     "LID_176_SHA256",
     "LID_176_URL",
     "MINHASH_CONFIG",
@@ -64,6 +65,12 @@ __all__ = [
 #: Where fastText's language-ID model comes from (CC BY-SA 3.0), and its sha256.
 LID_176_URL = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
 LID_176_SHA256 = "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e"
+#: Copies of the same file, tried in order when the download from ``LID_176_URL`` fails (on
+#: 2026-11-12 dl.fbaipublicfiles.com served an expired certificate). Each must match
+#: ``LID_176_SHA256``.
+LID_176_MIRRORS: tuple[str, ...] = (
+    "https://huggingface.co/julien-c/fasttext-language-id/resolve/main/lid.176.bin",
+)
 
 #: datatrove ``examples/fineweb.py``'s MinHash settings.
 MINHASH_CONFIG: dict[str, Any] = {
@@ -97,7 +104,8 @@ def lid_model_path(path: str | os.PathLike[str] | None = None, *, download: bool
     Args:
         path: An explicit model file; returned as is.
         download: When neither ``path`` nor ``$PYROID_LID_MODEL`` is set and the
-            cached copy is missing, download it from ``LID_176_URL`` into the
+            cached copy is missing, download it from ``LID_176_URL`` (else from
+            ``LID_176_MIRRORS``) into the
             cache (``$PYROID_CACHE_DIR``, else ``$XDG_CACHE_HOME/pyroid``, else
             ``~/.cache/pyroid``) and check its sha256.
 
@@ -121,18 +129,26 @@ def lid_model_path(path: str | os.PathLike[str] | None = None, *, download: bool
             f"{target.parent}"
         )
     target.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".lid.176.bin.")
-    try:
-        with os.fdopen(fd, "wb") as out, urllib.request.urlopen(LID_176_URL) as resp:
-            shutil.copyfileobj(resp, out, 1 << 20)
-        got = _sha256(Path(tmp))
-        if got != LID_176_SHA256:
-            raise OSError(f"{LID_176_URL}: sha256 {got}, expected {LID_176_SHA256}")
-        os.replace(tmp, target)
-    finally:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-    return str(target)
+    errors: list[str] = []
+    for url in (LID_176_URL, *LID_176_MIRRORS):
+        fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".lid.176.bin.")
+        try:
+            try:
+                with os.fdopen(fd, "wb") as out, urllib.request.urlopen(url) as resp:
+                    shutil.copyfileobj(resp, out, 1 << 20)
+            except OSError as e:
+                errors.append(f"{url}: {e}")
+                continue
+            got = _sha256(Path(tmp))
+            if got != LID_176_SHA256:
+                errors.append(f"{url}: sha256 {got}, expected {LID_176_SHA256}")
+                continue
+            os.replace(tmp, target)
+            return str(target)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+    raise OSError("could not download lid.176.bin: " + "; ".join(errors))
 
 
 # datatrove 0.10.1's drop reasons per filter kind ("empty" is shared by two of them).

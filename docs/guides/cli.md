@@ -321,8 +321,8 @@ $ pyroid clean shards/ clean.jsonl.zst --recipe fineweb --lid-model lid.176.bin 
 2. `$PYROID_LID_MODEL`;
 3. `lid.176.bin` in pyroid's cache directory: `$PYROID_CACHE_DIR`, else
    `$XDG_CACHE_HOME/pyroid`, else `~/.cache/pyroid`. If it is not there, it is downloaded once
-   from `dl.fbaipublicfiles.com` (125 MiB, CC BY-SA 3.0, by Facebook AI Research) and its
-   sha256 is checked.
+   from `dl.fbaipublicfiles.com` (125 MiB, CC BY-SA 3.0, by Facebook AI Research), or from a
+   copy on Hugging Face if that fails, and its sha256 is checked.
 
 To run without network, download the model once and point `PYROID_LID_MODEL` at it.
 

@@ -28,7 +28,7 @@ from pathlib import Path
 
 from pyroid_parity import data as D
 
-from fetch import FINEWEB, FINEWEB2, MODELS, download, log, range_read
+from fetch import FINEWEB, FINEWEB2, MODELS, download_model, log, range_read
 
 FINEWEB_ROWS = (10_000, 20_000)
 FINEWEB2_ROWS = (FINEWEB2["rows"], 2 * FINEWEB2["rows"])
@@ -99,8 +99,7 @@ def model(out: Path, rel: str) -> dict:
     if local.exists() and sha256(local) == want:
         shutil.copyfile(local, dest)
     else:
-        log(f"downloading {MODELS[rel]}")
-        download(MODELS[rel], dest)
+        download_model(rel, dest)
     if sha256(dest) != want:
         raise SystemExit(f"{dest.name}: sha256 differs from bench/manifest.json")
     return {"source": MODELS[rel], "license": "CC BY-SA 3.0"}

@@ -76,6 +76,12 @@ MODELS = {
     "models/lid.176.bin": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin",
     "models/lid.176.ftz": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz",
 }
+# Copies of the same files (bench/manifest.json pins their sha256), tried in order when the download from
+# MODELS fails: on 2026-11-12 dl.fbaipublicfiles.com served an expired certificate.
+MODEL_MIRRORS = {
+    "models/lid.176.bin": ["https://huggingface.co/julien-c/fasttext-language-id/resolve/main/lid.176.bin"],
+    "models/lid.176.ftz": ["https://huggingface.co/julien-c/fasttext-language-id/resolve/main/lid.176.ftz"],
+}
 # Eval data for the pyroid.metrics parity suite (ROUGE: summarization; BLEU/chrF: machine translation).
 CNNDM = {
     "repo": "abisee/cnn_dailymail",
@@ -307,11 +313,24 @@ def download(url: str, out: Path) -> None:
     tmp.replace(out)
 
 
+def download_model(rel: str, out: Path) -> None:
+    """``download`` from MODELS[rel], else from each of its mirrors (the caller checks the sha256)."""
+    urls = [MODELS[rel], *MODEL_MIRRORS.get(rel, [])]
+    for i, url in enumerate(urls):
+        log(f"downloading {url}")
+        try:
+            download(url, out)
+            return
+        except OSError as e:  # urllib.error.URLError included
+            if i == len(urls) - 1:
+                raise
+            log(f"{url}: {e}; trying the next copy")
+
+
 def fetch_models(pin: bool) -> None:
     for rel, url in MODELS.items():
         if not (D.DATA / rel).exists():
-            log(f"downloading {url}")
-            download(url, D.DATA / rel)
+            download_model(rel, D.DATA / rel)
         if pin:
             D.pin(rel, source={"url": url, "license": "CC BY-SA 3.0"})
 

@@ -110,6 +110,7 @@ stages also take the keyword `threads`.
       show_if_no_docstring: false
       members:
         - LID_176_URL
+        - LID_176_MIRRORS
         - LID_176_SHA256
         - MINHASH_CONFIG
         - lid_model_path
