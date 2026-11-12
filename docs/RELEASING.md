@@ -89,6 +89,11 @@ After `next` is merged into `main` and pushed:
    `chore(main): release 1.0.0`. `release-please-config.json` pins `"release-as": "1.0.0"`, so the first
    release is 1.0.0 however the history is merged. The breaking `chore!:` commit would also give 1.0.0, but a
    squash merge could drop its `!`.
+
+   release-please follows `main`'s first-parent history, so a merged PR counts as its merge commit alone. When
+   `next` was merged as "pyroid 1.0 (#1)", that message wasn't a Conventional Commit, release-please found no
+   commits, and it opened no PR. A follow-up PR squash-merged with a conventional title and a
+   `Release-As: 1.0.0` footer starts it. Give every PR to `main` a Conventional Commit title.
 2. Review the PR: the root `Cargo.toml` (`[workspace.package] version`) and the `pyroid-core`/`pyroid-py`
    entries in `Cargo.lock` say `1.0.0`, `.release-please-manifest.json` says `1.0.0`, and `CHANGELOG.md` has the
    generated 1.0.0 section. The hand-written `## 1.0.0 (unreleased)` section, the summary of what 1.0 contains,
