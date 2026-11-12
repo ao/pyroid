@@ -4,13 +4,14 @@
 # fixtures need their CRLFs as they are.
 * -text
 
-# GitHub's language statistics (linguist). Test inputs, recorded references, fuzz corpora and
-# benchmark results are data, not source, and parity/data also holds third-party files
-# (json_repair's own test suite).
+# GitHub's language statistics (linguist). Recorded inputs and references in the crates' tests
+# and the fuzz corpora are data, and parity/data holds third-party files (json_repair's own
+# test suite). The scripts that record the data stay counted as source.
 parity/data/** linguist-vendored
-crates/pyroid-core/tests/data/** linguist-vendored
-crates/pyroid-core/tests/*_data/** linguist-vendored
-crates/pyroid-core/src/*/testdata/** linguist-vendored
+crates/pyroid-core/tests/**/*.json linguist-vendored
+crates/pyroid-core/tests/**/*.jsonl linguist-vendored
+crates/pyroid-core/src/**/testdata/**/*.json linguist-vendored
+crates/pyroid-core/src/**/testdata/**/*.jsonl linguist-vendored
 fuzz/corpus/** linguist-vendored
 fuzz/arrow/corpus/** linguist-vendored
 bench/results/** linguist-generated
