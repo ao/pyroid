@@ -5,7 +5,7 @@
 # the extension (allow_inspection: false), so no Rust build is needed.
 site_name: pyroid
 site_description: Rust versions of popular Python libraries, with the same API and the same output. Drop-in replacements for ftfy, fastText inference, datatrove's filters and dedup, Trafilatura, NLTK's tokenizers, jieba, datasketch, warcio, rouge-score, sacrebleu and json_repair.
-site_url: https://ao.github.io/pyroid/
+site_url: https://ataiva.com/open-source/pyroid/docs/
 repo_url: https://github.com/ao/pyroid
 repo_name: ao/pyroid
 edit_uri: edit/main/docs/
@@ -13,6 +13,8 @@ copyright: "Copyright &copy; Andrew Odendaal. Licence: MIT AND Apache-2.0 AND BS
 
 theme:
   name: material
+  # System fonts: the site makes no requests to Google Fonts or any other third party.
+  font: false
   features:
     - navigation.sections
     - navigation.top
@@ -97,6 +99,7 @@ nav:
   - Development:
       - Writing a module: dev/MODULES.md
       - Releasing: RELEASING.md
+  - pyroid on ataiva.com: https://ataiva.com/open-source/pyroid/
 
 plugins:
   - search
@@ -147,5 +150,8 @@ markdown_extensions:
 
 extra:
   social:
+    - icon: material/home
+      link: https://ataiva.com/open-source/pyroid/
+      name: pyroid on ataiva.com
     - icon: fontawesome/brands/github
       link: https://github.com/ao/pyroid
