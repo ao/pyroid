@@ -2,7 +2,8 @@
 #
 #   push to main      -> release-please opens/updates the release PR. When that PR is merged it tags vX.Y.Z,
 #                        creates the GitHub Release, and this run builds, tests, attests and publishes to PyPI
-#                        (after approval in the `pypi` environment).
+#                        (after approval in the `pypi` environment). The docs-asset job attaches the docs site
+#                        (pyroid-docs-X.Y.Z.tar.gz and its .sha256) to the Release, for ataiva.com to serve.
 #   pull_request      -> build and test everything; never publishes.
 #   workflow_dispatch -> build and test; with `testpypi: true`, publish to TestPyPI (after approval in the
 #                        `testpypi` environment). Use it for dry runs.
@@ -87,6 +88,73 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # The docs site as a release asset, built at the release tag: pyroid-docs-<version>.tar.gz (the site's
+  # files at the archive root, built with site_url https://ataiva.com/open-source/pyroid/docs/) and its
+  # .sha256. ataiva.com fetches both and serves the docs from them. Nothing else needs this job, so it
+  # runs alongside the wheel builds and never holds up the PyPI publish; if it fails, re-run it alone.
+  docs-asset:
+    name: docs tarball for the GitHub Release
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # gh release upload: attach the docs tarball to the GitHub Release
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false # no caches in a publishing workflow (cache poisoning)
+      # The same strict build as docs.yml.
+      - name: Install the docs dependency group
+        run: |
+          uv venv -p 3.13 .venv-docs
+          uv pip install --python .venv-docs --group docs
+      - name: Generated tables match docs/data/ (parity.json, benchmarks.json)
+        run: |
+          .venv-docs/bin/python docs/scripts/render_parity.py --check
+          .venv-docs/bin/python docs/scripts/render_benchmarks.py --check
+      - name: Build the site (Zensical, strict)
+        run: .venv-docs/bin/zensical build --clean --strict
+      - name: Check links, anchors and nav (mkdocs, strict)
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+        run: .venv-docs/bin/mkdocs build --strict --site-dir "$RUNNER_TEMP/site-mkdocs"
+      - name: Pack pyroid-docs-<version>.tar.gz and its .sha256
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          set -euo pipefail
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          export SOURCE_DATE_EPOCH
+          sh docs/scripts/pack_site.sh "$VERSION" "$RUNNER_TEMP/docs-asset" site
+          {
+            echo "### Docs asset"
+            echo
+            echo '```'
+            ls -l "$RUNNER_TEMP/docs-asset"
+            cat "$RUNNER_TEMP/docs-asset/pyroid-docs-${VERSION}.tar.gz.sha256"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload both to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        # --clobber: a re-run replaces the files instead of failing on them.
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" --repo "$REPO" --clobber \
+            "$RUNNER_TEMP/docs-asset/pyroid-docs-${VERSION}.tar.gz" \
+            "$RUNNER_TEMP/docs-asset/pyroid-docs-${VERSION}.tar.gz.sha256"
 
   pgo-corpus:
     name: PGO training inputs
