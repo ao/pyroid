@@ -6,11 +6,11 @@ release notes are on the [GitHub releases](https://github.com/ao/pyroid/releases
 on, both are generated from [Conventional Commits](https://www.conventionalcommits.org/) by
 release-please.
 
-## 1.0.0 (unreleased)
+## 1.0.0
 
 pyroid 1.0 is a rewrite: Rust versions of popular Python libraries, each with the API and the
-output of the release it names, and most of them many times faster. The largest measured gains
-are in cleaning LLM training data. The 0.7.x API is removed: 0.7 added general-purpose helpers
+output of the release it names, and most of them many times faster. Cleaning LLM training data is
+where it has been measured end to end. The 0.7.x API is removed: 0.7 added general-purpose helpers
 that mostly ran in Python, while 1.0 speeds up code that uses the libraries it replaces. 0.7.x
 stays installable as `pip install "pyroid<1"`, its source is on the
 [`legacy`](https://github.com/ao/pyroid/tree/legacy) branch, and
@@ -32,6 +32,7 @@ stays installable as `pip install "pyroid<1"`, its source is on the
 | [`pyroid.jieba`](guides/jieba.md) | jieba 0.42.1's word segmentation, with its default dictionary and user dictionaries |
 | [`pyroid.nltk`](guides/nltk.md) | NLTK 3.10.4's Punkt sentence tokenizer, `word_tokenize`, the Treebank tokenizers and detokenizer, and the common regexp tokenizers |
 | [`pyroid.warc`](guides/warc.md) | warcio 1.8.2's WARC and ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading, including CPython's `gzip.GzipFile` read path |
+| [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers, as functions that don't need NeMo |
 
 The filters and dedup tokenize
 [4,049 of datatrove's 4,343 language codes](guides/languages.md) natively, with datatrove's
@@ -50,9 +51,12 @@ run datatrove's own tokenizer with `python_tokenizer=True`.
   stop; `pyroid dedup signatures`, `buckets`, `cluster` and `filter` run MinHash dedup across
   shards in datatrove's file format.
 - [`pyroid.patch()`](guides/patch.md) and `pyroid run -p`: `import ftfy`, `fasttext`, `anyascii`,
-  `datasketch`, `trafilatura`, `nltk` and `warcio` give pyroid's functions.
+  `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions.
 - [`pyroid.integrations.datatrove`](guides/datatrove.md): 17 drop-in datatrove steps with
   datatrove's names and arguments, `Trafilatura` and `WarcReader` among them.
+- [`pyroid.integrations.nemo_curator`](guides/nemo-curator.md): NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, `Score`, `Filter`, `Modify`, the 23
+  heuristic filters, the two fastText filters, `UnicodeReformatter` and the string modifiers),
+  subclassing NeMo's classes with the same arguments.
 - [`pyroid.integrations.hf`](guides/huggingface.md) (Hugging Face `datasets`) and
   `pyroid.integrations.recipes.FineWeb`.
 

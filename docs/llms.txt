@@ -1,6 +1,6 @@
 # pyroid
 
-> pyroid reimplements popular Python libraries in Rust, with the same API and the same output; most of its modules run many times faster than the library they replace. Text and encoding: ftfy 6.3.1, anyascii 0.3.3. Language ID and NLP: fastText inference, NLTK 3.10.4's tokenizers, jieba 0.42.1. Web and archives: Trafilatura 2.3.1 and 1.11.0, warcio 1.8.2. Dedup and similarity: datasketch 2.0.0, datatrove 0.10.1's MinHash and sentence dedup. Quality filters: datatrove 0.10.1's. Evaluation: rouge-score 0.1.2, sacrebleu 2.6.0. JSON: json_repair 0.64.5. Install with `pip install pyroid` and change the import (`import pyroid.ftfy as ftfy`). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. The largest measured gains are in cleaning LLM training data: from WARC files, datatrove's FineWeb pipeline runs 9.5x faster with pyroid's steps, WARC reader included (89.4 s vs 848.3 s, 8 workers, AWS EC2 c7i.4xlarge), and 10.7x as `pyroid clean --recipe fineweb-warc` (79.6 s).
+> pyroid reimplements popular Python libraries in Rust, with the same API and the same output; most of its modules run many times faster than the library they replace. Text and encoding: ftfy 6.3.1, anyascii 0.3.3. Language ID and NLP: fastText inference, NLTK 3.10.4's tokenizers, jieba 0.42.1. Web and archives: Trafilatura 2.3.1 and 1.11.0, warcio 1.8.2. Dedup and similarity: datasketch 2.0.0, datatrove 0.10.1's MinHash and sentence dedup. Quality filters: datatrove 0.10.1's Gopher, C4, FineWeb, PII and URL filters, NeMo Curator 1.4.0's heuristic filters. Evaluation: rouge-score 0.1.2, sacrebleu 2.6.0. JSON: json_repair 0.64.5. Install with `pip install pyroid` and change the import (`import pyroid.ftfy as ftfy`). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t. The end-to-end measurements are in cleaning LLM training data: from WARC files, datatrove's FineWeb pipeline runs 9.5x faster with pyroid's steps, WARC reader included (89.4 s vs 848.3 s, 8 workers, AWS EC2 c7i.4xlarge), and 10.7x as `pyroid clean --recipe fineweb-warc` (79.6 s).
 
 Modules and what they match:
 
@@ -14,10 +14,11 @@ Modules and what they match:
 - `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
 - `pyroid.dedup`: datatrove's MinHash and sentence dedup, with the same removals.
 - `pyroid.filters`: datatrove's Gopher, C4, FineWeb, PII, C4 bad words, symbol lines and URL filters, with the same decisions.
+- `pyroid.nemo`: NeMo Curator 1.4.0's heuristic document filters and string modifiers as functions (the scores `score_document` returns, the text `modify_document` returns), without NeMo; `pyroid.integrations.nemo_curator` has the stages.
 - `pyroid.metrics`: ROUGE, BLEU, chrF and chrF++, with scores identical to rouge-score and sacrebleu.
 - `pyroid.json_repair`: the same output as json_repair, in linear time.
 
-Integrations: the `pyroid clean IN OUT --recipe fineweb` command line (`--recipe fineweb-warc` from WARC files; many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs, resumable runs, `pyroid dedup signatures|buckets|cluster|filter` for MinHash across shards), `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`), datatrove drop-in steps (`pyroid.integrations.datatrove`, `WarcReader` included, `Trafilatura` included; it has no 1 s timeout, so results do not vary between runs) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` and `[datasketch]` (numpy), `[cli]` (pyarrow), `[datatrove]`, `[hf]`, `[warc]`, `[nemo]` and `[all]`.
+Integrations: the `pyroid clean IN OUT --recipe fineweb` command line (`--recipe fineweb-warc` from WARC files; many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs, resumable runs, `pyroid dedup signatures|buckets|cluster|filter` for MinHash across shards), `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`), datatrove drop-in steps (`pyroid.integrations.datatrove`, `WarcReader` included, `Trafilatura` included; it has no 1 s timeout, so results do not vary between runs) NeMo Curator 1.4.0 drop-in CPU text stages (`pyroid.integrations.nemo_curator`: `ScoreFilter`, `Score`, `Filter`, `Modify`, the heuristic and fastText filters, the modifiers) and Hugging Face `datasets` helpers (`pyroid.integrations.hf`). There are no runtime dependencies; the extras are `[fasttext]` and `[datasketch]` (numpy), `[cli]` (pyarrow), `[datatrove]`, `[hf]`, `[warc]`, `[nemo]` and `[all]`.
 
 Conventions shared by every module:
 
@@ -56,8 +57,9 @@ Conventions shared by every module:
 
 - [The pyroid command line](https://ao.github.io/pyroid/guides/cli/): `pyroid clean`, `langid`, `dedup`, `translit`, `run`; every option
 - [Large datasets](https://ao.github.io/pyroid/guides/large-datasets/): thousands of files, `--workers`, `--shard`, remote inputs, resuming, MinHash dedup across shards
-- [pyroid.patch()](https://ao.github.io/pyroid/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk` or `warcio` to pyroid in code you don't own
+- [pyroid.patch()](https://ao.github.io/pyroid/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` or `nemo_curator` to pyroid in code you don't own
 - [datatrove steps](https://ao.github.io/pyroid/guides/datatrove/): drop-in datatrove pipeline steps with the same names and signatures
+- [NeMo Curator stages](https://ao.github.io/pyroid/guides/nemo-curator/): drop-in NeMo Curator 1.4.0 text stages, and `pyroid.nemo`'s kernels
 - [Hugging Face datasets](https://ao.github.io/pyroid/guides/huggingface/): batched callables for `Dataset.map`/`filter`, the FineWeb recipe
 
 ## API reference
@@ -75,6 +77,7 @@ Conventions shared by every module:
 - [pyroid.trafilatura](https://ao.github.io/pyroid/reference/trafilatura/)
 - [pyroid.nltk](https://ao.github.io/pyroid/reference/nltk/)
 - [pyroid.warc](https://ao.github.io/pyroid/reference/warc/)
+- [pyroid.nemo](https://ao.github.io/pyroid/reference/nemo/)
 - [pyroid.integrations](https://ao.github.io/pyroid/reference/integrations/)
 - [pyroid.text](https://ao.github.io/pyroid/reference/text/)
 
