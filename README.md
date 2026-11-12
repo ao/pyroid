@@ -37,15 +37,16 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}', as js
 | Dedup and similarity | [`pyroid.datasketch`](https://ao.github.io/pyroid/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
 | | [`pyroid.dedup`](https://ao.github.io/pyroid/guides/dedup/) | datatrove 0.10.1's MinHash and sentence dedup |
 | Quality filters | [`pyroid.filters`](https://ao.github.io/pyroid/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
+| | [`pyroid.nemo`](https://ao.github.io/pyroid/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
 | Evaluation | [`pyroid.metrics`](https://ao.github.io/pyroid/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
 | JSON | [`pyroid.json_repair`](https://ao.github.io/pyroid/guides/json_repair/) | json_repair 0.64.5 |
 
 ## Example: cleaning LLM training data
 
-The largest measured gains are in cleaning text for LLM training, where several of these
-libraries run one after another. On 100,000 FineWeb documents on AWS EC2 c7i.4xlarge, pyroid's
-version of datatrove's FineWeb cleaning chain is 27× faster than datatrove on 8 processes, with
-the same output.
+On 100,000 FineWeb documents on AWS EC2 c7i.4xlarge, pyroid's version of datatrove's FineWeb
+cleaning chain is 27× faster than datatrove on 8 processes, with the same output. The chain runs
+several of the modules above one after another (ftfy, fastText, the quality filters, MinHash), and
+it is where pyroid has been measured end to end.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ao/pyroid/main/docs/assets/hero-dark.svg">
@@ -92,7 +93,7 @@ WARC reader.
 
 Each module is tested against the library it replaces, on pinned real data and with
 property-based fuzzing ([parity counts](https://ao.github.io/pyroid/compatibility/)). CI runs
-every parity suite on Linux x86_64 and aarch64. The ftfy, fastText, filters, dedup, metrics and
+the `parity/` suites on Linux x86_64 and aarch64. The ftfy, fastText, filters, dedup, metrics and
 json_repair suites also ran natively on AWS EC2 x86_64 and aarch64 (c7i.4xlarge and c8g.4xlarge),
 and the Trafilatura pages and the warc suite on x86_64. On macOS, Windows and musl Linux, every
 release's wheels pass pyroid's test suite before they are published.
@@ -153,8 +154,9 @@ corpus, interpreter and source.
 |---|---|
 | [`pyroid clean`](https://ao.github.io/pyroid/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files |
 | [Large datasets](https://ao.github.io/pyroid/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
-| [`pyroid.patch()`](https://ao.github.io/pyroid/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk` and `warcio` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](https://ao.github.io/pyroid/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
 | [datatrove steps](https://ao.github.io/pyroid/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
+| [NeMo Curator stages](https://ao.github.io/pyroid/guides/nemo-curator/) | NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, the heuristic filters, the modifiers) with the same classes and arguments |
 | [Hugging Face `datasets`](https://ao.github.io/pyroid/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
 
 ```python

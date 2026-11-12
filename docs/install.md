@@ -87,14 +87,15 @@ on CPython 3.11, 3.14t, 3.15 and 3.15t, on every platform above. PyPy and GraalP
 supported.
 
 !!! note "Where parity has been checked"
-    Every parity suite has run on Linux aarch64, and CI runs each one on Linux x86_64 and
-    aarch64. The ftfy, fastText, filters, dedup, metrics and
+    Every parity suite has run on Linux aarch64, and CI runs the `parity/` suites on Linux x86_64
+    and aarch64. The ftfy, fastText, filters, dedup, metrics and
     json_repair suites also ran natively on AWS EC2, on x86_64 (Intel Sapphire Rapids) and
     aarch64 (AWS Graviton4), with 0 differences. `pyroid.trafilatura` matched trafilatura on
     27,585 Common Crawl pages in 8 option sets, in both modes, on x86_64 (AWS EC2 c7i.4xlarge).
     fastText's and the metrics' references are pinned per platform, because the incumbents' own
-    output can differ by architecture and C library. On macOS, Windows and musl, the test suite
-    runs but the parity suites don't ([Compatibility](compatibility.md#platforms)).
+    output can differ by architecture and C library. On macOS, Windows and musl, the release
+    workflow runs pyroid's test suite, which compares against the installed incumbents, but not
+    the `parity/` suites on pinned data ([Compatibility](compatibility.md#platforms)).
 
 On free-threaded builds, importing pyroid does not re-enable the GIL. See
 [Threads and free-threading](concepts/threads.md).

@@ -8,7 +8,7 @@ have been made. Every known difference is listed in the module's guide.
 
 Each module is tested differentially: the same input goes to pyroid and to the incumbent, and the
 results are compared exactly. For fastText, probabilities may also differ by 1e-6, though none
-do. The metrics are compared as the strings they print, with no tolerance. The inputs are:
+do on Linux ([on macOS](#per-platform-references) they can differ more). The metrics are compared as the strings they print, with no tolerance. The inputs are:
 
 - Pinned real documents: the first 10,000 FineWeb documents, 8 FineWeb-2 languages, and a seeded
   adversarial set of 3,232 documents (mojibake, near-duplicates, edge cases), all fixed by
@@ -31,7 +31,7 @@ broken builds (for example ftfy without surrogate-pair joining) fail them.
 
 The counts below are from each module's test runs between 2026-11-05 and 2026-11-09, in a
 Docker/OrbStack VM on linux/aarch64 unless a row says otherwise. The native runs on AWS EC2 are
-under [Platforms](#platforms). CI runs the same suites on Linux x86_64 and aarch64 on every
+under [Platforms](#platforms). CI runs the `parity/` suites on Linux x86_64 and aarch64 on every
 pull request and push to `main`; their counts are in each job's summary and
 `parity-report.json` artifact, not on this page.
 
@@ -398,8 +398,7 @@ the same counts, with 0 differences in every check that ran:
 On 3.12, 6 live-oracle filter tests did not run: 4 for C4 bad words and 2 for the URL filter.
 datatrove's `C4BadWordsFilter` and `URLFilter` need optional dependencies that parity's lock file
 lacked at the time, so the tests failed on import before comparing anything. The lock file has
-them now, but the tests have not been re-run on EC2, so those two steps are not yet checked on
-x86_64.
+them now. They have not been re-run on EC2, but CI's parity jobs run them on x86_64 and aarch64.
 
 Both machines also regenerated the parity references. On the c8g, all 8 match the linux-aarch64
 pins byte for byte. On the c7i, the fastText reference is byte-identical to the x86_64 pin made
@@ -428,7 +427,8 @@ The metrics reference is pinned per platform the same way, because sacrebleu's B
 library's `exp` and `log`. Its difference came only from Rosetta 2's emulated CPU, which has
 SSE4.2, FMA and BMI2 but no AVX or AVX2, so glibc took other `exp`/`log` paths there. On the c7i,
 with AVX2 and FMA, the x86_64 and aarch64 files are the same. GitHub's x86_64 runners have AVX2
-too, and CI re-checks the references on its first run. pyroid and the reference share the C
+too, and CI's parity-data job regenerates the references on both architectures (when its cache
+misses) and checks them against their pins. pyroid and the reference share the C
 library, so they would agree with each other either way.
 
 ### Earlier runs under emulation
@@ -444,12 +444,14 @@ Before the EC2 runs, Linux x86_64 was checked under emulation (OrbStack with Ros
 
 ### macOS, Windows and musl
 
-The parity suites run on Linux only. On macOS (x86_64 and arm64), Windows (x64 and ARM64) and
-musl Linux (x86_64 and aarch64), the release workflow installs each wheel in a clean virtual
-environment and runs pyroid's test suite (`python/tests`) with it, on CPython 3.11, 3.14t, 3.15
-and 3.15t, before the release is published. That suite includes the fastText test-zoo digests
-pinned per platform ([above](#per-platform-references)), but not the comparisons on pinned
-FineWeb, Common Crawl and evaluation data.
+The `parity/` suites, with the pinned FineWeb, Common Crawl and evaluation data, run on Linux
+only. On macOS (x86_64 and arm64), Windows (x64 and ARM64) and musl Linux (x86_64 and aarch64),
+the release workflow installs each wheel in a clean virtual environment and runs pyroid's test
+suite (`python/tests`) with it, on CPython 3.11, 3.14t, 3.15 and 3.15t, before the release is
+published. That suite compares pyroid against the installed ftfy, anyascii, fasttext-predict,
+rouge-score, NLTK, json_repair, datasketch, jieba and warcio, where each installs, and checks the
+fastText test-zoo digests pinned per platform ([above](#per-platform-references); none are
+pinned for Windows ARM64).
 
 pyroid fuses fastText's multiply-adds on every aarch64 target, as Linux builds of fastText do,
 and orders exact ties between labels as libstdc++ orders them. pyroid's x86 builds stay at

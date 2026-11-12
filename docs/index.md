@@ -19,7 +19,7 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}', as js
 ```
 
 Or make code you don't own (a tokenizer, a language detector, a pipeline) use pyroid wherever it
-imports one of these libraries:
+imports ftfy, fastText, anyascii, datasketch, Trafilatura, NLTK, warcio or NeMo Curator:
 
 ```python
 import pyroid
@@ -47,10 +47,15 @@ See [`pyroid.patch()`](guides/patch.md).
 | Dedup and similarity | [`pyroid.datasketch`](guides/datasketch.md) | [datasketch](https://github.com/ekzhu/datasketch) 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble | same hash values, bytes and query results ([parity](compatibility.md#datasketch)) |
 |  | [`pyroid.dedup`](guides/dedup.md) | datatrove 0.10.1's MinHash and sentence dedup | same signatures, removals and files ([parity](compatibility.md#dedup)) |
 | Quality filters | [`pyroid.filters`](guides/filters.md) | [datatrove](https://github.com/huggingface/datatrove) 0.10.1's Gopher, C4 and FineWeb filters, PII formatter, C4 bad words, symbol lines and URL filter | same decisions, reasons and text ([parity](compatibility.md#filters)) |
+|  | [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | [NeMo Curator](https://github.com/NVIDIA-NeMo/Curator) 1.4.0's heuristic document filters and string modifiers | same scores, exceptions and modified text ([parity](compatibility.md#nemo)) |
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
 | JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
 
 ## Example: cleaning LLM training data
+
+On 100,000 FineWeb documents, pyroid's FineWeb chain is 27× faster than datatrove on 8 processes,
+and from Common Crawl WARC files `pyroid clean` runs datatrove's FineWeb pipeline 10.7× faster,
+both with the same output (AWS EC2 c7i.4xlarge; details under [Speed](#speed)).
 
 Building a pretraining or fine-tuning corpus means running every document through the same few
 steps: fix broken Unicode, identify the language, drop low-quality pages, remove near-duplicates.
@@ -123,8 +128,9 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 |---|---|
 | [`pyroid clean`](guides/cli.md) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files, with datatrove's output document for document |
 | [Large datasets](guides/large-datasets.md) | the same commands over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards in datatrove's file format |
-| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk` and `warcio` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
 | [datatrove steps](guides/datatrove.md) | `pyroid.integrations.datatrove`: datatrove's pipeline steps with the same names and signatures, `Trafilatura` included, as a one-import change |
+| [NeMo Curator stages](guides/nemo-curator.md) | `pyroid.integrations.nemo_curator`: NeMo Curator 1.4.0's CPU text stages, subclassing NeMo's classes with the same arguments |
 | [Hugging Face `datasets`](guides/huggingface.md) | `pyroid.integrations.hf`: batched callables for `Dataset.map` and `Dataset.filter`, and the FineWeb recipe |
 
 ## Speed
@@ -171,8 +177,8 @@ incumbent's own test corpus, and Hypothesis fuzzing that includes lone surrogate
 every option. The counts are on the [Compatibility](compatibility.md) page, and every known
 difference is listed in each guide.
 
-All suites ran on Linux aarch64 in a Docker VM, and CI runs every suite on Linux x86_64 and
-aarch64. The ftfy, fastText, filters, dedup, metrics and json_repair suites also ran natively on
+All suites ran on Linux aarch64 in a Docker VM, and CI runs the `parity/` suites on Linux x86_64
+and aarch64. The ftfy, fastText, filters, dedup, metrics and json_repair suites also ran natively on
 x86_64 and aarch64 on AWS EC2, and the Trafilatura pages on x86_64, with 0 differences
 ([Platforms](compatibility.md#platforms)). On macOS, Windows and musl Linux, every release's
 wheels pass pyroid's test suite before they are published.
