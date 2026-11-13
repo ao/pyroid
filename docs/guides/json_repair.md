@@ -150,10 +150,18 @@ on a Docker/OrbStack VM on Apple Silicon, indicative:
 | `records_missing_separators` (input rebuilt per split) | 1.47 / 0.97 | 1 MB: 6.1 s → 40 ms |
 | `nested_open_containers` (adversarial, `{[` × 60) | O(depth·n) / 1.02 | 512 KB: 12.5 s → 9.2 ms |
 
-These families come from reading json_repair's code. Fuzzing found one more that is quadratic in
-both: a 62-character run of garbage, repeated, takes pyroid 8, 32, 127 and 511 ms at 7,936, 15,872,
-31,744 and 63,488 characters, and json_repair 4.6 s at 15,872 and 18.4 s at 31,744 (Docker/OrbStack
-VM, indicative).
+These families come from reading json_repair's code. Fuzzing finds other inputs, made of a short
+unit of garbage repeated, that are quadratic in both. There json_repair's parser backtracks:
+it parses a value to the end of the text, drops it and parses again a few characters further on,
+or rescans an unclosed run of brackets from each bracket. pyroid follows the same steps to give the
+same output, so it is faster by a constant factor only. Three of them at 4,096 and 16,384
+characters (Docker/OrbStack VM, indicative):
+
+| Repeated unit | json_repair, 4 K / 16 K | pyroid, 4 K / 16 K |
+|---|---|---|
+| `{` U+FFFD `\0\0\0\0` `0]"` (an object key that runs to the end) | 1.43 s / 26.8 s | 19 ms / 309 ms |
+| `\x0c\0\0\0c{]=` | 1.14 s / 18.9 s | 17 ms / 232 ms |
+| `{a: [` inside a string value | 0.35 s / 5.2 s | 7 ms / 97 ms |
 
 ## Differences from json_repair
 
