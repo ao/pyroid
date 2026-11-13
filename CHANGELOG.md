@@ -2,7 +2,7 @@
 
 All notable changes to pyroid are documented here. From 1.0.0 on, [release-please](https://github.com/googleapis/release-please) maintains this file from [Conventional Commits](https://www.conventionalcommits.org/).
 
-## 1.0.0 (unreleased)
+## [1.0.0](https://github.com/ao/pyroid/compare/v0.7.0...v1.0.0) (2026-11-13)
 
 pyroid 1.0 is a rewrite. It has Rust versions of popular Python libraries, each with the API and
 output of the release named below, and most are many times faster. The end-to-end benchmarks are

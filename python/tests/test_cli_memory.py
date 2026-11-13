@@ -37,7 +37,9 @@ DATA = Path(os.environ.get("PYROID_DATA", "/data"))
 LID_BIN = DATA / "models" / "lid.176.bin"
 
 #: Peak RSS bounds, MiB. The interpreter with pyarrow and pyroid loaded is about 100 MiB.
-BOUND_STREAM = 300
+#: translit peaked at 302 MiB on a manylinux x86_64 3.15 leg (Release run 43367279690), under 300
+#: on the others, so the bound has some headroom over that.
+BOUND_STREAM = 330
 if sysconfig.get_config_var("Py_GIL_DISABLED"):
     # Free-threaded CPython's allocator (mimalloc, a heap per thread) holds more: translit peaked at
     # 307 MiB on one of GitHub's ubuntu-24.04 3.14t legs (run 43008668757), under 300 on the others.
