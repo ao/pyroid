@@ -796,9 +796,20 @@ def outcome(f, x):
     except Exception as e:
         return ["raise", type(e).__name__, str(e)]
 
-want = [outcome(ref, x) for x in inputs]
+def ref_outcome(x):
+    # NLTK runs each regex under a 5 s wall-clock limit, which a stalled CI runner can hit on a
+    # one-character input; retry once. pyroid has no such limit (a documented difference), so
+    # an input NLTK still times out on is not compared.
+    w = outcome(ref, x)
+    if w[:2] == ["raise", "TimeoutError"]:
+        w = outcome(ref, x)
+    return w
+
+want = [ref_outcome(x) for x in inputs]
 bad = []
 for x, w in zip(inputs, want):
+    if w[:2] == ["raise", "TimeoutError"]:
+        continue
     g = outcome(ours, x)
     if g != w:
         bad.append([x, g, w])
