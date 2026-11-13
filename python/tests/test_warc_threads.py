@@ -161,7 +161,10 @@ def test_large_input_completes(tmp_path: Path) -> None:
     assert n == 20_000
     with p.open("rb") as f:
         assert sum(1 for _ in pw.ArchiveIterator(f)) == 20_000
-    raw = gzip.decompress(data)
+    # Not gzip.decompress: it copies the rest of the input for every member, which is
+    # quadratic over 20,000 members and took over 120 s on a musllinux-aarch64 runner.
+    with gzip.GzipFile(fileobj=io.BytesIO(data)) as g:
+        raw = g.read()
     assert sum(1 for _ in pw.ArchiveIterator(io.BytesIO(raw), check_digests=True)) == 20_000
 
 

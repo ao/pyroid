@@ -8,6 +8,11 @@
 //! Each module adds `src/<mod>.rs` with a `register` function and one line
 //! below; see `docs/dev/MODULES.md`.
 
+// Methods named `_foo` are Python-private hooks (parity tests, internal
+// helpers). PyO3's generated wrappers call them, which clippy (from Rust
+// 1.100) reports as `used_underscore_items`.
+#![allow(clippy::used_underscore_items)]
+
 mod arrow;
 mod batch;
 mod datasketch;

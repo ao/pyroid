@@ -139,23 +139,40 @@ and no release PR appears. The extra files update `[workspace.package].version` 
 the `Cargo.lock` filter, or `--locked` builds fail on the release commit. The log line
 `file version.txt did not exist` is expected and harmless.
 
-## 8. Docs site (GitHub Pages)
+## 8. Docs site (ataiva.com)
 
-`.github/workflows/docs.yml` builds the site (`mkdocs.yml`, sources in `docs/`) on every PR and push, with
-`zensical build --strict` and a `mkdocs build --strict` link check. It deploys only on a push to `main`, and
-only if the `github-pages` environment exists. A first job looks the environment up and, if it is missing,
-skips the deploy with a notice instead of creating it. Nothing is published until you do this once:
+The docs live at <https://ataiva.com/open-source/pyroid/docs/>. They get there in two steps:
+
+1. When release-please creates a GitHub Release, the `docs-asset` job in `.github/workflows/release.yml`
+   checks out the release tag, builds the site with the same strict build as `docs.yml`, and attaches two
+   files to the Release: `pyroid-docs-X.Y.Z.tar.gz` and `pyroid-docs-X.Y.Z.tar.gz.sha256` (the hex digest, two
+   spaces, then the file name, as `sha256sum` writes it). The tarball holds the site's files at its root
+   (`index.html` at the top level) and is built with `site_url: https://ataiva.com/open-source/pyroid/docs/`,
+   so every link and asset works under that path. `docs/scripts/pack_site.sh` packs it; run it after
+   `zensical build --clean --strict` to get the same file locally. The job runs alongside the wheel builds and
+   nothing waits for it, so it can't hold up the PyPI publish. If it fails, re-run it on its own.
+2. ataiva.com's own build fetches the tarball and its `.sha256` from the GitHub Release and serves the files.
+   That side lives in the ataiva.com repository, not here.
+
+So the published docs follow releases, not `main`: a docs change merged to `main` appears on ataiva.com with
+the next release. `.github/workflows/docs.yml` builds the site on every PR and push, with
+`zensical build --strict` and a `mkdocs build --strict` link check, but never publishes it.
+
+The old address, <https://ao.github.io/pyroid/>, redirects to the new one. On a push to `main`, `docs.yml`
+deploys a redirect stub to GitHub Pages: `.github/pages-redirect/index.html`, served as both `index.html`
+and `404.html`, so that any old path goes to the same path under ataiva.com (GitHub Pages can't send a 301,
+so the page uses a canonical link, a meta refresh and a small script that keeps the path). It deploys only if
+the `github-pages` environment exists; a first job looks it up and, if it is missing, skips the deploy with a
+notice. To set it up once:
 
 1. **Settings → Pages → Build and deployment → Source: GitHub Actions.** This creates the `github-pages`
    environment.
 2. **Settings → Environments → `github-pages`:** check that **Deployment branches and tags** allows `main` only
    (GitHub's default for this environment). No reviewers or secrets are needed.
-3. Push to `main` (or re-run the latest `docs` run on `main`). The `deploy to GitHub Pages` job publishes
-   <https://ao.github.io/pyroid/>. The README's Docs, Benchmarks and Compatibility links point there, and 404
-   until then.
+3. Push to `main` (or re-run the latest `docs` run on `main`). The `deploy the redirect stub to GitHub Pages`
+   job publishes it.
 
-To stop publishing, set the Pages source back to "Deploy from a branch" (or delete the environment). The
-workflow then goes back to build-only.
+To stop the redirect, set the Pages source back to "Deploy from a branch" (or delete the environment).
 
 The README hero (`docs/assets/hero-{light,dark}.svg`) is a copy of `charts/hero-{light,dark}.svg` from the run
 folder that `bench/consolidate.py` wrote; it currently comes from the AWS EC2 c7i.4xlarge dev-slice run of

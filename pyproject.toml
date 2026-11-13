@@ -80,7 +80,7 @@ pyroid = "pyroid.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ao/pyroid"
-Documentation = "https://ao.github.io/pyroid/"
+Documentation = "https://ataiva.com/open-source/pyroid/docs/"
 Repository = "https://github.com/ao/pyroid"
 Issues = "https://github.com/ao/pyroid/issues"
 Changelog = "https://github.com/ao/pyroid/blob/main/CHANGELOG.md"

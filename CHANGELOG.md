@@ -11,7 +11,7 @@ on cleaning LLM training data.
 The 0.7.x API is removed. 0.7 added general-purpose helpers that mostly ran in Python; 1.0 speeds
 up code that uses the libraries it replaces. 0.7.x stays installable with `pip install "pyroid<1"`,
 and its source is on the [`legacy`](https://github.com/ao/pyroid/tree/legacy) branch.
-[Migrating from 0.7](https://ao.github.io/pyroid/migrating-from-0.7/) lists replacements.
+[Migrating from 0.7](https://ataiva.com/open-source/pyroid/docs/migrating-from-0.7/) lists replacements.
 
 ### Modules
 

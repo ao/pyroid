@@ -375,8 +375,7 @@ impl Nfa {
             }
             let npos = pos + c.len_utf8();
             next.clear();
-            for i in 0..cur.len() {
-                let pc = cur.dense[i];
+            for &pc in &cur.dense {
                 if let Inst::Char(node) = self.prog[pc] {
                     if char_matches(node, c, v)
                         && self.closure(pc + 1, npos, &m, &mut next, &mut stack)
@@ -411,8 +410,7 @@ impl Nfa {
             }
             let npos = pos + c.len_utf8();
             next.clear();
-            for i in 0..cur.len() {
-                let pc = cur.dense[i];
+            for &pc in &cur.dense {
                 if let Inst::Char(node) = self.prog[pc] {
                     if char_matches(node, c, m.v)
                         && self.closure_ordered(pc + 1, npos, m, accept, &mut next, &mut stack)
@@ -597,10 +595,6 @@ impl SparseSet {
             dense: Vec::with_capacity(n),
             sparse: vec![0; n],
         }
-    }
-
-    fn len(&self) -> usize {
-        self.dense.len()
     }
 
     fn is_empty(&self) -> bool {
