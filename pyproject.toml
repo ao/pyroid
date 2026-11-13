@@ -152,7 +152,7 @@ dev = ["maturin>=1.16,<2.0", { include-group = "test" }, { include-group = "lint
 # mkdocs-material's `mkdocs build --strict` is the link, anchor and nav check. mkdocstrings reads the
 # .pyi stubs statically, so no Rust build is needed; ruff formats the signatures it renders.
 docs = [
-  "zensical==0.0.74",
+  "zensical==0.1.0",
   "mkdocs-material==9.8.0",
   "mkdocstrings-python==2.0.10",
   "ruff==0.17.3",
