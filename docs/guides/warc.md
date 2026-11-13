@@ -132,17 +132,10 @@ Trafilatura, fastText language ID, the quality filters, MinHash and PII. See
 ## Differences from warcio
 
 The records, documents and errors are warcio's and datatrove's
-([parity](../compatibility.md#warc)). Two cases differ:
-
-- `check_digests` hashes md5, sha1, sha224, sha256, sha384 and sha512, under the names
-  `hashlib.new` takes for them (`sha1`, `SHA-1`, `sha-256`, ...). Any other algorithm name in
-  `WARC-Block-Digest` or `WARC-Payload-Digest` counts as unknown, where hashlib (through
-  OpenSSL) might know it and hash.
-- Brotli (`Content-Encoding: br`, decoded only when brotlicffi >= 1.2.1.0 is installed, as
-  warcio): on a corrupt stream with a damaged command before the last metablock, pyroid's
-  pure-Rust decoder keeps decoding where libbrotli raises. That was 41 of 2,296 corruption cases
-  in the differential tests; every valid stream and every other corrupt one gives the same
-  output or error.
+([parity](../compatibility.md#warc)). One case differs: `check_digests` hashes md5, sha1,
+sha224, sha256, sha384 and sha512, under the names `hashlib.new` takes for them (`sha1`,
+`SHA-1`, `sha-256`, ...). Any other algorithm name in `WARC-Block-Digest` or
+`WARC-Payload-Digest` counts as unknown, where hashlib (through OpenSSL) might know it and hash.
 
 And the API, in small ways: `iter(it)` returns a native iterator (warcio returns a generator),
 the iterator's arguments are read once (changing `it.no_record_parse` later has no effect), and a

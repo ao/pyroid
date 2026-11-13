@@ -321,8 +321,10 @@ in 74 jobs, all the same.
 
 - CPython's `gzip.GzipFile` read path, as datatrove reads `.warc.gz` files, is emulated per
   interpreter: it gave CPython's bytes and errors on all 4,910 cases on CPython 3.11 to 3.15.
-- The known differences are in the guide: [digest algorithm names](guides/warc.md#differences-from-warcio)
-  and damaged brotli streams (41 of 2,296 corruption cases).
+- Brotli payloads (`Content-Encoding: br`) are decoded in Rust as brotlicffi 1.2.1.0's
+  `Decompressor` decodes them: the same output and errors on all 2,296 cases of the differential
+  test (valid streams in chunks, truncations, bit flips, trailing data, garbage).
+- The known difference is in the guide: [digest algorithm names](guides/warc.md#differences-from-warcio).
 
 ## Known differences
 
