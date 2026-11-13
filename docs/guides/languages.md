@@ -326,8 +326,11 @@ pyroid finds the package without importing it and reads `corpus/words_th.txt` an
 pipeline, MinHash or sentence dedup is built for a Thai code. If `PYROID_PYTHAINLP_CORPUS` is
 set, the files of the directory it names are read instead. A file that cannot be read raises
 `OSError`, and a model that is not a CRFsuite model `ValueError`. The algorithms are PyThaiNLP
-5.4.0's, and parity was checked with PyThaiNLP 5.4.0 ([Parity](#parity)); newer releases change
+5.4.0's, and parity was checked with PyThaiNLP 5.4.0 ([Parity](#parity)); other releases change
 the word list, which pyroid then reads.
+
+One limit is pyroid's own: a text of 2\*\*32 - 64 characters or more raises `ValueError`, where
+PyThaiNLP has no limit.
 
 Without PyThaiNLP these codes are not native: they raise `NotImplementedError`, whose message says
 to install pythainlp. (datatrove's own Thai tokenizer also needs python-crfsuite for its

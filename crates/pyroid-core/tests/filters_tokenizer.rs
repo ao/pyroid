@@ -148,7 +148,8 @@ fn py_exception(e: FilterError) -> &'static str {
         FilterError::TextTooLong(_)
         | FilterError::SubstringNotFound
         | FilterError::NeedsTokenizer
-        | FilterError::Tokenizer(_) => "ValueError",
+        | FilterError::Tokenizer(_)
+        | FilterError::ThaiTextTooLong(_) => "ValueError",
     }
 }
 

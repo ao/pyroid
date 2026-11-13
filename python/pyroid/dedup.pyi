@@ -589,7 +589,8 @@ def sentence_dedup(
         pyroid.InputError: ``texts`` is not one of the accepted kinds.
         TypeError: An unknown or mistyped config field.
         ValueError: A config value out of range, ``language`` is not a datatrove
-            code (datatrove's message), or a text of 2**30 characters or more.
+            code (datatrove's message), or a text of 2**30 characters or more
+            (2**32 - 64 for Thai).
         NotImplementedError: No native word tokenizer for ``language``.
         OverflowError: A document has more than 65,536 sentence windows
             (datatrove's ``<u2`` window index).
