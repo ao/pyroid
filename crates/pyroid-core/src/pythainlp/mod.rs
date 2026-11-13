@@ -39,7 +39,7 @@ mod trie;
 #[cfg(test)]
 mod replay;
 
-pub use th::{install, installed};
+pub use th::{install, install_with, installed};
 
 /// `get_corpus`'s file name of the word list.
 pub const WORDS_FILE: &str = "words_th.txt";

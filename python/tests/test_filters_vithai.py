@@ -1332,3 +1332,68 @@ def test_first_use_from_threads(run_python: Callable[..., Any]) -> None:
         dd.minhash_signatures(docs, language=TH, n_grams=2),
     ]
     assert json.loads(r.stdout) == want
+
+
+VERSION_CHECK = """
+import sys, warnings
+sys.path.insert(0, $root)  # the stand-in pythainlp package and its metadata
+import pyroid.filters as pf, pyroid.dedup as dd
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    pf.gopher_quality(["ภาษาไทย"], language="tha_Thai")
+    dd.minhash_signatures(["ภาษาไทย"], language="th")
+    dd.SentenceDedup(language="tha_Thai").fit(["ภาษาไทย."])
+    pf.gopher_quality(["ภาษาไทย"], language="th")
+for w in caught:
+    if issubclass(w.category, RuntimeWarning):
+        print(w.category.__name__, w.filename, w.message, sep="|")
+"""
+
+
+def _stand_in_pythainlp(root: Path, version: str) -> Path:
+    """A ``pythainlp`` package under ``root`` with the real corpus files and version ``version``."""
+    real = thai_corpus()
+    corpus = root / "pythainlp" / "corpus"
+    corpus.mkdir(parents=True)
+    (root / "pythainlp" / "__init__.py").write_text("", encoding="utf-8")
+    for name in ("words_th.txt", "sentenceseg_crfcut.model"):
+        shutil.copy(real / name, corpus / name)
+    info = root / f"pythainlp-{version}.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text(
+        f"Metadata-Version: 2.1\nName: pythainlp\nVersion: {version}\n", encoding="utf-8"
+    )
+    return corpus
+
+
+@pytest.mark.thread_unsafe
+@needs_thai
+@pytest.mark.parametrize(
+    ("version", "variable", "warned"),
+    [("5.3.0", False, True), ("5.4.0", False, False), ("5.3.0", True, False)],
+)
+def test_pythainlp_version_warning(
+    run_python: Callable[..., Any], tmp_path: Path, version: str, variable: bool, warned: bool
+) -> None:
+    """Another installed pythainlp: one RuntimeWarning, at the caller's line.
+
+    With ``$PYROID_PYTHAINLP_CORPUS`` the files are not the package's, so there is no version
+    to compare.
+    """
+    corpus = _stand_in_pythainlp(tmp_path, version)
+    code = string.Template(VERSION_CHECK).substitute(root=repr(str(tmp_path)))
+    env = {"PYROID_PYTHAINLP_CORPUS": str(corpus) if variable else None}
+    r = run_python(code, env=env, timeout=300)
+    assert r.returncode == 0, r.stderr
+    lines = r.stdout.splitlines()
+    if not warned:
+        assert lines == []
+        return
+    assert len(lines) == 1, lines
+    category, filename, message = lines[0].split("|")
+    assert category == "RuntimeWarning"
+    assert filename == "<string>"  # the user's call, not pyroid's code
+    assert message == (
+        "pyroid's Thai tokenizer runs PyThaiNLP 5.4.0's newmm and crfcut on the word list and "
+        "sentence model of the installed pythainlp 5.3.0: results can differ from PyThaiNLP 5.3.0"
+    )

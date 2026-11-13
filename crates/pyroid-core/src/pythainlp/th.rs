@@ -27,6 +27,14 @@ static LOADING: Mutex<()> = Mutex::new(());
 /// for the Thai tokenizer, once per process. Later calls return the data
 /// already loaded, whatever their directory.
 pub fn install(corpus_dir: impl AsRef<std::path::Path>) -> Result<&'static Thai, ThaiError> {
+    install_with(corpus_dir, || {})
+}
+
+/// [`install`], calling `loaded` if this call is the one that read the files.
+pub fn install_with(
+    corpus_dir: impl AsRef<std::path::Path>,
+    loaded: impl FnOnce(),
+) -> Result<&'static Thai, ThaiError> {
     if let Some(t) = THAI.get() {
         return Ok(t);
     }
@@ -37,7 +45,9 @@ pub fn install(corpus_dir: impl AsRef<std::path::Path>) -> Result<&'static Thai,
         return Ok(t);
     }
     let t = Thai::open(corpus_dir)?;
-    Ok(THAI.get_or_init(|| t))
+    let t = THAI.get_or_init(|| t);
+    loaded();
+    Ok(t)
 }
 
 /// The data [`install`] loaded, if any.

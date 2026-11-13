@@ -327,7 +327,9 @@ pipeline, MinHash or sentence dedup is built for a Thai code. If `PYROID_PYTHAIN
 set, the files of the directory it names are read instead. A file that cannot be read raises
 `OSError`, and a model that is not a CRFsuite model `ValueError`. The algorithms are PyThaiNLP
 5.4.0's, and parity was checked with PyThaiNLP 5.4.0 ([Parity](#parity)); other releases change
-the word list, which pyroid then reads.
+the word list, which pyroid then reads. When the installed pythainlp is not 5.4.0, loading its
+files emits one `RuntimeWarning` per process that names both versions (none for the files of
+`PYROID_PYTHAINLP_CORPUS`, which have no version).
 
 One limit is pyroid's own: a text of 2\*\*32 - 64 characters or more raises `ValueError`, where
 PyThaiNLP has no limit.
