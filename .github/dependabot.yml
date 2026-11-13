@@ -31,12 +31,50 @@ updates:
       day: monday
     cooldown:
       default-days: 7
+    # The default strategy (auto) raised the floors of the extras (numpy>=1.26, pyarrow>=18,
+    # datasets>=3, orjson) in PR #6, which would break users on older releases. increase-if-necessary
+    # leaves a requirement alone when the new release already satisfies it, so those floors stay put.
+    # Exact pins (==) cannot be satisfied by a new release, so they are still updated: the ignore list
+    # below covers the ones that are bumped by hand.
+    versioning-strategy: increase-if-necessary
     commit-message:
       prefix: chore
       include: scope
     groups:
       python:
         patterns: ["*"]
+    ignore:
+      # Parity oracles: the reference libraries that pyroid's parity tests compare against, pinned
+      # in [dependency-groups] test, test-gil and test-trafilatura-111. Their versions are part of the
+      # parity contract (trafilatura 1.11.0 in particular is the compat reference, not the latest),
+      # so they change only by hand.
+      - dependency-name: ftfy
+      - dependency-name: fasttext-predict
+      - dependency-name: anyascii
+      - dependency-name: rouge-score
+      - dependency-name: nltk
+      - dependency-name: regex
+      - dependency-name: json-repair
+      - dependency-name: datasketch
+      - dependency-name: jieba
+      - dependency-name: warcio
+      - dependency-name: sacrebleu
+      - dependency-name: trafilatura
+      - dependency-name: lxml
+      - dependency-name: justext
+      - dependency-name: brotlicffi
+      - dependency-name: lxml-html-clean
+      - dependency-name: charset-normalizer
+      - dependency-name: courlan
+      - dependency-name: htmldate
+      # Pinned in two places that must move together: [dependency-groups] lint and docs in
+      # pyproject.toml, and the hook revision and uvx pins in .pre-commit-config.yaml (prek runs ruff
+      # and mypy from there). This pip entry does not read .pre-commit-config.yaml. Dependabot's
+      # separate pre-commit ecosystem would bump the ruff hook rev, but it is not enabled here, so a
+      # bump of ruff, mypy or prek is done by hand in all of these places.
+      - dependency-name: ruff
+      - dependency-name: mypy
+      - dependency-name: prek
 
   - package-ecosystem: github-actions
     directory: /
