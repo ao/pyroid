@@ -106,10 +106,12 @@ struct Pool {
 
 static POOL: Mutex<Option<Pool>> = Mutex::new(None);
 
-/// Parse the value of [`NUM_THREADS_ENV`]; `None` means "unset".
+/// Parse the value of [`NUM_THREADS_ENV`]; `None` or an empty value means
+/// "unset" (as rayon treats `RAYON_NUM_THREADS`).
 fn parse_num_threads(value: Option<&str>) -> Result<usize, PoolError> {
     match value {
         None => Ok(0), // 0 = rayon's default
+        Some(v) if v.trim().is_empty() => Ok(0),
         Some(v) => v
             .trim()
             .parse::<NonZeroUsize>()
@@ -720,7 +722,9 @@ mod tests {
         assert_eq!(parse_num_threads(None), Ok(0));
         assert_eq!(parse_num_threads(Some("4")), Ok(4));
         assert_eq!(parse_num_threads(Some(" 2 ")), Ok(2));
-        for bad in ["0", "-1", "abc", "", "1.5"] {
+        assert_eq!(parse_num_threads(Some("")), Ok(0));
+        assert_eq!(parse_num_threads(Some("  ")), Ok(0));
+        for bad in ["0", "-1", "abc", "1.5"] {
             let err = parse_num_threads(Some(bad)).unwrap_err();
             assert!(err.to_string().contains(NUM_THREADS_ENV), "{err}");
         }

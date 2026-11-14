@@ -23,7 +23,7 @@ ftfy.fix_text_batch(docs, threads=1)  # this thread only
 ```
 
 The pool is created on first use, not at import. Its size comes from the `PYROID_NUM_THREADS`
-environment variable, read once at that point. If it is unset, rayon's default applies
+environment variable, read once at that point. If it is unset or empty, rayon's default applies
 (`RAYON_NUM_THREADS`, else the number of available CPUs).
 
 Results never depend on `threads`: the same input gives the same output for every value.
