@@ -542,3 +542,55 @@ def test_spool_abort_removes_the_partial_file(tmp_path: Path, strict_unlink: lis
     spool.abort()  # idempotent
     assert _removed_under(strict_unlink, tmp_path) == [path + ".partial"]
     assert not list(tmp_path.iterdir())
+
+
+@pytest.fixture(scope="module")
+def en_lid(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A synthetic fastText model whose only label is ``__label__en`` (every text is English)."""
+    pytest.importorskip("numpy")
+    import dataclasses
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    try:
+        from test_fasttext import SPECS, build
+    finally:
+        sys.path.pop(0)
+    path = tmp_path_factory.mktemp("lid") / "en.bin"
+    path.write_bytes(build(dataclasses.replace(SPECS["softmax-dense"], labels=("__label__en",))).data)
+    return path
+
+
+def _english(i: int) -> str:
+    lines = [
+        f"The council of the city met on Tuesday {i} and talked about the plans for the new park.",
+        "Many people from the north side came to the meeting, and they asked about the costs.",
+        "The mayor said that the work would start in the spring if the weather is good enough.",
+        f"Residents who live near the river were worried about traffic during the {i} months.",
+        "After a long discussion, the members agreed to hold another meeting before the vote.",
+    ]
+    return "\n".join(lines)
+
+
+def test_clean_into_one_file_from_inputs_with_other_schemas(tmp_path: Path, en_lid: Path) -> None:
+    # Each file is read with its own schema; one output file takes them all, matched by name
+    # (it failed at the very end with "Target schema's field names are not matching").
+    src = tmp_path / "in"
+    src.mkdir()
+    a = pa.table({"text": [_english(i) for i in range(30)], "id": [f"a{i}" for i in range(30)]})
+    b = pa.table({"id": [f"b{i}" for i in range(30)], "text": [_english(100 + i) for i in range(30)]})
+    c = b.append_column("source", pa.array(["x"] * 30)).rename_columns(["id", "text", "source"])
+    for name, t in (("a", a), ("b", b), ("c", c)):
+        pq.write_table(t.replace_schema_metadata(None), src / f"{name}.parquet")
+    common = ["--recipe", "fineweb", "--lid-model", str(en_lid), "--no-dedup"]
+    assert main(["clean", str(src), str(tmp_path / "dir"), *common]) == 0
+    assert main(["clean", str(src), str(tmp_path / "one.parquet"), *common]) == 0
+    one = pq.read_table(tmp_path / "one.parquet")
+    assert one.column_names[:2] == ["text", "id"] and "source" in one.column_names
+    want = [
+        {**dict.fromkeys(one.column_names), **row}
+        for n in ("a", "b", "c")
+        for row in pq.read_table(tmp_path / "dir" / f"{n}.parquet").to_pylist()
+    ]
+    assert len(want) > 0
+    assert one.to_pylist() == want
+    assert not list(tmp_path.glob(".one.parquet.pyroid"))

@@ -1340,6 +1340,21 @@ def _parquet_row_groups(path: Path) -> Iterator[Any]:
             yield pf.read_row_group(i, use_threads=False)
 
 
+def _conform(table: Any, schema: Any) -> Any:
+    """``table`` with ``schema``'s columns in its order: matched by name and cast, a column the
+    table lacks all null. Each input file is read with its own schema; one output needs one."""
+    import pyarrow as pa
+
+    if table.schema.equals(schema):
+        return table
+    cols = []
+    for field in schema:
+        i = table.schema.get_field_index(field.name)
+        col = table.column(i) if i >= 0 else pa.nulls(table.num_rows, field.type)
+        cols.append(col if col.type == field.type else col.cast(field.type))
+    return pa.Table.from_arrays(cols, schema=schema)
+
+
 def _concat(parts: Sequence[Path], dest: Path, compression: str | None) -> None:
     """Concatenate part files (all in ``dest``'s format) into ``dest``, atomically."""
     from pyroid.integrations import _io
@@ -1370,12 +1385,18 @@ def _concat(parts: Sequence[Path], dest: Path, compression: str | None) -> None:
 
     present = [p for p in present if p.stat().st_size]  # an empty JSONL input leaves 0 bytes
     schemas = [_ipc_schema(p) if ipc else pq.read_schema(p) for p in present]
-    schema = pa.unify_schemas(schemas, promote_options="permissive") if schemas else None
+    try:
+        schema = pa.unify_schemas(schemas, promote_options="permissive") if schemas else None
+    except (pa.ArrowTypeError, pa.ArrowInvalid) as e:
+        raise ValueError(
+            f"the input files' columns do not fit in one {dest.name}: {e} "
+            "(write to a directory instead, one output per input file)"
+        ) from None
     w = _io.Writer(dest, compression=compression)
     try:
         for p in present:
             for t in _read_ipc(str(p)) if ipc else _parquet_row_groups(p):
-                w.write(t.cast(schema) if schema is not None else t)
+                w.write(_conform(t, schema) if schema is not None else t)
         w.close(schema)
     except BaseException:
         w.abort()
