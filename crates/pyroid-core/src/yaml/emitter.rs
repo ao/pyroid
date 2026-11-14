@@ -185,7 +185,7 @@ fn emitter_error(msg: Msg) -> YamlError {
 pub const TAG_PREFIX_TYPE_ERROR: &str = "ord() expected string of length 1, but int found";
 
 fn tag_prefix_type_error() -> YamlError {
-    YamlError::Value(TAG_PREFIX_TYPE_ERROR.to_owned())
+    YamlError::Type(TAG_PREFIX_TYPE_ERROR.to_owned())
 }
 
 impl Emitter {
@@ -2005,7 +2005,7 @@ mod tests {
         let got = match &err {
             None => None,
             Some(YamlError::Emitter(m)) => Some(("EmitterError".to_owned(), py_format(m, reprs))),
-            Some(YamlError::Value(s)) if s == TAG_PREFIX_TYPE_ERROR => {
+            Some(YamlError::Type(s)) if s == TAG_PREFIX_TYPE_ERROR => {
                 Some(("TypeError".to_owned(), s.clone()))
             }
             Some(other) => Some(("other".to_owned(), format!("{other:?}"))),
@@ -2165,7 +2165,7 @@ mod tests {
     fn error(kinds: Vec<EventKind>) -> String {
         match emit_with(EmitterOptions::default(), kinds) {
             Err(YamlError::Emitter(m)) => py_format(&m, None),
-            Err(YamlError::Value(s)) => format!("TypeError: {s}"),
+            Err(YamlError::Type(s)) => format!("TypeError: {s}"),
             other => panic!("{other:?}"),
         }
     }

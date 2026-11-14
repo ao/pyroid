@@ -8,6 +8,7 @@
 //! emits them in the core). Errors are raised as the exception classes the Python module
 //! registers with `_configure` (PyYAML's own when it is installed).
 
+mod dump;
 mod load;
 
 use pyo3::exceptions::{PyOverflowError, PyRecursionError, PyValueError};
@@ -25,6 +26,10 @@ struct Classes {
     parser_error: Py<PyAny>,
     composer_error: Py<PyAny>,
     constructor_error: Py<PyAny>,
+    representer_error: Py<PyAny>,
+    emitter_error: Py<PyAny>,
+    /// `base64.encodebytes` (`represent_binary`).
+    encodebytes: Py<PyAny>,
     /// `SafeConstructor.nan_value`: one shared float object, as in PyYAML.
     nan: Py<PyAny>,
     date: Py<PyAny>,
@@ -63,6 +68,9 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         parser_error: get("ParserError")?,
         composer_error: get("ComposerError")?,
         constructor_error: get("ConstructorError")?,
+        representer_error: get("RepresenterError")?,
+        emitter_error: get("EmitterError")?,
+        encodebytes: get("encodebytes")?,
         nan: get("nan")?,
         date: get("date")?,
         datetime: get("datetime")?,
@@ -203,12 +211,19 @@ fn to_pyerr<'py>(
             }
             YamlError::Value(msg) => PyValueError::new_err(msg),
             YamlError::Overflow(msg) => PyOverflowError::new_err(msg),
+            YamlError::Type(msg) => pyo3::exceptions::PyTypeError::new_err(msg),
             YamlError::Recursion => PyRecursionError::new_err("maximum recursion depth exceeded"),
             YamlError::NeedMore => match pending {
                 Some(p) => PyErr::from_value(p.bind(py).clone()),
                 None => PyValueError::new_err("pyroid.yaml: the reader ran out of input"),
             },
-            YamlError::Emitter(m) => PyValueError::new_err(m.render()),
+            YamlError::Emitter(m) => {
+                let exc = classes(py)?
+                    .emitter_error
+                    .bind(py)
+                    .call1((format_msg(py, &m)?,))?;
+                PyErr::from_value(exc)
+            }
         })
     })();
     r.unwrap_or_else(|e| e)
@@ -220,5 +235,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.gil_used(false)?;
     m.add_function(wrap_pyfunction!(_configure, &m)?)?;
     load::register(&m)?;
+    dump::register(&m)?;
     parent.add_submodule(&m)
 }

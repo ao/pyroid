@@ -151,6 +151,9 @@ pub enum YamlError {
     Marked(Box<MarkedError>),
     /// A Python `ValueError` PyYAML lets escape (e.g. `chr()` of an escape past U+10FFFF).
     Value(String),
+    /// A Python `TypeError` PyYAML lets escape (`ord()` of a byte in the emitter's tag
+    /// prefix escaping).
+    Type(String),
     /// A Python `OverflowError` PyYAML lets escape (`chr()` of an escape past 0x7FFFFFFF).
     Overflow(String),
     /// The stream needed characters past a pending reader error (file objects): the bindings
@@ -207,6 +210,7 @@ impl fmt::Display for YamlError {
             }
             Self::Value(msg) => write!(f, "ValueError: {msg}"),
             Self::Overflow(msg) => write!(f, "OverflowError: {msg}"),
+            Self::Type(msg) => write!(f, "TypeError: {msg}"),
             Self::NeedMore => f.write_str("reader error pending"),
             Self::Emitter(m) => write!(f, "EmitterError: {}", m.render()),
             Self::Recursion => f.write_str("RecursionError: maximum recursion depth exceeded"),

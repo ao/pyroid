@@ -115,6 +115,9 @@ _native._configure(
         "ParserError": ParserError,
         "ComposerError": ComposerError,
         "ConstructorError": ConstructorError,
+        "RepresenterError": RepresenterError,
+        "EmitterError": EmitterError,
+        "encodebytes": __import__("base64").encodebytes,
         "nan": _construct.nan_value,
         "date": datetime.date,
         "datetime": datetime.datetime,
@@ -634,14 +637,318 @@ def unsafe_load_all(stream: Any) -> Iterator[Any]:
 
 
 # ---------------------------------------------------------------------------
-# Dumping (delegated until the native dumper lands)
+# Dumping
 # ---------------------------------------------------------------------------
 
+_DUMPER_MODES: dict[Any, str] = {}
+_STOCK_REPRESENTERS: dict[Any, tuple[dict[Any, Any], dict[Any, Any]]] = {}
 
-def dump_all(documents: Any, stream: Any = None, Dumper: Any = Dumper, **kwds: Any) -> Any:  # noqa: N803
-    """Serialize a sequence of Python objects into a YAML stream (``yaml.dump_all``)."""
-    real = _pyyaml("dump_all", "dumping")
-    return real.dump_all(documents, stream, Dumper=Dumper, **kwds)
+
+def _snapshot_dumpers() -> None:
+    if _yaml is None:
+        _DUMPER_MODES[SafeDumper] = "safe"
+        _DUMPER_MODES[Dumper] = "full"
+        return
+    if _STOCK_RESOLVERS is None:
+        return
+    candidates = [(_yaml.SafeDumper, "safe"), (_yaml.Dumper, "full")]
+    for name, mode in (("CSafeDumper", "safe"), ("CDumper", "full")):
+        cls = getattr(_yaml, name, None)
+        if cls is not None:
+            candidates.append((cls, mode))
+    for cls, mode in candidates:
+        names = frozenset(vars(cls))
+        if names & _CUSTOM_DUMPER_ATTRS or any(not _inert(n) for n in names):
+            continue
+        _DUMPER_MODES[cls] = mode
+        _STOCK_VARS[cls] = names
+        _STOCK_REPRESENTERS[cls] = (dict(cls.yaml_representers), dict(cls.yaml_multi_representers))
+
+
+_CUSTOM_DUMPER_ATTRS = frozenset(
+    {
+        "yaml_representers",
+        "yaml_multi_representers",
+        "yaml_implicit_resolvers",
+        "yaml_path_resolvers",
+    }
+)
+
+_snapshot_dumpers()
+
+
+def _dumper_mode(dumper_cls: Any) -> str | None:
+    """"safe"/"full" when `dumper_cls` behaves as the stock class, else None (delegate)."""
+    mode = _DUMPER_MODES.get(dumper_cls)
+    if mode is not None:
+        if _yaml is None:
+            return mode
+        if vars(dumper_cls).keys() != _STOCK_VARS[dumper_cls]:
+            return None
+        base = dumper_cls
+    else:
+        if not isinstance(dumper_cls, type) or _yaml is None:
+            return None
+        base = next((c for c in dumper_cls.__mro__[1:] if c in _DUMPER_MODES), None)
+        if base is None:
+            return None
+        for cls in dumper_cls.__mro__:
+            if cls is base:
+                break
+            if any(n not in _INERT for n in vars(cls)):
+                return None
+        if vars(base).keys() != _STOCK_VARS[base]:
+            return None
+        mode = _DUMPER_MODES[base]
+    reps, multi = _STOCK_REPRESENTERS[base]
+    if dumper_cls.yaml_representers != reps or dumper_cls.yaml_multi_representers != multi:
+        return None
+    if dumper_cls.yaml_implicit_resolvers != _STOCK_RESOLVERS or dumper_cls.yaml_path_resolvers:
+        return None
+    return mode
+
+
+# Codecs whose encode() of the whole text equals the concatenation of encoding each write.
+_STATELESS_CODECS = frozenset(
+    {
+        "utf-8",
+        "ascii",
+        "latin-1",
+        "iso8859-1",
+        "utf-16-le",
+        "utf-16-be",
+        "utf-32-le",
+        "utf-32-be",
+        "cp1252",
+    }
+)
+
+
+def _dump_options(
+    default_style: Any,
+    default_flow_style: Any,
+    canonical: Any,
+    indent: Any,
+    width: Any,
+    allow_unicode: Any,
+    line_break: Any,
+    explicit_start: Any,
+    explicit_end: Any,
+    version: Any,
+    tags: Any,
+    sort_keys: Any,
+) -> dict[str, Any] | str:
+    """The native options, as PyYAML's Emitter/Serializer/Representer read them, or the reason
+    they need PyYAML."""
+    if default_style is not None and (type(default_style) is not str or default_style not in ("", '"', "'", "|", ">")):
+        return f"default_style={default_style!r}"
+    best_indent = 2
+    if indent and 1 < indent < 10:
+        if type(indent) is not int:
+            return f"indent={indent!r}"
+        best_indent = indent
+    best_width = 80
+    if width and width > best_indent * 2:
+        if type(width) is int:
+            best_width = min(width, 2**64 - 1)
+        elif type(width) is float:
+            best_width = 2**64 - 1 if width == float("inf") else int(width)
+        else:
+            return f"width={width!r}"
+    if version is not None:
+        if not (
+            type(version) in (tuple, list)
+            and len(version) == 2
+            and all(type(v) is int and 0 <= v < 2**63 for v in version)
+        ):
+            return f"version={version!r}"
+        version = tuple(version)
+    if tags is not None:
+        if type(tags) is not dict or not all(type(k) is str and type(v) is str for k, v in tags.items()):
+            return "tags that are not a dict of str"
+        tags = sorted(tags.items()) or None
+    return {
+        "default_style": default_style,
+        "default_flow_style": None if default_flow_style is None else bool(default_flow_style),
+        "canonical": bool(canonical),
+        "best_indent": best_indent,
+        "best_width": best_width,
+        "allow_unicode": bool(allow_unicode),
+        "line_break": line_break if line_break in ("\r", "\n", "\r\n") else "\n",
+        "explicit_start": bool(explicit_start),
+        "explicit_end": bool(explicit_end),
+        "version": version,
+        "tags": tags,
+        "sort_keys": bool(sort_keys),
+    }
+
+
+def _dump_depth() -> int:
+    """How deep PyYAML's recursive representer could nest from here."""
+    depth = 0
+    frame: Any = sys._getframe(1)
+    while frame is not None:
+        depth += 1
+        frame = frame.f_back
+    return max((sys.getrecursionlimit() - depth - 10) // 3, 0)
+
+
+def _py_dump_all(documents: Any, stream: Any, dumper_cls: Any, **kwds: Any) -> Any:
+    """PyYAML's ``yaml.dump_all``."""
+    import io
+
+    getvalue = None
+    if stream is None:
+        stream = io.StringIO() if kwds.get("encoding") is None else io.BytesIO()
+        getvalue = stream.getvalue
+    dumper = dumper_cls(stream, **kwds)
+    try:
+        dumper.open()
+        for data in documents:
+            dumper.represent(data)
+        dumper.close()
+    finally:
+        dumper.dispose()
+    if getvalue:
+        return getvalue()
+    return None
+
+
+def dump_all(
+    documents: Any,
+    stream: Any = None,
+    Dumper: Any = Dumper,  # noqa: N803 - PyYAML's name
+    default_style: Any = None,
+    default_flow_style: Any = False,
+    canonical: Any = None,
+    indent: Any = None,
+    width: Any = None,
+    allow_unicode: Any = None,
+    line_break: Any = None,
+    encoding: Any = None,
+    explicit_start: Any = None,
+    explicit_end: Any = None,
+    version: Any = None,
+    tags: Any = None,
+    sort_keys: Any = True,
+) -> Any:
+    """Serialize a sequence of Python objects into a YAML stream (``yaml.dump_all``).
+
+    If `stream` is None, return the produced ``str`` (``bytes`` with `encoding`). A
+    ``SafeDumper`` runs natively; so does ``Dumper`` for plain data (dicts, lists, tuples,
+    sets, str, bytes, numbers, booleans, None, dates). Customised dumpers go to PyYAML.
+    """
+    kwds = {
+        "default_style": default_style,
+        "default_flow_style": default_flow_style,
+        "canonical": canonical,
+        "indent": indent,
+        "width": width,
+        "allow_unicode": allow_unicode,
+        "line_break": line_break,
+        "encoding": encoding,
+        "explicit_start": explicit_start,
+        "explicit_end": explicit_end,
+        "version": version,
+        "tags": tags,
+        "sort_keys": sort_keys,
+    }
+    mode = _dumper_mode(Dumper)
+    if mode is None:
+        name = getattr(Dumper, "__name__", type(Dumper).__name__)
+        _pyyaml("dump_all", f"Dumper={name}" + ("" if Dumper in _DUMPER_MODES else " (customised)"))
+        return _py_dump_all(documents, stream, Dumper, **kwds)
+    opts = _dump_options(
+        default_style,
+        default_flow_style,
+        canonical,
+        indent,
+        width,
+        allow_unicode,
+        line_break,
+        explicit_start,
+        explicit_end,
+        version,
+        tags,
+        sort_keys,
+    )
+    if isinstance(opts, str) or (encoding is not None and type(encoding) is not str) or encoding == "":
+        _pyyaml("dump_all", opts if isinstance(opts, str) else f"encoding={encoding!r}")
+        return _py_dump_all(documents, stream, Dumper, **kwds)
+    # The emitter writes bytes only when the stream has no `encoding` (BytesIO when stream=None).
+    effective = encoding if encoding and (stream is None or not hasattr(stream, "encoding")) else None
+    per_write = False
+    if effective is not None:
+        try:
+            per_write = codecs.lookup(effective).name not in _STATELESS_CODECS
+        except LookupError:
+            per_write = True
+    it = iter(documents)
+    text, writes, error, consumed, reason = _native.dump(
+        it,
+        full=mode == "full",
+        encoding=effective,
+        record_writes=per_write,
+        max_depth=_dump_depth(),
+        **opts,
+    )
+    if error is NotImplemented:
+        _pyyaml("dump_all", reason)
+        import itertools
+
+        return _py_dump_all(itertools.chain(consumed, it), stream, Dumper, **kwds)
+    if effective is not None and writes is None:
+        try:
+            encoded = text.encode(effective)
+        except UnicodeEncodeError:
+            # PyYAML encodes each write: the error comes from the first failing write.
+            _, writes, _, _, _ = _native.dump(
+                consumed,
+                full=mode == "full",
+                encoding=effective,
+                record_writes=True,
+                max_depth=_dump_depth(),
+                **opts,
+            )
+            encoded = None
+    else:
+        encoded = None
+    if stream is None:
+        if effective is None:
+            if error is not None:
+                raise error
+            return text if encoding is None else _encode_chunks(text, None, encoding)
+        result = encoded if encoded is not None else _encode_chunks(text, writes, effective)
+        if error is not None:
+            raise error
+        return result
+    if effective is None:
+        if text:
+            stream.write(text)
+    elif encoded is not None:
+        if encoded:
+            stream.write(encoded)
+    else:
+        start = 0
+        for end in writes:
+            stream.write(text[start:end].encode(effective))
+            start = end
+    if error is not None:
+        raise error
+    if hasattr(stream, "flush"):
+        stream.flush()
+    return None
+
+
+def _encode_chunks(text: str, writes: list[int] | None, encoding: str) -> bytes:
+    if writes is None:
+        return text.encode(encoding)
+    out = []
+    start = 0
+    for end in writes:
+        out.append(text[start:end].encode(encoding))
+        start = end
+    return b"".join(out)
 
 
 def dump(data: Any, stream: Any = None, Dumper: Any = Dumper, **kwds: Any) -> Any:  # noqa: N803

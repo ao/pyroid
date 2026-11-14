@@ -14,8 +14,10 @@ pub mod events;
 pub mod nodes;
 pub mod parser;
 pub mod reader;
+pub mod represent;
 pub mod resolver;
 pub mod scanner;
+pub mod serializer;
 pub mod tokens;
 
 use composer::{Composer, ComposerOptions};
