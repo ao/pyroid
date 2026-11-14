@@ -34,7 +34,7 @@ and `patch()` is the only switch. Each patched name emits one
 |---|---|---|---|
 | `"ftfy"` | [`pyroid.ftfy`](ftfy.md) (ftfy 6.3.1) | `fix_text`, `fix_text_segment`, `fix_encoding`, `fix_and_explain`, `fix_encoding_and_explain`, `TextFixerConfig`, `ExplainedText`, `ExplanationStep`, the `ftfy` alias, `fix_text_batch` | `apply_plan`, `explain_unicode`, `fix_file`, `guess_bytes`, `ftfy.fixes` and the other submodules |
 | `"fasttext"` | [`pyroid.fasttext`](fasttext.md) (fastText 0.9.2's inference, as fasttext-predict 0.9.2.4) | `load_model`, `tokenize`, `fasttext.FastText.load_model`, and `fasttext.FastText._FastText(path)` (which returns a pyroid model) | training (`train_supervised`, ...) and `_FastText()` without a model file |
-| `"anyascii"` | [`pyroid.translit.anyascii`](translit.md) (anyascii 0.3.3) | `anyascii` | the rest of the package |
+| `"anyascii"` | [`pyroid.translit.anyascii`](translit.md) (anyascii 0.3.3) | `anyascii`, taking what the package's function takes (see below) | the rest of the package |
 | `"datasketch"` | [`pyroid.datasketch`](datasketch.md) (datasketch 2.0.0) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble`, `sha1_hash32`, `sha1_hash64`, `minhash_batch`, the `WeightedMinHashLSH` and `WeightedMinHashLSHForest` aliases, and the `minhash`, `lean_minhash`, `hashfunc`, `lsh`, `lshforest` and `lshensemble` submodules with them | `WeightedMinHash`, `HyperLogLog`, `bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `storage` and the other submodules |
 | `"json_repair"` | [`pyroid.json_repair`](json_repair.md) (json_repair 0.64.9) | `repair_json`, `loads`, `load`, `from_file` and `JSONReturnType`, on `json_repair` and `json_repair.json_repair` | the command line and the internal modules; `schema=` calls, which pyroid hands to it |
 | `"trafilatura"` | [`pyroid.trafilatura`](trafilatura.md) (trafilatura 2.3.1 or 1.11.0, following the installed release) | `extract`, `bare_extraction`, with 2.3.1 `extract_with_metadata` (delegated), with the installed release's signatures, in `trafilatura` and `trafilatura.core`, `trafilatura.deduplication.LRUCache` and `LRU_TEST`, `trafilatura.meta.reset_caches` | metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the other submodules |
@@ -46,6 +46,22 @@ and `patch()` is the only switch. Each patched name emits one
 real package (an ftfy option value the Rust port does not support, `_FastText()` without a model
 file) go to the real one, with the usual one-time
 [`pyroid.FallbackWarning`](../concepts/fallbacks.md).
+
+A patched name takes and returns what the package's own function does. Where pyroid's
+function treats an input differently, the shim keeps the package's meaning. `anyascii.anyascii`
+joins the characters of any iterable into one `str` (`anyascii(list("Björk"))` is `'Bjork'`) and
+returns an ASCII `bytes` as it is, while `pyroid.translit.anyascii` takes a list as a batch;
+so the patched `anyascii` is a separate function that transliterates a `str` in Rust and handles
+everything else as the package does. Where the package raises, pyroid may accept more: NLTK's
+tokenizer classes and fastText's `predict` also take a list, tuple or Arrow column as a batch. A
+wrong type raises [`pyroid.InputError`](../concepts/errors.md), a `TypeError`, where ftfy or
+NLTK raise `AttributeError` or a `TypeError` of their own.
+
+The fastText shim follows the `fasttext` package's return types, also when the installed
+`fasttext` is fasttext-predict, whose types differ: `predict(text)` gives the probabilities as
+a numpy array (fasttext-predict: a tuple of floats), and `predict(lines)` gives
+`(labels, probabilities)` for every line (fasttext-predict 0.9.2.4 returns only the labels, so
+unpacking its result fails unless there are exactly two lines).
 
 ### Why there is no `"unidecode"`
 

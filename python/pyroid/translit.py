@@ -7,6 +7,8 @@ to the ``anyascii`` package; :func:`unidecode` has Unidecode's signature and
 ``translit.pyi``. anyascii is Copyright (c) 2020-2025, Hunter WB (ISC License).
 """
 
+from typing import Any
+
 from pyroid import _versions
 from pyroid._pyroid import PyroidError
 from pyroid._pyroid import translit as _native
@@ -33,6 +35,28 @@ class UnidecodeError(PyroidError, ValueError):
 
 
 anyascii = _native.anyascii
+
+
+def _anyascii_package(string: Any) -> Any:
+    """``anyascii.anyascii`` for anything but an exact ``str``, as the package treats it.
+
+    ``pyroid.patch("anyascii")`` uses it through ``_native.anyascii_package``: the package
+    returns an object whose ``isascii()`` is true as it is (an ASCII ``bytes``, a ``str``
+    subclass), and otherwise joins the transliterations of the characters it iterates over
+    (a list or a generator of characters), with its errors (``ord()`` of an int or of a longer
+    ``str`` raises ``TypeError``).
+    """
+    try:
+        if string.isascii():
+            return string
+    except AttributeError:
+        pass
+    result = []
+    for char in string:
+        codepoint = ord(char)
+        result.append(char if codepoint <= 0x7F else _native.anyascii(chr(codepoint)))
+    return "".join(result)
+
 unidecode = _native.unidecode
 # Unidecode's two spellings of the same function.
 unidecode_expect_ascii = _native.unidecode

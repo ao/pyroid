@@ -30,7 +30,9 @@ reproduces trafilatura 2.3.1 or 1.11.0, following the installed release: ``extra
 from Unidecode's.
 
 :func:`patch` puts a shim in ``sys.modules[name]``: a module named like the real one whose
-functions are pyroid's (the same objects, so a call costs what calling pyroid costs). If the
+functions are pyroid's (the same objects, so a call costs what calling pyroid costs; the
+exception is ``anyascii.anyascii``, a separate native function that takes what the package's
+function takes, as pyroid's takes a list as a batch). If the
 real package is installed, :func:`patch` imports it right away, because the shim needs its
 ``__path__`` and ``__spec__`` up front (loading it later under the shim's name would be
 fragile). Then:
@@ -385,7 +387,9 @@ def _build_fasttext(impl: types.ModuleType, real: Any, missing: str) -> _Built:
 
 
 def _build_anyascii(impl: types.ModuleType, real: Any, missing: str) -> _Built:
-    provided = {"anyascii": impl.anyascii}
+    # Not impl.anyascii, which takes a list as a batch: the package's function joins the
+    # characters of any iterable into one str and returns an ASCII bytes as it is.
+    provided = {"anyascii": impl._native.anyascii_package}
     version = impl.ANYASCII_VERSION
     shim = _shim("anyascii", real, missing, impl, provided, package=True, version=version)
     return {"anyascii": shim}, []

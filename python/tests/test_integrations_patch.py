@@ -122,7 +122,7 @@ def test_pyroid_patch_alias_is_lazy() -> None:
                 warnings.simplefilter("always")
                 pyroid.patch("anyascii")
             import anyascii, pyroid.translit
-            assert anyascii.anyascii is pyroid.translit.anyascii
+            assert anyascii.anyascii is pyroid.translit._native.anyascii_package
             import pyroid.integrations as pi
             assert pi.patched() == ("anyascii",)
             pyroid.unpatch()
@@ -532,7 +532,8 @@ def test_anyascii_shim_and_code_imported_before_keeps_working() -> None:
             import pyroid.translit as impl
             patch_quietly("anyascii")
             import anyascii
-            assert anyascii.anyascii is impl.anyascii and early is not impl.anyascii
+            assert anyascii.anyascii is impl._native.anyascii_package
+            assert early is not anyascii.anyascii
             assert anyascii.__version__ == impl.ANYASCII_VERSION == "0.3.3"
             assert anyascii.__wrapped__._blocks is anyascii._blocks  # forwarded
             # The real function loads its tables with importlib.resources ("anyascii._data"),
@@ -547,6 +548,52 @@ def test_anyascii_shim_and_code_imported_before_keeps_working() -> None:
     )
 
 
+@needs_anyascii
+def test_anyascii_shim_takes_what_the_package_takes() -> None:
+    # The package's anyascii() iterates anything that is not ASCII per isascii(): a list of
+    # characters gives one str, an ASCII bytes comes back as it is. pyroid.translit.anyascii
+    # takes a list as a batch, so the shim must not be that function.
+    ok(
+        child(
+            """
+            import anyascii as real
+            patch_quietly("anyascii")
+            import anyascii
+
+            class S(str):
+                pass
+
+            def outcome(x):
+                try:
+                    v = x() if callable(x) else x
+                    v = f(v)
+                except Exception as e:
+                    return ("raise", type(e), str(e))
+                return (type(v), v)
+
+            inputs = [
+                lambda: list("Björk"), lambda: ("é", "ü"), lambda: (c for c in "Björk"),
+                lambda: iter("ab"), lambda: {"é": 1}, lambda: {"é"}, lambda: b"abc",
+                lambda: "café".encode(), lambda: bytearray(b"abc"), lambda: memoryview(b"abc"),
+                lambda: S("Björk"), lambda: S("abc"), lambda: None, lambda: 3,
+                lambda: ["ab", "cd"], lambda: [], lambda: "", lambda: ["é", None],
+                lambda: ["\\ud800", "é"], lambda: "Björk 東京", lambda: "plain ascii",
+            ]
+            for make in inputs:
+                f = real.anyascii
+                want = outcome(make)
+                f = anyascii.anyascii
+                got = outcome(make)
+                assert got == want, (make(), got, want)
+            s = S("abc")
+            assert anyascii.anyascii(s) is s
+            ascii_str = "plain ascii"
+            assert anyascii.anyascii(ascii_str) is ascii_str
+            """
+        )
+    )
+
+
 def test_anyascii_shim_without_anyascii() -> None:
     ok(
         child(
@@ -554,7 +601,8 @@ def test_anyascii_shim_without_anyascii() -> None:
             patch_quietly("anyascii")
             from anyascii import anyascii
             import pyroid.translit as impl
-            assert anyascii is impl.anyascii and anyascii("Björk") == "Bjork"
+            assert anyascii is impl._native.anyascii_package and anyascii("Björk") == "Bjork"
+            assert anyascii(list("Björk")) == "Bjork" and anyascii(b"abc") == b"abc"
             assert sys.modules["anyascii"].__wrapped__ is None
             """,
             hide=("anyascii",),
