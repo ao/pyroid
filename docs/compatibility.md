@@ -296,6 +296,25 @@ Reference: datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.p
 - The newer drop-ins (PIIFormatter, C4BadWordsFilter, SymbolLinesFormatter, URLFilter, sentence dedup) are counted under pyroid.filters and pyroid.dedup above.
 
 <small>Source: python/tests/test_integrations_*.py, test_cli.py, test_cli_scale.py, test_dedup_files.py and examples/datatrove/verify.py (2026-11-06 to 2026-11-09), and bench/fineweb_warc.py on AWS EC2 c7i.4xlarge (bench/results/aws-c7i.4xlarge/2026-11-09-warc, 2026-11-09).</small>
+
+### pyroid.yaml {#yaml}
+
+Reference: PyYAML 6.0.3's pure-Python SafeLoader and SafeDumper. Rule: the same objects (types, key order, shared objects) or the same exception class, str() and fields; the same dumped text byte for byte.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| Real-file corpus: 11,989 YAML files from 1,855 repositories and Hugging Face cards (GitHub Actions workflows, Kubernetes manifests, Helm charts, docker-compose and conda files, OpenAPI specs, mkdocs configs, model and dataset cards, files of 1 to 100 MB); safe_load_all of the bytes, str and file-object input of the 108 files that raise, and safe_dump_all under 6 option sets | 83,490 | 83,490 | 0 |
+| yaml-test-suite data release 2022-01-17 (402 cases), the same checks | 2,154 | 2,154 | 0 |
+| Mutation fuzzing: 689 seed documents (PyYAML's test data, the test suite) with random edits and splices, safe_load_all as str and bytes and safe_load, 16 processes for 4 minutes | 28,258,515 | 28,258,515 | 0 |
+| Emitter replay: event streams from PyYAML's parser, its dumpers and random generators, under every emitter option; the text, each write boundary and the error | 181,660 | 181,660 | 0 |
+| Floats: safe_dump of random bit patterns and of values exactly between two shortest decimals | 900,000 | 900,000 | 0 |
+| pytest test cases on CPython 3.12 (test_yaml_parity.py): PyYAML's test data (524 files as str, bytes and file objects read in pieces; dumps of 293 files under 6 option sets and both dumpers), the test suite's 706 files, reader errors at chunk boundaries, tagged edge cases, Hypothesis loads of mutated YAML and dumps of random data | 1,581 | 1,581 | 0 |
+| **Total** | **29,427,400** | **29,427,400** | **0** |
+
+- RecursionError on deep nesting depends on sys.getrecursionlimit() and the caller's stack; pyroid matches PyYAML's depth within 3 levels.
+- CSafeLoader and CSafeDumper are not the reference; how they differ from SafeLoader and SafeDumper on the same data is listed in the guide.
+
+<small>Source: bench/yaml/check_oracle.py against bench/yaml/record_oracle.py's recordings, python/tests/test_yaml_parity.py, and the emitter fixture replay in crates/pyroid-core/src/yaml/emitter.rs, run on 2026-11-14 on an EC2 c8g.16xlarge (linux/aarch64).</small>
 <!-- parity:end -->
 
 ### pyroid.warc {#warc}
@@ -344,6 +363,9 @@ as returning an unchanged string as the same object.
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)
 - [Differences from warcio](guides/warc.md#differences-from-warcio)
+- [Differences from PyYAML](guides/yaml.md#differences-from-pyyaml), and how PyYAML's
+  `CSafeLoader` differs from the `SafeLoader` pyroid follows
+  ([list](guides/yaml.md#differences-between-csafeloader-and-safeloader))
 - [Differences from Unidecode](guides/translit.md#differences-from-unidecode).
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).

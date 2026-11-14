@@ -49,6 +49,7 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 |  | [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | [NeMo Curator](https://github.com/NVIDIA-NeMo/Curator) 1.4.0's heuristic document filters and string modifiers | same scores, exceptions and modified text ([parity](compatibility.md#nemo)) |
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
 | JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
+| YAML | [`pyroid.yaml`](guides/yaml.md) | [PyYAML](https://github.com/yaml/pyyaml) 6.0.3's `safe_load` and `safe_dump` | same objects, text and errors as PyYAML's pure-Python `SafeLoader` and `SafeDumper`, faster than `CSafeLoader` ([parity](compatibility.md#yaml)) |
 
 ## Example: cleaning LLM training data
 
@@ -204,7 +205,7 @@ PSF-2.0 AND Unicode-3.0 AND Zlib`:
 - Apache-2.0 for the ftfy, datatrove, rouge-score, NLTK (Porter stemmer and tokenizers),
   sacrebleu, Trafilatura, SudachiPy and warcio ports;
 - MIT for the fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (and
-  its dictionary) and libxml2 (HTML parser) ports;
+  its dictionary), libxml2 (HTML parser) and PyYAML ports;
 - BSD-2-Clause for the jusText port and its stoplists;
 - BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract and lxml;
 - PSF-2.0 for CPython's `ipaddress`;

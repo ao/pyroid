@@ -21,7 +21,8 @@ pyroid has no runtime dependencies. Extras:
 
 Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
 `pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.trafilatura`,
-`pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader and `pyroid.patch()` need none of them.
+`pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader, `pyroid.yaml` and `pyroid.patch()` need none
+of them.
 
 Some dependencies of the `datatrove`, `hf` and `warc` extras (orjson, tokenizers, PyYAML and
 faust-cchardet) publish no wheels for CPython 3.15 and 3.15t yet, and orjson none for 3.14t. There
@@ -44,6 +45,8 @@ Optional libraries, needed only by the features that use them:
     - jieba 0.42.1 for `pyroid.jieba.posseg`, `pyroid.jieba.analyse` and paddle mode;
     - rouge-score 0.1.2 and sacrebleu 2.6.0 for the delegated metrics features;
     - json_repair 0.64.5 for `schema=`;
+    - PyYAML 6.0.3 for customised loaders and dumpers, `!!python/` tags and its other functions
+      (`scan`, `compose`, `YAMLObject`, ...);
     - datasketch 2.0.0 for its classes pyroid does not port (`WeightedMinHash`, `HyperLogLog`,
       ...) and for Redis or Cassandra LSH storage.
 

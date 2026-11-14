@@ -27,10 +27,11 @@ So the result is always the incumbent's. The warning tells you that this call to
 | `pyroid.nltk` | Punkt training (`PunktTrainer`, `PunktSentenceTokenizer(train_text)`), a custom `token_cls`, a `PunktLanguageVars` subclass that changes more than `sent_end_chars`, parameters that are not sets of `str`, `dump()` and saving parameters, a Treebank tokenizer whose patterns were changed, a `RegexpTokenizer` pattern that is not one of the native ones | — |
 | `pyroid.jieba` | `pyroid.jieba.posseg`, `pyroid.jieba.analyse`, paddle mode, and `get_dict_file()` for the default dictionary | — |
 | `pyroid.datasketch` | the classes pyroid does not port (`bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `WeightedMinHash`, `HyperLogLog`, ...), Redis and Cassandra storage, and a `hashfunc` other than `sha1_hash32`/`sha1_hash64` (called from Python for each token; the permutations stay in Rust) | — |
+| `pyroid.yaml` | loaders and dumpers with added constructors, representers or resolvers or overridden methods, `BaseLoader`, `load_all` with the full loaders, documents with `!!python/` tags under `FullLoader`/`Loader`/`UnsafeLoader`, objects other than plain data under `Dumper`, dumping a `str` with lone surrogates, and PyYAML's other functions (`scan`, `compose`, ...) | under `SafeDumper`, an object it cannot represent raises PyYAML's `RepresenterError` |
 | `pyroid.integrations.datatrove` | a `language` the step can't tokenize natively runs datatrove's own code for that step, and `Trafilatura` with an installed trafilatura release that pyroid does not reproduce runs datatrove's own step | — |
 
 Without the library a call needs (ftfy, datatrove and the language's segmenter, rouge-score,
-nltk, sacrebleu, json_repair, trafilatura, jieba, datasketch), it raises `pyroid.PyroidError` and
+nltk, sacrebleu, json_repair, trafilatura, jieba, datasketch, PyYAML), it raises `pyroid.PyroidError` and
 says what to install.
 
 ## `python_tokenizer=True`

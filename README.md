@@ -39,7 +39,8 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 | Quality filters | [`pyroid.filters`](https://ataiva.com/open-source/pyroid/docs/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
 | | [`pyroid.nemo`](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
 | Evaluation | [`pyroid.metrics`](https://ataiva.com/open-source/pyroid/docs/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
-| JSON | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.5 |
+| JSON and YAML | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.5 |
+| | [`pyroid.yaml`](https://ataiva.com/open-source/pyroid/docs/guides/yaml/) | PyYAML 6.0.3's `safe_load` and `safe_dump` (its pure-Python `SafeLoader` and `SafeDumper`) |
 
 ## Example: cleaning LLM training data
 
@@ -136,6 +137,11 @@ The other modules have only been measured in a Docker VM on a Mac, so treat thes
 | `nltk.sent_tokenize` / `word_tokenize` | NLTK 3.10.4 | 60× / 31× |
 | `filters`, FineWeb-2 settings, Chinese / Japanese | datatrove 0.10.1 | 44× / 7.8× |
 
+`pyroid.yaml` was measured on a shared AWS EC2 c8g.16xlarge, also indicative, on 11,878 real
+YAML files (343 MB: GitHub Actions workflows, Kubernetes and Helm files, OpenAPI specs, model
+cards): `safe_load` runs 6.8× faster than PyYAML's `CSafeLoader` and 44× faster than its default
+`SafeLoader`; `safe_dump` 6.1× faster than `CSafeDumper` and 25× faster than `SafeDumper`.
+
 `pyroid.json_repair` stays linear on 13 input families where json_repair is quadratic, so the gap
 grows with the input. The [benchmarks page](https://ataiva.com/open-source/pyroid/docs/benchmarks/) has each
 row's corpus, interpreter and source.
@@ -146,7 +152,7 @@ row's corpus, interpreter and source.
 |---|---|
 | [`pyroid clean`](https://ataiva.com/open-source/pyroid/docs/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files |
 | [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
-| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`, `nemo_curator` and `yaml` give pyroid's functions, in code you don't own |
 | [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
 | [NeMo Curator stages](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/) | NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, the heuristic filters, the modifiers) with the same classes and arguments |
 | [Hugging Face `datasets`](https://ataiva.com/open-source/pyroid/docs/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
@@ -204,7 +210,7 @@ expression is
 - Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK (the Porter stemmer and the
   tokenizers), sacrebleu, Trafilatura, SudachiPy and warcio;
 - MIT: ported from fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba
-  (with its dictionary) and libxml2 (the HTML parser);
+  (with its dictionary), libxml2 (the HTML parser) and PyYAML;
 - BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists);
 - BSD-3-Clause: numpy's random generator (for C4 bad words), scipy's QUADPACK integration (for
   MinHashLSH's parameters), tldextract and lxml;
