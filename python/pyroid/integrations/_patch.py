@@ -94,6 +94,16 @@ set on NeMo's own modules (``nemo_curator.stages.text.filters`` and the modules 
 them), so pipelines built afterwards, including from NeMo's YAML configs, use them. Ray workers
 need no patch: the stages they receive are pyroid's classes.
 
+``"yaml"`` works like ``"nltk"`` when PyYAML is installed: ``safe_load``, ``safe_load_all``,
+``load``, ``load_all``, ``full_load``, ``full_load_all``, ``unsafe_load``, ``unsafe_load_all``,
+``safe_dump``, ``safe_dump_all``, ``dump`` and ``dump_all`` on the ``yaml`` module become
+:mod:`pyroid.yaml`'s, which reproduce PyYAML 6.0.3's pure-Python ``SafeLoader`` and
+``SafeDumper`` and hand everything they do not port (customised loaders and dumpers,
+``!!python/`` tags) to PyYAML's own classes. Exceptions stay PyYAML's classes. Without PyYAML,
+``yaml`` and its ``error``, ``reader``, ``scanner``, ``parser``, ``composer``, ``constructor``,
+``representer``, ``emitter``, ``serializer``, ``resolver``, ``loader`` and ``dumper`` submodules
+are shims holding :mod:`pyroid.yaml`'s functions and classes.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -140,6 +150,7 @@ SUPPORTED: tuple[str, ...] = (
     "nltk",
     "warcio",
     "nemo_curator",
+    "yaml",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -774,6 +785,67 @@ def _distribution_version(name: str) -> Callable[[Any], str | None]:
     return installed
 
 
+# What patch("yaml") sets on PyYAML's `yaml` module.
+_YAML_SWAPS = (
+    "safe_load",
+    "safe_load_all",
+    "load",
+    "load_all",
+    "full_load",
+    "full_load_all",
+    "unsafe_load",
+    "unsafe_load_all",
+    "safe_dump",
+    "safe_dump_all",
+    "dump",
+    "dump_all",
+)
+# The shims without PyYAML: submodule -> the pyroid.yaml names it holds.
+_YAML_SHIMS: dict[str, tuple[str, ...]] = {
+    "yaml.error": ("Mark", "YAMLError", "MarkedYAMLError"),
+    "yaml.reader": ("ReaderError",),
+    "yaml.scanner": ("ScannerError",),
+    "yaml.parser": ("ParserError",),
+    "yaml.composer": ("ComposerError",),
+    "yaml.constructor": ("ConstructorError",),
+    "yaml.representer": ("RepresenterError",),
+    "yaml.emitter": ("EmitterError",),
+    "yaml.serializer": ("SerializerError",),
+    "yaml.resolver": ("ResolverError",),
+    "yaml.loader": ("BaseLoader", "FullLoader", "SafeLoader", "Loader", "UnsafeLoader"),
+    "yaml.dumper": ("SafeDumper", "Dumper"),
+}
+
+
+def _build_yaml(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if real is None:  # no PyYAML: shims holding pyroid.yaml's names
+        shims: dict[str, types.ModuleType] = {}
+        for mod, names in _YAML_SHIMS.items():
+            shims[mod] = _shim(
+                mod, None, missing, impl, {n: getattr(impl, n) for n in names}, package=False
+            )
+        provided: dict[str, Any] = {n: getattr(impl, n) for n in impl.__all__}
+        provided.update({k.rpartition(".")[2]: v for k, v in shims.items()})
+        provided["__with_libyaml__"] = False
+        shims["yaml"] = _shim(
+            "yaml", None, missing, impl, provided, package=True, version=impl.PYYAML_VERSION
+        )
+        return shims, []
+    saved: list[tuple[Any, str, Any]] = []
+    for n in _YAML_SWAPS:
+        saved.append((real, n, real.__dict__.get(n, _MISSING)))
+        setattr(real, n, getattr(impl, n))
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -850,10 +922,19 @@ _TARGETS: dict[str, _Target] = {
         " (readers, writers, deduplication, classifiers, the other stages)",
         _build_nemo_curator,
     ),
+    "yaml": _Target(
+        "pyroid.yaml",
+        "which reproduces PyYAML 6.0.3's safe_load, safe_load_all, safe_dump and safe_dump_all, "
+        "and load/dump with the stock loaders and dumpers",
+        "PYYAML_VERSION",
+        "pip install pyyaml==6.0.3",
+        " (customised loaders and dumpers, !!python/ tags, the event and token APIs, YAMLObject)",
+        _build_yaml,
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator")
+_SWAPPED = ("nltk", "warcio", "nemo_curator", "yaml")
 
 
 # ---------------------------------------------------------------------------
@@ -927,6 +1008,7 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
                 "nltk": "from nltk import word_tokenize",
                 "warcio": "from warcio.archiveiterator import ArchiveIterator",
                 "nemo_curator": "from nemo_curator.stages.text.filters import ScoreFilter",
+                "yaml": "from yaml import safe_load",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "

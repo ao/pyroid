@@ -27,6 +27,7 @@
 //!   Thai tokenizer in the filters).
 //! - [`crfsuite`]: CRFsuite model files and Viterbi tagging, for pyvi and
 //!   PyThaiNLP's sentence model.
+//! - [`yaml`]: PyYAML 6.0.3's safe loader and dumper, ported exactly (`pyroid.yaml`).
 //! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).
 //!
 //! Each module adds a `src/<mod>/` directory here; see `docs/dev/MODULES.md`.
@@ -54,3 +55,4 @@ pub mod trafilatura;
 pub mod translit;
 pub mod version;
 pub mod warc;
+pub mod yaml;
