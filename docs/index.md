@@ -92,7 +92,8 @@ docs = ["naÃ¯ve rÃ©sumÃ©", "Some other web page ..."]
 # ["naïve résumé", ...], like [ftfy.fix_text(d) for d in docs] but on all cores
 docs = ftfy.fix_text_batch(docs)
 
-# fastText's own .bin / .ftz files; a batch runs without the GIL
+# fastText's own .bin / .ftz files; a batch runs without the GIL. lid.176.bin is fastText's
+# language-ID model (125 MiB): https://fasttext.cc/docs/en/language-identification.html
 model = fasttext.load_model("lid.176.bin")
 labels, probs = model.predict(docs, k=1)  # [["__label__fr"], ["__label__en"]]
 
