@@ -1,8 +1,10 @@
 // Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
 //! A port of json_repair 0.64.5 (`pyroid.json_repair`): repair the broken JSON
 //! that LLMs emit, with json_repair's exact output and without unbounded recursion.
-//! Linear on the inputs where json_repair's lookaheads are quadratic, except one
-//! family the fuzzer found (`fuzz/fuzz_targets/json_repair.rs`), quadratic in both.
+//! Linear on the input families where json_repair's lookaheads are quadratic. Inputs
+//! where json_repair's parser backtracks (parses a value, drops it and parses again
+//! a little further on) stay quadratic, as in json_repair; the fuzzer finds many
+//! (`fuzz/fuzz_targets/json_repair.rs`).
 //!
 //! - [`value`]: the Python-typed value tree.
 //! - [`chars`]: Python's `str` predicates per Unicode version, lone surrogates.

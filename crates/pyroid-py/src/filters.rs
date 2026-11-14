@@ -270,7 +270,8 @@ impl RunError {
                     FilterError::TextTooLong(_)
                     | FilterError::SubstringNotFound
                     | FilterError::NeedsTokenizer
-                    | FilterError::Tokenizer(_) => PyValueError::new_err(err.to_string()),
+                    | FilterError::Tokenizer(_)
+                    | FilterError::ThaiTextTooLong(_) => PyValueError::new_err(err.to_string()),
                 };
                 with_note(py, base, format!("pyroid.filters: raised by {at}"))
             }

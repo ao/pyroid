@@ -39,12 +39,35 @@ mod trie;
 #[cfg(test)]
 mod replay;
 
-pub use th::{install, installed};
+pub use th::{install, install_with, installed};
 
 /// `get_corpus`'s file name of the word list.
 pub const WORDS_FILE: &str = "words_th.txt";
 /// `crfcut`'s model file name.
 pub const MODEL_FILE: &str = "sentenceseg_crfcut.model";
+
+/// The tokenizer takes texts of fewer characters than this, `2**32 - 64`: newmm
+/// keeps character positions, and indexes into its word graph (at most 51 more
+/// than the text's length), as `u32`. PyThaiNLP has no limit.
+pub const MAX_CHARS: usize = u32::MAX as usize - 63;
+
+/// [`crate::filters::FilterError::ThaiTextTooLong`] if a text of `n_chars`
+/// characters is too long (`n_chars >= MAX_CHARS`).
+fn check_chars(n_chars: usize) -> Result<(), crate::filters::FilterError> {
+    if n_chars >= MAX_CHARS {
+        return Err(crate::filters::FilterError::ThaiTextTooLong(n_chars));
+    }
+    Ok(())
+}
+
+/// Whether `text` is short enough for the tokenizer (see [`MAX_CHARS`]).
+pub(crate) fn check_len(text: &str) -> Result<(), crate::filters::FilterError> {
+    // Characters <= bytes: only count when the bytes could reach the limit.
+    if text.len() < MAX_CHARS {
+        return Ok(());
+    }
+    check_chars(crate::filters::text::py_len(text))
+}
 
 /// Why the corpus files could not be loaded.
 #[derive(Debug)]
@@ -389,6 +412,23 @@ mod tests {
         assert_eq!(lines, ["a", "b", "c", "d", "e", "f", "g", "", "", "h"]);
         assert_eq!(py_splitlines("a\n").collect::<Vec<_>>(), ["a"]);
         assert_eq!(py_splitlines("").count(), 0);
+    }
+
+    #[test]
+    fn length_limit() {
+        use crate::filters::FilterError;
+        assert_eq!(MAX_CHARS as u64, (1u64 << 32) - 64);
+        assert!(check_chars(0).is_ok());
+        assert!(check_chars(MAX_CHARS - 1).is_ok());
+        for n in [MAX_CHARS, MAX_CHARS + 1, usize::MAX] {
+            assert_eq!(check_chars(n), Err(FilterError::ThaiTextTooLong(n)));
+        }
+        let e = FilterError::ThaiTextTooLong(MAX_CHARS).to_string();
+        assert!(e.contains("fewer than 2**32 - 64 characters"), "{e}");
+        assert!(e.contains("4294967232"), "{e}");
+        // Short texts are not counted; the positions newmm stores fit in u32.
+        assert!(check_len("ภาษาไทย").is_ok());
+        assert!(u32::try_from(MAX_CHARS - 1 + 51).is_ok());
     }
 
     #[test]

@@ -48,8 +48,10 @@ pub(super) struct Work {
     window: Vec<u32>,
 }
 
+/// A position or edge index as stored. The callers check the text's length
+/// first ([`super::MAX_CHARS`]), so this never fails for them.
 fn pos32(p: usize) -> u32 {
-    u32::try_from(p).expect("texts under 2**32 characters")
+    u32::try_from(p).expect("texts under pythainlp::MAX_CHARS characters")
 }
 
 /// `[ก-ฮ]`.
@@ -189,13 +191,16 @@ impl Work {
                 }
                 round += 1;
                 self.first_path(end_pos, goal, round);
-                // graph.clear(): positions before `goal` are never read again.
+                // graph.clear(): positions before `goal` are never read again,
+                // nor their edges (so `edges` stays under the text's length + 51).
                 graph_size = 0;
+                self.edges.clear();
                 out.extend(self.path[1..].iter().map(|&p| pos32(base) + p));
                 end_pos = goal;
             } else if queued_n == 0 {
                 end_pos = find_skip_end(s, begin, &self.valid, trie, v);
                 graph_size = 0;
+                self.edges.clear();
                 out.push(pos32(base + end_pos));
                 self.queued[end_pos] = true;
                 queued_n = 1;

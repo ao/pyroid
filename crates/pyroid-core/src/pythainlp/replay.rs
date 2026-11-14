@@ -353,7 +353,7 @@ fn check_row(cx: &Ctx<'_>, row: &Value, fails: &mut Vec<String>) -> usize {
                     .map(|p| (p[0].as_u64().unwrap(), p[1].as_u64().unwrap()))
                     .collect();
                 let mut spans = Vec::new();
-                tok.spans(&t, &mut spans);
+                tok.spans(&t, &mut spans).expect("a short text");
                 let have: Vec<(u64, u64)> =
                     spans.iter().map(|&(s, e)| (s as u64, e as u64)).collect();
                 // `split_into_sentences` uses the span ends: here as bytes.

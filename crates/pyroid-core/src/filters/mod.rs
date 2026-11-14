@@ -90,6 +90,10 @@ pub enum FilterError {
     /// The word tokenizer failed (SudachiPy raises for a text that its
     /// normalization makes longer than 65,535 bytes).
     Tokenizer(crate::sudachi::TokenizeError),
+    /// Python `ValueError`: the Thai tokenizer takes texts of fewer than
+    /// [`crate::pythainlp::MAX_CHARS`] characters (a limit of pyroid's port;
+    /// PyThaiNLP has none).
+    ThaiTextTooLong(usize),
 }
 
 impl fmt::Display for FilterError {
@@ -105,6 +109,11 @@ impl fmt::Display for FilterError {
                 f.write_str("this filter needs a word tokenizer, not pre-tokenized words")
             }
             FilterError::Tokenizer(e) => write!(f, "{e}"),
+            FilterError::ThaiTextTooLong(n) => write!(
+                f,
+                "pyroid's Thai tokenizer takes texts of fewer than 2**32 - 64 characters; \
+                 this one has {n}"
+            ),
         }
     }
 }

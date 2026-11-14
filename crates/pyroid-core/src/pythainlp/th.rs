@@ -27,6 +27,14 @@ static LOADING: Mutex<()> = Mutex::new(());
 /// for the Thai tokenizer, once per process. Later calls return the data
 /// already loaded, whatever their directory.
 pub fn install(corpus_dir: impl AsRef<std::path::Path>) -> Result<&'static Thai, ThaiError> {
+    install_with(corpus_dir, || {})
+}
+
+/// [`install`], calling `loaded` if this call is the one that read the files.
+pub fn install_with(
+    corpus_dir: impl AsRef<std::path::Path>,
+    loaded: impl FnOnce(),
+) -> Result<&'static Thai, ThaiError> {
     if let Some(t) = THAI.get() {
         return Ok(t);
     }
@@ -37,7 +45,9 @@ pub fn install(corpus_dir: impl AsRef<std::path::Path>) -> Result<&'static Thai,
         return Ok(t);
     }
     let t = Thai::open(corpus_dir)?;
-    Ok(THAI.get_or_init(|| t))
+    let t = THAI.get_or_init(|| t);
+    loaded();
+    Ok(t)
 }
 
 /// The data [`install`] loaded, if any.
@@ -83,12 +93,17 @@ impl ThTokenizer {
 
     /// datatrove's `span_tokenize(text)`: `(start, end)` character offsets,
     /// appended to `out`.
-    pub fn spans(&self, text: &str, out: &mut Vec<(usize, usize)>) {
+    ///
+    /// # Errors
+    /// [`FilterError::ThaiTextTooLong`] for a text of [`super::MAX_CHARS`]
+    /// characters or more.
+    pub fn spans(&self, text: &str, out: &mut Vec<(usize, usize)>) -> Result<(), FilterError> {
+        super::check_len(text)?;
         let mut r = Vec::new();
         Self::thai().datatrove_sentence_ranges(text, self.version, &mut r);
         if r.len() == 1 {
             out.push((0, text.chars().count()));
-            return;
+            return Ok(());
         }
         let (mut at_b, mut at_c) = (0usize, 0usize);
         let mut chars = |b: usize| {
@@ -101,6 +116,7 @@ impl ThTokenizer {
             let e = chars(e);
             out.push((s, e));
         }
+        Ok(())
     }
 }
 
@@ -110,11 +126,13 @@ impl WordTokenizer for ThTokenizer {
     }
 
     fn words<'a>(&self, text: &'a str, out: &mut Vec<&'a str>) -> Result<(), FilterError> {
+        super::check_len(text)?;
         Self::thai().datatrove_words(text, self.version, out);
         Ok(())
     }
 
     fn sentence_ends(&self, text: &str, out: &mut Vec<usize>) -> Result<(), FilterError> {
+        super::check_len(text)?;
         let mut r = Vec::new();
         Self::thai().datatrove_sentence_ranges(text, self.version, &mut r);
         if r.len() == 1 {
@@ -126,6 +144,7 @@ impl WordTokenizer for ThTokenizer {
     }
 
     fn sentences<'a>(&self, text: &'a str, out: &mut Vec<Cow<'a, str>>) -> Result<(), FilterError> {
+        super::check_len(text)?;
         let mut s = Vec::new();
         Self::thai().datatrove_sentences(text, self.version, &mut s);
         out.extend(s.into_iter().map(Cow::Borrowed));
@@ -326,7 +345,7 @@ mod tests {
             tok.sentences(t, &mut sents).unwrap();
             assert_eq!(sents, c.s, "sentences {t:?}");
             let mut spans = Vec::new();
-            tok.spans(t, &mut spans);
+            tok.spans(t, &mut spans).expect("a short text");
             assert_eq!(spans, c.sp, "spans {t:?}");
             let mut ends = Vec::new();
             tok.sentence_ends(t, &mut ends).unwrap();
@@ -350,7 +369,7 @@ mod tests {
         // its surrounding whitespace included.
         let t = "  ฉันไปโรงเรียน \n";
         let mut spans = Vec::new();
-        tok.spans(t, &mut spans);
+        tok.spans(t, &mut spans).expect("a short text");
         assert_eq!(spans, [(0, 17)]);
         let mut ends = Vec::new();
         tok.sentence_ends(t, &mut ends).unwrap();

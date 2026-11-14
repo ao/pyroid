@@ -346,7 +346,7 @@ def gopher_quality(
         TypeError: A parameter has the wrong type.
         ValueError: datatrove has no tokenizer for ``language`` (datatrove's
             message), or a document of 2**30 characters or more (spaCy's
-            limit).
+            limit; 2**32 - 64 for Thai).
         NotImplementedError: pyroid does not tokenize ``language`` natively
             and ``python_tokenizer`` is not set (the message names
             datatrove's tokenizer and what to install).
