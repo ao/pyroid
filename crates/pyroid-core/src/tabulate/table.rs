@@ -552,13 +552,6 @@ pub fn simple_separated(sep: &str) -> TableFormat {
     }
 }
 
-/// A row of the finished table: padded cells, or a `SEPARATING_LINE`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Row {
-    Cells(Vec<String>),
-    Separator,
-}
-
 /// The per-table settings the measuring and aligning steps share (tabulate's flags).
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug)]
@@ -589,41 +582,192 @@ enum Pad {
     None,
 }
 
+/// A cell after `_align_column`: the string `" " * left + text + " " * right`, kept apart so
+/// the padding is written straight into the table.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Aligned<'a> {
+    pub text: Cow<'a, str>,
+    pub left: usize,
+    pub right: usize,
+}
+
+impl Aligned<'_> {
+    /// The padded string.
+    pub fn padded(&self) -> Cow<'_, str> {
+        if self.left == 0 && self.right == 0 {
+            return Cow::Borrowed(&self.text);
+        }
+        let mut s = String::with_capacity(self.text.len() + self.left + self.right);
+        s.extend(std::iter::repeat_n(' ', self.left));
+        s.push_str(&self.text);
+        s.extend(std::iter::repeat_n(' ', self.right));
+        Cow::Owned(s)
+    }
+
+    fn write(&self, buf: &mut String, extra: isize) {
+        let extra = usize::try_from(extra).unwrap_or(0);
+        buf.extend(std::iter::repeat_n(' ', self.left + extra));
+        buf.push_str(&self.text);
+        buf.extend(std::iter::repeat_n(' ', self.right + extra));
+    }
+}
+
 /// `"{0:>%ds}" % width` and friends.
-fn pad<E>(kind: Pad, width: isize, s: &str) -> Res<String, E> {
+fn pad<E>(kind: Pad, width: isize, s: Cow<'_, str>) -> Res<Aligned<'_>, E> {
+    let none = |text| {
+        Ok(Aligned {
+            text,
+            left: 0,
+            right: 0,
+        })
+    };
     if kind == Pad::None {
-        return Ok(s.to_owned());
+        return none(s);
     }
     if width < 0 {
         return Err(Error::NegativeWidth);
     }
-    let len = isize::try_from(py_len(s)).unwrap_or(isize::MAX);
-    let n = width - len;
-    if n <= 0 {
-        return Ok(s.to_owned());
-    }
-    let mut out = String::with_capacity(s.len() + n.unsigned_abs());
-    match kind {
-        Pad::Left => {
-            push_spaces(&mut out, n);
-            out.push_str(s);
-        }
-        Pad::Right => {
-            out.push_str(s);
-            push_spaces(&mut out, n);
-        }
-        Pad::Both => {
-            push_spaces(&mut out, n / 2);
-            out.push_str(s);
-            push_spaces(&mut out, n - n / 2);
-        }
+    let n = width - len_i(&s);
+    let Ok(n) = usize::try_from(n) else {
+        return none(s);
+    };
+    let (left, right) = match kind {
+        Pad::Left => (n, 0),
+        Pad::Right => (0, n),
+        Pad::Both => (n / 2, n - n / 2),
         Pad::None => unreachable!(),
-    }
-    Ok(out)
+    };
+    Ok(Aligned {
+        text: s,
+        left,
+        right,
+    })
 }
 
 fn len_i(s: &str) -> isize {
     isize::try_from(py_len(s)).unwrap_or(isize::MAX)
+}
+
+/// `s.strip()` without copying unless something is removed from an owned string.
+fn strip_cow(s: Cow<'_, str>) -> Cow<'_, str> {
+    match s {
+        Cow::Borrowed(b) => Cow::Borrowed(pystr::strip(b)),
+        Cow::Owned(o) => {
+            let t = pystr::strip(&o);
+            if t.len() == o.len() {
+                Cow::Owned(o)
+            } else {
+                Cow::Owned(t.to_owned())
+            }
+        }
+    }
+}
+
+/// A data row of the finished table, by position, or a re-inserted `SEPARATING_LINE`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowRef {
+    Data(usize),
+    Separator,
+}
+
+/// The cells of one row as `_format_table` passes them on.
+#[derive(Clone, Copy)]
+enum Src<'r> {
+    Cols(&'r [Vec<Aligned<'r>>], usize),
+    List(&'r [String]),
+    Separator,
+}
+
+impl Src<'_> {
+    fn len(&self) -> usize {
+        match self {
+            Self::Cols(c, _) => c.len(),
+            Self::List(l) => l.len(),
+            Self::Separator => 1,
+        }
+    }
+
+    /// Cell `j` as tabulate holds it (with its alignment padding).
+    fn get(&self, j: usize) -> Cow<'_, str> {
+        match self {
+            Self::Cols(c, i) => c[j][*i].padded(),
+            Self::List(l) => Cow::Borrowed(&l[j]),
+            Self::Separator => Cow::Borrowed("\u{1}"),
+        }
+    }
+
+    /// Append cell `j` with `padding` more spaces on each side.
+    fn write(&self, j: usize, buf: &mut String, padding: isize) {
+        if let Self::Cols(c, i) = self {
+            c[j][*i].write(buf, padding);
+        } else {
+            push_spaces(buf, padding);
+            buf.push_str(&self.get(j));
+            push_spaces(buf, padding);
+        }
+    }
+
+    /// Cell `j` after `_pad_row(cells, padding)`, as (spaces, text, spaces).
+    #[allow(clippy::many_single_char_names)]
+    fn parts(&self, j: usize, padding: isize) -> (usize, &str, usize) {
+        let p = usize::try_from(padding).unwrap_or(0);
+        match self {
+            Self::Cols(c, i) => {
+                let a = &c[j][*i];
+                (a.left + p, &a.text, a.right + p)
+            }
+            Self::List(l) => (p, &l[j], p),
+            Self::Separator => (0, "\u{1}", 0),
+        }
+    }
+
+    /// `_pad_row(cells, padding)` as owned strings (the separator stays itself).
+    fn padded(&self, padding: isize) -> Vec<String> {
+        (0..self.len())
+            .map(|j| {
+                let mut s = String::new();
+                self.write(j, &mut s, padding);
+                s
+            })
+            .collect()
+    }
+}
+
+/// `lines` and `"\n".join(lines)` in one buffer; the first non-str line is remembered.
+struct Out {
+    buf: String,
+    count: usize,
+    bad: Option<(usize, String)>,
+}
+
+impl Out {
+    fn start(&mut self) -> usize {
+        if self.count > 0 {
+            self.buf.push('\n');
+        }
+        self.count += 1;
+        self.buf.len()
+    }
+
+    fn rstrip_from(&mut self, start: usize) {
+        let keep = start + rstrip(&self.buf[start..]).len();
+        self.buf.truncate(keep);
+    }
+
+    fn piece(&mut self, p: Piece) {
+        match p {
+            Piece::Str(s) => {
+                self.start();
+                self.buf.push_str(&s);
+            }
+            Piece::Other(type_name) => {
+                if self.bad.is_none() {
+                    self.bad = Some((self.count, type_name));
+                }
+                self.count += 1;
+            }
+        }
+    }
 }
 
 impl<H: Host> Engine<'_, H> {
@@ -638,6 +782,9 @@ impl<H: Host> Engine<'_, H> {
 
     /// The width of one line of text: `_visible_width`, `wcwidth.wcswidth` or `len`.
     pub fn line_width(&mut self, s: &str) -> Res<isize, H::Error> {
+        if is_printable_ascii(s) {
+            return Ok(len_i(s));
+        }
         let t = if self.s.has_invisible {
             self.strip_ansi(s)?
         } else {
@@ -662,6 +809,15 @@ impl<H: Host> Engine<'_, H> {
         Ok(best)
     }
 
+    /// The table's `width_fn` of an aligned cell (its padding included).
+    pub fn aligned_width(&mut self, c: &Aligned<'_>) -> Res<isize, H::Error> {
+        if is_printable_ascii(&c.text) {
+            let n = c.left + c.right + c.text.len();
+            return Ok(isize::try_from(n).unwrap_or(isize::MAX));
+        }
+        self.width(&c.padded())
+    }
+
     fn afterpoint(&mut self, s: &str) -> Res<isize, H::Error> {
         let t = if self.s.has_invisible {
             self.strip_ansi(s)?
@@ -675,21 +831,18 @@ impl<H: Host> Engine<'_, H> {
     }
 
     /// `_align_column(strings, alignment, minwidth, ...)`.
-    pub fn align_column(
+    #[allow(clippy::too_many_lines)]
+    pub fn align_column<'a>(
         &mut self,
-        strings: Vec<String>,
+        strings: Vec<Cow<'a, str>>,
         alignment: Align,
         minwidth: isize,
-    ) -> Res<Vec<String>, H::Error> {
+    ) -> Res<Vec<Aligned<'a>>, H::Error> {
         let strip = !self.s.preserve_whitespace;
-        let stripped = |v: Vec<String>| -> Vec<String> {
+        let mut extra = vec![0usize; strings.len()];
+        let stripped = |v: Vec<Cow<'a, str>>| -> Vec<Cow<'a, str>> {
             if strip {
-                v.into_iter()
-                    .map(|s| {
-                        let t = pystr::strip(&s);
-                        if t.len() == s.len() { s } else { t.to_owned() }
-                    })
-                    .collect()
+                v.into_iter().map(strip_cow).collect()
             } else {
                 v
             }
@@ -703,11 +856,21 @@ impl<H: Host> Engine<'_, H> {
                     decimals.push(self.afterpoint(s)?);
                 }
                 let maxdecimals = decimals.iter().copied().max().ok_or(Error::EmptyMax)?;
+                // `s + (maxdecimals - decs) * " "`: as a count for printable ASCII (widths
+                // add up there), as text otherwise.
+                let multiline = self.s.is_multiline;
                 let out = strings
                     .into_iter()
                     .zip(&decimals)
-                    .map(|(mut s, &d)| {
-                        push_spaces(&mut s, maxdecimals - d);
+                    .enumerate()
+                    .map(|(i, (mut s, &d))| {
+                        if maxdecimals > d {
+                            if !multiline && is_printable_ascii(&s) {
+                                extra[i] = (maxdecimals - d).unsigned_abs();
+                            } else {
+                                push_spaces(s.to_mut(), maxdecimals - d);
+                            }
+                        }
                         s
                     })
                     .collect();
@@ -739,7 +902,11 @@ impl<H: Host> Engine<'_, H> {
                 let mut parts = Vec::with_capacity(lines.len());
                 if plain {
                     for line in lines {
-                        parts.push(pad(kind, maxwidth, line)?);
+                        parts.push(
+                            pad(kind, maxwidth, Cow::Borrowed(line))?
+                                .padded()
+                                .into_owned(),
+                        );
                     }
                 } else {
                     let lens: Vec<isize> = split_cr_lf(ms).into_iter().map(len_i).collect();
@@ -749,16 +916,20 @@ impl<H: Host> Engine<'_, H> {
                         .map(|(w, l)| maxwidth - (w - l))
                         .collect();
                     for (line, w) in lines.into_iter().zip(visible) {
-                        parts.push(pad(kind, w, line)?);
+                        parts.push(pad(kind, w, Cow::Borrowed(line))?.padded().into_owned());
                     }
                 }
-                out.push(parts.join("\n"));
+                out.push(Aligned {
+                    text: Cow::Owned(parts.join("\n")),
+                    left: 0,
+                    right: 0,
+                });
             }
             return Ok(out);
         }
         let mut s_widths = Vec::with_capacity(strings.len());
-        for s in &strings {
-            s_widths.push(self.line_width(s)?);
+        for (s, &x) in strings.iter().zip(&extra) {
+            s_widths.push(self.line_width(s)? + isize::try_from(x).unwrap_or(isize::MAX));
         }
         let maxwidth = s_widths
             .iter()
@@ -767,13 +938,20 @@ impl<H: Host> Engine<'_, H> {
             .ok_or(Error::EmptyMax)?
             .max(minwidth);
         let mut out = Vec::with_capacity(strings.len());
-        for (s, w) in strings.iter().zip(&s_widths) {
+        for ((s, w), x) in strings.into_iter().zip(&s_widths).zip(extra) {
+            let xi = isize::try_from(x).unwrap_or(isize::MAX);
             let width = if plain {
                 maxwidth
             } else {
-                maxwidth - (w - len_i(s))
+                maxwidth - (w - (len_i(&s) + xi))
             };
-            out.push(pad(kind, width, s)?);
+            // `extra` spaces are part of the string tabulate pads.
+            if width < 0 && kind != Pad::None {
+                return Err(Error::NegativeWidth);
+            }
+            let mut a = pad(kind, (width - xi).max(0), s)?;
+            a.right += x;
+            out.push(a);
         }
         Ok(out)
     }
@@ -804,120 +982,98 @@ impl<H: Host> Engine<'_, H> {
         visible_width: isize,
     ) -> Res<String, H::Error> {
         let width = width + (len_i(header) - visible_width);
-        match alignment {
-            Align::Left => pad(Pad::Right, width, header),
-            Align::Center => pad(Pad::Both, width, header),
-            Align::Falsy => Ok(header.to_owned()),
-            _ => pad(Pad::Left, width, header),
-        }
+        let h = Cow::Borrowed(header);
+        let out = match alignment {
+            Align::Left => pad(Pad::Right, width, h)?,
+            Align::Center => pad(Pad::Both, width, h)?,
+            Align::Falsy => return Ok(header.to_owned()),
+            _ => pad(Pad::Left, width, h)?,
+        };
+        Ok(out.padded().into_owned())
     }
 
     /// `_format_table(fmt, headers, headersaligns, rows, colwidths, colaligns, is_multiline,
-    /// rowaligns)`. `rows` already hold the re-inserted separators; `colaligns` and
-    /// `headersaligns` are the lists the line and row producers see.
-    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    /// rowaligns)`. The rows are `cols[j][i]` in the order of `order`, which holds the
+    /// re-inserted separators; `colaligns` and `headersaligns` are the lists the line and row
+    /// producers see.
+    #[allow(clippy::too_many_arguments)]
     pub fn format_table(
         &mut self,
         fmt: &TableFormat,
         headers: &[String],
         headersaligns: &[Align],
-        rows: &[Row],
+        cols: &[Vec<Aligned<'_>>],
+        order: &[RowRef],
         colwidths: &[isize],
         colaligns: &[Align],
         rowaligns: &[RowAlign],
     ) -> Res<String, H::Error> {
-        let mut lines: Vec<Piece> = Vec::new();
+        let total: usize = cols
+            .iter()
+            .map(|c| {
+                c.iter()
+                    .map(|s| s.text.len() + s.left + s.right + 3)
+                    .sum::<usize>()
+            })
+            .sum();
+        let mut out = Out {
+            buf: String::with_capacity(total + 256),
+            count: 0,
+            bad: None,
+        };
         let hidden = |i: usize| !headers.is_empty() && fmt.hide[i];
         let pad = fmt.padding;
-        let multiline = self.s.is_multiline;
         let padded_widths: Vec<isize> = colwidths.iter().map(|w| w + 2 * pad).collect();
-        let padded_headers: Vec<String> = if multiline {
-            headers.to_vec()
-        } else {
-            pad_cells(headers, pad)
-        };
+        let cw = (&padded_widths[..], colaligns, AlignList::Columns);
 
         if fmt.lineabove.on() && !hidden(ABOVE) {
-            let l = self.build_line(
-                &padded_widths,
-                colaligns,
-                AlignList::Columns,
-                &fmt.lineabove,
-            )?;
-            lines.push(l);
+            self.emit_line(&mut out, cw, &fmt.lineabove)?;
         }
-        if !padded_headers.is_empty() {
-            self.append_row(
-                &mut lines,
-                Cells::List(&padded_headers),
-                &padded_widths,
-                headersaligns,
-                AlignList::Headers,
+        if !headers.is_empty() {
+            let hw = (&padded_widths[..], headersaligns, AlignList::Headers);
+            self.emit_row(
+                &mut out,
+                Src::List(headers),
+                hw,
                 &fmt.headerrow,
                 pad,
                 RowAlign::Top,
             )?;
             if fmt.linebelowheader.on() && !hidden(BELOW_HEADER) {
-                let l = self.build_line(
-                    &padded_widths,
-                    colaligns,
-                    AlignList::Columns,
-                    &fmt.linebelowheader,
-                )?;
-                lines.push(l);
+                self.emit_line(&mut out, cw, &fmt.linebelowheader)?;
             }
         }
-        if !rows.is_empty() && fmt.linebetweenrows.on() && !hidden(BETWEEN) {
-            let (last, init) = rows.split_last().expect("non-empty");
-            for (row, &ralign) in init.iter().zip(rowaligns) {
-                if let Row::Cells(cells) = row {
-                    let padded = if multiline {
-                        cells.clone()
-                    } else {
-                        pad_cells(cells, pad)
-                    };
-                    self.append_row(
-                        &mut lines,
-                        Cells::List(&padded),
-                        &padded_widths,
-                        colaligns,
-                        AlignList::Columns,
-                        &fmt.datarow,
-                        pad,
-                        ralign,
-                    )?;
+        let src = |r: RowRef| match r {
+            RowRef::Data(i) => Src::Cols(cols, i),
+            RowRef::Separator => Src::Separator,
+        };
+        if !order.is_empty() && fmt.linebetweenrows.on() && !hidden(BETWEEN) {
+            let (&last, init) = order.split_last().expect("non-empty");
+            // A plain line between rows is the same every time.
+            let between = if let LineFmt::Plain { .. } = fmt.linebetweenrows {
+                let mut tmp = Out {
+                    buf: String::new(),
+                    count: 0,
+                    bad: None,
+                };
+                self.emit_line(&mut tmp, cw, &fmt.linebetweenrows)?;
+                Some(tmp.buf)
+            } else {
+                None
+            };
+            for (&row, &ralign) in init.iter().zip(rowaligns) {
+                if row != RowRef::Separator {
+                    self.emit_row(&mut out, src(row), cw, &fmt.datarow, pad, ralign)?;
                 }
-                let l = self.build_line(
-                    &padded_widths,
-                    colaligns,
-                    AlignList::Columns,
-                    &fmt.linebetweenrows,
-                )?;
-                lines.push(l);
+                if let Some(line) = &between {
+                    out.start();
+                    out.buf.push_str(line);
+                } else {
+                    self.emit_line(&mut out, cw, &fmt.linebetweenrows)?;
+                }
             }
             let ralign = *rowaligns.last().ok_or(Error::RowAlignIndex)?;
-            let padded;
-            let cells = match last {
-                Row::Cells(cells) => {
-                    padded = if multiline {
-                        cells.clone()
-                    } else {
-                        pad_cells(cells, pad)
-                    };
-                    Cells::List(&padded)
-                }
-                Row::Separator => Cells::Separator,
-            };
-            self.append_row(
-                &mut lines,
-                cells,
-                &padded_widths,
-                colaligns,
-                AlignList::Columns,
-                &fmt.datarow,
-                pad,
-                ralign,
-            )?;
+            self.emit_row(&mut out, src(last), cw, &fmt.datarow, pad, ralign)?;
         } else {
             let fallback = LineFmt::plain("", "", "", "");
             let separating_line = [
@@ -929,104 +1085,131 @@ impl<H: Host> Engine<'_, H> {
             .into_iter()
             .find(|l| l.on())
             .unwrap_or(&fallback);
-            for row in rows {
+            for &row in order {
                 match row {
-                    Row::Separator => {
-                        let l = self.build_line(
-                            &padded_widths,
-                            colaligns,
-                            AlignList::Columns,
-                            separating_line,
-                        )?;
-                        lines.push(l);
-                    }
-                    Row::Cells(cells) => {
-                        let padded = if multiline {
-                            cells.clone()
-                        } else {
-                            pad_cells(cells, pad)
-                        };
-                        self.append_row(
-                            &mut lines,
-                            Cells::List(&padded),
-                            &padded_widths,
-                            colaligns,
-                            AlignList::Columns,
-                            &fmt.datarow,
-                            pad,
-                            RowAlign::Top,
-                        )?;
+                    RowRef::Separator => self.emit_line(&mut out, cw, separating_line)?,
+                    RowRef::Data(_) => {
+                        self.emit_row(&mut out, src(row), cw, &fmt.datarow, pad, RowAlign::Top)?;
                     }
                 }
             }
         }
         if fmt.linebelow.on() && !hidden(BELOW) {
-            let l = self.build_line(
-                &padded_widths,
-                colaligns,
-                AlignList::Columns,
-                &fmt.linebelow,
-            )?;
-            lines.push(l);
+            self.emit_line(&mut out, cw, &fmt.linebelow)?;
         }
-        if headers.is_empty() && rows.is_empty() {
-            return Ok(String::new());
+        if headers.is_empty() && order.is_empty() {
+            return Ok(String::new()); // a completely empty table
         }
-        let total: usize = lines
-            .iter()
-            .map(|p| {
-                if let Piece::Str(s) = p {
-                    s.len() + 1
-                } else {
-                    0
-                }
-            })
-            .sum();
-        let mut out = String::with_capacity(total);
-        for (i, piece) in lines.into_iter().enumerate() {
-            match piece {
-                Piece::Str(s) => {
-                    if i > 0 {
-                        out.push('\n');
-                    }
-                    out.push_str(&s);
-                }
-                Piece::Other(type_name) => {
-                    return Err(Error::Join {
-                        index: i,
-                        type_name,
-                    });
-                }
-            }
+        if let Some((index, type_name)) = out.bad {
+            return Err(Error::Join { index, type_name });
         }
-        Ok(out)
+        Ok(out.buf)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn append_row(
+    fn emit_line(
         &mut self,
-        lines: &mut Vec<Piece>,
-        cells: Cells<'_>,
-        padded_widths: &[isize],
-        aligns: &[Align],
-        which: AlignList,
+        out: &mut Out,
+        (widths, aligns, which): (&[isize], &[Align], AlignList),
+        linefmt: &LineFmt,
+    ) -> Res<(), H::Error> {
+        if let LineFmt::Plain {
+            begin,
+            fill,
+            sep,
+            end,
+        } = linefmt
+        {
+            let start = out.start();
+            out.buf.push_str(begin);
+            for (j, &w) in widths.iter().enumerate() {
+                if j > 0 {
+                    out.buf.push_str(sep);
+                }
+                if let Ok(n) = usize::try_from(w) {
+                    let mut chars = fill.chars();
+                    match (chars.next(), chars.next()) {
+                        (Some(c), None) => out.buf.extend(std::iter::repeat_n(c, n)),
+                        _ => {
+                            for _ in 0..n {
+                                out.buf.push_str(fill);
+                            }
+                        }
+                    }
+                }
+            }
+            out.buf.push_str(end);
+            out.rstrip_from(start);
+            return Ok(());
+        }
+        let p = self.build_line(widths, aligns, which, linefmt)?;
+        out.piece(p);
+        Ok(())
+    }
+
+    fn emit_row(
+        &mut self,
+        out: &mut Out,
+        cells: Src<'_>,
+        (padded_widths, aligns, which): (&[isize], &[Align], AlignList),
         rowfmt: &RowFmt,
         pad: isize,
         rowalign: RowAlign,
     ) -> Res<(), H::Error> {
         if !self.s.is_multiline {
-            let p = self.build_row(cells, padded_widths, aligns, which, rowfmt)?;
-            lines.push(p);
+            if let RowFmt::Plain { begin, sep, end } = rowfmt {
+                // _build_simple_row(_pad_row(cells, pad), rowfmt); the separator is not padded.
+                let start = out.start();
+                out.buf.push_str(begin);
+                if let Src::Separator = cells {
+                    out.buf.push('\u{1}');
+                } else {
+                    for j in 0..cells.len() {
+                        if j > 0 {
+                            out.buf.push_str(sep);
+                        }
+                        cells.write(j, &mut out.buf, pad);
+                    }
+                }
+                out.buf.push_str(end);
+                out.rstrip_from(start);
+                return Ok(());
+            }
+            if let RowFmt::Html { th, unsafe_ } = rowfmt {
+                emit_html_row(out, cells, aligns, *th, *unsafe_, pad);
+                return Ok(());
+            }
+            if let RowFmt::Latex { raw } = rowfmt {
+                let start = out.start();
+                for j in 0..cells.len() {
+                    if j > 0 {
+                        out.buf.push('&');
+                    }
+                    let (l, text, r) = cells.parts(j, pad);
+                    out.buf.extend(std::iter::repeat_n(' ', l));
+                    if *raw {
+                        out.buf.push_str(text);
+                    } else {
+                        latex_escape_into(&mut out.buf, text);
+                    }
+                    out.buf.extend(std::iter::repeat_n(' ', r));
+                }
+                out.buf.push_str("\\\\");
+                out.rstrip_from(start);
+                return Ok(());
+            }
+            let p = if let Src::Separator = cells {
+                self.build_row(Cells::Separator, padded_widths, aligns, which, rowfmt)?
+            } else {
+                let padded = cells.padded(pad);
+                self.build_row(Cells::List(&padded), padded_widths, aligns, which, rowfmt)?
+            };
+            out.piece(p);
             return Ok(());
         }
         // _append_multiline_row: the producers see the unpadded widths.
         let colwidths: Vec<isize> = padded_widths.iter().map(|w| w - 2 * pad).collect();
-        let sep_cell = ["\u{1}".to_owned()];
-        let list: &[String] = match cells {
-            Cells::List(l) => l,
-            Cells::Separator => &sep_cell,
-        };
-        let cells_lines: Vec<Vec<&str>> = list.iter().map(|c| splitlines(c)).collect();
+        let texts: Vec<Cow<'_, str>> = (0..cells.len()).map(|j| cells.get(j)).collect();
+        let cells_lines: Vec<Vec<&str>> = texts.iter().map(|c| splitlines(c)).collect();
         let nlines = cells_lines
             .iter()
             .map(Vec::len)
@@ -1041,7 +1224,7 @@ impl<H: Host> Engine<'_, H> {
             let ln: Vec<String> = aligned.iter().map(|cl| cl[i].to_string()).collect();
             let padded = pad_cells(&ln, pad);
             let p = self.build_row(Cells::List(&padded), &colwidths, aligns, which, rowfmt)?;
-            lines.push(p);
+            out.piece(p);
         }
         Ok(())
     }
@@ -1362,8 +1545,61 @@ fn asciidoc_header_line<E>(
     Ok(format!("[{header}]\n|===="))
 }
 
+/// `_html_row_with_attrs(celltag, unsafe, _pad_row(cells, pad), colwidths, colaligns)`.
+fn emit_html_row(
+    out: &mut Out,
+    cells: Src<'_>,
+    aligns: &[Align],
+    th: bool,
+    unsafe_: bool,
+    pad: isize,
+) {
+    let tag = if th { "th" } else { "td" };
+    let start = out.start();
+    let _ = start;
+    if th {
+        out.buf.push_str("<table>\n<thead>\n");
+    }
+    out.buf.push_str("<tr>");
+    let cells_start = out.buf.len();
+    for (j, a) in (0..cells.len()).zip(aligns) {
+        let attr = match a {
+            Align::Right | Align::Decimal => " style=\"text-align: right;\"",
+            Align::Center => " style=\"text-align: center;\"",
+            _ => "",
+        };
+        out.buf.push('<');
+        out.buf.push_str(tag);
+        out.buf.push_str(attr);
+        out.buf.push('>');
+        let (l, text, r) = cells.parts(j, pad);
+        out.buf.extend(std::iter::repeat_n(' ', l));
+        if unsafe_ {
+            out.buf.push_str(text);
+        } else {
+            html_escape(&mut out.buf, text);
+        }
+        out.buf.extend(std::iter::repeat_n(' ', r));
+        out.buf.push_str("</");
+        out.buf.push_str(tag);
+        out.buf.push('>');
+    }
+    out.rstrip_from(cells_start);
+    out.buf.push_str("</tr>");
+    if th {
+        out.buf.push_str("\n</thead>\n<tbody>");
+    }
+}
+
 /// `html.escape(s)` (quote=True).
 fn html_escape(out: &mut String, s: &str) {
+    if !s
+        .bytes()
+        .any(|b| matches!(b, b'&' | b'<' | b'>' | b'"' | b'\''))
+    {
+        out.push_str(s);
+        return;
+    }
     for c in s.chars() {
         match c {
             '&' => out.push_str("&amp;"),
@@ -1379,6 +1615,20 @@ fn html_escape(out: &mut String, s: &str) {
 /// `_latex_row`'s per-char escapes (`LATEX_ESCAPE_RULES`).
 fn latex_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
+    latex_escape_into(&mut out, s);
+    out
+}
+
+fn latex_escape_into(out: &mut String, s: &str) {
+    if !s.bytes().any(|b| {
+        matches!(
+            b,
+            b'&' | b'%' | b'$' | b'#' | b'_' | b'^' | b'{' | b'}' | b'~' | b'\\' | b'<' | b'>'
+        )
+    }) {
+        out.push_str(s);
+        return;
+    }
     for c in s.chars() {
         match c {
             '&' => out.push_str("\\&"),
@@ -1396,5 +1646,4 @@ fn latex_escape(s: &str) -> String {
             c => out.push(c),
         }
     }
-    out
 }

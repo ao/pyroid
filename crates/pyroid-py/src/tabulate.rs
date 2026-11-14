@@ -24,8 +24,8 @@ use pyroid_core::tabulate::number::{self, ColType};
 use pyroid_core::tabulate::pyfmt::{self, Spec};
 use pyroid_core::tabulate::pystr;
 use pyroid_core::tabulate::table::{
-    self, Align, AlignList, Cells, Engine, Host, LineFmt, Piece, Row, RowAlign, RowFmt, Settings,
-    TableFormat,
+    self, Align, AlignList, Cells, Engine, Host, LineFmt, Piece, RowAlign, RowFmt, RowRef,
+    Settings, TableFormat,
 };
 use rustc_hash::FxHashMap;
 
@@ -459,6 +459,17 @@ fn row_align_of(obj: &Bound<'_, PyAny>) -> FResult<RowAlign> {
     }
 }
 
+/// tabulate's `_is_separating_line` for a list, from its first two items: one is a `str` that
+/// strips to `SEPARATING_LINE`.
+fn is_separating_line(first: Option<&Bound<'_, PyAny>>, second: Option<&Bound<'_, PyAny>>) -> bool {
+    let value = |v: Option<&Bound<'_, PyAny>>| {
+        v.and_then(|v| v.cast_exact::<PyString>().ok())
+            .and_then(|s| s.to_str().ok().map(|t| pystr::strip(t) == "\u{1}"))
+            .unwrap_or(false)
+    };
+    value(first) || value(second)
+}
+
 /// `_strip_ansi(s)` for typing (`_type` always strips).
 fn strip_for_type<'s>(host: &mut PyHost<'_, '_>, s: &'s str) -> FResult<Cow<'s, str>> {
     match pyroid_core::tabulate::ansi::strip(s) {
@@ -493,58 +504,88 @@ struct Column {
     int_fmt_empty: bool,
 }
 
-/// Format one native cell; `None` means "use tabulate's `_format`".
-#[allow(clippy::too_many_lines)]
-fn format_native(
+/// A formatted cell: borrowed from the cell, or a range of the column's text buffer.
+#[derive(Clone, Copy)]
+enum Fmt<'c> {
+    Borrowed(&'c str),
+    Range(usize, usize),
+}
+
+/// Append `text` to `arena` and return its range.
+fn put<'c>(arena: &mut String, text: &str) -> Fmt<'c> {
+    let start = arena.len();
+    arena.push_str(text);
+    Fmt::Range(start, arena.len())
+}
+
+/// Format one native cell (new text goes to `arena`); `None` means "use tabulate's `_format`".
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+fn format_native<'c>(
     host: &mut PyHost<'_, '_>,
-    cell: &Cell<'_>,
+    cell: &'c Cell<'_>,
     ct: ColType,
     col: &Column,
     has_invisible: bool,
     unicode_ok: bool,
-) -> FResult<Option<String>> {
-    let float = |f: f64| col.float_spec.as_ref().map(|spec| spec.format_float(f));
+    arena: &mut String,
+) -> FResult<Option<Fmt<'c>>> {
+    let start = arena.len();
+    let range = |arena: &String| Some(Fmt::Range(start, arena.len()));
     Ok(match (&cell.val, ct) {
-        (Val::Str(s), _) if s.is_empty() => Some(String::new()),
+        (Val::Str(s), _) if s.is_empty() => Some(Fmt::Borrowed("")),
         // Other objects, bytes columns and numpy scalars in text columns: tabulate's _format.
         (Val::Obj, _) | (_, ColType::Bytes) | (Val::NpInt(_) | Val::NpFloat(_), ColType::Str) => {
             None
         }
-        (Val::Str(s), ColType::Str | ColType::None | ColType::Bool) => Some(s.to_string()),
+        (Val::Str(s), ColType::Str | ColType::None | ColType::Bool) => Some(Fmt::Borrowed(s)),
         (Val::Bool(b), ColType::Str | ColType::None | ColType::Bool) => {
-            Some(if *b { "True" } else { "False" }.to_owned())
+            Some(Fmt::Borrowed(if *b { "True" } else { "False" }))
         }
-        (Val::Int(i), ColType::Str) => Some(i.to_string()),
-        (Val::Float(f), ColType::Str) => Some(pyfmt::float_repr(*f)),
+        (Val::Int(i), ColType::Str) => {
+            EMPTY_INT.format_int_into(i128::from(*i), arena);
+            range(arena)
+        }
+        (Val::Float(f), ColType::Str) => Some(put(arena, &pyfmt::float_repr(*f))),
         // An int column: str cells keep their text unless tabulate's colored-number regex
         // could match (it needs a backslash in the unicode_escape form).
         (Val::Str(s), ColType::Int) => {
             if pystr::is_printable_ascii(s) && !s.contains('\\') {
-                Some(s.to_string())
+                Some(Fmt::Borrowed(s))
             } else {
                 None
             }
         }
-        (Val::Int(i), ColType::Int) => col
-            .int_spec
-            .as_ref()
-            .map(|spec| spec.format_int(i128::from(*i))),
-        (Val::NpInt(i), ColType::Int) => col.int_fmt_empty.then(|| i.to_string()),
-        (Val::Bool(b), ColType::Int) => col
-            .int_fmt_empty
-            .then(|| if *b { "True" } else { "False" }.to_owned()),
-        (Val::Str(s), ColType::Float) => {
-            if col.float_spec.is_none() {
-                return Ok(None);
+        (Val::Int(i), ColType::Int) => match &col.int_spec {
+            Some(spec) => {
+                spec.format_int_into(i128::from(*i), arena);
+                range(arena)
             }
+            None => None,
+        },
+        (Val::NpInt(i), ColType::Int) => {
+            if col.int_fmt_empty {
+                EMPTY_INT.format_int_into(i128::from(*i), arena);
+                range(arena)
+            } else {
+                None
+            }
+        }
+        (Val::Bool(b), ColType::Int) => {
+            col.int_fmt_empty
+                .then_some(Fmt::Borrowed(if *b { "True" } else { "False" }))
+        }
+        (Val::Str(s), ColType::Float) => {
+            let Some(spec) = &col.float_spec else {
+                return Ok(None);
+            };
             if has_invisible {
                 let raw = strip_for_type(host, s)?;
                 match py_float_of(&raw, unicode_ok) {
                     PyFloat64::Ask => None,
-                    PyFloat64::Invalid => Some(s.to_string()),
+                    PyFloat64::Invalid => Some(Fmt::Borrowed(s)),
                     PyFloat64::Value(f) => {
-                        let formatted = float(f).expect("spec checked");
-                        Some(s.replace(&*raw, &formatted))
+                        let formatted = spec.format_float(f);
+                        Some(put(arena, &s.replace(&*raw, &formatted)))
                     }
                 }
             } else {
@@ -555,19 +596,42 @@ fn format_native(
                 };
                 match py_float_of(&v, unicode_ok) {
                     PyFloat64::Ask => None,
-                    PyFloat64::Invalid => Some(v.into_owned()),
-                    PyFloat64::Value(f) => float(f),
+                    PyFloat64::Invalid => Some(match v {
+                        Cow::Borrowed(b) => Fmt::Borrowed(b),
+                        Cow::Owned(o) => put(arena, &o),
+                    }),
+                    PyFloat64::Value(f) => {
+                        spec.format_float_into(f, arena);
+                        range(arena)
+                    }
                 }
             }
         }
-        #[allow(clippy::cast_precision_loss)]
-        (Val::Int(i) | Val::NpInt(i), ColType::Float) => float(*i as f64),
-        (Val::Float(f) | Val::NpFloat(f), ColType::Float) => float(*f),
-        (Val::Bool(b), ColType::Float) => float(if *b { 1.0 } else { 0.0 }),
+        (
+            Val::Int(_) | Val::NpInt(_) | Val::Float(_) | Val::NpFloat(_) | Val::Bool(_),
+            ColType::Float,
+        ) => {
+            let Some(spec) = &col.float_spec else {
+                return Ok(None);
+            };
+            #[allow(clippy::cast_precision_loss)]
+            let f = match cell.val {
+                Val::Int(i) | Val::NpInt(i) => i as f64,
+                Val::Float(f) | Val::NpFloat(f) => f,
+                Val::Bool(b) => f64::from(u8::from(b)),
+                _ => unreachable!(),
+            };
+            spec.format_float_into(f, arena);
+            range(arena)
+        }
         (Val::None, _) => unreachable!("handled by the caller"),
         _ => None,
     })
 }
+
+/// `format(n, "")`.
+static EMPTY_INT: std::sync::LazyLock<Spec> =
+    std::sync::LazyLock::new(|| Spec::parse("", true).expect("the empty spec parses"));
 
 /// `render(rows, headers, separating_lines, call)`: `(text, multiline, empty)` (`empty`: no
 /// headers and no rows, so the text is `""` whatever the format), or `(None, reason, None)`
@@ -678,15 +742,50 @@ fn render_inner<'py>(
     for h in headers_in.iter() {
         headers.push(to_backed(&h)?);
     }
+    // Raw rows (a plain list given to tabulate): tabulate's `list(r)` for each row, and
+    // `_remove_separating_lines` on the result, as its normalisation does.
+    let raw = call.flag("raw_rows")?;
+    let list_type = py.import("builtins")?.getattr("list")?;
+    let index_obj = call.obj.getattr("index")?;
+    let index: Option<Bound<'py, PyList>> = if raw && !index_obj.is_none() {
+        Some(index_obj.cast_into::<PyList>().map_err(PyErr::from)?)
+    } else {
+        None
+    };
+    let mut next_index = 0;
+    let mut found_seps: Vec<usize> = Vec::new();
     let mut table_rows: Vec<Vec<Cell<'py>>> = Vec::with_capacity(rows.len());
     let mut row_lens: Vec<usize> = Vec::with_capacity(rows.len());
     let mut ncols = 0;
-    for row in rows.iter() {
-        let row = row
-            .cast_into::<PyList>()
-            .map_err(|_| Fail::Unsupported("a row that is not a list"))?;
-        let mut cells = Vec::with_capacity(row.len());
-        for (c, item) in row.iter().enumerate() {
+    for (position, row) in rows.iter().enumerate() {
+        let row = match row.cast_exact::<PyList>() {
+            Ok(l) => l.clone(),
+            Err(_) if raw => list_type
+                .call1((row,))?
+                .cast_into::<PyList>()
+                .map_err(PyErr::from)?,
+            Err(_) => return Err(Fail::Unsupported("a row that is not a list")),
+        };
+        if raw && is_separating_line(row.get_item(0).ok().as_ref(), row.get_item(1).ok().as_ref()) {
+            found_seps.push(position);
+            continue;
+        }
+        // _prepend_row_index: the index goes to the rows that are not separators, and the
+        // result can be one.
+        let index_value = match &index {
+            Some(ix) => {
+                let v = ix.get_item(next_index)?;
+                next_index += 1;
+                if is_separating_line(Some(&v), row.get_item(0).ok().as_ref()) {
+                    found_seps.push(position);
+                    continue;
+                }
+                Some(v)
+            }
+            None => None,
+        };
+        let mut cells = Vec::with_capacity(row.len() + 1);
+        for (c, item) in index_value.into_iter().chain(row.iter()).enumerate() {
             let item = if is_rst && c == 0 {
                 escape_empty(call, item)?
             } else {
@@ -698,6 +797,11 @@ fn render_inner<'py>(
         ncols = ncols.max(cells.len());
         table_rows.push(cells);
     }
+    let separating_lines: Bound<'py, PyAny> = if raw {
+        PyList::new(py, &found_seps)?.into_any()
+    } else {
+        separating_lines.clone()
+    };
     if is_rst && !headers.is_empty() && pystr::strip(&headers[0]).is_empty() {
         headers[0] = to_backed(PyString::new(py, "..").as_any())?;
     }
@@ -721,16 +825,18 @@ fn render_inner<'py>(
     let mut any_esc = false;
     let mut any_newline = false;
     for h in &headers {
-        any_esc |= h.contains('\u{1b}');
-        any_newline |= pystr::has_cr_lf(h);
+        let (e, n) = pystr::esc_and_newline(h);
+        any_esc |= e;
+        any_newline |= n;
     }
     let mut obj_texts: FxHashMap<(usize, usize), String> = FxHashMap::default();
     for (j, col) in cols.iter().enumerate() {
         for (i, cell) in col.iter().enumerate() {
             match &cell.val {
                 Val::Str(s) => {
-                    any_esc |= s.contains('\u{1b}');
-                    any_newline |= pystr::has_cr_lf(s);
+                    let (e, n) = pystr::esc_and_newline(s);
+                    any_esc |= e;
+                    any_newline |= n;
                 }
                 Val::Obj => {
                     let t = call.to_str_fn.call1((&cell.obj,))?;
@@ -835,7 +941,8 @@ fn render_inner<'py>(
     let formats = call.obj.call_method1("formats", (ncols,))?;
     let (float_formats, int_formats, missing_vals): (Objs<'py>, Objs<'py>, Objs<'py>) =
         formats.extract()?;
-    let mut text_cols: Vec<Vec<String>> = Vec::with_capacity(ncols);
+    let mut arenas: Vec<String> = Vec::with_capacity(ncols);
+    let mut fmts: Vec<Vec<Fmt<'_>>> = Vec::with_capacity(ncols);
     for (j, col) in cols.iter().enumerate() {
         let (Some(ff), Some(fi), Some(mv)) = (
             float_formats.get(j),
@@ -863,30 +970,48 @@ fn render_inner<'py>(
         };
         let ct_obj = call.col_type_obj(ct);
         let mut out = Vec::with_capacity(col.len());
+        let mut arena = String::with_capacity(col.len() * 8);
         for cell in col {
             if matches!(cell.val, Val::None) {
-                out.push(
-                    missing
-                        .as_ref()
-                        .ok_or(Fail::Unsupported("a missingval that is not a str"))?
-                        .to_string(),
-                );
+                let m = missing
+                    .as_ref()
+                    .ok_or(Fail::Unsupported("a missingval that is not a str"))?;
+                out.push(put(&mut arena, m));
                 continue;
             }
-            let s = if let Some(s) =
-                format_native(&mut host, cell, ct, &column, has_invisible, unicode_ok)?
-            {
-                s
+            let f = if let Some(f) = format_native(
+                &mut host,
+                cell,
+                ct,
+                &column,
+                has_invisible,
+                unicode_ok,
+                &mut arena,
+            )? {
+                f
             } else {
                 let r = call
                     .format_fn
                     .call1((&cell.obj, ct_obj, ff, fi, mv, has_invisible))?;
-                to_backed(&r)?.to_string()
+                put(&mut arena, &to_backed(&r)?)
             };
-            out.push(s);
+            out.push(f);
         }
-        text_cols.push(out);
+        arenas.push(arena);
+        fmts.push(out);
     }
+    let text_cols: Vec<Vec<Cow<'_, str>>> = fmts
+        .into_iter()
+        .zip(&arenas)
+        .map(|(col, arena)| {
+            col.into_iter()
+                .map(|f| match f {
+                    Fmt::Borrowed(s) => Cow::Borrowed(s),
+                    Fmt::Range(a, b) => Cow::Borrowed(&arena[a..b]),
+                })
+                .collect()
+        })
+        .collect();
 
     // Alignments (the call object applies colglobalalign, colalign and warns like tabulate).
     let codes: Vec<u8> = coltypes.iter().map(|&t| t as u8).collect();
@@ -917,7 +1042,7 @@ fn render_inner<'py>(
         }
     }
     let n_aligned = text_cols.len().min(aligns.len()).min(minwidths.len());
-    let mut aligned_cols: Vec<Vec<String>> = Vec::with_capacity(n_aligned);
+    let mut aligned_cols: Vec<Vec<table::Aligned<'_>>> = Vec::with_capacity(n_aligned);
     for (j, strings) in text_cols.into_iter().enumerate().take(n_aligned) {
         let a = if colon { Align::Left } else { aligns[j] };
         aligned_cols.push(
@@ -938,7 +1063,7 @@ fn render_inner<'py>(
             for cl in c {
                 m = m.max(
                     engine
-                        .width(cl)
+                        .aligned_width(cl)
                         .map_err(|e| table_error(py, e, &[None, None]))?,
                 );
             }
@@ -967,7 +1092,7 @@ fn render_inner<'py>(
                 for cl in &aligned_cols[j] {
                     m = m.max(
                         engine
-                            .width(cl)
+                            .aligned_width(cl)
                             .map_err(|e| table_error(py, e, &[None, None]))?,
                     );
                 }
@@ -988,21 +1113,10 @@ fn render_inner<'py>(
     let col_aligns = aligns_of(&final_aligns_obj)?;
 
     // rows = list(zip(*cols)), the row alignments, then the separators back in place.
-    let nr = if aligned_cols.is_empty() {
-        0
-    } else {
-        aligned_cols.iter().map(Vec::len).min().unwrap_or(0)
-    };
-    let mut out_rows: Vec<Row> = Vec::with_capacity(nr);
-    let mut iters: Vec<std::vec::IntoIter<String>> =
-        aligned_cols.into_iter().map(Vec::into_iter).collect();
-    for _ in 0..nr {
-        out_rows.push(Row::Cells(
-            iters.iter_mut().map(|it| it.next().expect("nr")).collect(),
-        ));
-    }
+    let nr = aligned_cols.iter().map(Vec::len).min().unwrap_or(0);
+    let mut order: Vec<RowRef> = (0..nr).map(RowRef::Data).collect();
     // Only multiline rows compare the row alignments; the count matters either way.
-    let rowaligns_obj = call.obj.call_method1("rowaligns", (out_rows.len(),))?;
+    let rowaligns_obj = call.obj.call_method1("rowaligns", (nr,))?;
     let mut rowaligns = Vec::new();
     for a in rowaligns_obj.try_iter()? {
         let a = a?;
@@ -1015,8 +1129,8 @@ fn render_inner<'py>(
     if !separating_lines.is_none() {
         for idx in separating_lines.try_iter()? {
             let idx: usize = idx?.extract()?;
-            let at = idx.min(out_rows.len());
-            out_rows.insert(at, Row::Separator);
+            let at = idx.min(order.len());
+            order.insert(at, RowRef::Separator);
         }
     }
 
@@ -1032,7 +1146,8 @@ fn render_inner<'py>(
             fmt,
             &header_texts,
             &header_aligns,
-            &out_rows,
+            &aligned_cols,
+            &order,
             &colwidths,
             &col_aligns,
             &rowaligns,
@@ -1041,7 +1156,7 @@ fn render_inner<'py>(
     Ok((
         text,
         is_multiline,
-        header_texts.is_empty() && out_rows.is_empty(),
+        header_texts.is_empty() && order.is_empty(),
     ))
 }
 
@@ -1101,9 +1216,11 @@ fn _align_column(
         host: &mut host,
         s: settings,
     };
-    engine
+    let strings: Vec<Cow<'_, str>> = strings.iter().map(|s| Cow::Borrowed(s.as_str())).collect();
+    let out = engine
         .align_column(strings, a, minwidth)
-        .map_err(|e| unsupported(table_error(py, e, &[None, None])))
+        .map_err(|e| unsupported(table_error(py, e, &[None, None])))?;
+    Ok(out.iter().map(|c| c.padded().into_owned()).collect())
 }
 
 /// `_align_cell_veritically(text_lines, num_lines, column_width, row_alignment)`.

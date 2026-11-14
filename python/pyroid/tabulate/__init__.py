@@ -16,7 +16,7 @@ import sys
 import threading
 import unicodedata
 import warnings
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Sized
 from typing import Any
 
 from pyroid._pyroid import FallbackWarning, PyroidError
@@ -37,6 +37,7 @@ from pyroid.tabulate._port import (
     TableFormat,
     _afterpoint,
     _ansi_codes,
+    _bool,
     _column_type,
     _CustomTextWrap,
     _expand_iterable,
@@ -44,9 +45,11 @@ from pyroid.tabulate._port import (
     _format,
     _html_begin_table_without_header,
     _is_file,
+    _is_separating_line,
     _isnumber,
     _more_generic,
     _normalize_tabular_data,
+    _prepend_row_index,
     _reinsert_separating_lines,
     _remove_separating_lines,
     _strip_ansi,
@@ -466,11 +469,26 @@ def tabulate(
     if tabular_data is None:
         tabular_data = []
 
-    list_of_lists, headers, headers_pad = _normalize_tabular_data(
-        tabular_data, headers, showindex=showindex
-    )
-    normalized = (list_of_lists, headers[headers_pad:])
-    list_of_lists, separating_lines = _remove_separating_lines(list_of_lists)
+    fast = None
+    if maxcolwidths is None and maxheadercolwidths is None:
+        fast = _plain_rows(tabular_data, headers, showindex)
+        if fast is None:
+            fast = _frame_rows(tabular_data, headers, showindex)
+    index = None
+    if fast is not None:
+        # The rows go to Rust as they are; it converts them, adds the index and finds the
+        # separators.
+        list_of_lists, headers, headers_pad, index = fast
+        rows0, headers0 = list_of_lists, headers[headers_pad:]
+        normalized = lambda: (_with_index(rows0, index), headers0)  # noqa: E731
+        separating_lines = None
+    else:
+        list_of_lists, headers, headers_pad = _normalize_tabular_data(
+            tabular_data, headers, showindex=showindex
+        )
+        rows1, headers1 = list_of_lists, headers[headers_pad:]
+        normalized = lambda: (rows1, headers1)  # noqa: E731
+        list_of_lists, separating_lines = _remove_separating_lines(list_of_lists)
 
     if maxcolwidths is not None:
         if type(maxcolwidths) is tuple:  # Check if tuple, convert to list if so
@@ -580,6 +598,8 @@ def tabulate(
         headers=headers,
         headers_pad=headers_pad,
         rowalign=rowalign,
+        raw_rows=fast is not None,
+        index=index,
     )
     text, multiline, empty = _native.render(list_of_lists, headers, separating_lines, call)
     if text is None:
@@ -597,6 +617,135 @@ def tabulate(
     return text  # type: ignore[no-any-return]
 
 
+_ROW_TYPES = (list, tuple, str)
+
+
+def _index_for(showindex: Any, index: Any, rows: list[Any]) -> Any:
+    """The index column ``_normalize_tabular_data`` adds (``None``: none; ``False``: give up).
+
+    `index` is the DataFrame's index, or ``None``. Lazy iterables are left to the slow path.
+    """
+    showindex_is_a_str = type(showindex) in [str, bytes]
+    if showindex == "default" and index is not None:
+        idx = index
+    elif isinstance(showindex, Sized) and not showindex_is_a_str:
+        idx = list(showindex)
+    elif isinstance(showindex, Iterable) and not showindex_is_a_str:
+        return False
+    elif showindex == "always" or (_bool(showindex) and not showindex_is_a_str):
+        idx = index if index is not None else list(range(len(rows)))
+    else:
+        return None
+    if len(idx) != len(rows):
+        raise ValueError(
+            "index must be as long as the number of data rows: "
+            + f"len(index)={len(idx)} len(rows)={len(rows)}"
+        )
+    return idx
+
+
+def _padded_headers(headers: list[str], rows: list[Any], idx: Any) -> tuple[list[str], int]:
+    """Tabulate's empty headers for the first columns (the row length after the index)."""
+    headers_pad = 0
+    if headers and len(rows) > 0:
+        first = rows[0]
+        n = len(first)
+        if idx is not None and not _is_separating_line(first):
+            n += 1
+        headers_pad = max(0, n - len(headers))
+        headers = [""] * headers_pad + headers
+    return headers, headers_pad
+
+
+_ROW_TYPES = (list, tuple, str)
+
+
+def _plain_rows(tabular_data: Any, headers: Any, showindex: Any) -> Any:
+    """``_normalize_tabular_data`` for a plain list of rows, without converting the rows.
+
+    For a ``list`` whose first row is a list, tuple or str, tabulate's normalisation only
+    reads the first row (for ``"keys"`` and ``"firstrow"``), turns every row into a list and
+    adds an index; the Rust side does those. Returns ``(rows, headers, headers_pad, index)``,
+    or ``None`` for any other input.
+    """
+    if type(tabular_data) is not list:
+        return None
+    rows = tabular_data
+    if rows and type(rows[0]) not in _ROW_TYPES:
+        return None
+    try:
+        bool(headers)
+    except ValueError:  # numpy.ndarray, pandas.core.index.Index, ...
+        headers = list(headers)
+    if headers == "keys":
+        headers = list(map(str, range(len(rows[0])))) if rows else []
+    elif headers == "firstrow":
+        if rows:
+            headers = rows[0]
+            rows = rows[1:]
+            if rows and type(rows[0]) not in _ROW_TYPES:
+                return None
+        else:
+            headers = []
+    headers = list(map(str, headers))
+    idx = _index_for(showindex, None, rows)
+    if idx is False:
+        return None
+    headers, headers_pad = _padded_headers(headers, rows, idx)
+    return rows, headers, headers_pad, idx
+
+
+def _frame_rows(tabular_data: Any, headers: Any, showindex: Any) -> Any:
+    """``_normalize_tabular_data`` for a pandas DataFrame of floats, signed ints or objects.
+
+    tabulate builds its rows with ``[list(row) for row in df.values]``. For these dtypes
+    ``df.values.tolist()`` gives objects tabulate types and formats the same way (numpy
+    formats its float and int scalars through Python's own), so the rows come from that.
+    Unsigned ints and booleans, which tabulate types as floats, are left to the slow path.
+    """
+    if not (hasattr(tabular_data, "keys") and hasattr(tabular_data, "values")):
+        return None
+    if callable(tabular_data.values) or not hasattr(tabular_data, "index"):
+        return None
+    vals = tabular_data.values
+    kind = getattr(getattr(vals, "dtype", None), "kind", None)
+    if getattr(vals, "ndim", None) != 2 or kind not in ("f", "i", "O"):
+        return None
+    try:
+        bool(headers)
+    except ValueError:  # numpy.ndarray, pandas.core.index.Index, ...
+        headers = list(headers)
+    keys = list(tabular_data)
+    if showindex in ["default", "always", True] and tabular_data.index.name is not None:
+        if isinstance(tabular_data.index.name, list):
+            keys[:0] = tabular_data.index.name
+        else:
+            keys[:0] = [tabular_data.index.name]
+    index = list(tabular_data.index)
+    rows = vals.tolist()
+    if headers == "keys":
+        headers = list(map(str, keys))  # headers should be strings
+    if headers == "firstrow" and len(rows) > 0:
+        headers = [index[0]] + list(rows[0])  # noqa: RUF005 (tabulate's code)
+        index = index[1:]
+        rows = rows[1:]
+    elif headers == "firstrow":
+        headers = []
+    headers = list(map(str, headers))
+    idx = _index_for(showindex, index, rows)
+    if idx is False:
+        return None
+    headers, headers_pad = _padded_headers(headers, rows, idx)
+    return rows, headers, headers_pad, idx
+
+
+def _with_index(rows: list[Any], index: Any) -> list[Any]:
+    """`rows` with the index column added as tabulate adds it (for handing a call over)."""
+    if index is None:
+        return rows
+    return _prepend_row_index([r if _is_separating_line(r) else list(r) for r in rows], index)
+
+
 def _real_module() -> Any:
     real = sys.modules.get("tabulate")
     if getattr(real, "__pyroid__", False):
@@ -604,13 +753,15 @@ def _real_module() -> Any:
     return real
 
 
-def _delegate_normalized(reason: str, normalized: Any, options: dict[str, Any]) -> str:
+def _delegate_normalized(
+    reason: str, normalized: Callable[[], Any], options: dict[str, Any]
+) -> str:
     """Hand a call whose input was already normalised to the real tabulate.
 
     The input may have been a generator, so tabulate gets the normalised rows and headers
     (which it normalises to themselves) and no index.
     """
-    rows, headers = normalized
+    rows, headers = normalized()
     real = _real_tabulate(reason)
     kwargs = dict(_for_real(real, options), headers=headers, showindex=False)
     return real.tabulate(rows, **kwargs)  # type: ignore[no-any-return]

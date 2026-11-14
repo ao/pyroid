@@ -96,6 +96,19 @@ pub fn has_cr_lf(s: &str) -> bool {
     s.bytes().any(|b| b == b'\n' || b == b'\r')
 }
 
+/// Does `s` hold an ESC, and does it hold `\r` or `\n`?
+#[inline]
+pub fn esc_and_newline(s: &str) -> (bool, bool) {
+    let b = s.as_bytes();
+    if memchr::memchr3(0x1b, b'\n', b'\r', b).is_none() {
+        return (false, false);
+    }
+    (
+        memchr::memchr(0x1b, b).is_some(),
+        memchr::memchr2(b'\n', b'\r', b).is_some(),
+    )
+}
+
 /// `s * n`.
 #[inline]
 pub fn repeat(s: &str, n: isize) -> String {

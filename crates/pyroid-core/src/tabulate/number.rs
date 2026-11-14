@@ -274,6 +274,17 @@ pub fn str_type(s: &str, numparse: bool, max_digits: usize, unicode_ok: bool) ->
     if !numparse {
         return Some(ColType::Str);
     }
+    // int(), float() and the thousands regex all need one of these first (after spaces).
+    if let Some(&c) = s.as_bytes().iter().find(|&&b| !is_c_space(b)) {
+        if c.is_ascii()
+            && !matches!(
+                c,
+                b'0'..=b'9' | b'+' | b'-' | b'.' | b'i' | b'I' | b'n' | b'N'
+            )
+        {
+            return Some(ColType::Str);
+        }
+    }
     if !s.is_ascii() {
         // The thousands regex is ASCII-only, so only int() and float() could accept it.
         return if may_be_number(s, unicode_ok) {
@@ -295,6 +306,9 @@ pub fn str_type(s: &str, numparse: bool, max_digits: usize, unicode_ok: bool) ->
 /// tabulate's `_afterpoint(s)`: digits after the decimal point (or after the `e`), `-1` for
 /// non-numbers and ints; `None` means "ask Python".
 pub fn afterpoint(s: &str, max_digits: usize, unicode_ok: bool) -> Option<isize> {
+    if let Some(n) = afterpoint_plain(s, max_digits) {
+        return Some(n);
+    }
     if !s.is_ascii() {
         return if may_be_number(s, unicode_ok) {
             None
@@ -312,6 +326,50 @@ pub fn afterpoint(s: &str, max_digits: usize, unicode_ok: bool) -> Option<isize>
     Some(pos.map_or(-1, |p| {
         isize::try_from(s.len() - p - 1).unwrap_or(isize::MAX)
     }))
+}
+
+/// `_afterpoint` for text that is plainly a decimal literal (`[+-]?d*(.d*)?([eE][+-]?ddd)?`,
+/// far from overflow): the common case, without parsing the value. `None` for anything else.
+fn afterpoint_plain(s: &str, max_digits: usize) -> Option<isize> {
+    let b = s.as_bytes();
+    let digits = |from: usize| b[from..].iter().take_while(|c| c.is_ascii_digit()).count();
+    let mut i = usize::from(matches!(b.first(), Some(b'+' | b'-')));
+    let int_digits = digits(i);
+    i += int_digits;
+    let mut dot = None;
+    let mut frac_digits = 0;
+    if b.get(i) == Some(&b'.') {
+        dot = Some(i);
+        frac_digits = digits(i + 1);
+        i += 1 + frac_digits;
+    }
+    if int_digits + frac_digits == 0 || int_digits > 300 {
+        return None;
+    }
+    let mut exp = None;
+    if matches!(b.get(i), Some(b'e' | b'E')) {
+        let at = i;
+        i += 1 + usize::from(matches!(b.get(i + 1), Some(b'+' | b'-')));
+        let n = digits(i);
+        if n == 0 || n > 2 {
+            return None;
+        }
+        // At most 300 + 99 digits before the point: keep clear of overflow to inf.
+        if int_digits + 99 > 300 {
+            return None;
+        }
+        i += n;
+        exp = Some(at);
+    }
+    if i != b.len() {
+        return None;
+    }
+    if dot.is_none() && exp.is_none() {
+        // An int (int() takes it, within the digit limit).
+        return (max_digits == 0 || int_digits <= max_digits).then_some(-1);
+    }
+    let pos = dot.or(exp)?;
+    isize::try_from(b.len() - pos - 1).ok()
 }
 
 #[cfg(test)]
@@ -432,5 +490,37 @@ mod tests {
         assert_eq!(a("1e+05"), Some(3));
         assert_eq!(a("inf"), Some(-1));
         assert_eq!(a(""), Some(-1));
+        assert_eq!(a("1."), Some(0));
+        assert_eq!(a(".5"), Some(1));
+        assert_eq!(a("-.5e3"), Some(3));
+        assert_eq!(a("1e5"), Some(1));
+        assert_eq!(a("1e400"), Some(-1));
+        assert_eq!(a(&format!("{}e99", "9".repeat(250))), Some(-1));
+        assert_eq!(a(" 1.5"), Some(1));
+        assert_eq!(a("1,234"), Some(-1));
+        assert_eq!(afterpoint(&"1".repeat(4301), 4300, true), Some(-1));
+        // The plain fast path and the general one agree.
+        let general = |s: &str| -> isize {
+            if !(is_number(s, true) == Tri::Yes || thousands_match(s))
+                || int_ok_ascii(s.as_bytes(), 4300)
+            {
+                return -1;
+            }
+            let pos = s.rfind('.').or_else(|| s.to_ascii_lowercase().rfind('e'));
+            pos.map_or(-1, |p| isize::try_from(s.len() - p - 1).unwrap())
+        };
+        for s in [
+            "12",
+            "-3.25",
+            "1.5e+06",
+            "+.5",
+            "0.000",
+            "1e-05",
+            "123456.789",
+            "5.",
+            "-0",
+        ] {
+            assert_eq!(afterpoint_plain(s, 4300), Some(general(s)), "{s}");
+        }
     }
 }
