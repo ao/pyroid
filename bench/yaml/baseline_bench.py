@@ -210,6 +210,7 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--impl", action="append", help="only these implementations")
     ap.add_argument("--inputs", default="corpus,1mb,10mb,100mb")
+    ap.add_argument("--label", default="indicative (shared machine)", help="the machine, for the result")
     a = ap.parse_args()
 
     recs = [json.loads(line) for line in a.index.read_text().splitlines()]
@@ -224,7 +225,7 @@ def main() -> int:
     impls = a.impl or LOADS + DUMPS
     tmp = a.out.parent / "bench-tmp"
     tmp.mkdir(parents=True, exist_ok=True)
-    result = {"machine": machine(), "label": "indicative (shared machine)", "cells": []}
+    result = {"machine": machine(), "label": a.label, "cells": []}
     for name in a.inputs.split(","):
         files, rep = inputs[name]
         for impl in impls:

@@ -104,11 +104,12 @@ safe loaders and dumpers are about 1 to 2% of `safe_load`, `load` and `dump` cal
 ## Speed
 
 On 11,878 real YAML files (343 MB: GitHub Actions workflows, Kubernetes and Helm files, OpenAPI
-specs, model and dataset cards), `safe_load` runs 6.8x faster than PyYAML with `CSafeLoader` and
-44x faster than the default `SafeLoader`, and `safe_dump` 6.1x faster than `CSafeDumper` and 25x
-faster than `SafeDumper`. A 300-byte document loads in 24 µs (`CSafeLoader`: 116 µs). These are
-indicative numbers from a shared AWS EC2 c8g.16xlarge (Graviton4), CPython 3.12; the
-[benchmarks page](../benchmarks.md#pyroidyaml) has the tables.
+specs, model and dataset cards), `safe_load` runs 10x faster than PyYAML with `CSafeLoader` and
+44x faster than the default `SafeLoader`, and `safe_dump` 5.4x faster than `CSafeDumper` and 21x
+faster than `SafeDumper`. On single files of 1 to 100 MB, loading is 5.1x to 7.7x faster than
+`CSafeLoader`. A 300-byte document loads in 19 µs (`CSafeLoader`: 105 µs). Measured on a
+dedicated AWS EC2 c7i.4xlarge, CPython 3.12; the [benchmarks page](../benchmarks.md#pyroidyaml)
+has the tables.
 
 `safe_load` releases the GIL while it parses a document of 4 KiB or more; building the Python
 objects needs the interpreter. pyroid.yaml runs on free-threaded CPython without enabling the GIL.

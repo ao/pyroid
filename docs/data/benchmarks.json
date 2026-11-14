@@ -131,30 +131,30 @@
     {
       "title": "pyroid.yaml",
       "guide": "yaml",
-      "label": "AWS EC2 c8g.16xlarge (Graviton4, 64 vCPU), shared with other jobs, indicative",
-      "note": "MB/s of YAML read (loads) or written (dumps), each cell in a fresh process, CPython 3.12.16 with PyYAML 6.0.3 and libyaml 0.2.5; load average 4 to 28. The corpus is the 11,878 files of the parity corpus that PyYAML loads (343 MB); the 1, 10 and 100 MB files concatenate real ones.",
+      "label": "AWS EC2 c7i.4xlarge (Intel Xeon Sapphire Rapids, 16 vCPU), dedicated, nothing else running",
+      "note": "MB/s of YAML read (loads) or written (dumps), one process at a time, each cell in a fresh one, CPython 3.12.16 with PyYAML 6.0.3 and libyaml 0.2.5; load average at most 1.07 (the benchmark itself). The corpus is the 11,878 files of the parity corpus that PyYAML loads (343 MB); the 1, 10 and 100 MB files concatenate real ones.",
       "columns": ["Input", "pyroid `safe_load_all`", "`SafeLoader`", "`CSafeLoader`", "vs `CSafeLoader`", "pyroid `safe_dump_all`", "`SafeDumper`", "`CSafeDumper`", "vs `CSafeDumper`"],
       "rows": [
-        ["corpus, 11,878 files", "41.8", "0.94", "6.17", "6.8×", "44.0", "1.78", "7.27", "6.1×"],
-        ["1 MB file", "65.1", "1.27", "13.5", "4.8×", "46.0", "1.68", "8.26", "5.6×"],
-        ["10 MB file", "44.6", "1.01", "8.88", "5.0×", "43.7", "1.66", "8.03", "5.4×"],
-        ["100 MB file", "40.8", "0.96", "6.36", "6.4×", "41.3", "1.66", "7.93", "5.2×"]
+        ["corpus, 11,878 files", "42.9", "0.97", "4.15", "10.3×", "37.7", "1.82", "7.01", "5.4×"],
+        ["1 MB file", "76.5", "1.50", "14.9", "5.1×", "46.0", "1.76", "8.90", "5.2×"],
+        ["10 MB file", "52.1", "1.16", "9.57", "5.4×", "43.1", "1.78", "8.75", "4.9×"],
+        ["100 MB file", "42.8", "1.06", "5.54", "7.7×", "40.0", "1.79", "8.73", "4.6×"]
       ],
-      "footnote": "For context, on the same inputs: ruamel.yaml 0.19.1's pure-Python safe loader 0.69, 0.98, 0.76 and 0.73 MB/s; with ruamel.yaml.clib 0.2.15, 3.62 and 6.62 MB/s on the corpus and the 1 MB file (42 corpus files and the 10 and 100 MB files raise); rapidyaml 0.15.2's `parse_in_arena`, which builds a parse tree but no Python objects, 205, 251, 213 and 152 MB/s. ruamel.yaml reads YAML 1.2, so its results differ from PyYAML's.",
-      "source": "bench/yaml/baseline_bench.py, run on 2026-11-14 (bench/results/aws-c8g.16xlarge-shared/2026-11-14/yaml-corpus.json)"
+      "footnote": "For context, on the same inputs: ruamel.yaml 0.19.1's pure-Python safe loader 0.65, 1.02, 0.78 and 0.72 MB/s; with ruamel.yaml.clib 0.2.15, 3.20 and 7.42 MB/s on the corpus and the 1 MB file (42 corpus files and the 10 and 100 MB files raise); rapidyaml 0.15.2's `parse_in_arena`, which builds a parse tree but no Python objects, 156, 202, 167 and 112 MB/s (66 corpus files raise). ruamel.yaml reads YAML 1.2, so its results differ from PyYAML's.",
+      "source": "bench/yaml/baseline_bench.py, run on 2026-11-14 (bench/results/aws-c7i.4xlarge/2026-11-14/yaml-corpus.json)"
     },
     {
       "title": "pyroid.yaml: small documents",
       "guide": "yaml",
-      "label": "AWS EC2 c8g.16xlarge (Graviton4, 64 vCPU), shared with other jobs, indicative",
-      "note": "Time per call, best of 7 rounds interleaved in one process, load average 3.5; the 2 KB document is a GitHub Actions workflow.",
+      "label": "AWS EC2 c7i.4xlarge (Intel Xeon Sapphire Rapids, 16 vCPU), dedicated, nothing else running",
+      "note": "Time per call, best of 7 rounds interleaved in one process; the 2 KB document is a GitHub Actions workflow.",
       "columns": ["Document", "pyroid `safe_load`", "`CSafeLoader`", "`SafeLoader`", "pyroid `safe_dump`", "`CSafeDumper`", "`SafeDumper`"],
       "rows": [
-        ["5 bytes", "4.0 µs", "8.9 µs", "46 µs", "4.8 µs", "9.1 µs", "25 µs"],
-        ["300 bytes", "24 µs", "116 µs", "893 µs", "8.2 µs", "33 µs", "112 µs"],
-        ["2 KB", "77 µs", "354 µs", "3,186 µs", "24 µs", "118 µs", "520 µs"]
+        ["5 bytes", "3.4 µs", "8.0 µs", "49 µs", "4.6 µs", "8.4 µs", "32 µs"],
+        ["300 bytes", "19 µs", "105 µs", "843 µs", "8.0 µs", "31 µs", "131 µs"],
+        ["2 KB", "60 µs", "321 µs", "2,913 µs", "23 µs", "112 µs", "518 µs"]
       ],
-      "source": "bench/yaml/small_docs_bench.py, run on 2026-11-14"
+      "source": "bench/yaml/small_docs_bench.py, run on 2026-11-14 (bench/results/aws-c7i.4xlarge/2026-11-14/yaml-small-docs.md)"
     },
     {
       "title": "pyroid.datasketch: MinHash signatures",
