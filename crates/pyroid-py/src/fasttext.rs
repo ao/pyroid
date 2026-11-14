@@ -724,6 +724,7 @@ fn tokenize(text: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
 /// passes it when one of them is the installed ``fasttext``).
 #[pyfunction]
 #[pyo3(signature = (path, *, _upstream = false))]
+#[allow(clippy::used_underscore_binding)] // the keyword's name: private to pyroid.fasttext
 fn load_model(py: Python<'_>, path: PathBuf, _upstream: bool) -> PyResult<Model> {
     let inner = py
         .detach(|| ft::Model::load(&path))
