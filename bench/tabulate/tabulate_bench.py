@@ -19,12 +19,12 @@ import sys
 import time
 from typing import Any
 
-import tabulate as ref
-
 import pyroid
 import pyroid.tabulate as pt
 
-WORDS = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor".split()
+import tabulate as ref
+
+WORDS = ["lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit", "sed", "do"]
 
 
 def make(n: int, cols: int, kind: str, seed: int = 1) -> list[list[Any]]:
@@ -43,7 +43,9 @@ def make(n: int, cols: int, kind: str, seed: int = 1) -> list[list[Any]]:
                 else:
                     row.append(" ".join(rnd.choice(WORDS) for _ in range(rnd.randint(1, 4))))
             else:  # mixed
-                row.append([f"name{i}", i, rnd.random() * 100, None if i % 7 == 0 else "x" * (i % 5), str(i)][j % 5])
+                row.append(
+                    [f"name{i}", i, rnd.random() * 100, None if i % 7 == 0 else "x" * (i % 5), str(i)][j % 5]
+                )
         rows.append(row)
     return rows
 
@@ -77,10 +79,25 @@ def main() -> None:
                 want = ref.tabulate(data, headers=headers, tablefmt=fmt)
                 got = pt.tabulate(data, headers=headers, tablefmt=fmt)
                 assert got == want, (size, kind, fmt)
-                t_ref = best(lambda: ref.tabulate(data, headers=headers, tablefmt=fmt), reps_ref)
-                t_new = best(lambda: pt.tabulate(data, headers=headers, tablefmt=fmt), reps_new)
-                results.append({"size": size, "rows": n, "cols": cols, "kind": kind, "format": fmt, "tabulate_s": t_ref, "pyroid_s": t_new})
-                print(f"{size:6} {n:>7}x{cols:<2} {kind:7} {fmt:7} tabulate {t_ref*1e3:10.3f} ms  pyroid {t_new*1e3:9.3f} ms  {t_ref/t_new:6.1f}x", flush=True)
+                t_ref = best(
+                    lambda d=data, h=headers, f=fmt: ref.tabulate(d, headers=h, tablefmt=f), reps_ref
+                )
+                t_new = best(lambda d=data, h=headers, f=fmt: pt.tabulate(d, headers=h, tablefmt=f), reps_new)
+                results.append(
+                    {
+                        "size": size,
+                        "rows": n,
+                        "cols": cols,
+                        "kind": kind,
+                        "format": fmt,
+                        "tabulate_s": t_ref,
+                        "pyroid_s": t_new,
+                    }
+                )
+                print(
+                    f"{size:6} {n:>7}x{cols:<2} {kind:7} {fmt:7} tabulate {t_ref * 1e3:10.3f} ms  pyroid {t_new * 1e3:9.3f} ms  {t_ref / t_new:6.1f}x",
+                    flush=True,
+                )
     try:
         import pandas as pd
     except ImportError:
@@ -94,10 +111,27 @@ def main() -> None:
                 assert got == want, (size, kind)
                 reps_ref = 200 if n <= 5 else (5 if n <= 1000 else 1)
                 reps_new = 2000 if n <= 5 else (20 if n <= 1000 else 3)
-                t_ref = best(lambda: ref.tabulate(df, headers="keys", tablefmt="pipe", showindex=True), reps_ref)
-                t_new = best(lambda: pt.tabulate(df, headers="keys", tablefmt="pipe", showindex=True), reps_new)
-                results.append({"size": size, "rows": n, "cols": cols, "kind": f"dataframe-{kind}", "format": "to_markdown", "tabulate_s": t_ref, "pyroid_s": t_new})
-                print(f"{size:6} {n:>7}x{cols:<2} df-{kind:4} to_markdown tabulate {t_ref*1e3:10.3f} ms  pyroid {t_new*1e3:9.3f} ms  {t_ref/t_new:6.1f}x", flush=True)
+                t_ref = best(
+                    lambda d=df: ref.tabulate(d, headers="keys", tablefmt="pipe", showindex=True), reps_ref
+                )
+                t_new = best(
+                    lambda d=df: pt.tabulate(d, headers="keys", tablefmt="pipe", showindex=True), reps_new
+                )
+                results.append(
+                    {
+                        "size": size,
+                        "rows": n,
+                        "cols": cols,
+                        "kind": f"dataframe-{kind}",
+                        "format": "to_markdown",
+                        "tabulate_s": t_ref,
+                        "pyroid_s": t_new,
+                    }
+                )
+                print(
+                    f"{size:6} {n:>7}x{cols:<2} df-{kind:4} to_markdown tabulate {t_ref * 1e3:10.3f} ms  pyroid {t_new * 1e3:9.3f} ms  {t_ref / t_new:6.1f}x",
+                    flush=True,
+                )
     if args.json:
         meta = {
             "python": sys.version.split()[0],

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import itertools
 import json
 import os
 from pathlib import Path
@@ -48,7 +49,7 @@ def _rows(name: str, entry: dict[str, Any]) -> list[list[str]]:
     data = path.read_bytes()
     assert hashlib.sha256(data).hexdigest() == entry["sha256"], name
     with path.open(encoding="utf-8", newline="") as f:
-        return [row for _, row in zip(range(MAX_ROWS + 1), csv.reader(f))]
+        return list(itertools.islice(csv.reader(f), MAX_ROWS + 1))
 
 
 @pytest.mark.parametrize(("name", "entry"), FILES, ids=[n for n, _ in FILES])

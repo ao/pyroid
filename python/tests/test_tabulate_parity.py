@@ -128,9 +128,11 @@ def test_number_formats(values: list[Any], floatfmt: str, intfmt: str, fmt: str)
 
 _NUMBERISH = st.lists(
     st.sampled_from(
-        list("0123456789+-.,_eEinfatyINFATY \t\n\x0b\x0c\r\x1c")
-        + ["\u0661", "\u0662", "\uff10", "\uff15", "\xa0", "\u2028", "\u3000", "\xb2", "\xbd"]
-        + ["\u65e5", "\x1b[1m", "\x1b[0m"]
+        [
+            *"0123456789+-.,_eEinfatyINFATY \t\n\x0b\x0c\r\x1c",
+            *["\u0661", "\u0662", "\uff10", "\uff15", "\xa0", "\u2028", "\u3000", "\xb2"],
+            *["\xbd", "\u65e5", "\x1b[1m", "\x1b[0m"],
+        ]
     ),
     max_size=10,
 ).map("".join)

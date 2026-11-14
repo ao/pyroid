@@ -443,20 +443,35 @@ def tabulate(
         "break_on_hyphens": break_on_hyphens,
     }
     # Alignment lists are read once (tabulate iterates them once too).
-    if isinstance(colalign, Iterable) and not isinstance(colalign, str):
+    if colalign is not None and isinstance(colalign, Iterable) and not isinstance(colalign, str):
         colalign = options["colalign"] = list(colalign)
-    if isinstance(headersalign, Iterable) and not isinstance(headersalign, str):
+    if (
+        headersalign is not None
+        and isinstance(headersalign, Iterable)
+        and not isinstance(headersalign, str)
+    ):
         headersalign = options["headersalign"] = list(headersalign)
     tf_types = _table_format_types()
     is_tf = isinstance(tablefmt, tf_types)
     try:
-        if not all(
-            _simple_align(a) for a in (numalign, stralign, colglobalalign, headersglobalalign)
-        ) or not all(
-            _simple_align(a)
-            for seq in (colalign, headersalign)
-            if isinstance(seq, list)
-            for a in seq
+        plain_aligns = (
+            type(numalign) is str
+            and type(stralign) is str
+            and colglobalalign is None
+            and headersglobalalign is None
+            and colalign is None
+            and headersalign is None
+        )
+        if not plain_aligns and (
+            not all(
+                _simple_align(a) for a in (numalign, stralign, colglobalalign, headersglobalalign)
+            )
+            or not all(
+                _simple_align(a)
+                for seq in (colalign, headersalign)
+                if isinstance(seq, list)
+                for a in seq
+            )
         ):
             raise _UnsupportedError("an alignment that is not a str")
         if type(MIN_PADDING) is not int:
@@ -600,6 +615,15 @@ def tabulate(
         rowalign=rowalign,
         raw_rows=fast is not None,
         index=index,
+        simple_options=(
+            type(disable_numparse) is bool
+            and type(floatfmt) is str
+            and type(intfmt) is str
+            and type(missingval) is str
+            and colalign is None
+            and headersalign is None
+            and (rowalign is None or type(rowalign) is str)
+        ),
     )
     text, multiline, empty = _native.render(list_of_lists, headers, separating_lines, call)
     if text is None:

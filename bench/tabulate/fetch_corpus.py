@@ -24,22 +24,68 @@ VEGA = "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccb
 DATAHUB = "https://raw.githubusercontent.com/datasets/"
 
 FILES = {
-    **{f"seaborn-{n}": SEABORN + f"{n}.csv" for n in (
-        "anagrams", "anscombe", "attention", "brain_networks", "car_crashes", "diamonds", "dots",
-        "dowjones", "exercise", "flights", "fmri", "geyser", "glue", "healthexp", "iris", "mpg",
-        "penguins", "planets", "seaice", "taxis", "tips", "titanic",
-    )},
-    **{f"vega-{n}": VEGA + f"{n}.csv" for n in (
-        "airports", "bird-migration", "birdstrikes", "co2-concentration", "disasters",
-        "flights-airport", "gapminder-health-income", "github", "global-temp", "iowa-electricity",
-        "la-riots", "population_engineers_hurricanes", "seattle-weather", "sp500-2000", "sp500",
-        "species", "stocks", "us-employment", "weather", "windvectors", "zipcodes",
-    )},
-    "datahub-airport-codes": DATAHUB + "airport-codes/0ebaf2a8ab955eb542f84b7b5960ecf563f64edc/data/airport-codes.csv",
+    **{
+        f"seaborn-{n}": SEABORN + f"{n}.csv"
+        for n in (
+            "anagrams",
+            "anscombe",
+            "attention",
+            "brain_networks",
+            "car_crashes",
+            "diamonds",
+            "dots",
+            "dowjones",
+            "exercise",
+            "flights",
+            "fmri",
+            "geyser",
+            "glue",
+            "healthexp",
+            "iris",
+            "mpg",
+            "penguins",
+            "planets",
+            "seaice",
+            "taxis",
+            "tips",
+            "titanic",
+        )
+    },
+    **{
+        f"vega-{n}": VEGA + f"{n}.csv"
+        for n in (
+            "airports",
+            "bird-migration",
+            "birdstrikes",
+            "co2-concentration",
+            "disasters",
+            "flights-airport",
+            "gapminder-health-income",
+            "github",
+            "global-temp",
+            "iowa-electricity",
+            "la-riots",
+            "population_engineers_hurricanes",
+            "seattle-weather",
+            "sp500-2000",
+            "sp500",
+            "species",
+            "stocks",
+            "us-employment",
+            "weather",
+            "windvectors",
+            "zipcodes",
+        )
+    },
+    "datahub-airport-codes": DATAHUB
+    + "airport-codes/0ebaf2a8ab955eb542f84b7b5960ecf563f64edc/data/airport-codes.csv",
     "datahub-gdp": DATAHUB + "gdp/36d761dc5617982d3e50b213e02b9a1b47c4e958/data/gdp.csv",
-    "datahub-sp500-constituents": DATAHUB + "s-and-p-500-companies/05c998c3e714b8dc9b621239bbdef92bccefc376/data/constituents.csv",
-    "datahub-country-codes": DATAHUB + "country-codes/2d84034a0cae19ea5444b78c2131304a5c7f4bb9/data/country-codes.csv",
-    "datahub-covid-countries-aggregated": DATAHUB + "covid-19/bdd76cfa0d80a132898345bc21939f89b2e29137/data/countries-aggregated.csv",
+    "datahub-sp500-constituents": DATAHUB
+    + "s-and-p-500-companies/05c998c3e714b8dc9b621239bbdef92bccefc376/data/constituents.csv",
+    "datahub-country-codes": DATAHUB
+    + "country-codes/2d84034a0cae19ea5444b78c2131304a5c7f4bb9/data/country-codes.csv",
+    "datahub-covid-countries-aggregated": DATAHUB
+    + "covid-19/bdd76cfa0d80a132898345bc21939f89b2e29137/data/countries-aggregated.csv",
 }
 
 
@@ -53,7 +99,7 @@ def main() -> None:
     for name, url in sorted(FILES.items()):
         path = out / f"{name}.csv"
         if not path.is_file():
-            with urllib.request.urlopen(url, timeout=60) as r:  # noqa: S310 (fixed https URLs)
+            with urllib.request.urlopen(url, timeout=60) as r:
                 path.write_bytes(r.read())
         data = path.read_bytes()
         digest = hashlib.sha256(data).hexdigest()

@@ -19,6 +19,7 @@ use std::borrow::Cow;
 use pyo3::exceptions::{PyIndexError, PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedStr;
+use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBool, PyBytes, PyFloat, PyInt, PyList, PyString, PyTuple};
 use pyroid_core::tabulate::number::{self, ColType};
 use pyroid_core::tabulate::pyfmt::{self, Spec};
@@ -97,6 +98,33 @@ fn tp_name(obj: &Bound<'_, PyAny>) -> String {
     }
 }
 
+/// `type(None)`, `bool`, `int`, `float`, `bytes`, `str` and `list`, looked up once.
+static TYPES: PyOnceLock<[Py<PyAny>; 7]> = PyOnceLock::new();
+
+fn builtin_types(py: Python<'_>) -> PyResult<&[Py<PyAny>; 7]> {
+    TYPES.get_or_try_init(py, || {
+        let b = py.import("builtins")?;
+        Ok::<_, PyErr>([
+            py.None().into_bound(py).get_type().into_any().unbind(),
+            b.getattr("bool")?.unbind(),
+            b.getattr("int")?.unbind(),
+            b.getattr("float")?.unbind(),
+            b.getattr("bytes")?.unbind(),
+            b.getattr("str")?.unbind(),
+            b.getattr("list")?.unbind(),
+        ])
+    })
+}
+
+/// The built-in formats, built once.
+static BUILTIN_FORMATS: std::sync::LazyLock<FxHashMap<&'static str, TableFormat>> =
+    std::sync::LazyLock::new(|| {
+        table::FORMAT_NAMES
+            .iter()
+            .map(|&n| (n, table::builtin(n).expect("every name is built in")))
+            .collect()
+    });
+
 /// What the Python call object provides.
 struct Call<'py> {
     obj: Bound<'py, PyAny>,
@@ -116,7 +144,7 @@ impl<'py> Call<'py> {
         let py = obj.py();
         let wcswidth = obj.getattr("wcswidth")?;
         let np: Vec<(Bound<'py, PyAny>, bool)> = obj.getattr("numpy_types")?.extract()?;
-        let builtins = py.import("builtins")?;
+        let t = builtin_types(py)?;
         Ok(Self {
             type_fn: obj.getattr("type_fn")?,
             format_fn: obj.getattr("format_fn")?,
@@ -134,12 +162,12 @@ impl<'py> Call<'py> {
                 .map(|(t, is_int)| (t.as_ptr() as usize, *is_int))
                 .collect(),
             types: [
-                py.None().into_bound(py).get_type().into_any(),
-                builtins.getattr("bool")?,
-                builtins.getattr("int")?,
-                builtins.getattr("float")?,
-                builtins.getattr("bytes")?,
-                builtins.getattr("str")?,
+                t[0].bind(py).clone(),
+                t[1].bind(py).clone(),
+                t[2].bind(py).clone(),
+                t[3].bind(py).clone(),
+                t[4].bind(py).clone(),
+                t[5].bind(py).clone(),
             ],
             obj: obj.clone(),
         })
@@ -280,12 +308,15 @@ fn piece(out: &Bound<'_, PyAny>) -> FResult<Piece> {
 fn table_format<'py>(
     desc: &Bound<'py, PyAny>,
     callables: &mut Vec<Bound<'py, PyAny>>,
-) -> FResult<TableFormat> {
+) -> FResult<Cow<'static, TableFormat>> {
     let t = desc.cast::<PyTuple>().map_err(PyErr::from)?;
     let kind: PyBackedStr = t.get_item(0)?.extract()?;
     if &*kind == "builtin" {
         let name: PyBackedStr = t.get_item(1)?.extract()?;
-        return table::builtin(&name).ok_or(Fail::Unsupported("an unknown built-in format"));
+        return BUILTIN_FORMATS
+            .get(&*name)
+            .map(Cow::Borrowed)
+            .ok_or(Fail::Unsupported("an unknown built-in format"));
     }
     let mut field = |i: usize, line: bool| -> FResult<(Option<LineFmt>, Option<RowFmt>)> {
         let d = t.get_item(i)?;
@@ -391,7 +422,7 @@ fn table_format<'py>(
     let padding: isize = t.get_item(7)?.extract()?;
     let hide: [bool; 4] = t.get_item(8)?.extract()?;
     let mut it = lines.into_iter();
-    Ok(TableFormat {
+    Ok(Cow::Owned(TableFormat {
         lineabove: it.next().expect("4"),
         linebelowheader: it.next().expect("4"),
         linebetweenrows: it.next().expect("4"),
@@ -400,7 +431,7 @@ fn table_format<'py>(
         datarow,
         padding,
         hide,
-    })
+    }))
 }
 
 /// A simple alignment value (`str`, `None` or `bool`; the Python side delegates others).
@@ -745,7 +776,7 @@ fn render_inner<'py>(
     // Raw rows (a plain list given to tabulate): tabulate's `list(r)` for each row, and
     // `_remove_separating_lines` on the result, as its normalisation does.
     let raw = call.flag("raw_rows")?;
-    let list_type = py.import("builtins")?.getattr("list")?;
+    let list_type = builtin_types(py)?[6].bind(py);
     let index_obj = call.obj.getattr("index")?;
     let index: Option<Bound<'py, PyList>> = if raw && !index_obj.is_none() {
         Some(index_obj.cast_into::<PyList>().map_err(PyErr::from)?)
@@ -904,9 +935,20 @@ fn render_inner<'py>(
         unicode_ok,
     };
 
+    // Plain option values (no lists, nothing that can warn or raise): the option lists are
+    // computed here, as the call object's methods would.
+    let simple = call.flag("simple_options")?;
+    let opt = |name: &str| call.obj.getattr(name);
+
     // Column types (`_column_type(col, numparse=np)`: `_type` strips ANSI codes always).
-    let numparses: Vec<Bound<'py, PyAny>> =
-        call.obj.call_method1("numparses", (ncols,))?.extract()?;
+    let numparses: Vec<Bound<'py, PyAny>> = if simple {
+        let np = PyBool::new(py, !opt("disable_numparse")?.is_truthy()?)
+            .to_owned()
+            .into_any();
+        vec![np; ncols]
+    } else {
+        call.obj.call_method1("numparses", (ncols,))?.extract()?
+    };
     let mut coltypes = Vec::with_capacity(ncols);
     for (j, col) in cols.iter().enumerate() {
         let np_obj = numparses
@@ -938,9 +980,15 @@ fn render_inner<'py>(
     }
 
     // Per-column formats, then the cells as text.
-    let formats = call.obj.call_method1("formats", (ncols,))?;
-    let (float_formats, int_formats, missing_vals): (Objs<'py>, Objs<'py>, Objs<'py>) =
-        formats.extract()?;
+    let (float_formats, int_formats, missing_vals): (Objs<'py>, Objs<'py>, Objs<'py>) = if simple {
+        (
+            vec![opt("floatfmt")?; ncols],
+            vec![opt("intfmt")?; ncols],
+            vec![opt("missingval")?; ncols],
+        )
+    } else {
+        call.obj.call_method1("formats", (ncols,))?.extract()?
+    };
     let mut arenas: Vec<String> = Vec::with_capacity(ncols);
     let mut fmts: Vec<Vec<Fmt<'_>>> = Vec::with_capacity(ncols);
     for (j, col) in cols.iter().enumerate() {
@@ -1015,7 +1063,25 @@ fn render_inner<'py>(
 
     // Alignments (the call object applies colglobalalign, colalign and warns like tabulate).
     let codes: Vec<u8> = coltypes.iter().map(|&t| t as u8).collect();
-    let aligns_obj = call.obj.call_method1("aligns", (codes,))?;
+    let aligns_obj = if simple {
+        let global = opt("colglobalalign")?;
+        let (num, text) = (opt("numalign")?, opt("stralign")?);
+        let items: Vec<Bound<'py, PyAny>> = coltypes
+            .iter()
+            .map(|t| {
+                if !global.is_none() {
+                    global.clone()
+                } else if t.is_numeric() {
+                    num.clone()
+                } else {
+                    text.clone()
+                }
+            })
+            .collect();
+        PyList::new(py, items)?.into_any()
+    } else {
+        call.obj.call_method1("aligns", (codes,))?
+    };
     let aligns = aligns_of(&aligns_obj)?;
     let colon = if is_multiline {
         call.flag("colon_multi")?
@@ -1076,8 +1142,21 @@ fn render_inner<'py>(
         } else {
             aligned_cols.len()
         };
-        let pair = call.obj.call_method1("header_aligns", (&aligns_obj, n_t))?;
-        let (a2, ah): (Bound<'py, PyAny>, Bound<'py, PyAny>) = pair.extract()?;
+        let (a2, ah): (Bound<'py, PyAny>, Bound<'py, PyAny>) = if simple {
+            let global = opt("headersglobalalign")?;
+            let ah = if !global.is_none() {
+                PyList::new(py, vec![global; n_t])?.into_any()
+            } else if aligns.is_empty() {
+                PyList::new(py, vec![opt("stralign")?; headers.len()])?.into_any()
+            } else {
+                aligns_obj.clone()
+            };
+            (aligns_obj.clone(), ah)
+        } else {
+            call.obj
+                .call_method1("header_aligns", (&aligns_obj, n_t))?
+                .extract()?
+        };
         final_aligns_obj = a2;
         header_aligns = aligns_of(&ah)?;
         header_aligns_obj = Some(ah);
@@ -1116,7 +1195,12 @@ fn render_inner<'py>(
     let nr = aligned_cols.iter().map(Vec::len).min().unwrap_or(0);
     let mut order: Vec<RowRef> = (0..nr).map(RowRef::Data).collect();
     // Only multiline rows compare the row alignments; the count matters either way.
-    let rowaligns_obj = call.obj.call_method1("rowaligns", (nr,))?;
+    let rowaligns_obj = if simple {
+        let r = opt("rowalign")?; // None or a str: _expand_iterable gives [rowalign] * nr
+        PyList::new(py, vec![r; nr])?.into_any()
+    } else {
+        call.obj.call_method1("rowaligns", (nr,))?
+    };
     let mut rowaligns = Vec::new();
     for a in rowaligns_obj.try_iter()? {
         let a = a?;
@@ -1134,7 +1218,7 @@ fn render_inner<'py>(
         }
     }
 
-    let fmt = if is_multiline {
+    let fmt: &TableFormat = if is_multiline {
         fmt_multi.as_ref().unwrap_or(&fmt_plain)
     } else {
         &fmt_plain
