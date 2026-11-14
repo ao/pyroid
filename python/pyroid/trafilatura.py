@@ -429,9 +429,11 @@ _NOT_HTML: Any = object()
 
 
 def _response_data(filecontent: Any) -> Any:
-    """What load_html reads: a response's ``data`` (any object with one but an lxml tree, as
-    trafilatura's check goes, so also ``numpy.str_``), else the input itself. ``_NOT_HTML``
-    where that ``data`` is neither str nor bytes."""
+    """What load_html reads: a response's ``data``, else the input itself.
+
+    A response is any object with ``data`` but an lxml tree, as trafilatura checks, so also
+    ``numpy.str_``. ``_NOT_HTML`` where that ``data`` is neither str nor bytes.
+    """
     kind = type(filecontent)
     if kind is str or kind is bytes or not hasattr(filecontent, "data"):
         return filecontent

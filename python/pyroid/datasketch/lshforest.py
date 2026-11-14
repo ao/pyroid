@@ -30,8 +30,11 @@ _ForestNative = _native._ForestNative
 
 
 class _NoValues:
-    """A stand-in MinHash with no native hash values: the native index then asks for its
-    band keys (restoring a datasketch pickle, where they are stored)."""
+    """A stand-in MinHash with no native hash values.
+
+    The native index then asks for its band keys (restoring a datasketch pickle, where they
+    are stored).
+    """
 
     hashvalues = None
 
@@ -223,8 +226,8 @@ class MinHashLSHForest:
         if "_index" in state:
             self.__dict__.update(state)
             return
-        l, k = state["l"], state["k"]
-        MinHashLSHForest.__init__(self, num_perm=k * l, l=l)
+        trees, k = state["l"], state["k"]
+        MinHashLSHForest.__init__(self, num_perm=k * trees, l=trees)
         self._minhash_scheme = state.get("_minhash_scheme")
         for key, hs in state["keys"].items():
             self._index.add(key, _NO_VALUES, lambda _m, hs=hs: list(hs))

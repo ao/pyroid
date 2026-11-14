@@ -186,7 +186,8 @@ def test_file_and_input_errors_are_one_line(
     rc = main(["clean", str(src), str(out), "--recipe", "fineweb", "--lid-model", str(tmp_path)])
     assert rc == 1
     msg = capsys.readouterr().err
-    assert msg.startswith("pyroid clean: ") and "Traceback" not in msg
+    assert msg.startswith("pyroid clean: ")
+    assert "Traceback" not in msg
 
 
 @pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and the environment")
@@ -588,7 +589,9 @@ def en_lid(tmp_path_factory: pytest.TempPathFactory) -> Path:
     finally:
         sys.path.pop(0)
     path = tmp_path_factory.mktemp("lid") / "en.bin"
-    path.write_bytes(build(dataclasses.replace(SPECS["softmax-dense"], labels=("__label__en",))).data)
+    path.write_bytes(
+        build(dataclasses.replace(SPECS["softmax-dense"], labels=("__label__en",))).data
+    )
     return path
 
 
@@ -609,7 +612,9 @@ def test_clean_into_one_file_from_inputs_with_other_schemas(tmp_path: Path, en_l
     src = tmp_path / "in"
     src.mkdir()
     a = pa.table({"text": [_english(i) for i in range(30)], "id": [f"a{i}" for i in range(30)]})
-    b = pa.table({"id": [f"b{i}" for i in range(30)], "text": [_english(100 + i) for i in range(30)]})
+    b = pa.table(
+        {"id": [f"b{i}" for i in range(30)], "text": [_english(100 + i) for i in range(30)]}
+    )
     c = b.append_column("source", pa.array(["x"] * 30)).rename_columns(["id", "text", "source"])
     for name, t in (("a", a), ("b", b), ("c", c)):
         pq.write_table(t.replace_schema_metadata(None), src / f"{name}.parquet")
@@ -617,7 +622,8 @@ def test_clean_into_one_file_from_inputs_with_other_schemas(tmp_path: Path, en_l
     assert main(["clean", str(src), str(tmp_path / "dir"), *common]) == 0
     assert main(["clean", str(src), str(tmp_path / "one.parquet"), *common]) == 0
     one = pq.read_table(tmp_path / "one.parquet")
-    assert one.column_names[:2] == ["text", "id"] and "source" in one.column_names
+    assert one.column_names[:2] == ["text", "id"]
+    assert "source" in one.column_names
     want = [
         {**dict.fromkeys(one.column_names), **row}
         for n in ("a", "b", "c")

@@ -29,10 +29,63 @@ pytestmark = [
 PARTS = 12
 DOCS_PER_PART = 2_500
 WORDS = (
-    "the of and to in a is that for it as was with be by on not he this are or his from "
-    "at which but have an they you were her she there one all we can their has been if more "
-    "when will would who so no time people city river music water history"
-).split()
+    "the",
+    "of",
+    "and",
+    "to",
+    "in",
+    "a",
+    "is",
+    "that",
+    "for",
+    "it",
+    "as",
+    "was",
+    "with",
+    "be",
+    "by",
+    "on",
+    "not",
+    "he",
+    "this",
+    "are",
+    "or",
+    "his",
+    "from",
+    "at",
+    "which",
+    "but",
+    "have",
+    "an",
+    "they",
+    "you",
+    "were",
+    "her",
+    "she",
+    "there",
+    "one",
+    "all",
+    "we",
+    "can",
+    "their",
+    "has",
+    "been",
+    "if",
+    "more",
+    "when",
+    "will",
+    "would",
+    "who",
+    "so",
+    "no",
+    "time",
+    "people",
+    "city",
+    "river",
+    "music",
+    "water",
+    "history",
+)
 
 
 def _doc(rng: random.Random) -> str:
@@ -78,7 +131,12 @@ def _clean(root: Path, out: str) -> subprocess.Popen[bytes]:
     cmd += ["--lid-model", str(root / "lid.bin"), "--workers", "2", "--threads", "1"]
     env = {k: v for k, v in os.environ.items() if k not in ("PYROID_NUM_THREADS",)}
     return subprocess.Popen(
-        cmd, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
+        cmd,
+        cwd=root,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
     )
 
 
@@ -112,13 +170,19 @@ def test_clean_stops_on_a_signal_and_resumes(run_dir: Path, sig: signal.Signals)
     stopped = time.perf_counter() - t0
     assert proc.returncode == 128 + sig, err.decode()
     assert stopped < 10, stopped
-    assert f"pyroid clean: {'terminated' if sig == signal.SIGTERM else 'interrupted'}" in err.decode()
+    assert (
+        f"pyroid clean: {'terminated' if sig == signal.SIGTERM else 'interrupted'}" in err.decode()
+    )
     assert "Traceback" not in err.decode(), err.decode()
     deadline = time.monotonic() + 10
     while _group_alive(proc.pid) and time.monotonic() < deadline:
         time.sleep(0.1)
     assert not _group_alive(proc.pid), "a worker process outlived the run"
-    leftovers = [p.name for p in (run_dir / out).rglob(".*") if p.is_file() and p.suffix in (".partial", ".tmp")]
+    leftovers = [
+        p.name
+        for p in (run_dir / out).rglob(".*")
+        if p.is_file() and p.suffix in (".partial", ".tmp")
+    ]
     assert leftovers == []
     again = _clean(run_dir, out)
     _, err = again.communicate(timeout=600)

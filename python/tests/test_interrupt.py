@@ -129,7 +129,9 @@ def model(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.mark.parametrize("threads", [1, 2])
 @pytest.mark.parametrize("case", CASES)
-def test_ctrl_c_interrupts_a_batch(run_python: RunPython, model: Path, case: str, threads: int) -> None:
+def test_ctrl_c_interrupts_a_batch(
+    run_python: RunPython, model: Path, case: str, threads: int
+) -> None:
     proc = run_python_args(run_python, case, threads, model)
     lines = proc.stdout.splitlines()
     assert proc.returncode == 0, proc.stdout + proc.stderr

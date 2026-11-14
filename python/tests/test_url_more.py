@@ -714,9 +714,12 @@ def test_surrogate_urls_take_tldextracts_code(monkeypatch: pytest.MonkeyPatch) -
     """keep(), reasons() and domains() give a lone-surrogate URL datatrove's result, with one
     FallbackWarning, for a str, a list and a tuple; the other URLs of the call stay native."""
     monkeypatch.setattr(pf, "_url_fallbacks", set())
-    f = pf.URLFilter(use_integrated_lists=False, extra_domains=["example.com"], tld_extractor=_tld())
+    f = pf.URLFilter(
+        use_integrated_lists=False, extra_domains=["example.com"], tld_extractor=_tld()
+    )
     tld = _tld()
-    with pytest.warns(pyroid.FallbackWarning, match="lone surrogates") as record:
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
         for url, want in SURROGATE_URLS.items():
             assert f.reasons(url) == want, ascii(url)
             assert f.keep(url) is (want is None), ascii(url)
@@ -728,21 +731,26 @@ def test_surrogate_urls_take_tldextracts_code(monkeypatch: pytest.MonkeyPatch) -
         assert f.reasons(tuple(urls)) == tuple(wants)
         assert f.keep(urls, threads=2) == [w is None for w in wants]
         rd, fqdn = cast(Any, f.domains(tuple(urls)))
-        assert isinstance(rd, tuple) and len(rd) == len(fqdn) == len(urls)
+        assert isinstance(rd, tuple)
+        assert len(rd) == len(fqdn) == len(urls)
         assert list(rd) == [tld(u).top_domain_under_public_suffix for u in urls]
         assert pf.url_filter_reasons(urls, f) == wants
-    assert len(record) == 1
+    assert [(w.category, "lone surrogates" in str(w.message)) for w in record] == [
+        (pyroid.FallbackWarning, True)
+    ]
     # Other errors are not swallowed.
     with pytest.raises(pyroid.InputError):
         f.reasons(cast(Any, ["http://example.com/\ud800", None]))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="empty URL"):
         f.reasons(["http://example.com/\ud800", ""])
 
 
 def test_surrogate_urls_match_datatrove() -> None:
     dt = _datatrove()(use_integrated_lists=False, extra_domains=["example.com"])
     dt.tldextractor = _tld()
-    f = pf.URLFilter(use_integrated_lists=False, extra_domains=["example.com"], tld_extractor=_tld())
+    f = pf.URLFilter(
+        use_integrated_lists=False, extra_domains=["example.com"], tld_extractor=_tld()
+    )
     want = [_dt_outcome(dt, u) for u in SURROGATE_URLS]
     assert [w[1] for w in want] == list(SURROGATE_URLS.values())
     with warnings.catch_warnings():

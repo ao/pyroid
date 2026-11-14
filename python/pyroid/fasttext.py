@@ -89,6 +89,7 @@ def _load_upstream(path: str | os.PathLike[str]) -> Model:
     """
     return _native.load_model(path, _upstream=True)
 
+
 def _load_predict(path: str | os.PathLike[str]) -> Model:
     """:func:`load_model` computing as fasttext-predict 0.9.2.4 does, whatever is installed.
 
@@ -96,5 +97,6 @@ def _load_predict(path: str | os.PathLike[str]) -> Model:
     x86-64: ``pyroid clean``'s output is the same on every platform.
     """
     return _native.load_model(path, _upstream=False)
+
 
 __all__ = ["Model", "ModelError", "load_model", "tokenize"]

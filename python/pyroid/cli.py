@@ -1341,17 +1341,20 @@ def _parquet_row_groups(path: Path) -> Iterator[Any]:
 
 
 def _conform(table: Any, schema: Any) -> Any:
-    """``table`` with ``schema``'s columns in its order: matched by name and cast, a column the
-    table lacks all null. Each input file is read with its own schema; one output needs one."""
+    """``table`` with ``schema``'s columns, in its order.
+
+    Columns are matched by name and cast; one the table lacks is all null. Each input file is
+    read with its own schema, and one output file needs one.
+    """
     import pyarrow as pa
 
     if table.schema.equals(schema):
         return table
     cols = []
-    for field in schema:
-        i = table.schema.get_field_index(field.name)
-        col = table.column(i) if i >= 0 else pa.nulls(table.num_rows, field.type)
-        cols.append(col if col.type == field.type else col.cast(field.type))
+    for f in schema:
+        i = table.schema.get_field_index(f.name)
+        col = table.column(i) if i >= 0 else pa.nulls(table.num_rows, f.type)
+        cols.append(col if col.type == f.type else col.cast(f.type))
     return pa.Table.from_arrays(cols, schema=schema)
 
 
@@ -2411,9 +2414,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _on_sigterm() -> Any:
-    """Make SIGTERM raise ``Terminated`` in the main thread, as SIGINT raises
-    ``KeyboardInterrupt``: the run then stops its workers and removes its temporary files.
-    Returns the handler to restore, or None when a program that embeds the CLI set its own.
+    """Make SIGTERM raise ``Terminated`` in the main thread, as SIGINT raises KeyboardInterrupt.
+
+    The run then stops its workers and removes its temporary files. Returns the handler to
+    restore, or None when a program that embeds the CLI set its own.
     """
     from pyroid.integrations import _shards
 

@@ -65,7 +65,9 @@ def test_minhashlsh(prepickle: bool) -> None:
     assert type(got) is pds.MinHashLSH
     for m in mhs:
         assert sorted(map(repr, got.query(m))) == sorted(map(repr, lsh.query(m)))
-    assert ("doc", 5) in got and ("doc", 4) not in got and "k0" in got
+    assert ("doc", 5) in got
+    assert ("doc", 4) not in got
+    assert "k0" in got
     assert got.get_counts() == lsh.get_counts()
     got.insert("new", mhs[180])
     assert "new" in got.query(mhs[180])
@@ -123,10 +125,10 @@ def test_ensemble() -> None:
 
 
 def test_unported_storage_fails_at_load() -> None:
-    lsh = ds.MinHashLSH(threshold=0.5, num_perm=16, hashfunc=lambda b: b[:4])  # noqa: ARG005
+    lsh = ds.MinHashLSH(threshold=0.5, num_perm=16, hashfunc=lambda b: b[:4])
     state = lsh.__dict__.copy()
     obj = pds.MinHashLSH.__new__(pds.MinHashLSH)
-    with pytest.raises(pyroid.PyroidError, match="without pyroid.patch"):
+    with pytest.raises(pyroid.PyroidError, match=r"without pyroid\.patch"):
         obj.__setstate__(state)
 
 

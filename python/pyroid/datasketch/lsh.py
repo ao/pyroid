@@ -113,8 +113,11 @@ def _length_error(h: Any, n: Any) -> ValueError:
 
 
 class _NoValues:
-    """A stand-in MinHash with no native hash values: the native index then asks for its
-    band keys (restoring a datasketch pickle, where they are stored)."""
+    """A stand-in MinHash with no native hash values.
+
+    The native index then asks for its band keys (restoring a datasketch pickle, where they
+    are stored).
+    """
 
     hashvalues = None
 
@@ -290,7 +293,10 @@ class MinHashLSH:
             for i in range(0, len(hs), n):
                 run = list(hs[i : i + n])
                 self._index.insert(key, _NO_VALUES, False, lambda _m, k, run=run: run[:k])
-        got = [{h: self.hashtables[t].get(h) for h in self.hashtables[t].keys()} for t in range(n)]
+        got = []
+        for t in range(n):
+            view = self.hashtables[t]  # a storage view: keys() is its method, not a dict's
+            got.append({h: view.get(h) for h in view.keys()})  # noqa: SIM118
         want = [{h: set(v) for h, v in table.items() if v} for table in tables]
         if got != want:
             raise PyroidError(
