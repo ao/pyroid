@@ -8,6 +8,7 @@ All notable changes to pyroid are documented here. From 1.0.0 on, [release-pleas
 ### Bug Fixes
 
 * **thai:** error instead of panic on huge texts; warn on another pythainlp version ([#11](https://github.com/ao/pyroid/issues/11)) ([132c60f](https://github.com/ao/pyroid/commit/132c60f6d964e7eb84f36a5013997b74229b3f4e))
+* **warc:** damaged brotli payloads (`Content-Encoding: br`) now decode exactly as brotlicffi 1.2.1.0 does; brotli-decompressor 6.3.1 fixes the 41 cases where pyroid decoded further ([#9](https://github.com/ao/pyroid/issues/9))
 
 ## [1.0.0](https://github.com/ao/pyroid/compare/v0.7.0...v1.0.0) (2026-11-13)
 
