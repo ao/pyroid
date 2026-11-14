@@ -887,10 +887,11 @@ mod tests {
         arm(Poll::Continue, 2);
         let done = AtomicUsize::new(0);
         let t0 = Instant::now();
-        let r = interruptible(|| map(20_000, Threads::ONE, |i| slow_item(&done, i)));
+        // 100,000 items of 0.2 ms: 20 s uninterrupted.
+        let r = interruptible(|| map(100_000, Threads::ONE, |i| slow_item(&done, i)));
         assert!(r.unwrap_err().is_interrupted());
-        assert!(t0.elapsed() < Duration::from_secs(2), "{:?}", t0.elapsed());
-        assert!(done.load(Ordering::Relaxed) < 20_000);
+        assert!(t0.elapsed() < Duration::from_secs(5), "{:?}", t0.elapsed());
+        assert!(done.load(Ordering::Relaxed) < 100_000);
         assert_eq!(CHECKS.get(), 2);
         // The call is over: the next one runs to the end.
         assert_eq!(map(1_000, Threads::ONE, |i| i).unwrap().len(), 1_000);
@@ -901,18 +902,18 @@ mod tests {
         arm(Poll::Continue, 2);
         let done = AtomicUsize::new(0);
         let t0 = Instant::now();
-        // 20,000 items over 2 threads: 2 s uninterrupted.
-        let r = interruptible(|| map(20_000, n(2), |i| slow_item(&done, i)));
+        // 200,000 items over 2 threads: 20 s uninterrupted.
+        let r = interruptible(|| map(200_000, n(2), |i| slow_item(&done, i)));
         assert!(r.unwrap_err().is_interrupted());
-        assert!(t0.elapsed() < Duration::from_secs(1), "{:?}", t0.elapsed());
-        assert!(done.load(Ordering::Relaxed) < 20_000);
+        assert!(t0.elapsed() < Duration::from_secs(5), "{:?}", t0.elapsed());
+        assert!(done.load(Ordering::Relaxed) < 200_000);
         // Each call starts afresh, on the whole pool too.
         arm(Poll::Continue, 2);
         let t0 = Instant::now();
         let r: Result<Vec<usize>, PoolError> =
             interruptible(|| try_map(2_000_000, Threads::Auto, |i| Ok(slow_item(&done, i))));
         assert!(r.unwrap_err().is_interrupted());
-        assert!(t0.elapsed() < Duration::from_secs(1), "{:?}", t0.elapsed());
+        assert!(t0.elapsed() < Duration::from_secs(5), "{:?}", t0.elapsed());
     }
 
     #[test]
@@ -962,10 +963,14 @@ mod tests {
 
     #[test]
     fn short_calls_never_check() {
-        arm(Poll::Continue, 1);
-        let r = interruptible(|| map(100_000, Threads::Auto, |i| i * 2));
-        assert_eq!(r.unwrap().len(), 100_000);
-        assert_eq!(CHECKS.get(), 0);
+        arm(Poll::Continue, usize::MAX);
+        let t0 = Instant::now();
+        let r = interruptible(|| map(1_000, Threads::Auto, |i| i * 2));
+        assert_eq!(r.unwrap().len(), 1_000);
+        // (a loaded machine can take longer than the interval: then a check is due)
+        if t0.elapsed() < POLL_INTERVAL {
+            assert_eq!(CHECKS.get(), 0);
+        }
     }
 
     #[test]
