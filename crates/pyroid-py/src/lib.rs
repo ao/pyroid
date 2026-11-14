@@ -31,6 +31,7 @@ mod nltk;
 mod pythainlp;
 mod segmenters;
 mod sudachi;
+mod tabulate;
 mod testing;
 mod text;
 mod trafilatura;
@@ -65,5 +66,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jieba::register(m)?;
     trafilatura::register(m)?;
     warc::register(m)?;
+    tabulate::register(m)?;
     Ok(())
 }
