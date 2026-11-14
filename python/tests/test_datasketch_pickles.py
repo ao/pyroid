@@ -104,11 +104,11 @@ def test_forest(indexed: str) -> None:
     # Results come "in no particular order", as datasketch's; the sets are the same.
     for m in mhs:
         for k in (1, 5, 30):
-            assert sorted(got.query(m, k)) == sorted(forest.query(m, k))
+            assert sorted(got.query(m, k), key=repr) == sorted(forest.query(m, k), key=repr)
     got.index()
     forest.index()
     for m in mhs[::7]:
-        assert sorted(got.query(m, 10)) == sorted(forest.query(m, 10))
+        assert sorted(got.query(m, 10), key=repr) == sorted(forest.query(m, 10), key=repr)
 
 
 def test_ensemble() -> None:
@@ -119,7 +119,7 @@ def test_ensemble() -> None:
     assert type(got) is pds.MinHashLSHEnsemble
     for m in mhs:
         for size in (5, 20, 60):
-            assert sorted(got.query(m, size)) == sorted(ens.query(m, size))
+            assert sorted(got.query(m, size), key=repr) == sorted(ens.query(m, size), key=repr)
 
 
 def test_unported_storage_fails_at_load() -> None:

@@ -37,7 +37,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from hypothesis import given, settings
@@ -1760,7 +1760,7 @@ def test_upstream_arithmetic(zoo: Zoo) -> None:
     """``_load_upstream`` fuses every multiply-add of the dense output layer, as upstream fastText
     0.9.2's wheels do on aarch64; elsewhere it computes exactly what ``load_model`` does."""
     entry = zoo["softmax-dense"]
-    default = ft._native.load_model(entry.path)
+    default = cast(Any, ft)._native.load_model(entry.path)
     upstream = ft._load_upstream(entry.path)
     rng = np.random.default_rng(3)
     lines = [" ".join(rng.choice(list(map(str, WORDS)), size=12)) for _ in range(400)]
@@ -1777,7 +1777,7 @@ def test_upstream_arithmetic(zoo: Zoo) -> None:
     installed = _versions.distribution(
         "fasttext", ("fasttext-predict", "fasttext-numpy2-wheel", "fasttext-wheel")
     )
-    assert ft._UPSTREAM is (installed in ("fasttext-numpy2-wheel", "fasttext-wheel"))
+    assert cast(Any, ft)._UPSTREAM is (installed in ("fasttext-numpy2-wheel", "fasttext-wheel"))
 
 
 def test_numpy_is_imported_by_the_first_array(run_python: RunPython, zoo: Zoo) -> None:

@@ -723,18 +723,18 @@ def test_surrogate_urls_take_tldextracts_code(monkeypatch: pytest.MonkeyPatch) -
             r = tld(url)
             assert f.domains(url) == (r.top_domain_under_public_suffix, r.fqdn), ascii(url)
         urls = [*SURROGATE_URLS, "http://example.com/", "http://ok.org/"]
-        want = [*SURROGATE_URLS.values(), "domain", None]
-        assert f.reasons(urls) == want
-        assert f.reasons(tuple(urls)) == tuple(want)
-        assert f.keep(urls, threads=2) == [w is None for w in want]
-        rd, fqdn = f.domains(tuple(urls))
+        wants: list[str | None] = [*SURROGATE_URLS.values(), "domain", None]
+        assert f.reasons(urls) == wants
+        assert f.reasons(tuple(urls)) == tuple(wants)
+        assert f.keep(urls, threads=2) == [w is None for w in wants]
+        rd, fqdn = cast(Any, f.domains(tuple(urls)))
         assert isinstance(rd, tuple) and len(rd) == len(fqdn) == len(urls)
         assert list(rd) == [tld(u).top_domain_under_public_suffix for u in urls]
-        assert pf.url_filter_reasons(urls, f) == want
+        assert pf.url_filter_reasons(urls, f) == wants
     assert len(record) == 1
     # Other errors are not swallowed.
     with pytest.raises(pyroid.InputError):
-        f.reasons(["http://example.com/\ud800", None])
+        f.reasons(cast(Any, ["http://example.com/\ud800", None]))
     with pytest.raises(ValueError):
         f.reasons(["http://example.com/\ud800", ""])
 

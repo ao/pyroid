@@ -11,7 +11,7 @@ import os
 import re
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from hypothesis import HealthCheck, given, settings
@@ -347,4 +347,4 @@ def test_languages_from_an_arrow_column() -> None:
     assert f.keep(texts, languages=pa.chunked_array([["en"], ["fr", None]])) == want
     # Anything but str or None is an input error, not a "no list for ..." one.
     with pytest.raises(pyroid.InputError, match=r"languages\[1\]: expected str or None, got int"):
-        f.keep(texts, languages=["en", 1, None])
+        f.keep(texts, languages=cast(Any, ["en", 1, None]))

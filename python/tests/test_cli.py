@@ -185,8 +185,8 @@ def test_file_and_input_errors_are_one_line(
     out = tmp_path / "c.parquet"
     rc = main(["clean", str(src), str(out), "--recipe", "fineweb", "--lid-model", str(tmp_path)])
     assert rc == 1
-    err = capsys.readouterr().err
-    assert err.startswith("pyroid clean: ") and "Traceback" not in err
+    msg = capsys.readouterr().err
+    assert msg.startswith("pyroid clean: ") and "Traceback" not in msg
 
 
 @pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and the environment")
