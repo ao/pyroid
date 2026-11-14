@@ -1036,20 +1036,38 @@ mod pii {
     }
 
     /// Each document's start index into a replacement tuple of `len` items,
-    /// given how many replacements each makes; and the index after the last.
-    fn starts(counts: &[usize], start: usize, len: usize) -> PyResult<(Vec<usize>, usize)> {
+    /// given how many replacements each makes; and the counter after the last.
+    ///
+    /// datatrove's `PIIReplacer` takes `replacements[i]` and then sets
+    /// `i = (i + 1) % len`: a negative counter counts from the end, and one out
+    /// of range raises `IndexError` at the first replacement (a counter that
+    /// makes none is left as it was).
+    fn starts(counts: &[usize], start: i64, len: usize) -> PyResult<(Vec<usize>, i64)> {
         let mut out = Vec::with_capacity(counts.len());
-        let mut cur = start;
+        let mut cur: Option<usize> = None;
         for &n in counts {
-            out.push(cur);
-            if n > 0 {
-                if len == 0 {
+            if n == 0 {
+                out.push(cur.unwrap_or(0));
+                continue;
+            }
+            let at = if let Some(c) = cur {
+                c
+            } else {
+                let l = i64::try_from(len).unwrap_or(i64::MAX);
+                let i = if start < 0 { start + l } else { start };
+                if !(0..l).contains(&i) {
                     return Err(PyIndexError::new_err("tuple index out of range"));
                 }
-                cur = (cur + n % len) % len;
-            }
+                usize::try_from(i).unwrap_or(0)
+            };
+            out.push(at);
+            cur = Some((at + n % len) % len);
         }
-        Ok((out, cur))
+        let next = match cur {
+            Some(c) => i64::try_from(c).unwrap_or(i64::MAX),
+            None => start,
+        };
+        Ok((out, next))
     }
 
     pub(super) fn pool_err(py: Python<'_>, e: par::PoolError) -> PyErr {
@@ -1099,11 +1117,11 @@ mod pii {
             &self,
             py: Python<'py>,
             texts: &Bound<'py, PyAny>,
-            email_index: usize,
-            ip_index: usize,
+            email_index: i64,
+            ip_index: i64,
             validator: Option<Bound<'py, PyAny>>,
             threads: Option<ThreadsArg>,
-        ) -> PyResult<(Bound<'py, PyAny>, usize, usize)> {
+        ) -> PyResult<(Bound<'py, PyAny>, i64, i64)> {
             let (input, threads) = texts_and_threads(texts, threads, None)?;
             let threads = crate::input::threads(threads);
             let docs = crate::interrupt::detach_batch(py, || flat_docs(&input, threads))
@@ -1131,9 +1149,9 @@ mod pii {
             &self,
             py: Python<'_>,
             cur: &mut [Option<Cow<'_, str>>],
-            start: usize,
+            start: i64,
             threads: par::Threads,
-        ) -> PyResult<usize> {
+        ) -> PyResult<i64> {
             let v = self.version;
             let found = crate::interrupt::detach_batch(py, || {
                 par::map(cur.len(), threads, |i| {
@@ -1171,10 +1189,10 @@ mod pii {
             &self,
             py: Python<'_>,
             cur: &mut [Option<Cow<'_, str>>],
-            start: usize,
+            start: i64,
             validator: Option<&Bound<'_, PyAny>>,
             threads: par::Threads,
-        ) -> PyResult<usize> {
+        ) -> PyResult<i64> {
             let found: Vec<Vec<(Range<usize>, bool)>> = crate::interrupt::detach_batch(py, || {
                 par::map(cur.len(), threads, |i| {
                     let Some(t) = cur[i].as_deref() else {
