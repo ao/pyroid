@@ -132,6 +132,12 @@ These are deliberate, or harmless for real models (from the module's tests and d
   standard library may order exact ties differently.
 - `get_subwords` returns int64 ids even when empty (fastText gives float64 when every n-gram is
   pruned).
+- The return types are the `fasttext` package's, not fasttext-predict's, which differ:
+  fasttext-predict 0.9.2.4's `predict(text)` gives the probabilities as a tuple of floats (pyroid
+  and `fasttext`: a float64 array), and its `predict(lines)` returns only the labels, so
+  `labels, probs = model.predict(lines)` fails there unless there are exactly two lines. pyroid
+  gives `(labels, probabilities)` for every line, as `fasttext` does. fasttext-predict has no
+  `get_sentence_vector`.
 
 pyroid never delegates to fastText, so it never emits `FallbackWarning`.
 
