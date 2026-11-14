@@ -166,12 +166,14 @@ class _Pipe(io.StringIO):
 
 @pytest.mark.parametrize("doc", ['{"key": 1}', '{"key": }', 'text [1, 2] {"a": 1} more'])
 def test_load_non_seekable_stream(doc: str) -> None:
+    load: Any = jr.load  # the option sets below cross the stubs' overloads
+    repair: Any = jr.repair_json
     for kw in ({}, {"skip_json_loads": True}, {"logging": True}):
         fd, ref_fd = _Pipe("ignored" + doc), _Pipe("ignored" + doc)
         fd.read(7)
         ref_fd.read(7)
-        assert same(jr.load(fd, **kw), ref.load(ref_fd, **kw))
-        assert same(jr.load(_Pipe(doc), **kw), jr.repair_json(doc, return_objects=True, **kw))
+        assert same(load(fd, **kw), ref.load(ref_fd, **kw))
+        assert same(load(_Pipe(doc), **kw), repair(doc, return_objects=True, **kw))
 
 
 @pytest.mark.parametrize(
