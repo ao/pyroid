@@ -31,7 +31,9 @@ IN can be any mix of:
 Files are listed, then sorted by name within each IN, and each file's position in that list is its
 *rank*. Files are streamed in Arrow batches of `--batch-size` rows (10,000 by default), one Parquet
 row group at a time, and the next batch is read while the current one is processed: memory holds
-about one row group and two batches per process.
+about one row group and two batches per process. Rows that wait in a work directory (the MinHash
+survivors of `clean`, the parts of a merged Parquet OUT) are compressed on another thread, one
+batch behind, which holds one batch more.
 
 OUT, and the folders of the [MinHash stages](#minhash-dedup-across-shards), are local paths (or a
 shared filesystem such as NFS, EFS or Lustre). Outputs are not written to object stores directly.
