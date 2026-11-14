@@ -157,8 +157,10 @@ text = st.text(st.characters(exclude_categories=["Cs"]), max_size=40) | st.sampl
 
 
 def _timezones() -> st.SearchStrategy[datetime.tzinfo]:
-    """Fixed offsets everywhere, plus IANA zones where the platform has a tz database (not Windows or Alpine
-    without tzdata)."""
+    """Fixed offsets everywhere, plus IANA zones where the platform has a tz database.
+
+    Windows and Alpine runners without the tzdata package have none.
+    """
     day = datetime.timedelta(hours=23, minutes=59, seconds=59)
     fixed = st.builds(datetime.timezone, st.timedeltas(min_value=-day, max_value=day))
     try:
