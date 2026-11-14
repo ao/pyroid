@@ -94,6 +94,12 @@ set on NeMo's own modules (``nemo_curator.stages.text.filters`` and the modules 
 them), so pipelines built afterwards, including from NeMo's YAML configs, use them. Ray workers
 need no patch: the stages they receive are pyroid's classes.
 
+``"tabulate"`` is a shim whether or not tabulate is installed: ``tabulate.tabulate`` and the
+other names of :mod:`pyroid.tabulate` (``TableFormat``, ``tabulate_formats``, ``_table_formats``,
+...) are pyroid's, which reproduce tabulate 0.10.0, so ``DataFrame.to_markdown()`` uses them.
+Setting ``tabulate.MIN_PADDING``, ``PRESERVE_WHITESPACE`` or ``WIDE_CHARS_MODE`` on the shim
+sets them for :mod:`pyroid.tabulate` too.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -140,6 +146,7 @@ SUPPORTED: tuple[str, ...] = (
     "nltk",
     "warcio",
     "nemo_curator",
+    "tabulate",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -774,6 +781,20 @@ def _distribution_version(name: str) -> Callable[[Any], str | None]:
     return installed
 
 
+def _build_tabulate(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    shim = _shim(
+        "tabulate",
+        real,
+        missing,
+        impl,
+        impl._patched_names(),
+        package=True,
+        version=impl.TABULATE_VERSION,
+    )
+    impl._share_settings(shim, real)
+    return {"tabulate": shim}, []
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -849,6 +870,14 @@ _TARGETS: dict[str, _Target] = {
         "pip install nemo-curator==1.4.0",
         " (readers, writers, deduplication, classifiers, the other stages)",
         _build_nemo_curator,
+    ),
+    "tabulate": _Target(
+        "pyroid.tabulate",
+        "which reproduces tabulate 0.10.0",
+        "TABULATE_VERSION",
+        "pip install tabulate==0.10.0",
+        " (the private helpers pyroid does not port)",
+        _build_tabulate,
     ),
 }
 
