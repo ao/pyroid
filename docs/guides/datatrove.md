@@ -317,7 +317,8 @@ From WARC files, with `Trafilatura` in the chain, a c7i.4xlarge ran the pipeline
 (171,595 HTML records) in 89.4 s at 8 workers with pyroid's steps, `WarcReader` included, against
 848.3 s for stock datatrove (9.5×); with datatrove's reader the first run took 104 s against 871 s
 (8.4×), and 776 s against 6,976 s at 1 worker (9.0×). Trafilatura was 5,543 of stock datatrove's
-6,759 CPU seconds at 8 workers ([details](../benchmarks.md#from-warc-files-datatroves-fineweb-pipeline)).
+6,759 CPU seconds at 8 workers in that first run, and 5,403 of 6,593 in the second
+([details](../benchmarks.md#from-warc-files-datatroves-fineweb-pipeline)).
 
 
 The rest of this section comes from earlier runs on a Docker/OrbStack VM on Apple Silicon,

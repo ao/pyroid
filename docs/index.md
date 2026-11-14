@@ -64,8 +64,8 @@ The filters and MinHash both tokenize every document with spaCy and then do thei
 Python. pyroid moves both to Rust.
 
 From raw WARC files, text extraction with Trafilatura comes first, and it costs more than all the
-other steps together. On 8 Common Crawl WARC files, stock datatrove spent 5,543 of its 6,759 CPU
-seconds in it (AWS EC2 c7i.4xlarge, 8 workers). [`pyroid.trafilatura`](guides/trafilatura.md)
+other steps together. On 8 Common Crawl WARC files, stock datatrove spent 5,403 of its 6,593 CPU
+seconds in it (AWS EC2 c7i.4xlarge, 8 workers; the run behind the 10.7× below). [`pyroid.trafilatura`](guides/trafilatura.md)
 ports that step too.
 
 On 100,000 FineWeb documents, pyroid's chain is 27× faster than datatrove on 8 processes, with
