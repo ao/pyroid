@@ -82,8 +82,8 @@ t.normalize_whitespace(docs, threads=4)  # at most 4 tasks at once on the shared
   as the Thai and Japanese tokenizers, calls it when it reads it). Never write a version warning
   by hand: the helper is the only source of **`pyroid.VersionMismatchWarning`** (a
   `UserWarning`), once per process per library, at the first frame outside pyroid, with one
-  message shape. It never imports the incumbent, and imports `importlib.metadata` only when the
-  incumbent is importable. Callers that pick the release themselves import the module inside
+  message shape. It never imports the incumbent, and reads an importable incumbent's version
+  from its `.dist-info` (`importlib.metadata`, about 25 ms to import, only as a fallback). Callers that pick the release themselves import the module inside
   `_versions.follow_installed("<module>")`; a new `pyroid.patch()` target needs nothing more
   than its module's check, because `patch()` imports the module. The table in
   `docs/compatibility.md` ("Installed versions") lists every check. Warnings about results
