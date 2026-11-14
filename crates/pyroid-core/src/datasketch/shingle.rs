@@ -85,6 +85,15 @@ pub struct Scratch {
     joined: Vec<u8>,
 }
 
+impl Scratch {
+    /// Give the buffers back after a long text (see [`crate::scratch`]).
+    pub fn trim(&mut self) {
+        crate::scratch::trim(&mut self.words);
+        crate::scratch::trim(&mut self.single_gap);
+        crate::scratch::trim(&mut self.joined);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

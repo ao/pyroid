@@ -218,6 +218,13 @@ impl LineScratch {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Give the buffers back after a long line (see [`crate::scratch`]).
+    pub fn trim(&mut self) {
+        crate::scratch::trim(&mut self.ids);
+        crate::scratch::trim(&mut self.hashes);
+        crate::scratch::trim(&mut self.word);
+    }
 }
 
 #[derive(Debug)]

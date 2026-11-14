@@ -464,6 +464,7 @@ impl Model {
                 let mut v = Vec::new();
                 // Line rows are always in range (checked at load).
                 self.average(&s.line.ids, &mut v);
+                s.line.trim();
                 v
             }));
         }
@@ -544,6 +545,21 @@ impl Model {
             return Err(PredictError::Newline);
         }
         SCRATCH.with_borrow_mut(|s| {
+            let r = self.predict_in(s, text, k, threshold, out);
+            s.line.trim();
+            r
+        })
+    }
+
+    fn predict_in(
+        &self,
+        s: &mut Scratch,
+        text: &str,
+        k: i64,
+        threshold: f32,
+        out: &mut Vec<Prediction>,
+    ) -> Result<(), PredictError> {
+        {
             let Scratch {
                 line,
                 hidden,
@@ -573,6 +589,6 @@ impl Model {
                 label: label as usize,
             }));
             Ok(())
-        })
+        }
     }
 }

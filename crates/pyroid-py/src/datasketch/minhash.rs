@@ -649,6 +649,8 @@ fn text_rows<T: Value>(
             hashes.clear();
             shingle::for_each_word_ngram(text, ngram, scratch, |s| hashes.push(bits.hash(s)));
             let _ = perm.update_hashes(T::signature(row), hashes);
+            scratch.trim();
+            pyroid_core::scratch::trim(hashes);
         });
     })?;
     Ok(())
