@@ -2181,7 +2181,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--lid-model",
-        help="fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a cached download)",
+        help="fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a 125 MiB download, cached)",
     )
     p.add_argument(
         "--ftfy",
@@ -2396,7 +2396,9 @@ def main(argv: list[str] | None = None) -> int:
         return 128 + signal.SIGINT
     except _shards.StateError as e:
         raise SystemExit(f"pyroid {a.command}: {e}") from None
-    except (FileNotFoundError, ValueError, ImportError) as e:
+    # OSError: a model path that is a directory, an unwritable output, a failed download;
+    # EOFError: a truncated compressed input; PyroidError: a text column of another type.
+    except (OSError, ValueError, ImportError, EOFError, pyroid.PyroidError) as e:
         if os.environ.get("PYROID_DEBUG"):
             raise
         msg = _import_hint(e) if isinstance(e, ImportError) else str(e)

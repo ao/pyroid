@@ -158,6 +158,38 @@ def test_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and the environment")
+def test_file_and_input_errors_are_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import pyroid.cli as cli
+
+    monkeypatch.delenv("PYROID_DEBUG", raising=False)
+    src = _write(_table(["x"]), tmp_path / "in.parquet")
+    args = ["translit", str(src), str(tmp_path / "o.parquet")]
+    cases = [
+        IsADirectoryError(21, "Is a directory", "models/"),
+        PermissionError(13, "Permission denied", "/out/x.parquet"),
+        OSError("could not download lid.176.bin: https://example.invalid/lid.176.bin"),
+        EOFError("Compressed file ended before the end-of-stream marker was reached"),
+        pyroid.InputError("expected a string column, got int64"),
+    ]
+    for err in cases:
+
+        def body(a: Any, err: BaseException = err) -> int:
+            raise err
+
+        monkeypatch.setattr(cli, "_cmd_translit", body)
+        assert main(args) == 1
+        assert capsys.readouterr().err == f"pyroid translit: {err}\n"
+    # A real one: the model path is a directory.
+    out = tmp_path / "c.parquet"
+    rc = main(["clean", str(src), str(out), "--recipe", "fineweb", "--lid-model", str(tmp_path)])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert err.startswith("pyroid clean: ") and "Traceback" not in err
+
+
+@pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and the environment")
 def test_missing_optional_dependency_is_one_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
