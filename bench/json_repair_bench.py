@@ -32,7 +32,7 @@ candidate, which exercises the comparison path.
     free-threaded build also over a pool of 8 threads, in contiguous chunks); then each candidate in
     a loop and, if it has one, its ``repair_json_batch(docs, threads=t)``. Docs/s.
 * Output: a JSON file (``--out``) with machine info and every timing, and a Markdown summary on
-  stdout. Numbers measured in the Docker/OrbStack VM are indicative.
+  stdout, labelled with ``$PYROID_BENCH_LABEL`` (the machine; default "indicative").
 """
 
 from __future__ import annotations
@@ -62,7 +62,8 @@ from typing import Any
 
 REFERENCE = "json_repair"
 REFERENCE_VERSION = "0.64.9"
-LABEL = "Docker/OrbStack VM, indicative"
+#: Where the numbers come from, for the report (e.g. "EC2 c8g.16xlarge devbox, shared, indicative").
+LABEL = os.environ.get("PYROID_BENCH_LABEL", "indicative")
 
 # ------------------------------------------------------------------------------------------ inputs
 
@@ -232,7 +233,7 @@ class Family:
     kind: str  # "realistic" | "adversarial" | "control"
     gen: Callable[[int], str]
     desc: str
-    cause: str  # the json_repair 0.64.9 code path that makes it super-linear
+    cause: str  # the json_repair 0.64.5 code path that made it super-linear (0.64.9 fixed most)
     kwargs: dict[str, Any] = field(default_factory=dict)
 
 

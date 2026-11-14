@@ -8,7 +8,7 @@ arguments and return the same strings, objects and repair logs. Valid JSON comes
 back as ``json.dumps(json.loads(text))``. Broken JSON (LLM output with missing
 quotes, single quotes, comments, trailing commas, truncation, markdown fences,
 prose around it, Python literals, ...) is repaired with json_repair's heuristics,
-ported line by line to Rust. The port stays linear on 13 input families where
+ported line by line to Rust. The port stays linear on the inputs where
 json_repair's lookaheads are quadratic, and never overflows the stack.
 
 These are delegated to the real json_repair, with a one-time

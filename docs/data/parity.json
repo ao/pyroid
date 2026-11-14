@@ -249,25 +249,30 @@
       "source": "the parity/ metrics suite, run on 2026-11-06 (the x86_64 rows: bench/results/aws-c7i.4xlarge/2026-11-06/parity)"
     },
     "json_repair": {
-      "reference": "json_repair 0.64.5",
+      "reference": "json_repair 0.64.9",
       "rule": "the same returned string or object, the same repair log, the same exception",
       "checks": [
         {
-          "name": "Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 672 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file",
-          "same": 184403,
+          "name": "Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 821 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file",
+          "same": 184552,
           "diff": 0
         },
         {
-          "name": "Parity suite on free-threaded CPython 3.15t (the 149 schema= replays skipped: no jsonschema)",
-          "same": 184254,
+          "name": "Parity suite on free-threaded CPython 3.14t (the 166 schema= replays skipped: no jsonschema)",
+          "same": 184386,
+          "diff": 0
+        },
+        {
+          "name": "Parity suite on free-threaded CPython 3.15t (the 166 schema= replays skipped: no jsonschema)",
+          "same": 184386,
           "diff": 0
         }
       ],
       "notes": [
         "Skipped by design: 4 calls whose result depends on the hash seed and 3 that depend on the recursion limit.",
-        "The Rust kernel also replays 451 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k."
+        "The Rust kernel also replays 490 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k."
       ],
-      "source": "the parity/ json_repair suite, run on 2026-11-06"
+      "source": "the parity/ json_repair suite on an EC2 c8g.16xlarge devbox, run on 2026-11-14"
     },
     "datasketch": {
       "reference": "datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1)",

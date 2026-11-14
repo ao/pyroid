@@ -1,12 +1,12 @@
 # `pyroid.json_repair`: drop-in json_repair
 
 `pyroid.json_repair` is a Rust port of [json_repair](https://github.com/mangiucugna/json_repair)
-0.64.5 by Stefano Baccianella (MIT). json_repair turns broken JSON from LLMs into valid JSON:
+0.64.9 by Stefano Baccianella (MIT). json_repair turns broken JSON from LLMs into valid JSON:
 missing quotes, single quotes, comments, trailing commas, truncation, markdown fences, prose
 around it, Python literals. Its parser is ported line by line, so pyroid returns the same
-strings, objects and repair logs as json_repair 0.64.5 ([parity](../compatibility.md#json_repair)).
-It also stays linear on 13 input families where json_repair's lookaheads are quadratic, and deep
-nesting never overflows the stack.
+strings, objects and repair logs as json_repair 0.64.9 ([parity](../compatibility.md#json_repair)).
+It repairs broken documents about 15 times faster, stays linear on the inputs where json_repair is
+still quadratic, and deep nesting never overflows the stack.
 
 ## Change one import
 
@@ -18,6 +18,10 @@ nesting never overflows the stack.
  json_repair.loads('{"title": "Notes on the Analytical Eng')
  # {'title': 'Notes on the Analytical Eng'}
 ```
+
+For code you don't own, `pyroid.patch("json_repair")` makes a later `import json_repair` (and
+`from json_repair.json_repair import ...`) give these functions; see
+[`pyroid.patch()`](patch.md).
 
 ## Repairing and decoding
 
@@ -136,32 +140,33 @@ json_repair's command line (`python -m json_repair`) and its internal modules ar
 ## Pathological input
 
 json_repair has lookaheads and string copies that make some inputs quadratic. The port keeps
-every heuristic but memoizes those scans, and stays linear on all 13 super-linear input families
-found (json_repair's log-log slopes are 1.5 to 2.0). The table shows a few of them, at sizes
-doubling from 16 KiB to 1 MiB, with times at the largest size json_repair finished. CPython 3.12,
-on a Docker/OrbStack VM on Apple Silicon, indicative:
+every heuristic but memoizes those scans, so it stays linear on all 13 input families found by
+reading json_repair 0.64.5's code. json_repair 0.64.9 made 9 of them linear too. Two are still
+quadratic there, and two grow with the nesting depth times the length:
 
 | Input family (json_repair's cause) | Slope, json_repair / pyroid | json_repair → pyroid |
 |---|---|---|
-| `truncated_string` (`string_acc +=` copies) | 1.64 / 1.00 | 512 KB: 6.2 s → 9.2 ms; 1 MB: > 20 s → 19 ms |
-| `escaped_code_string` (`[:-1]` per escape) | 1.71 / 1.02 | 1 MB: 18.1 s → 17.6 ms |
-| `markdown_in_array` (a scan per `]`) | 2.00 / 1.02 | 128 KB: 10.0 s → 2.4 ms |
-| `single_quoted_apostrophes` (pairwise quote walk) | 2.04 / 1.05 | 64 KB: 15.9 s → 2.2 ms |
-| `records_missing_separators` (input rebuilt per split) | 1.47 / 0.97 | 1 MB: 6.1 s → 40 ms |
-| `nested_open_containers` (adversarial, `{[` × 60) | O(depth·n) / 1.02 | 512 KB: 12.5 s → 9.2 ms |
+| `records_missing_separators` (the input is rebuilt at each split) | 2.0 / 1.0 | 1 MB: 5.1 s → 33 ms |
+| `regex_class_quotes` (adversarial: quotes inside `[...]`) | 2.0 / 1.0 | 16 KB: 6.3 s → 0.38 ms; 32 KB: over 20 s → 0.79 ms |
+| `nested_open_tuples` (adversarial: 100 levels of `(`) | depth × length / 1.0 | 1 MB: 18.3 s → 36 ms |
+| `nested_open_containers` (adversarial: `{[` × 60) | depth × length / 1.0 | 256 KB: 7.1 s → 4.8 ms |
+
+On the other nine families both are linear and pyroid is 7 to 39 times faster at 1 MB (for
+example `truncated_string` 6.8×, `markdown_in_array` 17×, `single_quoted_apostrophes` 29×). The
+slopes are log-log fits over the 3 largest of sizes doubling from 2 KiB to 1 MiB.
+`bench/json_repair_bench.py`, CPython 3.12, on an EC2 c8g.16xlarge devbox (shared, indicative).
 
 These families come from reading json_repair's code. Fuzzing finds other inputs, made of a short
 unit of garbage repeated, that are quadratic in both. There json_repair's parser backtracks:
 it parses a value to the end of the text, drops it and parses again a few characters further on,
 or rescans an unclosed run of brackets from each bracket. pyroid follows the same steps to give the
-same output, so it is faster by a constant factor only. Three of them at 4,096 and 16,384
-characters (Docker/OrbStack VM, indicative):
+same output, so it is faster by a constant factor only. Two of them, repeated to 4,096 and
+16,384 characters (json_repair 0.64.9, same machine):
 
-| Repeated unit | json_repair, 4 K / 16 K | pyroid, 4 K / 16 K |
+| Input | json_repair, 4 K / 16 K | pyroid, 4 K / 16 K |
 |---|---|---|
-| `{` U+FFFD `\0\0\0\0` `0]"` (an object key that runs to the end) | 1.43 s / 26.8 s | 19 ms / 309 ms |
-| `\x0c\0\0\0c{]=` | 1.14 s / 18.9 s | 17 ms / 232 ms |
-| `{a: [` inside a string value | 0.35 s / 5.2 s | 7 ms / 97 ms |
+| `\x0c\0\0\0c{]=` repeated | 1.25 s / 20.1 s | 13 ms / 210 ms |
+| `{"a": "` then `{a: [` repeated (brackets inside a string value) | 0.57 s / 9.2 s | 7.7 ms / 119 ms |
 
 ## Differences from json_repair
 
@@ -174,51 +179,80 @@ From the module's documentation (`pyroid/json_repair.pyi`):
   past about 10,000 levels on 3.12 is the same. For string results pyroid decodes it at any depth
   (json_repair raises there too).
 - `load`/`from_file` read the file once (`fd.read()`) instead of in `chunk_length` pieces. The
-  result is the same, `chunk_length` is ignored and unseekable streams work.
+  result is the same and `chunk_length` is ignored.
 - json_repair's command line (`python -m json_repair`) is not part of this module.
 
 And by design, the [delegated features](#delegated-features) need json_repair installed.
 
+## Versions
+
+Each pyroid release reproduces one json_repair release, normally the newest one, and names it in
+`pyroid.json_repair.JSON_REPAIR_VERSION`. pyroid 1.0.0 reproduced 0.64.5; this release
+reproduces 0.64.9. When another version of json-repair is installed, `import pyroid.json_repair`
+emits one [`pyroid.VersionMismatchWarning`](../compatibility.md#installed-versions) that names
+both versions. Delegated calls always run the installed json_repair.
+
+What changed between json_repair 0.64.5 and 0.64.9, and so between pyroid 1.0.0 and this release:
+
+- 0.64.6: valid JSON holding an empty string is returned as JSON: `repair_json('""')` is now
+  `'""'`, not `''`. `''` still means that no value was found.
+- 0.64.6: a stream that cannot seek (`seekable()` is false) is read whole and repaired as a
+  string, so the valid-JSON shortcuts for strings apply to it.
+- 0.64.6: `schema=` rejects invalid schemas with `ValueError("Invalid schema: ...")` and leaves
+  `const`, `enum`, `default` and `examples` values alone. These calls are delegated, so they follow
+  the installed json_repair.
+- 0.64.8: two commas after a number in an object no longer turn the number into a string:
+  `{"a": 1,, "b": 2}` gives `{"a": 1, "b": 2}` (it was `{"a": "1,", "b": 2}`), and a stray number
+  between the commas is dropped. Strict mode raises on it.
+- 0.64.8: a number that ends in a bare exponent drops it: `[1e, 2]` gives `[1, 2]` (it was
+  `[1, "e", 2]`) and `[1e+]` gives `[1]` (it was `["1e"]`). Strict mode raises on it.
+- 0.64.9: faster on long inputs. Its results were the same as 0.64.8's on the 20,000 generated
+  broken LLM outputs of the parity suite and on 3,152 fuzzing inputs.
+
+On those 20,000 outputs, 39 give a different result between json_repair 0.64.5 and 0.64.9 under
+at least one option set, most of them because of the number changes.
+
 ## Parity
 
-There were 0 differences in 184,403 comparisons on CPython 3.12 and 184,254 on free-threaded
-3.15t, where the `schema=` replays are skipped for lack of jsonschema. The suite replays
-json_repair's own test suite as 672 recorded calls, 20,000 seeded broken LLM outputs under 8
-option sets, Hypothesis grammar fuzzing with lone surrogates under 9 option sets, and `load` and
-`from_file`. Details: [Compatibility](../compatibility.md#json_repair).
+There were 0 differences against json_repair 0.64.9 in 184,552 comparisons on CPython 3.12 and
+184,386 each on free-threaded 3.14t and 3.15t, where the `schema=` replays are skipped for lack of
+jsonschema. The suite replays json_repair's own test suite as 821 recorded calls, 20,000
+seeded broken LLM outputs under 8 option sets, Hypothesis grammar fuzzing with lone surrogates
+under 9 option sets, and `load` and `from_file`. Details: [Compatibility](../compatibility.md#json_repair).
 
 ## Speed
 
-These timings come from a Docker/OrbStack VM on Apple Silicon, indicative. Single documents,
-CPython 3.12, best time per call (3.15t is within ±10%):
+These timings come from an EC2 c8g.16xlarge devbox (Graviton4, shared with other work),
+indicative. Single documents, json_repair 0.64.9, CPython 3.12, best time per call:
 
 | Document | json_repair | pyroid | Speedup |
 |---|---:|---:|---:|
-| valid ~1 KB, `repair_json` | 11.3 µs | 6.6 µs | 1.7× |
-| valid ~1 KB, `loads` | 6.2 µs | 6.4 µs | 1.0× |
-| broken ~1 KB, `repair_json` | 600 µs | 20.1 µs | 30× |
-| broken ~1 KB, `loads` | 589 µs | 22.2 µs | 27× |
-| valid 1.2 MB, `repair_json` | 9.9 ms | 8.1 ms | 1.2× |
+| valid ~1 KB, `repair_json` | 12.6 µs | 7.5 µs | 1.7× |
+| valid ~1 KB, `loads` | 6.6 µs | 6.6 µs | 1.0× |
+| broken ~1 KB, `repair_json` | 367 µs | 21.0 µs | 17× |
+| broken ~1 KB, `loads` | 358 µs | 23.6 µs | 15× |
+| valid 1.2 MB, `repair_json` | 10.1 ms | 7.6 ms | 1.3× |
 | valid 1.2 MB, `loads` | 5.7 ms | 5.8 ms | 1.0× |
-| broken 1 MB, `repair_json` | 544 ms | 17.1 ms | 32× |
-| broken 1 MB, `loads` | 548 ms | 18.6 ms | 30× |
+| broken 1 MB, `repair_json` | 232 ms | 16.0 ms | 14.5× |
+| broken 1 MB, `loads` | 228 ms | 17.6 ms | 13× |
 
 On valid JSON there is little to gain. Both libraries start with CPython's `json.loads`, so
 `loads` of valid JSON costs the same. The speedup is on broken JSON, where json_repair's parser
-runs in Python.
+runs in Python. json_repair 0.64.9 is itself faster than 0.64.5 there: on the same machine 0.64.5
+took 625 µs for the broken ~1 KB document and 425 ms for the broken 1 MB one.
 
 For batches, 10,000 broken documents of about 1.2 KB on free-threaded CPython 3.15t (GIL off),
-on the same VM:
+on the same machine while other work kept the load average between 30 and 40:
 
 | Run | Documents/s | vs json_repair loop |
 |---|---:|---:|
-| json_repair, loop | 1,204 | 1× |
-| json_repair, 8-thread pool | 4,681 | 3.9× |
-| pyroid `repair_json`, loop | 41,414 | 34× |
-| `repair_json_batch`, `threads=1` | 46,221 | 38× |
-| `repair_json_batch`, `threads=8` | 156,134 | 130× |
+| json_repair, loop | 2,828 | 1× |
+| json_repair, 8-thread pool | 16,127 | 5.7× |
+| pyroid `repair_json`, loop | 48,056 | 17× |
+| `repair_json_batch`, `threads=1` | 49,131 | 17× |
+| `repair_json_batch`, `threads=8` | 260,003 | 92× |
 
-The 8-thread run is limited by the shared, loaded VM. See also
+Raw results: `bench/results/aws-c8g.16xlarge-devbox/2026-11-14-json_repair/`. See also
 [Benchmarks](../benchmarks.md#other-modules-languages-and-integrations).
 
 API: [`pyroid.json_repair` reference](../reference/json_repair.md).
