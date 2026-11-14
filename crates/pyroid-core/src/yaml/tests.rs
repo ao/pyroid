@@ -124,14 +124,8 @@ fn errors() {
         err("key: 'unterminated"),
         "ScannerError: while scanning a quoted scalar [1:6] found unexpected end of stream [1:19]"
     );
-    assert_eq!(
-        err("\"\\Uffffffff\""),
-        "OverflowError: Python int too large to convert to C int"
-    );
-    assert_eq!(
-        err("\"\\U00110000\""),
-        "ValueError: chr() arg not in range(0x110000)"
-    );
+    assert_eq!(err("\"\\Uffffffff\""), "chr(0xffffffff) failed");
+    assert_eq!(err("\"\\U00110000\""), "chr(0x110000) failed");
     assert_eq!(one("a\n:b"), "str:a :b");
     assert_eq!(
         err("a: 1\n:b"),

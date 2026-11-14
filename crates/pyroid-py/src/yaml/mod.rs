@@ -11,7 +11,7 @@
 mod dump;
 mod load;
 
-use pyo3::exceptions::{PyOverflowError, PyRecursionError, PyValueError};
+use pyo3::exceptions::{PyRecursionError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBytes, PyDict, PyString, PyTuple};
@@ -210,7 +210,10 @@ fn to_pyerr<'py>(
                 PyErr::from_value(exc)
             }
             YamlError::Value(msg) => PyValueError::new_err(msg),
-            YamlError::Overflow(msg) => PyOverflowError::new_err(msg),
+            YamlError::Chr(code) => match py.import("builtins")?.getattr("chr")?.call1((code,)) {
+                Err(e) => e,
+                Ok(_) => PyValueError::new_err("chr() arg not in range(0x110000)"),
+            },
             YamlError::Type(msg) => pyo3::exceptions::PyTypeError::new_err(msg),
             YamlError::Recursion => PyRecursionError::new_err("maximum recursion depth exceeded"),
             YamlError::NeedMore => match pending {

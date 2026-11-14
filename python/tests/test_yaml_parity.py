@@ -6,14 +6,37 @@ class and its ``str()`` (message and marks), and dumped text byte for byte.
 
 from __future__ import annotations
 
+import importlib.util
 import io
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
-from _yaml_util import Chunked, data, dump_options, encode, load_outcome, outcome, yaml_texts
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+
+
+def _helpers() -> Any:
+    """python/tests/_yaml_util.py (CI imports tests with --import-mode=importlib)."""
+    name = "_yaml_util"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name("_yaml_util.py"))
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+    return sys.modules[name]
+
+
+_u = _helpers()
+Chunked = _u.Chunked
+data = _u.data
+dump_options = _u.dump_options
+encode = _u.encode
+load_outcome = _u.load_outcome
+outcome = _u.outcome
+yaml_texts = _u.yaml_texts
 
 yaml: Any = pytest.importorskip("yaml")
 import pyroid.yaml as py  # noqa: E402

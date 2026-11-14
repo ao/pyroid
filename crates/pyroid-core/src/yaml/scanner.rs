@@ -1165,15 +1165,8 @@ impl Scanner {
                     }
                     let hex = self.reader.prefix(length);
                     let code = u32::from_str_radix(hex, 16).unwrap_or(u32::MAX);
-                    if code > 0x7FFF_FFFF {
-                        return Err(YamlError::Overflow(
-                            "Python int too large to convert to C int".to_owned(),
-                        ));
-                    }
                     if code > 0x10_FFFF {
-                        return Err(YamlError::Value(
-                            "chr() arg not in range(0x110000)".to_owned(),
-                        ));
+                        return Err(YamlError::Chr(code));
                     }
                     if let Some(c) = char::from_u32(code) {
                         chunks.push(c);

@@ -154,8 +154,10 @@ pub enum YamlError {
     /// A Python `TypeError` PyYAML lets escape (`ord()` of a byte in the emitter's tag
     /// prefix escaping).
     Type(String),
-    /// A Python `OverflowError` PyYAML lets escape (`chr()` of an escape past 0x7FFFFFFF).
-    Overflow(String),
+    /// `chr(code)` of a double-quoted escape past U+10FFFF: the bindings call Python's `chr`,
+    /// whose exception (`ValueError`, or `OverflowError` past `INT_MAX` on some versions)
+    /// PyYAML lets escape.
+    Chr(u32),
     /// The stream needed characters past a pending reader error (file objects): the bindings
     /// raise that error.
     NeedMore,
@@ -209,7 +211,7 @@ impl fmt::Display for YamlError {
                 Ok(())
             }
             Self::Value(msg) => write!(f, "ValueError: {msg}"),
-            Self::Overflow(msg) => write!(f, "OverflowError: {msg}"),
+            Self::Chr(code) => write!(f, "chr({code:#x}) failed"),
             Self::Type(msg) => write!(f, "TypeError: {msg}"),
             Self::NeedMore => f.write_str("reader error pending"),
             Self::Emitter(m) => write!(f, "EmitterError: {}", m.render()),
