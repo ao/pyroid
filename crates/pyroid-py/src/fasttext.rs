@@ -32,7 +32,6 @@ use crate::input::{TextInput, Threads, arg_note};
 type LineTokens = (Vec<String>, Vec<String>);
 
 static MODEL_ERROR: PyOnceLock<Py<PyType>> = PyOnceLock::new();
-static NUMPY: PyOnceLock<()> = PyOnceLock::new();
 
 /// `pyroid.fasttext.ModelError(PyroidError, ValueError)`: a ValueError, like
 /// fastText's own load errors.
@@ -55,20 +54,13 @@ fn model_error_type(py: Python<'_>) -> PyResult<&Bound<'_, PyType>> {
         .map(|t| t.bind(py))
 }
 
-/// rust-numpy needs numpy at the first array; fail with a clear ImportError
-/// instead of its panic.
+/// numpy for the arrays: a clear ImportError without it, and no panic from
+/// rust-numpy's first lookup (see `crate::np`).
 fn require_numpy(py: Python<'_>) -> PyResult<()> {
-    NUMPY
-        .get_or_try_init(py, || {
-            py.import("numpy").map(|_| ()).map_err(|e| {
-                let err = pyo3::exceptions::PyImportError::new_err(
-                    "pyroid.fasttext needs numpy: pip install 'pyroid[fasttext]' (or numpy)",
-                );
-                err.set_cause(py, Some(e));
-                err
-            })
-        })
-        .copied()
+    crate::np::ready(
+        py,
+        "pyroid.fasttext needs numpy: pip install 'pyroid[fasttext]' (or numpy)",
+    )
 }
 
 fn load_error(py: Python<'_>, path: &std::path::Path, err: LoadError) -> PyErr {
