@@ -344,11 +344,15 @@ jobs:
         run: >-
           uv run --project parity --frozen --no-group trafilatura --group trafilatura111
           python -m pyroid_parity.refs trafilatura111 trafilatura111_upstream
-      # json_repair's references are in the repo (parity/data/json_repair-0.64.5/): its own test suite, replayed
-      # as recorded public calls. Re-record them with the pinned json-repair and require the same bytes.
+      # json_repair's references are in the repo (parity/data/json_repair-0.64.9/): its own test suite, replayed
+      # as recorded public calls, and the Rust kernel's golden file built from them. Re-record both with the pinned
+      # json-repair and require the same bytes.
       - name: Re-record json_repair's test suite and compare (python -m pyroid_parity.json_repair_record --check)
         if: steps.cache.outputs.cache-hit != 'true'
-        run: uv run --project parity --frozen python -m pyroid_parity.json_repair_record --check
+        run: |
+          set -euo pipefail
+          uv run --project parity --frozen python -m pyroid_parity.json_repair_record --check
+          uv run --project parity --frozen python -m pyroid_parity.json_repair_kernel_cases --check
       # The nemo references need NeMo Curator and fasttext 0.9.3 (a C++ build): the nemo job builds, checks and
       # caches them, so they are left out here.
       - name: Verify every pinned file before caching (bench/fetch.py --verify-all)

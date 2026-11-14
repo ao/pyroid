@@ -1,4 +1,4 @@
-//! json_repair 0.64.5 (`pyroid_core::json_repair`): `repair`, `repair_chars`, `repair_json`
+//! json_repair 0.64.9 (`pyroid_core::json_repair`): `repair`, `repair_chars`, `repair_json`
 //! and `dumps_result`, under options from the first five input bytes.
 //!
 //! Input: `[repair dump extra n1 n2] a b rest...`, where `a` and `b` are the `n1` and `n2`
@@ -128,7 +128,7 @@ fn repair_string(text: &Text, o: &RepairOptions, d: &DumpOptions) -> Result<Stri
     match text {
         Text::Str(s) => jr::repair_json(s, &o, d),
         Text::Chars(c) => jr::repair_chars(c, &o).and_then(|r| {
-            let out = jr::dumps_result(&r.value, d);
+            let out = jr::dumps_result(&r, d);
             value::drop_deep(r.value);
             out
         }),

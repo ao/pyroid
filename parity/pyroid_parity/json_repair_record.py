@@ -1,6 +1,6 @@
-"""Record json_repair 0.64.5's own test suite as golden public calls (``upstream-calls.jsonl``).
+"""Record json_repair 0.64.9's own test suite as golden public calls (``upstream-calls.jsonl``).
 
-    python -m pyroid_parity.json_repair_record           # rewrite data/json_repair-0.64.5/upstream-calls.jsonl
+    python -m pyroid_parity.json_repair_record           # rewrite data/json_repair-0.64.9/upstream-calls.jsonl
     python -m pyroid_parity.json_repair_record --check   # re-record and compare with the committed file
 
 Run it in Docker, in the parity env plus pydantic (the schema tests need it)::
@@ -10,7 +10,7 @@ Run it in Docker, in the parity env plus pydantic (the schema tests need it)::
 
 How it works:
 
-1. The vendored upstream tests (``upstream_tests/``, tag v0.64.5) are copied to a temporary ``tests/`` package
+1. The vendored upstream tests (``upstream_tests/``, tag v0.64.9) are copied to a temporary ``tests/`` package
    and run by pytest in a subprocess with this module as a plugin (``-p pyroid_parity.json_repair_record``).
    The upstream tests import ``src.json_repair...`` (the source tree): the plugin aliases every
    ``src.json_repair.*`` module to the installed ``json_repair.*`` module object, then wraps ``repair_json``,
@@ -41,6 +41,7 @@ import contextlib
 import importlib
 import importlib.metadata as md
 import inspect
+import io
 import json
 import os
 import pkgutil
@@ -57,7 +58,7 @@ from typing import Any
 
 from pyroid_parity import json_repair_compare as C
 
-JSON_REPAIR_VERSION = "0.64.5"
+JSON_REPAIR_VERSION = "0.64.9"
 DATA = Path(__file__).resolve().parents[1] / "data" / f"json_repair-{JSON_REPAIR_VERSION}"
 UPSTREAM_TESTS = DATA / "upstream_tests"
 GOLDEN = DATA / "upstream-calls.jsonl"
@@ -112,6 +113,9 @@ def _file_spec(name: str, value: Any, tags: list[str]) -> Any:
             tags.append("unreplayable")
             return value
         return C.PathSpec(p.read_bytes(), "Path" if isinstance(value, Path) else "str")
+    if isinstance(value, io.StringIO) and not value.seekable():
+        # A test's non-seekable stream (its tell() raises): io.StringIO's own tell() has the position.
+        return C.TextIOSpec(value.getvalue(), io.StringIO.tell(value), seekable=False)
     if hasattr(value, "getvalue") and hasattr(value, "tell"):
         return C.TextIOSpec(value.getvalue(), value.tell())
     tags.append("unreplayable")

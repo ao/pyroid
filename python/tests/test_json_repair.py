@@ -1,7 +1,7 @@
-# Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+# Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 """pyroid.json_repair: the API surface, options, errors, delegation and the batch function.
 
-Results are compared with json_repair 0.64.5 where it is installed (the test group pins it);
+Results are compared with json_repair 0.64.9 where it is installed (the test group pins it);
 test_json_repair_parity.py and test_json_repair_upstream.py hold the differential suites.
 """
 
@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import json
 import math
+import re
 import sys
 import warnings
 from pathlib import Path
@@ -106,8 +107,71 @@ def test_types_of_numbers_and_literals() -> None:
 def test_empty_result_is_empty_string() -> None:
     assert jr.repair_json("") == ""
     assert jr.repair_json("nothing") == ""
-    assert jr.repair_json('""') == ""
+    assert jr.repair_json('"unterminated') == ""
     assert jr.loads("nothing") == ""
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_valid_empty_string_is_json(strict: bool) -> None:
+    # json_repair 0.64.6: valid JSON holding "" is written as JSON; only a failed repair gives "".
+    assert jr.repair_json('""', strict=strict) == '""'
+    assert jr.repair_json('""', strict=strict, indent=2, sort_keys=True) == '""'
+    assert jr.repair_json('""', strict=strict, cls=json.JSONEncoder) == '""'
+    assert jr.repair_json('""', strict=strict, return_objects=True) == ""
+    assert jr.repair_json('""', strict=strict, logging=True) == ("", [])
+    assert jr.repair_json('""', skip_json_loads=True) == ""
+    assert jr.repair_json_batch(['""', "x"]) == ['""', ""]
+
+
+@pytest.mark.parametrize(
+    ("doc", "expected", "log"),
+    [
+        # json_repair 0.64.8: consecutive commas after an object value's number.
+        ('{"a": 1,, "b": 2}', {"a": 1, "b": 2}, "Found consecutive commas after an object number"),
+        ('{"a":1,,2,"b":3}', {"a": 1, "b": 3}, "Discarded stray number between object fields"),
+        ('{"a": 1,,2}', {"a": 1}, "Found consecutive commas after an object number"),
+        # json_repair 0.64.8: a dangling exponent is dropped.
+        ("[1e, 2]", [1, 2], "Discarded dangling exponent from number"),
+        (
+            '{"n": 1.5E-, "next": 2}',
+            {"n": 1.5, "next": 2},
+            "Discarded dangling exponent from number",
+        ),
+    ],
+)
+def test_number_repairs(doc: str, expected: Any, log: str) -> None:
+    for skip in (False, True):
+        value, entries = jr.repair_json(doc, logging=True, skip_json_loads=skip)
+        assert value == expected
+        assert log in [e["text"] for e in entries]
+        assert same(
+            jr.loads(doc, logging=True, skip_json_loads=skip),
+            ref.loads(doc, logging=True, skip_json_loads=skip),
+        )
+        with pytest.raises(ValueError, match="strict mode") as info:
+            jr.repair_json(doc, strict=True, skip_json_loads=skip)
+        with pytest.raises(ValueError, match=f"^{re.escape(str(info.value))}$"):
+            ref.repair_json(doc, strict=True, skip_json_loads=skip)
+
+
+class _Pipe(io.StringIO):
+    """A text stream that cannot seek (json_repair 0.64.6 reads those whole, as a str)."""
+
+    def seekable(self) -> bool:
+        return False
+
+    def tell(self) -> int:
+        raise OSError("not seekable")
+
+
+@pytest.mark.parametrize("doc", ['{"key": 1}', '{"key": }', 'text [1, 2] {"a": 1} more'])
+def test_load_non_seekable_stream(doc: str) -> None:
+    for kw in ({}, {"skip_json_loads": True}, {"logging": True}):
+        fd, ref_fd = _Pipe("ignored" + doc), _Pipe("ignored" + doc)
+        fd.read(7)
+        ref_fd.read(7)
+        assert same(jr.load(fd, **kw), ref.load(ref_fd, **kw))
+        assert same(jr.load(_Pipe(doc), **kw), jr.repair_json(doc, return_objects=True, **kw))
 
 
 @pytest.mark.parametrize(
@@ -348,7 +412,7 @@ def test_batch_delegates_reserved_items() -> None:
 
 
 def test_constants() -> None:
-    assert jr.JSON_REPAIR_VERSION == "0.64.5"
+    assert jr.JSON_REPAIR_VERSION == "0.64.9"
     assert jr.DELEGATED == ("schema",)
     assert jr.MAX_DEPTH == 1000
     assert jr.repair_json.__module__ == "pyroid.json_repair"

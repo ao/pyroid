@@ -17,10 +17,11 @@ would join an escaped surrogate pair into one character) and long strings with r
 (``"x" * 5 MiB``, ``"# comment\\n" * 5000`` become ``{"$cat": [prefix, {"$rep": [unit, count]}, ...]}``) are
 tagged objects with a single ``"$..."`` key. A plain JSON object never has a key starting with ``$``.
 
-The recorded upstream calls (``parity/data/json_repair-0.64.5/upstream-calls.jsonl``) use this encoding, and
+The recorded upstream calls (``parity/data/json_repair-0.64.9/upstream-calls.jsonl``) use this encoding, and
 file arguments as placeholders: ``{"$textio": {"text": ..., "pos": n}}`` is an ``io.StringIO`` positioned at
-``n`` (``load(fd)`` / ``json_fd=``); ``{"$path": {"text": ..., "type": "Path" | "str"}}`` (or ``"bytes": hex`` when
-not UTF-8) is a file holding those bytes (``from_file(filename)``). ``replay`` materialises them.
+``n`` (``load(fd)`` / ``json_fd=``; with ``"seekable": false``, a stream that cannot seek);
+``{"$path": {"text": ..., "type": "Path" | "str"}}`` (or ``"bytes": hex`` when not UTF-8) is a file holding those
+bytes (``from_file(filename)``). ``replay`` materialises them.
 
 This module is also loaded by path from ``python/tests`` (no package imports, no third-party imports).
 """
@@ -116,7 +117,10 @@ def encode(x: Any) -> Any:
     if t is bytes:
         return {"$bytes": x.hex()}
     if isinstance(x, TextIOSpec):
-        return {"$textio": {"text": encode(x.text), "pos": x.pos}}
+        spec = {"text": encode(x.text), "pos": x.pos}
+        if not x.seekable:
+            spec["seekable"] = False
+        return {"$textio": spec}
     if isinstance(x, PathSpec):
         try:  # readable (and compressible: see "$rep") when the bytes are UTF-8
             return {"$path": {"text": encode(x.data.decode("utf-8")), "type": x.kind}}
@@ -128,10 +132,24 @@ def encode(x: Any) -> Any:
 
 @dataclass(frozen=True)
 class TextIOSpec:
-    """A text stream argument: ``io.StringIO(text)`` positioned at ``pos`` (characters)."""
+    """A text stream argument: ``io.StringIO(text)`` positioned at ``pos`` (characters).
+
+    ``seekable=False``: a stream whose ``seekable()`` is false and whose ``tell()`` raises ``OSError``.
+    """
 
     text: str
     pos: int = 0
+    seekable: bool = True
+
+
+class NonSeekableStringIO(io.StringIO):
+    """A ``StringIO`` that reports it cannot seek, like a pipe (json_repair reads such streams whole)."""
+
+    def seekable(self) -> bool:
+        return False
+
+    def tell(self) -> int:
+        raise OSError("not seekable")
 
 
 @dataclass(frozen=True)
@@ -183,7 +201,7 @@ def _decode_tagged(tag: str, v: Any) -> Any:
     if tag == "$bytes":
         return bytes.fromhex(v)
     if tag == "$textio":
-        return TextIOSpec(decode(v["text"]), int(v["pos"]))
+        return TextIOSpec(decode(v["text"]), int(v["pos"]), bool(v.get("seekable", True)))
     if tag == "$path":
         data = decode(v["text"]).encode("utf-8") if "text" in v else bytes.fromhex(v["bytes"])
         return PathSpec(data, v["type"])
@@ -293,7 +311,7 @@ def capture(fn: Callable[..., Any], *args: Any, scrub: Iterable[str] = (), **kwa
     return Outcome(out.kind, out.value, cats)
 
 
-#: json_repair 0.64.5's chunked file reader (StringFileWrapper) raises this on some inputs when
+#: json_repair 0.64.9's chunked file reader (StringFileWrapper) raises this on some inputs when
 #: ``chunk_length`` is small: a log-context slice asks for a chunk past the end of the file.
 #: pyroid reads the file at once (a documented difference), so for such calls the reference is
 #: json_repair with the default ``chunk_length`` (1M characters: the whole file).
@@ -326,7 +344,7 @@ def describe_difference(got: Outcome, want: Outcome) -> str:
 
 @dataclass
 class Call:
-    """One recorded public call: ``fn(*args, **kwargs)`` and its outcome under json_repair 0.64.5."""
+    """One recorded public call: ``fn(*args, **kwargs)`` and its outcome under json_repair 0.64.9."""
 
     fn: str
     args: list[Any]
@@ -379,7 +397,7 @@ def write_calls(path: Path, header: dict[str, Any], calls: Iterable[Call]) -> No
 
 def _materialize(x: Any, tmp: Path, counter: Iterator[int]) -> Any:
     if isinstance(x, TextIOSpec):
-        fd = io.StringIO(x.text)
+        fd = io.StringIO(x.text) if x.seekable else NonSeekableStringIO(x.text)
         fd.seek(x.pos)
         return fd
     if isinstance(x, PathSpec):

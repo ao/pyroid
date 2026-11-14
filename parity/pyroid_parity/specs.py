@@ -49,7 +49,7 @@ def lid_ref(platform: str) -> str:
 
 # json_repair suite: the pinned version and the option sets every corpus / Hypothesis input is repaired under
 # (keyword arguments of ``repair_json``; ``ensure_ascii`` and ``indent`` are passed on to ``json.dumps``).
-JSON_REPAIR_VERSION = "0.64.5"
+JSON_REPAIR_VERSION = "0.64.9"
 JSON_REPAIR_OPTION_SETS: dict[str, dict[str, Any]] = {
     "default": {},
     "return_objects": {"return_objects": True},

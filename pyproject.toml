@@ -112,7 +112,7 @@ test = [
   "nltk==3.10.4",
   "regex==2026.9.29",
   # The reference for pyroid.json_repair's parity tests (MIT, pure Python).
-  "json-repair==0.64.5",
+  "json-repair==0.64.9",
   # The reference for pyroid.datasketch's parity tests (MIT; pulls numpy and scipy).
   "datasketch==2.0.0",
   # The reference for pyroid.jieba and for datatrove's Chinese tokenizer (MIT, pure Python).

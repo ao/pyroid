@@ -5,7 +5,6 @@ from typing import Any, ClassVar
 
 import pytest
 
-from src.json_repair import repair_json
 from src.json_repair.schema_repair import (
     SchemaRepairer,
     load_schema_model,
@@ -174,6 +173,30 @@ def test_schema_repairer_validate_and_prepare() -> None:
     invalid_schema: Any = True
     with pytest.raises(ValueError, match="Schema must be an object"):
         repairer._prepare_schema_for_validation(invalid_schema)
+
+
+def test_schema_normalization_only_visits_schema_locations() -> None:
+    literal = {"items": [1, 2], "additionalItems": False}
+    schema = {
+        "default": literal,
+        "enum": [literal],
+        "examples": [literal],
+        "dependencies": {"dependent": {"items": [{"type": "integer"}]}, "names": ["a"]},
+        "properties": {
+            "items": {"const": literal},
+            "nested": {"items": [{"type": "integer"}], "additionalItems": False},
+        },
+    }
+    prepared = SchemaRepairer(schema, None)._prepare_schema_for_validation(schema)
+    assert prepared["default"] == literal
+    assert prepared["enum"] == [literal]
+    assert prepared["examples"] == [literal]
+    assert prepared["dependencies"] == {"dependent": {"prefixItems": [{"type": "integer"}]}, "names": ["a"]}
+    assert prepared["properties"]["items"]["const"] == literal
+    assert prepared["properties"]["nested"] == {"prefixItems": [{"type": "integer"}], "items": False}
+    assert schema["properties"]["nested"]["items"] == [{"type": "integer"}]
+    with pytest.raises(ValueError, match=r"\$ref must be a string"):
+        SchemaRepairer({}, None).resolve_schema({"$ref": 123})
 
 
 def test_schema_repairer_ignores_invalid_pydantic_alias_metadata() -> None:
@@ -481,7 +504,3 @@ def test_apply_enum_const_mismatch_raises() -> None:
         repairer.repair_value("b", {"const": "a"}, "$")
     with pytest.raises(ValueError, match="does not match enum"):
         repairer.repair_value("b", {"enum": ["a"]}, "$")
-
-
-def test_repair_json_valid_empty_string_returns_empty() -> None:
-    assert repair_json('""') == ""

@@ -1,4 +1,4 @@
-"""json_repair parity: the ``--impl`` candidate vs json_repair 0.64.5 (live) and its recorded outcomes.
+"""json_repair parity: the ``--impl`` candidate vs json_repair 0.64.9 (live) and its recorded outcomes.
 
     pytest tests/test_json_repair.py                                  # self-check (candidate = json_repair)
     pytest tests/test_json_repair.py --impl pyroid.json_repair        # pyroid vs json_repair
@@ -11,7 +11,7 @@ Option sets: ``pyroid_parity.specs.JSON_REPAIR_OPTION_SETS`` (default, return_ob
 ensure_ascii=False, stream_stable, strict, indent=2).
 
 Checks (suite ``json_repair`` in parity-report.json):
-    upstream               every outermost public call json_repair 0.64.5's own test suite makes, replayed
+    upstream               every outermost public call json_repair 0.64.9's own test suite makes, replayed
                            (``upstream-calls.jsonl``, recorded by ``python -m pyroid_parity.json_repair_record``)
     upstream-schema        the recorded calls with ``schema=`` (pyroid delegates those to json_repair)
     upstream-<tag>         skipped recorded calls, with the reason (outcome depends on the stack depth / hash seed)

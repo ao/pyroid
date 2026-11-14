@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""json_repair 0.64.5 vs candidates: gated single-doc, pathological-curve and batch timings.
+"""json_repair 0.64.9 vs candidates: gated single-doc, pathological-curve and batch timings.
 
     python bench/json_repair_bench.py --impl json_repair --impl pyroid.json_repair \
         --out /target/jr-bench.json
@@ -7,7 +7,7 @@
     python bench/json_repair_bench.py --sections patho --families truncated_string,table_rows_continued
     python bench/json_repair_bench.py --impl json_repair --impl json_repair --quick   # gate smoke test
 
-Needs the stdlib and ``json-repair==0.64.5`` only. json_repair is always the reference and the
+Needs the stdlib and ``json-repair==0.64.9`` only. json_repair is always the reference and the
 baseline (the first ``--impl json_repair``, or implicitly). Every other ``--impl MODULE`` is an
 optional candidate row: a module that does not import (``pyroid.json_repair`` before its wheel is
 installed) is skipped with a warning. Repeating ``--impl json_repair`` adds json_repair itself as a
@@ -19,7 +19,7 @@ candidate, which exercises the comparison path.
   message. A mismatch aborts the run (exit 1; ``--out`` still gets the partial results).
   Pathological points are gated inside the worker, after its first call and before its timed
   repeats, against fingerprints of the reference's output. There the reference's ``loads`` value is
-  ``json.loads`` of its ``repair_json`` string, which json_repair 0.64.5 builds as
+  ``json.loads`` of its ``repair_json`` string, which json_repair 0.64.9 builds as
   ``json.dumps(loads(s))``. A size json_repair did not reach (it stopped or timed out at a smaller
   size) is reported as unchecked (``*``).
 * Sections:
@@ -61,7 +61,7 @@ from pathlib import Path
 from typing import Any
 
 REFERENCE = "json_repair"
-REFERENCE_VERSION = "0.64.5"
+REFERENCE_VERSION = "0.64.9"
 LABEL = "Docker/OrbStack VM, indicative"
 
 # ------------------------------------------------------------------------------------------ inputs
@@ -232,7 +232,7 @@ class Family:
     kind: str  # "realistic" | "adversarial" | "control"
     gen: Callable[[int], str]
     desc: str
-    cause: str  # the json_repair 0.64.5 code path that makes it super-linear
+    cause: str  # the json_repair 0.64.9 code path that makes it super-linear
     kwargs: dict[str, Any] = field(default_factory=dict)
 
 
@@ -722,7 +722,7 @@ def _worker() -> int:
         emit({"phase": "call", "ns": times[-1]})
     done: dict[str, Any] = {"phase": "done", "times_ns": times}
     if expect is None:
-        # json_repair 0.64.5 returns json.dumps(loads(s)) (or "" for ""): this is its loads() value.
+        # json_repair 0.64.9 returns json.dumps(loads(s)) (or "" for ""): this is its loads() value.
         obj = (True, json.loads(out[1]) if out[1] != "" else "") if out[0] else out
         done["fp"] = {"str": fp_str, "obj": fp_outcome(obj)}
         done["head"] = _head(out)

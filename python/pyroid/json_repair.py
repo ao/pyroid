@@ -1,5 +1,5 @@
-# Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
-"""A drop-in, Rust-backed replacement for json_repair 0.64.5 (``import pyroid.json_repair``).
+# Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
+"""A drop-in, Rust-backed replacement for json_repair 0.64.9 (``import pyroid.json_repair``).
 
 ``repair_json``, ``loads``, ``load`` and ``from_file`` have json_repair's
 signatures and return the same strings and objects. The repair runs in Rust,
@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 #: The json_repair release whose behaviour this module reproduces.
-JSON_REPAIR_VERSION = "0.64.5"
+JSON_REPAIR_VERSION = "0.64.9"
 
 #: Arguments that are always forwarded to the real json_repair (it must be installed).
 DELEGATED = ("schema",)
@@ -226,6 +226,10 @@ def repair_json(
         raise ValueError("schema_repair_mode='salvage' requires schema.")
     if schema is not None and strict:
         raise ValueError("schema and strict cannot be used together.")
+    if json_fd is not None and not json_fd.seekable():
+        # As json_repair does: a stream that cannot be rewound is read and repaired as a str.
+        json_str = json_fd.read()
+        json_fd = None
     position = None
     if json_fd is not None:
         position = _tell(json_fd)
@@ -270,7 +274,7 @@ def repair_json(
             if out_mode == _MODE_LOGGING:
                 return value, []
             if dump is _PYTHON_DUMPS:
-                return "" if value == "" else json.dumps(value, **json_dumps_args)
+                return json.dumps(value, **json_dumps_args)
             return value
     result = _native.repair(
         text,
