@@ -70,7 +70,11 @@ class Mark:
 
     def __str__(self) -> str:
         snippet = self.get_snippet()
-        where = '  in "%s", line %d, column %d' % (self.name, self.line + 1, self.column + 1)
+        where = '  in "%s", line %d, column %d' % (  # noqa: UP031 - PyYAML's formatting
+            self.name,
+            self.line + 1,
+            self.column + 1,
+        )
         if snippet is not None:
             where += ":\n" + snippet
         return where
@@ -121,7 +125,9 @@ class MarkedYAMLError(YAMLError):
 class ReaderError(YAMLError):
     """The stream holds bytes that do not decode or characters YAML does not allow."""
 
-    def __init__(self, name: Any, position: int, character: Any, encoding: str, reason: str) -> None:
+    def __init__(
+        self, name: Any, position: int, character: Any, encoding: str, reason: str
+    ) -> None:
         self.name = name
         self.character = character
         self.position = position
@@ -130,14 +136,14 @@ class ReaderError(YAMLError):
 
     def __str__(self) -> str:
         if isinstance(self.character, bytes):
-            return "'%s' codec can't decode byte #x%02x: %s\n  in \"%s\", position %d" % (
+            return "'%s' codec can't decode byte #x%02x: %s\n  in \"%s\", position %d" % (  # noqa: UP031
                 self.encoding,
                 ord(self.character),
                 self.reason,
                 self.name,
                 self.position,
             )
-        return 'unacceptable character #x%04x: %s\n  in "%s", position %d' % (
+        return 'unacceptable character #x%04x: %s\n  in "%s", position %d' % (  # noqa: UP031
             self.character,
             self.reason,
             self.name,

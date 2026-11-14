@@ -123,7 +123,7 @@ _native._configure(
         "datetime": datetime.datetime,
         "timedelta": datetime.timedelta,
         "timezone": datetime.timezone,
-        "utc": datetime.timezone.utc,
+        "utc": datetime.UTC,
         "surrogates": {0x10F800 + i: 0xD800 + i for i in range(0x800)},
         "helpers": _construct.HELPERS,
     }
@@ -260,7 +260,7 @@ _snapshot()
 
 
 def _loader_mode(loader_cls: Any) -> str | None:
-    """"safe"/"full" when `loader_cls` behaves as the stock class, else None (delegate)."""
+    """The native mode for `loader_cls` ("safe" or "full"), or None to delegate."""
     mode = _LOADER_MODES.get(loader_cls)
     if mode is not None:
         if _yaml is None:
@@ -342,7 +342,9 @@ def _pyyaml(name: str, reason: str) -> Any:
 
 def _loader_reason(loader_cls: Any) -> str:
     name = getattr(loader_cls, "__name__", type(loader_cls).__name__)
-    if loader_cls in _LOADER_MODES or any(c in _LOADER_MODES for c in getattr(loader_cls, "__mro__", ())):
+    if loader_cls in _LOADER_MODES or any(
+        c in _LOADER_MODES for c in getattr(loader_cls, "__mro__", ())
+    ):
         return f"Loader={name} with added constructors, resolvers or overrides"
     return f"Loader={name}"
 
@@ -370,7 +372,9 @@ def _py_load_all(stream: Any, loader_cls: Any) -> Iterator[Any]:
 # Streams
 # ---------------------------------------------------------------------------
 
-_NON_PRINTABLE = re.compile("[^\x09\x0a\x0d\x20-\x7e\x85\xa0-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
+_NON_PRINTABLE = re.compile(
+    "[^\x09\x0a\x0d\x20-\x7e\x85\xa0-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]"
+)
 
 
 def _printable_error(text: str, name: Any, offset: int = 0) -> ReaderError | None:
@@ -378,13 +382,19 @@ def _printable_error(text: str, name: Any, offset: int = 0) -> ReaderError | Non
     if match is None:
         return None
     return ReaderError(
-        name, offset + match.start(), ord(match.group()), "unicode", "special characters are not allowed"
+        name,
+        offset + match.start(),
+        ord(match.group()),
+        "unicode",
+        "special characters are not allowed",
     )
 
 
 def _decode_bytes(data: bytes, name: str) -> str:
     """PyYAML's reader on a ``bytes`` stream with a UTF-16 BOM."""
-    decode = codecs.utf_16_le_decode if data.startswith(codecs.BOM_UTF16_LE) else codecs.utf_16_be_decode
+    decode = (
+        codecs.utf_16_le_decode if data.startswith(codecs.BOM_UTF16_LE) else codecs.utf_16_be_decode
+    )
     try:
         text, _ = decode(data, "strict", True)
     except UnicodeDecodeError as exc:
@@ -442,7 +452,9 @@ def _emulate_reader(reads: list[Any], name: Any) -> tuple[str, ReaderError | Non
             except UnicodeDecodeError as exc:
                 character = raw[exc.start]
                 position = pointer - len(raw) + exc.start
-                return "".join(parts), ReaderError(name, position, character, exc.encoding, exc.reason)
+                return "".join(parts), ReaderError(
+                    name, position, character, exc.encoding, exc.reason
+                )
         else:
             data = raw
             converted = len(data)
@@ -480,8 +492,11 @@ class _Replay:
 
 
 def _native_load(stream: Any, mode: str) -> tuple[Any, Any]:
-    """Load one document natively: ``(result, stream)``. A ``NotImplemented`` result means
-    PyYAML must load it, from the returned stream (file objects are replayed)."""
+    """Load one document natively: ``(result, stream)``.
+
+    A ``NotImplemented`` result means PyYAML must load it, from the returned stream (file
+    objects are replayed).
+    """
     reads: list[Any] = []
     result = _native_load_one(stream, mode, reads)
     if result is NotImplemented and reads:
@@ -506,7 +521,9 @@ def _native_load_one(stream: Any, mode: str, reads: list[Any]) -> Any:
     if isinstance(stream, bytes):
         name = "<byte string>"
         if stream.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
-            return _native.load(_decode_bytes(stream, name), name, True, None, None, depth, digits, full)
+            return _native.load(
+                _decode_bytes(stream, name), name, True, None, None, depth, digits, full
+            )
         return _native.load(stream, name, True, None, None, depth, digits, full)
     name = getattr(stream, "name", "<file>")
     reads.extend(_read_all(stream))
@@ -612,7 +629,7 @@ def safe_load(stream: Any) -> Any:
 
 
 def safe_load_all(stream: Any) -> Iterator[Any]:
-    """Parse all YAML documents in `stream` and produce the Python objects (``yaml.safe_load_all``)."""
+    """Parse all YAML documents in `stream` (``yaml.safe_load_all``)."""
     return load_all(stream, SafeLoader)
 
 
@@ -678,7 +695,7 @@ _snapshot_dumpers()
 
 
 def _dumper_mode(dumper_cls: Any) -> str | None:
-    """"safe"/"full" when `dumper_cls` behaves as the stock class, else None (delegate)."""
+    """The native mode for `dumper_cls` ("safe" or "full"), or None to delegate."""
     mode = _DUMPER_MODES.get(dumper_cls)
     if mode is not None:
         if _yaml is None:
@@ -738,9 +755,13 @@ def _dump_options(
     tags: Any,
     sort_keys: Any,
 ) -> dict[str, Any] | str:
-    """The native options, as PyYAML's Emitter/Serializer/Representer read them, or the reason
-    they need PyYAML."""
-    if default_style is not None and (type(default_style) is not str or default_style not in ("", '"', "'", "|", ">")):
+    """The native options, as PyYAML's Emitter, Serializer and Representer read them.
+
+    A ``str`` result is the reason the options need PyYAML.
+    """
+    if default_style is not None and (
+        type(default_style) is not str or default_style not in ("", '"', "'", "|", ">")
+    ):
         return f"default_style={default_style!r}"
     best_indent = 2
     if indent and 1 < indent < 10:
@@ -764,7 +785,9 @@ def _dump_options(
             return f"version={version!r}"
         version = tuple(version)
     if tags is not None:
-        if type(tags) is not dict or not all(type(k) is str and type(v) is str for k, v in tags.items()):
+        if type(tags) is not dict or not all(
+            type(k) is str and type(v) is str for k, v in tags.items()
+        ):
             return "tags that are not a dict of str"
         tags = sorted(tags.items()) or None
     return {
@@ -872,11 +895,17 @@ def dump_all(
         tags,
         sort_keys,
     )
-    if isinstance(opts, str) or (encoding is not None and type(encoding) is not str) or encoding == "":
+    if (
+        isinstance(opts, str)
+        or (encoding is not None and type(encoding) is not str)
+        or encoding == ""
+    ):
         _pyyaml("dump_all", opts if isinstance(opts, str) else f"encoding={encoding!r}")
         return _py_dump_all(documents, stream, Dumper, **kwds)
     # The emitter writes bytes only when the stream has no `encoding` (BytesIO when stream=None).
-    effective = encoding if encoding and (stream is None or not hasattr(stream, "encoding")) else None
+    effective = (
+        encoding if encoding and (stream is None or not hasattr(stream, "encoding")) else None
+    )
     per_write = False
     if effective is not None:
         try:
@@ -972,6 +1001,10 @@ def __getattr__(name: str) -> Any:
         return getattr(_yaml, name)
     raise AttributeError(
         f"module 'pyroid.yaml' has no attribute {name!r}"
-        + ("" if _yaml is not None else f" (PyYAML provides it: pip install pyyaml=={PYYAML_VERSION})"),
+        + (
+            ""
+            if _yaml is not None
+            else f" (PyYAML provides it: pip install pyyaml=={PYYAML_VERSION})"
+        ),
         name=name,
     )

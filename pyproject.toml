@@ -251,6 +251,11 @@ module = ["nemo_curator", "nemo_curator.*", "pandas", "pandas.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+# PyYAML 6.0.3 (the reference for pyroid.yaml's tests) ships neither py.typed nor stubs.
+module = ["yaml", "yaml.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # pyarrow 26 ships neither py.typed nor stubs.
 module = ["pyarrow", "pyarrow.*"]
 ignore_missing_imports = true

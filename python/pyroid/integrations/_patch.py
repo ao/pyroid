@@ -821,11 +821,15 @@ def _build_yaml(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     if real is None:  # no PyYAML: shims holding pyroid.yaml's names
         shims: dict[str, types.ModuleType] = {}
         for mod, names in _YAML_SHIMS.items():
-            shims[mod] = _shim(mod, None, missing, impl, {n: getattr(impl, n) for n in names}, package=False)
+            shims[mod] = _shim(
+                mod, None, missing, impl, {n: getattr(impl, n) for n in names}, package=False
+            )
         provided: dict[str, Any] = {n: getattr(impl, n) for n in impl.__all__}
         provided.update({k.rpartition(".")[2]: v for k, v in shims.items()})
         provided["__with_libyaml__"] = False
-        shims["yaml"] = _shim("yaml", None, missing, impl, provided, package=True, version=impl.PYYAML_VERSION)
+        shims["yaml"] = _shim(
+            "yaml", None, missing, impl, provided, package=True, version=impl.PYYAML_VERSION
+        )
         return shims, []
     saved: list[tuple[Any, str, Any]] = []
     for n in _YAML_SWAPS:

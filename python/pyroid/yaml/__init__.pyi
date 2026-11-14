@@ -129,7 +129,9 @@ class ReaderError(YAMLError):
     position: int
     encoding: str
     reason: str
-    def __init__(self, name: Any, position: int, character: Any, encoding: str, reason: str) -> None: ...
+    def __init__(
+        self, name: Any, position: int, character: Any, encoding: str, reason: str
+    ) -> None: ...
 
 class ScannerError(MarkedYAMLError):
     """The scanner could not make a token."""
@@ -193,7 +195,7 @@ def load_all(stream: Any, Loader: Any) -> Iterator[Any]:  # noqa: N803
     """
 
 def safe_load(stream: Any) -> Any:
-    """Parse the first YAML document in `stream`, resolving only basic YAML tags (``yaml.safe_load``).
+    """Parse the first YAML document in `stream`, with only basic tags (``yaml.safe_load``).
 
     >>> safe_load("a: [1, 2.5, yes, ~, 2001-12-14]")
     {'a': [1, 2.5, True, None, datetime.date(2001, 12, 14)]}
@@ -232,7 +234,7 @@ def dump_all(
     tags: dict[str, str] | None = None,
     sort_keys: bool = True,
 ) -> Any:
-    """Serialize a sequence of Python objects into a YAML stream (``yaml.dump_all``).
+    r"""Serialize a sequence of Python objects into a YAML stream (``yaml.dump_all``).
 
     Args:
         documents: The documents, iterated once.
@@ -248,7 +250,7 @@ def dump_all(
         indent: 2 to 9 (other values give 2, as in PyYAML).
         width: Preferred line width; ``float("inf")`` never wraps.
         allow_unicode: Write non-ASCII characters instead of escapes.
-        line_break: ``"\\n"``, ``"\\r"`` or ``"\\r\\n"``.
+        line_break: ``"\n"``, ``"\r"`` or ``"\r\n"``.
         encoding: Encode the text (as PyYAML, per write: ``"utf-16"`` repeats its BOM).
         explicit_start: Start each document with ``---``.
         explicit_end: End each document with ``...``.
@@ -268,10 +270,10 @@ def safe_dump_all(documents: Iterable[Any], stream: Any = None, **kwds: Any) -> 
     """``yaml.safe_dump_all``: :func:`dump_all` with ``SafeDumper``."""
 
 def safe_dump(data: Any, stream: Any = None, **kwds: Any) -> Any:
-    """Serialize one Python object with ``SafeDumper`` (``yaml.safe_dump``).
+    r"""Serialize one Python object with ``SafeDumper`` (``yaml.safe_dump``).
 
     >>> safe_dump({"b": [1, 2], "a": "x"})
-    'a: x\\nb:\\n- 1\\n- 2\\n'
+    'a: x\nb:\n- 1\n- 2\n'
     """
 
 def __getattr__(name: str) -> Any:

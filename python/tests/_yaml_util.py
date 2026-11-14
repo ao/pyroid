@@ -41,7 +41,7 @@ def outcome(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     """``("ok", value)`` or ``("err", exception class name, str(exception))``."""
     try:
         return ("ok", fn(*args, **kwargs))
-    except Exception as exc:  # noqa: BLE001 - every exception is part of the outcome
+    except Exception as exc:
         return ("err", type(exc).__name__, str(exc))
 
 
@@ -52,7 +52,7 @@ def load_outcome(fn: Callable[..., Any], *args: Any) -> Any:
         if hasattr(result, "__next__"):
             return ("ok", [encode(d) for d in result])
         return ("ok", encode(result))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return ("err", type(exc).__name__, str(exc))
 
 
@@ -73,13 +73,83 @@ class Chunked:
 
 # Strings that exercise the resolver, the emitter's style choice and its quoting.
 TRICKY = [
-    "", " a", "a ", "- x", "x: y", "a #b", "#c", "yes", "No", "on", "OFF", "~", "null", "NULL",
-    "1", "-1", "+1", "01", "08", "0x1F", "0b101", "0o17", "1_000", "1:20", "190:20:30.15",
-    "1e5", "1.0e+5", "1.", ".5", ".inf", "-.Inf", ".NaN", "2001-12-14", "2001-12-14 21:59:43.10 -5",
-    "a\nb", "a\n", "\n", "\n\n", "\t", "a\tb", "'", '"', "\\", "\u00e9", "\u2028", "\x85", "\ufeff",
-    "\x00", "\x07", "\x7f", "\ud7ff", "\ue000", "\U0001f600", "a" * 120, "word " * 30,
-    "=", "<<", "!x", "&a", "*a", "%x", "@x", "`x", "[", "{", "}", ",", "?", ":", "- ", "? x", "|",
-    ">", "---", "...", "--- x", "a: b: c",
+    "",
+    " a",
+    "a ",
+    "- x",
+    "x: y",
+    "a #b",
+    "#c",
+    "yes",
+    "No",
+    "on",
+    "OFF",
+    "~",
+    "null",
+    "NULL",
+    "1",
+    "-1",
+    "+1",
+    "01",
+    "08",
+    "0x1F",
+    "0b101",
+    "0o17",
+    "1_000",
+    "1:20",
+    "190:20:30.15",
+    "1e5",
+    "1.0e+5",
+    "1.",
+    ".5",
+    ".inf",
+    "-.Inf",
+    ".NaN",
+    "2001-12-14",
+    "2001-12-14 21:59:43.10 -5",
+    "a\nb",
+    "a\n",
+    "\n",
+    "\n\n",
+    "\t",
+    "a\tb",
+    "'",
+    '"',
+    "\\",
+    "\u00e9",
+    "\u2028",
+    "\x85",
+    "\ufeff",
+    "\x00",
+    "\x07",
+    "\x7f",
+    "\ud7ff",
+    "\ue000",
+    "\U0001f600",
+    "a" * 120,
+    "word " * 30,
+    "=",
+    "<<",
+    "!x",
+    "&a",
+    "*a",
+    "%x",
+    "@x",
+    "`x",
+    "[",
+    "{",
+    "}",
+    ",",
+    "?",
+    ":",
+    "- ",
+    "? x",
+    "|",
+    ">",
+    "---",
+    "...",
+    "--- x",
+    "a: b: c",
 ]
 
 text = st.text(st.characters(exclude_categories=["Cs"]), max_size=40) | st.sampled_from(TRICKY)
@@ -95,13 +165,22 @@ scalars = (
     | st.datetimes()
     | st.datetimes(timezones=st.timezones())
 )
-keys = st.none() | st.booleans() | st.integers(-1000, 1000) | st.floats(allow_nan=False) | text | st.dates()
+keys = (
+    st.none()
+    | st.booleans()
+    | st.integers(-1000, 1000)
+    | st.floats(allow_nan=False)
+    | text
+    | st.dates()
+)
 data = st.recursive(
     scalars,
-    lambda c: st.lists(c, max_size=5)
-    | st.tuples(c, c)
-    | st.dictionaries(keys, c, max_size=5)
-    | st.frozensets(keys, max_size=3).map(set),
+    lambda c: (
+        st.lists(c, max_size=5)
+        | st.tuples(c, c)
+        | st.dictionaries(keys, c, max_size=5)
+        | st.frozensets(keys, max_size=3).map(set)
+    ),
     max_leaves=25,
 )
 
@@ -125,7 +204,14 @@ dump_options = st.fixed_dictionaries(
 )
 
 # Characters that matter to the scanner, for mutating valid YAML.
-YAML_CHARS = list(" \t\n\r-?:,[]{}#&*!|>'\"%@`.=<~\\x0") + ["\x85", "\u2028", "\ufeff", "\u00e9", "\x07"]
+YAML_CHARS = [
+    *" \t\n\r-?:,[]{}#&*!|>'\"%@`.=<~\\x0",
+    "\x85",
+    "\u2028",
+    "\ufeff",
+    "\u00e9",
+    "\x07",
+]
 
 
 @st.composite
@@ -137,7 +223,7 @@ def yaml_texts(draw: Any, dump: Callable[..., str]) -> str:
     opts["version"] = None
     try:
         out = dump(doc, **opts)
-    except Exception:  # noqa: BLE001 - e.g. an EmitterError for a bad tag prefix
+    except Exception:
         out = ""
     s = list(out)
     for _ in range(draw(st.integers(0, 4))):

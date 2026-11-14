@@ -91,11 +91,11 @@ def construct_binary(value: str) -> bytes | str:
     try:
         data = value.encode("ascii")
     except UnicodeEncodeError as exc:
-        return "failed to convert base64 data into ascii: %s" % exc
+        return "failed to convert base64 data into ascii: %s" % exc  # noqa: UP031
     try:
         return base64.decodebytes(data)
     except binascii.Error as exc:
-        return "failed to decode base64 data: %s" % exc
+        return "failed to decode base64 data: %s" % exc  # noqa: UP031
 
 
 timestamp_regexp = re.compile(
@@ -139,7 +139,7 @@ def construct_timestamp(value: str) -> Any:
             delta = -delta
         tzinfo = datetime.timezone(delta)
     elif values["tz"]:
-        tzinfo = datetime.timezone.utc
+        tzinfo = datetime.UTC
     return datetime.datetime(year, month, day, hour, minute, second, fraction, tzinfo=tzinfo)
 
 
