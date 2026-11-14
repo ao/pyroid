@@ -828,6 +828,7 @@ impl LoadAll {
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(load, m)?)?;
     m.add_function(wrap_pyfunction!(_scan, m)?)?;
+    m.add_function(wrap_pyfunction!(_compose, m)?)?;
     m.add_class::<LoadAll>()?;
     Ok(())
 }
@@ -847,5 +848,16 @@ fn _scan(py: Python<'_>, text: &str) -> usize {
             n += 1;
         }
         n
+    })
+}
+
+/// The number of nodes PyYAML's composer makes from `text`, all documents (a benchmark hook:
+/// everything but constructing Python objects).
+#[pyfunction]
+fn _compose(py: Python<'_>, text: &str) -> usize {
+    let text = text.to_owned();
+    py.detach(|| {
+        pyroid_core::yaml::compose_all(&text)
+            .map_or(0, |docs| docs.iter().map(|g| g.nodes.len()).sum())
     })
 }

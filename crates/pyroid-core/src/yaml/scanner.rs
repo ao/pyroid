@@ -165,6 +165,10 @@ impl Scanner {
 
     #[inline]
     fn fill(&mut self) -> Result<()> {
+        // need_more_tokens() is false here (no key can be stale, none is at the head).
+        if !self.tokens.is_empty() && self.possible_simple_keys.is_empty() {
+            return Ok(());
+        }
         while self.need_more_tokens()? {
             let r = self.fetch_more_tokens();
             if self.reader.hit_limit() {

@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 license = "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib"
 license-files = ["LICENSE", "LICENSES/*", "NOTICE"]
 authors = [{ name = "Andrew Odendaal" }]
-keywords = ["rust", "pyo3", "ftfy", "json-repair", "datasketch", "minhash", "nltk", "jieba", "tokenizer", "trafilatura", "web-scraping", "warc", "fasttext", "datatrove", "rouge", "bleu", "nlp", "text-cleaning", "deduplication", "llm"]
+keywords = ["rust", "pyo3", "ftfy", "json-repair", "datasketch", "minhash", "nltk", "jieba", "tokenizer", "trafilatura", "web-scraping", "warc", "yaml", "pyyaml", "fasttext", "datatrove", "rouge", "bleu", "nlp", "text-cleaning", "deduplication", "llm"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -119,6 +119,8 @@ test = [
   "jieba==0.42.1",
   # The reference for pyroid.warc (Apache-2.0, pure Python).
   "warcio==1.8.2",
+  # The reference for pyroid.yaml (MIT; its pure-Python SafeLoader and SafeDumper are the oracle).
+  "pyyaml==6.0.3",
 ]
 # GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
 # PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds
