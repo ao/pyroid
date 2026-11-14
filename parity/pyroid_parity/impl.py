@@ -106,6 +106,7 @@ SUITES = (
     "nltk",
     "warc",
     "nemo",
+    "dateutil",
 )
 REFERENCE = {
     "ftfy": "ftfy",
@@ -120,9 +121,13 @@ REFERENCE = {
     "nltk": "nltk",
     "warc": "warcio",
     "nemo": "nemo_curator",
+    "dateutil": "dateutil",
 }
 # Distribution that provides a module, for version reporting when it differs from the module name.
-DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel")}
+DIST_HINT = {
+    "fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel"),
+    "dateutil": ("python-dateutil",),
+}
 
 
 class ImplError(ValueError):
@@ -448,6 +453,16 @@ def _generic_nemo(mod: Any) -> Any:
     return Candidate(mod)
 
 
+class GenericDateutil:
+    """A package with a ``parser`` submodule (``dateutil``, ``pyroid.dateutil``), taken as it is."""
+
+    def __init__(self, mod: Any) -> None:
+        import importlib
+
+        self.mod = mod
+        self.parser = importlib.import_module(f"{mod.__name__}.parser")
+
+
 GENERIC: dict[str, Callable[[Any], Any]] = {
     "ftfy": GenericFtfy,
     "fasttext": GenericFasttext,
@@ -461,4 +476,5 @@ GENERIC: dict[str, Callable[[Any], Any]] = {
     "nltk": GenericNltk,
     "warc": GenericWarc,
     "nemo": _generic_nemo,
+    "dateutil": GenericDateutil,
 }
