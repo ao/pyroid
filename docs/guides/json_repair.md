@@ -245,8 +245,11 @@ indicative. Single documents, json_repair 0.64.9, CPython 3.12, best time per ca
 | broken 1 MB, `loads` | 228 ms | 17.6 ms | 13× |
 
 On valid JSON there is little to gain. Both libraries start with CPython's `json.loads`, so
-`loads` of valid JSON costs the same. The speedup is on broken JSON, where json_repair's parser
-runs in Python. json_repair 0.64.9 is itself faster than 0.64.5 there: on the same machine 0.64.5
+`loads` of valid JSON costs the same. A decoder in Rust would not change that much: on the same
+devbox, orjson, the fastest Python JSON decoder, took valid ~1 KB and 1.9 MB documents 1.3× and
+1.7× faster than `json.loads`, and pyroid's own Rust decoder (with the conversion to Python
+objects) was slower than `json.loads` on both, so `loads` keeps calling `json.loads`. The speedup
+is on broken JSON, where json_repair's parser runs in Python. json_repair 0.64.9 is itself faster than 0.64.5 there: on the same machine 0.64.5
 took 625 µs for the broken ~1 KB document and 425 ms for the broken 1 MB one.
 
 For batches, 10,000 broken documents of about 1.2 KB on free-threaded CPython 3.15t (GIL off),
