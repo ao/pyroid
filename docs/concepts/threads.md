@@ -42,6 +42,13 @@ Python threads keep running, and a pyroid call in one thread doesn't block anoth
 pyroid call. Converting the results back to Python objects needs the interpreter, so it happens
 on the calling thread after the batch.
 
+A call on a single `str` releases the GIL only for long documents (4 KiB and more) or slow
+kernels (fastText, the filters, MinHash). When another Python thread is busy, getting the GIL
+back after such a call can take up to the interpreter's switch interval
+(`sys.getswitchinterval()`, 5 ms by default), which is far longer than the call itself. So with
+busy threads around, one call per document can be many times slower than alone; a batch call
+releases and retakes the GIL once for the whole batch.
+
 ## Free-threaded Python
 
 pyroid ships `cp314t` and `abi3t` wheels for free-threaded CPython 3.14t and 3.15t, and declares
