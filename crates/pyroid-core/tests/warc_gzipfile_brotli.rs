@@ -7,10 +7,11 @@
 //! here and in `warc_gzipfile_data/trace.py` by the same rules. A trace is each call's output
 //! (length and bytes) or `str(e)` of its `brotlicffi.error`, then `flush()` and `is_finished()`.
 //!
-//! `known` lists the cases where brotli-decompressor 5.0.3 cannot give libbrotli's result: a
-//! damaged command runs past a metablock that is not the last one, libbrotli stops with
-//! `_ERROR_FORMAT_BLOCK_LENGTH_2` (or `_1`), and the port resets the metablock state and decodes
-//! on. They are left out of the group digests and must keep differing (a fixed port shows up).
+//! `known` lists cases where the port cannot give libbrotli's result. They are left out of the
+//! group digests and must keep differing (a fixed port shows up). With brotli-decompressor 6.3
+//! it is empty: every case matches. (5.0.3 differed in 41 cases, where a damaged command ran
+//! past a metablock that was not the last one: libbrotli stops with
+//! `_ERROR_FORMAT_BLOCK_LENGTH_2` and 5.0.3 decoded on; 6.2.0 added libbrotli's check.)
 //!
 //! Regenerate with `python -I tests/warc_gzipfile_data/trace.py brotli <out.json> [detail dir]
 //! [known names file]`.

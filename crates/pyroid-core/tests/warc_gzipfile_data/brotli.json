@@ -39,14 +39,14 @@
   "b3/trail3": "2532586491058167239",
   "b3/trunc": "1013026320145117968",
   "b3/valid": "15764532145632308011",
-  "b4/flip": "7450797389912399919",
+  "b4/flip": "2459030682665715204",
   "b4/trail0": "14581129707408320485",
   "b4/trail1": "14581129707408320485",
   "b4/trail2": "12255490230856639512",
   "b4/trail3": "11501031149056356276",
   "b4/trunc": "9096681017399658754",
   "b4/valid": "9316243790168517165",
-  "b5/flip": "6171139548817852606",
+  "b5/flip": "5205973102952906786",
   "b5/trail0": "2388048929475132056",
   "b5/trail1": "2388048929475132056",
   "b5/trail2": "12433388641024759170",
@@ -65,170 +65,5 @@
   "garbage2": "1781000620387125866",
   "garbage3": "1013026320145117968"
  },
- "known": {
-  "b4/flip/230": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/305": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/340/100": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "14929626284385494644"
-  },
-  "b4/flip/340": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/370": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/375": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/410": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/440/100": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "1332068687019189507"
-  },
-  "b4/flip/440": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/465": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/485": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/525": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/670": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/690": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/720/100": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "17802277664122055481"
-  },
-  "b4/flip/720": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/745": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/790": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/810": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_1'",
-   "digest": "16625456112099789749"
-  },
-  "b4/flip/850": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b4/flip/870": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_1'",
-   "digest": "16625456112099789749"
-  },
-  "b5/flip/114": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/228": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/258": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/270": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/282": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/288/100": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "15970630796396133872"
-  },
-  "b5/flip/288": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/294": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/348": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/360/100": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "4844437200844147763"
-  },
-  "b5/flip/360": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/408/100": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "14202680169817330727"
-  },
-  "b5/flip/408": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/426": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/444": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/486": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/504/100": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "14944534311318628979"
-  },
-  "b5/flip/504": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/510": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  },
-  "b5/flip/516": {
-   "brotlicffi": "b'Decompression error: _ERROR_FORMAT_BLOCK_LENGTH_2'",
-   "digest": "13882068772001605441"
-  }
- }
+ "known": {}
 }

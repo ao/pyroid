@@ -52,9 +52,6 @@ Differences from warcio:
   (``sha3_256``, ``blake2b``, ...) report "unknown hash algorithm name" where hashlib would
   hash.
 - ``content_stream()`` needs the record's ``raw_stream`` to be pyroid's.
-- Brotli payloads: a damaged stream whose command runs past the end of a metablock that is
-  not the last one decodes further than libbrotli (more output, or another error later),
-  where brotlicffi raises ``brotlicffi.error``.
 """
 
 from collections.abc import Callable, Iterator

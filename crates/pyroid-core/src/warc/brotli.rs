@@ -9,11 +9,10 @@
 //! decoding error, every later call fails again with the same error (or, if the failing call
 //! left input unconsumed, with the `can_accept_more_data()` error when given more data).
 //!
-//! One difference remains, on damaged streams only: when a command runs past the end of a
-//! metablock that is not the last one, libbrotli fails with `_ERROR_FORMAT_BLOCK_LENGTH_2`
-//! (sometimes `_1`), while brotli-decompressor 5.0.3 has no such check, starts the next
-//! metablock and decodes on (more output, or another error later). The same overrun in the last
-//! metablock, and the port's other differing error codes, are mapped to libbrotli's.
+//! brotli-decompressor 6 reports the same error codes as libbrotli, including
+//! `_ERROR_FORMAT_BLOCK_LENGTH_2` for a command that runs past the end of its metablock (6.2.0)
+//! and `_ERROR_FORMAT_PADDING_1` for non-zero padding after a metadata or uncompressed
+//! metablock header, so its codes are passed through unchanged.
 
 use brotli_decompressor::{BrotliDecompressStream, BrotliResult, BrotliState, StandardAlloc};
 
@@ -89,12 +88,6 @@ impl Default for Decompressor {
     }
 }
 
-/// `BROTLI_DECODER_ERROR_FORMAT_BLOCK_LENGTH_2`.
-const BLOCK_LENGTH_2: i32 = -10;
-/// `BROTLI_DECODER_ERROR_FORMAT_PADDING_1`, `_PADDING_2`.
-const PADDING_1: i32 = -14;
-const PADDING_2: i32 = -15;
-
 impl Decompressor {
     /// A decoder with libbrotli's defaults (no large-window streams).
     pub fn new() -> Self {
@@ -107,29 +100,6 @@ impl Decompressor {
             unconsumed: Vec::new(),
             error: None,
         }
-    }
-
-    /// The error code libbrotli reports for the failure the port just returned.
-    ///
-    /// - libbrotli fails with `BLOCK_LENGTH_2` when a metablock ends with its remaining length
-    ///   below zero (a command ran past the metablock). The port has no such check: in the last
-    ///   metablock it fails right after (padding, or the ring-buffer write in `DONE`), which is
-    ///   mapped back here; before a later metablock it resets the length and decodes on (see
-    ///   the module docs).
-    /// - The port reports non-zero padding after a metadata or uncompressed metablock header as
-    ///   `PADDING_2`; libbrotli says `PADDING_1`.
-    fn failure_code(&self) -> i32 {
-        let code = self.state.error_code as i32;
-        let state = format!("{:?}", self.state.state);
-        if self.state.meta_block_remaining_len < 0
-            && (state == "BROTLI_STATE_METABLOCK_DONE" || state == "BROTLI_STATE_DONE")
-        {
-            return BLOCK_LENGTH_2;
-        }
-        if code == PADDING_2 && state == "BROTLI_STATE_METABLOCK_HEADER" {
-            return PADDING_1;
-        }
-        code
     }
 
     /// `Decompressor.decompress(data)`: append the output to `out` (nothing on an error).
@@ -182,7 +152,7 @@ impl Decompressor {
             match rc {
                 BrotliResult::ResultFailure => {
                     out.truncate(start);
-                    let code = self.failure_code();
+                    let code = self.state.error_code as i32;
                     self.error = Some(code);
                     return Err(brotli_error(format!(
                         "b'Decompression error: {}'",
@@ -214,8 +184,7 @@ impl Decompressor {
         Vec::new()
     }
 
-    /// `Decompressor.is_finished()`. Never after an error: libbrotli stops before `DONE`, where
-    /// the port may have gone on (see `failure_code`).
+    /// `Decompressor.is_finished()`. Never after an error, as in libbrotli.
     pub fn is_finished(&self) -> bool {
         self.error.is_none() && brotli_decompressor::BrotliDecoderIsFinished(&self.state)
     }
