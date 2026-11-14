@@ -482,6 +482,17 @@ def repair_json_batch(
             return one(texts)
         out = [one(doc) for doc in texts]
         return out if isinstance(texts, list) else tuple(out)
+
+    def fallback(doc: str) -> Any:
+        # A document the port does not handle (_RESERVED); also called from Rust for Arrow rows.
+        return _json_repair("repair_json_batch", _RESERVED).repair_json(
+            doc,
+            skip_json_loads=skip_json_loads,
+            stream_stable=stream_stable,
+            strict=strict,
+            **json_dumps_args,
+        )
+
     result, unsupported = _native.repair_batch(
         texts,
         bool(skip_json_loads),
@@ -490,19 +501,10 @@ def repair_json_batch(
         sys.get_int_max_str_digits(),
         dump,
         threads=threads,
+        delegate=fallback,
     )
     if not unsupported:
         return result
-    real = _json_repair("repair_json_batch", _RESERVED)
-
-    def fallback(doc: str) -> Any:
-        return real.repair_json(
-            doc,
-            skip_json_loads=skip_json_loads,
-            stream_stable=stream_stable,
-            strict=strict,
-            **json_dumps_args,
-        )
 
     if isinstance(texts, str):
         return fallback(texts)

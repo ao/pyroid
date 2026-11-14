@@ -343,6 +343,10 @@ def test_delegation_without_json_repair(monkeypatch: pytest.MonkeyPatch) -> None
         jr.repair_json("{}", schema={"type": "object"})
     # The Rust port itself needs nothing.
     assert jr.repair_json("{'a': 1}") == '{"a": 1}'
+    col = _testing.column(["{}", "{'a': '\U0010fffe'"])
+    with pytest.raises(pyroid.PyroidError, match="json_repair is not installed") as info:
+        jr.repair_json_batch(col)
+    assert any("row 1 of the Arrow input" in n for n in info.value.__notes__)
 
 
 @pytest.mark.thread_unsafe
@@ -449,6 +453,30 @@ def test_batch_delegates_reserved_items() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", pyroid.FallbackWarning)
         assert jr.repair_json_batch(docs) == [ref.repair_json(d) for d in docs]
+
+
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize("large", [False, True])
+def test_batch_arrow_delegates_only_the_reserved_rows(large: bool) -> None:
+    # It raised PyroidError for the whole column; a list delegated just those documents.
+    docs: list[str | None] = [
+        "{'a': 1",
+        "{'a': '\U0010fffe'",
+        None,
+        '"\\udbff\\udfff"',
+        "[1, 2,",
+    ]
+    want = [None if d is None else ref.repair_json(d) for d in docs]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        col = jr.repair_json_batch(_testing.column(docs, large=large, chunks=2))
+        assert col.to_pylist() == want
+        got = jr.repair_json_batch(
+            _testing.column(docs, chunks=2), ensure_ascii=False, indent=1
+        ).to_pylist()
+    assert got == [
+        None if d is None else ref.repair_json(d, ensure_ascii=False, indent=1) for d in docs
+    ]
 
 
 def test_constants() -> None:

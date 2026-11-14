@@ -388,9 +388,10 @@ enum BatchOut {
 /// `repair_json(doc)` for every document of a str, list or tuple on the shared
 /// pool. Returns `(result, unsupported)`: the result in the input's kind (an
 /// unchanged document is the original object; delegated ones are `None`) and
-/// the indices the shim must delegate to json_repair.
+/// the indices the shim must delegate to json_repair. For Arrow input,
+/// `delegate(doc)` gives those documents' results (`unsupported` is empty).
 #[pyfunction]
-#[pyo3(signature = (texts, /, skip_json_loads, stream_stable, strict, max_int_digits, dump, *, threads=None))]
+#[pyo3(signature = (texts, /, skip_json_loads, stream_stable, strict, max_int_digits, dump, *, threads=None, delegate=None))]
 #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 fn repair_batch<'py>(
     py: Python<'py>,
@@ -401,6 +402,7 @@ fn repair_batch<'py>(
     max_int_digits: usize,
     dump: Option<&DumpConfig>,
     threads: Option<Threads>,
+    delegate: Option<Bound<'py, PyAny>>,
 ) -> PyResult<(Bound<'py, PyAny>, Vec<usize>)> {
     let opts = options(
         skip_json_loads,
@@ -460,7 +462,8 @@ fn repair_batch<'py>(
     let is_list = texts.is_instance_of::<PyList>();
     if !is_list && !texts.is_instance_of::<PyTuple>() {
         // Arrow input: strings in, `pyroid.Column` out.
-        return arrow_batch(py, texts, &opts, &dump, threads).map(|c| (c, Vec::new()));
+        return arrow_batch(py, texts, &opts, &dump, threads, delegate.as_ref())
+            .map(|c| (c, Vec::new()));
     }
     let items: Vec<Bound<'py, PyAny>> = if is_list {
         texts.cast::<PyList>()?.iter().collect()
@@ -506,12 +509,15 @@ fn repair_batch<'py>(
 }
 
 /// `repair_batch` for Arrow string input (a `pyroid.Column` of strings out).
+/// A document the port does not handle goes to `delegate(doc)` (json_repair's
+/// `repair_json` with the call's options), when given.
 fn arrow_batch<'py>(
     py: Python<'py>,
     texts: &Bound<'py, PyAny>,
     opts: &RepairOptions,
     dump: &DumpOptions,
     threads_arg: Option<Threads>,
+    delegate: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let input = text_arg(texts, threads_arg, "texts")?;
     try_transform(
@@ -526,8 +532,42 @@ fn arrow_batch<'py>(
             Ok(out) => Ok(Cow::Owned(out)),
             Err(e) => Err(ArrowFailure::Repair(e)),
         },
-        |py, row, failure| arrow_error(py, row, failure),
+        |py, row, text, failure| match (failure, delegate) {
+            (ArrowFailure::Repair(e), Some(delegate)) if is_unsupported(&e) => {
+                delegated_row(py, delegate, row, text)
+            }
+            (failure, _) => Err(arrow_error(py, row, failure)),
+        },
     )
+}
+
+fn is_unsupported(e: &RepairError) -> bool {
+    matches!(
+        e,
+        RepairError::Unsupported | RepairError::Parse(ParseError::Unsupported)
+    )
+}
+
+/// json_repair's result for one Arrow row, from the shim's `delegate`.
+fn delegated_row(
+    py: Python<'_>,
+    delegate: &Bound<'_, PyAny>,
+    row: usize,
+    text: &str,
+) -> PyResult<String> {
+    let note = |e: PyErr| {
+        with_note(
+            py,
+            e,
+            format!("pyroid: while repairing row {row} of the Arrow input"),
+        )
+    };
+    let out = delegate.call1((text,)).map_err(note)?;
+    let out = out.cast_into::<PyString>().map_err(|e| note(e.into()))?;
+    match out.to_str() {
+        Ok(s) => Ok(s.to_owned()),
+        Err(e) => Err(surrogate_note(py, row, e)),
+    }
 }
 
 /// Why one row of an Arrow batch has no Arrow result.
@@ -537,14 +577,25 @@ enum ArrowFailure {
     Surrogate(String),
 }
 
+fn surrogate_note(py: Python<'_>, row: usize, err: PyErr) -> PyErr {
+    with_note(
+        py,
+        err,
+        format!(
+            "pyroid: row {row} of the Arrow input repairs to a str with a lone surrogate (an \
+             escape such as \\ud800 kept as is), which an Arrow string column cannot hold; pass \
+             a list to get the str, or ensure_ascii=True to keep the escape"
+        ),
+    )
+}
+
 fn arrow_error(py: Python<'_>, row: usize, failure: ArrowFailure) -> PyErr {
     match failure {
         ArrowFailure::Repair(e) => {
             let err = repair_err(py, e).unwrap_or_else(|| {
                 PyroidError::new_err(
                     "pyroid.json_repair.repair_json_batch: a document holds a char in \
-                     U+10F800..U+10FFFF, which the Rust port does not handle; pass a list \
-                     to have it delegated to json_repair",
+                     U+10F800..U+10FFFF, which the Rust port does not handle",
                 )
             });
             with_note(
@@ -559,16 +610,7 @@ fn arrow_error(py: Python<'_>, row: usize, failure: ArrowFailure) -> PyErr {
                 Err(e) => e,
                 Ok(()) => PyValueError::new_err("unreachable: no lone surrogate"),
             };
-            with_note(
-                py,
-                err,
-                format!(
-                    "pyroid: row {row} of the Arrow input repairs to a str with a lone \
-                     surrogate (an escape such as \\ud800 kept as is), which an Arrow string \
-                     column cannot hold; pass a list to get the str, or ensure_ascii=True to \
-                     keep the escape"
-                ),
-            )
+            surrogate_note(py, row, err)
         }
     }
 }

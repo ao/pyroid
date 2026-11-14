@@ -8,7 +8,6 @@ store, the Arrow call must raise ``UnicodeEncodeError`` naming the first such ro
 
 from __future__ import annotations
 
-import re
 import warnings
 from collections.abc import Callable
 from typing import Any
@@ -17,7 +16,6 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-import pyroid
 import pyroid.dedup
 import pyroid.filters
 import pyroid.ftfy
@@ -105,11 +103,6 @@ TRANSFORMS: dict[str, Callable[[Any], Any]] = {
 }
 
 
-# The range pyroid.json_repair stores lone surrogates in: a document holding one is delegated
-# from a list and raises PyroidError from Arrow (docs/guides/json_repair.md).
-RESERVED = re.compile("[\U0010f800-\U0010ffff]")
-
-
 def encodable(s: str | None) -> bool:
     try:
         if s is not None:
@@ -125,6 +118,7 @@ def encodable(s: str | None) -> bool:
 def test_arrow_rows_equal_list_items(name: str, large: bool, docs: list[str], null_at: int) -> None:
     f = TRANSFORMS[name]
     with warnings.catch_warnings():
+        # json_repair delegates a document holding U+10F800..U+10FFFF (FallbackWarning).
         warnings.simplefilter("ignore")
         want = f(docs)
     rows: list[str | None] = list(docs)
@@ -132,16 +126,14 @@ def test_arrow_rows_equal_list_items(name: str, large: bool, docs: list[str], nu
     expected: list[str | None] = list(want)
     expected.insert(min(null_at, len(rows) - 1), None)
     col = _testing.column(rows, large=large, chunks=2)
-    if name.startswith("json_repair") and any(RESERVED.search(d) for d in docs):
-        with pytest.raises(pyroid.PyroidError, match="U\\+10F800"):
-            f(col)
-        return
     bad = [i for i, s in enumerate(expected) if not encodable(s)]
-    if bad:
-        with pytest.raises(UnicodeEncodeError) as info:
-            f(col)
-        assert any(f"row {bad[0]} of the Arrow input" in n for n in info.value.__notes__)
-        return
-    got = f(col)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        if bad:
+            with pytest.raises(UnicodeEncodeError) as info:
+                f(col)
+            assert any(f"row {bad[0]} of the Arrow input" in n for n in info.value.__notes__)
+            return
+        got = f(col)
     assert got.to_pylist() == expected
     assert got.type in ("string", "large_string")

@@ -134,9 +134,8 @@ These are handed to the real json_repair, which must then be installed. The firs
   `pyroid.json_repair.DELEGATED`);
 - input that is not a `str` (for example `bytes`);
 - the rare text holding a character in U+10F800..U+10FFFF, raw or as an escaped surrogate pair,
-  because the port uses that range to store lone surrogates. In `repair_json_batch`, such
-  documents in a list or tuple are delegated one by one; Arrow input raises `PyroidError`
-  instead.
+  because the port uses that range to store lone surrogates. In `repair_json_batch`, only such
+  documents are delegated, one by one, from a list, a tuple or an Arrow column.
 
 ```python
 json_repair.repair_json(b"{'a': 1")  # json_repair's result, and:
