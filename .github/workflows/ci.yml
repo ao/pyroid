@@ -366,15 +366,17 @@ jobs:
         with:
           path: bench/data
           key: ${{ steps.cache.outputs.cache-primary-key }}
-      # The harness's own tests (manifest and per-platform refs, the `refs` exit code, the report, the ftfy mutant).
-      # No parity leg selects them (`-m <suite>`), and they need no wheel. Last, so a failure here never keeps the
-      # verified data out of the cache. The trafilatura mutant proof, once per mode, needs the data: it runs
-      # (about 2 minutes each) where they were just built, and skips on a cache hit, where nothing is restored.
+      # The harness's own tests (manifest and per-platform refs, the `refs` exit code, the report, the ftfy mutant,
+      # upstream.yml's detection on fake PyPI data). No parity leg selects them (`-m <suite>`), and they need no
+      # wheel. Last, so a failure here never keeps the verified data out of the cache. The trafilatura mutant
+      # proof, once per mode, needs the data: it runs (about 2 minutes each) where they were just built, and skips
+      # on a cache hit, where nothing is restored.
       - name: Harness self-tests (pytest parity/tests/test_harness*.py)
         run: |
           set -euo pipefail
           uv run --project parity --frozen pytest parity/tests/test_harness.py parity/tests/test_harness_ftfy.py \
-            parity/tests/test_harness_trafilatura.py parity/tests/test_harness_warc.py
+            parity/tests/test_harness_trafilatura.py parity/tests/test_harness_warc.py \
+            parity/tests/test_harness_upstream.py
           uv run --project parity --frozen --no-group trafilatura --group trafilatura111 \
             pytest parity/tests/test_harness_trafilatura.py --trafilatura-compat 1.11.0
 

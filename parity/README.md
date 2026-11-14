@@ -248,6 +248,50 @@ python -m pyroid_parity.nemo_pipeline all                                 # NeMo
   time, and compares kept ids, columns, dtypes and every cell; see its docstring. Three stock runs of each gave
   identical outputs (2026-11-10).
 
+## Upstream watch
+`.github/workflows/upstream.yml` runs every Monday and on demand. `pyroid_parity/upstream.py detect` reads the
+exact (`==`) pins of the root `pyproject.toml`'s dependency groups and of this project, looks each watched library
+up on PyPI and keeps the newest stable release newer than its pin. Pre-releases, dev releases and releases whose
+files are all yanked are skipped, and a version string must be canonical PEP 440 before it is used. For each
+library found, the workflow builds the wheel and runs the library's suites twice with the new release layered over
+the parity env:
+
+```bash
+cd parity
+uv run --frozen --with ../dist/pyroid-*.whl --with json-repair==0.65.0 pytest -m json_repair \
+  --upstream-oracle json-repair==0.65.0 -W ignore::pyroid.VersionMismatchWarning --impl pyroid.json_repair
+uv run --frozen --with ../dist/pyroid-*.whl --with json-repair==0.65.0 pytest -m json_repair \
+  --upstream-oracle json-repair==0.65.0 -W ignore::pyroid.VersionMismatchWarning   # the release's self-check
+```
+
+`--upstream-oracle DIST==VERSION` makes the suites' oracle version checks expect VERSION instead of the pin, and
+stops pytest unless DIST is installed at VERSION. Pinned references and recorded calls stay those of the pin, so
+the first run shows pyroid against the new release (live checks) and the second shows where the new release
+changes output on the pinned corpora. The workflow then opens or updates one issue per library, titled
+`upstream: <library> <version> released` and labelled `upstream`, with both results and a porting checklist.
+
+| library | suites run |
+|---|---|
+| ftfy, json-repair, datasketch, jieba, fasttext-predict | the module's own suite |
+| warcio, brotlicffi | `warc` |
+| trafilatura (the 2.x pin) | `trafilatura` |
+| lxml, justext | `trafilatura`, `trafilatura@1.11.0` |
+| lxml-html-clean, charset-normalizer, courlan, htmldate | `trafilatura@1.11.0` |
+| nltk, regex | `nltk`, `metrics` |
+| rouge-score, sacrebleu | `metrics` |
+| datatrove | `filters`, `dedup`, `warc` |
+| spacy, sudachipy, pyvi, pythainlp, python-crfsuite | `filters`, `dedup` |
+| tldextract | `filters` |
+| anyascii, nemo-curator | none: the issue says why |
+
+- trafilatura's 1.11.0 pin is not compared with PyPI. datatrove 0.10.1's processing extra requires
+  trafilatura<1.12, so that mode moves with datatrove. Its other pins are watched: a fresh
+  `datatrove[processing]==0.10.1` install resolves their newest releases.
+- Not watched: sudachidict-core (pyroid reads the installed dictionary), faust-cchardet and python-magic
+  (pyroid.warc calls the installed ones), pyahocorasick, and the lint and docs tools.
+- Every exact pin must be in `upstream.WATCH` or `upstream.NOT_WATCHED`; `tests/test_harness_upstream.py` fails
+  otherwise, and also when the two pyproject files pin different versions of a watched library.
+
 ## Oracle choices
 - fastText: fasttext-predict 0.9.2.4.
   - It is the package datatrove's LID loads (`fasttext.FastText._FastText`), built from the unmodified fastText C++ predict path.

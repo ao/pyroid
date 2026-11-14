@@ -50,7 +50,7 @@ from pyroid_parity import json_repair_compare as C
 from pyroid_parity import json_repair_corpus as JC
 from pyroid_parity import json_repair_strategies as S
 from pyroid_parity.json_repair_record import SKIP_TAGS
-from pyroid_parity.plugin import _impl, reference
+from pyroid_parity.plugin import _impl, oracle_pin, reference
 from pyroid_parity.report import Collector
 from pyroid_parity.specs import JSON_REPAIR_OPTION_SETS, JSON_REPAIR_VERSION
 
@@ -93,7 +93,7 @@ def check(
 
 
 def test_live_oracle_is_pinned_json_repair() -> None:
-    assert md.version("json-repair") == JSON_REPAIR_VERSION
+    assert md.version("json-repair") == oracle_pin("json-repair", JSON_REPAIR_VERSION)
     assert HEADER["json_repair"] == JSON_REPAIR_VERSION and PIN["json_repair"] == JSON_REPAIR_VERSION
 
 
