@@ -10,12 +10,14 @@ a fresh subprocess that reads its inputs into memory first; the time is the sum 
 inputs are frozen out of it with ``gc.freeze()``).
 
 Implementations (``LOADS`` and ``DUMPS``):
-  load  pyyaml-SafeLoader     list(yaml.load_all(data, Loader=yaml.SafeLoader))   (= yaml.safe_load_all)
+  load  pyroid-safe_load_all  list(pyroid.yaml.safe_load_all(data))
+        pyyaml-SafeLoader     list(yaml.load_all(data, Loader=yaml.SafeLoader))   (= yaml.safe_load_all)
         pyyaml-CSafeLoader    list(yaml.load_all(data, Loader=yaml.CSafeLoader))
         ruamel-safe-pure      list(YAML(typ="safe", pure=True).load_all(data)), allow_duplicate_keys
         ruamel-safe-c         the same with typ="safe" and ruamel.yaml.clib, when it is installed
         ryml-parse            ryml.parse_in_arena(data): rapidyaml's parse tree, no Python objects
-  dump  pyyaml-SafeDumper     yaml.safe_dump_all(docs)
+  dump  pyroid-safe_dump_all  pyroid.yaml.safe_dump_all(docs)
+        pyyaml-SafeDumper     yaml.safe_dump_all(docs)
         pyyaml-CSafeDumper    yaml.dump_all(docs, Dumper=yaml.CSafeDumper)
 ruamel.yaml follows YAML 1.2 and rapidyaml builds no Python values, so their work differs from PyYAML's.
 The dump inputs are the documents CSafeLoader loads (MB/s counts the YAML written). A file an
@@ -40,8 +42,15 @@ import sys
 import time
 from pathlib import Path
 
-LOADS = ["pyyaml-SafeLoader", "pyyaml-CSafeLoader", "ruamel-safe-pure", "ruamel-safe-c", "ryml-parse"]
-DUMPS = ["pyyaml-SafeDumper", "pyyaml-CSafeDumper"]
+LOADS = [
+    "pyroid-safe_load_all",
+    "pyyaml-SafeLoader",
+    "pyyaml-CSafeLoader",
+    "ruamel-safe-pure",
+    "ruamel-safe-c",
+    "ryml-parse",
+]
+DUMPS = ["pyroid-safe_dump_all", "pyyaml-SafeDumper", "pyyaml-CSafeDumper"]
 SIZES = {
     "1mb": ("synthetic/mixed-1mb.yaml", 5),
     "10mb": ("synthetic/mixed-10mb.yaml", 3),
@@ -53,6 +62,14 @@ def make_call(impl: str):
     """Return the timed callable: it takes the file bytes (loads) or the loaded documents (dumps)."""
     import yaml
 
+    if impl == "pyroid-safe_load_all":
+        import pyroid.yaml as py
+
+        return lambda d: list(py.safe_load_all(d))
+    if impl == "pyroid-safe_dump_all":
+        import pyroid.yaml as py
+
+        return lambda docs: py.safe_dump_all(docs)
     if impl == "pyyaml-SafeLoader":
         return lambda d: list(yaml.load_all(d, Loader=yaml.SafeLoader))
     if impl == "pyyaml-CSafeLoader":

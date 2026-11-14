@@ -1,0 +1,1238 @@
+{
+ "machine": {
+  "python": "3.12.16",
+  "platform": "Linux-6.18.62-127.179.amzn2023.aarch64-aarch64-with-glibc2.36",
+  "cpus": 64,
+  "cpu_part": "0xd4f",
+  "mem": "129538956 kB",
+  "pyyaml": "6.0.3",
+  "ruamel.yaml": "0.19.1",
+  "ruamel.yaml.clib": "0.2.15",
+  "rapidyaml": "0.15.2",
+  "pyroid": "1.0.0 + feat/yaml (release profile, fat LTO)"
+ },
+ "label": "EC2 c8g.16xlarge devbox, shared with other jobs (load average 4 to 28): indicative only",
+ "cells": [
+  {
+   "seconds": 8.204434790879532,
+   "bytes": 342963534,
+   "files": 11878,
+   "failed": [],
+   "impl": "pyroid-safe_load_all",
+   "repeat": 1,
+   "mb_per_s": 41.802213405517676,
+   "loadavg_before": [
+    "4.76",
+    "4.99",
+    "39.62"
+   ],
+   "loadavg_after": [
+    "4.56",
+    "4.93",
+    "38.86"
+   ],
+   "crashed": [],
+   "input": "corpus"
+  },
+  {
+   "seconds": 364.67245609393285,
+   "bytes": 342963534,
+   "files": 11878,
+   "failed": [],
+   "impl": "pyyaml-SafeLoader",
+   "repeat": 1,
+   "mb_per_s": 0.9404700801194016,
+   "loadavg_before": [
+    "4.56",
+    "4.93",
+    "38.86"
+   ],
+   "loadavg_after": [
+    "4.40",
+    "4.69",
+    "27.70"
+   ],
+   "crashed": [],
+   "input": "corpus"
+  },
+  {
+   "seconds": 55.57807684805812,
+   "bytes": 342963534,
+   "files": 11878,
+   "failed": [],
+   "impl": "pyyaml-CSafeLoader",
+   "repeat": 1,
+   "mb_per_s": 6.170842055899295,
+   "loadavg_before": [
+    "4.40",
+    "4.69",
+    "27.70"
+   ],
+   "loadavg_after": [
+    "4.56",
+    "4.71",
+    "26.16"
+   ],
+   "crashed": [],
+   "input": "corpus"
+  },
+  {
+   "seconds": 494.2068957959673,
+   "bytes": 342736391,
+   "files": 11876,
+   "failed": [
+    [
+     "/target/data/corpus/openapi/APIs-guru__openapi-directory/APIs/vtex.local/Payments-Gateway-API/1.0/openapi.yaml",
+     "OverflowError"
+    ],
+    [
+     "/target/data/corpus/openapi/APIs-guru__openapi-directory/APIs/vtex.local/Price-Simulations/1.0/openapi.yaml",
+     "OverflowError"
+    ]
+   ],
+   "impl": "ruamel-safe-pure",
+   "repeat": 1,
+   "mb_per_s": 0.6935079091682653,
+   "loadavg_before": [
+    "4.56",
+    "4.71",
+    "26.16"
+   ],
+   "loadavg_after": [
+    "3.90",
+    "4.05",
+    "16.73"
+   ],
+   "crashed": [],
+   "input": "corpus"
+  },
+  {
+   "seconds": 89.75011319189798,
+   "bytes": 324898803,
+   "files": 11836,
+   "failed": [
+    [
+     "/target/data/corpus/compose/BerriAI__litellm/litellm/deploy/compose/docker-compose.liteadmin.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/The-Vibe-Company__quivr/deploy/compose/compose.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/cheaper-inference__OmniRoute/docker/devin-bridge/compose.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/deepinsight__insightface/server/deploy/compose.cpu.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/deepinsight__insightface/server/deploy/compose.cuda12.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/oblien__openship/apps/api/test/fixtures/upgrade/compose-0.9.10.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/oblien__openship/apps/api/test/fixtures/upgrade/compose-0.9.11.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/oblien__openship/apps/api/test/fixtures/upgrade/compose-0.9.3.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/oblien__openship/apps/api/test/fixtures/upgrade/compose-0.9.4.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/oblien__openship/apps/api/test/fixtures/upgrade/compose-0.9.5.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/oblien__openship/apps/api/test/fixtures/upgrade/compose-0.9.6.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/oblien__openship/apps/api/test/fixtures/upgrade/compose-0.9.7.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/oblien__openship/apps/api/test/fixtures/upgrade/compose-0.9.8.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/compose/oblien__openship/apps/api/test/fixtures/upgrade/compose-0.9.9.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/config/Delgan__loguru/.github/dependabot.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/config/astral-sh__ruff/.pre-commit-config.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/config/explosion__spaCy/.github/FUNDING.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/config/godotengine__godot/.pre-commit-config.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/config/liketrek__TREK/.github/dependabot.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/config/linkerd__linkerd2/.github/dependabot.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/config/siyuan-note__siyuan/.github/dependabot.yml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/openapi/APIs-guru__openapi-directory/APIs/vtex.local/Payments-Gateway-API/1.0/openapi.yaml",
+     "OverflowError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/CherryHQ__cherry-studio/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/DIYgod__RSSHub/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/PostHog__posthog/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/angular__angular/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/clash-verge-rev__clash-verge-rev/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/deepseek-ai__deepseek-harness/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/gravitational__teleport/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/hoppscotch__hoppscotch/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/illacloud__illa-builder/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/kortix-ai__CompanyOS/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/marktext__marktext/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/n8n-io__n8n/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/nocodb__nocodb/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/openai__codex/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/openinterpreter__openinterpreter/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/pingdotgg__t3code/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/portainer__portainer/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/stablyai__orca/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/vercel__next.js/pnpm-lock.yaml",
+     "ScannerError"
+    ],
+    [
+     "/target/data/corpus/pnpm-lock/withastro__astro/pnpm-lock.yaml",
+     "ScannerError"
+    ]
+   ],
+   "impl": "ruamel-safe-c",
+   "repeat": 1,
+   "mb_per_s": 3.620037807699719,
+   "loadavg_before": [
+    "3.90",
+    "4.05",
+    "16.73"
+   ],
+   "loadavg_after": [
+    "4.23",
+    "4.19",
+    "15.37"
+   ],
+   "crashed": [],
+   "input": "corpus"
+  },
+  {
+   "seconds": 1.670651522001208,
+   "bytes": 342506760,
+   "files": 11812,
+   "failed": [
+    [
+     "/target/data/corpus/compose/1Panel-dev__1Panel/agent/cmd/server/ai/compose.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/compose/grafana__grafana/devenv/docker/blocks/auth/jwt_proxy/docker-compose.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/compose/seaweedfs__seaweedfs/telemetry/docker-compose.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/conda/geekcomputers__Python/environment.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/ClickHouse__ClickHouse/.clang-tidy",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/Fosowl__agenticSeek/.github/FUNDING.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/Kong__kong/.github/labeler.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/OpenBMB__MiniCPM-V/.github/ISSUE_TEMPLATE/feature_request.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/OpenBMB__MiniCPM-V/.github/ISSUE_TEMPLATE/llamacpp.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/OpenBMB__MiniCPM-V/.github/ISSUE_TEMPLATE/ollama.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/OpenBMB__MiniCPM-V/.github/ISSUE_TEMPLATE/vllm.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/WasmEdge__WasmEdge/.github/ISSUE_TEMPLATE/bug_report.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/WasmEdge__WasmEdge/.github/ISSUE_TEMPLATE/feature_request.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/WasmEdge__WasmEdge/.github/ISSUE_TEMPLATE/general_issue.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/agentscope-ai__QwenPaw/.pre-commit-config.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/agentscope-ai__agentscope/.pre-commit-config.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/authelia__authelia/.goreleaser.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/binary-husky__gpt_academic/.pre-commit-config.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/deepspeedai__DeepSpeed/.pre-commit-config.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/electron__electron/.clang-format",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/facebookresearch__fairseq/.pre-commit-config.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/harvard-edge__cs249r_book/.github/ISSUE_TEMPLATE/new_challenge.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/pandas-dev__pandas/.pre-commit-config.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/pyg-team__pytorch_geometric/.pre-commit-config.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/pytorch__pytorch/.clang-tidy",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/ray-project__ray/.pre-commit-config.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/salesforce__LAVIS/.pre-commit-config.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/swiftlang__swift/.clang-tidy",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/vllm-project__vllm/.pre-commit-config.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/config/x64dbg__x64dbg/.clang-tidy",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/AppFlowy-IO__AppFlowy/.github/workflows/release.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/behavior-check.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-3rd-party.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-apple.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-cann.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-cpu.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-cross.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-cuda-ubuntu.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-ibm.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-opencl.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-openvino.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-riscv.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-sanitize.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ggml-org__llama.cpp/.github/workflows/build-sycl.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/grafana__grafana/.github/workflows/backend-unit-tests.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/hoppscotch__hoppscotch/.github/workflows/release-push-docker.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/lodash__lodash/.github/workflows/ci-node.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/python__cpython/.github/workflows/mypy.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/react__react/.github/workflows/runtime_build_and_test.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/ryanoasis__nerd-fonts/.github/workflows/font-patcher.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/gha/sherlock-project__sherlock/.github/workflows/regression.yml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/helm/bitnami__charts/bitnami/chainloop/values.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/helm/grafana__helm-charts/charts/enterprise-logs/small.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/hf-card/datasets/lmsys/chatbot_arena_conversations.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/ci-output-artifact.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/ci.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/exit-handler-slack.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/influxdb-ci.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/k8s-orchestration.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/nested-workflow.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/resource-delete-with-flags.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/resource-flags.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/secrets.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/sidecar.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/argoproj__argo-workflows/examples/volumes-emptydir.yaml",
+     "ExceptionParse"
+    ],
+    [
+     "/target/data/corpus/k8s/istio__istio/samples/security/spire/spire-quickstart.yaml",
+     "ExceptionParse"
+    ]
+   ],
+   "impl": "ryml-parse",
+   "repeat": 1,
+   "mb_per_s": 205.0138855946,
+   "loadavg_before": [
+    "4.23",
+    "4.19",
+    "15.37"
+   ],
+   "loadavg_after": [
+    "4.20",
+    "4.19",
+    "15.25"
+   ],
+   "crashed": [],
+   "input": "corpus"
+  },
+  {
+   "seconds": 7.503098356115515,
+   "bytes": 342963534,
+   "files": 11878,
+   "failed": [],
+   "output_bytes": 330475543,
+   "impl": "pyroid-safe_dump_all",
+   "repeat": 1,
+   "mb_per_s": 44.04521003388432,
+   "loadavg_before": [
+    "4.20",
+    "4.19",
+    "15.25"
+   ],
+   "loadavg_after": [
+    "3.81",
+    "4.08",
+    "13.97"
+   ],
+   "crashed": [],
+   "input": "corpus"
+  },
+  {
+   "seconds": 185.41140228910626,
+   "bytes": 342963534,
+   "files": 11878,
+   "failed": [],
+   "output_bytes": 330475543,
+   "impl": "pyyaml-SafeDumper",
+   "repeat": 1,
+   "mb_per_s": 1.7823906130902334,
+   "loadavg_before": [
+    "3.81",
+    "4.08",
+    "13.97"
+   ],
+   "loadavg_after": [
+    "6.86",
+    "4.73",
+    "11.59"
+   ],
+   "crashed": [],
+   "input": "corpus"
+  },
+  {
+   "seconds": 45.40626491005969,
+   "bytes": 342963534,
+   "files": 11878,
+   "failed": [],
+   "output_bytes": 329990661,
+   "impl": "pyyaml-CSafeDumper",
+   "repeat": 1,
+   "mb_per_s": 7.267513891610386,
+   "loadavg_before": [
+    "6.86",
+    "4.73",
+    "11.59"
+   ],
+   "loadavg_after": [
+    "6.50",
+    "5.81",
+    "11.02"
+   ],
+   "crashed": [],
+   "input": "corpus"
+  },
+  {
+   "seconds": 0.017240442999536754,
+   "bytes": 1121919,
+   "files": 1,
+   "failed": [],
+   "impl": "pyroid-safe_load_all",
+   "repeat": 5,
+   "mb_per_s": 65.07483595578987,
+   "loadavg_before": [
+    "6.50",
+    "5.81",
+    "11.02"
+   ],
+   "loadavg_after": [
+    "6.50",
+    "5.81",
+    "11.02"
+   ],
+   "crashed": [],
+   "input": "1mb"
+  },
+  {
+   "seconds": 0.8840271720000601,
+   "bytes": 1121919,
+   "files": 1,
+   "failed": [],
+   "impl": "pyyaml-SafeLoader",
+   "repeat": 5,
+   "mb_per_s": 1.2691001312343415,
+   "loadavg_before": [
+    "6.50",
+    "5.81",
+    "11.02"
+   ],
+   "loadavg_after": [
+    "6.30",
+    "5.78",
+    "10.98"
+   ],
+   "crashed": [],
+   "input": "1mb"
+  },
+  {
+   "seconds": 0.08281633899969165,
+   "bytes": 1121919,
+   "files": 1,
+   "failed": [],
+   "impl": "pyyaml-CSafeLoader",
+   "repeat": 5,
+   "mb_per_s": 13.547073120488667,
+   "loadavg_before": [
+    "6.30",
+    "5.78",
+    "10.98"
+   ],
+   "loadavg_after": [
+    "6.30",
+    "5.78",
+    "10.98"
+   ],
+   "crashed": [],
+   "input": "1mb"
+  },
+  {
+   "seconds": 1.1419416079988878,
+   "bytes": 1121919,
+   "files": 1,
+   "failed": [],
+   "impl": "ruamel-safe-pure",
+   "repeat": 5,
+   "mb_per_s": 0.982466171773901,
+   "loadavg_before": [
+    "6.30",
+    "5.78",
+    "10.98"
+   ],
+   "loadavg_after": [
+    "6.11",
+    "5.75",
+    "10.95"
+   ],
+   "crashed": [],
+   "input": "1mb"
+  },
+  {
+   "seconds": 0.16957235699919693,
+   "bytes": 1121919,
+   "files": 1,
+   "failed": [],
+   "impl": "ruamel-safe-c",
+   "repeat": 5,
+   "mb_per_s": 6.616166808398573,
+   "loadavg_before": [
+    "6.11",
+    "5.75",
+    "10.95"
+   ],
+   "loadavg_after": [
+    "6.11",
+    "5.75",
+    "10.95"
+   ],
+   "crashed": [],
+   "input": "1mb"
+  },
+  {
+   "seconds": 0.004473221999433008,
+   "bytes": 1121919,
+   "files": 1,
+   "failed": [],
+   "impl": "ryml-parse",
+   "repeat": 5,
+   "mb_per_s": 250.80780702191979,
+   "loadavg_before": [
+    "6.11",
+    "5.75",
+    "10.95"
+   ],
+   "loadavg_after": [
+    "6.11",
+    "5.75",
+    "10.95"
+   ],
+   "crashed": [],
+   "input": "1mb"
+  },
+  {
+   "seconds": 0.013016998000239255,
+   "bytes": 1121919,
+   "files": 1,
+   "failed": [],
+   "output_bytes": 598245,
+   "impl": "pyroid-safe_dump_all",
+   "repeat": 5,
+   "mb_per_s": 45.95875331539608,
+   "loadavg_before": [
+    "6.11",
+    "5.75",
+    "10.95"
+   ],
+   "loadavg_after": [
+    "6.11",
+    "5.75",
+    "10.95"
+   ],
+   "crashed": [],
+   "input": "1mb"
+  },
+  {
+   "seconds": 0.3571561410008144,
+   "bytes": 1121919,
+   "files": 1,
+   "failed": [],
+   "output_bytes": 598245,
+   "impl": "pyyaml-SafeDumper",
+   "repeat": 5,
+   "mb_per_s": 1.6750236978247448,
+   "loadavg_before": [
+    "6.11",
+    "5.75",
+    "10.95"
+   ],
+   "loadavg_after": [
+    "5.94",
+    "5.72",
+    "10.91"
+   ],
+   "crashed": [],
+   "input": "1mb"
+  },
+  {
+   "seconds": 0.07213233800030139,
+   "bytes": 1121919,
+   "files": 1,
+   "failed": [],
+   "output_bytes": 595614,
+   "impl": "pyyaml-CSafeDumper",
+   "repeat": 5,
+   "mb_per_s": 8.257239630822882,
+   "loadavg_before": [
+    "5.94",
+    "5.72",
+    "10.91"
+   ],
+   "loadavg_after": [
+    "5.94",
+    "5.72",
+    "10.91"
+   ],
+   "crashed": [],
+   "input": "1mb"
+  },
+  {
+   "seconds": 0.2241780540007312,
+   "bytes": 10000949,
+   "files": 1,
+   "failed": [],
+   "impl": "pyroid-safe_load_all",
+   "repeat": 3,
+   "mb_per_s": 44.611632680009706,
+   "loadavg_before": [
+    "5.94",
+    "5.72",
+    "10.91"
+   ],
+   "loadavg_after": [
+    "5.94",
+    "5.72",
+    "10.91"
+   ],
+   "crashed": [],
+   "input": "10mb"
+  },
+  {
+   "seconds": 9.9443583150005,
+   "bytes": 10000949,
+   "files": 1,
+   "failed": [],
+   "impl": "pyyaml-SafeLoader",
+   "repeat": 3,
+   "mb_per_s": 1.0056907326955562,
+   "loadavg_before": [
+    "5.94",
+    "5.72",
+    "10.91"
+   ],
+   "loadavg_after": [
+    "5.18",
+    "5.56",
+    "10.69"
+   ],
+   "crashed": [],
+   "input": "10mb"
+  },
+  {
+   "seconds": 1.1258793270008027,
+   "bytes": 10000949,
+   "files": 1,
+   "failed": [],
+   "impl": "pyyaml-CSafeLoader",
+   "repeat": 3,
+   "mb_per_s": 8.882789443022494,
+   "loadavg_before": [
+    "5.18",
+    "5.56",
+    "10.69"
+   ],
+   "loadavg_after": [
+    "5.08",
+    "5.53",
+    "10.65"
+   ],
+   "crashed": [],
+   "input": "10mb"
+  },
+  {
+   "seconds": 13.225911026000176,
+   "bytes": 10000949,
+   "files": 1,
+   "failed": [],
+   "impl": "ruamel-safe-pure",
+   "repeat": 3,
+   "mb_per_s": 0.7561633357686757,
+   "loadavg_before": [
+    "5.08",
+    "5.53",
+    "10.65"
+   ],
+   "loadavg_after": [
+    "11.73",
+    "7.19",
+    "10.99"
+   ],
+   "crashed": [],
+   "input": "10mb"
+  },
+  {
+   "seconds": 0.0,
+   "bytes": 0,
+   "files": 0,
+   "failed": [
+    [
+     "/target/data/corpus/synthetic/mixed-10mb.yaml",
+     "ScannerError"
+    ]
+   ],
+   "impl": "ruamel-safe-c",
+   "repeat": 3,
+   "mb_per_s": null,
+   "loadavg_before": [
+    "11.73",
+    "7.19",
+    "10.99"
+   ],
+   "loadavg_after": [
+    "11.73",
+    "7.19",
+    "10.99"
+   ],
+   "crashed": [],
+   "input": "10mb"
+  },
+  {
+   "seconds": 0.047003716999824974,
+   "bytes": 10000949,
+   "files": 1,
+   "failed": [],
+   "impl": "ryml-parse",
+   "repeat": 3,
+   "mb_per_s": 212.769322052493,
+   "loadavg_before": [
+    "11.73",
+    "7.19",
+    "10.99"
+   ],
+   "loadavg_after": [
+    "11.73",
+    "7.19",
+    "10.99"
+   ],
+   "crashed": [],
+   "input": "10mb"
+  },
+  {
+   "seconds": 0.173773534999782,
+   "bytes": 10000949,
+   "files": 1,
+   "failed": [],
+   "output_bytes": 7598556,
+   "impl": "pyroid-safe_dump_all",
+   "repeat": 3,
+   "mb_per_s": 43.72677346990457,
+   "loadavg_before": [
+    "11.73",
+    "7.19",
+    "10.99"
+   ],
+   "loadavg_after": [
+    "11.73",
+    "7.19",
+    "10.99"
+   ],
+   "crashed": [],
+   "input": "10mb"
+  },
+  {
+   "seconds": 4.575901923999481,
+   "bytes": 10000949,
+   "files": 1,
+   "failed": [],
+   "output_bytes": 7598556,
+   "impl": "pyyaml-SafeDumper",
+   "repeat": 3,
+   "mb_per_s": 1.6605591916530031,
+   "loadavg_before": [
+    "11.73",
+    "7.19",
+    "10.99"
+   ],
+   "loadavg_after": [
+    "28.45",
+    "11.35",
+    "12.31"
+   ],
+   "crashed": [],
+   "input": "10mb"
+  },
+  {
+   "seconds": 0.9447473420004826,
+   "bytes": 10000949,
+   "files": 1,
+   "failed": [],
+   "output_bytes": 7588167,
+   "impl": "pyyaml-CSafeDumper",
+   "repeat": 3,
+   "mb_per_s": 8.031953796167572,
+   "loadavg_before": [
+    "28.45",
+    "11.35",
+    "12.31"
+   ],
+   "loadavg_after": [
+    "27.69",
+    "11.48",
+    "12.35"
+   ],
+   "crashed": [],
+   "input": "10mb"
+  },
+  {
+   "seconds": 2.4536935779997293,
+   "bytes": 100044905,
+   "files": 1,
+   "failed": [],
+   "impl": "pyroid-safe_load_all",
+   "repeat": 1,
+   "mb_per_s": 40.77318614558115,
+   "loadavg_before": [
+    "27.69",
+    "11.48",
+    "12.35"
+   ],
+   "loadavg_after": [
+    "27.24",
+    "11.65",
+    "12.40"
+   ],
+   "crashed": [],
+   "input": "100mb"
+  },
+  {
+   "seconds": 104.42156702300053,
+   "bytes": 100044905,
+   "files": 1,
+   "failed": [],
+   "impl": "pyyaml-SafeLoader",
+   "repeat": 1,
+   "mb_per_s": 0.9580866084681864,
+   "loadavg_before": [
+    "27.24",
+    "11.65",
+    "12.40"
+   ],
+   "loadavg_after": [
+    "14.41",
+    "13.80",
+    "13.25"
+   ],
+   "crashed": [],
+   "input": "100mb"
+  },
+  {
+   "seconds": 15.731128284000079,
+   "bytes": 100044905,
+   "files": 1,
+   "failed": [],
+   "impl": "pyyaml-CSafeLoader",
+   "repeat": 1,
+   "mb_per_s": 6.359677652731008,
+   "loadavg_before": [
+    "14.41",
+    "13.80",
+    "13.25"
+   ],
+   "loadavg_after": [
+    "12.10",
+    "13.31",
+    "13.10"
+   ],
+   "crashed": [],
+   "input": "100mb"
+  },
+  {
+   "seconds": 136.74392107300082,
+   "bytes": 100044905,
+   "files": 1,
+   "failed": [],
+   "impl": "ruamel-safe-pure",
+   "repeat": 1,
+   "mb_per_s": 0.7316223215991515,
+   "loadavg_before": [
+    "12.10",
+    "13.31",
+    "13.10"
+   ],
+   "loadavg_after": [
+    "6.55",
+    "10.41",
+    "12.03"
+   ],
+   "crashed": [],
+   "input": "100mb"
+  },
+  {
+   "seconds": 0.0,
+   "bytes": 0,
+   "files": 0,
+   "failed": [
+    [
+     "/target/data/corpus/synthetic/mixed-100mb.yaml",
+     "ScannerError"
+    ]
+   ],
+   "impl": "ruamel-safe-c",
+   "repeat": 1,
+   "mb_per_s": null,
+   "loadavg_before": [
+    "6.55",
+    "10.41",
+    "12.03"
+   ],
+   "loadavg_after": [
+    "6.55",
+    "10.41",
+    "12.03"
+   ],
+   "crashed": [],
+   "input": "100mb"
+  },
+  {
+   "seconds": 0.658302306999758,
+   "bytes": 100044905,
+   "files": 1,
+   "failed": [],
+   "impl": "ryml-parse",
+   "repeat": 1,
+   "mb_per_s": 151.97410663188938,
+   "loadavg_before": [
+    "6.55",
+    "10.41",
+    "12.03"
+   ],
+   "loadavg_after": [
+    "6.55",
+    "10.41",
+    "12.03"
+   ],
+   "crashed": [],
+   "input": "100mb"
+  },
+  {
+   "seconds": 1.847584327999357,
+   "bytes": 100044905,
+   "files": 1,
+   "failed": [],
+   "output_bytes": 76339104,
+   "impl": "pyroid-safe_dump_all",
+   "repeat": 1,
+   "mb_per_s": 41.318332724040395,
+   "loadavg_before": [
+    "6.55",
+    "10.41",
+    "12.03"
+   ],
+   "loadavg_after": [
+    "5.82",
+    "9.99",
+    "11.86"
+   ],
+   "crashed": [],
+   "input": "100mb"
+  },
+  {
+   "seconds": 46.067298019999726,
+   "bytes": 100044905,
+   "files": 1,
+   "failed": [],
+   "output_bytes": 76339104,
+   "impl": "pyyaml-SafeDumper",
+   "repeat": 1,
+   "mb_per_s": 1.6571213698458727,
+   "loadavg_before": [
+    "5.82",
+    "9.99",
+    "11.86"
+   ],
+   "loadavg_after": [
+    "4.61",
+    "8.82",
+    "11.32"
+   ],
+   "crashed": [],
+   "input": "100mb"
+  },
+  {
+   "seconds": 9.61416001500038,
+   "bytes": 100044905,
+   "files": 1,
+   "failed": [],
+   "output_bytes": 76228430,
+   "impl": "pyyaml-CSafeDumper",
+   "repeat": 1,
+   "mb_per_s": 7.928766515334204,
+   "loadavg_before": [
+    "4.61",
+    "8.82",
+    "11.32"
+   ],
+   "loadavg_after": [
+    "27.92",
+    "14.28",
+    "13.08"
+   ],
+   "crashed": [],
+   "input": "100mb"
+  }
+ ]
+}
