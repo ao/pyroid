@@ -7,7 +7,7 @@
 //! go through the kernel's char API via Python's `"surrogatepass"` UTF-8.
 
 use std::borrow::Cow;
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::OnceLock;
 
 use pyo3::exceptions::{PyAssertionError, PyRecursionError, PyUnicodeEncodeError, PyValueError};
 use pyo3::prelude::*;
@@ -21,7 +21,7 @@ use pyroid_core::json_repair::{
 };
 use pyroid_core::par;
 
-use crate::batch::{BatchError, SINGLE_DOC_DETACH_BYTES, transform};
+use crate::batch::{BatchError, SINGLE_DOC_DETACH_BYTES, try_transform};
 use crate::errors::{PyroidError, input_error, type_name, with_note};
 use crate::input::{Threads, arg_note, text_arg};
 
@@ -514,34 +514,63 @@ fn arrow_batch<'py>(
     threads_arg: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let input = text_arg(texts, threads_arg, "texts")?;
-    // A failing row is remembered and raised once the batch is done.
-    let failed: Mutex<Option<RepairError>> = Mutex::new(None);
-    let column = transform(py, input, threads_arg, |s| {
-        match kernel::repair_json(s, opts, dump) {
-            Ok(out) if out == s => Cow::Borrowed(s),
-            Ok(out) => Cow::Owned(out),
-            Err(e) => {
-                let mut f = failed.lock().unwrap_or_else(PoisonError::into_inner);
-                f.get_or_insert(e);
-                Cow::Borrowed(s)
-            }
-        }
-    })?;
-    if let Some(e) = failed.into_inner().unwrap_or_else(PoisonError::into_inner) {
-        let err = repair_err(py, e).unwrap_or_else(|| {
-            PyroidError::new_err(
-                "pyroid.json_repair.repair_json_batch: a document holds a char in \
-                 U+10F800..U+10FFFF, which the Rust port does not handle; pass a list \
-                 to have it delegated to json_repair",
+    try_transform(
+        py,
+        input,
+        threads_arg,
+        |s| match kernel::repair_json(s, opts, dump) {
+            Ok(out) if out == s => Ok(Cow::Borrowed(s)),
+            // The value holds a lone surrogate (stored remapped), which a
+            // UTF-8 Arrow column cannot hold.
+            Ok(out) if chars::contains_reserved(&out) => Err(ArrowFailure::Surrogate(out)),
+            Ok(out) => Ok(Cow::Owned(out)),
+            Err(e) => Err(ArrowFailure::Repair(e)),
+        },
+        |py, row, failure| arrow_error(py, row, failure),
+    )
+}
+
+/// Why one row of an Arrow batch has no Arrow result.
+enum ArrowFailure {
+    Repair(RepairError),
+    /// json_repair's result, which holds a lone surrogate.
+    Surrogate(String),
+}
+
+fn arrow_error(py: Python<'_>, row: usize, failure: ArrowFailure) -> PyErr {
+    match failure {
+        ArrowFailure::Repair(e) => {
+            let err = repair_err(py, e).unwrap_or_else(|| {
+                PyroidError::new_err(
+                    "pyroid.json_repair.repair_json_batch: a document holds a char in \
+                     U+10F800..U+10FFFF, which the Rust port does not handle; pass a list \
+                     to have it delegated to json_repair",
+                )
+            });
+            with_note(
+                py,
+                err,
+                format!("pyroid: while repairing row {row} of the Arrow input"),
             )
-        });
-        return Err(with_note(
-            py,
-            err,
-            "pyroid: while repairing a document of the Arrow input",
-        ));
+        }
+        ArrowFailure::Surrogate(out) => {
+            // The UnicodeEncodeError that encoding json_repair's str gives.
+            let err = match py_str(py, &out).and_then(|s| s.to_str().map(|_| ())) {
+                Err(e) => e,
+                Ok(()) => PyValueError::new_err("unreachable: no lone surrogate"),
+            };
+            with_note(
+                py,
+                err,
+                format!(
+                    "pyroid: row {row} of the Arrow input repairs to a str with a lone \
+                     surrogate (an escape such as \\ud800 kept as is), which an Arrow string \
+                     column cannot hold; pass a list to get the str, or ensure_ascii=True to \
+                     keep the escape"
+                ),
+            )
+        }
     }
-    Ok(column)
 }
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {

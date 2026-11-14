@@ -93,7 +93,13 @@ column.to_pylist()  # ['{"a": 1}', None, '[1, 2]']
 It takes a `str`, a `list` or `tuple` of `str`, or an Arrow string column (pyarrow, polars,
 `datasets`) and returns the same kind. For Arrow input that is a
 [`pyroid.Column`](../reference/pyroid.md#pyroid.Column), with nulls kept. In strict mode a
-failing document raises for the whole batch, and the exception's note names its index.
+failing document raises for the whole batch, and the exception's note names its index or row.
+
+An Arrow column cannot hold lone surrogates. json_repair keeps an escape such as `\ud800` as a
+lone surrogate, and so does an escaped pair such as `\ud83d\ude00` when its own parser reads it.
+With the default `ensure_ascii=True` the result writes it back as the escape, so nothing changes.
+With `ensure_ascii=False`, Arrow input raises `UnicodeEncodeError` for such a result, and the
+note names the row; pass a list to get json_repair's `str`.
 `json.dumps` arguments other than `ensure_ascii`, `indent`, `separators`, `sort_keys` and
 `allow_nan` work for `str`, `list` and `tuple` input only (one `repair_json` call per document).
 

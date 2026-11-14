@@ -208,8 +208,11 @@ def repair_json_batch(
         of strings (``large_string`` for ``large_string`` input, else ``string``).
 
     Raises:
-        ValueError: A document fails in strict mode (the note names its index).
+        ValueError: A document fails in strict mode (the note names its index or row).
         NestingError: A document nests deeper than :data:`MAX_DEPTH`.
+        UnicodeEncodeError: Arrow input with ``ensure_ascii=False``, and a result holds a lone
+            surrogate (json_repair keeps an escape such as ``\\ud800`` as one), which an Arrow
+            column cannot hold. The note names the row; a list gives json_repair's str.
         pyroid.InputError: ``texts`` is not one of the accepted kinds.
     """
 

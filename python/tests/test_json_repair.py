@@ -405,6 +405,34 @@ def test_batch_surrogates() -> None:
     assert jr.repair_json_batch(docs) == [ref.repair_json(d) for d in docs]
 
 
+@pytest.mark.parametrize("large", [False, True])
+def test_batch_arrow_result_with_lone_surrogate(large: bool) -> None:
+    # json_repair keeps the escape \ud800 (and an escaped pair it parses itself) as lone
+    # surrogates; with ensure_ascii=False its str holds them, which Arrow cannot. The port
+    # stores them in U+10F800..U+10FFFF, which must never reach the column.
+    docs = ['{"ok": 1,}', '{"emoji": "\\ud83d\\ude00", "ok": true,}', '"\\ud800"']
+    col = _testing.column(docs, large=large, chunks=2)
+    want = [ref.repair_json(d, ensure_ascii=False) for d in docs]
+    assert jr.repair_json_batch(docs, ensure_ascii=False) == want
+    with pytest.raises(UnicodeEncodeError) as info:
+        jr.repair_json_batch(col, ensure_ascii=False)
+    assert info.value.object == want[1]
+    assert any("row 1 of the Arrow input" in n for n in info.value.__notes__)
+    for kw in [{}, {"ensure_ascii": True}]:
+        assert jr.repair_json_batch(col, **kw).to_pylist() == [ref.repair_json(d) for d in docs]
+    # A result without one is unaffected.
+    assert jr.repair_json_batch(_testing.column(docs[:1]), ensure_ascii=False).to_pylist() == [
+        want[0]
+    ]
+
+
+def test_batch_arrow_error_names_the_row() -> None:
+    col = _testing.column(["{}", None, "[1]", '{"a" 1}'], chunks=2)
+    with pytest.raises(ValueError, match="Missing ':'") as info:
+        jr.repair_json_batch(col, strict=True, skip_json_loads=True)
+    assert any("row 3 of the Arrow input" in n for n in info.value.__notes__)
+
+
 @pytest.mark.thread_unsafe
 def test_batch_delegates_reserved_items() -> None:
     docs = ["{'a': 1}", "{'a': '\U0010fffe'}"]

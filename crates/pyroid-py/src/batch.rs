@@ -209,6 +209,91 @@ where
     }
 }
 
+/// [`transform`] for a kernel that can fail on a document. The whole batch
+/// runs; then the first failing document in input order is raised with
+/// `on_err(py, doc, e)`, where `doc` is its index in the list or tuple, or its
+/// row counted across the chunks of the Arrow input (0 for a single `str`).
+pub fn try_transform<'py, F, E, G>(
+    py: Python<'py>,
+    input: TextInput,
+    threads_arg: Option<Threads>,
+    f: F,
+    on_err: G,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    F: for<'a> Fn(&'a str) -> Result<Cow<'a, str>, E> + Sync,
+    E: Send,
+    G: FnOnce(Python<'py>, usize, E) -> PyErr,
+{
+    let threads = threads(threads_arg);
+    match &input {
+        TextInput::Str(s) => {
+            let out = if s.len() < SINGLE_DOC_DETACH_BYTES {
+                f(s)
+            } else {
+                py.detach(|| f(s))
+            };
+            match out {
+                Ok(out) => Ok(result_str(py, s, &out).into_any()),
+                Err(e) => Err(on_err(py, 0, e)),
+            }
+        }
+        TextInput::List(docs) | TextInput::Tuple(docs) => {
+            let outs = py
+                .detach(|| par::map(docs.len(), threads, |i| f(&docs[i])))
+                .map_err(|e| BatchError::from(e).into_pyerr(py))?;
+            let mut items = Vec::with_capacity(outs.len());
+            for (i, (d, o)) in docs.iter().zip(outs).enumerate() {
+                match o {
+                    Ok(o) => items.push(result_str(py, d, &o)),
+                    Err(e) => return Err(on_err(py, i, e)),
+                }
+            }
+            Ok(match input {
+                TextInput::List(_) => PyList::new(py, items)?.into_any(),
+                _ => PyTuple::new(py, items)?.into_any(),
+            })
+        }
+        TextInput::Arrow(strings) => {
+            let large = strings.field.ty == StrType::LargeUtf8;
+            let built = py
+                .detach(|| {
+                    let mut chunks = Vec::with_capacity(strings.chunks.len());
+                    let mut base = 0;
+                    for (c, chunk) in strings.chunks.iter().enumerate() {
+                        let mut outs = Vec::with_capacity(chunk.len());
+                        for (row, out) in map_chunk(chunk, c, threads, &f)?.into_iter().enumerate()
+                        {
+                            match out.transpose() {
+                                Ok(out) => outs.push(out),
+                                Err(e) => return Ok(Err((base + row, e))),
+                            }
+                        }
+                        base += chunk.len();
+                        if large {
+                            chunks.push(Chunk::LargeUtf8(StringBuffers::build(&outs, threads)?));
+                        } else {
+                            chunks.extend(
+                                StringBuffers::build_split(&outs, threads)?
+                                    .into_iter()
+                                    .map(Chunk::Utf8),
+                            );
+                        }
+                    }
+                    Ok(Ok(chunks))
+                })
+                .map_err(|e: BatchError| e.into_pyerr(py))?;
+            let chunks = built.map_err(|(doc, e)| on_err(py, doc, e))?;
+            let ty = if large {
+                ColumnType::LargeUtf8
+            } else {
+                ColumnType::Utf8
+            };
+            Ok(Bound::new(py, Column::new(ty, &strings.field.name, chunks))?.into_any())
+        }
+    }
+}
+
 /// Apply a per-document predicate; returns a mask in the caller's kind.
 pub fn predicate<F>(
     py: Python<'_>,
