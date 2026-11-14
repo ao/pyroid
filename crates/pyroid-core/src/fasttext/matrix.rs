@@ -19,8 +19,10 @@ use super::io::Reader;
 /// The published fastText wheels are built by GCC with `-O3`, which
 /// contracts these loops into fused multiply-adds where the base ISA has
 /// them: on aarch64 the reference rounds once, on baseline x86-64 twice.
-/// The dense `dotRow` is vectorized instead: products four at a time, added
-/// in order, and only its scalar tail is fused (see [`Matrix::dot_row`]).
+/// fasttext-predict's dense `dotRow` is vectorized instead: products four at
+/// a time, added in order, and only its scalar tail is fused; upstream
+/// fastText 0.9.2's wheels (`fasttext-numpy2-wheel`, `fasttext-wheel`) fuse
+/// the whole row (see [`Matrix::dot_row`] and [`Matrix::set_fused_dot`]).
 /// Measured against fasttext-predict 0.9.2.4 on aarch64: with this split, all
 /// 26,464 pinned lid.176 predictions, every synthetic qout/qnorm model and
 /// dense models of every dim from 1 to 33 are bit-identical;
@@ -47,6 +49,8 @@ pub struct Dense {
     rows: usize,
     cols: usize,
     data: Vec<f32>,
+    /// `dotRow` fuses every multiply-add, not only the tail.
+    fused_dot: bool,
 }
 
 /// `ProductQuantizer` (8 bits per code: 256 centroids per sub-quantizer).
@@ -94,7 +98,12 @@ impl Dense {
             .checked_mul(cols as u64)
             .ok_or_else(|| LoadError::Invalid(format!("{what}: {rows} x {cols} overflows")))?;
         let data = r.f32s(count, what)?;
-        Ok(Self { rows, cols, data })
+        Ok(Self {
+            rows,
+            cols,
+            data,
+            fused_dot: false,
+        })
     }
 
     #[inline]
@@ -360,6 +369,15 @@ impl Matrix {
         }
     }
 
+    /// Compute a dense `dotRow` as upstream fastText 0.9.2's wheels do (every
+    /// term fused where [`fused`] fuses) instead of as fasttext-predict does.
+    /// Quantized rows are the same in both.
+    pub fn set_fused_dot(&mut self, on: bool) {
+        if let Self::Dense(d) = self {
+            d.fused_dot = on;
+        }
+    }
+
     /// `dotRow(v, i)`. Dense rows check for NaN like fastText; quantized
     /// rows do not (nor does fastText).
     #[inline]
@@ -367,10 +385,15 @@ impl Matrix {
         match self {
             Self::Dense(d) => {
                 let row = d.row(i);
-                // GCC vectorizes the products four at a time and adds them in
-                // order (two roundings); the scalar tail of `cols % 4` terms
-                // is contracted into fused multiply-adds.
-                let body = row.len() - row.len() % 4;
+                // fasttext-predict: GCC vectorizes the products four at a time
+                // and adds them in order (two roundings); the scalar tail of
+                // `cols % 4` terms is contracted into fused multiply-adds.
+                // Upstream's wheels: one fused multiply-add per term.
+                let body = if d.fused_dot {
+                    0
+                } else {
+                    row.len() - row.len() % 4
+                };
                 let mut acc = 0.0f32;
                 for (&a, &b) in row[..body].iter().zip(v) {
                     acc += a * b;

@@ -326,7 +326,7 @@ class FineWeb:
     def model(self) -> Any:
         """The ``pyroid.fasttext.Model`` (loaded on first use)."""
         if self._model is None:
-            self._model = pyroid.fasttext.load_model(lid_model_path(self._model_path))
+            self._model = pyroid.fasttext._load_upstream(lid_model_path(self._model_path))
         return self._model
 
     def stages(self) -> list[str]:
