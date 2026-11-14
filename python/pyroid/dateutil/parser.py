@@ -1,0 +1,466 @@
+# Derived from python-dateutil 4.0.0 (BSD-3-Clause), (c) Gustavo Niemeyer, Paul Ganssle and
+# dateutil contributors; modified. See pyroid's NOTICE and LICENSES/BSD-3-Clause-dateutil.txt.
+"""A drop-in, Rust-backed ``dateutil.parser`` (``import pyroid.dateutil.parser``).
+
+``parse``, ``parser``, ``parserinfo``, ``isoparse`` and ``isoparser`` have python-dateutil's
+signatures and give the same results: the same ``datetime`` values, the installed dateutil's own
+time zone objects (``tz.UTC``, ``tz.tzoffset(...)``, ``tz.tzlocal()``), and the same
+``ParserError`` (dateutil's class, when it is installed) with the same message. ``parse`` is the
+same in python-dateutil 2.9.0.post0, 3.0.0 and 4.0.0; ``isoparse`` follows the installed release
+(see ``isoparser(compat=...)``). ``parse_batch`` and ``isoparse_batch`` parse lists and Arrow
+columns on pyroid's thread pool.
+
+The tokenizer and the parser's resolution logic run in Rust. A ``parser`` or ``parserinfo``
+subclass that overrides a method, and the few inputs the Rust port does not handle, run dateutil's
+own algorithm (pyroid's copy of it, :mod:`pyroid.dateutil._reference`), with a one-time
+:class:`pyroid.FallbackWarning`. See ``parser.pyi``.
+"""
+
+from __future__ import annotations
+
+import datetime
+import sys
+import unicodedata
+import warnings
+from collections.abc import Callable
+from typing import Any
+
+from pyroid._pyroid import FallbackWarning
+from pyroid._pyroid import dateutil as _native
+from pyroid.dateutil import _isoreference, _reference, _upstream
+from pyroid.dateutil._upstream import ParserError, UnknownTimezoneWarning
+
+__all__ = [
+    "DATEUTIL_VERSION",
+    "DATEUTIL_VERSIONS",
+    "DEFAULTPARSER",
+    "DEFAULTTZPARSER",
+    "DEFAULT_ISOPARSER",
+    "ParserError",
+    "UnknownTimezoneWarning",
+    "isoparse",
+    "isoparse_batch",
+    "isoparser",
+    "parse",
+    "parse_batch",
+    "parser",
+    "parserinfo",
+]
+
+#: The newest python-dateutil release this module reproduces.
+DATEUTIL_VERSION = "4.0.0"
+#: Every release it reproduces: ``parse`` is the same in all three; ``isoparse`` has a 4.0.0
+#: form and a 2.9.0.post0 form (which 3.0.0 shares), selected with ``isoparser(compat=...)``.
+DATEUTIL_VERSIONS = ("4.0.0", "3.0.0", "2.9.0.post0")
+
+# isoparse modes: the release whose isoparse a compat value means.
+_ISO_MODES = {"4.0.0": "4.0.0", "3.0.0": "2.9.0.post0", "2.9.0.post0": "2.9.0.post0"}
+
+
+def _version_check() -> None:
+    """Warn once if the installed python-dateutil is a release this module does not reproduce."""
+    try:
+        from pyroid import _versions  # type: ignore[attr-defined,unused-ignore]
+    except ImportError:
+        _versions = None
+    if _versions is not None:
+        _versions.check(
+            __name__,
+            "dateutil",
+            f"python-dateutil=={DATEUTIL_VERSION}",
+            same=("python-dateutil==3.0.0", "python-dateutil==2.9.0.post0"),
+        )
+        return
+    found = _upstream.INSTALLED_VERSION
+    if found is None or found in DATEUTIL_VERSIONS:
+        return
+    frame = sys._getframe(1)
+    level = 1
+    while frame.f_back is not None and frame.f_globals.get("__name__", "").startswith(
+        ("pyroid", "importlib")
+    ):
+        frame = frame.f_back
+        level += 1
+    warnings.warn(
+        f"{__name__} reproduces python-dateutil {DATEUTIL_VERSION} (and 3.0.0, 2.9.0.post0), but "
+        f"python-dateutil {found} is installed: results can differ from it. Install "
+        f"python-dateutil=={DATEUTIL_VERSION} to compare like for like.",
+        RuntimeWarning,
+        stacklevel=level + 1,
+    )
+
+
+_version_check()
+
+
+def _unicode_version() -> str:
+    version = unicodedata.unidata_version
+    supported = _native.supported_unicode_versions()
+    if version in supported:
+        return version
+    newest = supported[-1]
+    warnings.warn(
+        f"pyroid.dateutil has no tables for Unicode {version} (this Python's unicodedata); "
+        f"using Unicode {newest}. Output can differ from dateutil for characters added "
+        f"after {newest}.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+    return newest
+
+
+_native._set_unicode_version(_unicode_version())
+
+_WARNED: set[str] = set()
+
+
+def _caller_stacklevel() -> int:
+    """The ``stacklevel`` that points ``warnings.warn`` at the first frame outside pyroid."""
+    frame = sys._getframe(1)
+    level = 1
+    while frame.f_back is not None and frame.f_globals.get("__name__", "").startswith(
+        "pyroid.dateutil"
+    ):
+        frame = frame.f_back
+        level += 1
+    return level
+
+
+def _fallback(name: str, reason: str | None) -> None:
+    """Warn once that dateutil's Python algorithm runs, for `reason`.
+
+    `None` means no warning: the call's result or error is dateutil's anyway (an unexpected
+    keyword argument, for one).
+    """
+    if reason is None:
+        return
+    key = f"{name}:{reason}"
+    if key not in _WARNED:
+        _WARNED.add(key)
+        warnings.warn(
+            f"pyroid.dateutil.parser.{name}: {reason} is not supported by the Rust port; "
+            "running dateutil's own algorithm (slow path). This warning is shown once.",
+            FallbackWarning,
+            stacklevel=_caller_stacklevel(),
+        )
+
+
+# ---------------------------------------------------------------------------
+# parserinfo, parser
+# ---------------------------------------------------------------------------
+
+#: dateutil's parserinfo class (pyroid's copy): subclass it to change the accepted words.
+parserinfo = _reference.parserinfo
+parserinfo.__module__ = __name__
+
+_DATEUTIL_PARSERINFO: Any = getattr(_upstream._parser_mod, "parserinfo", None)
+
+# The parser methods the Rust port replaces; a subclass overriding one runs dateutil's code.
+_PARSER_HOOKS = (
+    "_parse",
+    "_parse_numeric_token",
+    "_find_hms_idx",
+    "_assign_hms",
+    "_could_be_tzname",
+    "_ampm_valid",
+    "_adjust_ampm",
+    "_parse_min_sec",
+    "_parse_hms",
+    "_parsems",
+    "_to_decimal",
+    "_build_tzinfo",
+    "_build_tzaware",
+    "_build_naive",
+    "_assign_tzname",
+    "_recombine_skipped",
+    "_result",
+)
+# The ones `_parse` calls (a subclass overriding `_parse` itself may call pyroid's).
+_PRIVATE_HOOKS = tuple(
+    h
+    for h in _PARSER_HOOKS
+    if h not in ("_parse", "_build_tzinfo", "_build_tzaware", "_build_naive", "_assign_tzname")
+)
+_INFO_HOOKS = (
+    "jump",
+    "weekday",
+    "month",
+    "hms",
+    "ampm",
+    "pertain",
+    "utczone",
+    "tzoffset",
+    "convertyear",
+    "validate",
+    "_convert",
+)
+
+
+class parser(_reference.parser):  # noqa: N801 - dateutil's name
+    """dateutil's ``parser``: ``parser(info=None).parse(timestr, ...)``.
+
+    ``info`` is a :class:`parserinfo` (or dateutil's own). The parsing runs in Rust unless a
+    subclass overrides one of the private methods dateutil documents as hooks, in which case
+    dateutil's algorithm runs with them.
+    """
+
+    def __init__(self, info: Any = None) -> None:
+        self.info = info or parserinfo()
+
+    def parse(
+        self,
+        timestr: Any,
+        default: datetime.datetime | None = None,
+        ignoretz: bool = False,
+        tzinfos: Any = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Parse the date/time string into a :class:`datetime.datetime` (dateutil's ``parse``)."""
+        return _native.parser_parse(self, timestr, default, ignoretz, tzinfos, kwargs)
+
+    def _parse(
+        self,
+        timestr: Any,
+        dayfirst: Any = None,
+        yearfirst: Any = None,
+        fuzzy: Any = False,
+        fuzzy_with_tokens: Any = False,
+    ) -> Any:
+        return _native.parser_private_parse(
+            self, timestr, dayfirst, yearfirst, fuzzy, fuzzy_with_tokens
+        )
+
+
+def _make_result(fields: tuple[Any, ...], century_specified: bool) -> Any:
+    """A ``parser._result`` holding the kernel's fields (for dateutil's ``_build_*`` steps)."""
+    res = parser._result()
+    for attr, value in zip(parser._result.__slots__, fields, strict=False):
+        setattr(res, attr, value)
+    res.century_specified = century_specified
+    return res
+
+
+def _finish(
+    self: Any,
+    res: Any,
+    skipped_tokens: Any,
+    timestr: Any,
+    default: Any,
+    ignoretz: Any,
+    tzinfos: Any,
+    kwargs: dict[str, Any],
+) -> Any:
+    """The rest of dateutil's ``parser.parse`` after ``_parse`` (its exact code)."""
+    if res is None:
+        raise ParserError("Unknown string format: %s", timestr)
+    if len(res) == 0:
+        raise ParserError("String does not contain a date: %s", timestr)
+    try:
+        ret = self._build_naive(res, default)
+    except ValueError as e:
+        raise ParserError(str(e) + ": %s", timestr) from e
+    if not ignoretz:
+        ret = self._build_tzaware(ret, res, tzinfos)
+    if kwargs.get("fuzzy_with_tokens", False):
+        return ret, skipped_tokens
+    return ret
+
+
+def _reference_parse(
+    self: Any,
+    reason: str | None,
+    timestr: Any,
+    default: Any,
+    ignoretz: Any,
+    tzinfos: Any,
+    kwargs: dict[str, Any],
+) -> Any:
+    """Run dateutil's ``parser.parse`` itself (pyroid's copy), after a FallbackWarning."""
+    _fallback("parse", reason)
+    return _reference.parser.parse(
+        self, timestr, default=default, ignoretz=ignoretz, tzinfos=tzinfos, **kwargs
+    )
+
+
+def _reference_private_parse(self: Any, reason: str, timestr: Any, *args: Any) -> Any:
+    _fallback("parser._parse", reason)
+    return _reference.parser._parse(self, timestr, *args)
+
+
+class _Replay:
+    """A stream that gives back the ``read(1)`` results already taken from another one.
+
+    ``str()`` and ``repr()`` are the original stream's, so dateutil's messages name it.
+    """
+
+    def __init__(self, chunks: list[Any], original: Any) -> None:
+        self._chunks = chunks
+        self._i = 0
+        self._original = original
+
+    def __str__(self) -> str:
+        return str(self._original)
+
+    def __repr__(self) -> str:
+        return repr(self._original)
+
+    def read(self, n: int = -1) -> Any:
+        if self._i < len(self._chunks):
+            self._i += 1
+            return self._chunks[self._i - 1]
+        return ""
+
+
+def _read_stream(stream: Any) -> Any:
+    """Read a character stream as ``_timelex`` does, one ``read(1)`` at a time.
+
+    Returns its text, or a replay of the reads when they are not all one-character ``str``
+    (dateutil's own code then reads them).
+    """
+    chunks = []
+    while True:
+        c = stream.read(1)
+        if not c:
+            break
+        chunks.append(c)
+    if all(type(c) is str and len(c) == 1 for c in chunks):
+        return "".join(chunks)
+    return _Replay(chunks, stream)
+
+
+DEFAULTPARSER = parser()
+
+
+# ---------------------------------------------------------------------------
+# isoparser
+# ---------------------------------------------------------------------------
+
+
+def _iso_mode(compat: str | None) -> str:
+    if compat is None:
+        installed = _upstream.INSTALLED_VERSION
+        return _ISO_MODES.get(installed or "", DATEUTIL_VERSION)
+    if compat not in _ISO_MODES:
+        raise ValueError(
+            f"compat must be one of {', '.join(map(repr, DATEUTIL_VERSIONS))} or None, "
+            f"not {compat!r}"
+        )
+    return _ISO_MODES[compat]
+
+
+class isoparser(_isoreference.isoparser):  # noqa: N801 - dateutil's name
+    """dateutil's ``isoparser(sep=None)``, plus the keyword-only ``compat``.
+
+    ``compat`` picks whose ``isoparse`` to reproduce: ``"4.0.0"`` (each field exactly N ASCII
+    digits), or ``"2.9.0.post0"``/``"3.0.0"`` (fields read with ``int()``, so ``2014- 4-21``
+    parses). ``None``, the default, follows the installed python-dateutil, and is 4.0.0 without it.
+    """
+
+    def __init__(self, sep: str | None = None, *, compat: str | None = None) -> None:
+        super().__init__(sep)
+        self._compat = _iso_mode(compat)
+        self._lenient = self._compat != "4.0.0"
+
+    @_isoreference._takes_ascii
+    def isoparse(self, dt_str: Any) -> datetime.datetime:
+        """Parse an ISO-8601 datetime string into a :class:`datetime.datetime`."""
+        return _native.isoparser_isoparse(self, dt_str)  # type: ignore[no-any-return]
+
+
+_isoparser_isoparse_doc = _isoreference.isoparser.isoparse.__doc__
+isoparser.isoparse.__doc__ = _isoparser_isoparse_doc
+
+# The isoparser methods the Rust port replaces.
+_ISO_HOOKS = (
+    "_parse_isodate",
+    "_parse_isodate_common",
+    "_parse_isodate_uncommon",
+    "_calculate_weekdate",
+    "_parse_isotime",
+    "_parse_tzstr",
+    "_parse_digits",
+)
+
+DEFAULT_ISOPARSER = isoparser()
+
+
+def _reference_isoparse(self: Any, reason: str | None, dt_str: bytes) -> Any:
+    """Run dateutil's ``isoparser.isoparse`` (pyroid's copy) on the ASCII bytes."""
+    if reason is not None:
+        _fallback("isoparse", reason)
+    return _isoreference.isoparser.isoparse.__wrapped__(self, dt_str)  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# The native module's hooks into this one
+# ---------------------------------------------------------------------------
+
+_native._install(
+    {
+        "module": sys.modules[__name__].__dict__,
+        "parser": parser,
+        "parserinfo": parserinfo,
+        "dateutil_parserinfo": _DATEUTIL_PARSERINFO,
+        "parser_hooks": _PARSER_HOOKS,
+        "private_hooks": _PRIVATE_HOOKS,
+        "info_hooks": _INFO_HOOKS,
+        "iso_hooks": _ISO_HOOKS,
+        "isoparser": isoparser,
+        "ParserError": ParserError,
+        "UnknownTimezoneWarning": UnknownTimezoneWarning,
+        "tz": _upstream.tz,
+        "finish": _finish,
+        "make_result": _make_result,
+        "reference_parse": _reference_parse,
+        "reference_private_parse": _reference_private_parse,
+        "reference_isoparse": _reference_isoparse,
+        "read_stream": _read_stream,
+        "replay": _Replay,
+        "datetime_module": datetime,
+    }
+)
+
+#: ``parse(timestr, parserinfo=None, **kwargs)``: dateutil's module-level ``parse``.
+parse: Callable[..., Any] = _native.parse
+#: ``isoparse(dt_str)``: ``DEFAULT_ISOPARSER.isoparse``.
+isoparse: Callable[..., datetime.datetime] = _native.isoparse
+
+
+def parse_batch(
+    timestrs: Any,
+    parserinfo: Any = None,
+    *,
+    threads: int | None = None,
+    errors: str = "raise",
+    **kwargs: Any,
+) -> Any:
+    """:func:`parse` over many strings at once, on pyroid's thread pool (not part of dateutil).
+
+    See ``parser.pyi``.
+    """
+    return _native.parse_batch(timestrs, parserinfo, threads, errors, kwargs)
+
+
+def isoparse_batch(
+    dt_strs: Any,
+    *,
+    threads: int | None = None,
+    errors: str = "raise",
+    sep: str | None = None,
+    compat: str | None = None,
+) -> Any:
+    """:func:`isoparse` over many strings at once, on pyroid's thread pool (not part of dateutil).
+
+    See ``parser.pyi``.
+    """
+    p = DEFAULT_ISOPARSER if sep is None and compat is None else isoparser(sep, compat=compat)
+    return _native.isoparse_batch(dt_strs, p, threads, errors)
+
+
+# dateutil.parser's private names that code outside it uses (pandas imports _timelex).
+_timelex = _reference._timelex
+_resultbase = _reference._resultbase
+_tzparser = _reference._tzparser
+_parsetz = _reference._parsetz
+#: dateutil's ``DEFAULTTZPARSER`` (the ``TZ``-string parser behind ``dateutil.tz.tzstr``).
+DEFAULTTZPARSER = _reference.DEFAULTTZPARSER

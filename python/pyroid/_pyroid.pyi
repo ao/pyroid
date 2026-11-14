@@ -13,6 +13,7 @@ __all__ = [
     "__version__",
     "_testing",
     "datasketch",
+    "dateutil",
     "dedup",
     "fasttext",
     "filters",
@@ -40,6 +41,7 @@ translit: ModuleType
 metrics: ModuleType
 json_repair: ModuleType
 datasketch: ModuleType
+dateutil: ModuleType
 jieba: ModuleType
 nltk: ModuleType
 nemo: ModuleType
