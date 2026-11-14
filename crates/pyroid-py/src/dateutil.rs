@@ -261,7 +261,11 @@ fn first_override(
 
 fn parser_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
     let ty = obj.get_type();
-    if ty.is(h.parser.bind(py)) {
+    if ty.is(h.parser.bind(py))
+        || UPSTREAM
+            .get(py)
+            .is_some_and(|u| ty.is(u.parser.bind(py)))
+    {
         return Ok(None);
     }
     cached_override(&PARSER_TYPES, &ty, || {
@@ -1533,19 +1537,41 @@ fn parse<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = timestr.py();
     let h = hooks(py)?;
-    let module = h.module.bind(py);
-    if let Some(info) = parserinfo {
-        if info.is_truthy()? {
-            let cls = item(module, "parser")?;
+    module_parse(h.module.bind(py), h.parser.bind(py), timestr, parserinfo, kwargs)
+}
+
+/// `parse` of the module whose globals are `module` (pyroid's, or dateutil's own when
+/// patched), whose `parser` class is `parser_type`: dateutil's
+/// `parser(parserinfo).parse(...)` or `DEFAULTPARSER.parse(...)`.
+fn module_parse<'py>(
+    module: &Bound<'py, PyDict>,
+    parser_type: &Bound<'py, PyType>,
+    timestr: &Bound<'py, PyAny>,
+    parserinfo: Option<&Bound<'py, PyAny>>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = timestr.py();
+    let info = match parserinfo {
+        Some(i) if i.is_truthy()? => Some(i),
+        _ => None,
+    };
+    let dp = if let Some(info) = info {
+        // `parser(parserinfo)`: the module's current `parser`.
+        let cls = module
+            .get_item(pyo3::intern!(py, "parser"))?
+            .ok_or_else(|| PyValueError::new_err("the parser module has no parser"))?;
+        if !cls.is(parser_type) {
             return cls
                 .call1((info,))?
                 .call_method(pyo3::intern!(py, "parse"), (timestr,), kwargs);
         }
-    }
-    let dp = module
-        .get_item(pyo3::intern!(py, "DEFAULTPARSER"))?
-        .ok_or_else(|| PyValueError::new_err("pyroid.dateutil.parser has no DEFAULTPARSER"))?;
-    if !dp.get_type().is(h.parser.bind(py)) {
+        cls.call1((info,))?
+    } else {
+        module
+            .get_item(pyo3::intern!(py, "DEFAULTPARSER"))?
+            .ok_or_else(|| PyValueError::new_err("the parser module has no DEFAULTPARSER"))?
+    };
+    if !dp.get_type().is(parser_type) {
         return dp.call_method(pyo3::intern!(py, "parse"), (timestr,), kwargs);
     }
     let none = py.None().into_bound(py);
@@ -1568,6 +1594,101 @@ fn parse<'py>(
         }
     }
     parse_impl(&dp, timestr, &default, &ignoretz, &tzinfos, Some(&rest))
+}
+
+/// What `pyroid.patch("dateutil")` sets on python-dateutil's own modules.
+struct Upstream {
+    /// `dateutil.parser._parser.__dict__`.
+    module: Py<PyDict>,
+    parser: Py<PyType>,
+    /// `dateutil.parser.isoparser.__dict__` (its `DEFAULT_ISOPARSER`, its `datetime`).
+    iso_module: Py<PyDict>,
+    isoparser: Py<PyType>,
+    /// The installed release's isoparse.
+    iso_mode: Mode,
+}
+
+static UPSTREAM: PyOnceLock<Upstream> = PyOnceLock::new();
+
+/// Called by `parser._patched_functions` with dateutil's modules and isoparse mode.
+#[pyfunction]
+fn _install_upstream(d: &Bound<'_, PyDict>) -> PyResult<()> {
+    let py = d.py();
+    let u = Upstream {
+        module: item(d, "module")?.cast_into::<PyDict>()?.unbind(),
+        parser: item(d, "parser")?.cast_into::<PyType>()?.unbind(),
+        iso_module: item(d, "iso_module")?.cast_into::<PyDict>()?.unbind(),
+        isoparser: item(d, "isoparser")?.cast_into::<PyType>()?.unbind(),
+        iso_mode: if item(d, "lenient")?.is_truthy()? {
+            Mode::Lenient
+        } else {
+            Mode::Strict
+        },
+    };
+    let _ = UPSTREAM.set(py, u);
+    Ok(())
+}
+
+fn upstream(py: Python<'_>) -> PyResult<&Upstream> {
+    UPSTREAM.get(py).ok_or_else(|| {
+        pyo3::exceptions::PyRuntimeError::new_err("pyroid.patch('dateutil') has not run")
+    })
+}
+
+/// `dateutil.parser.parse` under `pyroid.patch("dateutil")`: dateutil's own `parse`, with
+/// its `DEFAULTPARSER` and classes, parsed by pyroid.
+#[pyfunction]
+#[pyo3(name = "parse", signature = (timestr, parserinfo = None, **kwargs))]
+fn upstream_parse<'py>(
+    timestr: &Bound<'py, PyAny>,
+    parserinfo: Option<&Bound<'py, PyAny>>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = timestr.py();
+    let u = upstream(py)?;
+    module_parse(u.module.bind(py), u.parser.bind(py), timestr, parserinfo, kwargs)
+}
+
+/// `dateutil.parser.isoparse` under `pyroid.patch("dateutil")`: dateutil's
+/// `DEFAULT_ISOPARSER.isoparse`, parsed by pyroid when it can be.
+#[pyfunction]
+#[pyo3(name = "isoparse")]
+fn upstream_isoparse<'py>(dt_str: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let py = dt_str.py();
+    let h = hooks(py)?;
+    let u = upstream(py)?;
+    let globals = u.iso_module.bind(py);
+    let p = globals
+        .get_item(pyo3::intern!(py, "DEFAULT_ISOPARSER"))?
+        .ok_or_else(|| PyValueError::new_err("dateutil.parser.isoparser has no DEFAULT_ISOPARSER"))?;
+    let native = p.get_type().is(u.isoparser.bind(py))
+        && globals
+            .get_item(pyo3::intern!(py, "datetime"))?
+            .is_some_and(|d| d.is(h.datetime_type.bind(py)));
+    if native {
+        if let Ok(s) = dt_str.cast::<PyString>() {
+            if let Ok(text) = s.to_str() {
+                let sep = p.getattr(pyo3::intern!(py, "_sep"))?;
+                let sep = if sep.is_none() {
+                    Some(None)
+                } else {
+                    sep.cast::<PyBytes>()
+                        .ok()
+                        .filter(|b| b.as_bytes().len() == 1)
+                        .map(|b| Some(b.as_bytes()[0]))
+                };
+                if let (true, Some(sep)) = (text.is_ascii(), sep) {
+                    if let Ok(iso) = iso::isoparse(text.as_bytes(), sep, u.iso_mode) {
+                        if let Some(dt) = iso_build(py, h, &iso)? {
+                            return Ok(dt);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // dateutil's own method: its result or its exception.
+    p.call_method1(pyo3::intern!(py, "isoparse"), (dt_str,))
 }
 
 // ---------------------------------------------------------------------------
@@ -2120,6 +2241,12 @@ fn iso_instant(iso: &Iso) -> Option<(i64, bool)> {
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let m = PyModule::new(parent.py(), "pyroid.dateutil")?;
+    let up = PyModule::new(parent.py(), "pyroid.dateutil.upstream")?;
+    up.gil_used(false)?;
+    up.add_function(wrap_pyfunction!(upstream_parse, &up)?)?;
+    up.add_function(wrap_pyfunction!(upstream_isoparse, &up)?)?;
+    m.add_submodule(&up)?;
+    m.add_function(wrap_pyfunction!(_install_upstream, &m)?)?;
     m.gil_used(false)?;
     m.add_function(wrap_pyfunction!(supported_unicode_versions, &m)?)?;
     m.add_function(wrap_pyfunction!(_set_unicode_version, &m)?)?;

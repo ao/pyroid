@@ -23,9 +23,10 @@ reproduces trafilatura 2.3.1 or 1.11.0, following the installed release: ``extra
 ``trafilatura.core``, ``trafilatura.deduplication.LRUCache`` / ``LRU_TEST`` and
 ``trafilatura.meta.reset_caches``), ``"nltk"`` (:mod:`pyroid.nltk`, which reproduces NLTK
 3.10.4's tokenizers) and ``"warcio"`` (:mod:`pyroid.warc`, which reproduces warcio 1.8.2's
-``ArchiveIterator``, ``WARCIterator`` and ``ARCIterator``). There is no ``"unidecode"``:
-:func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its output differs
-from Unidecode's.
+``ArchiveIterator``, ``WARCIterator`` and ``ARCIterator``) and ``"dateutil"``
+(:mod:`pyroid.dateutil.parser`: ``dateutil.parser.parse`` and ``isoparse``). There is no
+``"unidecode"``: :func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its
+output differs from Unidecode's.
 
 :func:`patch` puts a shim in ``sys.modules[name]``: a module named like the real one whose
 functions are pyroid's (the same objects, so a call costs what calling pyroid costs). If the
@@ -94,6 +95,16 @@ set on NeMo's own modules (``nemo_curator.stages.text.filters`` and the modules 
 them), so pipelines built afterwards, including from NeMo's YAML configs, use them. Ray workers
 need no patch: the stages they receive are pyroid's classes.
 
+``"dateutil"`` works like ``"nltk"`` too. With python-dateutil installed, ``parse`` and
+``isoparse`` on ``dateutil.parser`` (and ``dateutil.parser._parser.parse``,
+``dateutil.parser.isoparser.isoparse``) become pyroid's. They behave as dateutil's module-level
+functions do: they use dateutil's own ``DEFAULTPARSER``, ``parser`` class and ``DEFAULT_ISOPARSER``,
+so changes made to those still apply, and ``isoparse`` follows the installed release.
+``dateutil.tz``, ``relativedelta``, ``rrule``, ``easter``, the ``parser`` and ``isoparser`` classes
+and ``DEFAULTPARSER._parse`` (which ``pandas.to_datetime`` calls) stay dateutil's. Without
+python-dateutil, ``dateutil`` and ``dateutil.parser`` are shims holding
+:mod:`pyroid.dateutil.parser`'s names.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -140,6 +151,7 @@ SUPPORTED: tuple[str, ...] = (
     "nltk",
     "warcio",
     "nemo_curator",
+    "dateutil",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -760,6 +772,39 @@ def _build_nemo_curator(impl: types.ModuleType, real: Any, missing: str) -> _Bui
     return {}, [undo]
 
 
+# What patch("dateutil") sets on python-dateutil's modules: parse and isoparse only.
+_DATEUTIL_SWAPS: dict[str, tuple[str, ...]] = {
+    "dateutil.parser": ("parse", "isoparse"),
+    "dateutil.parser._parser": ("parse",),
+    "dateutil.parser.isoparser": ("isoparse",),
+}
+
+
+def _build_dateutil(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if real is None:  # no python-dateutil: dateutil.parser is a shim holding pyroid's parser
+        provided = {n: getattr(impl, n) for n in impl.__all__ if not n.startswith("DATEUTIL")}
+        sub = _shim("dateutil.parser", None, missing, impl, provided, package=True)
+        top = _shim("dateutil", None, missing, impl, {"parser": sub}, package=True)
+        return {"dateutil": top, "dateutil.parser": sub}, []
+    parse, isoparse = impl._patched_functions()
+    new = {"parse": parse, "isoparse": isoparse}
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for mod, names in _DATEUTIL_SWAPS.items():
+        module = importlib.import_module(mod)
+        for n in names:
+            saved.append((module, n, module.__dict__.get(n, _MISSING)))
+            setattr(module, n, new[n])
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
 def _distribution_version(name: str) -> Callable[[Any], str | None]:
     """The installed version of distribution `name` (for packages without ``__version__``)."""
 
@@ -850,10 +895,21 @@ _TARGETS: dict[str, _Target] = {
         " (readers, writers, deduplication, classifiers, the other stages)",
         _build_nemo_curator,
     ),
+    "dateutil": _Target(
+        "pyroid.dateutil.parser",
+        "whose parse and isoparse reproduce python-dateutil 4.0.0, 3.0.0 and 2.9.0.post0 "
+        "(isoparse following the installed release)",
+        "DATEUTIL_VERSION",
+        "pip install python-dateutil",
+        " (dateutil.tz, relativedelta, rrule, easter, and the parser and isoparser classes)",
+        _build_dateutil,
+        modes_attr="DATEUTIL_VERSIONS",
+        installed=_distribution_version("python-dateutil"),
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator")
+_SWAPPED = ("nltk", "warcio", "nemo_curator", "dateutil")
 
 
 # ---------------------------------------------------------------------------
@@ -927,6 +983,7 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
                 "nltk": "from nltk import word_tokenize",
                 "warcio": "from warcio.archiveiterator import ArchiveIterator",
                 "nemo_curator": "from nemo_curator.stages.text.filters import ScoreFilter",
+                "dateutil": "from dateutil.parser import parse",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "

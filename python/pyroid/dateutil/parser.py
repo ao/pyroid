@@ -427,6 +427,28 @@ parse: Callable[..., Any] = _native.parse
 isoparse: Callable[..., datetime.datetime] = _native.isoparse
 
 
+def _patched_functions() -> tuple[Callable[..., Any], Callable[..., datetime.datetime]]:
+    """``parse`` and ``isoparse`` for ``pyroid.patch("dateutil")`` to set on dateutil's modules.
+
+    They are dateutil's module-level functions (its ``DEFAULTPARSER``, its ``parser`` class, its
+    ``DEFAULT_ISOPARSER``), parsed by pyroid; the installed release decides the isoparse mode.
+    """
+    import importlib
+
+    du_parser = importlib.import_module("dateutil.parser._parser")
+    du_iso = importlib.import_module("dateutil.parser.isoparser")
+    _native._install_upstream(
+        {
+            "module": du_parser.__dict__,
+            "parser": du_parser.parser,
+            "iso_module": du_iso.__dict__,
+            "isoparser": du_iso.isoparser,
+            "lenient": _iso_mode(None) != "4.0.0",
+        }
+    )
+    return _native.upstream.parse, _native.upstream.isoparse
+
+
 def parse_batch(
     timestrs: Any,
     parserinfo: Any = None,
