@@ -302,7 +302,10 @@ mod tests {
         // One task's worth (65..=127 items) stays on the calling thread.
         assert_eq!(plan(100, n(4)), None);
         assert_eq!(plan(2 * MIN_DOCS_PER_TASK - 1, Threads::Auto), None);
-        assert_eq!(plan(2 * MIN_DOCS_PER_TASK, Threads::Auto), Some(MIN_DOCS_PER_TASK));
+        assert_eq!(
+            plan(2 * MIN_DOCS_PER_TASK, Threads::Auto),
+            Some(MIN_DOCS_PER_TASK)
+        );
         assert_eq!(plan(2 * MIN_DOCS_PER_TASK, n(2)), Some(MIN_DOCS_PER_TASK));
     }
 
