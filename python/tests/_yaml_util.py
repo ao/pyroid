@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import math
+import zoneinfo
 from collections.abc import Callable
 from typing import Any
 
@@ -153,6 +154,20 @@ TRICKY = [
 ]
 
 text = st.text(st.characters(exclude_categories=["Cs"]), max_size=40) | st.sampled_from(TRICKY)
+
+
+def _timezones() -> st.SearchStrategy[datetime.tzinfo]:
+    """Fixed offsets everywhere, plus IANA zones where the platform has a tz database (not Windows or Alpine
+    without tzdata)."""
+    day = datetime.timedelta(hours=23, minutes=59, seconds=59)
+    fixed = st.builds(datetime.timezone, st.timedeltas(min_value=-day, max_value=day))
+    try:
+        zoneinfo.ZoneInfo("UTC")
+    except zoneinfo.ZoneInfoNotFoundError:
+        return fixed
+    return fixed | st.timezones()
+
+
 scalars = (
     st.none()
     | st.booleans()
@@ -163,7 +178,7 @@ scalars = (
     | st.binary(max_size=90)
     | st.dates()
     | st.datetimes()
-    | st.datetimes(timezones=st.timezones())
+    | st.datetimes(timezones=_timezones())
 )
 keys = (
     st.none()
