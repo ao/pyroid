@@ -72,8 +72,8 @@ On 100,000 FineWeb documents, pyroid's chain is 27× faster than datatrove on 8 
 the same output. From WARC files, `pyroid clean` runs the whole pipeline 10.7× faster (AWS EC2
 c7i.4xlarge; see [Speed](#speed)).
 
-The command line takes Parquet or JSONL and gives the same output as datatrove's FineWeb
-pipeline:
+The command line runs that chain (ftfy, then FineWeb's language ID, filters and MinHash) over
+Parquet or JSONL, with the same output as datatrove's stages:
 
 ```console
 $ pip install "pyroid[cli]"
@@ -125,7 +125,7 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 
 | Integration | What it does |
 |---|---|
-| [`pyroid clean`](guides/cli.md) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files, with datatrove's output document for document |
+| [`pyroid clean`](guides/cli.md) | the FineWeb-style chain as one command over Parquet or JSONL, or datatrove's FineWeb pipeline from WARC files, with datatrove's output document for document |
 | [Large datasets](guides/large-datasets.md) | the same commands over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards in datatrove's file format |
 | [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
 | [datatrove steps](guides/datatrove.md) | `pyroid.integrations.datatrove`: datatrove's pipeline steps with the same names and signatures, `Trafilatura` included, as a one-import change |

@@ -391,6 +391,63 @@ def test_clean_small_no_dedup_and_stats(tmp_path: Path, capsys: pytest.CaptureFi
     assert pq.read_table(out2).column("id").to_pylist() == ["d0", "d4"]
 
 
+def test_clean_ftfy_config(tmp_path: Path) -> None:
+    """--ftfy picks ftfy's defaults, datatrove's FTFYFormatter() config, or no ftfy step."""
+    pytest.importorskip("numpy")
+    if not (DEV.exists() and LID_BIN.exists()):
+        pytest.skip("needs the pinned dev slice and lid.176.bin")
+    from pyroid.integrations.recipes import FTFY_FORMATTER, FineWeb
+
+    sample = pq.read_table(DEV, columns=["text"]).slice(0, 200).column("text").to_pylist()
+    src = _write(_table(sample), tmp_path / "in.parquet")
+    args = ["--recipe", "fineweb", "--lid-model", str(LID_BIN), "--no-dedup"]
+    texts = {}
+    for mode in ["default", "datatrove", "off"]:
+        out = tmp_path / f"{mode}.parquet"
+        assert main(["clean", str(src), str(out), *args, "--ftfy", mode]) == 0
+        texts[mode] = dict(
+            zip(
+                pq.read_table(out).column("id").to_pylist(),
+                pq.read_table(out).column("text").to_pylist(),
+                strict=True,
+            )
+        )
+    for mode, config in [("default", None), ("datatrove", FTFY_FORMATTER), ("off", False)]:
+        ann = FineWeb(lid_model=str(LID_BIN), ftfy_config=config, minhash=None).annotate(
+            pa.chunked_array([sample])
+        )
+        want = {
+            f"d{i}": t
+            for i, (t, k) in enumerate(zip(ann.text.to_pylist(), ann.keep.to_pylist(), strict=True))
+            if k
+        }
+        assert texts[mode] == want, mode
+    # FineWeb's curly quotes stay with datatrove's config and are straightened by ftfy's.
+    curly = [i for i, t in texts["datatrove"].items() if "\u2019" in t]
+    assert curly
+    assert all("\u2019" not in texts["default"].get(i, "") for i in curly)
+    with pytest.raises(SystemExit, match="--ftfy applies to --recipe fineweb"):
+        main(
+            [
+                "clean",
+                str(src),
+                str(tmp_path / "w.parquet"),
+                "--recipe",
+                "fineweb-warc",
+                "--ftfy",
+                "off",
+            ]
+        )
+
+
+def test_ftfy_formatter_config_is_datatroves() -> None:
+    ftfy_fmt = pytest.importorskip("datatrove.pipeline.formatters.ftfy")
+    pytest.importorskip("ftfy")
+    from pyroid.integrations.recipes import FTFY_FORMATTER
+
+    assert tuple(ftfy_fmt.FTFYFormatter().config) == tuple(FTFY_FORMATTER)
+
+
 # ---------------------------------------------------------------------- the dedup spool's cleanup
 # Windows can't delete a file this process still has open or memory-mapped (PermissionError),
 # where Linux and macOS can. `strict_unlink` makes os.unlink of pyroid's spools behave the Windows

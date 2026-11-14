@@ -1,7 +1,9 @@
 """Cleaning recipes: the FineWeb chain, natively in pyroid.
 
 :class:`FineWeb` is the chain the pyroid benchmark gates against datatrove
-(``bench/chain.py``), over Arrow batches, as a reusable object::
+(``bench/chain.py``), over Arrow batches, as a reusable object. It is ftfy, then the stages of
+datatrove's FineWeb pipeline that work on text (``examples/fineweb.py`` has no ftfy step;
+:data:`FTFY_FORMATTER` is the config of datatrove's own ``FTFYFormatter()``)::
 
     ftfy.fix_text (ftfy's default config)
     -> LanguageFilter(languages=["en"], language_threshold=0.65), fastText lid.176.bin
@@ -56,6 +58,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "FINEWEB_TRAFILATURA",
+    "FTFY_FORMATTER",
     "LID_176_MIRRORS",
     "LID_176_SHA256",
     "LID_176_SIZE",
@@ -79,6 +82,16 @@ LID_176_SIZE = 131_266_198
 #: ``LID_176_SHA256``.
 LID_176_MIRRORS: tuple[str, ...] = (
     "https://huggingface.co/julien-c/fasttext-language-id/resolve/main/lid.176.bin",
+)
+
+#: The ftfy config of datatrove 0.10.1's ``FTFYFormatter()``: ftfy's defaults, except that it
+#: keeps curly quotes, ligatures, character widths and line breaks, and does not normalize.
+FTFY_FORMATTER = pyroid.ftfy.TextFixerConfig(
+    fix_latin_ligatures=False,
+    fix_character_width=False,
+    uncurl_quotes=False,
+    fix_line_breaks=False,
+    normalization=None,
 )
 
 #: datatrove ``examples/fineweb.py``'s MinHash settings.
