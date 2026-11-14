@@ -1207,6 +1207,16 @@ impl ForestNative {
         }
     }
 
+    /// `sorted_hashtables[table] = keys`, restoring a pickle datasketch made.
+    fn set_sorted(&self, py: Python<'_>, table: usize, keys: Vec<PyBackedBytes>) -> PyResult<()> {
+        self.check_table(table)?;
+        let keys: Vec<&[u8]> = keys.iter().map(|k| &**k).collect();
+        lock(py, &self.state)?
+            .core
+            .set_sorted(table, &keys)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
     /// `forest.keys[key] = hs`.
     fn keys_set(
         &self,
