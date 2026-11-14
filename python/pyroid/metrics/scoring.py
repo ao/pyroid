@@ -23,7 +23,12 @@ _versions.check(__name__, "rouge_score", "rouge-score==0.1.2")
 
 # collections.namedtuple bases, as in rouge-score (instances keep a __dict__).
 class Score(collections.namedtuple("Score", ["precision", "recall", "fmeasure"])):  # noqa: PYI024
-    """Tuple containing precision, recall, and f-measure values."""
+    """Tuple containing precision, recall, and f-measure values.
+
+    rougeL and rougeLsum return ``Score(precision=0, recall=0, fmeasure=0)``
+    with ``int`` zeros when the target or prediction has no tokens, as
+    rouge-score does; every other value is a ``float``.
+    """
 
 
 class BaseScorer(metaclass=abc.ABCMeta):
@@ -34,11 +39,11 @@ class BaseScorer(metaclass=abc.ABCMeta):
         """Calculates score between the target and prediction.
 
         Args:
-          target: Text containing the target (ground truth) text.
-          prediction: Text containing the predicted text.
+            target: Text containing the target (ground truth) text.
+            prediction: Text containing the predicted text.
 
         Returns:
-          A dict mapping each score_type (string) to Score object.
+            A dict mapping each score_type (string) to Score object.
         """
 
 
@@ -58,35 +63,31 @@ def _numpy() -> Any:
 
 
 class BootstrapAggregator:
-    """Aggregates scores to provide confidence intervals.
+    """Aggregates scores to provide confidence intervals (bootstrap resampling).
 
-    Sample usage:
-      scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'])
-      aggregator = Aggregator()
-      aggregator.add_scores(scorer.score("one two three", "one two"))
-      aggregator.add_scores(scorer.score("one two five six", "seven eight"))
-      result = aggregator.aggregate()
-      print result
-      {'rougeL': AggregateScore(
-           low=Score(precision=0.0, recall=0.0, fmeasure=0.0),
-           mid=Score(precision=0.5, recall=0.33, fmeasure=0.40),
-           high=Score(precision=1.0, recall=0.66, fmeasure=0.80)),
-       'rouge1': AggregateScore(
-           low=Score(precision=0.0, recall=0.0, fmeasure=0.0),
-           mid=Score(precision=0.5, recall=0.33, fmeasure=0.40),
-           high=Score(precision=1.0, recall=0.66, fmeasure=0.80))}
+    Example:
+        ```python
+        from pyroid.metrics import rouge_scorer, scoring
+
+        scorer = rouge_scorer.RougeScorer(["rouge1", "rougeL"])
+        aggregator = scoring.BootstrapAggregator()
+        aggregator.add_scores(scorer.score("one two three", "one two"))
+        aggregator.add_scores(scorer.score("one two five six", "seven eight"))
+        result = aggregator.aggregate()
+        # {'rouge1': AggregateScore(low=..., mid=..., high=...), 'rougeL': ...}
+        ```
     """
 
     def __init__(self, confidence_interval: float = 0.95, n_samples: int = 1000) -> None:
         """Initializes a BootstrapAggregator object.
 
         Args:
-          confidence_interval: Confidence interval to compute on the mean as a
-            decimal.
-          n_samples: Number of samples to use for bootstrap resampling.
+            confidence_interval: Confidence interval to compute on the mean as a
+                decimal.
+            n_samples: Number of samples to use for bootstrap resampling.
 
         Raises:
-          ValueError: If invalid argument is given.
+            ValueError: If invalid argument is given.
         """
         if confidence_interval < 0 or confidence_interval > 1:
             raise ValueError("confidence_interval must be in range [0, 1]")
@@ -101,8 +102,8 @@ class BootstrapAggregator:
         """Adds a sample for future aggregation.
 
         Args:
-          scores: Dict mapping score_type strings to a namedtuple object/class
-            representing a score.
+            scores: Dict mapping score_type strings to a namedtuple object/class
+                representing a score.
         """
         for score_type, score in scores.items():
             self._scores[score_type].append(score)
@@ -110,8 +111,15 @@ class BootstrapAggregator:
     def aggregate(self) -> dict[Any, AggregateScore]:
         """Aggregates scores previously added using add_scores.
 
+        The low and high bounds are the percentiles of ``n_samples`` bootstrap
+        means given by ``confidence_interval``; mid is the median of those means.
+        Resampling uses ``numpy.random`` (the global state).
+
         Returns:
-          A dict mapping score_type to AggregateScore objects.
+            A dict mapping score_type to AggregateScore objects.
+
+        Raises:
+            ImportError: numpy is not installed.
         """
         np = _numpy()
         result = {}
@@ -156,7 +164,10 @@ class BootstrapAggregator:
 
 
 def fmeasure(precision: float, recall: float) -> float:
-    """Computes f-measure given precision and recall values."""
+    """Computes f-measure given precision and recall values.
+
+    ``2 * precision * recall / (precision + recall)``, or ``0.0`` when both are 0.
+    """
     if precision + recall > 0:
         return 2 * precision * recall / (precision + recall)
     else:

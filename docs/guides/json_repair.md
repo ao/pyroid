@@ -93,13 +93,22 @@ column.to_pylist()  # ['{"a": 1}', None, '[1, 2]']
 It takes a `str`, a `list` or `tuple` of `str`, or an Arrow string column (pyarrow, polars,
 `datasets`) and returns the same kind. For Arrow input that is a
 [`pyroid.Column`](../reference/pyroid.md#pyroid.Column), with nulls kept. In strict mode a
-failing document raises for the whole batch, and the exception's note names its index.
+failing document raises for the whole batch, and the exception's note names its index or row.
+
 `json.dumps` arguments other than `ensure_ascii`, `indent`, `separators`, `sort_keys` and
 `allow_nan` work for `str`, `list` and `tuple` input only (one `repair_json` call per document).
 
+An Arrow column cannot hold lone surrogates. json_repair keeps an escape such as `\ud800` as a
+lone surrogate, and so does an escaped pair such as `\ud83d\ude00` when its own parser reads it.
+With the default `ensure_ascii=True` the result writes it back as the escape, so nothing changes.
+With `ensure_ascii=False`, Arrow input raises `UnicodeEncodeError` for such a result, and the
+note names the row; pass a list to get json_repair's `str`.
+
 ## Deep nesting: `NestingError`
 
-pyroid's parser follows up to `MAX_DEPTH` (1,000) levels of broken nesting. Deeper input raises
+pyroid's parser follows up to `MAX_DEPTH` (1,000) levels of broken nesting: arrays and objects
+in any mix, where an object that json_repair reads again as an array (`[{[{`) is one level. Deeper
+input raises
 `NestingError`, which is a [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError), a
 `ValueError` and a `RecursionError`, so `except` clauses written for json_repair still catch it.
 json_repair itself raises `ValueError` past about 140 to 330 levels, depending on
@@ -125,9 +134,8 @@ These are handed to the real json_repair, which must then be installed. The firs
   `pyroid.json_repair.DELEGATED`);
 - input that is not a `str` (for example `bytes`);
 - the rare text holding a character in U+10F800..U+10FFFF, raw or as an escaped surrogate pair,
-  because the port uses that range to store lone surrogates. In `repair_json_batch`, such
-  documents in a list or tuple are delegated one by one; Arrow input raises `PyroidError`
-  instead.
+  because the port uses that range to store lone surrogates. In `repair_json_batch`, only such
+  documents are delegated, one by one, from a list, a tuple or an Arrow column.
 
 ```python
 json_repair.repair_json(b"{'a': 1")  # json_repair's result, and:
@@ -237,8 +245,11 @@ indicative. Single documents, json_repair 0.64.9, CPython 3.12, best time per ca
 | broken 1 MB, `loads` | 228 ms | 17.6 ms | 13× |
 
 On valid JSON there is little to gain. Both libraries start with CPython's `json.loads`, so
-`loads` of valid JSON costs the same. The speedup is on broken JSON, where json_repair's parser
-runs in Python. json_repair 0.64.9 is itself faster than 0.64.5 there: on the same machine 0.64.5
+`loads` of valid JSON costs the same. A decoder in Rust would not change that much: on the same
+devbox, orjson, the fastest Python JSON decoder, took valid ~1 KB and 1.9 MB documents 1.3× and
+1.7× faster than `json.loads`, and pyroid's own Rust decoder (with the conversion to Python
+objects) was slower than `json.loads` on both, so `loads` keeps calling `json.loads`. The speedup
+is on broken JSON, where json_repair's parser runs in Python. json_repair 0.64.9 is itself faster than 0.64.5 there: on the same machine 0.64.5
 took 625 µs for the broken ~1 KB document and 425 ms for the broken 1 MB one.
 
 For batches, 10,000 broken documents of about 1.2 KB on free-threaded CPython 3.15t (GIL off),

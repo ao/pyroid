@@ -9,8 +9,8 @@
 //! - So the bindings must never wait for the pool while attached: a
 //!   stop-the-world request would then block the workers' attach while the
 //!   waiting thread never reaches a safe point (a deadlock, not just latency).
-//! - Work below [`MIN_DOCS_PER_TASK`] documents, or with `threads = 1`, runs
-//!   on the calling thread and never touches the pool.
+//! - Work too small for two tasks of [`MIN_DOCS_PER_TASK`] documents, or with
+//!   `threads = 1`, runs on the calling thread and never touches the pool.
 //! - The pool is built on first use, not at import, and rebuilt in a forked
 //!   child (worker threads do not survive `fork()`).
 
@@ -159,13 +159,14 @@ where
 }
 
 /// `None`: run serially on the calling thread. `Some(m)`: run on the pool with
-/// tasks of at least `m` items.
+/// tasks of at least `m` items. Fewer than two tasks' worth of items stays on the
+/// calling thread: one task on the pool would only add the round trip.
 fn plan(len: usize, threads: Threads) -> Option<usize> {
     let max_tasks = match threads {
         Threads::Auto => usize::MAX,
         Threads::Max(n) => n.get(),
     };
-    if max_tasks == 1 || len <= MIN_DOCS_PER_TASK {
+    if max_tasks == 1 || len < 2 * MIN_DOCS_PER_TASK {
         return None;
     }
     // Tasks of >= ceil(len / n) items means at most n tasks.
@@ -298,7 +299,14 @@ mod tests {
         assert_eq!(plan(10_000, Threads::Auto), Some(MIN_DOCS_PER_TASK));
         assert_eq!(plan(10_000, n(4)), Some(2_500));
         assert_eq!(plan(10_001, n(4)), Some(2_501));
-        assert_eq!(plan(100, n(4)), Some(MIN_DOCS_PER_TASK));
+        // One task's worth (65..=127 items) stays on the calling thread.
+        assert_eq!(plan(100, n(4)), None);
+        assert_eq!(plan(2 * MIN_DOCS_PER_TASK - 1, Threads::Auto), None);
+        assert_eq!(
+            plan(2 * MIN_DOCS_PER_TASK, Threads::Auto),
+            Some(MIN_DOCS_PER_TASK)
+        );
+        assert_eq!(plan(2 * MIN_DOCS_PER_TASK, n(2)), Some(MIN_DOCS_PER_TASK));
     }
 
     #[test]

@@ -8,11 +8,17 @@ $ pip install "pyroid[cli]"     # pyarrow and numpy
 $ pyroid clean in.parquet out.parquet --recipe fineweb
 ```
 
-`pyroid clean --recipe fineweb` runs FineWeb's cleaning chain with datatrove 0.10.1's stages,
-settings and order. It keeps the same documents, with the same text, as datatrove's own FineWeb
-pipeline. The per-document digest of a `pyroid clean` run equals the stock pipeline's on the
-10,000-document FineWeb dev slice and on the 13,232-document parity corpus
+`pyroid clean --recipe fineweb` runs ftfy, then the stages of datatrove 0.10.1's FineWeb pipeline
+that work on text (language ID, the quality filters, MinHash), with datatrove's settings and order.
+It keeps the same documents, with the same text, as that chain built from datatrove's own stages.
+The per-document digest of a `pyroid clean` run equals the stock chain's on the 10,000-document
+FineWeb dev slice and on the 13,232-document parity corpus
 ([parity](../compatibility.md#integrations)).
+
+datatrove's `examples/fineweb.py` has no ftfy step, and datatrove's own `FTFYFormatter()` uses
+another ftfy config than ftfy's defaults: it keeps curly quotes, ligatures, character widths and
+line breaks, and does not normalize to NFC. `--ftfy datatrove` uses that config, and `--ftfy off`
+leaves ftfy out.
 
 Files are streamed in Arrow batches, so memory holds about one row group and two batches per
 process, whatever the size of the dataset; MinHash dedup sorts its signatures on disk.
@@ -58,7 +64,8 @@ MinHash stages; see 'pyroid dedup --help'.
 
 The `fineweb` recipe is the chain pyroid's benchmark checks against datatrove:
 
-1. `ftfy.fix_text` with ftfy's default config;
+1. `ftfy.fix_text` with ftfy's default config (`--ftfy datatrove`: datatrove's `FTFYFormatter()`
+   config; `--ftfy off`: no ftfy step);
 2. fastText language ID with `lid.176.bin`: keep English with probability above 0.65
    (datatrove's `LanguageFilter(languages=["en"], language_threshold=0.65)`);
 3. `GopherRepetitionFilter()`, `GopherQualityFilter()`,
@@ -87,14 +94,16 @@ usage: pyroid clean [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--thre
                     [--batch-size BATCH_SIZE] [--shard I/N] [--workers N] [--merge] [--format FMT]
                     [--excluded PATH] [--stats] [--stats-json PATH] [--progress]
                     [--compression COMPRESSION] [--overwrite] --recipe {fineweb,fineweb-warc}
-                    [--dump NAME] [--limit N] [--lid-model LID_MODEL] [--no-dedup]
-                    [--tmp-dir TMP_DIR] [--sort-buffer-mb MB]
+                    [--dump NAME] [--limit N] [--lid-model LID_MODEL]
+                    [--ftfy {default,datatrove,off}] [--no-dedup] [--tmp-dir TMP_DIR]
+                    [--sort-buffer-mb MB]
                     [IN ...] OUT
 
-Run a cleaning recipe and write the kept rows. The fineweb recipe is datatrove's FineWeb chain on
-text: ftfy, fastText LID, the Gopher, C4 and FineWeb quality filters, then MinHash dedup. The
-fineweb-warc recipe is datatrove's examples/fineweb.py on WARC files: datatrove's WarcReader, URL
-filter, Trafilatura, fastText LID, the same filters, MinHash dedup, then PII replacement.
+Run a cleaning recipe and write the kept rows. The fineweb recipe runs ftfy (see --ftfy), then
+datatrove's FineWeb stages on text: fastText LID, the Gopher, C4 and FineWeb quality filters, then
+MinHash dedup. The fineweb-warc recipe is datatrove's examples/fineweb.py on WARC files:
+datatrove's WarcReader, URL filter, Trafilatura, fastText LID, the same filters, MinHash dedup,
+then PII replacement.
 
 positional arguments:
   IN                    input files (.parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4];
@@ -133,6 +142,10 @@ options:
   --lid-model LID_MODEL
                         fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a cached
                         download)
+  --ftfy {default,datatrove,off}
+                        fineweb: ftfy's config: ftfy's defaults (default), datatrove's
+                        FTFYFormatter() (keeps curly quotes, ligatures, widths and line breaks; no
+                        NFC), or off
   --no-dedup            skip the MinHash stage (needed with --shard; run the 'pyroid dedup' stages
                         after)
   --tmp-dir TMP_DIR     where rows and signatures wait for the MinHash decision (default: next to

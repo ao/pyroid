@@ -1,7 +1,9 @@
 """Cleaning recipes: the FineWeb chain, natively in pyroid.
 
 :class:`FineWeb` is the chain the pyroid benchmark gates against datatrove
-(``bench/chain.py``), over Arrow batches, as a reusable object::
+(``bench/chain.py``), over Arrow batches, as a reusable object. It is ftfy, then the stages of
+datatrove's FineWeb pipeline that work on text (``examples/fineweb.py`` has no ftfy step;
+:data:`FTFY_FORMATTER` is the config of datatrove's own ``FTFYFormatter()``)::
 
     ftfy.fix_text (ftfy's default config)
     -> LanguageFilter(languages=["en"], language_threshold=0.65), fastText lid.176.bin
@@ -29,7 +31,7 @@ import copy
 import hashlib
 import os
 import re
-import shutil
+import sys
 import tempfile
 import urllib.request
 from collections.abc import Iterator, Mapping, Sequence
@@ -37,8 +39,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-import pyarrow as pa
-import pyarrow.compute as pc
+from pyroid._deps import missing
+
+try:
+    import numpy  # noqa: F401  (pyroid.fasttext's arrays)
+    import pyarrow as pa
+    import pyarrow.compute as pc
+except ModuleNotFoundError as _exc:
+    missing(__name__, _exc, "cli", "pyarrow", "numpy")
 
 import pyroid.dedup
 import pyroid.fasttext
@@ -50,8 +58,10 @@ if TYPE_CHECKING:
 
 __all__ = [
     "FINEWEB_TRAFILATURA",
+    "FTFY_FORMATTER",
     "LID_176_MIRRORS",
     "LID_176_SHA256",
+    "LID_176_SIZE",
     "LID_176_URL",
     "MINHASH_CONFIG",
     "Annotation",
@@ -65,11 +75,23 @@ __all__ = [
 #: Where fastText's language-ID model comes from (CC BY-SA 3.0), and its sha256.
 LID_176_URL = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
 LID_176_SHA256 = "7e69ec5451bc261cc7844e49e4792a85d7f09c06789ec800fc4a44aec362764e"
+#: Size of ``lid.176.bin`` in bytes (125 MiB).
+LID_176_SIZE = 131_266_198
 #: Copies of the same file, tried in order when the download from ``LID_176_URL`` fails (on
 #: 2026-11-12 dl.fbaipublicfiles.com served an expired certificate). Each must match
 #: ``LID_176_SHA256``.
 LID_176_MIRRORS: tuple[str, ...] = (
     "https://huggingface.co/julien-c/fasttext-language-id/resolve/main/lid.176.bin",
+)
+
+#: The ftfy config of datatrove 0.10.1's ``FTFYFormatter()``: ftfy's defaults, except that it
+#: keeps curly quotes, ligatures, character widths and line breaks, and does not normalize.
+FTFY_FORMATTER = pyroid.ftfy.TextFixerConfig(
+    fix_latin_ligatures=False,
+    fix_character_width=False,
+    uncurl_quotes=False,
+    fix_line_breaks=False,
+    normalization=None,
 )
 
 #: datatrove ``examples/fineweb.py``'s MinHash settings.
@@ -98,6 +120,22 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _copy_with_progress(resp: Any, out: Any) -> None:
+    """Copy the response to ``out``; on a terminal, show how much has arrived."""
+    total = int(resp.headers.get("Content-Length") or 0) or LID_176_SIZE
+    tty = sys.stderr.isatty()
+    done = 0
+    while chunk := resp.read(1 << 20):
+        out.write(chunk)
+        done += len(chunk)
+        if tty:
+            mib = f"{done / 2**20:5.1f} of {total / 2**20:.1f} MiB"
+            sys.stderr.write(f"\rpyroid: lid.176.bin {mib}")
+            sys.stderr.flush()
+    if tty:
+        sys.stderr.write("\n")
+
+
 def lid_model_path(path: str | os.PathLike[str] | None = None, *, download: bool = True) -> str:
     """The fastText ``lid.176.bin`` file to use.
 
@@ -107,7 +145,8 @@ def lid_model_path(path: str | os.PathLike[str] | None = None, *, download: bool
             cached copy is missing, download it from ``LID_176_URL`` (else from
             ``LID_176_MIRRORS``) into the
             cache (``$PYROID_CACHE_DIR``, else ``$XDG_CACHE_HOME/pyroid``, else
-            ``~/.cache/pyroid``) and check its sha256.
+            ``~/.cache/pyroid``) and check its sha256. One line on stderr says so
+            first, and on a terminal a second line shows the progress.
 
     Returns:
         The model path.
@@ -129,13 +168,19 @@ def lid_model_path(path: str | os.PathLike[str] | None = None, *, download: bool
             f"{target.parent}"
         )
     target.parent.mkdir(parents=True, exist_ok=True)
+    sys.stderr.write(
+        f"pyroid: downloading fastText's lid.176.bin ({LID_176_SIZE / 2**20:.0f} MiB, once) to "
+        f"{target}; to use a copy you already have, set PYROID_LID_MODEL=FILE (or pass "
+        f"--lid-model FILE to pyroid clean)\n"
+    )
+    sys.stderr.flush()
     errors: list[str] = []
     for url in (LID_176_URL, *LID_176_MIRRORS):
         fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".lid.176.bin.")
         try:
             try:
                 with os.fdopen(fd, "wb") as out, urllib.request.urlopen(url) as resp:
-                    shutil.copyfileobj(resp, out, 1 << 20)
+                    _copy_with_progress(resp, out)
             except OSError as e:
                 errors.append(f"{url}: {e}")
                 continue

@@ -152,7 +152,16 @@ def _sacrebleu(name: str, reason: str) -> Any:
 
 
 def smart_open(file: str, mode: str = "rt", encoding: str = "utf-8") -> Any:
-    """Open a plain or gzip-compressed (``.gz``) text file, as ``sacrebleu.smart_open``."""
+    """Open a plain or gzip-compressed (``.gz``) text file, like ``sacrebleu.smart_open``.
+
+    Args:
+        file: The file to open.
+        mode: The file mode.
+        encoding: The text encoding.
+
+    Returns:
+        The open file.
+    """
     if file.endswith(".gz"):
         return gzip.open(file, mode=mode, encoding=encoding, newline="\n")
     return open(file, mode=mode, encoding=encoding, newline="\n")
@@ -205,13 +214,13 @@ def extract_word_ngrams(tokens: list[str], n: int) -> Counter[str]:
         n: The order of n-grams.
 
     Returns:
-        A Counter object with n-grams counts.
+        The n-gram counts.
     """
     return Counter([" ".join(tokens[i : i + n]) for i in range(len(tokens) - n + 1)])
 
 
 def extract_char_ngrams(line: str, n: int, include_whitespace: bool = False) -> Counter[str]:
-    """Counts of the character n-grams of order ``n`` of a sentence.
+    """Counts of the character n-grams of order ``n`` of ``line``.
 
     Args:
         line: A segment containing a sequence of words.
@@ -219,7 +228,7 @@ def extract_char_ngrams(line: str, n: int, include_whitespace: bool = False) -> 
         include_whitespace: If given, will not strip whitespaces from the line.
 
     Returns:
-        A dictionary containing ngrams and counts.
+        The n-gram counts.
     """
     if not include_whitespace:
         line = "".join(line.split())
@@ -249,7 +258,9 @@ def extract_all_char_ngrams(
 
 
 class Score:
-    """A base score class to derive from.
+    """The result of a metric (sacrebleu's ``Score``).
+
+    ``str(score)`` and ``repr(score)`` are ``score.format()``.
 
     Args:
         name: The name of the underlying metric.
@@ -274,17 +285,19 @@ class Score:
         signature: str = "",
         is_json: bool = False,
     ) -> str:
-        """Returns a pretty representation of the score.
+        """A pretty representation of the score, as sacrebleu prints it.
 
         Args:
             width: Floating point decimal precision width.
             score_only: If ``True``, and the format is not ``json``, returns a single score
                 string.
-            signature: A string representation of the given ``Signature`` instance.
+            signature: A string representation of the metric's signature
+                (``str(metric.get_signature())``).
             is_json: If ``True``, will output the score in JSON string.
 
         Returns:
-            A plain or JSON-formatted string representation.
+            A plain or JSON-formatted string, e.g.
+            ``"BLEU|nrefs:1|case:mixed|eff:no|tok:13a|smooth:exp|version:2.6.0 = ..."``.
         """
         d: dict[str, Any] = {
             "name": self.name,
@@ -324,11 +337,10 @@ class Score:
         return full_score
 
     def estimate_ci(self, scores: list[Score]) -> None:
-        """Stores the mean and the 95% confidence interval of bootstrap resampled scores.
+        """Store the mean and 95% confidence interval of bootstrap resampled ``scores``.
 
         Args:
-            scores: A list of ``Score`` objects obtained from bootstrap resampling for
-                example.
+            scores: Scores of bootstrap resamples of the corpus.
         """
         # Sort the scores
         raw_scores = sorted([x.score for x in scores])
@@ -347,10 +359,13 @@ class Score:
 
 
 class Signature:
-    """A convenience class to represent sacreBLEU reproducibility signatures.
+    """A sacreBLEU reproducibility signature; ``str()`` is ``format()``.
 
     Args:
-        args: key-value dictionary passed from the actual metric instance.
+        args: The metric's ``__dict__`` (must hold ``num_refs``: evaluate the metric first).
+
+    Raises:
+        ValueError: The metric has not been evaluated yet.
     """
 
     def __init__(self, args: dict[str, Any]):
@@ -390,13 +405,13 @@ class Signature:
         }
 
     def format(self, short: bool = False) -> str:
-        """Returns a string representation of the signature.
+        """The signature as a string, e.g. ``nrefs:1|case:mixed|...|version:2.6.0``.
 
         Args:
-            short: If True, shortened signature is produced.
+            short: If True, the abbreviated keys (``#:1|c:mixed|...|v:2.6.0``).
 
         Returns:
-            A string representation of the signature.
+            The signature string.
         """
         pairs = []
         keys = list(self.info.keys())
@@ -473,7 +488,7 @@ def _warn_tokenized(tok_count: int) -> None:
 
 
 class Metric(metaclass=ABCMeta):
-    """A base class for all metrics, as ``sacrebleu.metrics.base.Metric``."""
+    """The base class of :class:`BLEU` and :class:`CHRF` (sacrebleu's ``Metric``)."""
 
     # Each metric should define its Signature class' name here
     _SIGNATURE_TYPE: ClassVar[type[Signature]] = Signature
@@ -627,14 +642,17 @@ class Metric(metaclass=ABCMeta):
         return rows
 
     def sentence_score(self, hypothesis: str, references: Sequence[str]) -> Any:
-        """Compute the metric for a single sentence against a single (or multiple) reference(s).
+        """Score one hypothesis against its reference(s).
 
         Args:
             hypothesis: A single hypothesis string.
-            references: A sequence of reference strings.
+            references: Its reference strings (``None`` entries are skipped).
 
         Returns:
-            A ``Score`` object.
+            The score.
+
+        Raises:
+            TypeError: sacrebleu's argument checks (e.g. ``hypothesis`` is not a str).
         """
         self._check_sentence_score_args(hypothesis, references)
 
@@ -649,19 +667,27 @@ class Metric(metaclass=ABCMeta):
         *,
         threads: int | None = None,
     ) -> Any:
-        """Compute the metric for a corpus against a single (or multiple) reference(s).
+        """Score a corpus against one or more reference streams.
+
+        Hypotheses and reference segments are zipped, as in sacrebleu: extra items of the
+        longer one are ignored.
 
         Args:
             hypotheses: A sequence of hypothesis strings.
-            references: A sequence of reference documents with document being defined as a
-                sequence of reference strings. If ``None``, cached references will be used.
-            n_bootstrap: If > 1, provides 95% confidence interval around true mean using
-                bootstrap resampling with ``n_bootstrap`` samples (delegated to sacrebleu).
-            threads: pyroid's thread pool setting (``None``: the whole pool; ``1``: the
-                calling thread).
+            references: Reference streams: ``references[k][i]`` is the k-th reference of
+                hypothesis i (``None`` for a missing one). ``None`` (or empty) uses the
+                references the metric was constructed with.
+            n_bootstrap: If > 1, also estimate a 95% confidence interval by bootstrap
+                resampling with that many samples (delegated to sacrebleu).
+            threads: pyroid extension: ``None`` uses the whole thread pool, ``n`` at most
+                ``n`` tasks at once, ``1`` the calling thread. Results are the same.
 
         Returns:
-            A ``Score`` object.
+            The corpus score.
+
+        Raises:
+            TypeError: sacrebleu's argument checks.
+            RuntimeError: No references given and none cached.
         """
         self._check_corpus_score_args(hypotheses, references)
 
@@ -686,10 +712,10 @@ class Metric(metaclass=ABCMeta):
         return actual_score
 
     def get_signature(self) -> Signature:
-        """Creates and returns the signature for the metric.
+        """The reproducibility signature (available once the metric has been evaluated).
 
-        The creation of signatures is delayed as the number of references is resolved only at
-        the point of reference caching.
+        Raises:
+            ValueError: The metric has not been evaluated yet.
         """
         return self._SIGNATURE_TYPE(self.__dict__)
 
@@ -752,11 +778,7 @@ def _native_tokenizer(tokenizer: Any) -> str | None:
 
 
 class BLEUSignature(Signature):
-    """A convenience class to represent the reproducibility signature for BLEU.
-
-    Args:
-        args: key-value dictionary passed from the actual metric instance.
-    """
+    """The signature of a BLEU metric (``case``, ``eff``, ``tok``, ``smooth`` fields)."""
 
     def __init__(self, args: dict[str, Any]):
         super().__init__(args)
@@ -795,13 +817,14 @@ class BLEUSignature(Signature):
 
 
 class BLEUScore(Score):
-    """A convenience class to represent BLEU scores.
+    """A BLEU score with its statistics.
 
     Args:
         score: The BLEU score.
-        counts: List of counts of correct ngrams, 1 <= n <= max_ngram_order
-        totals: List of counts of total ngrams, 1 <= n <= max_ngram_order
-        precisions: List of precisions, 1 <= n <= max_ngram_order
+        counts: Counts of correct n-grams, 1 <= n <= max_ngram_order (with add-k smoothing,
+            including the added k, as in sacrebleu).
+        totals: Counts of total n-grams, 1 <= n <= max_ngram_order.
+        precisions: n-gram precisions (percentages).
         bp: The brevity penalty.
         sys_len: The cumulative system length.
         ref_len: The cumulative reference length.
@@ -840,24 +863,25 @@ def _native_order(n: Any) -> bool:
 
 
 class BLEU(Metric):
-    """Computes the BLEU metric given hypotheses and references (``sacrebleu.BLEU``).
+    """The BLEU metric (``sacrebleu.BLEU``).
 
     Args:
         lowercase: If True, lowercased BLEU is computed.
-        force: Ignore data that looks already tokenized.
-        tokenize: The tokenizer to use. If None, defaults to language-specific tokenizers
-            with '13a' as the fallback default.
-        smooth_method: The smoothing method to use ('floor', 'add-k', 'exp' or 'none').
-        smooth_value: The smoothing value for ``floor`` and ``add-k`` methods. ``None``
-            falls back to default value.
-        max_ngram_order: If given, it overrides the maximum n-gram order (default: 4) when
-            computing precisions.
-        effective_order: If ``True``, stop including n-gram orders for which precision is 0.
-            This should be ``True``, if sentence-level BLEU will be computed.
-        trg_lang: An optional language code to raise potential tokenizer warnings.
-        references: A sequence of reference documents with document being defined as a
-            sequence of reference strings. If given, the reference n-grams and lengths will
-            be pre-computed and cached for faster BLEU computation across many systems.
+        force: Ignore data that looks already tokenized (otherwise 100 hypotheses ending in
+            ``" ."`` log a warning on the ``sacrebleu`` logger).
+        tokenize: The tokenizer (one of ``TOKENIZERS``). If None, ``"13a"``, or the
+            language's tokenizer for ``trg_lang`` ``"zh"``, ``"ja"``, ``"ko"``.
+        smooth_method: ``"floor"``, ``"add-k"``, ``"exp"`` or ``"none"``.
+        smooth_value: The value for ``floor`` and ``add-k`` (None: 0.1 and 1).
+        max_ngram_order: The maximum n-gram order (default 4).
+        effective_order: Stop including n-gram orders for which precision is 0 (use it for
+            sentence-level BLEU).
+        trg_lang: An optional language code to pick (or warn about) the tokenizer.
+        references: Reference streams to pre-compute for scoring many systems.
+
+    Raises:
+        AssertionError: Unknown ``smooth_method`` (as sacrebleu).
+        KeyError: Unknown ``tokenize``.
     """
 
     SMOOTH_DEFAULTS: ClassVar[dict[str, float | None]] = {
@@ -982,32 +1006,21 @@ class BLEU(Metric):
         effective_order: bool = False,
         max_ngram_order: int = MAX_NGRAM_ORDER,
     ) -> BLEUScore:
-        """Computes BLEU score from its sufficient statistics with smoothing.
-
-        Smoothing methods (citing "A Systematic Comparison of Smoothing Techniques for
-        Sentence-Level BLEU", Boxing Chen and Colin Cherry, WMT 2014:
-        http://aclweb.org/anthology/W14-3346)
-
-        - none: No smoothing.
-        - floor: Method 1 (requires small positive value (0.1 in the paper) to be set)
-        - add-k: Method 2 (Generalizing Lin and Och, 2004)
-        - exp: Method 3 (NIST smoothing method i.e. in use with mteval-v13a.pl)
+        """BLEU from its sufficient statistics, with smoothing (sacrebleu's own code).
 
         Args:
-            correct: List of counts of correct ngrams, 1 <= n <= max_ngram_order
-            total: List of counts of total ngrams, 1 <= n <= max_ngram_order
-            sys_len: The cumulative system length
-            ref_len: The cumulative reference length
-            smooth_method: The smoothing method to use ('floor', 'add-k', 'exp' or 'none')
-            smooth_value: The smoothing value for ``floor`` and ``add-k`` methods. ``None``
-                falls back to default value.
-            effective_order: If ``True``, stop including n-gram orders for which precision
-                is 0. This should be ``True``, if sentence-level BLEU will be computed.
-            max_ngram_order: If given, it overrides the maximum n-gram order (default: 4)
-                when computing precisions.
+            correct: Counts of correct n-grams, 1 <= n <= max_ngram_order (modified in place
+                by ``add-k``).
+            total: Counts of total n-grams, 1 <= n <= max_ngram_order.
+            sys_len: The cumulative system length.
+            ref_len: The cumulative reference length.
+            smooth_method: ``"floor"``, ``"add-k"``, ``"exp"`` or ``"none"``.
+            smooth_value: The value for ``floor`` and ``add-k`` (None: the default).
+            effective_order: Stop at the first order without n-grams.
+            max_ngram_order: The maximum n-gram order.
 
         Returns:
-            A ``BLEUScore`` instance.
+            The score.
         """
         assert smooth_method in BLEU.SMOOTH_DEFAULTS, "Unknown smooth_method {smooth_method!r}"
 
@@ -1229,14 +1242,14 @@ class BLEU(Metric):
         return totals, rows
 
     def sentence_score(self, hypothesis: str, references: Sequence[str]) -> BLEUScore:
-        """Compute the metric for a single sentence against a single (or multiple) reference(s).
+        """Sentence-level BLEU (logs a recommendation unless ``effective_order``).
 
         Args:
             hypothesis: A single hypothesis string.
-            references: A sequence of reference strings.
+            references: Its reference strings (``None`` entries are skipped).
 
         Returns:
-            A ``BLEUScore`` object.
+            The score.
         """
         if not self.effective_order:
             sacrelogger.warning(
@@ -1274,11 +1287,7 @@ class BLEU(Metric):
 
 
 class CHRFSignature(Signature):
-    """A convenience class to represent the reproducibility signature for chrF.
-
-    Args:
-        args: key-value dictionary passed from the actual metric instance.
-    """
+    """The signature of a chrF metric (``case``, ``eff``, ``nc``, ``nw``, ``space`` fields)."""
 
     def __init__(self, args: dict[str, Any]):
         super().__init__(args)
@@ -1304,7 +1313,7 @@ class CHRFSignature(Signature):
 
 
 class CHRFScore(Score):
-    """A convenience class to represent chrF scores.
+    """A chrF score (named ``chrF2``, ``chrF2++``, ... after ``beta`` and ``word_order``).
 
     Args:
         score: The chrF (chrF++) score.
@@ -1326,7 +1335,7 @@ class CHRFScore(Score):
 
 
 class CHRF(Metric):
-    """Computes the chrF(++) metric given hypotheses and references (``sacrebleu.CHRF``).
+    """The chrF and chrF++ metrics (``sacrebleu.CHRF``).
 
     Args:
         char_order: Character n-gram order.
@@ -1334,12 +1343,10 @@ class CHRF(Metric):
         beta: Determine the importance of recall w.r.t precision.
         lowercase: Enable case-insensitivity.
         whitespace: If ``True``, include whitespaces when extracting character n-grams.
-        eps_smoothing: If ``True``, applies epsilon smoothing similar to reference
-            chrF++.py, NLTK and Moses implementations. Otherwise, it takes into account
-            effective match order similar to sacreBLEU < 2.0.0.
-        references: A sequence of reference documents with document being defined as a
-            sequence of reference strings. If given, the reference n-grams will be
-            pre-computed and cached for faster re-computation across many systems.
+        eps_smoothing: If ``True``, applies epsilon smoothing similar to reference chrF++.py,
+            NLTK and Moses implementations. Otherwise, it takes into account effective match
+            order similar to sacreBLEU < 2.0.0.
+        references: Reference streams to pre-compute for scoring many systems.
     """
 
     # Maximum character n-gram order to take into account
@@ -1724,9 +1731,26 @@ def corpus_bleu(
     *,
     threads: int | None = None,
 ) -> BLEUScore:
-    """Computes BLEU for a corpus against a single (or multiple) reference(s).
+    """BLEU of a corpus against one or more reference streams, like ``sacrebleu.corpus_bleu``.
 
-    See ``sacrebleu.pyi`` for the arguments.
+        >>> corpus_bleu(["The cat sat on the mat."], [["The cat sat on a mat."]]).score
+        48.892302243490086
+
+    Args:
+        hypotheses: A sequence of hypothesis strings.
+        references: Reference streams: ``references[k][i]`` is the k-th reference of
+            hypothesis i (``None`` for a missing one).
+        smooth_method: ``"floor"``, ``"add-k"``, ``"exp"`` or ``"none"``.
+        smooth_value: The value for ``floor`` and ``add-k`` (None: the default).
+        force: Ignore data that looks already tokenized.
+        lowercase: Lowercase the data.
+        tokenize: The tokenizer to use.
+        use_effective_order: Don't take into account n-gram orders without any match.
+        threads: pyroid extension: ``None`` uses the whole thread pool, ``n`` at most ``n``
+            tasks at once, ``1`` the calling thread.
+
+    Returns:
+        The score.
     """
     metric = _bleu(
         "corpus_bleu",
@@ -1748,9 +1772,16 @@ def raw_corpus_bleu(
     *,
     threads: int | None = None,
 ) -> BLEUScore:
-    """Computes BLEU on the raw corpus: no tokenization, ``floor`` smoothing (0.1 by default).
+    """BLEU of the raw corpus: no tokenization, ``floor`` smoothing, effective order.
 
-    See ``sacrebleu.pyi`` for the arguments.
+    Args:
+        hypotheses: A sequence of hypothesis strings.
+        references: Reference streams (``references[k][i]``).
+        smooth_value: The ``floor`` smoothing value.
+        threads: pyroid's thread pool setting (see :func:`corpus_bleu`).
+
+    Returns:
+        The score.
     """
     return corpus_bleu(
         hypotheses,
@@ -1773,9 +1804,19 @@ def sentence_bleu(
     tokenize: str = BLEU.TOKENIZER_DEFAULT,
     use_effective_order: bool = True,
 ) -> BLEUScore:
-    """Computes BLEU for a single sentence against a single (or multiple) reference(s).
+    """BLEU of one hypothesis against its reference(s), like ``sacrebleu.sentence_bleu``.
 
-    See ``sacrebleu.pyi`` for the arguments.
+    Args:
+        hypothesis: A single hypothesis string.
+        references: Its reference strings (``None`` entries are skipped).
+        smooth_method: ``"floor"``, ``"add-k"``, ``"exp"`` or ``"none"``.
+        smooth_value: The value for ``floor`` and ``add-k`` (None: the default).
+        lowercase: Lowercase the data.
+        tokenize: The tokenizer to use.
+        use_effective_order: Don't take into account n-gram orders without any match.
+
+    Returns:
+        The score.
     """
     metric = _bleu(
         "sentence_bleu",
@@ -1803,7 +1844,34 @@ def sentence_bleu_batch(
 ) -> list[BLEUScore | None]:
     """:func:`sentence_bleu` of every hypothesis at once, on pyroid's thread pool.
 
-    See ``sacrebleu.pyi`` for the arguments.
+    Element ``i`` equals ``sentence_bleu(hypotheses[i], [r[i] for r in references], ...)``.
+
+    Args:
+        hypotheses: The hypothesis strings: a list or tuple of str, or an Arrow string
+            array/column (pyarrow, polars, ``pyroid.Column``, ...). Not a single str: use
+            :func:`sentence_bleu` for one hypothesis.
+        references: Reference streams, as for :func:`corpus_bleu`: ``references[k][i]`` is
+            the k-th reference of hypothesis i (``None`` for a missing one). Every stream
+            must have one entry per hypothesis. A stream may be an Arrow string column, whose
+            nulls are missing references.
+        smooth_method: ``"floor"``, ``"add-k"``, ``"exp"`` or ``"none"``.
+        smooth_value: The value for ``floor`` and ``add-k`` (None: the default).
+        lowercase: Lowercase the data.
+        tokenize: The tokenizer to use.
+        use_effective_order: Don't take into account n-gram orders without any match.
+        threads: ``None`` uses the whole thread pool, ``n`` at most ``n`` tasks at once,
+            ``1`` the calling thread.
+
+    Returns:
+        A list (for any input kind) with one score per hypothesis, and ``None`` for a null
+        in an Arrow ``hypotheses`` column.
+
+    Raises:
+        pyroid.InputError: ``hypotheses`` is not a sequence of str or an Arrow string column,
+            or a list or tuple of hypotheses holds ``None`` (the message gives its index), or
+            ``references`` is not a sequence of streams (e.g. a flat list of str: pass
+            ``[refs]``).
+        ValueError: No streams, or a stream's length differs from the hypotheses'.
     """
     metric = _bleu(
         "sentence_bleu_batch",
@@ -1828,9 +1896,23 @@ def corpus_chrf(
     *,
     threads: int | None = None,
 ) -> CHRFScore:
-    """Computes chrF for a corpus against a single (or multiple) reference(s).
+    """Corpus-level chrF (``word_order=2``: chrF++), like ``sacrebleu.corpus_chrf``.
 
-    See ``sacrebleu.pyi`` for the arguments.
+    Args:
+        hypotheses: A sequence of hypothesis strings.
+        references: Reference streams (``references[k][i]``; ``None`` for a missing one).
+        char_order: Character n-gram order.
+        word_order: Word n-gram order. If equals to 2, the metric is referred to as chrF++.
+        beta: Determine the importance of recall w.r.t precision.
+        remove_whitespace: If ``True``, removes whitespaces prior to character n-gram
+            extraction.
+        eps_smoothing: If ``True``, applies epsilon smoothing similar to reference chrF++.py,
+            NLTK and Moses implementations. Otherwise, it takes into account effective match
+            order similar to sacreBLEU < 2.0.0.
+        threads: pyroid's thread pool setting (see :func:`corpus_bleu`).
+
+    Returns:
+        The score.
     """
     metric = CHRF(
         char_order=char_order,
@@ -1851,9 +1933,20 @@ def sentence_chrf(
     remove_whitespace: bool = True,
     eps_smoothing: bool = False,
 ) -> CHRFScore:
-    """Computes chrF for a single sentence against a single (or multiple) reference(s).
+    """Sentence-level chrF against the best reference, like ``sacrebleu.sentence_chrf``.
 
-    See ``sacrebleu.pyi`` for the arguments.
+    Args:
+        hypothesis: A single hypothesis string.
+        references: Its reference strings (``None`` entries are skipped).
+        char_order: Character n-gram order.
+        word_order: Word n-gram order. If equals to 2, the metric is referred to as chrF++.
+        beta: Determine the importance of recall w.r.t precision.
+        remove_whitespace: If ``True``, removes whitespaces prior to character n-gram
+            extraction.
+        eps_smoothing: Epsilon smoothing instead of effective-order smoothing.
+
+    Returns:
+        The score.
     """
     metric = CHRF(
         char_order=char_order,
@@ -1878,7 +1971,27 @@ def sentence_chrf_batch(
 ) -> list[CHRFScore | None]:
     """:func:`sentence_chrf` of every hypothesis at once, on pyroid's thread pool.
 
-    See ``sacrebleu.pyi`` for the arguments.
+    Element ``i`` equals ``sentence_chrf(hypotheses[i], [r[i] for r in references], ...)``.
+
+    Args:
+        hypotheses: The hypothesis strings, as for :func:`sentence_bleu_batch`.
+        references: Reference streams (see :func:`sentence_bleu_batch`).
+        char_order: Character n-gram order.
+        word_order: Word n-gram order. If equals to 2, the metric is referred to as chrF++.
+        beta: Determine the importance of recall w.r.t precision.
+        remove_whitespace: If ``True``, removes whitespaces prior to character n-gram
+            extraction.
+        eps_smoothing: Epsilon smoothing instead of effective-order smoothing.
+        threads: ``None`` uses the whole thread pool, ``n`` at most ``n`` tasks at once,
+            ``1`` the calling thread.
+
+    Returns:
+        A list (for any input kind) with one score per hypothesis, and ``None`` for a null
+        in an Arrow ``hypotheses`` column.
+
+    Raises:
+        pyroid.InputError: As for :func:`sentence_bleu_batch`.
+        ValueError: No streams, or a stream's length differs from the hypotheses'.
     """
     metric = CHRF(
         char_order=char_order,
@@ -1896,7 +2009,7 @@ def sentence_chrf_batch(
 
 
 class TER:
-    """sacrebleu's TER metric (delegated: wraps a real ``sacrebleu.TER``).
+    """sacrebleu's TER metric (delegated: every call runs a real ``sacrebleu.TER``).
 
     Args:
         normalized: Enable character normalization.
@@ -1904,6 +2017,9 @@ class TER:
         asian_support: Enable special treatment of Asian characters.
         case_sensitive: Enables case-sensitivity.
         references: Reference streams to pre-compute.
+
+    Raises:
+        pyroid.PyroidError: sacrebleu is not installed.
     """
 
     def __init__(
@@ -1929,11 +2045,22 @@ class TER:
         references: Sequence[Sequence[str]] | None,
         n_bootstrap: int = 1,
     ) -> Any:
-        """``sacrebleu.TER.corpus_score`` (returns a ``sacrebleu.metrics.ter.TERScore``)."""
+        """``sacrebleu.TER.corpus_score`` (returns sacrebleu's ``TERScore``).
+
+        Args:
+            hypotheses: A sequence of hypothesis strings.
+            references: Reference streams, or None for the cached ones.
+            n_bootstrap: Bootstrap resamples for a confidence interval.
+        """
         return self._ter.corpus_score(hypotheses, references, n_bootstrap)
 
     def sentence_score(self, hypothesis: str, references: Sequence[str]) -> Any:
-        """``sacrebleu.TER.sentence_score`` (returns a ``sacrebleu.metrics.ter.TERScore``)."""
+        """``sacrebleu.TER.sentence_score`` (returns sacrebleu's ``TERScore``).
+
+        Args:
+            hypothesis: A single hypothesis string.
+            references: Its reference strings.
+        """
         return self._ter.sentence_score(hypothesis, references)
 
     def get_signature(self) -> Any:
@@ -1954,7 +2081,16 @@ def corpus_ter(
     asian_support: bool = False,
     case_sensitive: bool = False,
 ) -> Any:
-    """``sacrebleu.corpus_ter`` (delegated)."""
+    """``sacrebleu.corpus_ter`` (delegated; returns sacrebleu's ``TERScore``).
+
+    Args:
+        hypotheses: A sequence of hypothesis strings.
+        references: Reference streams.
+        normalized: Enable character normalization.
+        no_punct: Remove punctuation.
+        asian_support: Enable special treatment of Asian characters.
+        case_sensitive: Enables case-sensitivity.
+    """
     real = _sacrebleu("corpus_ter", "TER")
     return real.corpus_ter(
         hypotheses,
@@ -1974,7 +2110,16 @@ def sentence_ter(
     asian_support: bool = False,
     case_sensitive: bool = False,
 ) -> Any:
-    """``sacrebleu.sentence_ter`` (delegated)."""
+    """``sacrebleu.sentence_ter`` (delegated; returns sacrebleu's ``TERScore``).
+
+    Args:
+        hypothesis: A single hypothesis string.
+        references: Its reference strings.
+        normalized: Enable character normalization.
+        no_punct: Remove punctuation.
+        asian_support: Enable special treatment of Asian characters.
+        case_sensitive: Enables case-sensitivity.
+    """
     real = _sacrebleu("sentence_ter", "TER")
     return real.sentence_ter(
         hypothesis,
@@ -2009,17 +2154,32 @@ DATASETS: Mapping[str, Any] = _Datasets()
 
 
 def download_test_set(test_set: str, langpair: str | None = None) -> Any:
-    """``sacrebleu.download_test_set`` (delegated)."""
+    """``sacrebleu.download_test_set`` (delegated).
+
+    Args:
+        test_set: The test set to download.
+        langpair: The language pair (all of them if None).
+    """
     return _sacrebleu("download_test_set", "test sets").download_test_set(test_set, langpair)
 
 
 def get_source_file(test_set: str, langpair: str) -> str:
-    """``sacrebleu.get_source_file`` (delegated)."""
+    """``sacrebleu.get_source_file`` (delegated).
+
+    Args:
+        test_set: The test set.
+        langpair: The language pair.
+    """
     return _sacrebleu("get_source_file", "test sets").get_source_file(test_set, langpair)  # type: ignore[no-any-return]
 
 
 def get_reference_files(test_set: str, langpair: str) -> list[str]:
-    """``sacrebleu.get_reference_files`` (delegated)."""
+    """``sacrebleu.get_reference_files`` (delegated).
+
+    Args:
+        test_set: The test set.
+        langpair: The language pair.
+    """
     real = _sacrebleu("get_reference_files", "test sets")
     return real.get_reference_files(test_set, langpair)  # type: ignore[no-any-return]
 
@@ -2030,6 +2190,10 @@ def get_available_testsets() -> list[str]:
 
 
 def get_langpairs_for_testset(testset: str) -> list[str]:
-    """``sacrebleu.get_langpairs_for_testset`` (delegated)."""
+    """``sacrebleu.get_langpairs_for_testset`` (delegated).
+
+    Args:
+        testset: The test set.
+    """
     real = _sacrebleu("get_langpairs_for_testset", "test sets")
     return real.get_langpairs_for_testset(testset)  # type: ignore[no-any-return]

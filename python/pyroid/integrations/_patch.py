@@ -30,7 +30,9 @@ reproduces trafilatura 2.3.1 or 1.11.0, following the installed release: ``extra
 from Unidecode's.
 
 :func:`patch` puts a shim in ``sys.modules[name]``: a module named like the real one whose
-functions are pyroid's (the same objects, so a call costs what calling pyroid costs). If the
+functions are pyroid's (the same objects, so a call costs what calling pyroid costs; the
+exception is ``anyascii.anyascii``, a separate native function that takes what the package's
+function takes, as pyroid's takes a list as a batch). If the
 real package is installed, :func:`patch` imports it right away, because the shim needs its
 ``__path__`` and ``__spec__`` up front (loading it later under the shim's name would be
 fragile). Then:
@@ -385,7 +387,9 @@ def _build_fasttext(impl: types.ModuleType, real: Any, missing: str) -> _Built:
 
 
 def _build_anyascii(impl: types.ModuleType, real: Any, missing: str) -> _Built:
-    provided = {"anyascii": impl.anyascii}
+    # Not impl.anyascii, which takes a list as a batch: the package's function joins the
+    # characters of any iterable into one str and returns an ASCII bytes as it is.
+    provided = {"anyascii": impl._native.anyascii_package}
     version = impl.ANYASCII_VERSION
     shim = _shim("anyascii", real, missing, impl, provided, package=True, version=version)
     return {"anyascii": shim}, []
@@ -1095,10 +1099,11 @@ def _split(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
-def _apply(names: Sequence[str], *, lenient: bool) -> list[str]:
+def _apply(names: Sequence[str], *, lenient: bool, announce: bool = True) -> list[str]:
     """Patch checked `names`, warning once per process tree; return the names patched.
 
     ``lenient``: skip (with a PatchWarning) a name whose pyroid module cannot be imported.
+    ``announce=False``: no PatchWarning per name (the caller says it in one line).
     """
     warned = set(_split(os.environ.get(_WARNED_ENV, "")))
     done: list[str] = []
@@ -1116,7 +1121,9 @@ def _apply(names: Sequence[str], *, lenient: bool) -> list[str]:
                     stacklevel=_caller_stacklevel(),
                 )
                 continue
-            _install(name, warn=name not in warned)
+            _install(name, warn=announce and name not in warned)
+            if not announce:
+                _WARNED.add(name)
         done.append(name)
     os.environ[_WARNED_ENV] = ",".join(n for n in SUPPORTED if n in warned or n in done)
     return done
@@ -1256,11 +1263,22 @@ def run(argv: Sequence[str]) -> int:
         sys.stderr.write(f"pyroid run: can't open file {path!r}: No such file or directory\n")
         return 2
     try:
-        # The PatchWarnings have no line of the user's to point at (pyroid run is the caller):
-        # show them as plain lines. The warning filters (-W, PYTHONWARNINGS) still apply.
+        # The warnings have no line of the user's to point at (pyroid run is the caller): show
+        # them as plain lines. The warning filters (-W, PYTHONWARNINGS) still apply. One short
+        # PatchWarning for all the names replaces patch()'s one per name.
+        warned = set(_split(os.environ.get(_WARNED_ENV, "")))
         with warnings.catch_warnings():
             warnings.showwarning = _show_run_warning
-            done = _apply(names, lenient=lenient)
+            done = _apply(names, lenient=lenient, announce=False)
+            new = [n for n in done if n not in warned]
+            if new:
+                warnings.warn(
+                    f"{', '.join(new)} patched with "
+                    f"{', '.join(_TARGETS[n].impl for n in new)}, in this process "
+                    "and the Python processes it starts",
+                    PatchWarning,
+                    stacklevel=1,
+                )
     except ImportError as exc:
         sys.stderr.write(f"pyroid run: error: cannot patch: {exc}\n")
         return 2

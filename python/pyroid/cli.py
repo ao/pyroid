@@ -70,6 +70,8 @@ _WARC_FLUSH_BYTES = 64 << 20
 # The suffixes pyroid.integrations._io reads and writes (only JSON Lines can be compressed).
 _FORMATS = ".parquet/.pq or .jsonl/.ndjson/.json[.gz|.bz2|.zst|.lz4]"
 _OUT_FORMATS = ("parquet", "jsonl", "jsonl.gz", "jsonl.bz2", "jsonl.zst", "jsonl.lz4")
+#: ``pyroid clean --ftfy``: ftfy's defaults, datatrove's ``FTFYFormatter()``, or no ftfy step.
+FTFY_CONFIGS = ("default", "datatrove", "off")
 _STAGES = ("signatures", "buckets", "cluster", "filter")
 
 
@@ -379,7 +381,13 @@ def _recipe(o: Options) -> Any:
                 threads=o.threads,
             )
         else:
-            r = recipes.FineWeb(lid_model=x["lid_model"], threads=o.threads, minhash=None)
+            ftfy = {"default": None, "datatrove": recipes.FTFY_FORMATTER, "off": False}
+            r = recipes.FineWeb(
+                lid_model=x["lid_model"],
+                ftfy_config=ftfy[x.get("ftfy", "default")],
+                threads=o.threads,
+                minhash=None,
+            )
         _CACHE[key] = r
     return r
 
@@ -1472,10 +1480,18 @@ def _cmd_clean(a: argparse.Namespace) -> int:
     extra: dict[str, Any] = {"recipe": a.recipe, "lid_model": a.lid_model, "dedup": not a.no_dedup}
     warc = a.recipe == WARC_RECIPE
     if warc:
+        if a.ftfy != "default":
+            raise SystemExit(
+                "pyroid clean: --ftfy applies to --recipe fineweb (fineweb-warc has no ftfy step, "
+                "as datatrove's examples/fineweb.py)"
+            )
         _check_warc(a)
         extra.update(dump=a.dump, limit=a.limit)
     elif a.dump is not None or a.limit != -1:
         raise SystemExit("pyroid clean: --dump and --limit apply to --recipe fineweb-warc")
+    if a.ftfy != "default":
+        # Only when given, so runs started without it keep their fingerprint (resume).
+        extra["ftfy"] = a.ftfy
     if a.no_dedup:
         return _rowwise(a, "clean", **extra)
     if getattr(a, "shard", None) and not a.shard.endswith("/1"):
@@ -2113,10 +2129,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "clean",
         help="run a cleaning recipe (ftfy, LID, quality filters, MinHash; or FineWeb from WARC)",
-        description="Run a cleaning recipe and write the kept rows. The fineweb recipe is "
-        "datatrove's FineWeb chain on text: ftfy, fastText LID, the Gopher, C4 and FineWeb "
-        "quality filters, then MinHash dedup. The fineweb-warc recipe is datatrove's "
-        "examples/fineweb.py on WARC files: datatrove's WarcReader, URL filter, Trafilatura, "
+        description="Run a cleaning recipe and write the kept rows. The fineweb recipe runs "
+        "ftfy (see --ftfy), then datatrove's FineWeb stages on text: fastText LID, the Gopher, "
+        "C4 and FineWeb quality filters, then MinHash dedup. The fineweb-warc recipe is "
+        "datatrove's examples/fineweb.py on WARC files: datatrove's WarcReader, URL filter, "
+        "Trafilatura, "
         "fastText LID, the same filters, MinHash dedup, then PII replacement.",
     )
     _io_args(p, warc=True)
@@ -2142,6 +2159,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--lid-model",
         help="fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a cached download)",
+    )
+    p.add_argument(
+        "--ftfy",
+        choices=FTFY_CONFIGS,
+        default="default",
+        help="fineweb: ftfy's config: ftfy's defaults (default), datatrove's FTFYFormatter() "
+        "(keeps curly quotes, ligatures, widths and line breaks; no NFC), or off",
     )
     p.add_argument(
         "--no-dedup",

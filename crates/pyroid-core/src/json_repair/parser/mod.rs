@@ -98,6 +98,11 @@ pub struct ParseOptions {
 /// Maximum nesting of containers/comments/fences the parser follows.
 pub const MAX_DEPTH: usize = 1_000;
 
+/// Maximum recursive steps: levels, plus the re-reads of a level (an empty
+/// object parsed again as an array or object) that do not count as one. Bounds
+/// the stack when re-reads chain.
+const MAX_STEPS: usize = 3 * MAX_DEPTH;
+
 /// Stack the parser may use on the calling thread before it asks for a rerun
 /// on a dedicated thread (see [`ParseError::NeedStack`]).
 const INLINE_STACK_BUDGET: usize = 256 * 1024;
@@ -119,7 +124,10 @@ pub(crate) struct Parser<'a> {
     has_tried_valid_json_suffix: bool,
     max_int_digits: usize,
     props: CharProps,
+    /// Nesting levels entered ([`MAX_DEPTH`]).
     depth: usize,
+    /// Recursive steps entered, re-reads included ([`MAX_STEPS`]).
+    steps: usize,
     /// Address of a local in the entry frame; `None` = no stack budget (big-stack thread).
     stack_base: Option<usize>,
     scan: scan::Memo,
@@ -142,6 +150,7 @@ impl<'a> Parser<'a> {
             max_int_digits: opts.max_int_digits,
             props: opts.props,
             depth: 0,
+            steps: 0,
             stack_base,
             scan: scan::Memo::default(),
             merge_stats: Vec::new(),
@@ -290,11 +299,13 @@ impl<'a> Parser<'a> {
     // Recursion guard
     // ------------------------------------------------------------------
 
-    /// Enter a recursive step: enforce [`MAX_DEPTH`] and the inline stack budget.
+    /// Enter a nesting level: enforce [`MAX_DEPTH`], [`MAX_STEPS`] and the
+    /// inline stack budget.
     #[inline]
     fn enter(&mut self) -> R<()> {
         self.depth += 1;
-        if self.depth > MAX_DEPTH {
+        self.steps += 1;
+        if self.depth > MAX_DEPTH || self.steps > MAX_STEPS {
             return Err(ParseError::Depth);
         }
         if let Some(base) = self.stack_base {
@@ -310,6 +321,16 @@ impl<'a> Parser<'a> {
     #[inline]
     fn leave(&mut self) {
         self.depth -= 1;
+        self.steps -= 1;
+    }
+
+    /// Run `f`, which parses the current level again (as another container),
+    /// so that its own [`Self::enter`] counts a step but not a level.
+    fn reread<T>(&mut self, f: impl FnOnce(&mut Self) -> R<T>) -> R<T> {
+        self.depth -= 1;
+        let r = f(self);
+        self.depth += 1;
+        r
     }
 
     // ------------------------------------------------------------------

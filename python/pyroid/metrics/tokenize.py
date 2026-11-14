@@ -65,17 +65,18 @@ def _tokens(text: Any, use_stemmer: bool) -> list[str]:
 
 
 def tokenize(text: Any, stemmer: Any) -> list[str]:
-    """Tokenize input text into a list of tokens.
+    """Tokenize input text into a list of tokens, as rouge-score does.
 
     This approach aims to replicate the approach taken by Chin-Yew Lin in
     the original ROUGE implementation.
 
     Args:
-      text: A text blob to tokenize.
-      stemmer: An optional stemmer.
+        text: A text blob to tokenize.
+        stemmer: An optional stemmer (e.g. ``nltk.stem.porter.PorterStemmer()``),
+            applied to tokens longer than 3 characters.
 
     Returns:
-      A list of string tokens extracted from input text.
+        A list of string tokens extracted from input text.
     """
     tokens = _tokens(text, False)
     if stemmer:

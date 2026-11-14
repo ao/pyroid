@@ -112,7 +112,9 @@ stages also take the keyword `threads`.
         - LID_176_URL
         - LID_176_MIRRORS
         - LID_176_SHA256
+        - LID_176_SIZE
         - MINHASH_CONFIG
+        - FTFY_FORMATTER
         - lid_model_path
         - Annotation
         - FineWeb

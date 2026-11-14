@@ -1755,6 +1755,24 @@ def test_pruned_subwords_list_more_strings_than_ids(zoo: Zoo) -> None:
 
 
 @pytest.mark.thread_unsafe(reason="runs a subprocess")
+def test_numpy_is_imported_by_the_first_array(run_python: RunPython, zoo: Zoo) -> None:
+    # Importing numpy takes ~90 ms; importing pyroid.fasttext and loading a model need none.
+    path = zoo["softmax-dense"].path
+    proc = run_python(
+        f"""
+        import sys
+        import pyroid.fasttext as ft
+        assert "numpy" not in sys.modules
+        m = ft.load_model({str(path)!r})
+        assert m.get_words()[:2] == ["</s>", "the"] and "numpy" not in sys.modules
+        labels, probs = m.predict("the cat")
+        assert "numpy" in sys.modules and type(probs).__module__ == "numpy"
+        """
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+@pytest.mark.thread_unsafe(reason="runs a subprocess")
 def test_import_error_without_numpy(run_python: RunPython, zoo: Zoo) -> None:
     path = zoo["softmax-dense"].path
     proc = run_python(

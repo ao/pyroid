@@ -6,20 +6,26 @@ A drop-in for the inference API of the ``fasttext`` package: the same
 fastText's C++. ``predict`` and ``get_sentence_vector`` also take a list,
 tuple or Arrow column and run it on pyroid's thread pool without the GIL.
 
-Needs numpy (``pip install 'pyroid[fasttext]'``). Types and docs are in
+Needs numpy (``pip install 'pyroid[fasttext]'``), which the first call that
+returns an array imports. Types and docs are in
 ``fasttext.pyi``. fastText is Copyright (c) 2016-present, Facebook, Inc.
 (MIT License).
 """
 
-try:
-    import numpy as _numpy  # noqa: F401  (imported to fail early, with a clear message)
-except ImportError as _exc:  # pragma: no cover - test_fasttext.py runs this in a subprocess
-    # ModuleNotFoundError naming numpy, as `import numpy` itself raises: pytest.importorskip skips.
-    raise ModuleNotFoundError(
-        "pyroid.fasttext needs numpy: install it with pip install 'pyroid[fasttext]' "
-        "(or pip install numpy)",
-        name="numpy",
-    ) from _exc
+import importlib.util as _importlib_util
+
+# numpy is imported by the first call that returns an array, not here (it takes about 90 ms),
+# but a missing numpy fails the import, with a clear message.
+if _importlib_util.find_spec("numpy") is None:  # pragma: no cover - test_fasttext.py runs this
+    try:
+        import numpy  # noqa: F401  (fails: its error is chained below)
+    except ImportError as _exc:
+        # ModuleNotFoundError naming numpy, as `import numpy` raises: pytest.importorskip skips.
+        raise ModuleNotFoundError(
+            "pyroid.fasttext needs numpy: install it with pip install 'pyroid[fasttext]' "
+            "(or pip install numpy)",
+            name="numpy",
+        ) from _exc
 
 from pyroid import _versions
 from pyroid._pyroid import fasttext as _native

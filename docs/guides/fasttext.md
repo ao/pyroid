@@ -39,6 +39,18 @@ $ pip install "pyroid[fasttext]"     # pyroid.fasttext returns numpy arrays
  # (('__label__fr', '__label__en'), array([9.94570732e-01, 8.63876310e-04]))
 ```
 
+`lid.176.bin` (125 MiB) and the compressed `lid.176.ftz` (916 KiB) are fastText's language-ID
+models for 176 languages, published on the
+[fastText site](https://fasttext.cc/docs/en/language-identification.html) (CC BY-SA 3.0):
+
+```console
+$ curl -LO https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin
+$ curl -LO https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz
+```
+
+`pyroid clean` and `pyroid langid` download `lid.176.bin` themselves on first use
+([details](cli.md#the-language-id-model)).
+
 The inference methods of fastText's `_FastText` are there, with the same results:
 `predict`, `get_sentence_vector`, `get_word_vector`, `get_input_vector`, `get_words`,
 `get_labels`, `words`, `labels`, `get_line`, `get_subwords`, `get_word_id`, `get_label_id`,
@@ -120,6 +132,12 @@ These are deliberate, or harmless for real models (from the module's tests and d
   standard library may order exact ties differently.
 - `get_subwords` returns int64 ids even when empty (fastText gives float64 when every n-gram is
   pruned).
+- The return types are the `fasttext` package's, not fasttext-predict's, which differ:
+  fasttext-predict 0.9.2.4's `predict(text)` gives the probabilities as a tuple of floats (pyroid
+  and `fasttext`: a float64 array), and its `predict(lines)` returns only the labels, so
+  `labels, probs = model.predict(lines)` fails there unless there are exactly two lines. pyroid
+  gives `(labels, probabilities)` for every line, as `fasttext` does. fasttext-predict has no
+  `get_sentence_vector`.
 
 pyroid never delegates to fastText, so it never emits `FallbackWarning`.
 

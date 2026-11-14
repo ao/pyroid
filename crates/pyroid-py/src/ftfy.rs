@@ -163,9 +163,10 @@ fn str_from_wtf8<'py>(py: Python<'py>, b: &[u8]) -> PyResult<Bound<'py, PyString
 }
 
 /// The input object itself when it is an exact `str` (ftfy returns an exact
-/// `str` even for subclasses).
-fn unchanged<'py>(text: &Bound<'py, PyString>) -> PyResult<Bound<'py, PyString>> {
-    if text.is_exact_instance_of::<PyString>() {
+/// `str` even for subclasses), or for `fix_encoding` (which returns the text
+/// it was given when nothing changes, subclass or not).
+fn unchanged<'py>(op: Op, text: &Bound<'py, PyString>) -> PyResult<Bound<'py, PyString>> {
+    if matches!(op, Op::Encoding) || text.is_exact_instance_of::<PyString>() {
         return Ok(text.clone());
     }
     match text.to_str() {
@@ -193,14 +194,14 @@ fn run<'py>(
             };
             match fixed {
                 Some(f) if f != s => Ok(PyString::new(py, &f)),
-                _ => unchanged(text),
+                _ => unchanged(op, text),
             }
         }
         Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) => {
             let bytes = surrogatepass_bytes(text)?;
             let b = bytes.as_bytes();
             match run_wtf8(op, b, cfg) {
-                Cow::Borrowed(_) => unchanged(text),
+                Cow::Borrowed(_) => unchanged(op, text),
                 Cow::Owned(v) => str_from_wtf8(py, &v),
             }
         }
@@ -231,6 +232,11 @@ fn run_explained<'py>(
 ) -> PyResult<(Bound<'py, PyString>, Bound<'py, PyAny>)> {
     let py = text.py();
     let cfg = &cfg.0;
+    let op = if encoding_only {
+        Op::Encoding
+    } else {
+        Op::Text
+    };
     match text.to_str() {
         Ok(s) => {
             let r = if encoding_only {
@@ -239,7 +245,7 @@ fn run_explained<'py>(
                 kernel::fix_and_explain(s, cfg)
             };
             let out = if r.text == s {
-                unchanged(text)?
+                unchanged(op, text)?
             } else {
                 PyString::new(py, &r.text)
             };
@@ -255,7 +261,7 @@ fn run_explained<'py>(
             }
             .expect("surrogatepass output is valid");
             let out = match r.text {
-                Cow::Borrowed(_) => unchanged(text)?,
+                Cow::Borrowed(_) => unchanged(op, text)?,
                 Cow::Owned(v) => str_from_wtf8(py, &v)?,
             };
             Ok((out, steps_to_py(py, r.explanation.as_ref())?))

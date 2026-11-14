@@ -47,50 +47,20 @@ def _optimal_param(threshold, num_perm, max_r, xq, false_positive_weight, false_
 
 
 class MinHashLSHEnsemble:
-    """The :ref:`minhash_lsh_ensemble` index. It supports
-    :ref:`containment` queries.
-    The implementation is based on
-    `E. Zhu et al. <http://www.vldb.org/pvldb/vol9/p1185-zhu.pdf>`_.
+    """The LSH Ensemble index for containment queries.
 
     Args:
-        threshold (float): The Containment threshold between 0.0 and
-            1.0. The initialized LSH Ensemble will be optimized for the threshold by
-            minimizing the false positive and false negative.
-        num_perm (int): The number of permutation functions used
-            by the MinHash to be indexed. For weighted MinHash, this
-            is the sample size (`sample_size`).
-        num_part (int): The number of partitions in LSH Ensemble.
-        m (int): The memory usage factor: an LSH Ensemble uses approximately
-            `m` times more memory space than a MinHash LSH with the same number of
-            sets indexed. The higher the `m` the better the accuracy.
-        weights (Tuple[float, float]): Used to adjust the relative importance of
-            minimizing false positive and false negative when optimizing
-            for the Containment threshold. Similar to the `weights` parameter
-            in :class:`datasketch.MinHashLSH`.
-        storage_config (Optional[Dict]): Type of storage service to use for storing
-            hashtables and keys.
-            `basename` is an optional property whose value will be used as the prefix to
-            stored keys. If this is not set, a random string will be generated instead. If you
-            set this, you will be responsible for ensuring there are no key collisions.
-        prepickle (Optional[bool]): If True, all keys are pickled to bytes before
-            insertion. If None, a default value is chosen based on the
-            `storage_config`.
+        threshold: The containment threshold, in [0.0, 1.0].
+        num_perm: The number of permutations of the indexed MinHash.
+        num_part: The number of partitions by set size.
+        m: The maximum band size `r` over the inner LSH indexes, in
+            ``[2, num_perm]``.
+        weights: ``(false_positive_weight, false_negative_weight)``, summing to 1.0.
+        storage_config: As for :class:`~pyroid.datasketch.MinHashLSH`.
+        prepickle: As for :class:`~pyroid.datasketch.MinHashLSH`.
 
-    Note:
-        Using more partitions (`num_part`) leads to better accuracy, at the
-        expense of slower query performance.
-        This is different from `the paper`_ and the `Go implementation`_, in which
-        more partitions leads to better accuracy AND faster query performance,
-        due to parallelism.
-
-    Note:
-        More information about the parameter `m` can be found in the
-        `Go implementation`_
-        of LSH Ensemble, in which `m` is named `MaxK`.
-
-    .. _`Go implementation`: https://github.com/ekzhu/lshensemble
-    .. _`the paper`: http://www.vldb.org/pvldb/vol9/p1185-zhu.pdf
-
+    Raises:
+        ValueError: As datasketch, for parameters out of range.
     """
 
     def __init__(
@@ -177,19 +147,11 @@ class MinHashLSHEnsemble:
         return config
 
     def index(self, entries: Iterable[tuple[Hashable, MinHash, int]]) -> None:
-        """Index all sets given their keys, MinHashes, and sizes.
-        It can be called only once after the index is created.
-
-        Args:
-            entries (Iterable[tuple[Hashable, MinHash, int]]): An iterable of
-                tuples, each must be in the form of ``(key, minhash, size)``,
-                where ``key`` is the unique
-                identifier of a set, ``minhash`` is the MinHash of the set,
-                and ``size`` is the size or number of unique items in the set.
+        """Index every ``(key, minhash, size)`` of `entries`; callable once.
 
         Raises:
-            ValueError: If the index is not empty or ``entries`` is empty.
-
+            ValueError: The index is not empty, `entries` is empty, or a size is
+                not positive.
         """
         if not self.is_empty():
             raise ValueError("Cannot call index again on a non-empty index")
@@ -218,17 +180,11 @@ class MinHashLSHEnsemble:
                 self.indexes[curr_part][r].insert(key, minhash)
 
     def query(self, minhash: MinHash, size: int) -> Generator[Hashable, None, None]:
-        """Giving the MinHash and size of the query set, retrieve
-        keys that references sets with containment with respect to
-        the query set greater than the threshold.
+        """Yield the keys of sets likely to contain `threshold` of the query set.
 
         Args:
-            minhash (MinHash): The MinHash of the query set.
-            size (int): The size (number of unique items) of the query set.
-
-        Returns:
-            Generator[Hashable, None, None]: an iterator of keys.
-
+            minhash: The MinHash of the query set.
+            size: The number of distinct items in the query set.
         """
         for i, index in enumerate(self.indexes):
             u = self.uppers[i]
@@ -254,8 +210,5 @@ class MinHashLSHEnsemble:
         return any(any(key in index[r] for r in index) for index in self.indexes)
 
     def is_empty(self) -> bool:
-        """Returns:
-        bool: Check if the index is empty.
-
-        """
+        """Return whether nothing has been indexed."""
         return all(all(index[r].is_empty() for r in index) for index in self.indexes)

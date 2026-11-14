@@ -93,7 +93,7 @@ def strdecode(sentence: Any) -> Any:
 
 
 def resolve_filename(f: Any) -> str:
-    """``f.name``, or ``repr(f)`` for an object without one (jieba's helper)."""
+    """``f.name``, or ``repr(f)`` for an object without one."""
     try:
         return f.name  # type: ignore[no-any-return]
     except AttributeError:
@@ -183,11 +183,15 @@ class _Freq(Mapping[str, int]):
 
 
 class Tokenizer:
-    """A jieba tokenizer: a dictionary (jieba's default or a file) plus the words added to it.
+    """A jieba tokenizer: a main dictionary plus the words added to it.
 
-    ``Tokenizer(dictionary=path)`` reads a jieba-format dictionary file
-    (``word freq [tag]`` per line, UTF-8) on first use. The default dictionary
-    is built in.
+    ``Tokenizer()`` uses jieba's default dictionary (built in).
+    ``Tokenizer(dictionary=path)`` reads a jieba-format dictionary file on first
+    use: one ``word freq [tag]`` per line, UTF-8; for a repeated word the last
+    frequency wins, and ``total`` adds up every line, as in jieba.
+
+    Args:
+        dictionary: ``None`` for the default dictionary, or a file path.
     """
 
     def __init__(self, dictionary: str | None = DEFAULT_DICT) -> None:
@@ -211,7 +215,7 @@ class Tokenizer:
 
     @property
     def FREQ(self) -> _Freq:  # noqa: N802  jieba's name
-        """Every word and word prefix with its frequency (empty until initialized)."""
+        """Every word and word prefix with its frequency (0 for a prefix); empty until loaded."""
         return _Freq(self)
 
     @property
@@ -221,7 +225,12 @@ class Tokenizer:
 
     @staticmethod
     def gen_pfdict(f: Any) -> tuple[dict[str, int], int]:
-        """Read a binary dictionary file into jieba's ``(FREQ, total)``."""
+        """Read a binary dictionary file into jieba's ``(FREQ, total)`` (a plain dict).
+
+        Raises:
+            ValueError: A line is not ``word freq ...`` with an int ``freq``
+                (``invalid dictionary entry in <file> at Line <n>: <line>``).
+        """
         words, freqs, total = _gen_entries(f)
         lfreq: dict[str, int] = {}
         for word, freq in zip(words, freqs, strict=True):
@@ -233,7 +242,15 @@ class Tokenizer:
         return lfreq, total
 
     def initialize(self, dictionary: str | None = None) -> None:
-        """Load the dictionary now (jieba loads it on first use)."""
+        """Load the dictionary now (otherwise it loads on first use).
+
+        Args:
+            dictionary: Switch to this dictionary file first.
+
+        Raises:
+            ValueError: The dictionary file has an invalid line.
+            OSError: The dictionary file cannot be read.
+        """
         if dictionary:
             abs_path = _get_abs_path(dictionary)
             if self.dictionary == abs_path and self.initialized:
@@ -310,7 +327,10 @@ class Tokenizer:
             )
 
     def get_DAG(self, sentence: str) -> dict[int, list[int]]:  # noqa: N802
-        """For each character index, the end indices of the dictionary words starting there."""
+        """For each character index of ``sentence``, the ends of the dictionary words there.
+
+        An index where no dictionary word starts maps to itself.
+        """
         self.check_initialized()
         return self._native.get_dag(sentence)  # type: ignore[no-any-return]
 
@@ -328,7 +348,7 @@ class Tokenizer:
         *,
         threads: int | None = None,
     ) -> list[Any]:
-        """Segment ``sentence`` into a list of words (a list of lists for a batch)."""
+        """:meth:`cut` as a list (for a batch, a list of lists)."""
         if use_paddle:
             words = self._paddle(sentence)
             if words is not None:
@@ -345,7 +365,30 @@ class Tokenizer:
         *,
         threads: int | None = None,
     ) -> Iterator[Any]:
-        """Segment ``sentence``; yields the words (one list per document for a batch)."""
+        """Segment ``sentence`` into words; yields them.
+
+        Args:
+            sentence: A str (bytes are decoded as UTF-8, else GBK), or a batch:
+                a list or tuple of str, or an Arrow string array/column.
+            cut_all: Full mode: every dictionary word in the text, overlapping
+                (empty strings included, as jieba yields them).
+            HMM: Find words that are not in the dictionary with the HMM.
+            use_paddle: Use paddle mode if :func:`enable_paddle` enabled it
+                (delegated to jieba); ignored otherwise, as in jieba.
+            threads: For a batch: ``None`` for the whole pool, ``n`` for at
+                most ``n`` tasks at once, ``1`` for the calling thread.
+
+        Yields:
+            The words, which concatenate to ``sentence`` (except in full
+            mode); for a batch, one list of words per document (``None`` for
+            an Arrow null).
+
+        Raises:
+            ValueError: The dictionary's total is 0, or a word on the route
+                has a negative frequency (``math.log``'s error).
+            pyroid.InputError: A batch holds a non-str item.
+            UnicodeEncodeError: A str contains a lone surrogate.
+        """
         yield from self.lcut(sentence, cut_all, HMM, use_paddle, threads=threads)
 
     def lcut_for_search(
@@ -355,7 +398,7 @@ class Tokenizer:
         *,
         threads: int | None = None,
     ) -> list[Any]:
-        """:meth:`lcut`, plus the 2- and 3-character dictionary words inside longer words."""
+        """:meth:`cut_for_search` as a list (for a batch, a list of lists)."""
         sentence = strdecode(sentence)
         return self._native_for(sentence).cut_for_search(sentence, bool(HMM), threads=threads)  # type: ignore[no-any-return]
 
@@ -366,7 +409,20 @@ class Tokenizer:
         *,
         threads: int | None = None,
     ) -> Iterator[Any]:
-        """Generator form of :meth:`lcut_for_search`."""
+        """Segment for search engines: :meth:`cut`, plus the dictionary words inside long ones.
+
+        Each word longer than 2 characters is preceded by the 2-character
+        dictionary words inside it, and one longer than 3 also by the
+        3-character ones.
+
+        Args:
+            sentence: A str, or a batch as for :meth:`cut`.
+            HMM: Find words that are not in the dictionary with the HMM.
+            threads: For a batch, as for :meth:`cut`.
+
+        Raises:
+            ValueError: As for :meth:`cut`.
+        """
         yield from self.lcut_for_search(sentence, HMM, threads=threads)
 
     _lcut = lcut
@@ -382,10 +438,13 @@ class Tokenizer:
         return self.lcut_for_search(sentence, False)
 
     def get_dict_file(self) -> Any:
-        """The dictionary file, opened in binary mode.
+        """The main dictionary file, opened in binary mode.
 
         For the default dictionary this is jieba's own ``dict.txt`` (pyroid
-        stores it in another form), so it needs jieba installed.
+        stores the dictionary in another form), so it is delegated to jieba.
+
+        Raises:
+            pyroid.PyroidError: The default dictionary and jieba is not installed.
         """
         if self.dictionary == DEFAULT_DICT:
             jieba = _jieba_module("get_dict_file() of the default dictionary")
@@ -393,10 +452,19 @@ class Tokenizer:
         return open(self.dictionary, "rb")
 
     def load_userdict(self, f: Any) -> None:
-        """Add the words of a user dictionary: a path, or a file opened in binary or text mode.
+        """Add the words of a user dictionary, as :meth:`add_word` does for each line.
 
-        One word per line: ``word [freq] [tag]``, separated by spaces; a file
-        given by path or opened in binary mode must be UTF-8.
+        One entry per line: ``word [freq] [tag]``, separated by spaces (jieba's
+        ``re_userdict``: a word may contain spaces; ``freq`` is ASCII digits;
+        ``tag`` lowercase ASCII letters). Blank lines are skipped.
+
+        Args:
+            f: A path, or a file opened in binary mode (UTF-8, an initial BOM
+                is ignored) or in text mode.
+
+        Raises:
+            ValueError: A file given by path or opened in binary mode is not
+                UTF-8.
         """
         self.check_initialized()
         if isinstance(f, str):
@@ -422,10 +490,17 @@ class Tokenizer:
             self.add_word(word, freq, tag)
 
     def add_word(self, word: Any, freq: Any = None, tag: str | None = None) -> None:
-        """Add ``word`` (or change its frequency).
+        """Add ``word`` to the dictionary, or change its frequency.
 
-        Without ``freq``, the frequency is :meth:`suggest_freq`'s, which makes
-        the word cut whole.
+        Args:
+            word: The word.
+            freq: Its frequency (anything ``int()`` takes); ``None`` uses
+                :meth:`suggest_freq`, which makes the word cut whole.
+            tag: A part-of-speech tag, kept in ``user_word_tag_tab``.
+
+        Raises:
+            ValueError: ``int(freq)`` fails.
+            OverflowError: ``freq`` or the new total does not fit in 64 bits.
         """
         self.check_initialized()
         word = strdecode(word)
@@ -439,16 +514,24 @@ class Tokenizer:
             _native.add_force_split(word)
 
     def del_word(self, word: Any) -> None:
-        """Remove ``word``: frequency 0, and the HMM may not produce it."""
+        """Remove ``word``: set its frequency to 0 and stop the HMM from producing it."""
         self.add_word(word, 0)
 
     def suggest_freq(self, segment: Any, tune: bool = False) -> int:
         """The frequency that makes ``segment`` cut as given.
 
-        A str: the frequency that keeps it whole. A tuple of str: one that
-        cuts their concatenation into them. With ``tune=True``, also set it
-        (:meth:`add_word`). The HMM may still change the result; if so, cut
-        with ``HMM=False``.
+        Args:
+            segment: A str, to keep it whole; or a tuple of str, to cut their
+                concatenation into them.
+            tune: Also set the word to that frequency (:meth:`add_word`).
+
+        Returns:
+            jieba's value. The HMM can still change how the word is cut; if
+            so, cut with ``HMM=False``.
+
+        Raises:
+            ValueError: The dictionary's total is 0 (``math.log``'s error).
+            ZeroDivisionError: The dictionary's total is 0.
         """
         self.check_initialized()
         if isinstance(segment, str):
@@ -470,9 +553,20 @@ class Tokenizer:
         *,
         threads: int | None = None,
     ) -> Iterator[Any]:
-        """Yield ``(word, start, end)`` with character offsets; ``mode="search"`` for finer words.
+        """Yield ``(word, start, end)`` for each word, with character offsets.
 
-        For a batch (list, tuple or Arrow column), yields one list of tuples per document.
+        Args:
+            unicode_sentence: A str, or a batch as for :meth:`cut` (then one
+                list of tuples per document).
+            mode: ``"default"`` for :meth:`cut`'s words; anything else for
+                :meth:`cut_for_search`'s.
+            HMM: Find words that are not in the dictionary with the HMM.
+            threads: For a batch, as for :meth:`cut`.
+
+        Raises:
+            ValueError: ``unicode_sentence`` is not a str or a batch
+                (``jieba: the input parameter should be unicode.``), or as for
+                :meth:`cut`.
         """
         if not isinstance(unicode_sentence, (str, list, tuple)) and not _is_arrow(unicode_sentence):
             raise ValueError("jieba: the input parameter should be unicode.")
@@ -481,7 +575,11 @@ class Tokenizer:
         )
 
     def set_dictionary(self, dictionary_path: str) -> None:
-        """Use another main dictionary from now on (loaded on next use)."""
+        """Use another main dictionary file from now on (loaded on next use, without added words).
+
+        Raises:
+            Exception: The file does not exist (``jieba: file does not exist: <path>``).
+        """
         with self.lock:
             abs_path = _get_abs_path(dictionary_path)
             if not os.path.isfile(abs_path):
@@ -513,7 +611,11 @@ def _delegated_paddle_cut(sentence: Any) -> Iterator[str]:
 
 
 def enable_paddle() -> None:
-    """Enable jieba's paddle mode (delegated to jieba, with a FallbackWarning)."""
+    """Enable jieba's paddle mode (delegated to jieba, with a FallbackWarning).
+
+    Raises:
+        pyroid.PyroidError: jieba or paddlepaddle-tiny is not installed.
+    """
     from pyroid.jieba._delegate import enable_paddle as _enable
 
     _enable()
@@ -582,11 +684,19 @@ def _pcut_for_search(sentence: Any, HMM: bool = True) -> Iterator[str]:  # noqa:
 
 
 def enable_parallel(processnum: int | None = None) -> None:
-    """Make the module-level ``cut`` and ``cut_for_search`` segment line by line in parallel.
+    """Make the module-level :func:`cut` and :func:`cut_for_search` cut lines in parallel.
 
-    As in jieba, this only changes those two functions (on ``dt``). pyroid
-    uses threads (at most ``processnum``; all of its pool by default), not
-    processes, and works on every platform. The words are the same.
+    As in jieba, only those two functions change (on :data:`dt`). pyroid uses
+    threads, at most ``processnum`` (the whole pool by default), and works on
+    every platform; the words are the same.
+
+    Args:
+        processnum: The most threads to cut with; ``None`` for the whole pool.
+
+    Raises:
+        ValueError: ``processnum`` is below 1 (``"Number of processes must be
+            at least 1"``, as jieba's ``multiprocessing.Pool``).
+        TypeError: ``processnum`` is not an int (as jieba's ``Pool``).
     """
     global _parallel_threads, cut, cut_for_search
     dt.check_initialized()

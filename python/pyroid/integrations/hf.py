@@ -52,8 +52,14 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias
 
-import pyarrow as pa
-import pyarrow.compute as pc
+from pyroid._deps import missing
+
+try:
+    import numpy  # noqa: F401  (pyroid.fasttext's arrays)
+    import pyarrow as pa
+    import pyarrow.compute as pc
+except ModuleNotFoundError as _exc:
+    missing(__name__, _exc, "hf", "pyarrow", "numpy")
 
 import pyroid.fasttext
 import pyroid.filters
@@ -478,8 +484,9 @@ def fineweb(
        always runs in this process over the whole dataset, so it is global and
        its result does not depend on ``batch_size`` or ``num_proc``.
 
-    On the same documents, the result equals datatrove's FineWeb pipeline
-    (``bench/chain.py``'s digest).
+    On the same documents, the result equals the same chain built from datatrove's stages
+    (``bench/chain.py``'s digest): ftfy with ftfy's default config, then the stages of
+    datatrove's FineWeb pipeline that work on text.
 
     Args:
         ds: A ``datasets.Dataset`` (any format; the results get the same format type).

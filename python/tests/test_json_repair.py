@@ -243,6 +243,16 @@ def test_load_and_from_file(tmp_path: Path) -> None:
     assert jr.repair_json(json_fd=io.StringIO(doc)) == ref.repair_json(json_fd=io.StringIO(doc))
 
 
+@pytest.mark.parametrize("unit", ["[", '{"a":', '{"a":[', "[{", "{[", "[[{", "[{["])
+def test_max_depth_counts_levels_in_any_mix(unit: str) -> None:
+    # An empty object re-read as an array is one level: "[{" * 334 used to raise at 668.
+    per = unit.count("[") + unit.count("{")
+    n = jr.MAX_DEPTH // per
+    assert isinstance(jr.repair_json(unit * n), str)
+    with pytest.raises(jr.NestingError):
+        jr.repair_json(unit * (n + 1))
+
+
 def test_nesting_error() -> None:
     assert issubclass(jr.NestingError, pyroid.PyroidError)
     assert issubclass(jr.NestingError, ValueError)
@@ -333,6 +343,10 @@ def test_delegation_without_json_repair(monkeypatch: pytest.MonkeyPatch) -> None
         jr.repair_json("{}", schema={"type": "object"})
     # The Rust port itself needs nothing.
     assert jr.repair_json("{'a': 1}") == '{"a": 1}'
+    col = _testing.column(["{}", "{'a': '\U0010fffe'"])
+    with pytest.raises(pyroid.PyroidError, match="json_repair is not installed") as info:
+        jr.repair_json_batch(col)
+    assert any("row 1 of the Arrow input" in n for n in info.value.__notes__)
 
 
 @pytest.mark.thread_unsafe
@@ -405,12 +419,64 @@ def test_batch_surrogates() -> None:
     assert jr.repair_json_batch(docs) == [ref.repair_json(d) for d in docs]
 
 
+@pytest.mark.parametrize("large", [False, True])
+def test_batch_arrow_result_with_lone_surrogate(large: bool) -> None:
+    # json_repair keeps the escape \ud800 (and an escaped pair it parses itself) as lone
+    # surrogates; with ensure_ascii=False its str holds them, which Arrow cannot. The port
+    # stores them in U+10F800..U+10FFFF, which must never reach the column.
+    docs = ['{"ok": 1,}', '{"emoji": "\\ud83d\\ude00", "ok": true,}', '"\\ud800"']
+    col = _testing.column(docs, large=large, chunks=2)
+    want = [ref.repair_json(d, ensure_ascii=False) for d in docs]
+    assert jr.repair_json_batch(docs, ensure_ascii=False) == want
+    with pytest.raises(UnicodeEncodeError) as info:
+        jr.repair_json_batch(col, ensure_ascii=False)
+    assert info.value.object == want[1]
+    assert any("row 1 of the Arrow input" in n for n in info.value.__notes__)
+    for kw in [{}, {"ensure_ascii": True}]:
+        assert jr.repair_json_batch(col, **kw).to_pylist() == [ref.repair_json(d) for d in docs]
+    # A result without one is unaffected.
+    assert jr.repair_json_batch(_testing.column(docs[:1]), ensure_ascii=False).to_pylist() == [
+        want[0]
+    ]
+
+
+def test_batch_arrow_error_names_the_row() -> None:
+    col = _testing.column(["{}", None, "[1]", '{"a" 1}'], chunks=2)
+    with pytest.raises(ValueError, match="Missing ':'") as info:
+        jr.repair_json_batch(col, strict=True, skip_json_loads=True)
+    assert any("row 3 of the Arrow input" in n for n in info.value.__notes__)
+
+
 @pytest.mark.thread_unsafe
 def test_batch_delegates_reserved_items() -> None:
     docs = ["{'a': 1}", "{'a': '\U0010fffe'}"]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", pyroid.FallbackWarning)
         assert jr.repair_json_batch(docs) == [ref.repair_json(d) for d in docs]
+
+
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize("large", [False, True])
+def test_batch_arrow_delegates_only_the_reserved_rows(large: bool) -> None:
+    # It raised PyroidError for the whole column; a list delegated just those documents.
+    docs: list[str | None] = [
+        "{'a': 1",
+        "{'a': '\U0010fffe'",
+        None,
+        '"\\udbff\\udfff"',
+        "[1, 2,",
+    ]
+    want = [None if d is None else ref.repair_json(d) for d in docs]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        col = jr.repair_json_batch(_testing.column(docs, large=large, chunks=2))
+        assert col.to_pylist() == want
+        got = jr.repair_json_batch(
+            _testing.column(docs, chunks=2), ensure_ascii=False, indent=1
+        ).to_pylist()
+    assert got == [
+        None if d is None else ref.repair_json(d, ensure_ascii=False, indent=1) for d in docs
+    ]
 
 
 def test_constants() -> None:
