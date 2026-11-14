@@ -46,8 +46,10 @@ pub fn intern(tag: &str) -> Option<&'static str> {
 
 /// `Resolver.resolve(ScalarNode, value, implicit)` for the stock resolvers (no path resolvers).
 pub fn resolve_scalar(value: &str, implicit_plain: bool) -> &'static str {
-    if implicit_plain && let Some(tag) = implicit_tag(value) {
-        return tag;
+    if implicit_plain {
+        if let Some(tag) = implicit_tag(value) {
+            return tag;
+        }
     }
     STR
 }
@@ -179,9 +181,8 @@ pub fn is_float(v: &[u8]) -> bool {
             }
         }
         // [-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*
-        if let Some(r) = sexagesimal_groups(rest)
-            && r.first() == Some(&b'.')
-            && r[1..].iter().all(|&b| digit_(b))
+        if sexagesimal_groups(rest)
+            .is_some_and(|r| r.first() == Some(&b'.') && r[1..].iter().all(|&b| digit_(b)))
         {
             return true;
         }

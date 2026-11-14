@@ -305,9 +305,7 @@ impl<'g, 'py> Ctor<'g, 'py> {
             return Ok(self.c.date.bind(py).call1((year, month, day))?);
         };
         let mut micro = 0i64;
-        if let Some(f) = fraction
-            && !f.is_empty()
-        {
+        if let Some(f) = fraction.filter(|f| !f.is_empty()) {
             let mut digits: String = f.chars().take(6).collect();
             while digits.len() < 6 {
                 digits.push('0');
@@ -533,11 +531,11 @@ impl<'g, 'py> Ctor<'g, 'py> {
                 index += 1;
             }
         }
-        if !merge.is_empty()
-            && let NodeKind::Mapping { pairs, .. } = &mut self.g.nodes[id].kind
-        {
-            merge.append(pairs);
-            *pairs = merge;
+        if !merge.is_empty() {
+            if let NodeKind::Mapping { pairs, .. } = &mut self.g.nodes[id].kind {
+                merge.append(pairs);
+                *pairs = merge;
+            }
         }
         Ok(())
     }

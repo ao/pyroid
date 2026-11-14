@@ -155,18 +155,18 @@ impl Composer {
                         | EventKind::MappingStart { anchor, .. } => anchor.clone(),
                         _ => None,
                     };
-                    if let Some(a) = &anchor
-                        && let Some(&first) = anchors.get(a)
-                    {
-                        return Err(composer_error(
-                            Some(Msg::str(
-                                "found duplicate anchor %r; first occurrence",
-                                a.clone(),
-                            )),
-                            Some(graph.nodes[first].start_mark),
-                            Msg::text("second occurrence"),
-                            event.start_mark,
-                        ));
+                    if let Some(a) = &anchor {
+                        if let Some(&first) = anchors.get(a) {
+                            return Err(composer_error(
+                                Some(Msg::str(
+                                    "found duplicate anchor %r; first occurrence",
+                                    a.clone(),
+                                )),
+                                Some(graph.nodes[first].start_mark),
+                                Msg::text("second occurrence"),
+                                event.start_mark,
+                            ));
+                        }
                     }
                     let event = self.get_event()?;
                     let (start_mark, end_mark) = (event.start_mark, event.end_mark);

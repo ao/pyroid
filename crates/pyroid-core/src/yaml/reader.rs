@@ -136,9 +136,7 @@ impl Reader {
     /// PyYAML's `update(n)`: the next `n` code points must be decoded.
     #[inline]
     fn need(&self, n: usize) {
-        if let Some(limit) = self.limit
-            && self.index + n > limit
-        {
+        if self.limit.is_some_and(|limit| self.index + n > limit) {
             self.hit_limit.set(true);
         }
     }

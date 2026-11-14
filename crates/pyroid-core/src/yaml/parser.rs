@@ -73,10 +73,10 @@ impl Parser {
 
     /// `peek_event()` (`None` after the stream end).
     pub fn peek_event(&mut self) -> Result<Option<&Event>> {
-        if self.current_event.is_none()
-            && let Some(state) = self.state
-        {
-            self.current_event = Some(self.run(state)?);
+        if self.current_event.is_none() {
+            if let Some(state) = self.state {
+                self.current_event = Some(self.run(state)?);
+            }
         }
         Ok(self.current_event.as_ref())
     }
