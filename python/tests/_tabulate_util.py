@@ -411,6 +411,20 @@ def build_args(case: dict[str, Any], mod: Any) -> tuple[Any, dict[str, Any]]:
 
         ncols = max((len(r) for r in rows), default=0)
         data = pd.DataFrame([(list(r) + [None] * ncols)[:ncols] for r in rows])
+    elif shape == "frame_numeric":
+        import pandas as pd
+
+        ncols = max((len(r) for r in rows), default=0)
+
+        def num(v: Any) -> Any:
+            if type(v) is float or (type(v) is int and abs(v) < 2**62):
+                return v
+            return 0.5 if isinstance(v, float) else 7
+
+        table = [[num(v) for v in (list(r) + [0] * ncols)[:ncols]] for r in rows]
+        data = pd.DataFrame(
+            table, index=pd.Index(range(10, 10 + len(table)), name="idx") if len(rows) % 2 else None
+        )
     else:
         raise AssertionError(shape)
     kwargs = dict(case["opts"])
