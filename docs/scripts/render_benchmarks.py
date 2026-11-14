@@ -117,7 +117,8 @@ def render_more(data: dict[str, Any], key: str) -> list[str]:
         lines += [
             f"### {group['title']}",
             "",
-            f"{group.get('label', data['more_label'])}. {group['note']} Guide: [{group['guide']}]({guide}).",
+            f"{group.get('label', data['more_label'])}. {group['note']} "
+            f"Guide: [{group['guide']}]({guide}).",
             "",
             "| " + " | ".join(group["columns"]) + " |",
             "|---|" + "---:|" * (len(group["columns"]) - 1),

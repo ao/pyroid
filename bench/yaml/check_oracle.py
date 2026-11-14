@@ -71,7 +71,13 @@ def check_file(root: str, oracle: str, entry: dict[str, Any]) -> dict[str, Any]:
             except Exception as e:  # noqa: BLE001
                 got = repr(e).encode()
             if got != path.read_bytes():
-                out["diffs"].append((f"dump:{name}", path.read_bytes()[:200].decode("utf-8", "replace"), got[:200].decode("utf-8", "replace")))
+                out["diffs"].append(
+                    (
+                        f"dump:{name}",
+                        path.read_bytes()[:200].decode("utf-8", "replace"),
+                        got[:200].decode("utf-8", "replace"),
+                    )
+                )
     else:
         variants = entry.get("variants") or {}
         for kind, recorded in variants.items():

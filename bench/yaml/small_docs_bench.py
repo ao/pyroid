@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import time
 
-import yaml
-
 import pyroid.yaml as py
+
+import yaml
 
 DOCS = {
     "5 bytes": "a: 1\n",
@@ -63,12 +63,12 @@ def main() -> None:
     for name, text in DOCS.items():
         data = yaml.safe_load(text)
         cells = [
-            best(lambda: py.safe_load(text)),
-            best(lambda: yaml.load(text, Loader=yaml.CSafeLoader)),
-            best(lambda: yaml.load(text, Loader=yaml.SafeLoader), n=200),
-            best(lambda: py.safe_dump(data)),
-            best(lambda: yaml.dump(data, Dumper=yaml.CSafeDumper)),
-            best(lambda: yaml.safe_dump(data), n=200),
+            best(lambda t=text: py.safe_load(t)),
+            best(lambda t=text: yaml.load(t, Loader=yaml.CSafeLoader)),
+            best(lambda t=text: yaml.load(t, Loader=yaml.SafeLoader), n=200),
+            best(lambda d=data: py.safe_dump(d)),
+            best(lambda d=data: yaml.dump(d, Dumper=yaml.CSafeDumper)),
+            best(lambda d=data: yaml.safe_dump(d), n=200),
         ]
         print(f"| {name} | " + " | ".join(f"{c * 1e6:.1f} µs" for c in cells) + " |")
 

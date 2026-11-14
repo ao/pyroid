@@ -11,9 +11,15 @@ pub fn python_float_repr(x: f64) -> String {
     // strings of that length, the one nearest the exact value, ties to even; Rust's exact
     // formatting at that precision rounds the same way (the shortest one may not, on a tie).
     let shortest = format!("{:e}", x.abs());
-    let len = shortest.split_once('e').map_or(1, |(m, _)| m.chars().filter(char::is_ascii_digit).count());
+    let len = shortest
+        .split_once('e')
+        .map_or(1, |(m, _)| m.chars().filter(char::is_ascii_digit).count());
     let exact = format!("{:.*e}", len.saturating_sub(1), x.abs());
-    let sci = if exact.parse::<f64>().ok() == Some(x.abs()) { exact } else { shortest };
+    let sci = if exact.parse::<f64>().ok() == Some(x.abs()) {
+        exact
+    } else {
+        shortest
+    };
     let (mantissa, exp) = sci.split_once('e').unwrap_or((&sci, "0"));
     let exp: i32 = exp.parse().unwrap_or(0);
     let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
@@ -101,7 +107,7 @@ mod tests {
             (100.0, "100.0"),
             (12.34, "12.34"),
             // Exact ties between two shortest candidates: Python rounds them to even.
-            (1711.531_066_894_531_2, "1711.5310668945312"),
+            (1_711.531_066_894_531_2, "1711.5310668945312"),
             (101.633_331_298_828_12, "101.63333129882812"),
             (-122.433_013_916_015_62, "-122.43301391601562"),
         ];
