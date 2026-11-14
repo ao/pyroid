@@ -155,9 +155,12 @@ $ python script.py
   pyroid.patch("ftfy")
 ```
 
-It warns once more if the installed package is a version pyroid does not reproduce (for
-trafilatura, neither 2.3.1 nor 1.11.0). The patched functions then still give the reproduced
-version's results (trafilatura 2.3.1's for trafilatura), and the rest is the installed version's.
+If the installed package is a release pyroid does not reproduce (for trafilatura, neither 2.3.1
+nor 1.11.0), `patch()` also emits the `pyroid.VersionMismatchWarning` that importing the pyroid
+module gives, at the same line: once per process for each package, whichever comes first
+([Installed versions](../compatibility.md#installed-versions)). The patched functions then still
+give the reproduced release's results (trafilatura 2.3.1's for trafilatura), and the rest is the
+installed release's.
 `PatchWarning` is a `UserWarning`, distinct from `pyroid.FallbackWarning`. To silence it:
 
 ```python
@@ -238,9 +241,9 @@ subprocess: True
   (`sys.argv`, `sys.path[0]`, `__name__ == "__main__"`). It exits with the target's exit code: 0
   when it finishes, 2 for a usage error or a missing script, 1 when the module can't be found.
 
-`PatchWarning` is shown once per process tree, not in every worker. The hook does nothing in an
-interpreter that can't import pyroid, nor in one started with `-I` or `-E` (which ignore
-`PYTHONPATH`).
+`PatchWarning` and `VersionMismatchWarning` are shown once per process tree, not in every worker.
+The hook does nothing in an interpreter that can't import pyroid, nor in one started with `-I` or
+`-E` (which ignore `PYTHONPATH`).
 
 ### Without `pyroid run`
 

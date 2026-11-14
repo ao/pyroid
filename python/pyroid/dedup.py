@@ -17,6 +17,7 @@ from dataclasses import dataclass, field, fields, replace
 from functools import lru_cache
 from typing import Any
 
+from pyroid import _versions
 from pyroid import filters as _filters
 from pyroid._pyroid import dedup as _native
 from pyroid._pyroid import ftfy as _ftfy_native
@@ -39,6 +40,8 @@ __all__ = [
 
 #: The datatrove release whose decisions this module reproduces.
 DATATROVE_VERSION = "0.10.1"
+
+_versions.check(__name__, "datatrove", f"datatrove=={DATATROVE_VERSION}")
 
 
 def _unicode_version() -> str:

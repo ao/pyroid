@@ -18,6 +18,7 @@ import sys
 from collections.abc import Iterator
 from typing import Any, ClassVar, TypedDict
 
+from pyroid import _versions
 from pyroid._pyroid import warc as _native
 from pyroid.warc._records import (
     ArchiveLoadFailed,
@@ -51,6 +52,10 @@ __all__ = [
 WARCIO_VERSION = "1.8.2"
 #: warcio's default ``block_size``.
 BUFF_SIZE: int = _native.BUFF_SIZE
+
+_versions.check(__name__, "warcio", f"warcio=={WARCIO_VERSION}")
+# iter_documents and iter_batches are datatrove 0.10.1's WarcReader loop (process_record).
+_versions.check(__name__, "datatrove", "datatrove==0.10.1")
 
 RawStream: Any = _native.RawStream
 ContentStream: Any = _native.ContentStream

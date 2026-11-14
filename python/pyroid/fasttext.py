@@ -21,7 +21,19 @@ except ImportError as _exc:  # pragma: no cover - test_fasttext.py runs this in 
         name="numpy",
     ) from _exc
 
+from pyroid import _versions
 from pyroid._pyroid import fasttext as _native
+
+# fasttext-predict 0.9.2.4 is the reference; fasttext 0.9.3 (NeMo Curator's) gave the same
+# results. Other builds of the fasttext module can differ in the last bits of a probability
+# (docs/guides/fasttext.md: fasttext-numpy2-wheel by up to 1.79e-7).
+_versions.check(
+    __name__,
+    "fasttext",
+    "fasttext-predict==0.9.2.4",
+    same=("fasttext==0.9.3",),
+    distributions=("fasttext-wheel", "fasttext-numpy2-wheel"),
+)
 
 Model = _native.Model
 ModelError = _native.ModelError

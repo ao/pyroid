@@ -372,27 +372,32 @@ def test_ftfy_fallback_without_real_ftfy_raises_pyroid_error() -> None:
 
 
 @needs_ftfy
-def test_other_ftfy_version_warns_and_falls_back_to_it() -> None:
+def test_other_ftfy_version_warns_and_falls_back_to_it(tmp_path: Path) -> None:
+    info = tmp_path / "ftfy-6.2.0.dist-info"  # another ftfy release's metadata, found first
+    info.mkdir()
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: ftfy\nVersion: 6.2.0\n")
     ok(
         child(
-            """
-            import ftfy as real
-            real.__version__ = "6.2.0"  # what pyroid sees if another ftfy is installed
-            import pyroid.ftfy, pyroid.integrations as pi
+            f"""
+            sys.path.insert(0, {str(tmp_path)!r})
+            import pyroid, pyroid.integrations as pi
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 pi.patch("ftfy")
-            messages = [str(w.message) for w in caught]
-            assert [w.category for w in caught] == [pi.PatchWarning] * 2, messages
-            assert "the installed ftfy is 6.2.0" in messages[1] and "6.3.1" in messages[1]
+            got = [(w.category, str(w.message), w.filename) for w in caught]
+            assert [c for c, _, _ in got] == [pyroid.VersionMismatchWarning, pi.PatchWarning], got
+            assert got[0][1].startswith(
+                "pyroid.ftfy reproduces ftfy 6.3.1, but ftfy 6.2.0 is installed: "
+            ), got
+            assert got[0][2] == "<string>", got  # the caller's line
             import ftfy
-            assert ftfy.__version__ == "6.3.1" and ftfy.__wrapped__ is real
+            assert ftfy.__version__ == "6.3.1" and ftfy.__wrapped__.__version__ == "6.3.1"
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 ftfy.fix_text("abc", max_decode_length=5.0)
-            # pyroid.ftfy's own warning about the version it falls back to: it got the real ftfy.
-            got = [(w.category.__name__, str(w.message)) for w in caught]
-            assert ("RuntimeWarning", "pyroid.ftfy is falling back to ftfy 6.2.0, not 6.3.1") in got
+            # The fallback only says it delegates: the version was checked once, by patch().
+            got = [w.category.__name__ for w in caught]
+            assert got == ["FallbackWarning"], got
             """
         )
     )

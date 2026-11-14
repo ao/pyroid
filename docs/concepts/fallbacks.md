@@ -70,14 +70,20 @@ warnings.simplefilter("error", pyroid.FallbackWarning)
 `FallbackWarning` is a `RuntimeWarning`. pyroid always emits that exact class for delegation,
 so a filter on it never hides anything else.
 
-Other warnings are about results, not code paths, and stay plain `RuntimeWarning`s. For example,
-a Python whose `unicodedata` is newer than the Unicode tables pyroid ships (17.0) gets a one-time
-`RuntimeWarning`, and pyroid uses its 17.0 tables. Any other warning matches the incumbent's own
-(for example `pyroid.translit.unidecode`'s lone-surrogate warning).
+Other warnings are about results, not code paths. An incumbent installed at another release than
+the one a module reproduces gets one
+[`pyroid.VersionMismatchWarning`](../reference/pyroid.md#pyroid.VersionMismatchWarning) (a
+`UserWarning`) per process, when the module is imported; see
+[Installed versions](../compatibility.md#installed-versions). A Python whose `unicodedata` is
+newer than the Unicode tables pyroid ships (17.0) gets a one-time `RuntimeWarning`, and pyroid
+uses its 17.0 tables. Any other warning matches the incumbent's own (for example
+`pyroid.translit.unidecode`'s lone-surrogate warning).
 
 ## `pyroid.patch()` warns too
 
 [`pyroid.patch()`](../guides/patch.md) is not a fallback but the opposite: it makes code that
 imports ftfy, fastText, anyascii, datasketch, trafilatura or NLTK get pyroid's functions instead.
 It announces that with its own `PatchWarning`, once per process for each patched name, so you can
-tell the two apart.
+tell the two apart. An installed package of another release also gets the
+`VersionMismatchWarning` that importing the pyroid module gives (once per process, whichever comes
+first).

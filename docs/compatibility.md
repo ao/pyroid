@@ -348,6 +348,46 @@ as returning an unchanged string as the same object.
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).
 
+## Installed versions
+
+Each module reproduces one release of its incumbent (trafilatura two), and the parity above is
+against that release. When another release is installed, the module still gives the reproduced
+release's results, and emits one
+[`pyroid.VersionMismatchWarning`](reference/pyroid.md#pyroid.VersionMismatchWarning) per process
+and library, at the line that imported it (or called `pyroid.patch(...)`):
+
+```text
+script.py:1: VersionMismatchWarning: pyroid.ftfy reproduces ftfy 6.3.1, but ftfy 6.2.0 is installed: results can differ from it. Install ftfy==6.3.1 to compare like for like (or silence this with warnings.simplefilter("ignore", pyroid.VersionMismatchWarning)).
+```
+
+The check reads the installed distribution's metadata and never imports the library. Without
+the library it costs one `importlib.util.find_spec` call; a checkout without metadata is not
+checked. Each library is checked once per process, by whichever module asks first, and
+`pyroid run` warns once per process tree.
+
+| Library | Release reproduced | Checked by |
+|---|---|---|
+| ftfy | ftfy 6.3.1 | `import pyroid.ftfy`, `pyroid.patch("ftfy")` |
+| fastText | fasttext-predict 0.9.2.4; fasttext 0.9.3 gives the same results | `import pyroid.fasttext`, `pyroid.patch("fasttext")` |
+| datatrove | datatrove 0.10.1 | `import pyroid.filters`, `pyroid.dedup`, `pyroid.warc` or `pyroid.integrations.datatrove` |
+| PyThaiNLP | pythainlp 5.4.0 | the Thai tokenizer, when it reads the installed package's word list and model |
+| SudachiDict | sudachidict-core 20261015 | the Japanese tokenizer, when it reads the installed package's dictionary |
+| tldextract | tldextract 5.4.0 | `pyroid.filters.URLFilter`, when it loads tldextract |
+| anyascii | anyascii 0.3.3 | `import pyroid.translit`, `pyroid.patch("anyascii")` |
+| rouge-score | rouge-score 0.1.2 | `import pyroid.metrics.rouge_scorer` (and its `scoring`, `tokenizers` and `tokenize`) |
+| NLTK | nltk 3.10.4 | `import pyroid.nltk`, `pyroid.patch("nltk")`; `pyroid.metrics.rouge_scorer` for its Porter stemmer |
+| sacrebleu | sacrebleu 2.6.0 | `import pyroid.metrics.sacrebleu` |
+| json_repair | json-repair 0.64.9 | `import pyroid.json_repair` |
+| datasketch | datasketch 2.0.0 | `import pyroid.datasketch`, `pyroid.patch("datasketch")` |
+| jieba | jieba 0.42.1 | `import pyroid.jieba` |
+| Trafilatura | trafilatura 2.3.1, and 1.11.0 with `compat="1.11.0"` | `import pyroid.trafilatura`, `pyroid.patch("trafilatura")` |
+| warcio | warcio 1.8.2 | `import pyroid.warc`, `pyroid.patch("warcio")` |
+| NeMo Curator | nemo-curator 1.4.0 | `import pyroid.nemo` or `pyroid.integrations.nemo_curator`, `pyroid.patch("nemo_curator")` |
+
+With trafilatura 1.11.0 installed, `import pyroid.trafilatura` says to pass `compat="1.11.0"`.
+`pyroid.patch("trafilatura")`, datatrove's `Trafilatura` step and the FineWeb recipe choose the
+release themselves, so they warn only about a release pyroid does not reproduce.
+
 ## Interpreters and Unicode versions
 
 Results that depend on the Python version are matched per interpreter. That covers ftfy's and

@@ -50,7 +50,8 @@ delegates, are the real ftfy's when it is installed. Calls that pyroid hands to 
 (option values the Rust port does not support; ``_FastText()`` without a model file) go to the
 real one, never back to the shim, with the usual one-time :class:`pyroid.FallbackWarning`, or
 raise :class:`pyroid.PyroidError` if it is not installed. :func:`patch` warns once per process
-and name with :class:`PatchWarning`.
+and name with :class:`PatchWarning`, and, like importing the pyroid module, once per process
+with :class:`pyroid.VersionMismatchWarning` if the installed package is another release.
 
 Child processes: :func:`run` is ``pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]``. It
 patches ``NAMES`` (default ``$PYROID_PATCH``, else ``ftfy,fasttext``) and runs the target as
@@ -115,7 +116,7 @@ from dataclasses import dataclass, field
 from importlib.machinery import ModuleSpec
 from typing import Any
 
-from pyroid import FallbackWarning, PyroidError
+from pyroid import FallbackWarning, PyroidError, _versions
 
 __all__ = [
     "DEFAULT_RUN_NAMES",
@@ -159,8 +160,10 @@ class PatchWarning(UserWarning):
     """:func:`patch` replaced a module with pyroid's drop-in.
 
     Says what was patched, which version pyroid reproduces and how to undo it; shown once per
-    process for each name, plus once more if the installed package is another version. Silence
-    it with ``warnings.simplefilter("ignore", pyroid.integrations.PatchWarning)``.
+    process for each name. Silence it with
+    ``warnings.simplefilter("ignore", pyroid.integrations.PatchWarning)``. An installed package
+    of another version gets a :class:`pyroid.VersionMismatchWarning` instead, as importing the
+    pyroid module would.
     """
 
 
@@ -273,16 +276,14 @@ _Built = tuple[dict[str, types.ModuleType], list[Callable[[], None]]]
 
 @dataclass(frozen=True)
 class _Target:
-    impl: str  # the pyroid module providing the drop-in
+    # The pyroid module providing the drop-in. patch() imports it through _impl(), so the module's
+    # own _versions.check() at import is the patch-side version check: a new target needs no
+    # version code here, only that check in its module.
+    impl: str
     reproduces: str  # what it reproduces, for the warning
-    version_attr: str | None  # impl attribute: the real __version__ pyroid reproduces
     pip: str  # how to install the real package
     rest: str  # examples of what the real package still provides, for the warning
     build: Callable[[types.ModuleType, Any, str], _Built]
-    # impl attribute: the real versions pyroid reproduces as modes (no version warning for them)
-    modes_attr: str | None = None
-    # the installed version, from the real module (default: its __version__)
-    installed: Callable[[Any], str | None] | None = None
 
 
 def _caller_stacklevel() -> int:
@@ -760,25 +761,10 @@ def _build_nemo_curator(impl: types.ModuleType, real: Any, missing: str) -> _Bui
     return {}, [undo]
 
 
-def _distribution_version(name: str) -> Callable[[Any], str | None]:
-    """The installed version of distribution `name` (for packages without ``__version__``)."""
-
-    def installed(real: Any) -> str | None:
-        from importlib.metadata import PackageNotFoundError, version
-
-        try:
-            return version(name)
-        except PackageNotFoundError:
-            return None
-
-    return installed
-
-
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
         "which reproduces ftfy 6.3.1",
-        "FTFY_VERSION",
         "pip install ftfy==6.3.1",
         " (apply_plan, explain_unicode, fix_file, guess_bytes, ftfy.fixes and the other"
         " submodules)",
@@ -788,7 +774,6 @@ _TARGETS: dict[str, _Target] = {
         "pyroid.fasttext",
         "fastText 0.9.2's inference, as fasttext-predict 0.9.2.4: load_model, tokenize and "
         "FastText._FastText(path) give pyroid models",
-        None,
         "pip install fasttext-predict",
         " (training, ...)",
         _build_fasttext,
@@ -796,7 +781,6 @@ _TARGETS: dict[str, _Target] = {
     "anyascii": _Target(
         "pyroid.translit",
         "anyascii(), which reproduces anyascii 0.3.3",
-        "ANYASCII_VERSION",
         "pip install anyascii==0.3.3",
         "",
         _build_anyascii,
@@ -805,7 +789,6 @@ _TARGETS: dict[str, _Target] = {
         "pyroid.datasketch",
         "which reproduces datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, MinHashLSHForest "
         "and MinHashLSHEnsemble",
-        "DATASKETCH_VERSION",
         "pip install datasketch==2.0.0",
         " (WeightedMinHash, HyperLogLog, bBitMinHash, HNSW, MinHashLSHBloom, Redis and Cassandra"
         " storage)",
@@ -815,19 +798,16 @@ _TARGETS: dict[str, _Target] = {
         "pyroid.trafilatura",
         "which reproduces the extract and bare_extraction of trafilatura 2.3.1 or 1.11.0, "
         "following the installed release; options it does not port go to the installed one",
-        "TRAFILATURA_VERSION",
         "pip install trafilatura==2.3.1",
         " (metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the "
         "other submodules)",
         _build_trafilatura,
-        modes_attr="TRAFILATURA_VERSIONS",
     ),
     "nltk": _Target(
         "pyroid.nltk",
         "NLTK 3.10.4's sent_tokenize, word_tokenize, PunktSentenceTokenizer, PunktTokenizer, "
         "TreebankWordTokenizer, NLTKWordTokenizer, TreebankWordDetokenizer and the regexp "
         "tokenizers",
-        "NLTK_VERSION",
         "pip install nltk==3.10.4",
         " (training, tagging, corpora, the other tokenizers)",
         _build_nltk,
@@ -835,17 +815,14 @@ _TARGETS: dict[str, _Target] = {
     "warcio": _Target(
         "pyroid.warc",
         "which reproduces warcio 1.8.2's ArchiveIterator, WARCIterator and ARCIterator",
-        "WARCIO_VERSION",
         "pip install warcio==1.8.2",
         " (WARCWriter, capture_http, the indexer, the checker, the command line)",
         _build_warcio,
-        installed=_distribution_version("warcio"),
     ),
     "nemo_curator": _Target(
         "pyroid.integrations.nemo_curator",
         "whose ScoreFilter, Score, Filter and Modify stages, heuristic filters, fastText filters, "
         "UnicodeReformatter and string modifiers reproduce NeMo Curator 1.4.0's",
-        "NEMO_CURATOR_VERSION",
         "pip install nemo-curator==1.4.0",
         " (readers, writers, deduplication, classifiers, the other stages)",
         _build_nemo_curator,
@@ -913,8 +890,11 @@ def _check(names: Sequence[str]) -> list[str]:
     return out
 
 
-def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> None:
-    """The once-per-process PatchWarning(s) for `name`."""
+def _announce(name: str, real: Any, missing: str) -> None:
+    """The once-per-process PatchWarning for `name`.
+
+    The installed version was checked when :func:`_impl` imported the pyroid module.
+    """
     target = _TARGETS[name]
     if name not in _WARNED:
         _WARNED.add(name)
@@ -944,25 +924,16 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
             PatchWarning,
             stacklevel=_caller_stacklevel(),
         )
-    expected = getattr(impl, target.version_attr) if target.version_attr else None
-    if real is None:
-        found = None
-    elif target.installed is not None:
-        found = target.installed(real)
-    else:
-        found = getattr(real, "__version__", None)
-    modes = getattr(impl, target.modes_attr) if target.modes_attr else ()
-    if real is not None and expected is not None and found != expected and found not in modes:
-        key = f"{name}:version"
-        if key not in _WARNED:
-            _WARNED.add(key)
-            warnings.warn(
-                f"pyroid.integrations.patch: the installed {name} is {found or 'unversioned'}, "
-                f"but {target.impl} reproduces {name} {expected}: the patched functions give "
-                f"{name} {expected}'s results, the rest is {name} {found or '(unversioned)'}.",
-                PatchWarning,
-                stacklevel=_caller_stacklevel(),
-            )
+
+
+def _impl(name: str) -> types.ModuleType:
+    """The pyroid module behind `name`, imported (its import checks the installed version).
+
+    patch() follows the installed release where pyroid reproduces several (trafilatura), so
+    the check does not suggest a ``compat=`` there.
+    """
+    with _versions.follow_installed(name):
+        return importlib.import_module(_TARGETS[name].impl)
 
 
 def _install(name: str, *, warn: bool) -> None:
@@ -975,7 +946,7 @@ def _install(name: str, *, warn: bool) -> None:
                     sys.modules[key] = module
             return
         target = _TARGETS[name]
-        impl = importlib.import_module(target.impl)
+        impl = _impl(name)
         saved = {k: v for k, v in sys.modules.copy().items() if _owned(k, name)}
         real, missing = _real(name)
         try:
@@ -987,7 +958,7 @@ def _install(name: str, *, warn: bool) -> None:
         # Attributes swapped on the real modules (no shims): sys.modules stays as it is.
         _ACTIVE[name] = _Active(shims, saved if shims else None, undo)
         if warn:
-            _announce(name, impl, real, missing)
+            _announce(name, real, missing)
 
 
 def _restore(name: str, saved: dict[str, Any] | None, undo: list[Callable[[], None]]) -> None:
@@ -1023,14 +994,16 @@ def patch(*names: str) -> None:
             and ``pyroid.datasketch`` need numpy).
 
     Warns:
-        PatchWarning: Once per process for each name: what was patched and how to undo it;
-            and if the installed package is not the version pyroid reproduces.
+        PatchWarning: Once per process for each name: what was patched and how to undo it.
+        pyroid.VersionMismatchWarning: The installed package is not the release pyroid
+            reproduces (once per process for each package, shared with the pyroid modules'
+            own check at import).
     """
     if not names:
         raise TypeError(f"patch() needs at least one name: {', '.join(map(repr, SUPPORTED))}")
     checked = _check(names)
     for name in checked:  # fail before patching anything
-        importlib.import_module(_TARGETS[name].impl)
+        _impl(name)
     for name in checked:
         _install(name, warn=True)
 
@@ -1106,16 +1079,20 @@ def _apply(names: Sequence[str], *, lenient: bool) -> list[str]:
     warned = set(_split(os.environ.get(_WARNED_ENV, "")))
     done: list[str] = []
     for name in names:
-        try:
-            importlib.import_module(_TARGETS[name].impl)
-        except ImportError as exc:
-            if not lenient:
-                raise
-            warnings.warn(
-                f"pyroid: not patching {name}: {exc}", PatchWarning, stacklevel=_caller_stacklevel()
-            )
-            continue
-        _install(name, warn=name not in warned)
+        # A name the process tree already warned about: its version checks stay quiet too.
+        with _versions.quiet() if name in warned else contextlib.nullcontext():
+            try:
+                _impl(name)
+            except ImportError as exc:
+                if not lenient:
+                    raise
+                warnings.warn(
+                    f"pyroid: not patching {name}: {exc}",
+                    PatchWarning,
+                    stacklevel=_caller_stacklevel(),
+                )
+                continue
+            _install(name, warn=name not in warned)
         done.append(name)
     os.environ[_WARNED_ENV] = ",".join(n for n in SUPPORTED if n in warned or n in done)
     return done

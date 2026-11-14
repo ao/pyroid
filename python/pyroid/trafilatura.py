@@ -29,6 +29,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, cast
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning, PyroidError
 from pyroid._pyroid import trafilatura as _native
 
@@ -77,6 +78,19 @@ REPRODUCED_VERSIONS: Mapping[str, Mapping[str, str]] = MappingProxyType(
             }
         ),
     }
+)
+
+# An installed release that compat= reproduces gets a warning naming that compat= (pyroid.patch,
+# datatrove's Trafilatura step and the FineWeb recipe pick the release themselves: no warning).
+_versions.check(
+    __name__,
+    "trafilatura",
+    f"trafilatura=={TRAFILATURA_VERSION}",
+    modes={
+        f"trafilatura=={v}": f'compat="{v}"'
+        for v in TRAFILATURA_VERSIONS
+        if v != TRAFILATURA_VERSION
+    },
 )
 
 #: Functions that always run the real trafilatura (it must be installed; 2.3.1 only).

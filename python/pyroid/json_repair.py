@@ -18,6 +18,7 @@ import warnings
 from pathlib import Path
 from typing import Any, TextIO
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning, PyroidError
 from pyroid._pyroid import json_repair as _native
 
@@ -36,6 +37,7 @@ __all__ = [
 
 #: The json_repair release whose behaviour this module reproduces.
 JSON_REPAIR_VERSION = "0.64.9"
+_versions.check(__name__, "json_repair", f"json-repair=={JSON_REPAIR_VERSION}")
 
 #: Arguments that are always forwarded to the real json_repair (it must be installed).
 DELEGATED = ("schema",)
@@ -101,21 +103,6 @@ def _json_repair(name: str, reason: str) -> Any:
             f"json_repair is not installed to fall back to (pip install "
             f"json-repair=={JSON_REPAIR_VERSION})"
         )
-    if "version" not in _WARNED:
-        _WARNED.add("version")
-        from importlib import metadata
-
-        try:
-            version = metadata.version("json-repair")
-        except metadata.PackageNotFoundError:
-            version = None
-        if version is not None and version != JSON_REPAIR_VERSION:
-            warnings.warn(
-                f"pyroid.json_repair is falling back to json_repair {version}, "
-                f"not {JSON_REPAIR_VERSION}",
-                RuntimeWarning,
-                stacklevel=_caller_stacklevel(),
-            )
     if f"{name}:{reason}" not in _WARNED:
         _WARNED.add(f"{name}:{reason}")
         warnings.warn(

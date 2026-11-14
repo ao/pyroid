@@ -31,6 +31,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from importlib import import_module
 from typing import Any, ClassVar, NoReturn
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning, InputError, PyroidError
 from pyroid._pyroid import metrics as _native
 from pyroid._typing import ArrowStrings
@@ -72,6 +73,8 @@ __all__ = [
 #: The sacrebleu release whose API and results this module reproduces (also the
 #: ``version:`` field of signatures).
 __version__ = "2.6.0"
+
+_versions.check(__name__, "sacrebleu", f"sacrebleu=={__version__}")
 
 #: Names that are forwarded to the real sacrebleu (it must be installed).
 DELEGATED = (
@@ -133,13 +136,6 @@ def _sacrebleu(name: str, reason: str) -> Any:
             f"pyroid.metrics.sacrebleu.{name}: {reason} is not supported by pyroid's Rust "
             "port, and sacrebleu is not installed to fall back to (pip install sacrebleu==2.6.0)"
         ) from None
-    if real.__version__ != __version__ and _first_time("version"):
-        warnings.warn(
-            f"pyroid.metrics.sacrebleu is falling back to sacrebleu {real.__version__}, "
-            f"not {__version__}",
-            RuntimeWarning,
-            stacklevel=_caller_stacklevel(),
-        )
     if _first_time(f"{name}:{reason}"):
         warnings.warn(
             f"pyroid.metrics.sacrebleu.{name}: {reason} is not supported by the Rust port; "
