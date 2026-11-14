@@ -511,11 +511,11 @@ def _native_load_one(stream: Any, mode: str, reads: list[Any]) -> Any:
     name = getattr(stream, "name", "<file>")
     reads.extend(_read_all(stream))
     first = reads[0]
-    if isinstance(first, bytes) and first.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+    data = first[:0].join(reads) if isinstance(first, (str, bytes)) else "".join(reads)
+    if isinstance(data, bytes) and data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
         text, pending = _emulate_reader(reads, name)
         limit = len(text) if pending is not None else None
         return _native.load(text, name, False, limit, pending, depth, digits, full)
-    data = first[:0].join(reads) if isinstance(first, (str, bytes)) else "".join(reads)
     try:
         return _native.load(data, name, False, None, None, depth, digits, full)
     except (ReaderError, UnicodeEncodeError):
@@ -589,10 +589,10 @@ def _native_load_all(stream: Any) -> Any:
     name = getattr(stream, "name", "<file>")
     reads = _read_all(stream)
     first = reads[0]
-    if isinstance(first, bytes) and first.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+    data = first[:0].join(reads) if isinstance(first, (str, bytes)) else "".join(reads)
+    if isinstance(data, bytes) and data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
         text, pending = _emulate_reader(reads, name)
         return start(text, name, False, len(text) if pending else None, pending, depth, digits)
-    data = first[:0].join(reads) if isinstance(first, (str, bytes)) else "".join(reads)
     try:
         return start(data, name, False, None, None, depth, digits)
     except (ReaderError, UnicodeEncodeError):
