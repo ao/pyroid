@@ -26,10 +26,14 @@ The pool is created on first use, not at import. Its size comes from the `PYROID
 environment variable, read once at that point. If it is unset, rayon's default applies
 (`RAYON_NUM_THREADS`, else the number of available CPUs).
 
-Results never depend on `threads`: the same input gives the same output for every value. Batches
-of 64 documents or fewer run on the calling thread, where the pool's overhead would cost more
-than it saves. Worker threads do not survive `fork()`, so the pool is rebuilt in a forked child
-process.
+Results never depend on `threads`: the same input gives the same output for every value.
+
+Each task on the pool holds at least 64 documents, because handing out a task costs more than a
+few documents' work. So a batch of `n` documents uses at most `n / 64` threads: fewer than 128
+documents run on the calling thread whatever `threads` says, 128 documents use two threads, and
+eight threads need 512 documents or more. To spread a smaller batch of slow documents over
+cores, call pyroid from several Python threads instead, on a free-threaded build. Worker threads do not survive `fork()`, so the pool is rebuilt
+in a forked child process.
 
 ## The GIL
 

@@ -51,7 +51,7 @@ t.normalize_whitespace(docs, threads=4)  # at most 4 tasks at once on the shared
 - **`threads=`** (keyword-only, default `None`): `None` = the whole shared pool
   (sized by `PYROID_NUM_THREADS`, else rayon's default); `n` = at most `n` tasks at once;
   `1` = run on the calling thread. The pool is built on first use and rebuilt in a
-  forked child. Batches of ≤ 64 docs always run on the calling thread.
+  forked child. Tasks hold at least 64 docs, so batches of < 128 docs run on the calling thread.
 - **`pyroid.Column`**: zero-dependency result type; `len()`, `.type`, `.name` (carried over
   from the input field), `.null_count`, `.num_chunks`, `.to_pylist()`,
   `__arrow_c_stream__`, `__arrow_c_array__` (concatenates chunks). pyarrow is never
