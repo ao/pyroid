@@ -49,6 +49,38 @@ back after such a call can take up to the interpreter's switch interval
 busy threads around, one call per document can be many times slower than alone; a batch call
 releases and retakes the GIL once for the whole batch.
 
+## Ctrl-C
+
+A batch runs without the GIL, so Python cannot run its signal handlers while it works. pyroid runs
+them itself: every 100 ms the thread that made the call runs the pending handlers, and if one
+raises (`KeyboardInterrupt` for Ctrl-C), the batch stops at its next document and the call raises
+that exception. The result so far is thrown away, and objects such as a `MinHashLSH` or a
+`MinHashDedup` keep their state from before the call. Two keep what was done: a trafilatura
+`LRUCache` holds the pages extracted so far, as after an interrupted loop of `extract` calls, and
+a MinHash signature writer interrupted in `finish()` has to be started again. A handler that
+returns lets the batch go on.
+Only the main thread runs signal handlers, as in Python, so a batch on another thread runs to its
+end. A single document is not interrupted halfway, so a very long one finishes first.
+
+## Memory after a call
+
+Each pool thread keeps a few buffers between calls so that a batch allocates little per
+document: the spaCy tokenizer's cache of up to 16,384 word spans per language (about 2 MiB when
+full), and scratch buffers of up to 1 MiB each, which are given back when a long document made
+them bigger. On a machine with many cores the pool has as many threads, and their buffers add up:
+after `gopher_quality` on 100k FineWeb documents with 64 threads, RSS stayed about 240 MiB above
+where it was with Arrow input (EC2 c8g.16xlarge, shared, indicative). Two more things keep memory
+after a call:
+
+- A list of `str` that is not ASCII gets a UTF-8 copy of each string, which CPython keeps inside
+  the string object until the string is freed (pyroid reads text as UTF-8). That was another
+  240 MiB for those 100k documents. Arrow input has no such copy.
+- The C allocator keeps freed memory per thread for reuse. With glibc, `MALLOC_ARENA_MAX=2` in the
+  environment, or `ctypes.CDLL("libc.so.6").malloc_trim(0)` after a large call, gives more of it
+  back to the system.
+
+`threads=` caps how many pool threads a call uses, and `PYROID_NUM_THREADS` the size of the pool.
+
 ## Free-threaded Python
 
 pyroid ships `cp314t` and `abi3t` wheels for free-threaded CPython 3.14t and 3.15t, and declares
