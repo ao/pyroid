@@ -17,6 +17,7 @@ import pickle
 import sys
 import threading
 import types
+import warnings
 import zlib
 from collections.abc import Callable
 from pathlib import Path
@@ -732,8 +733,8 @@ def test_input_delegation_without_trafilatura_raises(no_trafilatura: None) -> No
     class Response:
         data = page.encode()
 
-    with pytest.raises(pyroid.PyroidError, match="a response object input"):
-        pt.extract(Response())
+    # A response's data is read natively, as trafilatura's load_html reads it.
+    assert pt.extract(Response()) == pt.extract(page)
     cfg = configparser.ConfigParser()
     cfg.read_dict({"DEFAULT": dict(pt.DEFAULT_CONFIG["DEFAULT"])})
     cfg.set("DEFAULT", "MIN_DUPLCHECK_SIZE", "-1")
@@ -1068,3 +1069,23 @@ def test_div_soup_memory_is_linear(run_python: Callable[..., Any], compat: str) 
     n, grew = (int(x) for x in proc.stdout.split())
     assert n == 64_000 * 17 - 1
     assert grew < 800, f"{grew} MiB"
+
+
+@pytest.mark.thread_unsafe(reason="sets a warnings filter")
+def test_response_objects_are_read_natively() -> None:
+    # load_html reads `data` from anything that has it (an HTTP response, but also numpy.str_
+    # and numpy.bytes_, whose `data` is a memoryview: TypeError, caught, so None).
+    np = pytest.importorskip("numpy")
+    page = "<html><body><article><p>" + "The council met on Tuesday to discuss the park. " * 5
+    page += "</p></article></body></html>"
+
+    class Response:
+        data = page.encode()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pyroid.FallbackWarning)
+        for compat in ("2.3.1", "1.11.0"):
+            assert pt.extract(Response(), compat=compat) == pt.extract(page, compat=compat)
+            assert pt.extract(np.str_("hello world"), compat=compat) is None
+            assert pt.extract(np.bytes_(b"hello world"), compat=compat) is None
+            assert pt.bare_extraction(np.str_(page), compat=compat) is None

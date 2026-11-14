@@ -312,13 +312,13 @@ def _trafilatura(name: str, reason: str, mode: str) -> Any:
     pip = f"pip install trafilatura=={mode}"
     if real is None:
         raise PyroidError(
-            f"pyroid.trafilatura.{name}: {reason} is not supported by pyroid's Rust port, and "
+            f"pyroid.trafilatura.{name}: pyroid's Rust port does not handle {reason}, and "
             f"trafilatura is not installed to fall back to ({pip})"
         )
     found = getattr(real, "__version__", None)
     if found != mode:
         raise PyroidError(
-            f"pyroid.trafilatura.{name}: {reason} is not supported by pyroid's Rust port, and "
+            f"pyroid.trafilatura.{name}: pyroid's Rust port does not handle {reason}, and "
             f"the installed trafilatura is {found or 'unversioned'}, not {mode} (the version "
             f"this call reproduces), so it cannot stand in ({pip}, or pass compat= the "
             "installed version if pyroid supports it)"
@@ -328,7 +328,7 @@ def _trafilatura(name: str, reason: str, mode: str) -> Any:
     if key not in _WARNED:
         _WARNED.add(key)
         warnings.warn(
-            f"pyroid.trafilatura.{where}: {reason} is not supported by the Rust port; "
+            f"pyroid.trafilatura.{where}: the Rust port does not handle {reason}; "
             f"delegating to trafilatura {mode} (slow path). This warning is shown once.",
             FallbackWarning,
             stacklevel=_caller_stacklevel(),
@@ -414,16 +414,32 @@ def _call_real(fn: Callable[..., Any], cache: Any, args: dict[str, Any], mode: s
 
 
 def _input_reason(filecontent: object) -> str | None:
-    """Why a non-str input must be delegated (lxml trees, responses), or None."""
+    """Why a non-str input must be delegated (lxml trees), or None."""
     kind = type(filecontent)
     if kind is str or kind is bytes:
         return None
     lxml_html = _loaded("lxml.html")
     if lxml_html is not None and isinstance(filecontent, lxml_html.HtmlElement):
         return "an lxml tree input"
-    if hasattr(filecontent, "data"):
-        return "a response object input"
     return None
+
+
+#: load_html would raise TypeError for this input (and the call catches it: None).
+_NOT_HTML: Any = object()
+
+
+def _response_data(filecontent: Any) -> Any:
+    """What load_html reads: a response's ``data`` (any object with one but an lxml tree, as
+    trafilatura's check goes, so also ``numpy.str_``), else the input itself. ``_NOT_HTML``
+    where that ``data`` is neither str nor bytes."""
+    kind = type(filecontent)
+    if kind is str or kind is bytes or not hasattr(filecontent, "data"):
+        return filecontent
+    lxml_html = _loaded("lxml.html")
+    if lxml_html is not None and isinstance(filecontent, lxml_html.HtmlElement):
+        return filecontent
+    data = filecontent.data
+    return data if isinstance(data, (str, bytes)) else _NOT_HTML
 
 
 def _option_reason(args: dict[str, Any], python_format: bool) -> str | None:
@@ -973,6 +989,9 @@ def extract(  # noqa: D417  # **kwargs is compat="1.11.0" only, and the stub is 
             raise NameError(
                 'Deprecated argument: use output_format instead, e.g. output_format="xml"'
             )
+    filecontent = args["filecontent"] = _response_data(filecontent)
+    if filecontent is _NOT_HTML:
+        return None
     if mode == V1_11:
         return _extract_111(args)
     reason = _option_reason(args, python_format=False)
@@ -1382,6 +1401,9 @@ def bare_extraction(
     mode = _mode(compat)
     if as_dict is _UNSET:  # each release's default: 2.3.1 False, 1.11.0 True
         as_dict = args["as_dict"] = mode == V1_11
+    filecontent = args["filecontent"] = _response_data(filecontent)
+    if filecontent is _NOT_HTML:
+        return None
     if mode == V1_11:
         return _bare_111(args)
     reason = _option_reason(args, python_format=True)
