@@ -243,6 +243,16 @@ def test_load_and_from_file(tmp_path: Path) -> None:
     assert jr.repair_json(json_fd=io.StringIO(doc)) == ref.repair_json(json_fd=io.StringIO(doc))
 
 
+@pytest.mark.parametrize("unit", ["[", '{"a":', '{"a":[', "[{", "{[", "[[{", "[{["])
+def test_max_depth_counts_levels_in_any_mix(unit: str) -> None:
+    # An empty object re-read as an array is one level: "[{" * 334 used to raise at 668.
+    per = unit.count("[") + unit.count("{")
+    n = jr.MAX_DEPTH // per
+    assert isinstance(jr.repair_json(unit * n), str)
+    with pytest.raises(jr.NestingError):
+        jr.repair_json(unit * (n + 1))
+
+
 def test_nesting_error() -> None:
     assert issubclass(jr.NestingError, pyroid.PyroidError)
     assert issubclass(jr.NestingError, ValueError)

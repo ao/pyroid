@@ -274,6 +274,39 @@ mod tests {
         );
     }
 
+    /// `MAX_DEPTH` counts the arrays and objects that nest, whatever their mix: an empty
+    /// object that the parser reads again as an array (`[{[{`) is one level, not two (it
+    /// raised at 668 levels). (A `{` in key position is skipped, so `{{` is one level.)
+    #[test]
+    fn max_depth_counts_levels_in_every_shape() {
+        let (o, d) = (opts(), DumpOptions::default());
+        for unit in [
+            "[",
+            "{\"a\":",
+            "{\"a\":[",
+            "[{",
+            "{[",
+            "[[{",
+            "[{[",
+            "[{\"a\": ",
+        ] {
+            let per = unit.chars().filter(|c| matches!(c, '[' | '{')).count();
+            let n = super::MAX_DEPTH / per;
+            assert!(
+                repair_json(&unit.repeat(n), &o, &d).is_ok(),
+                "{unit:?} x {n} ({} levels)",
+                n * per
+            );
+            assert_eq!(
+                repair_json(&unit.repeat(n + 1), &o, &d),
+                Err(RepairError::Parse(ParseError::Depth)),
+                "{unit:?} x {} ({} levels)",
+                n + 1,
+                (n + 1) * per
+            );
+        }
+    }
+
     /// A deep valid prefix (`raw_decode` builds it without a depth limit) that the parser
     /// then fails on or discards must be dropped iteratively: a recursive drop of a million
     /// levels overflowed the stack and killed the process.

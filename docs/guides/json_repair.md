@@ -95,17 +95,20 @@ It takes a `str`, a `list` or `tuple` of `str`, or an Arrow string column (pyarr
 [`pyroid.Column`](../reference/pyroid.md#pyroid.Column), with nulls kept. In strict mode a
 failing document raises for the whole batch, and the exception's note names its index or row.
 
+`json.dumps` arguments other than `ensure_ascii`, `indent`, `separators`, `sort_keys` and
+`allow_nan` work for `str`, `list` and `tuple` input only (one `repair_json` call per document).
+
 An Arrow column cannot hold lone surrogates. json_repair keeps an escape such as `\ud800` as a
 lone surrogate, and so does an escaped pair such as `\ud83d\ude00` when its own parser reads it.
 With the default `ensure_ascii=True` the result writes it back as the escape, so nothing changes.
 With `ensure_ascii=False`, Arrow input raises `UnicodeEncodeError` for such a result, and the
 note names the row; pass a list to get json_repair's `str`.
-`json.dumps` arguments other than `ensure_ascii`, `indent`, `separators`, `sort_keys` and
-`allow_nan` work for `str`, `list` and `tuple` input only (one `repair_json` call per document).
 
 ## Deep nesting: `NestingError`
 
-pyroid's parser follows up to `MAX_DEPTH` (1,000) levels of broken nesting. Deeper input raises
+pyroid's parser follows up to `MAX_DEPTH` (1,000) levels of broken nesting: arrays and objects
+in any mix, where an object that json_repair reads again as an array (`[{[{`) is one level. Deeper
+input raises
 `NestingError`, which is a [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError), a
 `ValueError` and a `RecursionError`, so `except` clauses written for json_repair still catch it.
 json_repair itself raises `ValueError` past about 140 to 330 levels, depending on
