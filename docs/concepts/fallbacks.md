@@ -23,6 +23,7 @@ So the result is always the incumbent's. The warning tells you that this call to
 | `pyroid.translit` | never | — |
 | `pyroid.metrics` | ROUGE: tokens from a custom tokenizer that are not lists of `str` (to rouge-score). sacrebleu: the `ja-mecab`, `ko-mecab`, `spm`, `flores101`, `flores200` and `spBLEU-1K` tokenizers, `n_bootstrap > 1`, TER, `DATASETS` and the test-set helpers (`pyroid.metrics.sacrebleu.DELEGATED`) | — |
 | `pyroid.json_repair` | `schema=` calls, non-`str` input, and text holding a character in U+10F800..U+10FFFF (the range the port uses to store lone surrogates) | `repair_json_batch` on Arrow input raises `PyroidError` for those characters instead of delegating (pass a list) |
+| `pyroid.dateutil` | a `parser` or `parserinfo` subclass that overrides a method, a parserinfo whose tables are not dicts of `str` to small `int`s, numbers past 64 bits or fractions over 26 significant digits, a `decimal` context with too little precision, an odd text stream; these run pyroid's copy of dateutil 4.0.0's parser, so python-dateutil need not be installed | — |
 | `pyroid.trafilatura` | the other output formats, `include_formatting`, `include_links`, `include_images`, metadata (`with_metadata`, `url_blacklist`, `extract_with_metadata`, ...), `target_language`, `prune_xpath`, `options=`, a trafilatura `LRUCache`, an lxml tree or HTTP response as input, bytes that are compressed or not UTF-8 ([the list](../guides/trafilatura.md#delegated-options)) | the installed trafilatura must be the mode's release (2.3.1, or 1.11.0 with `compat="1.11.0"`); without it, or with another version, these calls raise `PyroidError` |
 | `pyroid.nltk` | Punkt training (`PunktTrainer`, `PunktSentenceTokenizer(train_text)`), a custom `token_cls`, a `PunktLanguageVars` subclass that changes more than `sent_end_chars`, parameters that are not sets of `str`, `dump()` and saving parameters, a Treebank tokenizer whose patterns were changed, a `RegexpTokenizer` pattern that is not one of the native ones | — |
 | `pyroid.jieba` | `pyroid.jieba.posseg`, `pyroid.jieba.analyse`, paddle mode, and `get_dict_file()` for the default dictionary | — |
@@ -78,6 +79,6 @@ a Python whose `unicodedata` is newer than the Unicode tables pyroid ships (17.0
 ## `pyroid.patch()` warns too
 
 [`pyroid.patch()`](../guides/patch.md) is not a fallback but the opposite: it makes code that
-imports ftfy, fastText, anyascii, datasketch, trafilatura or NLTK get pyroid's functions instead.
+imports ftfy, fastText, anyascii, datasketch, trafilatura, NLTK, warcio or dateutil get pyroid's functions instead.
 It announces that with its own `PatchWarning`, once per process for each patched name, so you can
 tell the two apart.

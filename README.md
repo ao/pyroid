@@ -40,6 +40,7 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 | | [`pyroid.nemo`](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
 | Evaluation | [`pyroid.metrics`](https://ataiva.com/open-source/pyroid/docs/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
 | JSON | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.5 |
+| Dates | [`pyroid.dateutil.parser`](https://ataiva.com/open-source/pyroid/docs/guides/dateutil/) | python-dateutil's `parse` and `isoparse` (4.0.0, 3.0.0 and 2.9.0.post0) |
 
 ## Example: cleaning LLM training data
 
@@ -207,7 +208,8 @@ expression is
   (with its dictionary) and libxml2 (the HTML parser);
 - BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists);
 - BSD-3-Clause: numpy's random generator (for C4 bad words), scipy's QUADPACK integration (for
-  MinHashLSH's parameters), tldextract and lxml;
+  MinHashLSH's parameters), tldextract, lxml and python-dateutil (its later contributions are
+  also Apache-2.0);
 - PSF-2.0: CPython's `ipaddress` (IPv6 parsing);
 - ISC: anyascii's transliteration data;
 - Unicode-3.0: data from the Unicode Character Database;
