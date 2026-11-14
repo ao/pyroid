@@ -6,6 +6,7 @@ class and its ``str()`` (message and marks), and dumped text byte for byte.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import io
 import sys
@@ -21,8 +22,11 @@ def _helpers() -> Any:
     """python/tests/_yaml_util.py (CI imports tests with --import-mode=importlib)."""
     name = "_yaml_util"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name("_yaml_util.py"))
-        assert spec is not None and spec.loader is not None
+        spec = importlib.util.spec_from_file_location(
+            name, Path(__file__).with_name("_yaml_util.py")
+        )
+        assert spec is not None
+        assert spec.loader is not None
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
         spec.loader.exec_module(module)
@@ -46,9 +50,28 @@ import pyroid.yaml as py  # noqa: E402
 pytestmark = pytest.mark.filterwarnings("ignore::pyroid.FallbackWarning")
 
 DATA = Path(__file__).resolve().parents[2] / "parity" / "data" / "pyyaml-6.0.3" / "data"
-EXTENSIONS = (".data", ".canonical", ".loader-error", ".single-loader-error", ".detect", ".unicode",
-              ".code", ".structure", ".tokens", ".events", ".error", ".stream-error", ".path")
+EXTENSIONS = (
+    ".data",
+    ".canonical",
+    ".loader-error",
+    ".single-loader-error",
+    ".detect",
+    ".unicode",
+    ".code",
+    ".structure",
+    ".tokens",
+    ".events",
+    ".error",
+    ".stream-error",
+    ".path",
+)
 FILES = sorted(p for p in DATA.glob("*") if p.suffix in EXTENSIONS) if DATA.is_dir() else []
+SUITE = DATA.parents[1] / "yaml-test-suite-data-2022-01-17"
+SUITE_FILES = (
+    sorted(p for name in ("in.yaml", "out.yaml", "emit.yaml") for p in SUITE.rglob(name))
+    if SUITE.is_dir()
+    else []
+)
 
 
 def ref_load(stream: Any) -> Any:
@@ -61,10 +84,8 @@ def ref_load_all(stream: Any) -> Any:
 
 def inputs(raw: bytes) -> list[tuple[str, Any]]:
     out: list[tuple[str, Any]] = [("bytes", raw)]
-    try:
+    with contextlib.suppress(UnicodeDecodeError):
         out.append(("str", raw.decode("utf-8")))
-    except UnicodeDecodeError:
-        pass
     return out
 
 
@@ -76,22 +97,54 @@ def test_pyyaml_test_data_loads(path: Path) -> None:
         assert load_outcome(py.safe_load, value) == load_outcome(ref_load, value)
         assert load_outcome(py.safe_load_all, value) == load_outcome(ref_load_all, value)
     # File objects, read 4096 bytes at a time by both, and in small pieces.
-    for make in (lambda: io.BytesIO(raw), lambda: Chunked(raw, 7), lambda: Chunked(raw.decode("latin-1"), 3)):
+    for make in (
+        lambda: io.BytesIO(raw),
+        lambda: Chunked(raw, 7),
+        lambda: Chunked(raw.decode("latin-1"), 3),
+    ):
         assert load_outcome(py.safe_load, make()) == load_outcome(ref_load, make())
         assert load_outcome(py.safe_load_all, make()) == load_outcome(ref_load_all, make())
 
 
 @pytest.mark.skipif(not FILES, reason="needs parity/data/pyyaml-6.0.3 (a source checkout)")
-@pytest.mark.parametrize("path", [p for p in FILES if p.suffix in (".data", ".canonical")], ids=lambda p: p.name)
+@pytest.mark.parametrize(
+    "path", [p for p in FILES if p.suffix in (".data", ".canonical")], ids=lambda p: p.name
+)
 def test_pyyaml_test_data_dumps(path: Path) -> None:
     try:
         docs = list(yaml.load_all(path.read_bytes(), Loader=yaml.SafeLoader))
     except yaml.YAMLError:
         pytest.skip("not loadable")
-    for opts in ({}, {"default_flow_style": None}, {"canonical": True}, {"allow_unicode": True, "width": 20},
-                 {"sort_keys": False, "indent": 4, "explicit_start": True}, {"default_style": '"'}):
+    for opts in (
+        {},
+        {"default_flow_style": None},
+        {"canonical": True},
+        {"allow_unicode": True, "width": 20},
+        {"sort_keys": False, "indent": 4, "explicit_start": True},
+        {"default_style": '"'},
+    ):
         assert outcome(py.safe_dump_all, docs, **opts) == outcome(yaml.safe_dump_all, docs, **opts)
         assert outcome(py.dump_all, docs, **opts) == outcome(yaml.dump_all, docs, **opts)
+
+
+@pytest.mark.skipif(
+    not SUITE_FILES, reason="needs parity/data/yaml-test-suite-* (a source checkout)"
+)
+@pytest.mark.parametrize("path", SUITE_FILES, ids=lambda p: str(p.relative_to(SUITE)))
+def test_yaml_test_suite(path: Path) -> None:
+    raw = path.read_bytes()
+    for _, value in inputs(raw):
+        assert load_outcome(py.safe_load, value) == load_outcome(ref_load, value)
+        assert load_outcome(py.safe_load_all, value) == load_outcome(ref_load_all, value)
+    assert load_outcome(py.safe_load_all, Chunked(raw, 5)) == load_outcome(
+        ref_load_all, Chunked(raw, 5)
+    )
+    try:
+        docs = list(yaml.load_all(raw, Loader=yaml.SafeLoader))
+    except yaml.YAMLError:
+        return
+    for opts in ({}, {"default_flow_style": None, "allow_unicode": True}, {"canonical": True}):
+        assert outcome(py.safe_dump_all, docs, **opts) == outcome(yaml.safe_dump_all, docs, **opts)
 
 
 @settings(suppress_health_check=list(HealthCheck), deadline=None)
@@ -109,7 +162,16 @@ def test_random_dumps(doc: Any, opts: dict[str, Any], share: bool) -> None:
         doc = [doc, doc, [doc]]
     assert outcome(py.safe_dump, doc, **opts) == outcome(yaml.safe_dump, doc, **opts)
     assert outcome(py.dump, doc, **opts) == outcome(yaml.dump, doc, **opts)
-    assert outcome(py.safe_dump_all, [doc, doc], **opts) == outcome(yaml.safe_dump_all, [doc, doc], **opts)
+    assert outcome(py.safe_dump_all, [doc, doc], **opts) == outcome(
+        yaml.safe_dump_all, [doc, doc], **opts
+    )
+
+
+@given(st.integers(-(10**9), 10**9), st.integers(1, 60))
+def test_float_text_ties(n: int, k: int) -> None:
+    # Dyadic values often sit exactly between two shortest decimals; repr rounds to even.
+    x = n / 2**k
+    assert py.safe_dump([x, -x, x * 1e20, x / 1e20]) == yaml.safe_dump([x, -x, x * 1e20, x / 1e20])
 
 
 @settings(suppress_health_check=list(HealthCheck), deadline=None)
@@ -123,7 +185,7 @@ def test_round_trip(doc: Any) -> None:
     "text",
     [
         "a: 1\nb: [x, 'y']\n",
-        "- !!int ' 0x1F '\n- !!float '١٫٥'\n",
+        "- !!int ' 0x1F '\n- !!float '١٫٥'\n",  # noqa: RUF001 - Arabic-Indic digits
         "!!bool maybe",
         "!!int ''",
         "!!int 0b",
@@ -147,9 +209,9 @@ def test_round_trip(doc: Any) -> None:
         "{.nan: 1, .NaN: 2}",
         "{1: a, 1.0: b, true: c}",
         "[[1]]: x",
-        "\"\\ud800\\udc00\"",
-        "\"\\U00110000\"",
-        "\"\\Uffffffff\"",
+        '"\\ud800\\udc00"',
+        '"\\U00110000"',
+        '"\\Uffffffff"',
         "%YAML 2.0\n--- x",
         "%YAML 1.1\n%YAML 1.1\n--- x",
         "%TAG ! a\n%TAG ! b\n--- x",
@@ -186,13 +248,19 @@ def test_edge_cases(text: str) -> None:
 def test_reader_errors(raw: bytes) -> None:
     assert load_outcome(py.safe_load, raw) == load_outcome(ref_load, raw)
     for size in (4096, 1, 2, 3, 4000, 5000):
-        assert load_outcome(py.safe_load_all, Chunked(raw, size)) == load_outcome(ref_load_all, Chunked(raw, size))
+        assert load_outcome(py.safe_load_all, Chunked(raw, size)) == load_outcome(
+            ref_load_all, Chunked(raw, size)
+        )
     text = raw.decode("latin-1")
     for size in (4096, 7):
-        assert load_outcome(py.safe_load, Chunked(text, size)) == load_outcome(ref_load, Chunked(text, size))
+        assert load_outcome(py.safe_load, Chunked(text, size)) == load_outcome(
+            ref_load, Chunked(text, size)
+        )
 
 
-@pytest.mark.parametrize("loader", ["SafeLoader", "CSafeLoader", "FullLoader", "Loader", "UnsafeLoader"])
+@pytest.mark.parametrize(
+    "loader", ["SafeLoader", "CSafeLoader", "FullLoader", "Loader", "UnsafeLoader"]
+)
 def test_stock_loaders(loader: str) -> None:
     cls = getattr(yaml, loader, None)
     if cls is None:
