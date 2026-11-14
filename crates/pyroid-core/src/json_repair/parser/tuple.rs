@@ -1,4 +1,4 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! `parenthesized_is_explicit_tuple` in linear time for nested tuples.
 //!
 //! json_repair scans from every `(` it parses to the first `)` or `,` at its

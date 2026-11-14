@@ -11,9 +11,13 @@ from __future__ import annotations
 import abc
 from typing import Any
 
-from pyroid.metrics.tokenize import _tokens
+from pyroid import _versions
+from pyroid.metrics.tokenize import _NLTK, _ROUGE_SCORE, _tokens
 
 __all__ = ["DefaultTokenizer", "Tokenizer"]
+
+_versions.check(__name__, "rouge_score", _ROUGE_SCORE)
+_versions.check(__name__, "nltk", _NLTK)  # DefaultTokenizer(use_stemmer=True)
 
 
 class Tokenizer(abc.ABC):

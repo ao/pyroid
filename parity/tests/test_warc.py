@@ -76,7 +76,7 @@ from pyroid_parity import warc_datatrove as T
 from pyroid_parity import warc_pins as P
 from pyroid_parity import warc_strategies as WS
 from pyroid_parity import warc_synth as S
-from pyroid_parity.plugin import _impl, reference
+from pyroid_parity.plugin import _impl, oracle_pin, reference
 from pyroid_parity.report import Collector
 
 SUITE = "warc"
@@ -167,14 +167,14 @@ def save_repro(job_name: str, path: Path, config: str, check: str, diff: C.Diff 
 
 def test_oracle_versions(parity: Collector) -> None:
     missing, bad = [], []
-    for dist, want in ORACLE.items():
+    for dist, pin in ORACLE.items():
         try:
             got = md.version(dist)
         except md.PackageNotFoundError:
             missing.append(dist)
             continue
-        if got != want:
-            bad.append(f"{dist} {got} (pinned {want})")
+        if got != (want := oracle_pin(dist, pin)):
+            bad.append(f"{dist} {got} (expected {want})")
     parity.record(SUITE, "oracle", not bad, got=bad, want=ORACLE)
     assert not bad, f"oracle versions differ from the pins: {bad}"
     if missing:
@@ -702,8 +702,8 @@ def test_api_names(warc_impl: Any, parity: Collector) -> None:
     missing = [n for n in NAMES if not hasattr(mod, n)]
     parity.record(SUITE, "api-names", not missing, got=missing, want=[])
     assert not missing
-    v = getattr(mod, "WARCIO_VERSION", None)
-    assert parity.record(SUITE, "api-names", v == "1.8.2", case="WARCIO_VERSION", got=v, want="1.8.2")
+    v, want = getattr(mod, "WARCIO_VERSION", None), oracle_pin("warcio", W.WARCIO_VERSION)
+    assert parity.record(SUITE, "api-names", v == want, case="WARCIO_VERSION", got=v, want=want)
     assert parity.record(
         SUITE,
         "api-names",

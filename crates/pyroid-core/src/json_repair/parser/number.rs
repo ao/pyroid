@@ -1,8 +1,8 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! `parse_number.py`.
 
 use super::super::value::{Int, Value};
-use super::{Ctx, Parser, R};
+use super::{Ctx, ParseError, Parser, R};
 
 /// `NUMBER_CHARS`.
 #[inline]
@@ -66,6 +66,13 @@ impl Parser<'_> {
             if !ok || (is_array && c == ',') {
                 break;
             }
+            if c == ','
+                && self.ctx_current() == Some(Ctx::ObjectValue)
+                && self.get_char_at(1) == Some(',')
+            {
+                self.skip_consecutive_commas()?;
+                break;
+            }
             if c != '_' {
                 number_str.push(c);
             }
@@ -77,10 +84,34 @@ impl Parser<'_> {
             self.index = number_start_index;
             return self.parse_string();
         }
-        if number_str
-            .chars()
-            .last()
-            .is_some_and(|c| matches!(c, '+' | '-' | 'e' | 'E' | '/' | ','))
+        // number_str is ASCII (NUMBER_CHARS and '+'), so byte offsets are char offsets.
+        let trailing_comma = number_str.ends_with(',');
+        if trailing_comma {
+            number_str.pop();
+            self.index -= 1;
+        }
+        let mut exponent_start = number_str.len() as isize - 1;
+        if number_str.ends_with(['+', '-']) {
+            exponent_start -= 1;
+        }
+        let mut repaired_exponent = false;
+        if exponent_start > 0
+            && matches!(number_str.as_bytes()[exponent_start as usize], b'e' | b'E')
+            && py_float(&number_str[..exponent_start as usize]).is_some()
+        {
+            self.log(|| "Discarded dangling exponent from number".into());
+            if self.strict {
+                return Err(ParseError::Strict("Dangling exponent in strict mode."));
+            }
+            number_str.truncate(exponent_start as usize);
+            repaired_exponent = true;
+        }
+        if !repaired_exponent
+            && !trailing_comma
+            && number_str
+                .chars()
+                .last()
+                .is_some_and(|c| matches!(c, '+' | '-' | 'e' | 'E' | '/'))
         {
             // The number ends with a non valid character for a number/currency.
             number_str.pop();
@@ -99,6 +130,42 @@ impl Parser<'_> {
             Ok(i) => Value::Int(i),
             Err(_) => Value::Str(number_str),
         })
+    }
+
+    /// `parse_number`'s consecutive-commas branch: at the first of two commas after
+    /// an object value's number. Moves to the comma after a stray number when a
+    /// quoted key follows it (`{"a": 1,,2, "b": 3}`).
+    fn skip_consecutive_commas(&mut self) -> R<()> {
+        self.log(|| "Found consecutive commas after an object number".into());
+        if self.strict {
+            return Err(ParseError::Strict(
+                "Consecutive commas after an object number in strict mode.",
+            ));
+        }
+        let mut offset = 2;
+        while self.opt_space(self.get_char_at(offset)) {
+            offset += 1;
+        }
+        let digit_start = offset;
+        while self.get_char_at(offset).is_some_and(|c| c.is_ascii_digit()) {
+            offset += 1;
+        }
+        if offset > digit_start {
+            while self.opt_space(self.get_char_at(offset)) {
+                offset += 1;
+            }
+            if self.get_char_at(offset) == Some(',') {
+                let mut next_offset = offset + 1;
+                while self.opt_space(self.get_char_at(next_offset)) {
+                    next_offset += 1;
+                }
+                if matches!(self.get_char_at(next_offset), Some('"' | '\'')) {
+                    self.log(|| "Discarded stray number between object fields".into());
+                    self.index += offset;
+                }
+            }
+        }
+        Ok(())
     }
 }
 

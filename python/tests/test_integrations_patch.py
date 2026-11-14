@@ -160,6 +160,7 @@ def test_names_are_checked_before_anything_is_patched() -> None:
         "fasttext",
         "anyascii",
         "datasketch",
+        "json_repair",
         "trafilatura",
         "nltk",
         "warcio",
@@ -372,27 +373,32 @@ def test_ftfy_fallback_without_real_ftfy_raises_pyroid_error() -> None:
 
 
 @needs_ftfy
-def test_other_ftfy_version_warns_and_falls_back_to_it() -> None:
+def test_other_ftfy_version_warns_and_falls_back_to_it(tmp_path: Path) -> None:
+    info = tmp_path / "ftfy-6.2.0.dist-info"  # another ftfy release's metadata, found first
+    info.mkdir()
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: ftfy\nVersion: 6.2.0\n")
     ok(
         child(
-            """
-            import ftfy as real
-            real.__version__ = "6.2.0"  # what pyroid sees if another ftfy is installed
-            import pyroid.ftfy, pyroid.integrations as pi
+            f"""
+            sys.path.insert(0, {str(tmp_path)!r})
+            import pyroid, pyroid.integrations as pi
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 pi.patch("ftfy")
-            messages = [str(w.message) for w in caught]
-            assert [w.category for w in caught] == [pi.PatchWarning] * 2, messages
-            assert "the installed ftfy is 6.2.0" in messages[1] and "6.3.1" in messages[1]
+            got = [(w.category, str(w.message), w.filename) for w in caught]
+            assert [c for c, _, _ in got] == [pyroid.VersionMismatchWarning, pi.PatchWarning], got
+            assert got[0][1].startswith(
+                "pyroid.ftfy reproduces ftfy 6.3.1, but ftfy 6.2.0 is installed: "
+            ), got
+            assert got[0][2] == "<string>", got  # the caller's line
             import ftfy
-            assert ftfy.__version__ == "6.3.1" and ftfy.__wrapped__ is real
+            assert ftfy.__version__ == "6.3.1" and ftfy.__wrapped__.__version__ == "6.3.1"
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 ftfy.fix_text("abc", max_decode_length=5.0)
-            # pyroid.ftfy's own warning about the version it falls back to: it got the real ftfy.
-            got = [(w.category.__name__, str(w.message)) for w in caught]
-            assert ("RuntimeWarning", "pyroid.ftfy is falling back to ftfy 6.2.0, not 6.3.1") in got
+            # The fallback only says it delegates: the version was checked once, by patch().
+            got = [w.category.__name__ for w in caught]
+            assert got == ["FallbackWarning"], got
             """
         )
     )
@@ -556,6 +562,80 @@ def test_anyascii_shim_without_anyascii() -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# json_repair
+# ---------------------------------------------------------------------------
+
+
+def real_json_repair_ok() -> bool:
+    if not installed("json_repair"):
+        return False
+    from importlib.metadata import version
+
+    import pyroid.json_repair as impl
+
+    return version("json-repair") == impl.JSON_REPAIR_VERSION
+
+
+needs_json_repair = pytest.mark.skipif(
+    not real_json_repair_ok(), reason="needs the json-repair release pyroid reproduces"
+)
+
+
+@needs_json_repair
+def test_json_repair_shim_with_real_json_repair() -> None:
+    ok(
+        child(
+            """
+            from json_repair import repair_json as early  # imported before patch(): the real one
+            import pyroid.json_repair as impl
+            patch_quietly("json_repair")
+            import json_repair
+            from json_repair.json_repair import loads as sub_loads
+            for n in ("repair_json", "loads", "load", "from_file"):
+                assert getattr(json_repair, n) is getattr(impl, n), n
+                assert getattr(json_repair.json_repair, n) is getattr(impl, n), n
+            assert sub_loads is impl.loads and early is not impl.repair_json
+            assert json_repair.JSONReturnType is impl.JSONReturnType
+            assert sys.modules["json_repair.json_repair"] is json_repair.json_repair
+            # Not ported: forwarded to the real package.
+            assert json_repair.__wrapped__.utils is json_repair.utils
+            doc = "{'a': 1, b: [1, 2,}"
+            assert json_repair.repair_json(doc) == early(doc) == '{"a": 1, "b": [1, 2]}'
+            # A delegated call (a char the port reserves) reaches the real json_repair.
+            reserved = '["\U0010f800", 1'
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                assert json_repair.loads(reserved) == json_repair.__wrapped__.loads(reserved)
+            assert [w.category.__name__ for w in caught] == ["FallbackWarning"]
+            """
+        )
+    )
+
+
+def test_json_repair_shim_without_json_repair() -> None:
+    ok(
+        child(
+            """
+            patch_quietly("json_repair")
+            from json_repair import repair_json
+            from json_repair.json_repair import loads
+            import pyroid, pyroid.json_repair as impl
+            assert repair_json is impl.repair_json and loads is impl.loads
+            assert repair_json("[1, 2") == "[1, 2]"
+            assert sys.modules["json_repair"].__wrapped__ is None
+            try:
+                loads('["\U0010f800", 1')
+            except pyroid.PyroidError as e:
+                assert "json_repair is not installed" in str(e), e
+            else:
+                raise AssertionError("a delegated call without json_repair must raise PyroidError")
+            """,
+            hide=("json_repair",),
+        )
+    )
+
+
 def real_datasketch_ok() -> bool:
     if not (installed("datasketch") and installed("numpy")):
         return False
@@ -670,7 +750,7 @@ def test_datasketch_shim_without_datasketch() -> None:
 
 SCENARIOS = [
     (name, scenario)
-    for name in ("ftfy", "fasttext", "anyascii", "datasketch")
+    for name in ("ftfy", "fasttext", "anyascii", "datasketch", "json_repair")
     for scenario in ("not imported", "imported", "blocked", "not installed")
 ]
 
@@ -715,7 +795,7 @@ def test_unpatch_restores_sys_modules_exactly(name: str, scenario: str) -> None:
             assert pyroid.ftfy._ftfy is fallback and pi.patched() == ()
             # A module that imported the shim keeps a working one.
             fn = {"ftfy": "fix_text", "fasttext": "tokenize", "anyascii": "anyascii",
-                  "datasketch": "minhash_batch"}[name]
+                  "datasketch": "minhash_batch", "json_repair": "repair_json"}[name]
             assert callable(getattr(shim, fn))
             """,
             args=(name, scenario),

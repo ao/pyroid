@@ -1,8 +1,8 @@
-# Replays calls recorded from json_repair 0.64.5's test suite (MIT), (c) Stefano Baccianella.
+# Replays calls recorded from json_repair 0.64.9's test suite (MIT), (c) Stefano Baccianella.
 """json_repair's own test suite, replayed against pyroid.json_repair.
 
-``parity/data/json_repair-0.64.5/upstream-calls.jsonl`` holds every outermost public call
-(``repair_json``, ``loads``, ``load``, ``from_file``) that json_repair 0.64.5's tests make, with
+``parity/data/json_repair-0.64.9/upstream-calls.jsonl`` holds every outermost public call
+(``repair_json``, ``loads``, ``load``, ``from_file``) that json_repair 0.64.9's tests make, with
 json_repair's outcome on CPython 3.12 (recorded by ``python -m pyroid_parity.json_repair_record``
 in ``parity/``). Each call is replayed and must give the same outcome: ``str`` results byte for
 byte, objects and ``(object, log)`` tuples type-exact (dict key order, int vs float, NaN), the
@@ -25,7 +25,7 @@ from typing import Any
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-DATA = REPO / "parity" / "data" / "json_repair-0.64.5" / "upstream-calls.jsonl"
+DATA = REPO / "parity" / "data" / "json_repair-0.64.9" / "upstream-calls.jsonl"
 COMPARE_PY = REPO / "parity" / "pyroid_parity" / "json_repair_compare.py"
 IMPL = os.environ.get("PYROID_JR_IMPL", "pyroid.json_repair")
 
@@ -60,7 +60,7 @@ HAS_SCHEMA_DEPS = all(
 
 
 def test_recording_is_json_repair_0_64_5() -> None:
-    assert HEADER["json_repair"] == "0.64.5"
+    assert HEADER["json_repair"] == "0.64.9"
     assert len(CALLS) == HEADER["calls"]
 
 

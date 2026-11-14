@@ -158,6 +158,11 @@ def fake_trafilatura(tmp_path: Path, version: str) -> Path:
     """A fake trafilatura `version` package (its own extract and reset_caches) on a new path."""
     fake = tmp_path / "site" / "trafilatura"
     fake.mkdir(parents=True)
+    info = fake.parent / f"trafilatura-{version}.dist-info"  # what the version check reads
+    info.mkdir()
+    (info / "METADATA").write_text(
+        f"Metadata-Version: 2.1\nName: trafilatura\nVersion: {version}\n"
+    )
     (fake / "__init__.py").write_text(
         f'__version__ = "{version}"\nfrom . import core, meta, deduplication, settings\n'
         "def html2txt(s):\n    return 'fake'\n"
@@ -194,11 +199,11 @@ def test_shim_with_another_trafilatura_version(
         print(json.dumps(caught))
         """,
     )
-    assert [c for c, _ in out] == ["PatchWarning", "PatchWarning"]
-    assert (
-        "the installed trafilatura is 1.10.0, but pyroid.trafilatura reproduces trafilatura "
-        "2.3.1: the patched functions give trafilatura 2.3.1's results"
-    ) in out[1][1]
+    assert [c for c, _ in out] == ["VersionMismatchWarning", "PatchWarning"]
+    assert out[0][1].startswith(
+        "pyroid.trafilatura reproduces trafilatura 2.3.1, but trafilatura 1.10.0 is installed: "
+        "results can differ from it. Install trafilatura==2.3.1 to compare like for like"
+    )
 
 
 def test_shim_follows_trafilatura_111(run_python: Callable[..., Any], tmp_path: Path) -> None:
@@ -222,7 +227,7 @@ def test_shim_follows_trafilatura_111(run_python: Callable[..., Any], tmp_path: 
         print(json.dumps(caught))
         """,
     )
-    assert [c for c, _ in out] == ["PatchWarning"]  # 1.11.0 is a mode: no version warning
+    assert [c for c, _ in out] == ["PatchWarning"]  # 1.11.0 is a mode: no VersionMismatchWarning
 
 
 @needs_real_111

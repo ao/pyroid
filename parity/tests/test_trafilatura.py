@@ -65,7 +65,7 @@ from pyroid_parity import trafilatura_compare as T
 from pyroid_parity import trafilatura_record as R
 from pyroid_parity import trafilatura_strategies as S
 from pyroid_parity.impl import FALLBACK_WARNING
-from pyroid_parity.plugin import _impl, need, reference
+from pyroid_parity.plugin import _impl, need, oracle_pin, reference
 from pyroid_parity.report import Collector
 
 SUITE = "trafilatura"
@@ -97,8 +97,8 @@ def oracle() -> Any:
     except ImportError:
         return None
     group = specs.TRAFILATURA_GROUPS[MODE]
-    for dist, want in specs.TRAFILATURA_ORACLES[MODE].items():
-        got = md.version(dist)
+    for dist, pin in specs.TRAFILATURA_ORACLES[MODE].items():
+        got, want = md.version(dist), oracle_pin(dist, pin)
         assert got == want, f"mode {MODE}: the oracle needs {dist}=={want} (group {group}), found {got}"
     return trafilatura
 

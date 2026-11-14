@@ -1,7 +1,144 @@
 {
-"json_repair": "0.64.5",
+"json_repair": "0.64.9",
 "python": "3.12.16",
 "cases": [
+{
+"in": "intro 'quoted' prose {\"x\":1}",
+"default": {
+"ok": "{\"x\": 1}"
+},
+"skip": {
+"ok": "{\"x\": 1}"
+},
+"strict": {
+"ok": "{\"x\": 1}"
+},
+"stream": {
+"ok": "{\"x\": 1}"
+}
+},
+{
+"in": "note “quoted” text [1,2]",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"ok": "[1, 2]"
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "Some prose (clarification): {\"x\":1}",
+"default": {
+"ok": "{\"x\": 1}"
+},
+"skip": {
+"ok": "{\"x\": 1}"
+},
+"strict": {
+"ok": "{\"x\": 1}"
+},
+"stream": {
+"ok": "{\"x\": 1}"
+}
+},
+{
+"in": "prose\n(true, false)",
+"default": {
+"ok": "[true, false]"
+},
+"skip": {
+"ok": "[true, false]"
+},
+"strict": {
+"ok": "[true, false]"
+},
+"stream": {
+"ok": "[true, false]"
+}
+},
+{
+"in": "text before #comment\n{\"x\":1}",
+"default": {
+"ok": "{\"x\": 1}"
+},
+"skip": {
+"ok": "{\"x\": 1}"
+},
+"strict": {
+"ok": "{\"x\": 1}"
+},
+"stream": {
+"ok": "{\"x\": 1}"
+}
+},
+{
+"in": "text before /* comment */ {\"x\":1}",
+"default": {
+"ok": "{\"x\": 1}"
+},
+"skip": {
+"ok": "{\"x\": 1}"
+},
+"strict": {
+"ok": "{\"x\": 1}"
+},
+"stream": {
+"ok": "{\"x\": 1}"
+}
+},
+{
+"in": "text before ```json\n{\"x\":1}\n```",
+"default": {
+"ok": "{\"x\": 1}"
+},
+"skip": {
+"ok": "{\"x\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "{\"x\": 1}"
+}
+},
+{
+"in": "  \"a\": 1}",
+"default": {
+"ok": "{\"a\": 1}"
+},
+"skip": {
+"ok": "{\"a\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing opening object brace in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 1}"
+}
+},
+{
+"in": "text with no result",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
 {
 "in": "\n    \"a\": 1\n}\n",
 "default": {
@@ -358,6 +495,36 @@
 }
 },
 {
+"in": "\"\"",
+"default": {
+"ok": "\"\""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": "\"\""
+},
+"stream": {
+"ok": "\"\""
+}
+},
+{
+"in": "\"unterminated",
+"default": {
+"ok": ""
+},
+"skip": {
+"ok": ""
+},
+"strict": {
+"ok": ""
+},
+"stream": {
+"ok": ""
+}
+},
+{
 "in": "{}",
 "default": {
 "ok": "{}"
@@ -400,21 +567,6 @@
 },
 "stream": {
 "ok": "\"note\""
-}
-},
-{
-"in": "\"unterminated",
-"default": {
-"ok": ""
-},
-"skip": {
-"ok": ""
-},
-"strict": {
-"ok": ""
-},
-"stream": {
-"ok": ""
 }
 },
 {
@@ -1515,6 +1667,67 @@
 }
 },
 {
+"in": "{\"rows\": [[\"a\", \"b\"], \"c\", \"d\"], [\"e\", \"f\"], [\"g\", \"h\", \"i\"], [\"j\", \"k\"]]}",
+"default": {
+"ok": "{\"rows\": [[\"a\", \"b\"], [\"c\", \"d\"], [\"e\", \"f\"], [\"g\", \"h\", \"i\"], \"j\", \"k\"]}"
+},
+"skip": {
+"ok": "{\"rows\": [[\"a\", \"b\"], [\"c\", \"d\"], [\"e\", \"f\"], [\"g\", \"h\", \"i\"], \"j\", \"k\"]}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Missing ':' after key in strict mode while parsing object."
+},
+"stream": {
+"ok": "{\"rows\": [[\"a\", \"b\"], [\"c\", \"d\"], [\"e\", \"f\"], [\"g\", \"h\", \"i\"], \"j\", \"k\"]}"
+}
+},
+{
+"in": "{\"a\": [[1,2], 3,4], [5,6], \"b\": [[7], 8], [9], [10,11], [12]}",
+"default": {
+"ok": "{\"a\": [[1, 2], [3, 4], [5, 6]], \"b\": [[7], [8], [9], [10, 11], 12]}"
+},
+"skip": {
+"ok": "{\"a\": [[1, 2], [3, 4], [5, 6]], \"b\": [[7], [8], [9], [10, 11], 12]}"
+},
+"strict": {
+"ok": "{\"a\": [[1, 2], 3, 4], \"b\": [[7], 8]}"
+},
+"stream": {
+"ok": "{\"a\": [[1, 2], [3, 4], [5, 6]], \"b\": [[7], [8], [9], [10, 11], 12]}"
+}
+},
+{
+"in": "{\"rows\": [[1,2], 3], [4,5], [6,7]}",
+"default": {
+"ok": "{\"rows\": [[1, 2], 3, [4, 5], [6, 7]]}"
+},
+"skip": {
+"ok": "{\"rows\": [[1, 2], 3, [4, 5], [6, 7]]}"
+},
+"strict": {
+"ok": "{\"rows\": [[1, 2], 3]}"
+},
+"stream": {
+"ok": "{\"rows\": [[1, 2], 3, [4, 5], [6, 7]]}"
+}
+},
+{
+"in": "{\"rows\": [[], 1,2], [3,4], [5,6]}",
+"default": {
+"ok": "{\"rows\": [[], 1, 2, 3, 4, 5, 6]}"
+},
+"skip": {
+"ok": "{\"rows\": [[], 1, 2, 3, 4, 5, 6]}"
+},
+"strict": {
+"ok": "{\"rows\": [[], 1, 2]}"
+},
+"stream": {
+"ok": "{\"rows\": [[], 1, 2, 3, 4, 5, 6]}"
+}
+},
+{
 "in": "{\"outer\": [\"a\", \"b\", \"next\": \"value\"}",
 "default": {
 "ok": "{\"outer\": [\"a\", \"b\"], \"next\": \"value\"}"
@@ -1707,6 +1920,83 @@
 },
 "stream": {
 "ok": "[1, 2]"
+}
+},
+{
+"in": "[\"he said \"hi\" to me\", \"she said \"bye\" too\", \"the 12\" pipe\", \"ok\"]",
+"default": {
+"ok": "[\"he said \", \"hi\\\" to me\\\"\", \"she said \", \"bye\\\" too\\\"\", \"the 12\", \"pipe\", \"ok\"]"
+},
+"skip": {
+"ok": "[\"he said \", \"hi\\\" to me\\\"\", \"she said \", \"bye\\\" too\\\"\", \"the 12\", \"pipe\", \"ok\"]"
+},
+"strict": {
+"ok": "[\"he said \", \"hi\\\" to me\\\"\", \"she said \", \"bye\\\" too\\\"\", \"the 12\", \"pipe\", \"ok\"]"
+},
+"stream": {
+"ok": "[\"he said \", \"hi\\\" to me\\\"\", \"she said \", \"bye\\\" too\\\"\", \"the 12\", \"pipe\", \"ok\"]"
+}
+},
+{
+"in": "{\"quotes\": [\"he said \"hi\" to me\", \"the 12\" pipe\"], \"next\": [\"a \"b\" c\"]}",
+"default": {
+"ok": "{\"quotes\": [\"he said \", \"hi\\\" to me\\\"\", \"the 12\", \"pipe\"], \"next\": [\"a \\\"b\\\" c\"]}"
+},
+"skip": {
+"ok": "{\"quotes\": [\"he said \", \"hi\\\" to me\\\"\", \"the 12\", \"pipe\"], \"next\": [\"a \\\"b\\\" c\"]}"
+},
+"strict": {
+"ok": "{\"quotes\": [\"he said \", \"hi\\\" to me\\\"\", \"the 12\", \"pipe\"], \"next\": [\"a \\\"b\\\" c\"]}"
+},
+"stream": {
+"ok": "{\"quotes\": [\"he said \", \"hi\\\" to me\\\"\", \"the 12\", \"pipe\"], \"next\": [\"a \\\"b\\\" c\"]}"
+}
+},
+{
+"in": "{\"a\": [\"one \"two\" three\", \"four\"], \"a\": [\"five \"six\" seven\"]}",
+"default": {
+"ok": "{\"a\": [\"five \\\"six\\\" seven\"]}"
+},
+"skip": {
+"ok": "{\"a\": [\"five \\\"six\\\" seven\"]}"
+},
+"strict": {
+"ok": "{\"a\": [\"five \\\"six\\\" seven\"]}"
+},
+"stream": {
+"ok": "{\"a\": [\"five \\\"six\\\" seven\"]}"
+}
+},
+{
+"in": "['one 'two' three', 'four'], [\"five \"six\" seven\"]",
+"default": {
+"ok": "[[\"one 'two' three\", \"four\"], [\"five \\\"six\\\" seven\"]]"
+},
+"skip": {
+"ok": "[[\"one 'two' three\", \"four\"], [\"five \\\"six\\\" seven\"]]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[[\"one 'two' three\", \"four\"], [\"five \\\"six\\\" seven\"]]"
+}
+},
+{
+"in": "[\"a \"b\" c] suffix\", \"d \"e\" f\",]",
+"default": {
+"ok": "[\"a \", \"b\", \"c\"]"
+},
+"skip": {
+"ok": "[\"a \", \"b\", \"c\"]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Multiple top-level JSON elements found in strict mode."
+},
+"stream": {
+"ok": "[\"a \", \"b\", \"c\"]"
 }
 },
 {
@@ -2510,6 +2800,117 @@
 }
 },
 {
+"in": "{\"a\": 1,, \"b\": 2}",
+"default": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"skip": {
+"ok": "{\"a\": 1, \"b\": 2}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Consecutive commas after an object number in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 1, \"b\": 2}"
+}
+},
+{
+"in": "{\"a\": 1,,2}",
+"default": {
+"ok": "{\"a\": 1}"
+},
+"skip": {
+"ok": "{\"a\": 1}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Consecutive commas after an object number in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 1}"
+}
+},
+{
+"in": "{\"a\": -1.5,,, \"b\": 2}",
+"default": {
+"ok": "{\"a\": -1.5, \"b\": 2}"
+},
+"skip": {
+"ok": "{\"a\": -1.5, \"b\": 2}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Consecutive commas after an object number in strict mode."
+},
+"stream": {
+"ok": "{\"a\": -1.5, \"b\": 2}"
+}
+},
+{
+"in": "{\"a\":1,,2,\"b\":3}",
+"default": {
+"ok": "{\"a\": 1, \"b\": 3}"
+},
+"skip": {
+"ok": "{\"a\": 1, \"b\": 3}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Consecutive commas after an object number in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 1, \"b\": 3}"
+}
+},
+{
+"in": "{\"a\":1,, 2 , \"b\":3}",
+"default": {
+"ok": "{\"a\": 1, \"b\": 3}"
+},
+"skip": {
+"ok": "{\"a\": 1, \"b\": 3}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Consecutive commas after an object number in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 1, \"b\": 3}"
+}
+},
+{
+"in": "{\"a\":1,,2:3}",
+"default": {
+"ok": "{\"a\": 1, \"2\": 3}"
+},
+"skip": {
+"ok": "{\"a\": 1, \"2\": 3}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Consecutive commas after an object number in strict mode."
+},
+"stream": {
+"ok": "{\"a\": 1, \"2\": 3}"
+}
+},
+{
+"in": "{\"value\": 105,12,",
+"default": {
+"ok": "{\"value\": \"105,12\"}"
+},
+"skip": {
+"ok": "{\"value\": \"105,12\"}"
+},
+"strict": {
+"ok": "{\"value\": \"105,12\"}"
+},
+"stream": {
+"ok": "{\"value\": \"105,12\"}"
+}
+},
+{
 "in": "{\"value\": 1e+10",
 "default": {
 "ok": "{\"value\": 10000000000.0}"
@@ -2585,33 +2986,178 @@
 }
 },
 {
-"in": "[1e+]",
+"in": "[1.1.1e+]",
 "default": {
-"ok": "[\"1e\"]"
+"ok": "[\"1.1.1e\"]"
 },
 "skip": {
-"ok": "[\"1e\"]"
+"ok": "[\"1.1.1e\"]"
 },
 "strict": {
-"ok": "[\"1e\"]"
+"ok": "[\"1.1.1e\"]"
 },
 "stream": {
-"ok": "[\"1e\"]"
+"ok": "[\"1.1.1e\"]"
 }
 },
 {
-"in": "[1e-]",
+"in": "[1e, 2]",
 "default": {
-"ok": "[\"1e\"]"
+"ok": "[1, 2]"
 },
 "skip": {
-"ok": "[\"1e\"]"
+"ok": "[1, 2]"
 },
 "strict": {
-"ok": "[\"1e\"]"
+"err": "ValueError",
+"msg": "Dangling exponent in strict mode."
 },
 "stream": {
-"ok": "[\"1e\"]"
+"ok": "[1, 2]"
+}
+},
+{
+"in": "{\"n\": 1e, \"next\": 2}",
+"default": {
+"ok": "{\"n\": 1, \"next\": 2}"
+},
+"skip": {
+"ok": "{\"n\": 1, \"next\": 2}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Dangling exponent in strict mode."
+},
+"stream": {
+"ok": "{\"n\": 1, \"next\": 2}"
+}
+},
+{
+"in": "[1E, 2]",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Dangling exponent in strict mode."
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "{\"n\": 1E, \"next\": 2}",
+"default": {
+"ok": "{\"n\": 1, \"next\": 2}"
+},
+"skip": {
+"ok": "{\"n\": 1, \"next\": 2}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Dangling exponent in strict mode."
+},
+"stream": {
+"ok": "{\"n\": 1, \"next\": 2}"
+}
+},
+{
+"in": "[1e+, 2]",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Dangling exponent in strict mode."
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "{\"n\": 1e+, \"next\": 2}",
+"default": {
+"ok": "{\"n\": 1, \"next\": 2}"
+},
+"skip": {
+"ok": "{\"n\": 1, \"next\": 2}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Dangling exponent in strict mode."
+},
+"stream": {
+"ok": "{\"n\": 1, \"next\": 2}"
+}
+},
+{
+"in": "[1E-, 2]",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Dangling exponent in strict mode."
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "{\"n\": 1E-, \"next\": 2}",
+"default": {
+"ok": "{\"n\": 1, \"next\": 2}"
+},
+"skip": {
+"ok": "{\"n\": 1, \"next\": 2}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Dangling exponent in strict mode."
+},
+"stream": {
+"ok": "{\"n\": 1, \"next\": 2}"
+}
+},
+{
+"in": "[1e-, 2]",
+"default": {
+"ok": "[1, 2]"
+},
+"skip": {
+"ok": "[1, 2]"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Dangling exponent in strict mode."
+},
+"stream": {
+"ok": "[1, 2]"
+}
+},
+{
+"in": "{\"n\": 1e-, \"next\": 2}",
+"default": {
+"ok": "{\"n\": 1, \"next\": 2}"
+},
+"skip": {
+"ok": "{\"n\": 1, \"next\": 2}"
+},
+"strict": {
+"err": "ValueError",
+"msg": "Dangling exponent in strict mode."
+},
+"stream": {
+"ok": "{\"n\": 1, \"next\": 2}"
 }
 },
 {
@@ -2820,7 +3366,7 @@
 },
 "strict": {
 "err": "ValueError",
-"msg": "Empty key found in strict mode while parsing object."
+"msg": "Dangling exponent in strict mode."
 },
 "stream": {
 "ok": "{\"key\": 1}"
@@ -4166,6 +4712,36 @@
 },
 "stream": {
 "ok": "{\"title\": \"\\\"hello\\\" world\", \"b\": \"y\"}"
+}
+},
+{
+"in": "[{\"a\":\"abc\\nx]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]end\"},]",
+"default": {
+"ok": "[{\"a\": \"abc\\nx]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]end\"}]"
+},
+"skip": {
+"ok": "[{\"a\": \"abc\\nx]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]end\"}]"
+},
+"strict": {
+"ok": "[{\"a\": \"abc\\nx]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]end\"}]"
+},
+"stream": {
+"ok": "[{\"a\": \"abc\\nx]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]x]end\"}]"
+}
+},
+{
+"in": "{\"a\":\"text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more ",
+"default": {
+"ok": "{\"a\": \"text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more\"}"
+},
+"skip": {
+"ok": "{\"a\": \"text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more\"}"
+},
+"strict": {
+"ok": "{\"a\": \"text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more\"}"
+},
+"stream": {
+"ok": "{\"a\": \"text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more text } more \"}"
 }
 },
 {
@@ -6123,18 +6699,63 @@
 }
 },
 {
-"in": "\"\"",
+"in": "{\"items\":[1,2],\"additionalItems\":false}",
 "default": {
-"ok": ""
+"ok": "{\"items\": [1, 2], \"additionalItems\": false}"
+},
+"skip": {
+"ok": "{\"items\": [1, 2], \"additionalItems\": false}"
+},
+"strict": {
+"ok": "{\"items\": [1, 2], \"additionalItems\": false}"
+},
+"stream": {
+"ok": "{\"items\": [1, 2], \"additionalItems\": false}"
+}
+},
+{
+"in": "\"x\"",
+"default": {
+"ok": "\"x\""
 },
 "skip": {
 "ok": ""
 },
 "strict": {
-"ok": ""
+"ok": "\"x\""
 },
 "stream": {
-"ok": ""
+"ok": "\"x\""
+}
+},
+{
+"in": "[1]",
+"default": {
+"ok": "[1]"
+},
+"skip": {
+"ok": "[1]"
+},
+"strict": {
+"ok": "[1]"
+},
+"stream": {
+"ok": "[1]"
+}
+},
+{
+"in": "{\"value\": [1]}",
+"default": {
+"ok": "{\"value\": [1]}"
+},
+"skip": {
+"ok": "{\"value\": [1]}"
+},
+"strict": {
+"ok": "{\"value\": [1]}"
+},
+"stream": {
+"ok": "{\"value\": [1]}"
 }
 },
 {
@@ -6406,21 +7027,6 @@
 },
 "stream": {
 "ok": "[\"1\", \"bad\"]"
-}
-},
-{
-"in": "[1]",
-"default": {
-"ok": "[1]"
-},
-"skip": {
-"ok": "[1]"
-},
-"strict": {
-"ok": "[1]"
-},
-"stream": {
-"ok": "[1]"
 }
 },
 {

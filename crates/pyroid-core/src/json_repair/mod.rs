@@ -1,5 +1,5 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
-//! A port of json_repair 0.64.5 (`pyroid.json_repair`): repair the broken JSON
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
+//! A port of json_repair 0.64.9 (`pyroid.json_repair`): repair the broken JSON
 //! that LLMs emit, with json_repair's exact output and without unbounded recursion.
 //! Linear on the input families where json_repair's lookaheads are quadratic. Inputs
 //! where json_repair's parser backtracks (parses a value, drops it and parses again
@@ -56,6 +56,7 @@ fn fast_path(text: &str, opts: &RepairOptions) -> Result<Option<Repaired>, Repai
         Ok(value) => Ok(Some(Repaired {
             value,
             log: opts.logging.then(Vec::new),
+            valid_json: true,
         })),
         Err(pyjson::DecodeError::ReservedCodePoint) => Err(RepairError::Unsupported),
         Err(_) => Ok(None),
@@ -109,6 +110,9 @@ impl RepairOptions {
 pub struct Repaired {
     pub value: Value,
     pub log: Option<Vec<LogEntry>>,
+    /// `json.loads` took the whole text (json_repair's `is_valid_json`): `repair_json`
+    /// then writes an empty-string value as `'""'`, not as `''`.
+    pub valid_json: bool,
 }
 
 /// `repair_json(text, return_objects=True, ...)`: the repaired value.
@@ -140,35 +144,39 @@ pub fn repair_chars(chars: &[char], opts: &RepairOptions) -> Result<Repaired, Re
 
 fn repair_chars_parse(chars: &[char], opts: &RepairOptions) -> Result<Repaired, RepairError> {
     let (value, log) = parser::parse(chars, &opts.parse_options())?;
-    Ok(Repaired { value, log })
+    Ok(Repaired {
+        value,
+        log,
+        valid_json: false,
+    })
 }
 
-/// `repair_json(text, ...)` returning the string: `""` for an empty-string
-/// result, else `json.dumps(value, **dump_opts)`.
+/// `repair_json(text, ...)` returning the string: `""` when the repair found no
+/// value (an empty-string result from the parser), else `json.dumps(value, **dump_opts)`.
 pub fn repair_json(
     text: &str,
     opts: &RepairOptions,
     dump: &DumpOptions,
 ) -> Result<String, RepairError> {
     let r = repair(text, opts)?;
-    let out = dumps_result(&r.value, dump);
+    let out = dumps_result(&r, dump);
     value::drop_deep(r.value);
     out
 }
 
-/// The string `repair_json` returns for `value`.
-pub fn dumps_result(value: &Value, dump: &DumpOptions) -> Result<String, RepairError> {
-    if value.is_str("") {
+/// The string `repair_json` returns for `r`.
+pub fn dumps_result(r: &Repaired, dump: &DumpOptions) -> Result<String, RepairError> {
+    if !r.valid_json && r.value.is_str("") {
         return Ok(String::new());
     }
-    dumps::dumps(value, dump).map_err(RepairError::Dump)
+    dumps::dumps(&r.value, dump).map_err(RepairError::Dump)
 }
 
 #[cfg(test)]
 mod tests {
-    //! The kernel against json_repair 0.64.5: every distinct input of json_repair's
-    //! own test suite (`testdata/upstream_cases.json`, recorded with CPython 3.12),
-    //! under four option sets.
+    //! The kernel against json_repair 0.64.9: every distinct input of json_repair's
+    //! own test suite (`testdata/upstream_cases.json`, recorded with CPython 3.12 by
+    //! `python -m pyroid_parity.json_repair_kernel_cases`), under four option sets.
 
     use super::chars::{CharProps, UnicodeVersion};
     use super::dumps::DumpOptions;

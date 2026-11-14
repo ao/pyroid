@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import metrics as _native
 
 __all__ = [
@@ -24,6 +25,11 @@ __all__ = [
     "VALID_TOKEN_RE",
     "tokenize",
 ]
+
+# What the ROUGE modules reproduce: rouge-score, and the NLTK whose Porter stemmer it uses.
+_ROUGE_SCORE = "rouge-score==0.1.2"
+_NLTK = "nltk==3.10.4"
+_versions.check(__name__, "rouge_score", _ROUGE_SCORE)
 
 # Pre-compile regexes that are use often
 NON_ALPHANUM_PATTERN = r"[^a-z0-9]+"

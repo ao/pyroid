@@ -1,4 +1,4 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! The value tree a repair produces: Python's JSON types, with Python's
 //! semantics where json_repair relies on them.
 //!

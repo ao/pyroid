@@ -153,18 +153,19 @@ Reference: rouge-score 0.1.2 (with NLTK 3.10.4's Porter stemmer) and sacrebleu 2
 
 ### pyroid.json_repair {#json_repair}
 
-Reference: json_repair 0.64.5. Rule: the same returned string or object, the same repair log, the same exception.
+Reference: json_repair 0.64.9. Rule: the same returned string or object, the same repair log, the same exception.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
-| Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 672 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file | 184,403 | 184,403 | 0 |
-| Parity suite on free-threaded CPython 3.15t (the 149 schema= replays skipped: no jsonschema) | 184,254 | 184,254 | 0 |
-| **Total** | **368,657** | **368,657** | **0** |
+| Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 821 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file | 184,552 | 184,552 | 0 |
+| Parity suite on free-threaded CPython 3.14t (the 166 schema= replays skipped: no jsonschema) | 184,386 | 184,386 | 0 |
+| Parity suite on free-threaded CPython 3.15t (the 166 schema= replays skipped: no jsonschema) | 184,386 | 184,386 | 0 |
+| **Total** | **553,324** | **553,324** | **0** |
 
 - Skipped by design: 4 calls whose result depends on the hash seed and 3 that depend on the recursion limit.
-- The Rust kernel also replays 451 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k.
+- The Rust kernel also replays 490 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k.
 
-<small>Source: the parity/ json_repair suite, run on 2026-11-06.</small>
+<small>Source: the parity/ json_repair suite on an EC2 c8g.16xlarge devbox, run on 2026-11-14.</small>
 
 ### pyroid.datasketch {#datasketch}
 
@@ -347,6 +348,46 @@ as returning an unchanged string as the same object.
 - [Differences from Unidecode](guides/translit.md#differences-from-unidecode).
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).
+
+## Installed versions
+
+Each module reproduces one release of its incumbent (trafilatura two), and the parity above is
+against that release. When another release is installed, the module still gives the reproduced
+release's results, and emits one
+[`pyroid.VersionMismatchWarning`](reference/pyroid.md#pyroid.VersionMismatchWarning) per process
+and library, at the line that imported it (or called `pyroid.patch(...)`):
+
+```text
+script.py:1: VersionMismatchWarning: pyroid.ftfy reproduces ftfy 6.3.1, but ftfy 6.2.0 is installed: results can differ from it. Install ftfy==6.3.1 to compare like for like (or silence this with warnings.simplefilter("ignore", pyroid.VersionMismatchWarning)).
+```
+
+The check reads the installed distribution's metadata and never imports the library. Without
+the library it costs one `importlib.util.find_spec` call; a checkout without metadata is not
+checked. Each library is checked once per process, by whichever module asks first, and
+`pyroid run` warns once per process tree.
+
+| Library | Release reproduced | Checked by |
+|---|---|---|
+| ftfy | ftfy 6.3.1 | `import pyroid.ftfy`, `pyroid.patch("ftfy")` |
+| fastText | fasttext-predict 0.9.2.4; fasttext 0.9.3 gives the same results | `import pyroid.fasttext`, `pyroid.patch("fasttext")` |
+| datatrove | datatrove 0.10.1 | `import pyroid.filters`, `pyroid.dedup`, `pyroid.warc` or `pyroid.integrations.datatrove` |
+| PyThaiNLP | pythainlp 5.4.0 | the Thai tokenizer, when it reads the installed package's word list and model |
+| SudachiDict | sudachidict-core 20261015 | the Japanese tokenizer, when it reads the installed package's dictionary |
+| tldextract | tldextract 5.4.0 | `pyroid.filters.URLFilter`, when it loads tldextract |
+| anyascii | anyascii 0.3.3 | `import pyroid.translit`, `pyroid.patch("anyascii")` |
+| rouge-score | rouge-score 0.1.2 | `import pyroid.metrics.rouge_scorer` (and its `scoring`, `tokenizers` and `tokenize`) |
+| NLTK | nltk 3.10.4 | `import pyroid.nltk`, `pyroid.patch("nltk")`; `pyroid.metrics.rouge_scorer` for its Porter stemmer |
+| sacrebleu | sacrebleu 2.6.0 | `import pyroid.metrics.sacrebleu` |
+| json_repair | json-repair 0.64.9 | `import pyroid.json_repair` |
+| datasketch | datasketch 2.0.0 | `import pyroid.datasketch`, `pyroid.patch("datasketch")` |
+| jieba | jieba 0.42.1 | `import pyroid.jieba` |
+| Trafilatura | trafilatura 2.3.1, and 1.11.0 with `compat="1.11.0"` | `import pyroid.trafilatura`, `pyroid.patch("trafilatura")` |
+| warcio | warcio 1.8.2 | `import pyroid.warc`, `pyroid.patch("warcio")` |
+| NeMo Curator | nemo-curator 1.4.0 | `import pyroid.nemo` or `pyroid.integrations.nemo_curator`, `pyroid.patch("nemo_curator")` |
+
+With trafilatura 1.11.0 installed, `import pyroid.trafilatura` says to pass `compat="1.11.0"`.
+`pyroid.patch("trafilatura")`, datatrove's `Trafilatura` step and the FineWeb recipe choose the
+release themselves, so they warn only about a release pyroid does not reproduce.
 
 ## Interpreters and Unicode versions
 

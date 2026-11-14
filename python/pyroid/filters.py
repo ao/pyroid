@@ -13,7 +13,7 @@ tokenizer object): the words come from Python, the filter math stays in Rust.
 
 from __future__ import annotations
 
-import importlib.metadata
+import importlib
 import sys
 import threading
 import unicodedata
@@ -21,6 +21,7 @@ import warnings
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, NamedTuple
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning, PyroidError
 from pyroid._pyroid import filters as _native
 
@@ -49,6 +50,8 @@ __all__ = [
 
 #: The datatrove release whose decisions this module reproduces.
 DATATROVE_VERSION = "0.10.1"
+
+_versions.check(__name__, "datatrove", f"datatrove=={DATATROVE_VERSION}")
 
 #: datatrove's default Gopher stop words.
 STOP_WORDS = ("the", "be", "to", "of", "and", "that", "have", "with")
@@ -455,27 +458,8 @@ def _datatrove(module: str, what: str, pip: str) -> Any:
         raise PyroidError(
             f"{what} needs datatrove {DATATROVE_VERSION}, which is not installed (`{pip}`): {e}"
         ) from e
-    try:
-        version = importlib.metadata.version("datatrove")
-    except importlib.metadata.PackageNotFoundError:  # importable, but not installed (a checkout)
-        version = DATATROVE_VERSION
-    if version != DATATROVE_VERSION:
-        _warn_version(version)
     _DT_MODULES[module] = mod
     return mod
-
-
-def _warn_version(version: str) -> None:
-    with _WARN_LOCK:
-        if "datatrove-version" in _WARNED:
-            return
-        _WARNED.add("datatrove-version")
-    warnings.warn(
-        f"pyroid is using datatrove {version}'s tokenizers and filters, not "
-        f"{DATATROVE_VERSION}'s: results can differ from datatrove {DATATROVE_VERSION}",
-        RuntimeWarning,
-        stacklevel=_caller_stacklevel(),
-    )
 
 
 class _PyTokenizer(NamedTuple):
@@ -1329,7 +1313,6 @@ _NO_AUTOMATON = (
     "Not an Aho-Corasick automaton yet: call add_word to add some keys and call "
     "make_automaton to convert the trie to an automaton."
 )
-_warned_tldextract = False
 _url_fallbacks: set[str] = set()
 
 
@@ -1468,7 +1451,6 @@ def _min_soft_count(threshold: Any) -> int:
 
 
 def _tld_extractor(tld: Any) -> Any:
-    global _warned_tldextract
     try:
         import tldextract
     except ImportError as e:
@@ -1478,15 +1460,10 @@ def _tld_extractor(tld: Any) -> Any:
                 f"cache): pip install tldextract=={TLDEXTRACT_VERSION}"
             ) from e
     else:
-        version = getattr(tldextract, "__version__", None)
-        if version != TLDEXTRACT_VERSION and not _warned_tldextract:
-            _warned_tldextract = True
-            warnings.warn(
-                f"pyroid.filters.URLFilter reproduces tldextract {TLDEXTRACT_VERSION}'s "
-                f"extraction; tldextract {version} is installed, whose may differ",
-                RuntimeWarning,
-                stacklevel=4,
-            )
+        # The URL filter runs on tldextract's suffix list: checked when it loads tldextract.
+        _versions.check(
+            "pyroid.filters.URLFilter", "tldextract", f"tldextract=={TLDEXTRACT_VERSION}"
+        )
         if tld is None:
             tld = tldextract.TLDExtract()
     return tld

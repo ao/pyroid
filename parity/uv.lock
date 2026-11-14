@@ -1214,11 +1214,11 @@ wheels = [
 
 [[package]]
 name = "json-repair"
-version = "0.64.5"
+version = "0.64.9"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c5/f4/e0aa506c013f0e1e29682bcc49158d18a8a712b25cd813ea8f5c199023e6/json_repair-0.64.5.tar.gz", hash = "sha256:572e14a470647e6dda03f527ab39c7c12d1861da86f26651324aba925eb963ff", size = 54519, upload-time = "2026-11-05T04:35:43.398Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/2b/537bf1dab1c058bfb2287662bf6c10de0c3907570781ccc0fc56878e39a7/json_repair-0.64.9.tar.gz", hash = "sha256:0e7e02e1c04d14b3677f97d13a8ff6b473cacb07b7111857c4202721b14efdc2", size = 56686, upload-time = "2026-11-10T04:29:13.966Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/ce/8a38b162fec75a2cf39c58a627c8311ac8f5e223d40e02555c6d223868db/json_repair-0.64.5-py3-none-any.whl", hash = "sha256:877dced415865e088ac5f08c5a3a09f598b63108d988b2f5c13c002b31bae0de", size = 52691, upload-time = "2026-11-05T04:35:41.916Z" },
+    { url = "https://files.pythonhosted.org/packages/40/1c/b38f71c1b4e859e10568336d8fbb271170150033c3a9d02b3e126b500828/json_repair-0.64.9-py3-none-any.whl", hash = "sha256:531c7d429db82731f3c9811157c025599a2ef620823c56d9143bab0b5ad97930", size = 54891, upload-time = "2026-11-10T04:29:12.575Z" },
 ]
 
 [[package]]
@@ -2354,7 +2354,7 @@ requires-dist = [
     { name = "datasketch", specifier = "==2.0.0" },
     { name = "ftfy", specifier = "==6.3.1" },
     { name = "hypothesis", specifier = ">=6.170" },
-    { name = "json-repair", specifier = "==0.64.5" },
+    { name = "json-repair", specifier = "==0.64.9" },
     { name = "nltk", specifier = "==3.10.4" },
     { name = "numpy", specifier = ">=2.3" },
     { name = "pyarrow", specifier = ">=26" },

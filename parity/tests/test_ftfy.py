@@ -36,7 +36,7 @@ from hypothesis import strategies as st
 from pyroid_parity import data as D
 from pyroid_parity import strategies as S
 from pyroid_parity.impl import warning_categories
-from pyroid_parity.plugin import need, need_corpus, reference
+from pyroid_parity.plugin import need, need_corpus, oracle_pin, reference
 from pyroid_parity.report import Collector
 
 FTFY_VERSION = "6.3.1"
@@ -81,7 +81,7 @@ def candidate_mod(ftfy_impl: Any) -> Any:
 
 
 def test_live_oracle_is_pinned_ftfy() -> None:
-    assert md.version("ftfy") == FTFY_VERSION
+    assert md.version("ftfy") == oracle_pin("ftfy", FTFY_VERSION)
 
 
 # ------------------------------------------------------------------------------------------- golden corpus

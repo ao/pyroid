@@ -1,4 +1,4 @@
-"""Differential tests: pyroid.json_repair must equal json_repair 0.64.5 exactly.
+"""Differential tests: pyroid.json_repair must equal json_repair 0.64.9 exactly.
 
 Every input is repaired by both under each option set (default, ``return_objects``, ``logging``,
 ``skip_json_loads``, ``ensure_ascii=False``, ``stream_stable``, ``strict``, ``indent=2``) and the
@@ -40,8 +40,8 @@ try:
 except ImportError as e:  # not built yet, or not in this wheel
     pytest.skip(f"{IMPL} is not importable: {e}", allow_module_level=True)
 oracle: Any = pytest.importorskip("json_repair")
-if importlib.metadata.version("json-repair") != "0.64.5":
-    pytest.skip("needs json-repair 0.64.5", allow_module_level=True)
+if importlib.metadata.version("json-repair") != "0.64.9":
+    pytest.skip("needs json-repair 0.64.9", allow_module_level=True)
 
 from hypothesis import example, given  # noqa: E402
 from hypothesis import strategies as st  # noqa: E402
@@ -100,7 +100,7 @@ def outcome(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> tuple[Any, ...
     return (*out, sorted({w.category.__name__ for w in caught if not _is_fallback(w.category)}))
 
 
-#: json_repair 0.64.5's chunked file reader raises this on some inputs when ``chunk_length`` is
+#: json_repair 0.64.9's chunked file reader raises this on some inputs when ``chunk_length`` is
 #: small (a log-context slice past the last chunk). pyroid reads files at once, so the reference
 #: for such calls is json_repair with the default chunk_length (documented difference).
 CHUNK_BUG = ("raise", "IndexError", "Chunk index out of range")

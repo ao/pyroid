@@ -1337,7 +1337,7 @@ def test_first_use_from_threads(run_python: Callable[..., Any]) -> None:
 VERSION_CHECK = """
 import sys, warnings
 sys.path.insert(0, $root)  # the stand-in pythainlp package and its metadata
-import pyroid.filters as pf, pyroid.dedup as dd
+import pyroid, pyroid.filters as pf, pyroid.dedup as dd
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
     pf.gopher_quality(["ภาษาไทย"], language="tha_Thai")
@@ -1345,7 +1345,7 @@ with warnings.catch_warnings(record=True) as caught:
     dd.SentenceDedup(language="tha_Thai").fit(["ภาษาไทย."])
     pf.gopher_quality(["ภาษาไทย"], language="th")
 for w in caught:
-    if issubclass(w.category, RuntimeWarning):
+    if issubclass(w.category, (RuntimeWarning, pyroid.VersionMismatchWarning)):
         print(w.category.__name__, w.filename, w.message, sep="|")
 """
 
@@ -1375,7 +1375,7 @@ def _stand_in_pythainlp(root: Path, version: str) -> Path:
 def test_pythainlp_version_warning(
     run_python: Callable[..., Any], tmp_path: Path, version: str, variable: bool, warned: bool
 ) -> None:
-    """Another installed pythainlp: one RuntimeWarning, at the caller's line.
+    """Another installed pythainlp: one VersionMismatchWarning, at the caller's line.
 
     With ``$PYROID_PYTHAINLP_CORPUS`` the files are not the package's, so there is no version
     to compare.
@@ -1391,9 +1391,10 @@ def test_pythainlp_version_warning(
         return
     assert len(lines) == 1, lines
     category, filename, message = lines[0].split("|")
-    assert category == "RuntimeWarning"
+    assert category == "VersionMismatchWarning"
     assert filename == "<string>"  # the user's call, not pyroid's code
     assert message == (
-        "pyroid's Thai tokenizer runs PyThaiNLP 5.4.0's newmm and crfcut on the word list and "
-        "sentence model of the installed pythainlp 5.3.0: results can differ from PyThaiNLP 5.3.0"
+        "pyroid's Thai tokenizer reproduces pythainlp 5.4.0, but pythainlp 5.3.0 is installed: "
+        "results can differ from it. Install pythainlp==5.4.0 to compare like for like (or "
+        'silence this with warnings.simplefilter("ignore", pyroid.VersionMismatchWarning)).'
     )

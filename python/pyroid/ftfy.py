@@ -18,6 +18,7 @@ import warnings
 from collections.abc import Iterator
 from typing import Any, BinaryIO, Literal, NamedTuple, TextIO
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning, PyroidError
 from pyroid._pyroid import ftfy as _native
 
@@ -42,6 +43,8 @@ __all__ = [
 
 #: The ftfy release whose behaviour this module reproduces.
 FTFY_VERSION = "6.3.1"
+
+_versions.check(__name__, "ftfy", f"ftfy=={FTFY_VERSION}")
 
 #: Functions that are forwarded to the real ftfy (it must be installed).
 DELEGATED = ("apply_plan", "explain_unicode", "fix_file", "guess_bytes")
@@ -214,13 +217,6 @@ def _ftfy(name: str, reason: str) -> Any:
         raise PyroidError(
             f"pyroid.ftfy.{name}: {reason} is not supported by pyroid's Rust port, and "
             "ftfy is not installed to fall back to (pip install ftfy==6.3.1)"
-        )
-    if real.__version__ != FTFY_VERSION and "version" not in _WARNED:
-        _WARNED.add("version")
-        warnings.warn(
-            f"pyroid.ftfy is falling back to ftfy {real.__version__}, not {FTFY_VERSION}",
-            RuntimeWarning,
-            stacklevel=_caller_stacklevel(),
         )
     if f"{name}:{reason}" not in _WARNED:
         _WARNED.add(f"{name}:{reason}")

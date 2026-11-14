@@ -9,7 +9,7 @@ license = "MIT"
 # pinned references stored in /data, and against the live oracle wherever the oracle installs.
 dependencies = [
     "ftfy==6.3.1",
-    "json-repair==0.64.5",
+    "json-repair==0.64.9",
     "pytest>=9.2",
     "pytest-timeout>=2.4",
     "hypothesis>=6.170",
@@ -112,6 +112,9 @@ filterwarnings = [
     "ignore:Python 3.14 will, by default, filter extracted tar archives:DeprecationWarning:tarfile",
     # jieba 0.42.1 has invalid escapes in non-raw strings ("\."): a SyntaxWarning when it is compiled.
     "ignore:invalid escape sequence:SyntaxWarning",
+    # The trafilatura@1.11.0 legs: importing pyroid.trafilatura with trafilatura 1.11.0 installed says that
+    # compat="1.11.0" reproduces it (a pyroid.VersionMismatchWarning, a UserWarning; the suite passes compat).
+    "ignore:pyroid\\.trafilatura reproduces trafilatura 2\\.3\\.1, but trafilatura 1\\.11\\.0 is installed:UserWarning",
 ]
 timeout = "600"
 

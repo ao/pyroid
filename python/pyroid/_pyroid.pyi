@@ -10,6 +10,7 @@ __all__ = [
     "FallbackWarning",
     "InputError",
     "PyroidError",
+    "VersionMismatchWarning",
     "__version__",
     "_testing",
     "datasketch",
@@ -55,6 +56,9 @@ class InputError(PyroidError, TypeError):
 
 class FallbackWarning(RuntimeWarning):
     """A pyroid function delegated this call to the incumbent library (slow path)."""
+
+class VersionMismatchWarning(UserWarning):
+    """The installed incumbent library is not the release pyroid reproduces: results can differ."""
 
 @final
 class Column(Generic[_T_co]):

@@ -1,4 +1,4 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! `parse_string.py` and `parse_string_helpers/`.
 
 use super::super::chars::surrogate_char;
@@ -1182,7 +1182,7 @@ impl Parser<'_> {
                         }
                     }
                 } else {
-                    let i = self.skip_to_character(Targets::one(':'), 1);
+                    let i = self.cached_skip_to_character(st, Targets::one(':'), 1);
                     if self.get_char_at(i).is_some() {
                         break;
                     }
@@ -1201,7 +1201,7 @@ impl Parser<'_> {
             }
             if !self.stream_stable && c == ']' && self.ctx_has(Ctx::Array) && st.last_is_not(outer)
             {
-                let i = self.skip_to_character(Targets::one(outer), 0);
+                let i = self.cached_skip_to_character(st, Targets::one(outer), 0);
                 if self.get_char_at(i).is_none() {
                     break;
                 }

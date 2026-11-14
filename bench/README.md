@@ -90,12 +90,12 @@ For thread scaling, pass `BENCH_THREADS` / `RAYON_NUM_THREADS`; workers inherit 
 
 ## json_repair (`json_repair_bench.py`)
 
-This script stands alone: it needs only the stdlib and `json-repair==0.64.5`, not the bench uv env.
+This script stands alone: it needs only the stdlib and `json-repair==0.64.9`, not the bench uv env.
 json_repair is the oracle and the baseline; every other `--impl` (such as `pyroid.json_repair`) is
 optional and skipped with a warning if it does not import.
 
 ```bash
-uv venv -p 3.12 /target/jr-312 && uv pip install --python /target/jr-312 json-repair==0.64.5 dist/pyroid-*.whl
+uv venv -p 3.12 /target/jr-312 && uv pip install --python /target/jr-312 json-repair==0.64.9 dist/pyroid-*.whl
 /target/jr-312/bin/python bench/json_repair_bench.py --impl json_repair --impl pyroid.json_repair --out /target/jr-bench.json
 /target/jr-312/bin/python bench/json_repair_bench.py --list        # the pathological families and their cause
 /target/jr-312/bin/python bench/json_repair_bench.py --impl json_repair --impl json_repair --quick   # gate smoke test

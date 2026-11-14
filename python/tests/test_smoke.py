@@ -52,6 +52,7 @@ def test_public_api() -> None:
         "FallbackWarning",
         "InputError",
         "PyroidError",
+        "VersionMismatchWarning",
         "__version__",
         "patch",
         "unpatch",
@@ -61,6 +62,7 @@ def test_public_api() -> None:
     assert pyroid.PyroidError is _pyroid.PyroidError
     assert pyroid.FallbackWarning is _pyroid.FallbackWarning
     assert pyroid.InputError is _pyroid.InputError
+    assert pyroid.VersionMismatchWarning is _pyroid.VersionMismatchWarning
     assert pyroid.Column is _pyroid.Column
 
 

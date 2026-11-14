@@ -436,7 +436,11 @@ class TaskExtractor:
     """
 
     def __init__(self, *, threads: int | None = None, **kwargs: Any) -> None:
-        import pyroid.trafilatura as pt
+        from pyroid import _versions
+
+        # compat picks the release, so only a trafilatura pyroid does not reproduce warns.
+        with _versions.follow_installed("trafilatura"):
+            import pyroid.trafilatura as pt
 
         self._pt: Any = pt
         self.kwargs = {**FINEWEB_TRAFILATURA, **kwargs}

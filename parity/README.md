@@ -11,7 +11,7 @@ without editing the suites. Every run writes `parity-report.json`, which feeds t
 | `filters` | datatrove 0.10.1 (+ spaCy 3.8.18 tokenizer) | Gopher repetition, Gopher quality, C4 (default and FineWeb config), FineWeb quality on 13.2k docs | same keep/drop, same reason string, same rewritten text (C4), same exception |
 | `dedup` | datatrove 0.10.1 MinHash, FineWeb config (sha1/64, 14×8, 5-grams) | 112 signature values per doc; removed-doc set over dev + adversarial (445 removals, mostly injected near-dups) | identical |
 | `metrics` | rouge-score 0.1.2 (+ NLTK 3.10.4 Porter), sacrebleu 2.6.0 | ROUGE-1/2/3/4/L/Lsum on CNN/DM test (11.5k lead-3 vs highlights, 2k whole articles) and SummEval (1.6k system summaries, 11 refs, `score_multi`), with and without stemming; BLEU (13a/intl/char/none/zh/trg_lang, smoothing, lowercase, effective order, max order, `None` reference holes) and chrF/chrF++ per WMT21 system (141 corpora) and per segment (163k); live Hypothesis vs both incumbents (sacrebleu only on GIL builds: it loads lxml, which re-enables the GIL) | identical `repr`/`str`/`format`/signature strings (exact floats) |
-| `json_repair` | json_repair 0.64.5 (live + calls recorded from its own test suite + pinned digests) | 672 public calls from json_repair's 466 upstream tests ([`data/json_repair-0.64.5`](data/json_repair-0.64.5/README.md)), 20k generated broken LLM outputs × 8 option sets, Hypothesis grammar fuzzing with lone surrogates, `loads` / `load` / `from_file` | `str` byte-identical; objects and repair logs type-exact (key order, int vs float, NaN); same exception type and message |
+| `json_repair` | json_repair 0.64.9 (live + calls recorded from its own test suite + pinned digests) | 821 public calls from json_repair's 534 upstream tests ([`data/json_repair-0.64.9`](data/json_repair-0.64.9/README.md)), 20k generated broken LLM outputs × 8 option sets, Hypothesis grammar fuzzing with lone surrogates, `loads` / `load` / `from_file` | `str` byte-identical; objects and repair logs type-exact (key order, int vs float, NaN); same exception type and message |
 | `trafilatura` | one mode per release (`--trafilatura-compat`): trafilatura 2.3.1, or 1.11.0 as `datatrove[processing]` resolves it, each with lxml 6.1.3 + justext 3.0.2 (live + pinned digests + calls recorded from its own tests) | 7,192 Common Crawl pages of 3 crawls (2019, 2023, 2026) × 7 `extract` option sets, datatrove's call among them (stateful: dedup in page order), also through `extract_batch`, and 2 `bare_extraction` sets; the public calls of the release's own tests, replayed test by test (2.3.1: 4,553 from 3,938 tests, [`data/trafilatura-2.3.1`](data/trafilatura-2.3.1/README.md); 1.11.0: 633 from 29 tests, [`data/trafilatura-1.11.0`](data/trafilatura-1.11.0/README.md)); Hypothesis grammar-generated HTML; unported options in fresh processes | text byte-identical (`None` is not `""`), `Document` fields identical, same exception type and message; exactly one `pyroid.FallbackWarning` per delegated option, none for the ported ones |
 | `warc` | warcio 1.8.2 (+ brotlicffi 1.2.1.0) and datatrove 0.10.1's `WarcReader` (+ faust-cchardet 3.2.0, python-magic 0.4.27) (live + pinned digests) | 34 Common Crawl slices (WARC of 16 crawls 2013–2026, WET, WAT, the 2012 ARC crawl, truncated, empty; 18.6k records) and warcio's 16 test files, [`data/warcio-1.8.2`](data/warcio-1.8.2/README.md); 1,085 seeded synthetic files (framing, gzip damage, lengths, headers, HTTP, chunked, encodings, digests, ARC, charsets, big records) and Hypothesis WARC streams, each under up to 29 read plans × options × openers (file, BytesIO, unseekable, short reads, `gzip.GzipFile`, datatrove's open); `process_record` dicts, `iter_documents`, `iter_batches`, `WarcReader` runs | every record field, read, offset, stderr / log message and exception (with what follows it) identical, event by event; Documents identical |
 | `nemo` | NeMo Curator 1.4.0 on CPython 3.12 (live + pinned outputs, recorded with `PYTHONHASHSEED=0`) | the 28 ScoreFilter stages of NeMo's `heuristic_filter_english_pipeline.yaml` and 22 other filter configs, 20 modifier configs, FastTextLangId (lid.176.bin/.ftz) and FastTextQualityFilter on dev + adversarial ([`data/nemo-curator-1.4.0`](data/nemo-curator-1.4.0/README.md)); str, list and Arrow calls; pyroid's NeMo classes per document and inside NeMo's ScoreFilter / Score / Filter / Modify stages; live Hypothesis per filter and modifier; NeMo's own pipelines stock vs pyroid's stages (`pyroid_parity.nemo_pipeline`, not pytest) | score `repr` and type identical, float64/int64 batches, same stage dtypes, same exception type, output digests identical |
@@ -247,6 +247,50 @@ python -m pyroid_parity.nemo_pipeline all                                 # NeMo
   `pyroid.integrations.nemo_curator`, and after `pyroid.patch("nemo_curator")`, on one Ray cluster of 4 CPUs at a
   time, and compares kept ids, columns, dtypes and every cell; see its docstring. Three stock runs of each gave
   identical outputs (2026-11-10).
+
+## Upstream watch
+`.github/workflows/upstream.yml` runs every Monday and on demand. `pyroid_parity/upstream.py detect` reads the
+exact (`==`) pins of the root `pyproject.toml`'s dependency groups and of this project, looks each watched library
+up on PyPI and keeps the newest stable release newer than its pin. Pre-releases, dev releases and releases whose
+files are all yanked are skipped, and a version string must be canonical PEP 440 before it is used. For each
+library found, the workflow builds the wheel and runs the library's suites twice with the new release layered over
+the parity env:
+
+```bash
+cd parity
+uv run --frozen --with ../dist/pyroid-*.whl --with json-repair==0.65.0 pytest -m json_repair \
+  --upstream-oracle json-repair==0.65.0 -W ignore::pyroid.VersionMismatchWarning --impl pyroid.json_repair
+uv run --frozen --with ../dist/pyroid-*.whl --with json-repair==0.65.0 pytest -m json_repair \
+  --upstream-oracle json-repair==0.65.0 -W ignore::pyroid.VersionMismatchWarning   # the release's self-check
+```
+
+`--upstream-oracle DIST==VERSION` makes the suites' oracle version checks expect VERSION instead of the pin, and
+stops pytest unless DIST is installed at VERSION. Pinned references and recorded calls stay those of the pin, so
+the first run shows pyroid against the new release (live checks) and the second shows where the new release
+changes output on the pinned corpora. The workflow then opens or updates one issue per library, titled
+`upstream: <library> <version> released` and labelled `upstream`, with both results and a porting checklist.
+
+| library | suites run |
+|---|---|
+| ftfy, json-repair, datasketch, jieba, fasttext-predict | the module's own suite |
+| warcio, brotlicffi | `warc` |
+| trafilatura (the 2.x pin) | `trafilatura` |
+| lxml, justext | `trafilatura`, `trafilatura@1.11.0` |
+| lxml-html-clean, charset-normalizer, courlan, htmldate | `trafilatura@1.11.0` |
+| nltk, regex | `nltk`, `metrics` |
+| rouge-score, sacrebleu | `metrics` |
+| datatrove | `filters`, `dedup`, `warc` |
+| spacy, sudachipy, pyvi, pythainlp, python-crfsuite | `filters`, `dedup` |
+| tldextract | `filters` |
+| anyascii, nemo-curator | none: the issue says why |
+
+- trafilatura's 1.11.0 pin is not compared with PyPI. datatrove 0.10.1's processing extra requires
+  trafilatura<1.12, so that mode moves with datatrove. Its other pins are watched: a fresh
+  `datatrove[processing]==0.10.1` install resolves their newest releases.
+- Not watched: sudachidict-core (pyroid reads the installed dictionary), faust-cchardet and python-magic
+  (pyroid.warc calls the installed ones), pyahocorasick, and the lint and docs tools.
+- Every exact pin must be in `upstream.WATCH` or `upstream.NOT_WATCHED`; `tests/test_harness_upstream.py` fails
+  otherwise, and also when the two pyproject files pin different versions of a watched library.
 
 ## Oracle choices
 - fastText: fasttext-predict 0.9.2.4.
