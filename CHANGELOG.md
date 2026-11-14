@@ -2,6 +2,13 @@
 
 All notable changes to pyroid are documented here. From 1.0.0 on, [release-please](https://github.com/googleapis/release-please) maintains this file from [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [1.0.1](https://github.com/ao/pyroid/compare/v1.0.0...v1.0.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **thai:** error instead of panic on huge texts; warn on another pythainlp version ([#11](https://github.com/ao/pyroid/issues/11)) ([132c60f](https://github.com/ao/pyroid/commit/132c60f6d964e7eb84f36a5013997b74229b3f4e))
+
 ## [1.0.0](https://github.com/ao/pyroid/compare/v0.7.0...v1.0.0) (2026-11-13)
 
 pyroid 1.0 is a rewrite. It has Rust versions of popular Python libraries, each with the API and
