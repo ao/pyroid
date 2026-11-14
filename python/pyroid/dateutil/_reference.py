@@ -235,6 +235,52 @@ class _resultbase:
         return self._repr(self.__class__.__name__)
 
 
+# pyroid: parserinfo reports changes to itself and to its tables, so pyroid's Rust parser
+# recompiles the tables only after one (parser.py sets _changed to the native hook).
+def _changed():
+    pass
+
+
+class _Table(dict):
+    """A parserinfo table (a dict) that reports changes."""
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        _changed()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        _changed()
+
+    def __ior__(self, other):
+        result = super().__ior__(other)
+        _changed()
+        return result
+
+    def clear(self):
+        super().clear()
+        _changed()
+
+    def pop(self, *args):
+        result = super().pop(*args)
+        _changed()
+        return result
+
+    def popitem(self):
+        result = super().popitem()
+        _changed()
+        return result
+
+    def setdefault(self, *args):
+        result = super().setdefault(*args)
+        _changed()
+        return result
+
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        _changed()
+
+
 class parserinfo:
     """
     Class which handles what inputs are accepted. Subclass this to customize
@@ -304,14 +350,23 @@ class parserinfo:
         self._century = self._year // 100 * 100
 
     def _convert(self, lst):
-        dct = {}
+        dct = _Table()
         for i, v in enumerate(lst):
             if isinstance(v, tuple):
                 for v in v:
-                    dct[v.lower()] = i
+                    dict.__setitem__(dct, v.lower(), i)
             else:
-                dct[v.lower()] = i
+                dict.__setitem__(dct, v.lower(), i)
         return dct
+
+    # pyroid: report attribute changes (see _changed).
+    def __setattr__(self, name, value):
+        object.__setattr__(self, name, value)
+        _changed()
+
+    def __delattr__(self, name):
+        object.__delattr__(self, name)
+        _changed()
 
     def jump(self, name):
         return name.lower() in self._jump

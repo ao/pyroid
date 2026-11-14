@@ -1,18 +1,18 @@
 //! Proleptic Gregorian calendar arithmetic, as `datetime.date` does it (years 1..=9999).
 
 /// Whether `y` is a leap year (`calendar.isleap`).
-pub fn is_leap(y: i128) -> bool {
+pub fn is_leap(y: i64) -> bool {
     y.rem_euclid(4) == 0 && (y.rem_euclid(100) != 0 || y.rem_euclid(400) == 0)
 }
 
 /// `calendar.monthrange(year, month)[1]` (`None`: `IllegalMonthError`).
-pub fn month_days(year: i128, month: i128) -> Option<i128> {
-    const DAYS: [i128; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+pub fn month_days(year: i64, month: i64) -> Option<i64> {
+    const DAYS: [i64; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     if !(1..=12).contains(&month) {
         return None;
     }
     let m = usize::try_from(month).ok()?;
-    Some(DAYS[m] + i128::from(month == 2 && is_leap(year)))
+    Some(DAYS[m] + i64::from(month == 2 && is_leap(year)))
 }
 
 /// `date(y, m, d).toordinal()` for a valid date in 1..=9999.
@@ -21,7 +21,7 @@ pub fn ordinal(year: i64, month: i64, day: i64) -> Option<i64> {
     if !(1..=9999).contains(&year) || !(1..=12).contains(&month) {
         return None;
     }
-    let md = i64::try_from(month_days(year.into(), month.into())?).ok()?;
+    let md = month_days(year, month)?;
     if !(1..=md).contains(&day) {
         return None;
     }
@@ -31,7 +31,7 @@ pub fn ordinal(year: i64, month: i64, day: i64) -> Option<i64> {
         y * 365 + y / 4 - y / 100
             + y / 400
             + BEFORE[m]
-            + i64::from(month > 2 && is_leap(year.into()))
+            + i64::from(month > 2 && is_leap(year))
             + day,
     )
 }
@@ -57,7 +57,7 @@ pub fn from_ordinal(n: i64) -> Option<[i64; 3]> {
     let mut doy = n - ordinal(year, 1, 1)? + 1;
     let mut month = 1;
     loop {
-        let md = i64::try_from(month_days(year.into(), month.into())?).ok()?;
+        let md = month_days(year, month)?;
         if doy <= md {
             break;
         }

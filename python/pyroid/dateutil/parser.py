@@ -152,6 +152,7 @@ def _fallback(name: str, reason: str | None) -> None:
 #: dateutil's parserinfo class (pyroid's copy): subclass it to change the accepted words.
 parserinfo = _reference.parserinfo
 parserinfo.__module__ = __name__
+_reference._changed = _native._info_changed
 
 _DATEUTIL_PARSERINFO: Any = getattr(_upstream._parser_mod, "parserinfo", None)
 

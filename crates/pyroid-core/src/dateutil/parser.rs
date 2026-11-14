@@ -8,7 +8,7 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
 
-use super::info::{ParserInfo, Settings, Table, Word};
+use super::info::{ParserInfo, Settings, Word};
 use super::pystr::{Fail, Int, Num, Props, Reason, py_find_dot, py_int, py_len, py_slice};
 use super::timelex;
 
@@ -86,8 +86,8 @@ pub fn parse(
     p: Props,
     opts: ParseOptions,
 ) -> Result<Option<Parsed>, Reason> {
-    let raw = timelex::split(s, p);
-    let mut l: Vec<Word<'_>> = raw.into_iter().map(|t| Word::new(t, p)).collect();
+    let mut l: Vec<Word<'_>> = Vec::with_capacity(16);
+    timelex::lex(s, p, |t| l.push(Word::new(t, info, p)));
     let mut cx = Cx {
         info,
         settings,
@@ -128,7 +128,7 @@ fn validate(info: &ParserInfo, settings: Settings, p: Props, res: &mut Res) {
         res.tzname = Some("UTC".to_owned());
         res.tzoffset = Some(0);
     } else if res.tzoffset != Some(0)
-        && tzname.is_some_and(|n| !n.is_empty() && info.utczone.contains_key(p.lower(n).as_ref()))
+        && tzname.is_some_and(|n| !n.is_empty() && info.word(n, p).utczone())
     {
         res.tzoffset = Some(0);
     }
@@ -157,14 +157,17 @@ enum Label {
 /// A value `_ymd.append` receives.
 enum YVal<'t> {
     Str(&'t str),
-    Dec(&'t Num),
+    Dec(&'t Num<'t>),
     Int(Int),
 }
 
 /// `_ymd`.
 #[derive(Debug, Default)]
 struct Ymd {
-    v: Vec<Int>,
+    /// The first four values inline, the rest in `extra` (dateutil raises past three anyway).
+    head: [Int; 4],
+    extra: Vec<Int>,
+    n: usize,
     century_specified: bool,
     dstridx: Option<usize>,
     mstridx: Option<usize>,
@@ -184,17 +187,26 @@ fn month_days(year: Int, month: Int) -> Result<Int, Fail> {
 
 impl Ymd {
     fn len(&self) -> usize {
-        self.v.len()
+        self.n
+    }
+
+    /// `self[i]`.
+    fn get(&self, i: usize) -> Int {
+        if i < 4 {
+            self.head[i]
+        } else {
+            self.extra[i - 4]
+        }
     }
 
     /// `self[i]` with Python's negative indexing.
     fn at(&self, i: isize) -> Int {
-        let n = isize::try_from(self.v.len()).expect("small");
+        let n = isize::try_from(self.n).expect("small");
         let j = if i < 0 { i + n } else { i };
-        self.v[usize::try_from(j).expect("in range")]
+        self.get(usize::try_from(j).expect("in range"))
     }
 
-    fn could_be_day(&self, value: &Num) -> Result<bool, Fail> {
+    fn could_be_day(&self, value: &Num<'_>) -> Result<bool, Fail> {
         if self.dstridx.is_some() {
             return Ok(false);
         }
@@ -205,8 +217,8 @@ impl Ymd {
         let Some(mi) = self.mstridx else {
             return Ok(value.cmp_int(31) != Ordering::Greater);
         };
-        let month = self.v[mi];
-        let year = self.ystridx.map_or(2000, |yi| self.v[yi]);
+        let month = self.get(mi);
+        let year = self.ystridx.map_or(2000, |yi| self.get(yi));
         let days = month_days(year, month)?;
         Ok(value.cmp_int(days) != Ordering::Greater)
     }
@@ -230,8 +242,13 @@ impl Ymd {
             YVal::Dec(d) => d.trunc()?,
             YVal::Int(i) => i,
         };
-        self.v.push(n);
-        let idx = Some(self.v.len() - 1);
+        if self.n < 4 {
+            self.head[self.n] = n;
+        } else {
+            self.extra.push(n);
+        }
+        self.n += 1;
+        let idx = Some(self.n - 1);
         match label {
             Some(Label::M) => {
                 if self.mstridx.is_some() {
@@ -274,14 +291,14 @@ impl Ymd {
             }
             for k in 0..3 {
                 if let Some(v) = slots[k] {
-                    out[k] = Some(self.v[v]);
+                    out[k] = Some(self.get(v));
                 }
             }
             return Ok(out);
         }
         let (mut year, mut month, mut day) = (None, None, None);
         let mstridx = self.mstridx;
-        let s = |i: usize| self.v[i];
+        let s = |i: usize| self.get(i);
         if len > 3 {
             return Err(Fail::Invalid);
         } else if len == 1 || (mstridx.is_some() && len == 2) {
@@ -368,37 +385,33 @@ fn tok<'l, 'a>(l: &'l [Word<'a>], i: usize) -> Result<&'l Word<'a>, Fail> {
     l.get(i).ok_or(Fail::Invalid)
 }
 
-fn lookup(t: &Table, w: &Word<'_>) -> Option<i64> {
-    t.get(w.low.as_ref()).copied()
-}
-
 impl Cx<'_> {
-    fn jump(&self, w: &Word<'_>) -> bool {
-        self.info.jump.contains_key(w.low.as_ref())
+    fn jump(w: &Word<'_>) -> bool {
+        w.w.jump()
     }
 
-    fn weekday(&self, w: &Word<'_>) -> Option<Int> {
-        lookup(&self.info.weekdays, w).map(Int::from)
+    fn weekday(w: &Word<'_>) -> Option<Int> {
+        w.w.weekday()
     }
 
-    fn month(&self, w: &Word<'_>) -> Option<Int> {
-        lookup(&self.info.months, w).map(|m| Int::from(m) + 1)
+    fn month(w: &Word<'_>) -> Option<Int> {
+        w.w.month().map(|m| m + 1)
     }
 
-    fn hms(&self, w: &Word<'_>) -> Option<Int> {
-        lookup(&self.info.hms, w).map(Int::from)
+    fn hms(w: &Word<'_>) -> Option<Int> {
+        w.w.hms()
     }
 
-    fn ampm(&self, w: &Word<'_>) -> Option<Int> {
-        lookup(&self.info.ampm, w).map(Int::from)
+    fn ampm(w: &Word<'_>) -> Option<Int> {
+        w.w.ampm()
     }
 
-    fn pertain(&self, w: &Word<'_>) -> bool {
-        self.info.pertain.contains_key(w.low.as_ref())
+    fn pertain(w: &Word<'_>) -> bool {
+        w.w.pertain()
     }
 
-    fn utczone(&self, w: &Word<'_>) -> bool {
-        self.info.utczone.contains_key(w.low.as_ref())
+    fn utczone(w: &Word<'_>) -> bool {
+        w.w.utczone()
     }
 
     /// `info.tzoffset(name)`: 0 when `name` (not lowered) is a key of `_utczone`.
@@ -414,18 +427,18 @@ impl Cx<'_> {
     }
 
     /// `_to_decimal(val)`: `ValueError` unless finite.
-    fn dec(&self, s: &str) -> Result<Num, Fail> {
+    fn dec<'s>(&self, s: &'s str) -> Result<Num<'s>, Fail> {
         Num::parse(self.p, s).ok_or(Fail::Invalid)
     }
 
-    fn note_precision(&mut self, d: &Num) -> Result<(), Fail> {
+    fn note_precision(&mut self, d: &Num<'_>) -> Result<(), Fail> {
         let need = d.precision_needed()?;
         self.precision = self.precision.max(need);
         Ok(())
     }
 
     /// `_parse_min_sec(value)` -> (minute, second).
-    fn min_sec(&mut self, d: &Num) -> Result<(Int, Option<Int>), Fail> {
+    fn min_sec(&mut self, d: &Num<'_>) -> Result<(Int, Option<Int>), Fail> {
         let minute = d.trunc()?;
         self.note_precision(d)?;
         let second = if d.has_fraction() {
@@ -492,18 +505,18 @@ impl Cx<'_> {
     }
 
     /// `_find_hms_idx(idx, tokens, info, allow_jump=True)`.
-    fn find_hms_idx(&self, idx: usize, l: &[Word<'_>]) -> Option<usize> {
+    fn find_hms_idx(idx: usize, l: &[Word<'_>]) -> Option<usize> {
         let len_l = l.len();
-        if idx + 1 < len_l && self.hms(&l[idx + 1]).is_some() {
+        if idx + 1 < len_l && Self::hms(&l[idx + 1]).is_some() {
             Some(idx + 1)
-        } else if idx + 2 < len_l && l[idx + 1].is(" ") && self.hms(&l[idx + 2]).is_some() {
+        } else if idx + 2 < len_l && l[idx + 1].is(" ") && Self::hms(&l[idx + 2]).is_some() {
             Some(idx + 2)
-        } else if idx > 0 && self.hms(&l[idx - 1]).is_some() {
+        } else if idx > 0 && Self::hms(&l[idx - 1]).is_some() {
             Some(idx - 1)
         } else if 1 < idx
             && idx == len_l - 1
             && l[idx - 1].is(" ")
-            && self.hms(&l[idx - 2]).is_some()
+            && Self::hms(&l[idx - 2]).is_some()
         {
             Some(idx - 2)
         } else {
@@ -548,7 +561,7 @@ impl Cx<'_> {
         if ymd.len() == 3
             && matches!(len_li, 2 | 4)
             && res.hour.is_none()
-            && (idx + 1 >= len_l || (!l[idx + 1].is(":") && self.hms(&l[idx + 1]).is_none()))
+            && (idx + 1 >= len_l || (!l[idx + 1].is(":") && Self::hms(&l[idx + 1]).is_none()))
         {
             // 19990101T23[59]
             let s = value_repr;
@@ -583,14 +596,14 @@ impl Cx<'_> {
                     res.second = Some(self.int(py_slice(s, 12, None))?);
                 }
             }
-        } else if let Some(hms_idx) = self.find_hms_idx(idx, l) {
+        } else if let Some(hms_idx) = Self::find_hms_idx(idx, l) {
             // HH[ ]h or MM[ ]m or SS[.ss][ ]s; _parse_hms
             let hms = if hms_idx > idx {
-                let h = self.hms(&l[hms_idx]).expect("found");
+                let h = Self::hms(&l[hms_idx]).expect("found");
                 idx = hms_idx;
                 h
             } else {
-                self.hms(&l[hms_idx]).expect("found") + 1
+                Self::hms(&l[hms_idx]).expect("found") + 1
             };
             self.assign_hms(res, value_repr, hms)?;
         } else if idx + 2 < len_l && l[idx + 1].is(":") {
@@ -610,13 +623,13 @@ impl Cx<'_> {
         } else if idx + 1 < len_l && matches!(&*l[idx + 1].raw, "-" | "/" | ".") {
             let sep: &str = &l[idx + 1].raw;
             ymd.append(self, YVal::Str(value_repr), None)?;
-            if idx + 2 < len_l && !self.jump(&l[idx + 2]) {
+            if idx + 2 < len_l && !Self::jump(&l[idx + 2]) {
                 if self.p.str_isdigit(&l[idx + 2].raw) {
                     // 01-01[-01]
                     ymd.append(self, YVal::Str(&l[idx + 2].raw), None)?;
                 } else {
                     // 01-Jan[-01]
-                    match self.month(&l[idx + 2]) {
+                    match Self::month(&l[idx + 2]) {
                         Some(m) => ymd.append(self, YVal::Int(m), Some(Label::M))?,
                         None => return Err(Fail::Invalid),
                     }
@@ -624,7 +637,7 @@ impl Cx<'_> {
                 if idx + 3 < len_l && l[idx + 3].is(sep) {
                     // We have three members
                     let t4 = tok(l, idx + 4)?;
-                    match self.month(t4) {
+                    match Self::month(t4) {
                         Some(m) => ymd.append(self, YVal::Int(m), Some(Label::M))?,
                         None => ymd.append(self, YVal::Str(&t4.raw), None)?,
                     }
@@ -633,8 +646,8 @@ impl Cx<'_> {
                 idx += 1;
             }
             idx += 1;
-        } else if idx + 1 >= len_l || self.jump(&l[idx + 1]) {
-            match l.get(idx + 2).and_then(|w| self.ampm(w)) {
+        } else if idx + 1 >= len_l || Self::jump(&l[idx + 1]) {
+            match l.get(idx + 2).and_then(|w| Self::ampm(w)) {
                 Some(ap) => {
                     // 12 am
                     let hour = value.trunc()?;
@@ -647,8 +660,7 @@ impl Cx<'_> {
                 }
             }
             idx += 1;
-        } else if let Some(ap) = self
-            .ampm(&l[idx + 1])
+        } else if let Some(ap) = Self::ampm(&l[idx + 1])
             .filter(|_| value.cmp_int(0) != Ordering::Less && value.cmp_int(24) == Ordering::Less)
         {
             // 12am
@@ -679,9 +691,9 @@ impl Cx<'_> {
             if float_ok(self.p, &l[i].raw) {
                 // Numeric token
                 i = self.numeric_token(l, i, &mut ymd, res)?;
-            } else if let Some(wd) = self.weekday(&l[i]) {
+            } else if let Some(wd) = Self::weekday(&l[i]) {
                 res.weekday = Some(wd);
-            } else if let Some(m) = self.month(&l[i]) {
+            } else if let Some(m) = Self::month(&l[i]) {
                 ymd.append(self, YVal::Int(m), Some(Label::M))?;
                 if i + 1 < len_l {
                     if matches!(&*l[i + 1].raw, "-" | "/") {
@@ -697,7 +709,7 @@ impl Cx<'_> {
                     } else if i + 4 < len_l
                         && l[i + 1].is(" ")
                         && l[i + 3].is(" ")
-                        && self.pertain(&l[i + 2])
+                        && Self::pertain(&l[i + 2])
                     {
                         // Jan of 01
                         if self.p.str_isdigit(&l[i + 4].raw) {
@@ -708,7 +720,7 @@ impl Cx<'_> {
                         i += 4;
                     }
                 }
-            } else if let Some(ap) = self.ampm(&l[i]) {
+            } else if let Some(ap) = Self::ampm(&l[i]) {
                 if self.ampm_valid(res)? {
                     res.hour = Some(adjust_ampm(res.hour.expect("valid"), ap));
                     res.ampm = Some(ap);
@@ -722,12 +734,9 @@ impl Cx<'_> {
                 // GMT+3 / BRST+3: "my time +3 is GMT", so the sign is flipped.
                 if i + 1 < len_l && matches!(&*l[i + 1].raw, "+" | "-") {
                     let flipped = if l[i + 1].is("+") { "-" } else { "+" };
-                    l[i + 1] = Word {
-                        raw: Cow::Borrowed(flipped),
-                        low: Cow::Borrowed(flipped),
-                    };
+                    l[i + 1] = Word::new(Cow::Borrowed(flipped), self.info, self.p);
                     res.tzoffset = None;
-                    if self.utczone(&l[i]) {
+                    if Self::utczone(&l[i]) {
                         res.tzname = None;
                     }
                 }
@@ -760,7 +769,7 @@ impl Cx<'_> {
                 res.tzoffset = Some(secs);
                 // Look for a timezone name between parenthesis: -0300 (BRST)
                 if i + 5 < len_l
-                    && self.jump(&l[i + 2])
+                    && Self::jump(&l[i + 2])
                     && l[i + 3].is("(")
                     && l[i + 5].is(")")
                     && 3 <= py_len(&l[i + 4].raw)
@@ -770,7 +779,7 @@ impl Cx<'_> {
                     i += 4;
                 }
                 i += 1;
-            } else if !(self.jump(&l[i]) || self.fuzzy) {
+            } else if !(Self::jump(&l[i]) || self.fuzzy) {
                 return Err(Fail::Invalid);
             } else {
                 skipped.push(i);

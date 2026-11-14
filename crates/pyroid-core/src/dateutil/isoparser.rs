@@ -282,7 +282,7 @@ impl P {
 }
 
 fn is_leap(y: i64) -> bool {
-    cal::is_leap(y.into())
+    cal::is_leap(y)
 }
 
 /// `date(year, 1, day).toordinal()`; `date()` raises outside 1..9999 (left to dateutil's code).

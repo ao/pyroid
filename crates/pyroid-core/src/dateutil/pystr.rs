@@ -10,9 +10,9 @@ use std::cmp::Ordering;
 use crate::ftfy::UnicodeVersion;
 use crate::json_repair::chars::{CharProps, UnicodeVersion as JrVersion};
 
-/// An integer as the parser computes it. Python's are unbounded; values past `i128` make the
+/// An integer as the parser computes it. Python's are unbounded; values past `i64` make the
 /// kernel hand the string to the Python reference ([`Fail::Reference`]).
-pub type Int = i128;
+pub type Int = i64;
 
 /// Why the kernel stopped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,7 +28,7 @@ pub enum Fail {
 /// What [`Fail::Reference`] needs Python for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Reason {
-    /// An integer outside `i128` (Python's ints are unbounded).
+    /// An integer outside `i64` (Python's ints are unbounded).
     BigNumber,
     /// `Decimal` arithmetic (`% 1`, `* 60`) on a number with more than 26 significant digits,
     /// where the `decimal` context's precision would round or raise.
@@ -41,7 +41,7 @@ impl Reason {
     /// The reason as the fallback warning names it.
     pub fn describe(self) -> &'static str {
         match self {
-            Self::BigNumber => "a number too large for the Rust port (over 38 digits)",
+            Self::BigNumber => "a number too large for the Rust port (past 64 bits)",
             Self::LongDecimal => "a fractional number with more than 26 significant digits",
             Self::InfoValue => "a parserinfo table value the Rust port does not handle",
         }
@@ -115,6 +115,9 @@ impl Props {
 
     /// `s.isdigit()`: non-empty and every character a digit.
     pub fn str_isdigit(self, s: &str) -> bool {
+        if s.is_ascii() {
+            return !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+        }
         !s.is_empty() && s.chars().all(|c| self.is_digit(c))
     }
 
@@ -172,7 +175,7 @@ pub fn py_find_dot(s: &str) -> Option<usize> {
     Some(py_len(&s[..byte]))
 }
 
-/// Accumulate decimal digit `d` into `acc` (`None` once past `i128`).
+/// Accumulate decimal digit `d` into `acc` (`None` once past `i64`).
 #[inline]
 fn push_digit(acc: Option<Int>, d: u8) -> Option<Int> {
     acc?.checked_mul(10)?.checked_add(Int::from(d))
@@ -181,7 +184,16 @@ fn push_digit(acc: Option<Int>, d: u8) -> Option<Int> {
 /// `int(s)` for a `str`, base 10: surrounding whitespace, one sign, Unicode decimal digits with
 /// single underscores between them. `max_digits` is `sys.get_int_max_str_digits()` (0: no
 /// limit).
+#[allow(clippy::many_single_char_names)]
 pub fn py_int(p: Props, s: &str, max_digits: usize) -> Result<Int, Fail> {
+    let b = s.as_bytes();
+    if !b.is_empty()
+        && b.len() <= 18
+        && (max_digits == 0 || b.len() <= max_digits)
+        && b.iter().all(u8::is_ascii_digit)
+    {
+        return Ok(b.iter().fold(0, |acc, &d| acc * 10 + Int::from(d - b'0')));
+    }
     let t = s.trim_matches(Props::is_space);
     let (neg, body) = match t.as_bytes().first() {
         Some(b'-') => (true, &t[1..]),
@@ -221,45 +233,51 @@ pub fn py_int(p: Props, s: &str, max_digits: usize) -> Result<Int, Fail> {
 /// tokenizer never makes another finite form; words such as `inf` are not finite). Digits are
 /// kept as ASCII.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Num {
+pub struct Num<'a> {
     /// Integer part, ASCII digits (at least one).
-    pub int: String,
+    pub int: Cow<'a, str>,
     /// Fraction digits (empty without a point).
-    pub frac: String,
+    pub frac: Cow<'a, str>,
 }
 
-impl Num {
+impl<'a> Num<'a> {
     /// `Decimal(s)` if it is finite, else `None` (dateutil's `_to_decimal` raises then).
-    pub fn parse(p: Props, s: &str) -> Option<Self> {
+    pub fn parse(p: Props, s: &'a str) -> Option<Self> {
         let (a, b) = match s.find('.') {
             Some(i) => (&s[..i], Some(&s[i + 1..])),
             None => (s, None),
         };
-        let digits = |x: &str| -> Option<String> {
+        let digits = |x: &'a str| -> Option<Cow<'a, str>> {
             if x.is_empty() {
                 return None;
             }
             if x.bytes().all(|c| c.is_ascii_digit()) {
-                return Some(x.to_owned());
+                return Some(Cow::Borrowed(x));
             }
             x.chars()
                 .map(|c| p.decimal_value(c).map(|d| char::from(b'0' + d)))
-                .collect()
+                .collect::<Option<String>>()
+                .map(Cow::Owned)
         };
         Some(Self {
             int: digits(a)?,
             frac: match b {
                 Some(b) => digits(b)?,
-                None => String::new(),
+                None => Cow::Borrowed(""),
             },
         })
     }
 
     /// `int(d)` (truncation; the values are never negative).
     pub fn trunc(&self) -> Result<Int, Fail> {
+        let b = self.int.as_bytes();
+        if b.len() <= 18 {
+            // No overflow: at most 18 digits.
+            return Ok(b.iter().fold(0, |a, &d| a * 10 + Int::from(d - b'0')));
+        }
         let mut acc = Some(0);
-        for b in self.int.bytes() {
-            acc = push_digit(acc, b - b'0');
+        for &d in b {
+            acc = push_digit(acc, d - b'0');
         }
         acc.ok_or(Fail::Reference(Reason::BigNumber))
     }
@@ -271,7 +289,7 @@ impl Num {
 
     /// `d` compared with the integer `n`.
     pub fn cmp_int(&self, n: Int) -> Ordering {
-        // Past i128 the value is larger than any `n`.
+        // Past i64 the value is larger than any `n`.
         let ord = self.trunc().map_or(Ordering::Greater, |v| v.cmp(&n));
         if ord == Ordering::Equal && self.has_fraction() {
             Ordering::Greater
@@ -337,7 +355,7 @@ mod tests {
         assert_eq!(py_int(p, ".5", 4300), Err(Fail::Invalid));
         assert_eq!(py_int(p, "12345", 4), Err(Fail::Invalid));
         assert_eq!(
-            py_int(p, &"9".repeat(40), 4300),
+            py_int(p, &"9".repeat(20), 4300),
             Err(Fail::Reference(Reason::BigNumber))
         );
     }

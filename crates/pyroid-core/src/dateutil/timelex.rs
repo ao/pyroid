@@ -118,8 +118,18 @@ struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     /// `instream.read(1)`, skipping NULs.
+    #[inline]
     fn read(&mut self) -> Option<(usize, char)> {
         loop {
+            let b = *self.s.as_bytes().get(self.pos)?;
+            if b < 0x80 {
+                let at = self.pos;
+                self.pos += 1;
+                if b != 0 {
+                    return Some((at, char::from(b)));
+                }
+                continue;
+            }
             let c = self.s[self.pos..].chars().next()?;
             let at = self.pos;
             self.pos += c.len_utf8();
@@ -238,8 +248,8 @@ impl<'a> Lexer<'a> {
     }
 }
 
-/// `_timelex.split(s)`.
-pub fn split(s: &str, p: Props) -> Vec<Cow<'_, str>> {
+/// `_timelex.split(s)`, each token passed to `emit`.
+pub fn lex<'a>(s: &'a str, p: Props, mut emit: impl FnMut(Cow<'a, str>)) {
     let mut lx = Lexer {
         s,
         pos: 0,
@@ -249,10 +259,15 @@ pub fn split(s: &str, p: Props) -> Vec<Cow<'_, str>> {
         eof: false,
         p,
     };
-    let mut out = Vec::with_capacity(16);
     while let Some(t) = lx.get_token() {
-        out.push(t);
+        emit(t);
     }
+}
+
+/// `_timelex.split(s)`.
+pub fn split(s: &str, p: Props) -> Vec<Cow<'_, str>> {
+    let mut out = Vec::with_capacity(16);
+    lex(s, p, |t| out.push(t));
     out
 }
 

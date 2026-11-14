@@ -14,14 +14,14 @@
 //! - a parser or parserinfo subclass that overrides a method, and the inputs the kernel cannot
 //!   reproduce, run dateutil's own algorithm (`parser._reference_parse`).
 
-use std::cell::OnceCell;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::cell::{OnceCell, RefCell};
+use std::sync::{Arc, OnceLock};
 
 use pyo3::exceptions::{PyTypeError, PyUnicodeEncodeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyString, PyTuple, PyType};
-use pyroid_core::dateutil::info::Table;
+use pyroid_core::dateutil::info::{Table, Tables};
 use pyroid_core::dateutil::isoparser::{self as iso, Iso, IsoTz, Mode};
 use pyroid_core::dateutil::{
     self as kernel, Int, ParseOptions, Parsed, ParserInfo, Props, Res, Settings,
@@ -76,6 +76,10 @@ struct Hooks {
     module: Py<PyDict>,
     parser: Py<PyType>,
     parserinfo: Py<PyType>,
+    /// pyroid's change-reporting table dict (`_reference._Table`).
+    table_type: Py<PyType>,
+    /// pyroid's parserinfo `__setattr__` and `__delattr__` (they report changes).
+    tracked_setattr: (Py<PyAny>, Py<PyAny>),
     dateutil_parserinfo: Option<Py<PyType>>,
     isoparser: Py<PyType>,
     default_isoparser: Py<PyAny>,
@@ -84,6 +88,7 @@ struct Hooks {
     unknown_tz: Py<PyAny>,
     utc: Py<PyAny>,
     tzoffset: Py<PyAny>,
+    tzlocal: Py<PyAny>,
     finish: Py<PyAny>,
     make_result: Py<PyAny>,
     reference_parse: Py<PyAny>,
@@ -159,6 +164,15 @@ fn _install(d: &Bound<'_, PyDict>) -> PyResult<()> {
         default_isoparser: item(&module, "DEFAULT_ISOPARSER")?.unbind(),
         module: module.unbind(),
         parser: parser.cast_into::<PyType>()?.unbind(),
+        table_type: py
+            .import("pyroid.dateutil._reference")?
+            .getattr("_Table")?
+            .cast_into::<PyType>()?
+            .unbind(),
+        tracked_setattr: (
+            parserinfo.getattr("__setattr__")?.unbind(),
+            parserinfo.getattr("__delattr__")?.unbind(),
+        ),
         parserinfo: parserinfo.cast_into::<PyType>()?.unbind(),
         dateutil_parserinfo: if du_info.is_none() {
             None
@@ -171,6 +185,7 @@ fn _install(d: &Bound<'_, PyDict>) -> PyResult<()> {
         unknown_tz: item(d, "UnknownTimezoneWarning")?.unbind(),
         utc: tz.getattr("UTC")?.unbind(),
         tzoffset: tz.getattr("tzoffset")?.unbind(),
+        tzlocal: tz.getattr("tzlocal")?.unbind(),
         finish: item(d, "finish")?.unbind(),
         make_result: item(d, "make_result")?.unbind(),
         reference_parse: item(d, "reference_parse")?.unbind(),
@@ -194,33 +209,34 @@ fn _install(d: &Bound<'_, PyDict>) -> PyResult<()> {
 // Subclass checks and the compiled parserinfo
 // ---------------------------------------------------------------------------
 
-/// Per type: the hook it overrides (`None`: none). Holds the types so ids stay unique.
-type TypeCache = Mutex<FxHashMap<usize, (Py<PyType>, Option<String>)>>;
-static PARSER_TYPES: OnceLock<TypeCache> = OnceLock::new();
-static PRIVATE_TYPES: OnceLock<TypeCache> = OnceLock::new();
-static INFO_TYPES: OnceLock<TypeCache> = OnceLock::new();
-static ISO_TYPES: OnceLock<TypeCache> = OnceLock::new();
+/// Per type: the hook it overrides (`None`: none). Per thread (no lock on the hot path); holds
+/// the types so their ids stay theirs.
+type TypeCache = RefCell<FxHashMap<usize, (Py<PyType>, Option<String>)>>;
+
+thread_local! {
+    static PARSER_TYPES: TypeCache = RefCell::default();
+    static PRIVATE_TYPES: TypeCache = RefCell::default();
+    static INFO_TYPES: TypeCache = RefCell::default();
+    static ISO_TYPES: TypeCache = RefCell::default();
+}
 
 fn cached_override(
-    cache: &'static OnceLock<TypeCache>,
+    cache: &'static std::thread::LocalKey<TypeCache>,
     ty: &Bound<'_, PyType>,
     check: impl FnOnce() -> PyResult<Option<String>>,
 ) -> PyResult<Option<String>> {
-    let cache = cache.get_or_init(TypeCache::default);
     let key = ty.as_ptr() as usize;
-    if let Some((_, r)) = cache
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .get(&key)
-    {
-        return Ok(r.clone());
+    if let Some(r) = cache.with(|c| c.borrow().get(&key).map(|(_, r)| r.clone())) {
+        return Ok(r);
     }
     let r = check()?;
-    let mut c = cache.lock().unwrap_or_else(PoisonError::into_inner);
-    if c.len() > 256 {
-        c.clear();
-    }
-    c.insert(key, (ty.clone().unbind(), r.clone()));
+    cache.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.len() > 256 {
+            c.clear();
+        }
+        c.insert(key, (ty.clone().unbind(), r.clone()));
+    });
     Ok(r)
 }
 
@@ -263,13 +279,18 @@ fn private_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResu
     })
 }
 
-fn info_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
+/// Whether `obj` is exactly dateutil's or pyroid's parserinfo.
+fn exact_info(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> bool {
     let ty = obj.get_type();
-    if ty.is(h.parserinfo.bind(py))
+    ty.is(h.parserinfo.bind(py))
         || h.dateutil_parserinfo
             .as_ref()
             .is_some_and(|d| ty.is(d.bind(py)))
-    {
+}
+
+fn info_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
+    let ty = obj.get_type();
+    if exact_info(py, h, obj) {
         return Ok(None);
     }
     cached_override(&INFO_TYPES, &ty, || {
@@ -315,14 +336,64 @@ const TABLE_ATTRS: [&str; 7] = [
     "_pertain",
 ];
 
+/// A compiled parserinfo and the objects it was compiled from.
 struct InfoEntry {
+    info: usize,
     /// The 7 table dicts, `TZOFFSET` and `UTCZONE` (held, so their ids stay theirs).
-    objs: Vec<Py<PyAny>>,
-    lens: Vec<usize>,
+    objs: [Py<PyAny>; 9],
+    lens: [usize; 9],
     compiled: Arc<Compiled>,
 }
 
-static INFO_CACHE: OnceLock<Mutex<FxHashMap<usize, InfoEntry>>> = OnceLock::new();
+thread_local! {
+    /// The parserinfos this thread used last (no lock on the hot path).
+    static INFOS: RefCell<Vec<InfoEntry>> = const { RefCell::new(Vec::new()) };
+    /// The last pyroid parserinfo whose tables all report changes ([`INFO_GEN`]).
+    static TRACKED: RefCell<Option<TrackedEntry>> = const { RefCell::new(None) };
+    /// Per type: whether its instances report changes (pyroid's `__setattr__`).
+    static TRACKED_TYPES: RefCell<FxHashMap<usize, (Py<PyType>, bool)>> = RefCell::default();
+}
+
+/// Bumped by pyroid's parserinfo on any change to one (an attribute set, a table changed).
+static INFO_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Called by pyroid's parserinfo and its tables when they change.
+#[pyfunction]
+fn _info_changed() {
+    INFO_GEN.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+}
+
+/// A parserinfo checked at generation `generation`: unchanged while the generation is, apart from its
+/// class-level `TZOFFSET` and `UTCZONE` (plain containers, checked each call).
+struct TrackedEntry {
+    info: Py<PyAny>,
+    generation: u64,
+    class_objs: [Py<PyAny>; 2],
+    class_lens: [usize; 2],
+    compiled: Arc<Compiled>,
+    settings: Option<Settings>,
+}
+
+/// Whether instances of `info`'s type report their changes.
+fn tracked_type(h: &Hooks, info: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let py = info.py();
+    let ty = info.get_type();
+    let key = ty.as_ptr() as usize;
+    if let Some(t) = TRACKED_TYPES.with(|c| c.borrow().get(&key).map(|(_, t)| *t)) {
+        return Ok(t);
+    }
+    let t = ty.is_subclass(h.parserinfo.bind(py))?
+        && ty.getattr("__setattr__")?.is(h.tracked_setattr.0.bind(py))
+        && ty.getattr("__delattr__")?.is(h.tracked_setattr.1.bind(py));
+    TRACKED_TYPES.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.len() > 256 {
+            c.clear();
+        }
+        c.insert(key, (ty.clone().unbind(), t));
+    });
+    Ok(t)
+}
 
 fn container_len(o: &Bound<'_, PyAny>) -> usize {
     o.len().unwrap_or(usize::MAX)
@@ -345,7 +416,9 @@ fn table_of(d: &Bound<'_, PyAny>, valued: bool, what: &str) -> Result<Table, Str
                 return Err(format!("a parserinfo {what} value that is a bool"));
             }
             v.extract::<i64>()
-                .map_err(|_| format!("a parserinfo {what} value that is not an int"))?
+                .ok()
+                .filter(|v| v.abs() <= pyroid_core::dateutil::info::MAX_TABLE_VALUE)
+                .ok_or_else(|| format!("a parserinfo {what} value the Rust port does not handle"))?
         } else {
             0
         };
@@ -380,8 +453,7 @@ fn compile(objs: &[Bound<'_, PyAny>]) -> Compiled {
             }
             let v: Int = v
                 .extract::<i64>()
-                .map_err(|_| "a TZOFFSET value that is not an int".to_owned())?
-                .into();
+                .map_err(|_| "a TZOFFSET value that is not an int".to_owned())?;
             tzoffset.insert(k.into(), v);
         }
         let ut = &objs[8];
@@ -402,7 +474,7 @@ fn compile(objs: &[Bound<'_, PyAny>]) -> Compiled {
         }
         let mut it = tables.into_iter();
         let mut next = || it.next().expect("seven");
-        Ok(ParserInfo {
+        let t = Tables {
             jump: next(),
             weekdays: next(),
             months: next(),
@@ -410,9 +482,8 @@ fn compile(objs: &[Bound<'_, PyAny>]) -> Compiled {
             ampm: next(),
             utczone: next(),
             pertain: next(),
-            tzoffset,
-            utczone_list,
-        })
+        };
+        Ok(ParserInfo::new(t, tzoffset, utczone_list))
     };
     match build() {
         Ok(i) => Compiled::Ok(Box::new(i)),
@@ -420,60 +491,145 @@ fn compile(objs: &[Bound<'_, PyAny>]) -> Compiled {
     }
 }
 
-/// The compiled tables and settings of parserinfo `info`.
-fn info_of(info: &Bound<'_, PyAny>) -> PyResult<(Arc<Compiled>, Option<Settings>)> {
-    let py = info.py();
-    let mut objs = Vec::with_capacity(9);
-    for a in TABLE_ATTRS {
-        objs.push(info.getattr(a)?);
+/// `info.<name>`: from the instance dict for dateutil's and pyroid's own parserinfo (no
+/// descriptors there), else `getattr`.
+fn info_attr<'py>(
+    info: &Bound<'py, PyAny>,
+    dict: Option<&Bound<'py, PyDict>>,
+    name: &Bound<'py, PyString>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(d) = dict {
+        if let Some(v) = d.get_item(name)? {
+            return Ok(v);
+        }
     }
-    objs.push(info.getattr(pyo3::intern!(py, "TZOFFSET"))?);
-    objs.push(info.getattr(pyo3::intern!(py, "UTCZONE"))?);
-    let lens: Vec<usize> = objs.iter().map(container_len).collect();
-    let settings = (|| -> PyResult<Option<Settings>> {
-        let dayfirst = info.getattr(pyo3::intern!(py, "dayfirst"))?.is_truthy()?;
-        let yearfirst = info.getattr(pyo3::intern!(py, "yearfirst"))?.is_truthy()?;
-        let year = info.getattr(pyo3::intern!(py, "_year"))?;
-        let century = info.getattr(pyo3::intern!(py, "_century"))?;
+    info.getattr(name)
+}
+
+/// The compiled tables and settings of parserinfo `info`.
+fn info_of(h: &Hooks, info: &Bound<'_, PyAny>) -> PyResult<(Arc<Compiled>, Option<Settings>)> {
+    use pyo3::intern;
+    let py = info.py();
+    let tracked = tracked_type(h, info)?;
+    let generation = INFO_GEN.load(std::sync::atomic::Ordering::Acquire);
+    if tracked {
+        let tz = info.getattr(intern!(py, "TZOFFSET"))?;
+        let utc = info.getattr(intern!(py, "UTCZONE"))?;
+        let lens = [container_len(&tz), container_len(&utc)];
+        let hit = TRACKED.with(|c| {
+            c.borrow().as_ref().and_then(|e| {
+                (e.generation == generation
+                    && e.info.bind(py).is(info)
+                    && e.class_objs[0].bind(py).is(&tz)
+                    && e.class_objs[1].bind(py).is(&utc)
+                    && e.class_lens == lens)
+                    .then(|| (e.compiled.clone(), e.settings))
+            })
+        });
+        if let Some(hit) = hit {
+            return Ok(hit);
+        }
+    }
+    let (compiled, settings, all_tables_tracked) = info_full(h, info)?;
+    if tracked && all_tables_tracked {
+        let tz = info.getattr(intern!(py, "TZOFFSET"))?;
+        let utc = info.getattr(intern!(py, "UTCZONE"))?;
+        let class_lens = [container_len(&tz), container_len(&utc)];
+        TRACKED.with(|c| {
+            *c.borrow_mut() = Some(TrackedEntry {
+                info: info.clone().unbind(),
+                generation,
+                class_objs: [tz.unbind(), utc.unbind()],
+                class_lens,
+                compiled: compiled.clone(),
+                settings,
+            });
+        });
+    }
+    Ok((compiled, settings))
+}
+
+/// [`info_of`] reading every attribute; also whether the seven tables are all pyroid's
+/// change-reporting dicts.
+fn info_full(
+    h: &Hooks,
+    info: &Bound<'_, PyAny>,
+) -> PyResult<(Arc<Compiled>, Option<Settings>, bool)> {
+    use pyo3::intern;
+    let py = info.py();
+    let exact = exact_info(py, h, info);
+
+    let dict = if exact {
+        info.getattr(intern!(py, "__dict__"))?
+            .cast_into::<PyDict>()
+            .ok()
+    } else {
+        None
+    };
+    let d = dict.as_ref();
+    let objs = [
+        info_attr(info, d, intern!(py, "_jump"))?,
+        info_attr(info, d, intern!(py, "_weekdays"))?,
+        info_attr(info, d, intern!(py, "_months"))?,
+        info_attr(info, d, intern!(py, "_hms"))?,
+        info_attr(info, d, intern!(py, "_ampm"))?,
+        info_attr(info, d, intern!(py, "_utczone"))?,
+        info_attr(info, d, intern!(py, "_pertain"))?,
+        info_attr(info, d, intern!(py, "TZOFFSET"))?,
+        info_attr(info, d, intern!(py, "UTCZONE"))?,
+    ];
+    let lens = objs.each_ref().map(container_len);
+    let settings = {
+        let dayfirst = info_attr(info, d, intern!(py, "dayfirst"))?.is_truthy()?;
+        let yearfirst = info_attr(info, d, intern!(py, "yearfirst"))?.is_truthy()?;
+        let year = info_attr(info, d, intern!(py, "_year"))?;
+        let century = info_attr(info, d, intern!(py, "_century"))?;
         let int = |o: &Bound<'_, PyAny>| -> Option<Int> {
             if o.is_instance_of::<pyo3::types::PyBool>() {
                 return None;
             }
-            o.extract::<i64>().ok().map(Int::from)
+            o.extract::<i64>().ok()
         };
-        Ok(int(&year)
+        int(&year)
             .zip(int(&century))
             .map(|(year, century)| Settings {
                 dayfirst,
                 yearfirst,
                 year,
                 century,
-            }))
-    })()?;
+            })
+    };
+    let tables_tracked = {
+        let table_type = h.table_type.bind(py);
+        objs[..7].iter().all(|o| o.get_type().is(table_type))
+    };
     let key = info.as_ptr() as usize;
-    let cache = INFO_CACHE.get_or_init(Mutex::default);
-    {
-        let c = cache.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(e) = c.get(&key) {
-            if e.lens == lens && e.objs.iter().zip(&objs).all(|(a, b)| a.is(b)) {
-                return Ok((e.compiled.clone(), settings));
-            }
-        }
+    let hit = INFOS.with(|c| {
+        c.borrow()
+            .iter()
+            .find(|e| {
+                e.info == key && e.lens == lens && e.objs.iter().zip(&objs).all(|(a, b)| a.is(b))
+            })
+            .map(|e| e.compiled.clone())
+    });
+    if let Some(c) = hit {
+        return Ok((c, settings, tables_tracked));
     }
     let compiled = Arc::new(compile(&objs));
-    let mut c = cache.lock().unwrap_or_else(PoisonError::into_inner);
-    if c.len() > 64 {
-        c.clear();
-    }
-    c.insert(
-        key,
-        InfoEntry {
-            objs: objs.into_iter().map(Bound::unbind).collect(),
+    INFOS.with(|c| {
+        let mut c = c.borrow_mut();
+        c.retain(|e| e.info != key);
+        if c.len() >= 8 {
+            c.remove(0);
+        }
+        c.push(InfoEntry {
+            info: key,
+            objs: objs.map(Bound::unbind),
             lens,
             compiled: compiled.clone(),
-        },
-    );
-    Ok((compiled, settings))
+        });
+    });
+    Ok((compiled, settings, tables_tracked))
 }
 
 // ---------------------------------------------------------------------------
@@ -773,7 +929,7 @@ fn naive_fields(res: &Res, ymd: [Int; 3], d: &DefaultFields<'_>) -> Option<([i64
     ];
     let mut out = [0i64; 7];
     for (o, v) in out.iter_mut().zip(f) {
-        *o = i64::try_from(v).ok()?;
+        *o = v;
     }
     let ord = kernel::cal::ordinal(out[0], out[1], out[2])?;
     if !(0..24).contains(&out[3])
@@ -788,7 +944,7 @@ fn naive_fields(res: &Res, ymd: [Int; 3], d: &DefaultFields<'_>) -> Option<([i64
         if res.day.is_none_or(|d| d == 0) {
             jumped = true;
             // + relativedelta(weekday=w): dateutil indexes (MO, ..., SU) with w.
-            let w = i64::try_from(w).ok().filter(|w| (-7..7).contains(w))?;
+            let w = Some(w).filter(|w| (-7..7).contains(w))?;
             let w = w.rem_euclid(7);
             let jump = (7 - kernel::cal::weekday(ord) + w).rem_euclid(7);
             let [y, m, dd] = kernel::cal::from_ordinal(ord + jump)?;
@@ -809,7 +965,7 @@ struct Finisher<'py, 'a> {
     default: &'a Bound<'py, PyAny>,
     ignoretz: bool,
     tzinfos: &'a Bound<'py, PyAny>,
-    kwargs: &'a Bound<'py, PyDict>,
+    kwargs: Option<&'a Bound<'py, PyDict>>,
     /// `default`'s fields (today's time, tz and fold for `default=None`); `None`: the fast
     /// path cannot be used (another `default` type, or a patched `datetime.datetime`).
     base: OnceCell<Option<DefaultFields<'py>>>,
@@ -817,6 +973,27 @@ struct Finisher<'py, 'a> {
     today: OnceCell<[Int; 3]>,
     /// `time.tzname`.
     local_names: OnceCell<Bound<'py, PyAny>>,
+    /// The local zone, when it has no DST (`None`: dateutil's steps run for it).
+    local: OnceCell<Option<LocalZone<'py>>>,
+    /// The parser's `info.UTCZONE`.
+    utczone: &'a [Box<str>],
+}
+
+/// `tz.tzlocal()` for a local zone without DST, where its `tzname()` is `time.tzname[0]` and
+/// its offset `-time.timezone` at every date.
+struct LocalZone<'py> {
+    name: String,
+    std_offset: i64,
+    tz: Bound<'py, PyAny>,
+}
+
+/// The local-zone fields a `tzlocal()` was made under.
+type LocalKey = (i64, i64, bool, String, String);
+
+thread_local! {
+    /// The `tzlocal()` handed out while the local zone stays the same (dateutil makes a new,
+    /// equal one per call).
+    static TZLOCAL: RefCell<Option<(LocalKey, Py<PyAny>)>> = const { RefCell::new(None) };
 }
 
 impl<'py, 'a> Finisher<'py, 'a> {
@@ -826,7 +1003,8 @@ impl<'py, 'a> Finisher<'py, 'a> {
         default: &'a Bound<'py, PyAny>,
         ignoretz: bool,
         tzinfos: &'a Bound<'py, PyAny>,
-        kwargs: &'a Bound<'py, PyDict>,
+        kwargs: Option<&'a Bound<'py, PyDict>>,
+        utczone: &'a [Box<str>],
     ) -> Self {
         Self {
             py: self_.py(),
@@ -839,7 +1017,47 @@ impl<'py, 'a> Finisher<'py, 'a> {
             base: OnceCell::new(),
             today: OnceCell::new(),
             local_names: OnceCell::new(),
+            local: OnceCell::new(),
+            utczone,
         }
+    }
+
+    fn local_zone(&self) -> PyResult<Option<&LocalZone<'py>>> {
+        if let Some(z) = self.local.get() {
+            return Ok(z.as_ref());
+        }
+        let py = self.py;
+        let t = self.h.time_module.bind(py);
+        let timezone: i64 = t.getattr(pyo3::intern!(py, "timezone"))?.extract()?;
+        let altzone: i64 = t.getattr(pyo3::intern!(py, "altzone"))?.extract()?;
+        let daylight = t.getattr(pyo3::intern!(py, "daylight"))?.is_truthy()?;
+        let names: Option<(String, String)> =
+            t.getattr(pyo3::intern!(py, "tzname"))?.extract().ok();
+        let z = match names {
+            Some((n0, n1)) if !daylight || altzone == timezone => {
+                let key: LocalKey = (timezone, altzone, daylight, n0.clone(), n1);
+                let cached = TZLOCAL.with(|c| {
+                    c.borrow()
+                        .as_ref()
+                        .filter(|(k, _)| *k == key)
+                        .map(|(_, v)| v.clone_ref(py))
+                });
+                let tz = if let Some(v) = cached {
+                    v.into_bound(py)
+                } else {
+                    let v = self.h.tzlocal.bind(py).call0()?;
+                    TZLOCAL.with(|c| *c.borrow_mut() = Some((key, v.clone().unbind())));
+                    v
+                };
+                Some(LocalZone {
+                    name: n0,
+                    std_offset: -timezone,
+                    tz,
+                })
+            }
+            _ => None,
+        };
+        Ok(self.local.get_or_init(|| z).as_ref())
     }
 
     fn base(&self) -> PyResult<Option<&DefaultFields<'py>>> {
@@ -948,7 +1166,17 @@ impl<'py, 'a> Finisher<'py, 'a> {
                 .map(|n| self.is_local_name(n, remapped))
                 .transpose()?;
             if local == Some(true) {
-                return Ok(None); // tzlocal() and the fold logic
+                // tz.tzlocal(), then _assign_tzname, then UTC for a UTCZONE name it does not
+                // give (GMT parsed in the UK in winter). With DST, dateutil's steps run.
+                let Some(z) = self.local_zone()? else {
+                    return Ok(None);
+                };
+                let name = res.tzname.as_deref().expect("a local name");
+                if z.name != name && self.utczone.iter().any(|u| &**u == name) {
+                    TzPlan::Utc
+                } else {
+                    TzPlan::Local
+                }
             } else if res.tzoffset == Some(0) {
                 TzPlan::Utc
             } else if let Some(off) = res.tzoffset {
@@ -991,7 +1219,7 @@ impl<'py, 'a> Finisher<'py, 'a> {
             default,
             self.ignoretz,
             self.tzinfos,
-            self.kwargs,
+            self.kwargs.map_or_else(|| PyDict::new(py), Bound::clone),
         ))
     }
 
@@ -1007,6 +1235,13 @@ impl<'py, 'a> Finisher<'py, 'a> {
         let tzinfo = match fast.tz {
             TzPlan::Default => fast.base.tzinfo.clone(),
             TzPlan::Utc => h.utc.bind(py).clone(),
+            TzPlan::Local => self
+                .local
+                .get()
+                .and_then(Option::as_ref)
+                .expect("planned with a local zone")
+                .tz
+                .clone(),
             TzPlan::Offset(off) => {
                 let name = match &p.res.tzname {
                     Some(n) => py_text(py, n, remapped)?.into_any(),
@@ -1056,8 +1291,15 @@ impl<'py, 'a> Finisher<'py, 'a> {
             let naive = micros(&fast.f);
             match fast.tz {
                 TzPlan::Utc => return Ok(Some((naive, true))),
+                TzPlan::Local => {
+                    let z = self
+                        .local
+                        .get()
+                        .and_then(Option::as_ref)
+                        .expect("planned with a local zone");
+                    return Ok(Some((naive - z.std_offset * 1_000_000, true)));
+                }
                 TzPlan::Offset(off) if off.abs() < 86_400 => {
-                    let off = i64::try_from(off).expect("small");
                     return Ok(Some((naive - off * 1_000_000, true)));
                 }
                 TzPlan::Default if fast.base.tzinfo.is_none() => return Ok(Some((naive, false))),
@@ -1077,6 +1319,8 @@ enum TzPlan {
     /// No time zone from the string: `default`'s tzinfo (or none).
     Default,
     Utc,
+    /// `tz.tzlocal()` (a zone without DST).
+    Local,
     /// `tz.tzoffset(tzname, seconds)`.
     Offset(Int),
 }
@@ -1143,17 +1387,29 @@ fn parser_parse<'py>(
     tzinfos: &Bound<'py, PyAny>,
     kwargs: &Bound<'py, PyDict>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    parse_impl(self_, timestr, default, ignoretz, tzinfos, Some(kwargs))
+}
+
+fn parse_impl<'py>(
+    self_: &Bound<'py, PyAny>,
+    timestr: &Bound<'py, PyAny>,
+    default: &Bound<'py, PyAny>,
+    ignoretz: &Bound<'py, PyAny>,
+    tzinfos: &Bound<'py, PyAny>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
     let py = self_.py();
     let h = hooks(py)?;
     let reference = |reason: Option<String>, timestr: &Bound<'py, PyAny>| {
+        let kw = kwargs.map_or_else(|| PyDict::new(py), Bound::clone);
         h.reference_parse
             .bind(py)
-            .call1((self_, reason, timestr, default, ignoretz, tzinfos, kwargs))
+            .call1((self_, reason, timestr, default, ignoretz, tzinfos, kw))
     };
     if let Some(r) = parser_override(py, h, self_)? {
         return reference(Some(r), timestr);
     }
-    let Some(mut opts) = private_kwargs(Some(kwargs))? else {
+    let Some(mut opts) = private_kwargs(kwargs)? else {
         // An unexpected keyword: dateutil's _parse signature raises the TypeError.
         return reference(None, timestr);
     };
@@ -1161,7 +1417,7 @@ fn parser_parse<'py>(
     if let Some(r) = info_override(py, h, &info)? {
         return reference(Some(r), timestr);
     }
-    let (compiled, settings) = info_of(&info)?;
+    let (compiled, settings) = info_of(h, &info)?;
     let (tables, settings) = match (&*compiled, settings) {
         (Compiled::Ok(t), Some(s)) => (t, s),
         (Compiled::Unsupported(r), _) => return reference(Some(r.clone()), timestr),
@@ -1182,10 +1438,16 @@ fn parser_parse<'py>(
     match run {
         Run::Unknown => Err(parser_error(py, h, "Unknown string format: %s", timestr)),
         Run::Reference(r) => reference(Some(r), timestr),
-        Run::Parsed(p, remapped) => {
-            Finisher::new(h, self_, default, ignoretz.is_truthy()?, tzinfos, kwargs)
-                .finish(&p, remapped, timestr)
-        }
+        Run::Parsed(p, remapped) => Finisher::new(
+            h,
+            self_,
+            default,
+            ignoretz.is_truthy()?,
+            tzinfos,
+            kwargs,
+            &tables.utczone_list,
+        )
+        .finish(&p, remapped, timestr),
     }
 }
 
@@ -1234,7 +1496,7 @@ fn parser_private_parse<'py>(
         fuzzy_with_tokens: fuzzy_with_tokens.is_truthy()?,
         max_str_digits: 0,
     };
-    let (compiled, settings) = info_of(&info)?;
+    let (compiled, settings) = info_of(h, &info)?;
     let (tables, settings) = match (&*compiled, settings) {
         (Compiled::Ok(t), Some(s)) => (t, s),
         (Compiled::Unsupported(r), _) => return reference(r.clone(), timestr),
@@ -1280,7 +1542,9 @@ fn parse<'py>(
                 .call_method(pyo3::intern!(py, "parse"), (timestr,), kwargs);
         }
     }
-    let dp = item(module, "DEFAULTPARSER")?;
+    let dp = module
+        .get_item(pyo3::intern!(py, "DEFAULTPARSER"))?
+        .ok_or_else(|| PyValueError::new_err("pyroid.dateutil.parser has no DEFAULTPARSER"))?;
     if !dp.get_type().is(h.parser.bind(py)) {
         return dp.call_method(pyo3::intern!(py, "parse"), (timestr,), kwargs);
     }
@@ -1288,21 +1552,22 @@ fn parse<'py>(
     let mut default = none.clone();
     let mut ignoretz = pyo3::types::PyBool::new(py, false).to_owned().into_any();
     let mut tzinfos = none;
+    let Some(kw) = kwargs else {
+        return parse_impl(&dp, timestr, &default, &ignoretz, &tzinfos, None);
+    };
     let rest = PyDict::new(py);
-    if let Some(kw) = kwargs {
-        for (k, v) in kw.iter() {
-            match k.cast::<PyString>().ok().map(|k| k.to_str()).transpose()? {
-                Some("default") => default = v,
-                Some("ignoretz") => ignoretz = v,
-                Some("tzinfos") => tzinfos = v,
-                Some("dayfirst" | "yearfirst" | "fuzzy" | "fuzzy_with_tokens") => {
-                    rest.set_item(k, v)?;
-                }
-                _ => return dp.call_method(pyo3::intern!(py, "parse"), (timestr,), kwargs),
+    for (k, v) in kw.iter() {
+        match k.cast::<PyString>().ok().map(|k| k.to_str()).transpose()? {
+            Some("default") => default = v,
+            Some("ignoretz") => ignoretz = v,
+            Some("tzinfos") => tzinfos = v,
+            Some("dayfirst" | "yearfirst" | "fuzzy" | "fuzzy_with_tokens") => {
+                rest.set_item(k, v)?;
             }
+            _ => return dp.call_method(pyo3::intern!(py, "parse"), (timestr,), kwargs),
         }
     }
-    parser_parse(&dp, timestr, &default, &ignoretz, &tzinfos, &rest)
+    parse_impl(&dp, timestr, &default, &ignoretz, &tzinfos, Some(&rest))
 }
 
 // ---------------------------------------------------------------------------
@@ -1592,7 +1857,7 @@ fn parse_batch<'py>(
         None => info_override(py, h, &info)?,
     };
     let compiled = if slow_reason.is_none() {
-        let (c, s) = info_of(&info)?;
+        let (c, s) = info_of(h, &info)?;
         match (&*c, s) {
             (Compiled::Ok(_), Some(s)) => Some((c.clone(), s)),
             _ => None,
@@ -1654,7 +1919,15 @@ fn parse_batch<'py>(
             })
         })
         .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
-    let fin = Finisher::new(h, &p, &default, ignoretz, &tzinfos, &rest);
+    let fin = Finisher::new(
+        h,
+        &p,
+        &default,
+        ignoretz,
+        &tzinfos,
+        Some(&rest),
+        &tables.utczone_list,
+    );
     let coerce_none =
         |i: usize, e: PyErr| -> PyResult<()> { row_result(py, errors, i, Err(e)).map(|_| ()) };
     for (i, run) in runs.into_iter().enumerate() {
@@ -1851,6 +2124,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(supported_unicode_versions, &m)?)?;
     m.add_function(wrap_pyfunction!(_set_unicode_version, &m)?)?;
     m.add_function(wrap_pyfunction!(_install, &m)?)?;
+    m.add_function(wrap_pyfunction!(_info_changed, &m)?)?;
     m.add_function(wrap_pyfunction!(parse, &m)?)?;
     m.add_function(wrap_pyfunction!(parser_parse, &m)?)?;
     m.add_function(wrap_pyfunction!(parser_private_parse, &m)?)?;
