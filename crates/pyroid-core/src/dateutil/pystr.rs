@@ -322,15 +322,21 @@ impl<'a> Num<'a> {
     /// `int(60 * (d % 1))`.
     pub fn frac_times_60(&self) -> Result<Int, Fail> {
         self.precision_needed()?;
+        // The fraction is `sig / 10^k`, `sig` its digits without leading or trailing zeros.
         let f = self.frac.trim_end_matches('0');
-        if f.is_empty() {
+        let sig = f.trim_start_matches('0');
+        if sig.is_empty() {
             return Ok(0);
         }
-        let mut num: u128 = 0;
-        for b in f.bytes() {
-            num = num * 10 + u128::from(b - b'0');
+        let k = f.len();
+        // 60 * sig < 10^(len(sig) + 2): the floor is 0 once 10^k is larger.
+        if k > sig.len() + 2 {
+            return Ok(0);
         }
-        let den = 10u128.pow(u32::try_from(f.len()).expect("<= 26"));
+        let num = sig
+            .bytes()
+            .fold(0u128, |a, b| a * 10 + u128::from(b - b'0'));
+        let den = 10u128.pow(u32::try_from(k).expect("<= 28"));
         Ok(Int::try_from(num * 60 / den).expect("< 60"))
     }
 }
@@ -375,6 +381,11 @@ mod tests {
         assert!(Num::parse(p, "²").is_none());
         assert_eq!(Num::parse(p, "\u{0661}.\u{0665}").unwrap().frac, "5");
         assert_eq!(Num::parse(p, "0.999").unwrap().frac_times_60(), Ok(59));
+        // Few significant digits far after the point (found by fuzzing).
+        let tiny = format!("0.{}2{}", "0".repeat(30), "5".repeat(20));
+        assert_eq!(Num::parse(p, &tiny).unwrap().frac_times_60(), Ok(0));
+        let n = Num::parse(p, "0.0166666666666666666666667").unwrap();
+        assert_eq!(n.frac_times_60(), Ok(1));
     }
 
     #[test]
