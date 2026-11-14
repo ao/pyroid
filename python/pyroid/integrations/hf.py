@@ -484,8 +484,9 @@ def fineweb(
        always runs in this process over the whole dataset, so it is global and
        its result does not depend on ``batch_size`` or ``num_proc``.
 
-    On the same documents, the result equals datatrove's FineWeb pipeline
-    (``bench/chain.py``'s digest).
+    On the same documents, the result equals the same chain built from datatrove's stages
+    (``bench/chain.py``'s digest): ftfy with ftfy's default config, then the stages of
+    datatrove's FineWeb pipeline that work on text.
 
     Args:
         ds: A ``datasets.Dataset`` (any format; the results get the same format type).
