@@ -57,6 +57,13 @@ def _load_upstream(path: str | os.PathLike[str]) -> Model:
     fasttext-numpy2-wheel.
     """
 
+def _load_predict(path: str | os.PathLike[str]) -> Model:
+    """:func:`load_model` computing as fasttext-predict 0.9.2.4 does, whatever is installed.
+
+    For lid.176.bin that gives the same bits on aarch64 as every build gives on
+    x86-64: ``pyroid clean``'s output is the same on every platform.
+    """
+
 def tokenize(text: str) -> list[str]:
     r"""Split text into fastText tokens, as ``fasttext.tokenize``.
 

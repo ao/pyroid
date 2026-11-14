@@ -20,9 +20,10 @@ as built in fasttext-predict 0.9.2.4 ([parity](../compatibility.md#fasttext)).
     build that is installed: with fasttext-numpy2-wheel or fasttext-wheel installed it computes
     as they do, otherwise as fasttext-predict does. Both were bit-identical over 5,000 FineWeb
     lines with lid.176.bin and lid.176.ftz, k=1 and k=-1 (EC2 c8g.16xlarge, aarch64). The
-    datatrove drop-in's `LanguageFilter` and `pyroid clean` always compute as
-    fasttext-numpy2-wheel does, as stock datatrove does. On x86-64 the builds give the same
-    results.
+    datatrove drop-in's `LanguageFilter` always computes as fasttext-numpy2-wheel does, as stock
+    datatrove does. `pyroid clean` always computes as fasttext-predict does: for lid.176.bin
+    that gives the same bits on aarch64 as every build gives on x86-64, so its output is the same
+    on every platform. On x86-64 the builds give the same results.
 
 Besides speed, there are two reasons to switch. pyroid has wheels for CPython 3.11–3.15 and
 free-threaded 3.14t/3.15t on Linux (glibc and musl), macOS and Windows, so it installs without a
