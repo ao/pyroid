@@ -602,7 +602,7 @@ def test_json_repair_shim_with_real_json_repair() -> None:
             assert json_repair.__wrapped__.utils is json_repair.utils
             doc = "{'a': 1, b: [1, 2,}"
             assert json_repair.repair_json(doc) == early(doc) == '{"a": 1, "b": [1, 2]}'
-            # A delegated call (a char the port reserves) reaches the real json_repair, not the shim.
+            # A delegated call (a char the port reserves) reaches the real json_repair.
             reserved = '["\U0010f800", 1'
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
@@ -795,7 +795,7 @@ def test_unpatch_restores_sys_modules_exactly(name: str, scenario: str) -> None:
             assert pyroid.ftfy._ftfy is fallback and pi.patched() == ()
             # A module that imported the shim keeps a working one.
             fn = {"ftfy": "fix_text", "fasttext": "tokenize", "anyascii": "anyascii",
-                  "datasketch": "minhash_batch"}[name]
+                  "datasketch": "minhash_batch", "json_repair": "repair_json"}[name]
             assert callable(getattr(shim, fn))
             """,
             args=(name, scenario),
