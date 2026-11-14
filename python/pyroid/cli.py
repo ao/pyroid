@@ -514,15 +514,20 @@ def _job_outputs(job: FileJob) -> list[str]:
 class _Ipc:
     """An Arrow IPC file (LZ4) that rows wait in.
 
-    It is read back with plain reads, never mapped: Windows can't delete a mapped file.
+    A thread compresses and writes each table while the caller works on the next one, so at
+    most one table is in flight. The file is read back with plain reads, never mapped: Windows
+    can't delete a mapped file.
     """
 
     def __init__(self, path: str) -> None:
         self.path = path
         self._sink: Any = None
         self._writer: Any = None
+        self._pool: cf.ThreadPoolExecutor | None = None
+        self._pending: cf.Future[None] | None = None
 
     def write(self, table: Any) -> None:
+        """Queue ``table``; raises the error of the previous write, if it failed."""
         import pyarrow as pa
 
         from pyroid.integrations import _io
@@ -534,7 +539,21 @@ class _Ipc:
             self._sink = pa.PythonFile(fh, mode="w")
             opts = pa.ipc.IpcWriteOptions(compression="lz4")
             self._writer = pa.ipc.new_file(self._sink, table.schema, options=opts)
-        self._writer.write_table(table)
+            self._pool = cf.ThreadPoolExecutor(1, thread_name_prefix="pyroid-spool")
+        self._wait()
+        assert self._pool is not None
+        self._pending = self._pool.submit(self._writer.write_table, table)
+
+    def _wait(self) -> None:
+        """Wait until the table in flight is written; raise its error."""
+        pending, self._pending = self._pending, None
+        if pending is not None:
+            pending.result()
+
+    def _stop(self) -> None:
+        pool, self._pool = self._pool, None
+        if pool is not None:
+            pool.shutdown(wait=True)
 
     def close(self, schema: Any = None) -> None:
         """Finish the file (an empty one with ``schema`` if nothing was written)."""
@@ -545,6 +564,10 @@ class _Ipc:
                 _io.atomic_write_bytes(self.path, b"")
                 return
             self.write(schema.empty_table())
+        try:
+            self._wait()
+        finally:
+            self._stop()
         writer, sink, self._writer, self._sink = self._writer, self._sink, None, None
         try:
             writer.close()
@@ -555,6 +578,11 @@ class _Ipc:
     def abort(self) -> None:
         from pyroid.integrations import _io
 
+        try:
+            with contextlib.suppress(Exception):
+                self._wait()
+        finally:
+            self._stop()
         writer, sink, self._writer, self._sink = self._writer, self._sink, None, None
         with contextlib.suppress(Exception):
             if writer is not None:

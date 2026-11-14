@@ -15,7 +15,8 @@ pipeline. The per-document digest of a `pyroid clean` run equals the stock pipel
 ([parity](../compatibility.md#integrations)).
 
 Files are streamed in Arrow batches, so memory holds about one row group and two batches per
-process, whatever the size of the dataset; MinHash dedup sorts its signatures on disk.
+process (three while rows are compressed into the [work directory](#the-minhash-work-directory)),
+whatever the size of the dataset; MinHash dedup sorts its signatures on disk.
 `python -m pyroid` is the same program. For thousands of files and many machines, see
 [Large datasets](large-datasets.md).
 

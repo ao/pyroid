@@ -693,6 +693,40 @@ def test_empty_spool_and_starting_shards(tmp_path: Path) -> None:
     _check_out(_layout(a, [], Shard(), excluded=False), False, [])
 
 
+def _spool_threads() -> list[str]:
+    import threading
+
+    return [t.name for t in threading.enumerate() if t.name.startswith("pyroid-spool")]
+
+
+@pytest.mark.thread_unsafe  # counts this process's threads
+def test_spool_writes_in_order_and_reports_errors(tmp_path: Path) -> None:
+    """A spool's tables are written by a thread: in order, and its errors surface at the next
+    write or at close, after which abort leaves no file and no thread behind."""
+    from pyroid.cli import _Ipc, _read_ipc
+
+    p = str(tmp_path / "s.arrow")
+    w = _Ipc(p)
+    tables = [_table([f"doc {i}.{j}" for j in range(i + 1)], 10 * i) for i in range(6)]
+    for t in tables:
+        w.write(t)
+    w.close()
+    assert [t.to_pylist() for t in _read_ipc(p)] == [t.to_pylist() for t in tables]
+    assert not os.path.exists(p + ".partial")
+    assert _spool_threads() == []
+
+    q = str(tmp_path / "bad.arrow")
+    w = _Ipc(q)
+    w.write(_table(["a"]))
+    w.write(pa.table({"other": [1]}))  # another schema: the thread's write fails
+    with pytest.raises(pa.ArrowInvalid):
+        w.close()
+    w.abort()
+    assert not os.path.exists(q)
+    assert not os.path.exists(q + ".partial")
+    assert _spool_threads() == []
+
+
 @pytest.mark.thread_unsafe  # reads stderr
 def test_stages_refuse_lost_or_unfinished_files(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
