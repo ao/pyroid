@@ -29,6 +29,10 @@ json_repair  json_repair 0.64.5's own API: ``repair_json(json_str="", return_obj
           schema=None, schema_repair_mode="standard", **json_dumps_args)``, ``loads``, ``load`` and ``from_file``
           with json_repair's signatures. Results must be identical: ``str`` byte for byte, objects and repair logs
           type-exact (``pyroid_parity.json_repair_compare.same``), exceptions with the same type and message.
+dateutil  a package with python-dateutil's ``parser`` submodule (``dateutil``, ``pyroid.dateutil``): ``parse``,
+          ``isoparse`` and ``isoparser`` with dateutil's signatures, and optionally ``parse_batch`` /
+          ``isoparse_batch``. Results must be identical: the ``datetime`` and its ``tzinfo`` type and ``repr``,
+          the fuzzy tokens, exceptions with the same type and message (``tests/test_dateutil.py``).
 datasketch  datasketch 2.0.0's own API: ``MinHash`` (with ``bulk``), ``LeanMinHash``, ``MinHashLSH``,
           ``MinHashLSHForest`` and ``MinHashLSHEnsemble``; optional pyroid-style extensions
           ``minhash_batch(texts, num_perm=, seed=, scheme=, ngram=)`` and ``MinHashLSH.query_batch``.
