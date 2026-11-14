@@ -400,16 +400,16 @@ impl Model {
 
     // ------------------------------------------------------------ vectors
 
-    /// `x += row i` for each row id; `false` if an id is out of range
-    /// (possible only for a word vector of a label in a pruned model).
+    /// `x += row i` for each row id; `false` (and `x` unspecified) if an id
+    /// is out of range (possible only for a word vector of a label in a
+    /// pruned model).
     fn add_rows(&self, x: &mut [f32], ids: &[i32]) -> bool {
-        let rows = self.input.rows();
-        for &id in ids {
-            match usize::try_from(id) {
-                Ok(i) if i < rows => self.input.add_row(x, i),
-                _ => return false,
-            }
+        // One vectorized pass: as unsigned, a negative id is 2^31 or more.
+        let max = ids.iter().fold(0u32, |m, &id| m.max(id as u32));
+        if !ids.is_empty() && (max > i32::MAX as u32 || max as usize >= self.input.rows()) {
+            return false;
         }
+        self.input.add_rows(x, ids);
         true
     }
 

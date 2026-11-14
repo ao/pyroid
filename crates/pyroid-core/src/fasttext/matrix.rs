@@ -102,6 +102,55 @@ impl Dense {
         &self.data[i * self.cols..(i + 1) * self.cols]
     }
 
+    /// `x += row i` for each id, in order (every id a row).
+    ///
+    /// Each element of `x` gets the same float additions in the same order
+    /// as one `addRowToVector` per id, so the result is bit-identical. The
+    /// work is regrouped by column blocks over tiles of ids: a block of `x`
+    /// stays in registers across a tile instead of being stored and loaded
+    /// again for every row, which made the store-to-load latency, not the
+    /// row loads, the limit for small `dim` (lid.176 has 16).
+    fn add_rows(&self, x: &mut [f32], ids: &[i32]) {
+        let cols = self.cols;
+        // About 32 KiB of rows per tile, so later column blocks find them in L1.
+        let tile = (8192 / cols.max(1)).clamp(8, 64);
+        for ids in ids.chunks(tile) {
+            let mut c = 0;
+            while c + 16 <= cols {
+                self.add_block::<16>(x, c, ids);
+                c += 16;
+            }
+            if c + 8 <= cols {
+                self.add_block::<8>(x, c, ids);
+                c += 8;
+            }
+            if c + 4 <= cols {
+                self.add_block::<4>(x, c, ids);
+                c += 4;
+            }
+            while c < cols {
+                self.add_block::<1>(x, c, ids);
+                c += 1;
+            }
+        }
+    }
+
+    /// `x[c..c + B] += row[c..c + B]` for each id, in order.
+    #[inline]
+    fn add_block<const B: usize>(&self, x: &mut [f32], c: usize, ids: &[i32]) {
+        let mut acc: [f32; B] = x[c..c + B].try_into().expect("a block of x");
+        for &id in ids {
+            let start = id as usize * self.cols + c;
+            let row: &[f32; B] = self.data[start..start + B]
+                .try_into()
+                .expect("a block of a row");
+            for (a, &r) in acc.iter_mut().zip(row) {
+                *a += r;
+            }
+        }
+        x[c..c + B].copy_from_slice(&acc);
+    }
+
     pub fn data(&self) -> &[f32] {
         &self.data
     }
@@ -294,6 +343,20 @@ impl Matrix {
                 }
             }
             Self::Quant(q) => q.pq.addcode(x, q.code(i), q.norm(i)),
+        }
+    }
+
+    /// `add_row(x, i)` for each id in `ids`, in order. Every id must be in
+    /// `0..rows`.
+    pub fn add_rows(&self, x: &mut [f32], ids: &[i32]) {
+        match self {
+            Self::Dense(d) => d.add_rows(x, ids),
+            Self::Quant(q) => {
+                for &id in ids {
+                    let i = id as usize;
+                    q.pq.addcode(x, q.code(i), q.norm(i));
+                }
+            }
         }
     }
 
