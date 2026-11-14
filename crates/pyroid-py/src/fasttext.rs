@@ -357,9 +357,27 @@ fn quantized_matrix_error() -> PyErr {
 
 #[pymethods]
 impl Model {
-    /// Predict the most likely labels of a line of text.
+    /// Predict the most likely labels of each line of text, as fastText's ``predict``.
     ///
-    /// Same results as fastText's ``predict``; see ``pyroid/fasttext.pyi``.
+    /// As fastText: the text is split on spaces, tabs, vertical tabs, form
+    /// feeds, carriage returns and NULs; tokens with the label prefix are
+    /// ignored; the end-of-line token ``</s>`` is always added. Probabilities
+    /// are fastText's, which add ``1e-5`` and so can slightly exceed 1.
+    ///
+    /// Args:
+    ///     text: One line (no ``"\n"``), or a batch of lines: a list or tuple
+    ///         of str, or an Arrow string array/column.
+    ///     k: Number of labels to return, best first; ``-1`` for all of them.
+    ///     threshold: Only return labels with at least this probability.
+    ///     on_unicode_error: Error handler for decoding labels that are not
+    ///         valid UTF-8 (``"strict"``, ``"replace"``, ...).
+    ///     threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at
+    ///         most ``n`` tasks at once; ``1`` runs on the calling thread.
+    ///
+    /// Returns:
+    ///     For a str: ``(labels, probabilities)``, a tuple of str and a
+    ///     float64 array. For a batch: ``(list of label lists, list of float32
+    ///     arrays)``, one entry per line (``None`` for Arrow nulls).
     #[pyo3(signature = (text, k = 1, threshold = 0.0, on_unicode_error = "strict", *, threads = None))]
     fn predict<'py>(
         &self,
