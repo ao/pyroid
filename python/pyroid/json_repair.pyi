@@ -187,7 +187,7 @@ def repair_json_batch(
     strict: bool = False,
     **json_dumps_args: Any,
 ) -> str:
-    """:func:`repair_json` over many documents at once, on pyroid's thread pool.
+    r""":func:`repair_json` over many documents at once, on pyroid's thread pool.
 
     Not part of json_repair. Each result equals ``json_repair.repair_json(doc,
     skip_json_loads=..., stream_stable=..., strict=..., **json_dumps_args)``;
@@ -211,7 +211,7 @@ def repair_json_batch(
         ValueError: A document fails in strict mode (the note names its index or row).
         NestingError: A document nests deeper than :data:`MAX_DEPTH`.
         UnicodeEncodeError: Arrow input with ``ensure_ascii=False``, and a result holds a lone
-            surrogate (json_repair keeps an escape such as ``\\ud800`` as one), which an Arrow
+            surrogate (json_repair keeps an escape such as ``\ud800`` as one), which an Arrow
             column cannot hold. The note names the row; a list gives json_repair's str.
         pyroid.InputError: ``texts`` is not one of the accepted kinds.
     """
