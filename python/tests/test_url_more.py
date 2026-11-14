@@ -679,8 +679,10 @@ def test_errors() -> None:
         f.reasons(["http://a.com", 3])  # type: ignore[list-item]
     with pytest.raises(pyroid.InputError):
         f.reasons(b"http://a.com")  # type: ignore[call-overload]
-    with pytest.raises(UnicodeEncodeError):
-        f.reasons(["http://a.com/\ud800"])
+    with warnings.catch_warnings():
+        # A lone surrogate is not an error: tldextract's code handles that URL.
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        assert f.reasons(["http://a.com/\ud800"]) == [None]
     with pytest.raises(IndexError):
         pf.URLFilter(extra_domains=["a.com", ""], use_integrated_lists=False, tld_extractor=_tld())
     with pytest.raises(TypeError):
@@ -697,6 +699,56 @@ def test_surrogate_entries_are_kept_for_the_python_path() -> None:
     assert cast(Any, f)._python_reason("http://\ud800.com/") == "domain"
     assert cast(Any, f)._python_reason("http://x.a.com/\ud800") == "domain"
     assert cast(Any, f)._python_reason("http://b.com/\ud800") is None
+
+
+SURROGATE_URLS = {
+    # url: datatrove 0.10.1's (keep, reason) with extra_domains=["example.com"]
+    "http://example.com/\ud800": "domain",
+    "http://ex\udc00ample.com/": None,
+    "http://example.com/a?\udfff=1": "domain",
+    "http://\ud800.example.com/": "domain",
+}
+
+
+def test_surrogate_urls_take_tldextracts_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    """keep(), reasons() and domains() give a lone-surrogate URL datatrove's result, with one
+    FallbackWarning, for a str, a list and a tuple; the other URLs of the call stay native."""
+    monkeypatch.setattr(pf, "_url_fallbacks", set())
+    f = pf.URLFilter(use_integrated_lists=False, extra_domains=["example.com"], tld_extractor=_tld())
+    tld = _tld()
+    with pytest.warns(pyroid.FallbackWarning, match="lone surrogates") as record:
+        for url, want in SURROGATE_URLS.items():
+            assert f.reasons(url) == want, ascii(url)
+            assert f.keep(url) is (want is None), ascii(url)
+            r = tld(url)
+            assert f.domains(url) == (r.top_domain_under_public_suffix, r.fqdn), ascii(url)
+        urls = [*SURROGATE_URLS, "http://example.com/", "http://ok.org/"]
+        want = [*SURROGATE_URLS.values(), "domain", None]
+        assert f.reasons(urls) == want
+        assert f.reasons(tuple(urls)) == tuple(want)
+        assert f.keep(urls, threads=2) == [w is None for w in want]
+        rd, fqdn = f.domains(tuple(urls))
+        assert isinstance(rd, tuple) and len(rd) == len(fqdn) == len(urls)
+        assert list(rd) == [tld(u).top_domain_under_public_suffix for u in urls]
+        assert pf.url_filter_reasons(urls, f) == want
+    assert len(record) == 1
+    # Other errors are not swallowed.
+    with pytest.raises(pyroid.InputError):
+        f.reasons(["http://example.com/\ud800", None])
+    with pytest.raises(ValueError):
+        f.reasons(["http://example.com/\ud800", ""])
+
+
+def test_surrogate_urls_match_datatrove() -> None:
+    dt = _datatrove()(use_integrated_lists=False, extra_domains=["example.com"])
+    dt.tldextractor = _tld()
+    f = pf.URLFilter(use_integrated_lists=False, extra_domains=["example.com"], tld_extractor=_tld())
+    want = [_dt_outcome(dt, u) for u in SURROGATE_URLS]
+    assert [w[1] for w in want] == list(SURROGATE_URLS.values())
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        got = f.reasons(list(SURROGATE_URLS))
+    assert [("ok", r) for r in got] == want
 
 
 # ---- the drop-in datatrove step ----------------------------------------------------------

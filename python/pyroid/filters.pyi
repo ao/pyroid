@@ -1453,8 +1453,10 @@ class URLFilter:
     ``ValueError`` for an empty URL (datatrove's ``assert url``),
     ``AttributeError`` as datatrove when the banned subwords are only ``""``
     (pyahocorasick's automaton then has no words) and a URL reaches that check,
-    ``pyroid.InputError`` for other input kinds, ``UnicodeEncodeError`` for a lone
-    surrogate and ``UnicodeDecodeError`` for invalid UTF-8 in Arrow input.
+    ``pyroid.InputError`` for other input kinds and ``UnicodeDecodeError`` for
+    invalid UTF-8 in Arrow input. A URL with a lone surrogate goes through
+    tldextract's own code (one ``pyroid.FallbackWarning``), so it gets datatrove's
+    result; the other URLs of the call stay native.
     """
 
     config: URLFilterConfig | None

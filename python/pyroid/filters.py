@@ -1651,6 +1651,28 @@ def _read_text(path: str) -> str:
         return f.read()
 
 
+def _surrogate_urls(urls: Any) -> list[Any] | None:
+    """``urls`` as a list if it is a str, list or tuple with a str holding a lone surrogate.
+
+    Those URLs go to tldextract's own code (``URLFilter._mixed``); else the error stands.
+    """
+    items = [urls] if isinstance(urls, str) else urls if isinstance(urls, (list, tuple)) else None
+    if items is None or not any(isinstance(u, str) and not _encodable(u) for u in items):
+        return None
+    return list(items)
+
+
+#: Stands in for a lone-surrogate URL in the native call (its result is replaced).
+_PLACEHOLDER_URL = "http://a/"
+
+
+def _like(urls: Any, out: list[Any]) -> Any:
+    """``out`` in the kind of ``urls`` (str, list or tuple)."""
+    if isinstance(urls, str):
+        return out[0]
+    return tuple(out) if isinstance(urls, tuple) else out
+
+
 def _encodable(s: str) -> bool:
     """No lone surrogate (pyroid takes UTF-8 strings only)."""
     if s.isascii():
@@ -1904,8 +1926,10 @@ class URLFilter:
     ``ValueError`` for an empty URL (datatrove's ``assert url``),
     ``AttributeError`` as datatrove when the banned subwords are only ``""``
     (pyahocorasick's automaton then has no words) and a URL reaches that check,
-    ``pyroid.InputError`` for other input kinds, ``UnicodeEncodeError`` for a lone
-    surrogate and ``UnicodeDecodeError`` for invalid UTF-8 in Arrow input.
+    ``pyroid.InputError`` for other input kinds and ``UnicodeDecodeError`` for
+    invalid UTF-8 in Arrow input. A URL with a lone surrogate goes through
+    tldextract's own code (one ``pyroid.FallbackWarning``), so it gets datatrove's
+    result; the other URLs of the call stay native.
     """
 
     config: URLFilterConfig | None
@@ -2006,7 +2030,16 @@ class URLFilter:
             bool, ``list[bool]``, ``tuple[bool, ...]``, or a :class:`pyroid.Column`
             of bools (nulls stay null), matching ``urls``.
         """
-        return self._native.keep(urls, threads=threads)
+        try:
+            return self._native.keep(urls, threads=threads)
+        except UnicodeEncodeError:
+            items = _surrogate_urls(urls)
+            if items is None:
+                raise
+        out = self._mixed(
+            items, threads, self._native.keep, lambda u: self._python_reason(u) is None
+        )
+        return _like(urls, out)
 
     def reasons(self, urls: Any, /, *, threads: Any = None) -> Any:
         """The drop reason (datatrove's) per URL, ``None`` when kept.
@@ -2015,7 +2048,13 @@ class URLFilter:
         ``soft_blacklisted``, ``blacklisted_subword``. Arrow input gives a
         ``string`` :class:`pyroid.Column` (null when kept or null).
         """
-        return self._native.reasons(urls, threads=threads)
+        try:
+            return self._native.reasons(urls, threads=threads)
+        except UnicodeEncodeError:
+            items = _surrogate_urls(urls)
+            if items is None:
+                raise
+        return _like(urls, self._mixed(items, threads, self._native.reasons, self._python_reason))
 
     def domains(self, urls: Any, /, *, threads: Any = None) -> tuple[Any, Any]:
         """The ``(top_domain_under_public_suffix, fqdn)`` tldextract gives each URL.
@@ -2028,8 +2067,41 @@ class URLFilter:
             A pair, each in the kind of ``urls`` (Arrow: ``large_string`` columns
             for ``large_string`` input, else ``string``; nulls stay null).
         """
-        rd, fqdn = self._native.domains(urls, threads=threads)
-        return rd, fqdn
+        try:
+            rd, fqdn = self._native.domains(urls, threads=threads)
+        except UnicodeEncodeError:
+            items = _surrogate_urls(urls)
+            if items is None:
+                raise
+        else:
+            return rd, fqdn
+
+        def native(xs: list[str], threads: Any) -> list[tuple[str, str]]:
+            return list(zip(*self._native.domains(xs, threads=threads), strict=True))
+
+        pairs = self._mixed(items, threads, native, _resolver(self._tld))
+        return _like(urls, [p[0] for p in pairs]), _like(urls, [p[1] for p in pairs])
+
+    def _mixed(
+        self,
+        items: list[Any],
+        threads: Any,
+        native: Callable[..., list[Any]],
+        python: Callable[[str], Any],
+    ) -> list[Any]:
+        """``python`` on the lone-surrogate URLs; ``native`` on the others, in one call.
+
+        The native call gets a placeholder where a lone-surrogate URL is, so its errors
+        for the other items (a non-str, an empty URL) name their own index.
+        """
+        odd = [isinstance(u, str) and not _encodable(u) for u in items]
+        stand_ins = [_PLACEHOLDER_URL if o else u for u, o in zip(items, odd, strict=True)]
+        out = list(native(stand_ins, threads=threads))
+        _url_fallback("URLs with lone surrogates")
+        for i, u in enumerate(items):
+            if odd[i]:
+                out[i] = python(u)
+        return out
 
     @property
     def tld_extractor(self) -> Any:
