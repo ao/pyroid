@@ -37,8 +37,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-import pyarrow as pa
-import pyarrow.compute as pc
+from pyroid._deps import missing
+
+try:
+    import numpy  # noqa: F401  (pyroid.fasttext's arrays)
+    import pyarrow as pa
+    import pyarrow.compute as pc
+except ModuleNotFoundError as _exc:
+    missing(__name__, _exc, "cli", "pyarrow", "numpy")
 
 import pyroid.dedup
 import pyroid.fasttext

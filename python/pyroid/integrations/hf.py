@@ -52,8 +52,14 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias
 
-import pyarrow as pa
-import pyarrow.compute as pc
+from pyroid._deps import missing
+
+try:
+    import numpy  # noqa: F401  (pyroid.fasttext's arrays)
+    import pyarrow as pa
+    import pyarrow.compute as pc
+except ModuleNotFoundError as _exc:
+    missing(__name__, _exc, "hf", "pyarrow", "numpy")
 
 import pyroid.fasttext
 import pyroid.filters

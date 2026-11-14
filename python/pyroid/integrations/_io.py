@@ -26,7 +26,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import pyarrow as pa
+from pyroid._deps import missing
+
+try:
+    import pyarrow as pa
+except ModuleNotFoundError as _exc:
+    missing(__name__, _exc, "cli", "pyarrow")
 
 PARQUET = (".parquet", ".pq")
 JSONL = (".jsonl", ".ndjson", ".json")
