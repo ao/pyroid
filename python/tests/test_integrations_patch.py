@@ -974,8 +974,12 @@ def test_run_script(tmp_path: Path) -> None:
     assert out["env"] == "ftfy"
     assert out["hook"] == _patch.HOOK_DIR
     assert proc.stderr.count("PatchWarning") == 1, proc.stderr
-    # A plain line: under pyroid run there is no user code for a warning location to point at.
-    assert proc.stderr.startswith("pyroid run: PatchWarning: pyroid.integrations.patch: ")
+    # One short plain line: under pyroid run there is no user code for a warning location to
+    # point at, and patch()'s long per-name warning would be repeated on every run.
+    assert proc.stderr == (
+        "pyroid run: PatchWarning: ftfy patched with pyroid.ftfy, in this process and the "
+        "Python processes it starts\n"
+    )
 
 
 def test_run_module(tmp_path: Path) -> None:
@@ -985,6 +989,10 @@ def test_run_module(tmp_path: Path) -> None:
     (tmp_path / "pkg/__main__.py").write_text(PROBE)
     proc = run_cli(["-p", "ftfy,anyascii", "-m", "probe", "0", "x"], cwd=tmp_path)
     out = ok(proc)
+    assert proc.stderr.splitlines() == [
+        "pyroid run: PatchWarning: ftfy, anyascii patched with pyroid.ftfy, pyroid.translit, "
+        "in this process and the Python processes it starts"
+    ]
     assert out["argv"] == [str(tmp_path / "probe.py"), "0", "x"]  # as `python -m probe 0 x`
     assert out["name"] == "__main__"
     assert out["spec"] == "probe"
@@ -1074,7 +1082,7 @@ def test_run_patches_child_processes_and_warns_once(tmp_path: Path) -> None:
     assert out["subprocess"] == ["True", "True"]
     # Shown by the parent only, not again by each worker (stderr is shared with them).
     assert out["subprocess_stderr"] == ""
-    assert proc.stderr.count("PatchWarning") == 2, proc.stderr
+    assert proc.stderr.count("PatchWarning") == 1, proc.stderr
 
 
 # ---------------------------------------------------------------------------

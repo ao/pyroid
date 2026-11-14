@@ -196,7 +196,11 @@ every Python process it starts, without editing a line:
 
 ```console
 $ pyroid run -p ftfy,fasttext train.py --epochs 3
+pyroid run: PatchWarning: ftfy, fasttext patched with pyroid.ftfy, pyroid.fasttext, in this process and the Python processes it starts
 ```
+
+That one line replaces the `PatchWarning` that `patch()` gives for each name;
+`PYTHONWARNINGS=ignore::UserWarning` silences it.
 
 ```text
 usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
