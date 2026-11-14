@@ -371,8 +371,37 @@ def test_silent(run_python: Run, tmp_path: Path, case: Case, state: str) -> None
     child = run_child(run_python, tmp_path, [case.statement], case.checks)
     assert child.warnings == []
     assert child.imported == []
-    if state == "absent":  # no incumbent: not even the metadata machinery is loaded
+    # Neither looks for the incumbent with importlib.metadata (about 25 ms to import): absent,
+    # it is not even looked up; installed, its .dist-info is read directly.
+    if state != "no metadata":
         assert child.metadata is False
+
+
+@pytest.mark.thread_unsafe(reason="changes sys.path")
+def test_dist_info_version_agrees_with_importlib_metadata(tmp_path: Path) -> None:
+    from importlib import metadata
+
+    from pyroid import _versions
+
+    dists = {d.metadata["Name"] for d in metadata.distributions() if d.metadata["Name"]}
+    assert len(dists) > 20
+    for name in [*sorted(dists), "no-such-distribution", "Ftfy", "JSON_repair", "rouge.score"]:
+        try:
+            want: str | None = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            want = None
+        assert _versions._version(name) == want, name
+    # An egg-info, a zip file or another finder on the path: importlib.metadata decides.
+    egg = tmp_path / "egglike-1.0.egg-info"
+    egg.mkdir()
+    (egg / "PKG-INFO").write_text("Metadata-Version: 1.1\nName: egglike\nVersion: 1.0\n")
+    sys.path.insert(0, str(tmp_path))
+    try:
+        with pytest.raises(_versions._UnsureError):
+            _versions._dist_info_version("egglike")
+        assert _versions._version("egglike") == metadata.version("egglike") == "1.0"
+    finally:
+        sys.path.remove(str(tmp_path))
 
 
 @pytest.mark.parametrize("case", _params(PATCHED))
