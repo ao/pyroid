@@ -838,7 +838,7 @@ def languages() -> dict[str, Language]:
     Example::
 
         >>> pyroid.filters.languages()["cmn_Hani"]
-        Language(tokenizer='SpaCyTokenizer', arg='zh', native=False)
+        Language(tokenizer='SpaCyTokenizer', arg='zh', native=True)
 
     Returns:
         ``{code: Language(tokenizer, arg, native)}``, sorted by code.
@@ -1136,8 +1136,9 @@ class BadWordsFilter:
         Args:
             texts: A str, a list or tuple of str, or an Arrow string array/column.
             languages: Each document's language (datatrove's ``doc.metadata["language"]``):
-                one str for all, or one entry per document (``None``: the default).
-                Default: ``default_language``.
+                one str for all, or one entry per document in a list, tuple or Arrow
+                string column (``None`` or null: the default). Default:
+                ``default_language``.
             threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
                 ``n`` tasks at once; ``1`` runs on the calling thread.
 

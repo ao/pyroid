@@ -333,3 +333,18 @@ def test_module_surface() -> None:
     for f in (pf.c4_badwords, pf.c4_badwords_reasons, pf.load_c4_badwords):
         assert f.__module__ == "pyroid.filters"
         assert f.__doc__
+
+
+def test_languages_from_an_arrow_column() -> None:
+    f = pf.BadWordsFilter(words={"en": ["bad"], "fr": ["mauvais"]})
+    texts = ["a bad day", "un jour mauvais", "a bad day"]
+    want = f.keep(texts, languages=["en", "fr", None])
+    assert want == [False, False, False]
+    col = _testing.column(["en", "fr", None])
+    assert f.keep(texts, languages=col) == want
+    pa = pytest.importorskip("pyarrow")
+    assert f.keep(texts, languages=pa.array(["en", "fr", None])) == want
+    assert f.keep(texts, languages=pa.chunked_array([["en"], ["fr", None]])) == want
+    # Anything but str or None is an input error, not a "no list for ..." one.
+    with pytest.raises(pyroid.InputError, match=r"languages\[1\]: expected str or None, got int"):
+        f.keep(texts, languages=["en", 1, None])

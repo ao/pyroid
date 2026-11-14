@@ -348,7 +348,7 @@ def languages() -> dict[str, Language]:
     Example::
 
         >>> pyroid.filters.languages()["cmn_Hani"]
-        Language(tokenizer='SpaCyTokenizer', arg='zh', native=False)
+        Language(tokenizer='SpaCyTokenizer', arg='zh', native=True)
 
     Returns:
         ``{code: Language(tokenizer, arg, native)}``, sorted by code.
@@ -1473,7 +1473,7 @@ class BadWordsFilter:
         else:
             default = self.config.default_language
             lang = -1
-            ids = [self._list(default if x is None else x) for x in languages]
+            ids = [self._list(default if x is None else x) for x in _language_list(languages)]
         out, state = _native._badwords_run(
             texts,
             self._native,
@@ -1494,8 +1494,9 @@ class BadWordsFilter:
         Args:
             texts: A str, a list or tuple of str, or an Arrow string array/column.
             languages: Each document's language (datatrove's ``doc.metadata["language"]``):
-                one str for all, or one entry per document (``None``: the default).
-                Default: ``default_language``.
+                one str for all, or one entry per document in a list, tuple or Arrow
+                string column (``None`` or null: the default). Default:
+                ``default_language``.
             threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
                 ``n`` tasks at once; ``1`` runs on the calling thread.
 
@@ -1588,6 +1589,7 @@ import re as _re  # noqa: E402
 import sys as _sys  # noqa: E402
 
 from pyroid._pyroid import FallbackWarning as _FallbackWarning  # noqa: E402
+from pyroid._pyroid import InputError as _InputError  # noqa: E402
 from pyroid._pyroid import PyroidError as _PyroidError  # noqa: E402
 
 __all__ += [
@@ -1617,7 +1619,7 @@ def _url_fallback(reason: str) -> None:
     if reason not in _url_fallbacks:
         _url_fallbacks.add(reason)
         warnings.warn(
-            f"pyroid.filters.URLFilter: {reason} is not supported by pyroid; running "
+            f"pyroid.filters.URLFilter: pyroid does not handle {reason}; running "
             "tldextract's own code for them (slow path). This warning is shown once.",
             _FallbackWarning,
             stacklevel=_caller_stacklevel(),
@@ -1671,6 +1673,22 @@ def _like(urls: Any, out: list[Any]) -> Any:
     if isinstance(urls, str):
         return out[0]
     return tuple(out) if isinstance(urls, tuple) else out
+
+
+def _language_list(languages: Any) -> list[str | None]:
+    """Per-document languages as a list: from a list, tuple or Arrow column (``to_pylist``)."""
+    if isinstance(languages, (list, tuple)):
+        out = list(languages)
+    elif callable(getattr(languages, "to_pylist", None)):  # pyarrow, pyroid.Column
+        out = languages.to_pylist()
+    elif callable(getattr(languages, "to_list", None)):  # polars
+        out = languages.to_list()
+    else:
+        out = list(languages)
+    for i, x in enumerate(out):
+        if x is not None and not isinstance(x, str):
+            raise _InputError(f"languages[{i}]: expected str or None, got {type(x).__name__}")
+    return out
 
 
 def _encodable(s: str) -> bool:
