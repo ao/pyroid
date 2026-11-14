@@ -234,7 +234,7 @@ fn ascii_str<'py>(string: &Bound<'py, PyAny>) -> Option<Bound<'py, PyAny>> {
 /// does (an ASCII ``bytes`` comes back as it is, an iterable of characters gives
 /// one ``str``), where :func:`anyascii` would take a list as a batch.
 #[pyfunction]
-#[pyo3(signature = (string, /))]
+#[pyo3(signature = (string))]
 fn anyascii_package<'py>(
     py: Python<'py>,
     string: &Bound<'py, PyAny>,

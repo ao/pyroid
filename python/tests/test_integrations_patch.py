@@ -585,6 +585,7 @@ def test_anyascii_shim_takes_what_the_package_takes() -> None:
                 f = anyascii.anyascii
                 got = outcome(make)
                 assert got == want, (make(), got, want)
+            assert anyascii.anyascii(string="Björk") == real.anyascii(string="Björk") == "Bjork"
             s = S("abc")
             assert anyascii.anyascii(s) is s
             ascii_str = "plain ascii"
