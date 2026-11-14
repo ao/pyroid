@@ -125,20 +125,23 @@ def punkt_model_available(language: str = "english") -> bool:
 
 
 def sent_tokenize(text: Any, language: str = "english", *, threads: int | None = None) -> Any:
-    """Split `text` into sentences with the Punkt model for `language`.
+    """Split `text` into sentences with the Punkt model for `language` (NLTK's ``sent_tokenize``).
+
+    The tokenizer for each language is loaded once and kept, as in NLTK.
 
     Args:
         text: A str, or a list or tuple of str, or an Arrow string array or column.
-        language: The ``punkt_tab`` model name.
+        language: The ``punkt_tab`` model name (``"english"``, ``"german"``, ...).
         threads: For a batch: ``None`` uses the whole shared pool, ``n`` at most ``n`` tasks,
             ``1`` the calling thread.
 
     Returns:
-        The sentences (a list of str); for a batch, one list per document (``None`` for an
-        Arrow null).
+        The sentences; for a batch, one list per document (``None`` for an Arrow null).
 
     Raises:
         LookupError: The model is not installed (``nltk.download('punkt_tab')``).
+        TypeError: `language` is not a str.
+        ValueError: `language` cannot name one model.
         pyroid.InputError: `text` is not text.
     """
     return _get_punkt_tokenizer(language).tokenize(text, threads=threads)
@@ -154,16 +157,18 @@ def word_tokenize(
     *,
     threads: int | None = None,
 ) -> Any:
-    """Split `text` into words: Punkt sentences, then :class:`NLTKWordTokenizer` on each.
+    """Split `text` into words (NLTK's ``word_tokenize``).
+
+    The sentences of :func:`sent_tokenize`, each split by :class:`NLTKWordTokenizer`.
 
     Args:
         text: A str, or a batch as for :func:`sent_tokenize`.
         language: The ``punkt_tab`` model name.
-        preserve_line: Do not split sentences first (no model is needed then).
+        preserve_line: Do not split sentences first (then no model is needed).
         threads: For a batch, as for :func:`sent_tokenize`.
 
     Returns:
-        The tokens (a list of str); for a batch, one list per document.
+        The tokens; for a batch, one list per document.
 
     Raises:
         LookupError: The model is not installed (``nltk.download('punkt_tab')``).

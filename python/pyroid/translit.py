@@ -57,6 +57,7 @@ def _anyascii_package(string: Any) -> Any:
         result.append(char if codepoint <= 0x7F else _native.anyascii(chr(codepoint)))
     return "".join(result)
 
+
 unidecode = _native.unidecode
 # Unidecode's two spellings of the same function.
 unidecode_expect_ascii = _native.unidecode

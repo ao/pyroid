@@ -117,7 +117,40 @@ def _same_length(keys: list[Any], n: int) -> None:
 
 
 class MinHashLSH:
-    """The MinHash LSH index (datasketch's ``MinHashLSH``). See ``lsh.pyi``."""
+    """The MinHash LSH index, for queries with a Jaccard similarity threshold.
+
+    Args:
+        threshold: The Jaccard similarity threshold, in ``[0.0, 1.0]``. The
+            band layout is chosen to minimize the weighted false positive and
+            false negative probabilities at this threshold.
+        num_perm: The number of permutations of the MinHashes to index (the
+            ``sample_size`` of a weighted MinHash).
+        weights: ``(false_positive_weight, false_negative_weight)``; they sum
+            to 1.0.
+        params: ``(b, r)``, the number of bands and rows per band. Skips the
+            search; ``threshold`` and ``weights`` are then ignored.
+        storage_config: ``{"type": "dict"}`` (the default) is the in-memory
+            index. ``"redis"`` and ``"cassandra"`` are delegated to
+            datasketch. ``"basename"`` names the storage.
+        prepickle: Pickle keys to bytes before storing them. Default: true
+            for Redis storage only.
+        hashfunc: Hash function applied to band keys. Delegated to
+            datasketch.
+
+    Raises:
+        ValueError: For the same invalid arguments as datasketch, with its
+            messages (``"Unknown storage type: ..."`` included).
+
+    Attributes:
+        h: ``num_perm``.
+        b: The number of bands (band tables).
+        r: The number of rows per band.
+        hashranges: ``[(i * r, (i + 1) * r) for i in range(b)]``.
+        prepickle: Whether keys are pickled before they are stored.
+        hashfunc: ``None`` (an index with a hash function is datasketch's).
+        hashtables: One view per band: band key -> set of keys.
+        keys: View: key -> its band keys.
+    """
 
     def __new__(
         cls,
@@ -212,7 +245,7 @@ class MinHashLSH:
 
     @property
     def buffer_size(self) -> int:
-        """The buffer size of the storage (used by Redis and Cassandra storage)."""
+        """The storage buffer size (used by Redis and Cassandra storage)."""
         return self._buffer_size
 
     @buffer_size.setter
@@ -223,7 +256,19 @@ class MinHashLSH:
         self._buffer_size = value
 
     def insert(self, key: Hashable, minhash: Any, check_duplication: bool = True) -> None:
-        """Insert ``key`` with the MinHash (or weighted MinHash) of its set."""
+        """Insert ``key`` with the MinHash (or weighted MinHash) of its set.
+
+        Args:
+            key: The key of the set (any hashable; keys compare with ``==``).
+            minhash: Its MinHash, of length ``num_perm``.
+            check_duplication: Raise if ``key`` is already in the index. With
+                ``False``, inserting a key again adds the new band keys to its
+                entry, as datasketch does.
+
+        Raises:
+            ValueError: The MinHash has the wrong length or another
+                permutation scheme than earlier ones, or ``key`` exists.
+        """
         self._insert(key, minhash, check_duplication=check_duplication, buffer=False)
 
     def insert_batch(
@@ -234,7 +279,29 @@ class MinHashLSH:
         check_duplication: bool = True,
         threads: int | None = None,
     ) -> None:
-        """Insert ``keys[i]`` with ``minhashes[i]`` for every ``i`` (all or nothing)."""
+        """Insert ``keys[i]`` with ``minhashes[i]`` for every ``i`` (pyroid extension).
+
+        The index ends up as after ``insert`` of each item in order, but
+        nothing is inserted if an item is invalid: the error is the one
+        ``insert`` would raise for the first invalid item, with a note naming
+        it. Band tables are filled in parallel.
+
+        Args:
+            keys: The keys.
+            minhashes: MinHash-like objects, or a numpy array whose rows
+                (axis 0) are ``hashvalues`` arrays, e.g. ``(n, num_perm)``
+                ``uint64`` or ``uint32``. Array rows have no ``scheme``, so
+                they are not checked against it (as weighted MinHashes).
+            check_duplication: As for :meth:`insert`; a key repeated within
+                the batch is a duplicate too.
+            threads: At most this many tasks at once on pyroid's thread pool
+                (``None``: the whole pool, ``1``: the calling thread).
+
+        Raises:
+            ValueError: ``keys`` and ``minhashes`` differ in length, or as
+                :meth:`insert`.
+            TypeError: An array of another dtype than integers or floats.
+        """
         keys = list(keys)
         if _ndarray(minhashes):
             values = _rows(minhashes, self.h)
@@ -263,15 +330,27 @@ class MinHashLSH:
         self._minhash_scheme = known
 
     def merge(self, other: MinHashLSH, check_overlap: bool = False) -> None:
-        """Merge ``other`` into this index (this one becomes the union)."""
+        """Merge ``other`` into this index, making this one the union of both.
+
+        Only ``num_perm``, ``b`` and ``r`` are compared, as in datasketch.
+
+        Args:
+            other: Another pyroid ``MinHashLSH``.
+            check_overlap: Raise if a key is in both indexes (nothing is
+                merged then).
+
+        Raises:
+            ValueError: The indexes differ in type, parameters or MinHash
+                scheme, or ``check_overlap`` found a common key.
+        """
         self._merge(other, check_overlap=check_overlap, buffer=False)
 
     def insertion_session(self, buffer_size: int = 50000) -> MinHashLSHInsertionSession:
-        """Return a context manager for inserting many keys."""
+        """Return a context manager whose ``insert`` inserts into this index."""
         return MinHashLSHInsertionSession(self, buffer_size=buffer_size)
 
     def deletion_session(self, buffer_size: int = 50000) -> MinHashLSHDeletionSession:
-        """Return a context manager for removing many keys."""
+        """Return a context manager whose ``remove`` removes from this index."""
         return MinHashLSHDeletionSession(self, buffer_size=buffer_size)
 
     def _check_bytes_key(self, key: Any) -> None:
@@ -331,7 +410,18 @@ class MinHashLSH:
             raise ValueError("Cannot merge MinHashLSH with different initialization parameters.")
 
     def query(self, minhash: Any) -> list[Hashable]:
-        """Return the keys whose sets likely have Jaccard similarity above the threshold."""
+        """Return the keys whose sets likely have a Jaccard similarity above the threshold.
+
+        Args:
+            minhash: The MinHash of the query set.
+
+        Returns:
+            The keys that share a band with ``minhash``, each once, in no
+            particular order.
+
+        Raises:
+            ValueError: The MinHash has the wrong length or another scheme.
+        """
         if len(minhash) != self.h:
             raise _length_error(self.h, len(minhash))
         _check_scheme_consistency(getattr(self, "_minhash_scheme", None), minhash)
@@ -343,7 +433,13 @@ class MinHashLSH:
         return candidates  # type: ignore[no-any-return]
 
     def query_batch(self, minhashes: Any, *, threads: int | None = None) -> list[list[Hashable]]:
-        """Return ``[self.query(m) for m in minhashes]``."""
+        """Return ``[self.query(m) for m in minhashes]``, in parallel (pyroid extension).
+
+        Args:
+            minhashes: MinHash-like objects, or a numpy array of signatures
+                (rows), as for :meth:`insert_batch`.
+            threads: As for :meth:`insert_batch`.
+        """
         if _ndarray(minhashes):
             results = self._index.query_array(_rows(minhashes, self.h), threads)
         else:
@@ -362,7 +458,10 @@ class MinHashLSH:
         return results  # type: ignore[no-any-return]
 
     def add_to_query_buffer(self, minhash: Any) -> None:
-        """Buffer a query; :meth:`collect_query_buffer` runs the buffered queries."""
+        """Buffer a query for :meth:`collect_query_buffer`.
+
+        The buckets are read now (a snapshot), not when the buffer is collected.
+        """
         if len(minhash) != self.h:
             raise _length_error(self.h, len(minhash))
         _check_scheme_consistency(getattr(self, "_minhash_scheme", None), minhash)
@@ -371,7 +470,7 @@ class MinHashLSH:
             hashtable.add_to_select_buffer([h])
 
     def collect_query_buffer(self) -> list[Hashable]:
-        """Return the keys found by every buffered query (their intersection)."""
+        """Run the buffered queries; return the keys every one of them found."""
         collected_result_lists = [
             hashtable.collect_select_buffer() for hashtable in self.hashtables
         ]
@@ -399,7 +498,11 @@ class MinHashLSH:
         return self._index.contains(key)  # type: ignore[no-any-return]
 
     def remove(self, key: Hashable) -> None:
-        """Remove ``key`` from the index (``ValueError`` if it is absent)."""
+        """Remove ``key`` from the index.
+
+        Raises:
+            ValueError: ``key`` is not in the index.
+        """
         self._remove(key, buffer=False)
 
     def _remove(self, key: Hashable, buffer: bool = False) -> None:
@@ -447,7 +550,7 @@ class MinHashLSH:
 
 
 class MinHashLSHInsertionSession:
-    """Context manager for batch insertion of documents into a MinHashLSH."""
+    """Context manager for inserting many keys into a :class:`MinHashLSH`."""
 
     def __init__(self, lsh: MinHashLSH, buffer_size: int) -> None:
         self.lsh = lsh
@@ -465,7 +568,7 @@ class MinHashLSHInsertionSession:
         self.close()
 
     def close(self) -> None:
-        """Flush the buffers (nothing to do in memory)."""
+        """Flush the buffers (nothing to do for the in-memory index)."""
         self.lsh.keys.empty_buffer()
         for hashtable in self.lsh.hashtables:
             hashtable.empty_buffer()
@@ -476,7 +579,7 @@ class MinHashLSHInsertionSession:
 
 
 class MinHashLSHDeletionSession:
-    """Context manager for batch deletion of documents from a MinHashLSH."""
+    """Context manager for removing many keys from a :class:`MinHashLSH`."""
 
     def __init__(self, lsh: MinHashLSH, buffer_size: int) -> None:
         self.lsh = lsh
@@ -494,7 +597,7 @@ class MinHashLSHDeletionSession:
         self.close()
 
     def close(self) -> None:
-        """Flush the buffers (nothing to do in memory)."""
+        """Flush the buffers (nothing to do for the in-memory index)."""
         self.lsh.keys.empty_buffer()
         for hashtable in self.lsh.hashtables:
             hashtable.empty_buffer()

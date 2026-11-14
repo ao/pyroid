@@ -1,7 +1,7 @@
 # Derived from datasketch 2.0.0 (MIT), © 2015 ekzhu; modified.
 # Error messages keep datasketch's %-formatting, so they stay byte-identical and the code
 # stays easy to diff against upstream.
-# ruff: noqa: UP031, E501, D102, D205, UP045
+# ruff: noqa: UP031, E501, UP045
 """datasketch's ``LeanMinHash`` (``datasketch.lean_minhash``): same byte format and pickles.
 
 A frozen MinHash without permutations or hash function. Types and docs are in
@@ -58,79 +58,19 @@ def _native_unpack(buf, byteorder):
 
 
 class LeanMinHash(MinHash):
-    """Lean MinHash is MinHash with a smaller memory footprint
-    and faster deserialization, but with its internal state frozen
-    -- no `update()`.
-
-    Lean MinHash inherits all methods from :class:`datasketch.MinHash`.
-    It does not store the `permutations` and the `hashfunc` needed for updating.
-    If a MinHash does not need further updates, convert it into a lean MinHash
-    to save memory.
-
-    Example:
-        To create a lean MinHash from an existing MinHash:
-
-        .. code-block:: python
-
-            lean_minhash = LeanMinHash(minhash)
-
-            # You can compute the Jaccard similarity between two lean MinHash
-            lean_minhash.jaccard(lean_minhash2)
-
-            # Or between a lean MinHash and a MinHash
-            lean_minhash.jaccard(minhash2)
-
-        To create a lean MinHash from the hash values, seed, and scheme of an
-        existing MinHash:
-
-        .. code-block:: python
-
-            lean_minhash = LeanMinHash(
-                seed=minhash.seed,
-                hashvalues=minhash.hashvalues,
-                scheme=minhash.scheme,
-            )
-
-        To create a MinHash from a lean MinHash:
-
-        .. code-block:: python
-
-            minhash = MinHash(
-                seed=lean_minhash.seed,
-                hashvalues=lean_minhash.hashvalues,
-                scheme=lean_minhash.scheme,
-            )
-
-            # Or if you want to prevent further updates on minhash
-            # from affecting the state of lean_minhash
-            minhash = MinHash(
-                seed=lean_minhash.seed,
-                hashvalues=lean_minhash.digest(),
-                scheme=lean_minhash.scheme,
-            )
-
-    Note:
-        Lean MinHash can also be used in :class:`datasketch.MinHashLSH`,
-        :class:`datasketch.MinHashLSHForest`, and :class:`datasketch.MinHashLSHEnsemble`.
+    """A MinHash with its state frozen: no :meth:`update`.
 
     Args:
-        minhash (optional): The :class:`datasketch.MinHash` object used to
-            initialize the LeanMinHash. If this is not set, then `seed`
-            and `hashvalues` must be set.
-        seed (optional): The random seed that controls the set of random
-            permutation functions generated for this LeanMinHash. This parameter
-            must be used together with `hashvalues`.
-        hashvalues (optional): The hash values used to initialize the state
-            of the LeanMinHash. This parameter must be used together with
-            `seed`.
-        scheme (optional): The permutation scheme of the MinHash the
-            `hashvalues` were taken from. Required when initializing from
-            `seed` and `hashvalues` (use ``"legacy"`` for hash values created
-            by datasketch before 2.0.0), because hash values carry no trace
-            of the scheme that produced them. When `minhash` is set the
-            scheme is taken from the MinHash object instead, and this
-            argument may only repeat it.
+        minhash: The MinHash to take the seed, hash values and scheme from.
+        seed: With `hashvalues` and `scheme`: the seed of the permutations.
+        hashvalues: With `seed` and `scheme`: the hash values.
+        scheme: The scheme of `hashvalues` (required with them; ``"legacy"`` for
+            values from datasketch before 2.0.0). With `minhash` it may only
+            repeat the MinHash's scheme.
 
+    Raises:
+        ValueError: Neither `minhash` nor `seed` and `hashvalues`; no or
+            conflicting `scheme`; empty `hashvalues` for an affine scheme.
     """
 
     __slots__ = ("hashvalues", "scheme", "seed")
@@ -189,12 +129,11 @@ class LeanMinHash(MinHash):
             )
 
     def update(self, b) -> None:
-        """Not available on a LeanMinHash.
-        Calling it raises a TypeError.
-        """
+        """Raise ``TypeError``: a LeanMinHash cannot be updated."""
         raise TypeError("Cannot update a LeanMinHash")
 
     def copy(self) -> LeanMinHash:
+        """Return a copy."""
         lmh = object.__new__(LeanMinHash)
         lmh._initialize_slots(self.seed, self.hashvalues, self.scheme)
         return lmh
@@ -213,18 +152,11 @@ class LeanMinHash(MinHash):
         return _native.lean_pack(self.scheme, seed, self.hashvalues, byteorder)
 
     def bytesize(self, byteorder="@") -> int:
-        """Compute the byte size after serialization.
+        """Return the size of the serialized form in bytes.
 
         Args:
-            byteorder (str, optional): This is byte order of the serialized data. Use one
-                of the `byte order characters
-                <https://docs.python.org/3/library/struct.html#byte-order-size-and-alignment>`_:
-                ``@``, ``=``, ``<``, ``>``, and ``!``.
-                Default is ``@`` -- the native order.
-
-        Returns:
-            int: Size in number of bytes after serialization.
-
+            byteorder: A `struct` byte order character: ``@`` (native, the
+                default), ``=``, ``<``, ``>`` or ``!``.
         """
         if self.scheme == _SCHEME_LEGACY:
             # 8 bytes for the seed, 4 bytes for the number of hash values,
@@ -236,57 +168,15 @@ class LeanMinHash(MinHash):
         return struct.calcsize("%sqiB%d%s" % (byteorder, len(self), self._value_fmt()))
 
     def serialize(self, buf, byteorder="@") -> None:
-        """Serialize this lean MinHash and store the result in an allocated buffer.
+        """Write this LeanMinHash into the writable buffer `buf`, from offset 0.
 
-        Args:
-            buf (buffer): `buf` must implement the `buffer`_ interface.
-                One such example is the built-in `bytearray`_ class.
-            byteorder (str, optional): This is byte order of the serialized data. Use one
-                of the `byte order characters
-                <https://docs.python.org/3/library/struct.html#byte-order-size-and-alignment>`_:
-                ``@``, ``=``, ``<``, ``>``, and ``!``.
-                Default is ``@`` -- the native order.
+        Layout (``"legacy"``, as before datasketch 2.0.0): seed (8 bytes), the
+        number of hash values (4 bytes), then each value in 4 bytes. Affine
+        schemes: seed, the *negated* number of values, a scheme code byte (1 for
+        ``"affine32"``, 2 for ``"affine64"``), then each value in 4 or 8 bytes.
 
-        This is preferred over using `pickle`_ if the serialized lean MinHash needs
-        to be used by another program in a different programming language.
-
-        The serialization schema for the ``"legacy"`` scheme (identical to
-        versions before 2.0.0):
-            1. The first 8 bytes is the seed integer
-            2. The next 4 bytes is the number of hash values
-            3. The rest is the serialized hash values, each uses 4 bytes
-
-        The serialization schema for the affine schemes:
-            1. The first 8 bytes is the seed integer
-            2. The next 4 bytes is the **negated** number of hash values
-               (a negative value marks the post-2.0.0 format)
-            3. The next byte is the scheme code (1 for ``"affine32"``,
-               2 for ``"affine64"``)
-            4. The rest is the serialized hash values, each uses 4 bytes
-               for ``"affine32"`` and 8 bytes for ``"affine64"``
-
-        Example:
-            To serialize a single lean MinHash into a `bytearray`_ buffer.
-
-            .. code-block:: python
-
-                buf = bytearray(lean_minhash.bytesize())
-                lean_minhash.serialize(buf)
-
-            To serialize multiple lean MinHash into a `bytearray`_ buffer.
-
-            .. code-block:: python
-
-                # assuming lean_minhashs is a list of LeanMinHash with the same size
-                size = lean_minhashs[0].bytesize()
-                buf = bytearray(size * len(lean_minhashs))
-                for i, lean_minhash in enumerate(lean_minhashs):
-                    lean_minhash.serialize(buf[i * size :])
-
-        .. _`buffer`: https://docs.python.org/3/c-api/buffer.html
-        .. _`bytearray`: https://docs.python.org/3.6/library/functions.html#bytearray
-        .. _`byteorder`: https://docs.python.org/3/library/struct.html
-
+        Raises:
+            ValueError: `buf` is shorter than :meth:`bytesize`.
         """
         if len(buf) < self.bytesize(byteorder):
             raise ValueError("The buffer does not have enough space for holding this MinHash.")
@@ -306,30 +196,13 @@ class LeanMinHash(MinHash):
 
     @classmethod
     def deserialize(cls, buf, byteorder="@") -> LeanMinHash:
-        """Deserialize a lean MinHash from a buffer.
+        """Read a LeanMinHash written by :meth:`serialize` (pyroid's or datasketch's).
 
-        Buffers written by versions before 2.0.0 (which had no scheme field)
-        deserialize with ``scheme="legacy"``.
+        Buffers written before datasketch 2.0.0 come back with
+        ``scheme="legacy"``.
 
-        Args:
-            buf (buffer): `buf` must implement the `buffer`_ interface.
-                One such example is the built-in `bytearray`_ class.
-            byteorder (str. optional): This is byte order of the serialized data. Use one
-                of the `byte order characters
-                <https://docs.python.org/3/library/struct.html#byte-order-size-and-alignment>`_:
-                ``@``, ``=``, ``<``, ``>``, and ``!``.
-                Default is ``@`` -- the native order.
-
-        Return:
-            datasketch.LeanMinHash: The deserialized lean MinHash
-
-        Example:
-            To deserialize a lean MinHash from a buffer.
-
-            .. code-block:: python
-
-                lean_minhash = LeanMinHash.deserialize(buf)
-
+        Raises:
+            ValueError: An unknown scheme code.
         """
         lmh = _native_unpack(buf, byteorder)
         if lmh is not None:
@@ -405,7 +278,7 @@ class LeanMinHash(MinHash):
 
     @classmethod
     def union(cls, *lmhs: LeanMinHash) -> LeanMinHash:
-        """Create a new lean MinHash by unioning multiple lean MinHash."""
+        """Return a new LeanMinHash, the union of `lmhs` (at least two)."""
         if len(lmhs) < 2:
             raise ValueError("Cannot union less than 2 MinHash")
         num_perm = len(lmhs[0])

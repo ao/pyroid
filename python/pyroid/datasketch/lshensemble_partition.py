@@ -182,20 +182,12 @@ def _compute_best_partitions(num_part, sizes, nfps):
 
 
 def optimal_partitions(sizes, counts, num_part):
-    """Compute the optimal partitions given a distribution of set sizes.
+    """Return `num_part` ``(lower, upper)`` set-size intervals that minimise false positives.
 
     Args:
-        sizes (numpy.array): The complete domain of set sizes in ascending
-            order.
-        counts (numpy.array): The frequencies of all set sizes in the same
-            order as `sizes`.
-        num_part (int): The number of partitions to create.
-
-    Returns:
-        list: A list of partitions in the form of `(lower, upper)` tuples,
-            where `lower` and `upper` are lower and upper bound (inclusive)
-            set sizes of each partition.
-
+        sizes: The distinct set sizes, ascending.
+        counts: The number of sets of each size.
+        num_part: The number of partitions.
     """
     if num_part < 2:
         return [(sizes[0], sizes[-1])]

@@ -12,7 +12,7 @@ merges without conflicts.
 | `crates/pyroid-core/src/<mod>/` | Pure-Rust kernels (`&str -> ...`). No PyO3, `#![forbid(unsafe_code)]`, unit tests + doctests. Add `pub mod <mod>;` to `crates/pyroid-core/src/lib.rs` (**registration line 1**). |
 | `crates/pyroid-py/src/<mod>.rs` | `#[pyfunction]` wrappers and `pub fn register(parent)`, which creates the native submodule `pyroid.<mod>`. Add `mod <mod>;` and `<mod>::register(m)?;` to `crates/pyroid-py/src/lib.rs` (**registration line 2**). |
 | `python/pyroid/<mod>.py` | Public module: re-exports the native functions (`from pyroid._pyroid import <mod> as _native`). Pure-Python glue only where it adds value. |
-| `python/pyroid/<mod>.pyi` | Hand-written stub: `@overload`s per input kind, Google-style docstrings (the API docs are built from these). |
+| `python/pyroid/<mod>.pyi` | Hand-written stub: `@overload`s per input kind, Google-style docstrings (the API docs are built from these; `docs/scripts/sync_docstrings.py` copies them into `<mod>.py` for `help()`, and a prek hook checks they match). |
 | `python/tests/test_<mod>*.py` | Tests against the installed wheel. |
 
 `python/pyroid/__init__.py` does not import submodules; users write `import pyroid.text`.
