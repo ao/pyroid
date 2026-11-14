@@ -50,7 +50,9 @@ import json
 import math
 import os
 import shutil
+import signal
 import sys
+import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Iterator, Sequence
@@ -2361,8 +2363,16 @@ def main(argv: list[str] | None = None) -> int:
     else:
         a = build_parser().parse_args(args)
     _need_pyarrow()
+    term = _on_sigterm()
     try:
         return int(a.body(a))
+    except _shards.Terminated:
+        # Finished files and their records are kept: the same command resumes the run.
+        print(f"pyroid {a.command}: terminated", file=sys.stderr)  # noqa: T201
+        return 128 + signal.SIGTERM
+    except KeyboardInterrupt:
+        print(f"pyroid {a.command}: interrupted", file=sys.stderr)  # noqa: T201
+        return 128 + signal.SIGINT
     except _shards.StateError as e:
         raise SystemExit(f"pyroid {a.command}: {e}") from None
     except (FileNotFoundError, ValueError, ImportError) as e:
@@ -2372,6 +2382,27 @@ def main(argv: list[str] | None = None) -> int:
         notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
         print(f"pyroid {a.command}: {msg}{notes}", file=sys.stderr)  # noqa: T201
         return 1
+    finally:
+        if term is not None:
+            signal.signal(signal.SIGTERM, term)
+
+
+def _on_sigterm() -> Any:
+    """Make SIGTERM raise ``Terminated`` in the main thread, as SIGINT raises
+    ``KeyboardInterrupt``: the run then stops its workers and removes its temporary files.
+    Returns the handler to restore, or None when a program that embeds the CLI set its own.
+    """
+    from pyroid.integrations import _shards
+
+    if threading.current_thread() is not threading.main_thread():
+        return None
+    if signal.getsignal(signal.SIGTERM) is not signal.SIG_DFL:
+        return None
+
+    def handler(signum: int, frame: Any) -> None:
+        raise _shards.Terminated
+
+    return signal.signal(signal.SIGTERM, handler)
 
 
 # What installs a module the commands import only when they need it (top-level name: pip args).
