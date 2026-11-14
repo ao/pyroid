@@ -407,16 +407,15 @@ fn run<'py>(
         }
         TextInput::List(docs) | TextInput::Tuple(docs) => {
             let tuple = matches!(texts, TextInput::Tuple(_));
-            let outs = py
-                .detach(|| {
-                    par::try_map(docs.len(), n_threads, |i| {
-                        p.run(&docs[i]).map_err(|err| RunError::Filter {
-                            at: format!("the str at index {i}"),
-                            err,
-                        })
+            let outs = crate::interrupt::detach_batch(py, || {
+                par::try_map(docs.len(), n_threads, |i| {
+                    p.run(&docs[i]).map_err(|err| RunError::Filter {
+                        at: format!("the str at index {i}"),
+                        err,
                     })
                 })
-                .map_err(|e| e.into_pyerr(py))?;
+            })
+            .map_err(|e| e.into_pyerr(py))?;
             pack(
                 py,
                 what,
@@ -453,16 +452,15 @@ fn run_arrow<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let large = strings.field.ty == StrType::LargeUtf8;
     let name = strings.field.name.as_str();
-    let chunks = py
-        .detach(|| {
-            strings
-                .chunks
-                .iter()
-                .enumerate()
-                .map(|(c, chunk)| run_chunk(p, chunk, c, n_threads))
-                .collect::<Result<Vec<_>, RunError>>()
-        })
-        .map_err(|e| e.into_pyerr(py))?;
+    let chunks = crate::interrupt::detach_batch(py, || {
+        strings
+            .chunks
+            .iter()
+            .enumerate()
+            .map(|(c, chunk)| run_chunk(p, chunk, c, n_threads))
+            .collect::<Result<Vec<_>, RunError>>()
+    })
+    .map_err(|e| e.into_pyerr(py))?;
     let keep = || -> PyResult<Bound<'py, PyAny>> {
         let out = chunks
             .iter()
@@ -603,25 +601,24 @@ fn _run_list<'py>(
     let p = &pipeline.pipeline;
     let n_threads = crate::input::threads(threads);
     // `None`: needs words.
-    let outcomes: Vec<Option<Outcome<'_>>> = py
-        .detach(|| {
-            par::try_map(docs.len(), n_threads, |i| {
-                let text: &str = &docs[i];
-                let res = match words.as_ref().and_then(|w| w[i].as_ref()) {
-                    None => p.run(text),
-                    Some(w) => p.run_with_words(text, w.iter().map(|s| &**s).collect()),
-                };
-                match res {
-                    Ok(o) => Ok(Some(o)),
-                    Err(FilterError::NeedsTokenizer) => Ok(None),
-                    Err(err) => Err(RunError::Filter {
-                        at: format!("document {}", name(i)),
-                        err,
-                    }),
-                }
-            })
+    let outcomes: Vec<Option<Outcome<'_>>> = crate::interrupt::detach_batch(py, || {
+        par::try_map(docs.len(), n_threads, |i| {
+            let text: &str = &docs[i];
+            let res = match words.as_ref().and_then(|w| w[i].as_ref()) {
+                None => p.run(text),
+                Some(w) => p.run_with_words(text, w.iter().map(|s| &**s).collect()),
+            };
+            match res {
+                Ok(o) => Ok(Some(o)),
+                Err(FilterError::NeedsTokenizer) => Ok(None),
+                Err(err) => Err(RunError::Filter {
+                    at: format!("document {}", name(i)),
+                    err,
+                }),
+            }
         })
-        .map_err(|e| e.into_pyerr(py))?;
+    })
+    .map_err(|e| e.into_pyerr(py))?;
     let codes = PyList::new(
         py,
         outcomes.iter().map(|o| match o {
@@ -1109,8 +1106,7 @@ mod pii {
         ) -> PyResult<(Bound<'py, PyAny>, usize, usize)> {
             let (input, threads) = texts_and_threads(texts, threads, None)?;
             let threads = crate::input::threads(threads);
-            let docs = py
-                .detach(|| flat_docs(&input, threads))
+            let docs = crate::interrupt::detach_batch(py, || flat_docs(&input, threads))
                 .map_err(|e| e.into_pyerr(py))?;
             let mut cur: Vec<Option<Cow<'_, str>>> =
                 docs.iter().map(|d| d.map(Cow::Borrowed)).collect();
@@ -1139,30 +1135,28 @@ mod pii {
             threads: par::Threads,
         ) -> PyResult<usize> {
             let v = self.version;
-            let found = py
-                .detach(|| {
-                    par::map(cur.len(), threads, |i| {
-                        let mut m = Vec::new();
-                        if let Some(d) = cur[i].as_deref() {
-                            pii::email_matches(d, v, &mut m);
-                        }
-                        m
-                    })
+            let found = crate::interrupt::detach_batch(py, || {
+                par::map(cur.len(), threads, |i| {
+                    let mut m = Vec::new();
+                    if let Some(d) = cur[i].as_deref() {
+                        pii::email_matches(d, v, &mut m);
+                    }
+                    m
                 })
-                .map_err(|e| pool_err(py, e))?;
+            })
+            .map_err(|e| pool_err(py, e))?;
             let counts: Vec<usize> = found.iter().map(Vec::len).collect();
             let (at, next) = starts(&counts, start, self.email.len())?;
             let reps = &self.email;
-            let replaced: Vec<Option<String>> = py
-                .detach(|| {
-                    par::map(cur.len(), threads, |i| {
-                        let d = cur[i].as_deref().filter(|_| counts[i] > 0)?;
-                        pii::replace(d, &found[i], |_| true, reps, at[i])
-                            .ok()
-                            .map(|(t, _)| t.into_owned())
-                    })
+            let replaced: Vec<Option<String>> = crate::interrupt::detach_batch(py, || {
+                par::map(cur.len(), threads, |i| {
+                    let d = cur[i].as_deref().filter(|_| counts[i] > 0)?;
+                    pii::replace(d, &found[i], |_| true, reps, at[i])
+                        .ok()
+                        .map(|(t, _)| t.into_owned())
                 })
-                .map_err(|e| pool_err(py, e))?;
+            })
+            .map_err(|e| pool_err(py, e))?;
             for (c, r) in cur.iter_mut().zip(replaced) {
                 if let Some(t) = r {
                     *c = Some(Cow::Owned(t));
@@ -1181,23 +1175,22 @@ mod pii {
             validator: Option<&Bound<'_, PyAny>>,
             threads: par::Threads,
         ) -> PyResult<usize> {
-            let found: Vec<Vec<(Range<usize>, bool)>> = py
-                .detach(|| {
-                    par::map(cur.len(), threads, |i| {
-                        let Some(t) = cur[i].as_deref() else {
-                            return Vec::new();
-                        };
-                        let mut m = Vec::new();
-                        pii::ip_matches(t, &mut m);
-                        m.into_iter()
-                            .map(|r| {
-                                let parses = pii::parse_ipv4(&t[r.clone()]).is_some();
-                                (r, parses)
-                            })
-                            .collect()
-                    })
+            let found: Vec<Vec<(Range<usize>, bool)>> = crate::interrupt::detach_batch(py, || {
+                par::map(cur.len(), threads, |i| {
+                    let Some(t) = cur[i].as_deref() else {
+                        return Vec::new();
+                    };
+                    let mut m = Vec::new();
+                    pii::ip_matches(t, &mut m);
+                    m.into_iter()
+                        .map(|r| {
+                            let parses = pii::parse_ipv4(&t[r.clone()]).is_some();
+                            (r, parses)
+                        })
+                        .collect()
                 })
-                .map_err(|e| pool_err(py, e))?;
+            })
+            .map_err(|e| pool_err(py, e))?;
             let valid = Self::validate(cur, &found, validator)?;
             let counts: Vec<usize> = valid
                 .iter()
@@ -1205,18 +1198,17 @@ mod pii {
                 .collect();
             let (at, next) = starts(&counts, start, self.ip.len())?;
             let reps = &self.ip;
-            let replaced: Vec<Option<String>> = py
-                .detach(|| {
-                    par::map(cur.len(), threads, |i| {
-                        let t = cur[i].as_deref().filter(|_| counts[i] > 0)?;
-                        let ranges: Vec<Range<usize>> =
-                            found[i].iter().map(|(r, _)| r.clone()).collect();
-                        pii::replace(t, &ranges, |k| valid[i][k], reps, at[i])
-                            .ok()
-                            .map(|(t, _)| t.into_owned())
-                    })
+            let replaced: Vec<Option<String>> = crate::interrupt::detach_batch(py, || {
+                par::map(cur.len(), threads, |i| {
+                    let t = cur[i].as_deref().filter(|_| counts[i] > 0)?;
+                    let ranges: Vec<Range<usize>> =
+                        found[i].iter().map(|(r, _)| r.clone()).collect();
+                    pii::replace(t, &ranges, |k| valid[i][k], reps, at[i])
+                        .ok()
+                        .map(|(t, _)| t.into_owned())
                 })
-                .map_err(|e| pool_err(py, e))?;
+            })
+            .map_err(|e| pool_err(py, e))?;
             for (c, r) in cur.iter_mut().zip(replaced) {
                 if let Some(t) = r {
                     *c = Some(Cow::Owned(t));
@@ -1347,25 +1339,23 @@ mod badwords {
             let id = ids.as_ref().map_or(lang, |ids| ids[i]);
             usize::try_from(id).ok().and_then(|k| lists.get(k).copied())
         };
-        let docs = py
-            .detach(|| flat_docs(&input, threads))
+        let docs = crate::interrupt::detach_batch(py, || flat_docs(&input, threads))
             .map_err(|e| e.into_pyerr(py))?;
         if ids.as_ref().is_some_and(|ids| ids.len() != docs.len()) {
             return Err(PyValueError::new_err(
                 "languages must have one entry per document",
             ));
         }
-        let hits: Vec<Option<Hit>> = py
-            .detach(|| {
-                par::map(docs.len(), threads, |i| {
-                    docs[i].map(|d| match pick(i) {
-                        None => Hit::Missing,
-                        Some(b) if b.found(d, v) => Hit::Yes,
-                        Some(_) => Hit::No,
-                    })
+        let hits: Vec<Option<Hit>> = crate::interrupt::detach_batch(py, || {
+            par::map(docs.len(), threads, |i| {
+                docs[i].map(|d| match pick(i) {
+                    None => Hit::Missing,
+                    Some(b) if b.found(d, v) => Hit::Yes,
+                    Some(_) => Hit::No,
                 })
             })
-            .map_err(|e| super::pii::pool_err(py, e))?;
+        })
+        .map_err(|e| super::pii::pool_err(py, e))?;
         let mut gen_state = rng.map(|(state, inc)| Pcg64 { state, inc });
         if what == "found" {
             let vals: Vec<Option<bool>> = hits.iter().map(|h| h.map(|h| h == Hit::Yes)).collect();

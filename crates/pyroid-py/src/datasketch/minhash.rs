@@ -460,7 +460,7 @@ fn bulk_rows<T: Value>(
                 &mut fallback,
             )?;
             let rows = &mut out[start * k..end * k];
-            py.detach(|| hash_round(perm, &arena, rows, bits, threads))
+            crate::interrupt::detach_batch(py, || hash_round(perm, &arena, rows, bits, threads))
                 .map_err(|e| e.into_pyerr(py))?;
             start = end;
         }
@@ -483,6 +483,11 @@ fn bulk_rows<T: Value>(
             Ok(Some(arena))
         };
         while start < n {
+            // Attached between rounds: a Ctrl-C raises here, after the round in flight.
+            if let Err(e) = py.check_signals() {
+                finish(&mut pending)?;
+                return Err(e);
+            }
             let mut arena = std::mem::take(&mut spare);
             let end = match extract_round(
                 &mut arena,
@@ -683,8 +688,10 @@ fn batch_texts<'py>(
     let arr = match scheme {
         Scheme::Legacy | Scheme::Affine64 => {
             let mut out = vec![max; n * k];
-            py.detach(|| text_rows(&perm, &input, threads_arg, ngram, bits, &mut out))
-                .map_err(|e| e.into_pyerr(py))?;
+            crate::interrupt::detach_batch(py, || {
+                text_rows(&perm, &input, threads_arg, ngram, bits, &mut out)
+            })
+            .map_err(|e| e.into_pyerr(py))?;
             if single {
                 owned1(py, &out)
             } else {
@@ -694,8 +701,10 @@ fn batch_texts<'py>(
         Scheme::Affine32 => {
             #[allow(clippy::cast_possible_truncation)]
             let mut out = vec![max as u32; n * k];
-            py.detach(|| text_rows(&perm, &input, threads_arg, ngram, bits, &mut out))
-                .map_err(|e| e.into_pyerr(py))?;
+            crate::interrupt::detach_batch(py, || {
+                text_rows(&perm, &input, threads_arg, ngram, bits, &mut out)
+            })
+            .map_err(|e| e.into_pyerr(py))?;
             if single {
                 owned1(py, &out)
             } else {
