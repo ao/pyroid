@@ -17,7 +17,9 @@ The names are ``"ftfy"`` (:mod:`pyroid.ftfy`, which reproduces ftfy 6.3.1), ``"f
 ``FastText.load_model`` give pyroid models), ``"anyascii"`` (:func:`pyroid.translit.anyascii`)
 and ``"datasketch"`` (:mod:`pyroid.datasketch`, which reproduces datasketch 2.0.0: ``datasketch``
 and its ``minhash``, ``lean_minhash``, ``hashfunc``, ``lsh``, ``lshforest`` and ``lshensemble``
-submodules give pyroid's classes), ``"trafilatura"`` (:mod:`pyroid.trafilatura`, which
+submodules give pyroid's classes), ``"json_repair"`` (:mod:`pyroid.json_repair`, which reproduces
+json_repair 0.64.9: ``repair_json``, ``loads``, ``load`` and ``from_file`` of ``json_repair``
+and ``json_repair.json_repair``), ``"trafilatura"`` (:mod:`pyroid.trafilatura`, which
 reproduces trafilatura 2.3.1 or 1.11.0, following the installed release: ``extract``,
 ``bare_extraction`` and (2.3.1) ``extract_with_metadata`` of ``trafilatura`` and
 ``trafilatura.core``, ``trafilatura.deduplication.LRUCache`` / ``LRU_TEST`` and
@@ -137,6 +139,7 @@ SUPPORTED: tuple[str, ...] = (
     "fasttext",
     "anyascii",
     "datasketch",
+    "json_repair",
     "trafilatura",
     "nltk",
     "warcio",
@@ -386,6 +389,19 @@ def _build_anyascii(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     version = impl.ANYASCII_VERSION
     shim = _shim("anyascii", real, missing, impl, provided, package=True, version=version)
     return {"anyascii": shim}, []
+
+
+def _build_json_repair(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    # json_repair and its json_repair submodule (`from json_repair.json_repair import repair_json`).
+    provided = {n: getattr(impl, n) for n in ("repair_json", "loads", "load", "from_file")}
+    provided["JSONReturnType"] = impl.JSONReturnType
+    full = "json_repair.json_repair"
+    real_sub = sys.modules.get(full) if real is not None else None
+    sub_missing = missing if real is None else "the installed json_repair has no json_repair module"
+    sub = _shim(full, real_sub, sub_missing, impl, provided, package=False)
+    top = _shim("json_repair", real, missing, impl, {**provided, "json_repair": sub}, package=True)
+    # pyroid.json_repair's own fallback (schema=, bytes) sees through the shim to `__wrapped__`.
+    return {"json_repair": top, full: sub}, []
 
 
 # datasketch's submodules that pyroid ports, and what each shim provides; the others
@@ -794,6 +810,13 @@ _TARGETS: dict[str, _Target] = {
         " storage)",
         _build_datasketch,
     ),
+    "json_repair": _Target(
+        "pyroid.json_repair",
+        "which reproduces repair_json, loads, load and from_file of json_repair 0.64.9",
+        "pip install json-repair==0.64.9",
+        " (the command line and the internal modules; schema= calls are handed to it)",
+        _build_json_repair,
+    ),
     "trafilatura": _Target(
         "pyroid.trafilatura",
         "which reproduces the extract and bare_extraction of trafilatura 2.3.1 or 1.11.0, "
@@ -985,7 +1008,8 @@ def patch(*names: str) -> None:
 
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
-            ``"trafilatura"``, ``"nltk"``, ``"warcio"`` and/or ``"nemo_curator"``.
+            ``"json_repair"``, ``"trafilatura"``, ``"nltk"``, ``"warcio"`` and/or
+            ``"nemo_curator"``.
 
     Raises:
         TypeError: No names were given.
@@ -1123,8 +1147,8 @@ def _export(names: Sequence[str]) -> None:
 _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
-`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
-`warcio` / `nemo_curator` giving pyroid's drop-ins. The Python processes it starts
+`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
+`nltk` / `warcio` / `nemo_curator` giving pyroid's drop-ins. The Python processes it starts
 (multiprocessing workers, subprocesses) are patched too.
 
 options:
