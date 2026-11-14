@@ -1040,3 +1040,31 @@ def test_trees_with_control_characters_stay_xml() -> None:
     pytest.importorskip("lxml.etree")
     xml = "<body><p>the &#xFFFD;</p></body>"  # tostring of a tree holding "\x1f"
     assert cast(Any, pt)._from_xml(xml) == xml
+
+
+@pytest.mark.thread_unsafe(reason="runs a subprocess and measures its memory")
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="reads /proc/self/status")
+@pytest.mark.parametrize("compat", ["2.3.1", "1.11.0"])
+def test_div_soup_memory_is_linear(run_python: Callable[..., Any], compat: str) -> None:
+    # A 4 MB page of 64k sibling <div>s: readability's sanitize drops them from the last one
+    # up, each joined tail one longer than the one before. Holding every dropped element's copy
+    # took 2.4 GB in 1.11.0 mode (as trafilatura 1.11.0 in lxml); now about the page's size.
+    proc = run_python(
+        f"""
+        import pyroid.trafilatura as T
+        def hwm():
+            for line in open("/proc/self/status"):
+                if line.startswith("VmHWM"):
+                    return int(line.split()[1]) // 1024
+        unit = "<div class='c'><span>w</span> text text <a href='#'>link</a></div>\\n"
+        page = "<html><body>" + unit * 64_000 + "</body></html>"
+        base = hwm()
+        out = T.extract(page, compat={compat!r})
+        print(len(out), hwm() - base)
+        """,
+        timeout=300.0,
+    )
+    assert proc.returncode == 0, proc.stderr
+    n, grew = (int(x) for x in proc.stdout.split())
+    assert n == 64_000 * 17 - 1
+    assert grew < 800, f"{grew} MiB"
