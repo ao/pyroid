@@ -113,6 +113,38 @@ def test_compliance_suite_is_complete() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Real queries: botocore's paginator and waiter expressions and AWS CLI examples
+# ---------------------------------------------------------------------------
+
+
+def _decode(x: Any) -> Any:
+    """Undo bench/jmespath/real_queries.py's JSON encoding of datetimes and bytes."""
+    import datetime
+
+    if isinstance(x, dict):
+        if set(x) == {"$datetime"}:
+            return datetime.datetime.fromisoformat(x["$datetime"])
+        if set(x) == {"$bytes"}:
+            return x["$bytes"].encode()
+        return {k: _decode(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_decode(v) for v in x]
+    return x
+
+
+REAL = DATA / "real-queries.json"
+REAL_CASES = json.loads(REAL.read_text(encoding="utf-8")) if REAL.is_file() else []
+
+
+@pytest.mark.skipif(not REAL_CASES, reason="needs parity/data/jmespath-1.1.0/real-queries.json")
+def test_real_queries() -> None:
+    # A sample of bench/jmespath/real_queries.py's corpus (the whole corpus is in the report).
+    assert len(REAL_CASES) > 300
+    for case in REAL_CASES:
+        compare(case["expression"], _decode(case["data"]))
+
+
+# ---------------------------------------------------------------------------
 # jmespath.py's own unit tests, against pyroid.jmespath
 # ---------------------------------------------------------------------------
 
