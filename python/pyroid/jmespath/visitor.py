@@ -8,6 +8,7 @@ themselves (``TreeInterpreter(options).visit(parsed, data)``) or subclass it.
 
 from __future__ import annotations
 
+import importlib
 import operator
 from numbers import Number
 from typing import Any
@@ -74,8 +75,8 @@ class Options:
     Args:
         dict_cls: The class of the dicts a multi-select hash (``{a: a}``) builds, for example
             ``collections.OrderedDict``. ``None`` means ``dict``.
-        custom_functions: A :class:`pyroid.jmespath.functions.Functions` instance (or a
-            subclass of jmespath's) with extra ``_func_*`` functions.
+        custom_functions: An instance of a ``pyroid.jmespath.functions.Functions`` subclass
+            (or of jmespath's own ``Functions``) with extra ``_func_*`` functions.
     """
 
     def __init__(self, dict_cls: Any = None, custom_functions: Any = None) -> None:
@@ -91,7 +92,7 @@ class Options:
         self.custom_functions = custom_functions
 
 
-class _Expression:  # noqa: N801 - jmespath's name
+class _Expression:
     """An expression reference (``&expr``) as functions receive it."""
 
     def __init__(self, expression: Any, interpreter: Any) -> None:
@@ -105,7 +106,7 @@ class _Expression:  # noqa: N801 - jmespath's name
 
 if _find.jmespath() is not None:
     # jmespath's own class, so isinstance checks and reprs in custom functions see it.
-    from jmespath.visitor import _Expression  # type: ignore[assignment] # noqa: F811
+    _Expression = importlib.import_module("jmespath.visitor")._Expression
 
 
 class Visitor:
@@ -327,7 +328,7 @@ class TreeInterpreter(Visitor):
         # This looks weird, but we're explicitly using equality checks
         # because the truth/false values are different between
         # python and jmespath.
-        return value == "" or value == [] or value == {} or value is None or value is False  # noqa: PLC1901
+        return value == "" or value == [] or value == {} or value is None or value is False
 
     def _is_true(self, value: Any) -> bool:
         return not self._is_false(value)

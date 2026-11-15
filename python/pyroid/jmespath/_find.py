@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 _UNSET: Any = object()
@@ -13,7 +14,7 @@ def jmespath() -> Any:
     global _found
     if _found is _UNSET:
         try:
-            import jmespath as real
+            real = importlib.import_module("jmespath")
         except ImportError:
             real = None
         # Under pyroid.patch("jmespath") without jmespath, `jmespath` is pyroid's shim.

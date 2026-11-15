@@ -8,20 +8,21 @@ copies with the same attributes and messages.
 
 from __future__ import annotations
 
+import importlib
+
 from pyroid.jmespath import _find
 
 if _find.jmespath() is not None:
-    from jmespath.exceptions import (
-        ArityError,
-        EmptyExpressionError,
-        IncompleteExpressionError,
-        JMESPathError,
-        JMESPathTypeError,
-        LexerError,
-        ParseError,
-        UnknownFunctionError,
-        VariadictArityError,
-    )
+    _real = importlib.import_module("jmespath.exceptions")
+    ArityError = _real.ArityError
+    EmptyExpressionError = _real.EmptyExpressionError
+    IncompleteExpressionError = _real.IncompleteExpressionError
+    JMESPathError = _real.JMESPathError
+    JMESPathTypeError = _real.JMESPathTypeError
+    LexerError = _real.LexerError
+    ParseError = _real.ParseError
+    UnknownFunctionError = _real.UnknownFunctionError
+    VariadictArityError = _real.VariadictArityError
 else:
     from pyroid.jmespath._exceptions import (
         ArityError,

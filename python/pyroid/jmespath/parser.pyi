@@ -3,8 +3,6 @@
 
 from typing import Any, ClassVar, Final
 
-from pyroid.jmespath.visitor import Options
-
 __all__ = ["ParsedResult", "Parser"]
 
 class ParsedResult:
@@ -23,7 +21,7 @@ class ParsedResult:
     def __init__(self, expression: Any, parsed: Any) -> None:
         """Make a result from an expression and a dict AST (as jmespath's `ParsedResult`)."""
 
-    def search(self, value: Any, options: Options | None = None) -> Any:
+    def search(self, value: Any, options: Any = None) -> Any:
         """Evaluate the expression on `value` (see `pyroid.jmespath.search`)."""
 
     def _render_dot_file(self) -> str: ...

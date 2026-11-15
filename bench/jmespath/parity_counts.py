@@ -109,9 +109,7 @@ def main() -> int:
             check("fuzz", t.compare, expression, value)
 
     @settings(max_examples=args.custom, **quiet)
-    @given(
-        t.custom_expressions, u.data, st.sampled_from(["plus", "dispatch", "plain"]), st.booleans()
-    )
+    @given(t.custom_expressions, u.data, st.sampled_from(["plus", "dispatch", "plain"]), st.booleans())
     def custom(expression: str, value: Any, kind: str, jbase: bool) -> None:
         check("custom", t.test_fuzz_custom_functions.hypothesis.inner_test, expression, value, kind, jbase)
 

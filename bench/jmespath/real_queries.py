@@ -38,9 +38,9 @@ assert spec is not None and spec.loader is not None
 util = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(util)
 
-import jmespath  # noqa: E402
+import pyroid.jmespath as pj
 
-import pyroid.jmespath as pj  # noqa: E402
+import jmespath
 
 WORDS = ["running", "stopped", "pending", "available", "ACTIVE", "in-use", "true", "Name", "web", "db-1", ""]
 
@@ -101,17 +101,18 @@ def botocore_expressions(session: Any) -> list[tuple[str, str, str, str]]:
         except Exception:  # noqa: BLE001 - not every service has paginators
             pag = {}
         for op, cfg in pag.get("pagination", {}).items():
-            for key in ("result_key", "more_results", "output_token", "non_aggregate_keys"):
-                for e in as_list(cfg.get(key)):
-                    out.append((f"paginator.{key}", service, op, e))
+            keys = ("result_key", "more_results", "output_token", "non_aggregate_keys")
+            out.extend((f"paginator.{key}", service, op, e) for key in keys for e in as_list(cfg.get(key)))
         try:
             wait = loader.load_service_model(service, "waiters-2")
         except Exception:  # noqa: BLE001
             wait = {}
-        for cfg in wait.get("waiters", {}).values():
-            for acc in cfg.get("acceptors", []):
-                if acc.get("matcher") in ("path", "pathAll", "pathAny"):
-                    out.append(("waiter.argument", service, cfg["operation"], acc["argument"]))
+        out.extend(
+            ("waiter.argument", service, cfg["operation"], acc["argument"])
+            for cfg in wait.get("waiters", {}).values()
+            for acc in cfg.get("acceptors", [])
+            if acc.get("matcher") in ("path", "pathAll", "pathAny")
+        )
     return out
 
 
@@ -155,14 +156,14 @@ def doc_cases() -> list[tuple[str, str, list[Any]]]:
     import urllib.request
 
     def fetch(url: str) -> str:
-        with urllib.request.urlopen(url, timeout=60) as r:  # noqa: S310 - fixed https URLs
+        with urllib.request.urlopen(url, timeout=60) as r:
             return r.read().decode("utf-8")
 
     out: list[tuple[str, str, list[Any]]] = []
     page = fetch(AWS_GUIDE)
     blocks = [
         html.unescape(re.sub(r"<[^>]+>", "", b))
-        for b in re.findall(r"<pre[^>]*>(.*?)</pre>", page, re.S)
+        for b in re.findall(r"<pre[^>]*>(.*?)</pre>", page, re.DOTALL)
     ]
     data = []
     for b in blocks:
@@ -175,16 +176,19 @@ def doc_cases() -> list[tuple[str, str, list[Any]]]:
             continue
         if value not in data:
             data.append(value)
-    for b in blocks:
-        for m in QUERY.finditer(b):
-            out.append(("docs.aws-cli-guide", shlex.split(m.group(1))[0], data))
+    out.extend(
+        ("docs.aws-cli-guide", shlex.split(m.group(1))[0], data) for b in blocks for m in QUERY.finditer(b)
+    )
     rst = fetch(ANSIBLE_GUIDE)
     value = json.loads(rst.split(".. code-block:: yaml+jinja", 2)[1].split("\n\nTo ", 1)[0])
     value = value["domain_definition"]
-    for m in re.finditer(r"json_query\('((?:[^']|'')*)'\)", rst):
-        out.append(("docs.ansible-json_query", m.group(1).replace("''", "'"), [value]))
-    for m in re.finditer(r"_query: \"([^\"]*)\"", rst):
-        out.append(("docs.ansible-json_query", m.group(1), [value]))
+    out.extend(
+        ("docs.ansible-json_query", m.group(1).replace("''", "'"), [value])
+        for m in re.finditer(r"json_query\('((?:[^']|'')*)'\)", rst)
+    )
+    out.extend(
+        ("docs.ansible-json_query", m.group(1), [value]) for m in re.finditer(r"_query: \"([^\"]*)\"", rst)
+    )
     return out
 
 
@@ -205,9 +209,7 @@ def main() -> int:
     import awscli
 
     examples = Path(args.examples) if args.examples else Path(awscli.__file__).parent / "examples"
-    entries = [(*e, None) for e in botocore_expressions(session)] + cli_expressions(
-        session, examples
-    )
+    entries = [(*e, None) for e in botocore_expressions(session)] + cli_expressions(session, examples)
     rng = random.Random(20261115)
     counts: dict[str, list[int]] = {}
     sample = []
@@ -241,8 +243,9 @@ def main() -> int:
                 if len(diffs) < 20:
                     diffs.append((source, service, op, expr, a, b))
         if args.sample_out and rng.random() < args.sample_rate and shape is not None:
-            sample.append({"source": source, "service": service, "operation": op,
-                           "expression": expr, "data": values[1]})
+            sample.append(
+                {"source": source, "service": service, "operation": op, "expression": expr, "data": values[1]}
+            )
     if args.docs:
         for source, expr, values in doc_cases():
             c = counts.setdefault(source, [0, 0, 0, 0])
@@ -262,16 +265,28 @@ def main() -> int:
     total = [sum(c[i] for c in counts.values()) for i in range(4)]
     for source, c in sorted(counts.items()):
         print(f"{source:28s} expressions {c[0]:6d} evaluations {c[1]:7d} non-null {c[2]:7d} different {c[3]}")
-    print(f"{'total':28s} expressions {total[0]:6d} evaluations {total[1]:7d} non-null {total[2]:7d} different {total[3]}")
-    print("botocore", botocore.__version__, "awscli", awscli.__version__, "jmespath",
-          jmespath.__version__, "examples", examples)
+    print(
+        f"{'total':28s} expressions {total[0]:6d} evaluations {total[1]:7d} non-null {total[2]:7d} different {total[3]}"
+    )
+    print(
+        "botocore",
+        botocore.__version__,
+        "awscli",
+        awscli.__version__,
+        "jmespath",
+        jmespath.__version__,
+        "examples",
+        examples,
+    )
     if args.sample_out:
+
         def default(o: Any) -> Any:
             if isinstance(o, datetime.datetime):
                 return {"$datetime": o.isoformat()}
             if isinstance(o, bytes):
                 return {"$bytes": o.decode()}
             raise TypeError(type(o))
+
         Path(args.sample_out).write_text(json.dumps(sample, default=default, sort_keys=False) + "\n")
         print("sample:", len(sample), "cases ->", args.sample_out)
     return 1 if total[3] else 0

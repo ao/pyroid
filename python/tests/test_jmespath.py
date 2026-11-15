@@ -81,9 +81,7 @@ def test_parsed_ast() -> None:
     compiled = jp.compile("{a: `1`}")
     assert compiled.parsed is compiled.parsed
     assert repr(compiled) == repr(compiled.parsed)
-    assert jp.compile("foo")._render_dot_file() == (
-        'digraph AST {\nfield1 [label="field(foo)"]\n}'
-    )
+    assert jp.compile("foo")._render_dot_file() == ('digraph AST {\nfield1 [label="field(foo)"]\n}')
 
 
 def test_parsed_result_from_a_dict_ast() -> None:
@@ -141,7 +139,9 @@ def test_errors() -> None:
     assert incomplete.value.token_type is None
     with pytest.raises(exceptions.LexerError) as lexer_error:
         jp.compile('foo."bar')
-    assert str(lexer_error.value) == 'Bad jmespath expression: Unclosed " delimiter:\nfoo."bar\n    ^'
+    assert (
+        str(lexer_error.value) == 'Bad jmespath expression: Unclosed " delimiter:\nfoo."bar\n    ^'
+    )
     with pytest.raises(exceptions.EmptyExpressionError):
         jp.search("", {})
     with pytest.raises(exceptions.ArityError, match=r"Expected 1 argument for function length"):
@@ -247,8 +247,11 @@ def test_custom_functions() -> None:
 def test_custom_functions_from_jmespath() -> None:
     real = oracle()
 
-    class Custom(real.functions.Functions):
-        @real.functions.signature({"types": ["string", "array", "object", "null"]})
+    base: Any = real.functions.Functions
+    signature: Any = real.functions.signature
+
+    class Custom(base):  # type: ignore[misc]
+        @signature({"types": ["string", "array", "object", "null"]})  # type: ignore[untyped-decorator]
         def _func_length0(self, s: Any) -> Any:
             return 0 if s is None else len(s)
 
@@ -270,27 +273,28 @@ def test_tokenize_is_lazy() -> None:
     with pytest.raises(exceptions.EmptyExpressionError):
         list(lexer.Lexer().tokenize(""))
     with pytest.warns(PendingDeprecationWarning, match="deprecated string literal syntax"):
-        assert list(lexer.Lexer().tokenize("`foo`"))[0]["value"] == "foo"
+        assert next(iter(lexer.Lexer().tokenize("`foo`")))["value"] == "foo"
 
 
 @pytest.mark.thread_unsafe(reason="warnings")
 def test_other_expression_types() -> None:
+    search: Any = jp.search  # these expressions are not str on purpose
     for falsy in (None, b"", 0):
         with pytest.raises(exceptions.EmptyExpressionError):
-            jp.search(falsy, {})
+            search(falsy, {})
     with pytest.raises(TypeError, match="unhashable"):
-        jp.search(["a"], {})
+        search(["a"], {})
     with pytest.raises(exceptions.LexerError, match="Unknown token 97"):
-        jp.search(b"a.b", {})
+        search(b"a.b", {})
     if HAVE_JMESPATH:
-        jp._WARNED.discard("search")  # once per process
+        getattr(jp, "_WARNED").discard("search")  # noqa: B009 - once per process
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            assert jp.search(("a", ".", "b"), {"a": {"b": 1}}) == 1
+            assert search(("a", ".", "b"), {"a": {"b": 1}}) == 1
         assert any(w.category is pyroid.FallbackWarning for w in caught)
     else:
         with pytest.raises(pyroid.PyroidError):
-            jp.search(("a",), {})
+            search(("a",), {})
 
 
 def test_lone_surrogates() -> None:
@@ -339,7 +343,7 @@ def test_threads_share_the_cache() -> None:
         try:
             for i, e in enumerate(expressions):
                 assert jp.search(e, {f"k{i}": {"v": i}}) == i
-        except BaseException as exc:  # noqa: BLE001 - reported below
+        except BaseException as exc:
             errors.append(exc)
 
     threads = [threading.Thread(target=worker) for _ in range(8)]

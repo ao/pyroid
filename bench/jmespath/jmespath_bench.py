@@ -49,9 +49,9 @@ def _load(name: str, path: Path) -> Any:
 
 util = _load("_jmespath_util", ROOT / "python" / "tests" / "_jmespath_util.py")
 
-import jmespath  # noqa: E402
+import pyroid.jmespath as pj
 
-import pyroid.jmespath as pj  # noqa: E402
+import jmespath
 
 
 def machine() -> dict[str, Any]:
@@ -89,19 +89,18 @@ def machine() -> dict[str, Any]:
 
 def response(rng: random.Random) -> dict[str, Any]:
     """A describe_instances-shaped response with 3 instances."""
-    instances = []
-    for i in range(3):
-        instances.append(
-            {
-                "InstanceId": f"i-{rng.getrandbits(64):016x}",
-                "InstanceType": rng.choice(["t3.micro", "m7g.large", "c7i.4xlarge"]),
-                "LaunchTime": f"2026-0{i + 1}-0{i + 3}T10:00:00.000Z",
-                "State": {"Code": 16, "Name": "running" if i != 1 else "stopped"},
-                "PrivateIpAddress": f"10.0.0.{10 + i}",
-                "Tags": [{"Key": "Name", "Value": f"web-{i}"}, {"Key": "env", "Value": "prod"}],
-                "SecurityGroups": [{"GroupId": "sg-1", "GroupName": "default"}],
-            }
-        )
+    instances = [
+        {
+            "InstanceId": f"i-{rng.getrandbits(64):016x}",
+            "InstanceType": rng.choice(["t3.micro", "m7g.large", "c7i.4xlarge"]),
+            "LaunchTime": f"2026-0{i + 1}-0{i + 3}T10:00:00.000Z",
+            "State": {"Code": 16, "Name": "running" if i != 1 else "stopped"},
+            "PrivateIpAddress": f"10.0.0.{10 + i}",
+            "Tags": [{"Key": "Name", "Value": f"web-{i}"}, {"Key": "env", "Value": "prod"}],
+            "SecurityGroups": [{"GroupId": "sg-1", "GroupName": "default"}],
+        }
+        for i in range(3)
+    ]
     return {"Reservations": [{"ReservationId": "r-1", "Instances": instances}]}
 
 
@@ -218,11 +217,19 @@ def main() -> int:
     rows = []
     for label, e in SMALL:
         gate(e, data)
-        rows.append(ab(f"{label}, search()", e, lambda e=e: jmespath.search(e, data),
-                       lambda e=e: pj.search(e, data), repeat))
+        rows.append(
+            ab(
+                f"{label}, search()",
+                e,
+                lambda e=e: jmespath.search(e, data),
+                lambda e=e: pj.search(e, data),
+                repeat,
+            )
+        )
         cj, cp = jmespath.compile(e), pj.compile(e)
-        rows.append(ab(f"{label}, compiled", e, lambda cj=cj: cj.search(data),
-                       lambda cp=cp: cp.search(data), repeat))
+        rows.append(
+            ab(f"{label}, compiled", e, lambda cj=cj: cj.search(data), lambda cp=cp: cp.search(data), repeat)
+        )
     out["sections"]["small"] = rows
 
     print("\n## A new expression every call: parse and search (µs per call)\n")
@@ -249,7 +256,12 @@ def main() -> int:
             gate(e, recs)
             cj, cp = jmespath.compile(e), pj.compile(e)
             row = ab(
-                label, e, lambda cj=cj: cj.search(recs), lambda cp=cp: cp.search(recs), r, 1e3
+                label,
+                e,
+                lambda cj=cj, recs=recs: cj.search(recs),
+                lambda cp=cp, recs=recs: cp.search(recs),
+                r,
+                1e3,
             )
             rows.append(row)
         out["sections"][f"records_{n}"] = rows

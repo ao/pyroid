@@ -296,7 +296,7 @@ class Functions(metaclass=FunctionRegistry):
 
     @signature({"types": ["array-string", "array-number"]})
     def _func_sort(self, arg: Any) -> Any:
-        return list(sorted(arg))  # noqa: C414 - jmespath's code
+        return sorted(arg)
 
     @signature({"types": ["array-number"]})
     def _func_sum(self, arg: Any) -> Any:
@@ -313,7 +313,7 @@ class Functions(metaclass=FunctionRegistry):
         return list(arg.values())
 
     @signature({"types": []})
-    def _func_type(self, arg: Any) -> Any:  # noqa: PLR0911
+    def _func_type(self, arg: Any) -> Any:
         if isinstance(arg, str):
             return "string"
         if isinstance(arg, bool):
@@ -346,7 +346,7 @@ class Functions(metaclass=FunctionRegistry):
                 "sort_by", array[0], required_type, ["string", "number"]
             )
         keyfunc = self._create_key_func(expref, [required_type], "sort_by")
-        return list(sorted(array, key=keyfunc))  # noqa: C414 - jmespath's code
+        return sorted(array, key=keyfunc)
 
     @signature({"types": ["array"]}, {"types": ["expref"]})
     def _func_min_by(self, array: Any, expref: Any) -> Any:

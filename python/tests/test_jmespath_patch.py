@@ -57,7 +57,9 @@ def child(code: str, *, env: dict[str, str] | None = None, hide: tuple[str, ...]
     if hide:
         child_env["TEST_HIDE"] = ",".join(hide)
     cmd = [sys.executable, "-I", "-c", PRELUDE + textwrap.dedent(code)]
-    proc = subprocess.run(cmd, env=child_env, capture_output=True, text=True, timeout=300, check=False)
+    proc = subprocess.run(
+        cmd, env=child_env, capture_output=True, text=True, timeout=300, check=False
+    )
     assert proc.returncode == 0, f"exit {proc.returncode}\n{proc.stdout}\n{proc.stderr}"
     lines = proc.stdout.strip().splitlines()
     return json.loads(lines[-1]) if lines else None
@@ -144,7 +146,8 @@ def test_pyroid_run_patches_jmespath(tmp_path: Any) -> None:
     script = tmp_path / "query.py"
     script.write_text(
         "import json, jmespath, pyroid.jmespath as pj\n"
-        "print(json.dumps([jmespath.search is pj.search, jmespath.search('a.b', {'a': {'b': 1}})]))\n"
+        "print(json.dumps([jmespath.search is pj.search,\n"
+        "                  jmespath.search('a.b', {'a': {'b': 1}})]))\n"
     )
     child_env = {k: v for k, v in os.environ.items() if k not in _CLEAN}
     child_env["PYTHONWARNINGS"] = "ignore::UserWarning"

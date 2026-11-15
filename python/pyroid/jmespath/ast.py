@@ -137,7 +137,7 @@ def subexpression(children: list[Node]) -> Node:
     return {"type": "subexpression", "children": children}
 
 
-def slice(start: Any, end: Any, step: Any) -> Node:  # noqa: A001 - jmespath's name
+def slice(start: Any, end: Any, step: Any) -> Node:
     """``[start:end:step]``."""
     return {"type": "slice", "children": [start, end, step]}
 

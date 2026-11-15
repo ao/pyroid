@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
+
 class JMESPathError(ValueError):
     """The base class of jmespath's errors."""
 
@@ -144,4 +145,3 @@ class EmptyExpressionError(JMESPathError):
 
 class UnknownFunctionError(JMESPathError):
     """A call to a function that does not exist."""
-

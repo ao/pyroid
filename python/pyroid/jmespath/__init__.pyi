@@ -74,14 +74,15 @@ def compile(expression: str) -> ParsedResult:
         jmespath.exceptions.EmptyExpressionError: `expression` is empty.
     """
 
-def search(expression: str, data: Any, options: Options | None = None) -> Any:
+def search(expression: str, data: Any, options: Any = None) -> Any:
     """Evaluate `expression` on `data`.
 
     Args:
         expression: A JMESPath expression (compiled once and cached).
         data: Any Python object: dicts and lists are walked as jmespath walks them, other
             objects are used through the same operations jmespath applies to them.
-        options: `Options(dict_cls=..., custom_functions=...)`, jmespath's or pyroid's.
+        options: `Options(dict_cls=..., custom_functions=...)`, jmespath's or pyroid's (any
+            object with those two attributes).
 
     Returns:
         The result, as jmespath returns it.

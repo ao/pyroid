@@ -45,7 +45,7 @@ _WARNED: set[str] = set()
 
 
 def _fallback(kind: str, expression: Any) -> Any:
-    """jmespath's own lexer for a non-``str`` expression (it lexes any iterable)."""
+    """Jmespath's own lexer for a non-``str`` expression (it lexes any iterable)."""
     real = _find.jmespath()
     if real is None:
         raise PyroidError(
@@ -101,5 +101,5 @@ _native._configure(
     }
 )
 
-compile = _native.compile  # noqa: A001 - jmespath's name
+compile = _native.compile
 search = _native.search

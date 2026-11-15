@@ -15,10 +15,10 @@ __all__ = ["Lexer"]
 class Lexer:
     """Split an expression into jmespath's tokens."""
 
-    START_IDENTIFIER = set(string.ascii_letters + "_")
-    VALID_IDENTIFIER = set(string.ascii_letters + string.digits + "_")
-    VALID_NUMBER = set(string.digits)
-    WHITESPACE = set(" \t\n\r")
+    START_IDENTIFIER = set(string.ascii_letters + "_")  # noqa: RUF012 - jmespath's class attribute
+    VALID_IDENTIFIER = set(string.ascii_letters + string.digits + "_")  # noqa: RUF012 - jmespath's class attribute
+    VALID_NUMBER = set(string.digits)  # noqa: RUF012 - jmespath's class attribute
+    WHITESPACE = set(" \t\n\r")  # noqa: RUF012 - jmespath's class attribute
     SIMPLE_TOKENS = {  # noqa: RUF012 - jmespath's class attribute
         ".": "dot",
         "*": "star",

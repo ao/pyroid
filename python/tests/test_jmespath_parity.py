@@ -9,6 +9,7 @@ expressions from the grammar (valid, mutated and random) over data with Python-o
 
 from __future__ import annotations
 
+import importlib
 import importlib.metadata
 import importlib.util
 import json
@@ -17,6 +18,7 @@ import threading
 import types
 import unittest
 from collections import OrderedDict
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +47,7 @@ _u = _helpers()
 jmespath: Any = pytest.importorskip("jmespath")
 if importlib.metadata.version("jmespath") != "1.1.0":
     pytest.skip("needs jmespath 1.1.0", allow_module_level=True)
-import jmespath.functions  # noqa: E402
+importlib.import_module("jmespath.functions")
 
 import pyroid.jmespath as pj  # noqa: E402
 import pyroid.jmespath.functions as pjf  # noqa: E402
@@ -79,7 +81,7 @@ def compare(expression: Any, value: Any, jopts: Any = None, popts: Any = None) -
     assert actual == expected, expression
     try:
         parsed = jmespath.compile(expression).parsed
-    except Exception:  # noqa: BLE001 - only expressions that parse have an AST to compare
+    except Exception:
         return
     assert repr(pj.compile(expression).parsed) == repr(parsed)
     assert pj.compile(expression).parsed == parsed
@@ -183,14 +185,14 @@ def _load_upstream(name: str) -> types.ModuleType:
         sys.modules.update(aliases)
         package = types.ModuleType("tests")
         package.__path__ = [str(DATA / "tests")]
-        exec(  # noqa: S102 - jmespath.py's tests/__init__.py, vendored
+        exec(
             compile((DATA / "tests" / "__init__.py").read_text(), "tests/__init__.py", "exec"),
             package.__dict__,
         )
         sys.modules["tests"] = package
         module = types.ModuleType(f"tests.{name}")
         path = DATA / "tests" / f"{name}.py"
-        exec(compile(path.read_text(), str(path), "exec"), module.__dict__)  # noqa: S102
+        exec(compile(path.read_text(), str(path), "exec"), module.__dict__)
         return module
     finally:
         for k, v in saved.items():
@@ -232,8 +234,11 @@ def test_fuzz_against_jmespath(expression: str, value: Any, ordered: bool) -> No
         compare(expression, value)
 
 
-def _custom(base: Any, signature: Any) -> tuple[Any, Any]:
-    class Plus(base):  # type: ignore[misc,valid-type]
+Decorator = Callable[[Callable[..., Any]], Callable[..., Any]]
+
+
+def _custom(base: Any, signature: Callable[..., Decorator]) -> tuple[Any, Any]:
+    class Plus(base):  # type: ignore[misc]
         @signature({"types": ["number"]}, {"types": ["number"]})
         def _func_add(self, x: Any, y: Any) -> Any:
             return x + y
@@ -317,7 +322,7 @@ def _deepest(search: Any, build: Any) -> int:
             search(build(mid), {"a": {"a": [1]}})
         except RecursionError:
             hi = mid - 1
-        except Exception:  # noqa: BLE001 - got past the recursion
+        except Exception:
             lo = mid
         else:
             lo = mid

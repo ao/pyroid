@@ -152,7 +152,7 @@ def _containers(children: Any) -> Any:
     return st.one_of(
         st.lists(children, max_size=4),
         st.dictionaries(st.sampled_from(KEYS), children, max_size=4),
-        st.fixed_dictionaries({k: children for k in ("a", "b", "foo")}),
+        st.fixed_dictionaries(dict.fromkeys(("a", "b", "foo"), children)),
         st.lists(st.fixed_dictionaries({"a": children, "b": children}), max_size=4),
         st.lists(children, max_size=3).map(tuple),
         st.dictionaries(st.sampled_from(KEYS), children, max_size=3).map(OrderedDict),
@@ -204,7 +204,9 @@ def encode(x: Any, ids: dict[int, Any]) -> Any:
 
 def error(e: BaseException, ids: dict[int, Any]) -> Any:
     """An exception's class, ``str()`` and attributes."""
-    attrs = {k: encode(v, ids) for k, v in sorted(vars(e).items())} if hasattr(e, "__dict__") else {}
+    attrs = (
+        {k: encode(v, ids) for k, v in sorted(vars(e).items())} if hasattr(e, "__dict__") else {}
+    )
     return ("err", type(e).__name__, normalize(str(e)), encode(e.args, ids), attrs)
 
 
@@ -214,5 +216,5 @@ def outcome(search: Any, expression: Any, value: Any, options: Any, ids: dict[in
         return ("ok", encode(search(expression, value, options), ids))
     except RecursionError:
         return ("recursion",)
-    except Exception as e:  # noqa: BLE001 - every exception is compared
+    except Exception as e:
         return error(e, ids)
