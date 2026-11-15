@@ -12,6 +12,7 @@ __all__ = [
     "PyroidError",
     "VersionMismatchWarning",
     "__version__",
+    "_numpy_ready",
     "_testing",
     "datasketch",
     "dedup",
