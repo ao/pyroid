@@ -26,21 +26,23 @@ pytestmark = pytest.mark.thread_unsafe(reason="runs subprocesses that signal the
 #: is headroom for a loaded CI runner and a debug build.
 LATENCY = 2.0
 
-#: minhash_dedup with one thread took 2.3 s (3.14t) and 5.0 s (3.15t) to stop on macOS
-#: free-threaded CI runners. On Linux it stops within 0.25 s wherever the signal lands, with the
-#: GIL or free-threaded, so the cause is not found yet. Until it is, those runners get a wider
-#: bound; the test still fails there if the call runs to its end.
-GIL_ENABLED = getattr(sys, "_is_gil_enabled", lambda: True)()
-MACOS_FREE_THREADED = sys.platform == "darwin" and not GIL_ENABLED
-SLOW_CASES = {"minhash_dedup": 10.0} if MACOS_FREE_THREADED else {}
+#: minhash_dedup with one thread took 2.3 s to 5.0 s to stop on macOS CI runners (3.11, 3.14t,
+#: 3.15t). On Linux it stops within 0.25 s wherever the signal lands, with the GIL or
+#: free-threaded, so the cause is not found yet. Until it is, macOS gets a wider bound for it; the
+#: test still fails there if the call runs to its end.
+SLOW_CASES = {"minhash_dedup": 10.0} if sys.platform == "darwin" else {}
+
+#: A case whose call ends before the signal (fast runners) is run again with this many times
+#: the input, up to the last factor.
+SCALES = (1, 4, 16)
 
 CHILD = r"""
 import signal, sys, threading, time
 import numpy  # imported, as in any real program; pyroid has built no array yet
 
-case, threads, model = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+case, threads, model, scale = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4])
 words = " ".join(["the quick brown fox jumps over the lazy dog"] * 6)
-n = 2_000_000
+n = 2_000_000 * scale
 docs = [words] * n
 small = docs[:200]
 if case == "fasttext":
@@ -65,7 +67,7 @@ elif case == "ftfy":
 elif case == "ftfy-arrow-chunks":
     import pyroid.ftfy as ftfy
     from pyroid._pyroid import _testing
-    docs = _testing.column(["cafÃ© " + words] * 200_000, chunks=4_000)
+    docs = _testing.column(["cafÃ© " + words] * (200_000 * scale), chunks=4_000)
     small = ["cafÃ©"] * 200
     call = lambda d: ftfy.fix_text_batch(d, threads=threads)
 elif case == "minhash_dedup":
@@ -82,7 +84,7 @@ elif case == "minhash_batch":
 elif case == "trafilatura":
     import pyroid.trafilatura as T
     page = "<html><body><article>" + "<p>" + words + "</p>" * 20 + "</article></body></html>"
-    docs = [page] * 400_000
+    docs = [page] * (400_000 * scale)
     small = docs[:50]
     call = lambda d: T.extract_batch(d, threads=threads)
 else:
@@ -94,15 +96,22 @@ def fire():
     signal.raise_signal(signal.SIGINT)
 
 t0 = time.perf_counter()
-threading.Timer(0.3, fire).start()
+timer = threading.Timer(0.3, fire)
+timer.start()
+done = []
 try:
     call(docs)
+    done.append(time.perf_counter())
+    timer.cancel()
+    timer.join()
 except KeyboardInterrupt:
-    print("interrupted", round(time.perf_counter() - fired[0], 3))
+    if not done:
+        print("interrupted", round(time.perf_counter() - fired[0], 3))
 except BaseException as e:
     print("raised", type(e).__module__ + "." + type(e).__name__, e)
-else:
-    print("finished", round(time.perf_counter() - t0, 3))
+if done:
+    # The call ended before the signal (or the signal came just after it): too fast to measure.
+    print("finished", round(done[0] - t0, 3))
 out = call(small)
 print("after", len(out) if not isinstance(out, tuple) else len(out[0]))
 """
@@ -140,8 +149,11 @@ def model(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def test_ctrl_c_interrupts_a_batch(
     run_python: RunPython, model: Path, case: str, threads: int
 ) -> None:
-    proc = run_python_args(run_python, case, threads, model)
-    lines = proc.stdout.splitlines()
+    for scale in SCALES:
+        proc = run_python_args(run_python, case, threads, model, scale)
+        lines = proc.stdout.splitlines()
+        if not (lines and lines[0].startswith("finished ")):
+            break
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "PanicException" not in proc.stdout + proc.stderr
     first = lines[0].split()
@@ -151,10 +163,10 @@ def test_ctrl_c_interrupts_a_batch(
 
 
 def run_python_args(
-    run_python: RunPython, case: str, threads: int, model: Path
+    run_python: RunPython, case: str, threads: int, model: Path, scale: int = 1
 ) -> subprocess.CompletedProcess[str]:
     """Run CHILD with its arguments after ``-c`` (sys.argv[1:])."""
-    code = f"import sys; sys.argv[1:] = {[case, str(threads), str(model)]!r}\n" + CHILD
+    code = f"import sys; sys.argv[1:] = {[case, str(threads), str(model), str(scale)]!r}\n" + CHILD
     return run_python(code, timeout=600.0)
 
 
