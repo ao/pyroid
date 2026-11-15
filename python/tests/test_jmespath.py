@@ -50,10 +50,12 @@ def test_results_are_the_inputs_own_objects() -> None:
     assert projected == [[1, 2], [3]]
     assert projected[0] is inner["x"]
     assert jp.search("items[*]", data) is not items  # a projection builds a new list
-    # Literals are the cached AST's objects, as in jmespath.
-    assert jp.search("`[1, 2]`", {}) is jp.search("`[1, 2]`", {})
+    # Literals are the compiled AST's objects, as in jmespath.
+    literal = jp.compile("`[1, 2]`")
+    assert literal.search({}) is literal.search({}) is literal.parsed["value"]
 
 
+@pytest.mark.thread_unsafe(reason="the parse cache is process-wide")
 def test_parse_cache() -> None:
     parser.Parser.purge()
     first = jp.compile("cache.test")
@@ -281,6 +283,7 @@ def test_other_expression_types() -> None:
     with pytest.raises(exceptions.LexerError, match="Unknown token 97"):
         jp.search(b"a.b", {})
     if HAVE_JMESPATH:
+        jp._WARNED.discard("search")  # once per process
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             assert jp.search(("a", ".", "b"), {"a": {"b": 1}}) == 1
@@ -327,6 +330,7 @@ def test_deep_nesting_on_a_small_stack_raises() -> None:
     assert r.stdout.strip() == str(["RecursionError"] * 4)
 
 
+@pytest.mark.thread_unsafe(reason="starts its own threads")
 def test_threads_share_the_cache() -> None:
     expressions = [f"k{i}.v" for i in range(2000)]
     errors: list[BaseException] = []

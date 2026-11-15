@@ -13,6 +13,7 @@ import importlib.metadata
 import importlib.util
 import json
 import sys
+import threading
 import types
 import unittest
 from collections import OrderedDict
@@ -327,5 +328,7 @@ def _deepest(search: Any, build: Any) -> int:
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="3.11 counts C calls in the limit")
 @pytest.mark.parametrize("kind", sorted(NESTING))
 def test_recursion_depth_matches(kind: str) -> None:
+    if threading.current_thread() is not threading.main_thread():
+        pytest.skip("other threads get a smaller native stack budget")
     build = NESTING[kind]
     assert _deepest(pj.search, build) == _deepest(jmespath.search, build)
