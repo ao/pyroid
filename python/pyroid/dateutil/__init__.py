@@ -8,13 +8,6 @@ objects and exceptions. The rest of python-dateutil (``tz``, ``relativedelta``, 
 
 from __future__ import annotations
 
-import importlib
-from typing import Any
+from pyroid.dateutil import parser
 
 __all__ = ["parser"]
-
-
-def __getattr__(name: str) -> Any:
-    if name == "parser":
-        return importlib.import_module("pyroid.dateutil.parser")
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
