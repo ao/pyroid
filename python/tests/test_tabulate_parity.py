@@ -38,8 +38,6 @@ def _helpers() -> Any:
 
 _u = _helpers()
 ref: Any = pytest.importorskip("tabulate")
-pytest.importorskip("numpy")
-pytest.importorskip("pandas")
 import pyroid  # noqa: E402
 import pyroid.tabulate as pt  # noqa: E402
 

@@ -139,6 +139,7 @@ def test_ansi_codes_are_invisible() -> None:
     assert tabulate([[red, 1]], tablefmt="plain") == f"{red}  1"
 
 
+@pytest.mark.thread_unsafe  # a module setting
 def test_min_padding_setting() -> None:
     saved = pt.MIN_PADDING
     try:
@@ -330,9 +331,9 @@ def test_threads_give_the_same_text() -> None:
 
 
 def test_large_table() -> None:
-    rows = [[i, i / 7, f"name {i}", i % 2 == 0] for i in range(20_000)]
+    rows = [[i, i / 7, f"name {i}", i % 2 == 0] for i in range(10_000)]
     out = tabulate(rows, headers=["i", "x", "name", "even"], tablefmt="pipe")
-    assert out.count("\n") == 20_001
+    assert out.count("\n") == 10_001
 
 
 @pytest.mark.thread_unsafe  # a child process

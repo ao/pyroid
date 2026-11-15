@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import importlib.util
 import decimal
 import fractions
 import signal
@@ -20,6 +21,9 @@ from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 from hypothesis import strategies as st
+
+HAS_NUMPY = importlib.util.find_spec("numpy") is not None
+HAS_PANDAS = HAS_NUMPY and importlib.util.find_spec("pandas") is not None
 
 FORMATS = [
     "asciidoc",
@@ -190,11 +194,17 @@ cell_recipes = st.one_of(
     st.tuples(st.just("decimal"), st.sampled_from(["1.10", "-0", "NaN", "sNaN", "1e3", "3.14159"])),
     st.tuples(st.just("fraction"), st.tuples(st.integers(-9, 9), st.integers(1, 9))),
     st.tuples(st.just("date"), st.integers(0, 20000)),
-    st.tuples(st.just("npfloat"), _floats()),
-    st.tuples(st.just("npint"), st.integers(-(2**31), 2**31)),
-    st.tuples(st.just("npuint"), st.integers(0, 2**32)),
-    st.tuples(st.just("npbool"), st.booleans()),
-    st.tuples(st.just("npf32"), st.floats(width=32, allow_nan=True)),
+    *(
+        [
+            st.tuples(st.just("npfloat"), _floats()),
+            st.tuples(st.just("npint"), st.integers(-(2**31), 2**31)),
+            st.tuples(st.just("npuint"), st.integers(0, 2**32)),
+            st.tuples(st.just("npbool"), st.booleans()),
+            st.tuples(st.just("npf32"), st.floats(width=32, allow_nan=True)),
+        ]
+        if HAS_NUMPY
+        else []
+    ),
 )
 
 
@@ -265,23 +275,13 @@ def tables(draw: st.DrawFn) -> dict[str, Any]:
     nrows = draw(st.integers(0, 5))
     rows = draw(st.lists(_row(ncols), min_size=nrows, max_size=nrows))
     sep_at = draw(st.lists(st.integers(0, nrows), max_size=2))
-    shape = draw(
-        st.sampled_from(
-            [
-                "lists",
-                "lists",
-                "lists",
-                "tuples",
-                "generator",
-                "dicts",
-                "dict_of_lists",
-                "dataclass",
-                "namedtuple",
-                "numpy",
-                "dataframe",
-            ]
-        )
-    )
+    shapes = ["lists", "lists", "lists", "tuples", "generator", "dicts", "dict_of_lists"]
+    shapes += ["dataclass", "namedtuple"]
+    if HAS_NUMPY:
+        shapes.append("numpy")
+    if HAS_PANDAS:
+        shapes += ["dataframe", "frame_numeric", "frame_numeric"]
+    shape = draw(st.sampled_from(shapes))
     headers = draw(
         st.one_of(
             st.just(()),
