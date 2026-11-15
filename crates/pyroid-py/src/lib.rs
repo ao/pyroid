@@ -23,6 +23,7 @@ mod filters;
 mod ftfy;
 mod input;
 mod jieba;
+mod jmespath;
 mod json_repair;
 mod metrics;
 mod nemo;
@@ -65,5 +66,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jieba::register(m)?;
     trafilatura::register(m)?;
     warc::register(m)?;
+    jmespath::register(m)?;
     Ok(())
 }
