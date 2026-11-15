@@ -530,7 +530,9 @@ def test_parse_batch_arrow_checks_datetime_subclass_fields() -> None:
         pp.parse_batch(col, default=_Month13(2003, 9, 25))
     with pytest.raises(ValueError, match=r"UTC offset .* out of range for an Arrow timestamp"):
         pp.parse_batch(col, default=_FarOffset(2003, 9, 25))
-    assert pp.parse_batch(["2020-01-02 10:00"], default=_Month13(2003, 9, 25))[0].day == 2
+    first = pp.parse_batch(["2020-01-02 10:00"], default=_Month13(2003, 9, 25))[0]
+    assert first is not None
+    assert first.day == 2
 
 
 def test_isoparse_batch() -> None:
