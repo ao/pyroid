@@ -17,6 +17,7 @@ known in advance; the expected results are computed first, on one thread.
 
 from __future__ import annotations
 
+import functools
 import io
 import sys
 import threading
@@ -132,7 +133,7 @@ def over_states(
     fn: Callable[[list[Any]], Any], variants: Sequence[Sequence[Any]], **kw: Any
 ) -> None:
     """`fn(lst)` on many threads while `lst` cycles through `variants` (the common case)."""
-    allowed = [_outcome(lambda v=v: fn(list(v)), kw.get("expected", ())) for v in variants]
+    allowed = [_outcome(functools.partial(fn, list(v)), kw.get("expected", ())) for v in variants]
     lst = list(variants[0])
     hammer(lambda: fn(lst), states(lst, variants), allowed, **kw)
 
@@ -140,7 +141,7 @@ def over_states(
 #: Two states of a document list: different lengths and contents, so a mix is visible.
 DOCS_A = ["The  cat sat on the mat. It was   happy."] * 150 + ["café crème"]
 DOCS_B = ["A dog\tbarked at the moon all night long."] * 90
-VARIANTS = (DOCS_A, DOCS_B, [])
+VARIANTS: tuple[list[str], ...] = (DOCS_A, DOCS_B, [])
 
 
 def test_text() -> None:
@@ -256,7 +257,7 @@ def test_dedup() -> None:
 
     near = ["one two three four five six seven eight nine ten eleven twelve"] * 80
     other = [f"doc {i} has words of its own, nothing else is like it at all {i}" for i in range(50)]
-    variants = (near + other, other, [])
+    variants: tuple[list[str], ...] = (near + other, other, [])
     over_states(D.exact_dedup, variants)
     over_states(D.minhash_dedup, variants)
     over_states(D.simplify_text, variants)
@@ -372,8 +373,8 @@ def test_metrics() -> None:
     refs = ["the cat sat on the mat"] * 40
     hyp_states = (["the cat sat on a mat"] * 40, ["a dog ran"] * 40)
     hyps = list(hyp_states[0])
-    allowed = [sacrebleu.corpus_bleu(list(h), [refs]).score for h in hyp_states]
-    hammer(lambda: sacrebleu.corpus_bleu(hyps, [refs]).score, states(hyps, hyp_states), allowed)
+    scores = [sacrebleu.corpus_bleu(list(h), [refs]).score for h in hyp_states]
+    hammer(lambda: sacrebleu.corpus_bleu(hyps, [refs]).score, states(hyps, hyp_states), scores)
 
 
 def test_warc() -> None:
@@ -409,7 +410,10 @@ def test_warc() -> None:
     reader.start()
     # Reading the record's `limit` while another thread reads the record used to deadlock on
     # GIL builds (the read held the record's lock across fh.read(), which released the GIL).
-    hammer(lambda: rec.raw_stream.limit, lambda i: done.wait(0.01))
+    def wait(i: int) -> None:
+        done.wait(0.01)
+
+    hammer(lambda: rec.raw_stream.limit, wait)
     reader.join(HANG)
     assert done.is_set() and not reader.is_alive()
     assert b"".join(got).endswith(body)
