@@ -5,19 +5,25 @@
 //! so it raises `RecursionError` on deeply nested expressions; [`Budget`] counts the Python
 //! frames jmespath would have open and stops where it would.
 
-use super::Host;
 use super::ast::{Comparator, Node};
 use super::lexer::{LexError, Token, TokenKind, TokenValue, tokenize};
+use super::{Host, STACK_BUDGET, stack_position};
 
-/// How many Python frames jmespath's parser may open below `Parser._parse`.
+/// How many Python frames jmespath's parser may open below `Parser._parse`, and how much
+/// native stack the port may use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Budget {
     pub frames: usize,
+    /// Bytes of stack below `parse`'s own frame.
+    pub stack: usize,
 }
 
 impl Budget {
-    /// No limit (only the hard cap applies).
-    pub const UNLIMITED: Self = Self { frames: usize::MAX };
+    /// No frame limit (the hard cap and [`STACK_BUDGET`] still apply).
+    pub const UNLIMITED: Self = Self {
+        frames: usize::MAX,
+        stack: STACK_BUDGET,
+    };
 }
 
 /// Nesting is cut off here whatever the budget, so the Rust stack stays small
@@ -77,6 +83,8 @@ pub fn parse<H: Host>(
         index: 0,
         depth: 0,
         limit: budget.frames.min(MAX_FRAMES),
+        stack_base: stack_position(),
+        stack: budget.stack,
     };
     let parsed = p.expression(0)?;
     if p.current() != TokenKind::Eof {
@@ -98,6 +106,8 @@ struct Parser<V> {
     /// Emulated Python frames open below `_parse`.
     depth: usize,
     limit: usize,
+    stack_base: usize,
+    stack: usize,
 }
 
 fn boxed<V>(n: Node<V>) -> Box<Node<V>> {
@@ -107,7 +117,7 @@ fn boxed<V>(n: Node<V>) -> Box<Node<V>> {
 impl<V: Clone> Parser<V> {
     /// Enter a method (one Python frame, plus one for the helpers it calls).
     fn enter<E>(&mut self) -> R<V, E, ()> {
-        if self.depth + 2 > self.limit {
+        if self.depth + 2 > self.limit || stack_position().abs_diff(self.stack_base) > self.stack {
             return Err(ParseError::Recursion);
         }
         self.depth += 1;

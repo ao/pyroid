@@ -206,6 +206,25 @@ fn recursion_limit(py: Python<'_>) -> PyResult<usize> {
     config(py)?.getrecursionlimit.bind(py).call0()?.extract()
 }
 
+/// Native stack for a deep parse or evaluation: more on the main thread (Linux and macOS give
+/// it 8 MiB, python.exe on Windows 2 MB), less when the program set a small thread stack size.
+fn stack_budget(py: Python<'_>) -> PyResult<usize> {
+    const MAIN_THREAD: usize = if cfg!(windows) { 1 << 20 } else { 6 << 20 };
+    let threading = py.import("threading")?;
+    let main = threading.call_method0("main_thread")?;
+    let current = threading.call_method0("current_thread")?;
+    let mut budget = if main.is(&current) {
+        MAIN_THREAD
+    } else {
+        pyroid_core::jmespath::STACK_BUDGET
+    };
+    let configured: usize = threading.call_method0("stack_size")?.extract()?;
+    if configured != 0 {
+        budget = budget.min(configured / 2);
+    }
+    Ok(budget)
+}
+
 fn recursion_error() -> PyErr {
     PyRecursionError::new_err("maximum recursion depth exceeded")
 }
@@ -371,6 +390,7 @@ fn parse_text<'py>(
         }
         Budget {
             frames: limit - used,
+            stack: stack_budget(py)?,
         }
     };
     let mut host = PyHost { py, cfg: c };
@@ -562,12 +582,16 @@ fn run<'py>(
     opts: &Arc<Opts>,
     frames_above: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let (limit, depth) = if frames + frames_above < SHALLOW {
-        (usize::MAX, 0)
+    let (limit, depth, stack) = if frames + frames_above < SHALLOW {
+        (usize::MAX, 0, pyroid_core::jmespath::STACK_BUDGET)
     } else {
-        (recursion_limit(py)?, stack_depth(py)? + frames_above)
+        (
+            recursion_limit(py)?,
+            stack_depth(py)? + frames_above,
+            stack_budget(py)?,
+        )
     };
-    let ctx = Ctx::new(py, opts, limit);
+    let ctx = Ctx::new(py, opts, limit, stack);
     interp::visit(&ctx, root, value, depth)
 }
 

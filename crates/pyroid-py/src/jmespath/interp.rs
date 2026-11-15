@@ -50,22 +50,30 @@ pub(crate) struct Ctx<'py, 'a> {
     pub opts: &'a Arc<Opts>,
     /// The deepest Python frame jmespath could open (`usize::MAX`: not checked).
     pub limit: usize,
+    /// Where the evaluation's stack starts (see [`pyroid_core::jmespath::stack_position`]),
+    /// and how much it may use.
+    stack_base: usize,
+    stack: usize,
     ticks: Cell<u32>,
 }
 
 impl<'py, 'a> Ctx<'py, 'a> {
-    pub(crate) fn new(py: Python<'py>, opts: &'a Arc<Opts>, limit: usize) -> Self {
+    pub(crate) fn new(py: Python<'py>, opts: &'a Arc<Opts>, limit: usize, stack: usize) -> Self {
         Self {
             py,
             opts,
             limit,
+            stack_base: pyroid_core::jmespath::stack_position(),
+            stack,
             ticks: Cell::new(0),
         }
     }
 
-    /// Fail as Python would if a frame at depth `frame` were opened.
+    /// Fail as Python would if a frame at depth `frame` were opened, or before the native
+    /// stack runs short.
     pub(crate) fn check(&self, frame: usize) -> PyResult<()> {
-        if frame > self.limit {
+        let used = pyroid_core::jmespath::stack_position().abs_diff(self.stack_base);
+        if frame > self.limit || used > self.stack {
             return Err(PyRecursionError::new_err(
                 "maximum recursion depth exceeded",
             ));
@@ -289,8 +297,9 @@ fn values_of<'py>(base: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>
 }
 
 /// Visit `node` with `value`. `depth`: the frames open before this node's `visit`.
-/// One arm per `visit_*` method.
-#[allow(clippy::too_many_lines)]
+///
+/// Each `visit_*` method is its own function (never inlined), so a level of nesting costs
+/// only the frame of the method that recurses.
 pub(crate) fn visit<'py>(
     ctx: &Ctx<'py, '_>,
     node: &Expr,
@@ -303,37 +312,10 @@ pub(crate) fn visit<'py>(
     let inner = depth + 2;
     match node {
         Expr::Subexpression(children) | Expr::IndexExpression(children) | Expr::Pipe(children) => {
-            let mut result = value.clone();
-            for c in children {
-                result = visit(ctx, c, &result, inner)?;
-            }
-            Ok(result)
+            visit_chain(ctx, children, value, inner)
         }
         Expr::Field(key) => field(value, key.bind(py)),
-        Expr::Comparator(op, name, l, r) => {
-            let Some(op) = op else {
-                return Err(PyKeyError::new_err(name.clone_ref(py)));
-            };
-            let left = visit(ctx, l, value, inner)?;
-            let right = visit(ctx, r, value, inner)?;
-            match op {
-                Comparator::Eq => equals(&left, &right),
-                Comparator::Ne => Ok(pybool(py, !equals(&left, &right)?.is_truthy()?)),
-                _ => {
-                    // Ordering is only for numbers and strings; anything else gives None.
-                    if !(is_comparable(&left)? && is_comparable(&right)?) {
-                        return Ok(none(py));
-                    }
-                    let op = match op {
-                        Comparator::Lt => CompareOp::Lt,
-                        Comparator::Gt => CompareOp::Gt,
-                        Comparator::Lte => CompareOp::Le,
-                        _ => CompareOp::Ge,
-                    };
-                    left.rich_compare(&right, op)
-                }
-            }
-        }
+        Expr::Comparator(op, name, l, r) => visit_comparator(ctx, *op, name, l, r, value, inner),
         Expr::Current | Expr::Identity => Ok(value.clone()),
         Expr::Expref(e) => expref(ctx, e),
         Expr::Function {
@@ -342,178 +324,318 @@ pub(crate) fn visit<'py>(
             args,
         } => call_function(ctx, name.bind(py), *builtin, args, value, depth),
         Expr::FilterProjection(left, right, cond) => {
-            let base = visit(ctx, left, value, inner)?;
-            if !is_list(&base) {
-                return Ok(none(py));
-            }
-            let mut collected = Vec::new();
-            for_each(ctx, &base, |el| {
-                if !is_false(&visit(ctx, cond, &el, inner)?)? {
-                    let current = visit(ctx, right, &el, inner)?;
-                    if !current.is_none() {
-                        collected.push(current);
-                    }
-                }
-                Ok(true)
-            })?;
-            Ok(PyList::new(py, collected)?.into_any())
+            visit_filter_projection(ctx, left, right, cond, value, inner)
         }
-        Expr::Flatten(x) => {
-            let base = visit(ctx, x, value, inner)?;
-            if !is_list(&base) {
-                // Can't flatten the object if it's not a list.
-                return Ok(none(py));
-            }
-            let mut merged = Vec::new();
-            for_each(ctx, &base, |el| {
-                if let Ok(l) = el.cast_exact::<PyList>() {
-                    merged.extend(l.iter());
-                } else if is_list(&el) {
-                    // list.extend iterates a list subclass with its own __iter__.
-                    for item in el.try_iter()? {
-                        merged.push(item?);
-                    }
-                } else {
-                    merged.push(el);
-                }
-                Ok(true)
-            })?;
-            Ok(PyList::new(py, merged)?.into_any())
-        }
-        Expr::Index(index, fast) => {
-            if !is_list(value) {
-                return Ok(none(py));
-            }
-            if let (Ok(l), Some(i)) = (value.cast_exact::<PyList>(), fast) {
-                let n = isize::try_from(l.len())?;
-                let j = if *i < 0 { i + n } else { *i };
-                return match usize::try_from(j) {
-                    Ok(j) if j < l.len() => l.get_item(j),
-                    _ => Ok(none(py)),
-                };
-            }
-            match value.get_item(index.bind(py)) {
-                Ok(v) => Ok(v),
-                Err(e) if e.is_instance_of::<PyIndexError>(py) => Ok(none(py)),
-                Err(e) => Err(e),
-            }
-        }
+        Expr::Flatten(x) => visit_flatten(ctx, x, value, inner),
+        Expr::Index(index, fast) => visit_index(value, index.bind(py), *fast),
         Expr::KeyValPair(_, x) => visit(ctx, x, value, inner),
         Expr::Literal(v) => Ok(v.bind(py).clone()),
-        Expr::MultiSelectDict(children) => {
-            if value.is_none() {
-                return Ok(none(py));
-            }
-            match &ctx.opts.dict_cls {
-                None => {
-                    let d = PyDict::new(py);
-                    for (key, child) in children {
-                        let v = visit(ctx, child, value, inner)?;
-                        d.set_item(key.bind(py), v)?;
-                    }
-                    Ok(d.into_any())
-                }
-                Some(cls) => {
-                    let d = cls.bind(py).call0()?;
-                    for (key, child) in children {
-                        let v = visit(ctx, child, value, inner)?;
-                        d.set_item(key.bind(py), v)?;
-                    }
-                    Ok(d)
-                }
-            }
-        }
-        Expr::MultiSelectList(children) => {
-            if value.is_none() {
-                return Ok(none(py));
-            }
-            let mut collected = Vec::with_capacity(children.len());
-            for c in children {
-                collected.push(visit(ctx, c, value, inner)?);
-            }
-            Ok(PyList::new(py, collected)?.into_any())
-        }
-        Expr::Or(l, r) => {
-            let matched = visit(ctx, l, value, inner)?;
-            if is_false(&matched)? {
-                return visit(ctx, r, value, inner);
-            }
-            Ok(matched)
-        }
-        Expr::And(l, r) => {
-            let matched = visit(ctx, l, value, inner)?;
-            if is_false(&matched)? {
-                return Ok(matched);
-            }
-            visit(ctx, r, value, inner)
-        }
-        Expr::Not(x) => {
-            let original = visit(ctx, x, value, inner)?;
-            // !0 is false: 0 is not special-cased in jmespath.
-            if is_actual_number(&original)? {
-                let zero = if original.is_exact_instance_of::<PyInt>() {
-                    matches!(original.extract::<i64>(), Ok(0))
-                } else if let Ok(f) = original.cast_exact::<PyFloat>() {
-                    f.value() == 0.0
-                } else {
-                    original.rich_compare(0, CompareOp::Eq)?.is_truthy()?
-                };
-                if zero {
-                    return Ok(pybool(py, false));
-                }
-            }
-            Ok(pybool(py, !original.is_truthy()?))
-        }
-        Expr::Projection(l, r) => {
-            let base = visit(ctx, l, value, inner)?;
-            if !is_list(&base) {
-                return Ok(none(py));
-            }
-            let mut collected = Vec::new();
-            if matches!(**r, Expr::Identity) {
-                for_each(ctx, &base, |el| {
-                    if !el.is_none() {
-                        collected.push(el);
-                    }
-                    Ok(true)
-                })?;
-            } else {
-                for_each(ctx, &base, |el| {
-                    let current = visit(ctx, r, &el, inner)?;
-                    if !current.is_none() {
-                        collected.push(current);
-                    }
-                    Ok(true)
-                })?;
-            }
-            Ok(PyList::new(py, collected)?.into_any())
-        }
+        Expr::MultiSelectDict(children) => visit_multi_select_dict(ctx, children, value, inner),
+        Expr::MultiSelectList(children) => visit_multi_select_list(ctx, children, value, inner),
+        Expr::Or(l, r) => visit_or(ctx, l, r, value, inner),
+        Expr::And(l, r) => visit_and(ctx, l, r, value, inner),
+        Expr::Not(x) => visit_not(ctx, x, value, inner),
+        Expr::Projection(l, r) => visit_projection(ctx, l, r, value, inner),
         Expr::Slice(_, s) => {
             if !is_list(value) {
                 return Ok(none(py));
             }
             value.get_item(s.bind(py))
         }
-        Expr::ValueProjection(l, r) => {
-            let base = visit(ctx, l, value, inner)?;
-            let Some(values) = values_of(&base)? else {
-                return Ok(none(py));
-            };
-            let mut collected = Vec::new();
-            for_each(ctx, &values, |el| {
-                let current = visit(ctx, r, &el, inner)?;
-                if !current.is_none() {
-                    collected.push(current);
-                }
-                Ok(true)
-            })?;
-            Ok(PyList::new(py, collected)?.into_any())
-        }
+        Expr::ValueProjection(l, r) => visit_value_projection(ctx, l, r, value, inner),
         Expr::Unknown(t) => Err(PyNotImplementedError::new_err(t.clone_ref(py))),
     }
 }
 
+/// `visit_subexpression`, `visit_index_expression`, `visit_pipe`.
+#[inline(never)]
+fn visit_chain<'py>(
+    ctx: &Ctx<'py, '_>,
+    children: &[Expr],
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let mut result = value.clone();
+    for c in children {
+        result = visit(ctx, c, &result, inner)?;
+    }
+    Ok(result)
+}
+
+#[inline(never)]
+fn visit_comparator<'py>(
+    ctx: &Ctx<'py, '_>,
+    op: Option<Comparator>,
+    name: &Py<PyAny>,
+    l: &Expr,
+    r: &Expr,
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = ctx.py;
+    let Some(op) = op else {
+        return Err(PyKeyError::new_err(name.clone_ref(py)));
+    };
+    let left = visit(ctx, l, value, inner)?;
+    let right = visit(ctx, r, value, inner)?;
+    match op {
+        Comparator::Eq => equals(&left, &right),
+        Comparator::Ne => Ok(pybool(py, !equals(&left, &right)?.is_truthy()?)),
+        _ => {
+            // Ordering is only for numbers and strings; anything else gives None.
+            if !(is_comparable(&left)? && is_comparable(&right)?) {
+                return Ok(none(py));
+            }
+            let op = match op {
+                Comparator::Lt => CompareOp::Lt,
+                Comparator::Gt => CompareOp::Gt,
+                Comparator::Lte => CompareOp::Le,
+                _ => CompareOp::Ge,
+            };
+            left.rich_compare(&right, op)
+        }
+    }
+}
+
+#[inline(never)]
+fn visit_filter_projection<'py>(
+    ctx: &Ctx<'py, '_>,
+    left: &Expr,
+    right: &Expr,
+    cond: &Expr,
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = ctx.py;
+    let base = visit(ctx, left, value, inner)?;
+    if !is_list(&base) {
+        return Ok(none(py));
+    }
+    let mut collected = Vec::new();
+    for_each(ctx, &base, |el| {
+        if !is_false(&visit(ctx, cond, &el, inner)?)? {
+            let current = visit(ctx, right, &el, inner)?;
+            if !current.is_none() {
+                collected.push(current);
+            }
+        }
+        Ok(true)
+    })?;
+    Ok(PyList::new(py, collected)?.into_any())
+}
+
+#[inline(never)]
+fn visit_flatten<'py>(
+    ctx: &Ctx<'py, '_>,
+    x: &Expr,
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = ctx.py;
+    let base = visit(ctx, x, value, inner)?;
+    if !is_list(&base) {
+        // Can't flatten the object if it's not a list.
+        return Ok(none(py));
+    }
+    let mut merged = Vec::new();
+    for_each(ctx, &base, |el| {
+        if let Ok(l) = el.cast_exact::<PyList>() {
+            merged.extend(l.iter());
+        } else if is_list(&el) {
+            // list.extend iterates a list subclass with its own __iter__.
+            for item in el.try_iter()? {
+                merged.push(item?);
+            }
+        } else {
+            merged.push(el);
+        }
+        Ok(true)
+    })?;
+    Ok(PyList::new(py, merged)?.into_any())
+}
+
+fn visit_index<'py>(
+    value: &Bound<'py, PyAny>,
+    index: &Bound<'py, PyAny>,
+    fast: Option<isize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = value.py();
+    if !is_list(value) {
+        return Ok(none(py));
+    }
+    if let (Ok(l), Some(i)) = (value.cast_exact::<PyList>(), fast) {
+        let n = isize::try_from(l.len())?;
+        let j = if i < 0 { i + n } else { i };
+        return match usize::try_from(j) {
+            Ok(j) if j < l.len() => l.get_item(j),
+            _ => Ok(none(py)),
+        };
+    }
+    match value.get_item(index) {
+        Ok(v) => Ok(v),
+        Err(e) if e.is_instance_of::<PyIndexError>(py) => Ok(none(py)),
+        Err(e) => Err(e),
+    }
+}
+
+#[inline(never)]
+fn visit_multi_select_dict<'py>(
+    ctx: &Ctx<'py, '_>,
+    children: &[(Py<PyAny>, Expr)],
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = ctx.py;
+    if value.is_none() {
+        return Ok(none(py));
+    }
+    let d = match &ctx.opts.dict_cls {
+        None => PyDict::new(py).into_any(),
+        Some(cls) => cls.bind(py).call0()?,
+    };
+    let exact = d.cast_exact::<PyDict>().ok();
+    for (key, child) in children {
+        let v = visit(ctx, child, value, inner)?;
+        match exact {
+            Some(e) => e.set_item(key.bind(py), v)?,
+            None => d.set_item(key.bind(py), v)?,
+        }
+    }
+    Ok(d)
+}
+
+#[inline(never)]
+fn visit_multi_select_list<'py>(
+    ctx: &Ctx<'py, '_>,
+    children: &[Expr],
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = ctx.py;
+    if value.is_none() {
+        return Ok(none(py));
+    }
+    let mut collected = Vec::with_capacity(children.len());
+    for c in children {
+        collected.push(visit(ctx, c, value, inner)?);
+    }
+    Ok(PyList::new(py, collected)?.into_any())
+}
+
+#[inline(never)]
+fn visit_or<'py>(
+    ctx: &Ctx<'py, '_>,
+    l: &Expr,
+    r: &Expr,
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let matched = visit(ctx, l, value, inner)?;
+    if is_false(&matched)? {
+        return visit(ctx, r, value, inner);
+    }
+    Ok(matched)
+}
+
+#[inline(never)]
+fn visit_and<'py>(
+    ctx: &Ctx<'py, '_>,
+    l: &Expr,
+    r: &Expr,
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let matched = visit(ctx, l, value, inner)?;
+    if is_false(&matched)? {
+        return Ok(matched);
+    }
+    visit(ctx, r, value, inner)
+}
+
+#[inline(never)]
+fn visit_not<'py>(
+    ctx: &Ctx<'py, '_>,
+    x: &Expr,
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = ctx.py;
+    let original = visit(ctx, x, value, inner)?;
+    // !0 is false: 0 is not special-cased in jmespath.
+    if is_actual_number(&original)? {
+        let zero = if original.is_exact_instance_of::<PyInt>() {
+            matches!(original.extract::<i64>(), Ok(0))
+        } else if let Ok(f) = original.cast_exact::<PyFloat>() {
+            f.value() == 0.0
+        } else {
+            original.rich_compare(0, CompareOp::Eq)?.is_truthy()?
+        };
+        if zero {
+            return Ok(pybool(py, false));
+        }
+    }
+    Ok(pybool(py, !original.is_truthy()?))
+}
+
+#[inline(never)]
+fn visit_projection<'py>(
+    ctx: &Ctx<'py, '_>,
+    l: &Expr,
+    r: &Expr,
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = ctx.py;
+    let base = visit(ctx, l, value, inner)?;
+    if !is_list(&base) {
+        return Ok(none(py));
+    }
+    let mut collected = Vec::new();
+    if matches!(r, Expr::Identity) {
+        for_each(ctx, &base, |el| {
+            if !el.is_none() {
+                collected.push(el);
+            }
+            Ok(true)
+        })?;
+    } else {
+        for_each(ctx, &base, |el| {
+            let current = visit(ctx, r, &el, inner)?;
+            if !current.is_none() {
+                collected.push(current);
+            }
+            Ok(true)
+        })?;
+    }
+    Ok(PyList::new(py, collected)?.into_any())
+}
+
+#[inline(never)]
+fn visit_value_projection<'py>(
+    ctx: &Ctx<'py, '_>,
+    l: &Expr,
+    r: &Expr,
+    value: &Bound<'py, PyAny>,
+    inner: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = ctx.py;
+    let base = visit(ctx, l, value, inner)?;
+    let Some(values) = values_of(&base)? else {
+        return Ok(none(py));
+    };
+    let mut collected = Vec::new();
+    for_each(ctx, &values, |el| {
+        let current = visit(ctx, r, &el, inner)?;
+        if !current.is_none() {
+            collected.push(current);
+        }
+        Ok(true)
+    })?;
+    Ok(PyList::new(py, collected)?.into_any())
+}
+
 /// `visit_function_expression`: the arguments, then `call_function(name, args)`.
+#[inline(never)]
 fn call_function<'py, 'a>(
     ctx: &Ctx<'py, '_>,
     name: &Bound<'py, PyAny>,

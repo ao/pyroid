@@ -47,6 +47,25 @@ pub trait Host {
     fn deprecated_literal(&mut self) -> Result<(), Self::Error>;
 }
 
+/// How deep the native stack is here: the address of a local, only ever compared with
+/// another position (a lower bound on the stack used in between, wherever the stack grows).
+// Always inlined: the local must sit in the caller's frame.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+pub fn stack_position() -> usize {
+    let marker = std::hint::black_box(0u8);
+    std::ptr::from_ref(&marker).addr()
+}
+
+/// Native stack a parse or evaluation may use before it raises `RecursionError` instead,
+/// on a thread whose size is unknown: musl's threads get 128 KiB, the others at least 1 MiB.
+#[cfg(target_env = "musl")]
+pub const STACK_BUDGET: usize = 96 << 10;
+/// Native stack a parse or evaluation may use before it raises `RecursionError` instead,
+/// on a thread whose size is unknown: musl's threads get 128 KiB, the others at least 1 MiB.
+#[cfg(not(target_env = "musl"))]
+pub const STACK_BUDGET: usize = 768 << 10;
+
 /// `s` as code points.
 pub fn code_points(s: &str) -> Text {
     s.chars().map(u32::from).collect()

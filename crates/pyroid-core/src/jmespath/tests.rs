@@ -343,35 +343,29 @@ fn parse_errors() {
 #[test]
 fn recursion_budget() {
     let deep = |n: usize| format!("{}a{}", "(".repeat(n), ")".repeat(n));
-    let budget = Budget { frames: 100 };
+    let budget = Budget {
+        frames: 100,
+        ..Budget::UNLIMITED
+    };
     // Parentheses cost two frames a level (`_expression`, `_token_nud_lparen`).
     assert!(parse(&code_points(&deep(40)), &mut Mock::default(), budget).is_ok());
     assert_eq!(
         parse(&code_points(&deep(60)), &mut Mock::default(), budget),
         Err(ParseError::Recursion)
     );
-    // The hard cap holds without a budget (a debug build needs a big stack to reach it).
+    // The hard cap holds without a frame budget (a debug build needs a big stack to reach it).
+    let big = Budget {
+        frames: usize::MAX,
+        stack: 200 << 20,
+    };
     let deep_ok = std::thread::Builder::new()
         .stack_size(256 << 20)
         .spawn(move || {
             let lists = format!("{}a{}", "[".repeat(100_000), "]".repeat(100_000));
             (
-                parse(
-                    &code_points(&deep(100_000)),
-                    &mut Mock::default(),
-                    Budget::UNLIMITED,
-                ),
-                parse(
-                    &code_points(&lists),
-                    &mut Mock::default(),
-                    Budget::UNLIMITED,
-                ),
-                parse(
-                    &code_points(&deep(990)),
-                    &mut Mock::default(),
-                    Budget::UNLIMITED,
-                )
-                .is_ok(),
+                parse(&code_points(&deep(100_000)), &mut Mock::default(), big),
+                parse(&code_points(&lists), &mut Mock::default(), big),
+                parse(&code_points(&deep(990)), &mut Mock::default(), big).is_ok(),
             )
         })
         .expect("spawns")
@@ -380,4 +374,18 @@ fn recursion_budget() {
     assert_eq!(deep_ok.0, Err(ParseError::Recursion));
     assert_eq!(deep_ok.1, Err(ParseError::Recursion));
     assert!(deep_ok.2);
+    // The stack budget stops a parse on a small stack before it overflows.
+    let small = std::thread::Builder::new()
+        .stack_size(64 << 10)
+        .spawn(move || {
+            let budget = Budget {
+                frames: usize::MAX,
+                stack: 32 << 10,
+            };
+            parse(&code_points(&deep(1_000)), &mut Mock::default(), budget)
+        })
+        .expect("spawns")
+        .join()
+        .expect("joins");
+    assert_eq!(small, Err(ParseError::Recursion));
 }
