@@ -80,6 +80,13 @@ extend-exclude = [
 ]
 
 [default.extend-words]
+# German month names: pyroid.dateutil's parserinfo tests and guide parse German dates.
+Januar = "Januar"
+Februar = "Februar"
+Juni = "Juni"
+Juli = "Juli"
+Oktober = "Oktober"
+Dezember = "Dezember"
 # numpy's ndarray.flags.writeable (pyroid.datasketch keeps cached arrays read-only).
 writeable = "writeable"
 # datatrove's parameter names (line_punct_thr, short_line_thr), kept for drop-in parity.
