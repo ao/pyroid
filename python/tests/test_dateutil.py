@@ -491,6 +491,15 @@ def test_decimal_context() -> None:
 @pytest.mark.thread_unsafe(reason="subprocesses")
 @pytest.mark.parametrize("zone", ["UTC", "Europe/London", "America/New_York", "Asia/Kolkata"])
 def test_local_zones(zone: str) -> None:
+    import os
+    import zoneinfo
+
+    if sys.platform == "win32":
+        pytest.skip("TZ takes POSIX zone names only on Unix")
+    try:
+        zoneinfo.ZoneInfo(zone)
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError):
+        pytest.skip(f"no tz database entry for {zone} here")
     code = textwrap.dedent(
         """
         import datetime, time
@@ -505,7 +514,11 @@ def test_local_zones(zone: str) -> None:
         """
     )
     r = subprocess.run(
-        [sys.executable, "-c", code], env={"TZ": zone}, capture_output=True, text=True, check=False
+        [sys.executable, "-c", code],
+        env={**os.environ, "TZ": zone},
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert r.returncode == 0, r.stderr
     assert r.stdout.startswith("ok")
@@ -563,3 +576,48 @@ def test_patch() -> None:
     finally:
         pyroid.unpatch("dateutil")
     assert (dateutil.parser.parse, dateutil.parser.isoparse) == original
+
+
+# --- versions -------------------------------------------------------------------------------
+
+
+@pytest.mark.thread_unsafe(reason="changes module state and warns")
+def test_version_warning_and_isoparse_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pyroid.dateutil import _upstream
+
+    for release in pp.DATEUTIL_VERSIONS:
+        monkeypatch.setattr(_upstream, "INSTALLED_VERSION", release)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            ppx._version_check()
+        lenient = release != "4.0.0"
+        assert ppx.isoparser()._lenient is lenient
+    monkeypatch.setattr(_upstream, "INSTALLED_VERSION", "2.8.2")
+    try:
+        from pyroid import _versions  # type: ignore[attr-defined]  # noqa: F401
+    except ImportError:
+        with pytest.warns(RuntimeWarning, match=r"reproduces python-dateutil 4\.0\.0.*2\.8\.2"):
+            ppx._version_check()
+    assert ppx.isoparser()._lenient is False
+    monkeypatch.setattr(_upstream, "INSTALLED_VERSION", None)
+    assert ppx.isoparser()._lenient is False
+
+
+@pytest.mark.thread_unsafe(reason="subprocess")
+def test_pyroid_run(tmp_path: Any) -> None:
+    script = tmp_path / "uses_dateutil.py"
+    script.write_text(
+        "import dateutil.parser\n"
+        "from pyroid._pyroid import dateutil as native\n"
+        "assert dateutil.parser.parse is native.upstream.parse\n"
+        "print(dateutil.parser.parse('Thu Sep 25 10:36:28 2003'))\n",
+        encoding="utf-8",
+    )
+    r = subprocess.run(
+        [sys.executable, "-m", "pyroid", "run", "-p", "dateutil", str(script)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "2003-09-25 10:36:28"
