@@ -1341,7 +1341,7 @@ mod badwords {
     fn _badwords_run<'py>(
         py: Python<'py>,
         texts: &Bound<'py, PyAny>,
-        lists: Vec<Py<NativeBadWords>>,
+        lists: crate::input::Items<Py<NativeBadWords>>,
         lang: i64,
         ids: Option<Vec<i64>>,
         keep_fraction: f64,
@@ -1355,7 +1355,8 @@ mod badwords {
         let v = UnicodeVersion::from_unidata_version(unicode_version).ok_or_else(|| {
             PyValueError::new_err(format!("unsupported Unicode version {unicode_version}"))
         })?;
-        let lists: Vec<&BadWords> = lists.iter().map(|l| &l.get().0).collect();
+        // `lists` is a filter's own list, which another thread using the filter may extend.
+        let lists: Vec<&BadWords> = lists.0.iter().map(|l| &l.get().0).collect();
         let pick = |i: usize| -> Option<&BadWords> {
             let id = ids.as_ref().map_or(lang, |ids| ids[i]);
             usize::try_from(id).ok().and_then(|k| lists.get(k).copied())

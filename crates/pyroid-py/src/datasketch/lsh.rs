@@ -269,6 +269,8 @@ fn new_state<C>(py: Python<'_>, core: C) -> Mutex<State<C>> {
 
 /// Rebuild the key map of a state read with `from_bytes` (ids `0..n`).
 fn restore_keys(py: Python<'_>, objs: &Bound<'_, PyList>, n: usize) -> PyResult<KeyMap> {
+    // The keys' `__eq__`/`__hash__` run while the map is built: read the list once.
+    let objs = crate::input::list_items(objs);
     if objs.len() != n {
         return Err(PyValueError::new_err(format!(
             "invalid pickled index state: {} keys for {n} ids",
