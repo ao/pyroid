@@ -1481,7 +1481,11 @@ fn read_dups(path: &Path, ignore_index_matches: bool, sets: &mut NodeSets) -> Re
     let f = File::open(path).map_err(io_at(path))?;
     let mut r = BufReader::with_capacity(DUPS_READ_BUFFER, f);
     let mut rec = [0u8; 16];
+    let mut ticker = par::Ticker::new();
     for _ in 0..size / 16 {
+        if ticker.tick() {
+            return Err(PoolError::interrupted().into());
+        }
         r.read_exact(&mut rec).map_err(io_at(path))?;
         let a = node_key(read_u32(&rec), read_u32(&rec[4..]));
         let b = node_key(read_u32(&rec[8..]), read_u32(&rec[12..]));
@@ -1585,7 +1589,11 @@ pub fn minhash_cluster(
         done: Vec::new(),
         removes: 0,
     };
+    let mut ticker = par::Ticker::new();
     for &(key, id) in &nodes {
+        if ticker.tick() {
+            return Err(PoolError::interrupted().into());
+        }
         let (file, doc) = split_key(key);
         if file != outputs.file {
             outputs.next_file(file)?;

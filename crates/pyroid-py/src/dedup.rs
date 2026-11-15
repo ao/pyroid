@@ -224,6 +224,12 @@ impl From<CapacityError> for AddError {
     }
 }
 
+impl From<par::PoolError> for AddError {
+    fn from(e: par::PoolError) -> Self {
+        Self::Pool(e)
+    }
+}
+
 impl AddError {
     fn into_pyerr(self, py: Python<'_>) -> PyErr {
         match self {
@@ -640,12 +646,12 @@ impl MinHashState {
 
     /// Stage-2 duplicate pairs of one bucket, in datatrove's order (test hook).
     fn _bucket_pairs<'py>(&self, py: Python<'py>, bucket: usize) -> PyResult<Bound<'py, PyList>> {
-        let pairs = py.detach(|| {
+        let pairs = crate::interrupt::detach_batch(py, || {
             let inner = lock(&self.inner);
             (bucket < inner.store.num_buckets()).then(|| inner.store.bucket_pairs(bucket))
         });
         let pairs = pairs.ok_or_else(|| PyIndexError::new_err("bucket out of range"))?;
-        PyList::new(py, pairs)
+        PyList::new(py, pairs.map_err(|e| crate::interrupt::pool_error(&e))?)
     }
 
     /// The signature of document ``i`` (``None`` if it has no shingles).
