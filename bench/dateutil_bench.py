@@ -21,8 +21,9 @@ taken from each source and mixed.
   pyroid's ``isoparse``, ``isoparse_batch``, ``datetime.fromisoformat`` and, if installed,
   ``ciso8601.parse_datetime``.
 
-Output: a JSON file (``--out``) with machine info and every timing, and a Markdown summary on
-stdout. Numbers from a shared machine are indicative.
+Output: a JSON file (``--out``) with machine info (CPU, versions, the load average before and
+after; no hostname) and every timing, and a Markdown summary on stdout. Numbers from a shared
+machine are indicative.
 """
 
 from __future__ import annotations
@@ -89,15 +90,31 @@ def loop(f: Callable[[str], Any], xs: list[str]) -> Callable[[], None]:
 
 def machine() -> dict[str, Any]:
     gil = getattr(sys, "_is_gil_enabled", lambda: True)()
+    cpu = None
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8") as f:
+            names = (ln.split(":", 1)[1].strip() for ln in f if ln.startswith("model name"))
+            cpu = next(names, None)
+    except OSError:
+        pass
+    versions = {}
+    for dist in ("pyarrow", "pandas", "ciso8601"):
+        try:
+            versions[dist] = md.version(dist)
+        except md.PackageNotFoundError:
+            versions[dist] = None
     return {
         "python": sys.version.split()[0],
         "free_threaded": bool(sysconfig.get_config_var("Py_GIL_DISABLED")),
         "gil_enabled": gil,
         "platform": platform.platform(),
         "machine": platform.machine(),
+        "cpu": cpu,
         "cpus": os.cpu_count(),
+        "loadavg": os.getloadavg(),
         "python-dateutil": md.version("python-dateutil"),
         "pyroid": md.version("pyroid"),
+        **versions,
     }
 
 
@@ -223,6 +240,7 @@ def main() -> int:
             )
         except ImportError:
             pass
+    report["loadavg_after"] = os.getloadavg()
     if args.out:
         args.out.write_text(json.dumps(report, indent=1, default=str))
     return 0

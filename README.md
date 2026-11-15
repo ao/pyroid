@@ -123,8 +123,12 @@ FineWeb dev slice, AWS EC2 c7i.4xlarge:
 | `dedup`, MinHash signatures | datatrove 0.10.1 | 34× |
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
 
-The other modules have only been measured in a Docker VM on a Mac or on a shared EC2 machine, so
-treat these as indicative (one thread unless stated):
+`pyroid.dateutil`, on 608,343 real date strings on AWS EC2 c7i.4xlarge: `parser.parse` runs 15×
+faster than python-dateutil 2.9.0.post0 in a loop of single calls, and `parse_batch` to Arrow
+37× faster on one thread and 101× on 16.
+
+The other modules have only been measured in a Docker VM on a Mac, so treat these as indicative
+(one thread unless stated):
 
 | pyroid | Against | Speedup |
 |---|---|---:|
@@ -132,7 +136,6 @@ treat these as indicative (one thread unless stated):
 | `metrics`, ROUGE | rouge-score 0.1.2 | 59–65× |
 | `metrics`, corpus BLEU / chrF | sacrebleu 2.6.0 | 11× / 19× |
 | `json_repair.repair_json`, broken JSON | json_repair 0.64.5 | about 30× |
-| `dateutil.parser.parse`, real strings, single calls / `parse_batch` to Arrow on 64 threads (shared EC2 c8g.16xlarge) | python-dateutil 2.9.0.post0 | 12× / 105× |
 | `datasketch`, MinHash signatures, 1 / 8 threads | datasketch 2.0.0 | 8× / 21× |
 | `jieba.lcut`, a batch, 1 / 8 threads | jieba 0.42.1 | 24× / 58× |
 | `nltk.sent_tokenize` / `word_tokenize` | NLTK 3.10.4 | 60× / 31× |

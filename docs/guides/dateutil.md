@@ -211,27 +211,28 @@ Details: [Compatibility](../compatibility.md#dateutil).
 
 ## Speed
 
-These timings are from a shared AWS EC2 c8g.16xlarge (64 Graviton cores), so they are
-indicative. The inputs are 608,343 real strings, up to 20,000 from each corpus source, those
-that dateutil cannot parse included, and every result was first checked against dateutil's.
-Against python-dateutil 2.9.0.post0 on CPython 3.12 (`bench/dateutil_bench.py`):
+These timings are from a dedicated AWS EC2 c7i.4xlarge (Intel Xeon, 16 vCPU), Amazon Linux
+2023, in Docker. The inputs are 608,343 real strings, up to 20,000 from each corpus source,
+those that dateutil cannot parse included, and every result was first checked against
+dateutil's. Against python-dateutil 2.9.0.post0 on CPython 3.12 (`bench/dateutil_bench.py`):
 
 | Call | µs per string | vs dateutil |
 |---|---:|---:|
-| `dateutil.parser.parse`, loop | 21.9 | 1× |
-| pyroid `parse`, loop | 1.77 | 12× |
-| `parse_batch`, list, 1 thread / all 64 | 1.15 / 0.55 | 19× / 40× |
-| `parse_batch`, Arrow, 1 thread / all 64 | 0.72 / 0.21 | 30× / 105× |
-| `pandas.to_datetime(format="mixed")` (its own parser, other results) | 24.4 | 0.9× |
+| `dateutil.parser.parse`, loop | 27.0 | 1× |
+| pyroid `parse`, loop | 1.76 | 15× |
+| `parse_batch`, list, 1 thread / all 16 | 1.19 / 0.60 | 23× / 45× |
+| `parse_batch`, Arrow, 1 thread / all 16 | 0.73 / 0.27 | 37× / 101× |
+| `pandas.to_datetime(format="mixed")` (its own parser, other results) | 29.1 | 0.9× |
 
 A loop of single calls also pays for a Python call per string and, for each string that fails, a
 raised and caught exception. Arrow output skips making a `datetime` per row on the calling
 thread, which is why it scales with threads. On free-threaded CPython 3.14t, dateutil itself on 8
-threads takes 4.0 µs per string (5.9×), and pyroid's Arrow batch 0.22 µs.
+threads takes 4.9 µs per string (5.3×), and pyroid's Arrow batch 0.27 µs.
 
 On the 139,939 strings among them that `datetime.fromisoformat` accepts, `isoparse` takes
-0.97 µs against dateutil's 3.7 µs (3.8×, and 6.3× on 3.14t). `datetime.fromisoformat` takes
-0.13 µs, but it accepts other strings and returns other objects.
+0.97 µs against dateutil's 3.5 µs (3.6×; on 3.14t, 5.5× on the 126,638 strings that its
+`fromisoformat` accepts). `datetime.fromisoformat` takes 0.13 µs, but it accepts other strings
+and returns other objects. The [benchmarks page](../benchmarks.md#pyroiddateutil) has every row.
 
 ## Differences from dateutil
 
