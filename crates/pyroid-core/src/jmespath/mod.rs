@@ -58,13 +58,15 @@ pub fn stack_position() -> usize {
 }
 
 /// Native stack a parse or evaluation may use before it raises `RecursionError` instead,
-/// on a thread whose size is unknown: musl's threads get 128 KiB, the others at least 1 MiB.
+/// on a thread whose stack size is unknown: musl gives threads 128 KiB, and programs set
+/// 256 KiB and up with `threading.stack_size`.
 #[cfg(target_env = "musl")]
 pub const STACK_BUDGET: usize = 96 << 10;
 /// Native stack a parse or evaluation may use before it raises `RecursionError` instead,
-/// on a thread whose size is unknown: musl's threads get 128 KiB, the others at least 1 MiB.
+/// on a thread whose stack size is unknown: musl gives threads 128 KiB, and programs set
+/// 256 KiB and up with `threading.stack_size`.
 #[cfg(not(target_env = "musl"))]
-pub const STACK_BUDGET: usize = 768 << 10;
+pub const STACK_BUDGET: usize = 192 << 10;
 
 /// `s` as code points.
 pub fn code_points(s: &str) -> Text {

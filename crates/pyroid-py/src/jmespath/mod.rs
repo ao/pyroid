@@ -206,23 +206,20 @@ fn recursion_limit(py: Python<'_>) -> PyResult<usize> {
     config(py)?.getrecursionlimit.bind(py).call0()?.extract()
 }
 
-/// Native stack for a deep parse or evaluation: more on the main thread (Linux and macOS give
-/// it 8 MiB, python.exe on Windows 2 MB), less when the program set a small thread stack size.
+/// Native stack for a deep parse or evaluation. The main thread gets 8 MiB on Linux and macOS
+/// (python.exe on Windows: 2 MB); other threads may be as small as the program chose, which
+/// can't be read without changing it (`threading.stack_size()` resets it), so they get
+/// [`pyroid_core::jmespath::STACK_BUDGET`].
 fn stack_budget(py: Python<'_>) -> PyResult<usize> {
     const MAIN_THREAD: usize = if cfg!(windows) { 1 << 20 } else { 6 << 20 };
     let threading = py.import("threading")?;
     let main = threading.call_method0("main_thread")?;
     let current = threading.call_method0("current_thread")?;
-    let mut budget = if main.is(&current) {
+    Ok(if main.is(&current) {
         MAIN_THREAD
     } else {
         pyroid_core::jmespath::STACK_BUDGET
-    };
-    let configured: usize = threading.call_method0("stack_size")?.extract()?;
-    if configured != 0 {
-        budget = budget.min(configured / 2);
-    }
-    Ok(budget)
+    })
 }
 
 fn recursion_error() -> PyErr {
