@@ -414,7 +414,7 @@ mod tests {
         assert!(float_ascii(b"nan").is_some_and(f64::is_nan));
         assert!(float_ascii(b"-NaN").is_some_and(|f| f.is_nan() && f.is_sign_negative()));
         for bad in [
-            "", ".", "e5", "1e", "1e+", "1_e5", "1e_5", "_1", "1_", "inf_", "infinit", "1nan",
+            "", ".", "e5", "1e", "1e+", "1_e5", "1e_5", "_1", "1_", "inf_", "infini", "1nan",
             "0x1p3", "1 2", "--1", "\x1c1",
         ] {
             assert_eq!(float_ascii(bad.as_bytes()), None, "{bad:?}");

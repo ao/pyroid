@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
-import importlib.util
 import decimal
 import fractions
+import importlib.util
 import signal
 import threading
 import warnings

@@ -1407,7 +1407,7 @@ class _CustomTextWrap(textwrap.TextWrapper):
         # of the next chunk onto the current line as will fit.
         if self.break_long_words and space_left > 0:
             # Tabulate Custom: Build the string up piece-by-piece in order to
-            # take each charcter's width into account
+            # take each character's width into account
             chunk = reversed_chunks[-1]
             i = 1
             # Only count printable characters, so strip_ansi first, index later.

@@ -34,7 +34,7 @@ For code you don't own, `DataFrame.to_markdown()` included, patch `tabulate`:
 import pyroid
 
 pyroid.patch("tabulate")  # import tabulate gives pyroid's module
-df.to_markdown()          # pandas now draws the table with pyroid
+df.to_markdown()  # pandas now draws the table with pyroid
 ```
 
 `pyroid run -p tabulate script.py` does the same for a whole program and the processes it starts
