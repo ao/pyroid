@@ -266,11 +266,49 @@ def test_parserinfo_changes_are_seen() -> None:
     assert p.parse("01/02/03") == D(2003, 2, 1)
     info._year, info._century = 1950, 1900
     assert p.parse("01/02/99") == D(1999, 2, 1)
-    pp.parserinfo.TZOFFSET["BRST"] = -10800
-    try:
-        assert p.parse("10:00 BRST").utcoffset() == datetime.timedelta(hours=-3)
-    finally:
-        del pp.parserinfo.TZOFFSET["BRST"]
+    info.TZOFFSET = {"BRST": -10800}  # this instance's, so parallel runs do not share it
+    assert p.parse("10:00 BRST").utcoffset() == datetime.timedelta(hours=-3)
+    info.TZOFFSET["BRDT"] = -7200
+    assert p.parse("10:00 BRDT").utcoffset() == datetime.timedelta(hours=-2)
+
+
+@pytest.mark.thread_unsafe(reason="starts its own threads")
+def test_tables_changed_while_other_threads_parse() -> None:
+    # Regression: the tables are copied before they are read. Iterating a dict that another
+    # thread changes made PyO3 panic ("dictionary changed size during iteration").
+    info: Any = pp.parserinfo()
+    info.TZOFFSET = {}
+    p = pp.parser(info)
+    stop = threading.Event()
+    errors: list[BaseException] = []
+
+    def change() -> None:
+        i = 0
+        while not stop.is_set():
+            info.TZOFFSET[f"Z{i % 50:02d}"] = 3600
+            info._jump[f"w{i % 50}"] = 0
+            if i % 2:
+                info.TZOFFSET.pop(f"Z{(i - 1) % 50:02d}", None)
+                info._jump.pop(f"w{(i - 1) % 50}", None)
+            i += 1
+
+    def parse() -> None:
+        try:
+            for _ in range(3000):
+                p.parse("2003-09-25 10:00 at noon", default=DEFAULT, fuzzy=True)
+        except BaseException as e:  # noqa: BLE001 - a PanicException is a BaseException
+            errors.append(e)
+
+    changer = threading.Thread(target=change)
+    changer.start()
+    workers = [threading.Thread(target=parse) for _ in range(8)]
+    for t in workers:
+        t.start()
+    for t in workers:
+        t.join()
+    stop.set()
+    changer.join()
+    assert not errors, errors[0]
 
 
 class LoudInfo(ppx.parserinfo):  # type: ignore[misc]
@@ -285,6 +323,7 @@ class DuLoudInfo(du.parserinfo):  # type: ignore[misc]
 
 @pytest.mark.thread_unsafe(reason="pytest.warns")
 def test_parserinfo_method_override_runs_dateutils_code() -> None:
+    ppx._WARNED.clear()  # the warning is shown once per process
     with pytest.warns(pyroid.FallbackWarning, match="overriding convertyear"):
         b = pp.parse("01/02/03", LoudInfo())
     assert b == du.parse("01/02/03", DuLoudInfo())
@@ -298,6 +337,7 @@ class MyParser(ppx.parser):  # type: ignore[misc]
 
 @pytest.mark.thread_unsafe(reason="pytest.warns")
 def test_parser_hook_override_runs_dateutils_code() -> None:
+    ppx._WARNED.clear()  # the warning is shown once per process
     with pytest.warns(pyroid.FallbackWarning, match="overriding _parsems"):
         assert MyParser().parse("10:20:30.5").microsecond == 500_001
 
@@ -605,6 +645,7 @@ def test_version_warning_and_isoparse_mode(monkeypatch: pytest.MonkeyPatch) -> N
 
 @pytest.mark.thread_unsafe(reason="subprocess")
 def test_pyroid_run(tmp_path: Any) -> None:
+    pytest.importorskip("pyarrow", reason="the pyroid command line needs pyarrow (pyroid[cli])")
     script = tmp_path / "uses_dateutil.py"
     script.write_text(
         "import dateutil.parser\n"

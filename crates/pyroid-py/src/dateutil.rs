@@ -404,9 +404,13 @@ fn container_len(o: &Bound<'_, PyAny>) -> usize {
 }
 
 fn table_of(d: &Bound<'_, PyAny>, valued: bool, what: &str) -> Result<Table, String> {
+    // A copy (atomic, also on free-threaded builds): another thread may change the dict while
+    // this one reads it, which a dict iterator does not allow.
     let d = d
         .cast::<PyDict>()
-        .map_err(|_| format!("a parserinfo whose {what} is not a dict"))?;
+        .map_err(|_| format!("a parserinfo whose {what} is not a dict"))?
+        .copy()
+        .map_err(|e| e.to_string())?;
     let mut t = Table::default();
     for (k, v) in d.iter() {
         let k = k
@@ -440,7 +444,9 @@ fn compile(objs: &[Bound<'_, PyAny>]) -> Compiled {
         }
         let tzd = objs[7]
             .cast::<PyDict>()
-            .map_err(|_| "a parserinfo whose TZOFFSET is not a dict".to_owned())?;
+            .map_err(|_| "a parserinfo whose TZOFFSET is not a dict".to_owned())?
+            .copy()
+            .map_err(|e| e.to_string())?;
         let mut tzoffset = FxHashMap::default();
         for (k, v) in tzd.iter() {
             let Ok(k) = k.cast::<PyString>() else {
@@ -460,10 +466,12 @@ fn compile(objs: &[Bound<'_, PyAny>]) -> Compiled {
                 .map_err(|_| "a TZOFFSET value that is not an int".to_owned())?;
             tzoffset.insert(k.into(), v);
         }
-        let ut = &objs[8];
-        if !(ut.is_instance_of::<PyList>() || ut.is_instance_of::<PyTuple>()) {
-            return Err("a parserinfo whose UTCZONE is not a list".to_owned());
-        }
+        // A snapshot of the list (atomic), as for the dicts.
+        let ut = match objs[8].cast::<PyList>() {
+            Ok(l) => l.to_tuple().into_any(),
+            Err(_) if objs[8].is_instance_of::<PyTuple>() => objs[8].clone(),
+            Err(_) => return Err("a parserinfo whose UTCZONE is not a list".to_owned()),
+        };
         let mut utczone_list = Vec::new();
         for z in ut.try_iter().map_err(|e| e.to_string())? {
             let z = z.map_err(|e| e.to_string())?;
