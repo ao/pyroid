@@ -194,19 +194,16 @@ fn type_check_single<'py>(
     name: &Bound<'py, PyAny>,
 ) -> PyResult<()> {
     let py = ctx.py;
-    let mut allowed_types: Vec<&str> = Vec::new();
-    let mut allowed_subtypes: Vec<&[&str]> = Vec::new();
-    for t in types {
-        match t.split_once('-') {
-            Some((ty, sub)) => {
-                allowed_subtypes.push(reverse_type(sub));
-                allowed_types.extend(reverse_type(ty));
-            }
-            None => allowed_types.extend(reverse_type(t)),
-        }
-    }
+    // _get_allowed_pytypes, without building the lists: `array-number` allows the array
+    // types, with `number` as a subtype.
+    let base = |t: &&str| reverse_type(t.split_once('-').map_or(*t, |(b, _)| b));
+    let subtypes = || {
+        types
+            .iter()
+            .filter_map(|t| t.split_once('-').map(|(_, sub)| reverse_type(sub)))
+    };
     let actual = type_name(current)?;
-    if !allowed_types.contains(&actual.as_ref()) {
+    if !types.iter().any(|t| base(t).contains(&actual.as_ref())) {
         let cur = current.to_py(ctx)?;
         return Err(type_error(
             ctx,
@@ -216,7 +213,8 @@ fn type_check_single<'py>(
             py_list(py, types)?.into_any(),
         ));
     }
-    if allowed_subtypes.is_empty() {
+    let n_subtypes = subtypes().count();
+    if n_subtypes == 0 {
         return Ok(());
     }
     // Arrays are the only types with subtypes.
@@ -232,8 +230,8 @@ fn type_check_single<'py>(
             py_list(py, types)?.into_any(),
         ))
     };
-    if allowed_subtypes.len() == 1 {
-        let allowed = allowed_subtypes[0];
+    if n_subtypes == 1 {
+        let allowed = subtypes().next().unwrap_or_default();
         let mut err = None;
         interp::for_each(ctx, current, |el| {
             let actual = type_name(&Val::Py(el.clone()))?;
@@ -246,14 +244,11 @@ fn type_check_single<'py>(
         })?;
         return err.map_or(Ok(()), Err);
     }
-    if allowed_subtypes.len() > 1 && current.is_truthy()? {
+    if n_subtypes > 1 && current.is_truthy()? {
         // The first element's type picks the subtype the others must have.
         let first_el = current.get_item(0)?;
         let first = type_name(&Val::Py(first_el.clone()))?;
-        let Some(allowed) = allowed_subtypes
-            .iter()
-            .find(|s| s.contains(&first.as_ref()))
-        else {
+        let Some(allowed) = subtypes().find(|s| s.contains(&first.as_ref())) else {
             return Err(raw_error(&first_el, &first)?);
         };
         let mut err = None;
@@ -502,7 +497,7 @@ impl Key<'_> {
 }
 
 /// Python's exact comparison of an `int` with a (non-NaN) `float`.
-fn cmp_int_float(i: i64, f: f64) -> Ordering {
+pub(crate) fn cmp_int_float(i: i64, f: f64) -> Ordering {
     const TWO_63: f64 = 9_223_372_036_854_775_808.0;
     if f >= TWO_63 {
         return Ordering::Less;
@@ -562,11 +557,29 @@ fn sorted_by_keys<'py>(
     keys: &[Bound<'py, PyAny>],
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = ctx.py;
+    // A stable sort on a total order gives the same order as CPython's Timsort.
     let order: Vec<usize> = if let Some(native) = native_keys(keys) {
-        let mut idx: Vec<usize> = (0..items.len()).collect();
-        // A stable sort on a total order gives the same order as CPython's Timsort.
-        idx.sort_by(|&a, &b| native[a].cmp(&native[b]));
-        idx
+        if native.iter().all(|k| matches!(k, Key::Int(_))) {
+            let mut pairs: Vec<(i64, usize)> = native
+                .iter()
+                .enumerate()
+                .map(|(i, k)| (if let Key::Int(v) = k { *v } else { 0 }, i))
+                .collect();
+            pairs.sort_by_key(|p| p.0);
+            pairs.into_iter().map(|p| p.1).collect()
+        } else if native.iter().all(|k| matches!(k, Key::Str(_))) {
+            let mut pairs: Vec<(&str, usize)> = native
+                .iter()
+                .enumerate()
+                .map(|(i, k)| (if let Key::Str(v) = k { *v } else { "" }, i))
+                .collect();
+            pairs.sort_by(|a, b| a.0.cmp(b.0));
+            pairs.into_iter().map(|p| p.1).collect()
+        } else {
+            let mut idx: Vec<usize> = (0..items.len()).collect();
+            idx.sort_by(|&a, &b| native[a].cmp(&native[b]));
+            idx
+        }
     } else {
         let c = config(py)?;
         let key_list = PyList::new(py, keys)?;

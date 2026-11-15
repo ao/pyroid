@@ -201,8 +201,57 @@ fn is_zero_or_one(x: &Bound<'_, PyAny>) -> PyResult<bool> {
     config(py)?.zero_one.bind(py).contains(x)
 }
 
+/// An exact `int` (that fits) or `float`: compared natively, as Python compares them.
+#[derive(Clone, Copy)]
+enum Num {
+    I(i64),
+    F(f64),
+}
+
+fn num(x: &Bound<'_, PyAny>) -> Option<Num> {
+    if x.is_exact_instance_of::<PyInt>() {
+        return x.extract::<i64>().ok().map(Num::I);
+    }
+    x.cast_exact::<PyFloat>().ok().map(|f| Num::F(f.value()))
+}
+
+/// `a` against `b` as Python orders them (`None` when either is NaN).
+fn num_cmp(a: Num, b: Num) -> Option<std::cmp::Ordering> {
+    match (a, b) {
+        (Num::I(a), Num::I(b)) => Some(a.cmp(&b)),
+        (Num::F(a), Num::F(b)) => a.partial_cmp(&b),
+        (Num::I(a), Num::F(b)) => (!b.is_nan()).then(|| functions::cmp_int_float(a, b)),
+        (Num::F(a), Num::I(b)) => (!a.is_nan()).then(|| functions::cmp_int_float(b, a).reverse()),
+    }
+}
+
+/// `x <op> y` for two exact numbers or two exact (valid UTF-8) strings, natively.
+fn native_compare(x: &Bound<'_, PyAny>, y: &Bound<'_, PyAny>, op: CompareOp) -> Option<bool> {
+    use std::cmp::Ordering::{Equal, Greater, Less};
+    let ord = if let (Some(a), Some(b)) = (num(x), num(y)) {
+        num_cmp(a, b)
+    } else if let (Ok(a), Ok(b)) = (x.cast_exact::<PyString>(), y.cast_exact::<PyString>()) {
+        Some(a.to_str().ok()?.cmp(b.to_str().ok()?))
+    } else {
+        return None;
+    };
+    Some(match (op, ord) {
+        (CompareOp::Eq, o) => o == Some(Equal),
+        (CompareOp::Ne, o) => o != Some(Equal),
+        (_, None) => false,
+        (CompareOp::Lt, Some(o)) => o == Less,
+        (CompareOp::Le, Some(o)) => o != Greater,
+        (CompareOp::Gt, Some(o)) => o == Greater,
+        (CompareOp::Ge, Some(o)) => o != Less,
+    })
+}
+
 /// `_equals(x, y)`: `x == y`, except that 0 and 1 never equal `False` and `True`.
 fn equals<'py>(x: &Bound<'py, PyAny>, y: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    // Two exact numbers or strings: no bool involved, so the special case can't apply.
+    if let Some(b) = native_compare(x, y, CompareOp::Eq) {
+        return Ok(pybool(x.py(), b));
+    }
     let special = if is_actual_number(x)? && is_zero_or_one(x)? {
         y.is_instance_of::<PyBool>()
     } else if is_actual_number(y)? && is_zero_or_one(y)? {
@@ -357,7 +406,15 @@ fn visit_chain<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let mut result = value.clone();
     for c in children {
-        result = visit(ctx, c, &result, inner)?;
+        result = if let Expr::Field(key) = c {
+            // A field opens no further frames: only the frame limit can stop it.
+            if inner + 3 > ctx.limit {
+                ctx.check(inner + 3)?;
+            }
+            field(&result, key.bind(ctx.py))?
+        } else {
+            visit(ctx, c, &result, inner)?
+        };
     }
     Ok(result)
 }
@@ -392,6 +449,9 @@ fn visit_comparator<'py>(
                 Comparator::Lte => CompareOp::Le,
                 _ => CompareOp::Ge,
             };
+            if let Some(b) = native_compare(&left, &right, op) {
+                return Ok(pybool(py, b));
+            }
             left.rich_compare(&right, op)
         }
     }

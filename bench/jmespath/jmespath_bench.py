@@ -139,7 +139,12 @@ def gate(expression: str, data: Any) -> None:
 
 
 def ab(
-    label: str, expression: str, fj: Callable[[], Any], fp: Callable[[], Any], repeat: int
+    label: str,
+    expression: str,
+    fj: Callable[[], Any],
+    fp: Callable[[], Any],
+    repeat: int,
+    scale: float = 1e6,
 ) -> dict[str, Any]:
     nj, np_ = calls_for(fj), calls_for(fp)
     # Interleave the two, so load on a shared machine hits both.
@@ -157,7 +162,7 @@ def ab(
         "pyroid_median_us": statistics.median(rows_p) * 1e6,
         "speedup": j / p,
     }
-    print(f"| {label} | `{expression}` | {j * 1e6:,.2f} | {p * 1e6:,.2f} | {j / p:.1f}x |")
+    print(f"| {label} | `{expression}` | {j * scale:,.2f} | {p * scale:,.2f} | {j / p:.1f}x |")
     sys.stdout.flush()
     return row
 
@@ -211,7 +216,9 @@ def main() -> int:
         for label, e in RECORDS:
             gate(e, recs)
             cj, cp = jmespath.compile(e), pj.compile(e)
-            row = ab(label, e, lambda cj=cj: cj.search(recs), lambda cp=cp: cp.search(recs), r)
+            row = ab(
+                label, e, lambda cj=cj: cj.search(recs), lambda cp=cp: cp.search(recs), r, 1e3
+            )
             rows.append(row)
         out["sections"][f"records_{n}"] = rows
     out["machine_after"] = machine_info.snapshot()

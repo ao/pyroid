@@ -112,6 +112,21 @@ def test_compliance_suite_is_complete() -> None:
     assert len(CASES) == 917
 
 
+SCALARS = [
+    0, 1, -1, 2**53, 2**53 + 1, 2**64, -(2**63), 1.0, 0.0, -0.0, 1.5, 2.0**53, float("nan"),
+    float("inf"), -float("inf"), True, False, None, "", "a", "b", "é", "\ud800", "\U0001f600",
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("op", ["==", "!=", "<", "<=", ">", ">="])
+def test_comparisons(op: str) -> None:
+    for a in SCALARS:
+        for b in SCALARS:
+            compare(f"a {op} b", {"a": a, "b": b})
+            compare(f"[?a {op} b] | length(@)", [{"a": a, "b": b}])
+            compare(f"!(a {op} b)", {"a": a, "b": b})
+
+
 # ---------------------------------------------------------------------------
 # Real queries: botocore's paginator and waiter expressions and AWS CLI examples
 # ---------------------------------------------------------------------------
