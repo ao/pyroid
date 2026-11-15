@@ -27,6 +27,7 @@
 //!   Thai tokenizer in the filters).
 //! - [`crfsuite`]: CRFsuite model files and Viterbi tagging, for pyvi and
 //!   PyThaiNLP's sentence model.
+//! - [`jmespath`]: jmespath 1.1.0's lexer and parser (`pyroid.jmespath`).
 //! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).
 //!
 //! Each module adds a `src/<mod>/` directory here; see `docs/dev/MODULES.md`.
@@ -41,6 +42,7 @@ pub mod filters;
 pub mod ftfy;
 pub mod html;
 pub mod jieba;
+pub mod jmespath;
 pub mod json_repair;
 pub mod metrics;
 pub mod nemo;
