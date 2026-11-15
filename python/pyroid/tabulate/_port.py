@@ -32,7 +32,7 @@ from itertools import zip_longest as izip_longest
 from typing import Any
 
 try:
-    import wcwidth  # optional wide-character (CJK) support
+    import wcwidth  # type: ignore[import-not-found,import-untyped,unused-ignore]  # optional, CJK widths
 except ImportError:
     wcwidth = None
 
