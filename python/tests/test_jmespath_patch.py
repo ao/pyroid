@@ -143,6 +143,7 @@ def test_patch_without_jmespath_installs_shims() -> None:
 
 @needs_jmespath
 def test_pyroid_run_patches_jmespath(tmp_path: Any) -> None:
+    pytest.importorskip("pyarrow", reason="the pyroid command line needs pyarrow (pyroid[cli])")
     script = tmp_path / "query.py"
     script.write_text(
         "import json, jmespath, pyroid.jmespath as pj\n"
