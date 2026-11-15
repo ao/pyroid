@@ -108,3 +108,10 @@ bench = false
 
 [workspace]
 members = ["."]
+
+[[bin]]
+name = "jmespath"
+path = "fuzz_targets/jmespath.rs"
+test = false
+doc = false
+bench = false
