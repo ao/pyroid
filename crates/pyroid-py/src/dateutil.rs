@@ -261,11 +261,7 @@ fn first_override(
 
 fn parser_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
     let ty = obj.get_type();
-    if ty.is(h.parser.bind(py))
-        || UPSTREAM
-            .get(py)
-            .is_some_and(|u| ty.is(u.parser.bind(py)))
-    {
+    if ty.is(h.parser.bind(py)) || UPSTREAM.get(py).is_some_and(|u| ty.is(u.parser.bind(py))) {
         return Ok(None);
     }
     cached_override(&PARSER_TYPES, &ty, || {
@@ -989,6 +985,7 @@ struct Finisher<'py, 'a> {
     local: OnceCell<Option<LocalZone<'py>>>,
     /// The parser's `info.UTCZONE`.
     utczone: &'a [Box<str>],
+    offsets: TzOffsets<'py>,
 }
 
 /// `tz.tzlocal()` for a local zone without DST, where its `tzname()` is `time.tzname[0]` and
@@ -1031,6 +1028,7 @@ impl<'py, 'a> Finisher<'py, 'a> {
             local_names: OnceCell::new(),
             local: OnceCell::new(),
             utczone,
+            offsets: TzOffsets::default(),
         }
     }
 
@@ -1255,11 +1253,8 @@ impl<'py, 'a> Finisher<'py, 'a> {
                 .tz
                 .clone(),
             TzPlan::Offset(off) => {
-                let name = match &p.res.tzname {
-                    Some(n) => py_text(py, n, remapped)?.into_any(),
-                    None => py.None().into_bound(py),
-                };
-                h.tzoffset.bind(py).call1((name, off))?
+                self.offsets
+                    .get(py, h, p.res.tzname.as_deref(), remapped, off)?
             }
         };
         let f = fast.f;
@@ -1322,6 +1317,42 @@ impl<'py, 'a> Finisher<'py, 'a> {
             }
         }
         py_instant(&self.slow(p, remapped, timestr)?)
+    }
+}
+
+/// `tz.tzoffset(name, seconds)` results for one call or one batch: the factory returns the same
+/// instance for the same key while one is alive, and the results already made keep theirs alive,
+/// so reusing them gives the objects dateutil would.
+#[derive(Default)]
+struct TzOffsets<'py>(RefCell<FxHashMap<TzKey, Bound<'py, PyAny>>>);
+
+/// `(tzname, seconds)`.
+type TzKey = (Option<String>, Int);
+
+impl<'py> TzOffsets<'py> {
+    fn get(
+        &self,
+        py: Python<'py>,
+        h: &Hooks,
+        name: Option<&str>,
+        remapped: bool,
+        off: Int,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let key = (name.map(str::to_owned), off);
+        if let Some(t) = self.0.borrow().get(&key) {
+            return Ok(t.clone());
+        }
+        let py_name = match name {
+            Some(n) => py_text(py, n, remapped)?.into_any(),
+            None => py.None().into_bound(py),
+        };
+        let t = h.tzoffset.bind(py).call1((py_name, off))?;
+        let mut m = self.0.borrow_mut();
+        if m.len() >= 256 {
+            m.clear();
+        }
+        m.insert(key, t.clone());
+        Ok(t)
     }
 }
 
@@ -1545,7 +1576,13 @@ fn parse<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = timestr.py();
     let h = hooks(py)?;
-    module_parse(h.module.bind(py), h.parser.bind(py), timestr, parserinfo, kwargs)
+    module_parse(
+        h.module.bind(py),
+        h.parser.bind(py),
+        timestr,
+        parserinfo,
+        kwargs,
+    )
 }
 
 /// `parse` of the module whose globals are `module` (pyroid's, or dateutil's own when
@@ -1654,7 +1691,13 @@ fn upstream_parse<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = timestr.py();
     let u = upstream(py)?;
-    module_parse(u.module.bind(py), u.parser.bind(py), timestr, parserinfo, kwargs)
+    module_parse(
+        u.module.bind(py),
+        u.parser.bind(py),
+        timestr,
+        parserinfo,
+        kwargs,
+    )
 }
 
 /// `dateutil.parser.isoparse` under `pyroid.patch("dateutil")`: dateutil's
@@ -1668,7 +1711,9 @@ fn upstream_isoparse<'py>(dt_str: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyA
     let globals = u.iso_module.bind(py);
     let p = globals
         .get_item(pyo3::intern!(py, "DEFAULT_ISOPARSER"))?
-        .ok_or_else(|| PyValueError::new_err("dateutil.parser.isoparser has no DEFAULT_ISOPARSER"))?;
+        .ok_or_else(|| {
+            PyValueError::new_err("dateutil.parser.isoparser has no DEFAULT_ISOPARSER")
+        })?;
     let native = p.get_type().is(u.isoparser.bind(py))
         && globals
             .get_item(pyo3::intern!(py, "datetime"))?
@@ -1687,7 +1732,7 @@ fn upstream_isoparse<'py>(dt_str: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyA
                 };
                 if let (true, Some(sep)) = (text.is_ascii(), sep) {
                     if let Ok(iso) = iso::isoparse(text.as_bytes(), sep, u.iso_mode) {
-                        if let Some(dt) = iso_build(py, h, &iso)? {
+                        if let Some(dt) = iso_build(py, h, &iso, &TzOffsets::default())? {
                             return Ok(dt);
                         }
                     }
@@ -1704,7 +1749,12 @@ fn upstream_isoparse<'py>(dt_str: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyA
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::many_single_char_names)]
-fn iso_build<'py>(py: Python<'py>, h: &Hooks, iso: &Iso) -> PyResult<Option<Bound<'py, PyAny>>> {
+fn iso_build<'py>(
+    py: Python<'py>,
+    h: &Hooks,
+    iso: &Iso,
+    offsets: &TzOffsets<'py>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
     let f = iso.fields;
     let Some(mut ord) = kernel::cal::ordinal(f[0], f[1], f[2]) else {
         return Ok(None);
@@ -1725,7 +1775,7 @@ fn iso_build<'py>(py: Python<'py>, h: &Hooks, iso: &Iso) -> PyResult<Option<Boun
     let tz = match iso.tz {
         None => py.None().into_bound(py),
         Some(IsoTz::Utc) => h.utc.bind(py).clone(),
-        Some(IsoTz::Offset(s)) => h.tzoffset.bind(py).call1((py.None(), s))?,
+        Some(IsoTz::Offset(s)) => offsets.get(py, h, None, false, s)?,
     };
     let dt = h
         .datetime_type
@@ -1770,7 +1820,7 @@ fn iso_bytes<'py>(
         }
     };
     match iso::isoparse(b, sep, mode) {
-        Ok(iso) => match iso_build(py, h, &iso)? {
+        Ok(iso) => match iso_build(py, h, &iso, &TzOffsets::default())? {
             Some(dt) => Ok(dt),
             None => reference(None),
         },
@@ -2191,6 +2241,7 @@ fn isoparse_batch<'py>(
             })
         })
         .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
+    let offsets = TzOffsets::default();
     for (i, run) in runs.into_iter().enumerate() {
         let Some(s) = rows[i] else {
             out.push(None);
@@ -2205,7 +2256,7 @@ fn isoparse_batch<'py>(
             }
         }
         let built = match iso {
-            Some(iso) => iso_build(py, h, &iso)?,
+            Some(iso) => iso_build(py, h, &iso, &offsets)?,
             None => None,
         };
         let v = match built {
