@@ -155,6 +155,17 @@ def main() -> int:
     base = best(loop(du_parse, xs), rep)
     row("dateutil.parser.parse, loop", base, len(xs))
     row("pyroid parse, loop", best(loop(pp_parse, xs), rep), len(xs), base)
+    if not info["gil_enabled"]:
+        # Free-threaded: dateutil itself on 8 threads (contiguous chunks), for comparison.
+        from concurrent.futures import ThreadPoolExecutor
+
+        chunks = [xs[i::8] for i in range(8)]
+
+        def du_threads() -> None:
+            with ThreadPoolExecutor(8) as ex:
+                list(ex.map(lambda c: loop(du_parse, c)(), chunks))
+
+        row("dateutil.parser.parse, 8 threads", best(du_threads, rep), len(xs), base)
     for t in (1, 8, None):
         f = lambda t=t: pp.parse_batch(xs, errors="coerce", default=default, threads=t)
         row(f"pyroid parse_batch, list, threads={t}", best(f, rep), len(xs), base)
