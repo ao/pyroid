@@ -296,7 +296,7 @@ def test_tables_changed_while_other_threads_parse() -> None:
         try:
             for _ in range(3000):
                 p.parse("2003-09-25 10:00 at noon", default=DEFAULT, fuzzy=True)
-        except BaseException as e:  # noqa: BLE001 - a PanicException is a BaseException
+        except BaseException as e:  # a PanicException is a BaseException
             errors.append(e)
 
     changer = threading.Thread(target=change)

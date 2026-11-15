@@ -57,9 +57,20 @@ parser.parse("10:00", default=datetime.datetime(2003, 9, 25))  # 2003-09-25 10:0
 
 
 class German(parser.parserinfo):
-    MONTHS = [("Jan", "Januar"), ("Feb", "Februar"), ("Mär", "März"), ("Apr", "April"),
-              ("Mai",), ("Jun", "Juni"), ("Jul", "Juli"), ("Aug", "August"),
-              ("Sep", "September"), ("Okt", "Oktober"), ("Nov", "November"), ("Dez", "Dezember")]
+    MONTHS = [
+        ("Jan", "Januar"),
+        ("Feb", "Februar"),
+        ("Mär", "März"),
+        ("Apr", "April"),
+        ("Mai",),
+        ("Jun", "Juni"),
+        ("Jul", "Juli"),
+        ("Aug", "August"),
+        ("Sep", "September"),
+        ("Okt", "Oktober"),
+        ("Nov", "November"),
+        ("Dez", "Dezember"),
+    ]
 
 
 parser.parse("25. März 2003", German())  # datetime.datetime(2003, 3, 25, 0, 0)

@@ -58,6 +58,10 @@ extend-exclude = [
   # Charts copied byte for byte from bench/results/ (matplotlib SVGs).
   "docs/assets/*.svg",
   "parity/data/",
+  # python-dateutil's own code, kept as released (its comments have typos).
+  "python/pyroid/dateutil/_reference.py",
+  "python/pyroid/dateutil/_isoreference.py",
+  "python/pyroid/dateutil/_tzlite.py",
   "parity/tests/",
   "parity/pyroid_parity/refs.py",
   "parity/pyroid_parity/strategies.py",
