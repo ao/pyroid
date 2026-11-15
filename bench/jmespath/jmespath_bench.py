@@ -17,7 +17,8 @@ Cases:
 - records: projections, filters, ``sort_by``, ``max_by``, ``sum``, multi-select hashes and
   ``contains`` over 10,000 and 1,000,000 records (``--sizes``).
 
-Prints a Markdown table; ``--out`` writes the timings and the machine (bench/machine_info.py).
+Prints a Markdown table; ``--out`` writes the timings and the machine (CPU, Python, versions and
+the load average before and after; no hostname or instance id).
 """
 
 from __future__ import annotations
@@ -47,11 +48,43 @@ def _load(name: str, path: Path) -> Any:
 
 
 util = _load("_jmespath_util", ROOT / "python" / "tests" / "_jmespath_util.py")
-machine_info = _load("machine_info", ROOT / "bench" / "machine_info.py")
 
 import jmespath  # noqa: E402
 
 import pyroid.jmespath as pj  # noqa: E402
+
+
+def machine() -> dict[str, Any]:
+    """The machine, without identifiers (no hostname or instance id)."""
+    import os
+    import platform
+
+    cpu = None
+    try:
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            if line.lower().startswith(("model name", "cpu part")):
+                cpu = line.split(":", 1)[1].strip()
+                break
+    except OSError:
+        pass
+    mem = None
+    try:
+        mem = Path("/proc/meminfo").read_text().splitlines()[0].split(":", 1)[1].strip()
+    except (OSError, IndexError):
+        pass
+    load = os.getloadavg() if hasattr(os, "getloadavg") else None
+    import pyroid
+
+    return {
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
+        "cpus": os.cpu_count(),
+        "cpu": cpu,
+        "mem": mem,
+        "loadavg": load,
+        "jmespath": jmespath.__version__,
+        "pyroid": pyroid.__version__,
+    }
 
 
 def response(rng: random.Random) -> dict[str, Any]:
@@ -177,8 +210,7 @@ def main() -> int:
     repeat = 3 if args.quick else args.repeat
     sizes = [1000] if args.quick else [int(s) for s in args.sizes.split(",")]
     rng = random.Random(20261115)
-    before = machine_info.snapshot()
-    out: dict[str, Any] = {"jmespath": jmespath.__version__, "machine": before, "sections": {}}
+    out: dict[str, Any] = {"machine": machine(), "sections": {}}
 
     data = response(rng)
     print("\n## Small queries, one describe_instances response (µs per call)\n")
@@ -221,7 +253,7 @@ def main() -> int:
             )
             rows.append(row)
         out["sections"][f"records_{n}"] = rows
-    out["machine_after"] = machine_info.snapshot()
+    out["loadavg_after"] = machine()["loadavg"]
     if args.out:
         Path(args.out).write_text(json.dumps(out, indent=1) + "\n")
     return 0
