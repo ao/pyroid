@@ -1,10 +1,11 @@
 # Derived from jmespath 1.1.0 (MIT), © Amazon.com, Inc. or its affiliates; modified.
 """jmespath's parser (`jmespath.parser`), parsing natively."""
 
-from typing import Any, ClassVar, Final
+from typing import Any, ClassVar, Final, final
 
 __all__ = ["ParsedResult", "Parser"]
 
+@final
 class ParsedResult:
     """A compiled expression."""
 
@@ -18,7 +19,7 @@ class ParsedResult:
     `search` evaluates; editing the dicts in place does not.
     """
 
-    def __init__(self, expression: Any, parsed: Any) -> None:
+    def __new__(cls, expression: Any, parsed: Any) -> ParsedResult:
         """Make a result from an expression and a dict AST (as jmespath's `ParsedResult`)."""
 
     def search(self, value: Any, options: Any = None) -> Any:

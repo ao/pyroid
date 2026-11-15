@@ -81,10 +81,12 @@ the caller's stack depth (on the main thread; see the differences below).
 ```python
 from pyroid.jmespath import functions  # or jmespath.functions
 
+
 class Custom(functions.Functions):
     @functions.signature({"types": ["string"]})
     def _func_shout(self, s):
         return s.upper()
+
 
 jmespath.search("shout(name)", {"name": "x"}, jmespath.Options(custom_functions=Custom()))
 ```
