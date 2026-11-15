@@ -40,13 +40,14 @@ Everything in `dateutil.parser`, with dateutil's signatures:
 - `ParserError` and `UnknownTimezoneWarning`. With python-dateutil installed these are
   dateutil's own classes, so `except dateutil.parser.ParserError` catches pyroid's errors.
 
-`timestr` can be a `str`, `bytes`, `bytearray` or a text stream, as in dateutil. The result does
-not depend on how it got there: values that `datetime` rejects raise the interpreter's own
-message, wrapped in `ParserError` as dateutil wraps it (`"day is out of range for month: Feb 30
-2021"`). Python's `str` methods follow the running interpreter's Unicode version (14.0 to 17.0),
+`timestr` can be a `str`, `bytes`, `bytearray` or a text stream, as in dateutil. Values that
+`datetime` rejects raise the interpreter's own message, wrapped in `ParserError` as dateutil
+wraps it (`"day is out of range for month: Feb 30 2021"`). Python's `str` methods follow the running interpreter's Unicode version (14.0 to 17.0),
 so digits from other scripts (`"٢٠٢٤-٠١-٠٢"`) and letters count as they do for dateutil.
 
 ```python
+import datetime
+
 from pyroid.dateutil import parser
 
 parser.parse("Today is January 1, 2047 at 8:21:00AM", fuzzy_with_tokens=True)
@@ -56,7 +57,9 @@ parser.parse("10:00", default=datetime.datetime(2003, 9, 25))  # 2003-09-25 10:0
 
 
 class German(parser.parserinfo):
-    MONTHS = [("Jan", "Januar"), ("Feb", "Februar"), ("Mär", "März"), ...]
+    MONTHS = [("Jan", "Januar"), ("Feb", "Februar"), ("Mär", "März"), ("Apr", "April"),
+              ("Mai",), ("Jun", "Juni"), ("Jul", "Juli"), ("Aug", "August"),
+              ("Sep", "September"), ("Okt", "Oktober"), ("Nov", "November"), ("Dez", "Dezember")]
 
 
 parser.parse("25. März 2003", German())  # datetime.datetime(2003, 3, 25, 0, 0)
@@ -177,6 +180,47 @@ python-dateutil), with a one-time [`pyroid.FallbackWarning`](../concepts/fallbac
 
 An unexpected keyword argument runs dateutil's code too (no warning), so the `TypeError` is
 dateutil's. `parse_batch` and `isoparse_batch` handle these strings one by one in the same way.
+
+## Parity
+
+There were 0 differences in all of these comparisons:
+
+- python-dateutil's own `test_parser.py` and `test_isoparser.py`, run against dateutil and against
+  pyroid: the same outcome for each of 830 tests with 4.0.0 and 813 with 2.9.0.post0.
+- The parity suite: those tests, 747 strings from dateutil's and pandas' issue trackers under 10
+  option sets, Hypothesis, `parse_batch` and a corpus sample. 222,675 comparisons on CPython 3.12
+  and on free-threaded 3.14t, and 222,658 against 2.9.0.post0.
+- Every string of a corpus of 9,246,745 real ones from 35 public sources, through `parse` under
+  3 option sets and through `isoparse`. The sources are system and web server logs, email and
+  HTTP headers, CSV date columns, and CLDR's date formats in 760 locales. That is 147,947,920
+  comparisons, against 4.0.0 under `TZ=UTC`, `Europe/London` and `America/New_York` and
+  against 2.9.0.post0.
+
+Details: [Compatibility](../compatibility.md#dateutil).
+
+## Speed
+
+These timings are from a shared AWS EC2 c8g.16xlarge (64 Graviton cores), so they are
+indicative. The inputs are 608,343 real strings, up to 20,000 from each corpus source, those
+that dateutil cannot parse included, and every result was first checked against dateutil's.
+Against python-dateutil 2.9.0.post0 on CPython 3.12 (`bench/dateutil_bench.py`):
+
+| Call | µs per string | vs dateutil |
+|---|---:|---:|
+| `dateutil.parser.parse`, loop | 21.9 | 1× |
+| pyroid `parse`, loop | 1.77 | 12× |
+| `parse_batch`, list, 1 thread / all 64 | 1.15 / 0.55 | 19× / 40× |
+| `parse_batch`, Arrow, 1 thread / all 64 | 0.72 / 0.21 | 30× / 105× |
+| `pandas.to_datetime(format="mixed")` (its own parser, other results) | 24.4 | 0.9× |
+
+A loop of single calls also pays for a Python call per string and, for each string that fails, a
+raised and caught exception. Arrow output skips making a `datetime` per row on the calling
+thread, which is why it scales with threads. On free-threaded CPython 3.14t, dateutil itself on 8
+threads takes 4.0 µs per string (5.9×), and pyroid's Arrow batch 0.22 µs.
+
+On the 139,939 strings among them that `datetime.fromisoformat` accepts, `isoparse` takes
+0.97 µs against dateutil's 3.7 µs (3.8×, and 6.3× on 3.14t). `datetime.fromisoformat` takes
+0.13 µs, but it accepts other strings and returns other objects.
 
 ## Differences from dateutil
 

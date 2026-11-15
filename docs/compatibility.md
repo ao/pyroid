@@ -340,6 +340,7 @@ as returning an unchanged string as the same object.
 - [Differences from rouge-score](guides/metrics.md#differences-from-rouge-score) and
   [from sacrebleu](guides/metrics.md#differences-from-sacrebleu)
 - [Differences from json_repair](guides/json_repair.md#differences-from-json_repair)
+- [Differences from python-dateutil](guides/dateutil.md#differences-from-dateutil)
 - [Differences from datasketch](guides/datasketch.md#differences-from-datasketch)
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)
