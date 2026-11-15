@@ -190,7 +190,7 @@ fn token_hashes(tokens: &Bound<'_, PyAny>, bits: Sha1Bits) -> Option<Vec<u64>> {
             .map(|b| bits.hash(b.as_bytes()))
     };
     if let Ok(list) = tokens.cast_exact::<PyList>() {
-        list.iter().map(hash).collect()
+        crate::input::list_items(list).iter().map(hash).collect()
     } else if let Ok(tuple) = tokens.cast_exact::<PyTuple>() {
         tuple.iter().map(hash).collect()
     } else {
@@ -247,7 +247,7 @@ fn update_hashes<'py>(
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
     let scheme = scheme_arg(scheme)?;
     let mut hs = Vec::with_capacity(hashes.len());
-    for h in hashes.iter() {
+    for h in crate::input::list_items(hashes).iter() {
         if !h.is_exact_instance_of::<PyInt>() {
             return Ok(None);
         }
@@ -333,7 +333,7 @@ fn extract_doc(
         doc.cast::<PyTuple>().ok()
     };
     let items: Vec<Bound<'_, PyAny>> = if let Some(list) = list {
-        list.iter().collect()
+        crate::input::list_items(list).iter().collect()
     } else if let Some(tuple) = tuple {
         tuple.iter().collect()
     } else if mode == Tokens::BytesOnly {
@@ -382,7 +382,7 @@ fn extract_doc(
 /// `fallback`.
 fn extract_round(
     arena: &mut Arena,
-    docs: &Bound<'_, PyList>,
+    docs: &Bound<'_, PyTuple>,
     start: usize,
     budget: usize,
     mode: Tokens,
@@ -435,7 +435,7 @@ fn bulk_rows<T: Value>(
     py: Python<'_>,
     perm: &Permutations,
     initial: &[T],
-    docs: &Bound<'_, PyList>,
+    docs: &Bound<'_, PyTuple>,
     bits: Sha1Bits,
     mode: Tokens,
     threads: par::Threads,
@@ -546,7 +546,7 @@ fn bulk_any<'py>(
     scheme: Scheme,
     initial: &Bound<'py, PyAny>,
     permutations: &Bound<'py, PyAny>,
-    docs: &Bound<'py, PyList>,
+    docs: &Bound<'py, PyTuple>,
     bits: Sha1Bits,
     mode: Tokens,
     threads: par::Threads,
@@ -596,7 +596,7 @@ fn bulk<'py>(
         scheme,
         initial,
         permutations,
-        docs,
+        &crate::input::list_items(docs),
         bits,
         Tokens::BytesOnly,
         self::threads(threads),
@@ -621,7 +621,7 @@ fn batch_tokens<'py>(
         scheme,
         initial,
         permutations,
-        docs,
+        &crate::input::list_items(docs),
         bits,
         Tokens::BytesOrStr,
         self::threads(threads),

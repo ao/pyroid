@@ -27,7 +27,7 @@ use crate::batch::{
     BatchError, DocCost, doc_count, fill_rows, map_values, map_values_cost, transform,
 };
 use crate::errors::{input_error, type_name, with_note};
-use crate::input::{TextInput, Threads, ThreadsArg, texts_and_threads, threads};
+use crate::input::{TextInput, Threads, ThreadsArg, list_items, texts_and_threads, threads};
 
 fn unicode_version(v: &str) -> PyResult<UnicodeVersion> {
     UnicodeVersion::from_unidata_version(v)
@@ -281,7 +281,7 @@ fn token_lists(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<PyBackedStr>>> {
             format!("expected list[list[str]], got {}", type_name(obj)),
         ));
     };
-    outer
+    list_items(outer)
         .iter()
         .enumerate()
         .map(|(i, doc)| {
@@ -294,7 +294,8 @@ fn token_lists(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<PyBackedStr>>> {
                     ),
                 ));
             };
-            doc.iter()
+            list_items(doc)
+                .iter()
                 .map(|t| {
                     t.cast_into::<PyString>()
                         .map_err(|e| input_error(py, format!("expected str tokens: {e}")))
@@ -1208,7 +1209,8 @@ mod sentence {
 
     /// `bytes` (contents) or a path (`str` / `os.PathLike`) per source.
     fn source_specs(objs: &Bound<'_, PyList>) -> PyResult<Vec<SourceSpec>> {
-        objs.iter()
+        crate::input::list_items(objs)
+            .iter()
             .map(|o| {
                 if let Ok(b) = o.extract::<PyBackedBytes>() {
                     Ok(SourceSpec::Bytes(b))

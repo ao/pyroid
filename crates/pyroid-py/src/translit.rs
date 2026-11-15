@@ -384,7 +384,7 @@ impl<'py> Strs<'py> {
             });
         }
         let (kind, items): (Kind, Vec<Bound<'py, PyAny>>) = if let Ok(l) = obj.cast::<PyList>() {
-            (Kind::List, l.iter().collect())
+            (Kind::List, crate::input::list_items(l).iter().collect())
         } else {
             (Kind::Tuple, obj.cast::<PyTuple>()?.iter().collect())
         };
@@ -558,7 +558,9 @@ fn is_ascii<'py>(
     let is_list = string.is_instance_of::<PyList>();
     if is_list || string.is_instance_of::<PyTuple>() {
         let items: Vec<Bound<'py, PyAny>> = if is_list {
-            string.cast::<PyList>()?.iter().collect()
+            crate::input::list_items(string.cast::<PyList>()?)
+                .iter()
+                .collect()
         } else {
             string.cast::<PyTuple>()?.iter().collect()
         };
