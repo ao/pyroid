@@ -509,6 +509,30 @@ def test_parse_batch_arrow_without_pyarrow() -> None:
     assert col.to_pylist() == [D(2003, 9, 25), None]
 
 
+class _Month13(D):
+    @property
+    def month(self) -> int:
+        return 13
+
+
+class _FarOffset(D):
+    def utcoffset(self) -> Any:
+        return datetime.timedelta.max
+
+
+def test_parse_batch_arrow_checks_datetime_subclass_fields() -> None:
+    # Regression: an Arrow result is read through the datetime's attributes, which a subclass can
+    # override; invalid fields panicked (`expect`), and a huge offset could overflow.
+    from pyroid._pyroid import _testing
+
+    col = _testing.column(["2020-01-02 10:00"], large=False, chunks=1)
+    with pytest.raises(ValueError, match="not a valid date and time for an Arrow timestamp"):
+        pp.parse_batch(col, default=_Month13(2003, 9, 25))
+    with pytest.raises(ValueError, match=r"UTC offset .* out of range for an Arrow timestamp"):
+        pp.parse_batch(col, default=_FarOffset(2003, 9, 25))
+    assert pp.parse_batch(["2020-01-02 10:00"], default=_Month13(2003, 9, 25))[0].day == 2
+
+
 def test_isoparse_batch() -> None:
     xs = ["2003-09-25T10:49:41", "2003-W39-4", "x"]
     assert pp.isoparse_batch(xs, errors="coerce") == [pp.isoparse(xs[0]), pp.isoparse(xs[1]), None]

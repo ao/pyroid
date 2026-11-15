@@ -1327,7 +1327,9 @@ impl<'py, 'a> Finisher<'py, 'a> {
         timestr: &Bound<'py, PyAny>,
     ) -> PyResult<Instant> {
         if let Some(fast) = self.plan(p, remapped, timestr)? {
-            let naive = micros(&fast.f);
+            let Some(naive) = micros(&fast.f) else {
+                return py_instant(&self.object(&fast, p, remapped)?);
+            };
             match fast.tz {
                 TzPlan::Utc => return Ok(Some((naive, true))),
                 TzPlan::Local => {
@@ -1407,10 +1409,17 @@ struct Fast<'b, 'py> {
 /// An Arrow timestamp: microseconds since the epoch, and whether it is an instant (aware).
 type Instant = Option<(i64, bool)>;
 
-/// Microseconds since 1970-01-01T00:00 of valid naive fields.
-fn micros(f: &[i64; 7]) -> i64 {
-    let days = kernel::cal::ordinal(f[0], f[1], f[2]).expect("valid") - 719_163;
-    days * 86_400_000_000 + f[3] * 3_600_000_000 + f[4] * 60_000_000 + f[5] * 1_000_000 + f[6]
+/// Microseconds since 1970-01-01T00:00 of naive fields, if they are a valid date and time.
+fn micros(f: &[i64; 7]) -> Option<i64> {
+    let days = kernel::cal::ordinal(f[0], f[1], f[2])? - 719_163;
+    if !(0..24).contains(&f[3])
+        || !(0..60).contains(&f[4])
+        || !(0..60).contains(&f[5])
+        || !(0..1_000_000).contains(&f[6])
+    {
+        return None;
+    }
+    Some(days * 86_400_000_000 + f[3] * 3_600_000_000 + f[4] * 60_000_000 + f[5] * 1_000_000 + f[6])
 }
 
 /// [`Instant`] of a Python `datetime`.
@@ -1426,15 +1435,35 @@ fn py_instant(dt: &Bound<'_, PyAny>) -> PyResult<Instant> {
         g("second")?,
         g("microsecond")?,
     ];
-    let naive = micros(&f);
+    // A datetime subclass can report any fields and offset: they are checked, not trusted.
+    let Some(naive) = micros(&f) else {
+        return Err(PyValueError::new_err(format!(
+            "{} is not a valid date and time for an Arrow timestamp",
+            dt.repr()?
+        )));
+    };
     let off = dt.call_method0(pyo3::intern!(py, "utcoffset"))?;
     if off.is_none() {
         return Ok(Some((naive, false)));
     }
-    let off_us = off.getattr("days")?.extract::<i64>()? * 86_400_000_000
-        + off.getattr("seconds")?.extract::<i64>()? * 1_000_000
-        + off.getattr("microseconds")?.extract::<i64>()?;
-    Ok(Some((naive - off_us, true)))
+    let part = |n: &str, unit: i64| -> PyResult<Option<i64>> {
+        Ok(off.getattr(n)?.extract::<i64>()?.checked_mul(unit))
+    };
+    let days = part("days", 86_400_000_000)?;
+    let secs = part("seconds", 1_000_000)?;
+    let us = part("microseconds", 1)?;
+    let instant = days
+        .zip(secs)
+        .zip(us)
+        .and_then(|((days, secs), us)| days.checked_add(secs)?.checked_add(us))
+        .and_then(|off_us| naive.checked_sub(off_us));
+    match instant {
+        Some(t) => Ok(Some((t, true))),
+        None => Err(PyValueError::new_err(format!(
+            "the UTC offset of {} is out of range for an Arrow timestamp",
+            dt.repr()?
+        ))),
+    }
 }
 
 fn warn_unknown_tz(py: Python<'_>, h: &Hooks, name: &str) -> PyResult<()> {
@@ -2319,7 +2348,7 @@ fn iso_instant(iso: &Iso) -> Option<(i64, bool)> {
         ord += 1;
     }
     let [y, m, d] = kernel::cal::from_ordinal(ord)?;
-    let naive = micros(&[y, m, d, f[3], f[4], f[5], f[6]]);
+    let naive = micros(&[y, m, d, f[3], f[4], f[5], f[6]])?;
     Some(match iso.tz {
         None => (naive, false),
         Some(IsoTz::Utc) => (naive, true),
