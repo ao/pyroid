@@ -230,14 +230,36 @@ fn cached_override(
         return Ok(r);
     }
     let r = check()?;
-    cache.with(|c| {
-        let mut c = c.borrow_mut();
-        if c.len() > 256 {
-            c.clear();
-        }
-        c.insert(key, (ty.clone().unbind(), r.clone()));
+    let old = cache.with(|c| {
+        cache_insert(
+            &mut c.borrow_mut(),
+            256,
+            key,
+            (ty.clone().unbind(), r.clone()),
+        )
     });
+    drop(old);
     Ok(r)
+}
+
+/// Inserts into a per-thread cache, emptying it first when it holds more than `cap` entries, and
+/// returns what it removed. The caller drops that after the `RefCell` borrow ends: dropping a
+/// Python object can run any Python code (`__del__`, a type's dealloc), which may parse again and
+/// borrow the same cache.
+#[must_use]
+fn cache_insert<K: std::hash::Hash + Eq, V>(
+    c: &mut FxHashMap<K, V>,
+    cap: usize,
+    key: K,
+    value: V,
+) -> (FxHashMap<K, V>, Option<V>) {
+    let old = if c.len() > cap {
+        std::mem::take(c)
+    } else {
+        FxHashMap::default()
+    };
+    let replaced = c.insert(key, value);
+    (old, replaced)
 }
 
 /// The first hook `ty` defines differently from `base` (`None`: none).
@@ -385,13 +407,9 @@ fn tracked_type(h: &Hooks, info: &Bound<'_, PyAny>) -> PyResult<bool> {
     let t = ty.is_subclass(h.parserinfo.bind(py))?
         && ty.getattr("__setattr__")?.is(h.tracked_setattr.0.bind(py))
         && ty.getattr("__delattr__")?.is(h.tracked_setattr.1.bind(py));
-    TRACKED_TYPES.with(|c| {
-        let mut c = c.borrow_mut();
-        if c.len() > 256 {
-            c.clear();
-        }
-        c.insert(key, (ty.clone().unbind(), t));
-    });
+    let old = TRACKED_TYPES
+        .with(|c| cache_insert(&mut c.borrow_mut(), 256, key, (ty.clone().unbind(), t)));
+    drop(old);
     Ok(t)
 }
 
@@ -543,16 +561,18 @@ fn info_of(h: &Hooks, info: &Bound<'_, PyAny>) -> PyResult<(Arc<Compiled>, Optio
         let tz = info.getattr(intern!(py, "TZOFFSET"))?;
         let utc = info.getattr(intern!(py, "UTCZONE"))?;
         let class_lens = [container_len(&tz), container_len(&utc)];
-        TRACKED.with(|c| {
-            *c.borrow_mut() = Some(TrackedEntry {
+        // The entry it replaces is dropped after the borrow ends (see `cache_insert`).
+        let old = TRACKED.with(|c| {
+            c.replace(Some(TrackedEntry {
                 info: info.clone().unbind(),
                 generation,
                 class_objs: [tz.unbind(), utc.unbind()],
                 class_lens,
                 compiled: compiled.clone(),
                 settings,
-            });
+            }))
         });
+        drop(old);
     }
     Ok((compiled, settings))
 }
@@ -624,11 +644,20 @@ fn info_full(
         return Ok((c, settings, tables_tracked));
     }
     let compiled = Arc::new(compile(&objs));
-    INFOS.with(|c| {
+    // The entries it removes are dropped after the borrow ends (see `cache_insert`).
+    let evicted = INFOS.with(|c| {
         let mut c = c.borrow_mut();
-        c.retain(|e| e.info != key);
+        let mut evicted = Vec::new();
+        let mut i = 0;
+        while i < c.len() {
+            if c[i].info == key {
+                evicted.push(c.remove(i));
+            } else {
+                i += 1;
+            }
+        }
         if c.len() >= 8 {
-            c.remove(0);
+            evicted.push(c.remove(0));
         }
         c.push(InfoEntry {
             info: key,
@@ -636,7 +665,9 @@ fn info_full(
             lens,
             compiled: compiled.clone(),
         });
+        evicted
     });
+    drop(evicted);
     Ok((compiled, settings, tables_tracked))
 }
 
@@ -1056,7 +1087,8 @@ impl<'py, 'a> Finisher<'py, 'a> {
                     v.into_bound(py)
                 } else {
                     let v = self.h.tzlocal.bind(py).call0()?;
-                    TZLOCAL.with(|c| *c.borrow_mut() = Some((key, v.clone().unbind())));
+                    let old = TZLOCAL.with(|c| c.replace(Some((key, v.clone().unbind()))));
+                    drop(old);
                     v
                 };
                 Some(LocalZone {
@@ -1347,11 +1379,8 @@ impl<'py> TzOffsets<'py> {
             None => py.None().into_bound(py),
         };
         let t = h.tzoffset.bind(py).call1((py_name, off))?;
-        let mut m = self.0.borrow_mut();
-        if m.len() >= 256 {
-            m.clear();
-        }
-        m.insert(key, t.clone());
+        let old = cache_insert(&mut self.0.borrow_mut(), 255, key, t.clone());
+        drop(old);
         Ok(t)
     }
 }

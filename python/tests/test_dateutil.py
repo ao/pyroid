@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime
 import decimal
+import gc
 import io
 import pickle
 import subprocess
@@ -309,6 +310,38 @@ def test_tables_changed_while_other_threads_parse() -> None:
     stop.set()
     changer.join()
     assert not errors, errors[0]
+
+
+@pytest.mark.thread_unsafe(reason="replaces sys.unraisablehook")
+def test_parse_in_del_while_a_cache_drops_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression: the per-thread caches dropped old entries while their RefCell was borrowed. The
+    # last reference to a parserinfo (or to a table value) going with it ran __del__, whose parse
+    # borrowed the same cache: PyO3 panicked ("already mutably borrowed"), reported as unraisable.
+    unraisable: list[Any] = []
+    monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
+    seen: list[D] = []
+
+    class DelInfo(ppx.parserinfo):  # type: ignore[misc]
+        def __del__(self) -> None:
+            seen.append(pp.parse("2020-01-02"))
+
+    for _ in range(4):
+        assert pp.parser(DelInfo()).parse("10:00", default=DEFAULT) == D(2003, 9, 25, 10)
+
+    class DelInt(int):
+        def __del__(self) -> None:
+            seen.append(pp.parse("2020-01-02"))
+
+    for _ in range(12):
+        info: Any = pp.parserinfo()
+        info.TZOFFSET = {"XYZ": DelInt(3600)}
+        got = pp.parse("10:00 XYZ", parserinfo=info, default=DEFAULT)
+        assert got.utcoffset() == datetime.timedelta(hours=1)
+        del info, got
+    gc.collect()
+    assert not unraisable, unraisable[0].exc_value
+    assert len(seen) >= 3
+    assert all(d == D(2020, 1, 2) for d in seen)
 
 
 class LoudInfo(ppx.parserinfo):  # type: ignore[misc]
