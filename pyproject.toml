@@ -257,15 +257,6 @@ module = ["nemo_curator", "nemo_curator.*", "pandas", "pandas.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# python-dateutil's own (untyped) code, kept as released: pyroid.dateutil's reference path.
-module = [
-  "pyroid.dateutil._reference",
-  "pyroid.dateutil._isoreference",
-  "pyroid.dateutil._tzlite",
-]
-ignore_errors = true
-
-[[tool.mypy.overrides]]
 # python-dateutil ships no py.typed (types-python-dateutil is not a dependency).
 module = ["dateutil", "dateutil.*"]
 ignore_missing_imports = true
