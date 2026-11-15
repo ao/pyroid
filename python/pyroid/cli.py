@@ -2375,10 +2375,9 @@ def build_stage_parser(stage: str) -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point of the ``pyroid`` console script."""
-    from pyroid.integrations import _shards
-
     args = list(sys.argv[1:] if argv is None else argv)
     if args and args[0] == "run":
+        # The base install: `pyroid run` patches imports and needs neither pyarrow nor numpy.
         from pyroid.integrations import run
 
         return run(args[1:])
@@ -2387,6 +2386,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         a = build_parser().parse_args(args)
     _need_pyarrow()
+    from pyroid.integrations import _shards  # imports pyarrow
+
     term = _on_sigterm()
     try:
         return int(a.body(a))
