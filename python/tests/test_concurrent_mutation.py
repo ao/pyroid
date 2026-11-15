@@ -69,7 +69,7 @@ def hammer(
             while not stop.is_set():
                 change(i)
                 i += 1
-        except BaseException as e:  # noqa: BLE001 - reported below
+        except BaseException as e:
             errors.append(e)
 
     def caller(k: int) -> None:
@@ -80,7 +80,7 @@ def hammer(
                 if allowed is not None and not any(_same(out, a) for a in allowed):
                     bad.append(out)
                 calls[k] += 1
-        except BaseException as e:  # noqa: BLE001 - a PanicException is a BaseException
+        except BaseException as e:
             errors.append(e)
 
     threads = [threading.Thread(target=caller, args=(k,), daemon=True) for k in range(CALLERS)]
@@ -183,12 +183,12 @@ def test_json_repair() -> None:
 
 
 def test_trafilatura() -> None:
-    import pyroid.trafilatura as T
+    import pyroid.trafilatura as traf
 
     page = "<html><body><article><p>{}</p></article></body></html>"
     a = [page.format("First page text, long enough to be kept as the main content.")] * 12
     b = [page.format("Second page: another paragraph that trafilatura extracts.")] * 5
-    over_states(T.extract_batch, (a, b))
+    over_states(traf.extract_batch, (a, b))
 
 
 @pytest.fixture(scope="module")
@@ -217,17 +217,20 @@ def test_fasttext(ft_model: Any) -> None:
 
 
 def test_filters() -> None:
-    import pyroid.filters as F
+    import pyroid.filters as pf
 
-    over_states(F.gopher_quality, VARIANTS)
-    chain = [F.GopherRepetition(), F.C4Quality(), F.FineWebQuality()]
-    over_states(lambda d: F.apply(d, chain), VARIANTS)
+    over_states(pf.gopher_quality, VARIANTS)
+    chain = [pf.GopherRepetition(), pf.C4Quality(), pf.FineWebQuality()]
+    over_states(lambda d: pf.apply(d, chain), VARIANTS)
     # A config's word list, changed while the filter runs.
     words = ["the", "and", "of"]
-    cfg = F.GopherQuality(min_stop_words=2, stop_words=words)
+    cfg = pf.GopherQuality(min_stop_words=2, stop_words=words)
     word_states = (["the", "and", "of"], ["cat", "dog"])
-    allowed = [F.gopher_quality(DOCS_A, F.GopherQuality(min_stop_words=2, stop_words=w)) for w in word_states]
-    hammer(lambda: F.gopher_quality(DOCS_A, cfg), states(words, word_states), allowed)
+    allowed = [
+        pf.gopher_quality(DOCS_A, pf.GopherQuality(min_stop_words=2, stop_words=w))
+        for w in word_states
+    ]
+    hammer(lambda: pf.gopher_quality(DOCS_A, cfg), states(words, word_states), allowed)
 
 
 def test_filters_pack_lists() -> None:
@@ -253,14 +256,14 @@ def test_filters_pack_lists() -> None:
 
 
 def test_dedup() -> None:
-    import pyroid.dedup as D
+    import pyroid.dedup as dd
 
     near = ["one two three four five six seven eight nine ten eleven twelve"] * 80
     other = [f"doc {i} has words of its own, nothing else is like it at all {i}" for i in range(50)]
     variants: tuple[list[str], ...] = (near + other, other, [])
-    over_states(D.exact_dedup, variants)
-    over_states(D.minhash_dedup, variants)
-    over_states(D.simplify_text, variants)
+    over_states(dd.exact_dedup, variants)
+    over_states(dd.minhash_dedup, variants)
+    over_states(dd.simplify_text, variants)
 
 
 def test_datasketch() -> None:
@@ -408,6 +411,7 @@ def test_warc() -> None:
 
     reader = threading.Thread(target=read, daemon=True)
     reader.start()
+
     # Reading the record's `limit` while another thread reads the record used to deadlock on
     # GIL builds (the read held the record's lock across fh.read(), which released the GIL).
     def wait(i: int) -> None:
@@ -415,7 +419,8 @@ def test_warc() -> None:
 
     hammer(lambda: rec.raw_stream.limit, wait)
     reader.join(HANG)
-    assert done.is_set() and not reader.is_alive()
+    assert done.is_set()
+    assert not reader.is_alive()
     assert b"".join(got).endswith(body)
 
     # One iterator shared by every thread: each record comes out once.
@@ -428,4 +433,5 @@ def test_warc() -> None:
             return
 
     hammer(take, lambda i: time.sleep(0.001))
-    assert seen.count("response") == 200 and seen.count("warcinfo") == 1
+    assert seen.count("response") == 200
+    assert seen.count("warcinfo") == 1
