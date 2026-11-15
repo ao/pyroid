@@ -123,6 +123,9 @@ FineWeb dev slice, AWS EC2 c7i.4xlarge:
 | `dedup`, MinHash signatures | datatrove 0.10.1 | 34× |
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
 
+`pyroid.tabulate`, on AWS EC2 c7i.4xlarge: 17 to 30× faster than tabulate 0.10.0 on 1,000-row
+tables and 12 to 22× on 100,000 rows, in five output formats; 6 to 10× on a 5-row table.
+
 The other modules have only been measured in a Docker VM on a Mac, so treat these as indicative
 (one thread unless stated):
 

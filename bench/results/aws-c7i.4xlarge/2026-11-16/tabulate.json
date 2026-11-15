@@ -1,0 +1,637 @@
+{
+ "meta": {
+  "label": "AWS EC2 c7i.4xlarge (Intel Xeon, 16 vCPU), Amazon Linux 2023, Docker, CPython 3.12",
+  "python": "3.12.16",
+  "tabulate": "0.10.0",
+  "wcwidth": "0.9.4",
+  "pandas": "3.1.1",
+  "pyroid": "1.0.1",
+  "machine": "x86_64",
+  "cpu": "Intel(R) Xeon(R) Platinum 8488C",
+  "cpus": 16,
+  "loadavg_before": [
+   0.4423828125,
+   0.79638671875,
+   0.43115234375
+  ],
+  "loadavg_after": [
+   1.05908203125,
+   0.92041015625,
+   0.5478515625
+  ]
+ },
+ "results": [
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "simple",
+   "tabulate_s": 3.295100009381713e-05,
+   "pyroid_s": 1.0629999906086596e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "pipe",
+   "tabulate_s": 3.600599995934317e-05,
+   "pyroid_s": 1.1012999948434299e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "grid",
+   "tabulate_s": 3.677800009427301e-05,
+   "pyroid_s": 1.088400006210577e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "github",
+   "tabulate_s": 3.5260000004200265e-05,
+   "pyroid_s": 1.0623000093801238e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "html",
+   "tabulate_s": 3.854800002045522e-05,
+   "pyroid_s": 1.0335999945709773e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "text",
+   "format": "simple",
+   "tabulate_s": 3.972299998622475e-05,
+   "pyroid_s": 1.0761999988062598e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "text",
+   "format": "pipe",
+   "tabulate_s": 4.13490000710226e-05,
+   "pyroid_s": 1.1256000107096042e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "text",
+   "format": "grid",
+   "tabulate_s": 4.181700001026911e-05,
+   "pyroid_s": 1.1137000001326669e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "text",
+   "format": "github",
+   "tabulate_s": 4.039699990698864e-05,
+   "pyroid_s": 1.0876000033022137e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "text",
+   "format": "html",
+   "tabulate_s": 4.536499989171716e-05,
+   "pyroid_s": 1.0184000075241784e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "simple",
+   "tabulate_s": 4.0706000049794966e-05,
+   "pyroid_s": 1.0636000070007867e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "pipe",
+   "tabulate_s": 4.179899997325265e-05,
+   "pyroid_s": 1.1070000027757487e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "grid",
+   "tabulate_s": 4.130600007101748e-05,
+   "pyroid_s": 1.0956999972222548e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "github",
+   "tabulate_s": 4.06949999387507e-05,
+   "pyroid_s": 1.046499994572514e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "html",
+   "tabulate_s": 4.4915999978911714e-05,
+   "pyroid_s": 1.0187000043515582e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "simple",
+   "tabulate_s": 7.751900000130263e-05,
+   "pyroid_s": 1.2518999938038178e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "pipe",
+   "tabulate_s": 8.037500003865716e-05,
+   "pyroid_s": 1.2852000054408563e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "grid",
+   "tabulate_s": 8.434599999418424e-05,
+   "pyroid_s": 1.2854000033257762e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "github",
+   "tabulate_s": 7.883099999617116e-05,
+   "pyroid_s": 1.250399998298235e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "html",
+   "tabulate_s": 8.884900000794005e-05,
+   "pyroid_s": 1.237999993008998e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "text",
+   "format": "simple",
+   "tabulate_s": 0.00011728700008006854,
+   "pyroid_s": 1.262900002529932e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "text",
+   "format": "pipe",
+   "tabulate_s": 0.00011997599995083874,
+   "pyroid_s": 1.2815999980375636e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "text",
+   "format": "grid",
+   "tabulate_s": 0.00012209599992729636,
+   "pyroid_s": 1.2971000046491099e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "text",
+   "format": "github",
+   "tabulate_s": 0.00011723400007213058,
+   "pyroid_s": 1.2612999967132055e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "text",
+   "format": "html",
+   "tabulate_s": 0.000127445999964948,
+   "pyroid_s": 1.241200004642451e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "simple",
+   "tabulate_s": 9.702099998776248e-05,
+   "pyroid_s": 1.249199999620032e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "pipe",
+   "tabulate_s": 9.893500009638956e-05,
+   "pyroid_s": 1.2986000001546927e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "grid",
+   "tabulate_s": 0.00010268999994877959,
+   "pyroid_s": 1.2942000012117205e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "github",
+   "tabulate_s": 9.85089999403499e-05,
+   "pyroid_s": 1.271999997243256e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "html",
+   "tabulate_s": 0.00010814699999173172,
+   "pyroid_s": 1.2535999985630042e-05
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "numeric",
+   "format": "simple",
+   "tabulate_s": 0.024318687000004502,
+   "pyroid_s": 0.001400708999995004
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "numeric",
+   "format": "pipe",
+   "tabulate_s": 0.024747621999949843,
+   "pyroid_s": 0.001416410000047108
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "numeric",
+   "format": "grid",
+   "tabulate_s": 0.025364993999914986,
+   "pyroid_s": 0.0014325580000331684
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "numeric",
+   "format": "github",
+   "tabulate_s": 0.02460996700006035,
+   "pyroid_s": 0.0014094169999907535
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "numeric",
+   "format": "html",
+   "tabulate_s": 0.027917587000047206,
+   "pyroid_s": 0.0014949970000088797
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "text",
+   "format": "simple",
+   "tabulate_s": 0.04164682900000116,
+   "pyroid_s": 0.0015836069999295432
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "text",
+   "format": "pipe",
+   "tabulate_s": 0.04191790000004403,
+   "pyroid_s": 0.0015644500000462358
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "text",
+   "format": "grid",
+   "tabulate_s": 0.042786640000031184,
+   "pyroid_s": 0.0015938810000761805
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "text",
+   "format": "github",
+   "tabulate_s": 0.04195146500001101,
+   "pyroid_s": 0.001555935000055797
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "text",
+   "format": "html",
+   "tabulate_s": 0.04505921899999521,
+   "pyroid_s": 0.0017238180000731518
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "mixed",
+   "format": "simple",
+   "tabulate_s": 0.03065315100002408,
+   "pyroid_s": 0.001083290999986275
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "mixed",
+   "format": "pipe",
+   "tabulate_s": 0.031037203999972007,
+   "pyroid_s": 0.0010965259999693444
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "mixed",
+   "format": "grid",
+   "tabulate_s": 0.031741129000010915,
+   "pyroid_s": 0.0011177019999877302
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "mixed",
+   "format": "github",
+   "tabulate_s": 0.03110946200001763,
+   "pyroid_s": 0.0010909669999819016
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "mixed",
+   "format": "html",
+   "tabulate_s": 0.034196823999991466,
+   "pyroid_s": 0.0011513880000393328
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "numeric",
+   "format": "simple",
+   "tabulate_s": 3.2306735040000376,
+   "pyroid_s": 0.24012902599997688
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "numeric",
+   "format": "pipe",
+   "tabulate_s": 3.287732000999995,
+   "pyroid_s": 0.23210797599995203
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "numeric",
+   "format": "grid",
+   "tabulate_s": 3.375407997000025,
+   "pyroid_s": 0.26750430399999914
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "numeric",
+   "format": "github",
+   "tabulate_s": 3.260625303000097,
+   "pyroid_s": 0.23077207999995153
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "numeric",
+   "format": "html",
+   "tabulate_s": 3.6800532250000515,
+   "pyroid_s": 0.31867285399994216
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "text",
+   "format": "simple",
+   "tabulate_s": 5.3606232599998975,
+   "pyroid_s": 0.2986698569999362
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "text",
+   "format": "pipe",
+   "tabulate_s": 5.4017652250000765,
+   "pyroid_s": 0.30982223399996656
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "text",
+   "format": "grid",
+   "tabulate_s": 5.531878054000003,
+   "pyroid_s": 0.33258783200005837
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "text",
+   "format": "github",
+   "tabulate_s": 5.4231288820000145,
+   "pyroid_s": 0.3092200539999794
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "text",
+   "format": "html",
+   "tabulate_s": 5.8501917689999345,
+   "pyroid_s": 0.3628907369999297
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "mixed",
+   "format": "simple",
+   "tabulate_s": 3.95317827100007,
+   "pyroid_s": 0.19631934099993487
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "mixed",
+   "format": "pipe",
+   "tabulate_s": 3.982987678000086,
+   "pyroid_s": 0.1946375429999989
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "mixed",
+   "format": "grid",
+   "tabulate_s": 4.114464056999964,
+   "pyroid_s": 0.20946524999999383
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "mixed",
+   "format": "github",
+   "tabulate_s": 3.976855494000006,
+   "pyroid_s": 0.18073466199996346
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "mixed",
+   "format": "html",
+   "tabulate_s": 4.396661255000026,
+   "pyroid_s": 0.254295715000012
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "dataframe-numeric",
+   "format": "to_markdown",
+   "tabulate_s": 8.51710000233652e-05,
+   "pyroid_s": 4.271000000244385e-05
+  },
+  {
+   "size": "one",
+   "rows": 1,
+   "cols": 3,
+   "kind": "dataframe-mixed",
+   "format": "to_markdown",
+   "tabulate_s": 0.00011617100005878456,
+   "pyroid_s": 6.888300003993209e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "dataframe-numeric",
+   "format": "to_markdown",
+   "tabulate_s": 0.00015397499998925923,
+   "pyroid_s": 4.612400005044037e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "dataframe-mixed",
+   "format": "to_markdown",
+   "tabulate_s": 0.000184558000000834,
+   "pyroid_s": 7.569900003545627e-05
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "dataframe-numeric",
+   "format": "to_markdown",
+   "tabulate_s": 0.035177231999909964,
+   "pyroid_s": 0.0020358209999358223
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "dataframe-mixed",
+   "format": "to_markdown",
+   "tabulate_s": 0.034775384999989,
+   "pyroid_s": 0.0018688139999767373
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "dataframe-numeric",
+   "format": "to_markdown",
+   "tabulate_s": 4.706765025999971,
+   "pyroid_s": 0.3084017880000829
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "dataframe-mixed",
+   "format": "to_markdown",
+   "tabulate_s": 4.580750104999993,
+   "pyroid_s": 0.2891194500000438
+  }
+ ]
+}

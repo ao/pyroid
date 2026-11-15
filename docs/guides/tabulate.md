@@ -91,24 +91,27 @@ call raises [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError):
 
 ## Speed
 
-Measured on the EC2 c8g.16xlarge devbox (shared, indicative), CPython 3.12.16, best of several
-runs; each pyroid result was checked equal to tabulate's first:
+Measured on a dedicated AWS EC2 c7i.4xlarge (Intel Xeon, 16 vCPU), Amazon Linux 2023, Docker,
+CPython 3.12.16, tabulate 0.10.0 with wcwidth 0.9.4, best of several runs; each pyroid result was
+checked equal to tabulate's first:
 
 | Table | tabulate | pyroid | Speedup |
 |---|---:|---:|---:|
-| 5 rows x 3, mixed, `simple` | 86 µs | 13 µs | 6.6x |
-| 1,000 x 8, numbers, `simple` | 25.7 ms | 1.15 ms | 22x |
-| 1,000 x 8, text, `simple` | 44.4 ms | 1.26 ms | 35x |
-| 1,000 x 8, mixed, `grid` | 34.2 ms | 0.96 ms | 36x |
-| 100,000 x 10, numbers, `pipe` | 3.28 s | 179 ms | 18x |
-| 100,000 x 10, text, `pipe` | 5.58 s | 304 ms | 18x |
-| 100,000 x 10, mixed, `github` | 4.12 s | 143 ms | 29x |
-| `DataFrame.to_markdown()`, 1,000 x 8 numbers | 35.9 ms | 1.71 ms | 21x |
-| `DataFrame.to_markdown()`, 100,000 x 10 numbers | 4.58 s | 250 ms | 18x |
+| 5 rows x 3, mixed, `simple` | 97 µs | 12 µs | 7.8x |
+| 1,000 x 8, numbers, `simple` | 24.3 ms | 1.40 ms | 17x |
+| 1,000 x 8, text, `simple` | 41.6 ms | 1.58 ms | 26x |
+| 1,000 x 8, mixed, `grid` | 31.7 ms | 1.12 ms | 28x |
+| 100,000 x 10, numbers, `pipe` | 3.29 s | 232 ms | 14x |
+| 100,000 x 10, text, `pipe` | 5.40 s | 310 ms | 17x |
+| 100,000 x 10, mixed, `github` | 3.98 s | 181 ms | 22x |
+| `DataFrame.to_markdown()`, 1,000 x 8 numbers | 35.2 ms | 2.04 ms | 17x |
+| `DataFrame.to_markdown()`, 100,000 x 10 numbers | 4.71 s | 308 ms | 15x |
 
-All formats and sizes: `bench/results/aws-c8g.16xlarge-shared/2026-11-14/tabulate.json`, made by
-`bench/tabulate/tabulate_bench.py`. A one-row table costs about 9 µs (tabulate: 13 µs), most of
-it fixed per-call work. pyroid.tabulate runs on free-threaded CPython without enabling the GIL.
+All formats and sizes are on the [benchmarks page](../benchmarks.md#pyroidtabulate)
+(`bench/results/aws-c7i.4xlarge/2026-11-16/tabulate.json`, made by
+`bench/tabulate/tabulate_bench.py`). A one-row table of three numbers takes 11 µs (tabulate:
+33 µs), most of it fixed per-call work. pyroid.tabulate runs on free-threaded CPython without
+enabling the GIL.
 
 ## Versions {#versions}
 

@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """Time pyroid.tabulate against tabulate on generated tables.
 
-    python bench/tabulate/tabulate_bench.py [--quick] [--json out.json]
+    python bench/tabulate/tabulate_bench.py [--quick] [--json out.json] [--label MACHINE]
 
-Tables: small (5x3), medium (1,000x8), large (100,000x10), each numeric (ints and floats)
-and text-heavy (words, some numeric strings), plus mixed; formats simple, pipe, grid, github,
-html; and DataFrame.to_markdown() (tabulate's "pipe" with the index). Every pyroid result is
-checked equal to tabulate's before it is timed. Reports the best of N runs of each.
+Tables: one row (1x3), small (5x3), medium (1,000x8), large (100,000x10), each numeric (ints
+and floats) and text-heavy (words, some numeric strings), plus mixed; formats simple, pipe, grid,
+github, html; and DataFrame.to_markdown() (tabulate's "pipe" with the index). Every pyroid result
+is checked equal to tabulate's before it is timed. Reports the best of N runs of each. The JSON
+records the versions, the CPU and the load average before and after (no hostname).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import random
 import sys
 import time
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 import pyroid
@@ -63,10 +66,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--json")
+    ap.add_argument("--label", help="where it ran, stored in the JSON")
     args = ap.parse_args()
-    sizes = [("small", 5, 3), ("medium", 1000, 8), ("large", 100_000, 10)]
+    load_before = os.getloadavg()
+    sizes = [("one", 1, 3), ("small", 5, 3), ("medium", 1000, 8), ("large", 100_000, 10)]
     if args.quick:
-        sizes = [("small", 5, 3), ("medium", 1000, 8), ("large", 20_000, 10)]
+        sizes = [("one", 1, 3), ("small", 5, 3), ("medium", 1000, 8), ("large", 20_000, 10)]
     formats = ["simple", "pipe", "grid", "github", "html"]
     results = []
     for size, n, cols in sizes:
@@ -133,11 +138,29 @@ def main() -> None:
                     flush=True,
                 )
     if args.json:
+        cpu = None
+        try:
+            with open("/proc/cpuinfo", encoding="utf-8") as f:
+                names = (ln.split(":", 1)[1].strip() for ln in f if ln.startswith("model name"))
+                cpu = next(names, None)
+        except OSError:
+            pass
+        try:
+            wcwidth: str | None = version("wcwidth")
+        except PackageNotFoundError:
+            wcwidth = None
         meta = {
+            "label": args.label,
             "python": sys.version.split()[0],
             "tabulate": ref.__version__,
+            "wcwidth": wcwidth,
+            "pandas": pd.__version__ if pd is not None else None,
             "pyroid": pyroid.__version__,
             "machine": platform.machine(),
+            "cpu": cpu,
+            "cpus": os.cpu_count(),
+            "loadavg_before": load_before,
+            "loadavg_after": os.getloadavg(),
         }
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump({"meta": meta, "results": results}, f, indent=1)
