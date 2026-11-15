@@ -12,7 +12,7 @@ import operator
 from numbers import Number
 from typing import Any
 
-from pyroid.jmespath import functions
+from pyroid.jmespath import _find, functions
 
 __all__ = ["GraphvizVisitor", "Options", "TreeInterpreter", "Visitor"]
 
@@ -91,13 +91,21 @@ class Options:
         self.custom_functions = custom_functions
 
 
-class _Expression:
+class _Expression:  # noqa: N801 - jmespath's name
+    """An expression reference (``&expr``) as functions receive it."""
+
     def __init__(self, expression: Any, interpreter: Any) -> None:
         self.expression = expression
         self.interpreter = interpreter
 
     def visit(self, node: Any, *args: Any, **kwargs: Any) -> Any:
+        """Evaluate ``node`` (normally ``self.expression``) on a value."""
         return self.interpreter.visit(node, *args, **kwargs)
+
+
+if _find.jmespath() is not None:
+    # jmespath's own class, so isinstance checks and reprs in custom functions see it.
+    from jmespath.visitor import _Expression  # type: ignore[assignment] # noqa: F811
 
 
 class Visitor:

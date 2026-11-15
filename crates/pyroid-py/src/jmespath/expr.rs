@@ -7,10 +7,43 @@ use std::sync::Arc;
 
 use pyo3::exceptions::PyRecursionError;
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyInt, PyList, PyString};
 use pyroid_core::jmespath::{Comparator, Node};
 
 use super::functions::Builtin;
+
+/// An expref's expression, with its dict AST (shared by `.parsed` and the `_Expression`
+/// objects made for it, as jmespath shares the node).
+pub(crate) struct ExprefNode {
+    pub expr: Expr,
+    pub dict: PyOnceLock<Py<PyAny>>,
+}
+
+impl std::fmt::Debug for ExprefNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExprefNode")
+            .field("expr", &self.expr)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ExprefNode {
+    pub(crate) fn new(expr: Expr) -> Arc<Self> {
+        Arc::new(Self {
+            expr,
+            dict: PyOnceLock::new(),
+        })
+    }
+
+    pub(crate) fn dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        self.dict
+            .get_or_try_init(py, || {
+                to_dict(py, &self.expr).map(|d| d.into_any().unbind())
+            })
+            .map(|d| d.bind(py).clone())
+    }
+}
 
 /// One node. Values are jmespath's: the same objects `.parsed` holds.
 #[derive(Debug)]
@@ -19,7 +52,7 @@ pub(crate) enum Expr {
     /// when visited, as in jmespath); the name object is kept for `.parsed`.
     Comparator(Option<Comparator>, Py<PyAny>, Box<Expr>, Box<Expr>),
     Current,
-    Expref(Arc<Expr>),
+    Expref(Arc<ExprefNode>),
     Function {
         name: Py<PyAny>,
         builtin: Option<Builtin>,
@@ -60,7 +93,7 @@ pub(crate) fn frames(e: &Expr) -> usize {
         | Expr::Projection(l, r)
         | Expr::ValueProjection(l, r) => frames(l).max(frames(r)) + 1,
         Expr::FilterProjection(a, b, c) => frames(a).max(frames(b)).max(frames(c)) + 1,
-        Expr::Expref(x) => frames(x) + 6,
+        Expr::Expref(x) => frames(&x.expr) + 6,
         Expr::Function { args, .. } => max(args).max(6) + 2,
         Expr::Flatten(x) | Expr::Not(x) | Expr::KeyValPair(_, x) => frames(x) + 1,
         Expr::IndexExpression(v)
@@ -84,7 +117,7 @@ pub(crate) fn from_node(py: Python<'_>, node: Node<Bound<'_, PyAny>>) -> PyResul
     Ok(match node {
         Node::Comparator(c, l, r) => Expr::Comparator(Some(c), intern(py, c.name()), b(l)?, b(r)?),
         Node::Current => Expr::Current,
-        Node::Expref(x) => Expr::Expref(Arc::new(from_node(py, *x)?)),
+        Node::Expref(x) => Expr::Expref(ExprefNode::new(from_node(py, *x)?)),
         Node::FunctionExpression(name, args) => Expr::Function {
             builtin: builtin_of(&name),
             name: name.unbind(),
@@ -191,7 +224,7 @@ pub(crate) fn from_dict(node: &Bound<'_, PyAny>, depth: usize) -> PyResult<Expr>
             Expr::Comparator(op, v.unbind(), child_box(0)?, child_box(1)?)
         }
         "current" => Expr::Current,
-        "expref" => Expr::Expref(Arc::new(child(0)?)),
+        "expref" => Expr::Expref(ExprefNode::new(child(0)?)),
         "function_expression" => {
             let name = node.get_item("value")?;
             Expr::Function {
@@ -265,7 +298,7 @@ pub(crate) fn to_dict<'py>(py: Python<'py>, e: &Expr) -> PyResult<Bound<'py, PyD
         }
         Expr::Expref(x) => {
             d.set_item("type", "expref")?;
-            d.set_item("children", one(x)?)?;
+            d.set_item("children", PyList::new(py, [x.dict(py)?])?)?;
         }
         Expr::Function { name, args, .. } => {
             d.set_item("type", "function_expression")?;

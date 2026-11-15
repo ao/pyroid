@@ -94,6 +94,7 @@ _native._configure(
         "ceil": math.ceil,
         "floor": math.floor,
         "TreeInterpreter": visitor.TreeInterpreter,
+        "Expression": visitor._Expression,
         "GraphvizVisitor": visitor.GraphvizVisitor,
         "fallback": _fallback,
         "stocks": _stocks(),

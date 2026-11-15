@@ -18,9 +18,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple};
 use pyroid_core::jmespath::Comparator;
 
-use super::expr::Expr;
+use super::expr::{Expr, ExprefNode};
 use super::functions::{self, unknown_function};
-use super::{ExprRef, config};
+use super::{Interpreter, config};
 
 /// How functions are called: natively, or through a custom `Functions` object.
 #[derive(Debug)]
@@ -87,7 +87,7 @@ impl<'py, 'a> Ctx<'py, 'a> {
 /// A function argument: a value, or an expref not yet made into an `_Expression`.
 pub(crate) enum Val<'py, 'a> {
     Py(Bound<'py, PyAny>),
-    Expref(&'a Arc<Expr>),
+    Expref(&'a Arc<ExprefNode>),
 }
 
 impl<'py> Val<'py, '_> {
@@ -99,8 +99,15 @@ impl<'py> Val<'py, '_> {
     }
 }
 
-fn expref<'py>(ctx: &Ctx<'py, '_>, e: &Arc<Expr>) -> PyResult<Bound<'py, PyAny>> {
-    Ok(Bound::new(ctx.py, ExprRef::new(Arc::clone(e), Arc::clone(ctx.opts)))?.into_any())
+/// `_Expression(node, interpreter)`: jmespath's class (pyroid's copy without jmespath), with
+/// an interpreter that evaluates natively.
+fn expref<'py>(ctx: &Ctx<'py, '_>, e: &Arc<ExprefNode>) -> PyResult<Bound<'py, PyAny>> {
+    let py = ctx.py;
+    let interpreter = Bound::new(py, Interpreter::new(Arc::clone(e), Arc::clone(ctx.opts)))?;
+    config(py)?
+        .expression_cls
+        .bind(py)
+        .call1((e.dict(py)?, interpreter))
 }
 
 /// `isinstance(x, list)`.
@@ -152,7 +159,6 @@ fn is_plain_scalar_or_list(x: &Bound<'_, PyAny>) -> bool {
         || x.is_exact_instance_of::<PyFloat>()
         || x.is_instance_of::<PyBool>()
         || x.is_exact_instance_of::<PyTuple>()
-        || x.is_exact_instance_of::<ExprRef>()
 }
 
 /// `_is_actual_number`: not a bool, and an instance of `numbers.Number`.
@@ -224,10 +230,7 @@ pub(crate) fn is_false(x: &Bound<'_, PyAny>) -> PyResult<bool> {
     if let Ok(b) = x.cast::<PyBool>() {
         return Ok(!b.is_true());
     }
-    if x.is_exact_instance_of::<PyInt>()
-        || x.is_exact_instance_of::<PyFloat>()
-        || x.is_exact_instance_of::<ExprRef>()
-    {
+    if x.is_exact_instance_of::<PyInt>() || x.is_exact_instance_of::<PyFloat>() {
         return Ok(false);
     }
     let py = x.py();

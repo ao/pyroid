@@ -14,8 +14,8 @@ use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString};
 
+use super::config;
 use super::interp::{self, Ctx, Val, is_list};
-use super::{ExprRef, config};
 
 macro_rules! builtins {
     ($($variant:ident = $name:literal: [$($arg:expr),*] $(variadic $v:literal)?;)*) => {
@@ -123,8 +123,6 @@ pub(crate) fn type_name(v: &Val<'_, '_>) -> PyResult<Cow<'static, str>> {
         "int"
     } else if o.is_exact_instance_of::<PyFloat>() {
         "float"
-    } else if o.is_exact_instance_of::<ExprRef>() {
-        "_Expression"
     } else {
         return Ok(Cow::Owned(o.get_type().name()?.to_cow()?.into_owned()));
     }))
@@ -375,7 +373,7 @@ pub(crate) fn call<'py>(
                 Val::Expref(e) => {
                     let e = Arc::clone(e);
                     interp::for_each(ctx, &a, |el| {
-                        out.push(interp::visit(ctx, &e, &el, depth + 3)?);
+                        out.push(interp::visit(ctx, &e.expr, &el, depth + 3)?);
                         Ok(true)
                     })?;
                 }
@@ -610,7 +608,7 @@ fn apply<'py>(
     depth: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
     match expref {
-        Val::Expref(e) => interp::visit(ctx, e, x, depth),
+        Val::Expref(e) => interp::visit(ctx, &e.expr, x, depth),
         Val::Py(o) => {
             let expression = o.getattr("expression")?;
             o.call_method1("visit", (expression, x))

@@ -74,6 +74,7 @@ struct Config {
     reverse_slice: Py<PyAny>,
     zero_one: Py<PyAny>,
     tree_interpreter: Py<PyAny>,
+    expression_cls: Py<PyAny>,
     graphviz: Py<PyAny>,
     fallback: Py<PyAny>,
     getframe: Py<PyAny>,
@@ -169,6 +170,7 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         reverse_slice: reverse_slice.unbind(),
         zero_one: PyTuple::new(py, [0, 1])?.into_any().unbind(),
         tree_interpreter: get("TreeInterpreter")?,
+        expression_cls: get("Expression")?,
         graphviz: get("GraphvizVisitor")?,
         fallback: get("fallback")?,
         getframe: sys.getattr("_getframe")?.unbind(),
@@ -676,58 +678,27 @@ fn tree_from_dict(parsed: &Bound<'_, PyAny>) -> PyResult<Tree> {
     Ok(tree)
 }
 
-/// An expression reference (``&expr``), as jmespath passes it to functions.
-#[pyclass(module = "pyroid.jmespath.visitor", name = "_Expression", frozen)]
-pub(crate) struct ExprRef {
-    node: Arc<Expr>,
+/// The interpreter behind the `_Expression` objects pyroid makes: `visit(node, value)`
+/// evaluates natively (the expref's own node without reading it back).
+#[pyclass(
+    module = "pyroid.jmespath.visitor",
+    name = "_NativeInterpreter",
+    frozen
+)]
+pub(crate) struct Interpreter {
+    node: Arc<expr::ExprefNode>,
     opts: Arc<Opts>,
-    dict: PyOnceLock<Py<PyAny>>,
-    interpreter: PyOnceLock<Py<PyAny>>,
 }
 
-impl ExprRef {
-    fn new(node: Arc<Expr>, opts: Arc<Opts>) -> Self {
-        Self {
-            node,
-            opts,
-            dict: PyOnceLock::new(),
-            interpreter: PyOnceLock::new(),
-        }
+impl Interpreter {
+    fn new(node: Arc<expr::ExprefNode>, opts: Arc<Opts>) -> Self {
+        Self { node, opts }
     }
 }
 
 #[pymethods]
-impl ExprRef {
-    /// The referenced expression's AST node.
-    #[getter]
-    fn expression<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        self.dict
-            .get_or_try_init(py, || {
-                expr::to_dict(py, &self.node).map(|d| d.into_any().unbind())
-            })
-            .map(|d| d.bind(py).clone())
-    }
-
-    /// A jmespath ``TreeInterpreter`` with the same options (pure Python).
-    #[getter]
-    fn interpreter<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        self.interpreter
-            .get_or_try_init(py, || {
-                let options = self
-                    .opts
-                    .options
-                    .as_ref()
-                    .map_or_else(|| py.None(), |o| o.clone_ref(py));
-                config(py)?
-                    .tree_interpreter
-                    .bind(py)
-                    .call1((options,))
-                    .map(Bound::unbind)
-            })
-            .map(|d| d.bind(py).clone())
-    }
-
-    /// Evaluate ``node`` (normally ``self.expression``) on ``value``.
+impl Interpreter {
+    /// Evaluate ``node`` (a dict AST node) on ``value``.
     #[pyo3(signature = (node, *args, **kwargs))]
     fn visit<'py>(
         &self,
@@ -744,19 +715,27 @@ impl ExprRef {
             _ => return Err(PyTypeError::new_err("visit() takes a node and a value")),
         };
         // _Expression.visit -> TreeInterpreter.visit
-        let own = self.dict.get(py).is_some_and(|d| node.is(d));
+        let own = self.node.dict.get(py).is_some_and(|d| node.is(d));
         if own {
-            return run(
-                py,
-                &self.node,
-                expr::frames(&self.node),
-                &value,
-                &self.opts,
-                1,
-            );
+            let e = &self.node.expr;
+            return run(py, e, expr::frames(e), &value, &self.opts, 1);
         }
         let e = expr::from_dict(node, 0)?;
         run(py, &e, expr::frames(&e), &value, &self.opts, 1)
+    }
+
+    /// A pure-Python ``TreeInterpreter`` with the same options, for other attributes.
+    fn __getattr__<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+        let options = self
+            .opts
+            .options
+            .as_ref()
+            .map_or_else(|| py.None(), |o| o.clone_ref(py));
+        config(py)?
+            .tree_interpreter
+            .bind(py)
+            .call1((options,))?
+            .getattr(name)
     }
 }
 
@@ -876,6 +855,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(purge, &m)?)?;
     m.add_function(wrap_pyfunction!(_cache_len, &m)?)?;
     m.add_class::<ParsedResult>()?;
-    m.add_class::<ExprRef>()?;
+    m.add_class::<Interpreter>()?;
     parent.add_submodule(&m)
 }
