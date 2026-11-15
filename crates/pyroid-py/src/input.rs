@@ -152,11 +152,14 @@ fn docs_par<'py>(
             .map_err(|e| crate::interrupt::pool_error(&e))?
             .min(total / PAR_MIN_CHARS_PER_TASK)
     };
-    let out = if tasks < 2 {
+    let serial = || {
         strs.iter()
             .enumerate()
             .map(|(i, s)| backed(s.bind(py), Some(i)))
-            .collect::<PyResult<Vec<_>>>()?
+            .collect::<PyResult<Vec<_>>>()
+    };
+    let out = if tasks < 2 {
+        serial()?
     } else {
         // Attach-sized ranges, dealt out in order to at most `tasks` tasks.
         let ranges = attach_ranges(&lens, total.div_ceil(tasks).min(PAR_CHARS_PER_ATTACH));
@@ -178,12 +181,17 @@ fn docs_par<'py>(
         // Back on the calling thread (attached): every PyBackedStr is dropped
         // here, and the error of the lowest failing index is raised here.
         let failed = first_err.into_inner();
-        if failed != usize::MAX {
+        if failed == usize::MAX {
+            parts.into_iter().flatten().collect()
+        } else {
             drop(parts);
-            return Err(backed(strs[failed].bind(py), Some(failed))
-                .expect_err("a str that failed to encode on the pool fails again"));
+            match backed(strs[failed].bind(py), Some(failed)) {
+                Err(e) => return Err(e),
+                // A failure that does not repeat (a MemoryError on the pool):
+                // the calling thread extracts the batch instead.
+                Ok(_) => serial()?,
+            }
         }
-        parts.into_iter().flatten().collect()
     };
     match not_str {
         Some(err) => Err(err),
