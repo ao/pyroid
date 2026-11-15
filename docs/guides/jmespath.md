@@ -115,12 +115,12 @@ the only shared state and is locked.
 
 ## Speed
 
-On a shared AWS EC2 c8g.16xlarge (Graviton4) with CPython 3.12, which makes these numbers
-indicative: a one-field `search()` on a boto3-style response takes 0.19 µs (jmespath: 1.6 µs) and a
-compiled one 0.11 µs; projections, paths, filters and multi-selects on the same response run 10 to 21
-times faster than jmespath's. Over 10,000 records, projections and filters run 20 to 24 times
-faster, `sort_by` and `max_by` 14 to 15 times, `sum` 9 times; over 1,000,000 records, 8 to 23
-times. A new expression every call (parse and search) takes 5.6 µs (jmespath: 52 µs). The
+On a dedicated AWS EC2 c7i.4xlarge (Intel Xeon) with CPython 3.12: a one-field `search()` on a
+boto3-style response takes 0.14 µs (jmespath: 1.5 µs) and a compiled one 0.09 µs; projections,
+paths, filters and multi-selects on the same response run 10 to 23 times faster than jmespath's.
+Over 10,000 records, projections and filters run 14 to 20 times faster, `sort_by` and `max_by` 11
+to 12 times, `sum` 6 times; over 1,000,000 records, 4 to 17 times. A new expression every call
+(parse and search) takes 5.6 µs (jmespath: 53 µs). The
 [benchmarks page](../benchmarks.md#pyroidjmespath) has the table.
 
 Most of what remains per call is CPython's own work: building the result lists and dicts,

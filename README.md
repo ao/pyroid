@@ -123,6 +123,9 @@ FineWeb dev slice, AWS EC2 c7i.4xlarge:
 | `dedup`, MinHash signatures | datatrove 0.10.1 | 34× |
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
 
+`pyroid.jmespath`, on AWS EC2 c7i.4xlarge: 10 to 23× faster than jmespath 1.1.0 on single
+queries of a boto3-style response, 6 to 20× over 10,000 records.
+
 The other modules have only been measured in a Docker VM on a Mac, so treat these as indicative
 (one thread unless stated):
 
@@ -136,9 +139,6 @@ The other modules have only been measured in a Docker VM on a Mac, so treat thes
 | `jieba.lcut`, a batch, 1 / 8 threads | jieba 0.42.1 | 24× / 58× |
 | `nltk.sent_tokenize` / `word_tokenize` | NLTK 3.10.4 | 60× / 31× |
 | `filters`, FineWeb-2 settings, Chinese / Japanese | datatrove 0.10.1 | 44× / 7.8× |
-
-`pyroid.jmespath`, on a shared AWS EC2 c8g.16xlarge (indicative): 8 to 21× faster than jmespath
-1.1.0 on single queries of a boto3-style response, 9 to 24× over 10,000 records.
 
 `pyroid.json_repair` stays linear on 13 input families where json_repair is quadratic, so the gap
 grows with the input. The [benchmarks page](https://ataiva.com/open-source/pyroid/docs/benchmarks/) has each
