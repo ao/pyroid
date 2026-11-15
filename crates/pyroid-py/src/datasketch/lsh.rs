@@ -451,13 +451,18 @@ fn signature(
         return Ok(None);
     }
     let arr = hv.cast::<PyUntypedArray>()?;
-    if arr.ndim() < min_ndim.max(1) || !arr.is_c_contiguous() || product(arr.shape()).is_none() {
+    // The shape is read once: another thread may reshape the caller's array
+    // in place (`a.shape = ...`) meanwhile. The values must then fill it.
+    let shape = arr.shape().to_vec();
+    let Some(len) = product(&shape) else {
+        return Ok(None);
+    };
+    if shape.len() < min_ndim.max(1) || !arr.is_c_contiguous() {
         return Ok(None);
     }
-    Ok(values_of(arr).map(|values| Signature {
-        values,
-        shape: arr.shape().to_vec(),
-    }))
+    Ok(values_of(arr)
+        .filter(|values| with_values!(values, v => v.len()) == len)
+        .map(|values| Signature { values, shape }))
 }
 
 /// The band keys a `slow` callback returned (a list of bytes).
