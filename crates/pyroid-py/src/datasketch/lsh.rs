@@ -100,7 +100,7 @@ fn capacity_error(e: CapacityError) -> PyErr {
 }
 
 fn pool_error(e: par::PoolError) -> PyErr {
-    PyroidError::new_err(e.to_string())
+    crate::interrupt::pool_error(&e)
 }
 
 fn corrupt() -> PyErr {
@@ -549,7 +549,7 @@ impl LshNative {
         t: par::Threads,
     ) -> PyResult<Vec<Vec<BandKey>>> {
         let bands = self.bands(self.num_tables);
-        py.detach(|| {
+        crate::interrupt::detach_batch(py, || {
             par::map(items.len(), t, |j| match &items[j] {
                 Hs::Python(hs) => hs.clone(),
                 Hs::Native(sig) => sig.band_keys(bands.expect("native band keys need r")),
@@ -633,7 +633,7 @@ impl LshNative {
     {
         let st = lock(py, &self.state)?;
         let core = &st.core;
-        let found = py.detach(|| queries(core)).map_err(pool_error)?;
+        let found = crate::interrupt::detach_batch(py, || queries(core)).map_err(pool_error)?;
         let lists = found
             .iter()
             .map(|ids| PyList::new(py, st.objs(py, ids)?))
@@ -794,8 +794,7 @@ impl LshNative {
         }
         let t = self::threads(threads);
         let hss = match self.bands(self.num_tables) {
-            Some(bands) => py
-                .detach(|| sig.band_keys_many(bands, t))
+            Some(bands) => crate::interrupt::detach_batch(py, || sig.band_keys_many(bands, t))
                 .map_err(pool_error)?,
             None => return Err(PyValueError::new_err("this index has no integer band size")),
         };
@@ -1206,6 +1205,16 @@ impl ForestNative {
             None => Ok(None),
             Some(hs) => bytes_list(py, hs).map(Some),
         }
+    }
+
+    /// `sorted_hashtables[table] = keys`, restoring a pickle datasketch made.
+    fn set_sorted(&self, py: Python<'_>, table: usize, keys: Vec<PyBackedBytes>) -> PyResult<()> {
+        self.check_table(table)?;
+        let keys: Vec<&[u8]> = keys.iter().map(|k| &**k).collect();
+        lock(py, &self.state)?
+            .core
+            .set_sorted(table, &keys)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// `forest.keys[key] = hs`.

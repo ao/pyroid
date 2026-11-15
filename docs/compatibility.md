@@ -369,7 +369,7 @@ checked. Each library is checked once per process, by whichever module asks firs
 | Library | Release reproduced | Checked by |
 |---|---|---|
 | ftfy | ftfy 6.3.1 | `import pyroid.ftfy`, `pyroid.patch("ftfy")` |
-| fastText | fasttext-predict 0.9.2.4; fasttext 0.9.3 gives the same results | `import pyroid.fasttext`, `pyroid.patch("fasttext")` |
+| fastText | fasttext-predict 0.9.2.4, or fasttext-numpy2-wheel 0.9.2 and fasttext-wheel 0.9.2 when one of them is installed; fasttext 0.9.3 gives the same results | `import pyroid.fasttext`, `pyroid.patch("fasttext")` |
 | datatrove | datatrove 0.10.1 | `import pyroid.filters`, `pyroid.dedup`, `pyroid.warc` or `pyroid.integrations.datatrove` |
 | PyThaiNLP | pythainlp 5.4.0 | the Thai tokenizer, when it reads the installed package's word list and model |
 | SudachiDict | sudachidict-core 20261015 | the Japanese tokenizer, when it reads the installed package's dictionary |

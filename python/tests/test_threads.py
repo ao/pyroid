@@ -416,6 +416,16 @@ def test_num_threads_env_set_before_first_use(run_python: RunPython) -> None:
     assert proc.stdout.strip() == "2"
 
 
+@pytest.mark.thread_unsafe(reason="runs subprocesses")
+def test_empty_num_threads_env_is_unset(run_python: RunPython) -> None:
+    code = "from pyroid._pyroid import _testing; print(_testing.pool_size())"
+    unset = run_python(code, env={"PYROID_NUM_THREADS": None, "RAYON_NUM_THREADS": None})
+    for value in ("", "  "):
+        empty = run_python(code, env={"PYROID_NUM_THREADS": value, "RAYON_NUM_THREADS": None})
+        assert empty.returncode == 0, empty.stderr
+        assert empty.stdout == unset.stdout
+
+
 @pytest.mark.thread_unsafe(reason="runs a subprocess")
 @pytest.mark.parametrize("value", ["abc", "0", "-1", "1.5"])
 def test_invalid_num_threads_env(run_python: RunPython, value: str) -> None:

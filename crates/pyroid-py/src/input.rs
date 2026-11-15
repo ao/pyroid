@@ -13,7 +13,7 @@ use pyo3::types::{PyBool, PyByteArray, PyBytes, PyList, PyMemoryView, PyString, 
 use pyroid_core::par;
 
 use crate::arrow::{self, ArrowStrings};
-use crate::errors::{PyroidError, input_error, type_name, with_note};
+use crate::errors::{input_error, type_name, with_note};
 
 const EXPECTED: &str = "expected str, list[str], tuple[str, ...] or an Arrow string array/column";
 
@@ -149,7 +149,7 @@ fn docs_par<'py>(
         1
     } else {
         par::max_tasks(threads)
-            .map_err(|e| PyroidError::new_err(e.to_string()))?
+            .map_err(|e| crate::interrupt::pool_error(&e))?
             .min(total / PAR_MIN_CHARS_PER_TASK)
     };
     let out = if tasks < 2 {
@@ -174,7 +174,7 @@ fn docs_par<'py>(
                     part
                 })
             })
-            .map_err(|e| PyroidError::new_err(e.to_string()))?;
+            .map_err(|e| crate::interrupt::pool_error(&e))?;
         // Back on the calling thread (attached): every PyBackedStr is dropped
         // here, and the error of the lowest failing index is raised here.
         let failed = first_err.into_inner();

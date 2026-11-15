@@ -27,11 +27,11 @@ use pyroid_core::metrics::sacrebleu::{
 use pyroid_core::par::PoolError;
 
 use crate::batch::SINGLE_DOC_DETACH_BYTES;
-use crate::errors::{PyroidError, input_error, type_name, with_note};
+use crate::errors::{input_error, type_name, with_note};
 use crate::input::{Threads, arg_note, threads};
 
 fn pool_error(e: PoolError) -> PyErr {
-    PyroidError::new_err(e.to_string())
+    crate::interrupt::pool_error(&e)
 }
 
 fn tokenizer(name: &str) -> PyResult<Tokenizer> {
@@ -138,7 +138,7 @@ fn run<R: Send>(py: Python<'_>, n: usize, bytes: usize, f: impl FnOnce() -> R + 
     if n <= 1 && bytes < SINGLE_DOC_DETACH_BYTES {
         f()
     } else {
-        py.detach(f)
+        crate::interrupt::detach_batch(py, f)
     }
 }
 

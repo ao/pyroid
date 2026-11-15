@@ -120,6 +120,14 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
 - `batch::map_values(py, &x, threads, f) -> Vec<Option<R>>` for anything else (scores,
   hashes, labels); build the output yourself (e.g. `PyList::new` from an exact-size
   iterator, a numpy array via `PyArray1::from_vec`).
+- Detach for a batch with `crate::interrupt::detach_batch(py, || ...)`, not `py.detach`: its
+  `par` maps check for Ctrl-C every 100 ms and return `PoolError::interrupted()`, which
+  `crate::interrupt::pool_error` turns into the signal handler's exception (convert every
+  `PoolError` with it). A `par` map that updates shared state in place goes in
+  `par::uninterruptible`; long loops of your own take a `par::Stop` (`map_tasks_stoppable`).
+- Call `crate::np::ready(py, ...)` before a batch whose result holds numpy arrays (or before the
+  first array or array type check): rust-numpy's first lookup of NumPy's C API runs Python code
+  inside an `expect`, so a Ctrl-C there would be a `PanicException`.
 - Kernels are **pure Rust**: they run detached on rayon workers and must never call
   Python (clippy's `disallowed-methods` bans `Python::attach`). Anything that needs the
   interpreter happens before or after the batch, on the calling thread.

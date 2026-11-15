@@ -18,6 +18,7 @@ from collections.abc import Callable, Hashable, Iterable
 from types import TracebackType
 from typing import Any, Self
 
+from pyroid._pyroid import PyroidError
 from pyroid._pyroid import datasketch as _native
 from pyroid.datasketch import _common
 from pyroid.datasketch._common import _check_scheme_consistency
@@ -109,6 +110,19 @@ def _rows(values: Any, h: Any) -> Any:
 def _length_error(h: Any, n: Any) -> ValueError:
     # %d as datasketch (it also formats a float num_perm as an int).
     return ValueError("Expecting minhash with length %d, got %d" % (h, n))  # noqa: UP031
+
+
+class _NoValues:
+    """A stand-in MinHash with no native hash values.
+
+    The native index then asks for its band keys (restoring a datasketch pickle, where they
+    are stored).
+    """
+
+    hashvalues = None
+
+
+_NO_VALUES = _NoValues()
 
 
 def _same_length(keys: list[Any], n: int) -> None:
@@ -234,6 +248,10 @@ class MinHashLSH:
             if tp != "dict":
                 raise ValueError(f"Unknown storage type: {tp}")
         self.hashranges = [(i * self.r, (i + 1) * self.r) for i in range(self.b)]
+        self._init_index()
+
+    def _init_index(self) -> None:
+        """An empty native index over ``hashranges``, and its views."""
         self._index = _LSHNative(len(self.hashranges), _band_size(self.r))
         self.hashtables: list[UnorderedStorage] = [
             DictSetStorageView(self._index, i) for i in range(len(self.hashranges))
@@ -242,6 +260,49 @@ class MinHashLSH:
         # The permutation scheme of the indexed MinHash, learned from the
         # first insert.
         self._minhash_scheme: str | None = None
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore a pickle: pyroid's own, or one datasketch made (under ``pyroid.patch``).
+
+        datasketch pickles its attributes, the dict storages included; their band keys
+        are inserted into a new native index, and the result is checked against them.
+        """
+        if "_index" in state:
+            self.__dict__.update(state)
+            return
+        stored = getattr(state.get("keys"), "_dict", None)
+        tables = [getattr(t, "_dict", None) for t in state.get("hashtables") or ()]
+        if state.get("hashfunc") or stored is None or None in tables:
+            raise PyroidError(
+                "pyroid.datasketch.MinHashLSH: this index was pickled by datasketch with "
+                "Redis or Cassandra storage or a hashfunc, which pyroid does not port; "
+                "load it without pyroid.patch('datasketch')"
+            )
+        self._buffer_size = state.get("_buffer_size", 50000)
+        self.h, self.b, self.r = state["h"], state["b"], state["r"]
+        self.prepickle = state["prepickle"]
+        self._require_bytes_keys = state.get("_require_bytes_keys", False)
+        self.hashfunc = None
+        self._H = self._byteswap
+        self.hashranges = [tuple(x) for x in state["hashranges"]]
+        self._init_index()
+        self._minhash_scheme = state.get("_minhash_scheme")
+        n = len(self.hashranges)
+        for key, hs in stored.items():
+            # A key inserted again (check_duplication=False) holds one run of band keys per insert.
+            for i in range(0, len(hs), n):
+                run = list(hs[i : i + n])
+                self._index.insert(key, _NO_VALUES, False, lambda _m, k, run=run: run[:k])
+        got = []
+        for t in range(n):
+            view = self.hashtables[t]  # a storage view: keys() is its method, not a dict's
+            got.append({h: view.get(h) for h in view.keys()})  # noqa: SIM118
+        want = [{h: set(v) for h, v in table.items() if v} for table in tables]
+        if got != want:
+            raise PyroidError(
+                "pyroid.datasketch.MinHashLSH: this pickle made by datasketch has hash "
+                "tables that do not match its keys; load it without pyroid.patch('datasketch')"
+            )
 
     @property
     def buffer_size(self) -> int:
