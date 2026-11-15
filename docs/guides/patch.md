@@ -184,7 +184,7 @@ usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
 
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
-`warcio` / `nemo_curator` giving pyroid's drop-ins. The Python processes it starts
+`warcio` / `nemo_curator` / `dateutil` giving pyroid's drop-ins. The Python processes it starts
 (multiprocessing workers, subprocesses) are patched too.
 
 options:

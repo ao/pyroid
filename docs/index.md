@@ -49,6 +49,7 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 |  | [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | [NeMo Curator](https://github.com/NVIDIA-NeMo/Curator) 1.4.0's heuristic document filters and string modifiers | same scores, exceptions and modified text ([parity](compatibility.md#nemo)) |
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
 | JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
+| Dates | [`pyroid.dateutil.parser`](guides/dateutil.md) | [python-dateutil](https://github.com/dateutil/dateutil)'s `parse` and `isoparse`, 4.0.0, 3.0.0 and 2.9.0.post0 | same datetimes, tz objects, exceptions and messages ([parity](compatibility.md#dateutil)) |
 
 ## Example: cleaning LLM training data
 
@@ -126,7 +127,7 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 |---|---|
 | [`pyroid clean`](guides/cli.md) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files, with datatrove's output document for document |
 | [Large datasets](guides/large-datasets.md) | the same commands over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards in datatrove's file format |
-| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`, `nemo_curator` and `dateutil` give pyroid's functions, in code you don't own |
 | [datatrove steps](guides/datatrove.md) | `pyroid.integrations.datatrove`: datatrove's pipeline steps with the same names and signatures, `Trafilatura` included, as a one-import change |
 | [NeMo Curator stages](guides/nemo-curator.md) | `pyroid.integrations.nemo_curator`: NeMo Curator 1.4.0's CPU text stages, subclassing NeMo's classes with the same arguments |
 | [Hugging Face `datasets`](guides/huggingface.md) | `pyroid.integrations.hf`: batched callables for `Dataset.map` and `Dataset.filter`, and the FineWeb recipe |
