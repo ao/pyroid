@@ -343,9 +343,10 @@ fn parse_errors() {
 #[test]
 fn recursion_budget() {
     let deep = |n: usize| format!("{}a{}", "(".repeat(n), ")".repeat(n));
+    // A debug build's frames are large: room for 60 levels on the test thread's 2 MiB.
     let budget = Budget {
         frames: 100,
-        ..Budget::UNLIMITED
+        stack: 1 << 20,
     };
     // Parentheses cost two frames a level (`_expression`, `_token_nud_lparen`).
     assert!(parse(&code_points(&deep(40)), &mut Mock::default(), budget).is_ok());
