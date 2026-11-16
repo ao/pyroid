@@ -13,6 +13,7 @@ import textwrap
 import threading
 import warnings
 from collections import OrderedDict
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
@@ -335,7 +336,7 @@ def _ansible_data() -> Any:
 def _outcome(search: Any, expression: str, data: Any) -> Any:
     try:
         return search(expression, data)
-    except Exception as e:  # noqa: BLE001 - the outcome is compared
+    except Exception as e:
         return (type(e).__name__, str(e))
 
 
@@ -363,6 +364,7 @@ def test_type_maps_take_additions_as_ansible_makes_them() -> None:
             assert functions.REVERSE_TYPES_MAP is real.functions.REVERSE_TYPES_MAP
             assert functions.TYPES_MAP is real.functions.TYPES_MAP
             assert after == {e: _outcome(real.search, e, data) for e in _ANSIBLE_CASES}
+
         # A custom Functions subclass reads the same maps.
         class Custom(functions.Functions):
             pass
@@ -378,7 +380,9 @@ def test_type_maps_take_additions_as_ansible_makes_them() -> None:
 @pytest.mark.thread_unsafe(reason="changes the module-wide type maps")
 def test_types_map_takes_additions() -> None:
     saved = dict(functions.TYPES_MAP)
-    data = {"servers": [{"name": _TaggedStr("server11"), "n": 1}, {"name": _TaggedStr("db"), "n": 2}]}
+    data = {
+        "servers": [{"name": _TaggedStr("server11"), "n": 1}, {"name": _TaggedStr("db"), "n": 2}]
+    }
     try:
         functions.TYPES_MAP["_TaggedStr"] = "string"
         assert jp.search("sort_by(servers, &name)[].name", data) == ["db", "server11"]
@@ -430,9 +434,10 @@ def test_unhashable_expressions_raise_the_cache_lookups_error() -> None:
     # from hash().
     search: Any = jp.search
     compile_: Any = jp.compile
+    cache: dict[Any, Any] = {}
     for expression in (["a"], bytearray(b"a"), {"a": 1}):
         with pytest.raises(TypeError) as caught:
-            {}.get(expression)
+            cache.get(expression)
         with pytest.raises(TypeError) as raised:
             search(expression, {})
         assert str(raised.value) == str(caught.value)
@@ -471,7 +476,7 @@ def test_tokenize_takes_what_jmespath_lexes() -> None:
 @pytest.mark.thread_unsafe(reason="warnings and the parse cache")
 def test_deprecated_literal_warning_points_at_the_caller() -> None:
     # J7: the warning pointed at pyroid/jmespath/__init__.py.
-    calls = [
+    calls: list[Callable[[str], Any]] = [
         lambda e: jp.search(e, {}),
         lambda e: jp.compile(e),
         lambda e: parser.Parser().parse(e),
@@ -584,7 +589,7 @@ def test_long_chains_compile_and_raise_recursion_error(run_python: Any, stack: i
     # J1: `a || a || ...`, `a[][]...` and the like (20,000 terms, 40 KB) crashed the interpreter.
     r = run_python(f"STACK = {stack}\n" + _LONG_CHAINS, timeout=600)
     assert r.returncode == 0, r.stderr[-2000:]
-    runs = [eval(line) for line in r.stdout.splitlines()]  # noqa: S307 - our own child's lists
+    runs = [eval(line) for line in r.stdout.splitlines()]
     assert len(runs) == (3 if stack else 2)
     # At the default limit, as in jmespath; with a raised one the native stack decides.
     assert runs[0] == ["RecursionError", "ParseError"] * 5
