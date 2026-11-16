@@ -8,33 +8,39 @@ packaging.version.InvalidVersion`` catches pyroid's errors too.
 
 from __future__ import annotations
 
+import importlib
 import re
 import sys
+import warnings
 from typing import Any, NamedTuple
 
+from pyroid._pyroid import FallbackWarning, PyroidError
 from pyroid._pyroid import packaging as _native
 
-try:
-    import packaging.version as _pv
-except ImportError:  # pragma: no cover - exercised by the no-packaging CI job
-    _pv = None  # type: ignore[assignment]
+def _import(name: str) -> Any:
+    try:
+        return importlib.import_module(name)
+    except ImportError:
+        return None
 
+
+_pv = _import("packaging.version")
 #: Whether packaging itself is importable (its classes are used where pyroid's would be copies).
 HAVE_PACKAGING = _pv is not None and not getattr(_pv, "__pyroid__", False)
+_ps = _import("packaging.specifiers") if HAVE_PACKAGING else None
+#: The installed packaging release ("" without it).
+INSTALLED = getattr(_import("packaging"), "__version__", "") if HAVE_PACKAGING else ""
+# pyroid objects claim packaging's classes (`__class__`) only for the releases whose private
+# attributes they reproduce.
+_CLAIM = HAVE_PACKAGING and INSTALLED.startswith("26.")
 
 
 class _InvalidVersion(ValueError):
-    """Raised when a version string is not a valid version.
-
-    >>> Version("invalid")
-    Traceback (most recent call last):
-        ...
-    packaging.version.InvalidVersion: Invalid version: 'invalid'
-    """
+    """Raised when a version string is not a valid version."""
 
 
-_InvalidVersion.__module__ = "pyroid.packaging.version"
-_InvalidVersion.__name__ = _InvalidVersion.__qualname__ = "InvalidVersion"
+class _InvalidSpecifier(ValueError):
+    """Raised when attempting to create a :class:`Specifier` with an invalid specifier string."""
 
 
 class _VersionTuple(NamedTuple):
@@ -46,19 +52,19 @@ class _VersionTuple(NamedTuple):
     local: tuple[int | str, ...] | None
 
 
-_VersionTuple.__module__ = "pyroid.packaging.version"
-_VersionTuple.__name__ = _VersionTuple.__qualname__ = "_Version"
+for _cls, _mod, _name in (
+    (_InvalidVersion, "pyroid.packaging.version", "InvalidVersion"),
+    (_VersionTuple, "pyroid.packaging.version", "_Version"),
+    (_InvalidSpecifier, "pyroid.packaging.specifiers", "InvalidSpecifier"),
+):
+    _cls.__module__ = _mod
+    _cls.__name__ = _cls.__qualname__ = _name
 
-if HAVE_PACKAGING:
-    InvalidVersion: type[ValueError] = _pv.InvalidVersion
-    _Version: Any = getattr(_pv, "_Version", _VersionTuple)
-    PACKAGING_VERSION_CLASS: type | None = _pv.Version
-    PACKAGING_BASE_VERSION: type | None = getattr(_pv, "_BaseVersion", None)
-else:
-    InvalidVersion = _InvalidVersion
-    _Version = _VersionTuple
-    PACKAGING_VERSION_CLASS = None
-    PACKAGING_BASE_VERSION = None
+InvalidVersion: type[ValueError] = _pv.InvalidVersion if HAVE_PACKAGING else _InvalidVersion
+_Version: Any = getattr(_pv, "_Version", _VersionTuple) if HAVE_PACKAGING else _VersionTuple
+InvalidSpecifier: type[ValueError] = (
+    _ps.InvalidSpecifier if _ps is not None else _InvalidSpecifier
+)
 
 # packaging.version.VERSION_PATTERN, verbatim.
 _VERSION_PATTERN = r"""
@@ -158,12 +164,166 @@ def _nonstr_version(version: Any) -> tuple[Any, ...]:
     )
 
 
+# Specifier._specifier_regex_str, verbatim.
+SPECIFIER_REGEX_STR = r"""
+        (?:
+            (?:
+                # The identity operators allow for an escape hatch that will
+                # do an exact string match of the version you wish to install.
+                # This will not be parsed by PEP 440 and we cannot determine
+                # any semantic meaning from it. This operator is discouraged
+                # but included entirely as an escape hatch.
+                ===  # Only match for the identity operator
+                \s*
+                [^\s;)]*  # The arbitrary version can be just about anything,
+                          # we match everything except for whitespace, a
+                          # semi-colon for marker support, and a closing paren
+                          # since versions can be enclosed in them.
+            )
+            |
+            (?:
+                # The (non)equality operators allow for wild card and local
+                # versions to be specified so we have to define these two
+                # operators separately to enable that.
+                (?:==|!=)            # Only match for equals and not equals
+
+                \s*
+                v?
+                (?:[0-9]+!)?          # epoch
+                [0-9]+(?:\.[0-9]+)*   # release
+
+                # You cannot use a wild card and a pre-release, post-release, a dev or
+                # local version together so group them with a | and make them optional.
+                (?:
+                    \.\*  # Wild card syntax of .*
+                    |
+                    (?a:                                  # pre release
+                        [-_\.]?
+                        (alpha|beta|preview|pre|a|b|c|rc)
+                        [-_\.]?
+                        [0-9]*
+                    )?
+                    (?a:                                  # post release
+                        (?:-[0-9]+)|(?:[-_\.]?(post|rev|r)[-_\.]?[0-9]*)
+                    )?
+                    (?a:[-_\.]?dev[-_\.]?[0-9]*)?         # dev release
+                    (?a:\+[a-z0-9]+(?:[-_\.][a-z0-9]+)*)? # local
+                )?
+            )
+            |
+            (?:
+                # The compatible operator requires at least two digits in the
+                # release segment.
+                (?:~=)               # Only match for the compatible operator
+
+                \s*
+                v?
+                (?:[0-9]+!)?          # epoch
+                [0-9]+(?:\.[0-9]+)+   # release  (We have a + instead of a *)
+                (?:                   # pre release
+                    [-_\.]?
+                    (alpha|beta|preview|pre|a|b|c|rc)
+                    [-_\.]?
+                    [0-9]*
+                )?
+                (?:                                   # post release
+                    (?:-[0-9]+)|(?:[-_\.]?(post|rev|r)[-_\.]?[0-9]*)
+                )?
+                (?:[-_\.]?dev[-_\.]?[0-9]*)?          # dev release
+            )
+            |
+            (?:
+                # All other operators only allow a sub set of what the
+                # (non)equality operators do. Specifically they do not allow
+                # local versions to be specified nor do they allow the prefix
+                # matching wild cards.
+                (?:<=|>=|<|>)
+
+                \s*
+                v?
+                (?:[0-9]+!)?          # epoch
+                [0-9]+(?:\.[0-9]+)*   # release
+                (?a:                   # pre release
+                    [-_\.]?
+                    (alpha|beta|preview|pre|a|b|c|rc)
+                    [-_\.]?
+                    [0-9]*
+                )?
+                (?a:                                   # post release
+                    (?:-[0-9]+)|(?:[-_\.]?(post|rev|r)[-_\.]?[0-9]*)
+                )?
+                (?a:[-_\.]?dev[-_\.]?[0-9]*)?          # dev release
+            )
+        )
+        """
+
+SPECIFIER_REGEX = re.compile(r"\s*" + SPECIFIER_REGEX_STR + r"\s*", re.VERBOSE | re.IGNORECASE)
+
+_WARNED: set[str] = set()
+
+
+def _fallback_warning(what: str) -> None:
+    if what not in _WARNED:
+        _WARNED.add(what)
+        warnings.warn(
+            f"pyroid.packaging: {what} runs packaging's own code (slow path). This warning is "
+            "shown once.",
+            FallbackWarning,
+            stacklevel=4,
+        )
+
+
+def _ranges_module() -> Any:
+    ranges = _import("packaging._ranges") if HAVE_PACKAGING else None
+    if ranges is None:
+        raise PyroidError(
+            "SpecifierSet.to_range(), is_subset(), is_superset() and is_disjoint() use "
+            "packaging's version-range code: pip install packaging==26.3"
+        )
+    return ranges
+
+
+def _delegate(name: str, obj: Any, *args: Any) -> Any:
+    """Calls pyroid hands to packaging's own code (its version-range algebra)."""
+    ranges = _ranges_module()
+    if name == "_to_ranges":
+        op, version = obj.operator, obj.version
+        if op == "===":
+            return ranges.FULL_RANGE
+        # The class packaging's ranges module uses (pyroid's under the patch).
+        version_cls = sys.modules["packaging.version"].Version
+        return ranges.bounds_for_spec(op, version, version_cls(version.removesuffix(".*")))
+    if name == "_get_ranges":
+        return ranges.intersect_specifier_bounds(s._to_ranges() for s in obj._specs)
+    from packaging.ranges import VersionRange
+
+    if name == "to_range":
+        _fallback_warning("SpecifierSet.to_range()")
+        return VersionRange._from_specifier_set(obj)
+    # is_subset / is_superset / is_disjoint: SpecifierSet._check_relation_operand, then ranges.
+    (other,) = args
+    from pyroid.packaging.specifiers import SpecifierSet
+
+    packaging_set = getattr(_ps, "SpecifierSet", SpecifierSet)
+    if not isinstance(other, (SpecifierSet, packaging_set)):
+        raise TypeError("expected a SpecifierSet")
+    if obj._has_arbitrary or other._has_arbitrary:
+        raise ValueError("set relations do not support === specifiers")
+    _fallback_warning(f"SpecifierSet.{name}()")
+    return getattr(obj.to_range(), name)(other.to_range())
+
+
 _native._configure(
     {
         "InvalidVersion": InvalidVersion,
         "nonstr_version": _nonstr_version,
         "_Version": _Version,
-        "packaging_Version": PACKAGING_VERSION_CLASS,
-        "packaging_BaseVersion": PACKAGING_BASE_VERSION,
+        "packaging_Version": _pv.Version if _CLAIM else None,
+        "packaging_BaseVersion": getattr(_pv, "_BaseVersion", None) if HAVE_PACKAGING else None,
+        "InvalidSpecifier": InvalidSpecifier,
+        "spec_regex": SPECIFIER_REGEX,
+        "delegate": _delegate,
+        "packaging_Specifier": _ps.Specifier if _CLAIM else None,
+        "packaging_SpecifierSet": _ps.SpecifierSet if _CLAIM else None,
     }
 )

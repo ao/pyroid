@@ -12,7 +12,7 @@ versions.
 
 from __future__ import annotations
 
-from pyroid.packaging import _compat, version
+from pyroid.packaging import _compat, specifiers, version
 
 #: The packaging release whose behaviour this module reproduces.
 PACKAGING_VERSION = "26.3"
@@ -20,9 +20,9 @@ __version__ = PACKAGING_VERSION
 
 #: The packaging submodules pyroid ports (``pyroid.patch("packaging")`` without packaging installed
 #: provides shims for these).
-PORTED = ("version",)
+PORTED = ("version", "specifiers")
 
-__all__ = ["PACKAGING_VERSION", "PORTED", "version"]
+__all__ = ["PACKAGING_VERSION", "PORTED", "specifiers", "version"]
 
 del _compat
 
@@ -36,4 +36,6 @@ def _patch_targets() -> list[tuple[str, str, object]]:
     return [
         ("packaging.version", "Version", version.Version),
         ("packaging.version", "parse", version.parse),
+        ("packaging.specifiers", "Specifier", specifiers.Specifier),
+        ("packaging.specifiers", "SpecifierSet", specifiers.SpecifierSet),
     ]

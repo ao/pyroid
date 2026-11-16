@@ -146,6 +146,19 @@ pub fn parse_str(py: Python<'_>, s: &Bound<'_, PyString>) -> PyResult<Version> {
     Ok(parsed.version)
 }
 
+/// The state of one of packaging's own `Version` objects (its slots).
+pub fn from_packaging(py: Python<'_>, v: &Bound<'_, PyAny>) -> PyResult<Option<Version>> {
+    let get = |name: &str| v.getattr(name);
+    let slots = (|| -> PyResult<Option<Version>> {
+        from_slots(py, &get("_epoch")?, &get("_release")?, &get("_pre")?, &get("_post")?, &get("_dev")?, &get("_local")?)
+    })();
+    match slots {
+        Ok(Some(found)) => Ok(Some(found)),
+        // Something that is not packaging 26's layout: its string form.
+        _ => parse_any(py, &v.str()?.into_any()).map(Some),
+    }
+}
+
 /// `Version(x)` for any `x`, as packaging 26.3's `__init__` treats it.
 pub fn parse_any(py: Python<'_>, x: &Bound<'_, PyAny>) -> PyResult<Version> {
     if let Ok(s) = x.cast::<PyString>() {

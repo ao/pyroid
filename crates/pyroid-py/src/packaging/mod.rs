@@ -6,6 +6,8 @@
 //! `_configure` at import (packaging's own exception classes when packaging is installed), and
 //! turns the `__class__` claim (see [`claims`]) on or off.
 
+mod cell;
+mod specifiers;
 mod version;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,7 +17,6 @@ use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyType};
 
-pub use version::PyVersion;
 
 /// What `_configure` registered.
 #[derive(Debug)]
@@ -31,6 +32,16 @@ struct Config {
     packaging_version: Option<Py<PyType>>,
     /// packaging's `_BaseVersion` (`None` without packaging): compared through `_key`.
     packaging_base_version: Option<Py<PyType>>,
+    invalid_specifier: Py<PyAny>,
+    /// pyroid's copy of `Specifier._regex` (for non-`str` arguments and lone surrogates).
+    spec_regex: Py<PyAny>,
+    /// `dict.fromkeys`.
+    dict_fromkeys: Py<PyAny>,
+    /// `_delegate(name, obj, *args)`: what pyroid hands to packaging's own code.
+    delegate: Py<PyAny>,
+    /// packaging's `Specifier` and `SpecifierSet` (the `__class__` claim).
+    packaging_specifier: Option<Py<PyType>>,
+    packaging_specifier_set: Option<Py<PyType>>,
 }
 
 static CONFIG: PyOnceLock<Config> = PyOnceLock::new();
@@ -71,6 +82,12 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         newobj: py.import("copyreg")?.getattr("__newobj__")?.unbind(),
         packaging_version: opt_type("packaging_Version")?,
         packaging_base_version: opt_type("packaging_BaseVersion")?,
+        invalid_specifier: get("InvalidSpecifier")?,
+        spec_regex: get("spec_regex")?,
+        dict_fromkeys: py.get_type::<PyDict>().getattr("fromkeys")?.unbind(),
+        delegate: get("delegate")?,
+        packaging_specifier: opt_type("packaging_Specifier")?,
+        packaging_specifier_set: opt_type("packaging_SpecifierSet")?,
     };
     let _ = CONFIG.set(py, c);
     Ok(())
@@ -88,5 +105,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_configure, &m)?)?;
     m.add_function(wrap_pyfunction!(_set_claims, &m)?)?;
     version::register(&m)?;
+    specifiers::register(&m)?;
     parent.add_submodule(&m)
 }
