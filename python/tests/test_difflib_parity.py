@@ -342,7 +342,7 @@ def test_get_close_matches(
 
 def test_get_close_matches_ties() -> None:
     # Equal scores: the larger string first; equal strings: the earlier first (heapq.nlargest).
-    possibilities = ["ab", "ba", "ab", "aa", "bb"] * 30
+    possibilities = ["ab", "ca", "ab", "aa", "bb"] * 30
     for n in (1, 2, 3, 7, 1000):
         assert pd.get_close_matches("ab", possibilities, n, 0.0) == difflib.get_close_matches(
             "ab", possibilities, n, 0.0

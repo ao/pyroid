@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import itertools
 import json
 import random
 import sys
@@ -46,7 +47,7 @@ def read_lines(path: Path) -> list[str] | None:
 
 def source_pairs(libs: list[Path]) -> list[tuple[str, Path, Path]]:
     pairs = []
-    for old, new in zip(libs, libs[1:]):
+    for old, new in itertools.pairwise(libs):
         for path in sorted(new.rglob("*.py")):
             rel = path.relative_to(new)
             if "site-packages" in rel.parts or "test" in rel.parts[:1]:
@@ -106,7 +107,7 @@ def compare_names(label: str, names: list[str], queries: int, counts: dict[str, 
     names = list(dict.fromkeys(n for n in names if n))
     picked = rng.sample(names, min(queries, len(names)))
     qs = [misspell(rng, n) for n in picked]
-    expected = [difflib.SequenceMatcher(None, q, n).ratio() for q, n in zip(qs, picked)]
+    expected = [difflib.SequenceMatcher(None, q, n).ratio() for q, n in zip(qs, picked, strict=True)]
     same("ratio_batch", [r.hex() for r in expected], [r.hex() for r in pd.ratio_batch(qs, picked)], label)
     counts["name pairs scored"] += len(qs)
     pool = names[:20_000]
@@ -133,7 +134,15 @@ def main() -> None:
     args = p.parse_args()
     warnings.simplefilter("error", pd.FallbackWarning)
     counts: dict[str, int] = dict.fromkeys(
-        ["file pairs", "changed file pairs", "lines", "diffs compared", "names", "name pairs scored", "close-match queries"],
+        [
+            "file pairs",
+            "changed file pairs",
+            "lines",
+            "diffs compared",
+            "names",
+            "name pairs scored",
+            "close-match queries",
+        ],
         0,
     )
     start = time.monotonic()

@@ -144,9 +144,7 @@ def main() -> None:
     rng = random.Random(1)
     info = {"before": machine()}
     places = list(
-        dict.fromkeys(
-            r.split("\t")[1] for r in args.places.read_text(encoding="utf-8").splitlines() if r
-        )
+        dict.fromkeys(r.split("\t")[1] for r in args.places.read_text(encoding="utf-8").splitlines() if r)
     )
     companies = [v["title"] for v in json.loads(args.companies.read_text(encoding="utf-8")).values()]
     names = rng.sample(places + companies, 10_000)
@@ -155,14 +153,16 @@ def main() -> None:
     a, b = typos[:n_pairs], names[:n_pairs]
     print("| case | difflib | pyroid ... |\n|---|---|---|")
     SM, PSM = difflib.SequenceMatcher, pd.SequenceMatcher
-    other = {"rapidfuzz fuzz.ratio (another score)": lambda: [fuzz.ratio(x, y) for x, y in zip(a, b)]}
+    other = {
+        "rapidfuzz fuzz.ratio (another score)": lambda: [fuzz.ratio(x, y) for x, y in zip(a, b, strict=True)]
+    }
     case(
         "SequenceMatcher(None, a, b).ratio(), names",
         "us",
         n_pairs,
-        lambda: [SM(None, x, y).ratio() for x, y in zip(a, b)],
+        lambda: [SM(None, x, y).ratio() for x, y in zip(a, b, strict=True)],
         {
-            "pyroid.difflib": lambda: [PSM(None, x, y).ratio() for x, y in zip(a, b)],
+            "pyroid.difflib": lambda: [PSM(None, x, y).ratio() for x, y in zip(a, b, strict=True)],
             "ratio_batch, 1 thread": lambda: pd.ratio_batch(a, b, threads=1),
             "ratio_batch": lambda: pd.ratio_batch(a, b),
         },
@@ -172,14 +172,18 @@ def main() -> None:
     words = " ".join(places[:20000]).split()
     paras = [" ".join(rng.choices(words, k=70))[:500] for _ in range(200 if args.quick else 1000)]
     edited = [misspell(rng, misspell(rng, x)).replace(" ", "  ", 3) for x in paras]
-    other = {"rapidfuzz fuzz.ratio (another score)": lambda: [fuzz.ratio(x, y) for x, y in zip(paras, edited)]}
+    other = {
+        "rapidfuzz fuzz.ratio (another score)": lambda: [
+            fuzz.ratio(x, y) for x, y in zip(paras, edited, strict=True)
+        ]
+    }
     case(
         "SequenceMatcher(None, a, b).ratio(), 500 characters",
         "us",
         len(paras),
-        lambda: [SM(None, x, y).ratio() for x, y in zip(paras, edited)],
+        lambda: [SM(None, x, y).ratio() for x, y in zip(paras, edited, strict=True)],
         {
-            "pyroid.difflib": lambda: [PSM(None, x, y).ratio() for x, y in zip(paras, edited)],
+            "pyroid.difflib": lambda: [PSM(None, x, y).ratio() for x, y in zip(paras, edited, strict=True)],
             "ratio_batch, 1 thread": lambda: pd.ratio_batch(paras, edited, threads=1),
             "ratio_batch": lambda: pd.ratio_batch(paras, edited),
         },
@@ -188,9 +192,11 @@ def main() -> None:
     )
     sizes = (10_000,) if args.quick else (10_000, 100_000, 1_000_000)
     for size in sizes:
-        pool = places[:size] if size <= len(places) else [
-            f"{n} {i}" for i in range(size // len(places) + 1) for n in places
-        ][:size]
+        pool = (
+            places[:size]
+            if size <= len(places)
+            else [f"{n} {i}" for i in range(size // len(places) + 1) for n in places][:size]
+        )
         query = misspell(rng, rng.choice(places[:1000]))
         r = 1 if size >= 1_000_000 else repeat
         case(
@@ -199,12 +205,14 @@ def main() -> None:
             1,
             lambda pool=pool, query=query: difflib.get_close_matches(query, pool),
             {
-                "pyroid.difflib, 1 thread": lambda pool=pool, query=query: pd.get_close_matches(query, pool, threads=1),
+                "pyroid.difflib, 1 thread": lambda pool=pool, query=query: pd.get_close_matches(
+                    query, pool, threads=1
+                ),
                 "pyroid.difflib": lambda pool=pool, query=query: pd.get_close_matches(query, pool),
             },
             r,
         )
-    queries = typos[:100 if args.quick else 1000]
+    queries = typos[: 100 if args.quick else 1000]
     pool = places[:10_000]
     case(
         f"close_matches_batch, {len(queries):,} queries x 10,000 names",

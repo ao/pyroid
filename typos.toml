@@ -117,6 +117,8 @@ arro3 = "arro3"
 # jusText, the paragraph classifier Trafilatura falls back on (github.com/miso-belica/jusText); typos
 # would otherwise split it into "jus" + "Text".
 jusText = "jusText"
+# difflib's find_longest_match(alo, ahi, blo, bhi) parameter names, kept in pyroid.difflib's port.
+alo = "alo"
 
 # bench/gates.py names near-duplicate pairs `nd` (not a misspelt "and"). typos matches file types by file name
 # only, so this type covers files named gates.py; there is one, and every other word in it is still checked.

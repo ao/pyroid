@@ -56,7 +56,8 @@ def main() -> None:
     m = re.search(r"(\d+) passed", out)
     s = re.search(r"(\d+) skipped", out)
     result = {
-        "python": sys.version.split()[0] + ("t" if not getattr(sys, "_is_gil_enabled", lambda: True)() else ""),
+        "python": sys.version.split()[0]
+        + ("t" if not getattr(sys, "_is_gil_enabled", lambda: True)() else ""),
         "fuzz_examples": fuzz,
         "fuzz_total": sum(fuzz.values()),
         "cpython_tests_passed": int(m.group(1)) if m else 0,
