@@ -105,6 +105,7 @@ def test_importing_pyroid_patches_nothing() -> None:
 
 
 def test_pyroid_run(tmp_path: Path) -> None:
+    pytest.importorskip("pyarrow", reason="the pyroid command line needs pyarrow (pyroid[cli])")
     script = tmp_path / "probe.py"
     script.write_text(
         "import packaging.version, packaging.specifiers, pyroid.packaging.version as rv\n"
