@@ -80,6 +80,7 @@ __all__ = [
 #: The PyYAML release whose behaviour this module reproduces.
 PYYAML_VERSION: Final[str]
 __version__: Final[str]
+#: PyYAML's ``__with_libyaml__`` (``False`` without PyYAML).
 __with_libyaml__: Final[bool]
 
 class Mark:

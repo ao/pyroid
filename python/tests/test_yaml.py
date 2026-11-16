@@ -465,3 +465,22 @@ except py.PyroidError as e:
         "{'a': 1} 'a: 1\\n'",
         "pyroid.yaml.load: Loader=M with added constructors",
     ]
+
+
+@needs_pyyaml
+@pytest.mark.thread_unsafe
+def test_libyaml_flag_and_version_warning(run_python: Any) -> None:
+    assert py.__with_libyaml__ is yaml.__with_libyaml__
+    code = r"""
+import warnings
+import yaml
+yaml.__version__ = "5.4.1"
+with warnings.catch_warnings(record=True) as w:
+    warnings.simplefilter("always")
+    import pyroid.yaml
+want = "pyroid.yaml reproduces PyYAML 6.0.3, but PyYAML 5.4.1 is installed: "
+print([(x.category.__name__, str(x.message).startswith(want), x.filename) for x in w])
+"""
+    r = run_python(code)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "[('RuntimeWarning', True, '<string>')]"

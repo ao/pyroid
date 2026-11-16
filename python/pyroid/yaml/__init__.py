@@ -29,7 +29,6 @@ from pyroid.yaml import _construct
 #: The PyYAML release whose behaviour this module reproduces.
 PYYAML_VERSION = "6.0.3"
 __version__ = PYYAML_VERSION
-__with_libyaml__ = False
 
 
 def _find_pyyaml() -> Any:
@@ -44,6 +43,19 @@ def _find_pyyaml() -> Any:
 
 
 _yaml: Any = _find_pyyaml()
+#: PyYAML's flag (so `CSafeLoader if __with_libyaml__ else SafeLoader` picks as with PyYAML; both
+#: run natively, with `SafeLoader`'s results).
+__with_libyaml__: bool = bool(getattr(_yaml, "__with_libyaml__", False))
+
+if _yaml is not None and getattr(_yaml, "__version__", None) != PYYAML_VERSION:
+    warnings.warn(
+        f"pyroid.yaml reproduces PyYAML {PYYAML_VERSION}, but PyYAML "
+        f"{getattr(_yaml, '__version__', None)} is installed: pyroid.yaml's load and dump "
+        f"functions give {PYYAML_VERSION}'s results, while the classes and names it forwards "
+        "and the calls it hands to PyYAML are the installed version's",
+        RuntimeWarning,
+        stacklevel=2,
+    )
 
 if _yaml is not None:
     from yaml.composer import ComposerError
@@ -338,15 +350,6 @@ def _pyyaml(name: str | None, reason: str) -> Any:
             f"pyroid.yaml.{name}: {reason} is not supported by pyroid's Rust port, and PyYAML "
             f"is not installed to fall back to (pip install pyyaml=={PYYAML_VERSION})"
         )
-    if "version" not in _WARNED:
-        _WARNED.add("version")
-        version = getattr(_yaml, "__version__", None)
-        if version != PYYAML_VERSION:
-            warnings.warn(
-                f"pyroid.yaml is falling back to PyYAML {version}, not {PYYAML_VERSION}",
-                RuntimeWarning,
-                stacklevel=_caller_stacklevel(),
-            )
     key = f"{name}:{reason}"
     if key not in _WARNED:
         _WARNED.add(key)
