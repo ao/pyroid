@@ -15,6 +15,15 @@ The per-document digest of a `pyroid clean` run equals the stock chain's on the 
 FineWeb dev slice and on the 13,232-document parity corpus
 ([parity](../compatibility.md#integrations)).
 
+On aarch64, `language_score` can differ from stock datatrove's in its last bits: 749 of the 8,407
+documents kept from the FineWeb dev slice differed, by at most 1.19e-7 (two float32 ulps; EC2
+c8g, datatrove 0.10.1 with fasttext-numpy2-wheel 0.9.2). That fastText build, which
+`datatrove[processing]` installs, fuses every multiply-add of the output layer on aarch64.
+`pyroid clean` computes as fasttext-predict does, which for `lid.176.bin` gives the bits every
+build gives on x86-64, so its output is the same on every platform. The kept documents, their text
+and `language` are the same. pyroid's datatrove `LanguageFilter` gives stock datatrove's scores on
+both ([fastText builds](fasttext.md)).
+
 datatrove's `examples/fineweb.py` has no ftfy step, and datatrove's own `FTFYFormatter()` uses
 another ftfy config than ftfy's defaults: it keeps curly quotes, ligatures, character widths and
 line breaks, and does not normalize to NFC. `--ftfy datatrove` uses that config, and `--ftfy off`
