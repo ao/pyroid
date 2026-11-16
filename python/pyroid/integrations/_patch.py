@@ -782,6 +782,8 @@ def _distribution_version(name: str) -> Callable[[Any], str | None]:
 
 
 def _build_difflib(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if not impl._KNOWN:  # pyroid.difflib is the standard library's here: nothing to patch
+        return {}, []
     saved: list[tuple[Any, str, Any]] = []
 
     def swap(owner: Any, name: str, value: Any) -> None:
@@ -959,6 +961,16 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
     target = _TARGETS[name]
     if name not in _WARNED:
         _WARNED.add(name)
+        if name == "difflib" and not impl._KNOWN:
+            v = sys.version_info
+            warnings.warn(
+                "pyroid.integrations.patch: nothing was patched: pyroid.difflib reproduces difflib "
+                f"of CPython 3.11 to 3.15, not {v[0]}.{v[1]}'s, so difflib stays the standard "
+                "library's. This warning is shown once.",
+                PatchWarning,
+                stacklevel=_caller_stacklevel(),
+            )
+            return
         what = f"`import {name}` now gives pyroid's drop-in"
         if real is None:
             rest = f"Everything else{target.rest} is unavailable: {missing} ({target.pip})."

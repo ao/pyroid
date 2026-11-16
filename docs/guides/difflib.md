@@ -71,7 +71,10 @@ Where CPython versions differ, the running version's behaviour is followed:
   changed lines with `class="diff_changed"`). pyroid uses the interpreter's own templates.
 
 On another CPython version (3.16 and later), `pyroid.difflib` is the standard library's difflib
-and says so with one [`pyroid.FallbackWarning`](../concepts/fallbacks.md) at import.
+and says so with one [`pyroid.FallbackWarning`](../concepts/fallbacks.md) at import. There,
+`get_close_matches` accepts `threads=` and ignores it, `pyroid.patch("difflib")` patches nothing
+(its `PatchWarning` says so), and `ratio_batch` and `close_matches_batch` still run natively, with
+3.15's `SequenceMatcher`.
 
 ## What runs in Rust
 

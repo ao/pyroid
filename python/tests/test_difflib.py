@@ -212,6 +212,21 @@ def test_unknown_python_version() -> None:
         assert pd.unified_diff is difflib.unified_diff
         assert [type(w.message).__name__ for w in rec] == ["FallbackWarning"], rec
         assert "3.11 to 3.15" in str(rec[0].message)
+        # The stub's threads= is accepted; patch() patches nothing and says so.
+        words = ["apple", "ape", "peach"]
+        assert pd.get_close_matches("appel", words, threads=4) == ["apple", "ape"]
+        import pyroid
+        before = dict(vars(difflib.SequenceMatcher))
+        functions = difflib.unified_diff, difflib.get_close_matches
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            pyroid.patch("difflib")
+        assert dict(vars(difflib.SequenceMatcher)) == before
+        assert (difflib.unified_diff, difflib.get_close_matches) == functions
+        messages = [str(w.message) for w in rec]
+        assert len(messages) == 1 and "nothing was patched" in messages[0], messages
+        assert "drop-in" not in messages[0], messages
+        pyroid.unpatch("difflib")
         print("ok")
     """)
     proc = subprocess.run(

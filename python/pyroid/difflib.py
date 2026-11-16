@@ -651,12 +651,24 @@ if not _KNOWN:  # an interpreter whose difflib this module does not know: the st
     ndiff = _std.ndiff
     unified_diff = _std.unified_diff
     context_diff = _std.context_diff
-    get_close_matches = _std.get_close_matches  # type: ignore[assignment]
     _mdiff = _std._mdiff
+
+    def get_close_matches(  # type: ignore[misc]
+        word: Sequence[Any],
+        possibilities: Any,
+        n: int = 3,
+        cutoff: float = 0.6,
+        *,
+        threads: int | None = None,
+    ) -> list[Any]:
+        return _std.get_close_matches(word, possibilities, n, cutoff)  # threads: nothing to share
+
+    get_close_matches.__doc__ = _std.get_close_matches.__doc__
     warnings.warn(
         f"pyroid.difflib reproduces difflib of CPython 3.11 to 3.15, not "
         f"{sys.version_info[0]}.{sys.version_info[1]}'s: it is the standard library's difflib "
-        "here (slow path).",
+        "here (slow path), and pyroid.patch('difflib') patches nothing. ratio_batch and "
+        "close_matches_batch still run natively, with 3.15's SequenceMatcher.",
         FallbackWarning,
         stacklevel=2,
     )
