@@ -401,7 +401,7 @@ impl PyMarker {
     fn __reduce_ex__<'py>(slf: &Bound<'py, Self>, _protocol: i64) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
         let state = slf.get().__getstate__()?;
-        PyTuple::new(py, [config(py)?.newobj.bind(py).clone(), PyTuple::new(py, [slf.get_type()])?.into_any(), PyString::new(py, &state).into_any()])
+        PyTuple::new(py, [config(py)?.restore.bind(py).clone(), PyTuple::new(py, [slf.get_type().into_any(), PyString::new(py, &state).into_any()])?.into_any()])
     }
 
     fn __and__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {

@@ -13,6 +13,7 @@ versions.
 from __future__ import annotations
 
 from pyroid.packaging import _compat, markers, requirements, specifiers, utils, version
+from pyroid.packaging._compat import _restore
 
 #: The packaging release whose behaviour this module reproduces.
 PACKAGING_VERSION = "26.3"

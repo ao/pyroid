@@ -723,11 +723,11 @@ impl PyVersion {
 
     fn __reduce_ex__<'py>(slf: &Bound<'py, Self>, _protocol: i64) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
-        let newobj = config(py)?.newobj.bind(py);
+        // `copyreg.__newobj__` would make pickle compare `cls` with `__class__` (the claim).
         let state = slf.get().__getstate__(py)?;
         PyTuple::new(
             py,
-            [newobj.clone(), PyTuple::new(py, [slf.get_type()])?.into_any(), state.into_any()],
+            [config(py)?.restore.bind(py).clone(), PyTuple::new(py, [slf.get_type().into_any(), state.into_any()])?.into_any()],
         )
     }
 

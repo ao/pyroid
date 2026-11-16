@@ -90,6 +90,10 @@ class Requirement:
         self.specifier._prereleases = prereleases
         self.marker = tmp.marker
 
+    def __reduce_ex__(self, protocol: Any) -> tuple[Any, ...]:
+        # Not copyreg.__newobj__: pickle compares its class argument with __class__ (the claim).
+        return (_compat._restore, (type(self), self.__getstate__()))
+
     def __str__(self) -> str:
         return "".join(self._iter_parts(self.name))
 

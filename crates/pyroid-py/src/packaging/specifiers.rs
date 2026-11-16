@@ -604,7 +604,7 @@ impl PySpecifier {
     fn __reduce_ex__<'py>(slf: &Bound<'py, Self>, _protocol: i64) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
         let state = slf.get().__getstate__(py)?;
-        PyTuple::new(py, [config(py)?.newobj.bind(py).clone(), PyTuple::new(py, [slf.get_type()])?.into_any(), state.into_any()])
+        PyTuple::new(py, [config(py)?.restore.bind(py).clone(), PyTuple::new(py, [slf.get_type().into_any(), state.into_any()])?.into_any()])
     }
 
     #[getter]
@@ -1533,7 +1533,7 @@ impl PySpecifierSet {
     fn __reduce_ex__<'py>(slf: &Bound<'py, Self>, _protocol: i64) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
         let state = slf.get().__getstate__(py)?;
-        PyTuple::new(py, [config(py)?.newobj.bind(py).clone(), PyTuple::new(py, [slf.get_type()])?.into_any(), state.into_any()])
+        PyTuple::new(py, [config(py)?.restore.bind(py).clone(), PyTuple::new(py, [slf.get_type().into_any(), state.into_any()])?.into_any()])
     }
 
     #[getter]

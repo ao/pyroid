@@ -27,8 +27,9 @@ struct Config {
     nonstr_version: Py<PyAny>,
     /// packaging's `_Version` named tuple (or pyroid's copy), for `Version._version`.
     version_tuple: Py<PyAny>,
-    /// `copyreg.__newobj__`, for `__reduce_ex__`.
-    newobj: Py<PyAny>,
+    /// `_restore(cls, state)`: what pyroid's objects pickle through (`cls.__new__(cls)`, then
+    /// `__setstate__(state)`).
+    restore: Py<PyAny>,
     /// packaging's `Version` class (`None` without packaging): the `__class__` claim.
     packaging_version: Option<Py<PyType>>,
     /// packaging's `Version` class whatever its release (`None` without packaging): read
@@ -104,7 +105,7 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         invalid_version: get("InvalidVersion")?,
         nonstr_version: get("nonstr_version")?,
         version_tuple: get("_Version")?,
-        newobj: py.import("copyreg")?.getattr("__newobj__")?.unbind(),
+        restore: get("restore")?,
         packaging_version: opt_type("packaging_Version")?,
         packaging_version_any: opt_type("packaging_Version_any")?,
         packaging_base_version: opt_type("packaging_BaseVersion")?,

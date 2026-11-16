@@ -263,6 +263,21 @@ def _nonstr_version(version: Any) -> tuple[Any, ...]:
     )
 
 
+def _restore(cls: Any, state: Any) -> Any:
+    """Unpickle a pyroid packaging object: ``cls.__new__(cls)``, then ``__setstate__(state)``.
+
+    packaging's own objects pickle through ``copyreg.__newobj__``; pyroid's cannot (pickle
+    checks ``args[0] is obj.__class__``, and ``__class__`` is packaging's class while
+    unpatched).
+    """
+    obj = cls.__new__(cls)
+    obj.__setstate__(state)
+    return obj
+
+
+_restore.__module__ = "pyroid.packaging"
+
+
 def canonicalize_name(name: str, *, validate: bool = False) -> str:
     """packaging's ``canonicalize_name`` (fast for ``str``; other types fail as there)."""
     if type(name) is str and not validate:
@@ -452,6 +467,7 @@ def _delegate(name: str, obj: Any, *args: Any) -> Any:
 _native._configure(
     {
         "InvalidVersion": InvalidVersion,
+        "restore": _restore,
         "nonstr_version": _nonstr_version,
         "_Version": _Version,
         "packaging_Version": _pv.Version if _CLAIM else None,
