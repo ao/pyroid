@@ -140,6 +140,7 @@ SUPPORTED: tuple[str, ...] = (
     "nltk",
     "warcio",
     "nemo_curator",
+    "packaging",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -760,6 +761,80 @@ def _build_nemo_curator(impl: types.ModuleType, real: Any, missing: str) -> _Bui
     return {}, [undo]
 
 
+# The packaging submodules patch("packaging") imports first, so that every global holding one of
+# packaging's ported objects is found and replaced (also in ranges, metadata, pylock, ...).
+_PACKAGING_MODULES = (
+    "version",
+    "specifiers",
+    "markers",
+    "requirements",
+    "utils",
+    "tags",
+    "_structures",
+    "_tokenizer",
+    "_parser",
+    "_ranges",
+    "ranges",
+    "errors",
+    "licenses",
+    "metadata",
+    "dependency_groups",
+    "direct_url",
+    "pylock",
+)
+
+
+def _build_packaging(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    from pyroid._pyroid import packaging as native
+
+    if real is None:  # no packaging: shims providing pyroid.packaging's modules
+        shims: dict[str, types.ModuleType] = {}
+        for sub in impl.PORTED:
+            sub_impl = importlib.import_module(f"{impl.__name__}.{sub}")
+            provided = {n: getattr(sub_impl, n) for n in sub_impl.__all__}
+            shims[f"packaging.{sub}"] = _shim(
+                f"packaging.{sub}", None, missing, sub_impl, provided, package=False
+            )
+        top = _shim(
+            "packaging",
+            None,
+            missing,
+            impl,
+            {sub: shims[f"packaging.{sub}"] for sub in impl.PORTED},
+            package=True,
+            version=impl.PACKAGING_VERSION,
+        )
+        return {"packaging": top, **shims}, []
+    for sub in _PACKAGING_MODULES:
+        with contextlib.suppress(ImportError):
+            importlib.import_module(f"packaging.{sub}")
+    # Each of packaging's ported objects, wherever a packaging module holds it, becomes pyroid's.
+    replace: dict[int, tuple[Any, Any]] = {}
+    for module_name, attr, new in impl._patch_targets():
+        module = sys.modules.get(module_name)
+        original = module.__dict__.get(attr, _MISSING) if module is not None else _MISSING
+        if original is not _MISSING and original is not new:
+            replace[id(original)] = (original, new)
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for key, module in list(sys.modules.items()):
+        if not _owned(key, "packaging") or not isinstance(module, types.ModuleType):
+            continue
+        for attr, value in list(vars(module).items()):
+            hit = replace.get(id(value))
+            if hit is not None and hit[0] is value:
+                saved.append((module, attr, value))
+                setattr(module, attr, hit[1])
+    # Under the patch packaging's classes are pyroid's: objects stop claiming the originals.
+    native._set_claims(False)
+
+    def undo() -> None:
+        for module, attr, original in reversed(saved):
+            setattr(module, attr, original)
+        native._set_claims(True)
+
+    return {}, [undo]
+
+
 def _distribution_version(name: str) -> Callable[[Any], str | None]:
     """The installed version of distribution `name` (for packages without ``__version__``)."""
 
@@ -850,10 +925,19 @@ _TARGETS: dict[str, _Target] = {
         " (readers, writers, deduplication, classifiers, the other stages)",
         _build_nemo_curator,
     ),
+    "packaging": _Target(
+        "pyroid.packaging",
+        "which reproduces packaging 26.3's Version, Specifier, SpecifierSet, Marker, Requirement "
+        "and the name, version and filename helpers of packaging.utils",
+        "PACKAGING_VERSION",
+        "pip install packaging==26.3",
+        " (tags, metadata, pylock, ranges, dependency groups; they now use pyroid's classes)",
+        _build_packaging,
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator")
+_SWAPPED = ("nltk", "warcio", "nemo_curator", "packaging")
 
 
 # ---------------------------------------------------------------------------
@@ -927,6 +1011,7 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
                 "nltk": "from nltk import word_tokenize",
                 "warcio": "from warcio.archiveiterator import ArchiveIterator",
                 "nemo_curator": "from nemo_curator.stages.text.filters import ScoreFilter",
+                "packaging": "from packaging.version import Version",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
