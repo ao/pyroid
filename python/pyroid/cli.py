@@ -206,8 +206,6 @@ def _layout(a: argparse.Namespace, sources: Sequence[Any], shard: Any, *, exclud
     out_dir = Path(out)
     if excl and _is_file_out(excl):
         raise SystemExit(f"pyroid: --excluded {excl}: OUT is a directory, so this must be too")
-    if excl and Path(excl).resolve().is_relative_to(out_dir.resolve()):
-        raise SystemExit("pyroid: --excluded must not be inside OUT (OUT is read by later stages)")
     suffix = f".{fmt}" if fmt else None
     final = excl_final = None
     if getattr(a, "merge", False):
@@ -269,7 +267,7 @@ def _private_work(path: Path) -> None:
             os.chmod(path, 0o700)
 
 
-def _check_out(layout: Layout, overwrite: bool, sources: Sequence[Any]) -> None:
+def _check_out(layout: Layout, overwrite: bool) -> None:
     """Refuse to replace files a previous, unrelated command wrote."""
     if layout.merge and layout.final is not None and layout.out_dir is None:
         if layout.final.exists() and not overwrite and not layout.state_root.exists():
@@ -285,10 +283,6 @@ def _check_out(layout: Layout, overwrite: bool, sources: Sequence[Any]) -> None:
                 f"pyroid: {layout.out_dir} is not empty and was not written by pyroid "
                 "(pass --overwrite to write into it anyway)"
             )
-    outs = [p for p in (layout.final, layout.excluded_final) if p is not None]
-    for s in sources:
-        if "://" not in s.uri and any(Path(s.uri).resolve() == p.resolve() for p in outs):
-            raise SystemExit(f"pyroid: {s.uri} is both an input and an output")
 
 
 # ======================================================================================== options
@@ -1174,29 +1168,135 @@ def _sources(a: argparse.Namespace, exclude: Sequence[Path]) -> list[Any]:
     return _io.resolve_inputs(specs, exclude=[p for p in exclude if p is not None])
 
 
+def _path_key(path: str | os.PathLike[str]) -> str:
+    """``path`` made absolute with its links resolved, to compare with other paths.
+
+    macOS and Windows file systems ignore case by default, so the key does too there.
+    """
+    key = os.path.normcase(os.path.realpath(path))
+    return key.casefold() if sys.platform == "darwin" else key
+
+
+def _inside(path: str | os.PathLike[str], root: str | os.PathLike[str]) -> bool:
+    """``path`` is ``root`` or below it (links resolved)."""
+    p, r = _path_key(path), _path_key(root)
+    return p == r or p.startswith(r.rstrip(os.sep) + os.sep)
+
+
+def _state_root(a: argparse.Namespace, shard: Any) -> Path:
+    """Where a run keeps its state: ``OUT/.pyroid``, or ``.NAME.pyroid`` beside a file OUT."""
+    if _is_file_out(a.output):
+        final = _tagged(Path(a.output), shard.tag) if shard.count > 1 else Path(a.output)
+        return final.parent / f".{final.name}.pyroid"
+    return Path(a.output) / ".pyroid"
+
+
+def _check_roots(a: argparse.Namespace, out: Path, excl: Path | None, tmp: Path | None) -> None:
+    """Refuse an OUT, --excluded and --tmp-dir that overlap (before any input is read)."""
+    file_out = _is_file_out(str(out))
+    if excl is not None:
+        if file_out and _path_key(excl) == _path_key(out):
+            raise SystemExit(f"pyroid: OUT and --excluded are the same file ({excl})")
+        if not file_out and _inside(excl, out):
+            raise SystemExit(
+                "pyroid: --excluded must not be OUT or inside it (OUT is read by later stages)"
+            )
+        if not file_out and _inside(out, excl):
+            raise SystemExit("pyroid: OUT must not be inside --excluded")
+    if tmp is not None:
+        if tmp.exists() and not tmp.is_dir():
+            raise SystemExit(f"pyroid: --tmp-dir {tmp} is not a directory")
+        files = [p for p in (out, excl) if p is not None and file_out]
+        if any(_path_key(tmp) == _path_key(p) for p in files):
+            raise SystemExit(f"pyroid: --tmp-dir {tmp} is an output file; it must be a directory")
+    stats = getattr(a, "stats_json", None)
+    if stats and any(_path_key(stats) == _path_key(p) for p in (out, excl) if p is not None):
+        raise SystemExit(f"pyroid: --stats-json {stats} is also an output")
+    roots = [(out, "OUT")] if not file_out else []
+    if excl is not None and not file_out:
+        roots.append((excl, "--excluded"))
+    for spec in getattr(a, "input", []):
+        if "://" in spec:
+            continue
+        for path in (out, excl):
+            if path is not None and _path_key(spec) == _path_key(path):
+                raise SystemExit(f"pyroid: {spec} is both an input and an output")
+        for root, what in roots:
+            if os.path.exists(spec) and _inside(spec, root):
+                raise SystemExit(f"pyroid: {spec} is inside {what}, which this command writes")
+
+
+class _Keys:
+    """:func:`_path_key` for many files: each directory is resolved once.
+
+    ``link=True`` also resolves a file that is itself a link (an input); an output that is a
+    link is replaced by the rename that writes it, never written through.
+    """
+
+    def __init__(self) -> None:
+        self._dirs: dict[str, str] = {}
+
+    def __call__(self, path: str | os.PathLike[str], *, link: bool = False) -> str:
+        if link and os.path.islink(path):
+            return _path_key(path)
+        d, name = os.path.split(os.path.abspath(path))
+        k = self._dirs.get(d)
+        if k is None:
+            k = self._dirs[d] = _path_key(d)
+        key = os.path.join(k, os.path.normcase(name))
+        return key.casefold() if sys.platform == "darwin" else key
+
+
+def _check_outputs(a: argparse.Namespace, layout: Layout, sources: Sequence[Any]) -> None:
+    """Refuse a run that would write one file twice, or over an input or --stats-json."""
+    outputs: dict[str, tuple[Path, str]] = {}  # path key -> (path, the input it comes from)
+    key = _Keys()
+
+    def add(p: Path | None, uri: str) -> None:
+        if p is None:
+            return
+        k = key(p)
+        if k in outputs:
+            raise SystemExit(f"pyroid: {outputs[k][1]} and {uri} would both be written to {p}")
+        outputs[k] = (p, uri)
+
+    if layout.out_dir is not None and not layout.merge:
+        for s in sources:
+            out, excl = layout.outputs(s)
+            add(out, s.uri)
+            add(excl, s.uri)
+    else:
+        add(layout.final, "the output")
+        add(layout.excluded_final, "--excluded")
+    inputs = {key(s._path, link=True): s.uri for s in sources if s._fs is None}
+    for k, uri in inputs.items():
+        if k in outputs:
+            raise SystemExit(f"pyroid: {uri} is both an input and an output")
+    stats = getattr(a, "stats_json", None)
+    if stats:
+        if key(stats, link=True) in outputs:
+            raise SystemExit(f"pyroid: --stats-json {stats} is also an output")
+        if key(stats, link=True) in inputs:
+            raise SystemExit(f"pyroid: --stats-json {stats} is also an input")
+
+
 def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: bool = True) -> Run:
     from pyroid.integrations import _shards
 
     shard = _shards.Shard.parse(a.shard) if getattr(a, "shard", None) else _shards.Shard()
     out = Path(a.output)
-    excl = Path(a.excluded) if getattr(a, "excluded", None) else None
+    excl = Path(a.excluded) if getattr(a, "excluded", None) and excluded else None
     tmp = Path(a.tmp_dir) if getattr(a, "tmp_dir", None) else None
-    exclude = [p for p in (out, excl, tmp) if p is not None]
-    for spec in getattr(a, "input", []):
-        if "://" not in spec and any(Path(spec).resolve() == p.resolve() for p in exclude):
-            raise SystemExit(f"pyroid: {spec} is both an input and an output (or --tmp-dir)")
-    sources = _sources(a, exclude)
+    _check_roots(a, out, excl, tmp)
+    # Inputs never come from what this run writes. An input below --tmp-dir is read; only the
+    # run's own work directory there is skipped.
+    work = _work(a, _state_root(a, shard), shard)
+    sources = _sources(a, [p for p in (out, excl, work) if p is not None])
     layout = _layout(a, sources, shard, excluded=excluded)
-    _check_out(layout, a.overwrite, sources)
+    _check_out(layout, a.overwrite)
+    _check_outputs(a, layout, sources)
     if tmp is not None:
         _private_work(layout.work)
-    if layout.out_dir is not None and not layout.merge:
-        seen: dict[Path, str] = {}
-        for s in sources:
-            p, _ = layout.outputs(s)
-            if p in seen:
-                raise SystemExit(f"pyroid: {seen[p]} and {s.uri} would both be written to {p}")
-            seen[p] = s.uri
     fp = _shards.fingerprint(command, _fingerprint_options(options), sources)
     state = _shards.State(layout.state_root, fp)
     mine = shard.take(list(enumerate(sources)))
@@ -1753,6 +1853,14 @@ def _stage_signatures(a: argparse.Namespace) -> int:
     return 0
 
 
+def _apart(out: Path, src: Path, what: str, of: str) -> None:
+    """Refuse a stage output that is its input folder, is inside it or holds it."""
+    if _inside(out, src) or _inside(src, out):
+        raise SystemExit(
+            f"pyroid {what} and {of} must be separate folders, neither inside the other"
+        )
+
+
 def _stage_meta(folder: Path) -> dict[str, Any] | None:
     try:
         data = json.loads((folder / ".pyroid" / "run.json").read_text(encoding="utf-8"))
@@ -1803,6 +1911,7 @@ def _stage_buckets(a: argparse.Namespace) -> int:
     sigs, out = Path(a.sigs), Path(a.output)
     if not sigs.is_dir():
         raise SystemExit(f"pyroid dedup buckets: {sigs}: no such directory")
+    _apart(out, sigs, "dedup buckets: DUPS", "SIGS")
     meta = _stage_meta(sigs)
     _check_complete(sigs, meta, "input files", "run every 'pyroid dedup signatures' shard first")
     cfg = _stage_cfg(a, meta, sigs)
@@ -1857,6 +1966,7 @@ def _stage_cluster(a: argparse.Namespace) -> int:
     dups, out = Path(a.dups), Path(a.output)
     if not dups.is_dir():
         raise SystemExit(f"pyroid dedup cluster: {dups}: no such directory")
+    _apart(out, dups, "dedup cluster: REMOVED", "DUPS")
     meta = _stage_meta(dups)
     cfg = _stage_cfg(a, meta, dups)
     files = _minhash.dups_files(dups)
@@ -1922,6 +2032,9 @@ def _stage_filter(a: argparse.Namespace) -> int:
     removed = Path(a.removed)
     if not removed.is_dir():
         raise SystemExit(f"pyroid dedup filter: --removed {removed}: no such directory")
+    _apart(Path(a.output), removed, "dedup filter: OUT", "--removed")
+    if a.excluded:
+        _apart(Path(a.excluded), removed, "dedup filter: --excluded", "--removed")
     meta = _stage_meta(removed)
     if meta is None and (removed / ".pyroid").is_dir():
         raise SystemExit(

@@ -165,7 +165,7 @@ def test_refuses_foreign_directory(tmp_path: Path) -> None:
     assert main(["translit", str(src), str(out), "--overwrite"]) == 0
     assert (out / "notes.txt").read_text() == "mine"
     excl = out / "dropped"
-    with pytest.raises(SystemExit, match="inside OUT"):
+    with pytest.raises(SystemExit, match="must not be OUT or inside it"):
         main(["langid", str(src), str(out), "--excluded", str(excl)])
 
 
@@ -690,7 +690,7 @@ def test_empty_spool_and_starting_shards(tmp_path: Path) -> None:
     from pyroid.cli import _layout
     from pyroid.integrations._shards import Shard
 
-    _check_out(_layout(a, [], Shard(), excluded=False), False, [])
+    _check_out(_layout(a, [], Shard(), excluded=False), False)
 
 
 @pytest.mark.thread_unsafe  # reads stderr

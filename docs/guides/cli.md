@@ -293,8 +293,10 @@ These rules hold for every command:
   Otherwise it is a directory with one output file per input file, under the same relative name
   ([layouts](large-datasets.md#output-layout)). Every output is written under a hidden temporary
   name and renamed when complete, so a failed or interrupted run never leaves a truncated file.
-  An existing OUT file is not replaced unless you pass `--overwrite`, and an output path equal to
-  the input path is refused.
+  An existing OUT file is not replaced unless you pass `--overwrite`.
+- Outputs never overlap. OUT, `--excluded`, `--tmp-dir`, `--stats-json` and the inputs must be
+  different files once links are resolved, and a directory OUT and a directory `--excluded` must
+  not be inside each other. pyroid refuses such a run before it reads anything.
 - `--stats` and `--progress` write to stderr. If stderr is a pipe that closes early
   (`2>&1 | head -1`), the messages stop and the run goes on.
 - `--text-column` names the text column (default `text`). Every other column is passed through
@@ -306,6 +308,8 @@ Errors exit with status 1 and a one-line message, for example:
 ```console
 $ pyroid clean sample.parquet clean.parquet --recipe fineweb
 pyroid: clean.parquet exists (pass --overwrite to replace it)
+$ pyroid clean sample.parquet out.parquet --recipe fineweb --excluded out.parquet
+pyroid: OUT and --excluded are the same file (out.parquet)
 $ pyroid clean sample.parquet x.parquet --recipe fineweb --text-column body
 pyroid: sample.parquet: no column 'body' (columns: text, id, dump, url, date, file_path, language, language_score, token_count)
 ```
