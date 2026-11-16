@@ -112,16 +112,16 @@ Arrow nulls give `None`. Pass `threads=n` to use at most `n` tasks at once.
 
 ## Speed
 
-Measured on a shared AWS EC2 c8g.16xlarge (Graviton4) with CPython 3.12, so the numbers are
-indicative. `SequenceMatcher(None, a, b).ratio()` on a pair of company or place names takes
-2.0 µs in a Python loop (difflib: 9.6 µs). Most of that is creating the matcher object;
-`ratio_batch` takes 0.56 µs per pair on one thread and 0.11 µs on 64 cores. On 500-character
-pairs, the loop takes 23 µs (difflib: 436 µs). `get_close_matches` over 100,000 place names takes
-8 ms on one thread and 3 ms on all cores (difflib: 142 ms). Diffs of argparse.py between CPython
-3.12 and 3.14 (2,700 lines) take 0.6 ms with `unified_diff` (difflib: 6 ms), 2.6 ms with `ndiff`
-(30 ms) and 8.5 ms with `HtmlDiff().make_file` (53 ms). The
-[benchmarks page](../benchmarks.md#pyroiddifflib) has the table. For context, rapidfuzz's
-`fuzz.ratio` takes 0.24 µs per name pair on one thread, but it computes a different score.
+Measured on a dedicated AWS EC2 c7i.4xlarge (Intel Xeon, 16 vCPU) with CPython 3.12.
+`SequenceMatcher(None, a, b).ratio()` on a pair of company or place names takes 2.1 µs in a
+Python loop (difflib: 10 µs). Most of that is creating the matcher object; `ratio_batch` takes
+0.64 µs per pair on one thread and 0.19 µs on 16 threads. On 500-character pairs, the loop takes
+27 µs (difflib: 398 µs). `get_close_matches` over 100,000 place names takes 10 ms on one thread
+and 5 ms on 16 (difflib: 144 ms). Diffs of argparse.py between CPython 3.12 and 3.14 (2,700
+lines) take 0.8 ms with `unified_diff` (difflib: 5.6 ms), 2.7 ms with `ndiff` (31 ms) and 8.5 ms
+with `HtmlDiff().make_file` (52 ms). The [benchmarks page](../benchmarks.md#pyroiddifflib) has
+the table. For context, rapidfuzz's `fuzz.ratio` takes 0.25 µs per name pair on one thread, but
+it computes a different score.
 
 ## Differences from difflib {#differences-from-difflib}
 

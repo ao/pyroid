@@ -123,9 +123,9 @@ FineWeb dev slice, AWS EC2 c7i.4xlarge:
 | `dedup`, MinHash signatures | datatrove 0.10.1 | 34× |
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
 
-`pyroid.difflib`, on a shared AWS EC2 c8g.16xlarge (indicative): 6 to 17× faster than the
-standard library's difflib on diffs of real source files, 15 to 18× on `get_close_matches` on one
-thread (up to 55× on all cores), with the same results.
+`pyroid.difflib`, on AWS EC2 c7i.4xlarge: 6 to 15× faster than the standard library's difflib
+on diffs of real source files, 12 to 15× on `get_close_matches` on one thread (up to 31× on 16
+threads), with the same results.
 
 The other modules have only been measured in a Docker VM on a Mac, so treat these as indicative
 (one thread unless stated):
