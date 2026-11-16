@@ -392,6 +392,24 @@ def test_numeric_arguments_as_difflib() -> None:
     ]
 
 
+@pytest.mark.thread_unsafe(reason="HtmlDiff's anchor counter is global")
+def test_html_tables_of_both_modules_get_distinct_anchors() -> None:
+    import re
+
+    def ids(table: str) -> set[str]:
+        return set(re.findall(r'id="([^"]+)"', table))
+
+    tables = [m.HtmlDiff().make_table(["a\n"], ["b\n"]) for m in (pd, difflib, pd, difflib)]
+    seen: set[str] = set()
+    for t in tables:
+        assert not ids(t) & seen
+        seen |= ids(t)
+    for owner in (pd, difflib):
+        owner.HtmlDiff._default_prefix = 0  # type: ignore[attr-defined]  # as CPython's tests reset it
+        assert 'id="difflib_chg_to0__0"' in pd.HtmlDiff().make_table(["a\n"], ["b\n"])
+        assert 'id="difflib_chg_to1__0"' in difflib.HtmlDiff().make_table(["a\n"], ["b\n"])
+
+
 def test_runtime_docstrings_match_the_stub() -> None:
     # help() shows the stub's documentation for pyroid's own functions.
     import ast

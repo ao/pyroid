@@ -698,8 +698,27 @@ class HtmlDiff(_std.HtmlDiff):
 for _name, _f in _std.HtmlDiff.__dict__.items():
     if isinstance(_f, types.FunctionType):
         setattr(HtmlDiff, _name, _rebind(_f))
+_std_make_prefix = _std.HtmlDiff.__dict__["_make_prefix"]
+_OwnHtmlDiff = HtmlDiff
+
+
+def _make_prefix(self: Any) -> None:
+    # One counter for the tables of both modules, as CPython has one: difflib.HtmlDiff's, so no
+    # two tables in a process share anchor ids. A value set on this class (to reset it, as
+    # CPython's tests do) moves to that counter first.
+    own = _OwnHtmlDiff.__dict__.get("_default_prefix")
+    if own is not None:
+        _std.HtmlDiff._default_prefix = own
+        with contextlib.suppress(AttributeError):
+            del _OwnHtmlDiff._default_prefix
+    _std_make_prefix(self)
+
+
+_make_prefix.__doc__ = _std_make_prefix.__doc__
+_make_prefix.__qualname__ = "HtmlDiff._make_prefix"
+HtmlDiff._make_prefix = _make_prefix  # type: ignore[method-assign]
 HtmlDiff.make_table = _make_make_table(  # type: ignore[method-assign]
-    HtmlDiff.__dict__["make_table"], {h: HtmlDiff.__dict__[h] for h in _HTML_HOOKS}
+    HtmlDiff.__dict__["make_table"], {h: getattr(HtmlDiff, h) for h in _HTML_HOOKS}
 )
 # What pyroid.patch("difflib") sets as difflib.HtmlDiff.make_table.
 _PATCH_MAKE_TABLE = _make_make_table(

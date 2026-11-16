@@ -144,6 +144,9 @@ it computes a different score.
   a new list instead.
 - `b2j`, `bjunk` and `bpopular` are built on first read; editing them does not change the
   matching (in CPython it would).
+- So `vars()` of a matcher differs: `b2j`, `bjunk`, `bpopular`, `fullbcount` and
+  `matching_blocks` are in it only once read, and pyroid keeps its native state there under
+  `_pyroid_` names (also in `dir()`). Pickles and copies have CPython's attributes only.
 - On 3.11 to 3.13, `Differ` pairs lines by recursion, and CPython raises `RecursionError` on long
   runs of similar lines (149 such lines at a recursion limit of 120, say). `HtmlDiff(wrapcolumn=...)`
   wraps a line by recursion in every version, so a line of about 1,000 wrapped rows raises it too.
