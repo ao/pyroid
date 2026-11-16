@@ -6,6 +6,50 @@ release notes are on the [GitHub releases](https://github.com/ao/pyroid/releases
 on, both are generated from [Conventional Commits](https://www.conventionalcommits.org/) by
 release-please.
 
+## 1.1.0
+
+pyroid 1.1 adds six modules, for data formats and developer tools. `pyroid.patch()` and
+`pyroid run -p` take their names too (`difflib` is patched in place), and `pyroid.json_repair`
+now reproduces json_repair 0.64.9.
+
+### Modules
+
+| Module | Replaces |
+|---|---|
+| [`pyroid.yaml`](guides/yaml.md) | PyYAML 6.0.3's `safe_load` and `safe_dump` (its pure-Python `SafeLoader` and `SafeDumper`) |
+| [`pyroid.jmespath`](guides/jmespath.md) | jmespath 1.1.0 (`search`, `compile`, custom functions), as boto3, the AWS CLI and Ansible use it |
+| [`pyroid.tabulate`](guides/tabulate.md) | tabulate 0.10.0, every format and option, `DataFrame.to_markdown()` included |
+| [`pyroid.dateutil.parser`](guides/dateutil.md) | python-dateutil's `parse` and `isoparse` (2.8.2 to 4.0.0) |
+| [`pyroid.difflib`](guides/difflib.md) | the standard library's `difflib` of CPython 3.11 to 3.15: `SequenceMatcher`, `get_close_matches`, `unified_diff`, `context_diff`, `ndiff`, `Differ` and `HtmlDiff` |
+| [`pyroid.packaging`](guides/packaging.md) | packaging 26.3's versions, specifiers, markers, requirements and name helpers (PEP 440, PEP 508) |
+
+### Features
+
+- **dateutil:** pyroid.dateutil.parser, a drop-in for python-dateutil's parse and isoparse ([#22](https://github.com/ao/pyroid/issues/22))
+- **difflib:** pyroid.difflib, the standard library's difflib in Rust ([#23](https://github.com/ao/pyroid/issues/23))
+- **jmespath:** pyroid.jmespath, a drop-in for jmespath 1.1.0 ([#20](https://github.com/ao/pyroid/issues/20))
+- **packaging:** pyroid.packaging, a drop-in for packaging 26.3 ([#24](https://github.com/ao/pyroid/issues/24))
+- **yaml:** add pyroid.yaml, a drop-in for PyYAML's safe loader and dumper ([#17](https://github.com/ao/pyroid/issues/17))
+- match json-repair 0.64.9, warn when an installed incumbent is another release, watch upstream weekly ([#15](https://github.com/ao/pyroid/issues/15))
+- pyroid.tabulate, a drop-in for tabulate 0.10.0 ([#19](https://github.com/ao/pyroid/issues/19))
+
+### Bug Fixes
+
+- containers changed by other threads during a call, Ctrl-C in minhash_dedup, pyroid run without pyarrow ([#21](https://github.com/ao/pyroid/issues/21))
+- Ctrl-C and SIGTERM, sentence dedup, datasketch pickles, memory and the rest of the outside evaluation ([#18](https://github.com/ao/pyroid/issues/18))
+- the outside evaluation's findings (json_repair Arrow output, patched anyascii, first-run friction, fastText speed) ([#16](https://github.com/ao/pyroid/issues/16))
+
+### Performance Improvements
+
+- **cli:** compress clean's spooled rows on a background thread ([#14](https://github.com/ao/pyroid/issues/14))
+
+## 1.0.1
+
+### Bug Fixes
+
+- **thai:** error instead of panic on huge texts; warn on another pythainlp version ([#11](https://github.com/ao/pyroid/issues/11)) ([132c60f](https://github.com/ao/pyroid/commit/132c60f6d964e7eb84f36a5013997b74229b3f4e))
+- **warc:** damaged brotli payloads (`Content-Encoding: br`) now decode exactly as brotlicffi 1.2.1.0 does; brotli-decompressor 6.3.1 fixes the 41 cases where pyroid decoded further ([#9](https://github.com/ao/pyroid/issues/9))
+
 ## 1.0.0
 
 pyroid 1.0 is a rewrite. It has Rust versions of popular Python libraries, each with the API and
