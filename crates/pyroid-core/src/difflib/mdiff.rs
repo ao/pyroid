@@ -257,23 +257,23 @@ impl LineIter<'_> {
 /// `_line_pair_iterator()`: one from line and one to line per row.
 fn pair_lines(lines: Vec<(Cell, Cell, bool)>) -> Vec<Row> {
     let mut out = Vec::with_capacity(lines.len());
-    let mut froms: VecDeque<(Cell, bool)> = VecDeque::new();
-    let mut tos: VecDeque<(Cell, bool)> = VecDeque::new();
+    let mut from_cells: VecDeque<(Cell, bool)> = VecDeque::new();
+    let mut to_cells: VecDeque<(Cell, bool)> = VecDeque::new();
     let mut it = lines.into_iter();
     loop {
-        while froms.is_empty() || tos.is_empty() {
+        while from_cells.is_empty() || to_cells.is_empty() {
             let Some((from, to, diff)) = it.next() else {
                 return out;
             };
             if from != Cell::Nothing {
-                froms.push_back((from, diff));
+                from_cells.push_back((from, diff));
             }
             if to != Cell::Nothing {
-                tos.push_back((to, diff));
+                to_cells.push_back((to, diff));
             }
         }
-        let (from, fd) = froms.pop_front().expect("non-empty");
-        let (to, td) = tos.pop_front().expect("non-empty");
+        let (from, fd) = from_cells.pop_front().expect("non-empty");
+        let (to, td) = to_cells.pop_front().expect("non-empty");
         out.push(Row {
             from,
             to,

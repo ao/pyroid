@@ -28,9 +28,11 @@ pytestmark = pytest.mark.filterwarnings("ignore::pyroid.FallbackWarning")
 COLOR = sys.version_info >= (3, 15)
 # PYROID_DIFFLIB_EXAMPLES=n runs n examples per fuzz test (the parity counts in the docs).
 _EXAMPLES = os.environ.get("PYROID_DIFFLIB_EXAMPLES")
-FUZZ = settings(
-    suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
-    **({"max_examples": int(_EXAMPLES)} if _EXAMPLES else {}),
+_HEALTH = [HealthCheck.too_slow, HealthCheck.data_too_large]
+FUZZ = (
+    settings(suppress_health_check=_HEALTH, max_examples=int(_EXAMPLES))
+    if _EXAMPLES
+    else settings(suppress_health_check=_HEALTH)
 )
 
 

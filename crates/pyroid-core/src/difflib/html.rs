@@ -144,19 +144,19 @@ pub fn rows(
             out.push(HRow::Pair(from, to, flag));
             continue;
         }
-        let (mut froms, mut tos) = (Vec::new(), Vec::new());
-        split_line(&mut froms, from, wrapcolumn);
-        split_line(&mut tos, to, wrapcolumn);
+        let (mut from_cells, mut to_cells) = (Vec::new(), Vec::new());
+        split_line(&mut from_cells, from, wrapcolumn);
+        split_line(&mut to_cells, to, wrapcolumn);
         let filler = || HCell {
             num: Num::Blank,
             text: vec![u32::from(b' ')],
         };
-        let k = froms.len().max(tos.len());
-        let mut froms = froms.into_iter();
-        let mut tos = tos.into_iter();
+        let k = from_cells.len().max(to_cells.len());
+        let mut from_cells = from_cells.into_iter();
+        let mut to_cells = to_cells.into_iter();
         for _ in 0..k {
-            let f = froms.next().unwrap_or_else(filler);
-            let t = tos.next().unwrap_or_else(filler);
+            let f = from_cells.next().unwrap_or_else(filler);
+            let t = to_cells.next().unwrap_or_else(filler);
             out.push(HRow::Pair(f, t, flag));
         }
     }
