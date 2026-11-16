@@ -21,7 +21,7 @@ import pytest
 
 pytestmark = pytest.mark.thread_unsafe(reason="starts child processes with their own packaging")
 
-_INFINITY = '''
+_INFINITY = """
 class InfinityType:
     def __repr__(self):
         return "Infinity"
@@ -78,7 +78,7 @@ class NegativeInfinityType:
 
 
 NegativeInfinity = NegativeInfinityType()
-'''
+"""
 
 # packaging 25.0's version module, without the properties these tests do not read.
 _VERSION_25 = r'''

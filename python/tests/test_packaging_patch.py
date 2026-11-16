@@ -12,7 +12,7 @@ import sys
 import textwrap
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -110,13 +110,16 @@ def test_objects_made_before_the_patch_keep_working() -> None:
         assert observe() == want
         new = pv.Version("1.5")
         assert type(new) is not type(v)
-        assert new == v and v == new and hash(new) == hash(v)
+        assert new == v
+        assert v == new
+        assert hash(new) == hash(v)
         assert pv.Version("1.0") < v < pv.Version("2.0")
-        assert pv.Version(v) == v  # taken by value while patched
+        assert pv.Version(cast(Any, v)) == v  # taken by value while patched
         assert ps.SpecifierSet(">=1").contains(v)
         assert list(ps.SpecifierSet(">=1").filter([v, "0.1"])) == [v]
         both = ss & ps.SpecifierSet("<2")
-        assert both.contains(v) and not both.contains("2.5")
+        assert both.contains(v)
+        assert not both.contains("2.5")
         assert pm.Marker("os_name == 'posix'") == m
         assert pr.Requirement("a>=1; os_name == 'posix'") == r
     finally:
@@ -153,7 +156,7 @@ def test_pickles_of_objects_made_before_the_patch() -> None:
         assert pickle.loads(pickle.dumps(objs[2])).prereleases is False
     finally:
         integrations.unpatch("packaging")
-    for o, cls in zip(objs, classes):
+    for o, cls in zip(objs, classes, strict=True):
         assert type(pickle.loads(pickle.dumps(o))) is cls
         assert "__reduce_ex__" not in vars(cls)
 
@@ -161,7 +164,9 @@ def test_pickles_of_objects_made_before_the_patch() -> None:
 def test_patch_warning_names_the_release() -> None:
     integrations.unpatch("packaging")
     integrations._patch._WARNED.discard("packaging")
-    with pytest.warns(integrations.PatchWarning, match="from packaging.version import Version") as w:
+    with pytest.warns(
+        integrations.PatchWarning, match="from packaging.version import Version"
+    ) as w:
         integrations.patch("packaging")
     integrations.unpatch("packaging")
     unported = [m for m in ("pylock", "ranges", "dependency groups") if m in str(w[0].message)]

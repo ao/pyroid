@@ -863,7 +863,7 @@ def _build_packaging(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     for original, new in replace.values():
         if isinstance(original, type):
             reduced.append((original, original.__dict__.get("__reduce_ex__", _MISSING)))
-            original.__reduce_ex__ = _pickle_as(original, new)  # type: ignore[method-assign]
+            original.__reduce_ex__ = _pickle_as(original, new)  # type: ignore[method-assign,assignment]
     # Under the patch packaging's classes are pyroid's: objects stop claiming the originals, and
     # pyroid's constructors take objects of the originals by value.
     native._set_patched(True)
@@ -875,9 +875,9 @@ def _build_packaging(impl: types.ModuleType, real: Any, missing: str) -> _Built:
             table[k] = f
         for cls, previous in reversed(reduced):
             if previous is _MISSING:
-                del cls.__reduce_ex__  # type: ignore[misc]
+                del cls.__reduce_ex__
             else:
-                cls.__reduce_ex__ = previous  # type: ignore[method-assign]
+                cls.__reduce_ex__ = previous
         native._set_patched(False)
 
     return {}, [undo]
@@ -885,15 +885,16 @@ def _build_packaging(impl: types.ModuleType, real: Any, missing: str) -> _Built:
 
 def _pickle_as(original: type, new: Any) -> Callable[[Any, Any], Any]:
     """``__reduce_ex__`` for packaging's `original` class while patched: pickle as `new`."""
-    base = original.__reduce_ex__
+    base: Any = original.__reduce_ex__
     restore = importlib.import_module("pyroid.packaging")._restore
 
-    def __reduce_ex__(self: Any, protocol: Any) -> Any:
+    def reduce_ex(self: Any, protocol: Any) -> Any:
         if type(self) is not original:  # a subclass: pickled by its own name
             return base(self, protocol)
         return (restore, (new, self.__getstate__()))
 
-    return __reduce_ex__
+    reduce_ex.__name__ = reduce_ex.__qualname__ = "__reduce_ex__"
+    return reduce_ex
 
 
 def _distribution_version(name: str) -> Callable[[Any], str | None]:

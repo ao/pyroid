@@ -517,7 +517,7 @@ def _marker_hash_named() -> bool:
     try:
         m = _pm.Marker('os_name == "a"')
         return hash(m) != hash(str(m)) and hash(m) == hash(("Marker", str(m)))
-    except Exception:  # noqa: BLE001  # a packaging whose markers pyroid cannot read
+    except Exception:  # a packaging whose markers pyroid cannot read
         return False
 
 
@@ -536,7 +536,7 @@ def _requirement_hash() -> str:
             return "parts"
         if hash(r) == hash(("Requirement", *parts)):
             return "named_parts"
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     return "fields"
 
@@ -550,8 +550,7 @@ _native._configure(
         "packaging_Version": _pv.Version if _CLAIM else None,
         "packaging_Version_any": _pv.Version if HAVE_PACKAGING else None,
         "packaging_BaseVersion": getattr(_pv, "_BaseVersion", None) if HAVE_PACKAGING else None,
-        "key_cache_slot": HAVE_PACKAGING
-        and "_key_cache" in getattr(_pv.Version, "__slots__", ()),
+        "key_cache_slot": HAVE_PACKAGING and "_key_cache" in getattr(_pv.Version, "__slots__", ()),
         "InvalidSpecifier": InvalidSpecifier,
         "spec_regex": SPECIFIER_REGEX,
         "delegate": _delegate,
@@ -620,7 +619,7 @@ def _choose_key_format() -> str:
         _native._set_key_format("legacy", structures.Infinity, structures.NegativeInfinity)
         if _keys_match():
             return "legacy"
-    except Exception:  # noqa: BLE001  # a packaging whose versions pyroid cannot read
+    except Exception:  # a packaging whose versions pyroid cannot read
         pass
     _native._set_key_format("apart")
     warnings.warn(

@@ -100,9 +100,9 @@ def test_isinstance_with_packagings_classes() -> None:
 
 
 def test_compares_with_packagings_other_base_versions() -> None:
-    """A _BaseVersion subclass of packaging's that only has `_key` (packaging's own tests use one)."""
+    """packaging's own tests compare with a _BaseVersion subclass that only has `_key`."""
 
-    class Simple(packaging_version._BaseVersion):  # type: ignore[misc,name-defined]
+    class Simple(packaging_version._BaseVersion):  # type: ignore[misc]
         def __init__(self, release: tuple[int, ...]) -> None:
             self._key = packaging_version.Version(".".join(map(str, release)))._key
 
@@ -362,21 +362,23 @@ def test_no_warning_on_import() -> None:
 def _outcome(f: Any) -> tuple[str, str]:
     try:
         return ("ok", repr(f()))
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return (type(e).__name__, str(e))
 
 
 def test_none_arguments_raise_as_packaging_does() -> None:
-    for build in (
+    builds: list[Any] = [
         lambda m: m.SpecifierSet(None),
         lambda m: m.Specifier(None),
         lambda m: m.SpecifierSet(None, prereleases=True),
-    ):
-        mine, theirs = _outcome(lambda: build(rp.specifiers)), _outcome(lambda: build(ps))
-        assert mine == theirs
+    ]
+    for build in builds:
+        mine = _outcome(lambda b=build: b(rp.specifiers))
+        assert mine == _outcome(lambda b=build: b(ps))
         assert mine[0] == "TypeError"
-    assert str(SpecifierSet()) == "" and len(SpecifierSet()) == 0
-    with pytest.raises(InvalidSpecifier, match="^Invalid specifier: ''$"):
+    assert str(SpecifierSet()) == ""
+    assert len(SpecifierSet()) == 0
+    with pytest.raises(InvalidSpecifier, match=r"^Invalid specifier: ''$"):
         Specifier()
 
 
@@ -440,7 +442,8 @@ def test_from_parts_requires_release() -> None:
     assert _outcome(lambda: Version.from_parts()) == _outcome(  # type: ignore[call-arg]
         lambda: packaging_version.Version.from_parts()
     )
-    assert Version.from_parts(release=None) == packaging_version.Version.from_parts(release=None)
+    none: Any = None
+    assert Version.from_parts(release=none) == packaging_version.Version.from_parts(release=none)
 
 
 @pytest.mark.skipif(not PACKAGING_263, reason="pyroid has packaging 26.3's attributes")
@@ -481,8 +484,8 @@ def test_deep_markers_do_not_use_the_stack() -> None:
     assert str(m).count("(") == 4999
     assert m.evaluate({"os_name": "nt"})
     # packaging's _markers: nested lists as deep as the marker, read back the same way.
-    nested = Marker(deep)._markers
-    back = Marker.__new__(Marker)
+    nested = cast(Any, Marker(deep))._markers
+    back: Any = Marker.__new__(Marker)
     back._markers = nested
     assert str(back) == 'os_name == "nt"'
     del nested, back
@@ -503,7 +506,7 @@ def test_deep_markers_in_a_thread_with_a_small_stack(stack: int) -> None:
             for _ in range(20_000):
                 m2 = m2 & other
             results.append(m2.evaluate({"os_name": "nt"}))
-        except BaseException as e:  # noqa: BLE001
+        except BaseException as e:
             results.append(e)
 
     old = threading.stack_size(stack)
@@ -532,7 +535,7 @@ def test_combining_markers_shares_the_groups() -> None:
     m = Marker("os_name == 'a'")
     for _ in range(18):
         m = m | m
-    tree = m._markers
+    tree = cast(Any, m)._markers
     assert tree[0] is tree[2]
     assert m.evaluate({"os_name": "a"})
     assert (m | Marker("os_name == 'c'")).evaluate({"os_name": "c"})
@@ -548,7 +551,7 @@ def test_combining_markers_shares_the_groups() -> None:
 def test_a_marker_list_that_holds_itself() -> None:
     loop: list[Any] = []
     loop.append(loop)
-    m = Marker.__new__(Marker)
+    m: Any = Marker.__new__(Marker)
     with pytest.raises(RecursionError):
         m._markers = loop
 
@@ -562,8 +565,9 @@ def test_and_with_packagings_specifier_set() -> None:
         both = ours & cast(Any, theirs)
         assert type(both) is SpecifierSet
         expected = ps.SpecifierSet(str(ours)) & theirs
-        if ours._prereleases is not None:
-            expected = ps.SpecifierSet(str(ours), prereleases=ours._prereleases) & theirs
+        pre = cast(Any, ours)._prereleases
+        if pre is not None:
+            expected = ps.SpecifierSet(str(ours), prereleases=pre) & theirs
         assert str(both) == str(expected)
         assert both.prereleases == expected.prereleases
         for v in ("0.5", "1.0", "2.5a1", "3.0", "foo"):
@@ -602,7 +606,7 @@ def test_fallback_warning_points_at_the_caller() -> None:
         line = sys._getframe().f_lineno + 1
         SpecifierSet(">=1").to_range()
         SpecifierSet(">=1").is_subset(SpecifierSet(">=0"))
-        SpecifierSet(">=1").is_superset(ps.SpecifierSet(">=2"))
+        SpecifierSet(">=1").is_superset(cast(Any, ps.SpecifierSet(">=2")))
         SpecifierSet(">=1").is_disjoint(SpecifierSet("<1"))
     got = [(w.filename, w.lineno, str(w.message).split(" runs")[0]) for w in caught]
     assert all(w.category is FallbackWarning for w in caught)
