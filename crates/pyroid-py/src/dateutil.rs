@@ -1896,9 +1896,12 @@ fn upstream_parse<'py>(
 /// `dateutil.parser.isoparse` under `pyroid.patch("dateutil")`: dateutil's
 /// `DEFAULT_ISOPARSER.isoparse`, parsed by pyroid when it can be.
 #[pyfunction]
-#[pyo3(name = "isoparse")]
-fn upstream_isoparse<'py>(dt_str: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    let py = dt_str.py();
+#[pyo3(name = "isoparse", signature = (*args, **kwargs), text_signature = "(dt_str)")]
+fn upstream_isoparse<'py>(
+    args: &Bound<'py, PyTuple>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = args.py();
     let h = hooks(py)?;
     let u = upstream(py)?;
     let globals = u.iso_module.bind(py);
@@ -1907,6 +1910,10 @@ fn upstream_isoparse<'py>(dt_str: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyA
         .ok_or_else(|| {
             PyValueError::new_err("dateutil.parser.isoparser has no DEFAULT_ISOPARSER")
         })?;
+    let Some(dt_str) = one_arg(args, kwargs)? else {
+        return p.call_method(pyo3::intern!(py, "isoparse"), args, kwargs);
+    };
+    let dt_str = &dt_str;
     let native = is_type(&p, &u.isoparser)
         && globals
             .get_item(pyo3::intern!(py, "datetime"))?
@@ -2022,12 +2029,34 @@ fn iso_bytes<'py>(
     }
 }
 
+/// The one argument of a call taken as `(*args, **kwargs)`, if it was called with exactly one
+/// positional argument. Any other call goes to dateutil's method, so a wrong call raises its
+/// `TypeError` (`isoparser.isoparse() missing 1 required positional argument: 'str_in'`).
+fn one_arg<'py>(
+    args: &Bound<'py, PyTuple>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    if args.len() == 1 && kwargs.is_none_or(PyDictMethods::is_empty) {
+        Ok(Some(args.get_item(0)?))
+    } else {
+        Ok(None)
+    }
+}
+
 /// The module-level `isoparse(dt_str)` (`DEFAULT_ISOPARSER.isoparse`).
 #[pyfunction]
-fn isoparse<'py>(dt_str: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    let py = dt_str.py();
+#[pyo3(signature = (*args, **kwargs), text_signature = "(dt_str)")]
+fn isoparse<'py>(
+    args: &Bound<'py, PyTuple>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = args.py();
     let h = hooks(py)?;
     let p = h.default_isoparser.bind(py);
+    let Some(dt_str) = one_arg(args, kwargs)? else {
+        return p.call_method(pyo3::intern!(py, "isoparse"), args, kwargs);
+    };
+    let dt_str = &dt_str;
     if let Ok(s) = dt_str.cast::<PyString>() {
         if let Ok(u) = s.to_str() {
             if u.is_ascii() {

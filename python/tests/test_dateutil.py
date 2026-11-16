@@ -608,6 +608,18 @@ def test_isoparse_inputs() -> None:
     same(a[1], b[1])
 
 
+def test_isoparse_type_errors_are_dateutils() -> None:
+    # dateutil's isoparse is DEFAULT_ISOPARSER.isoparse, so its TypeErrors name isoparser.isoparse.
+    for args, kwargs in [((), {}), (("2003-09-25",), {"sep": "T"}), (("2003-09-25", "T"), {})]:
+        for f in (pp.isoparse, pp.DEFAULT_ISOPARSER.isoparse):
+            assert outcome(f, *args, **kwargs) == outcome(du.isoparse, *args, **kwargs)
+    assert outcome(pp.isoparse, dt_str="2003-09-25") == outcome(du.isoparse, dt_str="2003-09-25")
+    import inspect
+
+    assert str(inspect.signature(pp.isoparse)) == "(dt_str)"
+    assert str(inspect.signature(pp.parse)) == "(timestr, parserinfo=None, **kwargs)"
+
+
 # --- batches -------------------------------------------------------------------------------
 
 STRINGS = ["2003-09-25", "Sep 26 2003 10:00", "10/27/03 1:02:03.5", "25.09.2003"]
@@ -911,6 +923,21 @@ def test_patch() -> None:
     finally:
         pyroid.unpatch("dateutil")
     assert (dateutil.parser.parse, dateutil.parser.isoparse) == original
+
+
+@pytest.mark.thread_unsafe(reason="patches dateutil")
+def test_patched_isoparse_type_errors_are_dateutils() -> None:
+    import dateutil.parser
+
+    want = [outcome(dateutil.parser.isoparse), outcome(du.isoparse, "2003-09-25", sep="T")]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.integrations.PatchWarning)
+        pyroid.patch("dateutil")
+    try:
+        assert outcome(dateutil.parser.isoparse) == want[0]
+        assert outcome(dateutil.parser.isoparse, "2003-09-25", sep="T") == want[1]
+    finally:
+        pyroid.unpatch("dateutil")
 
 
 # --- versions -------------------------------------------------------------------------------
