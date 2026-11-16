@@ -1,0 +1,11 @@
+{
+  "python": "3.12.16",
+  "seconds": 1297,
+  "file pairs": 2549,
+  "changed file pairs": 1033,
+  "lines": 2477356,
+  "diffs compared": 17451,
+  "names": 40343,
+  "name pairs scored": 2000,
+  "close-match queries": 4000
+}
