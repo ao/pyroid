@@ -1,0 +1,382 @@
+{
+ "machine": {
+  "python": "3.12.16",
+  "platform": "Linux-6.18.62-127.179.amzn2023.x86_64-x86_64-with-glibc2.36",
+  "machine": "x86_64",
+  "cpu": "Intel(R) Xeon(R) Platinum 8488C",
+  "cpus": 16,
+  "loadavg": [
+   0.466796875,
+   0.4833984375,
+   0.5146484375
+  ],
+  "packaging": "26.3",
+  "pyroid": "1.0.1"
+ },
+ "sections": {
+  "single": [
+   {
+    "case": "Version('1.2.3')",
+    "unit": "us",
+    "packaging": 1.102215716500877,
+    "pyroid": 0.34374988190934513,
+    "packaging_median": 1.1184973805036593,
+    "pyroid_median": 0.35008360891969637,
+    "speedup": 3.2064468222611846
+   },
+   {
+    "case": "Version('1.0.0rc1')",
+    "unit": "us",
+    "packaging": 2.8799788772324586,
+    "pyroid": 0.40783051911355506,
+    "packaging_median": 2.911429160442741,
+    "pyroid_median": 0.4127073171355612,
+    "speedup": 7.061705150198842
+   },
+   {
+    "case": "Version('2!1.0.post1.dev3+abc.5')",
+    "unit": "us",
+    "packaging": 4.812895190020666,
+    "pyroid": 0.5767191249918839,
+    "packaging_median": 4.89210624561016,
+    "pyroid_median": 0.5805278753364908,
+    "speedup": 8.345301866117925
+   },
+   {
+    "case": "a < b",
+    "unit": "us",
+    "packaging": 0.12344338884080489,
+    "pyroid": 0.05329579921546044,
+    "packaging_median": 0.12584817342142487,
+    "pyroid_median": 0.05639174731641275,
+    "speedup": 2.316193596079811
+   },
+   {
+    "case": "str(v)",
+    "unit": "us",
+    "packaging": 0.49036255565660153,
+    "pyroid": 0.056375513227650706,
+    "packaging_median": 0.49685346216089826,
+    "pyroid_median": 0.05714450650512667,
+    "speedup": 8.698147964994341
+   },
+   {
+    "case": "hash(Version('1.2.3'))",
+    "unit": "us",
+    "packaging": 0.8905596677377148,
+    "pyroid": 0.2492826957362845,
+    "packaging_median": 0.9016439477286484,
+    "pyroid_median": 0.2519695620707547,
+    "speedup": 3.5724889170800505
+   },
+   {
+    "case": "SpecifierSet('>=1.0,<2,!=1.5.*')",
+    "unit": "us",
+    "packaging": 10.05632423173984,
+    "pyroid": 3.064887734085734,
+    "packaging_median": 10.127902161117417,
+    "pyroid_median": 3.1483563410851323,
+    "speedup": 3.2811395079499297
+   },
+   {
+    "case": "ss.contains('1.6.2')",
+    "unit": "us",
+    "packaging": 1.4986221048334682,
+    "pyroid": 0.1878178247760707,
+    "packaging_median": 1.5255871596408632,
+    "pyroid_median": 0.1906719453169154,
+    "speedup": 7.97912608465266
+   },
+   {
+    "case": "ss.contains(Version)",
+    "unit": "us",
+    "packaging": 0.4614890994184983,
+    "pyroid": 0.12888631739557588,
+    "packaging_median": 0.47645949161053325,
+    "pyroid_median": 0.13007685058631413,
+    "speedup": 3.5805903120197247
+   },
+   {
+    "case": "Specifier('~=1.4.2').contains('1.4.5')",
+    "unit": "us",
+    "packaging": 7.371786394745324,
+    "pyroid": 0.6783261056502792,
+    "packaging_median": 7.416478458290673,
+    "pyroid_median": 0.688956633870666,
+    "speedup": 10.867614165723932
+   },
+   {
+    "case": "Marker(...) parse",
+    "unit": "us",
+    "packaging": 36.94478692626763,
+    "pyroid": 1.7518608473587924,
+    "packaging_median": 37.20331961272065,
+    "pyroid_median": 1.7792425680062138,
+    "speedup": 21.0888821346557
+   },
+   {
+    "case": "marker.evaluate()",
+    "unit": "us",
+    "packaging": 6.4866555559009695,
+    "pyroid": 0.8805847941455353,
+    "packaging_median": 6.606184847947184,
+    "pyroid_median": 0.8966649596369839,
+    "speedup": 7.366304300308997
+   },
+   {
+    "case": "marker.evaluate(environment)",
+    "unit": "us",
+    "packaging": 7.004158086949487,
+    "pyroid": 1.0384037678459672,
+    "packaging_median": 7.083704417369854,
+    "pyroid_median": 1.0472535936594474,
+    "speedup": 6.745120061995438
+   },
+   {
+    "case": "Requirement('requests>=2.8.1')",
+    "unit": "us",
+    "packaging": 10.198985119456795,
+    "pyroid": 1.7881198540556849,
+    "packaging_median": 10.402027380894738,
+    "pyroid_median": 1.8255157634705788,
+    "speedup": 5.70374804369192
+   },
+   {
+    "case": "Requirement(\"requests[security,socks]>=2.8.1,==2.8.*; python_version < '2.7'\")",
+    "unit": "us",
+    "packaging": 40.4866486902597,
+    "pyroid": 5.4369911339787365,
+    "packaging_median": 40.620519260025006,
+    "pyroid_median": 5.562885482066382,
+    "speedup": 7.44651732779854
+   },
+   {
+    "case": "canonicalize_name('Foo.Bar_baz')",
+    "unit": "us",
+    "packaging": 0.19141375451787487,
+    "pyroid": 0.1675523734246081,
+    "packaging_median": 0.19617963897665108,
+    "pyroid_median": 0.17071528151100263,
+    "speedup": 1.1424114777103018
+   }
+  ],
+  "versions_100000": [
+   {
+    "case": "parse every version",
+    "unit": "ms",
+    "packaging": 277.5119480002104,
+    "pyroid": 47.022820000165666,
+    "packaging_median": 278.89779600081965,
+    "pyroid_median": 47.20925099991291,
+    "speedup": 5.901644095339937
+   },
+   {
+    "case": "parse_batch",
+    "unit": "ms",
+    "packaging": 281.6199700000652,
+    "pyroid": 59.22381500022311,
+    "packaging_median": 285.5258750005305,
+    "pyroid_median": 60.678511999867624,
+    "speedup": 4.755181171611526
+   },
+   {
+    "case": "sorted(strs, key=Version)",
+    "unit": "ms",
+    "packaging": 612.440405999223,
+    "pyroid": 142.6972819999719,
+    "packaging_median": 626.5772809992995,
+    "pyroid_median": 147.78560000013385,
+    "speedup": 4.291885573541223
+   },
+   {
+    "case": "sort_versions(strs)",
+    "unit": "ms",
+    "packaging": 631.3374849996762,
+    "pyroid": 43.6737499994706,
+    "packaging_median": 639.58899499994,
+    "pyroid_median": 46.3846430002377,
+    "speedup": 14.455765419899347
+   },
+   {
+    "case": "sorted(Version objects)",
+    "unit": "ms",
+    "packaging": 330.2569669995137,
+    "pyroid": 87.77407000070525,
+    "packaging_median": 375.3240830001232,
+    "pyroid_median": 108.71508800028096,
+    "speedup": 3.7625800762897303
+   },
+   {
+    "case": "set(Version objects)",
+    "unit": "ms",
+    "packaging": 12.033058000270103,
+    "pyroid": 6.533335333339589,
+    "packaging_median": 12.503186999917185,
+    "pyroid_median": 6.682769999921827,
+    "speedup": 1.841794028061815
+   },
+   {
+    "case": "SpecifierSet.filter",
+    "unit": "ms",
+    "packaging": 264.6584139993138,
+    "pyroid": 16.20825533336756,
+    "packaging_median": 265.8344949995808,
+    "pyroid_median": 16.248165999968478,
+    "speedup": 16.328618260008998
+   },
+   {
+    "case": "filter_batch",
+    "unit": "ms",
+    "packaging": 265.0705129999551,
+    "pyroid": 15.515312333263864,
+    "packaging_median": 266.0093519998554,
+    "pyroid_median": 16.329982333445514,
+    "speedup": 17.084445823991594
+   },
+   {
+    "case": "contains_batch",
+    "unit": "ms",
+    "packaging": 307.74799099981465,
+    "pyroid": 6.469007166742813,
+    "packaging_median": 308.9465660004862,
+    "pyroid_median": 6.61561099999138,
+    "speedup": 47.57267739351845
+   }
+  ],
+  "versions_1000000": [
+   {
+    "case": "parse every version",
+    "unit": "ms",
+    "packaging": 2753.4584550003274,
+    "pyroid": 471.3870109999334,
+    "packaging_median": 2755.8665809992817,
+    "pyroid_median": 471.8918640000993,
+    "speedup": 5.841184399967942
+   },
+   {
+    "case": "parse_batch",
+    "unit": "ms",
+    "packaging": 2764.912894999725,
+    "pyroid": 720.379447000596,
+    "packaging_median": 2769.5626160002575,
+    "pyroid_median": 722.6421870000195,
+    "speedup": 3.838134064640294
+   },
+   {
+    "case": "sorted(strs, key=Version)",
+    "unit": "ms",
+    "packaging": 9399.139458000718,
+    "pyroid": 2411.5561070002514,
+    "packaging_median": 9402.15542399983,
+    "pyroid_median": 2416.8375310000556,
+    "speedup": 3.8975412725073864
+   },
+   {
+    "case": "sort_versions(strs)",
+    "unit": "ms",
+    "packaging": 9379.063086000315,
+    "pyroid": 740.2554370000871,
+    "packaging_median": 9392.334926999865,
+    "pyroid_median": 749.0518109998447,
+    "speedup": 12.67003606756246
+   },
+   {
+    "case": "sorted(Version objects)",
+    "unit": "ms",
+    "packaging": 5204.232592000153,
+    "pyroid": 1888.7481289993957,
+    "packaging_median": 5817.601910000121,
+    "pyroid_median": 1907.2803970002496,
+    "speedup": 2.755387291770452
+   },
+   {
+    "case": "set(Version objects)",
+    "unit": "ms",
+    "packaging": 481.11858099946403,
+    "pyroid": 261.92824200006726,
+    "packaging_median": 484.7423000001072,
+    "pyroid_median": 262.19961200058606,
+    "speedup": 1.8368335438961199
+   },
+   {
+    "case": "SpecifierSet.filter",
+    "unit": "ms",
+    "packaging": 2634.3437099994844,
+    "pyroid": 162.1795419996488,
+    "packaging_median": 2646.3220729992827,
+    "pyroid_median": 162.33575200021733,
+    "speedup": 16.243378650096258
+   },
+   {
+    "case": "filter_batch",
+    "unit": "ms",
+    "packaging": 2647.3505129997648,
+    "pyroid": 212.8232149998439,
+    "packaging_median": 2649.317895999957,
+    "pyroid_median": 214.64378699965891,
+    "speedup": 12.439199891805536
+   },
+   {
+    "case": "contains_batch",
+    "unit": "ms",
+    "packaging": 3065.804197000034,
+    "pyroid": 86.89002600021922,
+    "packaging_median": 3070.6774099999166,
+    "pyroid_median": 87.83155199944304,
+    "speedup": 35.283729768849405
+   }
+  ],
+  "lists": [
+   {
+    "case": "SpecifierSet('>=1.0,<2').filter(releases)",
+    "unit": "ms",
+    "packaging": 4.732626599979994,
+    "pyroid": 0.28219106321955023,
+    "packaging_median": 4.750898299971595,
+    "pyroid_median": 0.28250271839431074,
+    "speedup": 16.771000987717024
+   },
+   {
+    "case": "SpecifierSet('>=4.2,!=4.3.*,<30').filter(releases)",
+    "unit": "ms",
+    "packaging": 5.46339299995048,
+    "pyroid": 0.32655551034434305,
+    "packaging_median": 5.507994222170964,
+    "pyroid_median": 0.3275187793092457,
+    "speedup": 16.73036536480274
+   },
+   {
+    "case": "SpecifierSet('~=12.4').filter(releases)",
+    "unit": "ms",
+    "packaging": 4.648118900058762,
+    "pyroid": 0.2750076477272242,
+    "packaging_median": 4.679560499971558,
+    "pyroid_median": 0.27553578977093907,
+    "speedup": 16.901780508552104
+   },
+   {
+    "case": "Requirement() x 10,000",
+    "unit": "ms",
+    "packaging": 276.2615720002941,
+    "pyroid": 34.29645999949571,
+    "packaging_median": 277.83259300031204,
+    "pyroid_median": 34.35197299950232,
+    "speedup": 8.055104579433452
+   },
+   {
+    "case": "Marker.evaluate x 1,000",
+    "unit": "ms",
+    "packaging": 4.962818200056063,
+    "pyroid": 0.6305204430381182,
+    "packaging_median": 4.997235400060163,
+    "pyroid_median": 0.6351896961951994,
+    "speedup": 7.870986983614796
+   }
+  ]
+ },
+ "loadavg_after": [
+  1.0419921875,
+  0.90673828125,
+  0.71240234375
+ ]
+}

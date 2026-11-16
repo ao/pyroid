@@ -8,10 +8,10 @@ function, so pyroid gives the same parsing, ordering, hashes, strings and except
 26.3 ([parity](../compatibility.md#packaging)). Its objects mix with packaging's: they compare
 and hash equal, and packaging's own code accepts them.
 
-On a shared AWS EC2 c8g.16xlarge devbox (Graviton4, CPython 3.12; indicative), pyroid parses
-versions 3 to 9× faster than packaging 26.3, answers `SpecifierSet.contains` 8× faster, filters a
-project's release list 18× faster, and parses markers 21× and requirements 5 to 7× faster;
-`sort_versions` sorts 1,000,000 version strings 14× faster than `sorted(key=Version)`
+On a dedicated AWS EC2 c7i.4xlarge (Intel Xeon, CPython 3.12), pyroid parses versions 3 to 8×
+faster than packaging 26.3, answers `SpecifierSet.contains` 8× faster, filters a project's release
+list 17× faster, and parses markers 21× and requirements 6 to 7× faster; `sort_versions` sorts
+1,000,000 version strings 13× faster than `sorted(key=Version)`
 ([benchmarks](../benchmarks.md#pyroidpackaging)).
 
 ```console
