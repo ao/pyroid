@@ -12,8 +12,9 @@ Each module runs on list[str] and Arrow input and single str calls, at every ``-
 ftfy (FineWeb text, plus mojibake made from it), translit, fastText LID (.bin and .ftz), the Gopher, C4 and
 FineWeb filters and the formatters, MinHash and exact and sentence dedup, pyroid.text, pyroid.jieba,
 pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.metrics
-(ROUGE, BLEU, chrF), pyroid.datasketch, and the FineWeb-2 filter and MinHash configs of every language
-pyroid tokenizes natively here (Japanese only with SudachiDict installed).
+(ROUGE, BLEU, chrF), pyroid.datasketch, pyroid.tabulate (tables of numbers, FineWeb words and mixed cells
+in the common formats), and the FineWeb-2 filter and MinHash configs of every language pyroid tokenizes
+natively here (Japanese only with SudachiDict installed).
 
 Needs only pyroid and numpy. pyarrow is optional: without it, as on Windows ARM64, the Arrow calls are
 skipped. Nothing is checked or timed: an instrumented build is never shipped.
@@ -24,6 +25,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import random
 import sys
 import time
 import warnings
@@ -298,10 +300,39 @@ class Trainer:
             lsh.query(lean)
             m.jaccard(ms[0])
 
+    def tabulate(self) -> None:
+        import pyroid.tabulate as TB
+
+        rnd = random.Random(TRAIN_SEED)
+        words = [w for t in self.texts[:500] for w in t.split()[:50]] or ["x"]
+
+        def cell(kind: str, i: int, j: int) -> Any:
+            if kind == "numbers":
+                return i * 7 + j if j % 2 == 0 else rnd.random() * 10 ** rnd.randint(-4, 7)
+            if kind == "text":
+                if j % 3 == 2:
+                    return str(rnd.randint(0, 10**7))
+                return " ".join(rnd.choices(words, k=rnd.randint(1, 5)))
+            mixed = [words[i % len(words)], -i, rnd.random() * 1000, None if i % 6 == 0 else "y" * (i % 4)]
+            return [*mixed, f"{i}.5"][j % 5]
+
+        formats = ["simple", "plain", "pipe", "github", "grid", "fancy_grid", "psql", "rst", "orgtbl", "html"]
+        formats += ["latex", "tsv"]
+        for n, cols in ((1, 3), (6, 4), (800, 8), (30_000, 9)):
+            for kind in ("numbers", "text", "mixed"):
+                rows = [[cell(kind, i, j) for j in range(cols)] for i in range(n)]
+                headers = [f"h{j}" for j in range(cols)]
+                for fmt in formats if n <= 800 else formats[:5]:
+                    TB.tabulate(rows, headers=headers, tablefmt=fmt)
+                TB.tabulate(rows, headers="firstrow", floatfmt=".3f", intfmt=",", missingval="-")
+                TB.tabulate(rows, showindex=True, numalign="right", stralign="center")
+        for _ in range(self.per_doc):
+            TB.tabulate([[rnd.random(), rnd.randint(0, 99), rnd.choice(words)]], headers=["a", "b", "c"])
+
     def run(self) -> dict[str, float]:
         warnings.simplefilter("ignore")  # FallbackWarning and friends: the paths still run
         sections = ["ftfy", "translit", "fasttext", "filters", "dedup", "text", "multilingual", "jieba"]
-        sections += ["json_repair", "metrics", "datasketch"]
+        sections += ["json_repair", "metrics", "datasketch", "tabulate"]
         for name in sections:
             self.section(name, getattr(self, name))
         return self.timings
