@@ -90,7 +90,7 @@ fn reverse_type(t: &str) -> &'static [&'static str] {
 }
 
 /// `TYPES_MAP.get(name, 'unknown')`.
-pub(crate) fn jmespath_type(name: &str) -> &'static str {
+fn jmespath_type(name: &str) -> &'static str {
     match name {
         "bool" => "boolean",
         "list" | "_Projection" => "array",
@@ -187,6 +187,70 @@ fn validate<'py>(
     Ok(())
 }
 
+/// `TYPES_MAP.get(name, 'unknown')` for a value's type name: the built-in table, then (for a
+/// name it lacks) the stock `Functions` module's `TYPES_MAP`, so entries added to it count.
+fn jmespath_type_of(ctx: &Ctx<'_, '_>, name: &str) -> PyResult<Cow<'static, str>> {
+    let t = jmespath_type(name);
+    if t != "unknown" {
+        return Ok(Cow::Borrowed(t));
+    }
+    let py = ctx.py;
+    let Some(map) = type_map(ctx, pyo3::intern!(py, "TYPES_MAP"))? else {
+        return Ok(Cow::Borrowed(t));
+    };
+    let found = map.call_method1(pyo3::intern!(py, "get"), (name, t))?;
+    Ok(match found.cast::<PyString>() {
+        Ok(s) => Cow::Owned(s.to_cow()?.into_owned()),
+        Err(_) => Cow::Owned(found.str()?.to_cow()?.into_owned()),
+    })
+}
+
+/// The stock `Functions` module's global `name` (`TYPES_MAP` or `REVERSE_TYPES_MAP`), as its
+/// methods look it up when they run.
+fn type_map<'py>(
+    ctx: &Ctx<'py, '_>,
+    name: &Bound<'py, PyString>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    let py = ctx.py;
+    let Some(globals) = config(py)?.type_maps(py, &ctx.opts.funcs) else {
+        return Ok(None);
+    };
+    match globals.get_item(name)? {
+        Some(map) => Ok(Some(map)),
+        None => Err(pyo3::exceptions::PyNameError::new_err(format!(
+            "name '{name}' is not defined"
+        ))),
+    }
+}
+
+/// Is `actual` in `REVERSE_TYPES_MAP[t]` for one of `names`, as the map is now? Asked only when
+/// the built-in table says no, so names added to the map (Ansible adds its tagged `str`, `list`
+/// and `dict` subclasses) are accepted as jmespath accepts them.
+fn live_allows<'py, 'n>(
+    ctx: &Ctx<'py, '_>,
+    names: impl IntoIterator<Item = &'n str>,
+    actual: &str,
+) -> PyResult<bool> {
+    let py = ctx.py;
+    let Some(map) = type_map(ctx, pyo3::intern!(py, "REVERSE_TYPES_MAP"))? else {
+        return Ok(false);
+    };
+    for t in names {
+        if map.get_item(t)?.contains(actual)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The jmespath type of `t` (`array-number` -> `array`) and its subtype, if any.
+fn split_type(t: &str) -> (&str, Option<&str>) {
+    match t.split_once('-') {
+        Some((base, sub)) => (base, Some(sub)),
+        None => (t, None),
+    }
+}
+
 fn type_check_single<'py>(
     ctx: &Ctx<'py, '_>,
     current: &Val<'py, '_>,
@@ -196,20 +260,20 @@ fn type_check_single<'py>(
     let py = ctx.py;
     // _get_allowed_pytypes, without building the lists: `array-number` allows the array
     // types, with `number` as a subtype.
-    let base = |t: &&str| reverse_type(t.split_once('-').map_or(*t, |(b, _)| b));
-    let subtypes = || {
-        types
-            .iter()
-            .filter_map(|t| t.split_once('-').map(|(_, sub)| reverse_type(sub)))
-    };
+    let subtypes = || types.iter().filter_map(|t| split_type(t).1);
     let actual = type_name(current)?;
-    if !types.iter().any(|t| base(t).contains(&actual.as_ref())) {
+    let allowed = types
+        .iter()
+        .any(|t| reverse_type(split_type(t).0).contains(&actual.as_ref()))
+        || live_allows(ctx, types.iter().map(|t| split_type(t).0), &actual)?;
+    if !allowed {
         let cur = current.to_py(ctx)?;
+        let jt = jmespath_type_of(ctx, &actual)?;
         return Err(type_error(
             ctx,
             name,
             &cur,
-            jmespath_type(&actual),
+            &jt,
             py_list(py, types)?.into_any(),
         ));
     }
@@ -230,38 +294,40 @@ fn type_check_single<'py>(
             py_list(py, types)?.into_any(),
         ))
     };
-    if n_subtypes == 1 {
-        let allowed = subtypes().next().unwrap_or_default();
+    let check_all = |sub: &str| -> PyResult<()> {
+        let builtin = reverse_type(sub);
         let mut err = None;
         interp::for_each(ctx, current, |el| {
             let actual = type_name(&Val::Py(el.clone()))?;
-            if allowed.contains(&actual.as_ref()) {
+            if builtin.contains(&actual.as_ref()) || live_allows(ctx, [sub], &actual)? {
                 Ok(true)
             } else {
                 err = Some(raw_error(&el, &actual)?);
                 Ok(false)
             }
         })?;
-        return err.map_or(Ok(()), Err);
+        err.map_or(Ok(()), Err)
+    };
+    if n_subtypes == 1 {
+        return check_all(subtypes().next().unwrap_or_default());
     }
-    if n_subtypes > 1 && current.is_truthy()? {
+    if current.is_truthy()? {
         // The first element's type picks the subtype the others must have.
         let first_el = current.get_item(0)?;
         let first = type_name(&Val::Py(first_el.clone()))?;
-        let Some(allowed) = subtypes().find(|s| s.contains(&first.as_ref())) else {
+        let mut picked = subtypes().find(|s| reverse_type(s).contains(&first.as_ref()));
+        if picked.is_none() {
+            for s in subtypes() {
+                if live_allows(ctx, [s], &first)? {
+                    picked = Some(s);
+                    break;
+                }
+            }
+        }
+        let Some(sub) = picked else {
             return Err(raw_error(&first_el, &first)?);
         };
-        let mut err = None;
-        interp::for_each(ctx, current, |el| {
-            let actual = type_name(&Val::Py(el.clone()))?;
-            if allowed.contains(&actual.as_ref()) {
-                Ok(true)
-            } else {
-                err = Some(raw_error(&el, &actual)?);
-                Ok(false)
-            }
-        })?;
-        return err.map_or(Ok(()), Err);
+        return check_all(sub);
     }
     Ok(())
 }
@@ -651,18 +717,14 @@ fn sort_by<'py>(
     }
     // _func_sort_by -> expref.visit -> visit: the first element's type decides.
     let first = array.get_item(0)?;
-    let required = jmespath_type(&type_name(&Val::Py(apply(
-        ctx,
-        expref,
-        &first,
-        depth + 3,
-    )?))?);
+    let first_key = apply(ctx, expref, &first, depth + 3)?;
+    let required = jmespath_type_of(ctx, &type_name(&Val::Py(first_key))?)?;
     if required != "number" && required != "string" {
         return Err(type_error(
             ctx,
             &PyString::new(py, "sort_by").into_any(),
             &first,
-            required,
+            &required,
             py_list(py, &["string", "number"])?.into_any(),
         ));
     }
@@ -678,14 +740,14 @@ fn sort_by<'py>(
             py.check_signals()?;
         }
         let k = apply(ctx, expref, x, depth + 4)?;
-        let t = jmespath_type(&type_name(&Val::Py(k.clone()))?);
+        let t = jmespath_type_of(ctx, &type_name(&Val::Py(k.clone()))?)?;
         if t != required {
             return Err(type_error(
                 ctx,
                 &PyString::new(py, "sort_by").into_any(),
                 &k,
-                t,
-                py_list(py, &[required])?.into_any(),
+                &t,
+                py_list(py, &[required.as_ref()])?.into_any(),
             ));
         }
         keys.push(k);
@@ -751,13 +813,13 @@ fn min_max_by<'py>(
         }
         // _func_min_by -> min -> keyfunc -> expref.visit -> visit
         let k = apply(ctx, expref, &x, depth + 4)?;
-        let t = jmespath_type(&type_name(&Val::Py(k.clone()))?);
+        let t = jmespath_type_of(ctx, &type_name(&Val::Py(k.clone()))?)?;
         if t != "number" && t != "string" {
             return Err(type_error(
                 ctx,
                 &fname,
                 &k,
-                t,
+                &t,
                 py_list(py, &["number", "string"])?.into_any(),
             ));
         }

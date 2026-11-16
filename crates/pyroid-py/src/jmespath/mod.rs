@@ -36,6 +36,8 @@ struct Stock {
     methods: Vec<(Py<PyString>, Py<PyAny>)>,
     /// `(function, signature)` per [`Builtin`], from `FUNCTION_TABLE`.
     funcs: Vec<Option<(Py<PyAny>, Py<PyAny>)>>,
+    /// The globals its type checks read `TYPES_MAP` and `REVERSE_TYPES_MAP` from.
+    globals: Py<PyDict>,
 }
 
 impl Stock {
@@ -79,7 +81,20 @@ struct Config {
     fallback: Py<PyAny>,
     getframe: Py<PyAny>,
     getrecursionlimit: Py<PyAny>,
+    /// pyroid's `Functions`, then jmespath's when it is installed (the one `search` follows
+    /// without custom functions).
     stocks: Vec<Stock>,
+}
+
+impl Config {
+    /// The globals of the `Functions` class whose type checks the native ones stand in for.
+    fn type_maps<'py>(&self, py: Python<'py>, funcs: &Funcs) -> Option<&Bound<'py, PyDict>> {
+        let stock = match funcs {
+            Funcs::Custom { stock: Some(i), .. } => self.stocks.get(*i),
+            _ => self.stocks.last(),
+        };
+        stock.map(|s| s.globals.bind(py))
+    }
 }
 
 static CONFIG: PyOnceLock<Config> = PyOnceLock::new();
@@ -131,10 +146,16 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
                 Err(_) => None,
             });
         }
+        let globals = cls
+            .getattr("_type_check_single")?
+            .getattr("__globals__")?
+            .cast_into::<PyDict>()?
+            .unbind();
         stocks.push(Stock {
             cls: cls.unbind(),
             methods,
             funcs,
+            globals,
         });
     }
     let builtins = py.import("builtins")?;

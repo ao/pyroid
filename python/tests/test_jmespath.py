@@ -263,6 +263,102 @@ def test_custom_functions_from_jmespath() -> None:
     assert jp.search("sort(a.b)", data, options) == [1, 2, 3]
 
 
+class _TaggedStr(str):
+    __slots__ = ()
+
+
+class _LazyList(list[Any]):
+    __slots__ = ()
+
+
+class _LazyDict(dict[Any, Any]):
+    __slots__ = ()
+
+
+_ANSIBLE_CASES = [
+    "length(@)",
+    "length(servers)",
+    "servers[?starts_with(name, 'server')].name",
+    "servers[?contains(name, '1')].name",
+    "keys(@)",
+    "values(servers[0])",
+    "merge(servers[0], servers[1])",
+    "servers[].name | join(', ', @)",
+    "map(&name, servers)",
+    "reverse(servers[].name)",
+    "max(servers[].name)",
+    "sort(servers[].name)",
+    "sort_by(servers, &name)[].name",
+    "max_by(servers, &name).name",
+    "servers[].name | [?ends_with(@, 'db')]",
+]
+
+
+def _ansible_data() -> Any:
+    servers = _LazyList(
+        [_LazyDict(name=_TaggedStr("server11"), n=1), _LazyDict(name=_TaggedStr("db"), n=2)]
+    )
+    return _LazyDict(servers=servers)
+
+
+def _outcome(search: Any, expression: str, data: Any) -> Any:
+    try:
+        return search(expression, data)
+    except Exception as e:  # noqa: BLE001 - the outcome is compared
+        return (type(e).__name__, str(e))
+
+
+@pytest.mark.thread_unsafe(reason="changes the module-wide type maps")
+def test_type_maps_take_additions_as_ansible_makes_them() -> None:
+    # J2: Ansible's json_query adds its tagged str/list/dict classes to REVERSE_TYPES_MAP.
+    reverse = functions.REVERSE_TYPES_MAP
+    saved = dict(reverse)
+    data = _ansible_data()
+    before = {e: _outcome(jp.search, e, data) for e in _ANSIBLE_CASES}
+    assert before["length(@)"][0] == "JMESPathTypeError"
+    try:
+        reverse["string"] = reverse["string"] + ("_TaggedStr",)
+        reverse["array"] = reverse["array"] + ("_LazyList",)
+        reverse["object"] = reverse["object"] + ("_LazyDict",)
+        assert jp.search("length(@)", _TaggedStr("web-prod")) == 8
+        after = {e: _outcome(jp.search, e, data) for e in _ANSIBLE_CASES}
+        assert after["length(servers)"] == 2
+        assert after["servers[].name | join(', ', @)"] == "server11, db"
+        assert after["max(servers[].name)"] == "server11"
+        # sort_by's keys go by TYPES_MAP, which Ansible leaves alone: jmespath's error.
+        assert after["sort_by(servers, &name)[].name"][0] == "JMESPathTypeError"
+        if HAVE_JMESPATH:
+            real = oracle()
+            assert functions.REVERSE_TYPES_MAP is real.functions.REVERSE_TYPES_MAP
+            assert functions.TYPES_MAP is real.functions.TYPES_MAP
+            assert after == {e: _outcome(real.search, e, data) for e in _ANSIBLE_CASES}
+        # A custom Functions subclass reads the same maps.
+        class Custom(functions.Functions):
+            pass
+
+        options = jp.Options(custom_functions=Custom())
+        assert jp.search("length(servers)", data, options) == 2
+    finally:
+        reverse.clear()
+        reverse.update(saved)
+    assert _outcome(jp.search, "length(servers)", data) == before["length(servers)"]
+
+
+@pytest.mark.thread_unsafe(reason="changes the module-wide type maps")
+def test_types_map_takes_additions() -> None:
+    saved = dict(functions.TYPES_MAP)
+    data = {"servers": [{"name": _TaggedStr("server11"), "n": 1}, {"name": _TaggedStr("db"), "n": 2}]}
+    try:
+        functions.TYPES_MAP["_TaggedStr"] = "string"
+        assert jp.search("sort_by(servers, &name)[].name", data) == ["db", "server11"]
+        assert jp.search("max_by(servers, &name).n", data) == 1
+        with pytest.raises(exceptions.JMESPathTypeError, match='received: "string"'):
+            jp.search("abs(@)", _TaggedStr("x"))
+    finally:
+        functions.TYPES_MAP.clear()
+        functions.TYPES_MAP.update(saved)
+
+
 @pytest.mark.thread_unsafe(reason="pytest.warns")
 def test_tokenize_is_lazy() -> None:
     tokens = lexer.Lexer().tokenize("a.b ^")
