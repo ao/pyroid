@@ -31,7 +31,7 @@ Version("1.10") > Version("1.9")  # True
 ```
 
 For code you don't own, `pyroid.patch("yaml", "jmespath")` makes its `import yaml` and
-`import jmespath` give pyroid's modules (boto3 and the AWS CLI query through jmespath).
+`import jmespath` use pyroid's functions (boto3 and the AWS CLI query through jmespath).
 
 On an AWS EC2 c7i.4xlarge, `yaml.safe_load` is 10× faster than PyYAML's `CSafeLoader` on 11,878
 real YAML files, `jmespath.search` 10 to 26× faster than jmespath 1.1.0 on single queries of a
@@ -199,7 +199,7 @@ row's corpus, interpreter and source.
 ```python
 import pyroid
 
-pyroid.patch("ftfy", "fasttext")  # later imports of ftfy and fasttext get pyroid's
+pyroid.patch("yaml", "jmespath")  # from here on, yaml.safe_load and jmespath.search are pyroid's
 ```
 
 The filters and dedup tokenize 4,049 of datatrove's 4,343 language codes natively, Chinese and

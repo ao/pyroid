@@ -29,7 +29,7 @@ For code you don't own, such as boto3 or a pipeline library, patch its imports i
 ```python
 import pyroid
 
-pyroid.patch("jmespath", "ftfy")  # from here on, `import jmespath` gets pyroid.jmespath
+pyroid.patch("jmespath", "ftfy")  # from here on, jmespath.search and ftfy.fix_text are pyroid's
 
 import jmespath
 
