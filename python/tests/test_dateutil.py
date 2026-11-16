@@ -15,6 +15,7 @@ import subprocess
 import sys
 import textwrap
 import threading
+import time
 import warnings
 from typing import Any, cast
 
@@ -236,6 +237,140 @@ def test_parse_keywords() -> None:
     assert z is tz.tzoffset(None, 10800)
     assert pp.parse("2003-09-26 10:00 +0300").tzinfo is z
     assert pp.parse("2003-09-26 10:00 +0300 (BRST)").tzinfo is tz.tzoffset("BRST", 10800)
+
+
+def _offset(minutes: int) -> str:
+    sign = "-" if minutes < 0 else "+"
+    return f"{sign}{abs(minutes) // 60:02d}{abs(minutes) % 60:02d}"
+
+
+_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_names = iter(f"QX{a}{b}" for a in _LETTERS for b in _LETTERS)
+_names_lock = threading.Lock()
+
+
+def _tzname() -> str:
+    """A time zone name no other test (or earlier run of the same test) parses."""
+    with _names_lock:
+        return next(_names)
+
+
+@pytest.mark.thread_unsafe(reason="starts its own threads")
+def test_tzoffsets_are_dateutils_on_every_thread() -> None:
+    # Regression: each thread kept the tzoffsets it handed out. When threads parsed an offset no
+    # live object had at the same moment, dateutil's factory (WeakValueDictionary.get, then
+    # setdefault) gave some of them an instance it then replaced with another thread's, and those
+    # threads went on handing theirs out: `parse(s).tzinfo is tz.tzoffset(...)` failed on
+    # free-threaded builds (CI's pytest-run-parallel pass, test_parse_keywords).
+    gil = getattr(sys, "_is_gil_enabled", lambda: True)()
+    n, rounds = 4, (10 if gil else 120)
+    # The window is a few microseconds and a Barrier wakes its threads one by one, so after it
+    # they also wait for one moment on the clock.
+    start = [0.0]
+    barrier = threading.Barrier(n, action=lambda: start.__setitem__(0, time.perf_counter() + 1e-3))
+    name = _tzname()
+    results: list[list[tuple[Any, ...]]] = [[] for _ in range(n)]
+    errors: list[BaseException] = []
+
+    def run(i: int) -> None:
+        try:
+            for k in range(rounds):
+                # Keys (name, seconds) and (None, seconds) no other test makes.
+                minutes = 301 + 7 * k
+                s = f"2003-09-26 10:00 {_offset(minutes)} ({name})"
+                iso = f"2003-09-26T10:00{_offset(-minutes)[:3]}:{_offset(-minutes)[3:]}"
+                barrier.wait()
+                while time.perf_counter() < start[0]:
+                    pass
+                a = pp.parse(s).tzinfo
+                b = pp.isoparse(iso).tzinfo
+                after = (tz.tzoffset(name, 60 * minutes), tz.tzoffset(None, -60 * minutes))
+                barrier.wait()
+                # Later calls on the same thread, after every thread made its first.
+                batch = pp.parse_batch([s])[0]
+                assert batch is not None
+                later = (batch.tzinfo, pp.isoparse(iso).tzinfo)
+                results[i].append((a, b, *after, *later))
+        except BaseException as e:
+            errors.append(e)
+            barrier.abort()
+
+    ts = [threading.Thread(target=run, args=(i,)) for i in range(n)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert not errors, errors[0]
+    for k in range(rounds):
+        minutes = 301 + 7 * k
+        named, unnamed = tz.tzoffset(name, 60 * minutes), tz.tzoffset(None, -60 * minutes)
+        for i in range(n):
+            a, b, named_after, unnamed_after, named_later, unnamed_later = results[i][k]
+            assert a is named_after is named_later is named, (k, i)
+            assert b is unnamed_after is unnamed_later is unnamed, (k, i)
+
+
+@pytest.mark.thread_unsafe(reason="starts its own threads")
+def test_tzoffsets_are_dateutils_after_its_caches_drop_them() -> None:
+    # dateutil's factory keeps the last 8 instances strongly and the rest while they live; pyroid
+    # keeps 64 per thread and 1,024 for the process. Past all of those, a result still held keeps
+    # its instance, and a key nobody holds gets the factory's new one, on every thread.
+    name, other = _tzname(), _tzname()
+    held = pp.parse(f"2003-09-26 10:00 +1251 ({name})").tzinfo
+    assert held is tz.tzoffset(name, 46260)
+    pp.parse(f"2003-09-26 10:00 +1252 ({name})")
+    for m in range(1100):
+        pp.parse(f"2003-09-26 10:00 {_offset(m + 1)} ({other})")
+        tz.tzoffset(other, -m)
+    found: list[tuple[Any, Any]] = []
+
+    def run() -> None:
+        found.append(
+            (
+                pp.parse(f"2003-09-26 10:00 +1251 ({name})").tzinfo,
+                pp.parse(f"2003-09-26 10:00 +1252 ({name})").tzinfo,
+            )
+        )
+
+    ts = [threading.Thread(target=run) for _ in range(4)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    run()
+    assert len(found) == 5
+    for kept, made in found:
+        assert kept is held is tz.tzoffset(name, 46260)
+        assert made is found[0][1] is tz.tzoffset(name, 46320)
+
+
+@pytest.mark.thread_unsafe(reason="sets a trace function")
+def test_parse_from_inside_the_tzoffset_factory() -> None:
+    # Code that dateutil's tzoffset factory runs (a trace function here; a collection's __del__
+    # or a signal handler elsewhere) can parse a new offset while pyroid makes one. That parse
+    # must not wait for the outer one, which holds the lock that keeps two threads from making
+    # one at once, and both results are dateutil's.
+    outer, inner = _tzname(), _tzname()
+    seen: list[tuple[int, Any]] = []
+
+    def trace(frame: Any, event: str, arg: Any) -> None:
+        code = frame.f_code
+        if event == "call" and code.co_name == "__call__" and "_factories" in code.co_filename:
+            m = -1 - len(seen)
+            seen.append((m, pp.parse(f"2003-09-26 10:00 {_offset(m)} ({inner})").tzinfo))
+
+    old = sys.gettrace()
+    sys.settrace(trace)
+    try:
+        for m in range(1, 51):
+            z = pp.parse(f"2003-09-26 10:00 {_offset(m)} ({outer})").tzinfo
+            assert z is tz.tzoffset(outer, 60 * m)
+    finally:
+        sys.settrace(old)
+    # pyroid calls the factory twice for each new offset (and the assert once).
+    assert len(seen) >= 100
+    for m, z in seen:
+        assert z is tz.tzoffset(inner, 60 * m)
 
 
 @pytest.mark.thread_unsafe(reason="replaces DEFAULTPARSER")

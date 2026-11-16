@@ -14,12 +14,12 @@
 //! - a parser or parserinfo subclass that overrides a method, and the inputs the kernel cannot
 //!   reproduce, run dateutil's own algorithm (`parser._reference_parse`).
 
-use std::cell::{OnceCell, RefCell};
-use std::sync::{Arc, OnceLock};
+use std::cell::{Cell, OnceCell, RefCell};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock, PoisonError};
 
 use pyo3::exceptions::{PyTypeError, PyUnicodeEncodeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::sync::PyOnceLock;
+use pyo3::sync::{MutexExt, PyOnceLock};
 use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyString, PyTuple, PyType};
 use pyroid_core::dateutil::info::{Table, Tables};
 use pyroid_core::dateutil::isoparser::{self as iso, Iso, IsoTz, Mode};
@@ -1357,21 +1357,74 @@ impl<'py, 'a> Finisher<'py, 'a> {
     }
 }
 
-/// A `tz.tzoffset(name, seconds)` this thread handed out: (tzname, remapped, seconds, object).
-type TzEntry = (Option<Box<str>>, bool, Int, Py<PyAny>);
+/// What a `tz.tzoffset(name, seconds)` is kept under: the factory (`Hooks::tzoffset`, by
+/// address), the tzname (with `remapped` as in [`py_text`]) and the seconds.
+type TzKey = (usize, Option<Box<str>>, bool, Int);
 
 /// How many `tzoffset`s a thread keeps.
 const TZOFFSETS_KEPT: usize = 64;
 
+/// How many `tzoffset`s [`SHARED_TZOFFSETS`] keeps.
+const TZOFFSETS_SHARED: usize = 1024;
+
 thread_local! {
-    /// The `tz.tzoffset(name, seconds)` objects this thread handed out. dateutil's factory returns
-    /// the same instance for the same key while one is alive, and these are kept alive, so reusing
-    /// one gives the object dateutil would, without the factory's lock and caches (which threads
-    /// would otherwise queue on, call after call).
-    static TZOFFSETS: RefCell<Vec<TzEntry>> = const { RefCell::new(Vec::new()) };
+    /// This thread's copies of [`SHARED_TZOFFSETS`] entries. Looking one up takes no lock and
+    /// writes nothing another thread reads; going to dateutil's factory on every call (a lock
+    /// and two caches) made threads queue on it.
+    static TZOFFSETS: RefCell<Vec<(TzKey, Py<PyAny>)>> = const { RefCell::new(Vec::new()) };
+    /// Whether this thread is making a `tzoffset` for [`SHARED_TZOFFSETS`] (and the factory
+    /// call ran code that parses again).
+    static MAKING_TZOFFSET: Cell<bool> = const { Cell::new(false) };
 }
 
-/// `tz.tzoffset(name, seconds)` for one call or one batch (see [`TZOFFSETS`]).
+/// The `tz.tzoffset(name, seconds)` objects pyroid hands out, one per key for every thread, and
+/// each the one dateutil's factory keeps (see [`make_tzoffset`]). dateutil's factory returns the
+/// same instance for a key while one is alive, and these are kept alive, so it goes on returning
+/// them. Held only for lookups and inserts: no Python code runs under it, nothing is dropped
+/// under it.
+static SHARED_TZOFFSETS: LazyLock<Mutex<FxHashMap<TzKey, Py<PyAny>>>> =
+    LazyLock::new(Mutex::default);
+
+/// Held while a `tzoffset` for [`SHARED_TZOFFSETS`] is made, so that two threads never make one
+/// at the same moment (which dateutil's factory resolves by giving one of them an instance it
+/// then drops for the other's).
+static MAKE_TZOFFSET: Mutex<()> = Mutex::new(());
+
+fn shared_tzoffset(py: Python<'_>, key: &TzKey) -> Option<Py<PyAny>> {
+    let shared = SHARED_TZOFFSETS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    shared.get(key).map(|t| t.clone_ref(py))
+}
+
+/// `tz.tzoffset(name, seconds)`, asked until it returns the same object twice. When another
+/// thread makes the same key at the same moment, the factory can return an instance its
+/// `WeakValueDictionary.setdefault` then replaces with the other thread's; the next call returns
+/// the one it keeps.
+fn make_tzoffset<'py>(
+    py: Python<'py>,
+    h: &Hooks,
+    name: Option<&str>,
+    remapped: bool,
+    off: Int,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py_name = match name {
+        Some(n) => py_text(py, n, remapped)?.into_any(),
+        None => py.None().into_bound(py),
+    };
+    let factory = h.tzoffset.bind(py);
+    let mut t = factory.call1((&py_name, off))?;
+    for _ in 0..8 {
+        let again = factory.call1((&py_name, off))?;
+        if again.is(&t) {
+            break;
+        }
+        t = again;
+    }
+    Ok(t)
+}
+
+/// `tz.tzoffset(name, seconds)` for one call or one batch (see [`SHARED_TZOFFSETS`]).
 #[derive(Default)]
 struct TzOffsets<'py>(std::marker::PhantomData<Bound<'py, PyAny>>);
 
@@ -1385,20 +1438,54 @@ impl<'py> TzOffsets<'py> {
         remapped: bool,
         off: Int,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let factory = h.tzoffset.as_ptr() as usize;
         let hit = TZOFFSETS.with(|c| {
             c.borrow()
                 .iter()
-                .find(|(n, r, o, _)| *o == off && *r == remapped && n.as_deref() == name)
-                .map(|(_, _, _, t)| t.clone_ref(py))
+                .find(|((f, n, r, o), _)| {
+                    *o == off && *f == factory && *r == remapped && n.as_deref() == name
+                })
+                .map(|(_, t)| t.clone_ref(py))
         });
         if let Some(t) = hit {
             return Ok(t.into_bound(py));
         }
-        let py_name = match name {
-            Some(n) => py_text(py, n, remapped)?.into_any(),
-            None => py.None().into_bound(py),
+        let key: TzKey = (factory, name.map(Box::from), remapped, off);
+        let t = if let Some(t) = shared_tzoffset(py, &key) {
+            t
+        } else if MAKING_TZOFFSET.get() {
+            // Parsing from inside the factory call below (a `__del__` it ran): the lock is this
+            // thread's, so ask the factory directly.
+            return make_tzoffset(py, h, name, remapped, off);
+        } else {
+            // Detached while it waits: the holder runs Python code.
+            let making = MAKE_TZOFFSET
+                .lock_py_attached(py)
+                .unwrap_or_else(PoisonError::into_inner);
+            if let Some(t) = shared_tzoffset(py, &key) {
+                t
+            } else {
+                MAKING_TZOFFSET.set(true);
+                let made = make_tzoffset(py, h, name, remapped, off);
+                MAKING_TZOFFSET.set(false);
+                let t = made?.unbind();
+                let old = {
+                    let mut shared = SHARED_TZOFFSETS
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner);
+                    let old = if shared.len() >= TZOFFSETS_SHARED {
+                        std::mem::take(&mut *shared)
+                    } else {
+                        FxHashMap::default()
+                    };
+                    let replaced = shared.insert(key.clone(), t.clone_ref(py));
+                    (old, replaced)
+                };
+                drop(making);
+                drop(old);
+                t
+            }
         };
-        let t = h.tzoffset.bind(py).call1((py_name, off))?;
         // The entries it drops are dropped after the borrow ends (see `cache_insert`).
         let old = TZOFFSETS.with(|c| {
             let mut c = c.borrow_mut();
@@ -1407,11 +1494,11 @@ impl<'py> TzOffsets<'py> {
             } else {
                 Vec::new()
             };
-            c.push((name.map(Box::from), remapped, off, t.clone().unbind()));
+            c.push((key, t.clone_ref(py)));
             old
         });
         drop(old);
-        Ok(t)
+        Ok(t.into_bound(py))
     }
 }
 

@@ -245,8 +245,12 @@ and returns other objects. The [benchmarks page](../benchmarks.md#pyroiddateutil
 ## Differences from dateutil
 
 - `tz.tzlocal()`: for a local zone without daylight saving time (`TZ=UTC`, for one), pyroid
-  returns the same `tzlocal()` instance for every result while the zone stays the same; dateutil
-  makes a new, equal one per call. With daylight saving time, dateutil's own steps run.
+  returns the same `tzlocal()` instance for every result on a thread while the zone stays the
+  same; dateutil makes a new, equal one per call. With daylight saving time, dateutil's own steps
+  run.
+- `tz.tzoffset`: when threads parse an offset that no live object has at the same moment,
+  dateutil's factory can return different instances to them and keep only one. pyroid makes them
+  one thread at a time and asks the factory twice, so its results get the instance it keeps.
 - `parserinfo`: pyroid's parserinfo tables are a `dict` subclass that reports changes, and pyroid
   re-reads a parserinfo after any change to its attributes or tables. A parserinfo made by
   python-dateutil itself (under `patch()`, or passed in) is checked on every call, by the identity
