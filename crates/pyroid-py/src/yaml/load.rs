@@ -410,12 +410,12 @@ impl<'g, 'py> Ctor<'g, 'py> {
     }
 
     fn fill_set(&mut self, id: NodeId, set: &Bound<'py, PySet>) -> R<()> {
-        // `data.update(construct_mapping(node))`: the keys, after the values are built.
+        // `data.update(construct_mapping(node))`: the keys, after the values are built. The
+        // update itself, not one add per key: it sizes the table first, and the table's size
+        // decides the iteration order.
         let dict = PyDict::new(self.py);
         self.mapping(id, |k, v| dict.set_item(k, v))?;
-        for k in dict.keys() {
-            set.add(k)?;
-        }
+        set.call_method1(pyo3::intern!(self.py, "update"), (dict,))?;
         Ok(())
     }
 

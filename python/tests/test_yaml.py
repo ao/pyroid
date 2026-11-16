@@ -616,3 +616,20 @@ except py.PyroidError as e:
         "{'a': 1} 'a: 1\\n'",
         "pyroid.yaml.load: Loader=M with added constructors",
     ]
+
+
+@needs_pyyaml
+@pytest.mark.thread_unsafe
+def test_sets_iterate_in_pyyamls_order(run_python: Any) -> None:
+    # A set filled one key at a time has another table size than set.update(dict), so its
+    # order differed from PyYAML's for some hash seeds.
+    code = r"""
+import yaml, pyroid.yaml as py
+text = "!!set {a, b, c, d, e, f, g, h, i, j, k}"
+same = list(py.safe_load(text)) == list(yaml.load(text, Loader=yaml.SafeLoader))
+print(same, list(py.safe_load_all(text))[0] == yaml.load(text, Loader=yaml.SafeLoader))
+"""
+    for seed in range(8):
+        r = run_python(code, env={"PYTHONHASHSEED": str(seed)})
+        assert r.returncode == 0, r.stderr
+        assert r.stdout.split() == ["True", "True"], seed
