@@ -19,7 +19,7 @@ use pyroid_core::difflib::matcher::{
 use pyroid_core::difflib::with_work;
 
 use super::interrupt;
-use super::seq::{Key, Kinds, Seq, item_key, push_wtf8};
+use super::seq::{Key, Kinds, Seq, Types, bytes_warnings, item_key, kinds_of, push_wtf8, why_not};
 
 /// How `b`'s elements were numbered.
 #[derive(Debug)]
@@ -157,7 +157,8 @@ impl BSide {
 /// the [`BSide`] (with an empty index) and `b` as ids. `None` if `b`'s
 /// elements do not run natively.
 fn number_b(b: &Bound<'_, PyAny>) -> PyResult<Option<(BSide, Vec<u32>)>> {
-    let Some(seq) = Seq::read(b)? else {
+    let mut types = Types::default();
+    let Some(seq) = Seq::read(b, &mut types)? else {
         return Ok(None);
     };
     if seq.len() >= u32::MAX as usize {
@@ -195,7 +196,7 @@ fn number_b(b: &Bound<'_, PyAny>) -> PyResult<Option<(BSide, Vec<u32>)>> {
             let mut kinds = Kinds::default();
             let mut ids = Vec::with_capacity(items.len());
             for item in items.iter() {
-                let Some(key) = item_key(&item)? else {
+                let Some(key) = item_key(&item, &mut types)? else {
                     return Ok(None);
                 };
                 kinds = kinds.union(Kinds::of(&key));
@@ -205,7 +206,7 @@ fn number_b(b: &Bound<'_, PyAny>) -> PyResult<Option<(BSide, Vec<u32>)>> {
                 }
                 ids.push(id);
             }
-            if kinds.mixed() {
+            if kinds.mixed() && bytes_warnings(b.py())? {
                 return Ok(None);
             }
             (Keys::Items { keys, reps, kinds }, ids)
@@ -259,9 +260,12 @@ fn junk_pass(
 
 /// `a` as ids of `side`'s elements; `None` if it does not run natively.
 fn encode_a(side: &BSide, a: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u32>>> {
-    let Some(seq) = Seq::read(a)? else {
+    let mut types = Types::default();
+    let Some(seq) = Seq::read(a, &mut types)? else {
         return Ok(None);
     };
+    // Under `python -b`, str and bytes elements must not meet (CPython compares them and warns).
+    let no_mix = || bytes_warnings(a.py());
     let mut buf = Vec::new();
     Ok(Some(match (&side.keys, seq) {
         (Keys::Chars(chars), Seq::Chars(cps)) => chars.encode(cps),
@@ -269,8 +273,9 @@ fn encode_a(side: &BSide, a: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u32>>> {
         (Keys::Chars(chars), Seq::Items(items)) => {
             let mut ids = Vec::with_capacity(items.len());
             for item in items.iter() {
-                match item_key(&item)? {
-                    None | Some(Key::Bytes(_)) => return Ok(None),
+                match item_key(&item, &mut types)? {
+                    None => return Ok(None),
+                    Some(Key::Bytes(_)) if no_mix()? => return Ok(None),
                     Some(Key::Text(t)) => {
                         let s = std::str::from_utf8(&t).ok();
                         let mut it = s.into_iter().flat_map(str::chars);
@@ -279,13 +284,13 @@ fn encode_a(side: &BSide, a: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u32>>> {
                             _ => single_surrogate(&t).map_or(NONE, |c| chars.get(c)),
                         });
                     }
-                    Some(Key::Int(_)) => ids.push(NONE),
+                    Some(Key::Int(_) | Key::BigInt(_) | Key::Bytes(_)) => ids.push(NONE),
                 }
             }
             ids
         }
         (Keys::Items { keys, kinds, .. }, Seq::Chars(cps)) => {
-            if kinds.bytes {
+            if kinds.bytes && no_mix()? {
                 return Ok(None);
             }
             cps.iter()
@@ -304,13 +309,13 @@ fn encode_a(side: &BSide, a: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u32>>> {
             let mut ids = Vec::with_capacity(items.len());
             let mut mine = Kinds::default();
             for item in items.iter() {
-                let Some(key) = item_key(&item)? else {
+                let Some(key) = item_key(&item, &mut types)? else {
                     return Ok(None);
                 };
                 mine = mine.union(Kinds::of(&key));
                 ids.push(keys.get(&key));
             }
-            if mine.union(*kinds).mixed() {
+            if mine.union(*kinds).mixed() && no_mix()? {
                 return Ok(None);
             }
             ids
@@ -319,7 +324,7 @@ fn encode_a(side: &BSide, a: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u32>>> {
         (Keys::Values { keys, .. }, Seq::Items(items)) => {
             let mut ids = Vec::with_capacity(items.len());
             for item in items.iter() {
-                match item_key(&item)? {
+                match item_key(&item, &mut types)? {
                     None => return Ok(None),
                     Some(key @ Key::Int(_)) => ids.push(keys.get(&key)),
                     Some(_) => ids.push(NONE),
@@ -382,14 +387,21 @@ fn state<'py>(obj: &Bound<'py, PyAny>, d: &Bound<'py, PyDict>) -> PyResult<Optio
     }
     let a = obj.getattr(pyo3::intern!(py, "a"))?;
     if let Some(cached) = d.get_item(pyo3::intern!(py, "_pyroid_a"))? {
-        if let Ok(cached) = cached.cast_into::<ASide>() {
-            let c = cached.get();
-            if c.a.bind(py).is(&a) && c.side.bind(py).is(&side) {
-                return Ok(Some((side, a, AIds::Cached(cached))));
+        if let Ok(c) = cached.cast::<ASide>() {
+            let cc = c.get();
+            if cc.a.bind(py).is(&a) && cc.side.bind(py).is(&side) {
+                return Ok(Some((side, a, AIds::Cached(c.clone()))));
+            }
+        } else if let Ok(t) = cached.cast::<PyTuple>() {
+            // `(a, side)`: this `a` does not run natively against this `b`.
+            if t.len() == 2 && t.get_item(0)?.is(&a) && t.get_item(1)?.is(&side) {
+                return Ok(None);
             }
         }
     }
     let Some(ids) = encode_a(side.get(), &a)? else {
+        // Remembered: CPython's get_matching_blocks asks once per find_longest_match.
+        d.set_item(pyo3::intern!(py, "_pyroid_a"), (&a, &side))?;
         return Ok(None);
     };
     if ids.len() <= KEEP_A {
@@ -867,4 +879,21 @@ pub fn _sm_chain_attr<'py>(
     };
     d.set_item(name, &value)?;
     Ok(Some(value))
+}
+
+/// Why the matcher's sequences run CPython's code, for the `FallbackWarning`.
+#[pyfunction]
+pub fn _sm_why(obj: &Bound<'_, PyAny>) -> PyResult<String> {
+    let py = obj.py();
+    let a = obj.getattr(pyo3::intern!(py, "a"))?;
+    let b = obj.getattr(pyo3::intern!(py, "b"))?;
+    for seq in [&b, &a] {
+        if let Some(why) = why_not(seq)? {
+            return Ok(why);
+        }
+    }
+    if bytes_warnings(py)? && kinds_of(&a)?.union(kinds_of(&b)?).mixed() {
+        return Ok("a mix of str and bytes elements under python -b".into());
+    }
+    Ok("these sequences".into())
 }

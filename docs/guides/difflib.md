@@ -79,9 +79,13 @@ and says so with one [`pyroid.FallbackWarning`](../concepts/fallbacks.md) at imp
 ## What runs in Rust
 
 - `SequenceMatcher` over a `str`, a `bytes` or `bytearray`, or a `list` or `tuple` whose elements
-  are `str`, `int`, `bool` or `bytes` (exactly those types, whose equality pyroid knows without
-  calling Python). Lone surrogates are fine.
-- `get_close_matches` for a `str` word and `str` possibilities, on all cores for long lists.
+  are `str`, `int` (of any size), `bool` or `bytes`: types whose equality pyroid knows without
+  calling Python. Subclasses of these (a `str` subclass, an `IntEnum`, a named tuple) count too,
+  unless they define their own comparisons, `__hash__`, `__len__`, `__getitem__` or `__iter__`.
+  Lone surrogates are fine. A list that mixes `str` and `bytes` elements runs natively too, except
+  under `python -b`, where comparing them warns: there it runs difflib's code, which does.
+- `get_close_matches` for a `str` word and `str` possibilities (or such subclasses), on all
+  cores for long lists.
 - `Differ.compare`, `ndiff`, `unified_diff`, `context_diff`, `HtmlDiff.make_table` and
   `make_file` for lists or tuples of `str`, with any `linejunk` (called from Rust as difflib calls
   it) and a `charjunk` of `None` or `IS_CHARACTER_JUNK` (the defaults).
@@ -90,8 +94,9 @@ The rest runs the standard library's Python code, rebound to `pyroid.difflib` so
 pyroid's `SequenceMatcher` underneath: a custom `charjunk`, a `Differ` or `HtmlDiff` subclass
 that overrides one of its helper methods, a `SequenceMatcher` subclass that overrides
 `find_longest_match` or `get_matching_blocks`. Sequences of other element types (tuples, floats,
-`str` subclasses, objects with their own `__eq__`) run the standard library's `SequenceMatcher`
-code, with one `pyroid.FallbackWarning`.
+objects with their own `__eq__`) run the standard library's `SequenceMatcher` code, with one
+`pyroid.FallbackWarning` that names the type that triggered it, for example "a list with an
+element of type 'float'".
 
 pyroid.difflib runs on free-threaded CPython without enabling the GIL. Lists are read in one step,
 so another thread changing a list during a call cannot crash it. A long call (matching long

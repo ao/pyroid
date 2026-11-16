@@ -19,7 +19,7 @@ use pyroid_core::par;
 use pyroid_core::text::is_py_whitespace;
 
 use super::interrupt;
-use super::seq::{code_points, push_wtf8};
+use super::seq::{Base, Types, Verdict, code_points, push_wtf8};
 use crate::batch::BatchError;
 use crate::input::{self, Threads};
 
@@ -480,6 +480,21 @@ pub fn _line_diff<'py>(
     Ok(Some(out))
 }
 
+/// `obj` if it is a `str`, or a subclass that keeps str's indexing and comparisons
+/// (`get_close_matches` reads its candidates and sorts them).
+fn str_like<'py>(
+    obj: &Bound<'py, PyAny>,
+    types: &mut Types,
+) -> PyResult<Option<Bound<'py, PyString>>> {
+    if let Ok(s) = obj.cast_exact::<PyString>() {
+        return Ok(Some(s.clone()));
+    }
+    Ok(match types.verdict(obj)? {
+        Verdict::Plain(Base::Str) => Some(obj.cast::<PyString>()?.clone()),
+        _ => None,
+    })
+}
+
 /// One `get_close_matches` candidate's text.
 enum Cand {
     Utf8(PyBackedStr),
@@ -518,7 +533,8 @@ pub fn _get_close_matches<'py>(
     cutoff: &Bound<'py, PyAny>,
     threads: Option<Threads>,
 ) -> PyResult<Option<Bound<'py, PyList>>> {
-    let Ok(word) = word.cast_exact::<PyString>() else {
+    let mut types = Types::default();
+    let Some(word) = str_like(word, &mut types)? else {
         return Ok(None);
     };
     if !(n.is_exact_instance_of::<PyInt>() || n.is_exact_instance_of::<PyBool>()) {
@@ -542,15 +558,15 @@ pub fn _get_close_matches<'py>(
     };
     let mut cands = Vec::with_capacity(objs.len());
     for item in objs.iter() {
-        let Ok(s) = item.cast_exact::<PyString>() else {
+        let Some(s) = str_like(&item, &mut types)? else {
             return Ok(None);
         };
         cands.push(match PyBackedStr::try_from(s.clone()) {
             Ok(b) => Cand::Utf8(b),
-            Err(_) => Cand::Cps(code_points(s)?),
+            Err(_) => Cand::Cps(code_points(&s)?),
         });
     }
-    let matcher = StrMatcher::new(&code_points(word)?, |_| false, true);
+    let matcher = StrMatcher::new(&code_points(&word)?, |_| false, true);
     let t = input::threads(threads);
     let found = interrupt::in_parts(
         py,

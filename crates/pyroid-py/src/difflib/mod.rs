@@ -27,6 +27,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sm::_sm_quick_ratio, &m)?)?;
     m.add_function(wrap_pyfunction!(sm::_sm_find_longest_match, &m)?)?;
     m.add_function(wrap_pyfunction!(sm::_sm_chain_attr, &m)?)?;
+    m.add_function(wrap_pyfunction!(sm::_sm_why, &m)?)?;
     m.add_function(wrap_pyfunction!(lines::_differ_compare, &m)?)?;
     m.add_function(wrap_pyfunction!(lines::_mdiff, &m)?)?;
     m.add_function(wrap_pyfunction!(lines::_html_prepare, &m)?)?;

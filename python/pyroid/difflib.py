@@ -6,11 +6,13 @@ running interpreter's own (CPython 3.11 to 3.15): the same ratios (the same floa
 blocks, opcodes and diff lines. ``SequenceMatcher``, ``Differ`` and ``HtmlDiff`` subclass the
 standard library's classes. See ``difflib.pyi``.
 
-What runs natively: ``SequenceMatcher`` over a ``str``, ``bytes``, or a ``list``/``tuple`` of
-``str``, ``int`` or ``bytes``; ``Differ.compare``, ``ndiff``, ``unified_diff``, ``context_diff``,
-``get_close_matches`` and ``HtmlDiff``'s line pairing over lists or tuples of ``str``. Everything
-else (other element types, a custom ``charjunk``, overridden methods) runs the standard library's
-Python code, with this module's ``SequenceMatcher`` underneath where it applies.
+What runs natively: ``SequenceMatcher`` over a ``str``, ``bytes``, ``bytearray``, or a
+``list``/``tuple`` of ``str``, ``int`` (any size), ``bool`` or ``bytes`` (subclasses too, if they
+keep their comparisons and indexing); ``get_close_matches`` over ``str``; ``Differ.compare``,
+``ndiff``, ``unified_diff``, ``context_diff`` and ``HtmlDiff``'s line pairing over lists or tuples
+of ``str``. Everything else (other element types, ``str`` mixed with ``bytes`` under ``python -b``,
+a custom ``charjunk``, overridden methods) runs the standard library's Python code, with this
+module's ``SequenceMatcher`` underneath where it applies.
 """
 
 from __future__ import annotations
@@ -68,11 +70,11 @@ _check_types = _std._check_types
 _WARNED: set[str] = set()
 
 
-def _fallback(name: str, why: str) -> None:
-    """The once-per-process FallbackWarning for `name`."""
-    if name in _WARNED:
+def _fallback_sm(self: Any) -> None:
+    """The once-per-process FallbackWarning for SequenceMatcher, saying what triggered it."""
+    if "SequenceMatcher" in _WARNED:
         return
-    _WARNED.add(name)
+    _WARNED.add("SequenceMatcher")
     # stacklevel 2 is our caller; point at the first frame outside this module and difflib.
     frame = sys._getframe(1)
     level = 2
@@ -80,8 +82,10 @@ def _fallback(name: str, why: str) -> None:
         frame = frame.f_back
         level += 1
     warnings.warn(
-        f"pyroid.difflib.{name}: {why} run the standard library's difflib code (slow path). "
-        "This warning is shown once.",
+        f"pyroid.difflib.SequenceMatcher: {_native._sm_why(self)} runs the standard library's "
+        "difflib code (slow path). A str, bytes or bytearray, or a list or tuple of str, int "
+        "(bool too) and bytes, runs natively, and so do subclasses of these that keep their "
+        "comparisons and indexing. This warning is shown once.",
         FallbackWarning,
         stacklevel=level,
     )
@@ -105,7 +109,6 @@ def _rebind(f: Any) -> Any:
 _StdSequenceMatcher = _std.SequenceMatcher
 _SM = {k: _StdSequenceMatcher.__dict__[k] for k in _StdSequenceMatcher.__dict__}
 _chain_b = _SM["_SequenceMatcher__chain_b"]
-_ELEMENTS = "these sequences (elements other than str, int and bytes, or other sequence types)"
 
 
 def _init(
@@ -120,7 +123,7 @@ def _init(
         if not _native._sm_init(self, isjunk, a, b, autojunk, cls in _PLAIN):
             self.matching_blocks = None
             self.fullbcount = None
-            _fallback("SequenceMatcher", _ELEMENTS)
+            _fallback_sm(self)
             _chain_b(self)
     else:
         _SM["__init__"](self, isjunk, a, b, autojunk)
@@ -142,7 +145,7 @@ def _set_seq2(self: Any, b: Any) -> None:
     if not _native._sm_set_seq2(self, b):
         self.matching_blocks = None
         self.fullbcount = None
-        _fallback("SequenceMatcher", _ELEMENTS)
+        _fallback_sm(self)
         _chain_b(self)
 
 
@@ -158,7 +161,7 @@ def _find_longest_match(
 def _slow(self: Any) -> None:
     # set_seq2 warned if b's elements are the reason; here it is a.
     if "_pyroid_b" in self.__dict__:
-        _fallback("SequenceMatcher", _ELEMENTS)
+        _fallback_sm(self)
 
 
 def _get_matching_blocks(self: Any) -> Any:

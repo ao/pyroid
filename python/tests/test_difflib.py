@@ -7,6 +7,7 @@ test_difflib_cpython.py (CPython's own tests).
 from __future__ import annotations
 
 import _thread
+import collections
 import difflib
 import os
 import subprocess
@@ -185,6 +186,141 @@ def test_fallback_warns_once() -> None:
         warnings.simplefilter("error")
         pd.SequenceMatcher(None, "abc", ["a", "b"]).ratio()  # native: no warning
         list(pd.ndiff(["a\n"], ["b\n"], charjunk=lambda c: c == " "))  # Python code, native matcher
+
+
+class _Name(str):
+    __slots__ = ()
+
+
+class _Loud(str):
+    def __eq__(self, other: object) -> bool:
+        return str.__eq__(self.lower(), str(other).lower())
+
+    __hash__ = str.__hash__
+
+
+class _Row(tuple):  # type: ignore[type-arg]
+    __slots__ = ()
+
+
+def _matcher_state(m: Any) -> tuple[Any, ...]:
+    return (
+        m.get_matching_blocks(),
+        m.get_opcodes(),
+        m.ratio(),
+        m.quick_ratio(),
+        list(m.b2j.items()),
+        m.bjunk,
+        m.bpopular,
+    )
+
+
+def _native_pairs() -> list[tuple[Any, Any]]:
+    import enum
+
+    class Color(enum.IntEnum):
+        RED = 1
+        BLUE = 2
+
+    return [
+        # ints outside the signed 64-bit range, next to ones inside it
+        ([2**64, 1, 2, -(2**63) - 1, 2**63], [1, 2**64, 2**63, 5]),
+        ([10**40, -(10**40), 3], [3, 10**40]),
+        # str with bytes (no python -b)
+        (["a", b"a", "b"], ["b", b"a"]),
+        ("ab", [b"a", "a", "b"]),
+        ([b"x", "x"], "xx"),
+        # subclasses that keep their base's comparisons and indexing
+        (_Name("private Thread currentThread;"), _Name("private volatile Thread currentThread;")),
+        ([_Name("a"), "b", _Name("c")], ["a", _Name("b")]),
+        ([Color.RED, 2, Color.BLUE], [1, 2]),
+        (_Row((1, 2, 3)), _Row((2, 3))),
+        (bytearray(b"abcd"), b"bcd"),
+    ]
+
+
+def test_native_elements_and_subclasses() -> None:
+    # Big ints, str mixed with bytes and plain subclasses run natively, with difflib's results.
+    for a, b in _native_pairs():
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            got = _matcher_state(pd.SequenceMatcher(None, a, b))
+        assert got == _matcher_state(difflib.SequenceMatcher(None, a, b)), (a, b)
+        assert "_pyroid_b" in vars(pd.SequenceMatcher(None, a, b))
+
+
+@pytest.mark.thread_unsafe(reason="FallbackWarning is once per process")
+@pytest.mark.parametrize(
+    ("a", "b", "why"),
+    [
+        ([1.5, 2], [2], "a list with an element of type 'float'"),
+        ([(1, 2)], ((1, 2),), "a tuple with an element of type 'tuple'"),
+        ("abc", [_Loud("A")], "a list with an element of type '_Loud' (it overrides __eq__)"),
+        ([1], collections.deque([1]), "a sequence of type 'deque'"),
+    ],
+)
+def test_fallback_warning_names_the_trigger(a: Any, b: Any, why: str) -> None:
+    warned: set[str] = pd._WARNED  # type: ignore[attr-defined]
+    warned.discard("SequenceMatcher")
+    try:
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            got = pd.SequenceMatcher(None, a, b).ratio()
+        assert got == difflib.SequenceMatcher(None, a, b).ratio()
+    finally:
+        warned.add("SequenceMatcher")
+    assert [type(w.message) for w in rec] == [pyroid.FallbackWarning]
+    message = str(rec[0].message)
+    assert message.startswith(f"pyroid.difflib.SequenceMatcher: {why} runs the standard"), message
+    assert "int (bool too) and bytes" in message
+    assert rec[0].filename == __file__
+
+
+def test_str_and_bytes_under_python_b(run_python: Any) -> None:
+    # Under -b, comparing str with bytes warns: difflib's code runs, so the warnings are its own.
+    code = """
+        import difflib, warnings
+        import pyroid.difflib as pd
+
+        def run(module):
+            with warnings.catch_warnings(record=True) as rec:
+                warnings.simplefilter("always")
+                r = module.SequenceMatcher(None, ["a", b"a", "b"], ["b", b"a"]).ratio()
+            return r, rec
+
+        (rp, wp), (rd, wd) = run(pd), run(difflib)
+        assert rp == rd
+        bw = lambda rec: [str(w.message) for w in rec if w.category is BytesWarning]
+        assert bw(wp) == bw(wd) and bw(wd), (wp, wd)
+        print([str(w.message) for w in wp if w.category.__name__ == "FallbackWarning"])
+    """
+    proc = run_python(code, args=["-b"])
+    assert proc.returncode == 0, proc.stderr
+    assert "a mix of str and bytes elements under python -b" in proc.stdout, proc.stdout
+
+
+@pytest.mark.thread_unsafe(reason="FallbackWarning is once per process")
+def test_get_close_matches_over_str_subclasses() -> None:
+    # Native (no FallbackWarning), returning the possibilities' own objects.
+    names = [_Name(n) for n in ("apple", "ape", "peach", "puppy", "applet", "maple")]
+    warned: set[str] = pd._WARNED  # type: ignore[attr-defined]
+    warned.discard("SequenceMatcher")
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            got = pd.get_close_matches(_Name("appel"), names, n=4, cutoff=0.3)
+            assert pd.get_close_matches("appel", names, threads=2) == difflib.get_close_matches(
+                "appel", names
+            )
+    finally:
+        warned.add("SequenceMatcher")
+    want = difflib.get_close_matches(_Name("appel"), names, n=4, cutoff=0.3)
+    assert got == want
+    assert [id(x) for x in got] == [id(x) for x in want]
+    loud = [_Loud("APPLE"), _Loud("apple")]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        assert pd.get_close_matches("apple", loud) == difflib.get_close_matches("apple", loud)
 
 
 def test_large_inputs() -> None:
