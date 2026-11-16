@@ -242,6 +242,10 @@ class SequenceMatcher(_StdSequenceMatcher):
     __doc__ = _StdSequenceMatcher.__doc__
 
 
+for _name, _f in _StdSequenceMatcher.__dict__.items():
+    # The methods pyroid does not replace, rebound (same code), so their doctests run here too.
+    if isinstance(_f, types.FunctionType) and not _name.startswith("_SequenceMatcher"):
+        setattr(SequenceMatcher, _name, _rebind(_f))
 for _name, _f in _SM_METHODS.items():
     setattr(SequenceMatcher, _name, _f)
 
@@ -285,6 +289,12 @@ for _name, _f in _std.Differ.__dict__.items():
         setattr(Differ, _name, _rebind(_f))
 Differ.compare = _make_compare(  # type: ignore[method-assign]
     Differ.__dict__["compare"], {h: Differ.__dict__[h] for h in _HOOKS}
+)
+
+# What pyroid.patch("difflib") sets as difflib.Differ.compare: the same fast path, with
+# difflib's own methods as the hooks and the fallback.
+_PATCH_COMPARE = _make_compare(
+    _std.Differ.__dict__["compare"], {h: _std.Differ.__dict__[h] for h in _HOOKS}
 )
 
 ndiff = _rebind(_std.ndiff)
@@ -441,6 +451,14 @@ for _cls in (SequenceMatcher, Differ, HtmlDiff):
     _cls.__module__ = __name__
 
 del _name, _f, _cls
+
+#: What pyroid.patch("difflib") sets on the standard library's module.
+_PATCH_FUNCTIONS = ("get_close_matches", "unified_diff", "context_diff", "_mdiff")
+
+# The fallbacks' docstrings are the public functions' (their doctests run there once).
+for _f in (_std_unified, _std_context, _std_close, _std_mdiff, _PATCH_COMPARE):
+    _f.__doc__ = None
+del _f
 
 if not _KNOWN:  # an interpreter whose difflib this module does not know: the standard library's
     SequenceMatcher = _std.SequenceMatcher  # type: ignore[misc]
