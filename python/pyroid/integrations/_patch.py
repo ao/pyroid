@@ -1160,7 +1160,7 @@ Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, wi
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}
-                     (default: ${ENV_VAR}, else {",".join(DEFAULT_RUN_NAMES)})
+                     (repeatable; default: ${ENV_VAR}, else {",".join(DEFAULT_RUN_NAMES)})
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
 """
@@ -1173,9 +1173,16 @@ class _UsageError(Exception):
 _Parsed = tuple[str | None, str | None, str | None, list[str]]
 
 
+def _joined(given: Sequence[str]) -> str | None:
+    return ",".join(given) if given else None
+
+
 def _parse_run(argv: Sequence[str]) -> _Parsed | None:
-    """``(names, module, script, args)``, or None for ``--help``; options stop at the target."""
-    names: str | None = None
+    """``(names, module, script, args)``, or None for ``--help``; options stop at the target.
+
+    Repeated ``-p`` options add up: ``-p yaml -p ftfy`` is ``-p yaml,ftfy``.
+    """
+    given: list[str] = []
     i = 0
     while i < len(argv):
         arg = argv[i]
@@ -1184,32 +1191,33 @@ def _parse_run(argv: Sequence[str]) -> _Parsed | None:
         if arg in ("-p", "--patch"):
             if i + 1 == len(argv):
                 raise _UsageError(f"argument {arg}: expected a comma-separated list of names")
-            names = argv[i + 1]
+            given.append(argv[i + 1])
             i += 2
         elif arg.startswith("--patch="):
-            names = arg.partition("=")[2]
+            given.append(arg.partition("=")[2])
             i += 1
         elif arg.startswith("-p"):
-            names = arg[2:]
+            given.append(arg[2:])
             i += 1
         elif arg.startswith("-m"):
             module = arg[2:] or (argv[i + 1] if i + 1 < len(argv) else "")
             if not module:
                 raise _UsageError("argument -m: expected a module name")
-            return names, module, None, list(argv[i + (1 if arg[2:] else 2) :])
+            return _joined(given), module, None, list(argv[i + (1 if arg[2:] else 2) :])
         elif arg == "--":
             if i + 1 == len(argv):
                 raise _UsageError("no script given after --")
-            return names, None, argv[i + 1], list(argv[i + 2 :])
+            return _joined(given), None, argv[i + 1], list(argv[i + 2 :])
         elif arg.startswith("-"):
             raise _UsageError(f"unrecognized option {arg!r} (reading stdin is not supported)")
         else:
-            return names, None, arg, list(argv[i + 1 :])
+            return _joined(given), None, arg, list(argv[i + 1 :])
     raise _UsageError("give a SCRIPT or -m MODULE to run")
 
 
 def _show_run_warning(message: Warning | str, category: type[Warning], *_: Any, **__: Any) -> None:
-    sys.stderr.write(f"pyroid run: {category.__name__}: {message}\n")
+    text = str(message).removeprefix("pyroid: ")  # the line already starts with "pyroid run:"
+    sys.stderr.write(f"pyroid run: {category.__name__}: {text}\n")
 
 
 def run(argv: Sequence[str]) -> int:
@@ -1284,6 +1292,8 @@ def run(argv: Sequence[str]) -> int:
         return 2
     _export(done)
     if module is not None:
+        if not sys.flags.safe_path:
+            _set_path0(os.getcwd())  # before the lookup: python -m finds packages in the cwd
         try:
             found = importlib.util.find_spec(module)
         except (ImportError, ValueError) as exc:
@@ -1296,8 +1306,7 @@ def run(argv: Sequence[str]) -> int:
             sys.stderr.write(f"pyroid run: No module named {module}\n")
             return 1
         sys.argv[:] = [module, *args]  # runpy sets argv[0] to the module's file
-        if not sys.flags.safe_path:
-            _set_path0(os.getcwd())
+        _trim_tracebacks()
         runpy.run_module(module, run_name="__main__", alter_sys=True)
         return 0
     assert script is not None
@@ -1305,8 +1314,35 @@ def run(argv: Sequence[str]) -> int:
     # A directory or zip file is a sys.path entry that runpy puts first itself.
     if not sys.flags.safe_path and pkgutil.get_importer(script) is None:
         _set_path0(os.path.dirname(os.path.realpath(script)))
+    _trim_tracebacks()
     runpy.run_path(script, run_name="__main__")
     return 0
+
+
+def _trim_tracebacks() -> None:
+    """Show an uncaught exception of the target from its own first frame, as ``python`` does.
+
+    The frames of the ``pyroid`` launcher, :func:`run` and :mod:`runpy` above it are left out.
+    The exception still propagates (``python`` then exits with status 1, or as killed by SIGINT
+    for KeyboardInterrupt); a hook the target installs itself replaces this one.
+    """
+    previous = sys.excepthook
+    runpy_files = {runpy.__file__, "<frozen runpy>"}
+
+    def hook(kind: type[BaseException], exc: BaseException, tb: types.TracebackType | None) -> None:
+        t = tb
+        while t is not None and t.tb_frame.f_code is not run.__code__:
+            t = t.tb_next
+        if t is not None:  # skip run() and the runpy frames below it
+            t = t.tb_next
+            while t is not None and t.tb_frame.f_code.co_filename in runpy_files:
+                t = t.tb_next
+            tb = t
+            # Python prints the exception's own traceback (the argument only when it has none).
+            exc.with_traceback(tb)
+        previous(kind, exc, tb)
+
+    sys.excepthook = hook
 
 
 def _set_path0(entry: str) -> None:

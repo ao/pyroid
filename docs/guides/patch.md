@@ -212,7 +212,7 @@ Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, wi
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator
-                     (default: $PYROID_PATCH, else ftfy,fasttext)
+                     (repeatable; default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
 ```
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     subprocess.run(child, check=True)
 ```
 
-`pyroid run -p ftfy,fasttext train.py --epochs 3` prints (after the two `PatchWarning`s):
+`pyroid run -p ftfy,fasttext train.py --epochs 3` prints (after the `PatchWarning` line):
 
 ```text
 main: True ['--epochs', '3']
@@ -251,8 +251,9 @@ subprocess: True
 
 `pyroid run`:
 
-- patches `NAMES` (comma-separated). Without `-p` it patches the names in `$PYROID_PATCH`, else
-  `ftfy,fasttext`, and then skips `fasttext`, with a `PatchWarning`, if numpy is missing;
+- patches `NAMES` (comma-separated; `-p` can be repeated, and the names add up). Without `-p` it
+  patches the names in `$PYROID_PATCH`, else `ftfy,fasttext`, and then skips `fasttext`, with a
+  `PatchWarning`, if numpy is missing;
 - sets `PYROID_PATCH` to those names and puts pyroid's start-up hook directory first on
   `PYTHONPATH`. The hook is a `sitecustomize.py`, which Python imports at start-up. It applies
   `$PYROID_PATCH` in every Python process started from there (`multiprocessing` spawn and
@@ -260,7 +261,8 @@ subprocess: True
   one. Forked workers inherit the patch anyway;
 - runs the target in the same process, as `python SCRIPT ARGS` / `python -m MODULE ARGS` would
   (`sys.argv`, `sys.path[0]`, `__name__ == "__main__"`). It exits with the target's exit code: 0
-  when it finishes, 2 for a usage error or a missing script, 1 when the module can't be found.
+  when it finishes, 2 for a usage error or a missing script, 1 when the module can't be found. An
+  uncaught exception's traceback starts at the target's own first frame, as with `python`.
 
 `PatchWarning` and `VersionMismatchWarning` are shown once per process tree, not in every worker.
 The hook does nothing in an interpreter that can't import pyroid, nor in one started with `-I` or
