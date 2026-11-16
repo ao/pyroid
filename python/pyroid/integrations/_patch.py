@@ -790,22 +790,30 @@ def _build_difflib(impl: types.ModuleType, real: Any, missing: str) -> _Built:
         saved.append((owner, name, owner.__dict__.get(name, _MISSING)))
         setattr(owner, name, value)
 
-    for name, value in impl._SM_METHODS.items():
-        swap(real.SequenceMatcher, name, value)
-    swap(real.Differ, "compare", impl._PATCH_COMPARE)
-    swap(real.HtmlDiff, "make_table", impl._PATCH_MAKE_TABLE)
-    for name in impl._PATCH_FUNCTIONS:
-        swap(real, name, getattr(impl, name))
-
     def undo() -> None:
-        # Matchers made or used under the patch keep working with difflib's own methods.
-        impl._settle(real.SequenceMatcher)
+        # Matchers made or used under the patch get difflib's own state first, so they keep
+        # working with difflib's methods (one that another thread's set_seq* is changing at
+        # this moment gets it when that call ends).
+        impl._switch_off()
         for owner, name, original in reversed(saved):
             if original is _MISSING:
                 delattr(owner, name)
             else:
                 setattr(owner, name, original)
 
+    try:
+        for name, value in impl._SM_METHODS.items():
+            swap(real.SequenceMatcher, name, value)
+        swap(real.Differ, "compare", impl._PATCH_COMPARE)
+        swap(real.HtmlDiff, "make_table", impl._PATCH_MAKE_TABLE)
+        for name in impl._PATCH_FUNCTIONS:
+            swap(real, name, getattr(impl, name))
+    except BaseException:
+        undo()
+        raise
+    # Only now (every method and lazy attribute in place) do pyroid's methods give difflib's
+    # matchers native state; until then they run difflib's own code.
+    impl._switch_on()
     return {}, [undo]
 
 

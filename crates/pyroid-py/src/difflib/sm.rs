@@ -20,6 +20,7 @@ use pyroid_core::difflib::with_work;
 
 use super::interrupt;
 use super::seq::{Key, Kinds, Seq, Types, bytes_warnings, item_key, kinds_of, push_wtf8, why_not};
+use super::settle::{self, Gate};
 
 /// How `b`'s elements were numbered.
 #[derive(Debug)]
@@ -48,6 +49,8 @@ pub struct BSide {
     b: Py<PyAny>,
     keys: Keys,
     index: BIndex,
+    /// The patch generation it was made in, for a matcher of difflib's class (else 0).
+    generation: u64,
 }
 
 /// `a`, encoded against a [`BSide`].
@@ -84,6 +87,11 @@ fn new_match(py: Python<'_>, a: usize, b: usize, size: usize) -> PyResult<Bound<
 }
 
 impl BSide {
+    /// The `b` it was built from.
+    pub(super) fn b(&self) -> &Py<PyAny> {
+        &self.b
+    }
+
     /// The element object for id `id` (CPython's `b2j` key).
     fn rep<'py>(&self, py: Python<'py>, id: usize) -> PyResult<Bound<'py, PyAny>> {
         Ok(match &self.keys {
@@ -114,7 +122,7 @@ fn code_point_str(py: Python<'_>, c: u32) -> PyResult<Bound<'_, PyString>> {
 #[pymethods]
 impl BSide {
     /// `b2j`: element -> positions, junk and popular elements left out.
-    fn b2j<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+    pub(super) fn b2j<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let d = PyDict::new(py);
         for id in self.ids_where(|k| k == Kind::Normal) {
             #[allow(clippy::cast_possible_truncation)]
@@ -125,7 +133,7 @@ impl BSide {
     }
 
     /// `bjunk`.
-    fn bjunk<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PySet>> {
+    pub(super) fn bjunk<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PySet>> {
         let s = PySet::empty(py)?;
         for id in self.ids_where(|k| k == Kind::Junk) {
             s.add(self.rep(py, id)?)?;
@@ -134,7 +142,7 @@ impl BSide {
     }
 
     /// `bpopular`.
-    fn bpopular<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PySet>> {
+    pub(super) fn bpopular<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PySet>> {
         let s = PySet::empty(py)?;
         for id in self.ids_where(|k| k == Kind::Popular) {
             s.add(self.rep(py, id)?)?;
@@ -143,7 +151,7 @@ impl BSide {
     }
 
     /// `fullbcount`: element -> count in `b`.
-    fn fullbcount<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+    pub(super) fn fullbcount<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let d = PyDict::new(py);
         for id in 0..self.index.keys() {
             #[allow(clippy::cast_possible_truncation)]
@@ -216,6 +224,7 @@ fn number_b(b: &Bound<'_, PyAny>) -> PyResult<Option<(BSide, Vec<u32>)>> {
         b: b.clone().unbind(),
         keys,
         index: BIndex::new(Vec::new(), 0, &[], false),
+        generation: 0,
     };
     Ok(Some((side, ids)))
 }
@@ -347,7 +356,7 @@ fn single_surrogate(t: &[u8]) -> Option<u32> {
 
 /// `d.pop(name, None)`: another thread may have removed it already (racing
 /// `set_seq*` calls on one matcher), which is not an error here.
-fn discard(d: &Bound<'_, PyDict>, name: &Bound<'_, PyString>) -> PyResult<()> {
+pub(super) fn discard(d: &Bound<'_, PyDict>, name: &Bound<'_, PyString>) -> PyResult<()> {
     if !d.contains(name)? {
         return Ok(()); // the common case, without making an exception
     }
@@ -357,7 +366,7 @@ fn discard(d: &Bound<'_, PyDict>, name: &Bound<'_, PyString>) -> PyResult<()> {
     }
 }
 
-fn instance_dict<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
+pub(super) fn instance_dict<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
     Ok(obj
         .getattr(pyo3::intern!(obj.py(), "__dict__"))?
         .cast_into::<PyDict>()?)
@@ -528,16 +537,44 @@ fn opcodes_list<'py>(py: Python<'py>, blocks: &[Block]) -> PyResult<Bound<'py, P
     PyList::new(py, items)
 }
 
+/// `set_seq1(a)`. `None` when the patch is off and `obj` is of difflib's
+/// class: the caller runs CPython's `set_seq1`.
+#[pyfunction]
+pub fn _sm_set_seq1(obj: &Bound<'_, PyAny>, a: &Bound<'_, PyAny>) -> PyResult<Option<()>> {
+    let py = obj.py();
+    let Some(_gate) = settle::enter(obj)? else {
+        return Ok(None);
+    };
+    if a.is(&obj.getattr(pyo3::intern!(py, "a"))?) {
+        return Ok(Some(()));
+    }
+    obj.setattr(pyo3::intern!(py, "a"), a)?;
+    obj.setattr(pyo3::intern!(py, "opcodes"), py.None())?;
+    let d = instance_dict(obj)?;
+    discard(&d, pyo3::intern!(py, "matching_blocks"))?;
+    discard(&d, pyo3::intern!(py, "_pyroid_mb"))?;
+    Ok(Some(()))
+}
+
 /// `set_seq2(b)` after the identity check: reset the caches, build the
 /// index. False if `b` does not run natively (the caller chains it as
-/// CPython does). If `isjunk` (or `autojunk`'s truth) raises, the instance
-/// is left as CPython's `__chain_b` leaves it, without a native index.
+/// CPython does); `None` when the patch is off and `obj` is of difflib's
+/// class (the caller runs CPython's `set_seq2`). If `isjunk` (or
+/// `autojunk`'s truth) raises, the instance is left as CPython's
+/// `__chain_b` leaves it, without a native index.
 #[pyfunction]
-pub fn _sm_set_seq2(obj: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<bool> {
+pub fn _sm_set_seq2(obj: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<Option<bool>> {
+    let Some(mut gate) = settle::enter(obj)? else {
+        return Ok(None);
+    };
+    set_seq2(obj, b, &mut gate).map(Some)
+}
+
+fn set_seq2(obj: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>, gate: &mut Gate<'_>) -> PyResult<bool> {
     let py = obj.py();
     obj.setattr(pyo3::intern!(py, "b"), b)?;
     obj.setattr(pyo3::intern!(py, "opcodes"), py.None())?;
-    chain(obj, &instance_dict(obj)?, b, false)
+    chain(obj, &instance_dict(obj)?, b, false, gate)
 }
 
 /// The attributes CPython's `__chain_b` leaves when it raises: in the junk
@@ -575,6 +612,7 @@ fn chain(
     d: &Bound<'_, PyDict>,
     b: &Bound<'_, PyAny>,
     fresh: bool,
+    gate: &mut Gate<'_>,
 ) -> PyResult<bool> {
     let py = obj.py();
     let del = |names: &[&Bound<'_, PyString>]| -> PyResult<()> {
@@ -656,6 +694,12 @@ fn chain(
         }
     };
     side.index = BIndex::new(ids, n, &junk, autojunk);
+    side.generation = gate.generation();
+    // Recorded once per patch generation (see settle.rs).
+    gate.made(
+        old.as_ref()
+            .is_some_and(|o| o.get().generation != 0 && o.get().generation == side.generation),
+    );
     // The new index replaces the old one in one step, then the old b's attributes go: a thread
     // reading `b2j` meanwhile (racing this one) sees the old or the new, never neither.
     d.set_item(pyo3::intern!(py, "_pyroid_b"), Bound::new(py, side)?)?;
@@ -669,8 +713,10 @@ fn chain(
 
 /// `__init__(isjunk, a, b, autojunk)` when `set_seqs`, `set_seq1` and
 /// `set_seq2` are not overridden. False if `b` does not run natively (the
-/// caller chains it). `plain`: the instance is of `SequenceMatcher` itself
-/// (no `__setattr__` or descriptors of a subclass to honour).
+/// caller chains it); `None` when the patch is off and `obj` is of
+/// difflib's class (the caller runs CPython's `__init__`). `plain`: the
+/// instance is of `SequenceMatcher` itself (no `__setattr__` or descriptors
+/// of a subclass to honour).
 #[pyfunction]
 pub fn _sm_init(
     obj: &Bound<'_, PyAny>,
@@ -679,6 +725,21 @@ pub fn _sm_init(
     b: &Bound<'_, PyAny>,
     autojunk: &Bound<'_, PyAny>,
     plain: bool,
+) -> PyResult<Option<bool>> {
+    let Some(mut gate) = settle::enter(obj)? else {
+        return Ok(None);
+    };
+    init(obj, isjunk, a, b, autojunk, plain, &mut gate).map(Some)
+}
+
+fn init(
+    obj: &Bound<'_, PyAny>,
+    isjunk: &Bound<'_, PyAny>,
+    a: &Bound<'_, PyAny>,
+    b: &Bound<'_, PyAny>,
+    autojunk: &Bound<'_, PyAny>,
+    plain: bool,
+    gate: &mut Gate<'_>,
 ) -> PyResult<bool> {
     let py = obj.py();
     let d = instance_dict(obj)?;
@@ -697,7 +758,7 @@ pub fn _sm_init(
         }
         d.set_item(pyo3::intern!(py, "b"), b)?;
         d.set_item(pyo3::intern!(py, "opcodes"), py.None())?;
-        return chain(obj, &d, b, true);
+        return chain(obj, &d, b, true, gate);
     }
     obj.setattr(pyo3::intern!(py, "isjunk"), isjunk)?;
     obj.setattr(pyo3::intern!(py, "a"), py.None())?;
@@ -717,7 +778,7 @@ pub fn _sm_init(
     if b.is_none() {
         return Ok(true);
     }
-    _sm_set_seq2(obj, b)
+    set_seq2(obj, b, gate)
 }
 
 /// `ratio()`, or `None`.
@@ -768,19 +829,29 @@ pub fn _sm_matching_blocks<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Option<Boun
 /// blocks as a list (stored in the dict) if CPython would have them, or `None`.
 #[pyfunction]
 pub fn _sm_cached_blocks<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyList>>> {
-    let py = obj.py();
     let d = instance_dict(obj)?;
-    let found = match cached_blocks(obj, &d)? {
+    let Some(list) = cached_list(obj, &d)? else {
+        return Ok(None);
+    };
+    d.set_item(pyo3::intern!(obj.py(), "matching_blocks"), &list)?;
+    Ok(Some(list))
+}
+
+/// The blocks as a list if CPython would have them as `matching_blocks`
+/// (after `get_matching_blocks()`, `get_opcodes()` or `ratio()`), or `None`.
+pub(super) fn cached_list<'py>(
+    obj: &Bound<'py, PyAny>,
+    d: &Bound<'py, PyDict>,
+) -> PyResult<Option<Bound<'py, PyList>>> {
+    let found = match cached_blocks(obj, d)? {
         Cached::Nothing => return Ok(None),
         Cached::Blocks(blocks) => blocks,
-        Cached::Counted(_) => match blocks(obj, &d)? {
+        Cached::Counted(_) => match blocks(obj, d)? {
             Some(blocks) => blocks,
             None => return Ok(None),
         },
     };
-    let list = matches_list(py, &found.get().found)?;
-    d.set_item(pyo3::intern!(py, "matching_blocks"), &list)?;
-    Ok(Some(list))
+    matches_list(obj.py(), &found.get().found).map(Some)
 }
 
 /// `get_opcodes()` when `opcodes` is not set: the list (also stored as

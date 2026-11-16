@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import contextlib
 import difflib as _std
-import gc
 import operator
+import os
 import sys
 import types
 import warnings
@@ -69,6 +69,7 @@ diff_bytes = _std.diff_bytes
 _check_types = _std._check_types
 
 _WARNED: set[str] = set()
+_UNSET = object()
 
 
 def _fallback_sm(self: Any) -> None:
@@ -126,23 +127,23 @@ def _init(
         and cls.set_seq2 is _set_seq2
         and cls._SequenceMatcher__chain_b is _chain_b
     ):
-        if not _native._sm_init(self, isjunk, a, b, autojunk, cls in _PLAIN):
-            self.matching_blocks = None
-            self.fullbcount = None
-            _fallback_sm(self)
-            _chain_b(self)
+        done = _native._sm_init(self, isjunk, a, b, autojunk, cls in _PLAIN)
+        if done:
+            return
+        if done is None:  # difflib's class, and the patch has just been switched off
+            _SM["__init__"](self, isjunk, a, b, autojunk)
+            return
+        self.matching_blocks = None
+        self.fullbcount = None
+        _fallback_sm(self)
+        _chain_b(self)
     else:
         _SM["__init__"](self, isjunk, a, b, autojunk)
 
 
 def _set_seq1(self: Any, a: Any) -> None:
-    if a is self.a:
-        return
-    self.a = a
-    self.opcodes = None
-    d = self.__dict__
-    d.pop("matching_blocks", None)
-    d.pop("_pyroid_mb", None)
+    if _native._sm_set_seq1(self, a) is None:
+        _SM["set_seq1"](self, a)
 
 
 def _set_seq2(self: Any, b: Any) -> None:
@@ -152,11 +153,16 @@ def _set_seq2(self: Any, b: Any) -> None:
         return
     if b is self.b:
         return
-    if not _native._sm_set_seq2(self, b):
-        self.matching_blocks = None
-        self.fullbcount = None
-        _fallback_sm(self)
-        _chain_b(self)
+    done = _native._sm_set_seq2(self, b)
+    if done:
+        return
+    if done is None:
+        _SM["set_seq2"](self, b)
+        return
+    self.matching_blocks = None
+    self.fullbcount = None
+    _fallback_sm(self)
+    _chain_b(self)
 
 
 def _find_longest_match(
@@ -257,10 +263,16 @@ class _Lazy:
             return self
         name = self._name
         if name == "matching_blocks":
-            return _native._sm_cached_blocks(obj)
-        value = _native._sm_chain_attr(obj, name)
-        if value is None and name != "fullbcount":
-            raise AttributeError(f"{type(obj).__name__!r} object has no attribute {name!r}")
+            value = _native._sm_cached_blocks(obj)
+        else:
+            value = _native._sm_chain_attr(obj, name)
+        if value is None:
+            # pyroid.unpatch("difflib") may have just made it a plain attribute.
+            plain = obj.__dict__.get(name, _UNSET)
+            if plain is not _UNSET:
+                return plain
+            if name not in ("matching_blocks", "fullbcount"):
+                raise AttributeError(f"{type(obj).__name__!r} object has no attribute {name!r}")
         return value
 
 
@@ -287,32 +299,33 @@ for _name, _f in _SM_METHODS.items():
         _f.__doc__ = getattr(_StdSequenceMatcher, _name).__doc__
 
 
-def _settle(cls: type) -> None:
-    """Give the live instances of `cls` the state the standard library's methods read.
+def _switch_on() -> None:
+    """For ``pyroid.patch("difflib")``, once pyroid's methods are on difflib's class."""
+    _native._sm_patch(True)
 
-    For ``pyroid.unpatch("difflib")``, before it takes pyroid's methods off `cls` (difflib's
-    own ``SequenceMatcher``): a matcher made or used under the patch keeps ``b2j``, ``bjunk``,
+
+def _switch_off() -> int:
+    """For ``pyroid.unpatch("difflib")``, before it takes pyroid's methods off difflib's class.
+
+    A matcher of difflib's class made or used under the patch keeps ``b2j``, ``bjunk``,
     ``bpopular``, ``fullbcount`` and ``matching_blocks`` in pyroid's native state, which only
-    pyroid's descriptors on `cls` can read. They become plain instance attributes (CPython's
-    state, as pickling gives it), and the native state goes.
+    pyroid's descriptors on the class can read. Each one becomes CPython's state (plain instance
+    attributes, as pickling gives them), now or, if another thread's ``__init__``, ``set_seq1``
+    or ``set_seq2`` is changing it, when that call ends; and a call that starts from now on runs
+    CPython's method. Returns how many matchers were settled now. The matchers are recorded as
+    they get native state (see ``crates/pyroid-py/src/difflib/settle.rs``), so this does not
+    walk the heap or wait for other threads.
     """
-    lazy = {name: _SM_METHODS[name] for name in _LAZY}
-    for obj in gc.get_objects():
-        if not isinstance(obj, cls) or isinstance(obj, SequenceMatcher):
-            continue  # pyroid.difflib's own class keeps its methods
-        d = getattr(obj, "__dict__", None)
-        if type(d) is not dict or not any(type(k) is str and k.startswith("_pyroid_") for k in d):
-            continue
-        for name, attr in lazy.items():
-            if name not in d:
-                with contextlib.suppress(AttributeError):
-                    d[name] = attr.__get__(obj, type(obj))
-        for k in [k for k in d if type(k) is str and k.startswith("_pyroid_")]:
-            del d[k]
+    return _native._sm_patch(False)  # type: ignore[no-any-return]
 
 
 class SequenceMatcher(_StdSequenceMatcher):
     __doc__ = _StdSequenceMatcher.__doc__
+
+
+_native._sm_own(SequenceMatcher)
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_native._sm_forked)
 
 
 for _name, _f in _StdSequenceMatcher.__dict__.items():

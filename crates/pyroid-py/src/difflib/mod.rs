@@ -7,6 +7,7 @@ mod batch;
 mod interrupt;
 mod lines;
 mod seq;
+mod settle;
 mod sm;
 
 use pyo3::prelude::*;
@@ -19,7 +20,11 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<sm::ASide>()?;
     m.add_class::<sm::Blocks>()?;
     m.add_function(wrap_pyfunction!(sm::_sm_init, &m)?)?;
+    m.add_function(wrap_pyfunction!(sm::_sm_set_seq1, &m)?)?;
     m.add_function(wrap_pyfunction!(sm::_sm_set_seq2, &m)?)?;
+    m.add_function(wrap_pyfunction!(settle::_sm_own, &m)?)?;
+    m.add_function(wrap_pyfunction!(settle::_sm_forked, &m)?)?;
+    m.add_function(wrap_pyfunction!(settle::_sm_patch, &m)?)?;
     m.add_function(wrap_pyfunction!(sm::_sm_ratio, &m)?)?;
     m.add_function(wrap_pyfunction!(sm::_sm_matching_blocks, &m)?)?;
     m.add_function(wrap_pyfunction!(sm::_sm_cached_blocks, &m)?)?;

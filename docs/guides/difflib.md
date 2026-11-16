@@ -45,8 +45,10 @@ functions imported before the patch, subclasses defined earlier and `isinstance`
 working, and `ndiff`, `HtmlDiff`, unittest's `assertEqual` diffs and pytest's assertion diffs run
 natively. `pyroid run -p difflib -m pytest` does the same for a whole program and the processes it
 starts ([pyroid.patch()](patch.md)); `pyroid.unpatch("difflib")` puts everything back. Matchers
-made or used under the patch keep working after it: `unpatch` gives them the attributes
-difflib's own methods read (it looks through the live objects once, with `gc.get_objects()`).
+made or used under the patch keep working after it, also in threads that diff while `unpatch`
+runs: `unpatch` gives them the attributes difflib's own methods read. pyroid keeps track of these
+matchers as they are made, so `unpatch` does not search the heap for them or wait for other
+threads.
 
 ## What is the same
 
