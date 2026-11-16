@@ -827,3 +827,82 @@ def test_tmp_dir_refuses_work_dirs_others_control(
     work.unlink()
     assert main(args) == 0
     assert len(_rows(out)) == 1
+
+
+# -------------------------------------------- resume with relative paths, finished file OUT (P45)
+
+
+def _stamp(folder: Path) -> dict[str, tuple[int, int]]:
+    return {p.name: (p.stat().st_ino, p.stat().st_mtime_ns) for p in folder.glob("*.parquet")}
+
+
+@pytest.mark.thread_unsafe(reason="changes the working directory")
+@pytest.mark.parametrize("workers", ["1", "2"])
+def test_resume_with_a_relative_out_skips_finished_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, workers: str
+) -> None:
+    """Records hold output paths relative to OUT, a rerun's are relative to the working
+    directory; they were compared as if both were relative to OUT, so with a relative OUT
+    (``pyroid clean data/ out/``) every finished file was redone."""
+    monkeypatch.chdir(tmp_path)
+    _shards(tmp_path, [f"doc {i}" for i in range(12)], [3, 3, 3, 3])
+    assert main(["translit", "in/", "out/", "--workers", workers]) == 0
+    before = _stamp(Path("out"))
+    Path("out/part-002.parquet").unlink()  # unfinished again
+    assert main(["translit", "in", "out", "--workers", workers]) == 0
+    after = _stamp(Path("out"))
+    for name in ("part-000.parquet", "part-001.parquet", "part-003.parquet"):
+        assert after[name] == before[name], f"{name} was rewritten"
+    assert after["part-002.parquet"] != before["part-002.parquet"]
+    assert [r["id"] for r in _rows(Path("out"))] == [f"d{i}" for i in range(12)]
+
+
+@pytest.mark.thread_unsafe(reason="changes the working directory and patches pyroid.cli")
+def test_minhash_resume_with_a_relative_out_skips_what_is_done(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The signatures of finished files, and the MinHash decision once made, are not redone."""
+    import pyroid.cli as cli
+    from pyroid._pyroid import dedup as native
+
+    monkeypatch.chdir(tmp_path)
+    docs = _corpus(300, seed=3)
+    _shards(tmp_path, docs, [100, 100, 100])
+    calls: list[tuple[str, int]] = []
+    broken = {("sig", 2), ("filter", 1)}
+    real_sig, real_filter, real_cluster = (
+        cli._unit_signatures,
+        cli._unit_filter,
+        native._minhash_cluster,
+    )
+
+    def sig(job: Any, report: Any) -> Any:
+        calls.append(("sig", job.rank))
+        if ("sig", job.rank) in broken:
+            raise ValueError("boom")
+        return real_sig(job, report)
+
+    def filt(job: Any, report: Any) -> Any:
+        calls.append(("filter", job.rank))
+        if ("filter", job.rank) in broken:
+            raise ValueError("boom")
+        return real_filter(job, report)
+
+    def cluster(*args: Any, **kw: Any) -> Any:
+        calls.append(("cluster", 0))
+        return real_cluster(*args, **kw)
+
+    monkeypatch.setattr(cli, "_unit_signatures", sig)
+    monkeypatch.setattr(cli, "_unit_filter", filt)
+    monkeypatch.setattr(native, "_minhash_cluster", cluster)
+    assert main(["dedup", "in/", "out/"]) == 1  # the signatures of file 2 fail
+    assert calls == [("sig", 0), ("sig", 1), ("sig", 2)]
+    broken.discard(("sig", 2))
+    calls.clear()
+    assert main(["dedup", "in/", "out/"]) == 1  # now file 1's last stage fails
+    assert calls == [("sig", 2), ("cluster", 0), ("filter", 0), ("filter", 1)]
+    broken.clear()
+    calls.clear()
+    assert main(["dedup", "in/", "out/"]) == 0
+    assert calls == [("filter", 1), ("filter", 2)]
+    assert [r["id"] for r in _rows(Path("out"))] == _expected(docs)

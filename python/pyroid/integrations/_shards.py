@@ -156,7 +156,10 @@ class State:
         if size is not None and r.get("size") not in (None, size):
             return False
         recorded = [self._load(p) for p in r.get("outputs", [])]
-        if outputs is not None and sorted(recorded) != sorted(self._load(p) for p in outputs):
+        # The current paths are as the command names them (relative to the working directory),
+        # the recorded ones relative to the state's directory.
+        now = [os.path.normpath(os.path.abspath(p)) for p in outputs or ()]
+        if outputs is not None and sorted(recorded) != sorted(now):
             return False
         return all(os.path.exists(p) for p in recorded)
 
