@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import importlib
 import importlib.metadata
+import importlib.util
 import os
+import pickle
 import subprocess
 import sys
 import textwrap
@@ -79,12 +81,96 @@ def test_patch_replaces_and_unpatch_restores() -> None:
     assert packaging.specifiers.Version is originals[0]  # type: ignore[attr-defined]
 
 
+def test_objects_made_before_the_patch_keep_working() -> None:
+    """packaging's objects from before the patch work with each other and with pyroid's after."""
+    import packaging.markers as pm
+    import packaging.requirements as pr
+    import packaging.specifiers as ps
+    import packaging.version as pv
+
+    ss, v, spec = ps.SpecifierSet(">=1.0"), pv.Version("1.5"), ps.Specifier(">=1.0")
+    m, r = pm.Marker("os_name == 'posix'"), pr.Requirement("a>=1; os_name == 'posix'")
+    candidates = [v, "1.6", "0.5", pv.Version("2.0a1")]
+
+    def observe() -> tuple[Any, ...]:
+        return (
+            ss.contains(v),
+            list(ss.filter(candidates)),
+            spec.contains(v),
+            list(spec.filter(candidates)),
+            ss.contains("1.2"),
+            m.evaluate({"os_name": "posix"}),
+            r.specifier.contains(v),
+            v < pv.Version("2"),
+        )
+
+    want = observe()
+    _patched()
+    try:
+        assert observe() == want
+        new = pv.Version("1.5")
+        assert type(new) is not type(v)
+        assert new == v and v == new and hash(new) == hash(v)
+        assert pv.Version("1.0") < v < pv.Version("2.0")
+        assert pv.Version(v) == v  # taken by value while patched
+        assert ps.SpecifierSet(">=1").contains(v)
+        assert list(ps.SpecifierSet(">=1").filter([v, "0.1"])) == [v]
+        both = ss & ps.SpecifierSet("<2")
+        assert both.contains(v) and not both.contains("2.5")
+        assert pm.Marker("os_name == 'posix'") == m
+        assert pr.Requirement("a>=1; os_name == 'posix'") == r
+    finally:
+        integrations.unpatch("packaging")
+    assert observe() == want
+    with pytest.raises(pv.InvalidVersion):
+        importlib.import_module("pyroid.packaging.version").Version(v)  # as packaging's own
+
+
+def test_pickles_of_objects_made_before_the_patch() -> None:
+    import packaging.markers as pm
+    import packaging.requirements as pr
+    import packaging.specifiers as ps
+    import packaging.version as pv
+
+    objs: list[Any] = [
+        pv.Version("1.5.post1+x"),
+        ps.Specifier(">=1", prereleases=True),
+        ps.SpecifierSet(">=1,<2,!=1.5.*", prereleases=False),
+        pm.Marker("os_name == 'nt' or extra == 'Test_Me'"),
+        pr.Requirement("a[b]>=1; os_name == 'nt'"),
+    ]
+    classes = [type(o) for o in objs]
+    _patched()
+    try:
+        for o in objs:
+            for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
+                back = pickle.loads(pickle.dumps(o, protocol))
+                assert back == o
+                assert str(back) == str(o)
+                # The class packaging's name gives now: pyroid's.
+                assert type(back) is getattr(sys.modules[type(o).__module__], type(o).__name__)
+        assert pickle.loads(pickle.dumps(objs[1])).prereleases is True
+        assert pickle.loads(pickle.dumps(objs[2])).prereleases is False
+    finally:
+        integrations.unpatch("packaging")
+    for o, cls in zip(objs, classes):
+        assert type(pickle.loads(pickle.dumps(o))) is cls
+        assert "__reduce_ex__" not in vars(cls)
+
+
 def test_patch_warning_names_the_release() -> None:
     integrations.unpatch("packaging")
     integrations._patch._WARNED.discard("packaging")
-    with pytest.warns(integrations.PatchWarning, match="from packaging.version import Version"):
+    with pytest.warns(integrations.PatchWarning, match="from packaging.version import Version") as w:
         integrations.patch("packaging")
     integrations.unpatch("packaging")
+    unported = [m for m in ("pylock", "ranges", "dependency groups") if m in str(w[0].message)]
+    present = [
+        m
+        for m in ("pylock", "ranges", "dependency_groups")
+        if importlib.util.find_spec(f"packaging.{m}") is not None
+    ]
+    assert len(unported) == len(present)
 
 
 def test_importing_pyroid_patches_nothing() -> None:

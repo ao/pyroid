@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import random
+import subprocess
+import sys
 from typing import Any
 
 import pytest
@@ -126,3 +129,66 @@ def test_errors() -> None:
         rp.parse_batch(["1.0"], errors="ignore")  # type: ignore[call-overload]
     with pytest.raises(ValueError, match="threads"):
         rp.parse_batch(["1.0"], threads=0)
+
+
+def test_sort_versions_across_many_runs() -> None:
+    """Past one chunk (65,536 items) the sort merges runs: still stable, both directions."""
+    rng = random.Random(11)
+    texts = [f"{rng.randint(0, 9)}.{rng.randint(0, 9)}{rng.choice(SPELLINGS)}" for _ in range(150_000)]
+    keyed = [(Version(t), i) for i, t in enumerate(texts)]
+    for reverse in (False, True):
+        want = [texts[i] for _, i in sorted(keyed, key=lambda p: p[0], reverse=reverse)]
+        for threads in (1, None):
+            got = rp.sort_versions(texts, reverse=reverse, threads=threads)
+            assert got == want
+
+
+@pytest.mark.thread_unsafe(reason="interrupts the main thread")
+def test_ctrl_c_stops_sort_versions_promptly() -> None:
+    import _thread
+    import threading
+    import time
+
+    rng = random.Random(5)
+    texts = [f"{rng.randint(0, 30)}.{rng.randint(0, 30)}.{rng.randint(0, 30)}" for _ in range(600_000)]
+    start = time.perf_counter()
+    rp.sort_versions(texts, threads=1)
+    full = time.perf_counter() - start
+    sent: list[float] = []
+
+    def interrupt() -> None:
+        time.sleep(full * 0.4)
+        sent.append(time.perf_counter())
+        _thread.interrupt_main()
+
+    timer = threading.Thread(target=interrupt)
+    timer.start()
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            rp.sort_versions(texts, threads=1)
+            time.sleep(full * 2)  # the interrupt came after the call: still raised here
+        latency = time.perf_counter() - sent[0]
+    finally:
+        timer.join()
+    assert latency < max(0.25, full * 0.2), (latency, full)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="peak RSS in KiB (Linux)")
+def test_filter_batch_holds_one_chunk() -> None:
+    """filter_batch streams: its peak memory does not grow with the number of versions."""
+    code = r"""
+import json, random, resource
+import pyroid.packaging as pp
+rng = random.Random(1)
+vs = [f"{rng.randint(0, 30)}.{rng.randint(0, 30)}.{rng.randint(0, 30)}" + rng.choice(["", "a1", ".post1"])
+      for _ in range(600_000)]
+pp.filter_batch(">=1.0", vs[:1000])
+base = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+kept = pp.filter_batch(">=1.0,!=1.5.*,<20", vs)
+grow = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - base
+print(json.dumps([len(kept), grow // 1024]))
+"""
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    kept, grown_mb = json.loads(out.stdout)
+    assert kept > 100_000
+    assert grown_mb < 40, grown_mb  # was ~170 MB: every parsed version held at once

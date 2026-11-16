@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import itertools
 import pickle
+import sys
 import threading
 import warnings
 from collections.abc import Iterator
@@ -30,6 +31,7 @@ import packaging.requirements as pr  # noqa: E402
 import packaging.specifiers as ps  # noqa: E402
 
 PACKAGING_26 = getattr(__import__("packaging"), "__version__", "").startswith("26.")
+PACKAGING_263 = getattr(__import__("packaging"), "__version__", "") == "26.3"
 
 
 def test_version_basics() -> None:
@@ -158,7 +160,8 @@ def test_subclasses() -> None:
     assert str(m) == "1.2"
     assert m.raw == "release-1.2"
     assert repr(m) == "<MyVersion('1.2')>"
-    assert m.__class__ is MyVersion
+    assert type(m) is MyVersion
+    assert isinstance(m, MyVersion)
     assert m > Version("1")
     assert type(m.__replace__(local="x")) is MyVersion
 
@@ -167,7 +170,46 @@ def test_subclasses() -> None:
             super().__init__(s)
             self.unsafe_name = self.name
 
-    assert MyRequirement("Foo>=1").unsafe_name == "Foo"
+    r = MyRequirement("Foo>=1")
+    assert r.unsafe_name == "Foo"
+    assert repr(r) == "<MyRequirement('Foo>=1')>"
+
+
+@pytest.mark.skipif(not PACKAGING_26, reason="the __class__ claim is for packaging 26")
+def test_packagings_code_accepts_subclass_objects() -> None:
+    """Unpatched, packaging's own code takes objects of subclasses of pyroid's classes."""
+    import packaging.utils as pu
+
+    class RV(Version):
+        pass
+
+    class RS(Specifier):
+        pass
+
+    class RSS(SpecifierSet):
+        pass
+
+    class RM(Marker):
+        pass
+
+    class RR(Requirement):
+        pass
+
+    v: Any = RV("1.5.0")
+    assert v.__class__ is packaging_version.Version
+    assert ps.SpecifierSet(">=1.0").contains(v)
+    assert list(ps.SpecifierSet(">=1.0").filter([v, "0.5"])) == [v]
+    assert pu.canonicalize_version(v) == "1.5"
+    assert ps.Specifier("~=1.4").contains(v)
+    for obj, cls in (
+        (RS(">=1"), ps.Specifier),
+        (RSS(">=1"), ps.SpecifierSet),
+        (RM("os_name == 'nt'"), pm.Marker),
+        (RR("a>=1"), pr.Requirement),
+    ):
+        assert isinstance(obj, cls)
+        assert type(obj).__name__.startswith("R")
+    assert (ps.SpecifierSet(">=1") & cast(Any, RSS("<2"))).contains("1.5")
 
 
 def test_version_can_be_changed_in_place() -> None:
@@ -298,3 +340,261 @@ def test_no_warning_on_import() -> None:
         import importlib
 
         importlib.reload(rp)
+
+
+# --------------------------------------------------------------------------------------------
+# Edge cases from an outside evaluation (each compared with packaging itself)
+# --------------------------------------------------------------------------------------------
+
+
+def _outcome(f: Any) -> tuple[str, str]:
+    try:
+        return ("ok", repr(f()))
+    except Exception as e:  # noqa: BLE001
+        return (type(e).__name__, str(e))
+
+
+def test_none_arguments_raise_as_packaging_does() -> None:
+    for build in (
+        lambda m: m.SpecifierSet(None),
+        lambda m: m.Specifier(None),
+        lambda m: m.SpecifierSet(None, prereleases=True),
+    ):
+        mine, theirs = _outcome(lambda: build(rp.specifiers)), _outcome(lambda: build(ps))
+        assert mine == theirs
+        assert mine[0] == "TypeError"
+    assert str(SpecifierSet()) == "" and len(SpecifierSet()) == 0
+    with pytest.raises(InvalidSpecifier, match="^Invalid specifier: ''$"):
+        Specifier()
+
+
+@pytest.mark.parametrize(
+    ("marker", "environment"),
+    [
+        ("os_name == 'posix'", {"extra": 1}),
+        ("extra == 'x'", {"extra": 1}),
+        ("os_name == 'posix'", {"extra": b"x"}),
+        ("os_name == 'posix'", {"python_full_version": None}),
+        ("os_name == 'posix'", {"python_full_version": 3}),
+        ("os_name == 'posix'", {"extra": None}),
+        ("extra == ''", {"extra": None}),
+        ("extra == ''", {"extra": 0}),
+        ("python_full_version >= '3'", {"python_full_version": "3.12.0+"}),
+    ],
+)
+def test_marker_environment_is_prepared_first(marker: str, environment: dict[str, Any]) -> None:
+    """packaging canonicalises `extra` and repairs `python_full_version` before evaluating."""
+    env = {"os_name": "posix", **environment}
+    mine = _outcome(lambda: Marker(marker).evaluate(env))
+    assert mine == _outcome(lambda: pm.Marker(marker).evaluate(env))
+
+
+@pytest.mark.thread_unsafe(reason="changes sys.set_int_max_str_digits")
+def test_digit_limit_applies_when_printing() -> None:
+    """A Version made with the int-string limit off prints (or not) as packaging's does."""
+    import sys
+
+    import packaging.utils as pu
+
+    text = "1." + "7" * 5000 + "+" + "3" * 5000
+    old = sys.get_int_max_str_digits()
+    sys.set_int_max_str_digits(0)
+    try:
+        mine, theirs = Version(text), packaging_version.Version(text)
+    finally:
+        sys.set_int_max_str_digits(4300)
+    try:
+        checks: list[Any] = [
+            lambda v: len(str(v)),
+            lambda v: v.release[1] % 97,
+            lambda v: v.local,
+            lambda v: v.public,
+            lambda v: v.base_version,
+            lambda v: repr(v)[:20],
+            lambda v: isinstance(hash(v), int),
+            lambda v: v == theirs,
+        ]
+        for check in checks:
+            assert _outcome(lambda c=check: c(mine)) == _outcome(lambda c=check: c(theirs))
+        assert _outcome(lambda: str(mine))[0] == "ValueError"
+        assert _outcome(lambda: canonicalize_version(mine)) == _outcome(
+            lambda: pu.canonicalize_version(theirs)
+        )
+    finally:
+        sys.set_int_max_str_digits(old)
+
+
+def test_from_parts_requires_release() -> None:
+    assert _outcome(lambda: Version.from_parts()) == _outcome(  # type: ignore[call-arg]
+        lambda: packaging_version.Version.from_parts()
+    )
+    assert Version.from_parts(release=None) == packaging_version.Version.from_parts(release=None)
+
+
+@pytest.mark.skipif(not PACKAGING_263, reason="pyroid has packaging 26.3's attributes")
+def test_packagings_class_attributes() -> None:
+    assert Specifier._operators == ps.Specifier._operators  # type: ignore[attr-defined]
+    for mine, theirs in (
+        (Version, packaging_version.Version),
+        (Specifier, ps.Specifier),
+        (SpecifierSet, ps.SpecifierSet),
+        (Marker, pm.Marker),
+    ):
+        assert getattr(mine, "__slots__", None) == getattr(theirs, "__slots__", None)
+    assert Version._regex.pattern == packaging_version.Version._regex.pattern  # type: ignore[attr-defined]
+
+
+DEEP = 100_000
+
+
+def test_deep_markers_do_not_use_the_stack() -> None:
+    """Nesting is limited by memory, not by the native stack (packaging raises RecursionError)."""
+    deep = "(" * DEEP + "os_name == 'nt'" + ")" * DEEP
+    m = Marker(deep)
+    assert str(m) == 'os_name == "nt"'
+    assert m.evaluate({"os_name": "nt"})
+    assert m == Marker("os_name == 'nt'")
+    assert hash(m) == hash(Marker("os_name == 'nt'"))
+    r = Requirement("foo; " + deep)
+    assert str(r) == 'foo; os_name == "nt"'
+    assert pickle.loads(pickle.dumps(m)) == m
+    with pytest.raises(InvalidMarker) as info:
+        Marker("(" * DEEP)
+    assert str(info.value).startswith("Expected a marker variable or quoted string")
+    with pytest.raises(InvalidMarker):
+        Marker("(" * DEEP + "os_name == 'nt'")
+    # A group at every level: printed with all its parentheses.
+    chained = "(os_name == 'a' or " * 5000 + "os_name == 'nt'" + ")" * 5000
+    m = Marker(chained)
+    assert str(m).count("(") == 4999
+    assert m.evaluate({"os_name": "nt"})
+    # packaging's _markers: nested lists as deep as the marker, read back the same way.
+    nested = Marker(deep)._markers
+    back = Marker.__new__(Marker)
+    back._markers = nested
+    assert str(back) == 'os_name == "nt"'
+    del nested, back
+
+
+@pytest.mark.thread_unsafe(reason="sets its own thread stack size")
+@pytest.mark.parametrize("stack", [256 << 10, 1 << 20])
+def test_deep_markers_in_a_thread_with_a_small_stack(stack: int) -> None:
+    deep = "(" * 20_000 + "os_name == 'nt'" + ")" * 20_000
+    results: list[Any] = []
+
+    def work() -> None:
+        try:
+            m = Marker(deep)
+            results.append((m.evaluate({"os_name": "nt"}), str(m), hash(m) == hash(m)))
+            results.append(str(Requirement("foo; " + deep)))
+            m2, other = Marker("os_name == 'a'"), Marker("os_name == 'b'")
+            for _ in range(20_000):
+                m2 = m2 & other
+            results.append(m2.evaluate({"os_name": "nt"}))
+        except BaseException as e:  # noqa: BLE001
+            results.append(e)
+
+    old = threading.stack_size(stack)
+    try:
+        t = threading.Thread(target=work)
+        t.start()
+        t.join()
+    finally:
+        threading.stack_size(old)
+    assert results == [(True, 'os_name == "nt"', True), 'foo; os_name == "nt"', False]
+
+
+def test_combining_markers_shares_the_groups() -> None:
+    """`m & other` is constant time and `m & m` holds m once, as packaging's lists do."""
+    import time
+
+    other = Marker("os_name == 'b'")
+    m = Marker("os_name == 'a'")
+    start = time.perf_counter()
+    for _ in range(50_000):
+        m = m & other
+    assert time.perf_counter() - start < 5
+    assert m.evaluate({"os_name": "a"}) is False
+    assert m.evaluate({"os_name": "b"}) is False
+    assert str(m).startswith("(" * 49_999 + 'os_name == "a" and os_name == "b")')
+    m = Marker("os_name == 'a'")
+    for _ in range(18):
+        m = m | m
+    tree = m._markers
+    assert tree[0] is tree[2]
+    assert m.evaluate({"os_name": "a"})
+    assert (m | Marker("os_name == 'c'")).evaluate({"os_name": "c"})
+    # A packaging marker whose groups are shared stays small when pyroid reads it (2**40 leaves).
+    p = pm.Marker("os_name == 'a'")
+    if hasattr(p, "__and__"):
+        for _ in range(40):
+            p = p & p
+        both = (Marker("os_name == 'x'") | cast(Any, p))._markers
+        assert both[2][0] is both[2][2]
+
+
+def test_a_marker_list_that_holds_itself() -> None:
+    loop: list[Any] = []
+    loop.append(loop)
+    m = Marker.__new__(Marker)
+    with pytest.raises(RecursionError):
+        m._markers = loop
+
+
+def test_and_with_packagings_specifier_set() -> None:
+    for ours, theirs in (
+        (SpecifierSet(">=1.0"), ps.SpecifierSet("<3")),
+        (SpecifierSet(">=1.0", prereleases=True), ps.SpecifierSet("<3")),
+        (SpecifierSet(">=1.0"), ps.SpecifierSet("<3,===foo")),
+    ):
+        both = ours & cast(Any, theirs)
+        assert type(both) is SpecifierSet
+        expected = ps.SpecifierSet(str(ours)) & theirs
+        if ours._prereleases is not None:
+            expected = ps.SpecifierSet(str(ours), prereleases=ours._prereleases) & theirs
+        assert str(both) == str(expected)
+        assert both.prereleases == expected.prereleases
+        for v in ("0.5", "1.0", "2.5a1", "3.0", "foo"):
+            assert both.contains(v) == expected.contains(v)
+    with pytest.raises(ValueError, match="Cannot combine"):
+        SpecifierSet(">=1", prereleases=True) & cast(Any, ps.SpecifierSet("<3", prereleases=False))
+    assert SpecifierSet(">=1").__and__(1) is NotImplemented  # type: ignore[operator]
+
+
+def test_specifier_set_of_packagings_specifiers() -> None:
+    items = [ps.Specifier(">=1.0"), ps.Specifier("!=1.5.*"), ps.Specifier("<3", prereleases=True)]
+    ours, theirs = SpecifierSet(cast(Any, items)), ps.SpecifierSet(items)
+    candidates = ["0.9", "1.0", "1.5.2", "2.0a1", "2.9", "3.0", "nope"]
+    assert list(ours) == items  # the caller's objects, as given (until printed)
+    assert str(ours) == str(theirs)
+    assert [ours.contains(v) for v in candidates] == [theirs.contains(v) for v in candidates]
+    assert list(ours.filter(candidates)) == list(theirs.filter(candidates))
+    assert ours.prereleases == theirs.prereleases
+    assert list(ours) == list(theirs)
+    assert rp.filter_batch(ours, candidates) == list(theirs.filter(candidates))
+    # Strings are not specifiers: the same AttributeError as packaging's.
+    assert _outcome(lambda: SpecifierSet(cast(Any, [">=1"])).contains("1.5")) == _outcome(
+        lambda: ps.SpecifierSet(cast(Any, [">=1"])).contains("1.5")
+    )
+
+
+def test_fallback_warning_points_at_the_caller() -> None:
+    import packaging.ranges  # noqa: F401  # the code these calls hand over to
+
+    from pyroid import FallbackWarning
+    from pyroid.packaging import _compat
+
+    _compat._WARNED.clear()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        line = sys._getframe().f_lineno + 1
+        SpecifierSet(">=1").to_range()
+        SpecifierSet(">=1").is_subset(SpecifierSet(">=0"))
+        SpecifierSet(">=1").is_superset(ps.SpecifierSet(">=2"))
+        SpecifierSet(">=1").is_disjoint(SpecifierSet("<1"))
+    got = [(w.filename, w.lineno, str(w.message).split(" runs")[0]) for w in caught]
+    assert all(w.category is FallbackWarning for w in caught)
+    assert got == [
+        (__file__, line + i, f"pyroid.packaging: SpecifierSet.{name}()")
+        for i, name in enumerate(("to_range", "is_subset", "is_superset", "is_disjoint"))
+    ]
