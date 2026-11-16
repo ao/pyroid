@@ -127,6 +127,7 @@ def _native_callables() -> tuple[dict[int, tuple[str, Any]], dict[int, tuple[str
 
 
 _LINE_NATIVE, _ROW_NATIVE = _native_callables()
+_ROW_NATIVE_NO_LATEX = {k: v for k, v in _ROW_NATIVE.items() if v[0] != "latex_row"}
 
 
 class _UnsupportedError(Exception):
@@ -147,14 +148,39 @@ def _describe_field(f: Any, n: int, native: dict[int, tuple[str, Any]]) -> Any:
     return ("plain", *parts)
 
 
+#: tabulate's LaTeX escapes as they were at import: the Rust side's latex rows escape with these.
+_LATEX_RULES = dict(LATEX_ESCAPE_RULES)
+#: The built-in formats whose rows are `_latex_row`.
+_LATEX_NAMES = frozenset(
+    n for n, f in _table_formats.items() if _port._latex_row in (f.headerrow, f.datarow)
+)
+
+
+def _edited_latex(fmt: Any) -> bool:
+    """`fmt` draws rows with ``_latex_row`` and ``LATEX_ESCAPE_RULES`` was edited since import.
+
+    ``_latex_row`` reads that dict (its default ``escrules``) on each call, so tabulate follows
+    edits to it; such formats then run tabulate's ``_latex_row`` for their rows.
+    """
+    latex = _port._latex_row
+    head, data = getattr(fmt, "headerrow", None), getattr(fmt, "datarow", None)
+    return (head is latex or data is latex) and LATEX_ESCAPE_RULES != _LATEX_RULES
+
+
 def _describe(fmt: Any) -> Any:
     """How the Rust side draws `fmt` (a ``TableFormat``)."""
     builtin = _BUILTIN.get(id(fmt))
-    if builtin is not None and builtin[1] is fmt:
+    if (
+        builtin is not None
+        and builtin[1] is fmt
+        and (builtin[0] not in _LATEX_NAMES or LATEX_ESCAPE_RULES == _LATEX_RULES)
+    ):
         return ("builtin", builtin[0])
+    edited = _edited_latex(fmt)
     try:
+        rows = _ROW_NATIVE_NO_LATEX if edited else _ROW_NATIVE
         fields = [_describe_field(f, 4, _LINE_NATIVE) for f in fmt[:4]]
-        fields += [_describe_field(f, 3, _ROW_NATIVE) for f in fmt[4:6]]
+        fields += [_describe_field(f, 3, rows) for f in fmt[4:6]]
         padding = fmt.padding
         if type(padding) is not int:
             raise _UnsupportedError("a TableFormat padding that is not an int")

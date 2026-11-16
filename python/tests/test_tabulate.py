@@ -386,6 +386,20 @@ def test_separator_row_first_in_a_frame() -> None:
     assert tabulate(df, headers=["A"]) == "  A\n---\n---\n  0"
 
 
+@pytest.mark.thread_unsafe  # a module-level table
+def test_edited_latex_escape_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    # tabulate's _latex_row reads LATEX_ESCAPE_RULES on each call, so edits to it count.
+    rows = [["a&b", "x_y", 1]]
+    assert tabulate(rows, tablefmt="latex").splitlines()[2] == " a\\&b & x\\_y & 1 \\\\"
+    monkeypatch.setitem(pt.LATEX_ESCAPE_RULES, "&", "AND")
+    monkeypatch.delitem(pt.LATEX_ESCAPE_RULES, "_")
+    for fmt in ("latex", "latex_booktabs", "latex_longtable"):
+        assert tabulate(rows, tablefmt=fmt).splitlines()[2] == " aANDb & x_y & 1 \\\\", fmt
+    assert tabulate(rows, tablefmt="latex_raw").splitlines()[2] == " a&b & x_y & 1 \\\\"
+    monkeypatch.undo()
+    assert tabulate(rows, tablefmt="latex").splitlines()[2] == " a\\&b & x\\_y & 1 \\\\"
+
+
 def test_custom_table_formats() -> None:
     fmt = pt.TableFormat(
         lineabove=lambda widths, aligns: "=" * sum(w + 1 for w in widths),
