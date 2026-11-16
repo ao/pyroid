@@ -231,6 +231,38 @@ def test_missing_optional_dependency_is_one_line(
             main(args)
 
 
+def test_stats_into_a_closed_pipe(tmp_path: Path) -> None:
+    """``--stats 2>&1 | head -1``: the run completes, tidies up and exits 0 (it exited 120 and
+    left OUT/.pyroid/work-* behind)."""
+    src = _write(_table(["Ünïcödé", "ascii"]), tmp_path / "in.parquet")
+    out = tmp_path / "out"
+    cmd = [sys.executable, "-m", "pyroid", "translit", str(src), str(out), "--stats", "--progress"]
+    r, w = os.pipe()
+    os.close(r)  # nobody reads stderr
+    try:
+        proc = subprocess.run(cmd, stderr=w, stdout=subprocess.DEVNULL, check=False)
+    finally:
+        os.close(w)
+    assert proc.returncode == 0
+    assert _read(out / "in.parquet").column("text").to_pylist() == ["Unicode", "ascii"]
+    assert not list((out / ".pyroid").glob("work-*"))
+    # pyroid stats into a closed stdout: exit 1 quietly, as Python's tools do
+    r, w = os.pipe()
+    os.close(r)
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "pyroid", "stats", str(out)],
+            stdout=w,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    finally:
+        os.close(w)
+    assert proc.returncode == 1
+    assert proc.stderr == ""
+
+
 # ----------------------------------------------------------------------------------------- dedup
 
 

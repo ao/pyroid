@@ -295,6 +295,8 @@ These rules hold for every command:
   name and renamed when complete, so a failed or interrupted run never leaves a truncated file.
   An existing OUT file is not replaced unless you pass `--overwrite`, and an output path equal to
   the input path is refused.
+- `--stats` and `--progress` write to stderr. If stderr is a pipe that closes early
+  (`2>&1 | head -1`), the messages stop and the run goes on.
 - `--text-column` names the text column (default `text`). Every other column is passed through
   unchanged.
 - `--batch-size` sets the rows per Arrow batch (default 10,000).

@@ -16,6 +16,7 @@ and a rerun redoes only unfinished units.
 from __future__ import annotations
 
 import concurrent.futures as cf
+import contextlib
 import hashlib
 import json
 import multiprocessing
@@ -275,12 +276,42 @@ def summary(
 
 def print_summary(d: Mapping[str, Any]) -> None:
     """``--stats``: counts and drops by reason, on stderr."""
-    w = sys.stderr.write
-    w(f"pyroid {d['command']}: {d['docs_in']:,} in, {d['docs_out']:,} out, {d['wall_s']} s\n")
+    lines = [f"pyroid {d['command']}: {d['docs_in']:,} in, {d['docs_out']:,} out, {d['wall_s']} s"]
     width = max((len(k) for k in d["removed"]), default=0)
     for k, n in d["removed"].items():
         pct = 100 * n / d["docs_in"] if d["docs_in"] else 0.0
-        w(f"  dropped {k:<{width}}  {n:>9,}  {pct:5.1f}%\n")
+        lines.append(f"  dropped {k:<{width}}  {n:>9,}  {pct:5.1f}%")
+    say("".join(f"{ln}\n" for ln in lines))
+
+
+_muted = False  # stderr was a closed pipe: messages are dropped
+
+
+def say(text: str) -> None:
+    """Write ``text`` to stderr, for people (progress, stats, errors).
+
+    When stderr is a pipe that closed (``2>&1 | head -1``), this and later messages are dropped
+    and the run goes on: its outputs and exit status do not depend on them.
+    """
+    global _muted
+    if _muted:
+        return
+    try:
+        sys.stderr.write(text)
+        sys.stderr.flush()
+    except (BrokenPipeError, ValueError):  # ValueError: stderr was closed
+        _muted = True
+        mute(sys.stderr)
+
+
+def mute(stream: Any) -> None:
+    """Point ``stream``'s descriptor at the null device: nothing more fails on it, nor at exit."""
+    with contextlib.suppress(Exception):
+        null = os.open(os.devnull, os.O_WRONLY)
+        try:
+            os.dup2(null, stream.fileno())
+        finally:
+            os.close(null)
 
 
 # --------------------------------------------------------------------------------------- progress
@@ -335,19 +366,17 @@ class Progress:
         text = self.line()
         if self._tty:
             pad = " " * max(0, self._width - len(text))
-            sys.stderr.write(f"\r{text}{pad}")
+            say(f"\r{text}{pad}")
             self._width = len(text)
         else:
-            sys.stderr.write(text + "\n")
-        sys.stderr.flush()
+            say(text + "\n")
 
     def close(self) -> None:
         if not self.enabled:
             return
         self.show(force=True)
         if self._tty:
-            sys.stderr.write("\n")
-            sys.stderr.flush()
+            say("\n")
 
 
 def _si(x: float) -> str:

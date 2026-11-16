@@ -1414,7 +1414,7 @@ def _finalize(run: Run, *, keep_state: bool) -> dict[str, Any]:
     if lay.merge and run.mine:
         _merge_parts(run)
     elif lay.merge:
-        sys.stderr.write(f"pyroid {run.command}: shard {run.shard} has no input files\n")
+        _shards.say(f"pyroid {run.command}: shard {run.shard} has no input files\n")
     stats = _shards.Stats()
     for rank, _ in run.mine:
         r = run.state.record(_final_key(run, rank))
@@ -1424,17 +1424,18 @@ def _finalize(run: Run, *, keep_state: bool) -> dict[str, Any]:
     if run.shard.count > 1:
         extra["shard"] = str(run.shard)
     d = _shards.summary(run.command, stats, wall=time.perf_counter() - run.t0, extra=extra)
-    run.progress.close()
     if lay.out_dir is not None:
         name = f"stats-{lay.shard_tag}.json"
         _io.atomic_write_text(lay.state_root / name, json.dumps(d, indent=1) + "\n")
     if run.a.stats_json:
         _io.atomic_write_text(run.a.stats_json, json.dumps(d, indent=1) + "\n")
-    if run.a.stats:
-        _shards.print_summary(d)
     _shards.rmtree(lay.work)
     if not keep_state and lay.out_dir is None:
         _shards.rmtree(lay.state_root)
+    # Last: the files are complete and tidied whether or not stderr still takes the messages.
+    run.progress.close()
+    if run.a.stats:
+        _shards.print_summary(d)
     return d
 
 
@@ -1935,7 +1936,7 @@ def _stage_filter(a: argparse.Namespace) -> int:
         )
     lists = ("*.remove", "*.clusters", "*.sizes")
     if meta is None and not any(removed.glob("*.remove")):
-        sys.stderr.write(
+        _shards.say(
             f"pyroid dedup filter: {removed} has no .remove files: no document is removed\n"
         )
     # REMOVED by its cluster run's fingerprint (or its files, for datatrove's), never by path
@@ -1971,12 +1972,12 @@ def _stage_filter(a: argparse.Namespace) -> int:
 
 
 def _emit(a: argparse.Namespace, d: dict[str, Any]) -> None:
-    from pyroid.integrations import _io
+    from pyroid.integrations import _io, _shards
 
     if a.stats_json:
         _io.atomic_write_text(a.stats_json, json.dumps(d, indent=1) + "\n")
     if a.stats:
-        sys.stderr.write(" ".join(f"{k}={v}" for k, v in d.items()) + "\n")
+        _shards.say(" ".join(f"{k}={v}" for k, v in d.items()) + "\n")
 
 
 # ------------------------------------------------------------------------------------------ stats
@@ -2390,16 +2391,23 @@ def main(argv: list[str] | None = None) -> int:
 
     term = _on_sigterm()
     try:
-        return int(a.body(a))
+        code = int(a.body(a))
+        sys.stdout.flush()  # here, not at exit, so a closed pipe (| head -1) is handled below
+        return code
     except _shards.Terminated:
         # Finished files and their records are kept: the same command resumes the run.
-        print(f"pyroid {a.command}: terminated", file=sys.stderr)  # noqa: T201
+        _shards.say(f"pyroid {a.command}: terminated\n")
         return 128 + signal.SIGTERM
     except KeyboardInterrupt:
-        print(f"pyroid {a.command}: interrupted", file=sys.stderr)  # noqa: T201
+        _shards.say(f"pyroid {a.command}: interrupted\n")
         return 128 + signal.SIGINT
     except _shards.StateError as e:
         raise SystemExit(f"pyroid {a.command}: {e}") from None
+    except BrokenPipeError:
+        # stdout closed early (pyroid stats OUT | head -1): exit quietly, as Python's docs advise.
+        # Messages on stderr never get here (a closed stderr only silences them).
+        _shards.mute(sys.stdout)
+        return 1
     # OSError: a model path that is a directory, an unwritable output, a failed download;
     # EOFError: a truncated compressed input; PyroidError: a text column of another type.
     except (OSError, ValueError, ImportError, EOFError, pyroid.PyroidError) as e:
@@ -2407,7 +2415,7 @@ def main(argv: list[str] | None = None) -> int:
             raise
         msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
         notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
-        print(f"pyroid {a.command}: {msg}{notes}", file=sys.stderr)  # noqa: T201
+        _shards.say(f"pyroid {a.command}: {msg}{notes}\n")
         return 1
     finally:
         if term is not None:
