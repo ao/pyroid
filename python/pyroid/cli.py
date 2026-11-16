@@ -1256,10 +1256,7 @@ def _execute(run: Run, units: Sequence[Any], fn: Any) -> None:
         return
     todo = _shards.pending(run.state, units, overwrite=run.a.overwrite)
     run.progress.done_units = len(units) - len(todo)
-    for _ in _shards.run_units(
-        todo, fn, workers=run.a.workers, threads=run.a.threads, progress=run.progress
-    ):
-        pass
+    _shards.run_units(todo, fn, workers=run.a.workers, threads=run.a.threads, progress=run.progress)
 
 
 def _out_job(run: Run, rank: int, src: Any, **kw: Any) -> FileJob:
@@ -1488,10 +1485,7 @@ def _staged(
     label = run.progress.label
     run.progress.label = f"{label} (1/2)"
     run.progress.done_units = len(p1) - len(todo)
-    for _ in _shards.run_units(
-        todo, first_fn, workers=a.workers, threads=a.threads, progress=run.progress
-    ):
-        pass
+    _shards.run_units(todo, first_fn, workers=a.workers, threads=a.threads, progress=run.progress)
     run.progress.close()
     work = run.layout.work
     _minhash_middle(run, work / "sigs", work / "dups", work / "removed", cfg, threads=a.threads)

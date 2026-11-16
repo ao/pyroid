@@ -65,8 +65,9 @@ $ pyroid clean data/ out/ --recipe fineweb --workers 8   # redoes only the unfin
 Ctrl-C (SIGINT) and SIGTERM, what `kill`, `timeout`, systemd, Kubernetes and SLURM send, stop the
 run within a second or two: the main process stops its workers, each worker drops the file it was
 on (its temporary outputs are removed), and the command prints `pyroid clean: interrupted` (or
-`terminated`) and exits with status 130 (or 143). A worker whose main process was killed with
-SIGKILL stops by itself.
+`terminated`) and exits with status 130 (or 143). This holds for Ctrl-C in a terminal too, which
+reaches the workers as well as the main process. A worker that has not stopped after 10 seconds is
+killed. A worker whose main process was killed with SIGKILL stops by itself.
 
 Each record holds a fingerprint of the command, its options, the input list (names relative to
 IN, and sizes) and the pyroid version, plus the files the unit wrote, as paths relative to OUT. A

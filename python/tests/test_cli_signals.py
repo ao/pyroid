@@ -126,9 +126,9 @@ def run_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return root
 
 
-def _clean(root: Path, out: str) -> subprocess.Popen[bytes]:
+def _clean(root: Path, out: str, workers: int = 2) -> subprocess.Popen[bytes]:
     cmd = [sys.executable, "-I", "-m", "pyroid", "clean", "parts", out, "--recipe", "fineweb"]
-    cmd += ["--lid-model", str(root / "lid.bin"), "--workers", "2", "--threads", "1"]
+    cmd += ["--lid-model", str(root / "lid.bin"), "--workers", str(workers), "--threads", "1"]
     env = {k: v for k, v in os.environ.items() if k not in ("PYROID_NUM_THREADS",)}
     return subprocess.Popen(
         cmd,
@@ -178,13 +178,66 @@ def test_clean_stops_on_a_signal_and_resumes(run_dir: Path, sig: signal.Signals)
     while _group_alive(proc.pid) and time.monotonic() < deadline:
         time.sleep(0.1)
     assert not _group_alive(proc.pid), "a worker process outlived the run"
-    leftovers = [
-        p.name
-        for p in (run_dir / out).rglob(".*")
-        if p.is_file() and p.suffix in (".partial", ".tmp")
-    ]
-    assert leftovers == []
+    assert _leftovers(run_dir / out) == []
     again = _clean(run_dir, out)
     _, err = again.communicate(timeout=600)
     assert again.returncode == 0, err.decode()
     assert _rows(run_dir / out) == _rows(run_dir / "ref")
+
+
+def _leftovers(out: Path) -> list[str]:
+    """Temporary files a stopped run left (in OUT or its work directory)."""
+    return [
+        str(p.relative_to(out))
+        for p in out.rglob("*")
+        if p.is_file() and (".partial" in p.name or p.name.endswith(".tmp"))
+    ]
+
+
+TRIES = 12
+
+
+@pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"])
+def test_a_signal_to_the_whole_group_at_any_point_stops_the_run(
+    run_dir: Path, sig: signal.Signals
+) -> None:
+    """Ctrl-C in a terminal reaches every process of the group, the workers' too.
+
+    It hung forever in about one try in four: a worker that took both its own signal and the
+    main process's SIGTERM while it dropped its file then waited for a next file that never came,
+    and the pool joined it. Tries land at random points of the run: starting workers, reading,
+    writing, the MinHash stages, finishing.
+    """
+    ref_s = float((run_dir / "ref_seconds").read_text())
+    rng = random.Random(f"group-{sig.name}")
+    stopped = []
+    for k in range(TRIES):
+        out = f"g-{sig.name}-{k}"
+        proc = _clean(run_dir, out, workers=4)
+        time.sleep(rng.uniform(0.02, 1.0) * ref_s)
+        if proc.poll() is not None:
+            proc.communicate()
+            continue
+        os.killpg(proc.pid, sig)
+        try:
+            _, raw = proc.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.communicate()
+            pytest.fail(f"try {k}: still running 30 s after {sig.name} to the group")
+        err = raw.decode()
+        assert proc.returncode == 128 + sig, (k, err)
+        assert "Traceback" not in err, (k, err)
+        assert "Exception ignored" not in err, (k, err)
+        deadline = time.monotonic() + 10
+        while _group_alive(proc.pid) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert not _group_alive(proc.pid), f"try {k}: a process of the run outlived it"
+        assert _leftovers(run_dir / out) == [], k
+        stopped.append(out)
+    if not stopped:
+        pytest.skip("every run finished before its signal")
+    again = _clean(run_dir, stopped[-1], workers=4)
+    _, raw = again.communicate(timeout=600)
+    assert again.returncode == 0, raw.decode()
+    assert _rows(run_dir / stopped[-1]) == _rows(run_dir / "ref")
