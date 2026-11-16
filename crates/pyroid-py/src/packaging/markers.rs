@@ -3,14 +3,15 @@
 //! `pyroid.packaging.markers.Marker` and the requirement parser behind
 //! `pyroid.packaging.requirements.Requirement`.
 
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use pyo3::basic::CompareOp;
-use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyAttributeError, PyKeyError, PyRecursionError, PyTypeError, PyValueError};
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyBytes, PyDict, PyFrozenSet, PyList, PySet, PyString, PyTuple, PyType};
-use pyroid_core::packaging::markers::{self as core, Elem, MarkerVar, SyntaxError};
+use pyroid_core::packaging::markers::{self as core, Elem, List, MarkerVar, SyntaxError};
 use pyroid_core::packaging::specifiers::{self as spec_core, Op};
 
 use super::cell::{HashCache, StateCell, StateRef};
@@ -114,34 +115,36 @@ pub fn canonicalize(py: Python<'_>, value: &str) -> PyResult<String> {
     ))
 }
 
-/// `_normalize_extra_values`: the literal compared with `extra`, `extras` or `dependency_groups`
-/// is canonicalised at parse time, in nested groups too.
-fn normalize_extras(py: Python<'_>, list: &mut [Elem]) -> PyResult<()> {
-    for e in list.iter_mut() {
-        match e {
-            Elem::List(inner) => normalize_extras(py, inner)?,
-            Elem::Item(lhs, _, rhs) => match (&*lhs, &*rhs) {
-                (MarkerVar::Variable(v), MarkerVar::Value(val)) if v == "extra" => {
-                    *rhs = MarkerVar::Value(canonicalize(py, val)?);
-                }
-                (MarkerVar::Value(val), MarkerVar::Variable(v)) if v == "extra" => {
-                    *lhs = MarkerVar::Value(canonicalize(py, val)?);
-                }
-                (MarkerVar::Value(val), MarkerVar::Variable(v))
-                    if v == "extras" || v == "dependency_groups" =>
-                {
-                    *lhs = MarkerVar::Value(canonicalize(py, val)?);
-                }
-                _ => {}
-            },
-            Elem::And | Elem::Or => {}
-        }
+/// What the core parser asks of Python: quoted strings and `canonicalize_name`.
+struct PyHost<'py>(Python<'py>);
+
+impl core::Host for PyHost<'_> {
+    type Error = PyErr;
+
+    fn quoted(&mut self, token: &[u32]) -> PyResult<Option<String>> {
+        quoted(self.0, token)
     }
-    Ok(())
+
+    fn canonicalize(&mut self, value: &str) -> PyResult<String> {
+        canonicalize(self.0, value)
+    }
+}
+
+/// `_parse_marker` + `_normalize_extra_values` of a `str` (syntax errors as `SyntaxError`).
+fn parse_marker_str(
+    py: Python<'_>,
+    source: &Bound<'_, PyString>,
+) -> PyResult<Result<List, SyntaxError>> {
+    let cps = code_points(source)?;
+    match core::parse_marker(&cps, unicode_version(py)?, &mut PyHost(py)) {
+        Ok(l) => Ok(Ok(l)),
+        Err(core::Error::Syntax(e)) => Ok(Err(e)),
+        Err(core::Error::Host(e)) => Err(e),
+    }
 }
 
 /// `parse_marker` + `_normalize_extra_values`, raising `InvalidMarker`.
-fn parse_marker(py: Python<'_>, marker: &Bound<'_, PyAny>) -> PyResult<Vec<Elem>> {
+fn parse_marker(py: Python<'_>, marker: &Bound<'_, PyAny>) -> PyResult<List> {
     let c = config(py)?;
     let Ok(source) = marker.cast::<PyString>() else {
         // packaging's tokenizer runs a regex on it first: TypeError for a non-str.
@@ -150,16 +153,10 @@ fn parse_marker(py: Python<'_>, marker: &Bound<'_, PyAny>) -> PyResult<Vec<Elem>
             .call_method1(intern!(py, "match"), (marker, 0))?;
         return Err(PyTypeError::new_err("expected string or bytes-like object"));
     };
-    let cps = code_points(source)?;
-    let mut list = match core::parse_marker(&cps, unicode_version(py)?, |t| quoted(py, t)) {
-        Ok(l) => l,
-        Err(core::Error::Syntax(e)) => {
-            return Err(syntax_error(py, &e, source, c.invalid_marker.bind(py)));
-        }
-        Err(core::Error::Host(e)) => return Err(e),
-    };
-    normalize_extras(py, &mut list)?;
-    Ok(list)
+    match parse_marker_str(py, source)? {
+        Ok(l) => Ok(l),
+        Err(e) => Err(syntax_error(py, &e, source, c.invalid_marker.bind(py))),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -168,13 +165,13 @@ fn parse_marker(py: Python<'_>, marker: &Bound<'_, PyAny>) -> PyResult<Vec<Elem>
 
 #[derive(Debug)]
 struct MarkerData {
-    list: Vec<Elem>,
+    list: List,
     text: OnceLock<Result<String, core::QuoteError>>,
     hash: HashCache,
 }
 
 impl MarkerData {
-    fn new(list: Vec<Elem>) -> Self {
+    fn new(list: List) -> Self {
         Self {
             list,
             text: OnceLock::new(),
@@ -210,13 +207,13 @@ impl PyMarker {
             .ok_or_else(|| PyAttributeError::new_err("'Marker' object has no attribute '_markers'"))
     }
 
-    pub fn from_list(list: Vec<Elem>) -> Self {
+    pub fn from_list(list: List) -> Self {
         Self {
             data: StateCell::with(MarkerData::new(list)),
         }
     }
 
-    fn new_of<'py>(cls: &Bound<'py, PyType>, list: Vec<Elem>) -> PyResult<Bound<'py, PyAny>> {
+    fn new_of<'py>(cls: &Bound<'py, PyType>, list: List) -> PyResult<Bound<'py, PyAny>> {
         let py = cls.py();
         if cls.is(py.get_type::<PyMarker>()) {
             return Ok(Bound::new(py, PyMarker::from_list(list))?.into_any());
@@ -229,98 +226,174 @@ impl PyMarker {
         Ok(obj)
     }
 
-    fn list(&self) -> PyResult<Vec<Elem>> {
+    /// The marker's tree (shared: O(1)).
+    fn list(&self) -> PyResult<List> {
         Ok(self.data()?.list.clone())
     }
 }
 
 /// packaging's `_markers` objects (its `Variable`/`Value`/`Op` nodes) for `list`.
-fn to_py_list<'py>(py: Python<'py>, list: &[Elem]) -> PyResult<Bound<'py, PyList>> {
-    let c = config(py)?;
-    let out = PyList::empty(py);
-    for e in list {
-        match e {
-            Elem::List(inner) => out.append(to_py_list(py, inner)?)?,
+///
+/// Built with a work list, whatever the depth; a group the tree shares (`m & m`) becomes one
+/// Python list held in each place, as packaging's `__and__` leaves it.
+fn to_py_list<'py>(py: Python<'py>, list: &List) -> PyResult<Bound<'py, PyList>> {
+    let cfg = config(py)?;
+    let node = |v: &MarkerVar| -> PyResult<Bound<'py, PyAny>> {
+        match v {
+            MarkerVar::Variable(x) => cfg.node_variable.bind(py).call1((x.as_str(),)),
+            MarkerVar::Value(x) => cfg.node_value.bind(py).call1((x.as_str(),)),
+        }
+    };
+    let mut done: HashMap<usize, Bound<'py, PyList>> = HashMap::new();
+    // (the group, the next element, the Python list so far)
+    let mut work: Vec<(&List, usize, Bound<'py, PyList>)> = vec![(list, 0, PyList::empty(py))];
+    loop {
+        let Some((src, next, out)) = work.last_mut() else {
+            unreachable!("the loop returns when the outermost group is done")
+        };
+        let src: &List = src;
+        let Some(elem) = src.get(*next) else {
+            let Some((src, _, out)) = work.pop() else {
+                unreachable!()
+            };
+            match work.last() {
+                None => return Ok(out),
+                Some((_, _, parent)) => parent.append(&out)?,
+            }
+            done.insert(src.id(), out);
+            continue;
+        };
+        *next += 1;
+        match elem {
+            Elem::List(sub) => {
+                if let Some(shared) = done.get(&sub.id()) {
+                    out.append(shared)?;
+                } else {
+                    work.push((sub, 0, PyList::empty(py)));
+                }
+            }
             Elem::And => out.append("and")?,
             Elem::Or => out.append("or")?,
-            Elem::Item(l, op, r) => {
-                let node = |v: &MarkerVar| -> PyResult<Bound<'py, PyAny>> {
-                    match v {
-                        MarkerVar::Variable(x) => c.node_variable.bind(py).call1((x.as_str(),)),
-                        MarkerVar::Value(x) => c.node_value.bind(py).call1((x.as_str(),)),
-                    }
-                };
-                let t = PyTuple::new(
+            Elem::Item(lhs, op, rhs) => {
+                let item = PyTuple::new(
                     py,
                     [
-                        node(l)?,
-                        c.node_op.bind(py).call1((op.as_str(),))?,
-                        node(r)?,
+                        node(lhs)?,
+                        cfg.node_op.bind(py).call1((op.as_str(),))?,
+                        node(rhs)?,
                     ],
                 )?;
-                out.append(t)?;
+                out.append(item)?;
             }
         }
     }
-    Ok(out)
+}
+
+/// One element of packaging's `_markers` that is not a group.
+fn elem_from_py(py: Python<'_>, item: &Bound<'_, PyAny>) -> PyResult<Elem> {
+    if let Ok(s) = item.cast::<PyString>() {
+        return match &*s.to_cow()? {
+            "and" => Ok(Elem::And),
+            "or" => Ok(Elem::Or),
+            other => Err(PyTypeError::new_err(format!("Unexpected marker {other:?}"))),
+        };
+    }
+    let Ok(t) = item.cast::<PyTuple>() else {
+        return Err(PyTypeError::new_err(format!(
+            "Unexpected marker {}",
+            item.repr()?
+        )));
+    };
+    if t.len() != 3 {
+        return Err(PyTypeError::new_err(format!(
+            "Unexpected marker {}",
+            item.repr()?
+        )));
+    }
+    let var = |n: &Bound<'_, PyAny>| -> PyResult<MarkerVar> {
+        let value: String = n.getattr(intern!(py, "value"))?.extract()?;
+        let kind = n.get_type().name()?.to_string();
+        match kind.as_str() {
+            "Variable" => Ok(MarkerVar::Variable(value)),
+            "Value" => Ok(MarkerVar::Value(value)),
+            _ => Err(PyTypeError::new_err(format!(
+                "Unexpected marker node {}",
+                n.repr()?
+            ))),
+        }
+    };
+    let op: String = t.get_item(1)?.getattr(intern!(py, "value"))?.extract()?;
+    Ok(Elem::Item(var(&t.get_item(0)?)?, op, var(&t.get_item(2)?)?))
 }
 
 /// The native form of packaging's `_markers` objects.
-fn from_py_list(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<Elem>> {
-    let mut out = Vec::new();
-    for item in obj.try_iter()? {
-        let item = item?;
-        if let Ok(s) = item.cast::<PyString>() {
-            match &*s.to_cow()? {
-                "and" => out.push(Elem::And),
-                "or" => out.push(Elem::Or),
-                other => return Err(PyTypeError::new_err(format!("Unexpected marker {other:?}"))),
-            }
-        } else if let Ok(t) = item.cast::<PyTuple>() {
-            if t.len() != 3 {
-                return Err(PyTypeError::new_err(format!(
-                    "Unexpected marker {}",
-                    item.repr()?
-                )));
-            }
-            let var = |n: &Bound<'_, PyAny>| -> PyResult<MarkerVar> {
-                let value: String = n.getattr(intern!(py, "value"))?.extract()?;
-                let kind = n.get_type().name()?.to_string();
-                match kind.as_str() {
-                    "Variable" => Ok(MarkerVar::Variable(value)),
-                    "Value" => Ok(MarkerVar::Value(value)),
-                    _ => Err(PyTypeError::new_err(format!(
-                        "Unexpected marker node {}",
-                        n.repr()?
-                    ))),
-                }
-            };
-            let op: String = t.get_item(1)?.getattr(intern!(py, "value"))?.extract()?;
-            out.push(Elem::Item(var(&t.get_item(0)?)?, op, var(&t.get_item(2)?)?));
-        } else if item.cast::<PyList>().is_ok() {
-            out.push(Elem::List(from_py_list(py, &item)?));
-        } else {
-            return Err(PyTypeError::new_err(format!(
-                "Unexpected marker {}",
-                item.repr()?
-            )));
+///
+/// Read with a work list, whatever the depth. A Python list held in several places becomes
+/// one shared group (so packaging's `m & m` trees stay small); a list that holds itself raises
+/// `RecursionError`, as packaging's own walks of it do.
+fn from_py_list(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<List> {
+    fn snapshot<'py>(o: &Bound<'py, PyAny>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+        match o.cast::<PyList>() {
+            // One atomic copy (another thread may change the list meanwhile).
+            Ok(l) => Ok(l.to_tuple().iter().collect()),
+            Err(_) => o.try_iter()?.collect(),
         }
     }
-    Ok(out)
+    let mut done: HashMap<usize, List> = HashMap::new();
+    let mut open: HashSet<usize> = HashSet::new();
+    let root = obj.as_ptr().addr();
+    open.insert(root);
+    // (the Python list's id, its items, the next item, the elements so far)
+    let mut work = vec![(root, snapshot(obj)?, 0usize, Vec::new())];
+    loop {
+        let Some((_, items, i, out)) = work.last_mut() else {
+            unreachable!("the loop returns when the outermost list is done")
+        };
+        let Some(item) = items.get(*i).cloned() else {
+            let Some((id, _, _, out)) = work.pop() else {
+                unreachable!()
+            };
+            open.remove(&id);
+            let list = List::new(out);
+            match work.last_mut() {
+                None => return Ok(list),
+                Some((_, _, _, parent)) => parent.push(Elem::List(list.clone())),
+            }
+            done.insert(id, list);
+            continue;
+        };
+        *i += 1;
+        if item.cast::<PyList>().is_err() {
+            out.push(elem_from_py(py, &item)?);
+            continue;
+        }
+        let id = item.as_ptr().addr();
+        if let Some(l) = done.get(&id) {
+            out.push(Elem::List(l.clone()));
+        } else if open.contains(&id) {
+            return Err(PyRecursionError::new_err(
+                "maximum recursion depth exceeded (a marker list holds itself)",
+            ));
+        } else {
+            open.insert(id);
+            let sub = snapshot(&item)?;
+            work.push((id, sub, 0, Vec::new()));
+        }
+    }
 }
 
 fn is_marker(py: Python<'_>, x: &Bound<'_, PyAny>) -> PyResult<bool> {
     if x.cast::<PyMarker>().is_ok() {
         return Ok(true);
     }
-    match &config(py)?.packaging_marker {
+    match &config(py)?.packaging_marker_any {
         Some(cls) => x.is_instance(cls.bind(py)),
         None => Ok(false),
     }
 }
 
 /// The marker list of a pyroid or packaging `Marker`.
-fn marker_list(py: Python<'_>, x: &Bound<'_, PyAny>) -> PyResult<Vec<Elem>> {
+fn marker_list(py: Python<'_>, x: &Bound<'_, PyAny>) -> PyResult<List> {
     if let Ok(m) = x.cast::<PyMarker>() {
         return m.get().list();
     }
@@ -362,7 +435,7 @@ impl PyMarker {
         match parse_marker(py, marker) {
             Ok(list) => self.data.set(MarkerData::new(list)),
             Err(e) => {
-                self.data.set(MarkerData::new(Vec::new()));
+                self.data.set(MarkerData::new(List::default()));
                 return Err(e);
             }
         }
@@ -437,17 +510,13 @@ impl PyMarker {
             )))
         };
         if let Ok(s) = state.cast::<PyString>() {
-            let cps = code_points(s)?;
-            let mut list = match core::parse_marker(&cps, unicode_version(py)?, |t| quoted(py, t)) {
-                Ok(l) => l,
-                Err(core::Error::Syntax(_)) => return Err(fail()?),
-                Err(core::Error::Host(e)) => return Err(e),
+            let Ok(list) = parse_marker_str(py, s)? else {
+                return Err(fail()?);
             };
-            normalize_extras(py, &mut list)?;
             self.data.set(MarkerData::new(list));
             return Ok(());
         }
-        let from_dict = |d: &Bound<'_, PyDict>| -> PyResult<Option<Vec<Elem>>> {
+        let from_dict = |d: &Bound<'_, PyDict>| -> PyResult<Option<List>> {
             match d.get_item("_markers")? {
                 Some(m) if m.cast::<PyList>().is_ok() => Ok(Some(from_py_list(py, &m)?)),
                 _ => Ok(None),
@@ -512,7 +581,7 @@ impl PyMarker {
     #[getter]
     fn __class__(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
-        if claims() && slf.get_type().is(py.get_type::<PyMarker>()) {
+        if claims() {
             if let Some(cls) = &config(py)?.packaging_marker {
                 return Ok(cls.clone_ref(py).into_any());
             }
@@ -557,11 +626,12 @@ fn combine<'py>(
     if !is_marker(py, other)? {
         return Ok(py.NotImplemented().into_bound(py));
     }
-    let list = vec![
+    // packaging's `[self._markers, op, other._markers]`: both groups shared, not copied.
+    let list = List::new(vec![
         Elem::List(slf.get().list()?),
         op,
         Elem::List(marker_list(py, other)?),
-    ];
+    ]);
     PyMarker::new_of(&slf.get_type(), list)
 }
 
@@ -580,6 +650,11 @@ struct Env<'py> {
     /// `given` is the whole merged environment (built in Python for a non-dict mapping).
     merged: bool,
     context: Context,
+    /// `extra` as packaging leaves it before evaluating (canonicalised when an environment is
+    /// given); `None`: not in the environment.
+    extra: Option<Bound<'py, PyAny>>,
+    /// `python_full_version` after `_repair_python_full_version`.
+    python_full_version: Bound<'py, PyAny>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -622,53 +697,57 @@ impl<'py> Env<'py> {
                 (Some(merged), true)
             }
         };
-        Ok(Self {
+        let mut env = Self {
             py,
             default,
             given,
             merged,
             context,
-        })
+            extra: None,
+            python_full_version: py.None().into_bound(py),
+        };
+        // packaging prepares these two before it evaluates anything, so their errors come
+        // first, whatever the marker reads. With an environment given, a truthy `extra` is
+        // canonicalised and a falsy one (None) becomes "".
+        env.extra = match env.raw("extra")? {
+            Some(v) if environment.is_some() => Some(if !v.is_truthy()? {
+                PyString::new(py, "").into_any()
+            } else if let Ok(s) = v.cast::<PyString>() {
+                PyString::new(py, &canonicalize(py, &s.to_cow()?)?).into_any()
+            } else {
+                c.canonicalize_name.bind(py).call1((v,))?
+            }),
+            other => other,
+        };
+        // _repair_python_full_version: env["python_full_version"], with "local" after a "+".
+        let Some(v) = env.raw("python_full_version")? else {
+            return Err(PyKeyError::new_err("python_full_version"));
+        };
+        env.python_full_version = if let Ok(s) = v.cast::<PyString>() {
+            let t = s.to_cow()?;
+            if t.ends_with('+') {
+                PyString::new(py, &format!("{t}local")).into_any()
+            } else {
+                v
+            }
+        } else if v
+            .call_method1(intern!(py, "endswith"), ("+",))?
+            .is_truthy()?
+        {
+            v.add("local")?
+        } else {
+            v
+        };
+        Ok(env)
     }
 
     /// `environment[key]` of the merged environment (`None`: missing).
     fn get(&self, key: &str) -> PyResult<Option<Bound<'py, PyAny>>> {
-        let py = self.py;
-        let raw = self.raw(key)?;
-        let Some(v) = raw else {
-            return Ok(None);
-        };
-        if key == "extra"
-            && self
-                .given
-                .as_ref()
-                .is_some_and(|g| g.contains("extra").unwrap_or(false))
-        {
-            // packaging canonicalises `extra` when an environment is given (None/"" become "").
-            if !v.is_truthy()? {
-                return Ok(Some(PyString::new(py, "").into_any()));
-            }
-            return Ok(Some(match v.cast::<PyString>() {
-                Ok(s) => PyString::new(py, &canonicalize(py, &s.to_cow()?)?).into_any(),
-                Err(_) => config(py)?.canonicalize_name.bind(py).call1((v,))?,
-            }));
+        match key {
+            "extra" => Ok(self.extra.clone()),
+            "python_full_version" => Ok(Some(self.python_full_version.clone())),
+            _ => self.raw(key),
         }
-        if key == "python_full_version" {
-            // _repair_python_full_version: a trailing "+" gets "local".
-            if let Ok(s) = v.cast::<PyString>() {
-                let t = s.to_cow()?;
-                if t.ends_with('+') {
-                    return Ok(Some(PyString::new(py, &format!("{t}local")).into_any()));
-                }
-                return Ok(Some(v));
-            }
-            if v.call_method1(intern!(py, "endswith"), ("+",))?
-                .is_truthy()?
-            {
-                return Ok(Some(v.add("local")?));
-            }
-        }
-        Ok(Some(v))
     }
 
     fn raw(&self, key: &str) -> PyResult<Option<Bound<'py, PyAny>>> {
@@ -720,51 +799,90 @@ const REQUIRING_VERSION: &[&str] = &[
 ];
 const ALLOWING_SET: &[&str] = &["extras", "dependency_groups"];
 
-fn evaluate(py: Python<'_>, list: &[Elem], env: &Env<'_>) -> PyResult<bool> {
-    // packaging evaluates every item (no short circuit), so errors surface the same.
-    let mut groups: Vec<Vec<bool>> = vec![Vec::new()];
-    for e in list {
+/// `_evaluate_markers(markers, environment)`.
+///
+/// packaging recurses into each group and evaluates every item (no short circuit), so errors
+/// surface in the same order; this does the same with a work list.
+fn evaluate(py: Python<'_>, list: &List, env: &Env<'_>) -> PyResult<bool> {
+    /// A group being evaluated: `any(all(g) for g in groups)` so far, as two flags.
+    struct Group<'a> {
+        items: &'a [Elem],
+        next: usize,
+        /// Some finished `or` operand was all true.
+        any: bool,
+        /// Every item of the current `or` operand so far is true.
+        all: bool,
+    }
+    fn group(items: &[Elem]) -> Group<'_> {
+        Group {
+            items,
+            next: 0,
+            any: false,
+            all: true,
+        }
+    }
+    let mut work = vec![group(list)];
+    loop {
+        let Some(top) = work.last_mut() else {
+            unreachable!("the loop returns when the outermost group is done")
+        };
+        let items: &[Elem] = top.items;
+        let Some(e) = items.get(top.next) else {
+            let result = top.any || top.all;
+            work.pop();
+            match work.last_mut() {
+                None => return Ok(result),
+                Some(parent) => parent.all &= result,
+            }
+            continue;
+        };
+        top.next += 1;
         match e {
-            Elem::List(inner) => {
-                let r = evaluate(py, inner, env)?;
-                if let Some(g) = groups.last_mut() {
-                    g.push(r);
-                }
-            }
+            Elem::List(inner) => work.push(group(inner)),
             Elem::Item(lhs, op, rhs) => {
-                let (key, lhs_value, rhs_value) = match lhs {
-                    MarkerVar::Variable(k) => (
-                        k.as_str(),
-                        lookup(py, env, k)?,
-                        PyString::new(py, rhs.value()).into_any(),
-                    ),
-                    MarkerVar::Value(v) => {
-                        let k = rhs.value();
-                        (k, PyString::new(py, v).into_any(), lookup(py, env, k)?)
-                    }
-                };
-                if lhs_value.cast::<PyString>().is_err() {
-                    let c = config(py)?;
-                    let key_repr = PyString::new(py, key).repr()?;
-                    let op_repr = PyString::new(py, op).repr()?;
-                    let msg = format!(
-                        "Set-valued marker {key_repr} can only be used with the membership form (e.g. \"<name>\" in {key}); it cannot appear on the left-hand side of {op_repr}."
-                    );
-                    return Err(PyErr::from_value(
-                        c.undefined_comparison.bind(py).call1((msg,))?,
-                    ));
-                }
-                let (l, r) = normalize(py, &lhs_value, &rhs_value, key)?;
-                let v = eval_op(py, &l, op, &r, key)?;
-                if let Some(g) = groups.last_mut() {
-                    g.push(v);
-                }
+                let v = evaluate_item(py, lhs, op, rhs, env)?;
+                top.all &= v;
             }
-            Elem::Or => groups.push(Vec::new()),
+            Elem::Or => {
+                top.any |= top.all;
+                top.all = true;
+            }
             Elem::And => {}
         }
     }
-    Ok(groups.iter().any(|g| g.iter().all(|&b| b)))
+}
+
+fn evaluate_item(
+    py: Python<'_>,
+    lhs: &MarkerVar,
+    op: &str,
+    rhs: &MarkerVar,
+    env: &Env<'_>,
+) -> PyResult<bool> {
+    let (key, lhs_value, rhs_value) = match lhs {
+        MarkerVar::Variable(k) => (
+            k.as_str(),
+            lookup(py, env, k)?,
+            PyString::new(py, rhs.value()).into_any(),
+        ),
+        MarkerVar::Value(v) => {
+            let k = rhs.value();
+            (k, PyString::new(py, v).into_any(), lookup(py, env, k)?)
+        }
+    };
+    if lhs_value.cast::<PyString>().is_err() {
+        let c = config(py)?;
+        let key_repr = PyString::new(py, key).repr()?;
+        let op_repr = PyString::new(py, op).repr()?;
+        let msg = format!(
+            "Set-valued marker {key_repr} can only be used with the membership form (e.g. \"<name>\" in {key}); it cannot appear on the left-hand side of {op_repr}."
+        );
+        return Err(PyErr::from_value(
+            c.undefined_comparison.bind(py).call1((msg,))?,
+        ));
+    }
+    let (l, r) = normalize(py, &lhs_value, &rhs_value, key)?;
+    eval_op(py, &l, op, &r, key)
 }
 
 fn lookup<'py>(py: Python<'py>, env: &Env<'py>, key: &str) -> PyResult<Bound<'py, PyAny>> {
@@ -871,7 +989,7 @@ fn parse_requirement<'py>(
         return Err(PyTypeError::new_err("expected string or bytes-like object"));
     };
     let cps = code_points(source)?;
-    let parsed = match core::parse_requirement(&cps, unicode_version(py)?, |t| quoted(py, t)) {
+    let parsed = match core::parse_requirement(&cps, unicode_version(py)?, &mut PyHost(py)) {
         Ok(p) => p,
         Err(core::Error::Syntax(e)) => {
             return Err(syntax_error(py, &e, source, c.invalid_requirement.bind(py)));
@@ -892,10 +1010,7 @@ fn parse_requirement<'py>(
         spec.extend_from_slice(&cps[*a..*b]);
     }
     let marker = match parsed.marker {
-        Some(mut list) => {
-            normalize_extras(py, &mut list)?;
-            Bound::new(py, PyMarker::from_list(list))?.into_any()
-        }
+        Some(list) => Bound::new(py, PyMarker::from_list(list))?.into_any(),
         None => py.None().into_bound(py),
     };
     PyTuple::new(

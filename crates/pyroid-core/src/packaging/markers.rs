@@ -5,7 +5,16 @@
 //!
 //! The source is a slice of code points (a Python `str` can hold lone surrogates), and
 //! positions are code-point indices, as packaging reports them. Quoted marker strings are
-//! turned into values by the caller's `quoted` callback (packaging uses `ast.literal_eval`).
+//! turned into values by the caller's [`Host`] (packaging uses `ast.literal_eval`).
+//!
+//! Marker trees are as deep as the input's parentheses, or as long as a loop of `m = m & other`
+//! runs, so nothing here recurses: the parser keeps its open groups on a heap stack, and every
+//! walk of a tree (formatting, comparing, dropping, and the evaluation and conversions in
+//! `pyroid-py`) is a loop. Groups are shared ([`List`]), so combining two markers is O(1) and
+//! `m & m` holds `m` once, as packaging's nested lists do.
+
+use std::fmt;
+use std::sync::Arc;
 
 use crate::ftfy::UnicodeVersion;
 use crate::text::is_py_whitespace;
@@ -19,13 +28,33 @@ pub struct SyntaxError {
     pub span: (usize, usize),
 }
 
-/// A parse error, or an error from the `quoted` callback.
+/// A parse error, or an error from the [`Host`].
 #[derive(Debug)]
 pub enum Error<E> {
     /// packaging's `ParserSyntaxError`.
     Syntax(SyntaxError),
-    /// The callback's own error (for example a Python exception), passed through.
+    /// The host's own error (for example a Python exception), passed through.
     Host(E),
+}
+
+/// What the parser asks of its caller.
+pub trait Host {
+    /// The host's error (a Python exception in `pyroid-py`).
+    type Error;
+
+    /// The value of a quoted string token (quotes included), as `ast.literal_eval` gives it;
+    /// `Ok(None)` when packaging reports "Invalid quoted string".
+    ///
+    /// # Errors
+    /// The host's own failure.
+    fn quoted(&mut self, token: &[u32]) -> Result<Option<String>, Self::Error>;
+
+    /// `canonicalize_name(value)` (`_normalize_extra_values` applies it to the literal compared
+    /// with `extra`, `extras` or `dependency_groups`).
+    ///
+    /// # Errors
+    /// The host's own failure.
+    fn canonicalize(&mut self, value: &str) -> Result<String, Self::Error>;
 }
 
 /// One side of a marker comparison.
@@ -53,11 +82,143 @@ pub enum Elem {
     /// `(lhs, op, rhs)`.
     Item(MarkerVar, String, MarkerVar),
     /// A parenthesised (or combined) group.
-    List(Vec<Elem>),
+    List(List),
     /// `"and"`.
     And,
     /// `"or"`.
     Or,
+}
+
+/// packaging's `MarkerList`: a group of [`Elem`]s, shared between the trees that hold it.
+///
+/// Cloning is O(1). Dropping, comparing and printing it with `{:?}` are loops, whatever the
+/// depth.
+#[derive(Clone, Default)]
+pub struct List(Arc<Vec<Elem>>);
+
+impl List {
+    /// A group holding `items`.
+    #[must_use]
+    pub fn new(items: Vec<Elem>) -> Self {
+        Self(Arc::new(items))
+    }
+
+    /// The group's elements.
+    #[must_use]
+    pub fn items(&self) -> &[Elem] {
+        &self.0
+    }
+
+    /// The same group (shared, not equal): a key for memoising walks over shared sub-trees.
+    #[must_use]
+    pub fn id(&self) -> usize {
+        Arc::as_ptr(&self.0).addr()
+    }
+
+    /// The elements to change in place, when this is the only reference to the group.
+    pub fn get_mut(&mut self) -> Option<&mut Vec<Elem>> {
+        Arc::get_mut(&mut self.0)
+    }
+}
+
+impl std::ops::Deref for List {
+    type Target = [Elem];
+    fn deref(&self) -> &[Elem] {
+        &self.0
+    }
+}
+
+impl From<Vec<Elem>> for List {
+    fn from(items: Vec<Elem>) -> Self {
+        Self::new(items)
+    }
+}
+
+impl Drop for List {
+    fn drop(&mut self) {
+        // The last reference to a group with sub-groups frees them with a work list, so a deep
+        // tree never recurses. A shared group only loses a reference here.
+        let Some(items) = Arc::get_mut(&mut self.0) else {
+            return;
+        };
+        if !items.iter().any(|e| matches!(e, Elem::List(_))) {
+            return;
+        }
+        let mut work = vec![std::mem::take(items)];
+        while let Some(mut items) = work.pop() {
+            for e in items.drain(..) {
+                if let Elem::List(mut sub) = e {
+                    if let Some(inner) = Arc::get_mut(&mut sub.0) {
+                        if inner.iter().any(|e| matches!(e, Elem::List(_))) {
+                            work.push(std::mem::take(inner));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl PartialEq for List {
+    fn eq(&self, other: &Self) -> bool {
+        let mut work: Vec<(&[Elem], &[Elem])> = vec![(self, other)];
+        while let Some((a, b)) = work.pop() {
+            if a.len() != b.len() {
+                return false;
+            }
+            for (x, y) in a.iter().zip(b) {
+                match (x, y) {
+                    (Elem::List(p), Elem::List(q)) => {
+                        if !Arc::ptr_eq(&p.0, &q.0) {
+                            work.push((p, q));
+                        }
+                    }
+                    (Elem::Item(l1, o1, r1), Elem::Item(l2, o2, r2)) => {
+                        if l1 != l2 || o1 != o2 || r1 != r2 {
+                            return false;
+                        }
+                    }
+                    (Elem::And, Elem::And) | (Elem::Or, Elem::Or) => {}
+                    _ => return false,
+                }
+            }
+        }
+        true
+    }
+}
+
+impl Eq for List {}
+
+impl fmt::Debug for List {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // `[Item(...), And, [...]]`, written with a work list (a derived Debug would recurse).
+        enum Step<'a> {
+            Open(&'a [Elem]),
+            Elem(&'a Elem),
+            Text(&'static str),
+        }
+        let mut work = vec![Step::Open(self)];
+        while let Some(step) = work.pop() {
+            match step {
+                Step::Text(t) => f.write_str(t)?,
+                Step::Elem(Elem::Item(l, o, r)) => write!(f, "Item({l:?}, {o:?}, {r:?})")?,
+                Step::Elem(Elem::And) => f.write_str("And")?,
+                Step::Elem(Elem::Or) => f.write_str("Or")?,
+                Step::Elem(Elem::List(sub)) => work.push(Step::Open(sub)),
+                Step::Open(sub) => {
+                    f.write_str("[")?;
+                    work.push(Step::Text("]"));
+                    for (i, e) in sub.iter().enumerate().rev() {
+                        work.push(Step::Elem(e));
+                        if i > 0 {
+                            work.push(Step::Text(", "));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A parsed requirement; names, URL, extras and specifier are code-point spans of the source.
@@ -72,7 +233,7 @@ pub struct ParsedRequirement {
     /// The specifier tokens and commas, concatenated as packaging concatenates them.
     pub specifier: Vec<(usize, usize)>,
     /// The marker.
-    pub marker: Option<Vec<Elem>>,
+    pub marker: Option<List>,
 }
 
 const VARIABLES: &[&str] = &[
@@ -318,9 +479,9 @@ impl Rule {
     }
 }
 
-struct Parser<'a, F> {
+struct Parser<'a, H> {
     t: Tokenizer<'a>,
-    quoted: F,
+    host: &'a mut H,
 }
 
 type Res<T, E> = Result<T, Error<E>>;
@@ -329,7 +490,7 @@ fn syn<T, E>(r: Result<T, SyntaxError>) -> Res<T, E> {
     r.map_err(Error::Syntax)
 }
 
-impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
+impl<E, H: Host<Error = E>> Parser<'_, H> {
     /// `enclosing_tokens(open, close, around=...)`: the opening position, if it was there.
     fn open(&mut self, open: Rule) -> Option<usize> {
         let start = self.t.pos;
@@ -389,14 +550,7 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
     #[allow(clippy::type_complexity)]
     fn requirement_details(
         &mut self,
-    ) -> Res<
-        (
-            Option<(usize, usize)>,
-            Vec<(usize, usize)>,
-            Option<Vec<Elem>>,
-        ),
-        E,
-    > {
+    ) -> Res<(Option<(usize, usize)>, Vec<(usize, usize)>, Option<List>), E> {
         if let Some(n) = self.t.check(Rule::At) {
             self.t.pos += n;
             self.t.consume(Rule::Ws);
@@ -428,7 +582,7 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
         Ok((None, specifier, Some(marker)))
     }
 
-    fn requirement_marker(&mut self, span_start: usize, expected: &str) -> Res<Vec<Elem>, E> {
+    fn requirement_marker(&mut self, span_start: usize, expected: &str) -> Res<List, E> {
         match self.t.check(Rule::Semicolon) {
             Some(n) => self.t.pos += n,
             None => {
@@ -527,42 +681,60 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
         Ok(parts)
     }
 
-    fn full_marker(&mut self) -> Res<Vec<Elem>, E> {
+    fn full_marker(&mut self) -> Res<List, E> {
         let m = self.marker()?;
         syn(self.t.expect(Rule::End, "end of marker expression"))?;
         Ok(m)
     }
 
-    fn marker(&mut self) -> Res<Vec<Elem>, E> {
-        let mut expression = vec![self.marker_atom()?];
-        while let Some(n) = self.t.check(Rule::BoolOp) {
-            let op = if self.t.lit(self.t.pos, "or") {
-                Elem::Or
-            } else {
-                Elem::And
-            };
-            self.t.pos += n;
-            let right = self.marker_atom()?;
-            expression.push(op);
-            expression.push(right);
+    /// `_parse_marker`: `marker_atom (BOOLOP marker_atom)*`, where
+    /// `marker_atom = WS? '(' WS? marker WS? ')' WS? | WS? marker_item WS?`.
+    ///
+    /// packaging recurses through `_parse_marker_atom` for each `(`; this keeps the open
+    /// groups (their elements so far and where their `(` was) on a heap stack instead.
+    fn marker(&mut self) -> Res<List, E> {
+        // The innermost open group is last; the first entry is the marker itself (no `(`).
+        let mut open: Vec<(Vec<Elem>, Option<usize>)> = vec![(Vec::new(), None)];
+        loop {
+            // The start of a marker_atom.
+            self.t.consume(Rule::Ws);
+            if self.t.check(Rule::LeftParen).is_some() {
+                let at = self.open(Rule::LeftParen);
+                self.t.consume(Rule::Ws);
+                open.push((Vec::new(), at));
+                continue;
+            }
+            let mut atom = self.marker_item()?;
+            self.t.consume(Rule::Ws);
+            // The atom is done: add it to its group, then close every group that ends here.
+            loop {
+                let Some((items, _)) = open.last_mut() else {
+                    unreachable!("the outermost group is never closed here")
+                };
+                items.push(atom);
+                if let Some(n) = self.t.check(Rule::BoolOp) {
+                    let op = if self.t.lit(self.t.pos, "or") {
+                        Elem::Or
+                    } else {
+                        Elem::And
+                    };
+                    self.t.pos += n;
+                    items.push(op);
+                    break;
+                }
+                let Some((items, at)) = open.pop() else {
+                    unreachable!("the outermost group is never closed here")
+                };
+                if at.is_none() {
+                    return Ok(List::new(items));
+                }
+                // The rest of the parenthesised marker_atom.
+                self.t.consume(Rule::Ws);
+                self.close(at, Rule::LeftParen, Rule::RightParen, "marker expression")?;
+                self.t.consume(Rule::Ws);
+                atom = Elem::List(List::new(items));
+            }
         }
-        Ok(expression)
-    }
-
-    fn marker_atom(&mut self) -> Res<Elem, E> {
-        self.t.consume(Rule::Ws);
-        let marker = if self.t.check(Rule::LeftParen).is_some() {
-            let open = self.open(Rule::LeftParen);
-            self.t.consume(Rule::Ws);
-            let inner = self.marker()?;
-            self.t.consume(Rule::Ws);
-            self.close(open, Rule::LeftParen, Rule::RightParen, "marker expression")?;
-            Elem::List(inner)
-        } else {
-            self.marker_item()?
-        };
-        self.t.consume(Rule::Ws);
-        Ok(marker)
     }
 
     fn marker_item(&mut self) -> Res<Elem, E> {
@@ -573,7 +745,32 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
         self.t.consume(Rule::Ws);
         let rhs = self.marker_var()?;
         self.t.consume(Rule::Ws);
+        let (lhs, rhs) = self.normalize_extras(lhs, rhs).map_err(Error::Host)?;
         Ok(Elem::Item(lhs, op, rhs))
+    }
+
+    /// `_normalize_extras` for one item: the literal compared with `extra`, `extras` or
+    /// `dependency_groups` is canonicalised.
+    fn normalize_extras(
+        &mut self,
+        lhs: MarkerVar,
+        rhs: MarkerVar,
+    ) -> Result<(MarkerVar, MarkerVar), E> {
+        Ok(match (lhs, rhs) {
+            (MarkerVar::Variable(v), MarkerVar::Value(val)) if v == "extra" => {
+                let val = self.host.canonicalize(&val)?;
+                (MarkerVar::Variable(v), MarkerVar::Value(val))
+            }
+            (MarkerVar::Value(val), MarkerVar::Variable(v))
+                if v == "extra" || v == "extras" || v == "dependency_groups" =>
+            {
+                (
+                    MarkerVar::Value(self.host.canonicalize(&val)?),
+                    MarkerVar::Variable(v),
+                )
+            }
+            other => other,
+        })
     }
 
     fn marker_var(&mut self) -> Res<MarkerVar, E> {
@@ -591,7 +788,7 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
             let start = self.t.pos;
             self.t.pos += n;
             let token = &self.t.s[start..start + n];
-            return match (self.quoted)(token) {
+            return match self.host.quoted(token) {
                 Ok(Some(v)) => Ok(MarkerVar::Value(v)),
                 Ok(None) => Err(Error::Syntax(SyntaxError {
                     message: "Invalid quoted string".into(),
@@ -645,42 +842,42 @@ pub fn simple_quoted(token: &[u32]) -> Option<String> {
     Some(out)
 }
 
-/// `parse_marker(source)`.
+/// `parse_marker(source)`, with `_normalize_extra_values` applied.
 ///
 /// # Errors
-/// packaging's syntax errors, or the `quoted` callback's.
-pub fn parse_marker<E>(
+/// packaging's syntax errors, or the host's.
+pub fn parse_marker<H: Host>(
     source: &[u32],
     unicode: UnicodeVersion,
-    quoted: impl FnMut(&[u32]) -> Result<Option<String>, E>,
-) -> Result<Vec<Elem>, Error<E>> {
+    host: &mut H,
+) -> Result<List, Error<H::Error>> {
     let mut p = Parser {
         t: Tokenizer {
             s: source,
             pos: 0,
             unicode,
         },
-        quoted,
+        host,
     };
     p.full_marker()
 }
 
-/// `parse_requirement(source)`.
+/// `parse_requirement(source)`, with the marker's extra values normalised.
 ///
 /// # Errors
-/// packaging's syntax errors, or the `quoted` callback's.
-pub fn parse_requirement<E>(
+/// packaging's syntax errors, or the host's.
+pub fn parse_requirement<H: Host>(
     source: &[u32],
     unicode: UnicodeVersion,
-    quoted: impl FnMut(&[u32]) -> Result<Option<String>, E>,
-) -> Result<ParsedRequirement, Error<E>> {
+    host: &mut H,
+) -> Result<ParsedRequirement, Error<H::Error>> {
     let mut p = Parser {
         t: Tokenizer {
             s: source,
             pos: 0,
             unicode,
         },
-        quoted,
+        host,
     };
     p.requirement()
 }
@@ -761,42 +958,202 @@ pub struct QuoteError;
 
 /// `_format_marker(marker, first)`; `Err` when a value has both quote characters.
 ///
+/// packaging recurses into each group; this walks the tree with a work list. A group that a
+/// tree holds several times (`m & m`) is written each time, as packaging writes it.
+///
 /// # Errors
 /// [`QuoteError`] for a value that cannot be serialised.
 pub fn format_marker(marker: &[Elem], first: bool) -> Result<String, QuoteError> {
-    if marker.len() == 1 {
-        if let Elem::List(inner) = &marker[0] {
-            return format_marker(inner, first);
-        }
-        if let Elem::Item(..) = &marker[0] {
-            return format_elem(&marker[0], first);
+    enum Step<'a> {
+        Group(&'a [Elem], bool),
+        Text(&'static str),
+    }
+    let mut out = String::new();
+    let mut work = vec![Step::Group(marker, first)];
+    while let Some(step) = work.pop() {
+        let (mut items, first) = match step {
+            Step::Text(t) => {
+                out.push_str(t);
+                continue;
+            }
+            Step::Group(items, first) => (items, first),
+        };
+        // `[[...]]` and `[(...)]`: unwrap, keeping `first` (a single item is written bare).
+        loop {
+            match items {
+                [Elem::List(inner)] => items = inner,
+                [Elem::Item(l, op, r)] => {
+                    write_item(&mut out, l, op, r)?;
+                    break;
+                }
+                _ => {
+                    if !first {
+                        out.push('(');
+                        work.push(Step::Text(")"));
+                    }
+                    for (i, e) in items.iter().enumerate().rev() {
+                        work.push(match e {
+                            Elem::List(sub) => Step::Group(sub, false),
+                            Elem::Item(..) => Step::Group(std::slice::from_ref(e), false),
+                            Elem::And => Step::Text("and"),
+                            Elem::Or => Step::Text("or"),
+                        });
+                        if i > 0 {
+                            work.push(Step::Text(" "));
+                        }
+                    }
+                    break;
+                }
+            }
         }
     }
-    let mut parts = Vec::with_capacity(marker.len());
-    for m in marker {
-        parts.push(format_elem(m, false)?);
-    }
-    let joined = parts.join(" ");
-    Ok(if first { joined } else { format!("({joined})") })
+    Ok(out)
 }
 
-fn format_elem(e: &Elem, first: bool) -> Result<String, QuoteError> {
-    match e {
-        Elem::List(inner) => format_marker(inner, first),
-        Elem::Item(l, op, r) => {
-            let side = |v: &MarkerVar| match v {
-                MarkerVar::Variable(n) => Ok(n.clone()),
-                MarkerVar::Value(s) => serialize_value(s).ok_or(QuoteError),
-            };
-            Ok(format!("{} {op} {}", side(l)?, side(r)?))
+fn write_item(out: &mut String, l: &MarkerVar, op: &str, r: &MarkerVar) -> Result<(), QuoteError> {
+    let side = |out: &mut String, v: &MarkerVar| -> Result<(), QuoteError> {
+        match v {
+            MarkerVar::Variable(n) => out.push_str(n),
+            MarkerVar::Value(s) => out.push_str(&serialize_value(s).ok_or(QuoteError)?),
         }
-        Elem::And => Ok("and".into()),
-        Elem::Or => Ok("or".into()),
-    }
+        Ok(())
+    };
+    side(out, l)?;
+    out.push(' ');
+    out.push_str(op);
+    out.push(' ');
+    side(out, r)
 }
 
 /// `str.strip()` (Python whitespace).
 #[must_use]
 pub fn py_strip(s: &str) -> &str {
     s.trim_matches(is_py_whitespace)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Plain;
+
+    impl Host for Plain {
+        type Error = ();
+        fn quoted(&mut self, token: &[u32]) -> Result<Option<String>, ()> {
+            Ok(simple_quoted(token))
+        }
+        fn canonicalize(&mut self, value: &str) -> Result<String, ()> {
+            Ok(canonicalize_ascii(value))
+        }
+    }
+
+    fn cps(s: &str) -> Vec<u32> {
+        s.chars().map(u32::from).collect()
+    }
+
+    fn parse(s: &str) -> Result<List, SyntaxError> {
+        match parse_marker(&cps(s), UnicodeVersion::V17_0, &mut Plain) {
+            Ok(l) => Ok(l),
+            Err(Error::Syntax(e)) => Err(e),
+            Err(Error::Host(())) => unreachable!(),
+        }
+    }
+
+    fn text(s: &str) -> String {
+        format_marker(&parse(s).unwrap(), true).unwrap()
+    }
+
+    /// Run `f` on a thread with a small stack: any recursion per nesting level overflows it.
+    fn small_stack(f: impl FnOnce() + Send + 'static) {
+        std::thread::Builder::new()
+            .stack_size(64 << 10)
+            .spawn(f)
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn formats_as_packaging_does() {
+        assert_eq!(text("os_name=='a'"), r#"os_name == "a""#);
+        assert_eq!(text("((os_name=='a'))"), r#"os_name == "a""#);
+        assert_eq!(
+            text("os_name=='a' and (python_version>'3' or extra=='X_Y')"),
+            r#"os_name == "a" and (python_version > "3" or extra == "x-y")"#
+        );
+        assert_eq!(
+            text("(os_name=='a' or os_name=='b') and ((sys_platform=='c'))"),
+            r#"(os_name == "a" or os_name == "b") and sys_platform == "c""#
+        );
+        assert_eq!(text("'Foo.Bar' in extras"), r#""foo-bar" in extras"#);
+        assert_eq!(format_marker(&List::default(), true).unwrap(), "");
+        assert_eq!(format_marker(&List::default(), false).unwrap(), "()");
+    }
+
+    #[test]
+    fn syntax_errors_keep_packagings_spans() {
+        let e = parse("(os_name == 'a'").unwrap_err();
+        assert_eq!(
+            e.message,
+            "Expected matching RIGHT_PARENTHESIS for LEFT_PARENTHESIS, after marker expression"
+        );
+        assert_eq!(e.span, (0, 15));
+        let e = parse("os_name == 'a' and").unwrap_err();
+        assert_eq!(e.message, "Expected a marker variable or quoted string");
+        assert_eq!(e.span, (18, 18));
+        let e = parse("(((").unwrap_err();
+        assert_eq!(e.message, "Expected a marker variable or quoted string");
+        assert_eq!(e.span, (3, 3));
+        let e = parse("os_name == 'a')").unwrap_err();
+        assert_eq!(e.message, "Expected end of marker expression");
+    }
+
+    #[test]
+    fn deep_nesting_needs_no_stack() {
+        small_stack(|| {
+            let n = 200_000;
+            let src = format!("{}os_name == 'nt'{}", "(".repeat(n), ")".repeat(n));
+            let tree = parse(&src).unwrap();
+            assert_eq!(format_marker(&tree, true).unwrap(), r#"os_name == "nt""#);
+            assert_eq!(tree, parse(&src).unwrap());
+            assert!(format!("{tree:?}").starts_with("[[[["));
+            let e = parse(&"(".repeat(n)).unwrap_err();
+            assert_eq!(e.span, (n, n));
+            // Deep with a sibling at every level: printed with parentheses all the way down.
+            let src = format!(
+                "{}os_name == 'a'{}",
+                "(os_name == 'b' or ".repeat(1000),
+                ")".repeat(1000)
+            );
+            let printed = format_marker(&parse(&src).unwrap(), true).unwrap();
+            assert_eq!(printed.matches('(').count(), 999);
+            drop(tree);
+        });
+    }
+
+    #[test]
+    fn combined_groups_are_shared() {
+        small_stack(|| {
+            let other = parse("os_name == 'b'").unwrap();
+            let mut m = parse("os_name == 'a'").unwrap();
+            for _ in 0..100_000 {
+                m = List::new(vec![Elem::List(m), Elem::And, Elem::List(other.clone())]);
+            }
+            let text = format_marker(&m, true).unwrap();
+            assert!(text.starts_with(&format!("{}os_name == \"a\" and", "(".repeat(99_999))));
+            let copy = m.clone();
+            assert_eq!(copy.id(), m.id());
+            assert_eq!(copy, m);
+            drop(copy);
+            drop(m);
+            // m & m: one group held twice at each level, so 40 levels stay small.
+            let mut m = parse("os_name == 'a'").unwrap();
+            for _ in 0..40 {
+                m = List::new(vec![Elem::List(m.clone()), Elem::Or, Elem::List(m)]);
+            }
+            let Elem::List(l) = &m[0] else { unreachable!() };
+            let Elem::List(r) = &m[2] else { unreachable!() };
+            assert_eq!(l.id(), r.id());
+        });
+    }
 }

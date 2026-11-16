@@ -64,6 +64,8 @@ struct Config {
     node_value: Py<PyAny>,
     node_op: Py<PyAny>,
     packaging_marker: Option<Py<PyType>>,
+    /// packaging's `Marker` whatever its release (its `_markers` has the same nodes).
+    packaging_marker_any: Option<Py<PyType>>,
     /// `re.compile(r"[ \t]+")`: packaging's first tokenizer rule (its TypeError for a non-str).
     ws_regex: Py<PyAny>,
     /// The caller's `unicodedata.unidata_version` (for `\b` around marker tokens).
@@ -127,6 +129,7 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         node_value: get("Value")?,
         node_op: get("Op")?,
         packaging_marker: opt_type("packaging_Marker")?,
+        packaging_marker_any: opt_type("packaging_Marker_any")?,
         ws_regex: py
             .import("re")?
             .call_method1("compile", (r"[ \t]+",))?
