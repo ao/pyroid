@@ -145,14 +145,71 @@ _native._configure(
 # ---------------------------------------------------------------------------
 
 
+def _no_pyyaml(where: str, reason: str) -> PyroidError:
+    """The error for a call that needs PyYAML when it is not installed."""
+    return PyroidError(
+        f"{where}: {reason} is not supported by pyroid's Rust port, and PyYAML "
+        f"is not installed to fall back to (pip install pyyaml=={PYYAML_VERSION})"
+    )
+
+
 class _Placeholder:
-    """Stands for one of PyYAML's loader or dumper classes when PyYAML is not installed."""
+    """Stands for one of PyYAML's loader or dumper classes when PyYAML is not installed.
+
+    The class-level registrations that PyYAML's class has raise :class:`pyroid.PyroidError`.
+    """
+
+    _kind = ""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         raise PyroidError(
             f"pyroid.yaml.{type(self).__name__} is only a marker for load()/dump() here: "
             f"PyYAML is not installed (pip install pyyaml=={PYYAML_VERSION})"
         )
+
+    @classmethod
+    def _unregistered(cls, method: str, what: str) -> PyroidError:
+        return _no_pyyaml(
+            f"{cls.__module__}.{cls.__qualname__}.{method}", f"a {cls._kind} with added {what}"
+        )
+
+    @classmethod
+    def add_implicit_resolver(cls, tag: Any, regexp: Any, first: Any) -> None:
+        """Raise :class:`pyroid.PyroidError`: resolvers need PyYAML."""
+        raise cls._unregistered("add_implicit_resolver", "resolvers")
+
+    @classmethod
+    def add_path_resolver(cls, tag: Any, path: Any, kind: Any = None) -> None:
+        """Raise :class:`pyroid.PyroidError`: resolvers need PyYAML."""
+        raise cls._unregistered("add_path_resolver", "resolvers")
+
+
+class _LoaderPlaceholder(_Placeholder):
+    _kind = "loader"
+
+    @classmethod
+    def add_constructor(cls, tag: Any, constructor: Any) -> None:
+        """Raise :class:`pyroid.PyroidError`: constructors need PyYAML."""
+        raise cls._unregistered("add_constructor", "constructors")
+
+    @classmethod
+    def add_multi_constructor(cls, tag_prefix: Any, multi_constructor: Any) -> None:
+        """Raise :class:`pyroid.PyroidError`: constructors need PyYAML."""
+        raise cls._unregistered("add_multi_constructor", "constructors")
+
+
+class _DumperPlaceholder(_Placeholder):
+    _kind = "dumper"
+
+    @classmethod
+    def add_representer(cls, data_type: Any, representer: Any) -> None:
+        """Raise :class:`pyroid.PyroidError`: representers need PyYAML."""
+        raise cls._unregistered("add_representer", "representers")
+
+    @classmethod
+    def add_multi_representer(cls, data_type: Any, representer: Any) -> None:
+        """Raise :class:`pyroid.PyroidError`: representers need PyYAML."""
+        raise cls._unregistered("add_multi_representer", "representers")
 
 
 if _yaml is not None:
@@ -165,25 +222,25 @@ if _yaml is not None:
     Dumper = _yaml.Dumper
 else:
 
-    class SafeLoader(_Placeholder):  # type: ignore[no-redef]
+    class SafeLoader(_LoaderPlaceholder):  # type: ignore[no-redef]
         """PyYAML's ``SafeLoader``: pass it to :func:`load`."""
 
-    class BaseLoader(_Placeholder):  # type: ignore[no-redef]
+    class BaseLoader(_LoaderPlaceholder):  # type: ignore[no-redef]
         """PyYAML's ``BaseLoader`` (needs PyYAML)."""
 
-    class FullLoader(_Placeholder):  # type: ignore[no-redef]
+    class FullLoader(_LoaderPlaceholder):  # type: ignore[no-redef]
         """PyYAML's ``FullLoader``: pass it to :func:`load`."""
 
-    class Loader(_Placeholder):  # type: ignore[no-redef]
+    class Loader(_LoaderPlaceholder):  # type: ignore[no-redef]
         """PyYAML's ``Loader``: pass it to :func:`load`."""
 
-    class UnsafeLoader(_Placeholder):  # type: ignore[no-redef]
+    class UnsafeLoader(_LoaderPlaceholder):  # type: ignore[no-redef]
         """PyYAML's ``UnsafeLoader``: pass it to :func:`load`."""
 
-    class SafeDumper(_Placeholder):  # type: ignore[no-redef]
+    class SafeDumper(_DumperPlaceholder):  # type: ignore[no-redef]
         """PyYAML's ``SafeDumper``: pass it to :func:`dump`."""
 
-    class Dumper(_Placeholder):  # type: ignore[no-redef]
+    class Dumper(_DumperPlaceholder):  # type: ignore[no-redef]
         """PyYAML's ``Dumper``: pass it to :func:`dump`."""
 
 
@@ -344,10 +401,7 @@ def _pyyaml(name: str | None, reason: str) -> Any:
     if name is None:
         name = _public_name()
     if _yaml is None:
-        raise PyroidError(
-            f"pyroid.yaml.{name}: {reason} is not supported by pyroid's Rust port, and PyYAML "
-            f"is not installed to fall back to (pip install pyyaml=={PYYAML_VERSION})"
-        )
+        raise _no_pyyaml(f"pyroid.yaml.{name}", reason)
     key = f"{name}:{reason}"
     if key not in _WARNED:
         _WARNED.add(key)

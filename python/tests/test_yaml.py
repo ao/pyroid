@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import importlib
 import io
+import json
 import math
 import sys
 import sysconfig
@@ -636,6 +637,112 @@ except py.PyroidError as e:
         "{'a': 1} 'a: 1\\n'",
         "pyroid.yaml.load: Loader=M with added constructors",
     ]
+
+
+# The class-level registrations of PyYAML 6.0.3's loaders and dumpers (and what they register).
+_REGISTRATIONS = {
+    "loader": {
+        "add_constructor": "constructors",
+        "add_multi_constructor": "constructors",
+        "add_implicit_resolver": "resolvers",
+        "add_path_resolver": "resolvers",
+    },
+    "dumper": {
+        "add_representer": "representers",
+        "add_multi_representer": "representers",
+        "add_implicit_resolver": "resolvers",
+        "add_path_resolver": "resolvers",
+    },
+}
+_CLASSES = (
+    "SafeLoader",
+    "BaseLoader",
+    "FullLoader",
+    "Loader",
+    "UnsafeLoader",
+    "SafeDumper",
+    "Dumper",
+)
+
+
+def _registrations_without_pyyaml() -> dict[str, list[str]]:
+    """What each class attribute in test_registrations_without_pyyaml's child raises."""
+    want: dict[str, list[str]] = {}
+    for name in _CLASSES:
+        kind, other = ("dumper", "loader") if name.endswith("Dumper") else ("loader", "dumper")
+        for owner, module in ((name, "pyroid.yaml"), (f"My{name}", "__main__")):
+            for method, what in _REGISTRATIONS[kind].items():
+                want[f"{owner}.{method}"] = [
+                    "PyroidError",
+                    f"{module}.{owner}.{method}: a {kind} with added {what} is not supported by "
+                    "pyroid's Rust port, and PyYAML is not installed to fall back to "
+                    "(pip install pyyaml==6.0.3)",
+                ]
+            # The other kind's registrations (PyYAML's class lacks them too) and the rest of
+            # PyYAML's class attributes: Python's own AttributeError.
+            for attr in (
+                *(_REGISTRATIONS[other].keys() - _REGISTRATIONS[kind].keys()),
+                "yaml_constructors",
+                "yaml_representers",
+                "yaml_implicit_resolvers",
+                "construct_mapping",
+                "DEFAULT_SCALAR_TAG",
+            ):
+                want[f"{owner}.{attr}"] = [
+                    "AttributeError",
+                    f"type object {owner!r} has no attribute {attr!r}",
+                ]
+    return want
+
+
+@pytest.mark.thread_unsafe
+def test_registrations_without_pyyaml(run_python: Any) -> None:
+    # `class L(yaml.SafeLoader): ...; L.add_constructor(...)` raised a bare AttributeError.
+    code = r"""
+import abc, json, re, sys
+sys.modules["yaml"] = None
+import pyroid.yaml as py
+ARGS = {
+    "add_constructor": ("!x", print),
+    "add_multi_constructor": ("!x", print),
+    "add_representer": (int, print),
+    "add_multi_representer": (int, print),
+    "add_implicit_resolver": ("!x", re.compile("x"), ["x"]),
+    "add_path_resolver": ("!x", [], dict),
+}
+ATTRS = ("yaml_constructors", "yaml_representers", "yaml_implicit_resolvers",
+         "construct_mapping", "DEFAULT_SCALAR_TAG")
+def outcome(call):
+    try:
+        call()
+    except Exception as e:
+        return [type(e).__name__, str(e)]
+    return None
+out = {}
+for name in ("SafeLoader", "BaseLoader", "FullLoader", "Loader", "UnsafeLoader",
+             "SafeDumper", "Dumper"):
+    base = getattr(py, name)
+    sub = type("My" + name, (base,), {})
+    for cls in (base, sub):
+        for method, args in ARGS.items():
+            out[f"{cls.__qualname__}.{method}"] = outcome(lambda: getattr(cls, method)(*args))
+        for attr in ATTRS:
+            out[f"{cls.__qualname__}.{attr}"] = outcome(lambda: getattr(cls, attr))
+    # Still plain classes: subclassing (also with abc.ABC), issubclass and load()/dump() work.
+    class WithAbc(base, abc.ABC):
+        pass
+    assert type(base) is type and issubclass(sub, base) and issubclass(WithAbc, base)
+    if name == "SafeLoader":
+        print(py.load("a: 1", Loader=sub), py.load("b: 2", Loader=WithAbc))
+    elif name == "SafeDumper":
+        print(repr(py.dump([1], Dumper=sub)), repr(py.dump([2], Dumper=WithAbc)))
+print(json.dumps(out))
+"""
+    r = run_python(code)
+    assert r.returncode == 0, r.stderr
+    *printed, last = r.stdout.splitlines()
+    assert printed == ["{'a': 1} {'b': 2}", "'- 1\\n' '- 2\\n'"]
+    assert json.loads(last) == _registrations_without_pyyaml()
 
 
 @needs_pyyaml
