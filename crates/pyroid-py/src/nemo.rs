@@ -32,7 +32,7 @@ use crate::input::{TextInput, ThreadsArg, texts_and_threads};
 fn require_numpy(py: Python<'_>) -> PyResult<()> {
     crate::np::ready(
         py,
-        "pyroid.nemo returns numpy arrays for batches: pip install numpy",
+        "pyroid.nemo returns numpy arrays for batches: pip install 'pyroid[nemo]' (or numpy)",
     )
 }
 
