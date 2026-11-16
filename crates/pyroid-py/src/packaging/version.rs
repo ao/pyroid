@@ -990,6 +990,38 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVersion>()?;
     m.add_function(wrap_pyfunction!(parse, m)?)?;
     m.add_function(wrap_pyfunction!(normalize_pre, m)?)?;
+    m.add_function(wrap_pyfunction!(canonicalize_version, m)?)?;
     Ok(())
 }
 
+
+/// `canonicalize_version(version, strip_trailing_zero=...)`.
+#[pyfunction]
+#[pyo3(signature = (version, strip_trailing_zero = true))]
+fn canonicalize_version<'py>(py: Python<'py>, version: &Bound<'py, PyAny>, strip_trailing_zero: bool) -> PyResult<Bound<'py, PyAny>> {
+    let parsed = if version.is_instance_of::<PyString>() {
+        match parse_any(py, version) {
+            Ok(v) => v,
+            Err(e) if e.is_instance(py, config(py)?.invalid_version.bind(py)) => return Ok(version.str()?.into_any()),
+            Err(e) => return Err(e),
+        }
+    } else if let Ok(v) = version.cast::<PyVersion>() {
+        v.get().core()?
+    } else if !strip_trailing_zero {
+        return Ok(version.str()?.into_any());
+    } else if is_packaging_version(py, version)? {
+        from_packaging(py, version)?.ok_or_else(|| invalid_repr(py, version))?
+    } else {
+        // _TrimmedRelease(x) for anything else runs Version.__init__(x).
+        parse_any(py, version)?
+    };
+    let text = if strip_trailing_zero { parsed.to_string_trimmed() } else { parsed.to_string_py() };
+    Ok(PyString::new(py, &text).into_any())
+}
+
+fn is_packaging_version(py: Python<'_>, x: &Bound<'_, PyAny>) -> PyResult<bool> {
+    match &config(py)?.packaging_version_any {
+        Some(cls) => x.is_instance(cls.bind(py)),
+        None => Ok(false),
+    }
+}

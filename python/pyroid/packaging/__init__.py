@@ -12,7 +12,7 @@ versions.
 
 from __future__ import annotations
 
-from pyroid.packaging import _compat, specifiers, version
+from pyroid.packaging import _compat, markers, requirements, specifiers, utils, version
 
 #: The packaging release whose behaviour this module reproduces.
 PACKAGING_VERSION = "26.3"
@@ -20,9 +20,17 @@ __version__ = PACKAGING_VERSION
 
 #: The packaging submodules pyroid ports (``pyroid.patch("packaging")`` without packaging installed
 #: provides shims for these).
-PORTED = ("version", "specifiers")
+PORTED = ("version", "specifiers", "markers", "requirements", "utils")
 
-__all__ = ["PACKAGING_VERSION", "PORTED", "specifiers", "version"]
+__all__ = [
+    "PACKAGING_VERSION",
+    "PORTED",
+    "markers",
+    "requirements",
+    "specifiers",
+    "utils",
+    "version",
+]
 
 del _compat
 
@@ -38,4 +46,13 @@ def _patch_targets() -> list[tuple[str, str, object]]:
         ("packaging.version", "parse", version.parse),
         ("packaging.specifiers", "Specifier", specifiers.Specifier),
         ("packaging.specifiers", "SpecifierSet", specifiers.SpecifierSet),
+        ("packaging.markers", "Marker", markers.Marker),
+        ("packaging.markers", "default_environment", markers.default_environment),
+        ("packaging.markers", "_cached_default_environment", markers._cached_default_environment),
+        ("packaging.requirements", "Requirement", requirements.Requirement),
+        ("packaging.utils", "canonicalize_name", utils.canonicalize_name),
+        ("packaging.utils", "canonicalize_version", utils.canonicalize_version),
+        ("packaging.utils", "is_normalized_name", utils.is_normalized_name),
+        ("packaging.utils", "parse_wheel_filename", utils.parse_wheel_filename),
+        ("packaging.utils", "parse_sdist_filename", utils.parse_sdist_filename),
     ]

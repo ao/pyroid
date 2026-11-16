@@ -72,16 +72,20 @@ impl Op {
 // ---------------------------------------------------------------------------
 
 struct Scan<'a> {
-    s: &'a [char],
+    s: &'a [u32],
     i: usize,
     /// Letters compare with `re.IGNORECASE`'s Unicode folds (the `~=` branch is outside the
     /// `(?a:...)` groups): `İ` and `ı` match `i`, `ſ` matches `s`.
     unicode_case: bool,
 }
 
+fn as_char(c: u32) -> char {
+    char::from_u32(c).unwrap_or('\u{fffd}')
+}
+
 impl Scan<'_> {
     fn peek(&self) -> Option<char> {
-        self.s.get(self.i).copied()
+        self.s.get(self.i).map(|&c| as_char(c))
     }
 
     fn eat(&mut self, c: char) -> bool {
@@ -134,7 +138,7 @@ impl Scan<'_> {
                 continue;
             }
             for (k, &b) in w.iter().enumerate() {
-                if !self.letter_eq(self.s[self.i + k], b) {
+                if !self.letter_eq(as_char(self.s[self.i + k]), b) {
                     continue 'next;
                 }
             }
@@ -162,16 +166,14 @@ impl Scan<'_> {
             self.i += 1;
         }
         let save = self.i;
-        if self.digits() > 0 && self.eat('!') {
-        } else {
+        if !(self.digits() > 0 && self.eat('!')) {
             self.i = save;
         }
         if self.digits() == 0 {
             return false;
         }
         let mut parts = 1;
-        while self.peek() == Some('.') && self.s.get(self.i + 1).is_some_and(char::is_ascii_digit)
-        {
+        while self.peek() == Some('.') && self.s.get(self.i + 1).is_some_and(|&c| as_char(c).is_ascii_digit()) {
             self.i += 1;
             self.digits();
             parts += 1;
@@ -183,15 +185,14 @@ impl Scan<'_> {
     fn suffixes(&mut self) {
         self.lettered(&["alpha", "beta", "preview", "pre", "a", "b", "c", "rc"]);
         let save = self.i;
-        if self.eat('-') && self.digits() > 0 {
-        } else {
+        if !(self.eat('-') && self.digits() > 0) {
             self.i = save;
             self.lettered(&["post", "rev", "r"]);
         }
         self.lettered(&["dev"]);
     }
 
-    /// `\+[a-z0-9]+(?:[-_\.][a-z0-9]+)*`, optional (ASCII).
+    /// `\+[a-z0-9]+(?:[-_\.][a-z0-9]+)*`, optional (ASCII, any case).
     fn local(&mut self) {
         let save = self.i;
         if !self.eat('+') {
@@ -206,8 +207,7 @@ impl Scan<'_> {
             while alnum(self.peek()) {
                 self.i += 1;
             }
-            if matches!(self.peek(), Some('-' | '_' | '.')) && alnum(self.s.get(self.i + 1).copied())
-            {
+            if matches!(self.peek(), Some('-' | '_' | '.')) && alnum(self.s.get(self.i + 1).map(|&c| as_char(c))) {
                 self.i += 1;
             } else {
                 break;
@@ -215,62 +215,78 @@ impl Scan<'_> {
         }
     }
 
-    fn at_end(&self) -> bool {
-        self.i == self.s.len()
+    fn starts(&self, text: &str) -> bool {
+        let t = text.as_bytes();
+        self.s.len() >= t.len() && t.iter().enumerate().all(|(k, &b)| self.s[k] == u32::from(b))
+    }
+
+    /// The specifier pattern at the start (`Specifier._specifier_regex_str`, not anchored at
+    /// the end): the end of the match.
+    fn pattern(&mut self) -> Option<usize> {
+        self.i = 0;
+        if self.starts("===") {
+            self.i = 3;
+            self.ws();
+            while self.peek().is_some_and(|c| !is_py_whitespace(c) && c != ';' && c != ')') {
+                self.i += 1;
+            }
+            return Some(self.i);
+        }
+        if self.starts("==") || self.starts("!=") {
+            self.i = 2;
+            self.ws();
+            if !self.release(1) {
+                return None;
+            }
+            let save = self.i;
+            if self.eat('.') && self.eat('*') {
+                return Some(self.i);
+            }
+            self.i = save;
+            self.suffixes();
+            self.local();
+            return Some(self.i);
+        }
+        if self.starts("~=") {
+            self.i = 2;
+            self.unicode_case = true;
+            self.ws();
+            if !self.release(2) {
+                return None;
+            }
+            self.suffixes();
+            return Some(self.i);
+        }
+        let n = if self.starts("<=") || self.starts(">=") {
+            2
+        } else if self.starts("<") || self.starts(">") {
+            1
+        } else {
+            return None;
+        };
+        self.i = n;
+        self.ws();
+        if !self.release(1) {
+            return None;
+        }
+        self.suffixes();
+        Some(self.i)
     }
 }
 
 /// `Specifier._regex.fullmatch(spec)`: the specifier pattern with `re.VERBOSE | re.IGNORECASE`.
 #[must_use]
 pub fn is_valid(spec: &str) -> bool {
-    let chars: Vec<char> = spec.trim_matches(is_py_whitespace).chars().collect();
-    let mut s = Scan { s: &chars, i: 0, unicode_case: false };
-    let rest = |k: usize| &chars[k.min(chars.len())..];
-    if rest(0).starts_with(&['=', '=', '=']) {
-        // === \s* [^\s;)]*
-        s.i = 3;
-        s.ws();
-        return s.s[s.i..].iter().all(|&c| !is_py_whitespace(c) && c != ';' && c != ')');
-    }
-    if rest(0).starts_with(&['~', '=']) {
-        s.i = 2;
-        s.unicode_case = true;
-        s.ws();
-        if !s.release(2) {
-            return false;
-        }
-        s.suffixes();
-        return s.at_end();
-    }
-    if rest(0).starts_with(&['=', '=']) || rest(0).starts_with(&['!', '=']) {
-        s.i = 2;
-        s.ws();
-        if !s.release(1) {
-            return false;
-        }
-        let save = s.i;
-        if s.eat('.') && s.eat('*') && s.at_end() {
-            return true;
-        }
-        s.i = save;
-        s.suffixes();
-        s.local();
-        return s.at_end();
-    }
-    let n = if rest(0).starts_with(&['<', '=']) || rest(0).starts_with(&['>', '=']) {
-        2
-    } else if matches!(chars.first(), Some('<' | '>')) {
-        1
-    } else {
-        return false;
-    };
-    s.i = n;
-    s.ws();
-    if !s.release(1) {
-        return false;
-    }
-    s.suffixes();
-    s.at_end()
+    let cps: Vec<u32> = spec.trim_matches(is_py_whitespace).chars().map(u32::from).collect();
+    let mut s = Scan { s: &cps, i: 0, unicode_case: false };
+    s.pattern() == Some(cps.len())
+}
+
+/// The tokenizer's `SPECIFIER` rule: the length of the specifier pattern's match at the start of
+/// `s` (code points), if any.
+#[must_use]
+pub fn match_len(s: &[u32]) -> Option<usize> {
+    Scan { s, i: 0, unicode_case: false }.pattern()
 }
 
 /// `Specifier.__init__`'s split of a valid `spec`: `(operator, version)`.

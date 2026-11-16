@@ -8,7 +8,10 @@ packaging.version.InvalidVersion`` catches pyroid's errors too.
 
 from __future__ import annotations
 
+import functools
 import importlib
+import os
+import platform
 import re
 import sys
 import warnings
@@ -28,6 +31,10 @@ _pv = _import("packaging.version")
 #: Whether packaging itself is importable (its classes are used where pyroid's would be copies).
 HAVE_PACKAGING = _pv is not None and not getattr(_pv, "__pyroid__", False)
 _ps = _import("packaging.specifiers") if HAVE_PACKAGING else None
+_pm = _import("packaging.markers") if HAVE_PACKAGING else None
+_pr = _import("packaging.requirements") if HAVE_PACKAGING else None
+_pt = _import("packaging._tokenizer") if HAVE_PACKAGING else None
+_pp = _import("packaging._parser") if HAVE_PACKAGING else None
 #: The installed packaging release ("" without it).
 INSTALLED = getattr(_import("packaging"), "__version__", "") if HAVE_PACKAGING else ""
 # pyroid objects claim packaging's classes (`__class__`) only for the releases whose private
@@ -52,10 +59,91 @@ class _VersionTuple(NamedTuple):
     local: tuple[int | str, ...] | None
 
 
+class _InvalidMarker(ValueError):
+    """Raised when attempting to create a :class:`Marker` from invalid input."""
+
+
+class _UndefinedComparison(ValueError):
+    """Raised when evaluating an unsupported marker comparison."""
+
+
+class _UndefinedEnvironmentName(KeyError):
+    """Raised when evaluating a marker that references a missing environment key."""
+
+
+class _InvalidRequirement(ValueError):
+    """An invalid requirement was found, users should refer to PEP 508."""
+
+
+class _ParserSyntaxError(Exception):
+    """The provided source text could not be parsed correctly."""
+
+    def __init__(self, message: str, *, source: str, span: tuple[int, int]) -> None:
+        self.span = span
+        self.message = message
+        self.source = source
+        super().__init__()
+
+    def __str__(self) -> str:
+        marker = " " * self.span[0] + "~" * (self.span[1] - self.span[0]) + "^"
+        return f"{self.message}\n    {self.source}\n    {marker}"
+
+
+class _Node:
+    __slots__ = ("value",)
+
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+    def __str__(self) -> str:
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}({self.value!r})>"
+
+    def serialize(self) -> str:
+        raise NotImplementedError
+
+
+class _Variable(_Node):
+    __slots__ = ()
+
+    def serialize(self) -> str:
+        return str(self)
+
+
+class _Value(_Node):
+    __slots__ = ()
+
+    def serialize(self) -> str:
+        value = str(self)
+        if '"' not in value:
+            return f'"{value}"'
+        if "'" not in value:
+            return f"'{value}'"
+        raise ValueError("Cannot serialize marker value containing both quote characters")
+
+
+class _Op(_Node):
+    __slots__ = ()
+
+    def serialize(self) -> str:
+        return str(self)
+
+
 for _cls, _mod, _name in (
     (_InvalidVersion, "pyroid.packaging.version", "InvalidVersion"),
     (_VersionTuple, "pyroid.packaging.version", "_Version"),
     (_InvalidSpecifier, "pyroid.packaging.specifiers", "InvalidSpecifier"),
+    (_InvalidMarker, "pyroid.packaging.markers", "InvalidMarker"),
+    (_UndefinedComparison, "pyroid.packaging.markers", "UndefinedComparison"),
+    (_UndefinedEnvironmentName, "pyroid.packaging.markers", "UndefinedEnvironmentName"),
+    (_InvalidRequirement, "pyroid.packaging.requirements", "InvalidRequirement"),
+    (_ParserSyntaxError, "pyroid.packaging._compat", "ParserSyntaxError"),
+    (_Node, "pyroid.packaging._compat", "Node"),
+    (_Variable, "pyroid.packaging._compat", "Variable"),
+    (_Value, "pyroid.packaging._compat", "Value"),
+    (_Op, "pyroid.packaging._compat", "Op"),
 ):
     _cls.__module__ = _mod
     _cls.__name__ = _cls.__qualname__ = _name
@@ -65,6 +153,17 @@ _Version: Any = getattr(_pv, "_Version", _VersionTuple) if HAVE_PACKAGING else _
 InvalidSpecifier: type[ValueError] = (
     _ps.InvalidSpecifier if _ps is not None else _InvalidSpecifier
 )
+InvalidMarker: type[ValueError] = getattr(_pm, "InvalidMarker", _InvalidMarker)
+UndefinedComparison: type[ValueError] = getattr(_pm, "UndefinedComparison", _UndefinedComparison)
+# packaging < 26.3 has a ValueError subclass here; 26.3's is a KeyError, as pyroid raises.
+UndefinedEnvironmentName: type[Exception] = getattr(
+    _pm, "UndefinedEnvironmentName", _UndefinedEnvironmentName
+)
+InvalidRequirement: type[ValueError] = getattr(_pr, "InvalidRequirement", _InvalidRequirement)
+ParserSyntaxError: Any = getattr(_pt, "ParserSyntaxError", _ParserSyntaxError)
+Variable: Any = getattr(_pp, "Variable", _Variable)
+Value: Any = getattr(_pp, "Value", _Value)
+Op: Any = getattr(_pp, "Op", _Op)
 
 # packaging.version.VERSION_PATTERN, verbatim.
 _VERSION_PATTERN = r"""
@@ -162,6 +261,43 @@ def _nonstr_version(version: Any) -> tuple[Any, ...]:
         if local is None
         else tuple(p.lower() if not p.isdigit() else int(p) for p in _SEPARATORS.split(local)),
     )
+
+
+def canonicalize_name(name: str, *, validate: bool = False) -> str:
+    """packaging's ``canonicalize_name`` (fast for ``str``; other types fail as there)."""
+    if type(name) is str and not validate:
+        return _native.canonicalize_str(name)
+    from pyroid.packaging.utils import canonicalize_name as full
+
+    return full(name, validate=validate)
+
+
+def _format_full_version(info: Any) -> str:
+    version = f"{info.major}.{info.minor}.{info.micro}"
+    kind = info.releaselevel
+    if kind != "final":
+        version += kind[0] + str(info.serial)
+    return version
+
+
+@functools.cache
+def _cached_default_environment() -> dict[str, str]:
+    """packaging 26.3's default marker environment, built once (cleared by ``cache_clear``)."""
+    iver = _format_full_version(sys.implementation.version)
+    implementation_name = sys.implementation.name
+    return {
+        "implementation_name": implementation_name,
+        "implementation_version": iver,
+        "os_name": os.name,
+        "platform_machine": platform.machine(),
+        "platform_release": platform.release(),
+        "platform_system": platform.system(),
+        "platform_version": platform.version(),
+        "python_full_version": platform.python_version(),
+        "platform_python_implementation": platform.python_implementation(),
+        "python_version": ".".join(platform.python_version_tuple()[:2]),
+        "sys_platform": sys.platform,
+    }
 
 
 # Specifier._specifier_regex_str, verbatim.
@@ -319,11 +455,23 @@ _native._configure(
         "nonstr_version": _nonstr_version,
         "_Version": _Version,
         "packaging_Version": _pv.Version if _CLAIM else None,
+        "packaging_Version_any": _pv.Version if HAVE_PACKAGING else None,
         "packaging_BaseVersion": getattr(_pv, "_BaseVersion", None) if HAVE_PACKAGING else None,
         "InvalidSpecifier": InvalidSpecifier,
         "spec_regex": SPECIFIER_REGEX,
         "delegate": _delegate,
         "packaging_Specifier": _ps.Specifier if _CLAIM else None,
         "packaging_SpecifierSet": _ps.SpecifierSet if _CLAIM else None,
+        "InvalidMarker": InvalidMarker,
+        "UndefinedComparison": UndefinedComparison,
+        "UndefinedEnvironmentName": UndefinedEnvironmentName,
+        "InvalidRequirement": InvalidRequirement,
+        "ParserSyntaxError": ParserSyntaxError,
+        "cached_default_environment": _cached_default_environment,
+        "canonicalize_name": canonicalize_name,
+        "Variable": Variable,
+        "Value": Value,
+        "Op": Op,
+        "packaging_Marker": _pm.Marker if _CLAIM else None,
     }
 )

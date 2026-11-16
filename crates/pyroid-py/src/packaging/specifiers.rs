@@ -28,7 +28,7 @@ pub fn coerce(py: Python<'_>, item: &Bound<'_, PyAny>) -> PyResult<Option<Versio
         return v.get().core().map(Some);
     }
     let c = config(py)?;
-    if let Some(cls) = &c.packaging_version {
+    if let Some(cls) = &c.packaging_version_any {
         if item.is_instance(cls.bind(py))? {
             return super::version::from_packaging(py, item);
         }
@@ -58,7 +58,7 @@ fn is_version_object(py: Python<'_>, item: &Bound<'_, PyAny>) -> PyResult<bool> 
     if item.cast::<PyVersion>().is_ok() {
         return Ok(true);
     }
-    match &config(py)?.packaging_version {
+    match &config(py)?.packaging_version_any {
         Some(cls) => item.is_instance(cls.bind(py)),
         None => Ok(false),
     }
@@ -250,6 +250,17 @@ impl PySpecifier {
         self.data
             .get()
             .ok_or_else(|| PyAttributeError::new_err("'Specifier' object has no attribute '_spec'"))
+    }
+
+    /// `Specifier(text)` for a valid specifier string.
+    pub fn from_text(py: Python<'_>, text: &str) -> PyResult<Self> {
+        Self::new_parsed(py, PyString::new(py, text).as_any(), None)
+    }
+
+    /// `contains(version, prereleases=True)` for a parsed version (not `===`).
+    pub fn contains_version(&self, py: Python<'_>, v: &Version) -> PyResult<bool> {
+        let d = self.data()?;
+        self.contains_parsed(py, &d, v, PrerelKind::True)
     }
 
     fn new_parsed(py: Python<'_>, spec: &Bound<'_, PyAny>, prereleases: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
