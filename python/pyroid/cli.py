@@ -328,12 +328,27 @@ def _fingerprint_options(o: Options) -> dict[str, Any]:
     }
 
 
+def _not_text(column: str, typ: Any) -> str | None:
+    """The message for a text column of type ``typ`` that holds no strings, or None."""
+    import pyarrow as pa
+
+    t = pa.types
+    if t.is_string(typ) or t.is_large_string(typ) or t.is_null(typ):
+        return None
+    if getattr(t, "is_string_view", lambda _: False)(typ):
+        return None
+    return f"column {column!r} holds {typ}, not strings (--text-column names the text column)"
+
+
 def _text(table: Any, column: str) -> Any:
     import pyarrow as pa
 
     if column not in table.column_names:
         raise ValueError(f"no column {column!r} (columns: {', '.join(table.column_names)})")
     col = table.column(column)
+    bad = _not_text(column, col.type)
+    if bad is not None:
+        raise ValueError(bad)
     # An all-null or empty JSON file, or an empty table, infers the column as type null.
     return col.cast(pa.string()) if pa.types.is_null(col.type) else col
 
@@ -345,10 +360,15 @@ def _check_text_column(sources: Sequence[Any], column: str) -> None:
     if not sources:
         return
     schema = _io.read_schema(sources[0])
-    if schema is not None and column not in schema.names:
+    if schema is None:
+        return
+    if column not in schema.names:
         raise SystemExit(
             f"pyroid: {sources[0].uri}: no column {column!r} (columns: {', '.join(schema.names)})"
         )
+    bad = _not_text(column, schema.field(column).type)
+    if bad is not None:
+        raise SystemExit(f"pyroid: {sources[0].uri}: {bad}")
 
 
 # ================================================================================ per-file steps
@@ -837,6 +857,15 @@ def _warc_sources(specs: Sequence[str], exclude: Sequence[Path]) -> list[Any]:
     return out
 
 
+def _not_table(spec: str, name: str) -> None:
+    """Refuse a Parquet or JSON Lines file named as an input of --recipe fineweb-warc."""
+    if _data_suffix(name) is not None:
+        raise ValueError(
+            f"{spec}: --recipe {WARC_RECIPE} reads WARC, ARC or WET files, not Parquet or JSON "
+            "Lines (--recipe fineweb cleans the text column of those)"
+        )
+
+
 def _warc_local_sources(spec: str, excluded: Sequence[str]) -> list[tuple[str, Any]]:
     from pyroid.integrations import _io
 
@@ -845,6 +874,7 @@ def _warc_local_sources(spec: str, excluded: Sequence[str]) -> list[tuple[str, A
         if not p.exists():
             raise FileNotFoundError(f"{spec}: no such file or directory")
         if not p.is_dir():
+            _not_table(spec, p.name)
             absolute = os.path.abspath(spec)
             key = os.path.join(_io._canon(os.path.dirname(absolute)), os.path.normcase(p.name))
             if _io._excluded(key, excluded):
@@ -923,6 +953,7 @@ def _warc_uri_sources(spec: str) -> list[tuple[str, Any]]:
             raise FileNotFoundError(f"{spec}: no such file or directory")
         if kind == "file":
             name = (spec.split("?", 1)[0] if web else spec).rstrip("/").rsplit("/", 1)[-1]
+            _not_table(spec, name)
             return [(_io._key(fs, path), _io.Source(spec, name, size, "warc", fs, path))]
     elif kind != "directory":
         raise _no_warc(spec)
@@ -2573,10 +2604,8 @@ def main(argv: list[str] | None = None) -> int:
         # Messages on stderr never get here (a closed stderr only silences them).
         _shards.mute(sys.stdout)
         return 1
-    # OSError: a model path that is a directory, an unwritable output, a failed download;
-    # EOFError: a truncated compressed input; PyroidError: a text column of another type.
-    except (OSError, ValueError, ImportError, EOFError, pyroid.PyroidError) as e:
-        if os.environ.get("PYROID_DEBUG"):
+    except Exception as e:
+        if os.environ.get("PYROID_DEBUG") or not _one_line(e):
             raise
         msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
         notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
@@ -2585,6 +2614,22 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if term is not None:
             signal.signal(signal.SIGTERM, term)
+
+
+def _one_line(e: Exception) -> bool:
+    """An error about the inputs, outputs or setup: a one-line message, not a traceback.
+
+    OSError: a missing file, a model path that is a directory, an unwritable output, a failed
+    download; EOFError: a truncated compressed input; PyroidError: a value pyroid rejects;
+    Arrow's errors: a file it cannot read or a column type it cannot use; ArchiveLoadFailed
+    (pyroid.warc's or warcio's): a file that is not a WARC file.
+    """
+    if isinstance(e, (OSError, ValueError, ImportError, EOFError, pyroid.PyroidError)):
+        return True
+    if type(e).__name__ == "ArchiveLoadFailed":
+        return True
+    pa = sys.modules.get("pyarrow")
+    return pa is not None and isinstance(e, pa.ArrowException)
 
 
 def _on_sigterm() -> Any:

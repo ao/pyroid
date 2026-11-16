@@ -6,6 +6,7 @@ import gzip
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -229,6 +230,59 @@ def test_missing_optional_dependency_is_one_line(
         m.setenv("PYROID_DEBUG", "1")
         with pytest.raises(ModuleNotFoundError, match="zzz"):
             main(args)
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_a_text_column_of_another_type_is_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], en_lid: Path
+) -> None:
+    """langid printed a traceback (pyarrow's replace_substring on int64); now every command
+    says what is wrong, before it starts, for the first file and for any later one."""
+    ints = tmp_path / "ints.parquet"
+    pq.write_table(pa.table({"id": ["a", "b"], "text": [1, 2]}), ints)
+    out = tmp_path / "o.parquet"
+    msg = "column 'text' holds int64, not strings (--text-column names the text column)"
+    for argv in (
+        ["langid", str(ints), str(out), "--model", str(en_lid)],
+        ["clean", str(ints), str(out), "--recipe", "fineweb", "--lid-model", str(en_lid)],
+        ["translit", str(ints), str(out)],
+    ):
+        with pytest.raises(SystemExit, match=re.escape(msg)):
+            main(argv)
+    # a later file of another type: one line, naming the file
+    d = tmp_path / "in"
+    d.mkdir()
+    _write(_table([_english(1)]), d / "a.parquet")
+    pq.write_table(pa.table({"id": ["b"], "text": [3]}), d / "b.parquet")
+    assert main(["langid", str(d), str(tmp_path / "l"), "--model", str(en_lid)]) == 1
+    err = capsys.readouterr().err
+    assert err == f"pyroid langid: {msg}\n  (while processing {d / 'b.parquet'})\n"
+
+
+@pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and reads stderr")
+def test_warc_recipe_on_a_table_file_is_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import pyroid.cli as cli
+
+    monkeypatch.setattr(cli, "_check_warc", lambda a: None)  # datatrove need not be installed
+    monkeypatch.delenv("PYROID_DEBUG", raising=False)
+    src = _write(_table(["x"]), tmp_path / "x.parquet")
+    argv = ["clean", str(src), str(tmp_path / "y.parquet"), "--recipe", "fineweb-warc"]
+    assert main(argv) == 1
+    err = capsys.readouterr().err
+    assert "reads WARC, ARC or WET files, not Parquet or JSON Lines" in err
+    assert err.count("\n") == 1
+    assert not list(tmp_path.glob(".y.parquet.pyroid"))
+    # a file that does not read as a WARC (warcio's message): one line too
+    from pyroid.warc import ArchiveLoadFailed
+
+    def body(a: Any) -> int:
+        raise ArchiveLoadFailed("Invalid ARC record, first line: PAR1")
+
+    monkeypatch.setattr(cli, "_cmd_clean", body)
+    assert main(argv) == 1
+    assert capsys.readouterr().err.startswith("pyroid clean: Invalid ARC record")
 
 
 def test_stats_into_a_closed_pipe(tmp_path: Path) -> None:
