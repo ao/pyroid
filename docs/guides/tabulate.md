@@ -97,15 +97,15 @@ checked equal to tabulate's first:
 
 | Table | tabulate | pyroid | Speedup |
 |---|---:|---:|---:|
-| 5 rows x 3, mixed, `simple` | 97 µs | 12 µs | 7.8x |
-| 1,000 x 8, numbers, `simple` | 24.3 ms | 1.40 ms | 17x |
-| 1,000 x 8, text, `simple` | 41.6 ms | 1.58 ms | 26x |
-| 1,000 x 8, mixed, `grid` | 31.7 ms | 1.12 ms | 28x |
-| 100,000 x 10, numbers, `pipe` | 3.29 s | 232 ms | 14x |
-| 100,000 x 10, text, `pipe` | 5.40 s | 310 ms | 17x |
-| 100,000 x 10, mixed, `github` | 3.98 s | 181 ms | 22x |
-| `DataFrame.to_markdown()`, 1,000 x 8 numbers | 35.2 ms | 2.04 ms | 17x |
-| `DataFrame.to_markdown()`, 100,000 x 10 numbers | 4.71 s | 308 ms | 15x |
+| 5 rows x 3, mixed, `simple` | 98 µs | 13 µs | 7.7x |
+| 1,000 x 8, numbers, `simple` | 24.4 ms | 1.28 ms | 19x |
+| 1,000 x 8, text, `simple` | 41.5 ms | 1.37 ms | 30x |
+| 1,000 x 8, mixed, `grid` | 32.3 ms | 1.03 ms | 31x |
+| 100,000 x 10, numbers, `pipe` | 3.36 s | 222 ms | 15x |
+| 100,000 x 10, text, `pipe` | 5.49 s | 313 ms | 18x |
+| 100,000 x 10, mixed, `github` | 4.03 s | 200 ms | 20x |
+| `DataFrame.to_markdown()`, 1,000 x 8 numbers | 35.6 ms | 1.81 ms | 20x |
+| `DataFrame.to_markdown()`, 100,000 x 10 numbers | 4.93 s | 304 ms | 16x |
 
 All formats and sizes are on the [benchmarks page](../benchmarks.md#pyroidtabulate)
 (`bench/results/aws-c7i.4xlarge/2026-11-16/tabulate.json`, made by
