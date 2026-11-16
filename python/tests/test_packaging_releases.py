@@ -242,6 +242,66 @@ _VERSION_ODD = _VERSION_25.replace(
     "        self._key = _cmpkey(*self._parts)", '        self._key = ("odd", str(self))'
 )
 
+# packaging 26.0's specifiers, as far as these tests read them: a set is a frozenset of
+# specifiers, hashed and compared as one (26.1 and later compare _canonical_specs()).
+_SPECIFIERS_260 = """
+import abc
+
+
+class InvalidSpecifier(ValueError):
+    pass
+
+
+class BaseSpecifier(metaclass=abc.ABCMeta):
+    pass
+
+
+class Specifier(BaseSpecifier):
+    def __init__(self, spec="", prereleases=None):
+        op = next(o for o in ("~=", "==", "!=", "<=", ">=", "<", ">") if spec.startswith(o))
+        self._spec = (op, spec[len(op):].strip())
+        self._prereleases = prereleases
+
+    @property
+    def _canonical_spec(self):
+        return self._spec
+
+    def __str__(self):
+        return "".join(self._spec)
+
+    def __hash__(self):
+        return hash(self._canonical_spec)
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            other = Specifier(other)
+        elif not isinstance(other, Specifier):
+            return NotImplemented
+        return self._canonical_spec == other._canonical_spec
+
+
+class SpecifierSet(BaseSpecifier):
+    def __init__(self, specifiers="", prereleases=None):
+        parts = [s.strip() for s in specifiers.split(",") if s.strip()]
+        self._specs = frozenset(map(Specifier, parts))
+        self._prereleases = prereleases
+
+    def __hash__(self):
+        return hash(self._specs)
+
+    def __eq__(self, other):
+        if not isinstance(other, SpecifierSet):
+            return NotImplemented
+        return self._specs == other._specs
+
+    def __and__(self, other):
+        if not isinstance(other, SpecifierSet):
+            return NotImplemented
+        out = SpecifierSet()
+        out._specs = frozenset(self._specs | other._specs)
+        return out
+"""
+
 # packaging 26.2's markers module, as far as pyroid reads it: its exceptions.
 _MARKERS_262 = '''
 class InvalidMarker(ValueError):
@@ -311,6 +371,37 @@ def test_versions_mix_with_a_release_using_the_old_key(tmp_path: Path) -> None:
             str(v) for v in sorted(pv.Version(str(v)) for v in ours + theirs)
         ]
         assert not isinstance(Version("1.0"), pv.Version)  # no claim before 26
+        print("ok")
+        """,
+    )
+    assert out.stdout.strip() == "ok"
+
+
+def test_specifier_sets_hash_as_a_release_before_261(tmp_path: Path) -> None:
+    root = _release(
+        tmp_path,
+        "26.0",
+        {"_structures.py": _INFINITY, "version.py": _VERSION_25, "specifiers.py": _SPECIFIERS_260},
+    )
+    out = _run(
+        root,
+        """
+        import packaging.specifiers as ps
+        from pyroid.packaging.specifiers import Specifier, SpecifierSet
+        for text in (">=1.5,<2", "<2,>=1.5", ">=1.5", "", "~=1.4.2,!=1.5"):
+            mine, theirs = SpecifierSet(text), ps.SpecifierSet(text)
+            assert mine == theirs and theirs == mine, text
+            assert hash(mine) == hash(theirs), text
+            assert len({mine, theirs}) == 1, text
+        assert SpecifierSet(">=1.5") != ps.SpecifierSet(">=1.6")
+        assert SpecifierSet(">=1.5,<2") == SpecifierSet("<2,>=1.5")
+        assert hash(SpecifierSet(">=1.5,<2")) == hash(SpecifierSet("<2,>=1.5"))
+        assert Specifier(">=1.5") == ps.Specifier(">=1.5")
+        assert hash(Specifier(">=1.5")) == hash(ps.Specifier(">=1.5"))
+        # 26.0 is claimed: its own code reads pyroid's _specs as its frozenset.
+        assert isinstance(SpecifierSet(">=1"), ps.SpecifierSet)
+        both = ps.SpecifierSet(">=1.5") & SpecifierSet("<2")
+        assert both == SpecifierSet(">=1.5,<2") == both
         print("ok")
         """,
     )

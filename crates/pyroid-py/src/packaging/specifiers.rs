@@ -1582,9 +1582,15 @@ impl PySpecifierSet {
         self.prereleases.set(value)
     }
 
+    /// The specifiers as packaging's own code reads them: a tuple, or a frozenset when the
+    /// installed packaging (26.0 or earlier) keeps them in one.
     #[getter]
-    fn _specs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
-        Ok(self.state()?.specs.bind(py).clone())
+    fn _specs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let specs = self.state()?.specs.bind(py).clone();
+        if config(py)?.legacy_set_hash {
+            return Ok(pyo3::types::PyFrozenSet::new(py, specs.iter())?.into_any());
+        }
+        Ok(specs.into_any())
     }
 
     #[setter(_specs)]
@@ -1710,6 +1716,10 @@ impl PySpecifierSet {
     }
 
     fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {
+        if config(py)?.legacy_set_hash {
+            // As the installed packaging (26.0 or earlier) hashes its sets.
+            return pyo3::types::PyFrozenSet::new(py, self.state()?.specs.bind(py).iter())?.hash();
+        }
         self.canonical_specs(py)?.hash()
     }
 
@@ -1804,6 +1814,23 @@ impl PySpecifierSet {
         } else if let Ok(o) = other.cast::<PySpecifierSet>() {
             o.get().canonical_specs(py)?.into_any()
         } else if is_packaging_specifier_set(py, other)? {
+            if config(py)?.legacy_set_hash {
+                // packaging 26.0 and earlier: a frozenset of specifiers on both sides.
+                let mine =
+                    pyo3::types::PyFrozenSet::new(py, slf.get().state()?.specs.bind(py).iter())?;
+                let theirs = pyo3::types::PyFrozenSet::new(
+                    py,
+                    other
+                        .getattr(intern!(py, "_specs"))?
+                        .try_iter()?
+                        .collect::<PyResult<Vec<_>>>()?,
+                )?;
+                let eq = mine.eq(theirs)?;
+                return Ok(bool_obj(
+                    py,
+                    if matches!(op, CompareOp::Eq) { eq } else { !eq },
+                ));
+            }
             other.call_method0(intern!(py, "_canonical_specs"))?
         } else {
             return Ok(py.NotImplemented().into_bound(py));

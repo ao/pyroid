@@ -526,6 +526,7 @@ _native._configure(
         "delegate": _delegate,
         "packaging_Specifier": getattr(_ps, "Specifier", None) if _CLAIM else None,
         "packaging_SpecifierSet": getattr(_ps, "SpecifierSet", None) if _CLAIM else None,
+        "legacy_set_hash": _ps is not None and not hasattr(_ps.SpecifierSet, "_canonical_specs"),
         "packaging_Specifier_any": getattr(_ps, "Specifier", None),
         "packaging_SpecifierSet_any": getattr(_ps, "SpecifierSet", None),
         "InvalidMarker": InvalidMarker,

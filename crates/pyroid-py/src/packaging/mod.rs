@@ -50,6 +50,9 @@ struct Config {
     /// packaging's `Specifier` and `SpecifierSet` (the `__class__` claim).
     packaging_specifier: Option<Py<PyType>>,
     packaging_specifier_set: Option<Py<PyType>>,
+    /// packaging's `SpecifierSet` hashes and compares `frozenset(_specs)` (26.0 and earlier),
+    /// not its sorted, deduplicated `_canonical_specs()`: pyroid's sets hash the same way.
+    legacy_set_hash: bool,
     /// packaging's `Specifier` and `SpecifierSet` whatever its release: read through their
     /// strings and `_prereleases`.
     packaging_specifier_any: Option<Py<PyType>>,
@@ -178,6 +181,9 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         delegate: get("delegate")?,
         packaging_specifier: opt_type("packaging_Specifier")?,
         packaging_specifier_set: opt_type("packaging_SpecifierSet")?,
+        legacy_set_hash: config
+            .get_item("legacy_set_hash")?
+            .is_some_and(|v| v.is_truthy().unwrap_or(false)),
         packaging_specifier_any: opt_type("packaging_Specifier_any")?,
         packaging_specifier_set_any: opt_type("packaging_SpecifierSet_any")?,
         invalid_marker: get("InvalidMarker")?,
