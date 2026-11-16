@@ -6,6 +6,7 @@
 //! `_configure` at import (packaging's own exception classes when packaging is installed), and
 //! turns the `__class__` claim (see [`claims`]) on or off.
 
+mod batch;
 mod cell;
 mod markers;
 mod specifiers;
@@ -158,5 +159,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     version::register(&m)?;
     specifiers::register(&m)?;
     markers::register(&m)?;
+    batch::register(&m)?;
     parent.add_submodule(&m)
 }

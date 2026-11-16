@@ -257,6 +257,28 @@ impl PySpecifier {
         Self::new_parsed(py, PyString::new(py, text).as_any(), None)
     }
 
+    /// The operator.
+    pub fn op(&self) -> PyResult<Op> {
+        Ok(self.data()?.op)
+    }
+
+    /// `contains(item, prereleases)` for an item that parsed as `v` (not `===`).
+    pub fn contains_known(&self, py: Python<'_>, v: &Version, prereleases: Option<&Bound<'_, PyAny>>) -> PyResult<bool> {
+        let d = self.data()?;
+        let kind = match prereleases {
+            Some(p) if !p.is_none() => kind_of(p)?,
+            _ => kind_of(&self.resolved(py)?)?,
+        };
+        self.contains_parsed(py, &d, v, kind)
+    }
+
+    /// The ranges and pre-release policy of `filter(..., prereleases)` (not `===`).
+    pub fn filter_plan(&self, py: Python<'_>, prereleases: &Bound<'_, PyAny>) -> PyResult<(Vec<Interval>, super::batch::Policy)> {
+        let pre = if prereleases.is_none() { self.resolved(py)? } else { prereleases.clone() };
+        let d = self.data()?;
+        Ok((d.ranges(py)?.to_vec(), batch_policy(&pre)?))
+    }
+
     /// `contains(version, prereleases=True)` for a parsed version (not `===`).
     pub fn contains_version(&self, py: Python<'_>, v: &Version) -> PyResult<bool> {
         let d = self.data()?;
@@ -359,6 +381,14 @@ impl PySpecifier {
         };
         Ok(FilterIter::new(iterable, key, mode))
     }
+}
+
+fn batch_policy(p: &Bound<'_, PyAny>) -> PyResult<super::batch::Policy> {
+    Ok(match ranges_policy(p)? {
+        RangesPolicy::Pep440 => super::batch::Policy::Pep440,
+        RangesPolicy::Exclude => super::batch::Policy::Exclude,
+        RangesPolicy::Keep => super::batch::Policy::Keep,
+    })
 }
 
 /// The kind of a `prereleases` argument.
@@ -1098,9 +1128,52 @@ impl PySpecifierSet {
         Ok(FilterIter::new(iterable, key, mode))
     }
 
-    fn contains_impl(&self, py: Python<'_>, item: &Bound<'_, PyAny>, prereleases: Option<&Bound<'_, PyAny>>, installed: Option<&Bound<'_, PyAny>>) -> PyResult<bool> {
+    /// `SpecifierSet(text)`.
+    pub fn from_text(py: Python<'_>, text: &Bound<'_, PyAny>) -> PyResult<Self> {
+        Ok(Self { state: Mutex::new(Some(Arc::new(Self::build(py, Some(text))?))), prereleases: Prerel::new(None)?, unsat: Mutex::new(None) })
+    }
+
+    /// Every item is pyroid's `Specifier` and none is `===`: contains and filter run natively.
+    pub fn is_native(&self) -> bool {
+        self.state().is_ok_and(|s| s.native.is_some() && !s.has_arbitrary)
+    }
+
+    /// No specifiers.
+    pub fn is_empty(&self, py: Python<'_>) -> bool {
+        self.state().is_ok_and(|s| s.specs.bind(py).is_empty())
+    }
+
+    /// `contains(item, ...)` for an item that parsed as `v` (a native set).
+    pub fn contains_known(&self, py: Python<'_>, item: &Bound<'_, PyAny>, v: &Version, prereleases: Option<&Bound<'_, PyAny>>, installed: Option<&Bound<'_, PyAny>>) -> PyResult<bool> {
+        self.contains_with(py, item, Some(v.clone()), prereleases, installed)
+    }
+
+    /// `contains(item, ...)` for an item that does not parse (a native set).
+    pub fn contains_unparsable(&self, py: Python<'_>, prereleases: Option<&Bound<'_, PyAny>>) -> PyResult<bool> {
+        let none = py.None().into_bound(py);
+        self.contains_with(py, &none, None, prereleases, None)
+    }
+
+    /// The ranges and pre-release policy of `filter(..., prereleases)` (a native, non-empty set).
+    pub fn filter_plan(&self, py: Python<'_>, prereleases: &Bound<'_, PyAny>) -> PyResult<(Vec<Interval>, super::batch::Policy)> {
         let s = self.state()?;
+        let mut pre = prereleases.clone();
+        if pre.is_none() {
+            let mine = self.set_prereleases_value(py, &s)?;
+            if !mine.is_none() {
+                pre = mine;
+            }
+        }
+        Ok((s.ranges(py)?.to_vec(), batch_policy(&pre)?))
+    }
+
+    fn contains_impl(&self, py: Python<'_>, item: &Bound<'_, PyAny>, prereleases: Option<&Bound<'_, PyAny>>, installed: Option<&Bound<'_, PyAny>>) -> PyResult<bool> {
         let version = coerce(py, item)?;
+        self.contains_with(py, item, version, prereleases, installed)
+    }
+
+    fn contains_with(&self, py: Python<'_>, item: &Bound<'_, PyAny>, version: Option<Version>, prereleases: Option<&Bound<'_, PyAny>>, installed: Option<&Bound<'_, PyAny>>) -> PyResult<bool> {
+        let s = self.state()?;
         let none = py.None().into_bound(py);
         let mut pre = prereleases.cloned().unwrap_or_else(|| none.clone());
         if let Some(v) = &version {

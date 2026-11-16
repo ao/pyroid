@@ -23,9 +23,20 @@ __version__ = PACKAGING_VERSION
 #: provides shims for these).
 PORTED = ("version", "specifiers", "markers", "requirements", "utils")
 
+from pyroid._pyroid import packaging as _native
+
+contains_batch = _native.contains_batch
+filter_batch = _native.filter_batch
+parse_batch = _native.parse_batch
+sort_versions = _native.sort_versions
+
 __all__ = [
     "PACKAGING_VERSION",
     "PORTED",
+    "contains_batch",
+    "filter_batch",
+    "parse_batch",
+    "sort_versions",
     "markers",
     "requirements",
     "specifiers",
