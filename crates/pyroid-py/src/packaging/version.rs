@@ -3,6 +3,7 @@
 //! `pyroid.packaging.version.Version`.
 
 use std::cmp::Ordering;
+use std::fmt::Write as _;
 use std::sync::OnceLock;
 
 use pyo3::basic::CompareOp;
@@ -27,7 +28,12 @@ struct Inner {
 
 impl Inner {
     fn new(v: Version) -> Self {
-        Self { v, hash: HashCache::new(), text: OnceLock::new(), release: OnceLock::new() }
+        Self {
+            v,
+            hash: HashCache::new(),
+            text: OnceLock::new(),
+            release: OnceLock::new(),
+        }
     }
 }
 
@@ -35,7 +41,12 @@ impl Inner {
 ///
 /// Immutable in practice, but packaging's objects can be changed in place (`v._version = ...`,
 /// which hatchling does, `__setstate__`, `__init__` again): see [`StateCell`].
-#[pyclass(frozen, subclass, module = "pyroid.packaging.version", name = "Version")]
+#[pyclass(
+    frozen,
+    subclass,
+    module = "pyroid.packaging.version",
+    name = "Version"
+)]
 #[derive(Debug)]
 pub struct PyVersion {
     inner: StateCell<Inner>,
@@ -123,7 +134,15 @@ pub fn parse_str(py: Python<'_>, s: &Bound<'_, PyString>) -> PyResult<Version> {
 pub fn from_packaging(py: Python<'_>, v: &Bound<'_, PyAny>) -> PyResult<Option<Version>> {
     let get = |name: &str| v.getattr(name);
     let slots = (|| -> PyResult<Option<Version>> {
-        from_slots(py, &get("_epoch")?, &get("_release")?, &get("_pre")?, &get("_post")?, &get("_dev")?, &get("_local")?)
+        from_slots(
+            py,
+            &get("_epoch")?,
+            &get("_release")?,
+            &get("_pre")?,
+            &get("_post")?,
+            &get("_dev")?,
+            &get("_local")?,
+        )
     })();
     match slots {
         Ok(Some(found)) => Ok(Some(found)),
@@ -252,23 +271,34 @@ fn from_slots(
         }
         Some(segs)
     };
-    Ok(Some(Version { epoch, release, pre, post, dev, local }))
+    Ok(Some(Version {
+        epoch,
+        release,
+        pre,
+        post,
+        dev,
+        local,
+    }))
 }
 
 impl PyVersion {
     /// A new object holding `v`.
     pub fn from_core(v: Version) -> Self {
-        Self { inner: StateCell::with(Inner::new(v)) }
+        Self {
+            inner: StateCell::with(Inner::new(v)),
+        }
     }
 
     fn empty() -> Self {
-        Self { inner: StateCell::new() }
+        Self {
+            inner: StateCell::new(),
+        }
     }
 
     fn inner(&self) -> PyResult<StateRef<'_, Inner>> {
-        self.inner
-            .get()
-            .ok_or_else(|| PyAttributeError::new_err("'Version' object has no attribute '_release'"))
+        self.inner.get().ok_or_else(|| {
+            PyAttributeError::new_err("'Version' object has no attribute '_release'")
+        })
     }
 
     /// The parsed version (a copy: the object can be changed in place).
@@ -324,19 +354,26 @@ impl PyVersion {
                 let mut segs = Vec::with_capacity(local.len());
                 for seg in local {
                     segs.push(match seg {
-                        Local::Num(n) => PyTuple::new(
-                            py,
-                            [num_to_py(py, n)?, PyString::new(py, "").into_any()],
-                        )?,
+                        Local::Num(n) => {
+                            PyTuple::new(py, [num_to_py(py, n)?, PyString::new(py, "").into_any()])?
+                        }
                         Local::Str(st) => PyTuple::new(
                             py,
-                            [(-1i64).into_pyobject(py)?.into_any(), PyString::new(py, st).into_any()],
+                            [
+                                (-1i64).into_pyobject(py)?.into_any(),
+                                PyString::new(py, st).into_any(),
+                            ],
                         )?,
                     });
                 }
                 PyTuple::new(
                     py,
-                    [epoch, trimmed.into_any(), suffix.into_any(), PyTuple::new(py, segs)?.into_any()],
+                    [
+                        epoch,
+                        trimmed.into_any(),
+                        suffix.into_any(),
+                        PyTuple::new(py, segs)?.into_any(),
+                    ],
                 )?
             }
         };
@@ -384,7 +421,10 @@ fn is_exact(slf: &Bound<'_, PyVersion>) -> bool {
 }
 
 fn letter_tuple<'py>(py: Python<'py>, letter: &str, n: &Num) -> PyResult<Bound<'py, PyTuple>> {
-    PyTuple::new(py, [PyString::new(py, letter).into_any(), num_to_py(py, n)?])
+    PyTuple::new(
+        py,
+        [PyString::new(py, letter).into_any(), num_to_py(py, n)?],
+    )
 }
 
 fn bool_obj(py: Python<'_>, b: bool) -> Py<PyAny> {
@@ -409,26 +449,38 @@ fn fmt_value(x: &Bound<'_, PyAny>) -> PyResult<String> {
 
 fn validate_epoch(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Num> {
     // `value or 0`
-    let epoch = if value.is_truthy()? { value.clone() } else { 0i64.into_pyobject(py)?.into_any() };
+    let epoch = if value.is_truthy()? {
+        value.clone()
+    } else {
+        0i64.into_pyobject(py)?.into_any()
+    };
     if let Some(n) = py_to_num(&epoch)? {
         return Ok(n);
     }
-    Err(invalid_version(py, format!("epoch must be non-negative integer, got {}", fmt_value(&epoch)?)))
+    Err(invalid_version(
+        py,
+        format!(
+            "epoch must be non-negative integer, got {}",
+            fmt_value(&epoch)?
+        ),
+    ))
 }
 
 fn validate_release(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Vec<Num>> {
-    let release = if value.is_none() { PyTuple::new(py, [0i64])?.into_any() } else { value.clone() };
+    let release = if value.is_none() {
+        PyTuple::new(py, [0i64])?.into_any()
+    } else {
+        value.clone()
+    };
     if let Ok(t) = release.cast::<PyTuple>() {
         if !t.is_empty() {
             let mut out = Vec::with_capacity(t.len());
             for x in t.iter() {
-                match py_to_num(&x)? {
-                    Some(n) => out.push(n),
-                    None => {
-                        out.clear();
-                        break;
-                    }
-                }
+                let Some(n) = py_to_num(&x)? else {
+                    out.clear();
+                    break;
+                };
+                out.push(n);
             }
             if out.len() == t.len() {
                 return Ok(out);
@@ -464,7 +516,10 @@ fn validate_pre(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Option<(Pr
     }
     Err(invalid_version(
         py,
-        format!("pre must be a tuple of ('a'|'b'|'rc', non-negative int), got {}", fmt_value(value)?),
+        format!(
+            "pre must be a tuple of ('a'|'b'|'rc', non-negative int), got {}",
+            fmt_value(value)?
+        ),
     ))
 }
 
@@ -475,7 +530,13 @@ fn validate_number(py: Python<'_>, what: &str, value: &Bound<'_, PyAny>) -> PyRe
     if let Some(n) = py_to_num(value)? {
         return Ok(Some(n));
     }
-    Err(invalid_version(py, format!("{what} must be non-negative integer, got {}", fmt_value(value)?)))
+    Err(invalid_version(
+        py,
+        format!(
+            "{what} must be non-negative integer, got {}",
+            fmt_value(value)?
+        ),
+    ))
 }
 
 fn validate_local(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Option<Vec<Local>>> {
@@ -487,7 +548,13 @@ fn validate_local(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Option<V
             return Ok(Some(l));
         }
     }
-    Err(invalid_version(py, format!("local must be a valid version string, got {}", value.repr()?)))
+    Err(invalid_version(
+        py,
+        format!(
+            "local must be a valid version string, got {}",
+            value.repr()?
+        ),
+    ))
 }
 
 #[pymethods]
@@ -560,7 +627,17 @@ impl PyVersion {
             Some(p) => validate_local(py, p)?,
             None => None,
         };
-        PyVersion::new_of(cls, Version { epoch, release, pre, post, dev, local })
+        PyVersion::new_of(
+            cls,
+            Version {
+                epoch,
+                release,
+                pre,
+                post,
+                dev,
+                local,
+            },
+        )
     }
 
     /// Return a new version with parts replaced.
@@ -600,7 +677,11 @@ impl PyVersion {
 
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
         let name = slf.get_type().name()?;
-        let text = if is_exact(slf) { slf.get().text(slf.py())?.into_any() } else { slf.str()?.into_any() };
+        let text = if is_exact(slf) {
+            slf.get().text(slf.py())?.into_any()
+        } else {
+            slf.str()?.into_any()
+        };
         Ok(format!("<{name}({})>", text.repr()?))
     }
 
@@ -612,8 +693,10 @@ impl PyVersion {
         // packaging's __str__ reads the properties, which a subclass may override.
         let mut out = String::new();
         let release = slf.getattr(intern!(py, "release"))?;
-        let parts: Vec<String> =
-            release.try_iter()?.map(|x| x.and_then(|x| fmt_value(&x))).collect::<PyResult<_>>()?;
+        let parts: Vec<String> = release
+            .try_iter()?
+            .map(|x| x.and_then(|x| fmt_value(&x)))
+            .collect::<PyResult<_>>()?;
         out.push_str(&parts.join("."));
         let epoch = slf.getattr(intern!(py, "epoch"))?;
         if epoch.is_truthy()? {
@@ -627,15 +710,15 @@ impl PyVersion {
         }
         let post = slf.getattr(intern!(py, "post"))?;
         if !post.is_none() {
-            out.push_str(&format!(".post{}", fmt_value(&post)?));
+            let _ = write!(out, ".post{}", fmt_value(&post)?);
         }
         let dev = slf.getattr(intern!(py, "dev"))?;
         if !dev.is_none() {
-            out.push_str(&format!(".dev{}", fmt_value(&dev)?));
+            let _ = write!(out, ".dev{}", fmt_value(&dev)?);
         }
         let local = slf.getattr(intern!(py, "local"))?;
         if !local.is_none() {
-            out.push_str(&format!("+{}", fmt_value(&local)?));
+            let _ = write!(out, "+{}", fmt_value(&local)?);
         }
         Ok(PyString::new(py, &out))
     }
@@ -691,7 +774,15 @@ impl PyVersion {
                         else {
                             return Ok(None);
                         };
-                        return from_slots(py, &e, &r, &get("_pre")?, &get("_post")?, &get("_dev")?, &get("_local")?);
+                        return from_slots(
+                            py,
+                            &e,
+                            &r,
+                            &get("_pre")?,
+                            &get("_post")?,
+                            &get("_dev")?,
+                            &get("_local")?,
+                        );
                     }
                 }
             }
@@ -717,7 +808,10 @@ impl PyVersion {
                 self.set(v);
                 Ok(())
             }
-            None => Err(PyTypeError::new_err(format!("Cannot restore Version from {}", state.repr()?))),
+            None => Err(PyTypeError::new_err(format!(
+                "Cannot restore Version from {}",
+                state.repr()?
+            ))),
         }
     }
 
@@ -727,7 +821,10 @@ impl PyVersion {
         let state = slf.get().__getstate__(py)?;
         PyTuple::new(
             py,
-            [config(py)?.restore.bind(py).clone(), PyTuple::new(py, [slf.get_type().into_any(), state.into_any()])?.into_any()],
+            [
+                config(py)?.restore.bind(py).clone(),
+                PyTuple::new(py, [slf.get_type().into_any(), state.into_any()])?.into_any(),
+            ],
         )
     }
 
@@ -806,11 +903,17 @@ impl PyVersion {
         }
         let py = slf.py();
         let release = slf.getattr(intern!(py, "release"))?;
-        let parts: Vec<String> =
-            release.try_iter()?.map(|x| x.and_then(|x| fmt_value(&x))).collect::<PyResult<_>>()?;
+        let parts: Vec<String> = release
+            .try_iter()?
+            .map(|x| x.and_then(|x| fmt_value(&x)))
+            .collect::<PyResult<_>>()?;
         let seg = parts.join(".");
         let epoch = slf.getattr(intern!(py, "epoch"))?;
-        Ok(if epoch.is_truthy()? { format!("{}!{seg}", fmt_value(&epoch)?) } else { seg })
+        Ok(if epoch.is_truthy()? {
+            format!("{}!{seg}", fmt_value(&epoch)?)
+        } else {
+            seg
+        })
     }
 
     #[getter]
@@ -819,7 +922,8 @@ impl PyVersion {
             return slf.get().with_core(Version::is_prerelease);
         }
         let py = slf.py();
-        Ok(!slf.getattr(intern!(py, "dev"))?.is_none() || !slf.getattr(intern!(py, "pre"))?.is_none())
+        Ok(!slf.getattr(intern!(py, "dev"))?.is_none()
+            || !slf.getattr(intern!(py, "pre"))?.is_none())
     }
 
     #[getter]
@@ -968,7 +1072,11 @@ fn release_item<'py>(slf: &Bound<'py, PyVersion>, i: usize) -> PyResult<Bound<'p
     } else {
         slf.getattr(intern!(py, "release"))?
     };
-    if release.len()? > i { release.get_item(i) } else { Ok(0i64.into_pyobject(py)?.into_any()) }
+    if release.len()? > i {
+        release.get_item(i)
+    } else {
+        Ok(0i64.into_pyobject(py)?.into_any())
+    }
 }
 
 /// Parse the given version string (`packaging.version.parse`).
@@ -994,15 +1102,20 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-
 /// `canonicalize_version(version, strip_trailing_zero=...)`.
 #[pyfunction]
 #[pyo3(signature = (version, strip_trailing_zero = true))]
-fn canonicalize_version<'py>(py: Python<'py>, version: &Bound<'py, PyAny>, strip_trailing_zero: bool) -> PyResult<Bound<'py, PyAny>> {
+fn canonicalize_version<'py>(
+    py: Python<'py>,
+    version: &Bound<'py, PyAny>,
+    strip_trailing_zero: bool,
+) -> PyResult<Bound<'py, PyAny>> {
     let parsed = if version.is_instance_of::<PyString>() {
         match parse_any(py, version) {
             Ok(v) => v,
-            Err(e) if e.is_instance(py, config(py)?.invalid_version.bind(py)) => return Ok(version.str()?.into_any()),
+            Err(e) if e.is_instance(py, config(py)?.invalid_version.bind(py)) => {
+                return Ok(version.str()?.into_any());
+            }
             Err(e) => return Err(e),
         }
     } else if let Ok(v) = version.cast::<PyVersion>() {
@@ -1015,7 +1128,11 @@ fn canonicalize_version<'py>(py: Python<'py>, version: &Bound<'py, PyAny>, strip
         // _TrimmedRelease(x) for anything else runs Version.__init__(x).
         parse_any(py, version)?
     };
-    let text = if strip_trailing_zero { parsed.to_string_trimmed() } else { parsed.to_string_py() };
+    let text = if strip_trailing_zero {
+        parsed.to_string_trimmed()
+    } else {
+        parsed.to_string_py()
+    };
     Ok(PyString::new(py, &text).into_any())
 }
 

@@ -28,7 +28,10 @@ fn code_points(s: &Bound<'_, PyString>) -> PyResult<Vec<u32>> {
     }
     let b = s.call_method1(intern!(s.py(), "encode"), ("utf-32-le", "surrogatepass"))?;
     let bytes = b.cast::<PyBytes>()?.as_bytes();
-    Ok(bytes.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
+    Ok(bytes
+        .chunks_exact(4)
+        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect())
 }
 
 /// A Python `str` from code points.
@@ -62,20 +65,33 @@ fn quoted(py: Python<'_>, token: &[u32]) -> PyResult<Option<String>> {
                 Err(_) => Ok(None),
             }
         }
-        Err(e) if e.is_instance_of::<pyo3::exceptions::PySyntaxError>(py) || e.is_instance_of::<PyValueError>(py) => Ok(None),
+        Err(e)
+            if e.is_instance_of::<pyo3::exceptions::PySyntaxError>(py)
+                || e.is_instance_of::<PyValueError>(py) =>
+        {
+            Ok(None)
+        }
         Err(e) => Err(e),
     }
 }
 
 /// packaging's `ParserSyntaxError` for `err` in `source`, wrapped in `wrapper`
 /// (`InvalidMarker`/`InvalidRequirement`) as packaging raises it (`from e`).
-fn syntax_error(py: Python<'_>, err: &SyntaxError, source: &Bound<'_, PyString>, wrapper: &Bound<'_, PyAny>) -> PyErr {
+fn syntax_error(
+    py: Python<'_>,
+    err: &SyntaxError,
+    source: &Bound<'_, PyString>,
+    wrapper: &Bound<'_, PyAny>,
+) -> PyErr {
     let r = (|| -> PyResult<PyErr> {
         let c = config(py)?;
         let kw = PyDict::new(py);
         kw.set_item("source", source)?;
         kw.set_item("span", (err.span.0, err.span.1))?;
-        let inner = c.parser_syntax_error.bind(py).call((err.message.as_str(),), Some(&kw))?;
+        let inner = c
+            .parser_syntax_error
+            .bind(py)
+            .call((err.message.as_str(),), Some(&kw))?;
         let outer = wrapper.call1((inner.str()?,))?;
         outer.setattr(intern!(py, "__cause__"), &inner)?;
         Ok(PyErr::from_value(outer))
@@ -88,12 +104,14 @@ fn unicode_version(py: Python<'_>) -> PyResult<pyroid_core::ftfy::UnicodeVersion
 }
 
 /// `canonicalize_name(value)` (Python's `str.lower` for non-ASCII text).
-pub fn canonicalize<'py>(py: Python<'py>, value: &str) -> PyResult<String> {
+pub fn canonicalize(py: Python<'_>, value: &str) -> PyResult<String> {
     if value.is_ascii() {
         return Ok(core::canonicalize_ascii(value));
     }
     let low = PyString::new(py, value).call_method0(intern!(py, "lower"))?;
-    Ok(core::canonicalize_lowered(&low.cast::<PyString>()?.to_cow()?))
+    Ok(core::canonicalize_lowered(
+        &low.cast::<PyString>()?.to_cow()?,
+    ))
 }
 
 /// `_normalize_extra_values`: the literal compared with `extra`, `extras` or `dependency_groups`
@@ -109,7 +127,9 @@ fn normalize_extras(py: Python<'_>, list: &mut [Elem]) -> PyResult<()> {
                 (MarkerVar::Value(val), MarkerVar::Variable(v)) if v == "extra" => {
                     *lhs = MarkerVar::Value(canonicalize(py, val)?);
                 }
-                (MarkerVar::Value(val), MarkerVar::Variable(v)) if v == "extras" || v == "dependency_groups" => {
+                (MarkerVar::Value(val), MarkerVar::Variable(v))
+                    if v == "extras" || v == "dependency_groups" =>
+                {
                     *lhs = MarkerVar::Value(canonicalize(py, val)?);
                 }
                 _ => {}
@@ -125,13 +145,17 @@ fn parse_marker(py: Python<'_>, marker: &Bound<'_, PyAny>) -> PyResult<Vec<Elem>
     let c = config(py)?;
     let Ok(source) = marker.cast::<PyString>() else {
         // packaging's tokenizer runs a regex on it first: TypeError for a non-str.
-        c.ws_regex.bind(py).call_method1(intern!(py, "match"), (marker, 0))?;
+        c.ws_regex
+            .bind(py)
+            .call_method1(intern!(py, "match"), (marker, 0))?;
         return Err(PyTypeError::new_err("expected string or bytes-like object"));
     };
     let cps = code_points(source)?;
     let mut list = match core::parse_marker(&cps, unicode_version(py)?, |t| quoted(py, t)) {
         Ok(l) => l,
-        Err(core::Error::Syntax(e)) => return Err(syntax_error(py, &e, source, c.invalid_marker.bind(py))),
+        Err(core::Error::Syntax(e)) => {
+            return Err(syntax_error(py, &e, source, c.invalid_marker.bind(py)));
+        }
         Err(core::Error::Host(e)) => return Err(e),
     };
     normalize_extras(py, &mut list)?;
@@ -145,19 +169,28 @@ fn parse_marker(py: Python<'_>, marker: &Bound<'_, PyAny>) -> PyResult<Vec<Elem>
 #[derive(Debug)]
 struct MarkerData {
     list: Vec<Elem>,
-    text: OnceLock<Result<String, ()>>,
+    text: OnceLock<Result<String, core::QuoteError>>,
     hash: HashCache,
 }
 
 impl MarkerData {
     fn new(list: Vec<Elem>) -> Self {
-        Self { list, text: OnceLock::new(), hash: HashCache::new() }
+        Self {
+            list,
+            text: OnceLock::new(),
+            hash: HashCache::new(),
+        }
     }
 
     fn text(&self) -> PyResult<&str> {
-        match self.text.get_or_init(|| core::format_marker(&self.list, true)) {
+        match self
+            .text
+            .get_or_init(|| core::format_marker(&self.list, true))
+        {
             Ok(s) => Ok(s),
-            Err(()) => Err(PyValueError::new_err("Cannot serialize marker value containing both quote characters")),
+            Err(core::QuoteError) => Err(PyValueError::new_err(
+                "Cannot serialize marker value containing both quote characters",
+            )),
         }
     }
 }
@@ -172,11 +205,15 @@ pub struct PyMarker {
 impl PyMarker {
     fn data(&self) -> PyResult<StateRef<'_, MarkerData>> {
         // packaging sets `_markers = []` before parsing, so a failed construction still has it.
-        self.data.get().ok_or_else(|| PyAttributeError::new_err("'Marker' object has no attribute '_markers'"))
+        self.data
+            .get()
+            .ok_or_else(|| PyAttributeError::new_err("'Marker' object has no attribute '_markers'"))
     }
 
     pub fn from_list(list: Vec<Elem>) -> Self {
-        Self { data: StateCell::with(MarkerData::new(list)) }
+        Self {
+            data: StateCell::with(MarkerData::new(list)),
+        }
     }
 
     fn new_of<'py>(cls: &Bound<'py, PyType>, list: Vec<Elem>) -> PyResult<Bound<'py, PyAny>> {
@@ -185,7 +222,10 @@ impl PyMarker {
             return Ok(Bound::new(py, PyMarker::from_list(list))?.into_any());
         }
         let obj = cls.call_method1(intern!(py, "__new__"), (cls,))?;
-        obj.cast::<PyMarker>()?.get().data.set(MarkerData::new(list));
+        obj.cast::<PyMarker>()?
+            .get()
+            .data
+            .set(MarkerData::new(list));
         Ok(obj)
     }
 
@@ -210,7 +250,14 @@ fn to_py_list<'py>(py: Python<'py>, list: &[Elem]) -> PyResult<Bound<'py, PyList
                         MarkerVar::Value(x) => c.node_value.bind(py).call1((x.as_str(),)),
                     }
                 };
-                let t = PyTuple::new(py, [node(l)?, c.node_op.bind(py).call1((op.as_str(),))?, node(r)?])?;
+                let t = PyTuple::new(
+                    py,
+                    [
+                        node(l)?,
+                        c.node_op.bind(py).call1((op.as_str(),))?,
+                        node(r)?,
+                    ],
+                )?;
                 out.append(t)?;
             }
         }
@@ -231,7 +278,10 @@ fn from_py_list(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<Elem>> {
             }
         } else if let Ok(t) = item.cast::<PyTuple>() {
             if t.len() != 3 {
-                return Err(PyTypeError::new_err(format!("Unexpected marker {}", item.repr()?)));
+                return Err(PyTypeError::new_err(format!(
+                    "Unexpected marker {}",
+                    item.repr()?
+                )));
             }
             let var = |n: &Bound<'_, PyAny>| -> PyResult<MarkerVar> {
                 let value: String = n.getattr(intern!(py, "value"))?.extract()?;
@@ -239,7 +289,10 @@ fn from_py_list(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<Elem>> {
                 match kind.as_str() {
                     "Variable" => Ok(MarkerVar::Variable(value)),
                     "Value" => Ok(MarkerVar::Value(value)),
-                    _ => Err(PyTypeError::new_err(format!("Unexpected marker node {}", n.repr()?))),
+                    _ => Err(PyTypeError::new_err(format!(
+                        "Unexpected marker node {}",
+                        n.repr()?
+                    ))),
                 }
             };
             let op: String = t.get_item(1)?.getattr(intern!(py, "value"))?.extract()?;
@@ -247,7 +300,10 @@ fn from_py_list(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<Elem>> {
         } else if item.cast::<PyList>().is_ok() {
             out.push(Elem::List(from_py_list(py, &item)?));
         } else {
-            return Err(PyTypeError::new_err(format!("Unexpected marker {}", item.repr()?)));
+            return Err(PyTypeError::new_err(format!(
+                "Unexpected marker {}",
+                item.repr()?
+            )));
         }
     }
     Ok(out)
@@ -276,7 +332,11 @@ impl PyMarker {
     #[new]
     #[classmethod]
     #[pyo3(signature = (*args, **kwargs))]
-    fn py_new(cls: &Bound<'_, PyType>, args: &Bound<'_, PyTuple>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn py_new(
+        cls: &Bound<'_, PyType>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Self> {
         let py = cls.py();
         if cls.is(py.get_type::<PyMarker>()) {
             let marker = match (args.len(), kwargs) {
@@ -288,7 +348,9 @@ impl PyMarker {
                 return Ok(PyMarker::from_list(parse_marker(py, &m)?));
             }
         }
-        Ok(PyMarker { data: StateCell::new() })
+        Ok(PyMarker {
+            data: StateCell::new(),
+        })
     }
 
     #[pyo3(name = "__init__", signature = (marker))]
@@ -309,7 +371,10 @@ impl PyMarker {
 
     /// Create a Marker instance from a pre-parsed marker tree.
     #[classmethod]
-    fn _from_markers<'py>(cls: &Bound<'py, PyType>, markers: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    fn _from_markers<'py>(
+        cls: &Bound<'py, PyType>,
+        markers: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
         PyMarker::new_of(cls, from_py_list(cls.py(), markers)?)
     }
 
@@ -343,13 +408,21 @@ impl PyMarker {
         Ok(h)
     }
 
-    fn __richcmp__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>, op: CompareOp) -> PyResult<Bound<'py, PyAny>> {
+    fn __richcmp__<'py>(
+        slf: &Bound<'py, Self>,
+        other: &Bound<'py, PyAny>,
+        op: CompareOp,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         if !matches!(op, CompareOp::Eq | CompareOp::Ne) || !is_marker(py, other)? {
             return Ok(py.NotImplemented().into_bound(py));
         }
         let eq = slf.str()?.as_any().eq(other.str()?)?;
-        Ok(PyBool::new(py, if matches!(op, CompareOp::Eq) { eq } else { !eq }).to_owned().into_any())
+        Ok(
+            PyBool::new(py, if matches!(op, CompareOp::Eq) { eq } else { !eq })
+                .to_owned()
+                .into_any(),
+        )
     }
 
     fn __getstate__(&self) -> PyResult<String> {
@@ -357,7 +430,12 @@ impl PyMarker {
     }
 
     fn __setstate__(&self, py: Python<'_>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let fail = || -> PyResult<PyErr> { Ok(PyTypeError::new_err(format!("Cannot restore Marker from {}", state.repr()?))) };
+        let fail = || -> PyResult<PyErr> {
+            Ok(PyTypeError::new_err(format!(
+                "Cannot restore Marker from {}",
+                state.repr()?
+            )))
+        };
         if let Ok(s) = state.cast::<PyString>() {
             let cps = code_points(s)?;
             let mut list = match core::parse_marker(&cps, unicode_version(py)?, |t| quoted(py, t)) {
@@ -401,14 +479,33 @@ impl PyMarker {
     fn __reduce_ex__<'py>(slf: &Bound<'py, Self>, _protocol: i64) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
         let state = slf.get().__getstate__()?;
-        PyTuple::new(py, [config(py)?.restore.bind(py).clone(), PyTuple::new(py, [slf.get_type().into_any(), PyString::new(py, &state).into_any()])?.into_any()])
+        PyTuple::new(
+            py,
+            [
+                config(py)?.restore.bind(py).clone(),
+                PyTuple::new(
+                    py,
+                    [
+                        slf.get_type().into_any(),
+                        PyString::new(py, &state).into_any(),
+                    ],
+                )?
+                .into_any(),
+            ],
+        )
     }
 
-    fn __and__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    fn __and__<'py>(
+        slf: &Bound<'py, Self>,
+        other: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
         combine(slf, other, Elem::And)
     }
 
-    fn __or__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    fn __or__<'py>(
+        slf: &Bound<'py, Self>,
+        other: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
         combine(slf, other, Elem::Or)
     }
 
@@ -425,7 +522,12 @@ impl PyMarker {
 
     /// Evaluate a marker.
     #[pyo3(signature = (environment = None, context = ContextArg(None)))]
-    fn evaluate(&self, py: Python<'_>, environment: Option<&Bound<'_, PyAny>>, context: ContextArg) -> PyResult<bool> {
+    fn evaluate(
+        &self,
+        py: Python<'_>,
+        environment: Option<&Bound<'_, PyAny>>,
+        context: ContextArg,
+    ) -> PyResult<bool> {
         let d = self.data()?;
         let ctx = context.0.as_ref().map(|c| c.bind(py).clone());
         let env = Env::new(py, environment.filter(|e| !e.is_none()), ctx.as_ref())?;
@@ -446,12 +548,20 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ContextArg {
     }
 }
 
-fn combine<'py>(slf: &Bound<'py, PyMarker>, other: &Bound<'py, PyAny>, op: Elem) -> PyResult<Bound<'py, PyAny>> {
+fn combine<'py>(
+    slf: &Bound<'py, PyMarker>,
+    other: &Bound<'py, PyAny>,
+    op: Elem,
+) -> PyResult<Bound<'py, PyAny>> {
     let py = slf.py();
     if !is_marker(py, other)? {
         return Ok(py.NotImplemented().into_bound(py));
     }
-    let list = vec![Elem::List(slf.get().list()?), op, Elem::List(marker_list(py, other)?)];
+    let list = vec![
+        Elem::List(slf.get().list()?),
+        op,
+        Elem::List(marker_list(py, other)?),
+    ];
     PyMarker::new_of(&slf.get_type(), list)
 }
 
@@ -480,7 +590,11 @@ enum Context {
 }
 
 impl<'py> Env<'py> {
-    fn new(py: Python<'py>, environment: Option<&Bound<'py, PyAny>>, context: Option<&Bound<'py, PyAny>>) -> PyResult<Self> {
+    fn new(
+        py: Python<'py>,
+        environment: Option<&Bound<'py, PyAny>>,
+        context: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Self> {
         let c = config(py)?;
         let default = c.cached_default_environment.bind(py).call0()?;
         let context = match context {
@@ -497,7 +611,9 @@ impl<'py> Env<'py> {
         };
         let (given, merged) = match environment {
             None => (None, false),
-            Some(e) if e.is_exact_instance_of::<PyDict>() => (Some(e.cast::<PyDict>()?.clone()), false),
+            Some(e) if e.is_exact_instance_of::<PyDict>() => {
+                (Some(e.cast::<PyDict>()?.clone()), false)
+            }
             Some(e) => {
                 // packaging: current = dict(default) (+ context keys); current |= environment.
                 let merged = default.cast::<PyDict>()?.copy()?;
@@ -506,7 +622,13 @@ impl<'py> Env<'py> {
                 (Some(merged), true)
             }
         };
-        Ok(Self { py, default, given, merged, context })
+        Ok(Self {
+            py,
+            default,
+            given,
+            merged,
+            context,
+        })
     }
 
     /// `environment[key]` of the merged environment (`None`: missing).
@@ -516,7 +638,12 @@ impl<'py> Env<'py> {
         let Some(v) = raw else {
             return Ok(None);
         };
-        if key == "extra" && self.given.as_ref().is_some_and(|g| g.contains("extra").unwrap_or(false)) {
+        if key == "extra"
+            && self
+                .given
+                .as_ref()
+                .is_some_and(|g| g.contains("extra").unwrap_or(false))
+        {
             // packaging canonicalises `extra` when an environment is given (None/"" become "").
             if !v.is_truthy()? {
                 return Ok(Some(PyString::new(py, "").into_any()));
@@ -535,7 +662,9 @@ impl<'py> Env<'py> {
                 }
                 return Ok(Some(v));
             }
-            if v.call_method1(intern!(py, "endswith"), ("+",))?.is_truthy()? {
+            if v.call_method1(intern!(py, "endswith"), ("+",))?
+                .is_truthy()?
+            {
                 return Ok(Some(v.add("local")?));
             }
         }
@@ -558,7 +687,16 @@ impl<'py> Env<'py> {
             }
             _ => {}
         }
-        self.default.get_item(key).map(Some).or_else(|e| if e.is_instance_of::<pyo3::exceptions::PyKeyError>(self.py) { Ok(None) } else { Err(e) })
+        if let Ok(d) = self.default.cast::<PyDict>() {
+            return d.get_item(key);
+        }
+        self.default.get_item(key).map(Some).or_else(|e| {
+            if e.is_instance_of::<pyo3::exceptions::PyKeyError>(self.py) {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
     }
 }
 
@@ -574,7 +712,12 @@ fn add_context(py: Python<'_>, env: &Bound<'_, PyDict>, context: Context) -> PyR
     Ok(())
 }
 
-const REQUIRING_VERSION: &[&str] = &["implementation_version", "platform_release", "python_full_version", "python_version"];
+const REQUIRING_VERSION: &[&str] = &[
+    "implementation_version",
+    "platform_release",
+    "python_full_version",
+    "python_version",
+];
 const ALLOWING_SET: &[&str] = &["extras", "dependency_groups"];
 
 fn evaluate(py: Python<'_>, list: &[Elem], env: &Env<'_>) -> PyResult<bool> {
@@ -590,9 +733,11 @@ fn evaluate(py: Python<'_>, list: &[Elem], env: &Env<'_>) -> PyResult<bool> {
             }
             Elem::Item(lhs, op, rhs) => {
                 let (key, lhs_value, rhs_value) = match lhs {
-                    MarkerVar::Variable(k) => {
-                        (k.as_str(), lookup(py, env, k)?, PyString::new(py, rhs.value()).into_any())
-                    }
+                    MarkerVar::Variable(k) => (
+                        k.as_str(),
+                        lookup(py, env, k)?,
+                        PyString::new(py, rhs.value()).into_any(),
+                    ),
                     MarkerVar::Value(v) => {
                         let k = rhs.value();
                         (k, PyString::new(py, v).into_any(), lookup(py, env, k)?)
@@ -605,7 +750,9 @@ fn evaluate(py: Python<'_>, list: &[Elem], env: &Env<'_>) -> PyResult<bool> {
                     let msg = format!(
                         "Set-valued marker {key_repr} can only be used with the membership form (e.g. \"<name>\" in {key}); it cannot appear on the left-hand side of {op_repr}."
                     );
-                    return Err(PyErr::from_value(c.undefined_comparison.bind(py).call1((msg,))?));
+                    return Err(PyErr::from_value(
+                        c.undefined_comparison.bind(py).call1((msg,))?,
+                    ));
                 }
                 let (l, r) = normalize(py, &lhs_value, &rhs_value, key)?;
                 let v = eval_op(py, &l, op, &r, key)?;
@@ -623,11 +770,21 @@ fn evaluate(py: Python<'_>, list: &[Elem], env: &Env<'_>) -> PyResult<bool> {
 fn lookup<'py>(py: Python<'py>, env: &Env<'py>, key: &str) -> PyResult<Bound<'py, PyAny>> {
     match env.get(key)? {
         Some(v) => Ok(v),
-        None => Err(PyErr::from_value(config(py)?.undefined_environment_name.bind(py).call1((key,))?)),
+        None => Err(PyErr::from_value(
+            config(py)?
+                .undefined_environment_name
+                .bind(py)
+                .call1((key,))?,
+        )),
     }
 }
 
-fn normalize<'py>(py: Python<'py>, lhs: &Bound<'py, PyAny>, rhs: &Bound<'py, PyAny>, key: &str) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+fn normalize<'py>(
+    py: Python<'py>,
+    lhs: &Bound<'py, PyAny>,
+    rhs: &Bound<'py, PyAny>,
+    key: &str,
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
     if key == "extra" || !ALLOWING_SET.contains(&key) {
         return Ok((lhs.clone(), rhs.clone()));
     }
@@ -648,7 +805,13 @@ fn normalize<'py>(py: Python<'py>, lhs: &Bound<'py, PyAny>, rhs: &Bound<'py, PyA
     Ok((l, set.into_any()))
 }
 
-fn eval_op(py: Python<'_>, lhs: &Bound<'_, PyAny>, op: &str, rhs: &Bound<'_, PyAny>, key: &str) -> PyResult<bool> {
+fn eval_op(
+    py: Python<'_>,
+    lhs: &Bound<'_, PyAny>,
+    op: &str,
+    rhs: &Bound<'_, PyAny>,
+    key: &str,
+) -> PyResult<bool> {
     if REQUIRING_VERSION.contains(&key) {
         // Specifier(f"{op}{rhs}") if it is one, then contains(lhs, prereleases=True).
         let text = format!("{op}{}", rhs.str()?.to_cow()?);
@@ -657,7 +820,9 @@ fn eval_op(py: Python<'_>, lhs: &Bound<'_, PyAny>, op: &str, rhs: &Bound<'_, PyA
             if o == Op::Arbitrary {
                 let spec = Bound::new(py, super::specifiers::PySpecifier::from_text(py, &text)?)?;
                 let t = PyBool::new(py, true).to_owned().into_any();
-                return spec.call_method1(intern!(py, "contains"), (lhs, t))?.is_truthy();
+                return spec
+                    .call_method1(intern!(py, "contains"), (lhs, t))?
+                    .is_truthy();
             }
             let Some(parsed) = coerce(py, lhs)? else {
                 return Ok(false);
@@ -676,8 +841,14 @@ fn eval_op(py: Python<'_>, lhs: &Bound<'_, PyAny>, op: &str, rhs: &Bound<'_, PyA
         _ => {
             let c = config(py)?;
             let op_repr = c.node_op.bind(py).call1((op,))?.repr()?;
-            let msg = format!("Undefined {op_repr} on {} and {}.", lhs.repr()?, rhs.repr()?);
-            Err(PyErr::from_value(c.undefined_comparison.bind(py).call1((msg,))?))
+            let msg = format!(
+                "Undefined {op_repr} on {} and {}.",
+                lhs.repr()?,
+                rhs.repr()?
+            );
+            Err(PyErr::from_value(
+                c.undefined_comparison.bind(py).call1((msg,))?,
+            ))
         }
     }
 }
@@ -688,16 +859,23 @@ fn eval_op(py: Python<'_>, lhs: &Bound<'_, PyAny>, op: &str, rhs: &Bound<'_, PyA
 
 /// `parse_requirement(s)` with packaging's errors: `(name, url, extras, specifier, marker)`.
 #[pyfunction]
-fn parse_requirement<'py>(py: Python<'py>, requirement: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyTuple>> {
+fn parse_requirement<'py>(
+    py: Python<'py>,
+    requirement: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyTuple>> {
     let c = config(py)?;
     let Ok(source) = requirement.cast::<PyString>() else {
-        c.ws_regex.bind(py).call_method1(intern!(py, "match"), (requirement, 0))?;
+        c.ws_regex
+            .bind(py)
+            .call_method1(intern!(py, "match"), (requirement, 0))?;
         return Err(PyTypeError::new_err("expected string or bytes-like object"));
     };
     let cps = code_points(source)?;
     let parsed = match core::parse_requirement(&cps, unicode_version(py)?, |t| quoted(py, t)) {
         Ok(p) => p,
-        Err(core::Error::Syntax(e)) => return Err(syntax_error(py, &e, source, c.invalid_requirement.bind(py))),
+        Err(core::Error::Syntax(e)) => {
+            return Err(syntax_error(py, &e, source, c.invalid_requirement.bind(py)));
+        }
         Err(core::Error::Host(e)) => return Err(e),
     };
     let name = py_str(py, &cps[parsed.name.0..parsed.name.1])?;
@@ -720,25 +898,37 @@ fn parse_requirement<'py>(py: Python<'py>, requirement: &Bound<'py, PyAny>) -> P
         }
         None => py.None().into_bound(py),
     };
-    PyTuple::new(py, [name.into_any(), url, extras.into_any(), py_str(py, &spec)?.into_any(), marker])
+    PyTuple::new(
+        py,
+        [
+            name.into_any(),
+            url,
+            extras.into_any(),
+            py_str(py, &spec)?.into_any(),
+            marker,
+        ],
+    )
 }
 
 /// `canonicalize_name(name)` for a `str`.
 #[pyfunction]
 #[pyo3(signature = (name, /))]
-fn canonicalize_str<'py>(py: Python<'py>, name: &Bound<'py, PyString>) -> PyResult<Bound<'py, PyAny>> {
-    match name.to_cow() {
-        Ok(t) => Ok(PyString::new(py, &canonicalize(py, &t)?).into_any()),
-        Err(_) => {
-            let low = name.call_method0(intern!(py, "lower"))?;
-            let low = low.call_method1(intern!(py, "replace"), ("_", "-"))?.call_method1(intern!(py, "replace"), (".", "-"))?;
-            let mut s = low;
-            while s.contains("--")? {
-                s = s.call_method1(intern!(py, "replace"), ("--", "-"))?;
-            }
-            Ok(s)
-        }
+fn canonicalize_str<'py>(
+    py: Python<'py>,
+    name: &Bound<'py, PyString>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Ok(t) = name.to_cow() {
+        return Ok(PyString::new(py, &canonicalize(py, &t)?).into_any());
     }
+    // Lone surrogates: the same steps in Python.
+    let low = name.call_method0(intern!(py, "lower"))?;
+    let mut s = low
+        .call_method1(intern!(py, "replace"), ("_", "-"))?
+        .call_method1(intern!(py, "replace"), (".", "-"))?;
+    while s.contains("--")? {
+        s = s.call_method1(intern!(py, "replace"), ("--", "-"))?;
+    }
+    Ok(s)
 }
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

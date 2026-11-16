@@ -22,19 +22,29 @@ use crate::par::{self, PoolError, Threads};
 ///
 /// # Errors
 /// The pool could not start.
-pub fn sort_indices(keys: &[version::Version], reverse: bool, threads: Threads) -> Result<Vec<usize>, PoolError> {
+pub fn sort_indices(
+    keys: &[version::Version],
+    reverse: bool,
+    threads: Threads,
+) -> Result<Vec<usize>, PoolError> {
     let cmp = |a: &usize, b: &usize| {
         let o = keys[*a].cmp_key(&keys[*b]);
         if reverse { o.reverse() } else { o }
     };
     let n = keys.len();
-    let tasks = if n < 8192 { 1 } else { par::max_tasks(threads)?.min(n / 4096).max(1) };
+    let tasks = if n < 8192 {
+        1
+    } else {
+        par::max_tasks(threads)?.min(n / 4096).max(1)
+    };
     if tasks == 1 {
         let mut idx: Vec<usize> = (0..n).collect();
         idx.sort_by(cmp);
         return Ok(idx);
     }
-    let bounds: Vec<(usize, usize)> = (0..tasks).map(|t| (t * n / tasks, (t + 1) * n / tasks)).collect();
+    let bounds: Vec<(usize, usize)> = (0..tasks)
+        .map(|t| (t * n / tasks, (t + 1) * n / tasks))
+        .collect();
     let runs = par::map_tasks(&bounds, threads, |&(a, b)| {
         let mut idx: Vec<usize> = (a..b).collect();
         idx.sort_by(cmp);
@@ -46,7 +56,9 @@ pub fn sort_indices(keys: &[version::Version], reverse: bool, threads: Threads) 
     while runs.len() > 1 {
         let pairs: Vec<(usize, usize)> = (0..runs.len()).step_by(2).map(|i| (i, i + 1)).collect();
         let merged = par::map_tasks(&pairs, threads, |&(l, r)| {
-            let Some(right) = runs.get(r) else { return runs[l].clone() };
+            let Some(right) = runs.get(r) else {
+                return runs[l].clone();
+            };
             let left = &runs[l];
             let mut out = Vec::with_capacity(left.len() + right.len());
             let (mut i, mut j) = (0, 0);

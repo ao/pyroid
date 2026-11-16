@@ -41,12 +41,18 @@ impl<T> Deref for StateRef<'_, T> {
 impl<T> StateCell<T> {
     /// An empty cell.
     pub fn new() -> Self {
-        Self { first: None, replaced: OnceLock::new() }
+        Self {
+            first: None,
+            replaced: OnceLock::new(),
+        }
     }
 
     /// A cell holding `v`.
     pub fn with(v: T) -> Self {
-        Self { first: Some(v), replaced: OnceLock::new() }
+        Self {
+            first: Some(v),
+            replaced: OnceLock::new(),
+        }
     }
 
     /// The current value, if any.
@@ -66,7 +72,9 @@ impl<T> StateCell<T> {
     /// Set or replace the value.
     pub fn set(&self, v: T) {
         let mut v = Some(Arc::new(v));
-        let m = self.replaced.get_or_init(|| Mutex::new(v.take().unwrap_or_else(|| unreachable!())));
+        let m = self
+            .replaced
+            .get_or_init(|| Mutex::new(v.take().unwrap_or_else(|| unreachable!())));
         if let Some(v) = v {
             let mut g = m.lock().unwrap_or_else(PoisonError::into_inner);
             *g = v;
@@ -136,7 +144,10 @@ const K_OTHER_TRUTHY: u8 = 4;
 impl Prerel {
     /// From a Python value.
     pub fn new(value: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let p = Self { kind: AtomicU8::new(K_NONE), other: Mutex::new(None) };
+        let p = Self {
+            kind: AtomicU8::new(K_NONE),
+            other: Mutex::new(None),
+        };
         if let Some(v) = value {
             p.set(v)?;
         }
@@ -155,7 +166,11 @@ impl Prerel {
             let truthy = value.is_truthy()?;
             let mut g = self.other.lock().unwrap_or_else(PoisonError::into_inner);
             *g = Some(value.clone().unbind());
-            if truthy { K_OTHER_TRUTHY } else { K_OTHER_FALSY }
+            if truthy {
+                K_OTHER_TRUTHY
+            } else {
+                K_OTHER_FALSY
+            }
         };
         self.kind.store(k, Ordering::Release);
         Ok(())
@@ -180,7 +195,8 @@ impl Prerel {
             PrerelKind::True => PyBool::new(py, true).to_owned().into_any(),
             PrerelKind::Other(_) => {
                 let g = self.other.lock().unwrap_or_else(PoisonError::into_inner);
-                g.as_ref().map_or_else(|| py.None().into_bound(py), |o| o.bind(py).clone())
+                g.as_ref()
+                    .map_or_else(|| py.None().into_bound(py), |o| o.bind(py).clone())
             }
         }
     }

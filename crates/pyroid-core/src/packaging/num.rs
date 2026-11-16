@@ -73,7 +73,8 @@ impl Num {
     pub fn py_hash(&self) -> i64 {
         match self {
             Num::Small(v) => {
-                #[allow(clippy::cast_possible_wrap)] // the modulus is below 2**63
+                // The modulus is below 2**63.
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
                 let h = (u128::from(*v) % u128::from(HASH_MODULUS)) as i64;
                 h
             }
@@ -163,6 +164,90 @@ fn sub_one(digits: &str) -> String {
     String::from_utf8(out).unwrap_or_default()
 }
 
+/// CPython's tuple hash, one item at a time (no allocation).
+#[derive(Clone, Copy, Debug)]
+pub struct TupleHasher {
+    acc: u64,
+    len: u64,
+}
+
+#[cfg(target_pointer_width = "64")]
+const XX: (u64, u64, u64, u32) = (
+    11_400_714_785_074_694_791,
+    14_029_467_366_897_019_727,
+    2_870_177_450_012_600_261,
+    31,
+);
+#[cfg(not(target_pointer_width = "64"))]
+const XX: (u64, u64, u64, u32) = (2_654_435_761, 2_246_822_519, 374_761_393, 13);
+
+impl TupleHasher {
+    /// An empty tuple's state.
+    #[must_use]
+    pub fn new() -> Self {
+        Self { acc: XX.2, len: 0 }
+    }
+
+    /// Add an item whose hash is `lane`.
+    pub fn add(&mut self, lane: i64) {
+        #[cfg(target_pointer_width = "64")]
+        {
+            #[allow(clippy::cast_sign_loss)]
+            let lane = lane as u64;
+            self.acc = self
+                .acc
+                .wrapping_add(lane.wrapping_mul(XX.1))
+                .rotate_left(XX.3)
+                .wrapping_mul(XX.0);
+        }
+        #[cfg(not(target_pointer_width = "64"))]
+        {
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            let (lane, acc) = (lane as u32, self.acc as u32);
+            #[allow(clippy::cast_possible_truncation)]
+            let acc = acc
+                .wrapping_add(lane.wrapping_mul(XX.1 as u32))
+                .rotate_left(XX.3)
+                .wrapping_mul(XX.0 as u32);
+            self.acc = u64::from(acc);
+        }
+        self.len += 1;
+    }
+
+    /// The tuple's hash.
+    #[must_use]
+    pub fn finish(self) -> i64 {
+        #[cfg(target_pointer_width = "64")]
+        {
+            let acc = self.acc.wrapping_add(self.len ^ (XX.2 ^ 0x0035_d373));
+            if acc == u64::MAX {
+                return 1_546_275_796;
+            }
+            #[allow(clippy::cast_possible_wrap)]
+            let h = acc as i64;
+            h
+        }
+        #[cfg(not(target_pointer_width = "64"))]
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            let acc =
+                (self.acc as u32).wrapping_add((self.len as u32) ^ ((XX.2 as u32) ^ 0x0035_d373));
+            if acc == u32::MAX {
+                return 1_546_275_796;
+            }
+            #[allow(clippy::cast_possible_wrap)]
+            let h = i64::from(acc as i32);
+            h
+        }
+    }
+}
+
+impl Default for TupleHasher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// CPython's hash of a tuple whose items hash to `lanes` (`tuplehash`, xxHash-based, 3.8+).
 #[must_use]
 pub fn tuple_hash(lanes: &[i64]) -> i64 {
@@ -179,7 +264,7 @@ pub fn tuple_hash(lanes: &[i64]) -> i64 {
             acc = acc.rotate_left(31);
             acc = acc.wrapping_mul(P1);
         }
-        acc = acc.wrapping_add((lanes.len() as u64) ^ (P5 ^ 3_527_539));
+        acc = acc.wrapping_add((lanes.len() as u64) ^ (P5 ^ 0x0035_d373));
         if acc == u64::MAX {
             return 1_546_275_796;
         }
@@ -202,7 +287,7 @@ pub fn tuple_hash(lanes: &[i64]) -> i64 {
         }
         #[allow(clippy::cast_possible_truncation)]
         let n = lanes.len() as u32;
-        acc = acc.wrapping_add(n ^ (P5 ^ 3_527_539));
+        acc = acc.wrapping_add(n ^ (P5 ^ 0x0035_d373));
         if acc == u32::MAX {
             return 1_546_275_796;
         }

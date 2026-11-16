@@ -4,7 +4,9 @@ use super::num::{Num, tuple_hash};
 use super::version::{Local, Pre, Version, parse};
 
 fn v(s: &str) -> Version {
-    parse(s).unwrap_or_else(|| panic!("{s:?} should parse")).version
+    parse(s)
+        .unwrap_or_else(|| panic!("{s:?} should parse"))
+        .version
 }
 
 #[test]
@@ -42,8 +44,25 @@ fn parses_the_spellings() {
 #[test]
 fn rejects_what_the_pattern_rejects() {
     for bad in [
-        "", " ", "1.", ".1", "1..0", "1.0+", "1.0+a..b", "1.0+a.", "1.0ab", "foo", "1.0\u{e9}",
-        "1.0+\u{fc}", "v", "1!", "1.0-", "1.0.post.1.", "1.0 1", "\u{0661}", "1.0+a b",
+        "",
+        " ",
+        "1.",
+        ".1",
+        "1..0",
+        "1.0+",
+        "1.0+a..b",
+        "1.0+a.",
+        "1.0ab",
+        "foo",
+        "1.0\u{e9}",
+        "1.0+\u{fc}",
+        "v",
+        "1!",
+        "1.0-",
+        "1.0.post.1.",
+        "1.0 1",
+        "\u{0661}",
+        "1.0+a b",
     ] {
         assert!(parse(bad).is_none(), "{bad:?} should not parse");
     }
@@ -58,11 +77,29 @@ fn strips_python_whitespace() {
 #[test]
 fn orders_as_cmpkey() {
     let order = [
-        "1.0.dev0", "1.0a1.dev1", "1.0a1", "1.0a1.post1.dev1", "1.0a1.post1", "1.0b1", "1.0rc1",
-        "1.0", "1.0+abc", "1.0+abc.1", "1.0+1", "1.0.post1.dev1", "1.0.post1", "1.0.1",
+        "1.0.dev0",
+        "1.0a1.dev1",
+        "1.0a1",
+        "1.0a1.post1.dev1",
+        "1.0a1.post1",
+        "1.0b1",
+        "1.0rc1",
+        "1.0",
+        "1.0+abc",
+        "1.0+abc.1",
+        "1.0+1",
+        "1.0.post1.dev1",
+        "1.0.post1",
+        "1.0.1",
     ];
     for w in order.windows(2) {
-        assert_eq!(v(w[0]).cmp_key(&v(w[1])), Ordering::Less, "{} < {}", w[0], w[1]);
+        assert_eq!(
+            v(w[0]).cmp_key(&v(w[1])),
+            Ordering::Less,
+            "{} < {}",
+            w[0],
+            w[1]
+        );
     }
     assert_eq!(v("1.0").cmp_key(&v("1.0.0.0")), Ordering::Equal);
     assert_eq!(v("1.0+ABC").cmp_key(&v("1.0+abc")), Ordering::Equal);
@@ -75,7 +112,10 @@ fn big_numbers_compare_by_value() {
     assert!(matches!(big.release[1], Num::Big(_)));
     assert_eq!(big.cmp_key(&v("1.18446744073709551615")), Ordering::Greater);
     assert_eq!(v("1.18446744073709551615").release[1], Num::Small(u64::MAX));
-    assert_eq!(v("1.000000000000000000000000000000001").release[1], Num::Small(1));
+    assert_eq!(
+        v("1.000000000000000000000000000000001").release[1],
+        Num::Small(1)
+    );
     let p = parse("1.000000000000000000000000000000001").unwrap();
     assert_eq!(p.long_runs.len(), 1);
 }
@@ -101,16 +141,13 @@ fn trims_for_str() {
 }
 
 #[test]
-#[ignore = "timing probe: cargo test --release -p pyroid-core packaging::tests::parse_timing -- --ignored --nocapture"]
-fn parse_timing() {
-    for s in ["1", "1.2.3", "1.2.3.4.5.6", "2!1.0.post1.dev3+abc.5"] {
-        let n = 2_000_000;
-        let t = std::time::Instant::now();
-        let mut k = 0usize;
-        for _ in 0..n {
-            k += std::hint::black_box(parse(std::hint::black_box(s))).map_or(0, |p| p.version.release.len());
+fn incremental_tuple_hash_matches() {
+    use super::num::TupleHasher;
+    for lanes in [&[][..], &[1][..], &[1, 2][..], &[-2, 5, 1 << 40, 7][..]] {
+        let mut h = TupleHasher::new();
+        for &l in lanes {
+            h.add(l);
         }
-        let ns = t.elapsed().as_nanos() as f64 / f64::from(n);
-        eprintln!("parse({s:?}): {ns:.1} ns ({k})");
+        assert_eq!(h.finish(), tuple_hash(lanes));
     }
 }

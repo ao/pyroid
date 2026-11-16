@@ -115,7 +115,9 @@ impl Tokenizer<'_> {
     }
 
     fn is_word(&self, i: usize) -> bool {
-        self.at(i).and_then(ch).is_some_and(|c| crate::filters::unicode::is_word(c, self.unicode))
+        self.at(i)
+            .and_then(ch)
+            .is_some_and(|c| crate::filters::unicode::is_word(c, self.unicode))
     }
 
     /// `\b` at `i`.
@@ -126,7 +128,10 @@ impl Tokenizer<'_> {
 
     fn lit(&self, i: usize, text: &str) -> bool {
         let t = text.as_bytes();
-        self.s.len() >= i + t.len() && t.iter().enumerate().all(|(k, &b)| self.s[i + k] == u32::from(b))
+        self.s.len() >= i + t.len()
+            && t.iter()
+                .enumerate()
+                .all(|(k, &b)| self.s[i + k] == u32::from(b))
     }
 
     fn is_ws(&self, i: usize) -> bool {
@@ -161,7 +166,10 @@ impl Tokenizer<'_> {
             Rule::Variable => self.word_token(VARIABLES),
             Rule::Specifier => crate::packaging::specifiers::match_len(&self.s[p..]),
             Rule::Url => {
-                let n = self.s[p..].iter().take_while(|&&x| x != 0x20 && x != 0x09).count();
+                let n = self.s[p..]
+                    .iter()
+                    .take_while(|&&x| x != 0x20 && x != 0x09)
+                    .count();
                 (n > 0).then_some(n)
             }
             Rule::Identifier => {
@@ -169,7 +177,11 @@ impl Tokenizer<'_> {
                     return None;
                 }
                 let mut e = p + 1;
-                while self.at(e).and_then(ch).is_some_and(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')) {
+                while self
+                    .at(e)
+                    .and_then(ch)
+                    .is_some_and(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+                {
                     e += 1;
                 }
                 // Backtrack to the longest match that ends on a word boundary.
@@ -183,7 +195,10 @@ impl Tokenizer<'_> {
                 if c != Some(u32::from(b'+')) {
                     return None;
                 }
-                let low = |x: Option<u32>| x.and_then(ch).is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+                let low = |x: Option<u32>| {
+                    x.and_then(ch)
+                        .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+                };
                 let mut e = p + 1;
                 if !low(self.at(e)) {
                     return None;
@@ -192,7 +207,12 @@ impl Tokenizer<'_> {
                     while low(self.at(e)) {
                         e += 1;
                     }
-                    if self.at(e).and_then(ch).is_some_and(|c| matches!(c, '-' | '_' | '.')) && low(self.at(e + 1)) {
+                    if self
+                        .at(e)
+                        .and_then(ch)
+                        .is_some_and(|c| matches!(c, '-' | '_' | '.'))
+                        && low(self.at(e + 1))
+                    {
                         e += 1;
                     } else {
                         break;
@@ -214,7 +234,10 @@ impl Tokenizer<'_> {
         if !self.boundary(p) {
             return None;
         }
-        words.iter().find(|w| self.lit(p, w) && self.boundary(p + w.len())).map(|w| w.len())
+        words
+            .iter()
+            .find(|w| self.lit(p, w) && self.boundary(p + w.len()))
+            .map(|w| w.len())
     }
 
     fn check(&self, name: Rule) -> Option<usize> {
@@ -227,7 +250,12 @@ impl Tokenizer<'_> {
         }
     }
 
-    fn syntax<T>(&self, message: impl Into<String>, start: Option<usize>, end: Option<usize>) -> Result<T, SyntaxError> {
+    fn syntax<T>(
+        &self,
+        message: impl Into<String>,
+        start: Option<usize>,
+        end: Option<usize>,
+    ) -> Result<T, SyntaxError> {
         Err(SyntaxError {
             message: message.into(),
             span: (start.unwrap_or(self.pos), end.unwrap_or(self.pos)),
@@ -247,7 +275,10 @@ impl Tokenizer<'_> {
     }
 
     fn text(&self, span: (usize, usize)) -> String {
-        self.s[span.0..span.1].iter().filter_map(|&c| ch(c)).collect()
+        self.s[span.0..span.1]
+            .iter()
+            .filter_map(|&c| ch(c))
+            .collect()
     }
 }
 
@@ -308,7 +339,13 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
         })
     }
 
-    fn close(&mut self, open_pos: Option<usize>, open: Rule, close: Rule, around: &str) -> Res<(), E> {
+    fn close(
+        &mut self,
+        open_pos: Option<usize>,
+        open: Rule,
+        close: Rule,
+        around: &str,
+    ) -> Res<(), E> {
         let Some(start) = open_pos else {
             return Ok(());
         };
@@ -318,7 +355,11 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
                 Ok(())
             }
             None => syn(self.t.syntax(
-                format!("Expected matching {} for {}, after {around}", close.token(), open.token()),
+                format!(
+                    "Expected matching {} for {}, after {around}",
+                    close.token(),
+                    open.token()
+                ),
                 Some(start),
                 None,
             )),
@@ -327,17 +368,35 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
 
     fn requirement(&mut self) -> Res<ParsedRequirement, E> {
         self.t.consume(Rule::Ws);
-        let name = syn(self.t.expect(Rule::Identifier, "package name at the start of dependency specifier"))?;
+        let name = syn(self.t.expect(
+            Rule::Identifier,
+            "package name at the start of dependency specifier",
+        ))?;
         self.t.consume(Rule::Ws);
         let extras = self.extras()?;
         self.t.consume(Rule::Ws);
         let (url, specifier, marker) = self.requirement_details()?;
         syn(self.t.expect(Rule::End, "end of dependency specifier"))?;
-        Ok(ParsedRequirement { name, url, extras, specifier, marker })
+        Ok(ParsedRequirement {
+            name,
+            url,
+            extras,
+            specifier,
+            marker,
+        })
     }
 
     #[allow(clippy::type_complexity)]
-    fn requirement_details(&mut self) -> Res<(Option<(usize, usize)>, Vec<(usize, usize)>, Option<Vec<Elem>>), E> {
+    fn requirement_details(
+        &mut self,
+    ) -> Res<
+        (
+            Option<(usize, usize)>,
+            Vec<(usize, usize)>,
+            Option<Vec<Elem>>,
+        ),
+        E,
+    > {
         if let Some(n) = self.t.check(Rule::At) {
             self.t.pos += n;
             self.t.consume(Rule::Ws);
@@ -350,7 +409,8 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
             if self.t.check(Rule::End).is_some() {
                 return Ok((Some(url), Vec::new(), None));
             }
-            let marker = self.requirement_marker(url_start, "semicolon (after URL and whitespace)")?;
+            let marker =
+                self.requirement_marker(url_start, "semicolon (after URL and whitespace)")?;
             return Ok((Some(url), Vec::new(), Some(marker)));
         }
         let specifier_start = self.t.pos;
@@ -371,7 +431,13 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
     fn requirement_marker(&mut self, span_start: usize, expected: &str) -> Res<Vec<Elem>, E> {
         match self.t.check(Rule::Semicolon) {
             Some(n) => self.t.pos += n,
-            None => return syn(self.t.syntax(format!("Expected {expected} or end"), Some(span_start), None)),
+            None => {
+                return syn(self.t.syntax(
+                    format!("Expected {expected} or end"),
+                    Some(span_start),
+                    None,
+                ));
+            }
         }
         let marker = self.marker()?;
         self.t.consume(Rule::Ws);
@@ -400,14 +466,18 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
         loop {
             self.t.consume(Rule::Ws);
             if self.t.check(Rule::Identifier).is_some() {
-                return syn(self.t.syntax("Expected comma between extra names", None, None));
+                return syn(self
+                    .t
+                    .syntax("Expected comma between extra names", None, None));
             }
             let Some(n) = self.t.check(Rule::Comma) else {
                 break;
             };
             self.t.pos += n;
             self.t.consume(Rule::Ws);
-            extras.push(syn(self.t.expect(Rule::Identifier, "extra name after comma"))?);
+            extras.push(syn(self
+                .t
+                .expect(Rule::Identifier, "extra name after comma"))?);
         }
         Ok(extras)
     }
@@ -435,7 +505,9 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
                 } else {
                     ".* suffix can only be used with `==` or `!=` operators"
                 };
-                return syn(self.t.syntax(message, Some(span_start), Some(self.t.pos + 1)));
+                return syn(self
+                    .t
+                    .syntax(message, Some(span_start), Some(self.t.pos + 1)));
             }
             if self.t.check(Rule::VersionLocalLabelTrail).is_some() {
                 return syn(self.t.syntax(
@@ -464,7 +536,11 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
     fn marker(&mut self) -> Res<Vec<Elem>, E> {
         let mut expression = vec![self.marker_atom()?];
         while let Some(n) = self.t.check(Rule::BoolOp) {
-            let op = if self.t.lit(self.t.pos, "or") { Elem::Or } else { Elem::And };
+            let op = if self.t.lit(self.t.pos, "or") {
+                Elem::Or
+            } else {
+                Elem::And
+            };
             self.t.pos += n;
             let right = self.marker_atom()?;
             expression.push(op);
@@ -504,7 +580,11 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
         if let Some(n) = self.t.check(Rule::Variable) {
             let name = self.t.text((self.t.pos, self.t.pos + n)).replace('.', "_");
             self.t.pos += n;
-            let name = if name == "python_implementation" { "platform_python_implementation".to_owned() } else { name };
+            let name = if name == "python_implementation" {
+                "platform_python_implementation".to_owned()
+            } else {
+                name
+            };
             return Ok(MarkerVar::Variable(name));
         }
         if let Some(n) = self.t.check(Rule::QuotedString) {
@@ -520,7 +600,9 @@ impl<E, F: FnMut(&[u32]) -> Result<Option<String>, E>> Parser<'_, F> {
                 Err(e) => Err(Error::Host(e)),
             };
         }
-        syn(self.t.syntax("Expected a marker variable or quoted string", None, None))
+        syn(self
+            .t
+            .syntax("Expected a marker variable or quoted string", None, None))
     }
 
     fn marker_op(&mut self) -> Res<String, E> {
@@ -572,7 +654,14 @@ pub fn parse_marker<E>(
     unicode: UnicodeVersion,
     quoted: impl FnMut(&[u32]) -> Result<Option<String>, E>,
 ) -> Result<Vec<Elem>, Error<E>> {
-    let mut p = Parser { t: Tokenizer { s: source, pos: 0, unicode }, quoted };
+    let mut p = Parser {
+        t: Tokenizer {
+            s: source,
+            pos: 0,
+            unicode,
+        },
+        quoted,
+    };
     p.full_marker()
 }
 
@@ -585,7 +674,14 @@ pub fn parse_requirement<E>(
     unicode: UnicodeVersion,
     quoted: impl FnMut(&[u32]) -> Result<Option<String>, E>,
 ) -> Result<ParsedRequirement, Error<E>> {
-    let mut p = Parser { t: Tokenizer { s: source, pos: 0, unicode }, quoted };
+    let mut p = Parser {
+        t: Tokenizer {
+            s: source,
+            pos: 0,
+            unicode,
+        },
+        quoted,
+    };
     p.requirement()
 }
 
@@ -593,7 +689,12 @@ pub fn parse_requirement<E>(
 #[must_use]
 pub fn format_error(err: &SyntaxError, source: &str) -> String {
     let (a, b) = err.span;
-    format!("{}\n    {source}\n    {}{}^", err.message, " ".repeat(a), "~".repeat(b.saturating_sub(a)))
+    format!(
+        "{}\n    {source}\n    {}{}^",
+        err.message,
+        " ".repeat(a),
+        "~".repeat(b.saturating_sub(a))
+    )
 }
 
 /// `canonicalize_name(name)` for an ASCII `name` (others need Python's `str.lower`).
@@ -653,11 +754,16 @@ pub fn serialize_value(v: &str) -> Option<String> {
     }
 }
 
+/// A marker value holds both quote characters, so it cannot be written (packaging raises
+/// `ValueError`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct QuoteError;
+
 /// `_format_marker(marker, first)`; `Err` when a value has both quote characters.
 ///
 /// # Errors
-/// `()` for a value that cannot be serialised.
-pub fn format_marker(marker: &[Elem], first: bool) -> Result<String, ()> {
+/// [`QuoteError`] for a value that cannot be serialised.
+pub fn format_marker(marker: &[Elem], first: bool) -> Result<String, QuoteError> {
     if marker.len() == 1 {
         if let Elem::List(inner) = &marker[0] {
             return format_marker(inner, first);
@@ -674,13 +780,13 @@ pub fn format_marker(marker: &[Elem], first: bool) -> Result<String, ()> {
     Ok(if first { joined } else { format!("({joined})") })
 }
 
-fn format_elem(e: &Elem, first: bool) -> Result<String, ()> {
+fn format_elem(e: &Elem, first: bool) -> Result<String, QuoteError> {
     match e {
         Elem::List(inner) => format_marker(inner, first),
         Elem::Item(l, op, r) => {
             let side = |v: &MarkerVar| match v {
                 MarkerVar::Variable(n) => Ok(n.clone()),
-                MarkerVar::Value(s) => serialize_value(s).ok_or(()),
+                MarkerVar::Value(s) => serialize_value(s).ok_or(QuoteError),
             };
             Ok(format!("{} {op} {}", side(l)?, side(r)?))
         }

@@ -11,7 +11,7 @@
 use std::cmp::Ordering;
 use std::fmt::Write as _;
 
-use super::num::{Num, int_hash, tuple_hash};
+use super::num::{Num, TupleHasher, int_hash, tuple_hash};
 use crate::text::is_py_whitespace;
 
 /// A pre-release kind, in sort order.
@@ -139,7 +139,10 @@ impl Cursor<'_> {
                 break;
             }
             if !overflow {
-                match value.checked_mul(10).and_then(|x| x.checked_add(u64::from(b - b'0'))) {
+                match value
+                    .checked_mul(10)
+                    .and_then(|x| x.checked_add(u64::from(b - b'0')))
+                {
                     Some(x) => value = x,
                     None => overflow = true,
                 }
@@ -190,7 +193,9 @@ const POST_WORDS: &[&str] = &["post", "rev", "r"];
 pub fn py_strip(s: &str) -> &str {
     let b = s.as_bytes();
     // The common case: no whitespace at either end (an ASCII letter or digit there).
-    if b.first().is_some_and(u8::is_ascii_alphanumeric) && b.last().is_some_and(u8::is_ascii_alphanumeric) {
+    if b.first().is_some_and(u8::is_ascii_alphanumeric)
+        && b.last().is_some_and(u8::is_ascii_alphanumeric)
+    {
         return s;
     }
     s.trim_matches(is_py_whitespace)
@@ -198,12 +203,17 @@ pub fn py_strip(s: &str) -> &str {
 
 /// Parse `text` as `Version(text)` does; `None` means `InvalidVersion`.
 #[must_use]
+#[allow(clippy::too_many_lines)] // one pass, in the order of the pattern's groups
 pub fn parse(text: &str) -> Option<Parsed> {
     let core = py_strip(text);
     // Everything inside the surrounding whitespace is ASCII.
     let bytes = core.as_bytes();
     let offset = core.as_ptr() as usize - text.as_ptr() as usize;
-    let mut c = Cursor { s: bytes, i: 0, long_runs: Vec::new() };
+    let mut c = Cursor {
+        s: bytes,
+        i: 0,
+        long_runs: Vec::new(),
+    };
     if matches!(c.peek(), Some(b'v' | b'V')) {
         c.i += 1;
     }
@@ -229,7 +239,17 @@ pub fn parse(text: &str) -> Option<Parsed> {
     }
     if c.i == c.s.len() {
         let long_runs = shift(c.long_runs, offset);
-        return Some(Parsed { version: Version { epoch, release, pre: None, post: None, dev: None, local: None }, long_runs });
+        return Some(Parsed {
+            version: Version {
+                epoch,
+                release,
+                pre: None,
+                post: None,
+                dev: None,
+                local: None,
+            },
+            long_runs,
+        });
     }
     // Pre-release.
     let mut pre = None;
@@ -331,7 +351,17 @@ pub fn parse(text: &str) -> Option<Parsed> {
         return None;
     }
     let long_runs = shift(c.long_runs, offset);
-    Some(Parsed { version: Version { epoch, release, pre, post, dev, local }, long_runs })
+    Some(Parsed {
+        version: Version {
+            epoch,
+            release,
+            pre,
+            post,
+            dev,
+            local,
+        },
+        long_runs,
+    })
 }
 
 fn shift(mut runs: Vec<LongRun>, offset: usize) -> Vec<LongRun> {
@@ -376,7 +406,14 @@ impl Version {
     /// A plain release `release` (epoch 0, nothing else).
     #[must_use]
     pub fn release_only(release: Vec<Num>) -> Version {
-        Version { epoch: Num::ZERO, release, pre: None, post: None, dev: None, local: None }
+        Version {
+            epoch: Num::ZERO,
+            release,
+            pre: None,
+            post: None,
+            dev: None,
+            local: None,
+        }
     }
 
     /// `_cmpkey`'s suffix.
@@ -408,9 +445,7 @@ impl Version {
     pub fn cmp_key(&self, other: &Version) -> Ordering {
         self.epoch
             .cmp(&other.epoch)
-            .then_with(|| {
-                trim_zeros(&self.release, false).cmp(trim_zeros(&other.release, false))
-            })
+            .then_with(|| trim_zeros(&self.release, false).cmp(trim_zeros(&other.release, false)))
             .then_with(|| self.cmp_suffix(other))
             .then_with(|| match (&self.local, &other.local) {
                 (None, None) => Ordering::Equal,
@@ -438,29 +473,39 @@ impl Version {
     /// hashes are per-process; the bindings ask Python).
     #[must_use]
     pub fn py_hash(&self) -> Option<i64> {
-        let release: Vec<i64> = trim_zeros(&self.release, false).iter().map(Num::py_hash).collect();
+        let release = trim_zeros(&self.release, false);
+        let mut rh = TupleHasher::new();
+        for n in release {
+            rh.add(n.py_hash());
+        }
         let s = self.suffix();
-        let suffix = [
+        let mut sh = TupleHasher::new();
+        for lane in [
             int_hash(s.pre_rank),
             s.pre_n.py_hash(),
             int_hash(s.post_rank),
             s.post_n.py_hash(),
             int_hash(s.dev_rank),
             s.dev_n.py_hash(),
-        ];
-        let mut lanes = vec![self.epoch.py_hash(), tuple_hash(&release), tuple_hash(&suffix)];
+        ] {
+            sh.add(lane);
+        }
+        let mut h = TupleHasher::new();
+        h.add(self.epoch.py_hash());
+        h.add(rh.finish());
+        h.add(sh.finish());
         if let Some(local) = &self.local {
-            let mut segs = Vec::with_capacity(local.len());
+            let mut lh = TupleHasher::new();
             for seg in local {
                 match seg {
                     // (n, ""): hash("") is 0 in CPython.
-                    Local::Num(n) => segs.push(tuple_hash(&[n.py_hash(), 0])),
+                    Local::Num(n) => lh.add(tuple_hash(&[n.py_hash(), 0])),
                     Local::Str(_) => return None,
                 }
             }
-            lanes.push(tuple_hash(&segs));
+            h.add(lh.finish());
         }
-        Some(tuple_hash(&lanes))
+        Some(h.finish())
     }
 
     /// `str(Version)`.

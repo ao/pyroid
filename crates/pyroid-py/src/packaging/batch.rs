@@ -36,17 +36,27 @@ enum Item<'py> {
 }
 
 /// The input as items: a list or tuple (read through one snapshot), or an Arrow string array.
-fn items<'py>(py: Python<'py>, xs: &Bound<'py, PyAny>, t: Option<Threads>) -> PyResult<(Vec<Item<'py>>, Kind)> {
+fn items<'py>(
+    py: Python<'py>,
+    xs: &Bound<'py, PyAny>,
+    t: Option<Threads>,
+) -> PyResult<(Vec<Item<'py>>, Kind)> {
     let (seq, kind) = if let Ok(l) = xs.cast::<PyList>() {
         (l.to_tuple(), Kind::List)
     } else if let Ok(tu) = xs.cast::<PyTuple>() {
         (tu.clone(), Kind::Tuple)
     } else if xs.cast::<PyString>().is_ok() {
-        return Err(crate::errors::input_error(py, "expected a list, tuple or Arrow array of versions, got str".to_owned()));
+        return Err(crate::errors::input_error(
+            py,
+            "expected a list, tuple or Arrow array of versions, got str".to_owned(),
+        ));
     } else {
         let input = text_arg(xs, t, "versions")?;
         let TextInput::Arrow(_) = &input else {
-            return Err(crate::errors::input_error(py, "expected a list, tuple or Arrow array of versions".to_owned()));
+            return Err(crate::errors::input_error(
+                py,
+                "expected a list, tuple or Arrow array of versions".to_owned(),
+            ));
         };
         let rows = crate::batch::rows(&input).map_err(|e| e.into_pyerr(py))?;
         let mut out = Vec::with_capacity(rows.len());
@@ -116,12 +126,11 @@ fn parse_all(py: Python<'_>, items: &[Item<'_>], t: Option<Threads>) -> PyResult
             out.push(match (p, &items[start + k]) {
                 (Some(p), _) => p,
                 (None, Item::Null) => Parsed::Null,
-                (None, Item::Str(None, _)) => Parsed::Invalid,
                 (None, Item::Obj(o)) => match coerce(py, o)? {
                     Some(v) => Parsed::Version(v),
                     None => Parsed::Invalid,
                 },
-                (None, Item::Str(Some(_), _)) => Parsed::Invalid,
+                (None, Item::Str(..)) => Parsed::Invalid,
             });
         }
         py.check_signals()?;
@@ -144,7 +153,9 @@ fn index_note(py: Python<'_>, err: PyErr, i: usize) -> PyErr {
 
 fn invalid(py: Python<'_>, item: &Bound<'_, PyAny>) -> PyResult<PyErr> {
     let msg = format!("Invalid version: {}", item.repr()?);
-    Ok(PyErr::from_value(config(py)?.invalid_version.bind(py).call1((msg,))?))
+    Ok(PyErr::from_value(
+        config(py)?.invalid_version.bind(py).call1((msg,))?,
+    ))
 }
 
 fn item_obj<'py>(py: Python<'py>, item: &Item<'py>) -> Bound<'py, PyAny> {
@@ -167,11 +178,20 @@ fn item_obj<'py>(py: Python<'py>, item: &Item<'py>) -> Bound<'py, PyAny> {
 ///     A list of ``Version`` objects (``None`` for Arrow nulls).
 #[pyfunction]
 #[pyo3(signature = (versions, /, *, errors = "raise", threads = None))]
-fn parse_batch<'py>(py: Python<'py>, versions: &Bound<'py, PyAny>, errors: &str, threads: Option<ThreadsArg>) -> PyResult<Bound<'py, PyList>> {
+fn parse_batch<'py>(
+    py: Python<'py>,
+    versions: &Bound<'py, PyAny>,
+    errors: &str,
+    threads: Option<ThreadsArg>,
+) -> PyResult<Bound<'py, PyList>> {
     let raise = match errors {
         "raise" => true,
         "none" => false,
-        other => return Err(PyValueError::new_err(format!("errors must be 'raise' or 'none', not {other:?}"))),
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "errors must be 'raise' or 'none', not {other:?}"
+            )));
+        }
     };
     let t = ThreadsArg::resolve(threads)?;
     let (items, _) = items(py, versions, t)?;
@@ -212,7 +232,12 @@ fn parse_batch<'py>(py: Python<'py>, versions: &Bound<'py, PyAny>, errors: &str,
 ///     InvalidVersion: An item is not a valid version (the first one in input order).
 #[pyfunction]
 #[pyo3(signature = (versions, /, *, reverse = false, threads = None))]
-fn sort_versions<'py>(py: Python<'py>, versions: &Bound<'py, PyAny>, reverse: bool, threads: Option<ThreadsArg>) -> PyResult<Bound<'py, PyList>> {
+fn sort_versions<'py>(
+    py: Python<'py>,
+    versions: &Bound<'py, PyAny>,
+    reverse: bool,
+    threads: Option<ThreadsArg>,
+) -> PyResult<Bound<'py, PyList>> {
     let t = ThreadsArg::resolve(threads)?;
     let (items, _) = items(py, versions, t)?;
     let parsed = parse_all(py, &items, t)?;
@@ -258,34 +283,84 @@ fn contains_batch<'py>(
     let t = ThreadsArg::resolve(threads)?;
     let spec = as_spec(py, specifiers)?;
     let (items, kind) = items(py, versions, t)?;
-    let parsed = parse_all(py, &items, t)?;
-    let mut mask: Vec<Option<bool>> = Vec::with_capacity(items.len());
     let pre = prereleases.filter(|p| !p.is_none());
-    for (i, (p, item)) in parsed.into_iter().zip(&items).enumerate() {
-        let r = match p {
-            Parsed::Null => None,
-            Parsed::Version(v) if spec.native() => Some(spec.contains_parsed(py, &item_obj(py, item), &v, pre, installed)?),
-            Parsed::Invalid if spec.native() => Some(spec.contains_invalid(py, pre)?),
-            _ => {
-                let kw = pyo3::types::PyDict::new(py);
-                if let Some(p) = pre {
-                    kw.set_item("prereleases", p)?;
+    let plan = if let Some(set) = spec.set() {
+        set.get().contains_plan(py, pre, installed)?
+    } else if let Some(single) = spec.single() {
+        single.get().contains_plan(py, pre)?
+    } else {
+        None
+    };
+    // Natively, on the pool, for every str item; the rest (and everything without a plan)
+    // through the object's own contains().
+    let mut mask: Vec<Option<bool>> = vec![None; items.len()];
+    let mut done = vec![false; items.len()];
+    if let Some(plan) = &plan {
+        let threads = crate::input::threads(t);
+        let strs: Vec<Option<&str>> = items
+            .iter()
+            .map(|i| match i {
+                Item::Str(Some(s), _) => Some(&**s),
+                _ => None,
+            })
+            .collect();
+        let mut start = 0;
+        while start < items.len() {
+            let end = (start + CHUNK).min(items.len());
+            let slice = &strs[start..end];
+            let chunk = py
+                .detach(|| {
+                    par::map(slice.len(), threads, |k| {
+                        slice[k].and_then(|s| match vcore::parse(s) {
+                            Some(p) if p.long_runs.is_empty() => {
+                                Some(plan.contains(Some(&p.version)))
+                            }
+                            Some(_) => None,
+                            None => Some(plan.contains(None)),
+                        })
+                    })
+                })
+                .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
+            for (k, r) in chunk.into_iter().enumerate() {
+                if let Some(r) = r {
+                    mask[start + k] = Some(r);
+                    done[start + k] = true;
                 }
-                if let (Some(inst), true) = (installed, spec.is_set()) {
-                    kw.set_item("installed", inst)?;
-                }
-                let r = spec.obj.call_method(intern!(py, "contains"), (item_obj(py, item),), Some(&kw)).map_err(|e| index_note(py, e, i))?;
-                Some(r.is_truthy()?)
             }
-        };
-        mask.push(r);
+            py.check_signals()?;
+            start = end;
+        }
+    }
+    for (i, item) in items.iter().enumerate() {
+        if done[i] {
+            continue;
+        }
+        if let Item::Null = item {
+            continue;
+        }
+        let kw = pyo3::types::PyDict::new(py);
+        if let Some(p) = pre {
+            kw.set_item("prereleases", p)?;
+        }
+        if let (Some(inst), true) = (installed, spec.is_set()) {
+            kw.set_item("installed", inst)?;
+        }
+        let r = spec
+            .obj
+            .call_method(intern!(py, "contains"), (item_obj(py, item),), Some(&kw))
+            .map_err(|e| index_note(py, e, i))?;
+        mask[i] = Some(r.is_truthy()?);
     }
     Ok(match kind {
         Kind::List => PyList::new(py, mask)?.into_any(),
         Kind::Tuple => PyTuple::new(py, mask)?.into_any(),
         Kind::Arrow => {
             let chunk = pyroid_core::columnar::BoolBuffers::build(&mask);
-            Bound::new(py, Column::new(ColumnType::Bool, "", vec![Chunk::Bool(chunk)]))?.into_any()
+            Bound::new(
+                py,
+                Column::new(ColumnType::Bool, "", vec![Chunk::Bool(chunk)]),
+            )?
+            .into_any()
         }
     })
 }
@@ -387,44 +462,26 @@ impl<'py> Spec<'py> {
         self.set().is_some()
     }
 
-    /// Can `contains` run natively for parsed versions?
-    fn native(&self) -> bool {
-        if let Some(s) = self.set() {
-            return s.get().is_native();
-        }
-        self.single().is_some_and(|s| s.get().op().is_ok_and(|op| op != Op::Arbitrary))
-    }
-
     /// Can `filter` run natively (ranges, no `===`, not empty)?
     fn ranged(&self) -> bool {
         if let Some(s) = self.set() {
             return s.get().is_native() && !s.get().is_empty(self.obj.py());
         }
-        self.single().is_some_and(|s| s.get().op().is_ok_and(|op| op != Op::Arbitrary))
+        self.single()
+            .is_some_and(|s| s.get().op().is_ok_and(|op| op != Op::Arbitrary))
     }
 
-    fn contains_parsed(&self, py: Python<'py>, item: &Bound<'py, PyAny>, v: &Version, pre: Option<&Bound<'py, PyAny>>, installed: Option<&Bound<'py, PyAny>>) -> PyResult<bool> {
-        if let Some(s) = self.set() {
-            return s.get().contains_known(py, item, v, pre, installed);
-        }
-        let s = self.single().ok_or_else(|| PyValueError::new_err("not a specifier"))?;
-        s.get().contains_known(py, v, pre)
-    }
-
-    /// `contains(x)` for an `x` that does not parse: `False`, except for an empty set (its
-    /// filter yields unparsable items).
-    fn contains_invalid(&self, py: Python<'py>, pre: Option<&Bound<'py, PyAny>>) -> PyResult<bool> {
-        if let Some(s) = self.set() {
-            return s.get().contains_unparsable(py, pre);
-        }
-        Ok(false)
-    }
-
-    fn filter_plan(&self, py: Python<'py>, pre: &Bound<'py, PyAny>) -> PyResult<(Vec<spec_core::Interval>, Policy)> {
+    fn filter_plan(
+        &self,
+        py: Python<'py>,
+        pre: &Bound<'py, PyAny>,
+    ) -> PyResult<(Vec<spec_core::Interval>, Policy)> {
         if let Some(s) = self.set() {
             return s.get().filter_plan(py, pre);
         }
-        let s = self.single().ok_or_else(|| PyValueError::new_err("not a specifier"))?;
+        let s = self
+            .single()
+            .ok_or_else(|| PyValueError::new_err("not a specifier"))?;
         s.get().filter_plan(py, pre)
     }
 }
@@ -432,7 +489,9 @@ impl<'py> Spec<'py> {
 fn as_spec<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Spec<'py>> {
     if x.cast::<PyString>().is_ok() {
         let set = Bound::new(py, PySpecifierSet::from_text(py, x)?)?;
-        return Ok(Spec { obj: set.into_any() });
+        return Ok(Spec {
+            obj: set.into_any(),
+        });
     }
     Ok(Spec { obj: x.clone() })
 }

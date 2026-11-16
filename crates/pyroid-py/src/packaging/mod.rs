@@ -19,7 +19,6 @@ use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyType};
 
-
 /// What `_configure` registered.
 #[derive(Debug)]
 struct Config {
@@ -128,10 +127,17 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         node_value: get("Value")?,
         node_op: get("Op")?,
         packaging_marker: opt_type("packaging_Marker")?,
-        ws_regex: py.import("re")?.call_method1("compile", (r"[ \t]+",))?.unbind(),
+        ws_regex: py
+            .import("re")?
+            .call_method1("compile", (r"[ \t]+",))?
+            .unbind(),
         unicode: {
-            let v: String = py.import("unicodedata")?.getattr("unidata_version")?.extract()?;
-            pyroid_core::ftfy::UnicodeVersion::from_unidata_version(&v).unwrap_or(pyroid_core::ftfy::UnicodeVersion::V17_0)
+            let v: String = py
+                .import("unicodedata")?
+                .getattr("unidata_version")?
+                .extract()?;
+            pyroid_core::ftfy::UnicodeVersion::from_unidata_version(&v)
+                .unwrap_or(pyroid_core::ftfy::UnicodeVersion::V17_0)
         },
     };
     let _ = CONFIG.set(py, c);

@@ -52,7 +52,7 @@ impl Op {
 
     /// The operator `s` is, if it is one.
     #[must_use]
-    pub fn from_str(s: &str) -> Option<Op> {
+    pub fn parse(s: &str) -> Option<Op> {
         Some(match s {
             "~=" => Op::Compatible,
             "==" => Op::Equal,
@@ -71,8 +71,8 @@ impl Op {
 // Specifier._regex
 // ---------------------------------------------------------------------------
 
-struct Scan<'a> {
-    s: &'a [u32],
+struct Scan<'a, T: Copy + Into<u32>> {
+    s: &'a [T],
     i: usize,
     /// Letters compare with `re.IGNORECASE`'s Unicode folds (the `~=` branch is outside the
     /// `(?a:...)` groups): `İ` and `ı` match `i`, `ſ` matches `s`.
@@ -83,9 +83,9 @@ fn as_char(c: u32) -> char {
     char::from_u32(c).unwrap_or('\u{fffd}')
 }
 
-impl Scan<'_> {
+impl<T: Copy + Into<u32>> Scan<'_, T> {
     fn peek(&self) -> Option<char> {
-        self.s.get(self.i).map(|&c| as_char(c))
+        self.s.get(self.i).map(|&c| as_char(c.into()))
     }
 
     fn eat(&mut self, c: char) -> bool {
@@ -138,7 +138,7 @@ impl Scan<'_> {
                 continue;
             }
             for (k, &b) in w.iter().enumerate() {
-                if !self.letter_eq(as_char(self.s[self.i + k]), b) {
+                if !self.letter_eq(as_char(self.s[self.i + k].into()), b) {
                     continue 'next;
                 }
             }
@@ -178,7 +178,12 @@ impl Scan<'_> {
             }
         }
         let mut parts = 1;
-        while self.peek() == Some('.') && self.s.get(self.i + 1).is_some_and(|&c| as_char(c).is_ascii_digit()) {
+        while self.peek() == Some('.')
+            && self
+                .s
+                .get(self.i + 1)
+                .is_some_and(|&c| as_char(c.into()).is_ascii_digit())
+        {
             self.i += 1;
             self.digits();
             parts += 1;
@@ -212,7 +217,9 @@ impl Scan<'_> {
             while alnum(self.peek()) {
                 self.i += 1;
             }
-            if matches!(self.peek(), Some('-' | '_' | '.')) && alnum(self.s.get(self.i + 1).map(|&c| as_char(c))) {
+            if matches!(self.peek(), Some('-' | '_' | '.'))
+                && alnum(self.s.get(self.i + 1).map(|&c| as_char(c.into())))
+            {
                 self.i += 1;
             } else {
                 break;
@@ -222,7 +229,10 @@ impl Scan<'_> {
 
     fn starts(&self, text: &str) -> bool {
         let t = text.as_bytes();
-        self.s.len() >= t.len() && t.iter().enumerate().all(|(k, &b)| self.s[k] == u32::from(b))
+        self.s.len() >= t.len()
+            && t.iter()
+                .enumerate()
+                .all(|(k, &b)| self.s[k].into() == u32::from(b))
     }
 
     /// The specifier pattern at the start (`Specifier._specifier_regex_str`, not anchored at
@@ -232,7 +242,10 @@ impl Scan<'_> {
         if self.starts("===") {
             self.i = 3;
             self.ws();
-            while self.peek().is_some_and(|c| !is_py_whitespace(c) && c != ';' && c != ')') {
+            while self
+                .peek()
+                .is_some_and(|c| !is_py_whitespace(c) && c != ';' && c != ')')
+            {
                 self.i += 1;
             }
             return Some(self.i);
@@ -282,16 +295,38 @@ impl Scan<'_> {
 /// `Specifier._regex.fullmatch(spec)`: the specifier pattern with `re.VERBOSE | re.IGNORECASE`.
 #[must_use]
 pub fn is_valid(spec: &str) -> bool {
-    let cps: Vec<u32> = spec.trim_matches(is_py_whitespace).chars().map(u32::from).collect();
-    let mut s = Scan { s: &cps, i: 0, unicode_case: false };
-    s.pattern() == Some(cps.len())
+    let spec = spec.trim_matches(is_py_whitespace);
+    if spec.is_ascii() {
+        // ASCII text: scan the bytes, no copy.
+        let b = spec.as_bytes();
+        return Scan {
+            s: b,
+            i: 0,
+            unicode_case: false,
+        }
+        .pattern()
+            == Some(b.len());
+    }
+    let cps: Vec<u32> = spec.chars().map(u32::from).collect();
+    Scan {
+        s: &cps,
+        i: 0,
+        unicode_case: false,
+    }
+    .pattern()
+        == Some(cps.len())
 }
 
 /// The tokenizer's `SPECIFIER` rule: the length of the specifier pattern's match at the start of
 /// `s` (code points), if any.
 #[must_use]
 pub fn match_len(s: &[u32]) -> Option<usize> {
-    Scan { s, i: 0, unicode_case: false }.pattern()
+    Scan {
+        s,
+        i: 0,
+        unicode_case: false,
+    }
+    .pattern()
 }
 
 /// `Specifier.__init__`'s split of a valid `spec`: `(operator, version)`.
@@ -300,10 +335,10 @@ pub fn split(spec: &str) -> (Op, &str) {
     let spec = spec.trim_matches(is_py_whitespace);
     let (op, n) = if spec.starts_with("===") {
         (Op::Arbitrary, 3)
-    } else if let Some(op) = spec.get(..2).and_then(Op::from_str) {
+    } else if let Some(op) = spec.get(..2).and_then(Op::parse) {
         (op, 2)
     } else {
-        (spec.get(..1).and_then(Op::from_str).unwrap_or(Op::Equal), 1)
+        (spec.get(..1).and_then(Op::parse).unwrap_or(Op::Equal), 1)
     };
     (op, spec[n..].trim_matches(is_py_whitespace))
 }
@@ -351,15 +386,27 @@ pub struct Upper {
 /// One interval.
 pub type Interval = (Lower, Upper);
 
-const NEG_INF: Lower = Lower { point: None, inclusive: false };
-const POS_INF: Upper = Upper { point: None, inclusive: false };
+const NEG_INF: Lower = Lower {
+    point: None,
+    inclusive: false,
+};
+const POS_INF: Upper = Upper {
+    point: None,
+    inclusive: false,
+};
 
 fn lower(v: Version, inclusive: bool) -> Lower {
-    Lower { point: Some(Point::Version(v)), inclusive }
+    Lower {
+        point: Some(Point::Version(v)),
+        inclusive,
+    }
 }
 
 fn upper(v: Version, inclusive: bool) -> Upper {
-    Upper { point: Some(Point::Version(v)), inclusive }
+    Upper {
+        point: Some(Point::Version(v)),
+        inclusive,
+    }
 }
 
 /// `_ranges.trim_release`: trailing zeros off, one element kept.
@@ -413,7 +460,10 @@ fn cmp_boundaries(a: &Version, ak: Kind, b: &Version, bk: Kind) -> Ordering {
         .then_with(|| trim_zeros(&a.release, false).cmp(trim_zeros(&b.release, false)))
         .then_with(|| {
             let (sa, sb) = (a.suffix(), b.suffix());
-            let head = sa.pre_rank.cmp(&sb.pre_rank).then_with(|| sa.pre_n.cmp(&sb.pre_n));
+            let head = sa
+                .pre_rank
+                .cmp(&sb.pre_rank)
+                .then_with(|| sa.pre_n.cmp(&sb.pre_n));
             head.then_with(|| match (ak, bk) {
                 (Kind::AfterLocals, Kind::AfterLocals) => (
                     sa.post_rank,
@@ -648,7 +698,10 @@ fn standard_ranges(op: Op, v: &Version, has_local: bool) -> Option<Vec<Interval>
         Op::GreaterEqual => vec![(lower(v.clone(), true), POS_INF)],
         Op::LessEqual => vec![(
             NEG_INF,
-            Upper { point: Some(Point::Boundary(v.clone(), Kind::AfterLocals)), inclusive: true },
+            Upper {
+                point: Some(Point::Boundary(v.clone(), Kind::AfterLocals)),
+                inclusive: true,
+            },
         )],
         Op::Greater => {
             if let Some(d) = &v.dev {
@@ -670,7 +723,11 @@ fn standard_ranges(op: Op, v: &Version, has_local: bool) -> Option<Vec<Interval>
             }
         }
         Op::Less => {
-            let bound = if v.is_prerelease() { v.clone() } else { with_dev(v, Num::ZERO) };
+            let bound = if v.is_prerelease() {
+                v.clone()
+            } else {
+                with_dev(v, Num::ZERO)
+            };
             if le(&bound, &min_version()) {
                 return Some(Vec::new());
             }
@@ -683,11 +740,23 @@ fn standard_ranges(op: Op, v: &Version, has_local: bool) -> Option<Vec<Interval>
                 Point::Boundary(v.clone(), Kind::AfterLocals)
             };
             if op == Op::Equal {
-                vec![(lower(v.clone(), true), Upper { point: Some(up), inclusive: true })]
+                vec![(
+                    lower(v.clone(), true),
+                    Upper {
+                        point: Some(up),
+                        inclusive: true,
+                    },
+                )]
             } else {
                 vec![
                     (NEG_INF, upper(v.clone(), false)),
-                    (Lower { point: Some(up), inclusive: false }, POS_INF),
+                    (
+                        Lower {
+                            point: Some(up),
+                            inclusive: false,
+                        },
+                        POS_INF,
+                    ),
                 ]
             }
         }
@@ -697,7 +766,10 @@ fn standard_ranges(op: Op, v: &Version, has_local: bool) -> Option<Vec<Interval>
             }
             let mut prefix = v.clone();
             prefix.release.pop();
-            vec![(lower(v.clone(), true), upper(next_prefix_dev0(&prefix), false))]
+            vec![(
+                lower(v.clone(), true),
+                upper(next_prefix_dev0(&prefix), false),
+            )]
         }
         Op::Arbitrary => vec![(NEG_INF, POS_INF)],
     })
@@ -866,7 +938,12 @@ pub fn ranges_are_prerelease_only(ranges: &[Interval]) -> bool {
 
 /// `_fast_match(specifier, parsed)`: `Some(answer)` without building ranges, or `None`.
 #[must_use]
-pub fn fast_match(op: Op, version_str: &str, spec_v: Option<&Version>, parsed: &Version) -> Option<bool> {
+pub fn fast_match(
+    op: Op,
+    version_str: &str,
+    spec_v: Option<&Version>,
+    parsed: &Version,
+) -> Option<bool> {
     if version_str.ends_with(".*") || parsed.local.is_some() {
         return None;
     }
@@ -881,7 +958,11 @@ pub fn fast_match(op: Op, version_str: &str, spec_v: Option<&Version>, parsed: &
             if parsed.epoch != spec_v.epoch
                 || trim_release(&parsed.release) != trim_release(&spec_v.release)
             {
-                Some(if op == Op::Less { o == Ordering::Less } else { o == Ordering::Greater })
+                Some(if op == Op::Less {
+                    o == Ordering::Less
+                } else {
+                    o == Ordering::Greater
+                })
             } else {
                 None
             }
@@ -900,7 +981,11 @@ pub fn spec_version(version_str: &str) -> Option<Version> {
 /// `canonicalize_version(spec_version, strip_trailing_zero=...)`.
 #[must_use]
 pub fn canonical_version(v: &Version, strip_trailing_zero: bool) -> String {
-    if strip_trailing_zero { v.to_string_trimmed() } else { v.to_string_py() }
+    if strip_trailing_zero {
+        v.to_string_trimmed()
+    } else {
+        v.to_string_py()
+    }
 }
 
 /// Whether `pre` is set (a/b/rc), for callers outside the crate.
