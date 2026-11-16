@@ -41,14 +41,15 @@ def main() -> None:
     p.add_argument("--out", type=Path)
     args = p.parse_args()
     env = {**os.environ, "PYROID_DIFFLIB_EXAMPLES": str(args.examples), "HYPOTHESIS_PROFILE": "ci"}
-    out = run(["-q", "test_difflib_parity.py", "--hypothesis-show-statistics"], env)
+    # No per-test timeout: thousands of examples of one test take longer than the suite's 300 s.
+    out = run(["-q", "--timeout=0", "test_difflib_parity.py", "--hypothesis-show-statistics"], env)
     fuzz: dict[str, int] = {}
     test = None
     for line in out.splitlines():
         m = re.match(r"test_difflib_parity\.py::(\w+):", line.strip())
         if m:
             test = m.group(1)
-        m = re.search(r"- (\d+) passing examples", line)
+        m = re.search(r"(\d+) passing(?: examples)?,? ", line)
         if m and test:
             fuzz[test] = fuzz.get(test, 0) + int(m.group(1))
     out = run(["-q", "test_difflib_cpython.py", "-rs"], env)
