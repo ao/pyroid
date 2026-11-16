@@ -383,15 +383,17 @@ def test_numeric_arguments_as_difflib() -> None:
     ]
     for i, case in enumerate(cases):
         assert outcome(functools.partial(case, pd)) == outcome(functools.partial(case, difflib)), i
-    qs, poss = ["appel", "pech"], ["apple", "ape", "peach"]
+    # close_matches_batch gives what its loop gives (for a non-integer n, heapq decides, and 3.15
+    # takes some that 3.14 rejects).
+    poss = ["apple", "ape", "peach"]
+    ns: list[Any] = [2.5, 3.0, 1.0, 0.5, True, 2, 10**30]
+    for qs in (["appel", "pech"], ["appel"], ["zzz"], [], "appel"):
+        for n in ns:
+            words = [qs] if isinstance(qs, str) else qs
+            want = outcome(lambda: [difflib.get_close_matches(q, poss, n, 0.6) for q in words])  # noqa: B023
+            assert outcome(lambda: pd.close_matches_batch(qs, poss, n, 0.6)) == want, (qs, n)  # noqa: B023
     with pytest.raises(TypeError):
-        _ = [difflib.get_close_matches(q, poss, 2.5, 0.6) for q in qs]  # type: ignore[call-overload]
-    with pytest.raises(TypeError):
-        pd.close_matches_batch(qs, poss, 2.5, 0.6)  # type: ignore[arg-type]
-    assert pd.close_matches_batch([], poss, 2.5) == []  # type: ignore[arg-type]
-    assert pd.close_matches_batch(qs, poss, True) == [
-        difflib.get_close_matches(q, poss, True) for q in qs
-    ]
+        pd.close_matches_batch(["appel"], _testing.column(poss, chunks=1), 2.5)  # type: ignore[arg-type]
 
 
 @pytest.mark.thread_unsafe(reason="HtmlDiff's anchor counter is global")

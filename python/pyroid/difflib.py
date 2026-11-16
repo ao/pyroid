@@ -541,7 +541,8 @@ def close_matches_batch(
         words: The words to look up: a `str`, a list or tuple of `str`, or an Arrow string array.
         possibilities: The candidates: a list or tuple of `str`, or an Arrow string array (nulls
             are skipped).
-        n: At most this many results per word.
+        n: At most this many results per word. With lists and tuples, a non-integer `n` gives
+            what the loop above gives (its `heapq.nlargest` decides, by Python version).
         cutoff: The lowest ratio kept, in `[0.0, 1.0]`.
         threads: `None`: the whole shared pool; `n`: at most `n` tasks at once; `1`: this thread.
 
@@ -551,7 +552,7 @@ def close_matches_batch(
 
     Raises:
         ValueError: `n <= 0` or `cutoff` outside `[0.0, 1.0]`.
-        TypeError: `n` is not an integer (as the loop's `heapq.nlargest` raises).
+        TypeError: `n` is not an integer and an input is an Arrow array.
         pyroid.InputError: An argument is not text.
     """
     if not n > 0:
@@ -561,8 +562,11 @@ def close_matches_batch(
     try:
         n = operator.index(n)
     except TypeError:
-        if type(words) in (list, tuple) and not words:
-            return []  # the loop has no word to look up
+        # heapq.nlargest decides what a non-integer n does, and that differs between versions
+        # (3.15 takes 3.0, or 2.5 when there are no more matches): the loop itself answers.
+        if type(possibilities) in (list, tuple) and type(words) in (str, list, tuple):
+            words = [words] if type(words) is str else words
+            return [get_close_matches(w, possibilities, n, cutoff) for w in words]
         raise
     return _native._close_matches_batch(  # type: ignore[no-any-return]
         words, possibilities, min(n, sys.maxsize), float(cutoff), threads

@@ -155,4 +155,5 @@ it computes a different score.
 - A copied or unpickled `SequenceMatcher` has CPython's state and runs CPython's code until its
   next `set_seq2` (the results are the same).
 - `ratio_batch` and `close_matches_batch` follow pyroid's text-input rules: lone surrogates raise
-  `UnicodeEncodeError` there (they are fine everywhere else).
+  `UnicodeEncodeError` there (they are fine everywhere else). With Arrow input, a non-integer `n`
+  makes `close_matches_batch` raise `TypeError` (with lists and tuples it runs the loop).
