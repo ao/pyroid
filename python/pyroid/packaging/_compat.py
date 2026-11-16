@@ -4,6 +4,13 @@
 
 With packaging installed, pyroid raises packaging's exception classes, so ``except
 packaging.version.InvalidVersion`` catches pyroid's errors too.
+
+pyroid's versions compare and hash with packaging's through ``Version._key``, which pyroid
+builds in the installed release's format: 26.1 and later use tuples of ints, 26.0 and earlier a
+tuple holding packaging's ``Infinity`` objects. At import, pyroid checks its keys against the
+installed packaging's on a set of versions that covers every branch of the key; if neither
+format matches, pyroid's objects and packaging's are kept apart (they do not compare, and
+pyroid's do not claim packaging's classes), with a ``RuntimeWarning``.
 """
 
 from __future__ import annotations
@@ -39,7 +46,7 @@ _pp = _import("packaging._parser") if HAVE_PACKAGING else None
 #: The installed packaging release ("" without it).
 INSTALLED = getattr(_import("packaging"), "__version__", "") if HAVE_PACKAGING else ""
 # pyroid objects claim packaging's classes (`__class__`) only for the releases whose private
-# attributes they reproduce.
+# attributes they reproduce (and whose comparison key they build: see _choose_key_format).
 _CLAIM = HAVE_PACKAGING and INSTALLED.startswith("26.")
 
 
@@ -155,10 +162,22 @@ _Version: Any = getattr(_pv, "_Version", _VersionTuple) if HAVE_PACKAGING else _
 InvalidSpecifier: type[ValueError] = _ps.InvalidSpecifier if _ps is not None else _InvalidSpecifier
 InvalidMarker: type[ValueError] = getattr(_pm, "InvalidMarker", _InvalidMarker)
 UndefinedComparison: type[ValueError] = getattr(_pm, "UndefinedComparison", _UndefinedComparison)
-# packaging < 26.3 has a ValueError subclass here; 26.3's is a KeyError, as pyroid raises.
+# packaging 26.3 raises its UndefinedEnvironmentName, a KeyError, for a missing environment key.
+# Earlier releases raise a plain KeyError (their UndefinedEnvironmentName, a ValueError, is never
+# raised): with one of those, pyroid raises a subclass of both, so `except KeyError` and `except
+# packaging.markers.UndefinedEnvironmentName` both catch it.
 UndefinedEnvironmentName: type[Exception] = getattr(
     _pm, "UndefinedEnvironmentName", _UndefinedEnvironmentName
 )
+if not issubclass(UndefinedEnvironmentName, KeyError):
+    UndefinedEnvironmentName = type(
+        "UndefinedEnvironmentName",
+        (UndefinedEnvironmentName, KeyError),
+        {
+            "__module__": "pyroid.packaging.markers",
+            "__doc__": _UndefinedEnvironmentName.__doc__,
+        },
+    )
 InvalidRequirement: type[ValueError] = getattr(_pr, "InvalidRequirement", _InvalidRequirement)
 ParserSyntaxError: Any = getattr(_pt, "ParserSyntaxError", _ParserSyntaxError)
 Variable: Any = getattr(_pp, "Variable", _Variable)
@@ -419,6 +438,20 @@ SPECIFIER_REGEX_STR = r"""
 SPECIFIER_REGEX = re.compile(r"\s*" + SPECIFIER_REGEX_STR + r"\s*", re.VERBOSE | re.IGNORECASE)
 
 _WARNED: set[str] = set()
+_PYROID_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
+
+
+def _caller_stacklevel() -> int:
+    """The ``stacklevel`` of the first frame outside pyroid and the import system."""
+    frame = sys._getframe(1)
+    level = 1
+    while frame.f_back is not None and (
+        frame.f_code.co_filename.startswith(_PYROID_DIR)
+        or frame.f_code.co_filename.startswith("<frozen importlib")
+    ):
+        frame = frame.f_back
+        level += 1
+    return level
 
 
 def _fallback_warning(what: str) -> None:
@@ -428,7 +461,7 @@ def _fallback_warning(what: str) -> None:
             f"pyroid.packaging: {what} runs packaging's own code (slow path). This warning is "
             "shown once.",
             FallbackWarning,
-            stacklevel=4,
+            stacklevel=_caller_stacklevel(),
         )
 
 
@@ -454,9 +487,10 @@ def _delegate(name: str, obj: Any, *args: Any) -> Any:
         return ranges.bounds_for_spec(op, version, version_cls(version.removesuffix(".*")))
     if name == "_get_ranges":
         return ranges.intersect_specifier_bounds(s._to_ranges() for s in obj._specs)
+    version_range = importlib.import_module("packaging.ranges").VersionRange
     if name == "to_range":
         _fallback_warning("SpecifierSet.to_range()")
-        return importlib.import_module("packaging.ranges").VersionRange._from_specifier_set(obj)
+        return version_range._from_specifier_set(obj)
     # is_subset / is_superset / is_disjoint: SpecifierSet._check_relation_operand, then ranges.
     (other,) = args
     from pyroid.packaging.specifiers import SpecifierSet
@@ -467,7 +501,13 @@ def _delegate(name: str, obj: Any, *args: Any) -> Any:
     if obj._has_arbitrary or cast(Any, other)._has_arbitrary:
         raise ValueError("set relations do not support === specifiers")
     _fallback_warning(f"SpecifierSet.{name}()")
-    return getattr(obj.to_range(), name)(other.to_range())
+    # The ranges directly: the caller asked for the relation, not for to_range().
+    theirs = (
+        version_range._from_specifier_set(other)
+        if isinstance(other, SpecifierSet)
+        else other.to_range()
+    )
+    return getattr(version_range._from_specifier_set(obj), name)(theirs)
 
 
 _native._configure(
@@ -484,6 +524,8 @@ _native._configure(
         "delegate": _delegate,
         "packaging_Specifier": getattr(_ps, "Specifier", None) if _CLAIM else None,
         "packaging_SpecifierSet": getattr(_ps, "SpecifierSet", None) if _CLAIM else None,
+        "packaging_Specifier_any": getattr(_ps, "Specifier", None),
+        "packaging_SpecifierSet_any": getattr(_ps, "SpecifierSet", None),
         "InvalidMarker": InvalidMarker,
         "UndefinedComparison": UndefinedComparison,
         "UndefinedEnvironmentName": UndefinedEnvironmentName,
@@ -495,5 +537,68 @@ _native._configure(
         "Value": Value,
         "Op": Op,
         "packaging_Marker": getattr(_pm, "Marker", None) if _CLAIM else None,
+        "packaging_Marker_any": getattr(_pm, "Marker", None),
     }
 )
+
+
+# Versions whose keys take every branch of both key formats: pre, post and dev alone and
+# together, dev-only, local segments of both kinds, an epoch, trailing zeros, a number past
+# 2**64.
+_KEY_PROBES = (
+    "1",
+    "1.0.0",
+    "0",
+    "2!1.0",
+    "1.0a1",
+    "1.0b2",
+    "1.0rc3",
+    "1.0.post4",
+    "1.0.dev5",
+    "1.0a1.dev2",
+    "1.0.post1.dev2",
+    "1.0rc1.post2.dev3",
+    "1.0+abc.5",
+    "1.0+5.abc",
+    "1.0.dev1+local",
+    "1.2.3." + "9" * 25,
+)
+
+
+def _keys_match() -> bool:
+    """Do pyroid's ``_key`` and hash equal the installed packaging's on every probe?"""
+    for text in _KEY_PROBES:
+        theirs, mine = _pv.Version(text), _native.Version(text)
+        if mine._key != theirs._key or hash(mine) != hash(theirs):
+            return False
+    return True
+
+
+def _choose_key_format() -> str:
+    """Pick the installed packaging's key format; ``"apart"`` (and a warning) for neither."""
+    if not HAVE_PACKAGING:
+        return "current"
+    try:
+        if _keys_match():
+            return "current"
+        structures = importlib.import_module("packaging._structures")
+        _native._set_key_format("legacy", structures.Infinity, structures.NegativeInfinity)
+        if _keys_match():
+            return "legacy"
+    except Exception:  # noqa: BLE001  # a packaging whose versions pyroid cannot read
+        pass
+    _native._set_key_format("apart")
+    warnings.warn(
+        f"pyroid.packaging: packaging {INSTALLED or '(unknown release)'} orders versions with "
+        "a comparison key pyroid does not reproduce, so pyroid's objects and packaging's do not "
+        "compare with each other (pyroid's results are packaging 26.3's)",
+        RuntimeWarning,
+        stacklevel=_caller_stacklevel(),
+    )
+    return "apart"
+
+
+#: How pyroid's ``Version._key`` is built for the installed packaging: ``"current"`` (26.1 and
+#: later, or no packaging), ``"legacy"`` (26.0 and earlier), or ``"apart"`` (a release whose key
+#: pyroid does not reproduce: no comparisons across the two libraries).
+KEY_FORMAT = _choose_key_format()

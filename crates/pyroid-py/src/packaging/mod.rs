@@ -3,8 +3,9 @@
 //! `pyroid._pyroid.packaging`: the native classes behind `pyroid.packaging`.
 //!
 //! `pyroid.packaging` registers its exception classes and a few Python helpers with
-//! `_configure` at import (packaging's own exception classes when packaging is installed), and
-//! turns the `__class__` claim (see [`claims`]) on or off.
+//! `_configure` at import (packaging's own exception classes when packaging is installed),
+//! picks the comparison key format of the installed packaging ([`KeyFormat`]), and turns the
+//! `__class__` claim (see [`claims`]) on or off.
 
 mod batch;
 mod cell;
@@ -12,7 +13,7 @@ mod markers;
 mod specifiers;
 mod version;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -33,7 +34,7 @@ struct Config {
     /// packaging's `Version` class (`None` without packaging): the `__class__` claim.
     packaging_version: Option<Py<PyType>>,
     /// packaging's `Version` class whatever its release (`None` without packaging): read
-    /// through its slots.
+    /// through its slots, or its string.
     packaging_version_any: Option<Py<PyType>>,
     /// packaging's `_BaseVersion` (`None` without packaging): compared through `_key`.
     packaging_base_version: Option<Py<PyType>>,
@@ -77,15 +78,66 @@ static CONFIG: PyOnceLock<Config> = PyOnceLock::new();
 /// Whether pyroid's objects report packaging's classes as `__class__` (off under the patch).
 static CLAIMS: AtomicBool = AtomicBool::new(true);
 
+/// Whether `pyroid.patch("packaging")` is on: packaging's names are pyroid's classes, and
+/// objects of packaging's original classes (made before the patch) are taken by value.
+static PATCHED: AtomicBool = AtomicBool::new(false);
+
+/// How `Version._key` (and so the hash and the comparisons with packaging's objects) is built,
+/// following the installed packaging release.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum KeyFormat {
+    /// packaging 26.1 and later (and no packaging): `(epoch, release, suffix[, local])` of ints
+    /// and strings, hashed natively.
+    Current,
+    /// packaging 26.0 and earlier: `(epoch, release, pre, post, dev, local)` with its
+    /// `_structures.Infinity` and `NegativeInfinity` objects, hashed by Python.
+    Legacy,
+    /// A packaging release whose key pyroid does not reproduce: pyroid's objects and
+    /// packaging's do not compare (`NotImplemented`).
+    Apart,
+}
+
+const KEY_CURRENT: u8 = 0;
+const KEY_LEGACY: u8 = 1;
+const KEY_APART: u8 = 2;
+
+static KEY_FORMAT: AtomicU8 = AtomicU8::new(KEY_CURRENT);
+
+/// packaging's `Infinity` and `NegativeInfinity` (for [`KeyFormat::Legacy`]).
+static INFINITIES: PyOnceLock<(Py<PyAny>, Py<PyAny>)> = PyOnceLock::new();
+
+/// The key format in use.
+pub fn key_format() -> KeyFormat {
+    match KEY_FORMAT.load(Ordering::Relaxed) {
+        KEY_LEGACY => KeyFormat::Legacy,
+        KEY_APART => KeyFormat::Apart,
+        _ => KeyFormat::Current,
+    }
+}
+
+/// packaging's `(Infinity, NegativeInfinity)` (set with [`KeyFormat::Legacy`]).
+pub fn infinities(py: Python<'_>) -> PyResult<(&Bound<'_, PyAny>, &Bound<'_, PyAny>)> {
+    let (inf, neg) = INFINITIES
+        .get(py)
+        .ok_or_else(|| PyValueError::new_err("pyroid.packaging: no legacy key objects set"))?;
+    Ok((inf.bind(py), neg.bind(py)))
+}
+
+/// Is `pyroid.patch("packaging")` on?
+pub fn patched() -> bool {
+    PATCHED.load(Ordering::Relaxed)
+}
+
 fn config(py: Python<'_>) -> PyResult<&Config> {
     CONFIG.get(py).ok_or_else(|| {
         PyValueError::new_err("pyroid.packaging is not configured (import pyroid.packaging)")
     })
 }
 
-/// Is the `__class__` claim on?
+/// Is the `__class__` claim on? (Off under the patch, and when pyroid's objects are kept apart
+/// from the installed packaging's.)
 fn claims() -> bool {
-    CLAIMS.load(Ordering::Relaxed)
+    CLAIMS.load(Ordering::Relaxed) && key_format() != KeyFormat::Apart
 }
 
 /// Register the classes and helpers (`pyroid.packaging` does it once at import).
@@ -153,6 +205,62 @@ fn _set_claims(on: bool) {
     CLAIMS.store(on, Ordering::Relaxed);
 }
 
+/// `pyroid.patch("packaging")` on or off: the claim goes off while patched.
+#[pyfunction]
+fn _set_patched(on: bool) {
+    PATCHED.store(on, Ordering::Relaxed);
+    CLAIMS.store(!on, Ordering::Relaxed);
+}
+
+/// Is `pyroid.patch("packaging")` on?
+#[pyfunction]
+fn _patched() -> bool {
+    patched()
+}
+
+/// Set the key format: `"current"`, `"legacy"` (with packaging's `Infinity` and
+/// `NegativeInfinity`) or `"apart"`. `pyroid.packaging` calls it once at import, after checking
+/// the installed packaging's keys.
+#[pyfunction]
+#[pyo3(signature = (format, infinity = None, negative_infinity = None))]
+fn _set_key_format(
+    py: Python<'_>,
+    format: &str,
+    infinity: Option<Py<PyAny>>,
+    negative_infinity: Option<Py<PyAny>>,
+) -> PyResult<()> {
+    let f = match format {
+        "current" => KEY_CURRENT,
+        "apart" => KEY_APART,
+        "legacy" => {
+            let (Some(inf), Some(neg)) = (infinity, negative_infinity) else {
+                return Err(PyValueError::new_err(
+                    "the legacy key format needs packaging's Infinity and NegativeInfinity",
+                ));
+            };
+            let _ = INFINITIES.set(py, (inf, neg));
+            KEY_LEGACY
+        }
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "unknown key format {other:?}"
+            )));
+        }
+    };
+    KEY_FORMAT.store(f, Ordering::Relaxed);
+    Ok(())
+}
+
+/// The key format in use (`"current"`, `"legacy"` or `"apart"`).
+#[pyfunction]
+fn _key_format() -> &'static str {
+    match key_format() {
+        KeyFormat::Current => "current",
+        KeyFormat::Legacy => "legacy",
+        KeyFormat::Apart => "apart",
+    }
+}
+
 /// Is the `__class__` claim on?
 #[pyfunction]
 fn _claims() -> bool {
@@ -165,6 +273,10 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_configure, &m)?)?;
     m.add_function(wrap_pyfunction!(_set_claims, &m)?)?;
     m.add_function(wrap_pyfunction!(_claims, &m)?)?;
+    m.add_function(wrap_pyfunction!(_set_patched, &m)?)?;
+    m.add_function(wrap_pyfunction!(_patched, &m)?)?;
+    m.add_function(wrap_pyfunction!(_set_key_format, &m)?)?;
+    m.add_function(wrap_pyfunction!(_key_format, &m)?)?;
     version::register(&m)?;
     specifiers::register(&m)?;
     markers::register(&m)?;

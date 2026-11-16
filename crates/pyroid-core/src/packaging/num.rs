@@ -68,6 +68,58 @@ impl Num {
         }
     }
 
+    /// The value as big-endian bytes, without leading zero bytes (`int.from_bytes(b, "big")`
+    /// gives it back; unlike `int(digits)`, that is not subject to Python's limit on integer
+    /// string conversion).
+    #[must_use]
+    pub fn to_be_bytes(&self) -> Vec<u8> {
+        let digits = match self {
+            Num::Small(v) => {
+                let b = v.to_be_bytes();
+                let first = b.iter().position(|&x| x != 0).unwrap_or(b.len());
+                return b[first..].to_vec();
+            }
+            Num::Big(d) => d.as_bytes(),
+        };
+        // Little-endian base-2**32 limbs; each step multiplies by 10**k and adds k digits.
+        let mut limbs: Vec<u32> = Vec::with_capacity(digits.len() / 9 + 1);
+        for chunk in digits.chunks(9) {
+            let mut mul: u64 = 1;
+            let mut add: u64 = 0;
+            for &b in chunk {
+                mul *= 10;
+                add = add * 10 + u64::from(b - b'0');
+            }
+            let mut carry = add;
+            for limb in &mut limbs {
+                let x = u64::from(*limb) * mul + carry;
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    *limb = x as u32;
+                }
+                carry = x >> 32;
+            }
+            while carry > 0 {
+                #[allow(clippy::cast_possible_truncation)]
+                limbs.push(carry as u32);
+                carry >>= 32;
+            }
+        }
+        let mut out: Vec<u8> = limbs.iter().rev().flat_map(|l| l.to_be_bytes()).collect();
+        let first = out.iter().position(|&x| x != 0).unwrap_or(out.len());
+        out.drain(..first);
+        out
+    }
+
+    /// The number of decimal digits.
+    #[must_use]
+    pub fn digit_count(&self) -> usize {
+        match self {
+            Num::Small(v) => v.checked_ilog10().map_or(1, |l| l as usize + 1),
+            Num::Big(d) => d.len(),
+        }
+    }
+
     /// CPython's `hash(int(self))`: the value modulo the hash modulus (2**61 - 1 on 64-bit).
     #[must_use]
     pub fn py_hash(&self) -> i64 {

@@ -17,7 +17,7 @@ __all__ = ["InvalidRequirement", "Requirement"]
 
 _parse = _native.parse_requirement
 _canonicalize = _native.canonicalize_str
-_PACKAGING_REQUIREMENT = _compat._pr.Requirement if _compat._CLAIM else None
+_PACKAGING_REQUIREMENT = getattr(_compat._pr, "Requirement", None) if _compat._CLAIM else None
 
 
 class Requirement:
@@ -98,7 +98,8 @@ class Requirement:
         return "".join(self._iter_parts(self.name))
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}({str(self)!r})>"
+        # type(self): __class__ is packaging's class while the claim is on.
+        return f"<{type(self).__name__}({str(self)!r})>"
 
     def __hash__(self) -> int:
         return hash(
@@ -127,12 +128,11 @@ class Requirement:
 
     @property  # type: ignore[misc]
     def __class__(self) -> Any:
-        # isinstance(r, packaging.requirements.Requirement) for pyroid's (unpatched; not for
-        # subclasses).
-        cls = type(self)
-        if cls is Requirement and _PACKAGING_REQUIREMENT is not None and _native._claims():
+        # isinstance(r, packaging.requirements.Requirement) for pyroid's and its subclasses'
+        # objects (unpatched).
+        if _PACKAGING_REQUIREMENT is not None and _native._claims():
             return _PACKAGING_REQUIREMENT
-        return cls
+        return type(self)
 
 
 def _canonical(name: Any) -> str:
@@ -140,7 +140,7 @@ def _canonical(name: Any) -> str:
 
 
 _REQUIREMENT_TYPES: tuple[type, ...] = (Requirement,) + (
-    (_compat._pr.Requirement,) if _compat._pr is not None else ()
+    (_compat._pr.Requirement,) if hasattr(_compat._pr, "Requirement") else ()
 )
 
 

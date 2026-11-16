@@ -10,12 +10,12 @@ use pyo3::basic::CompareOp;
 use pyo3::exceptions::{PyAttributeError, PyDeprecationWarning, PyTypeError};
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyInt, PyString, PyTuple, PyType};
+use pyo3::types::{PyBool, PyBytes, PyDict, PyInt, PyString, PyTuple, PyType};
 use pyroid_core::packaging::num::Num;
 use pyroid_core::packaging::version::{self as core, Local, Pre, Version};
 
-use super::cell::{HashCache, StateCell, StateRef};
-use super::{claims, config};
+use super::cell::{HashCache, Passed, StateCell, StateRef};
+use super::{KeyFormat, claims, config, infinities, key_format, patched};
 
 /// A parsed version and the Python objects made from it on demand.
 #[derive(Debug)]
@@ -24,17 +24,78 @@ struct Inner {
     hash: HashCache,
     text: OnceLock<Py<PyString>>,
     release: OnceLock<Py<PyTuple>>,
+    /// `_key` in the format it was built in (packaging's own code reads it on every
+    /// comparison with one of its objects).
+    key: OnceLock<(KeyFormat, Py<PyTuple>)>,
+    /// Some number has more than 19 digits: printing it goes through Python's `str(int)`, so
+    /// the limit on integer string conversion applies as in packaging.
+    big: bool,
 }
 
 impl Inner {
     fn new(v: Version) -> Self {
+        let big = has_big(&v);
         Self {
             v,
             hash: HashCache::new(),
             text: OnceLock::new(),
             release: OnceLock::new(),
+            key: OnceLock::new(),
+            big,
         }
     }
+}
+
+/// Does `v` hold a number above `u64::MAX`?
+fn has_big(v: &Version) -> bool {
+    let big = |n: &Num| matches!(n, Num::Big(_));
+    big(&v.epoch)
+        || v.release.iter().any(big)
+        || v.pre.as_ref().is_some_and(|(_, n)| big(n))
+        || v.post.as_ref().is_some_and(big)
+        || v.dev.as_ref().is_some_and(big)
+        || v.local
+            .as_ref()
+            .is_some_and(|l| l.iter().any(|s| matches!(s, Local::Num(n) if big(n))))
+}
+
+/// `str(int)` of each of `nums` that has more digits than `sys.get_int_max_str_digits()`
+/// allows, which raises packaging's `ValueError` (packaging prints its numbers with `str`).
+fn check_printable<'a>(py: Python<'_>, nums: impl IntoIterator<Item = &'a Num>) -> PyResult<()> {
+    let mut limit: Option<usize> = None;
+    for n in nums {
+        if !matches!(n, Num::Big(_)) {
+            continue;
+        }
+        let max = if let Some(m) = limit {
+            m
+        } else {
+            let m: usize = py
+                .import("sys")?
+                .call_method0(intern!(py, "get_int_max_str_digits"))?
+                .extract()?;
+            limit = Some(m);
+            m
+        };
+        if max != 0 && n.digit_count() > max {
+            num_to_py(py, n)?.str()?;
+        }
+    }
+    Ok(())
+}
+
+/// Every number of `v`, in the order packaging's `__str__` prints them.
+fn all_nums(v: &Version) -> impl Iterator<Item = &Num> {
+    v.release
+        .iter()
+        .chain(std::iter::once(&v.epoch))
+        .chain(v.pre.iter().map(|(_, n)| n))
+        .chain(v.post.iter())
+        .chain(v.dev.iter())
+        .chain(v.local.iter().flatten().filter_map(|s| match s {
+            Local::Num(n) => Some(n),
+            Local::Str(_) => None,
+        }))
 }
 
 /// A PEP 440 version, as `packaging.version.Version` 26.3.
@@ -55,7 +116,12 @@ pub struct PyVersion {
 pub fn num_to_py<'py>(py: Python<'py>, n: &Num) -> PyResult<Bound<'py, PyAny>> {
     match n {
         Num::Small(v) => Ok(v.into_pyobject(py)?.into_any()),
-        Num::Big(d) => py.get_type::<PyInt>().call1((&**d,)),
+        // From bytes, not from the digits: packaging's int is already made, and a later limit
+        // on integer string conversion only stops printing it.
+        Num::Big(_) => py.get_type::<PyInt>().call_method1(
+            intern!(py, "from_bytes"),
+            (PyBytes::new(py, &n.to_be_bytes()), intern!(py, "big")),
+        ),
     }
 }
 
@@ -152,9 +218,16 @@ pub fn from_packaging(py: Python<'_>, v: &Bound<'_, PyAny>) -> PyResult<Option<V
 }
 
 /// `Version(x)` for any `x`, as packaging 26.3's `__init__` treats it.
+///
+/// Under `pyroid.patch("packaging")`, `x` may also be an object of packaging's own `Version`
+/// made before the patch: packaging's code (now on pyroid's classes) converts such an item with
+/// `Version(item)` after `isinstance(item, Version)` fails, so it is taken by value.
 pub fn parse_any(py: Python<'_>, x: &Bound<'_, PyAny>) -> PyResult<Version> {
     if let Ok(s) = x.cast::<PyString>() {
         return parse_str(py, s);
+    }
+    if patched() && is_packaging_version(py, x)? {
+        return from_packaging(py, x)?.ok_or_else(|| invalid_repr(py, x));
     }
     // packaging's own steps (a set test, then the regex) for a non-str; they raise
     // InvalidVersion, or (for objects that pretend to be strings) return the parts.
@@ -330,53 +403,20 @@ impl PyVersion {
         Ok(t)
     }
 
-    /// `_key` (`_cmpkey(...)`), built on each call (only packaging's own code reads it).
+    /// `_key` (`_cmpkey(...)`) in the installed packaging's format, built once.
     fn key<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         let inner = self.inner()?;
-        let v = &inner.v;
-        let s = v.suffix();
-        let suffix = PyTuple::new(
-            py,
-            [
-                s.pre_rank.into_pyobject(py)?.into_any(),
-                num_to_py(py, &s.pre_n)?,
-                s.post_rank.into_pyobject(py)?.into_any(),
-                num_to_py(py, &s.post_n)?,
-                s.dev_rank.into_pyobject(py)?.into_any(),
-                num_to_py(py, &s.dev_n)?,
-            ],
-        )?;
-        let epoch = num_to_py(py, &v.epoch)?;
-        let trimmed = tuple_of_nums(py, core::trim_zeros(&v.release, false))?;
-        let key = match &v.local {
-            None => PyTuple::new(py, [epoch, trimmed.into_any(), suffix.into_any()])?,
-            Some(local) => {
-                let mut segs = Vec::with_capacity(local.len());
-                for seg in local {
-                    segs.push(match seg {
-                        Local::Num(n) => {
-                            PyTuple::new(py, [num_to_py(py, n)?, PyString::new(py, "").into_any()])?
-                        }
-                        Local::Str(st) => PyTuple::new(
-                            py,
-                            [
-                                (-1i64).into_pyobject(py)?.into_any(),
-                                PyString::new(py, st).into_any(),
-                            ],
-                        )?,
-                    });
-                }
-                PyTuple::new(
-                    py,
-                    [
-                        epoch,
-                        trimmed.into_any(),
-                        suffix.into_any(),
-                        PyTuple::new(py, segs)?.into_any(),
-                    ],
-                )?
+        let format = key_format();
+        if let Some((f, k)) = inner.key.get() {
+            if *f == format {
+                return Ok(k.bind(py).clone());
             }
+        }
+        let key = match format {
+            KeyFormat::Legacy => legacy_key(py, &inner.v)?,
+            KeyFormat::Current | KeyFormat::Apart => current_key(py, &inner.v)?,
         };
+        let _ = inner.key.set((format, key.clone().unbind()));
         Ok(key)
     }
 
@@ -385,7 +425,12 @@ impl PyVersion {
         if let Some(h) = inner.hash.get() {
             return Ok(h);
         }
-        let h = match inner.v.py_hash() {
+        let native = match key_format() {
+            // packaging 26.0 and earlier hash a key holding its Infinity objects.
+            KeyFormat::Legacy => None,
+            KeyFormat::Current | KeyFormat::Apart => inner.v.py_hash(),
+        };
+        let h = match native {
             #[allow(clippy::cast_possible_truncation)]
             Some(h) => h as isize,
             None => self.key(py)?.hash()?,
@@ -396,6 +441,9 @@ impl PyVersion {
 
     fn text<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyString>> {
         let inner = self.inner()?;
+        if inner.big {
+            check_printable(py, all_nums(&inner.v))?;
+        }
         if let Some(t) = inner.text.get() {
             return Ok(t.bind(py).clone());
         }
@@ -595,22 +643,32 @@ impl PyVersion {
 
     /// Return a new version composed of the various parts.
     #[classmethod]
-    #[pyo3(signature = (*, epoch = None, release, pre = None, post = None, dev = None, local = None))]
+    #[pyo3(
+        signature = (*, epoch = None, release = Passed(None), pre = None, post = None, dev = None, local = None),
+        text_signature = "($cls, *, epoch=None, release, pre=None, post=None, dev=None, local=None)"
+    )]
     fn from_parts<'py>(
         cls: &Bound<'py, PyType>,
         epoch: Option<&Bound<'py, PyAny>>,
-        release: &Bound<'py, PyAny>,
+        release: Passed,
         pre: Option<&Bound<'py, PyAny>>,
         post: Option<&Bound<'py, PyAny>>,
         dev: Option<&Bound<'py, PyAny>>,
         local: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = cls.py();
+        let Some(release) = release.0.map(|r| r.into_bound(py)) else {
+            // As CPython words it for packaging's keyword-only `release`.
+            return Err(PyTypeError::new_err(format!(
+                "{}.from_parts() missing 1 required keyword-only argument: 'release'",
+                cls.name()?
+            )));
+        };
         let epoch = match epoch {
             Some(e) => validate_epoch(py, e)?,
             None => Num::ZERO,
         };
-        let release = validate_release(py, release)?;
+        let release = validate_release(py, &release)?;
         let pre = match pre {
             Some(p) => validate_pre(py, p)?,
             None => None,
@@ -734,8 +792,12 @@ impl PyVersion {
             let b = o.get().inner()?;
             return Ok(bool_obj(py, compare(a.v.cmp_key(&b.v), op)));
         }
-        // packaging's own objects (any _BaseVersion): compare the keys, as packaging does.
+        // packaging's own objects (any _BaseVersion): compare the keys, as packaging does,
+        // when pyroid builds them in the installed release's format.
         let c = config(py)?;
+        if key_format() == KeyFormat::Apart {
+            return Ok(py.NotImplemented());
+        }
         if let Some(base) = &c.packaging_base_version {
             if other.is_instance(base.bind(py))? {
                 let theirs = other.getattr(intern!(py, "_key"))?;
@@ -829,11 +891,11 @@ impl PyVersion {
     }
 
     /// What `isinstance` sees: packaging's `Version` while packaging is imported and not
-    /// patched, so packaging's own code accepts this object.
+    /// patched, so packaging's own code accepts this object (and objects of subclasses).
     #[getter]
     fn __class__(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
-        if claims() && is_exact(slf) {
+        if claims() {
             if let Some(cls) = &config(py)?.packaging_version {
                 return Ok(cls.clone_ref(py).into_any());
             }
@@ -883,14 +945,29 @@ impl PyVersion {
     }
 
     #[getter]
-    fn local(&self) -> PyResult<Option<String>> {
-        self.with_core(Version::local_str)
+    fn local(&self, py: Python<'_>) -> PyResult<Option<String>> {
+        let inner = self.inner()?;
+        if inner.big {
+            check_printable(
+                py,
+                inner.v.local.iter().flatten().filter_map(|s| match s {
+                    Local::Num(n) => Some(n),
+                    Local::Str(_) => None,
+                }),
+            )?;
+        }
+        Ok(inner.v.local_str())
     }
 
     #[getter]
     fn public(slf: &Bound<'_, Self>) -> PyResult<String> {
         if is_exact(slf) {
-            return slf.get().with_core(Version::public);
+            // str(self).split("+")[0]: every number is printed.
+            let inner = slf.get().inner()?;
+            if inner.big {
+                check_printable(slf.py(), all_nums(&inner.v))?;
+            }
+            return Ok(inner.v.public());
         }
         let s = slf.str()?.to_cow()?.into_owned();
         Ok(s.split('+').next().unwrap_or("").to_owned())
@@ -899,7 +976,18 @@ impl PyVersion {
     #[getter]
     fn base_version(slf: &Bound<'_, Self>) -> PyResult<String> {
         if is_exact(slf) {
-            return slf.get().with_core(Version::base_version);
+            let inner = slf.get().inner()?;
+            if inner.big {
+                check_printable(
+                    slf.py(),
+                    inner
+                        .v
+                        .release
+                        .iter()
+                        .chain(std::iter::once(&inner.v.epoch)),
+                )?;
+            }
+            return Ok(inner.v.base_version());
         }
         let py = slf.py();
         let release = slf.getattr(intern!(py, "release"))?;
@@ -1079,6 +1167,93 @@ fn release_item<'py>(slf: &Bound<'py, PyVersion>, i: usize) -> PyResult<Bound<'p
     }
 }
 
+/// packaging 26.1+'s `_cmpkey`: `(epoch, release, suffix)` or `(epoch, release, suffix,
+/// local)`.
+fn current_key<'py>(py: Python<'py>, v: &Version) -> PyResult<Bound<'py, PyTuple>> {
+    let s = v.suffix();
+    let suffix = PyTuple::new(
+        py,
+        [
+            s.pre_rank.into_pyobject(py)?.into_any(),
+            num_to_py(py, &s.pre_n)?,
+            s.post_rank.into_pyobject(py)?.into_any(),
+            num_to_py(py, &s.post_n)?,
+            s.dev_rank.into_pyobject(py)?.into_any(),
+            num_to_py(py, &s.dev_n)?,
+        ],
+    )?;
+    let epoch = num_to_py(py, &v.epoch)?;
+    let trimmed = tuple_of_nums(py, core::trim_zeros(&v.release, false))?;
+    match &v.local {
+        None => PyTuple::new(py, [epoch, trimmed.into_any(), suffix.into_any()]),
+        Some(local) => {
+            let mut segs = Vec::with_capacity(local.len());
+            for seg in local {
+                segs.push(match seg {
+                    Local::Num(n) => {
+                        PyTuple::new(py, [num_to_py(py, n)?, PyString::new(py, "").into_any()])?
+                    }
+                    Local::Str(st) => PyTuple::new(
+                        py,
+                        [
+                            (-1i64).into_pyobject(py)?.into_any(),
+                            PyString::new(py, st).into_any(),
+                        ],
+                    )?,
+                });
+            }
+            PyTuple::new(
+                py,
+                [
+                    epoch,
+                    trimmed.into_any(),
+                    suffix.into_any(),
+                    PyTuple::new(py, segs)?.into_any(),
+                ],
+            )
+        }
+    }
+}
+
+/// packaging 26.0 and earlier's `_cmpkey`: `(epoch, release, pre, post, dev, local)`, with its
+/// `Infinity` and `NegativeInfinity` objects for the missing parts.
+fn legacy_key<'py>(py: Python<'py>, v: &Version) -> PyResult<Bound<'py, PyTuple>> {
+    let (inf, neg) = infinities(py)?;
+    let epoch = num_to_py(py, &v.epoch)?;
+    let release = tuple_of_nums(py, core::trim_zeros(&v.release, false))?.into_any();
+    let pre = match &v.pre {
+        None if v.post.is_none() && v.dev.is_some() => neg.clone(),
+        None => inf.clone(),
+        Some((k, n)) => letter_tuple(py, k.letter(), n)?.into_any(),
+    };
+    let post = match &v.post {
+        None => neg.clone(),
+        Some(n) => letter_tuple(py, "post", n)?.into_any(),
+    };
+    let dev = match &v.dev {
+        None => inf.clone(),
+        Some(n) => letter_tuple(py, "dev", n)?.into_any(),
+    };
+    let local = match &v.local {
+        None => neg.clone(),
+        Some(local) => {
+            let mut segs = Vec::with_capacity(local.len());
+            for seg in local {
+                segs.push(match seg {
+                    Local::Num(n) => {
+                        PyTuple::new(py, [num_to_py(py, n)?, PyString::new(py, "").into_any()])?
+                    }
+                    Local::Str(st) => {
+                        PyTuple::new(py, [neg.clone(), PyString::new(py, st).into_any()])?
+                    }
+                });
+            }
+            PyTuple::new(py, segs)?.into_any()
+        }
+    };
+    PyTuple::new(py, [epoch, release, pre, post, dev, local])
+}
+
 /// Parse the given version string (`packaging.version.parse`).
 #[pyfunction]
 fn parse(py: Python<'_>, version: &Bound<'_, PyAny>) -> PyResult<PyVersion> {
@@ -1128,6 +1303,10 @@ fn canonicalize_version<'py>(
         // _TrimmedRelease(x) for anything else runs Version.__init__(x).
         parse_any(py, version)?
     };
+    if has_big(&parsed) {
+        // packaging prints the numbers with str(int), under the current digit limit.
+        check_printable(py, all_nums(&parsed))?;
+    }
     let text = if strip_trailing_zero {
         parsed.to_string_trimmed()
     } else {

@@ -151,3 +151,35 @@ fn incremental_tuple_hash_matches() {
         assert_eq!(h.finish(), tuple_hash(lanes));
     }
 }
+
+#[test]
+fn numbers_as_bytes() {
+    assert_eq!(Num::Small(0).to_be_bytes(), Vec::<u8>::new());
+    assert_eq!(Num::Small(0x0102).to_be_bytes(), vec![1, 2]);
+    assert_eq!(Num::Small(u64::MAX).to_be_bytes(), vec![0xff; 8]);
+    // 2**64 and 2**64 + 255
+    assert_eq!(
+        Num::from_digits("18446744073709551616").to_be_bytes(),
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0]
+    );
+    assert_eq!(
+        Num::from_digits("18446744073709551871").to_be_bytes(),
+        vec![1, 0, 0, 0, 0, 0, 0, 0, 0xff]
+    );
+    // 10**40 = 0x1d6329f1c35ca4bfabb9f5610000000000
+    let ten40 = format!("1{}", "0".repeat(40));
+    let hex = Num::from_digits(&ten40)
+        .to_be_bytes()
+        .iter()
+        .fold(String::new(), |mut out, b| {
+            use std::fmt::Write as _;
+            let _ = write!(out, "{b:02x}");
+            out
+        });
+    assert_eq!(hex, "1d6329f1c35ca4bfabb9f5610000000000");
+    assert_eq!(Num::Small(0).digit_count(), 1);
+    assert_eq!(Num::Small(9).digit_count(), 1);
+    assert_eq!(Num::Small(10).digit_count(), 2);
+    assert_eq!(Num::Small(u64::MAX).digit_count(), 20);
+    assert_eq!(Num::from_digits(&ten40).digit_count(), 41);
+}

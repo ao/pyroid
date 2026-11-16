@@ -201,3 +201,16 @@ impl Prerel {
         }
     }
 }
+
+/// An optional argument whose default is "not passed", so that an explicit `None` is a value
+/// (packaging's `Specifier(None)` and `SpecifierSet(None)` raise `TypeError`).
+#[derive(Debug)]
+pub struct Passed(pub Option<Py<PyAny>>);
+
+impl<'a, 'py> FromPyObject<'a, 'py> for Passed {
+    type Error = PyErr;
+
+    fn extract(obj: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
+        Ok(Passed(Some(obj.to_owned().unbind())))
+    }
+}
