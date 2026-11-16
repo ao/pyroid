@@ -399,6 +399,7 @@ def test_differ_subclass(a: list[str], b: list[str]) -> None:
     assert isinstance(pd.Differ(), difflib.Differ)
 
 
+@pytest.mark.thread_unsafe(reason="HtmlDiff's table prefix counter is global")
 @FUZZ
 @given(
     fancy_lines,

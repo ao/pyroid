@@ -72,8 +72,9 @@ def _fallback(name: str, why: str) -> None:
     if name in _WARNED:
         return
     _WARNED.add(name)
+    # stacklevel 2 is our caller; point at the first frame outside this module and difflib.
     frame = sys._getframe(1)
-    level = 1
+    level = 2
     while frame.f_back is not None and frame.f_globals.get("__name__") in (__name__, "difflib"):
         frame = frame.f_back
         level += 1
