@@ -285,6 +285,29 @@ def test_warc_recipe_on_a_table_file_is_one_line(
     assert capsys.readouterr().err.startswith("pyroid clean: Invalid ARC record")
 
 
+@pytest.mark.thread_unsafe(reason="reads stderr and patches the JSON chunk size")
+def test_a_jsonl_parse_error_names_its_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """pyarrow said "Invalid encoding in string. in row 1" for an unterminated string."""
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text('{"text": "ok"}\n{"text": "fine"}\n{"text": "unterminated}\n', "utf-8")
+    assert main(["translit", str(bad), str(tmp_path / "o.jsonl")]) == 1
+    err = capsys.readouterr().err
+    assert err == f"pyroid translit: {bad}: line 3: Unterminated string starting at column 10\n"
+    # past the first chunk, the line number counts from the start of the file
+    from pyroid.integrations import _io
+
+    monkeypatch.setattr(_io, "JSON_CHUNK_SIZE", 4096)
+    many = tmp_path / "many.jsonl"
+    with many.open("w", encoding="utf-8") as f:
+        f.writelines('{"text": "%s"}\n' % ("x" * 50) for _ in range(2_000))
+        f.write('{"text": "x}\n')
+    with pytest.raises(ValueError, match=r"line 2001: Unterminated string starting at column 10"):
+        for _ in _io.iter_tables(_io.resolve_inputs([many])[0], 1000):
+            pass
+
+
 def test_stats_into_a_closed_pipe(tmp_path: Path) -> None:
     """``--stats 2>&1 | head -1``: the run completes, tidies up and exits 0 (it exited 120 and
     left OUT/.pyroid/work-* behind)."""

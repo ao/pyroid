@@ -551,11 +551,42 @@ def _parse_json(chunk: bytes, schema: Any) -> Any:
     )
 
 
+def _bad_line(chunk: bytes, first: int, source: Source) -> ValueError | None:
+    """The first line of ``chunk`` (line ``first`` of the file) that is not JSON, as an error.
+
+    pyarrow's parse errors name a row of its block, and some name the wrong problem (an
+    unterminated string is "Invalid encoding in string").
+    """
+    for i, line in enumerate(chunk.split(b"\n")):
+        if not line.strip():
+            continue
+        try:
+            json.loads(line)
+        except UnicodeDecodeError as e:
+            return ValueError(f"{source.uri}: line {first + i}: not UTF-8 (byte {e.start})")
+        except json.JSONDecodeError as e:
+            n = first + i
+            if e.msg.endswith(" at"):  # "Unterminated string starting at"
+                return ValueError(f"{source.uri}: line {n}: {e.msg} column {e.colno}")
+            return ValueError(f"{source.uri}: line {n}, column {e.colno}: {e.msg}")
+        except ValueError as e:
+            return ValueError(f"{source.uri}: line {first + i}: {e}")
+    return None
+
+
 def _json_batches(
     stream: Any, source: Source, *, schema: Any = None, columns: Sequence[str] | None = None
 ) -> Iterator[Any]:
+    line = 1
     for chunk in _json_chunks(stream):
-        t = _parse_json(chunk, schema)
+        try:
+            t = _parse_json(chunk, schema)
+        except pa.ArrowInvalid as e:
+            bad = _bad_line(chunk, line, source)
+            if bad is None:
+                raise
+            raise bad from e
+        line += chunk.count(b"\n")
         if schema is None:
             schema = t.schema
             if columns is not None:
@@ -704,8 +735,8 @@ def read_schema(source: Source) -> pa.Schema | None:
         with _errors(source), _open_file(source) as f, pq.ParquetFile(f) as pf:
             return pf.schema_arrow
     with _errors(source), _open_stream(source) as stream:
-        for chunk in _json_chunks(stream):
-            return _parse_json(chunk, None).schema
+        for t in _json_batches(stream, source):
+            return t.schema
     return None
 
 
