@@ -394,6 +394,13 @@ def test_none_arguments_raise_as_packaging_does() -> None:
         ("extra == ''", {"extra": None}),
         ("extra == ''", {"extra": 0}),
         ("python_full_version >= '3'", {"python_full_version": "3.12.0+"}),
+        # Lone surrogates in environment values: packaging's steps work on them.
+        ("os_name == 'posix'", {"extra": "\udc80"}),
+        ("os_name == 'posix'", {"python_full_version": "3.12.0\udc80"}),
+        ("extra == 'x'", {"extra": "X\udc80"}),
+        ("python_full_version >= '3'", {"python_full_version": "3.12\udc80"}),
+        ("'3' < python_full_version", {"python_full_version": "3.12\udc80"}),
+        ("'a' in extras", {"extras": {"A\udc80", "a"}}),
     ],
 )
 def test_marker_environment_is_prepared_first(marker: str, environment: dict[str, Any]) -> None:
@@ -594,6 +601,7 @@ def test_specifier_set_of_packagings_specifiers() -> None:
     )
 
 
+@pytest.mark.thread_unsafe(reason="resets the once-per-process warning record")
 def test_fallback_warning_points_at_the_caller() -> None:
     import packaging.ranges  # noqa: F401  # the code these calls hand over to
 

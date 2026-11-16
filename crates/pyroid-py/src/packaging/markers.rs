@@ -292,10 +292,13 @@ fn to_py_list<'py>(py: Python<'py>, list: &List) -> PyResult<Bound<'py, PyList>>
 /// One element of packaging's `_markers` that is not a group.
 fn elem_from_py(py: Python<'_>, item: &Bound<'_, PyAny>) -> PyResult<Elem> {
     if let Ok(s) = item.cast::<PyString>() {
-        return match &*s.to_cow()? {
-            "and" => Ok(Elem::And),
-            "or" => Ok(Elem::Or),
-            other => Err(PyTypeError::new_err(format!("Unexpected marker {other:?}"))),
+        return match s.to_cow().as_deref() {
+            Ok("and") => Ok(Elem::And),
+            Ok("or") => Ok(Elem::Or),
+            _ => Err(PyTypeError::new_err(format!(
+                "Unexpected marker {}",
+                item.repr()?
+            ))),
         };
     }
     let Ok(t) = item.cast::<PyTuple>() else {
@@ -339,27 +342,29 @@ fn from_py_list(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<List> {
             Err(_) => o.try_iter()?.collect(),
         }
     }
-    let mut done: HashMap<usize, List> = HashMap::new();
+    // Keyed by the Python list's address; the list is kept alive with its result, so the
+    // address cannot be reused by another list during the walk.
+    let mut done: HashMap<usize, (Bound<'_, PyAny>, List)> = HashMap::new();
     let mut open: HashSet<usize> = HashSet::new();
     let root = obj.as_ptr().addr();
     open.insert(root);
-    // (the Python list's id, its items, the next item, the elements so far)
-    let mut work = vec![(root, snapshot(obj)?, 0usize, Vec::new())];
+    // (the Python list's id, the list, its items, the next item, the elements so far)
+    let mut work = vec![(root, obj.clone(), snapshot(obj)?, 0usize, Vec::new())];
     loop {
-        let Some((_, items, i, out)) = work.last_mut() else {
+        let Some((_, _, items, i, out)) = work.last_mut() else {
             unreachable!("the loop returns when the outermost list is done")
         };
         let Some(item) = items.get(*i).cloned() else {
-            let Some((id, _, _, out)) = work.pop() else {
+            let Some((id, obj, _, _, out)) = work.pop() else {
                 unreachable!()
             };
             open.remove(&id);
             let list = List::new(out);
             match work.last_mut() {
                 None => return Ok(list),
-                Some((_, _, _, parent)) => parent.push(Elem::List(list.clone())),
+                Some((_, _, _, _, parent)) => parent.push(Elem::List(list.clone())),
             }
-            done.insert(id, list);
+            done.insert(id, (obj, list));
             continue;
         };
         *i += 1;
@@ -368,7 +373,7 @@ fn from_py_list(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<List> {
             continue;
         }
         let id = item.as_ptr().addr();
-        if let Some(l) = done.get(&id) {
+        if let Some((_, l)) = done.get(&id) {
             out.push(Elem::List(l.clone()));
         } else if open.contains(&id) {
             return Err(PyRecursionError::new_err(
@@ -377,7 +382,7 @@ fn from_py_list(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<List> {
         } else {
             open.insert(id);
             let sub = snapshot(&item)?;
-            work.push((id, sub, 0, Vec::new()));
+            work.push((id, item, sub, 0, Vec::new()));
         }
     }
 }
@@ -718,9 +723,10 @@ impl<'py> Env<'py> {
         env.extra = match env.raw("extra")? {
             Some(v) if environment.is_some() => Some(if !v.is_truthy()? {
                 PyString::new(py, "").into_any()
-            } else if let Ok(s) = v.cast::<PyString>() {
-                PyString::new(py, &canonicalize(py, &s.to_cow()?)?).into_any()
+            } else if let Some(t) = v.cast::<PyString>().ok().and_then(|s| s.to_cow().ok()) {
+                PyString::new(py, &canonicalize(py, &t)?).into_any()
             } else {
+                // Another type, or a str with a lone surrogate: Python's canonicalize_name.
                 c.canonicalize_name.bind(py).call1((v,))?
             }),
             other => other,
@@ -729,8 +735,8 @@ impl<'py> Env<'py> {
         let Some(v) = env.raw("python_full_version")? else {
             return Err(PyKeyError::new_err("python_full_version"));
         };
-        env.python_full_version = if let Ok(s) = v.cast::<PyString>() {
-            let t = s.to_cow()?;
+        let text = v.cast::<PyString>().ok().and_then(|s| s.to_cow().ok());
+        env.python_full_version = if let Some(t) = text {
             if t.ends_with('+') {
                 PyString::new(py, &format!("{t}local")).into_any()
             } else {
@@ -914,8 +920,10 @@ fn normalize<'py>(
     }
     let canon = |x: &Bound<'py, PyAny>| -> PyResult<Bound<'py, PyAny>> {
         match x.cast::<PyString>() {
-            Ok(s) => Ok(PyString::new(py, &canonicalize(py, &s.to_cow()?)?).into_any()),
-            Err(_) => config(py)?.canonicalize_name.bind(py).call1((x,)),
+            Ok(s) if s.to_cow().is_ok() => {
+                Ok(PyString::new(py, &canonicalize(py, &s.to_cow()?)?).into_any())
+            }
+            _ => config(py)?.canonicalize_name.bind(py).call1((x,)),
         }
     };
     let l = canon(lhs)?;
@@ -938,7 +946,26 @@ fn eval_op(
 ) -> PyResult<bool> {
     if REQUIRING_VERSION.contains(&key) {
         // Specifier(f"{op}{rhs}") if it is one, then contains(lhs, prereleases=True).
-        let text = format!("{op}{}", rhs.str()?.to_cow()?);
+        let rhs_text = rhs.str()?;
+        let Ok(rhs_text) = rhs_text.to_cow() else {
+            // A lone surrogate in an environment value: the same steps through Python.
+            let text = PyString::new(py, op).add(rhs.str()?)?;
+            let spec = match py
+                .get_type::<super::specifiers::PySpecifier>()
+                .call1((text,))
+            {
+                Ok(spec) => spec,
+                Err(e) if e.is_instance(py, config(py)?.invalid_specifier.bind(py)) => {
+                    return plain_op(py, lhs, op, rhs);
+                }
+                Err(e) => return Err(e),
+            };
+            let t = PyBool::new(py, true).to_owned().into_any();
+            return spec
+                .call_method1(intern!(py, "contains"), (lhs, t))?
+                .is_truthy();
+        };
+        let text = format!("{op}{rhs_text}");
         if spec_core::is_valid(&text) {
             let (o, version) = spec_core::split(&text);
             if o == Op::Arbitrary {
@@ -956,6 +983,16 @@ fn eval_op(
             return spec.contains_version(py, &parsed);
         }
     }
+    plain_op(py, lhs, op, rhs)
+}
+
+/// `_operators[op](lhs, rhs)`, or `UndefinedComparison` for an operator it lacks.
+fn plain_op(
+    py: Python<'_>,
+    lhs: &Bound<'_, PyAny>,
+    op: &str,
+    rhs: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
     match op {
         "in" => rhs.contains(lhs),
         "not in" => Ok(!rhs.contains(lhs)?),
