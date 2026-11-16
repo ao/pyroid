@@ -820,6 +820,106 @@ def test_parse_in_threads() -> None:
     assert got == want
 
 
+# --- Ctrl-C during a batch -------------------------------------------------------------------
+
+#: A child that raises SIGINT in itself 0.3 s into a batch, and prints how long the
+#: KeyboardInterrupt took to arrive, and how long the whole batch would take (from a tenth of it).
+SIGINT_CHILD = r"""
+import signal, sys, threading, time
+import pyroid.dateutil.parser as P
+from pyroid._pyroid import _testing
+
+case, threads, scale = sys.argv[1], int(sys.argv[2]) or None, int(sys.argv[3])
+n = 1_000_000 * scale
+if case == "list":
+    make = lambda k: ["Sep 26 2003 10:00:00.5"] * k
+    call = lambda d: P.parse_batch(d, threads=threads, errors="coerce")
+elif case == "arrow":
+    make = lambda k: _testing.column(["Sep 26 2003 10:00:00.5"] * k, chunks=8)
+    call = lambda d: P.parse_batch(d, threads=threads)
+elif case == "iso":
+    make = lambda k: _testing.column(["2003-09-26T10:00:00.5+01:00"] * k, chunks=8)
+    call = lambda d: P.isoparse_batch(d, threads=threads)
+else:
+    raise SystemExit(f"unknown case {case}")
+tenth = make(n // 10)
+call(tenth)
+t = time.perf_counter()
+call(tenth)
+whole = (time.perf_counter() - t) * 10
+docs = make(n)
+
+fired = []
+def fire():
+    fired.append(time.perf_counter())
+    signal.raise_signal(signal.SIGINT)
+
+t0 = time.perf_counter()
+timer = threading.Timer(0.3, fire)
+timer.start()
+done = []
+try:
+    call(docs)
+    done.append(time.perf_counter())
+    timer.cancel()
+    timer.join()
+except KeyboardInterrupt:
+    if not done:
+        print("interrupted", round(time.perf_counter() - fired[0], 3), round(whole, 3))
+except BaseException as e:
+    print("raised", type(e).__module__ + "." + type(e).__name__, e)
+if done:
+    print("finished", round(done[0] - t0, 3))
+print("after", len(P.parse_batch(["2003-09-26"] * 200, threads=threads)))
+"""
+
+
+@pytest.mark.thread_unsafe(reason="runs subprocesses that signal themselves")
+@pytest.mark.parametrize(("case", "threads"), [("list", 1), ("list", 0), ("arrow", 1), ("iso", 2)])
+def test_ctrl_c_interrupts_a_batch(run_python: Any, case: str, threads: int) -> None:
+    for scale in (1, 4, 16):
+        code = f"import sys; sys.argv[1:] = {[case, str(threads), str(scale)]!r}\n" + SIGINT_CHILD
+        proc = run_python(code, timeout=600.0)
+        lines = proc.stdout.splitlines()
+        # Too fast to tell (a batch that ends within a second of the signal): more input.
+        if not (lines and lines[0].startswith(("finished ", "interrupted "))):
+            break
+        if lines[0].startswith("interrupted ") and float(lines[0].split()[2]) > 1.3:
+            break
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    word, latency, whole = lines[0].split()
+    assert word == "interrupted", lines
+    # The batch checks every 50 ms (and every 1,024 rows it builds), not at its end; the rest is
+    # headroom for a loaded runner and a debug build.
+    assert float(latency) < min(2.0, float(whole) / 2), lines
+    assert lines[1] == "after 200", lines
+
+
+SIGINT_HANDLER = r"""
+import signal, threading, time
+import pyroid.dateutil.parser as P
+
+hits = []
+signal.signal(signal.SIGINT, lambda *a: hits.append(time.perf_counter()))
+docs = ["Sep 26 2003 10:00:00.5"] * 2_000_000
+threading.Timer(0.3, signal.raise_signal, (signal.SIGINT,)).start()
+t0 = time.perf_counter()
+out = P.parse_batch(docs, threads=1)
+done = time.perf_counter()
+print(len(out) == len(docs), len(hits), (hits[0] < done) if hits else None, done - t0 > 0.3)
+"""
+
+
+@pytest.mark.thread_unsafe(reason="runs a subprocess that signals itself")
+def test_a_signal_handler_that_returns_lets_the_batch_finish(run_python: Any) -> None:
+    proc = run_python(SIGINT_HANDLER, timeout=600.0)
+    assert proc.returncode == 0, proc.stderr
+    ok, hits, during, long_enough = proc.stdout.split()
+    assert (ok, hits) == ("True", "1"), proc.stdout
+    if long_enough == "True":  # the handler ran during the call, not after it
+        assert during == "True", proc.stdout
+
+
 # --- time zones without python-dateutil -------------------------------------------------------
 
 

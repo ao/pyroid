@@ -149,6 +149,8 @@ parser.isoparse_batch(["2003-09-25T10:49:41", "2003-W39-4"], compat="4.0.0")
   raise `ValueError`; pass `ignoretz=True`, or a list, for those. Nulls stay null.
 - `threads=None` uses the shared pool, `threads=n` at most `n` tasks. Batches of 64 strings or
   fewer run on the calling thread.
+- Ctrl-C stops a batch within about 50 ms with `KeyboardInterrupt` (on the main thread, where
+  Python runs signal handlers), not when the batch ends.
 
 ## `pyroid.patch("dateutil")`
 

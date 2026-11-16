@@ -2094,6 +2094,62 @@ fn isoparser_isoparse<'py>(
 // Batches
 // ---------------------------------------------------------------------------
 
+/// How long a batch runs detached before the calling thread runs pending signal handlers.
+const SIGNAL_CHECK_EVERY: std::time::Duration = std::time::Duration::from_millis(50);
+/// The cost of a row besides its bytes, in [`map_checked`]'s units (bytes).
+const ROW_COST: usize = 64;
+/// Rows the attached part of a batch builds between two signal checks.
+const ROWS_PER_SIGNAL_CHECK: usize = 1024;
+
+/// `par::map(n, threads, f)` in pieces, with the calling thread attached between them to run
+/// pending signal handlers: Ctrl-C stops a batch within about [`SIGNAL_CHECK_EVERY`] with the
+/// handler's exception (`KeyboardInterrupt`), not when the batch ends. `len(i)` is row `i`'s
+/// length; a piece holds about the bytes the last one parsed in [`SIGNAL_CHECK_EVERY`].
+///
+/// This is pyroid-wide in `crate::interrupt::detach_batch` once that lands on main; until then
+/// the batches of this module check this way.
+fn map_checked<R, F>(
+    py: Python<'_>,
+    n: usize,
+    threads: par::Threads,
+    len: impl Fn(usize) -> usize,
+    f: F,
+) -> PyResult<Vec<R>>
+where
+    R: Send,
+    F: Fn(usize) -> R + Sync + Send,
+{
+    let mut out = Vec::with_capacity(n);
+    let mut start = 0;
+    // About 1 ms of parsing on one thread; the pieces grow from there.
+    let mut budget: usize = 1 << 16;
+    while start < n {
+        let mut end = start;
+        let mut cost = 0usize;
+        while end < n && (end == start || cost < budget) {
+            cost = cost.saturating_add(len(end).saturating_add(ROW_COST));
+            end += 1;
+        }
+        let t0 = std::time::Instant::now();
+        let part = py
+            .detach(|| par::map(end - start, threads, |i| f(start + i)))
+            .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
+        let elapsed = t0.elapsed();
+        out.extend(part);
+        start = end;
+        py.check_signals()?;
+        // The next piece: what this one would have done in SIGNAL_CHECK_EVERY, growing at most
+        // 8x a piece (the first pieces are timed with a cold cache).
+        let scaled = u128::try_from(cost).unwrap_or(u128::MAX) * SIGNAL_CHECK_EVERY.as_nanos()
+            / elapsed.as_nanos().max(1);
+        budget = usize::try_from(scaled)
+            .unwrap_or(usize::MAX)
+            .min(cost.saturating_mul(8))
+            .max(1 << 12);
+    }
+    Ok(out)
+}
+
 /// `errors=`: raise the first row's exception, or give `None` for the rows that fail.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Errors {
@@ -2313,13 +2369,13 @@ fn parse_batch<'py>(
     let longest = rows.iter().flatten().map(|s| s.len()).max().unwrap_or(0);
     opts.max_str_digits = max_str_digits(py, longest)?;
     let pool = pool_threads(threads);
-    let runs = py
-        .detach(|| {
-            par::map(rows.len(), pool, |i| {
-                rows[i].map(|s| run_kernel(&Text::Utf8(s), tables, settings, opts))
-            })
-        })
-        .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
+    let runs = map_checked(
+        py,
+        rows.len(),
+        pool,
+        |i| rows[i].map_or(0, str::len),
+        |i| rows[i].map(|s| run_kernel(&Text::Utf8(s), tables, settings, opts)),
+    )?;
     let fin = Finisher::new(
         h,
         &p,
@@ -2332,6 +2388,9 @@ fn parse_batch<'py>(
     let coerce_none =
         |i: usize, e: PyErr| -> PyResult<()> { row_result(py, errors, i, Err(e)).map(|_| ()) };
     for (i, run) in runs.into_iter().enumerate() {
+        if i % ROWS_PER_SIGNAL_CHECK == ROWS_PER_SIGNAL_CHECK - 1 {
+            py.check_signals()?;
+        }
         let Some(run) = run else {
             out.push(None);
             stamps.push(None);
@@ -2389,7 +2448,7 @@ fn parse_batch<'py>(
 
 /// `isoparse_batch(dt_strs, isoparser, threads, errors)`.
 #[pyfunction]
-#[allow(clippy::many_single_char_names)]
+#[allow(clippy::too_many_lines, clippy::many_single_char_names)]
 #[pyo3(signature = (dt_strs, isoparser, threads, errors))]
 fn isoparse_batch<'py>(
     dt_strs: &Bound<'py, PyAny>,
@@ -2450,21 +2509,26 @@ fn isoparse_batch<'py>(
     }
     let sep = sep_byte.expect("checked");
     let pool = pool_threads(threads);
-    let runs = py
-        .detach(|| {
-            par::map(rows.len(), pool, |i| {
-                rows[i].map(|s| {
-                    if s.is_ascii() {
-                        iso::isoparse(s.as_bytes(), sep, mode).ok()
-                    } else {
-                        None
-                    }
-                })
+    let runs = map_checked(
+        py,
+        rows.len(),
+        pool,
+        |i| rows[i].map_or(0, str::len),
+        |i| {
+            rows[i].map(|s| {
+                if s.is_ascii() {
+                    iso::isoparse(s.as_bytes(), sep, mode).ok()
+                } else {
+                    None
+                }
             })
-        })
-        .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
+        },
+    )?;
     let offsets = TzOffsets::default();
     for (i, run) in runs.into_iter().enumerate() {
+        if i % ROWS_PER_SIGNAL_CHECK == ROWS_PER_SIGNAL_CHECK - 1 {
+            py.check_signals()?;
+        }
         let Some(s) = rows[i] else {
             out.push(None);
             stamps.push(None);
