@@ -170,7 +170,12 @@ impl Scan<'_> {
             self.i = save;
         }
         if self.digits() == 0 {
-            return false;
+            // `(?:[0-9]+!)?` is not possessive here: without a release after it, the pattern
+            // backtracks and reads the digits as the release (`==000!` matches `==000`).
+            self.i = save;
+            if self.digits() == 0 {
+                return false;
+            }
         }
         let mut parts = 1;
         while self.peek() == Some('.') && self.s.get(self.i + 1).is_some_and(|&c| as_char(c).is_ascii_digit()) {

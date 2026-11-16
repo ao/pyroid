@@ -513,9 +513,10 @@ impl PySpecifier {
         Ok(format!("<{name}({}{pre})>", slf.str()?.repr()?))
     }
 
-    fn __str__(&self, py: Python<'_>) -> PyResult<String> {
+    fn __str__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let d = self.data()?;
-        Ok(format!("{}{}", d.op.as_str(), d.version.bind(py).to_cow()?))
+        // Python concatenation: a `===` version may hold a lone surrogate.
+        d.op_str.bind(py).add(d.version.bind(py))
     }
 
     fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {

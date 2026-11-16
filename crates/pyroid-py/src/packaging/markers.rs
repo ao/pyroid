@@ -726,9 +726,9 @@ fn parse_requirement<'py>(py: Python<'py>, requirement: &Bound<'py, PyAny>) -> P
 /// `canonicalize_name(name)` for a `str`.
 #[pyfunction]
 #[pyo3(signature = (name, /))]
-fn canonicalize_str(py: Python<'_>, name: &Bound<'_, PyString>) -> PyResult<String> {
+fn canonicalize_str<'py>(py: Python<'py>, name: &Bound<'py, PyString>) -> PyResult<Bound<'py, PyAny>> {
     match name.to_cow() {
-        Ok(t) => canonicalize(py, &t),
+        Ok(t) => Ok(PyString::new(py, &canonicalize(py, &t)?).into_any()),
         Err(_) => {
             let low = name.call_method0(intern!(py, "lower"))?;
             let low = low.call_method1(intern!(py, "replace"), ("_", "-"))?.call_method1(intern!(py, "replace"), (".", "-"))?;
@@ -736,7 +736,7 @@ fn canonicalize_str(py: Python<'_>, name: &Bound<'_, PyString>) -> PyResult<Stri
             while s.contains("--")? {
                 s = s.call_method1(intern!(py, "replace"), ("--", "-"))?;
             }
-            s.extract()
+            Ok(s)
         }
     }
 }
