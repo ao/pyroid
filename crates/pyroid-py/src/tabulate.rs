@@ -752,7 +752,7 @@ fn render<'py>(
         Ok((text, multiline, empty)) => Ok(PyTuple::new(
             py,
             [
-                PyString::new(py, &text).into_any(),
+                text.into_any(),
                 PyBool::new(py, multiline).to_owned().into_any(),
                 PyBool::new(py, empty).to_owned().into_any(),
             ],
@@ -819,7 +819,7 @@ fn render_inner<'py>(
     headers_in: &Bound<'py, PyList>,
     separating_lines: &Bound<'py, PyAny>,
     call: &Call<'py>,
-) -> FResult<(String, bool, bool)> {
+) -> FResult<(Bound<'py, PyString>, bool, bool)> {
     let unicode_ok = call.flag("unicode_ok")?;
     let max_digits: usize = call.obj.getattr("max_digits")?.extract()?;
     let is_rst = call.flag("is_rst")?;
@@ -897,6 +897,7 @@ fn render_inner<'py>(
         let done = row_lens.len();
         let mut n = 0;
         for (c, item) in index_value.into_iter().chain(row.iter()).enumerate() {
+            host.pacer.tick()?;
             let item = if is_rst && c == 0 {
                 escape_empty(call, item)?
             } else {
@@ -975,6 +976,7 @@ fn render_inner<'py>(
         for i in 0..nrows {
             host.pacer.tick()?;
             for (j, col) in cols.iter().enumerate().take(row_lens[i]) {
+                host.pacer.tick()?;
                 let cell = &col[i];
                 let text: Cow<'_, str> = match &cell.val {
                     Val::Str(s) => Cow::Borrowed(&**s),
@@ -1128,18 +1130,18 @@ fn render_inner<'py>(
         arenas.push(arena);
         fmts.push(out);
     }
-    let text_cols: Vec<Vec<Cow<'_, str>>> = fmts
-        .into_iter()
-        .zip(&arenas)
-        .map(|(col, arena)| {
-            col.into_iter()
-                .map(|f| match f {
-                    Fmt::Borrowed(s) => Cow::Borrowed(s),
-                    Fmt::Range(a, b) => Cow::Borrowed(&arena[a..b]),
-                })
-                .collect()
-        })
-        .collect();
+    let mut text_cols: Vec<Vec<Cow<'_, str>>> = Vec::with_capacity(fmts.len());
+    for (col, arena) in fmts.into_iter().zip(&arenas) {
+        let mut texts = Vec::with_capacity(col.len());
+        for f in col {
+            host.pacer.tick()?;
+            texts.push(match f {
+                Fmt::Borrowed(s) => Cow::Borrowed(s),
+                Fmt::Range(a, b) => Cow::Borrowed(&arena[a..b]),
+            });
+        }
+        text_cols.push(texts);
+    }
 
     // Alignments (the call object applies colglobalalign, colalign and warns like tabulate).
     let codes: Vec<u8> = coltypes.iter().map(|&t| t as u8).collect();
@@ -1277,21 +1279,27 @@ fn render_inner<'py>(
     let nr = aligned_cols.iter().map(Vec::len).min().unwrap_or(0);
     let mut order: Vec<RowRef> = (0..nr).map(RowRef::Data).collect();
     // Only multiline rows compare the row alignments; the count matters either way.
-    let rowaligns_obj = if simple {
-        let r = opt("rowalign")?; // None or a str: _expand_iterable gives [rowalign] * nr
-        PyList::new(py, vec![r; nr])?.into_any()
-    } else {
-        call.obj.call_method1("rowaligns", (nr,))?
-    };
-    let mut rowaligns = Vec::new();
-    for a in rowaligns_obj.try_iter()? {
-        let a = a?;
-        rowaligns.push(if is_multiline {
-            row_align_of(&a)?
+    let rowaligns = if simple {
+        // None or a str: _expand_iterable gives [rowalign] * nr.
+        let a = if is_multiline && nr > 0 {
+            row_align_of(&opt("rowalign")?)?
         } else {
             RowAlign::Top
-        });
-    }
+        };
+        vec![a; nr]
+    } else {
+        let mut v = Vec::with_capacity(nr);
+        for a in call.obj.call_method1("rowaligns", (nr,))?.try_iter()? {
+            engine.host.pacer.tick()?;
+            let a = a?;
+            v.push(if is_multiline {
+                row_align_of(&a)?
+            } else {
+                RowAlign::Top
+            });
+        }
+        v
+    };
     if !separating_lines.is_none() {
         for idx in separating_lines.try_iter()? {
             let idx: usize = idx?.extract()?;
@@ -1319,11 +1327,24 @@ fn render_inner<'py>(
             &rowaligns,
         )
         .map_err(|e| table_error(py, e, &align_objs))?;
-    Ok((
-        text,
-        is_multiline,
-        header_texts.is_empty() && order.is_empty(),
-    ))
+    let empty = header_texts.is_empty() && order.is_empty();
+    let out = PyString::new(py, &text);
+    // Freeing a large table takes tens of milliseconds. The Rust side's own data is then freed
+    // detached; the cells hold Python objects, so they go one at a time, with pauses.
+    let own = (text, aligned_cols, order, rowaligns, row_lens);
+    if nr.saturating_mul(ncols) >= 1 << 16 {
+        py.detach(move || drop(own));
+    } else {
+        drop(own);
+    }
+    drop(arenas);
+    for col in cols {
+        for cell in col {
+            drop(cell);
+            host.pacer.tick()?;
+        }
+    }
+    Ok((out, is_multiline, empty))
 }
 
 /// The rst first-column escape for one cell (`escape_empty`).

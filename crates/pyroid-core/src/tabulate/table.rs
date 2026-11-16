@@ -836,26 +836,29 @@ impl<H: Host> Engine<'_, H> {
         }
     }
 
+    /// `strings` stripped, as `_align_column` strips them unless whitespace is preserved.
+    fn stripped<'a>(&mut self, mut strings: Vec<Cow<'a, str>>) -> Res<Vec<Cow<'a, str>>, H::Error> {
+        if !self.s.preserve_whitespace {
+            for s in &mut strings {
+                self.host.tick()?;
+                *s = strip_cow(std::mem::take(s));
+            }
+        }
+        Ok(strings)
+    }
+
     /// `_align_column(strings, alignment, minwidth, ...)`.
     #[allow(clippy::too_many_lines)]
     pub fn align_column<'a>(
         &mut self,
-        strings: Vec<Cow<'a, str>>,
+        mut strings: Vec<Cow<'a, str>>,
         alignment: Align,
         minwidth: isize,
     ) -> Res<Vec<Aligned<'a>>, H::Error> {
-        let strip = !self.s.preserve_whitespace;
         let mut extra = vec![0usize; strings.len()];
-        let stripped = |v: Vec<Cow<'a, str>>| -> Vec<Cow<'a, str>> {
-            if strip {
-                v.into_iter().map(strip_cow).collect()
-            } else {
-                v
-            }
-        };
         let (strings, kind) = match alignment {
-            Align::Right => (stripped(strings), Pad::Left),
-            Align::Center => (stripped(strings), Pad::Both),
+            Align::Right => (self.stripped(strings)?, Pad::Left),
+            Align::Center => (self.stripped(strings)?, Pad::Both),
             Align::Decimal => {
                 let mut decimals = Vec::with_capacity(strings.len());
                 for s in &strings {
@@ -866,25 +869,20 @@ impl<H: Host> Engine<'_, H> {
                 // `s + (maxdecimals - decs) * " "`: as a count for printable ASCII (widths
                 // add up there), as text otherwise.
                 let multiline = self.s.is_multiline;
-                let out = strings
-                    .into_iter()
-                    .zip(&decimals)
-                    .enumerate()
-                    .map(|(i, (mut s, &d))| {
-                        if maxdecimals > d {
-                            if !multiline && is_printable_ascii(&s) {
-                                extra[i] = (maxdecimals - d).unsigned_abs();
-                            } else {
-                                push_spaces(s.to_mut(), maxdecimals - d);
-                            }
+                for (i, (s, &d)) in strings.iter_mut().zip(&decimals).enumerate() {
+                    self.host.tick()?;
+                    if maxdecimals > d {
+                        if !multiline && is_printable_ascii(s) {
+                            extra[i] = (maxdecimals - d).unsigned_abs();
+                        } else {
+                            push_spaces(s.to_mut(), maxdecimals - d);
                         }
-                        s
-                    })
-                    .collect();
-                (out, Pad::Left)
+                    }
+                }
+                (strings, Pad::Left)
             }
             Align::Falsy => (strings, Pad::None),
-            Align::Left | Align::Other => (stripped(strings), Pad::Right),
+            Align::Left | Align::Other => (self.stripped(strings)?, Pad::Right),
         };
         let plain = !self.s.wide && !self.s.has_invisible;
         if self.s.is_multiline {
@@ -1019,14 +1017,13 @@ impl<H: Host> Engine<'_, H> {
         colaligns: &[Align],
         rowaligns: &[RowAlign],
     ) -> Res<String, H::Error> {
-        let total: usize = cols
-            .iter()
-            .map(|c| {
-                c.iter()
-                    .map(|s| s.text.len() + s.left + s.right + 3)
-                    .sum::<usize>()
-            })
-            .sum();
+        let mut total = 0;
+        for c in cols {
+            for s in c {
+                self.host.tick()?;
+                total += s.text.len() + s.left + s.right + 3;
+            }
+        }
         let mut out = Out {
             buf: String::with_capacity(total + 256),
             count: 0,
@@ -1077,6 +1074,7 @@ impl<H: Host> Engine<'_, H> {
                     self.emit_row(&mut out, src(row), cw, &fmt.datarow, pad, ralign)?;
                 }
                 if let Some(line) = &between {
+                    self.host.tick()?;
                     out.start();
                     out.buf.push_str(line);
                 } else {
@@ -1123,6 +1121,7 @@ impl<H: Host> Engine<'_, H> {
         (widths, aligns, which): (&[isize], &[Align], AlignList),
         linefmt: &LineFmt,
     ) -> Res<(), H::Error> {
+        self.host.tick()?;
         if let LineFmt::Plain {
             begin,
             fill,
