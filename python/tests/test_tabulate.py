@@ -11,6 +11,7 @@ import ast
 import concurrent.futures
 import importlib.util
 import inspect
+import os
 import subprocess
 import sys
 import warnings
@@ -605,6 +606,23 @@ def test_a_long_table_lets_other_threads_run() -> None:
     got = _long_call("threads", at_least=0.6)
     # The other thread wakes every millisecond; the call lets it run about every 5 ms.
     assert float(got["longest_gap"]) < 0.3, got
+
+
+@pytest.mark.thread_unsafe  # a child process
+def test_command_line_non_utf8_and_an_old_tabulate(tmp_path: Path) -> None:
+    # Text read with surrogateescape takes the slow path, which prints what tabulate prints and
+    # nothing on stderr; an installed tabulate 0.9.0 is not used.
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8:surrogateescape"}
+    env["PYTHONPATH"] = str(_old_tabulate(tmp_path))
+    out = subprocess.run(
+        [sys.executable, "-m", "pyroid.tabulate"],
+        input=b"caf\xe9 1\nx 2\n",
+        capture_output=True,
+        env=env,
+        check=True,
+    )
+    assert out.stdout.replace(b"\r\n", b"\n") == b"----  -\ncaf\xe9  1\nx     2\n----  -\n"
+    assert out.stderr == b""
 
 
 @pytest.mark.thread_unsafe  # a child process

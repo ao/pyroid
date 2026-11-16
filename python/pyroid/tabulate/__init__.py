@@ -889,7 +889,13 @@ def _main() -> None:
             print(usage)  # noqa: T201
             sys.exit(0)
     files = [sys.stdin] if not args else args  # noqa: SIM212
-    with sys.stdout if outfile == "-" else open(outfile, "w") as out:
+    # The slow-path notice is for code that calls tabulate(); tabulate's command line prints
+    # nothing on stderr for, say, text read with surrogateescape.
+    with (
+        warnings.catch_warnings(),
+        sys.stdout if outfile == "-" else open(outfile, "w") as out,
+    ):
+        warnings.simplefilter("ignore", FallbackWarning)
         for f in files:
             if f == "-":
                 f = sys.stdin
