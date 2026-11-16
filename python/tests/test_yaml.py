@@ -324,3 +324,66 @@ def test_module_getattr() -> None:
     else:
         assert py.scan is yaml.scan
     assert sys.modules["pyroid.yaml"] is py
+
+
+_DEEP_CHILD = r"""
+import sys, threading
+import pyroid.yaml as py
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+def nested(n, kind):
+    x = [] if kind == "list" else {}
+    for _ in range(n):
+        x = [x] if kind == "list" else {"k": x}
+    return x
+
+def outcome(fn, *args):
+    try:
+        return ("ok", fn(*args))
+    except RecursionError:
+        return ("RecursionError",)
+
+def check(kind):
+    data = nested(DEPTH, kind)
+    got = outcome(py.safe_dump, data)
+    if yaml is not None:
+        assert got == outcome(lambda d: yaml.dump(d, Dumper=yaml.SafeDumper), data), kind
+    if got[0] == "ok":
+        outcome(py.safe_load, got[1])
+    # Merged mappings nested as deep: {<<: {<<: {...}}}.
+    merges = "{<<: " * DEPTH + "{a: 1}" + "}" * DEPTH
+    loaded = outcome(py.safe_load, merges)
+    if yaml is not None:
+        assert loaded == outcome(lambda s: yaml.load(s, Loader=yaml.SafeLoader), merges)
+    return got[0], loaded[0]
+
+sys.setrecursionlimit(LIMIT)
+results = []
+if STACK:
+    threading.stack_size(STACK)
+    t = threading.Thread(target=lambda: results.extend([check("list"), check("dict")]))
+    t.start()
+    t.join()
+else:
+    results.extend([check("list"), check("dict")])
+print(results)
+"""
+
+
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize(
+    ("limit", "depth", "stack"),
+    [(100_000, 30_000, 0), (1000, 320, 128 << 10), (20_000, 6_000, 256 << 10)],
+)
+def test_deep_nesting_never_overflows_the_native_stack(
+    run_python: Any, limit: int, depth: int, stack: int
+) -> None:
+    # Dumping 15,000 levels at a raised recursion limit, or 200 levels in a thread with a
+    # 128 KiB stack, used to crash the interpreter; the results (or RecursionError) are PyYAML's.
+    code = f"LIMIT, DEPTH, STACK = {limit}, {depth}, {stack}\n" + _DEEP_CHILD
+    proc = run_python(code, timeout=600.0)
+    assert proc.returncode == 0, proc.stderr[-3000:]
+    assert proc.stdout.startswith("[("), proc.stdout

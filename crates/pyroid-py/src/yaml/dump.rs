@@ -99,8 +99,38 @@ impl<'py> Repr<'py> {
             || data.is_instance_of::<PyFloat>()
     }
 
-    /// `represent_data(data)`.
-    fn data(&mut self, data: &Bound<'py, PyAny>, depth: usize) -> R<NodeId> {
+    /// `represent_data(data)`. PyYAML's representer recurses through `represent_sequence`
+    /// and `represent_mapping`; this walk keeps the open collections in a stack (deep nesting
+    /// costs heap, not native stack) and visits the objects in PyYAML's order.
+    fn data(&mut self, root: &Bound<'py, PyAny>) -> R<NodeId> {
+        let mut stack: Vec<Frame<'py>> = Vec::new();
+        let mut step = self.start(root, 0)?;
+        loop {
+            match step {
+                Step::Open(frame) => stack.push(frame),
+                Step::Done(id) => {
+                    let Some(top) = stack.last_mut() else {
+                        return Ok(id);
+                    };
+                    self.accept(top, id);
+                }
+            }
+            // The next child of the innermost open collection, or its end.
+            let depth = stack.len();
+            let top = stack.last_mut().expect("a collection is open");
+            step = if let Some(child) = top.next_child()? {
+                self.start(&child, depth)?
+            } else {
+                let frame = stack.pop().expect("a collection is open");
+                Step::Done(self.close(frame))
+            };
+        }
+    }
+
+    /// The head of `represent_data(data)` at nesting `depth`: a scalar's node, or a
+    /// collection's node (registered for aliases) with its children still to represent.
+    #[allow(clippy::too_many_lines)] // represent_data and the representers, a branch each
+    fn start(&mut self, data: &Bound<'py, PyAny>, depth: usize) -> R<Step<'py>> {
         if depth > self.o.max_depth {
             return Err(DErr::Yaml(YamlError::Recursion));
         }
@@ -111,45 +141,60 @@ impl<'py> Repr<'py> {
         };
         if let Some(k) = key {
             if let Some(&n) = self.represented.get(&k) {
-                return Ok(n);
+                return Ok(Step::Done(n));
             }
             self.keeper.push(data.clone());
         }
         let py = self.py;
         let ty = data.get_type();
         if data.is_none() {
-            return Ok(self.scalar(key, res::NULL, "null".to_owned(), None));
+            return Ok(Step::Done(self.scalar(
+                key,
+                res::NULL,
+                "null".to_owned(),
+                None,
+            )));
         }
         if ty.is(py.get_type::<PyString>()) {
             let s = data.cast::<PyString>().map_err(PyErr::from)?;
             let Ok(text) = s.to_str() else {
                 return Err(DErr::Unsupported("a str with lone surrogates"));
             };
-            return Ok(self.scalar(key, res::STR, text.to_owned(), None));
+            return Ok(Step::Done(self.scalar(
+                key,
+                res::STR,
+                text.to_owned(),
+                None,
+            )));
         }
         if ty.is(py.get_type::<PyBool>()) {
             let v = if data.is_truthy()? { "true" } else { "false" };
-            return Ok(self.scalar(key, res::BOOL, v.to_owned(), None));
+            return Ok(Step::Done(self.scalar(key, res::BOOL, v.to_owned(), None)));
         }
         if ty.is(py.get_type::<PyInt>()) {
             let text = match data.extract::<i64>() {
                 Ok(n) => n.to_string(),
                 Err(_) => data.str()?.to_str()?.to_owned(),
             };
-            return Ok(self.scalar(key, res::INT, text, None));
+            return Ok(Step::Done(self.scalar(key, res::INT, text, None)));
         }
         if ty.is(py.get_type::<PyFloat>()) {
             let x = data.cast::<PyFloat>().map_err(PyErr::from)?.value();
-            return Ok(self.scalar(key, res::FLOAT, float_text(x), None));
+            return Ok(Step::Done(self.scalar(
+                key,
+                res::FLOAT,
+                float_text(x),
+                None,
+            )));
         }
         if ty.is(py.get_type::<PyDict>()) {
             let d = data.cast::<PyDict>().map_err(PyErr::from)?;
             let items = PyList::new(py, d.items())?;
-            return self.mapping(key, res::MAP, &items, depth);
+            return self.mapping(key, res::MAP, items);
         }
         if ty.is(py.get_type::<PyList>()) {
             let l = data.cast::<PyList>().map_err(PyErr::from)?.clone();
-            return self.sequence(key, res::SEQ, l.iter(), depth);
+            return Ok(self.sequence(key, res::SEQ, Items::List(l)));
         }
         if ty.is(py.get_type::<PyTuple>()) {
             let t = data.cast::<PyTuple>().map_err(PyErr::from)?.clone();
@@ -158,7 +203,7 @@ impl<'py> Repr<'py> {
             } else {
                 res::SEQ
             };
-            return self.sequence(key, tag, t.iter(), depth);
+            return Ok(self.sequence(key, tag, Items::Tuple(t)));
         }
         if ty.is(py.get_type::<PyBytes>()) {
             let text: String = self
@@ -168,7 +213,7 @@ impl<'py> Repr<'py> {
                 .call1((data,))?
                 .call_method1("decode", ("ascii",))?
                 .extract()?;
-            return Ok(self.scalar(key, res::BINARY, text, Some('|')));
+            return Ok(Step::Done(self.scalar(key, res::BINARY, text, Some('|'))));
         }
         if ty.is(py.get_type::<PySet>()) {
             // value = {key: None for key in data}
@@ -177,15 +222,15 @@ impl<'py> Repr<'py> {
                 d.set_item(k?, py.None())?;
             }
             let items = PyList::new(py, d.items())?;
-            return self.mapping(key, res::SET, &items, depth);
+            return self.mapping(key, res::SET, items);
         }
         if ty.is(self.c.datetime.bind(py)) {
             let text: String = data.call_method1("isoformat", (" ",))?.extract()?;
-            return Ok(self.scalar(key, res::TIMESTAMP, text, None));
+            return Ok(Step::Done(self.scalar(key, res::TIMESTAMP, text, None)));
         }
         if ty.is(self.c.date.bind(py)) {
             let text: String = data.call_method0("isoformat")?.extract()?;
-            return Ok(self.scalar(key, res::TIMESTAMP, text, None));
+            return Ok(Step::Done(self.scalar(key, res::TIMESTAMP, text, None)));
         }
         if self.o.full {
             return Err(DErr::Unsupported("objects other than plain data"));
@@ -200,14 +245,8 @@ impl<'py> Repr<'py> {
         )
     }
 
-    /// `represent_sequence(tag, sequence)`.
-    fn sequence(
-        &mut self,
-        key: Option<usize>,
-        tag: &'static str,
-        items: impl Iterator<Item = Bound<'py, PyAny>>,
-        depth: usize,
-    ) -> R<NodeId> {
+    /// The start of `represent_sequence(tag, sequence)`.
+    fn sequence(&mut self, key: Option<usize>, tag: &'static str, items: Items<'py>) -> Step<'py> {
         let id = self.push(
             key,
             tag,
@@ -216,31 +255,22 @@ impl<'py> Repr<'py> {
                 flow_style: None,
             },
         );
-        let mut best_style = true;
-        let mut out = Vec::new();
-        for item in items {
-            let n = self.data(&item, depth + 1)?;
-            if !self.is_plain_scalar(n) {
-                best_style = false;
-            }
-            out.push(n);
-        }
-        let flow = self.o.default_flow_style.unwrap_or(best_style);
-        self.graph.nodes[id].kind = NodeKind::Sequence {
-            items: out,
-            flow_style: Some(flow),
-        };
-        Ok(id)
+        Step::Open(Frame::Seq {
+            id,
+            items,
+            next: 0,
+            out: Vec::new(),
+            best_style: true,
+        })
     }
 
-    /// `represent_mapping(tag, mapping)` over `list(mapping.items())`.
+    /// The start of `represent_mapping(tag, mapping)` over `list(mapping.items())`.
     fn mapping(
         &mut self,
         key: Option<usize>,
         tag: &'static str,
-        items: &Bound<'py, PyList>,
-        depth: usize,
-    ) -> R<NodeId> {
+        mut items: Bound<'py, PyList>,
+    ) -> R<Step<'py>> {
         let id = self.push(
             key,
             tag,
@@ -249,7 +279,6 @@ impl<'py> Repr<'py> {
                 flow_style: None,
             },
         );
-        let mut items = items.clone();
         if self.o.sort_keys {
             let sorted = PyList::new(self.py, items.iter())?;
             match sorted.sort() {
@@ -258,24 +287,151 @@ impl<'py> Repr<'py> {
                 Err(e) => return Err(e.into()),
             }
         }
-        let mut best_style = true;
-        let mut pairs = Vec::with_capacity(items.len());
-        for item in items.iter() {
-            let pair = item.cast::<PyTuple>().map_err(PyErr::from)?;
-            let k = self.data(&pair.get_item(0)?, depth + 1)?;
-            let v = self.data(&pair.get_item(1)?, depth + 1)?;
-            if !self.is_plain_scalar(k) || !self.is_plain_scalar(v) {
-                best_style = false;
-            }
-            pairs.push((k, v));
-        }
-        let flow = self.o.default_flow_style.unwrap_or(best_style);
-        self.graph.nodes[id].kind = NodeKind::Mapping {
-            pairs,
-            flow_style: Some(flow),
-        };
-        Ok(id)
+        let n = items.len();
+        Ok(Step::Open(Frame::Map {
+            id,
+            items,
+            next: 0,
+            key: None,
+            value: None,
+            pairs: Vec::with_capacity(n),
+            best_style: true,
+        }))
     }
+
+    /// Hand a represented child to its collection.
+    fn accept(&self, frame: &mut Frame<'py>, child: NodeId) {
+        let plain = self.is_plain_scalar(child);
+        match frame {
+            Frame::Seq {
+                out, best_style, ..
+            } => {
+                *best_style &= plain;
+                out.push(child);
+            }
+            Frame::Map {
+                next,
+                key,
+                pairs,
+                best_style,
+                ..
+            } => {
+                *best_style &= plain;
+                match key.take() {
+                    None => *key = Some(child),
+                    Some(k) => {
+                        pairs.push((k, child));
+                        *next += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    /// The end of `represent_sequence` / `represent_mapping`: the collection's flow style.
+    fn close(&mut self, frame: Frame<'py>) -> NodeId {
+        let (id, kind) = match frame {
+            Frame::Seq {
+                id,
+                out,
+                best_style,
+                ..
+            } => (
+                id,
+                NodeKind::Sequence {
+                    items: out,
+                    flow_style: Some(self.o.default_flow_style.unwrap_or(best_style)),
+                },
+            ),
+            Frame::Map {
+                id,
+                pairs,
+                best_style,
+                ..
+            } => (
+                id,
+                NodeKind::Mapping {
+                    pairs,
+                    flow_style: Some(self.o.default_flow_style.unwrap_or(best_style)),
+                },
+            ),
+        };
+        self.graph.nodes[id].kind = kind;
+        id
+    }
+}
+
+/// The items of a list or tuple being represented (`for item in sequence`: a list is read
+/// item by item, as Python's list iterator does).
+enum Items<'py> {
+    List(Bound<'py, PyList>),
+    Tuple(Bound<'py, PyTuple>),
+}
+
+/// A collection whose children are being represented.
+enum Frame<'py> {
+    Seq {
+        id: NodeId,
+        items: Items<'py>,
+        next: usize,
+        out: Vec<NodeId>,
+        best_style: bool,
+    },
+    Map {
+        id: NodeId,
+        /// `list(mapping.items())`, sorted with `sort_keys`.
+        items: Bound<'py, PyList>,
+        next: usize,
+        /// The key node of pair `next`, once represented.
+        key: Option<NodeId>,
+        /// The value of pair `next`, while its key is being represented.
+        value: Option<Bound<'py, PyAny>>,
+        pairs: Vec<(NodeId, NodeId)>,
+        best_style: bool,
+    },
+}
+
+impl<'py> Frame<'py> {
+    /// The next object to represent, or `None` when the collection is complete.
+    fn next_child(&mut self) -> PyResult<Option<Bound<'py, PyAny>>> {
+        match self {
+            Self::Seq { items, next, .. } => {
+                let item = match items {
+                    Items::List(l) if *next < l.len() => l.get_item(*next)?,
+                    Items::Tuple(t) if *next < t.len() => t.get_item(*next)?,
+                    _ => return Ok(None),
+                };
+                *next += 1;
+                Ok(Some(item))
+            }
+            Self::Map {
+                items,
+                next,
+                key,
+                value,
+                ..
+            } => {
+                if key.is_some() {
+                    return Ok(value.take());
+                }
+                if *next >= items.len() {
+                    return Ok(None);
+                }
+                // for item_key, item_value in mapping:
+                let item = items.get_item(*next)?;
+                let pair = item.cast::<PyTuple>().map_err(PyErr::from)?;
+                *value = Some(pair.get_item(1)?);
+                Ok(Some(pair.get_item(0)?))
+            }
+        }
+    }
+}
+
+enum Step<'py> {
+    /// A finished node.
+    Done(NodeId),
+    /// A collection's node, its children to come.
+    Open(Frame<'py>),
 }
 
 fn style_arg(style: Option<&str>) -> PyResult<Option<char>> {
@@ -370,7 +526,7 @@ fn dump<'py>(
                 keeper: Vec::new(),
                 o,
             };
-            r.graph.root = r.data(&data, 0)?;
+            r.graph.root = r.data(&data)?;
             serializer::serialize(&mut emitter, &r.graph, &sopts)?;
         }
         serializer::close(&mut emitter)?;

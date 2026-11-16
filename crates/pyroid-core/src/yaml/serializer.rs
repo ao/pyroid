@@ -2,7 +2,8 @@
 //! The serializer (`serializer.py`): a node graph to events, into an [`Emitter`].
 //!
 //! Nodes reached more than once get anchors `id001`, `id002`, ... in PyYAML's traversal order
-//! (numbered per document); later visits become aliases.
+//! (numbered per document); later visits become aliases. PyYAML walks the graph recursively;
+//! the walks here keep explicit stacks, so nesting depth costs heap, not native stack.
 
 use super::emitter::Emitter;
 use super::error::Result;
@@ -64,26 +65,26 @@ struct State {
 }
 
 impl State {
-    fn anchor_node(&mut self, graph: &Graph, id: NodeId) {
-        match self.anchors[id] {
-            Anchor::Once => {
-                self.last_anchor_id += 1;
-                self.anchors[id] = Anchor::Named(format!("id{:03}", self.last_anchor_id));
-            }
-            Anchor::Named(_) => {}
-            Anchor::Unseen => {
-                self.anchors[id] = Anchor::Once;
-                match &graph.nodes[id].kind {
-                    NodeKind::Scalar { .. } => {}
-                    NodeKind::Sequence { items, .. } => {
-                        for &item in items {
-                            self.anchor_node(graph, item);
-                        }
-                    }
-                    NodeKind::Mapping { pairs, .. } => {
-                        for &(k, v) in pairs {
-                            self.anchor_node(graph, k);
-                            self.anchor_node(graph, v);
+    /// `anchor_node(node)`: PyYAML's recursive walk, in the same (pre-)order, with a stack.
+    fn anchor_node(&mut self, graph: &Graph, root: NodeId) {
+        let mut stack = vec![root];
+        while let Some(id) = stack.pop() {
+            match self.anchors[id] {
+                Anchor::Once => {
+                    self.last_anchor_id += 1;
+                    self.anchors[id] = Anchor::Named(format!("id{:03}", self.last_anchor_id));
+                }
+                Anchor::Named(_) => {}
+                Anchor::Unseen => {
+                    self.anchors[id] = Anchor::Once;
+                    match &graph.nodes[id].kind {
+                        NodeKind::Scalar { .. } => {}
+                        NodeKind::Sequence { items, .. } => stack.extend(items.iter().rev()),
+                        NodeKind::Mapping { pairs, .. } => {
+                            for &(k, v) in pairs.iter().rev() {
+                                stack.push(v);
+                                stack.push(k);
+                            }
                         }
                     }
                 }
@@ -91,61 +92,82 @@ impl State {
         }
     }
 
-    fn serialize_node(&mut self, emitter: &mut Emitter, graph: &Graph, id: NodeId) -> Result<()> {
-        let alias = match &self.anchors[id] {
-            Anchor::Named(a) => Some(a.clone()),
-            _ => None,
-        };
-        if self.serialized[id] {
-            // PyYAML emits AliasEvent(None) for a node it saw once; serialized nodes always
-            // have a name here (a second visit named them).
-            return emitter.emit(Event::new(EventKind::Alias {
-                anchor: alias.unwrap_or_default(),
-            }));
+    /// `serialize_node(node, ...)`: PyYAML's recursive walk, in the same order, with a stack
+    /// (deep nesting must not overflow the native stack).
+    fn serialize_node(&mut self, emitter: &mut Emitter, graph: &Graph, root: NodeId) -> Result<()> {
+        enum Step {
+            Node(NodeId),
+            SequenceEnd,
+            MappingEnd,
         }
-        self.serialized[id] = true;
-        let node = &graph.nodes[id];
-        let tag = node.tag.to_string();
-        match &node.kind {
-            NodeKind::Scalar { value, style } => {
-                let detected = resolver::resolve_scalar(value, true);
-                let default = resolver::resolve_scalar(value, false);
-                let implicit = (node.tag == detected, node.tag == default);
-                emitter.emit(Event::new(EventKind::Scalar {
-                    anchor: alias,
-                    tag: Some(tag),
-                    implicit,
-                    value: value.clone(),
-                    style: *style,
-                }))
-            }
-            NodeKind::Sequence { items, flow_style } => {
-                let implicit = node.tag == SEQ;
-                emitter.emit(Event::new(EventKind::SequenceStart {
-                    anchor: alias,
-                    tag: Some(tag),
-                    implicit,
-                    flow_style: *flow_style,
-                }))?;
-                for &item in items {
-                    self.serialize_node(emitter, graph, item)?;
+        let mut stack = vec![Step::Node(root)];
+        while let Some(step) = stack.pop() {
+            let id = match step {
+                Step::Node(id) => id,
+                Step::SequenceEnd => {
+                    emitter.emit(Event::new(EventKind::SequenceEnd))?;
+                    continue;
                 }
-                emitter.emit(Event::new(EventKind::SequenceEnd))
-            }
-            NodeKind::Mapping { pairs, flow_style } => {
-                let implicit = node.tag == MAP;
-                emitter.emit(Event::new(EventKind::MappingStart {
-                    anchor: alias,
-                    tag: Some(tag),
-                    implicit,
-                    flow_style: *flow_style,
-                }))?;
-                for &(k, v) in pairs {
-                    self.serialize_node(emitter, graph, k)?;
-                    self.serialize_node(emitter, graph, v)?;
+                Step::MappingEnd => {
+                    emitter.emit(Event::new(EventKind::MappingEnd))?;
+                    continue;
                 }
-                emitter.emit(Event::new(EventKind::MappingEnd))
+            };
+            let alias = match &self.anchors[id] {
+                Anchor::Named(a) => Some(a.clone()),
+                _ => None,
+            };
+            if self.serialized[id] {
+                // PyYAML emits AliasEvent(None) for a node it saw once; serialized nodes always
+                // have a name here (a second visit named them).
+                emitter.emit(Event::new(EventKind::Alias {
+                    anchor: alias.unwrap_or_default(),
+                }))?;
+                continue;
+            }
+            self.serialized[id] = true;
+            let node = &graph.nodes[id];
+            let tag = node.tag.to_string();
+            match &node.kind {
+                NodeKind::Scalar { value, style } => {
+                    let detected = resolver::resolve_scalar(value, true);
+                    let default = resolver::resolve_scalar(value, false);
+                    let implicit = (node.tag == detected, node.tag == default);
+                    emitter.emit(Event::new(EventKind::Scalar {
+                        anchor: alias,
+                        tag: Some(tag),
+                        implicit,
+                        value: value.clone(),
+                        style: *style,
+                    }))?;
+                }
+                NodeKind::Sequence { items, flow_style } => {
+                    let implicit = node.tag == SEQ;
+                    emitter.emit(Event::new(EventKind::SequenceStart {
+                        anchor: alias,
+                        tag: Some(tag),
+                        implicit,
+                        flow_style: *flow_style,
+                    }))?;
+                    stack.push(Step::SequenceEnd);
+                    stack.extend(items.iter().rev().map(|&item| Step::Node(item)));
+                }
+                NodeKind::Mapping { pairs, flow_style } => {
+                    let implicit = node.tag == MAP;
+                    emitter.emit(Event::new(EventKind::MappingStart {
+                        anchor: alias,
+                        tag: Some(tag),
+                        implicit,
+                        flow_style: *flow_style,
+                    }))?;
+                    stack.push(Step::MappingEnd);
+                    for &(k, v) in pairs.iter().rev() {
+                        stack.push(Step::Node(v));
+                        stack.push(Step::Node(k));
+                    }
+                }
             }
         }
+        Ok(())
     }
 }

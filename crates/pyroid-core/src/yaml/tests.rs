@@ -133,3 +133,63 @@ fn errors() {
     );
     assert!(matches!(compose_all("\t"), Err(YamlError::Marked(_))));
 }
+
+/// Serialize `graph` as one document with the default options.
+fn dump_graph(graph: &Graph) -> String {
+    use super::emitter::{Emitter, EmitterOptions};
+    use super::serializer::{self, SerializerOptions};
+    let mut emitter = Emitter::new(EmitterOptions::default());
+    serializer::open(&mut emitter, None).unwrap();
+    serializer::serialize(&mut emitter, graph, &SerializerOptions::default()).unwrap();
+    serializer::close(&mut emitter).unwrap();
+    emitter.output().to_owned()
+}
+
+fn seq(graph: &mut Graph, items: Vec<NodeId>, flow: bool) -> NodeId {
+    graph.push(super::nodes::Node {
+        tag: std::borrow::Cow::Borrowed(super::resolver::SEQ),
+        kind: NodeKind::Sequence {
+            items,
+            flow_style: Some(flow),
+        },
+        start_mark: super::error::Mark::default(),
+        end_mark: super::error::Mark::default(),
+    })
+}
+
+#[test]
+fn serializer_anchors_in_pyyaml_order() {
+    // [[x], [x], y, y] with x and y shared: x is seen first, so it is id001.
+    let mut g = Graph::default();
+    let second = seq(&mut g, Vec::new(), true);
+    let first = seq(&mut g, Vec::new(), true);
+    let one = seq(&mut g, vec![first], true);
+    let two = seq(&mut g, vec![first], true);
+    g.root = seq(&mut g, vec![one, two, second, second], false);
+    assert_eq!(
+        dump_graph(&g),
+        "- [&id001 []]\n- [*id001]\n- &id002 []\n- *id002\n"
+    );
+}
+
+#[test]
+fn deep_graphs_serialize_on_a_small_stack() {
+    // The walks keep their own stacks: 200,000 levels fit in a 64 KiB thread.
+    let out = std::thread::Builder::new()
+        .stack_size(64 << 10)
+        .spawn(|| {
+            let mut g = Graph::default();
+            let mut id = seq(&mut g, Vec::new(), true);
+            for _ in 0..200_000 {
+                id = seq(&mut g, vec![id], false);
+            }
+            g.root = id;
+            dump_graph(&g)
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+    assert!(out.starts_with("- - - "));
+    assert!(out.ends_with("- []\n"));
+    assert_eq!(out.matches('-').count(), 200_000);
+}

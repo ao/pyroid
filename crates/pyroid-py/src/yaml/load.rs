@@ -65,9 +65,12 @@ fn ctor_error(
     ))
 }
 
-/// Python's recursion limit stands in for PyYAML's recursive `construct_scalar` and
-/// `flatten_mapping` (only reachable through long `=`/merge chains).
-const MAX_CHAIN: usize = 900;
+/// How long a chain of merged mappings (`flatten_mapping`) or of `=` keys (`construct_scalar`)
+/// may be before `RecursionError`. Both recurse in PyYAML, one frame a level, and run out of
+/// Python frames near where its composer (two frames a level) would at twice the nesting.
+fn chain_limit(max_depth: usize) -> usize {
+    max_depth.saturating_mul(2).saturating_add(6).min(1 << 22)
+}
 
 enum Fill<'py> {
     Seq(NodeId, Bound<'py, PyList>),
@@ -87,6 +90,8 @@ struct Ctor<'g, 'py> {
     surrogates: bool,
     /// A `FullLoader`/`Loader`/`UnsafeLoader` call: `!!python/...` tags are PyYAML's.
     full: bool,
+    /// [`chain_limit`].
+    chain: usize,
 }
 
 impl<'g, 'py> Ctor<'g, 'py> {
@@ -96,6 +101,7 @@ impl<'g, 'py> Ctor<'g, 'py> {
         g: &'g mut Graph,
         surrogates: bool,
         full: bool,
+        chain: usize,
     ) -> Self {
         let n = g.nodes.len();
         Self {
@@ -106,6 +112,7 @@ impl<'g, 'py> Ctor<'g, 'py> {
             queue: VecDeque::new(),
             surrogates,
             full,
+            chain,
         }
     }
 
@@ -200,7 +207,7 @@ impl<'g, 'py> Ctor<'g, 'py> {
     /// `SafeConstructor.construct_scalar(node)`: the scalar node whose value it returns
     /// (a mapping gives its `=` key's value).
     fn scalar(&self, mut id: NodeId) -> R<NodeId> {
-        for _ in 0..MAX_CHAIN {
+        for _ in 0..self.chain {
             let node = &self.g.nodes[id];
             match &node.kind {
                 NodeKind::Scalar { .. } => return Ok(id),
@@ -369,7 +376,7 @@ impl<'g, 'py> Ctor<'g, 'py> {
         mut f: impl FnMut(&Bound<'py, PyAny>, Bound<'py, PyAny>) -> PyResult<()>,
     ) -> R<()> {
         if matches!(self.g.nodes[id].kind, NodeKind::Mapping { .. }) {
-            self.flatten(id, 0)?;
+            self.flatten(id)?;
         }
         let node = &self.g.nodes[id];
         let NodeKind::Mapping { pairs, .. } = &node.kind else {
@@ -458,88 +465,156 @@ impl<'g, 'py> Ctor<'g, 'py> {
         Ok(())
     }
 
-    /// `flatten_mapping(node)`.
-    fn flatten(&mut self, id: NodeId, depth: usize) -> R<()> {
-        if depth > MAX_CHAIN {
-            return Err(CErr::Yaml(YamlError::Recursion));
-        }
-        let mut merge: Vec<(NodeId, NodeId)> = Vec::new();
-        let mut index = 0;
+    /// `flatten_mapping(node)`. PyYAML recurses into the mappings it merges; this keeps them
+    /// in a stack (depth costs heap, not native stack) and works in the same order, raising
+    /// `RecursionError` more than [`chain_limit`] levels down.
+    #[allow(clippy::too_many_lines)] // flatten_mapping, with its recursion unrolled
+    fn flatten(&mut self, root: NodeId) -> R<()> {
+        let mut stack = vec![Flatten::new(root)];
+        // A merged mapping was just flattened: its parent (the top) resumes.
+        let mut returned = false;
         loop {
-            let NodeKind::Mapping { pairs, .. } = &self.g.nodes[id].kind else {
-                return Ok(());
-            };
-            if index >= pairs.len() {
-                break;
-            }
-            let (k, v) = pairs[index];
-            let ktag: &str = &self.g.nodes[k].tag;
-            if ktag == res::MERGE {
-                if let NodeKind::Mapping { pairs, .. } = &mut self.g.nodes[id].kind {
-                    pairs.remove(index);
+            let top = stack.last_mut().expect("a mapping is being flattened");
+            let id = top.id;
+            if std::mem::take(&mut returned) {
+                if let Some(v) = top.map.take() {
+                    // flatten_mapping(value_node); merge.extend(value_node.value)
+                    if let NodeKind::Mapping { pairs, .. } = &self.g.nodes[v].kind {
+                        top.merge.extend_from_slice(pairs);
+                    }
+                } else if let Some(seq) = &mut top.seq {
+                    // flatten_mapping(subnode); submerge.append(subnode.value)
+                    let sub = seq.items[seq.next];
+                    if let NodeKind::Mapping { pairs, .. } = &self.g.nodes[sub].kind {
+                        seq.done.push(pairs.clone());
+                    }
+                    seq.next += 1;
                 }
-                let start = self.g.nodes[id].start_mark;
-                match &self.g.nodes[v].kind {
-                    NodeKind::Mapping { .. } => {
-                        self.flatten(v, depth + 1)?;
-                        if let NodeKind::Mapping { pairs, .. } = &self.g.nodes[v].kind {
-                            merge.extend_from_slice(pairs);
-                        }
-                    }
-                    NodeKind::Sequence { items, .. } => {
-                        let items = items.clone();
-                        let mut submerge = Vec::new();
-                        for sub in items {
-                            if !matches!(self.g.nodes[sub].kind, NodeKind::Mapping { .. }) {
-                                let sn = &self.g.nodes[sub];
-                                return Err(ctor_error(
-                                    Some("while constructing a mapping"),
-                                    Some(start),
-                                    Msg::str(
-                                        "expected a mapping for merging, but found %s",
-                                        sn.kind.id(),
-                                    ),
-                                    sn.start_mark,
-                                ));
-                            }
-                            self.flatten(sub, depth + 1)?;
-                            if let NodeKind::Mapping { pairs, .. } = &self.g.nodes[sub].kind {
-                                submerge.push(pairs.clone());
-                            }
-                        }
-                        for value in submerge.into_iter().rev() {
-                            merge.extend(value);
-                        }
-                    }
-                    NodeKind::Scalar { .. } => {
-                        let vn = &self.g.nodes[v];
+            }
+            // `<<: [a, b, ...]`: the next mapping of the sequence, or merge them all.
+            if let Some(seq) = &mut top.seq {
+                if let Some(&sub) = seq.items.get(seq.next) {
+                    if !matches!(self.g.nodes[sub].kind, NodeKind::Mapping { .. }) {
+                        let sn = &self.g.nodes[sub];
                         return Err(ctor_error(
                             Some("while constructing a mapping"),
-                            Some(start),
-                            Msg::str(
-                                "expected a mapping or list of mappings for merging, but found %s",
-                                vn.kind.id(),
-                            ),
-                            vn.start_mark,
+                            Some(self.g.nodes[id].start_mark),
+                            Msg::str("expected a mapping for merging, but found %s", sn.kind.id()),
+                            sn.start_mark,
                         ));
                     }
+                    if stack.len() > self.chain {
+                        return Err(CErr::Yaml(YamlError::Recursion));
+                    }
+                    stack.push(Flatten::new(sub));
+                    continue;
                 }
-            } else if ktag == res::VALUE {
-                self.g.nodes[k].tag = std::borrow::Cow::Borrowed(res::STR);
-                index += 1;
-            } else {
-                index += 1;
+                let seq = top.seq.take().expect("checked above");
+                for value in seq.done.into_iter().rev() {
+                    top.merge.extend(value);
+                }
             }
-        }
-        if !merge.is_empty() {
-            if let NodeKind::Mapping { pairs, .. } = &mut self.g.nodes[id].kind {
-                merge.append(pairs);
-                *pairs = merge;
+            // while index < len(node.value): ...
+            let mut descend = None;
+            while let NodeKind::Mapping { pairs, .. } = &self.g.nodes[id].kind {
+                let Some(&(k, v)) = pairs.get(top.index) else {
+                    break;
+                };
+                let ktag: &str = &self.g.nodes[k].tag;
+                if ktag == res::MERGE {
+                    if let NodeKind::Mapping { pairs, .. } = &mut self.g.nodes[id].kind {
+                        pairs.remove(top.index);
+                    }
+                    match &self.g.nodes[v].kind {
+                        NodeKind::Mapping { .. } => {
+                            top.map = Some(v);
+                            descend = Some(v);
+                            break;
+                        }
+                        NodeKind::Sequence { items, .. } => {
+                            top.seq = Some(SeqMerge {
+                                items: items.clone(),
+                                next: 0,
+                                done: Vec::new(),
+                            });
+                            break;
+                        }
+                        NodeKind::Scalar { .. } => {
+                            let vn = &self.g.nodes[v];
+                            return Err(ctor_error(
+                                Some("while constructing a mapping"),
+                                Some(self.g.nodes[id].start_mark),
+                                Msg::str(
+                                    "expected a mapping or list of mappings for merging, but found %s",
+                                    vn.kind.id(),
+                                ),
+                                vn.start_mark,
+                            ));
+                        }
+                    }
+                } else if ktag == res::VALUE {
+                    self.g.nodes[k].tag = std::borrow::Cow::Borrowed(res::STR);
+                }
+                top.index += 1;
             }
+            if let Some(v) = descend {
+                if stack.len() > self.chain {
+                    return Err(CErr::Yaml(YamlError::Recursion));
+                }
+                stack.push(Flatten::new(v));
+                continue;
+            }
+            if top.seq.is_some() {
+                continue;
+            }
+            // if merge: node.value = merge + node.value
+            let done = stack.pop().expect("a mapping is being flattened");
+            if !done.merge.is_empty() {
+                let mut merge = done.merge;
+                if let NodeKind::Mapping { pairs, .. } = &mut self.g.nodes[done.id].kind {
+                    merge.extend_from_slice(pairs);
+                    *pairs = merge;
+                }
+            }
+            if stack.is_empty() {
+                return Ok(());
+            }
+            returned = true;
         }
-        Ok(())
     }
 }
+
+/// One `flatten_mapping(node)` call in [`Ctor::flatten`]'s stack.
+struct Flatten {
+    id: NodeId,
+    merge: Vec<(NodeId, NodeId)>,
+    index: usize,
+    /// A `<<: mapping` being flattened.
+    map: Option<NodeId>,
+    /// A `<<: [mappings]` being flattened.
+    seq: Option<SeqMerge>,
+}
+
+impl Flatten {
+    fn new(id: NodeId) -> Self {
+        Self {
+            id,
+            merge: Vec::new(),
+            index: 0,
+            map: None,
+            seq: None,
+        }
+    }
+}
+
+/// `submerge`: the mappings of a `<<: [...]` value, the next one to flatten, and the pairs of
+/// those flattened so far.
+struct SeqMerge {
+    items: Vec<NodeId>,
+    next: usize,
+    done: Vec<Vec<(NodeId, NodeId)>>,
+}
+
 
 /// `construct_yaml_int` for the common forms; `None`: let PyYAML's code decide.
 fn fast_int(value: &str) -> Option<i64> {
@@ -680,9 +755,10 @@ fn construct<'py>(
     graph: &mut Graph,
     surrogates: bool,
     full: bool,
+    chain: usize,
 ) -> R<Bound<'py, PyAny>> {
     let c = classes(py)?;
-    Ctor::new(py, c, graph, surrogates, full).document()
+    Ctor::new(py, c, graph, surrogates, full, chain).document()
 }
 
 fn finish<'py>(
@@ -734,7 +810,7 @@ fn load<'py>(
     let r = match node {
         Err(e) => Err(CErr::Yaml(e)),
         Ok(None) => Ok(py.None().into_bound(py)),
-        Ok(Some(mut graph)) => construct(py, &mut graph, surrogates, full),
+        Ok(Some(mut graph)) => construct(py, &mut graph, surrogates, full, chain_limit(max_depth)),
     };
     finish(py, r, name, buffer, pending.as_ref())
 }
@@ -746,6 +822,7 @@ struct LoadAll {
     name: Py<PyAny>,
     marks: bool,
     pending: Option<Py<PyAny>>,
+    chain: usize,
 }
 
 #[pymethods]
@@ -775,6 +852,7 @@ impl LoadAll {
             name: name.clone().unbind(),
             marks,
             pending,
+            chain: chain_limit(max_depth),
         };
         Ok(Bound::new(py, me)?.into_any())
     }
@@ -808,7 +886,7 @@ impl LoadAll {
         let r = match node {
             Err(e) => Err(CErr::Yaml(e)),
             Ok(None) => Ok(py.None().into_bound(py)),
-            Ok(Some(mut graph)) => construct(py, &mut graph, surrogates, false),
+            Ok(Some(mut graph)) => construct(py, &mut graph, surrogates, false, self.chain),
         };
         finish(py, r, self.name.bind(py), buffer, self.pending.as_ref())
     }
