@@ -437,6 +437,25 @@ def test_tokenize_takes_what_jmespath_lexes() -> None:
             list(lexer_.tokenize(["n"]))
 
 
+@pytest.mark.thread_unsafe(reason="warnings and the parse cache")
+def test_deprecated_literal_warning_points_at_the_caller() -> None:
+    # J7: the warning pointed at pyroid/jmespath/__init__.py.
+    calls = [
+        lambda e: jp.search(e, {}),
+        lambda e: jp.compile(e),
+        lambda e: parser.Parser().parse(e),
+        lambda e: list(lexer.Lexer().tokenize(e)),
+    ]
+    for i, call in enumerate(calls):
+        parser.Parser.purge()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            call(f"`literal_{i}`")
+        [w] = [w for w in caught if w.category is PendingDeprecationWarning]
+        assert str(w.message) == "deprecated string literal syntax"
+        assert w.filename == __file__, (i, w.filename)
+
+
 def test_lone_surrogates() -> None:
     data = {"\ud800": 1, "x\udfff": 2}
     assert jp.search('"\\ud800"', data) == 1
