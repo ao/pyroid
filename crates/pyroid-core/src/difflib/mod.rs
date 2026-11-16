@@ -110,7 +110,6 @@ impl StrMatcher {
         let mut ids = std::mem::take(&mut w.ids);
         ids.clear();
         ids.extend(a.map(|c| self.chars.get(c)));
-        w.ticker().tick(ids.len());
         let r = calculate_ratio(self.index.matched(&ids, w), ids.len() + self.len());
         w.ids = ids;
         r

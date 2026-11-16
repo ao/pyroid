@@ -603,8 +603,9 @@ impl Cand {
     }
 }
 
-/// Candidates in the first part of a long list (Ctrl-C is checked between parts).
-const FIRST_PART: usize = 1 << 12;
+/// Candidates in the first part of a long list (Ctrl-C is checked between parts):
+/// enough for every thread of a large pool.
+const FIRST_PART: usize = 1 << 16;
 
 /// `get_close_matches(word, possibilities, n, cutoff)` after its argument
 /// checks, or `None`. `possibilities` is a list or tuple.
@@ -643,13 +644,21 @@ pub fn _get_close_matches<'py>(
     };
     let mut cands = Vec::with_capacity(objs.len());
     for item in objs.iter() {
-        let Some(s) = str_like(&item, &mut types)? else {
+        // No extra reference per candidate: with abi3 each is a call into the interpreter.
+        if !item.is_exact_instance_of::<PyString>()
+            && !matches!(types.verdict(&item)?, Verdict::Plain(Base::Str))
+        {
             return Ok(None);
-        };
-        cands.push(match PyBackedStr::try_from(s.clone()) {
+        }
+        let s = item.cast_into::<PyString>()?;
+        let cand = match PyBackedStr::try_from(s) {
             Ok(b) => Cand::Utf8(b),
-            Err(_) => Cand::Cps(code_points(&s)?),
-        });
+            // Lone surrogates: not UTF-8.
+            Err(_) => Cand::Cps(code_points(
+                objs.get_item(cands.len())?.cast::<PyString>()?,
+            )?),
+        };
+        cands.push(cand);
     }
     let matcher = StrMatcher::new(&code_points(&word)?, |_| false, true);
     let t = input::threads(threads);

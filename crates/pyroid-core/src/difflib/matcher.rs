@@ -11,6 +11,9 @@ use super::stop::Ticker;
 /// The id of an element of `a` that does not occur in `b`.
 pub const NONE: u32 = u32::MAX;
 
+/// Work units `find_longest_match` gathers before it ticks.
+const TICK_WORK: usize = 1 << 12;
+
 /// What `__chain_b` decided about an element of `b`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -169,6 +172,8 @@ impl BIndex {
     ) -> (usize, usize, usize) {
         let b = &self.b;
         let (mut besti, mut bestj, mut bestsize) = (alo, blo, 0usize);
+        // Work since the last tick: told to the ticker in lumps, to keep the rows cheap.
+        let mut work = 0usize;
         // j2len[j + 1] is the length of the match ending with a[i - 1] and
         // b[j] (CPython's dict, rebuilt for every i).
         for (i, &id) in a.iter().enumerate().take(ahi).skip(alo) {
@@ -176,8 +181,12 @@ impl BIndex {
             let first = positions.partition_point(|&j| (j as usize) < blo);
             // Stopped (Ctrl-C): the caller discards the result. Here, at the
             // top of a row, `j2len` holds only the entries in `touched`.
-            if s.ticker.tick(1 + positions.len() - first) {
-                break;
+            work += 1 + positions.len() - first;
+            if work >= TICK_WORK {
+                if s.ticker.tick(work) {
+                    break;
+                }
+                work = 0;
             }
             for &j in &positions[first..] {
                 let j = j as usize;
@@ -205,6 +214,7 @@ impl BIndex {
             s.j2len[t] = 0;
         }
         s.touched.clear();
+        s.ticker.tick(work); // the rest of this call's work (a stop shows at the next tick)
 
         // Extend the best by non-junk elements on each end, then by junk
         // (CPython's four loops, in order).
@@ -262,7 +272,8 @@ impl BIndex {
         w.queue.push((0, la, 0, lb));
         while let Some((alo, ahi, blo, bhi)) = w.queue.pop() {
             let (i, j, k) = self.find_longest_match(a, alo, ahi, blo, bhi, &mut w.scratch);
-            if w.scratch.ticker.stopped() {
+            // One unit per block (find_longest_match ticks only for long rows of work).
+            if w.scratch.ticker.tick(1) {
                 return;
             }
             if k > 0 {
