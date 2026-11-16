@@ -157,6 +157,8 @@ def test_ctrl_c_stops_sort_versions_promptly() -> None:
     import threading
     import time
 
+    if threading.current_thread() is not threading.main_thread():
+        pytest.skip("interrupt_main() interrupts the main thread (pytest-run-parallel runs here)")
     rng = random.Random(5)
     texts = [
         f"{rng.randint(0, 30)}.{rng.randint(0, 30)}.{rng.randint(0, 30)}" for _ in range(600_000)
