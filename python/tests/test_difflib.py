@@ -10,6 +10,7 @@ import _thread
 import collections
 import difflib
 import functools
+import json
 import os
 import subprocess
 import sys
@@ -667,6 +668,198 @@ def test_matchers_from_under_the_patch_work_after_unpatch() -> None:
         twin.set_seq1(b)
         assert m.ratio() == twin.ratio() == 1.0
         assert m.quick_ratio() == twin.quick_ratio()
+
+
+@pytestmark_patch
+def test_matchers_of_ended_threads_work_after_unpatch() -> None:
+    # Each thread records the matchers it gives native state; a thread that ends hands its
+    # records to the next one that starts, and unpatch still finds them.
+    def make(out: list[Any], n: int) -> None:
+        out.extend(difflib.SequenceMatcher(None, f"abcd{i}", "bcde") for i in range(n))
+
+    first: list[Any] = []
+    second: list[Any] = []
+    ctx = _quiet_patch()
+    try:
+        with integrations.patching("difflib"):
+            for out, n in ((first, 3), (second, 200)):  # 200: past the first pruning
+                t = threading.Thread(target=make, args=(out, n))
+                t.start()
+                t.join()
+            del second[:190]
+            assert all("_pyroid_b" in vars(m) for m in first + second)
+    finally:
+        ctx.__exit__(None, None, None)
+    for m in first + second:
+        twin = difflib.SequenceMatcher(None, m.a, m.b)
+        assert vars(m) == vars(twin)
+        assert m.ratio() == twin.ratio()
+
+
+@pytestmark_patch
+def test_unpatch_while_another_thread_sets_up_a_matcher() -> None:
+    # unpatch does not wait for a matcher another thread is setting up (here, blocked in
+    # isjunk): that call gives it difflib's own state when it ends.
+    called = threading.Event()
+    release = threading.Event()
+    made: list[Any] = []
+
+    def junk(ch: str) -> bool:
+        called.set()
+        assert release.wait(60)
+        return ch == " "
+
+    def build() -> None:
+        made.append(difflib.SequenceMatcher(junk, "a b c d", "a  b x d"))
+
+    ctx = _quiet_patch()
+    try:
+        integrations.patch("difflib")
+        t = threading.Thread(target=build)
+        t.start()
+        try:
+            assert called.wait(60)
+            start = time.monotonic()
+            integrations.unpatch("difflib")
+            assert time.monotonic() - start < 5
+        finally:
+            release.set()
+            t.join(60)
+    finally:
+        integrations.unpatch()
+        ctx.__exit__(None, None, None)
+    (m,) = made
+    twin = difflib.SequenceMatcher(lambda ch: ch == " ", "a b c d", "a  b x d")
+    assert {k: v for k, v in vars(m).items() if k != "isjunk"} == {
+        k: v for k, v in vars(twin).items() if k != "isjunk"
+    }
+    assert (m.ratio(), m.get_opcodes()) == (twin.ratio(), twin.get_opcodes())
+
+
+_TOGGLE_STRESS = r"""
+import difflib, faulthandler, json, os, sys, threading, time, warnings
+
+warnings.simplefilter("ignore")
+import pyroid
+
+togglers, users, toggles, limit = (int(x) for x in sys.argv[1:5])
+faulthandler.dump_traceback_later(limit + 60, exit=True)
+sys.setswitchinterval(1e-4)  # with the GIL: hand it to the togglers often
+
+
+def rss_mb():
+    try:
+        with open("/proc/self/statm") as f:
+            return int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE") / 2**20
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+class Sub(difflib.SequenceMatcher):
+    pass
+
+
+a, b = "private Thread currentThread;" * 4, "private volatile Thread currentThread;" * 4
+la = [f"line {i}\n" for i in range(60)]
+lb = [*la[:20], "new\n", *la[21:]]
+want = {}
+for cls in (difflib.SequenceMatcher, Sub):
+    m = cls(None, a, b)
+    want[cls] = (m.ratio(), m.get_opcodes(), m.quick_ratio())
+want_diff = list(difflib.unified_diff(la, lb))
+want_ab, want_aa = want[difflib.SequenceMatcher][0], 1.0
+before = dict(vars(difflib.SequenceMatcher))
+
+stop = threading.Event()
+errors, calls, done = [], [0] * users, [0] * togglers
+
+
+def user(k):
+    keep = difflib.SequenceMatcher(None, a, b)  # made once, used across every toggle
+    i = 0
+    while not stop.is_set():
+        i += 1
+        try:
+            cls = Sub if k % 2 else difflib.SequenceMatcher
+            m = cls(None, a, b)
+            got = (m.ratio(), m.get_opcodes(), m.quick_ratio())
+            if got != want[cls]:
+                errors.append(f"wrong {cls.__name__}: {got[0]}")
+            keep.set_seq2(a if i % 2 else b)
+            if keep.ratio() != (want_aa if i % 2 else want_ab):
+                errors.append("wrong ratio after set_seq2")
+            if i % 8 == 0 and list(difflib.unified_diff(la, lb)) != want_diff:
+                errors.append("wrong unified_diff")
+            # Garbage only the cycle collector frees, as PyYAML's loaders leave.
+            node = {"pad": [[j] for j in range(20)]}
+            node["self"] = node
+            calls[k] += 1
+        except Exception as e:
+            errors.append(f"{type(e).__name__}: {e}")
+
+
+def toggler(k):
+    try:
+        for _ in range(toggles):
+            pyroid.patch("difflib")
+            pyroid.unpatch("difflib")
+            done[k] += 1
+    except Exception as e:
+        errors.append(f"toggler: {type(e).__name__}: {e}")
+
+
+threads = [threading.Thread(target=user, args=(k,)) for k in range(users)]
+threads += [threading.Thread(target=toggler, args=(k,)) for k in range(togglers)]
+start = time.monotonic()
+base = rss_mb()
+peak = base
+for t in threads:
+    t.start()
+while any(t.is_alive() for t in threads[users:]) and time.monotonic() - start < limit:
+    time.sleep(0.05)
+    now = rss_mb()
+    if now is not None:
+        peak = max(peak, now)
+elapsed = time.monotonic() - start
+stop.set()
+finished = not any(t.is_alive() for t in threads[users:])
+for t in threads[:users]:
+    t.join()
+restored = dict(vars(difflib.SequenceMatcher)) == before
+print(json.dumps({
+    "finished": finished, "elapsed": elapsed, "toggles": sum(done), "calls": sum(calls),
+    "errors": len(errors), "first_errors": sorted(set(errors))[:5], "restored": restored,
+    "rss_base": base, "rss_peak": peak,
+}))
+sys.stdout.flush()
+os._exit(0)  # a toggler still running (the old bug) must not keep the process alive
+"""
+
+
+@pytestmark_patch
+def test_toggling_the_patch_while_threads_diff() -> None:
+    # 4 threads patch and unpatch difflib 300 times each (100 with the GIL) while 8 threads use
+    # it (matchers made fresh, one kept across toggles and re-pointed with set_seq2, a
+    # subclass, unified_diff) and leave cyclic garbage. Every result is difflib's, no call
+    # fails, and time and memory stay bounded: unpatch neither walks the heap (which kept every
+    # object alive and starved the cycle collector) nor misses a matcher another thread uses.
+    toggles = 100 if getattr(sys, "_is_gil_enabled", lambda: True)() else 300
+    proc = subprocess.run(
+        [sys.executable, "-c", _TOGGLE_STRESS, "4", "8", str(toggles), "60"],
+        capture_output=True,
+        text=True,
+        timeout=240,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr[-3000:]
+    out = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert out["finished"], json.dumps(out)
+    assert out["toggles"] == 4 * toggles, json.dumps(out)
+    assert out["errors"] == 0, json.dumps(out)
+    assert out["calls"] > 0, json.dumps(out)
+    assert out["restored"], json.dumps(out)
+    if out["rss_base"] is not None:
+        assert out["rss_peak"] - out["rss_base"] < 400, json.dumps(out)
 
 
 def _unittest_messages() -> list[str]:
