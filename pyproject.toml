@@ -92,8 +92,11 @@ Changelog = "https://github.com/ao/pyroid/blob/main/CHANGELOG.md"
 # so they are left out there (release.yml tests the windows-arm64 wheels).
 test = [
   "pytest>=9",
-  # Also the reference for pyroid.packaging's parity tests (Apache-2.0 OR BSD-2-Clause).
+  # Also the reference for pyroid.packaging's parity tests (Apache-2.0 OR BSD-2-Clause), whose own
+  # test suite (parity/data/packaging-26.3) also imports pretend and tomli_w.
   "packaging==26.3",
+  "pretend>=1.0.9",
+  "tomli-w>=1.0",
   "hypothesis>=6.170",
   "pytest-timeout>=2.4",
   "pytest-run-parallel>=0.10",
