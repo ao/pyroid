@@ -75,6 +75,8 @@ _OUT_FORMATS = ("parquet", "jsonl", "jsonl.gz", "jsonl.bz2", "jsonl.zst", "jsonl
 #: ``pyroid clean --ftfy``: ftfy's defaults, datatrove's ``FTFYFormatter()``, or no ftfy step.
 FTFY_CONFIGS = ("default", "datatrove", "off")
 _STAGES = ("signatures", "buckets", "cluster", "filter")
+#: `pyroid translit --mode unidecode --errors`: Unidecode's errors= values.
+UNIDECODE_ERRORS = ("ignore", "replace", "strict", "preserve")
 
 
 def _need_pyarrow() -> None:
@@ -1778,12 +1780,14 @@ def _cmd_langid(a: argparse.Namespace) -> int:
 
 
 def _cmd_translit(a: argparse.Namespace) -> int:
+    if a.mode != "unidecode" and (a.errors is not None or a.replace_str is not None):
+        raise SystemExit("pyroid translit: --errors and --replace-str apply to --mode unidecode")
     return _rowwise(
         a,
         "translit",
         mode=a.mode,
-        errors=a.errors,
-        replace_str=a.replace_str,
+        errors=a.errors or "ignore",
+        replace_str="?" if a.replace_str is None else a.replace_str,
         output_column=a.output_column,
     )
 
@@ -2468,12 +2472,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--errors",
-        default="ignore",
+        choices=UNIDECODE_ERRORS,
         help="--mode unidecode: ignore (default), replace, strict or preserve",
     )
     p.add_argument(
         "--replace-str",
-        default="?",
         help="--mode unidecode: replacement for --errors replace (default: ?)",
     )
     p.add_argument("--output-column", help="write here instead of replacing the text column")

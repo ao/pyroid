@@ -285,6 +285,20 @@ def test_warc_recipe_on_a_table_file_is_one_line(
     assert capsys.readouterr().err.startswith("pyroid clean: Invalid ARC record")
 
 
+def test_translit_errors_takes_unidecodes_values(tmp_path: Path) -> None:
+    src = _write(_table(["Ünïcödé"]), tmp_path / "in.parquet")
+    out = str(tmp_path / "o.parquet")
+    with pytest.raises(SystemExit) as e:
+        main(["translit", str(src), out, "--mode", "unidecode", "--errors", "bogus"])
+    assert e.value.code == 2  # a usage error, as for any bad choice
+    with pytest.raises(SystemExit, match="apply to --mode unidecode"):
+        main(["translit", str(src), out, "--errors", "replace"])
+    with pytest.raises(SystemExit, match="apply to --mode unidecode"):
+        main(["translit", str(src), out, "--replace-str", "_"])
+    assert not Path(out).exists()
+    assert main(["translit", str(src), out, "--mode", "unidecode", "--errors", "strict"]) == 0
+
+
 @pytest.mark.thread_unsafe(reason="reads stderr and patches the JSON chunk size")
 def test_a_jsonl_parse_error_names_its_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch

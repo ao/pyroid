@@ -429,7 +429,7 @@ usage: pyroid translit [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--t
                        [--batch-size BATCH_SIZE] [--shard I/N] [--workers N] [--merge]
                        [--format FMT] [--stats] [--stats-json PATH] [--progress]
                        [--compression COMPRESSION] [--overwrite] [--mode {anyascii,unidecode}]
-                       [--errors ERRORS] [--replace-str REPLACE_STR]
+                       [--errors {ignore,replace,strict,preserve}] [--replace-str REPLACE_STR]
                        [--output-column OUTPUT_COLUMN]
                        [IN ...] OUT
 ```
@@ -437,8 +437,8 @@ usage: pyroid translit [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--t
 Transliterates the text column to ASCII with [`pyroid.translit`](translit.md) (anyascii's data,
 ISC). `--mode anyascii` is the default. `--mode unidecode` takes Unidecode's `--errors`
 (`ignore`, `replace`, `strict` or `preserve`; default `ignore`) and `--replace-str` (default
-`?`). `--output-column` writes a new column instead of replacing the text. No row is dropped, so
-there is no `--excluded`.
+`?`); with `--mode anyascii` they are refused. `--output-column` writes a new column instead of
+replacing the text. No row is dropped, so there is no `--excluded`.
 
 ```console
 $ pyroid translit names.parquet ascii.jsonl --text-column name --output-column name_ascii
