@@ -197,6 +197,28 @@ import pyroid.integrations
 warnings.simplefilter("ignore", pyroid.integrations.PatchWarning)
 ```
 
+### Warnings as errors {#warnings-as-errors}
+
+The patched program emits warnings that the unpatched one never does: the `PatchWarning`, and a
+`pyroid.FallbackWarning` when a patched function hands a call to the real package. Under
+`python -W error` or pytest's `filterwarnings = error` they become exceptions. To keep that
+setting, ignore the two classes after it, for example in pytest's configuration:
+
+```toml
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error",
+    "ignore::pyroid.FallbackWarning",
+    "ignore::pyroid.integrations.PatchWarning",
+]
+```
+
+pytest's `-W ignore::pyroid.FallbackWarning` does the same. Python's own `-W` option and
+`PYTHONWARNINGS` can't name these classes: Python reads them at startup, before site-packages is
+on `sys.path`, and drops the entry with an `Invalid -W option ignored` message. In a script, call
+`warnings.simplefilter("ignore", pyroid.FallbackWarning)` (and the same for `PatchWarning`)
+before `patch()` instead.
+
 ## `pyroid run`: programs and their child processes
 
 `patch()` affects one interpreter. Data pipelines often start more, through `multiprocessing`
@@ -387,8 +409,9 @@ each of packaging's ported objects wherever a `packaging.*` module holds it, so 
 imports from packaging afterwards. Objects made before the patch keep working with each other
 and with new ones (they compare and hash equal, and packaging's code accepts them), but
 `isinstance(old_object, packaging.version.Version)` is false once that name is pyroid's class.
-packaging 26.3's own tests (62,499) pass patched, with `-W ignore::pyroid.FallbackWarning` under
-their warnings-as-errors setting. [`pyroid.packaging`](packaging.md#patch) has the details.
+packaging 26.3's own tests (62,499) pass patched, with pytest's
+`-W ignore::pyroid.FallbackWarning` under their warnings-as-errors setting
+([above](#warnings-as-errors)). [`pyroid.packaging`](packaging.md#patch) has the details.
 
 `"langdetect"` goes further when langdetect is installed: it swaps the code of four of
 langdetect's functions, which stay the same objects. So detectors and factories made before
