@@ -74,6 +74,25 @@ def test_versions() -> None:
     assert pp.DATEUTIL_VERSIONS == ("4.0.0", "3.0.0", "2.9.0.post0", "2.9.0", "2.8.2")
 
 
+def test_functions_pickle() -> None:
+    # Pool.map(parse, ...) pickles parse by reference: its module must hold it.
+    # Round-trips objects this test made (no untrusted data).
+    for f in (pp.parse, pp.isoparse, pp.parse_batch, pp.isoparse_batch):
+        assert pickle.loads(pickle.dumps(f)) is f
+    p = pickle.loads(pickle.dumps(pp.DEFAULTPARSER.parse))
+    assert p("2003-09-25 10:49") == D(2003, 9, 25, 10, 49)
+
+
+@pytest.mark.thread_unsafe(reason="starts a process pool")
+def test_parse_in_a_spawned_process_pool() -> None:
+    import multiprocessing
+
+    with multiprocessing.get_context("spawn").Pool(1) as pool:
+        got = pool.map(pp.parse, ["2003-09-25", "Sep 26 2003 10:00"])
+        assert pool.map(pp.isoparse, ["2003-09-25T10:00"]) == [D(2003, 9, 25, 10)]
+    assert got == [D(2003, 9, 25), D(2003, 9, 26, 10)]
+
+
 def test_classes_are_dateutils_own() -> None:
     assert pp.ParserError is du.ParserError
     assert pp.UnknownTimezoneWarning is du.UnknownTimezoneWarning
@@ -672,6 +691,10 @@ def test_patch() -> None:
         assert dateutil.parser.parse("01/02/03", dateutil.parser.parserinfo(dayfirst=True)) == D(
             2003, 2, 1
         )
+        # Pool.map(dateutil.parser.parse, ...) pickles them by reference to dateutil's modules.
+        # (Round-trips objects this test made: no untrusted data.)
+        for f in (dateutil.parser.parse, dateutil.parser.isoparse):
+            assert pickle.loads(pickle.dumps(f)) is f
     finally:
         pyroid.unpatch("dateutil")
     assert (dateutil.parser.parse, dateutil.parser.isoparse) == original

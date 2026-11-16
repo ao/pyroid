@@ -249,5 +249,8 @@ and returns other objects. The [benchmarks page](../benchmarks.md#pyroiddateutil
 - `UnknownTimezoneWarning` points at the caller's line, not at a line inside dateutil.
 - `parse_batch` and `isoparse_batch` take `str` only (no `bytes` or streams), without lone
   surrogates, as every pyroid batch function does.
+- `parse` and `isoparse` are built-in functions. pickle stores them by name, as it does
+  dateutil's `parse`, so `Pool.map(parser.parse, ...)` works (also under
+  `pyroid.patch("dateutil")`).
 
 API: [`pyroid.dateutil.parser` reference](../reference/dateutil.md).

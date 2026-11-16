@@ -447,6 +447,9 @@ _native._install(
 parse: Callable[..., Any] = _native.parse
 #: ``isoparse(dt_str)``: ``DEFAULT_ISOPARSER.isoparse``.
 isoparse: Callable[..., datetime.datetime] = _native.isoparse
+# pickle finds a function by its __module__ and name: this module (the native one is not
+# importable), so Pool.map(parse, ...) works.
+parse.__module__ = isoparse.__module__ = __name__
 
 
 def _patched_functions() -> tuple[Callable[..., Any], Callable[..., datetime.datetime]]:
@@ -468,7 +471,12 @@ def _patched_functions() -> tuple[Callable[..., Any], Callable[..., datetime.dat
             "lenient": _iso_mode(None) != "4.0.0",
         }
     )
-    return _native.upstream.parse, _native.upstream.isoparse
+    up_parse, up_isoparse = _native.upstream.parse, _native.upstream.isoparse
+    # Where dateutil's own functions live, so pickle finds them there (pyroid's while patched,
+    # dateutil's in a process that is not).
+    up_parse.__module__ = du_parser.__name__
+    up_isoparse.__module__ = du_iso.__name__
+    return up_parse, up_isoparse
 
 
 def parse_batch(
