@@ -99,6 +99,18 @@ def test_isinstance_with_packagings_classes() -> None:
     assert ps.Specifier("~=1.4").contains(v15)
 
 
+def test_compares_with_packagings_other_base_versions() -> None:
+    """A _BaseVersion subclass of packaging's that only has `_key` (packaging's own tests use one)."""
+
+    class Simple(packaging_version._BaseVersion):  # type: ignore[misc,name-defined]
+        def __init__(self, release: tuple[int, ...]) -> None:
+            self._key = packaging_version.Version(".".join(map(str, release)))._key
+
+    assert Version("1.0") == Simple((1, 0))
+    assert Version("1.0") < Simple((2,))
+    assert Simple((2,)) > Version("1.0")
+
+
 def test_mixed_sets_sorts_and_comparisons() -> None:
     ours = [Version(s) for s in ("1.0", "1.0.0", "2.0a1", "1.0+ABC", "0.9")]
     theirs = [packaging_version.Version(s) for s in ("1.0", "2.0a1", "1.0+abc", "3")]

@@ -26,6 +26,20 @@ use crate::input::{TextInput, Threads, ThreadsArg, text_arg};
 /// Items parsed per detach: between chunks the batch checks for Ctrl-C.
 const CHUNK: usize = 1 << 16;
 
+/// Below this many items a chunk is parsed on the calling thread: waking the pool and freeing
+/// on this thread what its workers allocated cost more than they save (2,000 versions parsed
+/// in 0.53 ms on the pool and 0.40 ms here, on a 64-core machine).
+const INLINE: usize = 4096;
+
+/// The pool for `n` items: the calling thread for a small batch.
+fn pool_for(n: usize, threads: par::Threads) -> par::Threads {
+    if n < INLINE {
+        par::Threads::ONE
+    } else {
+        threads
+    }
+}
+
 /// The input versions: a list (one snapshot) or tuple, or an Arrow string array's rows
 /// (borrowed from its buffers). Read a chunk at a time, so a batch holds at most one chunk of
 /// parsed versions.
@@ -277,6 +291,7 @@ fn parse_chunk(
     texts: &[Option<&str>],
     threads: par::Threads,
 ) -> PyResult<Vec<Option<Parsed>>> {
+    let threads = pool_for(texts.len(), threads);
     py.detach(|| par::map(texts.len(), threads, |k| texts[k].map(parse_text)))
         .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))
 }
@@ -426,6 +441,7 @@ fn contains_batch<'py>(
     let (mask, kind) = with_rows(py, &input, |rows, kind| {
         let mut mask: Vec<Option<bool>> = Vec::with_capacity(rows.len());
         rows.for_each_chunk(py, |start, texts| {
+            let pool = pool_for(texts.len(), pool);
             let native: Vec<Option<bool>> = match &plan {
                 Some(plan) => py
                     .detach(|| {
@@ -533,6 +549,7 @@ fn filter_batch<'py>(
     let mut found_final = false;
     with_rows(py, &input, |rows, _| {
         rows.for_each_chunk(py, |start, texts| {
+            let pool = pool_for(texts.len(), pool);
             let verdicts: Vec<Option<Option<(bool, bool)>>> = py
                 .detach(|| {
                     par::map(texts.len(), pool, |k| {

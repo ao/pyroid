@@ -38,6 +38,8 @@ struct Config {
     packaging_version_any: Option<Py<PyType>>,
     /// packaging's `_BaseVersion` (`None` without packaging): compared through `_key`.
     packaging_base_version: Option<Py<PyType>>,
+    /// packaging's `Version` has a `_key_cache` slot (26.0 and later): read it before `_key`.
+    key_cache_slot: bool,
     invalid_specifier: Py<PyAny>,
     /// pyroid's copy of `Specifier._regex` (for non-`str` arguments and lone surrogates).
     spec_regex: Py<PyAny>,
@@ -167,6 +169,9 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         packaging_version: opt_type("packaging_Version")?,
         packaging_version_any: opt_type("packaging_Version_any")?,
         packaging_base_version: opt_type("packaging_BaseVersion")?,
+        key_cache_slot: config
+            .get_item("key_cache_slot")?
+            .is_some_and(|v| v.is_truthy().unwrap_or(false)),
         invalid_specifier: get("InvalidSpecifier")?,
         spec_regex: get("spec_regex")?,
         dict_fromkeys: py.get_type::<PyDict>().getattr("fromkeys")?.unbind(),

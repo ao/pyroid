@@ -22,14 +22,21 @@ use super::{KeyFormat, claims, config, infinities, key_format, patched};
 struct Inner {
     v: Version,
     hash: HashCache,
+    /// Some number has more than 19 digits: printing it goes through Python's `str(int)`, so
+    /// the limit on integer string conversion applies as in packaging.
+    big: bool,
+    /// The Python objects made on demand, in one allocation made the first time one is.
+    made: OnceLock<Box<Made>>,
+}
+
+/// The Python objects a [`PyVersion`] makes on demand.
+#[derive(Debug, Default)]
+struct Made {
     text: OnceLock<Py<PyString>>,
     release: OnceLock<Py<PyTuple>>,
     /// `_key` in the format it was built in (packaging's own code reads it on every
     /// comparison with one of its objects).
     key: OnceLock<(KeyFormat, Py<PyTuple>)>,
-    /// Some number has more than 19 digits: printing it goes through Python's `str(int)`, so
-    /// the limit on integer string conversion applies as in packaging.
-    big: bool,
 }
 
 impl Inner {
@@ -38,11 +45,13 @@ impl Inner {
         Self {
             v,
             hash: HashCache::new(),
-            text: OnceLock::new(),
-            release: OnceLock::new(),
-            key: OnceLock::new(),
             big,
+            made: OnceLock::new(),
         }
+    }
+
+    fn made(&self) -> &Made {
+        self.made.get_or_init(Box::default)
     }
 }
 
@@ -395,11 +404,11 @@ impl PyVersion {
 
     fn release_tuple<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         let inner = self.inner()?;
-        if let Some(t) = inner.release.get() {
+        if let Some(t) = inner.made().release.get() {
             return Ok(t.bind(py).clone());
         }
         let t = tuple_of_nums(py, &inner.v.release)?;
-        let _ = inner.release.set(t.clone().unbind());
+        let _ = inner.made().release.set(t.clone().unbind());
         Ok(t)
     }
 
@@ -407,7 +416,7 @@ impl PyVersion {
     fn key<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         let inner = self.inner()?;
         let format = key_format();
-        if let Some((f, k)) = inner.key.get() {
+        if let Some((f, k)) = inner.made().key.get() {
             if *f == format {
                 return Ok(k.bind(py).clone());
             }
@@ -416,7 +425,7 @@ impl PyVersion {
             KeyFormat::Legacy => legacy_key(py, &inner.v)?,
             KeyFormat::Current | KeyFormat::Apart => current_key(py, &inner.v)?,
         };
-        let _ = inner.key.set((format, key.clone().unbind()));
+        let _ = inner.made().key.set((format, key.clone().unbind()));
         Ok(key)
     }
 
@@ -444,11 +453,11 @@ impl PyVersion {
         if inner.big {
             check_printable(py, all_nums(&inner.v))?;
         }
-        if let Some(t) = inner.text.get() {
+        if let Some(t) = inner.made().text.get() {
             return Ok(t.bind(py).clone());
         }
         let t = PyString::new(py, &inner.v.to_string_py());
-        let _ = inner.text.set(t.clone().unbind());
+        let _ = inner.made().text.set(t.clone().unbind());
         Ok(t)
     }
 
@@ -800,7 +809,19 @@ impl PyVersion {
         }
         if let Some(base) = &c.packaging_base_version {
             if other.is_instance(base.bind(py))? {
-                let theirs = other.getattr(intern!(py, "_key"))?;
+                // packaging 26's Version has a slot holding the key once computed (its `_key`
+                // property fills it); other _BaseVersion classes only have `_key`.
+                let mut theirs = py.None().into_bound(py);
+                if c.key_cache_slot
+                    && c.packaging_version_any
+                        .as_ref()
+                        .is_some_and(|cls| other.get_type_ptr() == cls.as_ptr().cast())
+                {
+                    theirs = other.getattr(intern!(py, "_key_cache"))?;
+                }
+                if theirs.is_none() {
+                    theirs = other.getattr(intern!(py, "_key"))?;
+                }
                 return Ok(self.key(py)?.rich_compare(theirs, op)?.unbind());
             }
         }
