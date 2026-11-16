@@ -2191,6 +2191,54 @@ fn row_result<'py>(
     }
 }
 
+/// A batch holding a str with lone surrogates, which pyroid's batch input refuses (`err`, its
+/// `UnicodeEncodeError`): `call` on each str, as the module's single-string function takes it,
+/// results in the input's kind. Only a `str`, `list` or `tuple` can hold one.
+fn each_str<'py>(
+    obj: &Bound<'py, PyAny>,
+    name: &str,
+    err: PyErr,
+    call: &dyn Fn(usize, Bound<'py, PyString>) -> PyResult<Option<Bound<'py, PyAny>>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = obj.py();
+    let none = || py.None().into_bound(py);
+    if let Ok(s) = obj.cast::<PyString>() {
+        return Ok(call(0, s.clone())?.unwrap_or_else(none));
+    }
+    // A snapshot (atomic), so another thread changing the list cannot change the batch.
+    let (items, tuple) = if let Ok(l) = obj.cast::<PyList>() {
+        (l.to_tuple(), false)
+    } else if let Ok(t) = obj.cast::<PyTuple>() {
+        (t.clone(), true)
+    } else {
+        return Err(err);
+    };
+    let mut strs = Vec::with_capacity(items.len());
+    for (i, item) in items.iter().enumerate() {
+        let Ok(s) = item.cast::<PyString>() else {
+            let msg = format!(
+                "expected str at index {i}, got {}",
+                crate::errors::type_name(&item)
+            );
+            return Err(crate::input::arg_note(
+                py,
+                crate::errors::input_error(py, msg),
+                name,
+            ));
+        };
+        strs.push(s.clone());
+    }
+    let mut out = Vec::with_capacity(strs.len());
+    for (i, s) in strs.into_iter().enumerate() {
+        out.push(call(i, s)?.unwrap_or_else(none));
+    }
+    if tuple {
+        Ok(PyTuple::new(py, out)?.into_any())
+    } else {
+        Ok(PyList::new(py, out)?.into_any())
+    }
+}
+
 /// The batch's results in the caller's container kind (Arrow: a list for now).
 fn output<'py>(
     py: Python<'py>,
@@ -2305,7 +2353,29 @@ fn parse_batch<'py>(
         // dateutil reads today's date per call; a batch reads it once.
         default = today(py, h)?;
     }
-    let input = crate::input::text_arg(timestrs, threads, "timestrs")?;
+    // The rows the kernel cannot take, and anything else odd, go through `p.parse` per row.
+    let call = |i: usize, s: Bound<'py, PyString>| -> PyResult<Option<Bound<'py, PyAny>>> {
+        let r = p.call_method(
+            pyo3::intern!(py, "parse"),
+            (s,),
+            Some(&{
+                let kw = rest.copy()?;
+                kw.set_item("default", &default)?;
+                kw.set_item("ignoretz", ignoretz)?;
+                kw.set_item("tzinfos", &tzinfos)?;
+                kw
+            }),
+        );
+        row_result(py, errors, i, r)
+    };
+    let one = |i: usize, s: &str| call(i, PyString::new(py, s));
+    let input = match crate::input::text_arg(timestrs, threads, "timestrs") {
+        Ok(input) => input,
+        Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) => {
+            return each_str(timestrs, "timestrs", e, &call);
+        }
+        Err(e) => return Err(e),
+    };
     let rows = crate::batch::rows(&input).map_err(|e| e.into_pyerr(py))?;
     let opts = private_kwargs(Some(&rest))?.expect("only _parse's keywords");
     let info = p.getattr(pyo3::intern!(py, "info"))?;
@@ -2321,21 +2391,6 @@ fn parse_batch<'py>(
         }
     } else {
         None
-    };
-    // The rows the kernel cannot take, and anything else odd, go through `p.parse` per row.
-    let one = |i: usize, s: &str| -> PyResult<Option<Bound<'py, PyAny>>> {
-        let r = p.call_method(
-            pyo3::intern!(py, "parse"),
-            (PyString::new(py, s),),
-            Some(&{
-                let kw = rest.copy()?;
-                kw.set_item("default", &default)?;
-                kw.set_item("ignoretz", ignoretz)?;
-                kw.set_item("tzinfos", &tzinfos)?;
-                kw
-            }),
-        );
-        row_result(py, errors, i, r)
     };
     let arrow = matches!(input, crate::input::TextInput::Arrow(_));
     let mut out = Vec::with_capacity(if arrow { 0 } else { rows.len() });
@@ -2459,12 +2514,19 @@ fn isoparse_batch<'py>(
     let py = dt_strs.py();
     let h = hooks(py)?;
     let errors = errors_arg(errors)?;
-    let input = crate::input::text_arg(dt_strs, threads, "dt_strs")?;
-    let rows = crate::batch::rows(&input).map_err(|e| e.into_pyerr(py))?;
-    let one = |i: usize, s: &str| -> PyResult<Option<Bound<'py, PyAny>>> {
-        let r = isoparser.call_method1(pyo3::intern!(py, "isoparse"), (PyString::new(py, s),));
+    let call = |i: usize, s: Bound<'py, PyString>| -> PyResult<Option<Bound<'py, PyAny>>> {
+        let r = isoparser.call_method1(pyo3::intern!(py, "isoparse"), (s,));
         row_result(py, errors, i, r)
     };
+    let one = |i: usize, s: &str| call(i, PyString::new(py, s));
+    let input = match crate::input::text_arg(dt_strs, threads, "dt_strs") {
+        Ok(input) => input,
+        Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) => {
+            return each_str(dt_strs, "dt_strs", e, &call);
+        }
+        Err(e) => return Err(e),
+    };
+    let rows = crate::batch::rows(&input).map_err(|e| e.into_pyerr(py))?;
     let real = h
         .iso_module
         .bind(py)

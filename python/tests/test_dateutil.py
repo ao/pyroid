@@ -715,6 +715,28 @@ def test_parse_batch_arrow_checks_datetime_subclass_fields() -> None:
     assert first.day == 2
 
 
+def test_batches_take_lone_surrogates() -> None:
+    # A str with lone surrogates is parsed as parse() parses it (the kernel's input refuses it).
+    xs = ["2003-09-25", "\ud800 2003-09-25 10:00", "\ud800", "Sep 26 2003"]
+    want = []
+    for x in xs:
+        r = outcome(pp.parse, x, default=DEFAULT, fuzzy=True)
+        want.append(r[1] if r[0] == "ok" else None)
+    assert want[1] == D(2003, 9, 25, 10)
+    assert pp.parse_batch(xs, default=DEFAULT, fuzzy=True, errors="coerce") == want
+    assert pp.parse_batch(tuple(xs), default=DEFAULT, fuzzy=True, errors="coerce") == tuple(want)
+    assert pp.parse_batch(xs[1], default=DEFAULT, fuzzy=True) == want[1]
+    with pytest.raises(pp.ParserError) as e:
+        pp.parse_batch(xs, default=DEFAULT, fuzzy=True)
+    assert "while parsing item 2" in "".join(getattr(e.value, "__notes__", []))
+    with pytest.raises(pyroid.InputError, match="expected str at index 3, got int"):
+        pp.parse_batch(["\ud800", "2003", "2004", 5])  # type: ignore[list-item]
+    assert pp.isoparse_batch(["2003-09-25", "\ud800"], errors="coerce") == [D(2003, 9, 25), None]
+    with pytest.raises(ValueError, match="only ASCII") as e2:
+        pp.isoparse_batch(["2003-09-25", "\ud800"])
+    assert "while parsing item 1" in "".join(getattr(e2.value, "__notes__", []))
+
+
 def test_isoparse_batch() -> None:
     xs = ["2003-09-25T10:49:41", "2003-W39-4", "x"]
     assert pp.isoparse_batch(xs, errors="coerce") == [pp.isoparse(xs[0]), pp.isoparse(xs[1]), None]

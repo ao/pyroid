@@ -136,7 +136,8 @@ parser.isoparse_batch(["2003-09-25T10:49:41", "2003-W39-4"], compat="4.0.0")
 
 - Input: a `str`, a `list` or `tuple` of `str`, or an Arrow string column (pyarrow, polars,
   `datasets`). Output: the same kind. Arrow input gives a
-  [`pyroid.Column`](../reference/pyroid.md#pyroid.Column) of `timestamp[us]`.
+  [`pyroid.Column`](../reference/pyroid.md#pyroid.Column) of `timestamp[us]`. A list holding a
+  `str` with lone surrogates is parsed one string at a time, as `parse` parses each.
 - Each result is what `parse(s, ...)` gives with the same arguments (`fuzzy_with_tokens` is not
   accepted), except that `default=None` means today at midnight read once for the batch, not per
   string.
@@ -251,8 +252,7 @@ and returns other objects. The [benchmarks page](../benchmarks.md#pyroiddateutil
   and size of each table, so replacing one value in place (`info._months["jan"] = 5`) is not seen
   until something else changes.
 - `UnknownTimezoneWarning` points at the caller's line, not at a line inside dateutil.
-- `parse_batch` and `isoparse_batch` take `str` only (no `bytes` or streams), without lone
-  surrogates, as every pyroid batch function does.
+- `parse_batch` and `isoparse_batch` take `str` only (no `bytes` or streams).
 - `parse` and `isoparse` are built-in functions. pickle stores them by name, as it does
   dateutil's `parse`, so `Pool.map(parser.parse, ...)` works (also under
   `pyroid.patch("dateutil")`).
