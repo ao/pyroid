@@ -142,7 +142,7 @@ def test_batches_stop_on_ctrl_c() -> None:
     timer.start()
     try:
         with pytest.raises(KeyboardInterrupt):
-            pd.ratio_batch(a, "a b c d e f g h " * 40)
+            pd.ratio_batch(a, "a b c d e f g h " * 40, threads=1)
     finally:
         timer.cancel()
     assert time.monotonic() - start < 30

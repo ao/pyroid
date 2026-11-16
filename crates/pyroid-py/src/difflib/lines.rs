@@ -10,6 +10,7 @@ use pyo3::pybacked::PyBackedStr;
 use pyo3::types::{PyBool, PyBytes, PyFloat, PyInt, PyList, PyString, PyTuple};
 use pyroid_core::difflib::differ::{self, CharJunk, DiffOp, DifferVersion, Side};
 use pyroid_core::difflib::format::{self, Out, Prefix};
+use pyroid_core::difflib::html;
 use pyroid_core::difflib::intern::Interner;
 use pyroid_core::difflib::matcher::{BIndex, grouped_opcodes, opcodes};
 use pyroid_core::difflib::mdiff::{self, Cell, Text};
@@ -17,7 +18,7 @@ use pyroid_core::difflib::{StrMatcher, nlargest, with_work};
 use pyroid_core::par;
 use pyroid_core::text::is_py_whitespace;
 
-use super::seq::code_points;
+use super::seq::{code_points, push_wtf8};
 use crate::batch::BatchError;
 use crate::input::{self, Threads};
 
@@ -141,18 +142,13 @@ fn line_junk(
 ) -> PyResult<Vec<bool>> {
     match kind {
         1 => {
-            // IS_LINE_JUNK: `line.strip() in '#'`.
             let mut cps = Vec::new();
             Ok(first
                 .iter()
                 .map(|&j| {
                     cps.clear();
                     b.text[j].push_code_points(&mut cps);
-                    let ws = |c: u32| char::from_u32(c).is_some_and(is_py_whitespace);
-                    let start = cps.iter().take_while(|&&c| ws(c)).count();
-                    let end = cps.len() - cps[start..].iter().rev().take_while(|&&c| ws(c)).count();
-                    let inner = &cps[start..end];
-                    inner.is_empty() || inner == [u32::from(b'#')]
+                    is_line_junk(&cps)
                 })
                 .collect())
         }
@@ -597,4 +593,180 @@ pub fn _get_close_matches<'py>(
         out.append(objs.get_item(i)?)?;
     }
     Ok(Some(out))
+}
+
+/// Code point lines (tab-expanded `HtmlDiff` input): `compare`'s inputs.
+fn compare_code_points(
+    py: Python<'_>,
+    a: &[Vec<u32>],
+    b: &[Vec<u32>],
+    linejunk_kind: u8,
+    linejunk: &Bound<'_, PyAny>,
+    charjunk_space_tab: bool,
+    windowed: bool,
+) -> PyResult<Vec<DiffOp>> {
+    let key = |cps: &[u32]| {
+        let mut k = Vec::with_capacity(cps.len());
+        for &c in cps {
+            push_wtf8(c, &mut k);
+        }
+        k
+    };
+    let mut keys: Interner<Vec<u8>> = Interner::default();
+    let mut first = Vec::new();
+    let bi: Vec<u32> = b
+        .iter()
+        .enumerate()
+        .map(|(j, line)| {
+            let (id, new) = keys.intern(key(line));
+            if new {
+                first.push(j);
+            }
+            id
+        })
+        .collect();
+    let ai: Vec<u32> = a.iter().map(|line| keys.get(&key(line))).collect();
+    let junk: Vec<bool> = match linejunk_kind {
+        1 => first.iter().map(|&j| is_line_junk(&b[j])).collect(),
+        2 if linejunk.is_truthy()? => first
+            .iter()
+            .map(|&j| {
+                linejunk
+                    .call1((str_from_code_points(py, &b[j])?,))?
+                    .is_truthy()
+            })
+            .collect::<PyResult<_>>()?,
+        _ => Vec::new(),
+    };
+    let ac: Vec<&[u32]> = a.iter().map(Vec::as_slice).collect();
+    let bc: Vec<&[u32]> = b.iter().map(Vec::as_slice).collect();
+    let lines = differ::Lines {
+        a: &ai,
+        b: &bi,
+        b_keys: first.len(),
+        b_junk: &junk,
+        a_chars: &ac,
+        b_chars: &bc,
+    };
+    let cj = if charjunk_space_tab {
+        CharJunk::SpaceTab
+    } else {
+        CharJunk::Nothing
+    };
+    let version = if windowed {
+        DifferVersion::Windowed
+    } else {
+        DifferVersion::Classic
+    };
+    Ok(py.detach(|| differ::compare(&lines, cj, version)))
+}
+
+/// `IS_LINE_JUNK(line)`: `line.strip() in '#'`.
+fn is_line_junk(cps: &[u32]) -> bool {
+    let ws = |c: u32| char::from_u32(c).is_some_and(is_py_whitespace);
+    let start = cps.iter().take_while(|&&c| ws(c)).count();
+    let end = cps.len() - cps[start..].iter().rev().take_while(|&&c| ws(c)).count();
+    let inner = &cps[start..end];
+    inner.is_empty() || inner == [u32::from(b'#')]
+}
+
+/// `HtmlDiff.make_table`'s rows before the prefixes are chosen.
+#[pyclass(frozen, module = "pyroid.difflib", name = "_HtmlRows")]
+#[derive(Debug)]
+pub struct HtmlRows {
+    rows: Vec<html::HRow>,
+}
+
+#[pymethods]
+impl HtmlRows {
+    /// `data_rows` for these prefixes (`self._prefix`), with `make_table`'s
+    /// final replacements made.
+    fn render<'py>(
+        &self,
+        py: Python<'py>,
+        from_prefix: &str,
+        to_prefix: &str,
+        context: bool,
+        numlines: usize,
+        changed_class: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let prefixes = [from_prefix, to_prefix];
+        if html::has_surrogates(&self.rows) {
+            let mut out: Vec<u32> = Vec::new();
+            html::render(
+                &mut out,
+                &self.rows,
+                prefixes,
+                context,
+                numlines,
+                changed_class,
+            );
+            return str_from_code_points(py, &out);
+        }
+        let mut out = String::new();
+        py.detach(|| {
+            html::render(
+                &mut out,
+                &self.rows,
+                prefixes,
+                context,
+                numlines,
+                changed_class,
+            );
+        });
+        Ok(PyString::new(py, &out).into_any())
+    }
+}
+
+/// `make_table`'s work up to the prefixes: tab expansion, `_mdiff` (with
+/// `context_lines`, `None` for full), and wrapping at `wrapcolumn` (0: none).
+/// `None` for input that does not run natively.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+pub fn _html_prepare(
+    py: Python<'_>,
+    fromlines: &Bound<'_, PyAny>,
+    tolines: &Bound<'_, PyAny>,
+    tabsize: i64,
+    wrapcolumn: usize,
+    context_lines: Option<usize>,
+    linejunk_kind: u8,
+    linejunk: &Bound<'_, PyAny>,
+    charjunk_space_tab: bool,
+    windowed: bool,
+) -> PyResult<Option<HtmlRows>> {
+    let (Some(al), Some(bl)) = (Lines::read(fromlines)?, Lines::read(tolines)?) else {
+        return Ok(None);
+    };
+    let expand = |l: &Lines<'_>| -> Vec<Vec<u32>> {
+        l.text
+            .iter()
+            .map(|t| {
+                let mut cps = Vec::new();
+                t.push_code_points(&mut cps);
+                html::expand_tabs(&cps, tabsize)
+            })
+            .collect()
+    };
+    let (a, b) = (expand(&al), expand(&bl));
+    let ops = compare_code_points(
+        py,
+        &a,
+        &b,
+        linejunk_kind,
+        linejunk,
+        charjunk_space_tab,
+        windowed,
+    )?;
+    let rows = py.detach(|| {
+        let ac: Vec<&[u32]> = a.iter().map(Vec::as_slice).collect();
+        let bc: Vec<&[u32]> = b.iter().map(Vec::as_slice).collect();
+        let rows = mdiff::mdiff(&ops, &ac, &bc, context_lines);
+        let text = |side: Side, i: usize| match side {
+            Side::A => a[i].clone(),
+            Side::B => b[i].clone(),
+        };
+        html::rows(&rows, &text, wrapcolumn)
+    });
+    Ok(Some(HtmlRows { rows }))
 }

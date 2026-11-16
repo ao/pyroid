@@ -95,10 +95,10 @@ them), so pipelines built afterwards, including from NeMo's YAML configs, use th
 need no patch: the stages they receive are pyroid's classes.
 
 ``"difflib"`` patches the standard library's difflib in place: :mod:`pyroid.difflib`'s
-methods are set on ``difflib.SequenceMatcher`` and ``difflib.Differ`` themselves (so instances,
-subclasses and ``isinstance`` checks stay difflib's, including classes imported earlier), and its
-``get_close_matches``, ``unified_diff``, ``context_diff`` and ``_mdiff`` on the module, which
-covers ``ndiff``, ``HtmlDiff`` and unittest's and pytest's assertion diffs.
+methods are set on ``difflib.SequenceMatcher``, ``difflib.Differ`` and ``difflib.HtmlDiff``
+themselves (so instances, subclasses and ``isinstance`` checks stay difflib's, including classes
+imported earlier), and its ``get_close_matches``, ``unified_diff``, ``context_diff`` and
+``_mdiff`` on the module, which covers ``ndiff`` and unittest's and pytest's assertion diffs.
 
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
@@ -791,6 +791,7 @@ def _build_difflib(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     for name, value in impl._SM_METHODS.items():
         swap(real.SequenceMatcher, name, value)
     swap(real.Differ, "compare", impl._PATCH_COMPARE)
+    swap(real.HtmlDiff, "make_table", impl._PATCH_MAKE_TABLE)
     for name in impl._PATCH_FUNCTIONS:
         swap(real, name, getattr(impl, name))
 

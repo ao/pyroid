@@ -497,6 +497,98 @@ def _mdiff(
 _mdiff.__doc__ = _std._mdiff.__doc__
 
 
+_HTML_HOOKS = (
+    "_make_prefix",
+    "_tab_newline_replace",
+    "_line_wrapper",
+    "_split_line",
+    "_collect_lines",
+    "_format_line",
+    "_convert_flags",
+)
+# 3.15's _format_line marks changed lines with class="diff_changed".
+_CHANGED_CLASS = sys.version_info >= (3, 15)
+
+
+def _html_marks(text: str) -> str:
+    """``make_table``'s final replacements of the change marks."""
+    return (
+        text.replace("\0+", '<span class="diff_add">')
+        .replace("\0-", '<span class="diff_sub">')
+        .replace("\0^", '<span class="diff_chg">')
+        .replace("\1", "</span>")
+        .replace("\t", "&nbsp;")
+    )
+
+
+def _make_make_table(fallback: Any, hooks: dict[str, Any]) -> Any:
+    def make_table(
+        self: Any,
+        fromlines: Sequence[str],
+        tolines: Sequence[str],
+        fromdesc: str = "",
+        todesc: str = "",
+        context: bool = False,
+        numlines: int = 5,
+    ) -> str:
+        cls = type(self)
+        kinds = _junk_kinds(self._linejunk, self._charjunk)
+        tabsize, wrap, template = self._tabsize, self._wrapcolumn, self._table_template
+        rows = None
+        if (
+            kinds is not None
+            and type(template) is str
+            and template.count("%(data_rows)s") == 1
+            and "%%" not in template
+            and type(tabsize) is int
+            and (wrap is None or (type(wrap) is int and wrap >= 0))
+            and type(numlines) is int
+            and numlines >= 0
+            and all(getattr(cls, h) is f for h, f in hooks.items())
+        ):
+            with_context = bool(context)
+            try:
+                rows = _native._html_prepare(
+                    fromlines,
+                    tolines,
+                    tabsize,
+                    wrap or 0,
+                    numlines if with_context else None,
+                    kinds[0],
+                    self._linejunk,
+                    kinds[1],
+                    _WINDOWED,
+                )
+            except BaseException:
+                self._make_prefix()  # CPython had made the prefixes before it failed
+                raise
+        if rows is None:
+            return fallback(self, fromlines, tolines, fromdesc, todesc, context, numlines)  # type: ignore[no-any-return]
+        # The rest of CPython's make_table, around the native rows.
+        self._make_prefix()
+        data_rows = rows.render(
+            self._prefix[0], self._prefix[1], with_context, numlines, _CHANGED_CLASS
+        )
+        if fromdesc or todesc:
+            header_row = "<thead><tr>%s%s%s%s</tr></thead>" % (  # noqa: UP031 - CPython's formatting
+                '<th class="diff_next"><br /></th>',
+                '<th colspan="2" class="diff_header">%s</th>' % fromdesc,  # noqa: UP031
+                '<th class="diff_next"><br /></th>',
+                '<th colspan="2" class="diff_header">%s</th>' % todesc,  # noqa: UP031
+            )
+        else:
+            header_row = ""
+        # The template around the rows gets the final replacements here; the rows have had
+        # them (no replacement can span a row's ends).
+        head, _, tail = template.partition("%(data_rows)s")
+        parts = {"header_row": header_row, "prefix": self._prefix[1]}
+        return _html_marks(head % parts) + data_rows + _html_marks(tail % parts)  # type: ignore[no-any-return]
+
+    make_table.__doc__ = fallback.__doc__
+    make_table.__qualname__ = "HtmlDiff.make_table"
+    return make_table
+
+
 class HtmlDiff(_std.HtmlDiff):
     __doc__ = _std.HtmlDiff.__doc__
 
@@ -504,6 +596,13 @@ class HtmlDiff(_std.HtmlDiff):
 for _name, _f in _std.HtmlDiff.__dict__.items():
     if isinstance(_f, types.FunctionType):
         setattr(HtmlDiff, _name, _rebind(_f))
+HtmlDiff.make_table = _make_make_table(  # type: ignore[method-assign]
+    HtmlDiff.__dict__["make_table"], {h: HtmlDiff.__dict__[h] for h in _HTML_HOOKS}
+)
+# What pyroid.patch("difflib") sets as difflib.HtmlDiff.make_table.
+_PATCH_MAKE_TABLE = _make_make_table(
+    _std.HtmlDiff.__dict__["make_table"], {h: _std.HtmlDiff.__dict__[h] for h in _HTML_HOOKS}
+)
 
 for _cls in (SequenceMatcher, Differ, HtmlDiff):
     _cls.__module__ = __name__
@@ -514,7 +613,7 @@ del _name, _f, _cls
 _PATCH_FUNCTIONS = ("get_close_matches", "unified_diff", "context_diff", "_mdiff")
 
 # The fallbacks' docstrings are the public functions' (their doctests run there once).
-for _f in (_std_unified, _std_context, _std_close, _std_mdiff, _PATCH_COMPARE):
+for _f in (_std_unified, _std_context, _std_close, _std_mdiff, _PATCH_COMPARE, _PATCH_MAKE_TABLE):
     _f.__doc__ = None
 del _f
 

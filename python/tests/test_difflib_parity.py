@@ -399,26 +399,49 @@ def test_differ_subclass(a: list[str], b: list[str]) -> None:
     assert isinstance(pd.Differ(), difflib.Differ)
 
 
+html_lines = st.lists(
+    st.one_of(
+        vocab,
+        st.text(alphabet=st.sampled_from("ab \t<&>\x00\x01é\ud800"), max_size=30).map(
+            lambda s: s + "\n"
+        ),
+    ),
+    max_size=14,
+)
+
+
 @pytest.mark.thread_unsafe(reason="HtmlDiff's table prefix counter is global")
 @FUZZ
 @given(
-    fancy_lines,
-    fancy_lines,
-    st.sampled_from([8, 2]),
-    st.sampled_from([None, 14]),
+    st.one_of(fancy_lines, html_lines),
+    st.one_of(fancy_lines, html_lines),
+    st.sampled_from([8, 2, 1, 0, -1]),
+    st.sampled_from([None, 14, 5, 1, 0]),
     st.booleans(),
     st.integers(0, 3),
     char_junk,
+    line_junk_factory(),
+    st.sampled_from([("from", "to"), ("", ""), ("a\tb<", ""), ("", "x\x00+y")]),
 )
 def test_html_diff(
-    a: list[str], b: list[str], tabsize: int, wrap: Any, context: bool, numlines: int, cj: Any
+    a: list[str],
+    b: list[str],
+    tabsize: int,
+    wrap: Any,
+    context: bool,
+    numlines: int,
+    cj: Any,
+    make_junk: Any,
+    descs: tuple[str, str],
 ) -> None:
     def html(module: Any) -> Any:
         module.HtmlDiff._default_prefix = 0
-        h = module.HtmlDiff(tabsize=tabsize, wrapcolumn=wrap, charjunk=cj)
+        h = module.HtmlDiff(tabsize=tabsize, wrapcolumn=wrap, linejunk=make_junk(), charjunk=cj)
         return (
-            h.make_table(a, b, "from", "to", context=context, numlines=numlines),
+            h.make_table(a, b, *descs, context=context, numlines=numlines),
             h.make_file(a, b, context=context, numlines=numlines, charset="latin-1"),
+            h.make_table(a, a, context=True),
+            h.make_table([], [], context=context),
         )
 
     assert outcome(lambda: html(pd)) == outcome(lambda: html(difflib))

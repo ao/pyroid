@@ -7,12 +7,14 @@
 //! - [`differ`]: `Differ.compare` / `ndiff`, in CPython 3.11-3.13's and 3.14+'s versions.
 //! - [`mdiff`]: `_mdiff`, the side-by-side rows of `HtmlDiff`.
 //! - [`format`]: `unified_diff` and `context_diff`.
+//! - [`html`]: `HtmlDiff.make_table`'s rows.
 //!
 //! [`StrMatcher`] is `SequenceMatcher` over the characters of two strings,
 //! for `get_close_matches` and the batch functions.
 
 pub mod differ;
 pub mod format;
+pub mod html;
 pub mod intern;
 pub mod matcher;
 pub mod mdiff;
