@@ -106,6 +106,9 @@ Errors have packaging's classes and messages:
 packaging.version.InvalidVersion: Invalid version: '1.0.0-final'
 ```
 
+Without packaging installed, the class is pyroid's copy, shown as
+`pyroid.packaging.version.InvalidVersion`, with the same message.
+
 ## Mixing pyroid's and packaging's objects {#interop}
 
 pyroid's objects meet packaging's in your code, in packaging's own modules (`ranges`, `metadata`,

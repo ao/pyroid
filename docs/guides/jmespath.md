@@ -72,6 +72,9 @@ jmespath.exceptions.ParseError: Unexpected token: ]: Parse error at column 3, to
     ^
 ```
 
+Without jmespath installed, the class is pyroid's copy, shown as
+`pyroid.jmespath._exceptions.ParseError`, with the same message.
+
 Compiled expressions are cached as jmespath 1.1.0 caches them: the 512 most recent, the oldest
 out first, shared by `search`, `compile` and `Parser().parse`, so `compile(e) is compile(e)`.
 An expression is found as jmespath's dict finds it, so a `str` subclass with its own `__eq__` or
