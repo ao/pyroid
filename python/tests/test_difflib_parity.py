@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import difflib
+import os
 import pickle
 import sys
 import warnings
@@ -25,7 +26,12 @@ from pyroid import integrations
 pytestmark = pytest.mark.filterwarnings("ignore::pyroid.FallbackWarning")
 
 COLOR = sys.version_info >= (3, 15)
-FUZZ = settings(suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large])
+# PYROID_DIFFLIB_EXAMPLES=n runs n examples per fuzz test (the parity counts in the docs).
+_EXAMPLES = os.environ.get("PYROID_DIFFLIB_EXAMPLES")
+FUZZ = settings(
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
+    **({"max_examples": int(_EXAMPLES)} if _EXAMPLES else {}),
+)
 
 
 def outcome(f: Callable[[], Any]) -> Any:
@@ -209,6 +215,7 @@ def run_ops(cls: type, isjunk: Any, a: Any, b: Any, autojunk: Any, ops: list[Any
             if isjunk is None:
                 s = pickle.loads(pickle.dumps(s))
                 log.append(type(s).__name__)
+                log.append(sorted(k for k in vars(s) if not k.startswith("_pyroid_")))
         elif kind == "copy":
             s = copy.copy(s)
             log.append(step(lambda s: s.get_opcodes(), s))
@@ -249,6 +256,7 @@ def test_line_lists(a: list[str], b: list[str]) -> None:
     compare_matchers(lambda: None, a, b, True, [("grouped", 3), ("attr", "bpopular")])
 
 
+@FUZZ
 @given(texts, texts, st.integers(0, 50), st.integers(0, 50), st.integers(0, 50), st.integers(0, 50))
 def test_find_longest_match_bounds(a: str, b: str, alo: int, ahi: int, blo: int, bhi: int) -> None:
     for junk in (None, " ".__eq__):
@@ -282,6 +290,7 @@ class PyroidOverriding(pd.SequenceMatcher[str]):
         return super().find_longest_match(alo, ahi, blo, bhi)
 
 
+@FUZZ
 @given(texts, texts)
 def test_subclass_overrides_are_called(a: str, b: str) -> None:
     s1, s2 = Overriding(None, a, b), PyroidOverriding(None, a, b)
@@ -393,6 +402,7 @@ class PyroidQuiet(pd.Differ):
         yield f"~ {aline}"
 
 
+@FUZZ
 @given(fancy_lines, fancy_lines)
 def test_differ_subclass(a: list[str], b: list[str]) -> None:
     assert list(PyroidQuiet().compare(a, b)) == list(Quiet().compare(a, b))
@@ -488,6 +498,7 @@ def test_lazy_errors() -> None:
         next(g2)
 
 
+@FUZZ
 @given(
     st.lists(st.binary(max_size=6).map(lambda s: s + b"\n"), max_size=10),
     st.lists(st.sampled_from([b"a\n", b"\xff\n"]), max_size=10),

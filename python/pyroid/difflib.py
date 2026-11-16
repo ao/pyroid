@@ -216,12 +216,14 @@ def _quick_ratio(self: Any) -> float:
 
 
 def _getstate(self: Any) -> dict[str, Any]:
-    # CPython's state: the lazy attributes made, the native index left out.
+    # CPython's state (the same keys, so plain difflib can load it): the lazy attributes
+    # made, the native index left out.
+    state = {k: v for k, v in self.__dict__.items() if not k.startswith("_pyroid_")}
     for name in _LAZY:
-        if name not in self.__dict__:
+        if name not in state:
             with contextlib.suppress(AttributeError):
-                getattr(self, name)
-    return {k: v for k, v in self.__dict__.items() if not k.startswith("_pyroid_")}
+                state[name] = getattr(self, name)
+    return state
 
 
 class _Lazy:
