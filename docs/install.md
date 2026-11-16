@@ -44,8 +44,8 @@ Optional libraries, needed only by the features that use them:
     - jieba 0.42.1 for `pyroid.jieba.posseg`, `pyroid.jieba.analyse` and paddle mode;
     - rouge-score 0.1.2 and sacrebleu 2.6.0 for the delegated metrics features;
     - json_repair 0.64.5 for `schema=`;
-    - tabulate 0.10.0 for the few `pyroid.tabulate` calls it hands over (text with lone
-      surrogates, alignments that are not strings), and wcwidth for wide-character widths;
+    - wcwidth for `pyroid.tabulate`'s wide-character widths (its few calls that the Rust code does
+      not take run pyroid's copy of tabulate 0.10.0's code: tabulate itself is never needed);
     - datasketch 2.0.0 for its classes pyroid does not port (`WeightedMinHash`, `HyperLogLog`,
       ...) and for Redis or Cassandra LSH storage.
 

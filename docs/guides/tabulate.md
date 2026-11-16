@@ -69,25 +69,30 @@ numpy's unsigned ints are typed as floats, and `"infinity"` is text while `"inf"
 | Step | Runs |
 |---|---|
 | Column types, number formatting (Python's format-spec language for floats and ints), ANSI stripping, widths of ASCII text, alignment, drawing every built-in format | in Rust |
-| Turning a plain list of rows, or a DataFrame of floats, signed ints or objects, into rows and adding the index | in Rust |
+| Turning a plain list of rows, or a DataFrame of float64s, signed ints or objects, into rows and adding the index | in Rust |
 | Other inputs (dicts, dataclasses, numpy arrays, generators, other DataFrames) | tabulate's own normalisation code, in Python |
 | `maxcolwidths` and `maxheadercolwidths` wrapping | tabulate's own text wrapper, in Python |
 | Cells Rust does not type itself (Decimal, Fraction, dates, bytes, subclasses, ints beyond 64 bits, numpy scalars other than float, int, uint and bool) | tabulate's `_type` and `_format`, per cell |
 | Widths of text that is not ASCII, with `WIDE_CHARS_MODE` on | the installed `wcwidth.wcswidth` |
 | Callables of a custom `TableFormat` | called from Rust, as tabulate calls them |
+| The calls listed below | tabulate's own `tabulate()`, in Python |
 
-The Python parts are tabulate's code, copied; a test checks they still match tabulate 0.10.0's
-source, AST for AST.
+The Python parts are tabulate 0.10.0's code, copied into pyroid; a test checks they still match
+its source, AST for AST.
 
-These calls go to the real tabulate, which must then be installed. The first call for each
-reason emits a [`pyroid.FallbackWarning`](../concepts/fallbacks.md), and without tabulate the
-call raises [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError):
+These calls run that copy of tabulate's `tabulate()`, never the installed tabulate, which need
+not be there and may be another release. They read pyroid.tabulate's `MIN_PADDING`,
+`WIDE_CHARS_MODE` and formats, as the Rust path does. The first call for each reason emits a
+[`pyroid.FallbackWarning`](../concepts/fallbacks.md):
 
-- text with lone surrogates (`"\ud800"`), in a cell, a header or a custom format's output;
+- text with lone surrogates (`"\ud800"`), in a cell, a header, an alignment, a custom format's
+  strings or its callables' output;
 - an alignment that is not a `str`, `None` or a `bool`;
 - a custom `TableFormat` whose lines and rows are not strings or callables, or whose `padding` is
   not an int, and a `MIN_PADDING` that is not an int;
-- a `missingval` that is not a `str`.
+- a per-column `missingval` entry that is not a `str`, in a column with missing values (a
+  `missingval` that is neither a `str` nor iterable, such as `0`, raises the `TypeError` tabulate
+  raises).
 
 ## Speed
 
@@ -111,13 +116,15 @@ All formats and sizes are on the [benchmarks page](../benchmarks.md#pyroidtabula
 (`bench/results/aws-c7i.4xlarge/2026-11-16/tabulate.json`, made by
 `bench/tabulate/tabulate_bench.py`). A one-row table of three numbers takes 11 µs (tabulate:
 33 µs), most of it fixed per-call work. pyroid.tabulate runs on free-threaded CPython without
-enabling the GIL.
+enabling the GIL. A long table lets other threads run every few milliseconds, as tabulate's Python
+code does, and Ctrl-C stops it there with `KeyboardInterrupt`.
 
 ## Versions {#versions}
 
 pyroid.tabulate reproduces tabulate 0.10.0, the newest release. With another tabulate installed,
-`pyroid.patch("tabulate")` warns once that the patched functions give 0.10.0's results. tabulate
-0.9.0 (2022) is still common; 0.10.0 changed what it prints in these cases:
+`pyroid.patch("tabulate")` warns once that the patched functions give 0.10.0's results; they do
+so on the slow path too, which runs pyroid's copy of 0.10.0's code. tabulate 0.9.0 (2022) is still
+common; 0.10.0 changed what it prints in these cases:
 
 - an empty string in a number column counts as missing, so the column stays right-aligned (0.9.0:
   the column became text);
@@ -140,9 +147,12 @@ No differences in output are known. Some behaviour around the edges:
 
 - With `maxcolwidths` narrower than a wide character (say `maxcolwidths=1` and `"日本"`),
   tabulate's text wrapper loops forever, and so does pyroid, which runs the same wrapper.
-- `pyroid.tabulate` provides tabulate's private helpers that its tests use (`_CustomTextWrap`,
-  `_strip_ansi`, `_type`, `_column_type`, `_align_column`, ...); `_align_column` and
-  `_align_cell_veritically` run pyroid's Rust code. Other private helpers (`_format_table`,
-  `_visible_width`, ...) are not provided; under `pyroid.patch("tabulate")` they come from the
-  installed tabulate.
-- The fallbacks above need tabulate installed.
+- `pyroid.tabulate` has all of tabulate's functions, private helpers included (`_align_column`,
+  `_format_table`, `_visible_width`, ...), as tabulate's own code; `tabulate()` and the command line
+  are pyroid's. `python -m pyroid.tabulate` is tabulate's `tabulate` command (tabulate 0.10.0 has no
+  `python -m tabulate`).
+- `TableFormat`, `Line`, `DataRow` and `JupyterHTMLStr` are pyroid.tabulate's own classes, so
+  `isinstance(table, tabulate.JupyterHTMLStr)` is false for a table pyroid drew, unless `tabulate`
+  is patched. Formats built with the real tabulate's classes are accepted and drawn the same.
+- numpy's `ComplexWarning` for a complex numpy scalar in a number column points at pyroid's copy
+  of the tabulate line that converts it, not at tabulate's file.
