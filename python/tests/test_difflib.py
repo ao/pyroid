@@ -461,7 +461,9 @@ def test_racing_set_seq_errors_name_no_internals() -> None:
         t.start()
     for t in threads:
         t.join(timeout=60)
-    assert not [e for e in errors if "_pyroid" in e or "'b2j'" in e], errors[:5]
+    lazy = ("b2j", "bjunk", "bpopular", "fullbcount", "matching_blocks")
+    internal = [e for e in errors if "_pyroid" in e or any(f"'{n}'" in e for n in lazy)]
+    assert not internal, internal[:5]
 
 
 @pytest.mark.thread_unsafe(reason="tracemalloc is process-wide")
