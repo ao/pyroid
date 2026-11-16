@@ -153,7 +153,7 @@ dev = ["maturin>=1.16,<2.0", { include-group = "test" }, { include-group = "lint
 # .pyi stubs statically, so no Rust build is needed; ruff formats the signatures it renders.
 docs = [
   "zensical==0.1.0",
-  "mkdocs-material==9.8.0",
+  "mkdocs-material==9.8.1",
   "mkdocstrings-python==2.0.10",
   "ruff==0.17.3",
 ]
