@@ -48,6 +48,10 @@ struct Config {
     /// packaging's `Specifier` and `SpecifierSet` (the `__class__` claim).
     packaging_specifier: Option<Py<PyType>>,
     packaging_specifier_set: Option<Py<PyType>>,
+    /// packaging's `Specifier` and `SpecifierSet` whatever its release: read through their
+    /// strings and `_prereleases`.
+    packaging_specifier_any: Option<Py<PyType>>,
+    packaging_specifier_set_any: Option<Py<PyType>>,
     invalid_marker: Py<PyAny>,
     undefined_comparison: Py<PyAny>,
     undefined_environment_name: Py<PyAny>,
@@ -169,6 +173,8 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         delegate: get("delegate")?,
         packaging_specifier: opt_type("packaging_Specifier")?,
         packaging_specifier_set: opt_type("packaging_SpecifierSet")?,
+        packaging_specifier_any: opt_type("packaging_Specifier_any")?,
+        packaging_specifier_set_any: opt_type("packaging_SpecifierSet_any")?,
         invalid_marker: get("InvalidMarker")?,
         undefined_comparison: get("UndefinedComparison")?,
         undefined_environment_name: get("UndefinedEnvironmentName")?,

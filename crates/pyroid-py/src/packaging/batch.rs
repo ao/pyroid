@@ -15,70 +15,117 @@ use pyroid_core::packaging::specifiers::{self as spec_core, Op};
 use pyroid_core::packaging::version::{self as vcore, Version};
 use pyroid_core::par;
 
+use super::cell::Passed;
 use super::config;
 use super::specifiers::{PySpecifier, PySpecifierSet, coerce};
 use super::version::{PyVersion, parse_str};
 use crate::arrow::{Chunk, Column, ColumnType};
 use crate::errors::with_note;
-use crate::input::{TextInput, Threads, ThreadsArg, text_arg, threads};
+use crate::input::{TextInput, Threads, ThreadsArg, text_arg};
 
 /// Items parsed per detach: between chunks the batch checks for Ctrl-C.
 const CHUNK: usize = 1 << 16;
 
-/// One input item, as the batch sees it.
-enum Item<'py> {
-    /// A `str` (`None`: it has a lone surrogate, so it is no version).
-    Str(Option<PyBackedStr>, Bound<'py, PyAny>),
-    /// Any other object (a Version, or something `Version()` decides about).
-    Obj(Bound<'py, PyAny>),
-    /// An Arrow null.
-    Null,
+/// The input versions: a list (one snapshot) or tuple, or an Arrow string array's rows
+/// (borrowed from its buffers). Read a chunk at a time, so a batch holds at most one chunk of
+/// parsed versions.
+enum Rows<'a, 'py> {
+    Seq(&'a Bound<'py, PyTuple>),
+    Arrow(&'a [Option<&'a str>]),
 }
 
-/// The input as items: a list or tuple (read through one snapshot), or an Arrow string array.
-fn items<'py>(
-    py: Python<'py>,
-    xs: &Bound<'py, PyAny>,
-    t: Option<Threads>,
-) -> PyResult<(Vec<Item<'py>>, Kind)> {
-    let (seq, kind) = if let Ok(l) = xs.cast::<PyList>() {
-        (l.to_tuple(), Kind::List)
-    } else if let Ok(tu) = xs.cast::<PyTuple>() {
-        (tu.clone(), Kind::Tuple)
-    } else if xs.cast::<PyString>().is_ok() {
+impl<'py> Rows<'_, 'py> {
+    fn len(&self) -> usize {
+        match self {
+            Rows::Seq(t) => t.len(),
+            Rows::Arrow(r) => r.len(),
+        }
+    }
+
+    /// Item `i` as a Python object (`None`: an Arrow null).
+    fn obj(&self, py: Python<'py>, i: usize) -> PyResult<Option<Bound<'py, PyAny>>> {
+        Ok(match self {
+            Rows::Seq(t) => Some(t.get_item(i)?),
+            Rows::Arrow(r) => r[i].map(|s| PyString::new(py, s).into_any()),
+        })
+    }
+
+    /// `f(start, texts)` for each chunk: the text of each `str` item (`None` for any other
+    /// object, a `str` with a lone surrogate, or an Arrow null), with a Ctrl-C check after each.
+    fn for_each_chunk(
+        &self,
+        py: Python<'py>,
+        mut f: impl FnMut(usize, &[Option<&str>]) -> PyResult<()>,
+    ) -> PyResult<()> {
+        let n = self.len();
+        let mut start = 0;
+        while start < n {
+            let end = (start + CHUNK).min(n);
+            match self {
+                Rows::Seq(t) => {
+                    let backed: Vec<Option<PyBackedStr>> = (start..end)
+                        .map(|i| {
+                            t.get_item(i).ok().and_then(|x| {
+                                x.cast_into::<PyString>()
+                                    .ok()
+                                    .and_then(|s| PyBackedStr::try_from(s).ok())
+                            })
+                        })
+                        .collect();
+                    let texts: Vec<Option<&str>> = backed.iter().map(|b| b.as_deref()).collect();
+                    f(start, &texts)?;
+                }
+                Rows::Arrow(r) => f(start, &r[start..end])?,
+            }
+            py.check_signals()?;
+            start = end;
+        }
+        Ok(())
+    }
+}
+
+/// The input: a list or tuple (its items, through one snapshot of a list), or an Arrow array.
+enum Input<'py> {
+    Seq(Bound<'py, PyTuple>, Kind),
+    Arrow(TextInput),
+}
+
+fn input<'py>(py: Python<'py>, xs: &Bound<'py, PyAny>, t: Option<Threads>) -> PyResult<Input<'py>> {
+    if let Ok(l) = xs.cast::<PyList>() {
+        return Ok(Input::Seq(l.to_tuple(), Kind::List));
+    }
+    if let Ok(tu) = xs.cast::<PyTuple>() {
+        return Ok(Input::Seq(tu.clone(), Kind::Tuple));
+    }
+    if xs.cast::<PyString>().is_ok() {
         return Err(crate::errors::input_error(
             py,
             "expected a list, tuple or Arrow array of versions, got str".to_owned(),
         ));
-    } else {
-        let input = text_arg(xs, t, "versions")?;
-        let TextInput::Arrow(_) = &input else {
-            return Err(crate::errors::input_error(
-                py,
-                "expected a list, tuple or Arrow array of versions".to_owned(),
-            ));
-        };
-        let rows = crate::batch::rows(&input).map_err(|e| e.into_pyerr(py))?;
-        let mut out = Vec::with_capacity(rows.len());
-        for r in rows {
-            out.push(match r {
-                None => Item::Null,
-                Some(s) => {
-                    let obj = PyString::new(py, s);
-                    Item::Str(PyBackedStr::try_from(obj.clone()).ok(), obj.into_any())
-                }
-            });
-        }
-        return Ok((out, Kind::Arrow));
-    };
-    let mut out = Vec::with_capacity(seq.len());
-    for x in seq.iter() {
-        out.push(match x.cast::<PyString>() {
-            Ok(s) => Item::Str(PyBackedStr::try_from(s.clone()).ok(), x.clone()),
-            Err(_) => Item::Obj(x),
-        });
     }
-    Ok((out, kind))
+    let input = text_arg(xs, t, "versions")?;
+    let TextInput::Arrow(_) = &input else {
+        return Err(crate::errors::input_error(
+            py,
+            "expected a list, tuple or Arrow array of versions".to_owned(),
+        ));
+    };
+    Ok(Input::Arrow(input))
+}
+
+/// `f(rows, kind)` over the input's rows.
+fn with_rows<'py, R>(
+    py: Python<'py>,
+    input: &Input<'py>,
+    f: impl FnOnce(&Rows<'_, 'py>, Kind) -> PyResult<R>,
+) -> PyResult<R> {
+    match input {
+        Input::Seq(t, kind) => f(&Rows::Seq(t), *kind),
+        Input::Arrow(a) => {
+            let rows = crate::batch::rows(a).map_err(|e| e.into_pyerr(py))?;
+            f(&Rows::Arrow(&rows), Kind::Arrow)
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -88,63 +135,45 @@ enum Kind {
     Arrow,
 }
 
-/// What parsing one item gave: a version, "not a version", or a digit run Python must check.
+/// What parsing one `str` item gave: a version, "not a version", or a digit run Python must
+/// check.
 enum Parsed {
     Version(Version),
     Invalid,
     LongRuns,
-    Null,
 }
 
-/// Parse every `str` item on the pool, a chunk at a time; other items are coerced here.
-fn parse_all(py: Python<'_>, items: &[Item<'_>], t: Option<Threads>) -> PyResult<Vec<Parsed>> {
-    let threads = threads(t);
-    let strs: Vec<Option<&str>> = items
-        .iter()
-        .map(|i| match i {
-            Item::Str(Some(s), _) => Some(&**s),
-            _ => None,
-        })
-        .collect();
-    let mut out: Vec<Parsed> = Vec::with_capacity(items.len());
-    let mut start = 0;
-    while start < items.len() {
-        let end = (start + CHUNK).min(items.len());
-        let slice = &strs[start..end];
-        let chunk = py
-            .detach(|| {
-                par::map(slice.len(), threads, |k| {
-                    slice[k].map(|s| match vcore::parse(s) {
-                        Some(p) if p.long_runs.is_empty() => Parsed::Version(p.version),
-                        Some(_) => Parsed::LongRuns,
-                        None => Parsed::Invalid,
-                    })
-                })
-            })
-            .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
-        for (k, p) in chunk.into_iter().enumerate() {
-            out.push(match (p, &items[start + k]) {
-                (Some(p), _) => p,
-                (None, Item::Null) => Parsed::Null,
-                (None, Item::Obj(o)) => match coerce(py, o)? {
-                    Some(v) => Parsed::Version(v),
-                    None => Parsed::Invalid,
-                },
-                (None, Item::Str(..)) => Parsed::Invalid,
-            });
-        }
-        py.check_signals()?;
-        start = end;
+fn parse_text(s: &str) -> Parsed {
+    match vcore::parse(s) {
+        Some(p) if p.long_runs.is_empty() => Parsed::Version(p.version),
+        Some(_) => Parsed::LongRuns,
+        None => Parsed::Invalid,
     }
-    Ok(out)
 }
 
-/// A long digit run: parse it as `Version()` would (CPython's `int()` may raise).
-fn resolve_long(py: Python<'_>, item: &Item<'_>) -> PyResult<Version> {
-    match item {
-        Item::Str(_, s) => parse_str(py, s.cast::<PyString>()?),
-        _ => Err(PyValueError::new_err("unexpected item")),
+/// The version of item `i` whose text did not parse on the pool (`texts[k]` is `None` or a long
+/// digit run): `Ok(None)` for "not a version" and for an Arrow null (`null` is set).
+fn resolve<'py>(
+    py: Python<'py>,
+    rows: &Rows<'_, 'py>,
+    i: usize,
+    long_runs: bool,
+    null: &mut bool,
+) -> PyResult<Option<Version>> {
+    *null = false;
+    let Some(obj) = rows.obj(py, i)? else {
+        *null = true;
+        return Ok(None);
+    };
+    if long_runs {
+        // A long digit run: parse it as `Version()` would (CPython's `int()` may raise).
+        return parse_str(py, obj.cast::<PyString>()?).map(Some);
     }
+    if obj.cast::<PyString>().is_ok() {
+        // A str with a lone surrogate: never a version.
+        return Ok(None);
+    }
+    coerce(py, &obj)
 }
 
 fn index_note(py: Python<'_>, err: PyErr, i: usize) -> PyErr {
@@ -158,11 +187,9 @@ fn invalid(py: Python<'_>, item: &Bound<'_, PyAny>) -> PyResult<PyErr> {
     ))
 }
 
-fn item_obj<'py>(py: Python<'py>, item: &Item<'py>) -> Bound<'py, PyAny> {
-    match item {
-        Item::Str(_, o) | Item::Obj(o) => o.clone(),
-        Item::Null => py.None().into_bound(py),
-    }
+fn invalid_at(py: Python<'_>, rows: &Rows<'_, '_>, i: usize) -> PyResult<PyErr> {
+    let item = rows.obj(py, i)?.unwrap_or_else(|| py.None().into_bound(py));
+    invalid(py, &item)
 }
 
 /// Parse many versions at once.
@@ -177,44 +204,81 @@ fn item_obj<'py>(py: Python<'py>, item: &Item<'py>) -> Bound<'py, PyAny> {
 /// Returns:
 ///     A list of ``Version`` objects (``None`` for Arrow nulls).
 #[pyfunction]
-#[pyo3(signature = (versions, /, *, errors = "raise", threads = None))]
+#[pyo3(
+    signature = (versions, /, *, errors = Passed(None), threads = None),
+    text_signature = "(versions, /, *, errors='raise', threads=None)"
+)]
 fn parse_batch<'py>(
     py: Python<'py>,
     versions: &Bound<'py, PyAny>,
-    errors: &str,
+    errors: Passed,
     threads: Option<ThreadsArg>,
 ) -> PyResult<Bound<'py, PyList>> {
-    let raise = match errors {
-        "raise" => true,
-        "none" => false,
-        other => {
-            return Err(PyValueError::new_err(format!(
-                "errors must be 'raise' or 'none', not {other:?}"
-            )));
-        }
+    let raise = match errors.0 {
+        Some(e) => errors_arg(py, e.bind(py))?,
+        None => true,
     };
     let t = ThreadsArg::resolve(threads)?;
-    let (items, _) = items(py, versions, t)?;
-    let parsed = parse_all(py, &items, t)?;
+    let pool = crate::input::threads(t);
+    let input = input(py, versions, t)?;
     let out = PyList::empty(py);
-    for (i, (p, item)) in parsed.into_iter().zip(&items).enumerate() {
-        let v = match p {
-            Parsed::Version(v) => Some(v),
-            Parsed::Null => None,
-            Parsed::LongRuns => Some(resolve_long(py, item).map_err(|e| index_note(py, e, i))?),
-            Parsed::Invalid => {
-                if raise {
-                    return Err(index_note(py, invalid(py, &item_obj(py, item))?, i));
+    with_rows(py, &input, |rows, _| {
+        rows.for_each_chunk(py, |start, texts| {
+            let parsed = parse_chunk(py, texts, pool)?;
+            for (k, p) in parsed.into_iter().enumerate() {
+                let i = start + k;
+                let mut null = false;
+                let v = match p {
+                    Some(Parsed::Version(v)) => Some(v),
+                    Some(Parsed::Invalid) => None,
+                    Some(Parsed::LongRuns) => {
+                        resolve(py, rows, i, true, &mut null).map_err(|e| index_note(py, e, i))?
+                    }
+                    None => resolve(py, rows, i, false, &mut null)?,
+                };
+                match v {
+                    Some(v) => out.append(Bound::new(py, PyVersion::from_core(v))?)?,
+                    None if raise && !null => {
+                        return Err(index_note(py, invalid_at(py, rows, i)?, i));
+                    }
+                    None => out.append(py.None())?,
                 }
-                None
             }
-        };
-        match v {
-            Some(v) => out.append(Bound::new(py, PyVersion::from_core(v))?)?,
-            None => out.append(py.None())?,
-        }
-    }
+            Ok(())
+        })
+    })?;
     Ok(out)
+}
+
+/// `errors=`: `"raise"` (true) or `"none"`; another value is a `ValueError`, another type an
+/// `InputError`, as for the other arguments of pyroid's batch functions.
+fn errors_arg(py: Python<'_>, errors: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let Ok(s) = errors.cast::<PyString>() else {
+        return Err(crate::errors::input_error(
+            py,
+            format!(
+                "errors must be 'raise' or 'none', not {}",
+                errors.get_type().name()?
+            ),
+        ));
+    };
+    match &*s.to_cow()? {
+        "raise" => Ok(true),
+        "none" => Ok(false),
+        other => Err(PyValueError::new_err(format!(
+            "errors must be 'raise' or 'none', not {other:?}"
+        ))),
+    }
+}
+
+/// Parse one chunk's texts on the pool (`None` where there is no text).
+fn parse_chunk(
+    py: Python<'_>,
+    texts: &[Option<&str>],
+    threads: par::Threads,
+) -> PyResult<Vec<Option<Parsed>>> {
+    py.detach(|| par::map(texts.len(), threads, |k| texts[k].map(parse_text)))
+        .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))
 }
 
 /// Sort versions by PEP 440 order (``sorted(versions, key=Version)``, stable).
@@ -239,22 +303,87 @@ fn sort_versions<'py>(
     threads: Option<ThreadsArg>,
 ) -> PyResult<Bound<'py, PyList>> {
     let t = ThreadsArg::resolve(threads)?;
-    let (items, _) = items(py, versions, t)?;
-    let parsed = parse_all(py, &items, t)?;
-    let mut keys: Vec<Version> = Vec::with_capacity(items.len());
-    for (p, item) in parsed.into_iter().zip(&items) {
-        match p {
-            Parsed::Version(v) => keys.push(v),
-            Parsed::LongRuns => keys.push(resolve_long(py, item)?),
-            Parsed::Invalid | Parsed::Null => return Err(invalid(py, &item_obj(py, item))?),
-        }
+    let pool = crate::input::threads(t);
+    let input = input(py, versions, t)?;
+    with_rows(py, &input, |rows, _| {
+        let mut keys: Vec<Version> = Vec::with_capacity(rows.len());
+        rows.for_each_chunk(py, |start, texts| {
+            for (k, p) in parse_chunk(py, texts, pool)?.into_iter().enumerate() {
+                let i = start + k;
+                let mut null = false;
+                let v = match p {
+                    Some(Parsed::Version(v)) => Some(v),
+                    Some(Parsed::Invalid) => None,
+                    Some(Parsed::LongRuns) => resolve(py, rows, i, true, &mut null)?,
+                    None => resolve(py, rows, i, false, &mut null)?,
+                };
+                match v {
+                    Some(v) => keys.push(v),
+                    None => return Err(invalid_at(py, rows, i)?),
+                }
+            }
+            Ok(())
+        })?;
+        let order = sorted_order(py, &keys, reverse, pool)?;
+        let items = order
+            .iter()
+            .map(|&i| -> PyResult<Bound<'py, PyAny>> {
+                Ok(rows.obj(py, i)?.unwrap_or_else(|| py.None().into_bound(py)))
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        PyList::new(py, items)
+    })
+}
+
+/// The stable PEP 440 order of `keys`: runs of [`CHUNK`] sorted on the pool, then merged pairwise,
+/// with a Ctrl-C check between the steps (each a few tens of milliseconds).
+fn sorted_order(
+    py: Python<'_>,
+    keys: &[Version],
+    reverse: bool,
+    threads: par::Threads,
+) -> PyResult<Vec<usize>> {
+    let pool_err = |e: par::PoolError| crate::batch::BatchError::from(e).into_pyerr(py);
+    let at_once = py
+        .detach(|| par::max_tasks(threads))
+        .map_err(pool_err)?
+        .max(1);
+    let n = keys.len();
+    let bounds: Vec<(usize, usize)> = (0..n)
+        .step_by(CHUNK)
+        .map(|a| (a, (a + CHUNK).min(n)))
+        .collect();
+    let mut runs: Vec<Vec<usize>> = Vec::with_capacity(bounds.len());
+    for group in bounds.chunks(at_once) {
+        let sorted = py
+            .detach(|| {
+                par::map_tasks(group, threads, |&r| {
+                    pyroid_core::packaging::sort_run(keys, r, reverse)
+                })
+            })
+            .map_err(pool_err)?;
+        runs.extend(sorted);
+        py.check_signals()?;
     }
-    let threads = crate::input::threads(t);
-    let order = py
-        .detach(|| pyroid_core::packaging::sort_indices(&keys, reverse, threads))
-        .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
-    py.check_signals()?;
-    PyList::new(py, order.iter().map(|&i| item_obj(py, &items[i])))
+    while runs.len() > 1 {
+        let mut next: Vec<Vec<usize>> = Vec::with_capacity(runs.len().div_ceil(2));
+        let pairs = runs.chunks(2).collect::<Vec<_>>();
+        for group in pairs.chunks(at_once) {
+            let merged = py
+                .detach(|| {
+                    par::map_tasks(group, threads, |pair| match pair {
+                        [l, r] => pyroid_core::packaging::merge_runs(keys, l, r, reverse),
+                        [l] => l.clone(),
+                        _ => Vec::new(),
+                    })
+                })
+                .map_err(pool_err)?;
+            next.extend(merged);
+            py.check_signals()?;
+        }
+        runs = next;
+    }
+    Ok(runs.pop().unwrap_or_default())
 }
 
 /// `[specifiers.contains(v, prereleases, installed) for v in versions]`.
@@ -281,8 +410,9 @@ fn contains_batch<'py>(
     threads: Option<ThreadsArg>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let t = ThreadsArg::resolve(threads)?;
+    let pool = crate::input::threads(t);
     let spec = as_spec(py, specifiers)?;
-    let (items, kind) = items(py, versions, t)?;
+    let input = input(py, versions, t)?;
     let pre = prereleases.filter(|p| !p.is_none());
     let plan = if let Some(set) = spec.set() {
         set.get().contains_plan(py, pre, installed)?
@@ -293,64 +423,52 @@ fn contains_batch<'py>(
     };
     // Natively, on the pool, for every str item; the rest (and everything without a plan)
     // through the object's own contains().
-    let mut mask: Vec<Option<bool>> = vec![None; items.len()];
-    let mut done = vec![false; items.len()];
-    if let Some(plan) = &plan {
-        let threads = crate::input::threads(t);
-        let strs: Vec<Option<&str>> = items
-            .iter()
-            .map(|i| match i {
-                Item::Str(Some(s), _) => Some(&**s),
-                _ => None,
-            })
-            .collect();
-        let mut start = 0;
-        while start < items.len() {
-            let end = (start + CHUNK).min(items.len());
-            let slice = &strs[start..end];
-            let chunk = py
-                .detach(|| {
-                    par::map(slice.len(), threads, |k| {
-                        slice[k].and_then(|s| match vcore::parse(s) {
-                            Some(p) if p.long_runs.is_empty() => {
-                                Some(plan.contains(Some(&p.version)))
-                            }
-                            Some(_) => None,
-                            None => Some(plan.contains(None)),
+    let (mask, kind) = with_rows(py, &input, |rows, kind| {
+        let mut mask: Vec<Option<bool>> = Vec::with_capacity(rows.len());
+        rows.for_each_chunk(py, |start, texts| {
+            let native: Vec<Option<bool>> = match &plan {
+                Some(plan) => py
+                    .detach(|| {
+                        par::map(texts.len(), pool, |k| {
+                            texts[k].and_then(|s| match vcore::parse(s) {
+                                Some(p) if p.long_runs.is_empty() => {
+                                    Some(plan.contains(Some(&p.version)))
+                                }
+                                Some(_) => None,
+                                None => Some(plan.contains(None)),
+                            })
                         })
                     })
-                })
-                .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
-            for (k, r) in chunk.into_iter().enumerate() {
-                if let Some(r) = r {
-                    mask[start + k] = Some(r);
-                    done[start + k] = true;
+                    .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?,
+                None => vec![None; texts.len()],
+            };
+            for (k, r) in native.into_iter().enumerate() {
+                if r.is_some() {
+                    mask.push(r);
+                    continue;
                 }
+                let i = start + k;
+                let Some(item) = rows.obj(py, i)? else {
+                    mask.push(None); // an Arrow null stays null
+                    continue;
+                };
+                let kw = pyo3::types::PyDict::new(py);
+                if let Some(p) = pre {
+                    kw.set_item("prereleases", p)?;
+                }
+                if let (Some(inst), true) = (installed, spec.is_set()) {
+                    kw.set_item("installed", inst)?;
+                }
+                let r = spec
+                    .obj
+                    .call_method(intern!(py, "contains"), (item,), Some(&kw))
+                    .map_err(|e| index_note(py, e, i))?;
+                mask.push(Some(r.is_truthy()?));
             }
-            py.check_signals()?;
-            start = end;
-        }
-    }
-    for (i, item) in items.iter().enumerate() {
-        if done[i] {
-            continue;
-        }
-        if let Item::Null = item {
-            continue;
-        }
-        let kw = pyo3::types::PyDict::new(py);
-        if let Some(p) = pre {
-            kw.set_item("prereleases", p)?;
-        }
-        if let (Some(inst), true) = (installed, spec.is_set()) {
-            kw.set_item("installed", inst)?;
-        }
-        let r = spec
-            .obj
-            .call_method(intern!(py, "contains"), (item_obj(py, item),), Some(&kw))
-            .map_err(|e| index_note(py, e, i))?;
-        mask[i] = Some(r.is_truthy()?);
-    }
+            Ok(())
+        })?;
+        Ok((mask, kind))
+    })?;
     Ok(match kind {
         Kind::List => PyList::new(py, mask)?.into_any(),
         Kind::Tuple => PyTuple::new(py, mask)?.into_any(),
@@ -386,51 +504,88 @@ fn filter_batch<'py>(
     threads: Option<ThreadsArg>,
 ) -> PyResult<Bound<'py, PyList>> {
     let t = ThreadsArg::resolve(threads)?;
+    let pool = crate::input::threads(t);
     let spec = as_spec(py, specifiers)?;
-    let (items, _) = items(py, versions, t)?;
+    let input = input(py, versions, t)?;
     let none = py.None().into_bound(py);
     let pre = prereleases.unwrap_or(&none);
     if !spec.ranged() {
         // `===`, an empty set or foreign items: the objects' own lazy filter.
-        let it = PyList::new(py, items.iter().map(|i| item_obj(py, i)))?;
+        let it: Bound<'py, PyAny> = match &input {
+            Input::Seq(t, _) => t.clone().into_any(),
+            Input::Arrow(_) => with_rows(py, &input, |rows, _| {
+                let objs = (0..rows.len())
+                    .map(|i| -> PyResult<Bound<'py, PyAny>> {
+                        Ok(rows.obj(py, i)?.unwrap_or_else(|| py.None().into_bound(py)))
+                    })
+                    .collect::<PyResult<Vec<_>>>()?;
+                Ok(PyList::new(py, objs)?.into_any())
+            })?,
+        };
         let f = spec.obj.call_method1(intern!(py, "filter"), (it, pre))?;
         return PyList::new(py, f.try_iter()?.collect::<PyResult<Vec<_>>>()?);
     }
-    let parsed = parse_all(py, &items, t)?;
     let (ranges, policy) = spec.filter_plan(py, pre)?;
+    // Per str item, on the pool: (in range, pre-release), or `None` when Python must decide.
+    let verdict = |v: &Version| (spec_core::in_ranges(&ranges, v), v.is_prerelease());
     let out = PyList::empty(py);
     let mut held = Vec::new();
     let mut found_final = false;
-    for (p, item) in parsed.into_iter().zip(&items) {
-        let v = match p {
-            Parsed::Version(v) => v,
-            Parsed::LongRuns => resolve_long(py, item)?,
-            Parsed::Invalid | Parsed::Null => continue,
-        };
-        match policy {
-            Policy::Pep440 => {
-                if !spec_core::in_ranges(&ranges, &v) {
+    with_rows(py, &input, |rows, _| {
+        rows.for_each_chunk(py, |start, texts| {
+            let verdicts: Vec<Option<Option<(bool, bool)>>> = py
+                .detach(|| {
+                    par::map(texts.len(), pool, |k| {
+                        texts[k].and_then(|s| match parse_text(s) {
+                            Parsed::Version(v) => Some(Some(verdict(&v))),
+                            Parsed::Invalid => Some(None),
+                            Parsed::LongRuns => None,
+                        })
+                    })
+                })
+                .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
+            for (k, v) in verdicts.into_iter().enumerate() {
+                let i = start + k;
+                let found = if let Some(found) = v {
+                    found
+                } else {
+                    let long = texts[k].is_some();
+                    let mut null = false;
+                    resolve(py, rows, i, long, &mut null)?.map(|v| verdict(&v))
+                };
+                let Some((in_range, is_pre)) = found else {
                     continue;
-                }
-                if !v.is_prerelease() {
-                    found_final = true;
-                    out.append(item_obj(py, item))?;
-                } else if !found_final {
-                    held.push(item_obj(py, item));
+                };
+                let keep = match policy {
+                    Policy::Pep440 => {
+                        if !in_range {
+                            continue;
+                        }
+                        if is_pre {
+                            if !found_final {
+                                held.push(rows.obj(py, i)?);
+                            }
+                            false
+                        } else {
+                            found_final = true;
+                            held.clear();
+                            true
+                        }
+                    }
+                    Policy::Exclude => in_range && !is_pre,
+                    Policy::Keep => in_range,
+                };
+                if keep {
+                    if let Some(obj) = rows.obj(py, i)? {
+                        out.append(obj)?;
+                    }
                 }
             }
-            Policy::Exclude | Policy::Keep => {
-                if matches!(policy, Policy::Exclude) && v.is_prerelease() {
-                    continue;
-                }
-                if spec_core::in_ranges(&ranges, &v) {
-                    out.append(item_obj(py, item))?;
-                }
-            }
-        }
-    }
+            Ok(())
+        })
+    })?;
     if !found_final {
-        for h in held {
+        for h in held.into_iter().flatten() {
             out.append(h)?;
         }
     }
@@ -465,7 +620,7 @@ impl<'py> Spec<'py> {
     /// Can `filter` run natively (ranges, no `===`, not empty)?
     fn ranged(&self) -> bool {
         if let Some(s) = self.set() {
-            return s.get().is_native() && !s.get().is_empty(self.obj.py());
+            return s.get().is_native(self.obj.py()) && !s.get().is_empty(self.obj.py());
         }
         self.single()
             .is_some_and(|s| s.get().op().is_ok_and(|op| op != Op::Arbitrary))

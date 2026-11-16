@@ -31,8 +31,29 @@ else:
 BaseSpecifier.register(Specifier)
 BaseSpecifier.register(SpecifierSet)
 
+Specifier.__slots__ = ("_prereleases", "_ranges", "_spec", "_spec_version")
+SpecifierSet.__slots__ = (
+    "_canonicalized",
+    "_has_arbitrary",
+    "_is_unsatisfiable",
+    "_prereleases",
+    "_ranges",
+    "_specs",
+)
 Specifier._regex = _compat.SPECIFIER_REGEX
 Specifier._specifier_regex_str = _compat.SPECIFIER_REGEX_STR
+# packaging keeps this unused table for backward compatibility; pip-requirements-parser (and so
+# pip-audit) reads it at import.
+Specifier._operators = {
+    "~=": "compatible",
+    "==": "equal",
+    "!=": "not_equal",
+    "<=": "less_than_equal",
+    ">=": "greater_than_equal",
+    "<": "less_than",
+    ">": "greater_than",
+    "===": "arbitrary",
+}
 
 
 def __dir__() -> list[str]:

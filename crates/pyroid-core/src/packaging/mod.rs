@@ -14,71 +14,43 @@ pub mod version;
 
 use std::cmp::Ordering;
 
-use crate::par::{self, PoolError, Threads};
+/// The PEP 440 order of `keys[range]`, as indices into `keys` (stable; `reverse` is newest first
+/// and still keeps equal versions in input order, as `sorted(..., reverse=True)` does).
+#[must_use]
+pub fn sort_run(keys: &[version::Version], range: (usize, usize), reverse: bool) -> Vec<usize> {
+    let mut idx: Vec<usize> = (range.0..range.1).collect();
+    idx.sort_by(|a, b| order(keys, *a, *b, reverse));
+    idx
+}
 
-/// The order that sorts `keys` by PEP 440 (stable; `reverse` is newest first and still keeps
-/// equal versions in input order, as `sorted(..., reverse=True)` does): runs sorted on the
-/// shared pool, then merged.
-///
-/// # Errors
-/// The pool could not start.
-pub fn sort_indices(
+/// Merge two runs from [`sort_run`]; on ties `left` (earlier input) comes first, which keeps
+/// the sort stable.
+#[must_use]
+pub fn merge_runs(
     keys: &[version::Version],
+    left: &[usize],
+    right: &[usize],
     reverse: bool,
-    threads: Threads,
-) -> Result<Vec<usize>, PoolError> {
-    let cmp = |a: &usize, b: &usize| {
-        let o = keys[*a].cmp_key(&keys[*b]);
-        if reverse { o.reverse() } else { o }
-    };
-    let n = keys.len();
-    let tasks = if n < 8192 {
-        1
-    } else {
-        par::max_tasks(threads)?.min(n / 4096).max(1)
-    };
-    if tasks == 1 {
-        let mut idx: Vec<usize> = (0..n).collect();
-        idx.sort_by(cmp);
-        return Ok(idx);
+) -> Vec<usize> {
+    let mut out = Vec::with_capacity(left.len() + right.len());
+    let (mut i, mut j) = (0, 0);
+    while i < left.len() && j < right.len() {
+        if order(keys, right[j], left[i], reverse) == Ordering::Less {
+            out.push(right[j]);
+            j += 1;
+        } else {
+            out.push(left[i]);
+            i += 1;
+        }
     }
-    let bounds: Vec<(usize, usize)> = (0..tasks)
-        .map(|t| (t * n / tasks, (t + 1) * n / tasks))
-        .collect();
-    let runs = par::map_tasks(&bounds, threads, |&(a, b)| {
-        let mut idx: Vec<usize> = (a..b).collect();
-        idx.sort_by(cmp);
-        idx
-    })?;
-    // Merge neighbouring runs pairwise (on the pool), log2(tasks) rounds; on ties the left run
-    // (earlier input) wins, which keeps the sort stable.
-    let mut runs = runs;
-    while runs.len() > 1 {
-        let pairs: Vec<(usize, usize)> = (0..runs.len()).step_by(2).map(|i| (i, i + 1)).collect();
-        let merged = par::map_tasks(&pairs, threads, |&(l, r)| {
-            let Some(right) = runs.get(r) else {
-                return runs[l].clone();
-            };
-            let left = &runs[l];
-            let mut out = Vec::with_capacity(left.len() + right.len());
-            let (mut i, mut j) = (0, 0);
-            while i < left.len() && j < right.len() {
-                if cmp(&right[j], &left[i]) == Ordering::Less {
-                    out.push(right[j]);
-                    j += 1;
-                } else {
-                    out.push(left[i]);
-                    i += 1;
-                }
-            }
-            out.extend_from_slice(&left[i..]);
-            out.extend_from_slice(&right[j..]);
-            out
-        })?;
-        runs = merged;
-    }
-    let out = runs.pop().unwrap_or_default();
-    Ok(out)
+    out.extend_from_slice(&left[i..]);
+    out.extend_from_slice(&right[j..]);
+    out
+}
+
+fn order(keys: &[version::Version], a: usize, b: usize, reverse: bool) -> Ordering {
+    let o = keys[a].cmp_key(&keys[b]);
+    if reverse { o.reverse() } else { o }
 }
 
 #[cfg(test)]

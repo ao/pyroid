@@ -13,7 +13,7 @@ use pyo3::types::{PyBool, PyDict, PyIterator, PyList, PyString, PyTuple, PyType}
 use pyroid_core::packaging::specifiers::{self as core, Interval, Op};
 use pyroid_core::packaging::version::Version;
 
-use super::cell::{Prerel, PrerelKind, StateCell};
+use super::cell::{Passed, Prerel, PrerelKind, StateCell};
 use super::version::{PyVersion, parse_any};
 use super::{claims, config};
 
@@ -486,10 +486,10 @@ fn kind_of(p: &Bound<'_, PyAny>) -> PyResult<PrerelKind> {
 impl PySpecifier {
     #[new]
     #[classmethod]
-    #[pyo3(signature = (spec = None, prereleases = None, *_args, **_kwargs))]
+    #[pyo3(signature = (spec = Passed(None), prereleases = None, *_args, **_kwargs))]
     fn py_new(
         cls: &Bound<'_, PyType>,
-        spec: Option<&Bound<'_, PyAny>>,
+        spec: Passed,
         prereleases: Option<&Bound<'_, PyAny>>,
         _args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
@@ -497,9 +497,9 @@ impl PySpecifier {
         let py = cls.py();
         // Like packaging's object.__new__: a subclass (or `Specifier.__new__(Specifier)`, for
         // unpickling) starts empty and __init__ fills it in.
-        if let Some(s) = spec {
+        if let Some(s) = spec.0 {
             if cls.is(py.get_type::<PySpecifier>()) {
-                return Self::new_parsed(py, s, prereleases);
+                return Self::new_parsed(py, s.bind(py), prereleases);
             }
         }
         Ok(Self {
@@ -508,19 +508,20 @@ impl PySpecifier {
         })
     }
 
-    #[pyo3(name = "__init__", signature = (spec = None, prereleases = None))]
+    #[pyo3(name = "__init__", signature = (spec = Passed(None), prereleases = None))]
     fn py_init(
         &self,
         py: Python<'_>,
-        spec: Option<&Bound<'_, PyAny>>,
+        spec: Passed,
         prereleases: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         if self.data.is_set() {
             return Ok(());
         }
-        let empty = PyString::new(py, "");
-        let spec = spec.unwrap_or(empty.as_any());
-        self.data.set(parse_spec(py, spec)?);
+        let spec = spec
+            .0
+            .map_or_else(|| PyString::new(py, "").into_any(), |s| s.into_bound(py));
+        self.data.set(parse_spec(py, &spec)?);
         if let Some(p) = prereleases {
             self.prereleases.set(p)?;
         }
@@ -786,7 +787,7 @@ impl PySpecifier {
     #[getter]
     fn __class__(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
-        if claims() && slf.get_type().is(py.get_type::<PySpecifier>()) {
+        if claims() {
             if let Some(cls) = &config(py)?.packaging_specifier {
                 return Ok(cls.clone_ref(py).into_any());
             }
@@ -822,10 +823,30 @@ fn valid_spec<'py>(s: &Bound<'py, PyAny>) -> PyResult<Option<(String, Bound<'py,
     Ok(Some((op.to_cow()?.into_owned(), v)))
 }
 
+/// Is `x` one of packaging's own `Specifier` objects (any release)?
 fn is_packaging_specifier(py: Python<'_>, x: &Bound<'_, PyAny>) -> PyResult<bool> {
-    match &config(py)?.packaging_specifier {
+    match &config(py)?.packaging_specifier_any {
         Some(cls) => x.is_instance(cls.bind(py)),
         None => Ok(false),
+    }
+}
+
+/// pyroid's copy of one of packaging's own `Specifier` objects (its string and `_prereleases`);
+/// `None` for anything else, or one whose string pyroid does not parse.
+fn from_packaging_specifier(
+    py: Python<'_>,
+    x: &Bound<'_, PyAny>,
+) -> PyResult<Option<Py<PySpecifier>>> {
+    if !is_packaging_specifier(py, x)? {
+        return Ok(None);
+    }
+    let pre = x
+        .getattr(intern!(py, "_prereleases"))
+        .unwrap_or_else(|_| py.None().into_bound(py));
+    let pre = (!pre.is_none()).then_some(&pre);
+    match PySpecifier::new_parsed(py, x.str()?.as_any(), pre) {
+        Ok(sp) => Ok(Some(Py::new(py, sp)?)),
+        Err(_) => Ok(None),
     }
 }
 
@@ -1085,8 +1106,9 @@ struct SetData {
     specs: Py<PyTuple>,
     canonicalized: bool,
     has_arbitrary: bool,
-    /// The specifiers as pyroid's, when every item is one.
-    native: Option<Vec<Py<PySpecifier>>>,
+    /// The specifiers as pyroid's (packaging's own `Specifier` objects converted), when every
+    /// item is one; built on first use.
+    native: OnceLock<Option<Vec<Py<PySpecifier>>>>,
     /// `_get_ranges()` (`None`: some specifier has no ranges, packaging asserts).
     ranges: OnceLock<Option<Vec<Interval>>>,
     /// The same as packaging's own objects, once asked for.
@@ -1100,26 +1122,40 @@ impl SetData {
         canonicalized: bool,
         has_arbitrary: bool,
     ) -> Self {
-        let mut native = Some(Vec::with_capacity(specs.len()));
-        for s in specs.iter() {
-            match s.cast_into::<PySpecifier>() {
-                Ok(s) => {
-                    if let Some(v) = native.as_mut() {
-                        v.push(s.unbind());
-                    }
-                }
-                Err(_) => native = None,
-            }
-        }
         let _ = py;
         Self {
             specs: specs.unbind(),
             canonicalized,
             has_arbitrary,
-            native,
+            native: OnceLock::new(),
             ranges: OnceLock::new(),
             py_ranges: OnceLock::new(),
         }
+    }
+
+    /// The items as pyroid's specifiers; `None` when one is not a specifier (a string, say).
+    fn native(&self, py: Python<'_>) -> PyResult<Option<&[Py<PySpecifier>]>> {
+        if let Some(n) = self.native.get() {
+            return Ok(n.as_deref());
+        }
+        let specs = self.specs.bind(py);
+        let mut out = Some(Vec::with_capacity(specs.len()));
+        for item in specs.iter() {
+            let Some(v) = out.as_mut() else { break };
+            match item.cast_into::<PySpecifier>() {
+                Ok(sp) => v.push(sp.unbind()),
+                Err(e) => {
+                    let item = e.into_inner();
+                    match from_packaging_specifier(py, &item)? {
+                        Some(sp) => v.push(sp),
+                        None => out = None,
+                    }
+                }
+            }
+        }
+        // Computed outside the cell (it calls Python); another thread's equal result may win.
+        let _ = self.native.set(out);
+        Ok(self.native.get().and_then(Option::as_deref))
     }
 
     /// The same set with `specs` canonicalised: packaging keeps the range caches.
@@ -1138,7 +1174,7 @@ impl SetData {
         if let Some(r) = self.ranges.get() {
             return r.as_deref().ok_or_else(assertion);
         }
-        let native = self.native.as_ref().ok_or_else(assertion)?;
+        let native = self.native(py)?.ok_or_else(assertion)?;
         let mut per = Vec::with_capacity(native.len());
         for s in native {
             let d = s.get().data()?;
@@ -1284,7 +1320,7 @@ impl PySpecifierSet {
         if specs.is_empty() {
             return Ok(py.None().into_bound(py));
         }
-        if let Some(native) = &s.native {
+        if let Some(native) = s.native(py)? {
             for sp in native {
                 if sp.get().prereleases_value(py)?.is_truthy()? {
                     return Ok(bool_obj(py, true));
@@ -1323,7 +1359,7 @@ impl PySpecifierSet {
                 Match::All(specs.iter().map(Bound::unbind).collect()),
                 prerelease_policy(&pre)?,
             )
-        } else if s.native.is_some() {
+        } else if s.native(py)?.is_some() {
             Mode::Ranges(Arc::new(s.ranges(py)?.to_vec()), ranges_policy(&pre)?)
         } else {
             return Err(foreign_items(py, specs));
@@ -1340,10 +1376,10 @@ impl PySpecifierSet {
         })
     }
 
-    /// Every item is pyroid's `Specifier` and none is `===`: contains and filter run natively.
-    pub fn is_native(&self) -> bool {
+    /// Every item is a `Specifier` and none is `===`: contains and filter run natively.
+    pub fn is_native(&self, py: Python<'_>) -> bool {
         self.state()
-            .is_ok_and(|s| s.native.is_some() && !s.has_arbitrary)
+            .is_ok_and(|s| !s.has_arbitrary && s.native(py).is_ok_and(|n| n.is_some()))
     }
 
     /// No specifiers.
@@ -1400,7 +1436,7 @@ impl PySpecifierSet {
         let specs = s.specs.bind(py);
         if let Some(v) = &version {
             if !s.has_arbitrary && v.local.is_none() && !specs.is_empty() {
-                let Some(native) = &s.native else {
+                let Some(native) = s.native(py)? else {
                     return Err(foreign_items(py, specs));
                 };
                 if v.is_prerelease() {
@@ -1460,7 +1496,7 @@ fn core_strip(s: &str) -> &str {
 /// AttributeError from the first attribute it reads.
 fn foreign_items(py: Python<'_>, specs: &Bound<'_, PyTuple>) -> PyErr {
     for s in specs.iter() {
-        if s.cast::<PySpecifier>().is_err() {
+        if s.cast::<PySpecifier>().is_err() && !is_packaging_specifier(py, &s).unwrap_or(false) {
             let name = s
                 .get_type()
                 .name()
@@ -1477,10 +1513,10 @@ fn foreign_items(py: Python<'_>, specs: &Bound<'_, PyTuple>) -> PyErr {
 impl PySpecifierSet {
     #[new]
     #[classmethod]
-    #[pyo3(signature = (specifiers = None, prereleases = None, *_args, **_kwargs))]
+    #[pyo3(signature = (specifiers = Passed(None), prereleases = None, *_args, **_kwargs))]
     fn py_new(
         cls: &Bound<'_, PyType>,
-        specifiers: Option<&Bound<'_, PyAny>>,
+        specifiers: Passed,
         prereleases: Option<&Bound<'_, PyAny>>,
         _args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
@@ -1492,7 +1528,8 @@ impl PySpecifierSet {
             unsat: Mutex::new(None),
         };
         if cls.is(py.get_type::<PySpecifierSet>()) {
-            me.set_state(Self::build(py, specifiers)?);
+            let specifiers = specifiers.0.map(|s| s.into_bound(py));
+            me.set_state(Self::build(py, specifiers.as_ref())?);
             if let Some(p) = prereleases {
                 me.prereleases.set(p)?;
             }
@@ -1500,11 +1537,11 @@ impl PySpecifierSet {
         Ok(me)
     }
 
-    #[pyo3(name = "__init__", signature = (specifiers = None, prereleases = None))]
+    #[pyo3(name = "__init__", signature = (specifiers = Passed(None), prereleases = None))]
     fn py_init(
         &self,
         py: Python<'_>,
-        specifiers: Option<&Bound<'_, PyAny>>,
+        specifiers: Passed,
         prereleases: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         let empty = self
@@ -1513,7 +1550,8 @@ impl PySpecifierSet {
             .unwrap_or_else(PoisonError::into_inner)
             .is_none();
         if empty {
-            self.set_state(Self::build(py, specifiers)?);
+            let specifiers = specifiers.0.map(|s| s.into_bound(py));
+            self.set_state(Self::build(py, specifiers.as_ref())?);
             if let Some(p) = prereleases {
                 self.prereleases.set(p)?;
             }
@@ -1680,33 +1718,52 @@ impl PySpecifierSet {
         other: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let other_set: Bound<'py, PySpecifierSet> = if let Ok(s) = other.cast::<PyString>() {
-            Bound::new(
-                py,
-                PySpecifierSet {
-                    state: Mutex::new(Some(Arc::new(Self::build(py, Some(s.as_any()))?))),
-                    prereleases: Prerel::new(None)?,
-                    unsat: Mutex::new(None),
-                },
-            )?
+        // (their `_specs`, `_has_arbitrary`, `_prereleases`)
+        let (b_specs, b_arbitrary, pb) = if let Ok(s) = other.cast::<PyString>() {
+            let b = Self::build(py, Some(s.as_any()))?;
+            (
+                b.specs.bind(py).clone(),
+                b.has_arbitrary,
+                py.None().into_bound(py),
+            )
         } else if let Ok(o) = other.cast::<PySpecifierSet>() {
-            o.clone()
+            let b = o.get().state()?;
+            (
+                b.specs.bind(py).clone(),
+                b.has_arbitrary,
+                o.get().prereleases.get(py),
+            )
+        } else if is_packaging_specifier_set(py, other)? {
+            // One of packaging's own sets: its items (a frozenset before 26.0) and override.
+            let specs = PyTuple::new(
+                py,
+                other
+                    .getattr(intern!(py, "_specs"))?
+                    .try_iter()?
+                    .collect::<PyResult<Vec<_>>>()?,
+            )?;
+            let arbitrary = has_arbitrary_items(&specs)?;
+            (
+                specs,
+                arbitrary,
+                other.getattr(intern!(py, "_prereleases"))?,
+            )
         } else {
             return Ok(py.NotImplemented().into_bound(py));
         };
         let me = slf.get();
         let a = me.state()?;
-        let b = other_set.get().state()?;
-        let mut items: Vec<Bound<'_, PyAny>> = a.specs.bind(py).iter().collect();
-        items.extend(b.specs.bind(py).iter());
-        let n = items.len();
-        let data = SetData::new(
-            py,
-            PyTuple::new(py, items)?,
-            n <= 1,
-            a.has_arbitrary || b.has_arbitrary,
-        );
-        let (pa, pb) = (me.prereleases.get(py), other_set.get().prereleases.get(py));
+        // `self._specs + other._specs`, as packaging builds it (one tuple concatenation; the
+        // items are checked when the set is first used).
+        let specs = a
+            .specs
+            .bind(py)
+            .as_any()
+            .add(&b_specs)?
+            .cast_into::<PyTuple>()?;
+        let n = specs.len();
+        let data = SetData::new(py, specs, n <= 1, a.has_arbitrary || b_arbitrary);
+        let pa = me.prereleases.get(py);
         let combined = if pa.is_none() || pa.eq(&pb)? {
             pb
         } else if pb.is_none() {
@@ -1776,7 +1833,7 @@ impl PySpecifierSet {
         let result = if specs.is_empty() {
             false
         } else {
-            let Some(native) = &s.native else {
+            let Some(native) = s.native(py)? else {
                 return Err(foreign_items(py, specs));
             };
             let ranges = s.ranges(py)?;
@@ -1971,7 +2028,7 @@ impl PySpecifierSet {
     #[getter]
     fn __class__(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
-        if claims() && slf.get_type().is(py.get_type::<PySpecifierSet>()) {
+        if claims() {
             if let Some(cls) = &config(py)?.packaging_specifier_set {
                 return Ok(cls.clone_ref(py).into_any());
             }
@@ -2024,8 +2081,9 @@ fn interval_from_py(py: Python<'_>, iv: &Bound<'_, PyAny>) -> PyResult<Interval>
     ))
 }
 
+/// Is `x` one of packaging's own `SpecifierSet` objects (any release)?
 fn is_packaging_specifier_set(py: Python<'_>, x: &Bound<'_, PyAny>) -> PyResult<bool> {
-    match &config(py)?.packaging_specifier_set {
+    match &config(py)?.packaging_specifier_set_any {
         Some(cls) => x.is_instance(cls.bind(py)),
         None => Ok(false),
     }
@@ -2206,12 +2264,12 @@ impl PySpecifierSet {
         installed: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Option<ContainsPlan>> {
         let s = self.state()?;
-        let Some(native) = &s.native else {
-            return Ok(None);
-        };
         if s.has_arbitrary {
             return Ok(None);
         }
+        let Some(native) = s.native(py)? else {
+            return Ok(None);
+        };
         let mut specs = Vec::with_capacity(native.len());
         for sp in native {
             let d = sp.get().data()?;
