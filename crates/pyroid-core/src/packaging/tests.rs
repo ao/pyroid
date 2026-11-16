@@ -99,3 +99,18 @@ fn trims_for_str() {
     assert_eq!(v("2!1.0.dev1").base_version(), "2!1.0");
     assert_eq!(v("1.0+x").public(), "1.0");
 }
+
+#[test]
+#[ignore = "timing probe: cargo test --release -p pyroid-core packaging::tests::parse_timing -- --ignored --nocapture"]
+fn parse_timing() {
+    for s in ["1", "1.2.3", "1.2.3.4.5.6", "2!1.0.post1.dev3+abc.5"] {
+        let n = 2_000_000;
+        let t = std::time::Instant::now();
+        let mut k = 0usize;
+        for _ in 0..n {
+            k += std::hint::black_box(parse(std::hint::black_box(s))).map_or(0, |p| p.version.release.len());
+        }
+        let ns = t.elapsed().as_nanos() as f64 / f64::from(n);
+        eprintln!("parse({s:?}): {ns:.1} ns ({k})");
+    }
+}

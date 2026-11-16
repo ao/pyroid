@@ -132,7 +132,18 @@ impl Cursor<'_> {
 
     fn digits(&mut self) -> Option<Num> {
         let start = self.i;
-        while self.peek().is_some_and(|b| b.is_ascii_digit()) {
+        let mut value: u64 = 0;
+        let mut overflow = false;
+        while let Some(&b) = self.s.get(self.i) {
+            if !b.is_ascii_digit() {
+                break;
+            }
+            if !overflow {
+                match value.checked_mul(10).and_then(|x| x.checked_add(u64::from(b - b'0'))) {
+                    Some(x) => value = x,
+                    None => overflow = true,
+                }
+            }
             self.i += 1;
         }
         if self.i == start {
@@ -140,6 +151,9 @@ impl Cursor<'_> {
         }
         if self.i - start > 19 {
             self.long_runs.push(LongRun { start, end: self.i });
+        }
+        if !overflow {
+            return Some(Num::Small(value));
         }
         // The slice is ASCII digits.
         let run = std::str::from_utf8(&self.s[start..self.i]).unwrap_or("0");
@@ -174,6 +188,11 @@ const POST_WORDS: &[&str] = &["post", "rev", "r"];
 /// Strip Python's `\s` (`str.isspace`) from both ends.
 #[must_use]
 pub fn py_strip(s: &str) -> &str {
+    let b = s.as_bytes();
+    // The common case: no whitespace at either end (an ASCII letter or digit there).
+    if b.first().is_some_and(u8::is_ascii_alphanumeric) && b.last().is_some_and(u8::is_ascii_alphanumeric) {
+        return s;
+    }
     s.trim_matches(is_py_whitespace)
 }
 
@@ -202,10 +221,15 @@ pub fn parse(text: &str) -> Option<Parsed> {
         }
     }
     // Release.
-    let mut release = vec![c.digits()?];
+    let mut release = Vec::with_capacity(4);
+    release.push(c.digits()?);
     while c.peek() == Some(b'.') && c.s.get(c.i + 1).is_some_and(u8::is_ascii_digit) {
         c.i += 1;
         release.push(c.digits()?);
+    }
+    if c.i == c.s.len() {
+        let long_runs = shift(c.long_runs, offset);
+        return Some(Parsed { version: Version { epoch, release, pre: None, post: None, dev: None, local: None }, long_runs });
     }
     // Pre-release.
     let mut pre = None;
@@ -306,12 +330,16 @@ pub fn parse(text: &str) -> Option<Parsed> {
     if c.i != c.s.len() {
         return None;
     }
-    let mut long_runs = c.long_runs;
-    for r in &mut long_runs {
+    let long_runs = shift(c.long_runs, offset);
+    Some(Parsed { version: Version { epoch, release, pre, post, dev, local }, long_runs })
+}
+
+fn shift(mut runs: Vec<LongRun>, offset: usize) -> Vec<LongRun> {
+    for r in &mut runs {
         r.start += offset;
         r.end += offset;
     }
-    Some(Parsed { version: Version { epoch, release, pre, post, dev, local }, long_runs })
+    runs
 }
 
 /// The release without trailing zeros (packaging's `_cmpkey` and `_TrimmedRelease` keep one

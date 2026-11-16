@@ -3,9 +3,7 @@
 //! `pyroid.packaging.version.Version`.
 
 use std::cmp::Ordering;
-use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::OnceLock;
 
 use pyo3::basic::CompareOp;
 use pyo3::exceptions::{PyAttributeError, PyDeprecationWarning, PyTypeError};
@@ -15,57 +13,32 @@ use pyo3::types::{PyBool, PyDict, PyInt, PyString, PyTuple, PyType};
 use pyroid_core::packaging::num::Num;
 use pyroid_core::packaging::version::{self as core, Local, Pre, Version};
 
+use super::cell::{HashCache, StateCell, StateRef};
 use super::{claims, config};
 
 /// A parsed version and the Python objects made from it on demand.
 #[derive(Debug)]
 struct Inner {
     v: Version,
-    hash: OnceLock<isize>,
+    hash: HashCache,
     text: OnceLock<Py<PyString>>,
     release: OnceLock<Py<PyTuple>>,
-    key: OnceLock<Py<PyTuple>>,
 }
 
 impl Inner {
     fn new(v: Version) -> Self {
-        Self {
-            v,
-            hash: OnceLock::new(),
-            text: OnceLock::new(),
-            release: OnceLock::new(),
-            key: OnceLock::new(),
-        }
+        Self { v, hash: HashCache::new(), text: OnceLock::new(), release: OnceLock::new() }
     }
 }
 
 /// A PEP 440 version, as `packaging.version.Version` 26.3.
 ///
 /// Immutable in practice, but packaging's objects can be changed in place (`v._version = ...`,
-/// which hatchling does, `__setstate__`, `__init__` again): the first state is a `OnceLock`
-/// (lock-free reads), a later one replaces it behind a mutex.
+/// which hatchling does, `__setstate__`, `__init__` again): see [`StateCell`].
 #[pyclass(frozen, subclass, module = "pyroid.packaging.version", name = "Version")]
 #[derive(Debug)]
 pub struct PyVersion {
-    inner: OnceLock<Inner>,
-    mutated: AtomicBool,
-    replaced: Mutex<Option<Arc<Inner>>>,
-}
-
-/// The current state of a [`PyVersion`].
-enum InnerRef<'a> {
-    First(&'a Inner),
-    Replaced(Arc<Inner>),
-}
-
-impl Deref for InnerRef<'_> {
-    type Target = Inner;
-    fn deref(&self) -> &Inner {
-        match self {
-            InnerRef::First(i) => i,
-            InnerRef::Replaced(a) => a,
-        }
-    }
+    inner: StateCell<Inner>,
 }
 
 pub fn num_to_py<'py>(py: Python<'py>, n: &Num) -> PyResult<Bound<'py, PyAny>> {
@@ -285,29 +258,17 @@ fn from_slots(
 impl PyVersion {
     /// A new object holding `v`.
     pub fn from_core(v: Version) -> Self {
-        let inner = OnceLock::new();
-        let _ = inner.set(Inner::new(v));
-        Self::with(inner)
+        Self { inner: StateCell::with(Inner::new(v)) }
     }
 
     fn empty() -> Self {
-        Self::with(OnceLock::new())
+        Self { inner: StateCell::new() }
     }
 
-    fn with(inner: OnceLock<Inner>) -> Self {
-        Self { inner, mutated: AtomicBool::new(false), replaced: Mutex::new(None) }
-    }
-
-    fn inner(&self) -> PyResult<InnerRef<'_>> {
-        if self.mutated.load(AtomicOrdering::Acquire) {
-            let g = self.replaced.lock().unwrap_or_else(PoisonError::into_inner);
-            if let Some(a) = g.as_ref() {
-                return Ok(InnerRef::Replaced(Arc::clone(a)));
-            }
-        }
-        self.inner.get().map(InnerRef::First).ok_or_else(|| {
-            PyAttributeError::new_err("'Version' object has no attribute '_release'")
-        })
+    fn inner(&self) -> PyResult<StateRef<'_, Inner>> {
+        self.inner
+            .get()
+            .ok_or_else(|| PyAttributeError::new_err("'Version' object has no attribute '_release'"))
     }
 
     /// The parsed version (a copy: the object can be changed in place).
@@ -321,16 +282,12 @@ impl PyVersion {
     }
 
     fn is_set(&self) -> bool {
-        self.inner.get().is_some()
+        self.inner.is_set()
     }
 
     /// Set the state (the first time), or replace it, as packaging's slot assignments do.
     fn set(&self, v: Version) {
-        if let Err(Inner { v, .. }) = self.inner.set(Inner::new(v)) {
-            let mut g = self.replaced.lock().unwrap_or_else(PoisonError::into_inner);
-            *g = Some(Arc::new(Inner::new(v)));
-            self.mutated.store(true, AtomicOrdering::Release);
-        }
+        self.inner.set(Inner::new(v));
     }
 
     fn release_tuple<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
@@ -343,12 +300,9 @@ impl PyVersion {
         Ok(t)
     }
 
-    /// `_key` (`_cmpkey(...)`), built once.
+    /// `_key` (`_cmpkey(...)`), built on each call (only packaging's own code reads it).
     fn key<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         let inner = self.inner()?;
-        if let Some(t) = inner.key.get() {
-            return Ok(t.bind(py).clone());
-        }
         let v = &inner.v;
         let s = v.suffix();
         let suffix = PyTuple::new(
@@ -386,21 +340,20 @@ impl PyVersion {
                 )?
             }
         };
-        let _ = inner.key.set(key.clone().unbind());
         Ok(key)
     }
 
     fn hash_value(&self, py: Python<'_>) -> PyResult<isize> {
         let inner = self.inner()?;
         if let Some(h) = inner.hash.get() {
-            return Ok(*h);
+            return Ok(h);
         }
         let h = match inner.v.py_hash() {
             #[allow(clippy::cast_possible_truncation)]
             Some(h) => h as isize,
             None => self.key(py)?.hash()?,
         };
-        let _ = inner.hash.set(h);
+        inner.hash.set(h);
         Ok(h)
     }
 
@@ -541,19 +494,24 @@ fn validate_local(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Option<V
 impl PyVersion {
     #[new]
     #[classmethod]
-    #[pyo3(signature = (version = None, *_args, **_kwargs))]
+    #[pyo3(signature = (*args, **kwargs))]
     fn py_new(
         cls: &Bound<'_, PyType>,
-        version: Option<&Bound<'_, PyAny>>,
-        _args: &Bound<'_, PyTuple>,
-        _kwargs: Option<&Bound<'_, PyDict>>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         let py = cls.py();
         // packaging's Version.__new__ is object.__new__: a subclass instance is filled in by
-        // __init__; `Version.__new__(Version)` (unpickling) gives an empty object.
-        if let Some(v) = version {
-            if cls.is(py.get_type::<PyVersion>()) {
-                return Ok(PyVersion::from_core(parse_any(py, v)?));
+        // __init__; `Version.__new__(Version)` (unpickling) gives an empty object. The exact
+        // class is parsed here, and its __init__ (which checks the arguments) does nothing more.
+        if cls.is(py.get_type::<PyVersion>()) {
+            let version = match (args.len(), kwargs) {
+                (1, None) => Some(args.get_item(0)?),
+                (0, Some(kw)) if kw.len() == 1 => kw.get_item("version")?,
+                _ => None,
+            };
+            if let Some(v) = version {
+                return Ok(PyVersion::from_core(parse_any(py, &v)?));
             }
         }
         Ok(PyVersion::empty())
@@ -1034,3 +992,4 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(normalize_pre, m)?)?;
     Ok(())
 }
+
