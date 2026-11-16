@@ -659,6 +659,70 @@ def test_parse_in_threads() -> None:
     assert got == want
 
 
+# --- time zones without python-dateutil -------------------------------------------------------
+
+
+def _tz_ops(z: Any) -> list[Any]:
+    """What a ``tzinfo`` gives, as comparable values (``repr`` for datetimes)."""
+    naive = D(2003, 9, 25, 10)
+    aware = D(2003, 9, 25, 10, tzinfo=datetime.UTC)
+    ops: list[Any] = [
+        lambda: repr(z),
+        lambda: str(z),
+        lambda: z.utcoffset(naive),
+        lambda: z.utcoffset(None),
+        lambda: z.dst(naive),
+        lambda: z.tzname(naive),
+        lambda: repr(z.fromutc(naive.replace(tzinfo=z))),
+        lambda: z.fromutc(naive),
+        lambda: z.fromutc(5),
+        lambda: repr(aware.astimezone(z)),
+        lambda: repr(datetime.datetime.fromtimestamp(1_064_484_000, z)),
+        lambda: z.is_ambiguous(naive),
+        lambda: naive.replace(tzinfo=z) - aware,
+        lambda: z == z,
+        lambda: z != 5,
+    ]
+    return [outcome(op) for op in ops]
+
+
+def test_tz_copies_behave_as_dateutils() -> None:
+    from pyroid.dateutil import _tzlite
+
+    lite: Any = _tzlite
+    for ours, theirs in [
+        (lite.tzutc(), tz.tzutc()),
+        (lite.UTC, tz.UTC),
+        (lite.tzoffset(None, 10800), tz.tzoffset(None, 10800)),
+        (lite.tzoffset("BRST", -10800), tz.tzoffset("BRST", -10800)),
+        (lite.tzlocal(), tz.tzlocal()),
+    ]:
+        assert _tz_ops(ours) == _tz_ops(theirs), ours
+
+
+@pytest.mark.thread_unsafe(reason="subprocess")
+def test_tz_without_dateutil(run_python: Any) -> None:
+    r = run_python(
+        """
+        import sys
+        sys.modules["dateutil"] = None  # not installed, as far as imports go
+        import datetime
+        import pyroid.dateutil.parser as P
+        utc = datetime.datetime(2003, 9, 25, 10, tzinfo=datetime.timezone.utc)
+        for s in ("2003-09-25 10:00 +0300", "2003-09-25 10:00 UTC", "2003-09-25T10:00Z"):
+            z = P.parse(s).tzinfo
+            print(type(z).__module__, utc.astimezone(z), datetime.datetime.fromtimestamp(0, z))
+        """,
+        env={"TZ": "UTC"},
+    )
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == [
+        "pyroid.dateutil._tzlite 2003-09-25 13:00:00+03:00 1970-01-01 03:00:00+03:00",
+        "pyroid.dateutil._tzlite 2003-09-25 10:00:00+00:00 1970-01-01 00:00:00+00:00",
+        "pyroid.dateutil._tzlite 2003-09-25 10:00:00+00:00 1970-01-01 00:00:00+00:00",
+    ]
+
+
 # --- pyroid.patch("dateutil") ------------------------------------------------------------------
 
 

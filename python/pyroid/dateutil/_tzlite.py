@@ -28,7 +28,7 @@ ZERO = timedelta(0)
 
 # The following is adapted from Alexander Belopolsky's tz library
 # https://github.com/abalkin/tz
-def enfold(dt: datetime, fold: int = 1) -> datetime:
+def enfold(dt: datetime.datetime, fold: int = 1) -> datetime.datetime:
     """Returns a datetime with the ``fold`` attribute set to ``fold``.
 
     :param fold:
@@ -49,7 +49,7 @@ def _validate_fromutc_inputs(f):
     """
     @wraps(f)
     def fromutc(self, dt):
-        if not isinstance(dt, datetime):
+        if not isinstance(dt, datetime.datetime):
             raise TypeError("fromutc() requires a datetime argument")
         if dt.tzinfo is not self:
             raise ValueError("dt.tzinfo is not self")
