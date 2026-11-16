@@ -92,7 +92,8 @@ Changelog = "https://github.com/ao/pyroid/blob/main/CHANGELOG.md"
 # so they are left out there (release.yml tests the windows-arm64 wheels).
 test = [
   "pytest>=9",
-  "packaging>=24",
+  # Also the reference for pyroid.packaging's parity tests (Apache-2.0 OR BSD-2-Clause).
+  "packaging==26.3",
   "hypothesis>=6.170",
   "pytest-timeout>=2.4",
   "pytest-run-parallel>=0.10",
@@ -231,6 +232,8 @@ convention = "google"
 "crates/pyroid-core/tests/ftfy_data/*.py" = ["T20"]
 "crates/pyroid-core/tests/datasketch_data/*.py" = ["T20"]
 "crates/pyroid-core/src/warc/generate_tables.py" = ["T20"]
+# pyroid.packaging keeps packaging's exception names (InvalidVersion, InvalidSpecifier, ...).
+"python/pyroid/packaging/**" = ["N818"]
 # warcio's oracle for tests/warc_oracle.rs: raw WARC bytes on long lines, a KELVIN SIGN on purpose.
 "crates/pyroid-core/tests/data/warc/gen.py" = ["T20", "RUF001", "E501", "PERF401"]
 

@@ -126,7 +126,7 @@ class Requirement:
         )
 
     @property  # type: ignore[misc]
-    def __class__(self) -> Any:  # noqa: PLE0307
+    def __class__(self) -> Any:
         # isinstance(r, packaging.requirements.Requirement) for pyroid's (unpatched; not for
         # subclasses).
         cls = type(self)

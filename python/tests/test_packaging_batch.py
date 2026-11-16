@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from typing import Any
 
 import pytest
 
@@ -11,21 +12,38 @@ from pyroid.packaging.specifiers import Specifier, SpecifierSet
 from pyroid.packaging.version import InvalidVersion, Version
 
 RNG = random.Random(7)
-SPELLINGS = ["", "", "", "rc1", "a2", "b0", ".post1", ".dev3", "+local.7", ".post2.dev1", "-1", "alpha", "c1"]
+SPELLINGS = [
+    "",
+    "",
+    "",
+    "rc1",
+    "a2",
+    "b0",
+    ".post1",
+    ".dev3",
+    "+local.7",
+    ".post2.dev1",
+    "-1",
+    "alpha",
+    "c1",
+]
 VERSIONS = [
-    f"{RNG.randint(0, 3)}.{RNG.randint(0, 12)}" + RNG.choice(["", f".{RNG.randint(0, 9)}"]) + RNG.choice(SPELLINGS)
+    f"{RNG.randint(0, 3)}.{RNG.randint(0, 12)}"
+    + RNG.choice(["", f".{RNG.randint(0, 9)}"])
+    + RNG.choice(SPELLINGS)
     for _ in range(20_000)
 ] + ["foo", "1..0", "", " 1.0 ", "v1.0", "1!2.0", "1.0\ud800"]
 SPECS = [
-    "", ">=1.0", "<2,>=1", "~=1.4.2", "==1.*", "!=1.5.*,>=1", ">1.0.post1", "<1.0", "==1.0+local", ">1.0a1",
+    "", ">=1.0", "<2,>=1", "~=1.4.2", "==1.*", "!=1.5.*,>=1", ">1.0.post1", "<1.0", "==1.0+local",
+    ">1.0a1",
     ">=1.0,<1.0", "===1.0", "==2.0.0,===2.0",
 ]  # fmt: skip
 
 
-def outcome(f, *args, **kwargs):  # type: ignore[no-untyped-def]
+def outcome(f: Any, *args: Any, **kwargs: Any) -> tuple[Any, ...]:
     try:
         return ("ok", f(*args, **kwargs))
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return ("err", type(e).__name__, str(e))
 
 
@@ -37,7 +55,9 @@ def test_parse_batch() -> None:
         except InvalidVersion:
             assert v is None
         else:
-            assert type(v) is Version and str(v) == str(want) and v == want
+            assert type(v) is Version
+            assert str(v) == str(want)
+            assert v == want
     with pytest.raises(InvalidVersion, match="Invalid version: 'foo'") as info:
         rp.parse_batch(VERSIONS)
     assert any("index 20000" in n for n in info.value.__notes__)
@@ -49,7 +69,9 @@ def test_sort_versions() -> None:
     for threads in (None, 1, 4):
         for reverse in (False, True):
             got = rp.sort_versions(mixed, reverse=reverse, threads=threads)
-            want = sorted(mixed, key=lambda x: x if isinstance(x, Version) else Version(x), reverse=reverse)
+            want = sorted(
+                mixed, key=lambda x: x if isinstance(x, Version) else Version(x), reverse=reverse
+            )
             assert all(a is b for a, b in zip(got, want, strict=True))
     with pytest.raises(InvalidVersion, match="Invalid version: 'foo'"):
         rp.sort_versions(VERSIONS)
@@ -61,12 +83,16 @@ def test_sort_versions() -> None:
 def test_contains_and_filter_batch(spec: str, pre: bool | None) -> None:
     ss = SpecifierSet(spec)
     items = VERSIONS[:3000] + VERSIONS[-7:] + [Version("1.0"), Version("1.5a1")]
-    for target in (ss, spec, *(list(ss)[:1] and [list(ss)[0]])):
+    first = next(iter(ss), None)
+    targets: list[Any] = [ss, spec, *([first] if first is not None else [])]
+    for target in targets:
         obj = SpecifierSet(target) if isinstance(target, str) else target
         want = [obj.contains(x, prereleases=pre) for x in items]
         assert rp.contains_batch(target, items, prereleases=pre) == want
         assert rp.contains_batch(target, tuple(items), prereleases=pre) == tuple(want)
-        assert rp.filter_batch(target, items, prereleases=pre) == list(obj.filter(items, prereleases=pre))
+        assert rp.filter_batch(target, items, prereleases=pre) == list(
+            obj.filter(items, prereleases=pre)
+        )
     want = [ss.contains(x, prereleases=pre, installed=True) for x in items]
     assert rp.contains_batch(ss, items, prereleases=pre, installed=True) == want
 
@@ -80,7 +106,13 @@ def test_single_specifier() -> None:
 def test_arrow() -> None:
     pa = pytest.importorskip("pyarrow")
     arr = pa.array(["1.0", None, "2.0a1", "foo", "3.0"])
-    assert rp.parse_batch(arr, errors="none") == [Version("1.0"), None, Version("2.0a1"), None, Version("3.0")]
+    assert rp.parse_batch(arr, errors="none") == [
+        Version("1.0"),
+        None,
+        Version("2.0a1"),
+        None,
+        Version("3.0"),
+    ]
     col = rp.contains_batch(">=1.5", arr)
     assert col.to_pylist() == [False, None, True, False, True]
     assert rp.filter_batch(">=1.5", arr) == ["3.0"]
@@ -91,6 +123,6 @@ def test_errors() -> None:
     with pytest.raises(TypeError):
         rp.parse_batch("1.0")
     with pytest.raises(ValueError, match="errors must be"):
-        rp.parse_batch(["1.0"], errors="ignore")
-    with pytest.raises(ValueError):
+        rp.parse_batch(["1.0"], errors="ignore")  # type: ignore[call-overload]
+    with pytest.raises(ValueError, match="threads"):
         rp.parse_batch(["1.0"], threads=0)

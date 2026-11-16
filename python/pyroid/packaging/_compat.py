@@ -15,10 +15,11 @@ import platform
 import re
 import sys
 import warnings
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast
 
 from pyroid._pyroid import FallbackWarning, PyroidError
 from pyroid._pyroid import packaging as _native
+
 
 def _import(name: str) -> Any:
     try:
@@ -150,9 +151,7 @@ for _cls, _mod, _name in (
 
 InvalidVersion: type[ValueError] = _pv.InvalidVersion if HAVE_PACKAGING else _InvalidVersion
 _Version: Any = getattr(_pv, "_Version", _VersionTuple) if HAVE_PACKAGING else _VersionTuple
-InvalidSpecifier: type[ValueError] = (
-    _ps.InvalidSpecifier if _ps is not None else _InvalidSpecifier
-)
+InvalidSpecifier: type[ValueError] = _ps.InvalidSpecifier if _ps is not None else _InvalidSpecifier
 InvalidMarker: type[ValueError] = getattr(_pm, "InvalidMarker", _InvalidMarker)
 UndefinedComparison: type[ValueError] = getattr(_pm, "UndefinedComparison", _UndefinedComparison)
 # packaging < 26.3 has a ValueError subclass here; 26.3's is a KeyError, as pyroid raises.
@@ -214,7 +213,15 @@ VERSION_PATTERN = (
 
 _REGEX = re.compile(r"\s*" + VERSION_PATTERN + r"\s*", re.VERBOSE | re.IGNORECASE)
 _SIMPLE_VERSION_INDICATORS = frozenset(".0123456789")
-_LETTERS = {"alpha": "a", "beta": "b", "c": "rc", "pre": "rc", "preview": "rc", "rev": "post", "r": "post"}
+_LETTERS = {
+    "alpha": "a",
+    "beta": "b",
+    "c": "rc",
+    "pre": "rc",
+    "preview": "rc",
+    "rev": "post",
+    "r": "post",
+}
 _SEPARATORS = re.compile(r"[\._-]")
 
 
@@ -229,7 +236,7 @@ def _letter(letter: str | None, number: Any) -> tuple[str, int] | None:
 
 
 def _nonstr_version(version: Any) -> tuple[Any, ...]:
-    """packaging 26.3's ``Version.__init__`` for a non-``str`` argument: raise as it does."""
+    """Packaging 26.3's ``Version.__init__`` for a non-``str`` argument: raise as it does."""
     try:
         is_simple = _SIMPLE_VERSION_INDICATORS.issuperset(version)
     except TypeError:
@@ -279,9 +286,9 @@ _restore.__module__ = "pyroid.packaging"
 
 
 def canonicalize_name(name: str, *, validate: bool = False) -> str:
-    """packaging's ``canonicalize_name`` (fast for ``str``; other types fail as there)."""
+    """Packaging's ``canonicalize_name`` (fast for ``str``; other types fail as there)."""
     if type(name) is str and not validate:
-        return _native.canonicalize_str(name)
+        return cast("str", _native.canonicalize_str(name))
     from pyroid.packaging.utils import canonicalize_name as full
 
     return full(name, validate=validate)
@@ -297,7 +304,7 @@ def _format_full_version(info: Any) -> str:
 
 @functools.cache
 def _cached_default_environment() -> dict[str, str]:
-    """packaging 26.3's default marker environment, built once (cleared by ``cache_clear``)."""
+    """Packaging 26.3's default marker environment, built once (cleared by ``cache_clear``)."""
     iver = _format_full_version(sys.implementation.version)
     implementation_name = sys.implementation.name
     return {
@@ -458,7 +465,7 @@ def _delegate(name: str, obj: Any, *args: Any) -> Any:
     packaging_set = getattr(_ps, "SpecifierSet", SpecifierSet)
     if not isinstance(other, (SpecifierSet, packaging_set)):
         raise TypeError("expected a SpecifierSet")
-    if obj._has_arbitrary or other._has_arbitrary:
+    if obj._has_arbitrary or cast(Any, other)._has_arbitrary:
         raise ValueError("set relations do not support === specifiers")
     _fallback_warning(f"SpecifierSet.{name}()")
     return getattr(obj.to_range(), name)(other.to_range())
@@ -476,8 +483,8 @@ _native._configure(
         "InvalidSpecifier": InvalidSpecifier,
         "spec_regex": SPECIFIER_REGEX,
         "delegate": _delegate,
-        "packaging_Specifier": _ps.Specifier if _CLAIM else None,
-        "packaging_SpecifierSet": _ps.SpecifierSet if _CLAIM else None,
+        "packaging_Specifier": getattr(_ps, "Specifier", None) if _CLAIM else None,
+        "packaging_SpecifierSet": getattr(_ps, "SpecifierSet", None) if _CLAIM else None,
         "InvalidMarker": InvalidMarker,
         "UndefinedComparison": UndefinedComparison,
         "UndefinedEnvironmentName": UndefinedEnvironmentName,
@@ -488,6 +495,6 @@ _native._configure(
         "Variable": Variable,
         "Value": Value,
         "Op": Op,
-        "packaging_Marker": _pm.Marker if _CLAIM else None,
+        "packaging_Marker": getattr(_pm, "Marker", None) if _CLAIM else None,
     }
 )

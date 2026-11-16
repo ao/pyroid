@@ -20,7 +20,7 @@ if _compat._ps is not None:
     BaseSpecifier: Any = _compat._ps.BaseSpecifier
 else:
 
-    class BaseSpecifier(metaclass=abc.ABCMeta):  # type: ignore[no-redef]
+    class BaseSpecifier(metaclass=abc.ABCMeta):  # type: ignore[no-redef]  # noqa: B024
         """Abstract base class for :class:`Specifier` and :class:`SpecifierSet`."""
 
         __slots__ = ()

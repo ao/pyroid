@@ -1,7 +1,6 @@
 # Derived from packaging 26.3 (Apache-2.0 OR BSD-2-Clause), © Donald Stufft and individual
 # contributors; modified.
-"""A drop-in, Rust-backed replacement for packaging 26.3's versions, specifiers, markers and
-requirements.
+"""A drop-in for packaging 26.3's versions, specifiers, markers and requirements, in Rust.
 
 ``from pyroid.packaging.version import Version`` (and ``specifiers``, ``markers``,
 ``requirements``, ``utils``) gives classes that behave as packaging's: the same parsing,
@@ -12,8 +11,11 @@ versions.
 
 from __future__ import annotations
 
+from pyroid._pyroid import packaging as _native
 from pyroid.packaging import _compat, markers, requirements, specifiers, utils, version
-from pyroid.packaging._compat import _restore
+
+# Pickles of pyroid's objects refer to `pyroid.packaging._restore`.
+_restore = _compat._restore
 
 #: The packaging release whose behaviour this module reproduces.
 PACKAGING_VERSION = "26.3"
@@ -22,8 +24,6 @@ __version__ = PACKAGING_VERSION
 #: The packaging submodules pyroid ports (``pyroid.patch("packaging")`` without packaging installed
 #: provides shims for these).
 PORTED = ("version", "specifiers", "markers", "requirements", "utils")
-
-from pyroid._pyroid import packaging as _native
 
 contains_batch = _native.contains_batch
 filter_batch = _native.filter_batch
@@ -35,10 +35,10 @@ __all__ = [
     "PORTED",
     "contains_batch",
     "filter_batch",
-    "parse_batch",
-    "sort_versions",
     "markers",
+    "parse_batch",
     "requirements",
+    "sort_versions",
     "specifiers",
     "utils",
     "version",

@@ -94,6 +94,16 @@ set on NeMo's own modules (``nemo_curator.stages.text.filters`` and the modules 
 them), so pipelines built afterwards, including from NeMo's YAML configs, use them. Ray workers
 need no patch: the stages they receive are pyroid's classes.
 
+``"packaging"`` works like ``"nltk"`` when packaging is installed, and goes further: it imports
+packaging and its submodules, then replaces each of packaging's ported objects (``Version``,
+``parse``, ``Specifier``, ``SpecifierSet``, ``Marker``, ``default_environment``, ``Requirement``
+and the name, version and filename helpers of ``packaging.utils``) wherever a ``packaging.*``
+module holds it, so packaging's own ``ranges``, ``metadata``, ``pylock`` and
+``dependency_groups`` use :mod:`pyroid.packaging`'s classes, which reproduce packaging 26.3.
+The exception classes stay packaging's. Without packaging, ``packaging`` and its ``version``,
+``specifiers``, ``markers``, ``requirements`` and ``utils`` submodules are shims holding
+:mod:`pyroid.packaging`'s names.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -1099,7 +1109,8 @@ def patch(*names: str) -> None:
 
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
-            ``"trafilatura"``, ``"nltk"``, ``"warcio"`` and/or ``"nemo_curator"``.
+            ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"`` and/or
+            ``"packaging"``.
 
     Raises:
         TypeError: No names were given.
@@ -1232,7 +1243,7 @@ _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
-`warcio` / `nemo_curator` giving pyroid's drop-ins. The Python processes it starts
+`warcio` / `nemo_curator` / `packaging` giving pyroid's drop-ins. The Python processes it starts
 (multiprocessing workers, subprocesses) are patched too.
 
 options:

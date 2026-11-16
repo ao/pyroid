@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, NewType, Union, cast
+from typing import Any, NewType, cast
 
 from pyroid._pyroid import packaging as _native
 from pyroid.packaging import _compat
@@ -27,14 +27,14 @@ __all__ = [
 _pu = _compat._import("packaging.utils") if _compat.HAVE_PACKAGING else None
 _ptags = _compat._import("packaging.tags") if _compat.HAVE_PACKAGING else None
 if _ptags is None or not hasattr(_ptags, "InvalidTag"):
-    from pyroid.packaging import _tags as _ptags  # noqa: F811
+    from pyroid.packaging import _tags as _ptags
 
 Tag = _ptags.Tag
 parse_tag = _ptags.parse_tag
 InvalidTag: Any = _ptags.InvalidTag
 UnsortedTagsError: Any = getattr(_ptags, "UnsortedTagsError", ValueError)
 
-BuildTag = Union[tuple[()], tuple[int, str]]
+BuildTag = tuple[()] | tuple[int, str]
 NormalizedName = NewType("NormalizedName", str)
 
 
@@ -110,7 +110,9 @@ def parse_wheel_filename(
         InvalidWheelFilename: The filename does not follow the wheel specification.
     """
     if not filename.endswith(".whl"):
-        raise InvalidWheelFilename(f"Invalid wheel filename (extension must be '.whl'): {filename!r}")
+        raise InvalidWheelFilename(
+            f"Invalid wheel filename (extension must be '.whl'): {filename!r}"
+        )
 
     filename = filename[:-4]
     dashes = filename.count("-")
@@ -145,7 +147,9 @@ def parse_wheel_filename(
             f"sorted order per PEP 425): {filename!r}"
         ) from None
     except InvalidTag:
-        raise InvalidWheelFilename(f"Invalid wheel filename (invalid tag component): {filename!r}") from None
+        raise InvalidWheelFilename(
+            f"Invalid wheel filename (invalid tag component): {filename!r}"
+        ) from None
     return (name, version, build, tags)
 
 

@@ -7,12 +7,18 @@ import itertools
 import pickle
 import threading
 import warnings
-from typing import Any
+from collections.abc import Iterator
+from typing import Any, cast
 
 import pytest
 
 import pyroid.packaging as rp
-from pyroid.packaging.markers import InvalidMarker, Marker, UndefinedEnvironmentName, default_environment
+from pyroid.packaging.markers import (
+    InvalidMarker,
+    Marker,
+    UndefinedEnvironmentName,
+    default_environment,
+)
 from pyroid.packaging.requirements import InvalidRequirement, Requirement
 from pyroid.packaging.specifiers import InvalidSpecifier, Specifier, SpecifierSet
 from pyroid.packaging.utils import canonicalize_name, canonicalize_version
@@ -30,9 +36,18 @@ def test_version_basics() -> None:
     v = Version("1!2.0.3rc4.post5.dev6+Ubuntu.1")
     assert str(v) == "1!2.0.3rc4.post5.dev6+ubuntu.1"
     assert repr(v) == "<Version('1!2.0.3rc4.post5.dev6+ubuntu.1')>"
-    assert (v.epoch, v.release, v.pre, v.post, v.dev, v.local) == (1, (2, 0, 3), ("rc", 4), 5, 6, "ubuntu.1")
-    assert v.public == "1!2.0.3rc4.post5.dev6" and v.base_version == "1!2.0.3"
-    assert Version("1.0") == Version("1.0.0") and hash(Version("1.0")) == hash(Version("1.0.0"))
+    assert (v.epoch, v.release, v.pre, v.post, v.dev, v.local) == (
+        1,
+        (2, 0, 3),
+        ("rc", 4),
+        5,
+        6,
+        "ubuntu.1",
+    )
+    assert v.public == "1!2.0.3rc4.post5.dev6"
+    assert v.base_version == "1!2.0.3"
+    assert Version("1.0") == Version("1.0.0")
+    assert hash(Version("1.0")) == hash(Version("1.0.0"))
     assert parse("1.0a1") < Version("1.0")
     with pytest.raises(InvalidVersion, match=r"^Invalid version: 'foo'$"):
         Version("foo")
@@ -59,9 +74,9 @@ def test_version_huge_numbers_raise_as_int_does() -> None:
 
 def test_errors_are_packagings_own_classes() -> None:
     assert InvalidVersion is packaging_version.InvalidVersion
-    assert InvalidSpecifier is ps.InvalidSpecifier
-    assert InvalidMarker is pm.InvalidMarker
-    assert InvalidRequirement is pr.InvalidRequirement
+    assert InvalidSpecifier is cast(Any, ps.InvalidSpecifier)
+    assert InvalidMarker is cast(Any, pm.InvalidMarker)
+    assert InvalidRequirement is cast(Any, pr.InvalidRequirement)
     with pytest.raises(packaging_version.InvalidVersion):
         Version("1..0")
 
@@ -76,9 +91,10 @@ def test_isinstance_with_packagings_classes() -> None:
     assert isinstance(Requirement("a>=1"), pr.Requirement)
     assert type(Version("1.0")) is Version
     # packaging's own code accepts pyroid's objects.
-    assert ps.SpecifierSet(">=1").contains(Version("2.0"))
-    assert not ps.SpecifierSet(">=1").contains(Version("0.5"))
-    assert ps.Specifier("~=1.4").contains(Version("1.5"))
+    v2, v05, v15 = (cast(Any, Version(s)) for s in ("2.0", "0.5", "1.5"))
+    assert ps.SpecifierSet(">=1").contains(v2)
+    assert not ps.SpecifierSet(">=1").contains(v05)
+    assert ps.Specifier("~=1.4").contains(v15)
 
 
 def test_mixed_sets_sorts_and_comparisons() -> None:
@@ -90,7 +106,9 @@ def test_mixed_sets_sorts_and_comparisons() -> None:
         assert (a == b) == (b == a)
         if a == b:
             assert hash(a) == hash(b)
-    assert [str(v) for v in sorted(ours + theirs)] == [str(v) for v in sorted(packaging_version.Version(str(v)) for v in ours + theirs)]
+    assert [str(v) for v in sorted(ours + theirs)] == [
+        str(v) for v in sorted(packaging_version.Version(str(v)) for v in ours + theirs)
+    ]
     assert SpecifierSet(">=1,<2") == ps.SpecifierSet("<2.0,>=1.0") == SpecifierSet("<2.0,>=1.0")
     assert hash(SpecifierSet(">=1,<2")) == hash(ps.SpecifierSet("<2,>=1"))
     assert Requirement("Foo[Bar]>=1.0") == pr.Requirement("foo[bar]>=1.0.0")
@@ -107,11 +125,14 @@ def test_pickle_and_copy() -> None:
     ]
     for obj in objs:
         for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
-            back = pickle.loads(pickle.dumps(obj, protocol))  # noqa: S301 - our own objects
-            assert type(back) is type(obj) and str(back) == str(obj) and back == obj
-        assert copy.copy(obj) == obj and copy.deepcopy(obj) == obj
-    assert pickle.loads(pickle.dumps(objs[1])).prereleases is True  # noqa: S301
-    assert pickle.loads(pickle.dumps(objs[4])).specifier._prereleases is None  # noqa: S301
+            back = pickle.loads(pickle.dumps(obj, protocol))
+            assert type(back) is type(obj)
+            assert str(back) == str(obj)
+            assert back == obj
+        assert copy.copy(obj) == obj
+        assert copy.deepcopy(obj) == obj
+    assert pickle.loads(pickle.dumps(objs[1])).prereleases is True
+    assert pickle.loads(pickle.dumps(objs[4])).specifier._prereleases is None
 
 
 def test_packagings_pickle_states_load() -> None:
@@ -120,7 +141,8 @@ def test_packagings_pickle_states_load() -> None:
     assert v == Version("1.0.post1")
     s = Specifier.__new__(Specifier)
     s.__setstate__(ps.Specifier(">=1.0", prereleases=True).__getstate__())
-    assert str(s) == ">=1.0" and s.prereleases is True
+    assert str(s) == ">=1.0"
+    assert s.prereleases is True
     m = Marker.__new__(Marker)
     m.__setstate__(pm.Marker("os_name == 'nt'").__getstate__())
     assert str(m) == 'os_name == "nt"'
@@ -133,8 +155,11 @@ def test_subclasses() -> None:
             self.raw = raw
 
     m = MyVersion("release-1.2")
-    assert str(m) == "1.2" and m.raw == "release-1.2" and repr(m) == "<MyVersion('1.2')>"
-    assert m.__class__ is MyVersion and m > Version("1")
+    assert str(m) == "1.2"
+    assert m.raw == "release-1.2"
+    assert repr(m) == "<MyVersion('1.2')>"
+    assert m.__class__ is MyVersion
+    assert m > Version("1")
     assert type(m.__replace__(local="x")) is MyVersion
 
     class MyRequirement(Requirement):
@@ -155,12 +180,13 @@ def test_version_can_be_changed_in_place() -> None:
 
 
 def test_filter_is_lazy() -> None:
-    def forever():  # type: ignore[no-untyped-def]
+    def forever() -> Iterator[str]:
         for i in itertools.count():
             yield f"1.{i}"
 
     it = SpecifierSet(">=1.5").filter(forever())
-    assert next(it) == "1.5" and next(it) == "1.6"
+    assert next(it) == "1.5"
+    assert next(it) == "1.6"
     it = Specifier(">=1.0", prereleases=False).filter(forever())
     assert next(it) == "1.0"
 
@@ -178,9 +204,11 @@ def test_prerelease_settings_are_live() -> None:
 
 def test_canonicalisation_reorders_iteration() -> None:
     ss = SpecifierSet(">=1,>=1.0,<2")
-    assert len(ss) == 3 and [str(x) for x in ss] == [">=1", ">=1.0", "<2"]
+    assert len(ss) == 3
+    assert [str(x) for x in ss] == [">=1", ">=1.0", "<2"]
     assert str(ss) == "<2,>=1"
-    assert len(ss) == 2 and [str(x) for x in ss] == ["<2", ">=1"]
+    assert len(ss) == 2
+    assert [str(x) for x in ss] == ["<2", ">=1"]
 
 
 def test_markers() -> None:
@@ -193,7 +221,8 @@ def test_markers() -> None:
         Marker("extra == 'x'").evaluate(context="requirement")
     with pytest.raises(InvalidMarker, match="Expected a marker variable or quoted string"):
         Marker("python_version >")
-    assert default_environment() == default_environment() and default_environment() is not default_environment()
+    assert default_environment() == default_environment()
+    assert default_environment() is not default_environment()
 
 
 def test_requirements() -> None:
@@ -214,7 +243,8 @@ def test_requirements() -> None:
 
 def test_utils() -> None:
     assert canonicalize_name("Foo.Bar__baz") == "foo-bar-baz"
-    assert canonicalize_version("1.0.0") == "1" and canonicalize_version(Version("1.4.0.0")) == "1.4"
+    assert canonicalize_version("1.0.0") == "1"
+    assert canonicalize_version(Version("1.4.0.0")) == "1.4"
     assert canonicalize_version("foo bar") == "foo bar"
 
 
@@ -241,7 +271,7 @@ def test_shared_objects_from_many_threads() -> None:
                 assert str(ss) == "!=1.5.*,!=2.2,<3,>=1.0"
                 if k == 0:
                     ss.prereleases = None
-        except BaseException as e:  # noqa: BLE001
+        except BaseException as e:
             errors.append(e)
 
     threads = [threading.Thread(target=work, args=(k,)) for k in range(8)]
@@ -257,7 +287,9 @@ def test_batch_threads_agree() -> None:
     base = rp.sort_versions(versions, threads=1)
     for n in (None, 2, 8):
         assert rp.sort_versions(versions, threads=n) == base
-        assert rp.contains_batch(">=2,<4", versions, threads=n) == rp.contains_batch(">=2,<4", versions, threads=1)
+        assert rp.contains_batch(">=2,<4", versions, threads=n) == rp.contains_batch(
+            ">=2,<4", versions, threads=1
+        )
 
 
 def test_no_warning_on_import() -> None:

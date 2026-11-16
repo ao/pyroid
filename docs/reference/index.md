@@ -19,6 +19,7 @@ source.
 | [`pyroid.trafilatura`](trafilatura.md) | `extract`, `bare_extraction`, `extract_with_metadata`, `extract_batch`, `Document`, `LRUCache`, `reset_caches`, the `compat=` modes 2.3.1 and 1.11.0 |
 | [`pyroid.nltk`](nltk.md) | NLTK 3.10.4's `sent_tokenize`, `word_tokenize`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer` |
 | [`pyroid.warc`](warc.md) | warcio 1.8.2's `ArchiveIterator`, `WARCIterator`, `ARCIterator`, `StatusAndHeaders`, `ArcWarcRecord`, `ArchiveLoadFailed`; datatrove's WARC loop: `iter_documents`, `iter_batches` |
+| [`pyroid.packaging`](packaging.md) | packaging 26.3's `version`, `specifiers`, `markers`, `requirements` and `utils` modules (`Version`, `Specifier`, `SpecifierSet`, `Marker`, `Requirement`, `canonicalize_name`, ...), `parse_batch`, `sort_versions`, `contains_batch`, `filter_batch` |
 | [`pyroid.integrations`](integrations.md) | the datatrove steps (`WarcReader` included), the Hugging Face helpers, the FineWeb recipes, `patch` and friends |
 | [`pyroid.text`](text.md) | `normalize_whitespace`, `min_chars`: small examples of pyroid's conventions |
 

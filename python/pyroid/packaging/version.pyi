@@ -2,9 +2,7 @@
 # contributors; modified.
 """`packaging.version`: PEP 440 versions."""
 
-from typing import Any, Final, Literal
-
-from typing_extensions import Self
+from typing import Any, Final, Literal, Self
 
 __all__ = ["VERSION_PATTERN", "InvalidVersion", "Version", "normalize_pre", "parse"]
 
@@ -12,7 +10,7 @@ __all__ = ["VERSION_PATTERN", "InvalidVersion", "Version", "normalize_pre", "par
 VERSION_PATTERN: Final[str]
 
 class InvalidVersion(ValueError):
-    """Raised when a version string is not a valid version (packaging's own class when installed)."""
+    """Raised for an invalid version string (packaging's own class when it is installed)."""
 
 class Version:
     """A PEP 440 version, as `packaging.version.Version` 26.3.
@@ -22,7 +20,7 @@ class Version:
     `isinstance(v, packaging.version.Version)` is true.
     """
 
-    __match_args__: Final[tuple[str, ...]]
+    __match_args__ = ("_str",)
     def __init__(self, version: str) -> None:
         """Parse and normalise `version`.
 
@@ -40,9 +38,9 @@ class Version:
         dev: int | None = None,
         local: str | None = None,
     ) -> Self:
-        """Return a new version composed of the various parts (the pre-release letter is normalised)."""
+        """Return a new version composed of the given parts (the pre-release letter normalised)."""
     def __replace__(self, **kwargs: Any) -> Self:
-        """Return a new version with parts replaced (`None` clears one); `self` when nothing changes."""
+        """Return a version with parts replaced (`None` clears one); `self` if nothing changes."""
     def __hash__(self) -> int: ...
     def __lt__(self, other: Any) -> bool: ...
     def __le__(self, other: Any) -> bool: ...
@@ -94,6 +92,10 @@ class Version:
     @property
     def micro(self) -> int:
         """The third item of `release`, or 0."""
+    @property
+    def _version(self) -> Any: ...
+    @_version.setter
+    def _version(self, value: Any) -> None: ...
 
 def parse(version: str) -> Version:
     """Parse the given version string (the same as `Version(version)`).
@@ -103,4 +105,4 @@ def parse(version: str) -> Version:
     """
 
 def normalize_pre(letter: str, /) -> str:
-    """Normalise a pre-release letter (`"alpha"` to `"a"`, `"c"` to `"rc"`; other text lowercased)."""
+    """Normalise a pre-release letter (`"alpha"` to `"a"`, `"c"` to `"rc"`; others lowercased)."""

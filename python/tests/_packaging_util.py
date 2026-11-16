@@ -12,12 +12,21 @@ from hypothesis import strategies as st
 # --------------------------------------------------------------------------------------------
 
 
-def outcome(f: Any, *args: Any, **kwargs: Any) -> tuple[str, Any]:
+def outcome(f: Any, *args: Any, **kwargs: Any) -> tuple[Any, ...]:
     """``("ok", value)`` or ``("err", class name, str(exc))`` (``KeyError`` messages included)."""
     try:
         return ("ok", f(*args, **kwargs))
-    except Exception as e:  # noqa: BLE001 - every exception is part of the comparison
+    except Exception as e:
         return ("err", type(e).__name__, str(e))
+
+
+def listed(it: Any) -> list[Any]:
+    """`list(it)` (for outcome(): the iterator's errors surface while listing)."""
+    return list(it)
+
+
+def strings(it: Any) -> list[str]:
+    return [str(x) for x in it]
 
 
 def version_view(v: Any) -> tuple[Any, ...]:
@@ -72,7 +81,7 @@ def requirement_view(r: Any) -> tuple[Any, ...]:
 
 def roundtrip(x: Any) -> Any:
     # Only objects the test itself just made are pickled and loaded back (trusted data).
-    return pickle.loads(pickle.dumps(x))  # noqa: S301
+    return pickle.loads(pickle.dumps(x))
 
 
 # --------------------------------------------------------------------------------------------
@@ -83,46 +92,77 @@ def roundtrip(x: Any) -> Any:
 # letters re.IGNORECASE folds onto ASCII (dotless i, dotted I, long s, Kelvin sign), other
 # digits, a lone surrogate.
 ODD = [
-    " ", "　", " ", "\x1c", "\x85", " ", "\t", "\n", "\r", "\x0b", "\x0c",
-    "ı", "İ", "ſ", "K", "١", "１", "²", "\ud800", "é", "ß",
-    "ǅ", "\x00",
+    " ", "\u3000", "\u00a0", "\x1c", "\x85", "\u2028", "\t", "\n", "\r", "\x0b", "\x0c",
+    "\u0131", "\u0130", "\u017f", "\u212a", "\u0661", "\uff11", "\u00b2", "\ud800", "\u00e9",
+    "\u00df", "\u01c5", "\x00", "\u1680",
 ]  # fmt: skip
 SEPARATORS = ["", ".", "-", "_"]
-PRE = ["a", "A", "alpha", "ALPHA", "b", "beta", "Beta", "c", "C", "rc", "RC", "pre", "preview", "Preview"]
+PRE = [
+    "a",
+    "A",
+    "alpha",
+    "ALPHA",
+    "b",
+    "beta",
+    "Beta",
+    "c",
+    "C",
+    "rc",
+    "RC",
+    "pre",
+    "preview",
+    "Preview",
+]
 POST = ["post", "POST", "rev", "r", "R"]
-NUMBERS = ["0", "1", "2", "9", "10", "00", "01", "007", "12345678901234567890", "99999999999999999999999"]
+NUMBERS = [
+    "0",
+    "1",
+    "2",
+    "9",
+    "10",
+    "00",
+    "01",
+    "007",
+    "12345678901234567890",
+    "99999999999999999999999",
+]
 
 
 @st.composite
 def version_strings(draw: st.DrawFn) -> str:
     """A PEP 440 version spelled any way the pattern allows, sometimes broken."""
     parts = []
-    parts.append(draw(st.sampled_from(["", "", "", " ", "v", "V", "\t", "　"])))
+    parts.append(draw(st.sampled_from(["", "", "", " ", "v", "V", "\t", "\u3000"])))
     if draw(st.booleans()) and draw(st.booleans()):
         parts.append(draw(st.sampled_from(NUMBERS[:6])) + "!")
     release = [draw(st.sampled_from(NUMBERS)) for _ in range(draw(st.integers(1, 5)))]
     parts.append(".".join(release))
     if draw(st.booleans()):
         parts.append(draw(st.sampled_from(SEPARATORS)) + draw(st.sampled_from(PRE)))
-        parts.append(draw(st.sampled_from(SEPARATORS + ["", ""])))
-        parts.append(draw(st.sampled_from(["", ""] + NUMBERS[:6])))
+        parts.append(draw(st.sampled_from([*SEPARATORS, "", ""])))
+        parts.append(draw(st.sampled_from(["", "", *NUMBERS[:6]])))
     if draw(st.booleans()):
         if draw(st.booleans()):
             parts.append("-" + draw(st.sampled_from(NUMBERS[:6])))
         else:
             parts.append(draw(st.sampled_from(SEPARATORS)) + draw(st.sampled_from(POST)))
             parts.append(draw(st.sampled_from(SEPARATORS)))
-            parts.append(draw(st.sampled_from(["", ""] + NUMBERS[:6])))
+            parts.append(draw(st.sampled_from(["", "", *NUMBERS[:6]])))
     if draw(st.booleans()):
-        parts.append(draw(st.sampled_from(SEPARATORS)) + draw(st.sampled_from(["dev", "DEV", "Dev"])))
+        parts.append(
+            draw(st.sampled_from(SEPARATORS)) + draw(st.sampled_from(["dev", "DEV", "Dev"]))
+        )
         parts.append(draw(st.sampled_from(SEPARATORS)))
-        parts.append(draw(st.sampled_from(["", ""] + NUMBERS[:6])))
+        parts.append(draw(st.sampled_from(["", "", *NUMBERS[:6]])))
     if draw(st.booleans()) and draw(st.booleans()):
-        segs = [draw(st.sampled_from(["abc", "ABC", "1", "01", "ubuntu", "x9", "0"])) for _ in range(draw(st.integers(1, 3)))]
+        segs = [
+            draw(st.sampled_from(["abc", "ABC", "1", "01", "ubuntu", "x9", "0"]))
+            for _ in range(draw(st.integers(1, 3)))
+        ]
         joiners = [draw(st.sampled_from([".", "-", "_"])) for _ in segs[1:]]
         local = segs[0] + "".join(j + s for j, s in zip(joiners, segs[1:], strict=True))
         parts.append("+" + local)
-    parts.append(draw(st.sampled_from(["", "", "", " ", "\n", " "])))
+    parts.append(draw(st.sampled_from(["", "", "", " ", "\n", "\u00a0"])))
     text = "".join(parts)
     return draw(mutated(text))
 
@@ -199,7 +239,10 @@ def marker_atoms(draw: st.DrawFn) -> str:
     var = draw(st.sampled_from(VARIABLES))
     val = quote(draw(st.sampled_from(VALUES)), draw)
     op = draw(st.sampled_from(MARKER_OPS))
-    ws = lambda: draw(st.sampled_from(["", " ", "  ", "\t"]))  # noqa: E731
+
+    def ws() -> str:
+        return draw(st.sampled_from(["", " ", "  ", "\t"]))
+
     if draw(st.integers(0, 3)) == 0:
         return f"{val}{ws()}{op}{ws()}{var}"
     return f"{var}{ws()}{op}{ws()}{val}"
@@ -228,16 +271,34 @@ def requirement_strings(draw: st.DrawFn) -> str:
     out = draw(st.sampled_from(["", " "])) + draw(st.sampled_from(NAMES))
     if draw(st.booleans()):
         extras = [draw(st.sampled_from(EXTRAS)) for _ in range(draw(st.integers(0, 3)))]
-        out += draw(st.sampled_from(["", " "])) + "[" + draw(st.sampled_from([",", ", ", " , "])).join(extras) + "]"
+        out += (
+            draw(st.sampled_from(["", " "]))
+            + "["
+            + draw(st.sampled_from([",", ", ", " , "])).join(extras)
+            + "]"
+        )
     if draw(st.integers(0, 4)) == 0:
-        out += draw(st.sampled_from(["", " "])) + "@ " + draw(
-            st.sampled_from(["https://example.com/x.whl", "file:///tmp/x", "git+https://g/x@v1#egg=x", "url"])
+        out += (
+            draw(st.sampled_from(["", " "]))
+            + "@ "
+            + draw(
+                st.sampled_from(
+                    [
+                        "https://example.com/x.whl",
+                        "file:///tmp/x",
+                        "git+https://g/x@v1#egg=x",
+                        "url",
+                    ]
+                )
+            )
         )
         if draw(st.booleans()):
             out += " "
     elif draw(st.booleans()):
         spec = draw(specifier_set_strings())
-        out += draw(st.sampled_from(["", " "])) + (f"({spec})" if draw(st.integers(0, 4)) == 0 else spec)
+        out += draw(st.sampled_from(["", " "])) + (
+            f"({spec})" if draw(st.integers(0, 4)) == 0 else spec
+        )
     if draw(st.booleans()):
         out += draw(st.sampled_from([";", "; ", " ; "])) + draw(marker_strings())
     return draw(mutated(out))
@@ -247,9 +308,18 @@ ENVIRONMENTS: list[dict[str, Any] | None] = [
     None,
     {},
     {"python_version": "3.7", "python_full_version": "3.7.17"},
-    {"python_version": "3.14", "python_full_version": "3.14.0rc1", "implementation_version": "3.14.0rc1"},
+    {
+        "python_version": "3.14",
+        "python_full_version": "3.14.0rc1",
+        "implementation_version": "3.14.0rc1",
+    },
     {"python_full_version": "3.12.1+"},
-    {"sys_platform": "win32", "os_name": "nt", "platform_system": "Windows", "platform_machine": "AMD64"},
+    {
+        "sys_platform": "win32",
+        "os_name": "nt",
+        "platform_system": "Windows",
+        "platform_machine": "AMD64",
+    },
     {"sys_platform": "darwin", "platform_release": "23.1.0", "platform_machine": "arm64"},
     {"platform_release": "5.10.0-28-amd64"},
     {"extra": "test"},

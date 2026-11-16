@@ -27,7 +27,9 @@ def _helpers() -> Any:
     """python/tests/_packaging_util.py (CI imports tests with --import-mode=importlib)."""
     name = "_packaging_util"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name("_packaging_util.py"))
+        spec = importlib.util.spec_from_file_location(
+            name, Path(__file__).with_name("_packaging_util.py")
+        )
         assert spec is not None
         assert spec.loader is not None
         module = importlib.util.module_from_spec(spec)
@@ -85,7 +87,9 @@ def test_version(text: str) -> None:
     same(_u.outcome(rv.parse, text)[0], _u.outcome(pv.parse, text)[0])
     if ours[0] == "ok":
         a, b = rv.Version(text), pv.Version(text)
-        assert a == b and b == a and hash(a) == hash(b)
+        assert a == b
+        assert b == a
+        assert hash(a) == hash(b)
         assert isinstance(a, pv.Version)
         same(_u.version_view(_u.roundtrip(a)), ours[1])
         same(ru.canonicalize_version(a), pu.canonicalize_version(b))
@@ -107,8 +111,13 @@ def test_version_ordering(texts: list[str]) -> None:
             continue
         ours.append(rv.Version(t))
     same([str(v) for v in sorted(ours)], [str(v) for v in sorted(theirs)])
-    for (a, b), (c, d) in zip(itertools.product(ours, ours), itertools.product(theirs, theirs), strict=True):
-        same((a < b, a <= b, a == b, a != b, a >= b, a > b), (c < d, c <= d, c == d, c != d, c >= d, c > d))
+    for (a, b), (c, d) in zip(
+        itertools.product(ours, ours), itertools.product(theirs, theirs), strict=True
+    ):
+        same(
+            (a < b, a <= b, a == b, a != b, a >= b, a > b),
+            (c < d, c <= d, c == d, c != d, c >= d, c > d),
+        )
         # Across the two classes, both ways.
         same((a < d, c < b, a == d, c == b), (c < d, c < d, c == d, c == d))
     same(len(set(ours) | set(theirs)), len(set(theirs)))
@@ -121,7 +130,9 @@ def test_version_ordering(texts: list[str]) -> None:
         st.one_of(
             st.none(),
             st.integers(-2, 3),
-            st.sampled_from([(1,), (1, 0), (), (0,), [1], ("a", 1), ("RC", 2), ("x", 1), ("b", -1)]),
+            st.sampled_from(
+                [(1,), (1, 0), (), (0,), [1], ("a", 1), ("RC", 2), ("x", 1), ("b", -1)]
+            ),
             st.sampled_from(["abc", "a.B", "", "a..b", "1", "é"]),
             st.booleans(),
         ),
@@ -145,7 +156,9 @@ def test_from_parts_and_replace(parts: dict[str, Any]) -> None:
 # Specifiers
 # --------------------------------------------------------------------------------------------
 
-CANDIDATES = st.lists(st.one_of(_u.version_strings(), st.sampled_from(["foo", "1.0", "FOO", "2.0a1"])), max_size=10)
+CANDIDATES = st.lists(
+    st.one_of(_u.version_strings(), st.sampled_from(["foo", "1.0", "FOO", "2.0a1"])), max_size=10
+)
 
 
 @PROFILE
@@ -161,13 +174,21 @@ def test_specifier(text: str, items: list[str], pre: bool | None) -> None:
     same(_u.spec_view(a), _u.spec_view(b))
     same(_u.outcome(hash, a)[0], _u.outcome(hash, b)[0])
     if _u.outcome(hash, b)[0] == "ok":
-        assert hash(a) == hash(b) and a == b and b == a
+        assert hash(a) == hash(b)
+        assert a == b
+        assert b == a
     for item in items:
         for p in (None, True, False):
-            same(_u.outcome(a.contains, item, prereleases=p), _u.outcome(b.contains, item, prereleases=p))
-        same(_u.outcome(lambda: item in a), _u.outcome(lambda: item in b))
+            same(
+                _u.outcome(a.contains, item, prereleases=p),
+                _u.outcome(b.contains, item, prereleases=p),
+            )
+        same(_u.outcome(a.__contains__, item), _u.outcome(b.__contains__, item))
     for p in (None, True, False):
-        same(_u.outcome(lambda: list(a.filter(items, prereleases=p))), _u.outcome(lambda: list(b.filter(items, prereleases=p))))
+        same(
+            _u.outcome(_u.listed, a.filter(items, prereleases=p)),
+            _u.outcome(_u.listed, b.filter(items, prereleases=p)),
+        )
 
 
 @PROFILE
@@ -183,8 +204,14 @@ def test_specifier_set(text: str, items: list[str], pre: bool | None, objects: b
     same(_u.outcome(_u.specset_view, a), _u.outcome(_u.specset_view, b))
     same(_u.outcome(lambda: a.is_unsatisfiable()), _u.outcome(lambda: b.is_unsatisfiable()))
     if objects:
-        mine = [_u.outcome(rv.Version, i)[1] if _u.outcome(pv.Version, i)[0] == "ok" else i for i in items]
-        theirs_items = [_u.outcome(pv.Version, i)[1] if _u.outcome(pv.Version, i)[0] == "ok" else i for i in items]
+        mine = [
+            _u.outcome(rv.Version, i)[1] if _u.outcome(pv.Version, i)[0] == "ok" else i
+            for i in items
+        ]
+        theirs_items = [
+            _u.outcome(pv.Version, i)[1] if _u.outcome(pv.Version, i)[0] == "ok" else i
+            for i in items
+        ]
     else:
         mine = theirs_items = items
     for x, y in zip(mine, theirs_items, strict=True):
@@ -196,12 +223,14 @@ def test_specifier_set(text: str, items: list[str], pre: bool | None, objects: b
                 )
     for p in (None, True, False):
         same(
-            _u.outcome(lambda: [str(v) for v in a.filter(mine, prereleases=p)]),
-            _u.outcome(lambda: [str(v) for v in b.filter(theirs_items, prereleases=p)]),
+            _u.outcome(_u.strings, a.filter(mine, prereleases=p)),
+            _u.outcome(_u.strings, b.filter(theirs_items, prereleases=p)),
         )
     same(_u.outcome(lambda: str(a & ">=1.0")), _u.outcome(lambda: str(b & ">=1.0")))
     if _u.outcome(hash, b)[0] == "ok":
-        assert hash(a) == hash(b) and a == b and b == a
+        assert hash(a) == hash(b)
+        assert a == b
+        assert b == a
 
 
 # --------------------------------------------------------------------------------------------
@@ -223,7 +252,9 @@ def test_marker(text: str, env: dict[str, Any] | None, context: str) -> None:
     same(_u.outcome(lambda: a.evaluate(env, context)), _u.outcome(lambda: b.evaluate(env, context)))
     same(_u.outcome(lambda: a.evaluate(env)), _u.outcome(lambda: b.evaluate(env)))
     if _u.outcome(hash, b)[0] == "ok":
-        assert hash(a) == hash(b) and a == b and b == a
+        assert hash(a) == hash(b)
+        assert a == b
+        assert b == a
         same(str(a & a), str(b & b))
         same(str(a | rm.Marker("os_name == 'nt'")), str(b | pm.Marker("os_name == 'nt'")))
 
@@ -236,7 +267,9 @@ def test_requirement(text: str) -> None:
     same(ours, theirs)
     if ours[0] == "ok":
         a, b = rr.Requirement(text), pr.Requirement(text)
-        assert a == b and b == a and hash(a) == hash(b)
+        assert a == b
+        assert b == a
+        assert hash(a) == hash(b)
         same(_u.requirement_view(_u.roundtrip(a)), ours[1])
 
 
@@ -245,7 +278,28 @@ def test_requirement(text: str) -> None:
 # --------------------------------------------------------------------------------------------
 
 FILENAME_PARTS = st.lists(
-    st.sampled_from(["foo", "Foo.Bar", "foo_bar", "1.0", "1.0rc1", "x", "", "1", "1a", "py3", "py2.py3", "none", "any", "cp312", "manylinux_2_17_x86_64", "-", "__", "é"]),
+    st.sampled_from(
+        [
+            "foo",
+            "Foo.Bar",
+            "foo_bar",
+            "1.0",
+            "1.0rc1",
+            "x",
+            "",
+            "1",
+            "1a",
+            "py3",
+            "py2.py3",
+            "none",
+            "any",
+            "cp312",
+            "manylinux_2_17_x86_64",
+            "-",
+            "__",
+            "é",
+        ]
+    ),
     min_size=1,
     max_size=6,
 )
@@ -270,5 +324,8 @@ def test_filenames(parts: list[str], ext: str, validate_order: bool) -> None:
 @PROFILE
 @given(st.text(st.sampled_from(list("aZ09._-") + _u.ODD), max_size=12), st.booleans())
 def test_names(name: str, validate: bool) -> None:
-    same(_u.outcome(ru.canonicalize_name, name, validate=validate), _u.outcome(pu.canonicalize_name, name, validate=validate))
+    same(
+        _u.outcome(ru.canonicalize_name, name, validate=validate),
+        _u.outcome(pu.canonicalize_name, name, validate=validate),
+    )
     same(ru.is_normalized_name(name), pu.is_normalized_name(name))

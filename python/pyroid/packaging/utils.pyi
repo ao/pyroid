@@ -2,7 +2,7 @@
 # contributors; modified.
 """`packaging.utils`: name, version and filename helpers."""
 
-from typing import Any, NewType
+from typing import Any, NewType, TypeAlias
 
 from pyroid.packaging.version import Version
 
@@ -19,7 +19,7 @@ __all__ = [
     "parse_wheel_filename",
 ]
 
-BuildTag = tuple[()] | tuple[int, str]
+BuildTag: TypeAlias = tuple[()] | tuple[int, str]
 NormalizedName = NewType("NormalizedName", str)
 
 class InvalidName(ValueError):

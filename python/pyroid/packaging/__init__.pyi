@@ -21,7 +21,7 @@ The batch functions below parse on pyroid's thread pool.
 """
 
 from collections.abc import Sequence
-from typing import Any, Final, Literal, TypeVar, overload
+from typing import Any, Final, Literal, TypeAlias, TypeVar, overload
 
 from pyroid._pyroid import Column
 from pyroid._typing import ArrowStrings as ArrowArray
@@ -54,7 +54,7 @@ __version__: Final[str]
 PORTED: Final[tuple[str, ...]]
 
 _T = TypeVar("_T")
-_Specs = SpecifierSet | Specifier | str
+_Specs: TypeAlias = SpecifierSet | Specifier | str
 
 @overload
 def parse_batch(
@@ -71,14 +71,7 @@ def parse_batch(
     *,
     errors: Literal["none"],
     threads: int | None = None,
-) -> list[Version | None]: ...
-def parse_batch(
-    versions: Sequence[str | Version] | ArrowArray,
-    /,
-    *,
-    errors: Literal["raise", "none"] = "raise",
-    threads: int | None = None,
-) -> list[Version] | list[Version | None]:
+) -> list[Version | None]:
     """Parse many versions at once.
 
     Args:
@@ -140,16 +133,7 @@ def contains_batch(
     prereleases: bool | None = None,
     installed: bool | None = None,
     threads: int | None = None,
-) -> Column[bool]: ...
-def contains_batch(
-    specifiers: _Specs,
-    versions: Any,
-    /,
-    *,
-    prereleases: bool | None = None,
-    installed: bool | None = None,
-    threads: int | None = None,
-) -> Any:
+) -> Column[bool]:
     """`[specifiers.contains(v, prereleases, installed) for v in versions]`, natively.
 
     Args:

@@ -166,6 +166,20 @@ Reference: json_repair 0.64.5. Rule: the same returned string or object, the sam
 
 <small>Source: the parity/ json_repair suite, run on 2026-11-06.</small>
 
+### pyroid.packaging {#packaging}
+
+Reference: packaging 26.3. Rule: the same result (strings, properties, order, hashes, equality across the two libraries, pickles) or the same exception class and message.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| packaging 26.3's own tests of versions, specifiers, markers, requirements, utils, ranges, metadata, pylock and dependency groups, and its property tests, unchanged, with pyroid.patch("packaging") on (tests passed) | 62,499 | 62,499 | 0 |
+| Hypothesis differential fuzzing from the PEP 440 and PEP 508 grammars plus mutations (Python whitespace, letters re.IGNORECASE folds onto ASCII, other digits, lone surrogates): versions, version ordering, from_parts and __replace__, Specifier, SpecifierSet, markers, requirements, wheel and sdist filenames, names; 9 properties x 20,000 cases | 180,000 | 180,000 | 0 |
+| **Total** | **242,499** | **242,499** | **0** |
+
+- The test suite runs with packaging's own modules (ranges, metadata, pylock, dependency_groups) using pyroid's classes. packaging's tests of platform tags (test_tags, test_manylinux, test_musllinux, test_elffile), licenses, direct URLs and errors are not run: pyroid does not port those modules.
+
+<small>Source: python/tests/test_packaging_patch.py::test_packagings_own_test_suite (PYROID_PACKAGING_UPSTREAM=all) and python/tests/test_packaging_parity.py (PYROID_PACKAGING_EXAMPLES=20000).</small>
+
 ### pyroid.datasketch {#datasketch}
 
 Reference: datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1). Rule: identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets.
@@ -340,6 +354,7 @@ as returning an unchanged string as the same object.
 - [Differences from rouge-score](guides/metrics.md#differences-from-rouge-score) and
   [from sacrebleu](guides/metrics.md#differences-from-sacrebleu)
 - [Differences from json_repair](guides/json_repair.md#differences-from-json_repair)
+- [Differences from packaging](guides/packaging.md#differences-from-packaging)
 - [Differences from datasketch](guides/datasketch.md#differences-from-datasketch)
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)

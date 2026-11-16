@@ -13,8 +13,7 @@ class UnsortedTagsError(ValueError):
 
 
 class InvalidTag(ValueError):
-    """Raised when an interpreter component is not an identifier, a tag component is empty, or
-    a tag does not have exactly three components."""
+    """Raised for a malformed tag (bad interpreter, empty component, not three components)."""
 
 
 class TooManyTagsError(ValueError):
@@ -77,7 +76,9 @@ class Tag:
         raise TypeError(f"Cannot restore Tag from {state!r}")
 
 
-def parse_tag(tag: str, *, validate_order: bool = False, limit: int | None = None) -> frozenset[Tag]:
+def parse_tag(
+    tag: str, *, validate_order: bool = False, limit: int | None = None
+) -> frozenset[Tag]:
     """Parse a tag (e.g. ``py3-none-any``) into a frozenset of :class:`Tag` instances."""
     if limit is not None and limit < 0:
         raise ValueError("limit must be non-negative")
@@ -88,7 +89,9 @@ def parse_tag(tag: str, *, validate_order: bool = False, limit: int | None = Non
             raise InvalidTag(f"Tag {tag!r} has an empty component: {component!r}")
         if validate_order and parts != sorted(parts):
             component = ".".join(parts)
-            raise UnsortedTagsError(f"Tag component {component!r} is not in sorted order per PEP 425")
+            raise UnsortedTagsError(
+                f"Tag component {component!r} is not in sorted order per PEP 425"
+            )
     tag_count = 1
     for parts in component_parts:
         tag_count *= len(parts)

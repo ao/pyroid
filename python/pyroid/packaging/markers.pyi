@@ -2,8 +2,9 @@
 # contributors; modified.
 """`packaging.markers`: environment markers."""
 
-from collections.abc import Mapping, Set
-from typing import Any, Literal, TypedDict
+from collections.abc import Mapping
+from collections.abc import Set as AbstractSet
+from typing import Any, Literal, TypeAlias, TypedDict
 
 __all__ = [
     "Environment",
@@ -15,7 +16,7 @@ __all__ = [
     "default_environment",
 ]
 
-EvaluateContext = Literal["metadata", "lock_file", "requirement"]
+EvaluateContext: TypeAlias = Literal["metadata", "lock_file", "requirement"]
 
 class Environment(TypedDict):
     """A marker environment, as `default_environment()` returns it."""
@@ -56,7 +57,7 @@ class Marker:
     def __or__(self, other: Marker) -> Marker: ...
     def evaluate(
         self,
-        environment: Mapping[str, str | Set[str]] | None = None,
+        environment: Mapping[str, str | AbstractSet[str]] | None = None,
         context: EvaluateContext = "metadata",
     ) -> bool:
         """Evaluate the marker in the current environment, updated with `environment`.

@@ -4,7 +4,7 @@
 
 import abc
 from collections.abc import Callable, Iterable, Iterator
-from typing import Any, Final, TypeVar, overload
+from typing import Any, TypeVar, overload
 
 from pyroid.packaging.version import Version
 
@@ -22,7 +22,7 @@ class BaseSpecifier(metaclass=abc.ABCMeta):
 class Specifier:
     """One version specifier (`>=1.0`), as `packaging.specifiers.Specifier` 26.3."""
 
-    __match_args__: Final[tuple[str, ...]]
+    __match_args__ = ("_str",)
     def __init__(self, spec: str = "", prereleases: bool | None = None) -> None:
         """Parse `spec`.
 
@@ -46,10 +46,15 @@ class Specifier:
     def contains(self, item: str | Version, prereleases: bool | None = None) -> bool:
         """Whether `item` matches (an unparsable item does not)."""
     @overload
-    def filter(self, iterable: Iterable[_V], prereleases: bool | None = None, key: None = None) -> Iterator[_V]: ...
+    def filter(
+        self, iterable: Iterable[_V], prereleases: bool | None = None, key: None = None
+    ) -> Iterator[_V]: ...
     @overload
     def filter(
-        self, iterable: Iterable[_T], prereleases: bool | None = None, key: Callable[[_T], str | Version] = ...
+        self,
+        iterable: Iterable[_T],
+        prereleases: bool | None = None,
+        key: Callable[[_T], str | Version] = ...,
     ) -> Iterator[_T]: ...
     def __getstate__(self) -> tuple[Any, ...]: ...
     def __setstate__(self, state: object) -> None: ...
@@ -57,8 +62,10 @@ class Specifier:
 class SpecifierSet:
     """A set of specifiers (`>=1.0,!=1.5.*`), as `packaging.specifiers.SpecifierSet` 26.3."""
 
-    __match_args__: Final[tuple[str, ...]]
-    def __init__(self, specifiers: str | Iterable[Specifier] = "", prereleases: bool | None = None) -> None:
+    __match_args__ = ("_str",)
+    def __init__(
+        self, specifiers: str | Iterable[Specifier] = "", prereleases: bool | None = None
+    ) -> None:
         """Parse a comma-separated specifier string, or take the given specifiers as they are.
 
         Raises:
@@ -80,15 +87,20 @@ class SpecifierSet:
     ) -> bool:
         """Whether `item` matches every specifier."""
     @overload
-    def filter(self, iterable: Iterable[_V], prereleases: bool | None = None, key: None = None) -> Iterator[_V]: ...
+    def filter(
+        self, iterable: Iterable[_V], prereleases: bool | None = None, key: None = None
+    ) -> Iterator[_V]: ...
     @overload
     def filter(
-        self, iterable: Iterable[_T], prereleases: bool | None = None, key: Callable[[_T], str | Version] = ...
+        self,
+        iterable: Iterable[_T],
+        prereleases: bool | None = None,
+        key: Callable[[_T], str | Version] = ...,
     ) -> Iterator[_T]: ...
     def is_unsatisfiable(self) -> bool:
         """Whether no version can match."""
     def to_range(self) -> Any:
-        """The `packaging.ranges.VersionRange` this set accepts (packaging's own code; needs packaging)."""
+        """The `packaging.ranges.VersionRange` this set accepts (packaging's own code)."""
     def is_subset(self, other: SpecifierSet) -> bool:
         """Whether every version matching this set matches `other` (packaging's own code)."""
     def is_superset(self, other: SpecifierSet) -> bool:

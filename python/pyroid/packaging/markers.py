@@ -35,7 +35,7 @@ if _compat._pm is not None and hasattr(_compat._pm, "Environment"):
 else:
 
     class Environment(TypedDict):  # type: ignore[no-redef]
-        """A dictionary that represents a Python environment, as from :func:`default_environment`."""
+        """A marker environment, as :func:`default_environment` returns it."""
 
         implementation_name: str
         implementation_version: str
