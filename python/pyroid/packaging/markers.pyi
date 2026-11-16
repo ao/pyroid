@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from collections.abc import Set as AbstractSet
 from typing import Any, Literal, TypeAlias, TypedDict
 
+from typing_extensions import disjoint_base
+
 __all__ = [
     "Environment",
     "EvaluateContext",
@@ -42,6 +44,7 @@ class UndefinedComparison(ValueError):
 class UndefinedEnvironmentName(KeyError):
     """Raised when a marker names a variable the environment lacks (packaging's own class)."""
 
+@disjoint_base
 class Marker:
     """A parsed environment marker, as `packaging.markers.Marker` 26.3."""
 
@@ -52,9 +55,9 @@ class Marker:
             InvalidMarker: `marker` is not a valid marker expression.
         """
     def __hash__(self) -> int: ...
-    def __eq__(self, other: object) -> bool: ...
-    def __and__(self, other: Marker) -> Marker: ...
-    def __or__(self, other: Marker) -> Marker: ...
+    def __eq__(self, other: object, /) -> bool: ...
+    def __and__(self, other: Marker, /) -> Marker: ...
+    def __or__(self, other: Marker, /) -> Marker: ...
     def evaluate(
         self,
         environment: Mapping[str, str | AbstractSet[str]] | None = None,

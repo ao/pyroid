@@ -148,6 +148,7 @@ for _cls, _mod, _name in (
 ):
     _cls.__module__ = _mod
     _cls.__name__ = _cls.__qualname__ = _name
+del _cls, _mod, _name
 
 InvalidVersion: type[ValueError] = _pv.InvalidVersion if HAVE_PACKAGING else _InvalidVersion
 _Version: Any = getattr(_pv, "_Version", _VersionTuple) if HAVE_PACKAGING else _VersionTuple
@@ -453,11 +454,9 @@ def _delegate(name: str, obj: Any, *args: Any) -> Any:
         return ranges.bounds_for_spec(op, version, version_cls(version.removesuffix(".*")))
     if name == "_get_ranges":
         return ranges.intersect_specifier_bounds(s._to_ranges() for s in obj._specs)
-    from packaging.ranges import VersionRange
-
     if name == "to_range":
         _fallback_warning("SpecifierSet.to_range()")
-        return VersionRange._from_specifier_set(obj)
+        return importlib.import_module("packaging.ranges").VersionRange._from_specifier_set(obj)
     # is_subset / is_superset / is_disjoint: SpecifierSet._check_relation_operand, then ranges.
     (other,) = args
     from pyroid.packaging.specifiers import SpecifierSet
