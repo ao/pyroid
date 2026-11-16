@@ -386,6 +386,17 @@ def test_separator_row_first_in_a_frame() -> None:
     assert tabulate(df, headers=["A"]) == "  A\n---\n---\n  0"
 
 
+@pytest.mark.parametrize("showindex", ["default", True])
+@pytest.mark.parametrize("tablefmt", ["simple", "grid"])
+def test_separator_rows_anywhere(showindex: Any, tablefmt: str) -> None:
+    # First, last, several in a row, as list, tuple and str rows: each goes back in its place.
+    few = [[_SEP], [1, "a"], _SEP, (_SEP, "x"), [2, "b"], [3, "c"], [_SEP], [_SEP]]
+    many = [[_SEP] if i % 3 else [i, "a"] for i in range(3_000)]
+    for rows in (few, many):
+        kwargs = {"headers": ["n", "s"], "tablefmt": tablefmt, "showindex": showindex}
+        assert tabulate(rows, **kwargs) == pt._port.tabulate(rows, **kwargs)
+
+
 @pytest.mark.thread_unsafe  # a module-level table
 def test_edited_latex_escape_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     # tabulate's _latex_row reads LATEX_ESCAPE_RULES on each call, so edits to it count.

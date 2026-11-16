@@ -1277,7 +1277,6 @@ fn render_inner<'py>(
 
     // rows = list(zip(*cols)), the row alignments, then the separators back in place.
     let nr = aligned_cols.iter().map(Vec::len).min().unwrap_or(0);
-    let mut order: Vec<RowRef> = (0..nr).map(RowRef::Data).collect();
     // Only multiline rows compare the row alignments; the count matters either way.
     let rowaligns = if simple {
         // None or a str: _expand_iterable gives [rowalign] * nr.
@@ -1300,13 +1299,17 @@ fn render_inner<'py>(
         }
         v
     };
-    if !separating_lines.is_none() {
+    let seps: Vec<usize> = if separating_lines.is_none() {
+        Vec::new()
+    } else {
+        let mut v = Vec::new();
         for idx in separating_lines.try_iter()? {
-            let idx: usize = idx?.extract()?;
-            let at = idx.min(order.len());
-            order.insert(at, RowRef::Separator);
+            engine.host.pacer.tick()?;
+            v.push(idx?.extract()?);
         }
-    }
+        v
+    };
+    let order = row_order(nr, &seps, &mut engine.host.pacer)?;
 
     let fmt: &TableFormat = if is_multiline {
         fmt_multi.as_ref().unwrap_or(&fmt_plain)
@@ -1345,6 +1348,38 @@ fn render_inner<'py>(
         }
     }
     Ok((out, is_multiline, empty))
+}
+
+/// The data rows `0..nr` with `SEPARATING_LINE` put back at `seps`, as tabulate's
+/// `_reinsert_separating_lines` does with `rows.insert(index, SEPARATING_LINE)` for each index
+/// in turn (an index past the end appends). The indices tabulate's normalisation finds are in
+/// increasing order, so the rows are laid out in one pass: one insert per separator takes time
+/// quadratic in the rows.
+fn row_order(nr: usize, seps: &[usize], pacer: &mut Pacer<'_>) -> PyResult<Vec<RowRef>> {
+    let mut order = Vec::with_capacity(nr + seps.len());
+    if !seps.is_sorted() {
+        order.extend((0..nr).map(RowRef::Data));
+        for &idx in seps {
+            pacer.tick()?;
+            order.insert(idx.min(order.len()), RowRef::Separator);
+        }
+        return Ok(order);
+    }
+    let mut data = 0..nr;
+    for &idx in seps {
+        while order.len() < idx {
+            let Some(i) = data.next() else { break };
+            pacer.tick()?;
+            order.push(RowRef::Data(i));
+        }
+        pacer.tick()?;
+        order.push(RowRef::Separator);
+    }
+    for i in data {
+        pacer.tick()?;
+        order.push(RowRef::Data(i));
+    }
+    Ok(order)
 }
 
 /// The rst first-column escape for one cell (`escape_empty`).
