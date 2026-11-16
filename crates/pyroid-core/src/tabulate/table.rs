@@ -12,7 +12,7 @@ use std::borrow::Cow;
 use super::ansi;
 use super::number::afterpoint;
 use super::pystr::{
-    self, is_printable_ascii, push_spaces, py_len, rstrip, split_cr_lf, splitlines,
+    self, is_printable_ascii, push_n_spaces, push_spaces, py_len, rstrip, split_cr_lf, splitlines,
 };
 
 /// A column (or header) alignment as tabulate compares it.
@@ -598,17 +598,17 @@ impl Aligned<'_> {
             return Cow::Borrowed(&self.text);
         }
         let mut s = String::with_capacity(self.text.len() + self.left + self.right);
-        s.extend(std::iter::repeat_n(' ', self.left));
+        push_n_spaces(&mut s, self.left);
         s.push_str(&self.text);
-        s.extend(std::iter::repeat_n(' ', self.right));
+        push_n_spaces(&mut s, self.right);
         Cow::Owned(s)
     }
 
     fn write(&self, buf: &mut String, extra: isize) {
         let extra = usize::try_from(extra).unwrap_or(0);
-        buf.extend(std::iter::repeat_n(' ', self.left + extra));
+        push_n_spaces(buf, self.left + extra);
         buf.push_str(&self.text);
-        buf.extend(std::iter::repeat_n(' ', self.right + extra));
+        push_n_spaces(buf, self.right + extra);
     }
 }
 
@@ -783,7 +783,8 @@ impl<H: Host> Engine<'_, H> {
     /// The width of one line of text: `_visible_width`, `wcwidth.wcswidth` or `len`.
     pub fn line_width(&mut self, s: &str) -> Res<isize, H::Error> {
         if is_printable_ascii(s) {
-            return Ok(len_i(s));
+            // ASCII: the length in code points is the length in bytes.
+            return Ok(isize::try_from(s.len()).unwrap_or(isize::MAX));
         }
         let t = if self.s.has_invisible {
             self.strip_ansi(s)?
@@ -1185,13 +1186,13 @@ impl<H: Host> Engine<'_, H> {
                         out.buf.push('&');
                     }
                     let (l, text, r) = cells.parts(j, pad);
-                    out.buf.extend(std::iter::repeat_n(' ', l));
+                    push_n_spaces(&mut out.buf, l);
                     if *raw {
                         out.buf.push_str(text);
                     } else {
                         latex_escape_into(&mut out.buf, text);
                     }
-                    out.buf.extend(std::iter::repeat_n(' ', r));
+                    push_n_spaces(&mut out.buf, r);
                 }
                 out.buf.push_str("\\\\");
                 out.rstrip_from(start);
@@ -1573,13 +1574,13 @@ fn emit_html_row(
         out.buf.push_str(attr);
         out.buf.push('>');
         let (l, text, r) = cells.parts(j, pad);
-        out.buf.extend(std::iter::repeat_n(' ', l));
+        push_n_spaces(&mut out.buf, l);
         if unsafe_ {
             out.buf.push_str(text);
         } else {
             html_escape(&mut out.buf, text);
         }
-        out.buf.extend(std::iter::repeat_n(' ', r));
+        push_n_spaces(&mut out.buf, r);
         out.buf.push_str("</");
         out.buf.push_str(tag);
         out.buf.push('>');

@@ -122,8 +122,19 @@ pub fn repeat(s: &str, n: isize) -> String {
 #[inline]
 pub fn push_spaces(out: &mut String, n: isize) {
     if let Ok(n) = usize::try_from(n) {
-        out.extend(std::iter::repeat_n(' ', n));
+        push_n_spaces(out, n);
     }
+}
+
+/// Append `n` spaces (copied from a constant, not pushed one char at a time).
+#[inline]
+pub fn push_n_spaces(out: &mut String, mut n: usize) {
+    const SPACES: &str = "                                                                ";
+    while n > SPACES.len() {
+        out.push_str(SPACES);
+        n -= SPACES.len();
+    }
+    out.push_str(&SPACES[..n]);
 }
 
 #[cfg(test)]

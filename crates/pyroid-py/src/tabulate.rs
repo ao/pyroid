@@ -785,9 +785,14 @@ fn render_inner<'py>(
     };
     let mut next_index = 0;
     let mut found_seps: Vec<usize> = Vec::new();
-    let mut table_rows: Vec<Vec<Cell<'py>>> = Vec::with_capacity(rows.len());
+    // The cells go straight into their columns (tabulate's zip_longest pads short rows with
+    // None), so the rows are never materialised.
+    let mut cols: Vec<Vec<Cell<'py>>> = Vec::new();
     let mut row_lens: Vec<usize> = Vec::with_capacity(rows.len());
-    let mut ncols = 0;
+    let none_cell = || Cell {
+        obj: py.None().into_bound(py),
+        val: Val::None,
+    };
     for (position, row) in rows.iter().enumerate() {
         let row = match row.cast_exact::<PyList>() {
             Ok(l) => l.clone(),
@@ -815,19 +820,29 @@ fn render_inner<'py>(
             }
             None => None,
         };
-        let mut cells = Vec::with_capacity(row.len() + 1);
+        let done = row_lens.len();
+        let mut n = 0;
         for (c, item) in index_value.into_iter().chain(row.iter()).enumerate() {
             let item = if is_rst && c == 0 {
                 escape_empty(call, item)?
             } else {
                 item
             };
-            cells.push(classify(call, item)?);
+            let cell = classify(call, item)?;
+            if c == cols.len() {
+                let mut col = Vec::with_capacity(rows.len());
+                col.extend((0..done).map(|_| none_cell()));
+                cols.push(col);
+            }
+            cols[c].push(cell);
+            n = c + 1;
         }
-        row_lens.push(cells.len());
-        ncols = ncols.max(cells.len());
-        table_rows.push(cells);
+        for col in cols.iter_mut().skip(n) {
+            col.push(none_cell());
+        }
+        row_lens.push(n);
     }
+    let ncols = cols.len();
     let separating_lines: Bound<'py, PyAny> = if raw {
         PyList::new(py, &found_seps)?.into_any()
     } else {
@@ -836,20 +851,7 @@ fn render_inner<'py>(
     if is_rst && !headers.is_empty() && pystr::strip(&headers[0]).is_empty() {
         headers[0] = to_backed(PyString::new(py, "..").as_any())?;
     }
-    let nrows = table_rows.len();
-    let mut cols: Vec<Vec<Cell<'py>>> = (0..ncols).map(|_| Vec::with_capacity(nrows)).collect();
-    for row in table_rows {
-        let n = row.len();
-        for (j, cell) in row.into_iter().enumerate() {
-            cols[j].push(cell);
-        }
-        for col in cols.iter_mut().skip(n) {
-            col.push(Cell {
-                obj: py.None().into_bound(py),
-                val: Val::None,
-            });
-        }
-    }
+    let nrows = row_lens.len();
 
     // plain_text: the ANSI search and the multiline test over the tab-joined cells.
     let multiline_ok = call.flag("multiline_candidate")?;
