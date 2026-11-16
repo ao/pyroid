@@ -82,8 +82,9 @@ pub enum Node<V> {
     Projection(Box<Node<V>>, Box<Node<V>>),
     /// `subexpression(children)`.
     Subexpression(Vec<Node<V>>),
-    /// `slice(start, end, step)`.
-    Slice(Option<V>, Option<V>, Option<V>),
+    /// `slice(start, end, step)`. Boxed: three `Option<V>` inline would make every node larger
+    /// (an `Option<Option<..>>` of a pointer has no niche left), and so every parser frame.
+    Slice(Box<[Option<V>; 3]>),
     /// `value_projection(left, right)`.
     ValueProjection(Box<Node<V>>, Box<Node<V>>),
 }

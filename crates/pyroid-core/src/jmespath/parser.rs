@@ -403,8 +403,7 @@ impl<V: Clone> Parser<V> {
                 current = self.current();
             }
             self.match_(TokenKind::Rbracket)?;
-            let [start, end, step] = parts;
-            Ok(Node::Slice(start, end, step))
+            Ok(Node::Slice(Box::new(parts)))
         })();
         self.leave();
         r

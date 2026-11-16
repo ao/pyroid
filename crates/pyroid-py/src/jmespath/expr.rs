@@ -399,7 +399,7 @@ fn from_node_shallow<'py>(py: Python<'py>, n: &mut PyNode<'py>) -> PyResult<(Exp
                 .map(|c| sub(c).map(|r| r.0))
                 .collect::<PyResult<_>>()?,
         ),
-        Node::Slice(first, end, step) => slice_of(py, [first, end, step])?,
+        Node::Slice(parts) => slice_of(py, parts)?,
         Node::ValueProjection(l, r) => {
             let l = Box::new(sub(l)?.0);
             Expr::ValueProjection(l, Box::new(sub(r)?.0))
@@ -415,9 +415,9 @@ fn take<'py>(v: &mut Value<'py>) -> Bound<'py, PyAny> {
 }
 
 /// A slice node's `Expr`, its parts moved out.
-fn slice_of<'py>(py: Python<'py>, parts: [&mut Option<Value<'py>>; 3]) -> PyResult<Expr> {
+fn slice_of<'py>(py: Python<'py>, parts: &mut [Option<Value<'py>>; 3]) -> PyResult<Expr> {
     let parts: Vec<Py<PyAny>> = parts
-        .into_iter()
+        .iter_mut()
         .map(|p| p.take().flatten().map_or_else(|| py.None(), Bound::unbind))
         .collect();
     slice(py, parts)
@@ -466,7 +466,7 @@ fn shell<'py>(py: Python<'py>, n: &mut PyNode<'py>) -> PyResult<Expr> {
         Node::Pipe(..) => Expr::Pipe(ids(2)),
         Node::Projection(..) => Expr::Projection(id(), id()),
         Node::Subexpression(c) => Expr::Subexpression(ids(c.len())),
-        Node::Slice(first, end, step) => slice_of(py, [first, end, step])?,
+        Node::Slice(parts) => slice_of(py, parts)?,
         Node::ValueProjection(..) => Expr::ValueProjection(id(), id()),
     })
 }
