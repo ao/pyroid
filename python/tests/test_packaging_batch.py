@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 import pyroid.packaging as rp
+from pyroid import InputError
 from pyroid.packaging.specifiers import Specifier, SpecifierSet
 from pyroid.packaging.version import InvalidVersion, Version
 
@@ -129,6 +130,11 @@ def test_errors() -> None:
         rp.parse_batch(["1.0"], errors="ignore")  # type: ignore[call-overload]
     with pytest.raises(ValueError, match="threads"):
         rp.parse_batch(["1.0"], threads=0)
+    # A wrong type is an InputError, as for threads="2" (it was a bare TypeError for None).
+    for bad in (None, 1, b"raise"):
+        with pytest.raises(InputError, match="errors must be 'raise' or 'none'"):
+            rp.parse_batch(["1.0"], errors=bad)  # type: ignore[call-overload]
+    assert rp.parse_batch(["1.0", "x"], errors="none")[1] is None
 
 
 def test_sort_versions_across_many_runs() -> None:
