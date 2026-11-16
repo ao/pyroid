@@ -510,6 +510,37 @@ def _delegate(name: str, obj: Any, *args: Any) -> Any:
     return getattr(version_range._from_specifier_set(obj), name)(theirs)
 
 
+def _marker_hash_named() -> bool:
+    """Does the installed packaging hash a Marker as ``(class name, str)`` (24.2 and 25.0)?"""
+    if _pm is None or not hasattr(_pm, "Marker"):
+        return False
+    try:
+        m = _pm.Marker('os_name == "a"')
+        return hash(m) != hash(str(m)) and hash(m) == hash(("Marker", str(m)))
+    except Exception:  # noqa: BLE001  # a packaging whose markers pyroid cannot read
+        return False
+
+
+def _requirement_hash() -> str:
+    """How the installed packaging hashes a Requirement.
+
+    ``"fields"`` (26.3: name, extras, specifier, url and marker), ``"parts"`` (26.0 to 26.2: its
+    printed parts) or ``"named_parts"`` (24.2 and 25.0: the class name, then those parts).
+    """
+    if _pr is None or not hasattr(_pr, "Requirement"):
+        return "fields"
+    try:
+        r = _pr.Requirement("Foo.Bar[X]>=1; os_name == 'a'")
+        parts = tuple(r._iter_parts(canonicalize_name(r.name)))
+        if hash(r) == hash(parts):
+            return "parts"
+        if hash(r) == hash(("Requirement", *parts)):
+            return "named_parts"
+    except Exception:  # noqa: BLE001
+        pass
+    return "fields"
+
+
 _native._configure(
     {
         "InvalidVersion": InvalidVersion,
@@ -541,6 +572,7 @@ _native._configure(
         "Op": Op,
         "packaging_Marker": getattr(_pm, "Marker", None) if _CLAIM else None,
         "packaging_Marker_any": getattr(_pm, "Marker", None),
+        "marker_hash_named": _marker_hash_named(),
     }
 )
 
@@ -605,3 +637,5 @@ def _choose_key_format() -> str:
 #: later, or no packaging), ``"legacy"`` (26.0 and earlier), or ``"apart"`` (a release whose key
 #: pyroid does not reproduce: no comparisons across the two libraries).
 KEY_FORMAT = _choose_key_format()
+#: How pyroid's ``Requirement`` hashes: as the installed packaging does (see _requirement_hash).
+REQUIREMENT_HASH = _requirement_hash()

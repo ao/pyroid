@@ -476,7 +476,13 @@ impl PyMarker {
         if let Some(h) = d.hash.get() {
             return Ok(h);
         }
-        let h = PyString::new(py, d.text()?).hash()?;
+        let text = PyString::new(py, d.text()?);
+        let h = if config(py)?.marker_hash_named {
+            // As packaging 24.2 and 25.0 hash their markers.
+            PyTuple::new(py, [PyString::new(py, "Marker"), text])?.hash()?
+        } else {
+            text.hash()?
+        };
         d.hash.set(h);
         Ok(h)
     }

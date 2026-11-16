@@ -302,6 +302,37 @@ class SpecifierSet(BaseSpecifier):
         return out
 """
 
+# packaging 25.0's markers, as far as these tests read them: a marker hashes as
+# (class name, str) and compares by str (26.0 and later hash str alone).
+_MARKERS_25 = """
+class InvalidMarker(ValueError):
+    pass
+
+
+class UndefinedComparison(ValueError):
+    pass
+
+
+class UndefinedEnvironmentName(ValueError):
+    pass
+
+
+class Marker:
+    def __init__(self, marker):
+        self._text = marker
+
+    def __str__(self):
+        return self._text
+
+    def __hash__(self):
+        return hash((self.__class__.__name__, str(self)))
+
+    def __eq__(self, other):
+        if not isinstance(other, Marker):
+            return NotImplemented
+        return str(self) == str(other)
+"""
+
 # packaging 26.2's markers module, as far as pyroid reads it: its exceptions.
 _MARKERS_262 = '''
 class InvalidMarker(ValueError):
@@ -402,6 +433,27 @@ def test_specifier_sets_hash_as_a_release_before_261(tmp_path: Path) -> None:
         assert isinstance(SpecifierSet(">=1"), ps.SpecifierSet)
         both = ps.SpecifierSet(">=1.5") & SpecifierSet("<2")
         assert both == SpecifierSet(">=1.5,<2") == both
+        print("ok")
+        """,
+    )
+    assert out.stdout.strip() == "ok"
+
+
+def test_markers_hash_as_a_release_before_26(tmp_path: Path) -> None:
+    root = _release(
+        tmp_path,
+        "25.0",
+        {"_structures.py": _INFINITY, "version.py": _VERSION_25, "markers.py": _MARKERS_25},
+    )
+    out = _run(
+        root,
+        """
+        import packaging.markers as pm
+        from pyroid.packaging.markers import Marker
+        mine, theirs = Marker("os_name=='a'"), pm.Marker('os_name == "a"')
+        assert mine == theirs and theirs == mine
+        assert hash(mine) == hash(theirs) and len({mine, theirs}) == 1
+        assert hash(Marker("os_name == 'a'")) == hash(mine)
         print("ok")
         """,
     )

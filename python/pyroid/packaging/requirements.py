@@ -18,6 +18,8 @@ __all__ = ["InvalidRequirement", "Requirement"]
 _parse = _native.parse_requirement
 _canonicalize = _native.canonicalize_str
 _PACKAGING_REQUIREMENT = getattr(_compat._pr, "Requirement", None) if _compat._CLAIM else None
+_HASH = _compat.REQUIREMENT_HASH
+_PACKAGING_ITER_PARTS: Any = getattr(getattr(_compat._pr, "Requirement", None), "_iter_parts", None)
 
 
 class Requirement:
@@ -102,6 +104,13 @@ class Requirement:
         return f"<{type(self).__name__}({str(self)!r})>"
 
     def __hash__(self) -> int:
+        # As the installed packaging hashes its requirements, so the two mix in sets.
+        # Those that hash their printed parts print them with their own _iter_parts (24.2 writes
+        # "name@ url").
+        if _HASH == "parts":
+            return hash(tuple(_PACKAGING_ITER_PARTS(self, _canonical(self.name))))
+        if _HASH == "named_parts":
+            return hash(("Requirement", *_PACKAGING_ITER_PARTS(self, _canonical(self.name))))
         return hash(
             (
                 _canonical(self.name),

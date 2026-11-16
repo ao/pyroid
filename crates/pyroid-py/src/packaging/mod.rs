@@ -76,6 +76,9 @@ struct Config {
     packaging_marker: Option<Py<PyType>>,
     /// packaging's `Marker` whatever its release (its `_markers` has the same nodes).
     packaging_marker_any: Option<Py<PyType>>,
+    /// The installed packaging hashes a marker as `("Marker", str(m))` (24.2 and 25.0), not as
+    /// `str(m)`.
+    marker_hash_named: bool,
     /// `re.compile(r"[ \t]+")`: packaging's first tokenizer rule (its TypeError for a non-str).
     ws_regex: Py<PyAny>,
     /// The caller's `unicodedata.unidata_version` (for `\b` around marker tokens).
@@ -199,6 +202,9 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         node_op: get("Op")?,
         packaging_marker: opt_type("packaging_Marker")?,
         packaging_marker_any: opt_type("packaging_Marker_any")?,
+        marker_hash_named: config
+            .get_item("marker_hash_named")?
+            .is_some_and(|v| v.is_truthy().unwrap_or(false)),
         ws_regex: py
             .import("re")?
             .call_method1("compile", (r"[ \t]+",))?

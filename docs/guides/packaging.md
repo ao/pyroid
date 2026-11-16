@@ -263,7 +263,7 @@ sort the same in all of them. The rest differs:
 | 24.2 | 7,486 | as 25.0, and `Marker.evaluate` has no `context=` and no `extras` or `dependency_groups` variables |
 | 25.0 | 7,102 | 26.0's PEP 440 pre-release rule: `SpecifierSet(">=1.0").contains("1.5a1")` was `False` and is `True`; `filter` returns pre-releases when nothing else matches; an invalid version in `contains` or `filter` raised `InvalidVersion` and now gives `False` or is skipped; `===foo` raised `InvalidVersion`; and the rows below |
 | 26.0 | 322 | `>V.devN` and `<V.postN`, which 26.1 narrowed (`SpecifierSet(">1.0.dev1").contains("1.0.post1")` was `False`); and the rows below |
-| 26.1, 26.2 | 171 each | 26.3's marker and requirement fixes: `UndefinedEnvironmentName`, a `KeyError` subclass, instead of a plain `KeyError`; `"X_Y" in extras` normalised at parse time; a trailing newline rejected; "Invalid quoted string" instead of a leaked `SyntaxError`; the `.*` suffix message; `is_normalized_name("a--b")` is `False`; wheel and sdist filenames with an empty name or bad tags rejected |
+| 26.1, 26.2 | 171 each | 26.3's marker and requirement fixes: `UndefinedEnvironmentName`, a `KeyError` subclass, instead of a plain `KeyError`; `"X_Y" in extras`, and an `extra` literal inside parentheses, normalised at parse time; a trailing newline rejected; "Invalid quoted string" instead of a leaked `SyntaxError`; the `.*` suffix message; `is_normalized_name("a--b")` is `False`; wheel and sdist filenames with an empty name or bad tags rejected |
 
 pyroid reproduces 26.3 only. The 25.0 differences are real (a resolver built on 25.0 sees another
 pre-release policy), but 26.0 made them on purpose to follow PEP 440, and 26.3 is what a new
