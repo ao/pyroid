@@ -113,6 +113,7 @@ from __future__ import annotations
 import contextlib
 import importlib
 import importlib.util
+import operator
 import os
 import pkgutil
 import runpy
@@ -834,15 +835,65 @@ def _build_packaging(impl: types.ModuleType, real: Any, missing: str) -> _Built:
             if hit is not None and hit[0] is value:
                 saved.append((module, attr, value))
                 setattr(module, attr, hit[1])
-    # Under the patch packaging's classes are pyroid's: objects stop claiming the originals.
-    native._set_claims(False)
+    # packaging.specifiers keeps Version's comparison methods in a table (_DIRECT_COMPARE_OPS)
+    # that its Specifier calls with a parsed version: pyroid's now, which the original methods'
+    # `super()` rejects. While patched, the table holds the plain operators.
+    ops = {f"__{n}__": getattr(operator, n) for n in ("lt", "le", "eq", "ne", "ge", "gt")}
+    methods = {
+        id(f): ops[name]
+        for original, _ in replace.values()
+        if isinstance(original, type)
+        for name, f in vars(original).items()
+        if name in ops
+    }
+    tables: list[tuple[dict[Any, Any], Any, Any]] = []
+    for key, module in list(sys.modules.items()):
+        if not _owned(key, "packaging") or not isinstance(module, types.ModuleType):
+            continue
+        for value in list(vars(module).values()):
+            if type(value) is dict:
+                for k, f in list(value.items()):
+                    if id(f) in methods:
+                        tables.append((value, k, f))
+                        value[k] = methods[id(f)]
+    # Objects made before the patch keep packaging's original classes. pickle finds a class by
+    # its name, `packaging.version.Version`, which is pyroid's class now; while patched, such an
+    # object pickles as the pyroid object it equals.
+    reduced: list[tuple[type, Any]] = []
+    for original, new in replace.values():
+        if isinstance(original, type):
+            reduced.append((original, original.__dict__.get("__reduce_ex__", _MISSING)))
+            original.__reduce_ex__ = _pickle_as(original, new)  # type: ignore[method-assign]
+    # Under the patch packaging's classes are pyroid's: objects stop claiming the originals, and
+    # pyroid's constructors take objects of the originals by value.
+    native._set_patched(True)
 
     def undo() -> None:
         for module, attr, original in reversed(saved):
             setattr(module, attr, original)
-        native._set_claims(True)
+        for table, k, f in reversed(tables):
+            table[k] = f
+        for cls, previous in reversed(reduced):
+            if previous is _MISSING:
+                del cls.__reduce_ex__  # type: ignore[misc]
+            else:
+                cls.__reduce_ex__ = previous  # type: ignore[method-assign]
+        native._set_patched(False)
 
     return {}, [undo]
+
+
+def _pickle_as(original: type, new: Any) -> Callable[[Any, Any], Any]:
+    """``__reduce_ex__`` for packaging's `original` class while patched: pickle as `new`."""
+    base = original.__reduce_ex__
+    restore = importlib.import_module("pyroid.packaging")._restore
+
+    def __reduce_ex__(self: Any, protocol: Any) -> Any:
+        if type(self) is not original:  # a subclass: pickled by its own name
+            return base(self, protocol)
+        return (restore, (new, self.__getstate__()))
+
+    return __reduce_ex__
 
 
 def _distribution_version(name: str) -> Callable[[Any], str | None]:
@@ -1015,6 +1066,18 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
         what = f"`import {name}` now gives pyroid's drop-in"
         if real is None:
             rest = f"Everything else{target.rest} is unavailable: {missing} ({target.pip})."
+        elif name == "packaging":
+            # The unported modules the installed release has (24.2 has no pylock, say).
+            unported = [
+                m.replace("_", " ")
+                for m in ("tags", "metadata", "pylock", "ranges", "dependency_groups")
+                if f"packaging.{m}" in sys.modules
+            ]
+            rest = (
+                f"Everything else ({', '.join(unported)}; they now use pyroid's classes) is "
+                "still packaging's own. Names imported from packaging before this call (from "
+                "packaging.version import Version) keep packaging's objects."
+            )
         elif name in _SWAPPED:
             what = f"the installed {name} now uses pyroid's drop-ins"
             example = {
