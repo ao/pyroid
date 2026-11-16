@@ -8,7 +8,7 @@
 //! never re-encoded.
 
 use super::StrMatcher;
-use super::matcher::{BIndex, Tag, calculate_ratio, matches, opcodes, real_quick_ratio};
+use super::matcher::{BIndex, Tag, Work, calculate_ratio, opcodes, real_quick_ratio};
 use crate::text::is_py_whitespace;
 
 /// Which `Differ._fancy_replace` to follow.
@@ -86,17 +86,21 @@ fn cruncher(b: &[u32], junk: CharJunk) -> StrMatcher {
 
 /// `real_quick_ratio() > best and quick_ratio() > best and ratio() > best`:
 /// the ratio if all three hold.
-fn better(m: &StrMatcher, a: &[u32], best: f64) -> Option<f64> {
+fn better(m: &StrMatcher, a: &[u32], best: f64, w: &mut Work) -> Option<f64> {
     let (la, lb) = (a.len(), m.len());
     if real_quick_ratio(la, lb) <= best {
         return None;
     }
-    let ids = m.encode(a);
-    if calculate_ratio(m.index().quick_matches(&ids), la + lb) <= best {
-        return None;
+    let mut ids = std::mem::take(&mut w.ids);
+    ids.clear();
+    ids.extend(m.encode_iter(a.iter().copied()));
+    let mut r = None;
+    if calculate_ratio(m.index().quick_matches_with(&ids, w), la + lb) > best {
+        let ratio = calculate_ratio(m.index().matched(&ids, w), la + lb);
+        r = (ratio > best).then_some(ratio);
     }
-    let r = calculate_ratio(matches(&m.index().matching_blocks(&ids)), la + lb);
-    (r > best).then_some(r)
+    w.ids = ids;
+    r
 }
 
 /// `Differ(linejunk, charjunk).compare(a, b)`.
@@ -107,6 +111,7 @@ pub fn compare(lines: &Lines<'_>, junk: CharJunk, version: DifferVersion) -> Vec
         lines,
         junk,
         version,
+        work: Work::default(),
         out: Vec::with_capacity(lines.a.len().max(lines.b.len())),
     };
     for op in opcodes(&blocks) {
@@ -124,6 +129,7 @@ struct Diff<'l, 'a> {
     lines: &'l Lines<'a>,
     junk: CharJunk,
     version: DifferVersion,
+    work: Work,
     out: Vec<DiffOp>,
 }
 
@@ -184,7 +190,7 @@ impl Diff<'_, '_> {
 
     /// The synch pair of a 3.11-3.13 replace block, `None` for a plain replace.
     fn classic_best(
-        &self,
+        &mut self,
         alo: usize,
         ahi: usize,
         blo: usize,
@@ -203,7 +209,7 @@ impl Diff<'_, '_> {
                     }
                     continue;
                 }
-                if let Some(r) = better(&cruncher, l.a_chars[i], best_ratio) {
+                if let Some(r) = better(&cruncher, l.a_chars[i], best_ratio, &mut self.work) {
                     best_ratio = r;
                     best = (i, j);
                 }
@@ -238,7 +244,7 @@ impl Diff<'_, '_> {
             let mut best_ratio = cutoff;
             let mut best_i = None;
             for i in lo..hi {
-                if let Some(r) = better(&cruncher, l.a_chars[i], best_ratio) {
+                if let Some(r) = better(&cruncher, l.a_chars[i], best_ratio, &mut self.work) {
                     best_ratio = r;
                     best_i = Some(i);
                 }

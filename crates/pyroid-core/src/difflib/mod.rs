@@ -20,8 +20,11 @@ pub mod mdiff;
 #[cfg(test)]
 mod tests;
 
+use std::cell::RefCell;
+
 use intern::CharInterner;
-use matcher::{BIndex, calculate_ratio, matches, real_quick_ratio};
+pub use matcher::Work;
+use matcher::{BIndex, calculate_ratio, real_quick_ratio};
 
 /// `SequenceMatcher(isjunk, autojunk=autojunk)` after `set_seq2(b)`, where
 /// `b` is a string given as code points.
@@ -40,6 +43,29 @@ impl StrMatcher {
         Self { chars, index }
     }
 
+    /// `set_seq2(b)` on this matcher, reusing its memory (`w` lends buffers).
+    pub fn reset(
+        &mut self,
+        b: impl IntoIterator<Item = u32>,
+        isjunk: impl Fn(u32) -> bool,
+        autojunk: bool,
+        w: &mut Work,
+    ) {
+        let mut ids = std::mem::take(&mut w.ids);
+        self.chars.rebuild(b, &mut ids);
+        let mut junk = std::mem::take(&mut w.junk);
+        junk.clear();
+        junk.extend(self.chars.chars().iter().map(|&c| isjunk(c)));
+        self.index.rebuild(&mut ids, junk.len(), &junk, autojunk);
+        w.ids = ids;
+        w.junk = junk;
+    }
+
+    /// An empty matcher, for [`Self::reset`].
+    pub fn empty() -> Self {
+        Self::new(&[], |_| false, true)
+    }
+
     /// Length of `b`.
     pub fn len(&self) -> usize {
         self.index.b().len()
@@ -55,6 +81,11 @@ impl StrMatcher {
         self.chars.encode(a.iter().copied())
     }
 
+    /// `a`'s code points as ids of `b`'s characters.
+    pub fn encode_iter(&self, a: impl Iterator<Item = u32>) -> impl Iterator<Item = u32> {
+        a.map(|c| self.chars.get(c))
+    }
+
     /// The index behind it.
     pub fn index(&self) -> &BIndex {
         &self.index
@@ -62,11 +93,7 @@ impl StrMatcher {
 
     /// `set_seq1(a); ratio()`.
     pub fn ratio(&self, a: &[u32]) -> f64 {
-        let ids = self.encode(a);
-        calculate_ratio(
-            matches(&self.index.matching_blocks(&ids)),
-            a.len() + self.len(),
-        )
+        self.ratio_with(a.iter().copied(), &mut Work::default())
     }
 
     /// `set_seq1(a); quick_ratio()`.
@@ -75,20 +102,57 @@ impl StrMatcher {
         calculate_ratio(self.index.quick_matches(&ids), a.len() + self.len())
     }
 
+    /// `set_seq1(a); ratio()` for `a`'s code points, with reusable buffers.
+    pub fn ratio_with(&self, a: impl Iterator<Item = u32>, w: &mut Work) -> f64 {
+        let mut ids = std::mem::take(&mut w.ids);
+        ids.clear();
+        ids.extend(a.map(|c| self.chars.get(c)));
+        let r = calculate_ratio(self.index.matched(&ids, w), ids.len() + self.len());
+        w.ids = ids;
+        r
+    }
+
     /// `real_quick_ratio() >= cutoff and quick_ratio() >= cutoff and
     /// ratio() >= cutoff` (`get_close_matches`' test): the ratio if it passes.
     pub fn close_match(&self, a: &[u32], cutoff: f64) -> Option<f64> {
-        let (la, lb) = (a.len(), self.len());
+        self.close_match_with(a.len(), a.iter().copied(), cutoff, &mut Work::default())
+    }
+
+    /// [`Self::close_match`] for `a`'s `la` code points, with reusable buffers.
+    pub fn close_match_with(
+        &self,
+        la: usize,
+        a: impl Iterator<Item = u32>,
+        cutoff: f64,
+        w: &mut Work,
+    ) -> Option<f64> {
+        let lb = self.len();
         if real_quick_ratio(la, lb) < cutoff {
             return None;
         }
-        let ids = self.encode(a);
-        if calculate_ratio(self.index.quick_matches(&ids), la + lb) < cutoff {
-            return None;
+        let mut ids = std::mem::take(&mut w.ids);
+        ids.clear();
+        ids.extend(a.map(|c| self.chars.get(c)));
+        let mut r = None;
+        if calculate_ratio(self.index.quick_matches_with(&ids, w), la + lb) >= cutoff {
+            let ratio = calculate_ratio(self.index.matched(&ids, w), la + lb);
+            r = (ratio >= cutoff).then_some(ratio);
         }
-        let r = calculate_ratio(matches(&self.index.matching_blocks(&ids)), la + lb);
-        (r >= cutoff).then_some(r)
+        w.ids = ids;
+        r
     }
+}
+
+thread_local! {
+    static WORK: RefCell<Work> = RefCell::new(Work::default());
+}
+
+/// `f` with this thread's reusable [`Work`] buffers.
+pub fn with_work<R>(f: impl FnOnce(&mut Work) -> R) -> R {
+    WORK.with(|w| match w.try_borrow_mut() {
+        Ok(mut w) => f(&mut w),
+        Err(_) => f(&mut Work::default()), // re-entered: fresh buffers
+    })
 }
 
 /// `heapq.nlargest(n, [(score, x), ...])` as `get_close_matches` uses it:

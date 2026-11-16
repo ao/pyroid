@@ -40,33 +40,59 @@ impl BIndex {
     ///
     /// If `b` has `u32::MAX` elements or more (the bindings delegate those).
     pub fn new(b: Vec<u32>, keys: usize, junk: &[bool], autojunk: bool) -> Self {
+        let mut index = Self {
+            b,
+            kind: Vec::new(),
+            starts: Vec::new(),
+            pos: Vec::new(),
+        };
+        index.reindex(keys, junk, autojunk);
+        index
+    }
+
+    /// [`Self::new`] for `b`'s ids in `ids` (left empty), reusing this index's memory.
+    pub fn rebuild(&mut self, ids: &mut Vec<u32>, keys: usize, junk: &[bool], autojunk: bool) {
+        std::mem::swap(&mut self.b, ids);
+        ids.clear();
+        self.reindex(keys, junk, autojunk);
+    }
+
+    fn reindex(&mut self, keys: usize, junk: &[bool], autojunk: bool) {
+        let b = &self.b;
         assert!(u32::try_from(b.len()).is_ok_and(|n| n < u32::MAX));
-        let mut starts = vec![0u32; keys + 1];
-        for &id in &b {
+        let starts = &mut self.starts;
+        starts.clear();
+        starts.resize(keys + 1, 0);
+        for &id in b {
             starts[id as usize + 1] += 1;
         }
         for k in 0..keys {
             starts[k + 1] += starts[k];
         }
-        let mut fill = starts[..keys].to_vec();
-        let mut pos = vec![0u32; b.len()];
-        for (j, &id) in b.iter().enumerate() {
-            let slot = &mut fill[id as usize];
+        // Fill the positions back to front, counting each start down to its final value.
+        let pos = &mut self.pos;
+        pos.clear();
+        pos.resize(b.len(), 0);
+        for (j, &id) in b.iter().enumerate().rev() {
+            let end = &mut starts[id as usize + 1];
+            *end -= 1;
             #[allow(clippy::cast_possible_truncation)] // checked above
             {
-                pos[*slot as usize] = j as u32;
+                pos[*end as usize] = j as u32;
             }
-            *slot += 1;
         }
-        let mut kind: Vec<Kind> = (0..keys)
-            .map(|id| {
-                if junk.get(id).copied().unwrap_or(false) {
-                    Kind::Junk
-                } else {
-                    Kind::Normal
-                }
-            })
-            .collect();
+        // starts[id + 1] now holds id's start: shift back by one.
+        starts.copy_within(1.., 0);
+        starts[keys] = u32::try_from(b.len()).unwrap_or(u32::MAX);
+        let kind = &mut self.kind;
+        kind.clear();
+        kind.extend((0..keys).map(|id| {
+            if junk.get(id).copied().unwrap_or(false) {
+                Kind::Junk
+            } else {
+                Kind::Normal
+            }
+        }));
         let n = b.len();
         if autojunk && n >= 200 {
             let ntest = n / 100 + 1;
@@ -75,12 +101,6 @@ impl BIndex {
                     *k = Kind::Popular;
                 }
             }
-        }
-        Self {
-            b,
-            kind,
-            starts,
-            pos,
         }
     }
 
@@ -126,12 +146,9 @@ impl BIndex {
 
     /// Scratch space for [`Self::find_longest_match`] on this `b`.
     pub fn scratch(&self) -> Scratch {
-        Scratch {
-            j2len: vec![0; self.b.len() + 1],
-            newj2len: vec![0; self.b.len() + 1],
-            touched: Vec::new(),
-            newtouched: Vec::new(),
-        }
+        let mut s = Scratch::default();
+        s.fit(self.b.len());
+        s
     }
 
     /// `find_longest_match(alo, ahi, blo, bhi)`: `(i, j, k)` such that
@@ -213,34 +230,62 @@ impl BIndex {
         (besti, bestj, bestsize)
     }
 
-    /// `get_matching_blocks()`: the non-adjacent matching blocks in order,
-    /// ending with the `(len(a), len(b), 0)` sentinel.
+    /// [`Self::find_longest_match`] with reusable buffers.
+    pub fn find_longest_match_with(
+        &self,
+        a: &[u32],
+        alo: usize,
+        ahi: usize,
+        blo: usize,
+        bhi: usize,
+        w: &mut Work,
+    ) -> (usize, usize, usize) {
+        w.scratch.fit(self.b.len());
+        self.find_longest_match(a, alo, ahi, blo, bhi, &mut w.scratch)
+    }
+
+    /// The blocks `get_matching_blocks` finds, in the order it finds them
+    /// (unsorted, adjacent ones not merged), in `w.found`.
     #[allow(clippy::similar_names, clippy::many_single_char_names)] // CPython's names
-    pub fn matching_blocks(&self, a: &[u32]) -> Vec<Block> {
+    fn find_blocks(&self, a: &[u32], w: &mut Work) {
         let (la, lb) = (a.len(), self.b.len());
-        let mut s = self.scratch();
-        let mut queue = vec![(0, la, 0, lb)];
-        let mut blocks: Vec<Block> = Vec::new();
-        while let Some((alo, ahi, blo, bhi)) = queue.pop() {
-            let (i, j, k) = self.find_longest_match(a, alo, ahi, blo, bhi, &mut s);
+        w.scratch.fit(lb);
+        w.found.clear();
+        w.queue.clear();
+        w.queue.push((0, la, 0, lb));
+        while let Some((alo, ahi, blo, bhi)) = w.queue.pop() {
+            let (i, j, k) = self.find_longest_match(a, alo, ahi, blo, bhi, &mut w.scratch);
             if k > 0 {
-                blocks.push(Block {
+                w.found.push(Block {
                     a: i,
                     b: j,
                     size: k,
                 });
                 if alo < i && blo < j {
-                    queue.push((alo, i, blo, j));
+                    w.queue.push((alo, i, blo, j));
                 }
                 if i + k < ahi && j + k < bhi {
-                    queue.push((i + k, ahi, j + k, bhi));
+                    w.queue.push((i + k, ahi, j + k, bhi));
                 }
             }
         }
+    }
+
+    /// `get_matching_blocks()`: the non-adjacent matching blocks in order,
+    /// ending with the `(len(a), len(b), 0)` sentinel.
+    pub fn matching_blocks(&self, a: &[u32]) -> Vec<Block> {
+        self.matching_blocks_with(a, &mut Work::default())
+    }
+
+    /// [`Self::matching_blocks`] with reusable buffers.
+    #[allow(clippy::similar_names, clippy::many_single_char_names)] // CPython's names
+    pub fn matching_blocks_with(&self, a: &[u32], w: &mut Work) -> Vec<Block> {
+        self.find_blocks(a, w);
+        let blocks = &mut w.found;
         blocks.sort_unstable_by_key(|m| (m.a, m.b, m.size));
         let mut out = Vec::with_capacity(blocks.len() + 1);
         let (mut i1, mut j1, mut k1) = (0, 0, 0);
-        for m in blocks {
+        for m in blocks.iter() {
             if i1 + k1 == m.a && j1 + k1 == m.b {
                 k1 += m.size;
             } else {
@@ -262,17 +307,30 @@ impl BIndex {
             });
         }
         out.push(Block {
-            a: la,
-            b: lb,
+            a: a.len(),
+            b: self.b.len(),
             size: 0,
         });
         out
     }
 
+    /// The number of matched elements of `get_matching_blocks()` (`ratio()`'s numerator).
+    pub fn matched(&self, a: &[u32], w: &mut Work) -> usize {
+        self.find_blocks(a, w);
+        w.found.iter().map(|m| m.size).sum()
+    }
+
     /// `quick_ratio()`'s match count: for every element, the smaller of its
     /// counts in `a` and in `b` (junk and popular elements included).
     pub fn quick_matches(&self, a: &[u32]) -> usize {
-        let mut avail: Vec<u32> = vec![0; self.keys()];
+        self.quick_matches_with(a, &mut Work::default())
+    }
+
+    /// [`Self::quick_matches`] with reusable buffers.
+    pub fn quick_matches_with(&self, a: &[u32], w: &mut Work) -> usize {
+        let avail = &mut w.avail;
+        avail.clear();
+        avail.resize(self.keys(), 0);
         let mut matches = 0;
         for &id in a {
             if id == NONE {
@@ -288,13 +346,36 @@ impl BIndex {
     }
 }
 
-/// Reusable buffers for [`BIndex::find_longest_match`].
-#[derive(Debug)]
+/// Buffers reused across matches (one per thread).
+#[derive(Debug, Default)]
+pub struct Work {
+    scratch: Scratch,
+    queue: Vec<(usize, usize, usize, usize)>,
+    found: Vec<Block>,
+    avail: Vec<u32>,
+    /// `a` as ids, for the caller to fill.
+    pub ids: Vec<u32>,
+    /// Junk verdicts, for the caller to fill.
+    pub junk: Vec<bool>,
+}
+
+/// Reusable buffers for [`BIndex::find_longest_match`]: all zeros between calls.
+#[derive(Debug, Default)]
 pub struct Scratch {
     j2len: Vec<u32>,
     newj2len: Vec<u32>,
     touched: Vec<usize>,
     newtouched: Vec<usize>,
+}
+
+impl Scratch {
+    /// Room for a `b` of `lb` elements.
+    fn fit(&mut self, lb: usize) {
+        if self.j2len.len() < lb + 1 {
+            self.j2len.resize(lb + 1, 0);
+            self.newj2len.resize(lb + 1, 0);
+        }
+    }
 }
 
 /// One `difflib.Match`.

@@ -96,6 +96,19 @@ impl CharInterner {
         *slot
     }
 
+    /// Number `chars` afresh, reusing this interner's memory; the ids go to `ids`.
+    pub fn rebuild(&mut self, chars: impl IntoIterator<Item = u32>, ids: &mut Vec<u32>) {
+        for &c in &self.chars {
+            if c < 128 {
+                self.ascii[c as usize] = NONE;
+            }
+        }
+        self.other.clear();
+        self.chars.clear();
+        ids.clear();
+        ids.extend(chars.into_iter().map(|c| self.intern(c)));
+    }
+
     /// The id of code point `c`, or [`NONE`].
     pub fn get(&self, c: u32) -> u32 {
         if c < 128 {

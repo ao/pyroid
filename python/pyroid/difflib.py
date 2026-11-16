@@ -27,15 +27,18 @@ from pyroid._pyroid import difflib as _native
 
 __all__ = [
     "IS_CHARACTER_JUNK",
+    "SUPPORTED_VERSIONS",
     "IS_LINE_JUNK",
     "Differ",
     "HtmlDiff",
     "Match",
     "SequenceMatcher",
+    "close_matches_batch",
     "context_diff",
     "diff_bytes",
     "get_close_matches",
     "ndiff",
+    "ratio_batch",
     "restore",
     "unified_diff",
 ]
@@ -100,6 +103,20 @@ _StdSequenceMatcher = _std.SequenceMatcher
 _SM = {k: _StdSequenceMatcher.__dict__[k] for k in _StdSequenceMatcher.__dict__}
 _chain_b = _SM["_SequenceMatcher__chain_b"]
 _ELEMENTS = "these sequences (elements other than str, int and bytes, or other sequence types)"
+
+
+def _init(
+    self: Any, isjunk: Callable[[Any], bool] | None = None, a: Any = "", b: Any = "", autojunk: bool = True
+) -> None:
+    cls = type(self)
+    if cls.set_seqs in _SET_SEQS and cls.set_seq1 is _set_seq1 and cls.set_seq2 is _set_seq2:
+        if not _native._sm_init(self, isjunk, a, b, autojunk, cls in _PLAIN):
+            self.matching_blocks = None
+            self.fullbcount = None
+            _fallback("SequenceMatcher", _ELEMENTS)
+            _chain_b(self)
+    else:
+        _SM["__init__"](self, isjunk, a, b, autojunk)
 
 
 def _set_seq1(self: Any, a: Any) -> None:
@@ -225,6 +242,7 @@ _LAZY = ("b2j", "bjunk", "bpopular", "fullbcount", "matching_blocks")
 
 #: What pyroid sets on a SequenceMatcher class (its own, or difflib's under pyroid.patch).
 _SM_METHODS: dict[str, Any] = {
+    "__init__": _init,
     "set_seq1": _set_seq1,
     "set_seq2": _set_seq2,
     "find_longest_match": _find_longest_match,
@@ -253,6 +271,10 @@ for _name, _f in _StdSequenceMatcher.__dict__.items():
         setattr(SequenceMatcher, _name, _rebind(_f))
 for _name, _f in _SM_METHODS.items():
     setattr(SequenceMatcher, _name, _f)
+# set_seqs as difflib.SequenceMatcher has it (under pyroid.patch) and as rebound here.
+_SET_SEQS = (_SM["set_seqs"], SequenceMatcher.__dict__["set_seqs"])
+# Classes whose attributes are plain instance-dict entries (no subclass __setattr__ or properties).
+_PLAIN = (SequenceMatcher, _StdSequenceMatcher)
 
 # ---------------------------------------------------------------------------
 # Differ, ndiff
@@ -417,6 +439,25 @@ def get_close_matches(
 
 
 get_close_matches.__doc__ = _std.get_close_matches.__doc__
+
+# ---------------------------------------------------------------------------
+# Batches
+# ---------------------------------------------------------------------------
+
+ratio_batch = _native.ratio_batch
+
+
+def close_matches_batch(
+    words: Any, possibilities: Any, n: int = 3, cutoff: float = 0.6, *, threads: int | None = None
+) -> list[list[str] | None]:
+    if not n > 0:
+        raise ValueError(f"n must be > 0: {n!r}")
+    if not 0.0 <= cutoff <= 1.0:
+        raise ValueError(f"cutoff must be in [0.0, 1.0]: {cutoff!r}")
+    return _native._close_matches_batch(  # type: ignore[no-any-return]
+        words, possibilities, min(int(n), sys.maxsize), float(cutoff), threads
+    )
+
 
 # ---------------------------------------------------------------------------
 # HtmlDiff and _mdiff

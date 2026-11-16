@@ -16,6 +16,7 @@ use pyroid_core::difflib::intern::{CharInterner, Interner};
 use pyroid_core::difflib::matcher::{
     BIndex, Block, Kind, NONE, Tag, calculate_ratio, matches, opcodes,
 };
+use pyroid_core::difflib::with_work;
 
 use super::seq::{Key, Kinds, Seq, item_key, push_wtf8};
 
@@ -229,7 +230,11 @@ impl BSide {
 
 /// `__chain_b`'s isjunk pass: `isjunk` (if truthy) on each distinct element,
 /// in `b2j` order. On an error, the verdicts made so far come with it.
-fn junk_pass(py: Python<'_>, side: &BSide, isjunk: &Bound<'_, PyAny>) -> Result<Vec<bool>, (PyErr, Vec<bool>)> {
+fn junk_pass(
+    py: Python<'_>,
+    side: &BSide,
+    isjunk: &Bound<'_, PyAny>,
+) -> Result<Vec<bool>, (PyErr, Vec<bool>)> {
     let mut junk = Vec::new();
     match isjunk.is_truthy() {
         Ok(false) => return Ok(junk),
@@ -340,12 +345,29 @@ fn instance_dict<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
         .cast_into::<PyDict>()?)
 }
 
-/// The instance's [`BSide`] and [`ASide`] for its current `a` and `b`
-/// (encoding `a` if needed), or `None`.
-fn state<'py>(
-    obj: &Bound<'py, PyAny>,
-    d: &Bound<'py, PyDict>,
-) -> PyResult<Option<(Bound<'py, BSide>, Bound<'py, ASide>)>> {
+/// `a`'s ids: kept on the instance (long `a`), or made for this call.
+enum AIds<'py> {
+    Cached(Bound<'py, ASide>),
+    Fresh(Vec<u32>),
+}
+
+impl AIds<'_> {
+    fn ids(&self) -> &[u32] {
+        match self {
+            Self::Cached(c) => &c.get().ids,
+            Self::Fresh(ids) => ids,
+        }
+    }
+}
+
+/// Encodings of an `a` longer than this are kept on the instance.
+const KEEP_A: usize = 256;
+
+/// The instance's [`BSide`], its current `a`, and `a`'s ids.
+type State<'py> = (Bound<'py, BSide>, Bound<'py, PyAny>, AIds<'py>);
+
+/// The instance's [`State`], or `None`.
+fn state<'py>(obj: &Bound<'py, PyAny>, d: &Bound<'py, PyDict>) -> PyResult<Option<State<'py>>> {
     let py = obj.py();
     let Some(side) = d.get_item(pyo3::intern!(py, "_pyroid_b"))? else {
         return Ok(None);
@@ -362,41 +384,58 @@ fn state<'py>(
         if let Ok(cached) = cached.cast_into::<ASide>() {
             let c = cached.get();
             if c.a.bind(py).is(&a) && c.side.bind(py).is(&side) {
-                return Ok(Some((side, cached)));
+                return Ok(Some((side, a, AIds::Cached(cached))));
             }
         }
     }
     let Some(ids) = encode_a(side.get(), &a)? else {
         return Ok(None);
     };
+    if ids.len() <= KEEP_A {
+        return Ok(Some((side, a, AIds::Fresh(ids))));
+    }
     let aside = Bound::new(
         py,
         ASide {
-            a: a.unbind(),
+            a: a.clone().unbind(),
             side: side.clone().unbind(),
             ids,
         },
     )?;
     d.set_item(pyo3::intern!(py, "_pyroid_a"), &aside)?;
-    Ok(Some((side, aside)))
+    Ok(Some((side, a, AIds::Cached(aside))))
 }
 
-/// The cached blocks, if they are for the current `a` and `b`.
-fn valid_blocks<'py>(
-    obj: &Bound<'py, PyAny>,
-    d: &Bound<'py, PyDict>,
-) -> PyResult<Option<Bound<'py, Blocks>>> {
+/// What `_pyroid_mb` says about the current `a` and `b`.
+enum Cached<'py> {
+    /// The blocks.
+    Blocks(Bound<'py, Blocks>),
+    /// `ratio()` ran and gave this (CPython has `matching_blocks` now); the
+    /// blocks were not kept.
+    Counted(f64),
+    Nothing,
+}
+
+/// `_pyroid_mb`: a [`Blocks`], or an `(a, b, ratio)` tuple after `ratio()`; valid
+/// while `self.a` and `self.b` are those objects.
+fn cached_blocks<'py>(obj: &Bound<'py, PyAny>, d: &Bound<'py, PyDict>) -> PyResult<Cached<'py>> {
     let py = obj.py();
     let Some(cached) = d.get_item(pyo3::intern!(py, "_pyroid_mb"))? else {
-        return Ok(None);
+        return Ok(Cached::Nothing);
     };
-    let Ok(cached) = cached.cast_into::<Blocks>() else {
-        return Ok(None);
-    };
-    let c = cached.get();
-    let current = c.a.bind(py).is(obj.getattr(pyo3::intern!(py, "a"))?)
-        && c.b.bind(py).is(obj.getattr(pyo3::intern!(py, "b"))?);
-    Ok(current.then_some(cached))
+    let a = obj.getattr(pyo3::intern!(py, "a"))?;
+    let b = obj.getattr(pyo3::intern!(py, "b"))?;
+    if let Ok(blocks) = cached.cast::<Blocks>() {
+        let c = blocks.get();
+        if c.a.bind(py).is(&a) && c.b.bind(py).is(&b) {
+            return Ok(Cached::Blocks(blocks.clone()));
+        }
+    } else if let Ok(t) = cached.cast::<PyTuple>() {
+        if t.len() == 3 && t.get_item(0)?.is(&a) && t.get_item(1)?.is(&b) {
+            return Ok(Cached::Counted(t.get_item(2)?.extract()?));
+        }
+    }
+    Ok(Cached::Nothing)
 }
 
 /// The matching blocks for the current `a` and `b`: cached, or computed and
@@ -406,22 +445,23 @@ fn blocks<'py>(
     d: &Bound<'py, PyDict>,
 ) -> PyResult<Option<Bound<'py, Blocks>>> {
     let py = obj.py();
-    if let Some(cached) = valid_blocks(obj, d)? {
-        return Ok(Some(cached));
+    if let Cached::Blocks(blocks) = cached_blocks(obj, d)? {
+        return Ok(Some(blocks));
     }
-    let Some((side, aside)) = state(obj, d)? else {
+    let Some((side, a, aside)) = state(obj, d)? else {
         return Ok(None);
     };
-    let (s, a) = (side.get(), aside.get());
-    let found = if a.ids.len() + s.index.b().len() > 4096 {
-        py.detach(|| s.index.matching_blocks(&a.ids))
+    let (s, ids) = (side.get(), aside.ids());
+    let work = || with_work(|w| s.index.matching_blocks_with(ids, w));
+    let found = if ids.len() + s.index.b().len() > 4096 {
+        py.detach(work)
     } else {
-        s.index.matching_blocks(&a.ids)
+        work()
     };
     let out = Bound::new(
         py,
         Blocks {
-            a: a.a.clone_ref(py),
+            a: a.unbind(),
             b: s.b.clone_ref(py),
             found,
         },
@@ -476,8 +516,50 @@ pub fn _sm_set_seq2(obj: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<bo
     let py = obj.py();
     obj.setattr(pyo3::intern!(py, "b"), b)?;
     obj.setattr(pyo3::intern!(py, "opcodes"), py.None())?;
-    let d = instance_dict(obj)?;
+    chain(obj, &instance_dict(obj)?, b, false)
+}
+
+/// The attributes CPython's `__chain_b` leaves when it raises: in the junk
+/// pass (`popular` false: `b2j` complete, `bjunk` so far, `bpopular` the old
+/// one) or at `autojunk` (`b2j` without junk, `bpopular` empty).
+fn failed_chain(
+    d: &Bound<'_, PyDict>,
+    side: &mut BSide,
+    ids: &[u32],
+    n: usize,
+    junk: &[bool],
+    popular: bool,
+) -> PyResult<()> {
+    let py = d.py();
+    d.set_item(pyo3::intern!(py, "matching_blocks"), py.None())?;
+    d.set_item(pyo3::intern!(py, "fullbcount"), py.None())?;
+    let deleted = if popular { junk } else { &[] };
+    side.index = BIndex::new(ids.to_vec(), n, deleted, false);
+    d.set_item(pyo3::intern!(py, "b2j"), side.b2j(py)?)?;
+    let found = PySet::empty(py)?;
+    for (id, _) in junk.iter().enumerate().filter(|(_, j)| **j) {
+        found.add(side.rep(py, id)?)?;
+    }
+    d.set_item(pyo3::intern!(py, "bjunk"), found)?;
+    if popular {
+        d.set_item(pyo3::intern!(py, "bpopular"), PySet::empty(py)?)?;
+    }
+    Ok(())
+}
+
+/// `__chain_b` for `b` (already `self.b`). `fresh`: the instance dict holds
+/// nothing of an earlier `b` (nothing to remove first).
+fn chain(
+    obj: &Bound<'_, PyAny>,
+    d: &Bound<'_, PyDict>,
+    b: &Bound<'_, PyAny>,
+    fresh: bool,
+) -> PyResult<bool> {
+    let py = obj.py();
     let del = |names: &[&Bound<'_, PyString>]| -> PyResult<()> {
+        if fresh {
+            return Ok(());
+        }
         for name in names {
             if d.contains(*name)? {
                 d.del_item(*name)?;
@@ -487,9 +569,12 @@ pub fn _sm_set_seq2(obj: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<bo
     };
     // The previous b's lazy attributes: CPython keeps bjunk and bpopular
     // until __chain_b replaces them, so a chain that fails half-way shows them.
-    let old = d
-        .get_item(pyo3::intern!(py, "_pyroid_b"))?
-        .and_then(|o| o.cast_into::<BSide>().ok());
+    let old = if fresh {
+        None
+    } else {
+        d.get_item(pyo3::intern!(py, "_pyroid_b"))?
+            .and_then(|o| o.cast_into::<BSide>().ok())
+    };
     let keep_old = |names: &[&str]| -> PyResult<()> {
         if let Some(old) = &old {
             for &name in names {
@@ -524,22 +609,8 @@ pub fn _sm_set_seq2(obj: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<bo
         pyo3::intern!(py, "fullbcount"),
     ])?;
     let n = side.distinct();
-    let fail = |side: &mut BSide, ids: &[u32], junk: &[bool], popular: bool| -> PyResult<()> {
-        // CPython's attributes at the point __chain_b raised.
-        d.set_item(pyo3::intern!(py, "matching_blocks"), py.None())?;
-        d.set_item(pyo3::intern!(py, "fullbcount"), py.None())?;
-        let deleted = if popular { junk } else { &[] };
-        side.index = BIndex::new(ids.to_vec(), n, deleted, false);
-        d.set_item(pyo3::intern!(py, "b2j"), side.b2j(py)?)?;
-        let found = PySet::empty(py)?;
-        for (id, _) in junk.iter().enumerate().filter(|(_, j)| **j) {
-            found.add(side.rep(py, id)?)?;
-        }
-        d.set_item(pyo3::intern!(py, "bjunk"), found)?;
-        if popular {
-            d.set_item(pyo3::intern!(py, "bpopular"), PySet::empty(py)?)?;
-        }
-        Ok(())
+    let fail = |side: &mut BSide, ids: &[u32], junk: &[bool], popular: bool| {
+        failed_chain(d, side, ids, n, junk, popular)
     };
     let junk = match obj
         .getattr(pyo3::intern!(py, "isjunk"))
@@ -576,6 +647,61 @@ pub fn _sm_set_seq2(obj: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<bo
     Ok(true)
 }
 
+/// `__init__(isjunk, a, b, autojunk)` when `set_seqs`, `set_seq1` and
+/// `set_seq2` are not overridden. False if `b` does not run natively (the
+/// caller chains it). `plain`: the instance is of `SequenceMatcher` itself
+/// (no `__setattr__` or descriptors of a subclass to honour).
+#[pyfunction]
+pub fn _sm_init(
+    obj: &Bound<'_, PyAny>,
+    isjunk: &Bound<'_, PyAny>,
+    a: &Bound<'_, PyAny>,
+    b: &Bound<'_, PyAny>,
+    autojunk: &Bound<'_, PyAny>,
+    plain: bool,
+) -> PyResult<bool> {
+    let py = obj.py();
+    let d = instance_dict(obj)?;
+    if plain && d.is_empty() {
+        // A new instance: CPython's attributes, set in its order.
+        d.set_item(pyo3::intern!(py, "isjunk"), isjunk)?;
+        d.set_item(pyo3::intern!(py, "a"), py.None())?;
+        d.set_item(pyo3::intern!(py, "b"), py.None())?;
+        d.set_item(pyo3::intern!(py, "autojunk"), autojunk)?;
+        if !a.is_none() {
+            d.set_item(pyo3::intern!(py, "a"), a)?;
+            d.set_item(pyo3::intern!(py, "opcodes"), py.None())?;
+        }
+        if b.is_none() {
+            return Ok(true);
+        }
+        d.set_item(pyo3::intern!(py, "b"), b)?;
+        d.set_item(pyo3::intern!(py, "opcodes"), py.None())?;
+        return chain(obj, &d, b, true);
+    }
+    obj.setattr(pyo3::intern!(py, "isjunk"), isjunk)?;
+    obj.setattr(pyo3::intern!(py, "a"), py.None())?;
+    obj.setattr(pyo3::intern!(py, "b"), py.None())?;
+    obj.setattr(pyo3::intern!(py, "autojunk"), autojunk)?;
+    // set_seq1(a): nothing for None (it is already self.a).
+    if !a.is_none() {
+        obj.setattr(pyo3::intern!(py, "a"), a)?;
+        obj.setattr(pyo3::intern!(py, "opcodes"), py.None())?;
+        for name in [
+            pyo3::intern!(py, "matching_blocks"),
+            pyo3::intern!(py, "_pyroid_mb"),
+        ] {
+            if d.contains(name)? {
+                d.del_item(name)?;
+            }
+        }
+    }
+    if b.is_none() {
+        return Ok(true);
+    }
+    _sm_set_seq2(obj, b)
+}
+
 /// `ratio()`, or `None`.
 #[pyfunction]
 pub fn _sm_ratio(obj: &Bound<'_, PyAny>) -> PyResult<Option<f64>> {
@@ -584,12 +710,30 @@ pub fn _sm_ratio(obj: &Bound<'_, PyAny>) -> PyResult<Option<f64>> {
     if has_list(&d, pyo3::intern!(py, "matching_blocks"))? {
         return Ok(None);
     }
-    let Some(found) = blocks(obj, &d)? else {
+    match cached_blocks(obj, &d)? {
+        Cached::Blocks(blocks) => {
+            let c = blocks.get();
+            let last = c.found.last().map_or(0, |m| m.a + m.b); // the (la, lb, 0) sentinel
+            return Ok(Some(calculate_ratio(matches(&c.found), last)));
+        }
+        Cached::Counted(ratio) => return Ok(Some(ratio)),
+        Cached::Nothing => {}
+    }
+    let Some((side, a, aside)) = state(obj, &d)? else {
         return Ok(None);
     };
-    let length =
-        obj.getattr(pyo3::intern!(py, "a"))?.len()? + obj.getattr(pyo3::intern!(py, "b"))?.len()?;
-    Ok(Some(calculate_ratio(matches(&found.get().found), length)))
+    let (s, ids) = (side.get(), aside.ids());
+    let work = || with_work(|w| s.index.matched(ids, w));
+    let matched = if ids.len() + s.index.b().len() > 4096 {
+        py.detach(work)
+    } else {
+        work()
+    };
+    // The lengths read when a and b were encoded (the same objects).
+    let ratio = calculate_ratio(matched, ids.len() + s.index.b().len());
+    let marker = (a, s.b.bind(py), ratio).into_pyobject(py)?;
+    d.set_item(pyo3::intern!(py, "_pyroid_mb"), marker)?;
+    Ok(Some(ratio))
 }
 
 /// `get_matching_blocks()` when `matching_blocks` is not set: the list of
@@ -607,15 +751,20 @@ pub fn _sm_matching_blocks<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Option<Boun
 }
 
 /// The `matching_blocks` attribute when the instance dict has none: the
-/// cached blocks as a list (stored in the dict), or `None`.
+/// blocks as a list (stored in the dict) if CPython would have them, or `None`.
 #[pyfunction]
 pub fn _sm_cached_blocks<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyList>>> {
     let py = obj.py();
     let d = instance_dict(obj)?;
-    let Some(cached) = valid_blocks(obj, &d)? else {
-        return Ok(None);
+    let found = match cached_blocks(obj, &d)? {
+        Cached::Nothing => return Ok(None),
+        Cached::Blocks(blocks) => blocks,
+        Cached::Counted(_) => match blocks(obj, &d)? {
+            Some(blocks) => blocks,
+            None => return Ok(None),
+        },
     };
-    let list = matches_list(py, &cached.get().found)?;
+    let list = matches_list(py, &found.get().found)?;
     d.set_item(pyo3::intern!(py, "matching_blocks"), &list)?;
     Ok(Some(list))
 }
@@ -642,14 +791,17 @@ pub fn _sm_opcodes<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, P
 pub fn _sm_quick_ratio(obj: &Bound<'_, PyAny>) -> PyResult<Option<f64>> {
     let py = obj.py();
     let d = instance_dict(obj)?;
-    let Some((side, aside)) = state(obj, &d)? else {
+    let Some((side, _, aside)) = state(obj, &d)? else {
         return Ok(None);
     };
-    let (s, a) = (side.get(), aside.get());
+    let (s, ids) = (side.get(), aside.ids());
     // CPython builds fullbcount on the first call: the attribute shows it from now on.
     d.set_item(pyo3::intern!(py, "_pyroid_qr"), true)?;
-    let length = a.ids.len() + s.index.b().len();
-    Ok(Some(calculate_ratio(s.index.quick_matches(&a.ids), length)))
+    let length = ids.len() + s.index.b().len();
+    Ok(Some(calculate_ratio(
+        with_work(|w| s.index.quick_matches_with(ids, w)),
+        length,
+    )))
 }
 
 /// `find_longest_match(alo, ahi, blo, bhi)`, or `None` (bounds that are not
@@ -665,11 +817,11 @@ pub fn _sm_find_longest_match<'py>(
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
     let py = obj.py();
     let d = instance_dict(obj)?;
-    let Some((side, aside)) = state(obj, &d)? else {
+    let Some((side, _, aside)) = state(obj, &d)? else {
         return Ok(None);
     };
-    let (s, a) = (side.get(), aside.get());
-    let (la, lb) = (a.ids.len(), s.index.b().len());
+    let (s, ids) = (side.get(), aside.ids());
+    let (la, lb) = (ids.len(), s.index.b().len());
     let bound = |x: &Bound<'py, PyAny>, default: Option<usize>, len: usize| -> Option<usize> {
         if x.is_none() {
             return default;
@@ -687,10 +839,7 @@ pub fn _sm_find_longest_match<'py>(
     ) else {
         return Ok(None);
     };
-    let mut scratch = s.index.scratch();
-    let (i, j, k) = s
-        .index
-        .find_longest_match(&a.ids, alo, ahi, blo, bhi, &mut scratch);
+    let (i, j, k) = with_work(|w| s.index.find_longest_match_with(ids, alo, ahi, blo, bhi, w));
     Ok(Some(new_match(py, i, j, k)?))
 }
 

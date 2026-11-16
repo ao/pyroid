@@ -13,7 +13,7 @@ use pyroid_core::difflib::format::{self, Out, Prefix};
 use pyroid_core::difflib::intern::Interner;
 use pyroid_core::difflib::matcher::{BIndex, grouped_opcodes, opcodes};
 use pyroid_core::difflib::mdiff::{self, Cell, Text};
-use pyroid_core::difflib::{StrMatcher, nlargest};
+use pyroid_core::difflib::{StrMatcher, nlargest, with_work};
 use pyroid_core::par;
 use pyroid_core::text::is_py_whitespace;
 
@@ -567,11 +567,19 @@ pub fn _get_close_matches<'py>(
         let found = py
             .detach(|| {
                 par::map(chunk.len(), t, |i| {
-                    let cps = match &chunk[i] {
-                        Cand::Utf8(s) => s.chars().map(u32::from).collect::<Vec<_>>(),
-                        Cand::Cps(cps) => cps.clone(),
-                    };
-                    matcher.close_match(&cps, cutoff)
+                    with_work(|w| match &chunk[i] {
+                        Cand::Utf8(s) => {
+                            let la = if s.is_ascii() {
+                                s.len()
+                            } else {
+                                s.chars().count()
+                            };
+                            matcher.close_match_with(la, s.chars().map(u32::from), cutoff, w)
+                        }
+                        Cand::Cps(cps) => {
+                            matcher.close_match_with(cps.len(), cps.iter().copied(), cutoff, w)
+                        }
+                    })
                 })
             })
             .map_err(|e| BatchError::from(e).into_pyerr(py))?;
