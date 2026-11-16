@@ -440,7 +440,7 @@ fn table_of(d: &Bound<'_, PyAny>, valued: bool, what: &str) -> Result<Table, Str
             v.extract::<i64>()
                 .ok()
                 .filter(|v| v.abs() <= pyroid_core::dateutil::info::MAX_TABLE_VALUE)
-                .ok_or_else(|| format!("a parserinfo {what} value the Rust port does not handle"))?
+                .ok_or_else(|| format!("a parserinfo {what} value that is not a small int"))?
         } else {
             0
         };

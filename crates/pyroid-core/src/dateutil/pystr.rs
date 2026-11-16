@@ -41,9 +41,9 @@ impl Reason {
     /// The reason as the fallback warning names it.
     pub fn describe(self) -> &'static str {
         match self {
-            Self::BigNumber => "a number too large for the Rust port (past 64 bits)",
+            Self::BigNumber => "a number past 64 bits",
             Self::LongDecimal => "a fractional number with more than 26 significant digits",
-            Self::InfoValue => "a parserinfo table value the Rust port does not handle",
+            Self::InfoValue => "a parserinfo table value that is not a small int",
         }
     }
 }

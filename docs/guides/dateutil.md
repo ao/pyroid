@@ -185,10 +185,12 @@ python-dateutil), with a one-time [`pyroid.FallbackWarning`](../concepts/fallbac
   `_parse_numeric_token`, `_build_naive`, ...), or a `parserinfo` subclass that overrides a method
   (`convertyear`, `validate`, ...) rather than the word lists;
 - a parserinfo whose tables are not dicts of `str` to small `int`s;
-- a number past 64 bits, or a fractional number with more than 26 significant digits (where the
-  `decimal` context rounds or raises), or a thread whose `decimal` precision is below what the
-  arithmetic needs;
-- a text stream whose `read(1)` does not return one-character strings;
+- a number past 64 bits; an hour or minute value with a fraction (`10.5h`, the minutes of
+  `10:30.5`) of more than 26 significant digits, where dateutil's `Decimal` arithmetic rounds or
+  raises; or a thread whose `decimal` precision is below what that arithmetic needs (the fraction
+  of a second is read as text, by dateutil and by pyroid, so it never falls back);
+- a text stream whose `read(1)` does not return one-character strings (dateutil's code reads it
+  from the first such read on, and fails there as dateutil does);
 - a string holding both lone surrogates and characters in U+10F800..U+10FFFF.
 
 An unexpected keyword argument runs dateutil's code too (no warning), so the `TypeError` is

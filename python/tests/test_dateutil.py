@@ -5,6 +5,7 @@ The differential checks against python-dateutil itself are in test_dateutil_pari
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import decimal
 import gc
@@ -158,6 +159,63 @@ def test_inputs() -> None:
         pp.parse(20030925)  # type: ignore[call-overload]
     with pytest.raises(UnicodeDecodeError):
         pp.parse(b"\xff2003")
+
+
+class OddStream:
+    """A stream whose ``read(1)`` gives ``chunks``, then `last` forever; counts the reads."""
+
+    def __init__(self, chunks: list[Any], last: Any) -> None:
+        self.chunks = list(chunks)
+        self.last = last
+        self.reads = 0
+
+    def read(self, n: int = -1) -> Any:
+        self.reads += 1
+        if self.reads > 10_000:
+            raise RuntimeError("read past the 10,000th character")
+        return self.chunks.pop(0) if self.chunks else self.last
+
+
+@pytest.mark.parametrize(
+    ("chunks", "last"),
+    [
+        ([], 5),  # read() returns an int: dateutil fails at the first character
+        ([], True),
+        (list("2003-09-25 "), 7),
+        (list("Sep 2"), "5 "),  # two characters at once, then a never-ending stream
+        ([], b"2"),
+        (["2", "0", "0", "3"], b""),
+        ([], []),
+        (list("2003-09-25"), ""),
+        (["1", "\x00", "0", ":", "3", "0"], ""),
+    ],
+)
+def test_odd_streams_are_read_as_dateutil_reads_them(chunks: list[Any], last: Any) -> None:
+    a, b = OddStream(chunks, last), OddStream(chunks, last)
+    ra = outcome(du.parse, a, default=DEFAULT)
+    rb = outcome(pp.parse, b, default=DEFAULT)
+    if ra[0] == rb[0] == "ok":
+        same(ra[1], rb[1])
+    else:
+        assert ra[:2] == rb[:2]
+        assert ra[2].replace(repr(a), "S") == rb[2].replace(repr(b), "S")
+    assert a.reads == b.reads
+
+
+def test_stream_errors_hold_the_callers_stream() -> None:
+    for make in (
+        lambda: io.BytesIO(b"nonsense"),
+        lambda: io.BytesIO(b"Feb 30 2021"),
+        lambda: OddStream([*"nonsen", "se"], ""),
+        lambda: OddStream(list("nonsense"), ""),
+    ):
+        for f in (du.parse, pp.parse, pp.DEFAULTPARSER.parse):
+            s = make()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", pyroid.FallbackWarning)
+                with pytest.raises(du.ParserError) as e:
+                    f(s)  # type: ignore[arg-type]
+            assert e.value.args[1] is s
 
 
 def test_unexpected_keyword_is_dateutils_type_error() -> None:
@@ -392,6 +450,71 @@ def test_parser_hook_override_runs_dateutils_code() -> None:
     ppx._WARNED.clear()  # the warning is shown once per process
     with pytest.warns(pyroid.FallbackWarning, match="overriding _parsems"):
         assert MyParser().parse("10:20:30.5").microsecond == 500_001
+
+
+class NumericParser(ppx.parser):  # type: ignore[misc]
+    def _parse_numeric_token(self, *args: Any, **kwargs: Any) -> Any:
+        return super()._parse_numeric_token(*args, **kwargs)
+
+
+class OwnParseParser(ppx.parser):  # type: ignore[misc]
+    def _parse(self, timestr: Any, **kwargs: Any) -> Any:
+        return super()._parse(timestr, **kwargs)
+
+
+@pytest.mark.thread_unsafe(reason="records warnings")
+@pytest.mark.parametrize(
+    ("call", "reason"),
+    [
+        (lambda: pp.parse("18446744073709551616 Sep 2003"), "a number past 64 bits"),
+        (lambda: NumericParser().parse("Sep 25 2003"), "overriding _parse_numeric_token"),
+        (lambda: OwnParseParser().parse("Sep 25 2003"), "overriding _parse"),
+        (lambda: pp.parse("01/02/03", LoudInfo()), "overriding convertyear"),
+        (lambda: pp.parse(io.BytesIO(b"Sep 25 2003")), "this stream"),  # type: ignore[arg-type]
+        pytest.param(
+            lambda: pp.parse("10." + "1" * 25 + "h"), "26 significant digits", id="long hour"
+        ),
+        pytest.param(
+            lambda: pp.parse("10:00." + "1" * 27), "26 significant digits", id="long minute"
+        ),
+    ],
+)
+def test_one_fallback_warning_per_reason(call: Any, reason: str) -> None:
+    ppx._WARNED.clear()  # the warning is shown once per process
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        for _ in range(2):
+            with contextlib.suppress(ValueError):
+                call()
+    got = [x for x in w if x.category is pyroid.FallbackWarning]
+    assert len(got) == 1, [str(x.message) for x in got]
+    assert reason in str(got[0].message)
+    assert str(got[0].message).count("Rust port") == 1
+    assert got[0].filename == __file__
+
+
+@pytest.mark.thread_unsafe(reason="records warnings")
+@pytest.mark.parametrize(
+    ("s", "falls_back"),
+    [
+        # The decimal context matters only where dateutil computes with the number (an hour or
+        # minute with a fraction); the fraction of a second is read as text, natively too.
+        ("10:00:00." + "1" * 40, False),
+        ("10:00." + "1" * 26, False),
+        ("10:00." + "1" * 27, True),
+        ("10." + "1" * 24 + "h", False),
+        ("10." + "1" * 25 + "h", True),
+        ("10." + "9" * 40 + "m", True),
+    ],
+)
+def test_long_fractions_match_dateutil(s: str, falls_back: bool) -> None:
+    check(s, default=DEFAULT)
+    ppx._WARNED.clear()
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        with contextlib.suppress(ValueError):  # dateutil's own error, for "10.99...9m"
+            pp.parse(s, default=DEFAULT)
+    assert any(x.category is pyroid.FallbackWarning for x in w) is falls_back
 
 
 def test_private_parse() -> None:

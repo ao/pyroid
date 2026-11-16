@@ -291,11 +291,24 @@ def _reference_parse(
     tzinfos: Any,
     kwargs: dict[str, Any],
 ) -> Any:
-    """Run dateutil's ``parser.parse`` itself (pyroid's copy), after a FallbackWarning."""
+    """Run dateutil's ``parser.parse`` itself (pyroid's copy), after a FallbackWarning.
+
+    `timestr` may be a :class:`_Replay` of a stream: dateutil's code reads it, and its errors
+    name the caller's stream.
+    """
     _fallback("parse", reason)
-    return _reference.parser.parse(
-        self, timestr, default=default, ignoretz=ignoretz, tzinfos=tzinfos, **kwargs
-    )
+    # dateutil's parse. It calls self._parse, which for pyroid's own _parse is dateutil's _parse
+    # here: pyroid's would run the kernel again and warn a second time for the same reason.
+    if default is None:
+        default = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    own = self._parse
+    if getattr(own, "__func__", None) is parser._parse:
+        res, skipped_tokens = _reference.parser._parse(self, timestr, **kwargs)
+    else:
+        res, skipped_tokens = own(timestr, **kwargs)
+    if isinstance(timestr, _Replay):
+        timestr = timestr._original
+    return _finish(self, res, skipped_tokens, timestr, default, ignoretz, tzinfos, kwargs)
 
 
 def _reference_private_parse(self: Any, reason: str, timestr: Any, *args: Any) -> Any:
@@ -304,7 +317,7 @@ def _reference_private_parse(self: Any, reason: str, timestr: Any, *args: Any) -
 
 
 class _Replay:
-    """A stream that gives back the ``read(1)`` results already taken from another one.
+    """A stream that replays the ``read(1)`` results taken from another one, then reads on.
 
     ``str()`` and ``repr()`` are the original stream's, so dateutil's messages name it.
     """
@@ -324,24 +337,24 @@ class _Replay:
         if self._i < len(self._chunks):
             self._i += 1
             return self._chunks[self._i - 1]
-        return ""
+        return self._original.read(n)
 
 
 def _read_stream(stream: Any) -> Any:
     """Read a character stream as ``_timelex`` does, one ``read(1)`` at a time.
 
-    Returns its text, or a replay of the reads when they are not all one-character ``str``
-    (dateutil's own code then reads them).
+    Returns its text, or, at the first read that is not a one-character ``str``, a replay of the
+    reads so far that then reads on from `stream` (dateutil's own code reads it, and fails at
+    that read as dateutil does, instead of this reading a stream that never ends).
     """
     chunks = []
     while True:
         c = stream.read(1)
-        if not c:
-            break
+        if type(c) is not str or len(c) > 1:
+            return _Replay([*chunks, c], stream)
+        if not c:  # ""
+            return "".join(chunks)
         chunks.append(c)
-    if all(type(c) is str and len(c) == 1 for c in chunks):
-        return "".join(chunks)
-    return _Replay(chunks, stream)
 
 
 DEFAULTPARSER = parser()
