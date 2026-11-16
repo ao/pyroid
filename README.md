@@ -123,8 +123,8 @@ FineWeb dev slice, AWS EC2 c7i.4xlarge:
 | `dedup`, MinHash signatures | datatrove 0.10.1 | 34× |
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
 
-`pyroid.jmespath`, on AWS EC2 c7i.4xlarge: 10 to 23× faster than jmespath 1.1.0 on single
-queries of a boto3-style response, 6 to 20× over 10,000 records.
+`pyroid.jmespath`, on AWS EC2 c7i.4xlarge: 10 to 26× faster than jmespath 1.1.0 on single
+queries of a boto3-style response, 7 to 20× over 10,000 records.
 
 The other modules have only been measured in a Docker VM on a Mac, so treat these as indicative
 (one thread unless stated):
