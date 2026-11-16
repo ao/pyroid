@@ -23,7 +23,7 @@ Modules and what they match:
 - `pyroid.jieba` (`import pyroid.jieba as jieba`): the same words, offsets and frequencies as jieba 0.42.1, with the default dictionary built in; `lcut(docs, threads=n)` segments a batch in parallel.
 - `pyroid.langdetect` (`from pyroid.langdetect import detect, DetectorFactory`): the same languages and probabilities, bit for bit, as langdetect 1.0.9 for the same `DetectorFactory.seed`; `detect_batch(texts, threads=n)` detects a batch in parallel with the per-call results; `pyroid.patch("langdetect")` runs langdetect's own classes on pyroid's code.
 - `pyroid.trafilatura` (`import pyroid.trafilatura as trafilatura`): the same text as Trafilatura 2.3.1 (the default) or 1.11.0 (`compat="1.11.0"`, the release `datatrove[processing]==0.10.1` installs), byte for byte; `extract_batch(pages, threads=n)` runs pages in parallel; other output formats and metadata are delegated to the installed trafilatura.
-- `pyroid.warc` (`from pyroid.warc import ArchiveIterator`): warcio 1.8.2's WARC/ARC reader with the same records, headers, payloads, offsets, exceptions and messages; `ArchiveIterator(path)` reads without the GIL; `iter_documents(path)` is datatrove 0.10.1's `WarcReader` loop (`process_record`: id, url, date, text), `iter_batches(path)` the same as Arrow record batches; `pyroid.patch("warcio")` swaps the iterator into an installed warcio, so stock datatrove reads with it. Known differences: `check_digests` knows md5, sha1, sha224, sha256, sha384, sha512 only; corrupt brotli streams may decode further than libbrotli.
+- `pyroid.warc` (`from pyroid.warc import ArchiveIterator`): warcio 1.8.2's WARC/ARC reader with the same records, headers, payloads, offsets, exceptions and messages; `ArchiveIterator(path)` reads without the GIL; `iter_documents(path)` is datatrove 0.10.1's `WarcReader` loop (`process_record`: id, url, date, text), `iter_batches(path)` the same as Arrow record batches; `pyroid.patch("warcio")` swaps the iterator into an installed warcio, so stock datatrove reads with it. Known difference: `check_digests` knows md5, sha1, sha224, sha256, sha384, sha512 only.
 - `pyroid.filters`: datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad words, symbol lines and URL filters, with the same decisions.
 - `pyroid.dedup`: datatrove 0.10.1's MinHash and sentence dedup, with the same removals.
 - `pyroid.datasketch`: datasketch 2.0.0's MinHash, LeanMinHash and LSH indexes with the same hash values and query results; needs numpy.
@@ -38,7 +38,7 @@ Integrations:
 - `pyroid.integrations.nemo_curator`: drop-in NeMo Curator 1.4.0 CPU text stages (`ScoreFilter`, `Score`, `Filter`, `Modify`, the heuristic and fastText filters, the modifiers).
 - `pyroid.integrations.hf`: Hugging Face `datasets` helpers.
 
-There are no runtime dependencies; the extras are `[fasttext]` and `[datasketch]` (numpy), `[cli]` (pyarrow), `[datatrove]`, `[hf]`, `[warc]`, `[nemo]` and `[all]`.
+There are no runtime dependencies; the extras are `[fasttext]`, `[datasketch]` and `[nemo]` (numpy, which `pyroid.nemo` needs for batch calls only), `[cli]` (pyarrow), `[datatrove]`, `[hf]`, `[warc]` and `[all]`.
 
 Conventions shared by every module:
 
