@@ -89,6 +89,113 @@ pub enum Node<V> {
 }
 
 impl<V> Node<V> {
+    /// Does this node have children? (A node without any is freed without recursion.)
+    pub fn is_leaf(&self) -> bool {
+        match self {
+            Self::Current
+            | Self::Field(_)
+            | Self::Identity
+            | Self::Index(_)
+            | Self::Literal(_)
+            | Self::Slice(..) => true,
+            Self::FunctionExpression(_, v)
+            | Self::IndexExpression(v)
+            | Self::MultiSelectDict(v)
+            | Self::MultiSelectList(v)
+            | Self::Subexpression(v) => v.is_empty(),
+            _ => false,
+        }
+    }
+
+    /// The children, in jmespath's order.
+    pub fn children(&self) -> impl Iterator<Item = &Self> {
+        let (few, many): ([Option<&Self>; 3], &[Self]) = match self {
+            Self::Comparator(_, l, r)
+            | Self::OrExpression(l, r)
+            | Self::AndExpression(l, r)
+            | Self::Pipe(l, r)
+            | Self::Projection(l, r)
+            | Self::ValueProjection(l, r) => ([Some(&**l), Some(&**r), None], &[]),
+            Self::FilterProjection(l, r, c) => ([Some(&**l), Some(&**r), Some(&**c)], &[]),
+            Self::Expref(x)
+            | Self::Flatten(x)
+            | Self::KeyValPair(_, x)
+            | Self::NotExpression(x) => ([Some(&**x), None, None], &[]),
+            Self::FunctionExpression(_, v)
+            | Self::IndexExpression(v)
+            | Self::MultiSelectDict(v)
+            | Self::MultiSelectList(v)
+            | Self::Subexpression(v) => ([None; 3], v),
+            Self::Current
+            | Self::Field(_)
+            | Self::Identity
+            | Self::Index(_)
+            | Self::Literal(_)
+            | Self::Slice(..) => ([None; 3], &[]),
+        };
+        few.into_iter().flatten().chain(many)
+    }
+
+    /// The children, in jmespath's order, to change.
+    pub fn children_mut(&mut self) -> impl Iterator<Item = &mut Self> {
+        let (few, many): ([Option<&mut Self>; 3], &mut [Self]) = match self {
+            Self::Comparator(_, l, r)
+            | Self::OrExpression(l, r)
+            | Self::AndExpression(l, r)
+            | Self::Pipe(l, r)
+            | Self::Projection(l, r)
+            | Self::ValueProjection(l, r) => ([Some(&mut **l), Some(&mut **r), None], &mut []),
+            Self::FilterProjection(l, r, c) => {
+                ([Some(&mut **l), Some(&mut **r), Some(&mut **c)], &mut [])
+            }
+            Self::Expref(x)
+            | Self::Flatten(x)
+            | Self::KeyValPair(_, x)
+            | Self::NotExpression(x) => ([Some(&mut **x), None, None], &mut []),
+            Self::FunctionExpression(_, v)
+            | Self::IndexExpression(v)
+            | Self::MultiSelectDict(v)
+            | Self::MultiSelectList(v)
+            | Self::Subexpression(v) => ([None, None, None], v),
+            Self::Current
+            | Self::Field(_)
+            | Self::Identity
+            | Self::Index(_)
+            | Self::Literal(_)
+            | Self::Slice(..) => ([None, None, None], &mut []),
+        };
+        few.into_iter().flatten().chain(many)
+    }
+
+    /// Take out the first child that has children of its own (an identity is left in its place).
+    fn take_first_inner_child(&mut self) -> Option<Self> {
+        let take = |n: &mut Self| (!n.is_leaf()).then(|| std::mem::replace(n, Self::Identity));
+        match self {
+            Self::Comparator(_, l, r)
+            | Self::OrExpression(l, r)
+            | Self::AndExpression(l, r)
+            | Self::Pipe(l, r)
+            | Self::Projection(l, r)
+            | Self::ValueProjection(l, r) => take(l).or_else(|| take(r)),
+            Self::FilterProjection(l, r, c) => take(l).or_else(|| take(r)).or_else(|| take(c)),
+            Self::Expref(x)
+            | Self::Flatten(x)
+            | Self::KeyValPair(_, x)
+            | Self::NotExpression(x) => take(x),
+            Self::FunctionExpression(_, v)
+            | Self::IndexExpression(v)
+            | Self::MultiSelectDict(v)
+            | Self::MultiSelectList(v)
+            | Self::Subexpression(v) => v.iter_mut().find_map(take),
+            Self::Current
+            | Self::Field(_)
+            | Self::Identity
+            | Self::Index(_)
+            | Self::Literal(_)
+            | Self::Slice(..) => None,
+        }
+    }
+
     /// `node['type']`.
     pub fn type_name(&self) -> &'static str {
         match self {
@@ -114,6 +221,20 @@ impl<V> Node<V> {
             Self::Subexpression(_) => "subexpression",
             Self::Slice(..) => "slice",
             Self::ValueProjection(..) => "value_projection",
+        }
+    }
+}
+
+/// Left-associative chains (`a | b | c`, `a || b`, `a == b`, `a[][]`) are parsed in a loop, so
+/// a tree can be as deep as its expression is long. Such a chain always runs through each
+/// node's first child (the `left` the parser folds into the new node): unlink it with a loop.
+/// Anything else nests only as deep as the parser's own (budgeted) recursion, and is dropped
+/// recursively.
+impl<V> Drop for Node<V> {
+    fn drop(&mut self) {
+        let mut next = self.take_first_inner_child();
+        while let Some(mut n) = next {
+            next = n.take_first_inner_child();
         }
     }
 }

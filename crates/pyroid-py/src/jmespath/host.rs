@@ -40,27 +40,31 @@ pub(crate) fn code_points(s: &Bound<'_, PyString>) -> PyResult<Text> {
         .collect())
 }
 
+/// A value made by the host: always `Some` (the conversion to an `Expr` takes it out, so it is
+/// moved, not copied: in abi3 builds every reference-count change is a call into libpython).
+pub(crate) type Value<'py> = Option<Bound<'py, PyAny>>;
+
 impl<'py> Host for PyHost<'py, '_> {
-    type Value = Bound<'py, PyAny>;
+    type Value = Value<'py>;
     type Error = PyErr;
 
     fn identifier(&mut self, text: &str) -> PyResult<Self::Value> {
         // Interned, as Python source keys are: dict lookups then hit by identity.
-        Ok(PyString::intern(self.py, text).into_any())
+        Ok(Some(PyString::intern(self.py, text).into_any()))
     }
 
     fn number(&mut self, text: &str) -> PyResult<Self::Value> {
-        self.py.get_type::<PyInt>().call1((text,))
+        self.py.get_type::<PyInt>().call1((text,)).map(Some)
     }
 
     fn raw_string(&mut self, text: &[u32]) -> PyResult<Self::Value> {
-        Ok(py_str(self.py, text)?.into_any())
+        Ok(Some(py_str(self.py, text)?.into_any()))
     }
 
     fn json(&mut self, text: &[u32]) -> PyResult<Result<Self::Value, Text>> {
         let s = py_str(self.py, text)?;
         match self.cfg.loads.bind(self.py).call1((s,)) {
-            Ok(v) => Ok(Ok(v)),
+            Ok(v) => Ok(Ok(Some(v))),
             Err(e) if e.is_instance_of::<PyValueError>(self.py) => {
                 let msg = e.value(self.py).str()?;
                 Ok(Err(code_points(&msg)?))

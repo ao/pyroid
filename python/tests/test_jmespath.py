@@ -8,6 +8,7 @@ import math
 import pickle
 import subprocess
 import sys
+import sysconfig
 import textwrap
 import threading
 import warnings
@@ -332,6 +333,75 @@ def test_deep_nesting_on_a_small_stack_raises() -> None:
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == str(["RecursionError"] * 4)
+
+
+_LONG_CHAINS = r"""
+import sys, threading
+import pyroid.jmespath as jp
+from pyroid.jmespath import exceptions
+
+CHAINS = {
+    "pipe": lambda n: " | ".join(["a"] * n),
+    "or_expression": lambda n: " || ".join(["a"] * n),
+    "and_expression": lambda n: " && ".join(["a"] * n),
+    "comparator": lambda n: " == ".join(["a"] * n),
+    "projection": lambda n: "a" + "[]" * n,
+}
+
+def run(n):
+    out = []
+    for kind, build in CHAINS.items():
+        expression = build(n)
+        # jmespath parses these chains in a loop and compiles them; only its interpreter runs
+        # out of frames.
+        compiled = jp.compile(expression)
+        assert compiled.parsed["type"] == kind, compiled.parsed["type"]
+        try:
+            jp.search(expression, {"a": [1]})
+            out.append("ok")
+        except RecursionError:
+            out.append("RecursionError")
+        # A syntax error after a long chain.
+        try:
+            jp.compile(expression + " ]")
+        except exceptions.ParseError:
+            out.append("ParseError")
+    return out
+
+print(run(20_000))
+sys.setrecursionlimit(100_000)
+print(run(30_000))
+if STACK:
+    threading.stack_size(STACK)
+    results = []
+    t = threading.Thread(target=lambda: results.append(run(30_000)))
+    t.start()
+    t.join()
+    print(results[0])
+"""
+
+
+#: CPython 3.14+ on musl (Alpine) cannot itself build and drop such deep data (the `.parsed`
+#: dicts) in a thread with a 256 KiB stack (see test_yaml.py); that case says nothing about pyroid.
+_MUSL_SMALL_STACK = pytest.mark.skipif(
+    sys.version_info >= (3, 14) and "musl" in (sysconfig.get_config_var("HOST_GNU_TYPE") or ""),
+    reason="CPython 3.14+ on musl overflows its own C stack at this depth in a 256 KiB thread",
+)
+
+
+@pytest.mark.thread_unsafe(reason="a subprocess")
+@pytest.mark.parametrize("stack", [0, pytest.param(256 << 10, marks=_MUSL_SMALL_STACK)])
+def test_long_chains_compile_and_raise_recursion_error(run_python: Any, stack: int) -> None:
+    # J1: `a || a || ...`, `a[][]...` and the like (20,000 terms, 40 KB) crashed the interpreter.
+    r = run_python(f"STACK = {stack}\n" + _LONG_CHAINS, timeout=600)
+    assert r.returncode == 0, r.stderr[-2000:]
+    runs = [eval(line) for line in r.stdout.splitlines()]  # noqa: S307 - our own child's lists
+    assert len(runs) == (3 if stack else 2)
+    # At the default limit, as in jmespath; with a raised one the native stack decides.
+    assert runs[0] == ["RecursionError", "ParseError"] * 5
+    for run in runs[1:]:
+        assert run[1::2] == ["ParseError"] * 5
+        assert set(run[::2]) <= {"ok", "RecursionError"}
 
 
 @pytest.mark.thread_unsafe(reason="starts its own threads")

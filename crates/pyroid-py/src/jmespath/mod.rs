@@ -242,6 +242,10 @@ struct Tree {
 impl Tree {
     fn new(root: Expr) -> Self {
         let frames = expr::frames(&root);
+        Self::with_frames(root, frames)
+    }
+
+    fn with_frames(root: Expr, frames: usize) -> Self {
         Self {
             root,
             frames,
@@ -258,10 +262,18 @@ impl Tree {
     }
 }
 
-fn token_value<'py>(py: Python<'py>, t: &Token<Bound<'py, PyAny>>) -> Bound<'py, PyAny> {
+impl Drop for Tree {
+    fn drop(&mut self) {
+        if self.frames > expr::DROP_FRAMES {
+            expr::free_deep(&mut self.root);
+        }
+    }
+}
+
+fn token_value<'py>(py: Python<'py>, t: &Token<host::Value<'py>>) -> Bound<'py, PyAny> {
     match &t.value {
         TokenValue::Text(s) => PyString::new(py, s).into_any(),
-        TokenValue::Value(v) => v.clone(),
+        TokenValue::Value(v) => v.clone().unwrap_or_else(|| py.None().into_bound(py)),
     }
 }
 
@@ -278,7 +290,7 @@ fn percent<'py>(
 /// `None` for tokenizing (`Lexer.tokenize` leaves it unset).
 fn parse_error<'py>(
     py: Python<'py>,
-    err: ParseError<Bound<'py, PyAny>, PyErr>,
+    err: ParseError<host::Value<'py>, PyErr>,
     expression: Option<&Bound<'py, PyAny>>,
 ) -> PyErr {
     let r = (|| -> PyResult<PyErr> {
@@ -391,9 +403,11 @@ fn parse_text<'py>(
         }
     };
     let mut host = PyHost { py, cfg: c };
-    let node = pyroid_core::jmespath::parse(text, &mut host, budget)
+    let mut node = pyroid_core::jmespath::parse(text, &mut host, budget)
         .map_err(|e| parse_error(py, e, Some(expression)))?;
-    Ok(Tree::new(expr::from_node(py, node)?))
+    let (root, frames) = expr::from_node(py, &mut node)?;
+    drop(node);
+    Ok(Tree::with_frames(root, frames))
 }
 
 // ---------------------------------------------------------------------------
@@ -694,7 +708,8 @@ impl ParsedResult {
 }
 
 fn tree_from_dict(parsed: &Bound<'_, PyAny>) -> PyResult<Tree> {
-    let tree = Tree::new(expr::from_dict(parsed, 0)?);
+    let stack = stack_budget(parsed.py())?;
+    let tree = Tree::new(expr::from_dict(parsed, stack)?);
     let _ = tree.parsed.set(parsed.py(), parsed.clone().unbind());
     Ok(tree)
 }
@@ -739,9 +754,9 @@ impl Interpreter {
         let own = self.node.dict.get(py).is_some_and(|d| node.is(d));
         if own {
             let e = &self.node.expr;
-            return run(py, e, expr::frames(e), &value, &self.opts, 1);
+            return run(py, e, self.node.frames, &value, &self.opts, 1);
         }
-        let e = expr::from_dict(node, 0)?;
+        let e = expr::from_dict(node, stack_budget(py)?)?;
         run(py, &e, expr::frames(&e), &value, &self.opts, 1)
     }
 
