@@ -1,0 +1,492 @@
+//! `difflib.SequenceMatcher`'s algorithm over dense element ids.
+//!
+//! Elements are `u32` ids: the distinct elements of `b` are numbered `0..n` in
+//! first-occurrence order (the order of CPython's `b2j` keys), and an element
+//! of `a` that is not in `b` is [`NONE`]. Every loop, comparison and tie-break
+//! follows CPython's `Lib/difflib.py` (identical in 3.11 to 3.15), so the
+//! blocks, opcodes and ratios are the same values, the ratios the same bits.
+
+/// The id of an element of `a` that does not occur in `b`.
+pub const NONE: u32 = u32::MAX;
+
+/// What `__chain_b` decided about an element of `b`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// In `b2j`.
+    Normal,
+    /// `isjunk(elt)` was true: in `bjunk`, not in `b2j`.
+    Junk,
+    /// Popular under `autojunk`: in `bpopular`, not in `b2j`.
+    Popular,
+}
+
+/// `set_seq2(b)`'s result: `b` as ids, and `b2j` (for every id, the
+/// positions of `b` holding it, junk and popular ones included: they are also
+/// `fullbcount`).
+#[derive(Debug, Clone)]
+pub struct BIndex {
+    b: Vec<u32>,
+    kind: Vec<Kind>,
+    starts: Vec<u32>,
+    pos: Vec<u32>,
+}
+
+impl BIndex {
+    /// Index `b` (ids below `keys`, numbered by first occurrence). `junk[id]`
+    /// is `isjunk`'s verdict (empty: no `isjunk`); `autojunk` is the
+    /// truthiness of the matcher's `autojunk`.
+    ///
+    /// # Panics
+    ///
+    /// If `b` has `u32::MAX` elements or more (the bindings delegate those).
+    pub fn new(b: Vec<u32>, keys: usize, junk: &[bool], autojunk: bool) -> Self {
+        assert!(u32::try_from(b.len()).is_ok_and(|n| n < u32::MAX));
+        let mut starts = vec![0u32; keys + 1];
+        for &id in &b {
+            starts[id as usize + 1] += 1;
+        }
+        for k in 0..keys {
+            starts[k + 1] += starts[k];
+        }
+        let mut fill = starts[..keys].to_vec();
+        let mut pos = vec![0u32; b.len()];
+        for (j, &id) in b.iter().enumerate() {
+            let slot = &mut fill[id as usize];
+            #[allow(clippy::cast_possible_truncation)] // checked above
+            {
+                pos[*slot as usize] = j as u32;
+            }
+            *slot += 1;
+        }
+        let mut kind: Vec<Kind> = (0..keys)
+            .map(|id| {
+                if junk.get(id).copied().unwrap_or(false) {
+                    Kind::Junk
+                } else {
+                    Kind::Normal
+                }
+            })
+            .collect();
+        let n = b.len();
+        if autojunk && n >= 200 {
+            let ntest = n / 100 + 1;
+            for (id, k) in kind.iter_mut().enumerate() {
+                if *k == Kind::Normal && (starts[id + 1] - starts[id]) as usize > ntest {
+                    *k = Kind::Popular;
+                }
+            }
+        }
+        Self {
+            b,
+            kind,
+            starts,
+            pos,
+        }
+    }
+
+    /// `b` as ids.
+    pub fn b(&self) -> &[u32] {
+        &self.b
+    }
+
+    /// Number of distinct elements of `b`.
+    pub fn keys(&self) -> usize {
+        self.kind.len()
+    }
+
+    /// What `__chain_b` made of element `id`.
+    pub fn kind(&self, id: u32) -> Kind {
+        self.kind[id as usize]
+    }
+
+    /// Every position of `id` in `b`, in increasing order.
+    pub fn positions(&self, id: u32) -> &[u32] {
+        let id = id as usize;
+        &self.pos[self.starts[id] as usize..self.starts[id + 1] as usize]
+    }
+
+    /// `b2j[id]`: the positions if `id` is neither junk nor popular, else none.
+    fn b2j(&self, id: u32) -> &[u32] {
+        if id == NONE || self.kind[id as usize] != Kind::Normal {
+            &[]
+        } else {
+            self.positions(id)
+        }
+    }
+
+    /// How often `id` occurs in `b` (`fullbcount[elt]`).
+    pub fn count(&self, id: u32) -> usize {
+        let id = id as usize;
+        (self.starts[id + 1] - self.starts[id]) as usize
+    }
+
+    fn is_junk(&self, j: usize) -> bool {
+        self.kind[self.b[j] as usize] == Kind::Junk
+    }
+
+    /// Scratch space for [`Self::find_longest_match`] on this `b`.
+    pub fn scratch(&self) -> Scratch {
+        Scratch {
+            j2len: vec![0; self.b.len() + 1],
+            newj2len: vec![0; self.b.len() + 1],
+            touched: Vec::new(),
+            newtouched: Vec::new(),
+        }
+    }
+
+    /// `find_longest_match(alo, ahi, blo, bhi)`: `(i, j, k)` such that
+    /// `a[i:i+k] == b[j:j+k]`, with CPython's tie-breaks (the earliest-ending
+    /// block in `a`, then the earliest in `b`) and its extension through junk.
+    /// Bounds must satisfy `alo <= ahi <= len(a)` and `blo <= bhi <= len(b)`.
+    #[allow(clippy::similar_names, clippy::many_single_char_names)] // CPython's names
+    pub fn find_longest_match(
+        &self,
+        a: &[u32],
+        alo: usize,
+        ahi: usize,
+        blo: usize,
+        bhi: usize,
+        s: &mut Scratch,
+    ) -> (usize, usize, usize) {
+        let b = &self.b;
+        let (mut besti, mut bestj, mut bestsize) = (alo, blo, 0usize);
+        // j2len[j + 1] is the length of the match ending with a[i - 1] and
+        // b[j] (CPython's dict, rebuilt for every i).
+        for (i, &id) in a.iter().enumerate().take(ahi).skip(alo) {
+            let positions = self.b2j(id);
+            let first = positions.partition_point(|&j| (j as usize) < blo);
+            for &j in &positions[first..] {
+                let j = j as usize;
+                if j >= bhi {
+                    break;
+                }
+                let k = s.j2len[j] + 1;
+                s.newj2len[j + 1] = k;
+                s.newtouched.push(j + 1);
+                let k = k as usize;
+                if k > bestsize {
+                    besti = i + 1 - k;
+                    bestj = j + 1 - k;
+                    bestsize = k;
+                }
+            }
+            for &t in &s.touched {
+                s.j2len[t] = 0;
+            }
+            s.touched.clear();
+            std::mem::swap(&mut s.j2len, &mut s.newj2len);
+            std::mem::swap(&mut s.touched, &mut s.newtouched);
+        }
+        for &t in &s.touched {
+            s.j2len[t] = 0;
+        }
+        s.touched.clear();
+
+        // Extend the best by non-junk elements on each end, then by junk
+        // (CPython's four loops, in order).
+        while besti > alo && bestj > blo && !self.is_junk(bestj - 1) && a[besti - 1] == b[bestj - 1]
+        {
+            besti -= 1;
+            bestj -= 1;
+            bestsize += 1;
+        }
+        while besti + bestsize < ahi
+            && bestj + bestsize < bhi
+            && !self.is_junk(bestj + bestsize)
+            && a[besti + bestsize] == b[bestj + bestsize]
+        {
+            bestsize += 1;
+        }
+        while besti > alo && bestj > blo && self.is_junk(bestj - 1) && a[besti - 1] == b[bestj - 1]
+        {
+            besti -= 1;
+            bestj -= 1;
+            bestsize += 1;
+        }
+        while besti + bestsize < ahi
+            && bestj + bestsize < bhi
+            && self.is_junk(bestj + bestsize)
+            && a[besti + bestsize] == b[bestj + bestsize]
+        {
+            bestsize += 1;
+        }
+        (besti, bestj, bestsize)
+    }
+
+    /// `get_matching_blocks()`: the non-adjacent matching blocks in order,
+    /// ending with the `(len(a), len(b), 0)` sentinel.
+    #[allow(clippy::similar_names, clippy::many_single_char_names)] // CPython's names
+    pub fn matching_blocks(&self, a: &[u32]) -> Vec<Block> {
+        let (la, lb) = (a.len(), self.b.len());
+        let mut s = self.scratch();
+        let mut queue = vec![(0, la, 0, lb)];
+        let mut blocks: Vec<Block> = Vec::new();
+        while let Some((alo, ahi, blo, bhi)) = queue.pop() {
+            let (i, j, k) = self.find_longest_match(a, alo, ahi, blo, bhi, &mut s);
+            if k > 0 {
+                blocks.push(Block {
+                    a: i,
+                    b: j,
+                    size: k,
+                });
+                if alo < i && blo < j {
+                    queue.push((alo, i, blo, j));
+                }
+                if i + k < ahi && j + k < bhi {
+                    queue.push((i + k, ahi, j + k, bhi));
+                }
+            }
+        }
+        blocks.sort_unstable_by_key(|m| (m.a, m.b, m.size));
+        let mut out = Vec::with_capacity(blocks.len() + 1);
+        let (mut i1, mut j1, mut k1) = (0, 0, 0);
+        for m in blocks {
+            if i1 + k1 == m.a && j1 + k1 == m.b {
+                k1 += m.size;
+            } else {
+                if k1 > 0 {
+                    out.push(Block {
+                        a: i1,
+                        b: j1,
+                        size: k1,
+                    });
+                }
+                (i1, j1, k1) = (m.a, m.b, m.size);
+            }
+        }
+        if k1 > 0 {
+            out.push(Block {
+                a: i1,
+                b: j1,
+                size: k1,
+            });
+        }
+        out.push(Block {
+            a: la,
+            b: lb,
+            size: 0,
+        });
+        out
+    }
+
+    /// `quick_ratio()`'s match count: for every element, the smaller of its
+    /// counts in `a` and in `b` (junk and popular elements included).
+    pub fn quick_matches(&self, a: &[u32]) -> usize {
+        let mut avail: Vec<u32> = vec![0; self.keys()];
+        let mut matches = 0;
+        for &id in a {
+            if id == NONE {
+                continue;
+            }
+            let used = &mut avail[id as usize];
+            if (*used as usize) < self.count(id) {
+                matches += 1;
+            }
+            *used = used.saturating_add(1);
+        }
+        matches
+    }
+}
+
+/// Reusable buffers for [`BIndex::find_longest_match`].
+#[derive(Debug)]
+pub struct Scratch {
+    j2len: Vec<u32>,
+    newj2len: Vec<u32>,
+    touched: Vec<usize>,
+    newtouched: Vec<usize>,
+}
+
+/// One `difflib.Match`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Block {
+    pub a: usize,
+    pub b: usize,
+    pub size: usize,
+}
+
+/// An opcode tag.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tag {
+    Replace,
+    Delete,
+    Insert,
+    Equal,
+}
+
+impl Tag {
+    /// The tag as CPython spells it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Replace => "replace",
+            Self::Delete => "delete",
+            Self::Insert => "insert",
+            Self::Equal => "equal",
+        }
+    }
+}
+
+/// One `get_opcodes()` entry: `(tag, i1, i2, j1, j2)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Opcode {
+    pub tag: Tag,
+    pub i1: usize,
+    pub i2: usize,
+    pub j1: usize,
+    pub j2: usize,
+}
+
+/// `get_opcodes()` from `get_matching_blocks()`.
+pub fn opcodes(blocks: &[Block]) -> Vec<Opcode> {
+    let (mut i, mut j) = (0, 0);
+    let mut out = Vec::with_capacity(2 * blocks.len());
+    for m in blocks {
+        let tag = if i < m.a && j < m.b {
+            Some(Tag::Replace)
+        } else if i < m.a {
+            Some(Tag::Delete)
+        } else if j < m.b {
+            Some(Tag::Insert)
+        } else {
+            None
+        };
+        if let Some(tag) = tag {
+            out.push(Opcode {
+                tag,
+                i1: i,
+                i2: m.a,
+                j1: j,
+                j2: m.b,
+            });
+        }
+        i = m.a + m.size;
+        j = m.b + m.size;
+        if m.size > 0 {
+            out.push(Opcode {
+                tag: Tag::Equal,
+                i1: m.a,
+                i2: i,
+                j1: m.b,
+                j2: j,
+            });
+        }
+    }
+    out
+}
+
+/// The number of matched elements of `get_matching_blocks()`.
+pub fn matches(blocks: &[Block]) -> usize {
+    blocks.iter().map(|m| m.size).sum()
+}
+
+/// CPython's `_calculate_ratio(matches, length)`: `2.0 * matches / length`,
+/// or `1.0` for two empty sequences (the same float operations).
+#[allow(clippy::cast_precision_loss)] // exact below 2**53, as in CPython
+pub fn calculate_ratio(matches: usize, length: usize) -> f64 {
+    if length == 0 {
+        1.0
+    } else {
+        2.0 * matches as f64 / length as f64
+    }
+}
+
+/// `real_quick_ratio()` for sequences of these lengths.
+pub fn real_quick_ratio(la: usize, lb: usize) -> f64 {
+    calculate_ratio(la.min(lb), la + lb)
+}
+
+/// `get_grouped_opcodes(n)`'s groups. Values are `i64` because a negative
+/// `n` makes CPython produce indices outside the sequences.
+pub fn grouped_opcodes(codes: &[Opcode], n: i64) -> Vec<Vec<GroupedOpcode>> {
+    #[allow(clippy::cast_possible_wrap)] // sequence lengths are far below 2**63
+    let mut codes: Vec<GroupedOpcode> = codes
+        .iter()
+        .map(|c| GroupedOpcode {
+            tag: c.tag,
+            i1: c.i1 as i64,
+            i2: c.i2 as i64,
+            j1: c.j1 as i64,
+            j2: c.j2 as i64,
+        })
+        .collect();
+    if codes.is_empty() {
+        codes.push(GroupedOpcode {
+            tag: Tag::Equal,
+            i1: 0,
+            i2: 1,
+            j1: 0,
+            j2: 1,
+        });
+    }
+    if codes[0].tag == Tag::Equal {
+        let c = &mut codes[0];
+        c.i1 = c.i1.max(c.i2 - n);
+        c.j1 = c.j1.max(c.j2 - n);
+    }
+    let last = codes.len() - 1;
+    if codes[last].tag == Tag::Equal {
+        let c = &mut codes[last];
+        c.i2 = c.i2.min(c.i1 + n);
+        c.j2 = c.j2.min(c.j1 + n);
+    }
+    let nn = n + n;
+    let mut groups = Vec::new();
+    let mut group = Vec::new();
+    for c in codes {
+        let GroupedOpcode {
+            tag,
+            mut i1,
+            i2,
+            mut j1,
+            j2,
+        } = c;
+        if tag == Tag::Equal && i2 - i1 > nn {
+            group.push(GroupedOpcode {
+                tag,
+                i1,
+                i2: i2.min(i1 + n),
+                j1,
+                j2: j2.min(j1 + n),
+            });
+            groups.push(std::mem::take(&mut group));
+            i1 = i1.max(i2 - n);
+            j1 = j1.max(j2 - n);
+        }
+        group.push(GroupedOpcode {
+            tag,
+            i1,
+            i2,
+            j1,
+            j2,
+        });
+    }
+    if !group.is_empty() && (group.len() != 1 || group[0].tag != Tag::Equal) {
+        groups.push(group);
+    }
+    groups
+}
+
+/// One opcode of [`grouped_opcodes`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GroupedOpcode {
+    pub tag: Tag,
+    pub i1: i64,
+    pub i2: i64,
+    pub j1: i64,
+    pub j2: i64,
+}
+
+/// Python's `range(len)[start:stop]` for a list of `len` items: the indices
+/// `seq[start:stop]` reads (negative values count from the end, both clamp).
+pub fn py_slice(len: usize, start: i64, stop: i64) -> std::ops::Range<usize> {
+    #[allow(clippy::cast_possible_wrap)]
+    let n = len as i64;
+    let clamp = |x: i64| -> i64 { if x < 0 { (x + n).max(0) } else { x.min(n) } };
+    let (s, e) = (clamp(start), clamp(stop));
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // both are in 0..=n
+    if e > s {
+        s as usize..e as usize
+    } else {
+        s as usize..s as usize
+    }
+}
