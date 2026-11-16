@@ -9,6 +9,7 @@ from __future__ import annotations
 import _thread
 import collections
 import difflib
+import functools
 import os
 import subprocess
 import sys
@@ -17,6 +18,7 @@ import threading
 import time
 import unittest
 import warnings
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -324,10 +326,10 @@ def test_get_close_matches_over_str_subclasses() -> None:
 
 
 def _vowels_are_junk(base: type) -> type:
-    class VowelsAreJunk(base):  # type: ignore[valid-type, misc]
+    class VowelsAreJunk(base):  # type: ignore[misc]
         calls = 0
 
-        def _SequenceMatcher__chain_b(self) -> None:
+        def _SequenceMatcher__chain_b(self) -> None:  # noqa: N802 - the hook's mangled name
             type(self).calls += 1
             super()._SequenceMatcher__chain_b()
             for v in "aeiou":
@@ -342,7 +344,7 @@ def test_chain_b_override_is_called() -> None:
     a, b = "private Thread currentThread;", "private volatile Thread currentThread;"
 
     def run(base: type) -> tuple[Any, ...]:
-        cls = _vowels_are_junk(base)
+        cls: Any = _vowels_are_junk(base)
         m = cls(None, a, b)
         first = (sorted(m.bjunk), m.get_matching_blocks(), m.ratio(), m.get_opcodes())
         m.set_seq2(b.upper() + "aeiou")
@@ -365,10 +367,10 @@ def test_numeric_arguments_as_difflib() -> None:
         difflib.HtmlDiff._default_prefix = 0  # type: ignore[attr-defined]
         try:
             return f()
-        except Exception as e:  # noqa: BLE001 - the exception is the result
+        except Exception as e:
             return type(e), str(e)
 
-    cases = [
+    cases: list[Callable[[Any], Any]] = [
         lambda m: m.HtmlDiff(wrapcolumn=10**20).make_table(["abcdef\n"], ["abcxef\n"]),
         lambda m: m.HtmlDiff(wrapcolumn=2**63).make_file(["a\n"], ["b\n"]),
         lambda m: m.HtmlDiff(tabsize=10**20).make_table(["a\tb\n"], ["a\tc\n"]),
@@ -380,14 +382,14 @@ def test_numeric_arguments_as_difflib() -> None:
         lambda m: list(m._mdiff(["a\n"], ["b\n"], context=sys.maxsize)),
     ]
     for i, case in enumerate(cases):
-        assert outcome(lambda: case(pd)) == outcome(lambda: case(difflib)), i
+        assert outcome(functools.partial(case, pd)) == outcome(functools.partial(case, difflib)), i
     qs, poss = ["appel", "pech"], ["apple", "ape", "peach"]
     with pytest.raises(TypeError):
-        [difflib.get_close_matches(q, poss, 2.5, 0.6) for q in qs]  # type: ignore[arg-type]
+        _ = [difflib.get_close_matches(q, poss, 2.5, 0.6) for q in qs]  # type: ignore[call-overload]
     with pytest.raises(TypeError):
         pd.close_matches_batch(qs, poss, 2.5, 0.6)  # type: ignore[arg-type]
     assert pd.close_matches_batch([], poss, 2.5) == []  # type: ignore[arg-type]
-    assert pd.close_matches_batch(qs, poss, True) == [  # type: ignore[arg-type]
+    assert pd.close_matches_batch(qs, poss, True) == [
         difflib.get_close_matches(q, poss, True) for q in qs
     ]
 
@@ -405,7 +407,7 @@ def test_html_tables_of_both_modules_get_distinct_anchors() -> None:
         assert not ids(t) & seen
         seen |= ids(t)
     for owner in (pd, difflib):
-        owner.HtmlDiff._default_prefix = 0  # type: ignore[attr-defined]  # as CPython's tests reset it
+        owner.HtmlDiff._default_prefix = 0  # as CPython's tests reset it
         assert 'id="difflib_chg_to0__0"' in pd.HtmlDiff().make_table(["a\n"], ["b\n"])
         assert 'id="difflib_chg_to1__0"' in difflib.HtmlDiff().make_table(["a\n"], ["b\n"])
 
@@ -418,9 +420,8 @@ def test_runtime_docstrings_match_the_stub() -> None:
     stub = ast.parse(Path(pd.__file__).with_suffix(".pyi").read_text(encoding="utf-8"))
     docs: dict[str, str] = {}
     for node in stub.body:
-        doc = ast.get_docstring(node) if isinstance(node, ast.FunctionDef) else None
-        if doc:
-            docs.setdefault(node.name, doc)  # type: ignore[union-attr]
+        if isinstance(node, ast.FunctionDef) and (doc := ast.get_docstring(node)):
+            docs.setdefault(node.name, doc)
     for name in ("ratio_batch", "close_matches_batch"):
         assert inspect.getdoc(getattr(pd, name)) == docs[name], name
 
@@ -430,7 +431,7 @@ def test_racing_set_seq_errors_name_no_internals() -> None:
     # inside the matcher shows up in what it raises.
     import random
 
-    m = pd.SequenceMatcher(None, "abc" * 50, "abd" * 50)
+    m: Any = pd.SequenceMatcher(None, "abc" * 50, "abe" * 50)
     errors: list[str] = []
     stop = time.monotonic() + 1.5
 
@@ -450,7 +451,7 @@ def test_racing_set_seq_errors_name_no_internals() -> None:
                     m.get_opcodes()
                 else:
                     assert isinstance(m.b2j, dict)
-            except Exception as e:  # noqa: BLE001 - collected
+            except Exception as e:  # collected
                 errors.append(f"{type(e).__name__}: {e}")
 
     threads = [threading.Thread(target=race, args=(i,)) for i in range(8)]
@@ -623,7 +624,7 @@ def test_patch_in_place_and_undo() -> None:
 @pytestmark_patch
 def test_matchers_from_under_the_patch_work_after_unpatch() -> None:
     # A matcher made or used under the patch gets CPython's state when the patch ends.
-    class Sub(difflib.SequenceMatcher):
+    class Sub(difflib.SequenceMatcher):  # type: ignore[type-arg]
         pass
 
     def steps(sm: Any, step: str) -> Any:

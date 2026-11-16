@@ -496,6 +496,7 @@ get_close_matches.__doc__ = _std.get_close_matches.__doc__
 # Batches
 # ---------------------------------------------------------------------------
 
+
 def ratio_batch(
     a: Any,
     b: Any,
@@ -566,7 +567,6 @@ def close_matches_batch(
     return _native._close_matches_batch(  # type: ignore[no-any-return]
         words, possibilities, min(n, sys.maxsize), float(cutoff), threads
     )
-
 
 
 # ---------------------------------------------------------------------------
