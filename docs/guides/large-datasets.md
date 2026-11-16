@@ -77,7 +77,8 @@ fingerprint changes, pyroid refuses to mix the two runs; `--overwrite` redoes ev
 nothing depends on absolute paths, a machine that mounts the data and OUT somewhere else resumes
 the same run. A file OUT keeps the same records next to it (`.out.parquet.pyroid/`) while it runs.
 When it is done, only the record that the file is complete stays there, so the same command run
-again does nothing and exits with status 0, as for a directory OUT.
+again does nothing and exits with status 0, as for a directory OUT. A run that stops before it
+finishes any file removes its records and work directory.
 
 ## Many machines: `--shard`
 

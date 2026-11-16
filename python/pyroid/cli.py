@@ -1184,6 +1184,8 @@ class Run:
     state: Any
     options: Options
     progress: Any
+    state_existed: bool = True  # the state directory was there before this run
+    out_existed: bool = True  # so was a directory OUT
     t0: float = field(default_factory=time.perf_counter)
 
 
@@ -1328,6 +1330,7 @@ def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: b
     layout = _layout(a, sources, shard, excluded=excluded)
     _check_out(layout, a.overwrite)
     _check_outputs(a, layout, sources)
+    existed = layout.state_root.exists(), layout.out_dir is not None and layout.out_dir.exists()
     if tmp is not None:
         _private_work(layout.work)
     fp = _shards.fingerprint(command, _fingerprint_options(options), sources)
@@ -1339,7 +1342,42 @@ def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: b
     progress = _shards.Progress(
         f"pyroid {command}", len(mine), total, enabled=getattr(a, "progress", False)
     )
-    return Run(a, command, sources, shard, mine, layout, state, options, progress)
+    run = Run(a, command, sources, shard, mine, layout, state, options, progress, *existed)
+    _STARTED.append(run)
+    return run
+
+
+# The runs this process started: main() tidies up after one that fails or stops.
+_STARTED: list[Run] = []
+
+
+def _tidy_failed(run: Run) -> None:
+    """After a run failed or stopped: drop the state and work it left, if nothing there resumes.
+
+    A run with finished files keeps everything, so the same command picks up from there. One that
+    ended before any (a wrong option, a missing model, an input it cannot read) leaves no hidden
+    ``.NAME.pyroid`` or ``OUT/.pyroid`` behind, nor a directory OUT it made.
+    """
+    from pyroid.integrations import _shards
+
+    lay = run.layout
+    if run.state.records():
+        return
+    _shards.rmtree(lay.work)
+    if run.state_existed:
+        return
+    root = lay.state_root
+    if lay.out_dir is None:  # a file OUT's .NAME.pyroid belongs to this shard alone
+        _shards.rmtree(root)
+        return
+    if run.shard.count > 1:
+        return  # OUT/.pyroid is shared with the other shards, which may be starting now
+    with contextlib.suppress(OSError):
+        if {p.name for p in root.iterdir()} <= {"run.json"}:
+            _shards.rmtree(root)
+    with contextlib.suppress(OSError):
+        if not run.out_existed and not any(lay.out_dir.iterdir()):
+            lay.out_dir.rmdir()
 
 
 def _record_run(run: Run, **info: Any) -> None:
@@ -2589,9 +2627,11 @@ def main(argv: list[str] | None = None) -> int:
     from pyroid.integrations import _shards  # imports pyarrow
 
     term = _on_sigterm()
+    ok = False
     try:
         code = int(a.body(a))
         sys.stdout.flush()  # here, not at exit, so a closed pipe (| head -1) is handled below
+        ok = True
         return code
     except _shards.Terminated:
         # Finished files and their records are kept: the same command resumes the run.
@@ -2617,6 +2657,11 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if term is not None:
             signal.signal(signal.SIGTERM, term)
+        if not ok:
+            for run in _STARTED:
+                with contextlib.suppress(Exception):
+                    _tidy_failed(run)
+        _STARTED.clear()
 
 
 def _one_line(e: Exception) -> bool:

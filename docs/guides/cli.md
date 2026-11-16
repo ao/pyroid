@@ -219,10 +219,11 @@ it has seen every document. Survivors wait in Arrow IPC files, and their MinHash
 datatrove's on-disk format, in a work directory next to OUT (`.OUT.pyroid/` for a file OUT,
 `OUT/.pyroid/` for a directory), or under `--tmp-dir`. Then the survivors are written in input
 order and the work directory is deleted. Plan disk space there for the survivors plus about 1 KB
-of signatures per survivor. If the run fails or is interrupted, the work directory stays, and the
-same command resumes from it. Under `--tmp-dir` the work directory is created with mode 0700, and
-pyroid refuses to reuse one that is a link, belongs to another user or is writable by others.
-`--no-dedup` skips MinHash, and the output is then the chain up to `FineWebQualityFilter`.
+of signatures per survivor. If the run fails or is interrupted after some files are done, the work
+directory stays, and the same command resumes from it. Under `--tmp-dir` the work directory is
+created with mode 0700, and pyroid refuses to reuse one that is a link, belongs to another user or
+is writable by others. `--no-dedup` skips MinHash, and the output is then the chain up to
+`FineWebQualityFilter`.
 
 ## `pyroid clean`: FineWeb from WARC files
 
@@ -300,7 +301,7 @@ These rules hold for every command:
 - Running a finished command again does nothing and exits with status 0, for a file OUT as for a
   directory OUT: a file OUT keeps a small record that it is complete next to it
   (`.OUT.pyroid/`). Other options or inputs are a different run, which pyroid refuses without
-  `--overwrite`.
+  `--overwrite`. A run that fails before it finishes any file leaves no record or work directory.
 - `--stats` and `--progress` write to stderr. If stderr is a pipe that closes early
   (`2>&1 | head -1`), the messages stop and the run goes on.
 - `--text-column` names the text column (default `text`). Every other column is passed through

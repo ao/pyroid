@@ -322,6 +322,33 @@ def test_a_jsonl_parse_error_names_its_line(
             pass
 
 
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_a_failed_run_leaves_nothing_behind(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A run that fails before finishing any file leaves no hidden state, work directory or
+    directory OUT (each failed attempt left a .OUT.pyroid/)."""
+    src = _write(_table([_english(1), _english(2)]), tmp_path / "in.parquet")
+    missing = str(tmp_path / "missing" / "lid.bin")
+    common = ["--recipe", "fineweb", "--lid-model", missing]
+    tmp = tmp_path / "scratch"
+    tmp.mkdir()
+    for out in ("o.parquet", "d"):
+        for extra in ([], ["--no-dedup"], ["--tmp-dir", str(tmp)]):
+            argv = ["clean", str(src), str(tmp_path / out), *common, *extra]
+            assert main(argv) == 1
+            assert "No such file or directory" in capsys.readouterr().err
+            assert sorted(p.name for p in tmp_path.iterdir()) == ["in.parquet", "scratch"], argv
+            assert list(tmp.iterdir()) == []
+    # a directory OUT of another run keeps all it had, run.json included
+    d = tmp_path / "d"
+    assert main(["translit", str(src), str(d)]) == 0
+    before = {p: p.read_bytes() for p in d.rglob("*") if p.is_file()}
+    with pytest.raises(SystemExit, match="from a different run"):
+        main(["translit", str(src), str(d), "--mode", "unidecode"])
+    assert {p: p.read_bytes() for p in d.rglob("*") if p.is_file()} == before
+
+
 def test_stats_into_a_closed_pipe(tmp_path: Path) -> None:
     """``--stats 2>&1 | head -1``: the run completes, tidies up and exits 0 (it exited 120 and
     left OUT/.pyroid/work-* behind)."""
