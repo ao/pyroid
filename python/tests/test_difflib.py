@@ -461,6 +461,26 @@ def test_racing_set_seq_errors_name_no_internals() -> None:
     assert not [e for e in errors if "_pyroid" in e or "'b2j'" in e], errors[:5]
 
 
+@pytest.mark.thread_unsafe(reason="tracemalloc is process-wide")
+def test_diff_lines_are_made_as_they_are_read() -> None:
+    # ndiff, unified_diff and context_diff keep the diff as small ops and make each line at
+    # next(): the first line does not cost a list of every line (13 MB here).
+    import tracemalloc
+
+    a = [f"{i:08d} " + "x" * 70 + "\n" for i in range(100_000)]
+    b = [*a[:10], "new\n", *a[10:]]
+    for name, kw in (("ndiff", {}), ("unified_diff", {"n": 10**6}), ("context_diff", {"n": 10**6})):
+        tracemalloc.start()
+        try:
+            lines = getattr(pd, name)(a, b, **kw)
+            first = next(lines)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert peak < 5_000_000, (name, peak)
+        assert [first, *lines] == list(getattr(difflib, name)(a, b, **kw)), name
+
+
 def test_large_inputs() -> None:
     a = [f"line {i}\n" for i in range(100_000)]
     b = [*a[:5000], "new\n", *a[5000:90000], *a[90001:]]

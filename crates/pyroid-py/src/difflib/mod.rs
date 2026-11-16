@@ -29,6 +29,8 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sm::_sm_chain_attr, &m)?)?;
     m.add_function(wrap_pyfunction!(sm::_sm_why, &m)?)?;
     m.add_function(wrap_pyfunction!(lines::_differ_compare, &m)?)?;
+    m.add_class::<lines::DiffLines>()?;
+    m.add_class::<lines::FormatLines>()?;
     m.add_function(wrap_pyfunction!(lines::_mdiff, &m)?)?;
     m.add_function(wrap_pyfunction!(lines::_html_prepare, &m)?)?;
     m.add_class::<lines::HtmlRows>()?;

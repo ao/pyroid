@@ -161,8 +161,9 @@ fn line_junk(
     }
 }
 
-/// `Differ(linejunk, charjunk).compare(a, b)` as a list of lines, or `None`.
-/// `linejunk_kind`: 0 `None`, 1 `IS_LINE_JUNK`, 2 another callable;
+/// `Differ(linejunk, charjunk).compare(a, b)`'s lines, made as they are read
+/// (an ndiff of large files keeps one list of small ops, not every line), or
+/// `None`. `linejunk_kind`: 0 `None`, 1 `IS_LINE_JUNK`, 2 another callable;
 /// `charjunk_space_tab`: `IS_CHARACTER_JUNK` (else `None`).
 #[pyfunction]
 pub fn _differ_compare<'py>(
@@ -173,7 +174,7 @@ pub fn _differ_compare<'py>(
     linejunk: &Bound<'py, PyAny>,
     charjunk_space_tab: bool,
     windowed: bool,
-) -> PyResult<Option<Bound<'py, PyList>>> {
+) -> PyResult<Option<DiffLines>> {
     let (Some(al), Some(bl)) = (Lines::read(a)?, Lines::read(b)?) else {
         return Ok(None);
     };
@@ -186,30 +187,54 @@ pub fn _differ_compare<'py>(
         charjunk_space_tab,
         windowed,
     )?;
-    let prefixes = [
-        PyString::new(py, "- "),
-        PyString::new(py, "+ "),
-        PyString::new(py, "  "),
-    ];
-    let out = PyList::empty(py);
-    for op in &ops {
-        match op {
-            DiffOp::Line(tag, side, i) => {
-                let p = &prefixes[match tag {
-                    b'-' => 0,
-                    b'+' => 1,
-                    _ => 2,
-                }];
-                let line = match side {
-                    Side::A => al.get(*i),
-                    Side::B => bl.get(*i),
-                };
-                out.append(p.add(line)?)?;
-            }
-            DiffOp::Tags(t) => out.append(format!("? {t}\n"))?,
-        }
+    Ok(Some(DiffLines {
+        ops,
+        a: al.objs.unbind(),
+        b: bl.objs.unbind(),
+        next: 0,
+    }))
+}
+
+/// The iterator [`_differ_compare`] returns.
+#[pyclass(module = "pyroid.difflib", name = "_DiffLines")]
+#[derive(Debug)]
+pub struct DiffLines {
+    ops: Vec<DiffOp>,
+    a: Py<PyTuple>,
+    b: Py<PyTuple>,
+    next: usize,
+}
+
+#[pymethods]
+impl DiffLines {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
     }
-    Ok(Some(out))
+
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<Bound<'_, PyAny>>> {
+        let py = slf.py();
+        let this = &mut *slf;
+        let Some(op) = this.ops.get(this.next) else {
+            return Ok(None);
+        };
+        let line = match op {
+            DiffOp::Line(tag, side, i) => {
+                let prefix = match tag {
+                    b'-' => pyo3::intern!(py, "- "),
+                    b'+' => pyo3::intern!(py, "+ "),
+                    _ => pyo3::intern!(py, "  "),
+                };
+                let lines = match side {
+                    Side::A => this.a.bind(py),
+                    Side::B => this.b.bind(py),
+                };
+                prefix.add(lines.get_item(*i)?)?
+            }
+            DiffOp::Tags(t) => PyString::new(py, &format!("? {t}\n")).into_any(),
+        };
+        this.next += 1;
+        Ok(Some(line))
+    }
 }
 
 struct Compared {
@@ -367,8 +392,8 @@ fn exact_str<'py>(obj: &Bound<'py, PyAny>) -> Option<Bound<'py, PyString>> {
     obj.cast_exact::<PyString>().ok().cloned()
 }
 
-/// `list(unified_diff(...))` (`context=False`) or `list(context_diff(...))`
-/// (`context=True`) after `_check_types`, or `None`. `theme` is 3.15's
+/// The lines of `unified_diff(...)` (`context=False`) or `context_diff(...)`
+/// (`context=True`) after `_check_types`, made as they are read, or `None`. `theme` is 3.15's
 /// `(header, hunk, context, removed, added, reset)` strings for `color=True`.
 #[pyfunction]
 #[pyo3(signature = (a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, context, theme=None))]
@@ -385,7 +410,7 @@ pub fn _line_diff<'py>(
     lineterm: &Bound<'py, PyAny>,
     context: bool,
     theme: Option<[String; 6]>,
-) -> PyResult<Option<Bound<'py, PyList>>> {
+) -> PyResult<Option<FormatLines>> {
     let (Some(fromfile), Some(tofile), Some(fromdate), Some(todate), Some(lineterm)) = (
         exact_str(fromfile),
         exact_str(tofile),
@@ -416,23 +441,30 @@ pub fn _line_diff<'py>(
     };
     let plan = interrupt::run(py, la + lb > 1024, work)?;
     let theme = theme.unwrap_or_default();
-    let [t_header, t_hunk, t_context, t_removed, t_added, t_reset] = &theme;
-    let reset = (!t_reset.is_empty()).then(|| PyString::new(py, t_reset));
-    let finish = |s: Bound<'py, PyAny>| -> PyResult<Bound<'py, PyAny>> {
-        match &reset {
-            Some(r) => s.add(r),
-            None => Ok(s),
-        }
-    };
+    let [t_header, t_hunk, t_context, t_removed, t_added, t_reset] = theme;
+    let reset = (!t_reset.is_empty()).then(|| PyString::new(py, &t_reset));
     let header = |mark: &str, name: &Bound<'py, PyString>, date: &Bound<'py, PyString>| {
         let mut s = PyString::new(py, &format!("{t_header}{mark} ")).add(name)?;
         if date.len()? > 0 {
             s = s.add("\t")?.add(date)?;
         }
-        finish(s.add(&lineterm)?)
+        s = s.add(&lineterm)?;
+        match &reset {
+            Some(r) => s.add(r),
+            None => Ok(s),
+        }
     };
+    let (m1, m2) = if context {
+        ("***", "---")
+    } else {
+        ("---", "+++")
+    };
+    let headers = [
+        header(m1, &fromfile, &fromdate)?.unbind(),
+        header(m2, &tofile, &todate)?.unbind(),
+    ];
     let prefixes = if context {
-        ["  ", "- ", "+ ", "! "].map(|p| PyString::new(py, p))
+        ["  ", "- ", "+ ", "! "].map(|p| PyString::new(py, p).unbind())
     } else {
         [
             format!("{t_context} "),
@@ -440,44 +472,97 @@ pub fn _line_diff<'py>(
             format!("{t_added}+"),
             String::new(),
         ]
-        .map(|p| PyString::new(py, &p))
+        .map(|p| PyString::new(py, &p).unbind())
     };
-    let out = PyList::empty(py);
-    for line in plan {
-        match line {
+    Ok(Some(FormatLines {
+        plan,
+        next: 0,
+        second_header: false,
+        headers,
+        prefixes,
+        hunk: t_hunk,
+        context,
+        lineterm: lineterm.unbind(),
+        reset: reset.map(Bound::unbind),
+        a: al.objs.unbind(),
+        b: bl.objs.unbind(),
+    }))
+}
+
+/// The iterator [`_line_diff`] returns: the diff's lines, made as they are read.
+#[pyclass(module = "pyroid.difflib", name = "_FormatLines")]
+#[derive(Debug)]
+pub struct FormatLines {
+    plan: Vec<Out>,
+    next: usize,
+    /// The first file header is out; the second is next.
+    second_header: bool,
+    headers: [Py<PyAny>; 2],
+    /// Context, removed, added and changed lines' prefixes.
+    prefixes: [Py<PyString>; 4],
+    /// 3.15's hunk colour (or nothing).
+    hunk: String,
+    context: bool,
+    lineterm: Py<PyString>,
+    /// 3.15's colour reset after each line, if colours are on.
+    reset: Option<Py<PyString>>,
+    a: Py<PyTuple>,
+    b: Py<PyTuple>,
+}
+
+#[pymethods]
+impl FormatLines {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<Bound<'_, PyAny>>> {
+        let py = slf.py();
+        let this = &mut *slf;
+        let Some(item) = this.plan.get(this.next) else {
+            return Ok(None);
+        };
+        let line = match item {
             Out::FileHeaders => {
-                let (m1, m2) = if context {
-                    ("***", "---")
-                } else {
-                    ("---", "+++")
-                };
-                out.append(header(m1, &fromfile, &fromdate)?)?;
-                out.append(header(m2, &tofile, &todate)?)?;
+                let h = this.headers[usize::from(this.second_header)]
+                    .bind(py)
+                    .clone();
+                if this.second_header {
+                    this.next += 1;
+                }
+                this.second_header = !this.second_header;
+                return Ok(Some(h));
             }
             Out::Control(text) => {
-                let s = if context {
-                    PyString::new(py, &text)
+                let s = if this.context {
+                    PyString::new(py, text)
                 } else {
-                    PyString::new(py, &format!("{t_hunk}{text}"))
+                    PyString::new(py, &format!("{}{text}", this.hunk))
                 };
-                out.append(finish(s.add(&lineterm)?)?)?;
+                s.add(this.lineterm.bind(py))?
             }
             Out::Line(prefix, side, i) => {
-                let p = &prefixes[match prefix {
+                let p = this.prefixes[match prefix {
                     Prefix::Context => 0,
                     Prefix::Removed => 1,
                     Prefix::Added => 2,
                     Prefix::Changed => 3,
-                }];
-                let line = match side {
-                    Side::A => al.get(i),
-                    Side::B => bl.get(i),
+                }]
+                .bind(py);
+                let lines = match side {
+                    Side::A => this.a.bind(py),
+                    Side::B => this.b.bind(py),
                 };
-                out.append(finish(p.add(line)?)?)?;
+                p.add(lines.get_item(*i)?)?
             }
-        }
+        };
+        let line = match &this.reset {
+            Some(r) => line.add(r.bind(py))?,
+            None => line,
+        };
+        this.next += 1;
+        Ok(Some(line))
     }
-    Ok(Some(out))
 }
 
 /// `obj` if it is a `str`, or a subclass that keeps str's indexing and comparisons
