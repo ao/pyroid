@@ -30,6 +30,15 @@ $ pip install "pyroid[datatrove]"     # datatrove, regex, tokenizers, numpy, orj
 The rest of the pipeline (readers, writers, the executor, steps pyroid does not replace) stays
 datatrove's, and the steps mix freely.
 
+In a fresh environment this pipeline also needs packages that datatrove does not install, with
+pyroid's steps or with stock datatrove's: `LanguageFilter()` without `model_path` downloads
+fastText's model through fsspec's HTTP filesystem (requests, aiohttp) and caches it with
+fasteners, and a `ParquetReader` needs pyarrow:
+
+```console
+$ pip install "pyroid[datatrove]" requests aiohttp fasteners pyarrow
+```
+
 ## The steps
 
 | pyroid step | datatrove's step | Runs on |
