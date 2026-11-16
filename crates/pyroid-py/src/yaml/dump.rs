@@ -233,7 +233,7 @@ impl<'py> Repr<'py> {
             return Ok(Step::Done(self.scalar(key, res::TIMESTAMP, text, None)));
         }
         if self.o.full {
-            return Err(DErr::Unsupported("objects other than plain data"));
+            return Err(DErr::Unsupported("an object other than plain data"));
         }
         Err(DErr::Undefined(data.clone().unbind()))
     }

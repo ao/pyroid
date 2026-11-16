@@ -387,3 +387,81 @@ def test_deep_nesting_never_overflows_the_native_stack(
     proc = run_python(code, timeout=600.0)
     assert proc.returncode == 0, proc.stderr[-3000:]
     assert proc.stdout.startswith("[("), proc.stdout
+
+
+@pytest.mark.thread_unsafe
+def test_fallback_warnings_name_the_call_and_the_reason(run_python: Any) -> None:
+    pytest.importorskip("yaml")
+    code = r"""
+import warnings
+warnings.simplefilter("always")
+import yaml, pyroid.yaml as py
+
+def warned(fn):
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        fn()
+    return [str(x.message).split(";")[0] for x in w]
+
+print(warned(lambda: list(py.unsafe_load_all("a: 1"))))
+print(warned(lambda: list(py.load_all("a: 1", Loader=yaml.FullLoader))))
+print(warned(lambda: py.load("!!python/tuple [1]", Loader=yaml.UnsafeLoader)))
+class L(yaml.SafeLoader):
+    pass
+L.add_constructor("!x", lambda loader, node: 1)
+print(warned(lambda: py.load("!x a", Loader=L)))
+import collections
+print(warned(lambda: py.safe_dump_all([1], tags=collections.OrderedDict([("!e!", "tag:e,2000:")]))))
+yaml.add_representer(set, lambda d, x: d.represent_list(sorted(x)), Dumper=yaml.SafeDumper)
+print(warned(lambda: py.safe_dump({"a": 1})))
+print(warned(lambda: py.dump(frozenset([1]))))
+for fn in (py.safe_dump, yaml.safe_dump):
+    try:
+        fn(1, Dumper=yaml.SafeDumper)
+    except TypeError as e:
+        print(e)
+"""
+    r = run_python(code)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == [
+        "['pyroid.yaml.load_all: Loader=UnsafeLoader in load_all is not supported by the "
+        "Rust port']",
+        "['pyroid.yaml.load_all: Loader=FullLoader in load_all is not supported by the Rust port']",
+        "['pyroid.yaml.load: a !!python/ tag is not supported by the Rust port']",
+        "['pyroid.yaml.load: Loader=L with added constructors, resolvers or overrides is not "
+        "supported by the Rust port']",
+        "['pyroid.yaml.safe_dump_all: a tags= value that is not a dict of str is not supported by "
+        "the Rust port']",
+        "['pyroid.yaml.safe_dump: Dumper=SafeDumper with added representers, resolvers or "
+        "overrides is not supported by the Rust port']",
+        "['pyroid.yaml.dump: an object other than plain data is not supported by the Rust port']",
+        "yaml.dump_all() got multiple values for keyword argument 'Dumper'",
+        "yaml.dump_all() got multiple values for keyword argument 'Dumper'",
+    ]
+
+
+@pytest.mark.thread_unsafe
+def test_plain_subclasses_run_without_pyyaml(run_python: Any) -> None:
+    code = r"""
+import sys
+sys.modules["yaml"] = None
+import pyroid.yaml as py
+class L(py.SafeLoader):
+    pass
+class D(py.SafeDumper):
+    pass
+print(py.load("a: 1", Loader=L), repr(py.dump({"a": 1}, Dumper=D)))
+class M(py.SafeLoader):
+    def construct_mapping(self, node):
+        return {}
+try:
+    py.load("a: 1", Loader=M)
+except py.PyroidError as e:
+    print(str(e).split(",")[0])
+"""
+    r = run_python(code)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == [
+        "{'a': 1} 'a: 1\\n'",
+        "pyroid.yaml.load: Loader=M with added constructors",
+    ]

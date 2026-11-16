@@ -277,13 +277,15 @@ def _loader_mode(loader_cls: Any) -> str | None:
             if cls in _LOADER_MODES:
                 base = cls
                 break
-        if base is None or _yaml is None:
+        if base is None:
             return None
         for cls in loader_cls.__mro__:
             if cls is base:
                 break
             if any(n not in _INERT for n in vars(cls)):
                 return None
+        if _yaml is None:
+            return _LOADER_MODES[base]
         if vars(base).keys() != _STOCK_VARS[base]:
             return None
         mode = _LOADER_MODES[base]
@@ -312,8 +314,25 @@ def _caller_stacklevel() -> int:
     return level
 
 
-def _pyyaml(name: str, reason: str) -> Any:
-    """The real PyYAML for `name`, warning once per function and reason, or PyroidError."""
+def _public_name() -> str:
+    """The public function of this module that the user called (the outermost one here)."""
+    name = "dump_all"
+    frame: Any = sys._getframe(1)
+    while frame is not None and frame.f_globals.get("__name__") == __name__:
+        if not frame.f_code.co_name.startswith("_"):
+            name = frame.f_code.co_name
+        frame = frame.f_back
+    return name
+
+
+
+def _pyyaml(name: str | None, reason: str) -> Any:
+    """The real PyYAML for `name`, warning once per function and reason, or PyroidError.
+
+    `name` is the public function the user called (None: find it on the stack).
+    """
+    if name is None:
+        name = _public_name()
     if _yaml is None:
         raise PyroidError(
             f"pyroid.yaml.{name}: {reason} is not supported by pyroid's Rust port, and PyYAML "
@@ -340,11 +359,12 @@ def _pyyaml(name: str, reason: str) -> Any:
     return _yaml
 
 
-def _loader_reason(loader_cls: Any) -> str:
+def _loader_reason(loader_cls: Any, mode: str | None) -> str:
+    """Why `loader_cls` goes to PyYAML (`mode`: what `_loader_mode` gave it)."""
     name = getattr(loader_cls, "__name__", type(loader_cls).__name__)
-    if loader_cls in _LOADER_MODES or any(
-        c in _LOADER_MODES for c in getattr(loader_cls, "__mro__", ())
-    ):
+    if mode is not None:
+        return f"Loader={name} in load_all"  # a full loader: only load() runs them natively
+    if any(c in _LOADER_MODES for c in getattr(loader_cls, "__mro__", ())):
         return f"Loader={name} with added constructors, resolvers or overrides"
     return f"Loader={name}"
 
@@ -560,9 +580,9 @@ def load(stream: Any, Loader: Any) -> Any:  # noqa: N803 - PyYAML's name
         if result is not NotImplemented:
             return result
         reason = "a !!python/ tag" if mode == "full" else "a str holding U+10F800..U+10FFFF"
-        _pyyaml("load", reason)
+        _pyyaml(None, reason)
         return _py_load(again, Loader)
-    _pyyaml("load", _loader_reason(Loader))
+    _pyyaml(None, _loader_reason(Loader, None))
     return _py_load(stream, Loader)
 
 
@@ -573,12 +593,12 @@ def load_all(stream: Any, Loader: Any) -> Iterator[Any]:  # noqa: N803 - PyYAML'
     """
     mode = _loader_mode(Loader)
     if mode != "safe":
-        _pyyaml("load_all", _loader_reason(Loader))
+        _pyyaml(None, _loader_reason(Loader, mode))
         yield from _py_load_all(stream, Loader)
         return
     loader = _native_load_all(stream)
     if loader is NotImplemented:
-        _pyyaml("load_all", "a str holding U+10F800..U+10FFFF")
+        _pyyaml(None, "a str holding U+10F800..U+10FFFF")
         yield from _py_load_all(stream, Loader)
         return
     while loader.check_data():
@@ -704,7 +724,7 @@ def _dumper_mode(dumper_cls: Any) -> str | None:
             return None
         base = dumper_cls
     else:
-        if not isinstance(dumper_cls, type) or _yaml is None:
+        if not isinstance(dumper_cls, type):
             return None
         base = next((c for c in dumper_cls.__mro__[1:] if c in _DUMPER_MODES), None)
         if base is None:
@@ -714,6 +734,8 @@ def _dumper_mode(dumper_cls: Any) -> str | None:
                 break
             if any(n not in _INERT for n in vars(cls)):
                 return None
+        if _yaml is None:
+            return _DUMPER_MODES[base]
         if vars(base).keys() != _STOCK_VARS[base]:
             return None
         mode = _DUMPER_MODES[base]
@@ -788,7 +810,7 @@ def _dump_options(
         if type(tags) is not dict or not all(
             type(k) is str and type(v) is str for k, v in tags.items()
         ):
-            return "tags that are not a dict of str"
+            return "a tags= value that is not a dict of str"
         tags = sorted(tags.items()) or None
     return {
         "default_style": default_style,
@@ -879,7 +901,9 @@ def dump_all(
     mode = _dumper_mode(Dumper)
     if mode is None:
         name = getattr(Dumper, "__name__", type(Dumper).__name__)
-        _pyyaml("dump_all", f"Dumper={name}" + ("" if Dumper in _DUMPER_MODES else " (customised)"))
+        if any(c in _DUMPER_MODES for c in getattr(Dumper, "__mro__", ())):
+            name += " with added representers, resolvers or overrides"
+        _pyyaml(None, f"Dumper={name}")
         return _py_dump_all(documents, stream, Dumper, **kwds)
     opts = _dump_options(
         default_style,
@@ -900,7 +924,7 @@ def dump_all(
         or (encoding is not None and type(encoding) is not str)
         or encoding == ""
     ):
-        _pyyaml("dump_all", opts if isinstance(opts, str) else f"encoding={encoding!r}")
+        _pyyaml(None, opts if isinstance(opts, str) else f"encoding={encoding!r}")
         return _py_dump_all(documents, stream, Dumper, **kwds)
     # The emitter writes bytes only when the stream has no `encoding` (BytesIO when stream=None).
     effective = (
@@ -922,7 +946,7 @@ def dump_all(
         **opts,
     )
     if error is NotImplemented:
-        _pyyaml("dump_all", reason)
+        _pyyaml(None, reason)
         import itertools
 
         return _py_dump_all(itertools.chain(consumed, it), stream, Dumper, **kwds)
@@ -980,6 +1004,10 @@ def _encode_chunks(text: str, writes: list[int] | None, encoding: str) -> bytes:
     return b"".join(out)
 
 
+# PyYAML's safe_dump passes Dumper= on to dump_all, so CPython names yaml.dump_all.
+_DUPLICATE_DUMPER = "yaml.dump_all() got multiple values for keyword argument 'Dumper'"
+
+
 def dump(data: Any, stream: Any = None, Dumper: Any = Dumper, **kwds: Any) -> Any:  # noqa: N803
     """Serialize a Python object into a YAML stream (``yaml.dump``)."""
     return dump_all([data], stream, Dumper=Dumper, **kwds)
@@ -987,11 +1015,15 @@ def dump(data: Any, stream: Any = None, Dumper: Any = Dumper, **kwds: Any) -> An
 
 def safe_dump_all(documents: Any, stream: Any = None, **kwds: Any) -> Any:
     """``yaml.safe_dump_all``: :func:`dump_all` with ``SafeDumper``."""
+    if "Dumper" in kwds:
+        raise TypeError(_DUPLICATE_DUMPER)
     return dump_all(documents, stream, Dumper=SafeDumper, **kwds)
 
 
 def safe_dump(data: Any, stream: Any = None, **kwds: Any) -> Any:
     """``yaml.safe_dump``: :func:`dump_all` of one document with ``SafeDumper``."""
+    if "Dumper" in kwds:
+        raise TypeError(_DUPLICATE_DUMPER)
     return dump_all([data], stream, Dumper=SafeDumper, **kwds)
 
 
