@@ -57,7 +57,9 @@ function type checks go by `type(x).__name__` (so an `OrderedDict` is an object,
 is not an array), `0` and `1` never equal `false` and `true`, ordering works on numbers
 (`numbers.Number`, so `Decimal` too) and strings, and comparing a string with a number raises
 Python's `TypeError`. Objects other than the builtin types go through the same Python operations
-jmespath applies to them.
+jmespath applies to them. Type names added to `jmespath.functions.REVERSE_TYPES_MAP` or
+`TYPES_MAP` count as in jmespath (Ansible's `json_query` adds its tagged `str`, `list` and `dict`
+subclasses); with jmespath installed, `pyroid.jmespath.functions` holds the same two dicts.
 
 Errors have jmespath's classes (`ParseError`, `LexerError`, `IncompleteExpressionError`,
 `EmptyExpressionError`, `ArityError`, `VariadictArityError`, `JMESPathTypeError`,
@@ -74,7 +76,9 @@ Compiled expressions are cached as jmespath 1.1.0 caches them: the 512 most rece
 out first, shared by `search`, `compile` and `Parser().parse`, so `compile(e) is compile(e)`.
 A deeply nested expression raises `RecursionError` at the nesting depth where jmespath's
 recursive parser and interpreter run out of frames, computed from `sys.getrecursionlimit()` and
-the caller's stack depth (on the main thread; see the differences below).
+the caller's stack depth (on the main thread; see the differences below). A long chain such as
+`a || b || c ...` or `a[][]...` compiles at any length, as in jmespath (both parsers build it in a
+loop), and searching it raises `RecursionError` where jmespath's interpreter does.
 
 ## Custom functions
 
@@ -137,10 +141,19 @@ with another jmespath installed says so in its `PatchWarning`.
 ## Differences from jmespath {#differences-from-jmespath}
 
 - Deep nesting in threads other than the main thread: pyroid keeps its native stack within 192
-  KiB there (96 KiB on musl), so a deeply nested expression raises `RecursionError` at about 150 to
-  230 levels, where jmespath allows 250 to 500 at the default recursion limit. On the main thread
-  the depths are jmespath's. With a raised recursion limit pyroid still stops at 650 to 1,000
-  levels, depending on the construct.
+  KiB there (96 KiB on musl), so a deeply nested expression raises `RecursionError` at about 100 to
+  410 levels, depending on the construct, where jmespath allows 250 to 500 at the default
+  recursion limit (CPython 3.12 on aarch64 Linux). On the main thread the depths are jmespath's.
+- With a raised recursion limit, pyroid stops nested expressions (parentheses, `!`,
+  multi-selects, function calls, filters, projections) at 500 to 1,000 levels. Chains of `|`,
+  `||`, `&&`, comparisons and `[]` go as deep as the recursion limit and a 6 MiB native stack
+  allow on the main thread: 3,200 to 10,000 terms at a limit of 20,000, where jmespath on CPython
+  3.12 stops at 2,500 to 5,000.
+- Type names removed from jmespath's own entries in `REVERSE_TYPES_MAP` or `TYPES_MAP` still
+  count: pyroid checks those entries natively and reads the dicts only for other types.
+- The `PendingDeprecationWarning` for a backtick literal that is not JSON points at the line that
+  called `search`, `compile`, `Parser().parse` or `Lexer().tokenize`; jmespath's points into its
+  lexer.
 - `ParsedResult.parsed` is built on first access and is not read back: editing its dicts in place
   does not change what `search` evaluates (assigning a new AST to `.parsed` does).
 - The `_Expression` objects pyroid makes carry a native interpreter: `expref.interpreter` is not a
