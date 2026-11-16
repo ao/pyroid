@@ -281,6 +281,16 @@ def _ansi_search(s: str) -> bool:
     return _ansi_codes.search(s) is not None
 
 
+def _pause() -> None:
+    """Do nothing, as Python code.
+
+    The Rust side calls this about every millisecond of a long table. Entering a Python
+    function runs the interpreter's periodic check: other threads get the GIL when they ask
+    for it, a free-threaded build's stop-the-world pauses can start, and Ctrl-C raises
+    ``KeyboardInterrupt``.
+    """
+
+
 class _Call:
     """What :func:`tabulate` hands the Rust side: settings, and tabulate's option logic."""
 
@@ -291,6 +301,7 @@ class _Call:
     to_str_fn = staticmethod(_to_str)
     escape_empty_fn = staticmethod(_escape_empty)
     ansi_search_fn = staticmethod(_ansi_search)
+    pause_fn = staticmethod(_pause)
 
     def __init__(self, **kw: Any) -> None:
         self.__dict__.update(kw)
