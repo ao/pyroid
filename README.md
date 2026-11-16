@@ -7,8 +7,10 @@
 
 [Docs](https://ataiva.com/open-source/pyroid/docs/) | [Benchmarks](https://ataiva.com/open-source/pyroid/docs/benchmarks/) | [Compatibility](https://ataiva.com/open-source/pyroid/docs/compatibility/)
 
-pyroid reimplements popular Python libraries in Rust, with the same API and the same output. Most
-of its modules are many times faster than the library they replace.
+pyroid reimplements 19 popular Python libraries in Rust, with the same API and the same output.
+Most of its modules are many times faster than the library they replace. They cover data formats
+(JSON, YAML, JMESPath queries, dates, tables), developer tools (difflib, packaging), text and NLP
+(ftfy, fastText, NLTK, jieba), web pages and archives, and the steps of LLM data pipelines.
 
 ```console
 $ pip install pyroid
@@ -17,16 +19,35 @@ $ pip install pyroid
 Change the import. The output is the same:
 
 ```python
+import pyroid.yaml as yaml  # was: import yaml
+import pyroid.jmespath as jmespath  # was: import jmespath
 import pyroid.ftfy as ftfy  # was: import ftfy
-import pyroid.json_repair as json_repair  # was: import json_repair
+from pyroid.packaging.version import Version  # was: from packaging.version import Version
 
-ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")  # 'naïve résumé'
+yaml.safe_load("ports: [80, 443]")  # {'ports': [80, 443]}
+jmespath.search("items[?up].name", {"items": [{"name": "web", "up": True}]})  # ['web']
 ftfy.fix_text_batch(["naÃ¯ve rÃ©sumÃ©", "ok"])  # ['naïve résumé', 'ok'], on all cores
-json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
+Version("1.10") > Version("1.9")  # True
 ```
+
+For code you don't own, `pyroid.patch("yaml", "jmespath")` makes its `import yaml` and
+`import jmespath` give pyroid's modules (boto3 and the AWS CLI query through jmespath).
+
+On an AWS EC2 c7i.4xlarge, `yaml.safe_load` is 10× faster than PyYAML's `CSafeLoader` on 11,878
+real YAML files, `jmespath.search` 10 to 26× faster than jmespath 1.1.0 on single queries of a
+boto3-style response, and `ftfy.fix_text_batch` 108× faster than ftfy 6.3.1 on one thread over
+10,000 FineWeb documents. [Speed by module](#speed-by-module) has every module's numbers.
 
 | Area | Module | Replaces |
 |---|---|---|
+| Data formats | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.9 |
+| | [`pyroid.yaml`](https://ataiva.com/open-source/pyroid/docs/guides/yaml/) | PyYAML 6.0.3's `safe_load` and `safe_dump` (its pure-Python `SafeLoader` and `SafeDumper`) |
+| | [`pyroid.jmespath`](https://ataiva.com/open-source/pyroid/docs/guides/jmespath/) | jmespath 1.1.0 (`search`, `compile`, custom functions), as boto3, the AWS CLI and Ansible use it |
+| | [`pyroid.tabulate`](https://ataiva.com/open-source/pyroid/docs/guides/tabulate/) | tabulate 0.10.0, `DataFrame.to_markdown()` included |
+| | [`pyroid.dateutil.parser`](https://ataiva.com/open-source/pyroid/docs/guides/dateutil/) | python-dateutil's `parse` and `isoparse` (2.8.2 to 4.0.0) |
+| Developer tools | [`pyroid.difflib`](https://ataiva.com/open-source/pyroid/docs/guides/difflib/) | the standard library's `difflib` (CPython 3.11 to 3.15): `SequenceMatcher`, `get_close_matches`, `unified_diff`, `ndiff`, `HtmlDiff` |
+| | [`pyroid.packaging`](https://ataiva.com/open-source/pyroid/docs/guides/packaging/) | packaging 26.3's versions, specifiers, markers, requirements and name helpers (PEP 440, PEP 508) |
+| | [`pyroid.sqlparse`](https://ataiva.com/open-source/pyroid/docs/guides/sqlparse/) | sqlparse 0.6.1 (`format`, `split`, `parse`, with sqlparse's own token classes) |
 | Text and encoding | [`pyroid.ftfy`](https://ataiva.com/open-source/pyroid/docs/guides/ftfy/) | ftfy 6.3.1 |
 | | [`pyroid.translit`](https://ataiva.com/open-source/pyroid/docs/guides/translit/) | anyascii 0.3.3; a permissively licensed alternative to Unidecode |
 | Language ID and NLP | [`pyroid.fasttext`](https://ataiva.com/open-source/pyroid/docs/guides/fasttext/) | fastText 0.9.2 inference (fasttext, fasttext-wheel, fasttext-predict) |
@@ -35,19 +56,11 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 | | [`pyroid.langdetect`](https://ataiva.com/open-source/pyroid/docs/guides/langdetect/) | langdetect 1.0.9, with the same results for the same seed |
 | Web and archives | [`pyroid.trafilatura`](https://ataiva.com/open-source/pyroid/docs/guides/trafilatura/) | Trafilatura's text extraction: 2.3.1, or 1.11.0 as datatrove 0.10.1 installs it (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
 | | [`pyroid.warc`](https://ataiva.com/open-source/pyroid/docs/guides/warc/) | warcio 1.8.2's WARC/ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading (`WarcReader`) |
-| Dedup and similarity | [`pyroid.datasketch`](https://ataiva.com/open-source/pyroid/docs/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
+| LLM data: filters and dedup | [`pyroid.filters`](https://ataiva.com/open-source/pyroid/docs/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
 | | [`pyroid.dedup`](https://ataiva.com/open-source/pyroid/docs/guides/dedup/) | datatrove 0.10.1's MinHash and sentence dedup |
-| Quality filters | [`pyroid.filters`](https://ataiva.com/open-source/pyroid/docs/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
+| | [`pyroid.datasketch`](https://ataiva.com/open-source/pyroid/docs/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
 | | [`pyroid.nemo`](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
 | Evaluation | [`pyroid.metrics`](https://ataiva.com/open-source/pyroid/docs/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
-| JSON and YAML | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.9 |
-| | [`pyroid.jmespath`](https://ataiva.com/open-source/pyroid/docs/guides/jmespath/) | jmespath 1.1.0 (`search`, `compile`, custom functions), as boto3, the AWS CLI and Ansible use it |
-| | [`pyroid.yaml`](https://ataiva.com/open-source/pyroid/docs/guides/yaml/) | PyYAML 6.0.3's `safe_load` and `safe_dump` (its pure-Python `SafeLoader` and `SafeDumper`) |
-| Tables | [`pyroid.tabulate`](https://ataiva.com/open-source/pyroid/docs/guides/tabulate/) | tabulate 0.10.0, `DataFrame.to_markdown()` included |
-| Dates | [`pyroid.dateutil.parser`](https://ataiva.com/open-source/pyroid/docs/guides/dateutil/) | python-dateutil's `parse` and `isoparse` (2.8.2 to 4.0.0) |
-| Diffs and fuzzy matching | [`pyroid.difflib`](https://ataiva.com/open-source/pyroid/docs/guides/difflib/) | the standard library's `difflib` (CPython 3.11 to 3.15): `SequenceMatcher`, `get_close_matches`, `unified_diff`, `ndiff`, `HtmlDiff` |
-| Python packaging | [`pyroid.packaging`](https://ataiva.com/open-source/pyroid/docs/guides/packaging/) | packaging 26.3's versions, specifiers, markers, requirements and name helpers (PEP 440, PEP 508) |
-| SQL | [`pyroid.sqlparse`](https://ataiva.com/open-source/pyroid/docs/guides/sqlparse/) | sqlparse 0.6.1 (`format`, `split`, `parse`, with sqlparse's own token classes) |
 
 ## Example: cleaning LLM training data
 

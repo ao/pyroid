@@ -1,8 +1,10 @@
 # pyroid
 
-pyroid reimplements popular Python libraries in Rust, with the same API and the same output. Most
-of its modules are many times faster than the library they replace. It runs on CPython 3.11 to
-3.15, including free-threaded 3.14t and 3.15t.
+pyroid reimplements 19 popular Python libraries in Rust, with the same API and the same output.
+Most of its modules are many times faster than the library they replace. They cover data formats
+(JSON, YAML, JMESPath queries, dates, tables), developer tools (difflib, packaging), text and NLP
+(ftfy, fastText, NLTK, jieba), web pages and archives, and the steps of LLM data pipelines. It runs
+on CPython 3.11 to 3.15, including free-threaded 3.14t and 3.15t.
 
 ```console
 $ pip install pyroid
@@ -11,23 +13,27 @@ $ pip install pyroid
 Change the import. The output is the same:
 
 ```python
+import pyroid.yaml as yaml  # was: import yaml
+import pyroid.jmespath as jmespath  # was: import jmespath
 import pyroid.ftfy as ftfy  # was: import ftfy
-import pyroid.json_repair as json_repair  # was: import json_repair
+from pyroid.packaging.version import Version  # was: from packaging.version import Version
 
+yaml.safe_load("ports: [80, 443]")  # {'ports': [80, 443]}
+jmespath.search("items[?up].name", {"items": [{"name": "web", "up": True}]})  # ['web']
 ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")  # 'naïve résumé'
-json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
+Version("1.10") > Version("1.9")  # True
 ```
 
-For code you don't own, such as a pipeline library, patch its imports instead:
+For code you don't own, such as boto3 or a pipeline library, patch its imports instead:
 
 ```python
 import pyroid
 
-pyroid.patch("ftfy", "fasttext")  # from here on, `import ftfy` gets pyroid.ftfy
+pyroid.patch("jmespath", "ftfy")  # from here on, `import jmespath` gets pyroid.jmespath
 
-import ftfy
+import jmespath
 
-ftfy.fix_text("naÃ¯ve rÃ©sumÃ©")  # 'naïve résumé', computed by pyroid
+jmespath.search("a.b", {"a": {"b": 1}})  # 1, computed by pyroid
 ```
 
 See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
@@ -36,6 +42,14 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 
 | Area | Module | Replaces | Identical output? |
 |---|---|---|---|
+| Data formats | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.9 | same output, linear where json_repair is still quadratic ([parity](compatibility.md#json_repair)) |
+|  | [`pyroid.yaml`](guides/yaml.md) | [PyYAML](https://github.com/yaml/pyyaml) 6.0.3's `safe_load` and `safe_dump` | same objects, text and errors as PyYAML's pure-Python `SafeLoader` and `SafeDumper`, faster than `CSafeLoader` ([parity](compatibility.md#yaml)) |
+|  | [`pyroid.jmespath`](guides/jmespath.md) | [jmespath](https://github.com/jmespath/jmespath.py) 1.1.0 | same results, ASTs and exceptions as jmespath, on your Python objects ([parity](compatibility.md#jmespath)) |
+|  | [`pyroid.tabulate`](guides/tabulate.md) | [tabulate](https://github.com/astanin/python-tabulate) 0.10.0, `DataFrame.to_markdown()` included | the same text, byte for byte, in every format ([parity](compatibility.md#tabulate)) |
+|  | [`pyroid.dateutil.parser`](guides/dateutil.md) | [python-dateutil](https://github.com/dateutil/dateutil)'s `parse` and `isoparse`, 2.8.2 to 4.0.0 | same datetimes, tz objects, exceptions and messages ([parity](compatibility.md#dateutil)) |
+| Developer tools | [`pyroid.difflib`](guides/difflib.md) | the standard library's [`difflib`](https://docs.python.org/3/library/difflib.html) (CPython 3.11 to 3.15) | the interpreter's own ratios (float bits), opcodes, diff lines and HTML ([parity](compatibility.md#difflib)) |
+|  | [`pyroid.packaging`](guides/packaging.md) | [packaging](https://github.com/pypa/packaging) 26.3's versions, specifiers, markers, requirements and name helpers | same parsing, order, hashes, strings and exceptions; packaging's own tests pass under the patch ([parity](compatibility.md#packaging)) |
+|  | [`pyroid.sqlparse`](guides/sqlparse.md) | [sqlparse](https://github.com/andialbrecht/sqlparse) 0.6.1 | same formatted text, statements, token trees (sqlparse's own classes) and exceptions ([parity](compatibility.md#sqlparse)) |
 | Text and encoding | [`pyroid.ftfy`](guides/ftfy.md) | [ftfy](https://github.com/rspeer/python-ftfy) 6.3.1 | byte-identical ([parity](compatibility.md#ftfy)) |
 |  | [`pyroid.translit`](guides/translit.md) | `anyascii` 0.3.3; a permissive alternative to GPL `Unidecode` | identical to `anyascii`; not Unidecode's output |
 | Language ID and NLP | [`pyroid.fasttext`](guides/fasttext.md) | [fastText](https://github.com/facebookresearch/fastText) inference (`fasttext`, `fasttext-predict`, ...) | bit-identical labels and probabilities on Linux (glibc) and Windows x64; on macOS the probabilities can differ in the last bits ([parity](compatibility.md#fasttext)) |
@@ -44,19 +58,11 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 |  | [`pyroid.langdetect`](guides/langdetect.md) | [langdetect](https://github.com/Mimino666/langdetect) 1.0.9 | same languages and probabilities, bit for bit, for the same seed ([parity](compatibility.md#langdetect)) |
 | Web and archives | [`pyroid.trafilatura`](guides/trafilatura.md) | [Trafilatura](https://github.com/adbar/trafilatura)'s text extraction, 2.3.1 or 1.11.0 (the release datatrove 0.10.1 installs), with lxml 6.1.3's HTML parser and jusText 3.0.2 | the same text, byte for byte ([parity](compatibility.md#trafilatura)) |
 |  | [`pyroid.warc`](guides/warc.md) | [warcio](https://github.com/webrecorder/warcio) 1.8.2's WARC/ARC reader, and datatrove 0.10.1's WARC reading | same records, documents, exceptions and messages ([parity](compatibility.md#warc)) |
-| Dedup and similarity | [`pyroid.datasketch`](guides/datasketch.md) | [datasketch](https://github.com/ekzhu/datasketch) 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble | same hash values, bytes and query results ([parity](compatibility.md#datasketch)) |
+| LLM data: filters and dedup | [`pyroid.filters`](guides/filters.md) | [datatrove](https://github.com/huggingface/datatrove) 0.10.1's Gopher, C4 and FineWeb filters, PII formatter, C4 bad words, symbol lines and URL filter | same decisions, reasons and text ([parity](compatibility.md#filters)) |
 |  | [`pyroid.dedup`](guides/dedup.md) | datatrove 0.10.1's MinHash and sentence dedup | same signatures, removals and files ([parity](compatibility.md#dedup)) |
-| Quality filters | [`pyroid.filters`](guides/filters.md) | [datatrove](https://github.com/huggingface/datatrove) 0.10.1's Gopher, C4 and FineWeb filters, PII formatter, C4 bad words, symbol lines and URL filter | same decisions, reasons and text ([parity](compatibility.md#filters)) |
+|  | [`pyroid.datasketch`](guides/datasketch.md) | [datasketch](https://github.com/ekzhu/datasketch) 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble | same hash values, bytes and query results ([parity](compatibility.md#datasketch)) |
 |  | [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | [NeMo Curator](https://github.com/NVIDIA-NeMo/Curator) 1.4.0's heuristic document filters and string modifiers | same scores, exceptions and modified text ([parity](compatibility.md#nemo)) |
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
-| JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.9 | same output, linear where json_repair is still quadratic ([parity](compatibility.md#json_repair)) |
-|  | [`pyroid.jmespath`](guides/jmespath.md) | [jmespath](https://github.com/jmespath/jmespath.py) 1.1.0 | same results, ASTs and exceptions as jmespath, on your Python objects ([parity](compatibility.md#jmespath)) |
-| YAML | [`pyroid.yaml`](guides/yaml.md) | [PyYAML](https://github.com/yaml/pyyaml) 6.0.3's `safe_load` and `safe_dump` | same objects, text and errors as PyYAML's pure-Python `SafeLoader` and `SafeDumper`, faster than `CSafeLoader` ([parity](compatibility.md#yaml)) |
-| Tables | [`pyroid.tabulate`](guides/tabulate.md) | [tabulate](https://github.com/astanin/python-tabulate) 0.10.0, `DataFrame.to_markdown()` included | the same text, byte for byte, in every format ([parity](compatibility.md#tabulate)) |
-| Dates | [`pyroid.dateutil.parser`](guides/dateutil.md) | [python-dateutil](https://github.com/dateutil/dateutil)'s `parse` and `isoparse`, 2.8.2 to 4.0.0 | same datetimes, tz objects, exceptions and messages ([parity](compatibility.md#dateutil)) |
-| Diffs and fuzzy matching | [`pyroid.difflib`](guides/difflib.md) | the standard library's [`difflib`](https://docs.python.org/3/library/difflib.html) (CPython 3.11 to 3.15) | the interpreter's own ratios (float bits), opcodes, diff lines and HTML ([parity](compatibility.md#difflib)) |
-| Python packaging | [`pyroid.packaging`](guides/packaging.md) | [packaging](https://github.com/pypa/packaging) 26.3's versions, specifiers, markers, requirements and name helpers | same parsing, order, hashes, strings and exceptions; packaging's own tests pass under the patch ([parity](compatibility.md#packaging)) |
-| SQL | [`pyroid.sqlparse`](guides/sqlparse.md) | [sqlparse](https://github.com/andialbrecht/sqlparse) 0.6.1 | same formatted text, statements, token trees (sqlparse's own classes) and exceptions ([parity](compatibility.md#sqlparse)) |
 
 ## Example: cleaning LLM training data
 

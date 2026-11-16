@@ -19,11 +19,10 @@ pyroid has no runtime dependencies. Extras:
 | `pyroid[nemo]` | `numpy>=1.26` | [`pyroid.nemo`](guides/nemo-curator.md), which returns numpy arrays of scores. NeMo Curator itself is not pulled in. |
 | `pyroid[all]` | all of the above | everything; on CPython 3.15 it leaves out `datatrove`, `hf` and `warc`, and on 3.14t its orjson builds from source (see below) |
 
-Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
-`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.jmespath`,
-`pyroid.tabulate`, `pyroid.trafilatura`, `pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader,
-`pyroid.yaml`, `pyroid.dateutil.parser`, `pyroid.difflib`, `pyroid.packaging`, `pyroid.sqlparse`,
-`pyroid.langdetect` and `pyroid.patch()` need none of them.
+Extras combine: `pip install "pyroid[cli,fasttext]"`. The modules listed on the
+[home page](index.md#whats-in-it) need none of them, apart from `pyroid.fasttext`,
+`pyroid.datasketch` and `pyroid.nemo` (numpy) and the datatrove page decoding of `pyroid.warc`
+(`pyroid[warc]`). `pyroid.patch()` needs none either.
 
 Some dependencies of the `datatrove`, `hf` and `warc` extras publish no wheels for some
 interpreters yet: PyYAML and faust-cchardet for CPython 3.15 and 3.15t, tokenizers for 3.15t, and
