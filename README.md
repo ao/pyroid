@@ -40,6 +40,7 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 | | [`pyroid.nemo`](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
 | Evaluation | [`pyroid.metrics`](https://ataiva.com/open-source/pyroid/docs/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
 | JSON | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.5 |
+| Diffs and fuzzy matching | [`pyroid.difflib`](https://ataiva.com/open-source/pyroid/docs/guides/difflib/) | the standard library's `difflib` (CPython 3.11 to 3.15): `SequenceMatcher`, `get_close_matches`, `unified_diff`, `ndiff`, `HtmlDiff` |
 
 ## Example: cleaning LLM training data
 
@@ -122,6 +123,10 @@ FineWeb dev slice, AWS EC2 c7i.4xlarge:
 | `dedup`, MinHash signatures | datatrove 0.10.1 | 34× |
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
 
+`pyroid.difflib`, on a shared AWS EC2 c8g.16xlarge (indicative): 6 to 17× faster than the
+standard library's difflib on diffs of real source files, 15 to 18× on `get_close_matches` on one
+thread (up to 55× on all cores), with the same results.
+
 The other modules have only been measured in a Docker VM on a Mac, so treat these as indicative
 (one thread unless stated):
 
@@ -146,7 +151,7 @@ row's corpus, interpreter and source.
 |---|---|
 | [`pyroid clean`](https://ataiva.com/open-source/pyroid/docs/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files |
 | [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
-| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own, and patches `difflib` in place |
 | [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
 | [NeMo Curator stages](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/) | NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, the heuristic filters, the modifiers) with the same classes and arguments |
 | [Hugging Face `datasets`](https://ataiva.com/open-source/pyroid/docs/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
@@ -208,7 +213,7 @@ expression is
 - BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists);
 - BSD-3-Clause: numpy's random generator (for C4 bad words), scipy's QUADPACK integration (for
   MinHashLSH's parameters), tldextract and lxml;
-- PSF-2.0: CPython's `ipaddress` (IPv6 parsing);
+- PSF-2.0: CPython's `ipaddress` (IPv6 parsing) and `difflib`;
 - ISC: anyascii's transliteration data;
 - Unicode-3.0: data from the Unicode Character Database;
 - Zlib: zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.
