@@ -82,6 +82,11 @@ pub trait Host {
         colwidths: &[isize],
         aligns: AlignList,
     ) -> Result<Piece, Self::Error>;
+    /// Called once per cell or row of work, so a host can pause a long table (to let other
+    /// threads run, or stop on an interrupt by returning an error).
+    fn tick(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 /// Errors tabulate raises from these steps.
@@ -854,6 +859,7 @@ impl<H: Host> Engine<'_, H> {
             Align::Decimal => {
                 let mut decimals = Vec::with_capacity(strings.len());
                 for s in &strings {
+                    self.host.tick()?;
                     decimals.push(self.afterpoint(s)?);
                 }
                 let maxdecimals = decimals.iter().copied().max().ok_or(Error::EmptyMax)?;
@@ -885,6 +891,7 @@ impl<H: Host> Engine<'_, H> {
             let mut s_widths = Vec::with_capacity(strings.len());
             let mut maxwidth = isize::MIN;
             for ms in &strings {
+                self.host.tick()?;
                 let mut ws = Vec::new();
                 for line in split_cr_lf(ms) {
                     let w = self.line_width(line)?;
@@ -899,6 +906,7 @@ impl<H: Host> Engine<'_, H> {
             let maxwidth = maxwidth.max(minwidth);
             let mut out = Vec::with_capacity(strings.len());
             for (ms, mw) in strings.iter().zip(&s_widths) {
+                self.host.tick()?;
                 let lines = splitlines(ms);
                 let mut parts = Vec::with_capacity(lines.len());
                 if plain {
@@ -930,6 +938,7 @@ impl<H: Host> Engine<'_, H> {
         }
         let mut s_widths = Vec::with_capacity(strings.len());
         for (s, &x) in strings.iter().zip(&extra) {
+            self.host.tick()?;
             s_widths.push(self.line_width(s)? + isize::try_from(x).unwrap_or(isize::MAX));
         }
         let maxwidth = s_widths
@@ -940,6 +949,7 @@ impl<H: Host> Engine<'_, H> {
             .max(minwidth);
         let mut out = Vec::with_capacity(strings.len());
         for ((s, w), x) in strings.into_iter().zip(&s_widths).zip(extra) {
+            self.host.tick()?;
             let xi = isize::try_from(x).unwrap_or(isize::MAX);
             let width = if plain {
                 maxwidth
@@ -1156,6 +1166,7 @@ impl<H: Host> Engine<'_, H> {
         pad: isize,
         rowalign: RowAlign,
     ) -> Res<(), H::Error> {
+        self.host.tick()?;
         if !self.s.is_multiline {
             if let RowFmt::Plain { begin, sep, end } = rowfmt {
                 // _build_simple_row(_pad_row(cells, pad), rowfmt); the separator is not padded.

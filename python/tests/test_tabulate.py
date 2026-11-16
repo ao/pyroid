@@ -515,6 +515,98 @@ def test_large_table() -> None:
     assert out.count("\n") == 10_001
 
 
+#: A child that draws a table of `rows` rows in Rust while something else goes on (`mode`): a
+#: SIGINT after 0.2 s, or a thread that counts. The table's only Python callback is its last
+#: line, which the code before the fix (attached, no signal checks) reached before stopping.
+_LONG_CALL = r"""
+import signal, sys, threading, time
+import pyroid.tabulate as pt
+
+mode, n = sys.argv[1], int(sys.argv[2])
+reached_end = []
+def last_line(widths, aligns):
+    reached_end.append(1)
+    return "-"
+row = pt.DataRow("", " ", "")
+fmt = pt.TableFormat(None, None, None, last_line, row, row, 0, None)
+rows = [[123, "abc", "4.5"]] * n
+
+if mode == "sigint":
+    fired, done = [], []
+    def fire():
+        fired.append(time.perf_counter())
+        signal.raise_signal(signal.SIGINT)
+    timer = threading.Timer(0.2, fire)
+    timer.start()
+    try:
+        pt.tabulate(rows, tablefmt=fmt)
+        done.append(1)
+        timer.cancel()
+        timer.join()
+    except KeyboardInterrupt:
+        if not done:
+            print("interrupted", round(time.perf_counter() - fired[0], 3))
+            print("reached_end", bool(reached_end))
+    if done:
+        print("finished", 1)  # before the signal: too fast to tell
+else:
+    stop, gaps = [], []
+    def count():
+        last = time.perf_counter()
+        while not stop:
+            time.sleep(0.001)
+            now = time.perf_counter()
+            gaps.append(now - last)
+            last = now
+    t = threading.Thread(target=count)
+    t.start()
+    time.sleep(0.05)
+    t0 = time.perf_counter()
+    pt.tabulate(rows, tablefmt=fmt)
+    took = time.perf_counter() - t0
+    stop.append(1)
+    t.join()
+    print("took", round(took, 3))
+    print("longest_gap", round(max(gaps), 3))
+print("after", pt.tabulate([[1]]) == "-\n1\n-")
+"""
+
+
+def _long_call(mode: str, *, at_least: float = 0) -> dict[str, str]:
+    """Run `_LONG_CALL` with more rows until the call outlasts the signal (or `at_least` s)."""
+    for rows in (100_000, 400_000, 1_600_000):
+        out = subprocess.run(
+            [sys.executable, "-c", _LONG_CALL, mode, str(rows)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        assert out.returncode == 0, out.stderr
+        lines = dict(line.split(" ", 1) for line in out.stdout.splitlines())
+        assert lines.pop("after") == "True", out.stdout
+        if "finished" in lines or float(lines.get("took", at_least)) < at_least:
+            continue
+        return lines
+    pytest.skip("the call always ended too soon to measure")
+
+
+@pytest.mark.thread_unsafe  # a child process that signals itself
+@pytest.mark.skipif(sys.platform == "win32", reason="SIGINT is delivered differently on Windows")
+def test_ctrl_c_stops_a_long_table() -> None:
+    got = _long_call("sigint")
+    assert float(got["interrupted"]) < 2.0, got
+    # Stopped by the signal check, not by the first Python callback (the table's last line).
+    assert got["reached_end"] == "False", got
+
+
+@pytest.mark.thread_unsafe  # a child process with threads of its own
+def test_a_long_table_lets_other_threads_run() -> None:
+    got = _long_call("threads", at_least=0.6)
+    # The other thread wakes every millisecond; the call lets it run about every 5 ms.
+    assert float(got["longest_gap"]) < 0.3, got
+
+
 @pytest.mark.thread_unsafe  # a child process
 def test_command_line(tmp_path: Path) -> None:
     src = tmp_path / "t.txt"

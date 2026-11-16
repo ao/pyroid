@@ -15,6 +15,7 @@
 //! `(None, reason)`: the caller hands the call to tabulate.
 
 use std::borrow::Cow;
+use std::time::{Duration, Instant};
 
 use pyo3::exceptions::{PyIndexError, PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -214,6 +215,45 @@ fn classify<'py>(call: &Call<'py>, obj: Bound<'py, PyAny>) -> FResult<Cell<'py>>
     Ok(Cell { obj, val })
 }
 
+/// Pauses for a long table. A call reads Python objects throughout (cells, callbacks), so it
+/// stays attached; every [`Pacer::SLICE`] it detaches for a moment, as the interpreter's own
+/// switch interval would, so that other threads run (and a free-threaded build's
+/// stop-the-world pauses can start), then runs the signal handlers, so that Ctrl-C stops the
+/// call there with `KeyboardInterrupt`.
+struct Pacer {
+    steps: u32,
+    last: Instant,
+}
+
+impl Pacer {
+    /// Steps between looks at the clock.
+    const EVERY: u32 = 256;
+    /// Time between pauses (CPython's default switch interval).
+    const SLICE: Duration = Duration::from_millis(5);
+
+    fn new() -> Self {
+        Self {
+            steps: 0,
+            last: Instant::now(),
+        }
+    }
+
+    fn tick(&mut self, py: Python<'_>) -> PyResult<()> {
+        self.steps += 1;
+        if self.steps < Self::EVERY {
+            return Ok(());
+        }
+        self.steps = 0;
+        if self.last.elapsed() < Self::SLICE {
+            return Ok(());
+        }
+        py.detach(|| ());
+        py.check_signals()?;
+        self.last = Instant::now();
+        Ok(())
+    }
+}
+
 /// The table's [`Host`]: widths through `wcwidth.wcswidth`, and the Python fallbacks.
 struct PyHost<'a, 'py> {
     call: &'a Call<'py>,
@@ -222,6 +262,7 @@ struct PyHost<'a, 'py> {
     callables: Vec<Bound<'py, PyAny>>,
     /// The alignment lists the callables receive (columns, headers).
     aligns: [Option<Bound<'py, PyAny>>; 2],
+    pacer: Pacer,
 }
 
 impl PyHost<'_, '_> {
@@ -291,6 +332,10 @@ impl Host for PyHost<'_, '_> {
         };
         let out = f.call1((cells, PyList::new(py, colwidths)?, a))?;
         piece(&out)
+    }
+
+    fn tick(&mut self) -> FResult<()> {
+        Ok(self.pacer.tick(self.call.obj.py())?)
     }
 }
 
@@ -769,6 +814,7 @@ fn render_inner<'py>(
         widths: FxHashMap::default(),
         callables,
         aligns: [None, None],
+        pacer: Pacer::new(),
     };
 
     // Headers (str after normalisation) and cells, as tabulate's columns (zip_longest).
@@ -797,6 +843,7 @@ fn render_inner<'py>(
         val: Val::None,
     };
     for (position, row) in rows.iter().enumerate() {
+        host.pacer.tick(py)?;
         let row = match row.cast_exact::<PyList>() {
             Ok(l) => l.clone(),
             Err(_) if raw => list_type
@@ -868,6 +915,7 @@ fn render_inner<'py>(
     let mut obj_texts: FxHashMap<(usize, usize), String> = FxHashMap::default();
     for (j, col) in cols.iter().enumerate() {
         for (i, cell) in col.iter().enumerate() {
+            host.pacer.tick(py)?;
             match &cell.val {
                 Val::Str(s) => {
                     let (e, n) = pystr::esc_and_newline(s);
@@ -901,6 +949,7 @@ fn render_inner<'py>(
             push(h);
         }
         for i in 0..nrows {
+            host.pacer.tick(py)?;
             for (j, col) in cols.iter().enumerate().take(row_lens[i]) {
                 let cell = &col[i];
                 let text: Cow<'_, str> = match &cell.val {
@@ -963,6 +1012,7 @@ fn render_inner<'py>(
         let numparse = np_obj.is_truthy()?;
         let mut t = ColType::Bool;
         for cell in col {
+            host.pacer.tick(py)?;
             let ct = match &cell.val {
                 Val::None => ColType::None,
                 Val::Bool(_) => ColType::Bool,
@@ -1025,6 +1075,7 @@ fn render_inner<'py>(
         let mut out = Vec::with_capacity(col.len());
         let mut arena = String::with_capacity(col.len() * 8);
         for cell in col {
+            host.pacer.tick(py)?;
             if matches!(cell.val, Val::None) {
                 let m = missing
                     .as_ref()
@@ -1132,6 +1183,7 @@ fn render_inner<'py>(
         for c in &aligned_cols {
             let mut m = isize::MIN;
             for cl in c {
+                engine.host.pacer.tick(py)?;
                 m = m.max(
                     engine
                         .aligned_width(cl)
@@ -1174,6 +1226,7 @@ fn render_inner<'py>(
             } else {
                 let mut m = isize::MIN;
                 for cl in &aligned_cols[j] {
+                    engine.host.pacer.tick(py)?;
                     m = m.max(
                         engine
                             .aligned_width(cl)
