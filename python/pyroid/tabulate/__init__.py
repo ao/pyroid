@@ -720,20 +720,25 @@ def _plain_rows(tabular_data: Any, headers: Any, showindex: Any) -> Any:
 
 
 def _frame_rows(tabular_data: Any, headers: Any, showindex: Any) -> Any:
-    """``_normalize_tabular_data`` for a pandas DataFrame of floats, signed ints or objects.
+    """``_normalize_tabular_data`` for a pandas DataFrame of float64s, signed ints or objects.
 
     tabulate builds its rows with ``[list(row) for row in df.values]``. For these dtypes
-    ``df.values.tolist()`` gives objects tabulate types and formats the same way (numpy
-    formats its float and int scalars through Python's own), so the rows come from that.
-    Unsigned ints and booleans, which tabulate types as floats, are left to the slow path.
+    ``df.values.tolist()`` gives objects tabulate types and formats the same way, and whose
+    ``str()`` is the same (``headers="firstrow"``, ``disable_numparse``), so the rows come
+    from that. float32 and float16 scalars print fewer digits than the Python floats
+    ``tolist()`` makes of them (``1.1``, not ``1.100000023841858``), and tabulate types
+    unsigned ints and booleans as floats: those frames are left to the slow path.
     """
     if not (hasattr(tabular_data, "keys") and hasattr(tabular_data, "values")):
         return None
     if callable(tabular_data.values) or not hasattr(tabular_data, "index"):
         return None
     vals = tabular_data.values
-    kind = getattr(getattr(vals, "dtype", None), "kind", None)
+    dtype = getattr(vals, "dtype", None)
+    kind = getattr(dtype, "kind", None)
     if getattr(vals, "ndim", None) != 2 or kind not in ("f", "i", "O"):
+        return None
+    if kind == "f" and getattr(dtype, "char", None) != "d":  # float64 only
         return None
     try:
         bool(headers)

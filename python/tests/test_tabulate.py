@@ -212,6 +212,31 @@ def test_fallbacks_warn_and_match_tabulate() -> None:
         tabulate([[1]], tablefmt=custom)
 
 
+def test_float32_frames() -> None:
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    values = [[1.1, 2.2], [3.3, 4.4]]
+    f32 = pd.DataFrame(np.array(values, dtype=np.float32))
+    f16 = pd.DataFrame(np.array(values, dtype=np.float16))
+    # The header row is str() of numpy's scalars, which print their own precision.
+    assert tabulate(f32, headers="firstrow") == (
+        "  0    1.1    2.2\n---  -----  -----\n  1    3.3    4.4"
+    )
+    assert tabulate(f16, headers="firstrow") == (
+        "  0      1.1      2.2\n---  -------  -------\n  1  3.30078  4.39844"
+    )
+    # Cells that are not parsed as numbers are f"{v}", which formats the value as a Python float.
+    assert tabulate(f32, disable_numparse=True) == (
+        "-  -----------------  -----------------\n"
+        "0  1.100000023841858  2.200000047683716\n"
+        "1  3.299999952316284  4.400000095367432\n"
+        "-  -----------------  -----------------"
+    )
+    assert tabulate(f32, headers="keys", floatfmt=".3f") == (
+        "        0      1\n--  -----  -----\n 0  1.100  2.200\n 1  3.300  4.400"
+    )
+
+
 def test_custom_table_formats() -> None:
     fmt = pt.TableFormat(
         lineabove=lambda widths, aligns: "=" * sum(w + 1 for w in widths),

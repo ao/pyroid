@@ -280,7 +280,7 @@ def tables(draw: st.DrawFn) -> dict[str, Any]:
     if HAS_NUMPY:
         shapes.append("numpy")
     if HAS_PANDAS:
-        shapes += ["dataframe", "frame_numeric", "frame_numeric"]
+        shapes += ["dataframe", "frame_numeric", "frame_numeric", "frame_float32"]
     shape = draw(st.sampled_from(shapes))
     headers = draw(
         st.one_of(
@@ -411,7 +411,7 @@ def build_args(case: dict[str, Any], mod: Any) -> tuple[Any, dict[str, Any]]:
 
         ncols = max((len(r) for r in rows), default=0)
         data = pd.DataFrame([(list(r) + [None] * ncols)[:ncols] for r in rows])
-    elif shape == "frame_numeric":
+    elif shape in ("frame_numeric", "frame_float32"):
         import pandas as pd
 
         ncols = max((len(r) for r in rows), default=0)
@@ -421,7 +421,15 @@ def build_args(case: dict[str, Any], mod: Any) -> tuple[Any, dict[str, Any]]:
                 return v
             return 0.5 if isinstance(v, float) else 7
 
-        table = [[num(v) for v in (list(r) + [0] * ncols)[:ncols]] for r in rows]
+        table: Any = [[num(v) for v in (list(r) + [0] * ncols)[:ncols]] for r in rows]
+        if shape == "frame_float32" and ncols:
+            import numpy as np
+
+            # float32 and float16 scalars print fewer digits than Python floats.
+            dtype = np.float16 if len(rows) % 3 == 2 else np.float32
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)  # overflow to inf
+                table = np.array(table, dtype=np.float64).astype(dtype)
         data = pd.DataFrame(
             table, index=pd.Index(range(10, 10 + len(table)), name="idx") if len(rows) % 2 else None
         )
