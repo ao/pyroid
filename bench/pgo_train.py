@@ -346,11 +346,15 @@ class Trainer:
             "join(', ', Reservations[].Instances[].InstanceId)",
             "Reservations[*].Instances[*].State | [0][0]",
         ]
+        # Single calls in the hundreds of thousands, as callers make them: with fewer, the
+        # per-call path stays cold next to the rest of the profile.
         for e in small:
             compiled = JM.compile(e)
-            for _ in range(self.per_doc):
+            for _ in range(50_000):
                 compiled.search(response)
-        for i in range(self.per_doc):
+            for _ in range(20_000):
+                JM.search(e, response)
+        for i in range(20_000):
             e = f"Reservations[].Instances[?State.Name=='{states[i % 3]}' && Tags[?Value=='w{i}']]"
             JM.search(e, response)
         records = [
