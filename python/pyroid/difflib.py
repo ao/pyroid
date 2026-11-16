@@ -119,7 +119,12 @@ def _init(
     autojunk: bool = True,
 ) -> None:
     cls = type(self)
-    if cls.set_seqs in _SET_SEQS and cls.set_seq1 is _set_seq1 and cls.set_seq2 is _set_seq2:
+    if (
+        cls.set_seqs in _SET_SEQS
+        and cls.set_seq1 is _set_seq1
+        and cls.set_seq2 is _set_seq2
+        and cls._SequenceMatcher__chain_b is _chain_b
+    ):
         if not _native._sm_init(self, isjunk, a, b, autojunk, cls in _PLAIN):
             self.matching_blocks = None
             self.fullbcount = None
@@ -140,6 +145,10 @@ def _set_seq1(self: Any, a: Any) -> None:
 
 
 def _set_seq2(self: Any, b: Any) -> None:
+    if type(self)._SequenceMatcher__chain_b is not _chain_b:
+        # A subclass post-processes b2j: CPython's set_seq2 calls its hook.
+        _SM["set_seq2"](self, b)
+        return
     if b is self.b:
         return
     if not _native._sm_set_seq2(self, b):

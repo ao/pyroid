@@ -323,6 +323,42 @@ def test_get_close_matches_over_str_subclasses() -> None:
         assert pd.get_close_matches("apple", loud) == difflib.get_close_matches("apple", loud)
 
 
+def _vowels_are_junk(base: type) -> type:
+    class VowelsAreJunk(base):  # type: ignore[valid-type, misc]
+        calls = 0
+
+        def _SequenceMatcher__chain_b(self) -> None:
+            type(self).calls += 1
+            super()._SequenceMatcher__chain_b()
+            for v in "aeiou":
+                if self.b2j.pop(v, None) is not None:
+                    self.bjunk.add(v)
+
+    return VowelsAreJunk
+
+
+def test_chain_b_override_is_called() -> None:
+    # A subclass's __chain_b post-processes b2j: called once per set_seq2, as by difflib.
+    a, b = "private Thread currentThread;", "private volatile Thread currentThread;"
+
+    def run(base: type) -> tuple[Any, ...]:
+        cls = _vowels_are_junk(base)
+        m = cls(None, a, b)
+        first = (sorted(m.bjunk), m.get_matching_blocks(), m.ratio(), m.get_opcodes())
+        m.set_seq2(b.upper() + "aeiou")
+        return cls.calls, first, sorted(m.bjunk), m.ratio(), dict(m.b2j)
+
+    want = run(difflib.SequenceMatcher)
+    assert want[0] == 2
+    assert run(pd.SequenceMatcher) == want
+    ctx = _quiet_patch()
+    try:
+        with integrations.patching("difflib"):
+            assert run(difflib.SequenceMatcher) == want
+    finally:
+        ctx.__exit__(None, None, None)
+
+
 def test_large_inputs() -> None:
     a = [f"line {i}\n" for i in range(100_000)]
     b = [*a[:5000], "new\n", *a[5000:90000], *a[90001:]]
