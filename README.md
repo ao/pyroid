@@ -123,8 +123,9 @@ FineWeb dev slice, AWS EC2 c7i.4xlarge:
 | `dedup`, MinHash signatures | datatrove 0.10.1 | 34× |
 | `translit.anyascii` | anyascii 0.3.3 | 53× |
 
-<!-- TODO(numbers): one line for pyroid.packaging against packaging 26.3 (machine, interpreter,
-the operations measured), as the jmespath branch adds for pyroid.jmespath. -->
+`pyroid.packaging`, on a shared AWS EC2 c8g.16xlarge devbox (indicative): 3 to 9× faster than
+packaging 26.3 on `Version()`, 8× on `SpecifierSet.contains`, 18× on `filter` over a release list,
+21× on parsing markers and 5 to 7× on requirements.
 
 The other modules have only been measured in a Docker VM on a Mac, so treat these as indicative
 (one thread unless stated):

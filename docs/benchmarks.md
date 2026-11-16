@@ -395,6 +395,54 @@ Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Documents per second 
 
 <small>Source: bench/json_repair_bench.py, run on 2026-11-06.</small>
 
+### pyroid.packaging
+
+AWS EC2 c8g.16xlarge devbox (Graviton4, 64 vCPU), shared with other sessions, indicative. Shared machine, load average 1.2 before and 1.1 after. Best of 15 rounds (3 for 1,000,000 versions), packaging 26.3 and pyroid interleaved in one process, CPython 3.12.16, pyroid release wheel; both results are checked equal before each case is timed. The versions are random `major.minor.micro` strings, 7 in 11 with a pre-, post-, dev or local suffix; the batch functions use the whole pool. The release list has 1,996 such versions, sorted. Rounding is to the last shown digit. Guide: [packaging](guides/packaging.md).
+
+| Case | packaging 26.3 | pyroid | Speedup |
+|---|---:|---:|---:|
+| Version('1.2.3') | 1.23 µs | 0.38 µs | 3.2× |
+| Version('1.0.0rc1') | 3.02 µs | 0.42 µs | 7.2× |
+| Version('2!1.0.post1.dev3+abc.5') | 5.15 µs | 0.56 µs | 9.2× |
+| a < b | 0.15 µs | 0.068 µs | 2.2× |
+| str(v) | 0.58 µs | 0.064 µs | 9.1× |
+| hash(Version('1.2.3')) | 0.91 µs | 0.31 µs | 3.0× |
+| SpecifierSet('>=1.0,<2,!=1.5.*') | 10.0 µs | 3.36 µs | 3.0× |
+| ss.contains('1.6.2') | 1.65 µs | 0.21 µs | 8.0× |
+| ss.contains(Version) | 0.57 µs | 0.15 µs | 3.7× |
+| Specifier('~=1.4.2').contains('1.4.5') | 7.54 µs | 0.77 µs | 9.7× |
+| Marker(...) parse | 36.9 µs | 1.80 µs | 21× |
+| marker.evaluate() | 6.89 µs | 0.97 µs | 7.1× |
+| marker.evaluate(environment) | 7.28 µs | 1.15 µs | 6.3× |
+| Requirement('requests>=2.8.1') | 10.4 µs | 1.97 µs | 5.3× |
+| Requirement("requests[security,socks]>=2.8.1,==2.8.*; python_version < '2.7'") | 34.9 µs | 5.61 µs | 6.2× |
+| canonicalize_name('Foo.Bar_baz') | 0.24 µs | 0.21 µs | 1.1× |
+| 100,000 versions: parse every version | 283 ms | 43.4 ms | 6.5× |
+| 100,000 versions: parse_batch | 286 ms | 50.1 ms | 5.7× |
+| 100,000 versions: sorted(strs, key=Version) | 506 ms | 119 ms | 4.3× |
+| 100,000 versions: sort_versions(strs) | 499 ms | 38.1 ms | 13× |
+| 100,000 versions: sorted(Version objects) | 311 ms | 80.4 ms | 3.9× |
+| 100,000 versions: set(Version objects) | 11.8 ms | 6.49 ms | 1.8× |
+| 100,000 versions: SpecifierSet.filter | 265 ms | 14.8 ms | 18× |
+| 100,000 versions: filter_batch | 267 ms | 16.3 ms | 16× |
+| 100,000 versions: contains_batch | 317 ms | 3.89 ms | 81× |
+| 1,000,000 versions: parse every version | 2,807 ms | 444 ms | 6.3× |
+| 1,000,000 versions: parse_batch | 2,807 ms | 519 ms | 5.4× |
+| 1,000,000 versions: sorted(strs, key=Version) | 7,308 ms | 2,231 ms | 3.3× |
+| 1,000,000 versions: sort_versions(strs) | 7,290 ms | 504 ms | 14× |
+| 1,000,000 versions: sorted(Version objects) | 4,825 ms | 1,665 ms | 2.9× |
+| 1,000,000 versions: set(Version objects) | 333 ms | 197 ms | 1.7× |
+| 1,000,000 versions: SpecifierSet.filter | 2,674 ms | 148 ms | 18× |
+| 1,000,000 versions: filter_batch | 2,678 ms | 176 ms | 15× |
+| 1,000,000 versions: contains_batch | 3,139 ms | 50.0 ms | 63× |
+| SpecifierSet('>=1.0,<2').filter(releases) | 4.65 ms | 0.27 ms | 17× |
+| SpecifierSet('>=4.2,!=4.3.*,<30').filter(releases) | 5.59 ms | 0.30 ms | 18× |
+| SpecifierSet('~=12.4').filter(releases) | 4.60 ms | 0.26 ms | 18× |
+| Requirement() x 10,000 | 233 ms | 34.4 ms | 6.8× |
+| Marker.evaluate x 1,000 | 4.99 ms | 0.72 ms | 6.9× |
+
+<small>Source: bench/packaging/packaging_bench.py, results in bench/results/aws-c8g.16xlarge/2026-11-16/packaging.json, run on 2026-11-16.</small>
+
 ### pyroid.datasketch: MinHash signatures
 
 Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Seconds for the first 10,000 FineWeb dev documents (5.1 million word 5-gram shingles), 128 permutations, best of 3, on free-threaded CPython 3.15t with the GIL off. datasketch 2.0.0 with numpy 2.5.4; its 8-thread rows split the documents over a thread pool. Every pyroid result was first checked for identical signatures. Load average 7 to 10. Guide: [datasketch](guides/datasketch.md).
