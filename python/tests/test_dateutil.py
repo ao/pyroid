@@ -226,6 +226,32 @@ def test_unexpected_keyword_is_dateutils_type_error() -> None:
     assert a[2] == b[2]
 
 
+def test_parse_keywords() -> None:
+    # parse takes dateutil's keywords as named parameters: None is the same as not passing one.
+    kw = dict.fromkeys(["dayfirst", "yearfirst", "fuzzy", "fuzzy_with_tokens", "ignoretz"])
+    check("01/02/03 10:00 +0300", default=None, tzinfos=None, **kw)
+    check("01/02/03", dayfirst=True, default=DEFAULT)
+    # The tzoffset objects are dateutil's: its factory gives the same one while it lives.
+    z = pp.parse("2003-09-25 10:00 +0300").tzinfo
+    assert z is tz.tzoffset(None, 10800)
+    assert pp.parse("2003-09-26 10:00 +0300").tzinfo is z
+    assert pp.parse("2003-09-26 10:00 +0300 (BRST)").tzinfo is tz.tzoffset("BRST", 10800)
+
+
+@pytest.mark.thread_unsafe(reason="replaces DEFAULTPARSER")
+def test_parse_passes_its_keywords_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = []
+
+    class Spy(ppx.parser):  # type: ignore[misc]
+        def parse(self, timestr: Any, **kwargs: Any) -> Any:
+            seen.append(kwargs)
+            return super().parse(timestr, **kwargs)
+
+    monkeypatch.setattr(pp, "DEFAULTPARSER", Spy())
+    assert pp.parse("01/02/03", dayfirst=True, default=DEFAULT) == D(2003, 2, 1)
+    assert seen == [{"default": DEFAULT, "dayfirst": True}]
+
+
 def test_tzinfos() -> None:
     for tzinfos in (
         {"BRST": -10800},

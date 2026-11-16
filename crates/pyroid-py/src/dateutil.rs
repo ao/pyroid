@@ -220,16 +220,24 @@ thread_local! {
     static ISO_TYPES: TypeCache = RefCell::default();
 }
 
+/// Whether `obj`'s type is `ty`. Compares the type pointer: a new reference to a type that every
+/// thread shares (`get_type`) is an atomic write to it on free-threaded builds, which threads
+/// parsing at once queue on.
+fn is_type(obj: &Bound<'_, PyAny>, ty: &Py<PyType>) -> bool {
+    obj.get_type_ptr().cast::<pyo3::ffi::PyObject>() == ty.as_ptr()
+}
+
 fn cached_override(
     cache: &'static std::thread::LocalKey<TypeCache>,
-    ty: &Bound<'_, PyType>,
-    check: impl FnOnce() -> PyResult<Option<String>>,
+    obj: &Bound<'_, PyAny>,
+    check: impl FnOnce(&Bound<'_, PyType>) -> PyResult<Option<String>>,
 ) -> PyResult<Option<String>> {
-    let key = ty.as_ptr() as usize;
+    let key = obj.get_type_ptr() as usize;
     if let Some(r) = cache.with(|c| c.borrow().get(&key).map(|(_, r)| r.clone())) {
         return Ok(r);
     }
-    let r = check()?;
+    let ty = obj.get_type();
+    let r = check(&ty)?;
     let old = cache.with(|c| {
         cache_insert(
             &mut c.borrow_mut(),
@@ -282,40 +290,36 @@ fn first_override(
 }
 
 fn parser_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
-    let ty = obj.get_type();
-    if ty.is(h.parser.bind(py)) || UPSTREAM.get(py).is_some_and(|u| ty.is(u.parser.bind(py))) {
+    if is_type(obj, &h.parser) || UPSTREAM.get(py).is_some_and(|u| is_type(obj, &u.parser)) {
         return Ok(None);
     }
-    cached_override(&PARSER_TYPES, &ty, || {
-        first_override(&ty, &h.parser_methods, "parser")
+    cached_override(&PARSER_TYPES, obj, |ty| {
+        first_override(ty, &h.parser_methods, "parser")
     })
 }
 
-fn private_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
-    let ty = obj.get_type();
-    if ty.is(h.parser.bind(py)) {
+fn private_override(h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
+    if is_type(obj, &h.parser) {
         return Ok(None);
     }
-    cached_override(&PRIVATE_TYPES, &ty, || {
-        first_override(&ty, &h.private_methods, "parser")
+    cached_override(&PRIVATE_TYPES, obj, |ty| {
+        first_override(ty, &h.private_methods, "parser")
     })
 }
 
 /// Whether `obj` is exactly dateutil's or pyroid's parserinfo.
-fn exact_info(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> bool {
-    let ty = obj.get_type();
-    ty.is(h.parserinfo.bind(py))
+fn exact_info(h: &Hooks, obj: &Bound<'_, PyAny>) -> bool {
+    is_type(obj, &h.parserinfo)
         || h.dateutil_parserinfo
             .as_ref()
-            .is_some_and(|d| ty.is(d.bind(py)))
+            .is_some_and(|d| is_type(obj, d))
 }
 
 fn info_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
-    let ty = obj.get_type();
-    if exact_info(py, h, obj) {
+    if exact_info(h, obj) {
         return Ok(None);
     }
-    cached_override(&INFO_TYPES, &ty, || {
+    cached_override(&INFO_TYPES, obj, |ty| {
         for (name, ours, theirs) in &h.info_methods {
             let Ok(v) = ty.getattr(name.bind(py)) else {
                 return Ok(Some(format!("a parserinfo without {}", name.bind(py))));
@@ -331,13 +335,12 @@ fn info_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<
     })
 }
 
-fn iso_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
-    let ty = obj.get_type();
-    if ty.is(h.isoparser.bind(py)) {
+fn iso_override(h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
+    if is_type(obj, &h.isoparser) {
         return Ok(None);
     }
-    cached_override(&ISO_TYPES, &ty, || {
-        first_override(&ty, &h.iso_methods, "isoparser")
+    cached_override(&ISO_TYPES, obj, |ty| {
+        first_override(ty, &h.iso_methods, "isoparser")
     })
 }
 
@@ -399,11 +402,11 @@ struct TrackedEntry {
 /// Whether instances of `info`'s type report their changes.
 fn tracked_type(h: &Hooks, info: &Bound<'_, PyAny>) -> PyResult<bool> {
     let py = info.py();
-    let ty = info.get_type();
-    let key = ty.as_ptr() as usize;
+    let key = info.get_type_ptr() as usize;
     if let Some(t) = TRACKED_TYPES.with(|c| c.borrow().get(&key).map(|(_, t)| *t)) {
         return Ok(t);
     }
+    let ty = info.get_type();
     let t = ty.is_subclass(h.parserinfo.bind(py))?
         && ty.getattr("__setattr__")?.is(h.tracked_setattr.0.bind(py))
         && ty.getattr("__delattr__")?.is(h.tracked_setattr.1.bind(py));
@@ -585,7 +588,7 @@ fn info_full(
 ) -> PyResult<(Arc<Compiled>, Option<Settings>, bool)> {
     use pyo3::intern;
     let py = info.py();
-    let exact = exact_info(py, h, info);
+    let exact = exact_info(h, info);
 
     let dict = if exact {
         info.getattr(intern!(py, "__dict__"))?
@@ -1123,7 +1126,7 @@ impl<'py, 'a> Finisher<'py, 'a> {
                 tzinfo: py.None().into_bound(py),
                 fold: false,
             })
-        } else if self.default.get_type().is(dt_type) {
+        } else if self.default.get_type_ptr().cast::<pyo3::ffi::PyObject>() == dt_type.as_ptr() {
             Some(default_fields(self.default)?)
         } else {
             None
@@ -1354,16 +1357,26 @@ impl<'py, 'a> Finisher<'py, 'a> {
     }
 }
 
-/// `tz.tzoffset(name, seconds)` results for one call or one batch: the factory returns the same
-/// instance for the same key while one is alive, and the results already made keep theirs alive,
-/// so reusing them gives the objects dateutil would.
-#[derive(Default)]
-struct TzOffsets<'py>(RefCell<FxHashMap<TzKey, Bound<'py, PyAny>>>);
+/// A `tz.tzoffset(name, seconds)` this thread handed out: (tzname, remapped, seconds, object).
+type TzEntry = (Option<Box<str>>, bool, Int, Py<PyAny>);
 
-/// `(tzname, seconds)`.
-type TzKey = (Option<String>, Int);
+/// How many `tzoffset`s a thread keeps.
+const TZOFFSETS_KEPT: usize = 64;
+
+thread_local! {
+    /// The `tz.tzoffset(name, seconds)` objects this thread handed out. dateutil's factory returns
+    /// the same instance for the same key while one is alive, and these are kept alive, so reusing
+    /// one gives the object dateutil would, without the factory's lock and caches (which threads
+    /// would otherwise queue on, call after call).
+    static TZOFFSETS: RefCell<Vec<TzEntry>> = const { RefCell::new(Vec::new()) };
+}
+
+/// `tz.tzoffset(name, seconds)` for one call or one batch (see [`TZOFFSETS`]).
+#[derive(Default)]
+struct TzOffsets<'py>(std::marker::PhantomData<Bound<'py, PyAny>>);
 
 impl<'py> TzOffsets<'py> {
+    #[allow(clippy::unused_self)]
     fn get(
         &self,
         py: Python<'py>,
@@ -1372,16 +1385,31 @@ impl<'py> TzOffsets<'py> {
         remapped: bool,
         off: Int,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let key = (name.map(str::to_owned), off);
-        if let Some(t) = self.0.borrow().get(&key) {
-            return Ok(t.clone());
+        let hit = TZOFFSETS.with(|c| {
+            c.borrow()
+                .iter()
+                .find(|(n, r, o, _)| *o == off && *r == remapped && n.as_deref() == name)
+                .map(|(_, _, _, t)| t.clone_ref(py))
+        });
+        if let Some(t) = hit {
+            return Ok(t.into_bound(py));
         }
         let py_name = match name {
             Some(n) => py_text(py, n, remapped)?.into_any(),
             None => py.None().into_bound(py),
         };
         let t = h.tzoffset.bind(py).call1((py_name, off))?;
-        let old = cache_insert(&mut self.0.borrow_mut(), 255, key, t.clone());
+        // The entries it drops are dropped after the borrow ends (see `cache_insert`).
+        let old = TZOFFSETS.with(|c| {
+            let mut c = c.borrow_mut();
+            let old = if c.len() >= TZOFFSETS_KEPT {
+                std::mem::take(&mut *c)
+            } else {
+                Vec::new()
+            };
+            c.push((name.map(Box::from), remapped, off, t.clone().unbind()));
+            old
+        });
         drop(old);
         Ok(t)
     }
@@ -1576,7 +1604,7 @@ fn parser_private_parse<'py>(
             fuzzy_with_tokens,
         ))
     };
-    if let Some(r) = private_override(py, h, self_)? {
+    if let Some(r) = private_override(h, self_)? {
         return reference(r, timestr);
     }
     let info = self_.getattr(pyo3::intern!(py, "info"))?;
@@ -1624,22 +1652,108 @@ fn parser_private_parse<'py>(
     }
 }
 
+/// The keyword arguments of the module-level `parse(timestr, parserinfo=None, **kwargs)`.
+///
+/// `parse` takes dateutil's keywords as named parameters rather than in a `**kwargs` dict: the
+/// dict PyO3 would build per call takes a reference to each value, and a `default` that every
+/// thread passes is then an atomic write per call on free-threaded builds, which threads parsing
+/// at once queue on. A keyword passed as `None` is the same as one not passed, as in dateutil's
+/// `parse` and `_parse`.
+struct ParseKw<'a, 'py> {
+    default: Option<&'a Bound<'py, PyAny>>,
+    ignoretz: Option<&'a Bound<'py, PyAny>>,
+    tzinfos: Option<&'a Bound<'py, PyAny>>,
+    dayfirst: Option<&'a Bound<'py, PyAny>>,
+    yearfirst: Option<&'a Bound<'py, PyAny>>,
+    fuzzy: Option<&'a Bound<'py, PyAny>>,
+    fuzzy_with_tokens: Option<&'a Bound<'py, PyAny>>,
+    /// Any other keyword argument (dateutil's `_parse` raises its `TypeError`).
+    rest: Option<&'a Bound<'py, PyDict>>,
+}
+
+impl<'py> ParseKw<'_, 'py> {
+    /// `_parse`'s keywords that were given, as a dict (`None`: none).
+    fn private(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
+        let given = [
+            ("dayfirst", self.dayfirst),
+            ("yearfirst", self.yearfirst),
+            ("fuzzy", self.fuzzy),
+            ("fuzzy_with_tokens", self.fuzzy_with_tokens),
+        ];
+        if given.iter().all(|(_, v)| v.is_none()) {
+            return Ok(None);
+        }
+        let d = PyDict::new(py);
+        for (k, v) in given {
+            if let Some(v) = v {
+                d.set_item(k, v)?;
+            }
+        }
+        Ok(Some(d))
+    }
+
+    /// Every keyword that was given, for another object's `parse` method.
+    fn all(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let d = PyDict::new(py);
+        for (k, v) in [
+            ("default", self.default),
+            ("ignoretz", self.ignoretz),
+            ("tzinfos", self.tzinfos),
+        ] {
+            if let Some(v) = v {
+                d.set_item(k, v)?;
+            }
+        }
+        if let Some(p) = self.private(py)? {
+            d.update(p.as_mapping())?;
+        }
+        if let Some(r) = self.rest {
+            d.update(r.as_mapping())?;
+        }
+        Ok(d)
+    }
+}
+
 /// dateutil's module-level `parse(timestr, parserinfo=None, **kwargs)`.
 #[pyfunction]
-#[pyo3(signature = (timestr, parserinfo = None, **kwargs))]
+#[pyo3(
+    signature = (
+        timestr, parserinfo = None, *, default = None, ignoretz = None, tzinfos = None,
+        dayfirst = None, yearfirst = None, fuzzy = None, fuzzy_with_tokens = None, **kwargs
+    ),
+    text_signature = "(timestr, parserinfo=None, **kwargs)"
+)]
+#[allow(clippy::too_many_arguments)]
 fn parse<'py>(
     timestr: &Bound<'py, PyAny>,
     parserinfo: Option<&Bound<'py, PyAny>>,
+    default: Option<&Bound<'py, PyAny>>,
+    ignoretz: Option<&Bound<'py, PyAny>>,
+    tzinfos: Option<&Bound<'py, PyAny>>,
+    dayfirst: Option<&Bound<'py, PyAny>>,
+    yearfirst: Option<&Bound<'py, PyAny>>,
+    fuzzy: Option<&Bound<'py, PyAny>>,
+    fuzzy_with_tokens: Option<&Bound<'py, PyAny>>,
     kwargs: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = timestr.py();
     let h = hooks(py)?;
+    let kw = ParseKw {
+        default,
+        ignoretz,
+        tzinfos,
+        dayfirst,
+        yearfirst,
+        fuzzy,
+        fuzzy_with_tokens,
+        rest: kwargs,
+    };
     module_parse(
         h.module.bind(py),
         h.parser.bind(py),
         timestr,
         parserinfo,
-        kwargs,
+        &kw,
     )
 }
 
@@ -1651,7 +1765,7 @@ fn module_parse<'py>(
     parser_type: &Bound<'py, PyType>,
     timestr: &Bound<'py, PyAny>,
     parserinfo: Option<&Bound<'py, PyAny>>,
-    kwargs: Option<&Bound<'py, PyDict>>,
+    kw: &ParseKw<'_, 'py>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = timestr.py();
     let info = match parserinfo {
@@ -1664,9 +1778,11 @@ fn module_parse<'py>(
             .get_item(pyo3::intern!(py, "parser"))?
             .ok_or_else(|| PyValueError::new_err("the parser module has no parser"))?;
         if !cls.is(parser_type) {
-            return cls
-                .call1((info,))?
-                .call_method(pyo3::intern!(py, "parse"), (timestr,), kwargs);
+            return cls.call1((info,))?.call_method(
+                pyo3::intern!(py, "parse"),
+                (timestr,),
+                Some(&kw.all(py)?),
+            );
         }
         cls.call1((info,))?
     } else {
@@ -1674,29 +1790,23 @@ fn module_parse<'py>(
             .get_item(pyo3::intern!(py, "DEFAULTPARSER"))?
             .ok_or_else(|| PyValueError::new_err("the parser module has no DEFAULTPARSER"))?
     };
-    if !dp.get_type().is(parser_type) {
-        return dp.call_method(pyo3::intern!(py, "parse"), (timestr,), kwargs);
+    if dp.get_type_ptr().cast::<pyo3::ffi::PyObject>() != parser_type.as_ptr()
+        || kw.rest.is_some_and(|r| !r.is_empty())
+    {
+        // Another parser object's own `parse`, or a keyword dateutil's `_parse` rejects.
+        return dp.call_method(pyo3::intern!(py, "parse"), (timestr,), Some(&kw.all(py)?));
     }
     let none = py.None().into_bound(py);
-    let mut default = none.clone();
-    let mut ignoretz = pyo3::types::PyBool::new(py, false).to_owned().into_any();
-    let mut tzinfos = none;
-    let Some(kw) = kwargs else {
-        return parse_impl(&dp, timestr, &default, &ignoretz, &tzinfos, None);
-    };
-    let rest = PyDict::new(py);
-    for (k, v) in kw.iter() {
-        match k.cast::<PyString>().ok().map(|k| k.to_str()).transpose()? {
-            Some("default") => default = v,
-            Some("ignoretz") => ignoretz = v,
-            Some("tzinfos") => tzinfos = v,
-            Some("dayfirst" | "yearfirst" | "fuzzy" | "fuzzy_with_tokens") => {
-                rest.set_item(k, v)?;
-            }
-            _ => return dp.call_method(pyo3::intern!(py, "parse"), (timestr,), kwargs),
-        }
-    }
-    parse_impl(&dp, timestr, &default, &ignoretz, &tzinfos, Some(&rest))
+    let no = pyo3::types::PyBool::new(py, false).to_owned().into_any();
+    let private = kw.private(py)?;
+    parse_impl(
+        &dp,
+        timestr,
+        kw.default.unwrap_or(&none),
+        kw.ignoretz.unwrap_or(&no),
+        kw.tzinfos.unwrap_or(&none),
+        private.as_ref(),
+    )
 }
 
 /// What `pyroid.patch("dateutil")` sets on python-dateutil's own modules.
@@ -1741,20 +1851,45 @@ fn upstream(py: Python<'_>) -> PyResult<&Upstream> {
 /// `dateutil.parser.parse` under `pyroid.patch("dateutil")`: dateutil's own `parse`, with
 /// its `DEFAULTPARSER` and classes, parsed by pyroid.
 #[pyfunction]
-#[pyo3(name = "parse", signature = (timestr, parserinfo = None, **kwargs))]
+#[pyo3(
+    name = "parse",
+    signature = (
+        timestr, parserinfo = None, *, default = None, ignoretz = None, tzinfos = None,
+        dayfirst = None, yearfirst = None, fuzzy = None, fuzzy_with_tokens = None, **kwargs
+    ),
+    text_signature = "(timestr, parserinfo=None, **kwargs)"
+)]
+#[allow(clippy::too_many_arguments)]
 fn upstream_parse<'py>(
     timestr: &Bound<'py, PyAny>,
     parserinfo: Option<&Bound<'py, PyAny>>,
+    default: Option<&Bound<'py, PyAny>>,
+    ignoretz: Option<&Bound<'py, PyAny>>,
+    tzinfos: Option<&Bound<'py, PyAny>>,
+    dayfirst: Option<&Bound<'py, PyAny>>,
+    yearfirst: Option<&Bound<'py, PyAny>>,
+    fuzzy: Option<&Bound<'py, PyAny>>,
+    fuzzy_with_tokens: Option<&Bound<'py, PyAny>>,
     kwargs: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = timestr.py();
     let u = upstream(py)?;
+    let kw = ParseKw {
+        default,
+        ignoretz,
+        tzinfos,
+        dayfirst,
+        yearfirst,
+        fuzzy,
+        fuzzy_with_tokens,
+        rest: kwargs,
+    };
     module_parse(
         u.module.bind(py),
         u.parser.bind(py),
         timestr,
         parserinfo,
-        kwargs,
+        &kw,
     )
 }
 
@@ -1772,7 +1907,7 @@ fn upstream_isoparse<'py>(dt_str: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyA
         .ok_or_else(|| {
             PyValueError::new_err("dateutil.parser.isoparser has no DEFAULT_ISOPARSER")
         })?;
-    let native = p.get_type().is(u.isoparser.bind(py))
+    let native = is_type(&p, &u.isoparser)
         && globals
             .get_item(pyo3::intern!(py, "datetime"))?
             .is_some_and(|d| d.is(h.datetime_type.bind(py)));
@@ -1852,7 +1987,7 @@ fn iso_bytes<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let reference =
         |reason: Option<String>| h.reference_isoparse.bind(py).call1((p, reason, as_bytes()));
-    if let Some(r) = iso_override(py, h, p)? {
+    if let Some(r) = iso_override(h, p)? {
         return reference(Some(r));
     }
     let real = h
@@ -2264,7 +2399,7 @@ fn isoparse_batch<'py>(
     } else {
         Mode::Strict
     };
-    let native = real && iso_override(py, h, isoparser)?.is_none() && sep_byte.is_some();
+    let native = real && iso_override(h, isoparser)?.is_none() && sep_byte.is_some();
     let arrow = matches!(input, crate::input::TextInput::Arrow(_));
     let mut out = Vec::with_capacity(if arrow { 0 } else { rows.len() });
     let mut stamps: Vec<Instant> = Vec::with_capacity(if arrow { rows.len() } else { 0 });
