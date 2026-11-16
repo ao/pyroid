@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import difflib as _std
+import gc
 import sys
 import types
 import warnings
@@ -271,6 +272,30 @@ for _name, _f in _SM_METHODS.items():
         _f.__name__ = _name
         _f.__qualname__ = f"SequenceMatcher.{_name}"
         _f.__doc__ = getattr(_StdSequenceMatcher, _name).__doc__
+
+
+def _settle(cls: type) -> None:
+    """Give the live instances of `cls` the state the standard library's methods read.
+
+    For ``pyroid.unpatch("difflib")``, before it takes pyroid's methods off `cls` (difflib's
+    own ``SequenceMatcher``): a matcher made or used under the patch keeps ``b2j``, ``bjunk``,
+    ``bpopular``, ``fullbcount`` and ``matching_blocks`` in pyroid's native state, which only
+    pyroid's descriptors on `cls` can read. They become plain instance attributes (CPython's
+    state, as pickling gives it), and the native state goes.
+    """
+    lazy = {name: _SM_METHODS[name] for name in _LAZY}
+    for obj in gc.get_objects():
+        if not isinstance(obj, cls) or isinstance(obj, SequenceMatcher):
+            continue  # pyroid.difflib's own class keeps its methods
+        d = getattr(obj, "__dict__", None)
+        if type(d) is not dict or not any(type(k) is str and k.startswith("_pyroid_") for k in d):
+            continue
+        for name, attr in lazy.items():
+            if name not in d:
+                with contextlib.suppress(AttributeError):
+                    d[name] = attr.__get__(obj, type(obj))
+        for k in [k for k in d if type(k) is str and k.startswith("_pyroid_")]:
+            del d[k]
 
 
 class SequenceMatcher(_StdSequenceMatcher):

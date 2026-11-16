@@ -311,6 +311,50 @@ def test_patch_in_place_and_undo() -> None:
     assert {n: getattr(difflib, n) for n in functions} == functions
 
 
+@pytestmark_patch
+def test_matchers_from_under_the_patch_work_after_unpatch() -> None:
+    # A matcher made or used under the patch gets CPython's state when the patch ends.
+    class Sub(difflib.SequenceMatcher):
+        pass
+
+    def steps(sm: Any, step: str) -> Any:
+        if step == "ratio":
+            sm.ratio()
+        elif step == "quick_ratio":
+            sm.quick_ratio()
+        elif step == "blocks":
+            sm.get_matching_blocks()
+        elif step == "b2j":
+            assert isinstance(sm.b2j, dict)
+        return sm
+
+    kinds = [
+        (cls, step, a, b)
+        for cls in (difflib.SequenceMatcher, Sub)
+        for step in ("", "ratio", "quick_ratio", "blocks", "b2j")
+        for a, b in (("abcd", "bcde"), ([1, 2, 3, 4], [2, 3, 4, 5]), ("x" * 300, "xy" * 150))
+    ]
+    ctx = _quiet_patch()
+    try:
+        with integrations.patching("difflib"):
+            made = [steps(cls(None, a, b), step) for cls, step, a, b in kinds]
+            own = pd.SequenceMatcher(None, "abcd", "bcde")
+            assert all("_pyroid_b" in vars(m) for m in made)
+    finally:
+        ctx.__exit__(None, None, None)
+    assert "_pyroid_b" in vars(own)  # pyroid.difflib's class keeps its methods and state
+    assert own.ratio() == 0.75
+    for m, (cls, step, a, b) in zip(made, kinds, strict=True):
+        twin = steps(cls(None, a, b), step)  # unpatched: the standard library's state
+        assert vars(m) == vars(twin), (step, a)
+        assert m.ratio() == twin.ratio()
+        assert m.get_opcodes() == twin.get_opcodes()
+        m.set_seq1(b)
+        twin.set_seq1(b)
+        assert m.ratio() == twin.ratio() == 1.0
+        assert m.quick_ratio() == twin.quick_ratio()
+
+
 def _unittest_messages() -> list[str]:
     class Report(unittest.TestCase):
         maxDiff = None

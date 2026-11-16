@@ -796,6 +796,8 @@ def _build_difflib(impl: types.ModuleType, real: Any, missing: str) -> _Built:
         swap(real, name, getattr(impl, name))
 
     def undo() -> None:
+        # Matchers made or used under the patch keep working with difflib's own methods.
+        impl._settle(real.SequenceMatcher)
         for owner, name, original in reversed(saved):
             if original is _MISSING:
                 delattr(owner, name)
