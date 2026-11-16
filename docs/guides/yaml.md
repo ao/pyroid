@@ -29,8 +29,15 @@ $ pip install pyroid
 Everything else stays as it was: `except yaml.YAMLError`, `yaml.SafeLoader`, `yaml.Dumper`,
 `yaml.scan`, `yaml.add_constructor`. With PyYAML installed, those names *are* PyYAML's own
 objects (pyroid.yaml forwards the names it does not define), so errors from pyroid and from
-PyYAML are the same classes. PyYAML is not required: without it, pyroid.yaml has its own copies of
-the exception and `Mark` classes, and the names it does not port raise `AttributeError`.
+PyYAML are the same classes.
+
+PyYAML is not required. Without it, pyroid.yaml has its own copies of the exception and `Mark`
+classes, and its loader and dumper classes are markers: they can be passed to `load()` and
+`dump()` and subclassed, but a registration on them or on a subclass (`add_constructor`,
+`add_multi_constructor`, `add_representer`, `add_multi_representer`, `add_implicit_resolver`,
+`add_path_resolver`) raises `pyroid.PyroidError` with the `pip install pyyaml==6.0.3` line. The
+names it does not port, on the module or on those classes (`yaml.scan`, `yaml.add_constructor`,
+`SafeLoader.yaml_constructors`), raise `AttributeError`.
 
 To make code you don't own use pyroid, patch it:
 
