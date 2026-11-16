@@ -212,6 +212,27 @@ def test_fallbacks_warn_and_match_tabulate() -> None:
         tabulate([[1]], tablefmt=custom)
 
 
+@pytest.mark.thread_unsafe  # warnings
+def test_lone_surrogates_in_a_custom_format() -> None:
+    row = pt.TableFormat(None, None, None, None, None, pt.DataRow("\ud800", "|", ""), 0, None)
+    line = pt.TableFormat(
+        pt.Line("\udc80", "-", "+", ""),
+        None,
+        None,
+        None,
+        pt.DataRow("", "|", ""),
+        pt.DataRow("", "|", ""),
+        1,
+        None,
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        assert tabulate([["a", 1]], tablefmt=row) == "\ud800a|1"
+        assert tabulate([["a", 1]], headers=["x", "y"], tablefmt=line) == (
+            "\udc80-----+-----\n x   |   y\n a   |   1"
+        )
+
+
 def test_float32_frames() -> None:
     np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")

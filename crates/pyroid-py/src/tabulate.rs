@@ -325,8 +325,11 @@ fn table_format<'py>(
         }
         let d = d.cast_into::<PyTuple>().map_err(PyErr::from)?;
         let tag: PyBackedStr = d.get_item(0)?.extract()?;
+        // The format's own strings (the Python side checked they are `str`) may hold lone
+        // surrogates: then the call goes to tabulate's code.
         let s = |j: usize| -> FResult<String> {
-            Ok(d.get_item(j)?.extract::<PyBackedStr>()?.to_string())
+            let item = d.get_item(j)?;
+            Ok(backed(item.cast::<PyString>().map_err(PyErr::from)?)?.to_string())
         };
         Ok(match &*tag {
             "plain" if line => (
