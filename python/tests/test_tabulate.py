@@ -446,10 +446,19 @@ def test_port_is_tabulates_code() -> None:
     assert sorted(set(ref) - set(port)) == ["__all__", "_main", "_pprint_file"]
 
 
-def test_internal_helpers_run_natively() -> None:
+def test_private_helpers_are_tabulates() -> None:
+    # All of tabulate's functions, classes and tables, as the patch shim has them.
+    assert [n for n in pt._PATCHED_NAMES if not hasattr(pt, n)] == []
+    assert pt._padleft is pt._port._padleft
+    assert pt._align_column is pt._port._align_column
+    assert pt._align_cell_veritically is pt._port._align_cell_veritically
     assert pt._align_column(["12.3", "1.0", "100"], "decimal") == [" 12.3", "  1.0", "100  "]
     assert pt._align_column(["a", "bb"], "right", 4) == ["   a", "  bb"]
     assert pt._align_cell_veritically(["x"], 3, 2, "bottom") == ["  ", "  ", "x"]
+    # With has_invisible, the widths follow WIDE_CHARS_MODE, whatever enable_widechars says.
+    wide = pt.wcwidth is not None and pt.WIDE_CHARS_MODE
+    want = ["   a", "   b", "日本"] if wide else [" a", " b", "日本"]
+    assert pt._align_column(["a", " b ", "日本"], "right", 0, True, False, False, False) == want
 
 
 @pytest.mark.thread_unsafe  # sys.modules, module settings

@@ -38,6 +38,9 @@ from pyroid.tabulate._port import (
     Line,
     TableFormat,
     _afterpoint,
+    _align_cell_veritically,
+    _align_column,
+    _align_header,
     _ansi_codes,
     _bool,
     _column_type,
@@ -45,11 +48,13 @@ from pyroid.tabulate._port import (
     _expand_iterable,
     _expand_numparse,
     _format,
+    _format_table,
     _html_begin_table_without_header,
     _is_file,
     _is_separating_line,
     _isnumber,
     _more_generic,
+    _multiline_width,
     _normalize_tabular_data,
     _prepend_row_index,
     _reinsert_separating_lines,
@@ -58,6 +63,7 @@ from pyroid.tabulate._port import (
     _table_formats,
     _to_str,
     _type,
+    _visible_width,
     _wrap_text_to_colwidths,
     multiline_formats,
     simple_separated_format,
@@ -803,48 +809,6 @@ def _delegate_normalized(
     return _run_python(rows, dict(options, headers=headers, showindex=False))  # type: ignore[no-any-return]
 
 
-def _multiline_width(multiline_s: Any, line_width_fn: Any = len) -> Any:
-    """Visible width of a potentially multiline content."""
-    return max(map(line_width_fn, re.split("[\r\n]", multiline_s)))
-
-
-def _align_column(
-    strings: Any,
-    alignment: Any,
-    minwidth: Any = 0,
-    has_invisible: Any = True,
-    enable_widechars: Any = False,
-    is_multiline: Any = False,
-    preserve_whitespace: Any = False,
-) -> list[str]:
-    """``[string] -> [padded_string]``: tabulate's helper, run by the Rust aligner."""
-    call = _Call(
-        wcswidth=wcwidth.wcswidth if enable_widechars else None,  # type: ignore[union-attr]
-        numpy_types=[],
-        unicode_ok=_unicode_ok,
-        max_digits=sys.get_int_max_str_digits(),
-    )
-    return _native._align_column(  # type: ignore[no-any-return]
-        list(strings),
-        alignment,
-        minwidth,
-        bool(has_invisible),
-        bool(enable_widechars),
-        bool(is_multiline),
-        bool(preserve_whitespace),
-        call,
-    )
-
-
-def _align_cell_veritically(
-    text_lines: Any, num_lines: Any, column_width: Any, row_alignment: Any
-) -> list[str]:
-    """Pad a cell's lines to `num_lines` (tabulate's helper, run by the Rust code)."""
-    return _native._align_cell_vertically(  # type: ignore[no-any-return]
-        list(text_lines), num_lines, column_width, row_alignment
-    )
-
-
 _USAGE = """\
     Usage: tabulate [options] [FILE ...]
 
@@ -1160,10 +1124,16 @@ _ = (
     Line,
     SEPARATING_LINE,
     _CustomTextWrap,
+    _align_cell_veritically,
+    _align_column,
+    _align_header,
     _column_type,
+    _format_table,
     _isnumber,
     _more_generic,
+    _multiline_width,
     _port,
     _reinsert_separating_lines,
+    _visible_width,
 )
 del _

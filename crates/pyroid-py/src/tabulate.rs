@@ -1264,73 +1264,6 @@ fn escape_empty<'py>(call: &Call<'py>, item: Bound<'py, PyAny>) -> FResult<Bound
     Ok(item)
 }
 
-/// `_align_column(strings, alignment, minwidth, has_invisible, enable_widechars,
-/// is_multiline, preserve_whitespace)`, for tabulate's own tests of that helper; `call`
-/// provides `wcswidth`, `strip_ansi_fn` and `afterpoint_fn`.
-#[pyfunction]
-#[pyo3(signature = (strings, alignment, minwidth, has_invisible, enable_widechars, is_multiline, preserve_whitespace, call))]
-#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
-fn _align_column(
-    py: Python<'_>,
-    strings: Vec<String>,
-    alignment: Bound<'_, PyAny>,
-    minwidth: isize,
-    has_invisible: bool,
-    enable_widechars: bool,
-    is_multiline: bool,
-    preserve_whitespace: bool,
-    call: Bound<'_, PyAny>,
-) -> PyResult<Vec<String>> {
-    let call = Call::new(&call)?;
-    let mut host = PyHost {
-        call: &call,
-        widths: FxHashMap::default(),
-        callables: Vec::new(),
-        aligns: [None, None],
-    };
-    let settings = Settings {
-        has_invisible,
-        wide: enable_widechars,
-        is_multiline,
-        preserve_whitespace,
-        max_digits: call.obj.getattr("max_digits")?.extract()?,
-        unicode_ok: call.flag("unicode_ok")?,
-    };
-    let unsupported = |e: Fail| match e {
-        Fail::Py(e) => e,
-        Fail::Unsupported(r) => PyValueError::new_err(r),
-    };
-    let a = align_of(&alignment).map_err(unsupported)?;
-    let mut engine = Engine {
-        host: &mut host,
-        s: settings,
-    };
-    let strings: Vec<Cow<'_, str>> = strings.iter().map(|s| Cow::Borrowed(s.as_str())).collect();
-    let out = engine
-        .align_column(strings, a, minwidth)
-        .map_err(|e| unsupported(table_error(py, e, &[None, None])))?;
-    Ok(out.iter().map(|c| c.padded().into_owned()).collect())
-}
-
-/// `_align_cell_veritically(text_lines, num_lines, column_width, row_alignment)`.
-#[pyfunction]
-fn _align_cell_vertically(
-    lines: Vec<String>,
-    num_lines: usize,
-    width: isize,
-    row_alignment: Bound<'_, PyAny>,
-) -> PyResult<Vec<String>> {
-    let a = row_align_of(&row_alignment).map_err(|e| match e {
-        Fail::Py(e) => e,
-        Fail::Unsupported(r) => PyValueError::new_err(r),
-    })?;
-    let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
-    Ok(table::align_cell_vertically(refs, num_lines, width, a)
-        .into_iter()
-        .map(Cow::into_owned)
-        .collect())
-}
-
 /// The Unicode version of Rust's `char` tables (`(major, minor, update)`).
 const UNICODE_VERSION: (u8, u8, u8) = char::UNICODE_VERSION;
 
@@ -1338,8 +1271,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let m = PyModule::new(parent.py(), "pyroid.tabulate")?;
     m.gil_used(false)?;
     m.add_function(wrap_pyfunction!(render, &m)?)?;
-    m.add_function(wrap_pyfunction!(_align_column, &m)?)?;
-    m.add_function(wrap_pyfunction!(_align_cell_vertically, &m)?)?;
     m.add("UNICODE_VERSION", UNICODE_VERSION)?;
     m.add("FORMAT_NAMES", table::FORMAT_NAMES.to_vec())?;
     parent.add_submodule(&m)
