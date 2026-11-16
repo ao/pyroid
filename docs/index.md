@@ -126,11 +126,13 @@ datatrove's own tokenizers ([Languages](guides/languages.md)).
 ## Install
 
 ```console
-$ pip install pyroid               # every module but fasttext and datasketch; no dependencies
+$ pip install pyroid               # no dependencies
 $ pip install "pyroid[fasttext]"   # adds numpy, which pyroid.fasttext returns arrays in
 $ pip install "pyroid[cli]"        # the pyroid command line (pyarrow)
 ```
 
+`pyroid.fasttext`, `pyroid.datasketch` and the batch calls of `pyroid.nemo` need numpy, which
+`[fasttext]`, `[datasketch]` and `[nemo]` add (`import pyroid.nemo` works without it).
 `[datatrove]` and `[hf]` add the datatrove steps and the Hugging Face helpers. There are prebuilt
 wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 [Install](install.md).

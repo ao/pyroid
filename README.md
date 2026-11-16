@@ -128,8 +128,8 @@ instead of a copy per process.
 
 Wheels cover CPython 3.11 to 3.15 and free-threaded 3.14t and 3.15t, on Linux (glibc and musl),
 macOS and Windows, for x86-64 and ARM64, so no compiler is needed. The core has no runtime
-dependencies; `pyroid.fasttext` and `pyroid.datasketch` need numpy (`pip install "pyroid[fasttext]"`,
-`"pyroid[datasketch]"`).
+dependencies; `pyroid.fasttext`, `pyroid.datasketch` and the batch calls of `pyroid.nemo` need
+numpy (`pip install "pyroid[fasttext]"`, `"pyroid[datasketch]"`, `"pyroid[nemo]"`).
 
 ## Speed by module
 
