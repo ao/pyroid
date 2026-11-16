@@ -55,9 +55,11 @@ explicitly tagged value, like `!!int " 0x1F "`, `!!float` with Arabic-Indic digi
 pyroid runs PyYAML's own code for the scalar forms it does not handle natively.
 
 Input can be a `str`, `bytes` (UTF-8, or UTF-16 with a BOM, as PyYAML's reader decodes it) or a
-file object. A file object is read 4096 units at a time, like PyYAML. A bad byte further on in a
-file is reported where PyYAML reports it: the documents before it still load, and a YAML error
-earlier in the file wins.
+file object. A file object is read as PyYAML reads it: 4096 units at a time, and only as far as
+the parser has got. So `safe_load_all` on a pipe or socket yields each document once the next
+one starts, memory stays at about one document, and a bad byte or a failed `read()` further on
+is raised where PyYAML raises it: the documents before it still load, and a YAML error earlier
+in the stream wins.
 
 Errors have PyYAML's classes (`ScannerError`, `ParserError`, `ComposerError`,
 `ConstructorError`, `ReaderError`, ...), messages, `context`/`problem` and marks (`name`,
@@ -98,6 +100,10 @@ the loader or dumper class on every call, so a registration made after import is
 not see methods monkeypatched onto PyYAML's own base classes (`yaml.constructor.SafeConstructor`
 and the like), which are rare.
 
+A program that changes `SafeLoader` itself sends every call to PyYAML: yamllint, for one, replaces
+`SafeLoader`'s implicit resolvers when it is imported, so in a yamllint process every load falls
+back (the results are the same, without the speed-up).
+
 In a sample of public Python code (Sourcegraph's index, November 2026), calls with customised
 safe loaders and dumpers are about 1 to 2% of `safe_load`, `load` and `dump` calls.
 
@@ -120,13 +126,12 @@ objects needs the interpreter. pyroid.yaml runs on free-threaded CPython without
   at a depth that depends on `sys.getrecursionlimit()` and on how deep the caller's stack is.
   pyroid computes the same limit from both and raises `RecursionError` at that nesting depth,
   within three levels of PyYAML's (about 490 levels from a shallow stack at the default limit;
-  dumping, about 328).
-- A file object is read to the end before parsing, in the same 4096-unit reads. PyYAML stops
-  reading at the first error. A stream given to `dump` gets the whole text in one `write()`
-  (PyYAML makes many small writes; pyroid makes the same writes only for codecs that need them,
-  such as `utf-16`), and `flush()` as PyYAML does.
-- Dumping a `str` with lone surrogates, and loading a document that contains characters in
-  U+10F800..U+10FFFF (the range pyroid uses to carry `"\ud800"` escapes), go to PyYAML.
+  dumping, about 328). pyroid itself does not recurse, so deep nesting cannot overflow the
+  native stack, whatever the recursion limit or the thread's stack size.
+- A stream given to `dump` gets the whole text in one `write()` and one `flush()` at the end.
+  PyYAML makes many small writes and flushes after each document and at the end; pyroid makes
+  PyYAML's writes only for codecs that need them, such as `utf-16`.
+- Dumping a `str` with lone surrogates goes to PyYAML.
 - Exceptions raised from pyroid have no `__context__` (PyYAML raises some of them while
   handling another exception).
 
