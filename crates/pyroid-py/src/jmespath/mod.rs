@@ -19,7 +19,7 @@ use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 use pyo3::exceptions::{PyRecursionError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyBytes, PyDict, PyList, PyString, PyTuple};
+use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyString, PyTuple};
 use pyroid_core::jmespath::{Budget, LexError, ParseError, ParseMessage, Token, TokenValue};
 
 use expr::Expr;
@@ -507,26 +507,32 @@ fn get_or_parse<'py>(
     Ok(Parsed::Native(result))
 }
 
-/// A non-`str` expression: what jmespath raises for empty, unhashable and `bytes` ones;
-/// anything else (jmespath lexes any iterable of characters) goes to jmespath.
+/// A non-`str` expression: what jmespath raises for empty, unhashable, `bytes` and
+/// `bytearray` ones; anything else (jmespath lexes any iterable of characters) goes to
+/// jmespath. For `tokenize` (`Lexer().tokenize`), an iterable of jmespath's tokens.
 fn other_expression<'py>(
     py: Python<'py>,
     expression: &Bound<'py, PyAny>,
     kind: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
     let c = config(py)?;
-    // The cache lookup hashes it first.
-    expression.hash()?;
+    if kind != "tokenize" {
+        // `Parser.parse` looks it up in its cache (a dict) first: an unhashable expression
+        // raises the dict's own TypeError (whose wording changed in 3.14).
+        PyDict::new(py).call_method1(pyo3::intern!(py, "get"), (expression,))?;
+    }
     if !expression.is_truthy()? {
         return Err(PyErr::from_value(c.empty_error.bind(py).call0()?));
     }
-    if let Ok(b) = expression.cast_exact::<PyBytes>() {
+    if expression.is_exact_instance_of::<PyBytes>()
+        || expression.is_exact_instance_of::<PyByteArray>()
+    {
         // list(b) gives ints, which match no token: "Unknown token <first byte>".
-        let first = b.as_bytes()[0];
-        let e = c
-            .lexer_error
-            .bind(py)
-            .call1((0, first, format!("Unknown token {first}")))?;
+        let first = expression.get_item(0)?;
+        let e =
+            c.lexer_error
+                .bind(py)
+                .call1((0, &first, percent(py, "Unknown token %s", &first)?))?;
         if kind != "tokenize" {
             e.setattr("expression", expression)?;
         }
@@ -842,18 +848,18 @@ fn parse<'py>(py: Python<'py>, expression: &Bound<'py, PyAny>) -> PyResult<Bound
     })
 }
 
-/// ``(tokens, error)``: jmespath's token dicts, and the exception its generator would raise
-/// after them (or ``None``).
+/// ``(tokens, error)``: jmespath's token dicts (a list, or jmespath's own generator for an
+/// expression it lexes), and the exception its generator would raise after them (or ``None``).
 #[pyfunction]
 fn tokenize<'py>(
     py: Python<'py>,
     expression: &Bound<'py, PyAny>,
-) -> PyResult<(Bound<'py, PyList>, Bound<'py, PyAny>)> {
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
     let Ok(s) = expression.cast::<PyString>() else {
         return match other_expression(py, expression, "tokenize") {
-            Ok(r) => Ok((r.cast_into::<PyList>()?, py.None().into_bound(py))),
+            Ok(r) => Ok((r, py.None().into_bound(py))),
             Err(e) => Ok((
-                PyList::empty(py),
+                PyList::empty(py).into_any(),
                 e.into_value(py).into_bound(py).into_any(),
             )),
         };
@@ -884,7 +890,7 @@ fn tokenize<'py>(
             .into_bound(py)
             .into_any(),
     };
-    Ok((list, error))
+    Ok((list.into_any(), error))
 }
 
 /// Clear the expression cache (``Parser.purge()``).

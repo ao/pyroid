@@ -394,6 +394,49 @@ def test_other_expression_types() -> None:
             search(("a",), {})
 
 
+def test_unhashable_expressions_raise_the_cache_lookups_error() -> None:
+    # J5: jmespath looks the expression up in its cache dict; 3.14 words that error differently
+    # from hash().
+    search: Any = jp.search
+    compile_: Any = jp.compile
+    for expression in (["a"], bytearray(b"a"), {"a": 1}):
+        with pytest.raises(TypeError) as caught:
+            {}.get(expression)
+        with pytest.raises(TypeError) as raised:
+            search(expression, {})
+        assert str(raised.value) == str(caught.value)
+        with pytest.raises(TypeError) as raised:
+            compile_(expression)
+        assert str(raised.value) == str(caught.value)
+
+
+@pytest.mark.thread_unsafe(reason="warnings")
+def test_tokenize_takes_what_jmespath_lexes() -> None:
+    # J4: Lexer().tokenize() does not hash its expression (jmespath lexes any iterable).
+    lexer_: Any = lexer.Lexer()
+    with pytest.raises(exceptions.LexerError, match="Unknown token 110") as e:
+        list(lexer_.tokenize(bytearray(b"n")))
+    assert (e.value.lex_position, e.value.token_value, e.value.expression) == (0, 110, None)
+    with pytest.raises(exceptions.EmptyExpressionError):
+        list(lexer_.tokenize([]))
+    if HAVE_JMESPATH:
+        real = oracle()
+        getattr(jp, "_WARNED").discard("tokenize")  # noqa: B009 - once per process
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert list(lexer_.tokenize(["n"])) == list(real.lexer.Lexer().tokenize(["n"]))
+            # Tokens up to a bad character come out first, as from jmespath's generator.
+            tokens = lexer_.tokenize(["a", ".", "~"])
+            assert next(tokens)["value"] == "a"
+            assert next(tokens)["type"] == "dot"
+            with pytest.raises(exceptions.LexerError):
+                next(tokens)
+        assert any(w.category is pyroid.FallbackWarning for w in caught)
+    else:
+        with pytest.raises(pyroid.PyroidError):
+            list(lexer_.tokenize(["n"]))
+
+
 def test_lone_surrogates() -> None:
     data = {"\ud800": 1, "x\udfff": 2}
     assert jp.search('"\\ud800"', data) == 1

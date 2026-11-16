@@ -64,7 +64,7 @@ def _fallback(kind: str, expression: Any) -> Any:
     import jmespath.parser
 
     if kind == "tokenize":
-        return list(jmespath.lexer.Lexer().tokenize(expression))
+        return jmespath.lexer.Lexer().tokenize(expression)
     return jmespath.parser.Parser().parse(expression)
 
 
