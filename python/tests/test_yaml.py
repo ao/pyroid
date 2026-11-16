@@ -7,6 +7,7 @@ import importlib
 import io
 import math
 import sys
+import sysconfig
 import threading
 import warnings
 from typing import Any
@@ -327,11 +328,16 @@ def test_module_getattr() -> None:
 
 
 _DEEP_CHILD = r"""
-import sys, threading
+import sys, sysconfig, threading
 import pyroid.yaml as py
 try:
     import yaml
 except ImportError:
+    yaml = None
+MUSL = "musl" in (sysconfig.get_config_var("HOST_GNU_TYPE") or "")
+if STACK and MUSL and sys.version_info >= (3, 14):
+    # PyYAML's pure dumper overflows CPython's own C stack in a small thread there (a segfault,
+    # not RecursionError), so it can't serve as the reference; pyroid's results are still checked.
     yaml = None
 
 def nested(n, kind):
@@ -373,10 +379,24 @@ print(results)
 """
 
 
+#: CPython 3.14+ on musl (Alpine) cannot itself hold such deep data in a thread with a 256 KiB
+#: stack: building and dropping a 6,000-deep list segfaults, as do ``repr`` at 3,000 levels and
+#: PyYAML's pure dumper at 1,000 (the same calls pass or raise RecursionError on glibc). That case
+#: says nothing about pyroid there.
+_MUSL_SMALL_STACK = pytest.mark.skipif(
+    sys.version_info >= (3, 14) and "musl" in (sysconfig.get_config_var("HOST_GNU_TYPE") or ""),
+    reason="CPython 3.14+ on musl overflows its own C stack at this depth in a 256 KiB thread",
+)
+
+
 @pytest.mark.thread_unsafe
 @pytest.mark.parametrize(
     ("limit", "depth", "stack"),
-    [(100_000, 30_000, 0), (1000, 320, 128 << 10), (20_000, 6_000, 256 << 10)],
+    [
+        (100_000, 30_000, 0),
+        (1000, 320, 128 << 10),
+        pytest.param(20_000, 6_000, 256 << 10, marks=_MUSL_SMALL_STACK),
+    ],
 )
 def test_deep_nesting_never_overflows_the_native_stack(
     run_python: Any, limit: int, depth: int, stack: int
