@@ -143,7 +143,11 @@ def test_merge_and_shard_names(tmp_path: Path) -> None:
     b = pq.read_table(tmp_path / "o-00001-of-00002.parquet").column("id").to_pylist()
     assert a == [f"d{i}" for i in (0, 1, 2, 6, 7, 8, 9)]  # files 0 and 2
     assert b == ["d3", "d4", "d5"]
-    assert not list(tmp_path.glob(".o*.pyroid"))  # a file OUT's state goes when it is done
+    # a finished file OUT keeps only the record that it is complete
+    assert sorted(p.name for p in tmp_path.glob(".o*.pyroid/done/*")) == [
+        "merged-00000-of-00002.json",
+        "merged-00001-of-00002.json",
+    ]
     # --merge into a directory: one part per shard
     out = tmp_path / "merged"
     for i in range(2):
@@ -581,7 +585,11 @@ def test_clean_resumes_after_a_failure_and_cleans_up(
     reasons = {r["id"]: r["filter_reason"] for r in _rows(excl)}
     assert reasons["d6"] == "minhash"
     assert reasons["d7"].startswith("gopher")
-    assert sorted(p.name for p in out.parent.iterdir()) == ["dropped.parquet", "kept.parquet"]
+    assert sorted(p.name for p in out.parent.iterdir()) == [
+        ".kept.parquet.pyroid",  # only the record that it is complete
+        "dropped.parquet",
+        "kept.parquet",
+    ]
     assert any(p.endswith(".arrow") for p in strict_fs)  # the spools were removed after closing
 
 
@@ -906,3 +914,60 @@ def test_minhash_resume_with_a_relative_out_skips_what_is_done(
     assert main(["dedup", "in/", "out/"]) == 0
     assert calls == [("filter", 1), ("filter", 2)]
     assert [r["id"] for r in _rows(Path("out"))] == _expected(docs)
+
+
+@pytest.mark.thread_unsafe(reason="patches the translit step")
+def test_a_finished_file_out_is_not_redone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Running the same command again does nothing and exits 0, for a file OUT as for a
+    directory (it exited 1: "exists, pass --overwrite")."""
+    import pyroid.cli as cli
+
+    src = _shards(tmp_path, [f"doc {i}" for i in range(6)], [3, 3])
+    calls: list[int] = []
+    real = cli._STEPS["translit"]
+
+    def counted(t: Any, o: Any) -> Any:
+        calls.append(1)
+        return real(t, o)
+
+    monkeypatch.setitem(cli._STEPS, "translit", counted)
+    for out in (tmp_path / "o.parquet", tmp_path / "o.jsonl.gz", tmp_path / "d"):
+        stats = tmp_path / f"{out.name}.stats.json"
+        argv = ["translit", str(src), str(out), "--stats-json", str(stats)]
+        assert main(argv) == 0
+        first = json.loads(stats.read_text())
+        stamp = out.stat().st_mtime_ns
+        calls.clear()
+        assert main(argv) == 0
+        assert calls == []
+        assert out.stat().st_mtime_ns == stamp
+        again = json.loads(stats.read_text())
+        assert {k: again[k] for k in ("docs_in", "docs_out", "files")} == {
+            k: first[k] for k in ("docs_in", "docs_out", "files")
+        }
+        # other options are another run: refused, the file is kept
+        with pytest.raises(SystemExit, match="different run"):
+            main([*argv, "--mode", "unidecode"])
+        assert out.stat().st_mtime_ns == stamp
+        assert main([*argv, "--mode", "unidecode", "--overwrite"]) == 0
+    # what is left next to a finished file OUT: the record that it is complete
+    state = tmp_path / ".o.parquet.pyroid"
+    assert sorted(p.relative_to(state).as_posix() for p in state.rglob("*") if p.is_file()) == [
+        "done/merged-00000-of-00001.json",
+        "run.json",
+    ]
+    # a file pyroid did not write is still not replaced without --overwrite
+    other = tmp_path / "other.parquet"
+    other.write_bytes(b"mine")
+    with pytest.raises(SystemExit, match="exists"):
+        main(["translit", str(src), str(other)])
+    # exact dedup (one pass, no per-file records) behaves the same
+    argv = ["dedup", "--method", "exact", str(src), str(tmp_path / "x.parquet"), "--stats"]
+    assert main(argv) == 0
+    stamp = (tmp_path / "x.parquet").stat().st_mtime_ns
+    capsys.readouterr()
+    assert main(argv) == 0
+    assert (tmp_path / "x.parquet").stat().st_mtime_ns == stamp
+    assert "6 in, 6 out" in capsys.readouterr().err

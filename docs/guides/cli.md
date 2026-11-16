@@ -293,10 +293,14 @@ These rules hold for every command:
   Otherwise it is a directory with one output file per input file, under the same relative name
   ([layouts](large-datasets.md#output-layout)). Every output is written under a hidden temporary
   name and renamed when complete, so a failed or interrupted run never leaves a truncated file.
-  An existing OUT file is not replaced unless you pass `--overwrite`.
+  An existing OUT file that pyroid did not write is not replaced unless you pass `--overwrite`.
 - Outputs never overlap. OUT, `--excluded`, `--tmp-dir`, `--stats-json` and the inputs must be
   different files once links are resolved, and a directory OUT and a directory `--excluded` must
   not be inside each other. pyroid refuses such a run before it reads anything.
+- Running a finished command again does nothing and exits with status 0, for a file OUT as for a
+  directory OUT: a file OUT keeps a small record that it is complete next to it
+  (`.OUT.pyroid/`). Other options or inputs are a different run, which pyroid refuses without
+  `--overwrite`.
 - `--stats` and `--progress` write to stderr. If stderr is a pipe that closes early
   (`2>&1 | head -1`), the messages stop and the run goes on.
 - `--text-column` names the text column (default `text`). Every other column is passed through
@@ -306,8 +310,10 @@ These rules hold for every command:
 Errors exit with status 1 and a one-line message, for example:
 
 ```console
-$ pyroid clean sample.parquet clean.parquet --recipe fineweb
-pyroid: clean.parquet exists (pass --overwrite to replace it)
+$ pyroid clean sample.parquet notes.parquet --recipe fineweb   # a notes.parquet of your own
+pyroid: notes.parquet exists (pass --overwrite to replace it)
+$ pyroid clean sample.parquet clean.parquet --recipe fineweb --ftfy off
+pyroid clean: clean.parquet comes from a different run (other options, inputs or pyroid version); pass --overwrite to redo it, or use another output path
 $ pyroid clean sample.parquet out.parquet --recipe fineweb --excluded out.parquet
 pyroid: OUT and --excluded are the same file (out.parquet)
 $ pyroid clean sample.parquet x.parquet --recipe fineweb --text-column body

@@ -75,8 +75,9 @@ file counts as done only if its outputs are still there and are the ones the com
 now, so a deleted output, another `--format` or another `--excluded` redoes that file. If the
 fingerprint changes, pyroid refuses to mix the two runs; `--overwrite` redoes everything. Since
 nothing depends on absolute paths, a machine that mounts the data and OUT somewhere else resumes
-the same run. A file OUT keeps the same records next to it (`.out.parquet.pyroid/`) while it runs
-and removes them when it is done.
+the same run. A file OUT keeps the same records next to it (`.out.parquet.pyroid/`) while it runs.
+When it is done, only the record that the file is complete stays there, so the same command run
+again does nothing and exits with status 0, as for a directory OUT.
 
 ## Many machines: `--shard`
 

@@ -663,4 +663,6 @@ def test_clean_into_one_file_from_inputs_with_other_schemas(tmp_path: Path, en_l
     ]
     assert len(want) > 0
     assert one.to_pylist() == want
-    assert not list(tmp_path.glob(".one.parquet.pyroid"))
+    assert [p.name for p in tmp_path.glob(".one.parquet.pyroid/done/*")] == [
+        "merged-00000-of-00001.json"
+    ]

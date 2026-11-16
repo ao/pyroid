@@ -1310,8 +1310,22 @@ def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: b
 
 
 def _record_run(run: Run, **info: Any) -> None:
-    from pyroid.integrations import _minhash
+    """Write run.json, once it is clear the run may go on in its OUT.
 
+    Records of a different run make it stop first (StateError, unless --overwrite): its
+    run.json, which the later MinHash stages read their settings from, must not be replaced.
+    """
+    from pyroid.integrations import _minhash, _shards
+
+    old = run.state.read_run()
+    other = old is not None and old.get("fingerprint") != run.state.fingerprint
+    if other and not run.a.overwrite and run.state.stale(r["key"] for r in run.state.records()):
+        lay = run.layout
+        what = f"{lay.final} comes" if lay.out_dir is None else f"{lay.out_dir}: its files come"
+        raise _shards.StateError(
+            f"{what} from a different run (other options, inputs or pyroid version); pass "
+            "--overwrite to redo it, or use another output path"
+        )
     run.state.write_run(
         {
             "command": run.command,
@@ -1340,13 +1354,27 @@ def _merged_outputs(run: Run) -> list[str]:
     return [str(p) for p in (lay.final, lay.excluded_final) if p is not None]
 
 
+def _merged_key(run: Run) -> str:
+    return f"merged-{run.layout.shard_tag}"
+
+
 def _merged_done(run: Run) -> bool:
-    """A merged output of this shard is complete: its parts are gone and need not be redone."""
+    """A merged output of this shard is complete: its parts are gone and need not be redone.
+
+    Raises StateError when the file was written by a different run (unless --overwrite).
+    """
+    from pyroid.integrations import _shards
+
     lay = run.layout
-    key = f"merged-{lay.shard_tag}"
-    return (
-        lay.merge and not run.a.overwrite and run.state.is_done(key, outputs=_merged_outputs(run))
-    )
+    if not lay.merge or run.a.overwrite:
+        return False
+    key = _merged_key(run)
+    if run.state.stale([key]):
+        raise _shards.StateError(
+            f"{lay.final} comes from a different run (other options, inputs or pyroid version); "
+            "pass --overwrite to redo it, or use another output path"
+        )
+    return bool(run.state.is_done(key, outputs=_merged_outputs(run)))
 
 
 def _execute(run: Run, units: Sequence[Any], fn: Any) -> None:
@@ -1380,11 +1408,26 @@ def _out_job(run: Run, rank: int, src: Any, **kw: Any) -> FileJob:
     )
 
 
+def _file_stats(run: Run) -> Any:
+    """This shard's counts: the sum of its files' records (or of its merged output's)."""
+    from pyroid.integrations import _shards
+
+    stats = _shards.Stats()
+    merged = run.state.record(_merged_key(run)) if run.layout.merge else None
+    if merged is not None and "stats" in merged:
+        stats.add(merged["stats"])
+        return stats
+    for rank, _ in run.mine:
+        r = run.state.record(_final_key(run, rank))
+        if r is not None and "stats" in r:
+            stats.add(r["stats"])
+    return stats
+
+
 def _merge_parts(run: Run) -> None:
     """Merged mode: concatenate this shard's parts, in input order, into the final file(s)."""
     lay = run.layout
     assert lay.final is not None
-    key = f"merged-{lay.shard_tag}"
     if _merged_done(run):
         return
     ranks = [r for r, _ in run.mine]
@@ -1393,7 +1436,9 @@ def _merge_parts(run: Run) -> None:
     if lay.excluded_final is not None:
         _concat([lay.part(r, excluded=True) for r in ranks], lay.excluded_final, None)
         outputs.append(str(lay.excluded_final))
-    run.state.mark(key, {"outputs": outputs})
+    # The counts go with it: a finished file OUT keeps only this record (see _finalize).
+    run.state.forget([_merged_key(run)])
+    run.state.mark(_merged_key(run), {"outputs": outputs, "stats": _file_stats(run).as_dict()})
 
 
 def _move(src: Path, dest: Path) -> None:
@@ -1512,11 +1557,7 @@ def _finalize(run: Run, *, keep_state: bool) -> dict[str, Any]:
         _merge_parts(run)
     elif lay.merge:
         _shards.say(f"pyroid {run.command}: shard {run.shard} has no input files\n")
-    stats = _shards.Stats()
-    for rank, _ in run.mine:
-        r = run.state.record(_final_key(run, rank))
-        if r is not None and "stats" in r:
-            stats.add(r["stats"])
+    stats = _file_stats(run)
     extra: dict[str, Any] = {"files": len(run.mine)}
     if run.shard.count > 1:
         extra["shard"] = str(run.shard)
@@ -1528,7 +1569,10 @@ def _finalize(run: Run, *, keep_state: bool) -> dict[str, Any]:
         _io.atomic_write_text(run.a.stats_json, json.dumps(d, indent=1) + "\n")
     _shards.rmtree(lay.work)
     if not keep_state and lay.out_dir is None:
-        _shards.rmtree(lay.state_root)
+        # A file OUT keeps only the record that it is complete (and run.json): the same command
+        # run again then has nothing to do, as for a directory OUT.
+        keep = _merged_key(run)
+        run.state.forget(r["key"] for r in run.state.records() if r["key"] != keep)
     # Last: the files are complete and tidied whether or not stderr still takes the messages.
     run.progress.close()
     if run.a.stats:
@@ -1781,6 +1825,10 @@ def _dedup_exact(a: argparse.Namespace) -> int:
     if not lay.merge or lay.final is None:
         raise SystemExit("pyroid dedup --method exact: OUT must be a file")
     _check_text_column([s for _, s in run.mine], o.text_column)
+    if _merged_done(run):  # finished earlier: the counts are in its record
+        _report_exact(run, _file_stats(run))
+        return 0
+    _record_run(run)
     state = pyroid.dedup.ExactDedup(normalize=a.normalize)
     out = _io.Writer(lay.final, compression=o.compression)
     excl = _io.Writer(lay.excluded_final, compression=o.compression) if lay.excluded_final else None
@@ -1811,14 +1859,23 @@ def _dedup_exact(a: argparse.Namespace) -> int:
     except BaseException:
         _abort(out, excl)
         raise
+    # As for every file OUT: a record that it is complete, so the same command does nothing again.
+    run.state.mark(_merged_key(run), {"outputs": _merged_outputs(run), "stats": stats.as_dict()})
+    _report_exact(run, stats)
+    return 0
+
+
+def _report_exact(run: Run, stats: Any) -> None:
+    from pyroid.integrations import _io, _shards
+
     wall = time.perf_counter() - run.t0
     d = _shards.summary("dedup", stats, wall=wall, extra={"files": len(run.mine)})
+    if run.a.stats_json:
+        _io.atomic_write_text(run.a.stats_json, json.dumps(d, indent=1) + "\n")
+    _shards.rmtree(run.layout.work)
     run.progress.close()
-    if a.stats_json:
-        _io.atomic_write_text(a.stats_json, json.dumps(d, indent=1) + "\n")
-    if a.stats:
+    if run.a.stats:
         _shards.print_summary(d)
-    return 0
 
 
 # ---------------------------------------------------------------------------- dedup: the 4 stages
@@ -2101,7 +2158,8 @@ def _cmd_stats(a: argparse.Namespace) -> int:
     stats = _shards.Stats()
     files = 0
     for r in state.records():
-        if "stats" in r and not str(r["key"]).startswith("p1-"):
+        # Per-file records only: not MinHash phase 1 (p1-), nor a merged output's total.
+        if "stats" in r and not str(r["key"]).startswith(("p1-", "merged-")):
             stats.add(r["stats"])
             files += 1
     total = (run.get("inputs") or {}).get("count")
