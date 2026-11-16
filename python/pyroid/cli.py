@@ -2295,7 +2295,14 @@ def _io_args(
     p.add_argument("--files-from", metavar="PATH", help="read more inputs from PATH, one per line")
 
 
-def _run_args(p: argparse.ArgumentParser, *, excluded: bool = True, merge: bool = True) -> None:
+def _run_args(
+    p: argparse.ArgumentParser,
+    *,
+    excluded: bool = True,
+    merge: bool = True,
+    warc: bool = False,
+    tables: bool = True,
+) -> None:
     p.add_argument("--text-column", default="text", help="the text column (default: text)")
     p.add_argument(
         "--threads",
@@ -2308,7 +2315,8 @@ def _run_args(p: argparse.ArgumentParser, *, excluded: bool = True, merge: bool 
         "--batch-size",
         type=_positive,
         default=None,
-        help="rows per Arrow batch (default: 10000; --recipe fineweb-warc: pages per batch, 256)",
+        help="rows per Arrow batch (default: 10000"
+        + ("; --recipe fineweb-warc: pages per batch, 256)" if warc else ")"),
     )
     p.add_argument(
         "--shard", type=_shard, metavar="I/N", help="process input files I, I+N, I+2N, ..."
@@ -2346,7 +2354,12 @@ def _run_args(p: argparse.ArgumentParser, *, excluded: bool = True, merge: bool 
     )
     p.add_argument("--stats-json", metavar="PATH", help="write the stats to PATH as JSON")
     p.add_argument("--progress", action="store_true", help="show a progress line on stderr")
-    p.add_argument("--compression", help="Parquet compression (default: pyarrow's, snappy)")
+    p.add_argument(
+        "--compression",
+        help="Parquet compression (default: pyarrow's, snappy)"
+        if tables
+        else "not used: signature files are not compressed",
+    )
     p.add_argument(
         "--overwrite",
         action="store_true",
@@ -2402,7 +2415,7 @@ def build_parser() -> argparse.ArgumentParser:
         "fastText LID, the same filters, MinHash dedup, then PII replacement.",
     )
     _io_args(p, warc=True)
-    _run_args(p)
+    _run_args(p, warc=True)
     p.add_argument(
         "--recipe",
         choices=RECIPES,
@@ -2549,7 +2562,7 @@ def build_stage_parser(stage: str) -> argparse.ArgumentParser:
             "position in the sorted input list.",
         )
         _io_args(p, out="SIGS", out_help="the signatures directory")
-        _run_args(p, excluded=False, merge=False)
+        _run_args(p, excluded=False, merge=False, tables=False)
         _minhash_args(p)
         p.set_defaults(body=_stage_signatures)
     elif stage == "buckets":
