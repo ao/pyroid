@@ -6,6 +6,8 @@
 //! follows CPython's `Lib/difflib.py` (identical in 3.11 to 3.15), so the
 //! blocks, opcodes and ratios are the same values, the ratios the same bits.
 
+use super::stop::Ticker;
+
 /// The id of an element of `a` that does not occur in `b`.
 pub const NONE: u32 = u32::MAX;
 
@@ -172,6 +174,11 @@ impl BIndex {
         for (i, &id) in a.iter().enumerate().take(ahi).skip(alo) {
             let positions = self.b2j(id);
             let first = positions.partition_point(|&j| (j as usize) < blo);
+            // Stopped (Ctrl-C): the caller discards the result. Here, at the
+            // top of a row, `j2len` holds only the entries in `touched`.
+            if s.ticker.tick(1 + positions.len() - first) {
+                break;
+            }
             for &j in &positions[first..] {
                 let j = j as usize;
                 if j >= bhi {
@@ -255,6 +262,9 @@ impl BIndex {
         w.queue.push((0, la, 0, lb));
         while let Some((alo, ahi, blo, bhi)) = w.queue.pop() {
             let (i, j, k) = self.find_longest_match(a, alo, ahi, blo, bhi, &mut w.scratch);
+            if w.scratch.ticker.stopped() {
+                return;
+            }
             if k > 0 {
                 w.found.push(Block {
                     a: i,
@@ -346,10 +356,11 @@ impl BIndex {
     }
 }
 
-/// Buffers reused across matches (one per thread).
+/// Buffers reused across matches (one per thread), and the thread's
+/// interrupt checks.
 #[derive(Debug, Default)]
 pub struct Work {
-    scratch: Scratch,
+    pub(crate) scratch: Scratch,
     queue: Vec<(usize, usize, usize, usize)>,
     found: Vec<Block>,
     avail: Vec<u32>,
@@ -366,6 +377,15 @@ pub struct Scratch {
     newj2len: Vec<u32>,
     touched: Vec<usize>,
     newtouched: Vec<usize>,
+    /// Ctrl-C checks (off unless the bindings turned them on).
+    pub(crate) ticker: Ticker,
+}
+
+impl Work {
+    /// Ctrl-C checks for the loops that use this `Work`.
+    pub fn ticker(&mut self) -> &mut Ticker {
+        &mut self.scratch.ticker
+    }
 }
 
 impl Scratch {

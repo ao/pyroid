@@ -258,3 +258,76 @@ fn interners() {
     assert_eq!(chars.get(u32::from('\u{e9}')), 3);
     assert_eq!(chars.get(u32::from('z')), super::matcher::NONE);
 }
+
+fn stop_now(_first: bool) -> super::stop::Poll {
+    super::stop::Poll::Stop
+}
+
+#[test]
+#[allow(clippy::many_single_char_names)]
+fn checks_stop_long_work_early() {
+    use super::matcher::Work;
+    use std::time::{Duration, Instant};
+    // Quadratic: every line differs from the one opposite, so each match is one
+    // line long and the remaining range barely shrinks. 200,000 lines take
+    // a minute; stopped at the first check (100 ms in), the call ends soon after.
+    let n: u32 = 200_000;
+    let b: Vec<u32> = (0..n).collect();
+    let a: Vec<u32> = (0..n)
+        .map(|i| if i % 2 == 0 { super::matcher::NONE } else { i })
+        .collect();
+    let index = BIndex::new(b, n as usize, &[], false);
+    let mut w = Work::default();
+    w.ticker().start(stop_now);
+    let t = Instant::now();
+    let found = index.matching_blocks_with(&a, &mut w);
+    assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
+    assert!(w.ticker().finish());
+    // Incomplete, but blocks are still sorted, non-overlapping, and end in the sentinel.
+    assert!(found.len() < n as usize / 2);
+    assert_eq!(
+        found.last(),
+        Some(&Block {
+            a: n as usize,
+            b: n as usize,
+            size: 0
+        })
+    );
+    // Without checks the same Work gives the full result.
+    let full = index.matching_blocks_with(&a[..2_000], &mut w);
+    assert_eq!(full.len(), 1_000 + 1);
+
+    // Differ stops between pairs of lines too.
+    let la: Vec<String> = (0..3_000)
+        .map(|i| format!("value = f(x{}, y{})\n", i % 97, i % 89))
+        .collect();
+    let lb: Vec<String> = (0..3_000)
+        .map(|i| format!("value = f(x{}, y{})\n", i % 89, i % 97))
+        .collect();
+    let mut keys: Interner<String> = Interner::default();
+    let bi: Vec<u32> = lb.iter().map(|l| keys.intern(l.clone()).0).collect();
+    let ai: Vec<u32> = la.iter().map(|l| keys.get(l)).collect();
+    let (ac, bc): (Vec<Vec<u32>>, Vec<Vec<u32>>) = (
+        la.iter().map(|l| cps(l)).collect(),
+        lb.iter().map(|l| cps(l)).collect(),
+    );
+    let (ac, bc): (Vec<&[u32]>, Vec<&[u32]>) = (
+        ac.iter().map(Vec::as_slice).collect(),
+        bc.iter().map(Vec::as_slice).collect(),
+    );
+    let lines = Lines {
+        a: &ai,
+        b: &bi,
+        b_keys: keys.len(),
+        b_junk: &[],
+        a_chars: &ac,
+        b_chars: &bc,
+    };
+    w.ticker().start(stop_now);
+    let t = Instant::now();
+    let ops =
+        super::differ::compare_with(&lines, CharJunk::SpaceTab, DifferVersion::Classic, &mut w);
+    assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
+    assert!(w.ticker().finish());
+    assert!(ops.len() < 2 * la.len());
+}

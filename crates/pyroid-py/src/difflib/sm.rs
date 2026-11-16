@@ -18,6 +18,7 @@ use pyroid_core::difflib::matcher::{
 };
 use pyroid_core::difflib::with_work;
 
+use super::interrupt;
 use super::seq::{Key, Kinds, Seq, item_key, push_wtf8};
 
 /// How `b`'s elements were numbered.
@@ -453,11 +454,7 @@ fn blocks<'py>(
     };
     let (s, ids) = (side.get(), aside.ids());
     let work = || with_work(|w| s.index.matching_blocks_with(ids, w));
-    let found = if ids.len() + s.index.b().len() > 4096 {
-        py.detach(work)
-    } else {
-        work()
-    };
+    let found = interrupt::run(py, ids.len() + s.index.b().len() > 4096, work)?;
     let out = Bound::new(
         py,
         Blocks {
@@ -724,11 +721,7 @@ pub fn _sm_ratio(obj: &Bound<'_, PyAny>) -> PyResult<Option<f64>> {
     };
     let (s, ids) = (side.get(), aside.ids());
     let work = || with_work(|w| s.index.matched(ids, w));
-    let matched = if ids.len() + s.index.b().len() > 4096 {
-        py.detach(work)
-    } else {
-        work()
-    };
+    let matched = interrupt::run(py, ids.len() + s.index.b().len() > 4096, work)?;
     // The lengths read when a and b were encoded (the same objects).
     let ratio = calculate_ratio(matched, ids.len() + s.index.b().len());
     let marker = (a, s.b.bind(py), ratio).into_pyobject(py)?;
@@ -839,7 +832,8 @@ pub fn _sm_find_longest_match<'py>(
     ) else {
         return Ok(None);
     };
-    let (i, j, k) = with_work(|w| s.index.find_longest_match_with(ids, alo, ahi, blo, bhi, w));
+    let work = || with_work(|w| s.index.find_longest_match_with(ids, alo, ahi, blo, bhi, w));
+    let (i, j, k) = interrupt::run(py, la + lb > 4096, work)?;
     Ok(Some(new_match(py, i, j, k)?))
 }
 

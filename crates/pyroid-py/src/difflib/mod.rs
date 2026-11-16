@@ -4,6 +4,7 @@
 //! when these apply and otherwise runs CPython's own difflib code.
 
 mod batch;
+mod interrupt;
 mod lines;
 mod seq;
 mod sm;

@@ -1,5 +1,8 @@
 //! `ratio_batch` and `close_matches_batch`: `SequenceMatcher` over many
-//! strings at once, on the shared pool, with Ctrl-C checked between chunks.
+//! strings at once, on the shared pool, in parts with Ctrl-C checked between
+//! them (see [`super::interrupt`]).
+
+use std::ops::Range;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -8,12 +11,13 @@ use pyroid_core::difflib::{StrMatcher, nlargest, with_work};
 use pyroid_core::par;
 use rustc_hash::FxHashSet;
 
+use super::interrupt;
 use crate::batch::{BatchError, rows};
 use crate::errors::input_error;
 use crate::input::{self, TextInput, Threads, text_arg};
 
-/// Pairs (or words) per chunk between checks for signals.
-const CHUNK: usize = 1 << 14;
+/// Pairs in the first part of a batch (Ctrl-C is checked between parts).
+const FIRST_PART: usize = 1 << 10;
 
 fn code_points(s: &str) -> impl Iterator<Item = u32> + '_ {
     s.chars().map(u32::from)
@@ -118,17 +122,11 @@ pub fn ratio_batch<'py>(
             }
         }
     };
-    let mut out: Vec<Option<f64>> = Vec::with_capacity(n);
-    let mut start = 0;
-    while start < n {
-        let len = CHUNK.min(n - start);
-        let part = py
-            .detach(|| par::map(len, t, |i| pair(start + i)))
-            .map_err(|e| BatchError::from(e).into_pyerr(py))?;
-        out.extend(part);
-        start += len;
-        py.check_signals()?;
-    }
+    let out = interrupt::in_parts(py, n, FIRST_PART, 2 * par::MIN_DOCS_PER_TASK, |range| {
+        let start = range.start;
+        interrupt::run(py, true, || par::map(range.len(), t, |i| pair(start + i)))?
+            .map_err(|e| BatchError::from(e).into_pyerr(py))
+    })?;
     PyList::new(py, out)
 }
 
@@ -174,30 +172,41 @@ pub fn _close_matches_batch<'py>(
             x.as_bytes().cmp(y.as_bytes())
         }))
     };
+    let tasks = py
+        .detach(|| par::max_tasks(t))
+        .map_err(|e| BatchError::from(e).into_pyerr(py))?;
     let mut picked: Vec<Option<Vec<usize>>> = Vec::with_capacity(rw.len());
     if rw.len() >= 2 * par::MIN_DOCS_PER_TASK {
-        // Many words: one word per task.
-        let mut start = 0;
-        while start < rw.len() {
-            let len = (CHUNK / 16).max(1).min(rw.len() - start);
-            let part = py
-                .detach(|| {
-                    par::try_map(len, t, |i| {
-                        rw[start + i]
-                            .map(|word| one(word, par::Threads::ONE))
-                            .transpose()
-                    })
+        // Many words: each part's words in `tasks` runs of words, one task each.
+        let found = interrupt::in_parts(py, rw.len(), 2 * tasks, tasks, |range| {
+            let words = &rw[range];
+            let k = tasks.min(words.len()).max(1);
+            let runs: Vec<Range<usize>> = (0..k)
+                .map(|i| i * words.len() / k..(i + 1) * words.len() / k)
+                .collect();
+            let done = interrupt::run(py, true, || {
+                par::map_tasks(&runs, t, |run| {
+                    words[run.clone()]
+                        .iter()
+                        .map(|word| word.map(|word| one(word, par::Threads::ONE)).transpose())
+                        .collect::<Result<Vec<_>, BatchError>>()
                 })
-                .map_err(|e| e.into_pyerr(py))?;
-            picked.extend(part);
-            start += len;
-            py.check_signals()?;
-        }
+            })?
+            .map_err(|e| BatchError::from(e).into_pyerr(py))?;
+            let mut out = Vec::with_capacity(words.len());
+            for run in done {
+                out.extend(run.map_err(|e| e.into_pyerr(py))?);
+            }
+            Ok(out)
+        })?;
+        picked.extend(found);
     } else {
         for word in &rw {
             let found = match word {
                 None => None,
-                Some(word) => Some(py.detach(|| one(word, t)).map_err(|e| e.into_pyerr(py))?),
+                Some(word) => {
+                    Some(interrupt::run(py, true, || one(word, t))?.map_err(|e| e.into_pyerr(py))?)
+                }
             };
             picked.push(found);
             py.check_signals()?;

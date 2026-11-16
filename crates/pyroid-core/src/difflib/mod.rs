@@ -18,6 +18,7 @@ pub mod html;
 pub mod intern;
 pub mod matcher;
 pub mod mdiff;
+pub mod stop;
 
 #[cfg(test)]
 mod tests;
@@ -109,6 +110,7 @@ impl StrMatcher {
         let mut ids = std::mem::take(&mut w.ids);
         ids.clear();
         ids.extend(a.map(|c| self.chars.get(c)));
+        w.ticker().tick(ids.len());
         let r = calculate_ratio(self.index.matched(&ids, w), ids.len() + self.len());
         w.ids = ids;
         r
@@ -129,7 +131,7 @@ impl StrMatcher {
         w: &mut Work,
     ) -> Option<f64> {
         let lb = self.len();
-        if real_quick_ratio(la, lb) < cutoff {
+        if w.ticker().tick(1 + la) || real_quick_ratio(la, lb) < cutoff {
             return None;
         }
         let mut ids = std::mem::take(&mut w.ids);
@@ -175,4 +177,22 @@ pub fn nlargest(
     });
     order.truncate(n);
     order.into_iter().map(|(_, i)| i).collect()
+}
+
+/// Turn on Ctrl-C checks for this thread's [`with_work`] buffers: from now
+/// until [`finish_checks`], the loops that use them ask `check` about every
+/// [`stop::POLL_INTERVAL`], and stop early once it says so. For the thread
+/// that called in from Python, never a pool worker.
+pub fn start_checks(check: stop::Check) {
+    WORK.with(|w| {
+        if let Ok(mut w) = w.try_borrow_mut() {
+            w.ticker().start(check);
+        }
+    });
+}
+
+/// Turn the checks of [`start_checks`] off: true if they stopped the work
+/// (whose results are then incomplete).
+pub fn finish_checks() -> bool {
+    WORK.with(|w| w.try_borrow_mut().is_ok_and(|mut w| w.ticker().finish()))
 }

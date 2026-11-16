@@ -89,7 +89,10 @@ that overrides one of its helper methods, a `SequenceMatcher` subclass that over
 code, with one `pyroid.FallbackWarning`.
 
 pyroid.difflib runs on free-threaded CPython without enabling the GIL. Lists are read in one step,
-so another thread changing a list during a call cannot crash it.
+so another thread changing a list during a call cannot crash it. A long call (matching long
+sequences, diffing large files, a batch) acts on Ctrl-C within about 0.1 s and raises
+`KeyboardInterrupt`; the matcher it ran on is unchanged and stays usable. In a batch on several
+threads, an item a pool thread has started is finished first.
 
 ## Many strings at once
 

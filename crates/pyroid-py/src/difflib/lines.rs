@@ -18,6 +18,7 @@ use pyroid_core::difflib::{StrMatcher, nlargest, with_work};
 use pyroid_core::par;
 use pyroid_core::text::is_py_whitespace;
 
+use super::interrupt;
 use super::seq::{code_points, push_wtf8};
 use crate::batch::BatchError;
 use crate::input::{self, Threads};
@@ -253,11 +254,7 @@ fn compare_full(
             DifferVersion::Classic
         };
         let work = a_buf.len() + b_buf.len();
-        if work > 1 << 14 {
-            py.detach(|| differ::compare(&lines, cj, version))
-        } else {
-            differ::compare(&lines, cj, version)
-        }
+        interrupt::run(py, work > 1 << 14, || differ::compare(&lines, cj, version))?
     };
     Ok(Compared {
         ops,
@@ -408,7 +405,8 @@ pub fn _line_diff<'py>(
     let (la, lb) = (al.len(), bl.len());
     let work = || {
         let index = BIndex::new(bi, first.len(), &[], true);
-        let codes = opcodes(&index.matching_blocks(&ai));
+        let blocks = with_work(|w| index.matching_blocks_with(&ai, w));
+        let codes = opcodes(&blocks);
         let groups = grouped_opcodes(&codes, n);
         if context {
             format::context(&groups, la, lb)
@@ -416,11 +414,7 @@ pub fn _line_diff<'py>(
             format::unified(&groups, la, lb)
         }
     };
-    let plan = if la + lb > 1024 {
-        py.detach(work)
-    } else {
-        work()
-    };
+    let plan = interrupt::run(py, la + lb > 1024, work)?;
     let theme = theme.unwrap_or_default();
     let [t_header, t_hunk, t_context, t_removed, t_added, t_reset] = &theme;
     let reset = (!t_reset.is_empty()).then(|| PyString::new(py, t_reset));
@@ -509,8 +503,8 @@ impl Cand {
     }
 }
 
-/// Candidates per chunk between checks for signals (Ctrl-C).
-const CHUNK: usize = 1 << 16;
+/// Candidates in the first part of a long list (Ctrl-C is checked between parts).
+const FIRST_PART: usize = 1 << 12;
 
 /// `get_close_matches(word, possibilities, n, cutoff)` after its argument
 /// checks, or `None`. `possibilities` is a list or tuple.
@@ -558,12 +552,16 @@ pub fn _get_close_matches<'py>(
     }
     let matcher = StrMatcher::new(&code_points(word)?, |_| false, true);
     let t = input::threads(threads);
-    let mut scored: Vec<(f64, usize)> = Vec::new();
-    for (c, chunk) in cands.chunks(CHUNK).enumerate() {
-        let found = py
-            .detach(|| {
-                par::map(chunk.len(), t, |i| {
-                    with_work(|w| match &chunk[i] {
+    let found = interrupt::in_parts(
+        py,
+        cands.len(),
+        FIRST_PART,
+        2 * par::MIN_DOCS_PER_TASK,
+        |range| {
+            let part = &cands[range];
+            interrupt::run(py, true, || {
+                par::map(part.len(), t, |i| {
+                    with_work(|w| match &part[i] {
                         Cand::Utf8(s) => {
                             let la = if s.is_ascii() {
                                 s.len()
@@ -577,16 +575,15 @@ pub fn _get_close_matches<'py>(
                         }
                     })
                 })
-            })
-            .map_err(|e| BatchError::from(e).into_pyerr(py))?;
-        scored.extend(
-            found
-                .into_iter()
-                .enumerate()
-                .filter_map(|(i, r)| r.map(|r| (r, c * CHUNK + i))),
-        );
-        py.check_signals()?;
-    }
+            })?
+            .map_err(|e| BatchError::from(e).into_pyerr(py))
+        },
+    )?;
+    let scored: Vec<(f64, usize)> = found
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, r)| r.map(|r| (r, i)))
+        .collect();
     let picked = nlargest(&scored, n, |x, y| cands[x].cmp(&cands[y]));
     let out = PyList::empty(py);
     for i in picked {
@@ -658,7 +655,7 @@ fn compare_code_points(
     } else {
         DifferVersion::Classic
     };
-    Ok(py.detach(|| differ::compare(&lines, cj, version)))
+    interrupt::run(py, true, || differ::compare(&lines, cj, version))
 }
 
 /// `IS_LINE_JUNK(line)`: `line.strip() in '#'`.

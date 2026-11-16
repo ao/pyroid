@@ -103,18 +103,33 @@ fn better(m: &StrMatcher, a: &[u32], best: f64, w: &mut Work) -> Option<f64> {
     r
 }
 
-/// `Differ(linejunk, charjunk).compare(a, b)`.
+/// `Differ(linejunk, charjunk).compare(a, b)`, with this thread's
+/// [`super::with_work`] buffers (and interrupt checks).
 pub fn compare(lines: &Lines<'_>, junk: CharJunk, version: DifferVersion) -> Vec<DiffOp> {
+    super::with_work(|w| compare_with(lines, junk, version, w))
+}
+
+/// [`compare`] with the buffers of `w`. If `w`'s ticker stops the call, the
+/// output is incomplete.
+pub fn compare_with(
+    lines: &Lines<'_>,
+    junk: CharJunk,
+    version: DifferVersion,
+    w: &mut Work,
+) -> Vec<DiffOp> {
     let index = BIndex::new(lines.b.to_vec(), lines.b_keys, lines.b_junk, true);
-    let blocks = index.matching_blocks(lines.a);
+    let blocks = index.matching_blocks_with(lines.a, w);
     let mut d = Diff {
         lines,
         junk,
         version,
-        work: Work::default(),
+        work: w,
         out: Vec::with_capacity(lines.a.len().max(lines.b.len())),
     };
     for op in opcodes(&blocks) {
+        if d.work.ticker().stopped() {
+            break;
+        }
         match op.tag {
             Tag::Replace => d.fancy_replace(op.i1, op.i2, op.j1, op.j2),
             Tag::Delete => d.dump(b'-', Side::A, op.i1, op.i2),
@@ -125,11 +140,11 @@ pub fn compare(lines: &Lines<'_>, junk: CharJunk, version: DifferVersion) -> Vec
     d.out
 }
 
-struct Diff<'l, 'a> {
+struct Diff<'l, 'a, 'w> {
     lines: &'l Lines<'a>,
     junk: CharJunk,
     version: DifferVersion,
-    work: Work,
+    work: &'w mut Work,
     out: Vec<DiffOp>,
 }
 
@@ -139,7 +154,7 @@ enum Task {
     Pair(usize, usize, bool),
 }
 
-impl Diff<'_, '_> {
+impl Diff<'_, '_, '_> {
     fn dump(&mut self, tag: u8, side: Side, lo: usize, hi: usize) {
         self.out
             .extend((lo..hi).map(|i| DiffOp::Line(tag, side, i)));
@@ -167,6 +182,9 @@ impl Diff<'_, '_> {
     fn classic(&mut self, alo: usize, ahi: usize, blo: usize, bhi: usize) {
         let mut stack = vec![Task::Helper(alo, ahi, blo, bhi)];
         while let Some(task) = stack.pop() {
+            if self.work.ticker().stopped() {
+                return;
+            }
             match task {
                 Task::Pair(i, j, identical) => self.pair(i, j, identical),
                 Task::Helper(alo, ahi, blo, bhi) => {
@@ -203,13 +221,16 @@ impl Diff<'_, '_> {
         for j in blo..bhi {
             let cruncher = cruncher(l.b_chars[j], self.junk);
             for i in alo..ahi {
+                if self.work.ticker().tick(1) {
+                    return None;
+                }
                 if l.a[i] == l.b[j] {
                     if eq.is_none() {
                         eq = Some((i, j));
                     }
                     continue;
                 }
-                if let Some(r) = better(&cruncher, l.a_chars[i], best_ratio, &mut self.work) {
+                if let Some(r) = better(&cruncher, l.a_chars[i], best_ratio, self.work) {
                     best_ratio = r;
                     best = (i, j);
                 }
@@ -244,7 +265,10 @@ impl Diff<'_, '_> {
             let mut best_ratio = cutoff;
             let mut best_i = None;
             for i in lo..hi {
-                if let Some(r) = better(&cruncher, l.a_chars[i], best_ratio, &mut self.work) {
+                if self.work.ticker().tick(1) {
+                    return;
+                }
+                if let Some(r) = better(&cruncher, l.a_chars[i], best_ratio, self.work) {
                     best_ratio = r;
                     best_i = Some(i);
                 }
@@ -278,7 +302,8 @@ impl Diff<'_, '_> {
         }
         let (aelt, belt) = (self.lines.a_chars[i], self.lines.b_chars[j]);
         let cruncher = cruncher(belt, self.junk);
-        let blocks = cruncher.index().matching_blocks(&cruncher.encode(aelt));
+        let ids = cruncher.encode(aelt);
+        let blocks = cruncher.index().matching_blocks_with(&ids, self.work);
         let (mut atags, mut btags) = (Vec::new(), Vec::new());
         for op in opcodes(&blocks) {
             let (la, lb) = (op.i2 - op.i1, op.j2 - op.j1);
