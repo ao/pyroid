@@ -425,6 +425,42 @@ def test_runtime_docstrings_match_the_stub() -> None:
         assert inspect.getdoc(getattr(pd, name)) == docs[name], name
 
 
+def test_racing_set_seq_errors_name_no_internals() -> None:
+    # Racing set_seq* on one matcher is unsupported (as in difflib), but nothing pyroid keeps
+    # inside the matcher shows up in what it raises.
+    import random
+
+    m = pd.SequenceMatcher(None, "abc" * 50, "abd" * 50)
+    errors: list[str] = []
+    stop = time.monotonic() + 1.5
+
+    def race(seed: int) -> None:
+        r = random.Random(seed)
+        while time.monotonic() < stop:
+            k = r.randrange(5)
+            text = "".join(r.choice("abcd") for _ in range(r.randint(0, 200)))
+            try:
+                if k == 0:
+                    m.set_seq1(text)
+                elif k == 1:
+                    m.set_seq2(text)
+                elif k == 2:
+                    m.ratio()
+                elif k == 3:
+                    m.get_opcodes()
+                else:
+                    assert isinstance(m.b2j, dict)
+            except Exception as e:  # noqa: BLE001 - collected
+                errors.append(f"{type(e).__name__}: {e}")
+
+    threads = [threading.Thread(target=race, args=(i,)) for i in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+    assert not [e for e in errors if "_pyroid" in e or "'b2j'" in e], errors[:5]
+
+
 def test_large_inputs() -> None:
     a = [f"line {i}\n" for i in range(100_000)]
     b = [*a[:5000], "new\n", *a[5000:90000], *a[90001:]]

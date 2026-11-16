@@ -345,6 +345,18 @@ fn single_surrogate(t: &[u8]) -> Option<u32> {
     }
 }
 
+/// `d.pop(name, None)`: another thread may have removed it already (racing
+/// `set_seq*` calls on one matcher), which is not an error here.
+fn discard(d: &Bound<'_, PyDict>, name: &Bound<'_, PyString>) -> PyResult<()> {
+    if !d.contains(name)? {
+        return Ok(()); // the common case, without making an exception
+    }
+    match d.del_item(name) {
+        Err(e) if e.is_instance_of::<pyo3::exceptions::PyKeyError>(d.py()) => Ok(()),
+        r => r,
+    }
+}
+
 fn instance_dict<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
     Ok(obj
         .getattr(pyo3::intern!(obj.py(), "__dict__"))?
@@ -570,9 +582,7 @@ fn chain(
             return Ok(());
         }
         for name in names {
-            if d.contains(*name)? {
-                d.del_item(*name)?;
-            }
+            discard(d, name)?;
         }
         Ok(())
     };
@@ -646,13 +656,14 @@ fn chain(
         }
     };
     side.index = BIndex::new(ids, n, &junk, autojunk);
+    // The new index replaces the old one in one step, then the old b's attributes go: a thread
+    // reading `b2j` meanwhile (racing this one) sees the old or the new, never neither.
+    d.set_item(pyo3::intern!(py, "_pyroid_b"), Bound::new(py, side)?)?;
     del(&[
-        pyo3::intern!(py, "_pyroid_b"),
         pyo3::intern!(py, "b2j"),
         pyo3::intern!(py, "bjunk"),
         pyo3::intern!(py, "bpopular"),
     ])?;
-    d.set_item(pyo3::intern!(py, "_pyroid_b"), Bound::new(py, side)?)?;
     Ok(true)
 }
 
@@ -700,9 +711,7 @@ pub fn _sm_init(
             pyo3::intern!(py, "matching_blocks"),
             pyo3::intern!(py, "_pyroid_mb"),
         ] {
-            if d.contains(name)? {
-                d.del_item(name)?;
-            }
+            discard(&d, name)?;
         }
     }
     if b.is_none() {
