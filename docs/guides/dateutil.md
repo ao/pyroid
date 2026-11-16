@@ -127,7 +127,8 @@ parser.parse_batch(["2003-09-25", "Sep 26 2003 10:00", "nonsense"], errors="coer
 
 column = parser.parse_batch(pa.array(["2003-09-25 10:00", None, "Sep 26 2003 10:00:00.5"]))
 column.type  # 'timestamp[us]'
-pa.array(column)  # [2003-09-25 10:00:00.000000, null, 2003-09-26 10:00:00.500000]
+pa.array(column).to_pylist()
+# [datetime.datetime(2003, 9, 25, 10, 0), None, datetime.datetime(2003, 9, 26, 10, 0, 0, 500000)]
 
 parser.parse_batch(pa.array(["2003-09-25 10:00Z", "2003-09-25 10:00+05:30"])).type
 # 'timestamp[us, tz=UTC]'
