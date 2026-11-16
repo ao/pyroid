@@ -555,7 +555,7 @@ impl Key<'_> {
             (Key::Int(a), Key::Float(b)) => cmp_int_float(*a, *b),
             (Key::Float(a), Key::Int(b)) => cmp_int_float(*b, *a).reverse(),
             (Key::Str(a), Key::Str(b)) => a.cmp(b),
-            // Never mixed: `native_keys` gives all strings or all numbers.
+            // Never mixed: `native_order` sorts all strings or all numbers.
             (Key::Str(_), _) => Ordering::Greater,
             (_, Key::Str(_)) => Ordering::Less,
         }
@@ -590,79 +590,95 @@ pub(crate) fn cmp_int_float(i: i64, f: f64) -> Ordering {
     }
 }
 
-/// Keys the native sort handles exactly (a total order, as `sorted` sees it), or `None`.
-fn native_keys<'a>(keys: &'a [Bound<'_, PyAny>]) -> Option<Vec<Key<'a>>> {
-    let mut out = Vec::with_capacity(keys.len());
-    let mut strings = 0usize;
-    for k in keys {
-        if let Ok(s) = k.cast_exact::<PyString>() {
-            out.push(Key::Str(s.to_str().ok()?));
-            strings += 1;
-        } else if k.is_exact_instance_of::<PyInt>() {
-            out.push(Key::Int(k.extract::<i64>().ok()?));
-        } else if let Ok(f) = k.cast_exact::<PyFloat>() {
-            let v = f.value();
-            if v.is_nan() {
-                return None;
+/// The order `sorted` gives keys that are all exact `int`s (fitting `i64`), all exact `str`s,
+/// or exact `int`s and non-NaN `float`s (a total order, so a stable sort agrees with CPython's
+/// Timsort); `None` for anything else. Builds one array of `(key, index)` pairs and sorts it.
+fn native_order(keys: &[Bound<'_, PyAny>]) -> Option<Vec<u32>> {
+    // `u32` indices keep the arrays small; a longer list goes to Python's sort.
+    u32::try_from(keys.len()).ok()?;
+    let Some(first) = keys.first() else {
+        return Some(Vec::new());
+    };
+    if first.is_exact_instance_of::<PyInt>() {
+        let mut pairs: Vec<(i64, u32)> = Vec::with_capacity(keys.len());
+        for (k, i) in keys.iter().zip(0u32..) {
+            match k
+                .is_exact_instance_of::<PyInt>()
+                .then(|| k.extract::<i64>().ok())
+                .flatten()
+            {
+                Some(v) => pairs.push((v, i)),
+                None => break,
             }
-            out.push(Key::Float(v));
-        } else {
-            return None;
+        }
+        if pairs.len() == keys.len() {
+            pairs.sort_by_key(|p| p.0);
+            return Some(pairs.iter().map(|p| p.1).collect());
+        }
+    } else if first.is_exact_instance_of::<PyString>() {
+        // Strings mixed with anything else: Python raises the TypeError.
+        let mut pairs: Vec<(&str, u32)> = Vec::with_capacity(keys.len());
+        for (k, i) in keys.iter().zip(0u32..) {
+            pairs.push((k.cast_exact::<PyString>().ok()?.to_str().ok()?, i));
+        }
+        pairs.sort_by(|a, b| a.0.cmp(b.0));
+        return Some(pairs.iter().map(|p| p.1).collect());
+    }
+    // Ints and floats.
+    let mut pairs: Vec<(Key<'_>, u32)> = Vec::with_capacity(keys.len());
+    for (k, i) in keys.iter().zip(0u32..) {
+        match native_key(k)? {
+            Key::Str(_) => return None,
+            key => pairs.push((key, i)),
         }
     }
-    if strings != 0 && strings != keys.len() {
-        return None;
-    }
-    Some(out)
+    pairs.sort_by(|a, b| a.0.cmp(&b.0));
+    Some(pairs.iter().map(|p| p.1).collect())
 }
 
-/// The elements of `items` in the order of `sorted(range(n), key=keys.__getitem__)`.
+/// The elements of `items` in the order of `sorted(range(n), key=keys.__getitem__)`;
+/// `keys: None` sorts the items by themselves.
 fn sorted_by_keys<'py>(
     ctx: &Ctx<'py, '_>,
     items: Vec<Bound<'py, PyAny>>,
-    keys: &[Bound<'py, PyAny>],
+    keys: Option<Vec<Bound<'py, PyAny>>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = ctx.py;
-    // A stable sort on a total order gives the same order as CPython's Timsort.
-    let order: Vec<usize> = if let Some(native) = native_keys(keys) {
-        if native.iter().all(|k| matches!(k, Key::Int(_))) {
-            let mut pairs: Vec<(i64, usize)> = native
-                .iter()
-                .enumerate()
-                .map(|(i, k)| (if let Key::Int(v) = k { *v } else { 0 }, i))
-                .collect();
-            pairs.sort_by_key(|p| p.0);
-            pairs.into_iter().map(|p| p.1).collect()
-        } else if native.iter().all(|k| matches!(k, Key::Str(_))) {
-            let mut pairs: Vec<(&str, usize)> = native
-                .iter()
-                .enumerate()
-                .map(|(i, k)| (if let Key::Str(v) = k { *v } else { "" }, i))
-                .collect();
-            pairs.sort_by(|a, b| a.0.cmp(b.0));
-            pairs.into_iter().map(|p| p.1).collect()
-        } else {
-            let mut idx: Vec<usize> = (0..items.len()).collect();
-            idx.sort_by(|&a, &b| native[a].cmp(&native[b]));
-            idx
-        }
-    } else {
-        let c = config(py)?;
-        let key_list = PyList::new(py, keys)?;
-        let getitem = key_list.getattr(pyo3::intern!(py, "__getitem__"))?;
-        let kwargs = PyDict::new(py);
-        kwargs.set_item("key", getitem)?;
-        let r = c.sorted.bind(py).call(
-            (pyo3::types::PyRange::new(py, 0, items.len().try_into()?)?,),
-            Some(&kwargs),
-        )?;
-        r.try_iter()?
-            .map(|i| i?.extract::<usize>())
-            .collect::<PyResult<Vec<_>>>()?
-    };
+    let k = keys.as_deref().unwrap_or(&items);
+    if let Some(order) = native_order(k) {
+        // Free the keys before the result list exists (peak memory on big arrays).
+        drop(keys);
+        return permuted(py, items, order.iter().map(|&i| i as usize));
+    }
+    let c = config(py)?;
+    let key_list = PyList::new(py, k)?;
+    let getitem = key_list.getattr(pyo3::intern!(py, "__getitem__"))?;
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("key", getitem)?;
+    let r = c.sorted.bind(py).call(
+        (pyo3::types::PyRange::new(py, 0, items.len().try_into()?)?,),
+        Some(&kwargs),
+    )?;
+    let order = r
+        .try_iter()?
+        .map(|i| i?.extract::<usize>())
+        .collect::<PyResult<Vec<_>>>()?;
+    drop((key_list, keys));
+    permuted(py, items, order.into_iter())
+}
+
+/// `[items[i] for i in order]`, for a permutation `order`.
+fn permuted<'py>(
+    py: Python<'py>,
+    items: Vec<Bound<'py, PyAny>>,
+    order: impl ExactSizeIterator<Item = usize>,
+) -> PyResult<Bound<'py, PyAny>> {
     let mut slots: Vec<Option<Bound<'py, PyAny>>> = items.into_iter().map(Some).collect();
-    let out: Vec<Bound<'py, PyAny>> = order.into_iter().filter_map(|i| slots[i].take()).collect();
-    Ok(PyList::new(py, out)?.into_any())
+    let list = PyList::new(
+        py,
+        order.map(|i| slots[i].take().expect("a permutation of the items")),
+    )?;
+    Ok(list.into_any())
 }
 
 fn sort<'py>(ctx: &Ctx<'py, '_>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
@@ -675,8 +691,7 @@ fn sort<'py>(ctx: &Ctx<'py, '_>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, P
         let r = config(py)?.sorted.bind(py).call1((a,))?;
         return py.get_type::<PyList>().call1((r,));
     }
-    let keys = items.clone();
-    sorted_by_keys(ctx, items, &keys)
+    sorted_by_keys(ctx, items, None)
 }
 
 /// The expref's value for `x` (`expref.visit(expref.expression, x)`).
@@ -752,7 +767,7 @@ fn sort_by<'py>(
         }
         keys.push(k);
     }
-    sorted_by_keys(ctx, items, &keys)
+    sorted_by_keys(ctx, items, Some(keys))
 }
 
 /// `a < b` (or `a > b`) as `min`/`max` compare keys.

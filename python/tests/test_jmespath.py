@@ -212,6 +212,37 @@ def test_sort_by_is_stable() -> None:
         assert [id(x) for x in jp.search("sort_by(@, &k)", values)] == [id(x) for x in expected]
 
 
+_SORT_MEMORY = r"""
+import random, resource, sys
+import pyroid.jmespath as jp
+
+def peak():
+    r = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return r if sys.platform == "darwin" else r * 1024
+
+n = 1_000_000
+data = list(range(1000, 1000 + n))
+random.Random(0).shuffle(data)
+compiled = jp.compile(EXPRESSION)
+compiled.search(data[:100])
+before = peak()
+result = compiled.search(data)
+assert result == sorted(data)
+print((peak() - before) / n)
+"""
+
+
+@pytest.mark.thread_unsafe(reason="a subprocess")
+@pytest.mark.skipif(sys.platform == "win32", reason="no resource module")
+@pytest.mark.parametrize("expression", ["sort_by(@, &@)", "sort(@)"])
+def test_sort_peak_memory(run_python: Any, expression: str) -> None:
+    # J8: sorting 1M records took +61 MB at peak (jmespath: +24 MB), about 64 bytes per element.
+    r = run_python(f"EXPRESSION = {expression!r}\n" + _SORT_MEMORY, timeout=300)
+    assert r.returncode == 0, r.stderr[-2000:]
+    # Now about 36 bytes for int keys (items, keys, (key, index) pairs, the order).
+    assert float(r.stdout) < 50, r.stdout
+
+
 class _Plus(functions.Functions):
     @functions.signature({"types": ["number"]}, {"types": ["number"]})
     def _func_add(self, x: Any, y: Any) -> Any:
