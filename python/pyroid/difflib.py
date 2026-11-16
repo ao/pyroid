@@ -20,6 +20,7 @@ from __future__ import annotations
 import contextlib
 import difflib as _std
 import gc
+import operator
 import sys
 import types
 import warnings
@@ -495,19 +496,77 @@ get_close_matches.__doc__ = _std.get_close_matches.__doc__
 # Batches
 # ---------------------------------------------------------------------------
 
-ratio_batch = _native.ratio_batch
+def ratio_batch(
+    a: Any,
+    b: Any,
+    *,
+    isjunk: Callable[[str], object] | None = None,
+    autojunk: bool = True,
+    threads: int | None = None,
+) -> list[float | None]:
+    """`SequenceMatcher(isjunk, a[i], b[i], autojunk).ratio()` for every `i`, on all cores.
+
+    ```python
+    ratio_batch(["Acme Corp.", "Globex"], ["ACME Corporation", "Globex Inc"])
+    ratio_batch("appel", candidates)  # one str is compared with every element of the other
+    ```
+
+    Args:
+        a: The first sequences: a `str`, a list or tuple of `str`, or an Arrow string array.
+        b: The second sequences, as `a`; both must have the same length unless one is a `str`.
+        isjunk: `None`, or a function of one character, called once per distinct character of
+            `b` before the work starts (so it must not depend on anything else).
+        autojunk: As for `SequenceMatcher`.
+        threads: `None`: the whole shared pool; `n`: at most `n` tasks at once; `1`: this thread.
+
+    Returns:
+        A list of floats, the same as `SequenceMatcher`'s; `None` where an Arrow input is null.
+
+    Raises:
+        ValueError: `a` and `b` have different lengths.
+        pyroid.InputError: An argument is not text (lone surrogates raise `UnicodeEncodeError`).
+    """
+    return _native.ratio_batch(  # type: ignore[no-any-return]
+        a, b, isjunk=isjunk, autojunk=autojunk, threads=threads
+    )
 
 
 def close_matches_batch(
     words: Any, possibilities: Any, n: int = 3, cutoff: float = 0.6, *, threads: int | None = None
 ) -> list[list[str] | None]:
+    """`get_close_matches(word, possibilities, n, cutoff)` for every word, on all cores.
+
+    Args:
+        words: The words to look up: a `str`, a list or tuple of `str`, or an Arrow string array.
+        possibilities: The candidates: a list or tuple of `str`, or an Arrow string array (nulls
+            are skipped).
+        n: At most this many results per word.
+        cutoff: The lowest ratio kept, in `[0.0, 1.0]`.
+        threads: `None`: the whole shared pool; `n`: at most `n` tasks at once; `1`: this thread.
+
+    Returns:
+        One list per word (the possibilities' own `str` objects for a list or tuple), or `None`
+        for a null word.
+
+    Raises:
+        ValueError: `n <= 0` or `cutoff` outside `[0.0, 1.0]`.
+        TypeError: `n` is not an integer (as the loop's `heapq.nlargest` raises).
+        pyroid.InputError: An argument is not text.
+    """
     if not n > 0:
         raise ValueError(f"n must be > 0: {n!r}")
     if not 0.0 <= cutoff <= 1.0:
         raise ValueError(f"cutoff must be in [0.0, 1.0]: {cutoff!r}")
+    try:
+        n = operator.index(n)
+    except TypeError:
+        if type(words) in (list, tuple) and not words:
+            return []  # the loop has no word to look up
+        raise
     return _native._close_matches_batch(  # type: ignore[no-any-return]
-        words, possibilities, min(int(n), sys.maxsize), float(cutoff), threads
+        words, possibilities, min(n, sys.maxsize), float(cutoff), threads
     )
+
 
 
 # ---------------------------------------------------------------------------
@@ -525,7 +584,10 @@ def _mdiff(
     charjunk: Callable[[str], bool] | None = IS_CHARACTER_JUNK,
 ) -> Iterator[Any]:
     kinds = _junk_kinds(linejunk, charjunk)
-    if kinds is not None and (context is None or (type(context) is int and context >= 0)):
+    # A context CPython cannot make a list of (an OverflowError there) runs its code.
+    if kinds is not None and (
+        context is None or (type(context) is int and 0 <= context < sys.maxsize)
+    ):
         rows = _native._mdiff(fromlines, tolines, context, kinds[0], linejunk, kinds[1], _WINDOWED)
         if rows is not None:
             yield from rows
@@ -580,9 +642,10 @@ def _make_make_table(fallback: Any, hooks: dict[str, Any]) -> Any:
             and template.count("%(data_rows)s") == 1
             and "%%" not in template
             and type(tabsize) is int
+            and -(2**31) <= tabsize < 2**31  # str.expandtabs takes a C int
             and (wrap is None or (type(wrap) is int and wrap >= 0))
             and type(numlines) is int
-            and numlines >= 0
+            and 0 <= numlines < sys.maxsize  # _mdiff makes a list of numlines + 1
             and all(getattr(cls, h) is f for h, f in hooks.items())
         ):
             with_context = bool(context)
@@ -591,7 +654,7 @@ def _make_make_table(fallback: Any, hooks: dict[str, Any]) -> Any:
                     fromlines,
                     tolines,
                     tabsize,
-                    wrap or 0,
+                    min(wrap or 0, sys.maxsize),  # no line is that long: no wrapping
                     numlines if with_context else None,
                     kinds[0],
                     self._linejunk,

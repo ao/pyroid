@@ -359,6 +359,54 @@ def test_chain_b_override_is_called() -> None:
         ctx.__exit__(None, None, None)
 
 
+@pytest.mark.thread_unsafe(reason="HtmlDiff's anchor counter is global")
+def test_numeric_arguments_as_difflib() -> None:
+    def outcome(f: Any) -> Any:
+        difflib.HtmlDiff._default_prefix = 0  # type: ignore[attr-defined]
+        try:
+            return f()
+        except Exception as e:  # noqa: BLE001 - the exception is the result
+            return type(e), str(e)
+
+    cases = [
+        lambda m: m.HtmlDiff(wrapcolumn=10**20).make_table(["abcdef\n"], ["abcxef\n"]),
+        lambda m: m.HtmlDiff(wrapcolumn=2**63).make_file(["a\n"], ["b\n"]),
+        lambda m: m.HtmlDiff(tabsize=10**20).make_table(["a\tb\n"], ["a\tc\n"]),
+        lambda m: m.HtmlDiff(tabsize=2**31).make_table(["a\tb\n"], ["a\tc\n"]),
+        lambda m: m.HtmlDiff(tabsize=-(2**31)).make_table(["a\tb\n"], ["a\tc\n"]),
+        lambda m: m.HtmlDiff().make_table(["a\n"], ["b\n"], context=True, numlines=10**20),
+        lambda m: m.HtmlDiff().make_table(["a\n"], ["b\n"], numlines=10**20),
+        lambda m: list(m._mdiff(["a\n"], ["b\n"], context=10**20)),
+        lambda m: list(m._mdiff(["a\n"], ["b\n"], context=sys.maxsize)),
+    ]
+    for i, case in enumerate(cases):
+        assert outcome(lambda: case(pd)) == outcome(lambda: case(difflib)), i
+    qs, poss = ["appel", "pech"], ["apple", "ape", "peach"]
+    with pytest.raises(TypeError):
+        [difflib.get_close_matches(q, poss, 2.5, 0.6) for q in qs]  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        pd.close_matches_batch(qs, poss, 2.5, 0.6)  # type: ignore[arg-type]
+    assert pd.close_matches_batch([], poss, 2.5) == []  # type: ignore[arg-type]
+    assert pd.close_matches_batch(qs, poss, True) == [  # type: ignore[arg-type]
+        difflib.get_close_matches(q, poss, True) for q in qs
+    ]
+
+
+def test_runtime_docstrings_match_the_stub() -> None:
+    # help() shows the stub's documentation for pyroid's own functions.
+    import ast
+    import inspect
+
+    stub = ast.parse(Path(pd.__file__).with_suffix(".pyi").read_text(encoding="utf-8"))
+    docs: dict[str, str] = {}
+    for node in stub.body:
+        doc = ast.get_docstring(node) if isinstance(node, ast.FunctionDef) else None
+        if doc:
+            docs.setdefault(node.name, doc)  # type: ignore[union-attr]
+    for name in ("ratio_batch", "close_matches_batch"):
+        assert inspect.getdoc(getattr(pd, name)) == docs[name], name
+
+
 def test_large_inputs() -> None:
     a = [f"line {i}\n" for i in range(100_000)]
     b = [*a[:5000], "new\n", *a[5000:90000], *a[90001:]]

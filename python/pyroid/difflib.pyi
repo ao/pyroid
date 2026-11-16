@@ -426,5 +426,6 @@ def close_matches_batch(
 
     Raises:
         ValueError: `n <= 0` or `cutoff` outside `[0.0, 1.0]`.
+        TypeError: `n` is not an integer (as the loop's `heapq.nlargest` raises).
         pyroid.InputError: An argument is not text.
     """
