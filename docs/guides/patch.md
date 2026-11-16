@@ -45,6 +45,7 @@ and `patch()` is the only switch. Each patched name emits one
 | `"sqlparse"` | [`pyroid.sqlparse`](sqlparse.md) (sqlparse 0.6.1) | `parse`, `parsestream`, `format`, `split` (on `sqlparse`), `tokenize` (on `sqlparse.lexer`) and `group` (on `sqlparse.engine.grouping`), building trees of sqlparse's own classes | the token classes and their methods, `FilterStack` and the filters (which then lex and group in Rust), the command line |
 | `"langdetect"` | [`pyroid.langdetect`](langdetect.md) (langdetect 1.0.9) | with langdetect installed, langdetect's own `detect` and `detect_langs` (one native call) and `Detector.append` and `Detector._detect_block` (in Rust) run pyroid's code, as the same function objects; without it, `langdetect` and its submodules hold pyroid's classes | with langdetect installed, everything else: its classes, exceptions and factories |
 | `"warcio"` | [`pyroid.warc`](warc.md) (warcio 1.8.2's reader) | `ArchiveIterator` (on `warcio` and `warcio.archiveiterator`), `WARCIterator` and `ARCIterator` (on `warcio.archiveiterator`), making warcio's own `StatusAndHeaders`, `ArcWarcRecord` (a subclass, with pyroid's `content_stream()`), `DigestChecker` and `ArchiveLoadFailed` | `WARCWriter`, `capture_http`, the indexer, the checker, the command line |
+| `"nemo_curator"` | [`pyroid.integrations.nemo_curator`](nemo-curator.md) (NeMo Curator 1.4.0's CPU text stages) | `ScoreFilter`, `Score`, `Filter`, `Modify`, the heuristic and fastText filters, `UnicodeReformatter` and the string modifiers, set on NeMo's own modules, so pipelines built afterwards (from NeMo's YAML configs too) use them; NeMo Curator must be installed | readers, writers, deduplication, classifiers and the other stages |
 | `"dateutil"` | [`pyroid.dateutil.parser`](dateutil.md) (python-dateutil 2.8.2 to 4.0.0) | `parse` and `isoparse`, on `dateutil.parser`, `dateutil.parser._parser` and `dateutil.parser.isoparser` (they use dateutil's own `DEFAULTPARSER` and `DEFAULT_ISOPARSER`) | `dateutil.tz`, `relativedelta`, `rrule`, `easter`, the `parser` and `isoparser` classes |
 | `"jmespath"` | [`pyroid.jmespath`](jmespath.md) (jmespath 1.1.0) | `search` and `compile`, set on jmespath's own module (shims of `jmespath` and its `exceptions`, `functions`, `visitor`, `parser`, `lexer` and `ast` submodules without jmespath); exceptions stay jmespath's classes | `jmespath.parser.Parser`, `jmespath.lexer.Lexer`, `TreeInterpreter` and the rest of the package |
 | `"packaging"` | [`pyroid.packaging`](packaging.md) (packaging 26.3) | `Version`, `parse`, `Specifier`, `SpecifierSet`, `Marker`, `default_environment`, `Requirement`, `canonicalize_name`, `canonicalize_version`, `is_normalized_name`, `parse_wheel_filename` and `parse_sdist_filename`, set wherever a `packaging.*` module holds packaging's original (shims of `packaging` and its `version`, `specifiers`, `markers`, `requirements` and `utils` submodules without packaging); exceptions stay packaging's classes | `tags`, `metadata`, `pylock`, `ranges`, `dependency_groups`, `direct_url` and `licenses`, which then use pyroid's classes |
@@ -87,6 +88,13 @@ pyroid.patch("unidecode")
 # (pyroid.translit.unidecode transliterates with anyascii's tables, so its output differs from
 # Unidecode's: it is not a drop-in)
 ```
+
+### Why there is no `"jieba"` {#no-jieba}
+
+[`pyroid.jieba`](jieba.md) is a drop-in for jieba 0.42.1 when you change the import, but no
+`patch()` shim has been written for it: `patch("jieba")` raises `ValueError`, and a library's
+`import jieba` still gives jieba. In datatrove pipelines, the [drop-in steps](datatrove.md) and
+[`pyroid.filters` and `pyroid.dedup`](languages.md) already segment Chinese with the same port.
 
 ## How it works
 
@@ -431,8 +439,8 @@ other threads detect. See [the guide](langdetect.md#patch).
   name; `unpatch()` and `patch()` it again.
 - Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`,
   `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `difflib`, `packaging`, `sqlparse` and
-  `langdetect` can be patched. pyroid's filters and dedup reach datatrove pipelines through the
-  [drop-in steps](datatrove.md) instead.
+  `langdetect` can be patched, not `jieba` ([above](#no-jieba)). pyroid's filters and dedup reach
+  datatrove pipelines through the [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked
   children inherit them).
