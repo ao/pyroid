@@ -105,10 +105,14 @@ pub(crate) fn jmespath_type(name: &str) -> &'static str {
 
 /// `type(x).__name__`, without a lookup for the builtin types.
 pub(crate) fn type_name(v: &Val<'_, '_>) -> PyResult<Cow<'static, str>> {
-    let o = match v {
-        Val::Expref(_) => return Ok(Cow::Borrowed("_Expression")),
-        Val::Py(o) => o,
-    };
+    match v {
+        Val::Expref(_) => Ok(Cow::Borrowed("_Expression")),
+        Val::Py(o) => py_type_name(o),
+    }
+}
+
+/// [`type_name`] of a Python value.
+fn py_type_name(o: &Bound<'_, PyAny>) -> PyResult<Cow<'static, str>> {
     Ok(Cow::Borrowed(if o.is_none() {
         "NoneType"
     } else if o.is_instance_of::<PyBool>() {
@@ -234,7 +238,7 @@ fn type_check_single<'py>(
         let allowed = subtypes().next().unwrap_or_default();
         let mut err = None;
         interp::for_each(ctx, current, |el| {
-            let actual = type_name(&Val::Py(el.clone()))?;
+            let actual = py_type_name(&el)?;
             if allowed.contains(&actual.as_ref()) {
                 Ok(true)
             } else {
@@ -253,7 +257,7 @@ fn type_check_single<'py>(
         };
         let mut err = None;
         interp::for_each(ctx, current, |el| {
-            let actual = type_name(&Val::Py(el.clone()))?;
+            let actual = py_type_name(&el)?;
             if allowed.contains(&actual.as_ref()) {
                 Ok(true)
             } else {

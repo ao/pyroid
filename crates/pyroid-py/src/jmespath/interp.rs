@@ -404,17 +404,23 @@ fn visit_chain<'py>(
     value: &Bound<'py, PyAny>,
     inner: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let mut result = value.clone();
-    for c in children {
-        result = if let Expr::Field(key) = c {
+    let step = |c: &Expr, v: &Bound<'py, PyAny>| -> PyResult<Bound<'py, PyAny>> {
+        if let Expr::Field(key) = c {
             // A field opens no further frames: only the frame limit can stop it.
             if inner + 3 > ctx.limit {
                 ctx.check(inner + 3)?;
             }
-            field(&result, key.bind(ctx.py))?
+            field(v, key.bind(ctx.py))
         } else {
-            visit(ctx, c, &result, inner)?
-        };
+            visit(ctx, c, v, inner)
+        }
+    };
+    let Some((first, rest)) = children.split_first() else {
+        return Ok(value.clone());
+    };
+    let mut result = step(first, value)?;
+    for c in rest {
+        result = step(c, &result)?;
     }
     Ok(result)
 }
@@ -650,7 +656,9 @@ fn visit_projection<'py>(
     if !is_list(&base) {
         return Ok(none(py));
     }
-    let mut collected = Vec::new();
+    // A projection usually keeps most elements: one allocation for all of them.
+    let mut collected =
+        Vec::with_capacity(base.cast_exact::<PyList>().map_or(0, PyListMethods::len));
     if matches!(r, Expr::Identity) {
         for_each(ctx, &base, |el| {
             if !el.is_none() {
