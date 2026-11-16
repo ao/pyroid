@@ -388,7 +388,10 @@ def build_args(case: dict[str, Any], mod: Any) -> tuple[Any, dict[str, Any]]:
     if shape in ("lists", "tuples", "generator"):
         out: list[Any] = [list(r) if shape != "tuples" else tuple(r) for r in rows]
         for i in sorted(case["sep_at"], reverse=True):
-            out.insert(min(i, len(out)), mod.SEPARATING_LINE if i % 2 else [mod.SEPARATING_LINE])
+            sep = mod.SEPARATING_LINE
+            # The separator alone, first in a row, or second (where it still counts).
+            variants: list[Any] = [[sep], sep, ["x", sep], ("x", sep)]
+            out.insert(min(i, len(out)), variants[i % 4])
         data = (r for r in out) if shape == "generator" else out
     elif shape == "dicts":
         data = [{f"k{j}": v for j, v in enumerate(r)} for r in rows]

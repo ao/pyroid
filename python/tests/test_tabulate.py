@@ -237,6 +237,36 @@ def test_float32_frames() -> None:
     )
 
 
+_SEP = pt.SEPARATING_LINE
+
+
+@pytest.mark.parametrize(
+    ("rows", "kwargs", "want"),
+    [
+        ([["a", _SEP], ["b", 2]], {"showindex": "always"}, "  A\n---\n---\n  0"),
+        ([("a", _SEP), ("b", 2)], {"showindex": "always"}, "  A\n---\n---\n  0"),
+        ([["a", _SEP], ["b", 2]], {"showindex": [7, 8]}, "  A\n---\n---\n  7"),
+        ([["a", _SEP], ["b", 2]], {}, "      A\n--  ---\n--  ---\nb     2"),
+        (
+            [[_SEP], ["b", 2, 3]],
+            {"showindex": True, "headers": ["A", "B"]},
+            "  A  B\n---  ---\n---  ---\n  0  b",
+        ),
+    ],
+)
+def test_separator_row_first_with_an_index(rows: Any, kwargs: Any, want: str) -> None:
+    # tabulate pads the headers to its first row after adding the index, and that row is then
+    # SEPARATING_LINE itself.
+    kwargs = {"headers": ["A"], **kwargs}
+    assert tabulate(rows, **kwargs) == want
+
+
+def test_separator_row_first_in_a_frame() -> None:
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame({"x": ["a", "b"], "y": [_SEP, "2"]}, dtype=object)
+    assert tabulate(df, headers=["A"]) == "  A\n---\n---\n  0"
+
+
 def test_custom_table_formats() -> None:
     fmt = pt.TableFormat(
         lineabove=lambda widths, aligns: "=" * sum(w + 1 for w in widths),

@@ -641,9 +641,6 @@ def tabulate(
     return text  # type: ignore[no-any-return]
 
 
-_ROW_TYPES = (list, tuple, str)
-
-
 def _index_for(showindex: Any, index: Any, rows: list[Any]) -> Any:
     """The index column ``_normalize_tabular_data`` adds (``None``: none; ``False``: give up).
 
@@ -674,8 +671,12 @@ def _padded_headers(headers: list[str], rows: list[Any], idx: Any) -> tuple[list
     if headers and len(rows) > 0:
         first = rows[0]
         n = len(first)
-        if idx is not None and not _is_separating_line(first):
-            n += 1
+        if idx is not None:
+            # tabulate measures its first row after `_prepend_row_index`, which puts
+            # SEPARATING_LINE itself (one character) in the place of a separator row. A tuple
+            # row is a list by then, so it can be a separator too.
+            as_row = list(first) if type(first) is tuple else first
+            n = len(SEPARATING_LINE) if _is_separating_line(as_row) else n + 1
         headers_pad = max(0, n - len(headers))
         headers = [""] * headers_pad + headers
     return headers, headers_pad
