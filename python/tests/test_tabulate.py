@@ -184,22 +184,62 @@ def test_colalign_string_warns_like_tabulate() -> None:
         tabulate([[1, 2]], colalign="rl")
 
 
+def _old_tabulate(path: Path) -> Path:
+    """A directory with a stand-in for tabulate 0.9.0 whose ``tabulate()`` must never run."""
+    pkg = path / "tabulate"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text(
+        "__version__ = '0.9.0'\n"
+        "MIN_PADDING = 2\n"
+        "def tabulate(tabular_data, headers=(), tablefmt='simple', **kwargs):\n"
+        "    raise AssertionError('the installed tabulate was called')\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+# The fallback cases: (args, kwargs, tabulate 0.10.0's text).
+_SLOW_PATH_CASES: list[tuple[tuple[Any, ...], dict[str, Any], str | None]] = [
+    (([["\ud800"]],), {}, "-\n\ud800\n-"),
+    (([[1]],), {"colalign": [3]}, "-\n1\n-"),
+    (([["a", 1]],), {"numalign": 5}, "-  -\na  1\n-  -"),
+    (((r for r in [["\ud800", 1], ["x", 2]]),), {"headers": ["a", "b"]}, None),
+]
+
+
 @pytest.mark.thread_unsafe  # warnings, sys.modules
-def test_fallback_without_tabulate(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setitem(sys.modules, "tabulate", None)
-    with pytest.raises(pyroid.PyroidError, match="tabulate is not installed"):
-        tabulate([["\ud800"]])
-    with pytest.raises(pyroid.PyroidError, match="alignment that is not a str"):
-        tabulate([[1]], colalign=[3])  # type: ignore[list-item]
+@pytest.mark.parametrize("installed", ["none", "0.9.0"])
+def test_fallbacks_run_pyroids_copy_of_tabulate(
+    installed: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # The slow path never needs, or calls, the installed tabulate: it may be missing, or
+    # another release whose tabulate() takes other arguments.
+    if installed == "none":
+        monkeypatch.setitem(sys.modules, "tabulate", None)
+    else:
+        monkeypatch.syspath_prepend(str(_old_tabulate(tmp_path)))
+        monkeypatch.delitem(sys.modules, "tabulate", raising=False)
+        old = importlib.import_module("tabulate")
+        assert old.__version__ == "0.9.0"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        for args, kwargs, want in _SLOW_PATH_CASES:
+            got = tabulate(*args, **kwargs)
+            if want is not None:
+                assert got == want
+        assert tabulate([["\ud800", 1], ["x", 2]], headers=["a", "b"]) == (
+            "a      b\n---  ---\n\ud800      1\nx      2"
+        )
 
 
 @pytest.mark.thread_unsafe  # warnings
 def test_fallbacks_warn_and_match_tabulate() -> None:
-    real = _real_tabulate()
     pt._WARNED.clear()
-    with pytest.warns(pyroid.FallbackWarning, match="lone surrogates"):
+    with pytest.warns(pyroid.FallbackWarning, match="lone surrogates") as record:
         got = tabulate((r for r in [["\ud800", 1], ["x", 2]]), headers=["a", "b"])
-    assert got == real.tabulate([["\ud800", 1], ["x", 2]], headers=["a", "b"])
+    assert "running tabulate 0.10.0's own Python code" in str(record[0].message)
+    assert record[0].filename == __file__
+    assert got == "a      b\n---  ---\n\ud800      1\nx      2"
     with warnings.catch_warnings():
         warnings.simplefilter("error", pyroid.FallbackWarning)
         # Shown once per reason.
@@ -210,6 +250,39 @@ def test_fallbacks_warn_and_match_tabulate() -> None:
         pytest.raises(TypeError),
     ):
         tabulate([[1]], tablefmt=custom)
+    if importlib.util.find_spec("tabulate") is not None:
+        real = _real_tabulate()
+        assert got == real.tabulate([["\ud800", 1], ["x", 2]], headers=["a", "b"])
+
+
+@pytest.mark.thread_unsafe  # module settings, warnings
+def test_settings_reach_the_slow_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [["\ud800", 1], ["ok", 22]]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        monkeypatch.setattr(pt, "MIN_PADDING", 0)
+        assert pt._port.MIN_PADDING == 0
+        assert tabulate(rows, headers=["h0", "h1"]) == "h0  h1\n--  --\n\ud800    1\nok  22"
+        monkeypatch.undo()
+        assert pt._port.MIN_PADDING == 2
+        assert tabulate(rows, headers=["h0", "h1"]) == (
+            "h0      h1\n----  ----\n\ud800        1\nok      22"
+        )
+        # A non-str alignment falls back too; widths follow WIDE_CHARS_MODE there as well.
+        monkeypatch.setattr(pt, "WIDE_CHARS_MODE", False)
+        assert tabulate([["日本", 1]], stralign=1.5) == "--  -\n日本  1\n--  -"  # type: ignore[arg-type]
+        monkeypatch.undo()
+        if pt.wcwidth is not None:
+            assert tabulate([["日本", 1]], stralign=1.5) == "----  -\n日本  1\n----  -"  # type: ignore[arg-type]
+        monkeypatch.setattr(pt, "wcwidth", None)
+        assert pt._port.wcwidth is None
+        assert tabulate([["日本", 1]], stralign=1.5) == "--  -\n日本  1\n--  -"  # type: ignore[arg-type]
+        monkeypatch.undo()
+        # Formats added to `_table_formats` are found by name on both paths.
+        brackets = pt.TableFormat(None, None, None, None, None, pt.DataRow("[", "|", "]"), 0, None)
+        monkeypatch.setitem(pt._table_formats, "brackets", brackets)
+        assert tabulate([["a", 1]], tablefmt="brackets") == "[a|1]"
+        assert tabulate([["\ud800", 1]], tablefmt="brackets") == "[\ud800|1]"
 
 
 @pytest.mark.thread_unsafe  # warnings
@@ -352,7 +425,8 @@ def test_port_is_tabulates_code() -> None:
     ref, port = defs(ref_src), defs(port_src)
     differ = [name for name, d in port.items() if name in ref and d != ref[name]]
     assert differ == []
-    assert len([name for name in port if name in ref]) >= 60
+    # All of tabulate but its command line, which pyroid.tabulate runs with its own tabulate().
+    assert sorted(set(ref) - set(port)) == ["__all__", "_main", "_pprint_file"]
 
 
 def test_internal_helpers_run_natively() -> None:
@@ -379,6 +453,9 @@ def test_patch() -> None:
         try:
             assert pt.MIN_PADDING == 0
             assert patched.tabulate([[1]], headers=["h"]) == "h\n-\n1"
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", pyroid.FallbackWarning)
+                assert patched.tabulate([["\ud800"]], headers=["h"]) == "h\n-\n\ud800"
         finally:
             patched.MIN_PADDING = saved
         assert saved == pt.MIN_PADDING

@@ -1,7 +1,9 @@
 # Derived from tabulate 0.10.0 (MIT), © 2011-2020 Sergey Astanin and contributors; modified.
-# ruff: noqa: B904, B905, C416, C417, D205, D301, D402, D415, E501, E721, PYI024, RUF005, SIM105, SIM108, SIM109, SIM118, UP031
+# ruff: noqa: B904, B905, C416, C417, D205, D301, D402, D415, E501, E721, E741, PYI024, RUF005, SIM105, SIM108, SIM109, SIM118, UP031
 # mypy: disable-error-code="arg-type, assignment, attr-defined, call-overload, misc, operator, return-value"
-"""tabulate 0.10.0's helpers that pyroid still runs in Python, copied with type annotations.
+"""tabulate 0.10.0's Python code, copied with type annotations.
+
+pyroid.tabulate runs these parts of it on every call:
 
 - input normalisation (``_normalize_tabular_data`` and the separating-line helpers);
 - ``maxcolwidths`` wrapping (``_wrap_text_to_colwidths``, ``_CustomTextWrap``), which depends on
@@ -9,6 +11,11 @@
 - ``_type``, ``_format``, ``_afterpoint`` and ``_strip_ansi`` for the cells and strings the Rust
   side leaves to Python (Decimal, datetime, bytes, numpy scalars it does not know, ...);
 - the ``TableFormat`` callables, so custom formats built from them work.
+
+The rest (``tabulate`` itself, alignment, ``_format_table``) runs the calls the Rust side does
+not take, so they never depend on the installed tabulate's version or settings.
+``pyroid.tabulate`` copies its settings (``MIN_PADDING``, ``WIDE_CHARS_MODE``, ...) here
+whenever they are written.
 
 The bodies are tabulate's, so results and exceptions are its own. The ``# ruff: noqa`` rules
 above would each need a rewrite that could change behaviour, and the ``mypy`` codes are
@@ -24,10 +31,12 @@ import io
 import math
 import re
 import textwrap
+import warnings
 from collections import namedtuple
 from collections.abc import Iterable, Sized
 from functools import partial, reduce
 from html import escape as htmlescape
+from itertools import chain
 from itertools import zip_longest as izip_longest
 from typing import Any
 
@@ -41,6 +50,12 @@ def _is_file(f: Any) -> bool:
     return isinstance(f, io.IOBase)
 
 
+# minimum extra space in headers
+MIN_PADDING = 2
+
+# Whether or not to preserve leading/trailing whitespace in data.
+PRESERVE_WHITESPACE = False
+
 # TextWrapper breaks words longer than 'width'.
 _BREAK_LONG_WORDS = True
 # TextWrapper is breaking hyphenated words.
@@ -52,6 +67,10 @@ _DEFAULT_MISSINGVAL = ""
 # default align will be overwritten by "left", "center" or "decimal"
 # depending on the formatter
 _DEFAULT_ALIGN = "default"
+
+
+# if True, enable wide-character (CJK) support
+WIDE_CHARS_MODE = wcwidth is not None
 
 # Constant that can be used as part of passed rows to generate a separating line
 # It is purposely an unprintable character, very unlikely to be used in a table
@@ -735,6 +754,7 @@ multiline_formats = {
 }
 
 _multiline_codes = re.compile(r"\r|\n|\r\n")
+_multiline_codes_bytes = re.compile(b"\r|\n|\r\n")
 
 # Handle ANSI escape sequences for both control sequence introducer (CSI) and
 # operating system command (OSC). Both of these begin with 0x1b (or octal 033),
@@ -933,6 +953,177 @@ def _strip_ansi(s: Any) -> Any:
         return _ansi_codes_bytes.sub(r"\4", s)
 
 
+def _padleft(width: Any, s: Any) -> Any:
+    """Flush right."""
+    fmt = "{0:>%ds}" % width
+    return fmt.format(s)
+
+
+def _padright(width: Any, s: Any) -> Any:
+    """Flush left."""
+    fmt = "{0:<%ds}" % width
+    return fmt.format(s)
+
+
+def _padboth(width: Any, s: Any) -> Any:
+    """Center string."""
+    fmt = "{0:^%ds}" % width
+    return fmt.format(s)
+
+
+def _padnone(ignore_width: Any, s: Any) -> Any:
+    return s
+
+
+def _visible_width(s: Any) -> Any:
+    """Visible width of a printed string. ANSI color codes are removed."""
+    # optional wide-character support
+    if wcwidth is not None and WIDE_CHARS_MODE:
+        len_fn = wcwidth.wcswidth
+    else:
+        len_fn = len
+    if isinstance(s, (str, bytes)):
+        return len_fn(_strip_ansi(s))
+    else:
+        return len_fn(str(s))
+
+
+def _is_multiline(s: Any) -> bool:
+    if isinstance(s, str):
+        return bool(re.search(_multiline_codes, s))
+    else:  # a bytestring
+        return bool(re.search(_multiline_codes_bytes, s))
+
+
+def _multiline_width(multiline_s: Any, line_width_fn: Any = len) -> Any:
+    """Visible width of a potentially multiline content."""
+    return max(map(line_width_fn, re.split("[\r\n]", multiline_s)))
+
+
+def _choose_width_fn(has_invisible: Any, enable_widechars: Any, is_multiline: Any) -> Any:
+    """Return a function to calculate visible cell width."""
+    if has_invisible:
+        line_width_fn = _visible_width
+    elif enable_widechars:  # optional wide-character support if available
+        line_width_fn = wcwidth.wcswidth
+    else:
+        line_width_fn = len
+    if is_multiline:
+        width_fn = lambda s: _multiline_width(s, line_width_fn)  # noqa: E731
+    else:
+        width_fn = line_width_fn
+    return width_fn
+
+
+def _align_column_choose_padfn(
+    strings: Any, alignment: Any, has_invisible: Any, preserve_whitespace: Any
+) -> tuple[Any, Any]:
+    if alignment == "right":
+        if not preserve_whitespace:
+            strings = [s.strip() for s in strings]
+        padfn = _padleft
+    elif alignment == "center":
+        if not preserve_whitespace:
+            strings = [s.strip() for s in strings]
+        padfn = _padboth
+    elif alignment == "decimal":
+        if has_invisible:
+            decimals = [_afterpoint(_strip_ansi(s)) for s in strings]
+        else:
+            decimals = [_afterpoint(s) for s in strings]
+        maxdecimals = max(decimals)
+        strings = [s + (maxdecimals - decs) * " " for s, decs in zip(strings, decimals)]
+        padfn = _padleft
+    elif not alignment:
+        padfn = _padnone
+    else:
+        if not preserve_whitespace:
+            strings = [s.strip() for s in strings]
+        padfn = _padright
+    return strings, padfn
+
+
+def _align_column_choose_width_fn(
+    has_invisible: Any, enable_widechars: Any, is_multiline: Any
+) -> Any:
+    if has_invisible:
+        line_width_fn = _visible_width
+    elif enable_widechars:  # optional wide-character support if available
+        line_width_fn = wcwidth.wcswidth
+    else:
+        line_width_fn = len
+    if is_multiline:
+        width_fn = lambda s: _align_column_multiline_width(  # noqa: E731
+            s, line_width_fn
+        )
+    else:
+        width_fn = line_width_fn
+    return width_fn
+
+
+def _align_column_multiline_width(multiline_s: Any, line_width_fn: Any = len) -> Any:
+    """Visible width of a potentially multiline content."""
+    return list(map(line_width_fn, re.split("[\r\n]", multiline_s)))
+
+
+def _flat_list(nested_list: Any) -> list[Any]:
+    ret = []
+    for item in nested_list:
+        if isinstance(item, list):
+            ret.extend(item)
+        else:
+            ret.append(item)
+    return ret
+
+
+def _align_column(
+    strings: Any,
+    alignment: Any,
+    minwidth: Any = 0,
+    has_invisible: Any = True,
+    enable_widechars: Any = False,
+    is_multiline: Any = False,
+    preserve_whitespace: Any = False,
+) -> Any:
+    """[string] -> [padded_string]"""
+    strings, padfn = _align_column_choose_padfn(
+        strings, alignment, has_invisible, preserve_whitespace
+    )
+    width_fn = _align_column_choose_width_fn(has_invisible, enable_widechars, is_multiline)
+
+    s_widths = list(map(width_fn, strings))
+    maxwidth = max(max(_flat_list(s_widths)), minwidth)
+    # TODO: refactor column alignment in single-line and multiline modes
+    if is_multiline:
+        if not enable_widechars and not has_invisible:
+            padded_strings = [
+                "\n".join([padfn(maxwidth, s) for s in ms.splitlines()]) for ms in strings
+            ]
+        else:
+            # enable wide-character width corrections
+            s_lens = [[len(s) for s in re.split("[\r\n]", ms)] for ms in strings]
+            visible_widths = [
+                [maxwidth - (w - l) for w, l in zip(mw, ml)] for mw, ml in zip(s_widths, s_lens)
+            ]
+            # wcswidth and _visible_width don't count invisible characters;
+            # padfn doesn't need to apply another correction
+            padded_strings = [
+                "\n".join([padfn(w, s) for s, w in zip((ms.splitlines() or ms), mw)])
+                for ms, mw in zip(strings, visible_widths)
+            ]
+    else:  # single-line cell values
+        if not enable_widechars and not has_invisible:
+            padded_strings = [padfn(maxwidth, s) for s in strings]
+        else:
+            # enable wide-character width corrections
+            s_lens = list(map(len, strings))
+            visible_widths = [maxwidth - (w - l) for w, l in zip(s_widths, s_lens)]
+            # wcswidth and _visible_width don't count invisible characters;
+            # padfn doesn't need to apply another correction
+            padded_strings = [padfn(w, s) for s, w in zip(strings, visible_widths)]
+    return padded_strings
+
+
 def _more_generic(type1: Any, type2: Any) -> Any:
     types = {
         type(None): 0,
@@ -1012,6 +1203,32 @@ def _format(
                 return f"{val}"
     else:
         return f"{val}"
+
+
+def _align_header(
+    header: Any,
+    alignment: Any,
+    width: Any,
+    visible_width: Any,
+    is_multiline: Any = False,
+    width_fn: Any = None,
+) -> Any:
+    """Pad string header to width chars given known visible_width of the header."""
+    if is_multiline:
+        header_lines = re.split(_multiline_codes, header)
+        padded_lines = [_align_header(h, alignment, width, width_fn(h)) for h in header_lines]
+        return "\n".join(padded_lines)
+    # else: not multiline
+    ninvisible = len(header) - visible_width
+    width += ninvisible
+    if alignment == "left":
+        return _padright(width, header)
+    elif alignment == "center":
+        return _padboth(width, header)
+    elif not alignment:
+        return f"{header}"
+    else:
+        return _padleft(width, header)
 
 
 def _remove_separating_lines(rows: Any) -> tuple[Any, Any]:
@@ -1289,6 +1506,259 @@ def _to_str(s: Any, encoding: str = "utf8", errors: str = "ignore") -> str:
     return str(s)
 
 
+def tabulate(
+    tabular_data: Any,
+    headers: Any = (),
+    tablefmt: Any = "simple",
+    floatfmt: Any = _DEFAULT_FLOATFMT,
+    intfmt: Any = _DEFAULT_INTFMT,
+    numalign: Any = _DEFAULT_ALIGN,
+    stralign: Any = _DEFAULT_ALIGN,
+    missingval: Any = _DEFAULT_MISSINGVAL,
+    showindex: Any = "default",
+    disable_numparse: Any = False,
+    colglobalalign: Any = None,
+    colalign: Any = None,
+    preserve_whitespace: Any = False,
+    maxcolwidths: Any = None,
+    headersglobalalign: Any = None,
+    headersalign: Any = None,
+    rowalign: Any = None,
+    maxheadercolwidths: Any = None,
+    break_long_words: Any = _BREAK_LONG_WORDS,
+    break_on_hyphens: Any = _BREAK_ON_HYPHENS,
+) -> Any:
+    """Format a fixed width table for pretty printing (tabulate 0.10.0's own code).
+
+    pyroid.tabulate.tabulate calls this for what its Rust code does not handle.
+    """
+    if tabular_data is None:
+        tabular_data = []
+
+    list_of_lists, headers, headers_pad = _normalize_tabular_data(
+        tabular_data, headers, showindex=showindex
+    )
+    list_of_lists, separating_lines = _remove_separating_lines(list_of_lists)
+
+    if maxcolwidths is not None:
+        if type(maxcolwidths) is tuple:  # Check if tuple, convert to list if so
+            maxcolwidths = list(maxcolwidths)
+        if len(list_of_lists):
+            num_cols = len(list_of_lists[0])
+        else:
+            num_cols = 0
+        if isinstance(maxcolwidths, int):  # Expand scalar for all columns
+            maxcolwidths = _expand_iterable(maxcolwidths, num_cols, maxcolwidths)
+        else:  # Ignore col width for any 'trailing' columns
+            maxcolwidths = _expand_iterable(maxcolwidths, num_cols, None)
+
+        numparses = _expand_numparse(disable_numparse, num_cols)
+        list_of_lists = _wrap_text_to_colwidths(
+            list_of_lists,
+            maxcolwidths,
+            numparses=numparses,
+            missingval=missingval,
+            break_long_words=break_long_words,
+            break_on_hyphens=break_on_hyphens,
+        )
+
+    if maxheadercolwidths is not None:
+        num_cols = len(list_of_lists[0]) if list_of_lists else len(headers)
+        if isinstance(maxheadercolwidths, int):  # Expand scalar for all columns
+            maxheadercolwidths = _expand_iterable(maxheadercolwidths, num_cols, maxheadercolwidths)
+        else:  # Ignore col width for any 'trailing' columns
+            maxheadercolwidths = _expand_iterable(maxheadercolwidths, num_cols, None)
+
+        numparses = _expand_numparse(disable_numparse, num_cols)
+        headers = _wrap_text_to_colwidths(
+            [headers],
+            maxheadercolwidths,
+            numparses=numparses,
+            missingval=missingval,
+            break_long_words=break_long_words,
+            break_on_hyphens=break_on_hyphens,
+        )[0]
+
+    # empty values in the first column of RST tables should be escaped (issue #82)
+    # "" should be escaped as "\\ " or ".."
+    if tablefmt == "rst":
+        list_of_lists, headers = _rst_escape_first_column(list_of_lists, headers)
+
+    # PrettyTable formatting does not use any extra padding.
+    # Numbers are not parsed and are treated the same as strings for alignment.
+    # Check if pretty is the format being used and override the defaults so it
+    # does not impact other formats.
+    min_padding = MIN_PADDING
+    if tablefmt == "pretty":
+        min_padding = 0
+        disable_numparse = True
+        numalign = "center" if numalign == _DEFAULT_ALIGN else numalign
+        stralign = "center" if stralign == _DEFAULT_ALIGN else stralign
+    else:
+        numalign = "decimal" if numalign == _DEFAULT_ALIGN else numalign
+        stralign = "left" if stralign == _DEFAULT_ALIGN else stralign
+
+    # 'colon_grid' uses colons in the line beneath the header to represent a column's
+    # alignment instead of literally aligning the text differently. Hence,
+    # left alignment of the data in the text output is enforced.
+    if tablefmt == "colon_grid":
+        colglobalalign = "left"
+        headersglobalalign = "left"
+
+    # optimization: look for ANSI control codes once,
+    # enable smart width functions only if a control code is found
+    #
+    # convert the headers and rows into a single, tab-delimited string ensuring
+    # that any bytestrings are decoded safely (i.e. errors ignored)
+    plain_text = "\t".join(
+        chain(
+            # headers
+            map(_to_str, headers),
+            # rows: chain the rows together into a single iterable after mapping
+            # the bytestring conversion to each cell value
+            chain.from_iterable(map(_to_str, row) for row in list_of_lists),
+        )
+    )
+
+    has_invisible = _ansi_codes.search(plain_text) is not None
+
+    enable_widechars = wcwidth is not None and WIDE_CHARS_MODE
+    if (
+        not isinstance(tablefmt, TableFormat)
+        and tablefmt in multiline_formats
+        and _is_multiline(plain_text)
+    ):
+        tablefmt = multiline_formats.get(tablefmt, tablefmt)
+        is_multiline = True
+    else:
+        is_multiline = False
+    width_fn = _choose_width_fn(has_invisible, enable_widechars, is_multiline)
+
+    # format rows and columns, convert numeric values to strings
+    cols: Any  # (for mypy: a list of tuples, then of lists)
+    cols = list(izip_longest(*list_of_lists))
+    numparses = _expand_numparse(disable_numparse, len(cols))
+    coltypes = [_column_type(col, numparse=np) for col, np in zip(cols, numparses)]
+    if isinstance(floatfmt, str):  # old version
+        float_formats = len(cols) * [floatfmt]  # just duplicate the string to use in each column
+    else:  # if floatfmt is list, tuple etc we have one per column
+        float_formats = list(floatfmt)
+        if len(float_formats) < len(cols):
+            float_formats.extend((len(cols) - len(float_formats)) * [_DEFAULT_FLOATFMT])
+    if isinstance(intfmt, str):  # old version
+        int_formats = len(cols) * [intfmt]  # just duplicate the string to use in each column
+    else:  # if intfmt is list, tuple etc we have one per column
+        int_formats = list(intfmt)
+        if len(int_formats) < len(cols):
+            int_formats.extend((len(cols) - len(int_formats)) * [_DEFAULT_INTFMT])
+    if isinstance(missingval, str):
+        missing_vals = len(cols) * [missingval]
+    else:
+        missing_vals = list(missingval)
+        if len(missing_vals) < len(cols):
+            missing_vals.extend((len(cols) - len(missing_vals)) * [_DEFAULT_MISSINGVAL])
+    cols = [
+        [_format(v, ct, fl_fmt, int_fmt, miss_v, has_invisible) for v in c]
+        for c, ct, fl_fmt, int_fmt, miss_v in zip(
+            cols, coltypes, float_formats, int_formats, missing_vals
+        )
+    ]
+
+    # align columns
+    # first set global alignment
+    if colglobalalign is not None:  # if global alignment provided
+        aligns = [colglobalalign] * len(cols)
+    else:  # default
+        aligns = [numalign if ct in [int, float] else stralign for ct in coltypes]
+    # then specific alignments
+    if colalign is not None:
+        assert isinstance(colalign, Iterable)
+        if isinstance(colalign, str):
+            warnings.warn(
+                f"As a string, `colalign` is interpreted as {[c for c in colalign]}. "
+                f'Did you mean `colglobalalign = "{colalign}"` or `colalign = ("{colalign}",)`?',
+                stacklevel=2,
+            )
+        for idx, align in enumerate(colalign):
+            if not idx < len(aligns):
+                break
+            elif align != "global":
+                aligns[idx] = align
+    minwidths = [width_fn(h) + min_padding for h in headers] if headers else [0] * len(cols)
+    aligns_copy = aligns.copy()
+    # Reset alignments in copy of alignments list to "left" for 'colon_grid' format,
+    # which enforces left alignment in the text output of the data.
+    if tablefmt == "colon_grid":
+        aligns_copy = ["left"] * len(cols)
+    cols = [
+        _align_column(
+            c,
+            a,
+            minw,
+            has_invisible,
+            enable_widechars,
+            is_multiline,
+            preserve_whitespace,
+        )
+        for c, a, minw in zip(cols, aligns_copy, minwidths)
+    ]
+
+    aligns_headers = None
+    if headers:
+        # align headers and add headers
+        t_cols = cols or [[""]] * len(headers)
+        # first set global alignment
+        if headersglobalalign is not None:  # if global alignment provided
+            aligns_headers = [headersglobalalign] * len(t_cols)
+        else:  # default
+            aligns_headers = aligns or [stralign] * len(headers)
+        # then specific header alignments
+        if headersalign is not None:
+            assert isinstance(headersalign, Iterable)
+            if isinstance(headersalign, str):
+                warnings.warn(
+                    f"As a string, `headersalign` is interpreted as {[c for c in headersalign]}. "
+                    f'Did you mean `headersglobalalign = "{headersalign}"` '
+                    f'or `headersalign = ("{headersalign}",)`?',
+                    stacklevel=2,
+                )
+            for idx, align in enumerate(headersalign):
+                hidx = headers_pad + idx
+                if not hidx < len(aligns_headers):
+                    break
+                elif align == "same" and hidx < len(aligns):  # same as column align
+                    aligns_headers[hidx] = aligns[hidx]
+                elif align != "global":
+                    aligns_headers[hidx] = align
+        minwidths = [max(minw, max(width_fn(cl) for cl in c)) for minw, c in zip(minwidths, t_cols)]
+        headers = [
+            _align_header(h, a, minw, width_fn(h), is_multiline, width_fn)
+            for h, a, minw in zip(headers, aligns_headers, minwidths)
+        ]
+        rows = list(zip(*cols))
+    else:
+        minwidths = [max(width_fn(cl) for cl in c) for c in cols]
+        rows = list(zip(*cols))
+
+    if not isinstance(tablefmt, TableFormat):
+        tablefmt = _table_formats.get(tablefmt, _table_formats["simple"])
+
+    ra_default = rowalign if isinstance(rowalign, str) else None
+    rowaligns = _expand_iterable(rowalign, len(rows), ra_default)
+    _reinsert_separating_lines(rows, separating_lines)
+
+    return _format_table(
+        tablefmt,
+        headers,
+        aligns_headers,
+        rows,
+        minwidths,
+        aligns,
+        is_multiline,
+        rowaligns=rowaligns,
+    )
+
+
 def _expand_numparse(disable_numparse: Any, column_count: int) -> list[bool]:
     """Return a list of bools of length `column_count` which indicates whether
     number parsing should be used on each column.
@@ -1318,10 +1788,103 @@ def _expand_iterable(original: Any, num_desired: Any, default: Any) -> Any:
         return [default] * num_desired
 
 
+def _pad_row(cells: Any, padding: Any) -> Any:
+    if cells:
+        if cells == SEPARATING_LINE:
+            return SEPARATING_LINE
+        pad = " " * padding
+        padded_cells = [pad + cell + pad for cell in cells]
+        return padded_cells
+    else:
+        return cells
+
+
 def _build_simple_row(padded_cells: Any, rowfmt: Any) -> Any:
     """Format row according to DataRow format without padding."""
     begin, sep, end = rowfmt
     return (begin + sep.join(padded_cells) + end).rstrip()
+
+
+def _build_row(padded_cells: Any, colwidths: Any, colaligns: Any, rowfmt: Any) -> Any:
+    """Return a string which represents a row of data cells."""
+    if not rowfmt:
+        return None
+    if callable(rowfmt):
+        return rowfmt(padded_cells, colwidths, colaligns)
+    else:
+        return _build_simple_row(padded_cells, rowfmt)
+
+
+def _append_basic_row(
+    lines: Any,
+    padded_cells: Any,
+    colwidths: Any,
+    colaligns: Any,
+    rowfmt: Any,
+    rowalign: Any = None,
+) -> Any:
+    # NOTE: rowalign is ignored and exists for api compatibility with _append_multiline_row
+    lines.append(_build_row(padded_cells, colwidths, colaligns, rowfmt))
+    return lines
+
+
+def _align_cell_veritically(
+    text_lines: Any, num_lines: Any, column_width: Any, row_alignment: Any
+) -> Any:
+    delta_lines = num_lines - len(text_lines)
+    blank = [" " * column_width]
+    if row_alignment == "bottom":
+        return blank * delta_lines + text_lines
+    elif row_alignment == "center":
+        top_delta = delta_lines // 2
+        bottom_delta = delta_lines - top_delta
+        return top_delta * blank + text_lines + bottom_delta * blank
+    else:
+        return text_lines + blank * delta_lines
+
+
+def _append_multiline_row(
+    lines: Any,
+    padded_multiline_cells: Any,
+    padded_widths: Any,
+    colaligns: Any,
+    rowfmt: Any,
+    pad: Any,
+    rowalign: Any = None,
+) -> Any:
+    colwidths = [w - 2 * pad for w in padded_widths]
+    cells_lines = [c.splitlines() for c in padded_multiline_cells]
+    nlines = max(map(len, cells_lines))  # number of lines in the row
+    # vertically pad cells where some lines are missing
+    # cells_lines = [
+    #     (cl + [" " * w] * (nlines - len(cl))) for cl, w in zip(cells_lines, colwidths)
+    # ]
+
+    cells_lines = [
+        _align_cell_veritically(cl, nlines, w, rowalign) for cl, w in zip(cells_lines, colwidths)
+    ]
+    lines_cells = [[cl[i] for cl in cells_lines] for i in range(nlines)]
+    for ln in lines_cells:
+        padded_ln = _pad_row(ln, pad)
+        _append_basic_row(lines, padded_ln, colwidths, colaligns, rowfmt)
+    return lines
+
+
+def _build_line(colwidths: Any, colaligns: Any, linefmt: Any) -> Any:
+    """Return a string which represents a horizontal line."""
+    if not linefmt:
+        return None
+    if callable(linefmt):
+        return linefmt(colwidths, colaligns)
+    else:
+        begin, fill, sep, end = linefmt
+        cells = [fill * w for w in colwidths]
+        return _build_simple_row(cells, (begin, sep, end))
+
+
+def _append_line(lines: Any, colwidths: Any, colaligns: Any, linefmt: Any) -> Any:
+    lines.append(_build_line(colwidths, colaligns, linefmt))
+    return lines
 
 
 class JupyterHTMLStr(str):
@@ -1336,6 +1899,93 @@ class JupyterHTMLStr(str):
     def str(self) -> builtins.str:
         """Add a .str property so that the raw string is still accessible"""
         return self
+
+
+def _format_table(
+    fmt: Any,
+    headers: Any,
+    headersaligns: Any,
+    rows: Any,
+    colwidths: Any,
+    colaligns: Any,
+    is_multiline: Any,
+    rowaligns: Any,
+) -> Any:
+    """Produce a plain-text representation of the table."""
+    lines: list[Any] = []
+    hidden = fmt.with_header_hide if (headers and fmt.with_header_hide) else []
+    pad = fmt.padding
+    headerrow = fmt.headerrow
+
+    padded_widths = [(w + 2 * pad) for w in colwidths]
+    pad_row: Any  # (for mypy: a lambda or a function)
+    append_row: Any
+    if is_multiline:
+        pad_row = lambda row, _: row  # noqa: E731 # do it later, in _append_multiline_row
+        append_row = partial(_append_multiline_row, pad=pad)
+    else:
+        pad_row = _pad_row
+        append_row = _append_basic_row
+
+    padded_headers = pad_row(headers, pad)
+
+    if fmt.lineabove and "lineabove" not in hidden:
+        _append_line(lines, padded_widths, colaligns, fmt.lineabove)
+
+    if padded_headers:
+        append_row(lines, padded_headers, padded_widths, headersaligns, headerrow)
+        if fmt.linebelowheader and "linebelowheader" not in hidden:
+            _append_line(lines, padded_widths, colaligns, fmt.linebelowheader)
+
+    if rows and fmt.linebetweenrows and "linebetweenrows" not in hidden:
+        # initial rows with a line below
+        for row, ralign in zip(rows[:-1], rowaligns):
+            if row != SEPARATING_LINE:
+                append_row(
+                    lines,
+                    pad_row(row, pad),
+                    padded_widths,
+                    colaligns,
+                    fmt.datarow,
+                    rowalign=ralign,
+                )
+            _append_line(lines, padded_widths, colaligns, fmt.linebetweenrows)
+        # the last row without a line below
+        append_row(
+            lines,
+            pad_row(rows[-1], pad),
+            padded_widths,
+            colaligns,
+            fmt.datarow,
+            rowalign=rowaligns[-1],
+        )
+    else:
+        separating_line = (
+            fmt.linebetweenrows
+            or fmt.linebelowheader
+            or fmt.linebelow
+            or fmt.lineabove
+            or Line("", "", "", "")
+        )
+        for row in rows:
+            # test to see if either the 1st column or the 2nd column (account for showindex) has
+            # the SEPARATING_LINE flag
+            if _is_separating_line(row):
+                _append_line(lines, padded_widths, colaligns, separating_line)
+            else:
+                append_row(lines, pad_row(row, pad), padded_widths, colaligns, fmt.datarow)
+
+    if fmt.linebelow and "linebelow" not in hidden:
+        _append_line(lines, padded_widths, colaligns, fmt.linebelow)
+
+    if headers or rows:
+        output = "\n".join(lines)
+        if fmt.lineabove == _html_begin_table_without_header:
+            return JupyterHTMLStr(output)
+        else:
+            return output
+    else:  # a completely empty table
+        return ""
 
 
 class _CustomTextWrap(textwrap.TextWrapper):

@@ -3,10 +3,11 @@
 
 :func:`tabulate` has tabulate's signature and returns the same text. Column types, number
 formatting, alignment and drawing run in Rust; input normalisation and ``maxcolwidths``
-wrapping run tabulate's own code. Calls the port does not handle (text with lone surrogates,
-alignments that are not strings, custom ``TableFormat`` fields that are neither strings nor
-callables) go to the real tabulate with a one-time :class:`pyroid.FallbackWarning`, or raise
-:class:`pyroid.PyroidError` if it is not installed. See ``__init__.pyi``.
+wrapping run tabulate's own code. The few calls the Rust code does not take (lone surrogates
+in the text, alignments that are not strings, unusual custom ``TableFormat`` fields) run
+tabulate 0.10.0's own Python code, which pyroid carries a copy of, with a one-time
+:class:`pyroid.FallbackWarning`; tabulate itself never needs to be installed. The full list
+is in the guide: https://ataiva.com/open-source/pyroid/docs/guides/tabulate/
 """
 
 from __future__ import annotations
@@ -14,12 +15,13 @@ from __future__ import annotations
 import re
 import sys
 import threading
+import types
 import unicodedata
 import warnings
 from collections.abc import Callable, Iterable, Sized
 from typing import Any
 
-from pyroid._pyroid import FallbackWarning, PyroidError
+from pyroid._pyroid import FallbackWarning
 from pyroid._pyroid import tabulate as _native
 from pyroid.tabulate import _port
 from pyroid.tabulate._port import (
@@ -170,8 +172,19 @@ def _table_format_types() -> tuple[type, ...]:
     return (TableFormat,)
 
 
+def _plain_str(s: str) -> bool:
+    """`s` has no lone surrogates (the Rust side cannot hold them)."""
+    if s.isascii():
+        return True
+    try:
+        s.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def _simple_align(a: Any) -> bool:
-    return a is None or type(a) is str or type(a) is bool
+    return a is None or (type(a) is str and _plain_str(a)) or type(a) is bool
 
 
 _unicode_ok = tuple(int(x) for x in unicodedata.unidata_version.split(".")) <= tuple(
@@ -328,7 +341,7 @@ class _Call:
         return _expand_iterable(rowalign, nrows, ra_default)
 
 
-# Fallbacks: the real tabulate, warning once per reason.
+# Fallbacks: tabulate 0.10.0's own code (`_port.tabulate`), warning once per reason.
 _WARNED: set[str] = set()
 _WARN_LOCK = threading.Lock()
 
@@ -351,41 +364,35 @@ def _first_time(key: str) -> bool:
         return True
 
 
-def _real_tabulate(reason: str) -> Any:
-    """The real tabulate module, warning once for `reason`, or PyroidError."""
-    try:
-        import tabulate as real
-    except ImportError:
-        real = None
-    # Under a pyroid patch shim, fall back to the real module it wraps, never to the shim.
-    if getattr(real, "__pyroid__", False):
-        real = real.__wrapped__
-    if real is None:
-        raise PyroidError(
-            f"pyroid.tabulate.tabulate: {reason} is not supported by pyroid's Rust port, and "
-            f"tabulate is not installed to fall back to (pip install tabulate=={TABULATE_VERSION})"
-        )
-    if _first_time("version"):
-        from importlib import metadata
-
-        try:
-            version = metadata.version("tabulate")
-        except metadata.PackageNotFoundError:
-            version = None
-        if version is not None and version != TABULATE_VERSION:
-            warnings.warn(
-                f"pyroid.tabulate is falling back to tabulate {version}, not {TABULATE_VERSION}",
-                RuntimeWarning,
-                stacklevel=_caller_stacklevel(),
-            )
+def _slow_path(reason: str) -> None:
+    """Warn, once for `reason`, that the call runs tabulate's Python code."""
     if _first_time(f"tabulate:{reason}"):
         warnings.warn(
             f"pyroid.tabulate.tabulate: {reason} is not supported by the Rust port; "
-            "delegating to tabulate (slow path). This warning is shown once.",
+            f"running tabulate {TABULATE_VERSION}'s own Python code (slow path). "
+            "This warning is shown once.",
             FallbackWarning,
             stacklevel=_caller_stacklevel(),
         )
-    return real
+
+
+def _run_python(tabular_data: Any, options: dict[str, Any]) -> Any:
+    """``tabulate(tabular_data, **options)`` by tabulate 0.10.0's own code (``_port``).
+
+    It is pyroid's copy, not the installed tabulate: that may be another release, and its
+    module settings and ``_table_formats`` are its own, not pyroid.tabulate's. A real
+    tabulate ``TableFormat`` is passed on as pyroid's class, which the copy recognises.
+    """
+    fmt = options["tablefmt"]
+    foreign = not isinstance(fmt, TableFormat) and isinstance(fmt, _table_format_types())
+    if foreign:
+        options = dict(options, tablefmt=TableFormat(*fmt))
+    text = _port.tabulate(tabular_data, **options)
+    if foreign:
+        real = _real_module()
+        if fmt.lineabove == getattr(real, "_html_begin_table_without_header", None):
+            return real.JupyterHTMLStr(text)
+    return text
 
 
 def tabulate(
@@ -478,8 +485,8 @@ def tabulate(
             raise _UnsupportedError("a MIN_PADDING that is not an int")
         fmt_given = _describe(tablefmt) if is_tf else None
     except _UnsupportedError as e:
-        real = _real_tabulate(str(e))
-        return real.tabulate(tabular_data, **_for_real(real, options))  # type: ignore[no-any-return]
+        _slow_path(str(e))
+        return _run_python(tabular_data, options)  # type: ignore[no-any-return]
 
     if tabular_data is None:
         tabular_data = []
@@ -786,24 +793,14 @@ def _real_module() -> Any:
 def _delegate_normalized(
     reason: str, normalized: Callable[[], Any], options: dict[str, Any]
 ) -> str:
-    """Hand a call whose input was already normalised to the real tabulate.
+    """Run a call whose input was already normalised by tabulate's Python code.
 
-    The input may have been a generator, so tabulate gets the normalised rows and headers
-    (which it normalises to themselves) and no index.
+    The input may have been a generator, so tabulate's code gets the normalised rows and
+    headers (which it normalises to themselves) and no index.
     """
     rows, headers = normalized()
-    real = _real_tabulate(reason)
-    kwargs = dict(_for_real(real, options), headers=headers, showindex=False)
-    return real.tabulate(rows, **kwargs)  # type: ignore[no-any-return]
-
-
-def _for_real(real: Any, options: dict[str, Any]) -> dict[str, Any]:
-    """`options` for the real tabulate: it only takes its own ``TableFormat`` class as one."""
-    fmt = options["tablefmt"]
-    real_cls = getattr(real, "TableFormat", None)
-    if isinstance(fmt, TableFormat) and isinstance(real_cls, type) and real_cls is not TableFormat:
-        return dict(options, tablefmt=real_cls(*fmt))
-    return options
+    _slow_path(reason)
+    return _run_python(rows, dict(options, headers=headers, showindex=False))  # type: ignore[no-any-return]
 
 
 def _multiline_width(multiline_s: Any, line_width_fn: Any = len) -> Any:
@@ -984,8 +981,9 @@ def _pprint_file(
 
 # pyroid.patch("tabulate")
 # ------------------------
-#: The names of tabulate 0.10.0 the ``tabulate`` shim takes from here (the others forward to
-#: the real tabulate when it is installed).
+#: The names of tabulate 0.10.0 the ``tabulate`` shim takes from here: all its functions,
+#: classes and tables (what else it has, the modules it imports, forwards to the real tabulate
+#: when it is installed).
 _PATCHED_NAMES: tuple[str, ...] = (
     "DataRow",
     "JupyterHTMLStr",
@@ -1003,25 +1001,38 @@ _PATCHED_NAMES: tuple[str, ...] = (
     "_afterpoint",
     "_align_cell_veritically",
     "_align_column",
+    "_align_column_choose_padfn",
+    "_align_column_choose_width_fn",
+    "_align_column_multiline_width",
+    "_align_header",
     "_ansi_codes",
     "_ansi_codes_bytes",
     "_ansi_color_reset_code",
     "_ansi_escape_pat",
+    "_append_basic_row",
+    "_append_line",
+    "_append_multiline_row",
     "_asciidoc_row",
     "_bool",
+    "_build_line",
+    "_build_row",
     "_build_simple_row",
+    "_choose_width_fn",
     "_column_type",
     "_csi",
     "_esc",
     "_expand_iterable",
     "_expand_numparse",
+    "_flat_list",
     "_float_with_thousands_separators",
     "_format",
+    "_format_table",
     "_grid_line_with_colons",
     "_grid_segment_with_colons",
     "_html_begin_table_without_header",
     "_html_row_with_attrs",
     "_is_file",
+    "_is_multiline",
     "_is_separating_line",
     "_is_separating_line_value",
     "_isbool",
@@ -1036,9 +1047,15 @@ _PATCHED_NAMES: tuple[str, ...] = (
     "_moin_row_with_attrs",
     "_more_generic",
     "_multiline_codes",
+    "_multiline_codes_bytes",
     "_multiline_width",
     "_normalize_tabular_data",
     "_osc",
+    "_pad_row",
+    "_padboth",
+    "_padleft",
+    "_padnone",
+    "_padright",
     "_pipe_line_with_colons",
     "_pipe_segment_with_colons",
     "_pprint_file",
@@ -1052,6 +1069,7 @@ _PATCHED_NAMES: tuple[str, ...] = (
     "_textile_row_with_attrs",
     "_to_str",
     "_type",
+    "_visible_width",
     "_wrap_text_to_colwidths",
     "multiline_formats",
     "simple_separated_format",
@@ -1059,16 +1077,46 @@ _PATCHED_NAMES: tuple[str, ...] = (
     "tabulate_formats",
 )
 
-#: Module settings ``tabulate()`` reads on each call: writes on the shim land here too.
+#: Module settings ``tabulate()`` reads on each call: writes on the shim land here too, and
+#: writes here reach the copied tabulate code in ``_port`` (`_Module`).
 _SETTINGS = ("MIN_PADDING", "PRESERVE_WHITESPACE", "WIDE_CHARS_MODE", "wcwidth")
 
+
+class _Module(types.ModuleType):
+    """This module's type: a setting written on it is written on ``_port`` too.
+
+    The Rust path reads the settings here, tabulate's copied code (the fallback, the text
+    wrapper) in ``_port``; both must see the same values.
+    """
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        super().__setattr__(name, value)
+        if name in _SETTINGS:
+            setattr(_port, name, value)
+
+    def __delattr__(self, name: str) -> None:
+        super().__delattr__(name)
+        if name in _SETTINGS and name in vars(_port):
+            delattr(_port, name)
+
+
+sys.modules[__name__].__class__ = _Module
+
 _shim_classes: dict[type, type] = {}
+
+
+# tabulate's private helpers not imported above, for code that reaches for them
+# (``pyroid.tabulate._padleft``): tabulate's own code, from `_port`.
+for _name in _PATCHED_NAMES:
+    if _name not in globals():
+        globals()[_name] = getattr(_port, _name)
+del _name
 
 
 def _patched_names() -> dict[str, Any]:
     """The objects ``pyroid.patch("tabulate")`` puts on its ``tabulate`` shim."""
     here = globals()
-    return {n: here[n] if n in here else getattr(_port, n) for n in _PATCHED_NAMES}
+    return {n: here[n] for n in _PATCHED_NAMES}
 
 
 def _share_settings(shim: Any, real: Any) -> None:

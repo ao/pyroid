@@ -14,11 +14,11 @@ tabulate's other names (`tabulate_formats`, `TableFormat`, `Line`, `DataRow`,
 `SEPARATING_LINE`, `simple_separated_format`, `MIN_PADDING`, `WIDE_CHARS_MODE`, ...), and
 `python -m pyroid.tabulate` is tabulate's command line.
 
-Calls the port does not handle go to the real tabulate with a one-time
-[`pyroid.FallbackWarning`][pyroid.FallbackWarning], or raise
-[`pyroid.PyroidError`][pyroid.PyroidError] if it is not installed: text holding lone
-surrogates, alignments that are not strings (`None` and booleans are fine), and custom
-`TableFormat` fields that are neither strings nor callables.
+The few calls the Rust code does not take run tabulate 0.10.0's own Python code, which pyroid
+carries a copy of, with a one-time [`pyroid.FallbackWarning`][pyroid.FallbackWarning]: text
+holding lone surrogates, alignments that are not strings (`None` and booleans are fine), custom
+`TableFormat` fields that are neither strings nor callables, and the others listed in the
+[guide](../guides/tabulate.md#what-runs-where). tabulate itself never needs to be installed.
 """
 
 from collections.abc import Callable, Iterable, Mapping
@@ -167,8 +167,6 @@ def tabulate(
     Raises:
         TypeError: The data is not two-dimensional, among tabulate's other errors.
         ValueError: An index of the wrong length, among tabulate's other errors.
-        pyroid.PyroidError: The call needs the real tabulate (see the module docs) and it
-            is not installed.
     """
 
 def _main() -> None:

@@ -876,7 +876,7 @@ _TARGETS: dict[str, _Target] = {
         "which reproduces tabulate 0.10.0",
         "TABULATE_VERSION",
         "pip install tabulate==0.10.0",
-        " (the private helpers pyroid does not port)",
+        " (the modules and names tabulate imports, such as `re`)",
         _build_tabulate,
     ),
 }

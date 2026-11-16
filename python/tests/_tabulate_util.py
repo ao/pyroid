@@ -182,6 +182,8 @@ cell_recipes = st.one_of(
     st.tuples(st.just("float"), _floats()),
     st.tuples(st.just("str"), st.sampled_from(WORDS + NUMERIC)),
     st.tuples(st.just("str"), st.text(max_size=12)),
+    # Lone surrogates: the Python fallback, which must still follow the settings.
+    st.tuples(st.just("str"), st.sampled_from(["\ud800", "x\udfff", "\udc80 1"])),
     st.tuples(
         st.just("str"),
         st.text(alphabet="0123456789.,-+e _", min_size=1, max_size=8),
@@ -241,6 +243,8 @@ def _row(ncols: int) -> st.SearchStrategy[Any]:
 
 
 ALIGNS = ["left", "right", "center", "decimal", None, "global", "same", "", "weird"]
+# Mostly the strings above; now and then a value that is not a str (the Python fallback).
+ALIGN_VALUES = st.sampled_from([*ALIGNS * 4, 1.5])
 
 FLOATFMTS = [
     "g",
@@ -314,8 +318,8 @@ def tables(draw: st.DrawFn) -> dict[str, Any]:
         "intfmt",
         st.one_of(st.sampled_from(INTFMTS), st.lists(st.sampled_from(INTFMTS), max_size=4)),
     )
-    maybe("numalign", st.sampled_from(ALIGNS))
-    maybe("stralign", st.sampled_from(ALIGNS))
+    maybe("numalign", ALIGN_VALUES)
+    maybe("stralign", ALIGN_VALUES)
     maybe(
         "missingval",
         st.one_of(
@@ -328,10 +332,10 @@ def tables(draw: st.DrawFn) -> dict[str, Any]:
         st.sampled_from(["default", "always", "never", True, False, "range", "short_list"]),
     )
     maybe("disable_numparse", st.one_of(st.booleans(), st.lists(st.integers(0, 3), max_size=2)))
-    maybe("colglobalalign", st.sampled_from(ALIGNS))
+    maybe("colglobalalign", ALIGN_VALUES)
     maybe(
         "colalign",
-        st.one_of(st.lists(st.sampled_from(ALIGNS), max_size=5), st.sampled_from(["lr", "right"])),
+        st.one_of(st.lists(ALIGN_VALUES, max_size=5), st.sampled_from(["lr", "right"])),
     )
     maybe("preserve_whitespace", st.booleans())
     maybe(
@@ -344,10 +348,10 @@ def tables(draw: st.DrawFn) -> dict[str, Any]:
     if not can_time_out():
         for k in ("maxcolwidths",):
             opts.pop(k, None)
-    maybe("headersglobalalign", st.sampled_from(ALIGNS))
+    maybe("headersglobalalign", ALIGN_VALUES)
     maybe(
         "headersalign",
-        st.one_of(st.lists(st.sampled_from(ALIGNS), max_size=5), st.sampled_from(["lr"])),
+        st.one_of(st.lists(ALIGN_VALUES, max_size=5), st.sampled_from(["lr"])),
     )
     maybe(
         "rowalign",
