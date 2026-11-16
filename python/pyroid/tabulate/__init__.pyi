@@ -24,7 +24,7 @@ holding lone surrogates, alignments that are not strings (`None` and booleans ar
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Final, NamedTuple
 
-__all__ = ["TABULATE_VERSION", "simple_separated_format", "tabulate", "tabulate_formats"]
+__all__ = ["tabulate", "tabulate_formats", "simple_separated_format"]  # noqa: RUF022 (tabulate's order)
 
 TABULATE_VERSION: Final[str]
 """The tabulate release whose output this module reproduces (`"0.10.0"`)."""

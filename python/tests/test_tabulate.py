@@ -80,6 +80,13 @@ def test_signature_is_tabulates() -> None:
         ]
 
 
+def test_star_import_is_tabulates() -> None:
+    # TABULATE_VERSION and the other extras stay attributes, out of `from ... import *`.
+    assert pt.__all__ == ["tabulate", "tabulate_formats", "simple_separated_format"]
+    if importlib.util.find_spec("tabulate") is not None:
+        assert _real_tabulate().__all__ == pt.__all__
+
+
 def test_formats_list() -> None:
     assert pt.tabulate_formats == sorted(pt.tabulate_formats)
     assert len(pt.tabulate_formats) == 37

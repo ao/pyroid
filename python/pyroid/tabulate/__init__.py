@@ -71,7 +71,7 @@ from pyroid.tabulate._port import (
     wcwidth,
 )
 
-__all__ = ["TABULATE_VERSION", "simple_separated_format", "tabulate", "tabulate_formats"]
+__all__ = ["tabulate", "tabulate_formats", "simple_separated_format"]  # noqa: RUF022 (tabulate's order)
 
 #: The tabulate release whose output this module reproduces.
 TABULATE_VERSION = "0.10.0"
