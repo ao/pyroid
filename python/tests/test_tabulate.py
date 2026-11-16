@@ -306,6 +306,23 @@ def test_lone_surrogates_in_a_custom_format() -> None:
         )
 
 
+@pytest.mark.thread_unsafe  # warnings
+def test_warnings_point_at_the_caller_on_the_slow_path() -> None:
+    pt._WARNED.clear()
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        tabulate([["a", 1]], colalign="right", stralign=1.5)  # type: ignore[arg-type]
+        tabulate([["\ud800", 1]], headers=["a", "b"], headersalign="r")
+        tabulate([["a", 1]], colalign="right")  # the Rust path
+    assert [(x.category, x.filename) for x in w] == [
+        (pyroid.FallbackWarning, __file__),
+        (UserWarning, __file__),
+        (pyroid.FallbackWarning, __file__),
+        (UserWarning, __file__),
+        (UserWarning, __file__),
+    ]
+
+
 def test_float32_frames() -> None:
     np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")

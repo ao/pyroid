@@ -13,6 +13,7 @@ import datetime
 import decimal
 import fractions
 import importlib.util
+import os
 import signal
 import threading
 import warnings
@@ -516,9 +517,17 @@ def outcome(
                 signal.setitimer(signal.ITIMER_REAL, 0)
                 signal.signal(signal.SIGALRM, old)
     out.warnings = [
-        f"{x.category.__name__}: {x.message}" for x in w if not issubclass(x.category, ignore)
+        f"{x.category.__name__} ({_where(x.filename)}): {x.message}"
+        for x in w
+        if not issubclass(x.category, ignore)
     ]
     return out
+
+
+def _where(filename: str) -> str:
+    """Where a warning points: into the library (tabulate's code, or pyroid's copy of it) or at
+    its caller. The two libraries' files differ, so only the side is compared."""
+    return "library" if f"{os.sep}tabulate{os.sep}" in filename else "caller"
 
 
 def with_settings(mod: Any, settings: dict[str, Any], fn: Callable[[], Any]) -> Callable[[], Any]:

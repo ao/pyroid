@@ -30,8 +30,8 @@ import dataclasses
 import io
 import math
 import re
+import sys
 import textwrap
-import warnings
 from collections import namedtuple
 from collections.abc import Iterable, Sized
 from functools import partial, reduce
@@ -44,6 +44,36 @@ try:
     import wcwidth  # type: ignore[import-not-found,import-untyped,unused-ignore]  # optional, CJK widths
 except ImportError:
     wcwidth = None
+
+
+class _CallerWarnings:
+    """The ``warnings`` that the copied ``tabulate`` calls.
+
+    tabulate's ``warnings.warn(..., stacklevel=2)`` points at the code that called
+    ``tabulate()``. Here pyroid.tabulate's own frames sit in between, so the warning goes to
+    the first frame outside pyroid.tabulate above that level instead.
+    """
+
+    @staticmethod
+    def warn(message: Any, category: Any = None, stacklevel: int = 1, source: Any = None) -> None:
+        import warnings
+
+        frame: Any = sys._getframe(1)  # the copied code's frame: stacklevel 2 from here
+        level = 2
+        for _ in range(stacklevel - 1):
+            if frame.f_back is None:
+                break
+            frame = frame.f_back
+            level += 1
+        while frame.f_back is not None and frame.f_globals.get("__name__", "").startswith(
+            "pyroid.tabulate"
+        ):
+            frame = frame.f_back
+            level += 1
+        warnings.warn(message, category, stacklevel=level, source=source)
+
+
+warnings = _CallerWarnings()
 
 
 def _is_file(f: Any) -> bool:
