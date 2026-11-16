@@ -125,7 +125,7 @@ pyroid's objects meet packaging's in your code, in packaging's own modules (`ran
    `self.__class__(...)` makes one of packaging's.
 3. They have the private attributes that packaging's modules read (`Version._key`, `_epoch`,
    `_release`, ..., `Specifier._spec`, `SpecifierSet._specs`, `Marker._markers` and others),
-   and packaging's class attributes (`Version._regex`, `Specifier._operators`, `__slots__`).
+   and packaging's class attributes `Version._regex` and `Specifier._operators`.
 4. A `SpecifierSet` takes packaging's `Specifier` objects as items and `&` takes packaging's
    `SpecifierSet`, of any release; markers combine with packaging's markers.
 5. With packaging installed, the exception classes are packaging's own. Without it, pyroid has

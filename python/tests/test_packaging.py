@@ -456,13 +456,6 @@ def test_from_parts_requires_release() -> None:
 @pytest.mark.skipif(not PACKAGING_263, reason="pyroid has packaging 26.3's attributes")
 def test_packagings_class_attributes() -> None:
     assert Specifier._operators == ps.Specifier._operators  # type: ignore[attr-defined]
-    for mine, theirs in (
-        (Version, packaging_version.Version),
-        (Specifier, ps.Specifier),
-        (SpecifierSet, ps.SpecifierSet),
-        (Marker, pm.Marker),
-    ):
-        assert getattr(mine, "__slots__", None) == getattr(theirs, "__slots__", None)
     assert Version._regex.pattern == packaging_version.Version._regex.pattern  # type: ignore[attr-defined]
 
 

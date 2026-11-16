@@ -26,7 +26,6 @@ __all__ = [
 ]
 
 Marker = _native.Marker
-Marker.__slots__ = ("_markers",)
 
 if _compat._pm is not None and hasattr(_compat._pm, "Environment"):
     Environment: Any = _compat._pm.Environment

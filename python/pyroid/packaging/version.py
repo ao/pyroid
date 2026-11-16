@@ -14,18 +14,8 @@ Version = _native.Version
 parse = _native.parse
 normalize_pre = _native.normalize_pre
 
-# packaging's class attributes, for code that reads them.
+# packaging's class attribute, for code that reads it.
 Version._regex = _compat._REGEX
-Version.__slots__ = (
-    "_dev",
-    "_epoch",
-    "_hash_cache",
-    "_key_cache",
-    "_local",
-    "_post",
-    "_pre",
-    "_release",
-)
 
 
 def __dir__() -> list[str]:
