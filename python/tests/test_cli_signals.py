@@ -214,7 +214,13 @@ def test_a_signal_to_the_whole_group_at_any_point_stops_the_run(
     for k in range(TRIES):
         out = f"g-{sig.name}-{k}"
         proc = _clean(run_dir, out, workers=4)
-        time.sleep(rng.uniform(0.02, 1.0) * ref_s)
+        # From the moment the command has set up its run (run.json), just before it starts its
+        # workers: earlier, Python is still importing and the signal's default action applies.
+        deadline = time.monotonic() + 60
+        while not (run_dir / out / ".pyroid" / "run.json").exists() and proc.poll() is None:
+            assert time.monotonic() < deadline, "the run did not start"
+            time.sleep(0.005)
+        time.sleep(rng.uniform(0.0, 0.9) * ref_s)
         if proc.poll() is not None:
             proc.communicate()
             continue
