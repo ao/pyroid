@@ -6,7 +6,8 @@ markers and requirements that pip, setuptools and hatchling use. Its version par
 pattern and range engine, marker and requirement parsers and name helpers are ported function by
 function, so pyroid gives the same parsing, ordering, hashes, strings and exceptions as packaging
 26.3 ([parity](../compatibility.md#packaging)). Its objects mix with packaging's: they compare
-and hash equal, and packaging's own code accepts them.
+and hash equal with any packaging release from 24.2 to 26.3, and packaging 26's own code accepts
+them ([interop](#interop)).
 
 On a dedicated AWS EC2 c7i.4xlarge (Intel Xeon, CPython 3.12), pyroid parses versions 3 to 8×
 faster than packaging 26.3, answers `SpecifierSet.contains` 8× faster, filters a project's release
@@ -108,23 +109,34 @@ packaging.version.InvalidVersion: Invalid version: '1.0.0-final'
 pyroid's objects meet packaging's in your code, in packaging's own modules (`ranges`, `metadata`,
 `pylock`) and in libraries that imported packaging first. These rules hold:
 
-1. They compare, hash and deduplicate with packaging's. `<` works in either order, and the hash
-   is CPython's hash of packaging's comparison key, computed natively, so sets, dict keys and
-   sorted lists can mix the two.
-2. With a packaging 26 release installed and not patched, pyroid's objects report packaging's
-   class as `__class__`. `isinstance(v, packaging.version.Version)` is then true, and packaging's
-   own code accepts them: `packaging.specifiers.SpecifierSet(">=1").contains(v)` would otherwise
-   be `False`. `type(v)` stays pyroid's class, and instances of your subclasses report their own
-   class.
+1. They compare, hash and deduplicate with packaging's. `<` works in either order, so sets, dict
+   keys and sorted lists can mix the two. packaging orders versions by a comparison key
+   (`Version._key`) whose format changed in 26.1, and pyroid builds it in the installed release's
+   format: tuples of ints for 26.1 and later, a tuple holding packaging's `Infinity` objects for
+   26.0 and earlier. At import pyroid checks its keys and hashes against the installed release's
+   on versions that take every branch of the key. With a release whose key matches neither
+   format, pyroid's objects and packaging's do not compare with each other at all (`==` is
+   false, `<` raises `TypeError`) and pyroid warns once, with a `RuntimeWarning`.
+2. With a packaging 26 release installed and not patched, pyroid's objects, and those of your
+   subclasses of pyroid's classes, report packaging's class as `__class__`.
+   `isinstance(v, packaging.version.Version)` is then true, and packaging's own code accepts
+   them: `packaging.specifiers.SpecifierSet(">=1").contains(v)` would otherwise be `False`.
+   `type(v)` stays your class; in a subclass, make new objects with `type(self)(...)`, since
+   `self.__class__(...)` makes one of packaging's.
 3. They have the private attributes that packaging's modules read (`Version._key`, `_epoch`,
-   `_release`, ..., `Specifier._spec`, `SpecifierSet._specs`, `Marker._markers` and others).
-4. With packaging installed, the exception classes are packaging's own. Without it, pyroid has
-   copies with the same names and bases.
-5. They pickle through `pyroid.packaging._restore` with packaging 26.3's state tuples and
+   `_release`, ..., `Specifier._spec`, `SpecifierSet._specs`, `Marker._markers` and others),
+   and packaging's class attributes (`Version._regex`, `Specifier._operators`, `__slots__`).
+4. A `SpecifierSet` takes packaging's `Specifier` objects as items and `&` takes packaging's
+   `SpecifierSet`, of any release; markers combine with packaging's markers.
+5. With packaging installed, the exception classes are packaging's own. Without it, pyroid has
+   copies with the same names and bases. Before 26.3 a missing marker environment key raises
+   `KeyError` (the release's `UndefinedEnvironmentName` exists but is not raised): with one of
+   those releases, pyroid raises a subclass of both, so either `except` catches it.
+6. They pickle through `pyroid.packaging._restore` with packaging 26.3's state tuples and
    unpickle as pyroid's objects, so loading them needs pyroid. `__setstate__` accepts every state
    format packaging writes, so under the patch packaging's own pickles load into pyroid's
    classes.
-6. Subclasses work, including `super().__init__(version)`. `Requirement` is a Python class with
+7. Subclasses work, including `super().__init__(version)`. `Requirement` is a Python class with
    writable attributes, so pkg_resources-style subclasses work. Assigning `Version._version` (as
    hatchling does) works, with packaging's `DeprecationWarning`.
 
@@ -165,11 +177,14 @@ puts every global back. Without packaging installed, `packaging` and its `versio
 `specifiers`, `markers`, `requirements` and `utils` submodules are shims holding
 pyroid.packaging's names.
 
-Code that imported packaging's classes before the patch keeps them. Their objects still compare
-and hash equal to pyroid's, but `isinstance(old_object, packaging.version.Version)` is false once
-that name is pyroid's class. Patch before importing the libraries you want redirected, or use
-`pyroid run -p packaging`. pip uses its own vendored copy (`pip._vendor.packaging`), which the
-patch does not touch.
+Code that imported packaging's classes before the patch keeps them, and objects made before the
+patch stay packaging's. They keep working with each other and with pyroid's: they compare and
+hash equal, pyroid's constructors take them by value while patched (so packaging's own code,
+which converts what `isinstance` does not recognise, accepts them), and pickling one while
+patched writes the pyroid object it equals. `isinstance(old_object, packaging.version.Version)` is
+false once that name is pyroid's class. Patch before importing the libraries you want redirected,
+or use `pyroid run -p packaging`. pip uses its own vendored copy (`pip._vendor.packaging`), which
+the patch does not touch.
 
 Importing pyroid never patches anything (pyroid's own build tooling uses packaging). With a
 packaging release other than 26.3 installed, the `PatchWarning` says so: the patched names give
@@ -207,8 +222,11 @@ pp.filter_batch(">=1.5", releases)  # ['1.10', '1.9.post1']
 tuple, or an Arrow string array ([inputs](../concepts/inputs.md)). For Arrow input,
 `contains_batch` returns a [`pyroid.Column`](../reference/pyroid.md#pyroid.Column) of bools with
 nulls kept, `parse_batch` gives `None` for a null, and `sort_versions` and `filter_batch` return
-new `str` objects. Parsing runs on pyroid's shared thread pool, 65,536 items at a time, and
-Ctrl-C is checked between those chunks. `threads=n` runs at most n tasks at once.
+new `str` objects. The input is read and parsed 65,536 items at a time, on pyroid's shared thread
+pool (a smaller batch on the calling thread), so `filter_batch` and `contains_batch` hold one
+chunk of parsed versions at most. Ctrl-C is checked between chunks, and `sort_versions` sorts
+runs of that size and merges them, checking between steps. `threads=n` runs at most n tasks at
+once.
 
 ## What runs in Rust
 
@@ -224,7 +242,9 @@ sets, and `int()` for digit runs longer than 19 characters.
 
 `SpecifierSet.to_range()`, `is_subset()`, `is_superset()` and `is_disjoint()` run packaging
 26.3's own `VersionRange` code on pyroid's objects, with one
-[`pyroid.FallbackWarning`](../concepts/fallbacks.md) per function. Without packaging they raise
+[`pyroid.FallbackWarning`](../concepts/fallbacks.md) per function, at the caller's line. A test
+suite that turns warnings into errors (`-W error`, or pytest's `filterwarnings = ["error"]`) needs
+`-W ignore::pyroid.FallbackWarning` for these. Without packaging they raise
 [`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError).
 
 A `SpecifierSet` built from items that are not `Specifier` objects (setuptools passes strings)
@@ -249,9 +269,10 @@ pyroid reproduces 26.3 only. The 25.0 differences are real (a resolver built on 
 pre-release policy), but 26.0 made them on purpose to follow PEP 440, and 26.3 is what a new
 install gets. Supporting 25.0 as well would take a second specifier engine and a second set of
 error messages. `pyroid.patch("packaging")` with another release installed says so in its
-`PatchWarning`; `import pyroid.packaging` warns about nothing. With a release older than 26
-installed, pyroid's objects do not claim packaging's class (rule 2 [above](#interop)), because
-those releases' private attributes differ.
+`PatchWarning`; `import pyroid.packaging` warns about nothing unless the installed release's
+comparison key is one pyroid does not reproduce (rule 1 [above](#interop)). With a release older
+than 26 installed, pyroid's objects do not claim packaging's class (rule 2), because those
+releases' private attributes differ; they still compare and hash with its objects.
 
 ## Differences from packaging {#differences-from-packaging}
 
@@ -268,6 +289,12 @@ those releases' private attributes differ.
 - A `str` subclass that overrides `split` or `lower` is read as its string data.
 - A marker string literal whose escapes produce a lone surrogate (`'\ud800'`) raises
   `InvalidMarker` ("Invalid quoted string"). packaging accepts it.
+- Markers nest as deep as memory allows. packaging parses, evaluates and prints them by
+  recursion, so it raises `RecursionError` past a few hundred levels of parentheses (fewer in a
+  thread with a small stack), or for `str()` or `evaluate()` after `m = m & other` has run some
+  500 times. pyroid gives the result, and for a string of only `(` the `InvalidMarker` the
+  grammar calls for. `Marker._markers` builds a new list each time it is read.
+- `filter()` returns an iterator, not a generator object.
 - Unpatched, `functools.singledispatch` dispatches pyroid's objects as packaging's, since it
   looks at `__class__`, so a handler registered for pyroid's own class is not found. Under the
   patch the two are the same class.
@@ -277,7 +304,9 @@ those releases' private attributes differ.
 packaging 26.3's own tests of versions, specifiers, markers, requirements, utils, ranges,
 metadata, pylock and dependency groups, with its property tests, pass unchanged with
 `pyroid.patch("packaging")` on: 62,499 tests, so packaging's unported modules are exercised on
-pyroid's classes too. A Hypothesis differential fuzzer builds versions, specifiers, markers,
+pyroid's classes too. They run with packaging's pytest settings, which turn warnings into errors,
+plus `-W ignore::pyroid.FallbackWarning` for the notice `to_range()` gives
+([fallbacks](#fallbacks)). A Hypothesis differential fuzzer builds versions, specifiers, markers,
 requirements, names and filenames from the PEP 440 and PEP 508 grammars, plus mutations (Python
 whitespace, the letters `re.IGNORECASE` folds onto ASCII, other digits, lone surrogates), and
 compares each result or exception (class and message) with packaging 26.3's. Its long run of

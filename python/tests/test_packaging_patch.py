@@ -243,7 +243,12 @@ def test_without_packaging_installed() -> None:
 )
 @pytest.mark.timeout(1800)
 def test_packagings_own_test_suite() -> None:
-    """packaging 26.3's whole test suite, unchanged, with pyroid.patch("packaging") on."""
+    """packaging 26.3's whole test suite, unchanged, with pyroid.patch("packaging") on.
+
+    With packaging's own pytest settings (its pyproject.toml): warnings are errors, xfails strict,
+    markers registered. pyroid.FallbackWarning, the documented notice of to_range() and the
+    other set relations, is ignored.
+    """
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join([str(Path(__file__).parent), env.get("PYTHONPATH", "")])
     args = [
@@ -257,7 +262,9 @@ def test_packagings_own_test_suite() -> None:
         "-p",
         "_packaging_upstream",
     ]
-    args += ["-q", "-W", "ignore::pytest.PytestUnknownMarkWarning", "-p", "no:randomly", "tests"]
+    args += ["-o", "xfail_strict=true", "-o", "markers=property: property-based tests (opt-in)"]
+    args += ["--strict-markers", "--strict-config", "-W", "error"]
+    args += ["-W", "ignore::pyroid.FallbackWarning", "-q", "-p", "no:randomly", "tests"]
     if os.environ.get("PYROID_PACKAGING_UPSTREAM") != "all":
         args += ["--ignore=tests/property"]
     out = subprocess.run(args, cwd=DATA, capture_output=True, text=True, env=env)

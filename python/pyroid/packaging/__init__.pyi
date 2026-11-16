@@ -12,10 +12,11 @@ SpecifierSet(">=1.0,!=1.5.*").contains("1.6.2")       # True
 
 `pyroid.packaging.version`, `specifiers`, `markers`, `requirements` and `utils` give packaging
 26.3's results: the same parsing, ordering, hashes, strings, pre-release rules, marker values and
-exceptions. With packaging installed, the exception classes are packaging's own, pyroid's
-objects compare and hash equal to packaging's, and `isinstance(v, packaging.version.Version)`
-is true for pyroid's versions. `pyroid.patch("packaging")` makes code that imports packaging use
-these classes.
+exceptions. With packaging installed, the exception classes are packaging's own and pyroid's
+objects compare and hash equal to packaging's (any release from 24.2 to 26.3: pyroid builds the
+installed release's comparison key). With a packaging 26 release, `isinstance(v,
+packaging.version.Version)` is true for pyroid's versions too. `pyroid.patch("packaging")` makes
+code that imports packaging use these classes.
 
 The batch functions below parse on pyroid's thread pool.
 """

@@ -274,7 +274,7 @@
       "rule": "the same result (strings, properties, order, hashes, equality across the two libraries, pickles) or the same exception class and message",
       "checks": [
         {
-          "name": "packaging 26.3's own tests of versions, specifiers, markers, requirements, utils, ranges, metadata, pylock and dependency groups, and its property tests, unchanged, with pyroid.patch(\"packaging\") on (tests passed)",
+          "name": "packaging 26.3's own tests of versions, specifiers, markers, requirements, utils, ranges, metadata, pylock and dependency groups, and its property tests, unchanged, with pyroid.patch(\"packaging\") on and packaging's pytest settings (warnings are errors; pyroid.FallbackWarning ignored) (tests passed)",
           "same": 62499,
           "diff": 0
         },
@@ -302,7 +302,7 @@
       "notes": [
         "The test suite runs with packaging's own modules (ranges, metadata, pylock, dependency_groups) using pyroid's classes. packaging's tests of platform tags (test_tags, test_manylinux, test_musllinux, test_elffile), licenses, direct URLs and errors are not run: pyroid does not port those modules."
       ],
-      "source": "python/tests/test_packaging_patch.py::test_packagings_own_test_suite (PYROID_PACKAGING_UPSTREAM=all), python/tests/test_packaging_parity.py (PYROID_PACKAGING_EXAMPLES=20000) and bench/packaging/pypi_corpus.py (PyPI JSON API, fetched 2026-11-16; counts in bench/results/aws-c8g.16xlarge/2026-11-16/packaging-corpus.json), CPython 3.12.16 on linux/aarch64, run on 2026-11-16"
+      "source": "python/tests/test_packaging_patch.py::test_packagings_own_test_suite (PYROID_PACKAGING_UPSTREAM=all), python/tests/test_packaging_parity.py (PYROID_PACKAGING_EXAMPLES=20000) and bench/packaging/pypi_corpus.py (PyPI JSON API, fetched 2026-11-16; counts in bench/results/aws-c8g.16xlarge/2026-11-16/packaging-corpus.json), CPython 3.12.16 on linux/aarch64 (an AWS EC2 c8g.16xlarge), run on 2026-11-16"
     },
     "datasketch": {
       "reference": "datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1)",

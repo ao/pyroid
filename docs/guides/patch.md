@@ -310,10 +310,11 @@ warcio`) reads WARC files with pyroid in stock datatrove. Without warcio, `warci
 `"packaging"` goes further than `"nltk"`: it imports packaging and its submodules, then replaces
 each of packaging's ported objects wherever a `packaging.*` module holds it, so packaging's own
 `ranges`, `metadata`, `pylock` and `dependency_groups` use pyroid's classes, as does code that
-imports from packaging afterwards. pyroid's objects compare and hash equal to packaging's, so
-objects made before the patch still mix with new ones, but `isinstance(old_object,
-packaging.version.Version)` is false once that name is pyroid's class. packaging 26.3's own tests
-(62,499) pass patched. [`pyroid.packaging`](packaging.md#patch) has the details.
+imports from packaging afterwards. Objects made before the patch keep working with each other
+and with new ones (they compare and hash equal, and packaging's code accepts them), but
+`isinstance(old_object, packaging.version.Version)` is false once that name is pyroid's class.
+packaging 26.3's own tests (62,499) pass patched, with `-W ignore::pyroid.FallbackWarning` under
+their warnings-as-errors setting. [`pyroid.packaging`](packaging.md#patch) has the details.
 
 ## Limitations
 
