@@ -118,8 +118,8 @@ def _set_seq2(self: Any, b: Any) -> None:
     if not _native._sm_set_seq2(self, b):
         self.matching_blocks = None
         self.fullbcount = None
-        _chain_b(self)
         _fallback("SequenceMatcher", _ELEMENTS)
+        _chain_b(self)
 
 
 def _find_longest_match(
@@ -149,13 +149,21 @@ def _get_matching_blocks(self: Any) -> Any:
     return _SM["get_matching_blocks"](self)
 
 
+def _native_blocks(self: Any) -> bool:
+    """True if the blocks can be computed natively: neither get_matching_blocks nor
+    find_longest_match is overridden, and no matching_blocks list is set."""
+    cls = type(self)
+    return (
+        cls.get_matching_blocks is _get_matching_blocks
+        and cls.find_longest_match is _find_longest_match
+        and self.__dict__.get("matching_blocks") is None
+    )
+
+
 def _get_opcodes(self: Any) -> Any:
     if self.opcodes is not None:
         return self.opcodes
-    if (
-        type(self).get_matching_blocks is _get_matching_blocks
-        and self.__dict__.get("matching_blocks") is None
-    ):
+    if _native_blocks(self):
         found = _native._sm_opcodes(self)
         if found is not None:
             return found
@@ -164,10 +172,7 @@ def _get_opcodes(self: Any) -> Any:
 
 
 def _ratio(self: Any) -> float:
-    if (
-        type(self).get_matching_blocks is _get_matching_blocks
-        and self.__dict__.get("matching_blocks") is None
-    ):
+    if _native_blocks(self):
         r = _native._sm_ratio(self)
         if r is not None:
             return r  # type: ignore[no-any-return]

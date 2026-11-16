@@ -151,14 +151,10 @@ impl BSide {
     }
 }
 
-/// Build the [`BSide`] for `b`, calling `isjunk` (if truthy) on each distinct
-/// element in `b2j` order. `None` if `b`'s elements do not run natively.
-pub fn build_b(
-    py: Python<'_>,
-    b: &Bound<'_, PyAny>,
-    isjunk: &Bound<'_, PyAny>,
-    autojunk: bool,
-) -> PyResult<Option<BSide>> {
+/// `b` numbered by element, before `__chain_b`'s junk and popular passes:
+/// the [`BSide`] (with an empty index) and `b` as ids. `None` if `b`'s
+/// elements do not run natively.
+fn number_b(b: &Bound<'_, PyAny>) -> PyResult<Option<(BSide, Vec<u32>)>> {
     let Some(seq) = Seq::read(b)? else {
         return Ok(None);
     };
@@ -213,25 +209,46 @@ pub fn build_b(
             (Keys::Items { keys, reps, kinds }, ids)
         }
     };
-    let mut side = BSide {
+    let side = BSide {
         b: b.clone().unbind(),
         keys,
         index: BIndex::new(Vec::new(), 0, &[], false),
     };
-    let n = match &side.keys {
-        Keys::Chars(c) => c.chars().len(),
-        Keys::Items { reps, .. } => reps.len(),
-        Keys::Values { values, .. } => values.len(),
-    };
-    let mut junk = Vec::new();
-    if isjunk.is_truthy()? {
-        junk.reserve(n);
-        for id in 0..n {
-            junk.push(isjunk.call1((side.rep(py, id)?,))?.is_truthy()?);
+    Ok(Some((side, ids)))
+}
+
+impl BSide {
+    fn distinct(&self) -> usize {
+        match &self.keys {
+            Keys::Chars(c) => c.chars().len(),
+            Keys::Items { reps, .. } => reps.len(),
+            Keys::Values { values, .. } => values.len(),
         }
     }
-    side.index = BIndex::new(ids, n, &junk, autojunk);
-    Ok(Some(side))
+}
+
+/// `__chain_b`'s isjunk pass: `isjunk` (if truthy) on each distinct element,
+/// in `b2j` order. On an error, the verdicts made so far come with it.
+fn junk_pass(py: Python<'_>, side: &BSide, isjunk: &Bound<'_, PyAny>) -> Result<Vec<bool>, (PyErr, Vec<bool>)> {
+    let mut junk = Vec::new();
+    match isjunk.is_truthy() {
+        Ok(false) => return Ok(junk),
+        Ok(true) => {}
+        Err(e) => return Err((e, junk)),
+    }
+    let n = side.distinct();
+    junk.reserve(n);
+    for id in 0..n {
+        let verdict = side
+            .rep(py, id)
+            .and_then(|rep| isjunk.call1((rep,)))
+            .and_then(|r| r.is_truthy());
+        match verdict {
+            Ok(v) => junk.push(v),
+            Err(e) => return Err((e, junk)),
+        }
+    }
+    Ok(junk)
 }
 
 /// `a` as ids of `side`'s elements; `None` if it does not run natively.
@@ -451,37 +468,112 @@ fn opcodes_list<'py>(py: Python<'py>, blocks: &[Block]) -> PyResult<Bound<'py, P
 }
 
 /// `set_seq2(b)` after the identity check: reset the caches, build the
-/// index. False if `b` does not run natively (the caller chains it).
+/// index. False if `b` does not run natively (the caller chains it as
+/// CPython does). If `isjunk` (or `autojunk`'s truth) raises, the instance
+/// is left as CPython's `__chain_b` leaves it, without a native index.
 #[pyfunction]
 pub fn _sm_set_seq2(obj: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<bool> {
     let py = obj.py();
     obj.setattr(pyo3::intern!(py, "b"), b)?;
     obj.setattr(pyo3::intern!(py, "opcodes"), py.None())?;
     let d = instance_dict(obj)?;
-    for name in [
-        pyo3::intern!(py, "matching_blocks"),
-        pyo3::intern!(py, "fullbcount"),
-        pyo3::intern!(py, "b2j"),
-        pyo3::intern!(py, "bjunk"),
-        pyo3::intern!(py, "bpopular"),
-        pyo3::intern!(py, "_pyroid_b"),
+    let del = |names: &[&Bound<'_, PyString>]| -> PyResult<()> {
+        for name in names {
+            if d.contains(*name)? {
+                d.del_item(*name)?;
+            }
+        }
+        Ok(())
+    };
+    // The previous b's lazy attributes: CPython keeps bjunk and bpopular
+    // until __chain_b replaces them, so a chain that fails half-way shows them.
+    let old = d
+        .get_item(pyo3::intern!(py, "_pyroid_b"))?
+        .and_then(|o| o.cast_into::<BSide>().ok());
+    let keep_old = |names: &[&str]| -> PyResult<()> {
+        if let Some(old) = &old {
+            for &name in names {
+                if !d.contains(name)? {
+                    let value = match name {
+                        "bjunk" => old.get().bjunk(py)?,
+                        _ => old.get().bpopular(py)?,
+                    };
+                    d.set_item(name, value)?;
+                }
+            }
+        }
+        Ok(())
+    };
+    let Some((mut side, ids)) = number_b(b)? else {
+        keep_old(&["bjunk", "bpopular"])?;
+        del(&[
+            pyo3::intern!(py, "_pyroid_b"),
+            pyo3::intern!(py, "_pyroid_a"),
+            pyo3::intern!(py, "_pyroid_mb"),
+            pyo3::intern!(py, "_pyroid_qr"),
+        ])?;
+        return Ok(false);
+    };
+    del(&[
         pyo3::intern!(py, "_pyroid_a"),
         pyo3::intern!(py, "_pyroid_mb"),
         pyo3::intern!(py, "_pyroid_qr"),
-    ] {
-        if d.contains(name)? {
-            d.del_item(name)?;
+    ])?;
+    del(&[
+        pyo3::intern!(py, "matching_blocks"),
+        pyo3::intern!(py, "fullbcount"),
+    ])?;
+    let n = side.distinct();
+    let fail = |side: &mut BSide, ids: &[u32], junk: &[bool], popular: bool| -> PyResult<()> {
+        // CPython's attributes at the point __chain_b raised.
+        d.set_item(pyo3::intern!(py, "matching_blocks"), py.None())?;
+        d.set_item(pyo3::intern!(py, "fullbcount"), py.None())?;
+        let deleted = if popular { junk } else { &[] };
+        side.index = BIndex::new(ids.to_vec(), n, deleted, false);
+        d.set_item(pyo3::intern!(py, "b2j"), side.b2j(py)?)?;
+        let found = PySet::empty(py)?;
+        for (id, _) in junk.iter().enumerate().filter(|(_, j)| **j) {
+            found.add(side.rep(py, id)?)?;
         }
-    }
-    let isjunk = obj.getattr(pyo3::intern!(py, "isjunk"))?;
-    let autojunk = obj.getattr(pyo3::intern!(py, "autojunk"))?.is_truthy()?;
-    match build_b(py, b, &isjunk, autojunk)? {
-        Some(side) => {
-            d.set_item(pyo3::intern!(py, "_pyroid_b"), Bound::new(py, side)?)?;
-            Ok(true)
+        d.set_item(pyo3::intern!(py, "bjunk"), found)?;
+        if popular {
+            d.set_item(pyo3::intern!(py, "bpopular"), PySet::empty(py)?)?;
         }
-        None => Ok(false),
-    }
+        Ok(())
+    };
+    let junk = match obj
+        .getattr(pyo3::intern!(py, "isjunk"))
+        .map_err(|e| (e, Vec::new()))
+        .and_then(|isjunk| junk_pass(py, &side, &isjunk))
+    {
+        Ok(junk) => junk,
+        Err((e, junk)) => {
+            keep_old(&["bpopular"])?;
+            del(&[pyo3::intern!(py, "_pyroid_b")])?;
+            fail(&mut side, &ids, &junk, false)?;
+            return Err(e);
+        }
+    };
+    let autojunk = match obj
+        .getattr(pyo3::intern!(py, "autojunk"))
+        .and_then(|v| v.is_truthy())
+    {
+        Ok(v) => v,
+        Err(e) => {
+            del(&[pyo3::intern!(py, "_pyroid_b")])?;
+            fail(&mut side, &ids, &junk, true)?;
+            return Err(e);
+        }
+    };
+    side.index = BIndex::new(ids, n, &junk, autojunk);
+    del(&[
+        pyo3::intern!(py, "_pyroid_b"),
+        pyo3::intern!(py, "b2j"),
+        pyo3::intern!(py, "bjunk"),
+        pyo3::intern!(py, "bpopular"),
+    ])?;
+    d.set_item(pyo3::intern!(py, "_pyroid_b"), Bound::new(py, side)?)?;
+    Ok(true)
 }
 
 /// `ratio()`, or `None`.
