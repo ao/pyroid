@@ -14,6 +14,7 @@ __all__ = [
     "_testing",
     "datasketch",
     "dedup",
+    "difflib",
     "fasttext",
     "filters",
     "ftfy",
@@ -36,6 +37,7 @@ ftfy: ModuleType
 fasttext: ModuleType
 filters: ModuleType
 dedup: ModuleType
+difflib: ModuleType
 translit: ModuleType
 metrics: ModuleType
 json_repair: ModuleType

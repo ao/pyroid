@@ -27,7 +27,7 @@ from typing import Any
 import pytest
 
 import pyroid.difflib as pd
-from pyroid import integrations
+from pyroid import FallbackWarning, integrations
 
 DATA = Path(__file__).resolve().parents[2] / "parity" / "data" / "cpython-difflib"
 HERE = DATA / f"{sys.version_info[0]}.{sys.version_info[1]}"
@@ -38,7 +38,7 @@ pytestmark = pytest.mark.thread_unsafe(reason="HtmlDiff's prefix counter and pat
 @contextlib.contextmanager
 def _force_color(color: bool) -> Iterator[None]:
     # test.support.force_color, without test.support.
-    import _colorize  # noqa: PLC0415  (3.13+; only the 3.15 tests use it)
+    import _colorize  # type: ignore[import-not-found]  # 3.13+, only the 3.15 tests use it
 
     names = ("FORCE_COLOR", "NO_COLOR", "PYTHON_COLORS")
     saved_env = {k: os.environ.get(k) for k in names}
@@ -149,7 +149,7 @@ def _run(module: types.ModuleType, case: unittest.TestCase) -> unittest.TestResu
     module.setUpModule()
     result = unittest.TestResult()
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", pd.FallbackWarning)
+        warnings.simplefilter("ignore", FallbackWarning)
         case(result)
     return result
 

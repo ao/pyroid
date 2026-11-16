@@ -32,7 +32,7 @@ def outcome(f: Callable[[], Any]) -> Any:
     """`f()`, or the exception it raised as (type name, message)."""
     try:
         return ("ok", f())
-    except Exception as exc:  # noqa: BLE001 - compared, not handled
+    except Exception as exc:
         return ("raised", type(exc).__name__, str(exc))
 
 
@@ -47,7 +47,9 @@ unicode_text = st.text(alphabet=any_char, max_size=30)
 long_text = st.text(alphabet=st.sampled_from("abcde "), min_size=190, max_size=400)
 texts = st.one_of(small_text, small_text, unicode_text, long_text)
 
-vocab = st.sampled_from(["a\n", "b\n", "c\n", "\n", "# x\n", "  \n", "aaa\n", "abc", "\ud800\n", "é\n"])
+vocab = st.sampled_from(
+    ["a\n", "b\n", "c\n", "\n", "# x\n", "  \n", "aaa\n", "abc", "\ud800\n", "é\n"]
+)
 line_lists = st.one_of(
     st.lists(vocab, max_size=25),
     st.lists(vocab, min_size=195, max_size=260),
@@ -57,7 +59,9 @@ line_lists = st.one_of(
 ints = st.lists(st.one_of(st.integers(-3, 3), st.booleans(), st.just(2**70)), max_size=30)
 bytes_items = st.lists(st.sampled_from([b"a", b"b", b"", b"ab"]), max_size=20)
 mixed = st.lists(
-    st.one_of(st.sampled_from(["a", "b"]), st.integers(0, 2), st.just(1.0), st.just((1,)), st.none()),
+    st.one_of(
+        st.sampled_from(["a", "b"]), st.integers(0, 2), st.just(1.0), st.just((1,)), st.none()
+    ),
     max_size=12,
 )
 
@@ -146,7 +150,9 @@ OPS = st.lists(
         st.tuples(st.just("grouped"), st.integers(-3, 6)),
         st.tuples(
             st.just("flm"),
-            st.lists(st.one_of(st.none(), st.integers(-2, 40), st.just(True)), min_size=0, max_size=4),
+            st.lists(
+                st.one_of(st.none(), st.integers(-2, 40), st.just(True)), min_size=0, max_size=4
+            ),
         ),
         st.tuples(st.just("seq1"), sequences()),
         st.tuples(st.just("seq2"), sequences()),
@@ -171,6 +177,11 @@ def view(value: Any) -> Any:
     return (type(value).__name__, value)
 
 
+def step(f: Callable[..., Any], *args: Any) -> Any:
+    """`outcome` of `view(f(*args))`."""
+    return outcome(lambda: view(f(*args)))
+
+
 def run_ops(cls: type, isjunk: Any, a: Any, b: Any, autojunk: Any, ops: list[Any]) -> list[Any]:
     log: list[Any] = []
     sm = outcome(lambda: cls(isjunk, a, b, autojunk))
@@ -180,29 +191,31 @@ def run_ops(cls: type, isjunk: Any, a: Any, b: Any, autojunk: Any, ops: list[Any
     for op in ops:
         kind = op[0]
         if kind == "attr":
-            log.append(outcome(lambda: view(getattr(s, op[1]))))
+            log.append(step(getattr, s, op[1]))
         elif kind == "grouped":
-            log.append(outcome(lambda: view(list(s.get_grouped_opcodes(op[1])))))
-            log.append(outcome(lambda: view(s.get_opcodes())))
+            log.append(step(lambda s, n: list(s.get_grouped_opcodes(n)), s, op[1]))
+            log.append(step(lambda s: s.get_opcodes(), s))
         elif kind == "flm":
-            log.append(outcome(lambda: view(s.find_longest_match(*op[1]))))
+            log.append(step(lambda s, bounds: s.find_longest_match(*bounds), s, op[1]))
         elif kind == "seq1":
-            log.append(outcome(lambda: s.set_seq1(op[1])))
+            log.append(step(lambda s, x: s.set_seq1(x), s, op[1]))
         elif kind == "seq2":
-            log.append(outcome(lambda: s.set_seq2(op[1])))
+            log.append(step(lambda s, x: s.set_seq2(x), s, op[1]))
         elif kind == "same":  # set_seq1/set_seq2 with the current object: a no-op
-            log.append(outcome(lambda: s.set_seq1(s.a) if op[1] == "a" else s.set_seq2(s.b)))
+            log.append(
+                step(lambda s, w: s.set_seq1(s.a) if w == "a" else s.set_seq2(s.b), s, op[1])
+            )
         elif kind == "pickle":  # a round trip of the matcher this test just made
             if isjunk is None:
                 s = pickle.loads(pickle.dumps(s))
                 log.append(type(s).__name__)
         elif kind == "copy":
             s = copy.copy(s)
-            log.append(outcome(lambda: view(s.get_opcodes())))
+            log.append(step(lambda s: s.get_opcodes(), s))
         else:
-            log.append(outcome(lambda: view(getattr(s, kind)())))
-    log.append(outcome(lambda: view(s.ratio())))
-    log.append(outcome(lambda: view(s.get_opcodes())))
+            log.append(step(lambda s, name: getattr(s, name)(), s, kind))
+    log.append(step(lambda s: s.ratio(), s))
+    log.append(step(lambda s: s.get_opcodes(), s))
     return log
 
 
@@ -240,8 +253,8 @@ def test_line_lists(a: list[str], b: list[str]) -> None:
 def test_find_longest_match_bounds(a: str, b: str, alo: int, ahi: int, blo: int, bhi: int) -> None:
     for junk in (None, " ".__eq__):
         s1, s2 = difflib.SequenceMatcher(junk, a, b), pd.SequenceMatcher(junk, a, b)
-        expected = outcome(lambda: view(s1.find_longest_match(alo, ahi, blo, bhi)))
-        assert outcome(lambda: view(s2.find_longest_match(alo, ahi, blo, bhi))) == expected
+        expected = step(s1.find_longest_match, alo, ahi, blo, bhi)
+        assert step(s2.find_longest_match, alo, ahi, blo, bhi) == expected
 
 
 def test_documented_examples() -> None:
@@ -253,14 +266,18 @@ def test_documented_examples() -> None:
     assert pd.SequenceMatcher(None, "abcd", "bcde").ratio() == 0.75
 
 
-class Overriding(difflib.SequenceMatcher):
-    def find_longest_match(self, alo: int = 0, ahi: Any = None, blo: int = 0, bhi: Any = None) -> Any:
+class Overriding(difflib.SequenceMatcher[str]):
+    def find_longest_match(
+        self, alo: int = 0, ahi: Any = None, blo: int = 0, bhi: Any = None
+    ) -> Any:
         self.calls = getattr(self, "calls", 0) + 1
         return super().find_longest_match(alo, ahi, blo, bhi)
 
 
-class PyroidOverriding(pd.SequenceMatcher):
-    def find_longest_match(self, alo: int = 0, ahi: Any = None, blo: int = 0, bhi: Any = None) -> Any:
+class PyroidOverriding(pd.SequenceMatcher[str]):
+    def find_longest_match(
+        self, alo: int = 0, ahi: Any = None, blo: int = 0, bhi: Any = None
+    ) -> Any:
         self.calls = getattr(self, "calls", 0) + 1
         return super().find_longest_match(alo, ahi, blo, bhi)
 
@@ -288,7 +305,9 @@ words = st.text(alphabet=st.sampled_from("abcdé\ud800"), max_size=8)
     st.sampled_from([0.0, 0.3, 0.6, 0.75, 1.0, 0, 1, -0.1, 1.5, float("nan")]),
     st.sampled_from(["list", "tuple", "iter", "dict", "set"]),
 )
-def test_get_close_matches(word: Any, possibilities: list[str], n: Any, cutoff: Any, kind: str) -> None:
+def test_get_close_matches(
+    word: Any, possibilities: list[str], n: Any, cutoff: Any, kind: str
+) -> None:
     def make() -> Any:
         if kind == "tuple":
             return tuple(possibilities)
@@ -332,7 +351,12 @@ def line_junk_factory() -> st.SearchStrategy[Callable[[], Any]]:
 
 char_junk = st.sampled_from([None, difflib.IS_CHARACTER_JUNK, lambda c: c in "ae", " ".__eq__])
 fancy_lines = st.lists(
-    st.one_of(vocab, st.text(alphabet=st.sampled_from("abcd \t"), min_size=1, max_size=12).map(lambda s: s + "\n")),
+    st.one_of(
+        vocab,
+        st.text(alphabet=st.sampled_from("abcd \t"), min_size=1, max_size=12).map(
+            lambda s: s + "\n"
+        ),
+    ),
     max_size=16,
 )
 diff_inputs = st.one_of(fancy_lines, line_lists, fancy_lines.map(tuple))
@@ -355,8 +379,8 @@ def test_ndiff(a: list[str], b: list[str], make_junk: Any, charjunk: Any) -> Non
 @FUZZ
 @given(diff_inputs, diff_inputs, st.one_of(st.none(), st.integers(0, 4)), char_junk)
 def test_mdiff(a: list[str], b: list[str], context: Any, charjunk: Any) -> None:
-    expected = outcome(lambda: list(difflib._mdiff(a, b, context, None, charjunk)))
-    assert outcome(lambda: list(pd._mdiff(a, b, context, None, charjunk))) == expected
+    expected = outcome(lambda: list(difflib._mdiff(a, b, context, None, charjunk)))  # type: ignore[attr-defined]
+    assert outcome(lambda: list(pd._mdiff(a, b, context, None, charjunk))) == expected  # type: ignore[attr-defined]
 
 
 class Quiet(difflib.Differ):
@@ -408,7 +432,9 @@ names = st.one_of(st.sampled_from(["", "a.txt", "b\ud800"]), st.text(max_size=5)
 
 @FUZZ
 @given(
-    st.one_of(diff_inputs, st.lists(st.one_of(vocab, st.just(b"x\n"), st.just(1)), max_size=3), small_text),
+    st.one_of(
+        diff_inputs, st.lists(st.one_of(vocab, st.just(b"x\n"), st.just(1)), max_size=3), small_text
+    ),
     diff_inputs,
     names,
     names,
@@ -416,27 +442,37 @@ names = st.one_of(st.sampled_from(["", "a.txt", "b\ud800"]), st.text(max_size=5)
     st.sampled_from(["\n", "", "\r\n", "\ud800"]),
     st.booleans(),
 )
-def test_unified_and_context(a: Any, b: Any, f1: str, f2: str, n: int, lineterm: str, color: bool) -> None:
+def test_unified_and_context(
+    a: Any, b: Any, f1: str, f2: str, n: int, lineterm: str, color: bool
+) -> None:
     for name in ("unified_diff", "context_diff"):
         kw: dict[str, Any] = {"color": color} if COLOR and name == "unified_diff" else {}
-        expected = outcome(lambda: list(getattr(difflib, name)(a, b, f1, f2, "d1", "", n, lineterm, **kw)))
-        actual = outcome(lambda: list(getattr(pd, name)(a, b, f1, f2, "d1", "", n, lineterm, **kw)))
-        assert actual == expected
+        args = (a, b, f1, f2, "d1", "", n, lineterm)
+        expected = step(lambda f, args, kw: list(f(*args, **kw)), getattr(difflib, name), args, kw)
+        assert (
+            step(lambda f, args, kw: list(f(*args, **kw)), getattr(pd, name), args, kw) == expected
+        )
 
 
 def test_lazy_errors() -> None:
     # As generators, both raise at the first next(), not at the call.
-    g = pd.unified_diff([1], ["a"])
+    g = pd.unified_diff([1], ["a"])  # type: ignore[list-item]
     with pytest.raises(TypeError, match="lines to compare must be str"):
         next(g)
-    g2 = pd.ndiff([["unhashable"]], [["x"]])
+    g2 = pd.ndiff([["unhashable"]], [["x"]])  # type: ignore[list-item]
     with pytest.raises(TypeError, match="unhashable"):
         next(g2)
 
 
-@given(st.lists(st.binary(max_size=6).map(lambda s: s + b"\n"), max_size=10), st.lists(st.sampled_from([b"a\n", b"\xff\n"]), max_size=10))
+@given(
+    st.lists(st.binary(max_size=6).map(lambda s: s + b"\n"), max_size=10),
+    st.lists(st.sampled_from([b"a\n", b"\xff\n"]), max_size=10),
+)
 def test_diff_bytes(a: list[bytes], b: list[bytes]) -> None:
-    for d1, d2 in ((difflib.unified_diff, pd.unified_diff), (difflib.context_diff, pd.context_diff)):
+    for d1, d2 in (
+        (difflib.unified_diff, pd.unified_diff),
+        (difflib.context_diff, pd.context_diff),
+    ):
         expected = list(difflib.diff_bytes(d1, a, b, b"x", b"y\xff"))
         assert list(pd.diff_bytes(d2, a, b, b"x", b"y\xff")) == expected
 
@@ -452,7 +488,9 @@ def test_diff_bytes(a: list[bytes], b: list[bytes]) -> None:
 def test_patched(a: str, b: str, la: list[str], lb: list[str]) -> None:
     before = Overriding(None, a, b)  # a subclass made before the patch
     expected = (
-        view(run_ops(difflib.SequenceMatcher, None, a, b, True, [("get_opcodes",), ("quick_ratio",)])),
+        view(
+            run_ops(difflib.SequenceMatcher, None, a, b, True, [("get_opcodes",), ("quick_ratio",)])
+        ),
         list(difflib.ndiff(la, lb)),
         list(difflib.unified_diff(la, lb)),
         view(before.get_opcodes()),
@@ -464,7 +502,16 @@ def test_patched(a: str, b: str, la: list[str], lb: list[str]) -> None:
             assert difflib.SequenceMatcher.ratio is pd.SequenceMatcher.ratio
             after = Overriding(None, a, b)
             actual = (
-                view(run_ops(difflib.SequenceMatcher, None, a, b, True, [("get_opcodes",), ("quick_ratio",)])),
+                view(
+                    run_ops(
+                        difflib.SequenceMatcher,
+                        None,
+                        a,
+                        b,
+                        True,
+                        [("get_opcodes",), ("quick_ratio",)],
+                    )
+                ),
                 list(difflib.ndiff(la, lb)),
                 list(difflib.unified_diff(la, lb)),
                 view(after.get_opcodes()),

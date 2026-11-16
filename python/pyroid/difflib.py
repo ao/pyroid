@@ -15,6 +15,7 @@ Python code, with this module's ``SequenceMatcher`` underneath where it applies.
 
 from __future__ import annotations
 
+import contextlib
 import difflib as _std
 import sys
 import types
@@ -27,8 +28,8 @@ from pyroid._pyroid import difflib as _native
 
 __all__ = [
     "IS_CHARACTER_JUNK",
-    "SUPPORTED_VERSIONS",
     "IS_LINE_JUNK",
+    "SUPPORTED_VERSIONS",
     "Differ",
     "HtmlDiff",
     "Match",
@@ -106,7 +107,11 @@ _ELEMENTS = "these sequences (elements other than str, int and bytes, or other s
 
 
 def _init(
-    self: Any, isjunk: Callable[[Any], bool] | None = None, a: Any = "", b: Any = "", autojunk: bool = True
+    self: Any,
+    isjunk: Callable[[Any], bool] | None = None,
+    a: Any = "",
+    b: Any = "",
+    autojunk: bool = True,
 ) -> None:
     cls = type(self)
     if cls.set_seqs in _SET_SEQS and cls.set_seq1 is _set_seq1 and cls.set_seq2 is _set_seq2:
@@ -167,8 +172,11 @@ def _get_matching_blocks(self: Any) -> Any:
 
 
 def _native_blocks(self: Any) -> bool:
-    """True if the blocks can be computed natively: neither get_matching_blocks nor
-    find_longest_match is overridden, and no matching_blocks list is set."""
+    """True if the blocks can be computed natively.
+
+    That is: neither get_matching_blocks nor find_longest_match is overridden, and no
+    matching_blocks list is set.
+    """
     cls = type(self)
     return (
         cls.get_matching_blocks is _get_matching_blocks
@@ -210,16 +218,17 @@ def _getstate(self: Any) -> dict[str, Any]:
     # CPython's state: the lazy attributes made, the native index left out.
     for name in _LAZY:
         if name not in self.__dict__:
-            try:
+            with contextlib.suppress(AttributeError):
                 getattr(self, name)
-            except AttributeError:
-                pass
     return {k: v for k, v in self.__dict__.items() if not k.startswith("_pyroid_")}
 
 
 class _Lazy:
-    """``b2j``, ``bjunk``, ``bpopular``, ``fullbcount`` or ``matching_blocks`` of a matcher
-    whose index is native: made (in CPython's order) on first read, then a plain attribute."""
+    """A lazy attribute of a matcher whose index is native.
+
+    ``b2j``, ``bjunk``, ``bpopular``, ``fullbcount`` or ``matching_blocks``: made (in CPython's
+    order) on first read, then a plain instance attribute.
+    """
 
     __slots__ = ("_name",)
 
@@ -383,7 +392,9 @@ else:
         lineterm: str = "\n",
     ) -> Iterator[str]:
         _check_types(a, b, fromfile, tofile, fromfiledate, tofiledate, lineterm)
-        lines = _native._line_diff(a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, False)
+        lines = _native._line_diff(
+            a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, False
+        )
         if lines is None:
             yield from _std_unified(a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm)
             return
