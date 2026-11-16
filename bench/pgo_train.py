@@ -12,8 +12,9 @@ Each module runs on list[str] and Arrow input and single str calls, at every ``-
 ftfy (FineWeb text, plus mojibake made from it), translit, fastText LID (.bin and .ftz), the Gopher, C4 and
 FineWeb filters and the formatters, MinHash and exact and sentence dedup, pyroid.text, pyroid.jieba,
 pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.metrics
-(ROUGE, BLEU, chrF), pyroid.datasketch, and the FineWeb-2 filter and MinHash configs of every language
-pyroid tokenizes natively here (Japanese only with SudachiDict installed).
+(ROUGE, BLEU, chrF), pyroid.datasketch, pyroid.difflib (diffs of FineWeb lines, name ratios and close
+matches), and the FineWeb-2 filter and MinHash configs of every language pyroid tokenizes natively here
+(Japanese only with SudachiDict installed).
 
 Needs only pyroid and numpy. pyarrow is optional: without it, as on Windows ARM64, the Arrow calls are
 skipped. Nothing is checked or timed: an instrumented build is never shipped.
@@ -24,6 +25,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import random
 import sys
 import time
 import warnings
@@ -298,10 +300,70 @@ class Trainer:
             lsh.query(lean)
             m.jaccard(ms[0])
 
+    def difflib(self) -> None:
+        import pyroid.difflib as D
+
+        rnd = random.Random(TRAIN_SEED)
+        words = [w for t in self.texts[:2000] for w in t.split()[:20] if w.isalpha()] or ["x"]
+        names = list(dict.fromkeys(words))[:20_000]
+
+        def typo(s: str) -> str:
+            i = rnd.randrange(max(1, len(s)))
+            return [s[:i] + s[i + 1 :], s[:i] + rnd.choice("aeiorst") + s[i:], s.upper(), s[::-1]][i % 4]
+
+        def edited(xs: list[str]) -> list[str]:
+            out = []
+            for x in xs:
+                k = rnd.randrange(10)
+                if k == 0:
+                    continue
+                out.append(typo(x) + "\n" if k == 1 else x)
+                if k == 2:
+                    out.append(rnd.choice(xs))
+            return out
+
+        lines = [s + "\n" for t in self.texts[:3000] for s in t.split(". ") if s]
+        files = [lines[i : i + rnd.randint(20, 300)] for i in range(0, len(lines), 300)][:200]
+        for a in files:
+            b = edited(a)
+            list(D.unified_diff(a, b))
+            list(D.context_diff(a, b, n=1))
+            list(D.ndiff(a[:80], b[:80]))
+            sm = D.SequenceMatcher(None, a, b)
+            sm.get_opcodes()
+            list(sm.get_grouped_opcodes())
+        for a in files[:30]:
+            b = edited(a)
+            D.HtmlDiff().make_file(a[:100], b[:100])
+            D.HtmlDiff(wrapcolumn=60).make_table(a[:60], b[:60], context=True)
+        typos = [typo(n) for n in names]
+        paras = [t[:500] for t in self.texts[:2000]]
+        changed = [typo(typo(p)) for p in paras]
+        for t in self.threads:
+            D.ratio_batch(typos, names, threads=t)
+            D.ratio_batch(paras, changed, threads=t)
+            D.close_matches_batch(typos[:300], names[:5000], threads=t)
+            if pa is not None:
+                D.ratio_batch(pa.array(typos), pa.array(names), threads=t)
+        # Single calls in the hundreds of thousands, as callers make them: with fewer, the
+        # per-call path stays cold next to the rest of the profile.
+        for _ in range(20):
+            for x, y in zip(typos, names, strict=True):
+                D.SequenceMatcher(None, x, y).ratio()
+        for x, y in zip(typos[:50_000], names, strict=False):
+            sm = D.SequenceMatcher(lambda c: c == " ", x, y)
+            sm.quick_ratio()
+            sm.get_matching_blocks()
+            D.SequenceMatcher(None, x.encode(), y.encode()).ratio()
+        for x, y in zip(paras, changed, strict=True):
+            D.SequenceMatcher(None, x, y).ratio()
+        for q in typos[:300]:
+            D.get_close_matches(q, names[:10_000])
+
     def run(self) -> dict[str, float]:
         warnings.simplefilter("ignore")  # FallbackWarning and friends: the paths still run
         sections = ["ftfy", "translit", "fasttext", "filters", "dedup", "text", "multilingual", "jieba"]
-        sections += ["json_repair", "metrics", "datasketch"]
+        sections += ["json_repair", "metrics", "datasketch", "difflib"]
         for name in sections:
             self.section(name, getattr(self, name))
         return self.timings
