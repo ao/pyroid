@@ -431,6 +431,9 @@ fn hash_round<T: Value>(
 /// pipelined: a helper thread waits for the pool to hash round `i` while the
 /// calling thread copies round `i + 1`; the calling thread only waits for the
 /// pool while detached.
+/// Rows of `initial` values written between two Ctrl-C checks in [`bulk_rows`].
+const FILL_ROWS: usize = 8192;
+
 fn bulk_rows<T: Value>(
     py: Python<'_>,
     perm: &Permutations,
@@ -443,7 +446,13 @@ fn bulk_rows<T: Value>(
     let k = initial.len();
     let n = docs.len();
     let mut out: Vec<T> = Vec::with_capacity(n * k);
-    for _ in 0..n {
+    // Every row starts as `initial`: n * k values (2 GB for 2 million documents of 128
+    // permutations), written before the first document is hashed. That takes seconds where page
+    // faults are slow, so Ctrl-C is checked between steps of FILL_ROWS rows.
+    for i in 0..n {
+        if i % FILL_ROWS == FILL_ROWS - 1 {
+            py.check_signals()?;
+        }
         out.extend_from_slice(initial);
     }
     let mut fallback = Vec::new();
