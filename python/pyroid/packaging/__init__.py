@@ -1,0 +1,39 @@
+# Derived from packaging 26.3 (Apache-2.0 OR BSD-2-Clause), © Donald Stufft and individual
+# contributors; modified.
+"""A drop-in, Rust-backed replacement for packaging 26.3's versions, specifiers, markers and
+requirements.
+
+``from pyroid.packaging.version import Version`` (and ``specifiers``, ``markers``,
+``requirements``, ``utils``) gives classes that behave as packaging's: the same parsing,
+ordering, hashing, string forms and exceptions. With packaging installed, the exceptions are
+packaging's own classes and ``isinstance(v, packaging.version.Version)`` is true for pyroid's
+versions.
+"""
+
+from __future__ import annotations
+
+from pyroid.packaging import _compat, version
+
+#: The packaging release whose behaviour this module reproduces.
+PACKAGING_VERSION = "26.3"
+__version__ = PACKAGING_VERSION
+
+#: The packaging submodules pyroid ports (``pyroid.patch("packaging")`` without packaging installed
+#: provides shims for these).
+PORTED = ("version",)
+
+__all__ = ["PACKAGING_VERSION", "PORTED", "version"]
+
+del _compat
+
+
+def _patch_targets() -> list[tuple[str, str, object]]:
+    """``(module, name, pyroid's object)`` for each packaging object ``patch()`` replaces.
+
+    ``pyroid.patch("packaging")`` replaces the original object everywhere a packaging module holds
+    it (``packaging.specifiers.Version`` too), so packaging's own modules use pyroid's classes.
+    """
+    return [
+        ("packaging.version", "Version", version.Version),
+        ("packaging.version", "parse", version.parse),
+    ]
