@@ -224,7 +224,8 @@ PSF-2.0 AND Unicode-3.0 AND Zlib`:
   its dictionary), libxml2 (HTML parser), PyYAML, tabulate and jmespath ports;
 - BSD-2-Clause for the jusText port and its stoplists, and the packaging port (packaging is
   dual-licensed Apache-2.0 OR BSD-2-Clause);
-- BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract and lxml;
+- BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract, lxml and
+  python-dateutil (whose later contributions are also Apache-2.0);
 - PSF-2.0 for CPython's `ipaddress`, float formatting and `difflib`;
 - ISC for anyascii's data;
 - Unicode-3.0 for Unicode Character Database data;
