@@ -897,7 +897,7 @@ _TARGETS: dict[str, _Target] = {
     ),
     "dateutil": _Target(
         "pyroid.dateutil.parser",
-        "whose parse and isoparse reproduce python-dateutil 4.0.0, 3.0.0 and 2.9.0.post0 "
+        "whose parse and isoparse reproduce python-dateutil 2.8.2 to 4.0.0 "
         "(isoparse following the installed release)",
         "DATEUTIL_VERSION",
         "pip install python-dateutil",

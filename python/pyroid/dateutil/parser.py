@@ -6,9 +6,9 @@
 signatures and give the same results: the same ``datetime`` values, the installed dateutil's own
 time zone objects (``tz.UTC``, ``tz.tzoffset(...)``, ``tz.tzlocal()``), and the same
 ``ParserError`` (dateutil's class, when it is installed) with the same message. ``parse`` is the
-same in python-dateutil 2.9.0.post0, 3.0.0 and 4.0.0; ``isoparse`` follows the installed release
-(see ``isoparser(compat=...)``). ``parse_batch`` and ``isoparse_batch`` parse lists and Arrow
-columns on pyroid's thread pool.
+same in python-dateutil 2.8.2, 2.9.0, 2.9.0.post0, 3.0.0 and 4.0.0; ``isoparse`` follows the
+installed release (see ``isoparser(compat=...)``). ``parse_batch`` and ``isoparse_batch`` parse
+lists and Arrow columns on pyroid's thread pool.
 
 The tokenizer and the parser's resolution logic run in Rust. A ``parser`` or ``parserinfo``
 subclass that overrides a method, and the few inputs the Rust port does not handle, run dateutil's
@@ -49,12 +49,45 @@ __all__ = [
 
 #: The newest python-dateutil release this module reproduces.
 DATEUTIL_VERSION = "4.0.0"
-#: Every release it reproduces: ``parse`` is the same in all three; ``isoparse`` has a 4.0.0
-#: form and a 2.9.0.post0 form (which 3.0.0 shares), selected with ``isoparser(compat=...)``.
-DATEUTIL_VERSIONS = ("4.0.0", "3.0.0", "2.9.0.post0")
+#: Every release it reproduces: ``parse`` is the same in all of them; ``isoparse`` has a 4.0.0
+#: form and a 2.9.0.post0 form (which 2.8.2, 2.9.0 and 3.0.0 share), selected with
+#: ``isoparser(compat=...)``.
+DATEUTIL_VERSIONS = ("4.0.0", "3.0.0", "2.9.0.post0", "2.9.0", "2.8.2")
 
-# isoparse modes: the release whose isoparse a compat value means.
-_ISO_MODES = {"4.0.0": "4.0.0", "3.0.0": "2.9.0.post0", "2.9.0.post0": "2.9.0.post0"}
+# isoparse modes: the release whose isoparse a compat value means. 2.8.2's and 2.9.0's
+# isoparser.py and _parser.py are 2.9.0.post0's code (2.8.2's differs in one docstring line).
+_ISO_MODES = {
+    "4.0.0": "4.0.0",
+    "3.0.0": "2.9.0.post0",
+    "2.9.0.post0": "2.9.0.post0",
+    "2.9.0": "2.9.0.post0",
+    "2.8.2": "2.9.0.post0",
+}
+
+
+def _is_internal(frame: Any) -> bool:
+    """Whether ``warnings.warn`` skips `frame` when it counts ``stacklevel`` (importlib's)."""
+    filename = frame.f_code.co_filename
+    return "importlib" in filename and "_bootstrap" in filename
+
+
+def _stacklevel_outside(prefixes: tuple[str, ...]) -> int:
+    """The ``stacklevel`` that points a warning at the first frame outside `prefixes`.
+
+    For the caller's ``warnings.warn``: the first frame whose module name does not start with
+    one of `prefixes`. ``warnings.warn`` does not count importlib's bootstrap frames, so neither
+    does this.
+    """
+    frame = sys._getframe(1)
+    level = 1
+    while frame.f_back is not None:
+        frame = frame.f_back
+        if _is_internal(frame):
+            continue
+        level += 1
+        if not frame.f_globals.get("__name__", "").startswith(prefixes):
+            break
+    return level
 
 
 def _version_check() -> None:
@@ -68,25 +101,19 @@ def _version_check() -> None:
             __name__,
             "dateutil",
             f"python-dateutil=={DATEUTIL_VERSION}",
-            same=("python-dateutil==3.0.0", "python-dateutil==2.9.0.post0"),
+            same=tuple(f"python-dateutil=={v}" for v in DATEUTIL_VERSIONS[1:]),
         )
         return
     found = _upstream.INSTALLED_VERSION
     if found is None or found in DATEUTIL_VERSIONS:
         return
-    frame = sys._getframe(1)
-    level = 1
-    while frame.f_back is not None and frame.f_globals.get("__name__", "").startswith(
-        ("pyroid", "importlib")
-    ):
-        frame = frame.f_back
-        level += 1
+    others = ", ".join(DATEUTIL_VERSIONS[1:])
     warnings.warn(
-        f"{__name__} reproduces python-dateutil {DATEUTIL_VERSION} (and 3.0.0, 2.9.0.post0), but "
-        f"python-dateutil {found} is installed: results can differ from it. Install "
-        f"python-dateutil=={DATEUTIL_VERSION} to compare like for like.",
+        f"{__name__} reproduces python-dateutil {DATEUTIL_VERSION} (and {others}), but "
+        f"python-dateutil {found} is installed: results can differ from it. Install one of "
+        "those releases to compare like for like.",
         RuntimeWarning,
-        stacklevel=level + 1,
+        stacklevel=_stacklevel_outside(("pyroid", "importlib")),
     )
 
 
@@ -114,18 +141,6 @@ _native._set_unicode_version(_unicode_version())
 _WARNED: set[str] = set()
 
 
-def _caller_stacklevel() -> int:
-    """The ``stacklevel`` that points ``warnings.warn`` at the first frame outside pyroid."""
-    frame = sys._getframe(1)
-    level = 1
-    while frame.f_back is not None and frame.f_globals.get("__name__", "").startswith(
-        "pyroid.dateutil"
-    ):
-        frame = frame.f_back
-        level += 1
-    return level
-
-
 def _fallback(name: str, reason: str | None) -> None:
     """Warn once that dateutil's Python algorithm runs, for `reason`.
 
@@ -141,7 +156,7 @@ def _fallback(name: str, reason: str | None) -> None:
             f"pyroid.dateutil.parser.{name}: {reason} is not supported by the Rust port; "
             "running dateutil's own algorithm (slow path). This warning is shown once.",
             FallbackWarning,
-            stacklevel=_caller_stacklevel(),
+            stacklevel=_stacklevel_outside(("pyroid.dateutil",)),
         )
 
 
@@ -340,7 +355,13 @@ DEFAULTPARSER = parser()
 def _iso_mode(compat: str | None) -> str:
     if compat is None:
         installed = _upstream.INSTALLED_VERSION
-        return _ISO_MODES.get(installed or "", DATEUTIL_VERSION)
+        if installed is None:
+            return DATEUTIL_VERSION
+        if installed in _ISO_MODES:
+            return _ISO_MODES[installed]
+        # Another release (the import warned about it): the closer of the two forms.
+        major = installed.partition(".")[0]
+        return DATEUTIL_VERSION if major.isdigit() and int(major) >= 4 else "2.9.0.post0"
     if compat not in _ISO_MODES:
         raise ValueError(
             f"compat must be one of {', '.join(map(repr, DATEUTIL_VERSIONS))} or None, "
@@ -353,8 +374,9 @@ class isoparser(_isoreference.isoparser):  # noqa: N801 - dateutil's name
     """dateutil's ``isoparser(sep=None)``, plus the keyword-only ``compat``.
 
     ``compat`` picks whose ``isoparse`` to reproduce: ``"4.0.0"`` (each field exactly N ASCII
-    digits), or ``"2.9.0.post0"``/``"3.0.0"`` (fields read with ``int()``, so ``2014- 4-21``
-    parses). ``None``, the default, follows the installed python-dateutil, and is 4.0.0 without it.
+    digits), or ``"3.0.0"``, ``"2.9.0.post0"``, ``"2.9.0"`` or ``"2.8.2"`` (fields read with
+    ``int()``, so ``2014- 4-21`` parses). ``None``, the default, follows the installed
+    python-dateutil, and is 4.0.0 without it.
     """
 
     def __init__(self, sep: str | None = None, *, compat: str | None = None) -> None:

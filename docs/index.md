@@ -49,7 +49,7 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 |  | [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | [NeMo Curator](https://github.com/NVIDIA-NeMo/Curator) 1.4.0's heuristic document filters and string modifiers | same scores, exceptions and modified text ([parity](compatibility.md#nemo)) |
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
 | JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
-| Dates | [`pyroid.dateutil.parser`](guides/dateutil.md) | [python-dateutil](https://github.com/dateutil/dateutil)'s `parse` and `isoparse`, 4.0.0, 3.0.0 and 2.9.0.post0 | same datetimes, tz objects, exceptions and messages ([parity](compatibility.md#dateutil)) |
+| Dates | [`pyroid.dateutil.parser`](guides/dateutil.md) | [python-dateutil](https://github.com/dateutil/dateutil)'s `parse` and `isoparse`, 2.8.2 to 4.0.0 | same datetimes, tz objects, exceptions and messages ([parity](compatibility.md#dateutil)) |
 
 ## Example: cleaning LLM training data
 

@@ -3,8 +3,8 @@
 ``parse``, ``parser``, ``parserinfo``, ``isoparse`` and ``isoparser`` take python-dateutil's
 arguments and give its results: the same ``datetime`` values, the installed dateutil's own time
 zone objects, and the same exceptions with the same messages. ``parse`` is the same in
-python-dateutil 2.9.0.post0, 3.0.0 and 4.0.0. ``isoparse`` follows the installed release
-(``isoparser(compat=...)``).
+python-dateutil 2.8.2, 2.9.0, 2.9.0.post0, 3.0.0 and 4.0.0. ``isoparse`` follows the installed
+release (``isoparser(compat=...)``).
 
 ``parse_batch`` and ``isoparse_batch`` are pyroid's additions: they parse lists, tuples and Arrow
 string columns on pyroid's thread pool.
@@ -38,12 +38,12 @@ DATEUTIL_VERSION: Final[str]
 """The newest python-dateutil release this module reproduces (``"4.0.0"``)."""
 
 DATEUTIL_VERSIONS: Final[tuple[str, ...]]
-"""Every release it reproduces: ``("4.0.0", "3.0.0", "2.9.0.post0")``."""
+"""Every release it reproduces: ``("4.0.0", "3.0.0", "2.9.0.post0", "2.9.0", "2.8.2")``."""
 
 _TzData: TypeAlias = datetime.tzinfo | str | int | None
 _TzInfos: TypeAlias = Mapping[str, _TzData] | Callable[[str | None, int | None], _TzData]
 _TimeStr: TypeAlias = str | bytes | bytearray | IO[str]
-_Compat: TypeAlias = Literal["4.0.0", "3.0.0", "2.9.0.post0"]
+_Compat: TypeAlias = Literal["4.0.0", "3.0.0", "2.9.0.post0", "2.9.0", "2.8.2"]
 
 class ParserError(ValueError):
     """dateutil's ``ParserError``: any failure to parse a date string.
@@ -206,9 +206,9 @@ class isoparser:  # noqa: N801 - dateutil's name
         sep: The one character that must separate date and time (``"T"`` for strict ISO 8601);
             any character if ``None``.
         compat: Whose ``isoparse`` to reproduce. ``"4.0.0"``: every numeric field is exactly N
-            ASCII digits. ``"2.9.0.post0"`` and ``"3.0.0"``: fields are read with ``int()``, so
-            ``"2014- 4-21"`` parses. ``None`` (the default): the installed python-dateutil's
-            release, and 4.0.0 without one.
+            ASCII digits. ``"3.0.0"``, ``"2.9.0.post0"``, ``"2.9.0"`` and ``"2.8.2"``: fields are
+            read with ``int()``, so ``"2014- 4-21"`` parses. ``None`` (the default): the installed
+            python-dateutil's release, and 4.0.0 without one.
 
     Raises:
         ValueError: ``sep`` is not a single non-digit ASCII character, or ``compat`` is not one

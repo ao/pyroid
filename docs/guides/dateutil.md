@@ -6,8 +6,8 @@ way people write them (`"Thu Sep 25 10:36:28 BRST 2003"`, `"25/09/2003"`, `"10h3
 `isoparse` reads ISO 8601. pyroid tokenizes and resolves the string in Rust and returns what
 dateutil returns: the same `datetime`, the installed dateutil's own time zone objects
 (`tz.UTC`, `tz.tzoffset(...)`, `tz.tzlocal()`), and dateutil's own `ParserError` with the same
-message. `parse` is the same in python-dateutil 2.9.0.post0, 3.0.0 and 4.0.0, and pyroid
-reproduces all three ([parity](../compatibility.md#dateutil)).
+message. `parse` is the same in python-dateutil 2.8.2, 2.9.0, 2.9.0.post0, 3.0.0 and 4.0.0, and
+pyroid reproduces it ([parity](../compatibility.md#dateutil)).
 
 ## Change one import
 
@@ -93,23 +93,25 @@ needs `dateutil.tz.tzstr` and raises `pyroid.PyroidError` without it.
 
 ## Versions: `isoparse` in 2.9 and 4.0
 
-`parse` did not change between python-dateutil 2.9.0.post0, 3.0.0 and 4.0.0. `isoparse` did, in
-4.0.0: each numeric field must now be exactly N ASCII digits. 2.9.0.post0 and 3.0.0 read the
-fields with `int()`, which takes spaces, signs and underscores, so `"2014- 4-21"`,
-`"2_14-04-21"` and an offset of `+-1:00` parse there and raise in 4.0.0, and
-`"20200728121240"` reads as 21:24. The error messages differ too.
+`parse` did not change between python-dateutil 2.8.2, 2.9.0, 2.9.0.post0, 3.0.0 and 4.0.0 (the
+parser code of 2.8.2 and 2.9.0 is 2.9.0.post0's). `isoparse` did, in 4.0.0: each numeric field
+must now be exactly N ASCII digits. The earlier releases read the fields with `int()`, which
+takes spaces, signs and underscores, so `"2014- 4-21"`, `"2_14-04-21"` and an offset of `+-1:00`
+parse there and raise in 4.0.0, and `"20200728121240"` reads as 21:24. The error messages differ
+too.
 
 `isoparser(sep=None, *, compat=None)` picks the release:
 
 | `compat` | `isoparse` of |
 |---|---|
-| `None` (the default) | the installed python-dateutil: 4.0.0, or 2.9.0.post0 for 2.9.0.post0 and 3.0.0; 4.0.0 when it is not installed |
+| `None` (the default) | the installed python-dateutil: 4.0.0's for 4.0.0, 2.9.0.post0's for 2.8.2, 2.9.0, 2.9.0.post0 and 3.0.0; 4.0.0's when it is not installed |
 | `"4.0.0"` | python-dateutil 4.0.0 |
-| `"2.9.0.post0"` or `"3.0.0"` | python-dateutil 2.9.0.post0 and 3.0.0 |
+| `"3.0.0"`, `"2.9.0.post0"`, `"2.9.0"` or `"2.8.2"` | python-dateutil 2.8.2 to 3.0.0 |
 
 The module-level `isoparse` uses `compat=None`, so it agrees with the dateutil installed next to
-it. With another python-dateutil release installed (2.8.2, say), importing the module warns once
-that results can differ from it.
+it. With another python-dateutil release installed (2.8.1, say), importing the module warns once
+that results can differ from it, and `compat=None` picks the closer of the two forms: 2.9.0.post0's
+for a release before 4.0.0, 4.0.0's for a later one.
 
 ## Many strings: `parse_batch` and `isoparse_batch`
 

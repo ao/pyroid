@@ -168,7 +168,7 @@ Reference: json_repair 0.64.5. Rule: the same returned string or object, the sam
 
 ### pyroid.dateutil {#dateutil}
 
-Reference: python-dateutil 4.0.0 and 2.9.0.post0 (parse is the same in both, and in 3.0.0; isoparse in each release's form). Rule: the same datetime (value, type, fold), the same tzinfo type and repr, the same fuzzy tokens, the same exception type, message and __cause__ type, the same warnings.
+Reference: python-dateutil 4.0.0 and 2.9.0.post0 (parse is the same in both, and in 3.0.0, 2.9.0 and 2.8.2, whose parser code is 2.9.0.post0's; isoparse in each release's form). Rule: the same datetime (value, type, fold), the same tzinfo type and repr, the same fuzzy tokens, the same exception type, message and __cause__ type, the same warnings.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|

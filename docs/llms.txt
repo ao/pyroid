@@ -19,7 +19,7 @@ Modules and what they match:
 - `pyroid.nemo`: NeMo Curator 1.4.0's heuristic document filters and string modifiers as functions (the scores `score_document` returns, the text `modify_document` returns), without NeMo; `pyroid.integrations.nemo_curator` has the stages.
 - `pyroid.metrics`: ROUGE, BLEU, chrF and chrF++, with scores identical to rouge-score 0.1.2 and sacrebleu 2.6.0.
 - `pyroid.json_repair`: the same output as json_repair 0.64.5, in linear time.
-- `pyroid.dateutil.parser` (`from pyroid.dateutil import parser`): python-dateutil's `parse`, `parser`, `parserinfo`, `isoparse` and `isoparser`, with the same datetimes, tz objects, exceptions and messages as 4.0.0, 3.0.0 and 2.9.0.post0; `parse_batch` and `isoparse_batch` parse lists and Arrow columns in parallel; `pyroid.patch("dateutil")` swaps `parse` and `isoparse` into an installed python-dateutil.
+- `pyroid.dateutil.parser` (`from pyroid.dateutil import parser`): python-dateutil's `parse`, `parser`, `parserinfo`, `isoparse` and `isoparser`, with the same datetimes, tz objects, exceptions and messages as 2.8.2 to 4.0.0; `parse_batch` and `isoparse_batch` parse lists and Arrow columns in parallel; `pyroid.patch("dateutil")` swaps `parse` and `isoparse` into an installed python-dateutil.
 
 Integrations:
 
@@ -62,7 +62,7 @@ Conventions shared by every module:
 - [pyroid.trafilatura](https://ataiva.com/open-source/pyroid/docs/guides/trafilatura/): drop-in Trafilatura 2.3.1 and 1.11.0, how to choose a mode, `extract_batch`, the datatrove step, differences
 - [pyroid.nltk](https://ataiva.com/open-source/pyroid/docs/guides/nltk/): drop-in NLTK 3.10.4 Punkt, Treebank and regexp tokenizers, punkt_tab models, differences from NLTK
 - [pyroid.warc](https://ataiva.com/open-source/pyroid/docs/guides/warc/): drop-in warcio 1.8.2 `ArchiveIterator`, datatrove's WARC documents (`iter_documents`, `iter_batches`), `patch("warcio")`, differences from warcio
-- [pyroid.dateutil](https://ataiva.com/open-source/pyroid/docs/guides/dateutil/): drop-in python-dateutil `parse` and `isoparse` (4.0.0, 3.0.0, 2.9.0.post0), `parse_batch` to Arrow, `patch("dateutil")`, differences from dateutil
+- [pyroid.dateutil](https://ataiva.com/open-source/pyroid/docs/guides/dateutil/): drop-in python-dateutil `parse` and `isoparse` (2.8.2 to 4.0.0), `parse_batch` to Arrow, `patch("dateutil")`, differences from dateutil
 - [Languages](https://ataiva.com/open-source/pyroid/docs/guides/languages/): which datatrove language codes are native, which need `python_tokenizer=True`, how to choose
 
 ## Integrations

@@ -71,7 +71,7 @@ def check(s: Any, **kwargs: Any) -> None:
 
 def test_versions() -> None:
     assert pp.DATEUTIL_VERSION == "4.0.0"
-    assert pp.DATEUTIL_VERSIONS == ("4.0.0", "3.0.0", "2.9.0.post0")
+    assert pp.DATEUTIL_VERSIONS == ("4.0.0", "3.0.0", "2.9.0.post0", "2.9.0", "2.8.2")
 
 
 def test_classes_are_dateutils_own() -> None:
@@ -691,15 +691,57 @@ def test_version_warning_and_isoparse_mode(monkeypatch: pytest.MonkeyPatch) -> N
             ppx._version_check()
         lenient = release != "4.0.0"
         assert ppx.isoparser()._lenient is lenient
-    monkeypatch.setattr(_upstream, "INSTALLED_VERSION", "2.8.2")
-    try:
-        from pyroid import _versions  # type: ignore[attr-defined]  # noqa: F401
-    except ImportError:
-        with pytest.warns(RuntimeWarning, match=r"reproduces python-dateutil 4\.0\.0.*2\.8\.2"):
-            ppx._version_check()
-    assert ppx.isoparser()._lenient is False
+        assert ppx.isoparser(compat=release)._lenient is lenient
+    # 2.8.2's and 2.9.0's isoparse is 2.9.0.post0's.
+    for release in ("2.8.2", "2.9.0"):
+        monkeypatch.setattr(_upstream, "INSTALLED_VERSION", release)
+        assert ppx.isoparser().isoparse("2014- 4-21") == D(2014, 4, 21)
+        assert ppx.isoparser().isoparse("20200728121240") == D(2020, 7, 28, 21, 24)
+    # Other releases warn, and get the closer of the two forms.
+    for release, lenient in (("2.8.1", True), ("2.7.5", True), ("4.1.0", False)):
+        monkeypatch.setattr(_upstream, "INSTALLED_VERSION", release)
+        try:
+            from pyroid import _versions  # type: ignore[attr-defined]  # noqa: F401
+        except ImportError:
+            with pytest.warns(RuntimeWarning, match=rf"but python-dateutil {release} is installed"):
+                ppx._version_check()
+        assert ppx.isoparser()._lenient is lenient
     monkeypatch.setattr(_upstream, "INSTALLED_VERSION", None)
     assert ppx.isoparser()._lenient is False
+
+
+FAKE_RELEASE = """
+import sys
+sys.path.insert(0, {site!r})
+import runpy
+runpy.run_path({script!r}, run_name="__main__")
+"""
+
+
+@pytest.mark.thread_unsafe(reason="subprocess")
+@pytest.mark.parametrize("release", ["2.8.1", "2.8.2", "2.9.0"])
+def test_import_under_another_release(run_python: Any, tmp_path: Any, release: str) -> None:
+    # The installed release as importlib.metadata reads it (dateutil itself is 4.0.0's code).
+    site = tmp_path / "site"
+    meta = site / f"python_dateutil-{release}.dist-info"
+    meta.mkdir(parents=True)
+    (meta / "METADATA").write_text(
+        f"Metadata-Version: 2.1\nName: python-dateutil\nVersion: {release}\n", encoding="utf-8"
+    )
+    script = tmp_path / "uses_dateutil.py"
+    script.write_text(
+        "import sys\nimport pyroid.dateutil.parser\n"
+        "print(pyroid.dateutil.parser.isoparse('2014- 4-21'))\n",
+        encoding="utf-8",
+    )
+    r = run_python(FAKE_RELEASE.format(site=str(site), script=str(script)))
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "2014-04-21 00:00:00"
+    warned = f"python-dateutil {release} is installed" in r.stderr
+    assert warned is (release == "2.8.1"), r.stderr
+    if warned:
+        # At the line that imports pyroid.dateutil.parser, not at sys:1.
+        assert f"{script}:2: " in r.stderr, r.stderr
 
 
 @pytest.mark.thread_unsafe(reason="subprocess")

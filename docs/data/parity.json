@@ -270,7 +270,7 @@
       "source": "the parity/ json_repair suite, run on 2026-11-06"
     },
     "dateutil": {
-      "reference": "python-dateutil 4.0.0 and 2.9.0.post0 (parse is the same in both, and in 3.0.0; isoparse in each release's form)",
+      "reference": "python-dateutil 4.0.0 and 2.9.0.post0 (parse is the same in both, and in 3.0.0, 2.9.0 and 2.8.2, whose parser code is 2.9.0.post0's; isoparse in each release's form)",
       "rule": "the same datetime (value, type, fold), the same tzinfo type and repr, the same fuzzy tokens, the same exception type, message and __cause__ type, the same warnings",
       "checks": [
         {
