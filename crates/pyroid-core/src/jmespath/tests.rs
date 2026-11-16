@@ -236,12 +236,14 @@ fn parses_like_jmespath() {
         ast("(a.b).c"),
         Node::Subexpression(vec![field("a"), field("b"), field("c")])
     );
-    let Node::IndexExpression(children) = ast("a[0][1]") else {
+    let n = ast("a[0][1]");
+    let Node::IndexExpression(children) = &n else {
         panic!("index expression");
     };
     assert_eq!(children.len(), 3);
     // A slice after an index expression is appended, not projected.
-    let Node::IndexExpression(children) = ast("a[0][1:2]") else {
+    let n = ast("a[0][1:2]");
+    let Node::IndexExpression(children) = &n else {
         panic!("index expression");
     };
     assert!(matches!(children[2], Node::Slice(..)));
@@ -251,24 +253,31 @@ fn parses_like_jmespath() {
     assert!(matches!(ast("a[?b][]"), Node::Projection(..)));
     assert!(matches!(ast("a || b && c"), Node::OrExpression(..)));
     // The grammar's quirks: no separators needed in hashes and argument lists.
-    let Node::MultiSelectDict(pairs) = ast("{a: b c: d}") else {
+    let n = ast("{a: b c: d}");
+    let Node::MultiSelectDict(pairs) = &n else {
         panic!("multi-select dict");
     };
     assert_eq!(pairs.len(), 2);
-    let Node::FunctionExpression(name, args) = ast("f(a b,)") else {
+    let n = ast("f(a b,)");
+    let Node::FunctionExpression(name, args) = &n else {
         panic!("function");
     };
-    assert_eq!((name, args.len()), (V::Ident("f".into()), 2));
+    assert_eq!((name, args.len()), (&V::Ident("f".into()), 2));
     // A later number in a slice overwrites an earlier one.
-    let Node::Projection(left, _) = ast("[1:2 3]") else {
+    let n = ast("[1:2 3]");
+    let Node::Projection(left, _) = &n else {
         panic!("projection");
     };
-    let Node::IndexExpression(children) = *left else {
+    let Node::IndexExpression(children) = &**left else {
         panic!("index expression");
     };
     assert_eq!(
         children[1],
-        Node::Slice(Some(V::Int("1".into())), Some(V::Int("3".into())), None)
+        Node::Slice(Box::new([
+            Some(V::Int("1".into())),
+            Some(V::Int("3".into())),
+            None
+        ]))
     );
 }
 
@@ -389,4 +398,45 @@ fn recursion_budget() {
         .join()
         .expect("joins");
     assert_eq!(small, Err(ParseError::Recursion));
+}
+
+#[test]
+fn long_left_associative_chains_parse_and_free_on_a_small_stack() {
+    // jmespath parses `a | a | ...`, `a || a`, `a && a`, `a == a` and `a[][]` in a loop, so the
+    // tree is as deep as the chain is long. Parsing and dropping it must not recurse per level.
+    let chains = [
+        vec!["a"; 50_000].join(" | "),
+        vec!["a"; 50_000].join(" || "),
+        vec!["a"; 50_000].join(" && "),
+        vec!["a"; 50_000].join(" == "),
+        format!("a{}", "[]".repeat(50_000)),
+        // A parse error after a deep tree drops the tree built so far.
+        format!("a{}]", "[]".repeat(50_000)),
+        // Short chains nested in parentheses (up to the stack budget, then RecursionError).
+        format!("{}a{}", "(a || a || a || ".repeat(400), ")".repeat(400)),
+    ];
+    let results = std::thread::Builder::new()
+        .stack_size(256 << 10)
+        .spawn(move || {
+            chains
+                .iter()
+                .map(|c| {
+                    let r = parse(&code_points(c), &mut Mock::default(), Budget::UNLIMITED);
+                    r.is_ok()
+                })
+                .collect::<Vec<_>>()
+        })
+        .expect("spawns")
+        .join()
+        .expect("joins");
+    assert_eq!(results[..6], [true, true, true, true, true, false]);
+}
+
+#[test]
+fn nodes_stay_small() {
+    // The parser's recursive frames hold nodes, and the native stack bounds how deep an
+    // expression may nest. The bindings' values are `Option`s of a pointer.
+    type PyLike = Option<std::ptr::NonNull<u8>>;
+    let size = std::mem::size_of::<Node<PyLike>>();
+    assert!(size <= 32, "{size}");
 }

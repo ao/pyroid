@@ -8,10 +8,12 @@ import math
 import pickle
 import subprocess
 import sys
+import sysconfig
 import textwrap
 import threading
 import warnings
 from collections import OrderedDict
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
@@ -211,6 +213,37 @@ def test_sort_by_is_stable() -> None:
         assert [id(x) for x in jp.search("sort_by(@, &k)", values)] == [id(x) for x in expected]
 
 
+_SORT_MEMORY = r"""
+import random, resource, sys
+import pyroid.jmespath as jp
+
+def peak():
+    r = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return r if sys.platform == "darwin" else r * 1024
+
+n = 1_000_000
+data = list(range(1000, 1000 + n))
+random.Random(0).shuffle(data)
+compiled = jp.compile(EXPRESSION)
+compiled.search(data[:100])
+before = peak()
+result = compiled.search(data)
+assert result == sorted(data)
+print((peak() - before) / n)
+"""
+
+
+@pytest.mark.thread_unsafe(reason="a subprocess")
+@pytest.mark.skipif(sys.platform == "win32", reason="no resource module")
+@pytest.mark.parametrize("expression", ["sort_by(@, &@)", "sort(@)"])
+def test_sort_peak_memory(run_python: Any, expression: str) -> None:
+    # J8: sorting 1M records took +61 MB at peak (jmespath: +24 MB), about 64 bytes per element.
+    r = run_python(f"EXPRESSION = {expression!r}\n" + _SORT_MEMORY, timeout=300)
+    assert r.returncode == 0, r.stderr[-2000:]
+    # Now about 36 bytes for int keys (items, keys, (key, index) pairs, the order).
+    assert float(r.stdout) < 50, r.stdout
+
+
 class _Plus(functions.Functions):
     @functions.signature({"types": ["number"]}, {"types": ["number"]})
     def _func_add(self, x: Any, y: Any) -> Any:
@@ -262,6 +295,105 @@ def test_custom_functions_from_jmespath() -> None:
     assert jp.search("sort(a.b)", data, options) == [1, 2, 3]
 
 
+class _TaggedStr(str):
+    __slots__ = ()
+
+
+class _LazyList(list[Any]):
+    __slots__ = ()
+
+
+class _LazyDict(dict[Any, Any]):
+    __slots__ = ()
+
+
+_ANSIBLE_CASES = [
+    "length(@)",
+    "length(servers)",
+    "servers[?starts_with(name, 'server')].name",
+    "servers[?contains(name, '1')].name",
+    "keys(@)",
+    "values(servers[0])",
+    "merge(servers[0], servers[1])",
+    "servers[].name | join(', ', @)",
+    "map(&name, servers)",
+    "reverse(servers[].name)",
+    "max(servers[].name)",
+    "sort(servers[].name)",
+    "sort_by(servers, &name)[].name",
+    "max_by(servers, &name).name",
+    "servers[].name | [?ends_with(@, 'db')]",
+]
+
+
+def _ansible_data() -> Any:
+    servers = _LazyList(
+        [_LazyDict(name=_TaggedStr("server11"), n=1), _LazyDict(name=_TaggedStr("db"), n=2)]
+    )
+    return _LazyDict(servers=servers)
+
+
+def _outcome(search: Any, expression: str, data: Any) -> Any:
+    try:
+        return search(expression, data)
+    except Exception as e:
+        return (type(e).__name__, str(e))
+
+
+@pytest.mark.thread_unsafe(reason="changes the module-wide type maps")
+def test_type_maps_take_additions_as_ansible_makes_them() -> None:
+    # J2: Ansible's json_query adds its tagged str/list/dict classes to REVERSE_TYPES_MAP.
+    reverse = functions.REVERSE_TYPES_MAP
+    saved = dict(reverse)
+    data = _ansible_data()
+    before = {e: _outcome(jp.search, e, data) for e in _ANSIBLE_CASES}
+    assert before["length(@)"][0] == "JMESPathTypeError"
+    try:
+        reverse["string"] = reverse["string"] + ("_TaggedStr",)
+        reverse["array"] = reverse["array"] + ("_LazyList",)
+        reverse["object"] = reverse["object"] + ("_LazyDict",)
+        assert jp.search("length(@)", _TaggedStr("web-prod")) == 8
+        after = {e: _outcome(jp.search, e, data) for e in _ANSIBLE_CASES}
+        assert after["length(servers)"] == 2
+        assert after["servers[].name | join(', ', @)"] == "server11, db"
+        assert after["max(servers[].name)"] == "server11"
+        # sort_by's keys go by TYPES_MAP, which Ansible leaves alone: jmespath's error.
+        assert after["sort_by(servers, &name)[].name"][0] == "JMESPathTypeError"
+        if HAVE_JMESPATH:
+            real = oracle()
+            assert functions.REVERSE_TYPES_MAP is real.functions.REVERSE_TYPES_MAP
+            assert functions.TYPES_MAP is real.functions.TYPES_MAP
+            assert after == {e: _outcome(real.search, e, data) for e in _ANSIBLE_CASES}
+
+        # A custom Functions subclass reads the same maps.
+        class Custom(functions.Functions):
+            pass
+
+        options = jp.Options(custom_functions=Custom())
+        assert jp.search("length(servers)", data, options) == 2
+    finally:
+        reverse.clear()
+        reverse.update(saved)
+    assert _outcome(jp.search, "length(servers)", data) == before["length(servers)"]
+
+
+@pytest.mark.thread_unsafe(reason="changes the module-wide type maps")
+def test_types_map_takes_additions() -> None:
+    saved = dict(functions.TYPES_MAP)
+    data = {
+        "servers": [{"name": _TaggedStr("server11"), "n": 1}, {"name": _TaggedStr("db"), "n": 2}]
+    }
+    try:
+        functions.TYPES_MAP["_TaggedStr"] = "string"
+        assert jp.search("sort_by(servers, &name)[].name", data) == ["db", "server11"]
+        assert jp.search("max_by(servers, &name).n", data) == 1
+        with pytest.raises(exceptions.JMESPathTypeError, match='received: "string"'):
+            jp.search("abs(@)", _TaggedStr("x"))
+    finally:
+        functions.TYPES_MAP.clear()
+        functions.TYPES_MAP.update(saved)
+
+
 @pytest.mark.thread_unsafe(reason="pytest.warns")
 def test_tokenize_is_lazy() -> None:
     tokens = lexer.Lexer().tokenize("a.b ^")
@@ -295,6 +427,69 @@ def test_other_expression_types() -> None:
     else:
         with pytest.raises(pyroid.PyroidError):
             search(("a",), {})
+
+
+def test_unhashable_expressions_raise_the_cache_lookups_error() -> None:
+    # J5: jmespath looks the expression up in its cache dict; 3.14 words that error differently
+    # from hash().
+    search: Any = jp.search
+    compile_: Any = jp.compile
+    cache: dict[Any, Any] = {}
+    for expression in (["a"], bytearray(b"a"), {"a": 1}):
+        with pytest.raises(TypeError) as caught:
+            cache.get(expression)
+        with pytest.raises(TypeError) as raised:
+            search(expression, {})
+        assert str(raised.value) == str(caught.value)
+        with pytest.raises(TypeError) as raised:
+            compile_(expression)
+        assert str(raised.value) == str(caught.value)
+
+
+@pytest.mark.thread_unsafe(reason="warnings")
+def test_tokenize_takes_what_jmespath_lexes() -> None:
+    # J4: Lexer().tokenize() does not hash its expression (jmespath lexes any iterable).
+    lexer_: Any = lexer.Lexer()
+    with pytest.raises(exceptions.LexerError, match="Unknown token 110") as e:
+        list(lexer_.tokenize(bytearray(b"n")))
+    assert (e.value.lex_position, e.value.token_value, e.value.expression) == (0, 110, None)
+    with pytest.raises(exceptions.EmptyExpressionError):
+        list(lexer_.tokenize([]))
+    if HAVE_JMESPATH:
+        real = oracle()
+        getattr(jp, "_WARNED").discard("tokenize")  # noqa: B009 - once per process
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert list(lexer_.tokenize(["n"])) == list(real.lexer.Lexer().tokenize(["n"]))
+            # Tokens up to a bad character come out first, as from jmespath's generator.
+            tokens = lexer_.tokenize(["a", ".", "~"])
+            assert next(tokens)["value"] == "a"
+            assert next(tokens)["type"] == "dot"
+            with pytest.raises(exceptions.LexerError):
+                next(tokens)
+        assert any(w.category is pyroid.FallbackWarning for w in caught)
+    else:
+        with pytest.raises(pyroid.PyroidError):
+            list(lexer_.tokenize(["n"]))
+
+
+@pytest.mark.thread_unsafe(reason="warnings and the parse cache")
+def test_deprecated_literal_warning_points_at_the_caller() -> None:
+    # J7: the warning pointed at pyroid/jmespath/__init__.py.
+    calls: list[Callable[[str], Any]] = [
+        lambda e: jp.search(e, {}),
+        lambda e: jp.compile(e),
+        lambda e: parser.Parser().parse(e),
+        lambda e: list(lexer.Lexer().tokenize(e)),
+    ]
+    for i, call in enumerate(calls):
+        parser.Parser.purge()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            call(f"`literal_{i}`")
+        [w] = [w for w in caught if w.category is PendingDeprecationWarning]
+        assert str(w.message) == "deprecated string literal syntax"
+        assert w.filename == __file__, (i, w.filename)
 
 
 def test_lone_surrogates() -> None:
@@ -332,6 +527,75 @@ def test_deep_nesting_on_a_small_stack_raises() -> None:
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == str(["RecursionError"] * 4)
+
+
+_LONG_CHAINS = r"""
+import sys, threading
+import pyroid.jmespath as jp
+from pyroid.jmespath import exceptions
+
+CHAINS = {
+    "pipe": lambda n: " | ".join(["a"] * n),
+    "or_expression": lambda n: " || ".join(["a"] * n),
+    "and_expression": lambda n: " && ".join(["a"] * n),
+    "comparator": lambda n: " == ".join(["a"] * n),
+    "projection": lambda n: "a" + "[]" * n,
+}
+
+def run(n):
+    out = []
+    for kind, build in CHAINS.items():
+        expression = build(n)
+        # jmespath parses these chains in a loop and compiles them; only its interpreter runs
+        # out of frames.
+        compiled = jp.compile(expression)
+        assert compiled.parsed["type"] == kind, compiled.parsed["type"]
+        try:
+            jp.search(expression, {"a": [1]})
+            out.append("ok")
+        except RecursionError:
+            out.append("RecursionError")
+        # A syntax error after a long chain.
+        try:
+            jp.compile(expression + " ]")
+        except exceptions.ParseError:
+            out.append("ParseError")
+    return out
+
+print(run(20_000))
+sys.setrecursionlimit(100_000)
+print(run(30_000))
+if STACK:
+    threading.stack_size(STACK)
+    results = []
+    t = threading.Thread(target=lambda: results.append(run(30_000)))
+    t.start()
+    t.join()
+    print(results[0])
+"""
+
+
+#: CPython 3.14+ on musl (Alpine) cannot itself build and drop such deep data (the `.parsed`
+#: dicts) in a thread with a 256 KiB stack (see test_yaml.py); that case says nothing about pyroid.
+_MUSL_SMALL_STACK = pytest.mark.skipif(
+    sys.version_info >= (3, 14) and "musl" in (sysconfig.get_config_var("HOST_GNU_TYPE") or ""),
+    reason="CPython 3.14+ on musl overflows its own C stack at this depth in a 256 KiB thread",
+)
+
+
+@pytest.mark.thread_unsafe(reason="a subprocess")
+@pytest.mark.parametrize("stack", [0, pytest.param(256 << 10, marks=_MUSL_SMALL_STACK)])
+def test_long_chains_compile_and_raise_recursion_error(run_python: Any, stack: int) -> None:
+    # J1: `a || a || ...`, `a[][]...` and the like (20,000 terms, 40 KB) crashed the interpreter.
+    r = run_python(f"STACK = {stack}\n" + _LONG_CHAINS, timeout=600)
+    assert r.returncode == 0, r.stderr[-2000:]
+    runs = [eval(line) for line in r.stdout.splitlines()]
+    assert len(runs) == (3 if stack else 2)
+    # At the default limit, as in jmespath; with a raised one the native stack decides.
+    assert runs[0] == ["RecursionError", "ParseError"] * 5
+    for run in runs[1:]:
+        assert run[1::2] == ["ParseError"] * 5
+        assert set(run[::2]) <= {"ok", "RecursionError"}
 
 
 @pytest.mark.thread_unsafe(reason="starts its own threads")

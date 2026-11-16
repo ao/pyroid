@@ -2,6 +2,11 @@
 //! The evaluable tree: jmespath's AST with Python values, built from the core parser's
 //! nodes or from a dict AST (`ParsedResult(expression, parsed)`, `_Expression.visit(node)`),
 //! and turned back into jmespath's dicts for `.parsed`.
+//!
+//! Left-associative chains (`a | b | c`, `a || b`, `a == b`, `a[][]`) are parsed in a loop, so a
+//! tree can be as deep as its expression is long (jmespath compiles them, and only its
+//! interpreter runs out of frames). Everything here that walks a whole tree (conversion,
+//! [`frames`], [`to_dict`], dropping) is a loop with its own stack, never recursion.
 
 use std::sync::Arc;
 
@@ -9,14 +14,17 @@ use pyo3::exceptions::PyRecursionError;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyInt, PyList, PyString};
-use pyroid_core::jmespath::{Comparator, Node};
+use pyroid_core::jmespath::{Comparator, Node, stack_position};
 
 use super::functions::Builtin;
+use super::host::Value;
 
 /// An expref's expression, with its dict AST (shared by `.parsed` and the `_Expression`
 /// objects made for it, as jmespath shares the node).
 pub(crate) struct ExprefNode {
     pub expr: Expr,
+    /// [`frames`] of `expr`.
+    pub frames: usize,
     pub dict: PyOnceLock<Py<PyAny>>,
 }
 
@@ -30,8 +38,14 @@ impl std::fmt::Debug for ExprefNode {
 
 impl ExprefNode {
     pub(crate) fn new(expr: Expr) -> Arc<Self> {
+        let frames = frames(&expr);
+        Self::with_frames(expr, frames)
+    }
+
+    fn with_frames(expr: Expr, frames: usize) -> Arc<Self> {
         Arc::new(Self {
             expr,
+            frames,
             dict: PyOnceLock::new(),
         })
     }
@@ -83,83 +97,401 @@ pub(crate) enum Expr {
     Unknown(Py<PyAny>),
 }
 
-/// Frames a node needs below its `visit` (an upper bound; decides when depth is checked).
-pub(crate) fn frames(e: &Expr) -> usize {
-    let max = |v: &[Expr]| v.iter().map(frames).max().unwrap_or(0);
-    2 + match e {
-        Expr::Comparator(_, _, l, r)
-        | Expr::Or(l, r)
-        | Expr::And(l, r)
-        | Expr::Projection(l, r)
-        | Expr::ValueProjection(l, r) => frames(l).max(frames(r)) + 1,
-        Expr::FilterProjection(a, b, c) => frames(a).max(frames(b)).max(frames(c)) + 1,
-        Expr::Expref(x) => frames(&x.expr) + 6,
-        Expr::Function { args, .. } => max(args).max(6) + 2,
-        Expr::Flatten(x) | Expr::Not(x) | Expr::KeyValPair(_, x) => frames(x) + 1,
-        Expr::IndexExpression(v)
-        | Expr::MultiSelectList(v)
-        | Expr::Pipe(v)
-        | Expr::Subexpression(v) => max(v) + 1,
-        Expr::MultiSelectDict(v) => v.iter().map(|(_, c)| frames(c)).max().unwrap_or(0) + 1,
-        _ => 1,
+impl Expr {
+    /// No child expressions (an expref's expression is reached through its [`ExprefNode`]).
+    fn is_leaf(&self) -> bool {
+        match self {
+            Expr::Current
+            | Expr::Expref(_)
+            | Expr::Field(_)
+            | Expr::Identity
+            | Expr::Index(..)
+            | Expr::Literal(_)
+            | Expr::Slice(..)
+            | Expr::Unknown(_) => true,
+            Expr::Function { args: v, .. }
+            | Expr::IndexExpression(v)
+            | Expr::MultiSelectList(v)
+            | Expr::Pipe(v)
+            | Expr::Subexpression(v) => v.is_empty(),
+            Expr::MultiSelectDict(v) => v.is_empty(),
+            _ => false,
+        }
+    }
+
+    /// Call `f` on each child expression, in jmespath's order (not into exprefs).
+    fn for_each_child<'a>(&'a self, mut f: impl FnMut(&'a Expr)) {
+        match self {
+            Expr::Comparator(_, _, l, r)
+            | Expr::Or(l, r)
+            | Expr::And(l, r)
+            | Expr::Projection(l, r)
+            | Expr::ValueProjection(l, r) => {
+                f(l);
+                f(r);
+            }
+            Expr::FilterProjection(a, b, c) => {
+                f(a);
+                f(b);
+                f(c);
+            }
+            Expr::Flatten(x) | Expr::Not(x) | Expr::KeyValPair(_, x) => f(x),
+            Expr::Function { args: v, .. }
+            | Expr::IndexExpression(v)
+            | Expr::MultiSelectList(v)
+            | Expr::Pipe(v)
+            | Expr::Subexpression(v) => v.iter().for_each(f),
+            Expr::MultiSelectDict(v) => v.iter().for_each(|(_, c)| f(c)),
+            Expr::Current
+            | Expr::Expref(_)
+            | Expr::Field(_)
+            | Expr::Identity
+            | Expr::Index(..)
+            | Expr::Literal(_)
+            | Expr::Slice(..)
+            | Expr::Unknown(_) => {}
+        }
+    }
+
+    /// Call `f` on each child expression to change it, in jmespath's order (not into exprefs).
+    fn for_each_child_mut(&mut self, mut f: impl FnMut(&mut Expr)) {
+        match self {
+            Expr::Comparator(_, _, l, r)
+            | Expr::Or(l, r)
+            | Expr::And(l, r)
+            | Expr::Projection(l, r)
+            | Expr::ValueProjection(l, r) => {
+                f(l);
+                f(r);
+            }
+            Expr::FilterProjection(a, b, c) => {
+                f(a);
+                f(b);
+                f(c);
+            }
+            Expr::Flatten(x) | Expr::Not(x) | Expr::KeyValPair(_, x) => f(x),
+            Expr::Function { args: v, .. }
+            | Expr::IndexExpression(v)
+            | Expr::MultiSelectList(v)
+            | Expr::Pipe(v)
+            | Expr::Subexpression(v) => v.iter_mut().for_each(f),
+            Expr::MultiSelectDict(v) => v.iter_mut().for_each(|(_, c)| f(c)),
+            Expr::Current
+            | Expr::Expref(_)
+            | Expr::Field(_)
+            | Expr::Identity
+            | Expr::Index(..)
+            | Expr::Literal(_)
+            | Expr::Slice(..)
+            | Expr::Unknown(_) => {}
+        }
+    }
+
+    /// Move the children that own further nodes into `out` (an identity is left in their
+    /// place), and the expression of an expref only this node holds.
+    fn take_inner_children(&mut self, out: &mut Vec<Expr>) {
+        let mut take = |e: &mut Expr| {
+            if !e.is_leaf() || matches!(e, Expr::Expref(_)) {
+                out.push(std::mem::replace(e, Expr::Identity));
+            }
+        };
+        if let Expr::Expref(x) = self {
+            if let Some(node) = Arc::get_mut(x) {
+                take(&mut node.expr);
+            }
+            return;
+        }
+        self.for_each_child_mut(take);
     }
 }
 
-/// From the core parser's nodes.
-#[allow(clippy::many_single_char_names)]
-pub(crate) fn from_node(py: Python<'_>, node: Node<Bound<'_, PyAny>>) -> PyResult<Expr> {
-    let b = |n: Box<Node<Bound<'_, PyAny>>>| from_node(py, *n).map(Box::new);
-    let v = |n: Vec<Node<Bound<'_, PyAny>>>| {
-        n.into_iter()
-            .map(|c| from_node(py, c))
-            .collect::<PyResult<Vec<_>>>()
+/// Trees that need more [`frames`] than this (at least three per level) are freed by
+/// [`free_deep`]; shallower ones by the usual recursive drop.
+pub(crate) const DROP_FRAMES: usize = 600;
+
+/// Free the nodes under `e` with a loop, leaving an identity. Left-associative chains
+/// (`a | b | c`, `a || b`, `a == b`, `a[][]`) are parsed in a loop, so a tree can be as deep as
+/// its expression is long.
+pub(crate) fn free_deep(e: &mut Expr) {
+    let mut pending = vec![std::mem::replace(e, Expr::Identity)];
+    while let Some(mut e) = pending.pop() {
+        e.take_inner_children(&mut pending);
+    }
+}
+
+impl Drop for ExprefNode {
+    fn drop(&mut self) {
+        if self.frames > DROP_FRAMES {
+            free_deep(&mut self.expr);
+        }
+    }
+}
+
+/// Frames a node needs below its `visit` (an upper bound; decides when depth is checked).
+pub(crate) fn frames(root: &Expr) -> usize {
+    // (node, its children are done), and the children's results.
+    let mut todo = Vec::with_capacity(32);
+    todo.push((root, false));
+    let mut done: Vec<usize> = Vec::with_capacity(16);
+    while let Some((e, ready)) = todo.pop() {
+        if !ready && !e.is_leaf() {
+            todo.push((e, true));
+            e.for_each_child(|c| todo.push((c, false)));
+            continue;
+        }
+        let mut n = 0;
+        if ready {
+            e.for_each_child(|_| n += 1);
+        }
+        let deepest = done.drain(done.len() - n..).max().unwrap_or(0);
+        done.push(frames_with(e, deepest));
+    }
+    done.pop().unwrap_or(0)
+}
+
+type PyNode<'py> = Node<Value<'py>>;
+
+/// Frames of a node whose deepest child needs `deepest` (see [`frames`]).
+fn frames_with(e: &Expr, deepest: usize) -> usize {
+    2 + match e {
+        Expr::Expref(x) => x.frames + 6,
+        Expr::Function { .. } => deepest.max(6) + 2,
+        _ => deepest + 1,
+    }
+}
+
+/// Trees at most this deep are converted by recursion (no work stacks to allocate; at most a
+/// few dozen KiB of native stack).
+const RECURSION_DEPTH: usize = 48;
+
+/// Is the tree under `n` at most `limit` nodes deep?
+fn depth_at_most(n: &PyNode<'_>, limit: usize) -> bool {
+    n.is_leaf() || (limit > 1 && n.children().all(|c| depth_at_most(c, limit - 1)))
+}
+
+/// From the core parser's nodes: the tree and its [`frames`]. The node's values are moved
+/// out (it is left empty).
+pub(crate) fn from_node<'py>(py: Python<'py>, root: &mut PyNode<'py>) -> PyResult<(Expr, usize)> {
+    enum Step<'a, 'py> {
+        Enter(&'a mut PyNode<'py>),
+        /// A node without its children, and how many it has.
+        Exit(Expr, usize),
+    }
+    if depth_at_most(root, RECURSION_DEPTH) {
+        return from_node_shallow(py, root);
+    }
+    // Children are converted last to first, so the first child's result is on top of `done`.
+    let mut todo = vec![Step::Enter(root)];
+    let mut done: Vec<(Expr, usize)> = Vec::new();
+    while let Some(step) = todo.pop() {
+        match step {
+            Step::Enter(n) => {
+                let e = match shell(py, n) {
+                    Ok(e) => e,
+                    Err(err) => {
+                        for (mut e, _) in done {
+                            free_deep(&mut e);
+                        }
+                        return Err(err);
+                    }
+                };
+                let count = n.children().count();
+                todo.push(Step::Exit(e, count));
+                todo.extend(PyNode::children_mut(n).map(Step::Enter));
+            }
+            Step::Exit(mut e, count) => {
+                let children = (0..count).map(|_| done.pop().expect("a converted child"));
+                let deepest = fill(&mut e, children);
+                let f = frames_with(&e, deepest);
+                done.push((e, f));
+            }
+        }
+    }
+    Ok(done.pop().expect("a root expression"))
+}
+
+/// [`from_node`] by recursion, for a tree at most [`RECURSION_DEPTH`] deep.
+#[allow(clippy::many_single_char_names, clippy::too_many_lines)]
+fn from_node_shallow<'py>(py: Python<'py>, n: &mut PyNode<'py>) -> PyResult<(Expr, usize)> {
+    let mut deepest = 0;
+    let mut sub = |c: &mut PyNode<'py>| -> PyResult<(Expr, usize)> {
+        let r = from_node_shallow(py, c)?;
+        deepest = deepest.max(r.1);
+        Ok(r)
     };
-    Ok(match node {
-        Node::Comparator(c, l, r) => Expr::Comparator(Some(c), intern(py, c.name()), b(l)?, b(r)?),
+    let e = match n {
+        Node::Comparator(c, l, r) => {
+            let l = Box::new(sub(l)?.0);
+            let r = Box::new(sub(r)?.0);
+            Expr::Comparator(Some(*c), intern(py, c.name()), l, r)
+        }
         Node::Current => Expr::Current,
-        Node::Expref(x) => Expr::Expref(ExprefNode::new(from_node(py, *x)?)),
-        Node::FunctionExpression(name, args) => Expr::Function {
-            builtin: builtin_of(&name),
-            name: name.unbind(),
-            args: v(args)?,
-        },
-        Node::Field(name) => Expr::Field(name.unbind()),
-        Node::FilterProjection(l, r, c) => Expr::FilterProjection(b(l)?, b(r)?, b(c)?),
-        Node::Flatten(x) => Expr::Flatten(b(x)?),
+        Node::Expref(x) => {
+            let (e, f) = sub(x)?;
+            Expr::Expref(ExprefNode::with_frames(e, f))
+        }
+        Node::FunctionExpression(name, args) => {
+            let name = take(name);
+            let mut converted = Vec::with_capacity(args.len());
+            for a in args.iter_mut() {
+                converted.push(sub(a)?.0);
+            }
+            Expr::Function {
+                builtin: builtin_of(&name),
+                name: name.unbind(),
+                args: converted,
+            }
+        }
+        Node::Field(name) => Expr::Field(take(name).unbind()),
+        Node::FilterProjection(l, r, c) => {
+            let l = Box::new(sub(l)?.0);
+            let r = Box::new(sub(r)?.0);
+            Expr::FilterProjection(l, r, Box::new(sub(c)?.0))
+        }
+        Node::Flatten(x) => Expr::Flatten(Box::new(sub(x)?.0)),
         Node::Identity => Expr::Identity,
-        Node::Index(i) => index(i),
-        Node::IndexExpression(c) => Expr::IndexExpression(v(c)?),
-        Node::KeyValPair(k, x) => Expr::KeyValPair(k.unbind(), b(x)?),
-        Node::Literal(x) => Expr::Literal(x.unbind()),
+        Node::Index(i) => index(take(i)),
+        Node::IndexExpression(c) => Expr::IndexExpression(
+            c.iter_mut()
+                .map(|c| sub(c).map(|r| r.0))
+                .collect::<PyResult<_>>()?,
+        ),
+        Node::KeyValPair(k, x) => {
+            let k = take(k).unbind();
+            Expr::KeyValPair(k, Box::new(sub(x)?.0))
+        }
+        Node::Literal(x) => Expr::Literal(take(x).unbind()),
+        Node::MultiSelectDict(c) => {
+            let mut pairs = Vec::with_capacity(c.len());
+            for child in c.iter_mut() {
+                let key = match child {
+                    Node::KeyValPair(Some(k), _) => k.clone().unbind(),
+                    _ => py.None(),
+                };
+                pairs.push((key, sub(child)?.0));
+            }
+            Expr::MultiSelectDict(pairs)
+        }
+        Node::MultiSelectList(c) => Expr::MultiSelectList(
+            c.iter_mut()
+                .map(|c| sub(c).map(|r| r.0))
+                .collect::<PyResult<_>>()?,
+        ),
+        Node::OrExpression(l, r) => {
+            let l = Box::new(sub(l)?.0);
+            Expr::Or(l, Box::new(sub(r)?.0))
+        }
+        Node::AndExpression(l, r) => {
+            let l = Box::new(sub(l)?.0);
+            Expr::And(l, Box::new(sub(r)?.0))
+        }
+        Node::NotExpression(x) => Expr::Not(Box::new(sub(x)?.0)),
+        Node::Pipe(l, r) => {
+            let l = sub(l)?.0;
+            Expr::Pipe(vec![l, sub(r)?.0])
+        }
+        Node::Projection(l, r) => {
+            let l = Box::new(sub(l)?.0);
+            Expr::Projection(l, Box::new(sub(r)?.0))
+        }
+        Node::Subexpression(c) => Expr::Subexpression(
+            c.iter_mut()
+                .map(|c| sub(c).map(|r| r.0))
+                .collect::<PyResult<_>>()?,
+        ),
+        Node::Slice(parts) => slice_of(py, parts)?,
+        Node::ValueProjection(l, r) => {
+            let l = Box::new(sub(l)?.0);
+            Expr::ValueProjection(l, Box::new(sub(r)?.0))
+        }
+    };
+    let f = frames_with(&e, deepest);
+    Ok((e, f))
+}
+
+/// A value of the node being converted (each is taken once).
+fn take<'py>(v: &mut Value<'py>) -> Bound<'py, PyAny> {
+    v.take().expect("a node value, taken once")
+}
+
+/// A slice node's `Expr`, its parts moved out.
+fn slice_of<'py>(py: Python<'py>, parts: &mut [Option<Value<'py>>; 3]) -> PyResult<Expr> {
+    let parts: Vec<Py<PyAny>> = parts
+        .iter_mut()
+        .map(|p| p.take().flatten().map_or_else(|| py.None(), Bound::unbind))
+        .collect();
+    slice(py, parts)
+}
+
+/// `n` as an `Expr` with identities for children (see [`fill`]), its values moved out.
+fn shell<'py>(py: Python<'py>, n: &mut PyNode<'py>) -> PyResult<Expr> {
+    let id = || Box::new(Expr::Identity);
+    let ids = |k: usize| (0..k).map(|_| Expr::Identity).collect::<Vec<_>>();
+    Ok(match n {
+        Node::Comparator(c, ..) => Expr::Comparator(Some(*c), intern(py, c.name()), id(), id()),
+        Node::Current => Expr::Current,
+        Node::Expref(_) => Expr::Expref(ExprefNode::with_frames(Expr::Identity, 0)),
+        Node::FunctionExpression(name, args) => {
+            let name = take(name);
+            Expr::Function {
+                builtin: builtin_of(&name),
+                name: name.unbind(),
+                args: ids(args.len()),
+            }
+        }
+        Node::Field(name) => Expr::Field(take(name).unbind()),
+        Node::FilterProjection(..) => Expr::FilterProjection(id(), id(), id()),
+        Node::Flatten(_) => Expr::Flatten(id()),
+        Node::Identity => Expr::Identity,
+        Node::Index(i) => index(take(i)),
+        Node::IndexExpression(c) => Expr::IndexExpression(ids(c.len())),
+        Node::KeyValPair(k, _) => Expr::KeyValPair(take(k).unbind(), id()),
+        Node::Literal(x) => Expr::Literal(take(x).unbind()),
+        // The keys are the pairs' own values: read here, before the pairs are converted.
         Node::MultiSelectDict(c) => Expr::MultiSelectDict(
-            c.into_iter()
+            c.iter()
                 .map(|child| {
-                    let key = match &child {
-                        Node::KeyValPair(k, _) => k.clone().unbind(),
+                    let key = match child {
+                        Node::KeyValPair(Some(k), _) => k.clone().unbind(),
                         _ => py.None(),
                     };
-                    Ok((key, from_node(py, child)?))
+                    (key, Expr::Identity)
                 })
-                .collect::<PyResult<Vec<_>>>()?,
+                .collect(),
         ),
-        Node::MultiSelectList(c) => Expr::MultiSelectList(v(c)?),
-        Node::OrExpression(l, r) => Expr::Or(b(l)?, b(r)?),
-        Node::AndExpression(l, r) => Expr::And(b(l)?, b(r)?),
-        Node::NotExpression(x) => Expr::Not(b(x)?),
-        Node::Pipe(l, r) => Expr::Pipe(vec![from_node(py, *l)?, from_node(py, *r)?]),
-        Node::Projection(l, r) => Expr::Projection(b(l)?, b(r)?),
-        Node::Subexpression(c) => Expr::Subexpression(v(c)?),
-        Node::Slice(first, end, step) => {
-            let parts: Vec<Py<PyAny>> = [first, end, step]
-                .into_iter()
-                .map(|p| p.map_or_else(|| py.None(), Bound::unbind))
-                .collect();
-            slice(py, parts)?
-        }
-        Node::ValueProjection(l, r) => Expr::ValueProjection(b(l)?, b(r)?),
+        Node::MultiSelectList(c) => Expr::MultiSelectList(ids(c.len())),
+        Node::OrExpression(..) => Expr::Or(id(), id()),
+        Node::AndExpression(..) => Expr::And(id(), id()),
+        Node::NotExpression(_) => Expr::Not(id()),
+        Node::Pipe(..) => Expr::Pipe(ids(2)),
+        Node::Projection(..) => Expr::Projection(id(), id()),
+        Node::Subexpression(c) => Expr::Subexpression(ids(c.len())),
+        Node::Slice(parts) => slice_of(py, parts)?,
+        Node::ValueProjection(..) => Expr::ValueProjection(id(), id()),
     })
 }
 
+/// Put `children` (converted, in order) into `e`'s places for them; the most frames any
+/// child needs.
+fn fill(e: &mut Expr, children: impl IntoIterator<Item = (Expr, usize)>) -> usize {
+    let mut children = children.into_iter();
+    if let Expr::Expref(x) = e {
+        let (Some(node), Some((child, f))) = (Arc::get_mut(x), children.next()) else {
+            return 0;
+        };
+        node.expr = child;
+        node.frames = f;
+        return f;
+    }
+    let mut deepest = 0;
+    e.for_each_child_mut(|slot| {
+        if let Some((child, f)) = children.next() {
+            deepest = deepest.max(f);
+            *slot = child;
+        }
+    });
+    deepest
+}
 fn intern(py: Python<'_>, s: &str) -> Py<PyAny> {
     PyString::intern(py, s).into_any().unbind()
 }
@@ -190,8 +522,13 @@ const MAX_DICT_DEPTH: usize = pyroid_core::jmespath::parser::MAX_FRAMES / 2;
 
 /// From a dict AST (`{'type': ..., 'children': [...], 'value': ...}`), as jmespath's
 /// `TreeInterpreter` reads it. A malformed node raises here (jmespath raises when it visits).
-pub(crate) fn from_dict(node: &Bound<'_, PyAny>, depth: usize) -> PyResult<Expr> {
-    if depth > MAX_DICT_DEPTH {
+/// `stack`: the native stack it may use (it recurses once per level).
+pub(crate) fn from_dict(node: &Bound<'_, PyAny>, stack: usize) -> PyResult<Expr> {
+    dict_node(node, 0, stack_position(), stack)
+}
+
+fn dict_node(node: &Bound<'_, PyAny>, depth: usize, base: usize, stack: usize) -> PyResult<Expr> {
+    if depth > MAX_DICT_DEPTH || stack_position().abs_diff(base) > stack {
         return Err(PyRecursionError::new_err(
             "maximum recursion depth exceeded while reading a jmespath AST",
         ));
@@ -199,12 +536,14 @@ pub(crate) fn from_dict(node: &Bound<'_, PyAny>, depth: usize) -> PyResult<Expr>
     let py = node.py();
     let kind = node.get_item("type")?;
     let children = || node.get_item("children");
-    let child = |i: usize| -> PyResult<Expr> { from_dict(&children()?.get_item(i)?, depth + 1) };
+    let child = |i: usize| -> PyResult<Expr> {
+        dict_node(&children()?.get_item(i)?, depth + 1, base, stack)
+    };
     let child_box = |i: usize| child(i).map(Box::new);
     let all = || -> PyResult<Vec<Expr>> {
         children()?
             .try_iter()?
-            .map(|c| from_dict(&c?, depth + 1))
+            .map(|c| dict_node(&c?, depth + 1, base, stack))
             .collect()
     };
     let value = || node.get_item("value").map(Bound::unbind);
@@ -246,7 +585,7 @@ pub(crate) fn from_dict(node: &Bound<'_, PyAny>, depth: usize) -> PyResult<Expr>
             for c in children()?.try_iter()? {
                 let c = c?;
                 let key = c.get_item("value")?.unbind();
-                out.push((key, from_dict(&c, depth + 1)?));
+                out.push((key, dict_node(&c, depth + 1, base, stack)?));
             }
             Expr::MultiSelectDict(out)
         }
@@ -269,27 +608,57 @@ pub(crate) fn from_dict(node: &Bound<'_, PyAny>, depth: usize) -> PyResult<Expr>
     })
 }
 
-/// jmespath's dict for `e` (`ast.py`'s key order): one arm per node kind.
-#[allow(clippy::too_many_lines, clippy::many_single_char_names)]
-pub(crate) fn to_dict<'py>(py: Python<'py>, e: &Expr) -> PyResult<Bound<'py, PyDict>> {
+/// jmespath's dict for `root` (`ast.py`'s key order).
+pub(crate) fn to_dict<'py>(py: Python<'py>, root: &Expr) -> PyResult<Bound<'py, PyDict>> {
+    enum Step<'a> {
+        /// A node, and whether its children's dicts are done.
+        Node(&'a Expr, bool),
+        /// Keep the dict on top as this expref's own.
+        Expref(&'a ExprefNode),
+    }
+    // Children are done last to first, so the first child's dict is on top of `done`.
+    let mut todo = vec![Step::Node(root, false)];
+    let mut done: Vec<Bound<'py, PyDict>> = Vec::new();
+    while let Some(step) = todo.pop() {
+        match step {
+            Step::Node(e @ Expr::Expref(x), false) if x.dict.get(py).is_none() => {
+                todo.push(Step::Node(e, true));
+                todo.push(Step::Expref(x));
+                todo.push(Step::Node(&x.expr, false));
+            }
+            Step::Node(e, false) if !e.is_leaf() => {
+                todo.push(Step::Node(e, true));
+                e.for_each_child(|c| todo.push(Step::Node(c, false)));
+            }
+            Step::Node(e, _) => {
+                let d = node_dict(py, e, &mut done)?;
+                done.push(d);
+            }
+            Step::Expref(x) => {
+                let d = done.pop().expect("the expref's dict");
+                // If another thread set one meanwhile, that one is kept.
+                let _ = x.dict.set(py, d.into_any().unbind());
+            }
+        }
+    }
+    Ok(done.pop().expect("the root's dict"))
+}
+
+/// The dict of one node, its children's dicts (in order) taken from the top of `done`: one
+/// arm per node kind.
+#[allow(clippy::too_many_lines)]
+fn node_dict<'py>(
+    py: Python<'py>,
+    e: &Expr,
+    done: &mut Vec<Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
-    let list = |v: &[Expr]| -> PyResult<Bound<'py, PyList>> {
-        PyList::new(
-            py,
-            v.iter()
-                .map(|c| to_dict(py, c))
-                .collect::<PyResult<Vec<_>>>()?,
-        )
-    };
-    let pair = |a: &Expr, b: &Expr| -> PyResult<Bound<'py, PyList>> {
-        PyList::new(py, [to_dict(py, a)?, to_dict(py, b)?])
-    };
-    let one = |a: &Expr| -> PyResult<Bound<'py, PyList>> { PyList::new(py, [to_dict(py, a)?]) };
+    let mut kids = |n: usize| PyList::new(py, (0..n).map(|_| done.pop().expect("a child's dict")));
     let empty = || PyList::empty(py);
     match e {
-        Expr::Comparator(_, name, l, r) => {
+        Expr::Comparator(_, name, ..) => {
             d.set_item("type", "comparator")?;
-            d.set_item("children", pair(l, r)?)?;
+            d.set_item("children", kids(2)?)?;
             d.set_item("value", name.bind(py))?;
         }
         Expr::Current => {
@@ -302,7 +671,7 @@ pub(crate) fn to_dict<'py>(py: Python<'py>, e: &Expr) -> PyResult<Bound<'py, PyD
         }
         Expr::Function { name, args, .. } => {
             d.set_item("type", "function_expression")?;
-            d.set_item("children", list(args)?)?;
+            d.set_item("children", kids(args.len())?)?;
             d.set_item("value", name.bind(py))?;
         }
         Expr::Field(name) => {
@@ -310,16 +679,13 @@ pub(crate) fn to_dict<'py>(py: Python<'py>, e: &Expr) -> PyResult<Bound<'py, PyD
             d.set_item("children", empty())?;
             d.set_item("value", name.bind(py))?;
         }
-        Expr::FilterProjection(l, r, c) => {
+        Expr::FilterProjection(..) => {
             d.set_item("type", "filter_projection")?;
-            d.set_item(
-                "children",
-                PyList::new(py, [to_dict(py, l)?, to_dict(py, r)?, to_dict(py, c)?])?,
-            )?;
+            d.set_item("children", kids(3)?)?;
         }
-        Expr::Flatten(x) => {
+        Expr::Flatten(_) => {
             d.set_item("type", "flatten")?;
-            d.set_item("children", one(x)?)?;
+            d.set_item("children", kids(1)?)?;
         }
         Expr::Identity => {
             d.set_item("type", "identity")?;
@@ -332,11 +698,11 @@ pub(crate) fn to_dict<'py>(py: Python<'py>, e: &Expr) -> PyResult<Bound<'py, PyD
         }
         Expr::IndexExpression(c) => {
             d.set_item("type", "index_expression")?;
-            d.set_item("children", list(c)?)?;
+            d.set_item("children", kids(c.len())?)?;
         }
-        Expr::KeyValPair(k, x) => {
+        Expr::KeyValPair(k, _) => {
             d.set_item("type", "key_val_pair")?;
-            d.set_item("children", one(x)?)?;
+            d.set_item("children", kids(1)?)?;
             d.set_item("value", k.bind(py))?;
         }
         Expr::Literal(v) => {
@@ -346,43 +712,35 @@ pub(crate) fn to_dict<'py>(py: Python<'py>, e: &Expr) -> PyResult<Bound<'py, PyD
         }
         Expr::MultiSelectDict(c) => {
             d.set_item("type", "multi_select_dict")?;
-            d.set_item(
-                "children",
-                PyList::new(
-                    py,
-                    c.iter()
-                        .map(|(_, x)| to_dict(py, x))
-                        .collect::<PyResult<Vec<_>>>()?,
-                )?,
-            )?;
+            d.set_item("children", kids(c.len())?)?;
         }
         Expr::MultiSelectList(c) => {
             d.set_item("type", "multi_select_list")?;
-            d.set_item("children", list(c)?)?;
+            d.set_item("children", kids(c.len())?)?;
         }
-        Expr::Or(l, r) => {
+        Expr::Or(..) => {
             d.set_item("type", "or_expression")?;
-            d.set_item("children", pair(l, r)?)?;
+            d.set_item("children", kids(2)?)?;
         }
-        Expr::And(l, r) => {
+        Expr::And(..) => {
             d.set_item("type", "and_expression")?;
-            d.set_item("children", pair(l, r)?)?;
+            d.set_item("children", kids(2)?)?;
         }
-        Expr::Not(x) => {
+        Expr::Not(_) => {
             d.set_item("type", "not_expression")?;
-            d.set_item("children", one(x)?)?;
+            d.set_item("children", kids(1)?)?;
         }
         Expr::Pipe(c) => {
             d.set_item("type", "pipe")?;
-            d.set_item("children", list(c)?)?;
+            d.set_item("children", kids(c.len())?)?;
         }
-        Expr::Projection(l, r) => {
+        Expr::Projection(..) => {
             d.set_item("type", "projection")?;
-            d.set_item("children", pair(l, r)?)?;
+            d.set_item("children", kids(2)?)?;
         }
         Expr::Subexpression(c) => {
             d.set_item("type", "subexpression")?;
-            d.set_item("children", list(c)?)?;
+            d.set_item("children", kids(c.len())?)?;
         }
         Expr::Slice(parts, _) => {
             d.set_item("type", "slice")?;
@@ -391,9 +749,9 @@ pub(crate) fn to_dict<'py>(py: Python<'py>, e: &Expr) -> PyResult<Bound<'py, PyD
                 PyList::new(py, parts.iter().map(|p| p.bind(py)))?,
             )?;
         }
-        Expr::ValueProjection(l, r) => {
+        Expr::ValueProjection(..) => {
             d.set_item("type", "value_projection")?;
-            d.set_item("children", pair(l, r)?)?;
+            d.set_item("children", kids(2)?)?;
         }
         Expr::Unknown(t) => {
             d.set_item("type", t.bind(py))?;

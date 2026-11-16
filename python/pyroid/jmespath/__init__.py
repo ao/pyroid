@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import math
 import numbers
+import sys
 import warnings
 from typing import Any
 
@@ -38,7 +39,24 @@ __all__ = [
 
 
 def _warn_literal() -> None:
-    warnings.warn("deprecated string literal syntax", PendingDeprecationWarning, stacklevel=1)
+    warnings.warn(
+        "deprecated string literal syntax",
+        PendingDeprecationWarning,
+        stacklevel=_caller_stacklevel(),
+    )
+
+
+def _caller_stacklevel() -> int:
+    """The ``stacklevel`` that points ``warnings.warn`` at the first frame outside this package."""
+    frame = sys._getframe(1)  # the function that calls warnings.warn: stacklevel 1
+    level = 1
+    while frame.f_back is not None:
+        name = str(frame.f_globals.get("__name__", ""))
+        if name != __name__ and not name.startswith(__name__ + "."):
+            break
+        frame = frame.f_back
+        level += 1
+    return level
 
 
 _WARNED: set[str] = set()
@@ -64,7 +82,7 @@ def _fallback(kind: str, expression: Any) -> Any:
     import jmespath.parser
 
     if kind == "tokenize":
-        return list(jmespath.lexer.Lexer().tokenize(expression))
+        return jmespath.lexer.Lexer().tokenize(expression)
     return jmespath.parser.Parser().parse(expression)
 
 

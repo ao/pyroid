@@ -9,13 +9,14 @@ pyroid; the methods here are jmespath's Python code, used when a subclass calls 
 
 from __future__ import annotations
 
+import importlib
 import inspect
 import json
 import math
 from collections.abc import Callable, Iterator
 from typing import Any, TypeVar
 
-from pyroid.jmespath import exceptions
+from pyroid.jmespath import _find, exceptions
 
 __all__ = ["REVERSE_TYPES_MAP", "TYPES_MAP", "FunctionRegistry", "Functions", "signature"]
 
@@ -49,6 +50,14 @@ REVERSE_TYPES_MAP = {
     "number": ("float", "int", "long"),
     "expref": ("_Expression",),
 }
+
+if _find.jmespath() is not None:
+    # The same dicts as jmespath's: code that adds its own types to one (Ansible's json_query
+    # adds its tagged str, list and dict classes) changes both, and the native type checks
+    # follow it.
+    _real = importlib.import_module("jmespath.functions")
+    TYPES_MAP = _real.TYPES_MAP
+    REVERSE_TYPES_MAP = _real.REVERSE_TYPES_MAP
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 

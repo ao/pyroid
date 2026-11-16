@@ -19,7 +19,7 @@ use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 use pyo3::exceptions::{PyRecursionError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyBytes, PyDict, PyList, PyString, PyTuple};
+use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyString, PyTuple};
 use pyroid_core::jmespath::{Budget, LexError, ParseError, ParseMessage, Token, TokenValue};
 
 use expr::Expr;
@@ -36,6 +36,8 @@ struct Stock {
     methods: Vec<(Py<PyString>, Py<PyAny>)>,
     /// `(function, signature)` per [`Builtin`], from `FUNCTION_TABLE`.
     funcs: Vec<Option<(Py<PyAny>, Py<PyAny>)>>,
+    /// The globals its type checks read `TYPES_MAP` and `REVERSE_TYPES_MAP` from.
+    globals: Py<PyDict>,
 }
 
 impl Stock {
@@ -79,7 +81,20 @@ struct Config {
     fallback: Py<PyAny>,
     getframe: Py<PyAny>,
     getrecursionlimit: Py<PyAny>,
+    /// pyroid's `Functions`, then jmespath's when it is installed (the one `search` follows
+    /// without custom functions).
     stocks: Vec<Stock>,
+}
+
+impl Config {
+    /// The globals of the `Functions` class whose type checks the native ones stand in for.
+    fn type_maps<'py>(&self, py: Python<'py>, funcs: &Funcs) -> Option<&Bound<'py, PyDict>> {
+        let stock = match funcs {
+            Funcs::Custom { stock: Some(i), .. } => self.stocks.get(*i),
+            _ => self.stocks.last(),
+        };
+        stock.map(|s| s.globals.bind(py))
+    }
 }
 
 static CONFIG: PyOnceLock<Config> = PyOnceLock::new();
@@ -131,10 +146,16 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
                 Err(_) => None,
             });
         }
+        let globals = cls
+            .getattr("_type_check_single")?
+            .getattr("__globals__")?
+            .cast_into::<PyDict>()?
+            .unbind();
         stocks.push(Stock {
             cls: cls.unbind(),
             methods,
             funcs,
+            globals,
         });
     }
     let builtins = py.import("builtins")?;
@@ -242,6 +263,10 @@ struct Tree {
 impl Tree {
     fn new(root: Expr) -> Self {
         let frames = expr::frames(&root);
+        Self::with_frames(root, frames)
+    }
+
+    fn with_frames(root: Expr, frames: usize) -> Self {
         Self {
             root,
             frames,
@@ -258,10 +283,18 @@ impl Tree {
     }
 }
 
-fn token_value<'py>(py: Python<'py>, t: &Token<Bound<'py, PyAny>>) -> Bound<'py, PyAny> {
+impl Drop for Tree {
+    fn drop(&mut self) {
+        if self.frames > expr::DROP_FRAMES {
+            expr::free_deep(&mut self.root);
+        }
+    }
+}
+
+fn token_value<'py>(py: Python<'py>, t: &Token<host::Value<'py>>) -> Bound<'py, PyAny> {
     match &t.value {
         TokenValue::Text(s) => PyString::new(py, s).into_any(),
-        TokenValue::Value(v) => v.clone(),
+        TokenValue::Value(v) => v.clone().unwrap_or_else(|| py.None().into_bound(py)),
     }
 }
 
@@ -278,7 +311,7 @@ fn percent<'py>(
 /// `None` for tokenizing (`Lexer.tokenize` leaves it unset).
 fn parse_error<'py>(
     py: Python<'py>,
-    err: ParseError<Bound<'py, PyAny>, PyErr>,
+    err: ParseError<host::Value<'py>, PyErr>,
     expression: Option<&Bound<'py, PyAny>>,
 ) -> PyErr {
     let r = (|| -> PyResult<PyErr> {
@@ -391,9 +424,11 @@ fn parse_text<'py>(
         }
     };
     let mut host = PyHost { py, cfg: c };
-    let node = pyroid_core::jmespath::parse(text, &mut host, budget)
+    let mut node = pyroid_core::jmespath::parse(text, &mut host, budget)
         .map_err(|e| parse_error(py, e, Some(expression)))?;
-    Ok(Tree::new(expr::from_node(py, node)?))
+    let (root, frames) = expr::from_node(py, &mut node)?;
+    drop(node);
+    Ok(Tree::with_frames(root, frames))
 }
 
 // ---------------------------------------------------------------------------
@@ -472,26 +507,32 @@ fn get_or_parse<'py>(
     Ok(Parsed::Native(result))
 }
 
-/// A non-`str` expression: what jmespath raises for empty, unhashable and `bytes` ones;
-/// anything else (jmespath lexes any iterable of characters) goes to jmespath.
+/// A non-`str` expression: what jmespath raises for empty, unhashable, `bytes` and
+/// `bytearray` ones; anything else (jmespath lexes any iterable of characters) goes to
+/// jmespath. For `tokenize` (`Lexer().tokenize`), an iterable of jmespath's tokens.
 fn other_expression<'py>(
     py: Python<'py>,
     expression: &Bound<'py, PyAny>,
     kind: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
     let c = config(py)?;
-    // The cache lookup hashes it first.
-    expression.hash()?;
+    if kind != "tokenize" {
+        // `Parser.parse` looks it up in its cache (a dict) first: an unhashable expression
+        // raises the dict's own TypeError (whose wording changed in 3.14).
+        PyDict::new(py).call_method1(pyo3::intern!(py, "get"), (expression,))?;
+    }
     if !expression.is_truthy()? {
         return Err(PyErr::from_value(c.empty_error.bind(py).call0()?));
     }
-    if let Ok(b) = expression.cast_exact::<PyBytes>() {
+    if expression.is_exact_instance_of::<PyBytes>()
+        || expression.is_exact_instance_of::<PyByteArray>()
+    {
         // list(b) gives ints, which match no token: "Unknown token <first byte>".
-        let first = b.as_bytes()[0];
-        let e = c
-            .lexer_error
-            .bind(py)
-            .call1((0, first, format!("Unknown token {first}")))?;
+        let first = expression.get_item(0)?;
+        let e =
+            c.lexer_error
+                .bind(py)
+                .call1((0, &first, percent(py, "Unknown token %s", &first)?))?;
         if kind != "tokenize" {
             e.setattr("expression", expression)?;
         }
@@ -694,7 +735,8 @@ impl ParsedResult {
 }
 
 fn tree_from_dict(parsed: &Bound<'_, PyAny>) -> PyResult<Tree> {
-    let tree = Tree::new(expr::from_dict(parsed, 0)?);
+    let stack = stack_budget(parsed.py())?;
+    let tree = Tree::new(expr::from_dict(parsed, stack)?);
     let _ = tree.parsed.set(parsed.py(), parsed.clone().unbind());
     Ok(tree)
 }
@@ -739,9 +781,9 @@ impl Interpreter {
         let own = self.node.dict.get(py).is_some_and(|d| node.is(d));
         if own {
             let e = &self.node.expr;
-            return run(py, e, expr::frames(e), &value, &self.opts, 1);
+            return run(py, e, self.node.frames, &value, &self.opts, 1);
         }
-        let e = expr::from_dict(node, 0)?;
+        let e = expr::from_dict(node, stack_budget(py)?)?;
         run(py, &e, expr::frames(&e), &value, &self.opts, 1)
     }
 
@@ -806,18 +848,18 @@ fn parse<'py>(py: Python<'py>, expression: &Bound<'py, PyAny>) -> PyResult<Bound
     })
 }
 
-/// ``(tokens, error)``: jmespath's token dicts, and the exception its generator would raise
-/// after them (or ``None``).
+/// ``(tokens, error)``: jmespath's token dicts (a list, or jmespath's own generator for an
+/// expression it lexes), and the exception its generator would raise after them (or ``None``).
 #[pyfunction]
 fn tokenize<'py>(
     py: Python<'py>,
     expression: &Bound<'py, PyAny>,
-) -> PyResult<(Bound<'py, PyList>, Bound<'py, PyAny>)> {
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
     let Ok(s) = expression.cast::<PyString>() else {
         return match other_expression(py, expression, "tokenize") {
-            Ok(r) => Ok((r.cast_into::<PyList>()?, py.None().into_bound(py))),
+            Ok(r) => Ok((r, py.None().into_bound(py))),
             Err(e) => Ok((
-                PyList::empty(py),
+                PyList::empty(py).into_any(),
                 e.into_value(py).into_bound(py).into_any(),
             )),
         };
@@ -848,7 +890,7 @@ fn tokenize<'py>(
             .into_bound(py)
             .into_any(),
     };
-    Ok((list, error))
+    Ok((list.into_any(), error))
 }
 
 /// Clear the expression cache (``Parser.purge()``).

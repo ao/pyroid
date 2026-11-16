@@ -265,13 +265,12 @@ impl<V: Clone> Parser<V> {
                     Ok(Node::ValueProjection(boxed(left), boxed(right)))
                 } else {
                     let right = self.parse_dot_rhs(TokenKind::Dot.binding_power())?;
-                    match left {
-                        Node::Subexpression(mut children) => {
-                            children.push(right);
-                            Ok(Node::Subexpression(children))
-                        }
-                        left => Ok(Node::Subexpression(vec![left, right])),
+                    let mut left = left;
+                    if let Node::Subexpression(children) = &mut left {
+                        children.push(right);
+                        return Ok(left);
                     }
+                    Ok(Node::Subexpression(vec![left, right]))
                 }
             }
             TokenKind::Pipe => {
@@ -303,14 +302,13 @@ impl<V: Clone> Parser<V> {
                 let token_kind = self.lookahead_token(0).kind;
                 if matches!(token_kind, TokenKind::Number | TokenKind::Colon) {
                     let right = self.parse_index_expression()?;
-                    match left {
-                        // Grow the index expression in place.
-                        Node::IndexExpression(mut children) => {
-                            children.push(right);
-                            Ok(Node::IndexExpression(children))
-                        }
-                        left => self.project_if_slice(left, right),
+                    let mut left = left;
+                    // Grow the index expression in place.
+                    if let Node::IndexExpression(children) = &mut left {
+                        children.push(right);
+                        return Ok(left);
                     }
+                    self.project_if_slice(left, right)
                 } else {
                     // A projection.
                     self.match_(TokenKind::Star)?;
@@ -328,7 +326,7 @@ impl<V: Clone> Parser<V> {
     }
 
     fn led_lparen<E>(&mut self, left: Node<V>) -> R<V, E> {
-        let Node::Field(name) = left else {
+        let Node::Field(name) = &left else {
             // -1 is the '(' token, -2 the invalid function "name".
             let prev = self.tokens[self.index - 2].clone();
             return Err(Self::raise_for_token(
@@ -336,6 +334,8 @@ impl<V: Clone> Parser<V> {
                 ParseMessage::InvalidFunctionName,
             ));
         };
+        let name = name.clone();
+        drop(left);
         let mut args = Vec::new();
         while self.current() != TokenKind::Rparen {
             let expression = self.expression(0)?;
@@ -403,8 +403,7 @@ impl<V: Clone> Parser<V> {
                 current = self.current();
             }
             self.match_(TokenKind::Rbracket)?;
-            let [start, end, step] = parts;
-            Ok(Node::Slice(start, end, step))
+            Ok(Node::Slice(Box::new(parts)))
         })();
         self.leave();
         r
