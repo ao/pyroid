@@ -136,7 +136,6 @@ _native._configure(
         "timedelta": datetime.timedelta,
         "timezone": datetime.timezone,
         "utc": datetime.UTC,
-        "surrogates": {0x10F800 + i: 0xD800 + i for i in range(0x800)},
         "helpers": _construct.HELPERS,
     }
 )
@@ -337,7 +336,6 @@ def _public_name() -> str:
     return name
 
 
-
 def _pyyaml(name: str | None, reason: str) -> Any:
     """The real PyYAML for `name`, warning once per function and reason, or PyroidError.
 
@@ -425,70 +423,83 @@ def _decode_bytes(data: bytes, name: str) -> str:
     return text
 
 
-def _read_all(stream: Any) -> list[Any]:
-    """Every ``stream.read(4096)`` result, the final empty one included."""
-    reads = []
-    while True:
-        data = stream.read(4096)
-        reads.append(data)
-        if not data:
-            return reads
+class _Stream:
+    """A file object read as PyYAML's ``Reader`` reads it.
 
-
-def _emulate_reader(reads: list[Any], name: Any) -> tuple[str, ReaderError | None]:
-    """PyYAML's ``Reader`` over a file object, reading it all.
-
-    Returns the text PyYAML decodes before its first error and that error (``None`` when the
-    whole stream is fine). PyYAML raises the error only once the scanner looks past that text.
+    The native scanner calls :meth:`pull` whenever it looks past the text read so far, which is
+    when PyYAML's reader reads, so ``load_all`` yields documents as a stream arrives, and reads,
+    decoding errors and their positions are PyYAML's. ``record`` keeps every ``read()`` result,
+    to hand the stream to PyYAML from the start (:class:`_Replay`).
     """
-    it = iter(reads)
-    raw: Any = None
-    eof = False
-    pointer = 0
 
-    def update_raw() -> None:
-        nonlocal raw, eof, pointer
-        data = next(it)
-        raw = data if raw is None else raw + data
-        pointer += len(data)
+    def __init__(self, stream: Any, record: bool = False) -> None:
+        self._stream = stream
+        self.name = getattr(stream, "name", "<file>")
+        self.reads: list[Any] | None = [] if record else None
+        self._raw: Any = None
+        self._eof = False
+        self._pointer = 0
+        self._decode: Any = None
+        # Reader.determine_encoding(), up to its update(1) (the first pull).
+        while not self._eof and (self._raw is None or len(self._raw) < 2):
+            self._update_raw()
+        if isinstance(self._raw, bytes):
+            if self._raw.startswith(codecs.BOM_UTF16_LE):
+                self._decode = codecs.utf_16_le_decode
+            elif self._raw.startswith(codecs.BOM_UTF16_BE):
+                self._decode = codecs.utf_16_be_decode
+            else:
+                self._decode = codecs.utf_8_decode
+
+    def _update_raw(self) -> None:
+        data = self._stream.read(4096)
+        if self.reads is not None:
+            self.reads.append(data)
+        self._raw = data if self._raw is None else self._raw + data
+        self._pointer += len(data)
         if not data:
-            eof = True
+            self._eof = True
 
-    while not eof and (raw is None or len(raw) < 2):
-        update_raw()
-    decode = None
-    if isinstance(raw, bytes):
-        if raw.startswith(codecs.BOM_UTF16_LE):
-            decode = codecs.utf_16_le_decode
-        elif raw.startswith(codecs.BOM_UTF16_BE):
-            decode = codecs.utf_16_be_decode
-        else:
-            decode = codecs.utf_8_decode
-    parts: list[str] = []
-    chars = 0
-    while True:
-        if not eof:
-            update_raw()
-        if decode is not None:
+    def pull(self) -> tuple[Any, bool]:
+        """One turn of ``Reader.update``'s loop: read once more, decode what has arrived.
+
+        Returns the text and whether the stream has ended. The caller checks the text as
+        ``check_printable`` does.
+        """
+        if not self._eof:
+            self._update_raw()
+        if self._decode is not None:
             try:
-                data, converted = decode(raw, "strict", eof)
+                data, converted = self._decode(self._raw, "strict", self._eof)
             except UnicodeDecodeError as exc:
-                character = raw[exc.start]
-                position = pointer - len(raw) + exc.start
-                return "".join(parts), ReaderError(
-                    name, position, character, exc.encoding, exc.reason
-                )
+                position = self._pointer - len(self._raw) + exc.start
+                character = self._raw[exc.start]
+                raise ReaderError(
+                    self.name, position, character, exc.encoding, exc.reason
+                ) from None
         else:
-            data = raw
+            data = self._raw
             converted = len(data)
-        error = _printable_error(data, name, chars)
-        if error is not None:
-            return "".join(parts), error
-        parts.append(data)
-        chars += len(data)
-        raw = raw[converted:]
-        if eof:
-            return "".join(parts), None
+            if type(data) is not str:
+                _NON_PRINTABLE.search(data)  # check_printable's TypeError for other types
+        self._raw = self._raw[converted:]
+        return data, self._eof
+
+
+class _Replay:
+    """A file object's ``read()`` results again, then the rest of it, for PyYAML."""
+
+    def __init__(self, reads: list[Any], stream: Any) -> None:
+        self._reads = iter(reads)
+        self._stream = stream
+        if hasattr(stream, "name"):
+            self.name = stream.name
+
+    def read(self, size: int = -1) -> Any:
+        data = next(self._reads, None)
+        if data is None:
+            return self._stream.read(size)
+        return data
 
 
 def _max_depth() -> int:
@@ -501,73 +512,79 @@ def _max_depth() -> int:
     return max((sys.getrecursionlimit() - depth - 12) // 2, 0)
 
 
-class _Replay:
-    """A file object's ``read(4096)`` results again, for handing the stream to PyYAML."""
+def _native_input(stream: Any, record: bool = False) -> tuple[Any, Any, bool]:
+    """What the native loader reads: ``(str, bytes or _Stream, name, marks)``."""
+    if isinstance(stream, str):
+        return stream, "<unicode string>", True
+    if isinstance(stream, bytes):
+        name = "<byte string>"
+        if stream.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+            return _decode_bytes(stream, name), name, True
+        return stream, name, True
+    source = _Stream(stream, record)
+    return source, source.name, False
 
-    def __init__(self, reads: list[Any], stream: Any) -> None:
-        self._reads = iter(reads)
-        self._last = reads[-1]
-        if hasattr(stream, "name"):
-            self.name = stream.name
 
-    def read(self, size: int = -1) -> Any:
-        return next(self._reads, self._last)
+def _lone_surrogates(exc: UnicodeEncodeError, stream: Any) -> Exception:
+    """The ``ReaderError`` PyYAML raises for a ``str`` stream with lone surrogates."""
+    if isinstance(stream, str):
+        error = _printable_error(stream, "<unicode string>")
+        if error is not None:
+            return error
+    return exc
 
 
 def _native_load(stream: Any, mode: str) -> tuple[Any, Any]:
     """Load one document natively: ``(result, stream)``.
 
-    A ``NotImplemented`` result means PyYAML must load it, from the returned stream (file
-    objects are replayed).
+    A ``NotImplemented`` result means PyYAML must load it (a ``!!python/`` tag under a full
+    loader), from the returned stream: a file object is replayed from its first read.
     """
-    reads: list[Any] = []
-    result = _native_load_one(stream, mode, reads)
-    if result is NotImplemented and reads:
-        return result, _Replay(reads, stream)
-    return result, stream
-
-
-def _native_load_one(stream: Any, mode: str, reads: list[Any]) -> Any:
-    """`reads` receives a file object's read() results."""
     full = mode == "full"
     depth = _max_depth()
-    digits = sys.get_int_max_str_digits()
-    if isinstance(stream, str):
-        name = "<unicode string>"
-        try:
-            return _native.load(stream, name, True, None, None, depth, digits, full)
-        except UnicodeEncodeError:
-            error = _printable_error(stream, name)
-            if error is None:
-                raise
-            raise error from None
-    if isinstance(stream, bytes):
-        name = "<byte string>"
-        if stream.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
-            return _native.load(
-                _decode_bytes(stream, name), name, True, None, None, depth, digits, full
-            )
-        return _native.load(stream, name, True, None, None, depth, digits, full)
-    name = getattr(stream, "name", "<file>")
-    reads.extend(_read_all(stream))
-    first = reads[0]
-    data = first[:0].join(reads) if isinstance(first, (str, bytes)) else "".join(reads)
-    if isinstance(data, bytes) and data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
-        text, pending = _emulate_reader(reads, name)
-        limit = len(text) if pending is not None else None
-        return _native.load(text, name, False, limit, pending, depth, digits, full)
+    data, name, marks = _native_input(stream, record=full)
     try:
-        return _native.load(data, name, False, None, None, depth, digits, full)
-    except (ReaderError, UnicodeEncodeError):
-        text, pending = _emulate_reader(reads, name)
-        if pending is None:
-            raise
-        return _native.load(text, name, False, len(text), pending, depth, digits, full)
+        result = _native.load(data, name, marks, depth, sys.get_int_max_str_digits(), full)
+    except UnicodeEncodeError as exc:
+        raise _lone_surrogates(exc, stream) from None
+    if result is NotImplemented and isinstance(data, _Stream):
+        return result, _Replay(data.reads or [], stream)
+    return result, stream
 
 
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
+
+
+def _load(stream: Any, loader_cls: Any, name: str) -> Any:
+    mode = _loader_mode(loader_cls)
+    if mode is not None:
+        result, again = _native_load(stream, mode)
+        if result is not NotImplemented:
+            return result
+        _pyyaml(name, "a !!python/ tag")
+        return _py_load(again, loader_cls)
+    _pyyaml(name, _loader_reason(loader_cls, None))
+    return _py_load(stream, loader_cls)
+
+
+def _load_all(stream: Any, loader_cls: Any, name: str) -> Iterator[Any]:
+    mode = _loader_mode(loader_cls)
+    if mode != "safe":
+        _pyyaml(name, _loader_reason(loader_cls, mode))
+        yield from _py_load_all(stream, loader_cls)
+        return
+    depth = _max_depth()
+    data, source_name, marks = _native_input(stream)
+    try:
+        loader = _native._LoadAll.start(
+            data, source_name, marks, depth, sys.get_int_max_str_digits()
+        )
+    except UnicodeEncodeError as exc:
+        raise _lone_surrogates(exc, stream) from None
+    while loader.check_data():
+        yield loader.get_data()
 
 
 def load(stream: Any, Loader: Any) -> Any:  # noqa: N803 - PyYAML's name
@@ -577,69 +594,16 @@ def load(stream: Any, Loader: Any) -> Any:  # noqa: N803 - PyYAML's name
     runs natively; so do ``FullLoader``, ``Loader`` and ``UnsafeLoader`` until a
     ``!!python/`` tag appears, when PyYAML takes over. Customised loaders go to PyYAML.
     """
-    mode = _loader_mode(Loader)
-    if mode is not None:
-        result, again = _native_load(stream, mode)
-        if result is not NotImplemented:
-            return result
-        reason = "a !!python/ tag" if mode == "full" else "a str holding U+10F800..U+10FFFF"
-        _pyyaml(None, reason)
-        return _py_load(again, Loader)
-    _pyyaml(None, _loader_reason(Loader, None))
-    return _py_load(stream, Loader)
+    return _load(stream, Loader, "load")
 
 
 def load_all(stream: Any, Loader: Any) -> Iterator[Any]:  # noqa: N803 - PyYAML's name
     """Parse all YAML documents in `stream` and produce the Python objects (a generator).
 
-    Like ``yaml.load_all``. A ``SafeLoader`` runs natively; other loaders go to PyYAML.
+    Like ``yaml.load_all``. A ``SafeLoader`` runs natively; other loaders go to PyYAML. A
+    file object is read as the documents are needed, as PyYAML reads it.
     """
-    mode = _loader_mode(Loader)
-    if mode != "safe":
-        _pyyaml(None, _loader_reason(Loader, mode))
-        yield from _py_load_all(stream, Loader)
-        return
-    loader = _native_load_all(stream)
-    if loader is NotImplemented:
-        _pyyaml(None, "a str holding U+10F800..U+10FFFF")
-        yield from _py_load_all(stream, Loader)
-        return
-    while loader.check_data():
-        yield loader.get_data()
-
-
-def _native_load_all(stream: Any) -> Any:
-    depth = _max_depth()
-    digits = sys.get_int_max_str_digits()
-    start = _native._LoadAll.start
-    if isinstance(stream, str):
-        name = "<unicode string>"
-        try:
-            return start(stream, name, True, None, None, depth, digits)
-        except UnicodeEncodeError:
-            error = _printable_error(stream, name)
-            if error is None:
-                raise
-            raise error from None
-    if isinstance(stream, bytes):
-        name = "<byte string>"
-        if stream.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
-            return start(_decode_bytes(stream, name), name, True, None, None, depth, digits)
-        return start(stream, name, True, None, None, depth, digits)
-    name = getattr(stream, "name", "<file>")
-    reads = _read_all(stream)
-    first = reads[0]
-    data = first[:0].join(reads) if isinstance(first, (str, bytes)) else "".join(reads)
-    if isinstance(data, bytes) and data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
-        text, pending = _emulate_reader(reads, name)
-        return start(text, name, False, len(text) if pending else None, pending, depth, digits)
-    try:
-        return start(data, name, False, None, None, depth, digits)
-    except (ReaderError, UnicodeEncodeError):
-        text, pending = _emulate_reader(reads, name)
-        if pending is None:
-            raise
-        return start(text, name, False, len(text), pending, depth, digits)
+    yield from _load_all(stream, Loader, "load_all")
 
 
 def safe_load(stream: Any) -> Any:
@@ -648,32 +612,32 @@ def safe_load(stream: Any) -> Any:
     Resolve only basic YAML tags (``yaml.safe_load``). `stream` is a ``str``, ``bytes``
     (UTF-8, or UTF-16 with a BOM) or a file object.
     """
-    return load(stream, SafeLoader)
+    return _load(stream, SafeLoader, "safe_load")
 
 
 def safe_load_all(stream: Any) -> Iterator[Any]:
     """Parse all YAML documents in `stream` (``yaml.safe_load_all``)."""
-    return load_all(stream, SafeLoader)
+    return _load_all(stream, SafeLoader, "safe_load_all")
 
 
 def full_load(stream: Any) -> Any:
     """``yaml.full_load``: :func:`load` with ``FullLoader``."""
-    return load(stream, FullLoader)
+    return _load(stream, FullLoader, "full_load")
 
 
 def full_load_all(stream: Any) -> Iterator[Any]:
     """``yaml.full_load_all``: :func:`load_all` with ``FullLoader``."""
-    return load_all(stream, FullLoader)
+    return _load_all(stream, FullLoader, "full_load_all")
 
 
 def unsafe_load(stream: Any) -> Any:
     """``yaml.unsafe_load``: :func:`load` with ``UnsafeLoader``."""
-    return load(stream, UnsafeLoader)
+    return _load(stream, UnsafeLoader, "unsafe_load")
 
 
 def unsafe_load_all(stream: Any) -> Iterator[Any]:
     """``yaml.unsafe_load_all``: :func:`load_all` with ``UnsafeLoader``."""
-    return load_all(stream, UnsafeLoader)
+    return _load_all(stream, UnsafeLoader, "unsafe_load_all")
 
 
 # ---------------------------------------------------------------------------

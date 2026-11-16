@@ -34,9 +34,10 @@ name (``scan``, ``parse``, ``compose``, ``emit``, ``YAMLObject``, ``add_construc
 is PyYAML's, through the module's ``__getattr__``.
 
 Input is a ``str``, ``bytes`` (UTF-8, or UTF-16 with a BOM) or a file object, read as
-PyYAML reads it, including where a decoding error further on is raised. Deeply nested
-documents raise ``RecursionError`` where PyYAML's recursive composer would, within three
-levels.
+PyYAML reads it: 4096 units at a time and only as far as the parser has got, so ``load_all``
+yields the documents of a pipe as they arrive, and a decoding or read error further on is
+raised where PyYAML raises it. Deeply nested documents raise ``RecursionError`` where PyYAML's
+recursive composer would, within three levels; no depth can overflow the native stack.
 """
 
 from collections.abc import Iterable, Iterator
@@ -190,9 +191,9 @@ def load(stream: Any, Loader: Any) -> Any:  # noqa: N803
 def load_all(stream: Any, Loader: Any) -> Iterator[Any]:  # noqa: N803
     """Parse all YAML documents in `stream` and produce the Python objects (``yaml.load_all``).
 
-    A generator, as in PyYAML: documents come one at a time, and an error in a later
-    document is raised when the generator gets there. Only ``SafeLoader`` (and
-    ``CSafeLoader``) run natively here.
+    A generator, as in PyYAML: documents come one at a time (a file object is read only as far
+    as the next document needs), and an error in a later document is raised when the generator
+    gets there. Only ``SafeLoader`` (and ``CSafeLoader``) run natively here.
     """
 
 def safe_load(stream: Any) -> Any:

@@ -6,15 +6,37 @@
 //! `Reader.forward` does (`'\r'` not followed by `'\n'`, `'\n'`, `'\x85'`, U+2028 and U+2029
 //! end a line; U+FEFF does not move the column). Past the end it reads `'\0'`.
 //!
-//! For file objects PyYAML reads 4096 units at a time and only decodes as far as the scanner
-//! looks, so a decoding error (or a character it rejects) further on is raised only when the
-//! scanner gets there. The bindings give such a stream as its valid prefix plus a `limit`:
-//! looking past it sets a flag that the scanner turns into [`YamlError::NeedMore`], and the
-//! bindings raise the pending `ReaderError`.
+//! For file objects PyYAML reads 4096 units at a time, and only when the scanner looks past what
+//! it has decoded, so documents come out as a stream arrives, and a read or decoding error
+//! further on is raised only when the scanner gets there. A [`Reader::stream`] does the same: it
+//! holds the text read so far, notes when the scanner looks past it ([`Reader::hit_limit`]), and
+//! reads more ([`Reader::pull`]) from a [`Source`] (the bindings read the Python file object).
+//! Once the source has failed, looking further is [`YamlError::NeedMore`](super::error::YamlError)
+//! and the bindings raise the error the source hit.
 
 use std::cell::Cell;
 
 use super::error::{Mark, ReaderError};
+
+/// Where a [`Reader::stream`] gets more text: one turn of PyYAML's `Reader.update` loop (one
+/// `stream.read`, then the decoding and `check_printable` of what has arrived).
+pub trait Source: Send + std::fmt::Debug {
+    /// The next piece of text (it may be empty), and whether the stream has ended. `Err`: the
+    /// read, the decoding or the check failed; the source keeps the error for its caller.
+    #[allow(clippy::result_unit_err)]
+    fn pull(&mut self) -> Result<(String, bool), ()>;
+}
+
+/// What [`Reader::pull`] got.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pull {
+    /// More text (possibly none, as when a read ends inside a character).
+    More,
+    /// The stream ended: everything is decoded.
+    End,
+    /// The source failed, now or before.
+    Failed,
+}
 
 /// The first code point of the stream that PyYAML's `Reader.NON_PRINTABLE` rejects.
 ///
@@ -48,15 +70,8 @@ pub fn is_printable(ch: char) -> bool {
     matches!(ch, '\t' | '\n' | '\r' | '\x20'..='\x7E' | '\u{85}' | '\u{A0}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}' | '\u{10000}'..)
 }
 
-/// Whether `text` holds a character in U+10F800..=U+10FFFF, the range the scanner uses to
-/// carry lone surrogates from `\uD800`-style escapes.
-pub fn has_reserved(text: &str) -> bool {
-    // U+10F800.. is F4 8F A0 80 ..= F4 8F BF BF in UTF-8.
-    memchr::memmem::find_iter(text.as_bytes(), b"\xF4\x8F")
-        .any(|i| text.as_bytes().get(i + 2).is_some_and(|&b| b >= 0xA0))
-}
-
-/// First code point of the reserved range (see [`has_reserved`]).
+/// The stand-in for the lone surrogate U+D800: the scanner writes `\uD800`..`\uDFFF` escapes as
+/// U+10F800..U+10FFFF and records where (see [`Escapes`](super::scanner::Escapes)).
 pub const SURROGATE_BASE: u32 = 0x10_F800;
 
 /// The `ReaderError` PyYAML raises for invalid UTF-8 `bytes` (`codecs.utf_8_decode(..., final=True)`).
@@ -96,9 +111,14 @@ pub struct Reader {
     pub index: usize,
     pub line: usize,
     pub column: usize,
-    /// Code points PyYAML has decoded before a pending reader error (file objects).
+    /// The code points decoded so far while more may come (a stream), or before an error
+    /// that looking further raises; `None`: the text is all there is.
     limit: Option<usize>,
     hit_limit: Cell<bool>,
+    /// Where more text comes from (a stream that has not ended).
+    source: Option<Box<dyn Source>>,
+    /// The source failed: nothing more will come.
+    failed: bool,
 }
 
 impl Reader {
@@ -112,13 +132,32 @@ impl Reader {
             column: 0,
             limit,
             hit_limit: Cell::new(false),
+            source: None,
+            failed: false,
         };
         // PyYAML's Reader.__init__ ends with `update(1)` (determine_encoding).
         reader.need(1);
         reader
     }
 
-    /// The whole text.
+    /// A reader over a stream: no text yet, more from `source` whenever the scanner looks past
+    /// what it has (PyYAML's first `update(1)` comes with the first token).
+    pub fn stream(source: Box<dyn Source>) -> Self {
+        Self {
+            text: String::new(),
+            pos: 0,
+            index: 0,
+            line: 0,
+            column: 0,
+            limit: Some(0),
+            hit_limit: Cell::new(false),
+            source: Some(source),
+            failed: false,
+        }
+    }
+
+    /// The text from the first character a stream still holds (for `str` and `bytes`
+    /// input: all of it).
     pub fn text(&self) -> &str {
         &self.text
     }
@@ -128,9 +167,60 @@ impl Reader {
         self.pos
     }
 
-    /// Whether the scanner looked past the pending reader error.
+    /// Whether the scanner looked past the text read so far.
     pub fn hit_limit(&self) -> bool {
         self.hit_limit.get()
+    }
+
+    /// Whether more text can come (a stream that has neither ended nor failed).
+    pub fn streaming(&self) -> bool {
+        self.source.is_some() && !self.failed
+    }
+
+    /// The code points read past the current one (`usize::MAX` once the stream has ended).
+    pub fn ahead(&self) -> usize {
+        self.limit
+            .map_or(usize::MAX, |limit| limit.saturating_sub(self.index))
+    }
+
+    /// Read more of the stream (one turn of PyYAML's `update` loop), after dropping the text
+    /// before the current character (PyYAML trims its buffer too; marks keep counting).
+    pub fn pull(&mut self) -> Pull {
+        if self.failed {
+            return Pull::Failed;
+        }
+        let Some(source) = self.source.as_mut() else {
+            return Pull::End;
+        };
+        self.hit_limit.set(false);
+        let Ok((more, end)) = source.pull() else {
+            self.failed = true;
+            return Pull::Failed;
+        };
+        if self.pos > 0 {
+            self.text.drain(..self.pos);
+            self.pos = 0;
+        }
+        let n = more.chars().count();
+        self.text.push_str(&more);
+        if end {
+            self.limit = None;
+            self.source = None;
+            return Pull::End;
+        }
+        self.limit = self.limit.map(|limit| limit + n);
+        Pull::More
+    }
+
+    /// The cursor, for the scanner to go back to ([`Self::set_position`]).
+    pub(crate) fn position(&self) -> (usize, usize, usize, usize) {
+        (self.pos, self.index, self.line, self.column)
+    }
+
+    /// Go back to a [`position`](Self::position) taken since the last [`pull`](Self::pull).
+    pub(crate) fn set_position(&mut self, at: (usize, usize, usize, usize)) {
+        (self.pos, self.index, self.line, self.column) = at;
+        self.hit_limit.set(false);
     }
 
     /// PyYAML's `update(n)`: the next `n` code points must be decoded.
@@ -291,13 +381,6 @@ mod tests {
         assert_eq!(find_non_printable("a\u{9F}"), Some((1, '\u{9F}')));
         assert_eq!(find_non_printable("a\u{85}\u{FFFE}"), Some((2, '\u{FFFE}')));
         assert_eq!(find_non_printable("\u{10FFFF}\u{7F}"), Some((1, '\u{7F}')));
-    }
-
-    #[test]
-    fn reserved() {
-        assert!(!has_reserved("abc\u{10F7FF}"));
-        assert!(has_reserved("a\u{10F800}"));
-        assert!(has_reserved("\u{10FFFF}"));
     }
 
     #[test]

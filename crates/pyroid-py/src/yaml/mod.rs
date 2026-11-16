@@ -2,11 +2,12 @@
 //! `pyroid._pyroid.yaml`: native entry points behind `pyroid.yaml`.
 //!
 //! The Python module (`python/pyroid/yaml/__init__.py`) owns PyYAML's signatures, the
-//! choice between the native path and PyYAML itself, file objects and UTF-16 input. This
-//! module loads (constructs Python objects from the core's node graphs, in
-//! `SafeConstructor`'s order) and dumps (represents objects as nodes, then serializes and
-//! emits them in the core). Errors are raised as the exception classes the Python module
-//! registers with `_configure` (PyYAML's own when it is installed).
+//! choice between the native path and PyYAML itself, the reading of file objects (`_Stream`,
+//! which the core's scanner asks for more text) and UTF-16 input. This module loads
+//! (constructs Python objects from the core's node graphs, in `SafeConstructor`'s order) and
+//! dumps (represents objects as nodes, then serializes and emits them in the core). Errors are
+//! raised as the exception classes the Python module registers with `_configure` (PyYAML's own
+//! when it is installed).
 
 mod dump;
 mod load;
@@ -37,8 +38,6 @@ struct Classes {
     timedelta: Py<PyAny>,
     timezone: Py<PyAny>,
     utc: Py<PyAny>,
-    /// `str.translate` table mapping U+10F800.. back to lone surrogates.
-    surrogates: Py<PyAny>,
     /// PyYAML's constructor code for the slow paths: `{"int": f, "float": f, "bool": f,
     /// "timestamp": f, "binary": f}`, each taking the scalar's value.
     helpers: Py<PyAny>,
@@ -77,7 +76,6 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         timedelta: get("timedelta")?,
         timezone: get("timezone")?,
         utc: get("utc")?,
-        surrogates: get("surrogates")?,
         helpers: get("helpers")?,
     };
     let _ = CLASSES.set(py, c);
@@ -160,17 +158,6 @@ fn opt_msg<'py>(py: Python<'py>, msg: Option<&Msg>) -> PyResult<Bound<'py, PyAny
         Some(m) => format_msg(py, m),
         None => Ok(py.None().into_bound(py)),
     }
-}
-
-/// A `str` from a scalar that may carry lone surrogates in U+10F800.. (the scanner maps
-/// `\uD800`-style escapes there; inputs holding such characters themselves go to PyYAML).
-fn restore_surrogates<'py>(py: Python<'py>, s: &str) -> PyResult<Bound<'py, PyAny>> {
-    let out = PyString::new(py, s).into_any();
-    if pyroid_core::yaml::reader::has_reserved(s) {
-        let table = &classes(py)?.surrogates;
-        return out.call_method1("translate", (table.bind(py),));
-    }
-    Ok(out)
 }
 
 fn reader_error(py: Python<'_>, name: &Bound<'_, PyAny>, e: &ReaderError) -> PyErr {

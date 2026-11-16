@@ -11,21 +11,26 @@
 //! timestamps); anything else goes to the Python helpers that `pyroid.yaml` registers, which
 //! are PyYAML's own constructor code, so unusual explicitly tagged values (`!!int " 0x1F "`,
 //! `!!float ١٫٥`, `!!bool maybe`) give PyYAML's results and exceptions.
+//!
+//! File objects are streams: `pyroid.yaml._Stream` reads and decodes them as PyYAML's reader
+//! does, and the core's scanner asks it for more ([`PyStream`]) whenever it looks past the text
+//! read so far, so documents come out of `load_all` as the stream arrives.
 
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyFloat, PyList, PySet, PyString, PyTuple};
+use pyo3::types::{PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyString, PyTuple};
 use pyroid_core::yaml::composer::{Composer, ComposerOptions};
 use pyroid_core::yaml::error::{ErrorKind, Msg, YamlError};
 use pyroid_core::yaml::nodes::{Graph, NodeId, NodeKind};
-use pyroid_core::yaml::reader::{self, find_non_printable, has_reserved, printable_error};
+use pyroid_core::yaml::parser::Parser;
+use pyroid_core::yaml::reader::{self, Reader, find_non_printable, is_printable, printable_error};
 use pyroid_core::yaml::resolver::{self as res, Tz};
-use pyroid_core::yaml::scanner::ScannerOptions;
+use pyroid_core::yaml::scanner::{Escapes, Scanner, ScannerOptions};
 
-use super::{Classes, Source, classes, reader_error, restore_surrogates, to_pyerr};
+use super::{Classes, Source, classes, reader_error, to_pyerr};
 use crate::batch::SINGLE_DOC_DETACH_BYTES;
 
 /// A construction failure: a core error (needs marks) or a Python exception.
@@ -86,8 +91,8 @@ struct Ctor<'g, 'py> {
     g: &'g mut Graph,
     objs: Vec<Option<Bound<'py, PyAny>>>,
     queue: VecDeque<Fill<'py>>,
-    /// The scanner decoded `\uD800`-style escapes (scalar strings need mapping back).
-    surrogates: bool,
+    /// The lone surrogates of the stream's double-quoted scalars.
+    escapes: &'g Escapes,
     /// A `FullLoader`/`Loader`/`UnsafeLoader` call: `!!python/...` tags are PyYAML's.
     full: bool,
     /// [`chain_limit`].
@@ -95,14 +100,7 @@ struct Ctor<'g, 'py> {
 }
 
 impl<'g, 'py> Ctor<'g, 'py> {
-    fn new(
-        py: Python<'py>,
-        c: &'py Classes,
-        g: &'g mut Graph,
-        surrogates: bool,
-        full: bool,
-        chain: usize,
-    ) -> Self {
+    fn new(py: Python<'py>, c: &'py Classes, g: &'g mut Graph, env: &'g Env<'g>) -> Self {
         let n = g.nodes.len();
         Self {
             py,
@@ -110,9 +108,9 @@ impl<'g, 'py> Ctor<'g, 'py> {
             g,
             objs: vec![None; n],
             queue: VecDeque::new(),
-            surrogates,
-            full,
-            chain,
+            escapes: env.escapes,
+            full: env.full,
+            chain: env.chain,
         }
     }
 
@@ -131,11 +129,14 @@ impl<'g, 'py> Ctor<'g, 'py> {
         Ok(data)
     }
 
-    fn string(&self, s: &str) -> PyResult<Bound<'py, PyAny>> {
-        if self.surrogates {
-            return restore_surrogates(self.py, s);
+    /// The `str` of scalar node `id`'s value, lone surrogates from escapes included.
+    fn string(&self, id: NodeId) -> PyResult<Bound<'py, PyAny>> {
+        let node = &self.g.nodes[id];
+        let value = self.value(id);
+        match self.escapes.of(node.end_mark.index) {
+            None => Ok(PyString::new(self.py, value).into_any()),
+            Some(offsets) => with_surrogates(self.py, value, offsets),
         }
-        Ok(PyString::new(self.py, s).into_any())
     }
 
     /// `construct_object(node)`.
@@ -148,7 +149,7 @@ impl<'g, 'py> Ctor<'g, 'py> {
         let obj = match tag {
             res::STR => {
                 let s = self.scalar(id)?;
-                self.string(self.value(s))?
+                self.string(s)?
             }
             res::MAP => {
                 let d = PyDict::new(py);
@@ -241,9 +242,9 @@ impl<'g, 'py> Ctor<'g, 'py> {
     }
 
     /// Call a registered Python helper (PyYAML's own code) on the scalar value.
-    fn slow(&self, helper: &str, value: &str) -> R<Bound<'py, PyAny>> {
+    fn slow(&self, helper: &str, scalar: NodeId) -> R<Bound<'py, PyAny>> {
         let f = self.c.helpers.bind(self.py).get_item(helper)?;
-        Ok(f.call1((self.string(value)?,))?)
+        Ok(f.call1((self.string(scalar)?,))?)
     }
 
     fn int(&mut self, id: NodeId) -> R<Bound<'py, PyAny>> {
@@ -252,7 +253,7 @@ impl<'g, 'py> Ctor<'g, 'py> {
         if let Some(n) = fast_int(value) {
             return Ok(pyo3::types::PyInt::new(self.py, n).into_any());
         }
-        self.slow("int", value)
+        self.slow("int", s)
     }
 
     fn float(&mut self, id: NodeId) -> R<Bound<'py, PyAny>> {
@@ -261,7 +262,7 @@ impl<'g, 'py> Ctor<'g, 'py> {
         match fast_float(value) {
             Some(FastFloat::Value(f)) => Ok(PyFloat::new(self.py, f).into_any()),
             Some(FastFloat::Nan) => Ok(self.c.nan.bind(self.py).clone()),
-            None => self.slow("float", value),
+            None => self.slow("float", s),
         }
     }
 
@@ -278,13 +279,12 @@ impl<'g, 'py> Ctor<'g, 'py> {
                 return Ok(PyBool::new(self.py, b).to_owned().into_any());
             }
         }
-        self.slow("bool", value)
+        self.slow("bool", s)
     }
 
     fn binary(&mut self, id: NodeId) -> R<Bound<'py, PyAny>> {
         let s = self.scalar(id)?;
-        let value = self.value(s);
-        let out = self.slow("binary", value)?;
+        let out = self.slow("binary", s)?;
         // The helper returns the bytes, or the message of PyYAML's ConstructorError.
         if let Ok(msg) = out.cast::<PyString>() {
             let mark = self.g.nodes[id].start_mark;
@@ -304,7 +304,7 @@ impl<'g, 'py> Ctor<'g, 'py> {
         let value = self.value(s);
         let py = self.py;
         let Some(t) = res::parse_timestamp(value) else {
-            return self.slow("timestamp", value);
+            return self.slow("timestamp", s);
         };
         let num = |s: &str| -> i64 { s.bytes().fold(0i64, |a, d| a * 10 + i64::from(d - b'0')) };
         let (year, month, day) = (num(t.year), num(t.month), num(t.day));
@@ -615,7 +615,6 @@ struct SeqMerge {
     done: Vec<Vec<(NodeId, NodeId)>>,
 }
 
-
 /// `construct_yaml_int` for the common forms; `None`: let PyYAML's code decide.
 fn fast_int(value: &str) -> Option<i64> {
     let b = value.as_bytes();
@@ -719,7 +718,7 @@ fn checked_text(
         // A str with lone surrogates raises UnicodeEncodeError here; pyroid.yaml catches it
         // and raises the ReaderError itself.
         s.to_str()?.to_owned()
-    } else if let Ok(b) = stream.cast::<pyo3::types::PyBytes>() {
+    } else if let Ok(b) = stream.cast::<PyBytes>() {
         let bytes = b.as_bytes();
         match std::str::from_utf8(bytes) {
             Ok(s) => s.to_owned(),
@@ -732,6 +731,97 @@ fn checked_text(
         return Err(reader_error(py, name, &printable_error(pos, u32::from(ch))));
     }
     Ok(text)
+}
+
+/// The first character of `s` that PyYAML's `check_printable` rejects, for a `str` with
+/// lone surrogates: `(index, code point)`.
+fn non_printable_in(s: &Bound<'_, PyString>) -> PyResult<Option<(usize, u32)>> {
+    let units = s.call_method1("encode", ("utf-32-le", "surrogatepass"))?;
+    let units = units.cast::<PyBytes>().map_err(PyErr::from)?.as_bytes();
+    Ok(units.chunks_exact(4).enumerate().find_map(|(i, u)| {
+        let cp = u32::from_le_bytes([u[0], u[1], u[2], u[3]]);
+        char::from_u32(cp)
+            .is_none_or(|ch| !is_printable(ch))
+            .then_some((i, cp))
+    }))
+}
+
+/// A `str` with lone surrogates: `value` with the stand-ins at `offsets` (see [`Escapes`])
+/// turned back into them.
+fn with_surrogates<'py>(
+    py: Python<'py>,
+    value: &str,
+    offsets: &[usize],
+) -> PyResult<Bound<'py, PyAny>> {
+    let mut units = Vec::with_capacity(value.len() * 4);
+    let mut next = offsets.iter().copied().peekable();
+    for (at, ch) in value.char_indices() {
+        while next.next_if(|&o| o < at).is_some() {}
+        let mut cp = u32::from(ch);
+        if next.next_if_eq(&at).is_some() && cp >= reader::SURROGATE_BASE {
+            cp = Escapes::surrogate(ch);
+        }
+        units.extend_from_slice(&cp.to_le_bytes());
+    }
+    PyBytes::new(py, &units).call_method1("decode", ("utf-32-le", "surrogatepass"))
+}
+
+/// What a read of the stream raised, kept until the scanner looks that far.
+type Pending = Arc<Mutex<Option<Py<PyAny>>>>;
+
+/// A Python file object as a [`reader::Source`]: `stream` is a `pyroid.yaml._Stream`, whose
+/// `pull()` makes one of PyYAML's reads and decodes it; the printable check is done here.
+#[derive(Debug)]
+struct PyStream {
+    stream: Py<PyAny>,
+    name: Py<PyAny>,
+    /// Code points decoded so far (positions of `check_printable` errors).
+    chars: usize,
+    pending: Pending,
+}
+
+impl PyStream {
+    fn pull_attached(&mut self, py: Python<'_>) -> PyResult<(String, bool)> {
+        let (data, end): (Bound<'_, PyAny>, bool) = self
+            .stream
+            .bind(py)
+            .call_method0(pyo3::intern!(py, "pull"))?
+            .extract()?;
+        let s = data.cast::<PyString>().map_err(PyErr::from)?;
+        let name = self.name.bind(py);
+        let Ok(text) = s.to_str() else {
+            let (pos, ch) = non_printable_in(s)?.unwrap_or((0, 0xD800));
+            return Err(reader_error(
+                py,
+                name,
+                &printable_error(self.chars + pos, ch),
+            ));
+        };
+        if let Some((pos, ch)) = find_non_printable(text) {
+            let e = printable_error(self.chars + pos, u32::from(ch));
+            return Err(reader_error(py, name, &e));
+        }
+        self.chars += s.len()?;
+        Ok((text.to_owned(), end))
+    }
+}
+
+impl reader::Source for PyStream {
+    // The scanner asks for more text on the thread that runs the load: inside `load`'s
+    // `py.detach` (which this re-attaches), or attached already (`_LoadAll`). Never on a
+    // worker thread.
+    #[allow(clippy::disallowed_methods)]
+    fn pull(&mut self) -> Result<(String, bool), ()> {
+        Python::attach(|py| {
+            self.pull_attached(py).map_err(|e| {
+                let mut slot = self
+                    .pending
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                *slot = Some(e.into_value(py).into_any());
+            })
+        })
+    }
 }
 
 /// The options PyYAML's environment implies.
@@ -750,15 +840,49 @@ fn opts(max_depth: usize, int_digits: usize) -> Opts {
     }
 }
 
-fn construct<'py>(
-    py: Python<'py>,
-    graph: &mut Graph,
-    surrogates: bool,
+/// A composer over a `str` or `bytes` stream, or over a `pyroid.yaml._Stream` (a file
+/// object), with the slot for the stream's read error.
+fn open(
+    py: Python<'_>,
+    stream: &Bound<'_, PyAny>,
+    name: &Bound<'_, PyAny>,
+    o: Opts,
+) -> PyResult<(Composer, Option<Pending>)> {
+    if stream.is_instance_of::<PyString>() || stream.is_instance_of::<PyBytes>() {
+        let text = checked_text(py, stream, name)?;
+        let composer = pyroid_core::yaml::loader(text, None, o.scanner, o.composer);
+        return Ok((composer, None));
+    }
+    let pending = Pending::default();
+    let source = PyStream {
+        stream: stream.clone().unbind(),
+        name: name.clone().unbind(),
+        chars: 0,
+        pending: Arc::clone(&pending),
+    };
+    let reader = Reader::stream(Box::new(source));
+    let parser = Parser::new(Scanner::new(reader, o.scanner));
+    Ok((Composer::new(parser, o.composer), Some(pending)))
+}
+
+/// What construction needs from the loader.
+struct Env<'a> {
+    escapes: &'a Escapes,
     full: bool,
     chain: usize,
-) -> R<Bound<'py, PyAny>> {
+}
+
+fn construct<'py>(py: Python<'py>, graph: &mut Graph, env: &Env<'_>) -> R<Bound<'py, PyAny>> {
     let c = classes(py)?;
-    Ctor::new(py, c, graph, surrogates, full, chain).document()
+    Ctor::new(py, c, graph, env).document()
+}
+
+/// The error a stream's read raised, if any (kept: it is raised again if asked again).
+fn pending_error(py: Python<'_>, pending: Option<&Pending>) -> Option<Py<PyAny>> {
+    let slot = pending?
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    slot.as_ref().map(|e| e.clone_ref(py))
 }
 
 fn finish<'py>(
@@ -766,51 +890,61 @@ fn finish<'py>(
     r: R<Bound<'py, PyAny>>,
     name: &Bound<'py, PyAny>,
     buffer: Option<&str>,
-    pending: Option<&Py<PyAny>>,
+    pending: Option<&Pending>,
 ) -> PyResult<Bound<'py, PyAny>> {
     match r {
         Ok(v) => Ok(v),
         Err(CErr::Py(e)) => Err(e),
-        Err(CErr::Yaml(e)) => Err(to_pyerr(py, e, &Source::new(name, buffer), pending)),
+        Err(CErr::Yaml(e)) => {
+            let pending = pending_error(py, pending);
+            Err(to_pyerr(
+                py,
+                e,
+                &Source::new(name, buffer),
+                pending.as_ref(),
+            ))
+        }
         Err(CErr::Unsupported) => Ok(py.NotImplemented().into_bound(py)),
     }
 }
 
-/// `yaml.load(stream, SafeLoader)` for a `str` or UTF-8 `bytes` stream (or a file object's
-/// text with `limit`/`pending`, see `reader`). Returns `NotImplemented` for the inputs
-/// pyroid.yaml hands to PyYAML.
+/// `yaml.load(stream, SafeLoader)` for a `str` or UTF-8 `bytes` stream, or a file object
+/// wrapped in `pyroid.yaml._Stream`. Returns `NotImplemented` when a full loader meets a
+/// `!!python/` tag (pyroid.yaml hands the call to PyYAML).
 #[pyfunction]
-#[pyo3(signature = (stream, name, marks, limit=None, pending=None, max_depth=usize::MAX, int_digits=4300, full=false))]
-#[allow(clippy::too_many_arguments)]
+#[pyo3(signature = (stream, name, marks, max_depth=usize::MAX, int_digits=4300, full=false))]
 fn load<'py>(
     py: Python<'py>,
     stream: &Bound<'py, PyAny>,
     name: &Bound<'py, PyAny>,
     marks: bool,
-    limit: Option<usize>,
-    pending: Option<Py<PyAny>>,
     max_depth: usize,
     int_digits: usize,
     full: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let text = checked_text(py, stream, name)?;
-    if has_reserved(&text) {
-        return Ok(py.NotImplemented().into_bound(py));
-    }
     let o = opts(max_depth, int_digits);
-    let big = text.len() >= SINGLE_DOC_DETACH_BYTES;
-    let mut composer = pyroid_core::yaml::loader(text, limit, o.scanner, o.composer);
+    let (mut composer, pending) = open(py, stream, name, o)?;
+    // A stream is read while it is parsed (PyStream re-attaches for each read).
+    let big =
+        pending.is_some() || composer.parser.scanner.reader.text().len() >= SINGLE_DOC_DETACH_BYTES;
     let node = if big {
         py.detach(|| composer.get_single_node())
     } else {
         composer.get_single_node()
     };
-    let surrogates = composer.parser.scanner.surrogates;
-    let buffer = marks.then(|| composer.parser.scanner.reader.text());
+    let scanner = &composer.parser.scanner;
+    let buffer = marks.then(|| scanner.reader.text());
     let r = match node {
         Err(e) => Err(CErr::Yaml(e)),
         Ok(None) => Ok(py.None().into_bound(py)),
-        Ok(Some(mut graph)) => construct(py, &mut graph, surrogates, full, chain_limit(max_depth)),
+        Ok(Some(mut graph)) => {
+            let env = Env {
+                escapes: &scanner.escapes,
+                full,
+                chain: chain_limit(max_depth),
+            };
+            construct(py, &mut graph, &env)
+        }
     };
     finish(py, r, name, buffer, pending.as_ref())
 }
@@ -821,32 +955,24 @@ struct LoadAll {
     state: Mutex<Composer>,
     name: Py<PyAny>,
     marks: bool,
-    pending: Option<Py<PyAny>>,
+    pending: Option<Pending>,
     chain: usize,
 }
 
 #[pymethods]
 impl LoadAll {
-    /// `NotImplemented` (from `start`) for inputs pyroid.yaml hands to PyYAML.
+    /// A loader over a `str` or `bytes` stream, or a `pyroid.yaml._Stream`.
     #[staticmethod]
-    #[pyo3(signature = (stream, name, marks, limit=None, pending=None, max_depth=usize::MAX, int_digits=4300))]
-    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (stream, name, marks, max_depth=usize::MAX, int_digits=4300))]
     fn start<'py>(
         py: Python<'py>,
         stream: &Bound<'py, PyAny>,
         name: &Bound<'py, PyAny>,
         marks: bool,
-        limit: Option<usize>,
-        pending: Option<Py<PyAny>>,
         max_depth: usize,
         int_digits: usize,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let text = checked_text(py, stream, name)?;
-        if has_reserved(&text) {
-            return Ok(py.NotImplemented().into_bound(py));
-        }
-        let o = opts(max_depth, int_digits);
-        let composer = pyroid_core::yaml::loader(text, limit, o.scanner, o.composer);
+        let (composer, pending) = open(py, stream, name, opts(max_depth, int_digits))?;
         let me = Self {
             state: Mutex::new(composer),
             name: name.clone().unbind(),
@@ -865,11 +991,12 @@ impl LoadAll {
             Ok(b) => Ok(b),
             Err(e) => {
                 let buffer = self.marks.then(|| c.parser.scanner.reader.text());
+                let pending = pending_error(py, self.pending.as_ref());
                 Err(to_pyerr(
                     py,
                     e,
                     &Source::new(self.name.bind(py), buffer),
-                    self.pending.as_ref(),
+                    pending.as_ref(),
                 ))
             }
         }
@@ -881,17 +1008,30 @@ impl LoadAll {
         let node = c
             .check_node()
             .and_then(|more| if more { c.get_node() } else { Ok(None) });
-        let surrogates = c.parser.scanner.surrogates;
-        let buffer = self.marks.then(|| c.parser.scanner.reader.text());
+        let scanner = &c.parser.scanner;
+        let buffer = self.marks.then(|| scanner.reader.text());
+        let mut end = None;
         let r = match node {
             Err(e) => Err(CErr::Yaml(e)),
             Ok(None) => Ok(py.None().into_bound(py)),
-            Ok(Some(mut graph)) => construct(py, &mut graph, surrogates, false, self.chain),
+            Ok(Some(mut graph)) => {
+                end = Some(graph.nodes[graph.root].end_mark.index);
+                let env = Env {
+                    escapes: &scanner.escapes,
+                    full: false,
+                    chain: self.chain,
+                };
+                construct(py, &mut graph, &env)
+            }
         };
-        finish(py, r, self.name.bind(py), buffer, self.pending.as_ref())
+        let out = finish(py, r, self.name.bind(py), buffer, self.pending.as_ref());
+        if let Some(end) = end {
+            // A long stream keeps no record of the documents it has given.
+            c.parser.scanner.escapes.forget_until(end);
+        }
+        out
     }
 }
-
 impl LoadAll {
     fn lock(&self, py: Python<'_>) -> std::sync::MutexGuard<'_, Composer> {
         use pyo3::sync::MutexExt;

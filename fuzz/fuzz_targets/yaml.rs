@@ -10,18 +10,20 @@
 //! Checked, besides "no panic and no stack overflow at any depth":
 //! - deterministic: composing twice gives the same graphs or the same error;
 //! - with a `limit`, the result is the full text's, or `NeedMore` (the pending reader error);
+//! - read as a stream, 1 to 8 characters at a time (bits 0-2 of `flags`, as for a file object),
+//!   the result is the full text's;
 //! - the events of a stream that parses go through the emitter (as `yaml.emit` would) without
 //!   a panic, and what it writes parses again.
 
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use pyroid_core::yaml::composer::ComposerOptions;
+use pyroid_core::yaml::composer::{Composer, ComposerOptions};
 use pyroid_core::yaml::emitter::{Emitter, EmitterOptions};
 use pyroid_core::yaml::error::YamlError;
 use pyroid_core::yaml::events::{Event, EventKind};
 use pyroid_core::yaml::parser::Parser;
-use pyroid_core::yaml::reader::{Reader, is_printable};
+use pyroid_core::yaml::reader::{Reader, Source, is_printable};
 use pyroid_core::yaml::scanner::{Scanner, ScannerOptions};
 use pyroid_core::yaml::{self, nodes::Graph};
 
@@ -32,6 +34,37 @@ fn compose(text: &str, limit: Option<usize>) -> Result<Vec<Graph>, YamlError> {
         ScannerOptions::default(),
         ComposerOptions { max_depth: 2000 },
     );
+    let mut out = Vec::new();
+    while c.check_node()? {
+        match c.get_node()? {
+            Some(g) => out.push(g),
+            None => break,
+        }
+    }
+    Ok(out)
+}
+
+/// A stream that hands out its pieces one `pull` at a time.
+#[derive(Debug)]
+struct Pieces(std::collections::VecDeque<String>);
+
+impl Source for Pieces {
+    fn pull(&mut self) -> Result<(String, bool), ()> {
+        Ok(match self.0.pop_front() {
+            Some(piece) => (piece, false),
+            None => (String::new(), true),
+        })
+    }
+}
+
+fn compose_stream(text: &str, k: usize) -> Result<Vec<Graph>, YamlError> {
+    let chars: Vec<char> = text.chars().collect();
+    let pieces = chars.chunks(k).map(|c| c.iter().collect()).collect();
+    let parser = Parser::new(Scanner::new(
+        Reader::stream(Box::new(Pieces(pieces))),
+        ScannerOptions::default(),
+    ));
+    let mut c = Composer::new(parser, ComposerOptions { max_depth: 2000 });
     let mut out = Vec::new();
     while c.check_node()? {
         match c.get_node()? {
@@ -77,6 +110,8 @@ fuzz_target!(|data: &[u8]| {
             other => assert_eq!(other, full, "a limit changed the result"),
         }
     }
+    let k = 1 + usize::from(flags & 7);
+    assert_eq!(compose_stream(&text, k), full, "reading {k} at a time changed the result");
     let Ok(evs) = events(&text) else { return };
     let options = EmitterOptions {
         canonical: flags & 4 != 0,

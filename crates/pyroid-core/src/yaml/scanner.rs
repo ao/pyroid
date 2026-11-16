@@ -9,7 +9,7 @@
 use std::collections::VecDeque;
 
 use super::error::{Arg, ErrorKind, Mark, Msg, Result, YamlError};
-use super::reader::{Reader, SURROGATE_BASE};
+use super::reader::{Pull, Reader, SURROGATE_BASE};
 use super::tokens::{DirectiveValue, T, Token, TokenKind};
 
 /// `'\0 \t\r\n\x85\u2028\u2029'`
@@ -97,10 +97,71 @@ pub struct Scanner {
     allow_simple_key: bool,
     /// PyYAML's dict keyed by flow level, in insertion order.
     possible_simple_keys: Vec<(usize, SimpleKey)>,
-    /// A `\uD800`-style escape was decoded into U+10F800.. (see `reader::has_reserved`).
-    pub surrogates: bool,
+    /// The lone surrogates that `\uD800`-style escapes decoded (see [`Escapes`]).
+    pub escapes: Escapes,
+    /// The byte offsets of such stand-ins in the double-quoted scalar being scanned.
+    escaping: Vec<usize>,
+    /// Where a fetch on a stream started ([`Checkpoint`]).
+    saved: Checkpoint,
+    /// The token queue's changes since then: a push (`None`) or an insert at an index.
+    journal: Vec<Option<usize>>,
+    journaling: bool,
     options: ScannerOptions,
 }
+
+/// The lone surrogates of double-quoted scalars: a Rust `String` cannot hold them, so the
+/// scanner writes `\uD800`..`\uDFFF` escapes as U+10F800..U+10FFFF and records where, per scalar
+/// (keyed by the scalar's end index, which no other token shares). The same characters typed
+/// in the input stay themselves.
+#[derive(Clone, Debug, Default)]
+pub struct Escapes {
+    /// `(end index, byte offsets in the value)`, in scanning order.
+    scalars: Vec<(usize, Vec<usize>)>,
+}
+
+impl Escapes {
+    /// The byte offsets of the stand-ins in the value of the scalar ending at `end_index`.
+    pub fn of(&self, end_index: usize) -> Option<&[usize]> {
+        if self.scalars.is_empty() {
+            return None;
+        }
+        self.scalars
+            .binary_search_by_key(&end_index, |(end, _)| *end)
+            .ok()
+            .map(|i| self.scalars[i].1.as_slice())
+    }
+
+    /// Forget the scalars that end at `index` or before (documents already constructed).
+    pub fn forget_until(&mut self, index: usize) {
+        let keep = self.scalars.partition_point(|(end, _)| *end <= index);
+        self.scalars.drain(..keep);
+    }
+
+    /// The lone surrogate a stand-in character carries.
+    pub fn surrogate(ch: char) -> u32 {
+        u32::from(ch) - SURROGATE_BASE + 0xD800
+    }
+}
+
+/// The scanner's state before a fetch on a stream, to go back to when the fetch looked past
+/// the text read so far (it is then fetched again with more text, as if PyYAML's reader had
+/// read in the middle of it).
+#[derive(Debug, Default)]
+struct Checkpoint {
+    position: (usize, usize, usize, usize),
+    done: bool,
+    flow_level: usize,
+    indent: isize,
+    indents: Vec<isize>,
+    allow_simple_key: bool,
+    possible_simple_keys: Vec<(usize, SimpleKey)>,
+    escapes: usize,
+}
+
+/// Past this many code points of one token, a fetch that runs out of text reads at least as
+/// much again before it starts over (so a huge token is scanned a few times, not once per
+/// 4096-unit read). Shorter tokens read exactly as PyYAML does.
+const STREAM_BATCH: usize = 1 << 16;
 
 fn scanner_error(
     context: Option<Msg>,
@@ -129,7 +190,11 @@ impl Scanner {
             indents: Vec::new(),
             allow_simple_key: true,
             possible_simple_keys: Vec::new(),
-            surrogates: false,
+            escapes: Escapes::default(),
+            escaping: Vec::new(),
+            saved: Checkpoint::default(),
+            journal: Vec::new(),
+            journaling: false,
             options,
         };
         s.fetch_stream_start();
@@ -170,6 +235,10 @@ impl Scanner {
             return Ok(());
         }
         while self.need_more_tokens()? {
+            if self.reader.streaming() {
+                self.fetch_from_stream()?;
+                continue;
+            }
             let r = self.fetch_more_tokens();
             if self.reader.hit_limit() {
                 return Err(YamlError::NeedMore);
@@ -177,6 +246,91 @@ impl Scanner {
             r?;
         }
         Ok(())
+    }
+
+    /// `fetch_more_tokens()` on a stream. PyYAML's reader reads more whenever the scanner
+    /// looks past the decoded text, in the middle of a token; here a fetch that does is undone,
+    /// more is read, and the token is fetched again, which gives the same tokens and the same
+    /// reads.
+    fn fetch_from_stream(&mut self) -> Result<()> {
+        loop {
+            self.checkpoint();
+            let r = self.fetch_more_tokens();
+            self.journaling = false;
+            if !self.reader.hit_limit() {
+                return r;
+            }
+            self.rollback();
+            // A token this long has been fetched before: read as much again first.
+            let have = self.reader.ahead();
+            let want = if have >= STREAM_BATCH { 2 * have } else { 0 };
+            match self.reader.pull() {
+                Pull::More => {
+                    while self.reader.ahead() < want && self.reader.pull() == Pull::More {}
+                }
+                Pull::End => {}
+                Pull::Failed => return Err(YamlError::NeedMore),
+            }
+        }
+    }
+
+    #[inline]
+    fn checkpoint(&mut self) {
+        let saved = &mut self.saved;
+        saved.position = self.reader.position();
+        saved.done = self.done;
+        saved.flow_level = self.flow_level;
+        saved.indent = self.indent;
+        saved.indents.clone_from(&self.indents);
+        saved.allow_simple_key = self.allow_simple_key;
+        saved
+            .possible_simple_keys
+            .clone_from(&self.possible_simple_keys);
+        saved.escapes = self.escapes.scalars.len();
+        self.journal.clear();
+        self.journaling = true;
+    }
+
+    #[cold]
+    fn rollback(&mut self) {
+        for change in self.journal.drain(..).rev() {
+            match change {
+                None => {
+                    self.tokens.pop_back();
+                }
+                Some(at) => {
+                    self.tokens.remove(at);
+                }
+            }
+        }
+        let saved = &mut self.saved;
+        self.reader.set_position(saved.position);
+        self.done = saved.done;
+        self.flow_level = saved.flow_level;
+        self.indent = saved.indent;
+        self.indents.clone_from(&saved.indents);
+        self.allow_simple_key = saved.allow_simple_key;
+        self.possible_simple_keys
+            .clone_from(&saved.possible_simple_keys);
+        self.escapes.scalars.truncate(saved.escapes);
+        self.escaping.clear();
+    }
+
+    /// `self.tokens.append(token)`.
+    #[inline]
+    fn push_token(&mut self, token: Token) {
+        if self.journaling {
+            self.journal.push(None);
+        }
+        self.tokens.push_back(token);
+    }
+
+    /// `self.tokens.insert(at, token)`.
+    fn insert_token(&mut self, at: usize, token: Token) {
+        if self.journaling {
+            self.journal.push(Some(at));
+        }
+        self.tokens.insert(at, token);
     }
 
     // Private methods.
@@ -328,7 +482,7 @@ impl Scanner {
 
     #[inline]
     fn push(&mut self, kind: TokenKind, start_mark: Mark, end_mark: Mark) {
-        self.tokens.push_back(Token {
+        self.push_token(Token {
             kind,
             start_mark,
             end_mark,
@@ -358,7 +512,7 @@ impl Scanner {
         self.remove_possible_simple_key()?;
         self.allow_simple_key = false;
         let token = self.scan_directive()?;
-        self.tokens.push_back(token);
+        self.push_token(token);
         Ok(())
     }
 
@@ -462,7 +616,7 @@ impl Scanner {
         {
             let key = self.possible_simple_keys.remove(i).1;
             let at = key.token_number - self.tokens_taken;
-            self.tokens.insert(
+            self.insert_token(
                 at,
                 Token {
                     kind: TokenKind::Key,
@@ -471,7 +625,7 @@ impl Scanner {
                 },
             );
             if self.flow_level == 0 && self.add_indent(key.column) {
-                self.tokens.insert(
+                self.insert_token(
                     at,
                     Token {
                         kind: TokenKind::BlockMappingStart,
@@ -508,7 +662,7 @@ impl Scanner {
         self.save_possible_simple_key()?;
         self.allow_simple_key = false;
         let token = self.scan_anchor(alias)?;
-        self.tokens.push_back(token);
+        self.push_token(token);
         Ok(())
     }
 
@@ -516,7 +670,7 @@ impl Scanner {
         self.save_possible_simple_key()?;
         self.allow_simple_key = false;
         let token = self.scan_tag()?;
-        self.tokens.push_back(token);
+        self.push_token(token);
         Ok(())
     }
 
@@ -524,7 +678,7 @@ impl Scanner {
         self.allow_simple_key = true;
         self.remove_possible_simple_key()?;
         let token = self.scan_block_scalar(folded)?;
-        self.tokens.push_back(token);
+        self.push_token(token);
         Ok(())
     }
 
@@ -532,7 +686,7 @@ impl Scanner {
         self.save_possible_simple_key()?;
         self.allow_simple_key = false;
         let token = self.scan_flow_scalar(double)?;
-        self.tokens.push_back(token);
+        self.push_token(token);
         Ok(())
     }
 
@@ -540,7 +694,7 @@ impl Scanner {
         self.save_possible_simple_key()?;
         self.allow_simple_key = false;
         let token = self.scan_plain();
-        self.tokens.push_back(token);
+        self.push_token(token);
         Ok(())
     }
 
@@ -1096,6 +1250,7 @@ impl Scanner {
 
     fn scan_flow_scalar(&mut self, double: bool) -> Result<Token> {
         let mut chunks = String::new();
+        self.escaping.clear();
         let start_mark = self.reader.mark();
         let quote = self.reader.peek0();
         self.reader.forward_plain1(1);
@@ -1107,6 +1262,10 @@ impl Scanner {
         self.reader.forward_plain1(1);
         let end_mark = self.reader.mark();
         let style = if double { '"' } else { '\'' };
+        if !self.escaping.is_empty() {
+            let offsets = std::mem::take(&mut self.escaping);
+            self.escapes.scalars.push((end_mark.index, offsets));
+        }
         Ok(Token {
             kind: TokenKind::Scalar {
                 value: chunks,
@@ -1171,8 +1330,8 @@ impl Scanner {
                     if let Some(c) = char::from_u32(code) {
                         chunks.push(c);
                     } else {
-                        // A lone surrogate: carried in U+10F800.. (the bindings map it back).
-                        self.surrogates = true;
+                        // A lone surrogate: a stand-in in U+10F800.., recorded in `escapes`.
+                        self.escaping.push(chunks.len());
                         let mapped = char::from_u32(SURROGATE_BASE + (code - 0xD800));
                         chunks.push(mapped.unwrap_or('\u{FFFD}'));
                     }

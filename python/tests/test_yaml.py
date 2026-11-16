@@ -389,6 +389,138 @@ def test_deep_nesting_never_overflows_the_native_stack(
     assert proc.stdout.startswith("[("), proc.stdout
 
 
+class _Feed:
+    """A file object that hands out `chunks` one ``read()`` at a time, then ``""``/``b""``,
+    and records how many reads had been made when each document came out."""
+
+    def __init__(self, chunks: list[Any], fail_at: int | None = None) -> None:
+        self.chunks = list(chunks)
+        self.end = chunks[0][:0] if chunks else b""
+        self.reads = 0
+        self.fail_at = fail_at
+        self.name = "<feed>"
+
+    def read(self, size: int = -1) -> Any:
+        self.reads += 1
+        if self.fail_at is not None and self.reads >= self.fail_at:
+            raise OSError("the stream broke")
+        if self.chunks:
+            return self.chunks.pop(0)
+        return self.end
+
+
+def _reads_per_document(load_all: Any, chunks: list[Any], fail_at: int | None = None) -> Any:
+    feed = _Feed(chunks, fail_at)
+    seen: list[Any] = []
+    try:
+        seen.extend((doc, feed.reads) for doc in load_all(feed))
+    except Exception as exc:
+        seen.append((type(exc).__name__, str(exc), feed.reads))
+    return seen
+
+
+def _pyyaml_all(stream: Any) -> Any:
+    return yaml.load_all(stream, Loader=yaml.SafeLoader)
+
+
+@needs_pyyaml
+@pytest.mark.parametrize("fail_at", [None, 6, 9])
+def test_load_all_reads_a_stream_as_documents_are_needed(fail_at: int | None) -> None:
+    # Documents come out as soon as PyYAML's reader would have read them (same reads), and a
+    # read that fails only fails the documents after it.
+    text = "".join(f"--- \nid: {i}\npad: {'x' * 1500}\n" for i in range(30)).encode()
+    chunks = [text[i : i + 4096] for i in range(0, len(text), 4096)]
+    got = _reads_per_document(py.safe_load_all, chunks, fail_at)
+    assert got == _reads_per_document(_pyyaml_all, chunks, fail_at)
+    assert got[0][1] < len(chunks)
+
+
+@needs_pyyaml
+def test_streams_match_pyyaml_reads_and_errors() -> None:
+    def pieces(data: Any, k: int) -> list[Any]:
+        return [data[i : i + k] for i in range(0, len(data), k)]
+
+    docs = "".join(f"- {i}: [a, 'b', \"c\\u00e9\"]\n" for i in range(400)) + "x: [\n"
+    cases = [
+        pieces(docs.encode(), 4096),
+        pieces(docs.encode(), 7),
+        pieces(docs, 4096),
+        pieces("é" * 5000 + "\x00", 4096),  # the bad character is in the second read
+        pieces(b"a: 1\n" * 900 + b"\xff", 4096),
+        pieces(codecs_bom(docs), 4096),
+        [b""],
+        [b"a", b": 1"],
+    ]
+    for chunks in cases:
+        got = _reads_per_document(py.safe_load_all, chunks)
+        assert got == _reads_per_document(_pyyaml_all, chunks), chunks[:1]
+        one = _Feed(chunks)
+        ref = _Feed(chunks)
+        mine = _outcome(py.safe_load, one)
+        assert mine == _outcome(lambda s: yaml.load(s, Loader=yaml.SafeLoader), ref)
+        assert one.reads == ref.reads
+
+
+def codecs_bom(text: str) -> bytes:
+    import codecs
+
+    return codecs.BOM_UTF16_LE + text.encode("utf-16-le")
+
+
+def _outcome(fn: Any, *args: Any) -> Any:
+    try:
+        return ("ok", fn(*args))
+    except Exception as exc:
+        return (type(exc).__name__, str(exc))
+
+
+def test_endless_streams_do_not_exhaust_memory() -> None:
+    class Endless:
+        def __init__(self, unit: bytes) -> None:
+            self.unit = unit
+            self.reads = 0
+
+        def read(self, size: int = -1) -> bytes:
+            self.reads += 1
+            return self.unit * (4096 // len(self.unit))
+
+    zeros = Endless(b"\0")
+    with pytest.raises(py.ReaderError, match="#x0000"):
+        py.safe_load(zeros)
+    assert zeros.reads <= 3
+    docs = Endless(b"--- a\n--- b\n")
+    first = []
+    for doc in py.safe_load_all(docs):
+        first.append(doc)
+        if len(first) == 5000:
+            break
+    assert first[:3] == ["a", "b", "a"]
+    assert docs.reads < 20
+
+
+@pytest.mark.thread_unsafe
+def test_characters_of_the_surrogate_range_load_natively(tmp_path: Any) -> None:
+    # U+10F800..U+10FFFF used to go to PyYAML, and a file object came back empty from
+    # safe_load_all. A "\ud800" escape gives a lone surrogate, the same character typed in
+    # gives itself, also in one scalar.
+    text = 'a: \U0010f800\nb: "\U0010ffff \\ud800 \U0010f800 \\udfff"\nc: ["\\ud800"]\n'
+    want = {"a": "\U0010f800", "b": "\U0010ffff \ud800 \U0010f800 \udfff", "c": ["\ud800"]}
+    path = tmp_path / "range.yaml"
+    path.write_text(text, encoding="utf-8")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pyroid.FallbackWarning)
+        assert py.safe_load(text) == want
+        assert py.safe_load(text.encode()) == want
+        assert py.safe_load(io.StringIO(text)) == want
+        assert list(py.safe_load_all(io.BytesIO(text.encode()))) == [want]
+        with path.open(encoding="utf-8") as f:
+            assert list(py.safe_load_all(f)) == [want]
+        with path.open("rb") as f:
+            assert list(py.load_all(f, Loader=py.SafeLoader)) == [want]
+    if yaml is not None:
+        assert yaml.load(text, Loader=yaml.SafeLoader) == want
+
+
 @pytest.mark.thread_unsafe
 def test_fallback_warnings_name_the_call_and_the_reason(run_python: Any) -> None:
     pytest.importorskip("yaml")
@@ -424,7 +556,7 @@ for fn in (py.safe_dump, yaml.safe_dump):
     r = run_python(code)
     assert r.returncode == 0, r.stderr
     assert r.stdout.splitlines() == [
-        "['pyroid.yaml.load_all: Loader=UnsafeLoader in load_all is not supported by the "
+        "['pyroid.yaml.unsafe_load_all: Loader=UnsafeLoader in load_all is not supported by the "
         "Rust port']",
         "['pyroid.yaml.load_all: Loader=FullLoader in load_all is not supported by the Rust port']",
         "['pyroid.yaml.load: a !!python/ tag is not supported by the Rust port']",
@@ -438,6 +570,25 @@ for fn in (py.safe_dump, yaml.safe_dump):
         "yaml.dump_all() got multiple values for keyword argument 'Dumper'",
         "yaml.dump_all() got multiple values for keyword argument 'Dumper'",
     ]
+
+
+@needs_pyyaml
+@pytest.mark.thread_unsafe
+def test_libyaml_flag_and_version_warning(run_python: Any) -> None:
+    assert py.__with_libyaml__ is yaml.__with_libyaml__
+    code = r"""
+import warnings
+import yaml
+yaml.__version__ = "5.4.1"
+with warnings.catch_warnings(record=True) as w:
+    warnings.simplefilter("always")
+    import pyroid.yaml
+want = "pyroid.yaml reproduces PyYAML 6.0.3, but PyYAML 5.4.1 is installed: "
+print([(x.category.__name__, str(x.message).startswith(want), x.filename) for x in w])
+"""
+    r = run_python(code)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "[('RuntimeWarning', True, '<string>')]"
 
 
 @pytest.mark.thread_unsafe
@@ -465,22 +616,3 @@ except py.PyroidError as e:
         "{'a': 1} 'a: 1\\n'",
         "pyroid.yaml.load: Loader=M with added constructors",
     ]
-
-
-@needs_pyyaml
-@pytest.mark.thread_unsafe
-def test_libyaml_flag_and_version_warning(run_python: Any) -> None:
-    assert py.__with_libyaml__ is yaml.__with_libyaml__
-    code = r"""
-import warnings
-import yaml
-yaml.__version__ = "5.4.1"
-with warnings.catch_warnings(record=True) as w:
-    warnings.simplefilter("always")
-    import pyroid.yaml
-want = "pyroid.yaml reproduces PyYAML 6.0.3, but PyYAML 5.4.1 is installed: "
-print([(x.category.__name__, str(x.message).startswith(want), x.filename) for x in w])
-"""
-    r = run_python(code)
-    assert r.returncode == 0, r.stderr
-    assert r.stdout.strip() == "[('RuntimeWarning', True, '<string>')]"

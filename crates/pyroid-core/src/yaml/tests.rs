@@ -193,3 +193,112 @@ fn deep_graphs_serialize_on_a_small_stack() {
     assert!(out.ends_with("- []\n"));
     assert_eq!(out.matches('-').count(), 200_000);
 }
+
+/// A stream handed out `k` characters at a time.
+#[derive(Debug)]
+struct Pieces(std::collections::VecDeque<String>);
+
+impl super::reader::Source for Pieces {
+    fn pull(&mut self) -> Result<(String, bool), ()> {
+        Ok(match self.0.pop_front() {
+            Some(piece) => (piece, false),
+            None => (String::new(), true),
+        })
+    }
+}
+
+/// `compose_all` over `text` read `k` characters at a time: the graphs, or the error.
+fn compose_stream(text: &str, k: usize) -> Result<Vec<Graph>, String> {
+    use super::composer::{Composer, ComposerOptions};
+    use super::parser::Parser;
+    use super::reader::Reader;
+    use super::scanner::{Scanner, ScannerOptions};
+    let chars: Vec<char> = text.chars().collect();
+    let pieces = chars.chunks(k).map(|c| c.iter().collect()).collect();
+    let reader = Reader::stream(Box::new(Pieces(pieces)));
+    let parser = Parser::new(Scanner::new(reader, ScannerOptions::default()));
+    let mut c = Composer::new(parser, ComposerOptions::default());
+    let mut out = Vec::new();
+    loop {
+        match c.check_node() {
+            Ok(false) => return Ok(out),
+            Ok(true) => {}
+            Err(e) => return Err(e.to_string()),
+        }
+        match c.get_node() {
+            Ok(Some(g)) => out.push(g),
+            Ok(None) => return Ok(out),
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+}
+
+fn check_stream(text: &str) {
+    let whole = compose_all(text).map_err(|e| e.to_string());
+    for k in [1, 2, 3, 5, 8, 13, 64] {
+        assert_eq!(
+            compose_stream(text, k),
+            whole,
+            "{text:?} read {k} at a time"
+        );
+    }
+}
+
+#[test]
+fn streams_compose_as_whole_texts() {
+    for text in [
+        "a: 1\nb: [x, 'y', \"z\"]\n",
+        "- a\n- - b\n  - c\n- {d: e}\n",
+        "key:\n- a\n- b\nother: ~\n",
+        "? complex\n: value\n",
+        "[a: b, c]",
+        "--- a\n--- b\n...\n",
+        "%YAML 1.1\n--- x\n",
+        "%TAG !e! tag:example.com,2000:\n--- !e!foo bar\n",
+        "|\n  line1\n  line2\n",
+        ">-\n  folded\n  text\n\n  para\n",
+        "\"tab\\there\\x41\\u00e9 \\ud800\"",
+        "plain\n  continued\n",
+        "\u{feff}a",
+        "# comment\n# more\na: 1 # c\nb: &x [*x]\n",
+        "a: b: c",
+        "[a, b",
+        "*x",
+        "- &a x\n- &a y\n",
+        "key: 'unterminated",
+        "a\n:b",
+        "a: 1\n:b",
+        "\t",
+        "",
+    ] {
+        check_stream(text);
+    }
+}
+
+#[test]
+fn streams_compose_as_whole_texts_fuzzed() {
+    // Random strings of YAML's significant characters, read in small pieces: every rollback
+    // of a fetch that ran out of text must leave the same tokens as one pass over the text.
+    // PYROID_YAML_STREAM_FUZZ sets the number of strings (default 3000).
+    let n: usize = std::env::var("PYROID_YAML_STREAM_FUZZ")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3000);
+    let alphabet: Vec<char> = "ab1 :-[]{},?'\"#&*!|>\n\n  \t%.~\\x\u{e9}"
+        .chars()
+        .collect();
+    let mut state = 0x2545_f491_4f6c_dd1d_u64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    for _ in 0..n {
+        let len = usize::try_from(next() % 60).unwrap_or(0);
+        let text: String = (0..len)
+            .map(|_| alphabet[usize::try_from(next()).unwrap_or(0) % alphabet.len()])
+            .collect();
+        check_stream(&text);
+    }
+}
