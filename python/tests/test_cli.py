@@ -8,8 +8,10 @@ import importlib.util
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -433,6 +435,50 @@ def test_a_closed_pipe_on_windows_is_einval_not_epipe(
         m.setattr(sys, "stderr", _ClosedPipe())
         with pytest.raises(OSError, match="Invalid argument"):
             _shards.say("x\n")
+
+
+@pytest.mark.skipif(not hasattr(signal, "pthread_kill"), reason="POSIX signals")
+def test_a_signal_raised_where_python_cannot_raise_it_comes_again(
+    run_python: Callable[..., subprocess.CompletedProcess[str]],
+) -> None:
+    """Ctrl-C handled inside a weakref callback: Python printed "Exception ignored" and dropped
+    the KeyboardInterrupt (a worker's, at the end of a run). The main process gets the signal
+    again just after; a worker, which has noted it, drops it quietly."""
+    r = run_python(
+        """
+        import signal, sys, time, weakref
+        from pyroid.integrations import _shards
+
+        def term(signum, frame):
+            raise _shards.Terminated
+
+        def swallowed(exc):
+            class Obj:
+                pass
+
+            def callback(ref):
+                raise exc  # as a signal handler that runs here would
+
+            obj = Obj()
+            ref = weakref.ref(obj, callback)
+            del obj  # the callback runs; its exception cannot propagate
+
+        signal.signal(signal.SIGTERM, term)
+        sys.unraisablehook = _shards.redelivering(sys.unraisablehook)
+        for exc in (KeyboardInterrupt, _shards.Terminated):
+            try:
+                swallowed(exc)
+                time.sleep(10)
+                print("not delivered")
+            except KeyboardInterrupt as e:
+                print(type(e).__name__)
+        _shards._interrupted = True  # as in a worker that took its signal
+        swallowed(KeyboardInterrupt)
+        time.sleep(0.2)
+        print("dropped")
+        """
+    )
+    assert (r.returncode, r.stdout, r.stderr) == (0, "KeyboardInterrupt\nTerminated\ndropped\n", "")
 
 
 # ----------------------------------------------------------------------------------------- dedup

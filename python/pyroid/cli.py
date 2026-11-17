@@ -2640,6 +2640,14 @@ def main(argv: list[str] | None = None) -> int:
     from pyroid.integrations import _shards  # imports pyarrow
 
     term = _on_sigterm()
+    # The pyroid program, not a caller of main(): it owns the process's signals to the end.
+    program = (
+        argv is None
+        and term is not None
+        and signal.getsignal(signal.SIGINT) is signal.default_int_handler
+    )
+    if program:
+        sys.unraisablehook = _shards.redelivering(sys.unraisablehook)
     ok = False
     try:
         code = int(a.body(a))

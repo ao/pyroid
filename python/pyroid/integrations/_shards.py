@@ -459,13 +459,67 @@ def _on_signal(signum: int, frame: Any) -> None:
     The unit the worker is on (or its wait for the next one) stops there, and the worker exits.
     Later signals do nothing: Ctrl-C reaches every process of the group and the main process
     then sends SIGTERM, and a second KeyboardInterrupt would cut short the unit's clean-up, which
-    removes its temporary files.
+    removes its temporary files. When Python has to drop the KeyboardInterrupt (see
+    :func:`redelivering`), the worker stops at its next batch instead.
     """
     global _interrupted
     if _interrupted:
         return
     _interrupted = True
     raise KeyboardInterrupt
+
+
+def redelivering(previous: Callable[[Any], object]) -> Callable[[Any], None]:
+    """A ``sys.unraisablehook`` for a process that a run owns, chained to ``previous``.
+
+    Python runs a signal's handler at its next check, which can be inside a weakref callback,
+    a ``__del__`` or a GC callback. The KeyboardInterrupt (or :class:`Terminated`) raised there
+    cannot propagate: Python prints "Exception ignored" with a traceback and drops it.
+
+    With this hook a worker drops it quietly: it has noted its signal and stops at its next
+    batch, or when its connection closes. The main process gets the signal again, from another
+    thread a moment later (once this hook has returned), and its handler runs outside that code.
+    """
+    import threading
+
+    def hook(args: Any) -> None:
+        exc_type = args.exc_type
+        if not (
+            isinstance(exc_type, type)
+            and issubclass(exc_type, KeyboardInterrupt)
+            and threading.current_thread() is threading.main_thread()
+        ):
+            previous(args)
+            return
+        if _interrupted:  # a worker's own signal
+            return
+        signum = signal.SIGTERM if issubclass(exc_type, Terminated) else signal.SIGINT
+        if not hasattr(signal, "pthread_kill"):  # pragma: no cover - Windows
+            previous(args)
+            return
+        resend = (threading.get_ident(), signum, hook.__code__)
+        try:
+            threading.Thread(target=_resend, args=resend, daemon=True).start()
+        except RuntimeError:  # the interpreter is shutting down
+            previous(args)
+
+    return hook
+
+
+def _resend(thread: int, signum: int, hook: Any) -> None:
+    """Send ``signum`` to ``thread`` once the unraisable hook (code ``hook``) has returned there.
+
+    Sent sooner, Python would run the handler inside the hook, where it cannot raise either.
+    """
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        frame = sys._current_frames().get(thread)
+        while frame is not None and frame.f_code is not hook:
+            frame = frame.f_back
+        if frame is None:
+            break
+        time.sleep(0.001)
+    signal.pthread_kill(thread, signum)
 
 
 def _watch_parent() -> None:
@@ -523,7 +577,9 @@ def _worker(conn: Any, threads: int | None, progress: bool) -> None:
     the connection or dies, and at its first SIGINT or SIGTERM (after reporting the interrupted
     unit). It shares no lock with another process, so it can stop at any point.
     """
+    global _interrupted
     try:
+        sys.unraisablehook = redelivering(sys.unraisablehook)
         signal.signal(signal.SIGINT, _on_signal)
         signal.signal(signal.SIGTERM, _on_signal)
         if hasattr(signal, "pthread_sigmask"):
@@ -534,7 +590,7 @@ def _worker(conn: Any, threads: int | None, progress: bool) -> None:
         _setup_threads(threads)
 
         def report(n: int) -> None:
-            if _interrupted:  # the unit's code swallowed the KeyboardInterrupt (a finalizer)
+            if _interrupted:  # the KeyboardInterrupt was swallowed (by the unit, or by Python)
                 raise KeyboardInterrupt
             if progress and n:
                 conn.send(("progress", n))
@@ -547,6 +603,9 @@ def _worker(conn: Any, threads: int | None, progress: bool) -> None:
             except Exception as e:  # the unit does not unpickle here
                 conn.send(("error", *_portable(e)))
                 continue
+            if _interrupted:  # a signal Python had to drop (see redelivering): stop here
+                conn.send(("error", *_portable(KeyboardInterrupt())))
+                return
             fn, payload = msg
             try:
                 result = fn(payload, report)
@@ -561,6 +620,8 @@ def _worker(conn: Any, threads: int | None, progress: bool) -> None:
                 conn.send(("error", *_portable(e)))
     except (KeyboardInterrupt, OSError):
         return  # interrupted, or the main process stopped or lost this worker
+    finally:
+        _interrupted = True  # stopping: a signal from here on (as the process exits) is a no-op
 
 
 @dataclass
