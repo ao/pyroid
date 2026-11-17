@@ -7,286 +7,331 @@
   "pyroid": "1.0.1",
   "sqlparse": "0.6.1",
   "loadavg": [
-   2.08740234375,
-   10.7255859375,
-   22.4951171875
+   3.11376953125,
+   15.623046875,
+   20.98876953125
   ]
  },
  "loadavg_after": [
-  2.21826171875,
-  7.2587890625,
-  19.36083984375
+  4.28759765625,
+  8.8564453125,
+  16.7255859375
  ],
  "rows": [
   {
    "group": "calls",
    "doc": "1-line SELECT",
    "call": "format()",
-   "sqlparse_us": 96.0654925108275,
-   "pyroid_us": 6.262891855610723,
-   "sqlparse_median_us": 96.32637686638573,
-   "pyroid_median_us": 6.273075104757279,
-   "speedup": 15.338839425235408
+   "sqlparse_us": 91.7293309180907,
+   "pyroid_us": 6.409799633980749,
+   "sqlparse_median_us": 91.82083071630777,
+   "pyroid_median_us": 6.411917305416271,
+   "speedup": 14.31079536898457
   },
   {
    "group": "calls",
    "doc": "1-line SELECT",
    "call": "format(reindent=True)",
-   "sqlparse_us": 375.2073165953311,
-   "pyroid_us": 12.764382852278978,
-   "sqlparse_median_us": 376.81638089090376,
-   "pyroid_median_us": 12.781914750179851,
-   "speedup": 29.394865457858064
+   "sqlparse_us": 376.210703811331,
+   "pyroid_us": 12.962179094828798,
+   "sqlparse_median_us": 376.6258564894976,
+   "pyroid_median_us": 12.974955160481558,
+   "speedup": 29.02372363929291
   },
   {
    "group": "calls",
    "doc": "1-line SELECT",
    "call": "format(reindent, keyword_case)",
-   "sqlparse_us": 379.1760961499087,
-   "pyroid_us": 13.487653193917646,
-   "sqlparse_median_us": 379.91604158104303,
-   "pyroid_median_us": 13.523437548732334,
-   "speedup": 28.1128296152292
+   "sqlparse_us": 379.7064783818619,
+   "pyroid_us": 13.6855646595923,
+   "sqlparse_median_us": 380.3702454651593,
+   "pyroid_median_us": 13.715092178048065,
+   "speedup": 27.745035577740907
   },
   {
    "group": "calls",
    "doc": "1-line SELECT",
    "call": "split()",
-   "sqlparse_us": 93.75598732731305,
-   "pyroid_us": 2.977326264545082,
-   "sqlparse_median_us": 93.83153399297348,
-   "pyroid_median_us": 2.9864404832076534,
-   "speedup": 31.489994376427003
+   "sqlparse_us": 94.66412121824214,
+   "pyroid_us": 2.994464735043178,
+   "sqlparse_median_us": 94.70344288701077,
+   "pyroid_median_us": 2.996698295312943,
+   "speedup": 31.61303591604232
   },
   {
    "group": "calls",
    "doc": "1-line SELECT",
    "call": "parse()",
-   "sqlparse_us": 300.3799637329243,
-   "pyroid_us": 19.95995402631114,
-   "sqlparse_median_us": 301.1017993117351,
-   "pyroid_median_us": 19.977163424869246,
-   "speedup": 15.049131041933487
+   "sqlparse_us": 300.64133039110504,
+   "pyroid_us": 20.173085799886266,
+   "sqlparse_median_us": 302.5207499881677,
+   "pyroid_median_us": 20.196525491078877,
+   "speedup": 14.903090849531806
   },
   {
    "group": "calls",
    "doc": "4-line SELECT",
    "call": "format()",
-   "sqlparse_us": 742.5669012620715,
-   "pyroid_us": 18.815277106198884,
-   "sqlparse_median_us": 746.1737696216973,
-   "pyroid_median_us": 18.830537712657623,
-   "speedup": 39.46616874525996
+   "sqlparse_us": 721.8751517432598,
+   "pyroid_us": 18.945838091230133,
+   "sqlparse_median_us": 725.1824900410625,
+   "pyroid_median_us": 18.967076815116396,
+   "speedup": 38.10204374529147
   },
   {
    "group": "calls",
    "doc": "4-line SELECT",
    "call": "format(reindent=True)",
-   "sqlparse_us": 2804.009370156564,
-   "pyroid_us": 64.74448410656524,
-   "sqlparse_median_us": 2816.4845798164606,
-   "pyroid_median_us": 64.77470706701061,
-   "speedup": 43.30885339268973
+   "sqlparse_us": 2766.3237058589525,
+   "pyroid_us": 65.26802281090099,
+   "sqlparse_median_us": 2778.7758233756117,
+   "pyroid_median_us": 65.28452092029758,
+   "speedup": 42.38405863578457
   },
   {
    "group": "calls",
    "doc": "4-line SELECT",
    "call": "format(reindent, keyword_case)",
-   "sqlparse_us": 2848.740618944811,
-   "pyroid_us": 70.76139492755325,
-   "sqlparse_median_us": 2857.813726309576,
-   "pyroid_median_us": 70.87199999247942,
-   "speedup": 40.258401093723506
+   "sqlparse_us": 2809.0911249679407,
+   "pyroid_us": 70.78867608270731,
+   "sqlparse_median_us": 2823.2628076064148,
+   "pyroid_median_us": 70.85636662060466,
+   "speedup": 39.682775274478715
   },
   {
    "group": "calls",
    "doc": "4-line SELECT",
    "call": "split()",
-   "sqlparse_us": 716.4249640115597,
-   "pyroid_us": 11.003975109874384,
-   "sqlparse_median_us": 717.535158309402,
-   "pyroid_median_us": 11.008905858715156,
-   "speedup": 65.10601458637234
+   "sqlparse_us": 678.0846013976175,
+   "pyroid_us": 11.04074335707601,
+   "sqlparse_median_us": 718.438214274265,
+   "pyroid_median_us": 11.056663086527296,
+   "speedup": 61.41657128213502
   },
   {
    "group": "calls",
    "doc": "4-line SELECT",
    "call": "parse()",
-   "sqlparse_us": 2270.811095340399,
-   "pyroid_us": 124.16485587327003,
-   "sqlparse_median_us": 2276.717920534475,
-   "pyroid_median_us": 129.94041687554935,
-   "speedup": 18.288678220334123
+   "sqlparse_us": 2222.60966674107,
+   "pyroid_us": 128.0989540877273,
+   "sqlparse_median_us": 2232.2115115640872,
+   "pyroid_median_us": 128.63404105372712,
+   "speedup": 17.350724543925146
   },
   {
    "group": "calls",
    "doc": "INSERT, 200 rows",
    "call": "format()",
-   "sqlparse_us": 15259.161262197029,
-   "pyroid_us": 185.98700404601243,
-   "sqlparse_median_us": 15531.668157659862,
-   "pyroid_median_us": 186.16605170431467,
-   "speedup": 82.04423389938565
+   "sqlparse_us": 14441.143946513828,
+   "pyroid_us": 189.07408820241014,
+   "sqlparse_median_us": 14754.093684084517,
+   "pyroid_median_us": 189.1526908343865,
+   "speedup": 76.37822868173295
   },
   {
    "group": "calls",
    "doc": "INSERT, 200 rows",
    "call": "format(reindent=True)",
-   "sqlparse_us": 42600.884717623034,
-   "pyroid_us": 884.8146847212466,
-   "sqlparse_median_us": 42820.34171462458,
-   "pyroid_median_us": 885.0212305610589,
-   "speedup": 48.14667461248576
+   "sqlparse_us": 42690.521663947344,
+   "pyroid_us": 888.8793277965366,
+   "sqlparse_median_us": 42874.93583494021,
+   "pyroid_median_us": 889.0522977011746,
+   "speedup": 48.02735346514792
   },
   {
    "group": "calls",
    "doc": "INSERT, 200 rows",
    "call": "format(reindent, keyword_case)",
-   "sqlparse_us": 43545.03766808193,
-   "pyroid_us": 905.3310477921784,
-   "sqlparse_median_us": 43588.25883537065,
-   "pyroid_median_us": 905.5629999570726,
-   "speedup": 48.09846936573618
+   "sqlparse_us": 43501.6585009483,
+   "pyroid_us": 913.864640420947,
+   "sqlparse_median_us": 43594.6798340107,
+   "pyroid_median_us": 914.7739280071046,
+   "speedup": 47.601862001040374
   },
   {
    "group": "calls",
    "doc": "INSERT, 200 rows",
    "call": "split()",
-   "sqlparse_us": 15345.51531566601,
-   "pyroid_us": 97.32791654185291,
-   "sqlparse_median_us": 15692.280210235987,
-   "pyroid_median_us": 97.41314259231353,
-   "speedup": 157.66817847238246
+   "sqlparse_us": 14901.718789540035,
+   "pyroid_us": 98.32745490191162,
+   "sqlparse_median_us": 15292.645790491644,
+   "pyroid_median_us": 98.34470977808898,
+   "speedup": 151.55196282061323
   },
   {
    "group": "calls",
    "doc": "INSERT, 200 rows",
    "call": "parse()",
-   "sqlparse_us": 38729.06085702458,
-   "pyroid_us": 2127.182905849836,
-   "sqlparse_median_us": 39038.2817173044,
-   "pyroid_median_us": 2173.8431353108303,
-   "speedup": 18.206737535600794
+   "sqlparse_us": 38631.87414494211,
+   "pyroid_us": 2145.379856322496,
+   "sqlparse_median_us": 38864.89028809592,
+   "pyroid_median_us": 2183.2979138038686,
+   "speedup": 18.007008889867624
   },
   {
    "group": "calls",
    "doc": "CREATE TABLE, 40 columns",
    "call": "format()",
-   "sqlparse_us": 2814.1280275731083,
-   "pyroid_us": 68.43005508762887,
-   "sqlparse_median_us": 2848.7181009558126,
-   "pyroid_median_us": 68.51044953599043,
-   "speedup": 41.124152595952836
+   "sqlparse_us": 2762.867054446939,
+   "pyroid_us": 68.49087665023093,
+   "sqlparse_median_us": 2773.3560998140915,
+   "pyroid_median_us": 68.57492895824625,
+   "speedup": 40.3391982928813
   },
   {
    "group": "calls",
    "doc": "CREATE TABLE, 40 columns",
    "call": "format(reindent=True)",
-   "sqlparse_us": 9982.522851916858,
-   "pyroid_us": 381.3097322008462,
-   "sqlparse_median_us": 10106.67836979135,
-   "pyroid_median_us": 381.39989320386076,
-   "speedup": 26.179564823325283
+   "sqlparse_us": 10116.111413888826,
+   "pyroid_us": 381.4692975579403,
+   "sqlparse_median_us": 10164.60720686531,
+   "pyroid_median_us": 381.7587041346015,
+   "speedup": 26.51880892813482
   },
   {
    "group": "calls",
    "doc": "CREATE TABLE, 40 columns",
    "call": "format(reindent, keyword_case)",
-   "sqlparse_us": 10186.43106940074,
-   "pyroid_us": 394.19546752364545,
-   "sqlparse_median_us": 10231.800517870179,
-   "pyroid_median_us": 394.35718589948175,
-   "speedup": 25.84106593967805
+   "sqlparse_us": 10188.487758819849,
+   "pyroid_us": 395.59854399345994,
+   "sqlparse_median_us": 10252.914999627734,
+   "pyroid_median_us": 395.72886357884823,
+   "speedup": 25.754613897133773
   },
   {
    "group": "calls",
    "doc": "CREATE TABLE, 40 columns",
    "call": "split()",
-   "sqlparse_us": 2581.439554027433,
-   "pyroid_us": 46.946020520364726,
-   "sqlparse_median_us": 2623.6574458134537,
-   "pyroid_median_us": 47.00775196663103,
-   "speedup": 54.98739883410628
+   "sqlparse_us": 2651.4827389677,
+   "pyroid_us": 46.735621780898555,
+   "sqlparse_median_us": 2691.372918848133,
+   "pyroid_median_us": 46.75708469136718,
+   "speedup": 56.73365706779565
   },
   {
    "group": "calls",
    "doc": "CREATE TABLE, 40 columns",
    "call": "parse()",
-   "sqlparse_us": 7634.138435465642,
-   "pyroid_us": 482.71177061239143,
-   "sqlparse_median_us": 7703.146820392412,
-   "pyroid_median_us": 488.65794830636605,
-   "speedup": 15.815107275674272
+   "sqlparse_us": 7658.093868246253,
+   "pyroid_us": 486.914817552213,
+   "sqlparse_median_us": 7745.283052300741,
+   "pyroid_median_us": 487.11189470180364,
+   "speedup": 15.727789732800765
   },
   {
    "group": "calls",
    "doc": "migration, 120 statements",
    "call": "format()",
-   "sqlparse_us": 14474.315350526012,
-   "pyroid_us": 331.36154509078244,
-   "sqlparse_median_us": 14479.129049868789,
-   "pyroid_median_us": 331.47745220883763,
-   "speedup": 43.68133709227036
+   "sqlparse_us": 14371.947563631693,
+   "pyroid_us": 330.68418121036206,
+   "sqlparse_median_us": 14380.965687450953,
+   "pyroid_median_us": 330.85568050272957,
+   "speedup": 43.461249071630355
   },
   {
    "group": "calls",
    "doc": "migration, 120 statements",
    "call": "format(reindent=True)",
-   "sqlparse_us": 56259.55780269578,
-   "pyroid_us": 1247.7740896909654,
-   "sqlparse_median_us": 56426.29160429351,
-   "pyroid_median_us": 1249.1222027302633,
-   "speedup": 45.08793560269352
+   "sqlparse_us": 56059.31620229967,
+   "pyroid_us": 1254.6848577184612,
+   "sqlparse_median_us": 56206.450395984575,
+   "pyroid_median_us": 1255.2922796259381,
+   "speedup": 44.67999741723098
   },
   {
    "group": "calls",
    "doc": "migration, 120 statements",
    "call": "format(reindent, keyword_case)",
-   "sqlparse_us": 56511.675799265504,
-   "pyroid_us": 1444.6204916480408,
-   "sqlparse_median_us": 56769.81220021844,
-   "pyroid_median_us": 1445.0525251664637,
-   "speedup": 39.118700119500794
+   "sqlparse_us": 56744.58220019005,
+   "pyroid_us": 1458.3795057384693,
+   "sqlparse_median_us": 56874.388799769804,
+   "pyroid_median_us": 1459.3089326399934,
+   "speedup": 38.909338739957605
   },
   {
    "group": "calls",
    "doc": "migration, 120 statements",
    "call": "split()",
-   "sqlparse_us": 13974.795000173062,
-   "pyroid_us": 163.40791151802546,
-   "sqlparse_median_us": 13983.306190874871,
-   "pyroid_median_us": 163.4999373148176,
-   "speedup": 85.52092043983751
+   "sqlparse_us": 13907.171809391695,
+   "pyroid_us": 163.62927660035592,
+   "sqlparse_median_us": 13925.125333203358,
+   "pyroid_median_us": 163.75349220284755,
+   "speedup": 84.99195314147985
   },
   {
    "group": "calls",
    "doc": "migration, 120 statements",
    "call": "parse()",
-   "sqlparse_us": 44747.80466989614,
-   "pyroid_us": 2859.6092031420994,
-   "sqlparse_median_us": 44883.21900134906,
-   "pyroid_median_us": 2943.7710311412957,
-   "speedup": 15.648223757542766
+   "sqlparse_us": 44903.345503068216,
+   "pyroid_us": 2884.539330743004,
+   "sqlparse_median_us": 45192.984165623784,
+   "pyroid_median_us": 2963.081952807765,
+   "speedup": 15.566903534472504
   },
   {
    "group": "batch",
    "call": "format(reindent=True)",
    "docs": 20000,
-   "sqlparse_s": 19.032360922021326,
-   "pyroid_all_s": 0.037908825994236395,
-   "pyroid_one_s": 0.4400484409998171,
-   "speedup_all": 502.0561946422445,
-   "speedup_one": 43.25060413525982
+   "sqlparse_s": 18.848280348000117,
+   "pyroid_all_s": 0.03775800601579249,
+   "pyroid_one_s": 0.43978513800539076,
+   "speedup_all": 499.18632726836057,
+   "speedup_one": 42.85792929130106
   },
   {
    "group": "batch",
    "call": "split()",
    "docs": 20000,
-   "sqlparse_s": 4.888986635982292,
-   "pyroid_all_s": 0.013882947998354211,
-   "pyroid_one_s": 0.07100189797347412,
-   "speedup_all": 352.15767116334865,
-   "speedup_one": 68.85712601385372
+   "sqlparse_s": 4.881905618996825,
+   "pyroid_all_s": 0.013691166997887194,
+   "pyroid_one_s": 0.07194703901768662,
+   "speedup_all": 356.57337462542057,
+   "speedup_one": 67.85415613555291
+  },
+  {
+   "group": "corpus",
+   "call": "format()",
+   "docs": 20000,
+   "bytes": 7242695,
+   "sqlparse_s": 12.324358849989949,
+   "pyroid_s": 0.37020538598881103,
+   "speedup": 33.290598452726016
+  },
+  {
+   "group": "corpus",
+   "call": "format(reindent=True)",
+   "docs": 20000,
+   "bytes": 7242695,
+   "sqlparse_s": 30.405031546019018,
+   "pyroid_s": 0.9675454709795304,
+   "speedup": 31.42491227336051
+  },
+  {
+   "group": "corpus",
+   "call": "format(reindent, keyword_case)",
+   "docs": 20000,
+   "bytes": 7242695,
+   "sqlparse_s": 30.81665062002139,
+   "pyroid_s": 1.02753125099116,
+   "speedup": 29.990961919937277
+  },
+  {
+   "group": "corpus",
+   "call": "split()",
+   "docs": 20000,
+   "bytes": 7242695,
+   "sqlparse_s": 11.503635199012933,
+   "pyroid_s": 0.21448445599526167,
+   "speedup": 53.63388757303265
+  },
+  {
+   "group": "corpus",
+   "call": "parse()",
+   "docs": 20000,
+   "bytes": 7242695,
+   "sqlparse_s": 27.784250819997396,
+   "pyroid_s": 3.2903049040178303,
+   "speedup": 8.44427845761945
   }
  ]
 }

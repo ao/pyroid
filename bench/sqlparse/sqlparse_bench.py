@@ -15,8 +15,10 @@ an INSERT of 200 rows, a CREATE TABLE of 40 columns and a 120-statement migratio
 through ``format()``, ``format(reindent=True)``, ``format(reindent=True,
 keyword_case="upper")``, ``split()`` and ``parse()``; then ``format_batch`` and ``split_batch``
 over 20,000 statements against a loop over sqlparse (pyroid on all cores and on one).
-``--corpus`` adds the same calls over a JSONL file of ``{"sql": ...}`` lines (the real-SQL
-corpus of ``bench/sqlparse/corpus.py``), as statements per second.
+``--corpus`` adds the same calls over a JSONL file of ``{"text": ...}`` lines (the real-SQL
+corpus of ``bench/sqlparse/corpus.py``; ``"sql"`` keys are read too), as the total time for the
+first ``--corpus-limit`` documents, each library timed once (``parity_corpus.py`` checks that the
+results are equal).
 
 Prints a Markdown table; ``--out`` writes the timings and the machine (CPU, Python, versions and
 the load average before and after; no hostname or instance id).
@@ -219,7 +221,8 @@ def run_corpus(rows: list[dict[str, Any]], path: Path, limit: int) -> None:
     docs: list[str] = []
     with path.open(encoding="utf-8") as fh:
         for line in fh:
-            sql = json.loads(line).get("sql")
+            row = json.loads(line)
+            sql = row.get("text", row.get("sql"))
             if isinstance(sql, str) and len(sql) < 200_000:
                 docs.append(sql)
             if len(docs) >= limit:
