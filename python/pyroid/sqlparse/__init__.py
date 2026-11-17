@@ -191,25 +191,29 @@ def _split(sql: Any, encoding: str | None, strip_semicolon: bool) -> list[str]:
     return [str(stmt).strip() for stmt in stack.run(sql, encoding)]
 
 
-def _batch_texts(sqls: Any) -> Any:
-    """A list or tuple batch's items as `format` and `split` read them (or None).
+def _batch_items(sqls: Any) -> list[Any] | None:
+    """One copy of a list or tuple batch's items (the caller's list may change meanwhile)."""
+    return list(sqls) if isinstance(sqls, (list, tuple)) else None
+
+
+def _batch_texts(items: list[Any] | None) -> list[Any] | None:
+    """The items as `format` and `split` read them, or None when they are all str already.
 
     Bytes are decoded and text streams read; the first item they reject raises their
-    TypeError. None when every item is already a str, or `sqls` is not a list or tuple.
+    TypeError.
     """
-    if not isinstance(sqls, (list, tuple)) or all(type(x) is str for x in sqls):
+    if items is None or all(type(x) is str for x in items):
         return None
-    texts = [lexer.read(x, None) for x in sqls]
-    return tuple(texts) if isinstance(sqls, tuple) else texts
+    return [lexer.read(x, None) for x in items]
 
 
-def _batch_loop(sqls: Any, texts: Any, one: Any) -> Any:
+def _batch_loop(sqls: Any, items: list[Any] | None, one: Any) -> Any:
     """``[one(sql) for sql in sqls]`` in the batch's container kind (Arrow nulls stay None)."""
     if isinstance(sqls, str):
         return one(sqls)
-    if isinstance(sqls, (list, tuple)):
-        items = [one(x) for x in (sqls if texts is None else texts)]
-        return tuple(items) if isinstance(sqls, tuple) else items
+    if items is not None:
+        out = [one(x) for x in items]
+        return tuple(out) if isinstance(sqls, tuple) else out
     rows = sqls.to_pylist() if hasattr(sqls, "to_pylist") else list(sqls)  # pyarrow, Column
     return [None if x is None else one(x) for x in rows]
 
@@ -299,12 +303,18 @@ def format_batch(sqls: Any, *, threads: int | None = None, **options: Any) -> An
         r = _native._format_batch(sqls, lex, *_limit_values(None), args, threads)
         if r is not NotImplemented:
             return r
-    texts = _batch_texts(sqls)
+    items = _batch_items(sqls)
+    texts = _batch_texts(items)
     if native and texts is not None:  # bytes or streams, read as format reads them
-        r = _native._format_batch(texts, lex, *_limit_values(None), args, threads)
+        again = tuple(texts) if isinstance(sqls, tuple) else texts
+        r = _native._format_batch(again, lex, *_limit_values(None), args, threads)
         if r is not NotImplemented:
             return r
-    return _batch_loop(sqls, texts, lambda x: _format(x, None, dict(options), None))
+
+    def one(sql: Any) -> Any:
+        return _format(sql, None, dict(options), None)
+
+    return _batch_loop(sqls, items if texts is None else texts, one)
 
 
 def split_batch(sqls: Any, *, threads: int | None = None, strip_semicolon: bool = False) -> Any:
@@ -329,12 +339,18 @@ def split_batch(sqls: Any, *, threads: int | None = None, strip_semicolon: bool 
         r = _native._split_batch(sqls, lex, bool(strip_semicolon), threads)
         if r is not NotImplemented:
             return r
-    texts = _batch_texts(sqls)
+    items = _batch_items(sqls)
+    texts = _batch_texts(items)
     if native and texts is not None:  # bytes or streams, read as split reads them
-        r = _native._split_batch(texts, lex, bool(strip_semicolon), threads)
+        again = tuple(texts) if isinstance(sqls, tuple) else texts
+        r = _native._split_batch(again, lex, bool(strip_semicolon), threads)
         if r is not NotImplemented:
             return r
-    return _batch_loop(sqls, texts, lambda x: _split(x, None, strip_semicolon))
+
+    def one(sql: Any) -> Any:
+        return _split(sql, None, strip_semicolon)
+
+    return _batch_loop(sqls, items if texts is None else texts, one)
 
 
 def __dir__() -> list[str]:
