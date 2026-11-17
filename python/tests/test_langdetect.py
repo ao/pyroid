@@ -400,3 +400,34 @@ def test_default_order_follows_langdetect() -> None:
     assert ours is not None
     assert ours.get_lang_list() == theirs.get_lang_list()
     assert sys.modules["pyroid.langdetect"] is pl
+
+
+@pytest.mark.thread_unsafe
+def test_another_langdetect_release_warns(run_python: Callable[..., Any], tmp_path: Any) -> None:
+    pkg = tmp_path / "langdetect"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "language.py").write_text("class Language:\n    pass\n", encoding="utf-8")
+    (pkg / "lang_detect_exception.py").write_text(
+        "ErrorCode = type('ErrorCode', (), {})\nclass LangDetectException(Exception):\n    pass\n",
+        encoding="utf-8",
+    )
+    dist = tmp_path / "langdetect-1.0.8.dist-info"
+    dist.mkdir()
+    (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: langdetect\nVersion: 1.0.8\n")
+    code = f"""
+        import sys, warnings
+        sys.path.insert(0, {str(tmp_path)!r})
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            import pyroid.langdetect
+            import pyroid.langdetect._compat as c
+            c.check_version()  # once per process
+        ours = [x for x in w if x.category is RuntimeWarning]
+        print(len(ours), "1.0.8" in str(ours[0].message), ours[0].filename)
+    """
+    out = run_python(code)
+    assert out.returncode == 0, out.stderr
+    count, named, filename = out.stdout.split()
+    assert (count, named) == ("1", "True")
+    assert filename == "<string>"

@@ -164,6 +164,7 @@ def test_appends_accumulate(factories: tuple[Any, Any]) -> None:
     assert results[0] == results[1]
 
 
+@pytest.mark.thread_unsafe  # sets DetectorFactory.seed on both classes
 def test_module_level_functions(factories: tuple[Any, Any]) -> None:
     saved = ld.DetectorFactory.seed, pl.DetectorFactory.seed
     try:

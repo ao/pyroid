@@ -143,13 +143,17 @@ def check_version() -> None:
         return
     if version == LANGDETECT_VERSION:
         return
-    frame = sys._getframe(1)
+    # The first frame outside pyroid and importlib. warnings skips importlib's bootstrap frames
+    # itself when it counts `stacklevel`, so they are not counted here either.
     level = 1
-    while frame.f_back is not None and str(frame.f_globals.get("__name__", "")).startswith(
-        ("pyroid", "importlib")
-    ):
+    frame: Any = sys._getframe(1)
+    while frame is not None:
+        filename = frame.f_code.co_filename
+        if not ("importlib" in filename and "_bootstrap" in filename):
+            level += 1
+            if not str(frame.f_globals.get("__name__", "")).startswith(("pyroid", "importlib")):
+                break
         frame = frame.f_back
-        level += 1
     warnings.warn(
         f"pyroid.langdetect reproduces langdetect {LANGDETECT_VERSION}, but langdetect {version} "
         f"is installed: detections follow {LANGDETECT_VERSION}, and Language, "

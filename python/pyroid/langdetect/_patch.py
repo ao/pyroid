@@ -111,6 +111,14 @@ def _store(word_map: Any, langlist: Any) -> Any:
     return store
 
 
+def _own(found: Any, name: str) -> Any:
+    """`found`, or the original pyroid replaced if `found` is pyroid's own function."""
+    ours = {"_detect_block": "_detect_block", "detect": "detect", "detect_langs": "detect_langs"}
+    if found is globals().get(ours[name]) and name in _ORIGINALS:
+        return _ORIGINALS[name]
+    return found
+
+
 class _Patched:
     """The originals replaced by one install(), and the functions that replaced them."""
 
@@ -125,9 +133,10 @@ class _Patched:
         self.detector = ld_detector.Detector
         self.factory = ld_factory.DetectorFactory
         d, f = self.detector, self.factory
-        self.original_detect_block = d.__dict__["_detect_block"]
-        self.original_detect = ld_factory.__dict__["detect"]
-        self.original_detect_langs = ld_factory.__dict__["detect_langs"]
+        # langdetect's own functions (an earlier patch's are never taken for them).
+        self.original_detect_block = _own(d.__dict__["_detect_block"], "_detect_block")
+        self.original_detect = _own(ld_factory.__dict__["detect"], "detect")
+        self.original_detect_langs = _own(ld_factory.__dict__["detect_langs"], "detect_langs")
         # What the one-call path stands for: create(), Detector(), append(), detect().
         self.plain = (
             f.__dict__.get("create"),
@@ -235,7 +244,10 @@ def detect_langs(text: Any) -> Any:
 
 
 def install() -> Callable[[], None]:
-    """Patch the installed langdetect in place; returns the undo function."""
+    """Patch the installed langdetect in place; returns the undo function.
+
+    A KeyboardInterrupt part-way undoes the swaps made so far, and the undo can run twice.
+    """
     global _ACTIVE
     active = _Patched()
     _ORIGINALS.update(
@@ -248,27 +260,30 @@ def install() -> Callable[[], None]:
         active.saved.append((owner, name, owner.__dict__.get(name, _MISSING)))
         setattr(owner, name, new)
 
-    _ACTIVE = active
-    swap(active.detector, "append", _append)
-    swap(active.detector, "_detect_block", _detect_block)
-    for module in (active.factory_module, active.langdetect):
-        if module.__dict__.get("detect") is active.original_detect:
-            swap(module, "detect", detect)
-        if module.__dict__.get("detect_langs") is active.original_detect_langs:
-            swap(module, "detect_langs", detect_langs)
-
     def undo() -> None:
         global _ACTIVE
         for owner, name, original in reversed(active.saved):
-            if original is _MISSING:
-                delattr(owner, name)
-            else:
+            if original is not _MISSING:
                 setattr(owner, name, original)
+            elif name in owner.__dict__:
+                delattr(owner, name)
         if _ACTIVE is active:
             _ACTIVE = None
         with _LOCK:
             _STORES.clear()
 
+    try:
+        _ACTIVE = active
+        swap(active.detector, "append", _append)
+        swap(active.detector, "_detect_block", _detect_block)
+        for module in (active.factory_module, active.langdetect):
+            if module.__dict__.get("detect") is active.original_detect:
+                swap(module, "detect", detect)
+            if module.__dict__.get("detect_langs") is active.original_detect_langs:
+                swap(module, "detect_langs", detect_langs)
+    except BaseException:
+        undo()
+        raise
     return undo
 
 
