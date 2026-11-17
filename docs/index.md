@@ -49,6 +49,7 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 |  | [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | [NeMo Curator](https://github.com/NVIDIA-NeMo/Curator) 1.4.0's heuristic document filters and string modifiers | same scores, exceptions and modified text ([parity](compatibility.md#nemo)) |
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
 | JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
+| SQL | [`pyroid.sqlparse`](guides/sqlparse.md) | [sqlparse](https://github.com/andialbrecht/sqlparse) 0.6.1 | same formatted text, statements, token trees (sqlparse's own classes) and exceptions ([parity](compatibility.md#sqlparse)) |
 
 ## Example: cleaning LLM training data
 

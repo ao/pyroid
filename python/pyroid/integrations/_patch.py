@@ -1081,7 +1081,8 @@ def patch(*names: str) -> None:
 
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
-            ``"trafilatura"``, ``"nltk"``, ``"warcio"`` and/or ``"nemo_curator"``.
+            ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"`` and/or
+            ``"sqlparse"``.
 
     Raises:
         TypeError: No names were given.
@@ -1214,7 +1215,7 @@ _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
-`warcio` / `nemo_curator` giving pyroid's drop-ins. The Python processes it starts
+`warcio` / `nemo_curator` / `sqlparse` giving pyroid's drop-ins. The Python processes it starts
 (multiprocessing workers, subprocesses) are patched too.
 
 options:

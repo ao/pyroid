@@ -40,6 +40,7 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 | | [`pyroid.nemo`](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
 | Evaluation | [`pyroid.metrics`](https://ataiva.com/open-source/pyroid/docs/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
 | JSON | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.5 |
+| SQL | [`pyroid.sqlparse`](https://ataiva.com/open-source/pyroid/docs/guides/sqlparse/) | sqlparse 0.6.1 (`format`, `split`, `parse`, with sqlparse's own token classes) |
 
 ## Example: cleaning LLM training data
 
