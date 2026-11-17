@@ -379,12 +379,14 @@ def test_parse_passes_its_keywords_on(monkeypatch: pytest.MonkeyPatch) -> None:
 
     class Spy(ppx.parser):  # type: ignore[misc]
         def parse(self, timestr: Any, **kwargs: Any) -> Any:
-            seen.append(kwargs)
+            seen.append((timestr, kwargs))
             return super().parse(timestr, **kwargs)
 
     monkeypatch.setattr(pp, "DEFAULTPARSER", Spy())
     assert pp.parse("01/02/03", dayfirst=True, default=DEFAULT) == D(2003, 2, 1)
-    assert seen == [{"default": DEFAULT, "dayfirst": True}]
+    # Only this call's: an object an earlier test left in a cache can be dropped meanwhile and
+    # parse in its __del__ (test_parse_in_del_while_a_cache_drops_entries).
+    assert [kw for s, kw in seen if s == "01/02/03"] == [{"default": DEFAULT, "dayfirst": True}]
 
 
 def test_tzinfos() -> None:
