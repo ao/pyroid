@@ -344,6 +344,12 @@ for a truncated compressed file), a text column of another type (`pyroid.InputEr
 dependencies (`ImportError`), `PYROID_DEBUG=1` shows the traceback instead. Bad options exit with
 status 2 (argparse's usage error).
 
+From Python, `pyroid.cli.main(["clean", ...])` runs a command and returns its exit status. Calls
+in several threads of one process can run at once, each with its own OUT: a call that fails
+removes only what its own runs left, and each call loads its own models. They share stderr and
+the signal handlers, which only the main thread's call sets. `pyroid run` is the exception, as its
+target becomes the program: a second `run` while one is running exits with status 2.
+
 A directory of shards in, compressed JSONL out, two threads:
 
 ```console

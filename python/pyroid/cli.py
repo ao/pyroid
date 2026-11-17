@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures as cf
 import contextlib
+import contextvars
 import itertools
 import json
 import math
@@ -375,16 +376,16 @@ def _check_text_column(sources: Sequence[Any], column: str) -> None:
 
 # ================================================================================ per-file steps
 # A step turns one input table into (kept, dropped-with-filter_reason or None, removed counts).
-# Steps are cached per process: workers load the LID model once.
-
-_CACHE: dict[Any, Any] = {}
+# A step's recipe is made once per call of main() (a worker process: once), so the LID model
+# is loaded once per run, not per file.
 
 
 def _recipe(o: Options) -> Any:
     from pyroid.integrations import recipes
 
+    cache = _recipes()
     key = (o.command, json.dumps(o.extra, sort_keys=True, default=str), o.threads)
-    r = _CACHE.get(key)
+    r = cache.get(key)
     if r is None:
         x = o.extra
         if o.command == "langid":
@@ -406,7 +407,7 @@ def _recipe(o: Options) -> Any:
                 threads=o.threads,
                 minhash=None,
             )
-        _CACHE[key] = r
+        cache[key] = r
     return r
 
 
@@ -1004,10 +1005,11 @@ def _warc_open(src: Any) -> Iterator[tuple[Any, str | None]]:
 def _warc_recipe(o: Options) -> Any:
     from pyroid.integrations import recipes
 
+    cache = _recipes()
     key = (WARC_RECIPE, o.extra.get("lid_model"), o.threads)
-    r = _CACHE.get(key)
+    r = cache.get(key)
     if r is None:
-        r = _CACHE[key] = recipes.FineWebWarc(lid_model=o.extra.get("lid_model"), threads=o.threads)
+        r = cache[key] = recipes.FineWebWarc(lid_model=o.extra.get("lid_model"), threads=o.threads)
     return r
 
 
@@ -1343,12 +1345,40 @@ def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: b
         f"pyroid {command}", len(mine), total, enabled=getattr(a, "progress", False)
     )
     run = Run(a, command, sources, shard, mine, layout, state, options, progress, *existed)
-    _STARTED.append(run)
+    call = _CALL.get()
+    if call is not None:
+        call.runs.append(run)
     return run
 
 
-# The runs this process started: main() tidies up after one that fails or stops.
-_STARTED: list[Run] = []
+@dataclass
+class _Call:
+    """What one call of :func:`main` owns. Calls in other threads (or nested) have their own."""
+
+    runs: list[Run] = field(default_factory=list)  # tidied up if the call fails or stops
+    recipes: dict[Any, Any] = field(default_factory=dict)  # see _recipe
+
+
+_CALL: contextvars.ContextVar[_Call | None] = contextvars.ContextVar(
+    "pyroid_cli_call", default=None
+)
+# The recipes of a worker process, which serves one run.
+_WORKER_RECIPES: dict[Any, Any] = {}
+
+
+@contextlib.contextmanager
+def _new_call() -> Iterator[_Call]:
+    call = _Call()
+    token = _CALL.set(call)
+    try:
+        yield call
+    finally:
+        _CALL.reset(token)
+
+
+def _recipes() -> dict[Any, Any]:
+    call = _CALL.get()
+    return call.recipes if call is not None else _WORKER_RECIPES
 
 
 def _tidy_failed(run: Run) -> None:
@@ -2648,46 +2678,46 @@ def main(argv: list[str] | None = None) -> int:
     )
     if program:
         sys.unraisablehook = _shards.redelivering(sys.unraisablehook)
-    ok = False
-    try:
-        code = int(a.body(a))
-        _stdout("")  # here, not at exit, so a closed pipe (| head -1) is handled below
-        ok = True
-        if program:
-            _default_signals()  # a signal before this line stops the run (exit 128 + signal)
-        return code
-    except _shards.Terminated:
-        # Finished files and their records are kept: the same command resumes the run.
-        _shards.say(f"pyroid {a.command}: terminated\n")
-        return 128 + signal.SIGTERM
-    except KeyboardInterrupt:
-        _shards.say(f"pyroid {a.command}: interrupted\n")
-        return 128 + signal.SIGINT
-    except _shards.StateError as e:
-        raise SystemExit(f"pyroid {a.command}: {e}") from None
-    except BrokenPipeError:
-        # stdout closed early (pyroid stats OUT | head -1): exit quietly, as Python's docs advise.
-        # Messages on stderr never get here (a closed stderr only silences them).
-        _shards.mute(sys.stdout)
-        return 1
-    except Exception as e:
-        if os.environ.get("PYROID_DEBUG") or not _one_line(e):
-            raise
-        msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
-        notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
-        _shards.say(f"pyroid {a.command}: {msg}{notes}\n")
-        return 1
-    finally:
-        if program:
-            with contextlib.suppress(KeyboardInterrupt):  # a second signal: exiting anyway
-                _default_signals()
-        elif term is not None:
-            signal.signal(signal.SIGTERM, term)
-        if not ok:
-            for started in _STARTED:
-                with contextlib.suppress(Exception):
-                    _tidy_failed(started)
-        _STARTED.clear()
+    with _new_call() as call:
+        ok = False
+        try:
+            code = int(a.body(a))
+            _stdout("")  # here, not at exit, so a closed pipe (| head -1) is handled below
+            ok = True
+            if program:
+                _default_signals()  # a signal before this line stops the run (exit 128 + signal)
+            return code
+        except _shards.Terminated:
+            # Finished files and their records are kept: the same command resumes the run.
+            _shards.say(f"pyroid {a.command}: terminated\n")
+            return 128 + signal.SIGTERM
+        except KeyboardInterrupt:
+            _shards.say(f"pyroid {a.command}: interrupted\n")
+            return 128 + signal.SIGINT
+        except _shards.StateError as e:
+            raise SystemExit(f"pyroid {a.command}: {e}") from None
+        except BrokenPipeError:
+            # stdout closed early (pyroid stats OUT | head -1): exit quietly, as Python's docs
+            # advise. Messages on stderr never get here (a closed stderr only silences them).
+            _shards.mute(sys.stdout)
+            return 1
+        except Exception as e:
+            if os.environ.get("PYROID_DEBUG") or not _one_line(e):
+                raise
+            msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
+            notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
+            _shards.say(f"pyroid {a.command}: {msg}{notes}\n")
+            return 1
+        finally:
+            if program:
+                with contextlib.suppress(KeyboardInterrupt):  # a second signal: exiting anyway
+                    _default_signals()
+            elif term is not None:
+                signal.signal(signal.SIGTERM, term)
+            if not ok:  # this call's runs only: calls in other threads have their own
+                for started in call.runs:
+                    with contextlib.suppress(Exception):
+                        _tidy_failed(started)
 
 
 def _one_line(e: Exception) -> bool:
