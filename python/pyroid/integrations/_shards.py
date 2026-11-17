@@ -575,25 +575,32 @@ def _spawn(ctx: Any, count: int, threads: int | None, progress: bool) -> list[_W
 
     Python's own handlers would otherwise raise KeyboardInterrupt (and print a traceback) in a
     worker that is still importing.
+
+    This process holds the two signals until every worker has started, and acts on them after.
+    The mask is per thread, and a signal the main thread blocks is taken by another thread
+    (pyarrow's, pyroid's), after which Python raises it in the main thread all the same. Raised
+    inside ``Process.start``, it left a child without its start-up data (an EOFError traceback).
     """
     pool: list[_Worker] = []
     mask = hasattr(signal, "pthread_sigmask")
-    old = signal.pthread_sigmask(signal.SIG_BLOCK, _SIGNALS) if mask else None
     try:
-        for _ in range(count):
-            mine, theirs = ctx.Pipe()
-            proc = ctx.Process(
-                target=_worker, args=(theirs, threads, progress), name="pyroid-worker"
-            )
-            pool.append(_Worker(proc, mine))
-            proc.start()
-            theirs.close()
+        with _held_signals(redeliver=True):
+            old = signal.pthread_sigmask(signal.SIG_BLOCK, _SIGNALS) if mask else None
+            try:
+                for _ in range(count):
+                    mine, theirs = ctx.Pipe()
+                    proc = ctx.Process(
+                        target=_worker, args=(theirs, threads, progress), name="pyroid-worker"
+                    )
+                    pool.append(_Worker(proc, mine))
+                    proc.start()
+                    theirs.close()
+            finally:
+                if old is not None:
+                    signal.pthread_sigmask(signal.SIG_SETMASK, old)
     except BaseException:
         _stop(pool, gently=False)
         raise
-    finally:
-        if old is not None:
-            signal.pthread_sigmask(signal.SIG_SETMASK, old)
     return pool
 
 
@@ -614,8 +621,11 @@ def _held_signals(*, redeliver: bool) -> Iterator[list[int]]:
     def note(signum: int, frame: Any) -> None:
         got.append(signum)
 
-    old = {s: signal.signal(s, note) for s in _SIGNALS}
+    old: dict[signal.Signals, Any] = {}
     try:
+        for s in _SIGNALS:  # old[s] first: a signal raised in between leaves nothing replaced
+            old[s] = signal.getsignal(s)
+            signal.signal(s, note)
         yield got
     finally:
         for s, h in old.items():

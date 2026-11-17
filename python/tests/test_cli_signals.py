@@ -7,6 +7,8 @@ and running the command again finishes the run with the output of an uninterrupt
 
 from __future__ import annotations
 
+import multiprocessing
+import multiprocessing.context
 import os
 import random
 import signal
@@ -14,6 +16,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -249,3 +252,43 @@ def test_a_signal_to_the_whole_group_at_any_point_stops_the_run(
     _, raw = again.communicate(timeout=600)
     assert again.returncode == 0, raw.decode()
     assert _rows(stopped[-1]) == _rows(run_dir / "ref")
+
+
+_SPAWN_START = multiprocessing.context.SpawnProcess.start
+
+
+def test_a_signal_while_the_workers_start_is_acted_on_once_all_have(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The main thread blocks SIGINT and SIGTERM while it starts the workers, but the kernel
+    gives a group's signal to another thread (pyarrow's) and Python then raised it in the main
+    thread anyway, inside ``Process.start``: the child got no start-up data and printed an
+    EOFError. Now the signal is acted on once every worker has started."""
+    import threading
+
+    from pyroid.integrations import _shards
+
+    if threading.current_thread() is not threading.main_thread():
+        pytest.skip("signal handlers run in the main thread")
+    idle = threading.Event()
+    other = threading.Thread(target=idle.wait, daemon=True)
+    other.start()
+    started: list[Any] = []
+
+    def start(self: Any) -> None:
+        _SPAWN_START(self)
+        started.append(self)
+        if len(started) == 1:
+            assert other.ident is not None
+            signal.pthread_kill(other.ident, signal.SIGINT)  # as the kernel can
+            time.sleep(0.2)  # the main thread's next check is in here
+
+    try:
+        with monkeypatch.context() as m:
+            m.setattr(multiprocessing.context.SpawnProcess, "start", start)
+            with pytest.raises(KeyboardInterrupt):
+                _shards._spawn(multiprocessing.get_context("spawn"), 2, None, False)
+    finally:
+        idle.set()
+    assert len(started) == 2
+    assert all(p.exitcode is not None for p in started)  # stopped and joined
