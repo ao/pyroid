@@ -168,6 +168,14 @@ threads), with the same results.
 on `SpecifierSet.contains`, 17× on `filter` over a release list, 21× on parsing markers and 6 to
 7× on requirements.
 
+`pyroid.sqlparse`, on AWS EC2 c7i.4xlarge: 15 to 68× faster than sqlparse 0.6.1 per `format()`
+call, 29 to 134× per `split()` and 12.5 to 16.5× per `parse()`; over 20,000 real SQL documents,
+28×, 44× and 5×.
+
+`pyroid.langdetect`, on AWS EC2 c7i.4xlarge: 35 to 49× faster than langdetect 1.0.9 per call on
+texts of 50 to 12,000 characters, with the same languages and probabilities for the same seed, and
+158 to 246× with `detect_batch` on 8 threads.
+
 The other modules have only been measured in a Docker VM on a Mac or on a shared EC2 machine,
 so treat these as indicative (one thread unless stated):
 
