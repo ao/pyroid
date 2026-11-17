@@ -1044,6 +1044,37 @@ def test_ctrl_c_never_leaves_difflib_half_patched() -> None:
     assert out["restored"], json.dumps(out)
 
 
+@pytestmark_patch
+def test_records_stay_bounded_however_many_matchers_are_made() -> None:
+    # unpatch finds the matchers made under the patch through per-thread weak records that
+    # drop their dead entries as they go: how many there are, and so the cost of a toggle and
+    # its memory, follows the matchers still alive, not how many were ever made.
+    def make(n: int, keep: list[Any]) -> None:
+        for i in range(n):
+            m = difflib.SequenceMatcher(None, "abcd", "bcde")
+            if i < len(keep):
+                keep[i] = m
+
+    ctx = _quiet_patch()
+    try:
+        with integrations.patching("difflib"):
+            _, start = native._sm_records()
+            make(10_000, [])
+            threads = [threading.Thread(target=make, args=(2_500, [])) for _ in range(4)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            _, held = native._sm_records()
+            assert held - start <= 5 * 64, (start, held)
+            alive: list[Any] = [None] * 500
+            make(10_000, alive)
+            _, held = native._sm_records()
+            assert held - start <= 2 * 500 + 5 * 64, (start, held)
+    finally:
+        ctx.__exit__(None, None, None)
+
+
 def _unittest_messages() -> list[str]:
     class Report(unittest.TestCase):
         maxDiff = None

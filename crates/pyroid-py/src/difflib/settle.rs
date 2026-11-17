@@ -392,6 +392,15 @@ pub fn _sm_unpatch(py: Python<'_>) -> PyResult<usize> {
     }
 }
 
+/// `_sm_records()`: how many threads' records there are, and how many matchers they hold
+/// (alive or not). For tests: they stay bounded however many matchers are made.
+#[pyfunction]
+pub fn _sm_records(py: Python<'_>) -> (usize, usize) {
+    let cells: Vec<Shared> = lock(py, &CELLS).clone();
+    let held = cells.iter().map(|cell| lock(py, cell).made.len()).sum();
+    (cells.len(), held)
+}
+
 /// Make every later call run CPython's methods, then settle every recorded matcher that no
 /// call is changing. How many it settled, or the first error (the others are still settled).
 fn switch_off(py: Python<'_>) -> PyResult<usize> {
