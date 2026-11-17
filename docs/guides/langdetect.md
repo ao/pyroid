@@ -62,9 +62,9 @@ with langdetect itself, two runs (of either library) do not give equal probabili
 import pyroid.langdetect as ld
 
 ld.DetectorFactory.seed = 0
-ld.detect_batch(["Das ist gut.", "C'est bon.", ""], errors="none")   # ['de', 'fr', None]
-ld.detect_langs_batch(titles)                                        # one list of Language per text
-ld.detect_batch(table["text"])                                       # an Arrow column -> pyroid.Column
+ld.detect_batch(["Das ist gut.", "C'est bon.", ""], errors="none")  # ['de', 'fr', None]
+ld.detect_langs_batch(titles)  # one list of Language per text
+ld.detect_batch(table["text"])  # an Arrow column -> pyroid.Column
 ```
 
 `detect_batch(texts)` is `[detect(t) for t in texts]` and `detect_langs_batch(texts)` is
@@ -87,7 +87,7 @@ checked between them.
 from pyroid.langdetect import DetectorFactory
 
 factory = DetectorFactory()
-factory.load_profile("/path/to/profiles")          # langdetect's JSON profile files
+factory.load_profile("/path/to/profiles")  # langdetect's JSON profile files
 factory.load_json_profile([json_a, json_b])
 detector = factory.create(alpha=0.3)
 detector.set_prior_map({"en": 0.7, "fr": 0.3})
@@ -184,4 +184,3 @@ Short texts cost the most per character: langdetect's trials converge slowly on 
 sampling steps per short English text, against 300 for 1,500 characters). langdetect's own `detect` under `pyroid.patch("langdetect")` takes
 57 µs on the 1,500-character texts (57×). A fresh interpreter reaches its first detection in
 120 ms with pyroid (import and profile loading) and 231 ms with langdetect.
-

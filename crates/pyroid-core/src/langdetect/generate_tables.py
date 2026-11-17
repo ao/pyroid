@@ -93,8 +93,10 @@ def _vi_tables() -> tuple[list[int], list[int], list[list[int]]]:
     base = [ord(c) for c in NGram.TO_NORMALIZE_VI_CHARS]
     marks = [ord(c) for c in NGram.DMARK_CLASS]
     table = [[ord(c) for c in row] for row in NGram.NORMALIZED_VI_CHARS]
-    assert len(set(base)) == len(base) and len(set(marks)) == len(marks)
-    assert all(len(row) == len(base) for row in table) and len(table) == len(marks)
+    assert len(set(base)) == len(base)
+    assert len(set(marks)) == len(marks)
+    assert all(len(row) == len(base) for row in table)
+    assert len(table) == len(marks)
     # The regex is a plain pair of character classes: check every pair, and a few non-pairs.
     for i, b in enumerate(base):
         for j, m in enumerate(marks):
@@ -105,15 +107,13 @@ def _vi_tables() -> tuple[list[int], list[int], list[list[int]]]:
 
 def _fmt_pairs(name: str, ty: str, items: list[str], per_line: int = 6) -> str:
     lines = [f"pub static {name}: &[{ty}] = &["]
-    for i in range(0, len(items), per_line):
-        lines.append("    " + " ".join(items[i : i + per_line]))
+    lines += ["    " + " ".join(items[i : i + per_line]) for i in range(0, len(items), per_line)]
     lines.append("];\n")
     return "\n".join(lines)
 
 
 def emit(dumps: list[str]) -> None:
     import langdetect
-
     from langdetect.detector import Detector
 
     by_version: dict[str, list[list[int]]] = {}
@@ -152,8 +152,7 @@ def emit(dumps: list[str]) -> None:
         f"/// `NGram.NORMALIZED_VI_CHARS[mark][base]`.\n"
         f"pub static VI_TABLE: [[u32; {len(base)}]; {len(marks)}] = [\n"
     )
-    for row in table:
-        out.append("    [" + ", ".join(f"0x{c:X}" for c in row) + "],\n")
+    out += ["    [" + ", ".join(f"0x{c:X}" for c in row) + "],\n" for row in table]
     out.append("];\n\n")
     # isupper: one table per distinct content.
     names: dict[str, str] = {}
@@ -165,13 +164,10 @@ def emit(dumps: list[str]) -> None:
         name = "UPPER_" + version.replace(".", "_")
         names[key] = name
         out.append(f"/// `str.isupper()` for Unicode {version}, inclusive ranges.\n")
-        out.append(
-            _fmt_pairs(name, "(u32, u32)", [f"(0x{s:X}, 0x{e:X})," for s, e in ranges], 6)
-        )
+        out.append(_fmt_pairs(name, "(u32, u32)", [f"(0x{s:X}, 0x{e:X})," for s, e in ranges], 6))
     out.append("/// The Unicode versions with an `isupper` table, and their table.\n")
     out.append("pub static UPPER_TABLES: &[(&str, &[(u32, u32)])] = &[\n")
-    for version in VERSIONS:
-        out.append(f'    ("{version}", {names[json.dumps(by_version[version])]}),\n')
+    out += [f'    ("{v}", {names[json.dumps(by_version[v])]}),\n' for v in VERSIONS]
     out.append("];\n")
     target = HERE / "tables.rs"
     target.write_text("".join(out))
