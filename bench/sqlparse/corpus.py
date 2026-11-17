@@ -140,7 +140,7 @@ SOURCES = [
         "chinook",
         f"{GH}/lerocha/chinook-database/tar.gz/refs/heads/master",
         "MIT",
-        "Chinook sample database scripts for several engines (DDL and many INSERTs)",
+        "Chinook sample database scripts for several engines (DDL and many INSERT statements)",
         kind="tar",
         members=("ChinookDatabase/DataSources/*.sql",),
     ),

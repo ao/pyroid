@@ -11,7 +11,7 @@ Unicode database, so every table here is read off CPython itself:
   final-sigma rule consults (probed through the rule itself);
 * `re`'s IGNORECASE data: `_sre.unicode_tolower` (the simple lowercase mapping sre compares
   with), `_sre.unicode_iscased`, and `re._casefix._EXTRA_CASES` (the extra equivalences such
-  as `i`/`ı`, `s`/`ſ`).
+  as `i`/U+0131, `s`/U+017F).
 
 The newest Unicode version is emitted in full; each older one as the entries that differ.
 
@@ -96,7 +96,8 @@ def dump(path: str) -> None:
             slower[cp] = sl
     for m in (upper, lower, title):
         assert all(1 <= len(x) <= 3 for x in m.values())
-    assert "Σ".lower() == "σ" and "AΣ".lower() == "aς"
+    assert "\u03a3".lower() == "\u03c3"
+    assert "A\u03a3".lower() == "a\u03c2"
     for lo, hi in FORBIDDEN:
         for m in (upper, lower, title, slower):
             assert not any(lo <= k <= hi for k in m)

@@ -584,7 +584,7 @@ REAL_SQL = [
     "CREATE VIEW v AS SELECT a, b FROM t; DROP VIEW IF EXISTS v CASCADE; TRUNCATE TABLE t RESTART "
     "IDENTITY;",
     'select "Weird ""Name""", \'it\'\'s\', \'a\\\'b\' from "Schema"."Table"',
-    "SELECT caf\xe9, \u0438\u043c\u044f, \u540d\u524d, \u03a9mega FROM donn\xe9es WHERE \u0131d = 1"
+    "SELECT caf\xe9, \u0438\u043c\u044f, \u540d\u524d, \u03a9mega FROM d\xe9tails WHERE \u0131d = 1"
     " AND \u017ftatus = 'ok' AND \u212aey = 2",
     "select\r\n  a,\r\n  b\r\nfrom\tt\x0bwhere\x0cx\xa0=\u30001",
     "CREATE TRIGGER trg AFTER INSERT ON t FOR EACH ROW EXECUTE PROCEDURE f();",

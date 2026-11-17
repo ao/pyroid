@@ -175,7 +175,7 @@ process, best of 7 rounds, load average about 2
 | migration, 120 statements | `split()` | 13,975 | 163.4 | 86× |
 | migration, 120 statements | `parse()` | 44,748 | 2,859.6 | 16× |
 
-Batches of 20,000 one-line SELECTs: `format_batch(docs, reindent=True)` took
+Batches of 20,000 one-line SELECT statements: `format_batch(docs, reindent=True)` took
 38 ms on all 64 cores and 440 ms on one, against 19.0 s for a loop over
 sqlparse (502× and 43×); `split_batch` 14 ms and 71 ms against 4.9 s.
 

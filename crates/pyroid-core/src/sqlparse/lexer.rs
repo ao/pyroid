@@ -501,8 +501,8 @@ mod fast {
         }
     }
 
-    /// Whether `word` matches one of `lits` (ASCII upper case) under IGNORECASE.
-    fn is_one_of(word: &str, lits: &[&str]) -> bool {
+    /// Whether `word` matches one of `literals` (ASCII upper case) under IGNORECASE.
+    fn is_one_of(word: &str, literals: &[&str]) -> bool {
         let mut buf = [0u8; 8];
         let mut n = 0;
         for c in word.chars() {
@@ -513,7 +513,7 @@ mod fast {
             buf[n] = f;
             n += 1;
         }
-        lits.iter().any(|l| l.as_bytes() == &buf[..n])
+        literals.iter().any(|l| l.as_bytes() == &buf[..n])
     }
 
     /// The end of `q(qq|\\q|[^q])*q` (`backslash`: with the middle alternative) when its first
