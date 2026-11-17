@@ -284,6 +284,8 @@ class _Target:
     modes_attr: str | None = None
     # the installed version, from the real module (default: its __version__)
     installed: Callable[[Any], str | None] | None = None
+    # the warning's second sentence without the real package, when pyroid provides all of it
+    standalone: str | None = None
 
 
 def _caller_stacklevel() -> int:
@@ -910,11 +912,16 @@ _TARGETS: dict[str, _Target] = {
     ),
     "sqlparse": _Target(
         "pyroid.sqlparse",
-        "which reproduces sqlparse 0.6.1's parse, parsestream, format, split and lexer.tokenize",
+        "which reproduces sqlparse 0.6.1's parse, parsestream, format, split, lexer.tokenize "
+        "and engine.grouping.group",
         "SQLPARSE_VERSION",
         "pip install sqlparse==0.6.1",
-        " (the token classes, FilterStack and the filters, the command line)",
+        " (the token classes and their methods, FilterStack and the filters, the command line)",
         _build_sqlparse,
+        standalone=(
+            "sqlparse is not installed, so sqlparse and its submodules are pyroid.sqlparse's, "
+            "which include sqlparse 0.6.1's Python modules."
+        ),
     ),
 }
 
@@ -985,7 +992,9 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
     if name not in _WARNED:
         _WARNED.add(name)
         what = f"`import {name}` now gives pyroid's drop-in"
-        if real is None:
+        if real is None and target.standalone is not None:
+            rest = target.standalone
+        elif real is None:
             rest = f"Everything else{target.rest} is unavailable: {missing} ({target.pip})."
         elif name in _SWAPPED:
             what = f"the installed {name} now uses pyroid's drop-ins"

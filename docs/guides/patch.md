@@ -312,7 +312,9 @@ sqlparse's own modules, so Django (which imports `sqlparse` at start-up), django
 other code calling `sqlparse.format(...)` get pyroid's, and sqlparse's own `FilterStack` lexes and
 groups in Rust. pyroid's trees are made of sqlparse's classes, so code that inspects them is
 unchanged. The DoS limits are read from `sqlparse.engine.grouping`. Without sqlparse, `sqlparse`
-and its submodules are pyroid.sqlparse's own modules.
+and its submodules are pyroid.sqlparse's own modules (so `sqlparse.__name__` is
+`"pyroid.sqlparse"`). A function taken from sqlparse before the patch (`from sqlparse import
+format`) keeps sqlparse's, and while patched it no longer pickles by name, as with `"nltk"`.
 
 ## Limitations
 
