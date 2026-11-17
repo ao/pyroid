@@ -376,6 +376,7 @@ def test_interop_with_langdetect_classes() -> None:
     assert d.detect() == "bb"
 
 
+@pytest.mark.thread_unsafe  # langdetect's init_factory publishes _factory before loading it
 def test_default_order_follows_langdetect() -> None:
     ld = pytest.importorskip("langdetect")
     pl.init_factory()
