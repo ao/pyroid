@@ -345,7 +345,13 @@ def test_a_failed_run_leaves_nothing_behind(
         for extra in ([], ["--no-dedup"], ["--tmp-dir", str(tmp)]):
             argv = ["clean", str(src), str(tmp_path / out), *common, *extra]
             assert main(argv) == 1
-            assert "No such file or directory" in capsys.readouterr().err
+            # One line naming the model (the OS's words differ: "[Errno 2] No such file or
+            # directory" here, "[WinError 3] The system cannot find the path specified" on
+            # Windows), and the note naming the input.
+            first, note = capsys.readouterr().err.splitlines()
+            assert first.startswith("pyroid clean: ")
+            assert "lid.bin" in first
+            assert note == f"  (while processing {src})"
             assert sorted(p.name for p in tmp_path.iterdir()) == ["in.parquet", "scratch"], argv
             assert list(tmp.iterdir()) == []
     # a directory OUT of another run keeps all it had, run.json included
