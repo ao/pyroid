@@ -26,7 +26,7 @@ use pyroid_core::langdetect::detect::{self, Failure, Outcome, Params, SumMode};
 use pyroid_core::langdetect::mt::{self, EntropyKeys, Random, SeededState};
 use pyroid_core::langdetect::profiles::{Builder, Frozen, Key, OutOfRange};
 use pyroid_core::langdetect::{self as core, text};
-use pyroid_core::par;
+use pyroid_core::par::{self, PoolError};
 
 use crate::arrow::{self, ArrowStrings, Chunk, Column, ColumnType, StrType, build_error};
 use crate::batch::BatchError;
@@ -1024,10 +1024,12 @@ fn detect_many<'py>(
         let t0 = Instant::now();
         let results = py
             .detach(|| {
-                par::map(docs.len(), threads, |i| {
-                    let src = docs[i].source()?;
+                par_docs(docs.len(), threads, |i| {
+                    let Some(src) = docs[i].source() else {
+                        return Ok::<_, PoolError>(None); // not a str
+                    };
                     let mut rng = batch_rng(&bseed, i);
-                    Some(run_source(&src, &ctx, &mut rng, &mut || true))
+                    Ok(Some(run_source(&src, &ctx, &mut rng, &mut || true)))
                 })
             })
             .map_err(|e| BatchError::from(e).into_pyerr(py))?;
@@ -1058,6 +1060,34 @@ fn detect_many<'py>(
         list.into_any()
     };
     Ok((res, -1, OK))
+}
+
+/// `f(0..len)` in order on the shared pool. A detection takes 30 µs to a few ms, so tasks are
+/// a share of the documents per thread rather than the pool's 64-document minimum (which would
+/// leave most threads idle on a few hundred long texts). At most `max_tasks(threads)` tasks.
+fn par_docs<R, E, F>(len: usize, threads: par::Threads, f: F) -> Result<Vec<R>, E>
+where
+    R: Send,
+    E: Send + From<PoolError>,
+    F: Fn(usize) -> Result<R, E> + Sync + Send,
+{
+    let max = par::max_tasks(threads)?;
+    if max <= 1 || len <= 1 {
+        return (0..len).map(f).collect();
+    }
+    let per = len.div_ceil(max).max(1);
+    let ranges: Vec<std::ops::Range<usize>> = (0..len)
+        .step_by(per)
+        .map(|a| a..(a + per).min(len))
+        .collect();
+    let parts = par::map_tasks(&ranges, threads, |r| {
+        r.clone().map(&f).collect::<Result<Vec<R>, E>>()
+    })?;
+    let mut out = Vec::with_capacity(len);
+    for part in parts {
+        out.extend(part?);
+    }
+    Ok(out)
 }
 
 fn next_chunk(chunk: usize, took: Duration, done: usize) -> usize {
@@ -1164,7 +1194,7 @@ fn many_arrow<'py>(
             let t0 = Instant::now();
             let results = py
                 .detach(|| {
-                    par::try_map(end - start, threads, |i| match chunk.get(start + i) {
+                    par_docs(end - start, threads, |i| match chunk.get(start + i) {
                         None => Ok(None),
                         Some(Err(err)) => Err(BatchError::BadUtf8 {
                             chunk: c,
