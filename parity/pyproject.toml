@@ -118,6 +118,8 @@ timeout = "600"
 [tool.ruff]
 line-length = 110
 target-version = "py312"
+# Upstream test suites copied unchanged (data/langdetect-1.0.9/tests).
+extend-exclude = ["data"]
 
 [tool.ruff.lint]
 extend-select = ["I", "B", "UP", "PERF", "PT", "RUF"]
