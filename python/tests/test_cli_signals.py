@@ -212,6 +212,9 @@ def test_a_signal_to_the_whole_group_at_any_point_stops_the_run(
     main process's SIGTERM while it dropped its file then waited for a next file that never came,
     and the pool joined it. Tries land at random points of the run: starting workers, reading,
     writing, the MinHash stages, finishing.
+
+    A signal that lands as the run ends, after its command has finished, ends the process by its
+    default action (or comes too late to matter): the output is then complete.
     """
     ref_s = float((run_dir / "ref_seconds").read_text())
     rng = random.Random(f"group-{sig.name}")
@@ -237,14 +240,18 @@ def test_a_signal_to_the_whole_group_at_any_point_stops_the_run(
             proc.communicate()
             pytest.fail(f"try {k}: still running 30 s after {sig.name} to the group")
         err = raw.decode()
-        assert proc.returncode == 128 + sig, (k, err)
-        assert "Traceback" not in err, (k, err)
-        assert "Exception ignored" not in err, (k, err)
         deadline = time.monotonic() + 10
         while _group_alive(proc.pid) and time.monotonic() < deadline:
             time.sleep(0.05)
         assert not _group_alive(proc.pid), f"try {k}: a process of the run outlived it"
         assert _leftovers(out) == [], k
+        if proc.returncode in (0, -sig):  # the run had finished
+            assert err == "", (k, proc.returncode, err)
+            assert _rows(out) == _rows(run_dir / "ref"), k
+            continue
+        assert proc.returncode == 128 + sig, (k, proc.returncode, err)
+        word = "terminated" if sig == signal.SIGTERM else "interrupted"
+        assert err == f"pyroid clean: {word}\n", (k, err)
         stopped.append(out)
     if not stopped:
         pytest.skip("every run finished before its signal")

@@ -67,7 +67,9 @@ run within a second or two: the main process stops its workers, each worker drop
 on (its temporary outputs are removed), and the command prints `pyroid clean: interrupted` (or
 `terminated`) and exits with status 130 (or 143). This holds for Ctrl-C in a terminal too, which
 reaches the workers as well as the main process. A worker that has not stopped after 10 seconds is
-killed. A worker whose main process was killed with SIGKILL stops by itself.
+killed. A worker whose main process was killed with SIGKILL stops by itself. A signal that comes
+after the command has finished, as the process exits, ends it at once: the shell still sees 130
+(or 143), and the outputs are complete.
 
 Each record holds a fingerprint of the command, its options, the input list (names relative to
 IN, and sizes) and the pyroid version, plus the files the unit wrote, as paths relative to OUT. A

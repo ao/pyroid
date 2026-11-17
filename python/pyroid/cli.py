@@ -2653,6 +2653,8 @@ def main(argv: list[str] | None = None) -> int:
         code = int(a.body(a))
         _stdout("")  # here, not at exit, so a closed pipe (| head -1) is handled below
         ok = True
+        if program:
+            _default_signals()  # a signal before this line stops the run (exit 128 + signal)
         return code
     except _shards.Terminated:
         # Finished files and their records are kept: the same command resumes the run.
@@ -2676,7 +2678,10 @@ def main(argv: list[str] | None = None) -> int:
         _shards.say(f"pyroid {a.command}: {msg}{notes}\n")
         return 1
     finally:
-        if term is not None:
+        if program:
+            with contextlib.suppress(KeyboardInterrupt):  # a second signal: exiting anyway
+                _default_signals()
+        elif term is not None:
             signal.signal(signal.SIGTERM, term)
         if not ok:
             for started in _STARTED:
@@ -2718,6 +2723,18 @@ def _on_sigterm() -> Any:
         raise _shards.Terminated
 
     return signal.signal(signal.SIGTERM, handler)
+
+
+def _default_signals() -> None:
+    """From here on, SIGINT and SIGTERM end the process at once (their default action).
+
+    The ``pyroid`` program sets this when its command has finished: nothing is left to stop or
+    tidy. Python's handlers would raise KeyboardInterrupt in the code that runs at shutdown (an
+    atexit handler prints its traceback), or miss the signal, until CPython resets them to the
+    default late in its shutdown anyway.
+    """
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
 
 def _stdout(text: str) -> None:

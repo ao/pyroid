@@ -437,6 +437,30 @@ def test_a_closed_pipe_on_windows_is_einval_not_epipe(
             _shards.say("x\n")
 
 
+def test_the_program_leaves_late_signals_their_default_action(tmp_path: Path) -> None:
+    """Once its command has finished, ``pyroid`` lets SIGINT and SIGTERM end the process.
+
+    A signal during interpreter shutdown was a KeyboardInterrupt in an atexit handler (and its
+    traceback), a lost signal (exit 0), or, after CPython reset the handlers, death by the signal:
+    now it is always the last. main() called with arguments, from Python code, leaves the
+    handlers as they were.
+    """
+    src = _write(_table(["a"]), tmp_path / "in.parquet")
+    code = (
+        "import signal, sys\n"
+        "from pyroid.cli import main\n"
+        f"sys.argv = ['pyroid', 'translit', {str(src)!r}, {str(tmp_path / 'o')!r}]\n"
+        "rc = main()\n"
+        "dfl = [signal.getsignal(s) is signal.SIG_DFL for s in (signal.SIGINT, signal.SIGTERM)]\n"
+        "print(rc, *dfl)\n"
+    )
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+    assert (r.returncode, r.stdout, r.stderr) == (0, "0 True True\n", "")
+    before = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
+    assert main(["translit", str(src), str(tmp_path / "o2")]) == 0
+    assert (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)) == before
+
+
 @pytest.mark.skipif(not hasattr(signal, "pthread_kill"), reason="POSIX signals")
 def test_a_signal_raised_where_python_cannot_raise_it_comes_again(
     run_python: Callable[..., subprocess.CompletedProcess[str]],
