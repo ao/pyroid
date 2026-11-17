@@ -8,9 +8,9 @@ release-please.
 
 ## 1.1.0
 
-pyroid 1.1 adds six modules, for data formats and developer tools. `pyroid.patch()` and
-`pyroid run -p` take their names too (`difflib` is patched in place), and `pyroid.json_repair`
-now reproduces json_repair 0.64.9.
+pyroid 1.1 adds eight modules, for data formats, developer tools and language detection.
+`pyroid.patch()` and `pyroid run -p` take their names too (`difflib` is patched in place), and
+`pyroid.json_repair` now reproduces json_repair 0.64.9.
 
 ### Modules
 
@@ -22,13 +22,17 @@ now reproduces json_repair 0.64.9.
 | [`pyroid.dateutil.parser`](guides/dateutil.md) | python-dateutil's `parse` and `isoparse` (2.8.2 to 4.0.0) |
 | [`pyroid.difflib`](guides/difflib.md) | the standard library's `difflib` of CPython 3.11 to 3.15: `SequenceMatcher`, `get_close_matches`, `unified_diff`, `context_diff`, `ndiff`, `Differ` and `HtmlDiff` |
 | [`pyroid.packaging`](guides/packaging.md) | packaging 26.3's versions, specifiers, markers, requirements and name helpers (PEP 440, PEP 508) |
+| [`pyroid.sqlparse`](guides/sqlparse.md) | sqlparse 0.6.1 (`format`, `split`, `parse`, with sqlparse's own token classes) |
+| [`pyroid.langdetect`](guides/langdetect.md) | langdetect 1.0.9, with the same results for the same seed |
 
 ### Features
 
 - **dateutil:** pyroid.dateutil.parser, a drop-in for python-dateutil's parse and isoparse ([#22](https://github.com/ao/pyroid/issues/22))
 - **difflib:** pyroid.difflib, the standard library's difflib in Rust ([#23](https://github.com/ao/pyroid/issues/23))
 - **jmespath:** pyroid.jmespath, a drop-in for jmespath 1.1.0 ([#20](https://github.com/ao/pyroid/issues/20))
+- **langdetect:** pyroid.langdetect, a drop-in for langdetect 1.0.9 ([#29](https://github.com/ao/pyroid/issues/29))
 - **packaging:** pyroid.packaging, a drop-in for packaging 26.3 ([#24](https://github.com/ao/pyroid/issues/24))
+- **sqlparse:** pyroid.sqlparse, a drop-in for sqlparse 0.6.1 ([#27](https://github.com/ao/pyroid/issues/27))
 - **yaml:** add pyroid.yaml, a drop-in for PyYAML's safe loader and dumper ([#17](https://github.com/ao/pyroid/issues/17))
 - match json-repair 0.64.9, warn when an installed incumbent is another release, watch upstream weekly ([#15](https://github.com/ao/pyroid/issues/15))
 - pyroid.tabulate, a drop-in for tabulate 0.10.0 ([#19](https://github.com/ao/pyroid/issues/19))
@@ -38,6 +42,7 @@ now reproduces json_repair 0.64.9.
 - containers changed by other threads during a call, Ctrl-C in minhash_dedup, pyroid run without pyarrow ([#21](https://github.com/ao/pyroid/issues/21))
 - Ctrl-C and SIGTERM, sentence dedup, datasketch pickles, memory and the rest of the outside evaluation ([#18](https://github.com/ao/pyroid/issues/18))
 - the outside evaluation's findings (json_repair Arrow output, patched anyascii, first-run friction, fastText speed) ([#16](https://github.com/ao/pyroid/issues/16))
+- Windows open errors in pyroid.warc, Ctrl-C during patch()/unpatch(), stale bench lock ([#28](https://github.com/ao/pyroid/issues/28))
 
 ### Performance Improvements
 
