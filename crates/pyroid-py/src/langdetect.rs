@@ -110,6 +110,53 @@ impl Source<'_> {
     }
 }
 
+/// A document's text as the detection reads it: all of a str, or only its first code points
+/// (`whole: false`), so a long text with lone surrogates or other non-ASCII characters is not
+/// converted past the part `append` can reach.
+struct Text<'a> {
+    src: Source<'a>,
+    whole: bool,
+}
+
+impl Text<'_> {
+    /// The first `n` code points and whether that is the whole text; `None` if this holds
+    /// fewer than `n` and is not the whole text.
+    fn prefix(&self, n: usize) -> Option<(Cow<'_, [u32]>, bool)> {
+        let (cps, complete) = self.src.prefix(n);
+        if complete && !self.whole {
+            return (cps.len() >= n).then_some((cps, false));
+        }
+        Some((cps, complete))
+    }
+}
+
+/// `str.isascii()`: constant time in CPython.
+fn is_ascii(s: &Bound<'_, PyString>) -> PyResult<bool> {
+    s.call_method0(intern!(s.py(), "isascii"))?.extract()
+}
+
+/// The first `n` code points of `s` as a new str, or `None` if `s` is not longer.
+fn head<'py>(s: &Bound<'py, PyString>, n: usize) -> PyResult<Option<Bound<'py, PyString>>> {
+    let len = s.len()?;
+    if len <= n || is_ascii(s)? {
+        return Ok(None); // the whole str (an ASCII str's UTF-8 is free)
+    }
+    let end = isize::try_from(n).unwrap_or(isize::MAX);
+    let part = s.get_item(pyo3::types::PySlice::new(s.py(), 0, end, 1))?;
+    Ok(Some(part.cast_into::<PyString>()?))
+}
+
+/// The first `n` code points of `s` (all of them if `s` is not longer), and whether that is
+/// all of `s`. Reads only what it returns (plus constant work for ASCII).
+fn prefix_cps(s: &Bound<'_, PyString>, n: usize) -> PyResult<(Vec<u32>, bool)> {
+    if let Some(part) = head(s, n)? {
+        return Ok((code_points(&part)?, false));
+    }
+    let src = source(s)?;
+    let (cps, complete) = src.prefix(n);
+    Ok((cps.into_owned(), complete))
+}
+
 /// All code points of a str whose UTF-8 cannot be taken (lone surrogates).
 fn surrogate_code_points(s: &Bound<'_, PyString>) -> PyResult<Vec<u32>> {
     let py = s.py();
@@ -149,10 +196,9 @@ fn to_py_str<'py>(py: Python<'py>, cps: &[u32]) -> PyResult<Bound<'py, PyString>
 
 /// `Detector.append(text)`'s addition to `Detector.text`, for an int `max_text_length`.
 fn appended(text: &Bound<'_, PyString>, max_len: usize) -> PyResult<Vec<u32>> {
-    let src = source(text)?;
     let mut take = text::first_prefix(max_len);
     loop {
-        let (prefix, complete) = src.prefix(take);
+        let (prefix, complete) = prefix_cps(text, take)?;
         if let Some(out) = text::append_prefix(&prefix, complete, max_len) {
             return Ok(out);
         }
@@ -760,8 +806,7 @@ fn detect_block<'py>(
             false
         }
     };
-    let (cleaned, result) =
-        core::detect_block(&cps, clean, &map, upper, &p, &mut rng, &mut tick);
+    let (cleaned, result) = core::detect_block(&cps, clean, &map, upper, &p, &mut rng, &mut tick);
     if let Some(e) = pending {
         return Err(e);
     }
@@ -828,18 +873,36 @@ fn run_doc(
     })
 }
 
-/// [`run_doc`] on a whole document, from its UTF-8 or code points.
-fn run_source(
-    src: &Source<'_>,
+/// [`run_doc`] on a document, from its UTF-8 or code points; `None` if `text` holds only a
+/// prefix of the document and the detection needs more of it (the generator is then unused).
+fn run_text(
+    text: &Text<'_>,
     ctx: &Ctx<'_>,
     rng: &mut Random,
     tick: &mut dyn FnMut() -> bool,
-) -> DocResult {
+) -> Option<DocResult> {
     let mut take = text::first_prefix(core::MAX_TEXT_LENGTH);
     loop {
-        let (prefix, complete) = src.prefix(take);
+        let (prefix, complete) = text.prefix(take)?;
         if let Some(r) = run_doc(&prefix, complete, ctx, rng, tick) {
-            return r;
+            return Some(r);
+        }
+        take = take.saturating_mul(2);
+    }
+}
+
+/// [`run_doc`] on a str, reading only as much of it as the detection needs.
+fn run_str(
+    s: &Bound<'_, PyString>,
+    ctx: &Ctx<'_>,
+    rng: &mut Random,
+    tick: &mut dyn FnMut() -> bool,
+) -> PyResult<DocResult> {
+    let mut take = text::first_prefix(core::MAX_TEXT_LENGTH);
+    loop {
+        let (prefix, complete) = prefix_cps(s, take)?;
+        if let Some(r) = run_doc(&prefix, complete, ctx, rng, tick) {
+            return Ok(r);
         }
         take = take.saturating_mul(2);
     }
@@ -867,7 +930,6 @@ fn detect_one<'py>(
     let seed = seed_from(seed)?;
     let p = self::params(&params, None, langlist.len(), sum_mode);
     let mut rng = rng_for(py, &seed)?;
-    let src = source(text)?;
     let mut pending: Option<PyErr> = None;
     let mut tick = || match py.check_signals() {
         Ok(()) => true,
@@ -882,7 +944,7 @@ fn detect_one<'py>(
         params: &p,
         threshold,
     };
-    let r = run_source(&src, &ctx, &mut rng, &mut tick);
+    let r = run_str(text, &ctx, &mut rng, &mut tick)?;
     if let Some(e) = pending {
         return Err(e);
     }
@@ -923,31 +985,50 @@ fn doc_value<'py>(
 const CHUNK_TIME: Duration = Duration::from_millis(50);
 
 /// A document of a list or tuple, readable from pool threads.
-enum Doc {
+enum DocText {
     Utf8(PyBackedStr),
     Cps(Vec<u32>),
     /// Not a str: the Python side raises langdetect's error for it.
     NotStr,
 }
 
+struct Doc {
+    text: DocText,
+    /// The str, when `text` holds only its first code points (a long non-ASCII text): the
+    /// rare detection that needs more reads it on the calling thread.
+    full: Option<Py<PyString>>,
+}
+
 impl Doc {
-    fn source(&self) -> Option<Source<'_>> {
-        match self {
-            Doc::Utf8(s) => Some(Source::Utf8(s)),
-            Doc::Cps(v) => Some(Source::Cps(Cow::Borrowed(v))),
-            Doc::NotStr => None,
-        }
+    fn text(&self) -> Option<Text<'_>> {
+        let src = match &self.text {
+            DocText::Utf8(s) => Source::Utf8(s),
+            DocText::Cps(v) => Source::Cps(Cow::Borrowed(v)),
+            DocText::NotStr => return None,
+        };
+        Some(Text {
+            src,
+            whole: self.full.is_none(),
+        })
     }
 }
 
 fn doc(item: &Bound<'_, PyAny>) -> PyResult<Doc> {
     let Ok(s) = item.cast::<PyString>() else {
-        return Ok(Doc::NotStr);
+        return Ok(Doc {
+            text: DocText::NotStr,
+            full: None,
+        });
     };
-    Ok(match PyBackedStr::try_from(s.clone()) {
-        Ok(b) => Doc::Utf8(b),
-        Err(_) => Doc::Cps(surrogate_code_points(s)?),
-    })
+    let (part, full) = match head(s, text::first_prefix(core::MAX_TEXT_LENGTH))? {
+        Some(part) => (part, Some(s.clone().unbind())),
+        None => (s.clone(), None),
+    };
+    let text = match PyBackedStr::try_from(part.clone()) {
+        Ok(b) => DocText::Utf8(b),
+        Err(_) => DocText::Cps(surrogate_code_points(&part)?),
+    };
+    Ok(Doc { text, full })
 }
 
 /// Per-document generators for a batch.
@@ -1030,15 +1111,36 @@ fn detect_many<'py>(
         let results = py
             .detach(|| {
                 par_docs(docs.len(), threads, |i| {
-                    let Some(src) = docs[i].source() else {
+                    let Some(text) = docs[i].text() else {
                         return Ok::<_, PoolError>(None); // not a str
                     };
                     let mut rng = batch_rng(&bseed, i);
-                    Ok(Some(run_source(&src, &ctx, &mut rng, &mut || true)))
+                    Ok(Some(run_text(&text, &ctx, &mut rng, &mut || true)))
                 })
             })
             .map_err(|e| BatchError::from(e).into_pyerr(py))?;
         for (i, r) in results.into_iter().enumerate() {
+            let r = match (r, &docs[i].full) {
+                // A prefix was not enough: read more of the str here, with the same generator.
+                (Some(None), Some(full)) => {
+                    let mut rng = batch_rng(&bseed, i);
+                    let mut pending: Option<PyErr> = None;
+                    let mut tick = || match py.check_signals() {
+                        Ok(()) => true,
+                        Err(e) => {
+                            pending = Some(e);
+                            false
+                        }
+                    };
+                    let r = run_str(full.bind(py), &ctx, &mut rng, &mut tick)?;
+                    if let Some(e) = pending {
+                        return Err(e);
+                    }
+                    Some(r)
+                }
+                (Some(r), _) => Some(r.unwrap_or(DocResult::Failed(INTERRUPTED))),
+                (None, _) => None,
+            };
             let code = match r {
                 None => 4,
                 Some(DocResult::Failed(c)) => c,
@@ -1209,12 +1311,12 @@ fn many_arrow<'py>(
                         }),
                         Some(Ok(s)) => {
                             let mut rng = batch_rng(&bseed, i);
-                            Ok(Some(run_source(
-                                &Source::Utf8(s),
-                                ctx,
-                                &mut rng,
-                                &mut || true,
-                            )))
+                            let text = Text {
+                                src: Source::Utf8(s),
+                                whole: true,
+                            };
+                            // The whole text is there: run_text always returns a result.
+                            Ok(run_text(&text, ctx, &mut rng, &mut || true))
                         }
                     })
                 })
