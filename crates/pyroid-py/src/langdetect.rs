@@ -728,12 +728,14 @@ fn failure_code(f: Failure) -> u8 {
 
 /// `Detector._detect_block` on `text` (`Detector.text`): `(cleaned text or None, code,
 /// langprob or None)`. Code 0: done; 1: no features (`langprob` stays `None`); 2:
-/// `IndexError`; 3: `ZeroDivisionError` (`langprob` as far as the trials got).
+/// `IndexError`; 3: `ZeroDivisionError` (`langprob` as far as the trials got). `clean=False`
+/// skips `cleaning_text` (the detector's own, overridden one ran first).
 /// What [`detect_block`] returns.
 type Block<'py> = (Option<Bound<'py, PyString>>, u8, Option<Bound<'py, PyList>>);
 
 #[pyfunction]
-#[pyo3(signature = (profiles, text, n_langs, seed, params, prior))]
+#[pyo3(signature = (profiles, text, n_langs, seed, params, prior, clean=true))]
+#[allow(clippy::too_many_arguments)]
 fn detect_block<'py>(
     py: Python<'py>,
     profiles: &Profiles,
@@ -742,6 +744,7 @@ fn detect_block<'py>(
     seed: &Bound<'py, PyAny>,
     params: DetectorParams,
     prior: Option<Vec<f64>>,
+    clean: bool,
 ) -> PyResult<Block<'py>> {
     let (upper, sum_mode) = tables(py)?;
     let map = profiles.snapshot(py);
@@ -757,7 +760,8 @@ fn detect_block<'py>(
             false
         }
     };
-    let (cleaned, result) = core::detect_block(&cps, &map, upper, &p, &mut rng, &mut tick);
+    let (cleaned, result) =
+        core::detect_block(&cps, clean, &map, upper, &p, &mut rng, &mut tick);
     if let Some(e) = pending {
         return Err(e);
     }
@@ -815,7 +819,8 @@ fn run_doc(
     tick: &mut dyn FnMut() -> bool,
 ) -> Option<DocResult> {
     let appended = text::append_prefix(text, complete, core::MAX_TEXT_LENGTH)?;
-    let (_, result) = core::detect_block(&appended, ctx.map, ctx.upper, ctx.params, rng, tick);
+    let (_, result) =
+        core::detect_block(&appended, true, ctx.map, ctx.upper, ctx.params, rng, tick);
     Some(match result {
         Ok(out) => DocResult::Langs(detect::sort_probability(&out.langprob, ctx.threshold)),
         Err(core::Error::NoFeatures) => DocResult::Failed(NO_FEATURES),

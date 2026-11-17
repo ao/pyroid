@@ -37,16 +37,17 @@ pub enum Error {
 }
 
 /// `_detect_block` on a detector's text: the cleaned text (if cleaning changed it) and the
-/// outcome of the trials.
+/// outcome of the trials. `clean: false` skips `cleaning_text` (a subclass's own ran already).
 pub fn detect_block(
     text: &[u32],
+    clean: bool,
     map: &Frozen,
     upper: &Upper,
     params: &Params,
     rng: &mut Random,
     tick: &mut dyn FnMut() -> bool,
 ) -> (Option<Vec<u32>>, Result<Outcome, Error>) {
-    let cleaned = text::clean(text);
+    let cleaned = if clean { text::clean(text) } else { None };
     let Some(ngrams) =
         detect::extract_ngrams_ticked(cleaned.as_deref().unwrap_or(text), map, upper, tick)
     else {
@@ -80,7 +81,7 @@ pub fn detect_text(
     tick: &mut dyn FnMut() -> bool,
 ) -> Result<Vec<f64>, Error> {
     let appended = text::append(text, max_len);
-    detect_block(&appended, map, upper, params, rng, tick)
+    detect_block(&appended, true, map, upper, params, rng, tick)
         .1
         .map(|o| o.langprob)
 }
