@@ -13,6 +13,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -766,3 +768,103 @@ def test_without_sqlparse_blocked_in_sys_modules() -> None:
     assert out[:2] == [["select 1;", "select 2"], True]
     assert "sqlparse and its submodules are pyroid.sqlparse's" in out[2]
     assert out[3] is True
+
+
+# ---------------------------------------------------------------------------
+# Other sqlparse releases installed
+# ---------------------------------------------------------------------------
+
+
+def _stand_in(root: Path, release: str) -> Path:
+    """A copy of the installed sqlparse 0.6.1 under `root` that looks like `release` to pyroid.
+
+    "0.5.0": the token classes have no ``is_newline`` slot (0.5.1 added it), and grouping
+    reads ``is_whitespace`` there instead, as 0.5.0 does. "0.4.4": ``sql`` has no ``Over``
+    class (0.5.0 added it), so pyroid cannot make its trees of these classes. The copy works
+    as sqlparse otherwise; ``root`` goes first on ``sys.path``.
+    """
+    spec = importlib.util.find_spec("sqlparse")
+    assert spec is not None
+    assert spec.origin is not None
+    dst = root / "sqlparse"
+    shutil.copytree(Path(spec.origin).parent, dst, ignore=shutil.ignore_patterns("__pycache__"))
+
+    def edit(rel: str, pattern: str, repl: str) -> None:
+        f = dst / rel
+        text, n = re.subn(pattern, repl, f.read_text())
+        assert n, (rel, pattern)
+        f.write_text(text)
+
+    edit("__init__.py", r"__version__ = (['\"])0\.6\.1\1", f"__version__ = '{release}'")
+    if release == "0.5.0":
+        edit("sql.py", r"\n\s*'is_newline',", "")
+        edit("sql.py", r"\n\s*self\.is_newline = .*", "")
+        edit("engine/grouping.py", r"tk\.is_newline", "tk.is_whitespace")
+    elif release == "0.4.4":
+        edit("sql.py", r"\bOver\b", "_Over")
+        edit("engine/grouping.py", r"\bsql\.Over\b", "sql._Over")
+    info = root / f"sqlparse-{release}.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text(f"Metadata-Version: 2.1\nName: sqlparse\nVersion: {release}\n")
+    return root
+
+
+# What a consumer computes with sqlparse (the trees, formatting, splitting, and sqlparse's own
+# FilterStack with grouping, as django-debug-toolbar's SQL panel runs it), for module `m`.
+_CONSUMER = """
+CASES = SQLS + [
+    "select a -- note\\n, b from t /* x */\\n where c = 1",
+    "CREATE TABLE t (id integer PRIMARY KEY, a text UNIQUE, CONSTRAINT u UNIQUE (a, id))",
+]
+def results(m):
+    from importlib import import_module
+    filters = import_module(m.__name__ + ".filters")
+    engine = import_module(m.__name__ + ".engine")
+    out = {"parse": [], "format": [], "split": [], "stack": [], "newline": set()}
+    for q in CASES:
+        trees = m.parse(q)
+        out["parse"].append([shape(s) for s in trees])
+        for s in trees:
+            out["newline"].update(hasattr(t, "is_newline") for t in s.flatten())
+        out["format"].append(m.format(q, reindent=True, keyword_case="upper"))
+        out["split"].append(m.split(q))
+        stack = engine.FilterStack()
+        stack.enable_grouping()
+        stack.stmtprocess.append(filters.AlignedIndentFilter(char="&nbsp;", n="<br/>"))
+        stack.postprocess.append(filters.SerializerUnicode())
+        out["stack"].append("".join(stack.run(q)))
+    out["newline"] = sorted(out["newline"])
+    return out
+"""
+
+
+@needs_sqlparse
+def test_sqlparse_0_5_0_installed(tmp_path: Path) -> None:
+    # sqlparse 0.5.0 is the oldest release Django 6.1 accepts. Its tokens have no is_newline
+    # slot, which pyroid used to set and read, so every parse() raised AttributeError, patched
+    # or not. pyroid now makes 0.5.0's objects as 0.5.0 does, with 0.6.1's results.
+    want = child(_CONSUMER + "import sqlparse\nprint(json.dumps(results(sqlparse)))")
+    assert want["newline"] == [True]
+    out = child(
+        _CONSUMER
+        + """
+        sys.path.insert(0, sys.argv[1])
+        import sqlparse
+        assert sqlparse.__version__ == "0.5.0" and not hasattr(sqlparse.sql.Token, "is_newline")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            import pyroid.sqlparse as P
+        assert P.sql.Token is sqlparse.sql.Token
+        res = {"pyroid": results(P)}
+        patch_quietly("sqlparse")
+        assert all_pyroid()
+        res["patched"] = results(sqlparse)
+        print(json.dumps(res))
+        """.replace("\n        ", "\n"),
+        args=(str(_stand_in(tmp_path, "0.5.0")),),
+    )
+    for mode in ("pyroid", "patched"):
+        got = out[mode]
+        assert got["newline"] == [False], mode  # objects as sqlparse 0.5.0 makes them
+        for key in ("parse", "format", "split", "stack"):
+            assert got[key] == want[key], (mode, key)

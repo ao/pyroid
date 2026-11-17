@@ -10,7 +10,7 @@
 
 import contextvars
 
-from pyroid.sqlparse import _core, sql
+from pyroid.sqlparse import _backend, _core, sql
 from pyroid.sqlparse import tokens as T
 from pyroid.sqlparse.exceptions import SQLParseError
 from pyroid.sqlparse.utils import imt, recurse
@@ -35,6 +35,15 @@ def _limits():
         return MAX_GROUPING_DEPTH, MAX_GROUPING_TOKENS
     return (getattr(src, "MAX_GROUPING_DEPTH", 100),
             getattr(src, "MAX_GROUPING_TOKENS", 10000))
+
+if _backend.NEWLINE_SLOT:
+    def _is_newline(token):
+        return token.is_newline
+else:
+    # pyroid: sqlparse 0.5.0's tokens have no is_newline (0.5.1 added it as `ttype in
+    # T.Newline`, set when the token is made).
+    def _is_newline(token):
+        return token.ttype in T.Newline
 
 T_NUMERICAL = (T.Number, T.Number.Integer, T.Number.Float)
 T_STRING = (T.String, T.String.Single, T.String.Symbol)
@@ -355,7 +364,7 @@ def group_comments(tlist):
     tidx, token = tlist.token_next_by(t=T.Comment)
     while token:
         eidx, end = tlist.token_not_matching(
-            lambda tk: imt(tk, t=T.Comment) or tk.is_newline, idx=tidx)
+            lambda tk: imt(tk, t=T.Comment) or _is_newline(tk), idx=tidx)
         if end is None:
             # From tidx onward everything is comment/newline: there is no
             # terminator to group against, and every later start would hit

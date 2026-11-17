@@ -9,7 +9,7 @@ use pyo3::types::{PyBool, PyList, PyString};
 use pyroid_core::json_repair::chars as wtf8;
 use pyroid_core::sqlparse::grouping::Limits;
 use pyroid_core::sqlparse::tree::{Class, Fail, Id, ListId, NO_LIST, Node, Str, Tree};
-use pyroid_core::sqlparse::ttype::{self, TT};
+use pyroid_core::sqlparse::ttype::{self, TT, bits};
 use rustc_hash::FxHashMap;
 
 use super::{Lim, limit, not_implemented, py_str, setup, sql_error, tt_of, type_objects};
@@ -33,6 +33,9 @@ struct Reader<'py> {
     src: String,
     remapped: bool,
     initial: Vec<Read>,
+    /// The classes have an `is_newline` slot (else it is read off the token type).
+    newline_slot: bool,
+    types: ttype::Types,
 }
 
 /// The text of a Python str value (`None`: not an exact str, or a surrogate case pyroid
@@ -117,7 +120,6 @@ impl<'py> Reader<'py> {
                 obj.getattr(intern!(py, "is_keyword"))?,
                 obj.getattr(intern!(py, "is_group"))?,
                 obj.getattr(intern!(py, "is_whitespace"))?,
-                obj.getattr(intern!(py, "is_newline"))?,
             ];
             let mut fl = [false; 4];
             for (slot, f) in fl.iter_mut().zip(&flags) {
@@ -126,6 +128,15 @@ impl<'py> Reader<'py> {
                 };
                 *slot = b;
             }
+            fl[3] = if self.newline_slot {
+                let Some(b) = exact_bool(&obj.getattr(intern!(py, "is_newline"))?) else {
+                    return Ok(None);
+                };
+                b
+            } else {
+                // sqlparse 0.5.0's tokens have no is_newline: 0.5.1's `ttype in T.Newline`
+                ttype.is_some_and(|t| self.types.has(t, bits::NEWLINE))
+            };
             let is_list_class = class != Class::Token;
             let Some(value) = self.text(&obj.getattr(intern!(py, "value"))?, !is_list_class)?
             else {
@@ -252,6 +263,8 @@ pub fn _group<'py>(
         src: String::new(),
         remapped: false,
         initial: Vec::new(),
+        newline_slot: s.newline,
+        types: ttype::types(),
     };
     let Some(root) = r.read(stmt)? else {
         return Ok(not_implemented(py));
@@ -372,7 +385,9 @@ fn write_back<'py>(
             obj.setattr(intern!(py, "is_keyword"), b(n.is_keyword))?;
             obj.setattr(intern!(py, "is_group"), b(n.is_group))?;
             obj.setattr(intern!(py, "is_whitespace"), b(n.is_whitespace))?;
-            obj.setattr(intern!(py, "is_newline"), b(n.is_newline))?;
+            if s.newline {
+                obj.setattr(intern!(py, "is_newline"), b(n.is_newline))?;
+            }
             out[i] = Some(obj);
         }
     }

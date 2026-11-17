@@ -79,6 +79,8 @@ def _find() -> tuple[types.ModuleType | None, str | None]:
 REAL, REAL_VERSION = _find()
 #: The lexer singleton and keyword dictionaries are sqlparse's own (it is 0.6.1).
 SHARE_LEXER = REAL is not None and REAL_VERSION == SQLPARSE_VERSION
+#: The token classes have an ``is_newline`` slot (sqlparse 0.5.1 added it; 0.5.0's have none).
+NEWLINE_SLOT = REAL is None or hasattr(REAL.sql.Token, "is_newline")
 
 
 def _stacklevel() -> int:

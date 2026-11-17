@@ -49,6 +49,8 @@ struct Setup {
     pattern: Py<PyType>,
     pause: Py<PyAny>,
     version: UnicodeVersion,
+    /// The token classes have an `is_newline` slot (sqlparse 0.5.0's have none).
+    newline: bool,
 }
 
 static SETUP: OnceLock<Setup> = OnceLock::new();
@@ -133,9 +135,10 @@ fn type_objects(py: Python<'_>) -> Arc<Vec<Option<Py<PyAny>>>> {
         .map_or_else(|| Arc::new(Vec::new()), |t| Arc::clone(&t.by_id))
 }
 
-/// `_configure(classes, token_root, tokentype, process_as_keyword, error, unidata_version)`.
+/// `_configure(classes, token_root, tokentype, process_as_keyword, error, unidata_version,
+/// pause, newline_slot)`.
 #[pyfunction]
-#[pyo3(signature = (classes, root, tokentype, process_as_keyword, error, unidata_version, pause))]
+#[pyo3(signature = (classes, root, tokentype, process_as_keyword, error, unidata_version, pause, newline_slot))]
 #[allow(clippy::too_many_arguments)]
 fn _configure(
     py: Python<'_>,
@@ -146,6 +149,7 @@ fn _configure(
     error: &Bound<'_, PyType>,
     unidata_version: &str,
     pause: &Bound<'_, PyAny>,
+    newline_slot: bool,
 ) -> PyResult<()> {
     if SETUP.get().is_some() {
         return Ok(());
@@ -179,6 +183,7 @@ fn _configure(
         pattern,
         pause: pause.clone().unbind(),
         version,
+        newline: newline_slot,
     });
     for path in BUILTIN_PATHS {
         let mut obj = root.clone();
@@ -643,7 +648,9 @@ fn build<'py>(
         obj.setattr(intern!(py, "is_keyword"), b(n.is_keyword))?;
         obj.setattr(intern!(py, "is_group"), b(n.is_group))?;
         obj.setattr(intern!(py, "is_whitespace"), b(n.is_whitespace))?;
-        obj.setattr(intern!(py, "is_newline"), b(n.is_newline))?;
+        if s.newline {
+            obj.setattr(intern!(py, "is_newline"), b(n.is_newline))?;
+        }
         if n.list != NO_LIST {
             let l = n.list as usize;
             let list = if let Some(x) = &lists[l] {

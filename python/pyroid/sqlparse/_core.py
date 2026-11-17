@@ -25,6 +25,7 @@ native._configure(
     exceptions.SQLParseError,
     unicodedata.unidata_version,
     _pause,
+    _backend.NEWLINE_SLOT,
 )
 
 _WARNED: set[str] = set()
