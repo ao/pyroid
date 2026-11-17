@@ -38,10 +38,10 @@ from typing import Any
 # Run from anywhere: keep bench/ off sys.path (bench/sqlparse would shadow the library).
 sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).resolve().parent]
 
-import sqlparse
-
 import pyroid
 import pyroid.sqlparse as ps
+
+import sqlparse
 
 SELECT_1 = "select id, name from users where id = 42"
 SELECT_4 = (
@@ -161,7 +161,9 @@ def run_calls(rows: list[dict[str, Any]], repeat: int, budget: float) -> None:
                     "speedup": s_best / p_best,
                 }
             )
-            print(f"| {doc_name} | `{call_name}` | {s_best * 1e6:,.1f} | {p_best * 1e6:,.2f} | {s_best / p_best:.1f}x |")
+            print(
+                f"| {doc_name} | `{call_name}` | {s_best * 1e6:,.1f} | {p_best * 1e6:,.2f} | {s_best / p_best:.1f}x |"
+            )
 
 
 def run_batches(rows: list[dict[str, Any]], n: int, repeat: int) -> None:
@@ -241,7 +243,9 @@ def run_corpus(rows: list[dict[str, Any]], path: Path, limit: int) -> None:
                 "speedup": t_s / t_p,
             }
         )
-        print(f"| corpus ({len(docs):,} docs, {total / 1e6:.1f} MB), `{call_name}` | {t_s:.1f} s | {t_p:.2f} s | {t_s / t_p:.0f}x |")
+        print(
+            f"| corpus ({len(docs):,} docs, {total / 1e6:.1f} MB), `{call_name}` | {t_s:.1f} s | {t_p:.2f} s | {t_s / t_p:.0f}x |"
+        )
 
 
 def _quiet(call: Callable[[Any, str], Any], mod: Any, doc: str) -> Any:
@@ -278,8 +282,7 @@ def main() -> None:
     after = machine()
     if args.out:
         args.out.write_text(
-            json.dumps({"machine": before, "loadavg_after": after["loadavg"], "rows": rows}, indent=1)
-            + "\n"
+            json.dumps({"machine": before, "loadavg_after": after["loadavg"], "rows": rows}, indent=1) + "\n"
         )
 
 
