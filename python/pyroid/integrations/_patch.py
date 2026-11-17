@@ -66,6 +66,9 @@ any. The same works by hand, with no ``pyroid run``::
 
 The hook warns once per process tree, not in every worker. It does nothing in an interpreter that
 cannot import pyroid, nor in one started with ``-I`` or ``-E`` (``PYTHONPATH`` is ignored there).
+A name that :func:`patch` refuses with ``ImportError`` (``"fasttext"`` without numpy, ``"sqlparse"``
+with sqlparse older than 0.5.0) is skipped by the hook with a :class:`PatchWarning`, while ``pyroid
+run`` stops with that error.
 
 ``"nltk"`` works differently when NLTK is installed: no shim, but ``sent_tokenize``,
 ``word_tokenize``, ``punkt_model_available``, ``PunktSentenceTokenizer``, ``PunktTokenizer``,
@@ -796,7 +799,7 @@ _SQLPARSE_MODULES = (
 
 
 def _build_sqlparse(impl: types.ModuleType, real: Any, missing: str) -> _Built:
-    from pyroid.sqlparse import _patched
+    from pyroid.sqlparse import _backend, _patched
 
     if real is None:
         mods = {
@@ -804,6 +807,9 @@ def _build_sqlparse(impl: types.ModuleType, real: Any, missing: str) -> _Built:
             for s in _SQLPARSE_MODULES
         }
         return mods, []
+    refusal = _backend.patch_refusal(real)  # pyroid's trees are not made of its classes
+    if refusal is not None:
+        raise ImportError(refusal)
     saved: list[tuple[types.ModuleType, str, Any]] = []
     for mod, names in _SQLPARSE_SWAPS.items():
         module = importlib.import_module(mod)
@@ -1098,7 +1104,9 @@ def patch(*names: str) -> None:
         TypeError: No names were given.
         ValueError: A name is not supported (nothing is patched then).
         ImportError: The pyroid module behind a name cannot be imported (``pyroid.fasttext``
-            and ``pyroid.datasketch`` need numpy).
+            and ``pyroid.datasketch`` need numpy), or the installed package cannot take
+            pyroid's objects (``"nemo_curator"`` needs NeMo Curator; ``"sqlparse"`` needs
+            sqlparse 0.5.0 or later, or none).
 
     Warns:
         PatchWarning: Once per process for each name: what was patched and how to undo it;
@@ -1179,13 +1187,15 @@ def _split(value: str) -> list[str]:
 def _apply(names: Sequence[str], *, lenient: bool) -> list[str]:
     """Patch checked `names`, warning once per process tree; return the names patched.
 
-    ``lenient``: skip (with a PatchWarning) a name whose pyroid module cannot be imported.
+    ``lenient``: skip (with a PatchWarning) a name that cannot be patched (ImportError: its
+    pyroid module cannot be imported, or the installed package cannot take pyroid's objects).
     """
     warned = set(_split(os.environ.get(_WARNED_ENV, "")))
     done: list[str] = []
     for name in names:
         try:
             importlib.import_module(_TARGETS[name].impl)
+            _install(name, warn=name not in warned)
         except ImportError as exc:
             if not lenient:
                 raise
@@ -1193,7 +1203,6 @@ def _apply(names: Sequence[str], *, lenient: bool) -> list[str]:
                 f"pyroid: not patching {name}: {exc}", PatchWarning, stacklevel=_caller_stacklevel()
             )
             continue
-        _install(name, warn=name not in warned)
         done.append(name)
     os.environ[_WARNED_ENV] = ",".join(n for n in SUPPORTED if n in warned or n in done)
     return done

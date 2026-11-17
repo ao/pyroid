@@ -48,13 +48,22 @@ CLASSES = (
 _PYROID_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _pyroids(mod: types.ModuleType) -> bool:
+    """`mod` is pyroid's own module (put in ``sys.modules`` by pyroid.patch())."""
+    return bool(getattr(mod, "__pyroid__", False)) or mod.__name__.startswith("pyroid.")
+
+
+def _has_classes(mod: types.ModuleType) -> bool:
+    """`mod.sql` has every class pyroid builds trees from (sqlparse 0.5.0 and later)."""
+    sql = getattr(mod, "sql", None)
+    return sql is not None and all(isinstance(getattr(sql, n, None), type) for n in CLASSES)
+
+
 def _find() -> tuple[types.ModuleType | None, str | None]:
     """The installed sqlparse, if it can be shared, and its version."""
     current = sys.modules.get("sqlparse", None)
-    if current is not None and (
-        getattr(current, "__pyroid__", False) or current.__name__.startswith("pyroid.")
-    ):
-        return None, None  # pyroid's own module, put there by pyroid.patch()
+    if current is not None and _pyroids(current):
+        return None, None
     if current is None:
         if "sqlparse" in sys.modules:  # sys.modules["sqlparse"] = None blocks it
             return None, None
@@ -70,8 +79,7 @@ def _find() -> tuple[types.ModuleType | None, str | None]:
     except Exception:  # a broken install: pyroid works without it
         return None, None
     version = getattr(mod, "__version__", None)
-    sql = getattr(mod, "sql", None)
-    if sql is None or not all(isinstance(getattr(sql, n, None), type) for n in CLASSES):
+    if not _has_classes(mod):
         return None, version
     return mod, version
 
@@ -101,8 +109,9 @@ def _warn_version() -> None:
         return
     if REAL is None:
         detail = (
-            "it is older than 0.5.0, so pyroid uses its own token classes "
-            "(isinstance checks against sqlparse.sql fail)"
+            "it is older than 0.5.0, so pyroid uses its own copies of the token classes "
+            "(isinstance checks against sqlparse.sql fail on pyroid's trees) and "
+            "pyroid.patch('sqlparse') refuses to patch it"
         )
     else:
         detail = (
@@ -114,6 +123,29 @@ def _warn_version() -> None:
         f"is installed: {detail}. Install sqlparse=={SQLPARSE_VERSION} to compare like for like.",
         RuntimeWarning,
         stacklevel=_stacklevel(),
+    )
+
+
+def patch_refusal(real: types.ModuleType) -> str | None:
+    """Why ``pyroid.patch("sqlparse")`` must leave the sqlparse module `real` alone (or None).
+
+    The patched functions make trees of the classes pyroid.sqlparse uses, so they may only go
+    on the sqlparse whose classes, token types and filters those are.
+    """
+    if real is REAL or _pyroids(real):
+        return None
+    if not _has_classes(real):
+        version = getattr(real, "__version__", None) or "unversioned"
+        return (
+            "patch('sqlparse') needs sqlparse 0.5.0 or later, and the installed sqlparse is "
+            f"{version}: code using it (its filters, isinstance checks and token types) would "
+            "get trees made of pyroid's own token classes, which it does not recognise. Upgrade "
+            f"it with pip install -U 'sqlparse>=0.5.0' (pyroid reproduces {SQLPARSE_VERSION})."
+        )
+    return (
+        "patch('sqlparse') cannot patch this sqlparse module: pyroid.sqlparse was imported "
+        "before it could be, so pyroid's trees are made of other token classes than its own. "
+        "Patch in a new process, before anything imports pyroid.sqlparse."
     )
 
 

@@ -868,3 +868,89 @@ def test_sqlparse_0_5_0_installed(tmp_path: Path) -> None:
         assert got["newline"] == [False], mode  # objects as sqlparse 0.5.0 makes them
         for key in ("parse", "format", "split", "stack"):
             assert got[key] == want[key], (mode, key)
+
+
+@needs_sqlparse
+def test_sqlparse_older_than_0_5_is_not_patched(tmp_path: Path) -> None:
+    # sqlparse 0.4.x: pyroid makes its trees of its own classes, so setting its functions on
+    # sqlparse would hand sqlparse's code (its filters, isinstance checks, token types) trees it
+    # does not recognise: pgcli stopped seeing tables, debug-toolbar lost its layout. patch()
+    # refuses instead, naming the release and the fix; import pyroid.sqlparse still works.
+    out = child(
+        _CONSUMER
+        + """
+        sys.path.insert(0, sys.argv[1])
+        import sqlparse
+        own = current()
+        want = results(sqlparse)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            import pyroid.sqlparse as P
+        import pyroid.integrations as pi
+        errors = []
+        for attempt in (lambda: pi.patch("sqlparse"), lambda: pi.patching("sqlparse").__enter__()):
+            try:
+                attempt()
+            except ImportError as e:
+                errors.append(str(e))
+        stmt = sqlparse.parse("select a from t")[0]
+        print(json.dumps({
+            "errors": errors,
+            "patched": pi.patched(),
+            "untouched": current() == own,
+            "same": results(sqlparse) == want,
+            "isinstance": isinstance(stmt.tokens[2], sqlparse.sql.Identifier),
+            "own_classes": P.sql.Identifier is not sqlparse.sql.Identifier,
+            "pyroid": P.format("select a, b from t", reindent=True),
+            "warnings": [f"{w.category.__name__}: {w.message}" for w in caught],
+        }))
+        """.replace("\n        ", "\n"),
+        args=(str(_stand_in(tmp_path, "0.4.4")),),
+    )
+    message = (
+        "patch('sqlparse') needs sqlparse 0.5.0 or later, and the installed sqlparse is 0.4.4: "
+        "code using it (its filters, isinstance checks and token types) would get trees made of "
+        "pyroid's own token classes, which it does not recognise. Upgrade it with pip install -U "
+        "'sqlparse>=0.5.0' (pyroid reproduces 0.6.1)."
+    )
+    assert out["errors"] == [message, message]
+    assert out["patched"] == []
+    for key in ("untouched", "same", "isinstance", "own_classes"):
+        assert out[key], key
+    assert out["pyroid"] == "select a,\n       b\nfrom t"
+    assert out["warnings"] == [
+        "RuntimeWarning: pyroid.sqlparse reproduces sqlparse 0.6.1, but sqlparse 0.4.4 is "
+        "installed: it is older than 0.5.0, so pyroid uses its own copies of the token classes "
+        "(isinstance checks against sqlparse.sql fail on pyroid's trees) and "
+        "pyroid.patch('sqlparse') refuses to patch it. Install sqlparse==0.6.1 to compare like "
+        "for like."
+    ]
+
+
+@needs_sqlparse
+def test_pyroid_run_and_the_hook_with_sqlparse_older_than_0_5(tmp_path: Path) -> None:
+    # pyroid run stops with patch()'s error (exit 2); the start-up hook, which must not stop a
+    # program, skips the name with a PatchWarning and leaves sqlparse alone.
+    root = _stand_in(tmp_path / "site", "0.4.4")
+    (tmp_path / "x.py").write_text("print('ran')\n")
+    runner = (
+        "import sys; from pyroid.integrations import _patch; sys.exit(_patch.run(sys.argv[1:]))"
+    )
+    proc = run_script(["-c", runner, "-p", "sqlparse", "x.py"], tmp_path, {"PYTHONPATH": str(root)})
+    assert proc.returncode == 2, proc
+    assert proc.stdout == ""
+    # after the RuntimeWarning of import pyroid.sqlparse
+    assert proc.stderr.splitlines()[-1].startswith(
+        "pyroid run: error: cannot patch: patch('sqlparse') needs sqlparse 0.5.0 or later, and "
+        "the installed sqlparse is 0.4.4"
+    ), proc.stderr
+    code = (
+        "import json, sqlparse, pyroid.integrations as pi\n"
+        "from pyroid.sqlparse import _patched\n"
+        "print(json.dumps([pi.patched(), sqlparse.format is _patched.format]))\n"
+    )
+    env = {"PYTHONPATH": os.pathsep.join([_patch.HOOK_DIR, str(root)]), "PYROID_PATCH": "sqlparse"}
+    proc = run_script(["-W", "always::UserWarning", "-c", code], tmp_path, env)
+    assert last_json(proc) == [[], False]
+    skipped = "PatchWarning: pyroid: not patching sqlparse: patch('sqlparse') needs sqlparse 0.5.0"
+    assert skipped in proc.stderr, proc.stderr
