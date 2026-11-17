@@ -48,7 +48,11 @@ starts ([pyroid.patch()](patch.md)); `pyroid.unpatch("difflib")` puts everything
 made or used under the patch keep working after it, also in threads that diff while `unpatch`
 runs: `unpatch` gives them the attributes difflib's own methods read. pyroid keeps track of these
 matchers as they are made, so `unpatch` does not search the heap for them or wait for other
-threads.
+threads. `patch` and `unpatch` each set or put back all of these methods and functions in one
+step, so Ctrl-C does not leave difflib half-patched. On free-threaded Python, changing a class
+while other threads use it can stall for up to a few hundred milliseconds when there are more
+threads than CPUs (for any class, not only difflib's), so patch once at startup rather than
+toggling it in a loop.
 
 ## What is the same
 
