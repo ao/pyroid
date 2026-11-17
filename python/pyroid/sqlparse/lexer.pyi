@@ -30,7 +30,10 @@ class Lexer:
     ) -> Iterator[tuple[_TokenType, str]]: ...
 
 def plain(lex: Any) -> bool:
-    """Whether `lex` is a `Lexer` whose behaviour is only its table (nothing overridden)."""
+    """Whether `lex` is a `Lexer` whose behaviour is only its table.
+
+    Nothing is overridden: not on the instance, in a subclass, or on the class itself.
+    """
 
 def read(text: Any, encoding: str | None) -> Any:
     """`Lexer.get_tokens`'s input handling: the text of a str, bytes or text stream."""

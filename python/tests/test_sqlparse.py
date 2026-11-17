@@ -372,6 +372,113 @@ def test_an_overridden_lexer_runs_python() -> None:
         lexer.Lexer._default_instance = saved
 
 
+LEXED = "select foo, zz from t"
+
+
+def _lexed() -> tuple[Any, ...]:
+    """What each entry point makes of LEXED with keyword_case="upper" (FallbackWarnings off)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        return (
+            P.format(LEXED, keyword_case="upper"),
+            [(t, v) for t, v in lexer.tokenize(LEXED) if v.strip()],
+            [(t.ttype, t.value) for t in P.parse(LEXED)[0].flatten() if t.value.strip()],
+            P.format_batch([LEXED], keyword_case="upper"),
+        )
+
+
+def _zz_is_a_keyword(got: tuple[Any, ...]) -> None:
+    assert got[0] == "SELECT foo, ZZ FROM t"
+    assert (T.Keyword, "zz") in got[1]
+    assert (T.Keyword, "zz") in got[2]
+    assert got[3] == ["SELECT foo, ZZ FROM t"]
+
+
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize("method", ["is_keyword", "get_tokens"])
+def test_a_method_replaced_on_the_lexer_class_runs_python(method: str) -> None:
+    # Set on the class itself (not a subclass or the instance): lexing goes to that code.
+    cls = lexer.Lexer
+    orig = cls.__dict__[method]
+
+    def is_keyword(self: Any, value: str) -> Any:
+        return (T.Keyword, value) if value.upper() == "ZZ" else orig(self, value)
+
+    def get_tokens(self: Any, text: Any, encoding: Any = None) -> Any:
+        for ttype, value in orig(self, text, encoding):
+            yield (T.Keyword, value) if value.upper() == "ZZ" else (ttype, value)
+
+    setattr(cls, method, is_keyword if method == "is_keyword" else get_tokens)
+    try:
+        from pyroid.sqlparse import _core
+
+        _core._WARNED.clear()  # once per process: --iterations reruns this test
+        with pytest.warns(pyroid.FallbackWarning, match="overridden methods"):
+            P.split(LEXED)
+        _zz_is_a_keyword(_lexed())
+        if SAME and lexer.Lexer is S.lexer.Lexer:  # one class for both: sqlparse agrees
+            assert S.format(LEXED, keyword_case="upper") == "SELECT foo, ZZ FROM t"
+    finally:
+        setattr(cls, method, orig)
+    assert _lexed()[0] == "SELECT foo, zz FROM t"
+
+
+@pytest.mark.thread_unsafe
+def test_a_keyword_dict_subclass_is_read_through_its_methods() -> None:
+    class AlwaysZZ(dict):  # type: ignore[type-arg]
+        def __contains__(self, key: object) -> bool:
+            return isinstance(key, str) and key.startswith("ZZ")
+
+        def __getitem__(self, key: object) -> Any:
+            return T.Keyword
+
+    class Plain(dict):  # type: ignore[type-arg]
+        pass
+
+    lex = lexer.Lexer.get_default_instance()
+    try:
+        lex.add_keywords(AlwaysZZ())
+        _zz_is_a_keyword(_lexed())
+        lex.default_initialization()
+        lex.add_keywords(Plain({"ZZ": T.Keyword}))  # dict's own lookups: read natively
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", pyroid.FallbackWarning)
+            _zz_is_a_keyword(_lexed())
+    finally:
+        lex.default_initialization()
+
+
+@pytest.mark.thread_unsafe
+def test_keyword_dict_edits_that_keep_its_size_are_seen() -> None:
+    lex = lexer.Lexer.get_default_instance()
+    up = {"keyword_case": "upper"}
+    d: dict[str, Any] = {"FOO": T.Keyword}
+    big = {f"K{i}": T.Keyword for i in range(300)}
+    try:
+        lex.add_keywords(d)
+        lex.add_keywords(big)
+        assert P.format(LEXED, **up) == "SELECT FOO, zz FROM t"
+        del d["FOO"]
+        d["ZZ"] = T.Keyword
+        assert P.format(LEXED, **up) == "SELECT foo, ZZ FROM t"
+        d.popitem()
+        d["FOO"] = T.Keyword
+        assert P.format(LEXED, **up) == "SELECT FOO, zz FROM t"
+        # many deletes and as many adds, so the dict compacts its entries
+        for i in range(200):
+            del big[f"K{i}"]
+        big.update({f"J{i}": T.Keyword for i in range(199)})
+        big["ZZ"] = T.Keyword
+        assert P.format(LEXED, **up) == "SELECT FOO, ZZ FROM t"
+        # a value replaced in place (not the last key) is seen after the next add_keywords
+        # (documented)
+        d["FOO"] = T.Name
+        lex.add_keywords({})
+        assert P.format(LEXED, **up) == "SELECT foo, ZZ FROM t"
+    finally:
+        lex.default_initialization()
+
+
 # ---------------------------------------------------------------------------
 # group() on statements of Python objects
 # ---------------------------------------------------------------------------

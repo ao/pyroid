@@ -24,12 +24,32 @@ from pyroid.sqlparse import _core
 
 __all__ = ["Lexer", "tokenize"]
 
-_GET_TOKENS = Lexer.get_tokens
+
+def _original(name: str) -> Any:
+    """``Lexer.<name>`` if it is sqlparse 0.6.1's own (or pyroid's copy), else None."""
+    f = getattr(Lexer, name)
+    own = getattr(f, "__qualname__", None) == f"Lexer.{name}" and getattr(
+        f, "__module__", None
+    ) in ("sqlparse.lexer", "pyroid.sqlparse._own_lexer")
+    return f if own else None
+
+
+# The methods the lexing runs: replaced on the class, the Python code runs instead.
+_GET_TOKENS = _original("get_tokens")
+_IS_KEYWORD = _original("is_keyword")
 
 
 def plain(lex: Any) -> bool:
-    """Whether `lex` is a `Lexer` whose behaviour is only its table (nothing overridden)."""
-    return type(lex) is Lexer and len(vars(lex)) == 2
+    """Whether `lex` is a `Lexer` whose behaviour is only its table.
+
+    Nothing is overridden: not on the instance, in a subclass, or on the class itself.
+    """
+    return (
+        type(lex) is Lexer
+        and len(vars(lex)) == 2
+        and Lexer.get_tokens is _GET_TOKENS
+        and Lexer.is_keyword is _IS_KEYWORD
+    )
 
 
 def read(text: Any, encoding: str | None) -> Any:

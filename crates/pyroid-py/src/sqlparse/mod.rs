@@ -223,9 +223,75 @@ struct Snap {
     regex: Py<PyAny>,
     regex_items: Vec<Py<PyAny>>,
     keywords: Py<PyAny>,
-    dicts: Vec<(Py<PyAny>, usize)>,
+    dicts: Vec<Seen>,
     config: Arc<Config>,
     externals: Vec<Py<PyAny>>,
+}
+
+/// A keyword dictionary as the snapshot read it: its size and its last entry. Adding or
+/// deleting keys changes one of them (a new key goes last), replacing a value in place does
+/// not (documented).
+struct Seen {
+    dict: Py<PyAny>,
+    len: usize,
+    /// The `PyDict_Next` position of the last entry, its key and value (held, so their
+    /// addresses are not reused).
+    last: Option<(pyo3::ffi::Py_ssize_t, Py<PyAny>, Py<PyAny>)>,
+}
+
+type DictEntry = (
+    pyo3::ffi::Py_ssize_t,
+    *mut pyo3::ffi::PyObject,
+    *mut pyo3::ffi::PyObject,
+);
+
+/// `PyDict_Next(d, pos)`: the entry at or after `pos` (its position), or `None` past the last.
+/// The caller holds `d`'s critical section; the key and value are borrowed from `d`.
+fn dict_next(d: &Bound<'_, PyAny>, pos: pyo3::ffi::Py_ssize_t) -> Option<DictEntry> {
+    let mut next = pos;
+    let mut key = std::ptr::null_mut();
+    let mut value = std::ptr::null_mut();
+    // SAFETY: `d` is a dict (the callers check), locked against other threads on free-threaded
+    // builds; the out-pointers are valid locals.
+    let found =
+        unsafe { pyo3::ffi::PyDict_Next(d.as_ptr(), &raw mut next, &raw mut key, &raw mut value) }
+            != 0;
+    found.then_some((next - 1, key, value))
+}
+
+/// `d`'s last entry (see [`Seen::last`]). The caller holds `d`'s critical section.
+fn last_entry(d: &Bound<'_, PyDict>) -> Option<(pyo3::ffi::Py_ssize_t, Py<PyAny>, Py<PyAny>)> {
+    let py = d.py();
+    let mut last = None;
+    while let Some(e) = dict_next(d.as_any(), last.map_or(0, |(p, _, _): DictEntry| p + 1)) {
+        last = Some(e);
+    }
+    last.map(|(p, k, v)| {
+        // SAFETY: borrowed from `d`, alive while it is locked; taken as new references.
+        let key = unsafe { Bound::from_borrowed_ptr(py, k) };
+        // SAFETY: as for the key.
+        let value = unsafe { Bound::from_borrowed_ptr(py, v) };
+        (p, key.unbind(), value.unbind())
+    })
+}
+
+/// `d` still has `seen`'s size and last entry.
+fn unchanged(d: &Bound<'_, PyAny>, seen: &Seen) -> PyResult<bool> {
+    if !seen.dict.is(d) || d.len()? != seen.len {
+        return Ok(false);
+    }
+    let Some((at, k0, v0)) = &seen.last else {
+        return Ok(true);
+    };
+    // `d` is the dict the snapshot read (identity checked); the pointers are only compared
+    Ok(pyo3::sync::critical_section::with_critical_section(
+        d,
+        || {
+            dict_next(d, *at).is_some_and(|(p, k, v)| {
+                p == *at && k == k0.as_ptr() && v == v0.as_ptr() && dict_next(d, p + 1).is_none()
+            })
+        },
+    ))
 }
 
 static SNAP: Mutex<Option<Arc<Snap>>> = Mutex::new(None);
@@ -242,7 +308,7 @@ fn snap_valid(
     if !(s.lexer.is(lex) && s.regex.is(regex) && s.keywords.is(kw)) {
         return Ok(false);
     }
-    let (Ok(rl), Ok(kl)) = (regex.cast::<PyList>(), kw.cast::<PyList>()) else {
+    let (Ok(rl), Ok(kl)) = (regex.cast_exact::<PyList>(), kw.cast_exact::<PyList>()) else {
         return Ok(false);
     };
     let rt = rl.to_tuple();
@@ -253,8 +319,8 @@ fn snap_valid(
     if kt.len() != s.dicts.len() {
         return Ok(false);
     }
-    for (d, (sd, n)) in kt.iter().zip(&s.dicts) {
-        if !sd.is(&d) || d.len()? != *n {
+    for (d, seen) in kt.iter().zip(&s.dicts) {
+        if !unchanged(&d, seen)? {
             return Ok(false);
         }
     }
@@ -295,7 +361,8 @@ fn build_snapshot(
 ) -> PyResult<Option<Snap>> {
     let py = lex.py();
     let s = setup()?;
-    let (Ok(rl), Ok(kl)) = (regex.cast::<PyList>(), kw.cast::<PyList>()) else {
+    // A list subclass could iterate differently: Python reads it.
+    let (Ok(rl), Ok(kl)) = (regex.cast_exact::<PyList>(), kw.cast_exact::<PyList>()) else {
         return Ok(None);
     };
     let rt = rl.to_tuple();
@@ -353,11 +420,24 @@ fn build_snapshot(
     let kt = kl.to_tuple();
     let mut dicts_out = Vec::with_capacity(kt.len());
     let mut dicts = Vec::with_capacity(kt.len());
+    let dict_type = py.get_type::<PyDict>();
     for d in kt.iter() {
         let Ok(dict) = d.cast::<PyDict>() else {
             return Ok(None);
         };
-        let copy = dict.copy()?;
+        // `Lexer.is_keyword` reads a dictionary with `in` and `[]`: a subclass with its own
+        // `__contains__` or `__getitem__` is read by Python.
+        if !dict.get_type().is(&dict_type) {
+            for name in [intern!(py, "__contains__"), intern!(py, "__getitem__")] {
+                if !dict.get_type().getattr(name)?.is(dict_type.getattr(name)?) {
+                    return Ok(None);
+                }
+            }
+        }
+        let (copy, last) = pyo3::sync::critical_section::with_critical_section(
+            dict.as_any(),
+            || -> PyResult<_> { Ok((dict.copy()?, last_entry(dict))) },
+        )?;
         let mut words = Vec::with_capacity(copy.len());
         for (k, v) in copy.iter() {
             let Ok(k) = k.cast::<PyString>() else {
@@ -373,7 +453,11 @@ fn build_snapshot(
             }
         }
         dicts_out.push(words);
-        dicts.push((d.clone().unbind(), copy.len()));
+        dicts.push(Seen {
+            dict: d.clone().unbind(),
+            len: copy.len(),
+            last,
+        });
     }
     if !externals.is_empty() && !EXTERNAL_WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
         PyErr::warn(
