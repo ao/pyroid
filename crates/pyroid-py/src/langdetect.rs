@@ -570,17 +570,24 @@ impl Profiles {
     }
 
     /// A store for langdetect's own `word_lang_prob_map` (a dict of str to lists of floats),
-    /// for `pyroid.patch("langdetect")`; `None` if a row holds anything but floats.
+    /// for `pyroid.patch("langdetect")`; `None` if a row holds anything but floats. Keys that
+    /// detection never looks up (not a str, or not 1 to 3 code points) are left out, unless
+    /// `keep_all` (a factory's whole map, from a pickle): then every str key is kept, and a key
+    /// that is not a str gives `None`.
     #[staticmethod]
-    fn _from_map(map: &Bound<'_, PyDict>) -> PyResult<Option<Self>> {
+    #[pyo3(signature = (map, keep_all=false))]
+    fn _from_map(map: &Bound<'_, PyDict>, keep_all: bool) -> PyResult<Option<Self>> {
         let mut builder = Builder::default();
         for item in map.items().iter() {
             let (key, row) = item.extract::<(Bound<'_, PyAny>, Bound<'_, PyAny>)>()?;
             let Ok(key) = key.cast::<PyString>() else {
+                if keep_all {
+                    return Ok(None);
+                }
                 continue; // never looked up
             };
             let cps = code_points(key)?;
-            if !(1..=3).contains(&cps.len()) {
+            if !keep_all && !(1..=3).contains(&cps.len()) {
                 continue;
             }
             let Ok(row) = row.cast_exact::<PyList>() else {
@@ -610,6 +617,74 @@ impl Profiles {
                 foreign_rows: None,
             }),
         }))
+    }
+
+    /// The table as `(bytes, keys)` for pickling: the rows, and the keys that are not str.
+    fn _dump<'py>(&self, py: Python<'py>) -> PyResult<(Bound<'py, PyBytes>, Bound<'py, PyList>)> {
+        let (bytes, foreign) = {
+            let g = lock(py, &self.inner);
+            let foreign: Vec<Py<PyAny>> = g.foreign.iter().map(|o| o.clone_ref(py)).collect();
+            (g.builder.to_bytes(), foreign)
+        };
+        Ok((PyBytes::new(py, &bytes), PyList::new(py, foreign)?))
+    }
+
+    /// The table [`_dump`](Self::_dump) gave.
+    #[staticmethod]
+    fn _load(py: Python<'_>, data: &[u8], foreign: &Bound<'_, PyList>) -> PyResult<Self> {
+        let bad = || PyValueError::new_err("not a pyroid.langdetect profile table");
+        let (builder, n) = Builder::from_bytes(data).ok_or_else(bad)?;
+        if n != foreign.len() {
+            return Err(bad());
+        }
+        let mut objects = Vec::with_capacity(n);
+        let rows = PyDict::new(py);
+        for (id, key) in builder.keys().iter().enumerate() {
+            if let Key::Foreign(f) = key {
+                let obj = foreign.get_item(*f)?;
+                rows.set_item(&obj, id)?;
+                objects.push(obj.unbind());
+            }
+        }
+        Ok(Self {
+            inner: Mutex::new(Inner {
+                builder,
+                frozen: None,
+                foreign: objects,
+                foreign_rows: (n > 0).then(|| rows.unbind()),
+            }),
+        })
+    }
+
+    /// A copy (`copy.copy` / `copy.deepcopy`; the keys that are not str are shared).
+    fn __copy__(&self, py: Python<'_>) -> PyResult<Self> {
+        let (builder, frozen, foreign, rows) = {
+            let g = lock(py, &self.inner);
+            (
+                g.builder.clone(),
+                g.frozen.clone(),
+                g.foreign
+                    .iter()
+                    .map(|o| o.clone_ref(py))
+                    .collect::<Vec<_>>(),
+                g.foreign_rows.as_ref().map(|d| d.clone_ref(py)),
+            )
+        };
+        let foreign_rows = rows
+            .map(|d| d.bind(py).copy().map(Bound::unbind))
+            .transpose()?;
+        Ok(Self {
+            inner: Mutex::new(Inner {
+                builder,
+                frozen,
+                foreign,
+                foreign_rows,
+            }),
+        })
+    }
+
+    fn __deepcopy__(&self, py: Python<'_>, _memo: &Bound<'_, PyAny>) -> PyResult<Self> {
+        self.__copy__(py)
     }
 }
 
