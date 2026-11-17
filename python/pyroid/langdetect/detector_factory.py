@@ -13,6 +13,7 @@ from __future__ import annotations
 import copyreg
 import json
 import os
+import sys
 import threading
 from collections.abc import Mapping
 from os import path
@@ -22,7 +23,8 @@ from pyroid._pyroid import langdetect as _native
 from pyroid.langdetect import _compat
 from pyroid.langdetect import detector as _detector
 from pyroid.langdetect._compat import ErrorCode, LangDetectException, Language
-from pyroid.langdetect.detector import Detector, _params, _seed_arg, _Unsupported, _WordMap
+from pyroid.langdetect.detector import Detector, _seed_arg, _Unsupported, _WordMap
+from pyroid.langdetect.utils import ngram as _ngram
 from pyroid.langdetect.utils.lang_profile import LangProfile
 
 __all__ = [
@@ -265,51 +267,54 @@ _LOAD_PROFILE = _F["load_profile"]
 _CREATE = _F["create"]
 _CREATE_DETECTOR = _F["_create_detector"]
 _MAP_PROPERTY = _F["word_lang_prob_map"]
+_MAX_SEED = _detector._MAX_INT_SEED
 del _F
-_FACTORY_KEYS = frozenset({"_profiles", "_exotic", "langlist", "seed"})
+_DETECTOR = _detector._DETECTOR
+_CUSTOMISED = 6  # detect_checked's code: a check failed
 
 
 def _plain(factory: Any) -> bool:
     """`factory.create()`, ``append`` and ``detect()`` give what one native call gives."""
     try:
-        return _plain_factory(factory)
+        cls = type(factory)
+        d = factory.__dict__
+        return (
+            cls is _FACTORY
+            and cls.create is _CREATE
+            and cls._create_detector is _CREATE_DETECTOR
+            and cls.word_lang_prob_map is _MAP_PROPERTY
+            and Detector is _detector._DETECTOR
+            and d["_exotic"] is None
+            and "create" not in d
+            and "_create_detector" not in d
+            and _detector._class_stock(Detector)
+        )
     except Exception:  # a missing attribute: langdetect's code raises it
         return False
 
 
-def _plain_factory(factory: Any) -> bool:
-    cls = type(factory)
-    return (
-        cls is _FACTORY
-        and cls.create is _CREATE
-        and cls._create_detector is _CREATE_DETECTOR
-        and cls.word_lang_prob_map is _MAP_PROPERTY
-        and Detector is _detector._DETECTOR
-        and factory._exotic is None
-        and factory.__dict__.keys() <= _FACTORY_KEYS
-        and _detector._class_stock(Detector)
-    )
-
-
 def _fast(factory: Any, text: Any, probs: bool) -> Any:
-    """`detect`/`detect_langs` in one native call; raises _Unsupported for the general path."""
-    if not isinstance(text, str) or not _plain(factory):
+    """`detect`/`detect_langs` in one native call; raises _Unsupported for the general path.
+
+    The native call first checks the factory, the classes (``_CHECKS``) and the seed and reads
+    ``Detector``'s constants; when a check fails (code 6) the checks run again in Python, which
+    also accept constants and seeds of other types and a ``CJK_MAP`` changed back.
+    """
+    if not isinstance(text, str):
         raise _Unsupported
-    seed = _seed_arg(factory.seed)
-    params = _params(Detector.ALPHA_DEFAULT, 7, Detector)
-    threshold = Detector.PROB_THRESHOLD
-    if type(threshold) not in (int, float):
-        raise _Unsupported
-    code, value = _native.detect_one(
-        factory._profiles,
-        factory.langlist,
-        text,
-        seed,
-        params,
-        threshold,
-        probs,
-        Detector.UNKNOWN_LANG,
-    )
+    code, value = _native.detect_fast(_CHECKS, _FACTORY, _DETECTOR_ATTRS, factory, text, probs)
+    if code == _CUSTOMISED:
+        if not _plain(factory):
+            raise _Unsupported
+        seed = _seed_arg(factory.seed)
+        profiles, langlist = factory._profiles, factory.langlist
+        params = _detector._class_params(Detector)
+        threshold = Detector.PROB_THRESHOLD
+        if type(threshold) not in (int, float):
+            raise _Unsupported
+        code, value = _native.detect_one(
+            profiles, langlist, text, seed, params, threshold, probs, Detector.UNKNOWN_LANG
+        )
     if code == 0:
         return value
     if code == 1:
@@ -349,3 +354,19 @@ def detect_langs(text: str) -> list[Any]:
     detector = factory.create()
     detector.append(text)
     return detector.get_probabilities()
+
+
+# What one native detect() stands for, checked by the native call itself: DetectorFactory's
+# methods, this module's Detector, and Detector's and NGram's (see `_plain`).
+_CHECKS = _native._Checks(
+    _ngram._items(
+        [
+            (sys.modules[__name__], "Detector", _DETECTOR, _ngram._IS),
+            (DetectorFactory, "create", _CREATE, _ngram._IS),
+            (DetectorFactory, "_create_detector", _CREATE_DETECTOR, _ngram._IS),
+            (DetectorFactory, "word_lang_prob_map", _MAP_PROPERTY, _ngram._IS),
+            *_detector._class_items(),
+        ]
+    )
+)
+_DETECTOR_ATTRS = _ngram._own(_DETECTOR) or _DETECTOR  # where detect_fast reads the constants

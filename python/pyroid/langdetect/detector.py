@@ -152,19 +152,14 @@ def _pattern_stock(p: Any, stock: re.Pattern[str]) -> bool:
 def _append_stock(self: Any) -> bool:
     """``append`` can run in Rust: the patterns and ``NGram.normalize_vi`` are langdetect's."""
     try:
-        return _append_tables(self)
+        url, mail = self.URL_RE, self.MAIL_RE
+        return (
+            (url is _URL_RE or _pattern_stock(url, _URL_RE))
+            and (mail is _MAIL_RE or _pattern_stock(mail, _MAIL_RE))
+            and _APPEND_CHECKS.ok()
+        )
     except Exception:  # a missing attribute: langdetect's code raises it
         return False
-
-
-def _append_tables(self: Any) -> bool:
-    return (
-        _pattern_stock(self.URL_RE, _URL_RE)
-        and _pattern_stock(self.MAIL_RE, _MAIL_RE)
-        and NGram is _NGRAM
-        and NGram.__dict__.get("normalize_vi") is _ngram._VI_FUNC
-        and _ngram._vi_stock(NGram)
-    )
 
 
 def _append_native(self: Any, text: Any) -> bool:
@@ -211,6 +206,20 @@ _BLOCK_METHODS = ("_extract_ngrams", "_init_probability", "_update_lang_prob", "
 def _block_mode(self: Any) -> int:
     """How ``_detect_block`` runs (see `_mode`); an attribute that is missing gives 2."""
     try:
+        if type(self) is _DETECTOR and _BLOCK_CHECKS.ok():  # the class-level checks, natively
+            d = self.__dict__
+            word_map = d["word_lang_prob_map"]
+            random = d.get("_random")
+            if (
+                type(word_map) is _WordMap
+                and word_map._profiles is d["_profiles"]
+                and (random is None or type(random) is _Random)
+                and "_extract_ngrams" not in d
+                and "_init_probability" not in d
+                and "_update_lang_prob" not in d
+                and "_normalize_prob" not in d
+            ):
+                return 0 if _DETECTOR.cleaning_text is _CLEAN and "cleaning_text" not in d else 1
         return _mode(self)
     except Exception:
         return 2  # langdetect's code raises it where langdetect does
@@ -238,7 +247,13 @@ def _mode(self: Any) -> int:
     ):
         return 2
     random = d.get("_random")
-    if (random is not None and type(random) is not _Random) or any(n in d for n in _BLOCK_METHODS):
+    if (
+        (random is not None and type(random) is not _Random)
+        or "_extract_ngrams" in d
+        or "_init_probability" in d
+        or "_update_lang_prob" in d
+        or "_normalize_prob" in d
+    ):
         return 2
     return 0 if cls.cleaning_text is _CLEAN and "cleaning_text" not in d else 1
 
@@ -543,6 +558,45 @@ _UPDATE = _D["_update_lang_prob"]
 _NORMALIZE_PROB = _D["_normalize_prob"]
 _RANDOM_PROPERTY = _D["random"]
 del _D
+# What langdetect's detect/detect_langs reach through the class: read in one call.
+_HOOK_NAMES = (
+    "__init__",
+    "append",
+    "detect",
+    "get_probabilities",
+    "_detect_block",
+    "_sort_probability",
+    "cleaning_text",
+    "_extract_ngrams",
+    "_init_probability",
+    "_update_lang_prob",
+    "_normalize_prob",
+    "random",
+    "URL_RE",
+    "MAIL_RE",
+)
+_HOOKS = operator.attrgetter(*_HOOK_NAMES)
+_STOCK_HOOKS = _HOOKS(Detector)
+# The class constants of a native call.
+_CONSTANTS = operator.attrgetter(
+    "ALPHA_DEFAULT", "ALPHA_WIDTH", "ITERATION_LIMIT", "CONV_THRESHOLD", "BASE_FREQ"
+)
+
+
+def _class_params(cls: Any) -> tuple[Any, ...]:
+    """``_params(cls.ALPHA_DEFAULT, 7, cls)`` (a fresh detector's), langdetect's types first."""
+    alpha, width, limit, conv, base = _CONSTANTS(cls)
+    if (
+        type(alpha) is float
+        and type(width) is float
+        and type(limit) is int
+        and type(conv) is float
+        and type(base) is int
+        and -_MAX_INT_PARAM < limit < _MAX_INT_PARAM
+        and -_MAX_INT_PARAM < base < _MAX_INT_PARAM
+    ):
+        return (alpha, 7, width, limit, conv, base)
+    return _params(alpha, 7, cls)
 
 
 def _class_stock(cls: Any) -> bool:
@@ -552,31 +606,14 @@ def _class_stock(cls: Any) -> bool:
     patterns, ``NGram`` and ``Language``; the class constants are read and passed on.
     """
     try:
-        return _stock(cls)
+        return (
+            _HOOKS(cls) == _STOCK_HOOKS  # functions by identity, patterns by value
+            and NGram is _NGRAM
+            and Language is _compat.Language
+            and _ngram._stock()
+        )
     except Exception:  # a missing attribute: langdetect's code raises it
         return False
-
-
-def _stock(cls: Any) -> bool:
-    return (
-        cls.__init__ is _INIT
-        and cls.append is _APPEND
-        and cls.detect is _DETECT
-        and cls.get_probabilities is _GET_PROBABILITIES
-        and cls._detect_block is _DETECT_BLOCK
-        and cls._sort_probability is _SORT
-        and cls.cleaning_text is _CLEAN
-        and cls._extract_ngrams is _EXTRACT
-        and cls._init_probability is _INIT_PROB
-        and cls._update_lang_prob is _UPDATE
-        and cls._normalize_prob is _NORMALIZE_PROB
-        and cls.random is _RANDOM_PROPERTY
-        and _pattern_stock(cls.URL_RE, _URL_RE)
-        and _pattern_stock(cls.MAIL_RE, _MAIL_RE)
-        and NGram is _NGRAM
-        and Language is _compat.Language
-        and _ngram._stock()
-    )
 
 
 def _block_python_rest(self: Any) -> None:
@@ -612,3 +649,49 @@ def _profiles_from(word_map: Any) -> Any:
     if type(word_map) is not dict:
         return None
     return _native._Profiles._from_map(word_map, keep_all=True)
+
+
+def _class_items() -> list[tuple[Any, str, Any, int]]:
+    """`_class_stock(Detector)`'s checks for a native check list (`_ngram._stock_items`)."""
+    module = sys.modules[__name__]
+    hooks = [
+        (_DETECTOR, n, v, _ngram._EQ if n in ("URL_RE", "MAIL_RE") else _ngram._IS)
+        for n, v in zip(_HOOK_NAMES, _STOCK_HOOKS, strict=True)
+    ]
+    return [
+        *hooks,
+        (module, "NGram", _NGRAM, _ngram._IS),
+        (module, "Language", _compat.Language, _ngram._IS),
+        *_ngram._stock_items(),
+    ]
+
+
+_IS = _ngram._IS
+_MODULE = sys.modules[__name__]
+# `_block_mode`'s class-level checks (for a detector whose class is pyroid's Detector).
+_BLOCK_CHECKS = _native._Checks(
+    _ngram._items(
+        [
+            (_DETECTOR, "_extract_ngrams", _EXTRACT, _IS),
+            (_DETECTOR, "_init_probability", _INIT_PROB, _IS),
+            (_DETECTOR, "_update_lang_prob", _UPDATE, _IS),
+            (_DETECTOR, "_normalize_prob", _NORMALIZE_PROB, _IS),
+            (_DETECTOR, "random", _RANDOM_PROPERTY, _IS),
+            (_MODULE, "NGram", _NGRAM, _IS),
+            *_ngram._stock_items(),
+        ]
+    )
+)
+# `_append_stock`'s checks besides the patterns (which may be a detector's own).
+_APPEND_CHECKS = _native._Checks(
+    _ngram._items(
+        [
+            (_MODULE, "NGram", _NGRAM, _IS),
+            (_NGRAM, "normalize_vi", _ngram._VI_FUNC.__func__, _ngram._FUNC),
+            (_NGRAM, "TO_NORMALIZE_VI_CHARS", _ngram._VI_BASE, _ngram._EQ),
+            (_NGRAM, "DMARK_CLASS", _ngram._VI_MARKS, _ngram._EQ),
+            (_NGRAM, "NORMALIZED_VI_CHARS", _ngram._VI_TABLE, _ngram._EQ),
+            (_NGRAM, "ALPHABET_WITH_DMARK", _ngram._VI_RE, _ngram._EQ),
+        ]
+    )
+)

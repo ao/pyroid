@@ -33,6 +33,7 @@ from pyroid._pyroid import langdetect as _native
 # The detector's private helpers (not in its stub).
 _pd: Any = importlib.import_module("pyroid.langdetect.detector")
 _png: Any = importlib.import_module("pyroid.langdetect.utils.ngram")
+_compat: Any = importlib.import_module("pyroid.langdetect._compat")
 
 #: The langdetect modules the shims stand in for, and the pyroid module each takes names from.
 SHIMMED = {
@@ -158,8 +159,11 @@ _Random = random.Random
 # A global of langdetect's patched modules while the patch is on: this module, for the
 # swapped code to find (it imports it if the global is gone, after an unpatch()).
 _HOOK = "__pyroid_langdetect__"
+_CODE = "__code__"
 # Never equal to a function: what a check compares with when langdetect's own was not found.
 _NOT_FOUND = object()
+_MAX_SEED = _pd._MAX_INT_SEED
+_CUSTOMISED = 6  # detect_checked's code: a check failed
 
 
 def _store(word_map: Any, langlist: Any) -> Any:
@@ -247,12 +251,6 @@ def _twin(fn: Any, code: types.CodeType) -> Any:
     return twin
 
 
-def _language() -> Any:
-    from pyroid.langdetect._compat import Language
-
-    return Language
-
-
 class _Patched:
     """langdetect's classes as one install() found them, and what the checks compare with."""
 
@@ -311,6 +309,72 @@ class _Patched:
         cjk = g.__dict__.get("CJK_MAP")
         self.cjk_map: Any = cjk if type(cjk) is dict and cjk == _png._CJK_MAP else _NOT_FOUND
         self.cjk_size = len(_png._CJK_MAP)
+        self._native_checks()
+
+    def _native_checks(self) -> None:
+        """The checks below as native check lists (`is_plain`, `block_mode`, `append_stock`)."""
+        is_, eq, int_, func, size = _png._IS, _png._EQ, _png._INT, _png._FUNC, _png._LEN
+        g, d, m = self.ngram, self.detector, self.methods
+        dm, nm = self.detector_module, self.ngram_module
+        vi = [
+            (g, "TO_NORMALIZE_VI_CHARS", _png._VI_BASE, eq),
+            (g, "DMARK_CLASS", _png._VI_MARKS, eq),
+            (g, "NORMALIZED_VI_CHARS", _png._VI_TABLE, eq),
+            (g, "ALPHABET_WITH_DMARK", _png._VI_RE, eq),
+        ]
+        ngram = [
+            (dm, "NGram", g, is_),
+            (g, "N_GRAM", 3, int_),
+            (g, "LATIN1_EXCLUDED", _png._LATIN1, eq),
+            (g, "CJK_MAP", self.cjk_map, is_),
+            (g, "CJK_MAP", self.cjk_size, size),
+            (g, "__init__", self.ngram_init, is_),
+            (g, "add_char", self.ngram_add_char, is_),
+            (g, "normalize", self.normalize, func),
+            (g, "normalize_vi", self.normalize_vi, func),
+            *vi,
+            (dm, "unicode_block", self.unicode_block, is_),
+            (nm, "unicode_block", self.unicode_block, is_),
+        ]
+        block = [
+            (d, n, m[n], is_)
+            for n in (
+                "_extract_ngrams",
+                "_init_probability",
+                "_update_lang_prob",
+                "_normalize_prob",
+            )
+        ]
+        items = _png._items
+        self.block_checks = _native._Checks(items([*block, *ngram]))
+        self.append_checks = _native._Checks(
+            items([(dm, "NGram", g, is_), (g, "normalize_vi", self.normalize_vi, func), *vi])
+        )
+        names = ("__init__", "append", "detect", "get_probabilities", "_detect_block")
+        self.plain_checks = _native._Checks(
+            items(
+                [
+                    (self.factory, "create", self.create, is_),
+                    (self.factory, "_create_detector", self.create_detector, is_),
+                    (self.factory_module, "Detector", d, is_),
+                    *[(d, n, m[n], is_) for n in names],
+                    (m["append"], "__code__", _CODES["append"], is_),
+                    (m["_detect_block"], "__code__", _CODES["_detect_block"], is_),
+                    (d, "_sort_probability", m["_sort_probability"], is_),
+                    (d, "cleaning_text", m["cleaning_text"], is_),
+                    *block,
+                    (d, "URL_RE", _pd._URL_RE, eq),
+                    (d, "MAIL_RE", _pd._MAIL_RE, eq),
+                    (dm, "Language", _compat.Language, is_),
+                    (dm, "random", random, is_),
+                    (random, "Random", _Random, is_),
+                    *ngram,
+                ]
+            )
+        )
+
+    # The checks below run before every native call: flat expressions, langdetect's own code
+    # (False, or 2) when an attribute is missing, as langdetect's code then raises it.
 
     def ngram_stock(self) -> bool:
         """Whether langdetect's ``NGram`` (and the ``unicode_block`` it calls) are langdetect's.
@@ -318,121 +382,120 @@ class _Patched:
         ``CJK_MAP`` is compared by identity and size: changing its entries in place is not
         seen.
         """
-        g: Any = self.ngram
-        gd: Any = g.__dict__
-        n = g.N_GRAM
-        cjk: Any = g.CJK_MAP
-        normalize = gd.get("normalize")
-        normalize_vi = gd.get("normalize_vi")
-        return (
-            self.detector_globals.get("NGram") is g
-            and type(n) is int
-            and n == 3
-            and g.LATIN1_EXCLUDED == _png._LATIN1
-            and cjk is self.cjk_map
-            and len(cjk) == self.cjk_size
-            and gd.get("__init__") is self.ngram_init
-            and gd.get("add_char") is self.ngram_add_char
-            and type(normalize) is classmethod
-            and normalize.__func__ is self.normalize
-            and type(normalize_vi) is classmethod
-            and normalize_vi.__func__ is self.normalize_vi
-            and _png._vi_stock(g)
-            and self.unicode_block is not _NOT_FOUND
-            and self.detector_globals.get("unicode_block") is self.unicode_block
-            and self.ngram_globals.get("unicode_block") is self.unicode_block
-        )
+        try:
+            g: Any = self.ngram
+            gd: Any = g.__dict__
+            n = g.N_GRAM
+            cjk: Any = g.CJK_MAP
+            dg: Any = self.detector_globals
+            pattern = g.ALPHABET_WITH_DMARK
+            return (
+                dg["NGram"] is g
+                and type(n) is int
+                and n == 3
+                and g.LATIN1_EXCLUDED == _png._LATIN1
+                and cjk is self.cjk_map
+                and len(cjk) == self.cjk_size
+                and gd["__init__"] is self.ngram_init
+                and gd["add_char"] is self.ngram_add_char
+                and gd["normalize"].__func__ is self.normalize
+                and gd["normalize_vi"].__func__ is self.normalize_vi
+                and g.TO_NORMALIZE_VI_CHARS == _png._VI_BASE
+                and g.DMARK_CLASS == _png._VI_MARKS
+                and g.NORMALIZED_VI_CHARS == _png._VI_TABLE
+                and (pattern is _png._VI_RE or pattern == _png._VI_RE)
+                and self.unicode_block is not _NOT_FOUND
+                and dg["unicode_block"] is self.unicode_block
+                and self.ngram_globals["unicode_block"] is self.unicode_block
+            )
+        except Exception:
+            return False
 
     def append_stock(self, detector: Any) -> bool:
         """``append`` can run in Rust: the patterns and the Vietnamese tables are langdetect's."""
-        g = self.ngram
-        normalize_vi = g.__dict__.get("normalize_vi")
-        return (
-            _pd._pattern_stock(detector.URL_RE, _pd._URL_RE)
-            and _pd._pattern_stock(detector.MAIL_RE, _pd._MAIL_RE)
-            and self.detector_globals.get("NGram") is g
-            and type(normalize_vi) is classmethod
-            and normalize_vi.__func__ is self.normalize_vi
-            and _png._vi_stock(g)
-        )
+        try:
+            url, mail = detector.URL_RE, detector.MAIL_RE
+            return bool(
+                (url is _pd._URL_RE or _pd._pattern_stock(url, _pd._URL_RE))
+                and (mail is _pd._MAIL_RE or _pd._pattern_stock(mail, _pd._MAIL_RE))
+                and self.append_checks.ok()
+            )
+        except Exception:
+            return False
 
     def block_mode(self, detector: Any) -> int:
         """As ``pyroid.langdetect.detector._block_mode``, for langdetect's ``Detector``."""
-        cls = type(detector)
-        d = detector.__dict__
-        m = self.methods
-        if (
-            cls._extract_ngrams is not m["_extract_ngrams"]
-            or cls._init_probability is not m["_init_probability"]
-            or cls._update_lang_prob is not m["_update_lang_prob"]
-            or cls._normalize_prob is not m["_normalize_prob"]
-            or type(d.get("random")) is not _Random
-            or any(n in d for n in _pd._BLOCK_METHODS)
-            or not self.ngram_stock()
-        ):
+        try:
+            cls = type(detector)
+            d = detector.__dict__
+            m = self.methods
+            if cls is self.detector and self.block_checks.ok():  # the class, natively
+                if (
+                    type(d["random"]) is _Random
+                    and "_extract_ngrams" not in d
+                    and "_init_probability" not in d
+                    and "_update_lang_prob" not in d
+                    and "_normalize_prob" not in d
+                ):
+                    clean = cls.cleaning_text is m["cleaning_text"] and "cleaning_text" not in d
+                    return 0 if clean else 1
+                return 2
+            if (
+                cls._extract_ngrams is not m["_extract_ngrams"]
+                or cls._init_probability is not m["_init_probability"]
+                or cls._update_lang_prob is not m["_update_lang_prob"]
+                or cls._normalize_prob is not m["_normalize_prob"]
+                or type(d.get("random")) is not _Random
+                or "_extract_ngrams" in d
+                or "_init_probability" in d
+                or "_update_lang_prob" in d
+                or "_normalize_prob" in d
+                or not self.ngram_stock()
+            ):
+                return 2
+            return 0 if cls.cleaning_text is m["cleaning_text"] and "cleaning_text" not in d else 1
+        except Exception:
             return 2
-        return 0 if cls.cleaning_text is m["cleaning_text"] and "cleaning_text" not in d else 1
 
     def is_plain(self, factory: Any) -> bool:
         """`factory.create()` + ``append`` + ``detect()`` give what one native call gives."""
-        f: Any = self.factory
-        d: Any = self.detector
-        m = self.methods
-        fd = factory.__dict__
-        return (
-            type(factory) is f
-            and "create" not in fd
-            and "_create_detector" not in fd
-            and f.create is self.create
-            and f._create_detector is self.create_detector
-            and self.factory_globals.get("Detector") is d
-            and d.__init__ is m["__init__"]
-            and d.append is m["append"]
-            and d.append.__code__ is _CODES["append"]
-            and d._detect_block is m["_detect_block"]
-            and d._detect_block.__code__ is _CODES["_detect_block"]
-            and d.detect is m["detect"]
-            and d.get_probabilities is m["get_probabilities"]
-            and d._sort_probability is m["_sort_probability"]
-            and d.cleaning_text is m["cleaning_text"]
-            and d._extract_ngrams is m["_extract_ngrams"]
-            and d._init_probability is m["_init_probability"]
-            and d._update_lang_prob is m["_update_lang_prob"]
-            and d._normalize_prob is m["_normalize_prob"]
-            and _pd._pattern_stock(d.URL_RE, _pd._URL_RE)
-            and _pd._pattern_stock(d.MAIL_RE, _pd._MAIL_RE)
-            and self.detector_globals.get("Language") is _language()
-            and self.detector_globals.get("random") is random
-            and random.Random is _Random
-            and self.ngram_stock()
-        )
-
-
-def _guarded(method: Any, default: Any) -> Any:
-    """Wrap the check `method` to give `default` (langdetect's own code) if it raises.
-
-    An attribute is missing then, and langdetect's code raises it where langdetect does.
-    """
-
-    def guarded(*args: Any) -> Any:
         try:
-            return method(*args)
+            f: Any = self.factory
+            d: Any = self.detector
+            m = self.methods
+            fd = factory.__dict__
+            url, mail = d.URL_RE, d.MAIL_RE
+            dg: Any = self.detector_globals
+            return (
+                type(factory) is f
+                and "create" not in fd
+                and "_create_detector" not in fd
+                and f.create is self.create
+                and f._create_detector is self.create_detector
+                and self.factory_globals["Detector"] is d
+                and d.__init__ is m["__init__"]
+                and d.append is m["append"]
+                and d.append.__code__ is _CODES["append"]
+                and d._detect_block is m["_detect_block"]
+                and d._detect_block.__code__ is _CODES["_detect_block"]
+                and d.detect is m["detect"]
+                and d.get_probabilities is m["get_probabilities"]
+                and d._sort_probability is m["_sort_probability"]
+                and d.cleaning_text is m["cleaning_text"]
+                and d._extract_ngrams is m["_extract_ngrams"]
+                and d._init_probability is m["_init_probability"]
+                and d._update_lang_prob is m["_update_lang_prob"]
+                and d._normalize_prob is m["_normalize_prob"]
+                and (url is _pd._URL_RE or _pd._pattern_stock(url, _pd._URL_RE))
+                and (mail is _pd._MAIL_RE or _pd._pattern_stock(mail, _pd._MAIL_RE))
+                and dg["Language"] is _compat.Language
+                and dg["random"] is random
+                and random.Random is _Random
+                and self.ngram_stock()
+            )
         except Exception:
-            return default
+            return False
 
-    guarded.__name__ = guarded.__qualname__ = method.__name__
-    guarded.__doc__ = method.__doc__
-    return guarded
-
-
-for _name, _default in (
-    ("ngram_stock", False),
-    ("append_stock", False),
-    ("block_mode", 2),
-    ("is_plain", False),
-):
-    setattr(_Patched, _name, _guarded(getattr(_Patched, _name), _default))
-del _name, _default
 
 _ACTIVE: _Patched | None = None
 
@@ -473,19 +536,34 @@ def _one_call(text: Any, probs: bool) -> Any:
     module = active.factory_module
     module.init_factory()
     factory = module._factory
-    if not isinstance(text, str) or not active.is_plain(factory):
+    if not isinstance(text, str):
         raise _pd._Unsupported
-    store = _store(factory.word_lang_prob_map, factory.langlist)
+    try:
+        fd = factory.__dict__
+        plain = (
+            type(factory) is active.factory and "create" not in fd and "_create_detector" not in fd
+        )
+        store = _store(factory.word_lang_prob_map, factory.langlist) if plain else None
+    except Exception:  # a missing attribute: langdetect's code raises it
+        store = None
     if store is None:
         raise _pd._Unsupported
     d = active.detector
-    seed = _pd._seed_arg(factory.seed)
-    params = _pd._params(d.ALPHA_DEFAULT, 7, d)
-    if type(d.PROB_THRESHOLD) not in (int, float):
-        raise _pd._Unsupported
-    code, value = _native.detect_one(
-        store, factory.langlist, text, seed, params, d.PROB_THRESHOLD, probs, d.UNKNOWN_LANG
-    )
+    seed = factory.seed
+    if seed is not None and not (type(seed) is int and -_MAX_SEED < seed < _MAX_SEED):
+        seed = _pd._seed_arg(seed)
+    langlist = factory.langlist
+    # The classes' checks run natively first (code 6: one failed), then in Python.
+    code, value = _native.detect_checked(active.plain_checks, d, store, langlist, text, seed, probs)
+    if code == _CUSTOMISED:
+        if not active.is_plain(factory):
+            raise _pd._Unsupported
+        params = _pd._params(d.ALPHA_DEFAULT, 7, d)
+        if type(d.PROB_THRESHOLD) not in (int, float):
+            raise _pd._Unsupported
+        code, value = _native.detect_one(
+            store, langlist, text, seed, params, d.PROB_THRESHOLD, probs, d.UNKNOWN_LANG
+        )
     if code == 0:
         return value
     if code == 1:
@@ -507,7 +585,7 @@ def detect(text: Any) -> Any:
 def detect_langs(text: Any) -> Any:
     """``langdetect.detect_langs`` under the patch: one native call when nothing is customised."""
     try:
-        language = _language()
+        language = _compat.Language
         return [language(lang, p) for lang, p in _one_call(text, True)]
     except _pd._Unsupported:
         pass
@@ -558,8 +636,8 @@ def install() -> Callable[[], None]:
                 setattr(module, _HOOK, sys.modules[__name__])
         for fn, original, code in found:
             if fn.__code__ is not code:
-                active.saved.append((fn, "__code__", original))
-                fn.__code__ = code
+                active.saved.append((fn, _CODE, original))
+                setattr(fn, _CODE, code)  # through setattr: the Ctrl-C tests hook it
     except BaseException:
         undo()
         raise

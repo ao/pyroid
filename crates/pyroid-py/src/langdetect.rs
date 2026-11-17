@@ -150,14 +150,14 @@ fn head<'py>(s: &Bound<'py, PyString>, n: usize) -> PyResult<Option<Bound<'py, P
 /// all of `s`. Reads only what it returns (plus constant work for ASCII).
 fn prefix_cps(s: &Bound<'_, PyString>, n: usize) -> PyResult<(Vec<u32>, bool)> {
     if let Some(part) = head(s, n)? {
-        return Ok((code_points(&part)?, false));
+        return Ok((text_code_points(&part)?, false));
     }
     let src = source(s)?;
     let (cps, complete) = src.prefix(n);
     Ok((cps.into_owned(), complete))
 }
 
-/// All code points of a str whose UTF-8 cannot be taken (lone surrogates).
+/// All code points of a str through its UTF-32 (lone surrogates included).
 fn surrogate_code_points(s: &Bound<'_, PyString>) -> PyResult<Vec<u32>> {
     let py = s.py();
     let b = s.call_method1(intern!(py, "encode"), ("utf-32-le", "surrogatepass"))?;
@@ -167,15 +167,27 @@ fn surrogate_code_points(s: &Bound<'_, PyString>) -> PyResult<Vec<u32>> {
         .collect())
 }
 
+/// A text's source: an ASCII str's UTF-8 (free), else its code points through UTF-32 (one
+/// widening pass, several times cheaper than encoding a non-ASCII str to UTF-8, and lone
+/// surrogates included).
 fn source<'a>(s: &'a Bound<'_, PyString>) -> PyResult<Source<'a>> {
-    match s.to_str() {
-        Ok(t) => Ok(Source::Utf8(t)),
-        Err(_) => Ok(Source::Cps(Cow::Owned(surrogate_code_points(s)?))),
+    if is_ascii(s)? {
+        return Ok(Source::Utf8(s.to_str()?));
     }
+    Ok(Source::Cps(Cow::Owned(surrogate_code_points(s)?)))
 }
 
-fn code_points(s: &Bound<'_, PyString>) -> PyResult<Vec<u32>> {
+/// A text's code points (see [`source`]).
+fn text_code_points(s: &Bound<'_, PyString>) -> PyResult<Vec<u32>> {
     Ok(source(s)?.all().into_owned())
+}
+
+/// A profile key's code points: its UTF-8 (a key's is cached in the str), else UTF-32.
+fn code_points(s: &Bound<'_, PyString>) -> PyResult<Vec<u32>> {
+    match s.to_str() {
+        Ok(t) => Ok(t.chars().map(u32::from).collect()),
+        Err(_) => surrogate_code_points(s),
+    }
 }
 
 /// A Python str from code points (lone surrogates included).
@@ -220,7 +232,7 @@ fn append_text<'py>(
 /// `URL_RE.sub`, `MAIL_RE.sub` and `NGram.normalize_vi` over all of `text`.
 #[pyfunction]
 fn substitute<'py>(py: Python<'py>, text: &Bound<'py, PyString>) -> PyResult<Bound<'py, PyString>> {
-    to_py_str(py, &text::substitute_all(&code_points(text)?))
+    to_py_str(py, &text::substitute_all(&text_code_points(text)?))
 }
 
 /// The first `n` code points of `text`, runs of spaces collapsed as `append` does.
@@ -230,7 +242,7 @@ fn collapse<'py>(
     text: &Bound<'py, PyString>,
     n: usize,
 ) -> PyResult<Bound<'py, PyString>> {
-    to_py_str(py, &text::collapse(&code_points(text)?, n))
+    to_py_str(py, &text::collapse(&text_code_points(text)?, n))
 }
 
 /// `Detector.cleaning_text` on `text`: the new text, or `None` if it stays.
@@ -239,7 +251,7 @@ fn clean_text<'py>(
     py: Python<'py>,
     text: &Bound<'py, PyString>,
 ) -> PyResult<Option<Bound<'py, PyString>>> {
-    text::clean(&code_points(text)?)
+    text::clean(&text_code_points(text)?)
         .map(|v| to_py_str(py, &v))
         .transpose()
 }
@@ -263,7 +275,7 @@ fn normalize_vi<'py>(
     py: Python<'py>,
     text: &Bound<'py, PyString>,
 ) -> PyResult<Bound<'py, PyString>> {
-    to_py_str(py, &text::normalize_vi_all(&code_points(text)?))
+    to_py_str(py, &text::normalize_vi_all(&text_code_points(text)?))
 }
 
 /// The Unicode versions with a built-in `str.isupper` table.
@@ -869,7 +881,7 @@ fn detect_block<'py>(
 ) -> PyResult<Block<'py>> {
     let (upper, sum_mode) = tables(py)?;
     let map = profiles.snapshot(py);
-    let cps = code_points(text)?;
+    let cps = text_code_points(text)?;
     let seed = seed_from(seed)?;
     let p = self::params(&params, prior, n_langs, sum_mode);
     let mut rng = rng_for(py, &seed)?;
@@ -906,7 +918,7 @@ fn extract_ngrams<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let (upper, _) = tables(py)?;
     let map = profiles.snapshot(py);
-    let cps = code_points(text)?;
+    let cps = text_code_points(text)?;
     let words = detect::extract_ngram_words(&cps, &map, upper);
     let items = words
         .iter()
@@ -1000,11 +1012,29 @@ fn detect_one<'py>(
     probs: bool,
     unknown: &Bound<'py, PyAny>,
 ) -> PyResult<(u8, Bound<'py, PyAny>)> {
+    let seed = seed_from(seed)?;
+    run_one(
+        py, profiles, langlist, text, &seed, &params, threshold, probs, unknown,
+    )
+}
+
+/// [`detect_one`] with its seed read.
+#[allow(clippy::too_many_arguments)]
+fn run_one<'py>(
+    py: Python<'py>,
+    profiles: &Profiles,
+    langlist: &Bound<'py, PyList>,
+    text: &Bound<'py, PyString>,
+    seed: &Seed,
+    params: &DetectorParams,
+    threshold: f64,
+    probs: bool,
+    unknown: &Bound<'py, PyAny>,
+) -> PyResult<(u8, Bound<'py, PyAny>)> {
     let (upper, sum_mode) = tables(py)?;
     let map = profiles.snapshot(py);
-    let seed = seed_from(seed)?;
-    let p = self::params(&params, None, langlist.len(), sum_mode);
-    let mut rng = rng_for(py, &seed)?;
+    let p = self::params(params, None, langlist.len(), sum_mode);
+    let mut rng = rng_for(py, seed)?;
     let mut pending: Option<PyErr> = None;
     let mut tick = || match py.check_signals() {
         Ok(()) => true,
@@ -1027,6 +1057,258 @@ fn detect_one<'py>(
         DocResult::Failed(code) => Ok((code, py.None().into_bound(py))),
         DocResult::Langs(langs) => Ok((OK, doc_value(py, langlist, &langs, probs, unknown)?)),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Stock checks
+// ---------------------------------------------------------------------------
+
+/// How a [`Check`] compares an attribute with what it expects.
+const IS: u8 = 0;
+/// The same object, or equal (`==`).
+const EQ: u8 = 1;
+/// An exact int equal to the expected one.
+const INT: u8 = 2;
+/// A bound method (a classmethod read from its class) of the expected function.
+const FUNC: u8 = 3;
+/// A container of the expected length.
+const LEN: u8 = 4;
+/// Added to a mode: the owner is a dict (a class's own `__dict__`, a module's globals), read
+/// with one lookup.
+const DICT: u8 = 8;
+
+/// `detect_checked`'s code when a check fails.
+const CUSTOMISED: u8 = 6;
+
+/// A check as Python gives it: `(owner, attribute name, expected, mode)`.
+type CheckItem = (Py<PyAny>, Py<PyString>, Py<PyAny>, u8);
+
+#[derive(Debug)]
+struct Check {
+    owner: Py<PyAny>,
+    name: Py<PyString>,
+    expected: Py<PyAny>,
+    mode: u8,
+}
+
+fn check_one(py: Python<'_>, c: &Check) -> PyResult<bool> {
+    let owner = c.owner.bind(py);
+    let got = if c.mode & DICT == 0 {
+        owner.getattr(c.name.bind(py))?
+    } else {
+        // A class's own dict or a module's globals: one lookup, as `getattr` finds it there.
+        match owner.cast::<PyDict>()?.get_item(c.name.bind(py))? {
+            Some(v) => v,
+            None => return Ok(false),
+        }
+    };
+    let want = c.expected.bind(py);
+    Ok(match c.mode & !DICT {
+        IS => got.is(want),
+        EQ => got.is(want) || got.eq(want)?,
+        INT => got.is_exact_instance_of::<PyInt>() && got.eq(want)?,
+        FUNC => got.getattr(intern!(py, "__func__"))?.is(want),
+        LEN => got.len()? == want.extract::<usize>()?,
+        _ => false,
+    })
+}
+
+/// Attributes that must hold what langdetect defines for the Rust code to stand for
+/// langdetect's (methods, patterns, `NGram`'s tables, module globals): one native call reads
+/// them all, at C speed, before a detection.
+#[pyclass(module = "pyroid.langdetect", name = "_Checks", frozen)]
+#[derive(Debug)]
+pub struct Checks {
+    items: Vec<Check>,
+}
+
+impl Checks {
+    /// Every check holds; an attribute that is missing or raises fails its check.
+    fn pass(&self, py: Python<'_>) -> bool {
+        self.items.iter().all(|c| check_one(py, c).unwrap_or(false))
+    }
+}
+
+#[pymethods]
+impl Checks {
+    /// From `(owner, attribute name, expected, mode)` tuples (modes: 0 `is`, 1 `is` or `==`,
+    /// 2 an exact int `==`, 3 a bound method's `__func__` `is`, 4 `len() ==`).
+    #[new]
+    fn new(items: Vec<CheckItem>) -> Self {
+        Self {
+            items: items
+                .into_iter()
+                .map(|(owner, name, expected, mode)| Check {
+                    owner,
+                    name,
+                    expected,
+                    mode,
+                })
+                .collect(),
+        }
+    }
+
+    /// Every check holds.
+    fn ok(&self, py: Python<'_>) -> bool {
+        self.pass(py)
+    }
+}
+
+/// A `Detector` class's constants as a native call takes them, if they have langdetect's
+/// types (exact floats and ints): `(params, PROB_THRESHOLD, UNKNOWN_LANG)`.
+/// `owner.name`, or `owner[name]` for a dict (a class's own `__dict__`).
+fn read<'py>(owner: &Bound<'py, PyAny>, name: &Bound<'py, PyString>) -> Option<Bound<'py, PyAny>> {
+    match owner.cast::<PyDict>() {
+        Ok(d) => d.get_item(name).ok().flatten(),
+        Err(_) => owner.getattr(name).ok(),
+    }
+}
+
+/// `cls` is a `Detector` class, or its own `__dict__`.
+fn class_params<'py>(cls: &Bound<'py, PyAny>) -> Option<(DetectorParams, f64, Bound<'py, PyAny>)> {
+    let py = cls.py();
+    let float = |name: &Bound<'py, PyString>| -> Option<f64> {
+        let v = read(cls, name)?;
+        v.cast_exact::<PyFloat>().ok().map(PyFloatMethods::value)
+    };
+    // `-2^53 < v < 2^53`, as the Python side checks ints it passes as floats.
+    let int = |name: &Bound<'py, PyString>| -> Option<f64> {
+        let v = read(cls, name)?;
+        if !v.is_exact_instance_of::<PyInt>() {
+            return None;
+        }
+        let v: i64 = v.extract().ok()?;
+        let fits = (-(1i64 << 53)) < v && v < (1i64 << 53);
+        #[allow(clippy::cast_precision_loss)] // |v| < 2^53: exact
+        let f = v as f64;
+        fits.then_some(f)
+    };
+    let alpha = float(intern!(py, "ALPHA_DEFAULT"))?;
+    let width = float(intern!(py, "ALPHA_WIDTH"))?;
+    let limit = int(intern!(py, "ITERATION_LIMIT"))?;
+    let conv = float(intern!(py, "CONV_THRESHOLD"))?;
+    let base = int(intern!(py, "BASE_FREQ"))?;
+    let threshold = read(cls, intern!(py, "PROB_THRESHOLD"))?;
+    if !(threshold.is_exact_instance_of::<PyFloat>() || threshold.is_exact_instance_of::<PyInt>()) {
+        return None;
+    }
+    let threshold: f64 = threshold.extract().ok()?;
+    let unknown = read(cls, intern!(py, "UNKNOWN_LANG"))?;
+    Some((
+        DetectorParams(alpha, 7, width, limit, conv, base),
+        threshold,
+        unknown,
+    ))
+}
+
+/// [`detect_one`] for the module-level `detect` / `detect_langs`, after `checks` and with the
+/// constants of `cls` (a `Detector` class): code 6, nothing done, if a check fails or a
+/// constant has another type than langdetect's.
+#[pyfunction]
+#[pyo3(signature = (checks, cls, profiles, langlist, text, seed, probs))]
+#[allow(clippy::too_many_arguments)]
+fn detect_checked<'py>(
+    py: Python<'py>,
+    checks: &Checks,
+    cls: &Bound<'py, PyAny>,
+    profiles: &Profiles,
+    langlist: &Bound<'py, PyList>,
+    text: &Bound<'py, PyString>,
+    seed: &Bound<'py, PyAny>,
+    probs: bool,
+) -> PyResult<(u8, Bound<'py, PyAny>)> {
+    if !checks.pass(py) {
+        return Ok((CUSTOMISED, py.None().into_bound(py)));
+    }
+    let Some((params, threshold, unknown)) = class_params(cls) else {
+        return Ok((CUSTOMISED, py.None().into_bound(py)));
+    };
+    detect_one(
+        py, profiles, langlist, text, seed, params, threshold, probs, &unknown,
+    )
+}
+
+/// `pyroid.langdetect.detect` / `detect_langs` on the module's factory in one call: `factory`
+/// is exactly a `factory_cls` with langdetect's instance state (a native table, a list of
+/// languages, no method set on the instance, an int or no seed), `checks` hold, and the
+/// constants come from `detector` (`Detector`'s own dict). Code 6, nothing done, otherwise:
+/// the Python side then decides.
+#[pyfunction]
+#[pyo3(signature = (checks, factory_cls, detector, factory, text, probs))]
+fn detect_fast<'py>(
+    py: Python<'py>,
+    checks: &Checks,
+    factory_cls: &Bound<'py, PyAny>,
+    detector: &Bound<'py, PyAny>,
+    factory: &Bound<'py, PyAny>,
+    text: &Bound<'py, PyString>,
+    probs: bool,
+) -> PyResult<(u8, Bound<'py, PyAny>)> {
+    let customised = (CUSTOMISED, py.None().into_bound(py));
+    if !factory.get_type().is(factory_cls) {
+        return Ok(customised);
+    }
+    let Some(fd) = read(factory, intern!(py, "__dict__")) else {
+        return Ok(customised);
+    };
+    let Ok(fd) = fd.cast_into::<PyDict>() else {
+        return Ok(customised);
+    };
+    let item = |name: &Bound<'py, PyString>| fd.get_item(name).ok().flatten();
+    let exotic = item(intern!(py, "_exotic"));
+    if !exotic.is_some_and(|e| e.is_none())
+        || fd.contains(intern!(py, "create")).unwrap_or(true)
+        || fd.contains(intern!(py, "_create_detector")).unwrap_or(true)
+    {
+        return Ok(customised);
+    }
+    let (Some(profiles), Some(langlist)) = (
+        item(intern!(py, "_profiles")),
+        item(intern!(py, "langlist")),
+    ) else {
+        return Ok(customised);
+    };
+    let (Ok(profiles), Ok(langlist)) = (
+        profiles.cast_into::<Profiles>(),
+        langlist.cast_into_exact::<PyList>(),
+    ) else {
+        return Ok(customised);
+    };
+    let seed = match item(intern!(py, "seed")) {
+        Some(s) => s,
+        None => match read(factory_cls, intern!(py, "seed")) {
+            Some(s) => s,
+            None => return Ok(customised),
+        },
+    };
+    let seed = if seed.is_none() {
+        Seed::Entropy
+    } else if seed.is_exact_instance_of::<PyInt>() {
+        // |seed| < 2^127, as the Python side takes ints natively.
+        match seed.extract::<i128>() {
+            Ok(v) if v != i128::MIN => Seed::Int(v.unsigned_abs()),
+            _ => return Ok(customised),
+        }
+    } else {
+        return Ok(customised);
+    };
+    if !checks.pass(py) {
+        return Ok(customised);
+    }
+    let Some((params, threshold, unknown)) = class_params(detector) else {
+        return Ok(customised);
+    };
+    run_one(
+        py,
+        profiles.get(),
+        &langlist,
+        text,
+        &seed,
+        &params,
+        threshold,
+        probs,
+        &unknown,
+    )
 }
 
 fn doc_value<'py>(
@@ -1099,9 +1381,10 @@ fn doc(item: &Bound<'_, PyAny>) -> PyResult<Doc> {
         Some(part) => (part, Some(s.clone().unbind())),
         None => (s.clone(), None),
     };
-    let text = match PyBackedStr::try_from(part.clone()) {
-        Ok(b) => DocText::Utf8(b),
-        Err(_) => DocText::Cps(surrogate_code_points(&part)?),
+    let text = if is_ascii(&part)? {
+        DocText::Utf8(PyBackedStr::try_from(part)?)
+    } else {
+        DocText::Cps(surrogate_code_points(&part)?)
     };
     Ok(Doc { text, full })
 }
@@ -1480,6 +1763,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.gil_used(false)?;
     m.add_class::<Profiles>()?;
     m.add_class::<SeedState>()?;
+    m.add_class::<Checks>()?;
     m.add_function(wrap_pyfunction!(append_text, &m)?)?;
     m.add_function(wrap_pyfunction!(substitute, &m)?)?;
     m.add_function(wrap_pyfunction!(collapse, &m)?)?;
@@ -1490,6 +1774,8 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(detect_block, &m)?)?;
     m.add_function(wrap_pyfunction!(extract_ngrams, &m)?)?;
     m.add_function(wrap_pyfunction!(detect_one, &m)?)?;
+    m.add_function(wrap_pyfunction!(detect_checked, &m)?)?;
+    m.add_function(wrap_pyfunction!(detect_fast, &m)?)?;
     m.add_function(wrap_pyfunction!(detect_many, &m)?)?;
     m.add_function(wrap_pyfunction!(_draws, &m)?)?;
     m.add("MAX_TEXT_LENGTH", core::MAX_TEXT_LENGTH)?;
