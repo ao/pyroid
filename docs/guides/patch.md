@@ -262,7 +262,9 @@ subprocess: True
 - runs the target in the same process, as `python SCRIPT ARGS` / `python -m MODULE ARGS` would
   (`sys.argv`, `sys.path[0]`, `__name__ == "__main__"`). It exits with the target's exit code: 0
   when it finishes, 2 for a usage error or a missing script, 1 when the module can't be found. An
-  uncaught exception's traceback starts at the target's own first frame, as with `python`.
+  uncaught exception's traceback starts at the target's own first frame, as with `python`. One
+  process runs one target at a time: a second `pyroid.integrations.run(...)` while a target runs,
+  from another thread or from the target, exits with status 2.
 
 `PatchWarning` and `VersionMismatchWarning` are shown once per process tree, not in every worker.
 The hook does nothing in an interpreter that can't import pyroid, nor in one started with `-I` or

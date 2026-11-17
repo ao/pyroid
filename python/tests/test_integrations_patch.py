@@ -984,6 +984,29 @@ def test_run_script(tmp_path: Path) -> None:
     )
 
 
+def test_run_refuses_a_second_target_while_one_runs(tmp_path: Path) -> None:
+    """A target owns the process (sys.argv, sys.path[0]): a second one is refused, not mixed in.
+    Once the first has finished, the next runs."""
+    (tmp_path / "inner.py").write_text("import sys; print('inner', sys.argv[1:])\n")
+    (tmp_path / "outer.py").write_text(
+        "import sys, threading\n"
+        "from pyroid.integrations._patch import run\n"
+        "codes = []\n"
+        "t = threading.Thread(target=lambda: codes.append(run(['inner.py', 'b'])))\n"
+        "t.start(); t.join()\n"
+        "print('outer', codes, run(['inner.py', 'c']), sys.argv[1:])\n"
+    )
+    code = f"{RUN[: RUN.index('sys.exit')]}run(sys.argv[1:]); sys.exit(run(['inner.py', 'd']))"
+    proc = child(code, args=("-p", "ftfy", "outer.py", "a"), cwd=tmp_path, prelude=False)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == "outer [2] 2 ['a']\ninner ['d']\n"
+    refused = (
+        "pyroid run: error: another target is running in this process (pyroid run makes its "
+        "target the program: sys.argv, sys.path[0]); run each in its own process\n"
+    )
+    assert proc.stderr.endswith(refused * 2), proc.stderr
+
+
 def test_run_module(tmp_path: Path) -> None:
     (tmp_path / "probe.py").write_text(PROBE)
     (tmp_path / "pkg").mkdir()
