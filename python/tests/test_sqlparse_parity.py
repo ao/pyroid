@@ -134,14 +134,23 @@ def cls_key(cls: type) -> Any:
     return cls.__qualname__
 
 
+#: CPython's RecursionError message. 3.11 appends the kind of call that hit the limit (" while
+#: calling a Python object", " in comparison"); which call of sqlparse's recursion that is depends
+#: on the kinds of nesting and, for some mixes, on how deep the caller's stack already was.
+_RECURSION = "maximum recursion depth exceeded"
+
+
+def cause_key(cause: BaseException | None) -> Any:
+    if cause is None:
+        return None
+    msg = str(cause)
+    if type(cause) is RecursionError and msg.startswith(_RECURSION):
+        msg = _RECURSION
+    return (type(cause).__qualname__, msg)
+
+
 def exc_key(e: BaseException) -> tuple[Any, ...]:
-    cause = e.__cause__
-    return (
-        "raise",
-        cls_key(type(e)),
-        str(e),
-        None if cause is None else (type(cause).__qualname__, str(cause)),
-    )
+    return ("raise", cls_key(type(e)), str(e), cause_key(e.__cause__))
 
 
 class Node(NamedTuple):
@@ -976,13 +985,24 @@ def test_token_limit_boundary(n: int) -> None:
         (None, None, nested(["paren"] * 150)),
         (None, None, nested(["paren"] * 2000)),  # sqlparse: RecursionError -> SQLParseError
         (None, None, nested(["case", "func"] * 1000)),
+        (None, None, nested(["bracket"] * 2000)),
         (None, 10000, nested(["paren"] * 300)),
         (200, None, nested(["paren"] * 250)),
         (None, None, _flat(12001)),
         (None, None, "SELECT " + ", ".join(["a"] * 1500) + " FROM t"),
         (5, 3, "SELECT a FROM t; SELECT (b) FROM u; SELECT ((c)) FROM v"),
     ],
-    ids=["150", "2000", "case-func-2000", "300", "250-of-200", "flat-12001", "list-1500", "small"],
+    ids=[
+        "150",
+        "2000",
+        "case-func-2000",
+        "bracket-2000",
+        "300",
+        "250-of-200",
+        "flat-12001",
+        "list-1500",
+        "small",
+    ],
 )
 def test_limits_off(depth: Any, tokens: Any, text: str) -> None:
     with limits(depth, tokens):

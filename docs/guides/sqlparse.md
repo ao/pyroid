@@ -128,7 +128,10 @@ call made while another thread re-initialises the lexer may see its table half b
 
 - With the limits disabled, the nesting depth at which `Maximum recursion depth exceeded` is
   raised is close to sqlparse's but not the same (sqlparse's depends on the interpreter's
-  recursion limit and the caller's stack).
+  recursion limit and the caller's stack). The `RecursionError` chained as its `__cause__` always
+  reads `maximum recursion depth exceeded`. On Python 3.11, sqlparse's can end in `while calling
+  a Python object` or `in comparison` instead, depending on the kinds of nesting and the caller's
+  stack.
 - The lexer reads the whole text before the first statement is grouped (sqlparse lexes as the
   splitter asks); results are the same, but Python regex entries of a customised table are all
   called before the first statement comes back, and `parsestream` reads the DoS limits once, when
