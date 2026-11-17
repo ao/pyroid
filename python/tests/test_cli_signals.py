@@ -129,8 +129,14 @@ def run_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return root
 
 
-def _clean(root: Path, out: str, workers: int = 2) -> subprocess.Popen[bytes]:
+def _clean(
+    root: Path, out: str, workers: int = 2, *, ignore_sigint: bool = False
+) -> subprocess.Popen[bytes]:
     cmd = [sys.executable, "-I", "-m", "pyroid", "clean", "parts", out, "--recipe", "fineweb"]
+    if ignore_sigint:  # as a shell starts a background job: exec keeps an ignored signal ignored
+        code = "import os, signal, sys; signal.signal(signal.SIGINT, signal.SIG_IGN); "
+        code += "os.execv(sys.executable, sys.argv[1:])"
+        cmd = [sys.executable, "-I", "-c", code, *cmd]
     cmd += ["--lid-model", str(root / "lid.bin"), "--workers", str(workers), "--threads", "1"]
     env = {k: v for k, v in os.environ.items() if k not in ("PYROID_NUM_THREADS",)}
     return subprocess.Popen(
@@ -259,6 +265,25 @@ def test_a_signal_to_the_whole_group_at_any_point_stops_the_run(
     _, raw = again.communicate(timeout=600)
     assert again.returncode == 0, raw.decode()
     assert _rows(stopped[-1]) == _rows(run_dir / "ref")
+
+
+def test_a_run_that_ignores_sigint_goes_on_through_it(run_dir: Path, tmp_path: Path) -> None:
+    """A shell script's background job starts with SIGINT ignored, and Ctrl-C in its terminal
+    reaches it all the same. The run goes on, its workers too: they stopped, and the run failed
+    with "a worker process exited (exit code 0) while processing ..."."""
+    out = tmp_path / "out"
+    proc = _clean(run_dir, str(out), workers=4, ignore_sigint=True)
+    deadline = time.monotonic() + 60
+    while not (out / ".pyroid" / "run.json").exists() and proc.poll() is None:
+        assert time.monotonic() < deadline, "the run did not start"
+        time.sleep(0.005)
+    for delay in (0.0, 0.1, 0.3, 0.6):  # the workers start, then run their first files
+        time.sleep(delay)
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGINT)
+    _, err = proc.communicate(timeout=600)
+    assert (proc.returncode, err.decode()) == (0, "")
+    assert _rows(out) == _rows(run_dir / "ref")
 
 
 _SPAWN_START = multiprocessing.context.SpawnProcess.start

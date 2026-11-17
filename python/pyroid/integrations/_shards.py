@@ -527,8 +527,8 @@ def _resend(thread: int, signum: int, hook: Any) -> None:
 def _watch_parent() -> None:
     """Stop this worker when its parent dies (killed, crashed): nothing else would.
 
-    The running unit is interrupted as by Ctrl-C (its temporary outputs are removed);
-    a worker waiting for its next unit sees its connection close.
+    The running unit is interrupted as by SIGTERM (its temporary outputs are removed); a
+    worker waiting for its next unit sees its connection close.
     """
     import _thread
     import threading
@@ -539,7 +539,7 @@ def _watch_parent() -> None:
 
     def watch() -> None:
         parent.join()
-        _thread.interrupt_main()
+        _thread.interrupt_main(signal.SIGTERM)  # handled even where SIGINT is ignored
         time.sleep(5.0)
         os._exit(1)
 
@@ -571,18 +571,19 @@ def _portable(e: BaseException) -> tuple[BaseException, str]:
     return e, tb
 
 
-def _worker(conn: Any, threads: int | None, progress: bool) -> None:
+def _worker(conn: Any, threads: int | None, progress: bool, sigint: bool = True) -> None:
     """A worker process: run the units the main process sends, one at a time.
 
     Messages to the main process: ``("progress", rows)``, then ``("done", result)`` or
     ``("error", exception, traceback)`` per unit. The worker stops when the main process closes
     the connection or dies, and at its first SIGINT or SIGTERM (after reporting the interrupted
-    unit). It shares no lock with another process, so it can stop at any point.
+    unit). It shares no lock with another process, so it can stop at any point. With
+    ``sigint`` false (the main process ignores SIGINT) it ignores SIGINT too.
     """
     global _interrupted
     try:
         sys.unraisablehook = redelivering(sys.unraisablehook)
-        signal.signal(signal.SIGINT, _on_signal)
+        signal.signal(signal.SIGINT, _on_signal if sigint else signal.SIG_IGN)
         signal.signal(signal.SIGTERM, _on_signal)
         if hasattr(signal, "pthread_sigmask"):
             # The main process started this one with both blocked; one that came in the meantime
@@ -643,9 +644,13 @@ def _spawn(ctx: Any, count: int, threads: int | None, progress: bool) -> list[_W
     The mask is per thread, and a signal the main thread blocks is taken by another thread
     (pyarrow's, pyroid's), after which Python raises it in the main thread all the same. Raised
     inside ``Process.start``, it left a child without its start-up data (an EOFError traceback).
+
+    The workers ignore SIGINT when this process does, as a background job of a shell script
+    does: Ctrl-C in the terminal stops the script, not the job.
     """
     pool: list[_Worker] = []
     mask = hasattr(signal, "pthread_sigmask")
+    sigint = signal.getsignal(signal.SIGINT) is not signal.SIG_IGN
     try:
         with _held_signals(redeliver=True):
             old = signal.pthread_sigmask(signal.SIG_BLOCK, _SIGNALS) if mask else None
@@ -653,7 +658,9 @@ def _spawn(ctx: Any, count: int, threads: int | None, progress: bool) -> list[_W
                 for _ in range(count):
                     mine, theirs = ctx.Pipe()
                     proc = ctx.Process(
-                        target=_worker, args=(theirs, threads, progress), name="pyroid-worker"
+                        target=_worker,
+                        args=(theirs, threads, progress, sigint),
+                        name="pyroid-worker",
                     )
                     pool.append(_Worker(proc, mine))
                     proc.start()
