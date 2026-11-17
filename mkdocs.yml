@@ -58,6 +58,7 @@ nav:
       - pyroid.json_repair: guides/json_repair.md
       - pyroid.datasketch: guides/datasketch.md
       - pyroid.jieba: guides/jieba.md
+      - pyroid.langdetect: guides/langdetect.md
       - pyroid.trafilatura: guides/trafilatura.md
       - pyroid.nltk: guides/nltk.md
       - pyroid.warc: guides/warc.md
@@ -86,6 +87,7 @@ nav:
       - pyroid.json_repair: reference/json_repair.md
       - pyroid.datasketch: reference/datasketch.md
       - pyroid.jieba: reference/jieba.md
+      - pyroid.langdetect: reference/langdetect.md
       - pyroid.trafilatura: reference/trafilatura.md
       - pyroid.nltk: reference/nltk.md
       - pyroid.warc: reference/warc.md

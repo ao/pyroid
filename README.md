@@ -32,6 +32,7 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 | Language ID and NLP | [`pyroid.fasttext`](https://ataiva.com/open-source/pyroid/docs/guides/fasttext/) | fastText 0.9.2 inference (fasttext, fasttext-wheel, fasttext-predict) |
 | | [`pyroid.nltk`](https://ataiva.com/open-source/pyroid/docs/guides/nltk/) | NLTK 3.10.4's `sent_tokenize` (Punkt), `word_tokenize` and Treebank tokenizers |
 | | [`pyroid.jieba`](https://ataiva.com/open-source/pyroid/docs/guides/jieba/) | jieba 0.42.1 (Chinese word segmentation) |
+| | [`pyroid.langdetect`](https://ataiva.com/open-source/pyroid/docs/guides/langdetect/) | langdetect 1.0.9, with the same results for the same seed |
 | Web and archives | [`pyroid.trafilatura`](https://ataiva.com/open-source/pyroid/docs/guides/trafilatura/) | Trafilatura's text extraction: 2.3.1, or 1.11.0 as datatrove 0.10.1 installs it (with lxml 6.1.3's HTML parser and jusText 3.0.2) |
 | | [`pyroid.warc`](https://ataiva.com/open-source/pyroid/docs/guides/warc/) | warcio 1.8.2's WARC/ARC reader (`ArchiveIterator`), and datatrove 0.10.1's WARC reading (`WarcReader`) |
 | Dedup and similarity | [`pyroid.datasketch`](https://ataiva.com/open-source/pyroid/docs/guides/datasketch/) | datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble |
