@@ -5,8 +5,8 @@
 django-debug-toolbar, database shells and many SQL tools. 0.6.1 is sqlparse's final release.
 The lexer, the statement splitter, the grouping passes and the formatting filters are ported
 line by line, so `format`, `split`, `parse` and `lexer.tokenize` give sqlparse 0.6.1's text,
-statements, token trees and exceptions ([parity](../compatibility.md#sqlparse)), 15 to 60 times
-faster per call.
+statements, token trees and exceptions ([parity](../compatibility.md#sqlparse)), 15 to 160 times
+faster per call on one core ([speed](#speed)).
 
 ```console
 $ pip install pyroid
@@ -150,4 +150,35 @@ changelog for the list.
 
 ## Speed
 
-<!-- filled from bench/sqlparse/sqlparse_bench.py -->
+EC2 c8g.16xlarge devbox (Graviton4, 64 vCPU), shared, indicative: CPython 3.12.16, a release
+build of pyroid (not the PGO-built release wheels), sqlparse 0.6.1, both libraries in one
+process, best of 7 rounds, load average about 2
+([full table](https://github.com/ao/pyroid/blob/main/bench/results/aws-c8g.16xlarge/2026-11-17/sqlparse.md),
+`bench/sqlparse/sqlparse_bench.py`).
+
+| Input | Call | sqlparse (µs) | pyroid (µs) | Speedup |
+|---|---|---:|---:|---:|
+| 1-line SELECT | `format()` | 96 | 6.3 | 15× |
+| 1-line SELECT | `format(reindent=True)` | 375 | 12.8 | 29× |
+| 1-line SELECT | `split()` | 94 | 3.0 | 31× |
+| 1-line SELECT | `parse()` | 300 | 20.0 | 15× |
+| 4-line SELECT | `format()` | 743 | 18.8 | 39× |
+| 4-line SELECT | `format(reindent=True)` | 2,804 | 64.7 | 43× |
+| 4-line SELECT | `split()` | 716 | 11.0 | 65× |
+| 4-line SELECT | `parse()` | 2,271 | 124.2 | 18× |
+| INSERT, 200 rows | `format()` | 15,259 | 186.0 | 82× |
+| INSERT, 200 rows | `format(reindent=True)` | 42,601 | 884.8 | 48× |
+| INSERT, 200 rows | `split()` | 15,346 | 97.3 | 158× |
+| INSERT, 200 rows | `parse()` | 38,729 | 2,127.2 | 18× |
+| migration, 120 statements | `format()` | 14,474 | 331.4 | 44× |
+| migration, 120 statements | `format(reindent=True)` | 56,260 | 1,247.8 | 45× |
+| migration, 120 statements | `split()` | 13,975 | 163.4 | 86× |
+| migration, 120 statements | `parse()` | 44,748 | 2,859.6 | 16× |
+
+Batches of 20,000 one-line SELECTs: `format_batch(docs, reindent=True)` took
+38 ms on all 64 cores and 440 ms on one, against 19.0 s for a loop over
+sqlparse (502× and 43×); `split_batch` 14 ms and 71 ms against 4.9 s.
+
+`parse` gains less than `format` and `split` because it ends by creating sqlparse's Python
+objects (about 190 for the 4-line SELECT), and the cycle collector then has to free them, as it
+does for sqlparse's own trees.

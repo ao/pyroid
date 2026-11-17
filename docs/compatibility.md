@@ -166,6 +166,24 @@ Reference: json_repair 0.64.5. Rule: the same returned string or object, the sam
 
 <small>Source: the parity/ json_repair suite, run on 2026-11-06.</small>
 
+### pyroid.sqlparse {#sqlparse}
+
+Reference: sqlparse 0.6.1. Rule: the same tokens (type identity and value), the same trees (class, ttype identity, value, normalized, the is_* flags, parent links, children), the same text from format and split, and the same exception class, message and __cause__.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| sqlparse 0.6.1's own test suite (540 tests) with pyroid.patch("sqlparse"): CPython 3.12 with sqlparse installed, 3.12 without it (sqlparse is pyroid.sqlparse), 3.14t; the same 537 passed, 2 xfailed, 1 xpassed as unpatched | 1,620 | 1,620 | 0 |
+| Real SQL, 216,108 documents (TPC-H, TPC-DS, the PostgreSQL and duckdb test suites, sqlglot fixtures, GitLab's structure.sql, dbt projects, the Pagila and Chinook databases, three text-to-SQL datasets; bench/sqlparse/corpus.py) x 17 checks: tokenize, parse, split twice, format with 13 option sets; CPython 3.12 | 3,673,836 | 3,673,836 | 0 |
+| Django 6.1.3's SQL for its test models and migrations on SQLite, PostgreSQL, MySQL, MariaDB and Oracle (65,190 distinct statements) x 8 checks, including group() on sqlparse's own statements; CPython 3.12 | 521,520 | 521,520 | 0 |
+| Inputs captured from Django, pgcli, mycli, litecli, sqllineage and django-debug-toolbar running their test suites (2,957 distinct texts x 4 checks, 785 distinct format calls with their own options); CPython 3.12 | 12,613 | 12,613 | 0 |
+| Hypothesis: generated, random and mutated SQL (comments of every kind, quotes, dollar quotes, nesting, unicode, lone surrogates, odd whitespace) through tokenize, parse, split, format with valid and invalid options, streams and bytes, the DoS limits and customised lexer tables, and each SQL_REGEX pattern and random patterns against re; CPython 3.12 | 3,561,537 | 3,561,537 | 0 |
+| **Total** | **7,771,126** | **7,771,126** | **0** |
+
+- Under the patch, the call sites of Django 6.1.3 (prepare_sql_script, sqlmigrate, --debug-sql and others: 3,460 values) and django-debug-toolbar 8.0.0's SQL formatting (7,835 values) are byte-identical, and the test suites of Django (2,029 tests in 12 apps), django-debug-toolbar (358), pgcli 4.7.1 (2,790), mycli 2.31.0 (3,549), litecli 1.17.1 (231) and sqllineage 1.5.9 (539) give the same outcome for every test as without the patch.
+- pyroid's regex engine refuses some random patterns (6% of them, syntax it does not reproduce); the lexer runs those in Python's re. The Rust lexer's shortcuts for sqlparse's own table are checked against its regex loop on 20,000 random texts in cargo test.
+
+<small>Source: python/tests/test_sqlparse_parity.py, bench/sqlparse/parity_corpus.py, bench/sqlparse/django_sql.py and bench/sqlparse/consumers/, run on 2026-11-17 on the EC2 c8g.16xlarge devbox (linux/aarch64).</small>
+
 ### pyroid.datasketch {#datasketch}
 
 Reference: datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1). Rule: identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets.
