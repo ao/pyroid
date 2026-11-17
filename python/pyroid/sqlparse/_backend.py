@@ -51,7 +51,9 @@ _PYROID_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def _find() -> tuple[types.ModuleType | None, str | None]:
     """The installed sqlparse, if it can be shared, and its version."""
     current = sys.modules.get("sqlparse", None)
-    if current is not None and getattr(current, "__pyroid__", False):
+    if current is not None and (
+        getattr(current, "__pyroid__", False) or current.__name__.startswith("pyroid.")
+    ):
         return None, None  # pyroid's own module, put there by pyroid.patch()
     if current is None:
         if "sqlparse" in sys.modules:  # sys.modules["sqlparse"] = None blocks it

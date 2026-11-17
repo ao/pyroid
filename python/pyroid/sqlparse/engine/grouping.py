@@ -7,6 +7,8 @@
 # This module is part of python-sqlparse and is released under
 # the BSD License: https://opensource.org/licenses/BSD-3-Clause
 
+import contextvars
+
 from pyroid.sqlparse import sql
 from pyroid.sqlparse import tokens as T
 from pyroid.sqlparse.exceptions import SQLParseError
@@ -21,6 +23,18 @@ MAX_GROUPING_DEPTH = 100
 # Set to None to disable limit (not recommended for untrusted input)
 MAX_GROUPING_TOKENS = 10000
 
+# pyroid: the module whose MAX_GROUPING_* apply (None: this one). pyroid.patch("sqlparse")
+# runs this code with an installed sqlparse's limits.
+_LIMITS = contextvars.ContextVar("pyroid_sqlparse_grouping_limits", default=None)
+
+
+def _limits():
+    src = _LIMITS.get()
+    if src is None:
+        return MAX_GROUPING_DEPTH, MAX_GROUPING_TOKENS
+    return (getattr(src, "MAX_GROUPING_DEPTH", 100),
+            getattr(src, "MAX_GROUPING_TOKENS", 10000))
+
 T_NUMERICAL = (T.Number, T.Number.Integer, T.Number.Float)
 T_STRING = (T.String, T.String.Single, T.String.Symbol)
 T_NAME = (T.Name, T.Name.Placeholder)
@@ -32,16 +46,17 @@ _DELIMITED_GROUPS = (sql.Parenthesis, sql.SquareBrackets, sql.Case,
 
 def _group_matching(tlist, cls, depth=0):
     """Groups Tokens that have beginning and end."""
-    if MAX_GROUPING_DEPTH is not None and depth > MAX_GROUPING_DEPTH:
+    max_depth, max_tokens = _limits()
+    if max_depth is not None and depth > max_depth:
         raise SQLParseError(
-            f"Maximum grouping depth exceeded ({MAX_GROUPING_DEPTH})."
+            f"Maximum grouping depth exceeded ({max_depth})."
         )
 
     # Limit the number of tokens to prevent DoS attacks
-    if MAX_GROUPING_TOKENS is not None \
-       and len(tlist.tokens) > MAX_GROUPING_TOKENS:
+    if max_tokens is not None \
+       and len(tlist.tokens) > max_tokens:
         raise SQLParseError(
-            f"Maximum number of tokens exceeded ({MAX_GROUPING_TOKENS})."
+            f"Maximum number of tokens exceeded ({max_tokens})."
         )
 
     opens = []
@@ -445,7 +460,13 @@ def group_values(tlist):
         tlist.group_tokens(sql.Values, start_idx, end_idx, extend=True)
 
 
-def _py_group(stmt):
+def _py_group(stmt, limits=None):
+    if limits is not None:
+        token = _LIMITS.set(limits)
+        try:
+            return _py_group(stmt)
+        finally:
+            _LIMITS.reset(token)
     for func in [
         group_comments,
 
@@ -503,16 +524,17 @@ def _group(tlist, cls, match,
            depth=0
            ):
     """Groups together tokens that are joined by a middle token. i.e. x < y"""
-    if MAX_GROUPING_DEPTH is not None and depth > MAX_GROUPING_DEPTH:
+    max_depth, max_tokens = _limits()
+    if max_depth is not None and depth > max_depth:
         raise SQLParseError(
-            f"Maximum grouping depth exceeded ({MAX_GROUPING_DEPTH})."
+            f"Maximum grouping depth exceeded ({max_depth})."
         )
 
     # Limit the number of tokens to prevent DoS attacks
-    if MAX_GROUPING_TOKENS is not None \
-       and len(tlist.tokens) > MAX_GROUPING_TOKENS:
+    if max_tokens is not None \
+       and len(tlist.tokens) > max_tokens:
         raise SQLParseError(
-            f"Maximum number of tokens exceeded ({MAX_GROUPING_TOKENS})."
+            f"Maximum number of tokens exceeded ({max_tokens})."
         )
 
     tidx_offset = 0

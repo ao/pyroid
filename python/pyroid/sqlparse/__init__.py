@@ -53,43 +53,56 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# The pipelines, for a given grouping module (it holds the DoS limits)
+# The pipelines. `limits` is the module whose MAX_GROUPING_DEPTH / MAX_GROUPING_TOKENS apply
+# (None: pyroid.sqlparse.engine.grouping; an installed sqlparse's under pyroid.patch).
 # ---------------------------------------------------------------------------
 
 
-def _python_stream(stream: Any, encoding: str | None, grouping: Any) -> Generator[Any, None, None]:
+def _limit_values(limits: Any) -> tuple[Any, Any]:
+    src = engine.grouping if limits is None else limits
+    return getattr(src, "MAX_GROUPING_DEPTH", 100), getattr(src, "MAX_GROUPING_TOKENS", 10000)
+
+
+def _python_group(limits: Any) -> Any:
+    def group(stmt: Any) -> Any:
+        return engine.grouping._py_group(stmt, limits)
+
+    return group
+
+
+def _python_stream(stream: Any, encoding: str | None, limits: Any) -> Generator[Any, None, None]:
     stack = engine.FilterStack()
     stack.enable_grouping()
-    stack._group = grouping._py_group
+    stack._group = _python_group(limits)
     yield from stack.run(stream, encoding)
 
 
-def _group_python(stmt: Any, grouping: Any) -> Any:
+def _group_python(stmt: Any, limits: Any) -> Any:
     try:
-        return grouping._py_group(stmt)
+        return engine.grouping._py_group(stmt, limits)
     except RecursionError as err:
         raise exceptions.SQLParseError("Maximum recursion depth exceeded") from err
 
 
-def _parsestream(stream: Any, encoding: str | None, grouping: Any) -> Generator[Any, None, None]:
+def _parsestream(stream: Any, encoding: str | None, limits: Any) -> Generator[Any, None, None]:
     lex = lexer.Lexer.get_default_instance()
     if not lexer.plain(lex):
         _warn_fallback("parsestream", "the default Lexer has overridden methods", 4)
-        yield from _python_stream(stream, encoding, grouping)
+        yield from _python_stream(stream, encoding, limits)
         return
     text = lexer.read(stream, encoding)
-    it = _native._parse(text, lex, grouping.MAX_GROUPING_DEPTH, grouping.MAX_GROUPING_TOKENS)
+    it = _native._parse(text, lex, *_limit_values(limits))
     if it is NotImplemented:
-        yield from _python_stream(text, None, grouping)
+        yield from _python_stream(text, None, limits)
         return
     for stmt in it:
         if type(stmt) is tuple:  # sqlparse's own grouping raises on this one
-            yield _group_python(stmt[1], grouping)
+            yield _group_python(stmt[1], limits)
         else:
             yield stmt
 
 
-def _format(sql: Any, encoding: str | None, options: dict[str, Any], grouping: Any) -> str:
+def _format(sql: Any, encoding: str | None, options: dict[str, Any], limits: Any) -> str:
     lex = lexer.Lexer.get_default_instance()
     if lexer.plain(lex):
         text = lexer.read(sql, encoding)
@@ -110,8 +123,7 @@ def _format(sql: Any, encoding: str | None, options: dict[str, Any], grouping: A
         r = _native._format(
             text,
             lex,
-            grouping.MAX_GROUPING_DEPTH,
-            grouping.MAX_GROUPING_TOKENS,
+            *_limit_values(limits),
             get("keyword_case") or None,
             get("identifier_case") or None,
             truncate,
@@ -129,7 +141,7 @@ def _format(sql: Any, encoding: str | None, options: dict[str, Any], grouping: A
     else:
         _warn_fallback("format", "the default Lexer has overridden methods", 4)
     stack = engine.FilterStack()
-    stack._group = grouping._py_group
+    stack._group = _python_group(limits)
     stack = formatter.build_filter_stack(stack, options)
     stack.postprocess.append(filters.SerializerUnicode())
     return "".join(stack.run(sql, encoding))
@@ -164,7 +176,7 @@ def parse(sql: Any, encoding: str | None = None) -> tuple[Any, ...]:
     Returns:
         A tuple of ``sql.Statement`` instances.
     """
-    return tuple(_parsestream(sql, encoding, engine.grouping))
+    return tuple(_parsestream(sql, encoding, None))
 
 
 def parsestream(stream: Any, encoding: str | None = None) -> Generator[Any, None, None]:
@@ -177,7 +189,7 @@ def parsestream(stream: Any, encoding: str | None = None) -> Generator[Any, None
     Returns:
         A generator of ``sql.Statement`` instances.
     """
-    return _parsestream(stream, encoding, engine.grouping)
+    return _parsestream(stream, encoding, None)
 
 
 def format(sql: Any, encoding: str | None = None, **options: Any) -> str:  # noqa: A001
@@ -192,7 +204,7 @@ def format(sql: Any, encoding: str | None = None, **options: Any) -> str:  # noq
         The formatted SQL statement as string.
     """
     options = formatter.validate_options(options)
-    return _format(sql, encoding, options, engine.grouping)
+    return _format(sql, encoding, options, None)
 
 
 def split(sql: Any, encoding: str | None = None, strip_semicolon: bool = False) -> list[str]:

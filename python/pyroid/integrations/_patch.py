@@ -140,6 +140,7 @@ SUPPORTED: tuple[str, ...] = (
     "nltk",
     "warcio",
     "nemo_curator",
+    "sqlparse",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -760,6 +761,59 @@ def _build_nemo_curator(impl: types.ModuleType, real: Any, missing: str) -> _Bui
     return {}, [undo]
 
 
+# What patch("sqlparse") sets on an installed sqlparse (pyroid.sqlparse._patched's functions).
+_SQLPARSE_SWAPS: dict[str, tuple[str, ...]] = {
+    "sqlparse": ("parse", "parsestream", "format", "split"),
+    "sqlparse.lexer": ("tokenize",),
+}
+# Without sqlparse, these pyroid.sqlparse modules stand in for sqlparse's.
+_SQLPARSE_MODULES = (
+    "",
+    ".sql",
+    ".tokens",
+    ".keywords",
+    ".lexer",
+    ".exceptions",
+    ".utils",
+    ".formatter",
+    ".cli",
+    ".engine",
+    ".engine.grouping",
+    ".engine.filter_stack",
+    ".engine.statement_splitter",
+    ".filters",
+    ".filters.aligned_indent",
+    ".filters.others",
+    ".filters.output",
+    ".filters.reindent",
+    ".filters.right_margin",
+    ".filters.tokens",
+)
+
+
+def _build_sqlparse(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    from pyroid.sqlparse import _patched
+
+    if real is None:
+        mods = {f"sqlparse{s}": importlib.import_module(f"pyroid.sqlparse{s}") for s in _SQLPARSE_MODULES}
+        return mods, []
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for mod, names in _SQLPARSE_SWAPS.items():
+        module = importlib.import_module(mod)
+        for n in names:
+            saved.append((module, n, module.__dict__.get(n, _MISSING)))
+            setattr(module, n, getattr(_patched, n))
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
 def _distribution_version(name: str) -> Callable[[Any], str | None]:
     """The installed version of distribution `name` (for packages without ``__version__``)."""
 
@@ -850,10 +904,19 @@ _TARGETS: dict[str, _Target] = {
         " (readers, writers, deduplication, classifiers, the other stages)",
         _build_nemo_curator,
     ),
+    "sqlparse": _Target(
+        "pyroid.sqlparse",
+        "which reproduces sqlparse 0.6.1's parse, parsestream, format, split and "
+        "lexer.tokenize",
+        "SQLPARSE_VERSION",
+        "pip install sqlparse==0.6.1",
+        " (the token classes, FilterStack and the filters, the command line)",
+        _build_sqlparse,
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator")
+_SWAPPED = ("nltk", "warcio", "nemo_curator", "sqlparse")
 
 
 # ---------------------------------------------------------------------------
@@ -927,6 +990,7 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
                 "nltk": "from nltk import word_tokenize",
                 "warcio": "from warcio.archiveiterator import ArchiveIterator",
                 "nemo_curator": "from nemo_curator.stages.text.filters import ScoreFilter",
+                "sqlparse": "from sqlparse import format",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
