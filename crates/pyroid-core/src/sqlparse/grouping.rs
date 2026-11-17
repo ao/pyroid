@@ -26,10 +26,97 @@ impl Default for Limits {
     }
 }
 
-/// The deepest native recursion allowed whatever the limits say, so the Rust stack stays
-/// small; sqlparse's own Python recursion overflows well before this
-/// (`SQLParseError('Maximum recursion depth exceeded')` from `FilterStack.run`).
-pub const HARD_DEPTH: usize = 2_000;
+/// The deepest recursion allowed whatever the limits say. With the limits disabled, sqlparse's
+/// own walks overflow CPython's recursion limit (1,000 frames, one per level) and
+/// `FilterStack.run` raises `SQLParseError('Maximum recursion depth exceeded')`; this stops at
+/// about the same depth with the same error.
+pub const HARD_DEPTH: usize = 980;
+
+/// Statements nested deeper than this are grouped and formatted on a helper thread with a
+/// large stack ([`on_big_stack`]), so deep input never depends on the caller's stack size.
+pub const BIG_STACK_NESTING: usize = 24;
+
+/// The helper thread's stack (address space; only the pages used are committed).
+const BIG_STACK: usize = 256 << 20;
+
+/// Run `f` on a scoped thread with a [`BIG_STACK`] stack if `deep`, else here. A panic in
+/// `f` is resumed on the calling thread.
+pub fn on_big_stack<T: Send>(deep: bool, f: impl FnOnce() -> T + Send) -> T {
+    if !deep {
+        return f();
+    }
+    let cell = std::sync::Mutex::new(Some(f));
+    let take = || {
+        cell.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+    };
+    let out = std::thread::scope(|s| {
+        let spawned = std::thread::Builder::new()
+            .name("pyroid-sqlparse".into())
+            .stack_size(BIG_STACK)
+            .spawn_scoped(s, || {
+                BUDGET.with(|b| b.set(BIG_STACK - (1 << 20)));
+                take().map(|f| f())
+            });
+        match spawned {
+            Ok(h) => h.join().unwrap_or_else(|p| std::panic::resume_unwind(p)),
+            Err(_) => None,
+        }
+    });
+    match out {
+        Some(v) => v,
+        // no thread to be had: run here (the stack budget still applies)
+        None => (take().expect("not run"))(),
+    }
+}
+
+thread_local! {
+    /// The stack the walks may use on this thread ([`STACK_BUDGET`], more on the helper).
+    static BUDGET: std::cell::Cell<usize> = const { std::cell::Cell::new(STACK_BUDGET) };
+}
+
+/// The stack budget of the current thread.
+pub fn stack_budget() -> usize {
+    BUDGET.with(std::cell::Cell::get)
+}
+
+/// How deeply `root` nests: its tree depth plus the depth of the brackets and block keywords
+/// among its leaves (an upper bound for what grouping makes of them).
+pub fn nesting(t: &Tree<'_>, root: Id) -> usize {
+    let mut max = 0usize;
+    let mut level = 0usize;
+    let mut stack: Vec<(Id, usize)> = vec![(root, 0)];
+    while let Some((id, d)) = stack.pop() {
+        let n = t.n(id);
+        if n.is_group {
+            for &k in t.kids(id).iter().rev() {
+                stack.push((k, d + 1));
+            }
+            continue;
+        }
+        let v = t.val(id);
+        let open = matches!(v, "(" | "[")
+            || (n.is_keyword && matches!(t.norm(id), "CASE" | "BEGIN" | "IF" | "FOR" | "LOOP"));
+        let close = matches!(v, ")" | "]") || (n.is_keyword && t.norm(id).starts_with("END"));
+        if open {
+            level += 1;
+        } else if close {
+            level = level.saturating_sub(1);
+        }
+        max = max.max(level + d);
+    }
+    max
+}
+
+/// `group(stmt)`, on a big stack when the statement nests deeply.
+///
+/// # Errors
+/// As [`Grouper::group`].
+pub fn group_statement(t: &mut Tree<'_>, stmt: Id, limits: Limits) -> R<()> {
+    let deep = nesting(t, stmt) > BIG_STACK_NESTING;
+    on_big_stack(deep, || Grouper::new(t, limits).group(stmt))
+}
 
 /// The message sqlparse raises when its recursion overflows.
 pub const RECURSION_MESSAGE: &str = "Maximum recursion depth exceeded";
@@ -132,7 +219,7 @@ impl<'t, 's> Grouper<'t, 's> {
             t,
             limits,
             stack_base: stack_position(),
-            stack_budget: STACK_BUDGET,
+            stack_budget: stack_budget(),
         }
     }
 

@@ -7,7 +7,7 @@ use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyList, PyString};
 use pyroid_core::json_repair::chars as wtf8;
-use pyroid_core::sqlparse::grouping::{Grouper, Limits};
+use pyroid_core::sqlparse::grouping::Limits;
 use pyroid_core::sqlparse::tree::{Class, Fail, Id, ListId, NO_LIST, Node, Str, Tree};
 use pyroid_core::sqlparse::ttype::{self, TT};
 use rustc_hash::FxHashMap;
@@ -45,23 +45,23 @@ fn str_value(v: &Bound<'_, PyAny>) -> PyResult<Option<(String, bool)>> {
     if !s.get_type().is(py.get_type::<PyString>()) {
         return Ok(None);
     }
-    match s.to_str() {
-        Ok(t) => Ok(Some((t.to_owned(), false))),
-        Err(_) => {
-            let bytes = py
-                .get_type::<PyString>()
-                .call_method1("encode", (s, "utf-8", "surrogatepass"))?
-                .cast_into::<pyo3::types::PyBytes>()?;
-            match wtf8::chars_from_wtf8(bytes.as_bytes()) {
-                Some(Ok(chars)) => Ok(Some((chars.into_iter().collect(), true))),
-                _ => Ok(None),
-            }
-        }
+    if let Ok(t) = s.to_str() {
+        return Ok(Some((t.to_owned(), false)));
+    }
+    let bytes = py
+        .get_type::<PyString>()
+        .call_method1("encode", (s, "utf-8", "surrogatepass"))?
+        .cast_into::<pyo3::types::PyBytes>()?;
+    match wtf8::chars_from_wtf8(bytes.as_bytes()) {
+        Some(Ok(chars)) => Ok(Some((chars.into_iter().collect(), true))),
+        _ => Ok(None),
     }
 }
 
 fn exact_bool(v: &Bound<'_, PyAny>) -> Option<bool> {
-    v.cast::<PyBool>().ok().map(|b| b.is_true())
+    v.cast::<PyBool>()
+        .ok()
+        .map(pyo3::types::PyBoolMethods::is_true)
 }
 
 impl<'py> Reader<'py> {
@@ -275,7 +275,8 @@ pub fn _group<'py>(
     let mut tree = Tree::new(&src, ttype::types(), s.version);
     tree.nodes = nodes;
     tree.lists = lists;
-    let result = Grouper::new(&mut tree, Limits { depth, tokens }).group(root);
+    let result =
+        pyroid_core::sqlparse::grouping::group_statement(&mut tree, root, Limits { depth, tokens });
     if result == Err(Fail::Python) {
         return Ok(not_implemented(py));
     }
@@ -300,7 +301,7 @@ pub fn _group<'py>(
 
 /// Set the arena's state on the Python objects: new groups become new objects, the original
 /// objects get the fields grouping changed, the lists their new items.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn write_back<'py>(
     py: Python<'py>,
     t: &Tree<'_>,
@@ -409,8 +410,7 @@ fn write_back<'py>(
                 } else {
                     new_lists[l]
                         .clone()
-                        .map(Bound::into_any)
-                        .unwrap_or_else(|| py.None().into_bound(py))
+                        .map_or_else(|| py.None().into_bound(py), Bound::into_any)
                 };
                 obj.setattr(intern!(py, "tokens"), lo)?;
             }

@@ -7,7 +7,7 @@
 
 use std::borrow::Cow;
 
-use super::grouping::{RECURSION_MESSAGE, STACK_BUDGET};
+use super::grouping::RECURSION_MESSAGE;
 use super::pystr;
 use super::tree::{Class, Fail, Id, R, Str, Tree};
 use super::ttype::{TT, Types, bits, builtin as T};
@@ -24,6 +24,7 @@ fn stack_position() -> usize {
 #[derive(Clone, Copy, Debug)]
 pub struct Depth {
     base: usize,
+    budget: usize,
 }
 
 impl Depth {
@@ -33,6 +34,7 @@ impl Depth {
     pub fn new() -> Depth {
         Depth {
             base: stack_position(),
+            budget: super::grouping::stack_budget(),
         }
     }
 
@@ -40,8 +42,7 @@ impl Depth {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub fn check(&self, depth: usize) -> R<()> {
-        if depth > super::grouping::HARD_DEPTH
-            || stack_position().abs_diff(self.base) > STACK_BUDGET
+        if depth > super::grouping::HARD_DEPTH || stack_position().abs_diff(self.base) > self.budget
         {
             Err(Fail::SqlParse(RECURSION_MESSAGE.to_owned()))
         } else {

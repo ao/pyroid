@@ -169,6 +169,8 @@ pub enum LexError<E> {
     EmptyMatch,
     /// The caller's matcher failed.
     External(E),
+    /// The caller's [`External::tick`] stopped the run (Ctrl-C): raise it at once.
+    Interrupted(E),
 }
 
 /// The caller's matchers ([`Matcher::External`]).
@@ -363,7 +365,7 @@ pub fn lex<X: External>(
         }
         if out.len() & 0xFFFF == 0xFFFF {
             if let Err(e) = ext.tick() {
-                return (out, Some(LexError::External(e)));
+                return (out, Some(LexError::Interrupted(e)));
             }
         }
         let c = text[pos..].chars().next().unwrap_or('\0');

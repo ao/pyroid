@@ -101,6 +101,10 @@ pub fn stream<S: AsRef<str>, H: Hooks>(
     hooks: &mut H,
 ) -> Result<Stream<S, H::Error>, Error<H::Error>> {
     let (raw, err) = lexer::lex(src.as_ref(), cfg, hooks);
+    let err = match err {
+        Some(LexError::Interrupted(e)) => return Err(Error::External(e)),
+        e => e,
+    };
     let types = ttype::types();
     let v = cfg.version();
     let mut items: Vec<Item> = raw
@@ -162,7 +166,7 @@ impl<S: AsRef<str>, E> Stream<S, E> {
         if let Some(e) = self.lex_error.take() {
             return Err(match e {
                 LexError::EmptyMatch => Error::EmptyMatch,
-                LexError::External(x) => Error::External(x),
+                LexError::External(x) | LexError::Interrupted(x) => Error::External(x),
             });
         }
         if self.splitter.finish() {
@@ -312,24 +316,29 @@ pub fn format<H: Hooks>(
         };
         hooks.tick().map_err(Error::External)?;
         let (mut t, stmt) = st.statement(range);
-        if grouping {
-            Grouper::new(&mut t, limits).group(stmt)?;
-        }
-        if opts.spaces_around_operators {
-            filters::spaces_around_operators(&mut t, stmt, Depth::new(), 0)?;
-        }
-        if opts.strip_comments {
-            filters::strip_comments(&mut t, stmt, Depth::new(), 0)?;
-        }
-        if opts.strip_whitespace {
-            filters::strip_whitespace(&mut t, stmt, Depth::new(), 0)?;
-        }
-        if let Some(r) = reindent.as_mut() {
-            r.process(&mut t, stmt)?;
-        }
-        if let Some(a) = aligned.as_mut() {
-            a.process(&mut t, stmt)?;
-        }
+        let deep = super::grouping::nesting(&t, stmt) > super::grouping::BIG_STACK_NESTING;
+        let (r, a) = (&mut reindent, &mut aligned);
+        super::grouping::on_big_stack(deep, || -> Result<(), Fail> {
+            if grouping {
+                Grouper::new(&mut t, limits).group(stmt)?;
+            }
+            if opts.spaces_around_operators {
+                filters::spaces_around_operators(&mut t, stmt, Depth::new(), 0)?;
+            }
+            if opts.strip_comments {
+                filters::strip_comments(&mut t, stmt, Depth::new(), 0)?;
+            }
+            if opts.strip_whitespace {
+                filters::strip_whitespace(&mut t, stmt, Depth::new(), 0)?;
+            }
+            if let Some(r) = r.as_mut() {
+                r.process(&mut t, stmt)?;
+            }
+            if let Some(a) = a.as_mut() {
+                a.process(&mut t, stmt)?;
+            }
+            Ok(())
+        })?;
         if opts.right_margin {
             return Err(Error::NotImplemented);
         }

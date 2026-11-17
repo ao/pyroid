@@ -25,7 +25,7 @@ use pyroid_core::ftfy::UnicodeVersion;
 use pyroid_core::json_repair::chars as wtf8;
 use pyroid_core::sqlparse::engine::{self, Error as EngineError, FormatOptions, Stream};
 use pyroid_core::sqlparse::filters::{Case, Output, TokenFilters};
-use pyroid_core::sqlparse::grouping::{Grouper, Limits};
+use pyroid_core::sqlparse::grouping::Limits;
 use pyroid_core::sqlparse::lexer::{self as core_lexer, Action, Config, Entry, External, Matcher};
 use pyroid_core::sqlparse::regex::Regex;
 use pyroid_core::sqlparse::reindent::ReindentOptions;
@@ -214,6 +214,9 @@ struct Snap {
 
 static SNAP: Mutex<Option<Arc<Snap>>> = Mutex::new(None);
 
+/// The slow-path warning for Python-matched patterns was shown.
+static EXTERNAL_WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn snap_valid(
     lex: &Bound<'_, PyAny>,
     regex: &Bound<'_, PyAny>,
@@ -268,6 +271,7 @@ fn snapshot(lex: &Bound<'_, PyAny>) -> PyResult<Option<Arc<Snap>>> {
     Ok(Some(snap))
 }
 
+#[allow(clippy::too_many_lines)]
 fn build_snapshot(
     lex: &Bound<'_, PyAny>,
     regex: &Bound<'_, PyAny>,
@@ -354,6 +358,20 @@ fn build_snapshot(
         }
         dicts_out.push(words);
         dicts.push((d.clone().unbind(), copy.len()));
+    }
+    if !externals.is_empty() && !EXTERNAL_WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        PyErr::warn(
+            py,
+            &py.get_type::<crate::errors::FallbackWarning>(),
+            &std::ffi::CString::new(format!(
+                "pyroid.sqlparse: {} of the lexer's {} patterns use regex syntax pyroid's matcher \
+                 does not reproduce; they run in Python's re (slow path)",
+                externals.len(),
+                rt.len()
+            ))
+            .unwrap_or_default(),
+            3,
+        )?;
     }
     let config = Config::new(entries, &dicts_out, s.version);
     Ok(Some(Snap {
@@ -638,7 +656,8 @@ fn not_implemented(py: Python<'_>) -> Bound<'_, PyAny> {
     py.NotImplemented().into_bound(py)
 }
 
-/// `Lexer.get_tokens(text)` for `lexer`: `(pairs, error)`, or `NotImplemented`.
+/// `Lexer.get_tokens(text)` for `lexer`: `(pairs, error)`, `NotImplemented` (a table pyroid
+/// cannot read), or `None` (a text holding lone surrogates and U+10F800..).
 #[pyfunction]
 fn _tokenize<'py>(
     text: &Bound<'py, PyString>,
@@ -649,7 +668,7 @@ fn _tokenize<'py>(
         return Ok(not_implemented(py));
     };
     let Some(src) = text_of(text)? else {
-        return Ok(not_implemented(py));
+        return Ok(py.None().into_bound(py));
     };
     let s = setup()?;
     let pause = s.pause.bind(py);
@@ -675,6 +694,7 @@ fn _tokenize<'py>(
             .into_value(py)
             .into_bound(py)
             .into_any(),
+        Some(core_lexer::LexError::Interrupted(e)) => return Err(e),
         Some(core_lexer::LexError::External(e)) => e.into_value(py).into_bound(py).into_any(),
     };
     Ok(PyTuple::new(py, [PyList::new(py, out)?.into_any(), err])?.into_any())
@@ -869,8 +889,8 @@ const BATCH_CHUNK: usize = 1024;
 
 /// `f` over the documents of `xs` in parallel, a chunk at a time (`None`: some document
 /// needs sqlparse's own code; the Python package then loops).
-fn run_batch<'py, R: Send>(
-    py: Python<'py>,
+fn run_batch<R: Send>(
+    py: Python<'_>,
     input: &TextInput,
     threads: Option<Threads>,
     f: impl Fn(&str) -> Option<R> + Sync,
@@ -943,13 +963,13 @@ fn _format_batch<'py>(
     };
     let limits = Limits { depth, tokens };
     let cfg = &*snap.config;
-    let Some(outs) = run_batch(py, &input, threads, |s| {
+    let Some(results) = run_batch(py, &input, threads, |s| {
         engine::format(s, cfg, limits, &opts, &mut engine::NoHooks).ok()
     })?
     else {
         return Ok(not_implemented(py));
     };
-    batch_output(py, &input, &outs)
+    batch_output(py, &input, &results)
 }
 
 /// The batch results in the input's container kind.
@@ -1089,7 +1109,7 @@ impl Statements {
         let remapped = inner.remapped;
         let limits = inner.limits;
         let (mut tree, stmt) = inner.stream.statement(range.clone());
-        match Grouper::new(&mut tree, limits).group(stmt) {
+        match pyroid_core::sqlparse::grouping::group_statement(&mut tree, stmt, limits) {
             Ok(()) => Ok(Some(build(py, &tree, stmt, remapped)?)),
             Err(Fail::SqlParse(m)) => Err(sql_error(py, m)?),
             Err(Fail::Python) => {

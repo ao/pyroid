@@ -54,8 +54,13 @@ def read(text: Any, encoding: str | None) -> Any:
 def _tokens(lex: Any, sql: Any, encoding: str | None) -> Iterator[tuple[Any, str]]:
     text = read(sql, encoding)
     r = _core.native._tokenize(text, lex)
-    if r is NotImplemented:
-        _core.warn_fallback("lexer.tokenize", "the lexer's table holds entries pyroid cannot read")
+    if r is NotImplemented or r is None:
+        why = (
+            "the text holds both lone surrogates and characters from U+10F800 on"
+            if r is None
+            else "the lexer's table holds entries pyroid cannot read"
+        )
+        _core.warn_fallback("lexer.tokenize", why, 4)
         yield from _GET_TOKENS(lex, text)
         return
     pairs, err = r
