@@ -24,6 +24,8 @@ __all__ = ["Detector"]
 
 _NUMBER = (int, float)
 _MAX_INT_SEED = 1 << 127
+# Ints the native side takes as they are (n_trial as an i64; the others as floats, exactly).
+_MAX_INT_PARAM = 1 << 53
 
 
 class _SeedCache:
@@ -78,9 +80,21 @@ def _params(alpha: Any, n_trial: Any, owner: Any) -> tuple[Any, ...]:
         owner.CONV_THRESHOLD,
         owner.BASE_FREQ,
     )
+    # langdetect's own types first (the common case), then any int or float.
+    if (
+        type(values[0]) is float
+        and type(n_trial) is int
+        and type(values[2]) is float
+        and type(values[3]) is int
+        and type(values[4]) is float
+        and type(values[5]) is int
+        and -_MAX_INT_PARAM < values[3] < _MAX_INT_PARAM
+        and -_MAX_INT_PARAM < values[5] < _MAX_INT_PARAM
+    ):
+        return values
     if type(n_trial) is not int or not all(type(v) in _NUMBER for v in values):
         raise _Unsupported
-    if not all(abs(v) < 1e308 for v in values if type(v) is int):
+    if not all(-_MAX_INT_PARAM < v < _MAX_INT_PARAM for v in values if type(v) is int):
         raise _Unsupported
     return values
 
@@ -162,12 +176,18 @@ class Detector:
         self.prior_map: list[float] | None = None
         self.verbose = False
 
-    def __getattr__(self, name: str) -> Any:
-        # langdetect makes a `random.Random()` per detector; pyroid makes it on first use.
-        if name == "random":
-            r = self.__dict__["random"] = _random.Random()
-            return r
-        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
+    @property
+    def random(self) -> _random.Random:
+        """A ``random.Random``, as langdetect makes one per detector (pyroid's detections draw
+        from their own generator, seeded the same way, and do not use it)."""
+        r = self.__dict__.get("_random")
+        if r is None:
+            r = self.__dict__["_random"] = _random.Random()
+        return r  # type: ignore[no-any-return]
+
+    @random.setter
+    def random(self, value: Any) -> None:
+        self.__dict__["_random"] = value
 
     def set_verbose(self) -> None:
         """Print what the detection does (slow: runs langdetect's Python algorithm)."""
