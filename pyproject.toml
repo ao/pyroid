@@ -173,7 +173,7 @@ include = [
   { path = "python/tests/pytest.ini", format = "sdist" },
   { path = "python/tests/*.json", format = "sdist" },
 ]
-# Keep the sdist small (release.yml checks it is under 5 MB): crate sources and the data they
+# Keep the sdist small (release.yml checks it is under 7 MB): crate sources and the data they
 # embed, Cargo.lock, pyproject, README, LICENSE, python/pyroid and python/tests. The Rust tests
 # and their golden files (about 20 MB) stay in the repository: building needs none of them.
 # Never ship locally built extensions.

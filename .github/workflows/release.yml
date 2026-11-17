@@ -60,7 +60,8 @@ env:
   MATURIN_VERSION: v1.16.0
   UV_VERSION: "0.13.7"
   # Junk guard for the sdist (source + Cargo.lock + Unicode tables); raise it deliberately if needed.
-  SDIST_MAX_BYTES: "5000000"
+  # 4.5 MB at 1.0; pyroid.langdetect's 55 language profiles (JSON, read at run time) add 1.1 MB.
+  SDIST_MAX_BYTES: "7000000"
   # PGO on or off for this run (see the top of this file). The pgo-corpus job's `if` repeats the expression,
   # because a job-level `if` cannot read `env`.
   PGO: ${{ vars.PYROID_PGO != 'off' && (github.event_name != 'workflow_dispatch' || inputs.pgo) }}
