@@ -896,7 +896,11 @@ _O_BINARY = getattr(os, "O_BINARY", 0)  # Windows: no newline translation
 
 
 def _sibling(path: Path, ext: str) -> tuple[Path, int]:
-    """Create a hidden, uniquely named file next to ``path``; return it and its open descriptor."""
+    """Create a hidden, uniquely named file next to ``path``; return it and its open descriptor.
+
+    Callers enter their ``try`` (which removes the file on failure) right after this returns.
+    A KeyboardInterrupt raised in here, even just after the file is made, removes it.
+    """
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_BINARY
     for _ in range(100):
         tmp = path.with_name(f".{path.name[:200]}.{secrets.token_hex(4)}{ext}")
@@ -904,6 +908,11 @@ def _sibling(path: Path, ext: str) -> tuple[Path, int]:
             return tmp, os.open(tmp, flags, 0o666)  # the umask applies, as for any new file
         except FileExistsError:
             continue
+        except BaseException:
+            # O_EXCL and a random name: a file there now is the one this call made.
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
     raise FileExistsError(f"{path}: no free name for a temporary file next to it")
 
 
@@ -974,10 +983,10 @@ class Writer:
     def _open(self, schema: Any) -> Path:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp, fd = _sibling(self.path, ".partial")
-        os.close(fd)
-        self.tmp = tmp
-        self._schema = schema
+        self.tmp = tmp  # before anything that can be interrupted: abort() removes it
         try:
+            os.close(fd)
+            self._schema = schema
             self._sink = pa.OSFile(str(tmp), "wb")
             if self.format == "parquet":
                 import pyarrow.parquet as pq
