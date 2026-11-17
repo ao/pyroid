@@ -3,7 +3,6 @@ results equal to unpatched langdetect, and threads racing patch()/unpatch()."""
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -17,9 +16,7 @@ pytestmark = pytest.mark.thread_unsafe
 
 
 @pytest.mark.parametrize("block", ["0", "1"])
-def test_langdetects_own_tests(
-    run_python: Callable[..., Any], block: str, tmp_path: Path
-) -> None:
+def test_langdetects_own_tests(run_python: Callable[..., Any], block: str, tmp_path: Path) -> None:
     if not UPSTREAM.is_dir():
         pytest.skip("needs the repository's parity/data")
     pytest.importorskip("six")  # langdetect's tests import it
@@ -151,4 +148,5 @@ def test_threads_while_patching(run_python: Callable[..., Any]) -> None:
     out = run_python(code, timeout=240)
     assert out.returncode == 0, out.stdout + out.stderr
     n, bad = map(int, out.stdout.split())
-    assert n > 0 and bad == 0
+    assert n > 0
+    assert bad == 0

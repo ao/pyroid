@@ -1,5 +1,7 @@
 """Short texts in many languages and scripts, for pyroid.langdetect's parity tests."""
 
+# ruff: noqa: E501, RUF001
+
 from __future__ import annotations
 
 SAMPLES: dict[str, str] = {

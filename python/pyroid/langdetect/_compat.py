@@ -20,7 +20,7 @@ LANGDETECT_VERSION = "1.0.9"
 
 
 def _installed_package_dir() -> str | None:
-    """langdetect's package directory, if it is installed (nothing is imported)."""
+    """Langdetect's package directory, if it is installed (nothing is imported)."""
     current = sys.modules.get("langdetect")
     if current is not None and getattr(current, "__pyroid__", False):
         real = getattr(current, "__wrapped__", None)
@@ -34,7 +34,7 @@ def _installed_package_dir() -> str | None:
 
 
 def _import_real() -> Any:
-    """langdetect's own classes, or None when langdetect is not installed or does not import."""
+    """Langdetect's own classes, or None when langdetect is not installed or does not import."""
     if _installed_package_dir() is None:
         return None
     current = sys.modules.get("langdetect")
@@ -69,7 +69,7 @@ else:
     ErrorCode = type("ErrorCode", (), _error_codes)
     ErrorCode.__module__ = "pyroid.langdetect.lang_detect_exception"
 
-    class LangDetectException(Exception):  # type: ignore[no-redef]
+    class LangDetectException(Exception):  # type: ignore[no-redef]  # noqa: N818
         """langdetect's exception; ``code`` is one of :data:`ErrorCode`'s values."""
 
         def __init__(self, code: int, message: str) -> None:
@@ -101,7 +101,7 @@ else:
 
 
 def _profiles_dir() -> str | None:
-    """langdetect's own profile directory, if langdetect is installed."""
+    """Langdetect's own profile directory, if langdetect is installed."""
     pkg = _installed_package_dir()
     return os.path.join(pkg, "profiles") if pkg is not None else None
 

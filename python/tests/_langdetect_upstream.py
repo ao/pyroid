@@ -14,7 +14,7 @@ import warnings
 if os.environ.get("PYROID_BLOCK_LANGDETECT") == "1":
     sys.modules["langdetect"] = None  # type: ignore[assignment]
 
-import pyroid.integrations  # noqa: E402
+import pyroid.integrations
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", pyroid.integrations.PatchWarning)

@@ -6,8 +6,10 @@ from typing import Any
 __all__ = ["Language"]
 
 class Language:
-    """A detected language: ``lang`` and ``prob``; ``repr`` is ``'lang:prob'``, ``<`` orders
-    by ``prob``."""
+    """A detected language: ``lang`` and ``prob``.
+
+    ``repr`` is ``'lang:prob'``, and ``<`` orders by ``prob``.
+    """
 
     lang: Any
     prob: Any

@@ -37,7 +37,6 @@ from typing import Any
 
 import langdetect
 import pyarrow.parquet as pq
-
 import pyroid
 import pyroid.langdetect as pl
 
@@ -82,7 +81,7 @@ def gate(sets: dict[str, list[str]]) -> None:
     for name, texts in sets.items():
         ours = [_langs(pl.detect_langs, t) for t in texts]
         theirs = [_langs(langdetect.detect_langs, t) for t in texts]
-        bad = [i for i, (a, b) in enumerate(zip(ours, theirs)) if a != b]
+        bad = [i for i, (a, b) in enumerate(zip(ours, theirs, strict=True)) if a != b]
         if bad:
             sys.exit(f"{name}: {len(bad)} texts differ, e.g. {texts[bad[0]][:80]!r}")
         batch = pl.detect_langs_batch(texts, errors="none")
@@ -171,11 +170,15 @@ def main() -> None:
                 n = len(texts)
                 chunks = [texts[i::8] for i in range(8)]
                 runs = {
-                    "langdetect, one thread": lambda: _loop(langdetect.detect, texts),
-                    "langdetect, 8 processes": lambda: pool.map(_ld_chunk, chunks),
-                    "pyroid, one call per text": lambda: _loop(pl.detect, texts),
-                    "pyroid detect_batch, threads=1": lambda: pl.detect_batch(texts, errors="none", threads=1),
-                    "pyroid detect_batch, threads=8": lambda: pl.detect_batch(texts, errors="none", threads=8),
+                    "langdetect, one thread": lambda t=texts: _loop(langdetect.detect, t),
+                    "langdetect, 8 processes": lambda c=chunks: pool.map(_ld_chunk, c),
+                    "pyroid, one call per text": lambda t=texts: _loop(pl.detect, t),
+                    "pyroid detect_batch, threads=1": lambda t=texts: pl.detect_batch(
+                        t, errors="none", threads=1
+                    ),
+                    "pyroid detect_batch, threads=8": lambda t=texts: pl.detect_batch(
+                        t, errors="none", threads=8
+                    ),
                 }
                 for label, fn in runs.items():
                     rows.setdefault(label, {}).setdefault(name, []).append(_per_text(fn, n))
@@ -193,9 +196,12 @@ def main() -> None:
     print("| Run | " + " | ".join(f"{k} ({len(sets[k])} texts)" for k in names) + " |")
     print("|---|" + "---:|" * len(names))
     for label, by in med.items():
-        cells = [f"{by[k]:,.1f}" + ("" if label == "langdetect, one thread" else f" ({base[k] / by[k]:.0f}×)") for k in names]
+        cells = [
+            f"{by[k]:,.1f}" + ("" if label == "langdetect, one thread" else f" ({base[k] / by[k]:.0f}\u00d7)")
+            for k in names
+        ]
         print(f"| {label} | " + " | ".join(cells) + " |")
-    print(f"\npatched langdetect.detect, medium: {patched:.1f} µs ({base['medium'] / patched:.0f}×)")
+    print(f"\npatched langdetect.detect, medium: {patched:.1f} µs ({base['medium'] / patched:.0f}\u00d7)")
     print("start-up to the first detect (ms):", {k: round(v) for k, v in start.items()})
     a.out.write_text(
         json.dumps(

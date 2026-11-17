@@ -358,7 +358,9 @@ fn skips_zeros(weight: f64, start: &[f64], map: &Frozen) -> bool {
         && weight >= 0.0
         && map.probs_nonneg_finite()
         && weight + map.max_prob() <= 1e50
-        && start.iter().all(|&v| v.is_finite() && (0.0..=1e8).contains(&v))
+        && start
+            .iter()
+            .all(|&v| v.is_finite() && (0.0..=1e8).contains(&v))
 }
 
 /// The trials of `_detect_block` over the n-gram rows `ngrams` (not empty), drawing from
@@ -438,7 +440,11 @@ pub fn trials(
                             live.clear();
                             // prob.len() <= n_langs, far below 2^32.
                             #[allow(clippy::cast_possible_truncation)]
-                            live.extend((0..prob.len()).filter(|&j| prob[j] != 0.0).map(|j| j as u32));
+                            live.extend(
+                                (0..prob.len())
+                                    .filter(|&j| prob[j] != 0.0)
+                                    .map(|j| j as u32),
+                            );
                         }
                     }
                 }

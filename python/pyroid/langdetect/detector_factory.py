@@ -117,7 +117,8 @@ class DetectorFactory:
             # KeyboardInterrupt and SystemExit pass through.
             except OSError:
                 raise LangDetectException(  # noqa: B904
-                    ErrorCode.FileLoadError, 'Cannot open "%s"' % filename  # noqa: UP031
+                    ErrorCode.FileLoadError,
+                    'Cannot open "%s"' % filename,  # noqa: UP031
                 )
             except Exception:
                 raise LangDetectException(  # noqa: B904

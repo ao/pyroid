@@ -53,7 +53,7 @@ class _SeedCache:
 _SEEDS = _SeedCache()
 
 
-class _Unsupported(Exception):
+class _Unsupported(Exception):  # noqa: N818
     """This call takes langdetect's Python algorithm."""
 
 
@@ -178,8 +178,11 @@ class Detector:
 
     @property
     def random(self) -> _random.Random:
-        """A ``random.Random``, as langdetect makes one per detector (pyroid's detections draw
-        from their own generator, seeded the same way, and do not use it)."""
+        """A ``random.Random``, as langdetect makes one per detector.
+
+        pyroid's detections draw from their own generator, seeded the same way, and do not use
+        it.
+        """
         r = self.__dict__.get("_random")
         if r is None:
             r = self.__dict__["_random"] = _random.Random()

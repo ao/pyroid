@@ -265,3 +265,8 @@ ignore_missing_imports = true
 # wheels, so it is only installed on GIL builds and absent from the mypy hook.
 module = ["polars", "polars.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# langdetect 1.0.9 (the reference for pyroid.langdetect's tests) ships neither py.typed nor stubs.
+module = ["langdetect", "langdetect.*"]
+ignore_missing_imports = true

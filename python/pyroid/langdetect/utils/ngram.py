@@ -63,7 +63,7 @@ class NGram:
 
     @classmethod
     def normalize(cls, ch: Any) -> str:
-        """langdetect's normalisation of one character."""
+        """Langdetect's normalisation of one character."""
         if not isinstance(ch, str):
             ord(ch)  # raises what langdetect raises
         return _native.normalize(ch)  # type: ignore[no-any-return]

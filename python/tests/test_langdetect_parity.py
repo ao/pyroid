@@ -8,6 +8,7 @@ message, ``code``), plus ``Detector.text`` and ``Detector.langprob`` afterwards.
 
 from __future__ import annotations
 
+import importlib
 import random
 from typing import Any
 
@@ -61,7 +62,7 @@ def test_samples(factories: tuple[Any, Any], name: str, seed: int) -> None:
     _same(factories, SAMPLES[name], seed)
 
 
-@pytest.mark.parametrize("seed", ["seed", b"bytes", bytearray(b"ba"), 1.5, -0.0, True, 2**200])
+@pytest.mark.parametrize("seed", ["seed", b"bytes", bytearray(b"xyz"), 1.5, -0.0, True, 2**200])
 def test_seed_types(factories: tuple[Any, Any], seed: Any) -> None:
     _same(factories, SAMPLES["de"], seed)
 
@@ -134,7 +135,9 @@ def test_prior_map_errors(factories: tuple[Any, Any]) -> None:
         assert a.prior_map == b.prior_map
 
 
-def test_verbose_prints_the_same(factories: tuple[Any, Any], capsys: pytest.CaptureFixture[str]) -> None:
+def test_verbose_prints_the_same(
+    factories: tuple[Any, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
     ours, theirs = factories
     out = []
     for factory in (ours, theirs):
@@ -235,7 +238,11 @@ def _load(factory: Any, how: str, profiles: list[dict[str, Any]], index: int, si
             factory.load_json_profile([json.dumps(p) for p in profiles])
         else:
             for i, p in enumerate(profiles):
-                profile = (pl.LangProfile if factory.__module__.startswith("pyroid") else ld.utils.lang_profile.LangProfile)(**p)
+                profile = (
+                    pl.LangProfile
+                    if factory.__module__.startswith("pyroid")
+                    else ld.utils.lang_profile.LangProfile
+                )(**p)
                 factory.add_profile(profile, index + i, size)
         return "ok"
     except Exception as exc:
@@ -253,7 +260,7 @@ def _load(factory: Any, how: str, profiles: list[dict[str, Any]], index: int, si
 def test_custom_profiles(
     profiles: list[dict[str, Any]], how: str, index: int, size: int, texts: list[str]
 ) -> None:
-    from langdetect.utils import lang_profile  # noqa: F401  (ld.utils.lang_profile)
+    importlib.import_module("langdetect.utils.lang_profile")  # ld.utils.lang_profile
 
     ours, theirs = pl.DetectorFactory(), ld.DetectorFactory()
     assert _load(ours, how, profiles, index, size) == _load(theirs, how, profiles, index, size)
@@ -273,9 +280,11 @@ def test_custom_profiles(
 
 @pytest.mark.parametrize("seed", [0, 1, 12345, 2**32 - 1, 2**32, 2**64 + 3, -9, "a", b"b", 0.5])
 def test_draws_match_random(seed: Any) -> None:
-    from pyroid.langdetect.detector import _seed_arg
+    _seed_arg = importlib.import_module("pyroid.langdetect.detector")._seed_arg
 
-    ops = [("gauss", 3), ("random", 5)] + [("below", n) for n in (1, 2, 3, 7, 1000, 2**31, 2**40, 2**63)]
+    ops = [("gauss", 3), ("random", 5)] + [
+        ("below", n) for n in (1, 2, 3, 7, 1000, 2**31, 2**40, 2**63)
+    ]
     ours = native._draws(_seed_arg(seed), ops * 30)
     r = random.Random(seed)
     theirs: list[Any] = []
@@ -285,7 +294,7 @@ def test_draws_match_random(seed: Any) -> None:
         elif op == "random":
             theirs.extend(r.random() for _ in range(n))
         else:
-            theirs.append(r._randbelow(n))  # type: ignore[attr-defined]
+            theirs.append(getattr(r, "_randbelow")(n))  # noqa: B009
     assert [x.hex() if isinstance(x, float) else x for x in ours] == [
         x.hex() if isinstance(x, float) else x for x in theirs
     ]
@@ -295,5 +304,6 @@ def test_draws_match_random(seed: Any) -> None:
 def test_draws_match_random_hypothesis(seed: int, n: int) -> None:
     ours = native._draws(seed, [("gauss", 4), ("below", n), ("random", 3)])
     r = random.Random(seed)
-    theirs = [r.gauss(0.0, 1.0) for _ in range(4)] + [r._randbelow(n)] + [r.random() for _ in range(3)]  # type: ignore[attr-defined]
+    below = getattr(r, "_randbelow")  # noqa: B009 (not in typeshed)
+    theirs = [r.gauss(0.0, 1.0) for _ in range(4)] + [below(n)] + [r.random() for _ in range(3)]
     assert ours == theirs

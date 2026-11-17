@@ -25,17 +25,61 @@ from typing import Any
 
 # langdetect code -> FineWeb-2 subset (English: FineWeb).
 LANGS = {
-    "af": "afr_Latn", "ar": "arb_Arab", "bg": "bul_Cyrl", "bn": "ben_Beng", "ca": "cat_Latn",
-    "cs": "ces_Latn", "cy": "cym_Latn", "da": "dan_Latn", "de": "deu_Latn", "el": "ell_Grek",
-    "en": "fineweb", "es": "spa_Latn", "et": "ekk_Latn", "fa": "fas_Arab", "fi": "fin_Latn",
-    "fr": "fra_Latn", "gu": "guj_Gujr", "he": "heb_Hebr", "hi": "hin_Deva", "hr": "hrv_Latn",
-    "hu": "hun_Latn", "id": "ind_Latn", "it": "ita_Latn", "ja": "jpn_Jpan", "kn": "kan_Knda",
-    "ko": "kor_Hang", "lt": "lit_Latn", "lv": "lvs_Latn", "mk": "mkd_Cyrl", "ml": "mal_Mlym",
-    "mr": "mar_Deva", "ne": "npi_Deva", "nl": "nld_Latn", "no": "nob_Latn", "pa": "pan_Guru",
-    "pl": "pol_Latn", "pt": "por_Latn", "ro": "ron_Latn", "ru": "rus_Cyrl", "sk": "slk_Latn",
-    "sl": "slv_Latn", "so": "som_Latn", "sq": "als_Latn", "sv": "swe_Latn", "sw": "swh_Latn",
-    "ta": "tam_Taml", "te": "tel_Telu", "th": "tha_Thai", "tl": "fil_Latn", "tr": "tur_Latn",
-    "uk": "ukr_Cyrl", "ur": "urd_Arab", "vi": "vie_Latn", "zh-cn": "cmn_Hani", "zh-tw": "yue_Hani",
+    "af": "afr_Latn",
+    "ar": "arb_Arab",
+    "bg": "bul_Cyrl",
+    "bn": "ben_Beng",
+    "ca": "cat_Latn",
+    "cs": "ces_Latn",
+    "cy": "cym_Latn",
+    "da": "dan_Latn",
+    "de": "deu_Latn",
+    "el": "ell_Grek",
+    "en": "fineweb",
+    "es": "spa_Latn",
+    "et": "ekk_Latn",
+    "fa": "fas_Arab",
+    "fi": "fin_Latn",
+    "fr": "fra_Latn",
+    "gu": "guj_Gujr",
+    "he": "heb_Hebr",
+    "hi": "hin_Deva",
+    "hr": "hrv_Latn",
+    "hu": "hun_Latn",
+    "id": "ind_Latn",
+    "it": "ita_Latn",
+    "ja": "jpn_Jpan",
+    "kn": "kan_Knda",
+    "ko": "kor_Hang",
+    "lt": "lit_Latn",
+    "lv": "lvs_Latn",
+    "mk": "mkd_Cyrl",
+    "ml": "mal_Mlym",
+    "mr": "mar_Deva",
+    "ne": "npi_Deva",
+    "nl": "nld_Latn",
+    "no": "nob_Latn",
+    "pa": "pan_Guru",
+    "pl": "pol_Latn",
+    "pt": "por_Latn",
+    "ro": "ron_Latn",
+    "ru": "rus_Cyrl",
+    "sk": "slk_Latn",
+    "sl": "slv_Latn",
+    "so": "som_Latn",
+    "sq": "als_Latn",
+    "sv": "swe_Latn",
+    "sw": "swh_Latn",
+    "ta": "tam_Taml",
+    "te": "tel_Telu",
+    "th": "tha_Thai",
+    "tl": "fil_Latn",
+    "tr": "tur_Latn",
+    "uk": "ukr_Cyrl",
+    "ur": "urd_Arab",
+    "vi": "vie_Latn",
+    "zh-cn": "cmn_Hani",
+    "zh-tw": "yue_Hani",
 }
 EXTRA = ["", " ", " \t\n ", "1234 5678", "http://example.com/x", "a@b.cd", "😀😀😀", "　", "...", "\ud800"]
 
@@ -60,9 +104,9 @@ _PL: Any = None
 
 def _init() -> None:
     global _LD, _PL
-    import langdetect
-
     import pyroid.langdetect
+
+    import langdetect
 
     langdetect.DetectorFactory.seed = 0
     pyroid.langdetect.DetectorFactory.seed = 0
@@ -72,7 +116,7 @@ def _init() -> None:
 def _outcome(fn: Any, text: str) -> Any:
     try:
         r = fn(text)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 (any exception is compared)
         return ["err", type(exc).__name__, str(exc), getattr(exc, "code", None)]
     if isinstance(r, list):
         return [[x.lang, x.prob.hex()] for x in r]
@@ -101,7 +145,9 @@ def _batch(item: tuple[str, list[str]]) -> tuple[str, int, int]:
     expect = [None if isinstance(r, list) and r[:1] == ["err"] else r for r in one]
     det = _PL.detect_batch(texts, errors="none")
     det_expect = [None if r is None else (r[0][0] if r else "unknown") for r in expect]
-    bad = sum(x != y for x, y in zip(langs, expect)) + sum(x != y for x, y in zip(det, det_expect))
+    bad = sum(x != y for x, y in zip(langs, expect, strict=True)) + sum(
+        x != y for x, y in zip(det, det_expect, strict=True)
+    )
     return lang, len(texts), bad
 
 

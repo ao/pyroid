@@ -22,7 +22,9 @@ from collections.abc import Callable
 from typing import Any
 
 from pyroid._pyroid import langdetect as _native
-from pyroid.langdetect import detector as _pd
+
+# The detector's private helpers (not in its stub).
+_pd: Any = importlib.import_module("pyroid.langdetect.detector")
 
 #: The langdetect modules the shims stand in for, and the pyroid module each takes names from.
 SHIMMED = {
@@ -208,7 +210,7 @@ def _one_call(text: Any, probs: bool) -> Any:
 
 
 def detect(text: Any) -> Any:
-    """langdetect's ``detect``, in one native call when nothing is customised."""
+    """Langdetect's ``detect``, in one native call when nothing is customised."""
     try:
         return _one_call(text, False)
     except _pd._Unsupported:
@@ -219,7 +221,7 @@ def detect(text: Any) -> Any:
 
 
 def detect_langs(text: Any) -> Any:
-    """langdetect's ``detect_langs``, in one native call when nothing is customised."""
+    """Langdetect's ``detect_langs``, in one native call when nothing is customised."""
     from pyroid.langdetect._compat import Language
 
     try:

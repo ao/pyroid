@@ -194,7 +194,10 @@ impl Builder {
         for (&key, &row) in &self.index {
             if key < 0x1_0001 {
                 // A 1-gram of a BMP character: key = cp + 1.
-                uni[(key - 1) as usize] = row + 1;
+                // key - 1 < 0x10000.
+                #[allow(clippy::cast_possible_truncation)]
+                let cp = (key - 1) as usize;
+                uni[cp] = row + 1;
             }
         }
         let mut dense_at = vec![u32::MAX; self.rows.len()];

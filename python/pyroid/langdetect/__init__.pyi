@@ -45,7 +45,6 @@ Differences from langdetect:
   after langdetect's arithmetic.
 """
 
-from collections.abc import Sequence
 from typing import Final, Literal, overload
 
 from pyroid._pyroid import Column
@@ -84,25 +83,7 @@ __version__: Final[str]
 @overload
 def detect_batch(
     texts: list[str], *, errors: Literal["raise"] = "raise", threads: int | None = None
-) -> list[str]: ...
-@overload
-def detect_batch(
-    texts: list[str], *, errors: Literal["none"], threads: int | None = None
-) -> list[str | None]: ...
-@overload
-def detect_batch(
-    texts: tuple[str, ...], *, errors: Literal["raise", "none"] = "raise", threads: int | None = None
-) -> tuple[str | None, ...]: ...
-@overload
-def detect_batch(
-    texts: ArrowStrings, *, errors: Literal["raise", "none"] = "raise", threads: int | None = None
-) -> Column[str]: ...
-def detect_batch(
-    texts: Sequence[str] | ArrowStrings,
-    *,
-    errors: Literal["raise", "none"] = "raise",
-    threads: int | None = None,
-) -> list[str] | list[str | None] | tuple[str | None, ...] | Column[str]:
+) -> list[str]:
     """The language of every text, as ``[detect(t) for t in texts]`` gives them.
 
     Each text is detected as a separate :func:`detect` call would (with the default factory,
@@ -129,22 +110,24 @@ def detect_batch(
     """
 
 @overload
-def detect_langs_batch(
-    texts: Sequence[str], *, errors: Literal["raise"] = "raise", threads: int | None = None
-) -> list[list[Language]]: ...
+def detect_batch(
+    texts: list[str], *, errors: Literal["none"], threads: int | None = None
+) -> list[str | None]: ...
+@overload
+def detect_batch(
+    texts: tuple[str, ...],
+    *,
+    errors: Literal["raise", "none"] = "raise",
+    threads: int | None = None,
+) -> tuple[str | None, ...]: ...
+@overload
+def detect_batch(
+    texts: ArrowStrings, *, errors: Literal["raise", "none"] = "raise", threads: int | None = None
+) -> Column[str]: ...
 @overload
 def detect_langs_batch(
-    texts: Sequence[str] | ArrowStrings,
-    *,
-    errors: Literal["raise", "none"] = "raise",
-    threads: int | None = None,
-) -> list[list[Language] | None]: ...
-def detect_langs_batch(
-    texts: Sequence[str] | ArrowStrings,
-    *,
-    errors: Literal["raise", "none"] = "raise",
-    threads: int | None = None,
-) -> list[list[Language]] | list[list[Language] | None]:
+    texts: list[str], *, errors: Literal["raise"] = "raise", threads: int | None = None
+) -> list[list[Language]]:
     """The languages and probabilities of every text, as ``[detect_langs(t) for t in texts]``.
 
     Args:
@@ -153,9 +136,24 @@ def detect_langs_batch(
         threads: As for :func:`detect_batch`.
 
     Returns:
-        One list of :class:`Language` per text (``None`` for an Arrow null, and with
-        ``errors="none"`` for a text with no features).
+        One list of :class:`Language` per text, in a list (a tuple for a tuple); ``None`` for an
+        Arrow null, and with ``errors="none"`` for a text with no features.
 
     Raises:
         As for :func:`detect_batch`.
     """
+
+@overload
+def detect_langs_batch(
+    texts: list[str] | ArrowStrings,
+    *,
+    errors: Literal["raise", "none"] = "raise",
+    threads: int | None = None,
+) -> list[list[Language] | None]: ...
+@overload
+def detect_langs_batch(
+    texts: tuple[str, ...],
+    *,
+    errors: Literal["raise", "none"] = "raise",
+    threads: int | None = None,
+) -> tuple[list[Language] | None, ...]: ...

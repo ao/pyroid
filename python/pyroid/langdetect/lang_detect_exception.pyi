@@ -18,7 +18,7 @@ class ErrorCode:
     TrainDataFormatError: ClassVar[int]
     InitParamError: ClassVar[int]
 
-class LangDetectException(Exception):
+class LangDetectException(Exception):  # noqa: N818 (langdetect's name)
     """langdetect's exception; ``code`` is one of :class:`ErrorCode`'s values."""
 
     code: int
