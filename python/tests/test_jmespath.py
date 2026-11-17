@@ -240,8 +240,11 @@ def test_sort_peak_memory(run_python: Any, expression: str) -> None:
     # J8: sorting 1M records took +61 MB at peak (jmespath: +24 MB), about 64 bytes per element.
     r = run_python(f"EXPRESSION = {expression!r}\n" + _SORT_MEMORY, timeout=300)
     assert r.returncode == 0, r.stderr[-2000:]
-    # Now about 36 bytes for int keys (items, keys, (key, index) pairs, the order).
-    assert float(r.stdout) < 50, r.stdout
+    # Now about 36 bytes for int keys (items, keys, (key, index) pairs, the order) on Linux. Peak
+    # RSS follows the platform's allocator: macOS's malloc measured 51 to 64 bytes for the same
+    # sort, so the tight bound applies where it was measured and a loose one elsewhere.
+    bound = 50 if sys.platform.startswith("linux") else 80
+    assert float(r.stdout) < bound, r.stdout
 
 
 class _Plus(functions.Functions):
