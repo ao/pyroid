@@ -67,14 +67,15 @@ def test_patched_results_equal_langdetect(run_python: Callable[..., Any]) -> Non
         assert any("langdetect" in str(x.message) for x in w), [str(x.message) for x in w]
         from langdetect.detector import Detector
         import pyroid.langdetect._patch as lp
-        assert Detector.__dict__["_detect_block"] is lp._detect_block
-        assert langdetect.detect is lp.detect
+        block = Detector.__dict__["_detect_block"]
+        assert block.__code__ is lp._CODES["_detect_block"]  # langdetect's function, pyroid's code
+        assert langdetect.detect is detect and detect.__code__ is lp._CODES["detect"]
         assert run() == expected
-        assert detect is not langdetect.detect and run() == expected  # names imported before
         assert d_before.detect() == "fr"
         pyroid.unpatch("langdetect")
-        assert Detector.__dict__["_detect_block"] is not lp._detect_block
-        assert langdetect.detect is detect
+        assert Detector.__dict__["_detect_block"] is block
+        assert block.__code__ is not lp._CODES["_detect_block"]
+        assert langdetect.detect is detect and detect.__code__ is not lp._CODES["detect"]
         assert run() == expected
         print("ok")
     """
@@ -150,3 +151,212 @@ def test_threads_while_patching(run_python: Callable[..., Any]) -> None:
     n, bad = map(int, out.stdout.split())
     assert n > 0
     assert bad == 0
+
+
+# The outside evaluation's (P61) reproducers for the patch.
+
+
+def test_patched_functions_pickle_for_an_unpatched_process(run_python: Callable[..., Any]) -> None:
+    pytest.importorskip("langdetect")
+    # Pickles made and loaded by this test's own child processes only.
+    code = """
+        import pickle, subprocess, sys, warnings
+        from langdetect import detect as early, detect_langs as early_langs
+        from langdetect.detector import Detector
+        warnings.simplefilter("ignore")
+        import pyroid
+        pyroid.patch("langdetect")
+        import langdetect
+        objs = [langdetect.detect, langdetect.detect_langs, early, early_langs, Detector.append,
+                Detector._detect_block, langdetect.detector_factory.detect]
+        blob = pickle.dumps(objs)
+        assert b"pyroid" not in blob, blob
+        child = (
+            "import pickle, sys; from langdetect import DetectorFactory; DetectorFactory.seed = 0;"
+            "f = pickle.loads(sys.stdin.buffer.read());"
+            "import langdetect; assert f[0] is langdetect.detect and f[2] is f[0];"
+            "print(f[0]('Hello world, this is English text.'),"
+            " f[1]('Bonjour tout le monde')[0].lang)"
+        )
+        out = subprocess.run([sys.executable, "-I", "-c", child], input=blob, capture_output=True)
+        print(out.stdout.decode().strip(), out.stderr.decode().strip()[-300:])
+        assert pickle.loads(blob)[0] is langdetect.detect
+    """
+    out = run_python(code, timeout=240)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.split()[:2] == ["en", "fr"], out.stdout
+
+
+def test_spawn_workers_without_the_patch(run_python: Callable[..., Any], tmp_path: Path) -> None:
+    pytest.importorskip("langdetect")
+    script = tmp_path / "job.py"
+    script.write_text(
+        "import multiprocessing as mp, warnings\n"
+        "import langdetect\n"
+        "from langdetect import DetectorFactory\n"
+        "DetectorFactory.seed = 0\n"
+        "TEXTS = ['Hello world, this is English.', 'Das ist ein Haus.', 'Ceci est une phrase.']\n"
+        "if __name__ == '__main__':\n"
+        "    warnings.simplefilter('ignore')\n"
+        "    expected = [langdetect.detect(t) for t in TEXTS]\n"
+        "    import pyroid\n"
+        "    pyroid.patch('langdetect')\n"
+        "    with mp.get_context('spawn').Pool(2) as pool:\n"
+        "        got = pool.map(langdetect.detect, TEXTS)\n"
+        "    print(got == expected, got)\n",
+        encoding="utf-8",
+    )
+    path = str(script)
+    code = (
+        f"import runpy, sys\nsys.argv = [{path!r}]\nrunpy.run_path({path!r}, run_name='__main__')"
+    )
+    out = run_python(code, timeout=240)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.startswith("True"), out.stdout
+
+
+def test_customised_langdetect_under_the_patch(run_python: Callable[..., Any]) -> None:
+    pytest.importorskip("langdetect")
+    code = r"""
+        import copy, pickle, re, warnings
+        import langdetect
+        from langdetect import DetectorFactory, detector_factory
+        from langdetect.detector import Detector
+        from langdetect.utils.ngram import NGram
+        DetectorFactory.seed = 0
+        detector_factory.init_factory()
+        f = detector_factory._factory
+        WWW = "Lies das: www.spiegel.de/politik/deutschland www.zeit.de/wirtschaft ok?"
+        RU = "Привет мир hello world ok fine"
+        def langs(r):
+            return [(x.lang, x.prob.hex()) for x in r]
+        def call(fn):
+            try:
+                return fn()
+            except Exception as e:
+                return (type(e).__name__, str(e))
+        class Lower(Detector):
+            def cleaning_text(self):
+                self.text = self.text.lower()
+        class Ngrams(Detector):
+            def _extract_ngrams(self):
+                return ["a", "b"]
+        def det(cls, text, **attrs):
+            d = cls(f)
+            for k, v in attrs.items():
+                setattr(d, k, v)
+            d.append(text)
+            return call(lambda: langs(d.get_probabilities())), d.text
+        def run():
+            out = [det(Lower, "Otec matka syn."), det(Ngrams, "Bonjour")]
+            out.append(det(Detector, "Hello 123", URL_RE=re.compile("[a-z]+")))
+            old = Detector.URL_RE
+            Detector.URL_RE = re.compile(r"(?:https?://|www\.)[-_.?&~;+=/#0-9A-Za-z]{1,2076}")
+            out.append(langs(langdetect.detect_langs(WWW)))
+            Detector.URL_RE = old
+            Detector.cleaning_text, old = (lambda self: None), Detector.cleaning_text
+            out.append((langs(langdetect.detect_langs(RU)), det(Detector, RU)))
+            Detector.cleaning_text = old
+            NGram.N_GRAM = 2
+            out.append(langs(langdetect.detect_langs("Otec matka syn.")))
+            NGram.N_GRAM = 3
+            g = copy.deepcopy(f)
+            d = g.create(); d.append("Das ist ein Haus.")
+            out.append(langs(pickle.loads(pickle.dumps(d)).get_probabilities()))
+            out.append(langs(langdetect.detect_langs("Otec matka syn.")))
+            return out
+        expected = run()
+        import pyroid
+        warnings.simplefilter("ignore")
+        pyroid.patch("langdetect")
+        got = run()
+        for e, g in zip(expected, got):
+            assert e == g, (e, g)
+        pyroid.unpatch("langdetect")
+        assert run() == expected
+        print("ok", len(expected))
+    """
+    out = run_python(code, timeout=240)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.startswith("ok"), out.stdout
+
+
+def test_shim_default_factory(run_python: Callable[..., Any]) -> None:
+    code = """
+        import json, sys, warnings
+        sys.modules["langdetect"] = None
+        import pyroid
+        warnings.simplefilter("ignore")
+        pyroid.patch("langdetect")
+        import langdetect
+        from langdetect import DetectorFactory, detector_factory
+        import pyroid.langdetect as pl
+        assert detector_factory._factory is None
+        detector_factory.init_factory()
+        assert detector_factory._factory is pl.detector_factory._factory is not None
+        ours = pl.detector_factory._factory
+        print(detector_factory._factory.get_lang_list()[:2] == ours.get_lang_list()[:2])
+        custom = DetectorFactory()
+        custom.load_json_profile([
+            json.dumps({"name": "aa", "freq": {"a": 10, "b": 5, "ab": 4}, "n_words": [15, 4, 0]}),
+            json.dumps({"name": "bb", "freq": {"b": 10, "c": 5, "bc": 4}, "n_words": [15, 4, 0]}),
+        ])
+        DetectorFactory.seed = 0
+        detector_factory._factory = custom
+        assert pl.detector_factory._factory is custom
+        print([(x.lang, x.prob.hex()) for x in langdetect.detect_langs("ab ab")])
+        same_dir = detector_factory.PROFILES_DIRECTORY == pl.PROFILES_DIRECTORY
+        print("_factory" in dir(detector_factory), same_dir)
+    """
+    out = run_python(code)
+    assert out.returncode == 0, out.stdout + out.stderr
+    lines = out.stdout.splitlines()
+    assert lines[0] == "True"
+    assert lines[1] == "[('aa', '0x1.ffffffffff2d6p-1')]"  # langdetect 1.0.9's result
+    assert lines[2] == "True True"
+
+
+def test_langdetect_pickles_load_under_the_shim(
+    run_python: Callable[..., Any], tmp_path: Path
+) -> None:
+    pytest.importorskip("langdetect")
+    blob = tmp_path / "ld.pickle"
+    make = f"""
+        import pickle, langdetect
+        from langdetect import DetectorFactory
+        from langdetect.detector_factory import PROFILES_DIRECTORY
+        f = DetectorFactory()
+        f.load_profile(PROFILES_DIRECTORY)
+        f.seed = 0
+        d = f.create()
+        d.append("Ceci est une phrase en français.")
+        blob = pickle.dumps((f, d))  # before d detects: the loaded one detects
+        def langs(text):
+            e = f.create()
+            e.append(text)
+            return [(x.lang, x.prob.hex()) for x in e.get_probabilities()]
+        with open({str(blob)!r}, "wb") as fh:
+            want = (langs("Das ist ein Haus."), langs("Ceci est une phrase en français."))
+            pickle.dump((blob, *want), fh)
+    """
+    out = run_python(make, timeout=240)
+    assert out.returncode == 0, out.stdout + out.stderr
+    # The pickle was written by this test's own child above.
+    load = f"""
+        import pickle, sys, warnings
+        sys.modules["langdetect"] = None
+        import pyroid
+        warnings.simplefilter("ignore")
+        pyroid.patch("langdetect")
+        with open({str(blob)!r}, "rb") as fh:
+            blob, want, want_d = pickle.load(fh)
+        f, d = pickle.loads(blob)
+        import pyroid.langdetect as pl
+        assert type(f) is pl.DetectorFactory and type(d) is pl.Detector
+        e = f.create(); e.append("Das ist ein Haus.")
+        print([(x.lang, x.prob.hex()) for x in e.get_probabilities()] == want)
+        print([(x.lang, x.prob.hex()) for x in d.get_probabilities()] == want_d)
+    """
+    out = run_python(load, timeout=240)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.stdout.split() == ["True", "True"]

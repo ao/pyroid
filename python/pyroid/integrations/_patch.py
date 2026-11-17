@@ -960,6 +960,12 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
                 f"{name} before this call ({example}) keep {name}'s objects."
             )
+            if name == "langdetect":  # patched in place: the same objects, pyroid's code
+                rest = (
+                    f"Everything else{target.rest} is still langdetect's own. langdetect's "
+                    f"functions stay the same objects, so names imported before this call "
+                    f"({example}) run pyroid's code too."
+                )
         else:
             rest = (
                 f"Everything else{target.rest} still comes from the installed {name}. Modules "
