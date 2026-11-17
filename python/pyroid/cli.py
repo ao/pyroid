@@ -15,6 +15,10 @@ Lines, optionally compressed as ``.gz``, ``.bz2``, ``.zst`` or ``.lz4``.
     pyroid stats OUT
     pyroid run [-p ftfy,fasttext] (SCRIPT | -m MODULE) [ARGS...]
 
+The commands that read or write data files need pyarrow and numpy (``pip install
+'pyroid[cli]'``); ``run``, ``stats``, ``dedup buckets``, ``dedup cluster`` and ``--help`` need
+neither.
+
 OUT is a file when its name has a data suffix, else a directory that gets one output file per
 input file (``--merge``: one per shard). Outputs are written under temporary names and renamed
 when complete; finished files are recorded in ``OUT/.pyroid``, so rerunning an interrupted
@@ -2654,6 +2658,10 @@ def build_stage_parser(stage: str) -> argparse.ArgumentParser:
     return p
 
 
+# The commands that read and write no Arrow data: run records, signature and duplicate files.
+_NO_ARROW = frozenset({_cmd_stats, _stage_buckets, _stage_cluster})
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point of the ``pyroid`` console script."""
     args = list(sys.argv[1:] if argv is None else argv)
@@ -2666,8 +2674,9 @@ def main(argv: list[str] | None = None) -> int:
         a = build_stage_parser(args[1]).parse_args(args[2:])
     else:
         a = build_parser().parse_args(args)
-    _need_pyarrow()
-    from pyroid.integrations import _shards  # imports pyarrow
+    if a.body not in _NO_ARROW:
+        _need_pyarrow()
+    from pyroid.integrations import _shards
 
     term = _on_sigterm()
     # The pyroid program, not a caller of main(): it owns the process's signals to the end.

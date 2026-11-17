@@ -24,14 +24,30 @@ import urllib.request
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pyroid._deps import missing
 
-try:
+if TYPE_CHECKING:
     import pyarrow as pa
-except ModuleNotFoundError as _exc:
-    missing(__name__, _exc, "cli", "pyarrow")
+else:
+
+    class _Pyarrow:
+        """pyarrow, imported where this module first uses it.
+
+        The commands that read or write no data file (``pyroid stats``, ``pyroid dedup
+        buckets`` and ``cluster``) and the run records then work without it.
+        """
+
+        def __getattr__(self, name: str) -> Any:
+            try:
+                import pyarrow
+            except ModuleNotFoundError as exc:
+                missing(__name__, exc, "cli", "pyarrow")
+            globals()["pa"] = pyarrow
+            return getattr(pyarrow, name)
+
+    pa = _Pyarrow()
 
 PARQUET = (".parquet", ".pq")
 JSONL = (".jsonl", ".ndjson", ".json")

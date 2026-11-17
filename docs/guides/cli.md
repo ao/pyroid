@@ -8,6 +8,10 @@ $ pip install "pyroid[cli]"     # pyarrow and numpy
 $ pyroid clean in.parquet out.parquet --recipe fineweb
 ```
 
+The commands that read or write Parquet and JSONL need the `cli` extra. `pyroid run`,
+`pyroid stats`, `pyroid dedup buckets` and `pyroid dedup cluster` also work with a plain
+`pip install pyroid`.
+
 `pyroid clean --recipe fineweb` runs ftfy, then the stages of datatrove 0.10.1's FineWeb pipeline
 that work on text (language ID, the quality filters, MinHash), with datatrove's settings and order.
 It keeps the same documents, with the same text, as that chain built from datatrove's own stages.
