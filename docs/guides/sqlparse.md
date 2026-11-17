@@ -5,7 +5,7 @@
 django-debug-toolbar, database shells and many SQL tools. 0.6.1 is sqlparse's final release.
 The lexer, the statement splitter, the grouping passes and the formatting filters are ported
 line by line, so `format`, `split`, `parse` and `lexer.tokenize` give sqlparse 0.6.1's text,
-statements, token trees and exceptions ([parity](../compatibility.md#sqlparse)), 14 to 150 times
+statements, token trees and exceptions ([parity](../compatibility.md#sqlparse)), 12 to 130 times
 faster per call on one core ([speed](#speed)).
 
 ```console
@@ -150,46 +150,50 @@ changelog for the list.
 
 ## Speed
 
-EC2 c8g.16xlarge devbox (Graviton4, 64 vCPU), shared, indicative: CPython 3.12.16, a release
-build of pyroid (not the PGO-built release wheels), sqlparse 0.6.1, both libraries in one
-process, best of 7 rounds, load average 3 to 4
-([full table](https://github.com/ao/pyroid/blob/main/bench/results/aws-c8g.16xlarge/2026-11-17/sqlparse.md),
-`bench/sqlparse/sqlparse_bench.py`).
+Measured on a dedicated AWS EC2 c7i.4xlarge (Intel Xeon Platinum 8488C, 16 vCPU) with CPython
+3.12.16, a release build of pyroid (not the PGO-built release wheels) and sqlparse 0.6.1, both
+libraries in one process, best of 7 rounds, load average 0.19 before and 0.99 after
+([full table](https://github.com/ao/pyroid/blob/main/bench/results/aws-c7i.4xlarge/2026-11-17/sqlparse.md),
+`bench/sqlparse/sqlparse_bench.py`; the [benchmarks page](../benchmarks.md#pyroidsqlparse) has
+every case).
 
 | Input | Call | sqlparse (µs) | pyroid (µs) | Speedup |
 |---|---|---:|---:|---:|
-| 1-line SELECT | `format()` | 92 | 6.4 | 14× |
-| 1-line SELECT | `format(reindent=True)` | 376 | 13.0 | 29× |
-| 1-line SELECT | `split()` | 95 | 3.0 | 32× |
-| 1-line SELECT | `parse()` | 301 | 20.2 | 15× |
-| 4-line SELECT | `format()` | 722 | 18.9 | 38× |
-| 4-line SELECT | `format(reindent=True)` | 2,766 | 65.3 | 42× |
-| 4-line SELECT | `split()` | 678 | 11.0 | 61× |
-| 4-line SELECT | `parse()` | 2,223 | 128.1 | 17× |
-| INSERT, 200 rows | `format()` | 14,441 | 189.1 | 76× |
-| INSERT, 200 rows | `format(reindent=True)` | 42,691 | 888.9 | 48× |
-| INSERT, 200 rows | `split()` | 14,902 | 98.3 | 152× |
-| INSERT, 200 rows | `parse()` | 38,632 | 2,145.4 | 18× |
-| migration, 120 statements | `format()` | 14,372 | 330.7 | 43× |
-| migration, 120 statements | `format(reindent=True)` | 56,059 | 1,254.7 | 45× |
-| migration, 120 statements | `split()` | 13,907 | 163.6 | 85× |
-| migration, 120 statements | `parse()` | 44,903 | 2,884.5 | 16× |
+| 1-line SELECT | `format()` | 85 | 5.7 | 15× |
+| 1-line SELECT | `format(reindent=True)` | 384 | 11.5 | 33× |
+| 1-line SELECT | `split()` | 80 | 2.8 | 29× |
+| 1-line SELECT | `parse()` | 284 | 18.2 | 16× |
+| 4-line SELECT | `format()` | 630 | 17.5 | 36× |
+| 4-line SELECT | `format(reindent=True)` | 2,507 | 62.7 | 40× |
+| 4-line SELECT | `split()` | 608 | 10.5 | 58× |
+| 4-line SELECT | `parse()` | 1,952 | 118.5 | 16× |
+| INSERT, 200 rows | `format()` | 12,586 | 184.0 | 68× |
+| INSERT, 200 rows | `format(reindent=True)` | 34,111 | 760.3 | 45× |
+| INSERT, 200 rows | `split()` | 12,087 | 89.9 | 134× |
+| INSERT, 200 rows | `parse()` | 30,239 | 2,423.1 | 12× |
+| migration, 120 statements | `format()` | 12,367 | 303.2 | 41× |
+| migration, 120 statements | `format(reindent=True)` | 53,608 | 1,141.0 | 47× |
+| migration, 120 statements | `split()` | 11,091 | 154.2 | 72× |
+| migration, 120 statements | `parse()` | 39,516 | 2,707.0 | 15× |
 
 Over 20,000 documents drawn at random from the real-SQL corpus
-([parity](../compatibility.md#sqlparse); 7.2 MB of queries, DDL, migrations and test scripts), one
+([parity](../compatibility.md#sqlparse); 7.6 MB of queries, DDL, migrations and test scripts), one
 call per document:
 
 | Call | sqlparse | pyroid | Speedup |
 |---|---:|---:|---:|
-| `format()` | 12.3 s | 0.37 s | 33× |
-| `format(reindent=True)` | 30.4 s | 0.97 s | 31× |
-| `split()` | 11.5 s | 0.21 s | 54× |
-| `parse()` | 27.8 s | 3.29 s | 8× |
+| `format()` | 10.8 s | 0.38 s | 28× |
+| `format(reindent=True)` | 27.9 s | 1.01 s | 28× |
+| `split()` | 10.0 s | 0.23 s | 44× |
+| `parse()` | 26.1 s | 5.06 s | 5× |
 
 Batches of 20,000 one-line SELECT statements: `format_batch(docs, reindent=True)` took
-38 ms on all 64 cores and 440 ms on one, against 18.8 s for a loop over
-sqlparse (499× and 43×); `split_batch` 14 ms and 72 ms against 4.9 s.
+60 ms on all 16 vCPUs and 395 ms on one, against 18.2 s for a loop over
+sqlparse (303× and 46×); `split_batch` 14 ms and 68 ms against 4.2 s.
 
 `parse` gains less than `format` and `split` because it ends by creating sqlparse's Python
 objects (about 190 for the 4-line SELECT), and the cycle collector then has to free them, as it
-does for sqlparse's own trees.
+does for sqlparse's own trees. Over the corpus, where every tree is kept until the loop ends, the
+collector's passes over the live trees take most of pyroid's time: in a separate run of that loop,
+2.3 of 3.7 s (sqlparse: 3.5 of 28 s). Those passes are slower on this Xeon than on Graviton4,
+where the same documents took 1.2 s of 2.5 s (EC2 c8g.16xlarge devbox, shared, indicative).
