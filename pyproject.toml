@@ -119,6 +119,8 @@ test = [
   "jieba==0.42.1",
   # The reference for pyroid.warc (Apache-2.0, pure Python).
   "warcio==1.8.2",
+  # The reference for pyroid.langdetect (Apache-2.0, pure Python; sdist only).
+  "langdetect==1.0.9",
 ]
 # GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
 # PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds
