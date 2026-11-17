@@ -20,6 +20,7 @@ use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::sync::MutexExt;
 use pyo3::types::{PyBytes, PyDict, PyList, PyString, PyTuple, PyType};
+use pyroid_core::columnar::StringBuffers;
 use pyroid_core::ftfy::UnicodeVersion;
 use pyroid_core::json_repair::chars as wtf8;
 use pyroid_core::sqlparse::engine::{self, Error as EngineError, FormatOptions, Stream};
@@ -31,6 +32,9 @@ use pyroid_core::sqlparse::reindent::ReindentOptions;
 use pyroid_core::sqlparse::tree::{Class, Fail, Id, NO_LIST, Str, Tree};
 use pyroid_core::sqlparse::ttype::{self, BUILTIN_PATHS, TT};
 use rustc_hash::FxHashMap;
+
+use crate::arrow::{Chunk, Column, ColumnType, StrType, build_error};
+use crate::input::{TextInput, Threads, text_arg};
 
 // ---------------------------------------------------------------------------
 // Set-up: the classes and token types of the `sql` and `tokens` modules in use
@@ -719,6 +723,7 @@ fn _split<'py>(
 }
 
 fn case_of(s: Option<&str>) -> PyResult<Option<Case>> {
+    // validate_options allows only these (and None)
     Ok(match s {
         None => None,
         Some("upper") => Some(Case::Upper),
@@ -734,45 +739,50 @@ fn one_char(s: &str) -> Option<char> {
     it.next().is_none().then_some(c)
 }
 
-/// `format(text, **options)` (options already validated by `formatter.validate_options`):
-/// a str, or `NotImplemented`.
-#[pyfunction]
-#[pyo3(signature = (text, lexer, max_depth, max_tokens, keyword_case, identifier_case, truncate, spaces_around_operators, strip_comments, strip_whitespace, reindent, aligned, right_margin, output))]
-#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
-fn _format<'py>(
-    text: &Bound<'py, PyString>,
-    lexer: &Bound<'py, PyAny>,
-    max_depth: Option<&Bound<'py, PyAny>>,
-    max_tokens: Option<&Bound<'py, PyAny>>,
-    keyword_case: Option<&str>,
-    identifier_case: Option<&str>,
-    truncate: Option<(usize, Bound<'py, PyAny>)>,
-    spaces_around_operators: bool,
-    strip_comments: bool,
-    strip_whitespace: bool,
-    reindent: Option<(i64, String, i64, bool, bool, bool, bool)>,
-    aligned: Option<String>,
-    right_margin: bool,
-    output: Option<&str>,
-) -> PyResult<Bound<'py, PyAny>> {
-    let py = text.py();
-    let (Lim::Is(depth), Lim::Is(tokens)) = (limit(max_depth), limit(max_tokens)) else {
-        return Ok(not_implemented(py));
-    };
+/// `format`'s options as the Python package passes them (validated by
+/// `formatter.validate_options`).
+type FormatArgs<'py> = (
+    Option<String>,
+    Option<String>,
+    Option<(usize, Bound<'py, PyAny>)>,
+    bool,
+    bool,
+    bool,
+    Option<(i64, String, i64, bool, bool, bool, bool)>,
+    Option<String>,
+    bool,
+    Option<String>,
+);
+
+/// The options for the Rust port (`None`: values only sqlparse's code handles).
+fn format_options(py: Python<'_>, args: FormatArgs<'_>) -> PyResult<Option<FormatOptions>> {
+    let (
+        keyword_case,
+        identifier_case,
+        truncate,
+        spaces_around_operators,
+        strip_comments,
+        strip_whitespace,
+        reindent,
+        aligned,
+        right_margin,
+        output,
+    ) = args;
     let truncate = match truncate {
         None => None,
         Some((w, ch)) => match ch.cast::<PyString>() {
-            Ok(c) if c.get_type().is(py.get_type::<PyString>()) => {
-                Some((w, c.to_str()?.to_owned()))
-            }
-            _ => return Ok(not_implemented(py)),
+            Ok(c) if c.get_type().is(py.get_type::<PyString>()) => match c.to_str() {
+                Ok(t) => Some((w, t.to_owned())),
+                Err(_) => return Ok(None),
+            },
+            _ => return Ok(None),
         },
     };
     let reindent = match reindent {
         None => None,
         Some((width, ch, wrap_after, comma_first, indent_after_first, indent_columns, compact)) => {
             let Some(ch) = one_char(&ch) else {
-                return Ok(not_implemented(py));
+                return Ok(None);
             };
             Some(ReindentOptions {
                 width,
@@ -789,18 +799,18 @@ fn _format<'py>(
         None => None,
         Some(a) => match one_char(&a) {
             Some(c) => Some(c),
-            None => return Ok(not_implemented(py)),
+            None => return Ok(None),
         },
     };
-    let output = match output {
+    let output = match output.as_deref() {
         Some("python") => Some(Output::Python),
         Some("php") => Some(Output::Php),
         _ => None,
     };
-    let opts = FormatOptions {
+    Ok(Some(FormatOptions {
         tokens: TokenFilters {
-            keyword_case: case_of(keyword_case)?,
-            identifier_case: case_of(identifier_case)?,
+            keyword_case: case_of(keyword_case.as_deref())?,
+            identifier_case: case_of(identifier_case.as_deref())?,
             truncate,
         },
         spaces_around_operators,
@@ -810,6 +820,25 @@ fn _format<'py>(
         aligned,
         right_margin,
         output,
+    }))
+}
+
+/// `format(text, **options)`: a str, or `NotImplemented`.
+#[pyfunction]
+#[pyo3(signature = (text, lexer, max_depth, max_tokens, options))]
+fn _format<'py>(
+    text: &Bound<'py, PyString>,
+    lexer: &Bound<'py, PyAny>,
+    max_depth: Option<&Bound<'py, PyAny>>,
+    max_tokens: Option<&Bound<'py, PyAny>>,
+    options: FormatArgs<'py>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = text.py();
+    let (Lim::Is(depth), Lim::Is(tokens)) = (limit(max_depth), limit(max_tokens)) else {
+        return Ok(not_implemented(py));
+    };
+    let Some(opts) = format_options(py, options)? else {
+        return Ok(not_implemented(py));
     };
     let Some(snap) = snapshot(lexer)? else {
         return Ok(not_implemented(py));
@@ -832,6 +861,182 @@ fn _format<'py>(
             Some(err) => Err(err),
             None => Ok(not_implemented(py)),
         },
+    }
+}
+
+/// Items per detached step of a batch: between steps it checks for Ctrl-C.
+const BATCH_CHUNK: usize = 1024;
+
+/// `f` over the documents of `xs` in parallel, a chunk at a time (`None`: some document
+/// needs sqlparse's own code; the Python package then loops).
+fn run_batch<'py, R: Send>(
+    py: Python<'py>,
+    input: &TextInput,
+    threads: Option<Threads>,
+    f: impl Fn(&str) -> Option<R> + Sync,
+) -> PyResult<Option<Vec<Option<R>>>> {
+    let rows = crate::batch::rows(input).map_err(|e| e.into_pyerr(py))?;
+    let pool = crate::input::threads(threads);
+    let mut out: Vec<Option<R>> = Vec::with_capacity(rows.len());
+    for chunk in rows.chunks(BATCH_CHUNK) {
+        let pool = if rows.len() < 2 * BATCH_CHUNK / 8 {
+            pyroid_core::par::Threads::ONE
+        } else {
+            pool
+        };
+        let part = py
+            .detach(|| {
+                pyroid_core::par::map(chunk.len(), pool, |i| match chunk[i] {
+                    None => Some(None),
+                    Some(s) => f(s).map(Some),
+                })
+            })
+            .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?;
+        for r in part {
+            match r {
+                Some(x) => out.push(x),
+                None => return Ok(None),
+            }
+        }
+        py.check_signals()?;
+    }
+    Ok(Some(out))
+}
+
+/// The batch's input, or `None` when the Python package should loop (lone surrogates).
+fn batch_input(xs: &Bound<'_, PyAny>, threads: Option<Threads>) -> PyResult<Option<TextInput>> {
+    let py = xs.py();
+    match text_arg(xs, threads, "sqls") {
+        Ok(i) => Ok(Some(i)),
+        Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+/// `[format(x, **options) for x in xs]`, in parallel: the caller's container kind (a str, a
+/// list, a tuple, or a `pyroid.Column` for Arrow input), or `NotImplemented`.
+#[pyfunction]
+#[pyo3(signature = (xs, lexer, max_depth, max_tokens, options, threads))]
+fn _format_batch<'py>(
+    xs: &Bound<'py, PyAny>,
+    lexer: &Bound<'py, PyAny>,
+    max_depth: Option<&Bound<'py, PyAny>>,
+    max_tokens: Option<&Bound<'py, PyAny>>,
+    options: FormatArgs<'py>,
+    threads: Option<Threads>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = xs.py();
+    let (Lim::Is(depth), Lim::Is(tokens)) = (limit(max_depth), limit(max_tokens)) else {
+        return Ok(not_implemented(py));
+    };
+    let Some(opts) = format_options(py, options)? else {
+        return Ok(not_implemented(py));
+    };
+    let Some(snap) = snapshot(lexer)? else {
+        return Ok(not_implemented(py));
+    };
+    if snap.config.has_external() {
+        return Ok(not_implemented(py));
+    }
+    let Some(input) = batch_input(xs, threads)? else {
+        return Ok(not_implemented(py));
+    };
+    let limits = Limits { depth, tokens };
+    let cfg = &*snap.config;
+    let Some(outs) = run_batch(py, &input, threads, |s| {
+        engine::format(s, cfg, limits, &opts, &mut engine::NoHooks).ok()
+    })?
+    else {
+        return Ok(not_implemented(py));
+    };
+    batch_output(py, &input, &outs)
+}
+
+/// The batch results in the input's container kind.
+fn batch_output<'py>(
+    py: Python<'py>,
+    input: &TextInput,
+    outs: &[Option<String>],
+) -> PyResult<Bound<'py, PyAny>> {
+    match input {
+        TextInput::Str(_) => Ok(PyString::new(py, outs[0].as_deref().unwrap_or("")).into_any()),
+        TextInput::List(_) => {
+            Ok(PyList::new(py, outs.iter().map(|o| o.as_deref().unwrap_or("")))?.into_any())
+        }
+        TextInput::Tuple(_) => {
+            Ok(PyTuple::new(py, outs.iter().map(|o| o.as_deref().unwrap_or("")))?.into_any())
+        }
+        TextInput::Arrow(strings) => {
+            let pool = crate::input::threads(None);
+            let large = strings.field.ty == StrType::LargeUtf8;
+            let chunks: Vec<Chunk> = if large {
+                vec![Chunk::LargeUtf8(
+                    StringBuffers::build(outs, pool).map_err(build_error)?,
+                )]
+            } else {
+                StringBuffers::build_split(outs, pool)
+                    .map_err(build_error)?
+                    .into_iter()
+                    .map(Chunk::Utf8)
+                    .collect()
+            };
+            let ty = if large {
+                ColumnType::LargeUtf8
+            } else {
+                ColumnType::Utf8
+            };
+            Ok(Bound::new(py, Column::new(ty, &strings.field.name, chunks))?.into_any())
+        }
+    }
+}
+
+/// `[split(x, strip_semicolon=...) for x in xs]`, in parallel (a list of lists; a tuple for
+/// tuple input; `None` for Arrow nulls), or `NotImplemented`.
+#[pyfunction]
+#[pyo3(signature = (xs, lexer, strip_semicolon, threads))]
+fn _split_batch<'py>(
+    xs: &Bound<'py, PyAny>,
+    lexer: &Bound<'py, PyAny>,
+    strip_semicolon: bool,
+    threads: Option<Threads>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = xs.py();
+    let Some(snap) = snapshot(lexer)? else {
+        return Ok(not_implemented(py));
+    };
+    if snap.config.has_external() {
+        return Ok(not_implemented(py));
+    }
+    let Some(input) = batch_input(xs, threads)? else {
+        return Ok(not_implemented(py));
+    };
+    let cfg = &*snap.config;
+    let Some(outs) = run_batch(py, &input, threads, |s| {
+        engine::split(s, cfg, strip_semicolon, &mut engine::NoHooks)
+            .ok()
+            .map(|v| {
+                v.into_iter()
+                    .map(std::borrow::Cow::into_owned)
+                    .collect::<Vec<String>>()
+            })
+    })?
+    else {
+        return Ok(not_implemented(py));
+    };
+    let mut items = Vec::with_capacity(outs.len());
+    for o in &outs {
+        items.push(match o {
+            None => py.None().into_bound(py),
+            Some(parts) => PyList::new(py, parts)?.into_any(),
+        });
+    }
+    match input {
+        TextInput::Str(_) => Ok(items
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| py.None().into_bound(py))),
+        TextInput::Tuple(_) => Ok(PyTuple::new(py, items)?.into_any()),
+        _ => Ok(PyList::new(py, items)?.into_any()),
     }
 }
 
@@ -976,6 +1181,8 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_tokenize, &m)?)?;
     m.add_function(wrap_pyfunction!(_split, &m)?)?;
     m.add_function(wrap_pyfunction!(_format, &m)?)?;
+    m.add_function(wrap_pyfunction!(_format_batch, &m)?)?;
+    m.add_function(wrap_pyfunction!(_split_batch, &m)?)?;
     m.add_function(wrap_pyfunction!(_parse, &m)?)?;
     m.add_function(wrap_pyfunction!(_regex_match, &m)?)?;
     m.add_function(wrap_pyfunction!(group::_group, &m)?)?;

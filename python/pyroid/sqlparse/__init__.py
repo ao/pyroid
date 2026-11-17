@@ -40,12 +40,14 @@ __all__ = [
     "exceptions",
     "filters",
     "format",
+    "format_batch",
     "formatter",
     "keywords",
     "lexer",
     "parse",
     "parsestream",
     "split",
+    "split_batch",
     "sql",
     "tokens",
     "utils",
@@ -102,39 +104,41 @@ def _parsestream(stream: Any, encoding: str | None, limits: Any) -> Generator[An
             yield stmt
 
 
+def _format_args(options: dict[str, Any]) -> tuple[Any, ...]:
+    """The validated options as `_native._format` takes them (`build_filter_stack`'s reading)."""
+    get = options.get
+    truncate = (get("truncate_strings"), get("truncate_char")) if get("truncate_strings") else None
+    reindent = None
+    if get("reindent"):
+        reindent = (
+            options["indent_width"],
+            options["indent_char"],
+            options["wrap_after"],
+            bool(options["comma_first"]),
+            bool(options["indent_after_first"]),
+            bool(options["indent_columns"]),
+            bool(options["compact"]),
+        )
+    output = get("output_format")
+    return (
+        get("keyword_case") or None,
+        get("identifier_case") or None,
+        truncate,
+        bool(get("use_space_around_operators", False)),
+        bool(get("strip_comments")),
+        bool(get("strip_whitespace") or get("reindent")),
+        reindent,
+        options["indent_char"] if get("reindent_aligned", False) else None,
+        bool(get("right_margin")),
+        output.lower() if output else None,
+    )
+
+
 def _format(sql: Any, encoding: str | None, options: dict[str, Any], limits: Any) -> str:
     lex = lexer.Lexer.get_default_instance()
     if lexer.plain(lex):
         text = lexer.read(sql, encoding)
-        get = options.get
-        truncate = (get("truncate_strings"), get("truncate_char")) if get("truncate_strings") else None
-        reindent = None
-        if get("reindent"):
-            reindent = (
-                options["indent_width"],
-                options["indent_char"],
-                options["wrap_after"],
-                bool(options["comma_first"]),
-                bool(options["indent_after_first"]),
-                bool(options["indent_columns"]),
-                bool(options["compact"]),
-            )
-        output = get("output_format")
-        r = _native._format(
-            text,
-            lex,
-            *_limit_values(limits),
-            get("keyword_case") or None,
-            get("identifier_case") or None,
-            truncate,
-            bool(get("use_space_around_operators", False)),
-            bool(get("strip_comments")),
-            bool(get("strip_whitespace") or get("reindent")),
-            reindent,
-            options["indent_char"] if get("reindent_aligned", False) else None,
-            bool(get("right_margin")),
-            output.lower() if output else None,
-        )
+        r = _native._format(text, lex, *_limit_values(limits), _format_args(options))
         if r is not NotImplemented:
             return r  # type: ignore[no-any-return]
         sql, encoding = text, None
@@ -159,6 +163,17 @@ def _split(sql: Any, encoding: str | None, strip_semicolon: bool) -> list[str]:
         _warn_fallback("split", "the default Lexer has overridden methods", 4)
     stack = engine.FilterStack(strip_semicolon=strip_semicolon)
     return [str(stmt).strip() for stmt in stack.run(sql, encoding)]
+
+
+def _batch_items(sqls: Any) -> list[Any]:
+    """The documents of a batch for the Python loop (Arrow nulls stay None)."""
+    if isinstance(sqls, (list, tuple)):
+        return list(sqls)
+    if isinstance(sqls, str):
+        return [sqls]
+    if hasattr(sqls, "to_pylist"):  # pyarrow, pyroid.Column
+        return list(sqls.to_pylist())
+    return list(sqls)
 
 
 # ---------------------------------------------------------------------------
@@ -219,3 +234,57 @@ def split(sql: Any, encoding: str | None = None, strip_semicolon: bool = False) 
         A list of strings.
     """
     return _split(sql, encoding, strip_semicolon)
+
+
+def format_batch(sqls: Any, *, threads: int | None = None, **options: Any) -> Any:
+    """Format every SQL text of `sqls` with `options`, in parallel.
+
+    The result equals ``[format(sql, **options) for sql in sqls]``, in the caller's kind: a
+    list for a list, a tuple for a tuple, a ``pyroid.Column`` of strings for an Arrow array
+    or column (nulls stay null), a str for a str. It raises what that loop raises.
+
+    Args:
+        sqls: The SQL texts: a list or tuple of str, or an Arrow string array or column.
+        threads: At most this many tasks at once on the shared pool (``None``: all of it).
+        **options: ``format``'s options.
+
+    Returns:
+        The formatted texts.
+    """
+    options = formatter.validate_options(options)
+    lex = lexer.Lexer.get_default_instance()
+    if lexer.plain(lex):
+        r = _native._format_batch(
+            sqls, lex, *_limit_values(None), _format_args(options), threads
+        )
+        if r is not NotImplemented:
+            return r
+    items = [None if x is None else _format(x, None, dict(options), None) for x in _batch_items(sqls)]
+    if isinstance(sqls, str):
+        return items[0]
+    return tuple(items) if isinstance(sqls, tuple) else items
+
+
+def split_batch(sqls: Any, *, threads: int | None = None, strip_semicolon: bool = False) -> Any:
+    """Split every SQL text of `sqls` into statements, in parallel.
+
+    The result equals ``[split(sql, strip_semicolon=strip_semicolon) for sql in sqls]``: a
+    list of lists (a tuple of lists for a tuple; ``None`` for an Arrow null).
+
+    Args:
+        sqls: The SQL texts: a list or tuple of str, or an Arrow string array or column.
+        threads: At most this many tasks at once on the shared pool (``None``: all of it).
+        strip_semicolon: Remove trailing semicolons, as ``split`` does.
+
+    Returns:
+        The statements of each text.
+    """
+    lex = lexer.Lexer.get_default_instance()
+    if lexer.plain(lex):
+        r = _native._split_batch(sqls, lex, bool(strip_semicolon), threads)
+        if r is not NotImplemented:
+            return r
+    items = [None if x is None else _split(x, None, strip_semicolon) for x in _batch_items(sqls)]
+    if isinstance(sqls, str):
+        return items[0]
+    return tuple(items) if isinstance(sqls, tuple) else items
