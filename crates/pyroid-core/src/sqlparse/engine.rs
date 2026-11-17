@@ -75,16 +75,20 @@ impl FormatOptions {
 }
 
 /// The lexed, filtered items of a text, handed out one statement at a time. The text is lexed
-/// as the splitter asks for tokens, and the items of a statement are dropped when the next
-/// one is asked for, so the memory held is about one statement's, not the text's.
+/// as the splitter asks for tokens (a few at a time), and the items of statements handed out
+/// are dropped every few thousand, so the memory held is about one statement's, not the
+/// text's.
 ///
 /// Every call takes the text and the configuration [`stream`] was given.
 #[allow(missing_debug_implementations)]
 pub struct Stream<E> {
-    /// The items from the current statement's first on (`start` indexes them).
+    /// The items not dropped yet (the ranges [`Stream::next_statement`] gives index them).
     pub items: Vec<Item>,
     lexer: lexer::Lexer,
-    lexed: bool,
+    /// The lexer's last step.
+    raw: Vec<lexer::RawTok>,
+    /// Tokens per step.
+    step: usize,
     lex_error: Option<LexError<E>>,
     filters: TokenFilters,
     pos: usize,
@@ -95,13 +99,30 @@ pub struct Stream<E> {
     version: UnicodeVersion,
 }
 
+/// Items lexed per step: a few ahead of the splitter (the lexer has no side effects the caller
+/// sees; a Python `re` entry is a pure match).
+const FILL: usize = 64;
+
+/// A text up to this many bytes is lexed in one step (its tokens take at most a few MiB, and
+/// one pass is faster).
+const WHOLE: usize = 1 << 20;
+
+/// The items of statements handed out are dropped once there are this many.
+const DRAIN: usize = 4096;
+
 /// A stream over `src`, lexed with `cfg` and the token filters as it is read.
 pub fn stream<E>(src: &str, cfg: &Config, filters: &TokenFilters) -> Stream<E> {
     let v = cfg.version();
     Stream {
-        items: Vec::new(),
+        // as many as a short text has (about one per 3 bytes), at most a few steps' worth
+        items: Vec::with_capacity((src.len() / 3 + 4).min(WHOLE / 3)),
         lexer: lexer::Lexer::new(src, cfg),
-        lexed: false,
+        raw: Vec::with_capacity(if src.len() <= WHOLE {
+            src.len() / 3 + 4
+        } else {
+            FILL
+        }),
+        step: if src.len() <= WHOLE { usize::MAX } else { FILL },
         lex_error: None,
         filters: filters.clone(),
         pos: 0,
@@ -114,38 +135,36 @@ pub fn stream<E>(src: &str, cfg: &Config, filters: &TokenFilters) -> Stream<E> {
 }
 
 impl<E> Stream<E> {
-    /// Lex the next item; false at the end of the text (or where lexing stopped).
+    /// Lex the next step's items (all of a short text, else [`FILL`]); false when there were
+    /// none (the end of the text, or where lexing stopped).
     fn fill<H: Hooks<Error = E>>(
         &mut self,
         src: &str,
         cfg: &Config,
         hooks: &mut H,
     ) -> Result<bool, Error<E>> {
-        if self.lexed {
+        if self.lexer.done() {
             return Ok(false);
         }
-        match self.lexer.next(src, cfg, hooks) {
-            Ok(Some(t)) => {
-                let mut item = (t.tt, Str::Span(t.start, t.end));
-                if !self.filters.is_empty() {
-                    self.filters
-                        .apply(src, &self.types, self.version, &mut item)?;
-                }
-                self.items.push(item);
-                Ok(true)
-            }
-            Ok(None) => {
-                self.lexed = true;
-                Ok(false)
-            }
-            Err(LexError::Interrupted(e)) => Err(Error::External(e)),
-            Err(e) => {
-                // raised once the statements before it are out, as sqlparse's generator does
-                self.lexed = true;
-                self.lex_error = Some(e);
-                Ok(false)
+        self.raw.clear();
+        let r = self
+            .lexer
+            .lex_into(src, cfg, hooks, &mut self.raw, self.step);
+        let before = self.items.len();
+        self.items
+            .extend(self.raw.iter().map(|t| (t.tt, Str::Span(t.start, t.end))));
+        if !self.filters.is_empty() {
+            for item in &mut self.items[before..] {
+                self.filters.apply(src, &self.types, self.version, item)?;
             }
         }
+        match r {
+            Ok(()) => {}
+            Err(LexError::Interrupted(e)) => return Err(Error::External(e)),
+            // raised once the statements before it are out, as sqlparse's generator does
+            Err(e) => self.lex_error = Some(e),
+        }
+        Ok(self.items.len() > before)
     }
 
     /// The next statement's item range (into [`Stream::items`], valid until the next call),
@@ -163,8 +182,8 @@ impl<E> Stream<E> {
         if self.done {
             return Ok(None);
         }
-        if self.start > 0 {
-            // the statements handed out before
+        if self.start >= DRAIN {
+            // the statements handed out before (in steps, so each item moves about once)
             self.items.drain(..self.start);
             self.pos -= self.start;
             self.start = 0;

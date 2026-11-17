@@ -311,20 +311,39 @@ fn snap_valid(
     let (Ok(rl), Ok(kl)) = (regex.cast_exact::<PyList>(), kw.cast_exact::<PyList>()) else {
         return Ok(false);
     };
-    let rt = rl.to_tuple();
-    if rt.len() != s.regex_items.len() || rt.iter().zip(&s.regex_items).any(|(a, b)| !b.is(&a)) {
+    if !same_items(
+        rl,
+        s.regex_items.iter().map(Py::as_ptr),
+        s.regex_items.len(),
+    ) || !same_items(kl, s.dicts.iter().map(|d| d.dict.as_ptr()), s.dicts.len())
+    {
         return Ok(false);
     }
-    let kt = kl.to_tuple();
-    if kt.len() != s.dicts.len() {
-        return Ok(false);
-    }
-    for (d, seen) in kt.iter().zip(&s.dicts) {
-        if !unchanged(&d, seen)? {
+    // the dictionaries are the snapshot's (identity checked); it holds them
+    let py = lex.py();
+    for seen in &s.dicts {
+        if !unchanged(seen.dict.bind(py), seen)? {
             return Ok(false);
         }
     }
     Ok(true)
+}
+
+/// `l` holds exactly the objects `want` (`n` of them), by identity; no new references.
+fn same_items(
+    l: &Bound<'_, PyList>,
+    want: impl Iterator<Item = *mut pyo3::ffi::PyObject>,
+    n: usize,
+) -> bool {
+    pyo3::sync::critical_section::with_critical_section(l.as_any(), || {
+        l.len() == n
+            && (0..n).zip(want).all(|(i, p)| {
+                let i = pyo3::ffi::Py_ssize_t::try_from(i).unwrap_or(pyo3::ffi::Py_ssize_t::MAX);
+                // SAFETY: `l` is a list, locked on free-threaded builds, and `i` is below its
+                // length; the borrowed item is only compared.
+                (unsafe { pyo3::ffi::PyList_GetItem(l.as_ptr(), i) }) == p
+            })
+    })
 }
 
 /// The snapshot of `lex`'s table, built if needed (`None`: it needs Python's lexer).
@@ -804,6 +823,68 @@ struct TokensInner {
     done: bool,
 }
 
+impl TokensInner {
+    /// The next list of up to [`TOKEN_CHUNK`] pairs; `None` at the end (or the lexer's error
+    /// once the pairs before it are out).
+    fn chunk<'py>(&mut self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyList>>> {
+        if let Some(e) = self.error.take() {
+            self.done = true;
+            return Err(e);
+        }
+        if self.done {
+            return Ok(None);
+        }
+        let text = self.text.bind(py).clone();
+        let src: &str = match &self.remapped {
+            Some(r) => r,
+            None => text.to_str()?,
+        };
+        let remapped = self.remapped.is_some();
+        let pause = setup()?.pause.bind(py);
+        let mut hooks = PyHooks::new(&text, &self.snap.externals, pause);
+        (hooks.byte, hooks.chr) = self.hook_pos;
+        let mut raw = Vec::with_capacity(TOKEN_CHUNK.min(src.len() / 3 + 4));
+        let r = self
+            .lexer
+            .lex_into(src, &self.snap.config, &mut hooks, &mut raw, TOKEN_CHUNK);
+        match r {
+            Ok(()) => self.done = self.lexer.done(),
+            Err(core_lexer::LexError::Interrupted(e)) => {
+                self.done = true;
+                return Err(e);
+            }
+            Err(core_lexer::LexError::EmptyMatch) => self.error = Some(empty_match_error(py)),
+            Err(core_lexer::LexError::External(e)) => self.error = Some(e),
+        }
+        let types = type_objects(py);
+        let mut out: Vec<Bound<'py, PyTuple>> = Vec::with_capacity(raw.len());
+        for t in &raw {
+            let tt = types
+                .get(usize::from(t.tt))
+                .and_then(Option::as_ref)
+                .ok_or_else(|| PyTypeError::new_err("unregistered token type"))?;
+            let v = py_str(py, &src[t.start as usize..t.end as usize], remapped)?;
+            out.push(PyTuple::new(py, [tt.bind(py).clone(), v.into_any()])?);
+        }
+        self.hook_pos = (hooks.byte, hooks.chr);
+        if out.is_empty() {
+            return match self.error.take() {
+                Some(e) => {
+                    self.done = true;
+                    Err(e)
+                }
+                None => Ok(None),
+            };
+        }
+        Ok(Some(PyList::new(py, out)?))
+    }
+
+    /// Nothing is left to hand out: no pairs, no error.
+    fn finished(&self) -> bool {
+        self.done && self.error.is_none()
+    }
+}
+
 #[pymethods]
 impl Tokens {
     fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
@@ -818,69 +899,18 @@ impl Tokens {
         let Some(inner) = guard.as_mut() else {
             return Ok(None);
         };
-        if let Some(e) = inner.error.take() {
+        let r = inner.chunk(py);
+        if !matches!(r, Ok(Some(_))) {
             *guard = None;
-            return Err(e);
         }
-        if inner.done {
-            *guard = None;
-            return Ok(None);
-        }
-        let text = inner.text.bind(py).clone();
-        let src: &str = match &inner.remapped {
-            Some(r) => r,
-            None => text.to_str()?,
-        };
-        let remapped = inner.remapped.is_some();
-        let pause = setup()?.pause.bind(py);
-        let mut hooks = PyHooks::new(&text, &inner.snap.externals, pause);
-        (hooks.byte, hooks.chr) = inner.hook_pos;
-        let types = type_objects(py);
-        let mut out: Vec<Bound<'py, PyTuple>> = Vec::new();
-        while out.len() < TOKEN_CHUNK {
-            match inner.lexer.next(src, &inner.snap.config, &mut hooks) {
-                Ok(Some(t)) => {
-                    let tt = types
-                        .get(usize::from(t.tt))
-                        .and_then(Option::as_ref)
-                        .ok_or_else(|| PyTypeError::new_err("unregistered token type"))?;
-                    let v = py_str(py, &src[t.start as usize..t.end as usize], remapped)?;
-                    out.push(PyTuple::new(py, [tt.bind(py).clone(), v.into_any()])?);
-                }
-                Ok(None) => {
-                    inner.done = true;
-                    break;
-                }
-                Err(core_lexer::LexError::Interrupted(e)) => {
-                    *guard = None;
-                    return Err(e);
-                }
-                Err(core_lexer::LexError::EmptyMatch) => {
-                    inner.error = Some(empty_match_error(py));
-                    break;
-                }
-                Err(core_lexer::LexError::External(e)) => {
-                    inner.error = Some(e);
-                    break;
-                }
-            }
-        }
-        inner.hook_pos = (hooks.byte, hooks.chr);
-        if out.is_empty() {
-            let err = inner.error.take();
-            *guard = None;
-            return match err {
-                Some(e) => Err(e),
-                None => Ok(None),
-            };
-        }
-        Ok(Some(PyList::new(py, out)?))
+        r
     }
 }
 
-/// `Lexer.get_tokens(text)` for `lexer`: an iterator of lists of `(ttype, value)` pairs
-/// (`Tokens`), `NotImplemented` (a table pyroid cannot read), or `None` (a text holding lone
-/// surrogates and U+10F800..).
+/// `Lexer.get_tokens(text)` for `lexer`: `(pairs, rest)`, the first list of `(ttype, value)`
+/// pairs and a `Tokens` iterator of the next lists (`None` when there are none), or
+/// `NotImplemented` (a table pyroid cannot read), or `None` (a text holding lone surrogates and
+/// U+10F800..).
 #[pyfunction]
 fn _tokenize<'py>(
     text: &Bound<'py, PyString>,
@@ -895,18 +925,29 @@ fn _tokenize<'py>(
     };
     let lexer = core_lexer::Lexer::new(&src.utf8, &snap.config);
     let remapped = src.remapped.then(|| src.utf8.into_owned());
-    let it = Tokens {
-        inner: Mutex::new(Some(TokensInner {
-            text: text.clone().unbind(),
-            remapped,
-            snap,
-            lexer,
-            hook_pos: (0, 0),
-            error: None,
-            done: false,
-        })),
+    let mut inner = TokensInner {
+        text: text.clone().unbind(),
+        remapped,
+        snap,
+        lexer,
+        hook_pos: (0, 0),
+        error: None,
+        done: false,
     };
-    Ok(Bound::new(py, it)?.into_any())
+    // the first list now: a short text needs no iterator
+    let first = match inner.chunk(py)? {
+        Some(l) => l,
+        None => PyList::empty(py),
+    };
+    let rest = if inner.finished() {
+        py.None().into_bound(py)
+    } else {
+        let it = Tokens {
+            inner: Mutex::new(Some(inner)),
+        };
+        Bound::new(py, it)?.into_any()
+    };
+    Ok(PyTuple::new(py, [first.into_any(), rest])?.into_any())
 }
 
 fn engine_err(py: Python<'_>, e: EngineError<PyErr>) -> PyResult<Option<PyErr>> {

@@ -83,8 +83,11 @@ def _tokens(lex: Any, sql: Any, encoding: str | None) -> Iterator[tuple[Any, str
         _core.warn_fallback("lexer.tokenize", why, 4)
         yield from Lexer.get_tokens(lex, text)
         return
-    for pairs in r:  # lexed as they are asked for, a list at a time
-        yield from pairs
+    first, rest = r
+    yield from first
+    if rest is not None:
+        for pairs in rest:  # lexed as they are asked for, a list at a time
+            yield from pairs
 
 
 def tokenize(sql: Any, encoding: str | None = None) -> Iterator[tuple[Any, str]]:
