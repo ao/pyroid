@@ -5,6 +5,7 @@ from __future__ import annotations
 import errno
 import gzip
 import importlib.util
+import io
 import json
 import os
 import re
@@ -420,21 +421,37 @@ def test_a_closed_pipe_on_windows_is_einval_not_epipe(
 
     src = _write(_table(["a", "b"]), tmp_path / "in.parquet")
     with monkeypatch.context() as m:
-        m.setattr(_shards, "_muted", False)
+        m.setattr(_shards, "_muted", None)
         m.setattr(_shards, "_WINDOWS", True)
         m.setattr(sys, "stderr", _ClosedPipe())
         _shards.say("lost\n")  # no error: stderr is muted from here
-        assert _shards._muted
+        assert _shards._muted is sys.stderr
         assert main(["translit", str(src), str(tmp_path / "o"), "--stats"]) == 0
         m.setattr(sys, "stdout", _ClosedPipe())
         assert main(["stats", str(tmp_path / "o")]) == 1  # quietly, as for EPIPE
     with monkeypatch.context() as m:
         # elsewhere EINVAL is another error, which is not silenced
-        m.setattr(_shards, "_muted", False)
+        m.setattr(_shards, "_muted", None)
         m.setattr(_shards, "_WINDOWS", False)
         m.setattr(sys, "stderr", _ClosedPipe())
         with pytest.raises(OSError, match="Invalid argument"):
             _shards.say("x\n")
+
+
+@pytest.mark.thread_unsafe(reason="replaces sys.stderr")
+def test_messages_go_to_a_new_stderr_after_a_closed_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A closed stderr silenced every later message of the process, to any stderr."""
+    from pyroid.integrations import _shards
+
+    with monkeypatch.context() as m:
+        m.setattr(_shards, "_muted", None)
+        m.setattr(_shards, "_WINDOWS", True)
+        m.setattr(sys, "stderr", _ClosedPipe())
+        _shards.say("lost\n")
+        new = io.StringIO()
+        m.setattr(sys, "stderr", new)
+        _shards.say("seen\n")
+        assert new.getvalue() == "seen\n"
 
 
 def test_the_program_leaves_late_signals_their_default_action(tmp_path: Path) -> None:

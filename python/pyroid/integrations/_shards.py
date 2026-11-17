@@ -290,7 +290,7 @@ def print_summary(d: Mapping[str, Any]) -> None:
     say("".join(f"{ln}\n" for ln in lines))
 
 
-_muted = False  # stderr was a closed pipe: messages are dropped
+_muted: Any = None  # the stderr that was a closed pipe: messages to it are dropped
 _WINDOWS = sys.platform == "win32"
 
 
@@ -308,20 +308,22 @@ def closed_pipe(e: BaseException) -> bool:
 def say(text: str) -> None:
     """Write ``text`` to stderr, for people (progress, stats, errors).
 
-    When stderr is a pipe that closed (``2>&1 | head -1``), this and later messages are dropped
-    and the run goes on: its outputs and exit status do not depend on them.
+    When stderr is a pipe that closed (``2>&1 | head -1``), this and later messages to it are
+    dropped and the run goes on: its outputs and exit status do not depend on them. The runs of a
+    process share stderr; once ``sys.stderr`` is replaced, messages go to the new one.
     """
     global _muted
-    if _muted:
+    stream = sys.stderr
+    if stream is _muted:
         return
     try:
-        sys.stderr.write(text)
-        sys.stderr.flush()
+        stream.write(text)
+        stream.flush()
     except (OSError, ValueError) as e:  # ValueError: stderr was closed
         if isinstance(e, OSError) and not closed_pipe(e):
             raise
-        _muted = True
-        mute(sys.stderr)
+        _muted = stream
+        mute(stream)
 
 
 def mute(stream: Any) -> None:
