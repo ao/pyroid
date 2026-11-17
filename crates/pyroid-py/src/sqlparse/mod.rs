@@ -544,6 +544,7 @@ fn limit(v: Option<&Bound<'_, PyAny>>) -> Lim {
 // ---------------------------------------------------------------------------
 
 /// Python objects for `stmt` and everything it holds, mirroring the arena.
+#[allow(clippy::too_many_lines)]
 fn build<'py>(
     py: Python<'py>,
     t: &Tree<'_>,
@@ -588,13 +589,12 @@ fn build<'py>(
     for &id in &order {
         let n = t.n(id);
         let ci = n.class.index();
-        let arg = match &args[ci] {
-            Some(a) => a.clone(),
-            None => {
-                let a = PyTuple::new(py, [s.classes[ci].bind(py)])?;
-                args[ci] = Some(a.clone());
-                a
-            }
+        let arg = if let Some(a) = &args[ci] {
+            a.clone()
+        } else {
+            let a = PyTuple::new(py, [s.classes[ci].bind(py)])?;
+            args[ci] = Some(a.clone());
+            a
         };
         let obj = new.call(arg, None)?;
         let text = t.val(id);
