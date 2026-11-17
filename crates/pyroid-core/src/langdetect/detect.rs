@@ -192,21 +192,36 @@ fn update(
     saved: &mut Vec<(usize, f64)>,
 ) -> Result<(), Failure> {
     let n = prob.len().min(row.len);
-    // `weight + 0.0` for the entries never set (`[0.0] * langsize`); the set entries from
-    // their old values first.
-    let w0 = weight + 0.0;
-    saved.clear();
-    for (&i, &p) in row.lang.iter().zip(row.prob) {
-        let i = i as usize;
-        if i < n {
-            saved.push((i, prob[i] * (weight + p)));
+    if let Some(dense) = row.dense {
+        // langdetect's own loop, over every language.
+        for (x, &p) in prob[..n].iter_mut().zip(&dense[..n]) {
+            *x *= weight + p;
         }
-    }
-    for x in &mut prob[..n] {
-        *x *= w0;
-    }
-    for &(i, v) in saved.iter() {
-        prob[i] = v;
+    } else {
+        // `weight + 0.0` for the entries never set (`[0.0] * langsize`); the set entries from
+        // their old values first.
+        let w0 = weight + 0.0;
+        let mut few = [(0usize, 0.0f64); super::profiles::DENSE_MIN];
+        let mut count = 0usize;
+        saved.clear();
+        for (&i, &p) in row.lang.iter().zip(row.prob) {
+            let i = i as usize;
+            if i < n {
+                let v = prob[i] * (weight + p);
+                if count < few.len() {
+                    few[count] = (i, v);
+                    count += 1;
+                } else {
+                    saved.push((i, v));
+                }
+            }
+        }
+        for x in &mut prob[..n] {
+            *x *= w0;
+        }
+        for &(i, v) in few[..count].iter().chain(saved.iter()) {
+            prob[i] = v;
+        }
     }
     if n < prob.len() {
         return Err(Failure::Index);

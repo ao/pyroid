@@ -197,6 +197,16 @@ impl Builder {
                 uni[(key - 1) as usize] = row + 1;
             }
         }
+        let mut dense_at = vec![u32::MAX; self.rows.len()];
+        let mut dense = Vec::new();
+        for (r, row) in self.rows.iter().enumerate() {
+            if row.entries.len() > DENSE_MIN && row.len <= DENSE_MAX_LEN {
+                if let Ok(at) = u32::try_from(dense.len()) {
+                    dense_at[r] = at;
+                    dense.extend(self.dense(r));
+                }
+            }
+        }
         let nonneg_finite = prob.iter().all(|p| p.is_finite() && *p >= 0.0);
         let max_prob = prob.iter().copied().fold(0.0f64, f64::max);
         Frozen {
@@ -209,6 +219,8 @@ impl Builder {
             keys,
             nonneg_finite,
             max_prob,
+            dense_at,
+            dense,
         }
     }
 }
@@ -229,7 +241,16 @@ pub struct Frozen {
     nonneg_finite: bool,
     /// The largest set value (0.0 if none).
     max_prob: f64,
+    /// Start in `dense` of each row stored densely (`u32::MAX`: not), see [`DENSE_MIN`].
+    dense_at: Vec<u32>,
+    dense: Vec<f64>,
 }
+
+/// Rows with more set entries than this (the common n-grams, which most languages share)
+/// are also stored densely, so an update multiplies every language in one pass.
+pub const DENSE_MIN: usize = 8;
+/// Rows longer than this are never stored densely.
+const DENSE_MAX_LEN: usize = 4096;
 
 /// One row as detection reads it.
 #[derive(Clone, Copy, Debug)]
@@ -240,6 +261,8 @@ pub struct RowRef<'a> {
     pub lang: &'a [u32],
     /// Their values.
     pub prob: &'a [f64],
+    /// All `len` values, if the row is stored densely.
+    pub dense: Option<&'a [f64]>,
 }
 
 impl Frozen {
@@ -275,10 +298,13 @@ impl Frozen {
     pub fn row(&self, row: u32) -> RowRef<'_> {
         let r = row as usize;
         let (a, b) = (self.start[r], self.start[r + 1]);
+        let len = self.len[r];
+        let at = self.dense_at[r];
         RowRef {
-            len: self.len[r],
+            len,
             lang: &self.lang[a..b],
             prob: &self.prob[a..b],
+            dense: (at != u32::MAX).then(|| &self.dense[at as usize..at as usize + len]),
         }
     }
 
