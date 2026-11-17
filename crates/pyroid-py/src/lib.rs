@@ -24,6 +24,7 @@ mod ftfy;
 mod input;
 mod jieba;
 mod json_repair;
+mod langdetect;
 mod metrics;
 mod nemo;
 mod nemo_modifiers;
@@ -65,5 +66,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jieba::register(m)?;
     trafilatura::register(m)?;
     warc::register(m)?;
+    langdetect::register(m)?;
     Ok(())
 }
