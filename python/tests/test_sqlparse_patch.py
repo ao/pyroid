@@ -732,7 +732,7 @@ def test_without_sqlparse_the_modules_are_pyroids(tmp_path: Path) -> None:
     assert message.startswith(
         "pyroid.integrations.patch: `import sqlparse` now gives pyroid's drop-in (pyroid.sqlparse"
     )
-    assert "sqlparse is not installed (pip install sqlparse==0.6.1)" in message
+    assert "so sqlparse and its submodules are pyroid.sqlparse's" in message
     assert out["module"]
     assert out["version"] == "0.6.1"
     assert out["format"] == "SELECT a,\n       b\nFROM t\nWHERE c=1"
@@ -764,5 +764,5 @@ def test_without_sqlparse_blocked_in_sys_modules() -> None:
         """
     )
     assert out[:2] == [["select 1;", "select 2"], True]
-    assert "importing sqlparse is blocked (sys.modules['sqlparse'] is None)" in out[2]
+    assert "sqlparse and its submodules are pyroid.sqlparse's" in out[2]
     assert out[3] is True

@@ -113,9 +113,20 @@ def _parsestream(stream: Any, encoding: str | None, limits: Any) -> Generator[An
             yield stmt
 
 
-def _format_args(options: dict[str, Any]) -> tuple[Any, ...]:
-    """The validated options as `_native._format` takes them (`build_filter_stack`'s reading)."""
+# Option values past this go to sqlparse's own code (Python ints have no bound).
+_BIG = 2**62
+
+
+def _format_args(options: dict[str, Any]) -> tuple[Any, ...] | None:
+    """The validated options as `_native._format` takes them (`build_filter_stack`'s reading).
+
+    None for integer options too large for the Rust port.
+    """
     get = options.get
+    for key in ("truncate_strings", "indent_width", "wrap_after"):
+        value = get(key)
+        if isinstance(value, int) and not -_BIG < value < _BIG:
+            return None
     truncate = (get("truncate_strings"), get("truncate_char")) if get("truncate_strings") else None
     reindent = None
     if get("reindent"):
@@ -147,7 +158,12 @@ def _format(sql: Any, encoding: str | None, options: dict[str, Any], limits: Any
     lex = lexer.Lexer.get_default_instance()
     if lexer.plain(lex):
         text = lexer.read(sql, encoding)
-        r = _native._format(text, lex, *_limit_values(limits), _format_args(options))
+        args = _format_args(options)
+        r = (
+            NotImplemented
+            if args is None
+            else _native._format(text, lex, *_limit_values(limits), args)
+        )
         if r is not NotImplemented:
             return r  # type: ignore[no-any-return]
         sql, encoding = text, None
@@ -262,8 +278,9 @@ def format_batch(sqls: Any, *, threads: int | None = None, **options: Any) -> An
     """
     options = formatter.validate_options(options)
     lex = lexer.Lexer.get_default_instance()
-    if lexer.plain(lex):
-        r = _native._format_batch(sqls, lex, *_limit_values(None), _format_args(options), threads)
+    args = _format_args(options)
+    if lexer.plain(lex) and args is not None:
+        r = _native._format_batch(sqls, lex, *_limit_values(None), args, threads)
         if r is not NotImplemented:
             return r
     items = [

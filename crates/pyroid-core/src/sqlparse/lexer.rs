@@ -428,9 +428,7 @@ pub fn lex<X: External>(
                 },
             };
             let Some(end) = end else { continue };
-            if end <= pos {
-                return (out, Some(LexError::EmptyMatch));
-            }
+            let end = end.max(pos);
             match e.action {
                 Action::Type(tt) => out.push(RawTok {
                     tt,
@@ -443,6 +441,10 @@ pub fn lex<X: External>(
                     end: u(end),
                 }),
                 Action::Drop => {}
+            }
+            if end <= pos {
+                // sqlparse yields the empty token, then consume(iterable, -1) raises
+                return (out, Some(LexError::EmptyMatch));
             }
             pos = end;
             continue 'outer;

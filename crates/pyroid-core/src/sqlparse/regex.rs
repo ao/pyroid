@@ -196,6 +196,8 @@ enum Ast {
     Class(ClassSpec),
     Any,
     Start,
+    /// `\A`: the string start, whatever the flags.
+    StartAbs,
     End,
     EndAbs,
     WordB,
@@ -341,7 +343,13 @@ impl Parser<'_> {
         };
         if matches!(
             atom,
-            Ast::Start | Ast::End | Ast::EndAbs | Ast::WordB | Ast::NotWordB | Ast::Look { .. }
+            Ast::Start
+                | Ast::StartAbs
+                | Ast::End
+                | Ast::EndAbs
+                | Ast::WordB
+                | Ast::NotWordB
+                | Ast::Look { .. }
         ) {
             return unsupported("a repeated assertion");
         }
@@ -559,7 +567,7 @@ impl Parser<'_> {
                     }
                     'b' => Ast::WordB,
                     'B' => Ast::NotWordB,
-                    'A' => Ast::Start,
+                    'A' => Ast::StartAbs,
                     'Z' => Ast::EndAbs,
                     '1'..='9' => {
                         // a group reference (1-99), or an octal escape of three digits
@@ -825,6 +833,7 @@ impl Compiler {
             } else {
                 Inst::Start
             }),
+            Ast::StartAbs => self.prog.push(Inst::Start),
             Ast::End => self.prog.push(if self.flags & FLAG_MULTILINE != 0 {
                 Inst::EndLine
             } else {
@@ -1008,6 +1017,7 @@ fn nullable(node: &Ast) -> bool {
     match node {
         Ast::Empty
         | Ast::Start
+        | Ast::StartAbs
         | Ast::End
         | Ast::EndAbs
         | Ast::WordB
@@ -1027,6 +1037,7 @@ fn width(node: &Ast) -> Option<usize> {
     match node {
         Ast::Empty
         | Ast::Start
+        | Ast::StartAbs
         | Ast::End
         | Ast::EndAbs
         | Ast::WordB
@@ -1242,7 +1253,9 @@ impl Regex {
             Inst::Char(x) => c == *x,
             Inst::CharI { lo, extra } => {
                 let l = pystr::simple_lower(c, self.version);
-                l == *lo || (extra[0] != '\0' && (l == extra[0] || l == extra[1]))
+                l == *lo
+                    || (extra[0] != '\0' && l == extra[0])
+                    || (extra[1] != '\0' && l == extra[1])
             }
             Inst::Set(i) => self.sets[*i as usize].test(c, self.version),
             Inst::Any => c != '\n',
@@ -1680,6 +1693,14 @@ mod tests {
         assert_eq!(m(r"x{2,3}", "xxxx", 0), Some(3));
         assert_eq!(m(r"x{2,3}?", "xxxx", 0), Some(2));
         assert_eq!(m(r"a$", "a\n", 0), Some(1));
+        assert_eq!(m("s", "\0", 0), None);
+        assert_eq!(m("s", "\u{17f}", 0), Some(2));
+        assert_eq!(
+            Regex::new(r"\A", FLAG_MULTILINE | FLAG_UNICODE, V)
+                .expect("ok")
+                .match_at("a\nb", 2),
+            None
+        );
     }
 
     #[test]

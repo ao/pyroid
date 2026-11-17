@@ -195,7 +195,18 @@ fn _configure(
 }
 
 fn sql_error(py: Python<'_>, msg: String) -> PyResult<PyErr> {
-    Ok(PyErr::from_type(setup()?.error.bind(py).clone(), msg))
+    let recursion = msg == pyroid_core::sqlparse::grouping::RECURSION_MESSAGE;
+    let err = PyErr::from_type(setup()?.error.bind(py).clone(), msg);
+    if recursion {
+        // FilterStack.run: `raise SQLParseError(...) from err` (a RecursionError)
+        err.set_cause(
+            py,
+            Some(pyo3::exceptions::PyRecursionError::new_err(
+                "maximum recursion depth exceeded",
+            )),
+        );
+    }
+    Ok(err)
 }
 
 // ---------------------------------------------------------------------------
@@ -889,6 +900,16 @@ fn _format<'py>(
     let Some(src) = text_of(text)? else {
         return Ok(not_implemented(py));
     };
+    if src.remapped
+        && opts
+            .tokens
+            .truncate
+            .as_ref()
+            .is_some_and(|(_, c)| wtf8::contains_reserved(c))
+    {
+        // the truncate char would read as a surrogate on the way out
+        return Ok(not_implemented(py));
+    }
     let s = setup()?;
     let pause = s.pause.bind(py);
     let mut hooks = PyHooks::new(text, &snap.externals, pause);
