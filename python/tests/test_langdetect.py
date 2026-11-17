@@ -5,17 +5,22 @@ from __future__ import annotations
 import contextlib
 import os
 import pickle
+import runpy
 import sys
 import threading
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
-from _langdetect_samples import SAMPLES
 
 import pyroid.langdetect as pl
 from pyroid._pyroid import _testing
 from pyroid.langdetect import detector_factory
+
+# By path: CI runs pytest with --import-mode=importlib, which keeps python/tests off sys.path.
+_SAMPLES_PY = Path(__file__).with_name("_langdetect_samples.py")
+SAMPLES: dict[str, str] = runpy.run_path(str(_SAMPLES_PY))["SAMPLES"]
 
 
 def _langs(results: list[Any]) -> list[tuple[str, str]]:

@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import importlib
 import random
+import runpy
+from pathlib import Path
 from typing import Any
 
 import pytest
-from _langdetect_samples import SAMPLES
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -21,6 +22,10 @@ ld = pytest.importorskip("langdetect")
 
 import pyroid.langdetect as pl  # noqa: E402
 from pyroid._pyroid import langdetect as native  # noqa: E402
+
+# By path: CI runs pytest with --import-mode=importlib, which keeps python/tests off sys.path.
+_SAMPLES_PY = Path(__file__).with_name("_langdetect_samples.py")
+SAMPLES: dict[str, str] = runpy.run_path(str(_SAMPLES_PY))["SAMPLES"]
 
 
 @pytest.fixture(scope="module")
