@@ -23,9 +23,12 @@ from pyroid.cli import main  # noqa: E402
 pytestmark = pytest.mark.thread_unsafe(reason="changes the working directory")
 
 
-@pytest.fixture
-def here(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """``tmp_path`` as the working directory, with ``in.parquet`` (texts with duplicates)."""
+def _enter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """``tmp_path`` as the working directory, with ``in.parquet`` (texts with duplicates).
+
+    Not a fixture: pytest-run-parallel gives each of a test's ``--iterations`` its own
+    ``tmp_path`` only when the test asks for it itself.
+    """
     monkeypatch.chdir(tmp_path)
     texts = ["a", "b", "a", "c", "b"]
     pq.write_table(pa.table({"id": [f"d{i}" for i in range(5)], "text": texts}), "in.parquet")
@@ -42,7 +45,10 @@ def _refused(argv: list[str], match: str) -> None:
     assert e.value.code not in (0, None)
 
 
-def test_excluded_same_file_as_out_is_refused(here: Path) -> None:
+def test_excluded_same_file_as_out_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    here = _enter(tmp_path, monkeypatch)
     assert main(_exact("same.parquet")) == 0
     kept = pq.read_table("same.parquet").to_pylist()
     assert [r["id"] for r in kept] == ["d0", "d1", "d3"]
@@ -57,14 +63,20 @@ def test_excluded_same_file_as_out_is_refused(here: Path) -> None:
     assert pq.read_table("same.parquet").to_pylist() == kept  # the kept rows are still there
 
 
-def test_the_clean_command_of_the_report(here: Path, en_lid: Path) -> None:
+def test_the_clean_command_of_the_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, en_lid: Path
+) -> None:
+    here = _enter(tmp_path, monkeypatch)
     argv = ["clean", "in.parquet", "same.parquet", "--recipe", "fineweb", "--lid-model"]
     _refused([*argv, str(en_lid), "--excluded", "same.parquet", "--stats"], "the same file")
     assert not Path("same.parquet").exists()
     assert not list(here.glob(".same*"))
 
 
-def test_directory_out_and_excluded_must_be_apart(here: Path) -> None:
+def test_directory_out_and_excluded_must_be_apart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    here = _enter(tmp_path, monkeypatch)
     argv = ["dedup", "in.parquet"]
     inside = "--excluded must not be OUT or inside it"
     _refused([*argv, "od/", "--excluded", "od/"], inside)
@@ -78,7 +90,10 @@ def test_directory_out_and_excluded_must_be_apart(here: Path) -> None:
     assert main([*argv, "od/", "--excluded", "dropped/"]) == 0
 
 
-def test_tmp_dir_and_stats_json_must_not_be_outputs(here: Path) -> None:
+def test_tmp_dir_and_stats_json_must_not_be_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _enter(tmp_path, monkeypatch)
     _refused(_exact("o.parquet", "--tmp-dir", "o.parquet"), "--tmp-dir o.parquet is an output")
     Path("afile").write_text("x")
     _refused(_exact("o.parquet", "--tmp-dir", "afile"), "--tmp-dir afile is not a directory")
@@ -89,7 +104,8 @@ def test_tmp_dir_and_stats_json_must_not_be_outputs(here: Path) -> None:
     assert not Path("o.parquet").exists()
 
 
-def test_inputs_never_overlap_outputs(here: Path) -> None:
+def test_inputs_never_overlap_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _enter(tmp_path, monkeypatch)
     _refused(_exact("in.parquet", "--overwrite"), "both an input and an output")
     _refused(
         ["dedup", "--method", "exact", "in.parquet", "o.parquet", "--excluded", "in.parquet"],
@@ -104,7 +120,8 @@ def test_inputs_never_overlap_outputs(here: Path) -> None:
     _refused(["translit", "out/raw/in.parquet", "out/", "--overwrite"], "is inside OUT")
 
 
-def test_an_input_below_tmp_dir_is_read(here: Path) -> None:
+def test_an_input_below_tmp_dir_is_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _enter(tmp_path, monkeypatch)
     # Only the run's own work directory there is skipped (it said "no .parquet or .jsonl files").
     Path("scratch").mkdir()
     Path("in.parquet").rename("scratch/in.parquet")
@@ -129,7 +146,8 @@ def test_an_input_below_tmp_dir_is_read(here: Path) -> None:
     assert sorted(p.name for p in Path("scratch").iterdir()) == ["in.parquet"]
 
 
-def test_stage_folders_must_be_apart(here: Path) -> None:
+def test_stage_folders_must_be_apart(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _enter(tmp_path, monkeypatch)
     assert main(["dedup", "signatures", "in.parquet", "sigs/"]) == 0
     _refused(["dedup", "buckets", "sigs", "sigs"], "DUPS and SIGS must be separate folders")
     _refused(["dedup", "buckets", "sigs", "sigs/dups"], "separate folders")

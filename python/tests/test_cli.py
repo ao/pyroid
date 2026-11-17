@@ -281,8 +281,9 @@ def test_warc_recipe_on_a_table_file_is_one_line(
     def body(a: Any) -> int:
         raise ArchiveLoadFailed("Invalid ARC record, first line: PAR1")
 
-    monkeypatch.setattr(cli, "_cmd_clean", body)
-    assert main(argv) == 1
+    with monkeypatch.context() as m:  # undone here: --iterations reruns the test with patches on
+        m.setattr(cli, "_cmd_clean", body)
+        assert main(argv) == 1
     assert capsys.readouterr().err.startswith("pyroid clean: Invalid ARC record")
 
 

@@ -156,10 +156,12 @@ def _rows(folder: Path) -> list[dict[str, object]]:
 
 
 @pytest.mark.parametrize("sig", [signal.SIGTERM, signal.SIGINT], ids=["SIGTERM", "SIGINT"])
-def test_clean_stops_on_a_signal_and_resumes(run_dir: Path, sig: signal.Signals) -> None:
+def test_clean_stops_on_a_signal_and_resumes(
+    run_dir: Path, sig: signal.Signals, tmp_path: Path
+) -> None:
     ref_s = float((run_dir / "ref_seconds").read_text())
-    out = f"out-{sig.name}"
-    proc = _clean(run_dir, out)
+    out = tmp_path / "out"  # tmp_path: each of pytest-run-parallel's --iterations starts afresh
+    proc = _clean(run_dir, str(out))
     time.sleep(max(0.8, 0.35 * ref_s))
     if proc.poll() is not None:
         proc.communicate()
@@ -178,11 +180,11 @@ def test_clean_stops_on_a_signal_and_resumes(run_dir: Path, sig: signal.Signals)
     while _group_alive(proc.pid) and time.monotonic() < deadline:
         time.sleep(0.1)
     assert not _group_alive(proc.pid), "a worker process outlived the run"
-    assert _leftovers(run_dir / out) == []
-    again = _clean(run_dir, out)
+    assert _leftovers(out) == []
+    again = _clean(run_dir, str(out))
     _, err = again.communicate(timeout=600)
     assert again.returncode == 0, err.decode()
-    assert _rows(run_dir / out) == _rows(run_dir / "ref")
+    assert _rows(out) == _rows(run_dir / "ref")
 
 
 def _leftovers(out: Path) -> list[str]:
@@ -199,7 +201,7 @@ TRIES = 12
 
 @pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"])
 def test_a_signal_to_the_whole_group_at_any_point_stops_the_run(
-    run_dir: Path, sig: signal.Signals
+    run_dir: Path, sig: signal.Signals, tmp_path: Path
 ) -> None:
     """Ctrl-C in a terminal reaches every process of the group, the workers' too.
 
@@ -212,12 +214,12 @@ def test_a_signal_to_the_whole_group_at_any_point_stops_the_run(
     rng = random.Random(f"group-{sig.name}")
     stopped = []
     for k in range(TRIES):
-        out = f"g-{sig.name}-{k}"
-        proc = _clean(run_dir, out, workers=4)
+        out = tmp_path / f"g-{k}"
+        proc = _clean(run_dir, str(out), workers=4)
         # From the moment the command has set up its run (run.json), just before it starts its
         # workers: earlier, Python is still importing and the signal's default action applies.
         deadline = time.monotonic() + 60
-        while not (run_dir / out / ".pyroid" / "run.json").exists() and proc.poll() is None:
+        while not (out / ".pyroid" / "run.json").exists() and proc.poll() is None:
             assert time.monotonic() < deadline, "the run did not start"
             time.sleep(0.005)
         time.sleep(rng.uniform(0.0, 0.9) * ref_s)
@@ -239,11 +241,11 @@ def test_a_signal_to_the_whole_group_at_any_point_stops_the_run(
         while _group_alive(proc.pid) and time.monotonic() < deadline:
             time.sleep(0.05)
         assert not _group_alive(proc.pid), f"try {k}: a process of the run outlived it"
-        assert _leftovers(run_dir / out) == [], k
+        assert _leftovers(out) == [], k
         stopped.append(out)
     if not stopped:
         pytest.skip("every run finished before its signal")
-    again = _clean(run_dir, stopped[-1], workers=4)
+    again = _clean(run_dir, str(stopped[-1]), workers=4)
     _, raw = again.communicate(timeout=600)
     assert again.returncode == 0, raw.decode()
-    assert _rows(run_dir / stopped[-1]) == _rows(run_dir / "ref")
+    assert _rows(stopped[-1]) == _rows(run_dir / "ref")
