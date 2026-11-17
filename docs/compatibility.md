@@ -362,6 +362,8 @@ as returning an unchanged string as the same object.
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)
 - [Differences from warcio](guides/warc.md#differences-from-warcio)
+- [Differences from sqlparse](guides/sqlparse.md#differences-from-sqlparse), and the
+  [sqlparse releases](guides/sqlparse.md#versions) the patch works with (0.5.0 and later)
 - [Differences from Unidecode](guides/translit.md#differences-from-unidecode).
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).

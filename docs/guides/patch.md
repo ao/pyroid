@@ -229,7 +229,9 @@ subprocess: True
 `pyroid run`:
 
 - patches `NAMES` (comma-separated). Without `-p` it patches the names in `$PYROID_PATCH`, else
-  `ftfy,fasttext`, and then skips `fasttext`, with a `PatchWarning`, if numpy is missing;
+  `ftfy,fasttext`, and then skips `fasttext`, with a `PatchWarning`, if numpy is missing. A name
+  given with `-p` or `$PYROID_PATCH` that `patch()` refuses (`sqlparse` older than 0.5.0, say)
+  stops it with exit code 2 and the reason;
 - sets `PYROID_PATCH` to those names and puts pyroid's start-up hook directory first on
   `PYTHONPATH`. The hook is a `sitecustomize.py`, which Python imports at start-up. It applies
   `$PYROID_PATCH` in every Python process started from there (`multiprocessing` spawn and
@@ -241,7 +243,8 @@ subprocess: True
 
 `PatchWarning` is shown once per process tree, not in every worker. The hook does nothing in an
 interpreter that can't import pyroid, nor in one started with `-I` or `-E` (which ignore
-`PYTHONPATH`).
+`PYTHONPATH`). It never stops a program: a name `patch()` refuses is skipped with a
+`PatchWarning` that says why, and the process runs unpatched for that name.
 
 ### Without `pyroid run`
 
@@ -307,20 +310,28 @@ warnings are the ones warcio gives. datatrove's `WarcReader` imports `ArchiveIte
 warcio`) reads WARC files with pyroid in stock datatrove. Without warcio, `warcio` and
 `warcio.archiveiterator` are shims holding pyroid.warc's classes.
 
-`"sqlparse"` works the same way. With sqlparse installed, the functions above are set on
-sqlparse's own modules, so Django (which imports `sqlparse` at start-up), django-debug-toolbar and
-other code calling `sqlparse.format(...)` get pyroid's, and sqlparse's own `FilterStack` lexes and
-groups in Rust. pyroid's trees are made of sqlparse's classes, so code that inspects them is
-unchanged. The DoS limits are read from `sqlparse.engine.grouping`. Without sqlparse, `sqlparse`
-and its submodules are pyroid.sqlparse's own modules (so `sqlparse.__name__` is
-`"pyroid.sqlparse"`). A function taken from sqlparse before the patch (`from sqlparse import
-format`) keeps sqlparse's, and while patched it no longer pickles by name, as with `"nltk"`.
+`"sqlparse"` works the same way. With sqlparse 0.5.0 or later installed, the functions above are
+set on sqlparse's own modules, so Django (which imports `sqlparse` at start-up),
+django-debug-toolbar and other code calling `sqlparse.format(...)` get pyroid's, and sqlparse's own
+`FilterStack` lexes and groups in Rust. pyroid's trees are then made of sqlparse's own classes, so
+code that inspects them is unchanged. The DoS limits are read from `sqlparse.engine.grouping`.
+Older releases (0.4.x) lack classes pyroid's trees need, so pyroid builds them from its own copies,
+which sqlparse 0.4's filters and `isinstance` checks do not recognise: `patch("sqlparse")` raises
+`ImportError` there and changes nothing, `pyroid run -p sqlparse` stops with that error, and the
+start-up hook skips the name with a `PatchWarning`. Upgrade sqlparse (`pip install -U
+'sqlparse>=0.5.0'`; Django 5.2, django-debug-toolbar, pgcli and litecli all accept 0.6.1).
+Without sqlparse, `sqlparse` and its submodules are pyroid.sqlparse's own modules (so
+`sqlparse.__name__` is `"pyroid.sqlparse"`). A function taken from sqlparse before the patch
+(`from sqlparse import format`) keeps sqlparse's, and while patched it no longer pickles by name,
+as with `"nltk"`.
 
 ## Limitations
 
 - A shim is not the real module object: code that already holds the real module (imported before
   `patch()`), or compares module objects, is not redirected.
-- `importlib.reload` of a shim is not supported.
+- `importlib.reload` of a shim is not supported. Reloading a module that `patch()` set names on
+  (`importlib.reload(sqlparse)`, or an `nltk`, `warcio` or NeMo Curator module) puts that module's
+  own functions back while `patched()` still lists the name; `unpatch()` and `patch()` it again.
 - Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`,
   `nemo_curator` and `sqlparse` can be patched. pyroid's filters and dedup reach datatrove pipelines through the
   [drop-in steps](datatrove.md) instead.

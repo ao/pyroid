@@ -19,7 +19,7 @@ Modules and what they match:
 - `pyroid.nemo`: NeMo Curator 1.4.0's heuristic document filters and string modifiers as functions (the scores `score_document` returns, the text `modify_document` returns), without NeMo; `pyroid.integrations.nemo_curator` has the stages.
 - `pyroid.metrics`: ROUGE, BLEU, chrF and chrF++, with scores identical to rouge-score 0.1.2 and sacrebleu 2.6.0.
 - `pyroid.json_repair`: the same output as json_repair 0.64.5, in linear time.
-- `pyroid.sqlparse`: sqlparse 0.6.1's `format`, `split`, `parse` and `lexer.tokenize` with the same text, token trees (objects of sqlparse's own classes when it is installed) and exceptions; `format_batch` and `split_batch` for many texts; `pyroid.patch("sqlparse")` for Django and other code calling sqlparse.
+- `pyroid.sqlparse`: sqlparse 0.6.1's `format`, `split`, `parse` and `lexer.tokenize` with the same text, token trees (objects of sqlparse's own classes when it is installed) and exceptions; `format_batch` and `split_batch` for many texts; `pyroid.patch("sqlparse")` for Django and other code calling sqlparse (0.5.0 or later installed, or none).
 
 Integrations:
 
