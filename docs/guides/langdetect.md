@@ -132,7 +132,8 @@ Some detections run langdetect's own code instead, in pyroid's line-for-line Pyt
 langdetect's results; no call is ever handed to langdetect itself. A pattern changed
 (`Detector.URL_RE` or `MAIL_RE`, on the class or on a detector) moves only `append`'s
 substitutions to Python (47 µs for a tweet instead of 32 µs). The others run langdetect's whole
-algorithm in Python, at about langdetect's speed:
+algorithm in Python, about as fast as langdetect or slower (1.7 to 2.8 ms for a tweet, against 1.4 ms for
+langdetect and 33 µs on the Rust path):
 
 - `set_verbose()`, which prints every step.
 - Attributes of types langdetect never sets: a `Decimal` alpha, a seed of another type, a
