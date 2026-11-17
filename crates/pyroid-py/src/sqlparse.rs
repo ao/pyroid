@@ -941,6 +941,32 @@ fn _parse<'py>(
     Ok(Bound::new(py, it)?.into_any())
 }
 
+/// Testing hook: `re.compile(pattern, flags).match(text, pos)` by pyroid's engine: the end
+/// (a code-point offset), `None`, or `NotImplemented` when the engine does not take the
+/// pattern. `text` must not hold lone surrogates.
+#[pyfunction]
+fn _regex_match<'py>(
+    py: Python<'py>,
+    pattern: &str,
+    flags: u32,
+    text: &str,
+    pos: usize,
+    unidata_version: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let v = UnicodeVersion::from_unidata_version(unidata_version).unwrap_or(UnicodeVersion::LATEST);
+    let Ok(re) = Regex::new(pattern, flags, v) else {
+        return Ok(not_implemented(py));
+    };
+    let byte = text.char_indices().nth(pos).map_or(text.len(), |(b, _)| b);
+    Ok(match re.match_at(text, byte) {
+        None => py.None().into_bound(py),
+        Some(end) => {
+            let chars = pos + text[byte..end].chars().count();
+            chars.into_pyobject(py)?.into_any()
+        }
+    })
+}
+
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let m = PyModule::new(parent.py(), "pyroid.sqlparse")?;
     m.gil_used(false)?;
@@ -949,6 +975,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_split, &m)?)?;
     m.add_function(wrap_pyfunction!(_format, &m)?)?;
     m.add_function(wrap_pyfunction!(_parse, &m)?)?;
+    m.add_function(wrap_pyfunction!(_regex_match, &m)?)?;
     m.add_class::<Statements>()?;
     parent.add_submodule(&m)
 }
