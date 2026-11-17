@@ -1423,10 +1423,15 @@ impl Regex {
                     pos == text.len()
                 }
                 Inst::WordB | Inst::NotWordB => {
-                    // sre: no boundary (and no non-boundary) in an empty string
-                    let ok = !text.is_empty()
-                        && ((self.word_before(text, pos) != self.word_at(text, pos))
-                            == matches!(self.prog[pc], Inst::WordB));
+                    // sre: no boundary in an empty string; no non-boundary either before
+                    // CPython 3.14 (Unicode 16.0), which made `\B` match it (gh-124130)
+                    let want = matches!(self.prog[pc], Inst::WordB);
+                    let ok = if text.is_empty() {
+                        !want
+                            && matches!(self.version, UnicodeVersion::V16_0 | UnicodeVersion::V17_0)
+                    } else {
+                        (self.word_before(text, pos) != self.word_at(text, pos)) == want
+                    };
                     pc += 1;
                     ok
                 }

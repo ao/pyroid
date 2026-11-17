@@ -468,6 +468,8 @@ mod fast {
     use super::super::pystr;
     use crate::ftfy::UnicodeVersion;
 
+    const HINT_LINE: usize = 0;
+    const COMMENT_LINE: usize = 1;
     const NEWLINE: usize = 2;
     const WHITESPACE: usize = 3;
     const BACKTICK: usize = 7;
@@ -545,6 +547,7 @@ mod fast {
     ) -> Option<(usize, usize)> {
         let b = text.as_bytes();
         match c {
+            '-' | '#' => line_comment(b, pos),
             '\r' => Some((
                 NEWLINE,
                 pos + if b.get(pos + 1) == Some(&b'\n') { 2 } else { 1 },
@@ -557,6 +560,29 @@ mod fast {
             c if pystr::is_word(c, v) && !pystr::is_digit(c, v) => word(text, pos, c, v),
             _ => None,
         }
+    }
+
+    /// `(--|# )\+.*?(\r\n|\r|\n|$)` (entry 0) or `(--|# ).*?(\r\n|\r|\n|$)` (entry 1): up to
+    /// and including the first line break, else to the end. `None` without the prefix.
+    fn line_comment(b: &[u8], pos: usize) -> Option<(usize, usize)> {
+        let pre = b.get(pos..pos + 2);
+        if pre != Some(b"--".as_slice()) && pre != Some(b"# ".as_slice()) {
+            return None;
+        }
+        let hint = b.get(pos + 2) == Some(&b'+');
+        let from = pos + 2 + usize::from(hint);
+        let end = match memchr::memchr2(b'\r', b'\n', &b[from..]) {
+            None => b.len(),
+            Some(i) => {
+                let i = from + i;
+                if b[i] == b'\r' && b.get(i + 1) == Some(&b'\n') {
+                    i + 2
+                } else {
+                    i + 1
+                }
+            }
+        };
+        Some((if hint { HINT_LINE } else { COMMENT_LINE }, end))
     }
 
     fn word(text: &str, pos: usize, c: char, v: UnicodeVersion) -> Option<(usize, usize)> {
