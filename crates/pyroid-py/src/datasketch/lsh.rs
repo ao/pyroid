@@ -269,6 +269,8 @@ fn new_state<C>(py: Python<'_>, core: C) -> Mutex<State<C>> {
 
 /// Rebuild the key map of a state read with `from_bytes` (ids `0..n`).
 fn restore_keys(py: Python<'_>, objs: &Bound<'_, PyList>, n: usize) -> PyResult<KeyMap> {
+    // The keys' `__eq__`/`__hash__` run while the map is built: read the list once.
+    let objs = crate::input::list_items(objs);
     if objs.len() != n {
         return Err(PyValueError::new_err(format!(
             "invalid pickled index state: {} keys for {n} ids",
@@ -451,13 +453,18 @@ fn signature(
         return Ok(None);
     }
     let arr = hv.cast::<PyUntypedArray>()?;
-    if arr.ndim() < min_ndim.max(1) || !arr.is_c_contiguous() || product(arr.shape()).is_none() {
+    // The shape is read once: another thread may reshape the caller's array
+    // in place (`a.shape = ...`) meanwhile. The values must then fill it.
+    let shape = arr.shape().to_vec();
+    let Some(len) = product(&shape) else {
+        return Ok(None);
+    };
+    if shape.len() < min_ndim.max(1) || !arr.is_c_contiguous() {
         return Ok(None);
     }
-    Ok(values_of(arr).map(|values| Signature {
-        values,
-        shape: arr.shape().to_vec(),
-    }))
+    Ok(values_of(arr)
+        .filter(|values| with_values!(values, v => v.len()) == len)
+        .map(|values| Signature { values, shape }))
 }
 
 /// The band keys a `slow` callback returned (a list of bytes).

@@ -100,7 +100,7 @@ type Types<'py> = (Vec<RougeType>, Vec<Bound<'py, PyAny>>);
 /// loop in Python). The first invalid type raises rouge-score's `ValueError`.
 fn parse_types<'py>(types: &Bound<'py, PyAny>) -> PyResult<Option<Types<'py>>> {
     let items: Vec<Bound<'py, PyAny>> = if let Ok(l) = types.cast_exact::<PyList>() {
-        l.iter().collect()
+        crate::input::list_items(l).iter().collect()
     } else if let Ok(t) = types.cast_exact::<PyTuple>() {
         t.iter().collect()
     } else {
@@ -297,7 +297,7 @@ fn rouge_score_batch<'py>(
 /// then scores it).
 fn token_list(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<PyBackedStr>>> {
     let items: Vec<Bound<'_, PyAny>> = if let Ok(l) = obj.cast_exact::<PyList>() {
-        l.iter().collect()
+        crate::input::list_items(l).iter().collect()
     } else if let Ok(t) = obj.cast_exact::<PyTuple>() {
         t.iter().collect()
     } else {
@@ -320,7 +320,7 @@ fn token_list(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<PyBackedStr>>> {
 /// A list of token lists; `None` as for [`token_list`].
 fn sentence_lists(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<Vec<PyBackedStr>>>> {
     let items: Vec<Bound<'_, PyAny>> = if let Ok(l) = obj.cast_exact::<PyList>() {
-        l.iter().collect()
+        crate::input::list_items(l).iter().collect()
     } else if let Ok(t) = obj.cast_exact::<PyTuple>() {
         t.iter().collect()
     } else {

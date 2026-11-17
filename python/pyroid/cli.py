@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures as cf
 import contextlib
+import contextvars
 import itertools
 import json
 import math
@@ -75,6 +76,8 @@ _OUT_FORMATS = ("parquet", "jsonl", "jsonl.gz", "jsonl.bz2", "jsonl.zst", "jsonl
 #: ``pyroid clean --ftfy``: ftfy's defaults, datatrove's ``FTFYFormatter()``, or no ftfy step.
 FTFY_CONFIGS = ("default", "datatrove", "off")
 _STAGES = ("signatures", "buckets", "cluster", "filter")
+#: `pyroid translit --mode unidecode --errors`: Unidecode's errors= values.
+UNIDECODE_ERRORS = ("ignore", "replace", "strict", "preserve")
 
 
 def _need_pyarrow() -> None:
@@ -206,8 +209,6 @@ def _layout(a: argparse.Namespace, sources: Sequence[Any], shard: Any, *, exclud
     out_dir = Path(out)
     if excl and _is_file_out(excl):
         raise SystemExit(f"pyroid: --excluded {excl}: OUT is a directory, so this must be too")
-    if excl and Path(excl).resolve().is_relative_to(out_dir.resolve()):
-        raise SystemExit("pyroid: --excluded must not be inside OUT (OUT is read by later stages)")
     suffix = f".{fmt}" if fmt else None
     final = excl_final = None
     if getattr(a, "merge", False):
@@ -269,7 +270,7 @@ def _private_work(path: Path) -> None:
             os.chmod(path, 0o700)
 
 
-def _check_out(layout: Layout, overwrite: bool, sources: Sequence[Any]) -> None:
+def _check_out(layout: Layout, overwrite: bool) -> None:
     """Refuse to replace files a previous, unrelated command wrote."""
     if layout.merge and layout.final is not None and layout.out_dir is None:
         if layout.final.exists() and not overwrite and not layout.state_root.exists():
@@ -285,10 +286,6 @@ def _check_out(layout: Layout, overwrite: bool, sources: Sequence[Any]) -> None:
                 f"pyroid: {layout.out_dir} is not empty and was not written by pyroid "
                 "(pass --overwrite to write into it anyway)"
             )
-    outs = [p for p in (layout.final, layout.excluded_final) if p is not None]
-    for s in sources:
-        if "://" not in s.uri and any(Path(s.uri).resolve() == p.resolve() for p in outs):
-            raise SystemExit(f"pyroid: {s.uri} is both an input and an output")
 
 
 # ======================================================================================== options
@@ -334,12 +331,27 @@ def _fingerprint_options(o: Options) -> dict[str, Any]:
     }
 
 
+def _not_text(column: str, typ: Any) -> str | None:
+    """The message for a text column of type ``typ`` that holds no strings, or None."""
+    import pyarrow as pa
+
+    t = pa.types
+    if t.is_string(typ) or t.is_large_string(typ) or t.is_null(typ):
+        return None
+    if getattr(t, "is_string_view", lambda _: False)(typ):
+        return None
+    return f"column {column!r} holds {typ}, not strings (--text-column names the text column)"
+
+
 def _text(table: Any, column: str) -> Any:
     import pyarrow as pa
 
     if column not in table.column_names:
         raise ValueError(f"no column {column!r} (columns: {', '.join(table.column_names)})")
     col = table.column(column)
+    bad = _not_text(column, col.type)
+    if bad is not None:
+        raise ValueError(bad)
     # An all-null or empty JSON file, or an empty table, infers the column as type null.
     return col.cast(pa.string()) if pa.types.is_null(col.type) else col
 
@@ -351,24 +363,29 @@ def _check_text_column(sources: Sequence[Any], column: str) -> None:
     if not sources:
         return
     schema = _io.read_schema(sources[0])
-    if schema is not None and column not in schema.names:
+    if schema is None:
+        return
+    if column not in schema.names:
         raise SystemExit(
             f"pyroid: {sources[0].uri}: no column {column!r} (columns: {', '.join(schema.names)})"
         )
+    bad = _not_text(column, schema.field(column).type)
+    if bad is not None:
+        raise SystemExit(f"pyroid: {sources[0].uri}: {bad}")
 
 
 # ================================================================================ per-file steps
 # A step turns one input table into (kept, dropped-with-filter_reason or None, removed counts).
-# Steps are cached per process: workers load the LID model once.
-
-_CACHE: dict[Any, Any] = {}
+# A step's recipe is made once per call of main() (a worker process: once), so the LID model
+# is loaded once per run, not per file.
 
 
 def _recipe(o: Options) -> Any:
     from pyroid.integrations import recipes
 
+    cache = _recipes()
     key = (o.command, json.dumps(o.extra, sort_keys=True, default=str), o.threads)
-    r = _CACHE.get(key)
+    r = cache.get(key)
     if r is None:
         x = o.extra
         if o.command == "langid":
@@ -390,7 +407,7 @@ def _recipe(o: Options) -> Any:
                 threads=o.threads,
                 minhash=None,
             )
-        _CACHE[key] = r
+        cache[key] = r
     return r
 
 
@@ -843,6 +860,15 @@ def _warc_sources(specs: Sequence[str], exclude: Sequence[Path]) -> list[Any]:
     return out
 
 
+def _not_table(spec: str, name: str) -> None:
+    """Refuse a Parquet or JSON Lines file named as an input of --recipe fineweb-warc."""
+    if _data_suffix(name) is not None:
+        raise ValueError(
+            f"{spec}: --recipe {WARC_RECIPE} reads WARC, ARC or WET files, not Parquet or JSON "
+            "Lines (--recipe fineweb cleans the text column of those)"
+        )
+
+
 def _warc_local_sources(spec: str, excluded: Sequence[str]) -> list[tuple[str, Any]]:
     from pyroid.integrations import _io
 
@@ -851,6 +877,7 @@ def _warc_local_sources(spec: str, excluded: Sequence[str]) -> list[tuple[str, A
         if not p.exists():
             raise FileNotFoundError(f"{spec}: no such file or directory")
         if not p.is_dir():
+            _not_table(spec, p.name)
             absolute = os.path.abspath(spec)
             key = os.path.join(_io._canon(os.path.dirname(absolute)), os.path.normcase(p.name))
             if _io._excluded(key, excluded):
@@ -929,6 +956,7 @@ def _warc_uri_sources(spec: str) -> list[tuple[str, Any]]:
             raise FileNotFoundError(f"{spec}: no such file or directory")
         if kind == "file":
             name = (spec.split("?", 1)[0] if web else spec).rstrip("/").rsplit("/", 1)[-1]
+            _not_table(spec, name)
             return [(_io._key(fs, path), _io.Source(spec, name, size, "warc", fs, path))]
     elif kind != "directory":
         raise _no_warc(spec)
@@ -977,10 +1005,11 @@ def _warc_open(src: Any) -> Iterator[tuple[Any, str | None]]:
 def _warc_recipe(o: Options) -> Any:
     from pyroid.integrations import recipes
 
+    cache = _recipes()
     key = (WARC_RECIPE, o.extra.get("lid_model"), o.threads)
-    r = _CACHE.get(key)
+    r = cache.get(key)
     if r is None:
-        r = _CACHE[key] = recipes.FineWebWarc(lid_model=o.extra.get("lid_model"), threads=o.threads)
+        r = cache[key] = recipes.FineWebWarc(lid_model=o.extra.get("lid_model"), threads=o.threads)
     return r
 
 
@@ -1157,6 +1186,8 @@ class Run:
     state: Any
     options: Options
     progress: Any
+    state_existed: bool = True  # the state directory was there before this run
+    out_existed: bool = True  # so was a directory OUT
     t0: float = field(default_factory=time.perf_counter)
 
 
@@ -1174,29 +1205,136 @@ def _sources(a: argparse.Namespace, exclude: Sequence[Path]) -> list[Any]:
     return _io.resolve_inputs(specs, exclude=[p for p in exclude if p is not None])
 
 
+def _path_key(path: str | os.PathLike[str]) -> str:
+    """``path`` made absolute with its links resolved, to compare with other paths.
+
+    macOS and Windows file systems ignore case by default, so the key does too there.
+    """
+    key = os.path.normcase(os.path.realpath(path))
+    return key.casefold() if sys.platform == "darwin" else key
+
+
+def _inside(path: str | os.PathLike[str], root: str | os.PathLike[str]) -> bool:
+    """``path`` is ``root`` or below it (links resolved)."""
+    p, r = _path_key(path), _path_key(root)
+    return p == r or p.startswith(r.rstrip(os.sep) + os.sep)
+
+
+def _state_root(a: argparse.Namespace, shard: Any) -> Path:
+    """Where a run keeps its state: ``OUT/.pyroid``, or ``.NAME.pyroid`` beside a file OUT."""
+    if _is_file_out(a.output):
+        final = _tagged(Path(a.output), shard.tag) if shard.count > 1 else Path(a.output)
+        return final.parent / f".{final.name}.pyroid"
+    return Path(a.output) / ".pyroid"
+
+
+def _check_roots(a: argparse.Namespace, out: Path, excl: Path | None, tmp: Path | None) -> None:
+    """Refuse an OUT, --excluded and --tmp-dir that overlap (before any input is read)."""
+    file_out = _is_file_out(str(out))
+    if excl is not None:
+        if file_out and _path_key(excl) == _path_key(out):
+            raise SystemExit(f"pyroid: OUT and --excluded are the same file ({excl})")
+        if not file_out and _inside(excl, out):
+            raise SystemExit(
+                "pyroid: --excluded must not be OUT or inside it (OUT is read by later stages)"
+            )
+        if not file_out and _inside(out, excl):
+            raise SystemExit("pyroid: OUT must not be inside --excluded")
+    if tmp is not None:
+        if tmp.exists() and not tmp.is_dir():
+            raise SystemExit(f"pyroid: --tmp-dir {tmp} is not a directory")
+        files = [p for p in (out, excl) if p is not None and file_out]
+        if any(_path_key(tmp) == _path_key(p) for p in files):
+            raise SystemExit(f"pyroid: --tmp-dir {tmp} is an output file; it must be a directory")
+    stats = getattr(a, "stats_json", None)
+    if stats and any(_path_key(stats) == _path_key(p) for p in (out, excl) if p is not None):
+        raise SystemExit(f"pyroid: --stats-json {stats} is also an output")
+    roots = [(out, "OUT")] if not file_out else []
+    if excl is not None and not file_out:
+        roots.append((excl, "--excluded"))
+    for spec in getattr(a, "input", []):
+        if "://" in spec:
+            continue
+        for path in (out, excl):
+            if path is not None and _path_key(spec) == _path_key(path):
+                raise SystemExit(f"pyroid: {spec} is both an input and an output")
+        for root, what in roots:
+            if os.path.exists(spec) and _inside(spec, root):
+                raise SystemExit(f"pyroid: {spec} is inside {what}, which this command writes")
+
+
+class _Keys:
+    """:func:`_path_key` for many files: each directory is resolved once.
+
+    ``link=True`` also resolves a file that is itself a link (an input); an output that is a
+    link is replaced by the rename that writes it, never written through.
+    """
+
+    def __init__(self) -> None:
+        self._dirs: dict[str, str] = {}
+
+    def __call__(self, path: str | os.PathLike[str], *, link: bool = False) -> str:
+        if link and os.path.islink(path):
+            return _path_key(path)
+        d, name = os.path.split(os.path.abspath(path))
+        k = self._dirs.get(d)
+        if k is None:
+            k = self._dirs[d] = _path_key(d)
+        key = os.path.join(k, os.path.normcase(name))
+        return key.casefold() if sys.platform == "darwin" else key
+
+
+def _check_outputs(a: argparse.Namespace, layout: Layout, sources: Sequence[Any]) -> None:
+    """Refuse a run that would write one file twice, or over an input or --stats-json."""
+    outputs: dict[str, tuple[Path, str]] = {}  # path key -> (path, the input it comes from)
+    key = _Keys()
+
+    def add(p: Path | None, uri: str) -> None:
+        if p is None:
+            return
+        k = key(p)
+        if k in outputs:
+            raise SystemExit(f"pyroid: {outputs[k][1]} and {uri} would both be written to {p}")
+        outputs[k] = (p, uri)
+
+    if layout.out_dir is not None and not layout.merge:
+        for s in sources:
+            out, excl = layout.outputs(s)
+            add(out, s.uri)
+            add(excl, s.uri)
+    else:
+        add(layout.final, "the output")
+        add(layout.excluded_final, "--excluded")
+    inputs = {key(s._path, link=True): s.uri for s in sources if s._fs is None}
+    for k, uri in inputs.items():
+        if k in outputs:
+            raise SystemExit(f"pyroid: {uri} is both an input and an output")
+    stats = getattr(a, "stats_json", None)
+    if stats:
+        if key(stats, link=True) in outputs:
+            raise SystemExit(f"pyroid: --stats-json {stats} is also an output")
+        if key(stats, link=True) in inputs:
+            raise SystemExit(f"pyroid: --stats-json {stats} is also an input")
+
+
 def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: bool = True) -> Run:
     from pyroid.integrations import _shards
 
     shard = _shards.Shard.parse(a.shard) if getattr(a, "shard", None) else _shards.Shard()
     out = Path(a.output)
-    excl = Path(a.excluded) if getattr(a, "excluded", None) else None
+    excl = Path(a.excluded) if getattr(a, "excluded", None) and excluded else None
     tmp = Path(a.tmp_dir) if getattr(a, "tmp_dir", None) else None
-    exclude = [p for p in (out, excl, tmp) if p is not None]
-    for spec in getattr(a, "input", []):
-        if "://" not in spec and any(Path(spec).resolve() == p.resolve() for p in exclude):
-            raise SystemExit(f"pyroid: {spec} is both an input and an output (or --tmp-dir)")
-    sources = _sources(a, exclude)
+    _check_roots(a, out, excl, tmp)
+    # Inputs never come from what this run writes. An input below --tmp-dir is read; only the
+    # run's own work directory there is skipped.
+    work = _work(a, _state_root(a, shard), shard)
+    sources = _sources(a, [p for p in (out, excl, work) if p is not None])
     layout = _layout(a, sources, shard, excluded=excluded)
-    _check_out(layout, a.overwrite, sources)
+    _check_out(layout, a.overwrite)
+    _check_outputs(a, layout, sources)
+    existed = layout.state_root.exists(), layout.out_dir is not None and layout.out_dir.exists()
     if tmp is not None:
         _private_work(layout.work)
-    if layout.out_dir is not None and not layout.merge:
-        seen: dict[Path, str] = {}
-        for s in sources:
-            p, _ = layout.outputs(s)
-            if p in seen:
-                raise SystemExit(f"pyroid: {seen[p]} and {s.uri} would both be written to {p}")
-            seen[p] = s.uri
     fp = _shards.fingerprint(command, _fingerprint_options(options), sources)
     state = _shards.State(layout.state_root, fp)
     mine = shard.take(list(enumerate(sources)))
@@ -1206,12 +1344,89 @@ def _start(a: argparse.Namespace, command: str, options: Options, *, excluded: b
     progress = _shards.Progress(
         f"pyroid {command}", len(mine), total, enabled=getattr(a, "progress", False)
     )
-    return Run(a, command, sources, shard, mine, layout, state, options, progress)
+    run = Run(a, command, sources, shard, mine, layout, state, options, progress, *existed)
+    call = _CALL.get()
+    if call is not None:
+        call.runs.append(run)
+    return run
+
+
+@dataclass
+class _Call:
+    """What one call of :func:`main` owns. Calls in other threads (or nested) have their own."""
+
+    runs: list[Run] = field(default_factory=list)  # tidied up if the call fails or stops
+    recipes: dict[Any, Any] = field(default_factory=dict)  # see _recipe
+
+
+_CALL: contextvars.ContextVar[_Call | None] = contextvars.ContextVar(
+    "pyroid_cli_call", default=None
+)
+# The recipes of a worker process, which serves one run.
+_WORKER_RECIPES: dict[Any, Any] = {}
+
+
+@contextlib.contextmanager
+def _new_call() -> Iterator[_Call]:
+    call = _Call()
+    token = _CALL.set(call)
+    try:
+        yield call
+    finally:
+        _CALL.reset(token)
+
+
+def _recipes() -> dict[Any, Any]:
+    call = _CALL.get()
+    return call.recipes if call is not None else _WORKER_RECIPES
+
+
+def _tidy_failed(run: Run) -> None:
+    """After a run failed or stopped: drop the state and work it left, if nothing there resumes.
+
+    A run with finished files keeps everything, so the same command picks up from there. One that
+    ended before any (a wrong option, a missing model, an input it cannot read) leaves no hidden
+    ``.NAME.pyroid`` or ``OUT/.pyroid`` behind, nor a directory OUT it made.
+    """
+    from pyroid.integrations import _shards
+
+    lay = run.layout
+    if run.state.records():
+        return
+    _shards.rmtree(lay.work)
+    if run.state_existed:
+        return
+    root = lay.state_root
+    if lay.out_dir is None:  # a file OUT's .NAME.pyroid belongs to this shard alone
+        _shards.rmtree(root)
+        return
+    if run.shard.count > 1:
+        return  # OUT/.pyroid is shared with the other shards, which may be starting now
+    with contextlib.suppress(OSError):
+        if {p.name for p in root.iterdir()} <= {"run.json"}:
+            _shards.rmtree(root)
+    with contextlib.suppress(OSError):
+        if not run.out_existed and not any(lay.out_dir.iterdir()):
+            lay.out_dir.rmdir()
 
 
 def _record_run(run: Run, **info: Any) -> None:
-    from pyroid.integrations import _minhash
+    """Write run.json, once it is clear the run may go on in its OUT.
 
+    Records of a different run make it stop first (StateError, unless --overwrite): its
+    run.json, which the later MinHash stages read their settings from, must not be replaced.
+    """
+    from pyroid.integrations import _minhash, _shards
+
+    old = run.state.read_run()
+    other = old is not None and old.get("fingerprint") != run.state.fingerprint
+    if other and not run.a.overwrite and run.state.stale(r["key"] for r in run.state.records()):
+        lay = run.layout
+        what = f"{lay.final} comes" if lay.out_dir is None else f"{lay.out_dir}: its files come"
+        raise _shards.StateError(
+            f"{what} from a different run (other options, inputs or pyroid version); pass "
+            "--overwrite to redo it, or use another output path"
+        )
     run.state.write_run(
         {
             "command": run.command,
@@ -1240,13 +1455,27 @@ def _merged_outputs(run: Run) -> list[str]:
     return [str(p) for p in (lay.final, lay.excluded_final) if p is not None]
 
 
+def _merged_key(run: Run) -> str:
+    return f"merged-{run.layout.shard_tag}"
+
+
 def _merged_done(run: Run) -> bool:
-    """A merged output of this shard is complete: its parts are gone and need not be redone."""
+    """A merged output of this shard is complete: its parts are gone and need not be redone.
+
+    Raises StateError when the file was written by a different run (unless --overwrite).
+    """
+    from pyroid.integrations import _shards
+
     lay = run.layout
-    key = f"merged-{lay.shard_tag}"
-    return (
-        lay.merge and not run.a.overwrite and run.state.is_done(key, outputs=_merged_outputs(run))
-    )
+    if not lay.merge or run.a.overwrite:
+        return False
+    key = _merged_key(run)
+    if run.state.stale([key]):
+        raise _shards.StateError(
+            f"{lay.final} comes from a different run (other options, inputs or pyroid version); "
+            "pass --overwrite to redo it, or use another output path"
+        )
+    return bool(run.state.is_done(key, outputs=_merged_outputs(run)))
 
 
 def _execute(run: Run, units: Sequence[Any], fn: Any) -> None:
@@ -1256,10 +1485,7 @@ def _execute(run: Run, units: Sequence[Any], fn: Any) -> None:
         return
     todo = _shards.pending(run.state, units, overwrite=run.a.overwrite)
     run.progress.done_units = len(units) - len(todo)
-    for _ in _shards.run_units(
-        todo, fn, workers=run.a.workers, threads=run.a.threads, progress=run.progress
-    ):
-        pass
+    _shards.run_units(todo, fn, workers=run.a.workers, threads=run.a.threads, progress=run.progress)
 
 
 def _out_job(run: Run, rank: int, src: Any, **kw: Any) -> FileJob:
@@ -1283,11 +1509,26 @@ def _out_job(run: Run, rank: int, src: Any, **kw: Any) -> FileJob:
     )
 
 
+def _file_stats(run: Run) -> Any:
+    """This shard's counts: the sum of its files' records (or of its merged output's)."""
+    from pyroid.integrations import _shards
+
+    stats = _shards.Stats()
+    merged = run.state.record(_merged_key(run)) if run.layout.merge else None
+    if merged is not None and "stats" in merged:
+        stats.add(merged["stats"])
+        return stats
+    for rank, _ in run.mine:
+        r = run.state.record(_final_key(run, rank))
+        if r is not None and "stats" in r:
+            stats.add(r["stats"])
+    return stats
+
+
 def _merge_parts(run: Run) -> None:
     """Merged mode: concatenate this shard's parts, in input order, into the final file(s)."""
     lay = run.layout
     assert lay.final is not None
-    key = f"merged-{lay.shard_tag}"
     if _merged_done(run):
         return
     ranks = [r for r, _ in run.mine]
@@ -1296,7 +1537,9 @@ def _merge_parts(run: Run) -> None:
     if lay.excluded_final is not None:
         _concat([lay.part(r, excluded=True) for r in ranks], lay.excluded_final, None)
         outputs.append(str(lay.excluded_final))
-    run.state.mark(key, {"outputs": outputs})
+    # The counts go with it: a finished file OUT keeps only this record (see _finalize).
+    run.state.forget([_merged_key(run)])
+    run.state.mark(_merged_key(run), {"outputs": outputs, "stats": _file_stats(run).as_dict()})
 
 
 def _move(src: Path, dest: Path) -> None:
@@ -1414,27 +1657,27 @@ def _finalize(run: Run, *, keep_state: bool) -> dict[str, Any]:
     if lay.merge and run.mine:
         _merge_parts(run)
     elif lay.merge:
-        sys.stderr.write(f"pyroid {run.command}: shard {run.shard} has no input files\n")
-    stats = _shards.Stats()
-    for rank, _ in run.mine:
-        r = run.state.record(_final_key(run, rank))
-        if r is not None and "stats" in r:
-            stats.add(r["stats"])
+        _shards.say(f"pyroid {run.command}: shard {run.shard} has no input files\n")
+    stats = _file_stats(run)
     extra: dict[str, Any] = {"files": len(run.mine)}
     if run.shard.count > 1:
         extra["shard"] = str(run.shard)
     d = _shards.summary(run.command, stats, wall=time.perf_counter() - run.t0, extra=extra)
-    run.progress.close()
     if lay.out_dir is not None:
         name = f"stats-{lay.shard_tag}.json"
         _io.atomic_write_text(lay.state_root / name, json.dumps(d, indent=1) + "\n")
     if run.a.stats_json:
         _io.atomic_write_text(run.a.stats_json, json.dumps(d, indent=1) + "\n")
-    if run.a.stats:
-        _shards.print_summary(d)
     _shards.rmtree(lay.work)
     if not keep_state and lay.out_dir is None:
-        _shards.rmtree(lay.state_root)
+        # A file OUT keeps only the record that it is complete (and run.json): the same command
+        # run again then has nothing to do, as for a directory OUT.
+        keep = _merged_key(run)
+        run.state.forget(r["key"] for r in run.state.records() if r["key"] != keep)
+    # Last: the files are complete and tidied whether or not stderr still takes the messages.
+    run.progress.close()
+    if run.a.stats:
+        _shards.print_summary(d)
     return d
 
 
@@ -1487,10 +1730,7 @@ def _staged(
     label = run.progress.label
     run.progress.label = f"{label} (1/2)"
     run.progress.done_units = len(p1) - len(todo)
-    for _ in _shards.run_units(
-        todo, first_fn, workers=a.workers, threads=a.threads, progress=run.progress
-    ):
-        pass
+    _shards.run_units(todo, first_fn, workers=a.workers, threads=a.threads, progress=run.progress)
     run.progress.close()
     work = run.layout.work
     _minhash_middle(run, work / "sigs", work / "dups", work / "removed", cfg, threads=a.threads)
@@ -1608,12 +1848,14 @@ def _cmd_langid(a: argparse.Namespace) -> int:
 
 
 def _cmd_translit(a: argparse.Namespace) -> int:
+    if a.mode != "unidecode" and (a.errors is not None or a.replace_str is not None):
+        raise SystemExit("pyroid translit: --errors and --replace-str apply to --mode unidecode")
     return _rowwise(
         a,
         "translit",
         mode=a.mode,
-        errors=a.errors,
-        replace_str=a.replace_str,
+        errors=a.errors or "ignore",
+        replace_str="?" if a.replace_str is None else a.replace_str,
         output_column=a.output_column,
     )
 
@@ -1686,6 +1928,10 @@ def _dedup_exact(a: argparse.Namespace) -> int:
     if not lay.merge or lay.final is None:
         raise SystemExit("pyroid dedup --method exact: OUT must be a file")
     _check_text_column([s for _, s in run.mine], o.text_column)
+    if _merged_done(run):  # finished earlier: the counts are in its record
+        _report_exact(run, _file_stats(run))
+        return 0
+    _record_run(run)
     state = pyroid.dedup.ExactDedup(normalize=a.normalize)
     out = _io.Writer(lay.final, compression=o.compression)
     excl = _io.Writer(lay.excluded_final, compression=o.compression) if lay.excluded_final else None
@@ -1716,14 +1962,23 @@ def _dedup_exact(a: argparse.Namespace) -> int:
     except BaseException:
         _abort(out, excl)
         raise
+    # As for every file OUT: a record that it is complete, so the same command does nothing again.
+    run.state.mark(_merged_key(run), {"outputs": _merged_outputs(run), "stats": stats.as_dict()})
+    _report_exact(run, stats)
+    return 0
+
+
+def _report_exact(run: Run, stats: Any) -> None:
+    from pyroid.integrations import _io, _shards
+
     wall = time.perf_counter() - run.t0
     d = _shards.summary("dedup", stats, wall=wall, extra={"files": len(run.mine)})
+    if run.a.stats_json:
+        _io.atomic_write_text(run.a.stats_json, json.dumps(d, indent=1) + "\n")
+    _shards.rmtree(run.layout.work)
     run.progress.close()
-    if a.stats_json:
-        _io.atomic_write_text(a.stats_json, json.dumps(d, indent=1) + "\n")
-    if a.stats:
+    if run.a.stats:
         _shards.print_summary(d)
-    return 0
 
 
 # ---------------------------------------------------------------------------- dedup: the 4 stages
@@ -1756,6 +2011,14 @@ def _stage_signatures(a: argparse.Namespace) -> int:
     _execute(run, _file_units(run, lambda r: f"{r:06d}", make), _unit_signatures)
     _finalize(run, keep_state=True)
     return 0
+
+
+def _apart(out: Path, src: Path, what: str, of: str) -> None:
+    """Refuse a stage output that is its input folder, is inside it or holds it."""
+    if _inside(out, src) or _inside(src, out):
+        raise SystemExit(
+            f"pyroid {what} and {of} must be separate folders, neither inside the other"
+        )
 
 
 def _stage_meta(folder: Path) -> dict[str, Any] | None:
@@ -1808,6 +2071,7 @@ def _stage_buckets(a: argparse.Namespace) -> int:
     sigs, out = Path(a.sigs), Path(a.output)
     if not sigs.is_dir():
         raise SystemExit(f"pyroid dedup buckets: {sigs}: no such directory")
+    _apart(out, sigs, "dedup buckets: DUPS", "SIGS")
     meta = _stage_meta(sigs)
     _check_complete(sigs, meta, "input files", "run every 'pyroid dedup signatures' shard first")
     cfg = _stage_cfg(a, meta, sigs)
@@ -1862,6 +2126,7 @@ def _stage_cluster(a: argparse.Namespace) -> int:
     dups, out = Path(a.dups), Path(a.output)
     if not dups.is_dir():
         raise SystemExit(f"pyroid dedup cluster: {dups}: no such directory")
+    _apart(out, dups, "dedup cluster: REMOVED", "DUPS")
     meta = _stage_meta(dups)
     cfg = _stage_cfg(a, meta, dups)
     files = _minhash.dups_files(dups)
@@ -1927,6 +2192,9 @@ def _stage_filter(a: argparse.Namespace) -> int:
     removed = Path(a.removed)
     if not removed.is_dir():
         raise SystemExit(f"pyroid dedup filter: --removed {removed}: no such directory")
+    _apart(Path(a.output), removed, "dedup filter: OUT", "--removed")
+    if a.excluded:
+        _apart(Path(a.excluded), removed, "dedup filter: --excluded", "--removed")
     meta = _stage_meta(removed)
     if meta is None and (removed / ".pyroid").is_dir():
         raise SystemExit(
@@ -1935,7 +2203,7 @@ def _stage_filter(a: argparse.Namespace) -> int:
         )
     lists = ("*.remove", "*.clusters", "*.sizes")
     if meta is None and not any(removed.glob("*.remove")):
-        sys.stderr.write(
+        _shards.say(
             f"pyroid dedup filter: {removed} has no .remove files: no document is removed\n"
         )
     # REMOVED by its cluster run's fingerprint (or its files, for datatrove's), never by path
@@ -1971,12 +2239,12 @@ def _stage_filter(a: argparse.Namespace) -> int:
 
 
 def _emit(a: argparse.Namespace, d: dict[str, Any]) -> None:
-    from pyroid.integrations import _io
+    from pyroid.integrations import _io, _shards
 
     if a.stats_json:
         _io.atomic_write_text(a.stats_json, json.dumps(d, indent=1) + "\n")
     if a.stats:
-        sys.stderr.write(" ".join(f"{k}={v}" for k, v in d.items()) + "\n")
+        _shards.say(" ".join(f"{k}={v}" for k, v in d.items()) + "\n")
 
 
 # ------------------------------------------------------------------------------------------ stats
@@ -1993,7 +2261,8 @@ def _cmd_stats(a: argparse.Namespace) -> int:
     stats = _shards.Stats()
     files = 0
     for r in state.records():
-        if "stats" in r and not str(r["key"]).startswith("p1-"):
+        # Per-file records only: not MinHash phase 1 (p1-), nor a merged output's total.
+        if "stats" in r and not str(r["key"]).startswith(("p1-", "merged-")):
             stats.add(r["stats"])
             files += 1
     total = (run.get("inputs") or {}).get("count")
@@ -2007,7 +2276,7 @@ def _cmd_stats(a: argparse.Namespace) -> int:
     if a.json:
         _io.atomic_write_text(a.json, json.dumps(d, indent=1) + "\n")
     else:
-        sys.stdout.write(json.dumps(d, indent=1) + "\n")
+        _stdout(json.dumps(d, indent=1) + "\n")
     return 0
 
 
@@ -2056,7 +2325,14 @@ def _io_args(
     p.add_argument("--files-from", metavar="PATH", help="read more inputs from PATH, one per line")
 
 
-def _run_args(p: argparse.ArgumentParser, *, excluded: bool = True, merge: bool = True) -> None:
+def _run_args(
+    p: argparse.ArgumentParser,
+    *,
+    excluded: bool = True,
+    merge: bool = True,
+    warc: bool = False,
+    tables: bool = True,
+) -> None:
     p.add_argument("--text-column", default="text", help="the text column (default: text)")
     p.add_argument(
         "--threads",
@@ -2069,7 +2345,8 @@ def _run_args(p: argparse.ArgumentParser, *, excluded: bool = True, merge: bool 
         "--batch-size",
         type=_positive,
         default=None,
-        help="rows per Arrow batch (default: 10000; --recipe fineweb-warc: pages per batch, 256)",
+        help="rows per Arrow batch (default: 10000"
+        + ("; --recipe fineweb-warc: pages per batch, 256)" if warc else ")"),
     )
     p.add_argument(
         "--shard", type=_shard, metavar="I/N", help="process input files I, I+N, I+2N, ..."
@@ -2107,7 +2384,12 @@ def _run_args(p: argparse.ArgumentParser, *, excluded: bool = True, merge: bool 
     )
     p.add_argument("--stats-json", metavar="PATH", help="write the stats to PATH as JSON")
     p.add_argument("--progress", action="store_true", help="show a progress line on stderr")
-    p.add_argument("--compression", help="Parquet compression (default: pyarrow's, snappy)")
+    p.add_argument(
+        "--compression",
+        help="Parquet compression (default: pyarrow's, snappy)"
+        if tables
+        else "not used: signature files are not compressed",
+    )
     p.add_argument(
         "--overwrite",
         action="store_true",
@@ -2163,7 +2445,7 @@ def build_parser() -> argparse.ArgumentParser:
         "fastText LID, the same filters, MinHash dedup, then PII replacement.",
     )
     _io_args(p, warc=True)
-    _run_args(p)
+    _run_args(p, warc=True)
     p.add_argument(
         "--recipe",
         choices=RECIPES,
@@ -2271,12 +2553,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--errors",
-        default="ignore",
+        choices=UNIDECODE_ERRORS,
         help="--mode unidecode: ignore (default), replace, strict or preserve",
     )
     p.add_argument(
         "--replace-str",
-        default="?",
         help="--mode unidecode: replacement for --errors replace (default: ?)",
     )
     p.add_argument("--output-column", help="write here instead of replacing the text column")
@@ -2311,7 +2592,7 @@ def build_stage_parser(stage: str) -> argparse.ArgumentParser:
             "position in the sorted input list.",
         )
         _io_args(p, out="SIGS", out_help="the signatures directory")
-        _run_args(p, excluded=False, merge=False)
+        _run_args(p, excluded=False, merge=False, tables=False)
         _minhash_args(p)
         p.set_defaults(body=_stage_signatures)
     elif stage == "buckets":
@@ -2375,10 +2656,9 @@ def build_stage_parser(stage: str) -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point of the ``pyroid`` console script."""
-    from pyroid.integrations import _shards
-
     args = list(sys.argv[1:] if argv is None else argv)
     if args and args[0] == "run":
+        # The base install: `pyroid run` patches imports and needs neither pyarrow nor numpy.
         from pyroid.integrations import run
 
         return run(args[1:])
@@ -2387,30 +2667,77 @@ def main(argv: list[str] | None = None) -> int:
     else:
         a = build_parser().parse_args(args)
     _need_pyarrow()
+    from pyroid.integrations import _shards  # imports pyarrow
+
     term = _on_sigterm()
-    try:
-        return int(a.body(a))
-    except _shards.Terminated:
-        # Finished files and their records are kept: the same command resumes the run.
-        print(f"pyroid {a.command}: terminated", file=sys.stderr)  # noqa: T201
-        return 128 + signal.SIGTERM
-    except KeyboardInterrupt:
-        print(f"pyroid {a.command}: interrupted", file=sys.stderr)  # noqa: T201
-        return 128 + signal.SIGINT
-    except _shards.StateError as e:
-        raise SystemExit(f"pyroid {a.command}: {e}") from None
-    # OSError: a model path that is a directory, an unwritable output, a failed download;
-    # EOFError: a truncated compressed input; PyroidError: a text column of another type.
-    except (OSError, ValueError, ImportError, EOFError, pyroid.PyroidError) as e:
-        if os.environ.get("PYROID_DEBUG"):
-            raise
-        msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
-        notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
-        print(f"pyroid {a.command}: {msg}{notes}", file=sys.stderr)  # noqa: T201
-        return 1
-    finally:
-        if term is not None:
-            signal.signal(signal.SIGTERM, term)
+    # The pyroid program, not a caller of main(): it owns the process's signals to the end.
+    program = (
+        argv is None
+        and term is not None
+        and signal.getsignal(signal.SIGINT) is signal.default_int_handler
+    )
+    previous = sys.unraisablehook
+    hook = _shards.redelivering(previous)
+    if program:
+        sys.unraisablehook = hook
+    with _new_call() as call:
+        ok = False
+        try:
+            code = int(a.body(a))
+            _stdout("")  # here, not at exit, so a closed pipe (| head -1) is handled below
+            ok = True
+            if program:
+                _default_signals()  # a signal before this line stops the run (exit 128 + signal)
+            return code
+        except _shards.Terminated:
+            # Finished files and their records are kept: the same command resumes the run.
+            _shards.say(f"pyroid {a.command}: terminated\n")
+            return 128 + signal.SIGTERM
+        except KeyboardInterrupt:
+            _shards.say(f"pyroid {a.command}: interrupted\n")
+            return 128 + signal.SIGINT
+        except _shards.StateError as e:
+            raise SystemExit(f"pyroid {a.command}: {e}") from None
+        except BrokenPipeError:
+            # stdout closed early (pyroid stats OUT | head -1): exit quietly, as Python's docs
+            # advise. Messages on stderr never get here (a closed stderr only silences them).
+            _shards.mute(sys.stdout)
+            return 1
+        except Exception as e:
+            if os.environ.get("PYROID_DEBUG") or not _one_line(e):
+                raise
+            msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
+            notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
+            _shards.say(f"pyroid {a.command}: {msg}{notes}\n")
+            return 1
+        finally:
+            if program:
+                with contextlib.suppress(KeyboardInterrupt):  # a second signal: exiting anyway
+                    _default_signals()
+                if sys.unraisablehook is hook:  # no KeyboardInterrupt to catch from here on
+                    sys.unraisablehook = previous
+            elif term is not None:
+                signal.signal(signal.SIGTERM, term)
+            if not ok:  # this call's runs only: calls in other threads have their own
+                for started in call.runs:
+                    with contextlib.suppress(Exception):
+                        _tidy_failed(started)
+
+
+def _one_line(e: Exception) -> bool:
+    """An error about the inputs, outputs or setup: a one-line message, not a traceback.
+
+    OSError: a missing file, a model path that is a directory, an unwritable output, a failed
+    download; EOFError: a truncated compressed input; PyroidError: a value pyroid rejects;
+    Arrow's errors: a file it cannot read or a column type it cannot use; ArchiveLoadFailed
+    (pyroid.warc's or warcio's): a file that is not a WARC file.
+    """
+    if isinstance(e, (OSError, ValueError, ImportError, EOFError, pyroid.PyroidError)):
+        return True
+    if type(e).__name__ == "ArchiveLoadFailed":
+        return True
+    pa = sys.modules.get("pyarrow")
+    return pa is not None and isinstance(e, pa.ArrowException)
 
 
 def _on_sigterm() -> Any:
@@ -2430,6 +2757,31 @@ def _on_sigterm() -> Any:
         raise _shards.Terminated
 
     return signal.signal(signal.SIGTERM, handler)
+
+
+def _default_signals() -> None:
+    """From here on, SIGINT and SIGTERM end the process at once (their default action).
+
+    The ``pyroid`` program sets this when its command has finished: nothing is left to stop or
+    tidy. Python's handlers would raise KeyboardInterrupt in the code that runs at shutdown (an
+    atexit handler prints its traceback), or miss the signal, until CPython resets them to the
+    default late in its shutdown anyway.
+    """
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+
+
+def _stdout(text: str) -> None:
+    """Write ``text`` to stdout and flush; a closed pipe raises BrokenPipeError on Windows too."""
+    from pyroid.integrations import _shards
+
+    try:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+    except OSError as e:
+        if isinstance(e, BrokenPipeError) or not _shards.closed_pipe(e):
+            raise
+        raise BrokenPipeError(e.errno, e.strerror) from e
 
 
 # What installs a module the commands import only when they need it (top-level name: pip args).
