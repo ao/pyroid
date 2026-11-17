@@ -4,7 +4,8 @@
 With langdetect installed, :class:`Language`, :class:`LangDetectException` and
 :data:`ErrorCode` are langdetect's own classes, so ``except
 langdetect.LangDetectException`` and ``isinstance(x, langdetect.language.Language)`` hold
-for what pyroid raises and returns. Without it they are copies of langdetect 1.0.9's.
+for what pyroid raises and returns. Without it they are copies of langdetect 1.0.9's
+(:mod:`pyroid.langdetect._classes`).
 """
 
 from __future__ import annotations
@@ -16,8 +17,13 @@ import sys
 import warnings
 from typing import Any
 
+from pyroid.langdetect import _classes
+
 #: The langdetect release whose behaviour pyroid.langdetect reproduces.
 LANGDETECT_VERSION = "1.0.9"
+#: Other langdetect releases that detect exactly as 1.0.9 does (the same detection code and
+#: profiles): no version warning for them.
+SAME_RELEASES = ("1.0.7", "1.0.8")
 
 
 def _installed_package_dir() -> str | None:
@@ -50,65 +56,10 @@ def _import_real() -> Any:
     return lang_detect_exception.ErrorCode, lang_detect_exception.LangDetectException, language
 
 
-# Copies of langdetect 1.0.9's classes, used when langdetect is not installed.
-_ErrorCode: Any = type(
-    "ErrorCode",
-    (),
-    {
-        "NoTextError": 0,
-        "FormatError": 1,
-        "FileLoadError": 2,
-        "DuplicateLangError": 3,
-        "NeedLoadProfileError": 4,
-        "CantDetectError": 5,
-        "CantOpenTrainData": 6,
-        "TrainDataFormatError": 7,
-        "InitParamError": 8,
-        "__module__": "pyroid.langdetect.lang_detect_exception",
-    },
-)
-
-
-class _LangDetectException(Exception):  # noqa: N818 (langdetect's name)
-    """langdetect's exception; ``code`` is one of :data:`ErrorCode`'s values."""
-
-    def __init__(self, code: int, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-
-    def get_code(self) -> int:
-        """The error code."""
-        return self.code
-
-
-class _Language:
-    """A detected language: ``lang`` and ``prob``, ordered by ``prob``."""
-
-    def __init__(self, lang: Any, prob: Any) -> None:
-        self.lang = lang
-        self.prob = prob
-
-    def __repr__(self) -> str:
-        if self.lang is None:
-            return ""
-        return "%s:%s" % (self.lang, self.prob)  # noqa: UP031 (langdetect's formatting)
-
-    def __lt__(self, other: Any) -> Any:
-        return self.prob < other.prob
-
-
-for _cls, _name, _module in (
-    (_LangDetectException, "LangDetectException", "pyroid.langdetect.lang_detect_exception"),
-    (_Language, "Language", "pyroid.langdetect.language"),
-):
-    _cls.__name__ = _cls.__qualname__ = _name
-    _cls.__module__ = _module
-del _cls, _name, _module
-
 _real = _import_real()
-ErrorCode: Any = _real[0] if _real is not None else _ErrorCode
-LangDetectException: Any = _real[1] if _real is not None else _LangDetectException
-Language: Any = _real[2].Language if _real is not None else _Language
+ErrorCode: Any = _real[0] if _real is not None else _classes.ErrorCode
+LangDetectException: Any = _real[1] if _real is not None else _classes.LangDetectException
+Language: Any = _real[2].Language if _real is not None else _classes.Language
 
 
 def _profiles_dir() -> str | None:
@@ -121,9 +72,12 @@ _WARNED = False
 
 
 def check_version() -> None:
-    """Warn once per process if the installed langdetect is not 1.0.9.
+    """Warn once per process if the installed langdetect detects differently from 1.0.9.
 
-    The shape follows json_repair's version warning until ``pyroid._versions.check`` lands.
+    langdetect 1.0.7 and 1.0.8 detect as 1.0.9 does (:data:`SAME_RELEASES`), so only other
+    releases warn. Until ``pyroid._versions`` lands this is a ``RuntimeWarning`` in
+    json_repair's shape; then the whole function becomes ``_versions.check(...)`` with
+    ``same=`` those releases.
     """
     global _WARNED
     if _WARNED or _real is None:
@@ -133,15 +87,16 @@ def check_version() -> None:
     if pkg is None:
         return
     parent = os.path.dirname(pkg)
-    if os.path.isdir(os.path.join(parent, f"langdetect-{LANGDETECT_VERSION}.dist-info")):
-        return
+    for release in (LANGDETECT_VERSION, *SAME_RELEASES):
+        if os.path.isdir(os.path.join(parent, f"langdetect-{release}.dist-info")):
+            return
     from importlib import metadata
 
     try:
         version = metadata.version("langdetect")
     except metadata.PackageNotFoundError:
         return
-    if version == LANGDETECT_VERSION:
+    if version in (LANGDETECT_VERSION, *SAME_RELEASES):
         return
     # The first frame outside pyroid and importlib. warnings skips importlib's bootstrap frames
     # itself when it counts `stacklevel`, so they are not counted here either.
@@ -156,8 +111,9 @@ def check_version() -> None:
         frame = frame.f_back
     warnings.warn(
         f"pyroid.langdetect reproduces langdetect {LANGDETECT_VERSION}, but langdetect {version} "
-        f"is installed: detections follow {LANGDETECT_VERSION}, and Language, "
-        f"LangDetectException and ErrorCode are the installed release's classes.",
+        f"is installed: detections follow {LANGDETECT_VERSION} (and 1.0.7 and 1.0.8, which detect "
+        f"the same), and Language, LangDetectException and ErrorCode are the installed "
+        f"release's classes.",
         RuntimeWarning,
         stacklevel=level,
     )

@@ -870,11 +870,12 @@ _TARGETS: dict[str, _Target] = {
         "pyroid.langdetect",
         "which reproduces langdetect 1.0.9's detect, detect_langs, DetectorFactory and Detector, "
         "with the same results for the same seed",
-        "LANGDETECT_VERSION",
+        # No version notice here: importing pyroid.langdetect warns once about a release
+        # that detects differently (not 1.0.7, 1.0.8 or 1.0.9).
+        None,
         "pip install langdetect==1.0.9",
         " (langdetect.utils.messages and langdetect.utils.unicode_block)",
         _build_langdetect,
-        installed=_distribution_version("langdetect"),
     ),
 }
 

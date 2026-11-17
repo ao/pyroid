@@ -6,6 +6,7 @@ import contextlib
 import os
 import pickle
 import runpy
+import shutil
 import sys
 import threading
 from collections.abc import Callable, Iterator
@@ -408,31 +409,62 @@ def test_default_order_follows_langdetect() -> None:
 
 
 @pytest.mark.thread_unsafe
-def test_another_langdetect_release_warns(run_python: Callable[..., Any], tmp_path: Any) -> None:
-    pkg = tmp_path / "langdetect"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("", encoding="utf-8")
-    (pkg / "language.py").write_text("class Language:\n    pass\n", encoding="utf-8")
-    (pkg / "lang_detect_exception.py").write_text(
-        "ErrorCode = type('ErrorCode', (), {})\nclass LangDetectException(Exception):\n    pass\n",
-        encoding="utf-8",
-    )
-    dist = tmp_path / "langdetect-1.0.8.dist-info"
+@pytest.mark.parametrize(("version", "warns"), [("1.0.6", 1), ("1.0.7", 0), ("1.0.8", 0)])
+def test_another_langdetect_release_warns(
+    run_python: Callable[..., Any], tmp_path: Any, version: str, warns: int
+) -> None:
+    ld = pytest.importorskip("langdetect")
+    # langdetect 1.0.9's code, installed as another release.
+    shutil.copytree(Path(ld.__file__).parent, tmp_path / "langdetect")
+    dist = tmp_path / f"langdetect-{version}.dist-info"
     dist.mkdir()
-    (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: langdetect\nVersion: 1.0.8\n")
+    (dist / "METADATA").write_text(f"Metadata-Version: 2.1\nName: langdetect\nVersion: {version}\n")
     code = f"""
         import sys, warnings
         sys.path.insert(0, {str(tmp_path)!r})
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            import pyroid.langdetect
+            import pyroid
+            pyroid.patch("langdetect")  # imports pyroid.langdetect
             import pyroid.langdetect._compat as c
             c.check_version()  # once per process
+        import pyroid.integrations as pi
         ours = [x for x in w if x.category is RuntimeWarning]
-        print(len(ours), "1.0.8" in str(ours[0].message), ours[0].filename)
+        versions = [x for x in w if x.category is pi.PatchWarning and "{version}" in str(x.message)]
+        print(len(ours), len(versions), all("{version}" in str(x.message) for x in ours))
+        print(*{{x.filename for x in ours}})
     """
     out = run_python(code)
     assert out.returncode == 0, out.stderr
-    count, named, filename = out.stdout.split()
-    assert (count, named) == ("1", "True")
-    assert filename == "<string>"
+    counts, *where = out.stdout.splitlines()
+    assert counts.split() == [str(warns), "0", "True"]
+    if warns:
+        assert where == ["<string>"]
+
+
+@pytest.mark.thread_unsafe
+def test_messages_name_langdetects_classes(run_python: Callable[..., Any]) -> None:
+    code = """
+        import pickle, sys
+        sys.modules["langdetect"] = None
+        import pyroid.langdetect as pl
+        for make in (lambda: pl.Language("en"), lambda: pl.LangDetectException(5)):
+            try:
+                make()
+            except TypeError as e:
+                print(str(e).split("(")[0])
+        e = pl.LangDetectException(5, "No features in text.")
+        try:
+            pickle.loads(pickle.dumps(e))  # fails in langdetect too (two arguments)
+        except TypeError as exc:
+            print(str(exc).split("(")[0])
+        print(pickle.loads(pickle.dumps(pl.Language("en", 0.5))))
+    """
+    out = run_python(code)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.split() == [
+        "Language.__init__",
+        "LangDetectException.__init__",
+        "LangDetectException.__init__",
+        "en:0.5",
+    ]
