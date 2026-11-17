@@ -368,7 +368,7 @@ def test_stats_into_a_closed_pipe(tmp_path: Path) -> None:
     r, w = os.pipe()
     os.close(r)
     try:
-        proc = subprocess.run(
+        stats = subprocess.run(
             [sys.executable, "-m", "pyroid", "stats", str(out)],
             stdout=w,
             stderr=subprocess.PIPE,
@@ -377,8 +377,8 @@ def test_stats_into_a_closed_pipe(tmp_path: Path) -> None:
         )
     finally:
         os.close(w)
-    assert proc.returncode == 1
-    assert proc.stderr == ""
+    assert stats.returncode == 1
+    assert stats.stderr == ""
 
 
 # ----------------------------------------------------------------------------------------- dedup

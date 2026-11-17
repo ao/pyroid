@@ -2671,9 +2671,9 @@ def main(argv: list[str] | None = None) -> int:
         if term is not None:
             signal.signal(signal.SIGTERM, term)
         if not ok:
-            for run in _STARTED:
+            for started in _STARTED:
                 with contextlib.suppress(Exception):
-                    _tidy_failed(run)
+                    _tidy_failed(started)
         _STARTED.clear()
 
 
