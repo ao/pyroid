@@ -12,7 +12,7 @@ from typing import Any
 
 import pyroid.sqlparse as _p
 
-__all__ = ["format", "parse", "parsestream", "split", "tokenize"]
+__all__ = ["format", "group", "parse", "parsestream", "split", "tokenize"]
 
 
 def _limits() -> Any:
@@ -38,6 +38,16 @@ def format(sql: Any, encoding: str | None = None, **options: Any) -> str:  # noq
 def split(sql: Any, encoding: str | None = None, strip_semicolon: bool = False) -> list[str]:
     """``sqlparse.split``, run by pyroid."""
     return _p._split(sql, encoding, strip_semicolon)
+
+
+def group(stmt: Any) -> Any:
+    """``sqlparse.engine.grouping.group``, run by pyroid."""
+    limits = _limits()
+    depth, tokens = _p._limit_values(limits)
+    r = _p._native._group(stmt, depth, tokens)
+    if r is NotImplemented:
+        return _p.engine.grouping._py_group(stmt, limits)
+    return r
 
 
 tokenize = _p.lexer.tokenize

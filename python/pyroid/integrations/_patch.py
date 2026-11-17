@@ -765,6 +765,7 @@ def _build_nemo_curator(impl: types.ModuleType, real: Any, missing: str) -> _Bui
 _SQLPARSE_SWAPS: dict[str, tuple[str, ...]] = {
     "sqlparse": ("parse", "parsestream", "format", "split"),
     "sqlparse.lexer": ("tokenize",),
+    "sqlparse.engine.grouping": ("group",),
 }
 # Without sqlparse, these pyroid.sqlparse modules stand in for sqlparse's.
 _SQLPARSE_MODULES = (

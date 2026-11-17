@@ -9,7 +9,7 @@
 
 import contextvars
 
-from pyroid.sqlparse import sql
+from pyroid.sqlparse import _core, sql
 from pyroid.sqlparse import tokens as T
 from pyroid.sqlparse.exceptions import SQLParseError
 from pyroid.sqlparse.utils import imt, recurse
@@ -569,4 +569,9 @@ def _group(tlist, cls, match,
 
 
 def group(stmt):
-    return _py_group(stmt)
+    # pyroid: grouped natively, in place; sqlparse's own code for what pyroid leaves to it
+    max_depth, max_tokens = _limits()
+    r = _core.native._group(stmt, max_depth, max_tokens)
+    if r is NotImplemented:
+        return _py_group(stmt)
+    return r

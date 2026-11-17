@@ -10,6 +10,8 @@
 
 #![allow(clippy::many_single_char_names)]
 
+mod group;
+
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -976,6 +978,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_format, &m)?)?;
     m.add_function(wrap_pyfunction!(_parse, &m)?)?;
     m.add_function(wrap_pyfunction!(_regex_match, &m)?)?;
+    m.add_function(wrap_pyfunction!(group::_group, &m)?)?;
     m.add_class::<Statements>()?;
     parent.add_submodule(&m)
 }
