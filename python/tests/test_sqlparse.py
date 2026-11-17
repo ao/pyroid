@@ -492,12 +492,25 @@ def test_threads_while_the_lexer_changes() -> None:
 
 
 @pytest.mark.thread_unsafe
-def test_ctrl_c_stops_a_long_format() -> None:
-    code = """
-        import signal, sys, threading, time, os
+@pytest.mark.parametrize(
+    "send",
+    [
+        # Trips CPython's SIGINT flag as the signal handler does, on every platform.
+        "_thread.interrupt_main()",
+        # A real signal. On Windows os.kill(pid, SIGINT) is TerminateProcess(pid, 2).
+        pytest.param(
+            "os.kill(os.getpid(), signal.SIGINT)",
+            marks=pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals"),
+        ),
+    ],
+    ids=["interrupt_main", "kill"],
+)
+def test_ctrl_c_stops_a_long_format(send: str) -> None:
+    code = f"""
+        import _thread, os, signal, threading, time
         import pyroid.sqlparse as P  # noqa: N812
         q = "select a, b, c from t where x = 1 and y in (1, 2, 3);\\n" * 200_000
-        threading.Timer(0.5, lambda: os.kill(os.getpid(), signal.SIGINT)).start()
+        threading.Timer(0.5, lambda: {send}).start()
         t = time.monotonic()
         try:
             P.format(q, reindent=True)
