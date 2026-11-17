@@ -335,3 +335,8 @@ def split_batch(sqls: Any, *, threads: int | None = None, strip_semicolon: bool 
         if r is not NotImplemented:
             return r
     return _batch_loop(sqls, texts, lambda x: _split(x, None, strip_semicolon))
+
+
+def __dir__() -> list[str]:
+    """``dir(pyroid.sqlparse)``: sqlparse's names, not this module's typing imports."""
+    return sorted(set(globals()) - {"annotations", "Any", "Generator"})

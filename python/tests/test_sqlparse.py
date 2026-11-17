@@ -225,6 +225,12 @@ def test_parsestream_reads_the_limits_for_each_statement() -> None:
         grouping.MAX_GROUPING_DEPTH = saved
 
 
+def test_the_namespace_is_sqlparses() -> None:
+    public = {n for n in dir(P) if not n.startswith("_")}
+    assert not public & {"Any", "Generator", "annotations"}
+    assert set(P.__all__) <= public
+
+
 def test_bytes_and_encodings() -> None:
     assert P.format(b"select '\xc3\xa9'") == "select 'é'"
     assert P.format(b"select '\xe9'") == S.format(b"select '\xe9'")  # not utf-8: unicode-escape
