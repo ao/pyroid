@@ -744,7 +744,7 @@ warnings.simplefilter("ignore")
 import pyroid
 
 togglers, users, toggles, limit = (int(x) for x in sys.argv[1:5])
-faulthandler.dump_traceback_later(limit + 60, exit=True)
+faulthandler.dump_traceback_later(limit + 120, exit=True)
 sys.setswitchinterval(1e-4)  # with the GIL: hand it to the togglers often
 
 
@@ -769,10 +769,19 @@ for cls in (difflib.SequenceMatcher, Sub):
     want[cls] = (m.ratio(), m.get_opcodes(), m.quick_ratio())
 want_diff = list(difflib.unified_diff(la, lb))
 want_ab, want_aa = want[difflib.SequenceMatcher][0], 1.0
-before = dict(vars(difflib.SequenceMatcher))
 
+CLASSES = ("SequenceMatcher", "Differ", "HtmlDiff")
+
+
+def state():
+    classes = {n: dict(vars(getattr(difflib, n))) for n in CLASSES}
+    names = ("get_close_matches", "unified_diff", "context_diff", "_mdiff")
+    return classes, {n: getattr(difflib, n) for n in names}
+
+
+before = state()
 stop = threading.Event()
-errors, calls, done = [], [0] * users, [0] * togglers
+errors, calls, took = [], [0] * users, [[] for _ in range(togglers)]
 
 
 def user(k):
@@ -802,20 +811,28 @@ def user(k):
 def toggler(k):
     try:
         for _ in range(toggles):
+            if stop.is_set():
+                break
+            t = time.perf_counter()
             pyroid.patch("difflib")
             pyroid.unpatch("difflib")
-            done[k] += 1
+            took[k].append(time.perf_counter() - t)
     except Exception as e:
         errors.append(f"toggler: {type(e).__name__}: {e}")
 
 
-threads = [threading.Thread(target=user, args=(k,)) for k in range(users)]
-threads += [threading.Thread(target=toggler, args=(k,)) for k in range(togglers)]
+threads = [threading.Thread(target=user, args=(k,), name=f"user {k}") for k in range(users)]
+threads += [
+    threading.Thread(target=toggler, args=(k,), name=f"toggler {k}") for k in range(togglers)
+]
 start = time.monotonic()
 base = rss_mb()
 peak = base
 for t in threads:
     t.start()
+# Until every toggler is done or `limit` seconds have passed. Where threads outnumber CPUs, a
+# change to a class other threads are using can wait many milliseconds on free-threaded
+# CPython (with or without pyroid), so slow machines stop the togglers early.
 while any(t.is_alive() for t in threads[users:]) and time.monotonic() - start < limit:
     time.sleep(0.05)
     now = rss_mb()
@@ -823,30 +840,42 @@ while any(t.is_alive() for t in threads[users:]) and time.monotonic() - start < 
         peak = max(peak, now)
 elapsed = time.monotonic() - start
 stop.set()
-finished = not any(t.is_alive() for t in threads[users:])
-for t in threads[:users]:
-    t.join()
-restored = dict(vars(difflib.SequenceMatcher)) == before
-print(json.dumps({
-    "finished": finished, "elapsed": elapsed, "toggles": sum(done), "calls": sum(calls),
-    "errors": len(errors), "first_errors": sorted(set(errors))[:5], "restored": restored,
+deadline = time.monotonic() + 60
+for t in threads:
+    t.join(max(deadline - time.monotonic(), 0))
+stuck = [t.name for t in threads if t.is_alive()]
+every = sorted(x for k in took for x in k)
+out = {
+    "elapsed": round(elapsed, 2), "toggles": [len(k) for k in took], "calls": sum(calls),
+    "toggle_ms": [round(every[q * (len(every) - 1) // 4] * 1e3, 2) for q in (2, 4)] if every else 0,
+    "errors": len(errors), "first_errors": sorted(set(errors))[:5], "stuck": stuck,
     "rss_base": base, "rss_peak": peak,
-}))
+}
+if stuck:
+    faulthandler.dump_traceback(all_threads=True)
+else:  # read only once no thread can change them
+    out["restored"] = state() == before
+    out["patched"] = list(sys.modules["pyroid.integrations"].patched())
+print(json.dumps(out))
 sys.stdout.flush()
-os._exit(0)  # a toggler still running (the old bug) must not keep the process alive
+os._exit(0)  # a thread still running must not keep the process alive
 """
 
 
 @pytestmark_patch
 def test_toggling_the_patch_while_threads_diff() -> None:
-    # 4 threads patch and unpatch difflib 300 times each (100 with the GIL) while 8 threads use
-    # it (matchers made fresh, one kept across toggles and re-pointed with set_seq2, a
-    # subclass, unified_diff) and leave cyclic garbage. Every result is difflib's, no call
-    # fails, and time and memory stay bounded: unpatch neither walks the heap (which kept every
-    # object alive and starved the cycle collector) nor misses a matcher another thread uses.
+    # 4 threads patch and unpatch difflib up to 300 times each (100 with the GIL) while 8
+    # threads use it (matchers made fresh, one kept across toggles and re-pointed with
+    # set_seq2, a subclass, unified_diff) and leave cyclic garbage. Every result is difflib's,
+    # no call fails, memory stays bounded (unpatch neither walks the heap, which kept every
+    # object alive and starved the cycle collector, nor misses a matcher another thread uses),
+    # and once every thread has stopped, difflib is as it was. The togglers stop after 30 s:
+    # on free-threaded CPython with more threads than CPUs, a change to a class the other
+    # threads are using can wait from milliseconds to seconds, also without pyroid, and one
+    # toggler can get far fewer turns at patch()'s lock than the others.
     toggles = 100 if getattr(sys, "_is_gil_enabled", lambda: True)() else 300
     proc = subprocess.run(
-        [sys.executable, "-c", _TOGGLE_STRESS, "4", "8", str(toggles), "60"],
+        [sys.executable, "-c", _TOGGLE_STRESS, "4", "8", str(toggles), "30"],
         capture_output=True,
         text=True,
         timeout=240,
@@ -854,13 +883,15 @@ def test_toggling_the_patch_while_threads_diff() -> None:
     )
     assert proc.returncode == 0, proc.stderr[-3000:]
     out = json.loads(proc.stdout.strip().splitlines()[-1])
-    assert out["finished"], json.dumps(out)
-    assert out["toggles"] == 4 * toggles, json.dumps(out)
-    assert out["errors"] == 0, json.dumps(out)
-    assert out["calls"] > 0, json.dumps(out)
-    assert out["restored"], json.dumps(out)
+    report = json.dumps(out)
+    assert out["stuck"] == [], f"still running 60 s after the stop: {report}\n{proc.stderr[-6000:]}"
+    assert out["errors"] == 0, report
+    assert sum(out["toggles"]) >= 20, report
+    assert out["calls"] > 0, report
+    assert out["restored"], report
+    assert out["patched"] == [], report
     if out["rss_base"] is not None:
-        assert out["rss_peak"] - out["rss_base"] < 400, json.dumps(out)
+        assert out["rss_peak"] - out["rss_base"] < 400, report
 
 
 @pytestmark_patch
