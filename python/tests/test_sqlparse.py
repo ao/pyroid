@@ -171,6 +171,60 @@ def test_parsestream_is_lazy() -> None:
     assert [str(s) for s in stmts] == ["select 1; ", "select 2"]
 
 
+@pytest.mark.thread_unsafe
+@pytest.mark.skipif(sys.platform == "win32", reason="the resource module")
+@pytest.mark.parametrize(("call", "most"), [("split", 3.0), ("format", 3.5), ("parsestream", 3.0)])
+def test_big_text_memory_stays_near_the_text_size(call: str, most: float) -> None:
+    # The text is lexed as the splitter asks and each statement's tokens are dropped after
+    # it, so split, format and parsestream hold about one statement's tokens, not the text's
+    # (they took about 9 times the text's size). format returns a str of the text's size,
+    # split a list of strs holding all of it. A fresh process: ru_maxrss is the peak so far.
+    r = run_py(
+        """
+        import gc, resource, sys
+        import pyroid.sqlparse as P
+        call, n = sys.argv[1], int(sys.argv[2])
+        P.format("select 1"), P.split("select 1"), list(P.parsestream("select 1"))
+        text = "insert into t values (1, 'abc', 2.5, null), (2, 'de', -3, 'x');\\n" * n
+        gc.collect()
+        scale = 1 if sys.platform == "darwin" else 1024
+        before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * scale
+        if call == "split":
+            P.split(text)
+        elif call == "format":
+            P.format(text)
+        else:
+            for _ in P.parsestream(text):
+                pass
+        after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * scale
+        print(f"{(after - before) / len(text):.2f}")
+        """,
+        call,
+        # parsestream makes Python objects for every statement: a smaller text
+        str((2 if call == "parsestream" else 8) * 2**20 // 64),
+        timeout=600,
+    )
+    assert r.returncode == 0, r.stderr
+    assert float(r.stdout) < most, f"{call}: {r.stdout.strip()} times the text's size"
+
+
+@pytest.mark.thread_unsafe
+def test_parsestream_reads_the_limits_for_each_statement() -> None:
+    deep = "select " + "(" * 150 + "1" + ")" * 150
+    grouping = engine.grouping
+    saved = grouping.MAX_GROUPING_DEPTH
+    try:
+        stmts = P.parsestream(f"select 1; {deep}; {deep}")
+        assert str(next(stmts)) == "select 1; "
+        grouping.MAX_GROUPING_DEPTH = None  # type: ignore[assignment]  # read for the next one
+        assert str(next(stmts)) == f"{deep}; "
+        grouping.MAX_GROUPING_DEPTH = 100
+        with pytest.raises(P.exceptions.SQLParseError, match="depth exceeded"):
+            next(stmts)
+    finally:
+        grouping.MAX_GROUPING_DEPTH = saved
+
+
 def test_bytes_and_encodings() -> None:
     assert P.format(b"select '\xc3\xa9'") == "select 'é'"
     assert P.format(b"select '\xe9'") == S.format(b"select '\xe9'")  # not utf-8: unicode-escape

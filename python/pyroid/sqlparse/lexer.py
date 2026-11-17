@@ -81,12 +81,10 @@ def _tokens(lex: Any, sql: Any, encoding: str | None) -> Iterator[tuple[Any, str
             else "the lexer's table holds entries pyroid cannot read"
         )
         _core.warn_fallback("lexer.tokenize", why, 4)
-        yield from _GET_TOKENS(lex, text)
+        yield from Lexer.get_tokens(lex, text)
         return
-    pairs, err = r
-    yield from pairs
-    if err is not None:
-        raise err
+    for pairs in r:  # lexed as they are asked for, a list at a time
+        yield from pairs
 
 
 def tokenize(sql: Any, encoding: str | None = None) -> Iterator[tuple[Any, str]]:

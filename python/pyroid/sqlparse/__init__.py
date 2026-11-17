@@ -102,12 +102,13 @@ def _parsestream(stream: Any, encoding: str | None, limits: Any) -> Generator[An
         yield from _python_stream(stream, encoding, limits)
         return
     text = lexer.read(stream, encoding)
-    it = _native._parse(text, lex, *_limit_values(limits))
+    # the limits are read for each statement, as sqlparse's group() reads them
+    it = _native._parse(text, lex, lambda: _limit_values(limits))
     if it is NotImplemented:
         yield from _python_stream(text, None, limits)
         return
     for stmt in it:
-        if type(stmt) is tuple:  # sqlparse's own grouping raises on this one
+        if type(stmt) is tuple:  # sqlparse's own grouping: it raises, or reads the limits
             yield _group_python(stmt[1], limits)
         else:
             yield stmt

@@ -74,14 +74,19 @@ impl FormatOptions {
     }
 }
 
-/// The lexed, filtered items of a text, handed out one statement at a time.
+/// The lexed, filtered items of a text, handed out one statement at a time. The text is lexed
+/// as the splitter asks for tokens, and the items of a statement are dropped when the next
+/// one is asked for, so the memory held is about one statement's, not the text's.
+///
+/// Every call takes the text and the configuration [`stream`] was given.
 #[allow(missing_debug_implementations)]
-pub struct Stream<S, E> {
-    /// The text.
-    pub src: S,
-    /// The items.
+pub struct Stream<E> {
+    /// The items from the current statement's first on (`start` indexes them).
     pub items: Vec<Item>,
+    lexer: lexer::Lexer,
+    lexed: bool,
     lex_error: Option<LexError<E>>,
+    filters: TokenFilters,
     pos: usize,
     start: usize,
     splitter: super::splitter::Splitter,
@@ -90,67 +95,88 @@ pub struct Stream<S, E> {
     version: UnicodeVersion,
 }
 
-/// Lex `src` and apply the token filters.
-///
-/// # Errors
-/// [`Error::Python`] where a token filter raises.
-pub fn stream<S: AsRef<str>, H: Hooks>(
-    src: S,
-    cfg: &Config,
-    filters: &TokenFilters,
-    hooks: &mut H,
-) -> Result<Stream<S, H::Error>, Error<H::Error>> {
-    let (raw, err) = lexer::lex(src.as_ref(), cfg, hooks);
-    let err = match err {
-        Some(LexError::Interrupted(e)) => return Err(Error::External(e)),
-        e => e,
-    };
-    let types = ttype::types();
+/// A stream over `src`, lexed with `cfg` and the token filters as it is read.
+pub fn stream<E>(src: &str, cfg: &Config, filters: &TokenFilters) -> Stream<E> {
     let v = cfg.version();
-    let mut items: Vec<Item> = raw
-        .iter()
-        .map(|t| (t.tt, Str::Span(t.start, t.end)))
-        .collect();
-    if !filters.is_empty() {
-        for it in &mut items {
-            filters.apply(src.as_ref(), &types, v, it)?;
-        }
-    }
-    Ok(Stream {
-        src,
-        items,
-        lex_error: err,
+    Stream {
+        items: Vec::new(),
+        lexer: lexer::Lexer::new(src, cfg),
+        lexed: false,
+        lex_error: None,
+        filters: filters.clone(),
         pos: 0,
         start: 0,
         splitter: super::splitter::Splitter::new(v),
         done: false,
-        types,
+        types: ttype::types(),
         version: v,
-    })
+    }
 }
 
-impl<S: AsRef<str>, E> Stream<S, E> {
-    fn text<'a>(&'a self, s: &'a Str) -> &'a str {
-        match s {
-            Str::Span(a, b) => &self.src.as_ref()[*a as usize..*b as usize],
-            Str::Owned(o) => o,
+impl<E> Stream<E> {
+    /// Lex the next item; false at the end of the text (or where lexing stopped).
+    fn fill<H: Hooks<Error = E>>(
+        &mut self,
+        src: &str,
+        cfg: &Config,
+        hooks: &mut H,
+    ) -> Result<bool, Error<E>> {
+        if self.lexed {
+            return Ok(false);
+        }
+        match self.lexer.next(src, cfg, hooks) {
+            Ok(Some(t)) => {
+                let mut item = (t.tt, Str::Span(t.start, t.end));
+                if !self.filters.is_empty() {
+                    self.filters
+                        .apply(src, &self.types, self.version, &mut item)?;
+                }
+                self.items.push(item);
+                Ok(true)
+            }
+            Ok(None) => {
+                self.lexed = true;
+                Ok(false)
+            }
+            Err(LexError::Interrupted(e)) => Err(Error::External(e)),
+            Err(e) => {
+                // raised once the statements before it are out, as sqlparse's generator does
+                self.lexed = true;
+                self.lex_error = Some(e);
+                Ok(false)
+            }
         }
     }
 
-    /// The next statement's item range, or the lexer's error once the items run out.
+    /// The next statement's item range (into [`Stream::items`], valid until the next call),
+    /// or the lexer's error once the items run out.
     ///
     /// # Errors
-    /// The splitter's [`Error::Python`], or the lexer's error after the last statement it
-    /// completed.
-    pub fn next_statement(&mut self) -> Result<Option<std::ops::Range<usize>>, Error<E>> {
+    /// The splitter's or a token filter's [`Error::Python`], a Ctrl-C from `hooks`, or the
+    /// lexer's error after the last statement it completed.
+    pub fn next_statement<H: Hooks<Error = E>>(
+        &mut self,
+        src: &str,
+        cfg: &Config,
+        hooks: &mut H,
+    ) -> Result<Option<std::ops::Range<usize>>, Error<E>> {
         if self.done {
             return Ok(None);
         }
-        while self.pos < self.items.len() {
+        if self.start > 0 {
+            // the statements handed out before
+            self.items.drain(..self.start);
+            self.pos -= self.start;
+            self.start = 0;
+        }
+        loop {
+            if self.pos == self.items.len() && !self.fill(src, cfg, hooks)? {
+                break;
+            }
             let tt = self.items[self.pos].0;
             let ws = self.types.has(tt, bits::WHITESPACE);
             let value: &str = match &self.items[self.pos].1 {
-                Str::Span(a, b) => &self.src.as_ref()[*a as usize..*b as usize],
+                Str::Span(a, b) => &src[*a as usize..*b as usize],
                 Str::Owned(o) => o,
             };
             let split_before = self.splitter.push(&self.types, tt, value, ws)?;
@@ -175,54 +201,15 @@ impl<S: AsRef<str>, E> Stream<S, E> {
         Ok(None)
     }
 
-    /// `sql.Statement(tokens)` for `range`, in a new arena.
-    pub fn statement(&self, range: std::ops::Range<usize>) -> (Tree<'_>, Id) {
-        let mut t = Tree::new(self.src.as_ref(), self.types.clone(), self.version);
+    /// `sql.Statement(tokens)` for `range` of `src`, in a new arena.
+    pub fn statement<'a>(&self, src: &'a str, range: std::ops::Range<usize>) -> (Tree<'a>, Id) {
+        let mut t = Tree::new(src, self.types.clone(), self.version);
         let mut ids = Vec::with_capacity(range.len());
         for (tt, val) in &self.items[range] {
             ids.push(t.token(*tt, val.clone()));
         }
         let stmt = t.group(Class::Statement, ids);
         (t, stmt)
-    }
-
-    /// The item values of `range`: `(is_whitespace, value)`.
-    pub fn values(&self, range: std::ops::Range<usize>) -> impl Iterator<Item = (bool, &str)> + '_ {
-        self.items[range]
-            .iter()
-            .map(|(tt, s)| (self.types.has(*tt, bits::WHITESPACE), self.text(s)))
-    }
-
-    /// The span `src[a..b]` covering `range`, if every value there is an untouched span and
-    /// they are adjacent.
-    pub fn span_of(&self, range: std::ops::Range<usize>) -> Option<(usize, usize)> {
-        let mut out: Option<(usize, usize)> = None;
-        for (_, s) in &self.items[range] {
-            let Str::Span(a, b) = s else { return None };
-            let (a, b) = (*a as usize, *b as usize);
-            out = match out {
-                None => Some((a, b)),
-                Some((x, y)) if y == a => Some((x, b)),
-                Some(_) => return None,
-            };
-        }
-        out
-    }
-
-    /// `str(stmt).strip()` of one statement of `split()`, after `StripTrailingSemicolonFilter`
-    /// if `strip_semicolon`.
-    pub fn split_text(
-        &self,
-        range: std::ops::Range<usize>,
-        strip_semicolon: bool,
-    ) -> std::borrow::Cow<'_, str> {
-        split_text(
-            self.src.as_ref(),
-            &self.items,
-            &self.types,
-            range,
-            strip_semicolon,
-        )
     }
 }
 
@@ -302,20 +289,18 @@ pub fn format<H: Hooks>(
     opts: &FormatOptions,
     hooks: &mut H,
 ) -> Result<String, Error<H::Error>> {
-    let mut st = stream(src, cfg, &opts.tokens, hooks)?;
+    let mut st = stream(src, cfg, &opts.tokens);
     let grouping = opts.grouping();
     let mut reindent = opts.reindent.clone().map(Reindent::new);
     let mut aligned = opts.aligned.map(Aligned::new);
     let mut out = String::with_capacity(src.len() + src.len() / 4);
     let mut count = 0usize;
     loop {
-        let range = match st.next_statement() {
-            Ok(Some(r)) => r,
-            Ok(None) => break,
-            Err(e) => return Err(e),
+        let Some(range) = st.next_statement(src, cfg, hooks)? else {
+            break;
         };
         hooks.tick().map_err(Error::External)?;
-        let (mut t, stmt) = st.statement(range);
+        let (mut t, stmt) = st.statement(src, range);
         let deep = super::grouping::nesting(&t, stmt) > super::grouping::BIG_STACK_NESTING;
         let (r, a) = (&mut reindent, &mut aligned);
         super::grouping::on_big_stack(deep, || -> Result<(), Fail> {
@@ -367,15 +352,12 @@ pub fn split<'s, H: Hooks>(
     strip_semicolon: bool,
     hooks: &mut H,
 ) -> Result<Vec<std::borrow::Cow<'s, str>>, Error<H::Error>> {
-    let mut st = stream(src, cfg, &TokenFilters::default(), hooks)?;
-    let mut ranges = Vec::new();
-    while let Some(r) = st.next_statement()? {
-        ranges.push(r);
+    let mut st = stream(src, cfg, &TokenFilters::default());
+    let mut out = Vec::new();
+    while let Some(r) = st.next_statement(src, cfg, hooks)? {
+        out.push(split_text(src, &st.items, &st.types, r, strip_semicolon));
     }
-    Ok(ranges
-        .into_iter()
-        .map(|r| split_text(src, &st.items, &st.types, r, strip_semicolon))
-        .collect())
+    Ok(out)
 }
 
 #[cfg(test)]

@@ -489,19 +489,19 @@ fn build_snapshot(
 // Text in and out (lone surrogates)
 // ---------------------------------------------------------------------------
 
-/// The text a call works on: the str's UTF-8, or (with lone surrogates) the text with each
-/// surrogate as a char in U+10F800.. (`remapped`).
-struct Text {
-    utf8: String,
+/// The text a call works on: the str's UTF-8 (borrowed from the str, no copy), or (with lone
+/// surrogates) the text with each surrogate as a char in U+10F800.. (`remapped`).
+struct Text<'a> {
+    utf8: std::borrow::Cow<'a, str>,
     remapped: bool,
 }
 
 /// `None`: the str holds both lone surrogates and U+10F800.. (Python runs it).
-fn text_of(s: &Bound<'_, PyString>) -> PyResult<Option<Text>> {
+fn text_of<'a>(s: &'a Bound<'_, PyString>) -> PyResult<Option<Text<'a>>> {
     let py = s.py();
     match s.to_str() {
         Ok(t) => Ok(Some(Text {
-            utf8: t.to_owned(),
+            utf8: std::borrow::Cow::Borrowed(t),
             remapped: false,
         })),
         Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) => {
@@ -511,7 +511,7 @@ fn text_of(s: &Bound<'_, PyString>) -> PyResult<Option<Text>> {
                 .cast_into::<PyBytes>()?;
             match wtf8::chars_from_wtf8(bytes.as_bytes()) {
                 Some(Ok(chars)) => Ok(Some(Text {
-                    utf8: chars.into_iter().collect(),
+                    utf8: std::borrow::Cow::Owned(chars.into_iter().collect()),
                     remapped: true,
                 })),
                 _ => Ok(None),
@@ -781,8 +781,106 @@ fn not_implemented(py: Python<'_>) -> Bound<'_, PyAny> {
     py.NotImplemented().into_bound(py)
 }
 
-/// `Lexer.get_tokens(text)` for `lexer`: `(pairs, error)`, `NotImplemented` (a table pyroid
-/// cannot read), or `None` (a text holding lone surrogates and U+10F800..).
+/// Tokens per list a `Tokens` iterator hands out.
+const TOKEN_CHUNK: usize = 1024;
+
+/// The `(ttype, value)` pairs of one `tokenize` call, lexed as they are asked for and handed
+/// out as lists of up to [`TOKEN_CHUNK`]; the lexer's error is raised after the pairs before
+/// it, as from sqlparse's generator.
+#[pyclass(module = "pyroid.sqlparse")]
+struct Tokens {
+    inner: Mutex<Option<TokensInner>>,
+}
+
+struct TokensInner {
+    text: Py<PyString>,
+    /// The text with its lone surrogates remapped (else the str's own UTF-8 is read).
+    remapped: Option<String>,
+    snap: Arc<Snap>,
+    lexer: core_lexer::Lexer,
+    hook_pos: (usize, usize),
+    /// Raised by the next `__next__` (the pairs before it are out).
+    error: Option<PyErr>,
+    done: bool,
+}
+
+#[pymethods]
+impl Tokens {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyList>>> {
+        let mut guard = self
+            .inner
+            .lock_py_attached(py)
+            .unwrap_or_else(PoisonError::into_inner);
+        let Some(inner) = guard.as_mut() else {
+            return Ok(None);
+        };
+        if let Some(e) = inner.error.take() {
+            *guard = None;
+            return Err(e);
+        }
+        if inner.done {
+            *guard = None;
+            return Ok(None);
+        }
+        let text = inner.text.bind(py).clone();
+        let src: &str = match &inner.remapped {
+            Some(r) => r,
+            None => text.to_str()?,
+        };
+        let remapped = inner.remapped.is_some();
+        let pause = setup()?.pause.bind(py);
+        let mut hooks = PyHooks::new(&text, &inner.snap.externals, pause);
+        (hooks.byte, hooks.chr) = inner.hook_pos;
+        let types = type_objects(py);
+        let mut out: Vec<Bound<'py, PyTuple>> = Vec::new();
+        while out.len() < TOKEN_CHUNK {
+            match inner.lexer.next(src, &inner.snap.config, &mut hooks) {
+                Ok(Some(t)) => {
+                    let tt = types
+                        .get(usize::from(t.tt))
+                        .and_then(Option::as_ref)
+                        .ok_or_else(|| PyTypeError::new_err("unregistered token type"))?;
+                    let v = py_str(py, &src[t.start as usize..t.end as usize], remapped)?;
+                    out.push(PyTuple::new(py, [tt.bind(py).clone(), v.into_any()])?);
+                }
+                Ok(None) => {
+                    inner.done = true;
+                    break;
+                }
+                Err(core_lexer::LexError::Interrupted(e)) => {
+                    *guard = None;
+                    return Err(e);
+                }
+                Err(core_lexer::LexError::EmptyMatch) => {
+                    inner.error = Some(empty_match_error(py));
+                    break;
+                }
+                Err(core_lexer::LexError::External(e)) => {
+                    inner.error = Some(e);
+                    break;
+                }
+            }
+        }
+        inner.hook_pos = (hooks.byte, hooks.chr);
+        if out.is_empty() {
+            let err = inner.error.take();
+            *guard = None;
+            return match err {
+                Some(e) => Err(e),
+                None => Ok(None),
+            };
+        }
+        Ok(Some(PyList::new(py, out)?))
+    }
+}
+
+/// `Lexer.get_tokens(text)` for `lexer`: an iterator of lists of `(ttype, value)` pairs
+/// (`Tokens`), `NotImplemented` (a table pyroid cannot read), or `None` (a text holding lone
+/// surrogates and U+10F800..).
 #[pyfunction]
 fn _tokenize<'py>(
     text: &Bound<'py, PyString>,
@@ -795,34 +893,20 @@ fn _tokenize<'py>(
     let Some(src) = text_of(text)? else {
         return Ok(py.None().into_bound(py));
     };
-    let s = setup()?;
-    let pause = s.pause.bind(py);
-    let mut hooks = PyHooks::new(text, &snap.externals, pause);
-    let (raw, err) = core_lexer::lex(&src.utf8, &snap.config, &mut hooks);
-    let types = type_objects(py);
-    let mut out = Vec::with_capacity(raw.len());
-    for t in &raw {
-        let tt = types
-            .get(usize::from(t.tt))
-            .and_then(Option::as_ref)
-            .ok_or_else(|| PyTypeError::new_err("unregistered token type"))?;
-        let v = py_str(
-            py,
-            &src.utf8[t.start as usize..t.end as usize],
-            src.remapped,
-        )?;
-        out.push(PyTuple::new(py, [tt.bind(py).clone(), v.into_any()])?);
-    }
-    let err: Bound<'py, PyAny> = match err {
-        None => py.None().into_bound(py),
-        Some(core_lexer::LexError::EmptyMatch) => empty_match_error(py)
-            .into_value(py)
-            .into_bound(py)
-            .into_any(),
-        Some(core_lexer::LexError::Interrupted(e)) => return Err(e),
-        Some(core_lexer::LexError::External(e)) => e.into_value(py).into_bound(py).into_any(),
+    let lexer = core_lexer::Lexer::new(&src.utf8, &snap.config);
+    let remapped = src.remapped.then(|| src.utf8.into_owned());
+    let it = Tokens {
+        inner: Mutex::new(Some(TokensInner {
+            text: text.clone().unbind(),
+            remapped,
+            snap,
+            lexer,
+            hook_pos: (0, 0),
+            error: None,
+            done: false,
+        })),
     };
-    Ok(PyTuple::new(py, [PyList::new(py, out)?.into_any(), err])?.into_any())
+    Ok(Bound::new(py, it)?.into_any())
 }
 
 fn engine_err(py: Python<'_>, e: EngineError<PyErr>) -> PyResult<Option<PyErr>> {
@@ -1195,17 +1279,23 @@ fn _split_batch<'py>(
     }
 }
 
-/// The statements of one `parsestream` call, grouped one per `__next__`.
+/// The statements of one `parsestream` call, lexed and grouped one per `__next__`.
 #[pyclass(module = "pyroid.sqlparse")]
 struct Statements {
     inner: Mutex<Option<Inner>>,
+    /// `() -> (MAX_GROUPING_DEPTH, MAX_GROUPING_TOKENS)`, read for each statement as
+    /// sqlparse's `group()` reads them.
+    limits: Py<PyAny>,
 }
 
 struct Inner {
     text: Py<PyString>,
-    stream: Stream<String, PyErr>,
-    remapped: bool,
-    limits: Limits,
+    /// The text with its lone surrogates remapped (else the str's own UTF-8 is read).
+    remapped: Option<String>,
+    snap: Arc<Snap>,
+    stream: Stream<PyErr>,
+    /// Where the Python matchers' character count stands (`PyHooks`).
+    hook_pos: (usize, usize),
 }
 
 #[pymethods]
@@ -1217,6 +1307,13 @@ impl Statements {
     /// The next statement; `("python", flat_statement)` when sqlparse's own grouping must
     /// run on it (it raises there).
     fn __next__<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        // the limits first, outside the lock (Python code)
+        let (depth, tokens): (Bound<'py, PyAny>, Bound<'py, PyAny>) =
+            self.limits.bind(py).call0()?.extract()?;
+        let limits = match (limit(Some(&depth)), limit(Some(&tokens))) {
+            (Lim::Is(depth), Lim::Is(tokens)) => Some(Limits { depth, tokens }),
+            _ => None, // values only sqlparse's code reads: it groups this statement
+        };
         let mut guard = self
             .inner
             .lock_py_attached(py)
@@ -1225,7 +1322,19 @@ impl Statements {
             return Ok(None);
         };
         py.check_signals()?;
-        let range = match inner.stream.next_statement() {
+        let text = inner.text.bind(py).clone();
+        let src: &str = match &inner.remapped {
+            Some(r) => r,
+            None => text.to_str()?,
+        };
+        let pause = setup()?.pause.bind(py);
+        let mut hooks = PyHooks::new(&text, &inner.snap.externals, pause);
+        (hooks.byte, hooks.chr) = inner.hook_pos;
+        let next = inner
+            .stream
+            .next_statement(src, &inner.snap.config, &mut hooks);
+        inner.hook_pos = (hooks.byte, hooks.chr);
+        let range = match next {
             Ok(Some(r)) => r,
             Ok(None) => {
                 *guard = None;
@@ -1241,16 +1350,20 @@ impl Statements {
                     .unwrap_or_else(|| PyIndexError::new_err("list index out of range")));
             }
         };
-        let remapped = inner.remapped;
-        let limits = inner.limits;
-        let (mut tree, stmt) = inner.stream.statement(range.clone());
-        match pyroid_core::sqlparse::grouping::group_statement(&mut tree, stmt, limits) {
+        let remapped = inner.remapped.is_some();
+        let (mut tree, stmt) = inner.stream.statement(src, range.clone());
+        let grouped = match limits {
+            Some(limits) => {
+                pyroid_core::sqlparse::grouping::group_statement(&mut tree, stmt, limits)
+            }
+            None => Err(Fail::Python),
+        };
+        match grouped {
             Ok(()) => Ok(Some(build(py, &tree, stmt, remapped)?)),
             Err(Fail::SqlParse(m)) => Err(sql_error(py, m)?),
             Err(Fail::Python) => {
-                let (flat, fstmt) = inner.stream.statement(range);
+                let (flat, fstmt) = inner.stream.statement(src, range);
                 let obj = build(py, &flat, fstmt, remapped)?;
-                let _ = &inner.text;
                 Ok(Some(
                     PyTuple::new(py, [PyString::new(py, "python").into_any(), obj])?.into_any(),
                 ))
@@ -1259,46 +1372,32 @@ impl Statements {
     }
 }
 
-/// `parsestream(text)` with `lexer` and the limits: a `Statements` iterator, or
-/// `NotImplemented`.
+/// `parsestream(text)` with `lexer`: a `Statements` iterator, or `NotImplemented`. `limits()`
+/// gives the DoS limits, asked before each statement is grouped.
 #[pyfunction]
 fn _parse<'py>(
     text: &Bound<'py, PyString>,
     lexer: &Bound<'py, PyAny>,
-    max_depth: Option<&Bound<'py, PyAny>>,
-    max_tokens: Option<&Bound<'py, PyAny>>,
+    limits: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = text.py();
-    let (Lim::Is(depth), Lim::Is(tokens)) = (limit(max_depth), limit(max_tokens)) else {
-        return Ok(not_implemented(py));
-    };
     let Some(snap) = snapshot(lexer)? else {
         return Ok(not_implemented(py));
     };
     let Some(src) = text_of(text)? else {
         return Ok(not_implemented(py));
     };
-    let s = setup()?;
-    let pause = s.pause.bind(py);
-    let mut hooks = PyHooks::new(text, &snap.externals, pause);
-    let remapped = src.remapped;
-    let stream = match engine::stream(src.utf8, &snap.config, &TokenFilters::default(), &mut hooks)
-    {
-        Ok(st) => st,
-        Err(e) => {
-            return match engine_err(py, e)? {
-                Some(err) => Err(err),
-                None => Ok(not_implemented(py)),
-            };
-        }
-    };
+    let stream = engine::stream(&src.utf8, &snap.config, &TokenFilters::default());
+    let remapped = src.remapped.then(|| src.utf8.into_owned());
     let it = Statements {
         inner: Mutex::new(Some(Inner {
             text: text.clone().unbind(),
-            stream,
             remapped,
-            limits: Limits { depth, tokens },
+            snap,
+            stream,
+            hook_pos: (0, 0),
         })),
+        limits: limits.clone().unbind(),
     };
     Ok(Bound::new(py, it)?.into_any())
 }
@@ -1342,5 +1441,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_regex_match, &m)?)?;
     m.add_function(wrap_pyfunction!(group::_group, &m)?)?;
     m.add_class::<Statements>()?;
+    m.add_class::<Tokens>()?;
     parent.add_submodule(&m)
 }

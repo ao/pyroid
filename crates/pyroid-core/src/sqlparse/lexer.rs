@@ -235,30 +235,27 @@ impl External for NoExternal {
 
 /// `find_delimited_spans`: opener and closer positions of dollar-quoted literals and
 /// multiline comments.
-struct Spans<'a> {
+#[derive(Debug, Default)]
+struct Spans {
     /// Sorted by position: (start, opener end, tag index, type).
     openers: Vec<(usize, usize, usize, TT)>,
     /// Per tag: closer starts (ascending) and ends.
     closers: Vec<(Vec<usize>, Vec<usize>)>,
-    tags: FxHashMap<&'a str, usize>,
 }
 
-impl<'a> Spans<'a> {
-    fn tag(&mut self, t: &'a str) -> usize {
-        let n = self.tags.len();
-        let i = *self.tags.entry(t).or_insert(n);
+impl Spans {
+    fn tag<'a>(&mut self, tags: &mut FxHashMap<&'a str, usize>, t: &'a str) -> usize {
+        let n = tags.len();
+        let i = *tags.entry(t).or_insert(n);
         if i == self.closers.len() {
             self.closers.push((Vec::new(), Vec::new()));
         }
         i
     }
 
-    fn find(text: &'a str, v: UnicodeVersion) -> Spans<'a> {
-        let mut s = Spans {
-            openers: Vec::new(),
-            closers: Vec::new(),
-            tags: FxHashMap::default(),
-        };
+    fn find(text: &str, v: UnicodeVersion) -> Spans {
+        let mut s = Spans::default();
+        let mut tags: FxHashMap<&str, usize> = FxHashMap::default();
         let has_dollar = text.contains('$');
         let has_comment_open = text.contains("/*");
         if !has_dollar && !has_comment_open {
@@ -273,7 +270,7 @@ impl<'a> Spans<'a> {
                     continue;
                 };
                 let tag = &text[start..end];
-                let ti = s.tag(tag);
+                let ti = s.tag(&mut tags, tag);
                 s.closers[ti].0.push(start);
                 s.closers[ti].1.push(end);
                 // _DOLLAR_QUOTE_OPENER_OK = (?<![\w"$])
@@ -287,7 +284,7 @@ impl<'a> Spans<'a> {
             }
         }
         if has_comment_open {
-            let ti = s.tag("/*");
+            let ti = s.tag(&mut tags, "/*");
             // /\*\+ (non-overlapping) then /\*(?!\+): both start at a "/*", so every "/*"
             // is an opener of one kind (finditer of "/\*" never overlaps itself).
             let mut i = 0;
@@ -352,112 +349,197 @@ pub fn is_tag_start(c: char, v: UnicodeVersion) -> bool {
     matches!(lo, 0x61..=0x7A | 0xE0..=0xF6 | 0xD7 | 0xF8..=0xFC | 0x131 | 0x17F)
 }
 
+/// `Lexer.get_tokens` as a resumable state: [`Lexer::next`] lexes one token at a time, so a
+/// caller can keep only the tokens it still needs (the splitter asks for them one by one, as
+/// in sqlparse).
+#[derive(Debug)]
+pub struct Lexer {
+    spans: Spans,
+    scratch: Scratch,
+    /// The first opener at or after `pos`.
+    oi: usize,
+    /// The byte offset lexing continues from.
+    pos: usize,
+    /// Tokens yielded (for [`External::tick`]).
+    count: usize,
+    /// The last token was an empty match: the next call raises.
+    empty: bool,
+    done: bool,
+}
+
+impl Lexer {
+    /// A lexer for `text` (the delimited-spans pre-pass runs here). Every [`Lexer::next`] call
+    /// must get the same `text` and `cfg`.
+    pub fn new(text: &str, cfg: &Config) -> Lexer {
+        Lexer {
+            spans: Spans::find(text, cfg.version),
+            scratch: Scratch::default(),
+            oi: 0,
+            pos: 0,
+            count: 0,
+            empty: false,
+            done: false,
+        }
+    }
+
+    /// The next token; `Ok(None)` at the end of the text.
+    ///
+    /// # Errors
+    /// Why lexing stopped ([`LexError`]); every later call then gives `Ok(None)`.
+    ///
+    /// # Panics
+    /// Never: texts of 4 GiB and more are refused by the caller.
+    pub fn next<X: External>(
+        &mut self,
+        text: &str,
+        cfg: &Config,
+        ext: &mut X,
+    ) -> Result<Option<RawTok>, LexError<X::Error>> {
+        if self.done {
+            return Ok(None);
+        }
+        if self.empty {
+            // sqlparse yields the empty token, then consume(iterable, -1) raises
+            self.done = true;
+            return Err(LexError::EmptyMatch);
+        }
+        match self.step(text, cfg, ext) {
+            Ok(Some(t)) => {
+                self.count += 1;
+                Ok(Some(t))
+            }
+            Ok(None) => {
+                self.done = true;
+                Ok(None)
+            }
+            Err(e) => {
+                self.done = true;
+                Err(e)
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn step<X: External>(
+        &mut self,
+        text: &str,
+        cfg: &Config,
+        ext: &mut X,
+    ) -> Result<Option<RawTok>, LexError<X::Error>> {
+        let v = cfg.version;
+        let n = text.len();
+        let u = |x: usize| u32::try_from(x).unwrap_or(u32::MAX);
+        let spans = &self.spans;
+        'outer: while self.pos < n {
+            let pos = self.pos;
+            if !spans.openers.is_empty() {
+                while self.oi < spans.openers.len() && spans.openers[self.oi].0 < pos {
+                    self.oi += 1;
+                }
+                if self.oi < spans.openers.len() && spans.openers[self.oi].0 == pos {
+                    if let Some((end, tt)) = spans.resolve(self.oi) {
+                        self.pos = end;
+                        return Ok(Some(RawTok {
+                            tt,
+                            start: u(pos),
+                            end: u(end),
+                        }));
+                    }
+                }
+            }
+            if self.count & 0xFFFF == 0xFFFF {
+                ext.tick().map_err(LexError::Interrupted)?;
+            }
+            let c = text[pos..].chars().next().unwrap_or('\0');
+            if cfg.fast {
+                if let Some((i, end)) = fast::matched(text, pos, c, v) {
+                    self.pos = end;
+                    let tt = match cfg.entries[i].action {
+                        Action::Type(tt) => tt,
+                        Action::Keyword => cfg.keyword_type(&text[pos..end]),
+                        Action::Drop => continue,
+                    };
+                    return Ok(Some(RawTok {
+                        tt,
+                        start: u(pos),
+                        end: u(end),
+                    }));
+                }
+            }
+            let cands: &[u16] = if c.is_ascii() {
+                &cfg.ascii[c as usize]
+            } else {
+                &cfg.other
+            };
+            for &i in cands {
+                let e = &cfg.entries[usize::from(i)];
+                let end = match &e.matcher {
+                    Matcher::Native(re) => re.match_with(text, pos, &mut self.scratch),
+                    Matcher::External(k) => {
+                        ext.match_at(*k, text, pos).map_err(LexError::External)?
+                    }
+                };
+                let Some(end) = end else { continue };
+                let end = end.max(pos);
+                let tt = match e.action {
+                    Action::Type(tt) => Some(tt),
+                    Action::Keyword => Some(cfg.keyword_type(&text[pos..end])),
+                    Action::Drop => None,
+                };
+                if end <= pos {
+                    // sqlparse yields the empty token, then consume(iterable, -1) raises
+                    return match tt {
+                        Some(tt) => {
+                            self.empty = true;
+                            Ok(Some(RawTok {
+                                tt,
+                                start: u(pos),
+                                end: u(end),
+                            }))
+                        }
+                        None => Err(LexError::EmptyMatch),
+                    };
+                }
+                self.pos = end;
+                match tt {
+                    Some(tt) => {
+                        return Ok(Some(RawTok {
+                            tt,
+                            start: u(pos),
+                            end: u(end),
+                        }));
+                    }
+                    None => continue 'outer,
+                }
+            }
+            let end = pos + c.len_utf8();
+            self.pos = end;
+            return Ok(Some(RawTok {
+                tt: builtin::ERROR,
+                start: u(pos),
+                end: u(end),
+            }));
+        }
+        Ok(None)
+    }
+}
+
 /// Lex `text` with `cfg` (`Lexer.get_tokens`): the tokens, and why lexing stopped if it did
 /// before the end.
-///
-/// # Panics
-/// Never: texts of 4 GiB and more are refused by the caller.
 pub fn lex<X: External>(
     text: &str,
     cfg: &Config,
     ext: &mut X,
 ) -> (Vec<RawTok>, Option<LexError<X::Error>>) {
-    let v = cfg.version;
-    let spans = Spans::find(text, v);
+    let mut lexer = Lexer::new(text, cfg);
     let mut out: Vec<RawTok> = Vec::with_capacity(text.len() / 3 + 4);
-    let mut scratch = Scratch::default();
-    let mut oi = 0;
-    let mut pos = 0;
-    let n = text.len();
-    let u = |x: usize| u32::try_from(x).unwrap_or(u32::MAX);
-    'outer: while pos < n {
-        if !spans.openers.is_empty() {
-            while oi < spans.openers.len() && spans.openers[oi].0 < pos {
-                oi += 1;
-            }
-            if oi < spans.openers.len() && spans.openers[oi].0 == pos {
-                if let Some((end, tt)) = spans.resolve(oi) {
-                    out.push(RawTok {
-                        tt,
-                        start: u(pos),
-                        end: u(end),
-                    });
-                    pos = end;
-                    continue;
-                }
-            }
+    loop {
+        match lexer.next(text, cfg, ext) {
+            Ok(Some(t)) => out.push(t),
+            Ok(None) => return (out, None),
+            Err(e) => return (out, Some(e)),
         }
-        if out.len() & 0xFFFF == 0xFFFF {
-            if let Err(e) = ext.tick() {
-                return (out, Some(LexError::Interrupted(e)));
-            }
-        }
-        let c = text[pos..].chars().next().unwrap_or('\0');
-        if cfg.fast {
-            if let Some((i, end)) = fast::matched(text, pos, c, v) {
-                let e = &cfg.entries[i];
-                match e.action {
-                    Action::Type(tt) => out.push(RawTok {
-                        tt,
-                        start: u(pos),
-                        end: u(end),
-                    }),
-                    Action::Keyword => out.push(RawTok {
-                        tt: cfg.keyword_type(&text[pos..end]),
-                        start: u(pos),
-                        end: u(end),
-                    }),
-                    Action::Drop => {}
-                }
-                pos = end;
-                continue;
-            }
-        }
-        let cands: &[u16] = if c.is_ascii() {
-            &cfg.ascii[c as usize]
-        } else {
-            &cfg.other
-        };
-        for &i in cands {
-            let e = &cfg.entries[usize::from(i)];
-            let end = match &e.matcher {
-                Matcher::Native(re) => re.match_with(text, pos, &mut scratch),
-                Matcher::External(k) => match ext.match_at(*k, text, pos) {
-                    Ok(m) => m,
-                    Err(err) => return (out, Some(LexError::External(err))),
-                },
-            };
-            let Some(end) = end else { continue };
-            let end = end.max(pos);
-            match e.action {
-                Action::Type(tt) => out.push(RawTok {
-                    tt,
-                    start: u(pos),
-                    end: u(end),
-                }),
-                Action::Keyword => out.push(RawTok {
-                    tt: cfg.keyword_type(&text[pos..end]),
-                    start: u(pos),
-                    end: u(end),
-                }),
-                Action::Drop => {}
-            }
-            if end <= pos {
-                // sqlparse yields the empty token, then consume(iterable, -1) raises
-                return (out, Some(LexError::EmptyMatch));
-            }
-            pos = end;
-            continue 'outer;
-        }
-        let end = pos + c.len_utf8();
-        out.push(RawTok {
-            tt: builtin::ERROR,
-            start: u(pos),
-            end: u(end),
-        });
-        pos = end;
     }
-    (out, None)
 }
 
 /// Shortcuts for sqlparse 0.6.1's own table: at positions where the first matching entry
