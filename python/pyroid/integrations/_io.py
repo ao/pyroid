@@ -555,11 +555,13 @@ def _bad_line(chunk: bytes, first: int, source: Source) -> ValueError | None:
     """The first line of ``chunk`` (line ``first`` of the file) that is not JSON, as an error.
 
     pyarrow's parse errors name a row of its block, and some name the wrong problem (an
-    unterminated string is "Invalid encoding in string").
+    unterminated string is "Invalid encoding in string"). Lines may end in CRLF.
     """
     for i, line in enumerate(chunk.split(b"\n")):
         if not line.strip():
             continue
+        if line.endswith(b"\r"):  # else json names the CR in an unterminated string
+            line = line[:-1]
         try:
             json.loads(line)
         except UnicodeDecodeError as e:

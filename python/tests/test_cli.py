@@ -304,11 +304,18 @@ def test_a_jsonl_parse_error_names_its_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """pyarrow said "Invalid encoding in string. in row 1" for an unterminated string."""
-    bad = tmp_path / "bad.jsonl"
-    bad.write_text('{"text": "ok"}\n{"text": "fine"}\n{"text": "unterminated}\n', "utf-8")
-    assert main(["translit", str(bad), str(tmp_path / "o.jsonl")]) == 1
-    err = capsys.readouterr().err
-    assert err == f"pyroid translit: {bad}: line 3: Unterminated string starting at column 10\n"
+    lines = ['{"text": "ok"}', '{"text": "fine"}', '{"text": "unterminated}']
+    # LF, and CRLF (Windows' text mode writes it): the CR is not named as the problem
+    for end in ("\n", "\r\n"):
+        bad = tmp_path / "bad.jsonl"
+        bad.write_bytes("".join(f"{ln}{end}" for ln in lines).encode())
+        assert main(["translit", str(bad), str(tmp_path / "o.jsonl")]) == 1
+        err = capsys.readouterr().err
+        assert err == f"pyroid translit: {bad}: line 3: Unterminated string starting at column 10\n"
+    good = tmp_path / "good.jsonl"
+    good.write_bytes(b'{"text": "ok"}\r\n{"text": "fine"}\r\n')
+    assert main(["translit", str(good), str(tmp_path / "g.jsonl")]) == 0
+    assert [r["text"] for r in _read(tmp_path / "g.jsonl").to_pylist()] == ["ok", "fine"]
     # past the first chunk, the line number counts from the start of the file
     from pyroid.integrations import _io
 
