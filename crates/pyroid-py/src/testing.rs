@@ -51,6 +51,14 @@ fn column(values: Vec<Option<String>>, large: bool, chunks: usize, name: &str) -
     Ok(Column::new(ty, name, out))
 }
 
+/// `(errno, strerror, winerror)` of the `OSError` for OS error `code` whose `io::Error` reads
+/// `text`, as built on Windows (`windows=True`) or elsewhere: `errors::os_error_args`.
+#[pyfunction]
+#[pyo3(signature = (code, text, *, windows))]
+fn os_error_args(code: i32, text: &str, windows: bool) -> (i32, String, Option<i32>) {
+    crate::errors::os_error_args(code, text, windows)
+}
+
 /// `len(s)` per document via `batch::map_values` (`None` for Arrow nulls).
 #[pyfunction]
 #[pyo3(signature = (x, /, *, threads = None))]
@@ -69,5 +77,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(pool_size, &m)?)?;
     m.add_function(wrap_pyfunction!(column, &m)?)?;
     m.add_function(wrap_pyfunction!(char_lengths, &m)?)?;
+    m.add_function(wrap_pyfunction!(os_error_args, &m)?)?;
     parent.add_submodule(&m)
 }
