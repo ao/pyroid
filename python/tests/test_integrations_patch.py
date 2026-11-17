@@ -934,6 +934,142 @@ def test_modules_that_imported_before_keep_the_real_module() -> None:
     )
 
 
+# A KeyboardInterrupt at each step of patch() and unpatch(), raised before the step and after it:
+# afterwards the module is patched and recorded (patched()), or neither. A step is any call of
+# _patch's helpers, of the target's build, of an undo step, or of importlib.import_module (which
+# the builds call between the attributes they swap).
+CTRL_C = """
+import dataclasses, types
+import pyroid.integrations._patch as p
+warnings.simplefilter("ignore")
+name = sys.argv[1]
+SWAPS = {"nltk": p._NLTK_SWAPS, "warcio": p._WARCIO_SWAPS, "nemo_curator": p._NEMO_SWAPS}
+
+def norm(v):
+    if isinstance(v, p._Shim):
+        return "shim"
+    if isinstance(v, types.ModuleType) and (v.__doc__ or "").startswith("pyroid's drop-ins"):
+        return "drop-in module"
+    return v
+
+def state():
+    # What patch(name) changes: sys.modules' entries for it and the attributes it swaps. A real
+    # module that is not the one in `before` was imported by a patch() (afresh each time).
+    mods = {}
+    for k, v in sys.modules.copy().items():
+        if p._owned(k, name):
+            v = norm(v)
+            if isinstance(v, types.ModuleType) and before is not None and before[0].get(k) is not v:
+                v = "imported by patch()"
+            mods[k] = v
+    attrs = {}
+    for mod, names in SWAPS.get(name, {}).items():
+        m = sys.modules.get(mod)
+        if m is not None and not isinstance(m, p._Shim):
+            attrs.update({(mod, n): m.__dict__.get(n, "missing") for n in names})
+    return mods, attrs
+
+calls, fire, fired = 0, None, False
+
+def step(fn, after=True):
+    def wrapped(*args, **kwargs):
+        global calls, fired
+        calls += 1
+        i = calls
+        if fire == (i, "before"):
+            fired = True
+            raise KeyboardInterrupt
+        out = fn(*args, **kwargs)
+        if after and fire == (i, "after"):
+            fired = True
+            raise KeyboardInterrupt
+        return out
+    return wrapped
+
+# One patch and unpatch first, so every module patch() imports is imported before the reference
+# states are taken.
+error = patched = before = None
+try:
+    p.patch(name)
+except ImportError:  # nemo_curator without NeMo Curator
+    error = ImportError
+p.unpatch(name)
+before = state()
+if error is None:
+    p.patch(name)
+    patched = state()
+    p.unpatch(name)
+    assert state() == before != patched
+
+for attr in ("_check", "_impl", "_real", "_Active", "_announce", "_restore"):
+    setattr(p, attr, step(getattr(p, attr)))
+importlib.import_module = step(importlib.import_module)
+target = p._TARGETS[name]
+# No "after" for the build: CPython runs signal handlers at calls and loop jumps, not on a
+# return, so a Ctrl-C cannot land between a build's last line and the caller's next step.
+p._TARGETS[name] = dataclasses.replace(target, build=step(target.build, after=False))
+
+def unpatched():
+    p.unpatch(name)
+    assert state() == before and p.patched() == ()
+
+def patch_and_wrap_undo():
+    p.patch(name)
+    record = p._ACTIVE[name]
+    record.undo[:] = [step(s) for s in record.undo]
+
+def sweep(op, setup):
+    global calls, fire, fired
+    runs = 0
+    for when in ("before", "after"):
+        k = 0
+        while True:
+            k += 1
+            setup()
+            calls, fire, fired = 0, (k, when), False
+            try:
+                op()
+            except KeyboardInterrupt:
+                assert fired, (when, k)
+            except ImportError:
+                assert error is ImportError and not fired, (when, k)
+            finally:
+                fire = None
+            if k > calls:
+                break
+            recorded = name in p._ACTIVE
+            assert p.patched() == ((name,) if recorded else ()), (when, k)
+            got, want = state(), patched if recorded else before
+            assert got == want, (f"Ctrl-C {when} step {k}", recorded, got, want)
+            runs += fired
+            unpatched()
+    return runs
+
+runs = {"patch": sweep(lambda: p.patch(name), unpatched)}
+if error is None:
+    runs["unpatch"] = sweep(lambda: p.unpatch(name), patch_and_wrap_undo)
+print(json.dumps(runs))
+"""
+
+
+def check_ctrl_c(name: str, *, hide: bool) -> None:
+    """Run CTRL_C for `name` (``hide``: as if its package were not installed)."""
+    runs = ok(child(CTRL_C, args=(name,), hide=(name,) if hide else ()))
+    assert runs["patch"] >= 3, runs
+    if "unpatch" in runs:
+        assert runs["unpatch"] >= 3, runs
+
+
+@pytest.mark.parametrize("scenario", ["installed", "not installed"])
+@pytest.mark.parametrize("name", _patch.SUPPORTED)
+def test_ctrl_c_leaves_a_patch_recorded_or_undone(name: str, scenario: str) -> None:
+    if name in ("fasttext", "datasketch") and not installed("numpy"):
+        pytest.skip(f"pyroid.{name} needs numpy")
+    if scenario == "installed" and not installed(name):
+        pytest.skip(f"needs {name}")  # nemo_curator: test_nemo_curator_patch.py
+    check_ctrl_c(name, hide=scenario == "not installed")
+
+
 # ---------------------------------------------------------------------------
 # pyroid run
 # ---------------------------------------------------------------------------

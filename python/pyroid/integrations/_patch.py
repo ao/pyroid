@@ -280,6 +280,9 @@ def _shim(
 # The supported modules
 # ---------------------------------------------------------------------------
 
+# What a build returns: the shims for sys.modules, and the steps that undo its other changes. A
+# build that raises (an error, or Ctrl-C part-way) first undoes what it changed. Each undo step
+# must be safe to run twice: unpatch() runs them all again if a Ctrl-C stops them part-way.
 _Built = tuple[dict[str, types.ModuleType], list[Callable[[], None]]]
 
 
@@ -555,24 +558,6 @@ def _build_nltk(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     # NLTK installed: set pyroid's objects on NLTK's modules, keeping the originals for the
     # fallbacks (pyroid.nltk._delegate.ORIGINALS) and for unpatch().
     saved: list[tuple[types.ModuleType, str, Any]] = []
-    for mod, names in _NLTK_SWAPS.items():
-        module = importlib.import_module(mod)
-        for n in names:
-            original = module.__dict__.get(n, _MISSING)
-            saved.append((module, n, original))
-            if original is not _MISSING:
-                _delegate.ORIGINALS.setdefault(f"{mod}:{n}", original)
-            setattr(module, n, getattr(impl, n))
-    tokenizer_i = getattr(importlib.import_module("nltk.tokenize.api"), "TokenizerI", None)
-    if isinstance(tokenizer_i, type) and hasattr(tokenizer_i, "register"):
-        for cls in (
-            "PunktSentenceTokenizer",
-            "TreebankWordTokenizer",
-            "TreebankWordDetokenizer",
-            "NLTKWordTokenizer",
-            "RegexpTokenizer",
-        ):
-            tokenizer_i.register(getattr(impl, cls))  # isinstance(tok, TokenizerI) stays true
 
     def undo() -> None:
         for module, n, original in reversed(saved):
@@ -590,6 +575,28 @@ def _build_nltk(impl: types.ModuleType, real: Any, missing: str) -> _Built:
         if cache_clear is not None:
             cache_clear()
 
+    try:
+        for mod, names in _NLTK_SWAPS.items():
+            module = importlib.import_module(mod)
+            for n in names:
+                original = module.__dict__.get(n, _MISSING)
+                saved.append((module, n, original))
+                if original is not _MISSING:
+                    _delegate.ORIGINALS.setdefault(f"{mod}:{n}", original)
+                setattr(module, n, getattr(impl, n))
+        tokenizer_i = getattr(importlib.import_module("nltk.tokenize.api"), "TokenizerI", None)
+        if isinstance(tokenizer_i, type) and hasattr(tokenizer_i, "register"):
+            for cls in (
+                "PunktSentenceTokenizer",
+                "TreebankWordTokenizer",
+                "TreebankWordDetokenizer",
+                "NLTKWordTokenizer",
+                "RegexpTokenizer",
+            ):
+                tokenizer_i.register(getattr(impl, cls))  # isinstance(tok, TokenizerI) stays true
+    except BaseException:  # an error or Ctrl-C part-way: put back what was set
+        undo()
+        raise
     return {}, [undo]
 
 
@@ -676,11 +683,6 @@ def _build_warcio(impl: types.ModuleType, real: Any, missing: str) -> _Built:
         return {"warcio": top, "warcio.archiveiterator": sub}, []
     classes = _warcio_classes(impl)
     saved: list[tuple[types.ModuleType, str, Any]] = []
-    for mod, names in _WARCIO_SWAPS.items():
-        module = importlib.import_module(mod)
-        for n in names:
-            saved.append((module, n, module.__dict__.get(n, _MISSING)))
-            setattr(module, n, classes[n])
 
     def undo() -> None:
         for module, n, original in reversed(saved):
@@ -689,6 +691,15 @@ def _build_warcio(impl: types.ModuleType, real: Any, missing: str) -> _Built:
             else:
                 setattr(module, n, original)
 
+    try:
+        for mod, names in _WARCIO_SWAPS.items():
+            module = importlib.import_module(mod)
+            for n in names:
+                saved.append((module, n, module.__dict__.get(n, _MISSING)))
+                setattr(module, n, classes[n])
+    except BaseException:  # an error or Ctrl-C part-way: put back what was set
+        undo()
+        raise
     return {}, [undo]
 
 
@@ -757,18 +768,6 @@ def _build_nemo_curator(impl: types.ModuleType, real: Any, missing: str) -> _Bui
         raise ImportError(f"patch('nemo_curator') needs NeMo Curator: {missing}")
     saved: list[tuple[types.ModuleType, str, Any]] = []
     added: list[tuple[str, Any]] = []
-    for mod, names in _NEMO_SWAPS.items():
-        try:
-            module = importlib.import_module(mod)
-        except ImportError:
-            # NeMo's fastText and ftfy modules import fasttext / ftfy at the top; pyroid's classes
-            # need neither, so a module named like NeMo's provides them (for YAML `_target_`s).
-            module = types.ModuleType(mod, f"pyroid's drop-ins for {mod} (pyroid.patch)")
-            added.append((mod, sys.modules.get(mod, _MISSING)))
-            sys.modules[mod] = module
-        for n in names:
-            saved.append((module, n, module.__dict__.get(n, _MISSING)))
-            setattr(module, n, getattr(impl, n))
 
     def undo() -> None:
         for module, n, original in reversed(saved):
@@ -782,6 +781,23 @@ def _build_nemo_curator(impl: types.ModuleType, real: Any, missing: str) -> _Bui
             else:
                 sys.modules[mod] = previous
 
+    try:
+        for mod, names in _NEMO_SWAPS.items():
+            try:
+                module = importlib.import_module(mod)
+            except ImportError:
+                # NeMo's fastText and ftfy modules import fasttext / ftfy at the top; pyroid's
+                # classes need neither, so a module named like NeMo's provides them (for YAML
+                # `_target_`s).
+                module = types.ModuleType(mod, f"pyroid's drop-ins for {mod} (pyroid.patch)")
+                added.append((mod, sys.modules.get(mod, _MISSING)))
+                sys.modules[mod] = module
+            for n in names:
+                saved.append((module, n, module.__dict__.get(n, _MISSING)))
+                setattr(module, n, getattr(impl, n))
+    except BaseException:  # an error or Ctrl-C part-way: put back what was set
+        undo()
+        raise
     return {}, [undo]
 
 
@@ -979,15 +995,20 @@ def _install(name: str, *, warn: bool) -> None:
         target = _TARGETS[name]
         impl = _impl(name)
         saved = {k: v for k, v in sys.modules.copy().items() if _owned(k, name)}
-        real, missing = _real(name)
+        undo: list[Callable[[], None]] = []
+        # Until the record is stored, an error or a Ctrl-C undoes the patch (and the import of
+        # the real package), so a patch in place is a recorded one. Only a second Ctrl-C during
+        # that undo can leave part of it behind.
         try:
+            real, missing = _real(name)
             shims, undo = target.build(impl, real, missing)
+            sys.modules.update(shims)  # the other runtime changes (undo) are already in place
+            # Attributes swapped on the real modules (no shims): sys.modules stays as it is.
+            _ACTIVE[name] = _Active(shims, saved if shims else None, undo)
         except BaseException:
-            _restore(name, saved, [])
+            if name not in _ACTIVE:
+                _restore(name, saved, undo)
             raise
-        sys.modules.update(shims)  # the other runtime changes (undo) are already in place
-        # Attributes swapped on the real modules (no shims): sys.modules stays as it is.
-        _ACTIVE[name] = _Active(shims, saved if shims else None, undo)
         if warn:
             _announce(name, real, missing)
 
@@ -1055,9 +1076,20 @@ def unpatch(*names: str) -> None:
     with _LOCK:
         todo = _check(names) if names else list(_ACTIVE)
         for name in reversed(todo):
-            active = _ACTIVE.pop(name, None)
-            if active is not None:
+            active = _ACTIVE.get(name)
+            if active is None:
+                continue
+            # The record goes once the patch is undone. A Ctrl-C part-way runs the undo again
+            # (every step can run twice) before it propagates; only a second one during that
+            # can leave part of the patch in place, unrecorded.
+            try:
                 _restore(name, active.saved, active.undo)
+            except BaseException as exc:
+                if not isinstance(exc, Exception):
+                    _restore(name, active.saved, active.undo)
+                raise
+            finally:
+                _ACTIVE.pop(name, None)
 
 
 def patched() -> tuple[str, ...]:
