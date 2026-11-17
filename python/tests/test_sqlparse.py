@@ -362,6 +362,9 @@ def test_an_overridden_lexer_runs_python() -> None:
         loud = Loud()
         loud.default_initialization()
         lexer.Lexer._default_instance = loud
+        from pyroid.sqlparse import _core
+
+        _core._WARNED.clear()  # once per process: --iterations reruns this test
         with pytest.warns(pyroid.FallbackWarning):
             out = P.format("select a from b")
         assert out == "SELECT a FROM b"
