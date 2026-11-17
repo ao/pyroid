@@ -14,9 +14,11 @@ class Detector:
     """Detect the language of a text: langdetect's ``Detector``.
 
     Made by :meth:`DetectorFactory.create`. :meth:`append` the text, then call :meth:`detect`
-    or :meth:`get_probabilities`. Detections with :meth:`set_verbose`, or with attributes of
-    other types than langdetect's (a ``Decimal`` alpha, a seed of an unusual type), run
-    langdetect's algorithm in Python, with the same results.
+    or :meth:`get_probabilities`. Detections with :meth:`set_verbose`, with attributes of
+    other types than langdetect's (a ``Decimal`` alpha, a seed of an unusual type), or with
+    customised classes (``URL_RE`` or ``MAIL_RE`` set, methods overridden in a subclass,
+    ``NGram``'s tables changed) run langdetect's algorithm in Python, with the same results.
+    A subclass that overrides only :meth:`cleaning_text` keeps the Rust trials.
     """
 
     ALPHA_DEFAULT: ClassVar[float]
@@ -42,7 +44,11 @@ class Detector:
     def __init__(self, factory: Any) -> None: ...
     @property
     def random(self) -> random.Random:
-        """A ``random.Random``, as langdetect makes one per detector (unused by pyroid)."""
+        """A ``random.Random``, as langdetect makes one per detector.
+
+        pyroid's detections draw from their own generator, seeded the same way; a generator of
+        another class set here (a subclass) is used, by langdetect's Python algorithm.
+        """
     @random.setter
     def random(self, value: Any) -> None: ...
     def set_verbose(self) -> None:

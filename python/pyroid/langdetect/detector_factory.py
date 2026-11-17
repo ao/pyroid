@@ -10,17 +10,19 @@ probability's last bit) is the one langdetect has on this machine.
 
 from __future__ import annotations
 
+import copyreg
 import json
 import os
 import threading
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from os import path
 from typing import Any
 
 from pyroid._pyroid import langdetect as _native
 from pyroid.langdetect import _compat
+from pyroid.langdetect import detector as _detector
 from pyroid.langdetect._compat import ErrorCode, LangDetectException, Language
-from pyroid.langdetect.detector import Detector, _params, _seed_arg, _Unsupported
+from pyroid.langdetect.detector import Detector, _params, _seed_arg, _Unsupported, _WordMap
 from pyroid.langdetect.utils.lang_profile import LangProfile
 
 __all__ = [
@@ -32,43 +34,12 @@ __all__ = [
 ]
 
 
-class _WordMap(Mapping[Any, list[float]]):
-    """``word_lang_prob_map``: n-gram -> one probability per language (read-only view)."""
-
-    __slots__ = ("_profiles",)
-
-    def __init__(self, profiles: Any) -> None:
-        self._profiles = profiles
-
-    def __getitem__(self, word: Any) -> list[float]:
-        return self._profiles._row(word)  # type: ignore[no-any-return]
-
-    def __contains__(self, word: object) -> bool:
-        return bool(self._profiles._contains(word))
-
-    def __len__(self) -> int:
-        return len(self._profiles)
-
-    def __iter__(self) -> Iterator[Any]:
-        return iter(self._profiles._keys())
-
-    def __repr__(self) -> str:
-        return f"<word_lang_prob_map: {len(self)} n-grams>"
+def _load_profiles(data: bytes, foreign: list[Any]) -> Any:
+    """A native profile table from its pickle (``copyreg`` reduces ``_Profiles`` to this)."""
+    return _native._Profiles._load(data, foreign)
 
 
-def _add_slow(profiles: Any, profile: Any, index: Any, langsize: Any) -> None:
-    """``add_profile``'s loop, in Python, for profiles of other shapes than JSON's."""
-    for word in profile.freq:
-        if not profiles._contains(word):
-            row = [0.0] * langsize
-            profiles._create(word, len(row))
-        length = len(word)
-        if 1 <= length <= 3:
-            prob = 1.0 * profile.freq.get(word) / profile.n_words[length - 1]
-            # `row[index] = prob`: Python's own checks of the index.
-            row = [None] * profiles._row_len(word)
-            row[index] = True
-            profiles._set(word, row.index(True), float(prob))
+copyreg.pickle(_native._Profiles, lambda p: (_load_profiles, p._dump()))
 
 
 class DetectorFactory:
@@ -81,12 +52,39 @@ class DetectorFactory:
 
     def __init__(self) -> None:
         self._profiles = _native._Profiles()
+        # langdetect's dict, kept instead of the native table once a profile probability is
+        # not a float (numpy counts) or a map of another shape was assigned: then detections
+        # run langdetect's Python algorithm on it.
+        self._exotic: Any = None
         self.langlist: list[Any] = []
 
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        state = dict(state)
+        if "_profiles" not in state:
+            # A langdetect DetectorFactory's pickle (pyroid.patch("langdetect") without
+            # langdetect): its map is the attribute `word_lang_prob_map`.
+            word_map = state.pop("word_lang_prob_map", {})
+            state.setdefault("langlist", [])
+            self.__dict__.update(state)
+            self.word_lang_prob_map = word_map
+            return
+        state.setdefault("_exotic", None)
+        self.__dict__.update(state)
+
     @property
-    def word_lang_prob_map(self) -> Mapping[Any, list[float]]:
+    def word_lang_prob_map(self) -> Mapping[Any, list[Any]]:
         """n-gram -> probability per language, a read-only view of the loaded profiles."""
+        if self._exotic is not None:
+            return self._exotic  # type: ignore[no-any-return]
         return _WordMap(self._profiles)
+
+    @word_lang_prob_map.setter
+    def word_lang_prob_map(self, word_map: Any) -> None:
+        profiles = _detector._profiles_from(word_map)
+        if profiles is not None:
+            self._profiles, self._exotic = profiles, None
+        else:
+            self._profiles, self._exotic = _native._Profiles(), word_map
 
     def load_profile(self, profile_directory: Any) -> None:
         """Load every profile file in `profile_directory` (in ``os.listdir`` order)."""
@@ -152,13 +150,53 @@ class DetectorFactory:
                 ErrorCode.DuplicateLangError, "Duplicate the same language profile."
             )
         self.langlist.append(lang)
-        if not self._profiles._add(profile.freq, profile.n_words, index, langsize):
-            _add_slow(self._profiles, profile, index, langsize)
+        word_map = self._exotic
+        if word_map is None:
+            if self._profiles._add(profile.freq, profile.n_words, index, langsize):
+                return
+            word_map = self._add_slow(profile, index, langsize)
+            if word_map is None:
+                return
+        # langdetect's own loop, on its dict.
+        for word in profile.freq:
+            if word not in word_map:
+                word_map[word] = [0.0] * langsize
+            length = len(word)
+            if 1 <= length <= 3:
+                prob = 1.0 * profile.freq.get(word) / profile.n_words[length - 1]
+                word_map[word][index] = prob
+
+    def _add_slow(self, profile: Any, index: Any, langsize: Any) -> Any:
+        """Run ``add_profile``'s loop in Python into the native table.
+
+        For profiles of other shapes than JSON's. At the first probability that is not a float
+        (numpy counts give ``numpy.float64``) the table becomes langdetect's dict, and this
+        returns it: the caller runs langdetect's loop on it again from the start, which sets
+        the words already done to the same values.
+        """
+        profiles = self._profiles
+        for word in profile.freq:
+            if not profiles._contains(word):
+                row = [0.0] * langsize
+                profiles._create(word, len(row))
+            length = len(word)
+            if 1 <= length <= 3:
+                prob = 1.0 * profile.freq.get(word) / profile.n_words[length - 1]
+                if type(prob) is not float:
+                    word_map = {w: profiles._row(w) for w in profiles._keys()}
+                    self._profiles, self._exotic = _native._Profiles(), word_map
+                    return word_map
+                # `row[index] = prob`: Python's own checks of the index.
+                row = [None] * profiles._row_len(word)
+                row[index] = True
+                profiles._set(word, row.index(True), prob)
+        return None
 
     def clear(self) -> None:
         """Forget every profile."""
         self.langlist = []
         self._profiles = _native._Profiles()
+        self._exotic = None
 
     def create(self, alpha: float | None = None) -> Detector:
         """Construct a :class:`Detector`, with smoothing parameter `alpha` if given."""
@@ -183,13 +221,14 @@ class DetectorFactory:
 
 #: pyroid's copy of langdetect 1.0.9's 55 language profiles.
 PROFILES_DIRECTORY = path.join(path.dirname(__file__), "profiles")
+_DEFAULT_DIRECTORY = PROFILES_DIRECTORY
 _factory: DetectorFactory | None = None
 _LOCK = threading.Lock()
 
 
 def _default_files() -> list[str]:
     """The profile file names, in the order langdetect's ``init_factory`` would read them."""
-    ours = os.listdir(PROFILES_DIRECTORY)
+    ours = os.listdir(_DEFAULT_DIRECTORY)
     theirs_dir = _compat._profiles_dir()
     if theirs_dir is not None:
         try:
@@ -208,13 +247,53 @@ def init_factory() -> None:
         with _LOCK:
             if _factory is None:
                 factory = DetectorFactory()
-                factory._load_files(PROFILES_DIRECTORY, _default_files())
+                directory = PROFILES_DIRECTORY
+                if (
+                    type(factory) is _FACTORY
+                    and _FACTORY.load_profile is _LOAD_PROFILE
+                    and directory == _DEFAULT_DIRECTORY
+                ):
+                    factory._load_files(directory, _default_files())
+                else:  # langdetect's call (a replaced class, method or directory)
+                    factory.load_profile(directory)
                 _factory = factory
 
 
-def _fast(factory: DetectorFactory, text: Any, probs: bool) -> Any:
+_FACTORY = DetectorFactory
+_F = DetectorFactory.__dict__
+_LOAD_PROFILE = _F["load_profile"]
+_CREATE = _F["create"]
+_CREATE_DETECTOR = _F["_create_detector"]
+_MAP_PROPERTY = _F["word_lang_prob_map"]
+del _F
+_FACTORY_KEYS = frozenset({"_profiles", "_exotic", "langlist", "seed"})
+
+
+def _plain(factory: Any) -> bool:
+    """`factory.create()`, ``append`` and ``detect()`` give what one native call gives."""
+    try:
+        return _plain_factory(factory)
+    except Exception:  # a missing attribute: langdetect's code raises it
+        return False
+
+
+def _plain_factory(factory: Any) -> bool:
+    cls = type(factory)
+    return (
+        cls is _FACTORY
+        and cls.create is _CREATE
+        and cls._create_detector is _CREATE_DETECTOR
+        and cls.word_lang_prob_map is _MAP_PROPERTY
+        and Detector is _detector._DETECTOR
+        and factory._exotic is None
+        and factory.__dict__.keys() <= _FACTORY_KEYS
+        and _detector._class_stock(Detector)
+    )
+
+
+def _fast(factory: Any, text: Any, probs: bool) -> Any:
     """`detect`/`detect_langs` in one native call; raises _Unsupported for the general path."""
-    if not isinstance(text, str):
+    if not isinstance(text, str) or not _plain(factory):
         raise _Unsupported
     seed = _seed_arg(factory.seed)
     params = _params(Detector.ALPHA_DEFAULT, 7, Detector)
@@ -245,8 +324,7 @@ def detect(text: str) -> Any:
         LangDetectException: The text has no features (no letters, only URLs, ...).
     """
     init_factory()
-    factory = _factory
-    assert factory is not None
+    factory: Any = _factory
     try:
         return _fast(factory, text, False)
     except _Unsupported:
@@ -263,8 +341,7 @@ def detect_langs(text: str) -> list[Any]:
         LangDetectException: The text has no features (no letters, only URLs, ...).
     """
     init_factory()
-    factory = _factory
-    assert factory is not None
+    factory: Any = _factory
     try:
         return [Language(lang, p) for lang, p in _fast(factory, text, True)]
     except _Unsupported:

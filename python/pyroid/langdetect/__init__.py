@@ -9,9 +9,7 @@ detection draws from a generator seeded by the operating system, as langdetect's
 pool, each one as a separate ``detect`` call would.
 """
 
-from __future__ import annotations
-
-from typing import Any
+from typing import Any as _Any
 
 from pyroid._pyroid import langdetect as _native
 from pyroid.langdetect import _compat
@@ -47,7 +45,7 @@ __version__ = LANGDETECT_VERSION
 _compat.check_version()
 
 
-def _errors_none(errors: Any) -> bool:
+def _errors_none(errors: _Any) -> bool:
     if errors == "raise" and type(errors) is str:
         return False
     if errors == "none" and type(errors) is str:
@@ -55,21 +53,20 @@ def _errors_none(errors: Any) -> bool:
     raise ValueError(f"errors must be 'raise' or 'none', not {errors!r}")
 
 
-def _batch(texts: Any, probs: bool, errors: Any, threads: Any) -> Any:
+def _batch(texts: _Any, probs: bool, errors: _Any, threads: _Any) -> _Any:
     from pyroid.langdetect import detector_factory as factory_module
 
     errors_none = _errors_none(errors)
-    init_factory()
-    factory = factory_module._factory
-    assert factory is not None
+    factory_module.init_factory()
+    factory: _Any = factory_module._factory
     try:
+        if not factory_module._plain(factory) or type(Detector.PROB_THRESHOLD) not in (int, float):
+            raise _Unsupported
         seed = _seed_arg(factory.seed)
         params = _params(Detector.ALPHA_DEFAULT, 7, Detector)
     except _Unsupported:
-        seed = params = None
-    if params is None or type(Detector.PROB_THRESHOLD) not in (int, float):
-        # Seeds or class constants of unusual types: one call per document.
-        one = detect_langs if probs else detect
+        # A customised factory or class, or settings of unusual types: one call per document.
+        one = factory_module.detect_langs if probs else factory_module.detect
         if isinstance(texts, (list, tuple)):
             items = texts
         else:  # an Arrow array: its values as str (None for nulls)
@@ -119,11 +116,51 @@ def _batch(texts: Any, probs: bool, errors: Any, threads: Any) -> Any:
         raise
 
 
-def detect_batch(texts: Any, *, errors: str = "raise", threads: int | None = None) -> Any:
-    """``detect(text)`` for every text: a list (tuple for a tuple; a Column for Arrow)."""
+def detect_batch(texts: _Any, *, errors: str = "raise", threads: int | None = None) -> _Any:
+    """The language of every text, as ``[detect(t) for t in texts]`` gives them.
+
+    Each text is detected as a separate :func:`detect` call would (with the default factory,
+    seeded with ``DetectorFactory.seed``), so the results equal the loop's; the texts are
+    processed on pyroid's shared thread pool, and Ctrl-C stops the call within a fraction of
+    a second.
+
+    Args:
+        texts: A list or tuple of str, or an Arrow string array (pyarrow, polars, ...). A
+            single str is not accepted.
+        errors: ``"raise"``: the first text langdetect cannot detect (no letters, only a URL)
+            raises :class:`LangDetectException`, with a note naming its index; ``"none"``: its
+            result is ``None``.
+        threads: At most this many tasks at once on pyroid's pool (``None``: all of it; ``1``:
+            the calling thread).
+
+    Returns:
+        A list (a tuple for a tuple) of language codes, or a :class:`pyroid.Column` of strings
+        for Arrow input, where an Arrow null gives a null.
+
+    Raises:
+        LangDetectException: With ``errors="raise"``, for a text with no features.
+        TypeError: `texts` is not a list, tuple or Arrow string array, or an item is not a str
+            (langdetect's own message, with a note).
+        ValueError: `errors` is not ``"raise"`` or ``"none"``.
+    """
     return _batch(texts, False, errors, threads)
 
 
-def detect_langs_batch(texts: Any, *, errors: str = "raise", threads: int | None = None) -> Any:
-    """``detect_langs(text)`` for every text: one list of ``Language`` per text."""
+def detect_langs_batch(texts: _Any, *, errors: str = "raise", threads: int | None = None) -> _Any:
+    """The languages and probabilities of every text, as ``[detect_langs(t) for t in texts]``.
+
+    Args:
+        texts: A list or tuple of str, or an Arrow string array.
+        errors: As for :func:`detect_batch`.
+        threads: As for :func:`detect_batch`.
+
+    Returns:
+        One list of :class:`Language` per text, in a list (a tuple for a tuple); ``None`` for an
+        Arrow null, and with ``errors="none"`` for a text with no features.
+
+    Raises:
+        LangDetectException: With ``errors="raise"``, for a text with no features.
+        TypeError: `texts` is not a list, tuple or Arrow string array, or an item is not a str.
+        ValueError: `errors` is not ``"raise"`` or ``"none"``.
+    """
     return _batch(texts, True, errors, threads)

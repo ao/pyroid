@@ -468,3 +468,16 @@ def test_messages_name_langdetects_classes(run_python: Callable[..., Any]) -> No
         "LangDetectException.__init__",
         "en:0.5",
     ]
+
+
+def test_module_namespace_and_docstrings() -> None:
+    public = [n for n in dir(pl) if not n.startswith("_")]
+    assert "Any" not in public
+    assert "annotations" not in public
+    from pyroid.langdetect.utils.ngram import NGram
+
+    assert len(NGram.CJK_MAP) == 6667
+    assert NGram.CJK_MAP["亀"] == NGram.CJK_CLASS[3][0]
+    for fn in (pl.detect_batch, pl.detect_langs_batch):
+        assert "Args:" in (fn.__doc__ or "")
+        assert "Raises:" in (fn.__doc__ or "")

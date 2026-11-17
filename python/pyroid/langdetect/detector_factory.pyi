@@ -25,7 +25,14 @@ class DetectorFactory:
     def __init__(self) -> None: ...
     @property
     def word_lang_prob_map(self) -> Mapping[Any, list[float]]:
-        """n-gram -> probability per language, a read-only view of the loaded profiles."""
+        """n-gram -> probability per language, a read-only view of the loaded profiles.
+
+        It is langdetect's dict itself when a profile probability is not a float (numpy
+        counts) or a map of another shape was assigned; detections then run langdetect's
+        Python algorithm on it.
+        """
+    @word_lang_prob_map.setter
+    def word_lang_prob_map(self, word_map: Mapping[Any, list[Any]]) -> None: ...
     def load_profile(self, profile_directory: str) -> None:
         """Load every profile file in `profile_directory`, in ``os.listdir`` order.
 
