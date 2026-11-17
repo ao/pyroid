@@ -1,5 +1,6 @@
 # Vendored from sqlparse 0.6.1 (BSD-3-Clause), © the sqlparse authors and contributors;
 # modified (see python/pyroid/sqlparse/__init__.py).
+# mypy: ignore-errors
 #!/usr/bin/env python
 #
 # Copyright (C) 2009-2020 the sqlparse authors and contributors

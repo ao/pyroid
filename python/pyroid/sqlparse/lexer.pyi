@@ -12,6 +12,8 @@ from typing import IO, Any, ClassVar
 
 from pyroid.sqlparse.tokens import _TokenType
 
+__all__ = ["Lexer", "tokenize"]
+
 class Lexer:
     """The lexer singleton's class; configure it with ``Lexer.get_default_instance()``."""
 
