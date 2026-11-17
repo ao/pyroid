@@ -104,9 +104,8 @@ _PL: Any = None
 
 def _init() -> None:
     global _LD, _PL
-    import pyroid.langdetect
-
     import langdetect
+    import pyroid.langdetect
 
     langdetect.DetectorFactory.seed = 0
     pyroid.langdetect.DetectorFactory.seed = 0
