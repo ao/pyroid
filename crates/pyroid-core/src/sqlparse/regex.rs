@@ -752,6 +752,8 @@ pub struct Regex {
     version: UnicodeVersion,
     /// `re.IGNORECASE` was set.
     ignore: bool,
+    /// The pattern text and the flags it was compiled with.
+    source: (Box<str>, u32),
 }
 
 struct Compiler {
@@ -1118,9 +1120,15 @@ impl Regex {
             first: None,
             version: v,
             ignore: flags & FLAG_IGNORECASE != 0,
+            source: (pattern.into(), flags),
         };
         re.first = re.first_set();
         Ok(re)
+    }
+
+    /// The pattern text and the flags given to [`Regex::new`].
+    pub fn source(&self) -> (&str, u32) {
+        (&self.source.0, self.source.1)
     }
 
     /// The Unicode version the pattern was compiled for.

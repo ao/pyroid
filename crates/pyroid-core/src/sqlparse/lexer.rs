@@ -51,6 +51,8 @@ pub struct Config {
     version: UnicodeVersion,
     /// Some entry is external.
     external: bool,
+    /// The table is sqlparse 0.6.1's own `SQL_REGEX` (any actions): [`fast`] applies.
+    fast: bool,
 }
 
 impl Config {
@@ -96,6 +98,20 @@ impl Config {
                 }
             }
         }
+        let fast = entries.len() == SQL_REGEX.len()
+            && entries
+                .iter()
+                .zip(SQL_REGEX)
+                .all(|(e, (rx, _))| match &e.matcher {
+                    Matcher::Native(re) => {
+                        re.source()
+                            == (
+                                *rx,
+                                super::regex::FLAG_IGNORECASE | super::regex::FLAG_UNICODE,
+                            )
+                    }
+                    Matcher::External(_) => false,
+                });
         Config {
             entries,
             keywords,
@@ -103,6 +119,7 @@ impl Config {
             other,
             version,
             external,
+            fast,
         }
     }
 
@@ -127,6 +144,13 @@ impl Config {
     /// The Unicode version the table was compiled for.
     pub fn version(&self) -> UnicodeVersion {
         self.version
+    }
+
+    /// Turn the fast paths for the default table off (tests compare both).
+    #[must_use]
+    pub fn without_fast_paths(mut self) -> Config {
+        self.fast = false;
+        self
     }
 
     /// Whether some entry needs the caller ([`Matcher::External`]).
@@ -369,6 +393,26 @@ pub fn lex<X: External>(
             }
         }
         let c = text[pos..].chars().next().unwrap_or('\0');
+        if cfg.fast {
+            if let Some((i, end)) = fast::matched(text, pos, c, v) {
+                let e = &cfg.entries[i];
+                match e.action {
+                    Action::Type(tt) => out.push(RawTok {
+                        tt,
+                        start: u(pos),
+                        end: u(end),
+                    }),
+                    Action::Keyword => out.push(RawTok {
+                        tt: cfg.keyword_type(&text[pos..end]),
+                        start: u(pos),
+                        end: u(end),
+                    }),
+                    Action::Drop => {}
+                }
+                pos = end;
+                continue;
+            }
+        }
         let cands: &[u16] = if c.is_ascii() {
             &cfg.ascii[c as usize]
         } else {
@@ -412,6 +456,160 @@ pub fn lex<X: External>(
         pos = end;
     }
     (out, None)
+}
+
+/// Shortcuts for sqlparse 0.6.1's own table: at positions where the first matching entry
+/// can be read off directly (whitespace, closed quotes, words), its index and end; `None`
+/// leaves the position to the ordered regex loop. Each answer is what that loop gives
+/// (`tests::fast_paths_agree` checks them against it).
+mod fast {
+    use super::super::pystr;
+    use crate::ftfy::UnicodeVersion;
+
+    const NEWLINE: usize = 2;
+    const WHITESPACE: usize = 3;
+    const BACKTICK: usize = 7;
+    const KEYWORD_LIKE: usize = 13;
+    const NAME_DOT: usize = 15;
+    const NAME_AFTER_DOT: usize = 16;
+    const NAME_CALL: usize = 17;
+    const STRING_SINGLE: usize = 22;
+    const STRING_SYMBOL: usize = 23;
+    const WORD: usize = 45;
+
+    /// `CASE|IN|VALUES|USING|FROM|AS` (entry 13).
+    const KEYWORDS_13: [&str; 6] = ["CASE", "IN", "VALUES", "USING", "FROM", "AS"];
+    /// The first words of entries 26 to 44 (JOIN, END, IF EXISTS, NOT NULL, ...).
+    const MULTI: [&str; 30] = [
+        "LEFT", "RIGHT", "FULL", "INNER", "OUTER", "STRAIGHT", "CROSS", "NATURAL", "JOIN", "END",
+        "IF", "NOT", "ASC", "DESC", "NULLS", "UNION", "CREATE", "DOUBLE", "GROUP", "ORDER",
+        "PRIMARY", "HANDLER", "GO", "LATERAL", "AT", "WITH", "LIKE", "ILIKE", "RLIKE", "REGEXP",
+    ];
+
+    /// The ASCII upper-case letter `re.IGNORECASE` matches `c` with, if any.
+    fn fold(c: char) -> Option<u8> {
+        match c {
+            'a'..='z' | 'A'..='Z' => Some(c.to_ascii_uppercase() as u8),
+            '\u{130}' | '\u{131}' => Some(b'I'),
+            '\u{17f}' => Some(b'S'),
+            '\u{212a}' => Some(b'K'),
+            _ => None,
+        }
+    }
+
+    /// Whether `word` matches one of `lits` (ASCII upper case) under IGNORECASE.
+    fn is_one_of(word: &str, lits: &[&str]) -> bool {
+        let mut buf = [0u8; 8];
+        let mut n = 0;
+        for c in word.chars() {
+            let Some(f) = fold(c) else { return false };
+            if n == buf.len() {
+                return false;
+            }
+            buf[n] = f;
+            n += 1;
+        }
+        lits.iter().any(|l| l.as_bytes() == &buf[..n])
+    }
+
+    /// The end of `q(qq|\\q|[^q])*q` (`backslash`: with the middle alternative) when its first
+    /// path closes; `None` when it would have to backtrack (an unclosed quote).
+    fn quoted(text: &str, pos: usize, q: u8, backslash: bool) -> Option<usize> {
+        let b = text.as_bytes();
+        let mut i = pos + 1;
+        while i < b.len() {
+            let c = b[i];
+            if c == q {
+                if b.get(i + 1) == Some(&q) {
+                    i += 2;
+                    continue;
+                }
+                return Some(i + 1);
+            }
+            if backslash && c == b'\\' && b.get(i + 1) == Some(&q) {
+                i += 2;
+                continue;
+            }
+            i += text[i..].chars().next().map_or(1, char::len_utf8);
+        }
+        None
+    }
+
+    pub(super) fn matched(
+        text: &str,
+        pos: usize,
+        c: char,
+        v: UnicodeVersion,
+    ) -> Option<(usize, usize)> {
+        let b = text.as_bytes();
+        match c {
+            '\r' => Some((
+                NEWLINE,
+                pos + if b.get(pos + 1) == Some(&b'\n') { 2 } else { 1 },
+            )),
+            '\n' => Some((NEWLINE, pos + 1)),
+            '\'' => quoted(text, pos, b'\'', true).map(|e| (STRING_SINGLE, e)),
+            '"' => quoted(text, pos, b'"', true).map(|e| (STRING_SYMBOL, e)),
+            '`' => quoted(text, pos, b'`', false).map(|e| (BACKTICK, e)),
+            c if pystr::is_space(c) => Some((WHITESPACE, pos + c.len_utf8())),
+            c if pystr::is_word(c, v) && !pystr::is_digit(c, v) => word(text, pos, c, v),
+            _ => None,
+        }
+    }
+
+    fn word(text: &str, pos: usize, c: char, v: UnicodeVersion) -> Option<(usize, usize)> {
+        let b = text.as_bytes();
+        let mut run = pos + c.len_utf8();
+        for d in text[run..].chars() {
+            if !pystr::is_word(d, v) {
+                break;
+            }
+            run += d.len_utf8();
+        }
+        let w = &text[pos..run];
+        if is_one_of(w, &KEYWORDS_13) {
+            return Some((KEYWORD_LIKE, run));
+        }
+        if c != '_' && super::is_tag_start(c, v) {
+            // [A-ZÀ-Ü]\w*(?=\s*\.(?!\d))
+            let mut j = run;
+            for d in text[run..].chars() {
+                if !pystr::is_space(d) {
+                    break;
+                }
+                j += d.len_utf8();
+            }
+            if b.get(j) == Some(&b'.')
+                && !text[j + 1..]
+                    .chars()
+                    .next()
+                    .is_some_and(|d| pystr::is_digit(d, v))
+            {
+                return Some((NAME_DOT, run));
+            }
+            // (?<=\.)[A-ZÀ-Ü]\w*
+            if pos > 0 && b[pos - 1] == b'.' {
+                return Some((NAME_AFTER_DOT, run));
+            }
+            // [A-ZÀ-Ü]\w*(?=\()
+            if b.get(run) == Some(&b'(') {
+                return Some((NAME_CALL, run));
+            }
+        }
+        if is_one_of(w, &MULTI) {
+            return None;
+        }
+        // \w[$#\w]*
+        let mut end = run;
+        for d in text[run..].chars() {
+            if d == '$' || d == '#' || pystr::is_word(d, v) {
+                end += d.len_utf8();
+            } else {
+                break;
+            }
+        }
+        Some((WORD, end))
+    }
 }
 
 /// sqlparse 0.6.1's `keywords.SQL_REGEX`.
@@ -542,6 +740,45 @@ mod tests {
                 (builtin::NAME, "b"),
             ]
         );
+    }
+
+    #[test]
+    fn fast_paths_agree() {
+        let fast = cfg();
+        let slow = cfg().without_fast_paths();
+        assert!(fast.fast && !slow.fast);
+        let alphabet: Vec<char> = "aZsSkKiI_0193 \t\r\n\x0b\x1c\u{a0}\u{2028}.,;:()[]'\"`\\$#@%?*-+/=<>!^&|~\
+             \u{130}\u{131}\u{17f}\u{212a}\u{212b}\u{d7}\u{f7}\u{c0}\u{e9}\u{300}\u{661}\u{b2}\u{4e00}\u{10f800}"
+            .chars()
+            .collect();
+        let words = [
+            "select", "SELECT", "from", "join", "left", "IN", "in", "as", "As", "CASE", "values",
+            "using", "end", "not", "null", "order", "by", "group", "if", "exists", "go", "with",
+            "at", "time", "zone", "like", "regexp", "binary", "union", "all", "create", "or",
+            "replace", "a.b", "f(", "x.1", ".y",
+        ];
+        let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for _ in 0..20_000 {
+            let mut s = String::new();
+            let len = (next() % 24) as usize;
+            for _ in 0..len {
+                let r = next();
+                if r % 3 == 0 {
+                    s.push_str(words[(r / 3) as usize % words.len()]);
+                } else {
+                    s.push(alphabet[(r / 3) as usize % alphabet.len()]);
+                }
+            }
+            let a = lex(&s, &fast, &mut NoExternal).0;
+            let b = lex(&s, &slow, &mut NoExternal).0;
+            assert_eq!(a, b, "{s:?}");
+        }
     }
 
     #[test]

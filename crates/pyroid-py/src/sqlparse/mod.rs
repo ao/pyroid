@@ -581,11 +581,34 @@ fn build<'py>(
     let true_ = pyo3::types::PyBool::new(py, true).to_owned().into_any();
     let false_ = pyo3::types::PyBool::new(py, false).to_owned().into_any();
     let b = |x: bool| if x { true_.clone() } else { false_.clone() };
+    // `object.__new__(cls)` argument tuples, and the str objects of short values (equal values
+    // may share one immutable str: whitespace, commas, keywords)
+    let mut args: Vec<Option<Bound<'py, PyTuple>>> = vec![None; s.classes.len()];
+    let mut short: FxHashMap<&str, Bound<'py, PyString>> = FxHashMap::default();
     for &id in &order {
         let n = t.n(id);
-        let cls = s.classes[n.class.index()].bind(py);
-        let obj = new.call1((cls,))?;
-        let value = py_str(py, t.val(id), remapped)?;
+        let ci = n.class.index();
+        let arg = match &args[ci] {
+            Some(a) => a.clone(),
+            None => {
+                let a = PyTuple::new(py, [s.classes[ci].bind(py)])?;
+                args[ci] = Some(a.clone());
+                a
+            }
+        };
+        let obj = new.call(arg, None)?;
+        let text = t.val(id);
+        let value = if !n.is_group && text.len() <= 32 {
+            if let Some(v) = short.get(text) {
+                v.clone()
+            } else {
+                let v = py_str(py, text, remapped)?;
+                short.insert(text, v.clone());
+                v
+            }
+        } else {
+            py_str(py, text, remapped)?
+        };
         let same = match (&n.value, &n.normalized) {
             (Str::Span(a, b), Str::Span(c, d)) => a == c && b == d,
             (Str::Owned(a), Str::Owned(b2)) => a == b2,
