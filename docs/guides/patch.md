@@ -38,7 +38,7 @@ and `patch()` is the only switch. Each patched name emits one
 | `"datasketch"` | [`pyroid.datasketch`](datasketch.md) (datasketch 2.0.0) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble`, `sha1_hash32`, `sha1_hash64`, `minhash_batch`, the `WeightedMinHashLSH` and `WeightedMinHashLSHForest` aliases, and the `minhash`, `lean_minhash`, `hashfunc`, `lsh`, `lshforest` and `lshensemble` submodules with them | `WeightedMinHash`, `HyperLogLog`, `bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `storage` and the other submodules |
 | `"trafilatura"` | [`pyroid.trafilatura`](trafilatura.md) (trafilatura 2.3.1 or 1.11.0, following the installed release) | `extract`, `bare_extraction`, with 2.3.1 `extract_with_metadata` (delegated), with the installed release's signatures, in `trafilatura` and `trafilatura.core`, `trafilatura.deduplication.LRUCache` and `LRU_TEST`, `trafilatura.meta.reset_caches` | metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the other submodules |
 | `"nltk"` | [`pyroid.nltk`](nltk.md) (NLTK 3.10.4's tokenizers) | `sent_tokenize`, `word_tokenize`, `punkt_model_available`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer`, `wordpunct_tokenize`, `regexp_tokenize`, `blankline_tokenize`, `RegexpTokenizer`, `WordPunctTokenizer`, `WhitespaceTokenizer`, `BlanklineTokenizer`, on `nltk`, `nltk.tokenize` and its `punkt`, `treebank`, `destructive` and `regexp` modules | everything else: `PunktTrainer`, the taggers, corpora, stemmers, the other tokenizers |
-| `"langdetect"` | [`pyroid.langdetect`](langdetect.md) (langdetect 1.0.9) | with langdetect installed, langdetect's own `Detector.append` and `Detector._detect_block` run pyroid's code, and `detect` and `detect_langs` (on `langdetect` and `langdetect.detector_factory`) take one native call; without it, `langdetect` and its submodules hold pyroid's classes | with langdetect installed, everything else: its classes, exceptions and factories |
+| `"langdetect"` | [`pyroid.langdetect`](langdetect.md) (langdetect 1.0.9) | with langdetect installed, langdetect's own `detect` and `detect_langs` (one native call) and `Detector.append` and `Detector._detect_block` (in Rust) run pyroid's code, as the same function objects; without it, `langdetect` and its submodules hold pyroid's classes | with langdetect installed, everything else: its classes, exceptions and factories |
 | `"warcio"` | [`pyroid.warc`](warc.md) (warcio 1.8.2's reader) | `ArchiveIterator` (on `warcio` and `warcio.archiveiterator`), `WARCIterator` and `ARCIterator` (on `warcio.archiveiterator`), making warcio's own `StatusAndHeaders`, `ArcWarcRecord` (a subclass, with pyroid's `content_stream()`), `DigestChecker` and `ArchiveLoadFailed` | `WARCWriter`, `capture_http`, the indexer, the checker, the command line |
 
 `fasttext.FastText._FastText(path)` is how datatrove and others load models, and
@@ -307,12 +307,13 @@ warnings are the ones warcio gives. datatrove's `WarcReader` imports `ArchiveIte
 warcio`) reads WARC files with pyroid in stock datatrove. Without warcio, `warcio` and
 `warcio.archiveiterator` are shims holding pyroid.warc's classes.
 
-`"langdetect"` goes further when langdetect is installed: it changes langdetect's classes in
-place, so detectors and factories made before `patch()`, and names imported before it (`from
-langdetect import detect`), run pyroid's code too, and every class, exception and `Language`
-stays langdetect's. Each replaced method gives langdetect's results on langdetect's own object
-state, so `unpatch("langdetect")` can run while other threads detect. See
-[the guide](langdetect.md#patch).
+`"langdetect"` goes further when langdetect is installed: it swaps the code of four of
+langdetect's functions, which stay the same objects. So detectors and factories made before
+`patch()`, and names imported before it (`from langdetect import detect`), run pyroid's code too;
+the patched functions pickle as langdetect's, and load as langdetect's own in a process without
+the patch; and every class, exception and `Language` stays langdetect's. Each replacement gives
+langdetect's results on langdetect's own object state, so `unpatch("langdetect")` can run while
+other threads detect. See [the guide](langdetect.md#patch).
 
 ## Limitations
 

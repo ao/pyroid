@@ -88,18 +88,28 @@ from pyroid.langdetect import DetectorFactory
 
 factory = DetectorFactory()
 factory.load_profile("/path/to/profiles")  # langdetect's JSON profile files
-factory.load_json_profile([json_a, json_b])
 detector = factory.create(alpha=0.3)
 detector.set_prior_map({"en": 0.7, "fr": 0.3})
 detector.append(text)
 detector.get_probabilities()
+
+from_strings = DetectorFactory()  # JSON strings go in a factory of their own
+from_strings.load_json_profile([json_a, json_b])
 ```
 
 Profiles are read as langdetect reads them (`os.listdir` order, `json`, `LangProfile`), into a
-table in Rust; every error has langdetect's code and message, and langdetect's quirks are kept
-(for example, two `load_profile` calls on one factory both number their languages from 0, so
-the second set's rows are shorter than the language list and detection raises `IndexError`, as
-in langdetect). `word_lang_prob_map` is a read-only view of that table.
+table in Rust; every error has langdetect's code and message, and langdetect's quirks are kept.
+For example, each `load_profile` or `load_json_profile` call numbers its languages from 0, so
+after a second load into the same factory the second set's rows are shorter than the language
+list and detection raises `IndexError`, as in langdetect: use one loader per factory.
+`word_lang_prob_map` is a read-only view of that table; assigning a new map
+(`factory.word_lang_prob_map = {...}`) works as in langdetect.
+
+Profiles whose counts are not ints or floats, such as numpy numbers, give probabilities that are
+not floats in langdetect (`numpy.float64`), and its sums then add them one by one rather than
+with the compensated `sum()` of CPython 3.12. Such a factory keeps langdetect's dict instead of the
+Rust table, and its detections run langdetect's Python algorithm, so they give langdetect's
+`numpy.float64` results at langdetect's speed.
 
 The default profiles (`detect`, `detect_langs`, `init_factory`) are a copy of langdetect
 1.0.9's 55 profiles in `pyroid.langdetect.PROFILES_DIRECTORY`; loading them takes 0.1 s
@@ -114,47 +124,98 @@ langdetect's own profile directory when langdetect is installed, and of its copy
 `append` (the URL and mail-address removal, the Vietnamese normalization, the cut at
 `max_text_length`), the n-gram extraction and the trials run in Rust, on code points, so lone
 surrogates are handled as langdetect handles them. langdetect runs its two regular
-expressions over the whole text before cutting it at 10,000 characters; pyroid processes only
-the part that can reach the cut, so long documents cost little more than 10,000 characters.
+expressions over the whole text before cutting it at 10,000 characters; pyroid reads and
+processes only the part that can reach the cut, so a long document costs little more than
+10,000 characters, whatever characters it holds.
 
-Two kinds of detection run langdetect's own algorithm in Python instead, with the same
-results and langdetect's speed: `set_verbose()` (it prints every step), and detectors whose
-attributes have types langdetect never sets (a `Decimal` alpha, a seed of another type, a
-`prior_map` that is not a list of floats). No call is ever handed to langdetect itself.
+Some detections run langdetect's own code instead, in pyroid's line-for-line Python port, with
+langdetect's results; no call is ever handed to langdetect itself. A pattern changed
+(`Detector.URL_RE` or `MAIL_RE`, on the class or on a detector) moves only `append`'s
+substitutions to Python (47 µs for a tweet instead of 32 µs). The others run langdetect's whole
+algorithm in Python, at about langdetect's speed:
+
+- `set_verbose()`, which prints every step.
+- Attributes of types langdetect never sets: a `Decimal` alpha, a seed of another type, a
+  `prior_map` that is not a list of floats.
+- langdetect's classes used as hooks, which the Rust code would ignore:
+    - a `Detector` method (`cleaning_text`, `_extract_ngrams`, `_update_lang_prob`, ...)
+      overridden in a subclass, replaced on the class or set on a detector. A subclass that only
+      overrides `cleaning_text` runs it, then the rest in Rust;
+    - a `detector.random` that is not a `random.Random`, or a `word_lang_prob_map` of another
+      object;
+    - `NGram`'s tables or methods changed: `N_GRAM`, `LATIN1_EXCLUDED`, `CJK_MAP` (also edited in
+      place), the Vietnamese tables, `normalize`, `add_char`.
+- Profiles whose probabilities are not floats (above).
+
+With `DetectorFactory.create` overridden, or `Detector` or `DetectorFactory` replaced in their
+modules, `detect`, `detect_langs` and the batch functions take langdetect's steps (`create()`,
+`append()`, `detect()`), one text at a time, and each step runs as above.
+
+Checking for these hooks takes well under a microsecond per call, in Rust: about 0.4 µs for
+`detect`, 0.8 µs for a detector made with `create()` (EC2 c8g.16xlarge devbox, shared, CPython
+3.12; the timings above too). A detection that uses none of them always takes the Rust path.
 
 ## `pyroid.patch("langdetect")` {#patch}
 
 With langdetect installed, `pyroid.patch("langdetect")` (or `pyroid run -p langdetect
-script.py`) gives langdetect's own `Detector` pyroid's `append` and `_detect_block`, and makes
-`langdetect.detect` and `langdetect.detect_langs` one native call when the default factory and
-classes are langdetect's own. Everything stays langdetect's: its classes, its exceptions, its
-`Language` objects, its factory and `DetectorFactory.seed`. Factories and detectors made before
-the patch are sped up too, and `pyroid.unpatch("langdetect")` restores the original methods;
-each method is an exact replacement on langdetect's own object state, so calls running in other
-threads while patching or unpatching still give langdetect's results. The first detection of
-each langdetect factory builds pyroid's table from its `word_lang_prob_map` (about 0.1 s for the
-default profiles).
+script.py`) gives four of langdetect's own functions pyroid's code: `detect` and
+`detect_langs` take one native call, and `Detector.append` and `Detector._detect_block` run in
+Rust on langdetect's own object state. The functions stay the same objects (their code is
+swapped), and everything else stays langdetect's: its classes, its exceptions, its `Language`
+objects, its factory and `DetectorFactory.seed`. So:
+
+- names imported before the patch (`from langdetect import detect`) and factories and detectors
+  made before it are sped up too;
+- the patched functions pickle as langdetect's: a process without the patch (a spawn or
+  forkserver worker, a joblib worker) loads langdetect's own function and runs langdetect's own
+  code, with the same results;
+- customised langdetect classes (the hooks listed [above](#what-runs-where)) run langdetect's
+  own code;
+- `pyroid.unpatch("langdetect")` puts the original code back. Each replacement gives
+  langdetect's results on langdetect's own object state, so calls running in other threads
+  while patching or unpatching still give langdetect's results.
+
+The first detection of each langdetect factory builds pyroid's table from its
+`word_lang_prob_map` (about 0.1 s for the default profiles).
 
 Without langdetect, `pyroid.patch("langdetect")` makes `import langdetect` (and its
-submodules) give pyroid's classes.
+submodules) give pyroid's classes. `langdetect.detector_factory` reads and sets `_factory`,
+`PROFILES_DIRECTORY` and the other names langdetect's code reads on
+`pyroid.langdetect.detector_factory`, so `detector_factory._factory` exists after
+`init_factory()` and a factory assigned to it is the one `langdetect.detect` uses. A
+`DetectorFactory` or `Detector` pickled by langdetect loads as pyroid's.
+
+## langdetect releases
+
+pyroid reproduces langdetect 1.0.9. Releases 1.0.7 and 1.0.8 have the same detection code and
+profiles, and detect the same. With another release installed, `import pyroid.langdetect` (and
+so `pyroid.patch("langdetect")`) warns once per process with a `RuntimeWarning`: detections
+follow 1.0.9, and `Language`, `LangDetectException` and `ErrorCode` are the installed
+release's classes. To silence it:
+
+```python
+import warnings
+
+warnings.filterwarnings("ignore", message="pyroid.langdetect reproduces", category=RuntimeWarning)
+```
 
 ## Differences from langdetect
 
 - `word_lang_prob_map` is a read-only view: changing the lists it returns does not change
-  detections (add profiles with `add_profile` instead). Under the patch, langdetect's own dict
-  is used and changes that do not change its size or the language list are not seen after the
-  first detection.
-- Overriding `Detector`'s private methods (`_update_lang_prob`, `_normalize_prob`, ...) in a
-  subclass does not change `detect()`, which does not call them.
+  detections (add profiles with `add_profile`, or assign a new map). Under the patch,
+  langdetect's own dict is used and changes that do not change its size or the language list
+  are not seen after the first detection. Under the patch, entries of langdetect's
+  `NGram.CJK_MAP` changed in place are not seen either (a new dict assigned to it is); pyroid's
+  own `NGram.CJK_MAP` is a `dict` subclass that records changes.
 - `Detector.random` exists, but pyroid's detections draw from their own generator, seeded the
-  same way, so its state does not advance.
+  same way, so its state does not advance (one of another class than `random.Random` is used).
 - Profiles are parsed with `json`, never `simplejson` (the results are the same for valid
   profiles).
 - Ctrl-C while `load_profile` reads the profiles raises `KeyboardInterrupt`; langdetect turns
   it into a `LangDetectException`. A failed first `init_factory()` is retried by the next call;
   langdetect keeps the half-loaded factory.
-- A frequency in a custom profile that is not an int or a float is converted with `float()`
-  after langdetect's arithmetic.
+- pyroid's `DetectorFactory` and `Detector` pickle in pyroid's own form (the table as bytes),
+  which only pyroid loads.
 
 ## Parity
 

@@ -94,12 +94,12 @@ set on NeMo's own modules (``nemo_curator.stages.text.filters`` and the modules 
 them), so pipelines built afterwards, including from NeMo's YAML configs, use them. Ray workers
 need no patch: the stages they receive are pyroid's classes.
 
-``"langdetect"`` (:mod:`pyroid.langdetect`, which reproduces langdetect 1.0.9) works like
-``"nltk"`` when langdetect is installed, and patches its classes in place: langdetect's own
-``Detector.append`` and ``Detector._detect_block`` run pyroid's code, and ``detect`` and
-``detect_langs`` take one native call, so detectors and factories made before the patch are fast
-too and every class, exception and ``Language`` stays langdetect's. Without langdetect,
-``langdetect`` and its submodules are shims holding :mod:`pyroid.langdetect`'s classes.
+``"langdetect"`` (:mod:`pyroid.langdetect`, which reproduces langdetect 1.0.9) patches the
+installed langdetect in place: four of its functions (``detect``, ``detect_langs``,
+``Detector.append`` and ``Detector._detect_block``) run pyroid's code as the same objects, so names
+imported before the patch and detectors and factories made before it are fast too, the functions
+pickle as langdetect's, and every class, exception and ``Language`` stays langdetect's. Without
+langdetect, ``langdetect`` and its submodules are shims holding :mod:`pyroid.langdetect`'s classes.
 
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.

@@ -32,17 +32,19 @@ order of :meth:`DetectorFactory.get_lang_list`, of ties and of the floating-poin
 uses the order of langdetect's own profile directory when langdetect is installed, and of its
 copy otherwise.
 
+Customised classes (``Detector.URL_RE`` set, a method overridden in a subclass, ``NGram``'s
+tables changed, ...) and profiles with numpy counts give langdetect's results too: those
+detections run langdetect's algorithm in Python, at langdetect's speed.
+
 Differences from langdetect:
 
 - ``DetectorFactory.word_lang_prob_map`` is a read-only view; changing the lists it returns
-  does not change detections (use ``add_profile``).
+  does not change detections (use ``add_profile``, or assign a new map).
+- ``Detector.random`` is not advanced by a detection.
 - Profiles are parsed with ``json``, never ``simplejson``.
-- ``Detector`` methods other than the public ones (``_update_lang_prob``, ...) are not hooks:
-  overriding them in a subclass does not change ``detect()``.
 - Ctrl-C while ``load_profile`` reads a file raises ``KeyboardInterrupt``; langdetect turns it
   into ``LangDetectException``.
-- A frequency in a custom profile that is not an int or a float is converted with ``float()``
-  after langdetect's arithmetic.
+- ``DetectorFactory`` and ``Detector`` pickle in pyroid's own form, which only pyroid loads.
 """
 
 from typing import Final, Literal, overload
