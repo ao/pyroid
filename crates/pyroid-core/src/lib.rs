@@ -27,6 +27,8 @@
 //!   Thai tokenizer in the filters).
 //! - [`crfsuite`]: CRFsuite model files and Viterbi tagging, for pyvi and
 //!   PyThaiNLP's sentence model.
+//! - [`langdetect`]: langdetect 1.0.9's language detection, ported exactly
+//!   (`pyroid.langdetect`).
 //! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).
 //!
 //! Each module adds a `src/<mod>/` directory here; see `docs/dev/MODULES.md`.
@@ -42,6 +44,7 @@ pub mod ftfy;
 pub mod html;
 pub mod jieba;
 pub mod json_repair;
+pub mod langdetect;
 pub mod metrics;
 pub mod nemo;
 pub mod nltk;
