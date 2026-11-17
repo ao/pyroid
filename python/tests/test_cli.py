@@ -442,8 +442,8 @@ def test_the_program_leaves_late_signals_their_default_action(tmp_path: Path) ->
 
     A signal during interpreter shutdown was a KeyboardInterrupt in an atexit handler (and its
     traceback), a lost signal (exit 0), or, after CPython reset the handlers, death by the signal:
-    now it is always the last. main() called with arguments, from Python code, leaves the
-    handlers as they were.
+    now it is always the last. ``sys.unraisablehook``, which the program sets for the run, is put
+    back. main() called with arguments, from Python code, leaves the handlers as they were.
     """
     src = _write(_table(["a"]), tmp_path / "in.parquet")
     code = (
@@ -452,10 +452,10 @@ def test_the_program_leaves_late_signals_their_default_action(tmp_path: Path) ->
         f"sys.argv = ['pyroid', 'translit', {str(src)!r}, {str(tmp_path / 'o')!r}]\n"
         "rc = main()\n"
         "dfl = [signal.getsignal(s) is signal.SIG_DFL for s in (signal.SIGINT, signal.SIGTERM)]\n"
-        "print(rc, *dfl)\n"
+        "print(rc, *dfl, sys.unraisablehook is sys.__unraisablehook__)\n"
     )
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
-    assert (r.returncode, r.stdout, r.stderr) == (0, "0 True True\n", "")
+    assert (r.returncode, r.stdout, r.stderr) == (0, "0 True True True\n", "")
     before = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
     assert main(["translit", str(src), str(tmp_path / "o2")]) == 0
     assert (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)) == before

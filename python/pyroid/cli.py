@@ -2676,8 +2676,10 @@ def main(argv: list[str] | None = None) -> int:
         and term is not None
         and signal.getsignal(signal.SIGINT) is signal.default_int_handler
     )
+    previous = sys.unraisablehook
+    hook = _shards.redelivering(previous)
     if program:
-        sys.unraisablehook = _shards.redelivering(sys.unraisablehook)
+        sys.unraisablehook = hook
     with _new_call() as call:
         ok = False
         try:
@@ -2712,6 +2714,8 @@ def main(argv: list[str] | None = None) -> int:
             if program:
                 with contextlib.suppress(KeyboardInterrupt):  # a second signal: exiting anyway
                     _default_signals()
+                if sys.unraisablehook is hook:  # no KeyboardInterrupt to catch from here on
+                    sys.unraisablehook = previous
             elif term is not None:
                 signal.signal(signal.SIGTERM, term)
             if not ok:  # this call's runs only: calls in other threads have their own
