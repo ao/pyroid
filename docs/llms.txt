@@ -1,6 +1,6 @@
 # pyroid
 
-> pyroid reimplements 19 popular Python libraries in Rust, with the same API and the same output: PyYAML's safe loader and dumper, jmespath, python-dateutil's parser, tabulate, json_repair, difflib, packaging, ftfy, anyascii, fastText inference, NLTK's tokenizers, jieba, Trafilatura, warcio, datasketch, datatrove's filters and dedup, NeMo Curator's filters, rouge-score and sacrebleu. Most of its modules run many times faster than the library they replace. Install with `pip install pyroid` and change the import (`import pyroid.yaml as yaml`). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t.
+> pyroid reimplements 21 popular Python libraries in Rust, with the same API and the same output: PyYAML's safe loader and dumper, jmespath, python-dateutil's parser, tabulate, json_repair, difflib, packaging, sqlparse, ftfy, anyascii, fastText inference, langdetect, NLTK's tokenizers, jieba, Trafilatura, warcio, datasketch, datatrove's filters and dedup, NeMo Curator's filters, rouge-score and sacrebleu. Most of its modules run many times faster than the library they replace. Install with `pip install pyroid` and change the import (`import pyroid.yaml as yaml`). Prebuilt wheels for CPython 3.11–3.15 and free-threaded 3.14t/3.15t.
 
 On an AWS EC2 c7i.4xlarge, `pyroid.yaml.safe_load` runs 10x faster than PyYAML's CSafeLoader on 11,878 real YAML files, and `pyroid.jmespath.search` 10 to 26x faster than jmespath 1.1.0 on single queries of a boto3-style response.
 

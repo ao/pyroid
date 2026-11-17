@@ -7,10 +7,11 @@
 
 [Docs](https://ataiva.com/open-source/pyroid/docs/) | [Benchmarks](https://ataiva.com/open-source/pyroid/docs/benchmarks/) | [Compatibility](https://ataiva.com/open-source/pyroid/docs/compatibility/)
 
-pyroid reimplements 19 popular Python libraries in Rust, with the same API and the same output.
+pyroid reimplements 21 popular Python libraries in Rust, with the same API and the same output.
 Most of its modules are many times faster than the library they replace. They cover data formats
-(JSON, YAML, JMESPath queries, dates, tables), developer tools (difflib, packaging), text and NLP
-(ftfy, fastText, NLTK, jieba), web pages and archives, and the steps of LLM data pipelines.
+(JSON, YAML, JMESPath queries, dates, tables), developer tools (difflib, packaging, sqlparse), text
+and NLP (ftfy, fastText, langdetect, NLTK, jieba), web pages and archives, and the steps of LLM data
+pipelines.
 
 ```console
 $ pip install pyroid
@@ -247,15 +248,15 @@ expression is
 `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib`:
 
 - Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK (the Porter stemmer and the
-  tokenizers), sacrebleu, Trafilatura, SudachiPy and warcio;
+  tokenizers), sacrebleu, Trafilatura, SudachiPy, warcio and langdetect (with its profiles);
 - MIT: ported from fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba
   (with its dictionary), libxml2 (the HTML parser), PyYAML, tabulate and jmespath;
 - BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists) and packaging
   (dual-licensed Apache-2.0 OR BSD-2-Clause, used under BSD-2-Clause);
 - BSD-3-Clause: numpy's random generator (for C4 bad words), scipy's QUADPACK integration (for
-  MinHashLSH's parameters), tldextract, lxml and python-dateutil (its later contributions are
-  also Apache-2.0);
-- PSF-2.0: CPython's `ipaddress` (IPv6 parsing), float formatting and `difflib`;
+  MinHashLSH's parameters), tldextract, lxml, python-dateutil (its later contributions are
+  also Apache-2.0), sqlparse and the Mersenne Twister (MT19937);
+- PSF-2.0: CPython's `ipaddress` (IPv6 parsing), float formatting, `difflib` and `random`;
 - ISC: anyascii's transliteration data;
 - Unicode-3.0: data from the Unicode Character Database;
 - Zlib: zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.

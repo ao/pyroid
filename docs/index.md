@@ -1,10 +1,10 @@
 # pyroid
 
-pyroid reimplements 19 popular Python libraries in Rust, with the same API and the same output.
+pyroid reimplements 21 popular Python libraries in Rust, with the same API and the same output.
 Most of its modules are many times faster than the library they replace. They cover data formats
-(JSON, YAML, JMESPath queries, dates, tables), developer tools (difflib, packaging), text and NLP
-(ftfy, fastText, NLTK, jieba), web pages and archives, and the steps of LLM data pipelines. It runs
-on CPython 3.11 to 3.15, including free-threaded 3.14t and 3.15t.
+(JSON, YAML, JMESPath queries, dates, tables), developer tools (difflib, packaging, sqlparse), text
+and NLP (ftfy, fastText, langdetect, NLTK, jieba), web pages and archives, and the steps of LLM data
+pipelines. It runs on CPython 3.11 to 3.15, including free-threaded 3.14t and 3.15t.
 
 ```console
 $ pip install pyroid
@@ -219,14 +219,15 @@ expression is `MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND
 PSF-2.0 AND Unicode-3.0 AND Zlib`:
 
 - Apache-2.0 for the ftfy, datatrove, rouge-score, NLTK (Porter stemmer and tokenizers),
-  sacrebleu, Trafilatura, SudachiPy and warcio ports;
+  sacrebleu, Trafilatura, SudachiPy, warcio and langdetect ports (and langdetect's profiles);
 - MIT for the fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (and
   its dictionary), libxml2 (HTML parser), PyYAML, tabulate and jmespath ports;
 - BSD-2-Clause for the jusText port and its stoplists, and the packaging port (packaging is
   dual-licensed Apache-2.0 OR BSD-2-Clause);
-- BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract, lxml and
-  python-dateutil (whose later contributions are also Apache-2.0);
-- PSF-2.0 for CPython's `ipaddress`, float formatting and `difflib`;
+- BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract, lxml,
+  python-dateutil (whose later contributions are also Apache-2.0), sqlparse and the Mersenne
+  Twister (MT19937);
+- PSF-2.0 for CPython's `ipaddress`, float formatting, `difflib` and `random`;
 - ISC for anyascii's data;
 - Unicode-3.0 for Unicode Character Database data;
 - Zlib for zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.

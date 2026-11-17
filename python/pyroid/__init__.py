@@ -3,8 +3,9 @@
 Each module is a drop-in for the library it is named after, or the one in parentheses:
 ``pyroid.yaml`` (PyYAML), ``pyroid.jmespath``, ``pyroid.tabulate``, ``pyroid.dateutil.parser``
 (python-dateutil), ``pyroid.json_repair``, ``pyroid.difflib`` (the standard library's),
-``pyroid.packaging``, ``pyroid.ftfy``, ``pyroid.translit`` (anyascii), ``pyroid.fasttext``,
-``pyroid.nltk``, ``pyroid.jieba``, ``pyroid.trafilatura``, ``pyroid.warc`` (warcio),
+``pyroid.packaging``, ``pyroid.sqlparse``, ``pyroid.ftfy``, ``pyroid.translit`` (anyascii),
+``pyroid.fasttext``, ``pyroid.langdetect``, ``pyroid.nltk``, ``pyroid.jieba``,
+``pyroid.trafilatura``, ``pyroid.warc`` (warcio),
 ``pyroid.filters`` and ``pyroid.dedup`` (datatrove), ``pyroid.datasketch``, ``pyroid.nemo``
 (NeMo Curator) and ``pyroid.metrics`` (rouge-score and sacrebleu). Change the import
 (``import pyroid.yaml as yaml``), or call :func:`pyroid.patch` to make code you don't own use
