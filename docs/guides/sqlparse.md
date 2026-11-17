@@ -97,7 +97,7 @@ Python runs only where sqlparse's behaviour is Python's own:
 
 ```python
 docs = ["select a from t", "insert into t values (1)", ...]
-sqlparse.format_batch(docs, reindent=True)        # == [sqlparse.format(d, reindent=True) for d in docs]
+sqlparse.format_batch(docs, reindent=True)  # == [sqlparse.format(d, reindent=True) for d in docs]
 sqlparse.split_batch(docs, strip_semicolon=True)  # == [sqlparse.split(d, strip_semicolon=True) ...]
 sqlparse.format_batch(pa.array(docs), threads=8)  # a pyroid.Column of strings; nulls stay null
 ```

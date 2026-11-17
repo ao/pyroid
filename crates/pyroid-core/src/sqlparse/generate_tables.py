@@ -146,10 +146,16 @@ def emit(paths: list[str]) -> None:
         "/// `(code point, mapped 1, 2, 3)`; unused slots are 0.\n"
         "pub(super) type Full = (u32, u32, u32, u32);\n\n"
     )
-    for key, doc in (("upper", "str.upper()"), ("lower", "str.lower()"), ("title", "str.capitalize()")):
+    for key, doc in (
+        ("upper", "str.upper()"),
+        ("lower", "str.lower()"),
+        ("title", "str.capitalize()"),
+    ):
         base = {int(k): x for k, x in latest[key].items()}
         out.append(f"/// `{doc}` of one character (Unicode 17.0).\n")
-        out.append(f"pub(super) static {key.upper()}: [Full; {len(base)}] = [{_map_rows(base)}];\n\n")
+        out.append(
+            f"pub(super) static {key.upper()}: [Full; {len(base)}] = [{_map_rows(base)}];\n\n"
+        )
         for v in VERSIONS[:-1]:
             m = {int(k): x for k, x in dumps[v][key].items()}
             delta = {}
@@ -170,7 +176,9 @@ def emit(paths: list[str]) -> None:
     )
     for v in VERSIONS[:-1]:
         m = {int(k): x for k, x in dumps[v]["slower"].items()}
-        delta = {cp: m.get(cp, cp) for cp in set(m) | set(base_l) if m.get(cp, cp) != base_l.get(cp, cp)}
+        delta = {
+            cp: m.get(cp, cp) for cp in set(m) | set(base_l) if m.get(cp, cp) != base_l.get(cp, cp)
+        }
         out.append(
             f"pub(super) static SLOWER_DELTA_{_vname(v)[1:]}: [(u32, u32); {len(delta)}] = ["
             + ", ".join(f"({k:#x}, {delta[k]:#x})" for k in sorted(delta))
@@ -197,13 +205,17 @@ def emit(paths: list[str]) -> None:
     extras = {json.dumps(dumps[v]["extra"], sort_keys=True) for v in VERSIONS}
     assert len(extras) == 1, "re._casefix differs between versions"
     extra = {int(k): x for k, x in latest["extra"].items()}
-    out.append("\n/// `re._casefix._EXTRA_CASES` (the same in every version): lowercase -> others.\n")
+    out.append(
+        "\n/// `re._casefix._EXTRA_CASES` (the same in every version): lowercase -> others.\n"
+    )
     rows = []
     for k in sorted(extra):
         x = extra[k] + [0] * (2 - len(extra[k]))
         assert len(extra[k]) <= 2
         rows.append(f"({k:#x}, {x[0]:#x}, {x[1]:#x})")
-    out.append(f"pub(super) static EXTRA_CASES: [(u32, u32, u32); {len(extra)}] = [{', '.join(rows)}];\n")
+    out.append(
+        f"pub(super) static EXTRA_CASES: [(u32, u32, u32); {len(extra)}] = [{', '.join(rows)}];\n"
+    )
     (HERE / "tables.rs").write_text("".join(out))
     print(f"wrote {HERE / 'tables.rs'}")
 
