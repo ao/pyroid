@@ -769,7 +769,9 @@ _SQLPARSE_SWAPS: dict[str, tuple[str, ...]] = {
     "sqlparse.lexer": ("tokenize",),
     "sqlparse.engine.grouping": ("group",),
 }
-# Without sqlparse, these pyroid.sqlparse modules stand in for sqlparse's.
+# Without sqlparse, these pyroid.sqlparse modules stand in for sqlparse's. sqlparse.cli and
+# sqlparse.__main__ are not aliased: they hold no state, and `python -m sqlparse.cli` needs a module
+# found under that name.
 _SQLPARSE_MODULES = (
     "",
     ".sql",
@@ -779,7 +781,6 @@ _SQLPARSE_MODULES = (
     ".exceptions",
     ".utils",
     ".formatter",
-    ".cli",
     ".engine",
     ".engine.grouping",
     ".engine.filter_stack",
