@@ -21,7 +21,7 @@ holding both lone surrogates and characters from U+10F800 on.
 """
 
 from collections.abc import Generator
-from typing import IO, Any, Final, overload
+from typing import IO, Any, Final, TypeAlias, overload
 
 from pyroid._pyroid import Column
 from pyroid._typing import ArrowStrings
@@ -148,16 +148,21 @@ def split(
         The statements, each stripped of surrounding whitespace.
     """
 
+# What format and split take, one text.
+_Text: TypeAlias = str | bytes | IO[str]
+
 @overload
 def format_batch(sqls: str, *, threads: int | None = None, **options: Any) -> str:
     """Format every SQL text of `sqls` with `options`, in parallel.
 
     The result equals ``[format(sql, **options) for sql in sqls]``, in the caller's kind: a
     list for a list, a tuple for a tuple, a ``pyroid.Column`` of strings for an Arrow array or
-    column (nulls stay null), a str for a str. It raises what that loop raises.
+    column (nulls stay null), a str for a str (one text). A list or tuple holds what ``format``
+    takes (str, bytes, text streams), and an item it rejects raises its ``TypeError``, as the
+    loop does; other errors are the loop's too.
 
     Args:
-        sqls: The SQL texts: a list or tuple of str, or an Arrow string array or column.
+        sqls: The SQL texts: a list or tuple, or an Arrow string array or column.
         threads: At most this many tasks at once on the shared pool (``None``: all of it).
         **options: ``format``'s options.
 
@@ -166,10 +171,12 @@ def format_batch(sqls: str, *, threads: int | None = None, **options: Any) -> st
     """
 
 @overload
-def format_batch(sqls: list[str], *, threads: int | None = None, **options: Any) -> list[str]: ...
+def format_batch(
+    sqls: list[str] | list[bytes] | list[_Text], *, threads: int | None = None, **options: Any
+) -> list[str]: ...
 @overload
 def format_batch(
-    sqls: tuple[str, ...], *, threads: int | None = None, **options: Any
+    sqls: tuple[_Text, ...], *, threads: int | None = None, **options: Any
 ) -> tuple[str, ...]: ...
 @overload
 def format_batch(
@@ -182,10 +189,12 @@ def split_batch(
     """Split every SQL text of `sqls` into statements, in parallel.
 
     The result equals ``[split(sql, strip_semicolon=strip_semicolon) for sql in sqls]``: a
-    list of lists (a tuple of lists for a tuple; ``None`` for an Arrow null).
+    list of lists (a tuple of lists for a tuple; ``None`` for an Arrow null). A list or tuple
+    holds what ``split`` takes (str, bytes, text streams), and an item it rejects raises its
+    ``TypeError``, as the loop does.
 
     Args:
-        sqls: The SQL texts: a list or tuple of str, or an Arrow string array or column.
+        sqls: The SQL texts: a list or tuple, or an Arrow string array or column.
         threads: At most this many tasks at once on the shared pool (``None``: all of it).
         strip_semicolon: Remove trailing semicolons, as ``split`` does.
 
@@ -195,9 +204,12 @@ def split_batch(
 
 @overload
 def split_batch(
-    sqls: tuple[str, ...], *, threads: int | None = None, strip_semicolon: bool = False
+    sqls: tuple[_Text, ...], *, threads: int | None = None, strip_semicolon: bool = False
 ) -> tuple[list[str], ...]: ...
 @overload
 def split_batch(
-    sqls: list[str] | ArrowStrings, *, threads: int | None = None, strip_semicolon: bool = False
+    sqls: list[str] | list[bytes] | list[_Text] | ArrowStrings,
+    *,
+    threads: int | None = None,
+    strip_semicolon: bool = False,
 ) -> list[list[str] | None]: ...

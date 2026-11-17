@@ -1142,12 +1142,20 @@ fn run_batch<R: Send>(
     Ok(Some(out))
 }
 
-/// The batch's input, or `None` when the Python package should loop (lone surrogates).
+/// The batch's input, or `None` when the Python package should loop: lone surrogates, or a
+/// list or tuple holding something else than str (`format` and `split` read bytes and text
+/// streams, and raise their own `TypeError` for the rest).
 fn batch_input(xs: &Bound<'_, PyAny>, threads: Option<Threads>) -> PyResult<Option<TextInput>> {
     let py = xs.py();
     match text_arg(xs, threads, "sqls") {
         Ok(i) => Ok(Some(i)),
         Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) => Ok(None),
+        Err(e)
+            if (xs.is_instance_of::<PyList>() || xs.is_instance_of::<PyTuple>())
+                && e.is_instance(py, crate::errors::input_error_type(py)?.as_any()) =>
+        {
+            Ok(None)
+        }
         Err(e) => Err(e),
     }
 }

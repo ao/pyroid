@@ -191,15 +191,27 @@ def _split(sql: Any, encoding: str | None, strip_semicolon: bool) -> list[str]:
     return [str(stmt).strip() for stmt in stack.run(sql, encoding)]
 
 
-def _batch_items(sqls: Any) -> list[Any]:
-    """The documents of a batch for the Python loop (Arrow nulls stay None)."""
-    if isinstance(sqls, (list, tuple)):
-        return list(sqls)
+def _batch_texts(sqls: Any) -> Any:
+    """A list or tuple batch's items as `format` and `split` read them (or None).
+
+    Bytes are decoded and text streams read; the first item they reject raises their
+    TypeError. None when every item is already a str, or `sqls` is not a list or tuple.
+    """
+    if not isinstance(sqls, (list, tuple)) or all(type(x) is str for x in sqls):
+        return None
+    texts = [lexer.read(x, None) for x in sqls]
+    return tuple(texts) if isinstance(sqls, tuple) else texts
+
+
+def _batch_loop(sqls: Any, texts: Any, one: Any) -> Any:
+    """``[one(sql) for sql in sqls]`` in the batch's container kind (Arrow nulls stay None)."""
     if isinstance(sqls, str):
-        return [sqls]
-    if hasattr(sqls, "to_pylist"):  # pyarrow, pyroid.Column
-        return list(sqls.to_pylist())
-    return list(sqls)
+        return one(sqls)
+    if isinstance(sqls, (list, tuple)):
+        items = [one(x) for x in (sqls if texts is None else texts)]
+        return tuple(items) if isinstance(sqls, tuple) else items
+    rows = sqls.to_pylist() if hasattr(sqls, "to_pylist") else list(sqls)  # pyarrow, Column
+    return [None if x is None else one(x) for x in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -267,10 +279,12 @@ def format_batch(sqls: Any, *, threads: int | None = None, **options: Any) -> An
 
     The result equals ``[format(sql, **options) for sql in sqls]``, in the caller's kind: a
     list for a list, a tuple for a tuple, a ``pyroid.Column`` of strings for an Arrow array
-    or column (nulls stay null), a str for a str. It raises what that loop raises.
+    or column (nulls stay null), a str for a str (one text). A list or tuple holds what
+    ``format`` takes (str, bytes, text streams), and an item it rejects raises its
+    ``TypeError``, as the loop does; other errors are the loop's too.
 
     Args:
-        sqls: The SQL texts: a list or tuple of str, or an Arrow string array or column.
+        sqls: The SQL texts: a list or tuple, or an Arrow string array or column.
         threads: At most this many tasks at once on the shared pool (``None``: all of it).
         **options: ``format``'s options.
 
@@ -280,26 +294,29 @@ def format_batch(sqls: Any, *, threads: int | None = None, **options: Any) -> An
     options = formatter.validate_options(options)
     lex = lexer.Lexer.get_default_instance()
     args = _format_args(options)
-    if lexer.plain(lex) and args is not None:
+    native = lexer.plain(lex) and args is not None
+    if native:
         r = _native._format_batch(sqls, lex, *_limit_values(None), args, threads)
         if r is not NotImplemented:
             return r
-    items = [
-        None if x is None else _format(x, None, dict(options), None) for x in _batch_items(sqls)
-    ]
-    if isinstance(sqls, str):
-        return items[0]
-    return tuple(items) if isinstance(sqls, tuple) else items
+    texts = _batch_texts(sqls)
+    if native and texts is not None:  # bytes or streams, read as format reads them
+        r = _native._format_batch(texts, lex, *_limit_values(None), args, threads)
+        if r is not NotImplemented:
+            return r
+    return _batch_loop(sqls, texts, lambda x: _format(x, None, dict(options), None))
 
 
 def split_batch(sqls: Any, *, threads: int | None = None, strip_semicolon: bool = False) -> Any:
     """Split every SQL text of `sqls` into statements, in parallel.
 
     The result equals ``[split(sql, strip_semicolon=strip_semicolon) for sql in sqls]``: a
-    list of lists (a tuple of lists for a tuple; ``None`` for an Arrow null).
+    list of lists (a tuple of lists for a tuple; ``None`` for an Arrow null). A list or tuple
+    holds what ``split`` takes (str, bytes, text streams), and an item it rejects raises its
+    ``TypeError``, as the loop does.
 
     Args:
-        sqls: The SQL texts: a list or tuple of str, or an Arrow string array or column.
+        sqls: The SQL texts: a list or tuple, or an Arrow string array or column.
         threads: At most this many tasks at once on the shared pool (``None``: all of it).
         strip_semicolon: Remove trailing semicolons, as ``split`` does.
 
@@ -307,11 +324,14 @@ def split_batch(sqls: Any, *, threads: int | None = None, strip_semicolon: bool 
         The statements of each text.
     """
     lex = lexer.Lexer.get_default_instance()
-    if lexer.plain(lex):
+    native = lexer.plain(lex)
+    if native:
         r = _native._split_batch(sqls, lex, bool(strip_semicolon), threads)
         if r is not NotImplemented:
             return r
-    items = [None if x is None else _split(x, None, strip_semicolon) for x in _batch_items(sqls)]
-    if isinstance(sqls, str):
-        return items[0]
-    return tuple(items) if isinstance(sqls, tuple) else items
+    texts = _batch_texts(sqls)
+    if native and texts is not None:  # bytes or streams, read as split reads them
+        r = _native._split_batch(texts, lex, bool(strip_semicolon), threads)
+        if r is not NotImplemented:
+            return r
+    return _batch_loop(sqls, texts, lambda x: _split(x, None, strip_semicolon))

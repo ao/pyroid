@@ -603,8 +603,32 @@ def test_batch_raises_what_the_loop_raises() -> None:
     deep = "select " + "(" * 150 + "1" + ")" * 150
     with pytest.raises(P.exceptions.SQLParseError, match="depth"):
         P.format_batch(["select 1", deep, "select 2"], reindent=True)
-    with pytest.raises(TypeError):
-        P.format_batch(["select 1", 2])  # type: ignore[list-item]
+    # the loop's own TypeError (not pyroid.InputError), for lists and tuples
+    for bad in (None, 2, 1.5):
+        with pytest.raises(TypeError) as one:
+            P.format(bad)  # type: ignore[arg-type]
+        assert str(one.value) == f"Expected text or file-like object, got {type(bad)!r}"
+        batches: list[Any] = [P.format_batch, P.split_batch]
+        for batch in batches:
+            for kind in (list, tuple):
+                with pytest.raises(TypeError) as many:
+                    batch(kind(["select 1", bad]))
+                assert type(many.value) is TypeError
+                assert str(many.value) == str(one.value)
+
+
+def test_batches_take_what_format_and_split_take() -> None:
+    def docs() -> list[Any]:  # streams are read once: a fresh list per call
+        return ["select a", b"select 'b'", b"select '\xe9'", io.StringIO("select c; select d")]
+
+    for opts in ({}, {"keyword_case": "upper"}, {"reindent": True}):
+        want = [P.format(d, **opts) for d in docs()]
+        assert P.format_batch(docs(), **opts) == want
+        assert P.format_batch(tuple(docs()), **opts) == tuple(want)
+    assert P.split_batch(docs()) == [P.split(d) for d in docs()]
+    assert P.split_batch(tuple(docs()), strip_semicolon=True) == tuple(
+        P.split(d, strip_semicolon=True) for d in docs()
+    )
 
 
 @pytest.mark.timeout(120)
