@@ -3,7 +3,7 @@
 `pyroid.langdetect` is a Rust port of [langdetect](https://github.com/Mimino666/langdetect)
 1.0.9 by Michal Danilak (Apache-2.0), itself a port of Cybozu Labs' language-detection. It
 returns the same language codes and the same probabilities, to the last bit, for the same
-`DetectorFactory.seed` ([parity](../compatibility.md#langdetect)), 40 to 65 times faster per
+`DetectorFactory.seed` ([parity](../compatibility.md#langdetect)), 35 to 50 times faster per
 call, and detects batches on all cores. The other fast detectors (fastText's lid.176, lingua,
 fast-langdetect) are different models and give different answers; this one keeps langdetect's.
 
@@ -168,19 +168,24 @@ None differed, and the batch functions gave the per-call results for every text.
 ## Speed
 
 µs per text, median of 5 rounds, every text's `detect_langs` first checked against
-langdetect's (EC2 c8g.16xlarge, shared with other jobs, so indicative; CPython 3.12, release
-wheel; texts from FineWeb and FineWeb-2 in all profile languages, round robin;
-`bench/langdetect_bench.py`):
+langdetect's (a dedicated AWS EC2 c7i.4xlarge, Intel Xeon Platinum 8488C, 16 vCPU; CPython
+3.12.16, release wheel; texts from FineWeb and FineWeb-2 in all profile languages, round robin;
+`bench/langdetect_bench.py`; the [benchmarks page](../benchmarks.md#pyroidlangdetect) has the
+details):
 
 | Run | 50 characters | 1,500 characters | 12,000 characters |
 |---|---:|---:|---:|
-| langdetect, one thread | 1,692 | 3,278 | 18,894 |
-| langdetect, 8 processes | 246 (7×) | 425 (8×) | 2,440 (8×) |
-| pyroid, one call per text | 39 (43×) | 59 (55×) | 293 (64×) |
-| pyroid `detect_batch(texts, threads=1)` | 37 (46×) | 55 (60×) | 279 (68×) |
-| pyroid `detect_batch(texts, threads=8)` | 5.6 (300×) | 7.8 (420×) | 38 (496×) |
+| langdetect, one thread | 1,366 | 2,687 | 15,191 |
+| langdetect, 8 processes | 200 (7×) | 348 (8×) | 1,994 (8×) |
+| pyroid, one call per text | 39 (35×) | 58 (46×) | 309 (49×) |
+| pyroid `detect_batch(texts, threads=1)` | 37 (37×) | 53 (51×) | 289 (52×) |
+| pyroid `detect_batch(texts, threads=8)` | 8.7 (158×) | 12 (220×) | 62 (246×) |
 
 Short texts cost the most per character: langdetect's trials converge slowly on them (about 750
 sampling steps per short English text, against 300 for 1,500 characters). langdetect's own `detect` under `pyroid.patch("langdetect")` takes
-57 µs on the 1,500-character texts (57×). A fresh interpreter reaches its first detection in
-120 ms with pyroid (import and profile loading) and 231 ms with langdetect.
+55 µs on the 1,500-character texts (49×). A fresh interpreter reaches its first detection in
+112 ms with pyroid (import and profile loading) and 237 ms with langdetect.
+
+The c7i's 16 vCPUs are 8 cores with two hardware threads each, and `threads=8` runs on 8 of the
+pool's 16 threads, so some of them share a core. Pinned to one thread per core
+(`taskset -c 0-7`), the 12,000-character batch took 41 to 46 µs per text instead of 59 to 61.
