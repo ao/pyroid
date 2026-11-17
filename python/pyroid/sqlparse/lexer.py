@@ -1,0 +1,74 @@
+"""SQL lexer (``sqlparse.lexer``): ``tokenize`` runs pyroid's port of sqlparse 0.6.1's lexer.
+
+``Lexer`` is sqlparse's own class when sqlparse 0.6.1 is installed (one singleton for both
+libraries), else pyroid's copy. Its table (``set_SQL_REGEX``, ``add_keywords``, ``clear``,
+``default_initialization``) is read on each call and compiled once per change.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from io import TextIOBase
+from typing import Any
+
+from pyroid.sqlparse import _backend
+
+if _backend.SHARE_LEXER and _backend.REAL is not None:
+    Lexer: Any = _backend.REAL.lexer.Lexer
+else:
+    from pyroid.sqlparse._own_lexer import Lexer
+
+    Lexer.__module__ = __name__
+
+from pyroid.sqlparse import _core
+
+__all__ = ["Lexer", "tokenize"]
+
+_GET_TOKENS = Lexer.get_tokens
+
+
+def plain(lex: Any) -> bool:
+    """Whether `lex` is a `Lexer` whose behaviour is only its table (nothing overridden)."""
+    return type(lex) is Lexer and len(vars(lex)) == 2
+
+
+def read(text: Any, encoding: str | None) -> Any:
+    """`Lexer.get_tokens`'s input handling: the text of a str, bytes or text stream."""
+    if isinstance(text, TextIOBase):
+        text = text.read()
+    if isinstance(text, str):
+        pass
+    elif isinstance(text, bytes):
+        if encoding:
+            text = text.decode(encoding)
+        else:
+            try:
+                text = text.decode("utf-8")
+            except UnicodeDecodeError:
+                text = text.decode("unicode-escape")
+    else:
+        raise TypeError(f"Expected text or file-like object, got {type(text)!r}")
+    return text
+
+
+def _tokens(lex: Any, sql: Any, encoding: str | None) -> Iterator[tuple[Any, str]]:
+    text = read(sql, encoding)
+    r = _core.native._tokenize(text, lex)
+    if r is NotImplemented:
+        _core.warn_fallback("lexer.tokenize", "the lexer's table holds entries pyroid cannot read")
+        yield from _GET_TOKENS(lex, text)
+        return
+    pairs, err = r
+    yield from pairs
+    if err is not None:
+        raise err
+
+
+def tokenize(sql: Any, encoding: str | None = None) -> Iterator[tuple[Any, str]]:
+    """Tokenize *sql* using the :class:`Lexer` and return a 2-tuple stream
+    of ``(token type, value)`` items.
+    """
+    lex = Lexer.get_default_instance()
+    if not plain(lex):
+        return lex.get_tokens(sql, encoding)  # type: ignore[no-any-return]
+    return _tokens(lex, sql, encoding)
