@@ -8,9 +8,14 @@
 //! ([`settle`]). To find these matchers without walking the heap, each thread keeps weak
 //! references to the ones its calls gave native state, and lists the ones its native
 //! `__init__`, `set_seq1` or `set_seq2` is changing at the moment ([`Gate`]). Switching the
-//! patch off ([`_sm_patch`]) makes every call that starts later run CPython's method, then
+//! patch off ([`_sm_unpatch`]) makes every call that starts later run CPython's method, then
 //! settles every recorded matcher that no call is changing; a call that was changing one
 //! settles it when it ends. Nothing walks the heap, and nothing waits for another thread.
+//! The cost of a switch-off follows the matchers recorded since the last one that are still
+//! alive, not how many were ever made: each thread prunes its dead records as it goes.
+//!
+//! [`_sm_patch`] and [`_sm_unpatch`] also set and put back the attributes themselves, with no
+//! Python code in between, so the classes are never left half-patched.
 //!
 //! pyroid.difflib's own `SequenceMatcher` (and its subclasses) keep pyroid's methods for good:
 //! their instances are neither recorded nor settled.
@@ -21,7 +26,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, TryLockError};
 
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyDict, PyString, PyType, PyWeakrefMethods, PyWeakrefReference};
+use pyo3::types::{PyDict, PyString, PyTuple, PyType, PyWeakrefMethods, PyWeakrefReference};
 
 use super::sm::{BSide, cached_list, discard, instance_dict};
 
@@ -267,16 +272,129 @@ pub fn _sm_own(py: Python<'_>, cls: Bound<'_, PyType>) {
     let _ = OWN.set(py, cls.unbind());
 }
 
-/// `_sm_patch(on)`: `pyroid.patch("difflib")` was switched on, or is being switched off.
-/// Switching off gives every recorded matcher CPython's state ([`settle`]) and returns how
-/// many it settled.
-#[pyfunction]
-pub fn _sm_patch(py: Python<'_>, on: bool) -> PyResult<usize> {
-    if on {
-        GENERATION.fetch_add(1, SeqCst);
-        ACTIVE.store(true, SeqCst);
-        return Ok(0);
+/// One attribute `pyroid.patch("difflib")` sets: the owner (a class or the difflib module),
+/// the name, and the value (or what was there before, `missing` where there was nothing).
+type Swap<'py> = (Bound<'py, PyAny>, Bound<'py, PyString>, Bound<'py, PyAny>);
+
+/// What [`_sm_patch`] replaced, while its attributes are in place.
+struct Saved {
+    swaps: Vec<(Py<PyAny>, Py<PyString>, Py<PyAny>)>,
+    missing: Py<PyAny>,
+}
+
+static SAVED: Mutex<Option<Saved>> = Mutex::new(None);
+
+/// `owner.__dict__[name]` (not inherited), or `missing`.
+fn own<'py>(swap: &Swap<'py>, missing: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let (owner, name, _) = swap;
+    let py = owner.py();
+    owner
+        .getattr(pyo3::intern!(py, "__dict__"))?
+        .call_method1(pyo3::intern!(py, "get"), (name, missing))
+}
+
+/// `owner.name = value`, or `del owner.name` when `value` is `missing`.
+fn put(swap: &Swap<'_>, missing: &Bound<'_, PyAny>) -> PyResult<()> {
+    let (owner, name, value) = swap;
+    if value.is(missing) {
+        owner.delattr(name)
+    } else {
+        owner.setattr(name, value)
     }
+}
+
+/// Undo `saved` (newest first), all of it even if a step fails; the first error.
+fn restore(saved: &[Swap<'_>], missing: &Bound<'_, PyAny>) -> Option<PyErr> {
+    let mut first_error = None;
+    for swap in saved.iter().rev() {
+        if let Err(e) = put(swap, missing) {
+            first_error.get_or_insert(e);
+        }
+    }
+    first_error
+}
+
+/// `_sm_patch(swaps, missing)`: `pyroid.patch("difflib")`. Sets every `(owner, name, value)`
+/// of `swaps` (`missing` stands for "no entry in `owner.__dict__`" in what it keeps), then
+/// switches pyroid's native path on. If a step fails, the ones made are undone and the error
+/// is raised. False if an earlier call's attributes are still in place (nothing is changed).
+///
+/// No Python code runs between the steps, so a signal (Ctrl-C) cannot stop it half-way, and
+/// with the GIL no other thread sees the classes half-patched. Switching on comes last: until
+/// then, pyroid's methods run difflib's own code. What it replaced is kept here, so that
+/// [`_sm_unpatch`] can put it back even if a Ctrl-C lands just after this call returns.
+#[pyfunction]
+pub fn _sm_patch(
+    py: Python<'_>,
+    swaps: &Bound<'_, PyTuple>,
+    missing: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
+    if lock(py, &SAVED).is_some() {
+        return Ok(false);
+    }
+    let todo: Vec<Swap<'_>> = swaps
+        .iter()
+        .map(|item| item.extract())
+        .collect::<PyResult<_>>()?;
+    let mut saved = Vec::with_capacity(todo.len());
+    for swap in todo {
+        let step = own(&swap, missing).and_then(|old| {
+            put(&swap, missing)?;
+            Ok(old)
+        });
+        match step {
+            Ok(old) => saved.push((swap.0, swap.1, old)),
+            Err(e) => {
+                let _ = restore(&saved, missing);
+                return Err(e);
+            }
+        }
+    }
+    let swaps = saved
+        .into_iter()
+        .map(|(owner, name, old)| (owner.unbind(), name.unbind(), old.unbind()))
+        .collect();
+    *lock(py, &SAVED) = Some(Saved {
+        swaps,
+        missing: missing.clone().unbind(),
+    });
+    GENERATION.fetch_add(1, SeqCst);
+    ACTIVE.store(true, SeqCst);
+    Ok(true)
+}
+
+/// `_sm_unpatch()`: `pyroid.unpatch("difflib")`. Switches pyroid's native path off, gives
+/// every recorded matcher CPython's state ([`settle`]), then puts back everything
+/// [`_sm_patch`] replaced: all of it (with no Python code running between those steps), also
+/// when settling a matcher failed (that error is raised afterwards). Returns how many
+/// matchers it settled; does nothing (0) if the patch is not in place.
+#[pyfunction]
+pub fn _sm_unpatch(py: Python<'_>) -> PyResult<usize> {
+    let Some(saved) = lock(py, &SAVED).take() else {
+        return Ok(0);
+    };
+    let settled = switch_off(py);
+    let missing = saved.missing.bind(py);
+    let swaps: Vec<Swap<'_>> = saved
+        .swaps
+        .iter()
+        .map(|(owner, name, old)| {
+            (
+                owner.bind(py).clone(),
+                name.bind(py).clone(),
+                old.bind(py).clone(),
+            )
+        })
+        .collect();
+    match (settled, restore(&swaps, missing)) {
+        (Err(e), _) | (Ok(_), Some(e)) => Err(e),
+        (Ok(n), None) => Ok(n),
+    }
+}
+
+/// Make every later call run CPython's methods, then settle every recorded matcher that no
+/// call is changing. How many it settled, or the first error (the others are still settled).
+fn switch_off(py: Python<'_>) -> PyResult<usize> {
     ACTIVE.store(false, SeqCst);
     GENERATION.fetch_add(1, SeqCst);
     let cells: Vec<Shared> = lock(py, &CELLS).clone();

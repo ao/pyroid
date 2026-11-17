@@ -25,6 +25,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(settle::_sm_own, &m)?)?;
     m.add_function(wrap_pyfunction!(settle::_sm_forked, &m)?)?;
     m.add_function(wrap_pyfunction!(settle::_sm_patch, &m)?)?;
+    m.add_function(wrap_pyfunction!(settle::_sm_unpatch, &m)?)?;
     m.add_function(wrap_pyfunction!(sm::_sm_ratio, &m)?)?;
     m.add_function(wrap_pyfunction!(sm::_sm_matching_blocks, &m)?)?;
     m.add_function(wrap_pyfunction!(sm::_sm_cached_blocks, &m)?)?;

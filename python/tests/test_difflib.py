@@ -29,6 +29,7 @@ import pyroid
 import pyroid.difflib as pd
 from pyroid import integrations
 from pyroid._pyroid import _testing
+from pyroid._pyroid import difflib as native
 
 WORDS = ["apple", "ape", "peach", "puppy", "applet", "maple", "Apple", "appel", "", "ÄPfel"]
 
@@ -860,6 +861,187 @@ def test_toggling_the_patch_while_threads_diff() -> None:
     assert out["restored"], json.dumps(out)
     if out["rss_base"] is not None:
         assert out["rss_peak"] - out["rss_base"] < 400, json.dumps(out)
+
+
+@pytestmark_patch
+def test_unpatch_puts_difflib_back_when_a_matcher_cannot_be_settled() -> None:
+    # unpatch gives the matchers made under the patch difflib's own state before it puts
+    # difflib's methods back. If one cannot be settled (here a subclass's `b` raises), the
+    # others still are, every attribute still goes back, and then the error is raised.
+    class Flaky(difflib.SequenceMatcher):  # type: ignore[type-arg]
+        broken = False
+
+        @property
+        def b(self) -> Any:
+            if Flaky.broken:
+                raise RuntimeError("b is broken")
+            return self.__dict__["_b"]
+
+        @b.setter
+        def b(self, value: Any) -> None:
+            self.__dict__["_b"] = value
+
+    names = ("SequenceMatcher", "Differ", "HtmlDiff")
+    before = {n: dict(vars(getattr(difflib, n))) for n in names}
+    functions = {n: getattr(difflib, n) for n in ("unified_diff", "context_diff", "_mdiff")}
+    ctx = _quiet_patch()
+    try:
+        integrations.patch("difflib")
+        flaky = Flaky(None, "abcd", "bcde")
+        plain = difflib.SequenceMatcher(None, "abcd", "bcde")
+        assert "_pyroid_b" in vars(flaky)
+        assert "_pyroid_b" in vars(plain)
+        Flaky.broken = True
+        with pytest.raises(RuntimeError, match="b is broken"):
+            integrations.unpatch("difflib")
+    finally:
+        Flaky.broken = False
+        integrations.unpatch()
+        ctx.__exit__(None, None, None)
+    assert {n: dict(vars(getattr(difflib, n))) for n in names} == before
+    assert {n: getattr(difflib, n) for n in functions} == functions
+    assert integrations.patched() == ()
+    assert vars(plain) == vars(difflib.SequenceMatcher(None, "abcd", "bcde"))
+    assert plain.ratio() == 0.75
+
+
+def test_a_failed_patch_step_undoes_the_others() -> None:
+    class Owner:
+        pass
+
+    missing = object()
+    swaps = ((Owner, "x", 1), (Owner, "y", 2), (int, "z", 3))  # int's attributes are read-only
+    with pytest.raises(TypeError, match="immutable type"):
+        native._sm_patch(swaps, missing)
+    assert not hasattr(Owner, "x")
+    assert not hasattr(Owner, "y")
+
+
+_CTRL_C = r"""
+import _thread, difflib, json, random, signal, sys, threading, time, warnings
+
+warnings.simplefilter("ignore")
+from pyroid import integrations
+from pyroid.integrations import _patch
+
+seconds = float(sys.argv[1])
+NAMES = ("get_close_matches", "unified_diff", "context_diff", "_mdiff")
+CLASSES = ("SequenceMatcher", "Differ", "HtmlDiff")
+
+
+def snapshot():
+    classes = {n: dict(vars(getattr(difflib, n))) for n in CLASSES}
+    return classes, {n: getattr(difflib, n) for n in NAMES}
+
+
+plain = snapshot()
+integrations.patch("difflib")
+patched = snapshot()
+integrations.unpatch("difflib")
+assert snapshot() == plain
+
+
+def put_back():
+    for n, d in plain[0].items():
+        cls = getattr(difflib, n)
+        for k in set(vars(cls)) - set(d):
+            delattr(cls, k)
+        for k, v in d.items():
+            if vars(cls).get(k, None) is not v:
+                setattr(cls, k, v)
+    for k, v in plain[1].items():
+        setattr(difflib, k, v)
+    _patch._ACTIVE.pop("difflib", None)
+
+
+class CtrlC(KeyboardInterrupt):
+    pass
+
+
+armed = False
+
+
+def on_sigint(signum, frame):
+    # Runs on the main thread, between two bytecodes: raises only while it toggles.
+    if armed:
+        raise CtrlC
+
+
+signal.signal(signal.SIGINT, on_sigint)
+stop = threading.Event()
+
+
+def interrupter():
+    rng = random.Random(1)
+    while not stop.is_set():
+        _thread.interrupt_main()
+        time.sleep(rng.uniform(0, 3e-4))
+
+
+counts = {"toggles": 0, "interrupted": 0, "half": 0, "untracked": 0, "unrepaired": 0}
+counts["first_half"] = None
+t = threading.Thread(target=interrupter, daemon=True)
+t.start()
+end = time.monotonic() + seconds
+while time.monotonic() < end:
+    try:
+        armed = True
+        integrations.patch("difflib")
+        integrations.unpatch("difflib")
+        armed = False
+    except CtrlC:
+        armed = False
+        counts["interrupted"] += 1
+    counts["toggles"] += 1
+    now = snapshot()
+    tracked = "difflib" in integrations.patched()
+    if now == patched and tracked:  # interrupted between patch() and unpatch()
+        integrations.unpatch("difflib")
+    elif now != plain or tracked:
+        if now in (patched, plain):
+            # Interrupted in patch()'s or unpatch()'s own bookkeeping, around difflib's steps:
+            # the next patch() takes over what is in place, and unpatch() puts difflib back.
+            counts["untracked"] += 1
+        else:
+            counts["half"] += 1
+            if counts["first_half"] is None:
+                counts["first_half"] = sorted(
+                    f"{n}.{k}" for n, d in now[0].items() for k in set(d) ^ set(plain[0][n])
+                )
+            put_back()
+        integrations.patch("difflib")
+        integrations.unpatch("difflib")
+        if snapshot() != plain:
+            counts["unrepaired"] += 1
+            put_back()
+stop.set()
+t.join()
+integrations.patch("difflib")
+integrations.unpatch("difflib")
+counts["restored"] = snapshot() == plain
+print(json.dumps(counts))
+"""
+
+
+@pytestmark_patch
+def test_ctrl_c_never_leaves_difflib_half_patched() -> None:
+    # Ctrl-C (an interrupt sent to the main thread every 0-0.3 ms) while the main thread
+    # patches and unpatches difflib: difflib's classes and functions are always either all
+    # pyroid's or all difflib's, never a mix. One cut off from patch()'s bookkeeping is
+    # taken over by the next patch(), and unpatch() then puts difflib back.
+    proc = subprocess.run(
+        [sys.executable, "-c", _CTRL_C, "3"],
+        capture_output=True,
+        text=True,
+        timeout=240,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr[-3000:]
+    out = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert out["half"] == 0, json.dumps(out)
+    assert out["unrepaired"] == 0, json.dumps(out)
+    assert out["interrupted"] > 10, json.dumps(out)
+    assert out["restored"], json.dumps(out)
 
 
 def _unittest_messages() -> list[str]:

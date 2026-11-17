@@ -784,37 +784,24 @@ def _distribution_version(name: str) -> Callable[[Any], str | None]:
 def _build_difflib(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     if not impl._KNOWN:  # pyroid.difflib is the standard library's here: nothing to patch
         return {}, []
-    saved: list[tuple[Any, str, Any]] = []
-
-    def swap(owner: Any, name: str, value: Any) -> None:
-        saved.append((owner, name, owner.__dict__.get(name, _MISSING)))
-        setattr(owner, name, value)
-
-    def undo() -> None:
-        # Matchers made or used under the patch get difflib's own state first, so they keep
-        # working with difflib's methods (one that another thread's set_seq* is changing at
-        # this moment gets it when that call ends).
-        impl._switch_off()
-        for owner, name, original in reversed(saved):
-            if original is _MISSING:
-                delattr(owner, name)
-            else:
-                setattr(owner, name, original)
-
+    swaps = [(real.SequenceMatcher, name, value) for name, value in impl._SM_METHODS.items()]
+    swaps += [
+        (real.Differ, "compare", impl._PATCH_COMPARE),
+        (real.HtmlDiff, "make_table", impl._PATCH_MAKE_TABLE),
+    ]
+    swaps += [(real, name, getattr(impl, name)) for name in impl._PATCH_FUNCTIONS]
+    # One native step sets all of them (or none, if one fails); only then (every method and
+    # lazy attribute in place) do pyroid's methods give difflib's matchers native state. The
+    # undo, also native, first gives matchers made or used under the patch difflib's own state,
+    # so they keep working with difflib's methods (one that another thread's set_seq* is
+    # changing at this moment gets it when that call ends), then puts every attribute back.
+    # Neither stops half-way on Ctrl-C; one that lands just after the patch is undone here.
     try:
-        for name, value in impl._SM_METHODS.items():
-            swap(real.SequenceMatcher, name, value)
-        swap(real.Differ, "compare", impl._PATCH_COMPARE)
-        swap(real.HtmlDiff, "make_table", impl._PATCH_MAKE_TABLE)
-        for name in impl._PATCH_FUNCTIONS:
-            swap(real, name, getattr(impl, name))
+        impl._switch_on(tuple(swaps), _MISSING)
     except BaseException:
-        undo()
+        impl._switch_off()
         raise
-    # Only now (every method and lazy attribute in place) do pyroid's methods give difflib's
-    # matchers native state; until then they run difflib's own code.
-    impl._switch_on()
-    return {}, [undo]
+    return {}, [impl._switch_off]
 
 
 _TARGETS: dict[str, _Target] = {

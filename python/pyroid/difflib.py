@@ -299,24 +299,26 @@ for _name, _f in _SM_METHODS.items():
         _f.__doc__ = getattr(_StdSequenceMatcher, _name).__doc__
 
 
-def _switch_on() -> None:
-    """For ``pyroid.patch("difflib")``, once pyroid's methods are on difflib's class."""
-    _native._sm_patch(True)
-
-
-def _switch_off() -> int:
-    """For ``pyroid.unpatch("difflib")``, before it takes pyroid's methods off difflib's class.
-
-    A matcher of difflib's class made or used under the patch keeps ``b2j``, ``bjunk``,
-    ``bpopular``, ``fullbcount`` and ``matching_blocks`` in pyroid's native state, which only
-    pyroid's descriptors on the class can read. Each one becomes CPython's state (plain instance
-    attributes, as pickling gives them), now or, if another thread's ``__init__``, ``set_seq1``
-    or ``set_seq2`` is changing it, when that call ends; and a call that starts from now on runs
-    CPython's method. Returns how many matchers were settled now. The matchers are recorded as
-    they get native state (see ``crates/pyroid-py/src/difflib/settle.rs``), so this does not
-    walk the heap or wait for other threads.
-    """
-    return _native._sm_patch(False)  # type: ignore[no-any-return]
+# For pyroid.patch("difflib") and pyroid.unpatch("difflib") (_build_difflib in
+# pyroid/integrations/_patch.py); both are native (crates/pyroid-py/src/difflib/settle.rs).
+#
+# _switch_on(swaps, missing) sets each (owner, name, value) of `swaps` (or none, if one cannot
+# be set), keeps what it replaced, and only then lets pyroid's methods give difflib's matchers
+# native state. False if its attributes are still in place from an earlier call.
+#
+# _switch_off() undoes it. A matcher of difflib's class made or used under the patch keeps
+# b2j, bjunk, bpopular, fullbcount and matching_blocks in pyroid's native state, which only
+# pyroid's descriptors on the class can read. Each one becomes CPython's state (plain instance
+# attributes, as pickling gives them), now or, if another thread's __init__, set_seq1 or
+# set_seq2 is changing it, when that call ends; and a call that starts from now on runs
+# CPython's method. Then every replaced attribute goes back, all of them even if a matcher
+# could not be settled (that error is raised afterwards). Returns how many matchers were
+# settled now (0, doing nothing, if the patch is not in place). The matchers are recorded as
+# they get native state, so this does not walk the heap or wait for other threads.
+#
+# No Python code runs between their steps, so Ctrl-C cannot stop either half-way.
+_switch_on: Callable[[tuple[tuple[Any, str, Any], ...], object], bool] = _native._sm_patch
+_switch_off: Callable[[], int] = _native._sm_unpatch
 
 
 class SequenceMatcher(_StdSequenceMatcher):
