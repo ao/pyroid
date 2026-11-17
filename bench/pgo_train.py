@@ -11,7 +11,7 @@ Run it once per interpreter the release wheels serve, with an instrumented build
 Each module runs on list[str] and Arrow input and single str calls, at every ``--threads`` value:
 ftfy (FineWeb text, plus mojibake made from it), translit, fastText LID (.bin and .ftz), the Gopher, C4 and
 FineWeb filters and the formatters, MinHash and exact and sentence dedup, pyroid.text, pyroid.jieba,
-pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.metrics
+pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.langdetect, pyroid.metrics
 (ROUGE, BLEU, chrF), pyroid.datasketch, and the FineWeb-2 filter and MinHash configs of every language
 pyroid tokenizes natively here (Japanese only with SudachiDict installed).
 
@@ -298,10 +298,26 @@ class Trainer:
             lsh.query(lean)
             m.jaccard(ms[0])
 
+    def langdetect(self) -> None:
+        import pyroid.langdetect as LD
+
+        texts = [t for docs in self.langs.values() for t in docs[:200]] + self.texts[: self.per_doc]
+        short = [t[:60] for t in texts]
+        for seed in (0, None):
+            LD.DetectorFactory.seed = seed
+            for t in self.threads:
+                LD.detect_batch(texts, errors="none", threads=t)
+                LD.detect_langs_batch(short, errors="none", threads=t)
+        LD.DetectorFactory.seed = 0
+        for s in texts[: self.per_doc] + short[: self.per_doc]:
+            with contextlib.suppress(LD.LangDetectException):
+                LD.detect(s)
+                LD.detect_langs(s)
+
     def run(self) -> dict[str, float]:
         warnings.simplefilter("ignore")  # FallbackWarning and friends: the paths still run
         sections = ["ftfy", "translit", "fasttext", "filters", "dedup", "text", "multilingual", "jieba"]
-        sections += ["json_repair", "metrics", "datasketch"]
+        sections += ["json_repair", "metrics", "datasketch", "langdetect"]
         for name in sections:
             self.section(name, getattr(self, name))
         return self.timings
