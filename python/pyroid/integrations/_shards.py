@@ -694,7 +694,13 @@ def _held_signals(*, redeliver: bool) -> Iterator[list[int]]:
     old: dict[signal.Signals, Any] = {}
     try:
         for s in _SIGNALS:  # old[s] first: a signal raised in between leaves nothing replaced
-            old[s] = signal.getsignal(s)
+            h = signal.getsignal(s)
+            if h is signal.SIG_IGN:
+                # An ignored signal stays ignored: workers started during the block inherit that
+                # through exec, from their first instruction. A handler here would be reset to the
+                # default in them, and a group Ctrl-C during their imports would raise there.
+                continue
+            old[s] = h
             signal.signal(s, note)
         yield got
     finally:
