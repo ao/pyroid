@@ -360,3 +360,49 @@ def test_langdetect_pickles_load_under_the_shim(
     out = run_python(load, timeout=240)
     assert out.returncode == 0, out.stdout + out.stderr
     assert out.stdout.split() == ["True", "True"]
+
+
+def test_ctrl_c_during_install_or_undo_restores_the_code(run_python: Callable[..., Any]) -> None:
+    pytest.importorskip("langdetect")
+    code = """
+        import builtins, warnings
+        import langdetect, langdetect.detector as d, langdetect.detector_factory as f
+        import pyroid.langdetect._patch as lp
+        fns = [d.Detector.append, d.Detector._detect_block, f.detect, f.detect_langs]
+        codes = [fn.__code__ for fn in fns]
+        def pristine():
+            same = [fn.__code__ for fn in fns] == codes
+            return same and not any(lp._HOOK in m.__dict__ for m in (d, f))
+        fire = [0, None]
+        def step(*args):
+            fire[0] += 1
+            if fire[0] == fire[1]:
+                raise KeyboardInterrupt
+            builtins.setattr(*args)
+        lp.setattr = step
+        installs = undos = 0
+        for k in range(1, 20):
+            fire[:] = [0, k]
+            try:
+                undo = lp.install()
+            except KeyboardInterrupt:
+                installs += 1
+                assert pristine(), ("install", k)
+                continue
+            fire[:] = [0, None]
+            assert not pristine()
+            fire[:] = [0, k - 6 if k > 6 else None]
+            try:
+                undo()
+            except KeyboardInterrupt:
+                undos += 1
+                fire[:] = [0, None]
+                undo()  # an undo step runs again
+            assert pristine(), ("undo", k)
+        print(installs, undos)
+    """
+    out = run_python(code)
+    assert out.returncode == 0, out.stdout + out.stderr
+    installs, undos = map(int, out.stdout.split())
+    # 6 swaps in install (2 hook globals, 4 codes); 4 setattr calls in undo (the codes).
+    assert (installs, undos) == (6, 4), out.stdout

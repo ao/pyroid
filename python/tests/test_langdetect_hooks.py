@@ -9,6 +9,7 @@ error, pickles and copies, the patch's pickles and shims.
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import functools
 import importlib
@@ -52,16 +53,9 @@ def _call(fn: Callable[[], Any]) -> Any:
         return ("raised", type(exc).__name__, str(exc))
 
 
-def _same(case: Callable[..., Any]) -> Any:
-    """`case(module, Detector, NGram)` on both libraries; the results must be equal."""
-    got = {name: _call(functools.partial(case, *lib)) for name, lib in LIBS.items()}
-    assert got["pyroid"] == got["langdetect"]
-    return got["pyroid"]
-
-
-@pytest.fixture(autouse=True)
-def _restore() -> Iterator[None]:
-    """Put back every class attribute and seed a case changes."""
+@contextlib.contextmanager
+def _restored() -> Iterator[None]:
+    """Put back every class attribute and seed changed inside the block."""
     saved = [(cls, dict(vars(cls))) for _, d, n in LIBS.values() for cls in (d, n)]
     seeds = [(m.DetectorFactory, m.DetectorFactory.seed) for m, _, _ in LIBS.values()]
     try:
@@ -75,6 +69,20 @@ def _restore() -> Iterator[None]:
                     setattr(cls, name, value)
         for cls, seed in seeds:
             cls.seed = seed
+
+
+def _same(case: Callable[..., Any]) -> Any:
+    """`case(module, Detector, NGram)` on both libraries; the results must be equal.
+
+    Each run starts from the classes as they were (pytest-run-parallel's ``--iterations``
+    shares fixtures between runs, so the restore is here).
+    """
+    got = {}
+    for name, lib in LIBS.items():
+        with _restored():
+            got[name] = _call(functools.partial(case, *lib))
+    assert got["pyroid"] == got["langdetect"]
+    return got["pyroid"]
 
 
 def _factory(module: Any, seed: Any = 0) -> Any:
