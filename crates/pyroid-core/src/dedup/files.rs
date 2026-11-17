@@ -32,7 +32,7 @@ use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rustc_hash::FxHashMap;
 
@@ -255,10 +255,10 @@ fn unique_tag() -> String {
 /// included: it reports `AlreadyExists` when its `mkdir` fails because the
 /// directory exists and the directory is gone again by the time it checks.
 /// macOS can also give `InvalidInput` (EINVAL) for a `mkdir` under a
-/// directory being removed (GitHub's macos-15 runners). All three are
-/// retried.
+/// directory being removed (GitHub's macos-15 runners), and Windows
+/// `PermissionDenied` (see [`removing_parent`]). All are retried.
 fn make_temp_dir(parent: &Path, prefix: &str) -> Result<PathBuf> {
-    let mut tries = 0;
+    let mut tries: u64 = 0;
     loop {
         let dir = parent.join(format!("{prefix}-{}", unique_tag()));
         let made = fs::create_dir_all(parent)
@@ -266,20 +266,36 @@ fn make_temp_dir(parent: &Path, prefix: &str) -> Result<PathBuf> {
             .and_then(|()| fs::create_dir(&dir).map_err(|e| (dir.clone(), e)));
         match made {
             Ok(()) => return Ok(dir),
-            Err((_, e))
-                if tries < 64
-                    && matches!(
-                        e.kind(),
-                        io::ErrorKind::AlreadyExists
-                            | io::ErrorKind::NotFound
-                            | io::ErrorKind::InvalidInput
-                    ) =>
-            {
+            Err((_, e)) if tries < 64 && removing_parent(&e) => {
                 tries += 1;
+                if delete_pending(&e) {
+                    // Until the remover (or a virus scanner) closes it: about 3 s in all.
+                    std::thread::sleep(Duration::from_millis(5 * tries.min(10)));
+                }
             }
             Err((path, err)) => return Err(MinhashFileError::Io { path, err }),
         }
     }
+}
+
+/// An error of [`make_temp_dir`]'s `mkdir`s that another writer removing
+/// `parent` at the same time can cause.
+fn removing_parent(e: &io::Error) -> bool {
+    matches!(
+        e.kind(),
+        io::ErrorKind::AlreadyExists | io::ErrorKind::NotFound | io::ErrorKind::InvalidInput
+    ) || delete_pending(e)
+}
+
+/// On Windows a removed directory stays until its last handle is closed
+/// ("delete pending"), and a `mkdir` in it fails with `ERROR_ACCESS_DENIED`
+/// (`ERROR_DELETE_PENDING` for some calls): two `--workers` processes of
+/// `pyroid dedup` on windows-2025.
+fn delete_pending(e: &io::Error) -> bool {
+    const ERROR_DELETE_PENDING: i32 = 303;
+    cfg!(windows)
+        && (e.kind() == io::ErrorKind::PermissionDenied
+            || e.raw_os_error() == Some(ERROR_DELETE_PENDING))
 }
 
 /// Files removed when dropped, unless forgotten (temporary outputs, runs).
@@ -1673,6 +1689,18 @@ mod tests {
                 });
             }
         });
+    }
+
+    #[test]
+    fn a_mkdir_in_a_directory_that_windows_is_still_removing_is_retried() {
+        let denied = io::Error::from(io::ErrorKind::PermissionDenied);
+        assert_eq!(removing_parent(&denied), cfg!(windows));
+        assert_eq!(
+            removing_parent(&io::Error::from_raw_os_error(303)),
+            cfg!(windows)
+        );
+        assert!(removing_parent(&io::Error::from(io::ErrorKind::NotFound)));
+        assert!(!removing_parent(&io::Error::from(io::ErrorKind::Other)));
     }
 
     struct Rng(u64);

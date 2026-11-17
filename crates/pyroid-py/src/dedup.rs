@@ -1497,10 +1497,22 @@ mod files {
     fn io_error(py: Python<'_>, path: &Path, err: io::Error) -> PyErr {
         if let Some(code) = err.raw_os_error() {
             let built = (|| -> PyResult<PyErr> {
-                let strerror = py.import("os")?.call_method1("strerror", (code,))?;
-                let exc = py
-                    .get_type::<PyOSError>()
-                    .call1((code, strerror, path.as_os_str()))?;
+                let oserror = py.get_type::<PyOSError>();
+                let exc = if cfg!(windows) {
+                    // A Windows error (5 = ERROR_ACCESS_DENIED), not an errno ("[Errno 5]
+                    // Input/output error"): as OSError's winerror it gives the errno and
+                    // the subclass. io::Error's Display appends " (os error N)", and
+                    // CPython's own messages have no trailing period.
+                    let msg = err.to_string();
+                    let strerror = msg
+                        .strip_suffix(&format!(" (os error {code})"))
+                        .unwrap_or(&msg)
+                        .trim_end_matches(['.', ' ']);
+                    oserror.call1((code, strerror, path.as_os_str(), code))?
+                } else {
+                    let strerror = py.import("os")?.call_method1("strerror", (code,))?;
+                    oserror.call1((code, strerror, path.as_os_str()))?
+                };
                 Ok(PyErr::from_value(exc))
             })();
             if let Ok(e) = built {
