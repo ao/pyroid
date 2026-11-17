@@ -809,6 +809,50 @@ mod tests {
         }
     }
 
+    /// The line-comment shortcut against the regex loop: every string of up to 5 characters
+    /// over the characters that start, hint and end `--` and `# ` comments, alone and between
+    /// other tokens.
+    #[test]
+    fn line_comment_shortcut_agrees() {
+        let fast = cfg();
+        let slow = cfg().without_fast_paths();
+        let alphabet = ['-', '#', ' ', '+', '\r', '\n', 'a', '/', '*', '\''];
+        let mut checked = 0usize;
+        let mut idx: Vec<usize> = Vec::new();
+        loop {
+            let core: String = idx.iter().map(|&i| alphabet[i]).collect();
+            for s in [
+                core.clone(),
+                format!("select {core}"),
+                format!("{core}\nfrom t"),
+                format!("x -- {core}\r\ny"),
+            ] {
+                let a = lex(&s, &fast, &mut NoExternal).0;
+                let b = lex(&s, &slow, &mut NoExternal).0;
+                assert_eq!(a, b, "{s:?}");
+                checked += 1;
+            }
+            // next string in length-then-lexicographic order
+            let mut i = idx.len();
+            loop {
+                if i == 0 {
+                    if idx.len() == 5 {
+                        assert_eq!(checked, 4 * 111_111);
+                        return;
+                    }
+                    idx = vec![0; idx.len() + 1];
+                    break;
+                }
+                i -= 1;
+                idx[i] += 1;
+                if idx[i] < alphabet.len() {
+                    break;
+                }
+                idx[i] = 0;
+            }
+        }
+    }
+
     #[test]
     fn spans() {
         assert_eq!(toks("/* x */"), vec![(builtin::MULTILINE, "/* x */")]);
