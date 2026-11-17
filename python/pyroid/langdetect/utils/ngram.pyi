@@ -23,7 +23,7 @@ class NGram:
         """The last `n` characters (`n` = 1, 2 or 3), or ``None``."""
     @classmethod
     def normalize(cls, ch: Any) -> str:
-        """Langdetect's normalisation of one character."""
+        """One character as langdetect normalises it."""
     @classmethod
     def normalize_vi(cls, text: Any) -> str:
         """Fold a Vietnamese letter and a following combining mark into one character."""

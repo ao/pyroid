@@ -115,9 +115,10 @@ class _Patched:
     """The originals replaced by one install(), and the functions that replaced them."""
 
     def __init__(self) -> None:
-        import langdetect
-        import langdetect.detector as ld_detector
-        import langdetect.detector_factory as ld_factory
+        # By name: langdetect ships no types.
+        langdetect = importlib.import_module("langdetect")
+        ld_detector = importlib.import_module("langdetect.detector")
+        ld_factory = importlib.import_module("langdetect.detector_factory")
 
         self.langdetect = langdetect
         self.factory_module = ld_factory
@@ -210,7 +211,7 @@ def _one_call(text: Any, probs: bool) -> Any:
 
 
 def detect(text: Any) -> Any:
-    """Langdetect's ``detect``, in one native call when nothing is customised."""
+    """The patched ``langdetect.detect``: one native call when nothing is customised."""
     try:
         return _one_call(text, False)
     except _pd._Unsupported:
@@ -221,7 +222,7 @@ def detect(text: Any) -> Any:
 
 
 def detect_langs(text: Any) -> Any:
-    """Langdetect's ``detect_langs``, in one native call when nothing is customised."""
+    """The patched ``langdetect.detect_langs``: one native call when nothing is customised."""
     from pyroid.langdetect._compat import Language
 
     try:

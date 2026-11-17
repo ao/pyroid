@@ -9,6 +9,7 @@ for what pyroid raises and returns. Without it they are copies of langdetect 1.0
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import os
 import sys
@@ -20,7 +21,7 @@ LANGDETECT_VERSION = "1.0.9"
 
 
 def _installed_package_dir() -> str | None:
-    """Langdetect's package directory, if it is installed (nothing is imported)."""
+    """The installed langdetect's package directory (nothing is imported)."""
     current = sys.modules.get("langdetect")
     if current is not None and getattr(current, "__pyroid__", False):
         real = getattr(current, "__wrapped__", None)
@@ -34,27 +35,26 @@ def _installed_package_dir() -> str | None:
 
 
 def _import_real() -> Any:
-    """Langdetect's own classes, or None when langdetect is not installed or does not import."""
+    """The installed langdetect's classes (None: not installed, or it does not import)."""
     if _installed_package_dir() is None:
         return None
     current = sys.modules.get("langdetect")
     if current is not None and getattr(current, "__pyroid__", False):
         return None  # pyroid's shims (patch() without langdetect): use pyroid's copies
     try:
-        from langdetect import lang_detect_exception, language
+        # By name: langdetect ships no types, and pyroid's stubs never depend on it.
+        lang_detect_exception = importlib.import_module("langdetect.lang_detect_exception")
+        language = importlib.import_module("langdetect.language")
     except Exception:  # a broken install: pyroid works without it
         return None
     return lang_detect_exception.ErrorCode, lang_detect_exception.LangDetectException, language
 
 
-_real = _import_real()
-
-if _real is not None:
-    ErrorCode: Any = _real[0]
-    LangDetectException: Any = _real[1]
-    Language: Any = _real[2].Language
-else:
-    _error_codes = {
+# Copies of langdetect 1.0.9's classes, used when langdetect is not installed.
+_ErrorCode: Any = type(
+    "ErrorCode",
+    (),
+    {
         "NoTextError": 0,
         "FormatError": 1,
         "FileLoadError": 2,
@@ -64,44 +64,55 @@ else:
         "CantOpenTrainData": 6,
         "TrainDataFormatError": 7,
         "InitParamError": 8,
-    }
+        "__module__": "pyroid.langdetect.lang_detect_exception",
+    },
+)
 
-    ErrorCode = type("ErrorCode", (), _error_codes)
-    ErrorCode.__module__ = "pyroid.langdetect.lang_detect_exception"
 
-    class LangDetectException(Exception):  # type: ignore[no-redef]  # noqa: N818
-        """langdetect's exception; ``code`` is one of :data:`ErrorCode`'s values."""
+class _LangDetectException(Exception):  # noqa: N818 (langdetect's name)
+    """langdetect's exception; ``code`` is one of :data:`ErrorCode`'s values."""
 
-        def __init__(self, code: int, message: str) -> None:
-            super().__init__(message)
-            self.code = code
+    def __init__(self, code: int, message: str) -> None:
+        super().__init__(message)
+        self.code = code
 
-        def get_code(self) -> int:
-            """The error code."""
-            return self.code
+    def get_code(self) -> int:
+        """The error code."""
+        return self.code
 
-    LangDetectException.__module__ = "pyroid.langdetect.lang_detect_exception"
 
-    class Language:  # type: ignore[no-redef]
-        """A detected language: ``lang`` and ``prob``, ordered by ``prob``."""
+class _Language:
+    """A detected language: ``lang`` and ``prob``, ordered by ``prob``."""
 
-        def __init__(self, lang: Any, prob: Any) -> None:
-            self.lang = lang
-            self.prob = prob
+    def __init__(self, lang: Any, prob: Any) -> None:
+        self.lang = lang
+        self.prob = prob
 
-        def __repr__(self) -> str:
-            if self.lang is None:
-                return ""
-            return "%s:%s" % (self.lang, self.prob)  # noqa: UP031 (langdetect's formatting)
+    def __repr__(self) -> str:
+        if self.lang is None:
+            return ""
+        return "%s:%s" % (self.lang, self.prob)  # noqa: UP031 (langdetect's formatting)
 
-        def __lt__(self, other: Any) -> Any:
-            return self.prob < other.prob
+    def __lt__(self, other: Any) -> Any:
+        return self.prob < other.prob
 
-    Language.__module__ = "pyroid.langdetect.language"
+
+for _cls, _name, _module in (
+    (_LangDetectException, "LangDetectException", "pyroid.langdetect.lang_detect_exception"),
+    (_Language, "Language", "pyroid.langdetect.language"),
+):
+    _cls.__name__ = _cls.__qualname__ = _name
+    _cls.__module__ = _module
+del _cls, _name, _module
+
+_real = _import_real()
+ErrorCode: Any = _real[0] if _real is not None else _ErrorCode
+LangDetectException: Any = _real[1] if _real is not None else _LangDetectException
+Language: Any = _real[2].Language if _real is not None else _Language
 
 
 def _profiles_dir() -> str | None:
-    """Langdetect's own profile directory, if langdetect is installed."""
+    """The profile directory of the installed langdetect, if any."""
     pkg = _installed_package_dir()
     return os.path.join(pkg, "profiles") if pkg is not None else None
 
