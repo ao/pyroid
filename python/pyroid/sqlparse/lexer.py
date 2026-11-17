@@ -70,9 +70,7 @@ def _tokens(lex: Any, sql: Any, encoding: str | None) -> Iterator[tuple[Any, str
 
 
 def tokenize(sql: Any, encoding: str | None = None) -> Iterator[tuple[Any, str]]:
-    """Tokenize *sql* using the :class:`Lexer` and return a 2-tuple stream
-    of ``(token type, value)`` items.
-    """
+    """Tokenize `sql` with the default `Lexer`: ``(token type, value)`` pairs."""
     lex = Lexer.get_default_instance()
     if not plain(lex):
         return lex.get_tokens(sql, encoding)  # type: ignore[no-any-return]

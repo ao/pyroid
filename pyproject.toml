@@ -202,6 +202,18 @@ testpaths = ["python/tests"]
 target-version = "py311"
 line-length = 100
 src = ["python"]
+# sqlparse 0.6.1's own modules, vendored unchanged but for their imports (BSD-3-Clause; see
+# python/pyroid/sqlparse/__init__.py). force-exclude: prek passes file names explicitly.
+extend-exclude = [
+  "python/pyroid/sqlparse/engine/*.py",
+  "python/pyroid/sqlparse/filters/*.py",
+  "python/pyroid/sqlparse/_own_*.py",
+  "python/pyroid/sqlparse/formatter.py",
+  "python/pyroid/sqlparse/utils.py",
+  "python/pyroid/sqlparse/cli.py",
+  "python/pyroid/sqlparse/__main__.py",
+]
+force-exclude = true
 
 [tool.ruff.lint]
 # An explicit list (not ruff's default set) so a ruff upgrade never adds rules silently.
@@ -249,6 +261,35 @@ files = ["python/pyroid", "python/tests"]
 # mypy hook installs neither it nor pandas (pandas-stubs is not a dependency).
 module = ["nemo_curator", "nemo_curator.*", "pandas", "pandas.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# sqlparse 0.6.1 (the reference for pyroid.sqlparse's tests) is not in the mypy hook.
+module = ["sqlparse", "sqlparse.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# pyroid.sqlparse's modules vendored from sqlparse 0.6.1 (untyped, kept as upstream wrote them),
+# and the code that calls into them.
+module = [
+  "pyroid.sqlparse.engine",
+  "pyroid.sqlparse.engine.*",
+  "pyroid.sqlparse.filters",
+  "pyroid.sqlparse.filters.*",
+  "pyroid.sqlparse._own_tokens",
+  "pyroid.sqlparse._own_sql",
+  "pyroid.sqlparse._own_keywords",
+  "pyroid.sqlparse._own_lexer",
+  "pyroid.sqlparse._own_exceptions",
+  "pyroid.sqlparse.formatter",
+  "pyroid.sqlparse.utils",
+  "pyroid.sqlparse.cli",
+  "pyroid.sqlparse.__main__",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["pyroid.sqlparse._patched", "test_sqlparse", "test_sqlparse_parity", "test_sqlparse_patch"]
+disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]
 # pyarrow 26 ships neither py.typed nor stubs.

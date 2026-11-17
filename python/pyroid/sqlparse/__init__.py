@@ -22,10 +22,19 @@ from __future__ import annotations
 from collections.abc import Generator
 from typing import Any
 
-from pyroid.sqlparse import _backend, exceptions, keywords, sql, tokens
-from pyroid.sqlparse import lexer
-from pyroid.sqlparse import engine, filters, formatter, utils
-from pyroid.sqlparse import cli
+from pyroid.sqlparse import (
+    _backend,
+    cli,
+    engine,
+    exceptions,
+    filters,
+    formatter,
+    keywords,
+    lexer,
+    sql,
+    tokens,
+    utils,
+)
 from pyroid.sqlparse._core import native as _native
 from pyroid.sqlparse._core import warn_fallback as _warn_fallback
 
@@ -207,7 +216,7 @@ def parsestream(stream: Any, encoding: str | None = None) -> Generator[Any, None
     return _parsestream(stream, encoding, None)
 
 
-def format(sql: Any, encoding: str | None = None, **options: Any) -> str:  # noqa: A001
+def format(sql: Any, encoding: str | None = None, **options: Any) -> str:
     """Format *sql* according to *options*.
 
     Args:
@@ -254,12 +263,12 @@ def format_batch(sqls: Any, *, threads: int | None = None, **options: Any) -> An
     options = formatter.validate_options(options)
     lex = lexer.Lexer.get_default_instance()
     if lexer.plain(lex):
-        r = _native._format_batch(
-            sqls, lex, *_limit_values(None), _format_args(options), threads
-        )
+        r = _native._format_batch(sqls, lex, *_limit_values(None), _format_args(options), threads)
         if r is not NotImplemented:
             return r
-    items = [None if x is None else _format(x, None, dict(options), None) for x in _batch_items(sqls)]
+    items = [
+        None if x is None else _format(x, None, dict(options), None) for x in _batch_items(sqls)
+    ]
     if isinstance(sqls, str):
         return items[0]
     return tuple(items) if isinstance(sqls, tuple) else items

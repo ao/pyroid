@@ -83,11 +83,11 @@ SHARE_LEXER = REAL is not None and REAL_VERSION == SQLPARSE_VERSION
 
 def _stacklevel() -> int:
     """The ``stacklevel`` of the first frame outside pyroid and importlib."""
-    frame = sys._getframe(1)
+    frame: types.FrameType | None = sys._getframe(1)
     level = 1
     while frame is not None:
         name = frame.f_code.co_filename
-        if not (name.startswith(_PYROID_DIR) or name.startswith("<frozen importlib")):
+        if not name.startswith((_PYROID_DIR, "<frozen importlib")):
             return level
         frame = frame.f_back
         level += 1

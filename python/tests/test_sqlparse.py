@@ -21,8 +21,9 @@ from typing import Any
 import pytest
 
 import pyroid
-import pyroid.sqlparse as P
-from pyroid.sqlparse import engine, lexer, sql, tokens as T
+import pyroid.sqlparse as P  # noqa: N812
+from pyroid.sqlparse import engine, lexer
+from pyroid.sqlparse import tokens as T  # noqa: N812
 
 S: Any = pytest.importorskip("sqlparse")
 SAME = getattr(S, "__version__", None) == "0.6.1"
@@ -142,7 +143,7 @@ def test_own_classes_without_sqlparse() -> None:
         """
         import pickle, sys
         sys.modules["sqlparse"] = None
-        import pyroid.sqlparse as P
+        import pyroid.sqlparse as P  # noqa: N812
         assert P._backend.REAL is None
         (s,) = P.parse("select a, b from t where x = 1")
         assert type(s).__module__ == "pyroid.sqlparse.sql", type(s).__module__
@@ -162,7 +163,7 @@ def test_own_classes_without_sqlparse() -> None:
 
 
 def test_parsestream_is_lazy() -> None:
-    gen = P.parsestream(123)
+    gen = P.parsestream(123)  # type: ignore[arg-type]
     assert type(gen).__name__ == "generator"
     with pytest.raises(TypeError, match=r"Expected text or file-like object, got <class 'int'>"):
         next(gen)
@@ -199,7 +200,9 @@ def test_lone_surrogates() -> None:
 
 def test_depth_limit_message() -> None:
     q = "select " + "(" * 150 + "1" + ")" * 150
-    with pytest.raises(P.exceptions.SQLParseError, match=r"^Maximum grouping depth exceeded \(100\)\.$"):
+    with pytest.raises(
+        P.exceptions.SQLParseError, match=r"^Maximum grouping depth exceeded \(100\)\.$"
+    ):
         P.parse(q)
     with pytest.raises(P.exceptions.SQLParseError, match="depth"):
         P.format(q, reindent=True)
@@ -208,13 +211,15 @@ def test_depth_limit_message() -> None:
 
 def test_token_limit_message() -> None:
     q = "select " + ", ".join(["1"] * 6000)
-    with pytest.raises(P.exceptions.SQLParseError, match=r"^Maximum number of tokens exceeded \(10000\)\.$"):
+    with pytest.raises(
+        P.exceptions.SQLParseError, match=r"^Maximum number of tokens exceeded \(10000\)\.$"
+    ):
         P.parse(q)
 
 
 @pytest.mark.thread_unsafe
 def test_limits_follow_the_module_globals() -> None:
-    g = engine.grouping
+    g: Any = engine.grouping
     saved = g.MAX_GROUPING_DEPTH, g.MAX_GROUPING_TOKENS
     try:
         g.MAX_GROUPING_DEPTH = 5
@@ -225,7 +230,7 @@ def test_limits_follow_the_module_globals() -> None:
         (s,) = P.parse("select " + "(" * 400 + "1" + ")" * 400)
         assert str(s).count("(") == 400
         # far past CPython's recursion limit: sqlparse's own error
-        with pytest.raises(P.exceptions.SQLParseError, match="^Maximum recursion depth exceeded$"):
+        with pytest.raises(P.exceptions.SQLParseError, match=r"^Maximum recursion depth exceeded$"):
             P.parse("select " + "(" * 5000 + "1" + ")" * 5000)
     finally:
         g.MAX_GROUPING_DEPTH, g.MAX_GROUPING_TOKENS = saved
@@ -234,7 +239,8 @@ def test_limits_follow_the_module_globals() -> None:
 @needs_061
 @pytest.mark.thread_unsafe
 def test_limits_disabled_like_sqlparse() -> None:
-    saved = [(m, m.MAX_GROUPING_DEPTH, m.MAX_GROUPING_TOKENS) for m in (engine.grouping, S.engine.grouping)]
+    mods: list[Any] = [engine.grouping, S.engine.grouping]
+    saved = [(m, m.MAX_GROUPING_DEPTH, m.MAX_GROUPING_TOKENS) for m in mods]
     try:
         for m, _, _ in saved:
             m.MAX_GROUPING_DEPTH = m.MAX_GROUPING_TOKENS = None
@@ -252,7 +258,7 @@ def test_limits_disabled_like_sqlparse() -> None:
     reason="small thread stacks crash CPython itself on musl",
 )
 def test_deep_input_in_a_small_thread() -> None:
-    g = engine.grouping
+    g: Any = engine.grouping
     saved = g.MAX_GROUPING_DEPTH, g.MAX_GROUPING_TOKENS
     out: list[Any] = []
 
@@ -320,13 +326,15 @@ def test_lexer_customisation_is_followed() -> None:
         for d in (P.keywords.KEYWORDS_COMMON, P.keywords.KEYWORDS):
             lex.add_keywords(d)
         lex.add_keywords({"BAR": T.Keyword})
-        toks = [(t.ttype, t.value) for t in P.parse("select * from foo zorder by bar")[0].flatten()]
+        toks: list[Any] = [
+            (t.ttype, t.value) for t in P.parse("select * from foo zorder by bar")[0].flatten()
+        ]
         assert (T.Keyword, "zorder by") in toks
         assert (T.Keyword, "bar") in toks
     finally:
         lex.default_initialization()
-    toks = [t.value for t in P.parse("select * from foo zorder by bar")[0].flatten()]
-    assert "zorder by" not in toks
+    values = [t.value for t in P.parse("select * from foo zorder by bar")[0].flatten()]
+    assert "zorder by" not in values
 
 
 @pytest.mark.thread_unsafe
@@ -344,7 +352,7 @@ def test_lexer_patterns_pyroid_does_not_compile_run_in_re() -> None:
 
 @pytest.mark.thread_unsafe
 def test_an_overridden_lexer_runs_python() -> None:
-    class Loud(lexer.Lexer):  # type: ignore[misc]
+    class Loud(lexer.Lexer):
         def get_tokens(self, text: Any, encoding: Any = None) -> Any:
             for ttype, value in super().get_tokens(text, encoding):
                 yield ttype, value.upper() if ttype in T.Keyword else value
@@ -409,7 +417,9 @@ def test_batches_equal_the_loop() -> None:
             assert P.format_batch(docs, threads=threads, **opts) == want
             assert P.format_batch(tuple(docs), threads=threads, **opts) == tuple(want)
     assert P.split_batch(docs) == [P.split(d) for d in docs]
-    assert P.split_batch(docs, strip_semicolon=True) == [P.split(d, strip_semicolon=True) for d in docs]
+    assert P.split_batch(docs, strip_semicolon=True) == [
+        P.split(d, strip_semicolon=True) for d in docs
+    ]
 
 
 def test_batches_on_arrow_without_pyarrow() -> None:
@@ -417,7 +427,11 @@ def test_batches_on_arrow_without_pyarrow() -> None:
 
     col = _testing.column([QUERIES[0], None, QUERIES[2]], chunks=2)
     out = P.format_batch(col, reindent=True)
-    assert out.to_pylist() == [P.format(QUERIES[0], reindent=True), None, P.format(QUERIES[2], reindent=True)]
+    assert out.to_pylist() == [
+        P.format(QUERIES[0], reindent=True),
+        None,
+        P.format(QUERIES[2], reindent=True),
+    ]
     assert P.split_batch(col) == [P.split(QUERIES[0]), None, P.split(QUERIES[2])]
 
 
@@ -426,7 +440,7 @@ def test_batch_raises_what_the_loop_raises() -> None:
     with pytest.raises(P.exceptions.SQLParseError, match="depth"):
         P.format_batch(["select 1", deep, "select 2"], reindent=True)
     with pytest.raises(TypeError):
-        P.format_batch(["select 1", 2])
+        P.format_batch(["select 1", 2])  # type: ignore[list-item]
 
 
 @pytest.mark.timeout(120)
@@ -454,7 +468,7 @@ def test_threads_while_the_lexer_changes() -> None:
             try:
                 P.format(QUERIES[1], reindent=True)
                 P.parse(QUERIES[1])
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 bad.append(e)
                 return
 
@@ -478,7 +492,7 @@ def test_threads_while_the_lexer_changes() -> None:
 def test_ctrl_c_stops_a_long_format() -> None:
     code = """
         import signal, sys, threading, time, os
-        import pyroid.sqlparse as P
+        import pyroid.sqlparse as P  # noqa: N812
         q = "select a, b, c from t where x = 1 and y in (1, 2, 3);\\n" * 200_000
         threading.Timer(0.5, lambda: os.kill(os.getpid(), signal.SIGINT)).start()
         t = time.monotonic()
@@ -502,14 +516,16 @@ def test_version_warning_for_another_release(tmp_path: Any) -> None:
     dst = tmp_path / "sqlparse"
     shutil.copytree(src, dst)
     init = dst / "__init__.py"
-    init.write_text(init.read_text().replace(f'__version__ = "{S.__version__}"', '__version__ = "0.5.3"'))
+    init.write_text(
+        init.read_text().replace(f'__version__ = "{S.__version__}"', '__version__ = "0.5.3"')
+    )
     r = run_py(
         """
         import sys, warnings
         sys.path.insert(0, sys.argv[1])
         warnings.simplefilter("always")
         with warnings.catch_warnings(record=True) as w:
-            import pyroid.sqlparse as P
+            import pyroid.sqlparse as P  # noqa: N812
         import sqlparse
         assert P.sql.Identifier is sqlparse.sql.Identifier
         print("|".join(f"{x.category.__name__}: {x.message}" for x in w))
@@ -517,4 +533,6 @@ def test_version_warning_for_another_release(tmp_path: Any) -> None:
         str(tmp_path),
     )
     assert r.returncode == 0, r.stderr
-    assert "RuntimeWarning: pyroid.sqlparse reproduces sqlparse 0.6.1, but sqlparse 0.5.3" in r.stdout
+    assert (
+        "RuntimeWarning: pyroid.sqlparse reproduces sqlparse 0.6.1, but sqlparse 0.5.3" in r.stdout
+    )

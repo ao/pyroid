@@ -796,7 +796,10 @@ def _build_sqlparse(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     from pyroid.sqlparse import _patched
 
     if real is None:
-        mods = {f"sqlparse{s}": importlib.import_module(f"pyroid.sqlparse{s}") for s in _SQLPARSE_MODULES}
+        mods = {
+            f"sqlparse{s}": importlib.import_module(f"pyroid.sqlparse{s}")
+            for s in _SQLPARSE_MODULES
+        }
         return mods, []
     saved: list[tuple[types.ModuleType, str, Any]] = []
     for mod, names in _SQLPARSE_SWAPS.items():
@@ -907,8 +910,7 @@ _TARGETS: dict[str, _Target] = {
     ),
     "sqlparse": _Target(
         "pyroid.sqlparse",
-        "which reproduces sqlparse 0.6.1's parse, parsestream, format, split and "
-        "lexer.tokenize",
+        "which reproduces sqlparse 0.6.1's parse, parsestream, format, split and lexer.tokenize",
         "SQLPARSE_VERSION",
         "pip install sqlparse==0.6.1",
         " (the token classes, FilterStack and the filters, the command line)",

@@ -6,11 +6,12 @@ code using sqlparse sets them). Module-level functions, so they pickle by refere
 
 from __future__ import annotations
 
+import importlib
 import sys
-from collections.abc import Generator
 from typing import Any
 
-import pyroid.sqlparse as _p
+# the implementation module (its private helpers are not in the stub)
+_p: Any = importlib.import_module("pyroid.sqlparse")
 
 __all__ = ["format", "group", "parse", "parsestream", "split", "tokenize"]
 
@@ -19,23 +20,23 @@ def _limits() -> Any:
     return sys.modules.get("sqlparse.engine.grouping")
 
 
-def parse(sql: Any, encoding: str | None = None) -> tuple[Any, ...]:
+def parse(sql: Any, encoding: str | None = None) -> Any:
     """``sqlparse.parse``, run by pyroid."""
     return tuple(_p._parsestream(sql, encoding, _limits()))
 
 
-def parsestream(stream: Any, encoding: str | None = None) -> Generator[Any, None, None]:
+def parsestream(stream: Any, encoding: str | None = None) -> Any:
     """``sqlparse.parsestream``, run by pyroid."""
     return _p._parsestream(stream, encoding, _limits())
 
 
-def format(sql: Any, encoding: str | None = None, **options: Any) -> str:  # noqa: A001
+def format(sql: Any, encoding: str | None = None, **options: Any) -> Any:
     """``sqlparse.format``, run by pyroid."""
     options = _p.formatter.validate_options(options)
     return _p._format(sql, encoding, options, _limits())
 
 
-def split(sql: Any, encoding: str | None = None, strip_semicolon: bool = False) -> list[str]:
+def split(sql: Any, encoding: str | None = None, strip_semicolon: bool = False) -> Any:
     """``sqlparse.split``, run by pyroid."""
     return _p._split(sql, encoding, strip_semicolon)
 
