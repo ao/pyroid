@@ -180,8 +180,8 @@ wheel; texts from FineWeb and FineWeb-2 in all profile languages, round robin;
 | pyroid `detect_batch(texts, threads=1)` | 37 (46×) | 55 (60×) | 279 (68×) |
 | pyroid `detect_batch(texts, threads=8)` | 5.6 (300×) | 7.8 (420×) | 38 (496×) |
 
-Short texts cost the most per character: langdetect's trials converge slowly on them, so most of
-the 7,000 sampling steps run. langdetect's own `detect` under `pyroid.patch("langdetect")` takes
+Short texts cost the most per character: langdetect's trials converge slowly on them (about 750
+sampling steps per short English text, against 300 for 1,500 characters). langdetect's own `detect` under `pyroid.patch("langdetect")` takes
 57 µs on the 1,500-character texts (57×). A fresh interpreter reaches its first detection in
 120 ms with pyroid (import and profile loading) and 231 ms with langdetect.
 
