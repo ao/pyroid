@@ -2246,7 +2246,7 @@ def _cmd_stats(a: argparse.Namespace) -> int:
     if a.json:
         _io.atomic_write_text(a.json, json.dumps(d, indent=1) + "\n")
     else:
-        sys.stdout.write(json.dumps(d, indent=1) + "\n")
+        _stdout(json.dumps(d, indent=1) + "\n")
     return 0
 
 
@@ -2643,7 +2643,7 @@ def main(argv: list[str] | None = None) -> int:
     ok = False
     try:
         code = int(a.body(a))
-        sys.stdout.flush()  # here, not at exit, so a closed pipe (| head -1) is handled below
+        _stdout("")  # here, not at exit, so a closed pipe (| head -1) is handled below
         ok = True
         return code
     except _shards.Terminated:
@@ -2710,6 +2710,19 @@ def _on_sigterm() -> Any:
         raise _shards.Terminated
 
     return signal.signal(signal.SIGTERM, handler)
+
+
+def _stdout(text: str) -> None:
+    """Write ``text`` to stdout and flush; a closed pipe raises BrokenPipeError on Windows too."""
+    from pyroid.integrations import _shards
+
+    try:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+    except OSError as e:
+        if isinstance(e, BrokenPipeError) or not _shards.closed_pipe(e):
+            raise
+        raise BrokenPipeError(e.errno, e.strerror) from e
 
 
 # What installs a module the commands import only when they need it (top-level name: pip args).

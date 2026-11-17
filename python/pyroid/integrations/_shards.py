@@ -16,6 +16,7 @@ and a rerun redoes only unfinished units.
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import json
 import multiprocessing
@@ -290,6 +291,18 @@ def print_summary(d: Mapping[str, Any]) -> None:
 
 
 _muted = False  # stderr was a closed pipe: messages are dropped
+_WINDOWS = sys.platform == "win32"
+
+
+def closed_pipe(e: BaseException) -> bool:
+    """True for the error of a write to a pipe that nobody reads any more.
+
+    POSIX raises BrokenPipeError. On Windows the C runtime reports the same write as EINVAL
+    (from ERROR_NO_DATA), and Python raises a plain OSError.
+    """
+    if isinstance(e, BrokenPipeError):
+        return True
+    return _WINDOWS and isinstance(e, OSError) and e.errno == errno.EINVAL
 
 
 def say(text: str) -> None:
@@ -304,7 +317,9 @@ def say(text: str) -> None:
     try:
         sys.stderr.write(text)
         sys.stderr.flush()
-    except (BrokenPipeError, ValueError):  # ValueError: stderr was closed
+    except (OSError, ValueError) as e:  # ValueError: stderr was closed
+        if isinstance(e, OSError) and not closed_pipe(e):
+            raise
         _muted = True
         mute(sys.stderr)
 

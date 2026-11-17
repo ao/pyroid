@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import gzip
 import importlib.util
 import json
@@ -386,6 +387,45 @@ def test_stats_into_a_closed_pipe(tmp_path: Path) -> None:
         os.close(w)
     assert stats.returncode == 1
     assert stats.stderr == ""
+
+
+class _ClosedPipe:
+    """A stream whose writes fail as a write to a pipe nobody reads does on Windows."""
+
+    def write(self, text: str) -> int:
+        raise OSError(errno.EINVAL, "Invalid argument")
+
+    def flush(self) -> None:
+        pass
+
+    def fileno(self) -> int:
+        raise OSError("no descriptor")  # mute() gives up quietly
+
+
+@pytest.mark.thread_unsafe(reason="replaces sys.stderr and sys.stdout")
+def test_a_closed_pipe_on_windows_is_einval_not_epipe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows' C runtime reports a write to a closed pipe as EINVAL; the run exited 120 there."""
+    from pyroid.integrations import _shards
+
+    src = _write(_table(["a", "b"]), tmp_path / "in.parquet")
+    with monkeypatch.context() as m:
+        m.setattr(_shards, "_muted", False)
+        m.setattr(_shards, "_WINDOWS", True)
+        m.setattr(sys, "stderr", _ClosedPipe())
+        _shards.say("lost\n")  # no error: stderr is muted from here
+        assert _shards._muted
+        assert main(["translit", str(src), str(tmp_path / "o"), "--stats"]) == 0
+        m.setattr(sys, "stdout", _ClosedPipe())
+        assert main(["stats", str(tmp_path / "o")]) == 1  # quietly, as for EPIPE
+    with monkeypatch.context() as m:
+        # elsewhere EINVAL is another error, which is not silenced
+        m.setattr(_shards, "_muted", False)
+        m.setattr(_shards, "_WINDOWS", False)
+        m.setattr(sys, "stderr", _ClosedPipe())
+        with pytest.raises(OSError, match="Invalid argument"):
+            _shards.say("x\n")
 
 
 # ----------------------------------------------------------------------------------------- dedup
