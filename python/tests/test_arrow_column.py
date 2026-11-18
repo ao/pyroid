@@ -529,7 +529,7 @@ CTRL_C_SCRIPT = textwrap.dedent(
     # SIGALRM comes from the kernel, so it trips CPython's signal flag while the call runs
     # attached (a Python timer thread could not take the GIL on a GIL build).
     signal.signal(signal.SIGALRM, stop)
-    col = _testing.column(["d"] * 3_000_000, chunks=3)
+    col = _testing.column(["d"] * 10_000_000, chunks=3)
     # Each call makes or compares a Python object per row, with no Python code in between.
     calls = {"count": lambda: col.count(0), "to_pylist": col.to_pylist, "in": lambda: 0 in col}
     for name, call in calls.items():
@@ -542,7 +542,7 @@ CTRL_C_SCRIPT = textwrap.dedent(
             call()
             print(name, "finished", full)
         except KeyboardInterrupt:
-            print(name, (time.perf_counter() - t0) / full, full)
+            print(name, time.perf_counter() - t0, full)
     """
 )
 
@@ -553,12 +553,15 @@ def test_ctrl_c_stops_a_long_call(run_python: RunPython) -> None:
     out = run_python(CTRL_C_SCRIPT, timeout=300.0)
     assert out.returncode == 0, out.stderr
     for line in out.stdout.splitlines():
-        _, ratio, full = line.split()
-        if float(full) < 0.03:
+        _, took, full = line.split()
+        if float(full) < 0.1:
             continue  # too fast to tell a check during the call from one after it
-        # Interrupted a fifth of the way in: it stops well before the end.
-        assert ratio != "finished", line
-        assert float(ratio) < 0.6, line
+        # Interrupted a fifth of the way in: it stops soon after the signal, well before the end.
+        # The bound is in seconds, not a share of the call: a loaded macOS runner delivers the
+        # timer tens of milliseconds late (0.62 and 0.95 of a 70 ms call with 3 million rows).
+        assert took != "finished", line
+        assert float(took) - float(full) / 5 < 0.25, line
+        assert float(took) < float(full), line
 
 
 # ---- generated columns ---------------------------------------------------------
