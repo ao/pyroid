@@ -260,7 +260,7 @@ subprocess: True
   forkserver workers, `subprocess`), then runs the environment's own `sitecustomize`, if there is
   one. Forked workers inherit the patch anyway;
 - runs the target in the same process, as `python SCRIPT ARGS` / `python -m MODULE ARGS` would
-  (`sys.argv`, `sys.path[0]`, `__name__ == "__main__"`). It exits with the target's exit code: 0
+  (`sys.argv`, `sys.path[0]`, an absolute `__file__`, `__name__ == "__main__"`). It exits with the target's exit code: 0
   when it finishes, 2 for a usage error or a missing script, 1 when the module can't be found. An
   uncaught exception's traceback starts at the target's own first frame, as with `python`. One
   process runs one target at a time: a second `pyroid.integrations.run(...)` while a target runs,

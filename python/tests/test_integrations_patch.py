@@ -1120,6 +1120,41 @@ def test_run_script(tmp_path: Path) -> None:
     )
 
 
+MAIN_PROBE = """\
+import json, os, sys, __main__
+here = os.path.dirname(__file__)
+os.chdir(os.path.dirname(here))  # a script that changes directory still finds files next to it
+with open(os.path.join(here, "data.txt")) as f:
+    data = f.read()
+print(json.dumps({
+    "file": __file__, "argv0": sys.argv[0], "code": sys._getframe().f_code.co_filename,
+    "package": __package__, "loader": type(__loader__).__name__, "spec": __spec__,
+    "cached": globals().get("__cached__", "missing"), "main": __main__.__dict__ is globals(),
+    "builtins": __builtins__ is __import__("builtins"), "data": data,
+}))
+"""
+
+
+@pytest.mark.parametrize("target", ["sub/probe.py", "./sub/../sub/probe.py", "probe.pyc"])
+def test_run_script_main_is_as_python_sets_it(tmp_path: Path, target: str) -> None:
+    """``__file__`` is absolute (CPython 3.9+), ``sys.argv[0]`` stays as given; it was the
+    relative path, so a script that changed directory could not find its own files."""
+    import py_compile
+
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub/probe.py").write_text(MAIN_PROBE)
+    (tmp_path / "sub/data.txt").write_text("next to the script")
+    py_compile.compile(str(tmp_path / "sub/probe.py"), str(tmp_path / "probe.pyc"))
+    (tmp_path / "data.txt").write_text("next to the script")
+    python = subprocess.run(
+        [sys.executable, target], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    want = json.loads(python.stdout)
+    assert os.path.isabs(want["file"])
+    got = ok(run_cli(["-p", "ftfy", target], cwd=tmp_path))
+    assert got == want
+
+
 def test_run_refuses_a_second_target_while_one_runs(tmp_path: Path) -> None:
     """A target owns the process (sys.argv, sys.path[0]): a second one is refused, not mixed in.
     Once the first has finished, the next runs."""
@@ -1182,13 +1217,19 @@ def test_run_tracebacks_start_at_the_target(tmp_path: Path) -> None:
     if launcher.exists():
         cmd = [str(launcher), "run", "-p", "ftfy", "boom.py"]
         runs.append(subprocess.run(cmd, cwd=tmp_path, capture_output=True, text=True, check=False))
+    boom = os.path.join(str(tmp_path), "boom.py")  # absolute, as python shows it
+    python = subprocess.run(
+        [sys.executable, "boom.py"], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert f'  File "{boom}", line 5, in <module>' in python.stderr
     for proc in runs:
         assert proc.returncode == 1
+        assert proc.stderr.endswith(python.stderr), proc.stderr
         tb = proc.stderr.split("Traceback (most recent call last):\n", 1)[1].splitlines()
-        assert tb[0] == '  File "boom.py", line 5, in <module>', proc.stderr
+        assert tb[0] == f'  File "{boom}", line 5, in <module>', proc.stderr
         assert [ln for ln in tb if ln.startswith("  File ")] == [
-            '  File "boom.py", line 5, in <module>',
-            '  File "boom.py", line 2, in f',
+            f'  File "{boom}", line 5, in <module>',
+            f'  File "{boom}", line 2, in f',
         ]
         assert tb[-1] == "ValueError: boom"
     proc = run_cli(["-p", "ftfy", "bad.py"], cwd=tmp_path)

@@ -105,8 +105,10 @@ compares module objects) is not redirected; ``importlib.reload`` of a shim is no
 
 from __future__ import annotations
 
+import builtins
 import contextlib
 import importlib
+import importlib.machinery
 import importlib.util
 import os
 import pkgutil
@@ -1262,11 +1264,11 @@ def run(argv: Sequence[str]) -> int:
     Patches ``NAMES`` (comma-separated; default ``$PYROID_PATCH``, else ``ftfy,fasttext``,
     skipping ``fasttext`` with a :class:`PatchWarning` if numpy is missing), exports
     ``PYROID_PATCH`` and puts :data:`HOOK_DIR` first on ``PYTHONPATH`` (so child Python
-    processes are patched too), then runs the target in this process with :mod:`runpy`, as
+    processes are patched too), then runs the target in this process, as
     ``python -m MODULE ARGS`` / ``python SCRIPT ARGS`` would: ``sys.argv``, ``sys.path[0]``,
-    ``__name__ == "__main__"``. It is meant to be the last thing a process does: the patches,
-    the environment and ``sys.argv`` stay as they are afterwards. A second call while a target
-    runs (from another thread, or the target itself) is refused with status 2.
+    ``__file__``, ``__name__ == "__main__"``. It is meant to be the last thing a process does:
+    the patches, the environment and ``sys.argv`` stay as they are afterwards. A second call
+    while a target runs (from another thread, or the target itself) is refused with status 2.
 
     Args:
         argv: The arguments after ``pyroid run``.
@@ -1355,14 +1357,58 @@ def run(argv: Sequence[str]) -> int:
             return 0
         assert script is not None
         sys.argv[:] = [script, *args]
-        # A directory or zip file is a sys.path entry that runpy puts first itself.
-        if not sys.flags.safe_path and pkgutil.get_importer(script) is None:
+        if pkgutil.get_importer(script) is not None:
+            # A directory or zip file is a sys.path entry that runpy puts first itself.
+            _trim_tracebacks()
+            runpy.run_path(script, run_name="__main__")
+            return 0
+        if not sys.flags.safe_path:
             _set_path0(os.path.dirname(os.path.realpath(script)))
         _trim_tracebacks()
-        runpy.run_path(script, run_name="__main__")
+        _run_file(script)
         return 0
     finally:
         _RUN_LOCK.release()
+
+
+def _run_file(script: str) -> None:
+    """Run the file `script` as ``__main__``, as ``python SCRIPT`` does.
+
+    As in CPython, ``__file__`` and the code's file name (in tracebacks) are `script` joined to
+    the working directory (normalized on Windows), ``sys.argv[0]`` stays as given, and
+    ``__loader__``, ``__package__`` and ``__spec__`` are the interpreter's. ``runpy.run_path``
+    keeps the path as given, so a script that changes directory can no longer find files next
+    to itself.
+    """
+    import io
+
+    path = os.path.abspath(script) if os.name == "nt" else os.path.join(os.getcwd(), script)
+    with io.open_code(path) as f:
+        code = pkgutil.read_code(f)  # python runs a .pyc file too
+    if code is None:
+        with io.open_code(path) as f:
+            code = compile(f.read(), path, "exec")
+        loader: Any = importlib.machinery.SourceFileLoader("__main__", path)
+    else:
+        loader = importlib.machinery.SourcelessFileLoader("__main__", path)
+    main = types.ModuleType("__main__")
+    main.__dict__.update(
+        __file__=path,
+        __cached__=None,
+        __loader__=loader,
+        __package__=None,
+        __spec__=None,
+        __builtins__=builtins,
+    )
+    saved = sys.modules.get("__main__")
+    sys.modules["__main__"] = main
+    try:
+        exec(code, main.__dict__)
+    finally:
+        if saved is None:
+            sys.modules.pop("__main__", None)
+        else:
+            sys.modules["__main__"] = saved
 
 
 def _trim_tracebacks() -> None:
@@ -1379,9 +1425,12 @@ def _trim_tracebacks() -> None:
         t = tb
         while t is not None and t.tb_frame.f_code is not run.__code__:
             t = t.tb_next
-        if t is not None:  # skip run() and the runpy frames below it
+        if t is not None:  # skip run() and the runpy or _run_file frames below it
             t = t.tb_next
-            while t is not None and t.tb_frame.f_code.co_filename in runpy_files:
+            while t is not None and (
+                t.tb_frame.f_code is _run_file.__code__
+                or t.tb_frame.f_code.co_filename in runpy_files
+            ):
                 t = t.tb_next
             tb = t
             # Python prints the exception's own traceback (the argument only when it has none).
