@@ -484,6 +484,15 @@ fn sig_int(a: f64, p: usize) -> Option<(u64, i64)> {
             k += 1;
         } else if q < POW10[p - 1] {
             k -= 1;
+        } else if q == POW10[p - 1] {
+            // `log10` rounds up for some `a` just below `10^k`; such an `a` can round up to
+            // `10^(p-1)` here although its digits belong to exponent `k - 1` (1e23 to 16
+            // digits is 9999999999999999e7, not 1e23). One more digit tells.
+            let q1 = scaled_round(a, p_i - k)?;
+            if q1 < POW10[p] {
+                return Some((u64::try_from(q1).ok()?, k));
+            }
+            return Some((u64::try_from(q).ok()?, k + 1));
         } else {
             return Some((u64::try_from(q).ok()?, k + 1));
         }
@@ -959,6 +968,24 @@ mod tests {
         assert!(ties > 0, "no tie among the values");
     }
 
+    /// Values just below a power of ten, where `log10` rounds up.
+    #[test]
+    fn g_below_powers_of_ten() {
+        let cases = [
+            (1e23, ".16g", "9.999999999999999e+22"),
+            (1e23, ".16", "9.999999999999999e+22"),
+            (1e23, ".17g", "9.9999999999999992e+22"),
+            (1e23, ".15g", "1e+23"),
+            (1e-06, ".17g", "9.9999999999999995e-07"),
+            (1e-06, ".16g", "1e-06"),
+            (1e-06, "#.17g", "9.9999999999999995e-07"),
+            (1e-06, ".17G", "9.9999999999999995E-07"),
+        ];
+        for (x, spec, want) in cases {
+            assert_eq!(f(x, spec), want, "{x:?} {spec:?}");
+        }
+    }
+
     #[test]
     fn g_like_python() {
         let cases = [
@@ -1047,6 +1074,15 @@ mod tests {
             2f64.powi(52),
             2f64.powi(53),
         ];
+        // Each side of every power of ten, where `log10` may round up.
+        for k in -320..=308 {
+            let p: f64 = format!("1e{k}").parse().unwrap();
+            values.extend([
+                p,
+                f64::from_bits(p.to_bits() - 1),
+                f64::from_bits(p.to_bits() + 1),
+            ]);
+        }
         let n = if cfg!(debug_assertions) {
             20_000
         } else {
@@ -1066,7 +1102,7 @@ mod tests {
             if !a.is_finite() || a <= 0.0 {
                 continue;
             }
-            for p in [1usize, 2, 3, 6, 10, 15, 17] {
+            for p in [1usize, 2, 3, 6, 10, 15, 16, 17] {
                 if let Some((d, decpt)) = significant_fast(a, p) {
                     let want = split_exp(format!("{a:.prec$e}", prec = p - 1).as_bytes());
                     assert_eq!(
@@ -1076,7 +1112,7 @@ mod tests {
                     );
                 }
             }
-            for p in [1usize, 3, 6, 12, 17] {
+            for p in [1usize, 3, 6, 12, 16, 17] {
                 for add_dot_0 in [false, true] {
                     let mut got = String::new();
                     if g_fast(&mut got, a, p, add_dot_0) {
