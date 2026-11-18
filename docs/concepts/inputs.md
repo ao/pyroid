@@ -78,6 +78,10 @@ pl.Series(col)  # polars
 pyroid.text.min_chars(col, 10)  # or straight back into pyroid
 ```
 
+pandas 3 takes it too: `pd.Series(col)`, or `df["lang"] = col`, gives a `str` column with nulls
+as `NaN`, and `pd.Series(col, dtype=pd.ArrowDtype(pa.string()))` keeps Arrow's `string` type, with
+nulls as `<NA>`.
+
 It is also a read-only sequence of its values. They come back as `to_pylist()` gives them:
 `str` (`bool` for a mask, `bytes` for `pyroid.warc`'s `html` column), and `None` for a null.
 
