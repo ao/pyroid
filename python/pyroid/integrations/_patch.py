@@ -966,10 +966,20 @@ def _announce(name: str, real: Any, missing: str) -> None:
                 f"Everything else{target.rest} still comes from the installed {name}. Modules "
                 f"that imported {name} before this call keep the real one."
             )
+        if real is None:
+            # One short sentence: on a base install, the README's patch("yaml", "jmespath") gives
+            # this first, and the list of what is missing says little before the package is in.
+            text = (
+                f"{missing}, so `import {name}` now gives {target.impl} alone ({target.pip} "
+                "for the rest)"
+            )
+        else:
+            text = (
+                f"{what} ({target.impl}, {target.reproduces}). {rest} Undo with "
+                f"pyroid.integrations.unpatch({name!r})"
+            )
         warnings.warn(
-            f"pyroid.integrations.patch: {what} "
-            f"({target.impl}, {target.reproduces}). {rest} Undo with "
-            f"pyroid.integrations.unpatch({name!r}). This warning is shown once.",
+            f"pyroid.integrations.patch: {text}. This warning is shown once.",
             PatchWarning,
             stacklevel=_caller_stacklevel(),
         )

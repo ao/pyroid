@@ -884,12 +884,34 @@ def test_patch_is_idempotent_and_warns_once_per_name() -> None:
             assert all((w.filename, w.lineno) == ("<string>", line) for w in warned)
             text = [str(w.message) for w in warned]
             assert "`import ftfy` now gives pyroid's drop-in (pyroid.ftfy" in text[0]
-            assert "6.3.1" in text[0] and "unpatch('ftfy')" in text[0]
-            assert "before this call keep the real one" in text[0] or "unavailable" in text[0]
-            assert "`import anyascii`" in text[1] and "unpatch('anyascii')" in text[1]
+            assert "6.3.1" in text[0]
+            assert "before this call keep the real one" in text[0] or "alone" in text[0]
+            assert "`import anyascii`" in text[1]
             """
         )
     )
+
+
+def test_patch_warning_without_the_incumbent_is_one_sentence() -> None:
+    """On a base install the README's patch() line warns first: it was ~400 characters a name."""
+    out = ok(
+        child(
+            """
+            import pyroid.translit
+            import pyroid.integrations as pi
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                pi.patch("anyascii")
+            print(json.dumps([str(w.message) for w in caught]))
+            """,
+            hide=("anyascii",),
+        )
+    )
+    assert out == [
+        "pyroid.integrations.patch: anyascii is not installed, so `import anyascii` now gives "
+        "pyroid.translit alone (pip install anyascii==0.3.3 for the rest). This warning is "
+        "shown once."
+    ]
 
 
 def test_patch_from_many_threads_installs_one_shim() -> None:
