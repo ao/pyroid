@@ -581,7 +581,9 @@ def columns(draw: st.DrawFn) -> tuple[Any, list[Any]]:
     sizes: list[int] = []
     left = len(values)
     while left:
-        size = draw(st.integers(0, left))
+        # At most 8 draws: Hypothesis can draw 0 thousands of times in a row, which used up the
+        # example's data and failed the data_too_large health check for some seeds.
+        size = draw(st.integers(0, left)) if len(sizes) < 8 else left
         sizes.append(size)
         left -= size
     return _testing.column(values, type=kind, sizes=sizes), values
