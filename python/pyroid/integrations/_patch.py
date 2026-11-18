@@ -102,7 +102,9 @@ need no patch: the stages they receive are pyroid's classes.
 ``!!python/`` tags) to PyYAML's own classes. Exceptions stay PyYAML's classes. Without PyYAML,
 ``yaml`` and its ``error``, ``reader``, ``scanner``, ``parser``, ``composer``, ``constructor``,
 ``representer``, ``emitter``, ``serializer``, ``resolver``, ``loader`` and ``dumper`` submodules
-are shims holding :mod:`pyroid.yaml`'s functions and classes.
+are shims holding :mod:`pyroid.yaml`'s functions and classes. With PyYAML 5.x installed it raises
+``ImportError`` and changes nothing: 5.x's ``load`` and ``load_all`` take no ``Loader``, and some
+of its results differ from 6.0's.
 
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
@@ -831,6 +833,9 @@ def _build_yaml(impl: types.ModuleType, real: Any, missing: str) -> _Built:
             "yaml", None, missing, impl, provided, package=True, version=impl.PYYAML_VERSION
         )
         return shims, []
+    refusal = impl._patch_refusal(real)  # PyYAML 5.x: other arguments and results
+    if refusal is not None:
+        raise ImportError(refusal)
     saved: list[tuple[Any, str, Any]] = []
     for n in _YAML_SWAPS:
         saved.append((real, n, real.__dict__.get(n, _MISSING)))
@@ -1103,7 +1108,9 @@ def patch(*names: str) -> None:
         TypeError: No names were given.
         ValueError: A name is not supported (nothing is patched then).
         ImportError: The pyroid module behind a name cannot be imported (``pyroid.fasttext``
-            and ``pyroid.datasketch`` need numpy).
+            and ``pyroid.datasketch`` need numpy), or the installed package cannot take
+            pyroid's functions (``"nemo_curator"`` needs NeMo Curator; ``"yaml"`` needs PyYAML
+            6.0 or later, or none).
 
     Warns:
         PatchWarning: Once per process for each name: what was patched and how to undo it;

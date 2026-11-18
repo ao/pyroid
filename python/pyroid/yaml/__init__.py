@@ -454,6 +454,27 @@ def _py_load_all(stream: Any, loader_cls: Any) -> Iterator[Any]:
         loader.dispose()
 
 
+def _patch_refusal(real: Any) -> str | None:
+    """Why ``pyroid.patch("yaml")`` must leave the PyYAML module `real` alone (or None).
+
+    PyYAML 5.x takes ``load(stream)`` and ``load_all(stream)`` without a ``Loader`` (then
+    ``FullLoader``, with a ``YAMLLoadWarning``), its resolver reads plain scalars such as
+    ``._1`` as floats, and two scanner errors are worded differently: functions with 6.0.3's
+    arguments and results would change what a program written for it does.
+    """
+    version = getattr(real, "__version__", None)
+    major = re.match(r"\d+", version) if isinstance(version, str) else None
+    if major is None or int(major.group()) >= 6:
+        return None
+    return (
+        f"patch('yaml') needs PyYAML 6.0 or later, and the installed PyYAML is {version}: its "
+        "load() and load_all() take no Loader (then FullLoader), where pyroid.yaml's need one as "
+        "6.0's do, and 5.x reads some scalars differently ('._1' is a float), so the patch would "
+        "change what this program's yaml calls do. Upgrade with pip install "
+        f"pyyaml=={PYYAML_VERSION} (6.0 to 6.0.2 give the same results)."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Streams
 # ---------------------------------------------------------------------------

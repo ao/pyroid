@@ -380,6 +380,39 @@ except ScannerError:
 
 @needs_pyyaml
 @pytest.mark.thread_unsafe
+@pytest.mark.parametrize("release", ["5.4.1", "5.1"])
+def test_patch_refuses_pyyaml_5(run_python: Any, release: str) -> None:
+    # PyYAML 5.x's load() and load_all() take no Loader, and it reads `._1` as a float: the
+    # patch raises ImportError and leaves the module as it was.
+    code = rf"""
+import warnings
+import yaml
+yaml.__version__ = {release!r}
+warnings.simplefilter("ignore")
+names = ("safe_load", "load", "load_all", "full_load", "safe_dump", "dump", "dump_all")
+before = {{n: getattr(yaml, n) for n in names}}
+import pyroid
+from pyroid.integrations import _patch
+try:
+    pyroid.patch("yaml")
+except ImportError as e:
+    print(e)
+print(all(getattr(yaml, n) is f for n, f in before.items()), "yaml" in _patch._ACTIVE)
+"""
+    r = run_python(code)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == [
+        f"patch('yaml') needs PyYAML 6.0 or later, and the installed PyYAML is {release}: its "
+        "load() and load_all() take no Loader (then FullLoader), where pyroid.yaml's need one as "
+        "6.0's do, and 5.x reads some scalars differently ('._1' is a float), so the patch would "
+        "change what this program's yaml calls do. Upgrade with pip install pyyaml==6.0.3 (6.0 "
+        "to 6.0.2 give the same results).",
+        "True False",
+    ]
+
+
+@needs_pyyaml
+@pytest.mark.thread_unsafe
 @pytest.mark.parametrize("release", ["6.0", "6.0.1", "6.0.2"])
 def test_no_version_warning_for_the_same_code(run_python: Any, release: str) -> None:
     # PyYAML 6.0 to 6.0.2 have 6.0.3's Python code (only __version__ differs).
