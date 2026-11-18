@@ -979,6 +979,38 @@ def test_a_refused_run_names_the_unfinished_work_when_out_is_missing(
     assert main(args) == 0  # the same command resumes
 
 
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["dedup", "--normalize"], "pyroid dedup: --normalize applies to --method exact"),
+        (
+            ["dedup", "--method", "exact", "--hash-fc", "sha1"],
+            "pyroid dedup: --hash-fc applies to --method minhash",
+        ),
+        (
+            ["dedup", "--method", "exact", "--n-grams", "3", "--sort-buffer-mb", "8"],
+            "pyroid dedup: --n-grams, --sort-buffer-mb apply to --method minhash",
+        ),
+        (
+            ["langid", "--min-score", "0.9", "--model", "unused.bin"],
+            "pyroid langid: --min-score and --excluded apply with --keep",
+        ),
+        (
+            ["langid", "--excluded", "x.parquet", "--model", "unused.bin"],
+            "pyroid langid: --min-score and --excluded apply with --keep",
+        ),
+    ],
+)
+def test_options_that_would_be_ignored_are_refused(
+    tmp_path: Path, argv: list[str], message: str
+) -> None:
+    src = _write(_table(["a b c"]), tmp_path / "in.parquet")
+    command, *options = argv
+    with pytest.raises(SystemExit, match=re.escape(message)):
+        main([command, str(src), str(tmp_path / "out.parquet"), *options])
+    assert not list(tmp_path.glob(".out.parquet.pyroid"))
+
+
 @pytest.mark.thread_unsafe(reason="reads stderr")
 def test_an_unknown_option_shows_the_commands_usage(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -990,3 +1022,31 @@ def test_an_unknown_option_shows_the_commands_usage(
     err = capsys.readouterr().err
     assert err.startswith("usage: pyroid translit "), err
     assert err.endswith("pyroid translit: error: unrecognized arguments: --excluded x.parquet\n")
+
+
+@pytest.mark.thread_unsafe(reason="reads stdout")
+def test_help_texts_describe_each_command(capsys: pytest.CaptureFixture[str]) -> None:
+    from pyroid.cli import build_stage_parser
+
+    def help_of(parser: Any) -> str:
+        with pytest.raises(SystemExit):
+            parser.parse_args(["--help"])
+        return " ".join(capsys.readouterr().out.split())
+
+    for name in ("langid", "dedup", "translit"):
+        text = help_of(_command_parser(name))
+        assert "(default: each input's)" in text, name
+        assert "WARC" not in text, name
+    assert "(default: each input's; parquet for WARC inputs)" in help_of(_command_parser("clean"))
+    assert "WARC" not in help_of(build_stage_parser("filter"))
+    signatures = help_of(build_stage_parser("signatures"))
+    assert "--compression" not in signatures  # it said "not used: signature files are not ..."
+    with pytest.raises(SystemExit):
+        build_stage_parser("signatures").parse_args(["in.parquet", "sigs", "--compression", "zstd"])
+    capsys.readouterr()
+
+
+def _command_parser(name: str) -> Any:
+    from pyroid.cli import _subparser, build_parser
+
+    return _subparser(build_parser(), name)

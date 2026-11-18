@@ -397,7 +397,7 @@ Adds fastText's top label (without `__label__`) as `language` and its probabilit
 | `--top-k TOP_K` | above 1: also add `top_languages` and `top_language_scores`, lists of the `TOP_K` best labels and their probabilities |
 
 With `--keep`, dropped rows go to `--excluded` with `filter_reason` `lid` (or `null` for a null
-text).
+text). Without `--keep` nothing is dropped, so `--min-score` and `--excluded` are refused.
 
 ```console
 $ pyroid langid sample.parquet tagged.parquet --model lid.176.bin --keep en,fr --top-k 3
@@ -421,8 +421,8 @@ usage: pyroid dedup [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--thre
 |---|---|
 | `--method minhash` | the default: datatrove's MinHash dedup ([`pyroid.dedup`](dedup.md)); one document of each cluster of near-duplicates is kept, the one datatrove keeps |
 | `--method exact` | drop exact repeats of an earlier document |
-| `--normalize` | with `exact`: compare the texts after datatrove's `simplify_text` normalization |
-| `--n-grams`, `--num-buckets`, `--hashes-per-bucket`, `--seed`, `--hash-fc`, `--precision` | datatrove `MinhashConfig` fields; each defaults to datatrove's default (xxhash, 64-bit, 5-grams, 14 × 8, seed 1) |
+| `--normalize` | with `exact` only: compare the texts after datatrove's `simplify_text` normalization |
+| `--n-grams`, `--num-buckets`, `--hashes-per-bucket`, `--seed`, `--hash-fc`, `--precision` | with `minhash` only: datatrove `MinhashConfig` fields; each defaults to datatrove's default (xxhash, 64-bit, 5-grams, 14 × 8, seed 1) |
 
 The `filter_reason` of a dropped row is the method's name (`minhash` or `exact`). `--method
 minhash` reads the input twice (signatures first, then the rows), so it must not change during the

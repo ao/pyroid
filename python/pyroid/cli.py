@@ -1797,7 +1797,7 @@ def _cmd_clean(a: argparse.Namespace) -> int:
             state=run.state,
             sigs=str(work / "sigs"),
             minhash=cfg,
-            sort_buffer=a.sort_buffer_mb << 20,
+            sort_buffer=_sort_buffer(a),
             **spools(rank),
         )
 
@@ -1853,7 +1853,10 @@ def _minhash_middle(
 
 def _cmd_langid(a: argparse.Namespace) -> int:
     keep = [x.strip() for x in a.keep.split(",") if x.strip()] if a.keep else None
-    return _rowwise(a, "langid", model=a.model, keep=keep, min_score=a.min_score, top_k=a.top_k)
+    if not keep and (a.min_score is not None or a.excluded):
+        raise SystemExit("pyroid langid: --min-score and --excluded apply with --keep")
+    min_score = 0.65 if a.min_score is None else a.min_score
+    return _rowwise(a, "langid", model=a.model, keep=keep, min_score=min_score, top_k=a.top_k)
 
 
 def _cmd_translit(a: argparse.Namespace) -> int:
@@ -1886,9 +1889,27 @@ def _minhash_cfg_from_args(a: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+#: The MinHash options of ``pyroid dedup``, which --method exact does not use.
+_MINHASH_OPTIONS = (
+    "n_grams",
+    "num_buckets",
+    "hashes_per_bucket",
+    "seed",
+    "hash_fc",
+    "precision",
+    "sort_buffer_mb",
+)
+
+
 def _cmd_dedup(a: argparse.Namespace) -> int:
     if a.method == "exact":
+        given = [f"--{k.replace('_', '-')}" for k in _MINHASH_OPTIONS if getattr(a, k) is not None]
+        if given:
+            verb = "applies" if len(given) == 1 else "apply"
+            raise SystemExit(f"pyroid dedup: {', '.join(given)} {verb} to --method minhash")
         return _dedup_exact(a)
+    if a.normalize:
+        raise SystemExit("pyroid dedup: --normalize applies to --method exact")
     if getattr(a, "shard", None) and not a.shard.endswith("/1"):
         raise SystemExit(
             "pyroid dedup: --shard needs the staged flow: 'pyroid dedup signatures', "
@@ -1910,7 +1931,7 @@ def _cmd_dedup(a: argparse.Namespace) -> int:
             state=run.state,
             sigs=str(work / "sigs"),
             minhash=cfg,
-            sort_buffer=a.sort_buffer_mb << 20,
+            sort_buffer=_sort_buffer(a),
         )
 
     def last(rank: int, src: Any) -> FileJob:
@@ -2014,7 +2035,7 @@ def _stage_signatures(a: argparse.Namespace) -> int:
             state=run.state,
             sigs=str(sigs),
             minhash=cfg,
-            sort_buffer=a.sort_buffer_mb << 20,
+            sort_buffer=_sort_buffer(a),
         )
 
     _execute(run, _file_units(run, lambda r: f"{r:06d}", make), _unit_signatures)
@@ -2402,7 +2423,11 @@ def _run_args(
             metavar="FMT",
             help="with a directory OUT, the output format: "
             + ", ".join(_OUT_FORMATS)
-            + " (default: each input's; parquet for WARC inputs)",
+            + (
+                " (default: each input's; parquet for WARC inputs)"
+                if warc
+                else " (default: each input's)"
+            ),
         )
     if excluded:
         p.add_argument(
@@ -2448,10 +2473,14 @@ def _sort_buffer_arg(p: Any) -> None:
     p.add_argument(
         "--sort-buffer-mb",
         type=_positive,
-        default=64,
         metavar="MB",
         help="signatures sorted in memory per process before spilling to disk (default: 64)",
     )
+
+
+def _sort_buffer(a: argparse.Namespace) -> int:
+    """``--sort-buffer-mb`` in bytes."""
+    return (64 if a.sort_buffer_mb is None else a.sort_buffer_mb) << 20
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2531,7 +2560,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--min-score",
         type=float,
-        default=0.65,
         help="with --keep: datatrove's language_threshold (default: 0.65)",
     )
     p.add_argument(

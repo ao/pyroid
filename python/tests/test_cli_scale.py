@@ -170,7 +170,7 @@ def test_refuses_foreign_directory(tmp_path: Path) -> None:
     assert (out / "notes.txt").read_text() == "mine"
     excl = out / "dropped"
     with pytest.raises(SystemExit, match="must not be OUT or inside it"):
-        main(["langid", str(src), str(out), "--excluded", str(excl)])
+        main(["langid", str(src), str(out), "--keep", "en", "--excluded", str(excl)])
 
 
 # ------------------------------------------------------------------------------------ resuming
