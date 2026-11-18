@@ -11,6 +11,7 @@ json_repair with a one-time :class:`pyroid.FallbackWarning`, or raise
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sys
 import unicodedata
@@ -89,7 +90,7 @@ def _caller_stacklevel() -> int:
 
 
 def _json_repair(name: str, reason: str) -> Any:
-    """Import the real json_repair for `name`, warning once, or raise PyroidError."""
+    """Import the real json_repair for `name`, or raise PyroidError."""
     try:
         import json_repair as real
     except ImportError:
@@ -103,6 +104,11 @@ def _json_repair(name: str, reason: str) -> Any:
             f"json_repair is not installed to fall back to (pip install "
             f"json-repair=={JSON_REPAIR_VERSION})"
         )
+    return real
+
+
+def _fallback_warning(name: str, reason: str) -> None:
+    """Warn once per `name` and `reason` that the call goes to json_repair."""
     if f"{name}:{reason}" not in _WARNED:
         _WARNED.add(f"{name}:{reason}")
         warnings.warn(
@@ -111,7 +117,6 @@ def _json_repair(name: str, reason: str) -> Any:
             FallbackWarning,
             stacklevel=_caller_stacklevel(),
         )
-    return real
 
 
 _RESERVED = "a char in U+10F800..U+10FFFF"
@@ -248,18 +253,18 @@ def repair_json(
         return _delegate(
             "repair_json",
             reason,
-            json_fd,
-            position,
-            json_str,
-            return_objects,
-            skip_json_loads,
-            logging,
-            chunk_length,
-            stream_stable,
-            strict,
-            schema,
-            schema_repair_mode,
             json_dumps_args,
+            position,
+            json_str=json_str,
+            return_objects=return_objects,
+            skip_json_loads=skip_json_loads,
+            logging=logging,
+            json_fd=json_fd,
+            chunk_length=chunk_length,
+            stream_stable=stream_stable,
+            strict=strict,
+            schema=schema,
+            schema_repair_mode=schema_repair_mode,
         )
     if logging:
         out_mode = _MODE_LOGGING
@@ -297,18 +302,18 @@ def repair_json(
         return _delegate(
             "repair_json",
             _RESERVED,
-            json_fd,
-            position,
-            json_str,
-            return_objects,
-            skip_json_loads,
-            logging,
-            chunk_length,
-            stream_stable,
-            strict,
-            schema,
-            schema_repair_mode,
             json_dumps_args,
+            position,
+            json_str=json_str,
+            return_objects=return_objects,
+            skip_json_loads=skip_json_loads,
+            logging=logging,
+            json_fd=json_fd,
+            chunk_length=chunk_length,
+            stream_stable=stream_stable,
+            strict=strict,
+            schema=schema,
+            schema_repair_mode=schema_repair_mode,
         )
     if dump is _PYTHON_DUMPS:
         if result == "":
@@ -324,37 +329,91 @@ def _tell(fd: Any) -> int | None:
         return None
 
 
+#: ``repair_json``'s defaults, and the json_repair release that added each argument after
+#: ``json_fd`` (``json.dumps`` arguments: ``ensure_ascii`` from 0.26.0, any from 0.47.1). A
+#: delegated call passes its arguments by keyword and leaves out those at their default that
+#: the installed release does not take, so older releases still run it.
+_ARGUMENTS: dict[str, tuple[Any, str]] = {
+    "return_objects": (False, ""),
+    "skip_json_loads": (False, ""),
+    "logging": (False, ""),
+    "json_fd": (None, ""),
+    "chunk_length": (0, "0.28.4"),
+    "stream_stable": (False, "0.44.0"),
+    "strict": (False, "0.54"),
+    "schema": (None, "0.56.0"),
+    "schema_repair_mode": ("standard", "0.58.0"),
+}
+_DUMPS_RELEASE = "0.47.1"
+# The installed repair_json's keyword arguments, and whether it takes ``**kwargs``.
+_SIGNATURES: dict[Any, tuple[frozenset[str], bool] | None] = {}
+
+
+def _accepted(fn: Any) -> tuple[frozenset[str], bool] | None:
+    """The argument names `fn` takes by keyword and whether it takes ``**kwargs`` (cached)."""
+    try:
+        return _SIGNATURES[fn]
+    except (KeyError, TypeError):
+        pass
+    import inspect
+
+    try:
+        parameters = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):
+        accepted = None  # no signature to read: pass everything and let it decide
+    else:
+        keyword = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        accepted = (
+            frozenset(p.name for p in parameters if p.kind in keyword),
+            any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters),
+        )
+    with contextlib.suppress(TypeError):
+        _SIGNATURES[fn] = accepted
+    return accepted
+
+
 def _delegate(
     name: str,
     reason: str,
-    json_fd: Any,
-    position: int | None,
-    json_str: Any,
-    return_objects: bool,
-    skip_json_loads: bool,
-    logging: bool,
-    chunk_length: int,
-    stream_stable: bool,
-    strict: bool,
-    schema: Any,
-    schema_repair_mode: Any,
     json_dumps_args: dict[str, Any],
+    position: int | None = None,
+    **arguments: Any,
 ) -> Any:
+    """Run the installed ``json_repair.repair_json`` with `arguments`, by keyword.
+
+    Raises:
+        PyroidError: json_repair is not installed, or its release does not take an argument
+            the call sets (one left at its default is not passed).
+    """
     real = _json_repair(name, reason)
+    fn = real.repair_json
+    accepted = _accepted(fn)
+    if accepted is not None:
+        names, any_keyword = accepted
+        for key in [key for key in arguments if key not in names]:
+            default, release = _ARGUMENTS.get(key, (None, ""))
+            value = arguments.pop(key)
+            if value is None if default is None else value == default:
+                continue
+            raise _too_old(name, reason, key, f"added in json-repair {release}" if release else "")
+        if not any_keyword:
+            for key in json_dumps_args:
+                if key not in names:
+                    added = f"json.dumps arguments were added in json-repair {_DUMPS_RELEASE}"
+                    raise _too_old(name, reason, key, added)
+    _fallback_warning(name, reason)
+    json_fd = arguments.get("json_fd")
     if json_fd is not None and position is not None:
         json_fd.seek(position)
-    return real.repair_json(
-        json_str,
-        return_objects,
-        skip_json_loads,
-        logging,
-        json_fd,
-        chunk_length,
-        stream_stable,
-        strict,
-        schema,
-        schema_repair_mode,
-        **json_dumps_args,
+    return fn(**arguments, **json_dumps_args)
+
+
+def _too_old(name: str, reason: str, key: str, added: str) -> PyroidError:
+    added = f" ({added})" if added else ""
+    return PyroidError(
+        f"pyroid.json_repair.{name}: pyroid's Rust port does not handle {reason}, and the "
+        f"installed json_repair, which it delegates to, has no {key}= argument{added}. "
+        f"Install json-repair=={JSON_REPAIR_VERSION}, the release pyroid reproduces"
     )
 
 
@@ -485,12 +544,14 @@ def repair_json_batch(
 
     def fallback(doc: str) -> Any:
         # A document the port does not handle (_RESERVED); also called from Rust for Arrow rows.
-        return _json_repair("repair_json_batch", _RESERVED).repair_json(
-            doc,
+        return _delegate(
+            "repair_json_batch",
+            _RESERVED,
+            json_dumps_args,
+            json_str=doc,
             skip_json_loads=skip_json_loads,
             stream_stable=stream_stable,
             strict=strict,
-            **json_dumps_args,
         )
 
     if isinstance(texts, list):

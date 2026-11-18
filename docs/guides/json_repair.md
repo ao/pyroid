@@ -198,7 +198,11 @@ Each pyroid release reproduces one json_repair release, normally the newest one,
 `pyroid.json_repair.JSON_REPAIR_VERSION`. pyroid 1.0.0 reproduced 0.64.5; this release
 reproduces 0.64.9. When another version of json-repair is installed, `import pyroid.json_repair`
 emits one [`pyroid.VersionMismatchWarning`](../compatibility.md#installed-versions) that names
-both versions. Delegated calls always run the installed json_repair.
+both versions. Delegated calls run the installed json_repair, so they give that release's
+results. They pass only the arguments that release takes, and raise
+[`pyroid.PyroidError`](../reference/pyroid.md#pyroid.PyroidError) naming the release needed when
+the call sets one it lacks: `schema=` needs json-repair 0.56.0 or later, `strict=` 0.54,
+`stream_stable=` 0.44.0 and `json.dumps` arguments other than `ensure_ascii` 0.47.1.
 
 What changed between json_repair 0.64.5 and 0.64.9, and so between pyroid 1.0.0 and this release:
 

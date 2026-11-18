@@ -349,6 +349,104 @@ def test_delegation_without_json_repair(monkeypatch: pytest.MonkeyPatch) -> None
     assert any("row 1 of the Arrow input" in n for n in info.value.__notes__)
 
 
+def _old_json_repair(calls: list[dict[str, Any]]) -> Any:
+    """A stand-in for json-repair 0.30.0, whose repair_json has 7 arguments and no **kwargs."""
+    import types
+
+    module = types.ModuleType("json_repair")
+
+    def repair_json(
+        json_str: Any = "",
+        return_objects: bool = False,
+        skip_json_loads: bool = False,
+        logging: bool = False,
+        json_fd: Any = None,
+        ensure_ascii: bool = True,
+        chunk_length: int = 0,
+    ) -> Any:
+        calls.append(dict(locals()))
+        return "old"
+
+    module.repair_json = repair_json  # type: ignore[attr-defined]
+    return module
+
+
+@pytest.mark.thread_unsafe
+def test_delegation_to_an_older_json_repair(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Delegated calls passed 10 positional arguments, a TypeError below json-repair 0.58.
+    untyped: Any = jr  # bytes input, which the stubs do not admit
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setitem(sys.modules, "json_repair", _old_json_repair(calls))
+    _reset_fallback_warnings()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        assert untyped.repair_json(b"{'a': 1") == "old"
+        assert calls[-1]["json_str"] == b"{'a': 1"
+        assert calls[-1]["ensure_ascii"] is True
+        assert untyped.loads(b"[1, 2") == "old"
+        assert calls[-1]["return_objects"] is True
+        assert untyped.repair_json('["\U0010f800"', ensure_ascii=False) == "old"
+        assert calls[-1]["ensure_ascii"] is False
+        # Arguments left at their default are not passed, even when named.
+        assert (
+            untyped.loads(b"[1", strict=False, schema=None, schema_repair_mode="standard") == "old"
+        )
+        assert untyped.repair_json_batch(["{'a': '\U0010fffe'", "{}"]) == ["old", "{}"]
+        assert calls[-1]["json_str"] == "{'a': '\U0010fffe'"
+    assert len(calls) == 5
+    for kwargs, release in [
+        ({"schema": {"type": "object"}}, "0.56.0"),
+        ({"strict": True}, "0.54"),
+        ({"stream_stable": True}, "0.44.0"),
+        ({"indent": 2}, "0.47.1"),
+    ]:
+        key = next(iter(kwargs))
+        with pytest.raises(
+            pyroid.PyroidError, match=rf"has no {key}= argument .*{re.escape(release)}"
+        ):
+            untyped.repair_json(b"{", **kwargs)
+    with pytest.raises(pyroid.PyroidError, match="has no strict= argument"):
+        untyped.repair_json_batch(["{'a': '\U0010fffe'"], strict=True)
+    assert len(calls) == 5
+
+
+@pytest.mark.thread_unsafe
+def test_delegation_to_a_json_repair_without_strict(monkeypatch: pytest.MonkeyPatch) -> None:
+    # json-repair 0.47.1 to 0.53 take **json_dumps_args but not strict, schema or
+    # schema_repair_mode: those must not reach json.dumps.
+    import types
+
+    untyped: Any = jr  # bytes input, which the stubs do not admit
+    calls: list[dict[str, Any]] = []
+    module = types.ModuleType("json_repair")
+
+    def repair_json(
+        json_str: Any = "",
+        return_objects: bool = False,
+        skip_json_loads: bool = False,
+        logging: bool = False,
+        json_fd: Any = None,
+        chunk_length: int = 0,
+        stream_stable: bool = False,
+        **json_dumps_args: Any,
+    ) -> Any:
+        calls.append({**locals(), **json_dumps_args})
+        json.dumps(None, **json_dumps_args)
+        return "0.50"
+
+    module.repair_json = repair_json  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "json_repair", module)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        assert untyped.repair_json(b"{", indent=2, stream_stable=True) == "0.50"
+        assert calls[-1]["indent"] == 2
+        assert calls[-1]["stream_stable"] is True
+        assert not {"strict", "schema", "schema_repair_mode"} & calls[-1].keys()
+        with pytest.raises(pyroid.PyroidError, match=r"has no strict= argument .*0\.54"):
+            untyped.repair_json(b"{", strict=True)
+    assert len(calls) == 1
+
+
 @pytest.mark.thread_unsafe
 def test_int_max_str_digits_follows_sys() -> None:
     doc = '{"a": ' + "1" * 5000 + ', "b": }'
