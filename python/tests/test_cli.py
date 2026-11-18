@@ -925,3 +925,55 @@ def test_clean_into_one_file_from_inputs_with_other_schemas(tmp_path: Path, en_l
     assert [p.name for p in tmp_path.glob(".one.parquet.pyroid/done/*")] == [
         "merged-00000-of-00001.json"
     ]
+
+
+# ------------------------------------------------- options and inputs checked before any work
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_a_bad_compression_is_refused_before_any_work(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], en_lid: Path
+) -> None:
+    # It failed at the first write, after the whole MinHash phase: the work it left behind made
+    # the corrected command refuse to run ("comes from a different run") without --overwrite.
+    src = _write(_table([_english(i) for i in range(20)]), tmp_path / "in.parquet")
+    out = tmp_path / "out.parquet"
+    args = ["clean", str(src), str(out), "--recipe", "fineweb", "--lid-model", str(en_lid)]
+    with pytest.raises(SystemExit) as e:
+        main([*args, "--compression", "bogus"])
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert "pyroid clean: error: argument --compression: Unsupported compression: bogus" in err
+    assert not (tmp_path / ".out.parquet.pyroid").exists()
+    assert main([*args, "--compression", "zstd"]) == 0
+    assert pq.ParquetFile(out).metadata.row_group(0).column(0).compression == "ZSTD"
+    for name in ("NONE", "snappy", "gzip"):
+        assert main([*args, "--compression", name, "--overwrite"]) == 0
+
+
+@pytest.mark.thread_unsafe(reason="monkeypatches pyroid.integrations._io and reads stderr")
+def test_a_refused_run_names_the_unfinished_work_when_out_is_missing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    en_lid: Path,
+) -> None:
+    from pyroid.integrations import _io
+
+    src = _write(_table([_english(i) for i in range(20)]), tmp_path / "in.parquet")
+    out = tmp_path / "out.parquet"
+    args = ["clean", str(src), str(out), "--recipe", "fineweb", "--lid-model", str(en_lid)]
+
+    def full(self: Any, table: Any) -> None:
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    with monkeypatch.context() as m:
+        m.setattr(_io.Writer, "write", full)
+        assert main(args) == 1  # after the MinHash phase: its records stay, for a resume
+    assert not out.exists()
+    capsys.readouterr()
+    with pytest.raises(
+        SystemExit, match=r"the unfinished work in .*out\.parquet\.pyroid comes from"
+    ):
+        main([*args, "--compression", "zstd"])
+    assert main(args) == 0  # the same command resumes

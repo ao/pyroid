@@ -1426,7 +1426,12 @@ def _record_run(run: Run, **info: Any) -> None:
     other = old is not None and old.get("fingerprint") != run.state.fingerprint
     if other and not run.a.overwrite and run.state.stale(r["key"] for r in run.state.records()):
         lay = run.layout
-        what = f"{lay.final} comes" if lay.out_dir is None else f"{lay.out_dir}: its files come"
+        if lay.out_dir is not None:
+            what = f"{lay.out_dir}: its files come"
+        elif lay.final is not None and lay.final.exists():
+            what = f"{lay.final} comes"
+        else:  # a run stopped before it wrote OUT
+            what = f"the unfinished work in {lay.state_root} comes"
         raise _shards.StateError(
             f"{what} from a different run (other options, inputs or pyroid version); pass "
             "--overwrite to redo it, or use another output path"
@@ -2311,6 +2316,28 @@ def _shard(s: str) -> str:
     return s
 
 
+def _compression(s: str) -> str:
+    """``--compression``: checked by pyarrow's Parquet writer before any work starts.
+
+    It was checked only when the first output was written: a failed run then left its
+    finished work behind, which the corrected command refused as another run's.
+    """
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError:  # main() reports the missing pyarrow, with what installs it
+        return s
+    try:
+        pq.ParquetWriter(
+            pa.BufferOutputStream(), pa.schema([("x", pa.int8())]), compression=s
+        ).close()
+    except (ValueError, pa.ArrowException) as e:
+        raise argparse.ArgumentTypeError(
+            f"{e} (pyarrow's Parquet writer takes none, snappy, gzip, brotli, lz4 or zstd)"
+        ) from None
+    return s
+
+
 def _io_args(
     p: argparse.ArgumentParser, *, out: str = "OUT", out_help: str | None = None, warc: bool = False
 ) -> None:
@@ -2388,12 +2415,12 @@ def _run_args(
     )
     p.add_argument("--stats-json", metavar="PATH", help="write the stats to PATH as JSON")
     p.add_argument("--progress", action="store_true", help="show a progress line on stderr")
-    p.add_argument(
-        "--compression",
-        help="Parquet compression (default: pyarrow's, snappy)"
-        if tables
-        else "not used: signature files are not compressed",
-    )
+    if tables:
+        p.add_argument(
+            "--compression",
+            type=_compression,
+            help="Parquet compression (default: pyarrow's, snappy)",
+        )
     p.add_argument(
         "--overwrite",
         action="store_true",

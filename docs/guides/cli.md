@@ -302,7 +302,8 @@ These rules hold for every command:
 - Formats follow the file name, for input and output alike. `.parquet` or `.pq` is Parquet.
   `.jsonl`, `.ndjson` or `.json` is JSON Lines, one object per line, optionally compressed as
   `.gz`, `.bz2`, `.zst` or `.lz4` (e.g. `docs.jsonl.gz`). `--compression` sets the Parquet codec
-  (default: pyarrow's, snappy).
+  (default: pyarrow's, snappy; `none`, `snappy`, `gzip`, `brotli`, `lz4` or `zstd`), checked
+  before the run starts.
 - OUT is one file when its name has one of these suffixes, holding every kept row in input order.
   Otherwise it is a directory with one output file per input file, under the same relative name
   ([layouts](large-datasets.md#output-layout)). Every output is written under a hidden temporary
