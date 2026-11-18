@@ -636,7 +636,9 @@ def test_rerun_with_other_outputs_redoes_them(tmp_path: Path) -> None:
     assert sorted(p.name for p in out.glob("*.jsonl")) == ["part-000.jsonl", "part-001.jsonl"]
     x1, x2 = tmp_path / "x1", tmp_path / "x2"
     model = _tiny_lid_model(tmp_path / "lid.bin")
-    args = ["langid", str(src), str(tmp_path / "l"), "--keep", "zz", "--model", str(model)]
+    # No score reaches 1.5: every row is dropped.
+    args = ["langid", str(src), str(tmp_path / "l"), "--keep", "en", "--min-score", "1.5"]
+    args += ["--model", str(model)]
     assert main([*args, "--excluded", str(x1)]) == 0
     assert main([*args, "--excluded", str(x2)]) == 0
     assert len(_rows(x2)) == 6

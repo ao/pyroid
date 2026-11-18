@@ -979,6 +979,25 @@ def test_a_refused_run_names_the_unfinished_work_when_out_is_missing(
     assert main(args) == 0  # the same command resumes
 
 
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_langid_keep_names_are_the_models_labels(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], en_lid: Path
+) -> None:
+    # A name that is not a label kept no row, with status 0 ("50 in, 0 out").
+    src = _write(_table([_english(i) for i in range(5)]), tmp_path / "in.parquet")
+    args = ["langid", str(src), str(tmp_path / "o.parquet"), "--model", str(en_lid), "--keep"]
+    for keep, hint in [("english", ""), ("EN", "; did you mean 'en'?"), ("__label__en", "; did")]:
+        assert main([*args, keep]) == 1
+        err = capsys.readouterr().err
+        assert err.startswith(
+            f"pyroid langid: --keep {keep!r} is not a label of the model, so no row would be "
+            f"kept{hint}"
+        ), err
+        assert "labels are language codes such as en)" in err
+    assert main([*args, "en"]) == 0
+    assert pq.read_table(tmp_path / "o.parquet").num_rows == 5
+
+
 @pytest.mark.parametrize(
     ("argv", "message"),
     [

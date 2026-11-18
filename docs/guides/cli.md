@@ -392,7 +392,7 @@ Adds fastText's top label (without `__label__`) as `language` and its probabilit
 | Option | Meaning |
 |---|---|
 | `--model MODEL` | a fastText model file (`.bin` or `.ftz`); default: `lid.176.bin`, found as [above](#the-language-id-model) |
-| `--keep LANGS` | keep only documents in these languages, comma-separated (`en,fr`); without it, every row but null texts is kept |
+| `--keep LANGS` | keep only documents in these languages, comma-separated (`en,fr`): labels of the model without `__label__`, which pyroid checks; without it, every row but null texts is kept |
 | `--min-score MIN_SCORE` | with `--keep`: datatrove's `language_threshold` (default 0.65); a document is kept if one of the languages has a probability above it |
 | `--top-k TOP_K` | above 1: also add `top_languages` and `top_language_scores`, lists of the `TOP_K` best labels and their probabilities |
 

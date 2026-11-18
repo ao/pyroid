@@ -403,6 +403,8 @@ def _recipe(o: Options) -> Any:
                 minhash=None,
                 threads=o.threads,
             )
+            if keep_langs:
+                _check_keep(r.model, keep_langs)
         else:
             ftfy = {"default": None, "datatrove": recipes.FTFY_FORMATTER, "off": False}
             r = recipes.FineWeb(
@@ -413,6 +415,26 @@ def _recipe(o: Options) -> Any:
             )
         cache[key] = r
     return r
+
+
+def _check_keep(model: Any, keep: Sequence[str]) -> None:
+    """``langid --keep``: every name must be one of the model's labels, or no row is kept.
+
+    The labels are compared as datatrove's LanguageFilter compares them, without the
+    ``__label__`` prefix and case-sensitively.
+    """
+    labels = [str(lb).removeprefix("__label__") for lb in model.labels]
+    known = set(labels)
+    for name in keep:
+        if name in known:
+            continue
+        near = name.removeprefix("__label__").lower()
+        hint = f"; did you mean {near!r}?" if near in known else ""
+        raise pyroid.PyroidError(
+            f"--keep {name!r} is not a label of the model, so no row would be kept{hint} "
+            f"(its {len(labels)} labels are language codes such as "
+            f"{', '.join(labels[:5])})"
+        )
 
 
 def _counts(reasons: Any) -> Counter[str]:
