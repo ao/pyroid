@@ -207,16 +207,18 @@ warnings.simplefilter("ignore", pyroid.integrations.PatchWarning)
 
 ### Warnings as errors {#warnings-as-errors}
 
-The patched program emits warnings that the unpatched one never does: the `PatchWarning`, and a
-`pyroid.FallbackWarning` when a patched function hands a call to the real package. Under
-`python -W error` or pytest's `filterwarnings = error` they become exceptions. To keep that
-setting, ignore the two classes after it, for example in pytest's configuration:
+The patched program emits warnings that the unpatched one never does: the `PatchWarning`, a
+`pyroid.FallbackWarning` when a patched function hands a call to the real package, and a
+`pyroid.VersionMismatchWarning` when the installed package is not a release pyroid reproduces.
+Under `python -W error` or pytest's `filterwarnings = error` they become exceptions. To keep that
+setting, ignore the three classes after it, for example in pytest's configuration:
 
 ```toml
 [tool.pytest.ini_options]
 filterwarnings = [
     "error",
     "ignore::pyroid.FallbackWarning",
+    "ignore::pyroid.VersionMismatchWarning",
     "ignore::pyroid.integrations.PatchWarning",
 ]
 ```
@@ -224,8 +226,10 @@ filterwarnings = [
 pytest's `-W ignore::pyroid.FallbackWarning` does the same. Python's own `-W` option and
 `PYTHONWARNINGS` can't name these classes: Python reads them at startup, before site-packages is
 on `sys.path`, and drops the entry with an `Invalid -W option ignored` message. In a script, call
-`warnings.simplefilter("ignore", pyroid.FallbackWarning)` (and the same for `PatchWarning`)
-before `patch()` instead.
+`warnings.simplefilter("ignore", pyroid.FallbackWarning)` (and the same for the other two)
+before `patch()` instead. Under `pyroid run` they come before the script runs:
+[`pyroid run`](#pyroid-run-programs-and-their-child-processes) gives the `PYTHONWARNINGS` values
+that silence them.
 
 ## `pyroid run`: programs and their child processes
 
