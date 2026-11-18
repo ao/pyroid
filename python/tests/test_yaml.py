@@ -52,6 +52,65 @@ def test_nan_is_one_object() -> None:
     assert py.safe_load("{.nan: 1, .NaN: 2}") == {a: 2}
 
 
+_NAN_DOC = "a: .nan\nb: [.NaN, !!float .NAN, !!float -.nan, !!float '+.nan']\n.nan: 1\n"
+
+
+@needs_pyyaml
+def test_nan_is_pyyamls_nan_value() -> None:
+    # PyYAML gives SafeConstructor.nan_value for every `.nan`. List and dict equality check
+    # identity first, so containers holding a nan compare equal only if both hold that object.
+    nan = yaml.constructor.SafeConstructor.nan_value
+    for result in (
+        py.safe_load(_NAN_DOC),
+        py.safe_load(_NAN_DOC.encode()),
+        py.safe_load(io.StringIO(_NAN_DOC)),
+        next(py.safe_load_all(_NAN_DOC)),
+        py.load(_NAN_DOC, Loader=yaml.SafeLoader),
+        py.load(_NAN_DOC, Loader=yaml.FullLoader),
+        py.full_load(_NAN_DOC),
+        py.unsafe_load(_NAN_DOC),
+    ):
+        assert result["a"] is nan
+        assert all(x is nan for x in result["b"])
+        assert next(k for k in result if isinstance(k, float)) is nan
+        assert result == yaml.safe_load(_NAN_DOC)
+
+
+@needs_pyyaml
+@pytest.mark.thread_unsafe
+def test_nan_under_the_patch_equals_pyyamls() -> None:
+    import pyroid.integrations as integrations
+
+    class Custom(yaml.SafeLoader):  # type: ignore[misc]
+        pass
+
+    Custom.add_constructor("!env", lambda loader, node: "ENV")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        integrations.patch("yaml")
+        try:
+            # The Rust path, and PyYAML for the customised loader.
+            assert yaml.safe_load(_NAN_DOC) == yaml.load(_NAN_DOC, Loader=Custom)
+        finally:
+            integrations.unpatch("yaml")
+
+
+@pytest.mark.thread_unsafe
+def test_nan_without_pyyaml_is_one_object(run_python: Any) -> None:
+    code = r"""
+import sys
+sys.modules["yaml"] = None
+import pyroid.yaml as py
+from pyroid.yaml import _construct
+doc = py.safe_load("a: .nan\nb: [.NaN, !!float -.nan, !!float '+.nan']\n.nan: 1\n")
+nans = [doc["a"], *doc["b"], *(k for k in doc if isinstance(k, float))]
+print(len(nans), all(x is _construct.nan_value for x in nans))
+"""
+    r = run_python(code)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ["5", "True"]
+
+
 def test_aliases_share_objects() -> None:
     doc = py.safe_load("a: &x [1]\nb: *x\nc: &y {}\nd: *y\n")
     assert doc["a"] is doc["b"]

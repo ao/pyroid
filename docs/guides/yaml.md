@@ -53,8 +53,9 @@ pyroid.patch("yaml")  # yaml.safe_load, yaml.load, yaml.dump, ... are pyroid.yam
 ## What is the same
 
 Loading gives PyYAML's YAML 1.1 types, as `SafeConstructor` builds them: `yes`/`no`/`on`/`off`
-booleans, `0x`, `0b`, `0`-octal and `1:20` (sexagesimal) ints, `.inf` and `.nan` (one shared
-`nan` object, as in PyYAML), timestamps as `date` and `datetime` with `tzinfo`, `!!binary` as
+booleans, `0x`, `0b`, `0`-octal and `1:20` (sexagesimal) ints, `.inf` and `.nan` (PyYAML's own
+shared `nan` object, `SafeConstructor.nan_value`, so containers holding one compare equal to
+PyYAML's; one shared object of pyroid's without PyYAML), timestamps as `date` and `datetime` with `tzinfo`, `!!binary` as
 `bytes`, `!!set`, `!!omap` and `!!pairs`, merge keys (`<<`), duplicate keys (the last value wins,
 in the first key's place), and aliases as shared objects (recursive ones included). An unusual
 explicitly tagged value, like `!!int " 0x1F "`, `!!float` with Arabic-Indic digits or
@@ -104,8 +105,8 @@ BOM before each piece PyYAML writes, as Python's codec gives PyYAML.
 Calls that go to PyYAML return PyYAML's result and emit one [`pyroid.FallbackWarning`](../concepts/fallbacks.md)
 per function and reason. Without PyYAML they raise `pyroid.PyroidError` instead. pyroid checks
 the loader or dumper class on every call, so a registration made after import is seen. It does
-not see methods monkeypatched onto PyYAML's own base classes (`yaml.constructor.SafeConstructor`
-and the like), which are rare.
+not see methods or attributes (such as `nan_value`) changed on PyYAML's own base classes
+(`yaml.constructor.SafeConstructor` and the like), which is rare.
 
 A program that changes `SafeLoader` itself sends every call to PyYAML: yamllint, for one, replaces
 `SafeLoader`'s implicit resolvers when it is imported, so in a yamllint process every load falls

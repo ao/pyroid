@@ -18,6 +18,7 @@ inf_value = 1e300
 while inf_value != inf_value * inf_value:
     inf_value *= inf_value
 #: ``SafeConstructor.nan_value``: one float object shared by every ``.nan``, as in PyYAML.
+#: With PyYAML installed, :mod:`pyroid.yaml` sets it to PyYAML's own at import.
 nan_value = -inf_value / inf_value
 
 bool_values = {

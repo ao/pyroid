@@ -60,6 +60,7 @@ if _yaml is not None and getattr(_yaml, "__version__", None) != PYYAML_VERSION:
 if _yaml is not None:
     from yaml.composer import ComposerError
     from yaml.constructor import ConstructorError
+    from yaml.constructor import SafeConstructor as _SafeConstructor
     from yaml.emitter import EmitterError
     from yaml.error import Mark, MarkedYAMLError, YAMLError
     from yaml.parser import ParserError
@@ -68,6 +69,10 @@ if _yaml is not None:
     from yaml.resolver import ResolverError
     from yaml.scanner import ScannerError
     from yaml.serializer import SerializerError
+
+    # Every `.nan` is PyYAML's own nan object, so containers holding it compare equal to the
+    # ones PyYAML loads (list and dict equality checks identity first).
+    _construct.nan_value = _SafeConstructor.nan_value
 else:
     from pyroid.yaml._errors import (
         ComposerError,
