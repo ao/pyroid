@@ -1318,6 +1318,17 @@ def test_run_usage(tmp_path: Path, argv: list[str], code: int, message: str) -> 
         assert "-p, --patch NAMES" in proc.stdout
 
 
+@pytest.mark.parametrize("columns", [60, 100, 300])
+def test_run_help_fits_the_terminal(tmp_path: Path, columns: int) -> None:
+    # The -p line listed every name on one line (223 characters with 17 names).
+    proc = run_cli(["--help"], cwd=tmp_path, env={"COLUMNS": str(columns)})
+    assert proc.returncode == 0, proc.stderr
+    assert max(map(len, proc.stdout.splitlines())) <= columns - 2, proc.stdout
+    assert proc.stdout.split() == _patch._RUN_HELP.split()
+    assert "\n  -p, --patch NAMES  comma-separated modules" in proc.stdout
+    assert proc.stdout.startswith("usage: pyroid run [-p NAMES]")
+
+
 def test_run_names_default_to_the_environment_then_ftfy_fasttext(tmp_path: Path) -> None:
     (tmp_path / "probe.py").write_text(PROBE)
     out = ok(run_cli(["probe.py"], cwd=tmp_path, env={"PYROID_PATCH": " anyascii "}))

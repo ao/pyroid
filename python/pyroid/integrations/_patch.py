@@ -1244,6 +1244,45 @@ options:
 """
 
 
+def _fit(text: str) -> str:
+    """`text` rewrapped to the terminal's width (``$COLUMNS`` too), as argparse wraps its help.
+
+    A paragraph with a line that is too long is refilled; a long option line is wrapped with
+    its continuation lines under the option's description.
+    """
+    import shutil
+    import textwrap
+
+    width = max(shutil.get_terminal_size().columns - 2, 40)
+    out: list[str] = []
+    for block in text.rstrip("\n").split("\n\n"):
+        lines = block.split("\n")
+        if all(len(line) <= width for line in lines):
+            out.append(block)
+        elif lines[0].endswith(":"):  # "options:" and its option lines
+            wrapped = [lines[0]]
+            for line in lines[1:]:
+                if line.startswith("  -"):  # the description starts after the option's name
+                    column = line.find("  ", 2) + 2
+                else:
+                    column = len(line) - len(line.lstrip())
+                wrapped += textwrap.wrap(
+                    line,
+                    width,
+                    subsequent_indent=" " * column,
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                ) or [line]
+            out.append("\n".join(wrapped))
+        else:
+            # A usage line goes on under its first argument, as argparse's does.
+            usage = lines[0].startswith("usage: ")
+            indent = " " * (len(" ".join(lines[0].split()[:3])) + 1) if usage else ""
+            text = " ".join(lines)
+            out.append(textwrap.fill(text, width, subsequent_indent=indent, break_long_words=False))
+    return "\n\n".join(out) + "\n"
+
+
 class _UsageError(Exception):
     pass
 
@@ -1327,7 +1366,7 @@ def run(argv: Sequence[str]) -> int:
         sys.stderr.write(f"{_RUN_USAGE}pyroid run: error: {exc}\n")
         return 2
     if parsed is None:
-        sys.stdout.write(_RUN_HELP)
+        sys.stdout.write(_fit(_RUN_HELP))
         return 0
     names_arg, module, script, args = parsed
     lenient = False
