@@ -7,9 +7,11 @@
 //! (`n`, `x`, grouping with zero padding, locale, out-of-range widths) gives `None`: the
 //! caller asks Python, which also raises its own errors for invalid specs.
 //!
-//! Digits come from Rust's formatter, which rounds the exact binary value correctly with ties
-//! to even, as CPython's dtoa does: `{:.N}` for `f`, `{:.Ne}` for `e` and for `g`'s
-//! significant digits, `{:e}` for the shortest round-tripping digits of `repr`.
+//! Digits are CPython's dtoa digits. Fixed precision rounds the exact binary value correctly,
+//! ties to even: exact integer arithmetic where it fits, else Rust's `{:.N}` (`f`) and
+//! `{:.Ne}` (`e`, and `g`'s significant digits), which round the same way. `repr` takes Rust's
+//! shortest round-tripping digits (`{:e}`), which are dtoa's except on an exact tie, where
+//! Rust rounds up and dtoa to even; [`shortest`] corrects that case.
 
 use std::fmt::Write as _;
 
@@ -598,7 +600,9 @@ fn significant(a: f64, p: usize) -> (Digits, i64) {
     split_exp(format!("{a:.prec$e}", prec = p - 1).as_bytes())
 }
 
-/// The shortest round-tripping digits of `a` (dtoa's mode 0).
+/// The shortest round-tripping digits of `a` (dtoa's mode 0): of the shortest digit strings
+/// that read back as `a`, the one nearest the exact value, an exact tie going to the even
+/// last digit.
 fn shortest(a: f64) -> (Digits, i64) {
     if a == 0.0 {
         return split_exp(b"0e0");
@@ -608,7 +612,105 @@ fn shortest(a: f64) -> (Digits, i64) {
         len: 0,
     };
     write!(w, "{a:e}").expect("a shortest float fits");
-    split_exp(&w.buf[..w.len])
+    let (d, decpt) = split_exp(&w.buf[..w.len]);
+    // A tie needs `1 + e + s == 0` ([`tie_to_even`]); that rules out almost every `a` here.
+    let s = i64::try_from(d.as_slice().len()).unwrap_or(0) - decpt;
+    if 1 + odd_mantissa(a).1 + s == 0 {
+        if let Some(even) = tie_to_even(a, d.as_slice(), decpt) {
+            return even;
+        }
+    }
+    (d, decpt)
+}
+
+/// `a = m * 2^e` with `m` odd, for a finite `a > 0`.
+#[inline]
+fn odd_mantissa(a: f64) -> (u64, i64) {
+    let bits = a.to_bits();
+    let exp_bits = i64::try_from((bits >> 52) & 0x7ff).unwrap_or(0);
+    let frac = bits & ((1u64 << 52) - 1);
+    let (m, e) = if exp_bits == 0 {
+        (frac, -1074)
+    } else {
+        (frac | (1u64 << 52), exp_bits - 1075)
+    };
+    let tz = m.trailing_zeros();
+    (m >> tz, e + i64::from(tz))
+}
+
+/// `5^k` for the exponents a tie can need.
+const POW5: [u64; 28] = {
+    let mut t = [1u64; 28];
+    let mut i = 1;
+    while i < 28 {
+        t[i] = t[i - 1] * 5;
+        i += 1;
+    }
+    t
+};
+
+/// dtoa's digits where Rust's shortest `{:e}` digits `digits` (no trailing zeros) and `decpt`
+/// break an exact tie the other way; `None` when they are dtoa's.
+///
+/// Rust gives the shortest digits nearest the exact value, as dtoa does, but rounds an exact
+/// tie up where dtoa rounds to an even last digit. `0.9790115356445312` (a float32 widened)
+/// is exactly `0.97901153564453125`: `...312` and `...313` both read back as it, CPython
+/// prints `...312`, Rust `...313`.
+///
+/// With `n` digits `D`, the shortest form is `D * 10^-s` with `s = n - decpt`. `a` lies
+/// halfway between two `n`-digit candidates exactly when `T = 2 * a * 10^s` is an odd
+/// integer, and they are `(T - 1) / 2` and `(T + 1) / 2`. Writing `a = m * 2^e` with `m` odd,
+/// `T = m * 5^s * 2^(1 + e + s)`, so `1 + e + s` must be 0, which [`shortest`] checks first.
+#[cold]
+#[inline(never)]
+#[allow(clippy::many_single_char_names)] // the names above
+fn tie_to_even(a: f64, digits: &[u8], decpt: i64) -> Option<(Digits, i64)> {
+    let s = i64::try_from(digits.len()).ok()? - decpt;
+    let (m, e) = odd_mantissa(a);
+    if 1 + e + s != 0 {
+        return None;
+    }
+    // T = m * 5^s, or m / 5^-s when that divides. T is near 2 * 10^17 at most, so 5^s
+    // beyond the table (and m < 2^53 < 5^23 below it) rules a tie out.
+    let t = if s >= 0 {
+        u128::from(m) * u128::from(*POW5.get(usize::try_from(s).ok()?)?)
+    } else {
+        let p = *POW5.get(usize::try_from(-s).ok()?)?;
+        if m % p != 0 {
+            return None;
+        }
+        u128::from(m / p)
+    };
+    let d = digits
+        .iter()
+        .fold(0u128, |acc, &b| acc * 10 + u128::from(b - b'0'));
+    let even = if t + 1 == 2 * d {
+        // a = D - 1/2 (in units of the last digit): D or D - 1.
+        (d % 2 == 1).then(|| d - 1)?
+    } else if t == 2 * d + 1 {
+        // a = D + 1/2: D or D + 1.
+        (d % 2 == 1).then_some(d + 1)?
+    } else {
+        return None;
+    };
+    // The even candidate must read back as `a` too (a power of two has a narrower gap
+    // below it than above).
+    let mut w = StackWriter {
+        buf: [0; 96],
+        len: 0,
+    };
+    write!(w, "{even}e{}", -s).ok()?;
+    let back: f64 = std::str::from_utf8(&w.buf[..w.len]).ok()?.parse().ok()?;
+    if back.to_bits() != a.to_bits() {
+        return None;
+    }
+    let mut len = 0i64;
+    let mut q = even;
+    while q > 0 {
+        len += 1;
+        q /= 10;
+    }
+    Some(digits_of(even, len - s))
 }
 
 fn split_exp(s: &[u8]) -> (Digits, i64) {
@@ -763,6 +865,98 @@ mod tests {
         for (x, want) in cases {
             assert_eq!(float_repr(x), want, "{x:?}");
         }
+    }
+
+    /// Exact ties at the last shortest digit go to the even digit, as in CPython's repr.
+    #[test]
+    fn repr_breaks_ties_to_even() {
+        let cases = [
+            // 0x1.f541p-1 = 0.97901153564453125 (a float32 widened)
+            (0.979_011_535_644_531_2, "0.9790115356445312"),
+            (0.627_296_447_753_906_2, "0.6272964477539062"),
+            (1_331_752_170_181_752.2, "1331752170181752.2"),
+            (272_721_534_007_552.62, "272721534007552.62"),
+        ];
+        for (x, want) in cases {
+            assert_eq!(float_repr(x), want, "{x:e}");
+            assert_eq!(float_repr(-x), format!("-{want}"), "{x:e}");
+            assert_eq!(f(x, ""), want, "{x:e}");
+        }
+        assert_eq!(f(1_331_752_170_181_752.2, ","), "1,331,752,170,181,752.2");
+        assert_eq!(f(0.979_011_535_644_531_2, "_"), "0.9790115356445312");
+        assert_eq!(f(0.979_011_535_644_531_2, "#"), "0.9790115356445312");
+    }
+
+    /// dtoa's shortest digits by search: the fewest digits `n` for which the correctly rounded
+    /// `n`-digit value (nearest, ties to even) or one of its two neighbours reads back as `a`;
+    /// the rounded one if it does, else the neighbour that does.
+    fn shortest_by_search(a: f64) -> (Vec<u8>, i64) {
+        for n in 1..=17usize {
+            let r = format!("{a:.prec$e}", prec = n - 1);
+            let (mantissa, exp) = r.split_once('e').unwrap();
+            let d: u64 = mantissa.replace('.', "").parse().unwrap();
+            let q = exp.parse::<i64>().unwrap() - i64::try_from(n).unwrap() + 1;
+            for c in [d, d - 1, d + 1] {
+                let back: f64 = format!("{c}e{q}").parse().unwrap();
+                if c > 0 && back.to_bits() == a.to_bits() {
+                    let text = c.to_string();
+                    let stripped = text.trim_end_matches('0');
+                    let len = i64::try_from(text.len()).unwrap();
+                    return (stripped.as_bytes().to_vec(), len + q);
+                }
+            }
+        }
+        unreachable!("17 digits always round-trip: {a:e}")
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_truncation)]
+    fn shortest_matches_a_search() {
+        let mut state: u64 = 0x2545_F491_4F6C_DD1D;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let mut values: Vec<f64> = vec![f64::MIN_POSITIVE, f64::MAX, 5e-324];
+        for k in -325..=308 {
+            let p: f64 = format!("1e{k}").parse().unwrap();
+            if p > 0.0 && p.is_finite() {
+                values.extend([p, f64::from_bits(p.to_bits() + 1)]);
+                values.push(f64::from_bits(p.to_bits() - 1));
+            }
+        }
+        let n = if cfg!(debug_assertions) {
+            15_000
+        } else {
+            300_000
+        };
+        for _ in 0..n {
+            let r = next();
+            values.push(f64::from_bits(r >> 1)); // any positive double
+            values.push(f64::from(f32::from_bits((r >> 33) as u32))); // a float32 widened
+            values.push(f64::from_bits(r >> 12)); // a subnormal or small normal
+            // a float32 in [0, 1), where ties are common
+            values.push(f64::from(
+                f32::from_bits(0x3f80_0000 | (r as u32 & 0x007f_ffff)) - 1.0,
+            ));
+        }
+        let mut ties = 0;
+        for &a in &values {
+            if !a.is_finite() || a <= 0.0 {
+                continue;
+            }
+            let (d, decpt) = shortest(a);
+            let want = shortest_by_search(a);
+            assert_eq!((d.as_slice(), decpt), (want.0.as_slice(), want.1), "{a:e}");
+            let mut w = String::new();
+            write!(w, "{a:e}").unwrap();
+            if split_exp(w.as_bytes()).0.as_slice() != d.as_slice() {
+                ties += 1;
+            }
+        }
+        assert!(ties > 0, "no tie among the values");
     }
 
     #[test]
