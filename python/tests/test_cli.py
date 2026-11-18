@@ -1030,6 +1030,22 @@ def test_options_that_would_be_ignored_are_refused(
     assert not list(tmp_path.glob(".out.parquet.pyroid"))
 
 
+def test_minhash_stages_refuse_a_directory_without_the_previous_stage(tmp_path: Path) -> None:
+    # Both accepted an empty directory with status 0, and 'filter' then kept every row.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    other = tmp_path / "inputs"
+    other.mkdir()
+    _write(_table(["a b c"]), other / "a.parquet")
+    for sigs in (empty, other):
+        with pytest.raises(SystemExit, match="holds no signatures"):
+            main(["dedup", "buckets", str(sigs), str(tmp_path / "dups")])
+        with pytest.raises(SystemExit, match="holds no duplicate pairs"):
+            main(["dedup", "cluster", str(sigs), str(tmp_path / "removed")])
+    assert not (tmp_path / "dups").exists()
+    assert not (tmp_path / "removed").exists()
+
+
 @pytest.mark.thread_unsafe(reason="reads stderr")
 def test_an_unknown_option_shows_the_commands_usage(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]

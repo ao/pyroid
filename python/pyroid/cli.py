@@ -2125,6 +2125,11 @@ def _stage_buckets(a: argparse.Namespace) -> int:
         raise SystemExit(f"pyroid dedup buckets: {sigs}: no such directory")
     _apart(out, sigs, "dedup buckets: DUPS", "SIGS")
     meta = _stage_meta(sigs)
+    if meta is None and next(sigs.glob("bucket_*/*.minhash.sig"), None) is None:
+        raise SystemExit(
+            f"pyroid dedup buckets: {sigs} holds no signatures (bucket_*/*.minhash.sig): give "
+            "the directory 'pyroid dedup signatures' wrote"
+        )
     _check_complete(sigs, meta, "input files", "run every 'pyroid dedup signatures' shard first")
     cfg = _stage_cfg(a, meta, sigs)
     shard = _shards.Shard.parse(a.shard) if a.shard else _shards.Shard()
@@ -2182,6 +2187,11 @@ def _stage_cluster(a: argparse.Namespace) -> int:
     meta = _stage_meta(dups)
     cfg = _stage_cfg(a, meta, dups)
     files = _minhash.dups_files(dups)
+    if meta is None and not files:
+        raise SystemExit(
+            f"pyroid dedup cluster: {dups} holds no duplicate pairs (*.dups): give the "
+            "directory 'pyroid dedup buckets' wrote"
+        )
     if meta is not None:
         # Only the bucket tasks of the run that wrote DUPS/.pyroid/run.json count.
         recs = [
