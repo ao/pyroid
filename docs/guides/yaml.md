@@ -128,6 +128,37 @@ has the tables.
 `safe_load` releases the GIL while it parses a document of 4 KiB or more; building the Python
 objects needs the interpreter. pyroid.yaml runs on free-threaded CPython without enabling the GIL.
 
+## Versions {#versions}
+
+pyroid.yaml reproduces PyYAML 6.0.3 (September 2025), the newest release. PyYAML 6.0 (October
+2021), 6.0.1 and 6.0.2 have the same Python code apart from `__version__`: they changed only how
+PyYAML is built and which wheels it ships. So pyroid gives the same results with any of the four
+installed, and does not warn about them.
+
+PyYAML 5.x (5.1 to 5.4.1, the last of them from January 2021) differs from 6.0 in what pyroid
+replaces:
+
+- `yaml.load(stream)` and `yaml.load_all(stream)` work without a `Loader`: they use `FullLoader`
+  and emit a `YAMLLoadWarning`. Since 6.0 the argument is required.
+- The float resolver also matches plain scalars that start with `._`: `._1` loads as `0.1` (and
+  `._` raises `ValueError`), and the string `"._1"` is dumped in quotes.
+- Two scanner error messages misspell "hexadecimal".
+- 5.1 and 5.2 load a timestamp with an offset as a naive `datetime` converted to UTC; 5.3 and
+  later give it a `tzinfo`.
+
+`pyroid.patch("yaml")` refuses PyYAML 5.x: it raises `ImportError` naming the release it needs
+and changes nothing, and `pyroid run -p yaml` stops with that error. A program written for 5.x
+keeps its own PyYAML then, instead of a `TypeError` from `yaml.load(stream)` or different results
+for the inputs above (accepting 5.x's call forms alone would still give 6.0's results). Upgrade with
+`pip install pyyaml==6.0.3`. `import pyroid.yaml` works with 5.x installed: its functions take
+6.0's arguments and give 6.0.3's results, it warns once that results can differ, and the classes it
+forwards and the calls it hands to PyYAML are 5.x's. PyYAML 5.x has no wheels for Python 3.10 or
+later, and its source distribution builds only with `cython<3` and `--no-build-isolation`, so it is
+rare on the Pythons pyroid supports.
+
+Without PyYAML, pyroid.yaml gives 6.0.3's results, with its own copies of the exception and `Mark`
+classes ([above](#change-one-import)).
+
 ## Differences from PyYAML {#differences-from-pyyaml}
 
 - Deep nesting: PyYAML's composer and representer are recursive, so it raises `RecursionError`
