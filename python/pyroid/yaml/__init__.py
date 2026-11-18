@@ -29,6 +29,9 @@ from pyroid.yaml import _construct
 #: The PyYAML release whose behaviour this module reproduces.
 PYYAML_VERSION = "6.0.3"
 __version__ = PYYAML_VERSION
+# Releases whose Python code is 6.0.3's apart from `__version__` (they differ in packaging and
+# wheels), so the results are the same: no version warning for them.
+_SAME_RELEASES = ("6.0", "6.0.1", "6.0.2")
 
 
 def _find_pyyaml() -> Any:
@@ -47,7 +50,10 @@ _yaml: Any = _find_pyyaml()
 #: run natively, with `SafeLoader`'s results).
 __with_libyaml__: bool = bool(getattr(_yaml, "__with_libyaml__", False))
 
-if _yaml is not None and getattr(_yaml, "__version__", None) != PYYAML_VERSION:
+if _yaml is not None and getattr(_yaml, "__version__", None) not in (
+    PYYAML_VERSION,
+    *_SAME_RELEASES,
+):
     warnings.warn(
         f"pyroid.yaml reproduces PyYAML {PYYAML_VERSION}, but PyYAML "
         f"{getattr(_yaml, '__version__', None)} is installed: pyroid.yaml's load and dump "

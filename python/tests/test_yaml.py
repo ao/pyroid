@@ -378,6 +378,32 @@ except ScannerError:
     assert r.stdout.splitlines() == ["{'a': 1} 6.0.3 True", "ScannerError"]
 
 
+@needs_pyyaml
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize("release", ["6.0", "6.0.1", "6.0.2"])
+def test_no_version_warning_for_the_same_code(run_python: Any, release: str) -> None:
+    # PyYAML 6.0 to 6.0.2 have 6.0.3's Python code (only __version__ differs).
+    code = rf"""
+import warnings
+import yaml
+yaml.__version__ = {release!r}
+with warnings.catch_warnings(record=True) as w:
+    warnings.simplefilter("always")
+    import pyroid.yaml
+    import pyroid
+    pyroid.patch("yaml")
+print(yaml.safe_load is pyroid.yaml.safe_load)
+for x in w:
+    print(x.category.__name__, str(x.message)[:54])
+"""
+    r = run_python(code)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == [
+        "True",
+        "PatchWarning pyroid.integrations.patch: the installed yaml now uses",
+    ]
+
+
 def test_module_getattr() -> None:
     if yaml is None:
         with pytest.raises(AttributeError, match="PyYAML provides it"):

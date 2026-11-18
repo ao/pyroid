@@ -930,6 +930,7 @@ _TARGETS: dict[str, _Target] = {
         "pip install pyyaml==6.0.3",
         " (customised loaders and dumpers, !!python/ tags, the event and token APIs, YAMLObject)",
         _build_yaml,
+        modes_attr="_SAME_RELEASES",  # the same Python code as 6.0.3
     ),
 }
 
