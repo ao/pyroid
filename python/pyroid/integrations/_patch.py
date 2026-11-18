@@ -1178,17 +1178,47 @@ def _apply(names: Sequence[str], *, lenient: bool, announce: bool = True) -> lis
 
 
 def _autopatch() -> None:
-    """Patch the names in ``$PYROID_PATCH`` (the start-up hook calls this)."""
+    """Patch the names in ``$PYROID_PATCH`` (the start-up hook calls this).
+
+    As under ``pyroid run``, the warnings have no line of the user's to point at (the hook runs
+    before the program): they are plain lines, with one short PatchWarning for all the names.
+    """
     names = _split(os.environ.get(ENV_VAR, ""))
     unknown = [n for n in names if n not in _TARGETS]
-    if unknown:
+    with warnings.catch_warnings(), _versions.at_startup():
+        warnings.showwarning = _show_hook_warning
+        if unknown:
+            warnings.warn(
+                f"pyroid: ignoring {', '.join(map(repr, unknown))} in ${ENV_VAR}: the supported "
+                f"names are {', '.join(map(repr, SUPPORTED))}",
+                PatchWarning,
+                stacklevel=1,
+            )
+        _apply_announced(_check([n for n in names if n in _TARGETS]), True, f"${ENV_VAR}")
+
+
+def _apply_announced(names: Sequence[str], lenient: bool, source: str | None = None) -> list[str]:
+    """:func:`_apply` with one short PatchWarning for the names this process tree patches first.
+
+    ``source`` names where the names came from (``$PYROID_PATCH`` for the start-up hook).
+    """
+    warned = set(_split(os.environ.get(_WARNED_ENV, "")))
+    done = _apply(names, lenient=lenient, announce=False)
+    new = [n for n in done if n not in warned]
+    if new:
+        origin = f" (from {source})" if source else ""
         warnings.warn(
-            f"pyroid: ignoring {', '.join(map(repr, unknown))} in ${ENV_VAR}: the supported "
-            f"names are {', '.join(map(repr, SUPPORTED))}",
+            f"{', '.join(new)} patched with {', '.join(_TARGETS[n].impl for n in new)}{origin}, "
+            "in this process and the Python processes it starts",
             PatchWarning,
-            stacklevel=_caller_stacklevel(),
+            stacklevel=1,
         )
-    _apply(_check([n for n in names if n in _TARGETS]), lenient=True)
+    return done
+
+
+def _show_hook_warning(message: Warning | str, category: type[Warning], *_: Any, **__: Any) -> None:
+    text = str(message).removeprefix("pyroid: ")
+    sys.stderr.write(f"pyroid: {category.__name__}: {text}\n")
 
 
 def _export(names: Sequence[str]) -> None:
@@ -1330,19 +1360,9 @@ def run(argv: Sequence[str]) -> int:
             # The warnings have no line of the user's to point at (pyroid run is the caller): show
             # them as plain lines. The warning filters (-W, PYTHONWARNINGS) still apply. One short
             # PatchWarning for all the names replaces patch()'s one per name.
-            warned = set(_split(os.environ.get(_WARNED_ENV, "")))
-            with warnings.catch_warnings():
+            with warnings.catch_warnings(), _versions.at_startup():
                 warnings.showwarning = _show_run_warning
-                done = _apply(names, lenient=lenient, announce=False)
-                new = [n for n in done if n not in warned]
-                if new:
-                    warnings.warn(
-                        f"{', '.join(new)} patched with "
-                        f"{', '.join(_TARGETS[n].impl for n in new)}, in this process "
-                        "and the Python processes it starts",
-                        PatchWarning,
-                        stacklevel=1,
-                    )
+                done = _apply_announced(names, lenient)
         except ImportError as exc:
             sys.stderr.write(f"pyroid run: error: cannot patch: {exc}\n")
             return 2

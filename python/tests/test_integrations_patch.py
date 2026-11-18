@@ -1399,7 +1399,11 @@ def test_hook_patches_from_the_environment(tmp_path: Path) -> None:
     out = ok(proc)
     assert out["ftfy"] is True
     assert out["warned"] == "ftfy,anyascii"
-    assert proc.stderr.count("PatchWarning") == 2, proc.stderr
+    # One plain line, as under pyroid run: patch()'s long warning per name pointed into the hook.
+    assert proc.stderr == (
+        "pyroid: PatchWarning: ftfy, anyascii patched with pyroid.ftfy, pyroid.translit (from "
+        "$PYROID_PATCH), in this process and the Python processes it starts\n"
+    )
     # Already warned higher up the process tree: quiet.
     env = hook_env(PYROID_PATCH="ftfy", _PYROID_PATCH_WARNED="ftfy")
     proc = child(HOOK_PROBE, env=env, prelude=False, cwd=tmp_path)
@@ -1432,7 +1436,7 @@ def test_hook_runs_the_sitecustomize_it_shadows(tmp_path: Path) -> None:
 def test_hook_warns_about_unknown_names(tmp_path: Path) -> None:
     proc = child(HOOK_PROBE, env=hook_env(PYROID_PATCH="ftfy,nope"), prelude=False, cwd=tmp_path)
     assert ok(proc)["ftfy"] is True
-    assert "ignoring 'nope' in $PYROID_PATCH" in proc.stderr
+    assert "pyroid: PatchWarning: ignoring 'nope' in $PYROID_PATCH" in proc.stderr
 
 
 def test_hook_is_inert_when_imported_as_part_of_the_package() -> None:

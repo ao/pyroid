@@ -200,7 +200,10 @@ pyroid run: PatchWarning: ftfy, fasttext patched with pyroid.ftfy, pyroid.fastte
 ```
 
 That one line replaces the `PatchWarning` that `patch()` gives for each name;
-`PYTHONWARNINGS=ignore::UserWarning` silences it.
+`PYTHONWARNINGS=ignore::UserWarning` silences it. A `VersionMismatchWarning` comes before the
+target too, so a `warnings.simplefilter(...)` in the target is too late for it; it names the
+`PYTHONWARNINGS` value that silences it, such as
+`PYTHONWARNINGS='ignore:pyroid.ftfy reproduces'`.
 
 ```text
 usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
@@ -272,12 +275,14 @@ The hook does nothing in an interpreter that can't import pyroid, nor in one sta
 
 ### Without `pyroid run`
 
-The same works with two environment variables, for example in a job script:
+The same works with two environment variables, for example in a job script. The hook directory
+goes first on `PYTHONPATH`, and the entries already there stay:
 
 ```console
 $ export PYROID_PATCH=ftfy,fasttext
-$ export PYTHONPATH="$(python -c 'import pyroid.integrations._patch as p; print(p.HOOK_DIR)')"
+$ export PYTHONPATH="$(python -c 'import pyroid.integrations._patch as p; print(p.HOOK_DIR)')${PYTHONPATH:+:$PYTHONPATH}"
 $ python train.py
+pyroid: PatchWarning: ftfy, fasttext patched with pyroid.ftfy, pyroid.fasttext (from $PYROID_PATCH), in this process and the Python processes it starts
 ```
 
 ## Verified call sites
