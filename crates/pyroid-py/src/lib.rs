@@ -30,6 +30,7 @@ mod nemo_modifiers;
 mod nltk;
 mod pythainlp;
 mod segmenters;
+mod sqlparse;
 mod sudachi;
 mod testing;
 mod text;
@@ -65,5 +66,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jieba::register(m)?;
     trafilatura::register(m)?;
     warc::register(m)?;
+    sqlparse::register(m)?;
     Ok(())
 }

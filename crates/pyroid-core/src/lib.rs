@@ -17,6 +17,8 @@
 //! - [`nltk`]: NLTK 3.10.4's Punkt sentence splitter and Treebank word tokenizers (`pyroid.nltk`).
 //! - [`trafilatura`]: Trafilatura 2.3.1's and 1.11.0's text extraction, ported exactly
 //!   (`pyroid.trafilatura`).
+//! - [`sqlparse`]: sqlparse 0.6.1's lexer, grouping and formatter, ported exactly
+//!   (`pyroid.sqlparse`).
 //! - [`sudachi`]: Japanese morphemes as SudachiPy 0.7.0 gives them, from an
 //!   installed SudachiDict (datatrove's Japanese tokenizer in the filters).
 //! - [`warc`]: warcio 1.8.2's WARC/ARC reader, ported exactly (`pyroid.warc`).
@@ -48,6 +50,7 @@ pub mod nltk;
 pub mod par;
 pub mod pythainlp;
 pub mod pyvi;
+pub mod sqlparse;
 pub mod sudachi;
 pub mod text;
 pub mod trafilatura;

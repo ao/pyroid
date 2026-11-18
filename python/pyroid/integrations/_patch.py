@@ -66,6 +66,9 @@ any. The same works by hand, with no ``pyroid run``::
 
 The hook warns once per process tree, not in every worker. It does nothing in an interpreter that
 cannot import pyroid, nor in one started with ``-I`` or ``-E`` (``PYTHONPATH`` is ignored there).
+A name that :func:`patch` refuses with ``ImportError`` (``"fasttext"`` without numpy, ``"sqlparse"``
+with sqlparse older than 0.5.0) is skipped by the hook with a :class:`PatchWarning`, while ``pyroid
+run`` stops with that error.
 
 ``"nltk"`` works differently when NLTK is installed: no shim, but ``sent_tokenize``,
 ``word_tokenize``, ``punkt_model_available``, ``PunktSentenceTokenizer``, ``PunktTokenizer``,
@@ -140,6 +143,7 @@ SUPPORTED: tuple[str, ...] = (
     "nltk",
     "warcio",
     "nemo_curator",
+    "sqlparse",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -283,6 +287,8 @@ class _Target:
     modes_attr: str | None = None
     # the installed version, from the real module (default: its __version__)
     installed: Callable[[Any], str | None] | None = None
+    # the warning's second sentence without the real package, when pyroid provides all of it
+    standalone: str | None = None
 
 
 def _caller_stacklevel() -> int:
@@ -760,6 +766,67 @@ def _build_nemo_curator(impl: types.ModuleType, real: Any, missing: str) -> _Bui
     return {}, [undo]
 
 
+# What patch("sqlparse") sets on an installed sqlparse (pyroid.sqlparse._patched's functions).
+_SQLPARSE_SWAPS: dict[str, tuple[str, ...]] = {
+    "sqlparse": ("parse", "parsestream", "format", "split"),
+    "sqlparse.lexer": ("tokenize",),
+    "sqlparse.engine.grouping": ("group",),
+}
+# Without sqlparse, these pyroid.sqlparse modules stand in for sqlparse's. sqlparse.cli and
+# sqlparse.__main__ are not aliased: they hold no state, and `python -m sqlparse.cli` needs a module
+# found under that name.
+_SQLPARSE_MODULES = (
+    "",
+    ".sql",
+    ".tokens",
+    ".keywords",
+    ".lexer",
+    ".exceptions",
+    ".utils",
+    ".formatter",
+    ".engine",
+    ".engine.grouping",
+    ".engine.filter_stack",
+    ".engine.statement_splitter",
+    ".filters",
+    ".filters.aligned_indent",
+    ".filters.others",
+    ".filters.output",
+    ".filters.reindent",
+    ".filters.right_margin",
+    ".filters.tokens",
+)
+
+
+def _build_sqlparse(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    from pyroid.sqlparse import _backend, _patched
+
+    if real is None:
+        mods = {
+            f"sqlparse{s}": importlib.import_module(f"pyroid.sqlparse{s}")
+            for s in _SQLPARSE_MODULES
+        }
+        return mods, []
+    refusal = _backend.patch_refusal(real)  # pyroid's trees are not made of its classes
+    if refusal is not None:
+        raise ImportError(refusal)
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for mod, names in _SQLPARSE_SWAPS.items():
+        module = importlib.import_module(mod)
+        for n in names:
+            saved.append((module, n, module.__dict__.get(n, _MISSING)))
+            setattr(module, n, getattr(_patched, n))
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
 def _distribution_version(name: str) -> Callable[[Any], str | None]:
     """The installed version of distribution `name` (for packages without ``__version__``)."""
 
@@ -850,10 +917,23 @@ _TARGETS: dict[str, _Target] = {
         " (readers, writers, deduplication, classifiers, the other stages)",
         _build_nemo_curator,
     ),
+    "sqlparse": _Target(
+        "pyroid.sqlparse",
+        "which reproduces sqlparse 0.6.1's parse, parsestream, format, split, lexer.tokenize "
+        "and engine.grouping.group",
+        "SQLPARSE_VERSION",
+        "pip install sqlparse==0.6.1",
+        " (the token classes and their methods, FilterStack and the filters, the command line)",
+        _build_sqlparse,
+        standalone=(
+            "sqlparse is not installed, so sqlparse and its submodules are pyroid.sqlparse's, "
+            "which include sqlparse 0.6.1's Python modules."
+        ),
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator")
+_SWAPPED = ("nltk", "warcio", "nemo_curator", "sqlparse")
 
 
 # ---------------------------------------------------------------------------
@@ -919,7 +999,9 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
     if name not in _WARNED:
         _WARNED.add(name)
         what = f"`import {name}` now gives pyroid's drop-in"
-        if real is None:
+        if real is None and target.standalone is not None:
+            rest = target.standalone
+        elif real is None:
             rest = f"Everything else{target.rest} is unavailable: {missing} ({target.pip})."
         elif name in _SWAPPED:
             what = f"the installed {name} now uses pyroid's drop-ins"
@@ -927,6 +1009,7 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
                 "nltk": "from nltk import word_tokenize",
                 "warcio": "from warcio.archiveiterator import ArchiveIterator",
                 "nemo_curator": "from nemo_curator.stages.text.filters import ScoreFilter",
+                "sqlparse": "from sqlparse import format",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
@@ -1014,13 +1097,16 @@ def patch(*names: str) -> None:
 
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
-            ``"trafilatura"``, ``"nltk"``, ``"warcio"`` and/or ``"nemo_curator"``.
+            ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"`` and/or
+            ``"sqlparse"``.
 
     Raises:
         TypeError: No names were given.
         ValueError: A name is not supported (nothing is patched then).
         ImportError: The pyroid module behind a name cannot be imported (``pyroid.fasttext``
-            and ``pyroid.datasketch`` need numpy).
+            and ``pyroid.datasketch`` need numpy), or the installed package cannot take
+            pyroid's objects (``"nemo_curator"`` needs NeMo Curator; ``"sqlparse"`` needs
+            sqlparse 0.5.0 or later, or none).
 
     Warns:
         PatchWarning: Once per process for each name: what was patched and how to undo it;
@@ -1101,13 +1187,15 @@ def _split(value: str) -> list[str]:
 def _apply(names: Sequence[str], *, lenient: bool) -> list[str]:
     """Patch checked `names`, warning once per process tree; return the names patched.
 
-    ``lenient``: skip (with a PatchWarning) a name whose pyroid module cannot be imported.
+    ``lenient``: skip (with a PatchWarning) a name that cannot be patched (ImportError: its
+    pyroid module cannot be imported, or the installed package cannot take pyroid's objects).
     """
     warned = set(_split(os.environ.get(_WARNED_ENV, "")))
     done: list[str] = []
     for name in names:
         try:
             importlib.import_module(_TARGETS[name].impl)
+            _install(name, warn=name not in warned)
         except ImportError as exc:
             if not lenient:
                 raise
@@ -1115,7 +1203,6 @@ def _apply(names: Sequence[str], *, lenient: bool) -> list[str]:
                 f"pyroid: not patching {name}: {exc}", PatchWarning, stacklevel=_caller_stacklevel()
             )
             continue
-        _install(name, warn=name not in warned)
         done.append(name)
     os.environ[_WARNED_ENV] = ",".join(n for n in SUPPORTED if n in warned or n in done)
     return done
@@ -1147,7 +1234,7 @@ _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
-`warcio` / `nemo_curator` giving pyroid's drop-ins. The Python processes it starts
+`warcio` / `nemo_curator` / `sqlparse` giving pyroid's drop-ins. The Python processes it starts
 (multiprocessing workers, subprocesses) are patched too.
 
 options:

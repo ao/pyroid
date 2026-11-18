@@ -12,7 +12,7 @@ Each module runs on list[str] and Arrow input and single str calls, at every ``-
 ftfy (FineWeb text, plus mojibake made from it), translit, fastText LID (.bin and .ftz), the Gopher, C4 and
 FineWeb filters and the formatters, MinHash and exact and sentence dedup, pyroid.text, pyroid.jieba,
 pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.metrics
-(ROUGE, BLEU, chrF), pyroid.datasketch, and the FineWeb-2 filter and MinHash configs of every language
+(ROUGE, BLEU, chrF), pyroid.datasketch, pyroid.sqlparse (generated SQL), and the FineWeb-2 filter and MinHash configs of every language
 pyroid tokenizes natively here (Japanese only with SudachiDict installed).
 
 Needs only pyroid and numpy. pyarrow is optional: without it, as on Windows ARM64, the Arrow calls are
@@ -298,10 +298,48 @@ class Trainer:
             lsh.query(lean)
             m.jaccard(ms[0])
 
+    def sqlparse(self) -> None:
+        import pyroid.sqlparse as SP
+
+        rng = __import__("random").Random(TRAIN_SEED)
+        cols = [
+            "id",
+            "name",
+            '"Weird Col"',
+            "t.x",
+            "count(*)",
+            "sum(a + b) as s",
+            "case when a > 1 then 2 else 3 end",
+        ]
+        docs = []
+        for i in range(max(len(self.texts) // 2, 200)):
+            c = ", ".join(rng.sample(cols, 3))
+            docs.append(
+                f"-- q{i}\nSELECT {c} FROM t{i % 9} t JOIN u ON t.id = u.tid "
+                f"WHERE t.a = {i} AND t.b IN ('x', 'y') AND t.c BETWEEN 1 AND 2 GROUP BY 1 ORDER BY 2 DESC;\n"
+                f"insert into t (a, b) values ({i}, 'v{i}'), ({i + 1}, $$d$$);\nupdate t set a = a + 1 /* c */ where b = '{i}'"
+            )
+        opts = [
+            {},
+            {"reindent": True},
+            {"reindent_aligned": True},
+            {"keyword_case": "upper", "strip_comments": True},
+            {"reindent": True, "comma_first": True, "wrap_after": 40, "output_format": "python"},
+        ]
+        for t in self.threads:
+            for o in opts:
+                SP.format_batch(docs, threads=t, **o)
+            SP.split_batch(docs, threads=t)
+        for d in docs[: self.per_doc]:
+            SP.parse(d)
+            SP.split(d)
+            for o in opts:
+                SP.format(d, **o)
+
     def run(self) -> dict[str, float]:
         warnings.simplefilter("ignore")  # FallbackWarning and friends: the paths still run
         sections = ["ftfy", "translit", "fasttext", "filters", "dedup", "text", "multilingual", "jieba"]
-        sections += ["json_repair", "metrics", "datasketch"]
+        sections += ["json_repair", "metrics", "datasketch", "sqlparse"]
         for name in sections:
             self.section(name, getattr(self, name))
         return self.timings

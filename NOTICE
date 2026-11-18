@@ -514,6 +514,56 @@ isdigit() and isalnum() sets of CPython 3.11-3.15's Unicode databases (see
 "Data derived from CPython and Unicode" above).
 
 -------------------------------------------------------------------------------
+sqlparse
+-------------------------------------------------------------------------------
+pyroid.sqlparse (crates/pyroid-core/src/sqlparse/, crates/pyroid-py/src/sqlparse/
+and python/pyroid/sqlparse/) is a derivative work of sqlparse 0.6.1,
+https://github.com/andialbrecht/sqlparse: its lexer, statement splitter,
+grouping and formatting filters were ported line by line to Rust (each ported
+file carries the header "Derived from sqlparse 0.6.1 (BSD-3-Clause), © the
+sqlparse authors and contributors; modified."), and its Python modules are
+vendored in python/pyroid/sqlparse/ (engine/, filters/, formatter.py,
+utils.py, cli.py, __main__.py and the _own_*.py copies of tokens.py, sql.py,
+keywords.py, lexer.py and exceptions.py) with their imports changed; each says
+so in its first lines. The test suite under parity/data/sqlparse-0.6.1/ is
+copied from the same release. A copy of the licence is in
+LICENSES/BSD-3-Clause-sqlparse.txt:
+
+    Copyright (c) 2016, Andi Albrecht <albrecht.andi@gmail.com>
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+        * Redistributions of source code must retain the above copyright
+          notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright
+          notice, this list of conditions and the following disclaimer in the
+          documentation and/or other materials provided with the distribution.
+        * Neither the name of the authors nor the names of its contributors may
+          be used to endorse or promote products derived from this software
+          without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+crates/pyroid-core/src/sqlparse/regex.rs and pystr.rs reproduce the behaviour
+of CPython's re module and str methods (no CPython code is included), and
+sqlparse/tables.rs holds str.upper(), str.lower(), str.capitalize() and the
+re IGNORECASE data (_sre.unicode_tolower, _sre.unicode_iscased,
+re._casefix) of CPython 3.11-3.15's Unicode databases (see "Data derived from
+CPython and Unicode" above).
+
+-------------------------------------------------------------------------------
 datasketch
 -------------------------------------------------------------------------------
 pyroid.datasketch (crates/pyroid-core/src/datasketch/,

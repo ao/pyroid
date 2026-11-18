@@ -22,6 +22,7 @@ __all__ = [
     "metrics",
     "nemo",
     "nltk",
+    "sqlparse",
     "text",
     "trafilatura",
     "translit",
@@ -43,6 +44,7 @@ datasketch: ModuleType
 jieba: ModuleType
 nltk: ModuleType
 nemo: ModuleType
+sqlparse: ModuleType
 trafilatura: ModuleType
 warc: ModuleType
 _testing: ModuleType
