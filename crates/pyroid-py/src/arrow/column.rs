@@ -235,11 +235,26 @@ impl ColumnData {
         if k == 0 { 0 } else { self.ends[k - 1] }
     }
 
-    /// The span holding row `i` (`i < len`) and the row's number in its chunk.
-    fn locate(&self, i: usize) -> (&Span, usize) {
-        let k = self.ends.partition_point(|&end| end <= i);
+    /// The index of the span holding row `i` (`i < len`). `guess` is tried
+    /// first (the span of the previous row, say), so a walk over the rows
+    /// searches only when it moves to the next chunk.
+    fn span_index(&self, i: usize, guess: usize) -> usize {
+        if guess < self.spans.len() && self.first_row(guess) <= i && i < self.ends[guess] {
+            guess
+        } else {
+            self.ends.partition_point(|&end| end <= i)
+        }
+    }
+
+    /// Span `k` and the number, in its chunk, of the column's row `i`.
+    fn row_in(&self, k: usize, i: usize) -> (&Span, usize) {
         let span = &self.spans[k];
         (span, span.start + (i - self.first_row(k)))
+    }
+
+    /// The span holding row `i` (`i < len`) and the row's number in its chunk.
+    fn locate(&self, i: usize) -> (&Span, usize) {
+        self.row_in(self.span_index(i, 0), i)
     }
 
     /// Rows `from..to` (`from <= to <= len`), over the same chunks.
@@ -266,12 +281,16 @@ impl ColumnData {
         rows: impl IntoIterator<Item = usize>,
         mut tick: impl FnMut() -> Result<(), E>,
     ) -> Result<Self, E> {
-        let mut out = Gather::new(self.ty);
-        for (n, row) in rows.into_iter().enumerate() {
+        let rows = rows.into_iter();
+        let mut out = Gather::new(self.ty, rows.size_hint().0);
+        let mut k = 0;
+        for (n, row) in rows.enumerate() {
             if n % CHECK_ROWS == CHECK_ROWS - 1 {
                 tick()?;
             }
-            let (span, at) = self.locate(row);
+            // A slice's next row is mostly in the same chunk as the last.
+            k = self.span_index(row, k);
+            let (span, at) = self.row_in(k, row);
             out.push(&span.chunk, at);
         }
         let spans = out.finish().into_iter().map(|c| Span::whole(Arc::new(c)));
@@ -301,6 +320,13 @@ impl ColumnData {
 /// a copy, `to_pylist`), as `input.rs` does for long lists. Fewer under Miri,
 /// so the unit tests reach a check without 65,536 interpreted rows.
 const CHECK_ROWS: usize = if cfg!(miri) { 1 << 6 } else { 1 << 16 };
+
+/// `rows` in runs of at most [`CHECK_ROWS`], for a Ctrl-C check before each.
+fn blocks(rows: std::ops::Range<usize>) -> impl Iterator<Item = std::ops::Range<usize>> {
+    let end = rows.end;
+    rows.step_by(CHECK_ROWS)
+        .map(move |start| start..end.min(start + CHECK_ROWS))
+}
 
 /// `py.check_signals()` every [`CHECK_ROWS`] calls.
 fn tick(py: Python<'_>, n: &mut usize) -> PyResult<()> {
@@ -441,12 +467,13 @@ enum Gather {
 }
 
 impl Gather {
-    fn new(ty: ColumnType) -> Self {
+    /// A builder for about `rows` rows of type `ty`.
+    fn new(ty: ColumnType, rows: usize) -> Self {
         match ty {
-            ColumnType::Utf8 => Self::Utf8(StringsBuilder::default()),
-            ColumnType::LargeUtf8 => Self::LargeUtf8(StringsBuilder::default()),
-            ColumnType::Bool => Self::Bool(Vec::new()),
-            ColumnType::LargeBinary => Self::LargeBinary(StringsBuilder::default()),
+            ColumnType::Utf8 => Self::Utf8(StringsBuilder::with_capacity(rows)),
+            ColumnType::LargeUtf8 => Self::LargeUtf8(StringsBuilder::with_capacity(rows)),
+            ColumnType::Bool => Self::Bool(Vec::with_capacity(rows)),
+            ColumnType::LargeBinary => Self::LargeBinary(StringsBuilder::with_capacity(rows)),
         }
     }
 
@@ -494,6 +521,16 @@ impl<O: Offset> Default for StringsBuilder<O> {
 }
 
 impl<O: Offset> StringsBuilder<O> {
+    fn with_capacity(rows: usize) -> Self {
+        let mut offsets = Vec::with_capacity(rows + 1);
+        offsets.push(O::from_usize(0));
+        Self {
+            offsets,
+            valid: Vec::with_capacity(rows),
+            ..Self::default()
+        }
+    }
+
     /// Append a row. Rows come from arrays of the same offset type, so one row
     /// always fits an empty array.
     fn push(&mut self, row: Option<&[u8]>) {
@@ -843,6 +880,22 @@ fn row_value<'py>(py: Python<'py>, chunk: &Chunk, at: usize) -> PyResult<Bound<'
     })
 }
 
+/// Rows `rows` of a string array, appended to `items`.
+fn push_strings<'py, O: Offset>(
+    py: Python<'py>,
+    items: &mut Vec<Bound<'py, PyAny>>,
+    b: &StringBuffers<O>,
+    rows: std::ops::Range<usize>,
+) -> PyResult<()> {
+    for at in rows {
+        items.push(match b.get(at) {
+            None => py.None().into_bound(py),
+            Some(bytes) => str_value(py, bytes)?,
+        });
+    }
+    Ok(())
+}
+
 fn str_value<'py>(py: Python<'py>, bytes: &[u8]) -> PyResult<Bound<'py, PyAny>> {
     // Built from `&str`s, so always valid UTF-8.
     let s = std::str::from_utf8(bytes)
@@ -1170,15 +1223,31 @@ impl Column {
 
     /// The values as a Python list (``None`` for nulls).
     fn to_pylist<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let out = PyList::empty(py);
-        let mut n = 0;
+        // Collected first, so the list is made at its final size (appending
+        // one by one is slow on free-threaded builds).
+        let mut items = Vec::with_capacity(self.inner.len());
         for span in &self.inner.spans {
-            for at in span.rows() {
-                tick(py, &mut n)?;
-                out.append(row_value(py, &span.chunk, at)?)?;
+            for rows in blocks(span.rows()) {
+                py.check_signals()?;
+                match &*span.chunk {
+                    Chunk::Utf8(b) => push_strings(py, &mut items, b, rows)?,
+                    Chunk::LargeUtf8(b) => push_strings(py, &mut items, b, rows)?,
+                    Chunk::Bool(b) => items.extend(rows.map(|at| {
+                        b.get(at).map_or_else(
+                            || py.None().into_bound(py),
+                            |v| PyBool::new(py, v).to_owned().into_any(),
+                        )
+                    })),
+                    Chunk::LargeBinary(b) => items.extend(rows.map(|at| {
+                        b.get(at).map_or_else(
+                            || py.None().into_bound(py),
+                            |v| PyBytes::new(py, v).into_any(),
+                        )
+                    })),
+                }
             }
         }
-        Ok(out)
+        PyList::new(py, items)
     }
 
     fn __repr__(&self) -> String {
@@ -1225,6 +1294,9 @@ pub struct ColumnIterator {
     column: Arc<ColumnData>,
     /// Forward: the next row. Reversed: the rows left (the next is `pos - 1`).
     pos: AtomicUsize,
+    /// The span of the last row taken, tried first for the next one. Threads
+    /// sharing the iterator may overwrite each other's; it is only a guess.
+    span: AtomicUsize,
     reversed: bool,
 }
 
@@ -1234,6 +1306,7 @@ impl ColumnIterator {
         Self {
             column,
             pos: AtomicUsize::new(pos),
+            span: AtomicUsize::new(0),
             reversed,
         }
     }
@@ -1272,7 +1345,12 @@ impl ColumnIterator {
         let Some(row) = self.claim() else {
             return Ok(None);
         };
-        let (span, at) = self.column.locate(row);
+        let guess = self.span.load(Ordering::Relaxed);
+        let k = self.column.span_index(row, guess);
+        if k != guess {
+            self.span.store(k, Ordering::Relaxed);
+        }
+        let (span, at) = self.column.row_in(k, row);
         row_value(py, &span.chunk, at).map(Some)
     }
 

@@ -747,3 +747,22 @@ fn strings_builder_keeps_rows_and_nulls() {
     assert_eq!(done[0].null_count, 1);
     assert_eq!(done[0].offsets, [0, 2, 2, 2, 3]);
 }
+
+#[test]
+fn span_index_only_trusts_a_right_guess() {
+    let owned = sample();
+    let rows = as_strs(&owned);
+    let column = three_chunks(ColumnType::Utf8, &rows); // rows 0..3, 3..4, 4..7
+    let want = [0, 0, 0, 1, 2, 2, 2];
+    for (i, &k) in want.iter().enumerate() {
+        for guess in [0, 1, 2, 3, usize::MAX] {
+            assert_eq!(
+                column.inner.span_index(i, guess),
+                k,
+                "row {i}, guess {guess}"
+            );
+        }
+        let (span, at) = column.inner.locate(i);
+        assert_eq!(span.start + (i - column.inner.first_row(k)), at);
+    }
+}
