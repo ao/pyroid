@@ -1047,6 +1047,47 @@ def test_minhash_stages_refuse_a_directory_without_the_previous_stage(tmp_path: 
 
 
 @pytest.mark.thread_unsafe(reason="reads stderr")
+def test_read_errors_name_the_file_and_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rows = "".join(json.dumps({"text": f"row {i}"}) + "\n" for i in range(200)).encode()
+    gz = gzip.compress(rows)
+    (tmp_path / "trunc.jsonl.gz").write_bytes(gz[: len(gz) // 2])
+    (tmp_path / "latin1.jsonl").write_bytes('{"text": "ok"}\n{"text": "café"}\n'.encode("latin-1"))
+    (tmp_path / "array.json").write_text(json.dumps([{"text": "a"}, {"text": "b"}]))
+    (tmp_path / "pretty.json").write_text(json.dumps([{"text": "a"}], indent=2))
+    cases = {
+        # It gave "Truncated compressed stream", without the file.
+        "trunc.jsonl.gz": "Truncated compressed stream",
+        # It named "row 0 of chunk 0 of the Arrow input", on three lines.
+        "latin1.jsonl": "line 2: not UTF-8 (byte 13)",
+        # It gave "JSON parse error: Column() changed from object to array in row 0".
+        "array.json": "line 1: an array, not an object (pyroid reads .json, .jsonl and .ndjson "
+        "files as JSON Lines: one object per line)",
+        "pretty.json": "line 1, column 2: Expecting value (pyroid reads .json files as JSON Lines)",
+    }
+    for name, message in cases.items():
+        src = tmp_path / name
+        assert main(["translit", str(src), str(tmp_path / "out.jsonl")]) == 1
+        err = capsys.readouterr().err
+        assert err == f"pyroid translit: {src}: {message}\n", err
+
+
+def test_stats_says_what_is_wrong_with_its_argument(tmp_path: Path) -> None:
+    # Each said "has no pyroid run records (.pyroid/)".
+    (tmp_path / "out.parquet").write_bytes(b"")
+    (tmp_path / "empty").mkdir()
+    for name, message in [
+        ("nosuchdir", ": no such directory"),
+        ("out.parquet", " is a file: give the directory OUT of a run (for a file OUT, the run's "),
+        ("empty", " has no pyroid run records (.pyroid/)"),
+    ]:
+        with pytest.raises(SystemExit) as e:
+            main(["stats", str(tmp_path / name)])
+        assert str(e.value).startswith(f"pyroid stats: {tmp_path / name}{message}"), e.value
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr")
 def test_an_unknown_option_shows_the_commands_usage(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -2317,6 +2317,13 @@ def _cmd_stats(a: argparse.Namespace) -> int:
 
     root = Path(a.output) / ".pyroid"
     if not root.is_dir():
+        if not os.path.lexists(a.output):
+            raise SystemExit(f"pyroid stats: {a.output}: no such directory")
+        if not os.path.isdir(a.output):
+            raise SystemExit(
+                f"pyroid stats: {a.output} is a file: give the directory OUT of a run (for a "
+                "file OUT, the run's --stats or --stats-json has the counts)"
+            )
         raise SystemExit(f"pyroid stats: {a.output} has no pyroid run records (.pyroid/)")
     state = _shards.State(root, "")
     run = state.read_run() or {}
@@ -2806,7 +2813,12 @@ def main(argv: list[str] | None = None) -> int:
             if os.environ.get("PYROID_DEBUG") or not _one_line(e):
                 raise
             msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
-            notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
+            # "while processing FILE" says nothing new when the message starts with FILE.
+            notes = "".join(
+                f"\n  ({n})"
+                for n in getattr(e, "__notes__", ())
+                if not msg.startswith(f"{n.removeprefix('while processing ')}: ")
+            )
             _shards.say(f"pyroid {a.command}: {msg}{notes}\n")
             return 1
         finally:

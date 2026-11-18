@@ -504,11 +504,19 @@ def _open_stream(source: Source) -> Iterator[Any]:
 
 @contextlib.contextmanager
 def _errors(source: Source) -> Iterator[None]:
-    """Name the file in pyarrow's parse errors."""
+    """Name the file in pyarrow's parse and decompression errors."""
     try:
         yield
     except pa.ArrowInvalid as e:
         raise ValueError(f"{source.uri}: {e}") from e
+    except EOFError as e:
+        raise EOFError(f"{source.uri}: {e}") from e
+    except OSError as e:
+        # pyarrow's codec errors ("Truncated compressed stream") name no file; an OSError of
+        # the file system names its path itself.
+        if e.errno is not None or e.filename is not None or str(e).startswith(source.uri):
+            raise
+        raise OSError(f"{source.uri}: {e}") from e
 
 
 def _check_columns(source: Source, names: Sequence[str], columns: Sequence[str]) -> None:
@@ -567,6 +575,14 @@ def _parse_json(chunk: bytes, schema: Any) -> Any:
     )
 
 
+def _is_json_name(name: str) -> bool:
+    """``x.json``, maybe compressed (``x.json.gz``): not ``.jsonl`` or ``.ndjson``."""
+    name = name.lower()
+    for ext in COMPRESSED:
+        name = name.removesuffix(ext)
+    return name.endswith(".json")
+
+
 def _bad_line(chunk: bytes, first: int, source: Source) -> ValueError | None:
     """The first line of ``chunk`` (line ``first`` of the file) that is not JSON, as an error.
 
@@ -579,14 +595,22 @@ def _bad_line(chunk: bytes, first: int, source: Source) -> ValueError | None:
         if line.endswith(b"\r"):  # else json names the CR in an unterminated string
             line = line[:-1]
         try:
-            json.loads(line)
+            value = json.loads(line)
+            if not isinstance(value, dict):
+                kind = "an array" if isinstance(value, list) else f"a {type(value).__name__}"
+                return ValueError(
+                    f"{source.uri}: line {first + i}: {kind}, not an object (pyroid reads "
+                    ".json, .jsonl and .ndjson files as JSON Lines: one object per line)"
+                )
         except UnicodeDecodeError as e:
             return ValueError(f"{source.uri}: line {first + i}: not UTF-8 (byte {e.start})")
         except json.JSONDecodeError as e:
             n = first + i
+            # A .json file holding one JSON document (an array, say) rather than JSON Lines.
+            hint = " (pyroid reads .json files as JSON Lines)" if _is_json_name(source.name) else ""
             if e.msg.endswith(" at"):  # "Unterminated string starting at"
-                return ValueError(f"{source.uri}: line {n}: {e.msg} column {e.colno}")
-            return ValueError(f"{source.uri}: line {n}, column {e.colno}: {e.msg}")
+                return ValueError(f"{source.uri}: line {n}: {e.msg} column {e.colno}{hint}")
+            return ValueError(f"{source.uri}: line {n}, column {e.colno}: {e.msg}{hint}")
         except ValueError as e:
             return ValueError(f"{source.uri}: line {first + i}: {e}")
     return None
@@ -599,6 +623,9 @@ def _json_batches(
     for chunk in _json_chunks(stream):
         try:
             t = _parse_json(chunk, schema)
+            # pyarrow's JSON reader passes strings that are not UTF-8 (latin-1 files); pyroid's
+            # kernels would reject them later, naming a row of an Arrow chunk, not the line.
+            t.validate(full=True)
         except pa.ArrowInvalid as e:
             bad = _bad_line(chunk, line, source)
             if bad is None:
