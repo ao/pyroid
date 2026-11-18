@@ -194,8 +194,13 @@ def test_big_text_memory_stays_near_the_text_size(call: str, most: float) -> Non
         elif call == "format":
             P.format(text)
         else:
-            for _ in P.parsestream(text):
-                pass
+            # Each statement is a tree with parent links, freed by the cycle collector; how much of
+            # that garbage waits for a collection depends on the build (free-threaded CPython on
+            # macOS kept 5.6 times the text). Collecting every 1,000 statements measures what
+            # pyroid itself holds.
+            for i, _ in enumerate(P.parsestream(text)):
+                if i % 1000 == 999:
+                    gc.collect()
         after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * scale
         print(f"{(after - before) / len(text):.2f}")
         """,
