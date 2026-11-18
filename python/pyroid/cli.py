@@ -2700,7 +2700,10 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) > 1 and args[0] == "dedup" and args[1] in _STAGES:
         a = build_stage_parser(args[1]).parse_args(args[2:])
     else:
-        a = build_parser().parse_args(args)
+        ap = build_parser()
+        a, unknown = ap.parse_known_args(args)
+        if unknown:  # with the command's usage, not the top-level one
+            _subparser(ap, a.command).error(f"unrecognized arguments: {' '.join(unknown)}")
     if a.body not in _NO_ARROW:
         _need_pyarrow()
     from pyroid.integrations import _shards
@@ -2758,6 +2761,15 @@ def main(argv: list[str] | None = None) -> int:
                 for started in call.runs:
                     with contextlib.suppress(Exception):
                         _tidy_failed(started)
+
+
+def _subparser(ap: argparse.ArgumentParser, command: str) -> argparse.ArgumentParser:
+    """The parser of ``pyroid COMMAND`` (``ap`` itself if there is none)."""
+    for action in ap._actions:  # argparse keeps its subparsers among the actions
+        if isinstance(action, argparse._SubParsersAction):
+            found: argparse.ArgumentParser | None = action.choices.get(command)
+            return found if found is not None else ap
+    return ap
 
 
 def _one_line(e: Exception) -> bool:

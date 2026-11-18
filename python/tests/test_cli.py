@@ -977,3 +977,16 @@ def test_a_refused_run_names_the_unfinished_work_when_out_is_missing(
     ):
         main([*args, "--compression", "zstd"])
     assert main(args) == 0  # the same command resumes
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_an_unknown_option_shows_the_commands_usage(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    src = _write(_table(["a"]), tmp_path / "in.parquet")
+    with pytest.raises(SystemExit) as e:
+        main(["translit", str(src), str(tmp_path / "o.parquet"), "--excluded", "x.parquet"])
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert err.startswith("usage: pyroid translit "), err
+    assert err.endswith("pyroid translit: error: unrecognized arguments: --excluded x.parquet\n")
