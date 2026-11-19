@@ -553,6 +553,47 @@ def test_parserinfo_changes_are_seen() -> None:
     assert p.parse("10:00 BRDT").utcoffset() == datetime.timedelta(hours=-2)
 
 
+class _GetDict(dict[str, int]):
+    def get(self, key: Any, default: Any = None) -> Any:
+        return 9000 if key == "XYZ" else dict.get(self, key, default)
+
+
+class _MissingDict(dict[str, int]):
+    def __missing__(self, key: str) -> int:
+        if key == "foo":
+            return 0
+        raise KeyError(key)
+
+
+class _ContainsList(list[str]):
+    def __contains__(self, x: object) -> bool:
+        return x == "foo" or list.__contains__(self, x)
+
+
+@pytest.mark.parametrize("case", ["TZOFFSET.get", "_months.__missing__", "UTCZONE.__contains__"])
+def test_tables_with_their_own_lookups_run_dateutils_code(case: str) -> None:
+    # dateutil looks words up with .get, [] and in, which a dict or list subclass can change.
+    def run(f: Any, base: Any) -> Any:
+        if case == "TZOFFSET.get":
+            info = type("PI", (base,), {"TZOFFSET": _GetDict({"XYZ": 3600})})()
+            s = "10:00 XYZ"
+        elif case == "_months.__missing__":
+            info = base()
+            info._months = _MissingDict(info._months)  # "foo" is January
+            s = "foo 3 2003"
+        else:
+            info = type("PI", (base,), {"UTCZONE": _ContainsList(["UTC", "GMT", "Z", "z"])})()
+            s = "10:00 foo"  # a time zone name (not understood), not an unknown word
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", du.UnknownTimezoneWarning)
+            return outcome(f, s, info, default=DEFAULT)
+
+    a, b = run(du.parse, du.parserinfo), run(pp.parse, ppx.parserinfo)
+    assert a[0] == "ok"
+    same(a[1], b[1])
+    assert b == run(pp.parse, du.parserinfo)
+
+
 @pytest.mark.thread_unsafe(reason="starts its own threads")
 def test_tables_changed_while_other_threads_parse() -> None:
     # Regression: the tables are copied before they are read. Iterating a dict that another

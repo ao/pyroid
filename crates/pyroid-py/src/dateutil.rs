@@ -468,12 +468,34 @@ fn container_len(o: &Bound<'_, PyAny>) -> usize {
     o.len().unwrap_or(usize::MAX)
 }
 
-fn table_of(d: &Bound<'_, PyAny>, valued: bool, what: &str) -> Result<Table, String> {
+/// `d` as a dict whose lookups are `dict`'s own: a `dict`, or pyroid's change-reporting table
+/// (`table_type`). dateutil looks words up with `in`, `[]` and `.get`, which a dict subclass can
+/// change (`__missing__`, a `get` of its own), so another one runs dateutil's code.
+fn plain_dict<'py>(
+    d: &Bound<'py, PyAny>,
+    table_type: &Bound<'py, PyType>,
+    what: &str,
+) -> Result<Bound<'py, PyDict>, String> {
+    let dict = d
+        .cast::<PyDict>()
+        .map_err(|_| format!("a parserinfo whose {what} is not a dict"))?;
+    if !(d.is_exact_instance_of::<PyDict>()
+        || d.get_type_ptr().cast::<pyo3::ffi::PyObject>() == table_type.as_ptr())
+    {
+        return Err(format!("a parserinfo whose {what} is a dict subclass"));
+    }
+    Ok(dict.clone())
+}
+
+fn table_of(
+    d: &Bound<'_, PyAny>,
+    table_type: &Bound<'_, PyType>,
+    valued: bool,
+    what: &str,
+) -> Result<Table, String> {
     // A copy (atomic, also on free-threaded builds): another thread may change the dict while
     // this one reads it, which a dict iterator does not allow.
-    let d = d
-        .cast::<PyDict>()
-        .map_err(|_| format!("a parserinfo whose {what} is not a dict"))?
+    let d = plain_dict(d, table_type, what)?
         .copy()
         .map_err(|e| e.to_string())?;
     let mut t = Table::default();
@@ -500,16 +522,14 @@ fn table_of(d: &Bound<'_, PyAny>, valued: bool, what: &str) -> Result<Table, Str
     Ok(t)
 }
 
-fn compile(objs: &[Bound<'_, PyAny>]) -> Compiled {
+fn compile(objs: &[Bound<'_, PyAny>], table_type: &Bound<'_, PyType>) -> Compiled {
     let build = || -> Result<ParserInfo, String> {
         let valued = [false, true, true, true, true, false, false];
         let mut tables = Vec::with_capacity(7);
         for (i, o) in objs[..7].iter().enumerate() {
-            tables.push(table_of(o, valued[i], TABLE_ATTRS[i])?);
+            tables.push(table_of(o, table_type, valued[i], TABLE_ATTRS[i])?);
         }
-        let tzd = objs[7]
-            .cast::<PyDict>()
-            .map_err(|_| "a parserinfo whose TZOFFSET is not a dict".to_owned())?
+        let tzd = plain_dict(&objs[7], table_type, "TZOFFSET")?
             .copy()
             .map_err(|e| e.to_string())?;
         let mut tzoffset = FxHashMap::default();
@@ -531,11 +551,16 @@ fn compile(objs: &[Bound<'_, PyAny>]) -> Compiled {
                 .map_err(|_| "a TZOFFSET value that is not an int".to_owned())?;
             tzoffset.insert(k.into(), v);
         }
-        // A snapshot of the list (atomic), as for the dicts.
-        let ut = match objs[8].cast::<PyList>() {
-            Ok(l) => l.to_tuple().into_any(),
-            Err(_) if objs[8].is_instance_of::<PyTuple>() => objs[8].clone(),
-            Err(_) => return Err("a parserinfo whose UTCZONE is not a list".to_owned()),
+        // A snapshot of the list (atomic), as for the dicts. dateutil tests `in UTCZONE`, which
+        // a list subclass can change.
+        let ut = if let Ok(l) = objs[8].cast_exact::<PyList>() {
+            l.to_tuple().into_any()
+        } else if objs[8].is_exact_instance_of::<PyTuple>() {
+            objs[8].clone()
+        } else if objs[8].is_instance_of::<PyList>() || objs[8].is_instance_of::<PyTuple>() {
+            return Err("a parserinfo whose UTCZONE is a list subclass".to_owned());
+        } else {
+            return Err("a parserinfo whose UTCZONE is not a list".to_owned());
         };
         let mut utczone_list = Vec::new();
         for z in ut.try_iter().map_err(|e| e.to_string())? {
@@ -694,7 +719,7 @@ fn info_full(
     if let Some(c) = hit {
         return Ok((c, settings, tables_tracked));
     }
-    let compiled = Arc::new(compile(&objs));
+    let compiled = Arc::new(compile(&objs, h.table_type.bind(py)));
     // The entries it removes are dropped after the borrow ends (see `cache_insert`).
     let evicted = INFOS.with(|c| {
         let mut c = c.borrow_mut();
