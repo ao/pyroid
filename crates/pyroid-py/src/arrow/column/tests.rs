@@ -10,13 +10,13 @@ use std::ptr;
 use std::slice;
 use std::sync::Arc;
 
-use pyroid_core::columnar::{BoolBuffers, StringBuffers, get_bit};
+use pyroid_core::columnar::{BoolBuffers, BuildError, StringBuffers, get_bit};
 use pyroid_core::par::Threads;
 
 use super::{
-    Chunk, Column, ColumnData, ColumnType, EINVAL, Exported, StringsBuilder, count_set,
-    export_array, export_schema, export_span, export_stream, release_array, release_schema,
-    release_stream, stream_get_last_error, stream_get_next, stream_get_schema,
+    Bits, CHECK_ROWS, Chunk, Column, ColumnData, ColumnType, EINVAL, Exported, StringsBuilder,
+    count_set, export_array, export_schema, export_span, export_stream, release_array,
+    release_schema, release_stream, stream_get_last_error, stream_get_next, stream_get_schema,
 };
 use crate::arrow::ffi::{FLAG_NULLABLE, FfiArray, FfiSchema, FfiStream};
 use crate::arrow::import::{StrChunk, StrType};
@@ -464,8 +464,8 @@ fn single_span_concatenates_once_and_round_trips() {
         "joined",
         vec![Chunk::Utf8(utf8(head)), Chunk::Utf8(utf8(tail))],
     );
-    let joined = column.inner.single_span().unwrap();
-    let again = column.inner.single_span().unwrap();
+    let joined = column.inner.single_span(go).unwrap();
+    let again = column.inner.single_span(go).unwrap();
     assert!(
         Arc::ptr_eq(&joined.chunk, &again.chunk),
         "the concatenation is cached"
@@ -481,12 +481,12 @@ fn single_span_concatenates_once_and_round_trips() {
         "",
         vec![Chunk::LargeUtf8(large(&rows))],
     );
-    let span = one.inner.single_span().unwrap();
+    let span = one.inner.single_span(go).unwrap();
     assert!(Arc::ptr_eq(&span.chunk, &one.inner.spans[0].chunk));
     assert_round_trip(export_span(span), StrType::LargeUtf8, &rows);
     for ty in [ColumnType::Utf8, ColumnType::Bool] {
         let none = Column::new(ty, "", Vec::new());
-        let array = export_span(none.inner.single_span().unwrap());
+        let array = export_span(none.inner.single_span(go).unwrap());
         assert_eq!(array.length, 0);
     }
 
@@ -498,8 +498,132 @@ fn single_span_concatenates_once_and_round_trips() {
             Chunk::Bool(BoolBuffers::build(&[Some(false), Some(true)])),
         ],
     );
-    let array = export_span(bools.inner.single_span().unwrap());
+    let array = export_span(bools.inner.single_span(go).unwrap());
     assert_eq!((array.length, array.null_count), (4, 1));
+}
+
+/// A `single_span` tick that never stops the copy.
+#[allow(clippy::unnecessary_wraps)] // the signature `single_span` takes
+fn go() -> Result<(), BuildError> {
+    Ok(())
+}
+
+#[derive(Debug, PartialEq)]
+enum Stop {
+    Build(BuildError),
+    Tick,
+}
+
+impl From<BuildError> for Stop {
+    fn from(e: BuildError) -> Self {
+        Self::Build(e)
+    }
+}
+
+#[test]
+fn a_failed_check_stops_the_concatenation_and_caches_nothing() {
+    let owned = sample();
+    let rows = as_strs(&owned);
+    // Several row blocks per chunk, and (under Miri) several byte pieces.
+    let many: Vec<Option<&str>> = rows
+        .iter()
+        .copied()
+        .cycle()
+        .take(2 * CHECK_ROWS + 5)
+        .collect();
+    for ty in [ColumnType::Utf8, ColumnType::Bool] {
+        let chunk = || match ty {
+            ColumnType::Utf8 => Chunk::Utf8(utf8(&many)),
+            _ => Chunk::Bool(BoolBuffers::build(
+                &many
+                    .iter()
+                    .map(|r| r.map(str::is_empty))
+                    .collect::<Vec<_>>(),
+            )),
+        };
+        let column = Column::new(ty, "", vec![chunk(), chunk()]);
+        for stop_at in 1..=4 {
+            let mut calls = 0;
+            let out = column.inner.single_span(|| {
+                calls += 1;
+                if calls == stop_at {
+                    Err(Stop::Tick)
+                } else {
+                    Ok(())
+                }
+            });
+            assert_eq!(out.err(), Some(Stop::Tick), "{ty:?}, stop at {stop_at}");
+            assert_eq!(calls, stop_at);
+            assert!(column.inner.joined.get().is_none());
+        }
+        let joined = column.inner.single_span(go).unwrap();
+        assert_eq!(
+            (joined.len, joined.null_count),
+            (
+                2 * many.len(),
+                2 * many.iter().filter(|r| r.is_none()).count()
+            )
+        );
+        if ty == ColumnType::Utf8 {
+            let want: Vec<Option<&str>> = many.iter().chain(&many).copied().collect();
+            assert_round_trip(export_span(joined), StrType::Utf8, &want);
+        }
+    }
+}
+
+#[test]
+fn bits_copy_bit_ranges_like_one_bit_at_a_time() {
+    let src = [
+        0b1011_0110_u8,
+        0b0000_1111,
+        0b1111_0000,
+        0b0101_0101,
+        0b1100_1010,
+    ];
+    for before in 0..9 {
+        for from in 0..17 {
+            for n in 0..=src.len() * 8 - from {
+                let prefix = |b: &mut Bits| (0..before).for_each(|i| b.push(i % 3 == 0));
+                let (mut fast, mut slow) = (Bits::default(), Bits::default());
+                prefix(&mut fast);
+                prefix(&mut slow);
+                fast.extend_from_bitmap(&src, from, n);
+                (from..from + n).for_each(|i| slow.push(get_bit(&src, i)));
+                assert_eq!(fast.len, slow.len);
+                assert_eq!(
+                    fast.finish(),
+                    slow.finish(),
+                    "{before} + {from}..{}",
+                    from + n
+                );
+            }
+            let (mut fast, mut slow) = (Bits::default(), Bits::default());
+            for b in [&mut fast, &mut slow] {
+                (0..before).for_each(|i| b.push(i % 2 == 0));
+            }
+            fast.extend_ones(from);
+            (0..from).for_each(|_| slow.push(true));
+            assert_eq!(fast.len, slow.len);
+            assert_eq!(fast.finish(), slow.finish(), "{before} + {from} ones");
+        }
+    }
+}
+
+#[test]
+fn bits_pack_like_bitmap() {
+    for len in 0..40 {
+        let bits: Vec<bool> = (0..len).map(|i| (i * 5 + i / 3) % 4 != 0).collect();
+        let mut b = Bits::with_capacity(len);
+        for &bit in &bits {
+            b.push(bit);
+        }
+        assert_eq!(b.len, len);
+        assert_eq!(
+            b.finish(),
+            pyroid_core::columnar::bitmap(bits.iter().copied(), len),
+            "{len}"
+        );
+    }
 }
 
 // ---- spans: slices, gathers, offsets -----------------------------------------
@@ -597,7 +721,7 @@ fn every_slice_shares_the_chunks_and_exports_its_rows() {
                 assert!(get_next(&mut stream).1.release.is_none(), "then the end");
                 assert_eq!(as_strs(&seen), want, "stream {from}..{to}");
                 // As one array: a span's offset, or the spans joined.
-                let one = sliced.single_span().unwrap();
+                let one = sliced.single_span(go).unwrap();
                 assert_round_trip(export_span(one), str_ty, want);
             }
         }
@@ -651,7 +775,7 @@ fn a_sliced_bool_span_exports_bit_offsets() {
         }
         assert_eq!(got, values[from..to], "{from}..{to}");
         // Joined into one array (two spans) or exported at an offset (one).
-        let one = export_span(sliced.single_span().unwrap());
+        let one = export_span(sliced.single_span(go).unwrap());
         let offset = usize::try_from(one.offset).unwrap();
         let bytes = (offset + to - from).div_ceil(8);
         let bufs = buffers(&one);
@@ -724,7 +848,7 @@ fn gather_copies_rows_in_any_order() {
 fn gather_stops_at_the_first_failed_check() {
     let column = Column::new(ColumnType::Utf8, "", vec![Chunk::Utf8(utf8(&[Some("a")]))]);
     let mut calls = 0;
-    let rows = std::iter::repeat_n(0, 3 * super::CHECK_ROWS);
+    let rows = std::iter::repeat_n(0, 3 * CHECK_ROWS);
     let out = column.inner.gather(rows, || {
         calls += 1;
         if calls == 2 { Err("stop") } else { Ok(()) }

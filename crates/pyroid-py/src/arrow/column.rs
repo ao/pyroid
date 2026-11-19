@@ -23,7 +23,7 @@ use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::slice::PySliceIndices;
 use pyo3::types::{PyBool, PyBytes, PyCapsule, PyList, PySlice, PyString, PyTuple, PyType};
-use pyroid_core::columnar::{BoolBuffers, BuildError, Offset, StringBuffers, bitmap, get_bit};
+use pyroid_core::columnar::{BoolBuffers, BuildError, Offset, StringBuffers, get_bit};
 
 use super::ffi::{FLAG_NULLABLE, FfiArray, FfiSchema, FfiStream};
 use super::fill::Fill;
@@ -298,9 +298,12 @@ impl ColumnData {
         Ok(Self::new(self.ty, self.name.clone(), spans))
     }
 
-    /// The whole column as one span (concatenating if needed; the
-    /// concatenation is kept for the next call).
-    fn single_span(&self) -> Result<Span, BuildError> {
+    /// The whole column as one span. Several spans are concatenated (calling
+    /// `tick` as [`join`] does), and the concatenation is kept for the next call.
+    fn single_span<E: From<BuildError>>(
+        &self,
+        mut tick: impl FnMut() -> Result<(), E>,
+    ) -> Result<Span, E> {
         match self.spans.as_slice() {
             [] => Ok(Span::whole(Arc::new(Chunk::empty(self.ty)))),
             [one] => Ok(one.clone()),
@@ -308,7 +311,7 @@ impl ColumnData {
                 if let Some(done) = self.joined.get() {
                     return Ok(Span::whole(Arc::clone(done)));
                 }
-                let joined = join(self.ty, many)?;
+                let joined = join(self.ty, many, &mut tick)?;
                 Ok(Span::whole(Arc::clone(
                     self.joined.get_or_init(|| Arc::new(joined)),
                 )))
@@ -385,33 +388,52 @@ fn as_bool(c: &Chunk) -> &BoolBuffers {
     }
 }
 
-/// Concatenate `spans` (of type `ty`) into one chunk.
-fn join(ty: ColumnType, spans: &[Span]) -> Result<Chunk, BuildError> {
+/// Bytes copied between two `tick` calls in [`join`] (16 MiB, a few ms). Fewer
+/// under Miri, so the unit tests copy a row's bytes in several pieces.
+const COPY_BYTES: usize = if cfg!(miri) { 1 << 4 } else { 1 << 24 };
+
+/// Concatenate `spans` (of type `ty`) into one chunk, calling `tick` between
+/// runs of [`CHECK_ROWS`] rows and of [`COPY_BYTES`] bytes; stops at its first
+/// error.
+fn join<E: From<BuildError>>(
+    ty: ColumnType,
+    spans: &[Span],
+    tick: &mut impl FnMut() -> Result<(), E>,
+) -> Result<Chunk, E> {
     Ok(match ty {
-        ColumnType::Utf8 => Chunk::Utf8(join_strings(spans, as_utf8)?),
-        ColumnType::LargeUtf8 => Chunk::LargeUtf8(join_strings(spans, as_large)?),
-        ColumnType::LargeBinary => Chunk::LargeBinary(join_strings(spans, as_large)?),
+        ColumnType::Utf8 => Chunk::Utf8(join_strings(spans, as_utf8, tick)?),
+        ColumnType::LargeUtf8 => Chunk::LargeUtf8(join_strings(spans, as_large, tick)?),
+        ColumnType::LargeBinary => Chunk::LargeBinary(join_strings(spans, as_large, tick)?),
         ColumnType::Bool => {
             let len = spans.iter().map(|s| s.len).sum();
-            let values = spans.iter().flat_map(|s| {
-                let b = as_bool(&s.chunk);
-                s.rows().map(|i| get_bit(&b.values, i))
-            });
             let null_count = spans.iter().map(|s| s.null_count).sum();
+            let mut values = Bits::with_capacity(len);
+            let mut valid = Bits::with_capacity(if null_count > 0 { len } else { 0 });
+            for s in spans {
+                let b = as_bool(&s.chunk);
+                for rows in blocks(s.rows()) {
+                    tick()?;
+                    values.extend_from_bitmap(&b.values, rows.start, rows.len());
+                    if null_count > 0 {
+                        valid.extend_validity(b.validity.as_deref(), rows);
+                    }
+                }
+            }
             Chunk::Bool(BoolBuffers {
                 len,
-                values: bitmap(values, len),
-                validity: join_validity(spans, len, null_count),
+                values: values.finish(),
+                validity: (null_count > 0).then(|| valid.finish()),
                 null_count,
             })
         }
     })
 }
 
-fn join_strings<O: Offset>(
+fn join_strings<O: Offset, E: From<BuildError>>(
     spans: &[Span],
     get: fn(&Chunk) -> &StringBuffers<O>,
-) -> Result<StringBuffers<O>, BuildError> {
+    tick: &mut impl FnMut() -> Result<(), E>,
+) -> Result<StringBuffers<O>, E> {
     let bytes = |s: &Span| {
         let b = get(&s.chunk);
         b.offsets[s.start].to_usize()..b.offsets[s.start + s.len].to_usize()
@@ -421,49 +443,170 @@ fn join_strings<O: Offset>(
         return Err(BuildError::Overflow {
             bytes: total,
             max: O::MAX,
-        });
+        }
+        .into());
     }
     let len = spans.iter().map(|s| s.len).sum();
+    let null_count = spans.iter().map(|s| s.null_count).sum();
     let mut offsets = Vec::with_capacity(len + 1);
     offsets.push(O::from_usize(0));
     let mut data = Vec::with_capacity(total);
+    let mut valid = Bits::with_capacity(if null_count > 0 { len } else { 0 });
     for s in spans {
         let b = get(&s.chunk);
         let range = bytes(s);
         let (base, first) = (data.len(), range.start);
-        offsets.extend(
-            b.offsets[s.start + 1..=s.start + s.len]
-                .iter()
-                .map(|o| O::from_usize(base + (o.to_usize() - first))),
-        );
-        data.extend_from_slice(&b.data[range]);
+        for rows in blocks(s.rows()) {
+            tick()?;
+            offsets.extend(
+                b.offsets[rows.start + 1..=rows.end]
+                    .iter()
+                    .map(|o| O::from_usize(base + (o.to_usize() - first))),
+            );
+            if null_count > 0 {
+                valid.extend_validity(b.validity.as_deref(), rows);
+            }
+        }
+        for from in range.clone().step_by(COPY_BYTES) {
+            tick()?;
+            data.extend_from_slice(&b.data[from..range.end.min(from + COPY_BYTES)]);
+        }
     }
-    let null_count = spans.iter().map(|s| s.null_count).sum();
     Ok(StringBuffers {
         len,
         offsets,
         data,
-        validity: join_validity(spans, len, null_count),
+        validity: (null_count > 0).then(|| valid.finish()),
         null_count,
     })
 }
 
-/// The validity bitmap of `spans` put end to end; `None` if no row is null.
-fn join_validity(spans: &[Span], len: usize, null_count: usize) -> Option<Vec<u8>> {
-    (null_count > 0).then(|| {
-        let bits = spans.iter().flat_map(|s| {
-            let v = s.chunk.validity();
-            s.rows().map(move |i| v.is_none_or(|v| get_bit(v, i)))
-        });
-        bitmap(bits, len)
-    })
+/// An LSB-first bitmap built one bit at a time.
+#[derive(Debug, Default)]
+struct Bits {
+    /// The full bytes so far.
+    bytes: Vec<u8>,
+    /// The bits after them (`len % 8` of them).
+    last: u8,
+    len: usize,
+}
+
+impl Bits {
+    fn with_capacity(bits: usize) -> Self {
+        Self {
+            bytes: Vec::with_capacity(bits.div_ceil(8)),
+            last: 0,
+            len: 0,
+        }
+    }
+
+    #[inline]
+    fn push(&mut self, bit: bool) {
+        self.last |= u8::from(bit) << (self.len % 8);
+        self.len += 1;
+        if self.len % 8 == 0 {
+            self.bytes.push(std::mem::take(&mut self.last));
+        }
+    }
+
+    /// Append bits `from..from + n` of the LSB-first bitmap `src`, a byte at
+    /// a time where it can.
+    fn extend_from_bitmap(&mut self, src: &[u8], from: usize, n: usize) {
+        let end = from + n;
+        let mut i = from;
+        while i < end && self.len % 8 != 0 {
+            self.push(get_bit(src, i));
+            i += 1;
+        }
+        // Byte-aligned output: each byte is 8 source bits, from one source
+        // byte or two (`i + 8 <= end`, so both exist).
+        let shift = i % 8;
+        while i + 8 <= end {
+            let low = src[i / 8] >> shift;
+            let high = if shift == 0 {
+                0
+            } else {
+                src[i / 8 + 1] << (8 - shift)
+            };
+            self.bytes.push(low | high);
+            self.len += 8;
+            i += 8;
+        }
+        while i < end {
+            self.push(get_bit(src, i));
+            i += 1;
+        }
+    }
+
+    /// Append `n` set bits.
+    fn extend_ones(&mut self, n: usize) {
+        let mut left = n;
+        while left > 0 && self.len % 8 != 0 {
+            self.push(true);
+            left -= 1;
+        }
+        self.bytes.resize(self.bytes.len() + left / 8, u8::MAX);
+        self.len += left / 8 * 8;
+        for _ in 0..left % 8 {
+            self.push(true);
+        }
+    }
+
+    /// Append bits `rows` of a validity bitmap (`None`: every row is valid).
+    fn extend_validity(&mut self, validity: Option<&[u8]>, rows: std::ops::Range<usize>) {
+        match validity {
+            Some(v) => self.extend_from_bitmap(v, rows.start, rows.len()),
+            None => self.extend_ones(rows.len()),
+        }
+    }
+
+    /// The bitmap: `len.div_ceil(8)` bytes.
+    fn finish(mut self) -> Vec<u8> {
+        if self.len % 8 != 0 {
+            self.bytes.push(self.last);
+        }
+        self.bytes
+    }
+}
+
+/// Builds a bool array row by row.
+#[derive(Debug, Default)]
+struct BoolsBuilder {
+    values: Bits,
+    valid: Bits,
+    null_count: usize,
+}
+
+impl BoolsBuilder {
+    fn with_capacity(rows: usize) -> Self {
+        Self {
+            values: Bits::with_capacity(rows),
+            valid: Bits::with_capacity(rows),
+            null_count: 0,
+        }
+    }
+
+    fn push(&mut self, row: Option<bool>) {
+        self.values.push(row == Some(true));
+        self.valid.push(row.is_some());
+        self.null_count += usize::from(row.is_none());
+    }
+
+    fn finish(self) -> BoolBuffers {
+        BoolBuffers {
+            len: self.values.len,
+            values: self.values.finish(),
+            validity: (self.null_count > 0).then(|| self.valid.finish()),
+            null_count: self.null_count,
+        }
+    }
 }
 
 /// New chunks built row by row (a slice with a step).
 enum Gather {
     Utf8(StringsBuilder<i32>),
     LargeUtf8(StringsBuilder<i64>),
-    Bool(Vec<Option<bool>>),
+    Bool(BoolsBuilder),
     LargeBinary(StringsBuilder<i64>),
 }
 
@@ -473,7 +616,7 @@ impl Gather {
         match ty {
             ColumnType::Utf8 => Self::Utf8(StringsBuilder::with_capacity(rows)),
             ColumnType::LargeUtf8 => Self::LargeUtf8(StringsBuilder::with_capacity(rows)),
-            ColumnType::Bool => Self::Bool(Vec::with_capacity(rows)),
+            ColumnType::Bool => Self::Bool(BoolsBuilder::with_capacity(rows)),
             ColumnType::LargeBinary => Self::LargeBinary(StringsBuilder::with_capacity(rows)),
         }
     }
@@ -493,7 +636,7 @@ impl Gather {
         match self {
             Self::Utf8(b) => b.finish().into_iter().map(Chunk::Utf8).collect(),
             Self::LargeUtf8(b) => b.finish().into_iter().map(Chunk::LargeUtf8).collect(),
-            Self::Bool(rows) => vec![Chunk::Bool(BoolBuffers::build(&rows))],
+            Self::Bool(b) => vec![Chunk::Bool(b.finish())],
             Self::LargeBinary(b) => b.finish().into_iter().map(Chunk::LargeBinary).collect(),
         }
     }
@@ -505,7 +648,7 @@ struct StringsBuilder<O> {
     done: Vec<StringBuffers<O>>,
     offsets: Vec<O>,
     data: Vec<u8>,
-    valid: Vec<bool>,
+    valid: Bits,
     null_count: usize,
 }
 
@@ -515,7 +658,7 @@ impl<O: Offset> Default for StringsBuilder<O> {
             done: Vec::new(),
             offsets: vec![O::from_usize(0)],
             data: Vec::new(),
-            valid: Vec::new(),
+            valid: Bits::default(),
             null_count: 0,
         }
     }
@@ -527,7 +670,7 @@ impl<O: Offset> StringsBuilder<O> {
         offsets.push(O::from_usize(0));
         Self {
             offsets,
-            valid: Vec::with_capacity(rows),
+            valid: Bits::with_capacity(rows),
             ..Self::default()
         }
     }
@@ -548,7 +691,7 @@ impl<O: Offset> StringsBuilder<O> {
     }
 
     fn flush(&mut self) {
-        let len = self.valid.len();
+        let len = self.valid.len;
         if len == 0 {
             return;
         }
@@ -558,7 +701,7 @@ impl<O: Offset> StringsBuilder<O> {
             len,
             offsets: std::mem::replace(&mut self.offsets, vec![O::from_usize(0)]),
             data: std::mem::take(&mut self.data),
-            validity: (null_count > 0).then(|| bitmap(valid, len)),
+            validity: (null_count > 0).then(|| valid.finish()),
             null_count,
         });
     }
@@ -596,6 +739,16 @@ pub fn build_error(e: BuildError) -> PyErr {
     match e {
         BuildError::Overflow { .. } => PyOverflowError::new_err(e.to_string()),
         BuildError::Pool(p) => crate::interrupt::pool_error(&p),
+    }
+}
+
+/// Why a copy that checks for Ctrl-C stopped, as a Python exception: the
+/// check's own error, or a [`build_error`].
+struct PyStop(PyErr);
+
+impl From<BuildError> for PyStop {
+    fn from(e: BuildError) -> Self {
+        Self(build_error(e))
     }
 }
 
@@ -1094,7 +1247,10 @@ impl Column {
         requested_schema: Option<Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyTuple>> {
         let _ = requested_schema;
-        let span = self.inner.single_span().map_err(build_error)?;
+        let span = self
+            .inner
+            .single_span(|| py.check_signals().map_err(PyStop))
+            .map_err(|PyStop(e)| e)?;
         let schema = capsule(
             py,
             export_schema(self.inner.ty, &self.inner.name),
