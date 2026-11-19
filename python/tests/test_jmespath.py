@@ -388,6 +388,50 @@ def test_custom_functions_from_jmespath() -> None:
     assert jp.search("sort(a.b)", data, options) == [1, 2, 3]
 
 
+def _shout(self: Any, s: Any) -> Any:
+    return s.upper()
+
+
+@pytest.mark.thread_unsafe(reason="edits the stock FUNCTION_TABLE")
+def test_functions_added_to_the_stock_function_table() -> None:
+    # P67's jm_function_table_add: jmespath's default Functions() looks every call up in its
+    # class's FUNCTION_TABLE, so a function added there is found. pyroid reads the tables for
+    # names that are not built-ins (jmespath's class first, then pyroid's).
+    classes: list[Any] = [functions.Functions]
+    if HAVE_JMESPATH:
+        classes.append(oracle().functions.Functions)
+    for cls in classes:
+        table = cls.FUNCTION_TABLE
+        table["shout"] = {"function": _shout, "signature": [{"types": ["string"]}]}
+        try:
+            assert jp.search("shout('a')", {}) == "A"
+            assert jp.compile("[*].shout(@)").search(["a", "b"]) == ["A", "B"]
+            with pytest.raises(exceptions.JMESPathTypeError):
+                jp.search("shout(`1`)", {})
+            with pytest.raises(exceptions.ArityError):
+                jp.search("shout('a', 'b')", {})
+            if cls is not functions.Functions:
+                real = oracle()
+                assert real.search("[*].shout(@)", ["a", "b"]) == ["A", "B"]
+        finally:
+            del table["shout"]
+        with pytest.raises(exceptions.UnknownFunctionError, match=r"shout\(\)"):
+            jp.search("shout('a')", {})
+
+
+@pytest.mark.thread_unsafe(reason="edits the stock FUNCTION_TABLE")
+def test_replaced_builtin_entries_are_not_read() -> None:
+    # Documented: the built-ins run natively without reading FUNCTION_TABLE (reading it would
+    # cost every search that calls one).
+    table = functions.Functions.FUNCTION_TABLE
+    saved = table["abs"]
+    table["abs"] = {"function": lambda self, x: "ABS", "signature": saved["signature"]}
+    try:
+        assert jp.search("abs(`-1`)", {}) == 1
+    finally:
+        table["abs"] = saved
+
+
 class _TaggedStr(str):
     __slots__ = ()
 

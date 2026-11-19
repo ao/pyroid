@@ -141,6 +141,35 @@ def test_patch_without_jmespath_installs_shims() -> None:
     }
 
 
+_TABLE_ADD = """
+    import pyroid
+    pyroid.patch("jmespath")
+    import jmespath, jmespath.exceptions, jmespath.functions
+    jmespath.functions.Functions.FUNCTION_TABLE["shout"] = {
+        "function": lambda self, x: x.upper(), "signature": [{"types": ["string"]}]}
+    out = [jmespath.search("shout('a')", {}), jmespath.compile("[*].shout(@)").search(["b"])]
+    try:
+        jmespath.search("shout(`1`)", {})
+    except jmespath.exceptions.JMESPathTypeError as e:
+        out.append(type(e).__name__)
+    print(json.dumps(out))
+"""
+
+
+@pytest.mark.parametrize("installed", [True, False])
+def test_functions_added_to_the_function_table_under_the_patch(installed: bool) -> None:
+    # P67's jm_function_table_add: jmespath's default Functions() reads its FUNCTION_TABLE on
+    # every call, so boto3-style code that registers a function there finds it.
+    if installed and not _jmespath_ok():
+        pytest.skip("needs jmespath 1.1.0")
+    out = child(
+        _TABLE_ADD,
+        hide=() if installed else ("jmespath",),
+        env={"PYTHONWARNINGS": "ignore::UserWarning"},
+    )
+    assert out == ["A", ["B"], "JMESPathTypeError"]
+
+
 @needs_jmespath
 def test_pyroid_run_patches_jmespath(tmp_path: Any) -> None:
     pytest.importorskip("pyarrow", reason="the pyroid command line needs pyarrow (pyroid[cli])")

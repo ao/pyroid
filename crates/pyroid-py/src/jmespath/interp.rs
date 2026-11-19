@@ -727,7 +727,7 @@ fn call_function<'py, 'a>(
     match &ctx.opts.funcs {
         Funcs::Native => match builtin {
             Some(b) => functions::call(ctx, b, name, &resolved, inner),
-            None => Err(unknown_function(py, name)),
+            None => table_function(ctx, name, &resolved),
         },
         Funcs::Custom { obj, stock } => {
             let obj = obj.bind(py);
@@ -746,14 +746,49 @@ fn call_function<'py, 'a>(
                     }
                 }
             }
-            let list = PyList::new(
-                py,
-                resolved
-                    .iter()
-                    .map(|v| v.to_py(ctx))
-                    .collect::<PyResult<Vec<_>>>()?,
-            )?;
-            obj.call_method1(pyo3::intern!(py, "call_function"), (name, list))
+            obj.call_method1(
+                pyo3::intern!(py, "call_function"),
+                (name, args_list(ctx, &resolved)?),
+            )
         }
     }
+}
+
+/// The resolved arguments as the list `call_function` takes.
+fn args_list<'py>(ctx: &Ctx<'py, '_>, resolved: &[Val<'py, '_>]) -> PyResult<Bound<'py, PyList>> {
+    PyList::new(
+        ctx.py,
+        resolved
+            .iter()
+            .map(|v| v.to_py(ctx))
+            .collect::<PyResult<Vec<_>>>()?,
+    )
+}
+
+/// A function that is not a built-in, without custom functions: one added to a stock
+/// class's `FUNCTION_TABLE` (jmespath's first, then pyroid's) runs as jmespath's
+/// `Functions().call_function(name, args)` would run it; any other name raises jmespath's
+/// `UnknownFunctionError`. Only names that are not built-ins come here, so the tables are
+/// read on this path only.
+fn table_function<'py>(
+    ctx: &Ctx<'py, '_>,
+    name: &Bound<'py, PyAny>,
+    resolved: &[Val<'py, '_>],
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = ctx.py;
+    for stock in config(py)?.stocks.iter().rev() {
+        let cls = stock.cls.bind(py);
+        let table = cls.getattr(pyo3::intern!(py, "FUNCTION_TABLE"))?;
+        match table.get_item(name) {
+            Ok(_) => {
+                return cls.call0()?.call_method1(
+                    pyo3::intern!(py, "call_function"),
+                    (name, args_list(ctx, resolved)?),
+                );
+            }
+            Err(e) if e.is_instance_of::<PyKeyError>(py) => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Err(unknown_function(py, name))
 }
