@@ -271,8 +271,6 @@ where
             for (c, chunk) in strings.chunks.iter().enumerate() {
                 // Attached between chunks: a Ctrl-C raises here, however short they are.
                 py.check_signals()?;
-                // Attached between chunks: a Ctrl-C raises here, however short they are.
-                py.check_signals()?;
                 let outs = detach_batch(py, || map_chunk(chunk, c, threads, &f))
                     .map_err(|e| e.into_pyerr(py))?;
                 let mut vals = Vec::with_capacity(outs.len());
