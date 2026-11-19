@@ -19,6 +19,7 @@ own algorithm (pyroid's copy of it, :mod:`pyroid.dateutil._reference`), with a o
 from __future__ import annotations
 
 import datetime
+import gc
 import sys
 import unicodedata
 import warnings
@@ -441,6 +442,44 @@ def _reference_isoparse(self: Any, reason: str | None, dt_str: bytes) -> Any:
 # The native module's hooks into this one
 # ---------------------------------------------------------------------------
 
+_DATEUTIL_CLASSES = tuple(
+    c
+    for c in (
+        _DATEUTIL_PARSERINFO,
+        getattr(_upstream._parser_mod, "parser", None),
+        getattr(
+            _upstream._real("dateutil.parser.isoparser") if _upstream._parser_mod else None,
+            "isoparser",
+            None,
+        ),
+    )
+    if isinstance(c, type)
+)
+# The classes the native caches compare a class's methods against (pyroid's and dateutil's).
+_OWN_CLASSES = (
+    parser,
+    _reference.parser,
+    parserinfo,
+    isoparser,
+    _isoreference.isoparser,
+    *_DATEUTIL_CLASSES,
+)
+_IMMUTABLETYPE = 1 << 8  # Py_TPFLAGS_IMMUTABLETYPE: object and other built-in types
+
+
+def _class_dicts(cls: type) -> tuple[dict[str, Any], ...]:
+    """The attribute dicts of `cls` and its bases, apart from pyroid's and dateutil's classes.
+
+    The native module checks a subclass for overridden methods once, and again when one of
+    these dicts changes size (a method added to the class or deleted from it later).
+    """
+    return tuple(
+        gc.get_referents(c.__dict__)[0]
+        for c in cls.__mro__
+        if all(c is not own for own in _OWN_CLASSES) and not c.__flags__ & _IMMUTABLETYPE
+    )
+
+
 _native._install(
     {
         "module": sys.modules[__name__].__dict__,
@@ -462,6 +501,7 @@ _native._install(
         "reference_isoparse": _reference_isoparse,
         "read_stream": _read_stream,
         "replay_read": _replay_read,
+        "class_dicts": _class_dicts,
         "datetime_module": datetime,
     }
 )

@@ -655,6 +655,83 @@ def test_parser_hook_override_runs_dateutils_code() -> None:
         assert MyParser().parse("10:20:30.5").microsecond == 500_001
 
 
+def _plus_1000(self: Any, year: int, century_specified: bool = False) -> int:
+    return year + 1000
+
+
+def _one_microsecond(self: Any, value: str) -> tuple[int, int]:
+    return int(value.partition(".")[0]), 1
+
+
+def _plus_one_hour(self: Any, tzstr: bytes, zero_as_utc: bool = True) -> Any:
+    return tz.tzoffset(None, 3600)
+
+
+@pytest.mark.parametrize("via_mixin", [False, True], ids=["subclass", "mixin"])
+def test_methods_added_to_a_subclass_later_are_seen(via_mixin: bool) -> None:
+    # P67's d_convertyear_after: pyroid checks a class for overridden methods once, and again
+    # when an attribute is added to or deleted from it (or a base other than pyroid's and
+    # dateutil's classes).
+    def classes(base: Any, name: str) -> tuple[Any, Any]:
+        mixin: Any = type("Mixin", (), {})
+        cls = type(name, (mixin, base) if via_mixin else (base,), {})
+        return cls, mixin if via_mixin else cls
+
+    pi, pi_owner = classes(ppx.parserinfo, "PI")
+    dpi, dpi_owner = classes(du.parserinfo, "DPI")
+    p, p_owner = classes(ppx.parser, "P")
+    dp, dp_owner = classes(du.parser, "DP")
+    ip, ip_owner = classes(ppx.isoparser, "I")
+    dip, dip_owner = classes(du.isoparser, "DI")
+
+    def results() -> list[Any]:
+        got = [
+            (outcome(du.parse, "1/2/03", dpi()), outcome(pp.parse, "1/2/03", pi())),
+            (outcome(dp().parse, "10:20:30.5"), outcome(p().parse, "10:20:30.5")),
+            (outcome(dp()._parse, "10:20:30.5"), outcome(p()._parse, "10:20:30.5")),
+            (
+                outcome(dip().isoparse, "2003-09-25T10:00+02"),
+                outcome(ip().isoparse, "2003-09-25T10:00+02"),
+            ),
+        ]
+        for a, b in got:
+            assert a[0] == b[0] == "ok"
+            assert repr(a[1]) == repr(b[1])
+        return [b[1] for _, b in got]
+
+    before = results()
+    assert before[0].year == 2003
+    hooks = [
+        (pi_owner, dpi_owner, "convertyear", _plus_1000),
+        (p_owner, dp_owner, "_parsems", _one_microsecond),
+        (ip_owner, dip_owner, "_parse_tzstr", _plus_one_hour),
+    ]
+    for ours, theirs, name, f in hooks:
+        setattr(ours, name, f)
+        setattr(theirs, name, f)
+    after = results()
+    assert after[0].year == 1003
+    assert after[1].microsecond == 1
+    assert after[3].utcoffset() == datetime.timedelta(hours=1)
+    for ours, theirs, name, _ in hooks:
+        delattr(ours, name)
+        delattr(theirs, name)
+    assert [repr(r) for r in results()] == [repr(r) for r in before]
+
+
+@pytest.mark.thread_unsafe(reason="replaces a method of pyroid's parserinfo class")
+def test_a_method_replaced_on_pyroids_own_class_is_not_seen() -> None:
+    # A documented difference (the guide's "Differences from dateutil"): checking the methods of
+    # pyroid's and dateutil's own classes on every call would cost every call.
+    assert pp.parse("1/2/03").year == 2003
+    original = ppx.parserinfo.__dict__["convertyear"]
+    ppx.parserinfo.convertyear = _plus_1000
+    try:
+        assert pp.parse("1/2/03").year == 2003  # dateutil would give 1003
+    finally:
+        ppx.parserinfo.convertyear = original
+
+
 class NumericParser(ppx.parser):  # type: ignore[misc]
     def _parse_numeric_token(self, *args: Any, **kwargs: Any) -> Any:
         return super()._parse_numeric_token(*args, **kwargs)

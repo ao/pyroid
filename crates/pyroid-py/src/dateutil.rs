@@ -96,6 +96,7 @@ struct Hooks {
     reference_isoparse: Py<PyAny>,
     read_stream: Py<PyAny>,
     replay_read: Py<PyAny>,
+    class_dicts: Py<PyAny>,
     datetime_module: Py<PyAny>,
     datetime_type: Py<PyAny>,
     time_module: Py<PyAny>,
@@ -194,6 +195,7 @@ fn _install(d: &Bound<'_, PyDict>) -> PyResult<()> {
         reference_isoparse: item(d, "reference_isoparse")?.unbind(),
         read_stream: item(d, "read_stream")?.unbind(),
         replay_read: item(d, "replay_read")?.unbind(),
+        class_dicts: item(d, "class_dicts")?.unbind(),
         datetime_type: datetime_module.getattr("datetime")?.unbind(),
         datetime_module: datetime_module.unbind(),
         time_module: py.import("time")?.into_any().unbind(),
@@ -211,9 +213,46 @@ fn _install(d: &Bound<'_, PyDict>) -> PyResult<()> {
 // Subclass checks and the compiled parserinfo
 // ---------------------------------------------------------------------------
 
-/// Per type: the hook it overrides (`None`: none). Per thread (no lock on the hot path); holds
-/// the types so their ids stay theirs.
-type TypeCache = RefCell<FxHashMap<usize, (Py<PyType>, Option<String>)>>;
+/// The attribute dicts a [`TypeEntry`] watches, with their sizes when it was made.
+type ClassDicts = Box<[(Py<PyDict>, usize)]>;
+
+/// What a per-type cache knows about one type.
+struct TypeEntry<V> {
+    /// Held, so its id stays its own.
+    _ty: Py<PyType>,
+    /// The attribute dicts of the type and its bases that are not pyroid's or dateutil's own
+    /// classes (`parser._class_dicts`), and their sizes when `verdict` was found.
+    dicts: ClassDicts,
+    verdict: V,
+}
+
+impl<V: Clone> TypeEntry<V> {
+    /// The verdict, unless one of the dicts changed size since: an attribute was added to or
+    /// deleted from the class or a base (`PI.convertyear = f` after a first parse), so the
+    /// caller checks the class again.
+    fn verdict(&self, py: Python<'_>) -> Option<V> {
+        self.dicts
+            .iter()
+            .all(|(d, n)| d.bind(py).len() == *n)
+            .then(|| self.verdict.clone())
+    }
+}
+
+/// The dicts a [`TypeEntry`] for `ty` watches, with their sizes now.
+fn class_dicts(h: &Hooks, ty: &Bound<'_, PyType>) -> PyResult<ClassDicts> {
+    let py = ty.py();
+    let dicts = h.class_dicts.bind(py).call1((ty,))?;
+    let mut out = Vec::new();
+    for d in dicts.try_iter()? {
+        let d = d?.cast_into::<PyDict>()?;
+        let n = d.len();
+        out.push((d.unbind(), n));
+    }
+    Ok(out.into_boxed_slice())
+}
+
+/// Per type: the hook it overrides (`None`: none). Per thread (no lock on the hot path).
+type TypeCache = RefCell<FxHashMap<usize, TypeEntry<Option<String>>>>;
 
 thread_local! {
     static PARSER_TYPES: TypeCache = RefCell::default();
@@ -230,24 +269,26 @@ fn is_type(obj: &Bound<'_, PyAny>, ty: &Py<PyType>) -> bool {
 }
 
 fn cached_override(
+    h: &Hooks,
     cache: &'static std::thread::LocalKey<TypeCache>,
     obj: &Bound<'_, PyAny>,
     check: impl FnOnce(&Bound<'_, PyType>) -> PyResult<Option<String>>,
 ) -> PyResult<Option<String>> {
+    let py = obj.py();
     let key = obj.get_type_ptr() as usize;
-    if let Some(r) = cache.with(|c| c.borrow().get(&key).map(|(_, r)| r.clone())) {
+    if let Some(r) = cache.with(|c| c.borrow().get(&key).and_then(|e| e.verdict(py))) {
         return Ok(r);
     }
     let ty = obj.get_type();
+    // The sizes before the check: a change made while it runs gets the class checked again.
+    let dicts = class_dicts(h, &ty)?;
     let r = check(&ty)?;
-    let old = cache.with(|c| {
-        cache_insert(
-            &mut c.borrow_mut(),
-            256,
-            key,
-            (ty.clone().unbind(), r.clone()),
-        )
-    });
+    let entry = TypeEntry {
+        _ty: ty.clone().unbind(),
+        dicts,
+        verdict: r.clone(),
+    };
+    let old = cache.with(|c| cache_insert(&mut c.borrow_mut(), 256, key, entry));
     drop(old);
     Ok(r)
 }
@@ -295,7 +336,7 @@ fn parser_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResul
     if is_type(obj, &h.parser) || UPSTREAM.get(py).is_some_and(|u| is_type(obj, &u.parser)) {
         return Ok(None);
     }
-    cached_override(&PARSER_TYPES, obj, |ty| {
+    cached_override(h, &PARSER_TYPES, obj, |ty| {
         first_override(ty, &h.parser_methods, "parser")
     })
 }
@@ -304,7 +345,7 @@ fn private_override(h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String
     if is_type(obj, &h.parser) {
         return Ok(None);
     }
-    cached_override(&PRIVATE_TYPES, obj, |ty| {
+    cached_override(h, &PRIVATE_TYPES, obj, |ty| {
         first_override(ty, &h.private_methods, "parser")
     })
 }
@@ -321,7 +362,7 @@ fn info_override(py: Python<'_>, h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<
     if exact_info(h, obj) {
         return Ok(None);
     }
-    cached_override(&INFO_TYPES, obj, |ty| {
+    cached_override(h, &INFO_TYPES, obj, |ty| {
         for (name, ours, theirs) in &h.info_methods {
             let Ok(v) = ty.getattr(name.bind(py)) else {
                 return Ok(Some(format!("a parserinfo without {}", name.bind(py))));
@@ -341,7 +382,7 @@ fn iso_override(h: &Hooks, obj: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
     if is_type(obj, &h.isoparser) {
         return Ok(None);
     }
-    cached_override(&ISO_TYPES, obj, |ty| {
+    cached_override(h, &ISO_TYPES, obj, |ty| {
         first_override(ty, &h.iso_methods, "isoparser")
     })
 }
@@ -378,7 +419,7 @@ thread_local! {
     /// The last pyroid parserinfo whose tables all report changes ([`INFO_GEN`]).
     static TRACKED: RefCell<Option<TrackedEntry>> = const { RefCell::new(None) };
     /// Per type: whether its instances report changes (pyroid's `__setattr__`).
-    static TRACKED_TYPES: RefCell<FxHashMap<usize, (Py<PyType>, bool)>> = RefCell::default();
+    static TRACKED_TYPES: RefCell<FxHashMap<usize, TypeEntry<bool>>> = RefCell::default();
 }
 
 /// Bumped by pyroid's parserinfo on any change to one (an attribute set, a table changed).
@@ -405,15 +446,20 @@ struct TrackedEntry {
 fn tracked_type(h: &Hooks, info: &Bound<'_, PyAny>) -> PyResult<bool> {
     let py = info.py();
     let key = info.get_type_ptr() as usize;
-    if let Some(t) = TRACKED_TYPES.with(|c| c.borrow().get(&key).map(|(_, t)| *t)) {
+    if let Some(t) = TRACKED_TYPES.with(|c| c.borrow().get(&key).and_then(|e| e.verdict(py))) {
         return Ok(t);
     }
     let ty = info.get_type();
+    let dicts = class_dicts(h, &ty)?;
     let t = ty.is_subclass(h.parserinfo.bind(py))?
         && ty.getattr("__setattr__")?.is(h.tracked_setattr.0.bind(py))
         && ty.getattr("__delattr__")?.is(h.tracked_setattr.1.bind(py));
-    let old = TRACKED_TYPES
-        .with(|c| cache_insert(&mut c.borrow_mut(), 256, key, (ty.clone().unbind(), t)));
+    let entry = TypeEntry {
+        _ty: ty.clone().unbind(),
+        dicts,
+        verdict: t,
+    };
+    let old = TRACKED_TYPES.with(|c| cache_insert(&mut c.borrow_mut(), 256, key, entry));
     drop(old);
     Ok(t)
 }
