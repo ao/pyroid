@@ -167,6 +167,10 @@ _NATIVE_DUMPS = frozenset(
     {"skipkeys", "ensure_ascii", "check_circular", "allow_nan", "indent", "separators", "default"}
     | {"sort_keys", "cls"}
 )
+#: The `json.dumps` flags, which it tests for truth.
+_DUMPS_FLAGS = frozenset({"skipkeys", "ensure_ascii", "check_circular", "allow_nan", "sort_keys"})
+_FLAG_TYPES = (bool, int, type(None))
+_PLAIN_TYPES = frozenset({bool, int, str, tuple, type(None)})
 _PYTHON_DUMPS = object()
 _DUMP_CACHE: dict[tuple[Any, ...], Any] = {}
 
@@ -179,48 +183,61 @@ def _dump_config(kwargs: dict[str, Any]) -> Any:
     """
     if not kwargs:
         return None
+    # Cached by the arguments as given, with their types (1 == 1.0 == True), when they are all
+    # plain values (no references to the caller's objects are kept); a separators tuple only
+    # when it holds str, since its items' types are not in the key.
+    key = (*kwargs.items(), *map(type, kwargs.values()))
+    try:
+        config = _DUMP_CACHE.get(key)
+    except TypeError:  # an unhashable value
+        return _new_dump_config(kwargs)
+    if config is None:
+        config = _new_dump_config(kwargs)
+        separators = kwargs.get("separators")
+        if _PLAIN_TYPES.issuperset(map(type, kwargs.values())) and (
+            type(separators) is not tuple or all(type(s) is str for s in separators)
+        ):
+            if len(_DUMP_CACHE) > 64:
+                _DUMP_CACHE.clear()
+            _DUMP_CACHE[key] = config
+    return config
+
+
+def _new_dump_config(kwargs: dict[str, Any]) -> Any:
+    """:func:`_dump_config`, uncached."""
     if not kwargs.keys() <= _NATIVE_DUMPS or kwargs.get("cls") is not None:
         return _PYTHON_DUMPS
+    for name, value in kwargs.items():
+        # json.dumps tests the flags for truth, where a value of another type can raise or count
+        # the calls; and json_repair does not call json.dumps at all when it finds no value.
+        if name in _DUMPS_FLAGS and type(value) not in _FLAG_TYPES:
+            return _PYTHON_DUMPS
     # skipkeys, check_circular and default never matter: keys are str, values JSON types.
     indent = kwargs.get("indent")
-    if indent is not None and not isinstance(indent, str):
-        if not isinstance(indent, int):
+    if indent is not None and type(indent) is not str:
+        if type(indent) not in (int, bool):
             return _PYTHON_DUMPS
         indent = " " * indent
     separators = kwargs.get("separators")
     if separators is not None:
-        try:
-            item_separator, key_separator = separators
-        except (TypeError, ValueError):
+        # A tuple or list of two str; json.dumps unpacks any other iterable itself.
+        if type(separators) not in (tuple, list) or len(separators) != 2:
             return _PYTHON_DUMPS
+        item_separator, key_separator = separators
         if type(item_separator) is not str or type(key_separator) is not str:
             return _PYTHON_DUMPS
     elif indent is None:
         item_separator, key_separator = ", ", ": "
     else:
         item_separator, key_separator = ",", ": "
-    key = (
-        bool(kwargs.get("ensure_ascii", True)),
-        bool(kwargs.get("allow_nan", True)),
-        bool(kwargs.get("sort_keys", False)),
-        indent,
-        item_separator,
-        key_separator,
+    return _native._DumpConfig(
+        ensure_ascii=bool(kwargs.get("ensure_ascii", True)),
+        allow_nan=bool(kwargs.get("allow_nan", True)),
+        sort_keys=bool(kwargs.get("sort_keys", False)),
+        indent=indent,
+        item_separator=item_separator,
+        key_separator=key_separator,
     )
-    config = _DUMP_CACHE.get(key)
-    if config is None:
-        config = _native._DumpConfig(
-            ensure_ascii=key[0],
-            allow_nan=key[1],
-            sort_keys=key[2],
-            indent=key[3],
-            item_separator=key[4],
-            key_separator=key[5],
-        )
-        if len(_DUMP_CACHE) > 64:
-            _DUMP_CACHE.clear()
-        _DUMP_CACHE[key] = config
-    return config
 
 
 def repair_json(

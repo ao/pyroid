@@ -700,6 +700,41 @@ def test_str_subclasses_seen_by_the_rust_path() -> None:
     assert _native_jr._overridden_str_hook(np.str_("abc")) is None
 
 
+class _Raises:
+    def __bool__(self) -> bool:
+        raise RuntimeError("bool")
+
+
+class _Counts:
+    """Falsy; counts how often it is tested for truth."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __bool__(self) -> bool:
+        self.calls += 1
+        return False
+
+
+@pytest.mark.parametrize("name", ["ensure_ascii", "allow_nan", "sort_keys", "skipkeys"])
+def test_json_dumps_flags_are_tested_by_json_dumps(name: str) -> None:
+    # A flag of another type than bool, int or None is left to json.dumps: json_repair does not
+    # call it when it finds no value, and json.dumps decides how often it is tested.
+    for doc in ["", "nothing", "{a: 1}", '{"a": [1, 2]}']:
+        assert _outcome(jr.repair_json, doc, **{name: _Raises()}) == _outcome(
+            ref.repair_json, doc, **{name: _Raises()}
+        )
+        got, want = _Counts(), _Counts()
+        assert _outcome(jr.repair_json, doc, **{name: got}) == _outcome(
+            ref.repair_json, doc, **{name: want}
+        )
+        assert got.calls == want.calls, doc
+    separators = iter([", ", ": "])
+    assert jr.repair_json("{a: 1}", separators=separators) == '{"a": 1}'
+    assert jr.repair_json("{a: 1}", separators=[",", ":"]) == '{"a":1}'
+    assert jr.repair_json("", separators=iter([])) == ref.repair_json("", separators=iter([]))
+
+
 # --- repair_json_batch ---------------------------------------------------------------
 
 
