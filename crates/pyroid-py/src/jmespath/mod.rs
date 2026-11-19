@@ -17,7 +17,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use pyo3::exceptions::{
-    PyKeyError, PyRecursionError, PyRuntimeError, PyStopIteration, PyTypeError, PyValueError,
+    PyKeyError, PyRecursionError, PyRuntimeError, PyStopIteration, PyValueError,
 };
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
@@ -1020,11 +1020,20 @@ impl Interpreter {
         kwargs: Option<&Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let value = match (args.len(), kwargs.map(PyDictMethods::len)) {
-            (1, None | Some(0)) => args.get_item(0)?,
-            (0, Some(1)) => kwargs
-                .and_then(|k| k.get_item("value").ok().flatten())
-                .ok_or_else(|| PyTypeError::new_err("visit() takes a node and a value"))?,
-            _ => return Err(PyTypeError::new_err("visit() takes a node and a value")),
+            (1, None | Some(0)) => Some(args.get_item(0)?),
+            (0, Some(1)) => kwargs.and_then(|k| k.get_item("value").ok().flatten()),
+            _ => None,
+        };
+        let Some(value) = value else {
+            // Other arguments: jmespath's visit_<type>(node, value) raises Python's own
+            // TypeError for them (or default_visit its NotImplementedError).
+            let mut all = vec![node.clone()];
+            all.extend(args.iter());
+            return self.python_interpreter(py)?.call_method(
+                pyo3::intern!(py, "visit"),
+                PyTuple::new(py, all)?,
+                kwargs,
+            );
         };
         // _Expression.visit -> TreeInterpreter.visit
         let own = self.node.dict.get(py).is_some_and(|d| node.is(d));
@@ -1038,16 +1047,19 @@ impl Interpreter {
 
     /// A pure-Python ``TreeInterpreter`` with the same options, for other attributes.
     fn __getattr__<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+        self.python_interpreter(py)?.getattr(name)
+    }
+}
+
+impl Interpreter {
+    /// `TreeInterpreter(options)` (pyroid's Python copy of jmespath's).
+    fn python_interpreter<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let options = self
             .opts
             .options
             .as_ref()
             .map_or_else(|| py.None(), |o| o.clone_ref(py));
-        config(py)?
-            .tree_interpreter
-            .bind(py)
-            .call1((options,))?
-            .getattr(name)
+        config(py)?.tree_interpreter.bind(py).call1((options,))
     }
 }
 

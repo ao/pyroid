@@ -432,6 +432,40 @@ def test_replaced_builtin_entries_are_not_read() -> None:
         table["abs"] = saved
 
 
+def test_expref_visit_with_other_arguments() -> None:
+    # P67's jm_visit: anything but (node, value) raises what jmespath's visit_<type>(node,
+    # value) raises.
+    expref: Any = jp.search("&a", {})
+    node = expref.expression
+    assert expref.visit(node, {"a": 5}) == 5
+    assert expref.visit(node, value={"a": 6}) == 6
+    calls: list[Callable[[Any], Any]] = [
+        lambda e: e.visit(e.expression),
+        lambda e: e.visit(e.expression, {}, {}),
+        lambda e: e.visit(e.expression, nope=1),
+        lambda e: e.visit(e.expression, {}, value={}),
+        lambda e: e.visit(e.expression, value={}, nope=1),
+        lambda e: e.visit({"type": "nope", "children": []}),
+    ]
+    got = [_raised(c, expref) for c in calls]
+    assert got[0] == (
+        "TypeError",
+        "TreeInterpreter.visit_field() missing 1 required positional argument: 'value'",
+    )
+    assert got[-1] == ("NotImplementedError", "nope")
+    if HAVE_JMESPATH:
+        real_expref = oracle().search("&a", {})
+        assert got == [_raised(c, real_expref) for c in calls]
+
+
+def _raised(f: Callable[[Any], Any], arg: Any) -> tuple[str, str]:
+    try:
+        f(arg)
+    except Exception as e:
+        return type(e).__name__, str(e)
+    return "no error", ""
+
+
 class _TaggedStr(str):
     __slots__ = ()
 
