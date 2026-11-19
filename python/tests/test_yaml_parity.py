@@ -167,6 +167,23 @@ def test_random_dumps(doc: Any, opts: dict[str, Any], share: bool) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "width",
+    [1e20, 2.0**64, 1e300, float("inf"), 2.0**64 - 2048, 2.0**63, 2**64, 10**30, 20.7, 4.5],
+)
+def test_huge_and_float_widths(width: Any) -> None:
+    # P67: a float width of 2**64 or more raised OverflowError. PyYAML only compares columns
+    # with the width, so any width that large never wraps.
+    doc = {"a": "x y " * 30, "b": [1.5, "c " * 50, {"k": "v w " * 40}]}
+    for opts in ({}, {"indent": 4}, {"default_flow_style": True}, {"default_style": '"'}):
+        opts = {"width": width, **opts}
+        assert outcome(py.safe_dump, doc, **opts) == outcome(yaml.safe_dump, doc, **opts)
+        assert outcome(py.dump, doc, **opts) == outcome(yaml.dump, doc, **opts)
+    # An object SafeDumper cannot represent still raises RepresenterError first.
+    odd = {"a": complex(1, 2)}
+    assert outcome(py.safe_dump, odd, width=width) == outcome(yaml.safe_dump, odd, width=width)
+
+
 @given(st.integers(-(10**9), 10**9), st.integers(1, 60))
 def test_float_text_ties(n: int, k: int) -> None:
     # Dyadic values often sit exactly between two shortest decimals; repr rounds to even.

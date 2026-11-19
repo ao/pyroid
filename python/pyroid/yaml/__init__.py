@@ -848,7 +848,8 @@ def _dump_options(
         if type(width) is int:
             best_width = min(width, 2**64 - 1)
         elif type(width) is float:
-            best_width = 2**64 - 1 if width == float("inf") else int(width)
+            # PyYAML only compares columns with it: 2**64 or more never wraps, as 2**64 - 1.
+            best_width = int(width) if width < 2.0**64 else 2**64 - 1
         else:
             return f"width={width!r}"
     if version is not None:
