@@ -858,6 +858,8 @@ fn render_inner<'py>(
     };
     let mut next_index = 0;
     let mut found_seps: Vec<usize> = Vec::new();
+    // The cells tabulate's `_to_str` calls `str()` on, as (row, column), row by row.
+    let mut obj_cells: Vec<(usize, usize)> = Vec::new();
     // The cells go straight into their columns (tabulate's zip_longest pads short rows with
     // None), so the rows are never materialised.
     let mut cols: Vec<Vec<Cell<'py>>> = Vec::new();
@@ -904,6 +906,9 @@ fn render_inner<'py>(
                 item
             };
             let cell = classify(call, item)?;
+            if matches!(cell.val, Val::Obj) {
+                obj_cells.push((done, c));
+            }
             if c == cols.len() {
                 let mut col = Vec::with_capacity(rows.len());
                 col.extend((0..done).map(|_| none_cell()));
@@ -937,26 +942,26 @@ fn render_inner<'py>(
         any_esc |= e;
         any_newline |= n;
     }
-    let mut obj_texts: FxHashMap<(usize, usize), String> = FxHashMap::default();
-    for (j, col) in cols.iter().enumerate() {
-        for (i, cell) in col.iter().enumerate() {
+    for col in &cols {
+        for cell in col {
             host.pacer.tick()?;
-            match &cell.val {
-                Val::Str(s) => {
-                    let (e, n) = pystr::esc_and_newline(s);
-                    any_esc |= e;
-                    any_newline |= n;
-                }
-                Val::Obj => {
-                    let t = call.to_str_fn.call1((&cell.obj,))?;
-                    let t = to_backed(&t)?;
-                    any_esc |= t.contains('\u{1b}');
-                    any_newline |= pystr::has_cr_lf(&t);
-                    obj_texts.insert((i, j), t.to_string());
-                }
-                _ => {}
+            if let Val::Str(s) = &cell.val {
+                let (e, n) = pystr::esc_and_newline(s);
+                any_esc |= e;
+                any_newline |= n;
             }
         }
+    }
+    // `str()` of the other cells, row by row as tabulate joins them: a `__str__` with side
+    // effects sees the same calls, and of two that raise, the same one raises.
+    let mut obj_texts: FxHashMap<(usize, usize), String> = FxHashMap::default();
+    for &(i, j) in &obj_cells {
+        host.pacer.tick()?;
+        let t = call.to_str_fn.call1((&cols[j][i].obj,))?;
+        let t = to_backed(&t)?;
+        any_esc |= t.contains('\u{1b}');
+        any_newline |= pystr::has_cr_lf(&t);
+        obj_texts.insert((i, j), t.to_string());
     }
     let has_invisible = if any_esc {
         // Rebuild "\t".join(...) in tabulate's order: headers, then the rows as normalised

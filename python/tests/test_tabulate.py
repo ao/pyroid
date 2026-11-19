@@ -509,6 +509,52 @@ def test_builtin_formats_edited_in_place() -> None:
     assert tabulate([["a&b"]], tablefmt="latex_raw").splitlines()[2] == " a&b \\\\"
 
 
+class _Recorded:
+    """A cell whose ``__str__`` records the order it runs in (and raises for ``bad``)."""
+
+    def __init__(self, calls: list[Any], tag: Any, bad: bool = False) -> None:
+        self.calls, self.tag, self.bad = calls, tag, bad
+
+    def __str__(self) -> str:
+        self.calls.append(self.tag)
+        if self.bad:
+            raise ValueError(f"bad {self.tag}")
+        return f"c{self.tag}"
+
+
+def _str_calls(fn: Any, shape: list[list[Any]], **kwargs: Any) -> tuple[Any, list[Any]]:
+    """`fn` on a table of `_Recorded` cells shaped like `shape` (a tag per cell, None: None,
+    a tag ending in "!": raises), and the order their ``__str__`` ran in."""
+    calls: list[Any] = []
+
+    def cell(tag: Any) -> Any:
+        if tag is None or isinstance(tag, (int, float)):
+            return tag
+        return _Recorded(calls, tag, tag.endswith("!"))
+
+    rows = [[cell(t) for t in row] for row in shape]
+    return _outcome(fn, rows, **kwargs), calls
+
+
+def test_cells_str_runs_in_tabulates_order(tablefmt: str) -> None:
+    # tabulate takes str() of every cell row by row (to look for ANSI codes), then formats
+    # them column by column (P67, `t_str_calls`, `t_bad_str_order`).
+    shapes: list[tuple[list[list[Any]], dict[str, Any]]] = [
+        ([["a", "b"], ["c", "d"]], {}),
+        ([["a", "b", "c"], ["d"], ["e", None, "f"]], {"headers": ["x", "y"]}),
+        ([[1, "a"], ["b", 2.5], ["c", "d"]], {"showindex": True}),
+        ([[1, "b!"], ["a!", 2]], {}),
+        ([["a", "b"], ["c!", "d!"]], {"headers": "firstrow"}),
+    ]
+    for shape, kwargs in shapes:
+        kwargs = {"tablefmt": tablefmt, **kwargs}
+        got = _str_calls(tabulate, shape, **kwargs)
+        assert got == _str_calls(pt._port.tabulate, shape, **kwargs), (shape, kwargs)
+    calls = _str_calls(tabulate, [["1", "2"], ["3", "4"]])[1]
+    assert calls == ["1", "2", "3", "4", "1", "3", "2", "4"]
+    assert _str_calls(tabulate, [[1, "b!"], ["a!", 2]])[0] == (ValueError, "bad b!")
+
+
 def test_port_is_tabulates_code() -> None:
     """Every function and table kept in ``_port.py`` is tabulate's, AST for AST."""
     real = _real_tabulate()
