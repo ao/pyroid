@@ -11,9 +11,9 @@ What runs natively: ``SequenceMatcher`` over a ``str``, ``bytes``, ``bytearray``
 keep their comparisons and indexing); ``get_close_matches`` over ``str``; ``Differ.compare``,
 ``ndiff``, ``unified_diff``, ``context_diff`` and ``HtmlDiff``'s line pairing over lists or tuples
 of ``str``, or a ``str`` (one line per character). Everything else (other element types, ``str``
-mixed with ``bytes`` under ``python -b``, a custom ``charjunk``, overridden methods) runs the
-standard library's Python code, with this module's ``SequenceMatcher`` underneath where it
-applies.
+mixed with ``bytes`` under ``python -b``, a custom ``charjunk``, overridden methods, one of this
+module's classes or functions replaced by another) runs the standard library's Python code, with
+this module's ``SequenceMatcher`` underneath where it applies.
 """
 
 from __future__ import annotations
@@ -357,11 +357,24 @@ def _junk_kinds(linejunk: Any, charjunk: Any) -> tuple[int, bool] | None:
     return kind, charjunk is not None
 
 
-def _make_compare(fallback: Any, hooks: dict[str, Any]) -> Any:
+def _make_compare(fallback: Any, hooks: dict[str, Any], g: dict[str, Any], sm: Any) -> Any:
+    """`Differ.compare` for the module whose globals are `g`.
+
+    CPython's `compare` looks up `SequenceMatcher` there, which must be `sm` for the native path.
+    """
+
     def compare(self: Any, a: Sequence[str], b: Sequence[str]) -> Iterator[str]:
         cls = type(self)
         kinds = _junk_kinds(self.linejunk, self.charjunk)
-        if kinds is not None and all(getattr(cls, h) is f for h, f in hooks.items()):
+        try:
+            native = (
+                kinds is not None
+                and g["SequenceMatcher"] is sm
+                and all(getattr(cls, h) is f for h, f in hooks.items())
+            )
+        except KeyError:  # deleted: CPython's code raises NameError
+            native = False
+        if native and kinds is not None:
             lines = _native._differ_compare(a, b, kinds[0], self.linejunk, kinds[1], _WINDOWED)
             if lines is not None:
                 yield from lines
@@ -381,16 +394,95 @@ for _name, _f in _std.Differ.__dict__.items():
     if isinstance(_f, types.FunctionType):
         setattr(Differ, _name, _rebind(_f))
 Differ.compare = _make_compare(  # type: ignore[method-assign]
-    Differ.__dict__["compare"], {h: Differ.__dict__[h] for h in _HOOKS}
+    Differ.__dict__["compare"],
+    {h: Differ.__dict__[h] for h in _HOOKS},
+    globals(),
+    SequenceMatcher,
 )
 
 # What pyroid.patch("difflib") sets as difflib.Differ.compare: the same fast path, with
-# difflib's own methods as the hooks and the fallback.
+# difflib's own methods as the hooks and the fallback, and difflib's globals.
 _PATCH_COMPARE = _make_compare(
-    _std.Differ.__dict__["compare"], {h: _std.Differ.__dict__[h] for h in _HOOKS}
+    _std.Differ.__dict__["compare"],
+    {h: _std.Differ.__dict__[h] for h in _HOOKS},
+    _std.__dict__,
+    _std.SequenceMatcher,
 )
 
 ndiff = _rebind(_std.ndiff)
+
+
+class _Module:
+    """The globals the native paths of one module's functions depend on.
+
+    Each native path stands in for the standard library's Python code, which looks up some of
+    its module's globals when it runs: `SequenceMatcher` (which cdifflib tells its users to
+    replace), `Differ`, `ndiff`, `_mdiff`. A native path runs only while they are the module's
+    own: pyroid.difflib's for its functions; difflib's for those pyroid.patch("difflib") sets
+    there. Otherwise the standard library's code runs with the replacement.
+    """
+
+    __slots__ = ("differ", "differ_funcs", "g", "get_differ_funcs", "mdiff", "ndiff", "sm")
+
+    def __init__(
+        self, g: dict[str, Any], sm: Any, differ: Any, ndiff: Any, compare: Any = None
+    ) -> None:
+        self.g = g
+        self.sm = sm
+        self.differ = differ
+        self.ndiff = ndiff
+        # What ndiff's Differ(linejunk, charjunk).compare(a, b) runs (`compare`: what the patch
+        # sets there), read in one call.
+        names = ("__init__", "compare", *_HOOKS)
+        self.get_differ_funcs = operator.attrgetter(*names)
+        funcs = [differ.__dict__[n] for n in names]
+        if compare is not None:
+            funcs[1] = compare
+        self.differ_funcs = tuple(funcs)
+        self.mdiff: Any = None  # set once that module's _mdiff exists
+
+    def ndiff_ok(self) -> bool:
+        """Whether `ndiff` (with `Differ` and `SequenceMatcher` under it) is the module's own."""
+        g = self.g
+        try:
+            if (
+                g["ndiff"] is not self.ndiff
+                or g["Differ"] is not self.differ
+                or g["SequenceMatcher"] is not self.sm
+            ):
+                return False
+        except KeyError:  # deleted: CPython's code raises NameError
+            return False
+        return all(map(operator.is_, self.get_differ_funcs(self.differ), self.differ_funcs))
+
+    def mdiff_ok(self) -> bool:
+        """Whether `_mdiff`, and what it runs, is the module's own."""
+        try:
+            if self.g["_mdiff"] is not self.mdiff:
+                return False
+        except KeyError:
+            return False
+        return self.ndiff_ok()
+
+
+def _placed(f: Any, m: _Module) -> Any:
+    """`f`, named as the module-level function of `m` it is, so that pickle finds it there.
+
+    That is pyroid.difflib, or (patched) difflib, which unpatched processes load as difflib's own.
+    """
+    f.__qualname__ = f.__name__
+    f.__module__ = m.g["__name__"]
+    return f
+
+
+_OWN = _Module(globals(), SequenceMatcher, Differ, ndiff)
+# Under the patch, difflib's Differ.compare is pyroid's (see _build_difflib).
+_STD = _Module(_std.__dict__, _std.SequenceMatcher, _std.Differ, _std.ndiff, _PATCH_COMPARE)
+# The standard library's own functions, for the patched ones to fall back to (they look up
+# difflib's globals, as difflib's functions do).
+_STD_FUNCTIONS = {
+    n: getattr(_std, n) for n in ("get_close_matches", "unified_diff", "context_diff", "_mdiff")
+}
 
 # ---------------------------------------------------------------------------
 # unified_diff, context_diff
@@ -399,6 +491,8 @@ ndiff = _rebind(_std.ndiff)
 _std_unified = _rebind(_std.unified_diff)
 _std_context = _rebind(_std.context_diff)
 _COLOR = "color" in (_std.unified_diff.__kwdefaults__ or {})
+_UNIFIED_DOC = _std.unified_diff.__doc__
+_CONTEXT_DOC = _std.context_diff.__doc__
 
 
 def _theme(color: bool) -> tuple[str, ...]:
@@ -410,9 +504,77 @@ def _theme(color: bool) -> tuple[str, ...]:
     return (t.header, t.hunk, t.context, t.removed, t.added, t.reset)
 
 
-if _COLOR:
+def _make_unified(m: _Module, fallback: Any) -> Any:
+    """`unified_diff` for module `m`, running `fallback` where the native path does not."""
+    g, sm = m.g, m.sm
+    if _COLOR:
 
-    def unified_diff(
+        def unified_diff(
+            a: Sequence[str],
+            b: Sequence[str],
+            fromfile: str = "",
+            tofile: str = "",
+            fromfiledate: str = "",
+            tofiledate: str = "",
+            n: int = 3,
+            lineterm: str = "\n",
+            *,
+            color: bool = False,
+        ) -> Iterator[str]:
+            g["_check_types"](a, b, fromfile, tofile, fromfiledate, tofiledate, lineterm)
+            lines = None
+            try:
+                native = g["SequenceMatcher"] is sm
+            except KeyError:  # deleted: CPython's code raises NameError
+                native = False
+            if native:
+                theme = _theme(color)
+                lines = _native._line_diff(
+                    a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, False, theme
+                )
+            if lines is None:
+                yield from fallback(
+                    a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, color=color
+                )
+                return
+            yield from lines
+
+    else:
+
+        def unified_diff(  # type: ignore[misc]
+            a: Sequence[str],
+            b: Sequence[str],
+            fromfile: str = "",
+            tofile: str = "",
+            fromfiledate: str = "",
+            tofiledate: str = "",
+            n: int = 3,
+            lineterm: str = "\n",
+        ) -> Iterator[str]:
+            g["_check_types"](a, b, fromfile, tofile, fromfiledate, tofiledate, lineterm)
+            lines = None
+            try:
+                native = g["SequenceMatcher"] is sm
+            except KeyError:  # deleted: CPython's code raises NameError
+                native = False
+            if native:
+                lines = _native._line_diff(
+                    a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, False
+                )
+            if lines is None:
+                yield from fallback(a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm)
+                return
+            yield from lines
+
+    unified_diff.__doc__ = _UNIFIED_DOC
+    return _placed(unified_diff, m)
+
+
+def _make_context(m: _Module, fallback: Any) -> Any:
+    """`context_diff` for module `m`, running `fallback` where the native path does not."""
+    g, sm = m.g, m.sm
+
+    def context_diff(
         a: Sequence[str],
         b: Sequence[str],
         fromfile: str = "",
@@ -421,63 +583,28 @@ if _COLOR:
         tofiledate: str = "",
         n: int = 3,
         lineterm: str = "\n",
-        *,
-        color: bool = False,
     ) -> Iterator[str]:
-        _check_types(a, b, fromfile, tofile, fromfiledate, tofiledate, lineterm)
-        theme = _theme(color)
-        lines = _native._line_diff(
-            a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, False, theme
-        )
-        if lines is None:
-            yield from _std_unified(
-                a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, color=color
+        g["_check_types"](a, b, fromfile, tofile, fromfiledate, tofiledate, lineterm)
+        lines = None
+        try:
+            native = g["SequenceMatcher"] is sm
+        except KeyError:  # deleted: CPython's code raises NameError
+            native = False
+        if native:
+            lines = _native._line_diff(
+                a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, True
             )
-            return
-        yield from lines
-
-else:
-
-    def unified_diff(  # type: ignore[misc]
-        a: Sequence[str],
-        b: Sequence[str],
-        fromfile: str = "",
-        tofile: str = "",
-        fromfiledate: str = "",
-        tofiledate: str = "",
-        n: int = 3,
-        lineterm: str = "\n",
-    ) -> Iterator[str]:
-        _check_types(a, b, fromfile, tofile, fromfiledate, tofiledate, lineterm)
-        lines = _native._line_diff(
-            a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, False
-        )
         if lines is None:
-            yield from _std_unified(a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm)
+            yield from fallback(a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm)
             return
         yield from lines
 
-
-def context_diff(
-    a: Sequence[str],
-    b: Sequence[str],
-    fromfile: str = "",
-    tofile: str = "",
-    fromfiledate: str = "",
-    tofiledate: str = "",
-    n: int = 3,
-    lineterm: str = "\n",
-) -> Iterator[str]:
-    _check_types(a, b, fromfile, tofile, fromfiledate, tofiledate, lineterm)
-    lines = _native._line_diff(a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm, True)
-    if lines is None:
-        yield from _std_context(a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm)
-        return
-    yield from lines
+    context_diff.__doc__ = _CONTEXT_DOC
+    return _placed(context_diff, m)
 
 
-unified_diff.__doc__ = _std.unified_diff.__doc__
-context_diff.__doc__ = _std.context_diff.__doc__
+unified_diff = _make_unified(_OWN, _std_unified)
+context_diff = _make_context(_OWN, _std_context)
 
 # ---------------------------------------------------------------------------
 # get_close_matches
@@ -486,27 +613,40 @@ context_diff.__doc__ = _std.context_diff.__doc__
 _std_close = _rebind(_std.get_close_matches)
 
 
-def get_close_matches(
-    word: Sequence[Any],
-    possibilities: Any,
-    n: int = 3,
-    cutoff: float = 0.6,
-    *,
-    threads: int | None = None,
-) -> list[Any]:
-    if not n > 0:
-        raise ValueError(f"n must be > 0: {n!r}")
-    if not 0.0 <= cutoff <= 1.0:
-        raise ValueError(f"cutoff must be in [0.0, 1.0]: {cutoff!r}")
-    if type(possibilities) is not list and type(possibilities) is not tuple:
-        possibilities = list(possibilities)
-    found = _native._get_close_matches(word, possibilities, n, cutoff, threads)
-    if found is None:
-        return _std_close(word, possibilities, n, cutoff)  # type: ignore[no-any-return]
-    return found  # type: ignore[no-any-return]
+def _make_close(m: _Module, fallback: Any) -> Any:
+    """`get_close_matches` for module `m`, running `fallback` where the native path does not."""
+    g, sm = m.g, m.sm
+
+    def get_close_matches(
+        word: Sequence[Any],
+        possibilities: Any,
+        n: int = 3,
+        cutoff: float = 0.6,
+        *,
+        threads: int | None = None,
+    ) -> list[Any]:
+        if not n > 0:
+            raise ValueError(f"n must be > 0: {n!r}")
+        if not 0.0 <= cutoff <= 1.0:
+            raise ValueError(f"cutoff must be in [0.0, 1.0]: {cutoff!r}")
+        if type(possibilities) is not list and type(possibilities) is not tuple:
+            possibilities = list(possibilities)
+        found = None
+        try:
+            native = g["SequenceMatcher"] is sm
+        except KeyError:  # deleted: CPython's code raises NameError
+            native = False
+        if native:
+            found = _native._get_close_matches(word, possibilities, n, cutoff, threads)
+        if found is None:
+            return fallback(word, possibilities, n, cutoff)  # type: ignore[no-any-return]
+        return found  # type: ignore[no-any-return]
+
+    get_close_matches.__doc__ = _std.get_close_matches.__doc__
+    return _placed(get_close_matches, m)
 
 
-get_close_matches.__doc__ = _std.get_close_matches.__doc__
+get_close_matches = _make_close(_OWN, _std_close)
 
 # ---------------------------------------------------------------------------
 # Batches
@@ -596,26 +736,37 @@ def close_matches_batch(
 _std_mdiff = _rebind(_std._mdiff)
 
 
-def _mdiff(
-    fromlines: Sequence[str],
-    tolines: Sequence[str],
-    context: int | None = None,
-    linejunk: Callable[[str], bool] | None = None,
-    charjunk: Callable[[str], bool] | None = IS_CHARACTER_JUNK,
-) -> Iterator[Any]:
-    kinds = _junk_kinds(linejunk, charjunk)
-    # A context CPython cannot make a list of (an OverflowError there) runs its code.
-    if kinds is not None and (
-        context is None or (type(context) is int and 0 <= context < sys.maxsize)
-    ):
-        rows = _native._mdiff(fromlines, tolines, context, kinds[0], linejunk, kinds[1], _WINDOWED)
-        if rows is not None:
-            yield from rows
-            return
-    yield from _std_mdiff(fromlines, tolines, context, linejunk, charjunk)
+def _make_mdiff(m: _Module, fallback: Any) -> Any:
+    """`_mdiff` for module `m`, running `fallback` where the native path does not."""
+
+    def _mdiff(
+        fromlines: Sequence[str],
+        tolines: Sequence[str],
+        context: int | None = None,
+        linejunk: Callable[[str], bool] | None = None,
+        charjunk: Callable[[str], bool] | None = IS_CHARACTER_JUNK,
+    ) -> Iterator[Any]:
+        kinds = _junk_kinds(linejunk, charjunk)
+        # A context CPython cannot make a list of (an OverflowError there) runs its code.
+        if (
+            kinds is not None
+            and (context is None or (type(context) is int and 0 <= context < sys.maxsize))
+            and m.ndiff_ok()
+        ):
+            rows = _native._mdiff(
+                fromlines, tolines, context, kinds[0], linejunk, kinds[1], _WINDOWED
+            )
+            if rows is not None:
+                yield from rows
+                return
+        yield from fallback(fromlines, tolines, context, linejunk, charjunk)
+
+    _mdiff.__doc__ = _std._mdiff.__doc__
+    m.mdiff = _mdiff
+    return _placed(_mdiff, m)
 
 
-_mdiff.__doc__ = _std._mdiff.__doc__
+_mdiff = _make_mdiff(_OWN, _std_mdiff)
 
 
 _HTML_HOOKS = (
@@ -642,7 +793,9 @@ def _html_marks(text: str) -> str:
     )
 
 
-def _make_make_table(fallback: Any, hooks: dict[str, Any]) -> Any:
+def _make_make_table(fallback: Any, hooks: dict[str, Any], m: _Module) -> Any:
+    """`HtmlDiff.make_table` for module `m` (CPython's looks up `_mdiff` there)."""
+
     def make_table(
         self: Any,
         fromlines: Sequence[str],
@@ -667,6 +820,7 @@ def _make_make_table(fallback: Any, hooks: dict[str, Any]) -> Any:
             and type(numlines) is int
             and 0 <= numlines < sys.maxsize  # _mdiff makes a list of numlines + 1
             and all(getattr(cls, h) is f for h, f in hooks.items())
+            and m.mdiff_ok()
         ):
             with_context = bool(context)
             try:
@@ -738,11 +892,13 @@ _make_prefix.__doc__ = _std_make_prefix.__doc__
 _make_prefix.__qualname__ = "HtmlDiff._make_prefix"
 HtmlDiff._make_prefix = _make_prefix  # type: ignore[method-assign]
 HtmlDiff.make_table = _make_make_table(  # type: ignore[method-assign]
-    HtmlDiff.__dict__["make_table"], {h: getattr(HtmlDiff, h) for h in _HTML_HOOKS}
+    HtmlDiff.__dict__["make_table"], {h: getattr(HtmlDiff, h) for h in _HTML_HOOKS}, _OWN
 )
 # What pyroid.patch("difflib") sets as difflib.HtmlDiff.make_table.
 _PATCH_MAKE_TABLE = _make_make_table(
-    _std.HtmlDiff.__dict__["make_table"], {h: _std.HtmlDiff.__dict__[h] for h in _HTML_HOOKS}
+    _std.HtmlDiff.__dict__["make_table"],
+    {h: _std.HtmlDiff.__dict__[h] for h in _HTML_HOOKS},
+    _STD,
 )
 
 for _cls in (SequenceMatcher, Differ, HtmlDiff):
@@ -750,11 +906,26 @@ for _cls in (SequenceMatcher, Differ, HtmlDiff):
 
 del _name, _f, _cls
 
-#: What pyroid.patch("difflib") sets on the standard library's module.
-_PATCH_FUNCTIONS = ("get_close_matches", "unified_diff", "context_diff", "_mdiff")
+#: What pyroid.patch("difflib") sets on the standard library's module: these functions with
+#: difflib's globals (and difflib's own functions to fall back to).
+_PATCH_FUNCTIONS: dict[str, Any] = {
+    "get_close_matches": _make_close(_STD, _STD_FUNCTIONS["get_close_matches"]),
+    "unified_diff": _make_unified(_STD, _STD_FUNCTIONS["unified_diff"]),
+    "context_diff": _make_context(_STD, _STD_FUNCTIONS["context_diff"]),
+    "_mdiff": _make_mdiff(_STD, _STD_FUNCTIONS["_mdiff"]),
+}
 
-# The fallbacks' docstrings are the public functions' (their doctests run there once).
-for _f in (_std_unified, _std_context, _std_close, _std_mdiff, _PATCH_COMPARE, _PATCH_MAKE_TABLE):
+# The fallbacks' and the patched functions' docstrings are the public functions' (their
+# doctests run there once).
+for _f in (
+    _std_unified,
+    _std_context,
+    _std_close,
+    _std_mdiff,
+    _PATCH_COMPARE,
+    _PATCH_MAKE_TABLE,
+    *_PATCH_FUNCTIONS.values(),
+):
     _f.__doc__ = None
 del _f
 

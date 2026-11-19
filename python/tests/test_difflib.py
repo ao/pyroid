@@ -465,6 +465,113 @@ def test_a_long_str_pair_diffs_as_its_lists_do() -> None:
     assert list(pd.ndiff(a, b)) == list(pd.ndiff(list(a), list(b)))
 
 
+class _CloseMatcher(pd.SequenceMatcher):  # type: ignore[type-arg]
+    def ratio(self) -> float:
+        return 0.99
+
+
+class _StdCloseMatcher(difflib.SequenceMatcher):  # type: ignore[type-arg]
+    def ratio(self) -> float:
+        return 0.99
+
+
+def _plain_replace(self: Any, *args: Any) -> Any:
+    # A Differ that never pairs similar lines.
+    yield from self._plain_replace(*args)
+
+
+def _module_results(m: Any) -> list[Any]:
+    a = ["one\n", "two\n", "three\n", "four\n"]
+    b = ["one\n", "tow\n", "three\n", "fuor\n"]
+    m.HtmlDiff._default_prefix = 0
+    return [
+        m.get_close_matches("appel", ["ape", "apple", "peach", "puppy"]),
+        list(m.ndiff(a, b)),
+        list(m.Differ().compare(a, b)),
+        list(m.unified_diff(a, b)),
+        list(m.context_diff(a, b)),
+        list(m._mdiff(a, b)),
+        m.HtmlDiff().make_table(a, b),
+    ]
+
+
+def _replace(monkeypatch: pytest.MonkeyPatch, m: Any, what: str) -> None:
+    std = m is difflib
+    if what == "SequenceMatcher":
+        monkeypatch.setattr(m, "SequenceMatcher", _StdCloseMatcher if std else _CloseMatcher)
+    elif what == "Differ":
+        sub = type("Plain", (m.Differ,), {"_fancy_replace": _plain_replace})
+        monkeypatch.setattr(m, "Differ", sub)
+    elif what == "Differ._fancy_replace":
+        monkeypatch.setattr(m.Differ, "_fancy_replace", _plain_replace)
+    elif what == "ndiff":  # the same, on the lines in reverse order
+        ndiff = m.ndiff
+        monkeypatch.setattr(
+            m, "ndiff", lambda a, b, *args, **kw: ndiff(a[::-1], b[::-1], *args, **kw)
+        )
+    else:
+        mdiff = m._mdiff
+        monkeypatch.setattr(
+            m, "_mdiff", lambda a, b, *args, **kw: mdiff(a[::-1], b[::-1], *args, **kw)
+        )
+
+
+REPLACED = ["SequenceMatcher", "Differ", "Differ._fancy_replace", "ndiff", "_mdiff"]
+
+
+@pytest.mark.thread_unsafe(reason="replaces module globals")
+@pytest.mark.parametrize("what", REPLACED)
+def test_replaced_classes_and_functions_are_used(
+    monkeypatch: pytest.MonkeyPatch, what: str
+) -> None:
+    # P67's df_sm_global_replaced: the standard library's functions look these globals up when
+    # they run, so pyroid's native paths step aside once one is replaced.
+    with monkeypatch.context() as mp:
+        _replace(mp, difflib, what)
+        want = _module_results(difflib)
+    with monkeypatch.context() as mp:
+        _replace(mp, pd, what)
+        assert _module_results(pd) == want
+    assert _module_results(pd) == _module_results(difflib)
+
+
+@pytest.mark.thread_unsafe(reason="patches the standard library")
+@pytest.mark.parametrize("what", REPLACED)
+def test_replaced_classes_and_functions_are_used_under_the_patch(
+    monkeypatch: pytest.MonkeyPatch, what: str
+) -> None:
+    with monkeypatch.context() as mp:
+        _replace(mp, difflib, what)
+        want = _module_results(difflib)
+    ctx = _quiet_patch()
+    try:
+        with integrations.patching("difflib"), monkeypatch.context() as mp:
+            _replace(mp, difflib, what)
+            assert _module_results(difflib) == want
+    finally:
+        ctx.__exit__(None, None, None)
+
+
+@pytest.mark.thread_unsafe(reason="patches the standard library")
+def test_functions_pickle_by_reference() -> None:
+    import pickle
+
+    names = ("get_close_matches", "unified_diff", "context_diff", "_mdiff", "ndiff")
+    # (Round trips of the module's own functions: no untrusted data.)
+    for n in names:
+        assert pickle.loads(pickle.dumps(getattr(pd, n))) is getattr(pd, n)
+    ctx = _quiet_patch()
+    try:
+        with integrations.patching("difflib"):
+            for n in names:
+                f = getattr(difflib, n)
+                assert pickle.loads(pickle.dumps(f)) is f
+                # By difflib's name: an unpatched process loads difflib's own function.
+                assert b"pyroid" not in pickle.dumps(f)
+    finally:
+        ctx.__exit__(None, None, None)
+
+
 def test_runtime_docstrings_match_the_stub() -> None:
     # help() shows the stub's documentation for pyroid's own functions.
     import ast
@@ -664,7 +771,7 @@ def test_patch_in_place_and_undo() -> None:
         with integrations.patching("difflib"):
             assert integrations.patched() == ("difflib",)
             assert difflib.SequenceMatcher is original_class  # in place: the same class
-            assert difflib.unified_diff is pd.unified_diff
+            assert difflib.unified_diff is pdx._PATCH_FUNCTIONS["unified_diff"]
             s = difflib.SequenceMatcher(None, "abcd", "bcde")
             assert "_pyroid_b" in vars(s)
             assert s.ratio() == 0.75

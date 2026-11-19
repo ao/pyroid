@@ -789,7 +789,7 @@ def _build_difflib(impl: types.ModuleType, real: Any, missing: str) -> _Built:
         (real.Differ, "compare", impl._PATCH_COMPARE),
         (real.HtmlDiff, "make_table", impl._PATCH_MAKE_TABLE),
     ]
-    swaps += [(real, name, getattr(impl, name)) for name in impl._PATCH_FUNCTIONS]
+    swaps += [(real, name, value) for name, value in impl._PATCH_FUNCTIONS.items()]
     # One native step sets all of them (or none, if one fails); only then (every method and
     # lazy attribute in place) do pyroid's methods give difflib's matchers native state. The
     # undo, also native, first gives matchers made or used under the patch difflib's own state,

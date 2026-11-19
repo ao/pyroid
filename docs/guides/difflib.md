@@ -100,7 +100,11 @@ and says so with one [`pyroid.FallbackWarning`](../concepts/fallbacks.md) at imp
 The rest runs the standard library's Python code, rebound to `pyroid.difflib` so that it uses
 pyroid's `SequenceMatcher` underneath: a custom `charjunk`, a `Differ` or `HtmlDiff` subclass
 that overrides one of its helper methods, a `SequenceMatcher` subclass that overrides
-`find_longest_match` or `get_matching_blocks`. Sequences of other element types (tuples, floats,
+`find_longest_match` or `get_matching_blocks`. So does a function whose code
+looks up a class or function of the module that has been replaced: `SequenceMatcher` (as
+cdifflib suggests, `difflib.SequenceMatcher = CSequenceMatcher`), `Differ`, `ndiff` or `_mdiff`,
+in `pyroid.difflib` or, under `pyroid.patch("difflib")`, in `difflib`. The replacement is then
+used, as in the standard library. Sequences of other element types (tuples, floats,
 objects with their own `__eq__`) run the standard library's `SequenceMatcher` code, with one
 `pyroid.FallbackWarning` that names the type that triggered it, for example "a list with an
 element of type 'float'".
@@ -159,6 +163,13 @@ it computes a different score.
   wraps a line by recursion in every version, so a line of about 1,000 wrapped rows raises it too.
   pyroid keeps the same order without recursion and returns the diff.
 - `get_close_matches` reads a non-list, non-tuple `possibilities` into a list before it starts.
+- When they run natively, `get_close_matches`, `ndiff`, `Differ.compare`, `unified_diff`,
+  `context_diff` and `HtmlDiff` do not call `SequenceMatcher`'s methods, so a method replaced on
+  the class in place (`SequenceMatcher.ratio = f`) is not seen there; checking those methods on
+  every call would slow down every `get_close_matches` call. A subclass assigned to
+  `SequenceMatcher` is seen (see above). Replaced private helpers of the module (`_nlargest`,
+  `_keep_original_ws`, `_format_range_unified`) are likewise used only where the standard
+  library's code runs.
 - A copied or unpickled `SequenceMatcher` has CPython's state and runs CPython's code until its
   next `set_seq2` (the results are the same).
 - `ratio_batch` and `close_matches_batch` follow pyroid's text-input rules: lone surrogates raise
