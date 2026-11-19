@@ -2094,8 +2094,10 @@ fn upstream_isoparse<'py>(
         && globals
             .get_item(pyo3::intern!(py, "datetime"))?
             .is_some_and(|d| d.is(h.datetime_type.bind(py)));
+    // A str subclass goes to dateutil's method: its `_takes_ascii` calls the object's own `read`
+    // and `encode`, if it has them.
     if native {
-        if let Ok(s) = dt_str.cast::<PyString>() {
+        if let Ok(s) = dt_str.cast_exact::<PyString>() {
             if let Ok(text) = s.to_str() {
                 let sep = p.getattr(pyo3::intern!(py, "_sep"))?;
                 let sep = if sep.is_none() {
@@ -2233,7 +2235,8 @@ fn isoparse<'py>(
         return p.call_method(pyo3::intern!(py, "isoparse"), args, kwargs);
     };
     let dt_str = &dt_str;
-    if let Ok(s) = dt_str.cast::<PyString>() {
+    // Exact str only: `_takes_ascii` calls a str subclass's own `read` and `encode`.
+    if let Ok(s) = dt_str.cast_exact::<PyString>() {
         if let Ok(u) = s.to_str() {
             if u.is_ascii() {
                 let mk = || PyBytes::new(py, u.as_bytes()).into_any();
@@ -2241,7 +2244,8 @@ fn isoparse<'py>(
             }
         }
     }
-    // Streams, bytes and non-ASCII strings: the method (dateutil's `_takes_ascii`).
+    // Streams, bytes, str subclasses and non-ASCII strings: the method (dateutil's
+    // `_takes_ascii`).
     p.call_method1(pyo3::intern!(py, "isoparse"), (dt_str,))
 }
 

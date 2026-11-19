@@ -903,6 +903,25 @@ def test_isoparse_inputs() -> None:
     same(a[1], b[1])
 
 
+class _ReadStr(str):
+    def read(self) -> str:
+        return "2020-01-01"
+
+
+class _EncodeStr(str):
+    def encode(self, *args: Any, **kwargs: Any) -> bytes:
+        return b"2021-02-03"
+
+
+def test_isoparse_calls_a_str_subclasss_read_and_encode() -> None:
+    # P67's d_isoparse_strsub_read: dateutil's _takes_ascii calls them.
+    for s in [_ReadStr("1999-12-31"), _EncodeStr("1999-12-31")]:
+        for f in (pp.isoparse, pp.DEFAULT_ISOPARSER.isoparse, ppx.isoparser().isoparse):
+            same(f(s), du.isoparse(s))
+        # A documented difference: the batch reads the str's value.
+        assert pp.isoparse_batch([s]) == [D(1999, 12, 31)]
+
+
 def test_isoparse_type_errors_are_dateutils() -> None:
     # dateutil's isoparse is DEFAULT_ISOPARSER.isoparse, so its TypeErrors name isoparser.isoparse.
     for args, kwargs in [((), {}), (("2003-09-25",), {"sep": "T"}), (("2003-09-25", "T"), {})]:
