@@ -18,6 +18,7 @@ __all__ = [
     "filters",
     "ftfy",
     "jieba",
+    "jmespath",
     "json_repair",
     "metrics",
     "nemo",
@@ -41,6 +42,7 @@ metrics: ModuleType
 json_repair: ModuleType
 datasketch: ModuleType
 jieba: ModuleType
+jmespath: ModuleType
 nltk: ModuleType
 nemo: ModuleType
 trafilatura: ModuleType

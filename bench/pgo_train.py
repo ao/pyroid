@@ -12,8 +12,9 @@ Each module runs on list[str] and Arrow input and single str calls, at every ``-
 ftfy (FineWeb text, plus mojibake made from it), translit, fastText LID (.bin and .ftz), the Gopher, C4 and
 FineWeb filters and the formatters, MinHash and exact and sentence dedup, pyroid.text, pyroid.jieba,
 pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.metrics
-(ROUGE, BLEU, chrF), pyroid.datasketch, and the FineWeb-2 filter and MinHash configs of every language
-pyroid tokenizes natively here (Japanese only with SudachiDict installed).
+(ROUGE, BLEU, chrF), pyroid.datasketch, pyroid.jmespath (queries over a boto3-style response and over
+records), and the FineWeb-2 filter and MinHash configs of every language pyroid tokenizes natively here
+(Japanese only with SudachiDict installed).
 
 Needs only pyroid and numpy. pyarrow is optional: without it, as on Windows ARM64, the Arrow calls are
 skipped. Nothing is checked or timed: an instrumented build is never shipped.
@@ -24,6 +25,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import random
 import sys
 import time
 import warnings
@@ -298,10 +300,98 @@ class Trainer:
             lsh.query(lean)
             m.jaccard(ms[0])
 
+    def jmespath(self) -> None:
+        # This script's folder holds bench/jmespath/, which Python would import as a namespace
+        # package named jmespath; pyroid.jmespath has to see that jmespath is not installed.
+        here = Path(__file__).resolve().parent
+        saved = sys.path[:]
+        sys.path[:] = [p for p in sys.path if p and Path(p).resolve() != here]
+        try:
+            import pyroid.jmespath as JM
+        finally:
+            sys.path[:] = saved
+
+        rnd = random.Random(TRAIN_SEED)
+        words = [w for t in self.texts[:200] for w in t.split()[:20]] or ["x"]
+        states = ["running", "stopped", "pending"]
+        response = {
+            "Reservations": [
+                {
+                    "Instances": [
+                        {
+                            "InstanceId": f"i-{r:04x}{i:04x}",
+                            "InstanceType": rnd.choice(["t3.micro", "m7g.large", "c7i.4xlarge"]),
+                            "State": {"Name": rnd.choice(states), "Code": rnd.randint(0, 80)},
+                            "LaunchTime": f"2026-{rnd.randint(1, 12):02d}-{rnd.randint(1, 28):02d}",
+                            "Tags": [
+                                {"Key": "Name", "Value": rnd.choice(words)},
+                                {"Key": "env", "Value": "web-1"},
+                            ],
+                        }
+                        for i in range(rnd.randint(1, 4))
+                    ]
+                }
+                for r in range(12)
+            ]
+        }
+        small = [
+            "Reservations",
+            "Reservations[0].Instances[0].State.Name",
+            "Reservations[].Instances[].InstanceId",
+            "Reservations[].Instances[?State.Name=='running'].InstanceId[]",
+            "Reservations[].Instances[].{id: InstanceId, type: InstanceType}",
+            "Reservations[].Instances[].Tags[?Key=='Name'].Value[]",
+            "sort_by(Reservations[].Instances[], &LaunchTime)[-1].InstanceId",
+            "!contains(Reservations[].Instances[].InstanceType, 'x') && length(Reservations) > `3`",
+            "join(', ', Reservations[].Instances[].InstanceId)",
+            "Reservations[*].Instances[*].State | [0][0]",
+        ]
+        # Single calls in the hundreds of thousands, as callers make them: with fewer, the
+        # per-call path stays cold next to the rest of the profile.
+        for e in small:
+            compiled = JM.compile(e)
+            for _ in range(50_000):
+                compiled.search(response)
+            for _ in range(20_000):
+                JM.search(e, response)
+        for i in range(20_000):
+            e = f"Reservations[].Instances[?State.Name=='{states[i % 3]}' && Tags[?Value=='w{i}']]"
+            JM.search(e, response)
+        records = [
+            {
+                "id": i,
+                "name": words[i % len(words)],
+                "age": rnd.randint(1, 99),
+                "score": rnd.random() * 100,
+                "tags": ["a", "b", "c"][: i % 4],
+                "address": {"city": rnd.choice(words), "zip": f"{i:06d}"},
+            }
+            for i in range(50_000)
+        ]
+        queries = [
+            "[*].address.city",
+            "[?age > `40`].name",
+            "[?age > `40` && address.zip != '000001'].id",
+            "[*].{n: name, c: address.city}",
+            "sort_by(@, &age)[0].id",
+            "max_by(@, &score).id",
+            "min_by(@, &age).name",
+            "sum([*].age)",
+            "avg([*].score)",
+            "[?contains(tags, 'a')] | length(@)",
+            "[*].tags[]",
+            "sort([*].name)[-1]",
+            "reverse(@)[0].id",
+            "[*].[id, age]",
+            "@[?score < `50`] | [*].address",
+        ]
+        for e in queries:
+            JM.compile(e).search(records)
+
     def run(self) -> dict[str, float]:
         warnings.simplefilter("ignore")  # FallbackWarning and friends: the paths still run
         sections = ["ftfy", "translit", "fasttext", "filters", "dedup", "text", "multilingual", "jieba"]
-        sections += ["json_repair", "metrics", "datasketch"]
+        sections += ["json_repair", "metrics", "datasketch", "jmespath"]
         for name in sections:
             self.section(name, getattr(self, name))
         return self.timings

@@ -119,6 +119,8 @@ test = [
   "jieba==0.42.1",
   # The reference for pyroid.warc (Apache-2.0, pure Python).
   "warcio==1.8.2",
+  # The reference for pyroid.jmespath (MIT, pure Python).
+  "jmespath==1.1.0",
 ]
 # GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
 # PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds
@@ -246,6 +248,11 @@ files = ["python/pyroid", "python/tests"]
 # pyroid.integrations.nemo_curator and its tests: NeMo Curator 1.4.0 ships no py.typed, and the
 # mypy hook installs neither it nor pandas (pandas-stubs is not a dependency).
 module = ["nemo_curator", "nemo_curator.*", "pandas", "pandas.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# jmespath 1.1.0 (the reference for pyroid.jmespath's tests) ships neither py.typed nor stubs.
+module = ["jmespath", "jmespath.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
