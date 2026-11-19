@@ -107,6 +107,22 @@ def test_floatfmt_like_format(spec: str) -> None:
     assert got == want, _first_difference(got, want, vals)
 
 
+@pytest.mark.parametrize("ty", ["f", "F", "e", "E", "%", "g", "G", ""])
+def test_precisions_and_widths_at_rusts_limit(ty: str) -> None:
+    # Rust's formatter takes a width or precision of at most 65535 and panics above it; P67
+    # found `.65536f` raising PanicException. Longer specs are Python's.
+    vals = [0.5, -2.25, 1e300, 5e-324, math.inf]
+    specs = [f"{w}.{p}{ty}" for w in ("", "65535", "65536") for p in (65535, 65536, 65537)]
+    specs += [f"{w}.1{ty}" for w in (65535, 65536, 65537)]
+    for spec in specs:
+        want = [format(v, spec) for v in vals]
+        assert _lines([[v] for v in vals], floatfmt=spec) == want, spec
+        # Number strings in a float column take the same path.
+        assert _lines([["0.5"], ["1e300"]], floatfmt=spec) == want[:1] + want[2:3], spec
+    for spec in ("65535", "65536", "65537", "65536,", "65536_d"):
+        assert _lines([[5], [-12345]], intfmt=spec) == [format(5, spec), format(-12345, spec)]
+
+
 @pytest.mark.parametrize("spec", ["g", "", ".16g", ".17g", ".20e", ".3f", ",.2f"])
 def test_numeric_strings_like_format(spec: str) -> None:
     # A numeric str cell in a float column is format(float(s), spec); float(s) rounds correctly.

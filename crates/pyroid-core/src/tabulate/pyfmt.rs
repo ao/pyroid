@@ -15,8 +15,10 @@
 
 use std::fmt::Write as _;
 
-/// Widths and precisions above this are left to Python.
-const MAX_WIDTH: usize = 1 << 16;
+/// Widths and precisions above this are left to Python. Rust's formatter takes a width or
+/// precision of at most `u16::MAX` (and panics above it): `{a:.p$}` and `{a:.p$e}` below get
+/// the precision as it was given.
+const MAX_WIDTH: usize = 65_535;
 
 /// A parsed format spec.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1166,5 +1168,31 @@ mod tests {
         for spec in ["z", ".2", "x", "f", "n"] {
             assert!(Spec::parse(spec, true).is_none(), "{spec:?}");
         }
+    }
+
+    /// Rust's formatter panics on a precision above `u16::MAX`: such specs go to Python.
+    #[test]
+    fn widths_and_precisions_up_to_rusts_limit() {
+        for ty in ["f", "F", "e", "E", "%", "g", "G", ""] {
+            let at = format!(".65535{ty}");
+            let spec = Spec::parse(&at, false).unwrap_or_else(|| panic!("{at:?}"));
+            for x in [0.5, -1e300, 5e-324, 123.456] {
+                assert!(spec.format_float(x).len() >= 3, "{at:?} {x:e}");
+            }
+            for over in [".65536", ".65537", ".99999"] {
+                let spec = format!("{over}{ty}");
+                assert!(Spec::parse(&spec, false).is_none(), "{spec:?}");
+            }
+        }
+        assert_eq!(f(0.5, ".65535f").len(), 65_537);
+        assert!(f(0.5, ".65535f").starts_with("0.5000"));
+        assert_eq!(f(1.5, "65535.1f").len(), 65_535);
+        assert_eq!(f(0.5, ".65535%").len(), 65_539);
+        assert!(Spec::parse("65536.1f", false).is_none());
+        assert_eq!(
+            Spec::parse("65535", true).unwrap().format_int(7).len(),
+            65_535
+        );
+        assert!(Spec::parse("65536", true).is_none());
     }
 }
