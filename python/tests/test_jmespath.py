@@ -74,6 +74,96 @@ def test_parse_cache() -> None:
     assert native._cache_len() == 0
 
 
+class _AnyKey(str):
+    """Every instance hashes alike and equals everything (P67's jm_strsub_eq)."""
+
+    __slots__ = ()
+
+    def __hash__(self) -> int:
+        return 1
+
+    def __eq__(self, other: object) -> bool:
+        return True
+
+
+class _CaseFolded(str):
+    """A case-insensitive key."""
+
+    __slots__ = ()
+
+    def __hash__(self) -> int:
+        return hash(self.lower())
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, str) and self.lower() == other.lower()
+
+
+class _Unhashable(str):
+    __slots__ = ()
+    __hash__ = None  # type: ignore[assignment]
+
+
+def _purge_both() -> Any:
+    parser.Parser.purge()
+    if HAVE_JMESPATH:
+        real = oracle()
+        real.parser.Parser.purge()
+        return real
+    return None
+
+
+@pytest.mark.thread_unsafe(reason="the parse cache is process-wide")
+def test_str_subclass_keys_with_their_own_eq_or_hash() -> None:
+    # jmespath's cache is a dict keyed by the expression object: a str subclass with its own
+    # __eq__/__hash__ finds what a dict finds, not what its text would.
+    data = {"a": 1, "b": 2, "A": 3}
+    try:
+        real = _purge_both()
+        got = [jp.search(_AnyKey("a"), data), jp.search(_AnyKey("b"), data)]
+        assert got == [1, 1]
+        if real is not None:
+            assert got == [real.search(_AnyKey("a"), data), real.search(_AnyKey("b"), data)]
+        real = _purge_both()
+        first = jp.compile(_CaseFolded("A"))
+        assert jp.compile(_CaseFolded("a")) is first
+        # A plain str with the same hash: the dict compares it through _CaseFolded.__eq__.
+        assert jp.compile("a") is first
+        assert jp.search("a", data) == 3
+        assert type(first.expression) is _CaseFolded
+        assert native._cache_len() == 1
+        if real is not None:
+            real.compile(_CaseFolded("A"))
+            assert real.search("a", data) == 3
+        # Unhashable: the dict's own TypeError (3.14 words it differently from hash()).
+        lookup: dict[Any, Any] = {}
+        with pytest.raises(TypeError) as caught:
+            lookup.get(_Unhashable("a"))
+        with pytest.raises(TypeError) as raised:
+            jp.search(_Unhashable("a"), data)
+        assert str(raised.value) == str(caught.value)
+        # Eviction: 512 entries, the oldest out first, odd keys included.
+        _purge_both()
+        jp.compile(_AnyKey("z"))
+        for i in range(parser.Parser._MAX_SIZE - 1):
+            jp.compile(f"odd{i}")
+        assert native._cache_len() == 512
+        assert jp.search(_AnyKey("b"), data) is None  # _AnyKey("z")'s entry
+        jp.compile("odd_last")
+        assert native._cache_len() == 512
+        assert jp.search(_AnyKey("b"), data) == 2
+    finally:
+        _purge_both()
+    # With no odd keys cached, lookups go by text again.
+    assert jp.compile("a") is jp.compile("a")
+    assert jp.compile(_TextOnly("a")) is jp.compile("a")
+
+
+class _TextOnly(str):
+    """A str subclass that keeps str's __eq__ and __hash__: keyed by its text."""
+
+    __slots__ = ()
+
+
 def test_parsed_ast() -> None:
     assert jp.compile("foo.bar").parsed == ast.subexpression([ast.field("foo"), ast.field("bar")])
     parsed = jp.compile("a[0][1:2]").parsed

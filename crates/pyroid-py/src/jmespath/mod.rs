@@ -16,7 +16,9 @@ mod interp;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
-use pyo3::exceptions::{PyRecursionError, PyTypeError, PyValueError};
+use pyo3::exceptions::{
+    PyKeyError, PyRecursionError, PyRuntimeError, PyStopIteration, PyTypeError, PyValueError,
+};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyString, PyTuple};
@@ -81,6 +83,10 @@ struct Config {
     fallback: Py<PyAny>,
     getframe: Py<PyAny>,
     getrecursionlimit: Py<PyAny>,
+    /// `str.__hash__` and `str.__eq__`: a `str` subclass with other ones is not keyed by its
+    /// text in the cache.
+    str_hash: Py<PyAny>,
+    str_eq: Py<PyAny>,
     /// pyroid's `Functions`, then jmespath's when it is installed (the one `search` follows
     /// without custom functions).
     stocks: Vec<Stock>,
@@ -196,6 +202,8 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
         fallback: get("fallback")?,
         getframe: sys.getattr("_getframe")?.unbind(),
         getrecursionlimit: sys.getattr("getrecursionlimit")?.unbind(),
+        str_hash: builtins.getattr("str")?.getattr("__hash__")?.unbind(),
+        str_eq: builtins.getattr("str")?.getattr("__eq__")?.unbind(),
         stocks,
     };
     let _ = CONFIG.set(py, c);
@@ -437,10 +445,42 @@ fn parse_text<'py>(
 
 const MAX_SIZE: usize = 512;
 
+/// One cached expression, as a `_CACHE` entry.
+struct Slot {
+    /// The key's text, for a `str` key and a subclass that keeps `str`'s `__eq__` and
+    /// `__hash__` (equal text is then equal keys); `None` for other keys.
+    text: Option<Box<[u8]>>,
+    /// The key object (dicts keep the first one stored).
+    key: Py<PyAny>,
+    /// `hash(key)` when it was stored (dicts keep it too). `None` for a key stored by its text
+    /// while no odd key was cached: `str.__hash__(key)`, worked out when first needed.
+    hash: Option<isize>,
+    result: Py<ParsedResult>,
+}
+
+/// jmespath's `_CACHE` dict. Keys with a text are found by it in `map`. Keys of `str`
+/// subclasses with their own `__eq__` or `__hash__` (`odd` of them) are found as a dict finds
+/// them: by `hash()`, then identity or `==` against the keys with that hash, oldest first;
+/// while any is cached, every lookup goes that way.
 #[derive(Default)]
 struct Cache {
     map: HashMap<Box<[u8]>, Py<ParsedResult>>,
-    order: VecDeque<Box<[u8]>>,
+    /// Oldest first.
+    order: VecDeque<Slot>,
+    odd: usize,
+}
+
+impl Cache {
+    fn evict_oldest(&mut self) -> Option<(Slot, Option<Py<ParsedResult>>)> {
+        let old = self.order.pop_front()?;
+        let removed = if let Some(t) = &old.text {
+            self.map.remove(t)
+        } else {
+            self.odd -= 1;
+            None
+        };
+        Some((old, removed))
+    }
 }
 
 static CACHE: LazyLock<Mutex<Cache>> = LazyLock::new(Mutex::default);
@@ -456,6 +496,186 @@ fn cache_key(s: &Bound<'_, PyString>) -> PyResult<Box<[u8]>> {
     }
     let b = s.call_method1("encode", ("utf-8", "surrogatepass"))?;
     Ok(b.cast::<PyBytes>()?.as_bytes().into())
+}
+
+/// Does `s`'s class define its own `__eq__` or `__hash__` (so its text is not its dict key)?
+/// Only for a subclass: a `str` never is.
+#[cold]
+#[inline(never)]
+fn odd_key(py: Python<'_>, s: &Bound<'_, PyString>) -> PyResult<bool> {
+    let c = config(py)?;
+    let ty = s.get_type();
+    Ok(!ty.getattr(pyo3::intern!(py, "__hash__"))?.is(&c.str_hash)
+        || !ty.getattr(pyo3::intern!(py, "__eq__"))?.is(&c.str_eq))
+}
+
+/// What a dict lookup of `key` (hash `hash`) finds among the cached keys: identity or `==`
+/// against each key with that hash, oldest first. Comparisons run with the cache unlocked
+/// (they may run Python code, which may search).
+#[cold]
+#[inline(never)]
+fn find_slow<'py>(
+    py: Python<'py>,
+    key: &Bound<'py, PyAny>,
+    hash: isize,
+) -> PyResult<Option<Bound<'py, ParsedResult>>> {
+    let candidates = {
+        let mut cache = lock_cache();
+        let mut found: Vec<(Py<PyAny>, Py<ParsedResult>)> = Vec::new();
+        for s in &mut cache.order {
+            let h = if let Some(h) = s.hash {
+                h
+            } else {
+                let h = text_hash(py, s.key.bind(py))?;
+                s.hash = Some(h);
+                h
+            };
+            if h == hash {
+                found.push((s.key.clone_ref(py), s.result.clone_ref(py)));
+            }
+        }
+        found
+    };
+    for (k, r) in candidates {
+        let k = k.bind(py);
+        if k.is(key) || k.eq(key)? {
+            return Ok(Some(r.into_bound(py)));
+        }
+    }
+    Ok(None)
+}
+
+/// `str.__hash__(key)`: the hash a key stored by its text had (no Python code runs).
+fn text_hash(py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<isize> {
+    if key.is_exact_instance_of::<PyString>() {
+        return key.hash();
+    }
+    config(py)?.str_hash.bind(py).call1((key,))?.extract()
+}
+
+/// `hash(key)` as a dict operation reports a failure: 3.14 rewords a `TypeError` ("cannot use
+/// 'X' as a dict key (...)"), so a failing key is looked up in an empty dict for its error.
+fn dict_hash(key: &Bound<'_, PyAny>) -> PyResult<isize> {
+    key.hash().or_else(|_| {
+        let py = key.py();
+        PyDict::new(py)
+            .as_any()
+            .get_item(key)
+            .and(Err(PyKeyError::new_err(key.clone().unbind())))
+    })
+}
+
+/// `_CACHE[expression]` while odd keys are about: `None` for a miss (jmespath's `except
+/// KeyError: pass` takes a `KeyError` from `__hash__` or `__eq__` as one too).
+#[cold]
+#[inline(never)]
+fn lookup_slow<'py>(
+    py: Python<'py>,
+    expression: &Bound<'py, PyAny>,
+) -> PyResult<Option<Bound<'py, ParsedResult>>> {
+    let found = dict_hash(expression).and_then(|h| find_slow(py, expression, h));
+    match found {
+        Err(e) if e.is_instance_of::<PyKeyError>(py) => Ok(None),
+        other => other,
+    }
+}
+
+/// jmespath's insertion after a parse when odd keys are about: drop the oldest entry when
+/// full (a failed `del` leaves the result uncached), then `_CACHE[expression] = result`.
+#[cold]
+#[inline(never)]
+fn insert_slow(
+    py: Python<'_>,
+    expression: &Bound<'_, PyAny>,
+    text: Option<Box<[u8]>>,
+    result: &Bound<'_, ParsedResult>,
+) -> PyResult<()> {
+    let oldest = {
+        let cache = lock_cache();
+        if cache.order.len() >= MAX_SIZE {
+            cache
+                .order
+                .front()
+                .map(|s| (s.key.clone_ref(py), s.hash.unwrap_or(0), s.text.is_none()))
+        } else {
+            None
+        }
+    };
+    if let Some((key, hash, odd)) = oldest {
+        // `del _CACHE[next(iter(_CACHE))]` hashes the key again; jmespath returns the result
+        // uncached on a KeyError, StopIteration or RuntimeError.
+        if odd {
+            match dict_hash(key.bind(py)) {
+                Ok(h) if h == hash => {}
+                Ok(_) => return Ok(()), // not found under its new hash: KeyError
+                Err(e)
+                    if e.is_instance_of::<PyKeyError>(py)
+                        || e.is_instance_of::<PyStopIteration>(py)
+                        || e.is_instance_of::<PyRuntimeError>(py) =>
+                {
+                    return Ok(());
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        let evicted = {
+            let mut cache = lock_cache();
+            if cache.order.front().is_some_and(|s| s.key.is(&key)) {
+                cache.evict_oldest()
+            } else {
+                None
+            }
+        };
+        drop(evicted);
+    }
+    let hash = dict_hash(expression)?;
+    if let Some(same) = find_slow(py, expression, hash)? {
+        // An equal key appeared (another thread, or an `__eq__` that changed its mind): the
+        // dict keeps that key and takes the new value.
+        let replaced = {
+            let mut cache = lock_cache();
+            let mut old = (None, None);
+            if let Some(slot) = cache.order.iter_mut().find(|s| s.result.is(&same)) {
+                let t = slot.text.clone();
+                old.0 = Some(std::mem::replace(&mut slot.result, result.clone().unbind()));
+                if let Some(t) = t {
+                    old.1 = cache.map.insert(t, result.clone().unbind());
+                }
+            }
+            old
+        };
+        // Dropped after unlocking, as below.
+        drop(replaced);
+        return Ok(());
+    }
+    let previous = {
+        let mut cache = lock_cache();
+        let previous = match &text {
+            Some(t) => cache.map.insert(t.clone(), result.clone().unbind()),
+            None => None,
+        };
+        let mut replaced = None;
+        if previous.is_some() {
+            // Another thread stored the same text meanwhile: one entry, the new value.
+            if let Some(slot) = cache.order.iter_mut().find(|s| s.text == text) {
+                replaced = Some(std::mem::replace(&mut slot.result, result.clone().unbind()));
+            }
+        } else {
+            if text.is_none() {
+                cache.odd += 1;
+            }
+            cache.order.push_back(Slot {
+                text,
+                key: expression.clone().unbind(),
+                hash: Some(hash),
+                result: result.clone().unbind(),
+            });
+        }
+        (previous, replaced)
+    };
+    // Dropped after unlocking: freeing a result may run arbitrary Python code.
+    drop(previous);
+    Ok(())
 }
 
 /// What a non-`str` expression gets.
@@ -475,9 +695,23 @@ fn get_or_parse<'py>(
     let Ok(s) = expression.cast::<PyString>() else {
         return other_expression(py, expression, kind).map(Parsed::Foreign);
     };
+    let odd = !s.is_exact_instance_of::<PyString>() && odd_key(py, s)?;
     let key = cache_key(s)?;
-    if let Some(hit) = lock_cache().map.get(&key) {
-        return Ok(Parsed::Native(hit.bind(py).clone()));
+    let mut slow = odd;
+    if !odd {
+        let cache = lock_cache();
+        if cache.odd == 0 {
+            if let Some(hit) = cache.map.get(&key) {
+                return Ok(Parsed::Native(hit.bind(py).clone()));
+            }
+        } else {
+            slow = true;
+        }
+    }
+    if slow {
+        if let Some(hit) = lookup_slow(py, expression)? {
+            return Ok(Parsed::Native(hit));
+        }
     }
     let text = host::code_points(s)?;
     let tree = parse_text(py, &text, expression, frames_above)?;
@@ -488,19 +722,34 @@ fn get_or_parse<'py>(
             tree: Mutex::new(Arc::new(tree)),
         },
     )?;
+    if slow {
+        insert_slow(py, expression, (!odd).then_some(key), &result)?;
+        return Ok(Parsed::Native(result));
+    }
     let evicted = {
         let mut cache = lock_cache();
         let mut evicted = None;
-        if !cache.map.contains_key(&key) {
-            if cache.map.len() >= MAX_SIZE {
-                if let Some(old) = cache.order.pop_front() {
-                    evicted = cache.map.remove(&old);
-                }
+        let mut replaced = None;
+        let previous = cache.map.insert(key.clone(), result.clone().unbind());
+        if previous.is_none() {
+            if cache.order.len() >= MAX_SIZE {
+                evicted = cache.evict_oldest();
             }
-            cache.order.push_back(key.clone());
+            cache.order.push_back(Slot {
+                text: Some(key),
+                key: expression.clone().unbind(),
+                hash: None,
+                result: result.clone().unbind(),
+            });
+        } else if let Some(slot) = cache
+            .order
+            .iter_mut()
+            .find(|s| s.text.as_deref() == Some(&*key))
+        {
+            // Another thread parsed it too: keep the first key, take the new value.
+            replaced = Some(std::mem::replace(&mut slot.result, result.clone().unbind()));
         }
-        let previous = cache.map.insert(key, result.clone().unbind());
-        (evicted, previous)
+        (evicted, previous, replaced)
     };
     // Dropped after unlocking: freeing a result may run arbitrary Python code.
     drop(evicted);
@@ -903,7 +1152,7 @@ fn purge() {
 /// How many expressions are cached.
 #[pyfunction]
 fn _cache_len() -> usize {
-    lock_cache().map.len()
+    lock_cache().order.len()
 }
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
