@@ -23,7 +23,9 @@ use pyo3::types::{PyBool, PyList, PyString, PyTuple};
 use pyroid_core::columnar::{BoolBuffers, BuildError, StringBuffers};
 use pyroid_core::par::{self, PoolError};
 
-use crate::arrow::{Chunk, Column, ColumnType, StrChunk, StrType, build_error};
+use crate::arrow::{
+    ArrowStrings, Chunk, Column, ColumnType, StrChunk, StrType, build_error, collect,
+};
 use crate::errors::with_note;
 use crate::input::{TextInput, Threads, threads};
 use crate::interrupt::detach_batch;
@@ -169,10 +171,15 @@ where
         TextInput::List(docs) | TextInput::Tuple(docs) => {
             let outs = detach_batch(py, || par::map(docs.len(), threads, |i| f(&docs[i])))
                 .map_err(|e| BatchError::from(e).into_pyerr(py))?;
-            let items = docs.iter().zip(&outs).map(|(d, o)| result_str(py, d, o));
+            // `outs` by value: each result is freed once its str is made, between the
+            // list's Ctrl-C checks, not all at once after them.
+            let items = docs
+                .iter()
+                .zip(outs)
+                .map(|(d, o)| Ok(result_str(py, d, &o).into_any()));
             Ok(match input {
-                TextInput::List(_) => PyList::new(py, items)?.into_any(),
-                _ => PyTuple::new(py, items)?.into_any(),
+                TextInput::List(_) => collect::<PyList>(py, docs.len(), items)?.into_any(),
+                _ => collect::<PyTuple>(py, docs.len(), items)?.into_any(),
             })
         }
         TextInput::Arrow(strings) => {
@@ -244,17 +251,16 @@ where
         TextInput::List(docs) | TextInput::Tuple(docs) => {
             let outs = detach_batch(py, || par::map(docs.len(), threads, |i| f(&docs[i])))
                 .map_err(|e| BatchError::from(e).into_pyerr(py))?;
-            let mut items = Vec::with_capacity(outs.len());
-            for (i, (d, o)) in docs.iter().zip(outs).enumerate() {
+            let items = docs.iter().zip(outs).enumerate().map(|(i, (d, o))| {
                 let o = match o {
                     Ok(o) => o,
                     Err(e) => Cow::Owned(on_err(py, i, d, e)?),
                 };
-                items.push(result_str(py, d, &o));
-            }
+                Ok(result_str(py, d, &o).into_any())
+            });
             Ok(match input {
-                TextInput::List(_) => PyList::new(py, items)?.into_any(),
-                _ => PyTuple::new(py, items)?.into_any(),
+                TextInput::List(_) => collect::<PyList>(py, docs.len(), items)?.into_any(),
+                _ => collect::<PyTuple>(py, docs.len(), items)?.into_any(),
             })
         }
         TextInput::Arrow(strings) => {
@@ -328,9 +334,12 @@ where
         TextInput::List(docs) | TextInput::Tuple(docs) => {
             let mask = detach_batch(py, || par::map(docs.len(), threads, |i| f(&docs[i])))
                 .map_err(|e| BatchError::from(e).into_pyerr(py))?;
+            let items = mask
+                .iter()
+                .map(|&keep| Ok(PyBool::new(py, keep).to_owned().into_any()));
             Ok(match input {
-                TextInput::List(_) => PyList::new(py, mask)?.into_any(),
-                _ => PyTuple::new(py, mask)?.into_any(),
+                TextInput::List(_) => collect::<PyList>(py, mask.len(), items)?.into_any(),
+                _ => collect::<PyTuple>(py, mask.len(), items)?.into_any(),
             })
         }
         TextInput::Arrow(strings) => {
@@ -355,31 +364,34 @@ where
     }
 }
 
+/// Row `row` of chunk `c` of an Arrow input as UTF-8 (`None` for a null).
+fn arrow_row(chunk: &StrChunk, c: usize, row: usize) -> Result<Option<&str>, BatchError> {
+    match chunk.get(row) {
+        None => Ok(None),
+        Some(Ok(s)) => Ok(Some(s)),
+        Some(Err(err)) => Err(BatchError::BadUtf8 {
+            chunk: c,
+            row,
+            bytes: chunk.bytes(row).unwrap_or_default().to_vec(),
+            err,
+        }),
+    }
+}
+
+/// Every row of an Arrow input with its chunk's number: `(chunk, c, row)`.
+fn arrow_rows(strings: &ArrowStrings) -> impl Iterator<Item = (&StrChunk, usize, usize)> {
+    let chunks = strings.chunks.iter().enumerate();
+    chunks.flat_map(|(c, chunk)| (0..chunk.len()).map(move |row| (chunk, c, row)))
+}
+
 /// Every document of `input` as UTF-8, in order (`None` for an Arrow null).
 pub fn rows(input: &TextInput) -> Result<Vec<Option<&str>>, BatchError> {
     Ok(match input {
         TextInput::Str(s) => vec![Some(&**s)],
         TextInput::List(d) | TextInput::Tuple(d) => d.iter().map(|s| Some(&**s)).collect(),
-        TextInput::Arrow(strings) => {
-            let mut out = Vec::with_capacity(strings.len());
-            for (c, chunk) in strings.chunks.iter().enumerate() {
-                for row in 0..chunk.len() {
-                    out.push(match chunk.get(row) {
-                        None => None,
-                        Some(Ok(s)) => Some(s),
-                        Some(Err(err)) => {
-                            return Err(BatchError::BadUtf8 {
-                                chunk: c,
-                                row,
-                                bytes: chunk.bytes(row).unwrap_or_default().to_vec(),
-                                err,
-                            });
-                        }
-                    });
-                }
-            }
-            out
-        }
+        TextInput::Arrow(strings) => arrow_rows(strings)
+            .map(|(chunk, c, row)| arrow_row(chunk, c, row))
+            .collect::<Result<_, _>>()?,
     })
 }
 
@@ -390,7 +402,17 @@ pub fn to_list<'py>(py: Python<'py>, input: &TextInput) -> PyResult<Bound<'py, P
     match input {
         TextInput::Str(s) => PyList::new(py, [s]),
         TextInput::List(docs) | TextInput::Tuple(docs) => PyList::new(py, docs),
-        TextInput::Arrow(_) => PyList::new(py, rows(input).map_err(|e| e.into_pyerr(py))?),
+        TextInput::Arrow(strings) => {
+            let items = arrow_rows(strings).map(|(chunk, c, row)| {
+                Ok(
+                    match arrow_row(chunk, c, row).map_err(|e| e.into_pyerr(py))? {
+                        None => py.None().into_bound(py),
+                        Some(s) => PyString::new(py, s).into_any(),
+                    },
+                )
+            });
+            collect::<PyList>(py, strings.len(), items)
+        }
     }
 }
 

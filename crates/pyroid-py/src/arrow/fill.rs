@@ -1,5 +1,5 @@
 //! Lists and tuples of known length, filled in place. Here because all of
-//! pyroid-py's `unsafe` lives in this module.
+//! pyroid-py's `unsafe` lives in this module; the batch functions use it too.
 //!
 //! `PyList::new(py, vec)` makes a result in two passes: the items go into the
 //! `Vec`, then into the list, which is only allocated then (and zeroed on
@@ -22,6 +22,10 @@ use pyo3::exceptions::PyOverflowError;
 use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyTuple};
+
+/// Items put in place between two Ctrl-C checks in [`collect`], as when the
+/// batch functions read a list.
+const CHECK_ITEMS: usize = 1 << 16;
 
 /// `PyList` or `PyTuple`: the types a [`Fill`] makes.
 pub trait Slots {
@@ -178,4 +182,22 @@ impl<'py, T: Slots> Fill<'py, T> {
         // SAFETY: `T::alloc` made an object of type `T`.
         unsafe { self.seq.cast_into_unchecked() }
     }
+}
+
+/// A new list or tuple of the `len` items `items` yields (exactly `len`, or
+/// this panics), checking for Ctrl-C between runs of [`CHECK_ITEMS`]; stops
+/// at the first error.
+pub fn collect<'py, T: Slots>(
+    py: Python<'py>,
+    len: usize,
+    items: impl IntoIterator<Item = PyResult<Bound<'py, PyAny>>>,
+) -> PyResult<Bound<'py, T>> {
+    let mut fill = Fill::<T>::new(py, len)?;
+    for (i, item) in items.into_iter().enumerate() {
+        if i % CHECK_ITEMS == CHECK_ITEMS - 1 {
+            py.check_signals()?;
+        }
+        fill.push(item?);
+    }
+    Ok(fill.finish())
 }
