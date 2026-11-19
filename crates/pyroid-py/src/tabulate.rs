@@ -737,8 +737,10 @@ static EMPTY_INT: std::sync::LazyLock<Spec> =
     std::sync::LazyLock::new(|| Spec::parse("", true).expect("the empty spec parses"));
 
 /// `render(rows, headers, separating_lines, call)`: `(text, multiline, empty)` (`empty`: no
-/// headers and no rows, so the text is `""` whatever the format), or `(None, reason, None)`
-/// when the call has to go to tabulate.
+/// headers and no rows, so the text is `""` whatever the format), or `(None, reason, read)`
+/// when the call has to go to tabulate. `read` is `rows` with the rows that were read through
+/// `list()` (iterators and other objects) replaced by those lists, or `None` if there were
+/// none: tabulate's code must not read an iterator a second time.
 #[pyfunction]
 fn render<'py>(
     py: Python<'py>,
@@ -748,7 +750,8 @@ fn render<'py>(
     call: Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let call = Call::new(&call)?;
-    match render_inner(py, &rows, &headers, &separating_lines, &call) {
+    let mut read = Vec::new();
+    match render_inner(py, &rows, &headers, &separating_lines, &call, &mut read) {
         Ok((text, multiline, empty)) => Ok(PyTuple::new(
             py,
             [
@@ -759,15 +762,26 @@ fn render<'py>(
         )?
         .into_any()),
         Err(Fail::Py(e)) => Err(e),
-        Err(Fail::Unsupported(reason)) => Ok(PyTuple::new(
-            py,
-            [
-                py.None().into_bound(py),
-                PyString::new(py, reason).into_any(),
-                py.None().into_bound(py),
-            ],
-        )?
-        .into_any()),
+        Err(Fail::Unsupported(reason)) => {
+            let read = if read.is_empty() {
+                py.None().into_bound(py)
+            } else {
+                let out = PyList::new(py, rows.iter())?;
+                for (position, list) in read {
+                    out.set_item(position, list)?;
+                }
+                out.into_any()
+            };
+            Ok(PyTuple::new(
+                py,
+                [
+                    py.None().into_bound(py),
+                    PyString::new(py, reason).into_any(),
+                    read,
+                ],
+            )?
+            .into_any())
+        }
     }
 }
 
@@ -819,6 +833,7 @@ fn render_inner<'py>(
     headers_in: &Bound<'py, PyList>,
     separating_lines: &Bound<'py, PyAny>,
     call: &Call<'py>,
+    read: &mut Vec<(usize, Bound<'py, PyList>)>,
 ) -> FResult<(Bound<'py, PyString>, bool, bool)> {
     let unicode_ok = call.flag("unicode_ok")?;
     let max_digits: usize = call.obj.getattr("max_digits")?.extract()?;
@@ -872,10 +887,18 @@ fn render_inner<'py>(
         host.pacer.tick()?;
         let row = match row.cast_exact::<PyList>() {
             Ok(l) => l.clone(),
-            Err(_) if raw => list_type
-                .call1((row,))?
-                .cast_into::<PyList>()
-                .map_err(PyErr::from)?,
+            Err(_) if raw => {
+                let list = list_type
+                    .call1((&row,))?
+                    .cast_into::<PyList>()
+                    .map_err(PyErr::from)?;
+                if !(row.is_exact_instance_of::<PyTuple>()
+                    || row.is_exact_instance_of::<PyString>())
+                {
+                    read.push((position, list.clone()));
+                }
+                list
+            }
             Err(_) => return Err(Fail::Unsupported("a row that is not a list")),
         };
         if raw && is_separating_line(row.get_item(0).ok().as_ref(), row.get_item(1).ok().as_ref()) {

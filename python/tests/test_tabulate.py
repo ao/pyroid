@@ -555,6 +555,21 @@ def test_cells_str_runs_in_tabulates_order(tablefmt: str) -> None:
     assert _str_calls(tabulate, [[1, "b!"], ["a!", 2]])[0] == (ValueError, "bad b!")
 
 
+def test_row_iterators_survive_a_fallback() -> None:
+    # The Rust side turns rows into lists as it reads them; when it then hands the call to
+    # tabulate's code (here for the lone surrogate in the last row), that code gets those lists,
+    # not the spent iterators.
+    def rows() -> list[Any]:
+        return [[1, 2], iter([3, 4]), (x for x in "ab"), ["\ud800", 5]]
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        for kwargs in ({}, {"headers": ["x", "y"]}, {"showindex": True}, {"tablefmt": "rst"}):
+            want = pt._port.tabulate(rows(), **kwargs)
+            assert "3" in want
+            assert tabulate(rows(), **kwargs) == want, kwargs
+
+
 def test_port_is_tabulates_code() -> None:
     """Every function and table kept in ``_port.py`` is tabulate's, AST for AST."""
     real = _real_tabulate()

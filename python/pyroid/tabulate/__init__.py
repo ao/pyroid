@@ -723,6 +723,10 @@ def tabulate(
     )
     text, multiline, empty = _native.render(list_of_lists, headers, separating_lines, call)
     if text is None:
+        if empty is not None:
+            # The rows as the Rust side read them: an iterator among them is spent.
+            read = empty
+            normalized = lambda: (_with_index(read, index), headers0)  # noqa: E731
         return _delegate_normalized(multiline, normalized, options)
     if empty:  # a completely empty table
         return ""
