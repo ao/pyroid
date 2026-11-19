@@ -430,6 +430,85 @@ def test_custom_table_formats() -> None:
     assert tabulate([[1, 2]], tablefmt=pt.simple_separated_format(";")) == "1;2"
 
 
+def _outcome(fn: Any, *args: Any, **kwargs: Any) -> Any:
+    try:
+        return fn(*args, **kwargs)
+    except Exception as e:
+        return type(e), str(e)
+
+
+#: In-place edits to the built-in formats: (format, edit, undo). tabulate reads the
+#: partials' arguments and the ``with_header_hide`` lists on every call (P67, `t_mutate_latex`).
+def _format_edits(formats: Any) -> list[tuple[str, Any, Any]]:
+    f = formats
+
+    def setitem(d: dict[str, Any], key: str, value: Any) -> tuple[Any, Any]:
+        missing = object()
+        old = d.get(key, missing)
+
+        def undo() -> None:
+            if old is missing:
+                del d[key]
+            else:
+                d[key] = old
+
+        return lambda: d.__setitem__(key, value), undo
+
+    def relist(lst: list[str], new: list[str]) -> tuple[Any, Any]:
+        old = list(lst)
+        return lambda: lst.__setitem__(slice(None), new), lambda: lst.__setitem__(slice(None), old)
+
+    edits = [
+        ("latex_raw", *setitem(f["latex_raw"].datarow.keywords["escrules"], "&", "X")),
+        ("latex_raw", *setitem(f["latex_raw"].headerrow.keywords["escrules"], "_", "Y")),
+        ("latex_booktabs", *setitem(f["latex_booktabs"].lineabove.keywords, "booktabs", False)),
+        ("latex_longtable", *setitem(f["latex_longtable"].lineabove.keywords, "booktabs", True)),
+        ("moinmoin", *setitem(f["moinmoin"].headerrow.keywords, "header", "*")),
+        ("moinmoin", *setitem(f["moinmoin"].datarow.keywords, "header", "~")),
+        ("html", *setitem(f["html"].datarow.keywords, "unsafe", False)),  # a TypeError
+        ("simple", *relist(f["simple"].with_header_hide, [])),
+        ("github", *relist(f["github"].with_header_hide, ["lineabove", "linebelowheader"])),
+        ("html", *relist(f["html"].with_header_hide, [])),
+        ("asciidoc", *relist(f["asciidoc"].with_header_hide, ["linebelow"])),
+    ]
+    return edits
+
+
+def test_builtin_formats_edited_in_place() -> None:
+    rows = [["a&b", "x_y", 1.5], ["c", "d\ne", 22]]
+    headers = ["h&1", "h_2", "h3"]
+    real = _real_tabulate() if importlib.util.find_spec("tabulate") else None
+    edits = _format_edits(pt._table_formats)
+    real_edits = _format_edits(real._table_formats) if real is not None else [None] * len(edits)
+    for (name, do, undo), real_edit in zip(edits, real_edits, strict=True):
+        cases = [((rows,), {"tablefmt": name}), ((rows, headers), {"tablefmt": name})]
+        before = [tabulate(*a, **k) for a, k in cases]
+        do()
+        if real_edit is not None:
+            real_edit[1]()
+        try:
+            for a, k in cases:
+                got = _outcome(tabulate, *a, **k)
+                # tabulate's own code, over the same (edited) `_table_formats`.
+                assert got == _outcome(pt._port.tabulate, *a, **k), (name, a, k)
+                if real_edit is not None:
+                    assert got == _outcome(real.tabulate, *a, **k), (name, a, k)
+            assert [_outcome(tabulate, *a, **k) for a, k in cases] != before, name
+        finally:
+            undo()
+            if real_edit is not None:
+                real_edit[2]()
+        assert [tabulate(*a, **k) for a, k in cases] == before, name
+    # The finding's call.
+    escrules = pt._table_formats["latex_raw"].datarow.keywords["escrules"]
+    escrules["&"] = "X"
+    try:
+        assert tabulate([["a&b"]], tablefmt="latex_raw").splitlines()[2] == " aXb \\\\"
+    finally:
+        del escrules["&"]
+    assert tabulate([["a&b"]], tablefmt="latex_raw").splitlines()[2] == " a&b \\\\"
+
+
 def test_port_is_tabulates_code() -> None:
     """Every function and table kept in ``_port.py`` is tabulate's, AST for AST."""
     real = _real_tabulate()

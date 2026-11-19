@@ -12,6 +12,8 @@ is in the guide: https://ataiva.com/open-source/pyroid/docs/guides/tabulate/
 
 from __future__ import annotations
 
+import copy
+import functools
 import re
 import sys
 import threading
@@ -89,8 +91,48 @@ WIDE_CHARS_MODE = wcwidth is not None
 
 _LINE_NAMES = ("lineabove", "linebelowheader", "linebetweenrows", "linebelow")
 
-# The built-in formats as they were at import: `_table_formats` may be edited by users.
-_BUILTIN: dict[int, tuple[str, Any]] = {id(f): (name, f) for name, f in _table_formats.items()}
+_PartialState = tuple[Any, tuple[Any, ...], dict[str, Any]]
+
+
+def _partial_state(p: functools.partial[Any]) -> _PartialState:
+    return p.func, p.args, copy.deepcopy(p.keywords)
+
+
+#: Each ``functools.partial`` among the built-in formats' lines and rows (by id), with its
+#: function, arguments and keyword arguments as they were at import.
+_PARTIALS: dict[int, tuple[Any, _PartialState]] = {
+    id(field): (field, _partial_state(field))
+    for f in _table_formats.values()
+    for field in f[:6]
+    if type(field) is functools.partial
+}
+
+#: The built-in formats as they were at import (`_table_formats` may be edited by users), by
+#: id: name, the format, its ``with_header_hide`` list and its partials. tabulate reads those
+#: two on every call, so edits made in place
+#: (``_table_formats["latex_raw"].datarow.keywords["escrules"]["&"] = "X"``) change what it
+#: draws; the Rust side's built-in formats are fixed, so an edited one is drawn as a custom one.
+_BUILTIN: dict[int, tuple[str, Any, list[str] | None, tuple[tuple[Any, _PartialState], ...]]] = {
+    id(f): (
+        name,
+        f,
+        None if f.with_header_hide is None else list(f.with_header_hide),
+        tuple(_PARTIALS[id(field)] for field in f[:6] if id(field) in _PARTIALS),
+    )
+    for name, f in _table_formats.items()
+}
+
+
+def _partial_intact(p: Any, state: _PartialState) -> bool:
+    func, args, keywords = state
+    return p.keywords == keywords and p.func is func and p.args == args
+
+
+def _partials_intact(partials: tuple[tuple[Any, _PartialState], ...]) -> bool:
+    for p, state in partials:
+        if not _partial_intact(p, state):
+            return False
+    return True
 
 
 def _native_callables() -> tuple[dict[int, tuple[str, Any]], dict[int, tuple[str, Any]]]:
@@ -140,7 +182,9 @@ def _describe_field(f: Any, n: int, native: dict[int, tuple[str, Any]]) -> Any:
     if callable(f):
         known = native.get(id(f))
         if known is not None and known[1] is f:
-            return ("native", known[0])
+            part = _PARTIALS.get(id(f))
+            if part is None or _partial_intact(f, part[1]):
+                return ("native", known[0])
         return ("call", f)
     parts = tuple(f)
     if len(parts) != n or not all(type(p) is str for p in parts):
@@ -174,6 +218,8 @@ def _describe(fmt: Any) -> Any:
         builtin is not None
         and builtin[1] is fmt
         and (builtin[0] not in _LATEX_NAMES or LATEX_ESCAPE_RULES == _LATEX_RULES)
+        and (builtin[2] is None or fmt.with_header_hide == builtin[2])
+        and (not builtin[3] or _partials_intact(builtin[3]))
     ):
         return ("builtin", builtin[0])
     edited = _edited_latex(fmt)
