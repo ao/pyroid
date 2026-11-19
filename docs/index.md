@@ -49,6 +49,7 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 |  | [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | [NeMo Curator](https://github.com/NVIDIA-NeMo/Curator) 1.4.0's heuristic document filters and string modifiers | same scores, exceptions and modified text ([parity](compatibility.md#nemo)) |
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
 | JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
+| Diffs and fuzzy matching | [`pyroid.difflib`](guides/difflib.md) | the standard library's [`difflib`](https://docs.python.org/3/library/difflib.html) (CPython 3.11 to 3.15) | the interpreter's own ratios (float bits), opcodes, diff lines and HTML ([parity](compatibility.md#difflib)) |
 
 ## Example: cleaning LLM training data
 
@@ -207,7 +208,7 @@ PSF-2.0 AND Unicode-3.0 AND Zlib`:
   its dictionary) and libxml2 (HTML parser) ports;
 - BSD-2-Clause for the jusText port and its stoplists;
 - BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract and lxml;
-- PSF-2.0 for CPython's `ipaddress`;
+- PSF-2.0 for CPython's `ipaddress` and `difflib`;
 - ISC for anyascii's data;
 - Unicode-3.0 for Unicode Character Database data;
 - Zlib for zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.

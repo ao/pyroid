@@ -14,6 +14,7 @@ source.
 | [`pyroid.translit`](translit.md) | `anyascii`, `unidecode`, `is_ascii`, `UnidecodeError` |
 | [`pyroid.metrics`](metrics.md) | `rouge_scorer`, `scoring`, `tokenizers`, `tokenize` (rouge-score's modules) and `sacrebleu` |
 | [`pyroid.json_repair`](json_repair.md) | `repair_json`, `loads`, `load`, `from_file`, `repair_json_batch`, `NestingError` |
+| [`pyroid.difflib`](difflib.md) | the standard library's `difflib` (`SequenceMatcher`, `get_close_matches`, `unified_diff`, `ndiff`, `HtmlDiff`, ...), `ratio_batch`, `close_matches_batch` |
 | [`pyroid.datasketch`](datasketch.md) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble` (datasketch's modules), `minhash_batch` |
 | [`pyroid.jieba`](jieba.md) | jieba 0.42.1's API: `cut`, `lcut`, `cut_for_search`, `tokenize`, `add_word`, `load_userdict`, `Tokenizer`, ... |
 | [`pyroid.trafilatura`](trafilatura.md) | `extract`, `bare_extraction`, `extract_with_metadata`, `extract_batch`, `Document`, `LRUCache`, `reset_caches`, the `compat=` modes 2.3.1 and 1.11.0 |

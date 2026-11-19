@@ -39,6 +39,7 @@ ORDER = [
     "jieba",
     "trafilatura",
     "nltk",
+    "difflib",
     "nemo",
     "integrations",
 ]
@@ -54,6 +55,7 @@ TITLES = {
     "jieba": "pyroid.jieba",
     "trafilatura": "pyroid.trafilatura",
     "nltk": "pyroid.nltk",
+    "difflib": "pyroid.difflib",
     "nemo": "pyroid.nemo and pyroid.integrations.nemo_curator",
     "integrations": "Integrations: datatrove steps, pyroid clean, pyroid.patch()",
 }

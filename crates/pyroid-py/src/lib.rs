@@ -17,6 +17,7 @@ mod arrow;
 mod batch;
 mod datasketch;
 mod dedup;
+mod difflib;
 mod errors;
 mod fasttext;
 mod filters;
@@ -65,5 +66,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jieba::register(m)?;
     trafilatura::register(m)?;
     warc::register(m)?;
+    difflib::register(m)?;
     Ok(())
 }

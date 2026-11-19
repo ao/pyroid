@@ -1,5 +1,5 @@
 {
-  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'runs' holds the consolidated EC2 runs: 'label' and 'rows' are copied from each run folder's consolidated.json, 'chain' from the end-to-end table of its CONSOLIDATED.md (with en dashes and ×), 'source' is the folder in this repository and 'caption' is the short name the page prints. 'more' holds runs outside the consolidated benchmark, all in the Docker VM ('more_label'), each group with its own source. 'tables' holds hand-entered tables with columns of their own (the WARC runs), each with its caption and source. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
+  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'runs' holds the consolidated EC2 runs: 'label' and 'rows' are copied from each run folder's consolidated.json, 'chain' from the end-to-end table of its CONSOLIDATED.md (with en dashes and ×), 'source' is the folder in this repository and 'caption' is the short name the page prints. 'more' holds runs outside the consolidated benchmark, each group with its own source and, if it did not run in the Docker VM ('more_label'), its own 'label'. 'tables' holds hand-entered tables with columns of their own (the WARC runs), each with its caption and source. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
   "runs": {
     "c7i-100k": {
       "caption": "c7i.4xlarge, 100,000 documents",
@@ -186,6 +186,34 @@
       ],
       "footnote": "Speedups are against NLTK on one thread. pyroid builds the Python lists of sentences and tokens on the calling thread, which limits the 8-thread rows; against NLTK on 8 processes they are 35× (sent_tokenize) and 14× (word_tokenize) on 3.13. The first sentence in a fresh interpreter takes 177 ms with pyroid and 203 ms with NLTK on 3.13: pyroid imports NLTK to find the model when NLTK is installed.",
       "source": "bench/results/orbstack-aarch64-12cpu/2026-11-09-nltk (bench/nltk_bench.py)"
+    },
+    {
+      "title": "pyroid.difflib",
+      "guide": "difflib",
+      "label": "AWS EC2 c7i.4xlarge (Intel Xeon, 16 vCPU), Amazon Linux 2023, Docker, CPython 3.12",
+      "note": "Dedicated instance, one process; load average 0.41 before and 0.70 after. Time per call (per pair for the ratios), best of 7 rounds (1 for 1,000,000 names and for close_matches_batch, 3 for the whole standard library), the standard library's difflib and pyroid interleaved in one process, CPython 3.12.16, pyroid release wheel built on the instance. Both results are checked identical before each case is timed. Names: GeoNames place names and SEC company names, each against a copy with one typo; 1,000,000 names are the place names with numbered suffixes; both lists fetched on 2026-11-16. The diffs are of the files of CPython 3.12.16 and 3.14.10. \"16 threads\" is the default `threads=None` (8 cores with two threads each); the loop rows have no such column.",
+      "columns": ["Call", "difflib (CPython 3.12)", "pyroid, 1 thread", "Speedup", "pyroid, 16 threads", "Speedup"],
+      "rows": [
+        ["`SequenceMatcher(None, a, b).ratio()` in a loop, name pairs", "9.98 µs", "2.07 µs", "4.8×", "—", "—"],
+        ["`ratio_batch(a, b)`, name pairs", "9.98 µs", "0.64 µs", "15.7×", "0.19 µs", "53.6×"],
+        ["`SequenceMatcher(None, a, b).ratio()` in a loop, 500-character pairs", "397.66 µs", "26.70 µs", "14.9×", "—", "—"],
+        ["`ratio_batch(a, b)`, 500-character pairs", "397.66 µs", "23.22 µs", "17.1×", "4.97 µs", "80.0×"],
+        ["`get_close_matches`, 10,000 place names", "13.59 ms", "1.09 ms", "12.4×", "0.79 ms", "17.1×"],
+        ["`get_close_matches`, 100,000 place names", "144.40 ms", "9.93 ms", "14.5×", "4.83 ms", "29.9×"],
+        ["`get_close_matches`, 1,000,000 names", "1,800.78 ms", "136.33 ms", "13.2×", "58.24 ms", "30.9×"],
+        ["`close_matches_batch`, 1,000 queries × 10,000 names (difflib: a loop of `get_close_matches`)", "11,895.28 ms", "584.00 ms", "20.4×", "102.68 ms", "115.8×"],
+        ["`unified_diff`, argparse.py (2,650 / 2,789 lines)", "5.62 ms", "0.78 ms", "7.2×", "—", "—"],
+        ["`context_diff`, argparse.py", "5.86 ms", "0.86 ms", "6.8×", "—", "—"],
+        ["`ndiff`, argparse.py", "30.55 ms", "2.74 ms", "11.2×", "—", "—"],
+        ["`HtmlDiff().make_file`, argparse.py", "52.45 ms", "8.46 ms", "6.2×", "—", "—"],
+        ["`unified_diff`, typing.py (3,494 / 3,866 lines)", "7.89 ms", "1.07 ms", "7.3×", "—", "—"],
+        ["`context_diff`, typing.py", "8.11 ms", "1.14 ms", "7.1×", "—", "—"],
+        ["`ndiff`, typing.py", "106.96 ms", "6.98 ms", "15.3×", "—", "—"],
+        ["`HtmlDiff().make_file`, typing.py", "138.28 ms", "14.74 ms", "9.4×", "—", "—"],
+        ["`unified_diff`, every file of the standard library (591 files, 594,900 lines)", "370.71 ms", "65.84 ms", "5.6×", "—", "—"]
+      ],
+      "footnote": "For context only: rapidfuzz 3.14.6's `fuzz.ratio` takes 0.25 µs per name pair and 4.50 µs per 500-character pair on one thread, but computes a different, Levenshtein-based score.",
+      "source": "bench/difflib/difflib_bench.py, run on 2026-11-16 (bench/results/aws-c7i.4xlarge/2026-11-16/difflib.json)"
     },
     {
       "title": "pyroid.trafilatura",

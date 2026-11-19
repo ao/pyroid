@@ -94,6 +94,12 @@ set on NeMo's own modules (``nemo_curator.stages.text.filters`` and the modules 
 them), so pipelines built afterwards, including from NeMo's YAML configs, use them. Ray workers
 need no patch: the stages they receive are pyroid's classes.
 
+``"difflib"`` patches the standard library's difflib in place: :mod:`pyroid.difflib`'s
+methods are set on ``difflib.SequenceMatcher``, ``difflib.Differ`` and ``difflib.HtmlDiff``
+themselves (so instances, subclasses and ``isinstance`` checks stay difflib's, including classes
+imported earlier), and its ``get_close_matches``, ``unified_diff``, ``context_diff`` and
+``_mdiff`` on the module, which covers ``ndiff`` and unittest's and pytest's assertion diffs.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -140,6 +146,7 @@ SUPPORTED: tuple[str, ...] = (
     "nltk",
     "warcio",
     "nemo_curator",
+    "difflib",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -774,6 +781,29 @@ def _distribution_version(name: str) -> Callable[[Any], str | None]:
     return installed
 
 
+def _build_difflib(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if not impl._KNOWN:  # pyroid.difflib is the standard library's here: nothing to patch
+        return {}, []
+    swaps = [(real.SequenceMatcher, name, value) for name, value in impl._SM_METHODS.items()]
+    swaps += [
+        (real.Differ, "compare", impl._PATCH_COMPARE),
+        (real.HtmlDiff, "make_table", impl._PATCH_MAKE_TABLE),
+    ]
+    swaps += [(real, name, value) for name, value in impl._PATCH_FUNCTIONS.items()]
+    # One native step sets all of them (or none, if one fails); only then (every method and
+    # lazy attribute in place) do pyroid's methods give difflib's matchers native state. The
+    # undo, also native, first gives matchers made or used under the patch difflib's own state,
+    # so they keep working with difflib's methods (one that another thread's set_seq* is
+    # changing at this moment gets it when that call ends), then puts every attribute back.
+    # Neither stops half-way on Ctrl-C; one that lands just after the patch is undone here.
+    try:
+        impl._switch_on(tuple(swaps), _MISSING)
+    except BaseException:
+        impl._switch_off()
+        raise
+    return {}, [impl._switch_off]
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -850,10 +880,18 @@ _TARGETS: dict[str, _Target] = {
         " (readers, writers, deduplication, classifiers, the other stages)",
         _build_nemo_curator,
     ),
+    "difflib": _Target(
+        "pyroid.difflib",
+        "which reproduces this Python's difflib",
+        None,
+        "difflib is part of the standard library",
+        " (restore, diff_bytes, IS_LINE_JUNK, Match)",
+        _build_difflib,
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator")
+_SWAPPED = ("nltk", "warcio", "nemo_curator", "difflib")
 
 
 # ---------------------------------------------------------------------------
@@ -918,6 +956,16 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
     target = _TARGETS[name]
     if name not in _WARNED:
         _WARNED.add(name)
+        if name == "difflib" and not impl._KNOWN:
+            v = sys.version_info
+            warnings.warn(
+                "pyroid.integrations.patch: nothing was patched: pyroid.difflib reproduces difflib "
+                f"of CPython 3.11 to 3.15, not {v[0]}.{v[1]}'s, so difflib stays the standard "
+                "library's. This warning is shown once.",
+                PatchWarning,
+                stacklevel=_caller_stacklevel(),
+            )
+            return
         what = f"`import {name}` now gives pyroid's drop-in"
         if real is None:
             rest = f"Everything else{target.rest} is unavailable: {missing} ({target.pip})."
@@ -927,6 +975,7 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
                 "nltk": "from nltk import word_tokenize",
                 "warcio": "from warcio.archiveiterator import ArchiveIterator",
                 "nemo_curator": "from nemo_curator.stages.text.filters import ScoreFilter",
+                "difflib": "from difflib import unified_diff",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
@@ -1014,7 +1063,8 @@ def patch(*names: str) -> None:
 
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
-            ``"trafilatura"``, ``"nltk"``, ``"warcio"`` and/or ``"nemo_curator"``.
+            ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"`` and/or
+            ``"difflib"``.
 
     Raises:
         TypeError: No names were given.
@@ -1147,7 +1197,7 @@ _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
-`warcio` / `nemo_curator` giving pyroid's drop-ins. The Python processes it starts
+`warcio` / `nemo_curator` / `difflib` giving pyroid's drop-ins. The Python processes it starts
 (multiprocessing workers, subprocesses) are patched too.
 
 options:
