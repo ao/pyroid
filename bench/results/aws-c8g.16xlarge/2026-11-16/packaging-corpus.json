@@ -1,0 +1,67 @@
+{
+ "packaging": "26.3",
+ "python": "3.12.16",
+ "projects": 9996,
+ "releases_json": 9784,
+ "requires_dist_unique": 69162,
+ "total": 8725233,
+ "different": 0,
+ "checks": {
+  "version parse, str, properties, key, hash": {
+   "compared": 828241,
+   "different": 0
+  },
+  "canonicalize_version": {
+   "compared": 828241,
+   "different": 0
+  },
+  "sort of each project's releases": {
+   "compared": 9996,
+   "different": 0
+  },
+  "sort_versions batch": {
+   "compared": 9996,
+   "different": 0
+  },
+  "sort of all release versions": {
+   "compared": 1,
+   "different": 0
+  },
+  "Requires-Python parse": {
+   "compared": 25930,
+   "different": 0
+  },
+  "Requires-Python contains (CPython versions, prereleases None/True/False)": {
+   "compared": 4731831,
+   "different": 0
+  },
+  "Requires-Python filter over the project's releases": {
+   "compared": 25857,
+   "different": 0
+  },
+  "contains_batch over CPython versions": {
+   "compared": 25857,
+   "different": 0
+  },
+  "Requires-Dist parse and str": {
+   "compared": 69162,
+   "different": 0
+  },
+  "Requirement == and hash across the two libraries": {
+   "compared": 69157,
+   "different": 0
+  },
+  "dependency specifier filter over the dependency's releases": {
+   "compared": 186519,
+   "different": 0
+  },
+  "filter_batch over the dependency's releases": {
+   "compared": 62173,
+   "different": 0
+  },
+  "marker evaluate (4 environments x extras x 3 contexts)": {
+   "compared": 1852272,
+   "different": 0
+  }
+ }
+}

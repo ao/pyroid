@@ -117,6 +117,8 @@ timeout = "600"
 
 [tool.ruff]
 line-length = 110
+# Vendored upstream test files (packaging's test suite) stay as upstream wrote them.
+extend-exclude = ["data"]
 target-version = "py312"
 
 [tool.ruff.lint]

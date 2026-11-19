@@ -28,6 +28,7 @@ mod metrics;
 mod nemo;
 mod nemo_modifiers;
 mod nltk;
+mod packaging;
 mod pythainlp;
 mod segmenters;
 mod sudachi;
@@ -65,5 +66,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jieba::register(m)?;
     trafilatura::register(m)?;
     warc::register(m)?;
+    packaging::register(m)?;
     Ok(())
 }

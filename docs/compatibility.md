@@ -30,7 +30,7 @@ broken builds (for example ftfy without surrogate-pair joining) fail them.
 ## Results
 
 The counts below are from each module's test runs between 2026-11-05 and 2026-11-09, in a
-Docker/OrbStack VM on linux/aarch64 unless a row says otherwise. The native runs on AWS EC2 are
+Docker/OrbStack VM on linux/aarch64, unless a module's source line says otherwise. The native runs on AWS EC2 are
 under [Platforms](#platforms). CI runs the `parity/` suites on Linux x86_64 and aarch64 on every
 pull request and push to `main`; their counts are in each job's summary and
 `parity-report.json` artifact, not on this page.
@@ -165,6 +165,23 @@ Reference: json_repair 0.64.5. Rule: the same returned string or object, the sam
 - The Rust kernel also replays 451 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k.
 
 <small>Source: the parity/ json_repair suite, run on 2026-11-06.</small>
+
+### pyroid.packaging {#packaging}
+
+Reference: packaging 26.3. Rule: the same result (strings, properties, order, hashes, equality across the two libraries, pickles) or the same exception class and message.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| packaging 26.3's own tests of versions, specifiers, markers, requirements, utils, ranges, metadata, pylock and dependency groups, and its property tests, unchanged, with pyroid.patch("packaging") on and packaging's pytest settings (warnings are errors; pyroid.FallbackWarning ignored) (tests passed) | 62,499 | 62,499 | 0 |
+| Hypothesis differential fuzzing from the PEP 440 and PEP 508 grammars plus mutations (Python whitespace, letters re.IGNORECASE folds onto ASCII, other digits, lone surrogates): versions, version ordering, from_parts and __replace__, Specifier, SpecifierSet, markers, requirements, wheel and sdist filenames, names; 9 properties x 20,000 cases | 180,000 | 180,000 | 0 |
+| PyPI corpus, the top 9,996 projects: every release version (828,241) parsed, printed, keyed and hashed, and canonicalize_version of each; each project's release list sorted, natively and with sort_versions, and all of them sorted together | 1,676,475 | 1,676,475 | 0 |
+| PyPI corpus: the 25,930 distinct Requires-Python values parsed; contains of 61 CPython versions with prereleases None, True and False (4,731,831); filter over the project's own releases; contains_batch | 4,809,475 | 4,809,475 | 0 |
+| PyPI corpus: 69,162 distinct Requires-Dist values (the latest release of each project and the last 10 releases of the top 1,000) parsed and printed; == and hash against packaging's objects; each marker evaluated in 4 environments x 3 extras x 3 contexts (1,852,272); each specifier's filter over the dependency's own release list (186,519, and filter_batch) | 2,239,283 | 2,239,283 | 0 |
+| **Total** | **8,967,732** | **8,967,732** | **0** |
+
+- The test suite runs with packaging's own modules (ranges, metadata, pylock, dependency_groups) using pyroid's classes. packaging's tests of platform tags (test_tags, test_manylinux, test_musllinux, test_elffile), licenses, direct URLs and errors are not run: pyroid does not port those modules.
+
+<small>Source: python/tests/test_packaging_patch.py::test_packagings_own_test_suite (PYROID_PACKAGING_UPSTREAM=all), python/tests/test_packaging_parity.py (PYROID_PACKAGING_EXAMPLES=20000) and bench/packaging/pypi_corpus.py (PyPI JSON API, fetched 2026-11-16; counts in bench/results/aws-c8g.16xlarge/2026-11-16/packaging-corpus.json), CPython 3.12.16 on linux/aarch64 (an AWS EC2 c8g.16xlarge), run on 2026-11-16.</small>
 
 ### pyroid.datasketch {#datasketch}
 
@@ -340,6 +357,7 @@ as returning an unchanged string as the same object.
 - [Differences from rouge-score](guides/metrics.md#differences-from-rouge-score) and
   [from sacrebleu](guides/metrics.md#differences-from-sacrebleu)
 - [Differences from json_repair](guides/json_repair.md#differences-from-json_repair)
+- [Differences from packaging](guides/packaging.md#differences-from-packaging)
 - [Differences from datasketch](guides/datasketch.md#differences-from-datasketch)
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)
