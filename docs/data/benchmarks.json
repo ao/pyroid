@@ -1,5 +1,5 @@
 {
-  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'runs' holds the consolidated EC2 runs: 'label' and 'rows' are copied from each run folder's consolidated.json, 'chain' from the end-to-end table of its CONSOLIDATED.md (with en dashes and ×), 'source' is the folder in this repository and 'caption' is the short name the page prints. 'more' holds runs outside the consolidated benchmark, all in the Docker VM ('more_label'), each group with its own source. 'tables' holds hand-entered tables with columns of their own (the WARC runs), each with its caption and source. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
+  "about": "Generated tables of docs/benchmarks.md, rendered by docs/scripts/render_benchmarks.py. 'runs' holds the consolidated EC2 runs: 'label' and 'rows' are copied from each run folder's consolidated.json, 'chain' from the end-to-end table of its CONSOLIDATED.md (with en dashes and ×), 'source' is the folder in this repository and 'caption' is the short name the page prints. 'more' holds runs outside the consolidated benchmark, each group with its own source and, if it did not run in the Docker VM ('more_label'), its own 'label'. 'tables' holds hand-entered tables with columns of their own (the WARC runs), each with its caption and source. Units: microseconds per document (rows; pyroid_us is one thread on CPython 3.15t, pyroid_us_8_threads a pool of 8, incumbents one process on CPython 3.13) and seconds per run (chain). Every value is a string copied from the source, never computed.",
   "runs": {
     "c7i-100k": {
       "caption": "c7i.4xlarge, 100,000 documents",
@@ -186,6 +186,29 @@
       ],
       "footnote": "Speedups are against NLTK on one thread. pyroid builds the Python lists of sentences and tokens on the calling thread, which limits the 8-thread rows; against NLTK on 8 processes they are 35× (sent_tokenize) and 14× (word_tokenize) on 3.13. The first sentence in a fresh interpreter takes 177 ms with pyroid and 203 ms with NLTK on 3.13: pyroid imports NLTK to find the model when NLTK is installed.",
       "source": "bench/results/orbstack-aarch64-12cpu/2026-11-09-nltk (bench/nltk_bench.py)"
+    },
+    {
+      "title": "pyroid.tabulate",
+      "guide": "tabulate",
+      "label": "AWS EC2 c7i.4xlarge (Intel Xeon, 16 vCPU), Amazon Linux 2023, Docker, CPython 3.12",
+      "note": "Dedicated instance, one process; load average 0.44 before and 0.98 after (the benchmark itself). Time per `tabulate(rows, headers=..., tablefmt=...)` call, best of 200 runs of tabulate and 2,000 of pyroid at 1 and 5 rows, 5 and 20 at 1,000 rows, 1 and 3 at 100,000 rows; CPython 3.12.16, tabulate 0.10.0 with wcwidth 0.9.4, pyroid release wheel. Each pyroid result is checked equal to tabulate's before it is timed. Numbers are ints and floats; text is words and some numeric strings; mixed has strings, ints, floats and missing values. The times are for `simple`; the last five columns are pyroid's speedup in each format.",
+      "columns": ["Table", "tabulate, `simple`", "pyroid, `simple`", "Speedup, `simple`", "`pipe`", "`grid`", "`github`", "`html`"],
+      "rows": [
+        ["1 x 3, numbers", "33 µs", "11 µs", "3.0×", "3.2×", "3.3×", "3.3×", "3.6×"],
+        ["1 x 3, text", "41 µs", "11 µs", "3.7×", "3.7×", "3.7×", "3.8×", "4.4×"],
+        ["1 x 3, mixed", "40 µs", "11 µs", "3.7×", "3.8×", "3.8×", "3.8×", "4.3×"],
+        ["5 x 3, numbers", "77 µs", "13 µs", "6.1×", "6.2×", "6.4×", "6.4×", "7.4×"],
+        ["5 x 3, text", "116 µs", "13 µs", "9.1×", "8.9×", "9.1×", "9.1×", "10×"],
+        ["5 x 3, mixed", "98 µs", "13 µs", "7.7×", "7.6×", "7.9×", "7.6×", "8.9×"],
+        ["1,000 x 8, numbers", "24.4 ms", "1.28 ms", "19×", "19×", "20×", "19×", "20×"],
+        ["1,000 x 8, text", "41.5 ms", "1.37 ms", "30×", "30×", "30×", "31×", "30×"],
+        ["1,000 x 8, mixed", "31.2 ms", "993 µs", "31×", "31×", "31×", "31×", "32×"],
+        ["100,000 x 10, numbers", "3.29 s", "232 ms", "14×", "15×", "13×", "15×", "12×"],
+        ["100,000 x 10, text", "5.55 s", "287 ms", "19×", "18×", "17×", "18×", "16×"],
+        ["100,000 x 10, mixed", "4.02 s", "193 ms", "21×", "22×", "19×", "20×", "16×"]
+      ],
+      "footnote": "`DataFrame.to_markdown()` (tabulate's `pipe` with the index, pandas 3.1.1), numbers / mixed: 2.0× / 1.6× at 1 row, 3.3× / 2.5× at 5 rows, 20× / 20× at 1,000 rows, 16× / 17× at 100,000 rows.",
+      "source": "bench/tabulate/tabulate_bench.py, run on 2026-11-16 (bench/results/aws-c7i.4xlarge/2026-11-16/tabulate.json)"
     },
     {
       "title": "pyroid.trafilatura",

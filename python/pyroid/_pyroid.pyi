@@ -22,6 +22,7 @@ __all__ = [
     "metrics",
     "nemo",
     "nltk",
+    "tabulate",
     "text",
     "trafilatura",
     "translit",
@@ -45,6 +46,7 @@ nltk: ModuleType
 nemo: ModuleType
 trafilatura: ModuleType
 warc: ModuleType
+tabulate: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):

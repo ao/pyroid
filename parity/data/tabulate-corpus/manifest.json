@@ -1,0 +1,244 @@
+{
+ "files": {
+  "datahub-airport-codes": {
+   "url": "https://raw.githubusercontent.com/datasets/airport-codes/0ebaf2a8ab955eb542f84b7b5960ecf563f64edc/data/airport-codes.csv",
+   "bytes": 8826617,
+   "sha256": "b13058a39d558e7787795436c8b0a3d3eb56c1d93dd48082dec960d31cc14cf4"
+  },
+  "datahub-country-codes": {
+   "url": "https://raw.githubusercontent.com/datasets/country-codes/2d84034a0cae19ea5444b78c2131304a5c7f4bb9/data/country-codes.csv",
+   "bytes": 133991,
+   "sha256": "bb199ebc9636b9872705e8216f1f849359f136a7668ebfa23a3c58048462ab92"
+  },
+  "datahub-covid-countries-aggregated": {
+   "url": "https://raw.githubusercontent.com/datasets/covid-19/bdd76cfa0d80a132898345bc21939f89b2e29137/data/countries-aggregated.csv",
+   "bytes": 5512931,
+   "sha256": "fbd1738729a2ebac655e08fcd9562b5cf71573a8b9c03f809c2cf2c53faf047f"
+  },
+  "datahub-gdp": {
+   "url": "https://raw.githubusercontent.com/datasets/gdp/36d761dc5617982d3e50b213e02b9a1b47c4e958/data/gdp.csv",
+   "bytes": 562767,
+   "sha256": "8d84ef6bcaccf740c01c5ed7566aae8f7b149d0e2c20001e441efd3cb5b2fa86"
+  },
+  "datahub-sp500-constituents": {
+   "url": "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/05c998c3e714b8dc9b621239bbdef92bccefc376/data/constituents.csv",
+   "bytes": 53594,
+   "sha256": "5307d7ebfe868913b59c53463993b4ce4544a9bd031cf9d4fe4f093d743c4995"
+  },
+  "seaborn-anagrams": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/anagrams.csv",
+   "bytes": 361,
+   "sha256": "b482ed07f06c201f83ce9c44c24a33e6e413195e01d45f34ca65f7f6b22fb8d3"
+  },
+  "seaborn-anscombe": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/anscombe.csv",
+   "bytes": 556,
+   "sha256": "a0c1f636aa0347101de76271e7efe4c86a22ef28cda62886eaff23a1bf1924b1"
+  },
+  "seaborn-attention": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/attention.csv",
+   "bytes": 1198,
+   "sha256": "5c1de4b2a7cb7a9521145074815e0f3824f2d11786e72fc843f6fcb24701bc19"
+  },
+  "seaborn-brain_networks": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/brain_networks.csv",
+   "bytes": 1075911,
+   "sha256": "538dd9952e03837a78242494cee2583c3eaf3fe5978a60ebad05235bc60a0c82"
+  },
+  "seaborn-car_crashes": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/car_crashes.csv",
+   "bytes": 3301,
+   "sha256": "78ac44c0f6d407bda2d646a65447d119994d34afa11bb9f689833031bc4869c7"
+  },
+  "seaborn-diamonds": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/diamonds.csv",
+   "bytes": 2772143,
+   "sha256": "9574730b03aba241d899c4a97511c5061b19358fab89510774fb6c24168345c4"
+  },
+  "seaborn-dots": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/dots.csv",
+   "bytes": 25742,
+   "sha256": "dd8ed5e18358ec23250ecc877c98d0212c0419d0152e1bf5387b20341059842b"
+  },
+  "seaborn-dowjones": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/dowjones.csv",
+   "bytes": 11349,
+   "sha256": "8b1bc96432981689eb6d00de1909fb1f61aa82064418a39104ec186dfd22c539"
+  },
+  "seaborn-exercise": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/exercise.csv",
+   "bytes": 2735,
+   "sha256": "d67ff5896d7d262bba3ec0bd7a8db410e56afc96a0436e08dfe53016d5f1e4e6"
+  },
+  "seaborn-flights": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/flights.csv",
+   "bytes": 2350,
+   "sha256": "237d834127d9c6355630d8f443a7a2377b5925923010009b59809ba0b67f4fac"
+  },
+  "seaborn-fmri": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/fmri.csv",
+   "bytes": 38329,
+   "sha256": "8a0bfdce94daa31c95ae9f49ca6a2a3ac39e2fe85719c892cb0b06bca94ffe3e"
+  },
+  "seaborn-geyser": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/geyser.csv",
+   "bytes": 4199,
+   "sha256": "ce8f6bd15967c9a3dee345aaf268f6b92623abb1e1d313e04d79b720aa6b8bd6"
+  },
+  "seaborn-glue": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/glue.csv",
+   "bytes": 2054,
+   "sha256": "0c6b840da0a2c7fba3422d3b6867492bc8e61dd99dec7a276f6108774c81744e"
+  },
+  "seaborn-healthexp": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/healthexp.csv",
+   "bytes": 7222,
+   "sha256": "ba4178979b7b0c0f0f793fe7999b3e2303cd6e47a545b1957a2501cbc2ca2b62"
+  },
+  "seaborn-iris": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/iris.csv",
+   "bytes": 3858,
+   "sha256": "9cc1c345c71bcc9b486b74cbf6063fa66f4bb5e0f603a4b3c3471ec2e5e8e355"
+  },
+  "seaborn-mpg": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/mpg.csv",
+   "bytes": 21222,
+   "sha256": "c14b8b855ea7ee86cb9736bf8caaf281c4685ca08826f3eb2acaccaaf40f0d5a"
+  },
+  "seaborn-penguins": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/penguins.csv",
+   "bytes": 13478,
+   "sha256": "e07636bd8af74260099ea2f8678e2eabbf35def579940cc76f67061ee16c06c1"
+  },
+  "seaborn-planets": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/planets.csv",
+   "bytes": 36263,
+   "sha256": "a6d10044887e17396974525a366f5fa2e4b34df70f491e64eb9943de0e3d3825"
+  },
+  "seaborn-seaice": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/seaice.csv",
+   "bytes": 231046,
+   "sha256": "a6ea8fad59199919f3ab3ece99b46dc7484e58824f30af2924316205b411e509"
+  },
+  "seaborn-taxis": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/taxis.csv",
+   "bytes": 869349,
+   "sha256": "08d6d71784dbaa2651fee37fc03389754194c05d72d2d19cbc2c799dea6ac09d"
+  },
+  "seaborn-tips": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/tips.csv",
+   "bytes": 9729,
+   "sha256": "e54cc4d2ce1bff65d32ca60b3e4b802e06bde1d7e7caf6f796f6bf7370e863b0"
+  },
+  "seaborn-titanic": {
+   "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/titanic.csv",
+   "bytes": 57018,
+   "sha256": "81787d320d7f7b03df935e91de8bd19e11d45c5bbcab86ef4d4a76dc91b7d4f2"
+  },
+  "vega-airports": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/airports.csv",
+   "bytes": 210363,
+   "sha256": "caeb10d97cf2946792f7f2b4e28b692c655bb6c5f0a8e048ea3625b538266dd3"
+  },
+  "vega-bird-migration": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/bird-migration.csv",
+   "bytes": 165944,
+   "sha256": "257ddefeb18eefffa44dbd05e8ced2b2a2a558bdb481d8a9ee92a5509a5b728c"
+  },
+  "vega-birdstrikes": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/birdstrikes.csv",
+   "bytes": 1223329,
+   "sha256": "45777edf69984b37599e73dbfb34dbc976055243547407214261a4fcb9466462"
+  },
+  "vega-co2-concentration": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/co2-concentration.csv",
+   "bytes": 18547,
+   "sha256": "c1a4a970864145940a28225cae288618b156cb32f9a2a1b6606ba7124134febb"
+  },
+  "vega-disasters": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/disasters.csv",
+   "bytes": 18840,
+   "sha256": "36d151b50da0aeb82e86b152f91b8cf912a0e4cb50fe32744cf33f22463847d9"
+  },
+  "vega-flights-airport": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/flights-airport.csv",
+   "bytes": 65572,
+   "sha256": "f9f66bc27adebf459e39fbdb6d71402c4355584f27ea1062606219d771ea4bcf"
+  },
+  "vega-gapminder-health-income": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/gapminder-health-income.csv",
+   "bytes": 8605,
+   "sha256": "27366350362387628fa50ad9db85358e60bb31c3b7a3523e4e11e9561ca64eda"
+  },
+  "vega-github": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/github.csv",
+   "bytes": 21059,
+   "sha256": "d7e3fa02d6025a63bb9a3148648e5dda170139247b24e7237208eb72876ee7ca"
+  },
+  "vega-global-temp": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/global-temp.csv",
+   "bytes": 1663,
+   "sha256": "5933dcb6d5e7fc5c0c241b956b802de2b02da12d0914d06031030579a0f1443b"
+  },
+  "vega-iowa-electricity": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/iowa-electricity.csv",
+   "bytes": 1531,
+   "sha256": "6071c2e657d91509885a1f3eec0884b2854d66990b5c556dbead15e263f9506b"
+  },
+  "vega-la-riots": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/la-riots.csv",
+   "bytes": 7432,
+   "sha256": "90884a2c333e45c172446211edadcb0201957b6b9a378525fa8fd10f4856734a"
+  },
+  "vega-population_engineers_hurricanes": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/population_engineers_hurricanes.csv",
+   "bytes": 1852,
+   "sha256": "62225f22e5fd94327150f0c51d384c780de8a92f1b131b6b8d6c5549b5cc00a8"
+  },
+  "vega-seattle-weather": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/seattle-weather.csv",
+   "bytes": 48219,
+   "sha256": "0845078a290b48e3149ab8639966824110a251db4e06fc144c06ebb534af23be"
+  },
+  "vega-sp500": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/sp500.csv",
+   "bytes": 2305,
+   "sha256": "8d1a3310b741565fd2aaf7b9d34030c92b1fbedbc9ba839f4a50dab8b2dd5c3d"
+  },
+  "vega-sp500-2000": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/sp500-2000.csv",
+   "bytes": 415968,
+   "sha256": "9409e9342d0657c747324e4cfabce8a8c7f663bc485b95a3378f36b0a160f8c8"
+  },
+  "vega-species": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/species.csv",
+   "bytes": 1034744,
+   "sha256": "5a517e887a2b2b1c5756d7aaad66b5ac9244139058c4c4835f8a9186c649396a"
+  },
+  "vega-stocks": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/stocks.csv",
+   "bytes": 12245,
+   "sha256": "f9953ac6693e587476b4ebf2f0b00d9bb95371ca8c39da4cc6155077b3e417cd"
+  },
+  "vega-us-employment": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/us-employment.csv",
+   "bytes": 17841,
+   "sha256": "0fa5366929bf738ac420509b84ed120155f740b0fa9c265ca309dad4057d1b1b"
+  },
+  "vega-weather": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/weather.csv",
+   "bytes": 121417,
+   "sha256": "27219f1ca8dbd94c9b6f4b9f4f52ab2f1eb33dfdcf719cd9fc6481ed50b74549"
+  },
+  "vega-windvectors": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/windvectors.csv",
+   "bytes": 129253,
+   "sha256": "5c39a73494320709433432248fe3951c69a3172129544d345e8060dab6c70f8d"
+  },
+  "vega-zipcodes": {
+   "url": "https://raw.githubusercontent.com/vega/vega-datasets/192178cf90a83fedccbab80c1f067c29cac6a697/data/zipcodes.csv",
+   "bytes": 2018388,
+   "sha256": "8ad998c84fe40b33806130ba942f18beaf734617a150ad563eeaebdfc003bc62"
+  }
+ }
+}
