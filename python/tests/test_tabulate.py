@@ -478,11 +478,14 @@ def _format_edits(formats: Any) -> list[tuple[str, Any, Any]]:
 def test_builtin_formats_edited_in_place() -> None:
     rows = [["a&b", "x_y", 1.5], ["c", "d\ne", 22]]
     headers = ["h&1", "h_2", "h3"]
-    real = _real_tabulate() if importlib.util.find_spec("tabulate") else None
+    real: Any = _real_tabulate() if importlib.util.find_spec("tabulate") else None
     edits = _format_edits(pt._table_formats)
-    real_edits = _format_edits(real._table_formats) if real is not None else [None] * len(edits)
+    real_edits: list[Any] = _format_edits(real._table_formats) if real else [None] * len(edits)
     for (name, do, undo), real_edit in zip(edits, real_edits, strict=True):
-        cases = [((rows,), {"tablefmt": name}), ((rows, headers), {"tablefmt": name})]
+        cases: list[tuple[tuple[Any, ...], dict[str, Any]]] = [
+            ((rows,), {"tablefmt": name}),
+            ((rows, headers), {"tablefmt": name}),
+        ]
         before = [tabulate(*a, **k) for a, k in cases]
         do()
         if real_edit is not None:
