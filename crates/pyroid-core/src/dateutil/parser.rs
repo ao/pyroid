@@ -75,6 +75,13 @@ pub struct Parsed {
     /// The `decimal` context precision the `Decimal` arithmetic needed (0: none ran). The
     /// caller checks the thread's context against it.
     pub decimal_precision: u32,
+    /// The most fraction digits of a number that arithmetic ran on: `d % 1` and `60 * (d % 1)`
+    /// have exponents from `-decimal_scale` to 0, which the context's `Emin` and `clamp` must
+    /// allow.
+    pub decimal_scale: usize,
+    /// Whether one of those numbers had a nonzero fraction, so that `60 * (d % 1)` ran (up to
+    /// 59.99..., which the context's `Emax` must allow).
+    pub decimal_fraction: bool,
 }
 
 /// `_parse(timestr, ...)`: `Ok(Some(..))`, `Ok(None)` for dateutil's `(None, None)`, or
@@ -95,6 +102,8 @@ pub fn parse(
         fuzzy: opts.fuzzy || opts.fuzzy_with_tokens,
         max_digits: opts.max_str_digits,
         precision: 0,
+        scale: 0,
+        fraction: false,
     };
     let dayfirst = opts.dayfirst.unwrap_or(settings.dayfirst);
     let yearfirst = opts.yearfirst.unwrap_or(settings.yearfirst);
@@ -113,6 +122,8 @@ pub fn parse(
         res,
         skipped,
         decimal_precision: cx.precision,
+        decimal_scale: cx.scale,
+        decimal_fraction: cx.fraction,
     }))
 }
 
@@ -378,6 +389,8 @@ struct Cx<'i> {
     fuzzy: bool,
     max_digits: usize,
     precision: u32,
+    scale: usize,
+    fraction: bool,
 }
 
 /// `tokens[i]`, or `IndexError` (dateutil returns `None` for it).
@@ -434,6 +447,8 @@ impl Cx<'_> {
     fn note_precision(&mut self, d: &Num<'_>) -> Result<(), Fail> {
         let need = d.precision_needed()?;
         self.precision = self.precision.max(need);
+        self.scale = self.scale.max(d.frac.len());
+        self.fraction |= d.has_fraction();
         Ok(())
     }
 

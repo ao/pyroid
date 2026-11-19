@@ -914,22 +914,49 @@ fn run_kernel(text: &Text<'_>, tables: &ParserInfo, settings: Settings, opts: Pa
 }
 
 /// The verdict, after the checks that need the interpreter (the `decimal` context).
+///
+/// dateutil computes `d % 1` and `60 * (d % 1)` in the thread's context (for every `HH:MM`).
+/// They are exact and signal nothing when the precision holds their digits and the exponent
+/// limits hold their exponents: from `-decimal_scale` to 0, and 1 for `60 * (d % 1)`. Then the
+/// kernel's integer arithmetic gives dateutil's values. Otherwise dateutil's code runs: it
+/// rounds, sets the context's flags and raises as its traps say (`decimal.Overflow` for
+/// `10.5h` with `Emax = 0`, say).
+///
+/// For an integer (the minutes of a plain `HH:MM`) only the precision is read: reading `clamp`
+/// as well added 2 to 4% to such a parse in an A/B. With `clamp = 1` and `Emax` below the
+/// precision minus one, dateutil's `int % 1` sets the context's `Clamped` flag, which pyroid then
+/// does not (a documented difference).
 fn checked(py: Python<'_>, h: &Hooks, run: Run) -> PyResult<Run> {
-    if let Run::Parsed(p, _) = &run {
-        if p.decimal_precision > 0 {
-            let prec: u32 = h
-                .getcontext
-                .bind(py)
-                .call0()?
-                .getattr(pyo3::intern!(py, "prec"))?
-                .extract()?;
-            if prec < p.decimal_precision {
-                return Ok(Run::Reference(format!(
-                    "a decimal context precision below {}",
-                    p.decimal_precision
-                )));
-            }
-        }
+    use pyo3::intern;
+    let Run::Parsed(p, _) = &run else {
+        return Ok(run);
+    };
+    if p.decimal_precision == 0 {
+        return Ok(run);
+    }
+    let cx = h.getcontext.bind(py).call0()?;
+    let int = |name: &Bound<'_, PyString>| -> PyResult<i64> { cx.getattr(name)?.extract() };
+    let prec = int(intern!(py, "prec"))?;
+    if prec < i64::from(p.decimal_precision) {
+        return Ok(Run::Reference(format!(
+            "a decimal context precision below {}",
+            p.decimal_precision
+        )));
+    }
+    if p.decimal_scale == 0 && !p.decimal_fraction {
+        return Ok(run);
+    }
+    // Emax >= 1 for 60 * (d % 1); with clamp, Emax - prec + 1 >= 0 for exponents up to 0;
+    // Emin <= -decimal_scale for d % 1.
+    let emax = int(intern!(py, "Emax"))?;
+    let scale = i64::try_from(p.decimal_scale).unwrap_or(i64::MAX);
+    if (p.decimal_fraction && emax < 1)
+        || int(intern!(py, "Emin"))? > -scale
+        || (int(intern!(py, "clamp"))? != 0 && emax < prec - 1)
+    {
+        return Ok(Run::Reference(
+            "a decimal context whose Emax, Emin or clamp this arithmetic reaches".to_owned(),
+        ));
     }
     Ok(run)
 }

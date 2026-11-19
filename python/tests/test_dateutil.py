@@ -1103,6 +1103,63 @@ def test_decimal_context() -> None:
         check("10.5h", default=DEFAULT)
 
 
+@pytest.mark.thread_unsafe(reason="changes the thread's decimal context")
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"Emax": 0},  # P67's d_decimal_emax0: dateutil raises decimal.Overflow for 10.5h
+        {"Emax": 1},
+        {"Emin": -1},
+        {"Emin": 0},
+        {"Emin": -1, "traps": [decimal.Subnormal]},
+        {"clamp": 1, "Emax": 5},
+        {"clamp": 1, "Emax": 5, "traps": [decimal.Clamped]},
+        {"clamp": 1, "Emax": 27},
+        {"prec": 10**10},
+    ],
+    ids=[
+        "Emax0",
+        "Emax1",
+        "Emin-1",
+        "Emin0",
+        "Emin-1-Subnormal-trap",
+        "clamp-Emax5",
+        "clamp-Emax5-Clamped-trap",
+        "clamp-Emax27",
+        "prec-1e10",
+    ],
+)
+@pytest.mark.parametrize("s", ["10.5h", "10.05h", "10:30.5", "10:30", "10h", "0.0001h", "10.00h"])
+def test_decimal_context_limits(settings: dict[str, Any], s: str) -> None:
+    # The result, the exception and the flags the arithmetic sets in the context.
+    def run(f: Any) -> Any:
+        with decimal.localcontext() as ctx:
+            for k, v in settings.items():
+                if k == "traps":
+                    for t in v:
+                        ctx.traps[t] = True
+                else:
+                    setattr(ctx, k, v)
+            ctx.clear_flags()
+            r = outcome(f, s, default=DEFAULT)
+            return r, {k.__name__ for k, v in ctx.flags.items() if v}
+
+    (a, fa), (b, fb) = run(du.parse), run(pp.parse)
+    if s in ("10:30", "10h") and settings.get("clamp") and settings["Emax"] < 27:
+        # A documented difference: for an integer only the precision is checked (reading clamp
+        # too adds 2 to 4% to every HH:MM parse), so dateutil's Clamped flag, or its trap, is
+        # not seen there.
+        assert "Clamped" in fa or a[1] is decimal.Clamped
+        assert b[0] == "ok"
+        assert fb == set()
+        return
+    if a[0] == b[0] == "ok":
+        same(a[1], b[1])
+    else:
+        assert a == b
+    assert fa == fb
+
+
 @pytest.mark.thread_unsafe(reason="subprocesses")
 @pytest.mark.parametrize("zone", ["UTC", "Europe/London", "America/New_York", "Asia/Kolkata"])
 def test_local_zones(zone: str) -> None:
