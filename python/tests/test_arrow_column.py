@@ -523,11 +523,18 @@ CTRL_C_SCRIPT = textwrap.dedent(
     import signal, time
     from pyroid._pyroid import _testing
 
+    armed, fired = [False], []
+
     def stop(*args):
+        if not armed[0]:
+            return  # a timer that came after its call: ignored
+        armed[0] = False
+        fired.append(time.perf_counter())
         raise KeyboardInterrupt
 
     # SIGALRM comes from the kernel, so it trips CPython's signal flag while the call runs
-    # attached (a Python timer thread could not take the GIL on a GIL build).
+    # attached (a Python timer thread could not take the GIL on a GIL build). The handler
+    # runs where the call checks for signals, so its time is where the call stopped.
     signal.signal(signal.SIGALRM, stop)
     col = _testing.column(["d"] * 10_000_000, chunks=3)
     # Each call makes or compares a Python object per row, with no Python code in between.
@@ -536,13 +543,24 @@ CTRL_C_SCRIPT = textwrap.dedent(
         t0 = time.perf_counter()
         call()
         full = time.perf_counter() - t0
-        signal.setitimer(signal.ITIMER_REAL, full / 5)
-        t0 = time.perf_counter()
-        try:
-            call()
-            print(name, "finished", full)
-        except KeyboardInterrupt:
-            print(name, time.perf_counter() - t0, full)
+        result = "finished"
+        # A loaded macOS runner can deliver the timer after the whole call: try again then.
+        for _ in range(5):
+            armed[0] = True
+            signal.setitimer(signal.ITIMER_REAL, full / 5)
+            t0 = time.perf_counter()
+            try:
+                try:
+                    call()
+                finally:
+                    armed[0] = False
+                    signal.setitimer(signal.ITIMER_REAL, 0)
+            except KeyboardInterrupt:
+                at, done = fired[-1] - t0, time.perf_counter() - fired[-1]
+                if at < 0.9 * full:
+                    result = f"{at} {done}"
+                    break
+        print(name, result, full)
     """
 )
 
@@ -553,15 +571,17 @@ def test_ctrl_c_stops_a_long_call(run_python: RunPython) -> None:
     out = run_python(CTRL_C_SCRIPT, timeout=300.0)
     assert out.returncode == 0, out.stderr
     for line in out.stdout.splitlines():
-        _, took, full = line.split()
+        name, *result, full = line.split()
         if float(full) < 0.1:
             continue  # too fast to tell a check during the call from one after it
-        # Interrupted a fifth of the way in: it stops soon after the signal. The bound is in
-        # seconds, not a share of the call: a loaded macOS runner delivers the timer tens of
-        # milliseconds late (0.62 and 0.95 of a 70 ms call with 3 million rows; once after a
-        # whole 0.1 s to_pylist), so the call may even end before the signal is handled.
-        assert took != "finished", line
-        assert float(took) - float(full) / 5 < 0.25, line
+        # Interrupted a fifth of the way in, in one of five tries: the call saw the signal
+        # before its end (it checks during the call, not only after it), and then stopped
+        # promptly. Where the signal lands depends on the timer, which a loaded macOS runner
+        # delivers tens of milliseconds late, so a try that saw it only at the end is retried.
+        assert result != ["finished"], line
+        at, done = map(float, result)
+        assert at < 0.9 * float(full), line
+        assert done < 0.25, line
 
 
 STOPPED_FILL_SCRIPT = textwrap.dedent(
