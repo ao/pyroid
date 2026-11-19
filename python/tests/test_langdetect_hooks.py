@@ -237,6 +237,32 @@ def test_other_methods_overridden(method: str) -> None:
     _same(case)
 
 
+@pytest.mark.parametrize("base", [0, 0.0, -0.0])
+def test_base_freq_zero(base: Any) -> None:
+    # P67's ld_base_freq_0: _update_lang_prob divides alpha by BASE_FREQ, so every text with
+    # n-grams raises ZeroDivisionError and leaves langprob at zero.
+    def case(m: Any, d: Any, n: Any) -> Any:
+        d.BASE_FREQ = base
+        m.DetectorFactory.seed = 0
+        det = _loaded(m).create()
+        det.append("Bonjour le monde")
+        out = [_call(det.get_probabilities), det.langprob == [0.0] * len(det.langlist)]
+        out.append(_call(lambda: _langs(m.detect_langs("hello world this is english"))))
+        out.append(_call(lambda: m.detect("Das ist ein Haus.")))
+        out.append(_call(lambda: m.detect("1234 ...")))  # no n-grams: no division
+        return out
+
+    out = _same(case)
+    assert out[0][:2] == ("raised", "ZeroDivisionError")
+    assert out[1] is True
+    with _restored():
+        pl_detector.Detector.BASE_FREQ = base
+        pl.DetectorFactory.seed = 0
+        with pytest.raises(ZeroDivisionError) as caught:
+            pl.detect_batch(["1234", "hello world this is english"], errors="none")
+        assert caught.value.__notes__ == ["pyroid.langdetect: raised for the text at index 1"]
+
+
 def test_custom_random() -> None:
     class MyRandom(random.Random):
         def gauss(self, mu: float = 0.0, sigma: float = 1.0) -> float:

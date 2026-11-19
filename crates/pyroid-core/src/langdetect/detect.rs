@@ -167,7 +167,8 @@ impl Params {
 pub enum Failure {
     /// `IndexError: list index out of range` (a row or the prior is shorter than needed).
     Index,
-    /// `ZeroDivisionError: float division by zero` (all probabilities became 0).
+    /// `ZeroDivisionError: float division by zero` (all probabilities became 0, or
+    /// `BASE_FREQ` is 0).
     ZeroDivision,
     /// Stopped by the interrupt check.
     Interrupted,
@@ -399,6 +400,12 @@ pub fn trials(
             None => prob.resize(l, 1.0 / l as f64),
         }
         let alpha = params.alpha + rng.gauss(0.0, 1.0) * params.alpha_width;
+        if params.base_freq == 0.0 {
+            // `alpha / self.BASE_FREQ` in the first `_update_lang_prob` (every drawn n-gram
+            // has a row) raises before any probability changes.
+            out.failure = Some(Failure::ZeroDivision);
+            return out;
+        }
         let weight = alpha / params.base_freq;
         // Once few entries are non-zero, the loop runs over those only (when that is exact).
         let can_skip = skips_zeros(weight, &prob, map);
