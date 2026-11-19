@@ -340,6 +340,16 @@ class _Replay:
         return self._original.read(n)
 
 
+def _replay_read(text: str, stream: Any) -> _Replay:
+    """A replay of the reads :func:`_read_stream` took to read `text` from `stream`.
+
+    One ``read(1)`` result per character, then the ``""`` that ended it: dateutil's code, run
+    after the Rust parser read the stream, reads the same characters and does not read `stream`
+    again.
+    """
+    return _Replay([*text, ""], stream)
+
+
 def _read_stream(stream: Any) -> Any:
     """Read a character stream as ``_timelex`` does, one ``read(1)`` at a time.
 
@@ -451,7 +461,7 @@ _native._install(
         "reference_private_parse": _reference_private_parse,
         "reference_isoparse": _reference_isoparse,
         "read_stream": _read_stream,
-        "replay": _Replay,
+        "replay_read": _replay_read,
         "datetime_module": datetime,
     }
 )

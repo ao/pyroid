@@ -219,6 +219,46 @@ def test_stream_errors_hold_the_callers_stream() -> None:
             assert e.value.args[1] is s
 
 
+# Strings that the Rust parser reads and then hands to dateutil's code (a number past 64 bits,
+# say). From a stream, dateutil's code must read the same characters (P67's fuzz: it read the
+# drained stream and said "String does not contain a date").
+STREAM_CASES = [
+    ("199199199199709020908", {}),
+    ("0 09223400000000000000", {"yearfirst": True}),
+    ("Jan 9231000000000000000 0 0 0 0 0", {"dayfirst": True, "yearfirst": True}),
+    ("Jan 1 " + "9" * 25, {}),
+    ("10:00 +99999999999999999999:00", {}),
+    ("18446744073709551616 Sep 2003", {}),
+    ("Sep 25 2003 10." + "1" * 30 + "h", {}),
+]
+
+
+@pytest.mark.parametrize(("s", "kwargs"), STREAM_CASES)
+@pytest.mark.parametrize("kind", ["StringIO", "OddStream"])
+def test_streams_give_what_the_same_str_gives(s: str, kwargs: dict[str, Any], kind: str) -> None:
+    def make() -> Any:
+        return io.StringIO(s) if kind == "StringIO" else OddStream(list(s), "")
+
+    for du_f, pp_f, kw in [
+        (du.parse, pp.parse, {"default": DEFAULT, **kwargs}),
+        (du.DEFAULTPARSER._parse, ppx.DEFAULTPARSER._parse, kwargs),
+    ]:
+        a, b = make(), make()
+        ra, rb = outcome(du_f, a, **kw), outcome(pp_f, b, **kw)
+        if ra[0] == rb[0] == "ok":
+            assert repr(ra[1]) == repr(rb[1])
+        else:
+            assert ra[:2] == rb[:2]
+            assert ra[2].replace(repr(a), "S") == rb[2].replace(repr(b), "S")
+            assert ra[3] is rb[3]
+        if kind == "OddStream":
+            assert a.reads == b.reads
+        # And what the same str gives.
+        rs = outcome(pp_f, s, **kw)
+        assert rs[0] == ra[0]
+        assert repr(rs[1]) == repr(ra[1]) if rs[0] == "ok" else rs[1] is ra[1]
+
+
 def test_unexpected_keyword_is_dateutils_type_error() -> None:
     a = outcome(du.parse, "2003", fuzzzy=True)
     b = outcome(pp.parse, "2003", fuzzzy=True)

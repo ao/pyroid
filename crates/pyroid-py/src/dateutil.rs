@@ -95,6 +95,7 @@ struct Hooks {
     reference_private_parse: Py<PyAny>,
     reference_isoparse: Py<PyAny>,
     read_stream: Py<PyAny>,
+    replay_read: Py<PyAny>,
     datetime_module: Py<PyAny>,
     datetime_type: Py<PyAny>,
     time_module: Py<PyAny>,
@@ -192,6 +193,7 @@ fn _install(d: &Bound<'_, PyDict>) -> PyResult<()> {
         reference_private_parse: item(d, "reference_private_parse")?.unbind(),
         reference_isoparse: item(d, "reference_isoparse")?.unbind(),
         read_stream: item(d, "read_stream")?.unbind(),
+        replay_read: item(d, "replay_read")?.unbind(),
         datetime_type: datetime_module.getattr("datetime")?.unbind(),
         datetime_module: datetime_module.unbind(),
         time_module: py.import("time")?.into_any().unbind(),
@@ -729,11 +731,25 @@ fn py_text<'py>(py: Python<'py>, s: &str, remapped: bool) -> PyResult<Bound<'py,
     )
 }
 
-/// What `_timelex` reads from `timestr`: a str to tokenize, or a replay of an odd stream's
-/// reads (for the reference).
+/// What `_timelex` reads from `timestr`: a str to tokenize, the text of a stream, or a replay of
+/// an odd stream's reads (for the reference).
 enum Source<'py> {
     Str(Bound<'py, PyString>),
+    Stream(Bound<'py, PyString>),
     Replay(Bound<'py, PyAny>),
+}
+
+/// What dateutil's own code reads when it runs after the kernel: the caller's `timestr`, or for
+/// a stream (read to its end by [`source`]) a replay of the same reads.
+fn again<'py>(
+    h: &Hooks,
+    timestr: &Bound<'py, PyAny>,
+    streamed: Option<&Bound<'py, PyString>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    match streamed {
+        Some(text) => h.replay_read.bind(timestr.py()).call1((text, timestr)),
+        None => Ok(timestr.clone()),
+    }
 }
 
 fn source<'py>(h: &Hooks, timestr: &Bound<'py, PyAny>) -> PyResult<Source<'py>> {
@@ -756,7 +772,7 @@ fn source<'py>(h: &Hooks, timestr: &Bound<'py, PyAny>) -> PyResult<Source<'py>> 
     }
     let r = h.read_stream.bind(py).call1((timestr,))?;
     match r.cast_into::<PyString>() {
-        Ok(s) => Ok(Source::Str(s)),
+        Ok(s) => Ok(Source::Stream(s)),
         Err(e) => Ok(Source::Replay(e.into_inner())),
     }
 }
@@ -1644,8 +1660,9 @@ fn parse_impl<'py>(
             );
         }
     };
-    let text = match source(h, timestr)? {
-        Source::Str(s) => s,
+    let (text, streamed) = match source(h, timestr)? {
+        Source::Str(s) => (s, false),
+        Source::Stream(s) => (s, true),
         Source::Replay(r) => return reference(Some("this stream".to_owned()), &r),
     };
     let t = text_of(&text)?;
@@ -1653,7 +1670,7 @@ fn parse_impl<'py>(
     let run = checked(py, h, run_kernel(&t, tables, settings, opts))?;
     match run {
         Run::Unknown => Err(parser_error(py, h, "Unknown string format: %s", timestr)),
-        Run::Reference(r) => reference(Some(r), timestr),
+        Run::Reference(r) => reference(Some(r), &again(h, timestr, streamed.then_some(&text))?),
         Run::Parsed(p, remapped) => Finisher::new(
             h,
             self_,
@@ -1723,15 +1740,16 @@ fn parser_private_parse<'py>(
             );
         }
     };
-    let text = match source(h, timestr)? {
-        Source::Str(s) => s,
+    let (text, streamed) = match source(h, timestr)? {
+        Source::Str(s) => (s, false),
+        Source::Stream(s) => (s, true),
         Source::Replay(r) => return reference("this stream".to_owned(), &r),
     };
     let t = text_of(&text)?;
     opts.max_str_digits = max_str_digits(py, t.as_str().len())?;
     match checked(py, h, run_kernel(&t, tables, settings, opts))? {
         Run::Unknown => Ok(PyTuple::new(py, [py.None(), py.None()])?.into_any()),
-        Run::Reference(r) => reference(r, timestr),
+        Run::Reference(r) => reference(r, &again(h, timestr, streamed.then_some(&text))?),
         Run::Parsed(p, remapped) => {
             let res = result_object(py, h, &p.res, remapped)?;
             Ok(PyTuple::new(py, [res, skipped_tuple(py, &p, remapped)?])?.into_any())
