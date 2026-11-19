@@ -129,8 +129,8 @@ def _partial_intact(p: Any, state: _PartialState) -> bool:
 
 
 def _partials_intact(partials: tuple[tuple[Any, _PartialState], ...]) -> bool:
-    for p, state in partials:
-        if not _partial_intact(p, state):
+    for p, (func, args, keywords) in partials:
+        if p.keywords != keywords or p.func is not func or p.args != args:
             return False
     return True
 
