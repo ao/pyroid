@@ -100,7 +100,8 @@ and says so with one [`pyroid.FallbackWarning`](../concepts/fallbacks.md) at imp
 The rest runs the standard library's Python code, rebound to `pyroid.difflib` so that it uses
 pyroid's `SequenceMatcher` underneath: a custom `charjunk`, a `Differ` or `HtmlDiff` subclass
 that overrides one of its helper methods, a `SequenceMatcher` subclass that overrides
-`find_longest_match` or `get_matching_blocks`. So does a function whose code
+`find_longest_match` or `get_matching_blocks`, an `HtmlDiff` `_table_template` with a `%` other
+than `%(data_rows)s` (once), `%(header_row)s` and `%(prefix)s`. So does a function whose code
 looks up a class or function of the module that has been replaced: `SequenceMatcher` (as
 cdifflib suggests, `difflib.SequenceMatcher = CSequenceMatcher`), `Differ`, `ndiff` or `_mdiff`,
 in `pyroid.difflib` or, under `pyroid.patch("difflib")`, in `difflib`. The replacement is then

@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import contextlib
 import difflib as _std
+import functools
 import operator
 import os
+import re
 import sys
 import types
 import warnings
@@ -793,6 +795,24 @@ def _html_marks(text: str) -> str:
     )
 
 
+# make_table formats its template around the native rows: the text before and after
+# %(data_rows)s on its own. That is the same as formatting the whole template only when each %
+# starts one of these (and %(data_rows)s is there once).
+_TEMPLATE_KEY = re.compile(r"%\((?:data_rows|header_row|prefix)\)s")
+
+
+@functools.lru_cache(maxsize=64)
+def _plain_template(template: str) -> bool:
+    """Whether `template` formats in parts (see `_TEMPLATE_KEY`).
+
+    Anything else, such as `%(data_rows)r`, a `%s` that formats the whole dict or `%%`, runs
+    CPython's make_table.
+    """
+    return template.count("%(data_rows)s") == 1 and template.count("%") == len(
+        _TEMPLATE_KEY.findall(template)
+    )
+
+
 def _make_make_table(fallback: Any, hooks: dict[str, Any], m: _Module) -> Any:
     """`HtmlDiff.make_table` for module `m` (CPython's looks up `_mdiff` there)."""
 
@@ -812,8 +832,7 @@ def _make_make_table(fallback: Any, hooks: dict[str, Any], m: _Module) -> Any:
         if (
             kinds is not None
             and type(template) is str
-            and template.count("%(data_rows)s") == 1
-            and "%%" not in template
+            and _plain_template(template)
             and type(tabsize) is int
             and -(2**31) <= tabsize < 2**31  # str.expandtabs takes a C int
             and (wrap is None or (type(wrap) is int and wrap >= 0))

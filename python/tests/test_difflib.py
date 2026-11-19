@@ -572,6 +572,34 @@ def test_functions_pickle_by_reference() -> None:
         ctx.__exit__(None, None, None)
 
 
+@pytest.mark.thread_unsafe(reason="HtmlDiff's anchor counter is global")
+@pytest.mark.parametrize(
+    "template",
+    [
+        "<t>%(data_rows)s|%(data_rows)r</t>",  # P67's df_template_r
+        "<t>%(data_rows)s %s</t>",  # a %s with a dict formats the whole dict
+        "<t>%%(data_rows)s %(data_rows)s</t>",
+        "<t>%(prefix)r %(data_rows)s %(header_row)5s</t>",
+        "<t>%(data_rows)s %(other)s</t>",
+        "<t>%(prefix)s%(data_rows)s%(header_row)s</t>",
+        "<t>no rows</t>",
+    ],
+)
+def test_odd_table_templates_format_as_difflib(template: str) -> None:
+    ours: Any = type("H", (pd.HtmlDiff,), {"_table_template": template})
+    theirs: Any = type("H", (difflib.HtmlDiff,), {"_table_template": template})
+
+    def table(cls: Any) -> Any:
+        for owner in (pd, difflib):
+            owner.HtmlDiff._default_prefix = 0
+        try:
+            return ("ok", cls().make_table(["a\n"], ["b\n"], "x", "y"))
+        except Exception as e:
+            return ("err", type(e), str(e))
+
+    assert table(ours) == table(theirs)
+
+
 def test_runtime_docstrings_match_the_stub() -> None:
     # help() shows the stub's documentation for pyroid's own functions.
     import ast
