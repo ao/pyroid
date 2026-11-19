@@ -556,12 +556,12 @@ def test_ctrl_c_stops_a_long_call(run_python: RunPython) -> None:
         _, took, full = line.split()
         if float(full) < 0.1:
             continue  # too fast to tell a check during the call from one after it
-        # Interrupted a fifth of the way in: it stops soon after the signal, well before the end.
-        # The bound is in seconds, not a share of the call: a loaded macOS runner delivers the
-        # timer tens of milliseconds late (0.62 and 0.95 of a 70 ms call with 3 million rows).
+        # Interrupted a fifth of the way in: it stops soon after the signal. The bound is in
+        # seconds, not a share of the call: a loaded macOS runner delivers the timer tens of
+        # milliseconds late (0.62 and 0.95 of a 70 ms call with 3 million rows; once after a
+        # whole 0.1 s to_pylist), so the call may even end before the signal is handled.
         assert took != "finished", line
         assert float(took) - float(full) / 5 < 0.25, line
-        assert float(took) < float(full), line
 
 
 # ---- generated columns ---------------------------------------------------------
