@@ -564,6 +564,62 @@ def test_ctrl_c_stops_a_long_call(run_python: RunPython) -> None:
         assert float(took) - float(full) / 5 < 0.25, line
 
 
+STOPPED_FILL_SCRIPT = textwrap.dedent(
+    """
+    import gc, signal, time, tracemalloc
+    from pyroid._pyroid import _testing
+
+    n = 2_000_000
+    col = _testing.column([f"row {i}" for i in range(n)], chunks=3)
+    armed, half_built = [False], []
+
+    def stop(*args):
+        if not armed[0]:
+            return  # the call ended first
+        armed[0] = False
+        # to_pylist fills its list in place. A list with slots still empty (NULL) has fewer
+        # referents than slots, and the cycle GC must not show it to Python code. Only len and
+        # gc.get_referents here: reading an empty slot would crash.
+        half_built.append(sum(
+            1 for o in gc.get_objects()
+            if type(o) is list and len(o) == n and len(gc.get_referents(o)) < n
+        ))
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGALRM, stop)
+    t0 = time.perf_counter()
+    col.to_pylist()
+    full = time.perf_counter() - t0
+    tracemalloc.start()
+    before = tracemalloc.get_traced_memory()[0]
+    stopped = 0
+    for i in range(10):
+        armed[0] = True
+        signal.setitimer(signal.ITIMER_REAL, full * (i + 1) / 12)
+        try:
+            col.to_pylist()
+        except KeyboardInterrupt:
+            stopped += 1
+        armed[0] = False
+        signal.setitimer(signal.ITIMER_REAL, 0)
+    gc.collect()
+    print(stopped, sum(half_built), tracemalloc.get_traced_memory()[0] - before)
+    """
+)
+
+
+@pytest.mark.thread_unsafe(reason="a subprocess that signals itself")
+@pytest.mark.skipif(sys.platform == "win32", reason="needs SIGALRM")
+def test_a_stopped_to_pylist_frees_its_list_and_hides_it(run_python: RunPython) -> None:
+    out = run_python(STOPPED_FILL_SCRIPT, timeout=300.0)
+    assert out.returncode == 0, out.stderr
+    stopped, half_built, leaked = map(int, out.stdout.split())
+    assert stopped > 0, out.stdout  # else nothing was checked
+    assert half_built == 0, out.stdout
+    # Each stopped call made up to 2 million strs (about 60 MB) and the list (16 MB).
+    assert leaked < 2**20, out.stdout
+
+
 # ---- generated columns ---------------------------------------------------------
 
 VALUE_STRATEGIES = {

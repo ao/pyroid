@@ -5,10 +5,12 @@
 //! ~9 MB (measured when the Arrow interface was chosen). Scope is deliberately small: import
 //! `utf8`/`large_utf8`/`utf8_view`; export `utf8`/`large_utf8`/`bool`/`large_binary`, and
 //! record batches of those as struct arrays (`record_batch`).
-//! All `unsafe` lives in this module; each block states why it is sound.
+//! All of pyroid-py's `unsafe` lives in this module (also `fill`, which fills
+//! `to_pylist`'s list in place); each block states why it is sound.
 
 mod column;
 mod ffi;
+mod fill;
 mod import;
 mod record_batch;
 

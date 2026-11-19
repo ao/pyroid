@@ -26,6 +26,7 @@ use pyo3::types::{PyBool, PyBytes, PyCapsule, PyList, PySlice, PyString, PyTuple
 use pyroid_core::columnar::{BoolBuffers, BuildError, Offset, StringBuffers, bitmap, get_bit};
 
 use super::ffi::{FLAG_NULLABLE, FfiArray, FfiSchema, FfiStream};
+use super::fill::Fill;
 use super::import::{ARRAY_CAPSULE, SCHEMA_CAPSULE, STREAM_CAPSULE};
 use crate::errors::{PyroidError, type_name};
 
@@ -880,15 +881,15 @@ fn row_value<'py>(py: Python<'py>, chunk: &Chunk, at: usize) -> PyResult<Bound<'
     })
 }
 
-/// Rows `rows` of a string array, appended to `items`.
+/// Rows `rows` of a string array, put in the next slots of `list`.
 fn push_strings<'py, O: Offset>(
     py: Python<'py>,
-    items: &mut Vec<Bound<'py, PyAny>>,
+    list: &mut Fill<'py, PyList>,
     b: &StringBuffers<O>,
     rows: std::ops::Range<usize>,
 ) -> PyResult<()> {
     for at in rows {
-        items.push(match b.get(at) {
+        list.push(match b.get(at) {
             None => py.None().into_bound(py),
             Some(bytes) => str_value(py, bytes)?,
         });
@@ -1223,31 +1224,36 @@ impl Column {
 
     /// The values as a Python list (``None`` for nulls).
     fn to_pylist<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        // Collected first, so the list is made at its final size (appending
-        // one by one is slow on free-threaded builds).
-        let mut items = Vec::with_capacity(self.inner.len());
+        // Made at its final size and filled in place: appending one by one is
+        // slow on free-threaded builds, and a list built from a collected
+        // `Vec` would end in a pass with no Ctrl-C check.
+        let mut list = Fill::<PyList>::new(py, self.inner.len())?;
         for span in &self.inner.spans {
             for rows in blocks(span.rows()) {
                 py.check_signals()?;
                 match &*span.chunk {
-                    Chunk::Utf8(b) => push_strings(py, &mut items, b, rows)?,
-                    Chunk::LargeUtf8(b) => push_strings(py, &mut items, b, rows)?,
-                    Chunk::Bool(b) => items.extend(rows.map(|at| {
-                        b.get(at).map_or_else(
-                            || py.None().into_bound(py),
-                            |v| PyBool::new(py, v).to_owned().into_any(),
-                        )
-                    })),
-                    Chunk::LargeBinary(b) => items.extend(rows.map(|at| {
-                        b.get(at).map_or_else(
-                            || py.None().into_bound(py),
-                            |v| PyBytes::new(py, v).into_any(),
-                        )
-                    })),
+                    Chunk::Utf8(b) => push_strings(py, &mut list, b, rows)?,
+                    Chunk::LargeUtf8(b) => push_strings(py, &mut list, b, rows)?,
+                    Chunk::Bool(b) => {
+                        for at in rows {
+                            list.push(b.get(at).map_or_else(
+                                || py.None().into_bound(py),
+                                |v| PyBool::new(py, v).to_owned().into_any(),
+                            ));
+                        }
+                    }
+                    Chunk::LargeBinary(b) => {
+                        for at in rows {
+                            list.push(b.get(at).map_or_else(
+                                || py.None().into_bound(py),
+                                |v| PyBytes::new(py, v).into_any(),
+                            ));
+                        }
+                    }
                 }
             }
         }
-        PyList::new(py, items)
+        Ok(list.finish())
     }
 
     fn __repr__(&self) -> String {
