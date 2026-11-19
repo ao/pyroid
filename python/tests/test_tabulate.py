@@ -474,6 +474,7 @@ def _format_edits(formats: Any) -> list[tuple[str, Any, Any]]:
     return edits
 
 
+@pytest.mark.thread_unsafe  # edits module-level tables
 def test_builtin_formats_edited_in_place() -> None:
     rows = [["a&b", "x_y", 1.5], ["c", "d\ne", 22]]
     headers = ["h&1", "h_2", "h3"]
@@ -536,6 +537,7 @@ def _str_calls(fn: Any, shape: list[list[Any]], **kwargs: Any) -> tuple[Any, lis
     return _outcome(fn, rows, **kwargs), calls
 
 
+@pytest.mark.parametrize("tablefmt", ["simple", "grid", "html", "latex", "pretty", "rst"])
 def test_cells_str_runs_in_tabulates_order(tablefmt: str) -> None:
     # tabulate takes str() of every cell row by row (to look for ANSI codes), then formats
     # them column by column (P67, `t_str_calls`, `t_bad_str_order`).
@@ -555,6 +557,45 @@ def test_cells_str_runs_in_tabulates_order(tablefmt: str) -> None:
     assert _str_calls(tabulate, [[1, "b!"], ["a!", 2]])[0] == (ValueError, "bad b!")
 
 
+@pytest.mark.thread_unsafe  # warnings
+def test_str_runs_again_when_a_call_is_handed_over() -> None:
+    # A documented difference: a cell's str() with lone surrogates sends the call to tabulate's
+    # code after the Rust side has taken str() of the cells before it.
+    def run(fn: Any) -> tuple[Any, list[Any]]:
+        calls: list[Any] = []
+
+        class Cell:
+            def __init__(self, k: int) -> None:
+                self.k = k
+
+            def __str__(self) -> str:
+                calls.append(self.k)
+                return "\ud800" if self.k == 2 else f"c{self.k}"
+
+        return fn([[Cell(1), Cell(2)], [Cell(3), 4]]), calls
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        got, calls = run(tabulate)
+    want, want_calls = run(pt._port.tabulate)
+    assert got == want
+    assert want_calls == [1, 2, 3, 1, 3, 2]
+    assert calls == [1, 2, *want_calls]
+
+
+@pytest.mark.thread_unsafe  # module attributes
+def test_replaced_helpers_are_not_used(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A documented difference: tabulate looks its helpers up on each call, pyroid.tabulate's
+    # tabulate() and its copy of tabulate's code use their own.
+    monkeypatch.setattr(pt, "_format", lambda *args, **kwargs: "X")
+    monkeypatch.setattr(pt, "_type", lambda *args, **kwargs: str)
+    assert tabulate([[1.5, "a"]]) == "---  -\n1.5  a\n---  -"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        assert tabulate([[1.5, "\ud800"]]) == "---  -\n1.5  \ud800\n---  -"
+
+
+@pytest.mark.thread_unsafe  # warnings
 def test_row_iterators_survive_a_fallback() -> None:
     # The Rust side turns rows into lists as it reads them; when it then hands the call to
     # tabulate's code (here for the lone surrogate in the last row), that code gets those lists,

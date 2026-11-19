@@ -143,7 +143,27 @@ every format, every `mediawiki` and `asciidoc` table differs, and 1 of the 48
 
 ## Differences from tabulate {#differences-from-tabulate}
 
-No differences in output are known. Some behaviour around the edges:
+The text, result type, exceptions and warnings are tabulate's for any data and options, and
+also after edits to tabulate's tables: `_table_formats`, `multiline_formats`,
+`LATEX_ESCAPE_RULES`, and the built-in formats' `with_header_hide` lists and `functools.partial`
+arguments (`_table_formats["latex_raw"].datarow.keywords["escrules"]`). Cells' `__str__` run in
+tabulate's order. Two differences are known, both for code that reaches into tabulate's
+internals:
+
+- Functions and other names replaced on the module (`tabulate._format = f`,
+  `tabulate.htmlescape = f`, on the patched `tabulate` too) are not used. tabulate looks them up
+  on every call; pyroid.tabulate's `tabulate()` and its copy of tabulate's code keep their own.
+  Following replacements would mean checking dozens of names on every call. The settings
+  (`MIN_PADDING`, `PRESERVE_WHITESPACE`, `WIDE_CHARS_MODE`) are followed.
+- When the Rust side hands a call to tabulate's code after it has started on the cells (a
+  cell whose `str()` contains lone surrogates, or a per-column `missingval` that is not a `str`
+  meeting a missing value), the cells' `__str__`, and in `rst` the `strip` of `str` subclasses
+  in the first column, have run once already and run again there. Only code with side effects
+  can tell. Avoiding it would mean holding lone surrogates in the Rust side's text, which every
+  call would pay for, and reading the per-column options before the cells, which tabulate reads
+  after them. Rows that are iterators are still read only once.
+
+Some behaviour around the edges:
 
 - With `maxcolwidths` narrower than a wide character (say `maxcolwidths=1` and `"日本"`),
   tabulate's text wrapper loops forever, and so does pyroid, which runs the same wrapper.
