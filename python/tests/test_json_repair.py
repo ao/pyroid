@@ -560,6 +560,64 @@ def test_batch_errors() -> None:
         jr.repair_json_batch(["{}"], threads=0)
 
 
+def _first_error(docs: Any, **kwargs: Any) -> Any:
+    """What a loop over json_repair.repair_json raises first: (index, type, message)."""
+    for i, doc in enumerate(docs):
+        if doc is None:
+            continue
+        try:
+            ref.repair_json(doc, **kwargs)
+        except Exception as e:
+            return i, type(e), str(e)
+    return None
+
+
+@pytest.mark.thread_unsafe(reason="warnings.catch_warnings")
+@pytest.mark.parametrize(
+    "docs",
+    [
+        ["", "\U0010ffff{[1, 2", "[1e, 2"],  # P67: the delegated document at index 1 fails first
+        ["[1e, 2", "\U0010ffff{[1, 2"],
+        ["{}", "\U0010ffff[1]", "{'a' 1}", "[1e, 2", "\U0010ffff{[1, 2"],
+        ["\U0010ffff{[1, 2", "\U0010ffff[1e, 2"],
+    ],
+)
+def test_batch_raises_the_first_failing_document(docs: list[str]) -> None:
+    first = _first_error(docs, strict=True)
+    assert first is not None
+    index, error, message = first
+    inputs: list[Any] = [docs, tuple(docs), _testing.column(docs, chunks=2)]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        for texts in inputs:
+            with pytest.raises(error) as info:
+                jr.repair_json_batch(texts, strict=True)
+            assert str(info.value) == message, type(texts)
+            where = "the document at index" if isinstance(texts, (list, tuple)) else "row"
+            assert f"pyroid: while repairing {where} {index}" in " ".join(
+                getattr(info.value, "__notes__", [])
+            ), type(texts)
+        with pytest.raises(error, match=re.escape(message)):
+            jr.repair_json_batch(docs[index], strict=True)
+
+
+@pytest.mark.thread_unsafe(reason="warnings.catch_warnings")
+def test_batch_python_route_keeps_the_order_and_takes_arrow() -> None:
+    # json.dumps arguments the port does not reproduce: one repair_json call per document, which
+    # now also works for Arrow input, with the same notes.
+    docs: list[str | None] = ["{'a': 1", None, "[1, 2,", '{"b": 2}']
+    kwargs: dict[str, Any] = {"cls": json.JSONEncoder, "indent": 1}
+    want = [None if d is None else ref.repair_json(d, **kwargs) for d in docs]
+    col = jr.repair_json_batch(_testing.column(docs, chunks=2), **kwargs)
+    assert col.to_pylist() == want
+    assert jr.repair_json_batch([d for d in docs if d], **kwargs) == [w for w in want if w]
+    bad = ["{}", "[1e, 2", "{'a' 1}"]
+    for texts in (bad, _testing.column(bad)):
+        with pytest.raises(ValueError, match="Dangling exponent") as info:
+            jr.repair_json_batch(texts, strict=True, **kwargs)
+        assert any(" 1" in n for n in info.value.__notes__)
+
+
 def test_batch_surrogates() -> None:
     docs = ['{"a": "\ud800"}', "{'a': 'x'}", "\udcff"]
     assert jr.repair_json_batch(docs) == [ref.repair_json(d) for d in docs]

@@ -208,7 +208,8 @@ def repair_json_batch(
         of strings (``large_string`` for ``large_string`` input, else ``string``).
 
     Raises:
-        ValueError: A document fails in strict mode (the note names its index or row).
+        ValueError: A document fails in strict mode: the first one that fails, as in a
+            loop over ``repair_json`` (the note names its index or row).
         NestingError: A document nests deeper than :data:`MAX_DEPTH`.
         UnicodeEncodeError: Arrow input with ``ensure_ascii=False``, and a result holds a lone
             surrogate (json_repair keeps an escape such as ``\ud800`` as one), which an Arrow

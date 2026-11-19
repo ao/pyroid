@@ -513,7 +513,8 @@ def repair_json_batch(
         of strings (``large_string`` for ``large_string`` input, else ``string``).
 
     Raises:
-        ValueError: A document fails in strict mode (the note names its index or row).
+        ValueError: A document fails in strict mode: the first one that fails, as in a
+            loop over ``repair_json`` (the note names its index or row).
         NestingError: A document nests deeper than :data:`MAX_DEPTH`.
         UnicodeEncodeError: Arrow input with ``ensure_ascii=False``, and a result holds a lone
             surrogate (json_repair keeps an escape such as ``\ud800`` as one), which an Arrow
@@ -521,29 +522,21 @@ def repair_json_batch(
         pyroid.InputError: ``texts`` is not one of the accepted kinds.
     """
     dump = _dump_config(json_dumps_args)
-    if dump is _PYTHON_DUMPS:
-        if not isinstance(texts, (str, list, tuple)):
-            raise PyroidError(
-                "pyroid.json_repair.repair_json_batch: json.dumps arguments "
-                f"{sorted(json_dumps_args)} are only supported for str, list and tuple input"
-            )
+    python = dump is _PYTHON_DUMPS
 
-        def one(doc: Any) -> Any:
-            return repair_json(
-                doc,
-                skip_json_loads=skip_json_loads,
-                stream_stable=stream_stable,
-                strict=strict,
-                **json_dumps_args,
-            )
-
-        if isinstance(texts, str):
-            return one(texts)
-        out = [one(doc) for doc in texts]
-        return out if isinstance(texts, list) else tuple(out)
+    def one(doc: Any) -> Any:
+        # The Python route, for json.dumps arguments the port does not reproduce: one
+        # repair_json call per document.
+        return repair_json(
+            doc,
+            skip_json_loads=skip_json_loads,
+            stream_stable=stream_stable,
+            strict=strict,
+            **json_dumps_args,
+        )
 
     def fallback(doc: str) -> Any:
-        # A document the port does not handle (_RESERVED); also called from Rust for Arrow rows.
+        # A document the port does not handle (_RESERVED).
         return _delegate(
             "repair_json_batch",
             _RESERVED,
@@ -554,25 +547,16 @@ def repair_json_batch(
             strict=strict,
         )
 
-    if isinstance(texts, list):
-        # One read of the caller's list (atomic): the fallback below indexes the same items.
-        texts = list(texts)
-    result, unsupported = _native.repair_batch(
+    # Rust calls the delegate in document order, after the native documents ran, so the first
+    # document that fails raises, as in a loop.
+    return _native.repair_batch(
         texts,
         bool(skip_json_loads),
         bool(stream_stable),
         bool(strict),
         sys.get_int_max_str_digits(),
-        dump,
+        None if python else dump,
         threads=threads,
-        delegate=fallback,
+        delegate=one if python else fallback,
+        python=python,
     )
-    if not unsupported:
-        return result
-
-    if isinstance(texts, str):
-        return fallback(texts)
-    items = list(result)
-    for i in unsupported:
-        items[i] = fallback(texts[i])
-    return items if isinstance(texts, list) else tuple(items)
