@@ -164,6 +164,7 @@ def test_names_are_checked_before_anything_is_patched() -> None:
         "nltk",
         "warcio",
         "nemo_curator",
+        "yaml",
     )
     assert (Path(_patch.HOOK_DIR) / "sitecustomize.py").is_file()
 

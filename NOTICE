@@ -878,6 +878,40 @@ ThaiTokenizer (Apache-2.0), described above.
 
 Rust crates in the extension module
 -------------------------------------------------------------------------------
+PyYAML
+-------------------------------------------------------------------------------
+pyroid.yaml (crates/pyroid-core/src/yaml/, crates/pyroid-py/src/yaml/ and
+python/pyroid/yaml/) is a derivative work of PyYAML 6.0.3,
+https://github.com/yaml/pyyaml: its pure-Python reader, scanner, parser,
+composer, resolver, SafeConstructor, SafeRepresenter, serializer and emitter
+were ported method by method to Rust, and its error classes and part of
+SafeConstructor are copied in python/pyroid/yaml/_errors.py and _construct.py.
+Each ported file carries the header "Derived from PyYAML 6.0.3 (MIT),
+© Kirill Simonov and Ingy döt Net; modified." The test data under
+parity/data/pyyaml-6.0.3/ is copied from the same release.
+
+    Copyright (c) 2017-2021 Ingy döt Net
+    Copyright (c) 2006-2016 Kirill Simonov
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of
+    this software and associated documentation files (the "Software"), to deal in
+    the Software without restriction, including without limitation the rights to
+    use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+    of the Software, and to permit persons to whom the Software is furnished to do
+    so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+-------------------------------------------------------------------------------
 The extension module (pyroid._pyroid) is built from the Rust crates listed in
 LICENSES/THIRD-PARTY-RUST.txt, each under the licence given there; the file
 reproduces the copyright and licence text each crate ships. It is generated

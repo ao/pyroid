@@ -395,6 +395,33 @@ Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Documents per second 
 
 <small>Source: bench/json_repair_bench.py, run on 2026-11-06.</small>
 
+### pyroid.yaml
+
+AWS EC2 c7i.4xlarge (Intel Xeon Sapphire Rapids, 16 vCPU), dedicated, nothing else running. MB/s of YAML read (loads) or written (dumps), one process at a time, each cell in a fresh one, CPython 3.12.16 with PyYAML 6.0.3 and libyaml 0.2.5; load average at most 1.07 (the benchmark itself). The corpus is the 11,878 files of the parity corpus that PyYAML loads (343 MB); the 1, 10 and 100 MB files concatenate real ones. Guide: [yaml](guides/yaml.md).
+
+| Input | pyroid `safe_load_all` | `SafeLoader` | `CSafeLoader` | vs `CSafeLoader` | pyroid `safe_dump_all` | `SafeDumper` | `CSafeDumper` | vs `CSafeDumper` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| corpus, 11,878 files | 42.9 | 0.97 | 4.15 | 10.3× | 37.7 | 1.82 | 7.01 | 5.4× |
+| 1 MB file | 76.5 | 1.50 | 14.9 | 5.1× | 46.0 | 1.76 | 8.90 | 5.2× |
+| 10 MB file | 52.1 | 1.16 | 9.57 | 5.4× | 43.1 | 1.78 | 8.75 | 4.9× |
+| 100 MB file | 42.8 | 1.06 | 5.54 | 7.7× | 40.0 | 1.79 | 8.73 | 4.6× |
+
+For context, on the same inputs: ruamel.yaml 0.19.1's pure-Python safe loader 0.65, 1.02, 0.78 and 0.72 MB/s; with ruamel.yaml.clib 0.2.15, 3.20 and 7.42 MB/s on the corpus and the 1 MB file (42 corpus files and the 10 and 100 MB files raise); rapidyaml 0.15.2's `parse_in_arena`, which builds a parse tree but no Python objects, 156, 202, 167 and 112 MB/s (66 corpus files raise). ruamel.yaml reads YAML 1.2, so its results differ from PyYAML's.
+
+<small>Source: bench/yaml/baseline_bench.py, run on 2026-11-14 (bench/results/aws-c7i.4xlarge/2026-11-14/yaml-corpus.json).</small>
+
+### pyroid.yaml: small documents
+
+AWS EC2 c7i.4xlarge (Intel Xeon Sapphire Rapids, 16 vCPU), dedicated, nothing else running. Time per call, best of 7 rounds interleaved in one process; the 2 KB document is a GitHub Actions workflow. Guide: [yaml](guides/yaml.md).
+
+| Document | pyroid `safe_load` | `CSafeLoader` | `SafeLoader` | pyroid `safe_dump` | `CSafeDumper` | `SafeDumper` |
+|---|---:|---:|---:|---:|---:|---:|
+| 5 bytes | 3.4 µs | 8.0 µs | 49 µs | 4.6 µs | 8.4 µs | 32 µs |
+| 300 bytes | 19 µs | 105 µs | 843 µs | 8.0 µs | 31 µs | 131 µs |
+| 2 KB | 60 µs | 321 µs | 2,913 µs | 23 µs | 112 µs | 518 µs |
+
+<small>Source: bench/yaml/small_docs_bench.py, run on 2026-11-14 (bench/results/aws-c7i.4xlarge/2026-11-14/yaml-small-docs.md).</small>
+
 ### pyroid.datasketch: MinHash signatures
 
 Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Seconds for the first 10,000 FineWeb dev documents (5.1 million word 5-gram shingles), 128 permutations, best of 3, on free-threaded CPython 3.15t with the GIL off. datasketch 2.0.0 with numpy 2.5.4; its 8-thread rows split the documents over a thread pool. Every pyroid result was first checked for identical signatures. Load average 7 to 10. Guide: [datasketch](guides/datasketch.md).

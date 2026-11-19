@@ -108,3 +108,10 @@ bench = false
 
 [workspace]
 members = ["."]
+
+[[bin]]
+name = "yaml"
+path = "fuzz_targets/yaml.rs"
+test = false
+doc = false
+bench = false

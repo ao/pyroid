@@ -26,6 +26,7 @@ __all__ = [
     "trafilatura",
     "translit",
     "warc",
+    "yaml",
 ]
 
 __version__: Final[str]
@@ -45,6 +46,7 @@ nltk: ModuleType
 nemo: ModuleType
 trafilatura: ModuleType
 warc: ModuleType
+yaml: ModuleType
 _testing: ModuleType
 
 class PyroidError(Exception):

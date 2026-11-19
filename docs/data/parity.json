@@ -571,6 +571,47 @@
         "python/tests/test_trafilatura*.py: 544 tests against trafilatura 2.3.1, and 395 against trafilatura 1.11.0 in its own environment, including the datatrove Trafilatura step against datatrove's own step, statistics included."
       ],
       "source": "the parity/ trafilatura suite in both modes (CPython 3.13, run on 2026-11-09), and parity/pyroid_parity/trafilatura_scale.py on AWS EC2 c7i.4xlarge (bench/results/aws-c7i.4xlarge/2026-11-09-warc/scale)"
+    },
+    "yaml": {
+      "reference": "PyYAML 6.0.3's pure-Python SafeLoader and SafeDumper",
+      "rule": "the same objects (types, key order, shared objects) or the same exception class, str() and fields; the same dumped text byte for byte",
+      "checks": [
+        {
+          "name": "Real-file corpus: 11,989 YAML files from 1,855 repositories and Hugging Face cards (GitHub Actions workflows, Kubernetes manifests, Helm charts, docker-compose and conda files, OpenAPI specs, mkdocs configs, model and dataset cards, files of 1 to 100 MB); safe_load_all of the bytes, str and file-object input of the 108 files that raise, and safe_dump_all under 6 option sets",
+          "same": 83490,
+          "diff": 0
+        },
+        {
+          "name": "yaml-test-suite data release 2022-01-17 (402 cases), the same checks",
+          "same": 2154,
+          "diff": 0
+        },
+        {
+          "name": "Mutation fuzzing: 689 seed documents (PyYAML's test data, the test suite) with random edits and splices, safe_load_all as str and bytes and safe_load, 16 processes for 4 minutes",
+          "same": 28258515,
+          "diff": 0
+        },
+        {
+          "name": "Emitter replay: event streams from PyYAML's parser, its dumpers and random generators, under every emitter option; the text, each write boundary and the error",
+          "same": 181660,
+          "diff": 0
+        },
+        {
+          "name": "Floats: safe_dump of random bit patterns and of values exactly between two shortest decimals",
+          "same": 900000,
+          "diff": 0
+        },
+        {
+          "name": "pytest test cases on CPython 3.12 (test_yaml_parity.py): PyYAML's test data (524 files as str, bytes and file objects read in pieces; dumps of 293 files under 6 option sets and both dumpers), the test suite's 706 files, reader errors at chunk boundaries, tagged edge cases, Hypothesis loads of mutated YAML and dumps of random data",
+          "same": 1581,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "RecursionError on deep nesting depends on sys.getrecursionlimit() and the caller's stack; pyroid matches PyYAML's depth within 3 levels.",
+        "CSafeLoader and CSafeDumper are not the reference; how they differ from SafeLoader and SafeDumper on the same data is listed in the guide."
+      ],
+      "source": "bench/yaml/check_oracle.py against bench/yaml/record_oracle.py's recordings, python/tests/test_yaml_parity.py, and the emitter fixture replay in crates/pyroid-core/src/yaml/emitter.rs, run on 2026-11-14 on an EC2 c8g.16xlarge (linux/aarch64)"
     }
   }
 }
