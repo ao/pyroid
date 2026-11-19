@@ -35,7 +35,9 @@ For code you don't own, `pyroid.patch("json_repair")` makes a later `import json
 | `from_file(filename, ...)` | the same, opening the file by name |
 
 Valid JSON comes back as `json.dumps(json.loads(text))`. Anything else goes through json_repair's
-heuristics.
+heuristics. `NaN`, `Infinity` and `-Infinity` read from valid JSON, also from a valid stretch
+followed by other text, are json's shared `json.decoder.NaN`, `PosInf` and `NegInf`, as in
+json_repair, so two results holding `NaN` compare equal.
 
 ```python
 import pyroid.json_repair as json_repair

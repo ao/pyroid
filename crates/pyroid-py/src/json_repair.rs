@@ -15,7 +15,7 @@ use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple, PyType};
 use pyroid_core::json_repair::chars::{self, CharProps, UnicodeVersion};
 use pyroid_core::json_repair::dumps::{DumpError, DumpOptions};
-use pyroid_core::json_repair::value::{Int, ObjectIntoIter, Value};
+use pyroid_core::json_repair::value::{Constant, Int, ObjectIntoIter, Value};
 use pyroid_core::json_repair::{
     self as kernel, LogEntry, MAX_DEPTH, ParseError, RepairError, RepairOptions, Repaired,
 };
@@ -147,12 +147,34 @@ enum Frame<'py> {
     },
 }
 
+/// `json.decoder`'s `NaN`, `PosInf` and `NegInf`: the objects `json.JSONDecoder` returns
+/// for the `NaN`, `Infinity` and `-Infinity` tokens (json_repair keeps them).
+static JSON_CONSTANTS: PyOnceLock<[Py<PyAny>; 3]> = PyOnceLock::new();
+
+fn json_constant(py: Python<'_>, c: Constant) -> PyResult<Bound<'_, PyAny>> {
+    let all = JSON_CONSTANTS.get_or_try_init(py, || -> PyResult<_> {
+        let m = py.import("json.decoder")?;
+        Ok([
+            m.getattr("NaN")?.unbind(),
+            m.getattr("PosInf")?.unbind(),
+            m.getattr("NegInf")?.unbind(),
+        ])
+    })?;
+    let i = match c {
+        Constant::NaN => 0,
+        Constant::PosInf => 1,
+        Constant::NegInf => 2,
+    };
+    Ok(all[i].bind(py).clone())
+}
+
 fn scalar_to_py<'py>(py: Python<'py>, value: &Value) -> PyResult<Bound<'py, PyAny>> {
     Ok(match value {
         Value::Null => py.None().into_bound(py),
         Value::Bool(b) => PyBool::new(py, *b).to_owned().into_any(),
         Value::Int(i) => py_int(py, i)?,
         Value::Float(f) => PyFloat::new(py, *f).into_any(),
+        Value::Constant(c) => json_constant(py, *c)?,
         Value::Str(s) => py_str(py, s)?.into_any(),
         Value::Array(_) | Value::Object(_) => unreachable!("containers are frames"),
     })

@@ -104,6 +104,54 @@ def test_types_of_numbers_and_literals() -> None:
     assert list(jr.loads('{"a": 1, "b": 2, "a": 3}').items()) == [("a", 3), ("b", 2)]  # type: ignore[union-attr]
 
 
+def _floats(value: Any) -> list[tuple[str, str | None]]:
+    """The floats in `value`, in order, each with the json.decoder constant it is (if any)."""
+    constants = {
+        id(json.decoder.NaN): "NaN",  # type: ignore[attr-defined]
+        id(json.decoder.PosInf): "PosInf",  # type: ignore[attr-defined]
+        id(json.decoder.NegInf): "NegInf",  # type: ignore[attr-defined]
+    }
+    out: list[tuple[str, str | None]] = []
+    stack = [value]
+    while stack:
+        v = stack.pop()
+        if isinstance(v, float):
+            out.append((v.hex(), constants.get(id(v))))
+        elif isinstance(v, dict):
+            stack.extend(reversed(list(v.values())))
+        elif isinstance(v, (list, tuple)):
+            stack.extend(reversed(v))
+    return out
+
+
+@pytest.mark.parametrize(
+    "doc",
+    [
+        "[NaN,NaN]]",
+        "[NaN, NaN] x",
+        "[1, NaN, NaN] ]",
+        '{"a": NaN, "b": NaN}}',
+        "[Infinity, -Infinity, 1e400, -1e400, NaN] and some text",
+        '"a": NaN, "b": [Infinity, 1e999]}',  # the missing-opening-brace repair decodes it whole
+        "[NaN]",
+        "[NaN, 1",
+        "{'a': NaN, 'b': [1e400]",
+    ],
+)
+def test_json_constants_are_jsons_shared_objects(doc: str) -> None:
+    # NaN, Infinity and -Infinity in a stretch of valid JSON come from json's decoder, which
+    # returns one shared object for each; a number that overflows (1e400) is a new float.
+    options: list[dict[str, Any]] = [{}, {"logging": True}, {"skip_json_loads": True}]
+    for kwargs in options:
+        kwargs = {"return_objects": True, **kwargs}
+        got, want = jr.repair_json(doc, **kwargs), ref.repair_json(doc, **kwargs)
+        assert same(got, want)
+        assert _floats(got) == _floats(want), kwargs
+    # Containers check identity before equality: with the shared NaN, results compare equal.
+    assert (jr.loads(doc) == ref.loads(doc)) is (ref.loads(doc) == ref.loads(doc))
+    assert (jr.loads(doc) == jr.loads(doc)) is (ref.loads(doc) == ref.loads(doc))
+
+
 def test_empty_result_is_empty_string() -> None:
     assert jr.repair_json("") == ""
     assert jr.repair_json("nothing") == ""
