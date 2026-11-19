@@ -286,7 +286,9 @@ releases' private attributes differ; they still compare and hash with its object
 - Calling `__init__` again on an existing `Version`, `Specifier`, `SpecifierSet` or `Marker`
   keeps the first value, where packaging parses the new one in place. Assigning `_version` and
   calling `__setstate__` do replace it.
-- A `str` subclass that overrides `split` or `lower` is read as its string data.
+- A `str` subclass that overrides `split` or `lower` is read as its string data, except where a
+  version is parsed (`Version()`, `parse`, a specifier's `contains` and `filter`, the batch
+  functions): there `__iter__` and `split` overrides count, as in packaging.
 - A marker string literal whose escapes produce a lone surrogate (`'\ud800'`) raises
   `InvalidMarker` ("Invalid quoted string"). packaging accepts it.
 - Markers nest as deep as memory allows. packaging parses, evaluates and prints them by
