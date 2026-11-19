@@ -149,8 +149,10 @@ def test_shim_without_trafilatura(run_python: Callable[..., Any]) -> None:
         """,
     )
     assert [c for c, _ in out] == ["PatchWarning"]
-    assert (
-        "is unavailable: trafilatura is not installed (pip install trafilatura==2.3.1)" in out[0][1]
+    assert out[0][1] == (
+        "pyroid.integrations.patch: trafilatura is not installed, so `import trafilatura` now "
+        "gives pyroid.trafilatura alone (pip install trafilatura==2.3.1 for the rest). This "
+        "warning is shown once."
     )
 
 

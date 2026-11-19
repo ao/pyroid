@@ -21,6 +21,7 @@ import pytest
 import pyroid
 import pyroid.json_repair as jr
 from pyroid._pyroid import _testing
+from pyroid._pyroid import json_repair as _native_jr
 
 ref: Any = pytest.importorskip("json_repair")
 
@@ -102,6 +103,54 @@ def test_types_of_numbers_and_literals() -> None:
     assert jr.repair_json("[NaN]") == "[NaN]"
     # Duplicate keys: last value, first position (dict semantics), as json.loads.
     assert list(jr.loads('{"a": 1, "b": 2, "a": 3}').items()) == [("a", 3), ("b", 2)]  # type: ignore[union-attr]
+
+
+def _floats(value: Any) -> list[tuple[str, str | None]]:
+    """The floats in `value`, in order, each with the json.decoder constant it is (if any)."""
+    constants = {
+        id(json.decoder.NaN): "NaN",  # type: ignore[attr-defined]
+        id(json.decoder.PosInf): "PosInf",  # type: ignore[attr-defined]
+        id(json.decoder.NegInf): "NegInf",  # type: ignore[attr-defined]
+    }
+    out: list[tuple[str, str | None]] = []
+    stack = [value]
+    while stack:
+        v = stack.pop()
+        if isinstance(v, float):
+            out.append((v.hex(), constants.get(id(v))))
+        elif isinstance(v, dict):
+            stack.extend(reversed(list(v.values())))
+        elif isinstance(v, (list, tuple)):
+            stack.extend(reversed(v))
+    return out
+
+
+@pytest.mark.parametrize(
+    "doc",
+    [
+        "[NaN,NaN]]",
+        "[NaN, NaN] x",
+        "[1, NaN, NaN] ]",
+        '{"a": NaN, "b": NaN}}',
+        "[Infinity, -Infinity, 1e400, -1e400, NaN] and some text",
+        '"a": NaN, "b": [Infinity, 1e999]}',  # the missing-opening-brace repair decodes it whole
+        "[NaN]",
+        "[NaN, 1",
+        "{'a': NaN, 'b': [1e400]",
+    ],
+)
+def test_json_constants_are_jsons_shared_objects(doc: str) -> None:
+    # NaN, Infinity and -Infinity in a stretch of valid JSON come from json's decoder, which
+    # returns one shared object for each; a number that overflows (1e400) is a new float.
+    options: list[dict[str, Any]] = [{}, {"logging": True}, {"skip_json_loads": True}]
+    for kwargs in options:
+        kwargs = {"return_objects": True, **kwargs}
+        got, want = jr.repair_json(doc, **kwargs), ref.repair_json(doc, **kwargs)
+        assert same(got, want)
+        assert _floats(got) == _floats(want), kwargs
+    # Containers check identity before equality: with the shared NaN, results compare equal.
+    assert (jr.loads(doc) == ref.loads(doc)) is (ref.loads(doc) == ref.loads(doc))
+    assert (jr.loads(doc) == jr.loads(doc)) is (ref.loads(doc) == ref.loads(doc))
 
 
 def test_empty_result_is_empty_string() -> None:
@@ -349,6 +398,104 @@ def test_delegation_without_json_repair(monkeypatch: pytest.MonkeyPatch) -> None
     assert any("row 1 of the Arrow input" in n for n in info.value.__notes__)
 
 
+def _old_json_repair(calls: list[dict[str, Any]]) -> Any:
+    """A stand-in for json-repair 0.30.0, whose repair_json has 7 arguments and no **kwargs."""
+    import types
+
+    module = types.ModuleType("json_repair")
+
+    def repair_json(
+        json_str: Any = "",
+        return_objects: bool = False,
+        skip_json_loads: bool = False,
+        logging: bool = False,
+        json_fd: Any = None,
+        ensure_ascii: bool = True,
+        chunk_length: int = 0,
+    ) -> Any:
+        calls.append(dict(locals()))
+        return "old"
+
+    module.repair_json = repair_json  # type: ignore[attr-defined]
+    return module
+
+
+@pytest.mark.thread_unsafe
+def test_delegation_to_an_older_json_repair(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Delegated calls passed 10 positional arguments, a TypeError below json-repair 0.58.
+    untyped: Any = jr  # bytes input, which the stubs do not admit
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setitem(sys.modules, "json_repair", _old_json_repair(calls))
+    _reset_fallback_warnings()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        assert untyped.repair_json(b"{'a': 1") == "old"
+        assert calls[-1]["json_str"] == b"{'a': 1"
+        assert calls[-1]["ensure_ascii"] is True
+        assert untyped.loads(b"[1, 2") == "old"
+        assert calls[-1]["return_objects"] is True
+        assert untyped.repair_json('["\U0010f800"', ensure_ascii=False) == "old"
+        assert calls[-1]["ensure_ascii"] is False
+        # Arguments left at their default are not passed, even when named.
+        assert (
+            untyped.loads(b"[1", strict=False, schema=None, schema_repair_mode="standard") == "old"
+        )
+        assert untyped.repair_json_batch(["{'a': '\U0010fffe'", "{}"]) == ["old", "{}"]
+        assert calls[-1]["json_str"] == "{'a': '\U0010fffe'"
+    assert len(calls) == 5
+    for kwargs, release in [
+        ({"schema": {"type": "object"}}, "0.56.0"),
+        ({"strict": True}, "0.54"),
+        ({"stream_stable": True}, "0.44.0"),
+        ({"indent": 2}, "0.47.1"),
+    ]:
+        key = next(iter(kwargs))
+        with pytest.raises(
+            pyroid.PyroidError, match=rf"has no {key}= argument .*{re.escape(release)}"
+        ):
+            untyped.repair_json(b"{", **kwargs)
+    with pytest.raises(pyroid.PyroidError, match="has no strict= argument"):
+        untyped.repair_json_batch(["{'a': '\U0010fffe'"], strict=True)
+    assert len(calls) == 5
+
+
+@pytest.mark.thread_unsafe
+def test_delegation_to_a_json_repair_without_strict(monkeypatch: pytest.MonkeyPatch) -> None:
+    # json-repair 0.47.1 to 0.53 take **json_dumps_args but not strict, schema or
+    # schema_repair_mode: those must not reach json.dumps.
+    import types
+
+    untyped: Any = jr  # bytes input, which the stubs do not admit
+    calls: list[dict[str, Any]] = []
+    module = types.ModuleType("json_repair")
+
+    def repair_json(
+        json_str: Any = "",
+        return_objects: bool = False,
+        skip_json_loads: bool = False,
+        logging: bool = False,
+        json_fd: Any = None,
+        chunk_length: int = 0,
+        stream_stable: bool = False,
+        **json_dumps_args: Any,
+    ) -> Any:
+        calls.append({**locals(), **json_dumps_args})
+        json.dumps(None, **json_dumps_args)
+        return "0.50"
+
+    module.repair_json = repair_json  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "json_repair", module)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        assert untyped.repair_json(b"{", indent=2, stream_stable=True) == "0.50"
+        assert calls[-1]["indent"] == 2
+        assert calls[-1]["stream_stable"] is True
+        assert not {"strict", "schema", "schema_repair_mode"} & calls[-1].keys()
+        with pytest.raises(pyroid.PyroidError, match=r"has no strict= argument .*0\.54"):
+            untyped.repair_json(b"{", strict=True)
+    assert len(calls) == 1
+
+
 @pytest.mark.thread_unsafe
 def test_int_max_str_digits_follows_sys() -> None:
     doc = '{"a": ' + "1" * 5000 + ', "b": }'
@@ -360,6 +507,232 @@ def test_int_max_str_digits_follows_sys() -> None:
             assert jr.repair_json(doc[:-8] + "}") == ref.repair_json(doc[:-8] + "}")
     finally:
         sys.set_int_max_str_digits(old)
+
+
+# --- the json module and str subclasses ----------------------------------------------
+
+
+def _outcome(f: Any, *args: Any, **kwargs: Any) -> Any:
+    try:
+        return ("ok", f(*args, **kwargs))
+    except Exception as e:
+        return ("raise", type(e).__name__, str(e))
+
+
+def _calls(lib: Any) -> list[Any]:
+    """Results of the calls json_repair makes json.loads and json.dumps matter for."""
+    docs = ['{"a": 1}', "{a: 1, 'b': [1, 2,", "", "nothing", '[1, 2] {"a": "b"}']
+    out = []
+    for doc in docs:
+        out.append(_outcome(lib.repair_json, doc))
+        out.append(_outcome(lib.repair_json, doc, indent=2))
+        out.append(_outcome(lib.repair_json, doc, skip_json_loads=True))
+        out.append(_outcome(lib.repair_json, doc, return_objects=True))
+        out.append(_outcome(lib.loads, doc))
+        out.append(_outcome(lib.repair_json, json_fd=io.StringIO(doc)))
+        out.append(_outcome(lib.load, io.StringIO(doc)))
+    return out
+
+
+_BATCH_OPTIONS: list[dict[str, Any]] = [{}, {"indent": 2}, {"skip_json_loads": True}]
+
+
+def _batch_calls() -> list[Any]:
+    """repair_json_batch over the same documents, as a list, a tuple, a str and Arrow."""
+    docs = ['{"a": 1}', "{a: 1, 'b': [1, 2,", "", "nothing", '[1, 2] {"a": "b"}']
+    out = []
+    for kwargs in _BATCH_OPTIONS:
+        out.append(_outcome(jr.repair_json_batch, docs, **kwargs))
+        out.append(_outcome(jr.repair_json_batch, tuple(docs), **kwargs))
+        out.append(_outcome(jr.repair_json_batch, docs[1], **kwargs))
+        col = _outcome(jr.repair_json_batch, _testing.column(docs, chunks=2), **kwargs)
+        out.append((col[0], col[1].to_pylist()) if col[0] == "ok" else col)
+    return out
+
+
+def _ref_batch_calls() -> list[Any]:
+    docs = ['{"a": 1}', "{a: 1, 'b': [1, 2,", "", "nothing", '[1, 2] {"a": "b"}']
+    out = []
+    for kwargs in _BATCH_OPTIONS:
+        want = [ref.repair_json(d, **kwargs) for d in docs]
+        out += [("ok", want), ("ok", tuple(want)), ("ok", want[1]), ("ok", want)]
+    return out
+
+
+@pytest.mark.thread_unsafe(reason="replaces json module functions")
+@pytest.mark.parametrize(
+    ("name", "replacement"),
+    [
+        ("dumps", lambda orig: lambda *a, **k: "DUMPED:" + orig(*a, **k)),
+        ("dumps", lambda orig: lambda *a, **k: orig(*a, **{**k, "separators": (",", ":")})),
+        ("loads", lambda orig: lambda *a, **k: {"patched": True}),
+        ("loads", lambda orig: lambda s, *a, **k: orig(s.replace("1", "7"), *a, **k)),
+    ],
+    ids=["dumps-prefix", "dumps-compact", "loads-constant", "loads-edit"],
+)
+def test_replaced_json_functions_are_used_as_json_repair_uses_them(
+    monkeypatch: pytest.MonkeyPatch, name: str, replacement: Any
+) -> None:
+    # json_repair calls json.loads and json.dumps through the module at each call, so a program
+    # that swaps them (an orjson-backed shim, say) gets their results. String results came from
+    # the Rust port's own decoder and encoder, which ignored the swap.
+    monkeypatch.setattr(json, name, replacement(getattr(json, name)))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pyroid.FallbackWarning)  # the Python route, not json_repair
+        assert _calls(jr) == _calls(ref)
+        assert _batch_calls() == _ref_batch_calls()
+
+
+@pytest.mark.thread_unsafe(reason="replaces json module functions")
+def test_replaced_json_decoder_and_load_are_delegated(monkeypatch: pytest.MonkeyPatch) -> None:
+    # json_repair decodes stretches of valid JSON inside broken input with json.JSONDecoder, and
+    # a file with json.load: the port cannot call them, so such calls go to json_repair.
+    class Decoder(json.JSONDecoder):
+        def raw_decode(self, s: str, idx: int = 0) -> tuple[Any, int]:
+            value, end = super().raw_decode(s, idx)
+            return ["decoded", value], end
+
+    orig_load = json.load
+    _reset_fallback_warnings()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        monkeypatch.setattr(json, "JSONDecoder", Decoder)
+        assert _calls(jr) == _calls(ref)
+        assert _batch_calls() == _ref_batch_calls()
+        monkeypatch.undo()
+        monkeypatch.setattr(json, "load", lambda fd, **k: ["load", orig_load(fd, **k)])
+        assert _calls(jr) == _calls(ref)
+    reasons = {str(w.message).split(" does not handle ")[1].split(";")[0] for w in caught}
+    assert reasons == {"a replaced json.JSONDecoder", "a replaced json.load"}
+    assert {w.category for w in caught} == {pyroid.FallbackWarning}
+
+
+def test_json_functions_replaced_before_the_import_are_used(tmp_path: Path) -> None:
+    # Replaced before pyroid.json_repair was imported: the import cannot take them as json's own.
+    import subprocess
+
+    script = tmp_path / "early.py"
+    script.write_text(
+        "import json\n"
+        "orig = json.dumps\n"
+        "json.dumps = lambda *a, **k: 'DUMPED:' + orig(*a, **k)\n"
+        "import pyroid.json_repair as jr\n"
+        "import json_repair as ref\n"
+        "for doc in ['{\"a\": 1}', '{a: 1', '']:\n"
+        "    assert jr.repair_json(doc) == ref.repair_json(doc), doc\n"
+        "    assert jr.repair_json_batch([doc]) == [ref.repair_json(doc)], doc\n"
+        "print('ok')\n"
+    )
+    run = subprocess.run(
+        [sys.executable, str(script)], capture_output=True, text=True, check=False, timeout=120
+    )
+    assert run.stdout.strip() == "ok", run.stderr
+
+
+class _Upper(str):
+    """Characters read through ``__getitem__`` come back upper-case (json_repair reads them so)."""
+
+    __slots__ = ()
+
+    def __getitem__(self, key: Any) -> str:
+        part = str.__getitem__(self, key)
+        return part.upper() if isinstance(key, int) else part
+
+
+class _Plain(str):
+    __slots__ = ()
+
+
+@pytest.mark.thread_unsafe(reason="global one-time-warning state")
+def test_str_subclass_overriding_what_json_repair_calls_is_delegated() -> None:
+    class Find(str):
+        def find(self, *args: Any) -> int:
+            return -1
+
+    class Length(str):
+        def __len__(self) -> int:
+            return 3
+
+    docs = ["{a: 'b'}", '{"a": "b"}', "{'key': \"value\", x: [1, 2", "[NaN] trailing"]
+    _reset_fallback_warnings()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        for cls in (_Upper, Find, Length):
+            for doc in docs:
+                for kwargs in [{}, {"return_objects": True}, {"skip_json_loads": True}]:
+                    got = _outcome(jr.repair_json, cls(doc), **kwargs)
+                    assert got == _outcome(ref.repair_json, cls(doc), **kwargs), (cls, doc)
+            want = [ref.repair_json(cls(d)) for d in docs]
+            assert jr.repair_json_batch([cls(d) for d in docs]) == want
+            assert jr.repair_json_batch(tuple(cls(d) for d in docs)) == tuple(want)
+            assert jr.repair_json_batch(cls(docs[0])) == want[0]
+    reasons = {str(w.message).split(" does not handle ")[1].split(";")[0] for w in caught}
+    assert reasons == {
+        "a str subclass overriding __getitem__()",
+        "a str subclass overriding find()",
+        "a str subclass overriding __len__()",
+    }
+    # A subclass that overrides nothing json_repair calls stays on the Rust path.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pyroid.FallbackWarning)
+        for doc in docs:
+            assert jr.repair_json(_Plain(doc)) == ref.repair_json(_Plain(doc))
+        assert jr.repair_json_batch([_Plain(d) for d in docs]) == [ref.repair_json(d) for d in docs]
+
+
+def test_str_subclasses_seen_by_the_rust_path() -> None:
+    assert _native_jr._overridden_str_hook("abc") is None
+    assert _native_jr._overridden_str_hook(_Plain("abc")) is None
+    assert _native_jr._overridden_str_hook(_Upper("abc")) == "__getitem__"
+
+    class Deeper(_Upper):
+        pass
+
+    assert _native_jr._overridden_str_hook(Deeper("abc")) == "__getitem__"
+
+    class WithDict(str):
+        pass
+
+    s = WithDict("abc")
+    s.startswith = lambda *a: True  # type: ignore[method-assign]
+    assert _native_jr._overridden_str_hook(s) == "startswith"
+    np = pytest.importorskip("numpy")
+    assert _native_jr._overridden_str_hook(np.str_("abc")) is None
+
+
+class _Raises:
+    def __bool__(self) -> bool:
+        raise RuntimeError("bool")
+
+
+class _Counts:
+    """Falsy; counts how often it is tested for truth."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __bool__(self) -> bool:
+        self.calls += 1
+        return False
+
+
+@pytest.mark.parametrize("name", ["ensure_ascii", "allow_nan", "sort_keys", "skipkeys"])
+def test_json_dumps_flags_are_tested_by_json_dumps(name: str) -> None:
+    # A flag of another type than bool, int or None is left to json.dumps: json_repair does not
+    # call it when it finds no value, and json.dumps decides how often it is tested.
+    for doc in ["", "nothing", "{a: 1}", '{"a": [1, 2]}']:
+        assert _outcome(jr.repair_json, doc, **{name: _Raises()}) == _outcome(
+            ref.repair_json, doc, **{name: _Raises()}
+        )
+        got, want = _Counts(), _Counts()
+        assert _outcome(jr.repair_json, doc, **{name: got}) == _outcome(
+            ref.repair_json, doc, **{name: want}
+        )
+        assert got.calls == want.calls, doc
+    separators = iter([", ", ": "])
+    assert jr.repair_json("{a: 1}", separators=separators) == '{"a": 1}'
+    assert jr.repair_json("{a: 1}", separators=[",", ":"]) == '{"a":1}'
+    assert jr.repair_json("", separators=iter([])) == ref.repair_json("", separators=iter([]))
 
 
 # --- repair_json_batch ---------------------------------------------------------------
@@ -412,6 +785,67 @@ def test_batch_errors() -> None:
         jr.repair_json_batch(["[1]", "[" * (jr.MAX_DEPTH + 1)])
     with pytest.raises(ValueError, match="threads"):
         jr.repair_json_batch(["{}"], threads=0)
+
+
+def _first_error(docs: Any, **kwargs: Any) -> Any:
+    """What a loop over json_repair.repair_json raises first: (index, type, message)."""
+    for i, doc in enumerate(docs):
+        if doc is None:
+            continue
+        try:
+            ref.repair_json(doc, **kwargs)
+        except Exception as e:
+            return i, type(e), str(e)
+    return None
+
+
+@pytest.mark.thread_unsafe(reason="warnings.catch_warnings")
+@pytest.mark.parametrize(
+    "docs",
+    [
+        ["", "\U0010ffff{[1, 2", "[1e, 2"],  # P67: the delegated document at index 1 fails first
+        ["[1e, 2", "\U0010ffff{[1, 2"],
+        ["{}", "\U0010ffff[1]", "{'a' 1}", "[1e, 2", "\U0010ffff{[1, 2"],
+        ["\U0010ffff{[1, 2", "\U0010ffff[1e, 2"],
+        [_Upper("{a: 1}"), _Upper("[1e, 2"), "[1e, 2"],
+    ],
+)
+def test_batch_raises_the_first_failing_document(docs: list[str]) -> None:
+    first = _first_error(docs, strict=True)
+    assert first is not None
+    index, error, message = first
+    inputs: list[Any] = [docs, tuple(docs)]
+    if not any(type(d) is _Upper for d in docs):
+        inputs.append(_testing.column(docs, chunks=2))  # Arrow has no str subclasses
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        for texts in inputs:
+            with pytest.raises(error) as info:
+                jr.repair_json_batch(texts, strict=True)
+            assert str(info.value) == message, type(texts)
+            where = "the document at index" if isinstance(texts, (list, tuple)) else "row"
+            assert f"pyroid: while repairing {where} {index}" in " ".join(
+                getattr(info.value, "__notes__", [])
+            ), type(texts)
+        with pytest.raises(error, match=re.escape(message)):
+            jr.repair_json_batch(docs[index], strict=True)
+
+
+@pytest.mark.thread_unsafe(reason="warnings.catch_warnings")
+def test_batch_python_route_keeps_the_order_and_takes_arrow() -> None:
+    # json.dumps arguments the port does not reproduce: one repair_json call per document, which
+    # now also works for Arrow input, with the same notes.
+    docs: list[str | None] = ["{'a': 1", None, "[1, 2,", '{"b": 2}']
+    kwargs: dict[str, Any] = {"cls": json.JSONEncoder, "indent": 1}
+    want = [None if d is None else ref.repair_json(d, **kwargs) for d in docs]
+    col = jr.repair_json_batch(_testing.column(docs, chunks=2), **kwargs)
+    assert col.to_pylist() == want
+    assert jr.repair_json_batch([d for d in docs if d], **kwargs) == [w for w in want if w]
+    bad = ["{}", "[1e, 2", "{'a' 1}"]
+    for texts in (bad, _testing.column(bad)):
+        with pytest.raises(ValueError, match="Dangling exponent") as info:
+            jr.repair_json_batch(texts, strict=True, **kwargs)
+        assert any(" 1" in n for n in info.value.__notes__)
 
 
 def test_batch_surrogates() -> None:

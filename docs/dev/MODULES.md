@@ -54,7 +54,10 @@ t.normalize_whitespace(docs, threads=4)  # at most 4 tasks at once on the shared
   forked child. Tasks hold at least 64 docs, so batches of < 128 docs run on the calling thread.
 - **`pyroid.Column`**: zero-dependency result type; `len()`, `.type`, `.name` (carried over
   from the input field), `.null_count`, `.num_chunks`, `.to_pylist()`,
-  `__arrow_c_stream__`, `__arrow_c_array__` (concatenates chunks). pyarrow is never
+  `__arrow_c_stream__`, `__arrow_c_array__` (concatenates chunks). A read-only sequence:
+  `col[i]`, lazy iteration, `reversed`, `in`/`index`/`count`, and `col[a:b]` as a `Column`
+  over the same chunks (exported with an Arrow offset; a step copies). Not registered as a
+  `collections.abc.Sequence` (polars would take the slow Python path). pyarrow is never
   required at runtime. polars 2.1 takes the Series name from the stream and ignores
   `pl.Series("new", col)`'s name: use `pl.Series(col).alias("new")`.
 - **Errors**: `pyroid.InputError(PyroidError, TypeError)` for a wrong type anywhere

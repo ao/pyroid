@@ -25,7 +25,7 @@ use pyo3::types::{PyBytes, PyDict, PyList, PyString, PyTuple, PyType};
 use pyroid_core::fasttext::{self as ft, LoadError, PredictError, Prediction};
 
 use crate::batch::{DocCost, map_values, map_values_cost};
-use crate::errors::{PyroidError, with_note};
+use crate::errors::{PyroidError, os_error, with_note};
 use crate::input::{TextInput, Threads, arg_note};
 
 /// `get_line` result for one document: its word tokens and known labels.
@@ -66,30 +66,9 @@ fn require_numpy(py: Python<'_>) -> PyResult<()> {
 fn load_error(py: Python<'_>, path: &std::path::Path, err: LoadError) -> PyErr {
     let shown = path.display();
     match err {
-        LoadError::Io(e) => match e.raw_os_error() {
-            // OSError(errno, strerror, filename) becomes FileNotFoundError etc.
-            Some(code) => {
-                let msg = e.to_string();
-                // io::Error's Display appends " (os error N)": Python shows the errno itself.
-                let strerror = msg
-                    .strip_suffix(&format!(" (os error {code})"))
-                    .unwrap_or(&msg);
-                // On Windows the code is a Windows error (5 = ERROR_ACCESS_DENIED), not an errno.
-                // Passed as OSError's winerror, it gives the errno and the subclass
-                // (PermissionError), and CPython's own messages drop the trailing period.
-                #[cfg(windows)]
-                let args = (
-                    code,
-                    strerror.trim_end_matches(['.', ' ']).to_owned(),
-                    shown.to_string(),
-                    code,
-                );
-                #[cfg(not(windows))]
-                let args = (code, strerror.to_owned(), shown.to_string());
-                PyOSError::new_err(args)
-            }
-            None => PyOSError::new_err(format!("{shown}: {e}")),
-        },
+        // OSError(errno, strerror, filename) becomes FileNotFoundError etc.
+        LoadError::Io(e) => os_error(py, &e, shown.to_string())
+            .unwrap_or_else(|| PyOSError::new_err(format!("{shown}: {e}"))),
         // MemoryError, as fastText's std::bad_alloc becomes in Python (callers fall back on it).
         e @ LoadError::OutOfMemory { .. } => PyMemoryError::new_err(format!("{shown}: {e}")),
         other => match model_error_type(py) {

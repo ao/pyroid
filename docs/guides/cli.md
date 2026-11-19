@@ -8,6 +8,10 @@ $ pip install "pyroid[cli]"     # pyarrow and numpy
 $ pyroid clean in.parquet out.parquet --recipe fineweb
 ```
 
+The commands that read or write Parquet and JSONL need the `cli` extra. `pyroid run`,
+`pyroid stats`, `pyroid dedup buckets` and `pyroid dedup cluster` also work with a plain
+`pip install pyroid`.
+
 `pyroid clean --recipe fineweb` runs ftfy, then the stages of datatrove 0.10.1's FineWeb pipeline
 that work on text (language ID, the quality filters, MinHash), with datatrove's settings and order.
 It keeps the same documents, with the same text, as that chain built from datatrove's own stages.
@@ -298,7 +302,8 @@ These rules hold for every command:
 - Formats follow the file name, for input and output alike. `.parquet` or `.pq` is Parquet.
   `.jsonl`, `.ndjson` or `.json` is JSON Lines, one object per line, optionally compressed as
   `.gz`, `.bz2`, `.zst` or `.lz4` (e.g. `docs.jsonl.gz`). `--compression` sets the Parquet codec
-  (default: pyarrow's, snappy).
+  (default: pyarrow's, snappy; `none`, `snappy`, `gzip`, `brotli`, `lz4` or `zstd`), checked
+  before the run starts.
 - OUT is one file when its name has one of these suffixes, holding every kept row in input order.
   Otherwise it is a directory with one output file per input file, under the same relative name
   ([layouts](large-datasets.md#output-layout)). Every output is written under a hidden temporary
@@ -387,12 +392,12 @@ Adds fastText's top label (without `__label__`) as `language` and its probabilit
 | Option | Meaning |
 |---|---|
 | `--model MODEL` | a fastText model file (`.bin` or `.ftz`); default: `lid.176.bin`, found as [above](#the-language-id-model) |
-| `--keep LANGS` | keep only documents in these languages, comma-separated (`en,fr`); without it, every row but null texts is kept |
+| `--keep LANGS` | keep only documents in these languages, comma-separated (`en,fr`): labels of the model without `__label__`, which pyroid checks; without it, every row but null texts is kept |
 | `--min-score MIN_SCORE` | with `--keep`: datatrove's `language_threshold` (default 0.65); a document is kept if one of the languages has a probability above it |
 | `--top-k TOP_K` | above 1: also add `top_languages` and `top_language_scores`, lists of the `TOP_K` best labels and their probabilities |
 
 With `--keep`, dropped rows go to `--excluded` with `filter_reason` `lid` (or `null` for a null
-text).
+text). Without `--keep` nothing is dropped, so `--min-score` and `--excluded` are refused.
 
 ```console
 $ pyroid langid sample.parquet tagged.parquet --model lid.176.bin --keep en,fr --top-k 3
@@ -416,8 +421,8 @@ usage: pyroid dedup [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--thre
 |---|---|
 | `--method minhash` | the default: datatrove's MinHash dedup ([`pyroid.dedup`](dedup.md)); one document of each cluster of near-duplicates is kept, the one datatrove keeps |
 | `--method exact` | drop exact repeats of an earlier document |
-| `--normalize` | with `exact`: compare the texts after datatrove's `simplify_text` normalization |
-| `--n-grams`, `--num-buckets`, `--hashes-per-bucket`, `--seed`, `--hash-fc`, `--precision` | datatrove `MinhashConfig` fields; each defaults to datatrove's default (xxhash, 64-bit, 5-grams, 14 × 8, seed 1) |
+| `--normalize` | with `exact` only: compare the texts after datatrove's `simplify_text` normalization |
+| `--n-grams`, `--num-buckets`, `--hashes-per-bucket`, `--seed`, `--hash-fc`, `--precision` | with `minhash` only: datatrove `MinhashConfig` fields; each defaults to datatrove's default (xxhash, 64-bit, 5-grams, 14 × 8, seed 1) |
 
 The `filter_reason` of a dropped row is the method's name (`minhash` or `exact`). `--method
 minhash` reads the input twice (signatures first, then the rows), so it must not change during the

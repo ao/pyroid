@@ -166,6 +166,7 @@ impl Encoder<'_> {
             Value::Bool(false) => self.out.push_str("false"),
             Value::Int(i) => i.write_repr(&mut self.out),
             Value::Float(f) => self.float(*f)?,
+            Value::Constant(c) => self.float(c.value())?,
             Value::Str(s) => write_str(&mut self.out, s, self.opts.ensure_ascii),
             Value::Array(a) if a.is_empty() => self.out.push_str("[]"),
             Value::Object(o) if o.is_empty() => self.out.push_str("{}"),

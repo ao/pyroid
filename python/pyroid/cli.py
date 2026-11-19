@@ -15,6 +15,10 @@ Lines, optionally compressed as ``.gz``, ``.bz2``, ``.zst`` or ``.lz4``.
     pyroid stats OUT
     pyroid run [-p ftfy,fasttext] (SCRIPT | -m MODULE) [ARGS...]
 
+The commands that read or write data files need pyarrow and numpy (``pip install
+'pyroid[cli]'``); ``run``, ``stats``, ``dedup buckets``, ``dedup cluster`` and ``--help`` need
+neither.
+
 OUT is a file when its name has a data suffix, else a directory that gets one output file per
 input file (``--merge``: one per shard). Outputs are written under temporary names and renamed
 when complete; finished files are recorded in ``OUT/.pyroid``, so rerunning an interrupted
@@ -399,6 +403,8 @@ def _recipe(o: Options) -> Any:
                 minhash=None,
                 threads=o.threads,
             )
+            if keep_langs:
+                _check_keep(r.model, keep_langs)
         else:
             ftfy = {"default": None, "datatrove": recipes.FTFY_FORMATTER, "off": False}
             r = recipes.FineWeb(
@@ -409,6 +415,26 @@ def _recipe(o: Options) -> Any:
             )
         cache[key] = r
     return r
+
+
+def _check_keep(model: Any, keep: Sequence[str]) -> None:
+    """``langid --keep``: every name must be one of the model's labels, or no row is kept.
+
+    The labels are compared as datatrove's LanguageFilter compares them, without the
+    ``__label__`` prefix and case-sensitively.
+    """
+    labels = [str(lb).removeprefix("__label__") for lb in model.labels]
+    known = set(labels)
+    for name in keep:
+        if name in known:
+            continue
+        near = name.removeprefix("__label__").lower()
+        hint = f"; did you mean {near!r}?" if near in known else ""
+        raise pyroid.PyroidError(
+            f"--keep {name!r} is not a label of the model, so no row would be kept{hint} "
+            f"(its {len(labels)} labels are language codes such as "
+            f"{', '.join(labels[:5])})"
+        )
 
 
 def _counts(reasons: Any) -> Counter[str]:
@@ -1422,7 +1448,12 @@ def _record_run(run: Run, **info: Any) -> None:
     other = old is not None and old.get("fingerprint") != run.state.fingerprint
     if other and not run.a.overwrite and run.state.stale(r["key"] for r in run.state.records()):
         lay = run.layout
-        what = f"{lay.final} comes" if lay.out_dir is None else f"{lay.out_dir}: its files come"
+        if lay.out_dir is not None:
+            what = f"{lay.out_dir}: its files come"
+        elif lay.final is not None and lay.final.exists():
+            what = f"{lay.final} comes"
+        else:  # a run stopped before it wrote OUT
+            what = f"the unfinished work in {lay.state_root} comes"
         raise _shards.StateError(
             f"{what} from a different run (other options, inputs or pyroid version); pass "
             "--overwrite to redo it, or use another output path"
@@ -1788,7 +1819,7 @@ def _cmd_clean(a: argparse.Namespace) -> int:
             state=run.state,
             sigs=str(work / "sigs"),
             minhash=cfg,
-            sort_buffer=a.sort_buffer_mb << 20,
+            sort_buffer=_sort_buffer(a),
             **spools(rank),
         )
 
@@ -1844,7 +1875,10 @@ def _minhash_middle(
 
 def _cmd_langid(a: argparse.Namespace) -> int:
     keep = [x.strip() for x in a.keep.split(",") if x.strip()] if a.keep else None
-    return _rowwise(a, "langid", model=a.model, keep=keep, min_score=a.min_score, top_k=a.top_k)
+    if not keep and (a.min_score is not None or a.excluded):
+        raise SystemExit("pyroid langid: --min-score and --excluded apply with --keep")
+    min_score = 0.65 if a.min_score is None else a.min_score
+    return _rowwise(a, "langid", model=a.model, keep=keep, min_score=min_score, top_k=a.top_k)
 
 
 def _cmd_translit(a: argparse.Namespace) -> int:
@@ -1877,9 +1911,27 @@ def _minhash_cfg_from_args(a: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+#: The MinHash options of ``pyroid dedup``, which --method exact does not use.
+_MINHASH_OPTIONS = (
+    "n_grams",
+    "num_buckets",
+    "hashes_per_bucket",
+    "seed",
+    "hash_fc",
+    "precision",
+    "sort_buffer_mb",
+)
+
+
 def _cmd_dedup(a: argparse.Namespace) -> int:
     if a.method == "exact":
+        given = [f"--{k.replace('_', '-')}" for k in _MINHASH_OPTIONS if getattr(a, k) is not None]
+        if given:
+            verb = "applies" if len(given) == 1 else "apply"
+            raise SystemExit(f"pyroid dedup: {', '.join(given)} {verb} to --method minhash")
         return _dedup_exact(a)
+    if a.normalize:
+        raise SystemExit("pyroid dedup: --normalize applies to --method exact")
     if getattr(a, "shard", None) and not a.shard.endswith("/1"):
         raise SystemExit(
             "pyroid dedup: --shard needs the staged flow: 'pyroid dedup signatures', "
@@ -1901,7 +1953,7 @@ def _cmd_dedup(a: argparse.Namespace) -> int:
             state=run.state,
             sigs=str(work / "sigs"),
             minhash=cfg,
-            sort_buffer=a.sort_buffer_mb << 20,
+            sort_buffer=_sort_buffer(a),
         )
 
     def last(rank: int, src: Any) -> FileJob:
@@ -2005,7 +2057,7 @@ def _stage_signatures(a: argparse.Namespace) -> int:
             state=run.state,
             sigs=str(sigs),
             minhash=cfg,
-            sort_buffer=a.sort_buffer_mb << 20,
+            sort_buffer=_sort_buffer(a),
         )
 
     _execute(run, _file_units(run, lambda r: f"{r:06d}", make), _unit_signatures)
@@ -2073,6 +2125,11 @@ def _stage_buckets(a: argparse.Namespace) -> int:
         raise SystemExit(f"pyroid dedup buckets: {sigs}: no such directory")
     _apart(out, sigs, "dedup buckets: DUPS", "SIGS")
     meta = _stage_meta(sigs)
+    if meta is None and next(sigs.glob("bucket_*/*.minhash.sig"), None) is None:
+        raise SystemExit(
+            f"pyroid dedup buckets: {sigs} holds no signatures (bucket_*/*.minhash.sig): give "
+            "the directory 'pyroid dedup signatures' wrote"
+        )
     _check_complete(sigs, meta, "input files", "run every 'pyroid dedup signatures' shard first")
     cfg = _stage_cfg(a, meta, sigs)
     shard = _shards.Shard.parse(a.shard) if a.shard else _shards.Shard()
@@ -2130,6 +2187,11 @@ def _stage_cluster(a: argparse.Namespace) -> int:
     meta = _stage_meta(dups)
     cfg = _stage_cfg(a, meta, dups)
     files = _minhash.dups_files(dups)
+    if meta is None and not files:
+        raise SystemExit(
+            f"pyroid dedup cluster: {dups} holds no duplicate pairs (*.dups): give the "
+            "directory 'pyroid dedup buckets' wrote"
+        )
     if meta is not None:
         # Only the bucket tasks of the run that wrote DUPS/.pyroid/run.json count.
         recs = [
@@ -2255,6 +2317,13 @@ def _cmd_stats(a: argparse.Namespace) -> int:
 
     root = Path(a.output) / ".pyroid"
     if not root.is_dir():
+        if not os.path.lexists(a.output):
+            raise SystemExit(f"pyroid stats: {a.output}: no such directory")
+        if not os.path.isdir(a.output):
+            raise SystemExit(
+                f"pyroid stats: {a.output} is a file: give the directory OUT of a run (for a "
+                "file OUT, the run's --stats or --stats-json has the counts)"
+            )
         raise SystemExit(f"pyroid stats: {a.output} has no pyroid run records (.pyroid/)")
     state = _shards.State(root, "")
     run = state.read_run() or {}
@@ -2304,6 +2373,28 @@ def _shard(s: str) -> str:
         Shard.parse(s)
     except ValueError as e:
         raise argparse.ArgumentTypeError(str(e).removeprefix(f"--shard {s!r}: ")) from None
+    return s
+
+
+def _compression(s: str) -> str:
+    """``--compression``: checked by pyarrow's Parquet writer before any work starts.
+
+    It was checked only when the first output was written: a failed run then left its
+    finished work behind, which the corrected command refused as another run's.
+    """
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError:  # main() reports the missing pyarrow, with what installs it
+        return s
+    try:
+        pq.ParquetWriter(
+            pa.BufferOutputStream(), pa.schema([("x", pa.int8())]), compression=s
+        ).close()
+    except (ValueError, pa.ArrowException) as e:
+        raise argparse.ArgumentTypeError(
+            f"{e} (pyarrow's Parquet writer takes none, snappy, gzip, brotli, lz4 or zstd)"
+        ) from None
     return s
 
 
@@ -2371,7 +2462,11 @@ def _run_args(
             metavar="FMT",
             help="with a directory OUT, the output format: "
             + ", ".join(_OUT_FORMATS)
-            + " (default: each input's; parquet for WARC inputs)",
+            + (
+                " (default: each input's; parquet for WARC inputs)"
+                if warc
+                else " (default: each input's)"
+            ),
         )
     if excluded:
         p.add_argument(
@@ -2384,12 +2479,12 @@ def _run_args(
     )
     p.add_argument("--stats-json", metavar="PATH", help="write the stats to PATH as JSON")
     p.add_argument("--progress", action="store_true", help="show a progress line on stderr")
-    p.add_argument(
-        "--compression",
-        help="Parquet compression (default: pyarrow's, snappy)"
-        if tables
-        else "not used: signature files are not compressed",
-    )
+    if tables:
+        p.add_argument(
+            "--compression",
+            type=_compression,
+            help="Parquet compression (default: pyarrow's, snappy)",
+        )
     p.add_argument(
         "--overwrite",
         action="store_true",
@@ -2417,10 +2512,14 @@ def _sort_buffer_arg(p: Any) -> None:
     p.add_argument(
         "--sort-buffer-mb",
         type=_positive,
-        default=64,
         metavar="MB",
         help="signatures sorted in memory per process before spilling to disk (default: 64)",
     )
+
+
+def _sort_buffer(a: argparse.Namespace) -> int:
+    """``--sort-buffer-mb`` in bytes."""
+    return (64 if a.sort_buffer_mb is None else a.sort_buffer_mb) << 20
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2500,7 +2599,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--min-score",
         type=float,
-        default=0.65,
         help="with --keep: datatrove's language_threshold (default: 0.65)",
     )
     p.add_argument(
@@ -2654,6 +2752,10 @@ def build_stage_parser(stage: str) -> argparse.ArgumentParser:
     return p
 
 
+# The commands that read and write no Arrow data: run records, signature and duplicate files.
+_NO_ARROW = frozenset({_cmd_stats, _stage_buckets, _stage_cluster})
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point of the ``pyroid`` console script."""
     args = list(sys.argv[1:] if argv is None else argv)
@@ -2665,9 +2767,13 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) > 1 and args[0] == "dedup" and args[1] in _STAGES:
         a = build_stage_parser(args[1]).parse_args(args[2:])
     else:
-        a = build_parser().parse_args(args)
-    _need_pyarrow()
-    from pyroid.integrations import _shards  # imports pyarrow
+        ap = build_parser()
+        a, unknown = ap.parse_known_args(args)
+        if unknown:  # with the command's usage, not the top-level one
+            _subparser(ap, a.command).error(f"unrecognized arguments: {' '.join(unknown)}")
+    if a.body not in _NO_ARROW:
+        _need_pyarrow()
+    from pyroid.integrations import _shards
 
     term = _on_sigterm()
     # The pyroid program, not a caller of main(): it owns the process's signals to the end.
@@ -2707,7 +2813,12 @@ def main(argv: list[str] | None = None) -> int:
             if os.environ.get("PYROID_DEBUG") or not _one_line(e):
                 raise
             msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
-            notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
+            # "while processing FILE" says nothing new when the message starts with FILE.
+            notes = "".join(
+                f"\n  ({n})"
+                for n in getattr(e, "__notes__", ())
+                if not msg.startswith(f"{n.removeprefix('while processing ')}: ")
+            )
             _shards.say(f"pyroid {a.command}: {msg}{notes}\n")
             return 1
         finally:
@@ -2722,6 +2833,15 @@ def main(argv: list[str] | None = None) -> int:
                 for started in call.runs:
                     with contextlib.suppress(Exception):
                         _tidy_failed(started)
+
+
+def _subparser(ap: argparse.ArgumentParser, command: str) -> argparse.ArgumentParser:
+    """The parser of ``pyroid COMMAND`` (``ap`` itself if there is none)."""
+    for action in ap._actions:  # argparse keeps its subparsers among the actions
+        if isinstance(action, argparse._SubParsersAction):
+            found: argparse.ArgumentParser | None = action.choices.get(command)
+            return found if found is not None else ap
+    return ap
 
 
 def _one_line(e: Exception) -> bool:

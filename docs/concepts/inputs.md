@@ -63,9 +63,9 @@ or a `pyroid.Column`), and the ones that score pairs take no single `str`:
 ## `pyroid.Column`
 
 Arrow input gives a [`pyroid.Column`](../reference/pyroid.md#pyroid.Column): a small, read-only,
-dependency-free Arrow column. It has `len()`, `.type`, `.name` (carried over from the input
-field), `.null_count`, `.num_chunks` and `.to_pylist()`, and it implements the PyCapsule
-interface, so any Arrow library takes it without a copy:
+dependency-free Arrow column. It has `.type`, `.name` (carried over from the input field),
+`.null_count`, `.num_chunks` and `.to_pylist()`, and it implements the PyCapsule interface, so
+any Arrow library takes it without a copy:
 
 ```python
 import polars as pl
@@ -77,6 +77,39 @@ pa.array(col)  # pyarrow, one chunk (concatenates if needed)
 pl.Series(col)  # polars
 pyroid.text.min_chars(col, 10)  # or straight back into pyroid
 ```
+
+pandas 3 takes it too: `pd.Series(col)`, or `df["lang"] = col`, gives a `str` column with nulls
+as `NaN`, and `pd.Series(col, dtype=pd.ArrowDtype(pa.string()))` keeps Arrow's `string` type, with
+nulls as `<NA>`.
+
+It is also a read-only sequence of its values. They come back as `to_pylist()` gives them:
+`str` (`bool` for a mask, `bytes` for `pyroid.warc`'s `html` column), and `None` for a null.
+
+```python
+import pyarrow as pa
+import pyroid.text as t
+
+col = t.normalize_whitespace(pa.chunked_array([["a  b", None], ["c", "d  e"]]))
+len(col)  # 4
+col[0], col[-1]  # ('a b', 'd e')
+for text in col:  # reads one row at a time; no list of the whole column
+    ...
+"c" in col, col.index("c"), col.count(None)  # (True, 2, 1)
+part = col[1:3]  # a Column over the same buffers
+part.to_pylist(), part.num_chunks  # ([None, 'c'], 2)
+```
+
+`col[a:b]` shares the column's buffers and exports them with an Arrow offset, as a pyarrow slice
+does; a slice with a step (`col[::2]`, `col[::-1]`) copies the rows it selects into a new
+`Column`. `in`, `index` and `count` compare as a list does (`None` finds the nulls, and
+`1 in mask` is true when a row is `True`); a `str` or `bytes` is compared with the buffers
+directly, without making a Python object per row. `==` is still identity: compare
+`col.to_pylist()` with a list. Threads can read one column at once, or share one iterator (each
+value goes to one of them), on free-threaded Python too.
+
+`Column` is not registered as a `collections.abc.Sequence`, though it has every method of one:
+`polars.Series(x)` checks for a `Sequence` before the Arrow interface, and would then copy each
+value through Python instead of taking the buffers. It is a `Collection` and `Reversible`.
 
 !!! tip "polars and column names"
     polars takes the series name from the Arrow stream and ignores the name in
