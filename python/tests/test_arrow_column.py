@@ -571,7 +571,7 @@ def test_ctrl_c_stops_a_long_call(run_python: RunPython) -> None:
     out = run_python(CTRL_C_SCRIPT, timeout=300.0)
     assert out.returncode == 0, out.stderr
     for line in out.stdout.splitlines():
-        name, *result, full = line.split()
+        _, *result, full = line.split()
         if float(full) < 0.1:
             continue  # too fast to tell a check during the call from one after it
         # Interrupted a fifth of the way in, in one of five tries: the call saw the signal
