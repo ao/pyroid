@@ -187,12 +187,16 @@ python-dateutil), with a one-time [`pyroid.FallbackWarning`](../concepts/fallbac
 
 - a `parser` subclass that overrides one of its private methods (`_parse`,
   `_parse_numeric_token`, `_build_naive`, ...), or a `parserinfo` subclass that overrides a method
-  (`convertyear`, `validate`, ...) rather than the word lists;
-- a parserinfo whose tables are not dicts of `str` to small `int`s;
+  (`convertyear`, `validate`, ...) rather than the word lists, also when the method is added to
+  the class after its first use;
+- a parserinfo whose tables are not plain dicts of `str` to small `int`s (a dict subclass can
+  change the lookups with its own `get` or `__missing__`), or whose `UTCZONE` is not a plain list
+  or tuple;
 - a number past 64 bits; an hour or minute value with a fraction (`10.5h`, the minutes of
   `10:30.5`) of more than 26 significant digits, where dateutil's `Decimal` arithmetic rounds or
-  raises; or a thread whose `decimal` precision is below what that arithmetic needs (the fraction
-  of a second is read as text, by dateutil and by pyroid, so it never falls back);
+  raises; or a thread whose `decimal` context would make that arithmetic round, signal or raise
+  (a precision below what it needs, or an `Emax`, `Emin` or `clamp` it reaches). The fraction of a
+  second is read as text, by dateutil and by pyroid, so it never falls back;
 - a text stream whose `read(1)` does not return one-character strings (dateutil's code reads it
   from the first such read on, and fails there as dateutil does);
 - a string holding both lone surrogates and characters in U+10F800..U+10FFFF.
@@ -256,8 +260,21 @@ and returns other objects. The [benchmarks page](../benchmarks.md#pyroiddateutil
   python-dateutil itself (under `patch()`, or passed in) is checked on every call, by the identity
   and size of each table, so replacing one value in place (`info._months["jan"] = 5`) is not seen
   until something else changes.
+- Methods replaced on pyroid's or dateutil's own `parser`, `parserinfo` and `isoparser` classes
+  (`parserinfo.convertyear = f`) are not seen: dateutil looks its methods up on every call, and
+  checking them all on every call would slow down every call. A subclass is checked when it is
+  first used and again after an attribute is added to or deleted from it (or from a class between
+  it and those classes), so `MyInfo.convertyear = f` after a first parse is seen. Replacing an
+  attribute the subclass already has is not checked; that matters only where the subclass held
+  the base class's own method.
+- `decimal`: for the integer minutes of a plain `HH:MM`, pyroid checks only the thread's
+  precision. With `clamp = 1` and an `Emax` below the precision minus one, dateutil's arithmetic
+  there sets the context's `Clamped` flag (or raises `decimal.Clamped` if it is trapped), and
+  pyroid's does not: reading `clamp` as well would add 2 to 4% to every such parse. Fractional
+  hours and minutes (`10.5h`, `10:30.5`) are checked against the whole context.
 - `UnknownTimezoneWarning` points at the caller's line, not at a line inside dateutil.
-- `parse_batch` and `isoparse_batch` take `str` only (no `bytes` or streams).
+- `parse_batch` and `isoparse_batch` take `str` only (no `bytes` or streams), and read a `str`
+  subclass as its value; `isoparse` calls its `read` and `encode` methods, as dateutil does.
 - `parse` and `isoparse` are built-in functions. pickle stores them by name, as it does
   dateutil's `parse`, so `Pool.map(parser.parse, ...)` works (also under
   `pyroid.patch("dateutil")`).
