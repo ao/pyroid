@@ -12,9 +12,15 @@ ported line by line to Rust. The port stays linear on the inputs where
 json_repair's lookaheads are quadratic, and never overflows the stack.
 
 These are delegated to the real json_repair, with a one-time
-``pyroid.FallbackWarning``: every ``schema=`` call, non-str input, and the rare
+``pyroid.FallbackWarning``: every ``schema=`` call, non-str input, a str subclass
+that overrides a method json_repair calls on its input (``__getitem__``,
+``__len__``, ``__iter__``, ``find``, ``startswith``), calls made while
+``json.JSONDecoder`` (or ``json.load``, for a file) is replaced, and the rare
 text holding a char in U+10F800..U+10FFFF (the range the port uses to store lone
 surrogates). Without json_repair installed they raise ``pyroid.PyroidError``.
+
+While ``json.loads`` or ``json.dumps`` is replaced (an orjson-backed shim, for
+example), they are called where json_repair calls them, in Python.
 
 Differences from json_repair
 ----------------------------
@@ -27,6 +33,10 @@ Differences from json_repair
   results pyroid decodes it at any depth (json_repair raises there too).
 - ``load``/``from_file`` read the file once (``fd.read()``) instead of in
   ``chunk_length`` pieces. The result is the same and ``chunk_length`` is ignored.
+- Changes inside the ``json`` module, such as a method of ``json.JSONDecoder`` or
+  ``json.JSONEncoder`` replaced on the class, or ``json.encoder``'s functions, are
+  not seen: only ``json.loads``, ``json.load``, ``json.dumps`` and
+  ``json.JSONDecoder`` themselves are checked, at each call.
 - json_repair's command line (``python -m json_repair``) is not part of this module.
 """
 

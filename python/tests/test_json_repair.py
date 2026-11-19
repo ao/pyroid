@@ -21,6 +21,7 @@ import pytest
 import pyroid
 import pyroid.json_repair as jr
 from pyroid._pyroid import _testing
+from pyroid._pyroid import json_repair as _native_jr
 
 ref: Any = pytest.importorskip("json_repair")
 
@@ -508,6 +509,197 @@ def test_int_max_str_digits_follows_sys() -> None:
         sys.set_int_max_str_digits(old)
 
 
+# --- the json module and str subclasses ----------------------------------------------
+
+
+def _outcome(f: Any, *args: Any, **kwargs: Any) -> Any:
+    try:
+        return ("ok", f(*args, **kwargs))
+    except Exception as e:
+        return ("raise", type(e).__name__, str(e))
+
+
+def _calls(lib: Any) -> list[Any]:
+    """Results of the calls json_repair makes json.loads and json.dumps matter for."""
+    docs = ['{"a": 1}', "{a: 1, 'b': [1, 2,", "", "nothing", '[1, 2] {"a": "b"}']
+    out = []
+    for doc in docs:
+        out.append(_outcome(lib.repair_json, doc))
+        out.append(_outcome(lib.repair_json, doc, indent=2))
+        out.append(_outcome(lib.repair_json, doc, skip_json_loads=True))
+        out.append(_outcome(lib.repair_json, doc, return_objects=True))
+        out.append(_outcome(lib.loads, doc))
+        out.append(_outcome(lib.repair_json, json_fd=io.StringIO(doc)))
+        out.append(_outcome(lib.load, io.StringIO(doc)))
+    return out
+
+
+_BATCH_OPTIONS: list[dict[str, Any]] = [{}, {"indent": 2}, {"skip_json_loads": True}]
+
+
+def _batch_calls() -> list[Any]:
+    """repair_json_batch over the same documents, as a list, a tuple, a str and Arrow."""
+    docs = ['{"a": 1}', "{a: 1, 'b': [1, 2,", "", "nothing", '[1, 2] {"a": "b"}']
+    out = []
+    for kwargs in _BATCH_OPTIONS:
+        out.append(_outcome(jr.repair_json_batch, docs, **kwargs))
+        out.append(_outcome(jr.repair_json_batch, tuple(docs), **kwargs))
+        out.append(_outcome(jr.repair_json_batch, docs[1], **kwargs))
+        col = _outcome(jr.repair_json_batch, _testing.column(docs, chunks=2), **kwargs)
+        out.append((col[0], col[1].to_pylist()) if col[0] == "ok" else col)
+    return out
+
+
+def _ref_batch_calls() -> list[Any]:
+    docs = ['{"a": 1}', "{a: 1, 'b': [1, 2,", "", "nothing", '[1, 2] {"a": "b"}']
+    out = []
+    for kwargs in _BATCH_OPTIONS:
+        want = [ref.repair_json(d, **kwargs) for d in docs]
+        out += [("ok", want), ("ok", tuple(want)), ("ok", want[1]), ("ok", want)]
+    return out
+
+
+@pytest.mark.thread_unsafe(reason="replaces json module functions")
+@pytest.mark.parametrize(
+    ("name", "replacement"),
+    [
+        ("dumps", lambda orig: lambda *a, **k: "DUMPED:" + orig(*a, **k)),
+        ("dumps", lambda orig: lambda *a, **k: orig(*a, **{**k, "separators": (",", ":")})),
+        ("loads", lambda orig: lambda *a, **k: {"patched": True}),
+        ("loads", lambda orig: lambda s, *a, **k: orig(s.replace("1", "7"), *a, **k)),
+    ],
+    ids=["dumps-prefix", "dumps-compact", "loads-constant", "loads-edit"],
+)
+def test_replaced_json_functions_are_used_as_json_repair_uses_them(
+    monkeypatch: pytest.MonkeyPatch, name: str, replacement: Any
+) -> None:
+    # json_repair calls json.loads and json.dumps through the module at each call, so a program
+    # that swaps them (an orjson-backed shim, say) gets their results. String results came from
+    # the Rust port's own decoder and encoder, which ignored the swap.
+    monkeypatch.setattr(json, name, replacement(getattr(json, name)))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pyroid.FallbackWarning)  # the Python route, not json_repair
+        assert _calls(jr) == _calls(ref)
+        assert _batch_calls() == _ref_batch_calls()
+
+
+@pytest.mark.thread_unsafe(reason="replaces json module functions")
+def test_replaced_json_decoder_and_load_are_delegated(monkeypatch: pytest.MonkeyPatch) -> None:
+    # json_repair decodes stretches of valid JSON inside broken input with json.JSONDecoder, and
+    # a file with json.load: the port cannot call them, so such calls go to json_repair.
+    class Decoder(json.JSONDecoder):
+        def raw_decode(self, s: str, idx: int = 0) -> tuple[Any, int]:
+            value, end = super().raw_decode(s, idx)
+            return ["decoded", value], end
+
+    orig_load = json.load
+    _reset_fallback_warnings()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        monkeypatch.setattr(json, "JSONDecoder", Decoder)
+        assert _calls(jr) == _calls(ref)
+        assert _batch_calls() == _ref_batch_calls()
+        monkeypatch.undo()
+        monkeypatch.setattr(json, "load", lambda fd, **k: ["load", orig_load(fd, **k)])
+        assert _calls(jr) == _calls(ref)
+    reasons = {str(w.message).split(" does not handle ")[1].split(";")[0] for w in caught}
+    assert reasons == {"a replaced json.JSONDecoder", "a replaced json.load"}
+    assert {w.category for w in caught} == {pyroid.FallbackWarning}
+
+
+def test_json_functions_replaced_before_the_import_are_used(tmp_path: Path) -> None:
+    # Replaced before pyroid.json_repair was imported: the import cannot take them as json's own.
+    import subprocess
+
+    script = tmp_path / "early.py"
+    script.write_text(
+        "import json\n"
+        "orig = json.dumps\n"
+        "json.dumps = lambda *a, **k: 'DUMPED:' + orig(*a, **k)\n"
+        "import pyroid.json_repair as jr\n"
+        "import json_repair as ref\n"
+        "for doc in ['{\"a\": 1}', '{a: 1', '']:\n"
+        "    assert jr.repair_json(doc) == ref.repair_json(doc), doc\n"
+        "    assert jr.repair_json_batch([doc]) == [ref.repair_json(doc)], doc\n"
+        "print('ok')\n"
+    )
+    run = subprocess.run(
+        [sys.executable, str(script)], capture_output=True, text=True, check=False, timeout=120
+    )
+    assert run.stdout.strip() == "ok", run.stderr
+
+
+class _Upper(str):
+    """Characters read through ``__getitem__`` come back upper-case (json_repair reads them so)."""
+
+    __slots__ = ()
+
+    def __getitem__(self, key: Any) -> str:
+        part = str.__getitem__(self, key)
+        return part.upper() if isinstance(key, int) else part
+
+
+class _Plain(str):
+    __slots__ = ()
+
+
+@pytest.mark.thread_unsafe(reason="global one-time-warning state")
+def test_str_subclass_overriding_what_json_repair_calls_is_delegated() -> None:
+    class Find(str):
+        def find(self, *args: Any) -> int:
+            return -1
+
+    class Length(str):
+        def __len__(self) -> int:
+            return 3
+
+    docs = ["{a: 'b'}", '{"a": "b"}', "{'key': \"value\", x: [1, 2", "[NaN] trailing"]
+    _reset_fallback_warnings()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        for cls in (_Upper, Find, Length):
+            for doc in docs:
+                for kwargs in [{}, {"return_objects": True}, {"skip_json_loads": True}]:
+                    got = _outcome(jr.repair_json, cls(doc), **kwargs)
+                    assert got == _outcome(ref.repair_json, cls(doc), **kwargs), (cls, doc)
+            want = [ref.repair_json(cls(d)) for d in docs]
+            assert jr.repair_json_batch([cls(d) for d in docs]) == want
+            assert jr.repair_json_batch(tuple(cls(d) for d in docs)) == tuple(want)
+            assert jr.repair_json_batch(cls(docs[0])) == want[0]
+    reasons = {str(w.message).split(" does not handle ")[1].split(";")[0] for w in caught}
+    assert reasons == {
+        "a str subclass overriding __getitem__()",
+        "a str subclass overriding find()",
+        "a str subclass overriding __len__()",
+    }
+    # A subclass that overrides nothing json_repair calls stays on the Rust path.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pyroid.FallbackWarning)
+        for doc in docs:
+            assert jr.repair_json(_Plain(doc)) == ref.repair_json(_Plain(doc))
+        assert jr.repair_json_batch([_Plain(d) for d in docs]) == [ref.repair_json(d) for d in docs]
+
+
+def test_str_subclasses_seen_by_the_rust_path() -> None:
+    assert _native_jr._overridden_str_hook("abc") is None
+    assert _native_jr._overridden_str_hook(_Plain("abc")) is None
+    assert _native_jr._overridden_str_hook(_Upper("abc")) == "__getitem__"
+
+    class Deeper(_Upper):
+        pass
+
+    assert _native_jr._overridden_str_hook(Deeper("abc")) == "__getitem__"
+
+    class WithDict(str):
+        pass
+
+    s = WithDict("abc")
+    s.startswith = lambda *a: True  # type: ignore[method-assign]
+    assert _native_jr._overridden_str_hook(s) == "startswith"
+    np = pytest.importorskip("numpy")
+    assert _native_jr._overridden_str_hook(np.str_("abc")) is None
+
+
 # --- repair_json_batch ---------------------------------------------------------------
 
 
@@ -580,13 +772,16 @@ def _first_error(docs: Any, **kwargs: Any) -> Any:
         ["[1e, 2", "\U0010ffff{[1, 2"],
         ["{}", "\U0010ffff[1]", "{'a' 1}", "[1e, 2", "\U0010ffff{[1, 2"],
         ["\U0010ffff{[1, 2", "\U0010ffff[1e, 2"],
+        [_Upper("{a: 1}"), _Upper("[1e, 2"), "[1e, 2"],
     ],
 )
 def test_batch_raises_the_first_failing_document(docs: list[str]) -> None:
     first = _first_error(docs, strict=True)
     assert first is not None
     index, error, message = first
-    inputs: list[Any] = [docs, tuple(docs), _testing.column(docs, chunks=2)]
+    inputs: list[Any] = [docs, tuple(docs)]
+    if not any(type(d) is _Upper for d in docs):
+        inputs.append(_testing.column(docs, chunks=2))  # Arrow has no str subclasses
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", pyroid.FallbackWarning)
         for texts in inputs:

@@ -3,9 +3,10 @@
 
 ``repair_json``, ``loads``, ``load`` and ``from_file`` have json_repair's
 signatures and return the same strings and objects. The repair runs in Rust,
-linear on most of the inputs that make json_repair quadratic. ``schema=`` calls, and
-the rare inputs the port cannot represent, are delegated to the real
-json_repair with a one-time :class:`pyroid.FallbackWarning`, or raise
+linear on most of the inputs that make json_repair quadratic. ``schema=`` calls,
+str subclasses that override what json_repair calls on them, a replaced
+``json.JSONDecoder`` and the rare inputs the port cannot represent are delegated
+to the real json_repair with a one-time :class:`pyroid.FallbackWarning`, or raise
 :class:`pyroid.PyroidError` if it is not installed. See ``json_repair.pyi``.
 """
 
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import json.decoder
 import sys
 import unicodedata
 import warnings
@@ -120,6 +122,36 @@ def _fallback_warning(name: str, reason: str) -> None:
 
 
 _RESERVED = "a char in U+10F800..U+10FFFF"
+
+
+def _stdlib_json(name: str) -> Any:
+    """``json.<name>`` if it is the standard library's own, else ``None``.
+
+    ``None`` (it was replaced before this module was imported) never matches, so such a
+    program always takes the Python route.
+    """
+    obj = getattr(json, name)
+    if isinstance(obj, type):
+        own = obj.__module__ == "json.decoder" and obj is vars(json.decoder).get(name)
+    else:
+        own = getattr(obj, "__globals__", None) is vars(json)
+    return obj if own else None
+
+
+# json_repair looks these up on the json module at each call, so a program that replaces one
+# (an orjson-backed json.dumps, say) changes its results. The Rust port reproduces the originals:
+# while one of them is replaced, calls take the Python route (json.loads and json.dumps called by
+# this module, as json_repair calls them) or are delegated (json.JSONDecoder, json.load).
+_JSON_LOADS = _stdlib_json("loads")
+_JSON_LOAD = _stdlib_json("load")
+_JSON_DUMPS = _stdlib_json("dumps")
+_JSON_DECODER = _stdlib_json("JSONDecoder")
+
+
+def _str_subclass(text: Any) -> str | None:
+    """The delegation reason for a str subclass overriding a method json_repair calls on it."""
+    name = _native._overridden_str_hook(text)
+    return None if name is None else f"a str subclass overriding {name}()"
 
 
 def _normalize_schema_repair_mode(mode: Any) -> str:
@@ -248,24 +280,28 @@ def repair_json(
         text = json_fd.read()
     else:
         text = json_str
-    if schema is not None or not isinstance(text, str):
-        reason = "schema" if schema is not None else f"a {type(text).__name__} input"
-        return _delegate(
-            "repair_json",
-            reason,
-            json_dumps_args,
-            position,
-            json_str=json_str,
-            return_objects=return_objects,
-            skip_json_loads=skip_json_loads,
-            logging=logging,
-            json_fd=json_fd,
-            chunk_length=chunk_length,
-            stream_stable=stream_stable,
-            strict=strict,
-            schema=schema,
-            schema_repair_mode=schema_repair_mode,
-        )
+    if (
+        schema is not None
+        or type(text) is not str
+        or (json_fd is not None and not skip_json_loads and json.load is not _JSON_LOAD)
+    ):
+        reason = _early_reason(text, schema, json_fd, skip_json_loads)
+        if reason is not None:
+            return _delegate_repair_json(
+                reason,
+                json_dumps_args,
+                position,
+                json_str,
+                return_objects,
+                skip_json_loads,
+                logging,
+                json_fd,
+                chunk_length,
+                stream_stable,
+                strict,
+                schema,
+                schema_repair_mode,
+            )
     if logging:
         out_mode = _MODE_LOGGING
         dump = None
@@ -274,7 +310,18 @@ def repair_json(
         dump = None
     else:
         dump = _dump_config(json_dumps_args)
-        out_mode = _MODE_OBJECTS if dump is _PYTHON_DUMPS else _MODE_STRING
+        if dump is _PYTHON_DUMPS:
+            out_mode = _MODE_OBJECTS
+        elif (
+            json.dumps is _JSON_DUMPS
+            and json.JSONDecoder is _JSON_DECODER
+            and (skip_json_loads or json.loads is _JSON_LOADS)
+        ):
+            out_mode = _MODE_STRING
+        else:
+            # A json function json_repair calls is not the standard library's: take its steps
+            # here, calling them (the repair in between still runs in Rust).
+            out_mode, dump = _MODE_OBJECTS, _PYTHON_DUMPS
     if out_mode != _MODE_STRING and not skip_json_loads:
         # json_repair's own first step. For a value (not a string) CPython's json.loads is the
         # fastest exact answer; only invalid JSON goes on to the Rust parser.
@@ -288,38 +335,87 @@ def repair_json(
             if dump is _PYTHON_DUMPS:
                 return json.dumps(value, **json_dumps_args)
             return value
-    result = _native.repair(
-        text,
-        out_mode,
-        bool(skip_json_loads),
-        bool(stream_stable),
-        bool(strict),
-        json_fd is not None,
-        sys.get_int_max_str_digits(),
-        None if dump is _PYTHON_DUMPS else dump,
-    )
+    if out_mode == _MODE_STRING or json.JSONDecoder is _JSON_DECODER:
+        result = _native.repair(
+            text,
+            out_mode,
+            bool(skip_json_loads),
+            bool(stream_stable),
+            bool(strict),
+            json_fd is not None,
+            sys.get_int_max_str_digits(),
+            None if dump is _PYTHON_DUMPS else dump,
+        )
+        reason = _RESERVED
+    else:
+        # json_repair decodes the valid stretches of broken input with json.JSONDecoder.
+        result = NotImplemented
+        reason = "a replaced json.JSONDecoder"
     if result is NotImplemented:
-        return _delegate(
-            "repair_json",
-            _RESERVED,
+        return _delegate_repair_json(
+            reason,
             json_dumps_args,
             position,
-            json_str=json_str,
-            return_objects=return_objects,
-            skip_json_loads=skip_json_loads,
-            logging=logging,
-            json_fd=json_fd,
-            chunk_length=chunk_length,
-            stream_stable=stream_stable,
-            strict=strict,
-            schema=schema,
-            schema_repair_mode=schema_repair_mode,
+            json_str,
+            return_objects,
+            skip_json_loads,
+            logging,
+            json_fd,
+            chunk_length,
+            stream_stable,
+            strict,
+            schema,
+            schema_repair_mode,
         )
     if dump is _PYTHON_DUMPS:
-        if result == "":
-            return ""
-        return json.dumps(result, **json_dumps_args)
+        return "" if result == "" else json.dumps(result, **json_dumps_args)
     return result
+
+
+def _delegate_repair_json(
+    reason: str,
+    json_dumps_args: dict[str, Any],
+    position: int | None,
+    json_str: Any,
+    return_objects: bool,
+    skip_json_loads: bool,
+    logging: bool,
+    json_fd: Any,
+    chunk_length: int,
+    stream_stable: bool,
+    strict: bool,
+    schema: Any,
+    schema_repair_mode: str,
+) -> Any:
+    """:func:`repair_json`'s call, delegated to json_repair."""
+    return _delegate(
+        "repair_json",
+        reason,
+        json_dumps_args,
+        position,
+        json_str=json_str,
+        return_objects=return_objects,
+        skip_json_loads=skip_json_loads,
+        logging=logging,
+        json_fd=json_fd,
+        chunk_length=chunk_length,
+        stream_stable=stream_stable,
+        strict=strict,
+        schema=schema,
+        schema_repair_mode=schema_repair_mode,
+    )
+
+
+def _early_reason(text: Any, schema: Any, json_fd: Any, skip_json_loads: bool) -> str | None:
+    """Why :func:`repair_json` delegates before it starts, if it does."""
+    if schema is not None:
+        return "schema"
+    if not isinstance(text, str):
+        return f"a {type(text).__name__} input"
+    reason = _str_subclass(text)
+    if reason is None and json_fd is not None and not skip_json_loads:
+        reason = None if json.load is _JSON_LOAD else "a replaced json.load"
+    return reason
 
 
 def _tell(fd: Any) -> int | None:
@@ -522,11 +618,16 @@ def repair_json_batch(
         pyroid.InputError: ``texts`` is not one of the accepted kinds.
     """
     dump = _dump_config(json_dumps_args)
-    python = dump is _PYTHON_DUMPS
+    python = (
+        dump is _PYTHON_DUMPS
+        or json.dumps is not _JSON_DUMPS
+        or (not skip_json_loads and json.loads is not _JSON_LOADS)
+        or json.JSONDecoder is not _JSON_DECODER
+    )
 
     def one(doc: Any) -> Any:
-        # The Python route, for json.dumps arguments the port does not reproduce: one
-        # repair_json call per document.
+        # The Python route, for json.dumps arguments the port does not reproduce, or json functions
+        # this program replaced: one repair_json call per document.
         return repair_json(
             doc,
             skip_json_loads=skip_json_loads,
@@ -536,10 +637,10 @@ def repair_json_batch(
         )
 
     def fallback(doc: str) -> Any:
-        # A document the port does not handle (_RESERVED).
+        # A document the port does not handle: a char in _RESERVED, or a str subclass.
         return _delegate(
             "repair_json_batch",
-            _RESERVED,
+            _str_subclass(doc) or _RESERVED,
             json_dumps_args,
             json_str=doc,
             skip_json_loads=skip_json_loads,

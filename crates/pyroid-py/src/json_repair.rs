@@ -10,6 +10,7 @@ use std::borrow::Cow;
 use std::sync::OnceLock;
 
 use pyo3::exceptions::{PyAssertionError, PyRecursionError, PyUnicodeEncodeError, PyValueError};
+use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple, PyType};
@@ -295,6 +296,49 @@ fn surrogatepass_bytes<'py>(text: &Bound<'py, PyString>) -> PyResult<Bound<'py, 
         .cast_into::<PyBytes>()?)
 }
 
+/// The `str` methods json_repair calls on its input (`startswith` and `len` through
+/// `json.loads`). A subclass that overrides one is delegated: the port reads the
+/// characters themselves.
+const STR_HOOKS: [&str; 5] = ["__getitem__", "__len__", "__iter__", "find", "startswith"];
+
+/// The first of [`STR_HOOKS`] that `text` (a `str` subclass instance) overrides, in
+/// its class or a base class below `str`, or as an instance attribute.
+fn overridden_str_hook(text: &Bound<'_, PyAny>) -> PyResult<Option<&'static str>> {
+    let py = text.py();
+    let str_type = py.get_type::<PyString>();
+    for cls in text.get_type().mro().iter() {
+        if cls.is(&str_type) {
+            break;
+        }
+        let namespace = cls.getattr(intern!(py, "__dict__"))?;
+        for name in STR_HOOKS {
+            if namespace.contains(name)? {
+                return Ok(Some(name));
+            }
+        }
+    }
+    // Plain methods (not the dunders, which Python looks up on the type) can be
+    // set on the instance.
+    if let Ok(namespace) = text.getattr(intern!(py, "__dict__")) {
+        for name in ["find", "startswith"] {
+            if namespace.contains(name)? {
+                return Ok(Some(name));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// `_overridden_str_hook(text)`: the name of the `str` method that `text`'s class
+/// overrides among those json_repair calls, or `None` (always for an exact `str`).
+#[pyfunction]
+fn _overridden_str_hook(text: &Bound<'_, PyAny>) -> PyResult<Option<&'static str>> {
+    if text.is_exact_instance_of::<PyString>() {
+        return Ok(None);
+    }
+    overridden_str_hook(text)
+}
+
 /// The kernel text for a Python str: its UTF-8, or (with lone surrogates) the
 /// remapped chars.
 enum Text<'py> {
@@ -407,10 +451,11 @@ enum BatchOut {
     Failed(RepairError),
 }
 
-/// The kernel text of a batch document, or `Unsupported` with `python` (every
-/// document goes to the delegate).
+/// The kernel text of a batch document, or `Unsupported` for one that goes to the
+/// delegate: every one with `python`, else a str subclass that overrides a method
+/// json_repair calls on it.
 fn batch_text<'a>(s: &'a Bound<'_, PyString>, python: bool) -> PyResult<Text<'a>> {
-    if python {
+    if python || (!s.is_exact_instance_of::<PyString>() && overridden_str_hook(s)?.is_some()) {
         return Ok(Text::Unsupported);
     }
     text_of(s)
@@ -449,8 +494,8 @@ fn finish_batch<'py>(
 /// `repair_json(doc)` for every document of a str, list, tuple or Arrow column, on
 /// the shared pool; the result is in the input's kind (an unchanged document is
 /// the original object). A document the port does not handle (a char reserved
-/// for surrogates) gets `delegate(doc)`, called in document order after the
-/// native ones ran; with
+/// for surrogates, a str subclass overriding a method json_repair calls) gets
+/// `delegate(doc)`, called in document order after the native ones ran; with
 /// `python`, every document does (the shim's Python route).
 #[pyfunction]
 #[pyo3(signature = (texts, /, skip_json_loads, stream_stable, strict, max_int_digits, dump, *, delegate, python=false, threads=None))]
@@ -663,6 +708,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(_set_unicode_version, &m)?)?;
     m.add_function(wrap_pyfunction!(repair, &m)?)?;
     m.add_function(wrap_pyfunction!(repair_batch, &m)?)?;
+    m.add_function(wrap_pyfunction!(_overridden_str_hook, &m)?)?;
     m.add_class::<DumpConfig>()?;
     m.add("NestingError", nesting_error_type(py)?)?;
     m.add("MAX_DEPTH", MAX_DEPTH)?;

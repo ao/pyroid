@@ -99,7 +99,8 @@ failing document raises for the whole batch. It is the first one that fails, as 
 `repair_json`, delegated documents included, and the exception's note names its index or row.
 
 `json.dumps` arguments other than `ensure_ascii`, `indent`, `separators`, `sort_keys` and
-`allow_nan` cost one `repair_json` call per document, in order, on the calling thread.
+`allow_nan`, and a replaced `json.loads` or `json.dumps` (see below), cost one `repair_json`
+call per document, in order, on the calling thread.
 
 An Arrow column cannot hold lone surrogates. json_repair keeps an escape such as `\ud800` as a
 lone surrogate, and so does an escaped pair such as `\ud83d\ude00` when its own parser reads it.
@@ -135,7 +136,12 @@ These are handed to the real json_repair, which must then be installed. The firs
 
 - every `schema=` call, which needs jsonschema or pydantic as in json_repair (listed in
   `pyroid.json_repair.DELEGATED`);
-- input that is not a `str` (for example `bytes`);
+- input that is not a `str` (for example `bytes`), and a `str` subclass that overrides one of the
+  methods json_repair calls on its input: `__getitem__`, `__len__`, `__iter__`, `find`, or
+  `startswith`, which `json.loads` calls (a subclass that overrides none of them, such as
+  `numpy.str_`, is repaired in Rust);
+- calls made while `json.JSONDecoder` is replaced (json_repair decodes valid stretches of broken
+  input with it), or `json.load` for a file;
 - the rare text holding a character in U+10F800..U+10FFFF, raw or as an escaped surrogate pair,
   because the port uses that range to store lone surrogates. In `repair_json_batch`, only such
   documents are delegated, one by one, from a list, a tuple or an Arrow column.
@@ -147,6 +153,29 @@ json_repair.repair_json(b"{'a': 1")  # json_repair's result, and:
 ```
 
 json_repair's command line (`python -m json_repair`) and its internal modules are not provided.
+
+## Replaced json functions
+
+json_repair calls `json.loads` and `json.dumps` through the `json` module at each call, so a
+program that replaces them, with an orjson-backed shim for example, changes what it returns.
+pyroid.json_repair checks them at each call. While one is not the standard library's, it calls
+them where json_repair does: `json.loads` on the text first, `json.dumps` on the value. The repair
+in between still runs in Rust. A replaced `json.JSONDecoder`, or `json.load` when reading a file,
+sends the call to json_repair, as listed above. This holds for functions replaced before
+`pyroid.json_repair` was imported too.
+
+```python
+import json
+import pyroid.json_repair as json_repair
+
+_dumps = json.dumps
+json.dumps = lambda obj, **kw: _dumps(obj, separators=(",", ":"), **kw)
+json_repair.repair_json("{'a': [1, 2")  # '{"a":[1,2]}', as with json_repair
+```
+
+Changes inside the `json` module are not seen: a method of `json.JSONDecoder` or
+`json.JSONEncoder` replaced on the class, or the functions of `json.decoder` and `json.encoder`.
+Checking those too would cost every call.
 
 ## Pathological input
 
@@ -191,6 +220,8 @@ From the module's documentation (`pyroid/json_repair.pyi`):
   (json_repair raises there too).
 - `load`/`from_file` read the file once (`fd.read()`) instead of in `chunk_length` pieces. The
   result is the same and `chunk_length` is ignored.
+- Changes inside the `json` module, such as a method of `json.JSONDecoder` or `json.JSONEncoder`
+  replaced on the class, are not seen ([Replaced json functions](#replaced-json-functions)).
 - json_repair's command line (`python -m json_repair`) is not part of this module.
 
 And by design, the [delegated features](#delegated-features) need json_repair installed.
