@@ -48,6 +48,10 @@ Optional libraries, needed only by the features that use them:
       ...) and for Redis or Cassandra LSH storage.
 
     Without them, those calls raise `pyroid.PyroidError`.
+- langdetect 1.0.9 (or 1.0.7 or 1.0.8, which detect the same), never needed by
+  `pyroid.langdetect`: with it installed, pyroid's results and errors are langdetect's own
+  `Language` and `LangDetectException` objects, and `pyroid.patch("langdetect")` speeds up
+  langdetect itself ([details](guides/langdetect.md)).
 - NLTK's `punkt_tab` data for `pyroid.nltk`'s Punkt and ROUGE's `split_summaries=True`
   (`python -m nltk.downloader punkt_tab`; pyroid does not bundle it, [details](guides/nltk.md)).
 - numpy for `pyroid.metrics.scoring.BootstrapAggregator`, which runs rouge-score's numpy code.

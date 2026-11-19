@@ -119,6 +119,8 @@ test = [
   "jieba==0.42.1",
   # The reference for pyroid.warc (Apache-2.0, pure Python).
   "warcio==1.8.2",
+  # The reference for pyroid.langdetect (Apache-2.0, pure Python; sdist only).
+  "langdetect==1.0.9",
 ]
 # GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
 # PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds
@@ -171,7 +173,7 @@ include = [
   { path = "python/tests/pytest.ini", format = "sdist" },
   { path = "python/tests/*.json", format = "sdist" },
 ]
-# Keep the sdist small (release.yml checks it is under 5 MB): crate sources and the data they
+# Keep the sdist small (release.yml checks it is under 7 MB): crate sources and the data they
 # embed, Cargo.lock, pyproject, README, LICENSE, python/pyroid and python/tests. The Rust tests
 # and their golden files (about 20 MB) stay in the repository: building needs none of them.
 # Never ship locally built extensions.
@@ -262,4 +264,9 @@ ignore_missing_imports = true
 # polars is typed, but optional in the tests: polars-runtime-32 2.1.0 has no free-threaded
 # wheels, so it is only installed on GIL builds and absent from the mypy hook.
 module = ["polars", "polars.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# langdetect 1.0.9 (the reference for pyroid.langdetect's tests) ships neither py.typed nor stubs.
+module = ["langdetect", "langdetect.*"]
 ignore_missing_imports = true

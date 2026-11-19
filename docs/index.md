@@ -41,6 +41,7 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 | Language ID and NLP | [`pyroid.fasttext`](guides/fasttext.md) | [fastText](https://github.com/facebookresearch/fastText) inference (`fasttext`, `fasttext-predict`, ...) | bit-identical labels and probabilities on Linux (glibc) and Windows x64; on macOS the probabilities can differ in the last bits ([parity](compatibility.md#fasttext)) |
 |  | [`pyroid.nltk`](guides/nltk.md) | [NLTK](https://www.nltk.org) 3.10.4's `sent_tokenize` (Punkt), `word_tokenize`, Treebank and regexp tokenizers | same sentences, tokens and offsets ([parity](compatibility.md#nltk)) |
 |  | [`pyroid.jieba`](guides/jieba.md) | [jieba](https://github.com/fxsjy/jieba) 0.42.1 | same words, offsets and frequencies ([parity](compatibility.md#jieba)) |
+|  | [`pyroid.langdetect`](guides/langdetect.md) | [langdetect](https://github.com/Mimino666/langdetect) 1.0.9 | same languages and probabilities, bit for bit, for the same seed ([parity](compatibility.md#langdetect)) |
 | Web and archives | [`pyroid.trafilatura`](guides/trafilatura.md) | [Trafilatura](https://github.com/adbar/trafilatura)'s text extraction, 2.3.1 or 1.11.0 (the release datatrove 0.10.1 installs), with lxml 6.1.3's HTML parser and jusText 3.0.2 | the same text, byte for byte ([parity](compatibility.md#trafilatura)) |
 |  | [`pyroid.warc`](guides/warc.md) | [warcio](https://github.com/webrecorder/warcio) 1.8.2's WARC/ARC reader, and datatrove 0.10.1's WARC reading | same records, documents, exceptions and messages ([parity](compatibility.md#warc)) |
 | Dedup and similarity | [`pyroid.datasketch`](guides/datasketch.md) | [datasketch](https://github.com/ekzhu/datasketch) 2.0.0's MinHash, LeanMinHash, MinHashLSH, LSH Forest and LSH Ensemble | same hash values, bytes and query results ([parity](compatibility.md#datasketch)) |
@@ -126,7 +127,7 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 |---|---|
 | [`pyroid clean`](guides/cli.md) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files, with datatrove's output document for document |
 | [Large datasets](guides/large-datasets.md) | the same commands over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards in datatrove's file format |
-| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`, `nemo_curator` and `langdetect` give pyroid's functions, in code you don't own |
 | [datatrove steps](guides/datatrove.md) | `pyroid.integrations.datatrove`: datatrove's pipeline steps with the same names and signatures, `Trafilatura` included, as a one-import change |
 | [NeMo Curator stages](guides/nemo-curator.md) | `pyroid.integrations.nemo_curator`: NeMo Curator 1.4.0's CPU text stages, subclassing NeMo's classes with the same arguments |
 | [Hugging Face `datasets`](guides/huggingface.md) | `pyroid.integrations.hf`: batched callables for `Dataset.map` and `Dataset.filter`, and the FineWeb recipe |

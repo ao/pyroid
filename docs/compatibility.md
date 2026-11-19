@@ -203,6 +203,25 @@ Reference: jieba 0.42.1. Rule: the same words in the same order (empty strings i
 
 <small>Source: the parity/ jieba suite, crates/pyroid-core/src/jieba/replay.rs and a 20,000-document replay, run on 2026-11-07.</small>
 
+### pyroid.langdetect {#langdetect}
+
+Reference: langdetect 1.0.9. Rule: for the same seed, the same detect() language and the same detect_langs() list (languages in order, every probability equal to the last bit, compared as float.hex); for invalid input the same exception type, message and code.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| FineWeb (English) and the FineWeb-2 test split of each of the other 54 profile languages, 2,000 documents each, as they are and cut to 50 characters, a tweet (140), a title (first line, 80) and a 3-word query, plus 600-character two-language mixes, seed 0; the first 50 documents' whole and 50-character texts with seeds 1 to 20; empty, whitespace, digit, URL, mail, emoji and lone-surrogate texts with 5 seeds; detect and detect_langs, CPython 3.12 | 770,050 | 770,050 | 0 |
+| detect_batch and detect_langs_batch of those texts (the 6 variants of every document) against pyroid's per-call results, CPython 3.12 | 660,000 | 660,000 | 0 |
+| The same corpus with 1,000 documents per language, on CPython 3.11 (left-to-right float sum), 3.15 (Unicode 17.0) and free-threaded 3.14t, detect and detect_langs | 1,320,150 | 1,320,150 | 0 |
+| The same 1,000-document corpus through detect_batch and detect_langs_batch on 3.11, 3.15 and 3.14t | 990,000 | 990,000 | 0 |
+| **Total** | **3,740,200** | **3,740,200** | **0** |
+
+- python/tests (464 tests on CPython 3.11, 3.12 and 3.14t, also under pytest-run-parallel): 65 texts (55 languages, mixed and code-mixed text, URLs, capitals, tweets, titles, queries) with 5 seeds, every seed type (str, bytes, bytearray, float, bool, ints past 2^64, and types that must raise), alpha, n_trial, max_text_length and prior maps of every kind, verbose output, Hypothesis over random unicode with lone surrogates, URL and mail patterns, seeds and cut lengths, custom profiles through load_json_profile and add_profile with every index and size, and the random draws (gauss, random, _randbelow) against random.Random.
+- langdetect 1.0.9's own tests pass with pyroid.patch("langdetect"), with langdetect installed and without it.
+- python/tests/test_langdetect_hooks.py and test_langdetect_patch.py: an outside evaluation's reproducers, against langdetect: URL_RE and MAIL_RE set, Detector methods overridden or replaced, NGram's tables changed, a custom random, profiles with numpy counts, a seed that random.seed() rejects, pickles and copies of factories and detectors; and under the patch, pickles loaded by an unpatched process, customised classes, the shim's default factory and langdetect's own pickles loaded without langdetect.
+- A FineWeb and FineWeb-2 sample (English and 10 FineWeb-2 languages, 300 documents each as 7 variants, plus seeds: 20,920 texts) through detect, detect_langs and a Detector, unpatched and under the patch, on CPython 3.11, 3.12 and 3.14t: no difference, and no call left the Rust path (2026-11-18).
+
+<small>Source: parity/langdetect_corpus.py and python/tests/test_langdetect_parity.py, run on 2026-11-17 on the EC2 c8g.16xlarge devbox (linux/aarch64).</small>
+
 ### pyroid.trafilatura {#trafilatura}
 
 Reference: trafilatura 2.3.1 with lxml 6.1.3 (libxml2 2.14.6) and jusText 3.0.2; for compat="1.11.0", trafilatura 1.11.0 with the releases a fresh datatrove[processing]==0.10.1 install resolves (lxml 6.1.3, jusText 3.0.2, lxml-html-clean 0.4.6, charset-normalizer 3.5.2, courlan 1.4.0, htmldate 1.11.0). Rule: extract text byte for byte (None distinct from ""), bare_extraction field by field, the same exceptions (type and message) and warnings.

@@ -346,6 +346,39 @@
       ],
       "source": "the parity/ jieba suite, crates/pyroid-core/src/jieba/replay.rs and a 20,000-document replay, run on 2026-11-07"
     },
+    "langdetect": {
+      "reference": "langdetect 1.0.9",
+      "rule": "for the same seed, the same detect() language and the same detect_langs() list (languages in order, every probability equal to the last bit, compared as float.hex); for invalid input the same exception type, message and code",
+      "checks": [
+        {
+          "name": "FineWeb (English) and the FineWeb-2 test split of each of the other 54 profile languages, 2,000 documents each, as they are and cut to 50 characters, a tweet (140), a title (first line, 80) and a 3-word query, plus 600-character two-language mixes, seed 0; the first 50 documents' whole and 50-character texts with seeds 1 to 20; empty, whitespace, digit, URL, mail, emoji and lone-surrogate texts with 5 seeds; detect and detect_langs, CPython 3.12",
+          "same": 770050,
+          "diff": 0
+        },
+        {
+          "name": "detect_batch and detect_langs_batch of those texts (the 6 variants of every document) against pyroid's per-call results, CPython 3.12",
+          "same": 660000,
+          "diff": 0
+        },
+        {
+          "name": "The same corpus with 1,000 documents per language, on CPython 3.11 (left-to-right float sum), 3.15 (Unicode 17.0) and free-threaded 3.14t, detect and detect_langs",
+          "same": 1320150,
+          "diff": 0
+        },
+        {
+          "name": "The same 1,000-document corpus through detect_batch and detect_langs_batch on 3.11, 3.15 and 3.14t",
+          "same": 990000,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "python/tests (464 tests on CPython 3.11, 3.12 and 3.14t, also under pytest-run-parallel): 65 texts (55 languages, mixed and code-mixed text, URLs, capitals, tweets, titles, queries) with 5 seeds, every seed type (str, bytes, bytearray, float, bool, ints past 2^64, and types that must raise), alpha, n_trial, max_text_length and prior maps of every kind, verbose output, Hypothesis over random unicode with lone surrogates, URL and mail patterns, seeds and cut lengths, custom profiles through load_json_profile and add_profile with every index and size, and the random draws (gauss, random, _randbelow) against random.Random.",
+        "langdetect 1.0.9's own tests pass with pyroid.patch(\"langdetect\"), with langdetect installed and without it.",
+        "python/tests/test_langdetect_hooks.py and test_langdetect_patch.py: an outside evaluation's reproducers, against langdetect: URL_RE and MAIL_RE set, Detector methods overridden or replaced, NGram's tables changed, a custom random, profiles with numpy counts, a seed that random.seed() rejects, pickles and copies of factories and detectors; and under the patch, pickles loaded by an unpatched process, customised classes, the shim's default factory and langdetect's own pickles loaded without langdetect.",
+        "A FineWeb and FineWeb-2 sample (English and 10 FineWeb-2 languages, 300 documents each as 7 variants, plus seeds: 20,920 texts) through detect, detect_langs and a Detector, unpatched and under the patch, on CPython 3.11, 3.12 and 3.14t: no difference, and no call left the Rust path (2026-11-18)."
+      ],
+      "source": "parity/langdetect_corpus.py and python/tests/test_langdetect_parity.py, run on 2026-11-17 on the EC2 c8g.16xlarge devbox (linux/aarch64)"
+    },
     "nltk": {
       "reference": "NLTK 3.10.4 (with regex 2026.9.29)",
       "rule": "the same sentences, tokens and offsets, str for str, and the same exceptions (type and message)",
