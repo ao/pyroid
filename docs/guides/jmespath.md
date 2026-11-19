@@ -74,6 +74,11 @@ jmespath.exceptions.ParseError: Unexpected token: ]: Parse error at column 3, to
 
 Compiled expressions are cached as jmespath 1.1.0 caches them: the 512 most recent, the oldest
 out first, shared by `search`, `compile` and `Parser().parse`, so `compile(e) is compile(e)`.
+An expression is found as jmespath's dict finds it, so a `str` subclass with its own `__eq__` or
+`__hash__` (a case-insensitive string, say) gets the entry that compares equal to it. While such
+an expression is cached, each lookup compares hashes with every cached entry, which adds about
+0.4 µs when 512 are cached (EC2 c8g.16xlarge devbox, shared, CPython 3.12); once it leaves the
+cache, lookups go by the text again.
 A deeply nested expression raises `RecursionError` at the nesting depth where jmespath's
 recursive parser and interpreter run out of frames, computed from `sys.getrecursionlimit()` and
 the caller's stack depth (on the main thread; see the differences below). A long chain such as
@@ -100,6 +105,10 @@ natively and its own functions in Python, with jmespath's arguments and checks. 
 references (`&field`) reach your function as `_Expression` objects whose `visit(expression,
 value)` evaluates natively. A subclass that overrides `call_function` or the argument checks gets
 every call through its own `call_function`, as in jmespath.
+
+A function added to the `FUNCTION_TABLE` of `jmespath.functions.Functions` or of pyroid's
+`Functions` is found without custom functions too, as jmespath's default `Functions()` finds it,
+and runs through that class's `call_function`.
 
 ## What runs in Rust
 
@@ -163,3 +172,9 @@ with another jmespath installed says so in its `PatchWarning`.
   iteration`.
 - `pyroid.jmespath.visitor.TreeInterpreter` is jmespath's Python interpreter (copied), for code
   that drives or subclasses it; `search` and `ParsedResult.search` do not go through it.
+- Without custom functions, the built-in functions run natively without reading
+  `Functions.FUNCTION_TABLE` (jmespath's or pyroid's), since reading it would add several dict
+  lookups to every search that calls a function. So replacing or removing a built-in's entry
+  there, or replacing `call_function` or the argument checks on that class itself, does not
+  change what `search` does. Functions added to the table are found. To change a built-in,
+  pass a `Functions` subclass as `Options(custom_functions=...)`.
