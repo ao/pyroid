@@ -1463,12 +1463,13 @@ def _run_file(script: str) -> None:
     main = types.ModuleType("__main__")
     main.__dict__.update(
         __file__=path,
-        __cached__=None,
         __loader__=loader,
         __package__=None,
         __spec__=None,
         __builtins__=builtins,
     )
+    if sys.version_info < (3, 15):  # 3.15 no longer sets __cached__ on __main__
+        main.__dict__["__cached__"] = None
     saved = sys.modules.get("__main__")
     sys.modules["__main__"] = main
     try:
