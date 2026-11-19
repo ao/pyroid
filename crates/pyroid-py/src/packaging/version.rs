@@ -185,6 +185,19 @@ fn invalid_repr(py: Python<'_>, version: &Bound<'_, PyAny>) -> PyErr {
     }
 }
 
+/// Is `s` read by its text alone: a `str`, or a subclass without its own `__iter__` (packaging's
+/// set test iterates the object) or `split` (its simple path splits it)? Other subclasses take
+/// packaging's own steps (`nonstr_version`).
+pub fn plain_str(py: Python<'_>, s: &Bound<'_, PyString>) -> PyResult<bool> {
+    if s.is_exact_instance_of::<PyString>() {
+        return Ok(true);
+    }
+    let c = config(py)?;
+    let ty = s.get_type();
+    Ok(ty.getattr(intern!(py, "__iter__"))?.is(&c.str_iter)
+        && ty.getattr(intern!(py, "split"))?.is(&c.str_split))
+}
+
 /// `Version(text)` for a `str`.
 pub fn parse_str(py: Python<'_>, s: &Bound<'_, PyString>) -> PyResult<Version> {
     let Ok(text) = s.to_cow() else {
@@ -233,7 +246,9 @@ pub fn from_packaging(py: Python<'_>, v: &Bound<'_, PyAny>) -> PyResult<Option<V
 /// `Version(item)` after `isinstance(item, Version)` fails, so it is taken by value.
 pub fn parse_any(py: Python<'_>, x: &Bound<'_, PyAny>) -> PyResult<Version> {
     if let Ok(s) = x.cast::<PyString>() {
-        return parse_str(py, s);
+        if plain_str(py, s)? {
+            return parse_str(py, s);
+        }
     }
     if patched() && is_packaging_version(py, x)? {
         return from_packaging(py, x)?.ok_or_else(|| invalid_repr(py, x));

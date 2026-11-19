@@ -33,7 +33,11 @@ pub fn coerce(py: Python<'_>, item: &Bound<'_, PyAny>) -> PyResult<Option<Versio
             return super::version::from_packaging(py, item);
         }
     }
-    if let Ok(s) = item.cast::<PyString>() {
+    let text = match item.cast::<PyString>() {
+        Ok(s) if super::version::plain_str(py, s)? => Some(s),
+        _ => None,
+    };
+    if let Some(s) = text {
         // The str path without building an InvalidVersion for each unparsable string.
         let Ok(text) = s.to_cow() else {
             return Ok(None);

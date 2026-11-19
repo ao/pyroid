@@ -162,6 +162,84 @@ def test_packagings_pickle_states_load() -> None:
     assert str(m) == 'os_name == "nt"'
 
 
+class _IterOne(str):
+    """Iterates as "1": packaging's set test calls it simple (P67's pv_strsub_iter)."""
+
+    __slots__ = ()
+
+    def __iter__(self) -> Iterator[str]:
+        return iter("1")
+
+
+class _IterLetter(str):
+    __slots__ = ()
+
+    def __iter__(self) -> Iterator[str]:
+        return iter("a")
+
+
+class _SplitNine(str):
+    __slots__ = ()
+
+    def split(self, *args: Any, **kwargs: Any) -> list[str]:
+        return ["9"]
+
+
+_STR_SUBCLASS_VERSIONS = [
+    _IterOne("1.0a1"),
+    _IterOne("1.0"),
+    _IterOne("1..2"),
+    _IterOne("1.0+x"),
+    _IterLetter("1.0"),
+    _IterLetter("1..0"),
+    _SplitNine("1.0"),
+    _SplitNine("1.0a1"),
+]
+
+
+def _version_outcome(f: Any, x: Any) -> Any:
+    try:
+        return str(f(x))
+    except Exception as e:
+        return type(e).__name__, str(e)
+
+
+@pytest.mark.skipif(not PACKAGING_263, reason="packaging 26.3's steps")
+@pytest.mark.parametrize(
+    "text",
+    _STR_SUBCLASS_VERSIONS,
+    ids=[f"{type(t).__name__}({str(t)!r})" for t in _STR_SUBCLASS_VERSIONS],
+)
+def test_str_subclasses_with_their_own_iter_or_split(text: str) -> None:
+    # packaging's Version() tests the object with a set (iterating it) and splits it on the
+    # simple path: pyroid takes packaging's steps for such subclasses.
+    want = _version_outcome(packaging_version.Version, text)
+    assert _version_outcome(Version, text) == want
+    assert _version_outcome(parse, text) == want
+    spec, real = SpecifierSet("<2"), ps.SpecifierSet("<2")
+    items = [text, "1.0"]
+    checks = [
+        (spec.contains, real.contains),
+        (lambda x: list(spec.filter([x, "1.0"])), lambda x: list(real.filter([x, "1.0"]))),
+        (
+            lambda x: rp.contains_batch(spec, [x, "1.0"]),
+            lambda x: [real.contains(y) for y in items],
+        ),
+        (lambda x: rp.filter_batch(spec, [x, "1.0"]), lambda x: list(real.filter(items))),
+    ]
+    for mine, theirs in checks:
+        assert _version_outcome(mine, text) == _version_outcome(theirs, text)
+    batch = _version_outcome(lambda x: rp.parse_batch([x], errors="none")[0], text)
+    assert batch == ("None" if want[0] == "InvalidVersion" else want)
+
+
+def test_iter_override_reaches_the_simple_path() -> None:
+    with pytest.raises(ValueError, match="invalid literal for int"):
+        Version(_IterOne("1.0a1"))
+    assert str(Version(_SplitNine("1.0"))) == "9"
+    assert str(Version(_IterLetter("1.0"))) == "1.0"
+
+
 def test_subclasses() -> None:
     class MyVersion(Version):
         def __init__(self, raw: str) -> None:

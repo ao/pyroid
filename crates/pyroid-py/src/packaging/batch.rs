@@ -18,7 +18,7 @@ use pyroid_core::par;
 use super::cell::Passed;
 use super::config;
 use super::specifiers::{PySpecifier, PySpecifierSet, coerce};
-use super::version::{PyVersion, parse_str};
+use super::version::{PyVersion, parse_str, plain_str};
 use crate::arrow::{Chunk, Column, ColumnType};
 use crate::errors::with_note;
 use crate::input::{TextInput, Threads, ThreadsArg, text_arg};
@@ -65,7 +65,8 @@ impl<'py> Rows<'_, 'py> {
     }
 
     /// `f(start, texts)` for each chunk: the text of each `str` item (`None` for any other
-    /// object, a `str` with a lone surrogate, or an Arrow null), with a Ctrl-C check after each.
+    /// object, a `str` with a lone surrogate, a subclass that `plain_str` rejects, or an Arrow
+    /// null), with a Ctrl-C check after each.
     fn for_each_chunk(
         &self,
         py: Python<'py>,
@@ -82,6 +83,8 @@ impl<'py> Rows<'_, 'py> {
                             t.get_item(i).ok().and_then(|x| {
                                 x.cast_into::<PyString>()
                                     .ok()
+                                    // Subclasses with their own __iter__ or split: resolve().
+                                    .filter(|s| plain_str(py, s).unwrap_or(false))
                                     .and_then(|s| PyBackedStr::try_from(s).ok())
                             })
                         })
@@ -183,9 +186,11 @@ fn resolve<'py>(
         // A long digit run: parse it as `Version()` would (CPython's `int()` may raise).
         return parse_str(py, obj.cast::<PyString>()?).map(Some);
     }
-    if obj.cast::<PyString>().is_ok() {
-        // A str with a lone surrogate: never a version.
-        return Ok(None);
+    if let Ok(s) = obj.cast::<PyString>() {
+        if plain_str(py, s)? {
+            // A str with a lone surrogate: never a version.
+            return Ok(None);
+        }
     }
     coerce(py, &obj)
 }

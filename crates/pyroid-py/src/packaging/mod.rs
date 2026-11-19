@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyDict, PyType};
+use pyo3::types::{PyDict, PyString, PyType};
 
 /// What `_configure` registered.
 #[derive(Debug)]
@@ -26,6 +26,9 @@ struct Config {
     invalid_version: Py<PyAny>,
     /// `Version(x)` for a non-`str` `x`: packaging 26.3's own steps, in Python.
     nonstr_version: Py<PyAny>,
+    /// `str.__iter__` and `str.split`: a `str` subclass with its own takes `nonstr_version`.
+    str_iter: Py<PyAny>,
+    str_split: Py<PyAny>,
     /// packaging's `_Version` named tuple (or pyroid's copy), for `Version._version`.
     version_tuple: Py<PyAny>,
     /// `_restore(cls, state)`: what pyroid's objects pickle through (`cls.__new__(cls)`, then
@@ -170,6 +173,8 @@ fn _configure(py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<()> {
     let c = Config {
         invalid_version: get("InvalidVersion")?,
         nonstr_version: get("nonstr_version")?,
+        str_iter: py.get_type::<PyString>().getattr("__iter__")?.unbind(),
+        str_split: py.get_type::<PyString>().getattr("split")?.unbind(),
         version_tuple: get("_Version")?,
         restore: get("restore")?,
         packaging_version: opt_type("packaging_Version")?,
