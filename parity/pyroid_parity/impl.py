@@ -29,6 +29,10 @@ json_repair  json_repair 0.64.5's own API: ``repair_json(json_str="", return_obj
           schema=None, schema_repair_mode="standard", **json_dumps_args)``, ``loads``, ``load`` and ``from_file``
           with json_repair's signatures. Results must be identical: ``str`` byte for byte, objects and repair logs
           type-exact (``pyroid_parity.json_repair_compare.same``), exceptions with the same type and message.
+dateutil  a package with python-dateutil's ``parser`` submodule (``dateutil``, ``pyroid.dateutil``): ``parse``,
+          ``isoparse`` and ``isoparser`` with dateutil's signatures, and optionally ``parse_batch`` /
+          ``isoparse_batch``. Results must be identical: the ``datetime`` and its ``tzinfo`` type and ``repr``,
+          the fuzzy tokens, exceptions with the same type and message (``tests/test_dateutil.py``).
 datasketch  datasketch 2.0.0's own API: ``MinHash`` (with ``bulk``), ``LeanMinHash``, ``MinHashLSH``,
           ``MinHashLSHForest`` and ``MinHashLSHEnsemble``; optional pyroid-style extensions
           ``minhash_batch(texts, num_perm=, seed=, scheme=, ngram=)`` and ``MinHashLSH.query_batch``.
@@ -106,6 +110,7 @@ SUITES = (
     "nltk",
     "warc",
     "nemo",
+    "dateutil",
 )
 REFERENCE = {
     "ftfy": "ftfy",
@@ -120,9 +125,13 @@ REFERENCE = {
     "nltk": "nltk",
     "warc": "warcio",
     "nemo": "nemo_curator",
+    "dateutil": "dateutil",
 }
 # Distribution that provides a module, for version reporting when it differs from the module name.
-DIST_HINT = {"fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel")}
+DIST_HINT = {
+    "fasttext": ("fasttext-predict", "fasttext-predict-v2", "fasttext", "fasttext-wheel"),
+    "dateutil": ("python-dateutil",),
+}
 
 
 class ImplError(ValueError):
@@ -448,6 +457,16 @@ def _generic_nemo(mod: Any) -> Any:
     return Candidate(mod)
 
 
+class GenericDateutil:
+    """A package with a ``parser`` submodule (``dateutil``, ``pyroid.dateutil``), taken as it is."""
+
+    def __init__(self, mod: Any) -> None:
+        import importlib
+
+        self.mod = mod
+        self.parser = importlib.import_module(f"{mod.__name__}.parser")
+
+
 GENERIC: dict[str, Callable[[Any], Any]] = {
     "ftfy": GenericFtfy,
     "fasttext": GenericFasttext,
@@ -461,4 +480,5 @@ GENERIC: dict[str, Callable[[Any], Any]] = {
     "nltk": GenericNltk,
     "warc": GenericWarc,
     "nemo": _generic_nemo,
+    "dateutil": GenericDateutil,
 }

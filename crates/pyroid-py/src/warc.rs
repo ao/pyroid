@@ -1636,7 +1636,7 @@ fn chunk_values<'py>(py: Python<'py>, chunk: &Chunk) -> PyResult<Bound<'py, PyLi
                 }
             }
         }
-        Chunk::Utf8(_) | Chunk::Bool(_) => {
+        Chunk::Utf8(_) | Chunk::Bool(_) | Chunk::TimestampUs(_) | Chunk::TimestampUsUtc(_) => {
             return Err(PyRuntimeError::new_err(
                 "pyroid.warc: unexpected column type",
             ));

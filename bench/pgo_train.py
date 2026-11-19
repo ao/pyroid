@@ -12,8 +12,9 @@ Each module runs on list[str] and Arrow input and single str calls, at every ``-
 ftfy (FineWeb text, plus mojibake made from it), translit, fastText LID (.bin and .ftz), the Gopher, C4 and
 FineWeb filters and the formatters, MinHash and exact and sentence dedup, pyroid.text, pyroid.jieba,
 pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.metrics
-(ROUGE, BLEU, chrF), pyroid.datasketch, and the FineWeb-2 filter and MinHash configs of every language
-pyroid tokenizes natively here (Japanese only with SudachiDict installed).
+(ROUGE, BLEU, chrF), pyroid.datasketch, pyroid.dateutil (dates and times in common formats, valid and
+not), and the FineWeb-2 filter and MinHash configs of every language pyroid tokenizes natively here
+(Japanese only with SudachiDict installed).
 
 Needs only pyroid and numpy. pyarrow is optional: without it, as on Windows ARM64, the Arrow calls are
 skipped. Nothing is checked or timed: an instrumented build is never shipped.
@@ -23,7 +24,9 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime
 import json
+import random
 import sys
 import time
 import warnings
@@ -298,10 +301,52 @@ class Trainer:
             lsh.query(lean)
             m.jaccard(ms[0])
 
+    def dateutil(self) -> None:
+        from pyroid.dateutil import parser as P
+
+        rnd = random.Random(TRAIN_SEED)
+        formats = ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y%m%dT%H%M%SZ"]
+        formats += ["%Y-%m-%dT%H:%M:%S+05:30", "%d/%m/%Y", "%m/%d/%y %I:%M %p", "%d %B %Y", "%B %d, %Y %H:%M"]
+        formats += ["%a, %d %b %Y %H:%M:%S +0000", "%A %d %b %Y", "%b %d %Y %I%p", "%Y.%m.%d", "%d-%b-%y"]
+        formats += ["%H:%M:%S", "%Y-W%W", "%c"]
+        start = datetime.datetime(1975, 1, 1)
+        span = 60 * 365 * 86400
+        stamps = [
+            start + datetime.timedelta(seconds=rnd.randint(0, span), microseconds=rnd.randint(0, 10**6 - 1))
+            for _ in range(20_000)
+        ]
+        dates = [d.strftime(formats[i % len(formats)]) for i, d in enumerate(stamps)]
+        dates += ["not a date", "32/13/2020", "2020-02-30", "", "12:61", "Mon 31 Feb", "1e5"] * 50
+        specs_ = ("auto", "seconds", "milliseconds")
+        isos = [d.isoformat(sep=" " if i % 3 else "T", timespec=specs_[i % 3]) for i, d in enumerate(stamps)]
+        isos += [d.date().isoformat() for d in stamps[:2000]] + ["2021-W05-3", "20210203T1504", "2021-13-01"]
+        prose = [f"{t[:60]} {d}" for t, d in zip(self.texts, dates, strict=False)]
+        for t in self.threads:
+            P.parse_batch(dates, threads=t, errors="coerce")
+            P.parse_batch(dates, threads=t, errors="coerce", dayfirst=True, ignoretz=True)
+            P.parse_batch(prose[:2000], threads=t, errors="coerce", fuzzy=True)
+            P.isoparse_batch(isos, threads=t, errors="coerce")
+            if pa is not None:
+                P.parse_batch(pa.array(dates), threads=t, errors="coerce", ignoretz=True)
+                P.isoparse_batch(pa.array(isos[:5000]), threads=t, errors="coerce")
+        # About two million single calls, as callers make them: with tens of thousands the
+        # per-call path stays cold next to the rest of the profile.
+        tzinfos = {"EST": -18000, "CET": 3600}
+        for _ in range(50):
+            for i, s in enumerate(dates):
+                with contextlib.suppress(ValueError, OverflowError):
+                    P.parse(s)
+                if i % 8 == 0:
+                    with contextlib.suppress(ValueError, OverflowError):
+                        P.parse(s + " EST", tzinfos=tzinfos, yearfirst=True)
+            for s in isos:
+                with contextlib.suppress(ValueError, OverflowError):
+                    P.isoparse(s)
+
     def run(self) -> dict[str, float]:
         warnings.simplefilter("ignore")  # FallbackWarning and friends: the paths still run
         sections = ["ftfy", "translit", "fasttext", "filters", "dedup", "text", "multilingual", "jieba"]
-        sections += ["json_repair", "metrics", "datasketch"]
+        sections += ["json_repair", "metrics", "datasketch", "dateutil"]
         for name in sections:
             self.section(name, getattr(self, name))
         return self.timings
