@@ -26,7 +26,8 @@ What runs natively: `SequenceMatcher` over a `str`, `bytes`, `bytearray`, or a `
 `str`, `int` (any size), `bool` or `bytes`, and subclasses of these that keep their comparisons
 and indexing; `get_close_matches` for a `str` word and `str` possibilities (such subclasses too);
 `Differ.compare`, `ndiff`, `unified_diff`, `context_diff` and `HtmlDiff`'s line pairing for lists
-or tuples of `str`, with `linejunk` any function and `charjunk` `None` or `IS_CHARACTER_JUNK`.
+or tuples of `str`, or a `str` (one line per character), with `linejunk` any function and
+`charjunk` `None` or `IS_CHARACTER_JUNK`.
 Other element types, and `str` mixed with `bytes` under `python -b`, run the standard library's
 code, with one `pyroid.FallbackWarning` that names the type; a custom
 `charjunk` or an overridden `Differ`/`HtmlDiff` method runs the standard library's Python code

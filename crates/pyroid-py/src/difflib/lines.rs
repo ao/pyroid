@@ -2,8 +2,9 @@
 //! `unified_diff`, `context_diff`, and `get_close_matches`.
 //!
 //! Each takes exact `list`/`tuple` inputs of exact `str` (read in one step,
-//! as another thread may change a list) and returns `None` for anything
-//! else; the Python side then runs CPython's code.
+//! as another thread may change a list), or an exact `str` (one line per
+//! character, as difflib reads it), and returns `None` for anything else;
+//! the Python side then runs CPython's code.
 
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedStr;
@@ -45,7 +46,7 @@ impl LineText {
     }
 }
 
-/// An exact `list`/`tuple` of exact `str`.
+/// An exact `list`/`tuple` of exact `str`, or the characters of an exact `str`.
 struct Lines<'py> {
     objs: Bound<'py, PyTuple>,
     text: Vec<LineText>,
@@ -57,6 +58,13 @@ impl<'py> Lines<'py> {
             list.to_tuple()
         } else if let Ok(tuple) = obj.cast_exact::<PyTuple>() {
             tuple.clone()
+        } else if let Ok(s) = obj.cast_exact::<PyString>() {
+            // `ndiff("kitten", "sitting")`: difflib indexes and iterates a str, so each character
+            // is a line. `tuple(s)` gives those one-character strings.
+            obj.py()
+                .get_type::<PyTuple>()
+                .call1((s,))?
+                .cast_into::<PyTuple>()?
         } else {
             return Ok(None);
         };

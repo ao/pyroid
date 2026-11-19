@@ -10,9 +10,10 @@ What runs natively: ``SequenceMatcher`` over a ``str``, ``bytes``, ``bytearray``
 ``list``/``tuple`` of ``str``, ``int`` (any size), ``bool`` or ``bytes`` (subclasses too, if they
 keep their comparisons and indexing); ``get_close_matches`` over ``str``; ``Differ.compare``,
 ``ndiff``, ``unified_diff``, ``context_diff`` and ``HtmlDiff``'s line pairing over lists or tuples
-of ``str``. Everything else (other element types, ``str`` mixed with ``bytes`` under ``python -b``,
-a custom ``charjunk``, overridden methods) runs the standard library's Python code, with this
-module's ``SequenceMatcher`` underneath where it applies.
+of ``str``, or a ``str`` (one line per character). Everything else (other element types, ``str``
+mixed with ``bytes`` under ``python -b``, a custom ``charjunk``, overridden methods) runs the
+standard library's Python code, with this module's ``SequenceMatcher`` underneath where it
+applies.
 """
 
 from __future__ import annotations

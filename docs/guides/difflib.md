@@ -93,7 +93,8 @@ and says so with one [`pyroid.FallbackWarning`](../concepts/fallbacks.md) at imp
 - `get_close_matches` for a `str` word and `str` possibilities (or such subclasses), on all
   cores for long lists.
 - `Differ.compare`, `ndiff`, `unified_diff`, `context_diff`, `HtmlDiff.make_table` and
-  `make_file` for lists or tuples of `str`, with any `linejunk` (called from Rust as difflib calls
+  `make_file` for lists or tuples of `str`, or a `str` (each character is a line, as difflib
+  reads it: `ndiff("kitten", "sitting")`), with any `linejunk` (called from Rust as difflib calls
   it) and a `charjunk` of `None` or `IS_CHARACTER_JUNK` (the defaults).
 
 The rest runs the standard library's Python code, rebound to `pyroid.difflib` so that it uses

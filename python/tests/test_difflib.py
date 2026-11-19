@@ -31,6 +31,9 @@ from pyroid import integrations
 from pyroid._pyroid import _testing
 from pyroid._pyroid import difflib as native
 
+# The private parts of pyroid.difflib that the tests reach into.
+pdx: Any = pd
+
 WORDS = ["apple", "ape", "peach", "puppy", "applet", "maple", "Apple", "appel", "", "ÄPfel"]
 
 
@@ -414,6 +417,52 @@ def test_html_tables_of_both_modules_get_distinct_anchors() -> None:
         owner.HtmlDiff._default_prefix = 0  # as CPython's tests reset it
         assert 'id="difflib_chg_to0__0"' in pd.HtmlDiff().make_table(["a\n"], ["b\n"])
         assert 'id="difflib_chg_to1__0"' in difflib.HtmlDiff().make_table(["a\n"], ["b\n"])
+
+
+# Two str are sequences of one-character lines for Differ, ndiff, the line diffs and HtmlDiff.
+STR_PAIRS = [
+    ("", ""),
+    ("abc", "abz"),
+    ("one two three\n", "one tow three\n"),
+    ("cb " * 30, "cb " + "aacb " * 31 + "aa"),
+    ("tab\there\n x", "tab here\n\n y"),
+    ("\ud800ab\udfff", "a\ud800b\U0010ffff"),
+    ("héllo wörld 😀", "hello world 🙂"),
+]
+
+
+@pytest.mark.parametrize(("a", "b"), STR_PAIRS)
+def test_two_str_diff_natively(a: str, b: str) -> None:
+    # P67's finding 2: these ran the standard library's Differ over pyroid's matcher, slower
+    # than the standard library itself.
+    for x, y in ((a, b), (a, list(b)), (list(a), b)):
+        assert native._differ_compare(x, y, 0, None, True, pdx._WINDOWED) is not None
+        assert list(pd.ndiff(x, y)) == list(difflib.ndiff(x, y))
+        assert list(pd.Differ().compare(x, y)) == list(difflib.Differ().compare(x, y))
+        assert list(pdx._mdiff(x, y)) == list(difflib._mdiff(x, y))  # type: ignore[attr-defined]
+        assert list(pdx._mdiff(x, y, 1)) == list(difflib._mdiff(x, y, 1))  # type: ignore[attr-defined]
+    if sys.version_info < (3, 14):  # 3.14 makes unified_diff and context_diff reject a str
+        assert list(pd.unified_diff(a, b)) == list(difflib.unified_diff(a, b))
+        assert list(pd.context_diff(a, b, n=1)) == list(difflib.context_diff(a, b, n=1))
+
+
+@pytest.mark.thread_unsafe(reason="HtmlDiff's anchor counter is global")
+@pytest.mark.parametrize(("a", "b"), STR_PAIRS)
+def test_two_str_html_tables(a: str, b: str) -> None:
+    for owner in (pd, difflib):
+        owner.HtmlDiff._default_prefix = 0
+    t1 = pd.HtmlDiff(wrapcolumn=3).make_table(a, b, context=True, numlines=1)
+    for owner in (pd, difflib):
+        owner.HtmlDiff._default_prefix = 0
+    assert t1 == difflib.HtmlDiff(wrapcolumn=3).make_table(a, b, context=True, numlines=1)
+
+
+def test_a_long_str_pair_diffs_as_its_lists_do() -> None:
+    # Like the minimised P67 case (about 340 characters), which takes 6 to 9 s through Differ's
+    # Python code on 3.11 and 3.12.
+    a = "a" * 20 + "hefcbcgaceefedhbeeefhhhdfcfeghgddeffffgabhbfhgcfgghfehaffcfdfbffae" * 5
+    b = "ahhbbbffaeeaccheeabbfegghdefdbdadhcbcffffgcfbaehheaaabcafehbahedddea" * 5
+    assert list(pd.ndiff(a, b)) == list(pd.ndiff(list(a), list(b)))
 
 
 def test_runtime_docstrings_match_the_stub() -> None:
