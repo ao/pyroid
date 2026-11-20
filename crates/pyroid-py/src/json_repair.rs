@@ -1,4 +1,4 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! `pyroid._pyroid.json_repair`: native entry points behind `pyroid.json_repair`.
 //!
 //! The typed shim (`python/pyroid/json_repair.py`) owns json_repair's
@@ -342,7 +342,7 @@ fn repair<'py>(
         let dump = dump.map_or_else(DumpOptions::default, |d| d.0.clone());
         let work = || {
             run_kernel(&t, &opts).and_then(|r| {
-                let out = kernel::dumps_result(&r.value, &dump);
+                let out = kernel::dumps_result(&r, &dump);
                 kernel::value::drop_deep(r.value);
                 out
             })
@@ -413,7 +413,7 @@ fn repair_batch<'py>(
     let dump = dump.map_or_else(DumpOptions::default, |d| d.0.clone());
     let one = |t: &Text<'_>, original: Option<&str>| -> BatchOut {
         match run_kernel(t, &opts).and_then(|r| {
-            let out = kernel::dumps_result(&r.value, &dump);
+            let out = kernel::dumps_result(&r, &dump);
             kernel::value::drop_deep(r.value);
             out
         }) {

@@ -48,7 +48,7 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 | Quality filters | [`pyroid.filters`](guides/filters.md) | [datatrove](https://github.com/huggingface/datatrove) 0.10.1's Gopher, C4 and FineWeb filters, PII formatter, C4 bad words, symbol lines and URL filter | same decisions, reasons and text ([parity](compatibility.md#filters)) |
 |  | [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | [NeMo Curator](https://github.com/NVIDIA-NeMo/Curator) 1.4.0's heuristic document filters and string modifiers | same scores, exceptions and modified text ([parity](compatibility.md#nemo)) |
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
-| JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
+| JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.9 | same output, linear where json_repair is still quadratic ([parity](compatibility.md#json_repair)) |
 
 ## Example: cleaning LLM training data
 
@@ -126,7 +126,7 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 |---|---|
 | [`pyroid clean`](guides/cli.md) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files, with datatrove's output document for document |
 | [Large datasets](guides/large-datasets.md) | the same commands over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards in datatrove's file format |
-| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
 | [datatrove steps](guides/datatrove.md) | `pyroid.integrations.datatrove`: datatrove's pipeline steps with the same names and signatures, `Trafilatura` included, as a one-import change |
 | [NeMo Curator stages](guides/nemo-curator.md) | `pyroid.integrations.nemo_curator`: NeMo Curator 1.4.0's CPU text stages, subclassing NeMo's classes with the same arguments |
 | [Hugging Face `datasets`](guides/huggingface.md) | `pyroid.integrations.hf`: batched callables for `Dataset.map` and `Dataset.filter`, and the FineWeb recipe |
@@ -158,15 +158,15 @@ process:
 | `pyroid.dedup` | datatrove 0.10.1's MinHash signatures | 34× |
 | `pyroid.translit` | anyascii 0.3.3 | 53× |
 
-The other modules have only been measured in a Docker/OrbStack VM on Apple Silicon, so treat
-their numbers as indicative (one thread unless stated):
+The other modules have only been measured in a Docker/OrbStack VM on Apple Silicon or on a shared
+EC2 machine, so treat their numbers as indicative (one thread unless stated):
 
 | Module | Incumbent | Speedup |
 |---|---|---:|
 | `pyroid.trafilatura.extract`, default options (`compat="2.3.1"` / `"1.11.0"`) | Trafilatura 2.3.1 / 1.11.0 | 7.2× / 8.6× |
 | `pyroid.metrics`, ROUGE | rouge-score 0.1.2 | 59–65× |
 | `pyroid.metrics`, corpus BLEU / chrF | sacrebleu 2.6.0 | 11× / 19× |
-| `pyroid.json_repair.repair_json`, broken JSON | json_repair 0.64.5 | about 30× |
+| `pyroid.json_repair.repair_json`, broken JSON | json_repair 0.64.9 | about 15× |
 | `pyroid.datasketch`, MinHash signatures, 1 / 8 threads | datasketch 2.0.0 | 8× / 21× |
 | `pyroid.jieba.lcut`, a batch, 1 / 8 threads | jieba 0.42.1 | 24× / 58× |
 | `pyroid.nltk.sent_tokenize` / `word_tokenize` | NLTK 3.10.4 | 60× / 31× |

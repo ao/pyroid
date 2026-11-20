@@ -9,7 +9,8 @@ Each block sits between ``<!-- bench:KIND:KEY:begin -->`` and ``<!-- bench:KIND:
   ``pyroid_us_8_threads``), as copied from a ``consolidated.json``;
 - ``more``: runs outside the consolidated benchmark (other modules, languages, datatrove steps),
   from ``more``: groups of ``title``, ``guide``, ``note``, ``columns``, ``rows`` (lists of cells),
-  optional ``footnote``, and their own ``source``. ``KEY`` is unused (write ``all``).
+  optional ``footnote`` and ``label`` (the machine, instead of ``more_label``), and their own
+  ``source``. ``KEY`` is unused (write ``all``).
 - ``table``: one hand-entered table, ``tables[KEY]``: ``caption``, ``columns``, ``rows`` (lists of
   cells), optional ``footnote``, and ``source``.
 
@@ -114,10 +115,11 @@ def render_more(data: dict[str, Any], key: str) -> list[str]:
     lines: list[str] = []
     for group in data["more"]:
         guide = GUIDE.format(module=group["guide"])
+        label = group.get("label", data["more_label"])
         lines += [
             f"### {group['title']}",
             "",
-            f"{data['more_label']}. {group['note']} Guide: [{group['guide']}]({guide}).",
+            f"{label}. {group['note']} Guide: [{group['guide']}]({guide}).",
             "",
             "| " + " | ".join(group["columns"]) + " |",
             "|---|" + "---:|" * (len(group["columns"]) - 1),

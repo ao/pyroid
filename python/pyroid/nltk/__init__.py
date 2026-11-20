@@ -20,6 +20,7 @@ from __future__ import annotations
 import functools
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import nltk as _native
 from pyroid.nltk._punkt import (
     DEBUG_DECISION_FMT,
@@ -86,6 +87,8 @@ __all__ = [
 NLTK_VERSION = "3.10.4"
 #: The ``regex`` release whose Unicode tables NLTK 3.10.4's patterns are reproduced with.
 REGEX_VERSION = "2026.9.29"
+
+_versions.check(__name__, "nltk", f"nltk=={NLTK_VERSION}")
 
 _ = (
     DEBUG_DECISION_FMT,

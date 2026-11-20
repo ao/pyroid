@@ -23,15 +23,19 @@ import sys
 import warnings
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning, InputError, PyroidError
 from pyroid._pyroid import metrics as _native
 from pyroid.metrics import scoring, tokenizers
-from pyroid.metrics.tokenize import _ensure_str
+from pyroid.metrics.tokenize import _NLTK, _ensure_str
 
 __all__ = ["ROUGE_SCORE_VERSION", "RougeScorer"]
 
 #: The rouge-score release whose behaviour this module reproduces.
 ROUGE_SCORE_VERSION = "0.1.2"
+
+_versions.check(__name__, "rouge_score", f"rouge-score=={ROUGE_SCORE_VERSION}")
+_versions.check(__name__, "nltk", _NLTK)  # the Porter stemmer
 
 _log = logging.getLogger(__name__)
 _ROUGE_N = re.compile(r"rouge[0-9]$")

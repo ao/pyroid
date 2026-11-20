@@ -13,10 +13,13 @@ import functools
 import sys
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import nemo as _native
 
 #: The NeMo Curator release whose results this module reproduces.
 NEMO_CURATOR_VERSION = "1.4.0"
+
+_versions.check(__name__, "nemo_curator", f"nemo-curator=={NEMO_CURATOR_VERSION}")
 
 # --- filter scores and fastText helpers -------------------------------------------------------
 

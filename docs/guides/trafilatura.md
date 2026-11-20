@@ -142,7 +142,9 @@ pyroid reproduces one combination of releases per mode, selected with `compat=`:
 The second row is what a fresh `pip install 'datatrove[processing]==0.10.1'` resolves.
 `pyroid.trafilatura.TRAFILATURA_VERSIONS` lists the modes, `REPRODUCED_VERSIONS` the versions
 behind each, and `DEFAULT_CONFIGS` each release's settings.cfg. Another version of trafilatura or
-lxml can extract different text from the same page.
+lxml can extract different text from the same page. With a trafilatura other than 2.3.1 installed,
+`import pyroid.trafilatura` emits one `pyroid.VersionMismatchWarning`; for 1.11.0 it says to pass
+`compat="1.11.0"` ([Installed versions](../compatibility.md#installed-versions)).
 
 lxml 6.1.3's Windows wheels bundle libxml2 2.11.9, whose HTML parser builds different trees for
 some pages (it drops `&#0;`, for one), so Trafilatura itself extracts some pages differently on
@@ -258,10 +260,10 @@ too). Everything else comes from the installed trafilatura. The mode follows the
 release: with 1.11.0 installed the shim's functions are 1.11.0's (its `extract` takes
 `**kwargs` and has no `fast`, its `bare_extraction` returns a dict by default), with 2.3.1 they
 are 2.3.1's. Either way they have exactly the installed trafilatura's signatures, without
-`compat`, and `config` defaults to its `DEFAULT_CONFIG`. With another release installed, a
-`PatchWarning` says that the patched functions give trafilatura 2.3.1's results. datatrove's own `Trafilatura` step
-does `from trafilatura import extract` in its child process, so a patch made before the pipeline
-starts (or `pyroid run -p trafilatura`) reaches it. See [`pyroid.patch()`](patch.md).
+`compat`, and `config` defaults to its `DEFAULT_CONFIG`. With another release installed, the
+patched functions give trafilatura 2.3.1's results, and a `pyroid.VersionMismatchWarning` says so.
+datatrove's own `Trafilatura` step does `from trafilatura import extract` in its child process, so a
+patch made before the pipeline starts (or `pyroid run -p trafilatura`) reaches it. See [`pyroid.patch()`](patch.md).
 
 ## Differences from trafilatura
 

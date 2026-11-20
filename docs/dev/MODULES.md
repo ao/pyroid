@@ -73,11 +73,22 @@ t.normalize_whitespace(docs, threads=4)  # at most 4 tasks at once on the shared
   returns the incumbent's result and emits **`pyroid.FallbackWarning`** (a `RuntimeWarning`):
   that class exactly, never a bare `RuntimeWarning` or a subclass, once per process for each
   function and reason. If the incumbent is not installed, raise `PyroidError` instead.
-  Warnings about results (an incumbent at another version, missing Unicode tables) stay
-  plain `RuntimeWarning`s. Users silence the slow-path notice with
+  Users silence the slow-path notice with
   `warnings.simplefilter("ignore", pyroid.FallbackWarning)`; the parity suites ignore it,
-  because it says which code path ran, not what the result is. Any other warning must match
-  the incumbent's.
+  because it says which code path ran, not what the result is.
+- **Installed versions**: a module that reproduces a release of a library calls
+  `pyroid._versions.check(__name__, "<module>", "<dist>==<version>")` once at import, for each
+  library whose behaviour it reproduces (code that reads the incumbent's data at run time, such
+  as the Thai and Japanese tokenizers, calls it when it reads it). Never write a version warning
+  by hand: the helper is the only source of **`pyroid.VersionMismatchWarning`** (a
+  `UserWarning`), once per process per library, at the first frame outside pyroid, with one
+  message shape. It never imports the incumbent, and imports `importlib.metadata` only when the
+  incumbent is importable. Callers that pick the release themselves import the module inside
+  `_versions.follow_installed("<module>")`; a new `pyroid.patch()` target needs nothing more
+  than its module's check, because `patch()` imports the module. The table in
+  `docs/compatibility.md` ("Installed versions") lists every check. Warnings about results
+  that are not about versions (missing Unicode tables) stay plain `RuntimeWarning`s; any other
+  warning must match the incumbent's.
 
 ## Rust side
 
@@ -155,4 +166,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
 - [ ] Wheel built in Docker; pytest green on the installed wheel on 3.11, 3.12, 3.14t,
       3.15, 3.15t; `sys._is_gil_enabled()` stays False on 3.14t/3.15t.
 - [ ] Every delegation to the incumbent warns once with `pyroid.FallbackWarning`.
+- [ ] The module calls `pyroid._versions.check` at import for each library it reproduces, has
+      a case in `python/tests/test_version_mismatch.py` and a row in `docs/compatibility.md`.
 - [ ] Speed numbers only from the harness (`bench/`), labelled with the machine.

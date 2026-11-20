@@ -1,4 +1,4 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! json_repair's `JSONParser` (`json_parser.py`), ported line by line.
 //!
 //! The parser walks a char array with json_repair's index arithmetic, including

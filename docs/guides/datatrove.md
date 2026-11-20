@@ -238,8 +238,9 @@ Also:
 - The steps' timing statistics are per batch, not per document. `WarcReader` times each
   document, including the reading of the records before it, plus once per file for the records
   after the last document (datatrove times each record's `process_record`).
-- With a datatrove other than 0.10.1 installed, importing the module gives one `RuntimeWarning`:
-  the steps reproduce 0.10.1's decisions.
+- With a datatrove other than 0.10.1 installed, importing the module gives one
+  `pyroid.VersionMismatchWarning`: the steps reproduce 0.10.1's decisions
+  ([Installed versions](../compatibility.md#installed-versions)).
 - datatrove's quirks are reproduced, not fixed. For instance, sentence dedup's stage 1 strips
   sentences while stage 3 doesn't, so window indices can shift, and a blank `URLFilter` list
   entry drops every URL without a registered domain.

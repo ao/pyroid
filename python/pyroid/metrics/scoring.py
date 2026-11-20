@@ -14,7 +14,11 @@ import abc
 import collections
 from typing import Any
 
+from pyroid import _versions
+
 __all__ = ["AggregateScore", "BaseScorer", "BootstrapAggregator", "Score", "fmeasure"]
+
+_versions.check(__name__, "rouge_score", "rouge-score==0.1.2")
 
 
 # collections.namedtuple bases, as in rouge-score (instances keep a __dict__).

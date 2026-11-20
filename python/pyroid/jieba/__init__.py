@@ -25,6 +25,7 @@ import threading
 from collections.abc import Iterator, Mapping
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import jieba as _native
 
 __all__ = [
@@ -58,6 +59,8 @@ __all__ = [
 JIEBA_VERSION = "0.42.1"
 __version__ = JIEBA_VERSION
 __license__ = "MIT"
+
+_versions.check(__name__, "jieba", f"jieba=={JIEBA_VERSION}")
 
 DEFAULT_DICT = None
 DEFAULT_DICT_NAME = "dict.txt"

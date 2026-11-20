@@ -39,10 +39,10 @@ each file is the full list.
 Three targets limit what they run, so that a run is not spent on costs the
 reference libraries have too:
 
-- json_repair 0.64.5's parser rescans the rest of the text in places, so some
+- json_repair's parser rescans the rest of the text in places, so some
   inputs take time quadratic in their length, in json_repair as in pyroid (a
   62-byte unit of garbage repeated to 31,744 characters: 18.4 s in json_repair
-  and 1.9 s in pyroid 1.0.0rc1, Docker/OrbStack VM, linux/arm64), and with
+  0.64.5 and 1.9 s in pyroid 1.0.0rc1, Docker/OrbStack VM, linux/arm64), and with
   `logging` the log grows the same way. `json_repair` turns logging off past
   8 KiB and skips texts over 16 KiB unless their repeated middle is valid JSON.
 - A Sudachi trie value can list any number of word entries, each a lattice node

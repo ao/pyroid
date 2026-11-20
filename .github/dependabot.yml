@@ -48,6 +48,7 @@ updates:
       # in [dependency-groups] test, test-gil and test-trafilatura-111. Their versions are part of the
       # parity contract (trafilatura 1.11.0 in particular is the compat reference, not the latest),
       # so they change only by hand.
+      # .github/workflows/upstream.yml checks PyPI for newer releases of them weekly and opens an issue per library.
       - dependency-name: ftfy
       - dependency-name: fasttext-predict
       - dependency-name: anyascii

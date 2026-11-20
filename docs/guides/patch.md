@@ -36,6 +36,7 @@ and `patch()` is the only switch. Each patched name emits one
 | `"fasttext"` | [`pyroid.fasttext`](fasttext.md) (fastText 0.9.2's inference, as fasttext-predict 0.9.2.4) | `load_model`, `tokenize`, `fasttext.FastText.load_model`, and `fasttext.FastText._FastText(path)` (which returns a pyroid model) | training (`train_supervised`, ...) and `_FastText()` without a model file |
 | `"anyascii"` | [`pyroid.translit.anyascii`](translit.md) (anyascii 0.3.3) | `anyascii` | the rest of the package |
 | `"datasketch"` | [`pyroid.datasketch`](datasketch.md) (datasketch 2.0.0) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble`, `sha1_hash32`, `sha1_hash64`, `minhash_batch`, the `WeightedMinHashLSH` and `WeightedMinHashLSHForest` aliases, and the `minhash`, `lean_minhash`, `hashfunc`, `lsh`, `lshforest` and `lshensemble` submodules with them | `WeightedMinHash`, `HyperLogLog`, `bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `storage` and the other submodules |
+| `"json_repair"` | [`pyroid.json_repair`](json_repair.md) (json_repair 0.64.9) | `repair_json`, `loads`, `load`, `from_file` and `JSONReturnType`, on `json_repair` and `json_repair.json_repair` | the command line and the internal modules; `schema=` calls, which pyroid hands to it |
 | `"trafilatura"` | [`pyroid.trafilatura`](trafilatura.md) (trafilatura 2.3.1 or 1.11.0, following the installed release) | `extract`, `bare_extraction`, with 2.3.1 `extract_with_metadata` (delegated), with the installed release's signatures, in `trafilatura` and `trafilatura.core`, `trafilatura.deduplication.LRUCache` and `LRU_TEST`, `trafilatura.meta.reset_caches` | metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the other submodules |
 | `"nltk"` | [`pyroid.nltk`](nltk.md) (NLTK 3.10.4's tokenizers) | `sent_tokenize`, `word_tokenize`, `punkt_model_available`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer`, `wordpunct_tokenize`, `regexp_tokenize`, `blankline_tokenize`, `RegexpTokenizer`, `WordPunctTokenizer`, `WhitespaceTokenizer`, `BlanklineTokenizer`, on `nltk`, `nltk.tokenize` and its `punkt`, `treebank`, `destructive` and `regexp` modules | everything else: `PunktTrainer`, the taggers, corpora, stemmers, the other tokenizers |
 | `"warcio"` | [`pyroid.warc`](warc.md) (warcio 1.8.2's reader) | `ArchiveIterator` (on `warcio` and `warcio.archiveiterator`), `WARCIterator` and `ARCIterator` (on `warcio.archiveiterator`), making warcio's own `StatusAndHeaders`, `ArcWarcRecord` (a subclass, with pyroid's `content_stream()`), `DigestChecker` and `ArchiveLoadFailed` | `WARCWriter`, `capture_http`, the indexer, the checker, the command line |
@@ -57,7 +58,7 @@ import pyroid
 
 pyroid.patch("unidecode")
 # ValueError: cannot patch 'unidecode': the supported names are 'ftfy', 'fasttext', 'anyascii',
-# 'datasketch', 'trafilatura', 'nltk', 'warcio', 'nemo_curator'
+# 'datasketch', 'json_repair', 'trafilatura', 'nltk', 'warcio', 'nemo_curator'
 # (pyroid.translit.unidecode transliterates with anyascii's tables, so its output differs from
 # Unidecode's: it is not a drop-in)
 ```
@@ -155,9 +156,12 @@ $ python script.py
   pyroid.patch("ftfy")
 ```
 
-It warns once more if the installed package is a version pyroid does not reproduce (for
-trafilatura, neither 2.3.1 nor 1.11.0). The patched functions then still give the reproduced
-version's results (trafilatura 2.3.1's for trafilatura), and the rest is the installed version's.
+If the installed package is a release pyroid does not reproduce (for trafilatura, neither 2.3.1
+nor 1.11.0), `patch()` also emits the `pyroid.VersionMismatchWarning` that importing the pyroid
+module gives, at the same line: once per process for each package, whichever comes first
+([Installed versions](../compatibility.md#installed-versions)). The patched functions then still
+give the reproduced release's results (trafilatura 2.3.1's for trafilatura), and the rest is the
+installed release's.
 `PatchWarning` is a `UserWarning`, distinct from `pyroid.FallbackWarning`. To silence it:
 
 ```python
@@ -182,12 +186,12 @@ $ pyroid run -p ftfy,fasttext train.py --epochs 3
 usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
 
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
-`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
-`warcio` / `nemo_curator` giving pyroid's drop-ins. The Python processes it starts
+`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
+`nltk` / `warcio` / `nemo_curator` giving pyroid's drop-ins. The Python processes it starts
 (multiprocessing workers, subprocesses) are patched too.
 
 options:
-  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, trafilatura, nltk, warcio, nemo_curator
+  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator
                      (default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
@@ -238,9 +242,9 @@ subprocess: True
   (`sys.argv`, `sys.path[0]`, `__name__ == "__main__"`). It exits with the target's exit code: 0
   when it finishes, 2 for a usage error or a missing script, 1 when the module can't be found.
 
-`PatchWarning` is shown once per process tree, not in every worker. The hook does nothing in an
-interpreter that can't import pyroid, nor in one started with `-I` or `-E` (which ignore
-`PYTHONPATH`).
+`PatchWarning` and `VersionMismatchWarning` are shown once per process tree, not in every worker.
+The hook does nothing in an interpreter that can't import pyroid, nor in one started with `-I` or
+`-E` (which ignore `PYTHONPATH`).
 
 ### Without `pyroid run`
 
@@ -311,8 +315,8 @@ warcio`) reads WARC files with pyroid in stock datatrove. Without warcio, `warci
 - A shim is not the real module object: code that already holds the real module (imported before
   `patch()`), or compares module objects, is not redirected.
 - `importlib.reload` of a shim is not supported.
-- Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator`
-  can be patched. pyroid's filters and dedup reach datatrove pipelines through the
+- Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`
+  and `nemo_curator` can be patched. pyroid's filters and dedup reach datatrove pipelines through the
   [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked

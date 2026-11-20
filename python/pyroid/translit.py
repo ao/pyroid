@@ -7,10 +7,13 @@ to the ``anyascii`` package; :func:`unidecode` has Unidecode's signature and
 ``translit.pyi``. anyascii is Copyright (c) 2020-2025, Hunter WB (ISC License).
 """
 
+from pyroid import _versions
 from pyroid._pyroid import PyroidError
 from pyroid._pyroid import translit as _native
 
 ANYASCII_VERSION = "0.3.3"
+
+_versions.check(__name__, "anyascii", f"anyascii=={ANYASCII_VERSION}")
 
 
 class UnidecodeError(PyroidError, ValueError):

@@ -71,6 +71,7 @@ from nemo_curator.stages.text.utils import constants as _nc_constants  # type: i
 import pyroid
 import pyroid.ftfy
 import pyroid.nemo as _k
+from pyroid import _versions
 
 __all__ = [
     "BoilerPlateStringFilter",
@@ -130,23 +131,7 @@ _FALLBACK_ERRORS = (
 )
 
 
-def _check_nemo_version() -> None:
-    from importlib.metadata import PackageNotFoundError, version
-
-    try:
-        installed = version("nemo_curator")
-    except PackageNotFoundError:  # pragma: no cover - imported from a source tree
-        return
-    if installed != _k.NEMO_CURATOR_VERSION:
-        warnings.warn(
-            f"pyroid.integrations.nemo_curator reproduces NeMo Curator {_k.NEMO_CURATOR_VERSION}; "
-            f"NeMo Curator {installed} is installed, whose own stages may differ",
-            RuntimeWarning,
-            stacklevel=3,
-        )
-
-
-_check_nemo_version()
+_versions.check(__name__, "nemo_curator", f"nemo-curator=={NEMO_CURATOR_VERSION}")
 
 
 def _fallback(what: str, reason: str) -> None:

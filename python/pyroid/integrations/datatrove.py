@@ -88,7 +88,9 @@ from datatrove.utils.batching import batched  # type: ignore[import-not-found,im
 from datatrove.utils.typeshelper import StatHints  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
 import pyroid
+import pyroid.filters
 import pyroid.ftfy
+from pyroid import _versions
 
 __all__ = [
     "C4QualityFilter",
@@ -104,26 +106,7 @@ DEFAULT_BATCH_SIZE = 1000
 _WARNED: set[str] = set()
 
 
-def _check_datatrove_version() -> None:
-    from importlib.metadata import PackageNotFoundError, version
-
-    import pyroid.filters
-
-    try:
-        installed = version("datatrove")
-    except PackageNotFoundError:  # pragma: no cover - imported from a source tree
-        return
-    if installed != pyroid.filters.DATATROVE_VERSION:
-        warnings.warn(
-            f"pyroid.integrations.datatrove reproduces datatrove "
-            f"{pyroid.filters.DATATROVE_VERSION}'s decisions; datatrove {installed} is installed, "
-            "whose own steps may differ",
-            RuntimeWarning,
-            stacklevel=3,
-        )
-
-
-_check_datatrove_version()
+_versions.check(__name__, "datatrove", f"datatrove=={pyroid.filters.DATATROVE_VERSION}")
 
 
 def _caller_stacklevel() -> int:
@@ -1240,6 +1223,17 @@ def _installed_trafilatura() -> str | None:
         return None
 
 
+def _import_trafilatura() -> None:
+    """Import pyroid.trafilatura with its version check following the installed release.
+
+    The step picks the release to reproduce itself (``compat``, else the installed one), so the
+    check only warns about a trafilatura release pyroid does not reproduce. Called where the
+    step first imports it: in ``__init__``, and in ``run`` (a worker that unpickled the step).
+    """
+    with _versions.follow_installed("trafilatura"):
+        import pyroid.trafilatura  # noqa: F401
+
+
 class Trafilatura(_Step, _dt_traf.Trafilatura):
     """datatrove's ``Trafilatura`` extractor (same arguments and defaults) on pyroid.trafilatura.
 
@@ -1279,6 +1273,7 @@ class Trafilatura(_Step, _dt_traf.Trafilatura):
         **kwargs: Any,
     ) -> None:
         super().__init__(favour_precision, include_images, timeout, deduplicate, **kwargs)
+        _import_trafilatura()
         import pyroid.trafilatura as pt
 
         if compat is not None:
@@ -1365,6 +1360,7 @@ class Trafilatura(_Step, _dt_traf.Trafilatura):
 
     def run(self, data: Iterable[Any], rank: int = 0, world_size: int = 1) -> Any:
         """Extract the text of every document, ``batch_size`` at a time."""
+        _import_trafilatura()
         import pyroid.trafilatura as pt
 
         mode = self._mode()

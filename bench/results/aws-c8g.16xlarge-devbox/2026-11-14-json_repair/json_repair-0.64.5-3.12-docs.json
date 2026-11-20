@@ -1,0 +1,168 @@
+{
+ "machine": {
+  "label": "EC2 c8g.16xlarge devbox, shared, indicative",
+  "time_utc": "2026-11-14T07:52:49Z",
+  "python": "3.12.16 (main, Nov 11 2026, 00:17:04) [Clang 23.1.3 ]",
+  "python_version": "3.12.16",
+  "implementation": "CPython",
+  "free_threaded_build": false,
+  "gil_enabled": null,
+  "platform": "Linux-6.18.62-127.179.amzn2023.aarch64-aarch64-with-glibc2.36",
+  "machine": "aarch64",
+  "cpu_count": 64,
+  "process_cpu_count": null,
+  "affinity_cpus": 64,
+  "loadavg_before": [
+   5.64,
+   4.8,
+   2.55
+  ],
+  "git_sha": null,
+  "impls": {
+   "json_repair": {
+    "module": "json_repair",
+    "version": "0.64.5"
+   }
+  }
+ },
+ "args": {
+  "impl": [
+   "json_repair"
+  ],
+  "out": "/target/jr-bench-645.json",
+  "sections": [
+   "docs"
+  ],
+  "families": [
+   "truncated_string",
+   "escaped_code_string",
+   "escaped_code_string_skip_loads",
+   "markdown_in_array",
+   "array_unescaped_quotes",
+   "single_quoted_apostrophes",
+   "markdown_paren_list",
+   "records_missing_separators",
+   "table_rows_continued",
+   "unbalanced_close_braces",
+   "regex_class_quotes",
+   "nested_open_tuples",
+   "nested_open_containers",
+   "valid_records",
+   "valid_records_skip_loads",
+   "broken_records",
+   "prose_fragments"
+  ],
+  "list": false,
+  "quick": false,
+  "seed": 1234,
+  "doc_sizes": [
+   1024,
+   1048576
+  ],
+  "repeat": 15,
+  "min_sample_ms": 20.0,
+  "max_row_s": 4.0,
+  "min_bytes": 2048,
+  "max_bytes": 1048576,
+  "timeout": 20.0,
+  "stop_after": 10.0,
+  "budget": 2.0,
+  "patho_runs": 6,
+  "batch_docs": 10000,
+  "batch_doc_bytes": 1024,
+  "batch_threads": [
+   1,
+   8
+  ],
+  "batch_repeat": 3,
+  "pool_threads": 8
+ },
+ "skipped_impls": [],
+ "docs": [
+  {
+   "doc": "valid 1 KiB",
+   "bytes": 1190,
+   "op": "repair_json",
+   "impl": "json_repair",
+   "best_ns": 12653.470430107527,
+   "median_ns": 12727.610215053763,
+   "samples": 15,
+   "loops": 372
+  },
+  {
+   "doc": "valid 1 KiB",
+   "bytes": 1190,
+   "op": "loads",
+   "impl": "json_repair",
+   "best_ns": 6625.706930693069,
+   "median_ns": 6640.954950495049,
+   "samples": 15,
+   "loops": 2020
+  },
+  {
+   "doc": "broken 1 KiB",
+   "bytes": 1239,
+   "op": "repair_json",
+   "impl": "json_repair",
+   "best_ns": 625029.44,
+   "median_ns": 626828.12,
+   "samples": 15,
+   "loops": 25
+  },
+  {
+   "doc": "broken 1 KiB",
+   "bytes": 1239,
+   "op": "loads",
+   "impl": "json_repair",
+   "best_ns": 617123.7878787878,
+   "median_ns": 618369.0303030303,
+   "samples": 15,
+   "loops": 33
+  },
+  {
+   "doc": "valid 1.0 MiB",
+   "bytes": 1210195,
+   "op": "repair_json",
+   "impl": "json_repair",
+   "best_ns": 10000486.5,
+   "median_ns": 10056682.0,
+   "samples": 15,
+   "loops": 2
+  },
+  {
+   "doc": "valid 1.0 MiB",
+   "bytes": 1210195,
+   "op": "loads",
+   "impl": "json_repair",
+   "best_ns": 5752782.25,
+   "median_ns": 5791839.25,
+   "samples": 15,
+   "loops": 4
+  },
+  {
+   "doc": "broken 1.0 MiB",
+   "bytes": 1048652,
+   "op": "repair_json",
+   "impl": "json_repair",
+   "best_ns": 424811846.0,
+   "median_ns": 425484450.5,
+   "samples": 10,
+   "loops": 1
+  },
+  {
+   "doc": "broken 1.0 MiB",
+   "bytes": 1048652,
+   "op": "loads",
+   "impl": "json_repair",
+   "best_ns": 422777051.0,
+   "median_ns": 423619624.0,
+   "samples": 10,
+   "loops": 1
+  }
+ ],
+ "loadavg_after": [
+  5.54,
+  4.81,
+  2.58
+ ]
+}
