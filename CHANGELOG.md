@@ -2,6 +2,18 @@
 
 All notable changes to pyroid are documented here. From 1.0.0 on, [release-please](https://github.com/googleapis/release-please) maintains this file from [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [1.1.0](https://github.com/ao/pyroid/compare/v1.0.1...v1.1.0) (2026-11-20)
+
+
+### Features
+
+* match json-repair 0.64.9, warn when an installed incumbent is another release, watch upstream weekly ([#15](https://github.com/ao/pyroid/issues/15)) ([675b0f9](https://github.com/ao/pyroid/commit/675b0f921121c4587e47bb364ead80a2a2229b2d))
+
+
+### Performance Improvements
+
+* **cli:** compress clean's spooled rows on a background thread ([#14](https://github.com/ao/pyroid/issues/14)) ([e02798d](https://github.com/ao/pyroid/commit/e02798dac80b505fb902f2acb3ff7d37c41e2776))
+
 ## [1.0.1](https://github.com/ao/pyroid/compare/v1.0.0...v1.0.1) (2026-11-14)
 
 
