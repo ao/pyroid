@@ -92,6 +92,15 @@ elif case == "dateutil-isoparse":
     docs = ["2003-09-25T10:49:41.5-03:00"] * n
     small = docs[:200]
     call = lambda d: P.isoparse_batch(d, threads=threads)
+elif case == "difflib-ratio_batch":
+    import pyroid.difflib as pd
+    call = lambda d: pd.ratio_batch(d, d[::-1], threads=threads)
+elif case == "difflib-close_matches_batch":
+    import pyroid.difflib as pd
+    names = [f"name {i * 7919 % 100_003} street" for i in range(20_000)]
+    docs = names[: 300 * scale]
+    small = docs[:5]
+    call = lambda d: pd.close_matches_batch(d, names, threads=threads)
 else:
     raise SystemExit(f"unknown case {case}")
 
@@ -134,6 +143,8 @@ CASES = [
     "trafilatura",
     "dateutil-parse",
     "dateutil-isoparse",
+    "difflib-ratio_batch",
+    "difflib-close_matches_batch",
 ]
 
 

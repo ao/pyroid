@@ -17,6 +17,7 @@ source.
 | [`pyroid.yaml`](yaml.md) | `safe_load`, `safe_load_all`, `safe_dump`, `safe_dump_all`, `load`, `load_all`, `dump`, `dump_all`, PyYAML's exception classes |
 | [`pyroid.tabulate`](tabulate.md) | `tabulate`, `tabulate_formats`, `simple_separated_format`, `TableFormat`, `Line`, `DataRow`, `SEPARATING_LINE` |
 | [`pyroid.jmespath`](jmespath.md) | `search`, `compile`, `Options`, `ParsedResult`, `Parser`, and jmespath's `functions`, `exceptions`, `visitor`, `lexer` and `ast` modules |
+| [`pyroid.difflib`](difflib.md) | the standard library's `difflib` (`SequenceMatcher`, `get_close_matches`, `unified_diff`, `ndiff`, `HtmlDiff`, ...), `ratio_batch`, `close_matches_batch` |
 | [`pyroid.datasketch`](datasketch.md) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble` (datasketch's modules), `minhash_batch` |
 | [`pyroid.jieba`](jieba.md) | jieba 0.42.1's API: `cut`, `lcut`, `cut_for_search`, `tokenize`, `add_word`, `load_userdict`, `Tokenizer`, ... |
 | [`pyroid.trafilatura`](trafilatura.md) | `extract`, `bare_extraction`, `extract_with_metadata`, `extract_batch`, `Document`, `LRUCache`, `reset_caches`, the `compat=` modes 2.3.1 and 1.11.0 |

@@ -41,6 +41,7 @@ and `patch()` is the only switch. Each patched name emits one
 | `"nltk"` | [`pyroid.nltk`](nltk.md) (NLTK 3.10.4's tokenizers) | `sent_tokenize`, `word_tokenize`, `punkt_model_available`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer`, `wordpunct_tokenize`, `regexp_tokenize`, `blankline_tokenize`, `RegexpTokenizer`, `WordPunctTokenizer`, `WhitespaceTokenizer`, `BlanklineTokenizer`, on `nltk`, `nltk.tokenize` and its `punkt`, `treebank`, `destructive` and `regexp` modules | everything else: `PunktTrainer`, the taggers, corpora, stemmers, the other tokenizers |
 | `"yaml"` | [`pyroid.yaml`](yaml.md) (PyYAML 6.0.3's safe loader and dumper) | `safe_load`, `safe_load_all`, `load`, `load_all`, `full_load`, `full_load_all`, `unsafe_load`, `unsafe_load_all`, `safe_dump`, `safe_dump_all`, `dump`, `dump_all`, set on PyYAML's own `yaml` module (shims of `yaml` and its error, loader and dumper submodules without PyYAML) | everything else: the loader and dumper classes, `add_constructor`, `scan`, `parse`, `compose`, `YAMLObject`; customised loaders and dumpers and `!!python/` tags are handed to PyYAML |
 | `"tabulate"` | [`pyroid.tabulate`](tabulate.md) (tabulate 0.10.0) | a shim of `tabulate` with `tabulate`, `tabulate_formats`, `simple_separated_format`, `TableFormat`, `Line`, `DataRow`, `SEPARATING_LINE`, `multiline_formats`, `_table_formats` and tabulate's other functions, private helpers included; writes of `MIN_PADDING`, `PRESERVE_WHITESPACE` and `WIDE_CHARS_MODE` reach pyroid.tabulate. `DataFrame.to_markdown()` then uses it | only the modules tabulate imports (`re`, `textwrap`, ...) |
+| `"difflib"` | [`pyroid.difflib`](difflib.md) (this Python's difflib) | in place, no shim: `SequenceMatcher`'s, `Differ.compare` and `HtmlDiff.make_table` on difflib's own classes, and `get_close_matches`, `unified_diff`, `context_diff` and `_mdiff` on the module (so `ndiff`, unittest's and pytest's diffs too) | `restore`, `diff_bytes`, `IS_LINE_JUNK`, `IS_CHARACTER_JUNK`, `Match` (the same objects pyroid.difflib uses) |
 | `"warcio"` | [`pyroid.warc`](warc.md) (warcio 1.8.2's reader) | `ArchiveIterator` (on `warcio` and `warcio.archiveiterator`), `WARCIterator` and `ARCIterator` (on `warcio.archiveiterator`), making warcio's own `StatusAndHeaders`, `ArcWarcRecord` (a subclass, with pyroid's `content_stream()`), `DigestChecker` and `ArchiveLoadFailed` | `WARCWriter`, `capture_http`, the indexer, the checker, the command line |
 | `"dateutil"` | [`pyroid.dateutil.parser`](dateutil.md) (python-dateutil 2.8.2 to 4.0.0) | `parse` and `isoparse`, on `dateutil.parser`, `dateutil.parser._parser` and `dateutil.parser.isoparser` (they use dateutil's own `DEFAULTPARSER` and `DEFAULT_ISOPARSER`) | `dateutil.tz`, `relativedelta`, `rrule`, `easter`, the `parser` and `isoparser` classes |
 | `"jmespath"` | [`pyroid.jmespath`](jmespath.md) (jmespath 1.1.0) | `search` and `compile`, set on jmespath's own module (shims of `jmespath` and its `exceptions`, `functions`, `visitor`, `parser`, `lexer` and `ast` submodules without jmespath); exceptions stay jmespath's classes | `jmespath.parser.Parser`, `jmespath.lexer.Lexer`, `TreeInterpreter` and the rest of the package |
@@ -79,7 +80,7 @@ import pyroid
 pyroid.patch("unidecode")
 # ValueError: cannot patch 'unidecode': the supported names are 'ftfy', 'fasttext', 'anyascii',
 # 'datasketch', 'json_repair', 'trafilatura', 'nltk', 'warcio', 'nemo_curator', 'yaml',
-# 'tabulate', 'dateutil', 'jmespath'
+# 'tabulate', 'dateutil', 'jmespath', 'difflib'
 # (pyroid.translit.unidecode transliterates with anyascii's tables, so its output differs from
 # Unidecode's: it is not a drop-in)
 ```
@@ -212,11 +213,12 @@ usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
 
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
-`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` giving pyroid's
-drop-ins. The Python processes it starts (multiprocessing workers, subprocesses) are patched too.
+`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` / `difflib`
+giving pyroid's drop-ins. The Python processes it starts (multiprocessing workers, subprocesses)
+are patched too.
 
 options:
-  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate, dateutil, jmespath
+  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate, dateutil, jmespath, difflib
                      (repeatable; default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
@@ -358,8 +360,8 @@ botocore 1.44.3's paginator and waiter tests (3,720) pass patched.
   `patch()`), or compares module objects, is not redirected.
 - `importlib.reload` of a shim is not supported.
 - Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`,
-  `nemo_curator`, `yaml`, `tabulate`, `dateutil` and `jmespath` can be patched. pyroid's filters
-  and dedup reach datatrove pipelines through the [drop-in steps](datatrove.md) instead.
+  `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath` and `difflib` can be patched. pyroid's
+  filters and dedup reach datatrove pipelines through the [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked
   children inherit them).

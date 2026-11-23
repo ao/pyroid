@@ -160,6 +160,19 @@ is Melissa O'Neill's PCG family (https://www.pcg-random.org). numpy:
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -------------------------------------------------------------------------------
+CPython's difflib (pyroid.difflib)
+-------------------------------------------------------------------------------
+crates/pyroid-core/src/difflib/ ports Lib/difflib.py of CPython 3.11 to 3.15
+(SequenceMatcher, Differ, _mdiff, unified_diff, context_diff and HtmlDiff's
+table rows), https://github.com/python/cpython, and python/pyroid/difflib.py
+runs that module's own functions; parity/data/cpython-difflib/ holds copies of
+CPython's Lib/test/test_difflib.py and test_difflib_expect.html. Python
+Software Foundation License Version 2 (PSF-2.0), see
+parity/data/cpython-difflib/LICENSE:
+
+    Copyright (c) 2001 Python Software Foundation; All Rights Reserved
+
+-------------------------------------------------------------------------------
 tldextract and CPython's ipaddress (URLFilter)
 -------------------------------------------------------------------------------
 crates/pyroid-core/src/filters/url.rs ports tldextract 5.4.0's extract_str

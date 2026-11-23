@@ -1,0 +1,299 @@
+{
+  "machine": {
+    "before": {
+      "python": "3.12.16",
+      "platform": "Linux-6.18.62-127.179.amzn2023.aarch64-aarch64-with-glibc2.36",
+      "machine": "aarch64",
+      "cpu": "0xd4f",
+      "cpus": 64,
+      "pyroid": "1.0.1",
+      "rapidfuzz": "3.14.6",
+      "loadavg": [
+        0.99462890625,
+        1.41552734375,
+        2.00439453125
+      ]
+    },
+    "after": {
+      "python": "3.12.16",
+      "platform": "Linux-6.18.62-127.179.amzn2023.aarch64-aarch64-with-glibc2.36",
+      "machine": "aarch64",
+      "cpu": "0xd4f",
+      "cpus": 64,
+      "pyroid": "1.0.1",
+      "rapidfuzz": "3.14.6",
+      "loadavg": [
+        1.34521484375,
+        1.4677734375,
+        1.99609375
+      ]
+    }
+  },
+  "rows": [
+    {
+      "case": "SequenceMatcher(None, a, b).ratio(), names",
+      "unit": "us",
+      "per": 10000,
+      "timings": {
+        "difflib": {
+          "best": 9.54675360044348e-06,
+          "median": 9.612127099535427e-06
+        },
+        "pyroid.difflib": {
+          "best": 2.0160441999905743e-06,
+          "median": 2.0225715001288336e-06
+        },
+        "ratio_batch, 1 thread": {
+          "best": 5.56312999833608e-07,
+          "median": 5.569984001340344e-07
+        },
+        "ratio_batch": {
+          "best": 1.077282999176532e-07,
+          "median": 1.1107360041933135e-07
+        },
+        "rapidfuzz fuzz.ratio (another score)": {
+          "best": 2.4417539971182123e-07,
+          "median": 2.4453610021737404e-07
+        }
+      }
+    },
+    {
+      "case": "SequenceMatcher(None, a, b).ratio(), 500 characters",
+      "unit": "us",
+      "per": 1000,
+      "timings": {
+        "difflib": {
+          "best": 0.00043585519600310363,
+          "median": 0.0004361030000000028
+        },
+        "pyroid.difflib": {
+          "best": 2.293342100165319e-05,
+          "median": 2.2942274001252373e-05
+        },
+        "ratio_batch, 1 thread": {
+          "best": 1.962928499415284e-05,
+          "median": 1.9643168998300097e-05
+        },
+        "ratio_batch": {
+          "best": 2.7024779992643745e-06,
+          "median": 2.718480995099526e-06
+        },
+        "rapidfuzz fuzz.ratio (another score)": {
+          "best": 4.772521002450958e-06,
+          "median": 4.786140001669992e-06
+        }
+      }
+    },
+    {
+      "case": "get_close_matches, 10,000 place names",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.013515995000489056,
+          "median": 0.01353503500286024
+        },
+        "pyroid.difflib, 1 thread": {
+          "best": 0.0009001510043162853,
+          "median": 0.0009065289996215142
+        },
+        "pyroid.difflib": {
+          "best": 0.0005817439960082993,
+          "median": 0.0006285530034801923
+        }
+      }
+    },
+    {
+      "case": "get_close_matches, 100,000 place names",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.1419957130055991,
+          "median": 0.14213152100273874
+        },
+        "pyroid.difflib, 1 thread": {
+          "best": 0.008007507000002079,
+          "median": 0.008027668998693116
+        },
+        "pyroid.difflib": {
+          "best": 0.0030944809986976907,
+          "median": 0.0031099890038603917
+        }
+      }
+    },
+    {
+      "case": "get_close_matches, 1,000,000 place names",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 1.756787788006477,
+          "median": 1.756787788006477
+        },
+        "pyroid.difflib, 1 thread": {
+          "best": 0.100451491001877,
+          "median": 0.100451491001877
+        },
+        "pyroid.difflib": {
+          "best": 0.032193276994803455,
+          "median": 0.032193276994803455
+        }
+      }
+    },
+    {
+      "case": "close_matches_batch, 1,000 queries x 10,000 names",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 11.727417077003338,
+          "median": 11.727417077003338
+        },
+        "close_matches_batch, 1 thread": {
+          "best": 0.48266961500485195,
+          "median": 0.48266961500485195
+        },
+        "close_matches_batch": {
+          "best": 0.0627754660017672,
+          "median": 0.0627754660017672
+        }
+      }
+    },
+    {
+      "case": "unified_diff, argparse.py 3.12 -> 3.14 (2,650 / 2,789 lines)",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.006023760994139593,
+          "median": 0.006086689005314838
+        },
+        "pyroid.difflib": {
+          "best": 0.000639369995042216,
+          "median": 0.0006455679977079853
+        }
+      }
+    },
+    {
+      "case": "context_diff, argparse.py 3.12 -> 3.14 (2,650 / 2,789 lines)",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.006234364002011716,
+          "median": 0.006252632003452163
+        },
+        "pyroid.difflib": {
+          "best": 0.0007007220046943985,
+          "median": 0.0007054110028548166
+        }
+      }
+    },
+    {
+      "case": "ndiff, argparse.py 3.12 -> 3.14 (2,650 / 2,789 lines)",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.030405444995267317,
+          "median": 0.03047243300534319
+        },
+        "pyroid.difflib": {
+          "best": 0.0025988749985117465,
+          "median": 0.0026316200019209646
+        }
+      }
+    },
+    {
+      "case": "HtmlDiff().make_file, argparse.py 3.12 -> 3.14 (2,650 / 2,789 lines)",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.05291539800236933,
+          "median": 0.05327527200279292
+        },
+        "pyroid.difflib": {
+          "best": 0.00844726400100626,
+          "median": 0.008469929001876153
+        }
+      }
+    },
+    {
+      "case": "unified_diff, typing.py 3.12 -> 3.14 (3,494 / 3,866 lines)",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.008531911997124553,
+          "median": 0.008556626002246048
+        },
+        "pyroid.difflib": {
+          "best": 0.0009034250033437274,
+          "median": 0.0009097069996641949
+        }
+      }
+    },
+    {
+      "case": "context_diff, typing.py 3.12 -> 3.14 (3,494 / 3,866 lines)",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.008751929002755787,
+          "median": 0.008787942002527416
+        },
+        "pyroid.difflib": {
+          "best": 0.0009823290019994602,
+          "median": 0.0009982909978134558
+        }
+      }
+    },
+    {
+      "case": "ndiff, typing.py 3.12 -> 3.14 (3,494 / 3,866 lines)",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.10715530400193529,
+          "median": 0.10726028800127096
+        },
+        "pyroid.difflib": {
+          "best": 0.006349417999444995,
+          "median": 0.006384034997608978
+        }
+      }
+    },
+    {
+      "case": "HtmlDiff().make_file, typing.py 3.12 -> 3.14 (3,494 / 3,866 lines)",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.13693494099425152,
+          "median": 0.13748047000262886
+        },
+        "pyroid.difflib": {
+          "best": 0.013694920999114402,
+          "median": 0.013701078001759015
+        }
+      }
+    },
+    {
+      "case": "unified_diff, the standard library 3.12 -> 3.14 (591 files, 594,900 lines)",
+      "unit": "ms",
+      "per": 1,
+      "timings": {
+        "difflib": {
+          "best": 0.3787494499993045,
+          "median": 0.3789598119983566
+        },
+        "pyroid.difflib": {
+          "best": 0.05239167400577571,
+          "median": 0.05242111600091448
+        }
+      }
+    }
+  ]
+}

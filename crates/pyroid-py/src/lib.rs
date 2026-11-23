@@ -18,6 +18,7 @@ mod batch;
 mod datasketch;
 mod dateutil;
 mod dedup;
+mod difflib;
 mod errors;
 mod fasttext;
 mod filters;
@@ -77,5 +78,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     yaml::register(m)?;
     tabulate::register(m)?;
     jmespath::register(m)?;
+    difflib::register(m)?;
     Ok(())
 }

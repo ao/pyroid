@@ -136,6 +136,12 @@ subclasses keep working. Without jmespath, ``jmespath`` and its ``exceptions``, 
 ``visitor``, ``parser``, ``lexer`` and ``ast`` submodules are shims holding
 :mod:`pyroid.jmespath`'s names.
 
+``"difflib"`` patches the standard library's difflib in place: :mod:`pyroid.difflib`'s
+methods are set on ``difflib.SequenceMatcher``, ``difflib.Differ`` and ``difflib.HtmlDiff``
+themselves (so instances, subclasses and ``isinstance`` checks stay difflib's, including classes
+imported earlier), and its ``get_close_matches``, ``unified_diff``, ``context_diff`` and
+``_mdiff`` on the module, which covers ``ndiff`` and unittest's and pytest's assertion diffs.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -187,6 +193,7 @@ SUPPORTED: tuple[str, ...] = (
     "tabulate",
     "dateutil",
     "jmespath",
+    "difflib",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -976,6 +983,29 @@ def _build_jmespath(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     return {}, [undo]
 
 
+def _build_difflib(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if not impl._KNOWN:  # pyroid.difflib is the standard library's here: nothing to patch
+        return {}, []
+    swaps = [(real.SequenceMatcher, name, value) for name, value in impl._SM_METHODS.items()]
+    swaps += [
+        (real.Differ, "compare", impl._PATCH_COMPARE),
+        (real.HtmlDiff, "make_table", impl._PATCH_MAKE_TABLE),
+    ]
+    swaps += [(real, name, value) for name, value in impl._PATCH_FUNCTIONS.items()]
+    # One native step sets all of them (or none, if one fails); only then (every method and
+    # lazy attribute in place) do pyroid's methods give difflib's matchers native state. The
+    # undo, also native, first gives matchers made or used under the patch difflib's own state,
+    # so they keep working with difflib's methods (one that another thread's set_seq* is
+    # changing at this moment gets it when that call ends), then puts every attribute back.
+    # Neither stops half-way on Ctrl-C; one that lands just after the patch is undone here.
+    try:
+        impl._switch_on(tuple(swaps), _MISSING)
+    except BaseException:
+        impl._switch_off()
+        raise
+    return {}, [impl._switch_off]
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -1079,10 +1109,17 @@ _TARGETS: dict[str, _Target] = {
         " (its Parser, Lexer and TreeInterpreter classes)",
         _build_jmespath,
     ),
+    "difflib": _Target(
+        "pyroid.difflib",
+        "which reproduces this Python's difflib",
+        "difflib is part of the standard library",
+        " (restore, diff_bytes, IS_LINE_JUNK, Match)",
+        _build_difflib,
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator", "yaml", "dateutil", "jmespath")
+_SWAPPED = ("nltk", "warcio", "nemo_curator", "yaml", "dateutil", "jmespath", "difflib")
 
 
 # ---------------------------------------------------------------------------
@@ -1142,14 +1179,24 @@ def _check(names: Sequence[str]) -> list[str]:
     return out
 
 
-def _announce(name: str, real: Any, missing: str) -> None:
-    """The once-per-process PatchWarning for `name`.
+def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> None:
+    """The once-per-process PatchWarning for `name`, whose pyroid module is `impl`.
 
     The installed version was checked when :func:`_impl` imported the pyroid module.
     """
     target = _TARGETS[name]
     if name not in _WARNED:
         _WARNED.add(name)
+        if name == "difflib" and not impl._KNOWN:
+            v = sys.version_info
+            warnings.warn(
+                "pyroid.integrations.patch: nothing was patched: pyroid.difflib reproduces difflib "
+                f"of CPython 3.11 to 3.15, not {v[0]}.{v[1]}'s, so difflib stays the standard "
+                "library's. This warning is shown once.",
+                PatchWarning,
+                stacklevel=_caller_stacklevel(),
+            )
+            return
         what = f"`import {name}` now gives pyroid's drop-in"
         if real is None:
             rest = f"Everything else{target.rest} is unavailable: {missing} ({target.pip})."
@@ -1162,6 +1209,7 @@ def _announce(name: str, real: Any, missing: str) -> None:
                 "yaml": "from yaml import safe_load",
                 "dateutil": "from dateutil.parser import parse",
                 "jmespath": "from jmespath import search",
+                "difflib": "from difflib import unified_diff",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
@@ -1213,7 +1261,7 @@ def _install(name: str, *, warn: bool) -> None:
         # Attributes swapped on the real modules (no shims): sys.modules stays as it is.
         _ACTIVE[name] = _Active(shims, saved if shims else None, undo)
         if warn:
-            _announce(name, real, missing)
+            _announce(name, impl, real, missing)
 
 
 def _restore(name: str, saved: dict[str, Any] | None, undo: list[Callable[[], None]]) -> None:
@@ -1241,7 +1289,7 @@ def patch(*names: str) -> None:
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
             ``"json_repair"``, ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"``,
-            ``"yaml"``, ``"tabulate"``, ``"dateutil"`` and/or ``"jmespath"``.
+            ``"yaml"``, ``"tabulate"``, ``"dateutil"``, ``"jmespath"`` and/or ``"difflib"``.
 
     Raises:
         TypeError: No names were given.
@@ -1385,8 +1433,9 @@ _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
-`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` giving pyroid's
-drop-ins. The Python processes it starts (multiprocessing workers, subprocesses) are patched too.
+`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` / `difflib`
+giving pyroid's drop-ins. The Python processes it starts (multiprocessing workers, subprocesses)
+are patched too.
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}

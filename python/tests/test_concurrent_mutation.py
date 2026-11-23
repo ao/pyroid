@@ -514,3 +514,22 @@ def test_jmespath() -> None:
             meta.clear()
 
     hammer(lambda: jp.search("meta.*", data), grow_or_clear)
+
+
+def test_difflib() -> None:
+    import pyroid.difflib as pd
+
+    names: tuple[list[str], ...] = (
+        [f"name {i}" for i in range(300)],
+        ["nome 1", "name 2x"] * 10,
+        [],
+    )
+    over_states(lambda p: pd.get_close_matches("name 12", p), names)
+    over_states(lambda p: pd.get_close_matches("name 12", p, threads=2), names)
+    over_states(lambda a: pd.ratio_batch(a, "name 7"), names)
+    over_states(lambda p: pd.close_matches_batch(["name 3", "nome"] * 70, p), names)
+    lines = ([f"line {i}\n" for i in range(300)], [f"line {i}\n" for i in range(0, 300, 3)])
+    base = [f"line {i}\n" for i in range(0, 300, 2)]
+    over_states(lambda a: list(pd.unified_diff(a, base)), lines)
+    over_states(lambda a: list(pd.ndiff(a, base)), lines)
+    over_states(lambda a: pd.SequenceMatcher(None, a, base).get_opcodes(), lines)

@@ -240,6 +240,9 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "!python/pyroid/**" = ["D"]
+# pyroid.difflib's classes and functions carry the standard library's docstrings (set at import,
+# so its doctests run against them); the API docs come from difflib.pyi.
+"python/pyroid/difflib.py" = ["D101", "D103"]
 # Dev scripts and the benchmark/parity harnesses report on stdout. bench/ and parity/ are linted with
 # their own [tool.ruff]; this entry covers the ftfy table generator, oracle and benchmark scripts.
 "{python/scripts,bench,parity}/**" = ["T20"]

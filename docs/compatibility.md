@@ -305,6 +305,25 @@ Reference: NLTK 3.10.4 (with regex 2026.9.29). Rule: the same sentences, tokens 
 
 <small>Source: the parity/ nltk suite, crates/pyroid-core/src/nltk/testdata/ replays and their large uncommitted recordings, run on 2026-11-09.</small>
 
+### pyroid.difflib {#difflib}
+
+Reference: the running interpreter's difflib (CPython 3.11.18, 3.12.16, 3.13.18, 3.14.10, 3.15.2 and 3.14.10t). Rule: the same ratios (float bits), matching blocks with their type, opcodes, b2j/bjunk/bpopular/fullbcount contents and key order, isjunk and linejunk calls, every line of text and HTML, and the same exceptions (type and message).
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| CPython's Lib/test/test_difflib.py and its doctests (vendored per version), against pyroid.difflib and against the standard library under pyroid.patch("difflib"), CPython 3.11, 3.12, 3.13, 3.14, 3.15 and 3.14t | 658 | 658 | 0 |
+| Hypothesis, SequenceMatcher and get_close_matches: str, bytes and lists of str, int, bytes and other types, junk functions that record their calls or raise, random operation orders on one matcher (caches, attributes, pickling, copies), find_longest_match bounds, subclasses; CPython 3.12 (60,000), 3.14 (60,000) and 3.14t (18,000) | 138,000 | 138,000 | 0 |
+| Hypothesis, diff text: ndiff and restore, Differ subclasses, _mdiff, HtmlDiff (tab sizes, wrapping, context, junk functions), unified_diff and context_diff (n, lineterm, names with lone surrogates, color), diff_bytes; CPython 3.12 (60,000), 3.14 (60,000) and 3.14t (18,000) | 138,000 | 138,000 | 0 |
+| Hypothesis, the standard library's difflib under pyroid.patch("difflib") (a subclass made before the patch included); CPython 3.12 (10,000), 3.14 (10,000) and 3.14t (3,000) | 23,000 | 23,000 | 0 |
+| Real source files: every *.py file of the standard library between consecutive CPython releases (3.11 to 3.15: 2,549 file pairs, 1,033 changed, 2.48 million lines) with unified_diff, context_diff, ndiff, ratio, get_opcodes and, up to 3,000 lines, HtmlDiff.make_table with and without context; CPython 3.12 and 3.14 | 34,902 | 34,902 | 0 |
+| Real names: 1,000 misspelled GeoNames place names and 1,000 SEC company names, scored against the originals with ratio_batch and looked up with get_close_matches among 20,000 names (n=3, cutoff 0.6 and n=10, cutoff 0.3); CPython 3.12 and 3.14 | 12,000 | 12,000 | 0 |
+| **Total** | **346,560** | **346,560** | **0** |
+
+- python/tests/test_difflib.py also checks that unittest's assertEqual diffs and pytest's assertion diffs (pytest under pyroid run -p difflib) are the same with and without the patch.
+- Two inputs on which CPython raises RecursionError get a diff from pyroid: long runs of similar lines in Differ on 3.11 to 3.13, and HtmlDiff wrapping a line into about 1,000 rows (see the guide's differences).
+
+<small>Source: python/tests/test_difflib_cpython.py, python/tests/test_difflib_parity.py, bench/difflib/parity_counts.py and bench/difflib/real_data.py, run on 2026-11-16 on the EC2 c8g.16xlarge devbox (linux/aarch64).</small>
+
 ### pyroid.nemo and pyroid.integrations.nemo_curator {#nemo}
 
 Reference: NeMo Curator 1.4.0 on CPython 3.12 (pandas 3.1.1, regex 2026.11.9, ftfy 6.3.1, jieba 0.42.1, fasttext 0.9.3 built with g++ 12). Rule: the same score (repr and type), the same exception type and the same modified text; for the stages, the same DataFrame (values, dtypes, index).
@@ -423,6 +442,7 @@ as returning an unchanged string as the same object.
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)
 - [Differences from warcio](guides/warc.md#differences-from-warcio)
+- [Differences from difflib](guides/difflib.md#differences-from-difflib)
 - [Differences from PyYAML](guides/yaml.md#differences-from-pyyaml), and how PyYAML's
   `CSafeLoader` differs from the `SafeLoader` pyroid follows
   ([list](guides/yaml.md#differences-between-csafeloader-and-safeloader))

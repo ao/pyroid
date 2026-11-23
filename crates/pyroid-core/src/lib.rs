@@ -11,6 +11,7 @@
 //! - [`text`]: text kernels (`pyroid.text`, the demonstration module).
 //! - [`dedup`]: MinHash and exact deduplication (`pyroid.dedup`).
 //! - [`dateutil`]: python-dateutil's date parser, ported exactly (`pyroid.dateutil`).
+//! - [`difflib`]: CPython's difflib, ported exactly (`pyroid.difflib`).
 //! - [`html`]: an HTML parser with lxml 6.1.3's trees (a port of libxml2 2.14.6's), for
 //!   `pyroid.trafilatura`.
 //! - [`metrics`]: ROUGE, BLEU and chrF, exact ports of rouge-score and sacrebleu (`pyroid.metrics`).
@@ -41,6 +42,7 @@ pub mod crfsuite;
 pub mod datasketch;
 pub mod dateutil;
 pub mod dedup;
+pub mod difflib;
 pub mod fasttext;
 pub mod filters;
 pub mod ftfy;
