@@ -23,7 +23,7 @@ use pyroid_core::par;
 
 use crate::batch::{BatchError, SINGLE_DOC_DETACH_BYTES, try_transform};
 use crate::errors::{PyroidError, input_error, type_name, with_note};
-use crate::input::{Threads, arg_note, text_arg};
+use crate::input::{Threads, arg_note, list_items, text_arg};
 
 /// The interpreter's Unicode tables (set once by the shim at import).
 static PROPS: OnceLock<CharProps> = OnceLock::new();
@@ -466,7 +466,7 @@ fn repair_batch<'py>(
             .map(|c| (c, Vec::new()));
     }
     let items: Vec<Bound<'py, PyAny>> = if is_list {
-        texts.cast::<PyList>()?.iter().collect()
+        list_items(texts.cast::<PyList>()?).iter().collect()
     } else {
         texts.cast::<PyTuple>()?.iter().collect()
     };

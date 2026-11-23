@@ -65,8 +65,11 @@ $ pyroid clean data/ out/ --recipe fineweb --workers 8   # redoes only the unfin
 Ctrl-C (SIGINT) and SIGTERM, what `kill`, `timeout`, systemd, Kubernetes and SLURM send, stop the
 run within a second or two: the main process stops its workers, each worker drops the file it was
 on (its temporary outputs are removed), and the command prints `pyroid clean: interrupted` (or
-`terminated`) and exits with status 130 (or 143). A worker whose main process was killed with
-SIGKILL stops by itself.
+`terminated`) and exits with status 130 (or 143). This holds for Ctrl-C in a terminal too, which
+reaches the workers as well as the main process. A worker that has not stopped after 10 seconds is
+killed. A worker whose main process was killed with SIGKILL stops by itself. A signal that comes
+after the command has finished, as the process exits, ends it at once: the shell still sees 130
+(or 143), and the outputs are complete.
 
 Each record holds a fingerprint of the command, its options, the input list (names relative to
 IN, and sizes) and the pyroid version, plus the files the unit wrote, as paths relative to OUT. A
@@ -74,8 +77,10 @@ file counts as done only if its outputs are still there and are the ones the com
 now, so a deleted output, another `--format` or another `--excluded` redoes that file. If the
 fingerprint changes, pyroid refuses to mix the two runs; `--overwrite` redoes everything. Since
 nothing depends on absolute paths, a machine that mounts the data and OUT somewhere else resumes
-the same run. A file OUT keeps the same records next to it (`.out.parquet.pyroid/`) while it runs
-and removes them when it is done.
+the same run. A file OUT keeps the same records next to it (`.out.parquet.pyroid/`) while it runs.
+When it is done, only the record that the file is complete stays there, so the same command run
+again does nothing and exits with status 0, as for a directory OUT. A run that stops before it
+finishes any file removes its records and work directory.
 
 ## Many machines: `--shard`
 

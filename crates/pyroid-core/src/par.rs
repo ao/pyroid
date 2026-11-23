@@ -342,18 +342,45 @@ fn stopped() -> bool {
     call.active() && call.stopped
 }
 
-/// Interrupt checks for a loop on the calling thread: [`Ticker::tick`] once
-/// per item reads the clock only every `stride` items, with `stride` adapted
-/// so that reads are about a millisecond apart.
-struct Ticker {
+/// [`PoolError::interrupted`] if the current call has been stopped (a loop
+/// with a [`Ticker`] gave up, or a map was interrupted); asks the interrupt
+/// check if one is due. For the end of a step whose result is only partial
+/// when it was stopped.
+pub fn checkpoint() -> Result<(), PoolError> {
+    if stop_due(Instant::now()) {
+        Err(PoolError::interrupted())
+    } else {
+        Ok(())
+    }
+}
+
+/// Interrupt checks for a long serial loop of your own (a union-find over
+/// millions of pairs, zeroing a large buffer): call [`Ticker::tick`] once per
+/// item and stop with [`PoolError::interrupted`] when it says so. It reads the
+/// clock only every `stride` items, with `stride` adapted so that reads are
+/// about a millisecond apart, and asks the interrupt check every
+/// [`POLL_INTERVAL`]. It stops only on the thread that called in, inside an
+/// [`interruptible`] call (not [`uninterruptible`]); on a pool worker or
+/// outside a call it never does. Keep items roughly even in cost: a stride
+/// adapted to fast items reads the clock late once items get slow.
+#[derive(Debug)]
+pub struct Ticker {
     on: bool,
     left: u32,
     stride: u32,
     last: Option<Instant>,
 }
 
+impl Default for Ticker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ticker {
-    fn new() -> Self {
+    /// A ticker for a loop that starts now, in the current call.
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             on: CALL.get().active(),
             left: 1,
@@ -362,9 +389,10 @@ impl Ticker {
         }
     }
 
-    /// Should the loop stop before its next item?
+    /// Should the loop stop before its next item? Once it is true, every map
+    /// of the call returns [`PoolError::interrupted`] too.
     #[inline]
-    fn tick(&mut self) -> bool {
+    pub fn tick(&mut self) -> bool {
         if !self.on {
             return false;
         }
@@ -708,6 +736,42 @@ where
     }
 }
 
+/// The interrupt check of the unit tests (of this crate's modules too).
+#[cfg(test)]
+pub(crate) mod testing {
+    use super::{Cell, Poll, set_interrupt_check};
+
+    // The interrupt check is process-wide (set once); each test thread says
+    // through `MODE` what it should answer, and counts the checks.
+    thread_local! {
+        static MODE: Cell<Poll> = const { Cell::new(Poll::Continue) };
+        static STOP_AT: Cell<usize> = const { Cell::new(usize::MAX) };
+        pub(crate) static CHECKS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    fn test_check(first: bool) -> Poll {
+        let n = CHECKS.get() + 1;
+        CHECKS.set(n);
+        if first && MODE.get() == Poll::Never {
+            return Poll::Never;
+        }
+        if n >= STOP_AT.get() {
+            Poll::Stop
+        } else {
+            Poll::Continue
+        }
+    }
+
+    /// On this thread, the check answers `mode` to the first ask of a call
+    /// if that is `Never`, else stops from its `stop_at`-th ask on.
+    pub(crate) fn arm(mode: Poll, stop_at: usize) {
+        set_interrupt_check(test_check);
+        MODE.set(mode);
+        STOP_AT.set(stop_at);
+        CHECKS.set(0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -847,33 +911,7 @@ mod tests {
         );
     }
 
-    // The interrupt check is process-wide (set once); each test thread says
-    // through `MODE` what it should answer, and counts the checks.
-    thread_local! {
-        static MODE: Cell<Poll> = const { Cell::new(Poll::Continue) };
-        static STOP_AT: Cell<usize> = const { Cell::new(usize::MAX) };
-        static CHECKS: Cell<usize> = const { Cell::new(0) };
-    }
-
-    fn test_check(first: bool) -> Poll {
-        let n = CHECKS.get() + 1;
-        CHECKS.set(n);
-        if first && MODE.get() == Poll::Never {
-            return Poll::Never;
-        }
-        if n >= STOP_AT.get() {
-            Poll::Stop
-        } else {
-            Poll::Continue
-        }
-    }
-
-    fn arm(mode: Poll, stop_at: usize) {
-        set_interrupt_check(test_check);
-        MODE.set(mode);
-        STOP_AT.set(stop_at);
-        CHECKS.set(0);
-    }
+    use super::testing::{CHECKS, arm};
 
     /// Items of ~0.2 ms: 20,000 of them take 4 s serially.
     fn slow_item(done: &AtomicUsize, i: usize) -> usize {

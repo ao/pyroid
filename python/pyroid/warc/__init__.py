@@ -18,7 +18,7 @@ import sys
 from collections.abc import Iterator
 from typing import Any, ClassVar, TypedDict
 
-from pyroid import _versions
+from pyroid import _deps, _versions
 from pyroid._pyroid import warc as _native
 from pyroid.warc._records import (
     ArchiveLoadFailed,
@@ -375,10 +375,26 @@ def _mime_ok(mime_type: Any, conversion: bool) -> bool:
     )
 
 
+# The distributions behind the modules datatrove decodes pages with (both in pyroid[warc]).
+_DISTS = {"cchardet": "faust-cchardet", "magic": "python-magic"}
+
+
+def _need(name: str) -> Any:
+    """Import ``cchardet`` or ``magic``; if it is not installed, say what installs it.
+
+    The error is still a ``ModuleNotFoundError`` for ``name``, raised where datatrove's is.
+    """
+    try:
+        return importlib.import_module(name)
+    except ModuleNotFoundError as e:
+        hint = f"pip install 'pyroid[warc]' (or pip install {_DISTS[name]})"
+        _deps.missing("pyroid.warc", e, None, name, hint=hint)
+
+
 def _process_record(record: Any) -> dict[str, Any] | None:
     """Run datatrove 0.10.1's ``process_record``."""
-    cchardet = importlib.import_module("cchardet")
-    magic = importlib.import_module("magic")
+    cchardet = _need("cchardet")
+    magic = _need("magic")
 
     # record type
     if record.rec_type != "response" and record.rec_type != "conversion":
@@ -474,8 +490,8 @@ def _documents(
     source: Any, is_path: bool, gz: bool, iterator_cls: type[ArchiveIterator]
 ) -> Iterator[tuple[int, dict[str, Any]]]:
     try:
-        cchardet = importlib.import_module("cchardet")
-        magic = importlib.import_module("magic")
+        cchardet = _need("cchardet")
+        magic = _need("magic")
     except Exception:
         # datatrove imports both at its first record: its own loop raises at the same place.
         yield from _record_loop(source, is_path, gz, iterator_cls)
@@ -520,10 +536,11 @@ def iter_documents(
     ``ri`` is the record's index among all records of the file. ``cchardet``
     (faust-cchardet) and ``magic`` (python-magic) are imported at the first ``next()``, as
     datatrove imports them at its first record; if either import fails, datatrove's own loop
-    runs on :class:`ArchiveIterator` over CPython's ``gzip.GzipFile``, so the ``ImportError``
-    comes at the first record. The file is opened at the first ``next()``; up to 64 documents
-    (16 MiB of payload) are read ahead, and messages and errors are delivered at the document
-    they belong to.
+    runs on :class:`ArchiveIterator` over CPython's ``gzip.GzipFile``, so the
+    ``ImportError`` comes at the first record (for a module that is not installed, it names
+    ``pip install 'pyroid[warc]'``).
+    The file is opened at the first ``next()``; up to 64 documents (16 MiB of payload) are read
+    ahead, and messages and errors are delivered at the document they belong to.
 
     Args:
         source: A path, or a binary file object.
@@ -550,13 +567,13 @@ def _text(
     """A pending row's text: ``None`` (datatrove skips it), ``True`` (the content) or a str."""
     if mime_type is None:
         if "magic" not in mods:
-            mods["magic"] = importlib.import_module("magic")
+            mods["magic"] = _need("magic")
         if not _mime_ok(mods["magic"].from_buffer(content, mime=True), conversion):
             return None
     if utf8:
         return True
     if "cchardet" not in mods:
-        mods["cchardet"] = importlib.import_module("cchardet")
+        mods["cchardet"] = _need("cchardet")
     encoding_det = mods["cchardet"].detect(content)["encoding"]
     if not encoding_det or encoding_det == "UTF-8":
         return None
