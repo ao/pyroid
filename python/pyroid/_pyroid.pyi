@@ -1,7 +1,9 @@
 # Type stubs for the pyroid._pyroid extension module (crates/pyroid-py).
 # Hand-written: keep in sync with crates/pyroid-py/src/. Checked by stubtest.
+import sys
+from collections.abc import Iterator
 from types import ModuleType
-from typing import Final, Generic, Literal, TypeVar, final
+from typing import Final, Generic, Literal, SupportsIndex, TypeVar, final, overload
 
 _T_co = TypeVar("_T_co", covariant=True)
 
@@ -73,6 +75,15 @@ class Column(Generic[_T_co]):
     ``pyarrow.chunked_array(col)``, ``pyarrow.array(col)``,
     ``polars.Series(col)``, or pass it back to pyroid. pyroid itself needs no
     Arrow library.
+
+    It is also a read-only sequence of its values, which come back as
+    :meth:`to_pylist` gives them (``str``, ``bool`` or ``bytes``, and ``None``
+    for a null): ``len(col)``, ``col[i]`` (negative ``i`` counts from the end),
+    ``for value in col``, ``reversed(col)``, ``value in col``, :meth:`index` and
+    :meth:`count`. Iteration reads each row when it gets to it, so it never
+    builds a list of the whole column. ``col[a:b]`` is a ``Column`` over the
+    same buffers, without a copy; a slice with a step (``col[::2]``) copies the
+    rows it selects into a new ``Column``.
     """
 
     def __arrow_c_stream__(self, requested_schema: object | None = None) -> object:
@@ -82,6 +93,28 @@ class Column(Generic[_T_co]):
         """Export as one Arrow C array, concatenating chunks if needed."""
 
     def __len__(self) -> int: ...
+    @overload
+    def __getitem__(self, index: SupportsIndex, /) -> _T_co | None: ...
+    @overload
+    def __getitem__(self, index: slice, /) -> Column[_T_co]: ...
+    def __iter__(self) -> Iterator[_T_co | None]: ...
+    def __reversed__(self) -> Iterator[_T_co | None]: ...
+    def __contains__(self, value: object, /) -> bool: ...
+    def index(
+        self, value: object, start: SupportsIndex = 0, stop: SupportsIndex = sys.maxsize, /
+    ) -> int:
+        """Return the first row in ``start:stop`` whose value equals ``value``.
+
+        Rows compare as in ``list.index``: a row matches if it is ``value`` or
+        ``== value``, so ``None`` finds the first null.
+
+        Raises:
+            ValueError: No row in ``start:stop`` equals ``value``.
+        """
+
+    def count(self, value: object, /) -> int:
+        """Return the number of rows whose value equals ``value``."""
+
     @property
     def type(self) -> Literal["string", "large_string", "bool", "large_binary"]:
         """Arrow type name."""

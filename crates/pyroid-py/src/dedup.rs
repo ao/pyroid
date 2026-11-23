@@ -1476,7 +1476,7 @@ mod files {
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
 
-    use pyo3::exceptions::{PyOSError, PyValueError};
+    use pyo3::exceptions::PyValueError;
     use pyo3::prelude::*;
     use pyo3::types::PyDict;
     use pyroid_core::dedup::TokenizeError;
@@ -1486,7 +1486,7 @@ mod files {
 
     use super::{NativeConfig, lock};
     use crate::batch::{BatchError, doc_count, fill_rows};
-    use crate::errors::with_note;
+    use crate::errors::{os_error, with_note};
     use crate::input::{Threads, ThreadsArg, texts_and_threads, threads};
 
     const MIB: usize = 1 << 20;
@@ -1495,34 +1495,12 @@ mod files {
     /// `FileNotFoundError`); without an errno, the `io::Error`'s own class
     /// with the path in the message.
     fn io_error(py: Python<'_>, path: &Path, err: io::Error) -> PyErr {
-        if let Some(code) = err.raw_os_error() {
-            let built = (|| -> PyResult<PyErr> {
-                let oserror = py.get_type::<PyOSError>();
-                let exc = if cfg!(windows) {
-                    // A Windows error (5 = ERROR_ACCESS_DENIED), not an errno ("[Errno 5]
-                    // Input/output error"): as OSError's winerror it gives the errno and
-                    // the subclass. io::Error's Display appends " (os error N)", and
-                    // CPython's own messages have no trailing period.
-                    let msg = err.to_string();
-                    let strerror = msg
-                        .strip_suffix(&format!(" (os error {code})"))
-                        .unwrap_or(&msg)
-                        .trim_end_matches(['.', ' ']);
-                    oserror.call1((code, strerror, path.as_os_str(), code))?
-                } else {
-                    let strerror = py.import("os")?.call_method1("strerror", (code,))?;
-                    oserror.call1((code, strerror, path.as_os_str()))?
-                };
-                Ok(PyErr::from_value(exc))
-            })();
-            if let Ok(e) = built {
-                return e;
-            }
-        }
-        PyErr::from(io::Error::new(
-            err.kind(),
-            format!("{}: {err}", path.display()),
-        ))
+        os_error(py, &err, path.as_os_str()).unwrap_or_else(|| {
+            PyErr::from(io::Error::new(
+                err.kind(),
+                format!("{}: {err}", path.display()),
+            ))
+        })
     }
 
     fn files_err(py: Python<'_>, e: MinhashFileError) -> PyErr {

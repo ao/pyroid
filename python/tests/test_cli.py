@@ -925,3 +925,204 @@ def test_clean_into_one_file_from_inputs_with_other_schemas(tmp_path: Path, en_l
     assert [p.name for p in tmp_path.glob(".one.parquet.pyroid/done/*")] == [
         "merged-00000-of-00001.json"
     ]
+
+
+# ------------------------------------------------- options and inputs checked before any work
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_a_bad_compression_is_refused_before_any_work(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], en_lid: Path
+) -> None:
+    # It failed at the first write, after the whole MinHash phase: the work it left behind made
+    # the corrected command refuse to run ("comes from a different run") without --overwrite.
+    src = _write(_table([_english(i) for i in range(20)]), tmp_path / "in.parquet")
+    out = tmp_path / "out.parquet"
+    args = ["clean", str(src), str(out), "--recipe", "fineweb", "--lid-model", str(en_lid)]
+    with pytest.raises(SystemExit) as e:
+        main([*args, "--compression", "bogus"])
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert "pyroid clean: error: argument --compression: Unsupported compression: bogus" in err
+    assert not (tmp_path / ".out.parquet.pyroid").exists()
+    assert main([*args, "--compression", "zstd"]) == 0
+    assert pq.ParquetFile(out).metadata.row_group(0).column(0).compression == "ZSTD"
+    for name in ("NONE", "snappy", "gzip"):
+        assert main([*args, "--compression", name, "--overwrite"]) == 0
+
+
+@pytest.mark.thread_unsafe(reason="monkeypatches pyroid.integrations._io and reads stderr")
+def test_a_refused_run_names_the_unfinished_work_when_out_is_missing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    en_lid: Path,
+) -> None:
+    from pyroid.integrations import _io
+
+    src = _write(_table([_english(i) for i in range(20)]), tmp_path / "in.parquet")
+    out = tmp_path / "out.parquet"
+    args = ["clean", str(src), str(out), "--recipe", "fineweb", "--lid-model", str(en_lid)]
+
+    def full(self: Any, table: Any) -> None:
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    with monkeypatch.context() as m:
+        m.setattr(_io.Writer, "write", full)
+        assert main(args) == 1  # after the MinHash phase: its records stay, for a resume
+    assert not out.exists()
+    capsys.readouterr()
+    with pytest.raises(
+        SystemExit, match=r"the unfinished work in .*out\.parquet\.pyroid comes from"
+    ):
+        main([*args, "--compression", "zstd"])
+    assert main(args) == 0  # the same command resumes
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_langid_keep_names_are_the_models_labels(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], en_lid: Path
+) -> None:
+    # A name that is not a label kept no row, with status 0 ("50 in, 0 out").
+    src = _write(_table([_english(i) for i in range(5)]), tmp_path / "in.parquet")
+    args = ["langid", str(src), str(tmp_path / "o.parquet"), "--model", str(en_lid), "--keep"]
+    for keep, hint in [("english", ""), ("EN", "; did you mean 'en'?"), ("__label__en", "; did")]:
+        assert main([*args, keep]) == 1
+        err = capsys.readouterr().err
+        assert err.startswith(
+            f"pyroid langid: --keep {keep!r} is not a label of the model, so no row would be "
+            f"kept{hint}"
+        ), err
+        assert "labels are language codes such as en)" in err
+    assert main([*args, "en"]) == 0
+    assert pq.read_table(tmp_path / "o.parquet").num_rows == 5
+
+
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["dedup", "--normalize"], "pyroid dedup: --normalize applies to --method exact"),
+        (
+            ["dedup", "--method", "exact", "--hash-fc", "sha1"],
+            "pyroid dedup: --hash-fc applies to --method minhash",
+        ),
+        (
+            ["dedup", "--method", "exact", "--n-grams", "3", "--sort-buffer-mb", "8"],
+            "pyroid dedup: --n-grams, --sort-buffer-mb apply to --method minhash",
+        ),
+        (
+            ["langid", "--min-score", "0.9", "--model", "unused.bin"],
+            "pyroid langid: --min-score and --excluded apply with --keep",
+        ),
+        (
+            ["langid", "--excluded", "x.parquet", "--model", "unused.bin"],
+            "pyroid langid: --min-score and --excluded apply with --keep",
+        ),
+    ],
+)
+def test_options_that_would_be_ignored_are_refused(
+    tmp_path: Path, argv: list[str], message: str
+) -> None:
+    src = _write(_table(["a b c"]), tmp_path / "in.parquet")
+    command, *options = argv
+    with pytest.raises(SystemExit, match=re.escape(message)):
+        main([command, str(src), str(tmp_path / "out.parquet"), *options])
+    assert not list(tmp_path.glob(".out.parquet.pyroid"))
+
+
+def test_minhash_stages_refuse_a_directory_without_the_previous_stage(tmp_path: Path) -> None:
+    # Both accepted an empty directory with status 0, and 'filter' then kept every row.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    other = tmp_path / "inputs"
+    other.mkdir()
+    _write(_table(["a b c"]), other / "a.parquet")
+    for sigs in (empty, other):
+        with pytest.raises(SystemExit, match="holds no signatures"):
+            main(["dedup", "buckets", str(sigs), str(tmp_path / "dups")])
+        with pytest.raises(SystemExit, match="holds no duplicate pairs"):
+            main(["dedup", "cluster", str(sigs), str(tmp_path / "removed")])
+    assert not (tmp_path / "dups").exists()
+    assert not (tmp_path / "removed").exists()
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_read_errors_name_the_file_and_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rows = "".join(json.dumps({"text": f"row {i}"}) + "\n" for i in range(200)).encode()
+    gz = gzip.compress(rows)
+    (tmp_path / "trunc.jsonl.gz").write_bytes(gz[: len(gz) // 2])
+    (tmp_path / "latin1.jsonl").write_bytes('{"text": "ok"}\n{"text": "café"}\n'.encode("latin-1"))
+    (tmp_path / "array.json").write_text(json.dumps([{"text": "a"}, {"text": "b"}]))
+    (tmp_path / "pretty.json").write_text(json.dumps([{"text": "a"}], indent=2))
+    cases = {
+        # It gave "Truncated compressed stream", without the file.
+        "trunc.jsonl.gz": "Truncated compressed stream",
+        # It named "row 0 of chunk 0 of the Arrow input", on three lines.
+        "latin1.jsonl": "line 2: not UTF-8 (byte 13)",
+        # It gave "JSON parse error: Column() changed from object to array in row 0".
+        "array.json": "line 1: an array, not an object (pyroid reads .json, .jsonl and .ndjson "
+        "files as JSON Lines: one object per line)",
+        "pretty.json": "line 1, column 2: Expecting value (pyroid reads .json files as JSON Lines)",
+    }
+    for name, message in cases.items():
+        src = tmp_path / name
+        assert main(["translit", str(src), str(tmp_path / "out.jsonl")]) == 1
+        err = capsys.readouterr().err
+        assert err == f"pyroid translit: {src}: {message}\n", err
+
+
+def test_stats_says_what_is_wrong_with_its_argument(tmp_path: Path) -> None:
+    # Each said "has no pyroid run records (.pyroid/)".
+    (tmp_path / "out.parquet").write_bytes(b"")
+    (tmp_path / "empty").mkdir()
+    for name, message in [
+        ("nosuchdir", ": no such directory"),
+        ("out.parquet", " is a file: give the directory OUT of a run (for a file OUT, the run's "),
+        ("empty", " has no pyroid run records (.pyroid/)"),
+    ]:
+        with pytest.raises(SystemExit) as e:
+            main(["stats", str(tmp_path / name)])
+        assert str(e.value).startswith(f"pyroid stats: {tmp_path / name}{message}"), e.value
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_an_unknown_option_shows_the_commands_usage(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    src = _write(_table(["a"]), tmp_path / "in.parquet")
+    with pytest.raises(SystemExit) as e:
+        main(["translit", str(src), str(tmp_path / "o.parquet"), "--excluded", "x.parquet"])
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert err.startswith("usage: pyroid translit "), err
+    assert err.endswith("pyroid translit: error: unrecognized arguments: --excluded x.parquet\n")
+
+
+@pytest.mark.thread_unsafe(reason="reads stdout")
+def test_help_texts_describe_each_command(capsys: pytest.CaptureFixture[str]) -> None:
+    from pyroid.cli import build_stage_parser
+
+    def help_of(parser: Any) -> str:
+        with pytest.raises(SystemExit):
+            parser.parse_args(["--help"])
+        return " ".join(capsys.readouterr().out.split())
+
+    for name in ("langid", "dedup", "translit"):
+        text = help_of(_command_parser(name))
+        assert "(default: each input's)" in text, name
+        assert "WARC" not in text, name
+    assert "(default: each input's; parquet for WARC inputs)" in help_of(_command_parser("clean"))
+    assert "WARC" not in help_of(build_stage_parser("filter"))
+    signatures = help_of(build_stage_parser("signatures"))
+    assert "--compression" not in signatures  # it said "not used: signature files are not ..."
+    with pytest.raises(SystemExit):
+        build_stage_parser("signatures").parse_args(["in.parquet", "sigs", "--compression", "zstd"])
+    capsys.readouterr()
+
+
+def _command_parser(name: str) -> Any:
+    from pyroid.cli import _subparser, build_parser
+
+    return _subparser(build_parser(), name)
