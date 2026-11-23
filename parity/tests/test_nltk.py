@@ -71,7 +71,7 @@ import pytest
 
 from pyroid_parity import data as D
 from pyroid_parity import multilingual as ML
-from pyroid_parity.plugin import _impl, effective_limit, need, need_corpus, reference
+from pyroid_parity.plugin import _impl, effective_limit, need, need_corpus, oracle_pin, reference
 from pyroid_parity.report import Collector
 
 SUITE = "nltk"
@@ -144,9 +144,10 @@ except ImportError as e:
     nltk = None
     _NO_ORACLE: str | None = f"NLTK (the oracle) is not installed here: {e}"
 else:
+    _WANT = (oracle_pin("nltk", NLTK_VERSION), oracle_pin("regex", REGEX_VERSION))
     _NO_ORACLE = (
-        f"needs nltk {NLTK_VERSION} with regex {REGEX_VERSION}, found {nltk.__version__} with {regex.__version__}"
-        if (nltk.__version__, regex.__version__) != (NLTK_VERSION, REGEX_VERSION)
+        f"needs nltk {_WANT[0]} with regex {_WANT[1]}, found {nltk.__version__} with {regex.__version__}"
+        if (nltk.__version__, regex.__version__) != _WANT
         else None
     )
 

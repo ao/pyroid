@@ -18,6 +18,7 @@ import sys
 from collections.abc import Iterator
 from typing import Any, ClassVar, TypedDict
 
+from pyroid import _deps, _versions
 from pyroid._pyroid import warc as _native
 from pyroid.warc._records import (
     ArchiveLoadFailed,
@@ -51,6 +52,10 @@ __all__ = [
 WARCIO_VERSION = "1.8.2"
 #: warcio's default ``block_size``.
 BUFF_SIZE: int = _native.BUFF_SIZE
+
+_versions.check(__name__, "warcio", f"warcio=={WARCIO_VERSION}")
+# iter_documents and iter_batches are datatrove 0.10.1's WarcReader loop (process_record).
+_versions.check(__name__, "datatrove", "datatrove==0.10.1")
 
 RawStream: Any = _native.RawStream
 ContentStream: Any = _native.ContentStream
@@ -141,7 +146,35 @@ def _is_path(source: object) -> bool:
 
 
 class ArchiveIterator:
-    """Iterate over the records of a WARC or ARC file (warcio's ``ArchiveIterator``)."""
+    """Iterate over the records of a WARC or ARC file (warcio 1.8.2's ``ArchiveIterator``).
+
+    The file may be uncompressed or gzip-compressed with one member per record, as warcio
+    reads them.
+
+    Args:
+        fileobj: A binary file object, or a path to open (read with the GIL released).
+        no_record_parse: Do not parse the HTTP headers.
+        verify_http: Raise :class:`StatusAndHeadersParserException` for an HTTP status line
+            that does not start with a known protocol (or verb, for requests).
+        arc2warc: Present ARC records as WARC records.
+        ensure_http_headers: Give records without HTTP headers a ``200 OK`` set.
+        block_size: The bytes asked for in each ``fh.read()``.
+        check_digests: Check ``WARC-Block-Digest`` and ``WARC-Payload-Digest``: ``True``
+            records the results in ``record.digest_checker``, ``"log"`` also writes problems
+            to stderr, ``"raise"`` raises :class:`ArchiveLoadFailed` at the first.
+
+    Raises:
+        ArchiveLoadFailed: The file is not a WARC or ARC file, a record is malformed, or a
+            gzip member holds several records.
+        EOFError: A gzip member or the file ends inside a record's headers.
+
+    Subclass to change the classes it creates (what ``pyroid.patch("warcio")`` does): the
+    class attributes ``record_cls`` (called as warcio's ``ArcWarcRecord(format, rec_type,
+    rec_headers, raw_stream, http_headers, content_type, length, payload_length=...,
+    digest_checker=...)``), ``headers_cls`` (as ``StatusAndHeaders(statusline=..., headers=...,
+    protocol=..., total_len=...)``), ``digest_checker_cls``, ``archive_load_failed``,
+    ``parser_exception`` and ``logger`` (``warcio.recordloader``'s by default).
+    """
 
     GZIP_ERR_MSG = """
     ERROR: non-chunked gzip file detected, gzip block continues
@@ -209,32 +242,39 @@ class ArchiveIterator:
         return next(self._it)
 
     def close(self) -> None:
-        """Drop the current record and close the decompressor (not the file)."""
+        """Drop the current record and flush the decompressor (the file stays open).
+
+        Raises:
+            zlib.error: The last gzip member was corrupt (CPython 3.13 and later).
+        """
         self._it.close()
 
     def read_to_end(self, record: Any = None) -> None:
-        """Read the rest of the current record (its digests see the bytes)."""
+        """Read the rest of the current record and the blank lines after it."""
         self._it.read_to_end()
 
     def get_record_offset(self) -> int:
-        """The offset of the current record in the file."""
+        """Return the offset of the current record in the file (reads it to its end)."""
         offset: int = self._it.get_record_offset()
         return offset
 
     def get_record_length(self) -> int:
-        """The length of the current record in the file (its gzip member, if compressed)."""
+        """Return the bytes of the current record in the file (reads it to its end).
+
+        Compressed: its gzip member. Uncompressed: up to the blank lines after it.
+        """
         length: int = self._it.get_record_length()
         return length
 
     @property
     def offset(self) -> int:
-        """The offset where the current record started."""
+        """The offset where the next record starts, once the current one has been read."""
         offset: int = self._it.offset
         return offset
 
     @property
     def err_count(self) -> int:
-        """Records not followed by a blank line so far."""
+        """Records so far not followed by a blank line (each also warned about on stderr)."""
         n: int = self._it.err_count
         return n
 
@@ -246,7 +286,7 @@ class ArchiveIterator:
 
     @property
     def known_format(self) -> str | None:
-        """``'warc'`` or ``'arc'``, once a record says which."""
+        """The format of the records read so far (the first record decides)."""
         fmt: str | None = self._it.known_format
         return fmt
 
@@ -257,18 +297,18 @@ class ArchiveIterator:
 
     @property
     def fh(self) -> Any:
-        """The file object read (``None`` when a path was given)."""
+        """The file object read (``None`` for a path)."""
         return self._it.fh
 
 
 class WARCIterator(ArchiveIterator):
-    """``ArchiveIterator`` that reads WARC records only."""
+    """:class:`ArchiveIterator` that reads WARC records only."""
 
     _known_format: ClassVar[str | None] = "warc"
 
 
 class ARCIterator(ArchiveIterator):
-    """``ArchiveIterator`` that reads ARC records only."""
+    """:class:`ArchiveIterator` that reads ARC records only."""
 
     _known_format: ClassVar[str | None] = "arc"
 
@@ -335,10 +375,26 @@ def _mime_ok(mime_type: Any, conversion: bool) -> bool:
     )
 
 
+# The distributions behind the modules datatrove decodes pages with (both in pyroid[warc]).
+_DISTS = {"cchardet": "faust-cchardet", "magic": "python-magic"}
+
+
+def _need(name: str) -> Any:
+    """Import ``cchardet`` or ``magic``; if it is not installed, say what installs it.
+
+    The error is still a ``ModuleNotFoundError`` for ``name``, raised where datatrove's is.
+    """
+    try:
+        return importlib.import_module(name)
+    except ModuleNotFoundError as e:
+        hint = f"pip install 'pyroid[warc]' (or pip install {_DISTS[name]})"
+        _deps.missing("pyroid.warc", e, None, name, hint=hint)
+
+
 def _process_record(record: Any) -> dict[str, Any] | None:
     """Run datatrove 0.10.1's ``process_record``."""
-    cchardet = importlib.import_module("cchardet")
-    magic = importlib.import_module("magic")
+    cchardet = _need("cchardet")
+    magic = _need("magic")
 
     # record type
     if record.rec_type != "response" and record.rec_type != "conversion":
@@ -434,8 +490,8 @@ def _documents(
     source: Any, is_path: bool, gz: bool, iterator_cls: type[ArchiveIterator]
 ) -> Iterator[tuple[int, dict[str, Any]]]:
     try:
-        cchardet = importlib.import_module("cchardet")
-        magic = importlib.import_module("magic")
+        cchardet = _need("cchardet")
+        magic = _need("magic")
     except Exception:
         # datatrove imports both at its first record: its own loop raises at the same place.
         yield from _record_loop(source, is_path, gz, iterator_cls)
@@ -467,7 +523,40 @@ def iter_documents(
     compression: str | None = "infer",
     iterator_cls: type[ArchiveIterator] = ArchiveIterator,
 ) -> Iterator[tuple[int, dict[str, Any]]]:
-    """``(ri, {"text", "id", "url", "date"})`` for each document datatrove keeps."""
+    """Read the documents datatrove 0.10.1's ``WarcReader`` reads from a WARC file.
+
+    This is ``for ri, record in enumerate(ArchiveIterator(f)): doc = process_record(record);
+    if doc: yield ri, doc``, where ``f`` is what datatrove opens: ``response`` and
+    ``conversion`` records whose ``WARC-Identified-Payload-Type`` is ``text/html`` or
+    ``application/xhtml+xml`` (or ``text/plain`` for ``conversion``), or missing and then
+    detected by ``magic.from_buffer``; the payload decoded as UTF-8, else as cchardet guesses
+    (records that decode neither way are skipped). The same documents, the same exceptions at
+    the same record (``KeyError`` for a record without a URL or date), and the same messages.
+
+    ``ri`` is the record's index among all records of the file. ``cchardet``
+    (faust-cchardet) and ``magic`` (python-magic) are imported at the first ``next()``, as
+    datatrove imports them at its first record; if either import fails, datatrove's own loop
+    runs on :class:`ArchiveIterator` over CPython's ``gzip.GzipFile``, so the
+    ``ImportError`` comes at the first record (for a module that is not installed, it names
+    ``pip install 'pyroid[warc]'``).
+    The file is opened at the first ``next()``; up to 64 documents (16 MiB of payload) are read
+    ahead, and messages and errors are delivered at the document they belong to.
+
+    Args:
+        source: A path, or a binary file object.
+        compression: For a path, ``"infer"`` reads names ending in ``.gz`` (any case) as gzip
+            and others as uncompressed, as fsspec does; ``"gzip"`` and ``None`` say which. A
+            gzip file is read through an emulation of CPython's ``gzip.GzipFile`` (the bytes
+            warcio sees, and the ``EOFError`` / ``gzip.BadGzipFile`` / ``zlib.error`` at the
+            same point, as on this CPython version). A file object is read as is unless
+            ``compression="gzip"``.
+        iterator_cls: Where the ``archive_load_failed`` exception and the ``logger`` come
+            from (and the iterator when an import fails), such as warcio's patched class.
+
+    Raises:
+        ValueError: ``compression`` is not ``"infer"``, ``"gzip"`` or ``None``, or the path's
+            extension names another compression (``.zst``, ``.bz2``, ``.xz``, ...).
+    """
     src, is_path, gz = _mode(source, compression)
     return _documents(src, is_path, gz, iterator_cls)
 
@@ -478,13 +567,13 @@ def _text(
     """A pending row's text: ``None`` (datatrove skips it), ``True`` (the content) or a str."""
     if mime_type is None:
         if "magic" not in mods:
-            mods["magic"] = importlib.import_module("magic")
+            mods["magic"] = _need("magic")
         if not _mime_ok(mods["magic"].from_buffer(content, mime=True), conversion):
             return None
     if utf8:
         return True
     if "cchardet" not in mods:
-        mods["cchardet"] = importlib.import_module("cchardet")
+        mods["cchardet"] = _need("cchardet")
     encoding_det = mods["cchardet"].detect(content)["encoding"]
     if not encoding_det or encoding_det == "UTF-8":
         return None
@@ -532,7 +621,20 @@ def iter_batches(
     compression: str | None = "infer",
     iterator_cls: type[ArchiveIterator] = ArchiveIterator,
 ) -> Iterator[Any]:
-    """Arrow record batches of the documents datatrove reads."""
+    """Read a WARC file's documents as Arrow record batches of up to ``batch_size`` rows.
+
+    The rows are the records :func:`iter_documents` looks at: ``response`` and
+    ``conversion`` records whose ``WARC-Identified-Payload-Type`` is one datatrove keeps or
+    is missing. ``text`` is what datatrove's ``process_record`` decodes, and null where it
+    skips the record (``magic.from_buffer`` finds another type, or the payload decodes neither
+    as UTF-8 nor as cchardet guesses); ``url`` and ``date`` are null where datatrove raises
+    ``KeyError``. ``magic`` and ``cchardet`` are imported only when a row needs them.
+    ``source``, ``compression`` and ``iterator_cls`` are as for :func:`iter_documents`; the
+    messages of a batch are emitted before it is yielded.
+
+    Raises:
+        ValueError: ``batch_size`` is not a positive int, or as :func:`iter_documents`.
+    """
     if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
         raise ValueError(f"batch_size must be a positive int, not {batch_size!r}")
     src, is_path, gz = _mode(source, compression)

@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+import sysconfig
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -122,7 +123,7 @@ def test_pyroid_patch_alias_is_lazy() -> None:
                 warnings.simplefilter("always")
                 pyroid.patch("anyascii")
             import anyascii, pyroid.translit
-            assert anyascii.anyascii is pyroid.translit.anyascii
+            assert anyascii.anyascii is pyroid.translit._native.anyascii_package
             import pyroid.integrations as pi
             assert pi.patched() == ("anyascii",)
             pyroid.unpatch()
@@ -160,10 +161,15 @@ def test_names_are_checked_before_anything_is_patched() -> None:
         "fasttext",
         "anyascii",
         "datasketch",
+        "json_repair",
         "trafilatura",
         "nltk",
         "warcio",
         "nemo_curator",
+        "yaml",
+        "tabulate",
+        "dateutil",
+        "jmespath",
         "difflib",
     )
     assert (Path(_patch.HOOK_DIR) / "sitecustomize.py").is_file()
@@ -373,27 +379,32 @@ def test_ftfy_fallback_without_real_ftfy_raises_pyroid_error() -> None:
 
 
 @needs_ftfy
-def test_other_ftfy_version_warns_and_falls_back_to_it() -> None:
+def test_other_ftfy_version_warns_and_falls_back_to_it(tmp_path: Path) -> None:
+    info = tmp_path / "ftfy-6.2.0.dist-info"  # another ftfy release's metadata, found first
+    info.mkdir()
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: ftfy\nVersion: 6.2.0\n")
     ok(
         child(
-            """
-            import ftfy as real
-            real.__version__ = "6.2.0"  # what pyroid sees if another ftfy is installed
-            import pyroid.ftfy, pyroid.integrations as pi
+            f"""
+            sys.path.insert(0, {str(tmp_path)!r})
+            import pyroid, pyroid.integrations as pi
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 pi.patch("ftfy")
-            messages = [str(w.message) for w in caught]
-            assert [w.category for w in caught] == [pi.PatchWarning] * 2, messages
-            assert "the installed ftfy is 6.2.0" in messages[1] and "6.3.1" in messages[1]
+            got = [(w.category, str(w.message), w.filename) for w in caught]
+            assert [c for c, _, _ in got] == [pyroid.VersionMismatchWarning, pi.PatchWarning], got
+            assert got[0][1].startswith(
+                "pyroid.ftfy reproduces ftfy 6.3.1, but ftfy 6.2.0 is installed: "
+            ), got
+            assert got[0][2] == "<string>", got  # the caller's line
             import ftfy
-            assert ftfy.__version__ == "6.3.1" and ftfy.__wrapped__ is real
+            assert ftfy.__version__ == "6.3.1" and ftfy.__wrapped__.__version__ == "6.3.1"
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 ftfy.fix_text("abc", max_decode_length=5.0)
-            # pyroid.ftfy's own warning about the version it falls back to: it got the real ftfy.
-            got = [(w.category.__name__, str(w.message)) for w in caught]
-            assert ("RuntimeWarning", "pyroid.ftfy is falling back to ftfy 6.2.0, not 6.3.1") in got
+            # The fallback only says it delegates: the version was checked once, by patch().
+            got = [w.category.__name__ for w in caught]
+            assert got == ["FallbackWarning"], got
             """
         )
     )
@@ -527,7 +538,8 @@ def test_anyascii_shim_and_code_imported_before_keeps_working() -> None:
             import pyroid.translit as impl
             patch_quietly("anyascii")
             import anyascii
-            assert anyascii.anyascii is impl.anyascii and early is not impl.anyascii
+            assert anyascii.anyascii is impl._native.anyascii_package
+            assert early is not anyascii.anyascii
             assert anyascii.__version__ == impl.ANYASCII_VERSION == "0.3.3"
             assert anyascii.__wrapped__._blocks is anyascii._blocks  # forwarded
             # The real function loads its tables with importlib.resources ("anyascii._data"),
@@ -542,6 +554,53 @@ def test_anyascii_shim_and_code_imported_before_keeps_working() -> None:
     )
 
 
+@needs_anyascii
+def test_anyascii_shim_takes_what_the_package_takes() -> None:
+    # The package's anyascii() iterates anything that is not ASCII per isascii(): a list of
+    # characters gives one str, an ASCII bytes comes back as it is. pyroid.translit.anyascii
+    # takes a list as a batch, so the shim must not be that function.
+    ok(
+        child(
+            """
+            import anyascii as real
+            patch_quietly("anyascii")
+            import anyascii
+
+            class S(str):
+                pass
+
+            def outcome(x):
+                try:
+                    v = x() if callable(x) else x
+                    v = f(v)
+                except Exception as e:
+                    return ("raise", type(e), str(e))
+                return (type(v), v)
+
+            inputs = [
+                lambda: list("Björk"), lambda: ("é", "ü"), lambda: (c for c in "Björk"),
+                lambda: iter("ab"), lambda: {"é": 1}, lambda: {"é"}, lambda: b"abc",
+                lambda: "café".encode(), lambda: bytearray(b"abc"), lambda: memoryview(b"abc"),
+                lambda: S("Björk"), lambda: S("abc"), lambda: None, lambda: 3,
+                lambda: ["ab", "cd"], lambda: [], lambda: "", lambda: ["é", None],
+                lambda: ["\\ud800", "é"], lambda: "Björk 東京", lambda: "plain ascii",
+            ]
+            for make in inputs:
+                f = real.anyascii
+                want = outcome(make)
+                f = anyascii.anyascii
+                got = outcome(make)
+                assert got == want, (make(), got, want)
+            assert anyascii.anyascii(string="Björk") == real.anyascii(string="Björk") == "Bjork"
+            s = S("abc")
+            assert anyascii.anyascii(s) is s
+            ascii_str = "plain ascii"
+            assert anyascii.anyascii(ascii_str) is ascii_str
+            """
+        )
+    )
+
+
 def test_anyascii_shim_without_anyascii() -> None:
     ok(
         child(
@@ -549,10 +608,85 @@ def test_anyascii_shim_without_anyascii() -> None:
             patch_quietly("anyascii")
             from anyascii import anyascii
             import pyroid.translit as impl
-            assert anyascii is impl.anyascii and anyascii("Björk") == "Bjork"
+            assert anyascii is impl._native.anyascii_package and anyascii("Björk") == "Bjork"
+            assert anyascii(list("Björk")) == "Bjork" and anyascii(b"abc") == b"abc"
             assert sys.modules["anyascii"].__wrapped__ is None
             """,
             hide=("anyascii",),
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# json_repair
+# ---------------------------------------------------------------------------
+
+
+def real_json_repair_ok() -> bool:
+    if not installed("json_repair"):
+        return False
+    from importlib.metadata import version
+
+    import pyroid.json_repair as impl
+
+    return version("json-repair") == impl.JSON_REPAIR_VERSION
+
+
+needs_json_repair = pytest.mark.skipif(
+    not real_json_repair_ok(), reason="needs the json-repair release pyroid reproduces"
+)
+
+
+@needs_json_repair
+def test_json_repair_shim_with_real_json_repair() -> None:
+    ok(
+        child(
+            """
+            from json_repair import repair_json as early  # imported before patch(): the real one
+            import pyroid.json_repair as impl
+            patch_quietly("json_repair")
+            import json_repair
+            from json_repair.json_repair import loads as sub_loads
+            for n in ("repair_json", "loads", "load", "from_file"):
+                assert getattr(json_repair, n) is getattr(impl, n), n
+                assert getattr(json_repair.json_repair, n) is getattr(impl, n), n
+            assert sub_loads is impl.loads and early is not impl.repair_json
+            assert json_repair.JSONReturnType is impl.JSONReturnType
+            assert sys.modules["json_repair.json_repair"] is json_repair.json_repair
+            # Not ported: forwarded to the real package.
+            assert json_repair.__wrapped__.utils is json_repair.utils
+            doc = "{'a': 1, b: [1, 2,}"
+            assert json_repair.repair_json(doc) == early(doc) == '{"a": 1, "b": [1, 2]}'
+            # A delegated call (a char the port reserves) reaches the real json_repair.
+            reserved = '["\U0010f800", 1'
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                assert json_repair.loads(reserved) == json_repair.__wrapped__.loads(reserved)
+            assert [w.category.__name__ for w in caught] == ["FallbackWarning"]
+            """
+        )
+    )
+
+
+def test_json_repair_shim_without_json_repair() -> None:
+    ok(
+        child(
+            """
+            patch_quietly("json_repair")
+            from json_repair import repair_json
+            from json_repair.json_repair import loads
+            import pyroid, pyroid.json_repair as impl
+            assert repair_json is impl.repair_json and loads is impl.loads
+            assert repair_json("[1, 2") == "[1, 2]"
+            assert sys.modules["json_repair"].__wrapped__ is None
+            try:
+                loads('["\U0010f800", 1')
+            except pyroid.PyroidError as e:
+                assert "json_repair is not installed" in str(e), e
+            else:
+                raise AssertionError("a delegated call without json_repair must raise PyroidError")
+            """,
+            hide=("json_repair",),
         )
     )
 
@@ -671,7 +805,7 @@ def test_datasketch_shim_without_datasketch() -> None:
 
 SCENARIOS = [
     (name, scenario)
-    for name in ("ftfy", "fasttext", "anyascii", "datasketch")
+    for name in ("ftfy", "fasttext", "anyascii", "datasketch", "json_repair")
     for scenario in ("not imported", "imported", "blocked", "not installed")
 ]
 
@@ -716,7 +850,7 @@ def test_unpatch_restores_sys_modules_exactly(name: str, scenario: str) -> None:
             assert pyroid.ftfy._ftfy is fallback and pi.patched() == ()
             # A module that imported the shim keeps a working one.
             fn = {"ftfy": "fix_text", "fasttext": "tokenize", "anyascii": "anyascii",
-                  "datasketch": "minhash_batch"}[name]
+                  "datasketch": "minhash_batch", "json_repair": "repair_json"}[name]
             assert callable(getattr(shim, fn))
             """,
             args=(name, scenario),
@@ -847,8 +981,35 @@ def test_run_script(tmp_path: Path) -> None:
     assert out["env"] == "ftfy"
     assert out["hook"] == _patch.HOOK_DIR
     assert proc.stderr.count("PatchWarning") == 1, proc.stderr
-    # A plain line: under pyroid run there is no user code for a warning location to point at.
-    assert proc.stderr.startswith("pyroid run: PatchWarning: pyroid.integrations.patch: ")
+    # One short plain line: under pyroid run there is no user code for a warning location to
+    # point at, and patch()'s long per-name warning would be repeated on every run.
+    assert proc.stderr == (
+        "pyroid run: PatchWarning: ftfy patched with pyroid.ftfy, in this process and the "
+        "Python processes it starts\n"
+    )
+
+
+def test_run_refuses_a_second_target_while_one_runs(tmp_path: Path) -> None:
+    """A target owns the process (sys.argv, sys.path[0]): a second one is refused, not mixed in.
+    Once the first has finished, the next runs."""
+    (tmp_path / "inner.py").write_text("import sys; print('inner', sys.argv[1:])\n")
+    (tmp_path / "outer.py").write_text(
+        "import sys, threading\n"
+        "from pyroid.integrations._patch import run\n"
+        "codes = []\n"
+        "t = threading.Thread(target=lambda: codes.append(run(['inner.py', 'b'])))\n"
+        "t.start(); t.join()\n"
+        "print('outer', codes, run(['inner.py', 'c']), sys.argv[1:])\n"
+    )
+    code = f"{RUN[: RUN.index('sys.exit')]}run(sys.argv[1:]); sys.exit(run(['inner.py', 'd']))"
+    proc = child(code, args=("-p", "ftfy", "outer.py", "a"), cwd=tmp_path, prelude=False)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == "outer [2] 2 ['a']\ninner ['d']\n"
+    refused = (
+        "pyroid run: error: another target is running in this process (pyroid run makes its "
+        "target the program: sys.argv, sys.path[0]); run each in its own process\n"
+    )
+    assert proc.stderr.endswith(refused * 2), proc.stderr
 
 
 def test_run_module(tmp_path: Path) -> None:
@@ -858,6 +1019,10 @@ def test_run_module(tmp_path: Path) -> None:
     (tmp_path / "pkg/__main__.py").write_text(PROBE)
     proc = run_cli(["-p", "ftfy,anyascii", "-m", "probe", "0", "x"], cwd=tmp_path)
     out = ok(proc)
+    assert proc.stderr.splitlines() == [
+        "pyroid run: PatchWarning: ftfy, anyascii patched with pyroid.ftfy, pyroid.translit, "
+        "in this process and the Python processes it starts"
+    ]
     assert out["argv"] == [str(tmp_path / "probe.py"), "0", "x"]  # as `python -m probe 0 x`
     assert out["name"] == "__main__"
     assert out["spec"] == "probe"
@@ -875,6 +1040,64 @@ def test_run_target_exceptions_propagate(tmp_path: Path) -> None:
     assert proc.returncode == 1
     assert "ValueError: boom" in proc.stderr
     assert 'boom.py", line 1' in proc.stderr
+
+
+def test_run_tracebacks_start_at_the_target(tmp_path: Path) -> None:
+    """As ``python boom.py`` shows it: no frames of pyroid run or runpy above the script's."""
+    (tmp_path / "boom.py").write_text("def f():\n    raise ValueError('boom')\n\n\nf()\n")
+    (tmp_path / "bad.py").write_text("x = (\n")
+    launcher = Path(sysconfig.get_path("scripts")) / ("pyroid.exe" if os.name == "nt" else "pyroid")
+    runs = [run_cli(["-p", "ftfy", "boom.py"], cwd=tmp_path)]
+    if launcher.exists():
+        cmd = [str(launcher), "run", "-p", "ftfy", "boom.py"]
+        runs.append(subprocess.run(cmd, cwd=tmp_path, capture_output=True, text=True, check=False))
+    for proc in runs:
+        assert proc.returncode == 1
+        tb = proc.stderr.split("Traceback (most recent call last):\n", 1)[1].splitlines()
+        assert tb[0] == '  File "boom.py", line 5, in <module>', proc.stderr
+        assert [ln for ln in tb if ln.startswith("  File ")] == [
+            '  File "boom.py", line 5, in <module>',
+            '  File "boom.py", line 2, in f',
+        ]
+        assert tb[-1] == "ValueError: boom"
+    proc = run_cli(["-p", "ftfy", "bad.py"], cwd=tmp_path)
+    assert proc.returncode == 1
+    assert "runpy" not in proc.stderr
+    assert proc.stderr.rstrip().endswith("SyntaxError: '(' was never closed")
+
+
+def test_run_repeated_p_options_add_up(tmp_path: Path) -> None:
+    (tmp_path / "probe.py").write_text(PROBE)
+    out = ok(run_cli(["-p", "ftfy", "--patch", "anyascii", "probe.py"], cwd=tmp_path))
+    assert out["env"] == "ftfy,anyascii"  # the last -p alone won before
+    out = ok(run_cli(["-pftfy", "-p", "ftfy,anyascii", "--patch=ftfy", "probe.py"], cwd=tmp_path))
+    assert out["env"] == "ftfy,anyascii"
+
+
+def test_run_finds_a_module_in_the_working_directory(tmp_path: Path) -> None:
+    """``pyroid run -m pkg`` through the installed launcher, whose sys.path[0] is its own
+    directory: the module is looked up after sys.path[0] is the working directory, as
+    ``python -m pkg`` does (it said "No module named pkg")."""
+    launcher = Path(sysconfig.get_path("scripts")) / ("pyroid.exe" if os.name == "nt" else "pyroid")
+    if not launcher.exists():
+        pytest.skip(f"no {launcher}")
+    (tmp_path / "showmod").mkdir()
+    (tmp_path / "showmod/__init__.py").write_text("")
+    (tmp_path / "showmod/__main__.py").write_text(PROBE)
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYROID_PATCH")}
+    cmd = [str(launcher), "run", "-p", "ftfy", "-m", "showmod", "0"]
+    proc = subprocess.run(cmd, cwd=tmp_path, env=env, capture_output=True, text=True, check=False)
+    out = ok(proc)
+    assert out["spec"] == "showmod.__main__"
+    assert out["path0"] == str(tmp_path)
+
+
+def test_run_warning_has_one_prefix(tmp_path: Path) -> None:
+    (tmp_path / "probe.py").write_text(PROBE)
+    proc = child(RUN, args=("probe.py",), cwd=tmp_path, hide=("numpy",))
+    ok(proc)
+    assert "pyroid run: PatchWarning: not patching fasttext: " in proc.stderr
+    assert "PatchWarning: pyroid:" not in proc.stderr
 
 
 @pytest.mark.parametrize(
@@ -947,7 +1170,7 @@ def test_run_patches_child_processes_and_warns_once(tmp_path: Path) -> None:
     assert out["subprocess"] == ["True", "True"]
     # Shown by the parent only, not again by each worker (stderr is shared with them).
     assert out["subprocess_stderr"] == ""
-    assert proc.stderr.count("PatchWarning") == 2, proc.stderr
+    assert proc.stderr.count("PatchWarning") == 1, proc.stderr
 
 
 # ---------------------------------------------------------------------------

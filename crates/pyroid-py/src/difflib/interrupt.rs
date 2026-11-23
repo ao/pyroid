@@ -9,16 +9,11 @@
 //! result is dropped and the call raises that exception. Nothing the
 //! instance holds is changed by a call that stops, so it stays usable.
 //!
-//! Batches run in parts ([`in_parts`]) of about 50 ms each, with the checks
-//! on for the items the calling thread runs itself and signals checked
-//! between parts. An item on a pool thread is not stopped halfway.
-//!
-//! The crate-wide `interrupt` module (feat/fixes3) is not on main yet; when
-//! it is, the batches can move to its `detach_batch`.
+//! The batches (`ratio_batch`, `close_matches_batch`, `get_close_matches` over
+//! long lists) run under `crate::interrupt::detach_batch` instead, which stops
+//! their `par` maps between items.
 
 use std::cell::RefCell;
-use std::ops::Range;
-use std::time::{Duration, Instant};
 
 use pyo3::exceptions::PyKeyboardInterrupt;
 use pyo3::intern;
@@ -88,41 +83,6 @@ where
         return Err(PENDING
             .with(|p| p.borrow_mut().take())
             .unwrap_or_else(|| PyKeyboardInterrupt::new_err(())));
-    }
-    Ok(out)
-}
-
-/// About how long one part of a batch should take.
-const PART: Duration = Duration::from_millis(50);
-
-/// `part(range)` for consecutive ranges covering `0..n`, results in order,
-/// with signals checked between parts. The first range has `first` items;
-/// later ones are sized from how long the last took (about [`PART`] each,
-/// at least `min` items). `part` runs its range with [`run`].
-pub fn in_parts<R>(
-    py: Python<'_>,
-    n: usize,
-    first: usize,
-    min: usize,
-    mut part: impl FnMut(Range<usize>) -> PyResult<Vec<R>>,
-) -> PyResult<Vec<R>> {
-    let min = min.max(1);
-    let mut out = Vec::with_capacity(n);
-    let (mut start, mut len) = (0, first.max(min));
-    while start < n {
-        let end = start + len.min(n - start);
-        let t = Instant::now();
-        out.extend(part(start..end)?);
-        let took = t.elapsed().as_secs_f64();
-        py.check_signals()?;
-        // Aim for PART, changing the size at most 4x at a time.
-        #[allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            clippy::cast_precision_loss
-        )]
-        let next = (len as f64 * (PART.as_secs_f64() / took.max(1e-6)).clamp(0.25, 4.0)) as usize;
-        (start, len) = (end, next.max(min));
     }
     Ok(out)
 }

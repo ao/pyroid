@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 license = "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib"
 license-files = ["LICENSE", "LICENSES/*", "NOTICE"]
 authors = [{ name = "Andrew Odendaal" }]
-keywords = ["rust", "pyo3", "ftfy", "json-repair", "datasketch", "minhash", "nltk", "jieba", "tokenizer", "trafilatura", "web-scraping", "warc", "fasttext", "datatrove", "rouge", "bleu", "nlp", "text-cleaning", "deduplication", "llm"]
+keywords = ["rust", "pyo3", "ftfy", "json-repair", "datasketch", "minhash", "nltk", "jieba", "tokenizer", "trafilatura", "web-scraping", "warc", "yaml", "pyyaml", "tabulate", "markdown", "fasttext", "datatrove", "rouge", "bleu", "nlp", "text-cleaning", "deduplication", "llm"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -112,13 +112,23 @@ test = [
   "nltk==3.10.4",
   "regex==2026.9.29",
   # The reference for pyroid.json_repair's parity tests (MIT, pure Python).
-  "json-repair==0.64.5",
+  "json-repair==0.64.9",
   # The reference for pyroid.datasketch's parity tests (MIT; pulls numpy and scipy).
   "datasketch==2.0.0",
   # The reference for pyroid.jieba and for datatrove's Chinese tokenizer (MIT, pure Python).
   "jieba==0.42.1",
   # The reference for pyroid.warc (Apache-2.0, pure Python).
   "warcio==1.8.2",
+  # The reference for pyroid.yaml (MIT; its pure-Python SafeLoader and SafeDumper are the oracle).
+  # No CPython 3.15 wheels yet: there the parity tests skip and the PyYAML-less tests run.
+  "pyyaml==6.0.3; python_version < '3.15'",
+  # The reference for pyroid.tabulate (MIT, pure Python), and the wide-character widths both use.
+  "tabulate==0.10.0",
+  "wcwidth>=0.2.13",
+  # The reference for pyroid.dateutil (BSD-3-Clause, pure Python): the newest release it reproduces.
+  "python-dateutil==4.0.0",
+  # The reference for pyroid.jmespath (MIT, pure Python).
+  "jmespath==1.1.0",
 ]
 # GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
 # PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds
@@ -200,6 +210,12 @@ testpaths = ["python/tests"]
 target-version = "py311"
 line-length = 100
 src = ["python"]
+# python-dateutil's own code, kept as released (pyroid.dateutil's reference path).
+extend-exclude = [
+  "python/pyroid/dateutil/_reference.py",
+  "python/pyroid/dateutil/_isoreference.py",
+  "python/pyroid/dateutil/_tzlite.py",
+]
 
 [tool.ruff.lint]
 # An explicit list (not ruff's default set) so a ruff upgrade never adds rules silently.
@@ -249,6 +265,21 @@ files = ["python/pyroid", "python/tests"]
 # pyroid.integrations.nemo_curator and its tests: NeMo Curator 1.4.0 ships no py.typed, and the
 # mypy hook installs neither it nor pandas (pandas-stubs is not a dependency).
 module = ["nemo_curator", "nemo_curator.*", "pandas", "pandas.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# PyYAML 6.0.3 (the reference for pyroid.yaml's tests) ships neither py.typed nor stubs.
+module = ["yaml", "yaml.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# python-dateutil ships no py.typed (types-python-dateutil is not a dependency).
+module = ["dateutil", "dateutil.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# jmespath 1.1.0 (the reference for pyroid.jmespath's tests) ships neither py.typed nor stubs.
+module = ["jmespath", "jmespath.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

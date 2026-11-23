@@ -10,6 +10,7 @@
 //!   boolean) so the bindings can export results without an Arrow dependency.
 //! - [`text`]: text kernels (`pyroid.text`, the demonstration module).
 //! - [`dedup`]: MinHash and exact deduplication (`pyroid.dedup`).
+//! - [`dateutil`]: python-dateutil's date parser, ported exactly (`pyroid.dateutil`).
 //! - [`difflib`]: CPython's difflib, ported exactly (`pyroid.difflib`).
 //! - [`html`]: an HTML parser with lxml 6.1.3's trees (a port of libxml2 2.14.6's), for
 //!   `pyroid.trafilatura`.
@@ -21,6 +22,7 @@
 //! - [`sudachi`]: Japanese morphemes as SudachiPy 0.7.0 gives them, from an
 //!   installed SudachiDict (datatrove's Japanese tokenizer in the filters).
 //! - [`warc`]: warcio 1.8.2's WARC/ARC reader, ported exactly (`pyroid.warc`).
+//! - [`tabulate`]: tabulate 0.10.0's table rendering (`pyroid.tabulate`).
 //! - [`pyvi`]: Vietnamese words as spaCy's tokenizer gets them from pyvi 0.1.1
 //!   (datatrove's Vietnamese tokenizer in the filters).
 //! - [`pythainlp`]: Thai words and sentences as PyThaiNLP 5.4.0 gives them,
@@ -28,6 +30,8 @@
 //!   Thai tokenizer in the filters).
 //! - [`crfsuite`]: CRFsuite model files and Viterbi tagging, for pyvi and
 //!   PyThaiNLP's sentence model.
+//! - [`yaml`]: PyYAML 6.0.3's safe loader and dumper, ported exactly (`pyroid.yaml`).
+//! - [`jmespath`]: jmespath 1.1.0's lexer and parser (`pyroid.jmespath`).
 //! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).
 //!
 //! Each module adds a `src/<mod>/` directory here; see `docs/dev/MODULES.md`.
@@ -36,6 +40,7 @@
 pub mod columnar;
 pub mod crfsuite;
 pub mod datasketch;
+pub mod dateutil;
 pub mod dedup;
 pub mod difflib;
 pub mod fasttext;
@@ -43,6 +48,7 @@ pub mod filters;
 pub mod ftfy;
 pub mod html;
 pub mod jieba;
+pub mod jmespath;
 pub mod json_repair;
 pub mod metrics;
 pub mod nemo;
@@ -50,9 +56,12 @@ pub mod nltk;
 pub mod par;
 pub mod pythainlp;
 pub mod pyvi;
+pub mod scratch;
 pub mod sudachi;
+pub mod tabulate;
 pub mod text;
 pub mod trafilatura;
 pub mod translit;
 pub mod version;
 pub mod warc;
+pub mod yaml;

@@ -20,9 +20,9 @@ pyroid has no runtime dependencies. Extras:
 | `pyroid[all]` | all of the above | everything; on CPython 3.15 it leaves out `datatrove`, `hf` and `warc` (see below) |
 
 Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
-`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.trafilatura`,
-`pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader, `pyroid.difflib` and `pyroid.patch()` need none
-of them.
+`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.jmespath`,
+`pyroid.tabulate`, `pyroid.trafilatura`, `pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader,
+`pyroid.yaml`, `pyroid.dateutil.parser`, `pyroid.difflib` and `pyroid.patch()` need none of them.
 
 Some dependencies of the `datatrove`, `hf` and `warc` extras (orjson, tokenizers, PyYAML and
 faust-cchardet) publish no wheels for CPython 3.15 and 3.15t yet, and orjson none for 3.14t. There
@@ -44,7 +44,13 @@ Optional libraries, needed only by the features that use them:
     - nltk 3.10.4 for Punkt training and the other `pyroid.nltk` features it hands back;
     - jieba 0.42.1 for `pyroid.jieba.posseg`, `pyroid.jieba.analyse` and paddle mode;
     - rouge-score 0.1.2 and sacrebleu 2.6.0 for the delegated metrics features;
-    - json_repair 0.64.5 for `schema=`;
+    - json_repair 0.64.9 for `schema=`;
+    - PyYAML 6.0.3 for customised loaders and dumpers, `!!python/` tags and its other functions
+      (`scan`, `compose`, `YAMLObject`, ...);
+    - wcwidth for `pyroid.tabulate`'s wide-character widths (its few calls that the Rust code does
+      not take run pyroid's copy of tabulate 0.10.0's code: tabulate itself is never needed);
+    - python-dateutil for `tzinfos` values given as strings (`tz.tzstr`); when it is installed,
+      `pyroid.dateutil.parser` returns its tz objects and raises its `ParserError`;
     - datasketch 2.0.0 for its classes pyroid does not port (`WeightedMinHash`, `HyperLogLog`,
       ...) and for Redis or Cassandra LSH storage.
 

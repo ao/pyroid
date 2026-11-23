@@ -1,6 +1,6 @@
 //! `ratio_batch` and `close_matches_batch`: `SequenceMatcher` over many
-//! strings at once, on the shared pool, in parts with Ctrl-C checked between
-//! them (see [`super::interrupt`]).
+//! strings at once, on the shared pool. They run under
+//! `crate::interrupt::detach_batch`, so Ctrl-C stops them between items.
 
 use std::ops::Range;
 
@@ -11,13 +11,9 @@ use pyroid_core::difflib::{StrMatcher, nlargest, with_work};
 use pyroid_core::par;
 use rustc_hash::FxHashSet;
 
-use super::interrupt;
 use crate::batch::{BatchError, rows};
 use crate::errors::input_error;
 use crate::input::{self, TextInput, Threads, text_arg};
-
-/// Pairs in the first part of a batch (Ctrl-C is checked between parts).
-const FIRST_PART: usize = 1 << 10;
 
 fn code_points(s: &str) -> impl Iterator<Item = u32> + '_ {
     s.chars().map(u32::from)
@@ -122,11 +118,8 @@ pub fn ratio_batch<'py>(
             }
         }
     };
-    let out = interrupt::in_parts(py, n, FIRST_PART, 2 * par::MIN_DOCS_PER_TASK, |range| {
-        let start = range.start;
-        interrupt::run(py, true, || par::map(range.len(), t, |i| pair(start + i)))?
-            .map_err(|e| BatchError::from(e).into_pyerr(py))
-    })?;
+    let out = crate::interrupt::detach_batch(py, || par::map(n, t, pair))
+        .map_err(|e| crate::interrupt::pool_error(&e))?;
     PyList::new(py, out)
 }
 
@@ -177,36 +170,35 @@ pub fn _close_matches_batch<'py>(
         .map_err(|e| BatchError::from(e).into_pyerr(py))?;
     let mut picked: Vec<Option<Vec<usize>>> = Vec::with_capacity(rw.len());
     if rw.len() >= 2 * par::MIN_DOCS_PER_TASK {
-        // Many words: each part's words in `tasks` runs of words, one task each.
-        let found = interrupt::in_parts(py, rw.len(), 2 * tasks, tasks, |range| {
-            let words = &rw[range];
-            let k = tasks.min(words.len()).max(1);
-            let runs: Vec<Range<usize>> = (0..k)
-                .map(|i| i * words.len() / k..(i + 1) * words.len() / k)
-                .collect();
-            let done = interrupt::run(py, true, || {
-                par::map_tasks(&runs, t, |run| {
-                    words[run.clone()]
-                        .iter()
-                        .map(|word| word.map(|word| one(word, par::Threads::ONE)).transpose())
-                        .collect::<Result<Vec<_>, BatchError>>()
-                })
-            })?
-            .map_err(|e| BatchError::from(e).into_pyerr(py))?;
-            let mut out = Vec::with_capacity(words.len());
-            for run in done {
-                out.extend(run.map_err(|e| e.into_pyerr(py))?);
-            }
-            Ok(out)
-        })?;
-        picked.extend(found);
+        // Many words: `tasks` runs of words, one task each, which stop between words on Ctrl-C.
+        let k = tasks.min(rw.len()).max(1);
+        let runs: Vec<Range<usize>> = (0..k)
+            .map(|i| i * rw.len() / k..(i + 1) * rw.len() / k)
+            .collect();
+        let done = crate::interrupt::detach_batch(py, || {
+            par::map_tasks_stoppable(&runs, t, |run, stop| {
+                let mut out = Vec::with_capacity(run.len());
+                for word in &rw[run.clone()] {
+                    if stop.requested() {
+                        break; // the map returns PoolError::interrupted()
+                    }
+                    out.push(word.map(|word| one(word, par::Threads::ONE)).transpose()?);
+                }
+                Ok::<_, BatchError>(out)
+            })
+        })
+        .map_err(|e| crate::interrupt::pool_error(&e))?;
+        for run in done {
+            picked.extend(run.map_err(|e| e.into_pyerr(py))?);
+        }
     } else {
         for word in &rw {
             let found = match word {
                 None => None,
-                Some(word) => {
-                    Some(interrupt::run(py, true, || one(word, t))?.map_err(|e| e.into_pyerr(py))?)
-                }
+                Some(word) => Some(
+                    crate::interrupt::detach_batch(py, || one(word, t))
+                        .map_err(|e| e.into_pyerr(py))?,
+                ),
             };
             picked.push(found);
             py.check_signals()?;

@@ -367,33 +367,94 @@ Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Milliseconds for the 
 
 ### pyroid.json_repair
 
-Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Single documents, best time per call, json_repair 0.64.5 on CPython 3.12 (3.15t was within ±10%). Release wheel; other work kept the load average between 16 and 24. Guide: [json_repair](guides/json_repair.md).
+EC2 c8g.16xlarge devbox (Graviton4, shared), indicative. Single documents, best time per call, json_repair 0.64.9 on CPython 3.12. Release wheel; load average 0.1 to 4.7. Guide: [json_repair](guides/json_repair.md).
 
 | Document and call | json_repair | pyroid | Speedup |
 |---|---:|---:|---:|
-| valid JSON, ~1 KB, `repair_json` | 11.3 µs | 6.6 µs | 1.7× |
-| valid JSON, ~1 KB, `loads` | 6.2 µs | 6.4 µs | 1.0× |
-| broken JSON, ~1 KB, `repair_json` | 600 µs | 20.1 µs | 30× |
-| broken JSON, ~1 KB, `loads` | 589 µs | 22.2 µs | 27× |
-| valid JSON, 1.2 MB, `repair_json` | 9.9 ms | 8.1 ms | 1.2× |
-| broken JSON, 1 MB, `repair_json` | 544 ms | 17.1 ms | 32× |
-| broken JSON, 1 MB, `loads` | 548 ms | 18.6 ms | 30× |
+| valid JSON, ~1 KB, `repair_json` | 12.6 µs | 7.5 µs | 1.7× |
+| valid JSON, ~1 KB, `loads` | 6.6 µs | 6.6 µs | 1.0× |
+| broken JSON, ~1 KB, `repair_json` | 367 µs | 21.0 µs | 17× |
+| broken JSON, ~1 KB, `loads` | 358 µs | 23.6 µs | 15× |
+| valid JSON, 1.2 MB, `repair_json` | 10.1 ms | 7.6 ms | 1.3× |
+| broken JSON, 1 MB, `repair_json` | 232 ms | 16.0 ms | 14.5× |
+| broken JSON, 1 MB, `loads` | 228 ms | 17.6 ms | 13× |
 
-<small>Source: bench/json_repair_bench.py, run on 2026-11-06.</small>
+<small>Source: bench/results/aws-c8g.16xlarge-devbox/2026-11-14-json_repair (bench/json_repair_bench.py).</small>
 
 ### pyroid.json_repair: batches
 
-Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Documents per second over 10,000 broken documents of about 1.2 KB, on free-threaded CPython 3.15t with the GIL off. The shared, loaded VM limits the 8-thread rows. Guide: [json_repair](guides/json_repair.md).
+EC2 c8g.16xlarge devbox (Graviton4, shared), indicative. Documents per second over 10,000 broken documents of about 1.2 KB, json_repair 0.64.9 on free-threaded CPython 3.15t with the GIL off. Other work kept the load average between 30 and 40. Guide: [json_repair](guides/json_repair.md).
 
 | Run | Documents/s | vs json_repair in a loop |
 |---|---:|---:|
-| json_repair, loop | 1,204 | 1× |
-| json_repair, 8-thread pool | 4,681 | 3.9× |
-| pyroid `repair_json`, loop | 41,414 | 34× |
-| `repair_json_batch`, threads=1 | 46,221 | 38× |
-| `repair_json_batch`, threads=8 | 156,134 | 130× |
+| json_repair, loop | 2,828 | 1× |
+| json_repair, 8-thread pool | 16,127 | 5.7× |
+| pyroid `repair_json`, loop | 48,056 | 17× |
+| `repair_json_batch`, threads=1 | 49,131 | 17× |
+| `repair_json_batch`, threads=8 | 260,003 | 92× |
 
-<small>Source: bench/json_repair_bench.py, run on 2026-11-06.</small>
+<small>Source: bench/results/aws-c8g.16xlarge-devbox/2026-11-14-json_repair (bench/json_repair_bench.py).</small>
+
+### pyroid.yaml
+
+AWS EC2 c7i.4xlarge (Intel Xeon Sapphire Rapids, 16 vCPU), dedicated, nothing else running. MB/s of YAML read (loads) or written (dumps), one process at a time, each cell in a fresh one, CPython 3.12.16 with PyYAML 6.0.3 and libyaml 0.2.5; load average at most 1.07 (the benchmark itself). The corpus is the 11,878 files of the parity corpus that PyYAML loads (343 MB); the 1, 10 and 100 MB files concatenate real ones. Guide: [yaml](guides/yaml.md).
+
+| Input | pyroid `safe_load_all` | `SafeLoader` | `CSafeLoader` | vs `CSafeLoader` | pyroid `safe_dump_all` | `SafeDumper` | `CSafeDumper` | vs `CSafeDumper` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| corpus, 11,878 files | 42.9 | 0.97 | 4.15 | 10.3× | 37.7 | 1.82 | 7.01 | 5.4× |
+| 1 MB file | 76.5 | 1.50 | 14.9 | 5.1× | 46.0 | 1.76 | 8.90 | 5.2× |
+| 10 MB file | 52.1 | 1.16 | 9.57 | 5.4× | 43.1 | 1.78 | 8.75 | 4.9× |
+| 100 MB file | 42.8 | 1.06 | 5.54 | 7.7× | 40.0 | 1.79 | 8.73 | 4.6× |
+
+For context, on the same inputs: ruamel.yaml 0.19.1's pure-Python safe loader 0.65, 1.02, 0.78 and 0.72 MB/s; with ruamel.yaml.clib 0.2.15, 3.20 and 7.42 MB/s on the corpus and the 1 MB file (42 corpus files and the 10 and 100 MB files raise); rapidyaml 0.15.2's `parse_in_arena`, which builds a parse tree but no Python objects, 156, 202, 167 and 112 MB/s (66 corpus files raise). ruamel.yaml reads YAML 1.2, so its results differ from PyYAML's.
+
+<small>Source: bench/yaml/baseline_bench.py, run on 2026-11-14 (bench/results/aws-c7i.4xlarge/2026-11-14/yaml-corpus.json).</small>
+
+### pyroid.yaml: small documents
+
+AWS EC2 c7i.4xlarge (Intel Xeon Sapphire Rapids, 16 vCPU), dedicated, nothing else running. Time per call, best of 7 rounds interleaved in one process; the 2 KB document is a GitHub Actions workflow. Guide: [yaml](guides/yaml.md).
+
+| Document | pyroid `safe_load` | `CSafeLoader` | `SafeLoader` | pyroid `safe_dump` | `CSafeDumper` | `SafeDumper` |
+|---|---:|---:|---:|---:|---:|---:|
+| 5 bytes | 3.4 µs | 8.0 µs | 49 µs | 4.6 µs | 8.4 µs | 32 µs |
+| 300 bytes | 19 µs | 105 µs | 843 µs | 8.0 µs | 31 µs | 131 µs |
+| 2 KB | 60 µs | 321 µs | 2,913 µs | 23 µs | 112 µs | 518 µs |
+
+<small>Source: bench/yaml/small_docs_bench.py, run on 2026-11-14 (bench/results/aws-c7i.4xlarge/2026-11-14/yaml-small-docs.md).</small>
+
+### pyroid.jmespath
+
+AWS EC2 c7i.4xlarge (Intel Xeon, 16 vCPU), Amazon Linux 2023, Docker, CPython 3.12. Dedicated instance, one process; load average 0.47 before and 0.99 after (the benchmark itself). Time per call, best of 15 rounds (5 for 1,000,000 records), jmespath 1.1.0 and pyroid interleaved in one process, CPython 3.12.16, pyroid release wheel. Both results are checked identical before each case is timed. The small queries run on one `describe_instances`-shaped response with 3 instances; `search()` includes the cached parse, "compiled" is `compile(e).search()`. The records are dicts of 6 fields with a nested address. This is the second of two runs; the first (`jmespath-run1.json` in the same folder) agrees within 7% on every row but `field, compiled`, where pyroid took 0.24 µs. Guide: [jmespath](guides/jmespath.md).
+
+| Query | jmespath 1.1.0 | pyroid | Speedup |
+|---|---:|---:|---:|
+| field, search(): `Reservations` | 1.48 µs | 0.14 µs | 10.3× |
+| field, compiled: `Reservations` | 1.20 µs | 0.09 µs | 12.8× |
+| path, compiled: `Reservations[0].Instances[0].State.Name` | 4.03 µs | 0.15 µs | 26.0× |
+| projection, compiled: `Reservations[].Instances[].InstanceId` | 4.12 µs | 0.40 µs | 10.2× |
+| filter, compiled: `Reservations[].Instances[?State.Name=='running'].InstanceId[]` | 12.15 µs | 0.72 µs | 16.9× |
+| multi-select, compiled: `Reservations[].Instances[].{id: InstanceId, type: InstanceType}` | 7.53 µs | 0.57 µs | 13.3× |
+| tag lookup, compiled: `Reservations[].Instances[].Tags[?Key=='Name'].Value[]` | 16.72 µs | 1.26 µs | 13.2× |
+| sort_by, compiled: `sort_by(Reservations[].Instances[], &LaunchTime)[-1].InstanceId` | 12.09 µs | 0.76 µs | 15.9× |
+| a new expression every call (parse + search): `Reservations[].Instances[?State.Name=='running' && Tags[?Value=='web-N']].InstanceId` | 55.30 µs | 5.46 µs | 10.1× |
+| 10,000 records, projection: `[*].address.city` | 6.71 ms | 0.45 ms | 15.0× |
+| 10,000 records, filter: `[?age > `30`].name` | 15.89 ms | 0.85 ms | 18.7× |
+| 10,000 records, filter, and: `[?age > `30` && address.city == 'Oslo'].id` | 30.90 ms | 1.54 ms | 20.1× |
+| 10,000 records, multi-select: `[*].{n: name, c: address.city}` | 15.86 ms | 1.29 ms | 12.3× |
+| 10,000 records, sort_by: `sort_by(@, &age)[0].id` | 6.32 ms | 0.50 ms | 12.7× |
+| 10,000 records, max_by: `max_by(@, &score).id` | 5.49 ms | 0.47 ms | 11.7× |
+| 10,000 records, sum: `sum([*].age)` | 2.80 ms | 0.38 ms | 7.4× |
+| 10,000 records, contains: `[?contains(tags, 'a')] \| length(@)` | 18.93 ms | 1.24 ms | 15.2× |
+| 1,000,000 records, projection: `[*].address.city` | 687.05 ms | 93.39 ms | 7.4× |
+| 1,000,000 records, filter: `[?age > `30`].name` | 1,687.21 ms | 110.97 ms | 15.2× |
+| 1,000,000 records, filter, and: `[?age > `30` && address.city == 'Oslo'].id` | 3,116.75 ms | 180.62 ms | 17.3× |
+| 1,000,000 records, multi-select: `[*].{n: name, c: address.city}` | 1,698.96 ms | 269.79 ms | 6.3× |
+| 1,000,000 records, sort_by: `sort_by(@, &age)[0].id` | 789.21 ms | 140.44 ms | 5.6× |
+| 1,000,000 records, max_by: `max_by(@, &score).id` | 610.66 ms | 60.92 ms | 10.0× |
+| 1,000,000 records, sum: `sum([*].age)` | 287.48 ms | 69.22 ms | 4.2× |
+| 1,000,000 records, contains: `[?contains(tags, 'a')] \| length(@)` | 1,928.85 ms | 163.92 ms | 11.8× |
+
+<small>Source: bench/jmespath/jmespath_bench.py, run on 2026-11-16 (bench/results/aws-c7i.4xlarge/2026-11-16/jmespath.json).</small>
 
 ### pyroid.datasketch: MinHash signatures
 
@@ -421,6 +482,27 @@ Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Milliseconds for 10,0
 | query, threshold 0.5 | 235.2 | 26.7 (8.8×) | 17.9 (13.1×) | 12.3 (19.1×) |
 
 <small>Source: bench/results/orbstack-aarch64-12cpu/2026-11-07-datasketch (bench/datasketch_bench.py).</small>
+
+### pyroid.dateutil
+
+AWS EC2 c7i.4xlarge (Intel Xeon, 16 vCPU), Amazon Linux 2023, Docker, CPython 3.12 and 3.14t. Dedicated instance, one process at a time; load average 0.25 before the CPython 3.12.16 run and 0.52 before the free-threaded 3.14.10 one (the rows with threads raise it while they run). µs per string over 608,343 real date strings, up to 20,000 from each of the 35 corpus sources in `parity/data/dateutil/corpus-manifest.json`, those that dateutil cannot parse included; best of 3 runs; python-dateutil 2.9.0.post0, pyroid release wheel. Every pyroid result was first checked against dateutil's (748,282 comparisons on 3.12, 734,981 on 3.14t). Batches use `errors="coerce"`, Arrow output `ignoretz=True`; 16 threads is the whole pool. Guide: [dateutil](guides/dateutil.md).
+
+| Call | CPython 3.12, µs per string | vs dateutil | 3.14t, µs per string | vs dateutil |
+|---|---:|---:|---:|---:|
+| `dateutil.parser.parse`, loop | 27.0 | 1× | 26.1 | 1× |
+| dateutil, 8 threads |  |  | 4.90 | 5.3× |
+| pyroid `parse`, loop | 1.76 | 15× | 1.95 | 13× |
+| `parse_batch`, list, 1 / 8 / 16 threads | 1.19 / 0.76 / 0.60 | 23× / 35× / 45× | 1.27 / 0.85 / 0.72 | 21× / 31× / 36× |
+| `parse_batch`, Arrow, 1 / 8 / 16 threads | 0.73 / 0.33 / 0.27 | 37× / 81× / 101× | 0.73 / 0.34 / 0.27 | 36× / 78× / 97× |
+| `pandas.to_datetime(format="mixed")` (other results) | 29.1 | 0.9× |  |  |
+| `pandas.to_datetime()` (guesses one format, other results) | 0.75 | 36× |  |  |
+| ISO strings: dateutil `isoparse` | 3.50 | 1× | 3.44 | 1× |
+| pyroid `isoparse` / `isoparse_batch` (16 threads) | 0.97 / 0.84 | 3.6× / 4.2× | 0.62 / 0.42 | 5.5× / 8.2× |
+| `datetime.fromisoformat` / `ciso8601` (other results) | 0.13 / 0.16 |  | 0.16 / – |  |
+
+The ISO strings are those `datetime.fromisoformat` accepts: 139,939 on 3.12, 126,638 on 3.14. The corpus was fetched again for this run: 33 sources are byte-identical to the manifest, the two New York City exports (`nyc_311`, `nyc_crashes`) are live and have changed. pandas 3.1.1, pyarrow 26.0.1, ciso8601 2.4.1 (not installed on 3.14t).
+
+<small>Source: bench/dateutil_bench.py, run on 2026-11-16 (bench/results/aws-c7i.4xlarge/2026-11-16/dateutil-312.json and dateutil-314t.json).</small>
 
 ### pyroid.jieba
 
@@ -455,6 +537,29 @@ Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. µs per document over
 Speedups are against NLTK on one thread. pyroid builds the Python lists of sentences and tokens on the calling thread, which limits the 8-thread rows; against NLTK on 8 processes they are 35× (sent_tokenize) and 14× (word_tokenize) on 3.13. The first sentence in a fresh interpreter takes 177 ms with pyroid and 203 ms with NLTK on 3.13: pyroid imports NLTK to find the model when NLTK is installed.
 
 <small>Source: bench/results/orbstack-aarch64-12cpu/2026-11-09-nltk (bench/nltk_bench.py).</small>
+
+### pyroid.tabulate
+
+AWS EC2 c7i.4xlarge (Intel Xeon, 16 vCPU), Amazon Linux 2023, Docker, CPython 3.12. Dedicated instance, one process; load average 0.44 before and 0.98 after (the benchmark itself). Time per `tabulate(rows, headers=..., tablefmt=...)` call, best of 200 runs of tabulate and 2,000 of pyroid at 1 and 5 rows, 5 and 20 at 1,000 rows, 1 and 3 at 100,000 rows; CPython 3.12.16, tabulate 0.10.0 with wcwidth 0.9.4, pyroid release wheel. Each pyroid result is checked equal to tabulate's before it is timed. Numbers are ints and floats; text is words and some numeric strings; mixed has strings, ints, floats and missing values. The times are for `simple`; the last five columns are pyroid's speedup in each format. Guide: [tabulate](guides/tabulate.md).
+
+| Table | tabulate, `simple` | pyroid, `simple` | Speedup, `simple` | `pipe` | `grid` | `github` | `html` |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 x 3, numbers | 33 µs | 11 µs | 3.0× | 3.2× | 3.3× | 3.3× | 3.6× |
+| 1 x 3, text | 41 µs | 11 µs | 3.7× | 3.7× | 3.7× | 3.8× | 4.4× |
+| 1 x 3, mixed | 40 µs | 11 µs | 3.7× | 3.8× | 3.8× | 3.8× | 4.3× |
+| 5 x 3, numbers | 77 µs | 13 µs | 6.1× | 6.2× | 6.4× | 6.4× | 7.4× |
+| 5 x 3, text | 116 µs | 13 µs | 9.1× | 8.9× | 9.1× | 9.1× | 10× |
+| 5 x 3, mixed | 98 µs | 13 µs | 7.7× | 7.6× | 7.9× | 7.6× | 8.9× |
+| 1,000 x 8, numbers | 24.4 ms | 1.28 ms | 19× | 19× | 20× | 19× | 20× |
+| 1,000 x 8, text | 41.5 ms | 1.37 ms | 30× | 30× | 30× | 31× | 30× |
+| 1,000 x 8, mixed | 31.2 ms | 993 µs | 31× | 31× | 31× | 31× | 32× |
+| 100,000 x 10, numbers | 3.29 s | 232 ms | 14× | 15× | 13× | 15× | 12× |
+| 100,000 x 10, text | 5.55 s | 287 ms | 19× | 18× | 17× | 18× | 16× |
+| 100,000 x 10, mixed | 4.02 s | 193 ms | 21× | 22× | 19× | 20× | 16× |
+
+`DataFrame.to_markdown()` (tabulate's `pipe` with the index, pandas 3.1.1), numbers / mixed: 2.0× / 1.6× at 1 row, 3.3× / 2.5× at 5 rows, 20× / 20× at 1,000 rows, 16× / 17× at 100,000 rows.
+
+<small>Source: bench/tabulate/tabulate_bench.py, run on 2026-11-16 (bench/results/aws-c7i.4xlarge/2026-11-16/tabulate.json).</small>
 
 ### pyroid.difflib
 
@@ -747,6 +852,6 @@ Unidecode. `pyroid.translit.unidecode`'s output is not Unidecode's; see
 
 - The metrics, json_repair, datasketch, jieba, nltk and trafilatura modules, the FineWeb-2
   languages and the newer datatrove steps in the gated harness on EC2. Their numbers above come
-  from each module's own run in the Docker VM; only trafilatura has also run on EC2, inside the
-  WARC pipeline.
+  from each module's own run in the Docker VM (json_repair's from a shared EC2 devbox); only
+  trafilatura has also run on EC2, inside the WARC pipeline.
 - Runs with more than 8 threads. Every EC2 run used 8 of the 16 vCPUs.

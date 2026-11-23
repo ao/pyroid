@@ -1,0 +1,165 @@
+{
+ "machine": {
+  "python": "3.12.16",
+  "free_threaded": false,
+  "gil_enabled": true,
+  "platform": "Linux-6.18.62-127.179.amzn2023.x86_64-x86_64-with-glibc2.36",
+  "machine": "x86_64",
+  "cpu": "Intel(R) Xeon(R) Platinum 8488C",
+  "cpus": 16,
+  "loadavg": [
+   0.25439453125,
+   0.3916015625,
+   0.61962890625
+  ],
+  "python-dateutil": "2.9.0.post0",
+  "pyroid": "1.0.1",
+  "pyarrow": "26.0.1",
+  "pandas": "3.1.1",
+  "ciso8601": "2.4.1"
+ },
+ "sources": {
+  "cldr_generated": 20000,
+  "cnb_fx_rates": 8825,
+  "commoncrawl_http_headers": 20000,
+  "covid19india": 1835,
+  "elastic_access_logs": 20000,
+  "enron_email": 20000,
+  "fte_misc": 14032,
+  "fte_russian_troll_tweets": 20000,
+  "fte_uber_2014": 20000,
+  "gharchive_events": 20000,
+  "gnu_mailing_lists": 20000,
+  "ita_http_traces": 20000,
+  "jhu_csse_covid": 3645,
+  "la_crime": 20000,
+  "loghub_android": 20000,
+  "loghub_apache": 16445,
+  "loghub_bgl": 20000,
+  "loghub_hadoop": 20000,
+  "loghub_hdfs": 20000,
+  "loghub_healthapp": 20000,
+  "loghub_linux": 15475,
+  "loghub_mac": 17899,
+  "loghub_openssh": 20000,
+  "loghub_openstack": 20000,
+  "loghub_proxifier": 5457,
+  "loghub_spark": 20000,
+  "loghub_thunderbird": 20000,
+  "loghub_windows": 15008,
+  "loghub_zookeeper": 20000,
+  "nyc_311": 20000,
+  "nyc_crashes": 20000,
+  "sbb_istdaten": 20000,
+  "tatoeba_sentences": 9722,
+  "tidytuesday_misc": 20000,
+  "usgs_earthquakes": 20000
+ },
+ "strings": 608343,
+ "rows": [
+  {
+   "name": "dateutil.parser.parse, loop",
+   "us_per_string": 26.987578929978614,
+   "strings": 608343
+  },
+  {
+   "name": "pyroid parse, loop",
+   "us_per_string": 1.7568280772527047,
+   "strings": 608343,
+   "speedup": 15.361536669075376
+  },
+  {
+   "name": "pyroid parse_batch, list, threads=1",
+   "us_per_string": 1.1921673726830047,
+   "strings": 608343,
+   "speedup": 22.63740775696817
+  },
+  {
+   "name": "pyroid parse_batch, list, threads=8",
+   "us_per_string": 0.7604110937410656,
+   "strings": 608343,
+   "speedup": 35.490774861273124
+  },
+  {
+   "name": "pyroid parse_batch, list, threads=None",
+   "us_per_string": 0.5979796134752016,
+   "strings": 608343,
+   "speedup": 45.13126923029759
+  },
+  {
+   "name": "pyroid parse_batch, Arrow, threads=1",
+   "us_per_string": 0.7268349105689016,
+   "strings": 608343,
+   "speedup": 37.13027337783644
+  },
+  {
+   "name": "pyroid parse_batch, Arrow, threads=8",
+   "us_per_string": 0.33257236624701636,
+   "strings": 608343,
+   "speedup": 81.14798963764093
+  },
+  {
+   "name": "pyroid parse_batch, Arrow, threads=None",
+   "us_per_string": 0.26784799036079493,
+   "strings": 608343,
+   "speedup": 100.75707080581779
+  },
+  {
+   "name": "pandas.to_datetime(format='mixed') (not dateutil's results)",
+   "us_per_string": 29.074053640791625,
+   "strings": 608343,
+   "speedup": 0.9282358512304031
+  },
+  {
+   "name": "pandas.to_datetime(format=None) (not dateutil's results)",
+   "us_per_string": 0.7471265486744139,
+   "strings": 608343,
+   "speedup": 36.121831004213696
+  },
+  {
+   "name": "dateutil.parser.isoparse, loop",
+   "us_per_string": 3.503820436048796,
+   "strings": 139939
+  },
+  {
+   "name": "pyroid isoparse, loop",
+   "us_per_string": 0.9707117243970046,
+   "strings": 139939,
+   "speedup": 3.60953756711379
+  },
+  {
+   "name": "pyroid isoparse_batch, list, threads=1",
+   "us_per_string": 0.9486086437669127,
+   "strings": 139939,
+   "speedup": 3.6936416920419046
+  },
+  {
+   "name": "pyroid isoparse_batch, list, threads=None",
+   "us_per_string": 0.8424746639583052,
+   "strings": 139939,
+   "speedup": 4.1589623830185625
+  },
+  {
+   "name": "datetime.fromisoformat, loop (not dateutil's results)",
+   "us_per_string": 0.1285191261896077,
+   "strings": 139939,
+   "speedup": 27.263027223508473
+  },
+  {
+   "name": "ciso8601.parse_datetime, loop (not dateutil's results)",
+   "us_per_string": 0.1645710273757158,
+   "strings": 139939,
+   "speedup": 21.290627469011117
+  }
+ ],
+ "gate": {
+  "compared": 748282,
+  "different": 0,
+  "examples": []
+ },
+ "loadavg_after": [
+  0.94091796875,
+  0.63525390625,
+  0.68212890625
+ ]
+}

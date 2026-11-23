@@ -1,4 +1,4 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! The scans `_repair_empty_object_result` and `_classify_empty_object_repair`
 //! run over an empty object's body: `_strip_comments_for_empty_object_classification`,
 //! then a look for content and for a `:` outside quotes.

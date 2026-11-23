@@ -325,6 +325,25 @@ _switch_off: Callable[[], int] = _native._sm_unpatch
 
 
 class SequenceMatcher(_StdSequenceMatcher):
+    """Compare two sequences of hashable elements, as `difflib.SequenceMatcher`.
+
+    Ratcliff/Obershelp matching with CPython's junk and autojunk rules: `b2j` holds where each
+    element of `b` occurs, `isjunk` is called once on each distinct element of `b` (in order of
+    first occurrence), and with `autojunk` an element of a `b` of 200 or more elements that
+    occurs more than 1% + 1 times is popular and not used to start a match.
+
+    The instance attributes are CPython's (`a`, `b`, `isjunk`, `autojunk`, `b2j`, `bjunk`,
+    `bpopular`, `fullbcount`, `matching_blocks`, `opcodes`); `b2j`, `bjunk`, `bpopular`,
+    `fullbcount` and `matching_blocks` are built on first read. Pickling and copying give
+    CPython's state.
+
+    Args:
+        isjunk: `None`, or a function called with each distinct element of `b`; true means junk.
+        a: The first sequence.
+        b: The second sequence, the one that is indexed.
+        autojunk: Whether to drop popular elements of a long `b` (see above).
+    """
+
     __doc__ = _StdSequenceMatcher.__doc__
 
 
@@ -389,6 +408,18 @@ def _make_compare(fallback: Any, hooks: dict[str, Any], g: dict[str, Any], sm: A
 
 
 class Differ(_std.Differ):
+    """Line-by-line deltas with intraline marks (`ndiff`'s format), as `difflib.Differ`.
+
+    Lines that differ are paired up by similarity (character-level `SequenceMatcher` ratios), and
+    each pair gets `?` lines marking the changed characters. CPython 3.14 changed how lines are
+    paired (a window of 10 lines around the diagonal instead of the best pair of the whole block);
+    the running version's way is followed.
+
+    Args:
+        linejunk: `None`, or a function called with each distinct line of `b`; true means junk.
+        charjunk: `None`, or a function called with characters; true means junk.
+    """
+
     __doc__ = _std.Differ.__doc__
 
 
@@ -885,6 +916,18 @@ def _make_make_table(fallback: Any, hooks: dict[str, Any], m: _Module) -> Any:
 
 
 class HtmlDiff(_std.HtmlDiff):
+    """A side-by-side HTML table (or page) of the differences, as `difflib.HtmlDiff`.
+
+    The markup, styles and line wrapping are the running interpreter's own; the line pairing
+    underneath (`ndiff`) runs natively.
+
+    Args:
+        tabsize: Tab stops.
+        wrapcolumn: Wrap lines at this column (`None`: no wrapping).
+        linejunk: As for `ndiff`.
+        charjunk: As for `ndiff`.
+    """
+
     __doc__ = _std.HtmlDiff.__doc__
 
 

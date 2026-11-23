@@ -21,7 +21,6 @@ use pyroid_core::text::is_py_whitespace;
 
 use super::interrupt;
 use super::seq::{Base, Types, Verdict, code_points, push_wtf8};
-use crate::batch::BatchError;
 use crate::input::{self, Threads};
 
 /// A line's text: its UTF-8, or (lone surrogates) the `surrogatepass` bytes.
@@ -611,10 +610,6 @@ impl Cand {
     }
 }
 
-/// Candidates in the first part of a long list (Ctrl-C is checked between parts):
-/// enough for every thread of a large pool.
-const FIRST_PART: usize = 1 << 16;
-
 /// `get_close_matches(word, possibilities, n, cutoff)` after its argument
 /// checks, or `None`. `possibilities` is a list or tuple.
 #[pyfunction]
@@ -670,33 +665,24 @@ pub fn _get_close_matches<'py>(
     }
     let matcher = StrMatcher::new(&code_points(&word)?, |_| false, true);
     let t = input::threads(threads);
-    let found = interrupt::in_parts(
-        py,
-        cands.len(),
-        FIRST_PART,
-        2 * par::MIN_DOCS_PER_TASK,
-        |range| {
-            let part = &cands[range];
-            interrupt::run(py, true, || {
-                par::map(part.len(), t, |i| {
-                    with_work(|w| match &part[i] {
-                        Cand::Utf8(s) => {
-                            let la = if s.is_ascii() {
-                                s.len()
-                            } else {
-                                s.chars().count()
-                            };
-                            matcher.close_match_with(la, s.chars().map(u32::from), cutoff, w)
-                        }
-                        Cand::Cps(cps) => {
-                            matcher.close_match_with(cps.len(), cps.iter().copied(), cutoff, w)
-                        }
-                    })
-                })
-            })?
-            .map_err(|e| BatchError::from(e).into_pyerr(py))
-        },
-    )?;
+    let found = crate::interrupt::detach_batch(py, || {
+        par::map(cands.len(), t, |i| {
+            with_work(|w| match &cands[i] {
+                Cand::Utf8(s) => {
+                    let la = if s.is_ascii() {
+                        s.len()
+                    } else {
+                        s.chars().count()
+                    };
+                    matcher.close_match_with(la, s.chars().map(u32::from), cutoff, w)
+                }
+                Cand::Cps(cps) => {
+                    matcher.close_match_with(cps.len(), cps.iter().copied(), cutoff, w)
+                }
+            })
+        })
+    })
+    .map_err(|e| crate::interrupt::pool_error(&e))?;
     let scored: Vec<(f64, usize)> = found
         .into_iter()
         .enumerate()

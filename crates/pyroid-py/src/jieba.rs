@@ -22,7 +22,7 @@ use pyroid_core::par::{self, PoolError};
 use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::batch::{DocCost, map_values_cost};
-use crate::errors::{PyroidError, with_note};
+use crate::errors::with_note;
 use crate::input::{TextInput, Threads};
 
 /// `finalseg.Force_Split_Words` (`None` while empty).
@@ -304,12 +304,12 @@ fn intern_batch<'d, W: Word>(
         1
     } else {
         par::max_tasks(threads)
-            .map_err(|e| PyroidError::new_err(e.to_string()))?
+            .map_err(|e| crate::interrupt::pool_error(&e))?
             .min(total / INTERN_MIN_WORDS_PER_TASK)
     };
     let ranges = balanced(&weights, tasks);
     let shards = ranges.len();
-    py.detach(|| {
+    crate::interrupt::detach_batch(py, || {
         let mut locals = par::map_tasks(&ranges, threads, |r| {
             intern_local(texts, results, r.clone(), shards)
         })?;
@@ -318,7 +318,7 @@ fn intern_batch<'d, W: Word>(
         }
         merge(locals, threads)
     })
-    .map_err(|e: PoolError| PyroidError::new_err(e.to_string()))
+    .map_err(|e: PoolError| crate::interrupt::pool_error(&e))
 }
 
 /// Each document of `x` (`None` for an Arrow null), in input order.

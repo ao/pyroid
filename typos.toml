@@ -58,6 +58,10 @@ extend-exclude = [
   # Charts copied byte for byte from bench/results/ (matplotlib SVGs).
   "docs/assets/*.svg",
   "parity/data/",
+  # python-dateutil's own code, kept as released (its comments have typos).
+  "python/pyroid/dateutil/_reference.py",
+  "python/pyroid/dateutil/_isoreference.py",
+  "python/pyroid/dateutil/_tzlite.py",
   "parity/tests/",
   "parity/pyroid_parity/refs.py",
   "parity/pyroid_parity/strategies.py",
@@ -80,6 +84,13 @@ extend-exclude = [
 ]
 
 [default.extend-words]
+# German month names: pyroid.dateutil's parserinfo tests and guide parse German dates.
+Januar = "Januar"
+Februar = "Februar"
+Juni = "Juni"
+Juli = "Juli"
+Oktober = "Oktober"
+Dezember = "Dezember"
 # numpy's ndarray.flags.writeable (pyroid.datasketch keeps cached arrays read-only).
 writeable = "writeable"
 # datatrove's parameter names (line_punct_thr, short_line_thr), kept for drop-in parity.

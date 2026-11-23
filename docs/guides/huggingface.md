@@ -3,9 +3,12 @@
 `pyroid.integrations.hf` has functions to pass to `Dataset.map` and `Dataset.filter` with
 `batched=True`: ftfy, fastText language ID, the Gopher, C4 and FineWeb quality filters, and the
 whole FineWeb recipe with MinHash dedup. On Arrow-format datasets pyroid reads the text column in
-place, without building a Python `str` per document. `hf.fineweb(ds)` keeps the same documents,
-with the same text, as datatrove 0.10.1's FineWeb pipeline
-([parity](../compatibility.md#integrations)). Tested with datasets 3.6, 4.8 and 5.1.
+place, without building a Python `str` per document. `hf.fineweb(ds)` runs ftfy (ftfy's default
+config) and then the stages of datatrove 0.10.1's FineWeb pipeline that work on text, and keeps
+the same documents, with the same text, as that chain built from datatrove's stages
+([parity](../compatibility.md#integrations); datatrove's own `FTFYFormatter()` uses another ftfy
+config, see [the command line](cli.md#pyroid-clean-the-fineweb-recipe)). Tested with datasets
+3.6, 4.8 and 5.1.
 
 ```console
 $ pip install "pyroid[hf]"     # datasets, pyarrow, numpy

@@ -1,11 +1,11 @@
 """Ctrl-C during a long pyroid.difflib call.
 
 A SIGINT that arrives while a long native call runs (matching, a diff of large inputs, a batch)
-raises ``KeyboardInterrupt`` within a fraction of a second, and the module keeps working
-afterwards: the call checks for signals about every 0.1 s, and a batch runs in parts of about
-50 ms. Before, the interrupt came only when the call had finished (52.7 s into a 200,000-line
-``unified_diff``). Each case runs in a fresh interpreter, sized to run for seconds uninterrupted;
-the signal comes after 0.3 s, or after 0.02 s (before the call first looks for it).
+raises ``KeyboardInterrupt`` within a fraction of a second, and the module keeps working afterwards:
+the call checks for signals about every 0.1 s, and a batch stops between items. Before, the
+interrupt came only when the call had finished (52.7 s into a 200,000-line ``unified_diff``). Each
+case runs in a fresh interpreter, sized to run for seconds uninterrupted; the signal comes after
+0.3 s, or after 0.02 s (before the call first looks for it).
 """
 
 from __future__ import annotations

@@ -48,7 +48,11 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 | Quality filters | [`pyroid.filters`](guides/filters.md) | [datatrove](https://github.com/huggingface/datatrove) 0.10.1's Gopher, C4 and FineWeb filters, PII formatter, C4 bad words, symbol lines and URL filter | same decisions, reasons and text ([parity](compatibility.md#filters)) |
 |  | [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | [NeMo Curator](https://github.com/NVIDIA-NeMo/Curator) 1.4.0's heuristic document filters and string modifiers | same scores, exceptions and modified text ([parity](compatibility.md#nemo)) |
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
-| JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.5 | same output, linear on 13 input families where json_repair is quadratic ([parity](compatibility.md#json_repair)) |
+| JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.9 | same output, linear where json_repair is still quadratic ([parity](compatibility.md#json_repair)) |
+|  | [`pyroid.jmespath`](guides/jmespath.md) | [jmespath](https://github.com/jmespath/jmespath.py) 1.1.0 | same results, ASTs and exceptions as jmespath, on your Python objects ([parity](compatibility.md#jmespath)) |
+| YAML | [`pyroid.yaml`](guides/yaml.md) | [PyYAML](https://github.com/yaml/pyyaml) 6.0.3's `safe_load` and `safe_dump` | same objects, text and errors as PyYAML's pure-Python `SafeLoader` and `SafeDumper`, faster than `CSafeLoader` ([parity](compatibility.md#yaml)) |
+| Tables | [`pyroid.tabulate`](guides/tabulate.md) | [tabulate](https://github.com/astanin/python-tabulate) 0.10.0, `DataFrame.to_markdown()` included | the same text, byte for byte, in every format ([parity](compatibility.md#tabulate)) |
+| Dates | [`pyroid.dateutil.parser`](guides/dateutil.md) | [python-dateutil](https://github.com/dateutil/dateutil)'s `parse` and `isoparse`, 2.8.2 to 4.0.0 | same datetimes, tz objects, exceptions and messages ([parity](compatibility.md#dateutil)) |
 | Diffs and fuzzy matching | [`pyroid.difflib`](guides/difflib.md) | the standard library's [`difflib`](https://docs.python.org/3/library/difflib.html) (CPython 3.11 to 3.15) | the interpreter's own ratios (float bits), opcodes, diff lines and HTML ([parity](compatibility.md#difflib)) |
 
 ## Example: cleaning LLM training data
@@ -65,16 +69,16 @@ The filters and MinHash both tokenize every document with spaCy and then do thei
 Python. pyroid moves both to Rust.
 
 From raw WARC files, text extraction with Trafilatura comes first, and it costs more than all the
-other steps together. On 8 Common Crawl WARC files, stock datatrove spent 5,543 of its 6,759 CPU
-seconds in it (AWS EC2 c7i.4xlarge, 8 workers). [`pyroid.trafilatura`](guides/trafilatura.md)
+other steps together. On 8 Common Crawl WARC files, stock datatrove spent 5,403 of its 6,593 CPU
+seconds in it (AWS EC2 c7i.4xlarge, 8 workers; the run behind the 10.7× below). [`pyroid.trafilatura`](guides/trafilatura.md)
 ports that step too.
 
 On 100,000 FineWeb documents, pyroid's chain is 27× faster than datatrove on 8 processes, with
 the same output. From WARC files, `pyroid clean` runs the whole pipeline 10.7× faster (AWS EC2
 c7i.4xlarge; see [Speed](#speed)).
 
-The command line takes Parquet or JSONL and gives the same output as datatrove's FineWeb
-pipeline:
+The command line runs that chain (ftfy, then FineWeb's language ID, filters and MinHash) over
+Parquet or JSONL, with the same output as datatrove's stages:
 
 ```console
 $ pip install "pyroid[cli]"
@@ -93,7 +97,8 @@ docs = ["naÃ¯ve rÃ©sumÃ©", "Some other web page ..."]
 # ["naïve résumé", ...], like [ftfy.fix_text(d) for d in docs] but on all cores
 docs = ftfy.fix_text_batch(docs)
 
-# fastText's own .bin / .ftz files; a batch runs without the GIL
+# fastText's own .bin / .ftz files; a batch runs without the GIL. lid.176.bin is fastText's
+# language-ID model (125 MiB): https://fasttext.cc/docs/en/language-identification.html
 model = fasttext.load_model("lid.176.bin")
 labels, probs = model.predict(docs, k=1)  # [["__label__fr"], ["__label__en"]]
 
@@ -125,9 +130,9 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 
 | Integration | What it does |
 |---|---|
-| [`pyroid clean`](guides/cli.md) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files, with datatrove's output document for document |
+| [`pyroid clean`](guides/cli.md) | the FineWeb-style chain as one command over Parquet or JSONL, or datatrove's FineWeb pipeline from WARC files, with datatrove's output document for document |
 | [Large datasets](guides/large-datasets.md) | the same commands over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards in datatrove's file format |
-| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil` and `jmespath` give pyroid's functions, in code you don't own, and patches `difflib` in place |
 | [datatrove steps](guides/datatrove.md) | `pyroid.integrations.datatrove`: datatrove's pipeline steps with the same names and signatures, `Trafilatura` included, as a one-import change |
 | [NeMo Curator stages](guides/nemo-curator.md) | `pyroid.integrations.nemo_curator`: NeMo Curator 1.4.0's CPU text stages, subclassing NeMo's classes with the same arguments |
 | [Hugging Face `datasets`](guides/huggingface.md) | `pyroid.integrations.hf`: batched callables for `Dataset.map` and `Dataset.filter`, and the FineWeb recipe |
@@ -159,15 +164,15 @@ process:
 | `pyroid.dedup` | datatrove 0.10.1's MinHash signatures | 34× |
 | `pyroid.translit` | anyascii 0.3.3 | 53× |
 
-The other modules have only been measured in a Docker/OrbStack VM on Apple Silicon, so treat
-their numbers as indicative (one thread unless stated):
+The other modules have only been measured in a Docker/OrbStack VM on Apple Silicon or on a shared
+EC2 machine, so treat their numbers as indicative (one thread unless stated):
 
 | Module | Incumbent | Speedup |
 |---|---|---:|
 | `pyroid.trafilatura.extract`, default options (`compat="2.3.1"` / `"1.11.0"`) | Trafilatura 2.3.1 / 1.11.0 | 7.2× / 8.6× |
 | `pyroid.metrics`, ROUGE | rouge-score 0.1.2 | 59–65× |
 | `pyroid.metrics`, corpus BLEU / chrF | sacrebleu 2.6.0 | 11× / 19× |
-| `pyroid.json_repair.repair_json`, broken JSON | json_repair 0.64.5 | about 30× |
+| `pyroid.json_repair.repair_json`, broken JSON | json_repair 0.64.9 | about 15× |
 | `pyroid.datasketch`, MinHash signatures, 1 / 8 threads | datasketch 2.0.0 | 8× / 21× |
 | `pyroid.jieba.lcut`, a batch, 1 / 8 threads | jieba 0.42.1 | 24× / 58× |
 | `pyroid.nltk.sent_tokenize` / `word_tokenize` | NLTK 3.10.4 | 60× / 31× |
@@ -205,10 +210,10 @@ PSF-2.0 AND Unicode-3.0 AND Zlib`:
 - Apache-2.0 for the ftfy, datatrove, rouge-score, NLTK (Porter stemmer and tokenizers),
   sacrebleu, Trafilatura, SudachiPy and warcio ports;
 - MIT for the fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (and
-  its dictionary) and libxml2 (HTML parser) ports;
+  its dictionary), libxml2 (HTML parser), PyYAML, tabulate and jmespath ports;
 - BSD-2-Clause for the jusText port and its stoplists;
 - BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract and lxml;
-- PSF-2.0 for CPython's `ipaddress` and `difflib`;
+- PSF-2.0 for CPython's `ipaddress`, float formatting and `difflib`;
 - ISC for anyascii's data;
 - Unicode-3.0 for Unicode Character Database data;
 - Zlib for zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.

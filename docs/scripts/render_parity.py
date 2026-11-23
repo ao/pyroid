@@ -35,6 +35,9 @@ ORDER = [
     "translit",
     "metrics",
     "json_repair",
+    "tabulate",
+    "dateutil",
+    "jmespath",
     "datasketch",
     "jieba",
     "trafilatura",
@@ -42,6 +45,7 @@ ORDER = [
     "difflib",
     "nemo",
     "integrations",
+    "yaml",
 ]
 TITLES = {
     "ftfy": "pyroid.ftfy",
@@ -51,6 +55,9 @@ TITLES = {
     "translit": "pyroid.translit",
     "metrics": "pyroid.metrics",
     "json_repair": "pyroid.json_repair",
+    "tabulate": "pyroid.tabulate",
+    "dateutil": "pyroid.dateutil",
+    "jmespath": "pyroid.jmespath",
     "datasketch": "pyroid.datasketch",
     "jieba": "pyroid.jieba",
     "trafilatura": "pyroid.trafilatura",
@@ -58,6 +65,7 @@ TITLES = {
     "difflib": "pyroid.difflib",
     "nemo": "pyroid.nemo and pyroid.integrations.nemo_curator",
     "integrations": "Integrations: datatrove steps, pyroid clean, pyroid.patch()",
+    "yaml": "pyroid.yaml",
 }
 
 
