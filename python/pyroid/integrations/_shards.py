@@ -382,13 +382,42 @@ Report = Callable[[int], None]
 UnitFn = Callable[[Any, Report], dict[str, Any]]
 
 _queue: Any = None  # the worker processes' progress queue (set by _init_worker)
-_interrupted = False  # set in a worker by Ctrl-C: queued units then fail at once
+_interrupted = False  # set in a worker by Ctrl-C or SIGTERM: queued units then fail at once
+_in_unit = False  # a worker is running a unit
 
 
-def _on_sigint(signum: int, frame: Any) -> None:
+class Terminated(KeyboardInterrupt):
+    """SIGTERM, raised in the main thread (as ``KeyboardInterrupt`` is for SIGINT)."""
+
+
+def _on_signal(signum: int, frame: Any) -> None:
     global _interrupted
     _interrupted = True
+    if not _in_unit:
+        os._exit(128 + signum)  # between units: nothing to clean up
     raise KeyboardInterrupt
+
+
+def _watch_parent() -> None:
+    """Stop this worker when its parent dies (killed, crashed): nothing else would.
+
+    The running unit is interrupted as by Ctrl-C (its temporary outputs are removed);
+    a worker waiting for its next unit would otherwise wait forever.
+    """
+    import _thread
+    import threading
+
+    parent = multiprocessing.parent_process()
+    if parent is None:  # pragma: no cover - always set in a spawned worker
+        return
+
+    def watch() -> None:
+        parent.join()
+        _thread.interrupt_main()
+        time.sleep(5.0)
+        os._exit(1)
+
+    threading.Thread(target=watch, name="pyroid-parent-watch", daemon=True).start()
 
 
 def _init_worker(threads: int | None, queue: Any) -> None:
@@ -396,9 +425,12 @@ def _init_worker(threads: int | None, queue: Any) -> None:
     _queue = queue
     import signal
 
-    # Ctrl-C reaches every process of the group: the running unit aborts (its outputs are
-    # dropped), and the units already handed to this worker must not start afterwards.
-    signal.signal(signal.SIGINT, _on_sigint)
+    # Ctrl-C reaches every process of the group, and the parent sends SIGTERM to its workers
+    # when it is interrupted or terminated: the running unit aborts (its outputs are dropped),
+    # and the units already handed to this worker must not start afterwards.
+    signal.signal(signal.SIGINT, _on_signal)
+    signal.signal(signal.SIGTERM, _on_signal)
+    _watch_parent()
     if threads is not None:
         # Before pyroid's pool is first used in this process (it is built lazily).
         os.environ["PYROID_NUM_THREADS"] = str(threads)
@@ -417,9 +449,14 @@ def _report_to_queue(n: int) -> None:
 
 
 def _call(fn: UnitFn, payload: Any) -> dict[str, Any]:
+    global _in_unit
     if _interrupted:
         raise KeyboardInterrupt
-    return fn(payload, _report_to_queue)
+    _in_unit = True
+    try:
+        return fn(payload, _report_to_queue)
+    finally:
+        _in_unit = False
 
 
 def worker_threads(workers: int, threads: int | None) -> int | None:
@@ -506,7 +543,10 @@ def run_units(
                 if failure is not None:
                     waiting = {g for g in waiting if not g.cancelled()}
         except BaseException:
-            pool.shutdown(wait=True, cancel_futures=True)  # the running units abort on Ctrl-C
+            # Ctrl-C, SIGTERM or an error here: stop the workers now. A worker that got no
+            # signal itself (the parent alone was signalled) would finish its unit first.
+            _stop_workers(pool)
+            pool.shutdown(wait=True, cancel_futures=True)
             raise
         if failure is not None:
             u, exc = failure
@@ -518,6 +558,14 @@ def run_units(
                 )
                 raise exc
             raise _noted(exc, u.label)
+
+
+def _stop_workers(pool: cf.ProcessPoolExecutor) -> None:
+    """SIGTERM every live worker of ``pool``: each aborts its unit, as on Ctrl-C."""
+    procs = getattr(pool, "_processes", None) or {}
+    for proc in list(procs.values()):
+        if proc.is_alive():
+            proc.terminate()
 
 
 def _noop(n: int) -> None:

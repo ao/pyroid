@@ -496,7 +496,9 @@ def test_one_check_per_library(run_python: Run, tmp_path: Path) -> None:
         ("fasttext", "0.9.3", False),  # NeMo Curator's fastText: the same results
         ("fasttext-predict", "0.9.2.3", True),
         ("fasttext", "0.9.2", True),
-        ("fasttext-wheel", "0.9.2", True),
+        # Upstream fastText 0.9.2's wheels: pyroid computes as they do when one is installed.
+        ("fasttext-wheel", "0.9.2", False),
+        ("fasttext-numpy2-wheel", "0.9.2", False),
         ("fasttext-numpy2-wheel", "0.9.2.1", True),
     ],
 )

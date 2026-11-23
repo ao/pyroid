@@ -64,7 +64,9 @@ native APIs of every step are in
 The drop-ins need fewer packages than datatrove's steps. The filters, MinHash and sentence dedup
 need no spaCy for the languages pyroid tokenizes ([below](#languages)). No step needs ftfy,
 trafilatura or `fasttext-numpy2-wheel`, and `LanguageFilter` needs no `fasteners` when
-`model_path` is given. Without trafilatura installed, `Trafilatura` runs the 2.3.1 mode; pass
+`model_path` is given. `LanguageFilter` computes `language_score` as fasttext-numpy2-wheel does
+(what `datatrove[processing]` installs), so it is bit-identical to stock datatrove's on aarch64
+too, whichever fastText build is installed. Without trafilatura installed, `Trafilatura` runs the 2.3.1 mode; pass
 `compat="1.11.0"` to match a stock `datatrove[processing]` install.
 `URLFilter` needs tldextract and fasteners, as datatrove's does.
 

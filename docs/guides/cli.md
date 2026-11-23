@@ -141,8 +141,8 @@ options:
                         default_metadata)
   --limit N             fineweb-warc: read at most N documents per WARC file (WarcReader's limit)
   --lid-model LID_MODEL
-                        fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a cached
-                        download)
+                        fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a 125 MiB
+                        download, cached)
   --ftfy {default,datatrove,off}
                         fineweb: ftfy's config: ftfy's defaults (default), datatrove's
                         FTFYFormatter() (keeps curly quotes, ligatures, widths and line breaks; no
@@ -317,7 +317,9 @@ pyroid clean: failed to find libmagic.  Check your installation (python-magic ne
   (while processing warc/CC-MAIN-00000.warc.gz)
 ```
 
-For errors from reading or writing the files (`FileNotFoundError`, `ValueError`) and missing
+For errors from reading or writing the files (`OSError`, such as a missing file, a `--lid-model`
+that is a directory, an unwritable output or a failed model download; `ValueError`; `EOFError`
+for a truncated compressed file), a text column of another type (`pyroid.InputError`) and missing
 dependencies (`ImportError`), `PYROID_DEBUG=1` shows the traceback instead. Bad options exit with
 status 2 (argparse's usage error).
 

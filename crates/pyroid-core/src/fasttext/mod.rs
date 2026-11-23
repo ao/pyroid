@@ -342,6 +342,16 @@ impl Model {
             .map(|d| (self.input.rows(), self.input.cols(), d.data()))
     }
 
+    /// Compute the output layer as upstream fastText 0.9.2's wheels
+    /// (`fasttext-numpy2-wheel`, `fasttext-wheel`) do, not as fasttext-predict
+    /// 0.9.2.4 does. On aarch64 their probabilities differ in the last bits
+    /// (see [`matrix::fused`]); elsewhere the two compute the same thing.
+    #[must_use]
+    pub fn with_upstream_arithmetic(mut self, on: bool) -> Self {
+        self.output.set_fused_dot(on);
+        self
+    }
+
     /// Dense output matrix as `(rows, cols, row-major data)`; `None` if quantized.
     pub fn output_matrix(&self) -> Option<(usize, usize, &[f32])> {
         self.output
@@ -464,6 +474,7 @@ impl Model {
                 let mut v = Vec::new();
                 // Line rows are always in range (checked at load).
                 self.average(&s.line.ids, &mut v);
+                s.line.trim();
                 v
             }));
         }
@@ -544,6 +555,21 @@ impl Model {
             return Err(PredictError::Newline);
         }
         SCRATCH.with_borrow_mut(|s| {
+            let r = self.predict_in(s, text, k, threshold, out);
+            s.line.trim();
+            r
+        })
+    }
+
+    fn predict_in(
+        &self,
+        s: &mut Scratch,
+        text: &str,
+        k: i64,
+        threshold: f32,
+        out: &mut Vec<Prediction>,
+    ) -> Result<(), PredictError> {
+        {
             let Scratch {
                 line,
                 hidden,
@@ -573,6 +599,6 @@ impl Model {
                 label: label as usize,
             }));
             Ok(())
-        })
+        }
     }
 }
