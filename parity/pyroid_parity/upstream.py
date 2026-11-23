@@ -120,6 +120,12 @@ WATCH: dict[str, Watch] = {
         "python/tests/test_packaging_parity.py and packaging's own tests (parity/data/packaging-26.3), which "
         "compare against the pinned packaging.",
     ),
+    "sqlparse": Watch(
+        (),
+        "pyroid.sqlparse reproduces sqlparse. No parity suite covers it here: its parity tests are "
+        "python/tests/test_sqlparse_parity.py and sqlparse's own tests (parity/data/sqlparse-0.6.1), which "
+        "compare against the pinned sqlparse.",
+    ),
     # Libraries an oracle depends on whose behaviour pyroid reproduces too.
     "lxml": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces trafilatura on lxml's (libxml2's) parse tree."),
     "justext": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces jusText, trafilatura's fallback extractor."),

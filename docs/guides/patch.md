@@ -42,6 +42,7 @@ and `patch()` is the only switch. Each patched name emits one
 | `"yaml"` | [`pyroid.yaml`](yaml.md) (PyYAML 6.0.3's safe loader and dumper) | `safe_load`, `safe_load_all`, `load`, `load_all`, `full_load`, `full_load_all`, `unsafe_load`, `unsafe_load_all`, `safe_dump`, `safe_dump_all`, `dump`, `dump_all`, set on PyYAML's own `yaml` module (shims of `yaml` and its error, loader and dumper submodules without PyYAML) | everything else: the loader and dumper classes, `add_constructor`, `scan`, `parse`, `compose`, `YAMLObject`; customised loaders and dumpers and `!!python/` tags are handed to PyYAML |
 | `"tabulate"` | [`pyroid.tabulate`](tabulate.md) (tabulate 0.10.0) | a shim of `tabulate` with `tabulate`, `tabulate_formats`, `simple_separated_format`, `TableFormat`, `Line`, `DataRow`, `SEPARATING_LINE`, `multiline_formats`, `_table_formats` and tabulate's other functions, private helpers included; writes of `MIN_PADDING`, `PRESERVE_WHITESPACE` and `WIDE_CHARS_MODE` reach pyroid.tabulate. `DataFrame.to_markdown()` then uses it | only the modules tabulate imports (`re`, `textwrap`, ...) |
 | `"difflib"` | [`pyroid.difflib`](difflib.md) (this Python's difflib) | in place, no shim: `SequenceMatcher`'s, `Differ.compare` and `HtmlDiff.make_table` on difflib's own classes, and `get_close_matches`, `unified_diff`, `context_diff` and `_mdiff` on the module (so `ndiff`, unittest's and pytest's diffs too) | `restore`, `diff_bytes`, `IS_LINE_JUNK`, `IS_CHARACTER_JUNK`, `Match` (the same objects pyroid.difflib uses) |
+| `"sqlparse"` | [`pyroid.sqlparse`](sqlparse.md) (sqlparse 0.6.1) | `parse`, `parsestream`, `format`, `split` (on `sqlparse`), `tokenize` (on `sqlparse.lexer`) and `group` (on `sqlparse.engine.grouping`), building trees of sqlparse's own classes | the token classes and their methods, `FilterStack` and the filters (which then lex and group in Rust), the command line |
 | `"warcio"` | [`pyroid.warc`](warc.md) (warcio 1.8.2's reader) | `ArchiveIterator` (on `warcio` and `warcio.archiveiterator`), `WARCIterator` and `ARCIterator` (on `warcio.archiveiterator`), making warcio's own `StatusAndHeaders`, `ArcWarcRecord` (a subclass, with pyroid's `content_stream()`), `DigestChecker` and `ArchiveLoadFailed` | `WARCWriter`, `capture_http`, the indexer, the checker, the command line |
 | `"dateutil"` | [`pyroid.dateutil.parser`](dateutil.md) (python-dateutil 2.8.2 to 4.0.0) | `parse` and `isoparse`, on `dateutil.parser`, `dateutil.parser._parser` and `dateutil.parser.isoparser` (they use dateutil's own `DEFAULTPARSER` and `DEFAULT_ISOPARSER`) | `dateutil.tz`, `relativedelta`, `rrule`, `easter`, the `parser` and `isoparser` classes |
 | `"jmespath"` | [`pyroid.jmespath`](jmespath.md) (jmespath 1.1.0) | `search` and `compile`, set on jmespath's own module (shims of `jmespath` and its `exceptions`, `functions`, `visitor`, `parser`, `lexer` and `ast` submodules without jmespath); exceptions stay jmespath's classes | `jmespath.parser.Parser`, `jmespath.lexer.Lexer`, `TreeInterpreter` and the rest of the package |
@@ -81,7 +82,7 @@ import pyroid
 pyroid.patch("unidecode")
 # ValueError: cannot patch 'unidecode': the supported names are 'ftfy', 'fasttext', 'anyascii',
 # 'datasketch', 'json_repair', 'trafilatura', 'nltk', 'warcio', 'nemo_curator', 'yaml',
-# 'tabulate', 'dateutil', 'jmespath', 'difflib', 'packaging'
+# 'tabulate', 'dateutil', 'jmespath', 'difflib', 'packaging', 'sqlparse'
 # (pyroid.translit.unidecode transliterates with anyascii's tables, so its output differs from
 # Unidecode's: it is not a drop-in)
 ```
@@ -215,11 +216,11 @@ usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
 `nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` / `difflib` /
-`packaging` giving pyroid's drop-ins. The Python processes it starts (multiprocessing workers,
-subprocesses) are patched too.
+`packaging` / `sqlparse` giving pyroid's drop-ins. The Python processes it starts (multiprocessing
+workers, subprocesses) are patched too.
 
 options:
-  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate, dateutil, jmespath, difflib, packaging
+  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate, dateutil, jmespath, difflib, packaging, sqlparse
                      (repeatable; default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
@@ -261,7 +262,8 @@ subprocess: True
 
 - patches `NAMES` (comma-separated; `-p` can be repeated, and the names add up). Without `-p` it
   patches the names in `$PYROID_PATCH`, else `ftfy,fasttext`, and then skips `fasttext`, with a
-  `PatchWarning`, if numpy is missing;
+  `PatchWarning`, if numpy is missing. A name given with `-p` or `$PYROID_PATCH` that `patch()`
+  refuses (`sqlparse` older than 0.5.0, say) stops it with exit code 2 and the reason;
 - sets `PYROID_PATCH` to those names and puts pyroid's start-up hook directory first on
   `PYTHONPATH`. The hook is a `sitecustomize.py`, which Python imports at start-up. It applies
   `$PYROID_PATCH` in every Python process started from there (`multiprocessing` spawn and
@@ -276,7 +278,8 @@ subprocess: True
 
 `PatchWarning` and `VersionMismatchWarning` are shown once per process tree, not in every worker.
 The hook does nothing in an interpreter that can't import pyroid, nor in one started with `-I` or
-`-E` (which ignore `PYTHONPATH`).
+`-E` (which ignore `PYTHONPATH`). It never stops a program: a name `patch()` refuses is skipped
+with a `PatchWarning` that says why, and the process runs unpatched for that name.
 
 ### Without `pyroid run`
 
@@ -342,6 +345,21 @@ warnings are the ones warcio gives. datatrove's `WarcReader` imports `ArchiveIte
 warcio`) reads WARC files with pyroid in stock datatrove. Without warcio, `warcio` and
 `warcio.archiveiterator` are shims holding pyroid.warc's classes.
 
+`"sqlparse"` works the same way. With sqlparse 0.5.0 or later installed, the functions above are
+set on sqlparse's own modules, so Django (which imports `sqlparse` at start-up),
+django-debug-toolbar and other code calling `sqlparse.format(...)` get pyroid's, and sqlparse's own
+`FilterStack` lexes and groups in Rust. pyroid's trees are then made of sqlparse's own classes, so
+code that inspects them is unchanged. The DoS limits are read from `sqlparse.engine.grouping`.
+Older releases (0.4.x) lack classes pyroid's trees need, so pyroid builds them from its own copies,
+which sqlparse 0.4's filters and `isinstance` checks do not recognise: `patch("sqlparse")` raises
+`ImportError` there and changes nothing, `pyroid run -p sqlparse` stops with that error, and the
+start-up hook skips the name with a `PatchWarning`. Upgrade sqlparse (`pip install -U
+'sqlparse>=0.5.0'`; Django 5.2, django-debug-toolbar, pgcli and litecli all accept 0.6.1).
+Without sqlparse, `sqlparse` and its submodules are pyroid.sqlparse's own modules (so
+`sqlparse.__name__` is `"pyroid.sqlparse"`). A function taken from sqlparse before the patch
+(`from sqlparse import format`) keeps sqlparse's, and while patched it no longer pickles by name,
+as with `"nltk"`.
+
 `"dateutil"` works like `"nltk"`: pyroid's `parse` and `isoparse` are set on python-dateutil's
 own modules, and they parse with dateutil's own `DEFAULTPARSER`, `parser` class and
 `DEFAULT_ISOPARSER`, so a word added to `DEFAULTPARSER.info` still counts and `isoparse` follows
@@ -368,10 +386,13 @@ their warnings-as-errors setting. [`pyroid.packaging`](packaging.md#patch) has t
 
 - A shim is not the real module object: code that already holds the real module (imported before
   `patch()`), or compares module objects, is not redirected.
-- `importlib.reload` of a shim is not supported.
+- `importlib.reload` of a shim is not supported. Reloading a module that `patch()` set names on
+  (`importlib.reload(sqlparse)`, or a `yaml`, `dateutil`, `jmespath`, `packaging`, `nltk`, `warcio`
+  or NeMo Curator module) puts that module's own functions back while `patched()` still lists the
+  name; `unpatch()` and `patch()` it again.
 - Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`,
-  `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `difflib` and `packaging` can be
-  patched. pyroid's filters and dedup reach datatrove pipelines through the
+  `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `difflib`, `packaging` and `sqlparse`
+  can be patched. pyroid's filters and dedup reach datatrove pipelines through the
   [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked

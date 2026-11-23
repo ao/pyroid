@@ -63,6 +63,8 @@ extend-exclude = [
   "python/pyroid/dateutil/_isoreference.py",
   "python/pyroid/dateutil/_tzlite.py",
   "parity/tests/",
+  # sqlparse 0.6.1's keyword list, vendored as it is (its keywords include "TRANSATION").
+  "python/pyroid/sqlparse/_own_keywords.py",
   "parity/pyroid_parity/refs.py",
   "parity/pyroid_parity/strategies.py",
   # cargo-fuzz corpora: arbitrary bytes and generated text, kept exactly as the fuzzers wrote them.

@@ -36,6 +36,7 @@ mod np;
 mod packaging;
 mod pythainlp;
 mod segmenters;
+mod sqlparse;
 mod sudachi;
 mod tabulate;
 mod testing;
@@ -81,5 +82,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jmespath::register(m)?;
     difflib::register(m)?;
     packaging::register(m)?;
+    sqlparse::register(m)?;
     Ok(())
 }

@@ -25,11 +25,12 @@ Modules and what they match:
 - `pyroid.dateutil.parser` (`from pyroid.dateutil import parser`): python-dateutil's `parse`, `parser`, `parserinfo`, `isoparse` and `isoparser`, with the same datetimes, tz objects, exceptions and messages as 2.8.2 to 4.0.0; `parse_batch` and `isoparse_batch` parse lists and Arrow columns in parallel; `pyroid.patch("dateutil")` swaps `parse` and `isoparse` into an installed python-dateutil.
 - `pyroid.difflib`: the standard library's difflib (CPython 3.11 to 3.15) with the interpreter's own results (ratios to the float bit, opcodes, diff lines, HTML); `ratio_batch` and `close_matches_batch` for many strings; `pyroid.patch("difflib")` patches the standard library in place.
 - `pyroid.packaging` (`from pyroid.packaging.version import Version`): packaging 26.3's `Version`, `Specifier`, `SpecifierSet`, `Marker`, `Requirement` and `utils` with the same parsing, order, hashes, strings and exceptions; its objects compare and hash equal to packaging's and, with packaging 26 installed, pass its `isinstance` checks; `parse_batch`, `sort_versions`, `contains_batch`, `filter_batch` for many versions; `pyroid.patch("packaging")` makes installed packaging use it.
+- `pyroid.sqlparse`: sqlparse 0.6.1's `format`, `split`, `parse` and `lexer.tokenize` with the same text, token trees (objects of sqlparse's own classes when it is installed) and exceptions; `format_batch` and `split_batch` for many texts; `pyroid.patch("sqlparse")` for Django and other code calling sqlparse (0.5.0 or later installed, or none).
 
 Integrations:
 
 - `pyroid clean IN OUT --recipe fineweb`, the command line (`--recipe fineweb-warc` from WARC files). It takes many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs and resumable runs; `pyroid dedup signatures|buckets|cluster|filter` runs MinHash dedup across shards.
-- `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `difflib`, `packaging`).
+- `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `difflib`, `packaging`, `sqlparse`).
 - `pyroid.integrations.datatrove`: drop-in datatrove steps, `WarcReader` and `Trafilatura` included. Its `Trafilatura` has no 1 s timeout, so results do not vary between runs.
 - `pyroid.integrations.nemo_curator`: drop-in NeMo Curator 1.4.0 CPU text stages (`ScoreFilter`, `Score`, `Filter`, `Modify`, the heuristic and fastText filters, the modifiers).
 - `pyroid.integrations.hf`: Hugging Face `datasets` helpers.
@@ -66,6 +67,7 @@ Conventions shared by every module:
 - [pyroid.tabulate](https://ataiva.com/open-source/pyroid/docs/guides/tabulate/): drop-in tabulate 0.10.0, what runs in Rust, 0.9.0 vs 0.10.0, differences
 - [pyroid.jmespath](https://ataiva.com/open-source/pyroid/docs/guides/jmespath/): drop-in jmespath 1.1.0, custom functions, what runs in Python, differences
 - [pyroid.difflib](https://ataiva.com/open-source/pyroid/docs/guides/difflib/): drop-in difflib, what runs natively, `ratio_batch`, `close_matches_batch`, differences
+- [pyroid.sqlparse](https://ataiva.com/open-source/pyroid/docs/guides/sqlparse/): drop-in sqlparse 0.6.1, the token objects, batches, the patch, differences from sqlparse
 - [pyroid.datasketch](https://ataiva.com/open-source/pyroid/docs/guides/datasketch/): drop-in datasketch 2.0.0 (MinHash, LeanMinHash, MinHashLSH, LSH Forest, LSH Ensemble), `minhash_batch`, differences from datasketch
 - [pyroid.jieba](https://ataiva.com/open-source/pyroid/docs/guides/jieba/): drop-in jieba 0.42.1, batches, user dictionaries, differences from jieba
 - [pyroid.trafilatura](https://ataiva.com/open-source/pyroid/docs/guides/trafilatura/): drop-in Trafilatura 2.3.1 and 1.11.0, how to choose a mode, `extract_batch`, the datatrove step, differences
@@ -79,7 +81,7 @@ Conventions shared by every module:
 
 - [The pyroid command line](https://ataiva.com/open-source/pyroid/docs/guides/cli/): `pyroid clean`, `langid`, `dedup`, `translit`, `run`; every option
 - [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/): thousands of files, `--workers`, `--shard`, remote inputs, resuming, MinHash dedup across shards
-- [pyroid.patch()](https://ataiva.com/open-source/pyroid/docs/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath` or `packaging` to pyroid in code you don't own, or patch `difflib` in place
+- [pyroid.patch()](https://ataiva.com/open-source/pyroid/docs/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `packaging` or `sqlparse` to pyroid in code you don't own, or patch `difflib` in place
 - [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/): drop-in datatrove pipeline steps with the same names and signatures
 - [NeMo Curator stages](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/): drop-in NeMo Curator 1.4.0 text stages, and `pyroid.nemo`'s kernels
 - [Hugging Face datasets](https://ataiva.com/open-source/pyroid/docs/guides/huggingface/): batched callables for `Dataset.map`/`filter`, the FineWeb recipe
@@ -98,6 +100,7 @@ Conventions shared by every module:
 - [pyroid.tabulate](https://ataiva.com/open-source/pyroid/docs/reference/tabulate/)
 - [pyroid.jmespath](https://ataiva.com/open-source/pyroid/docs/reference/jmespath/)
 - [pyroid.difflib](https://ataiva.com/open-source/pyroid/docs/reference/difflib/)
+- [pyroid.sqlparse](https://ataiva.com/open-source/pyroid/docs/reference/sqlparse/)
 - [pyroid.datasketch](https://ataiva.com/open-source/pyroid/docs/reference/datasketch/)
 - [pyroid.jieba](https://ataiva.com/open-source/pyroid/docs/reference/jieba/)
 - [pyroid.trafilatura](https://ataiva.com/open-source/pyroid/docs/reference/trafilatura/)

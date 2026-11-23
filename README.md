@@ -46,6 +46,7 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 | Dates | [`pyroid.dateutil.parser`](https://ataiva.com/open-source/pyroid/docs/guides/dateutil/) | python-dateutil's `parse` and `isoparse` (2.8.2 to 4.0.0) |
 | Diffs and fuzzy matching | [`pyroid.difflib`](https://ataiva.com/open-source/pyroid/docs/guides/difflib/) | the standard library's `difflib` (CPython 3.11 to 3.15): `SequenceMatcher`, `get_close_matches`, `unified_diff`, `ndiff`, `HtmlDiff` |
 | Python packaging | [`pyroid.packaging`](https://ataiva.com/open-source/pyroid/docs/guides/packaging/) | packaging 26.3's versions, specifiers, markers, requirements and name helpers (PEP 440, PEP 508) |
+| SQL | [`pyroid.sqlparse`](https://ataiva.com/open-source/pyroid/docs/guides/sqlparse/) | sqlparse 0.6.1 (`format`, `split`, `parse`, with sqlparse's own token classes) |
 
 ## Example: cleaning LLM training data
 
@@ -176,7 +177,7 @@ row's corpus, interpreter and source.
 |---|---|
 | [`pyroid clean`](https://ataiva.com/open-source/pyroid/docs/guides/cli/) | the FineWeb-style chain as one command over Parquet or JSONL, or datatrove's FineWeb pipeline from WARC files |
 | [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
-| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath` and `packaging` give pyroid's functions, in code you don't own, and patches `difflib` in place |
+| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `packaging` and `sqlparse` give pyroid's functions, in code you don't own, and patches `difflib` in place |
 | [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
 | [NeMo Curator stages](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/) | NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, the heuristic filters, the modifiers) with the same classes and arguments |
 | [Hugging Face `datasets`](https://ataiva.com/open-source/pyroid/docs/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |

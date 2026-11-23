@@ -273,6 +273,17 @@ CASES = [
         patch="packaging",
         imports=True,  # pyroid.packaging uses packaging's exception classes when it imports
     ),
+    Case(
+        "sqlparse",
+        "import pyroid.sqlparse",
+        "sqlparse",
+        "sqlparse",
+        _version("pyroid.sqlparse", "SQLPARSE_VERSION"),
+        "pyroid.sqlparse",
+        ("sqlparse",),
+        patch="sqlparse",
+        imports=True,  # pyroid.sqlparse uses sqlparse's token classes when it imports
+    ),
 ]
 PATCHED = [c for c in CASES if c.patch is not None]
 

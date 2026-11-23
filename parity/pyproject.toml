@@ -122,8 +122,8 @@ timeout = "600"
 
 [tool.ruff]
 line-length = 110
-# Vendored upstream test files (jmespath.py's unit tests, CPython's test_difflib, packaging's test
-# suite) stay as upstream wrote them.
+# Vendored upstream test files (jmespath.py's unit tests, CPython's test_difflib, packaging's and
+# sqlparse's test suites) stay as upstream wrote them.
 extend-exclude = ["data"]
 target-version = "py312"
 

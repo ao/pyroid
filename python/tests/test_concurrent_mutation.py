@@ -556,3 +556,20 @@ def test_packaging() -> None:
         lambda i: env.update(os_name="nt" if i % 2 else "posix"),
         allowed,
     )
+
+
+def test_sqlparse() -> None:
+    import pyroid.sqlparse as sp
+
+    sqls: tuple[list[str], ...] = (
+        [f"select a, b from t{i} where x = {i}; update t set a = 1" for i in range(200)],
+        ["insert into t (a) values (1), (2)", "-- c\nselect 1"] * 30,
+        [],
+    )
+    over_states(sp.format_batch, sqls)
+    over_states(lambda s: sp.format_batch(s, reindent=True, keyword_case="upper"), sqls)
+    over_states(lambda s: sp.format_batch(s, threads=2), sqls)
+    over_states(sp.split_batch, sqls)
+    over_states(lambda s: sp.split_batch(s, strip_semicolon=True), sqls)
+    # Lone surrogates take a second route that reads the list again.
+    over_states(sp.format_batch, (["select '\udce9' from t"] * 40, ["select 1 \ud800"] * 9 + ["x"]))

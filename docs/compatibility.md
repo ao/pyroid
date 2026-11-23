@@ -242,6 +242,24 @@ Reference: packaging 26.3. Rule: the same result (strings, properties, order, ha
 
 <small>Source: python/tests/test_packaging_patch.py::test_packagings_own_test_suite (PYROID_PACKAGING_UPSTREAM=all), python/tests/test_packaging_parity.py (PYROID_PACKAGING_EXAMPLES=20000) and bench/packaging/pypi_corpus.py (PyPI JSON API, fetched 2026-11-16; counts in bench/results/aws-c8g.16xlarge/2026-11-16/packaging-corpus.json), CPython 3.12.16 on linux/aarch64 (an AWS EC2 c8g.16xlarge), run on 2026-11-16.</small>
 
+### pyroid.sqlparse {#sqlparse}
+
+Reference: sqlparse 0.6.1. Rule: the same tokens (type identity and value), the same trees (class, ttype identity, value, normalized, the is_* flags, parent links, children), the same text from format and split, and the same exception class, message and __cause__.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| sqlparse 0.6.1's own test suite (540 tests) with pyroid.patch("sqlparse"): CPython 3.12 with sqlparse installed, 3.12 without it (sqlparse is pyroid.sqlparse), 3.14t; the same 537 passed, 2 xfailed, 1 xpassed as unpatched | 1,620 | 1,620 | 0 |
+| Real SQL, 216,108 documents (TPC-H, TPC-DS, the PostgreSQL and duckdb test suites, sqlglot fixtures, GitLab's structure.sql, dbt projects, the Pagila and Chinook databases, three text-to-SQL datasets; bench/sqlparse/corpus.py) x 17 checks: tokenize, parse, split twice, format with 13 option sets; CPython 3.12 | 3,673,836 | 3,673,836 | 0 |
+| Django 6.1.3's SQL for its test models and migrations on SQLite, PostgreSQL, MySQL, MariaDB and Oracle (65,190 distinct statements) x 8 checks, including group() on sqlparse's own statements; CPython 3.12 | 521,520 | 521,520 | 0 |
+| Inputs captured from Django, pgcli, mycli, litecli, sqllineage and django-debug-toolbar running their test suites (2,957 distinct texts x 4 checks, 785 distinct format calls with their own options); CPython 3.12 | 12,613 | 12,613 | 0 |
+| Hypothesis: generated, random and mutated SQL (comments of every kind, quotes, dollar quotes, nesting, unicode, lone surrogates, odd whitespace) through tokenize, parse, split, format with valid and invalid options, streams and bytes, the DoS limits and customised lexer tables, and each SQL_REGEX pattern and random patterns against re; CPython 3.12 | 3,561,537 | 3,561,537 | 0 |
+| **Total** | **7,771,126** | **7,771,126** | **0** |
+
+- Under the patch, the call sites of Django 6.1.3 (prepare_sql_script, sqlmigrate, --debug-sql and others: 3,460 values) and django-debug-toolbar 8.0.0's SQL formatting (7,835 values) are byte-identical, and the test suites of Django (2,029 tests in 12 apps), django-debug-toolbar (358), pgcli 4.7.1 (2,790), mycli 2.31.0 (3,549), litecli 1.17.1 (231) and sqllineage 1.5.9 (539) give the same outcome for every test as without the patch.
+- pyroid's regex engine refuses some random patterns (6% of them, syntax it does not reproduce); the lexer runs those in Python's re. The Rust lexer's shortcuts for sqlparse's own table are checked against its regex loop on 20,000 random texts in cargo test.
+
+<small>Source: python/tests/test_sqlparse_parity.py, bench/sqlparse/parity_corpus.py, bench/sqlparse/django_sql.py and bench/sqlparse/consumers/, run on 2026-11-17 on the EC2 c8g.16xlarge devbox (linux/aarch64).</small>
+
 ### pyroid.datasketch {#datasketch}
 
 Reference: datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1). Rule: identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets.
@@ -464,6 +482,8 @@ as returning an unchanged string as the same object.
 - [Differences from PyYAML](guides/yaml.md#differences-from-pyyaml), and how PyYAML's
   `CSafeLoader` differs from the `SafeLoader` pyroid follows
   ([list](guides/yaml.md#differences-between-csafeloader-and-safeloader))
+- [Differences from sqlparse](guides/sqlparse.md#differences-from-sqlparse), and the
+  [sqlparse releases](guides/sqlparse.md#versions) the patch works with (0.5.0 and later)
 - [Differences from Unidecode](guides/translit.md#differences-from-unidecode).
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).
@@ -503,6 +523,7 @@ checked. Each library is checked once per process, by whichever module asks firs
 | python-dateutil | python-dateutil 4.0.0; 3.0.0, 2.9.0.post0, 2.9.0 and 2.8.2 give the same results (`isoparse` follows the installed release) | `import pyroid.dateutil.parser`, `pyroid.patch("dateutil")` |
 | jmespath | jmespath 1.1.0 | `import pyroid.jmespath`, `pyroid.patch("jmespath")` |
 | packaging | packaging 26.3 | `import pyroid.packaging`, `pyroid.patch("packaging")` |
+| sqlparse | sqlparse 0.6.1 | `import pyroid.sqlparse`, `pyroid.patch("sqlparse")` |
 | datasketch | datasketch 2.0.0 | `import pyroid.datasketch`, `pyroid.patch("datasketch")` |
 | jieba | jieba 0.42.1 | `import pyroid.jieba` |
 | Trafilatura | trafilatura 2.3.1, and 1.11.0 with `compat="1.11.0"` | `import pyroid.trafilatura`, `pyroid.patch("trafilatura")` |

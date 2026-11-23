@@ -23,6 +23,7 @@ So the result is always the incumbent's. The warning tells you that this call to
 | `pyroid.translit` | never | — |
 | `pyroid.metrics` | ROUGE: tokens from a custom tokenizer that are not lists of `str` (to rouge-score). sacrebleu: the `ja-mecab`, `ko-mecab`, `spm`, `flores101`, `flores200` and `spBLEU-1K` tokenizers, `n_bootstrap > 1`, TER, `DATASETS` and the test-set helpers (`pyroid.metrics.sacrebleu.DELEGATED`) | — |
 | `pyroid.tabulate` | text with lone surrogates, an alignment that is not a `str`, `None` or `bool`, a custom `TableFormat` whose lines and rows are not strings or callables (or whose `padding` is not an int), a per-column `missingval` entry that is not a `str` ([the list](../guides/tabulate.md#what-runs-where)). These run tabulate 0.10.0's own Python code, which pyroid carries a copy of, not the installed tabulate | tabulate never needs to be installed |
+| `pyroid.sqlparse` | runs sqlparse 0.6.1's own Python code (shipped with pyroid, so sqlparse need not be installed) for a `Lexer` whose `get_tokens` or `is_keyword` is overridden (on the instance, in a subclass or on the class), for a keyword dictionary of a `dict` subclass with its own `__contains__` or `__getitem__`, and for a text holding both lone surrogates and characters from U+10F800 on; lexer patterns using syntax pyroid's matcher does not reproduce (`re.VERBOSE`, possessive quantifiers, ...) run in Python's `re`, the rest of the call in Rust | — |
 | `pyroid.json_repair` | `schema=` calls, non-`str` input, and text holding a character in U+10F800..U+10FFFF (the range the port uses to store lone surrogates); `repair_json_batch` delegates only those documents, from a list or an Arrow column | — |
 | `pyroid.dateutil` | a `parser` or `parserinfo` subclass that overrides a method, a parserinfo whose tables are not dicts of `str` to small `int`s, numbers past 64 bits, an hour or minute value whose fraction has over 26 significant digits, a `decimal` context with too little precision, an odd text stream; these run pyroid's copy of dateutil 4.0.0's parser, so python-dateutil need not be installed | — |
 | `pyroid.trafilatura` | the other output formats, `include_formatting`, `include_links`, `include_images`, metadata (`with_metadata`, `url_blacklist`, `extract_with_metadata`, ...), `target_language`, `prune_xpath`, `options=`, a trafilatura `LRUCache`, an lxml tree as input, bytes that are compressed or not UTF-8 ([the list](../guides/trafilatura.md#delegated-options)) | the installed trafilatura must be the mode's release (2.3.1, or 1.11.0 with `compat="1.11.0"`); without it, or with another version, these calls raise `PyroidError` |
@@ -89,7 +90,8 @@ uses its 17.0 tables. Any other warning matches the incumbent's own (for example
 
 [`pyroid.patch()`](../guides/patch.md) is not a fallback but the opposite: it makes code that
 imports ftfy, fastText, anyascii, datasketch, json_repair, Trafilatura, NLTK, warcio, NeMo Curator,
-PyYAML, tabulate, python-dateutil, jmespath, difflib or packaging get pyroid's functions instead. It
-announces that with its own `PatchWarning`, once per process for each patched name, so you can tell
-the two apart. An installed package of another release also gets the `VersionMismatchWarning` that
-importing the pyroid module gives (once per process, whichever comes first).
+PyYAML, tabulate, python-dateutil, jmespath, difflib, packaging or sqlparse get pyroid's functions
+instead. It announces that with its own `PatchWarning`, once per process for each patched name, so
+you can tell the two apart. An installed package of another release also gets the
+`VersionMismatchWarning` that importing the pyroid module gives (once per process, whichever comes
+first).

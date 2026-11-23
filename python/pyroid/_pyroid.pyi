@@ -28,6 +28,7 @@ __all__ = [
     "nemo",
     "nltk",
     "packaging",
+    "sqlparse",
     "tabulate",
     "text",
     "trafilatura",
@@ -55,6 +56,7 @@ jmespath: ModuleType
 nltk: ModuleType
 packaging: ModuleType
 nemo: ModuleType
+sqlparse: ModuleType
 trafilatura: ModuleType
 warc: ModuleType
 yaml: ModuleType

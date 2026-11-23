@@ -44,3 +44,10 @@ pyroid.packaging.markers.EvaluateContext
 pyroid.packaging.utils.NormalizedName
 # A functools.cache wrapper (mypy sees *args, **kwargs).
 pyroid.packaging._compat._cached_default_environment
+
+# pyroid.sqlparse: its private copies of sqlparse 0.6.1's tokens.py, sql.py, keywords.py, lexer.py
+# and exceptions.py (used when sqlparse is not installed). Their classes report the public module
+# as __module__ (pyroid.sqlparse.tokens, ...), which the untyped sources cannot say.
+pyroid.sqlparse._own_.*
+# A tuple subclass, as sqlparse defines it; the stub keeps it a plain class.
+pyroid.sqlparse.tokens._TokenType
