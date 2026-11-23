@@ -573,3 +573,26 @@ def test_sqlparse() -> None:
     over_states(lambda s: sp.split_batch(s, strip_semicolon=True), sqls)
     # Lone surrogates take a second route that reads the list again.
     over_states(sp.format_batch, (["select '\udce9' from t"] * 40, ["select 1 \ud800"] * 9 + ["x"]))
+
+
+def test_langdetect() -> None:
+    import pyroid.langdetect as pl
+
+    texts: tuple[list[str], ...] = (
+        ["El gato duerme en la casa y está contento."] * 60 + ["https://example.org"],
+        ["The cat sat on the mat and it was happy.", "Der Hund bellte die ganze Nacht."] * 15,
+        [],
+    )
+
+    def langs(t: list[str]) -> list[Any]:
+        out = pl.detect_langs_batch(t, errors="none")
+        return [None if r is None else [(x.lang, x.prob) for x in r] for r in out]
+
+    saved = pl.DetectorFactory.seed
+    pl.DetectorFactory.seed = 0  # the same draws in every call, so a result names its state
+    try:
+        over_states(lambda t: pl.detect_batch(t, errors="none"), texts)
+        over_states(lambda t: pl.detect_batch(t, errors="none", threads=2), texts)
+        over_states(langs, texts)
+    finally:
+        pl.DetectorFactory.seed = saved

@@ -51,14 +51,17 @@ A few details that matter for large corpora:
 
 ## Exceptions
 
-These batch functions return a `list` for a list, a tuple and an Arrow column alike (never a tuple
-or a `pyroid.Column`), and the ones that score pairs take no single `str`:
+These batch functions differ from the rules above in what they take, what they return or how they
+treat `None`. Those in the first three rows return a `list` for a list, a tuple and an Arrow column
+alike (never a tuple or a `pyroid.Column`); the ones that score pairs, and langdetect's, take no
+single `str`:
 
 | Function | Takes | Returns | A `None` in a list | An Arrow null |
 |---|---|---|---|---|
 | `trafilatura.extract_batch(htmls)` | a `str`, a list or tuple of pages, or an Arrow column; list items may also be `bytes`, as `extract` takes them | `extract(htmls)` for a `str`, else a `list` of `str` or `None` | `InputError` | `None` |
 | `metrics.rouge_scorer.RougeScorer.score_batch(targets, predictions)` | two lists, tuples or Arrow columns of the same length, not a `str` (use `score`) | a `list` of `dict[str, Score]` | `InputError` | `None` for the pair (a null on either side) |
 | `metrics.sacrebleu.sentence_bleu_batch` and `sentence_chrf_batch(hypotheses, references)` | a list, tuple or Arrow column of hypotheses, not a `str` (use `sentence_bleu`, `sentence_chrf`), and reference streams that may be Arrow columns | a `list` of `BLEUScore` / `CHRFScore` | `InputError` for a hypothesis; `None` is a missing reference, as in sacrebleu | `None` for a null hypothesis; a null reference is a missing one |
+| `langdetect.detect_batch(texts)` and `detect_langs_batch(texts)` | a list, tuple or Arrow column, not a `str` (use `detect`, `detect_langs`) | one language code, or one list of `Language`, per text: a `list` (a `tuple` for a tuple; for Arrow input a `pyroid.Column` of strings from `detect_batch`, a `list` from `detect_langs_batch`) | `TypeError`, as `detect(None)` raises it, with a note naming the index | `None` |
 
 ## `pyroid.Column`
 

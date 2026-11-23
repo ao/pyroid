@@ -284,6 +284,17 @@ CASES = [
         patch="sqlparse",
         imports=True,  # pyroid.sqlparse uses sqlparse's token classes when it imports
     ),
+    Case(
+        "langdetect",
+        "import pyroid.langdetect",
+        "langdetect",
+        "langdetect",
+        _version("pyroid.langdetect", "LANGDETECT_VERSION"),
+        "pyroid.langdetect",
+        ("langdetect",),
+        patch="langdetect",
+        imports=True,  # pyroid.langdetect uses langdetect's Language and exception classes
+    ),
 ]
 PATCHED = [c for c in CASES if c.patch is not None]
 

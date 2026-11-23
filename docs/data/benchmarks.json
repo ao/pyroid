@@ -307,6 +307,22 @@
       "source": "bench/results/orbstack-aarch64-12cpu/2026-11-07-jieba (bench/jieba_bench.py)"
     },
     {
+      "title": "pyroid.langdetect",
+      "guide": "langdetect",
+      "label": "AWS EC2 c7i.4xlarge (Intel Xeon, 16 vCPU), Amazon Linux 2023, Docker, CPython 3.12",
+      "note": "Dedicated instance, one benchmark process; load average 0.46 before and 1.90 after. µs per text, median of 5 rounds, langdetect 1.0.9 and pyroid interleaved, CPython 3.12.16, pyroid release wheel built on the instance. Every text's `detect_langs` (languages and probabilities to the last bit, seed 0) is first checked against langdetect's. Texts: FineWeb for English and the FineWeb-2 test split of each other profile language, round robin, cut to 50 or 1,500 characters or joined to 12,000. langdetect's 8 processes are a warmed fork Pool(8).",
+      "columns": ["Run", "50 characters (2,000 texts)", "1,500 characters (1,000)", "12,000 characters (250)"],
+      "rows": [
+        ["langdetect, one thread", "1,366", "2,687", "15,191"],
+        ["langdetect, 8 processes", "200 (7×)", "348 (8×)", "1,994 (8×)"],
+        ["pyroid, one call per text", "39 (35×)", "58 (46×)", "309 (49×)"],
+        ["pyroid, `detect_batch(texts, threads=1)`", "37 (37×)", "53 (51×)", "289 (52×)"],
+        ["pyroid, `detect_batch(texts, threads=8)`", "8.7 (158×)", "12 (220×)", "62 (246×)"]
+      ],
+      "footnote": "Speedups are against langdetect on one thread. langdetect's own `detect` under `pyroid.patch(\"langdetect\")` takes 55 µs on the 1,500-character texts (49×). A fresh interpreter reaches its first detection in 112 ms with pyroid and 237 ms with langdetect. The c7i's 16 vCPUs are 8 cores with two hardware threads each, and `threads=8` runs on 8 of the pool's 16 threads, some sharing a core: pinned to one thread per core (`taskset -c 0-7`), the 12,000-character batch took 41 to 46 µs per text in a separate script, against 59 to 61 unpinned. A second run gave medians within 5.3% of these.",
+      "source": "bench/langdetect_bench.py, run on 2026-11-17 (bench/results/aws-c7i.4xlarge/2026-11-17/langdetect.json)"
+    },
+    {
       "title": "pyroid.nltk",
       "guide": "nltk",
       "note": "µs per document over the first 1,000 documents of the FineWeb dev slice (3,018 characters each on average), English model, release wheels, median of 5 runs (2 for NLTK), load average 3 to 5. Every document's output was first checked against NLTK 3.10.4's. NLTK's 8 processes are a warmed fork Pool(8); its 8 threads run in parallel only on 3.15t.",

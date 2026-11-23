@@ -43,6 +43,7 @@ and `patch()` is the only switch. Each patched name emits one
 | `"tabulate"` | [`pyroid.tabulate`](tabulate.md) (tabulate 0.10.0) | a shim of `tabulate` with `tabulate`, `tabulate_formats`, `simple_separated_format`, `TableFormat`, `Line`, `DataRow`, `SEPARATING_LINE`, `multiline_formats`, `_table_formats` and tabulate's other functions, private helpers included; writes of `MIN_PADDING`, `PRESERVE_WHITESPACE` and `WIDE_CHARS_MODE` reach pyroid.tabulate. `DataFrame.to_markdown()` then uses it | only the modules tabulate imports (`re`, `textwrap`, ...) |
 | `"difflib"` | [`pyroid.difflib`](difflib.md) (this Python's difflib) | in place, no shim: `SequenceMatcher`'s, `Differ.compare` and `HtmlDiff.make_table` on difflib's own classes, and `get_close_matches`, `unified_diff`, `context_diff` and `_mdiff` on the module (so `ndiff`, unittest's and pytest's diffs too) | `restore`, `diff_bytes`, `IS_LINE_JUNK`, `IS_CHARACTER_JUNK`, `Match` (the same objects pyroid.difflib uses) |
 | `"sqlparse"` | [`pyroid.sqlparse`](sqlparse.md) (sqlparse 0.6.1) | `parse`, `parsestream`, `format`, `split` (on `sqlparse`), `tokenize` (on `sqlparse.lexer`) and `group` (on `sqlparse.engine.grouping`), building trees of sqlparse's own classes | the token classes and their methods, `FilterStack` and the filters (which then lex and group in Rust), the command line |
+| `"langdetect"` | [`pyroid.langdetect`](langdetect.md) (langdetect 1.0.9) | with langdetect installed, langdetect's own `detect` and `detect_langs` (one native call) and `Detector.append` and `Detector._detect_block` (in Rust) run pyroid's code, as the same function objects; without it, `langdetect` and its submodules hold pyroid's classes | with langdetect installed, everything else: its classes, exceptions and factories |
 | `"warcio"` | [`pyroid.warc`](warc.md) (warcio 1.8.2's reader) | `ArchiveIterator` (on `warcio` and `warcio.archiveiterator`), `WARCIterator` and `ARCIterator` (on `warcio.archiveiterator`), making warcio's own `StatusAndHeaders`, `ArcWarcRecord` (a subclass, with pyroid's `content_stream()`), `DigestChecker` and `ArchiveLoadFailed` | `WARCWriter`, `capture_http`, the indexer, the checker, the command line |
 | `"dateutil"` | [`pyroid.dateutil.parser`](dateutil.md) (python-dateutil 2.8.2 to 4.0.0) | `parse` and `isoparse`, on `dateutil.parser`, `dateutil.parser._parser` and `dateutil.parser.isoparser` (they use dateutil's own `DEFAULTPARSER` and `DEFAULT_ISOPARSER`) | `dateutil.tz`, `relativedelta`, `rrule`, `easter`, the `parser` and `isoparser` classes |
 | `"jmespath"` | [`pyroid.jmespath`](jmespath.md) (jmespath 1.1.0) | `search` and `compile`, set on jmespath's own module (shims of `jmespath` and its `exceptions`, `functions`, `visitor`, `parser`, `lexer` and `ast` submodules without jmespath); exceptions stay jmespath's classes | `jmespath.parser.Parser`, `jmespath.lexer.Lexer`, `TreeInterpreter` and the rest of the package |
@@ -82,7 +83,7 @@ import pyroid
 pyroid.patch("unidecode")
 # ValueError: cannot patch 'unidecode': the supported names are 'ftfy', 'fasttext', 'anyascii',
 # 'datasketch', 'json_repair', 'trafilatura', 'nltk', 'warcio', 'nemo_curator', 'yaml',
-# 'tabulate', 'dateutil', 'jmespath', 'difflib', 'packaging', 'sqlparse'
+# 'tabulate', 'dateutil', 'jmespath', 'difflib', 'packaging', 'sqlparse', 'langdetect'
 # (pyroid.translit.unidecode transliterates with anyascii's tables, so its output differs from
 # Unidecode's: it is not a drop-in)
 ```
@@ -216,11 +217,11 @@ usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
 `nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` / `difflib` /
-`packaging` / `sqlparse` giving pyroid's drop-ins. The Python processes it starts (multiprocessing
-workers, subprocesses) are patched too.
+`packaging` / `sqlparse` / `langdetect` giving pyroid's drop-ins. The Python processes it starts
+(multiprocessing workers, subprocesses) are patched too.
 
 options:
-  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate, dateutil, jmespath, difflib, packaging, sqlparse
+  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate, dateutil, jmespath, difflib, packaging, sqlparse, langdetect
                      (repeatable; default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
@@ -382,6 +383,14 @@ and with new ones (they compare and hash equal, and packaging's code accepts the
 packaging 26.3's own tests (62,499) pass patched, with `-W ignore::pyroid.FallbackWarning` under
 their warnings-as-errors setting. [`pyroid.packaging`](packaging.md#patch) has the details.
 
+`"langdetect"` goes further when langdetect is installed: it swaps the code of four of
+langdetect's functions, which stay the same objects. So detectors and factories made before
+`patch()`, and names imported before it (`from langdetect import detect`), run pyroid's code too;
+the patched functions pickle as langdetect's, and load as langdetect's own in a process without
+the patch; and every class, exception and `Language` stays langdetect's. Each replacement gives
+langdetect's results on langdetect's own object state, so `unpatch("langdetect")` can run while
+other threads detect. See [the guide](langdetect.md#patch).
+
 ## Limitations
 
 - A shim is not the real module object: code that already holds the real module (imported before
@@ -391,8 +400,8 @@ their warnings-as-errors setting. [`pyroid.packaging`](packaging.md#patch) has t
   or NeMo Curator module) puts that module's own functions back while `patched()` still lists the
   name; `unpatch()` and `patch()` it again.
 - Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`,
-  `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `difflib`, `packaging` and `sqlparse`
-  can be patched. pyroid's filters and dedup reach datatrove pipelines through the
+  `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `difflib`, `packaging`, `sqlparse` and
+  `langdetect` can be patched. pyroid's filters and dedup reach datatrove pipelines through the
   [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked

@@ -20,6 +20,7 @@ source.
 | [`pyroid.difflib`](difflib.md) | the standard library's `difflib` (`SequenceMatcher`, `get_close_matches`, `unified_diff`, `ndiff`, `HtmlDiff`, ...), `ratio_batch`, `close_matches_batch` |
 | [`pyroid.sqlparse`](sqlparse.md) | sqlparse 0.6.1's `parse`, `parsestream`, `format`, `split` and modules (`sql`, `tokens`, `lexer`, `engine`, `filters`, ...), plus `format_batch`, `split_batch` |
 | [`pyroid.datasketch`](datasketch.md) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble` (datasketch's modules), `minhash_batch` |
+| [`pyroid.langdetect`](langdetect.md) | langdetect 1.0.9's API: `detect`, `detect_langs`, `DetectorFactory`, `Detector`, `LangProfile`, `LangDetectException`, plus `detect_batch` and `detect_langs_batch` |
 | [`pyroid.jieba`](jieba.md) | jieba 0.42.1's API: `cut`, `lcut`, `cut_for_search`, `tokenize`, `add_word`, `load_userdict`, `Tokenizer`, ... |
 | [`pyroid.trafilatura`](trafilatura.md) | `extract`, `bare_extraction`, `extract_with_metadata`, `extract_batch`, `Document`, `LRUCache`, `reset_caches`, the `compat=` modes 2.3.1 and 1.11.0 |
 | [`pyroid.nltk`](nltk.md) | NLTK 3.10.4's `sent_tokenize`, `word_tokenize`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer` |

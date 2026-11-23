@@ -28,6 +28,7 @@ mod interrupt;
 mod jieba;
 mod jmespath;
 mod json_repair;
+mod langdetect;
 mod metrics;
 mod nemo;
 mod nemo_modifiers;
@@ -83,5 +84,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     difflib::register(m)?;
     packaging::register(m)?;
     sqlparse::register(m)?;
+    langdetect::register(m)?;
     Ok(())
 }

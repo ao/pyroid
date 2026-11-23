@@ -22,8 +22,8 @@ pyroid has no runtime dependencies. Extras:
 Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
 `pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.jmespath`,
 `pyroid.tabulate`, `pyroid.trafilatura`, `pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader,
-`pyroid.yaml`, `pyroid.dateutil.parser`, `pyroid.difflib`, `pyroid.packaging`, `pyroid.sqlparse` and
-`pyroid.patch()` need none of them.
+`pyroid.yaml`, `pyroid.dateutil.parser`, `pyroid.difflib`, `pyroid.packaging`, `pyroid.sqlparse`,
+`pyroid.langdetect` and `pyroid.patch()` need none of them.
 
 Some dependencies of the `datatrove`, `hf` and `warc` extras (orjson, tokenizers, PyYAML and
 faust-cchardet) publish no wheels for CPython 3.15 and 3.15t yet, and orjson none for 3.14t. There
@@ -56,6 +56,10 @@ Optional libraries, needed only by the features that use them:
       ...) and for Redis or Cassandra LSH storage.
 
     Without them, those calls raise `pyroid.PyroidError`.
+- langdetect 1.0.9 (or 1.0.7 or 1.0.8, which detect the same), never needed by
+  `pyroid.langdetect`: with it installed, pyroid's results and errors are langdetect's own
+  `Language` and `LangDetectException` objects, and `pyroid.patch("langdetect")` speeds up
+  langdetect itself ([details](guides/langdetect.md)).
 - NLTK's `punkt_tab` data for `pyroid.nltk`'s Punkt and ROUGE's `split_summaries=True`
   (`python -m nltk.downloader punkt_tab`; pyroid does not bundle it, [details](guides/nltk.md)).
 - numpy for `pyroid.metrics.scoring.BootstrapAggregator`, which runs rouge-score's numpy code.

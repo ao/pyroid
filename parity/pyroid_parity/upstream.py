@@ -126,6 +126,12 @@ WATCH: dict[str, Watch] = {
         "python/tests/test_sqlparse_parity.py and sqlparse's own tests (parity/data/sqlparse-0.6.1), which "
         "compare against the pinned sqlparse.",
     ),
+    "langdetect": Watch(
+        (),
+        "pyroid.langdetect reproduces langdetect. No parity suite covers it here: its parity tests are "
+        "python/tests/test_langdetect_parity.py and parity/langdetect_corpus.py, which compare against the "
+        "pinned langdetect.",
+    ),
     # Libraries an oracle depends on whose behaviour pyroid reproduces too.
     "lxml": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces trafilatura on lxml's (libxml2's) parse tree."),
     "justext": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces jusText, trafilatura's fallback extractor."),

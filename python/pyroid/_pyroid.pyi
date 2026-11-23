@@ -24,6 +24,7 @@ __all__ = [
     "jieba",
     "jmespath",
     "json_repair",
+    "langdetect",
     "metrics",
     "nemo",
     "nltk",
@@ -53,6 +54,7 @@ datasketch: ModuleType
 dateutil: ModuleType
 jieba: ModuleType
 jmespath: ModuleType
+langdetect: ModuleType
 nltk: ModuleType
 packaging: ModuleType
 nemo: ModuleType

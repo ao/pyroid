@@ -42,6 +42,7 @@ repos:
             crates/pyroid-core/src/pyvi/data/|
             crates/pyroid-core/src/pyvi/testdata/|
             crates/pyroid-core/src/pythainlp/testdata/|
+            python/pyroid/langdetect/profiles/|
             bench/data/|
             bench/results/|
             docs/assets/.*\.svg$|

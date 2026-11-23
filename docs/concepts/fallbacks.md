@@ -90,8 +90,8 @@ uses its 17.0 tables. Any other warning matches the incumbent's own (for example
 
 [`pyroid.patch()`](../guides/patch.md) is not a fallback but the opposite: it makes code that
 imports ftfy, fastText, anyascii, datasketch, json_repair, Trafilatura, NLTK, warcio, NeMo Curator,
-PyYAML, tabulate, python-dateutil, jmespath, difflib, packaging or sqlparse get pyroid's functions
-instead. It announces that with its own `PatchWarning`, once per process for each patched name, so
-you can tell the two apart. An installed package of another release also gets the
+PyYAML, tabulate, python-dateutil, jmespath, difflib, packaging, sqlparse or langdetect get pyroid's
+functions instead. It announces that with its own `PatchWarning`, once per process for each patched
+name, so you can tell the two apart. An installed package of another release also gets the
 `VersionMismatchWarning` that importing the pyroid module gives (once per process, whichever comes
 first).

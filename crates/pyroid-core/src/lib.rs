@@ -36,6 +36,8 @@
 //! - [`jmespath`]: jmespath 1.1.0's lexer and parser (`pyroid.jmespath`).
 //! - [`packaging`]: packaging 26.3's versions, specifiers, markers and requirements
 //!   (`pyroid.packaging`).
+//! - [`langdetect`]: langdetect 1.0.9's language detection, ported exactly
+//!   (`pyroid.langdetect`).
 //! - [`version`]: the PEP 440 form of the Cargo version (`pyroid.__version__`).
 //!
 //! Each module adds a `src/<mod>/` directory here; see `docs/dev/MODULES.md`.
@@ -54,6 +56,7 @@ pub mod html;
 pub mod jieba;
 pub mod jmespath;
 pub mod json_repair;
+pub mod langdetect;
 pub mod metrics;
 pub mod nemo;
 pub mod nltk;

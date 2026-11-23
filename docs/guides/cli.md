@@ -471,7 +471,7 @@ $ cat ascii.jsonl
 `import ftfy` / `import fasttext` giving pyroid's drop-ins, in the program and in the Python
 processes it starts; `-p` picks the modules from `ftfy`, `fasttext`, `anyascii`, `datasketch`,
 `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`,
-`jmespath`, `difflib`, `packaging` and `sqlparse`. It is described with
+`jmespath`, `difflib`, `packaging`, `sqlparse` and `langdetect`. It is described with
 [`pyroid.patch()`](patch.md#pyroid-run-programs-and-their-child-processes).
 
 ## From Python: `pyroid.integrations.recipes`

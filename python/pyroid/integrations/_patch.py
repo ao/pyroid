@@ -155,6 +155,13 @@ The exception classes stay packaging's. Without packaging, ``packaging`` and its
 ``specifiers``, ``markers``, ``requirements`` and ``utils`` submodules are shims holding
 :mod:`pyroid.packaging`'s names.
 
+``"langdetect"`` (:mod:`pyroid.langdetect`, which reproduces langdetect 1.0.9) patches the
+installed langdetect in place: four of its functions (``detect``, ``detect_langs``,
+``Detector.append`` and ``Detector._detect_block``) run pyroid's code as the same objects, so names
+imported before the patch and detectors and factories made before it are fast too, the functions
+pickle as langdetect's, and every class, exception and ``Language`` stays langdetect's. Without
+langdetect, ``langdetect`` and its submodules are shims holding :mod:`pyroid.langdetect`'s classes.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -210,6 +217,7 @@ SUPPORTED: tuple[str, ...] = (
     "difflib",
     "packaging",
     "sqlparse",
+    "langdetect",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -851,6 +859,14 @@ def _build_nemo_curator(impl: types.ModuleType, real: Any, missing: str) -> _Bui
     return {}, [undo]
 
 
+def _build_langdetect(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    from pyroid.langdetect import _patch as lp
+
+    if real is None:  # no langdetect: shims holding pyroid.langdetect's classes
+        return lp.shims(_shim, missing), []
+    return {}, [lp.install()]  # langdetect's own classes, with pyroid's methods
+
+
 # What patch("sqlparse") sets on an installed sqlparse (pyroid.sqlparse._patched's functions).
 _SQLPARSE_SWAPS: dict[str, tuple[str, ...]] = {
     "sqlparse": ("parse", "parsestream", "format", "split"),
@@ -1340,6 +1356,14 @@ _TARGETS: dict[str, _Target] = {
             "which include sqlparse 0.6.1's Python modules."
         ),
     ),
+    "langdetect": _Target(
+        "pyroid.langdetect",
+        "which reproduces langdetect 1.0.9's detect, detect_langs, DetectorFactory and Detector, "
+        "with the same results for the same seed",
+        "pip install langdetect==1.0.9",
+        " (langdetect.utils.messages and langdetect.utils.unicode_block)",
+        _build_langdetect,
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
@@ -1353,6 +1377,7 @@ _SWAPPED = (
     "difflib",
     "packaging",
     "sqlparse",
+    "langdetect",
 )
 
 
@@ -1460,11 +1485,18 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
                 "difflib": "from difflib import unified_diff",
                 "packaging": "from packaging.version import Version",
                 "sqlparse": "from sqlparse import format",
+                "langdetect": "from langdetect import detect",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
                 f"{name} before this call ({example}) keep {name}'s objects."
             )
+            if name == "langdetect":  # patched in place: the same objects, pyroid's code
+                rest = (
+                    f"Everything else{target.rest} is still langdetect's own. langdetect's "
+                    f"functions stay the same objects, so names imported before this call "
+                    f"({example}) run pyroid's code too."
+                )
         else:
             rest = (
                 f"Everything else{target.rest} still comes from the installed {name}. Modules "
@@ -1540,7 +1572,7 @@ def patch(*names: str) -> None:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
             ``"json_repair"``, ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"``,
             ``"yaml"``, ``"tabulate"``, ``"dateutil"``, ``"jmespath"``, ``"difflib"``,
-            ``"packaging"`` and/or ``"sqlparse"``.
+            ``"packaging"``, ``"sqlparse"`` and/or ``"langdetect"``.
 
     Raises:
         TypeError: No names were given.
@@ -1686,8 +1718,8 @@ _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
 `nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` / `difflib` /
-`packaging` / `sqlparse` giving pyroid's drop-ins. The Python processes it starts (multiprocessing
-workers, subprocesses) are patched too.
+`packaging` / `sqlparse` / `langdetect` giving pyroid's drop-ins. The Python processes it starts
+(multiprocessing workers, subprocesses) are patched too.
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}
