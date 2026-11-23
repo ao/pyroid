@@ -122,3 +122,10 @@ path = "fuzz_targets/yaml.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "jmespath"
+path = "fuzz_targets/jmespath.rs"
+test = false
+doc = false
+bench = false

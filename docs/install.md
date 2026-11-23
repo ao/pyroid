@@ -20,9 +20,9 @@ pyroid has no runtime dependencies. Extras:
 | `pyroid[all]` | all of the above | everything; on CPython 3.15 it leaves out `datatrove`, `hf` and `warc` (see below) |
 
 Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
-`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.tabulate`,
-`pyroid.trafilatura`, `pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader, `pyroid.yaml`,
-`pyroid.dateutil.parser` and `pyroid.patch()` need none of them.
+`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.jmespath`,
+`pyroid.tabulate`, `pyroid.trafilatura`, `pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader,
+`pyroid.yaml`, `pyroid.dateutil.parser` and `pyroid.patch()` need none of them.
 
 Some dependencies of the `datatrove`, `hf` and `warc` extras (orjson, tokenizers, PyYAML and
 faust-cchardet) publish no wheels for CPython 3.15 and 3.15t yet, and orjson none for 3.14t. There

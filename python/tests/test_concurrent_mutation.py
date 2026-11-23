@@ -481,3 +481,36 @@ def test_dateutil() -> None:
         lambda i: tzinfos.update(EST=-14400 if i % 2 else -18000),
         allowed,
     )
+
+
+def test_jmespath() -> None:
+    import pyroid.jmespath as jp
+
+    items: list[Any] = []
+    meta: dict[str, int] = {"n": 1}
+    data = {"items": items, "meta": meta}
+    errors = (jp.exceptions.JMESPathError,)
+    variants: tuple[list[Any], ...] = (
+        [{"a": i, "b": {"c": i % 3}} for i in range(200)],
+        [{"a": "x"}] * 5,
+        [],
+    )
+    for expr in ("items[*].a", "length(items)", "items[?b.c == `1`].a", "sort_by(items, &a)[0]"):
+        allowed = [
+            _outcome(functools.partial(jp.search, expr, {"items": list(v)}), errors)
+            for v in variants
+        ]
+        items[:] = variants[0]
+        hammer(
+            functools.partial(_outcome, functools.partial(jp.search, expr, data), errors),
+            states(items, variants),
+            allowed,
+        )
+
+    def grow_or_clear(i: int) -> None:
+        if i % 2:
+            meta.update({f"k{i % 40}": i})
+        else:
+            meta.clear()
+
+    hammer(lambda: jp.search("meta.*", data), grow_or_clear)

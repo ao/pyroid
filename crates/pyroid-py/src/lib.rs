@@ -25,6 +25,7 @@ mod ftfy;
 mod input;
 mod interrupt;
 mod jieba;
+mod jmespath;
 mod json_repair;
 mod metrics;
 mod nemo;
@@ -75,5 +76,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     warc::register(m)?;
     yaml::register(m)?;
     tabulate::register(m)?;
+    jmespath::register(m)?;
     Ok(())
 }

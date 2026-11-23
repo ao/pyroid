@@ -351,6 +351,57 @@
       ],
       "source": "the parity/ dateutil suite and the full-corpus run, 2026-11-14 and 2026-11-15"
     },
+    "jmespath": {
+      "reference": "jmespath 1.1.0",
+      "rule": "the same result (type, key order, float bits, and the same input objects where jmespath returns them), the same AST, the same exception class, message, args and attributes",
+      "checks": [
+        {
+          "name": "JMESPath compliance suite (jmespath.py 1.1.0's 16 files and its legacy literals, 917 cases), with plain dicts and with dict_cls=OrderedDict, CPython 3.12 and 3.14t",
+          "same": 3668,
+          "diff": 0
+        },
+        {
+          "name": "jmespath.py 1.1.0's own unit tests (test_lexer, test_parser, test_functions, test_search, test_custom_functions) run against pyroid.jmespath, CPython 3.12 and 3.14t",
+          "same": 144,
+          "diff": 0
+        },
+        {
+          "name": "Comparators on edge values (NaN, -0.0, inf, 2**53 + 1, 2**64, booleans, None, lone surrogates), 6 operators x 3 forms, CPython 3.12 and 3.14t",
+          "same": 20736,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis: grammar expressions (valid, mutated, random) over data with OrderedDict, list and dict subclasses, tuples, Decimal, objects with get, huge ints, NaN and surrogates; CPython 3.12 (200,000) and 3.14t (100,000)",
+          "same": 300000,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis with custom functions (pyroid's and jmespath's Functions subclasses, an overridden call_function, a replaced built-in); CPython 3.12 (100,000) and 3.14t (50,000)",
+          "same": 150000,
+          "diff": 0
+        },
+        {
+          "name": "Real queries: botocore 1.44.3's paginator and waiter expressions and AWS CLI examples (8,593 expressions), the AWS CLI user guide's and Ansible's json_query guide's examples, over generated and documented responses, CPython 3.12",
+          "same": 34498,
+          "diff": 0
+        },
+        {
+          "name": "The same, the 358-case sample in parity/data replayed by the tests, CPython 3.12 and 3.14t",
+          "same": 716,
+          "diff": 0
+        },
+        {
+          "name": "Nesting depth at which RecursionError is raised, 10 constructs, main thread, CPython 3.12 and 3.14t",
+          "same": 20,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "botocore 1.44.3's own paginator and waiter tests (tests/unit/test_paginate.py, test_waiters.py, tests/functional/test_paginate.py, test_paginator_config.py, test_waiter_config.py) pass with pyroid.patch(\"jmespath\"): 3,720 passed, as without it.",
+        "Each result comparison also compares the compiled AST (repr and ==) when the expression parses. The lexer and parser are fuzzed in Rust as well (fuzz/fuzz_targets/jmespath.rs, 4 million runs, no failure)."
+      ],
+      "source": "python/tests/test_jmespath_parity.py, bench/jmespath/parity_counts.py and bench/jmespath/real_queries.py, run on 2026-11-15 on the EC2 c8g.16xlarge devbox (linux/aarch64)"
+    },
     "datasketch": {
       "reference": "datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1)",
       "rule": "identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets",

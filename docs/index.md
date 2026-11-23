@@ -49,6 +49,7 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 |  | [`pyroid.nemo`](guides/nemo-curator.md#pyroidnemo) | [NeMo Curator](https://github.com/NVIDIA-NeMo/Curator) 1.4.0's heuristic document filters and string modifiers | same scores, exceptions and modified text ([parity](compatibility.md#nemo)) |
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
 | JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.9 | same output, linear where json_repair is still quadratic ([parity](compatibility.md#json_repair)) |
+|  | [`pyroid.jmespath`](guides/jmespath.md) | [jmespath](https://github.com/jmespath/jmespath.py) 1.1.0 | same results, ASTs and exceptions as jmespath, on your Python objects ([parity](compatibility.md#jmespath)) |
 | YAML | [`pyroid.yaml`](guides/yaml.md) | [PyYAML](https://github.com/yaml/pyyaml) 6.0.3's `safe_load` and `safe_dump` | same objects, text and errors as PyYAML's pure-Python `SafeLoader` and `SafeDumper`, faster than `CSafeLoader` ([parity](compatibility.md#yaml)) |
 | Tables | [`pyroid.tabulate`](guides/tabulate.md) | [tabulate](https://github.com/astanin/python-tabulate) 0.10.0, `DataFrame.to_markdown()` included | the same text, byte for byte, in every format ([parity](compatibility.md#tabulate)) |
 | Dates | [`pyroid.dateutil.parser`](guides/dateutil.md) | [python-dateutil](https://github.com/dateutil/dateutil)'s `parse` and `isoparse`, 2.8.2 to 4.0.0 | same datetimes, tz objects, exceptions and messages ([parity](compatibility.md#dateutil)) |
@@ -130,7 +131,7 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 |---|---|
 | [`pyroid clean`](guides/cli.md) | the FineWeb-style chain as one command over Parquet or JSONL, or datatrove's FineWeb pipeline from WARC files, with datatrove's output document for document |
 | [Large datasets](guides/large-datasets.md) | the same commands over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards in datatrove's file format |
-| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate` and `dateutil` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil` and `jmespath` give pyroid's functions, in code you don't own |
 | [datatrove steps](guides/datatrove.md) | `pyroid.integrations.datatrove`: datatrove's pipeline steps with the same names and signatures, `Trafilatura` included, as a one-import change |
 | [NeMo Curator stages](guides/nemo-curator.md) | `pyroid.integrations.nemo_curator`: NeMo Curator 1.4.0's CPU text stages, subclassing NeMo's classes with the same arguments |
 | [Hugging Face `datasets`](guides/huggingface.md) | `pyroid.integrations.hf`: batched callables for `Dataset.map` and `Dataset.filter`, and the FineWeb recipe |
@@ -208,7 +209,7 @@ PSF-2.0 AND Unicode-3.0 AND Zlib`:
 - Apache-2.0 for the ftfy, datatrove, rouge-score, NLTK (Porter stemmer and tokenizers),
   sacrebleu, Trafilatura, SudachiPy and warcio ports;
 - MIT for the fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (and
-  its dictionary), libxml2 (HTML parser), PyYAML and tabulate ports;
+  its dictionary), libxml2 (HTML parser), PyYAML, tabulate and jmespath ports;
 - BSD-2-Clause for the jusText port and its stoplists;
 - BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract and lxml;
 - PSF-2.0 for CPython's `ipaddress` and float formatting;

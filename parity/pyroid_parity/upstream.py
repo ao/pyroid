@@ -109,6 +109,11 @@ WATCH: dict[str, Watch] = {
         "pyroid.dateutil reproduces python-dateutil's parse and isoparse (the newest release; 3.0.0, "
         "2.9.0.post0, 2.9.0 and 2.8.2 are reproduced too).",
     ),
+    "jmespath": Watch(
+        (),
+        "pyroid.jmespath reproduces jmespath. No parity suite covers it here: its parity tests are "
+        "python/tests/test_jmespath_parity.py, which compare against the pinned jmespath.",
+    ),
     # Libraries an oracle depends on whose behaviour pyroid reproduces too.
     "lxml": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces trafilatura on lxml's (libxml2's) parse tree."),
     "justext": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces jusText, trafilatura's fallback extractor."),

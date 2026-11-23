@@ -128,6 +128,14 @@ and ``DEFAULTPARSER._parse`` (which ``pandas.to_datetime`` calls) stay dateutil'
 python-dateutil, ``dateutil`` and ``dateutil.parser`` are shims holding
 :mod:`pyroid.dateutil.parser`'s names.
 
+``"jmespath"`` works like ``"nltk"`` when jmespath is installed: ``search`` and ``compile`` on
+the ``jmespath`` module become :mod:`pyroid.jmespath`'s, which reproduce jmespath 1.1.0 (the
+same results, ASTs and exceptions, which stay jmespath's classes), so boto3's and botocore's
+``jmespath.compile(...)``/``jmespath.search(...)`` calls run natively. Custom ``Functions``
+subclasses keep working. Without jmespath, ``jmespath`` and its ``exceptions``, ``functions``,
+``visitor``, ``parser``, ``lexer`` and ``ast`` submodules are shims holding
+:mod:`pyroid.jmespath`'s names.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -178,6 +186,7 @@ SUPPORTED: tuple[str, ...] = (
     "yaml",
     "tabulate",
     "dateutil",
+    "jmespath",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -928,6 +937,45 @@ def _build_dateutil(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     return {}, [undo]
 
 
+# What patch("jmespath") sets on jmespath's own module.
+_JMESPATH_SWAPS = ("search", "compile")
+# The shims without jmespath: submodule -> the pyroid.jmespath submodule behind it.
+_JMESPATH_SHIMS = ("exceptions", "functions", "visitor", "parser", "lexer", "ast")
+
+
+def _build_jmespath(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if real is None:  # no jmespath: shims holding pyroid.jmespath's names
+        shims: dict[str, types.ModuleType] = {}
+        for sub in _JMESPATH_SHIMS:
+            module = getattr(impl, sub)
+            names = getattr(module, "__all__", None) or [n for n in vars(module) if n[:1] != "_"]
+            provided = {n: getattr(module, n) for n in names}
+            if sub == "visitor":
+                provided["_Expression"] = module._Expression
+            shims[f"jmespath.{sub}"] = _shim(
+                f"jmespath.{sub}", None, missing, impl, provided, package=False
+            )
+        top: dict[str, Any] = {n: getattr(impl, n) for n in ("search", "compile", "Options")}
+        top.update({k.rpartition(".")[2]: v for k, v in shims.items()})
+        shims["jmespath"] = _shim(
+            "jmespath", None, missing, impl, top, package=True, version=impl.JMESPATH_VERSION
+        )
+        return shims, []
+    saved: list[tuple[Any, str, Any]] = []
+    for n in _JMESPATH_SWAPS:
+        saved.append((real, n, real.__dict__.get(n, _MISSING)))
+        setattr(real, n, getattr(impl, n))
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -1024,10 +1072,17 @@ _TARGETS: dict[str, _Target] = {
         " (dateutil.tz, relativedelta, rrule, easter, and the parser and isoparser classes)",
         _build_dateutil,
     ),
+    "jmespath": _Target(
+        "pyroid.jmespath",
+        "which reproduces jmespath 1.1.0's search and compile",
+        "pip install jmespath==1.1.0",
+        " (its Parser, Lexer and TreeInterpreter classes)",
+        _build_jmespath,
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator", "yaml", "dateutil")
+_SWAPPED = ("nltk", "warcio", "nemo_curator", "yaml", "dateutil", "jmespath")
 
 
 # ---------------------------------------------------------------------------
@@ -1106,6 +1161,7 @@ def _announce(name: str, real: Any, missing: str) -> None:
                 "nemo_curator": "from nemo_curator.stages.text.filters import ScoreFilter",
                 "yaml": "from yaml import safe_load",
                 "dateutil": "from dateutil.parser import parse",
+                "jmespath": "from jmespath import search",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
@@ -1185,7 +1241,7 @@ def patch(*names: str) -> None:
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
             ``"json_repair"``, ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"``,
-            ``"yaml"``, ``"tabulate"`` and/or ``"dateutil"``.
+            ``"yaml"``, ``"tabulate"``, ``"dateutil"`` and/or ``"jmespath"``.
 
     Raises:
         TypeError: No names were given.
@@ -1329,8 +1385,8 @@ _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
-`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` giving pyroid's drop-ins.
-The Python processes it starts (multiprocessing workers, subprocesses) are patched too.
+`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` giving pyroid's
+drop-ins. The Python processes it starts (multiprocessing workers, subprocesses) are patched too.
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}

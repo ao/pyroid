@@ -28,6 +28,7 @@ So the result is always the incumbent's. The warning tells you that this call to
 | `pyroid.trafilatura` | the other output formats, `include_formatting`, `include_links`, `include_images`, metadata (`with_metadata`, `url_blacklist`, `extract_with_metadata`, ...), `target_language`, `prune_xpath`, `options=`, a trafilatura `LRUCache`, an lxml tree as input, bytes that are compressed or not UTF-8 ([the list](../guides/trafilatura.md#delegated-options)) | the installed trafilatura must be the mode's release (2.3.1, or 1.11.0 with `compat="1.11.0"`); without it, or with another version, these calls raise `PyroidError` |
 | `pyroid.nltk` | Punkt training (`PunktTrainer`, `PunktSentenceTokenizer(train_text)`), a custom `token_cls`, a `PunktLanguageVars` subclass that changes more than `sent_end_chars`, parameters that are not sets of `str`, `dump()` and saving parameters, a Treebank tokenizer whose patterns were changed, a `RegexpTokenizer` pattern that is not one of the native ones | — |
 | `pyroid.jieba` | `pyroid.jieba.posseg`, `pyroid.jieba.analyse`, paddle mode, and `get_dict_file()` for the default dictionary | — |
+| `pyroid.jmespath` | a non-`str` expression other than an empty, unhashable or `bytes` one (jmespath lexes any iterable, such as a tuple of characters) | without jmespath such an expression raises `PyroidError`; custom functions are not a fallback: they run in Python as in jmespath |
 | `pyroid.datasketch` | the classes pyroid does not port (`bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `WeightedMinHash`, `HyperLogLog`, ...), Redis and Cassandra storage, and a `hashfunc` other than `sha1_hash32`/`sha1_hash64` (called from Python for each token; the permutations stay in Rust) | — |
 | `pyroid.yaml` | loaders and dumpers with added constructors, representers or resolvers or overridden methods, `BaseLoader`, `load_all` with the full loaders, documents with `!!python/` tags under `FullLoader`/`Loader`/`UnsafeLoader`, objects other than plain data under `Dumper`, dumping a `str` with lone surrogates, and PyYAML's other functions (`scan`, `compose`, ...) | under `SafeDumper`, an object it cannot represent raises PyYAML's `RepresenterError` |
 | `pyroid.integrations.datatrove` | a `language` the step can't tokenize natively runs datatrove's own code for that step, and `Trafilatura` with an installed trafilatura release that pyroid does not reproduce runs datatrove's own step | — |
@@ -86,8 +87,7 @@ uses its 17.0 tables. Any other warning matches the incumbent's own (for example
 
 [`pyroid.patch()`](../guides/patch.md) is not a fallback but the opposite: it makes code that
 imports ftfy, fastText, anyascii, datasketch, json_repair, Trafilatura, NLTK, warcio, NeMo Curator,
-PyYAML, tabulate or python-dateutil get pyroid's functions instead.
-It announces that with its own `PatchWarning`, once per process for each patched name, so you can
-tell the two apart. An installed package of another release also gets the
-`VersionMismatchWarning` that importing the pyroid module gives (once per process, whichever comes
-first).
+PyYAML, tabulate, python-dateutil or jmespath get pyroid's functions instead. It announces that with
+its own `PatchWarning`, once per process for each patched name, so you can tell the two apart. An
+installed package of another release also gets the `VersionMismatchWarning` that importing the
+pyroid module gives (once per process, whichever comes first).

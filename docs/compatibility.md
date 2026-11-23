@@ -204,6 +204,27 @@ Reference: python-dateutil 4.0.0 and 2.9.0.post0 (parse is the same in both, and
 
 <small>Source: the parity/ dateutil suite and the full-corpus run, 2026-11-14 and 2026-11-15.</small>
 
+### pyroid.jmespath {#jmespath}
+
+Reference: jmespath 1.1.0. Rule: the same result (type, key order, float bits, and the same input objects where jmespath returns them), the same AST, the same exception class, message, args and attributes.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| JMESPath compliance suite (jmespath.py 1.1.0's 16 files and its legacy literals, 917 cases), with plain dicts and with dict_cls=OrderedDict, CPython 3.12 and 3.14t | 3,668 | 3,668 | 0 |
+| jmespath.py 1.1.0's own unit tests (test_lexer, test_parser, test_functions, test_search, test_custom_functions) run against pyroid.jmespath, CPython 3.12 and 3.14t | 144 | 144 | 0 |
+| Comparators on edge values (NaN, -0.0, inf, 2**53 + 1, 2**64, booleans, None, lone surrogates), 6 operators x 3 forms, CPython 3.12 and 3.14t | 20,736 | 20,736 | 0 |
+| Hypothesis: grammar expressions (valid, mutated, random) over data with OrderedDict, list and dict subclasses, tuples, Decimal, objects with get, huge ints, NaN and surrogates; CPython 3.12 (200,000) and 3.14t (100,000) | 300,000 | 300,000 | 0 |
+| Hypothesis with custom functions (pyroid's and jmespath's Functions subclasses, an overridden call_function, a replaced built-in); CPython 3.12 (100,000) and 3.14t (50,000) | 150,000 | 150,000 | 0 |
+| Real queries: botocore 1.44.3's paginator and waiter expressions and AWS CLI examples (8,593 expressions), the AWS CLI user guide's and Ansible's json_query guide's examples, over generated and documented responses, CPython 3.12 | 34,498 | 34,498 | 0 |
+| The same, the 358-case sample in parity/data replayed by the tests, CPython 3.12 and 3.14t | 716 | 716 | 0 |
+| Nesting depth at which RecursionError is raised, 10 constructs, main thread, CPython 3.12 and 3.14t | 20 | 20 | 0 |
+| **Total** | **509,782** | **509,782** | **0** |
+
+- botocore 1.44.3's own paginator and waiter tests (tests/unit/test_paginate.py, test_waiters.py, tests/functional/test_paginate.py, test_paginator_config.py, test_waiter_config.py) pass with pyroid.patch("jmespath"): 3,720 passed, as without it.
+- Each result comparison also compares the compiled AST (repr and ==) when the expression parses. The lexer and parser are fuzzed in Rust as well (fuzz/fuzz_targets/jmespath.rs, 4 million runs, no failure).
+
+<small>Source: python/tests/test_jmespath_parity.py, bench/jmespath/parity_counts.py and bench/jmespath/real_queries.py, run on 2026-11-15 on the EC2 c8g.16xlarge devbox (linux/aarch64).</small>
+
 ### pyroid.datasketch {#datasketch}
 
 Reference: datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1). Rule: identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets.
@@ -442,6 +463,7 @@ checked. Each library is checked once per process, by whichever module asks firs
 | PyYAML | pyyaml 6.0.3; 6.0, 6.0.1 and 6.0.2 give the same results | `import pyroid.yaml`, `pyroid.patch("yaml")` |
 | tabulate | tabulate 0.10.0 | `import pyroid.tabulate`, `pyroid.patch("tabulate")` |
 | python-dateutil | python-dateutil 4.0.0; 3.0.0, 2.9.0.post0, 2.9.0 and 2.8.2 give the same results (`isoparse` follows the installed release) | `import pyroid.dateutil.parser`, `pyroid.patch("dateutil")` |
+| jmespath | jmespath 1.1.0 | `import pyroid.jmespath`, `pyroid.patch("jmespath")` |
 | datasketch | datasketch 2.0.0 | `import pyroid.datasketch`, `pyroid.patch("datasketch")` |
 | jieba | jieba 0.42.1 | `import pyroid.jieba` |
 | Trafilatura | trafilatura 2.3.1, and 1.11.0 with `compat="1.11.0"` | `import pyroid.trafilatura`, `pyroid.patch("trafilatura")` |

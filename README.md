@@ -40,6 +40,7 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 | | [`pyroid.nemo`](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
 | Evaluation | [`pyroid.metrics`](https://ataiva.com/open-source/pyroid/docs/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
 | JSON and YAML | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.9 |
+| | [`pyroid.jmespath`](https://ataiva.com/open-source/pyroid/docs/guides/jmespath/) | jmespath 1.1.0 (`search`, `compile`, custom functions), as boto3, the AWS CLI and Ansible use it |
 | | [`pyroid.yaml`](https://ataiva.com/open-source/pyroid/docs/guides/yaml/) | PyYAML 6.0.3's `safe_load` and `safe_dump` (its pure-Python `SafeLoader` and `SafeDumper`) |
 | Tables | [`pyroid.tabulate`](https://ataiva.com/open-source/pyroid/docs/guides/tabulate/) | tabulate 0.10.0, `DataFrame.to_markdown()` included |
 | Dates | [`pyroid.dateutil.parser`](https://ataiva.com/open-source/pyroid/docs/guides/dateutil/) | python-dateutil's `parse` and `isoparse` (2.8.2 to 4.0.0) |
@@ -138,6 +139,9 @@ tables and 12 to 22× on 100,000 rows, in five output formats; 6 to 10× on a 5-
 faster than python-dateutil 2.9.0.post0 in a loop of single calls, and `parse_batch` to Arrow
 37× faster on one thread and 101× on 16.
 
+`pyroid.jmespath`, on AWS EC2 c7i.4xlarge: 10 to 26× faster than jmespath 1.1.0 on single
+queries of a boto3-style response, 7 to 20× over 10,000 records.
+
 The other modules have only been measured in a Docker VM on a Mac or on a shared EC2 machine,
 so treat these as indicative (one thread unless stated):
 
@@ -162,7 +166,7 @@ row's corpus, interpreter and source.
 |---|---|
 | [`pyroid clean`](https://ataiva.com/open-source/pyroid/docs/guides/cli/) | the FineWeb-style chain as one command over Parquet or JSONL, or datatrove's FineWeb pipeline from WARC files |
 | [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
-| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate` and `dateutil` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil` and `jmespath` give pyroid's functions, in code you don't own |
 | [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
 | [NeMo Curator stages](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/) | NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, the heuristic filters, the modifiers) with the same classes and arguments |
 | [Hugging Face `datasets`](https://ataiva.com/open-source/pyroid/docs/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
@@ -220,7 +224,7 @@ expression is
 - Apache-2.0: ported from ftfy, datatrove, rouge-score, NLTK (the Porter stemmer and the
   tokenizers), sacrebleu, Trafilatura, SudachiPy and warcio;
 - MIT: ported from fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba
-  (with its dictionary), libxml2 (the HTML parser), PyYAML and tabulate;
+  (with its dictionary), libxml2 (the HTML parser), PyYAML, tabulate and jmespath;
 - BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists);
 - BSD-3-Clause: numpy's random generator (for C4 bad words), scipy's QUADPACK integration (for
   MinHashLSH's parameters), tldextract, lxml and python-dateutil (its later contributions are

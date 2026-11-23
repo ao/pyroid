@@ -251,6 +251,17 @@ CASES = [
         patch="dateutil",
         imports=True,  # pyroid.dateutil.parser uses dateutil.tz's classes when it imports
     ),
+    Case(
+        "jmespath",
+        "import pyroid.jmespath",
+        "jmespath",
+        "jmespath",
+        _version("pyroid.jmespath", "JMESPATH_VERSION"),
+        "pyroid.jmespath",
+        ("jmespath",),
+        patch="jmespath",
+        imports=True,  # pyroid.jmespath uses jmespath's exception classes when it imports
+    ),
 ]
 PATCHED = [c for c in CASES if c.patch is not None]
 
