@@ -53,10 +53,16 @@ class Case:
     checks: tuple[str, ...]  # every library the statement checks
     patch: str | None = None  # the pyroid.patch() name, if there is one
     numpy: bool = False  # the pyroid module needs numpy
+    imports: bool = False  # the pyroid module imports the incumbent at import, if it can
 
 
 def _fixed(version: str) -> Callable[[], str]:
     return lambda: version
+
+
+def _error(case: Case) -> str:
+    """What the case's stand-in raises: ImportError where pyroid imports the incumbent itself."""
+    return "ImportError" if case.imports else "RuntimeError"
 
 
 CASES = [
@@ -213,6 +219,17 @@ CASES = [
         "pyroid.nemo",
         ("nemo_curator",),
     ),
+    Case(
+        "yaml",
+        "import pyroid.yaml",
+        "yaml",
+        "pyyaml",
+        _version("pyroid.yaml", "PYYAML_VERSION"),
+        "pyroid.yaml",
+        ("yaml",),
+        patch="yaml",
+        imports=True,  # pyroid.yaml uses PyYAML's exception classes when it imports
+    ),
 ]
 PATCHED = [c for c in CASES if c.patch is not None]
 
@@ -232,16 +249,19 @@ def message(case: Case, found: str, *, dist: str | None = None, todo: str | None
     )
 
 
-def stand_in(root: Path, library: str, dist: str | None, version: str | None) -> None:
-    """A stand-in `library` under `root`: a module that raises if imported, and its metadata.
+def stand_in(
+    root: Path, library: str, dist: str | None, version: str | None, *, error: str = "RuntimeError"
+) -> None:
+    """A stand-in `library` under `root`: a module raising `error` if imported, and its metadata.
 
     ``dist=None`` leaves the metadata out (a source checkout); ``version=None`` the module.
+    ``error="ImportError"`` is for a pyroid module that imports the incumbent if it can.
     """
     if version is not None or dist is None:
         package = root / library
         package.mkdir(parents=True, exist_ok=True)
         (package / "__init__.py").write_text(
-            f"raise RuntimeError('the stand-in {library} was imported')\n", encoding="utf-8"
+            f"raise {error}('the stand-in {library} was imported')\n", encoding="utf-8"
         )
     if dist is not None and version is not None:
         info = root / f"{dist.replace('-', '_')}-{version}.dist-info"
@@ -353,7 +373,7 @@ def test_warning_class() -> None:
 def test_another_release_warns_once_at_the_import(
     run_python: Run, tmp_path: Path, case: Case
 ) -> None:
-    stand_in(tmp_path, case.library, case.dist, "0.0.1")
+    stand_in(tmp_path, case.library, case.dist, "0.0.1", error=_error(case))
     child = run_child(run_python, tmp_path, [case.statement], case.checks)
     assert child.of("VersionMismatchWarning") == [
         ["VersionMismatchWarning", message(case, "0.0.1"), "<string>", child.lines[case.statement]]
@@ -365,9 +385,9 @@ def test_another_release_warns_once_at_the_import(
 @pytest.mark.parametrize("state", ["same release", "no metadata", "absent"])
 def test_silent(run_python: Run, tmp_path: Path, case: Case, state: str) -> None:
     if state == "same release":
-        stand_in(tmp_path, case.library, case.dist, case.version())
+        stand_in(tmp_path, case.library, case.dist, case.version(), error=_error(case))
     elif state == "no metadata":  # importable, not installed: a source checkout
-        stand_in(tmp_path, case.library, None, None)
+        stand_in(tmp_path, case.library, None, None, error=_error(case))
     child = run_child(run_python, tmp_path, [case.statement], case.checks)
     assert child.warnings == []
     assert child.imported == []
@@ -408,7 +428,7 @@ def test_dist_info_version_agrees_with_importlib_metadata(tmp_path: Path) -> Non
 def test_patch_warns_at_its_line_and_shares_the_check(
     run_python: Run, tmp_path: Path, case: Case
 ) -> None:
-    stand_in(tmp_path, case.library, case.dist, "0.0.1")
+    stand_in(tmp_path, case.library, case.dist, "0.0.1", error=_error(case))
     patch = f"pyroid.patch({case.patch!r})"
     statements = ["import pyroid", patch, case.statement, f"pyroid.unpatch(); {patch}"]
     child = run_child(run_python, tmp_path, statements, ())
@@ -511,6 +531,27 @@ def test_fasttext_distributions(
     want = [message(case, version, dist=dist)] if warned else []
     assert [w[1] for w in child.of("VersionMismatchWarning")] == want
     assert child.imported == []
+
+
+@pytest.mark.parametrize(
+    ("version", "warned"),
+    [
+        # PyYAML 6.0 to 6.0.2: 6.0.3's Python code apart from __version__.
+        ("6.0", False),
+        ("6.0.1", False),
+        ("6.0.2", False),
+        ("5.4.1", True),
+        ("6.0.4", True),
+    ],
+)
+def test_pyyaml_releases_with_the_same_code(
+    run_python: Run, tmp_path: Path, version: str, warned: bool
+) -> None:
+    case = next(c for c in CASES if c.id == "yaml")
+    stand_in(tmp_path, "yaml", "pyyaml", version, error=_error(case))
+    child = run_child(run_python, tmp_path, [case.statement], case.checks)
+    want = [message(case, version)] if warned else []
+    assert [w[1] for w in child.of("VersionMismatchWarning")] == want
 
 
 @pytest.mark.parametrize(

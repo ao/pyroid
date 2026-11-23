@@ -435,3 +435,22 @@ def test_warc() -> None:
     hammer(take, lambda i: time.sleep(0.001))
     assert seen.count("response") == 200
     assert seen.count("warcinfo") == 1
+
+
+def test_yaml() -> None:
+    import pyroid.yaml as y
+
+    rows = ([{"name": f"svc{i}", "ports": [80, 443], "on": True} for i in range(150)], ["a", 1.5])
+    over_states(y.safe_dump, rows)
+    over_states(lambda d: y.safe_dump_all(d), ([{"a": 1}] * 140, [None, "x"]))
+    # A mapping whose values another thread replaces: no panic and no hang.
+    config = {f"k{i}": i for i in range(200)}
+    hammer(lambda: y.safe_dump(config), lambda i: config.update(k3=i, k150=-i))
+
+    def grow_or_clear(i: int) -> None:
+        if i % 2:
+            config.update({f"new{i % 50}": i})
+        else:
+            config.clear()
+
+    hammer(lambda: y.safe_dump(config), grow_or_clear)

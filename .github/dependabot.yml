@@ -68,6 +68,7 @@ updates:
       - dependency-name: charset-normalizer
       - dependency-name: courlan
       - dependency-name: htmldate
+      - dependency-name: pyyaml
       # Pinned in two places that must move together: [dependency-groups] lint and docs in
       # pyproject.toml, and the hook revision and uvx pins in .pre-commit-config.yaml (prek runs ruff
       # and mypy from there). This pip entry does not read .pre-commit-config.yaml. Dependabot's

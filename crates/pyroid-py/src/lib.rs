@@ -38,6 +38,7 @@ mod text;
 mod trafilatura;
 mod translit;
 mod warc;
+mod yaml;
 
 use pyo3::prelude::*;
 
@@ -69,5 +70,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jieba::register(m)?;
     trafilatura::register(m)?;
     warc::register(m)?;
+    yaml::register(m)?;
     Ok(())
 }

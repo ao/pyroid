@@ -93,6 +93,11 @@ WATCH: dict[str, Watch] = {
         "pyroid.nemo reproduces NeMo Curator's filters and modifiers. Its parity suite needs the env of ci.yml's "
         "nemo job (NeMo without its dependencies, fasttext built from source), so this workflow does not run it.",
     ),
+    "pyyaml": Watch(
+        (),
+        "pyroid.yaml reproduces PyYAML's pure-Python SafeLoader and SafeDumper. No parity suite covers it here: "
+        "its parity tests are python/tests/test_yaml_parity.py, which compare against the pinned PyYAML.",
+    ),
     # Libraries an oracle depends on whose behaviour pyroid reproduces too.
     "lxml": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces trafilatura on lxml's (libxml2's) parse tree."),
     "justext": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces jusText, trafilatura's fallback extractor."),
