@@ -15,9 +15,7 @@
 - **Every code point** alone, and inside a few dense templates (every code point below U+3400
   and every 31st above; all of them with ``PYROID_NLTK_SWEEP=full``), through ``sent_tokenize``,
   ``word_tokenize``, both Treebank tokenizers and the detokenizer (in child processes, one per
-  CPU). NLTK's results there are pinned as digests per Python version
-  (nltk_sweep_digests.json), since NLTK takes about 10 CPU-minutes for them; NLTK runs itself
-  where no digest is pinned, and to show the differences when pyroid's results don't match.
+  core, since NLTK takes minutes for 1.1M calls).
 - **NLTK's own examples**: the inputs and expected outputs of NLTK's doctests
   (``tokenize.doctest``, the docstrings of ``punkt``, ``treebank``, ``destructive``) and unit
   tests (``test_tokenize.py``) for these tokenizers, checked without NLTK.
@@ -29,19 +27,15 @@ which pyroid rejects with ``UnicodeEncodeError``, are tested at the end.
 from __future__ import annotations
 
 import functools
-import hashlib
 import importlib
 import json
 import os
-import platform
 import re
 import subprocess
 import sys
 import textwrap
 import types
-import unicodedata
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -706,22 +700,19 @@ def test_regexp_batches(
 
 # ---- every code point --------------------------------------------------------------------------
 
-# Run in child processes (one per CPU): (function, mode, k, step, sample, check) -> the code
-# points k, k + step, ..., alone ("alone") or inside dense templates ("templates"), through
-# pyroid (one call each, and its batch call over all of them) and, with check = "live", through
-# NLTK; prints the mismatches and the digests of both sides' results as JSON. With sample = n > 1,
-# the templates take every code point below U+3400 and every n-th above. A digest is the sum,
-# modulo 2**128, of a 128-bit hash of each (input, repr of its outcome): the children's parts add
-# up to the digest of the whole sweep however the code points are dealt out.
+# Run in child processes (one per core): (function, mode, k, step, sample) -> the code points
+# k, k + step, ..., alone ("alone") or inside dense templates ("templates"), through NLTK and
+# pyroid (one call each, and pyroid's batch call over all of them); prints the mismatches as JSON.
+# With sample = n > 1, the templates take every code point below U+3400 and every n-th above.
 SWEEP_SCRIPT = r"""
-import hashlib, json, sys
+import json, sys
+from nltk.tokenize import punkt, regexp, treebank, destructive, word_tokenize
 import pyroid.nltk as pn
 
 func, mode = sys.argv[1], sys.argv[2]
 k, step, sample = int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5])
-live = sys.argv[6] == "live"
-codes = [
-    c for c in range(k, 0x110000, step)
+chars = [
+    chr(c) for c in range(k, 0x110000, step)
     if not 0xD800 <= c <= 0xDFFF and (mode == "alone" or c < 0x3400 or c % sample == 0)
 ]
 
@@ -759,6 +750,7 @@ PATTERNS = [
 ]
 CONFIGS = [(p, False, True) for p in PATTERNS]
 CONFIGS += [(p, True, d) for p in PATTERNS for d in (True, False)]
+ref_rx = [regexp.RegexpTokenizer(*c) for c in CONFIGS]
 our_rx = [pn.RegexpTokenizer(*c) for c in CONFIGS]
 
 def rx_ours(x):
@@ -766,28 +758,37 @@ def rx_ours(x):
         return [list(r) for r in zip(*(t.tokenize(x) for t in our_rx))] if x else []
     return [t.tokenize(x) for t in our_rx]
 
+pt = punkt.PunktTokenizer("english")
+tb, nw = treebank.TreebankWordTokenizer(), destructive.NLTKWordTokenizer()
+dt = treebank.TreebankWordDetokenizer()
 our_tb, our_nw = pn.TreebankWordTokenizer(), pn.NLTKWordTokenizer()
 our_dt = pn.TreebankWordDetokenizer()
-OURS = {
-    "sent_tokenize": (pn.sent_tokenize, sent_templates),
-    "word_tokenize": (pn.word_tokenize, lambda c: [sent_templates(c)[0], word_templates(c)[0]]),
-    "treebank": (our_tb.tokenize, word_templates),
-    "nltkword": (our_nw.tokenize, word_templates),
-    "treebank_ptb": (lambda s: our_tb.tokenize(s, True), word_templates),
-    "detokenize": (our_dt.detokenize, detok_templates),
-    "regexp": (rx_ours, regexp_templates),
-    "regexp_spans": (lambda x: [list(t.span_tokenize(x)) for t in our_rx], regexp_templates),
-    "detokenize_ptb": (lambda t: our_dt.detokenize(t, True), detok_templates),
+FUNCS = {
+    "sent_tokenize": (pt.tokenize, pn.sent_tokenize, sent_templates),
+    "word_tokenize": (
+        word_tokenize, pn.word_tokenize, lambda c: [sent_templates(c)[0], word_templates(c)[0]]
+    ),
+    "treebank": (tb.tokenize, our_tb.tokenize, word_templates),
+    "nltkword": (nw.tokenize, our_nw.tokenize, word_templates),
+    "treebank_ptb": (
+        lambda s: tb.tokenize(s, True), lambda s: our_tb.tokenize(s, True), word_templates
+    ),
+    "detokenize": (dt.detokenize, our_dt.detokenize, detok_templates),
+    "regexp": (lambda x: [t.tokenize(x) for t in ref_rx], rx_ours, regexp_templates),
+    "regexp_spans": (
+        lambda x: [list(t.span_tokenize(x)) for t in ref_rx],
+        lambda x: [list(t.span_tokenize(x)) for t in our_rx],
+        regexp_templates,
+    ),
+    "detokenize_ptb": (
+        lambda t: dt.detokenize(t, True), lambda t: our_dt.detokenize(t, True), detok_templates
+    ),
 }
-ours, templates = OURS[func]
-keys, inputs = [], []
-for c in codes:
-    xs = templates(chr(c)) if mode == "templates" else [
-        [chr(c)] if func.startswith("detok") else chr(c)
-    ]
-    for t, x in enumerate(xs):
-        keys.append(f"{c:x}.{t}")
-        inputs.append(x)
+ref, ours, templates = FUNCS[func]
+if mode == "alone":
+    inputs = [[c] if func.startswith("detok") else c for c in chars]
+else:
+    inputs = [x for c in chars for x in templates(c)]
 
 def outcome(f, x):
     try:
@@ -795,115 +796,47 @@ def outcome(f, x):
     except Exception as e:
         return ["raise", type(e).__name__, str(e)]
 
-def digest(outcomes):
-    total = 0
-    for key, o in zip(keys, outcomes, strict=True):
-        h = hashlib.blake2b(f"{key} {o!r}".encode("utf-8", "surrogatepass"), digest_size=16)
-        total += int.from_bytes(h.digest(), "little")
-    return f"{total % (1 << 128):032x}"
-
-got = [outcome(ours, x) for x in inputs]
-bad, want, timeouts = [], got, 0
-if live:
-    from nltk.tokenize import punkt, regexp, treebank, destructive, word_tokenize
-    ref_rx = [regexp.RegexpTokenizer(*c) for c in CONFIGS]
-    pt = punkt.PunktTokenizer("english")
-    tb, nw = treebank.TreebankWordTokenizer(), destructive.NLTKWordTokenizer()
-    dt = treebank.TreebankWordDetokenizer()
-    ref = {
-        "sent_tokenize": pt.tokenize,
-        "word_tokenize": word_tokenize,
-        "treebank": tb.tokenize,
-        "nltkword": nw.tokenize,
-        "treebank_ptb": lambda s: tb.tokenize(s, True),
-        "detokenize": dt.detokenize,
-        "regexp": lambda x: [t.tokenize(x) for t in ref_rx],
-        "regexp_spans": lambda x: [list(t.span_tokenize(x)) for t in ref_rx],
-        "detokenize_ptb": lambda t: dt.detokenize(t, True),
-    }[func]
-
-    def ref_outcome(x):
-        # NLTK runs each regex under a 5 s wall-clock limit, which a stalled CI runner can hit
-        # on a one-character input; retry once. pyroid has no such limit (a documented
-        # difference), so an input NLTK still times out on is not compared.
+def ref_outcome(x):
+    # NLTK runs each regex under a 5 s wall-clock limit, which a stalled CI runner can hit on a
+    # one-character input; retry once. pyroid has no such limit (a documented difference), so
+    # an input NLTK still times out on is not compared.
+    w = outcome(ref, x)
+    if w[:2] == ["raise", "TimeoutError"]:
         w = outcome(ref, x)
-        if w[:2] == ["raise", "TimeoutError"]:
-            w = outcome(ref, x)
-        return w
+    return w
 
-    want = [ref_outcome(x) for x in inputs]
-    for x, g, w in zip(inputs, got, want, strict=True):
-        if w[:2] == ["raise", "TimeoutError"]:
-            timeouts += 1
-        elif g != w:
-            bad.append([x, g, w])
-# Without NLTK, the batch call is checked against the calls one by one, whose digest the caller
-# compares with NLTK's pinned one.
+want = [ref_outcome(x) for x in inputs]
+bad = []
+for x, w in zip(inputs, want):
+    if w[:2] == ["raise", "TimeoutError"]:
+        continue
+    g = outcome(ours, x)
+    if g != w:
+        bad.append([x, g, w])
 if not func.startswith("detok") and func != "regexp_spans":
-    ok = [(x, w) for x, w in zip(inputs, want, strict=True) if w[0] == "ok"]
-    batch = ours([x for x, _ in ok])
-    for (x, w), b in zip(ok, batch, strict=True):
-        if ["ok", b] != w:
-            bad.append(["batch", x, b, w])
-print(json.dumps({
-    "n": len(inputs), "nbad": len(bad), "bad": bad[:10], "timeouts": timeouts,
-    "ours": digest(got), "nltk": digest(want) if live and not timeouts else None,
-}))
+    ok = [x for x, w in zip(inputs, want) if w[0] == "ok"]
+    got = ours(ok)
+    for x, g, w in zip(ok, got, (w for w in want if w[0] == "ok")):
+        if ["ok", g] != w:
+            bad.append(["batch", x, g, w])
+print(json.dumps({"n": len(inputs), "nbad": len(bad), "bad": bad[:10]}))
 """
 
 SWEEP_FUNCS = ["sent_tokenize", "word_tokenize", "treebank", "nltkword", "treebank_ptb"]
 SWEEP_FUNCS += ["detokenize", "detokenize_ptb", "regexp", "regexp_spans"]
-SWEEP_MODES = ["alone", "templates"]
 #: PYROID_NLTK_SWEEP=full puts every code point in the templates too (NLTK then takes about an
 #: hour of CPU), PYROID_NLTK_SWEEP=<n> every n-th above U+3400; by default the templates get every
 #: code point below U+3400 and every 31st above (the Rust replays cover every code point in the
-#: templates). Each code point alone is always checked.
+#: templates; this keeps a CI leg to a few minutes). Each code point alone is always checked.
 _SWEEP_ENV = os.environ.get("PYROID_NLTK_SWEEP", "")
 SWEEP_SAMPLE = 1 if _SWEEP_ENV == "full" else int(_SWEEP_ENV) if _SWEEP_ENV.isdigit() else 31
 
-#: NLTK's results on each sweep, pinned as digests per key (`_sweep_key`). NLTK takes about 10
-#: CPU-minutes for the 18 sweeps and pyroid about 2, so with a pin a 4-CPU runner checks every
-#: input in well under a minute instead of five. Without a pin for the running Python (or after an
-#: edit of SWEEP_SCRIPT), or with PYROID_NLTK_SWEEP_LIVE=1, the sweep runs NLTK itself. Pin the
-#: running Python with `python python/tests/test_nltk_parity.py pin-sweep-digests`.
-SWEEP_DIGESTS = Path(__file__).with_name("nltk_sweep_digests.json")
 
-
-def _sweep_key() -> str:
-    """What NLTK's results on the sweeps depend on: Python's ``re`` and Unicode database (one per
-    minor version; any pre-release is its own), NLTK, ``regex``, the script and the sample."""
-    v = sys.version_info
-    py = f"{v.major}.{v.minor}" if v.releaselevel == "final" else platform.python_version()
-    script = hashlib.sha256(f"{SWEEP_SCRIPT}\n{SWEEP_SAMPLE}".encode()).hexdigest()[:16]
-    return (
-        f"python{py} unicode{unicodedata.unidata_version} nltk{NLTK_VERSION} "
-        f"regex{REGEX_VERSION} sweep{script}"
-    )
-
-
-def _pinned(func: str, mode: str) -> dict[str, Any] | None:
-    pins = json.loads(SWEEP_DIGESTS.read_text("utf-8")) if SWEEP_DIGESTS.exists() else {}
-    return cast("dict[str, Any] | None", pins.get(_sweep_key(), {}).get(f"{func} {mode}"))
-
-
-def _sweep_procs() -> int:
-    """One child per CPU this process may use (a container's or runner's limit), at most 16."""
-    n: int | None
-    if sys.version_info >= (3, 13):
-        n = os.process_cpu_count()
-    elif hasattr(os, "sched_getaffinity"):
-        n = len(os.sched_getaffinity(0))
-    else:
-        n = os.cpu_count()
-    return max(1, min(n or 2, 16))
-
-
-def _run_sweep(func: str, mode: str, check: str) -> dict[str, Any]:
-    """One sweep over every child: ``check`` is "live" (NLTK runs too) or "pinned"."""
-    procs = _sweep_procs()
+def _sweep(func: str, mode: str) -> None:
+    procs = max(1, min(os.cpu_count() or 2, 16))
     env = {k: v for k, v in os.environ.items() if k not in ("PYROID_NUM_THREADS", "PYTHON_GIL")}
     script = textwrap.dedent(SWEEP_SCRIPT)
-    args = [func, mode, "", str(procs), str(SWEEP_SAMPLE), check]
+    args = [func, mode, "", str(procs), str(SWEEP_SAMPLE)]
     children = [
         subprocess.Popen(
             [sys.executable, "-I", "-c", script, *args[:2], str(k), *args[3:]],
@@ -924,51 +857,20 @@ def _run_sweep(func: str, mode: str, check: str) -> dict[str, Any]:
             pytest.fail(f"code point sweep {func} {mode}: a child did not finish in 1500 s")
         assert child.returncode == 0, err
         results.append(json.loads(out))
-
-    def total(name: str) -> str | None:
-        parts = [r[name] for r in results]
-        if None in parts:
-            return None
-        return f"{sum(int(p, 16) for p in parts) % (1 << 128):032x}"
-
-    return {
-        "n": sum(r["n"] for r in results),
-        "nbad": sum(r["nbad"] for r in results),
-        "bad": [b for r in results for b in r["bad"]][:10],
-        "timeouts": sum(r["timeouts"] for r in results),
-        "ours": total("ours"),
-        "nltk": total("nltk"),
-    }
-
-
-def _sweep(func: str, mode: str) -> None:
-    pin = _pinned(func, mode)
-    live = pin is None or os.environ.get("PYROID_NLTK_SWEEP_LIVE") == "1"
-    res = _run_sweep(func, mode, "live" if live else "pinned")
+    n = sum(r["n"] for r in results)
+    nbad = sum(r["nbad"] for r in results)
+    examples_ = [b for r in results for b in r["bad"]][:10]
     if mode == "alone":
-        assert res["n"] == 0x110000 - 0x800  # every code point but the surrogates
-    if pin is not None and live and res["nltk"] is not None:
-        assert (res["n"], res["nltk"]) == (pin["inputs"], pin["nltk"]), (
-            f"{func} {mode}: the live NLTK's results are not the ones pinned for {_sweep_key()!r}"
-        )
-    differs = pin is not None and (res["n"], res["ours"]) != (pin["inputs"], pin["nltk"])
-    if differs and not live and res["nbad"] == 0:
-        # pyroid's results are not NLTK's pinned ones: run NLTK to show which inputs differ.
-        res = _run_sweep(func, mode, "live")
-        assert res["nbad"] != 0, (
-            f"{func} {mode}: pyroid gives the live NLTK's results, but their digest differs from "
-            f"the one pinned for {_sweep_key()!r}: re-pin ({SWEEP_DIGESTS.name})"
-        )
-    assert res["nbad"] == 0, (
-        f"{func} {mode}: {res['nbad']} of {res['n']} inputs differ, e.g.\n"
-        + "\n".join(repr(b) for b in res["bad"])
+        assert n == 0x110000 - 0x800  # every code point but the surrogates
+    assert nbad == 0, f"{func} {mode}: {nbad} of {n} inputs differ, e.g.\n" + "\n".join(
+        repr(b) for b in examples_
     )
 
 
 @needs_nltk
 @pytest.mark.thread_unsafe(reason="subprocesses, one per core")
 @pytest.mark.timeout(1800)
-@pytest.mark.parametrize("mode", SWEEP_MODES)
+@pytest.mark.parametrize("mode", ["alone", "templates"])
 @pytest.mark.parametrize("func", SWEEP_FUNCS)
 def test_every_code_point(punkt_tab: Any, func: str, mode: str) -> None:
     if (func, mode) in _SWEPT:  # pytest-run-parallel's --iterations: one sweep per process
@@ -1605,21 +1507,3 @@ def test_tricky_texts_everywhere(punkt_tab: Any, text: str) -> None:
             outcome(ref.debug_decisions, text),
             lang,
         )
-
-
-if __name__ == "__main__" and sys.argv[1:] == ["pin-sweep-digests"]:
-    # Pins this Python's sweeps; NLTK must find the punkt_tab models (NLTK_DATA), as in the tests.
-    if _NO_NLTK is not None:
-        raise SystemExit(_NO_NLTK)
-    _pins = json.loads(SWEEP_DIGESTS.read_text("utf-8")) if SWEEP_DIGESTS.exists() else {}
-    _entry = {}
-    for _func in SWEEP_FUNCS:
-        for _mode in SWEEP_MODES:
-            _res = _run_sweep(_func, _mode, "live")
-            if _res["nbad"] or _res["timeouts"] or _res["nltk"] != _res["ours"]:
-                raise SystemExit(f"{_func} {_mode} not pinned: {_res}")
-            _entry[f"{_func} {_mode}"] = {"inputs": _res["n"], "nltk": _res["nltk"]}
-            sys.stdout.write(f"{_func} {_mode}: {_res['n']} inputs, {_res['nltk']}\n")
-    _pins[_sweep_key()] = _entry
-    SWEEP_DIGESTS.write_text(json.dumps(_pins, indent=1, sort_keys=True) + "\n", "utf-8")
-    sys.stdout.write(f"pinned {len(_entry)} sweeps for {_sweep_key()!r} in {SWEEP_DIGESTS}\n")

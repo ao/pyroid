@@ -3,18 +3,15 @@
 
 ``repair_json``, ``loads``, ``load`` and ``from_file`` have json_repair's
 signatures and return the same strings and objects. The repair runs in Rust,
-linear on most of the inputs that make json_repair quadratic. ``schema=`` calls,
-str subclasses that override what json_repair calls on them, a replaced
-``json.JSONDecoder`` and the rare inputs the port cannot represent are delegated
-to the real json_repair with a one-time :class:`pyroid.FallbackWarning`, or raise
+linear on most of the inputs that make json_repair quadratic. ``schema=`` calls, and
+the rare inputs the port cannot represent, are delegated to the real
+json_repair with a one-time :class:`pyroid.FallbackWarning`, or raise
 :class:`pyroid.PyroidError` if it is not installed. See ``json_repair.pyi``.
 """
 
 from __future__ import annotations
 
-import contextlib
 import json
-import json.decoder
 import sys
 import unicodedata
 import warnings
@@ -92,7 +89,7 @@ def _caller_stacklevel() -> int:
 
 
 def _json_repair(name: str, reason: str) -> Any:
-    """Import the real json_repair for `name`, or raise PyroidError."""
+    """Import the real json_repair for `name`, warning once, or raise PyroidError."""
     try:
         import json_repair as real
     except ImportError:
@@ -106,11 +103,6 @@ def _json_repair(name: str, reason: str) -> Any:
             f"json_repair is not installed to fall back to (pip install "
             f"json-repair=={JSON_REPAIR_VERSION})"
         )
-    return real
-
-
-def _fallback_warning(name: str, reason: str) -> None:
-    """Warn once per `name` and `reason` that the call goes to json_repair."""
     if f"{name}:{reason}" not in _WARNED:
         _WARNED.add(f"{name}:{reason}")
         warnings.warn(
@@ -119,39 +111,10 @@ def _fallback_warning(name: str, reason: str) -> None:
             FallbackWarning,
             stacklevel=_caller_stacklevel(),
         )
+    return real
 
 
 _RESERVED = "a char in U+10F800..U+10FFFF"
-
-
-def _stdlib_json(name: str) -> Any:
-    """``json.<name>`` if it is the standard library's own, else ``None``.
-
-    ``None`` (it was replaced before this module was imported) never matches, so such a
-    program always takes the Python route.
-    """
-    obj = getattr(json, name)
-    if isinstance(obj, type):
-        own = obj.__module__ == "json.decoder" and obj is vars(json.decoder).get(name)
-    else:
-        own = getattr(obj, "__globals__", None) is vars(json)
-    return obj if own else None
-
-
-# json_repair looks these up on the json module at each call, so a program that replaces one
-# (an orjson-backed json.dumps, say) changes its results. The Rust port reproduces the originals:
-# while one of them is replaced, calls take the Python route (json.loads and json.dumps called by
-# this module, as json_repair calls them) or are delegated (json.JSONDecoder, json.load).
-_JSON_LOADS = _stdlib_json("loads")
-_JSON_LOAD = _stdlib_json("load")
-_JSON_DUMPS = _stdlib_json("dumps")
-_JSON_DECODER = _stdlib_json("JSONDecoder")
-
-
-def _str_subclass(text: Any) -> str | None:
-    """The delegation reason for a str subclass overriding a method json_repair calls on it."""
-    name = _native._overridden_str_hook(text)
-    return None if name is None else f"a str subclass overriding {name}()"
 
 
 def _normalize_schema_repair_mode(mode: Any) -> str:
@@ -167,10 +130,6 @@ _NATIVE_DUMPS = frozenset(
     {"skipkeys", "ensure_ascii", "check_circular", "allow_nan", "indent", "separators", "default"}
     | {"sort_keys", "cls"}
 )
-#: The `json.dumps` flags, which it tests for truth.
-_DUMPS_FLAGS = frozenset({"skipkeys", "ensure_ascii", "check_circular", "allow_nan", "sort_keys"})
-_FLAG_TYPES = (bool, int, type(None))
-_PLAIN_TYPES = frozenset({bool, int, str, tuple, type(None)})
 _PYTHON_DUMPS = object()
 _DUMP_CACHE: dict[tuple[Any, ...], Any] = {}
 
@@ -183,61 +142,48 @@ def _dump_config(kwargs: dict[str, Any]) -> Any:
     """
     if not kwargs:
         return None
-    # Cached by the arguments as given, with their types (1 == 1.0 == True), when they are all
-    # plain values (no references to the caller's objects are kept); a separators tuple only
-    # when it holds str, since its items' types are not in the key.
-    key = (*kwargs.items(), *map(type, kwargs.values()))
-    try:
-        config = _DUMP_CACHE.get(key)
-    except TypeError:  # an unhashable value
-        return _new_dump_config(kwargs)
-    if config is None:
-        config = _new_dump_config(kwargs)
-        separators = kwargs.get("separators")
-        if _PLAIN_TYPES.issuperset(map(type, kwargs.values())) and (
-            type(separators) is not tuple or all(type(s) is str for s in separators)
-        ):
-            if len(_DUMP_CACHE) > 64:
-                _DUMP_CACHE.clear()
-            _DUMP_CACHE[key] = config
-    return config
-
-
-def _new_dump_config(kwargs: dict[str, Any]) -> Any:
-    """:func:`_dump_config`, uncached."""
     if not kwargs.keys() <= _NATIVE_DUMPS or kwargs.get("cls") is not None:
         return _PYTHON_DUMPS
-    for name, value in kwargs.items():
-        # json.dumps tests the flags for truth, where a value of another type can raise or count
-        # the calls; and json_repair does not call json.dumps at all when it finds no value.
-        if name in _DUMPS_FLAGS and type(value) not in _FLAG_TYPES:
-            return _PYTHON_DUMPS
     # skipkeys, check_circular and default never matter: keys are str, values JSON types.
     indent = kwargs.get("indent")
-    if indent is not None and type(indent) is not str:
-        if type(indent) not in (int, bool):
+    if indent is not None and not isinstance(indent, str):
+        if not isinstance(indent, int):
             return _PYTHON_DUMPS
         indent = " " * indent
     separators = kwargs.get("separators")
     if separators is not None:
-        # A tuple or list of two str; json.dumps unpacks any other iterable itself.
-        if type(separators) not in (tuple, list) or len(separators) != 2:
+        try:
+            item_separator, key_separator = separators
+        except (TypeError, ValueError):
             return _PYTHON_DUMPS
-        item_separator, key_separator = separators
         if type(item_separator) is not str or type(key_separator) is not str:
             return _PYTHON_DUMPS
     elif indent is None:
         item_separator, key_separator = ", ", ": "
     else:
         item_separator, key_separator = ",", ": "
-    return _native._DumpConfig(
-        ensure_ascii=bool(kwargs.get("ensure_ascii", True)),
-        allow_nan=bool(kwargs.get("allow_nan", True)),
-        sort_keys=bool(kwargs.get("sort_keys", False)),
-        indent=indent,
-        item_separator=item_separator,
-        key_separator=key_separator,
+    key = (
+        bool(kwargs.get("ensure_ascii", True)),
+        bool(kwargs.get("allow_nan", True)),
+        bool(kwargs.get("sort_keys", False)),
+        indent,
+        item_separator,
+        key_separator,
     )
+    config = _DUMP_CACHE.get(key)
+    if config is None:
+        config = _native._DumpConfig(
+            ensure_ascii=key[0],
+            allow_nan=key[1],
+            sort_keys=key[2],
+            indent=key[3],
+            item_separator=key[4],
+            key_separator=key[5],
+        )
+        if len(_DUMP_CACHE) > 64:
+            _DUMP_CACHE.clear()
+        _DUMP_CACHE[key] = config
+    return config
 
 
 def repair_json(
@@ -297,28 +243,24 @@ def repair_json(
         text = json_fd.read()
     else:
         text = json_str
-    if (
-        schema is not None
-        or type(text) is not str
-        or (json_fd is not None and not skip_json_loads and json.load is not _JSON_LOAD)
-    ):
-        reason = _early_reason(text, schema, json_fd, skip_json_loads)
-        if reason is not None:
-            return _delegate_repair_json(
-                reason,
-                json_dumps_args,
-                position,
-                json_str,
-                return_objects,
-                skip_json_loads,
-                logging,
-                json_fd,
-                chunk_length,
-                stream_stable,
-                strict,
-                schema,
-                schema_repair_mode,
-            )
+    if schema is not None or not isinstance(text, str):
+        reason = "schema" if schema is not None else f"a {type(text).__name__} input"
+        return _delegate(
+            "repair_json",
+            reason,
+            json_fd,
+            position,
+            json_str,
+            return_objects,
+            skip_json_loads,
+            logging,
+            chunk_length,
+            stream_stable,
+            strict,
+            schema,
+            schema_repair_mode,
+            json_dumps_args,
+        )
     if logging:
         out_mode = _MODE_LOGGING
         dump = None
@@ -327,18 +269,7 @@ def repair_json(
         dump = None
     else:
         dump = _dump_config(json_dumps_args)
-        if dump is _PYTHON_DUMPS:
-            out_mode = _MODE_OBJECTS
-        elif (
-            json.dumps is _JSON_DUMPS
-            and json.JSONDecoder is _JSON_DECODER
-            and (skip_json_loads or json.loads is _JSON_LOADS)
-        ):
-            out_mode = _MODE_STRING
-        else:
-            # A json function json_repair calls is not the standard library's: take its steps
-            # here, calling them (the repair in between still runs in Rust).
-            out_mode, dump = _MODE_OBJECTS, _PYTHON_DUMPS
+        out_mode = _MODE_OBJECTS if dump is _PYTHON_DUMPS else _MODE_STRING
     if out_mode != _MODE_STRING and not skip_json_loads:
         # json_repair's own first step. For a value (not a string) CPython's json.loads is the
         # fastest exact answer; only invalid JSON goes on to the Rust parser.
@@ -352,87 +283,38 @@ def repair_json(
             if dump is _PYTHON_DUMPS:
                 return json.dumps(value, **json_dumps_args)
             return value
-    if out_mode == _MODE_STRING or json.JSONDecoder is _JSON_DECODER:
-        result = _native.repair(
-            text,
-            out_mode,
-            bool(skip_json_loads),
-            bool(stream_stable),
-            bool(strict),
-            json_fd is not None,
-            sys.get_int_max_str_digits(),
-            None if dump is _PYTHON_DUMPS else dump,
-        )
-        reason = _RESERVED
-    else:
-        # json_repair decodes the valid stretches of broken input with json.JSONDecoder.
-        result = NotImplemented
-        reason = "a replaced json.JSONDecoder"
+    result = _native.repair(
+        text,
+        out_mode,
+        bool(skip_json_loads),
+        bool(stream_stable),
+        bool(strict),
+        json_fd is not None,
+        sys.get_int_max_str_digits(),
+        None if dump is _PYTHON_DUMPS else dump,
+    )
     if result is NotImplemented:
-        return _delegate_repair_json(
-            reason,
-            json_dumps_args,
+        return _delegate(
+            "repair_json",
+            _RESERVED,
+            json_fd,
             position,
             json_str,
             return_objects,
             skip_json_loads,
             logging,
-            json_fd,
             chunk_length,
             stream_stable,
             strict,
             schema,
             schema_repair_mode,
+            json_dumps_args,
         )
     if dump is _PYTHON_DUMPS:
-        return "" if result == "" else json.dumps(result, **json_dumps_args)
+        if result == "":
+            return ""
+        return json.dumps(result, **json_dumps_args)
     return result
-
-
-def _delegate_repair_json(
-    reason: str,
-    json_dumps_args: dict[str, Any],
-    position: int | None,
-    json_str: Any,
-    return_objects: bool,
-    skip_json_loads: bool,
-    logging: bool,
-    json_fd: Any,
-    chunk_length: int,
-    stream_stable: bool,
-    strict: bool,
-    schema: Any,
-    schema_repair_mode: str,
-) -> Any:
-    """:func:`repair_json`'s call, delegated to json_repair."""
-    return _delegate(
-        "repair_json",
-        reason,
-        json_dumps_args,
-        position,
-        json_str=json_str,
-        return_objects=return_objects,
-        skip_json_loads=skip_json_loads,
-        logging=logging,
-        json_fd=json_fd,
-        chunk_length=chunk_length,
-        stream_stable=stream_stable,
-        strict=strict,
-        schema=schema,
-        schema_repair_mode=schema_repair_mode,
-    )
-
-
-def _early_reason(text: Any, schema: Any, json_fd: Any, skip_json_loads: bool) -> str | None:
-    """Why :func:`repair_json` delegates before it starts, if it does."""
-    if schema is not None:
-        return "schema"
-    if not isinstance(text, str):
-        return f"a {type(text).__name__} input"
-    reason = _str_subclass(text)
-    if reason is None and json_fd is not None and not skip_json_loads:
-        reason = None if json.load is _JSON_LOAD else "a replaced json.load"
-    return reason
 
 
 def _tell(fd: Any) -> int | None:
@@ -442,91 +324,37 @@ def _tell(fd: Any) -> int | None:
         return None
 
 
-#: ``repair_json``'s defaults, and the json_repair release that added each argument after
-#: ``json_fd`` (``json.dumps`` arguments: ``ensure_ascii`` from 0.26.0, any from 0.47.1). A
-#: delegated call passes its arguments by keyword and leaves out those at their default that
-#: the installed release does not take, so older releases still run it.
-_ARGUMENTS: dict[str, tuple[Any, str]] = {
-    "return_objects": (False, ""),
-    "skip_json_loads": (False, ""),
-    "logging": (False, ""),
-    "json_fd": (None, ""),
-    "chunk_length": (0, "0.28.4"),
-    "stream_stable": (False, "0.44.0"),
-    "strict": (False, "0.54"),
-    "schema": (None, "0.56.0"),
-    "schema_repair_mode": ("standard", "0.58.0"),
-}
-_DUMPS_RELEASE = "0.47.1"
-# The installed repair_json's keyword arguments, and whether it takes ``**kwargs``.
-_SIGNATURES: dict[Any, tuple[frozenset[str], bool] | None] = {}
-
-
-def _accepted(fn: Any) -> tuple[frozenset[str], bool] | None:
-    """The argument names `fn` takes by keyword and whether it takes ``**kwargs`` (cached)."""
-    try:
-        return _SIGNATURES[fn]
-    except (KeyError, TypeError):
-        pass
-    import inspect
-
-    try:
-        parameters = inspect.signature(fn).parameters.values()
-    except (TypeError, ValueError):
-        accepted = None  # no signature to read: pass everything and let it decide
-    else:
-        keyword = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
-        accepted = (
-            frozenset(p.name for p in parameters if p.kind in keyword),
-            any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters),
-        )
-    with contextlib.suppress(TypeError):
-        _SIGNATURES[fn] = accepted
-    return accepted
-
-
 def _delegate(
     name: str,
     reason: str,
+    json_fd: Any,
+    position: int | None,
+    json_str: Any,
+    return_objects: bool,
+    skip_json_loads: bool,
+    logging: bool,
+    chunk_length: int,
+    stream_stable: bool,
+    strict: bool,
+    schema: Any,
+    schema_repair_mode: Any,
     json_dumps_args: dict[str, Any],
-    position: int | None = None,
-    **arguments: Any,
 ) -> Any:
-    """Run the installed ``json_repair.repair_json`` with `arguments`, by keyword.
-
-    Raises:
-        PyroidError: json_repair is not installed, or its release does not take an argument
-            the call sets (one left at its default is not passed).
-    """
     real = _json_repair(name, reason)
-    fn = real.repair_json
-    accepted = _accepted(fn)
-    if accepted is not None:
-        names, any_keyword = accepted
-        for key in [key for key in arguments if key not in names]:
-            default, release = _ARGUMENTS.get(key, (None, ""))
-            value = arguments.pop(key)
-            if value is None if default is None else value == default:
-                continue
-            raise _too_old(name, reason, key, f"added in json-repair {release}" if release else "")
-        if not any_keyword:
-            for key in json_dumps_args:
-                if key not in names:
-                    added = f"json.dumps arguments were added in json-repair {_DUMPS_RELEASE}"
-                    raise _too_old(name, reason, key, added)
-    _fallback_warning(name, reason)
-    json_fd = arguments.get("json_fd")
     if json_fd is not None and position is not None:
         json_fd.seek(position)
-    return fn(**arguments, **json_dumps_args)
-
-
-def _too_old(name: str, reason: str, key: str, added: str) -> PyroidError:
-    added = f" ({added})" if added else ""
-    return PyroidError(
-        f"pyroid.json_repair.{name}: pyroid's Rust port does not handle {reason}, and the "
-        f"installed json_repair, which it delegates to, has no {key}= argument{added}. "
-        f"Install json-repair=={JSON_REPAIR_VERSION}, the release pyroid reproduces"
+    return real.repair_json(
+        json_str,
+        return_objects,
+        skip_json_loads,
+        logging,
+        json_fd,
+        chunk_length,
+        stream_stable,
+        strict,
+        schema,
+        schema_repair_mode,
+        **json_dumps_args,
     )
 
 
@@ -626,8 +454,7 @@ def repair_json_batch(
         of strings (``large_string`` for ``large_string`` input, else ``string``).
 
     Raises:
-        ValueError: A document fails in strict mode: the first one that fails, as in a
-            loop over ``repair_json`` (the note names its index or row).
+        ValueError: A document fails in strict mode (the note names its index or row).
         NestingError: A document nests deeper than :data:`MAX_DEPTH`.
         UnicodeEncodeError: Arrow input with ``ensure_ascii=False``, and a result holds a lone
             surrogate (json_repair keeps an escape such as ``\ud800`` as one), which an Arrow
@@ -635,17 +462,30 @@ def repair_json_batch(
         pyroid.InputError: ``texts`` is not one of the accepted kinds.
     """
     dump = _dump_config(json_dumps_args)
-    python = (
-        dump is _PYTHON_DUMPS
-        or json.dumps is not _JSON_DUMPS
-        or (not skip_json_loads and json.loads is not _JSON_LOADS)
-        or json.JSONDecoder is not _JSON_DECODER
-    )
+    if dump is _PYTHON_DUMPS:
+        if not isinstance(texts, (str, list, tuple)):
+            raise PyroidError(
+                "pyroid.json_repair.repair_json_batch: json.dumps arguments "
+                f"{sorted(json_dumps_args)} are only supported for str, list and tuple input"
+            )
 
-    def one(doc: Any) -> Any:
-        # The Python route, for json.dumps arguments the port does not reproduce, or json functions
-        # this program replaced: one repair_json call per document.
-        return repair_json(
+        def one(doc: Any) -> Any:
+            return repair_json(
+                doc,
+                skip_json_loads=skip_json_loads,
+                stream_stable=stream_stable,
+                strict=strict,
+                **json_dumps_args,
+            )
+
+        if isinstance(texts, str):
+            return one(texts)
+        out = [one(doc) for doc in texts]
+        return out if isinstance(texts, list) else tuple(out)
+
+    def fallback(doc: str) -> Any:
+        # A document the port does not handle (_RESERVED); also called from Rust for Arrow rows.
+        return _json_repair("repair_json_batch", _RESERVED).repair_json(
             doc,
             skip_json_loads=skip_json_loads,
             stream_stable=stream_stable,
@@ -653,28 +493,25 @@ def repair_json_batch(
             **json_dumps_args,
         )
 
-    def fallback(doc: str) -> Any:
-        # A document the port does not handle: a char in _RESERVED, or a str subclass.
-        return _delegate(
-            "repair_json_batch",
-            _str_subclass(doc) or _RESERVED,
-            json_dumps_args,
-            json_str=doc,
-            skip_json_loads=skip_json_loads,
-            stream_stable=stream_stable,
-            strict=strict,
-        )
-
-    # Rust calls the delegate in document order, after the native documents ran, so the first
-    # document that fails raises, as in a loop.
-    return _native.repair_batch(
+    if isinstance(texts, list):
+        # One read of the caller's list (atomic): the fallback below indexes the same items.
+        texts = list(texts)
+    result, unsupported = _native.repair_batch(
         texts,
         bool(skip_json_loads),
         bool(stream_stable),
         bool(strict),
         sys.get_int_max_str_digits(),
-        None if python else dump,
+        dump,
         threads=threads,
-        delegate=one if python else fallback,
-        python=python,
+        delegate=fallback,
     )
+    if not unsupported:
+        return result
+
+    if isinstance(texts, str):
+        return fallback(texts)
+    items = list(result)
+    for i in unsupported:
+        items[i] = fallback(texts[i])
+    return items if isinstance(texts, list) else tuple(items)

@@ -128,38 +128,12 @@ pub enum Value {
     Int(Int),
     /// `float` (any `f64`, including NaN and the infinities).
     Float(f64),
-    /// A `float` that `json.JSONDecoder` gives for the `NaN`, `Infinity` and
-    /// `-Infinity` tokens: one shared object each, where `float()` gives new ones.
-    Constant(Constant),
     /// `str` (lone surrogates remapped, see [`super::chars`]).
     Str(String),
     /// `list`.
     Array(Vec<Value>),
     /// `dict`.
     Object(Object),
-}
-
-/// The `NaN`, `Infinity` and `-Infinity` tokens of JSON as Python's `json`
-/// decodes them: `json.decoder.NaN`, `PosInf` and `NegInf`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Constant {
-    /// `NaN`.
-    NaN,
-    /// `Infinity`.
-    PosInf,
-    /// `-Infinity`.
-    NegInf,
-}
-
-impl Constant {
-    /// The float value.
-    pub fn value(self) -> f64 {
-        match self {
-            Self::NaN => f64::NAN,
-            Self::PosInf => f64::INFINITY,
-            Self::NegInf => f64::NEG_INFINITY,
-        }
-    }
 }
 
 /// Python's `type(value)`, for json_repair's `type(a) is type(b)` checks.
@@ -187,7 +161,6 @@ impl Value {
             Self::Bool(b) => *b,
             Self::Int(i) => !i.is_zero(),
             Self::Float(f) => *f != 0.0,
-            Self::Constant(_) => true,
             Self::Str(s) => !s.is_empty(),
             Self::Array(a) => !a.is_empty(),
             Self::Object(o) => !o.is_empty(),
@@ -200,7 +173,7 @@ impl Value {
             Self::Null => PyType::NoneType,
             Self::Bool(_) => PyType::Bool,
             Self::Int(_) => PyType::Int,
-            Self::Float(_) | Self::Constant(_) => PyType::Float,
+            Self::Float(_) => PyType::Float,
             Self::Str(_) => PyType::Str,
             Self::Array(_) => PyType::List,
             Self::Object(_) => PyType::Dict,
@@ -345,10 +318,6 @@ mod tests {
         assert!(!is_same_object(&a, &c));
         assert!(!Value::Float(-0.0).truthy());
         assert!(Value::Float(f64::NAN).truthy());
-        for c in [Constant::NaN, Constant::PosInf, Constant::NegInf] {
-            assert!(Value::Constant(c).truthy());
-            assert!(is_same_object(&Value::Constant(c), &Value::Float(0.0)));
-        }
         assert!(!Value::empty_str().truthy());
     }
 

@@ -19,7 +19,7 @@
 use memchr::memchr2;
 
 use super::chars::{SURROGATE_BASE, surrogate_char};
-use super::value::{Constant, Int, IntError, Object, Value, drop_deep, new_object};
+use super::value::{Int, IntError, Object, Value, drop_deep, new_object};
 
 /// Why decoding failed.
 #[derive(Clone, Debug, PartialEq)]
@@ -391,9 +391,9 @@ fn scan<S: Source>(
             b'n' if word_at(src, i + 1, b"ull") => (Value::Null, i + 4),
             b't' if word_at(src, i + 1, b"rue") => (Value::Bool(true), i + 4),
             b'f' if word_at(src, i + 1, &b"false"[1..]) => (Value::Bool(false), i + 5),
-            b'N' if word_at(src, i + 1, b"aN") => (Value::Constant(Constant::NaN), i + 3),
-            b'I' if word_at(src, i + 1, b"nfinity") => (Value::Constant(Constant::PosInf), i + 8),
-            b'-' if word_at(src, i + 1, b"Infinity") => (Value::Constant(Constant::NegInf), i + 9),
+            b'N' if word_at(src, i + 1, b"aN") => (Value::Float(f64::NAN), i + 3),
+            b'I' if word_at(src, i + 1, b"nfinity") => (Value::Float(f64::INFINITY), i + 8),
+            b'-' if word_at(src, i + 1, b"Infinity") => (Value::Float(f64::NEG_INFINITY), i + 9),
             _ => number(src, i, max_digits, &mut buf)?,
         };
         // Hand the value to the innermost open container, closing containers
@@ -490,7 +490,6 @@ pub(super) mod testutil {
                         out.push(s);
                     }
                     Value::Float(f) => out.push(format!("d{:016x}", f.to_bits())),
-                    Value::Constant(c) => out.push(format!("d{:016x}", c.value().to_bits())),
                     Value::Str(s) => out.push(format!("s{}", hex(&to_wtf8(s)))),
                     Value::Array(a) => {
                         out.push("[".into());
@@ -610,10 +609,9 @@ mod tests {
         assert_eq!(both("1e400"), Ok(Value::Float(f64::INFINITY)));
         assert_eq!(both("-1e400"), Ok(Value::Float(f64::NEG_INFINITY)));
         assert!(matches!(both("-0.0"), Ok(Value::Float(f)) if f == 0.0 && f.is_sign_negative()));
-        // The tokens are json.decoder's shared objects; overflowing numbers are new floats.
-        assert_eq!(both("NaN"), Ok(Value::Constant(Constant::NaN)));
-        assert_eq!(both("Infinity"), Ok(Value::Constant(Constant::PosInf)));
-        assert_eq!(both("-Infinity"), Ok(Value::Constant(Constant::NegInf)));
+        assert!(matches!(both("NaN"), Ok(Value::Float(f)) if f.is_nan()));
+        assert_eq!(both("Infinity"), Ok(Value::Float(f64::INFINITY)));
+        assert_eq!(both("-Infinity"), Ok(Value::Float(f64::NEG_INFINITY)));
         assert_eq!(both("\"a\\u00e9\\n\""), Ok(s("aé\n")));
         assert_eq!(
             both("9223372036854775808"),

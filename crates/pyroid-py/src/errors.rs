@@ -21,11 +21,8 @@
 //! name. Each module adds a subclass here with one `create_exception!` (or
 //! `make_type` call for multiple bases) and one line in [`register`].
 
-use std::io;
-
-use pyo3::IntoPyObjectExt;
 use pyo3::create_exception;
-use pyo3::exceptions::{PyException, PyOSError, PyRuntimeWarning, PyTypeError, PyUserWarning};
+use pyo3::exceptions::{PyException, PyRuntimeWarning, PyTypeError, PyUserWarning};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyTuple, PyType};
@@ -90,44 +87,6 @@ pub fn input_error(py: Python<'_>, msg: impl Into<String>) -> PyErr {
         Ok(ty) => PyErr::from_type(ty.clone(), msg.into()),
         Err(e) => e,
     }
-}
-
-/// The `(errno, strerror, winerror)` arguments of the `OSError` for OS error `code`, whose
-/// `io::Error` reads `text` (`"<message> (os error <code>)"`).
-///
-/// On Windows `code` is a Windows error, not an errno: 3 is ERROR_PATH_NOT_FOUND there but ESRCH
-/// elsewhere. As `winerror` it gives the `OSError` its errno and subclass (`FileNotFoundError`)
-/// as in CPython's own Windows errors, whose messages also drop the trailing period.
-pub(crate) fn os_error_args(code: i32, text: &str, windows: bool) -> (i32, String, Option<i32>) {
-    let message = text
-        .strip_suffix(&format!(" (os error {code})"))
-        .unwrap_or(text);
-    if windows {
-        let message = message.trim_end_matches(|c: char| c <= ' ' || c == '.');
-        (code, message.to_owned(), Some(code))
-    } else {
-        (code, message.to_owned(), None)
-    }
-}
-
-/// `OSError(errno, strerror, filename)` for `err` (Python picks the subclass, e.g.
-/// `FileNotFoundError`), with the code as `winerror` on Windows; `None` if `err` has no OS code.
-pub(crate) fn os_error<'py>(
-    py: Python<'py>,
-    err: &io::Error,
-    filename: impl IntoPyObject<'py>,
-) -> Option<PyErr> {
-    let code = err.raw_os_error()?;
-    let filename = match filename.into_py_any(py) {
-        Ok(f) => f,
-        Err(e) => return Some(e),
-    };
-    Some(match os_error_args(code, &err.to_string(), cfg!(windows)) {
-        (errno, strerror, None) => PyOSError::new_err((errno, strerror, filename)),
-        (errno, strerror, Some(winerror)) => {
-            PyOSError::new_err((errno, strerror, filename, winerror))
-        }
-    })
 }
 
 /// Human-readable type of `obj` for error messages: `int`, `numpy.ndarray`.

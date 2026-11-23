@@ -300,26 +300,6 @@ def test_max_decode_length_below_one_is_refused() -> None:
 
 
 @pytest.mark.thread_unsafe(reason="warnings.catch_warnings")
-def test_equal_option_values_of_another_type_get_their_own_config() -> None:
-    # The native-config cache was keyed on the field values, and 1 == 1.0: after
-    # max_decode_length=1, max_decode_length=1.0 reused the native config of 1, where ftfy
-    # (and pyroid without the earlier call) raises TypeError for slicing with a float.
-    text = "ab\ncd"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", pyroid.FallbackWarning)
-        values: tuple[Any, ...] = (1, 1.0, True, 1, 1.0)
-        for value in values:
-            assert outcome(candidate.fix_text, text, max_decode_length=value) == outcome(
-                ftfy.fix_text, text, max_decode_length=value
-            ), value
-            config = candidate.TextFixerConfig(max_decode_length=value)
-            assert outcome(candidate.fix_text_batch, [text], config) == outcome(
-                lambda c: [ftfy.fix_text(text, c)], ftfy.TextFixerConfig(max_decode_length=value)
-            ), value
-    assert outcome(candidate.fix_text, text, max_decode_length=1.0)[0] == "raise"
-
-
-@pytest.mark.thread_unsafe(reason="warnings.catch_warnings")
 def test_delegated_helpers_match() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)

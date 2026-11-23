@@ -170,7 +170,7 @@ def test_refuses_foreign_directory(tmp_path: Path) -> None:
     assert (out / "notes.txt").read_text() == "mine"
     excl = out / "dropped"
     with pytest.raises(SystemExit, match="must not be OUT or inside it"):
-        main(["langid", str(src), str(out), "--keep", "en", "--excluded", str(excl)])
+        main(["langid", str(src), str(out), "--excluded", str(excl)])
 
 
 # ------------------------------------------------------------------------------------ resuming
@@ -636,9 +636,7 @@ def test_rerun_with_other_outputs_redoes_them(tmp_path: Path) -> None:
     assert sorted(p.name for p in out.glob("*.jsonl")) == ["part-000.jsonl", "part-001.jsonl"]
     x1, x2 = tmp_path / "x1", tmp_path / "x2"
     model = _tiny_lid_model(tmp_path / "lid.bin")
-    # No score reaches 1.5: every row is dropped.
-    args = ["langid", str(src), str(tmp_path / "l"), "--keep", "en", "--min-score", "1.5"]
-    args += ["--model", str(model)]
+    args = ["langid", str(src), str(tmp_path / "l"), "--keep", "zz", "--model", str(model)]
     assert main([*args, "--excluded", str(x1)]) == 0
     assert main([*args, "--excluded", str(x2)]) == 0
     assert len(_rows(x2)) == 6
@@ -701,6 +699,40 @@ def test_empty_spool_and_starting_shards(tmp_path: Path) -> None:
     from pyroid.integrations._shards import Shard
 
     _check_out(_layout(a, [], Shard(), excluded=False), False)
+
+
+def _spool_threads() -> list[str]:
+    import threading
+
+    return [t.name for t in threading.enumerate() if t.name.startswith("pyroid-spool")]
+
+
+@pytest.mark.thread_unsafe  # counts this process's threads
+def test_spool_writes_in_order_and_reports_errors(tmp_path: Path) -> None:
+    """A spool's tables are written by a thread: in order, and its errors surface at the next
+    write or at close, after which abort leaves no file and no thread behind."""
+    from pyroid.cli import _Ipc, _read_ipc
+
+    p = str(tmp_path / "s.arrow")
+    w = _Ipc(p)
+    tables = [_table([f"doc {i}.{j}" for j in range(i + 1)], 10 * i) for i in range(6)]
+    for t in tables:
+        w.write(t)
+    w.close()
+    assert [t.to_pylist() for t in _read_ipc(p)] == [t.to_pylist() for t in tables]
+    assert not os.path.exists(p + ".partial")
+    assert _spool_threads() == []
+
+    q = str(tmp_path / "bad.arrow")
+    w = _Ipc(q)
+    w.write(_table(["a"]))
+    w.write(pa.table({"other": [1]}))  # another schema: the thread's write fails
+    with pytest.raises(pa.ArrowInvalid):
+        w.close()
+    w.abort()
+    assert not os.path.exists(q)
+    assert not os.path.exists(q + ".partial")
+    assert _spool_threads() == []
 
 
 @pytest.mark.thread_unsafe  # reads stderr

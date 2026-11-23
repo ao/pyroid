@@ -333,9 +333,6 @@ jobs:
       # bench/ and parity/ each pin their interpreter in .python-version (3.13: the oracle env).
       - name: Fetch and verify the pinned inputs (bench/fetch.py)
         if: steps.cache.outputs.cache-hit != 'true'
-        env:
-          # Two GitHub tree listings; unauthenticated, they share the runner IP's 60 requests an hour.
-          GITHUB_TOKEN: ${{ github.token }}
         run: uv run --project bench --frozen --no-default-groups python bench/fetch.py
       - name: Regenerate and verify the references (python -m pyroid_parity.refs all)
         if: steps.cache.outputs.cache-hit != 'true'

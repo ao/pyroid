@@ -10,13 +10,13 @@ use std::ptr;
 use std::slice;
 use std::sync::Arc;
 
-use pyroid_core::columnar::{BoolBuffers, BuildError, StringBuffers, get_bit};
+use pyroid_core::columnar::{BoolBuffers, StringBuffers, get_bit};
 use pyroid_core::par::Threads;
 
 use super::{
-    Bits, CHECK_ROWS, Chunk, Column, ColumnData, ColumnType, EINVAL, Exported, StringsBuilder,
-    count_set, export_array, export_schema, export_span, export_stream, release_array,
-    release_schema, release_stream, stream_get_last_error, stream_get_next, stream_get_schema,
+    Chunk, Column, ColumnType, EINVAL, Exported, export_array, export_schema, export_stream,
+    release_array, release_schema, release_stream, stream_get_last_error, stream_get_next,
+    stream_get_schema,
 };
 use crate::arrow::ffi::{FLAG_NULLABLE, FfiArray, FfiSchema, FfiStream};
 use crate::arrow::import::{StrChunk, StrType};
@@ -310,7 +310,7 @@ fn stream_yields_schema_then_non_empty_chunks_then_end() {
             Chunk::LargeUtf8(large(&second)),
         ],
     );
-    assert_eq!(column.inner.spans.len(), 2);
+    assert_eq!(column.inner.chunks.len(), 2);
     let mut stream = export_stream(&column.inner);
 
     let (code, schema) = get_schema(&mut stream);
@@ -444,7 +444,7 @@ fn a_bool_stream() {
 fn an_empty_column_streams_nothing() {
     for ty in [ColumnType::Utf8, ColumnType::LargeUtf8, ColumnType::Bool] {
         let column = Column::new(ty, "e", vec![Chunk::empty(ty)]);
-        assert!(column.inner.spans.is_empty());
+        assert!(column.inner.chunks.is_empty());
         let mut stream = export_stream(&column.inner);
         let (code, end) = get_next(&mut stream);
         assert_eq!(code, 0);
@@ -452,10 +452,10 @@ fn an_empty_column_streams_nothing() {
     }
 }
 
-// ---- single_span (what __arrow_c_array__ exports) --------------------------
+// ---- single_chunk (what __arrow_c_array__ exports) --------------------------
 
 #[test]
-fn single_span_concatenates_once_and_round_trips() {
+fn single_chunk_concatenates_once_and_round_trips() {
     let rows = sample();
     let rows = as_strs(&rows);
     let (head, tail) = rows.split_at(3);
@@ -464,16 +464,16 @@ fn single_span_concatenates_once_and_round_trips() {
         "joined",
         vec![Chunk::Utf8(utf8(head)), Chunk::Utf8(utf8(tail))],
     );
-    let joined = column.inner.single_span(go).unwrap();
-    let again = column.inner.single_span(go).unwrap();
-    assert!(
-        Arc::ptr_eq(&joined.chunk, &again.chunk),
-        "the concatenation is cached"
-    );
+    let Ok(joined) = column.single_chunk() else {
+        panic!("concat failed")
+    };
+    let Ok(again) = column.single_chunk() else {
+        panic!("concat failed")
+    };
+    assert!(Arc::ptr_eq(&joined, &again), "the concatenation is cached");
     drop(again);
-    assert_eq!((joined.start, joined.len, joined.null_count), (0, 7, 2));
-    assert_round_trip(export_span(joined.clone()), StrType::Utf8, &rows);
-    assert_eq!(Arc::strong_count(&joined.chunk), 2); // ours + the column's cache
+    assert_round_trip(export_array(Arc::clone(&joined)), StrType::Utf8, &rows);
+    assert_eq!(Arc::strong_count(&joined), 2); // ours + the column's cache
 
     // One chunk is exported as is; no chunks as an empty array.
     let one = Column::new(
@@ -481,12 +481,17 @@ fn single_span_concatenates_once_and_round_trips() {
         "",
         vec![Chunk::LargeUtf8(large(&rows))],
     );
-    let span = one.inner.single_span(go).unwrap();
-    assert!(Arc::ptr_eq(&span.chunk, &one.inner.spans[0].chunk));
-    assert_round_trip(export_span(span), StrType::LargeUtf8, &rows);
+    let Ok(chunk) = one.single_chunk() else {
+        panic!("single chunk")
+    };
+    assert!(Arc::ptr_eq(&chunk, &one.inner.chunks[0]));
+    assert_round_trip(export_array(chunk), StrType::LargeUtf8, &rows);
     for ty in [ColumnType::Utf8, ColumnType::Bool] {
         let none = Column::new(ty, "", Vec::new());
-        let array = export_span(none.inner.single_span(go).unwrap());
+        let Ok(empty) = none.single_chunk() else {
+            panic!("empty")
+        };
+        let array = export_array(empty);
         assert_eq!(array.length, 0);
     }
 
@@ -498,395 +503,9 @@ fn single_span_concatenates_once_and_round_trips() {
             Chunk::Bool(BoolBuffers::build(&[Some(false), Some(true)])),
         ],
     );
-    let array = export_span(bools.inner.single_span(go).unwrap());
-    assert_eq!((array.length, array.null_count), (4, 1));
-}
-
-/// A `single_span` tick that never stops the copy.
-#[allow(clippy::unnecessary_wraps)] // the signature `single_span` takes
-fn go() -> Result<(), BuildError> {
-    Ok(())
-}
-
-#[derive(Debug, PartialEq)]
-enum Stop {
-    Build(BuildError),
-    Tick,
-}
-
-impl From<BuildError> for Stop {
-    fn from(e: BuildError) -> Self {
-        Self::Build(e)
-    }
-}
-
-#[test]
-fn a_failed_check_stops_the_concatenation_and_caches_nothing() {
-    let owned = sample();
-    let rows = as_strs(&owned);
-    // Several row blocks per chunk, and (under Miri) several byte pieces.
-    let many: Vec<Option<&str>> = rows
-        .iter()
-        .copied()
-        .cycle()
-        .take(2 * CHECK_ROWS + 5)
-        .collect();
-    for ty in [ColumnType::Utf8, ColumnType::Bool] {
-        let chunk = || match ty {
-            ColumnType::Utf8 => Chunk::Utf8(utf8(&many)),
-            _ => Chunk::Bool(BoolBuffers::build(
-                &many
-                    .iter()
-                    .map(|r| r.map(str::is_empty))
-                    .collect::<Vec<_>>(),
-            )),
-        };
-        let column = Column::new(ty, "", vec![chunk(), chunk()]);
-        for stop_at in 1..=4 {
-            let mut calls = 0;
-            let out = column.inner.single_span(|| {
-                calls += 1;
-                if calls == stop_at {
-                    Err(Stop::Tick)
-                } else {
-                    Ok(())
-                }
-            });
-            assert_eq!(out.err(), Some(Stop::Tick), "{ty:?}, stop at {stop_at}");
-            assert_eq!(calls, stop_at);
-            assert!(column.inner.joined.get().is_none());
-        }
-        let joined = column.inner.single_span(go).unwrap();
-        assert_eq!(
-            (joined.len, joined.null_count),
-            (
-                2 * many.len(),
-                2 * many.iter().filter(|r| r.is_none()).count()
-            )
-        );
-        if ty == ColumnType::Utf8 {
-            let want: Vec<Option<&str>> = many.iter().chain(&many).copied().collect();
-            assert_round_trip(export_span(joined), StrType::Utf8, &want);
-        }
-    }
-}
-
-#[test]
-fn bits_copy_bit_ranges_like_one_bit_at_a_time() {
-    let src = [
-        0b1011_0110_u8,
-        0b0000_1111,
-        0b1111_0000,
-        0b0101_0101,
-        0b1100_1010,
-    ];
-    for before in 0..9 {
-        for from in 0..17 {
-            for n in 0..=src.len() * 8 - from {
-                let prefix = |b: &mut Bits| (0..before).for_each(|i| b.push(i % 3 == 0));
-                let (mut fast, mut slow) = (Bits::default(), Bits::default());
-                prefix(&mut fast);
-                prefix(&mut slow);
-                fast.extend_from_bitmap(&src, from, n);
-                (from..from + n).for_each(|i| slow.push(get_bit(&src, i)));
-                assert_eq!(fast.len, slow.len);
-                assert_eq!(
-                    fast.finish(),
-                    slow.finish(),
-                    "{before} + {from}..{}",
-                    from + n
-                );
-            }
-            let (mut fast, mut slow) = (Bits::default(), Bits::default());
-            for b in [&mut fast, &mut slow] {
-                (0..before).for_each(|i| b.push(i % 2 == 0));
-            }
-            fast.extend_ones(from);
-            (0..from).for_each(|_| slow.push(true));
-            assert_eq!(fast.len, slow.len);
-            assert_eq!(fast.finish(), slow.finish(), "{before} + {from} ones");
-        }
-    }
-}
-
-#[test]
-fn bits_pack_like_bitmap() {
-    for len in 0..40 {
-        let bits: Vec<bool> = (0..len).map(|i| (i * 5 + i / 3) % 4 != 0).collect();
-        let mut b = Bits::with_capacity(len);
-        for &bit in &bits {
-            b.push(bit);
-        }
-        assert_eq!(b.len, len);
-        assert_eq!(
-            b.finish(),
-            pyroid_core::columnar::bitmap(bits.iter().copied(), len),
-            "{len}"
-        );
-    }
-}
-
-// ---- spans: slices, gathers, offsets -----------------------------------------
-
-#[test]
-fn count_set_matches_a_bit_by_bit_count() {
-    let bits: Vec<bool> = (0..61).map(|i| (i * 7 + i / 5) % 3 != 0).collect();
-    let map = pyroid_core::columnar::bitmap(bits.iter().copied(), bits.len());
-    for start in 0..bits.len() {
-        for len in 0..=bits.len() - start {
-            let want = bits[start..start + len].iter().filter(|b| **b).count();
-            assert_eq!(count_set(&map, start, len), want, "{start}+{len}");
-        }
-    }
-}
-
-/// The rows of a string column, read through `locate`.
-fn rows_of(data: &ColumnData) -> Vec<Option<String>> {
-    (0..data.len())
-        .map(|i| {
-            let (span, at) = data.locate(i);
-            let bytes = match &*span.chunk {
-                Chunk::Utf8(b) => b.get(at),
-                Chunk::LargeUtf8(b) | Chunk::LargeBinary(b) => b.get(at),
-                Chunk::Bool(_) => unreachable!(),
-            };
-            bytes.map(|b| String::from_utf8(b.to_vec()).unwrap())
-        })
-        .collect()
-}
-
-/// `rows` as a column of `ty` in chunks of 3, 1 and the rest.
-fn three_chunks(ty: ColumnType, rows: &[Option<&str>]) -> Column {
-    let parts = [&rows[..3], &rows[3..4], &rows[4..]];
-    let chunks = parts
-        .iter()
-        .map(|p| match ty {
-            ColumnType::Utf8 => Chunk::Utf8(utf8(p)),
-            ColumnType::LargeUtf8 => Chunk::LargeUtf8(large(p)),
-            _ => unreachable!(),
-        })
-        .collect();
-    Column::new(ty, "s", chunks)
-}
-
-#[test]
-fn every_slice_shares_the_chunks_and_exports_its_rows() {
-    let owned = sample();
-    let rows = as_strs(&owned);
-    for (ty, str_ty) in [
-        (ColumnType::Utf8, StrType::Utf8),
-        (ColumnType::LargeUtf8, StrType::LargeUtf8),
-    ] {
-        let column = three_chunks(ty, &rows);
-        for from in 0..=rows.len() {
-            for to in from..=rows.len() {
-                let want = &rows[from..to];
-                let sliced = Arc::new(column.inner.slice(from, to));
-                assert_eq!(sliced.len(), to - from);
-                let got = rows_of(&sliced);
-                assert_eq!(as_strs(&got), want, "{from}..{to}");
-                let nulls = want.iter().filter(|r| r.is_none()).count();
-                let span_nulls: usize = sliced.spans.iter().map(|s| s.null_count).sum();
-                assert_eq!(span_nulls, nulls, "{from}..{to}");
-                for span in &sliced.spans {
-                    assert!(span.len > 0);
-                    assert!(
-                        column
-                            .inner
-                            .spans
-                            .iter()
-                            .any(|s| Arc::ptr_eq(&s.chunk, &span.chunk)),
-                        "a slice shares its chunks"
-                    );
-                }
-                // Through the stream: one array per span, with the span's offset.
-                let mut stream = export_stream(&sliced);
-                let mut seen = Vec::new();
-                for span in &sliced.spans {
-                    let (code, array) = get_next(&mut stream);
-                    assert_eq!(code, 0);
-                    assert_eq!(
-                        (array.offset, array.length, array.null_count),
-                        (
-                            i64::try_from(span.start).unwrap(),
-                            i64::try_from(span.len).unwrap(),
-                            i64::try_from(span.null_count).unwrap()
-                        )
-                    );
-                    let chunk = StrChunk::new(array, str_ty).unwrap();
-                    seen.extend(
-                        (0..chunk.len()).map(|i| chunk.get(i).map(|r| r.unwrap().to_owned())),
-                    );
-                }
-                assert!(get_next(&mut stream).1.release.is_none(), "then the end");
-                assert_eq!(as_strs(&seen), want, "stream {from}..{to}");
-                // As one array: a span's offset, or the spans joined.
-                let one = sliced.single_span(go).unwrap();
-                assert_round_trip(export_span(one), str_ty, want);
-            }
-        }
-    }
-}
-
-#[test]
-fn a_slice_of_a_slice() {
-    let owned = sample();
-    let rows = as_strs(&owned);
-    let column = three_chunks(ColumnType::Utf8, &rows);
-    let outer = column.inner.slice(1, 6);
-    let inner = outer.slice(2, 5);
-    assert_eq!(as_strs(&rows_of(&inner)), &rows[3..6]);
-    assert_eq!(inner.spans[0].start, 0, "row 3 starts the second chunk");
-    assert_eq!(column.inner.slice(2, 2).len(), 0);
-    assert!(column.inner.slice(4, 4).spans.is_empty());
-}
-
-#[test]
-fn a_sliced_bool_span_exports_bit_offsets() {
-    let values: Vec<Option<bool>> = (0..21)
-        .map(|i| (i % 4 != 1).then_some(i % 3 == 0))
-        .collect();
-    let column = Column::new(
-        ColumnType::Bool,
-        "b",
-        vec![
-            Chunk::Bool(BoolBuffers::build(&values[..13])),
-            Chunk::Bool(BoolBuffers::build(&values[13..])),
-        ],
-    );
-    for (from, to) in [(3, 11), (5, 6), (12, 14), (0, 21), (9, 20)] {
-        let sliced = column.inner.slice(from, to);
-        let mut got = Vec::new();
-        for span in &sliced.spans {
-            let array = export_span(span.clone());
-            let offset = usize::try_from(array.offset).unwrap();
-            let bufs = buffers(&array);
-            let bytes = (offset + span.len).div_ceil(8);
-            // SAFETY: the exported bitmaps cover offset + length bits.
-            let validity = unsafe { slice::from_raw_parts(bufs[0].cast::<u8>(), bytes) };
-            // SAFETY: as above.
-            let bits = unsafe { slice::from_raw_parts(bufs[1].cast::<u8>(), bytes) };
-            got.extend(
-                (0..span.len)
-                    .map(|i| get_bit(validity, offset + i).then(|| get_bit(bits, offset + i))),
-            );
-            let nulls = values[from..to].iter().filter(|v| v.is_none()).count();
-            assert!(span.null_count <= nulls);
-        }
-        assert_eq!(got, values[from..to], "{from}..{to}");
-        // Joined into one array (two spans) or exported at an offset (one).
-        let one = export_span(sliced.single_span(go).unwrap());
-        let offset = usize::try_from(one.offset).unwrap();
-        let bytes = (offset + to - from).div_ceil(8);
-        let bufs = buffers(&one);
-        // SAFETY: as above.
-        let validity = unsafe { slice::from_raw_parts(bufs[0].cast::<u8>(), bytes) };
-        // SAFETY: as above.
-        let bits = unsafe { slice::from_raw_parts(bufs[1].cast::<u8>(), bytes) };
-        let joined: Vec<Option<bool>> = (0..to - from)
-            .map(|i| get_bit(validity, offset + i).then(|| get_bit(bits, offset + i)))
-            .collect();
-        assert_eq!(joined, values[from..to], "joined {from}..{to}");
-    }
-}
-
-#[test]
-fn gather_copies_rows_in_any_order() {
-    let owned = sample();
-    let rows = as_strs(&owned);
-    let pick = [6, 0, 3, 3, 1, 5, 4];
-    for ty in [ColumnType::Utf8, ColumnType::LargeUtf8] {
-        let column = three_chunks(ty, &rows);
-        let gathered = column.inner.gather(pick, || Ok::<(), ()>(())).unwrap();
-        let want: Vec<Option<&str>> = pick.iter().map(|&i| rows[i]).collect();
-        assert_eq!(as_strs(&rows_of(&gathered)), want);
-        assert_eq!(gathered.spans.len(), 1);
-        assert_eq!(gathered.spans[0].null_count, 2);
-        assert!(
-            gathered
-                .gather([], || Ok::<(), ()>(()))
-                .unwrap()
-                .spans
-                .is_empty()
-        );
-    }
-    let binary = Column::new(
-        ColumnType::LargeBinary,
-        "html",
-        vec![Chunk::LargeBinary(large(&[
-            Some("\u{e9}"),
-            None,
-            Some("x"),
-        ]))],
-    );
-    let gathered = binary.inner.gather([2, 1, 0], || Ok::<(), ()>(())).unwrap();
-    assert_eq!(
-        as_strs(&rows_of(&gathered)),
-        [Some("x"), None, Some("\u{e9}")]
-    );
-    let bools = Column::new(
-        ColumnType::Bool,
-        "",
-        vec![Chunk::Bool(BoolBuffers::build(&[
-            Some(true),
-            None,
-            Some(false),
-        ]))],
-    );
-    let gathered = bools
-        .inner
-        .gather([2, 2, 1, 0], || Ok::<(), ()>(()))
-        .unwrap();
-    let Chunk::Bool(b) = &*gathered.spans[0].chunk else {
-        panic!("bool")
+    let Ok(chunk) = bools.single_chunk() else {
+        panic!("bool concat")
     };
-    let got: Vec<Option<bool>> = (0..b.len).map(|i| b.get(i)).collect();
-    assert_eq!(got, [Some(false), Some(false), None, Some(true)]);
-}
-
-#[test]
-fn gather_stops_at_the_first_failed_check() {
-    let column = Column::new(ColumnType::Utf8, "", vec![Chunk::Utf8(utf8(&[Some("a")]))]);
-    let mut calls = 0;
-    let rows = std::iter::repeat_n(0, 3 * CHECK_ROWS);
-    let out = column.inner.gather(rows, || {
-        calls += 1;
-        if calls == 2 { Err("stop") } else { Ok(()) }
-    });
-    assert_eq!(out.err(), Some("stop"));
-    assert_eq!(calls, 2);
-}
-
-#[test]
-fn strings_builder_keeps_rows_and_nulls() {
-    let mut b = StringsBuilder::<i32>::default();
-    assert_eq!(StringsBuilder::<i64>::default().finish().len(), 0);
-    for row in [Some(&b"ab"[..]), None, Some(b""), Some(b"c")] {
-        b.push(row);
-    }
-    let done = b.finish();
-    assert_eq!(done.len(), 1);
-    let got: Vec<Option<&[u8]>> = (0..done[0].len).map(|i| done[0].get(i)).collect();
-    assert_eq!(got, [Some(&b"ab"[..]), None, Some(b""), Some(b"c")]);
-    assert_eq!(done[0].null_count, 1);
-    assert_eq!(done[0].offsets, [0, 2, 2, 2, 3]);
-}
-
-#[test]
-fn span_index_only_trusts_a_right_guess() {
-    let owned = sample();
-    let rows = as_strs(&owned);
-    let column = three_chunks(ColumnType::Utf8, &rows); // rows 0..3, 3..4, 4..7
-    let want = [0, 0, 0, 1, 2, 2, 2];
-    for (i, &k) in want.iter().enumerate() {
-        for guess in [0, 1, 2, 3, usize::MAX] {
-            assert_eq!(
-                column.inner.span_index(i, guess),
-                k,
-                "row {i}, guess {guess}"
-            );
-        }
-        let (span, at) = column.inner.locate(i);
-        assert_eq!(span.start + (i - column.inner.first_row(k)), at);
-    }
+    let array = export_array(chunk);
+    assert_eq!((array.length, array.null_count), (4, 1));
 }

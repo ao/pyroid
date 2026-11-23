@@ -46,7 +46,7 @@ use pyroid_core::warc::{
 use crate::arrow::{
     Chunk, Column, ColumnType, Field, RecordBatch, array_capsules, schema_capsule, stream_capsule,
 };
-use crate::errors::{os_error, type_name};
+use crate::errors::type_name;
 
 // ---- a mutex that refuses re-entry -------------------------------------------------------
 
@@ -307,27 +307,17 @@ impl Src {
     }
 }
 
-/// What `open(path, "rb")` raises for a failed open: `OSError(errno, os.strerror(errno), path)`
-/// (Python picks the subclass).
+/// `OSError(errno, os.strerror(errno), path)` for a failed open (Python picks the subclass).
 fn open_error(py: Python<'_>, e: &io::Error, path: &Bound<'_, PyAny>) -> PyErr {
-    let Some(err) = os_error(py, e, path) else {
+    let Some(code) = e.raw_os_error() else {
         return PyOSError::new_err(e.to_string());
     };
-    if cfg!(windows) {
-        // There `open()` reports the C runtime's errno, not the Windows error: "[Errno 2] No such
-        // file or directory" for ERROR_PATH_NOT_FOUND, without a winerror. CPython maps the
-        // Windows error to that errno (`OSError(...).errno`).
-        return errno_error(py, &err, path).unwrap_or(err);
-    }
-    err
-}
-
-/// `OSError(err.errno, os.strerror(err.errno), path)`.
-fn errno_error(py: Python<'_>, err: &PyErr, path: &Bound<'_, PyAny>) -> PyResult<PyErr> {
-    let errno = err.value(py).getattr(intern!(py, "errno"))?;
-    let strerror = py.import("os")?.call_method1("strerror", (&errno,))?;
-    let exc = py.get_type::<PyOSError>().call1((errno, strerror, path))?;
-    Ok(PyErr::from_value(exc))
+    let strerror = py
+        .import("os")
+        .and_then(|os| os.call_method1("strerror", (code,)))
+        .and_then(|s| s.extract::<String>())
+        .unwrap_or_else(|_| e.to_string());
+    PyOSError::new_err((code, strerror, path.clone().unbind()))
 }
 
 /// Open a path (detached).

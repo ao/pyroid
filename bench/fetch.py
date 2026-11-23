@@ -339,29 +339,13 @@ def hf_url(src: dict) -> str:
     return f"https://huggingface.co/datasets/{src['repo']}/resolve/{src['revision']}/{src['file']}"
 
 
-def github_tree(repo: str, rev: str) -> dict:
-    """GitHub's recursive tree listing of `repo` at a pinned commit (the listing cannot change).
-
-    Without a token GitHub allows 60 API requests an hour per IP address, which shared CI runners
-    use up; with GITHUB_TOKEN set (CI passes the job's token), the request is authenticated.
-    """
-    import json
-    import os
-
-    req = urllib.request.Request(
-        f"https://api.github.com/repos/{repo}/git/trees/{rev}?recursive=1",
-        headers={"Accept": "application/vnd.github+json"},
-    )
-    token = os.environ.get("GITHUB_TOKEN")
-    if token:
-        req.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(req, timeout=120) as r:
-        return json.load(r)
-
-
 def wmt21_files() -> dict[str, list[str]]:
     """Language pair -> [reference files..., system output files...] at the pinned revision (sorted)."""
-    tree = github_tree(WMT21["repo"], WMT21["revision"])
+    import json
+
+    url = f"https://api.github.com/repos/{WMT21['repo']}/git/trees/{WMT21['revision']}?recursive=1"
+    with urllib.request.urlopen(url, timeout=120) as r:  # pinned commit: the listing cannot change
+        tree = json.load(r)
     assert not tree.get("truncated"), "GitHub tree listing truncated"
     out: dict[str, list[str]] = {}
     for lp in WMT21["langpairs"]:
@@ -464,10 +448,14 @@ def git_blob_sha1(data: bytes) -> str:
 
 def build_trafilatura_tests(rel: str, src: dict) -> None:
     """Trafilatura's tests/ at a pinned commit (each file checked against its git blob sha1)."""
+    import json
+
     import pyarrow as pa
     import pyarrow.parquet as pq
 
-    tree = github_tree(src["repo"], src["commit"])
+    url = f"https://api.github.com/repos/{src['repo']}/git/trees/{src['commit']}?recursive=1"
+    with urllib.request.urlopen(url, timeout=120) as r:  # pinned commit: the listing cannot change
+        tree = json.load(r)
     assert not tree.get("truncated"), "GitHub tree listing truncated"
     files = sorted(
         (x["path"], x["sha"])

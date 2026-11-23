@@ -377,13 +377,9 @@ fn extract_doc(
     Ok(true)
 }
 
-/// Documents copied between two Ctrl-C checks in [`extract_round`].
-const EXTRACT_CHECK_DOCS: usize = 4096;
-
 /// Copy documents `start..` into `arena` until it holds about `budget`
 /// bytes; returns the end index. Documents the caller handles go to
-/// `fallback`. This runs attached (a round of `BULK_CHUNK_BYTES` can take a
-/// second on a slow machine), so it checks for Ctrl-C as it goes.
+/// `fallback`.
 fn extract_round(
     arena: &mut Arena,
     docs: &Bound<'_, PyTuple>,
@@ -396,9 +392,6 @@ fn extract_round(
     let n = docs.len();
     let mut end = start;
     while end < n && (end == start || arena.bytes.len() < budget) {
-        if (end - start) % EXTRACT_CHECK_DOCS == EXTRACT_CHECK_DOCS - 1 {
-            docs.py().check_signals()?;
-        }
         let doc = docs.get_item(end)?;
         let first = arena.token_ends.len();
         if extract_doc(arena, &doc, end, mode)? {
@@ -412,18 +405,15 @@ fn extract_round(
     Ok(end)
 }
 
-/// Hash one round's documents into their rows, each set to `initial` first
-/// (pure Rust; runs detached).
+/// Hash one round's documents into their rows (pure Rust; runs detached).
 fn hash_round<T: Value>(
     perm: &Permutations,
     arena: &Arena,
-    initial: &[T],
     rows: &mut [T],
     bits: Sha1Bits,
     threads: par::Threads,
 ) -> Result<(), BatchError> {
     par::try_map_rows(rows, perm.len(), threads, |i, row| {
-        row.copy_from_slice(initial);
         if let Some(tokens) = arena.tokens(i) {
             // The permutations and rows have the scheme's width, and
             // affine32 runs with 32-bit hashes (checked by the caller).
@@ -434,17 +424,16 @@ fn hash_round<T: Value>(
     Ok(())
 }
 
-/// Signatures of every document of `docs` into `out` (`len(docs)` rows of
-/// `initial.len()` values, any contents), starting from `initial`; returns
-/// the documents the caller handles.
+/// Signatures of every document of `docs`, starting from `initial`.
 ///
 /// Copying tokens out of the Python objects needs the interpreter and runs
 /// on the calling thread. With more than one thread allowed, rounds are
 /// pipelined: a helper thread waits for the pool to hash round `i` while the
 /// calling thread copies round `i + 1`; the calling thread only waits for the
-/// pool while detached. Each row is set to `initial` as its round is hashed,
-/// so there is no pass over the whole matrix before the first document.
-#[allow(clippy::too_many_arguments)]
+/// pool while detached.
+/// Rows of `initial` values written between two Ctrl-C checks in [`bulk_rows`].
+const FILL_ROWS: usize = 8192;
+
 fn bulk_rows<T: Value>(
     py: Python<'_>,
     perm: &Permutations,
@@ -453,11 +442,19 @@ fn bulk_rows<T: Value>(
     bits: Sha1Bits,
     mode: Tokens,
     threads: par::Threads,
-    out: &mut [T],
-) -> PyResult<Vec<usize>> {
+) -> PyResult<(Vec<T>, Vec<usize>)> {
     let k = initial.len();
     let n = docs.len();
-    debug_assert_eq!(out.len(), n * k);
+    let mut out: Vec<T> = Vec::with_capacity(n * k);
+    // Every row starts as `initial`: n * k values (2 GB for 2 million documents of 128
+    // permutations), written before the first document is hashed. That takes seconds where page
+    // faults are slow, so Ctrl-C is checked between steps of FILL_ROWS rows.
+    for i in 0..n {
+        if i % FILL_ROWS == FILL_ROWS - 1 {
+            py.check_signals()?;
+        }
+        out.extend_from_slice(initial);
+    }
     let mut fallback = Vec::new();
     if threads == par::Threads::ONE {
         let mut arena = Arena::default();
@@ -472,16 +469,14 @@ fn bulk_rows<T: Value>(
                 &mut fallback,
             )?;
             let rows = &mut out[start * k..end * k];
-            crate::interrupt::detach_batch(py, || {
-                hash_round(perm, &arena, initial, rows, bits, threads)
-            })
-            .map_err(|e| e.into_pyerr(py))?;
+            crate::interrupt::detach_batch(py, || hash_round(perm, &arena, rows, bits, threads))
+                .map_err(|e| e.into_pyerr(py))?;
             start = end;
         }
-        return Ok(fallback);
+        return Ok((out, fallback));
     }
     std::thread::scope(|s| -> PyResult<()> {
-        let mut rest: &mut [T] = out;
+        let mut rest: &mut [T] = &mut out;
         let mut spare = Arena::default();
         let mut pending: Option<
             std::thread::ScopedJoinHandle<'_, (Arena, Result<(), BatchError>)>,
@@ -523,7 +518,7 @@ fn bulk_rows<T: Value>(
             let (rows, tail) = std::mem::take(&mut rest).split_at_mut((end - start) * k);
             rest = tail;
             pending = Some(s.spawn(move || {
-                let res = hash_round(perm, &arena, initial, rows, bits, threads);
+                let res = hash_round(perm, &arena, rows, bits, threads);
                 (arena, res)
             }));
             start = end;
@@ -531,32 +526,27 @@ fn bulk_rows<T: Value>(
         finish(&mut pending)?;
         Ok(())
     })?;
-    Ok(fallback)
+    Ok((out, fallback))
 }
 
-fn internal(e: &dyn std::fmt::Display) -> PyErr {
-    PyroidError::new_err(format!("pyroid.datasketch: {e}"))
-}
-
-/// A new array of `dims` (`rows * k` values) that `fill` writes, then returns.
-///
-/// The rows are written straight into numpy's buffer (so the result owns its
-/// data like numpy's own arrays, and there is no second copy of the matrix).
-/// numpy allocates it zeroed, which the OS does lazily: `fill` sets every row,
-/// so no pass over the whole matrix (1 GB for 2 million documents of 128
-/// `uint32` permutations, and seconds where page faults are slow) runs before
-/// the first document, attached, where a Ctrl-C would wait for it.
-fn new_matrix<'py, T: Value, R>(
-    py: Python<'py>,
-    dims: &[usize],
-    fill: impl FnOnce(&mut [T]) -> PyResult<R>,
-) -> PyResult<(Bound<'py, PyAny>, R)> {
-    let arr = numpy::PyArrayDyn::<T>::zeros(py, dims, false);
-    let r = {
+fn matrix<T: Value>(
+    py: Python<'_>,
+    rows: usize,
+    k: usize,
+    v: Vec<T>,
+) -> PyResult<Bound<'_, PyAny>> {
+    // numpy allocates it, so the result owns its data like numpy's own arrays.
+    debug_assert_eq!(v.len(), rows * k);
+    let arr = PyArray2::<T>::zeros(py, [rows, k], false);
+    {
+        let internal =
+            |e: &dyn std::fmt::Display| PyroidError::new_err(format!("pyroid.datasketch: {e}"));
         let mut rw = arr.try_readwrite().map_err(|e| internal(&e))?;
-        fill(rw.as_slice_mut().map_err(|e| internal(&e))?)?
-    };
-    Ok((arr.into_any(), r))
+        rw.as_slice_mut()
+            .map_err(|e| internal(&e))?
+            .copy_from_slice(&v);
+    }
+    Ok(arr.into_any())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -582,17 +572,15 @@ fn bulk_any<'py>(
             let Some(init) = read_values::<u64>(initial, k) else {
                 return Ok(None);
             };
-            Some(new_matrix(py, &[docs.len(), k], |out| {
-                bulk_rows(py, &perm, &init, docs, bits, mode, threads, out)
-            })?)
+            let (rows, fb) = bulk_rows(py, &perm, &init, docs, bits, mode, threads)?;
+            Some((matrix(py, docs.len(), k, rows)?, fb))
         }
         Scheme::Affine32 => {
             let Some(init) = read_values::<u32>(initial, k) else {
                 return Ok(None);
             };
-            Some(new_matrix(py, &[docs.len(), k], |out| {
-                bulk_rows(py, &perm, &init, docs, bits, mode, threads, out)
-            })?)
+            let (rows, fb) = bulk_rows(py, &perm, &init, docs, bits, mode, threads)?;
+            Some((matrix(py, docs.len(), k, rows)?, fb))
         }
     })
 }
@@ -656,21 +644,16 @@ thread_local! {
     static SHINGLES: RefCell<(shingle::Scratch, Vec<u64>)> = RefCell::default();
 }
 
-/// The signatures of `input`'s texts into `out` (any contents): each row is
-/// set to `max` (the empty signature) and then updated with its text's
-/// shingles. Arrow nulls get the empty signature.
 fn text_rows<T: Value>(
     perm: &Permutations,
     input: &crate::input::TextInput,
     threads_arg: Option<Threads>,
     ngram: usize,
     bits: Sha1Bits,
-    max: T,
     out: &mut [T],
 ) -> Result<(), BatchError> {
     let k = perm.len();
-    let done = fill_rows(input, threads_arg, out, k, |text, row| {
-        row.fill(max);
+    fill_rows(input, threads_arg, out, k, |text, row| {
         SHINGLES.with_borrow_mut(|(scratch, hashes)| {
             hashes.clear();
             shingle::for_each_word_ngram(text, ngram, scratch, |s| hashes.push(bits.hash(s)));
@@ -679,13 +662,6 @@ fn text_rows<T: Value>(
             pyroid_core::scratch::trim(hashes);
         });
     })?;
-    if done.contains(&None) {
-        for (row, d) in out.chunks_mut(k).zip(&done) {
-            if d.is_none() {
-                row.fill(max);
-            }
-        }
-    }
     Ok(())
 }
 
@@ -719,24 +695,32 @@ fn batch_texts<'py>(
     } else {
         Sha1Bits::B32
     };
-    let dims: &[usize] = if single { &[k] } else { &[n, k] };
     let max = scheme.max_value();
-    let (arr, ()) = match scheme {
-        Scheme::Legacy | Scheme::Affine64 => new_matrix(py, dims, |out| {
+    let arr = match scheme {
+        Scheme::Legacy | Scheme::Affine64 => {
+            let mut out = vec![max; n * k];
             crate::interrupt::detach_batch(py, || {
-                text_rows(&perm, &input, threads_arg, ngram, bits, max, out)
+                text_rows(&perm, &input, threads_arg, ngram, bits, &mut out)
             })
-            .map_err(|e| e.into_pyerr(py))
-        })?,
+            .map_err(|e| e.into_pyerr(py))?;
+            if single {
+                owned1(py, &out)
+            } else {
+                matrix(py, n, k, out)?
+            }
+        }
         Scheme::Affine32 => {
             #[allow(clippy::cast_possible_truncation)]
-            let max = max as u32;
-            new_matrix(py, dims, |out| {
-                crate::interrupt::detach_batch(py, || {
-                    text_rows(&perm, &input, threads_arg, ngram, bits, max, out)
-                })
-                .map_err(|e| e.into_pyerr(py))
-            })?
+            let mut out = vec![max as u32; n * k];
+            crate::interrupt::detach_batch(py, || {
+                text_rows(&perm, &input, threads_arg, ngram, bits, &mut out)
+            })
+            .map_err(|e| e.into_pyerr(py))?;
+            if single {
+                owned1(py, &out)
+            } else {
+                matrix(py, n, k, out)?
+            }
         }
     };
     Ok(arr)

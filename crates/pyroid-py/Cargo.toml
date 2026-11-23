@@ -30,9 +30,5 @@ simdutf8.workspace = true
 # numpy arrays for pyroid.fasttext (works under abi3-py311 and abi3t).
 numpy = "0.30.0"
 
-[build-dependencies]
-# build.rs: PyO3's cfgs (`Py_LIMITED_API`, ...) for this crate's own code.
-pyo3-build-config.workspace = true
-
 [lints]
 workspace = true

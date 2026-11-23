@@ -217,10 +217,7 @@ _CACHE: dict[Any, Any] = {}
 
 def _prepare(config: Any) -> Any:
     try:
-        values = tuple(getattr(config, f) for f in _FIELDS)
-        # The value types are part of the key: 1 == 1.0 == True, but ftfy slices with
-        # max_decode_length, which a float cannot do, and _native_config delegates it.
-        key = (type(config), values, tuple(map(type, values)))
+        key = (type(config), tuple(getattr(config, f) for f in _FIELDS))
         hash(key)
     except TypeError:
         return _native_config(config)

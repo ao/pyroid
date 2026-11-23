@@ -27,7 +27,7 @@ from types import FrameType
 
 from pyroid._pyroid import VersionMismatchWarning
 
-__all__ = ["at_startup", "check", "distribution", "follow_installed", "quiet"]
+__all__ = ["check", "distribution", "follow_installed", "quiet"]
 
 _LOCK = threading.Lock()
 # The libraries (top-level module names) already checked in this process.
@@ -39,10 +39,6 @@ _FOLLOWED: contextvars.ContextVar[frozenset[str]] = contextvars.ContextVar(
 # Checks record the library without warning, in this context (quiet).
 _QUIET: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "pyroid._versions.quiet", default=False
-)
-# Checks run before the user's program (pyroid run, the start-up hook), in this context.
-_STARTUP: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    "pyroid._versions.startup", default=False
 )
 _MISSING = object()
 
@@ -113,12 +109,9 @@ def check(
     else:
         todo = f"Pass {advice} to reproduce it"
     name, _, wanted = release.partition("==")
-    # Before the program runs, its warnings filters are not set yet; -W and PYTHONWARNINGS are
-    # (they can match the message, not pyroid's class: Python reads them before site-packages).
-    silence = f"PYTHONWARNINGS='ignore:{module} reproduces'" if _STARTUP.get() else _SILENCE
     _warn(
         f"{module} reproduces {name} {wanted}, but {dist} {version} is installed: results can "
-        f"differ from it. {todo} (or silence this with {silence})."
+        f"differ from it. {todo} (or silence this with {_SILENCE})."
     )
 
 
@@ -307,17 +300,3 @@ def quiet() -> Iterator[None]:
         yield
     finally:
         _QUIET.reset(token)
-
-
-@contextlib.contextmanager
-def at_startup() -> Iterator[None]:
-    """In this block, checks run before the user's program (``pyroid run``, the start-up hook).
-
-    Their advice then names ``PYTHONWARNINGS``, which applies from the start, instead of
-    ``warnings.simplefilter``, which the program would call too late.
-    """
-    token = _STARTUP.set(True)
-    try:
-        yield
-    finally:
-        _STARTUP.reset(token)

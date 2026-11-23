@@ -396,10 +396,7 @@ def test_patch_without_nltk(punkt_tab: Any) -> None:
     assert out["punkt"] == ["A b.", "C d."]
     assert out["detok"] == "I can't."
     assert len(out["warnings"]) == 1
-    assert out["warnings"][0].startswith(
-        "pyroid.integrations.patch: nltk is not installed, so `import nltk` now gives pyroid.nltk "
-        "alone"
-    )
+    assert "unavailable" in out["warnings"][0]
     assert "has no attribute 'download'" in out["download"]
     assert out["trainer"] == "PyroidError", out["trainer"]
     assert out["changed"] == "PyroidError", out["changed"]
