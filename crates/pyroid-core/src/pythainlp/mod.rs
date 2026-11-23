@@ -195,14 +195,9 @@ thread_local! {
 fn with_scratch<R>(f: impl FnOnce(&mut Scratch) -> R) -> R {
     let mut f = Some(f);
     let r = SCRATCH.with(|s| {
-        s.try_borrow_mut().ok().map(|mut s| {
-            let r = (f.take().expect("called once"))(&mut s);
-            // The buffers scale with the text's characters.
-            if crate::scratch::too_big(&s.offs) {
-                *s = Scratch::default();
-            }
-            r
-        })
+        s.try_borrow_mut()
+            .ok()
+            .map(|mut s| (f.take().expect("called once"))(&mut s))
     });
     match r {
         Some(r) => r,

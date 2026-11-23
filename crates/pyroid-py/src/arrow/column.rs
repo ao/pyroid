@@ -139,7 +139,7 @@ pub struct Column {
 pub fn build_error(e: BuildError) -> PyErr {
     match e {
         BuildError::Overflow { .. } => PyOverflowError::new_err(e.to_string()),
-        BuildError::Pool(p) => crate::interrupt::pool_error(&p),
+        BuildError::Pool(p) => PyroidError::new_err(p.to_string()),
     }
 }
 

@@ -99,14 +99,14 @@ def _json_repair(name: str, reason: str) -> Any:
         real = real.__wrapped__
     if real is None:
         raise PyroidError(
-            f"pyroid.json_repair.{name}: pyroid's Rust port does not handle {reason}, and "
+            f"pyroid.json_repair.{name}: {reason} is not supported by pyroid's Rust port, and "
             f"json_repair is not installed to fall back to (pip install "
             f"json-repair=={JSON_REPAIR_VERSION})"
         )
     if f"{name}:{reason}" not in _WARNED:
         _WARNED.add(f"{name}:{reason}")
         warnings.warn(
-            f"pyroid.json_repair.{name}: the Rust port does not handle {reason}; "
+            f"pyroid.json_repair.{name}: {reason} is not supported by the Rust port; "
             "delegating to json_repair (slow path). This warning is shown once.",
             FallbackWarning,
             stacklevel=_caller_stacklevel(),

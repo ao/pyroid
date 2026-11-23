@@ -504,15 +504,6 @@ impl WordTokenizer for IndicNlp {
         self.sent_tokenize(text, &mut sents)?;
         simple_span_ends(text, &sents, out)
     }
-
-    /// `sent_tokenize` itself, not the texts of `span_tokenize`'s spans: the
-    /// sentences `sentence_split` joins need not occur in `text`, so
-    /// `span_tokenize` can raise where `sent_tokenize` works (datatrove's
-    /// sentence dedup calls `sent_tokenize` in stage 1, `span_tokenize` only
-    /// in stage 3 and only for documents with duplicates).
-    fn sentences<'a>(&self, text: &'a str, out: &mut Vec<Cow<'a, str>>) -> Result<(), FilterError> {
-        self.sent_tokenize(text, out)
-    }
 }
 
 #[cfg(test)]
@@ -598,26 +589,6 @@ mod tests {
         assert_eq!(out, ["keep"]);
         hi().words("x 1,2 \\ y", &mut out).unwrap();
         assert_eq!(out, ["keep", "x", "1,2", "\\", "y"]);
-    }
-
-    #[test]
-    fn sentences_are_sent_tokenize_where_span_tokenize_raises() {
-        // datatrove 0.10.1 + indic-nlp-library 0.92: sent_tokenize gives these, span_tokenize
-        // raises ValueError("substring not found").
-        for (text, want) in [
-            (".n .क", vec![". n .", "क"]),
-            (".n .क .ख .ग", vec![". n .", "क .", "ख .", "ग"]),
-            ("1 , 000 रुपये. और यह", vec!["1 , 000 रुपये.", "और यह"]),
-        ] {
-            let mut got = Vec::new();
-            hi().sentences(text, &mut got).unwrap();
-            assert_eq!(got, want, "{text:?}");
-        }
-        let mut ends = Vec::new();
-        assert_eq!(
-            hi().sentence_ends(".n .क", &mut ends),
-            Err(FilterError::SubstringNotFound)
-        );
     }
 
     #[test]

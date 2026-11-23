@@ -99,7 +99,7 @@ fn ensemble_optimal_params(
             )
         })
     })
-    .map_err(|e| crate::interrupt::pool_error(&e))
+    .map_err(|e| crate::errors::PyroidError::new_err(e.to_string()))
 }
 
 pub fn add(m: &Bound<'_, PyModule>) -> PyResult<()> {

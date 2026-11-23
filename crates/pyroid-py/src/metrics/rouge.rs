@@ -271,8 +271,8 @@ fn rouge_score_batch<'py>(
         _ => None,
     };
     let scorer = Scorer::new(types, use_stemmer);
-    let results =
-        crate::interrupt::detach_batch(py, || -> Result<Vec<Option<Vec<Score>>>, BatchError> {
+    let results = py
+        .detach(|| -> Result<Vec<Option<Vec<Score>>>, BatchError> {
             let tr = rows(&targets)?;
             let pr = rows(&predictions)?;
             Ok(par::map(n, t, |i| {
@@ -384,7 +384,8 @@ fn rouge_score_tokens<'py>(
         });
     }
     let t = crate::input::threads(threads);
-    let scores = crate::interrupt::detach_batch(py, || par::map(work.len(), t, |i| work[i].run()))
+    let scores = py
+        .detach(|| par::map(work.len(), t, |i| work[i].run()))
         .map_err(|e| BatchError::from(e).into_pyerr(py))?;
     let out = scores
         .into_iter()

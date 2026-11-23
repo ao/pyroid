@@ -175,22 +175,9 @@ def test_counters_carry_over_and_are_assignable() -> None:
     assert r(["a@b.cc"]) == ["email@example.com"]
     assert r(["a@b.cc"]) == ["firstname.lastname@example.org"]
     assert (r.email_index, r.ip_index) == (0, 0)
-    ips = r.config.ip_replacement
-    ips = (ips,) if isinstance(ips, str) else tuple(ips)
-    # datatrove's counter indexes the tuple, then wraps: a negative one counts from the end,
-    # one out of range raises IndexError at the first replacement (and is left as it was if
-    # nothing is replaced).
-    r.ip_index = -1
-    assert r("8.8.8.8") == ips[-1]
+    r.ip_index = 5
+    assert r("8.8.8.8") == "18.104.22.168"
     assert r.ip_index == 0
-    r.ip_index = len(ips) + 3
-    assert r("no address here") == "no address here"
-    assert r.ip_index == len(ips) + 3
-    with pytest.raises(IndexError, match="tuple index out of range"):
-        r("8.8.8.8")
-    r.email_index = -2
-    assert r(["a@b.cc", "c@d.ee"]) == ["email@example.com", "firstname.lastname@example.org"]
-    assert r.email_index == 0
     # A fresh function call starts at 0 again.
     want = ["email@example.com", "firstname.lastname@example.org"]
     assert pf.pii_replace(["a@b.cc", "a@b.cc"]) == want

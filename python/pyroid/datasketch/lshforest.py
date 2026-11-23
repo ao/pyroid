@@ -21,25 +21,11 @@ from collections.abc import (
 )
 from typing import Any, overload
 
-from pyroid._pyroid import PyroidError
 from pyroid._pyroid import datasketch as _native
 from pyroid.datasketch._common import _check_scheme_consistency
 
 # Pickles of the native index name it by this module.
 _ForestNative = _native._ForestNative
-
-
-class _NoValues:
-    """A stand-in MinHash with no native hash values.
-
-    The native index then asks for its band keys (restoring a datasketch pickle, where they
-    are stored).
-    """
-
-    hashvalues = None
-
-
-_NO_VALUES = _NoValues()
 
 __all__ = ["MinHashLSHForest"]
 
@@ -215,32 +201,6 @@ class MinHashLSHForest:
         ]
         # The permutation scheme of the indexed MinHash, learned on first add.
         self._minhash_scheme: str | None = None
-
-    def __setstate__(self, state: dict[str, Any]) -> None:
-        """Restore a pickle: pyroid's own, or one datasketch made (under ``pyroid.patch``).
-
-        datasketch pickles its dicts: the keys are added again in their order (which is
-        the order of every bucket), and the sorted tables of its last ``index()`` set as
-        they were.
-        """
-        if "_index" in state:
-            self.__dict__.update(state)
-            return
-        trees, k = state["l"], state["k"]
-        MinHashLSHForest.__init__(self, num_perm=k * trees, l=trees)
-        self._minhash_scheme = state.get("_minhash_scheme")
-        for key, hs in state["keys"].items():
-            self._index.add(key, _NO_VALUES, lambda _m, hs=hs: list(hs))
-        tables = state["hashtables"]
-        if [dict(t) for t in self.hashtables] != [
-            {h: list(v) for h, v in t.items() if v} for t in tables
-        ]:
-            raise PyroidError(
-                "pyroid.datasketch.MinHashLSHForest: this pickle made by datasketch has hash "
-                "tables that do not match its keys; load it without pyroid.patch('datasketch')"
-            )
-        for i, sorted_table in enumerate(state["sorted_hashtables"]):
-            self._index.set_sorted(i, list(sorted_table))
 
     def add(self, key: Hashable, minhash: Any) -> None:
         """Add ``key`` with the MinHash of its set.

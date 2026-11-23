@@ -66,14 +66,13 @@ says which:
 - `target_language` and `prune_xpath`;
 - `options=` a `trafilatura.settings.Extractor`, and `deduplicate=` a
   `trafilatura.deduplication.LRUCache`;
-- an lxml tree as input, and bytes that are compressed or not UTF-8 (an HTTP response's `data`
-  is read natively, as trafilatura's `load_html` reads it);
+- an lxml tree or an HTTP response as input, and bytes that are compressed or not UTF-8;
 - a negative size setting in `config`, and a `sys.set_int_max_str_digits()` limit other than 4300.
 
 ```python
 trafilatura.extract(html, output_format="xml")  # trafilatura's XML, and:
-# FallbackWarning: pyroid.trafilatura.extract: the Rust port does not handle output_format='xml';
-# delegating to trafilatura 2.3.1 (slow path). This warning is shown once.
+# FallbackWarning: pyroid.trafilatura.extract: output_format='xml' is not supported by the Rust
+# port; delegating to trafilatura 2.3.1 (slow path). This warning is shown once.
 ```
 
 A pyroid `LRUCache` (or the module cache, for `deduplicate=True`) is lent to a delegated call, so
@@ -97,10 +96,7 @@ cache.maxsize, len(cache.cache)  # cache.cache is a read-only copy of the entrie
 `LRUCache` has trafilatura's methods (`get`, `put`, `increment`, `clear`) and is always true. It
 is safe to share between threads: an extraction holds it for the whole page, so extractions
 through one cache run one at a time. It pickles and copies with its entries. Keys are str without
-lone surrogates, and values are ints (the counts deduplication stores): `put("a", 1.5)` raises
-`TypeError`, where trafilatura's stores anything. It is trafilatura 2.3.1's class in both modes:
-with `compat="1.11.0"`, `maxsize` must be at least 1 (trafilatura 1.11.0 accepts 0 and -1), and
-unlike 1.11.0's, it has `increment` and pickles.
+lone surrogates.
 
 ## Many pages: `extract_batch`
 

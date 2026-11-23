@@ -53,16 +53,6 @@ impl WordTokenizer for Whitespace {
     fn sentence_ends(&self, text: &str, out: &mut Vec<usize>) -> Result<(), FilterError> {
         sentence_ends(text, out)
     }
-
-    /// `sent_tokenize` itself: a single sentence's span is the whole text,
-    /// text after the last match included, which `sent_tokenize` leaves out
-    /// (`"Hello. world"` is one sentence, `"Hello."`).
-    fn sentences<'a>(&self, text: &'a str, out: &mut Vec<Cow<'a, str>>) -> Result<(), FilterError> {
-        let mut sents = Vec::new();
-        sent_tokenize(text, &mut sents);
-        out.extend(sents.into_iter().map(Cow::Borrowed));
-        Ok(())
-    }
 }
 
 /// The datatrove language codes whose tokenizer is `WhitespaceTokenizer()`,

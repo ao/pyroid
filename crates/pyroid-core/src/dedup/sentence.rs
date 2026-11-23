@@ -853,35 +853,6 @@ mod tests {
     }
 
     #[test]
-    fn stage_one_uses_sent_tokenize_not_its_spans() {
-        // datatrove 0.10.1's SentenceDedupSignature calls sent_tokenize; span_tokenize (stage
-        // 3) raises for the Hindi texts and covers the whole text for one whitespace sentence.
-        let config = SentDedupConfig {
-            n_sentences: 1,
-            ..SentDedupConfig::default()
-        };
-        for (lang, text, want) in [
-            ("hin_Deva", ".n .क", vec![". n .", "क"]),
-            ("hin_Deva", ".n .क .ख .ग", vec![". n .", "क .", "ख .", "ग"]),
-            ("ace_Arab", "Hello. world", vec!["Hello."]),
-            ("ace_Arab", "A. B. c", vec!["A. B."]),
-            ("ace_Arab", "One sentence only", vec![]),
-            ("ace_Arab", "Hi! There? Yes.", vec!["Hi!", "There?", "Yes."]),
-        ] {
-            let d = SentenceDeduper::new(config, UnicodeVersion::LATEST, lang).unwrap();
-            let mut s = Vec::new();
-            d.sentences(text, &mut s).unwrap();
-            assert_eq!(s, want, "{lang} {text:?}");
-            let mut h = Vec::new();
-            d.hashes(text, &mut h).unwrap();
-            assert_eq!(h.len(), want.len(), "{lang} {text:?}");
-            // No duplicates: stage 3 keeps the document without tokenizing it.
-            let f = d.filter(text, &[]).unwrap();
-            assert!(f.keep && f.formatted.is_none());
-        }
-    }
-
-    #[test]
     fn window_hashes_skip_blank_windows_but_count_them() {
         let d = lines(2);
         let mut h = Vec::new();

@@ -348,7 +348,7 @@ def languages() -> dict[str, Language]:
     Example::
 
         >>> pyroid.filters.languages()["cmn_Hani"]
-        Language(tokenizer='SpaCyTokenizer', arg='zh', native=True)
+        Language(tokenizer='SpaCyTokenizer', arg='zh', native=False)
 
     Returns:
         ``{code: Language(tokenizer, arg, native)}``, sorted by code.
@@ -1473,7 +1473,7 @@ class BadWordsFilter:
         else:
             default = self.config.default_language
             lang = -1
-            ids = [self._list(default if x is None else x) for x in _language_list(languages)]
+            ids = [self._list(default if x is None else x) for x in languages]
         out, state = _native._badwords_run(
             texts,
             self._native,
@@ -1494,9 +1494,8 @@ class BadWordsFilter:
         Args:
             texts: A str, a list or tuple of str, or an Arrow string array/column.
             languages: Each document's language (datatrove's ``doc.metadata["language"]``):
-                one str for all, or one entry per document in a list, tuple or Arrow
-                string column (``None`` or null: the default). Default:
-                ``default_language``.
+                one str for all, or one entry per document (``None``: the default).
+                Default: ``default_language``.
             threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
                 ``n`` tasks at once; ``1`` runs on the calling thread.
 
@@ -1589,7 +1588,6 @@ import re as _re  # noqa: E402
 import sys as _sys  # noqa: E402
 
 from pyroid._pyroid import FallbackWarning as _FallbackWarning  # noqa: E402
-from pyroid._pyroid import InputError as _InputError  # noqa: E402
 from pyroid._pyroid import PyroidError as _PyroidError  # noqa: E402
 
 __all__ += [
@@ -1619,7 +1617,7 @@ def _url_fallback(reason: str) -> None:
     if reason not in _url_fallbacks:
         _url_fallbacks.add(reason)
         warnings.warn(
-            f"pyroid.filters.URLFilter: pyroid does not handle {reason}; running "
+            f"pyroid.filters.URLFilter: {reason} is not supported by pyroid; running "
             "tldextract's own code for them (slow path). This warning is shown once.",
             _FallbackWarning,
             stacklevel=_caller_stacklevel(),
@@ -1651,44 +1649,6 @@ def _read_text(path: str) -> str:
     """The text ``open(path)`` iterates over (newlines translated)."""
     with open(path, encoding=_text_encoding()) as f:
         return f.read()
-
-
-def _surrogate_urls(urls: Any) -> list[Any] | None:
-    """``urls`` as a list if it is a str, list or tuple with a str holding a lone surrogate.
-
-    Those URLs go to tldextract's own code (``URLFilter._mixed``); else the error stands.
-    """
-    items = [urls] if isinstance(urls, str) else urls if isinstance(urls, (list, tuple)) else None
-    if items is None or not any(isinstance(u, str) and not _encodable(u) for u in items):
-        return None
-    return list(items)
-
-
-#: Stands in for a lone-surrogate URL in the native call (its result is replaced).
-_PLACEHOLDER_URL = "http://a/"
-
-
-def _like(urls: Any, out: list[Any]) -> Any:
-    """``out`` in the kind of ``urls`` (str, list or tuple)."""
-    if isinstance(urls, str):
-        return out[0]
-    return tuple(out) if isinstance(urls, tuple) else out
-
-
-def _language_list(languages: Any) -> list[str | None]:
-    """Per-document languages as a list: from a list, tuple or Arrow column (``to_pylist``)."""
-    if isinstance(languages, (list, tuple)):
-        out = list(languages)
-    elif callable(getattr(languages, "to_pylist", None)):  # pyarrow, pyroid.Column
-        out = languages.to_pylist()
-    elif callable(getattr(languages, "to_list", None)):  # polars
-        out = languages.to_list()
-    else:
-        out = list(languages)
-    for i, x in enumerate(out):
-        if x is not None and not isinstance(x, str):
-            raise _InputError(f"languages[{i}]: expected str or None, got {type(x).__name__}")
-    return out
 
 
 def _encodable(s: str) -> bool:
@@ -1944,10 +1904,8 @@ class URLFilter:
     ``ValueError`` for an empty URL (datatrove's ``assert url``),
     ``AttributeError`` as datatrove when the banned subwords are only ``""``
     (pyahocorasick's automaton then has no words) and a URL reaches that check,
-    ``pyroid.InputError`` for other input kinds and ``UnicodeDecodeError`` for
-    invalid UTF-8 in Arrow input. A URL with a lone surrogate goes through
-    tldextract's own code (one ``pyroid.FallbackWarning``), so it gets datatrove's
-    result; the other URLs of the call stay native.
+    ``pyroid.InputError`` for other input kinds, ``UnicodeEncodeError`` for a lone
+    surrogate and ``UnicodeDecodeError`` for invalid UTF-8 in Arrow input.
     """
 
     config: URLFilterConfig | None
@@ -2048,16 +2006,7 @@ class URLFilter:
             bool, ``list[bool]``, ``tuple[bool, ...]``, or a :class:`pyroid.Column`
             of bools (nulls stay null), matching ``urls``.
         """
-        try:
-            return self._native.keep(urls, threads=threads)
-        except UnicodeEncodeError:
-            items = _surrogate_urls(urls)
-            if items is None:
-                raise
-        out = self._mixed(
-            items, threads, self._native.keep, lambda u: self._python_reason(u) is None
-        )
-        return _like(urls, out)
+        return self._native.keep(urls, threads=threads)
 
     def reasons(self, urls: Any, /, *, threads: Any = None) -> Any:
         """The drop reason (datatrove's) per URL, ``None`` when kept.
@@ -2066,13 +2015,7 @@ class URLFilter:
         ``soft_blacklisted``, ``blacklisted_subword``. Arrow input gives a
         ``string`` :class:`pyroid.Column` (null when kept or null).
         """
-        try:
-            return self._native.reasons(urls, threads=threads)
-        except UnicodeEncodeError:
-            items = _surrogate_urls(urls)
-            if items is None:
-                raise
-        return _like(urls, self._mixed(items, threads, self._native.reasons, self._python_reason))
+        return self._native.reasons(urls, threads=threads)
 
     def domains(self, urls: Any, /, *, threads: Any = None) -> tuple[Any, Any]:
         """The ``(top_domain_under_public_suffix, fqdn)`` tldextract gives each URL.
@@ -2085,41 +2028,8 @@ class URLFilter:
             A pair, each in the kind of ``urls`` (Arrow: ``large_string`` columns
             for ``large_string`` input, else ``string``; nulls stay null).
         """
-        try:
-            rd, fqdn = self._native.domains(urls, threads=threads)
-        except UnicodeEncodeError:
-            items = _surrogate_urls(urls)
-            if items is None:
-                raise
-        else:
-            return rd, fqdn
-
-        def native(xs: list[str], threads: Any) -> list[tuple[str, str]]:
-            return list(zip(*self._native.domains(xs, threads=threads), strict=True))
-
-        pairs = self._mixed(items, threads, native, _resolver(self._tld))
-        return _like(urls, [p[0] for p in pairs]), _like(urls, [p[1] for p in pairs])
-
-    def _mixed(
-        self,
-        items: list[Any],
-        threads: Any,
-        native: Callable[..., list[Any]],
-        python: Callable[[str], Any],
-    ) -> list[Any]:
-        """``python`` on the lone-surrogate URLs; ``native`` on the others, in one call.
-
-        The native call gets a placeholder where a lone-surrogate URL is, so its errors
-        for the other items (a non-str, an empty URL) name their own index.
-        """
-        odd = [isinstance(u, str) and not _encodable(u) for u in items]
-        stand_ins = [_PLACEHOLDER_URL if o else u for u, o in zip(items, odd, strict=True)]
-        out = list(native(stand_ins, threads=threads))
-        _url_fallback("URLs with lone surrogates")
-        for i, u in enumerate(items):
-            if odd[i]:
-                out[i] = python(u)
-        return out
+        rd, fqdn = self._native.domains(urls, threads=threads)
+        return rd, fqdn
 
     @property
     def tld_extractor(self) -> Any:

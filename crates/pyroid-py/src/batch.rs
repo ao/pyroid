@@ -1,7 +1,6 @@
 //! The batch helpers every text function goes through.
 //!
-//! Pattern: extract while attached → `detach_batch(py, ..)` (detached, and
-//! stopped by Ctrl-C: see `crate::interrupt`) around the
+//! Pattern: extract while attached → `py.detach(..)` around the
 //! rayon work → re-attach and build the output once, with exact-size
 //! iterators. Kernels are pure Rust closures; they never call Python.
 //!
@@ -24,9 +23,8 @@ use pyroid_core::columnar::{BoolBuffers, BuildError, StringBuffers};
 use pyroid_core::par::{self, PoolError};
 
 use crate::arrow::{Chunk, Column, ColumnType, StrChunk, StrType, build_error};
-use crate::errors::with_note;
+use crate::errors::{PyroidError, with_note};
 use crate::input::{TextInput, Threads, threads};
-use crate::interrupt::detach_batch;
 
 /// A single `str` shorter than this is processed without detaching: the
 /// detach/re-attach round trip would cost more than it frees.
@@ -100,7 +98,7 @@ impl BatchError {
                     ),
                 )
             }
-            Self::Pool(e) => crate::interrupt::pool_error(&e),
+            Self::Pool(e) => PyroidError::new_err(e.to_string()),
             Self::Build(e) => build_error(e),
         }
     }
@@ -167,7 +165,8 @@ where
             Ok(result_str(py, s, &out).into_any())
         }
         TextInput::List(docs) | TextInput::Tuple(docs) => {
-            let outs = detach_batch(py, || par::map(docs.len(), threads, |i| f(&docs[i])))
+            let outs = py
+                .detach(|| par::map(docs.len(), threads, |i| f(&docs[i])))
                 .map_err(|e| BatchError::from(e).into_pyerr(py))?;
             let items = docs.iter().zip(&outs).map(|(d, o)| result_str(py, d, o));
             Ok(match input {
@@ -177,28 +176,29 @@ where
         }
         TextInput::Arrow(strings) => {
             let large = strings.field.ty == StrType::LargeUtf8;
-            let chunks = detach_batch(py, || {
-                strings
-                    .chunks
-                    .iter()
-                    .enumerate()
-                    .map(|(c, chunk)| {
-                        let outs = map_chunk(chunk, c, threads, &f)?;
-                        // A `string` chunk holds at most 2 GiB: split the
-                        // output rather than fail (or change type).
-                        Ok(if large {
-                            vec![Chunk::LargeUtf8(StringBuffers::build(&outs, threads)?)]
-                        } else {
-                            StringBuffers::build_split(&outs, threads)?
-                                .into_iter()
-                                .map(Chunk::Utf8)
-                                .collect()
+            let chunks = py
+                .detach(|| {
+                    strings
+                        .chunks
+                        .iter()
+                        .enumerate()
+                        .map(|(c, chunk)| {
+                            let outs = map_chunk(chunk, c, threads, &f)?;
+                            // A `string` chunk holds at most 2 GiB: split the
+                            // output rather than fail (or change type).
+                            Ok(if large {
+                                vec![Chunk::LargeUtf8(StringBuffers::build(&outs, threads)?)]
+                            } else {
+                                StringBuffers::build_split(&outs, threads)?
+                                    .into_iter()
+                                    .map(Chunk::Utf8)
+                                    .collect()
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<Vec<_>>, BatchError>>()
-                    .map(|v| v.into_iter().flatten().collect::<Vec<_>>())
-            })
-            .map_err(|e| e.into_pyerr(py))?;
+                        .collect::<Result<Vec<Vec<_>>, BatchError>>()
+                        .map(|v| v.into_iter().flatten().collect::<Vec<_>>())
+                })
+                .map_err(|e| e.into_pyerr(py))?;
             let ty = if large {
                 ColumnType::LargeUtf8
             } else {
@@ -242,7 +242,8 @@ where
             Ok(result_str(py, s, &out).into_any())
         }
         TextInput::List(docs) | TextInput::Tuple(docs) => {
-            let outs = detach_batch(py, || par::map(docs.len(), threads, |i| f(&docs[i])))
+            let outs = py
+                .detach(|| par::map(docs.len(), threads, |i| f(&docs[i])))
                 .map_err(|e| BatchError::from(e).into_pyerr(py))?;
             let mut items = Vec::with_capacity(outs.len());
             for (i, (d, o)) in docs.iter().zip(outs).enumerate() {
@@ -263,11 +264,8 @@ where
             let mut base = 0;
             // Chunk by chunk: the kernel detached, the failures attached, the buffers detached.
             for (c, chunk) in strings.chunks.iter().enumerate() {
-                // Attached between chunks: a Ctrl-C raises here, however short they are.
-                py.check_signals()?;
-                // Attached between chunks: a Ctrl-C raises here, however short they are.
-                py.check_signals()?;
-                let outs = detach_batch(py, || map_chunk(chunk, c, threads, &f))
+                let outs = py
+                    .detach(|| map_chunk(chunk, c, threads, &f))
                     .map_err(|e| e.into_pyerr(py))?;
                 let mut vals = Vec::with_capacity(outs.len());
                 for (row, out) in outs.into_iter().enumerate() {
@@ -282,17 +280,18 @@ where
                     });
                 }
                 base += chunk.len();
-                let built = detach_batch(py, || -> Result<Vec<Chunk>, BatchError> {
-                    Ok(if large {
-                        vec![Chunk::LargeUtf8(StringBuffers::build(&vals, threads)?)]
-                    } else {
-                        StringBuffers::build_split(&vals, threads)?
-                            .into_iter()
-                            .map(Chunk::Utf8)
-                            .collect()
+                let built = py
+                    .detach(|| -> Result<Vec<Chunk>, BatchError> {
+                        Ok(if large {
+                            vec![Chunk::LargeUtf8(StringBuffers::build(&vals, threads)?)]
+                        } else {
+                            StringBuffers::build_split(&vals, threads)?
+                                .into_iter()
+                                .map(Chunk::Utf8)
+                                .collect()
+                        })
                     })
-                })
-                .map_err(|e| e.into_pyerr(py))?;
+                    .map_err(|e| e.into_pyerr(py))?;
                 chunks.extend(built);
             }
             let ty = if large {
@@ -326,7 +325,8 @@ where
             Ok(PyBool::new(py, keep).to_owned().into_any())
         }
         TextInput::List(docs) | TextInput::Tuple(docs) => {
-            let mask = detach_batch(py, || par::map(docs.len(), threads, |i| f(&docs[i])))
+            let mask = py
+                .detach(|| par::map(docs.len(), threads, |i| f(&docs[i])))
                 .map_err(|e| BatchError::from(e).into_pyerr(py))?;
             Ok(match input {
                 TextInput::List(_) => PyList::new(py, mask)?.into_any(),
@@ -334,18 +334,19 @@ where
             })
         }
         TextInput::Arrow(strings) => {
-            let chunks = detach_batch(py, || {
-                strings
-                    .chunks
-                    .iter()
-                    .enumerate()
-                    .map(|(c, chunk)| {
-                        let mask = map_chunk(chunk, c, threads, &|s: &str| f(s))?;
-                        Ok(Chunk::Bool(BoolBuffers::build(&mask)))
-                    })
-                    .collect::<Result<Vec<_>, BatchError>>()
-            })
-            .map_err(|e| e.into_pyerr(py))?;
+            let chunks = py
+                .detach(|| {
+                    strings
+                        .chunks
+                        .iter()
+                        .enumerate()
+                        .map(|(c, chunk)| {
+                            let mask = map_chunk(chunk, c, threads, &|s: &str| f(s))?;
+                            Ok(Chunk::Bool(BoolBuffers::build(&mask)))
+                        })
+                        .collect::<Result<Vec<_>, BatchError>>()
+                })
+                .map_err(|e| e.into_pyerr(py))?;
             Ok(Bound::new(
                 py,
                 Column::new(ColumnType::Bool, &strings.field.name, chunks),
@@ -491,11 +492,10 @@ where
         } else {
             f(s)
         })]),
-        TextInput::List(docs) | TextInput::Tuple(docs) => {
-            detach_batch(py, || par::map(docs.len(), threads, |i| Some(f(&docs[i]))))
-                .map_err(BatchError::from)
-        }
-        TextInput::Arrow(strings) => detach_batch(py, || {
+        TextInput::List(docs) | TextInput::Tuple(docs) => py
+            .detach(|| par::map(docs.len(), threads, |i| Some(f(&docs[i]))))
+            .map_err(BatchError::from),
+        TextInput::Arrow(strings) => py.detach(|| {
             let mut out = Vec::with_capacity(strings.len());
             for (c, chunk) in strings.chunks.iter().enumerate() {
                 out.extend(map_chunk(chunk, c, threads, &|s: &str| f(s))?);

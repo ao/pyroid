@@ -139,8 +139,8 @@ These are handed to the real json_repair, which must then be installed. The firs
 
 ```python
 json_repair.repair_json(b"{'a': 1")  # json_repair's result, and:
-# FallbackWarning: pyroid.json_repair.repair_json: the Rust port does not handle a bytes input;
-# delegating to json_repair (slow path). This warning is shown once.
+# FallbackWarning: pyroid.json_repair.repair_json: a bytes input is not supported by the Rust
+# port; delegating to json_repair (slow path). This warning is shown once.
 ```
 
 json_repair's command line (`python -m json_repair`) and its internal modules are not provided.

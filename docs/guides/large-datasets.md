@@ -31,7 +31,9 @@ IN can be any mix of:
 Files are listed, then sorted by name within each IN, and each file's position in that list is its
 *rank*. Files are streamed in Arrow batches of `--batch-size` rows (10,000 by default), one Parquet
 row group at a time, and the next batch is read while the current one is processed: memory holds
-about one row group and two batches per process.
+about one row group and two batches per process. Rows that wait in a work directory (the MinHash
+survivors of `clean`, the parts of a merged Parquet OUT) are compressed on another thread, one
+batch behind, which holds one batch more.
 
 OUT, and the folders of the [MinHash stages](#minhash-dedup-across-shards), are local paths (or a
 shared filesystem such as NFS, EFS or Lustre). Outputs are not written to object stores directly.
@@ -61,12 +63,6 @@ $ pyroid clean data/ out/ --recipe fineweb --workers 8
 ^C
 $ pyroid clean data/ out/ --recipe fineweb --workers 8   # redoes only the unfinished files
 ```
-
-Ctrl-C (SIGINT) and SIGTERM, what `kill`, `timeout`, systemd, Kubernetes and SLURM send, stop the
-run within a second or two: the main process stops its workers, each worker drops the file it was
-on (its temporary outputs are removed), and the command prints `pyroid clean: interrupted` (or
-`terminated`) and exits with status 130 (or 143). A worker whose main process was killed with
-SIGKILL stops by itself.
 
 Each record holds a fingerprint of the command, its options, the input list (names relative to
 IN, and sizes) and the pyroid version, plus the files the unit wrote, as paths relative to OUT. A

@@ -263,7 +263,7 @@ class _PyroidLID:
                     subfolder=self.MODEL_SUBFOLDER,  # type: ignore[attr-defined]
                     desc="fast-text language identifier model",
                 )
-            self._model = _Primed(pyroid.fasttext._load_upstream(path))
+            self._model = _Primed(pyroid.fasttext.load_model(path))
         return self._model
 
 

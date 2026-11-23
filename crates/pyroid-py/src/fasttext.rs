@@ -32,6 +32,7 @@ use crate::input::{TextInput, Threads, arg_note};
 type LineTokens = (Vec<String>, Vec<String>);
 
 static MODEL_ERROR: PyOnceLock<Py<PyType>> = PyOnceLock::new();
+static NUMPY: PyOnceLock<()> = PyOnceLock::new();
 
 /// `pyroid.fasttext.ModelError(PyroidError, ValueError)`: a ValueError, like
 /// fastText's own load errors.
@@ -54,13 +55,20 @@ fn model_error_type(py: Python<'_>) -> PyResult<&Bound<'_, PyType>> {
         .map(|t| t.bind(py))
 }
 
-/// numpy for the arrays: a clear ImportError without it, and no panic from
-/// rust-numpy's first lookup (see `crate::np`).
+/// rust-numpy needs numpy at the first array; fail with a clear ImportError
+/// instead of its panic.
 fn require_numpy(py: Python<'_>) -> PyResult<()> {
-    crate::np::ready(
-        py,
-        "pyroid.fasttext needs numpy: pip install 'pyroid[fasttext]' (or numpy)",
-    )
+    NUMPY
+        .get_or_try_init(py, || {
+            py.import("numpy").map(|_| ()).map_err(|e| {
+                let err = pyo3::exceptions::PyImportError::new_err(
+                    "pyroid.fasttext needs numpy: pip install 'pyroid[fasttext]' (or numpy)",
+                );
+                err.set_cause(py, Some(e));
+                err
+            })
+        })
+        .copied()
 }
 
 fn load_error(py: Python<'_>, path: &std::path::Path, err: LoadError) -> PyErr {
@@ -719,21 +727,13 @@ fn tokenize(text: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
     Ok(ft::tokenize(&text).into_iter().map(str::to_owned).collect())
 }
 
-/// Load a fastText model (``.bin``, or quantized ``.ftz``). ``_upstream``:
-/// compute as upstream fastText 0.9.2's wheels do (``pyroid.fasttext``
-/// passes it when one of them is the installed ``fasttext``).
+/// Load a fastText model (``.bin``, or quantized ``.ftz``).
 #[pyfunction]
-#[pyo3(signature = (path, *, _upstream = false))]
-#[allow(clippy::used_underscore_binding)] // the keyword's name: private to pyroid.fasttext
-fn load_model(py: Python<'_>, path: PathBuf, _upstream: bool) -> PyResult<Model> {
+fn load_model(py: Python<'_>, path: PathBuf) -> PyResult<Model> {
     let inner = py
         .detach(|| ft::Model::load(&path))
         .map_err(|e| load_error(py, &path, e))?;
-    Ok(Model::new(
-        py,
-        inner.with_upstream_arithmetic(_upstream),
-        path,
-    ))
+    Ok(Model::new(py, inner, path))
 }
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {

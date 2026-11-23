@@ -26,7 +26,7 @@ use crate::arrow::{Chunk, Column, ColumnType};
 use crate::batch::{
     BatchError, DocCost, doc_count, fill_rows, map_values, map_values_cost, transform,
 };
-use crate::errors::{input_error, type_name, with_note};
+use crate::errors::{PyroidError, input_error, type_name, with_note};
 use crate::input::{TextInput, Threads, ThreadsArg, texts_and_threads, threads};
 
 fn unicode_version(v: &str) -> PyResult<UnicodeVersion> {
@@ -235,7 +235,7 @@ impl AddError {
                 format!("pyroid: while tokenizing document {i}"),
             ),
             Self::Capacity(e) => PyValueError::new_err(e.to_string()),
-            Self::Pool(e) => crate::interrupt::pool_error(&e),
+            Self::Pool(e) => PyroidError::new_err(e.to_string()),
         }
     }
 }
@@ -306,10 +306,8 @@ fn token_signatures(
     threads_arg: Option<Threads>,
 ) -> PyResult<Vec<Signature>> {
     let t = threads(threads_arg);
-    crate::interrupt::detach_batch(py, || {
-        par::map(docs.len(), t, |i| token_signature(hasher, &docs[i]))
-    })
-    .map_err(|e| BatchError::from(e).into_pyerr(py))
+    py.detach(|| par::map(docs.len(), t, |i| token_signature(hasher, &docs[i])))
+        .map_err(|e| BatchError::from(e).into_pyerr(py))
 }
 
 fn signatures_to_py<'py>(py: Python<'py>, sigs: &[Signature]) -> PyResult<Bound<'py, PyList>> {
@@ -470,8 +468,8 @@ impl MinHashState {
 
     fn clusters(&self, py: Python<'_>) -> PyResult<Arc<Clusters>> {
         let t = threads(self.threads);
-        crate::interrupt::detach_batch(py, || lock(&self.inner).clusters(t))
-            .map_err(|e| crate::interrupt::pool_error(&e))
+        py.detach(|| lock(&self.inner).clusters(t))
+            .map_err(|e| PyroidError::new_err(e.to_string()))
     }
 }
 
@@ -503,7 +501,7 @@ impl MinHashState {
         // The lock is held (detached) while the signatures are computed, so
         // they can be written into the store in place.
         let t = threads.or(self.threads);
-        crate::interrupt::detach_batch(py, || {
+        py.detach(|| {
             let mut inner = lock(&self.inner);
             let start = inner.store.len();
             append_text_signatures(&mut inner.store, self.hasher(), &texts, t)?;
@@ -542,7 +540,7 @@ impl MinHashState {
         let sigs = token_signatures(py, self.hasher(), &docs, t)?;
         drop(docs);
         let tt = self::threads(t);
-        let keep = crate::interrupt::detach_batch(py, || {
+        let keep = py.detach(|| {
             // A new store, filled outside the lock; the old index stays as
             // it was if this fails.
             let mut fresh = MinHashInner {
@@ -555,7 +553,7 @@ impl MinHashState {
             inner.clusters = None;
             inner
                 .clusters(tt)
-                .map_err(|e| crate::interrupt::pool_error(&e))
+                .map_err(|e| PyroidError::new_err(e.to_string()))
         })?;
         PyList::new(py, (0..keep.len()).map(|i| keep.is_kept(i)))
     }
@@ -573,17 +571,18 @@ impl MinHashState {
         let t = threads.or(self.threads);
         let nulls = null_rows(&texts);
         let tt = self::threads(t);
-        let keep = crate::interrupt::detach_batch(py, || {
-            // A new store, filled in place outside the lock; the old index
-            // stays as it was if this fails.
-            let mut fresh = SignatureStore::new(self.hasher().config());
-            append_text_signatures(&mut fresh, self.hasher(), &texts, t)?;
-            let mut inner = lock(&self.inner);
-            inner.store = fresh;
-            inner.clusters = None;
-            inner.clusters(tt).map_err(AddError::Pool)
-        })
-        .map_err(|e| e.into_pyerr(py))?;
+        let keep = py
+            .detach(|| {
+                // A new store, filled in place outside the lock; the old index
+                // stays as it was if this fails.
+                let mut fresh = SignatureStore::new(self.hasher().config());
+                append_text_signatures(&mut fresh, self.hasher(), &texts, t)?;
+                let mut inner = lock(&self.inner);
+                inner.store = fresh;
+                inner.clusters = None;
+                inner.clusters(tt).map_err(AddError::Pool)
+            })
+            .map_err(|e| e.into_pyerr(py))?;
         let values: Vec<Option<bool>> = (0..keep.len())
             .map(|i| (!nulls[i]).then(|| keep.is_kept(i)))
             .collect();
@@ -1003,7 +1002,7 @@ mod sentence {
             let (texts, threads) = texts_and_threads(texts, threads, self.threads)?;
             let t = self::threads(threads.or(self.threads));
             let kernel = &self.config.get().kernel;
-            crate::interrupt::detach_batch(py, || {
+            py.detach(|| {
                 let hashes = map_indexed(&texts, t, |_, s| {
                     let mut v = Vec::new();
                     kernel.hashes(s, &mut v).map(|()| v)
@@ -1033,21 +1032,22 @@ mod sentence {
             let t = self::threads(threads.or(self.threads));
             let config = self.config.get();
             let kernel = &config.kernel;
-            let dups = crate::interrupt::detach_batch(py, || {
-                let hashes = map_indexed(&texts, t, |_, s| {
-                    let mut v = Vec::new();
-                    kernel.hashes(s, &mut v).map(|()| v)
-                })?;
-                let mut sigs = to_records(&hashes, 0)?;
-                let dups = Arc::new(Duplicates::within(&mut sigs));
-                *lock(&self.inner) = StateInner {
-                    sigs,
-                    docs: hashes.len(),
-                    dups: Some(Arc::clone(&dups)),
-                };
-                Ok(dups)
-            })
-            .map_err(|e: RunError| e.into_pyerr(py))?;
+            let dups = py
+                .detach(|| {
+                    let hashes = map_indexed(&texts, t, |_, s| {
+                        let mut v = Vec::new();
+                        kernel.hashes(s, &mut v).map(|()| v)
+                    })?;
+                    let mut sigs = to_records(&hashes, 0)?;
+                    let dups = Arc::new(Duplicates::within(&mut sigs));
+                    *lock(&self.inner) = StateInner {
+                        sigs,
+                        docs: hashes.len(),
+                        dups: Some(Arc::clone(&dups)),
+                    };
+                    Ok(dups)
+                })
+                .map_err(|e: RunError| e.into_pyerr(py))?;
             let out = run_filter(py, &texts, config, &dups, 0, None, false, t)?;
             PyTuple::new(py, [out.get_item(0)?, out.get_item(1)?])
         }
@@ -1338,13 +1338,14 @@ mod sentence {
             }
         }
         let kernel = &config.kernel;
-        let res = crate::interrupt::detach_batch(py, || {
-            map_indexed(texts, t, |i, s| {
-                let doc = ids.map_or(start + i, |ids| ids[i]);
-                kernel.filter(s, dups.of_doc(doc))
+        let res = py
+            .detach(|| {
+                map_indexed(texts, t, |i, s| {
+                    let doc = ids.map_or(start + i, |ids| ids[i]);
+                    kernel.filter(s, dups.of_doc(doc))
+                })
             })
-        })
-        .map_err(|e| e.into_pyerr(py))?;
+            .map_err(|e| e.into_pyerr(py))?;
         let text = texts_like(py, texts, &res, t)?;
         let keep: Vec<Option<bool>> = res.iter().map(|r| r.as_ref().map(|f| f.keep)).collect();
         let keep = mask_like(py, texts, &keep)?;
@@ -1386,12 +1387,13 @@ mod sentence {
             .ok_or_else(|| PyValueError::new_err("precision must be 32 or 64"))?;
         let (sigs, index) = (source_specs(sigs)?, source_specs(index)?);
         let n = sigs.len();
-        let out = crate::interrupt::detach_batch(py, || {
-            let sigs = open_all(sigs, 0)?;
-            let index = open_all(index, n)?;
-            core::find_duplicates(sigs, index, p, only_dedup_in_index)
-        })
-        .map_err(|e| file_err(py, e))?;
+        let out = py
+            .detach(|| {
+                let sigs = open_all(sigs, 0)?;
+                let index = open_all(index, n)?;
+                core::find_duplicates(sigs, index, p, only_dedup_in_index)
+            })
+            .map_err(|e| file_err(py, e))?;
         PyList::new(py, out.iter().map(|b| PyBytes::new(py, b)))
     }
 
@@ -1407,7 +1409,8 @@ mod sentence {
         let p = Precision::from_bits(precision)
             .ok_or_else(|| PyValueError::new_err("precision must be 32 or 64"))?;
         let sigs = source_specs(sigs)?;
-        let out = crate::interrupt::detach_batch(py, || core::build_index(open_all(sigs, 0)?, p))
+        let out = py
+            .detach(|| core::build_index(open_all(sigs, 0)?, p))
             .map_err(|e| file_err(py, e))?;
         Ok(PyBytes::new(py, &out))
     }
@@ -1425,13 +1428,14 @@ mod sentence {
         let (texts, threads) = texts_and_threads(texts, threads, None)?;
         let t = self::threads(threads);
         let kernel = &config.kernel;
-        let hashes = crate::interrupt::detach_batch(py, || {
-            map_indexed(&texts, t, |_, s| {
-                let mut v = Vec::new();
-                kernel.hashes(s, &mut v).map(|()| v)
+        let hashes = py
+            .detach(|| {
+                map_indexed(&texts, t, |_, s| {
+                    let mut v = Vec::new();
+                    kernel.hashes(s, &mut v).map(|()| v)
+                })
             })
-        })
-        .map_err(|e| e.into_pyerr(py))?;
+            .map_err(|e| e.into_pyerr(py))?;
         let mut items = hashes
             .into_iter()
             .map(|h| match h {
@@ -1478,7 +1482,7 @@ mod files {
 
     use super::{NativeConfig, lock};
     use crate::batch::{BatchError, doc_count, fill_rows};
-    use crate::errors::with_note;
+    use crate::errors::{PyroidError, with_note};
     use crate::input::{Threads, ThreadsArg, texts_and_threads, threads};
 
     const MIB: usize = 1 << 20;
@@ -1511,7 +1515,7 @@ mod files {
             MinhashFileError::Malformed { .. } | MinhashFileError::Invalid(_) => {
                 PyValueError::new_err(e.to_string())
             }
-            MinhashFileError::Pool(e) => crate::interrupt::pool_error(&e),
+            MinhashFileError::Pool(e) => PyroidError::new_err(e.to_string()),
         }
     }
 
@@ -1605,7 +1609,7 @@ mod files {
             let t = call_threads.or(self.threads);
             let hasher = &self.config.get().hasher;
             let h = hasher.num_hashes();
-            crate::interrupt::detach_batch(py, || {
+            py.detach(|| {
                 let mut inner = lock(&self.inner);
                 let writer = inner.open().map_err(AddError::Files)?;
                 // The batch's signatures, computed in place, then appended.
@@ -1632,7 +1636,7 @@ mod files {
         /// Write every bucket's file; returns the number of documents added.
         fn finish(&self, py: Python<'_>) -> PyResult<u64> {
             let t = threads(self.threads);
-            crate::interrupt::detach_batch(py, || {
+            py.detach(|| {
                 let mut inner = lock(&self.inner);
                 let res = inner.open()?.finish(t);
                 inner.writer = None;
@@ -1715,7 +1719,7 @@ mod files {
             memory_budget,
             max_open,
         };
-        crate::interrupt::detach_batch(py, || core::minhash_buckets(&files, &output, cfg, &opts))
+        py.detach(|| core::minhash_buckets(&files, &output, cfg, &opts))
             .map_err(|e| files_err(py, e))
     }
 
@@ -1741,10 +1745,9 @@ mod files {
             save_cluster_size,
             ignore_index_matches,
         };
-        let s = crate::interrupt::detach_batch(py, || {
-            core::minhash_cluster(&dups, &output_folder, opts)
-        })
-        .map_err(|e| files_err(py, e))?;
+        let s = py
+            .detach(|| core::minhash_cluster(&dups, &output_folder, opts))
+            .map_err(|e| files_err(py, e))?;
         let out = PyDict::new(py);
         out.set_item("nodes", s.nodes)?;
         out.set_item("removed", s.removed)?;

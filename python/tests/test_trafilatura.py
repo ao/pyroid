@@ -17,7 +17,6 @@ import pickle
 import sys
 import threading
 import types
-import warnings
 import zlib
 from collections.abc import Callable
 from pathlib import Path
@@ -733,8 +732,8 @@ def test_input_delegation_without_trafilatura_raises(no_trafilatura: None) -> No
     class Response:
         data = page.encode()
 
-    # A response's data is read natively, as trafilatura's load_html reads it.
-    assert pt.extract(Response()) == pt.extract(page)
+    with pytest.raises(pyroid.PyroidError, match="a response object input"):
+        pt.extract(Response())
     cfg = configparser.ConfigParser()
     cfg.read_dict({"DEFAULT": dict(pt.DEFAULT_CONFIG["DEFAULT"])})
     cfg.set("DEFAULT", "MIN_DUPLCHECK_SIZE", "-1")
@@ -1041,51 +1040,3 @@ def test_trees_with_control_characters_stay_xml() -> None:
     pytest.importorskip("lxml.etree")
     xml = "<body><p>the &#xFFFD;</p></body>"  # tostring of a tree holding "\x1f"
     assert cast(Any, pt)._from_xml(xml) == xml
-
-
-@pytest.mark.thread_unsafe(reason="runs a subprocess and measures its memory")
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="reads /proc/self/status")
-@pytest.mark.parametrize("compat", ["2.3.1", "1.11.0"])
-def test_div_soup_memory_is_linear(run_python: Callable[..., Any], compat: str) -> None:
-    # A 4 MB page of 64k sibling <div>s: readability's sanitize drops them from the last one
-    # up, each joined tail one longer than the one before. Holding every dropped element's copy
-    # took 2.4 GB in 1.11.0 mode (as trafilatura 1.11.0 in lxml); now about the page's size.
-    proc = run_python(
-        f"""
-        import pyroid.trafilatura as T
-        def hwm():
-            for line in open("/proc/self/status"):
-                if line.startswith("VmHWM"):
-                    return int(line.split()[1]) // 1024
-        unit = "<div class='c'><span>w</span> text text <a href='#'>link</a></div>\\n"
-        page = "<html><body>" + unit * 64_000 + "</body></html>"
-        base = hwm()
-        out = T.extract(page, compat={compat!r})
-        print(len(out), hwm() - base)
-        """,
-        timeout=300.0,
-    )
-    assert proc.returncode == 0, proc.stderr
-    n, grew = (int(x) for x in proc.stdout.split())
-    assert n == 64_000 * 17 - 1
-    assert grew < 800, f"{grew} MiB"
-
-
-@pytest.mark.thread_unsafe(reason="sets a warnings filter")
-def test_response_objects_are_read_natively() -> None:
-    # load_html reads `data` from anything that has it (an HTTP response, but also numpy.str_
-    # and numpy.bytes_, whose `data` is a memoryview: TypeError, caught, so None).
-    np = pytest.importorskip("numpy")
-    page = "<html><body><article><p>" + "The council met on Tuesday to discuss the park. " * 5
-    page += "</p></article></body></html>"
-
-    class Response:
-        data = page.encode()
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", pyroid.FallbackWarning)
-        for compat in ("2.3.1", "1.11.0"):
-            assert pt.extract(Response(), compat=compat) == pt.extract(page, compat=compat)
-            assert pt.extract(np.str_("hello world"), compat=compat) is None
-            assert pt.extract(np.bytes_(b"hello world"), compat=compat) is None
-            assert pt.bare_extraction(np.str_(page), compat=compat) is None

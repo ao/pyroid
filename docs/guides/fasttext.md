@@ -11,19 +11,9 @@ as built in fasttext-predict 0.9.2.4 ([parity](../compatibility.md#fasttext)).
     platform, so the last bits of a probability depend on the architecture and the C library.
     On Linux (glibc) and Windows x64, pyroid matches fasttext-predict bit for bit. On macOS,
     fasttext-predict's clang build rounds its dot products differently: the largest difference
-    on GitHub's runners was 1.91e-6, on a test model with weights scaled by 20.
-
-    Builds of fastText itself differ too. On aarch64, upstream fastText 0.9.2's wheels
-    (fasttext-numpy2-wheel, which `datatrove[processing]` installs, and fasttext-wheel) fuse
-    every multiply-add of the output layer, and fasttext-predict fuses fewer, so their
-    probabilities differ by about one float32 ulp (up to 1.2e-7 on lid.176). pyroid follows the
-    build that is installed: with fasttext-numpy2-wheel or fasttext-wheel installed it computes
-    as they do, otherwise as fasttext-predict does. Both were bit-identical over 5,000 FineWeb
-    lines with lid.176.bin and lid.176.ftz, k=1 and k=-1 (EC2 c8g.16xlarge, aarch64). The
-    datatrove drop-in's `LanguageFilter` always computes as fasttext-numpy2-wheel does, as stock
-    datatrove does. `pyroid clean` always computes as fasttext-predict does: for lid.176.bin
-    that gives the same bits on aarch64 as every build gives on x86-64, so its output is the same
-    on every platform. On x86-64 the builds give the same results.
+    on GitHub's runners was 1.91e-6, on a test model with weights scaled by 20. Different builds
+    of fastText itself differ too: fasttext-numpy2-wheel's probabilities were up to 1.79e-7 away
+    from fasttext-predict's on the same inputs.
 
 Besides speed, there are two reasons to switch. pyroid has wheels for CPython 3.11–3.15 and
 free-threaded 3.14t/3.15t on Linux (glibc and musl), macOS and Windows, so it installs without a

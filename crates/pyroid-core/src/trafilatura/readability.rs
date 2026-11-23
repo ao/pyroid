@@ -63,19 +63,11 @@ impl Ctx<'_> {
     }
 
     /// lxml.html drop_tree.
-    ///
-    /// lxml leaves the dropped element its tail, a copy of what was joined to the previous
-    /// sibling. readability never reads a dropped element again (its lists visit descendants
-    /// before ancestors, and dropped elements are not serialized), so the copy is released:
-    /// when `sanitize` drops a run of siblings from the last one up, each joined tail grows by
-    /// one, and keeping every copy held the sum of their lengths (8.5 GB for an 8 MB page of
-    /// 128k `<div>`s, as in lxml).
     pub(super) fn drop_tree(&mut self, e: NodeId) -> Result<(), Failed> {
         if self.d.parent(e).is_none() {
             return Err(Failed);
         }
         self.delete_element(e, true);
-        self.d.set_tail(e, None);
         if self.raised { Err(Failed) } else { Ok(()) }
     }
 

@@ -260,13 +260,13 @@ def _ftfy(name: str, reason: str) -> Any:
         real = real.__wrapped__
     if real is None:
         raise PyroidError(
-            f"pyroid.ftfy.{name}: pyroid's Rust port does not handle {reason}, and "
+            f"pyroid.ftfy.{name}: {reason} is not supported by pyroid's Rust port, and "
             "ftfy is not installed to fall back to (pip install ftfy==6.3.1)"
         )
     if f"{name}:{reason}" not in _WARNED:
         _WARNED.add(f"{name}:{reason}")
         warnings.warn(
-            f"pyroid.ftfy.{name}: the Rust port does not handle {reason}; "
+            f"pyroid.ftfy.{name}: {reason} is not supported by the Rust port; "
             "delegating to ftfy (slow path). This warning is shown once.",
             FallbackWarning,
             stacklevel=_caller_stacklevel(),

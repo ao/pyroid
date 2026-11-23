@@ -591,14 +591,11 @@ impl LshIndex {
             .enumerate()
             .map(|(t, (table, added))| (t, table, added))
             .collect();
-        // Every table or none: an interrupt must not leave the index half-filled.
-        par::uninterruptible(|| {
-            par::for_each(tasks, items.len(), threads, |(t, table, added)| {
-                *added = items
-                    .iter()
-                    .map(|(id, hs)| hs.get(t).is_some_and(|h| add_to_bucket(table, h, *id)))
-                    .collect();
-            })
+        par::for_each(tasks, items.len(), threads, |(t, table, added)| {
+            *added = items
+                .iter()
+                .map(|(id, hs)| hs.get(t).is_some_and(|h| add_to_bucket(table, h, *id)))
+                .collect();
         })?;
         for added in &added {
             for ((id, _), &new) in items.iter().zip(added) {

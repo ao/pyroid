@@ -838,7 +838,7 @@ def languages() -> dict[str, Language]:
     Example::
 
         >>> pyroid.filters.languages()["cmn_Hani"]
-        Language(tokenizer='SpaCyTokenizer', arg='zh', native=True)
+        Language(tokenizer='SpaCyTokenizer', arg='zh', native=False)
 
     Returns:
         ``{code: Language(tokenizer, arg, native)}``, sorted by code.
@@ -1136,9 +1136,8 @@ class BadWordsFilter:
         Args:
             texts: A str, a list or tuple of str, or an Arrow string array/column.
             languages: Each document's language (datatrove's ``doc.metadata["language"]``):
-                one str for all, or one entry per document in a list, tuple or Arrow
-                string column (``None`` or null: the default). Default:
-                ``default_language``.
+                one str for all, or one entry per document (``None``: the default).
+                Default: ``default_language``.
             threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
                 ``n`` tasks at once; ``1`` runs on the calling thread.
 
@@ -1454,10 +1453,8 @@ class URLFilter:
     ``ValueError`` for an empty URL (datatrove's ``assert url``),
     ``AttributeError`` as datatrove when the banned subwords are only ``""``
     (pyahocorasick's automaton then has no words) and a URL reaches that check,
-    ``pyroid.InputError`` for other input kinds and ``UnicodeDecodeError`` for
-    invalid UTF-8 in Arrow input. A URL with a lone surrogate goes through
-    tldextract's own code (one ``pyroid.FallbackWarning``), so it gets datatrove's
-    result; the other URLs of the call stay native.
+    ``pyroid.InputError`` for other input kinds, ``UnicodeEncodeError`` for a lone
+    surrogate and ``UnicodeDecodeError`` for invalid UTF-8 in Arrow input.
     """
 
     config: URLFilterConfig | None

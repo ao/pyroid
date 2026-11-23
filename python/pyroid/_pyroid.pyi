@@ -12,7 +12,6 @@ __all__ = [
     "PyroidError",
     "VersionMismatchWarning",
     "__version__",
-    "_numpy_ready",
     "_testing",
     "datasketch",
     "dedup",
@@ -48,9 +47,6 @@ nemo: ModuleType
 trafilatura: ModuleType
 warc: ModuleType
 _testing: ModuleType
-
-def _numpy_ready() -> None:
-    """Look NumPy's C API up now (for modules that import numpy at import)."""
 
 class PyroidError(Exception):
     """Base class for all pyroid errors."""

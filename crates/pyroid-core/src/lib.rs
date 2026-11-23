@@ -48,7 +48,6 @@ pub mod nltk;
 pub mod par;
 pub mod pythainlp;
 pub mod pyvi;
-pub mod scratch;
 pub mod sudachi;
 pub mod text;
 pub mod trafilatura;

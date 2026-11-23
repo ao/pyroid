@@ -326,10 +326,7 @@ class FineWeb:
     def model(self) -> Any:
         """The ``pyroid.fasttext.Model`` (loaded on first use)."""
         if self._model is None:
-            # fasttext-predict's arithmetic whatever is installed: for lid.176.bin it gives the
-            # same bits on aarch64 as every build gives on x86-64, so the output is the same on
-            # every platform.
-            self._model = pyroid.fasttext._load_predict(lid_model_path(self._model_path))
+            self._model = pyroid.fasttext.load_model(lid_model_path(self._model_path))
         return self._model
 
     def stages(self) -> list[str]:

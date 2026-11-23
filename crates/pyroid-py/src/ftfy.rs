@@ -383,12 +383,13 @@ fn with_surrogates<'py>(
         })
         .collect::<PyResult<_>>()?;
     let t = threads(threads_arg);
-    let outs = crate::interrupt::detach_batch(py, || {
-        par::map(bytes.len(), t, |i| {
-            kernel::fix_text_wtf8(bytes[i], cfg).expect("str UTF-8 / surrogatepass is valid")
+    let outs = py
+        .detach(|| {
+            par::map(bytes.len(), t, |i| {
+                kernel::fix_text_wtf8(bytes[i], cfg).expect("str UTF-8 / surrogatepass is valid")
+            })
         })
-    })
-    .map_err(|e| BatchError::from(e).into_pyerr(py))?;
+        .map_err(|e| BatchError::from(e).into_pyerr(py))?;
     let mut fixed = Vec::with_capacity(outs.len());
     for (item, out) in strs.iter().zip(outs) {
         fixed.push(match out {

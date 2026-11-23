@@ -196,7 +196,6 @@ impl WordTokenizer for tokenizer::SpacyTokenizer {
             toks.clear();
             self.tokens(text, toks);
             out.extend(toks.iter().filter(|t| !t.space).map(|t| t.text(text)));
-            crate::scratch::trim(toks);
         });
         Ok(())
     }
@@ -211,7 +210,6 @@ impl WordTokenizer for tokenizer::SpacyTokenizer {
                     .filter(|t| !t.space)
                     .map(|t| Cow::Borrowed(t.text(text))),
             );
-            crate::scratch::trim(toks);
         });
         Ok(())
     }
@@ -222,7 +220,6 @@ impl WordTokenizer for tokenizer::SpacyTokenizer {
             toks.clear();
             self.tokens(text, toks);
             self.sentence_ends_in(text, toks, out);
-            crate::scratch::trim(toks);
         });
         Ok(())
     }
