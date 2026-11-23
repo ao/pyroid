@@ -432,7 +432,7 @@ impl<'py> Strs<'py> {
             })
             .collect::<PyResult<_>>()?;
         let t = threads(threads_arg);
-        py.detach(|| par::map(bytes.len(), t, |i| f(bytes[i])))
+        crate::interrupt::detach_batch(py, || par::map(bytes.len(), t, |i| f(bytes[i])))
             .map_err(|e| BatchError::from(e).into_pyerr(py))
     }
 

@@ -488,17 +488,16 @@ fn repair_batch<'py>(
         docs.push(text_of(s)?);
     }
     let t = crate::input::threads(threads);
-    let results = py
-        .detach(|| {
-            par::map(docs.len(), t, |i| {
-                let original = match &docs[i] {
-                    Text::Utf8(u) => Some(*u),
-                    _ => None,
-                };
-                one(&docs[i], original)
-            })
+    let results = crate::interrupt::detach_batch(py, || {
+        par::map(docs.len(), t, |i| {
+            let original = match &docs[i] {
+                Text::Utf8(u) => Some(*u),
+                _ => None,
+            };
+            one(&docs[i], original)
         })
-        .map_err(|e| BatchError::from(e).into_pyerr(py))?;
+    })
+    .map_err(|e| BatchError::from(e).into_pyerr(py))?;
     let (items, unsupported) = finish(results, &items)?;
     let result = if is_list {
         PyList::new(py, items)?.into_any()

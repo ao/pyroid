@@ -27,7 +27,7 @@ from types import FrameType
 
 from pyroid._pyroid import VersionMismatchWarning
 
-__all__ = ["check", "follow_installed", "quiet"]
+__all__ = ["check", "distribution", "follow_installed", "quiet"]
 
 _LOCK = threading.Lock()
 # The libraries (top-level module names) already checked in this process.
@@ -113,6 +113,19 @@ def check(
         f"{module} reproduces {name} {wanted}, but {dist} {version} is installed: results can "
         f"differ from it. {todo} (or silence this with {_SILENCE})."
     )
+
+
+def distribution(library: str, candidates: Sequence[str]) -> str | None:
+    """The first of `candidates` (distribution names) installed, if `library` can be imported.
+
+    Never imports `library`; reads the version metadata as :func:`check` does.
+    """
+    if not _importable(library):
+        return None
+    for dist in candidates:
+        if _version(dist):
+            return dist
+    return None
 
 
 def _importable(library: str) -> bool:

@@ -162,6 +162,12 @@ impl FastMod {
 /// the map directly.
 const MAX_PRUNE_BITS: usize = 1 << 24;
 
+/// Bitmap bits allowed per key of the pruning index (1 KiB). The bitmap's size then follows the
+/// index's length in the file (8 bytes per key), not the largest bucket id one entry claims: a
+/// one-entry index with id 16M would otherwise cost 2 MiB. Real models are far denser (lid.176.ftz:
+/// 2M buckets for tens of thousands of keys), so they keep the whole bitmap.
+const PRUNE_BITS_PER_KEY: usize = 8192;
+
 /// The keys of the pruning index in `0..len` as a bitmap: most n-grams of a
 /// quantized model were pruned, and one bit test rejects them before a
 /// hash-map probe.
@@ -179,7 +185,10 @@ impl PruneBits {
         let (Ok(max), Ok(bucket)) = (usize::try_from(max), usize::try_from(bucket)) else {
             return Self::default();
         };
-        let len = (max + 1).min(bucket).min(MAX_PRUNE_BITS);
+        let len = (max + 1)
+            .min(bucket)
+            .min(MAX_PRUNE_BITS)
+            .min(map.len().saturating_mul(PRUNE_BITS_PER_KEY));
         let mut words = vec![0u64; len.div_ceil(64)];
         // Every key the bitmap's words cover gets its bit, so a clear bit is a sure "no".
         let covered = words.len() * 64;
@@ -217,6 +226,13 @@ pub struct LineScratch {
 impl LineScratch {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Give the buffers back after a long line (see [`crate::scratch`]).
+    pub fn trim(&mut self) {
+        crate::scratch::trim(&mut self.ids);
+        crate::scratch::trim(&mut self.hashes);
+        crate::scratch::trim(&mut self.word);
     }
 }
 
@@ -829,6 +845,10 @@ mod tests {
         for (k, v) in [(0, 5), (63, 1), (64, 2), (1_999_999, 3), (-4, 7)] {
             map.insert(k, v);
         }
+        // Enough keys for a bitmap over all 2M buckets (as in a real quantized model).
+        for k in 3_000..3_300 {
+            map.insert(k, 0);
+        }
         let bits = PruneBits::new(&map, 2_000_000);
         for k in [0, 63, 64, 1_999_999] {
             assert!(bits.may_contain(k));
@@ -837,6 +857,9 @@ mod tests {
             assert!(!bits.may_contain(k));
         }
         // Keys past the bitmap's cap go to the map.
+        for k in 10_000..12_100 {
+            map.insert(k, 0);
+        }
         map.insert(i32::MAX - 1, 9);
         let bits = PruneBits::new(&map, i32::MAX);
         assert_eq!(bits.words.len(), MAX_PRUNE_BITS / 64);
@@ -844,6 +867,14 @@ mod tests {
         assert!(bits.may_contain(i32::MAX - 1));
         assert!(bits.may_contain(i32::MAX - 2));
         assert!(!bits.may_contain(65));
+        // A sparse index gets a bitmap as small as its own length allows; a far key passes.
+        let mut sparse = PruneMap::default();
+        sparse.insert(16_000_000, 1);
+        let bits = PruneBits::new(&sparse, i32::MAX);
+        assert_eq!(bits.words.len() * 64, PRUNE_BITS_PER_KEY);
+        assert!(bits.beyond);
+        assert!(bits.may_contain(16_000_000));
+        assert!(!bits.may_contain(5));
         // No non-negative key: nothing passes.
         let mut neg = PruneMap::default();
         neg.insert(-1, 0);

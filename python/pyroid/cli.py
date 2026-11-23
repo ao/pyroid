@@ -50,7 +50,9 @@ import json
 import math
 import os
 import shutil
+import signal
 import sys
+import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Iterator, Sequence
@@ -1338,6 +1340,24 @@ def _parquet_row_groups(path: Path) -> Iterator[Any]:
             yield pf.read_row_group(i, use_threads=False)
 
 
+def _conform(table: Any, schema: Any) -> Any:
+    """``table`` with ``schema``'s columns, in its order.
+
+    Columns are matched by name and cast; one the table lacks is all null. Each input file is
+    read with its own schema, and one output file needs one.
+    """
+    import pyarrow as pa
+
+    if table.schema.equals(schema):
+        return table
+    cols = []
+    for f in schema:
+        i = table.schema.get_field_index(f.name)
+        col = table.column(i) if i >= 0 else pa.nulls(table.num_rows, f.type)
+        cols.append(col if col.type == f.type else col.cast(f.type))
+    return pa.Table.from_arrays(cols, schema=schema)
+
+
 def _concat(parts: Sequence[Path], dest: Path, compression: str | None) -> None:
     """Concatenate part files (all in ``dest``'s format) into ``dest``, atomically."""
     from pyroid.integrations import _io
@@ -1368,12 +1388,18 @@ def _concat(parts: Sequence[Path], dest: Path, compression: str | None) -> None:
 
     present = [p for p in present if p.stat().st_size]  # an empty JSONL input leaves 0 bytes
     schemas = [_ipc_schema(p) if ipc else pq.read_schema(p) for p in present]
-    schema = pa.unify_schemas(schemas, promote_options="permissive") if schemas else None
+    try:
+        schema = pa.unify_schemas(schemas, promote_options="permissive") if schemas else None
+    except (pa.ArrowTypeError, pa.ArrowInvalid) as e:
+        raise ValueError(
+            f"the input files' columns do not fit in one {dest.name}: {e} "
+            "(write to a directory instead, one output per input file)"
+        ) from None
     w = _io.Writer(dest, compression=compression)
     try:
         for p in present:
             for t in _read_ipc(str(p)) if ipc else _parquet_row_groups(p):
-                w.write(t.cast(schema) if schema is not None else t)
+                w.write(_conform(t, schema) if schema is not None else t)
         w.close(schema)
     except BaseException:
         w.abort()
@@ -2158,7 +2184,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--lid-model",
-        help="fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a cached download)",
+        help="fastText's lid.176.bin (default: $PYROID_LID_MODEL, else a 125 MiB download, cached)",
     )
     p.add_argument(
         "--ftfy",
@@ -2361,17 +2387,49 @@ def main(argv: list[str] | None = None) -> int:
     else:
         a = build_parser().parse_args(args)
     _need_pyarrow()
+    term = _on_sigterm()
     try:
         return int(a.body(a))
+    except _shards.Terminated:
+        # Finished files and their records are kept: the same command resumes the run.
+        print(f"pyroid {a.command}: terminated", file=sys.stderr)  # noqa: T201
+        return 128 + signal.SIGTERM
+    except KeyboardInterrupt:
+        print(f"pyroid {a.command}: interrupted", file=sys.stderr)  # noqa: T201
+        return 128 + signal.SIGINT
     except _shards.StateError as e:
         raise SystemExit(f"pyroid {a.command}: {e}") from None
-    except (FileNotFoundError, ValueError, ImportError) as e:
+    # OSError: a model path that is a directory, an unwritable output, a failed download;
+    # EOFError: a truncated compressed input; PyroidError: a text column of another type.
+    except (OSError, ValueError, ImportError, EOFError, pyroid.PyroidError) as e:
         if os.environ.get("PYROID_DEBUG"):
             raise
         msg = _import_hint(e) if isinstance(e, ImportError) else str(e)
         notes = "".join(f"\n  ({n})" for n in getattr(e, "__notes__", ()))
         print(f"pyroid {a.command}: {msg}{notes}", file=sys.stderr)  # noqa: T201
         return 1
+    finally:
+        if term is not None:
+            signal.signal(signal.SIGTERM, term)
+
+
+def _on_sigterm() -> Any:
+    """Make SIGTERM raise ``Terminated`` in the main thread, as SIGINT raises KeyboardInterrupt.
+
+    The run then stops its workers and removes its temporary files. Returns the handler to
+    restore, or None when a program that embeds the CLI set its own.
+    """
+    from pyroid.integrations import _shards
+
+    if threading.current_thread() is not threading.main_thread():
+        return None
+    if signal.getsignal(signal.SIGTERM) is not signal.SIG_DFL:
+        return None
+
+    def handler(signum: int, frame: Any) -> None:
+        raise _shards.Terminated
+
+    return signal.signal(signal.SIGTERM, handler)
 
 
 # What installs a module the commands import only when they need it (top-level name: pip args).

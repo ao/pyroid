@@ -391,7 +391,7 @@ fn detached<R: Send>(
     cache: Option<&Lru>,
     f: impl FnOnce(Option<&mut LruCache>) -> R + Send,
 ) -> R {
-    py.detach(|| match cache {
+    crate::interrupt::detach_batch(py, || match cache {
         None => f(None),
         Some(c) => f(Some(&mut guard(&c.inner))),
     })
@@ -475,17 +475,22 @@ where
     F: Fn(usize) -> R + Sync + Send,
 {
     if n <= 1 || threads == par::Threads::ONE {
-        return Ok((0..n).map(f).collect());
+        return par::map(n, par::Threads::ONE, f);
     }
     let tasks = par::max_tasks(threads)?.min(n);
     if tasks <= 1 {
-        return Ok((0..n).map(f).collect());
+        return par::map(n, par::Threads::ONE, f);
     }
     let next = AtomicUsize::new(0);
     let workers: Vec<usize> = (0..tasks).collect();
-    let parts = par::map_tasks(&workers, threads, |_| {
+    // An interrupt leaves indices unclaimed; the map then returns its error
+    // before the slots are read.
+    let parts = par::map_tasks_stoppable(&workers, threads, |_, stop| {
         let mut out = Vec::new();
         loop {
+            if stop.requested() {
+                break;
+            }
             let idx = next.fetch_add(1, Ordering::Relaxed);
             if idx >= n {
                 break;
@@ -528,7 +533,12 @@ fn cached_batch(
     };
     let mut out = Vec::with_capacity(n);
     if tasks <= 1 {
+        // The cache then holds the pages before the interrupt, as after an
+        // interrupted loop of `extract` calls.
         for d in docs {
+            if par::Stop::Here.requested() {
+                return Err(PoolError::interrupted());
+            }
             let r = core::extract(d, opts, Some(&mut *cache));
             let stop = stop_on_error && r.is_err();
             out.push(r);
@@ -552,13 +562,16 @@ fn cached_batch(
         let next: Vec<Mutex<Option<Document>>> = (0..next_len).map(|_| Mutex::new(None)).collect();
         let claimed = AtomicUsize::new(0);
         let stopped = AtomicBool::new(false);
-        let mut parts = par::map_tasks(&workers, threads, |&w| {
+        let mut parts = par::map_tasks_stoppable(&workers, threads, |&w, stop| {
             let mut res = Vec::new();
             if w == 0 {
                 let pages =
                     std::mem::take(&mut *todo.lock().unwrap_or_else(PoisonError::into_inner));
                 let mut lru = cache.lock().unwrap_or_else(PoisonError::into_inner);
                 for page in pages {
+                    if stop.requested() {
+                        break;
+                    }
                     let r = page.map_or(Ok(None), |doc| {
                         core::extract_tree(doc, opts, Some(&mut **lru))
                     });
@@ -571,7 +584,7 @@ fn cached_batch(
                 }
             }
             loop {
-                if stopped.load(Ordering::Relaxed) {
+                if stopped.load(Ordering::Relaxed) || stop.requested() {
                     break;
                 }
                 let idx = claimed.fetch_add(1, Ordering::Relaxed);

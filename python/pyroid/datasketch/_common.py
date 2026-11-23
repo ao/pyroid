@@ -27,6 +27,11 @@ def _require_numpy() -> None:
             "pip install 'pyroid[datasketch]' (or numpy)",
             name="numpy",
         ) from exc
+    # Look NumPy's C API up now, at import, so no later native call does it (an exception there,
+    # such as a Ctrl-C, would otherwise surface as a PanicException).
+    from pyroid._pyroid import _numpy_ready
+
+    _numpy_ready()
 
 
 _require_numpy()

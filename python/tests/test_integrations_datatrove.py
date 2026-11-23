@@ -554,7 +554,14 @@ def _model() -> Path:
     ],
 )
 @pytest.mark.parametrize("batch_size", [1, 1000])
-def test_language_filter_matches_datatrove(kwargs: dict[str, Any], batch_size: int) -> None:
+def test_language_filter_matches_datatrove(
+    kwargs: dict[str, Any], batch_size: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import pyroid.fasttext
+
+    # The drop-in computes as fasttext-numpy2-wheel (stock datatrove's); the stock run here uses
+    # the installed fasttext, usually fasttext-predict, which rounds differently on aarch64.
+    monkeypatch.setattr(pyroid.fasttext, "_load_upstream", pyroid.fasttext.load_model)
     model = _model()
     texts = [
         *_texts(),
@@ -569,6 +576,23 @@ def test_language_filter_matches_datatrove(kwargs: dict[str, Any], batch_size: i
     got = _run_filter(ours, _docs(texts))
     assert got == want
     assert ours.model.model.queue == type(ours.model.model.queue)()
+
+
+def test_language_filter_computes_as_datatroves_fasttext(monkeypatch: pytest.MonkeyPatch) -> None:
+    import pyroid.fasttext
+
+    loaded: list[str] = []
+    real = pyroid.fasttext._load_upstream
+
+    def spy(path: Any) -> Any:
+        loaded.append(str(path))
+        return real(path)
+
+    monkeypatch.setattr(pyroid.fasttext, "_load_upstream", spy)
+    model = _model()
+    ours = pdt.LanguageFilter(model_path=model)
+    _run_filter(ours, _docs(["Hello world, how are you today?"]))
+    assert loaded == [str(model)]
 
 
 # --------------------------------------------------------------------------------------- MinHash
