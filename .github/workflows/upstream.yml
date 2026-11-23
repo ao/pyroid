@@ -161,7 +161,7 @@ jobs:
           groups=()
           mode=()
           case "$SUITE" in
-            ftfy | fasttext | metrics | json_repair | datasketch | jieba | nltk | warc | trafilatura) ;;
+            ftfy | fasttext | metrics | json_repair | datasketch | jieba | nltk | warc | trafilatura | dateutil) ;;
             filters | dedup) groups=(--group ja --group vi --group th) ;;
             trafilatura@1.11.0)
               groups=(--no-group trafilatura --group trafilatura111)

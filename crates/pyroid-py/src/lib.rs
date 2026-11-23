@@ -16,6 +16,7 @@
 mod arrow;
 mod batch;
 mod datasketch;
+mod dateutil;
 mod dedup;
 mod errors;
 mod fasttext;
@@ -68,6 +69,7 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     nemo::register(m)?;
     json_repair::register(m)?;
     datasketch::register(m)?;
+    dateutil::register(m)?;
     jieba::register(m)?;
     trafilatura::register(m)?;
     warc::register(m)?;

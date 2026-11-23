@@ -466,3 +466,18 @@ def test_tabulate() -> None:
     over_states(lambda r: tabulate([r, row]), ([1, 2, 3], ["a", "b"]))
     columns = {"a": list(range(150)), "b": ["x"] * 150}
     hammer(lambda: tabulate(columns, headers="keys"), lambda i: columns.update(c=[i] * (i % 150)))
+
+
+def test_dateutil() -> None:
+    from pyroid.dateutil import parser as dp
+
+    dates = (["2003-09-25 10:49:41"] * 150 + ["Thu Sep 25 2003"], ["25/12/2020 08:00"] * 70)
+    over_states(dp.parse_batch, dates)
+    over_states(dp.isoparse_batch, (["2003-09-25T10:49:41.5-03:00"] * 140, ["2021-W05-3"] * 9))
+    tzinfos = {"EST": -18000}
+    allowed = [dp.parse("2003-09-25 10:49 EST", tzinfos={"EST": v}) for v in (-18000, -14400)]
+    hammer(
+        lambda: dp.parse("2003-09-25 10:49 EST", tzinfos=tzinfos),
+        lambda i: tzinfos.update(EST=-14400 if i % 2 else -18000),
+        allowed,
+    )

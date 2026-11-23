@@ -25,9 +25,10 @@ reproduces trafilatura 2.3.1 or 1.11.0, following the installed release: ``extra
 ``trafilatura.core``, ``trafilatura.deduplication.LRUCache`` / ``LRU_TEST`` and
 ``trafilatura.meta.reset_caches``), ``"nltk"`` (:mod:`pyroid.nltk`, which reproduces NLTK
 3.10.4's tokenizers) and ``"warcio"`` (:mod:`pyroid.warc`, which reproduces warcio 1.8.2's
-``ArchiveIterator``, ``WARCIterator`` and ``ARCIterator``). There is no ``"unidecode"``:
-:func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its output differs
-from Unidecode's.
+``ArchiveIterator``, ``WARCIterator`` and ``ARCIterator``) and ``"dateutil"``
+(:mod:`pyroid.dateutil.parser`: ``dateutil.parser.parse`` and ``isoparse``). There is no
+``"unidecode"``: :func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its
+output differs from Unidecode's.
 
 :func:`patch` puts a shim in ``sys.modules[name]``: a module named like the real one whose
 functions are pyroid's (the same objects, so a call costs what calling pyroid costs; the
@@ -117,6 +118,16 @@ other names of :mod:`pyroid.tabulate` (``TableFormat``, ``tabulate_formats``, ``
 Setting ``tabulate.MIN_PADDING``, ``PRESERVE_WHITESPACE`` or ``WIDE_CHARS_MODE`` on the shim
 sets them for :mod:`pyroid.tabulate` too.
 
+``"dateutil"`` works like ``"nltk"`` too. With python-dateutil installed, ``parse`` and
+``isoparse`` on ``dateutil.parser`` (and ``dateutil.parser._parser.parse``,
+``dateutil.parser.isoparser.isoparse``) become pyroid's. They behave as dateutil's module-level
+functions do: they use dateutil's own ``DEFAULTPARSER``, ``parser`` class and ``DEFAULT_ISOPARSER``,
+so changes made to those still apply, and ``isoparse`` follows the installed release.
+``dateutil.tz``, ``relativedelta``, ``rrule``, ``easter``, the ``parser`` and ``isoparser`` classes
+and ``DEFAULTPARSER._parse`` (which ``pandas.to_datetime`` calls) stay dateutil's. Without
+python-dateutil, ``dateutil`` and ``dateutil.parser`` are shims holding
+:mod:`pyroid.dateutil.parser`'s names.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -166,6 +177,7 @@ SUPPORTED: tuple[str, ...] = (
     "nemo_curator",
     "yaml",
     "tabulate",
+    "dateutil",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -883,6 +895,39 @@ def _build_tabulate(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     return {"tabulate": shim}, []
 
 
+# What patch("dateutil") sets on python-dateutil's modules: parse and isoparse only.
+_DATEUTIL_SWAPS: dict[str, tuple[str, ...]] = {
+    "dateutil.parser": ("parse", "isoparse"),
+    "dateutil.parser._parser": ("parse",),
+    "dateutil.parser.isoparser": ("isoparse",),
+}
+
+
+def _build_dateutil(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if real is None:  # no python-dateutil: dateutil.parser is a shim holding pyroid's parser
+        provided = {n: getattr(impl, n) for n in impl.__all__ if not n.startswith("DATEUTIL")}
+        sub = _shim("dateutil.parser", None, missing, impl, provided, package=True)
+        top = _shim("dateutil", None, missing, impl, {"parser": sub}, package=True)
+        return {"dateutil": top, "dateutil.parser": sub}, []
+    parse, isoparse = impl._patched_functions()
+    new = {"parse": parse, "isoparse": isoparse}
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for mod, names in _DATEUTIL_SWAPS.items():
+        module = importlib.import_module(mod)
+        for n in names:
+            saved.append((module, n, module.__dict__.get(n, _MISSING)))
+            setattr(module, n, new[n])
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -971,10 +1016,18 @@ _TARGETS: dict[str, _Target] = {
         " (the modules and names tabulate imports, such as `re`)",
         _build_tabulate,
     ),
+    "dateutil": _Target(
+        "pyroid.dateutil.parser",
+        "whose parse and isoparse reproduce python-dateutil 2.8.2 to 4.0.0 "
+        "(isoparse following the installed release)",
+        "pip install python-dateutil",
+        " (dateutil.tz, relativedelta, rrule, easter, and the parser and isoparser classes)",
+        _build_dateutil,
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator", "yaml")
+_SWAPPED = ("nltk", "warcio", "nemo_curator", "yaml", "dateutil")
 
 
 # ---------------------------------------------------------------------------
@@ -1052,6 +1105,7 @@ def _announce(name: str, real: Any, missing: str) -> None:
                 "warcio": "from warcio.archiveiterator import ArchiveIterator",
                 "nemo_curator": "from nemo_curator.stages.text.filters import ScoreFilter",
                 "yaml": "from yaml import safe_load",
+                "dateutil": "from dateutil.parser import parse",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
@@ -1131,7 +1185,7 @@ def patch(*names: str) -> None:
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
             ``"json_repair"``, ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"``,
-            ``"yaml"`` and/or ``"tabulate"``.
+            ``"yaml"``, ``"tabulate"`` and/or ``"dateutil"``.
 
     Raises:
         TypeError: No names were given.
@@ -1275,8 +1329,8 @@ _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
-`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` giving pyroid's drop-ins. The Python
-processes it starts (multiprocessing workers, subprocesses) are patched too.
+`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` giving pyroid's drop-ins.
+The Python processes it starts (multiprocessing workers, subprocesses) are patched too.
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}

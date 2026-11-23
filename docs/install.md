@@ -21,8 +21,8 @@ pyroid has no runtime dependencies. Extras:
 
 Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
 `pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.tabulate`,
-`pyroid.trafilatura`, `pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader, `pyroid.yaml` and
-`pyroid.patch()` need none of them.
+`pyroid.trafilatura`, `pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader, `pyroid.yaml`,
+`pyroid.dateutil.parser` and `pyroid.patch()` need none of them.
 
 Some dependencies of the `datatrove`, `hf` and `warc` extras (orjson, tokenizers, PyYAML and
 faust-cchardet) publish no wheels for CPython 3.15 and 3.15t yet, and orjson none for 3.14t. There
@@ -49,6 +49,8 @@ Optional libraries, needed only by the features that use them:
       (`scan`, `compose`, `YAMLObject`, ...);
     - wcwidth for `pyroid.tabulate`'s wide-character widths (its few calls that the Rust code does
       not take run pyroid's copy of tabulate 0.10.0's code: tabulate itself is never needed);
+    - python-dateutil for `tzinfos` values given as strings (`tz.tzstr`); when it is installed,
+      `pyroid.dateutil.parser` returns its tz objects and raises its `ParserError`;
     - datasketch 2.0.0 for its classes pyroid does not port (`WeightedMinHash`, `HyperLogLog`,
       ...) and for Redis or Cassandra LSH storage.
 

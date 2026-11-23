@@ -62,6 +62,27 @@ JSON_REPAIR_OPTION_SETS: dict[str, dict[str, Any]] = {
 }
 
 
+# dateutil suite: the option sets (keywords of ``parse``) every issue-tracker, Hypothesis and corpus string is
+# parsed under. ``default`` is a ``datetime`` argument tuple; ``tzinfos="names"`` is a dict of names to offsets,
+# a ``tzoffset`` and a ``TZ`` string (built in tests/test_dateutil.py).
+DATEUTIL_OPTION_SETS: dict[str, dict[str, Any]] = {
+    "default": {"default": (2003, 9, 25)},
+    "today": {},
+    "dayfirst": {"default": (2003, 9, 25), "dayfirst": True},
+    "yearfirst": {"default": (2003, 9, 25), "yearfirst": True},
+    "dayfirst_yearfirst": {"default": (2003, 9, 25), "dayfirst": True, "yearfirst": True},
+    "fuzzy": {"default": (2003, 9, 25), "fuzzy": True},
+    "fuzzy_with_tokens": {"default": (2003, 9, 25), "fuzzy_with_tokens": True},
+    "ignoretz": {"default": (2003, 9, 25), "ignoretz": True},
+    "tzinfos": {"default": (2003, 9, 25), "tzinfos": "names"},
+    "default_leap_end": {"default": (2024, 2, 29, 13, 14, 15, 161718)},
+}
+# The real-string corpus is large: three sets.
+DATEUTIL_CORPUS_OPTION_SETS = {
+    k: DATEUTIL_OPTION_SETS[k] for k in ("default", "dayfirst", "fuzzy_with_tokens")
+}
+
+
 # --------------------------------------------------------------------------------------------- FineWeb-2
 # The FineWeb-2 slices pinned in bench/manifest.json (``fineweb2/<code>.parquet``, 250 docs each). A FineWeb-2
 # subset's name is its datatrove language code: datatrove tokenizes it with the word tokenizer that

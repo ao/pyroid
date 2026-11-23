@@ -15,6 +15,7 @@ __all__ = [
     "_numpy_ready",
     "_testing",
     "datasketch",
+    "dateutil",
     "dedup",
     "fasttext",
     "filters",
@@ -44,6 +45,7 @@ translit: ModuleType
 metrics: ModuleType
 json_repair: ModuleType
 datasketch: ModuleType
+dateutil: ModuleType
 jieba: ModuleType
 nltk: ModuleType
 nemo: ModuleType

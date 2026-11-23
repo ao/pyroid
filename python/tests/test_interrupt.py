@@ -82,6 +82,16 @@ elif case == "trafilatura":
     docs = [page] * (400_000 * scale)
     small = docs[:50]
     call = lambda d: T.extract_batch(d, threads=threads)
+elif case == "dateutil-parse":
+    import pyroid.dateutil.parser as P
+    docs = ["Thu Sep 25 10:36:28 2003"] * n
+    small = docs[:200]
+    call = lambda d: P.parse_batch(d, threads=threads)
+elif case == "dateutil-isoparse":
+    import pyroid.dateutil.parser as P
+    docs = ["2003-09-25T10:49:41.5-03:00"] * n
+    small = docs[:200]
+    call = lambda d: P.isoparse_batch(d, threads=threads)
 else:
     raise SystemExit(f"unknown case {case}")
 
@@ -122,6 +132,8 @@ CASES = [
     "sentence_dedup",
     "minhash_batch",
     "trafilatura",
+    "dateutil-parse",
+    "dateutil-isoparse",
 ]
 
 

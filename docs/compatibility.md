@@ -185,6 +185,25 @@ Reference: tabulate 0.10.0 (live, with wcwidth 0.9.4, numpy 2.5.4 and pandas 3.1
 
 <small>Source: python/tests/test_tabulate_upstream.py, test_tabulate_parity.py and test_tabulate_corpus.py on the EC2 devbox, 2026-11-16.</small>
 
+### pyroid.dateutil {#dateutil}
+
+Reference: python-dateutil 4.0.0 and 2.9.0.post0 (parse is the same in both, and in 3.0.0, 2.9.0 and 2.8.2, whose parser code is 2.9.0.post0's; isoparse in each release's form). Rule: the same datetime (value, type, fold), the same tzinfo type and repr, the same fuzzy tokens, the same exception type, message and __cause__ type, the same warnings.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| python-dateutil 4.0.0's own test_parser.py and test_isoparser.py, run against dateutil and against pyroid: the same outcome for every test (815 passed, 15 xfailed) | 830 | 830 | 0 |
+| python-dateutil 2.9.0.post0's own test_parser.py and test_isoparser.py, the same way (798 passed, 15 xfailed) | 813 | 813 | 0 |
+| Parity suite on CPython 3.12 against python-dateutil 4.0.0, 21 checks: the upstream tests, 747 issue-tracker strings x 10 option sets and with their own keywords, isoparse of them, Hypothesis, parse_batch, 2,000 corpus strings per source x 3 option sets | 222,675 | 222,675 | 0 |
+| The same suite against python-dateutil 2.9.0.post0 | 222,658 | 222,658 | 0 |
+| The same suite on free-threaded CPython 3.14t (GIL off), against python-dateutil 4.0.0 | 222,675 | 222,675 | 0 |
+| Real strings: all 9,246,745 corpus strings from 35 public sources (system and web server logs, email and HTTP headers, CSV date columns, CLDR date formats in 760 locales) x (parse under 3 option sets, isoparse), against python-dateutil 4.0.0 with TZ=UTC, Europe/London and America/New_York, and against 2.9.0.post0 | 147,947,920 | 147,947,920 | 0 |
+| **Total** | **148,617,571** | **148,617,571** | **0** |
+
+- Run on EC2 c8g.16xlarge (linux/aarch64), 2026-11-14 and 2026-11-15; the full-corpus run was repeated on 2026-11-15 with that day's fetch (9,243,790 strings: two live NYC exports had changed), again with no difference. The corpus is listed by URL and sha256 in parity/data/dateutil/corpus-manifest.json; the strings stay out of the repository.
+- python/tests/test_dateutil_parity.py also runs Hypothesis over date-like strings with lone surrogates, NUL and digits of other scripts, every keyword and default value (3,000 examples per run), and the cargo-fuzz target dateutil checks the kernel for panics.
+
+<small>Source: the parity/ dateutil suite and the full-corpus run, 2026-11-14 and 2026-11-15.</small>
+
 ### pyroid.datasketch {#datasketch}
 
 Reference: datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1). Rule: identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets.
@@ -378,6 +397,7 @@ as returning an unchanged string as the same object.
 - [Differences from rouge-score](guides/metrics.md#differences-from-rouge-score) and
   [from sacrebleu](guides/metrics.md#differences-from-sacrebleu)
 - [Differences from json_repair](guides/json_repair.md#differences-from-json_repair)
+- [Differences from python-dateutil](guides/dateutil.md#differences-from-dateutil)
 - [Differences from datasketch](guides/datasketch.md#differences-from-datasketch)
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)
@@ -421,6 +441,7 @@ checked. Each library is checked once per process, by whichever module asks firs
 | json_repair | json-repair 0.64.9 | `import pyroid.json_repair` |
 | PyYAML | pyyaml 6.0.3; 6.0, 6.0.1 and 6.0.2 give the same results | `import pyroid.yaml`, `pyroid.patch("yaml")` |
 | tabulate | tabulate 0.10.0 | `import pyroid.tabulate`, `pyroid.patch("tabulate")` |
+| python-dateutil | python-dateutil 4.0.0; 3.0.0, 2.9.0.post0, 2.9.0 and 2.8.2 give the same results (`isoparse` follows the installed release) | `import pyroid.dateutil.parser`, `pyroid.patch("dateutil")` |
 | datasketch | datasketch 2.0.0 | `import pyroid.datasketch`, `pyroid.patch("datasketch")` |
 | jieba | jieba 0.42.1 | `import pyroid.jieba` |
 | Trafilatura | trafilatura 2.3.1, and 1.11.0 with `compat="1.11.0"` | `import pyroid.trafilatura`, `pyroid.patch("trafilatura")` |

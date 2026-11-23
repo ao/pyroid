@@ -104,6 +104,11 @@ WATCH: dict[str, Watch] = {
         "python/tests/test_tabulate_parity.py and test_tabulate_upstream.py, which compare against the "
         "pinned tabulate.",
     ),
+    "python-dateutil": Watch(
+        ("dateutil",),
+        "pyroid.dateutil reproduces python-dateutil's parse and isoparse (the newest release; 3.0.0, "
+        "2.9.0.post0, 2.9.0 and 2.8.2 are reproduced too).",
+    ),
     # Libraries an oracle depends on whose behaviour pyroid reproduces too.
     "lxml": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces trafilatura on lxml's (libxml2's) parse tree."),
     "justext": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces jusText, trafilatura's fallback extractor."),
@@ -153,8 +158,9 @@ SOURCE_PINS: dict[str, tuple[str, str, str]] = {
     "nemo-curator": ("parity/pyroid_parity/nemo_cases.py", "NEMO_VERSION", r'^NEMO_VERSION = "([^"\n]+)"$'),
 }
 
-# Suites that read the pinned parity data (the parity-data cache); json_repair's data is in the repository.
-SUITES_WITHOUT_DATA = {"json_repair"}
+# Suites that read the pinned parity data (the parity-data cache); json_repair's and dateutil's data is in the
+# repository (dateutil's corpus checks skip without PYROID_DATEUTIL_CORPUS).
+SUITES_WITHOUT_DATA = {"json_repair", "dateutil"}
 # The suites this workflow runs: entries of ci.yml's parity matrix (SUITE@MODE is a suite in another mode).
 KNOWN_SUITES = frozenset(s for w in WATCH.values() for s in w.suites)
 

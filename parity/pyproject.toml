@@ -26,6 +26,8 @@ dependencies = [
     # decodes Content-Encoding br only when brotlicffi >= 1.2.1.0 imports; brotlicffi has no 3.15 wheels.
     "warcio==1.8.2",
     "brotlicffi==1.2.1.0; python_version < '3.15'",
+    # dateutil suite oracle (BSD-3-Clause, pure Python): the newest release pyroid.dateutil reproduces.
+    "python-dateutil==4.0.0",
 ]
 
 [dependency-groups]

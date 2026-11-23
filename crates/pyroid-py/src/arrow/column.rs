@@ -14,7 +14,7 @@ use std::sync::{Arc, OnceLock};
 use pyo3::exceptions::PyOverflowError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyCapsule, PyList, PyString, PyTuple, PyType};
-use pyroid_core::columnar::{BoolBuffers, BuildError, StringBuffers};
+use pyroid_core::columnar::{BoolBuffers, BuildError, I64Buffers, StringBuffers};
 
 use super::ffi::{FLAG_NULLABLE, FfiArray, FfiSchema, FfiStream};
 use super::import::{ARRAY_CAPSULE, SCHEMA_CAPSULE, STREAM_CAPSULE};
@@ -28,6 +28,10 @@ pub enum ColumnType {
     Bool,
     /// `large_binary` (`pyroid.warc`'s `html` column).
     LargeBinary,
+    /// `timestamp[us]`, wall time with no time zone (`pyroid.dateutil`).
+    TimestampUs,
+    /// `timestamp[us, tz=UTC]`, instants (`pyroid.dateutil`).
+    TimestampUsUtc,
 }
 
 impl ColumnType {
@@ -37,6 +41,8 @@ impl ColumnType {
             Self::LargeUtf8 => c"U",
             Self::Bool => c"b",
             Self::LargeBinary => c"Z",
+            Self::TimestampUs => c"tsu:",
+            Self::TimestampUsUtc => c"tsu:UTC",
         }
     }
 
@@ -46,6 +52,8 @@ impl ColumnType {
             Self::LargeUtf8 => "large_string",
             Self::Bool => "bool",
             Self::LargeBinary => "large_binary",
+            Self::TimestampUs => "timestamp[us]",
+            Self::TimestampUsUtc => "timestamp[us, tz=UTC]",
         }
     }
 }
@@ -58,6 +66,10 @@ pub enum Chunk {
     Bool(BoolBuffers),
     /// The `large_utf8` layout holding any bytes.
     LargeBinary(StringBuffers<i64>),
+    /// Microseconds since 1970-01-01T00:00 (wall time).
+    TimestampUs(I64Buffers),
+    /// Microseconds since 1970-01-01T00:00Z.
+    TimestampUsUtc(I64Buffers),
 }
 
 impl Chunk {
@@ -66,6 +78,7 @@ impl Chunk {
             Self::Utf8(b) => b.len,
             Self::LargeUtf8(b) | Self::LargeBinary(b) => b.len,
             Self::Bool(b) => b.len,
+            Self::TimestampUs(b) | Self::TimestampUsUtc(b) => b.len,
         }
     }
 
@@ -74,6 +87,7 @@ impl Chunk {
             Self::Utf8(b) => b.null_count,
             Self::LargeUtf8(b) | Self::LargeBinary(b) => b.null_count,
             Self::Bool(b) => b.null_count,
+            Self::TimestampUs(b) | Self::TimestampUsUtc(b) => b.null_count,
         }
     }
 
@@ -101,6 +115,8 @@ impl Chunk {
                 validity: None,
                 null_count: 0,
             }),
+            ColumnType::TimestampUs => Self::TimestampUs(I64Buffers::build(&[])),
+            ColumnType::TimestampUsUtc => Self::TimestampUsUtc(I64Buffers::build(&[])),
         }
     }
 
@@ -110,6 +126,8 @@ impl Chunk {
             Self::LargeUtf8(_) => ColumnType::LargeUtf8,
             Self::Bool(_) => ColumnType::Bool,
             Self::LargeBinary(_) => ColumnType::LargeBinary,
+            Self::TimestampUs(_) => ColumnType::TimestampUs,
+            Self::TimestampUsUtc(_) => ColumnType::TimestampUsUtc,
         }
     }
 }
@@ -207,6 +225,12 @@ impl Column {
                         )
                         .map_err(build_error)?,
                     ),
+                    ColumnType::TimestampUs => Chunk::TimestampUs(I64Buffers::concat(
+                        &many.iter().map(|c| as_i64(c)).collect::<Vec<_>>(),
+                    )),
+                    ColumnType::TimestampUsUtc => Chunk::TimestampUsUtc(I64Buffers::concat(
+                        &many.iter().map(|c| as_i64(c)).collect::<Vec<_>>(),
+                    )),
                 };
                 Ok(Arc::clone(
                     self.inner.joined.get_or_init(|| Arc::new(joined)),
@@ -233,6 +257,13 @@ fn as_large(c: &Chunk) -> &StringBuffers<i64> {
 fn as_bool(c: &Chunk) -> &BoolBuffers {
     match c {
         Chunk::Bool(b) => b,
+        _ => unreachable!("column chunks share one type"),
+    }
+}
+
+fn as_i64(c: &Chunk) -> &I64Buffers {
+    match c {
+        Chunk::TimestampUs(b) | Chunk::TimestampUsUtc(b) => b,
         _ => unreachable!("column chunks share one type"),
     }
 }
@@ -321,6 +352,14 @@ pub(super) fn export_array(chunk: Arc<Chunk>) -> FfiArray {
             ],
         ),
         Chunk::Bool(b) => (
+            2,
+            [
+                validity_ptr(b.validity.as_ref()),
+                b.values.as_ptr().cast(),
+                ptr::null(),
+            ],
+        ),
+        Chunk::TimestampUs(b) | Chunk::TimestampUsUtc(b) => (
             2,
             [
                 validity_ptr(b.validity.as_ref()),
@@ -544,7 +583,8 @@ impl Column {
         self.inner.chunks.iter().map(|c| c.len()).sum()
     }
 
-    /// Arrow type name: ``"string"``, ``"large_string"`` or ``"bool"``.
+    /// Arrow type name: ``"string"``, ``"large_string"``, ``"bool"``, ``"large_binary"``,
+    /// ``"timestamp[us]"`` or ``"timestamp[us, tz=UTC]"``.
     #[getter(r#type)]
     fn type_name(&self) -> &'static str {
         self.inner.ty.name()
@@ -588,6 +628,9 @@ impl Column {
                         }
                     }
                 }
+                Chunk::TimestampUs(b) | Chunk::TimestampUsUtc(b) => {
+                    push_timestamps(py, &out, b, matches!(&**chunk, Chunk::TimestampUsUtc(_)))?;
+                }
             }
         }
         Ok(out)
@@ -617,6 +660,37 @@ fn push_strings<O: pyroid_core::columnar::Offset>(
                 let s = std::str::from_utf8(bytes)
                     .map_err(|e| PyroidError::new_err(format!("internal error: {e}")))?;
                 out.append(PyString::new(py, s))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `datetime(1970, 1, 1) + timedelta(microseconds=v)` per value (aware in UTC for `utc`), as
+/// pyarrow's `to_pylist` gives them.
+fn push_timestamps(
+    py: Python<'_>,
+    out: &Bound<'_, PyList>,
+    b: &I64Buffers,
+    utc: bool,
+) -> PyResult<()> {
+    let dt = py.import("datetime")?;
+    let tz = if utc {
+        dt.getattr("timezone")?.getattr("utc")?
+    } else {
+        py.None().into_bound(py)
+    };
+    let epoch = dt
+        .getattr("datetime")?
+        .call1((1970, 1, 1, 0, 0, 0, 0, tz))?;
+    let timedelta = dt.getattr("timedelta")?;
+    for i in 0..b.len {
+        match b.get(i) {
+            None => out.append(py.None())?,
+            Some(us) => {
+                let kw = pyo3::types::PyDict::new(py);
+                kw.set_item("microseconds", us)?;
+                out.append(epoch.add(timedelta.call((), Some(&kw))?)?)?;
             }
         }
     }

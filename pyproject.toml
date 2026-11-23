@@ -125,6 +125,8 @@ test = [
   # The reference for pyroid.tabulate (MIT, pure Python), and the wide-character widths both use.
   "tabulate==0.10.0",
   "wcwidth>=0.2.13",
+  # The reference for pyroid.dateutil (BSD-3-Clause, pure Python): the newest release it reproduces.
+  "python-dateutil==4.0.0",
 ]
 # GIL builds only. `import sacrebleu` loads lxml, which re-enables the GIL on free-threaded CPython, and no
 # PEP 508 marker can tell a free-threaded interpreter apart, so CI installs this group only on GIL builds
@@ -206,6 +208,12 @@ testpaths = ["python/tests"]
 target-version = "py311"
 line-length = 100
 src = ["python"]
+# python-dateutil's own code, kept as released (pyroid.dateutil's reference path).
+extend-exclude = [
+  "python/pyroid/dateutil/_reference.py",
+  "python/pyroid/dateutil/_isoreference.py",
+  "python/pyroid/dateutil/_tzlite.py",
+]
 
 [tool.ruff.lint]
 # An explicit list (not ruff's default set) so a ruff upgrade never adds rules silently.
@@ -257,6 +265,11 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 # PyYAML 6.0.3 (the reference for pyroid.yaml's tests) ships neither py.typed nor stubs.
 module = ["yaml", "yaml.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# python-dateutil ships no py.typed (types-python-dateutil is not a dependency).
+module = ["dateutil", "dateutil.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

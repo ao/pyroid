@@ -240,6 +240,17 @@ CASES = [
         ("tabulate",),
         patch="tabulate",
     ),
+    Case(
+        "dateutil",
+        "import pyroid.dateutil.parser",
+        "dateutil",
+        "python-dateutil",
+        _version("pyroid.dateutil.parser", "DATEUTIL_VERSION"),
+        "pyroid.dateutil.parser",
+        ("dateutil",),
+        patch="dateutil",
+        imports=True,  # pyroid.dateutil.parser uses dateutil.tz's classes when it imports
+    ),
 ]
 PATCHED = [c for c in CASES if c.patch is not None]
 

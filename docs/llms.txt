@@ -21,11 +21,12 @@ Modules and what they match:
 - `pyroid.json_repair`: the same output as json_repair 0.64.9, about 15 times faster on broken JSON.
 - `pyroid.yaml`: PyYAML 6.0.3's `safe_load`, `safe_load_all`, `safe_dump` and `safe_dump_all` (and `load`/`dump` with the stock loaders and dumpers): the same objects, text and exceptions as PyYAML's pure-Python SafeLoader and SafeDumper, several times faster than CSafeLoader.
 - `pyroid.tabulate`: tabulate 0.10.0's `tabulate()` (every format and option, `DataFrame.to_markdown()` through `pyroid.patch("tabulate")`), the same text byte for byte.
+- `pyroid.dateutil.parser` (`from pyroid.dateutil import parser`): python-dateutil's `parse`, `parser`, `parserinfo`, `isoparse` and `isoparser`, with the same datetimes, tz objects, exceptions and messages as 2.8.2 to 4.0.0; `parse_batch` and `isoparse_batch` parse lists and Arrow columns in parallel; `pyroid.patch("dateutil")` swaps `parse` and `isoparse` into an installed python-dateutil.
 
 Integrations:
 
 - `pyroid clean IN OUT --recipe fineweb`, the command line (`--recipe fineweb-warc` from WARC files). It takes many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs and resumable runs; `pyroid dedup signatures|buckets|cluster|filter` runs MinHash dedup across shards.
-- `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`).
+- `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`).
 - `pyroid.integrations.datatrove`: drop-in datatrove steps, `WarcReader` and `Trafilatura` included. Its `Trafilatura` has no 1 s timeout, so results do not vary between runs.
 - `pyroid.integrations.nemo_curator`: drop-in NeMo Curator 1.4.0 CPU text stages (`ScoreFilter`, `Score`, `Filter`, `Modify`, the heuristic and fastText filters, the modifiers).
 - `pyroid.integrations.hf`: Hugging Face `datasets` helpers.
@@ -65,13 +66,14 @@ Conventions shared by every module:
 - [pyroid.trafilatura](https://ataiva.com/open-source/pyroid/docs/guides/trafilatura/): drop-in Trafilatura 2.3.1 and 1.11.0, how to choose a mode, `extract_batch`, the datatrove step, differences
 - [pyroid.nltk](https://ataiva.com/open-source/pyroid/docs/guides/nltk/): drop-in NLTK 3.10.4 Punkt, Treebank and regexp tokenizers, punkt_tab models, differences from NLTK
 - [pyroid.warc](https://ataiva.com/open-source/pyroid/docs/guides/warc/): drop-in warcio 1.8.2 `ArchiveIterator`, datatrove's WARC documents (`iter_documents`, `iter_batches`), `patch("warcio")`, differences from warcio
+- [pyroid.dateutil](https://ataiva.com/open-source/pyroid/docs/guides/dateutil/): drop-in python-dateutil `parse` and `isoparse` (2.8.2 to 4.0.0), `parse_batch` to Arrow, `patch("dateutil")`, differences from dateutil
 - [Languages](https://ataiva.com/open-source/pyroid/docs/guides/languages/): which datatrove language codes are native, which need `python_tokenizer=True`, how to choose
 
 ## Integrations
 
 - [The pyroid command line](https://ataiva.com/open-source/pyroid/docs/guides/cli/): `pyroid clean`, `langid`, `dedup`, `translit`, `run`; every option
 - [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/): thousands of files, `--workers`, `--shard`, remote inputs, resuming, MinHash dedup across shards
-- [pyroid.patch()](https://ataiva.com/open-source/pyroid/docs/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio` or `nemo_curator` to pyroid in code you don't own
+- [pyroid.patch()](https://ataiva.com/open-source/pyroid/docs/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate` or `dateutil` to pyroid in code you don't own
 - [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/): drop-in datatrove pipeline steps with the same names and signatures
 - [NeMo Curator stages](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/): drop-in NeMo Curator 1.4.0 text stages, and `pyroid.nemo`'s kernels
 - [Hugging Face datasets](https://ataiva.com/open-source/pyroid/docs/guides/huggingface/): batched callables for `Dataset.map`/`filter`, the FineWeb recipe
@@ -93,6 +95,7 @@ Conventions shared by every module:
 - [pyroid.trafilatura](https://ataiva.com/open-source/pyroid/docs/reference/trafilatura/)
 - [pyroid.nltk](https://ataiva.com/open-source/pyroid/docs/reference/nltk/)
 - [pyroid.warc](https://ataiva.com/open-source/pyroid/docs/reference/warc/)
+- [pyroid.dateutil](https://ataiva.com/open-source/pyroid/docs/reference/dateutil/)
 - [pyroid.nemo](https://ataiva.com/open-source/pyroid/docs/reference/nemo/)
 - [pyroid.integrations](https://ataiva.com/open-source/pyroid/docs/reference/integrations/)
 - [pyroid.text](https://ataiva.com/open-source/pyroid/docs/reference/text/)
