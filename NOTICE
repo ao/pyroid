@@ -478,12 +478,12 @@ json_repair
 -------------------------------------------------------------------------------
 pyroid.json_repair (crates/pyroid-core/src/json_repair/,
 crates/pyroid-py/src/json_repair.rs, python/pyroid/json_repair.py and
-python/pyroid/json_repair.pyi) is a derivative work of json_repair 0.64.5,
+python/pyroid/json_repair.pyi) is a derivative work of json_repair 0.64.9,
 https://github.com/mangiucugna/json_repair: its parser (json_parser.py,
 parse_*.py, parser_parenthesized.py and parse_string_helpers/) was ported line
 by line to Rust. Each ported file carries the header "Derived from json_repair
-0.64.5 (MIT), © Stefano Baccianella; modified." The test suite vendored under
-parity/data/json_repair-0.64.5/ is copied from the same release.
+0.64.9 (MIT), © Stefano Baccianella; modified." The test suite vendored under
+parity/data/json_repair-0.64.9/ is copied from the same release.
 
     MIT License
 

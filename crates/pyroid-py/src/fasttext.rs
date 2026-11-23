@@ -32,7 +32,6 @@ use crate::input::{TextInput, Threads, arg_note};
 type LineTokens = (Vec<String>, Vec<String>);
 
 static MODEL_ERROR: PyOnceLock<Py<PyType>> = PyOnceLock::new();
-static NUMPY: PyOnceLock<()> = PyOnceLock::new();
 
 /// `pyroid.fasttext.ModelError(PyroidError, ValueError)`: a ValueError, like
 /// fastText's own load errors.
@@ -55,20 +54,13 @@ fn model_error_type(py: Python<'_>) -> PyResult<&Bound<'_, PyType>> {
         .map(|t| t.bind(py))
 }
 
-/// rust-numpy needs numpy at the first array; fail with a clear ImportError
-/// instead of its panic.
+/// numpy for the arrays: a clear ImportError without it, and no panic from
+/// rust-numpy's first lookup (see `crate::np`).
 fn require_numpy(py: Python<'_>) -> PyResult<()> {
-    NUMPY
-        .get_or_try_init(py, || {
-            py.import("numpy").map(|_| ()).map_err(|e| {
-                let err = pyo3::exceptions::PyImportError::new_err(
-                    "pyroid.fasttext needs numpy: pip install 'pyroid[fasttext]' (or numpy)",
-                );
-                err.set_cause(py, Some(e));
-                err
-            })
-        })
-        .copied()
+    crate::np::ready(
+        py,
+        "pyroid.fasttext needs numpy: pip install 'pyroid[fasttext]' (or numpy)",
+    )
 }
 
 fn load_error(py: Python<'_>, path: &std::path::Path, err: LoadError) -> PyErr {
@@ -186,7 +178,7 @@ fn newline_error(obj: &Bound<'_, PyAny>, msg: &'static str) -> Option<PyErr> {
         return Some(PyValueError::new_err(msg));
     }
     let items: Vec<Bound<'_, PyAny>> = if let Ok(list) = obj.cast::<PyList>() {
-        list.iter().collect()
+        crate::input::list_items(list).iter().collect()
     } else if let Ok(tuple) = obj.cast::<PyTuple>() {
         tuple.iter().collect()
     } else {
@@ -357,9 +349,27 @@ fn quantized_matrix_error() -> PyErr {
 
 #[pymethods]
 impl Model {
-    /// Predict the most likely labels of a line of text.
+    /// Predict the most likely labels of each line of text, as fastText's ``predict``.
     ///
-    /// Same results as fastText's ``predict``; see ``pyroid/fasttext.pyi``.
+    /// As fastText: the text is split on spaces, tabs, vertical tabs, form
+    /// feeds, carriage returns and NULs; tokens with the label prefix are
+    /// ignored; the end-of-line token ``</s>`` is always added. Probabilities
+    /// are fastText's, which add ``1e-5`` and so can slightly exceed 1.
+    ///
+    /// Args:
+    ///     text: One line (no ``"\n"``), or a batch of lines: a list or tuple
+    ///         of str, or an Arrow string array/column.
+    ///     k: Number of labels to return, best first; ``-1`` for all of them.
+    ///     threshold: Only return labels with at least this probability.
+    ///     on_unicode_error: Error handler for decoding labels that are not
+    ///         valid UTF-8 (``"strict"``, ``"replace"``, ...).
+    ///     threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at
+    ///         most ``n`` tasks at once; ``1`` runs on the calling thread.
+    ///
+    /// Returns:
+    ///     For a str: ``(labels, probabilities)``, a tuple of str and a
+    ///     float64 array. For a batch: ``(list of label lists, list of float32
+    ///     arrays)``, one entry per line (``None`` for Arrow nulls).
     #[pyo3(signature = (text, k = 1, threshold = 0.0, on_unicode_error = "strict", *, threads = None))]
     fn predict<'py>(
         &self,
@@ -709,13 +719,21 @@ fn tokenize(text: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
     Ok(ft::tokenize(&text).into_iter().map(str::to_owned).collect())
 }
 
-/// Load a fastText model (``.bin``, or quantized ``.ftz``).
+/// Load a fastText model (``.bin``, or quantized ``.ftz``). ``_upstream``:
+/// compute as upstream fastText 0.9.2's wheels do (``pyroid.fasttext``
+/// passes it when one of them is the installed ``fasttext``).
 #[pyfunction]
-fn load_model(py: Python<'_>, path: PathBuf) -> PyResult<Model> {
+#[pyo3(signature = (path, *, _upstream = false))]
+#[allow(clippy::used_underscore_binding)] // the keyword's name: private to pyroid.fasttext
+fn load_model(py: Python<'_>, path: PathBuf, _upstream: bool) -> PyResult<Model> {
     let inner = py
         .detach(|| ft::Model::load(&path))
         .map_err(|e| load_error(py, &path, e))?;
-    Ok(Model::new(py, inner, path))
+    Ok(Model::new(
+        py,
+        inner.with_upstream_arithmetic(_upstream),
+        path,
+    ))
 }
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {

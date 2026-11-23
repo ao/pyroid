@@ -193,8 +193,9 @@ impl<'py> Repr<'py> {
             return self.mapping(key, res::MAP, items);
         }
         if ty.is(py.get_type::<PyList>()) {
-            let l = data.cast::<PyList>().map_err(PyErr::from)?.clone();
-            return Ok(self.sequence(key, res::SEQ, Items::List(l)));
+            // Read in one step (another thread may change the list meanwhile).
+            let l = crate::input::list_items(data.cast::<PyList>().map_err(PyErr::from)?);
+            return Ok(self.sequence(key, res::SEQ, l));
         }
         if ty.is(py.get_type::<PyTuple>()) {
             let t = data.cast::<PyTuple>().map_err(PyErr::from)?.clone();
@@ -203,7 +204,7 @@ impl<'py> Repr<'py> {
             } else {
                 res::SEQ
             };
-            return Ok(self.sequence(key, tag, Items::Tuple(t)));
+            return Ok(self.sequence(key, tag, t));
         }
         if ty.is(py.get_type::<PyBytes>()) {
             let text: String = self
@@ -246,7 +247,12 @@ impl<'py> Repr<'py> {
     }
 
     /// The start of `represent_sequence(tag, sequence)`.
-    fn sequence(&mut self, key: Option<usize>, tag: &'static str, items: Items<'py>) -> Step<'py> {
+    fn sequence(
+        &mut self,
+        key: Option<usize>,
+        tag: &'static str,
+        items: Bound<'py, PyTuple>,
+    ) -> Step<'py> {
         let id = self.push(
             key,
             tag,
@@ -361,18 +367,12 @@ impl<'py> Repr<'py> {
     }
 }
 
-/// The items of a list or tuple being represented (`for item in sequence`: a list is read
-/// item by item, as Python's list iterator does).
-enum Items<'py> {
-    List(Bound<'py, PyList>),
-    Tuple(Bound<'py, PyTuple>),
-}
-
 /// A collection whose children are being represented.
 enum Frame<'py> {
     Seq {
         id: NodeId,
-        items: Items<'py>,
+        /// The sequence's items: a tuple, or one snapshot of a list.
+        items: Bound<'py, PyTuple>,
         next: usize,
         out: Vec<NodeId>,
         best_style: bool,
@@ -396,11 +396,10 @@ impl<'py> Frame<'py> {
     fn next_child(&mut self) -> PyResult<Option<Bound<'py, PyAny>>> {
         match self {
             Self::Seq { items, next, .. } => {
-                let item = match items {
-                    Items::List(l) if *next < l.len() => l.get_item(*next)?,
-                    Items::Tuple(t) if *next < t.len() => t.get_item(*next)?,
-                    _ => return Ok(None),
-                };
+                if *next >= items.len() {
+                    return Ok(None);
+                }
+                let item = items.get_item(*next)?;
                 *next += 1;
                 Ok(Some(item))
             }

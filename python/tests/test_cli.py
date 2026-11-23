@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import errno
 import gzip
 import importlib.util
+import io
 import json
 import os
+import re
+import signal
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -158,6 +163,39 @@ def test_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and the environment")
+def test_file_and_input_errors_are_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import pyroid.cli as cli
+
+    monkeypatch.delenv("PYROID_DEBUG", raising=False)
+    src = _write(_table(["x"]), tmp_path / "in.parquet")
+    args = ["translit", str(src), str(tmp_path / "o.parquet")]
+    cases = [
+        IsADirectoryError(21, "Is a directory", "models/"),
+        PermissionError(13, "Permission denied", "/out/x.parquet"),
+        OSError("could not download lid.176.bin: https://example.invalid/lid.176.bin"),
+        EOFError("Compressed file ended before the end-of-stream marker was reached"),
+        pyroid.InputError("expected a string column, got int64"),
+    ]
+    for err in cases:
+
+        def body(a: Any, err: BaseException = err) -> int:
+            raise err
+
+        monkeypatch.setattr(cli, "_cmd_translit", body)
+        assert main(args) == 1
+        assert capsys.readouterr().err == f"pyroid translit: {err}\n"
+    # A real one: the model path is a directory.
+    out = tmp_path / "c.parquet"
+    rc = main(["clean", str(src), str(out), "--recipe", "fineweb", "--lid-model", str(tmp_path)])
+    assert rc == 1
+    msg = capsys.readouterr().err
+    assert msg.startswith("pyroid clean: ")
+    assert "Traceback" not in msg
+
+
+@pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and the environment")
 def test_missing_optional_dependency_is_one_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -196,6 +234,292 @@ def test_missing_optional_dependency_is_one_line(
         m.setenv("PYROID_DEBUG", "1")
         with pytest.raises(ModuleNotFoundError, match="zzz"):
             main(args)
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_a_text_column_of_another_type_is_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], en_lid: Path
+) -> None:
+    """langid printed a traceback (pyarrow's replace_substring on int64); now every command
+    says what is wrong, before it starts, for the first file and for any later one."""
+    ints = tmp_path / "ints.parquet"
+    pq.write_table(pa.table({"id": ["a", "b"], "text": [1, 2]}), ints)
+    out = tmp_path / "o.parquet"
+    msg = "column 'text' holds int64, not strings (--text-column names the text column)"
+    for argv in (
+        ["langid", str(ints), str(out), "--model", str(en_lid)],
+        ["clean", str(ints), str(out), "--recipe", "fineweb", "--lid-model", str(en_lid)],
+        ["translit", str(ints), str(out)],
+    ):
+        with pytest.raises(SystemExit, match=re.escape(msg)):
+            main(argv)
+    # a later file of another type: one line, naming the file
+    d = tmp_path / "in"
+    d.mkdir()
+    _write(_table([_english(1)]), d / "a.parquet")
+    pq.write_table(pa.table({"id": ["b"], "text": [3]}), d / "b.parquet")
+    assert main(["langid", str(d), str(tmp_path / "l"), "--model", str(en_lid)]) == 1
+    err = capsys.readouterr().err
+    assert err == f"pyroid langid: {msg}\n  (while processing {d / 'b.parquet'})\n"
+
+
+@pytest.mark.thread_unsafe(reason="monkeypatches pyroid.cli and reads stderr")
+def test_warc_recipe_on_a_table_file_is_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import pyroid.cli as cli
+
+    monkeypatch.setattr(cli, "_check_warc", lambda a: None)  # datatrove need not be installed
+    monkeypatch.delenv("PYROID_DEBUG", raising=False)
+    src = _write(_table(["x"]), tmp_path / "x.parquet")
+    argv = ["clean", str(src), str(tmp_path / "y.parquet"), "--recipe", "fineweb-warc"]
+    assert main(argv) == 1
+    err = capsys.readouterr().err
+    assert "reads WARC, ARC or WET files, not Parquet or JSON Lines" in err
+    assert err.count("\n") == 1
+    assert not list(tmp_path.glob(".y.parquet.pyroid"))
+    # a file that does not read as a WARC (warcio's message): one line too
+    from pyroid.warc import ArchiveLoadFailed
+
+    def body(a: Any) -> int:
+        raise ArchiveLoadFailed("Invalid ARC record, first line: PAR1")
+
+    with monkeypatch.context() as m:  # undone here: --iterations reruns the test with patches on
+        m.setattr(cli, "_cmd_clean", body)
+        assert main(argv) == 1
+    assert capsys.readouterr().err.startswith("pyroid clean: Invalid ARC record")
+
+
+def test_translit_errors_takes_unidecodes_values(tmp_path: Path) -> None:
+    src = _write(_table(["Ünïcödé"]), tmp_path / "in.parquet")
+    out = str(tmp_path / "o.parquet")
+    with pytest.raises(SystemExit) as e:
+        main(["translit", str(src), out, "--mode", "unidecode", "--errors", "bogus"])
+    assert e.value.code == 2  # a usage error, as for any bad choice
+    with pytest.raises(SystemExit, match="apply to --mode unidecode"):
+        main(["translit", str(src), out, "--errors", "replace"])
+    with pytest.raises(SystemExit, match="apply to --mode unidecode"):
+        main(["translit", str(src), out, "--replace-str", "_"])
+    assert not Path(out).exists()
+    assert main(["translit", str(src), out, "--mode", "unidecode", "--errors", "strict"]) == 0
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr and patches the JSON chunk size")
+def test_a_jsonl_parse_error_names_its_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """pyarrow said "Invalid encoding in string. in row 1" for an unterminated string."""
+    lines = ['{"text": "ok"}', '{"text": "fine"}', '{"text": "unterminated}']
+    # LF, and CRLF (Windows' text mode writes it): the CR is not named as the problem
+    for end in ("\n", "\r\n"):
+        bad = tmp_path / "bad.jsonl"
+        bad.write_bytes("".join(f"{ln}{end}" for ln in lines).encode())
+        assert main(["translit", str(bad), str(tmp_path / "o.jsonl")]) == 1
+        err = capsys.readouterr().err
+        assert err == f"pyroid translit: {bad}: line 3: Unterminated string starting at column 10\n"
+    good = tmp_path / "good.jsonl"
+    good.write_bytes(b'{"text": "ok"}\r\n{"text": "fine"}\r\n')
+    assert main(["translit", str(good), str(tmp_path / "g.jsonl")]) == 0
+    assert [r["text"] for r in _read(tmp_path / "g.jsonl").to_pylist()] == ["ok", "fine"]
+    # past the first chunk, the line number counts from the start of the file
+    from pyroid.integrations import _io
+
+    monkeypatch.setattr(_io, "JSON_CHUNK_SIZE", 4096)
+    many = tmp_path / "many.jsonl"
+    with many.open("w", encoding="utf-8") as f:
+        f.writelines('{"text": "%s"}\n' % ("x" * 50) for _ in range(2_000))
+        f.write('{"text": "x}\n')
+    with pytest.raises(ValueError, match=r"line 2001: Unterminated string starting at column 10"):
+        for _ in _io.iter_tables(_io.resolve_inputs([many])[0], 1000):
+            pass
+
+
+@pytest.mark.thread_unsafe(reason="reads stderr")
+def test_a_failed_run_leaves_nothing_behind(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A run that fails before finishing any file leaves no hidden state, work directory or
+    directory OUT (each failed attempt left a .OUT.pyroid/)."""
+    src = _write(_table([_english(1), _english(2)]), tmp_path / "in.parquet")
+    missing = str(tmp_path / "missing" / "lid.bin")
+    common = ["--recipe", "fineweb", "--lid-model", missing]
+    tmp = tmp_path / "scratch"
+    tmp.mkdir()
+    for out in ("o.parquet", "d"):
+        for extra in ([], ["--no-dedup"], ["--tmp-dir", str(tmp)]):
+            argv = ["clean", str(src), str(tmp_path / out), *common, *extra]
+            assert main(argv) == 1
+            # One line naming the model (the OS's words differ: "[Errno 2] No such file or
+            # directory" here, "[WinError 3] The system cannot find the path specified" on
+            # Windows), and the note naming the input.
+            first, note = capsys.readouterr().err.splitlines()
+            assert first.startswith("pyroid clean: ")
+            assert "lid.bin" in first
+            assert note == f"  (while processing {src})"
+            assert sorted(p.name for p in tmp_path.iterdir()) == ["in.parquet", "scratch"], argv
+            assert list(tmp.iterdir()) == []
+    # a directory OUT of another run keeps all it had, run.json included
+    d = tmp_path / "d"
+    assert main(["translit", str(src), str(d)]) == 0
+    before = {p: p.read_bytes() for p in d.rglob("*") if p.is_file()}
+    with pytest.raises(SystemExit, match="from a different run"):
+        main(["translit", str(src), str(d), "--mode", "unidecode"])
+    assert {p: p.read_bytes() for p in d.rglob("*") if p.is_file()} == before
+
+
+def test_stats_into_a_closed_pipe(tmp_path: Path) -> None:
+    """``--stats 2>&1 | head -1``: the run completes, tidies up and exits 0 (it exited 120 and
+    left OUT/.pyroid/work-* behind)."""
+    src = _write(_table(["Ünïcödé", "ascii"]), tmp_path / "in.parquet")
+    out = tmp_path / "out"
+    cmd = [sys.executable, "-m", "pyroid", "translit", str(src), str(out), "--stats", "--progress"]
+    r, w = os.pipe()
+    os.close(r)  # nobody reads stderr
+    try:
+        proc = subprocess.run(cmd, stderr=w, stdout=subprocess.DEVNULL, check=False)
+    finally:
+        os.close(w)
+    assert proc.returncode == 0
+    assert _read(out / "in.parquet").column("text").to_pylist() == ["Unicode", "ascii"]
+    assert not list((out / ".pyroid").glob("work-*"))
+    # pyroid stats into a closed stdout: exit 1 quietly, as Python's tools do
+    r, w = os.pipe()
+    os.close(r)
+    try:
+        stats = subprocess.run(
+            [sys.executable, "-m", "pyroid", "stats", str(out)],
+            stdout=w,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    finally:
+        os.close(w)
+    assert stats.returncode == 1
+    assert stats.stderr == ""
+
+
+class _ClosedPipe:
+    """A stream whose writes fail as a write to a pipe nobody reads does on Windows."""
+
+    def write(self, text: str) -> int:
+        raise OSError(errno.EINVAL, "Invalid argument")
+
+    def flush(self) -> None:
+        pass
+
+    def fileno(self) -> int:
+        raise OSError("no descriptor")  # mute() gives up quietly
+
+
+@pytest.mark.thread_unsafe(reason="replaces sys.stderr and sys.stdout")
+def test_a_closed_pipe_on_windows_is_einval_not_epipe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows' C runtime reports a write to a closed pipe as EINVAL; the run exited 120 there."""
+    from pyroid.integrations import _shards
+
+    src = _write(_table(["a", "b"]), tmp_path / "in.parquet")
+    with monkeypatch.context() as m:
+        m.setattr(_shards, "_muted", None)
+        m.setattr(_shards, "_WINDOWS", True)
+        m.setattr(sys, "stderr", _ClosedPipe())
+        _shards.say("lost\n")  # no error: stderr is muted from here
+        assert _shards._muted is sys.stderr
+        assert main(["translit", str(src), str(tmp_path / "o"), "--stats"]) == 0
+        m.setattr(sys, "stdout", _ClosedPipe())
+        assert main(["stats", str(tmp_path / "o")]) == 1  # quietly, as for EPIPE
+    with monkeypatch.context() as m:
+        # elsewhere EINVAL is another error, which is not silenced
+        m.setattr(_shards, "_muted", None)
+        m.setattr(_shards, "_WINDOWS", False)
+        m.setattr(sys, "stderr", _ClosedPipe())
+        with pytest.raises(OSError, match="Invalid argument"):
+            _shards.say("x\n")
+
+
+@pytest.mark.thread_unsafe(reason="replaces sys.stderr")
+def test_messages_go_to_a_new_stderr_after_a_closed_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A closed stderr silenced every later message of the process, to any stderr."""
+    from pyroid.integrations import _shards
+
+    with monkeypatch.context() as m:
+        m.setattr(_shards, "_muted", None)
+        m.setattr(_shards, "_WINDOWS", True)
+        m.setattr(sys, "stderr", _ClosedPipe())
+        _shards.say("lost\n")
+        new = io.StringIO()
+        m.setattr(sys, "stderr", new)
+        _shards.say("seen\n")
+        assert new.getvalue() == "seen\n"
+
+
+def test_the_program_leaves_late_signals_their_default_action(tmp_path: Path) -> None:
+    """Once its command has finished, ``pyroid`` lets SIGINT and SIGTERM end the process.
+
+    A signal during interpreter shutdown was a KeyboardInterrupt in an atexit handler (and its
+    traceback), a lost signal (exit 0), or, after CPython reset the handlers, death by the signal:
+    now it is always the last. ``sys.unraisablehook``, which the program sets for the run, is put
+    back. main() called with arguments, from Python code, leaves the handlers as they were.
+    """
+    src = _write(_table(["a"]), tmp_path / "in.parquet")
+    code = (
+        "import signal, sys\n"
+        "from pyroid.cli import main\n"
+        f"sys.argv = ['pyroid', 'translit', {str(src)!r}, {str(tmp_path / 'o')!r}]\n"
+        "rc = main()\n"
+        "dfl = [signal.getsignal(s) is signal.SIG_DFL for s in (signal.SIGINT, signal.SIGTERM)]\n"
+        "print(rc, *dfl, sys.unraisablehook is sys.__unraisablehook__)\n"
+    )
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+    assert (r.returncode, r.stdout, r.stderr) == (0, "0 True True True\n", "")
+    before = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
+    assert main(["translit", str(src), str(tmp_path / "o2")]) == 0
+    assert (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)) == before
+
+
+@pytest.mark.skipif(not hasattr(signal, "pthread_kill"), reason="POSIX signals")
+def test_a_signal_raised_where_python_cannot_raise_it_comes_again(
+    run_python: Callable[..., subprocess.CompletedProcess[str]],
+) -> None:
+    """Ctrl-C handled inside a weakref callback: Python printed "Exception ignored" and dropped
+    the KeyboardInterrupt (a worker's, at the end of a run). The main process gets the signal
+    again just after; a worker, which has noted it, drops it quietly."""
+    r = run_python(
+        """
+        import signal, sys, time, weakref
+        from pyroid.integrations import _shards
+
+        def term(signum, frame):
+            raise _shards.Terminated
+
+        def swallowed(exc):
+            class Obj:
+                pass
+
+            def callback(ref):
+                raise exc  # as a signal handler that runs here would
+
+            obj = Obj()
+            ref = weakref.ref(obj, callback)
+            del obj  # the callback runs; its exception cannot propagate
+
+        signal.signal(signal.SIGTERM, term)
+        sys.unraisablehook = _shards.redelivering(sys.unraisablehook)
+        for exc in (KeyboardInterrupt, _shards.Terminated):
+            try:
+                swallowed(exc)
+                time.sleep(10)
+                print("not delivered")
+            except KeyboardInterrupt as e:
+                print(type(e).__name__)
+        _shards._interrupted = True  # as in a worker that took its signal
+        swallowed(KeyboardInterrupt)
+        time.sleep(0.2)
+        print("dropped")
+        """
+    )
+    assert (r.returncode, r.stdout, r.stderr) == (0, "KeyboardInterrupt\nTerminated\ndropped\n", "")
 
 
 # ----------------------------------------------------------------------------------------- dedup
@@ -391,6 +715,63 @@ def test_clean_small_no_dedup_and_stats(tmp_path: Path, capsys: pytest.CaptureFi
     assert pq.read_table(out2).column("id").to_pylist() == ["d0", "d4"]
 
 
+def test_clean_ftfy_config(tmp_path: Path) -> None:
+    """--ftfy picks ftfy's defaults, datatrove's FTFYFormatter() config, or no ftfy step."""
+    pytest.importorskip("numpy")
+    if not (DEV.exists() and LID_BIN.exists()):
+        pytest.skip("needs the pinned dev slice and lid.176.bin")
+    from pyroid.integrations.recipes import FTFY_FORMATTER, FineWeb
+
+    sample = pq.read_table(DEV, columns=["text"]).slice(0, 200).column("text").to_pylist()
+    src = _write(_table(sample), tmp_path / "in.parquet")
+    args = ["--recipe", "fineweb", "--lid-model", str(LID_BIN), "--no-dedup"]
+    texts = {}
+    for mode in ["default", "datatrove", "off"]:
+        out = tmp_path / f"{mode}.parquet"
+        assert main(["clean", str(src), str(out), *args, "--ftfy", mode]) == 0
+        texts[mode] = dict(
+            zip(
+                pq.read_table(out).column("id").to_pylist(),
+                pq.read_table(out).column("text").to_pylist(),
+                strict=True,
+            )
+        )
+    for mode, config in [("default", None), ("datatrove", FTFY_FORMATTER), ("off", False)]:
+        ann = FineWeb(lid_model=str(LID_BIN), ftfy_config=config, minhash=None).annotate(
+            pa.chunked_array([sample])
+        )
+        want = {
+            f"d{i}": t
+            for i, (t, k) in enumerate(zip(ann.text.to_pylist(), ann.keep.to_pylist(), strict=True))
+            if k
+        }
+        assert texts[mode] == want, mode
+    # FineWeb's curly quotes stay with datatrove's config and are straightened by ftfy's.
+    curly = [i for i, t in texts["datatrove"].items() if "\u2019" in t]
+    assert curly
+    assert all("\u2019" not in texts["default"].get(i, "") for i in curly)
+    with pytest.raises(SystemExit, match="--ftfy applies to --recipe fineweb"):
+        main(
+            [
+                "clean",
+                str(src),
+                str(tmp_path / "w.parquet"),
+                "--recipe",
+                "fineweb-warc",
+                "--ftfy",
+                "off",
+            ]
+        )
+
+
+def test_ftfy_formatter_config_is_datatroves() -> None:
+    ftfy_fmt = pytest.importorskip("datatrove.pipeline.formatters.ftfy")
+    pytest.importorskip("ftfy")
+    from pyroid.integrations.recipes import FTFY_FORMATTER
+
+    assert tuple(ftfy_fmt.FTFYFormatter().config) == tuple(FTFY_FORMATTER)
+
+
 # ---------------------------------------------------------------------- the dedup spool's cleanup
 # Windows can't delete a file this process still has open or memory-mapped (PermissionError),
 # where Linux and macOS can. `strict_unlink` makes os.unlink of pyroid's spools behave the Windows
@@ -485,3 +866,62 @@ def test_spool_abort_removes_the_partial_file(tmp_path: Path, strict_unlink: lis
     spool.abort()  # idempotent
     assert _removed_under(strict_unlink, tmp_path) == [path + ".partial"]
     assert not list(tmp_path.iterdir())
+
+
+@pytest.fixture(scope="module")
+def en_lid(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A synthetic fastText model whose only label is ``__label__en`` (every text is English)."""
+    pytest.importorskip("numpy")
+    import dataclasses
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    try:
+        from test_fasttext import SPECS, build
+    finally:
+        sys.path.pop(0)
+    path = tmp_path_factory.mktemp("lid") / "en.bin"
+    path.write_bytes(
+        build(dataclasses.replace(SPECS["softmax-dense"], labels=("__label__en",))).data
+    )
+    return path
+
+
+def _english(i: int) -> str:
+    lines = [
+        f"The council of the city met on Tuesday {i} and talked about the plans for the new park.",
+        "Many people from the north side came to the meeting, and they asked about the costs.",
+        "The mayor said that the work would start in the spring if the weather is good enough.",
+        f"Residents who live near the river were worried about traffic during the {i} months.",
+        "After a long discussion, the members agreed to hold another meeting before the vote.",
+    ]
+    return "\n".join(lines)
+
+
+def test_clean_into_one_file_from_inputs_with_other_schemas(tmp_path: Path, en_lid: Path) -> None:
+    # Each file is read with its own schema; one output file takes them all, matched by name
+    # (it failed at the very end with "Target schema's field names are not matching").
+    src = tmp_path / "in"
+    src.mkdir()
+    a = pa.table({"text": [_english(i) for i in range(30)], "id": [f"a{i}" for i in range(30)]})
+    b = pa.table(
+        {"id": [f"b{i}" for i in range(30)], "text": [_english(100 + i) for i in range(30)]}
+    )
+    c = b.append_column("source", pa.array(["x"] * 30)).rename_columns(["id", "text", "source"])
+    for name, t in (("a", a), ("b", b), ("c", c)):
+        pq.write_table(t.replace_schema_metadata(None), src / f"{name}.parquet")
+    common = ["--recipe", "fineweb", "--lid-model", str(en_lid), "--no-dedup"]
+    assert main(["clean", str(src), str(tmp_path / "dir"), *common]) == 0
+    assert main(["clean", str(src), str(tmp_path / "one.parquet"), *common]) == 0
+    one = pq.read_table(tmp_path / "one.parquet")
+    assert one.column_names[:2] == ["text", "id"]
+    assert "source" in one.column_names
+    want = [
+        {**dict.fromkeys(one.column_names), **row}
+        for n in ("a", "b", "c")
+        for row in pq.read_table(tmp_path / "dir" / f"{n}.parquet").to_pylist()
+    ]
+    assert len(want) > 0
+    assert one.to_pylist() == want
+    assert [p.name for p in tmp_path.glob(".one.parquet.pyroid/done/*")] == [
+        "merged-00000-of-00001.json"
+    ]

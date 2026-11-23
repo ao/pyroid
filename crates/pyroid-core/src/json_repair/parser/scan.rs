@@ -1,4 +1,4 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! Lookahead scans with memoization.
 //!
 //! json_repair rescans the rest of the input from many nearby start points

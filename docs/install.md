@@ -44,7 +44,7 @@ Optional libraries, needed only by the features that use them:
     - nltk 3.10.4 for Punkt training and the other `pyroid.nltk` features it hands back;
     - jieba 0.42.1 for `pyroid.jieba.posseg`, `pyroid.jieba.analyse` and paddle mode;
     - rouge-score 0.1.2 and sacrebleu 2.6.0 for the delegated metrics features;
-    - json_repair 0.64.5 for `schema=`;
+    - json_repair 0.64.9 for `schema=`;
     - PyYAML 6.0.3 for customised loaders and dumpers, `!!python/` tags and its other functions
       (`scan`, `compose`, `YAMLObject`, ...);
     - datasketch 2.0.0 for its classes pyroid does not port (`WeightedMinHash`, `HyperLogLog`,

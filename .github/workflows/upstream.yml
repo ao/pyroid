@@ -1,0 +1,303 @@
+name: upstream
+
+# Weekly watch of the libraries pyroid reproduces (the parity oracles, which Dependabot ignores on purpose). For
+# each one with a stable release newer than its pin, it runs that library's parity suites against the new release
+# and opens or updates one issue, "upstream: <library> <version> released", labelled `upstream`. The detection
+# and the issue text are parity/pyroid_parity/upstream.py (parity/README.md, "Upstream watch"). Not in ci-ok.
+
+on:
+  schedule:
+    # Mondays 04:17 UTC.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Render the issues in the job summary instead of opening or updating them
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  MATURIN_VERSION: v1.16.0
+  # For pyroid_parity.upstream; the version parity/uv.lock has.
+  PACKAGING: packaging==26.3
+  # uv's own CPython builds, as in ci.yml.
+  UV_PYTHON_PREFERENCE: only-managed
+
+jobs:
+  detect:
+    name: detect newer releases on PyPI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout (the pins in pyproject.toml and parity/pyproject.toml)
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      parity: ${{ steps.detect.outputs.parity }}
+      found: ${{ steps.detect.outputs.found }}
+      errors: ${{ steps.detect.outputs.errors }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      # Writes found.json, the job summary and the outputs: the parity matrix (one entry per library and suite),
+      # whether anything was found, and how many libraries could not be checked.
+      - id: detect
+        name: Look the pinned oracles up on PyPI (pyroid_parity.upstream detect)
+        run: >-
+          uv run --no-project --python 3.13 --with "$PACKAGING"
+          python -I parity/pyroid_parity/upstream.py detect --root . --out found.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upstream-detect
+          path: found.json
+          if-no-files-found: error
+
+  # A failed lookup (PyPI unreachable, a project renamed) or an exact pin upstream.py does not classify turns the
+  # run red here, without holding up the libraries that were checked.
+  lookups:
+    name: every library checked
+    needs: detect
+    if: needs.detect.outputs.errors != '0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Fail on lookup errors (listed in the detect job's summary)
+        env:
+          ERRORS: ${{ needs.detect.outputs.errors }}
+        run: |
+          echo "::error::${ERRORS} watched libraries could not be checked; see the detect job's summary"
+          exit 1
+
+  wheel:
+    name: wheel (cp311-abi3, ubuntu-24.04)
+    needs: detect
+    if: needs.detect.outputs.parity == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # As ci.yml's wheels job builds it on ubuntu-24.04.
+      - name: Build the cp311-abi3 wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          manylinux: auto
+          args: --release --locked --out dist -i 3.11
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upstream-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+
+  parity:
+    name: parity (${{ matrix.suite }}, ${{ matrix.library }} ${{ matrix.version }})
+    needs: [detect, wheel]
+    if: needs.detect.outputs.parity == 'true'
+    runs-on: ubuntu-24.04
+    # Two passes of the suite; ci.yml's trafilatura legs take about an hour each.
+    timeout-minutes: 200
+    permissions:
+      contents: read # checkout (parity/, bench/manifest.json)
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    env:
+      PYROID_DATA: ${{ github.workspace }}/bench/data
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: upstream-wheel
+          path: dist
+      # The cache ci.yml's parity-data job saves for this commit's manifest and lockfile; restored, never saved. On a
+      # miss the suite runs anyway (checks that read pinned files skip) and the issue says so.
+      - id: data
+        name: Restore the parity data (ci.yml's cache for this architecture)
+        if: matrix.data
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data
+          key: parity-data-${{ runner.arch }}-${{ hashFiles('bench/manifest.json', 'parity/uv.lock') }}
+      # On a miss the nltk suite downloads the models itself and checks their sha256 (as in ci.yml).
+      - name: Restore NLTK's punkt_tab models
+        if: matrix.suite == 'nltk'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench/data/nltk_data
+          key: punkt-tab-parity-e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106
+      - name: pytest parity/tests -m ${{ matrix.suite }} with ${{ matrix.library }} ${{ matrix.version }} over the pin
+        env:
+          LIBRARY: ${{ matrix.library }}
+          VERSION: ${{ matrix.version }}
+          SUITE: ${{ matrix.suite }}
+          DATA: ${{ matrix.data && (steps.data.outputs.cache-hit == 'true' && 'hit' || 'miss') || 'unused' }}
+        run: |
+          set -euo pipefail
+          # Checked by upstream.py already; again here, before they reach a command line.
+          [[ "$LIBRARY" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "::error::bad library name"; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*(\.post[0-9]+)?$ ]] || { echo "::error::bad version"; exit 1; }
+          mapfile -t wheels < <(find dist -maxdepth 1 -name 'pyroid-*-cp311-abi3-*.whl')
+          [[ ${#wheels[@]} -eq 1 ]] || { echo "::error::expected one cp311-abi3 wheel, found ${#wheels[@]}"; exit 1; }
+          # As ci.yml's parity legs on a GIL build: SUITE@MODE is the suite in that mode, with its own group.
+          groups=()
+          mode=()
+          case "$SUITE" in
+            ftfy | fasttext | metrics | json_repair | datasketch | jieba | nltk | warc | trafilatura) ;;
+            filters | dedup) groups=(--group ja --group vi --group th) ;;
+            trafilatura@1.11.0)
+              groups=(--no-group trafilatura --group trafilatura111)
+              mode=(--trafilatura-compat 1.11.0)
+              ;;
+            *) echo "::error::unknown suite $SUITE"; exit 1 ;;
+          esac
+          out="upstream-out/upstream-parity-${LIBRARY}-${SUITE}"
+          mkdir -p "$out"
+          # The parity env (parity/uv.lock) with the wheel and the new release layered over it: uv puts the
+          # --with packages first on sys.path, so they win over the pinned ones.
+          run=(uv run --project parity --frozen --python 3.12 "${groups[@]}" --with "${wheels[0]}" --with "${LIBRARY}==${VERSION}")
+          install=0
+          "${run[@]}" python -c 'import importlib.metadata as m, sys; print(sys.argv[1], m.version(sys.argv[1]))' \
+            "$LIBRARY" || install=$?
+          impl=null
+          self=null
+          if [[ "$install" -eq 0 ]]; then
+            # --upstream-oracle: the suite's oracle version checks expect the new release, and pytest stops with a
+            # usage error unless it is the installed one. pyroid warns that it reproduces another release
+            # (VersionMismatchWarning), which the parity config would turn into an error.
+            tests=(pytest parity/tests -m "${SUITE%@*}" "${mode[@]}" --upstream-oracle "${LIBRARY}==${VERSION}"
+              -W ignore::pyroid.VersionMismatchWarning)
+            # pyroid against the new release (2000 Hypothesis examples per property, as in ci.yml).
+            if HYPOTHESIS_PROFILE=ci "${run[@]}" "${tests[@]}" --impl "pyroid.${SUITE%@*}" \
+              --parity-report "$out/parity-report.json"; then impl=0; else impl=$?; fi
+            # The new release against the pinned references: the suite's self-check (no --impl).
+            if "${run[@]}" "${tests[@]}" --parity-report "$out/parity-self.json"; then self=0; else self=$?; fi
+          fi
+          jq -n --argjson install "$install" --argjson impl "$impl" --argjson self "$self" --arg data "$DATA" \
+            '{install: $install, impl: $impl, self: $self, data: $data}' | tee "$out/status.json"
+      - name: Render the parity reports to the job summary
+        if: ${{ !cancelled() && hashFiles('upstream-out/*/parity-*.json') != '' }}
+        run: |
+          set -euo pipefail
+          for f in upstream-out/*/parity-report.json upstream-out/*/parity-self.json; do
+            if [[ -f "$f" ]]; then
+              echo "#### ${f#upstream-out/}" >> "$GITHUB_STEP_SUMMARY"
+              parity/.venv/bin/python -m pyroid_parity.report render "$f"
+            fi
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: upstream-parity-${{ matrix.library }}-${{ matrix.suite }}
+          # The directory keeps its upstream-parity-<library>-<suite>/ subdirectory in the artifact.
+          path: upstream-out
+          if-no-files-found: warn
+
+  report:
+    name: issue text
+    needs: [detect, parity]
+    if: ${{ !cancelled() && needs.detect.outputs.found == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout (parity/pyroid_parity/upstream.py)
+    outputs:
+      issues: ${{ steps.render.outputs.issues }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: upstream-detect
+          path: upstream
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.parity.result != 'skipped'
+        with:
+          pattern: upstream-parity-*
+          path: upstream/results
+          merge-multiple: true
+      # One body per library with a newer release; a suite without a result (the wheel or the parity job failed)
+      # says so. Also writes every body to the job summary.
+      - id: render
+        name: Write the issue bodies (pyroid_parity.upstream render)
+        run: >-
+          uv run --no-project --python 3.13 --with "$PACKAGING"
+          python -I parity/pyroid_parity/upstream.py render
+          --found upstream/found.json --results upstream/results --out upstream/issues
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upstream-issues
+          path: upstream/issues
+          if-no-files-found: error
+
+  issues:
+    name: open or update the issues
+    needs: report
+    if: ${{ !cancelled() && needs.report.result == 'success' && needs.report.outputs.issues != '0' && !inputs.dry_run }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      issues: write # create the upstream label; open, retitle, edit and comment on the upstream issues
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: upstream-issues
+          path: issues
+      # One open issue per library: the oldest open one labelled `upstream` whose title starts with
+      # "upstream: <library> " is retitled and its body replaced; without one, a new issue is opened.
+      - name: Open or update one issue per library
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          labels=$(gh label list --limit 1000 --json name --jq '.[].name')
+          if ! grep -qx upstream <<< "$labels"; then
+            gh label create upstream --color 5319e7 --description "A newer release of a library pyroid reproduces"
+          fi
+          open=$(gh issue list --state open --label upstream --limit 1000 --json number,title)
+          # The index is read on fd 3, so that gh never reads it from stdin.
+          while IFS=$'\t' read -r -u 3 library title file; do
+            # Written by upstream.py from checked names and versions; checked again before use.
+            [[ "$library" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && "$file" == "$library.md" ]] || { echo "::error::bad index"; exit 1; }
+            [[ "$title" =~ ^upstream:\ [a-z0-9-]+\ [0-9][0-9a-z.]*\ released$ ]] || { echo "::error::bad title"; exit 1; }
+            numbers=$(jq -r --arg prefix "upstream: $library " \
+              '[.[] | select(.title | startswith($prefix)) | .number] | sort | map(tostring) | join(" ")' <<< "$open")
+            read -ra matching <<< "$numbers"
+            if [[ ${#matching[@]} -eq 0 ]]; then
+              gh issue create --title "$title" --label upstream --body-file "issues/$file"
+              continue
+            fi
+            number=${matching[0]}
+            if [[ ${#matching[@]} -gt 1 ]]; then
+              echo "::warning::several open upstream issues for $library (${numbers}); updating #$number"
+            fi
+            old=$(jq -r --argjson n "$number" '.[] | select(.number == $n) | .title' <<< "$open")
+            gh issue edit "$number" --title "$title" --body-file "issues/$file"
+            if [[ "$old" != "$title" ]]; then
+              release=${title#upstream: }
+              gh issue comment "$number" --body "Updated for ${release% released}: the title and the parity result in the description are for this release."
+            fi
+          done 3< issues/index.tsv

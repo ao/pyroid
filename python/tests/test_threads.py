@@ -416,6 +416,16 @@ def test_num_threads_env_set_before_first_use(run_python: RunPython) -> None:
     assert proc.stdout.strip() == "2"
 
 
+@pytest.mark.thread_unsafe(reason="runs subprocesses")
+def test_empty_num_threads_env_is_unset(run_python: RunPython) -> None:
+    code = "from pyroid._pyroid import _testing; print(_testing.pool_size())"
+    unset = run_python(code, env={"PYROID_NUM_THREADS": None, "RAYON_NUM_THREADS": None})
+    for value in ("", "  "):
+        empty = run_python(code, env={"PYROID_NUM_THREADS": value, "RAYON_NUM_THREADS": None})
+        assert empty.returncode == 0, empty.stderr
+        assert empty.stdout == unset.stdout
+
+
 @pytest.mark.thread_unsafe(reason="runs a subprocess")
 @pytest.mark.parametrize("value", ["abc", "0", "-1", "1.5"])
 def test_invalid_num_threads_env(run_python: RunPython, value: str) -> None:
@@ -423,13 +433,13 @@ def test_invalid_num_threads_env(run_python: RunPython, value: str) -> None:
         """
         import pyroid, pyroid.text as t
         from pyroid._pyroid import _testing
-        # Work that never touches the pool still runs.
-        assert t.normalize_whitespace(["a  b"] * 64) == ["a b"] * 64
+        # Work that never touches the pool still runs (one task's worth: < 128 documents).
+        assert t.normalize_whitespace(["a  b"] * 127) == ["a b"] * 127
         assert t.normalize_whitespace(["a  b"] * 1000, threads=1) == ["a b"] * 1000
         long = " a  b " * 2000  # >= 4096 bytes: detached, but not on the pool
         assert t.normalize_whitespace(long) == " ".join(long.split())
         for call in (
-            lambda: t.normalize_whitespace(["a  b"] * 65),
+            lambda: t.normalize_whitespace(["a  b"] * 128),
             lambda: t.min_chars(["a"] * 1000, 1),
             lambda: t.normalize_whitespace(_testing.column(["a  b"] * 1000)),
             _testing.pool_size,

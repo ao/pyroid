@@ -39,13 +39,14 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 | Quality filters | [`pyroid.filters`](https://ataiva.com/open-source/pyroid/docs/guides/filters/) | datatrove 0.10.1's Gopher, C4, FineWeb, PII, C4 bad-words, symbol-lines and URL filters |
 | | [`pyroid.nemo`](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/#pyroidnemo) | NeMo Curator 1.4.0's heuristic document filters and string modifiers |
 | Evaluation | [`pyroid.metrics`](https://ataiva.com/open-source/pyroid/docs/guides/metrics/) | rouge-score 0.1.2; sacrebleu 2.6.0's BLEU, chrF and chrF++ |
-| JSON and YAML | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.5 |
+| JSON and YAML | [`pyroid.json_repair`](https://ataiva.com/open-source/pyroid/docs/guides/json_repair/) | json_repair 0.64.9 |
 | | [`pyroid.yaml`](https://ataiva.com/open-source/pyroid/docs/guides/yaml/) | PyYAML 6.0.3's `safe_load` and `safe_dump` (its pure-Python `SafeLoader` and `SafeDumper`) |
 
 ## Example: cleaning LLM training data
 
-The end-to-end benchmarks run datatrove's FineWeb pipeline. Without text extraction, that is a
-chain of ftfy, fastText language ID, the Gopher, C4 and FineWeb quality filters and MinHash dedup.
+The end-to-end benchmarks run datatrove's FineWeb pipeline. Without text extraction, they run a
+FineWeb-style chain: ftfy, then the pipeline's fastText language ID, Gopher, C4 and FineWeb quality
+filters and MinHash dedup.
 On 100,000 FineWeb documents on AWS EC2 c7i.4xlarge, pyroid's version of the chain is 27× faster
 than datatrove on 8 processes, with the same output.
 
@@ -64,7 +65,7 @@ CPython 3.15.2. Same output, document for document. On the 100k corpus the ratio
 
 ```console
 $ pip install "pyroid[cli]"
-$ pyroid clean in.parquet out.parquet --recipe fineweb   # datatrove's FineWeb pipeline
+$ pyroid clean in.parquet out.parquet --recipe fineweb   # ftfy, then FineWeb's filters and MinHash
 ```
 
 pyroid's stages also drop into datatrove's own executor. There the chain runs 11.2× faster at 8
@@ -128,31 +129,31 @@ files, OpenAPI specs, model cards) on AWS EC2 c7i.4xlarge: `safe_load` runs 10×
 PyYAML's `CSafeLoader` and 44× faster than its default `SafeLoader`; `safe_dump` 5.4× faster than
 `CSafeDumper` and 21× faster than `SafeDumper`.
 
-The other modules have only been measured in a Docker VM on a Mac, so treat these as indicative
-(one thread unless stated):
+The other modules have only been measured in a Docker VM on a Mac or on a shared EC2 machine,
+so treat these as indicative (one thread unless stated):
 
 | pyroid | Against | Speedup |
 |---|---|---:|
 | `trafilatura.extract`, default options (`compat="2.3.1"` / `"1.11.0"`) | Trafilatura 2.3.1 / 1.11.0 | 7.2× / 8.6× |
 | `metrics`, ROUGE | rouge-score 0.1.2 | 59–65× |
 | `metrics`, corpus BLEU / chrF | sacrebleu 2.6.0 | 11× / 19× |
-| `json_repair.repair_json`, broken JSON | json_repair 0.64.5 | about 30× |
+| `json_repair.repair_json`, broken JSON | json_repair 0.64.9 | about 15× |
 | `datasketch`, MinHash signatures, 1 / 8 threads | datasketch 2.0.0 | 8× / 21× |
 | `jieba.lcut`, a batch, 1 / 8 threads | jieba 0.42.1 | 24× / 58× |
 | `nltk.sent_tokenize` / `word_tokenize` | NLTK 3.10.4 | 60× / 31× |
 | `filters`, FineWeb-2 settings, Chinese / Japanese | datatrove 0.10.1 | 44× / 7.8× |
 
-`pyroid.json_repair` stays linear on 13 input families where json_repair is quadratic, so the gap
-grows with the input. The [benchmarks page](https://ataiva.com/open-source/pyroid/docs/benchmarks/) has each
+`pyroid.json_repair` stays linear on the input families where json_repair is still quadratic, so
+there the gap grows with the input. The [benchmarks page](https://ataiva.com/open-source/pyroid/docs/benchmarks/) has each
 row's corpus, interpreter and source.
 
 ## Integrations
 
 | Entry point | What it does |
 |---|---|
-| [`pyroid clean`](https://ataiva.com/open-source/pyroid/docs/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files |
+| [`pyroid clean`](https://ataiva.com/open-source/pyroid/docs/guides/cli/) | the FineWeb-style chain as one command over Parquet or JSONL, or datatrove's FineWeb pipeline from WARC files |
 | [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
-| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`, `nemo_curator` and `yaml` give pyroid's functions, in code you don't own |
+| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator` and `yaml` give pyroid's functions, in code you don't own |
 | [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
 | [NeMo Curator stages](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/) | NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, the heuristic filters, the modifiers) with the same classes and arguments |
 | [Hugging Face `datasets`](https://ataiva.com/open-source/pyroid/docs/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |

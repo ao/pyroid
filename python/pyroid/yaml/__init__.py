@@ -22,6 +22,7 @@ import warnings
 from collections.abc import Iterator
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning, PyroidError
 from pyroid._pyroid import yaml as _native
 from pyroid.yaml import _construct
@@ -32,6 +33,12 @@ __version__ = PYYAML_VERSION
 # Releases whose Python code is 6.0.3's apart from `__version__` (they differ in packaging and
 # wheels), so the results are the same: no version warning for them.
 _SAME_RELEASES = ("6.0", "6.0.1", "6.0.2")
+_versions.check(
+    __name__,
+    "yaml",
+    f"pyyaml=={PYYAML_VERSION}",
+    same=tuple(f"pyyaml=={v}" for v in _SAME_RELEASES),
+)
 
 
 def _find_pyyaml() -> Any:
@@ -49,19 +56,6 @@ _yaml: Any = _find_pyyaml()
 #: PyYAML's flag (so `CSafeLoader if __with_libyaml__ else SafeLoader` picks as with PyYAML; both
 #: run natively, with `SafeLoader`'s results).
 __with_libyaml__: bool = bool(getattr(_yaml, "__with_libyaml__", False))
-
-if _yaml is not None and getattr(_yaml, "__version__", None) not in (
-    PYYAML_VERSION,
-    *_SAME_RELEASES,
-):
-    warnings.warn(
-        f"pyroid.yaml reproduces PyYAML {PYYAML_VERSION}, but PyYAML "
-        f"{getattr(_yaml, '__version__', None)} is installed: pyroid.yaml's load and dump "
-        f"functions give {PYYAML_VERSION}'s results, while the classes and names it forwards "
-        "and the calls it hands to PyYAML are the installed version's",
-        RuntimeWarning,
-        stacklevel=2,
-    )
 
 if _yaml is not None:
     from yaml.composer import ComposerError
@@ -159,7 +153,7 @@ _native._configure(
 def _no_pyyaml(where: str, reason: str) -> PyroidError:
     """The error for a call that needs PyYAML when it is not installed."""
     return PyroidError(
-        f"{where}: {reason} is not supported by pyroid's Rust port, and PyYAML "
+        f"{where}: pyroid's Rust port does not handle {reason}, and PyYAML "
         f"is not installed to fall back to (pip install pyyaml=={PYYAML_VERSION})"
     )
 
@@ -417,7 +411,7 @@ def _pyyaml(name: str | None, reason: str) -> Any:
     if key not in _WARNED:
         _WARNED.add(key)
         warnings.warn(
-            f"pyroid.yaml.{name}: {reason} is not supported by the Rust port; delegating to "
+            f"pyroid.yaml.{name}: the Rust port does not handle {reason}; delegating to "
             "PyYAML (slow path). This warning is shown once.",
             FallbackWarning,
             stacklevel=_caller_stacklevel(),
@@ -674,29 +668,36 @@ def _load_all(stream: Any, loader_cls: Any, name: str) -> Iterator[Any]:
 
 
 def load(stream: Any, Loader: Any) -> Any:  # noqa: N803 - PyYAML's name
-    """Parse the first YAML document in `stream` and produce the Python object.
+    """Parse the first YAML document in `stream` and produce the Python object (``yaml.load``).
 
-    Like ``yaml.load``. A ``SafeLoader`` (or ``CSafeLoader``, with ``SafeLoader``'s results)
-    runs natively; so do ``FullLoader``, ``Loader`` and ``UnsafeLoader`` until a
-    ``!!python/`` tag appears, when PyYAML takes over. Customised loaders go to PyYAML.
+    Args:
+        stream: A ``str``, ``bytes`` (UTF-8, or UTF-16 with a BOM) or a file object.
+        Loader: A loader class. ``SafeLoader``, ``CSafeLoader`` and unmodified subclasses run
+            natively with ``SafeLoader``'s results; ``FullLoader``, ``Loader`` and
+            ``UnsafeLoader`` too until a ``!!python/`` tag appears.
+
+    Raises:
+        YAMLError: The stream is not valid YAML, or a node cannot be constructed (a subclass
+            such as ``ScannerError`` or ``ConstructorError``, with PyYAML's message and marks).
     """
     return _load(stream, Loader, "load")
 
 
 def load_all(stream: Any, Loader: Any) -> Iterator[Any]:  # noqa: N803 - PyYAML's name
-    """Parse all YAML documents in `stream` and produce the Python objects (a generator).
+    """Parse all YAML documents in `stream` and produce the Python objects (``yaml.load_all``).
 
-    Like ``yaml.load_all``. A ``SafeLoader`` runs natively; other loaders go to PyYAML. A
-    file object is read as the documents are needed, as PyYAML reads it.
+    A generator, as in PyYAML: documents come one at a time (a file object is read only as far
+    as the next document needs), and an error in a later document is raised when the generator
+    gets there. Only ``SafeLoader`` (and ``CSafeLoader``) run natively here.
     """
     yield from _load_all(stream, Loader, "load_all")
 
 
 def safe_load(stream: Any) -> Any:
-    """Parse the first YAML document in `stream` and produce the Python object.
+    """Parse the first YAML document in `stream`, with only basic tags (``yaml.safe_load``).
 
-    Resolve only basic YAML tags (``yaml.safe_load``). `stream` is a ``str``, ``bytes``
-    (UTF-8, or UTF-16 with a BOM) or a file object.
+    >>> safe_load("a: [1, 2.5, yes, ~, 2001-12-14]")
+    {'a': [1, 2.5, True, None, datetime.date(2001, 12, 14)]}
     """
     return _load(stream, SafeLoader, "safe_load")
 
@@ -931,11 +932,33 @@ def dump_all(
     tags: Any = None,
     sort_keys: Any = True,
 ) -> Any:
-    """Serialize a sequence of Python objects into a YAML stream (``yaml.dump_all``).
+    r"""Serialize a sequence of Python objects into a YAML stream (``yaml.dump_all``).
 
-    If `stream` is None, return the produced ``str`` (``bytes`` with `encoding`). A
-    ``SafeDumper`` runs natively; so does ``Dumper`` for plain data (dicts, lists, tuples,
-    sets, str, bytes, numbers, booleans, None, dates). Customised dumpers go to PyYAML.
+    Args:
+        documents: The documents, iterated once.
+        stream: A file object to write to; ``None`` returns the text (``bytes`` with
+            `encoding`). A stream gets the text in one ``write`` (PyYAML writes it in many
+            pieces), and what PyYAML would have written before an error.
+        Dumper: ``SafeDumper`` or ``CSafeDumper`` (``SafeDumper``'s text), ``Dumper`` (plain
+            data natively, tuples as ``!!python/tuple``), or a class that goes to PyYAML.
+        default_style: ``None``, ``"'"``, ``'"'``, ``"|"`` or ``">"``.
+        default_flow_style: ``False`` (block), ``True`` (flow) or ``None`` (flow for
+            collections of plain scalars).
+        canonical: Write canonical YAML.
+        indent: 2 to 9 (other values give 2, as in PyYAML).
+        width: Preferred line width; ``float("inf")`` never wraps.
+        allow_unicode: Write non-ASCII characters instead of escapes.
+        line_break: ``"\n"``, ``"\r"`` or ``"\r\n"``.
+        encoding: Encode the text (as PyYAML, per write: ``"utf-16"`` repeats its BOM).
+        explicit_start: Start each document with ``---``.
+        explicit_end: End each document with ``...``.
+        version: A ``%YAML`` directive, e.g. ``(1, 1)``.
+        tags: ``%TAG`` directives, handle to prefix.
+        sort_keys: Sort mapping keys (keys of mixed types stay in order).
+
+    Raises:
+        RepresenterError: ``SafeDumper`` met an object it cannot represent.
+        EmitterError: A bad `version` or `tags`.
     """
     kwds = {
         "default_style": default_style,
@@ -990,7 +1013,8 @@ def dump_all(
             per_write = codecs.lookup(effective).name not in _STATELESS_CODECS
         except LookupError:
             per_write = True
-    it = iter(documents)
+    # A list of documents is read in one step: another thread may change it meanwhile.
+    it = iter(tuple(documents) if type(documents) is list else documents)
     text, writes, error, consumed, reason = _native.dump(
         it,
         full=mode == "full",
@@ -1063,7 +1087,7 @@ _DUPLICATE_DUMPER = "yaml.dump_all() got multiple values for keyword argument 'D
 
 
 def dump(data: Any, stream: Any = None, Dumper: Any = Dumper, **kwds: Any) -> Any:  # noqa: N803
-    """Serialize a Python object into a YAML stream (``yaml.dump``)."""
+    """Serialize one Python object into a YAML stream (``yaml.dump``); see :func:`dump_all`."""
     return dump_all([data], stream, Dumper=Dumper, **kwds)
 
 
@@ -1075,14 +1099,18 @@ def safe_dump_all(documents: Any, stream: Any = None, **kwds: Any) -> Any:
 
 
 def safe_dump(data: Any, stream: Any = None, **kwds: Any) -> Any:
-    """``yaml.safe_dump``: :func:`dump_all` of one document with ``SafeDumper``."""
+    r"""Serialize one Python object with ``SafeDumper`` (``yaml.safe_dump``).
+
+    >>> safe_dump({"b": [1, 2], "a": "x"})
+    'a: x\nb:\n- 1\n- 2\n'
+    """
     if "Dumper" in kwds:
         raise TypeError(_DUPLICATE_DUMPER)
     return dump_all([data], stream, Dumper=SafeDumper, **kwds)
 
 
 def __getattr__(name: str) -> Any:
-    """The rest of PyYAML's API (the event and token APIs, ``YAMLObject``, ...)."""
+    """The rest of PyYAML's API (``scan``, ``parse``, ``compose``, ``YAMLObject``, ...)."""
     if _yaml is not None and not name.startswith("__"):
         return getattr(_yaml, name)
     raise AttributeError(

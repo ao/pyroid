@@ -22,12 +22,14 @@ mod fasttext;
 mod filters;
 mod ftfy;
 mod input;
+mod interrupt;
 mod jieba;
 mod json_repair;
 mod metrics;
 mod nemo;
 mod nemo_modifiers;
 mod nltk;
+mod np;
 mod pythainlp;
 mod segmenters;
 mod sudachi;
@@ -51,6 +53,8 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     errors::register(m)?;
     m.add_class::<arrow::Column>()?;
     testing::register(m)?;
+    np::register(m)?;
+    interrupt::register();
     // Product modules: one registration line each.
     text::register(m)?;
     ftfy::register(m)?;

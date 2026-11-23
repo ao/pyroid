@@ -37,7 +37,11 @@ def _datasketch_storage(function: str, tp: str) -> Any:
 
 
 def ordered_storage(config: dict[str, Any], name: bytes | None = None) -> OrderedStorage:
-    """Return an ordered storage container (``defaultdict(list)``-like) for ``config``."""
+    """Return an ordered storage (values are lists) for ``config``.
+
+    Raises:
+        ValueError: ``"Unknown storage type: ..."``.
+    """
     tp = config["type"]
     if tp == "dict":
         return DictListStorage(config)
@@ -47,7 +51,11 @@ def ordered_storage(config: dict[str, Any], name: bytes | None = None) -> Ordere
 
 
 def unordered_storage(config: dict[str, Any], name: bytes | None = None) -> UnorderedStorage:
-    """Return an unordered storage container (``defaultdict(set)``-like) for ``config``."""
+    """Return an unordered storage (values are sets) for ``config``.
+
+    Raises:
+        ValueError: ``"Unknown storage type: ..."``.
+    """
     tp = config["type"]
     if tp == "dict":
         return DictSetStorage(config)
@@ -76,12 +84,12 @@ class Storage(ABC):
 
     @abstractmethod
     def keys(self) -> Any:
-        """Return an iterator on keys in storage."""
+        """Return the keys."""
         return []
 
     @abstractmethod
     def get(self, key: Any) -> Any:
-        """Return the values stored under ``key``, empty if it is absent."""
+        """Return the values of ``key``, empty if it is absent."""
 
     def getmany(self, *keys: Any) -> list[Any]:
         """Return ``[self.get(key) for key in keys]``."""
@@ -89,27 +97,27 @@ class Storage(ABC):
 
     @abstractmethod
     def insert(self, key: Any, *vals: Any, **kwargs: Any) -> None:
-        """Add `val` to storage against `key`."""
+        """Add ``vals`` to the values of ``key``."""
 
     @abstractmethod
     def remove(self, *keys: Any, **kwargs: Any) -> None:
-        """Remove `keys` from storage."""
+        """Remove ``keys``."""
 
     @abstractmethod
     def remove_val(self, key: Any, val: Any) -> None:
-        """Remove `val` from list of values under `key`."""
+        """Remove ``val`` from the values of ``key``."""
 
     @abstractmethod
     def size(self) -> int:
-        """Return size of storage with respect to number of keys."""
+        """Return the number of keys."""
 
     @abstractmethod
     def itemcounts(self, **kwargs: Any) -> dict[Any, int]:
-        """Return the number of values stored under each key."""
+        """Return the number of values of each key."""
 
     @abstractmethod
     def has_key(self, key: Any) -> bool:
-        """Return whether ``key`` is in the storage."""
+        """Return whether ``key`` is stored."""
 
     @property
     def buffer_size(self) -> int:
@@ -128,14 +136,14 @@ class Storage(ABC):
         """Flush buffered writes (nothing to do in memory)."""
 
     def add_to_select_buffer(self, keys: Any) -> None:
-        """Query keys and add them to internal buffer."""
+        """Look up ``keys`` and buffer the results."""
         if not hasattr(self, "_select_buffer"):
             self._select_buffer = self.getmany(*keys)
         else:
             self._select_buffer.extend(self.getmany(*keys))
 
     def collect_select_buffer(self) -> list[Any]:
-        """Return buffered query results."""
+        """Return the buffered results and clear the buffer."""
         if not hasattr(self, "_select_buffer"):
             return []
         buffer = list(self._select_buffer)
@@ -219,17 +227,17 @@ def _read_only(name: str) -> NotImplementedError:
 
 
 class DictListStorageView(OrderedStorage):
-    """Read-only view of ``MinHashLSH.keys``, with ``DictListStorage``'s API.
+    """Read-only view of ``MinHashLSH.keys``: key -> its band keys.
 
-    Values are new lists (a snapshot); the mutating methods raise
-    ``NotImplementedError``.
+    It has ``DictListStorage``'s API. ``insert``, ``remove`` and
+    ``remove_val`` raise ``NotImplementedError``.
     """
 
     def __init__(self, index: Any) -> None:
         self._index = index
 
     def keys(self) -> list[Hashable]:
-        """Return the keys, in insertion order (a new list)."""
+        """Return the keys in insertion order (a new list)."""
         return self._index.keys_list()  # type: ignore[no-any-return]
 
     def get(self, key: Hashable) -> list[bytes]:
@@ -265,9 +273,9 @@ class DictListStorageView(OrderedStorage):
 class DictSetStorageView(UnorderedStorage):
     """Read-only view of one band table, ``MinHashLSH.hashtables[i]``.
 
-    It has ``DictSetStorage``'s API: band keys (bytes) map to the set of keys
-    in that bucket. Values are new sets (a snapshot); the mutating methods
-    raise ``NotImplementedError``.
+    It has ``DictSetStorage``'s API: band key (bytes) -> the set of keys in
+    that bucket. Buckets iterate in no particular order. ``insert``,
+    ``remove`` and ``remove_val`` raise ``NotImplementedError``.
     """
 
     def __init__(self, index: Any, table: int) -> None:
@@ -275,7 +283,7 @@ class DictSetStorageView(UnorderedStorage):
         self._table = table
 
     def keys(self) -> list[bytes]:
-        """Return the band keys of the buckets (a new list, in no particular order)."""
+        """Return the band keys of the buckets (a new list)."""
         return self._index.table_keys(self._table)  # type: ignore[no-any-return]
 
     def get(self, key: Any) -> set[Hashable]:

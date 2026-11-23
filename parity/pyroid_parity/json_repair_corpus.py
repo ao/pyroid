@@ -47,7 +47,7 @@ from typing import Any
 SEED = 645
 DEFAULT_SIZE = 20_000
 CHUNK = 250
-DATA = Path(__file__).resolve().parents[1] / "data" / "json_repair-0.64.5"
+DATA = Path(__file__).resolve().parents[1] / "data" / "json_repair-0.64.9"
 PIN = DATA / "corpus-outcomes.json"
 PIN_FORMAT = "pyroid-json_repair-corpus/1"
 

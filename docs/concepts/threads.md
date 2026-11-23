@@ -23,13 +23,17 @@ ftfy.fix_text_batch(docs, threads=1)  # this thread only
 ```
 
 The pool is created on first use, not at import. Its size comes from the `PYROID_NUM_THREADS`
-environment variable, read once at that point. If it is unset, rayon's default applies
+environment variable, read once at that point. If it is unset or empty, rayon's default applies
 (`RAYON_NUM_THREADS`, else the number of available CPUs).
 
-Results never depend on `threads`: the same input gives the same output for every value. Batches
-of 64 documents or fewer run on the calling thread, where the pool's overhead would cost more
-than it saves. Worker threads do not survive `fork()`, so the pool is rebuilt in a forked child
-process.
+Results never depend on `threads`: the same input gives the same output for every value.
+
+Each task on the pool holds at least 64 documents, because handing out a task costs more than a
+few documents' work. So a batch of `n` documents uses at most `n / 64` threads: fewer than 128
+documents run on the calling thread whatever `threads` says, 128 documents use two threads, and
+eight threads need 512 documents or more. To spread a smaller batch of slow documents over
+cores, call pyroid from several Python threads instead, on a free-threaded build. Worker threads do not survive `fork()`, so the pool is rebuilt
+in a forked child process.
 
 ## The GIL
 
@@ -37,6 +41,45 @@ While a batch runs, pyroid releases the GIL (the Rust kernels never call into Py
 Python threads keep running, and a pyroid call in one thread doesn't block another thread's
 pyroid call. Converting the results back to Python objects needs the interpreter, so it happens
 on the calling thread after the batch.
+
+A call on a single `str` releases the GIL only for long documents (4 KiB and more) or slow
+kernels (fastText, the filters, MinHash). When another Python thread is busy, getting the GIL
+back after such a call can take up to the interpreter's switch interval
+(`sys.getswitchinterval()`, 5 ms by default), which is far longer than the call itself. So with
+busy threads around, one call per document can be many times slower than alone; a batch call
+releases and retakes the GIL once for the whole batch.
+
+## Ctrl-C
+
+A batch runs without the GIL, so Python cannot run its signal handlers while it works. pyroid runs
+them itself: every 100 ms the thread that made the call runs the pending handlers, and if one
+raises (`KeyboardInterrupt` for Ctrl-C), the batch stops at its next document and the call raises
+that exception. The result so far is thrown away, and objects such as a `MinHashLSH` or a
+`MinHashDedup` keep their state from before the call. Two keep what was done: a trafilatura
+`LRUCache` holds the pages extracted so far, as after an interrupted loop of `extract` calls, and
+a MinHash signature writer interrupted in `finish()` has to be started again. A handler that
+returns lets the batch go on.
+Only the main thread runs signal handlers, as in Python, so a batch on another thread runs to its
+end. A single document is not interrupted halfway, so a very long one finishes first.
+
+## Memory after a call
+
+Each pool thread keeps a few buffers between calls so that a batch allocates little per
+document: the spaCy tokenizer's cache of up to 16,384 word spans per language (about 2 MiB when
+full), and scratch buffers of up to 1 MiB each, which are given back when a long document made
+them bigger. On a machine with many cores the pool has as many threads, and their buffers add up:
+after `gopher_quality` on 100k FineWeb documents with 64 threads, RSS stayed about 240 MiB above
+where it was with Arrow input (EC2 c8g.16xlarge, shared, indicative). Two more things keep memory
+after a call:
+
+- A list of `str` that is not ASCII gets a UTF-8 copy of each string, which CPython keeps inside
+  the string object until the string is freed (pyroid reads text as UTF-8). That was another
+  240 MiB for those 100k documents. Arrow input has no such copy.
+- The C allocator keeps freed memory per thread for reuse. With glibc, `MALLOC_ARENA_MAX=2` in the
+  environment, or `ctypes.CDLL("libc.so.6").malloc_trim(0)` after a large call, gives more of it
+  back to the system.
+
+`threads=` caps how many pool threads a call uses, and `PYROID_NUM_THREADS` the size of the pool.
 
 ## Free-threaded Python
 
@@ -67,6 +110,31 @@ against 6.63 µs with Arrow input ([Benchmarks](../benchmarks.md#thread-scaling)
     Arrow input, but only from 1.74 to 1.01 µs on a list. For a list, pyroid still builds the
     output strings one after another on the calling thread. See
     [Benchmarks](../benchmarks.md#thread-scaling).
+
+## Inputs that another thread changes
+
+A call may get a list, dict or set that another thread changes while the call runs. That can
+happen on any build, and on a free-threaded one at any moment. pyroid never crashes or raises
+`PanicException` because of it:
+
+- A list of documents, and the other lists pyroid's Rust code reads (such as `remove_lines`'
+  patterns), is read once, in one step, at the start of the call. The result is for the list
+  as it was at that moment; later changes don't reach the call, and a call never sees part of
+  one change.
+- A set or dict that pyroid reads, such as `PunktParameters`' sets and `ortho_context`, is copied
+  in one step first. A change made during a call shows from the next call on.
+- Configuration objects (a filter config and the lists in it) are read by pyroid's Python code
+  as a call starts, as any Python code reads them: a list changed at that moment can be read
+  partly before and partly after the change.
+- APIs that take any iterable and mirror a library that iterates it lazily
+  (`MinHash.bulk`, `MinHash.generator`, `update_batch` with a generator) go through it as that
+  library does, with Python's iterator.
+- Objects that hold state, such as a `MinHashLSH` or a `pyroid.warc` reader, can be used from
+  several threads; each call takes the object's lock.
+
+A NumPy array is different. NumPy doesn't guard an array against a thread that writes,
+resizes or reshapes it while another reads it, and pyroid can't either. Don't change an array
+in place while a pyroid call that got it is running.
 
 ## What can bring the GIL back
 

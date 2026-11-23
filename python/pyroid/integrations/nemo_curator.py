@@ -55,7 +55,22 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple
 
-import numpy as np
+from pyroid._deps import missing
+
+try:
+    import numpy as np
+except ModuleNotFoundError as _exc:
+    missing(__name__, _exc, "nemo", "numpy")
+try:
+    import nemo_curator  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: F401
+except ModuleNotFoundError as _exc:
+    missing(
+        __name__,
+        _exc,
+        None,
+        "nemo_curator",
+        hint="pip install nemo-curator==1.4.0 (CPython 3.11 to 3.13; it brings torch and Ray)",
+    )
 import pandas as pd  # type: ignore[import-not-found,import-untyped,unused-ignore]
 from nemo_curator.stages import base as _nc_base  # type: ignore[import-not-found,import-untyped,unused-ignore]
 from nemo_curator.stages.text.filters import doc_filter as _nc_doc_filter  # type: ignore[import-not-found,import-untyped,unused-ignore]
@@ -71,6 +86,7 @@ from nemo_curator.stages.text.utils import constants as _nc_constants  # type: i
 import pyroid
 import pyroid.ftfy
 import pyroid.nemo as _k
+from pyroid import _versions
 
 __all__ = [
     "BoilerPlateStringFilter",
@@ -130,23 +146,7 @@ _FALLBACK_ERRORS = (
 )
 
 
-def _check_nemo_version() -> None:
-    from importlib.metadata import PackageNotFoundError, version
-
-    try:
-        installed = version("nemo_curator")
-    except PackageNotFoundError:  # pragma: no cover - imported from a source tree
-        return
-    if installed != _k.NEMO_CURATOR_VERSION:
-        warnings.warn(
-            f"pyroid.integrations.nemo_curator reproduces NeMo Curator {_k.NEMO_CURATOR_VERSION}; "
-            f"NeMo Curator {installed} is installed, whose own stages may differ",
-            RuntimeWarning,
-            stacklevel=3,
-        )
-
-
-_check_nemo_version()
+_versions.check(__name__, "nemo_curator", f"nemo-curator=={NEMO_CURATOR_VERSION}")
 
 
 def _fallback(what: str, reason: str) -> None:

@@ -695,39 +695,26 @@ for fn in (py.safe_dump, yaml.safe_dump):
     r = run_python(code)
     assert r.returncode == 0, r.stderr
     assert r.stdout.splitlines() == [
-        "['pyroid.yaml.unsafe_load_all: Loader=UnsafeLoader in load_all is not supported by the "
-        "Rust port']",
-        "['pyroid.yaml.load_all: Loader=FullLoader in load_all is not supported by the Rust port']",
-        "['pyroid.yaml.load: a !!python/ tag is not supported by the Rust port']",
-        "['pyroid.yaml.load: Loader=L with added constructors, resolvers or overrides is not "
-        "supported by the Rust port']",
-        "['pyroid.yaml.safe_dump_all: a tags= value that is not a dict of str is not supported by "
-        "the Rust port']",
-        "['pyroid.yaml.safe_dump: Dumper=SafeDumper with added representers, resolvers or "
-        "overrides is not supported by the Rust port']",
-        "['pyroid.yaml.dump: an object other than plain data is not supported by the Rust port']",
+        "['pyroid.yaml.unsafe_load_all: the Rust port does not handle Loader=UnsafeLoader in "
+        "load_all']",
+        "['pyroid.yaml.load_all: the Rust port does not handle Loader=FullLoader in load_all']",
+        "['pyroid.yaml.load: the Rust port does not handle a !!python/ tag']",
+        "['pyroid.yaml.load: the Rust port does not handle Loader=L with added constructors, "
+        "resolvers or overrides']",
+        "['pyroid.yaml.safe_dump_all: the Rust port does not handle a tags= value that is not a "
+        "dict of str']",
+        "['pyroid.yaml.safe_dump: the Rust port does not handle Dumper=SafeDumper with added "
+        "representers, resolvers or overrides']",
+        "['pyroid.yaml.dump: the Rust port does not handle an object other than plain data']",
         "yaml.dump_all() got multiple values for keyword argument 'Dumper'",
         "yaml.dump_all() got multiple values for keyword argument 'Dumper'",
     ]
 
 
 @needs_pyyaml
-@pytest.mark.thread_unsafe
-def test_libyaml_flag_and_version_warning(run_python: Any) -> None:
+def test_libyaml_flag() -> None:
+    # Another PyYAML release warns through pyroid._versions: test_version_mismatch.py.
     assert py.__with_libyaml__ is yaml.__with_libyaml__
-    code = r"""
-import warnings
-import yaml
-yaml.__version__ = "5.4.1"
-with warnings.catch_warnings(record=True) as w:
-    warnings.simplefilter("always")
-    import pyroid.yaml
-want = "pyroid.yaml reproduces PyYAML 6.0.3, but PyYAML 5.4.1 is installed: "
-print([(x.category.__name__, str(x.message).startswith(want), x.filename) for x in w])
-"""
-    r = run_python(code)
-    assert r.returncode == 0, r.stderr
-    assert r.stdout.strip() == "[('RuntimeWarning', True, '<string>')]"
 
 
 @pytest.mark.thread_unsafe
@@ -753,7 +740,7 @@ except py.PyroidError as e:
     assert r.returncode == 0, r.stderr
     assert r.stdout.splitlines() == [
         "{'a': 1} 'a: 1\\n'",
-        "pyroid.yaml.load: Loader=M with added constructors",
+        "pyroid.yaml.load: pyroid's Rust port does not handle Loader=M with added constructors",
     ]
 
 
@@ -792,8 +779,8 @@ def _registrations_without_pyyaml() -> dict[str, list[str]]:
             for method, what in _REGISTRATIONS[kind].items():
                 want[f"{owner}.{method}"] = [
                     "PyroidError",
-                    f"{module}.{owner}.{method}: a {kind} with added {what} is not supported by "
-                    "pyroid's Rust port, and PyYAML is not installed to fall back to "
+                    f"{module}.{owner}.{method}: pyroid's Rust port does not handle a {kind} "
+                    f"with added {what}, and PyYAML is not installed to fall back to "
                     "(pip install pyyaml==6.0.3)",
                 ]
             # The other kind's registrations (PyYAML's class lacks them too) and the rest of
