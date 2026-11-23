@@ -41,12 +41,6 @@ needs_sqlparse = pytest.mark.skipif(
     _sqlparse_version() != "0.6.1", reason="needs sqlparse 0.6.1 installed"
 )
 
-# `python -m pyroid run`: the pyroid command line imports pyarrow before it gets to `run`.
-needs_cli = pytest.mark.skipif(
-    importlib.util.find_spec("pyarrow") is None,
-    reason="the pyroid command line needs pyarrow (pyroid[cli])",
-)
-
 # Environment that would leak a patch (or a warning filter) into the children.
 _CLEAN = ("PYTHONPATH", "PYROID_PATCH", "_PYROID_PATCH_WARNED", "PYTHONWARNINGS", "TEST_HIDE")
 
@@ -475,7 +469,6 @@ def test_pool_map_with_the_patched_functions(tmp_path: Path) -> None:
 
 
 @needs_sqlparse
-@needs_cli
 def test_pool_map_under_pyroid_run(tmp_path: Path) -> None:
     # Spawned and forkserver workers are patched by the start-up hook too.
     (tmp_path / "pool.py").write_text(POOL)
@@ -509,7 +502,6 @@ if __name__ == "__main__":
 
 
 @needs_sqlparse
-@needs_cli
 @pytest.mark.parametrize("how", ["script", "module"])
 def test_pyroid_run_patches_the_target_and_its_children(tmp_path: Path, how: str) -> None:
     (tmp_path / "children.py").write_text(CHILDREN)
@@ -529,7 +521,6 @@ def test_pyroid_run_patches_the_target_and_its_children(tmp_path: Path, how: str
 
 
 @needs_sqlparse
-@needs_cli
 def test_pyroid_run_sqlparses_command_line(tmp_path: Path) -> None:
     sql = tmp_path / "in.sql"
     sql.write_text("select a,b from t where c=1; -- note\ninsert into t values (1,2)\n")
@@ -733,10 +724,12 @@ def test_without_sqlparse_the_modules_are_pyroids(tmp_path: Path) -> None:
     assert len(out["warnings"]) == 1, out["warnings"]
     category, message = out["warnings"][0]
     assert category == "PatchWarning"
-    assert message.startswith(
-        "pyroid.integrations.patch: `import sqlparse` now gives pyroid's drop-in (pyroid.sqlparse"
+    # One sentence, as for every name whose package is missing.
+    assert message == (
+        "pyroid.integrations.patch: sqlparse is not installed, so sqlparse and its submodules "
+        "are pyroid.sqlparse's, which include sqlparse 0.6.1's Python modules. This warning is "
+        "shown once."
     )
-    assert "so sqlparse and its submodules are pyroid.sqlparse's" in message
     assert out["module"]
     assert out["version"] == "0.6.1"
     assert out["format"] == "SELECT a,\n       b\nFROM t\nWHERE c=1"
@@ -956,5 +949,7 @@ def test_pyroid_run_and_the_hook_with_sqlparse_older_than_0_5(tmp_path: Path) ->
     env = {"PYTHONPATH": os.pathsep.join([_patch.HOOK_DIR, str(root)]), "PYROID_PATCH": "sqlparse"}
     proc = run_script(["-W", "always::UserWarning", "-c", code], tmp_path, env)
     assert last_json(proc) == [[], False]
-    skipped = "PatchWarning: pyroid: not patching sqlparse: patch('sqlparse') needs sqlparse 0.5.0"
+    # A plain line, as under pyroid run (it was located in pyroid's sitecustomize.py).
+    skipped = "pyroid: PatchWarning: not patching sqlparse: patch('sqlparse') needs sqlparse 0.5.0"
     assert skipped in proc.stderr, proc.stderr
+    assert "sitecustomize.py" not in proc.stderr, proc.stderr

@@ -108,8 +108,8 @@ files can keep different documents. pyroid has no timeout.
 
 ## Differences from the originals
 
-Batch functions take a `str`, a `list` of `str` or an Arrow column (pyarrow, polars, Hugging Face
-`datasets`) and return text and masks in the same kind. They release the GIL and run on all
+Batch functions take a `str`, a `list` or `tuple` of `str`, or an Arrow string column (pyarrow,
+polars, pandas, Hugging Face `datasets`), and return text and masks in the same kind. They release the GIL and run on all
 cores, so threads replace worker processes, and every thread shares one loaded fastText model
 instead of a copy per process.
 

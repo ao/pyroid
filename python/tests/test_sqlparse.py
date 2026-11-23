@@ -776,8 +776,11 @@ def test_classes_warning_for_a_release_older_than_0_5(tmp_path: Any) -> None:
         sys.path.insert(0, sys.argv[1])
         warnings.simplefilter("always")
         with warnings.catch_warnings(record=True) as w:
+            line = sys._getframe().f_lineno + 1
             import pyroid.sqlparse as P  # noqa: N812
         assert P.sql.Identifier.__module__ == "pyroid.sqlparse.sql"
+        # Both at the import line (the RuntimeWarning was located at sys:1).
+        assert {(x.filename, x.lineno) for x in w} == {("<string>", line)}, w
         print("|".join(f"{x.category.__name__}: {x.message}" for x in w))
         """,
         str(tmp_path),

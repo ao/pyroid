@@ -536,7 +536,7 @@ checked. Each library is checked once per process, by whichever module asks firs
 | rouge-score | rouge-score 0.1.2 | `import pyroid.metrics.rouge_scorer` (and its `scoring`, `tokenizers` and `tokenize`) |
 | NLTK | nltk 3.10.4 | `import pyroid.nltk`, `pyroid.patch("nltk")`; `pyroid.metrics.rouge_scorer` for its Porter stemmer |
 | sacrebleu | sacrebleu 2.6.0 | `import pyroid.metrics.sacrebleu` |
-| json_repair | json-repair 0.64.9 | `import pyroid.json_repair` |
+| json_repair | json-repair 0.64.9 | `import pyroid.json_repair`, `pyroid.patch("json_repair")` |
 | PyYAML | pyyaml 6.0.3; 6.0, 6.0.1 and 6.0.2 give the same results | `import pyroid.yaml`, `pyroid.patch("yaml")` |
 | tabulate | tabulate 0.10.0 | `import pyroid.tabulate`, `pyroid.patch("tabulate")` |
 | python-dateutil | python-dateutil 4.0.0; 3.0.0, 2.9.0.post0, 2.9.0 and 2.8.2 give the same results (`isoparse` follows the installed release) | `import pyroid.dateutil.parser`, `pyroid.patch("dateutil")` |

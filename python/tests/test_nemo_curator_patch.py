@@ -6,10 +6,12 @@ Curator (Python < 3.14 only).
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -103,3 +105,14 @@ def test_patched_yaml_pipeline_stage_runs_pyroid() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == "[3]"
+
+
+def test_ctrl_c_leaves_a_patch_recorded_or_undone() -> None:
+    # test_integrations_patch.py's sweep, with NeMo Curator installed (that file runs without it).
+    path = Path(__file__).with_name("test_integrations_patch.py")
+    spec = importlib.util.spec_from_file_location("_pyroid_test_integrations_patch", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.check_ctrl_c("nemo_curator", hide=False)

@@ -209,7 +209,10 @@ pyroid run: PatchWarning: ftfy, fasttext patched with pyroid.ftfy, pyroid.fastte
 ```
 
 That one line replaces the `PatchWarning` that `patch()` gives for each name;
-`PYTHONWARNINGS=ignore::UserWarning` silences it.
+`PYTHONWARNINGS=ignore::UserWarning` silences it. A `VersionMismatchWarning` comes before the
+target too, so a `warnings.simplefilter(...)` in the target is too late for it; it names the
+`PYTHONWARNINGS` value that silences it, such as
+`PYTHONWARNINGS='ignore:pyroid.ftfy reproduces'`.
 
 ```text
 usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
@@ -221,7 +224,9 @@ Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, wi
 (multiprocessing workers, subprocesses) are patched too.
 
 options:
-  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate, dateutil, jmespath, difflib, packaging, sqlparse, langdetect
+  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch,
+                     json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate,
+                     dateutil, jmespath, difflib, packaging, sqlparse, langdetect
                      (repeatable; default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
@@ -271,7 +276,7 @@ subprocess: True
   forkserver workers, `subprocess`), then runs the environment's own `sitecustomize`, if there is
   one. Forked workers inherit the patch anyway;
 - runs the target in the same process, as `python SCRIPT ARGS` / `python -m MODULE ARGS` would
-  (`sys.argv`, `sys.path[0]`, `__name__ == "__main__"`). It exits with the target's exit code: 0
+  (`sys.argv`, `sys.path[0]`, an absolute `__file__`, `__name__ == "__main__"`). It exits with the target's exit code: 0
   when it finishes, 2 for a usage error or a missing script, 1 when the module can't be found. An
   uncaught exception's traceback starts at the target's own first frame, as with `python`. One
   process runs one target at a time: a second `pyroid.integrations.run(...)` while a target runs,
@@ -284,12 +289,14 @@ with a `PatchWarning` that says why, and the process runs unpatched for that nam
 
 ### Without `pyroid run`
 
-The same works with two environment variables, for example in a job script:
+The same works with two environment variables, for example in a job script. The hook directory
+goes first on `PYTHONPATH`, and the entries already there stay:
 
 ```console
 $ export PYROID_PATCH=ftfy,fasttext
-$ export PYTHONPATH="$(python -c 'import pyroid.integrations._patch as p; print(p.HOOK_DIR)')"
+$ export PYTHONPATH="$(python -c 'import pyroid.integrations._patch as p; print(p.HOOK_DIR)')${PYTHONPATH:+:$PYTHONPATH}"
 $ python train.py
+pyroid: PatchWarning: ftfy, fasttext patched with pyroid.ftfy, pyroid.fasttext (from $PYROID_PATCH), in this process and the Python processes it starts
 ```
 
 ## Verified call sites

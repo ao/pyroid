@@ -3,7 +3,7 @@
 `pyroid.langdetect` is a Rust port of [langdetect](https://github.com/Mimino666/langdetect)
 1.0.9 by Michal Danilak (Apache-2.0), itself a port of Cybozu Labs' language-detection. It
 returns the same language codes and the same probabilities, to the last bit, for the same
-`DetectorFactory.seed` ([parity](../compatibility.md#langdetect)), 35 to 50 times faster per
+`DetectorFactory.seed` ([parity](../compatibility.md#langdetect)), 35 to 49 times faster per
 call, and detects batches on all cores. The other fast detectors (fastText's lid.176, lingua,
 fast-langdetect) are different models and give different answers; this one keeps langdetect's.
 
@@ -72,7 +72,9 @@ ld.detect_batch(table["text"])  # an Arrow column -> pyroid.Column
 with the default factory and `DetectorFactory.seed`, so a batch gives exactly the loop's
 results, whatever the number of threads. Texts are detected on pyroid's shared thread pool
 (`threads=` caps it; `threads=1` uses the calling thread), in chunks of about 50 ms with Ctrl-C
-checked between them.
+checked between them. The seed is `pyroid.langdetect.DetectorFactory.seed`, also under
+`pyroid.patch("langdetect")`: setting langdetect's own `DetectorFactory.seed` leaves a batch
+unseeded.
 
 - `texts`: a list or tuple of str (a tuple gives a tuple), or an Arrow string array
   (pyarrow, polars, ...; [inputs](../concepts/inputs.md)). `detect_batch` on Arrow input
