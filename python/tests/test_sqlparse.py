@@ -721,6 +721,13 @@ def test_ctrl_c_stops_a_long_format(send: str) -> None:
     assert float(secs) < 3.0, r.stdout
 
 
+def _dist_info(root: Any, version: str) -> None:
+    """Metadata that makes pyroid._versions see sqlparse `version` installed under `root`."""
+    info = root / f"sqlparse-{version}.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text(f"Metadata-Version: 2.1\nName: sqlparse\nVersion: {version}\n")
+
+
 def test_version_warning_for_another_release(tmp_path: Any) -> None:
     src = os.path.dirname(S.__file__)
     import shutil
@@ -731,6 +738,7 @@ def test_version_warning_for_another_release(tmp_path: Any) -> None:
     init.write_text(
         init.read_text().replace(f'__version__ = "{S.__version__}"', '__version__ = "0.5.3"')
     )
+    _dist_info(tmp_path, "0.5.3")
     r = run_py(
         """
         import sys, warnings
@@ -745,6 +753,45 @@ def test_version_warning_for_another_release(tmp_path: Any) -> None:
         str(tmp_path),
     )
     assert r.returncode == 0, r.stderr
-    assert (
-        "RuntimeWarning: pyroid.sqlparse reproduces sqlparse 0.6.1, but sqlparse 0.5.3" in r.stdout
+    # One warning, pyroid's VersionMismatchWarning: the classes are still sqlparse's own.
+    assert r.stdout.strip() == (
+        "VersionMismatchWarning: pyroid.sqlparse reproduces sqlparse 0.6.1, but sqlparse 0.5.3 "
+        "is installed: results can differ from it. Install sqlparse==0.6.1 to compare like for "
+        'like (or silence this with warnings.simplefilter("ignore", '
+        "pyroid.VersionMismatchWarning))."
+    )
+
+
+def test_classes_warning_for_a_release_older_than_0_5(tmp_path: Any) -> None:
+    # A stand-in sqlparse 0.4.4: its sql module lacks the classes pyroid builds trees from.
+    pkg = tmp_path / "sqlparse"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text('__version__ = "0.4.4"\n')
+    for sub in ("sql", "tokens", "exceptions", "keywords", "lexer"):
+        (pkg / f"{sub}.py").write_text("")
+    _dist_info(tmp_path, "0.4.4")
+    r = run_py(
+        """
+        import sys, warnings
+        sys.path.insert(0, sys.argv[1])
+        warnings.simplefilter("always")
+        with warnings.catch_warnings(record=True) as w:
+            import pyroid.sqlparse as P  # noqa: N812
+        assert P.sql.Identifier.__module__ == "pyroid.sqlparse.sql"
+        print("|".join(f"{x.category.__name__}: {x.message}" for x in w))
+        """,
+        str(tmp_path),
+    )
+    assert r.returncode == 0, r.stderr
+    got = r.stdout.strip().split("|")
+    assert len(got) == 2, got
+    # The classes are chosen (and the RuntimeWarning given) before the version check runs.
+    assert got[0] == (
+        "RuntimeWarning: sqlparse 0.4.4 is older than 0.5.0, so pyroid.sqlparse builds its trees "
+        "from its own copies of sqlparse 0.6.1's token classes: isinstance checks against "
+        "sqlparse.sql fail on them, and pyroid.patch('sqlparse') refuses to patch it."
+    )
+    assert got[1].startswith(
+        "VersionMismatchWarning: pyroid.sqlparse reproduces sqlparse 0.6.1, but sqlparse 0.4.4 "
+        "is installed: results can differ from it."
     )

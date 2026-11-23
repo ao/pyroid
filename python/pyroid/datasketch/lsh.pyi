@@ -137,6 +137,12 @@ class MinHashLSH:
         prepickle: bool | None = None,
         hashfunc: Callable[[bytes], bytes] | None = None,
     ) -> None: ...
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore a pickle: pyroid's own, or one datasketch made (under ``pyroid.patch``).
+
+        datasketch pickles its attributes, the dict storages included; their band keys
+        are inserted into a new native index, and the result is checked against them.
+        """
     @property
     def buffer_size(self) -> int:
         """The storage buffer size (used by Redis and Cassandra storage)."""

@@ -1,0 +1,469 @@
+{
+ "meta": {
+  "python": "3.12.16",
+  "tabulate": "0.10.0",
+  "pyroid": "1.0.1",
+  "machine": "aarch64"
+ },
+ "results": [
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "simple",
+   "tabulate_s": 6.559200119227171e-05,
+   "pyroid_s": 1.2966003851033747e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "pipe",
+   "tabulate_s": 6.81649980833754e-05,
+   "pyroid_s": 1.3383003533817828e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "grid",
+   "tabulate_s": 7.108000136213377e-05,
+   "pyroid_s": 1.3382996257860214e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "github",
+   "tabulate_s": 6.75249975756742e-05,
+   "pyroid_s": 1.3074000889901072e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "numeric",
+   "format": "html",
+   "tabulate_s": 7.575799827463925e-05,
+   "pyroid_s": 1.2932003301102668e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "text",
+   "format": "simple",
+   "tabulate_s": 0.00011351400462444872,
+   "pyroid_s": 1.296700065722689e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "text",
+   "format": "pipe",
+   "tabulate_s": 0.0001151810065493919,
+   "pyroid_s": 1.3390999811235815e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "text",
+   "format": "grid",
+   "tabulate_s": 0.00011848700523842126,
+   "pyroid_s": 1.3598997611552477e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "text",
+   "format": "github",
+   "tabulate_s": 0.00011492700286908075,
+   "pyroid_s": 1.291099761147052e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "text",
+   "format": "html",
+   "tabulate_s": 0.00012356800289126113,
+   "pyroid_s": 1.2877004337497056e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "simple",
+   "tabulate_s": 8.564799645682797e-05,
+   "pyroid_s": 1.3037002645432949e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "pipe",
+   "tabulate_s": 8.683700434630737e-05,
+   "pyroid_s": 1.3491997378878295e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "grid",
+   "tabulate_s": 9.032500383909792e-05,
+   "pyroid_s": 1.3338998542167246e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "github",
+   "tabulate_s": 8.649899973534048e-05,
+   "pyroid_s": 1.3091994333080947e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "mixed",
+   "format": "html",
+   "tabulate_s": 9.468600183026865e-05,
+   "pyroid_s": 1.2999997125007212e-05
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "numeric",
+   "format": "simple",
+   "tabulate_s": 0.02570529300282942,
+   "pyroid_s": 0.0011500910040922463
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "numeric",
+   "format": "pipe",
+   "tabulate_s": 0.026025459002994467,
+   "pyroid_s": 0.0011674109991872683
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "numeric",
+   "format": "grid",
+   "tabulate_s": 0.026703755000198726,
+   "pyroid_s": 0.0011894010021933354
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "numeric",
+   "format": "github",
+   "tabulate_s": 0.02600867000001017,
+   "pyroid_s": 0.0011640430020634085
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "numeric",
+   "format": "html",
+   "tabulate_s": 0.02926955500151962,
+   "pyroid_s": 0.001260878001630772
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "text",
+   "format": "simple",
+   "tabulate_s": 0.044356217003951315,
+   "pyroid_s": 0.0012552429980132729
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "text",
+   "format": "pipe",
+   "tabulate_s": 0.04474805200152332,
+   "pyroid_s": 0.001254290997167118
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "text",
+   "format": "grid",
+   "tabulate_s": 0.04560846999811474,
+   "pyroid_s": 0.001278961994103156
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "text",
+   "format": "github",
+   "tabulate_s": 0.04485669799760217,
+   "pyroid_s": 0.0012506010025390424
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "text",
+   "format": "html",
+   "tabulate_s": 0.04815696999867214,
+   "pyroid_s": 0.0013908079999964684
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "mixed",
+   "format": "simple",
+   "tabulate_s": 0.03311156799463788,
+   "pyroid_s": 0.0009345699945697561
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "mixed",
+   "format": "pipe",
+   "tabulate_s": 0.033504621002066415,
+   "pyroid_s": 0.0009454030005144887
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "mixed",
+   "format": "grid",
+   "tabulate_s": 0.03418688999954611,
+   "pyroid_s": 0.0009589239998604171
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "mixed",
+   "format": "github",
+   "tabulate_s": 0.03359095500491094,
+   "pyroid_s": 0.0009431599974050187
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "mixed",
+   "format": "html",
+   "tabulate_s": 0.03616035299637588,
+   "pyroid_s": 0.0010262810028507374
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "numeric",
+   "format": "simple",
+   "tabulate_s": 3.2463357290034764,
+   "pyroid_s": 0.18499279300158378
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "numeric",
+   "format": "pipe",
+   "tabulate_s": 3.2758547859993996,
+   "pyroid_s": 0.1791845670013572
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "numeric",
+   "format": "grid",
+   "tabulate_s": 3.3879066919980687,
+   "pyroid_s": 0.20256535299995448
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "numeric",
+   "format": "github",
+   "tabulate_s": 3.282326631997421,
+   "pyroid_s": 0.17762675699486863
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "numeric",
+   "format": "html",
+   "tabulate_s": 3.679394611004682,
+   "pyroid_s": 0.24255132299731486
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "text",
+   "format": "simple",
+   "tabulate_s": 5.561144407998654,
+   "pyroid_s": 0.30509176300256513
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "text",
+   "format": "pipe",
+   "tabulate_s": 5.58092823199695,
+   "pyroid_s": 0.3041407090058783
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "text",
+   "format": "grid",
+   "tabulate_s": 5.726447171997279,
+   "pyroid_s": 0.33725095500267344
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "text",
+   "format": "github",
+   "tabulate_s": 5.61258857199573,
+   "pyroid_s": 0.3231585620014812
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "text",
+   "format": "html",
+   "tabulate_s": 6.020173579003313,
+   "pyroid_s": 0.3587069120039814
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "mixed",
+   "format": "simple",
+   "tabulate_s": 4.072673059003137,
+   "pyroid_s": 0.15240550300222822
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "mixed",
+   "format": "pipe",
+   "tabulate_s": 4.115415449996362,
+   "pyroid_s": 0.15042146199994022
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "mixed",
+   "format": "grid",
+   "tabulate_s": 4.227177978995314,
+   "pyroid_s": 0.16583655800059205
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "mixed",
+   "format": "github",
+   "tabulate_s": 4.116710285998124,
+   "pyroid_s": 0.1427397099978407
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "mixed",
+   "format": "html",
+   "tabulate_s": 4.531719455000712,
+   "pyroid_s": 0.20261126100376714
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "dataframe-numeric",
+   "format": "to_markdown",
+   "tabulate_s": 0.0001349119993392378,
+   "pyroid_s": 4.90970051032491e-05
+  },
+  {
+   "size": "small",
+   "rows": 5,
+   "cols": 3,
+   "kind": "dataframe-mixed",
+   "format": "to_markdown",
+   "tabulate_s": 0.00017666700296103954,
+   "pyroid_s": 8.114500087685883e-05
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "dataframe-numeric",
+   "format": "to_markdown",
+   "tabulate_s": 0.03591433400288224,
+   "pyroid_s": 0.0017083450002246536
+  },
+  {
+   "size": "medium",
+   "rows": 1000,
+   "cols": 8,
+   "kind": "dataframe-mixed",
+   "format": "to_markdown",
+   "tabulate_s": 0.03772441899491241,
+   "pyroid_s": 0.002195473003666848
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "dataframe-numeric",
+   "format": "to_markdown",
+   "tabulate_s": 4.582089103998442,
+   "pyroid_s": 0.250008428003639
+  },
+  {
+   "size": "large",
+   "rows": 100000,
+   "cols": 10,
+   "kind": "dataframe-mixed",
+   "format": "to_markdown",
+   "tabulate_s": 4.671513679000782,
+   "pyroid_s": 0.2712956830000621
+  }
+ ]
+}

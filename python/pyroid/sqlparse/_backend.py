@@ -104,23 +104,18 @@ def _stacklevel() -> int:
     return 1
 
 
-def _warn_version() -> None:
-    if REAL_VERSION is None or REAL_VERSION == SQLPARSE_VERSION:
+def _warn_classes() -> None:
+    """Another release is installed whose classes pyroid cannot share (older than 0.5.0).
+
+    pyroid.sqlparse's VersionMismatchWarning (pyroid._versions) names the release; this says
+    what else differs.
+    """
+    if REAL is not None or REAL_VERSION is None or REAL_VERSION == SQLPARSE_VERSION:
         return
-    if REAL is None:
-        detail = (
-            "it is older than 0.5.0, so pyroid uses its own copies of the token classes "
-            "(isinstance checks against sqlparse.sql fail on pyroid's trees) and "
-            "pyroid.patch('sqlparse') refuses to patch it"
-        )
-    else:
-        detail = (
-            "pyroid shares its token types and classes, but parses and formats as "
-            f"{SQLPARSE_VERSION}, and the methods of the tokens are the installed release's"
-        )
     warnings.warn(
-        f"pyroid.sqlparse reproduces sqlparse {SQLPARSE_VERSION}, but sqlparse {REAL_VERSION} "
-        f"is installed: {detail}. Install sqlparse=={SQLPARSE_VERSION} to compare like for like.",
+        f"sqlparse {REAL_VERSION} is older than 0.5.0, so pyroid.sqlparse builds its trees from "
+        f"its own copies of sqlparse {SQLPARSE_VERSION}'s token classes: isinstance checks "
+        "against sqlparse.sql fail on them, and pyroid.patch('sqlparse') refuses to patch it.",
         RuntimeWarning,
         stacklevel=_stacklevel(),
     )
@@ -149,4 +144,4 @@ def patch_refusal(real: types.ModuleType) -> str | None:
     )
 
 
-_warn_version()
+_warn_classes()

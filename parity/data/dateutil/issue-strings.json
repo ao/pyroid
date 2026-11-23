@@ -1,0 +1,4057 @@
+{
+"source": "dateutil and pandas issue trackers (strings reported as bugs or surprises), collected 2026-11-14",
+"strings": [
+{
+"string": "Jan.5.2014",
+"url": "https://github.com/dateutil/dateutil/issues/19",
+"kwargs": {}
+},
+{
+"string": "Jan. 5.2014",
+"url": "https://github.com/dateutil/dateutil/issues/19",
+"kwargs": {}
+},
+{
+"string": "",
+"url": "https://github.com/dateutil/dateutil/issues/21",
+"kwargs": {}
+},
+{
+"string": "p",
+"url": "https://github.com/dateutil/dateutil/issues/21",
+"kwargs": {}
+},
+{
+"string": "14am",
+"url": "https://github.com/dateutil/dateutil/issues/21",
+"kwargs": {}
+},
+{
+"string": "Jan 2011",
+"url": "https://github.com/dateutil/dateutil/issues/25",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Feb 2011",
+"url": "https://github.com/dateutil/dateutil/issues/25",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Dec 2011",
+"url": "https://github.com/dateutil/dateutil/issues/25",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Apr 2011",
+"url": "https://github.com/dateutil/dateutil/issues/25",
+"kwargs": {}
+},
+{
+"string": "2015-02-05T13:34:04,000+0000",
+"url": "https://github.com/dateutil/dateutil/issues/28",
+"kwargs": {}
+},
+{
+"string": "2015-02-05T13:34:04.000+0000",
+"url": "https://github.com/dateutil/dateutil/issues/28",
+"kwargs": {}
+},
+{
+"string": "2015 01 02 03 04 05 06 07 08 09",
+"url": "https://github.com/dateutil/dateutil/issues/31",
+"kwargs": {}
+},
+{
+"string": "01-Jan-2015",
+"url": "https://github.com/dateutil/dateutil/issues/60",
+"kwargs": {}
+},
+{
+"string": "2014-06-01T00:00:00.000Z",
+"url": "https://github.com/dateutil/dateutil/issues/64",
+"kwargs": {}
+},
+{
+"string": "2016-08-24T12:14:39.783776+0:00",
+"url": "https://github.com/dateutil/dateutil/issues/64",
+"kwargs": {}
+},
+{
+"string": "2014-02",
+"url": "https://github.com/dateutil/dateutil/issues/69",
+"kwargs": {}
+},
+{
+"string": "2015-03-31 00:01 UTC",
+"url": "https://github.com/dateutil/dateutil/issues/70",
+"kwargs": {}
+},
+{
+"string": "2015-03-31 00:01 UTC+1",
+"url": "https://github.com/dateutil/dateutil/issues/70",
+"kwargs": {}
+},
+{
+"string": "2015-03-31 00:01 UTC-1",
+"url": "https://github.com/dateutil/dateutil/issues/70",
+"kwargs": {}
+},
+{
+"string": "2015-03-31 00:00 UTC+1",
+"url": "https://github.com/dateutil/dateutil/issues/70",
+"kwargs": {}
+},
+{
+"string": "2015-06-15T11:19:57 UTC+05:00",
+"url": "https://github.com/dateutil/dateutil/issues/70",
+"kwargs": {}
+},
+{
+"string": "2015-06-15T11:19:57 +0500",
+"url": "https://github.com/dateutil/dateutil/issues/70",
+"kwargs": {}
+},
+{
+"string": "Jul 1, 2021 12:00:01 AM UTC-7",
+"url": "https://github.com/dateutil/dateutil/issues/70",
+"kwargs": {}
+},
+{
+"string": "2010-07-15T17:58:00-07:00",
+"url": "https://github.com/dateutil/dateutil/issues/74",
+"kwargs": {}
+},
+{
+"string": "What a lovely day it was.",
+"url": "https://github.com/dateutil/dateutil/issues/78",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "What a lovely day it was on March 3rd.",
+"url": "https://github.com/dateutil/dateutil/issues/78",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Sat Oct 11 17:13:46 UTC 2003",
+"url": "https://github.com/dateutil/dateutil/issues/80",
+"kwargs": {
+"ignoretz": true
+}
+},
+{
+"string": "Saturday October 21, 1975 17:21:00 FET",
+"url": "https://github.com/dateutil/dateutil/issues/80",
+"kwargs": {}
+},
+{
+"string": "January 1st, 9999999999",
+"url": "https://github.com/dateutil/dateutil/issues/82",
+"kwargs": {}
+},
+{
+"string": "11/08/64",
+"url": "https://github.com/dateutil/dateutil/issues/84",
+"kwargs": {}
+},
+{
+"string": "2015-04",
+"url": "https://github.com/dateutil/dateutil/issues/89",
+"kwargs": {}
+},
+{
+"string": "2014-04",
+"url": "https://github.com/dateutil/dateutil/issues/89",
+"kwargs": {}
+},
+{
+"string": "04/04/0d4",
+"url": "https://github.com/dateutil/dateutil/issues/91",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "04/04/04 +32423",
+"url": "https://github.com/dateutil/dateutil/issues/91",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "2003-04-12 04:05:06 America/New_York",
+"url": "https://github.com/dateutil/dateutil/issues/93",
+"kwargs": {}
+},
+{
+"string": "00:00",
+"url": "https://github.com/dateutil/dateutil/issues/94",
+"kwargs": {}
+},
+{
+"string": "00:00Z",
+"url": "https://github.com/dateutil/dateutil/issues/94",
+"kwargs": {}
+},
+{
+"string": "2000-01-01T00:00",
+"url": "https://github.com/dateutil/dateutil/issues/94",
+"kwargs": {}
+},
+{
+"string": "0:00",
+"url": "https://github.com/dateutil/dateutil/issues/94",
+"kwargs": {}
+},
+{
+"string": "04/04/04 Dog470",
+"url": "https://github.com/dateutil/dateutil/issues/95",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "0099-01-01T00:00:00",
+"url": "https://github.com/dateutil/dateutil/issues/96",
+"kwargs": {}
+},
+{
+"string": "2015-07-20T20:52:19+00:00",
+"url": "https://github.com/dateutil/dateutil/issues/100",
+"kwargs": {}
+},
+{
+"string": "2012-01-19 17:21:00 BRST",
+"url": "https://github.com/dateutil/dateutil/issues/118",
+"kwargs": {}
+},
+{
+"string": "Today is 2015-09-08, the last day to get tickets to the Eisbrecher show",
+"url": "https://github.com/dateutil/dateutil/issues/118",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "--/--/1963",
+"url": "https://github.com/dateutil/dateutil/issues/121",
+"kwargs": {}
+},
+{
+"string": "Today is January 1, 2047 at 8:21:00AM",
+"url": "https://github.com/dateutil/dateutil/issues/138",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "Wed, 28 Jul 2010 10:38:18 -0400 (GMT-04:00)",
+"url": "https://github.com/dateutil/dateutil/issues/157",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2014-04-12 13:00:10 hkhakhsak 12",
+"url": "https://github.com/dateutil/dateutil/issues/161",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2015-08-24T10:41:00Z",
+"url": "https://github.com/dateutil/dateutil/issues/163",
+"kwargs": {}
+},
+{
+"string": "10/23,20:20",
+"url": "https://github.com/dateutil/dateutil/issues/172",
+"kwargs": {}
+},
+{
+"string": "2004-11",
+"url": "https://github.com/dateutil/dateutil/issues/173",
+"kwargs": {}
+},
+{
+"string": "feb",
+"url": "https://github.com/dateutil/dateutil/issues/174",
+"kwargs": {}
+},
+{
+"string": "2016-02-22T05:16:45-64:00",
+"url": "https://github.com/dateutil/dateutil/issues/188",
+"kwargs": {}
+},
+{
+"string": "Tue Feb 23 00:44:27 PST 2016",
+"url": "https://github.com/dateutil/dateutil/issues/189",
+"kwargs": {}
+},
+{
+"string": "12:00 PST",
+"url": "https://github.com/dateutil/dateutil/issues/189",
+"kwargs": {}
+},
+{
+"string": "12:00 GMT",
+"url": "https://github.com/dateutil/dateutil/issues/189",
+"kwargs": {}
+},
+{
+"string": "Tue Feb 23 00:44:27 UTC 2016",
+"url": "https://github.com/dateutil/dateutil/issues/189",
+"kwargs": {}
+},
+{
+"string": "now",
+"url": "https://github.com/dateutil/dateutil/issues/212",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "tomorrow",
+"url": "https://github.com/dateutil/dateutil/issues/212",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "31/12/2014",
+"url": "https://github.com/dateutil/dateutil/issues/214",
+"kwargs": {}
+},
+{
+"string": "10/03/2011",
+"url": "https://github.com/dateutil/dateutil/issues/214",
+"kwargs": {}
+},
+{
+"string": "10/13/2011",
+"url": "https://github.com/dateutil/dateutil/issues/214",
+"kwargs": {}
+},
+{
+"string": "10/11",
+"url": "https://github.com/dateutil/dateutil/issues/232",
+"kwargs": {}
+},
+{
+"string": "2010 09 25",
+"url": "https://github.com/dateutil/dateutil/issues/233",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2015-01-02",
+"url": "https://github.com/dateutil/dateutil/issues/233",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2015-01-13",
+"url": "https://github.com/dateutil/dateutil/issues/233",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2016-03-21",
+"url": "https://github.com/dateutil/dateutil/issues/242",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "201508",
+"url": "https://github.com/dateutil/dateutil/issues/242",
+"kwargs": {}
+},
+{
+"string": "20160407061740404",
+"url": "https://github.com/dateutil/dateutil/issues/246",
+"kwargs": {}
+},
+{
+"string": "20160407061740",
+"url": "https://github.com/dateutil/dateutil/issues/246",
+"kwargs": {}
+},
+{
+"string": "2016-04-14T2.06.51 PM+07:00",
+"url": "https://github.com/dateutil/dateutil/issues/252",
+"kwargs": {}
+},
+{
+"string": "10:00 -",
+"url": "https://github.com/dateutil/dateutil/issues/256",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "10:00",
+"url": "https://github.com/dateutil/dateutil/issues/256",
+"kwargs": {}
+},
+{
+"string": "10:00 PM -",
+"url": "https://github.com/dateutil/dateutil/issues/256",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "010203",
+"url": "https://github.com/dateutil/dateutil/issues/258",
+"kwargs": {
+"yearfirst": true
+}
+},
+{
+"string": "1995-02-03",
+"url": "https://github.com/dateutil/dateutil/issues/268",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2016-05-12",
+"url": "https://github.com/dateutil/dateutil/issues/269",
+"kwargs": {}
+},
+{
+"string": "2015:04:15 17:15:34",
+"url": "https://github.com/dateutil/dateutil/issues/271",
+"kwargs": {}
+},
+{
+"string": "Sun May  8 03:10:20 CST 2016",
+"url": "https://github.com/dateutil/dateutil/issues/273",
+"kwargs": {}
+},
+{
+"string": "Sun May  8 03:10:20 IST 2016",
+"url": "https://github.com/dateutil/dateutil/issues/273",
+"kwargs": {}
+},
+{
+"string": "27.08",
+"url": "https://github.com/dateutil/dateutil/issues/278",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "08.27",
+"url": "https://github.com/dateutil/dateutil/issues/278",
+"kwargs": {}
+},
+{
+"string": "2015 Feb",
+"url": "https://github.com/dateutil/dateutil/issues/288",
+"kwargs": {}
+},
+{
+"string": "2017-01-09T13:13:15Z",
+"url": "https://github.com/dateutil/dateutil/issues/289",
+"kwargs": {}
+},
+{
+"string": "2017-01-09T13:13:15CLA",
+"url": "https://github.com/dateutil/dateutil/issues/289",
+"kwargs": {}
+},
+{
+"string": "22-23 February",
+"url": "https://github.com/dateutil/dateutil/issues/290",
+"kwargs": {}
+},
+{
+"string": "Screenshot_2016-09-07_12-26-45.png",
+"url": "https://github.com/dateutil/dateutil/issues/294",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2016-01-30-15-30-10",
+"url": "https://github.com/dateutil/dateutil/issues/294",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2016-10-04T10:00/2016-10-04T11:15:00",
+"url": "https://github.com/dateutil/dateutil/issues/295",
+"kwargs": {}
+},
+{
+"string": "Wed, 02 Oct 2002 13:00:00 GMT",
+"url": "https://github.com/dateutil/dateutil/issues/318",
+"kwargs": {}
+},
+{
+"string": "2011-11-06 01:30:00 EST",
+"url": "https://github.com/dateutil/dateutil/issues/320",
+"kwargs": {}
+},
+{
+"string": "2011-11-06 01:03:00 EST",
+"url": "https://github.com/dateutil/dateutil/issues/320",
+"kwargs": {}
+},
+{
+"string": "2014-01",
+"url": "https://github.com/dateutil/dateutil/issues/325",
+"kwargs": {}
+},
+{
+"string": "2016-11",
+"url": "https://github.com/dateutil/dateutil/issues/325",
+"kwargs": {}
+},
+{
+"string": "23. November 2016:",
+"url": "https://github.com/dateutil/dateutil/issues/326",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "18 October 1874:",
+"url": "https://github.com/dateutil/dateutil/issues/326",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "18 October 1874: Had to eat dogs",
+"url": "https://github.com/dateutil/dateutil/issues/326",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "18 October 1874 Had to eat dogs",
+"url": "https://github.com/dateutil/dateutil/issues/326",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "On 18 October 1874:",
+"url": "https://github.com/dateutil/dateutil/issues/326",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "(18 October 1874)",
+"url": "https://github.com/dateutil/dateutil/issues/326",
+"kwargs": {}
+},
+{
+"string": "1",
+"url": "https://github.com/dateutil/dateutil/issues/328",
+"kwargs": {}
+},
+{
+"string": "1-1",
+"url": "https://github.com/dateutil/dateutil/issues/328",
+"kwargs": {}
+},
+{
+"string": "http://biz.yahoo.com/ipo/p/600221.html",
+"url": "https://github.com/dateutil/dateutil/issues/332",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "1996.07.10 AD at 15:08:56 PST",
+"url": "https://github.com/dateutil/dateutil/issues/345",
+"kwargs": {
+"ignoretz": true
+}
+},
+{
+"string": "1996.07.10 AD at 15:08:56 CST",
+"url": "https://github.com/dateutil/dateutil/issues/345",
+"kwargs": {
+"ignoretz": false
+}
+},
+{
+"string": "1996.07.10 AD at 15:08:56 EST",
+"url": "https://github.com/dateutil/dateutil/issues/345",
+"kwargs": {
+"ignoretz": false
+}
+},
+{
+"string": "2017-02-23T06:54:00Z",
+"url": "https://github.com/dateutil/dateutil/issues/349",
+"kwargs": {}
+},
+{
+"string": "2014-03-22T01:30Z",
+"url": "https://github.com/dateutil/dateutil/issues/349",
+"kwargs": {}
+},
+{
+"string": "2015-01-01T01:01:01Z",
+"url": "https://github.com/dateutil/dateutil/issues/349",
+"kwargs": {}
+},
+{
+"string": "2019-02-19T04:10:30Z",
+"url": "https://github.com/dateutil/dateutil/issues/349",
+"kwargs": {}
+},
+{
+"string": "2020-04-15T00:00:00Z",
+"url": "https://github.com/dateutil/dateutil/issues/349",
+"kwargs": {}
+},
+{
+"string": "February 2009",
+"url": "https://github.com/dateutil/dateutil/issues/351",
+"kwargs": {}
+},
+{
+"string": "201A-01-01T23:58:39.239769+03:00",
+"url": "https://github.com/dateutil/dateutil/issues/353",
+"kwargs": {}
+},
+{
+"string": "2017-03-29T00:00:00 UTC",
+"url": "https://github.com/dateutil/dateutil/issues/356",
+"kwargs": {}
+},
+{
+"string": "2017-03-29T00:00:00 GMT",
+"url": "https://github.com/dateutil/dateutil/issues/356",
+"kwargs": {}
+},
+{
+"string": "2017:01:11 18:18:55+08:00",
+"url": "https://github.com/dateutil/dateutil/issues/359",
+"kwargs": {}
+},
+{
+"string": "2017-01-11 18:18:55+08:00",
+"url": "https://github.com/dateutil/dateutil/issues/359",
+"kwargs": {}
+},
+{
+"string": "13NOV2017",
+"url": "https://github.com/dateutil/dateutil/issues/360",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Fri, 14 Apr 2017 16:18:53 GMT",
+"url": "https://github.com/dateutil/dateutil/issues/370",
+"kwargs": {}
+},
+{
+"string": "25/06/18 13:53:33 UTC+1",
+"url": "https://github.com/dateutil/dateutil/issues/370",
+"kwargs": {}
+},
+{
+"string": "05.2016",
+"url": "https://github.com/dateutil/dateutil/issues/384",
+"kwargs": {}
+},
+{
+"string": "04.2014",
+"url": "https://github.com/dateutil/dateutil/issues/384",
+"kwargs": {}
+},
+{
+"string": "04/2014",
+"url": "https://github.com/dateutil/dateutil/issues/384",
+"kwargs": {}
+},
+{
+"string": "05.06T02:10",
+"url": "https://github.com/dateutil/dateutil/issues/384",
+"kwargs": {}
+},
+{
+"string": "5.6 02:10",
+"url": "https://github.com/dateutil/dateutil/issues/384",
+"kwargs": {}
+},
+{
+"string": "0005-01-01T00:00:05",
+"url": "https://github.com/dateutil/dateutil/issues/387",
+"kwargs": {}
+},
+{
+"string": "0005-01-01T00:00:00",
+"url": "https://github.com/dateutil/dateutil/issues/387",
+"kwargs": {}
+},
+{
+"string": "File Creation Time: 0513201421:33",
+"url": "https://github.com/dateutil/dateutil/issues/394",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "1991041310:19:24",
+"url": "https://github.com/dateutil/dateutil/issues/394",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "06 June 11th",
+"url": "https://github.com/dateutil/dateutil/issues/394",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Fri Jun 30 12:00:56 EDT 2017",
+"url": "https://github.com/dateutil/dateutil/issues/406",
+"kwargs": {}
+},
+{
+"string": "17 Jan 2017",
+"url": "https://github.com/dateutil/dateutil/issues/417",
+"kwargs": {}
+},
+{
+"string": "2017-07-17 06:21:",
+"url": "https://github.com/dateutil/dateutil/issues/420",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "17.05.2014 11:15",
+"url": "https://github.com/dateutil/dateutil/issues/423",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "17.05.2014 11.15",
+"url": "https://github.com/dateutil/dateutil/issues/423",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "12:06:58 XM",
+"url": "https://github.com/dateutil/dateutil/issues/426",
+"kwargs": {}
+},
+{
+"string": "12:08:07 XM",
+"url": "https://github.com/dateutil/dateutil/issues/426",
+"kwargs": {}
+},
+{
+"string": "5.6h",
+"url": "https://github.com/dateutil/dateutil/issues/427",
+"kwargs": {}
+},
+{
+"string": "0s",
+"url": "https://github.com/dateutil/dateutil/issues/427",
+"kwargs": {}
+},
+{
+"string": "05.6:00",
+"url": "https://github.com/dateutil/dateutil/issues/427",
+"kwargs": {}
+},
+{
+"string": "5.6h5.6m5.6s",
+"url": "https://github.com/dateutil/dateutil/issues/427",
+"kwargs": {}
+},
+{
+"string": "2.3, 4.1, 4.3",
+"url": "https://github.com/dateutil/dateutil/issues/440",
+"kwargs": {}
+},
+{
+"string": "6.2 . . . 6.5 6.6",
+"url": "https://github.com/dateutil/dateutil/issues/440",
+"kwargs": {}
+},
+{
+"string": "Sept 2003 25",
+"url": "https://github.com/dateutil/dateutil/issues/441",
+"kwargs": {}
+},
+{
+"string": "January 25, 1921 23:13 PM",
+"url": "https://github.com/dateutil/dateutil/issues/447",
+"kwargs": {}
+},
+{
+"string": "Tue, 27 May 2014 20:06:08 +0800 (GMT+08:00)",
+"url": "https://github.com/dateutil/dateutil/issues/453",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Fri, 16 Aug 2019 17:25:00 +0800 (GMT+08:00)",
+"url": "https://github.com/dateutil/dateutil/issues/453",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Fri, 16 Aug 2019 17:25:00 (GMT+08:00)",
+"url": "https://github.com/dateutil/dateutil/issues/453",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Fri, 16 Aug 2019 17:25:00 (GMT-08:00)",
+"url": "https://github.com/dateutil/dateutil/issues/453",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Fri, 16 Aug 2019 17:25:00 +0800",
+"url": "https://github.com/dateutil/dateutil/issues/453",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "01/04/17 10:00",
+"url": "https://github.com/dateutil/dateutil/issues/456",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "01/04/2017",
+"url": "https://github.com/dateutil/dateutil/issues/457",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2017/04/01",
+"url": "https://github.com/dateutil/dateutil/issues/457",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "+1960-00-00T00:00:00Z",
+"url": "https://github.com/dateutil/dateutil/issues/473",
+"kwargs": {}
+},
+{
+"string": "19-9-42-14QBCD",
+"url": "https://github.com/dateutil/dateutil/issues/478",
+"kwargs": {
+"fuzzy": false
+}
+},
+{
+"string": "Mon Oct 30, 2017 12:37 PM EDT",
+"url": "https://github.com/dateutil/dateutil/issues/487",
+"kwargs": {}
+},
+{
+"string": "Mon Oct 30, 2017 12:37 PM CST",
+"url": "https://github.com/dateutil/dateutil/issues/487",
+"kwargs": {}
+},
+{
+"string": "2017/10/03 09:59:52 PDT",
+"url": "https://github.com/dateutil/dateutil/issues/508",
+"kwargs": {}
+},
+{
+"string": "2010-02-18 16.2h",
+"url": "https://github.com/dateutil/dateutil/issues/531",
+"kwargs": {}
+},
+{
+"string": "1970-01-01T00:00:00Z",
+"url": "https://github.com/dateutil/dateutil/issues/531",
+"kwargs": {}
+},
+{
+"string": "1970-01-01t00:00:00Z",
+"url": "https://github.com/dateutil/dateutil/issues/531",
+"kwargs": {}
+},
+{
+"string": "1970-01-01t00:00:00",
+"url": "https://github.com/dateutil/dateutil/issues/531",
+"kwargs": {}
+},
+{
+"string": "1970-01-01t00:00:00z",
+"url": "https://github.com/dateutil/dateutil/issues/531",
+"kwargs": {}
+},
+{
+"string": "2017-12-05 08:38 EST",
+"url": "https://github.com/dateutil/dateutil/issues/540",
+"kwargs": {}
+},
+{
+"string": "2017-12-08 12:05 EST",
+"url": "https://github.com/dateutil/dateutil/issues/575",
+"kwargs": {}
+},
+{
+"string": "2015-03-22Z",
+"url": "https://github.com/dateutil/dateutil/issues/599",
+"kwargs": {}
+},
+{
+"string": "May  1, 2017 20:43:13.229000000 Eastern Daylight Time",
+"url": "https://github.com/dateutil/dateutil/issues/600",
+"kwargs": {}
+},
+{
+"string": "May  1, 2017 20:43:13.229000000 EDT",
+"url": "https://github.com/dateutil/dateutil/issues/600",
+"kwargs": {}
+},
+{
+"string": "1: test",
+"url": "https://github.com/dateutil/dateutil/issues/632",
+"kwargs": {}
+},
+{
+"string": "9999: 12, test",
+"url": "https://github.com/dateutil/dateutil/issues/632",
+"kwargs": {}
+},
+{
+"string": "2017-01-01",
+"url": "https://github.com/dateutil/dateutil/issues/639",
+"kwargs": {}
+},
+{
+"string": "000A-01-01T00:00:00",
+"url": "https://github.com/dateutil/dateutil/issues/640",
+"kwargs": {}
+},
+{
+"string": "200A-01-01T00:00:00",
+"url": "https://github.com/dateutil/dateutil/issues/640",
+"kwargs": {}
+},
+{
+"string": "2007-04-05T24:00",
+"url": "https://github.com/dateutil/dateutil/issues/658",
+"kwargs": {}
+},
+{
+"string": "2007-04-06T00:00",
+"url": "https://github.com/dateutil/dateutil/issues/658",
+"kwargs": {}
+},
+{
+"string": "2017-02-03 12:40 MGX",
+"url": "https://github.com/dateutil/dateutil/issues/661",
+"kwargs": {}
+},
+{
+"string": "2017-02-03 12:40 RDT",
+"url": "https://github.com/dateutil/dateutil/issues/661",
+"kwargs": {}
+},
+{
+"string": "Nan",
+"url": "https://github.com/dateutil/dateutil/issues/662",
+"kwargs": {}
+},
+{
+"string": "December.0031.30",
+"url": "https://github.com/dateutil/dateutil/issues/687",
+"kwargs": {}
+},
+{
+"string": "65-12-01",
+"url": "https://github.com/dateutil/dateutil/issues/703",
+"kwargs": {}
+},
+{
+"string": "10.2014",
+"url": "https://github.com/dateutil/dateutil/issues/713",
+"kwargs": {}
+},
+{
+"string": "10-2014",
+"url": "https://github.com/dateutil/dateutil/issues/713",
+"kwargs": {}
+},
+{
+"string": "2016.01",
+"url": "https://github.com/dateutil/dateutil/issues/713",
+"kwargs": {}
+},
+{
+"string": "24.06",
+"url": "https://github.com/dateutil/dateutil/issues/713",
+"kwargs": {}
+},
+{
+"string": "24. 06",
+"url": "https://github.com/dateutil/dateutil/issues/713",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "5",
+"url": "https://github.com/dateutil/dateutil/issues/718",
+"kwargs": {}
+},
+{
+"string": "4",
+"url": "https://github.com/dateutil/dateutil/issues/718",
+"kwargs": {}
+},
+{
+"string": "32",
+"url": "https://github.com/dateutil/dateutil/issues/718",
+"kwargs": {}
+},
+{
+"string": "July 4, 4:05 PM",
+"url": "https://github.com/dateutil/dateutil/issues/730",
+"kwargs": {}
+},
+{
+"string": "2018-05-28 08:18 PM",
+"url": "https://github.com/dateutil/dateutil/issues/732",
+"kwargs": {}
+},
+{
+"string": "2018              Jun\n\r\n\t1",
+"url": "https://github.com/dateutil/dateutil/issues/733",
+"kwargs": {}
+},
+{
+"string": "2018-06-03T06:38:25Z-0700",
+"url": "https://github.com/dateutil/dateutil/issues/777",
+"kwargs": {}
+},
+{
+"string": "2006-01-02T15:04:05.9999999-07:00",
+"url": "https://github.com/dateutil/dateutil/issues/786",
+"kwargs": {}
+},
+{
+"string": "22/08/2018 07:00:50",
+"url": "https://github.com/dateutil/dateutil/issues/789",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "22/08/2018 06:00",
+"url": "https://github.com/dateutil/dateutil/issues/789",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "22/08/2018 07:00:59",
+"url": "https://github.com/dateutil/dateutil/issues/789",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "02Apr2019",
+"url": "https://github.com/dateutil/dateutil/issues/797",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2018-08-14 08:41:31.181 1288 ERROR",
+"url": "https://github.com/dateutil/dateutil/issues/803",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "Tue, 27 Mar 2018 23:48:52 +0800 (GMT+08:00)",
+"url": "https://github.com/dateutil/dateutil/issues/805",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "7/10/2018 12:51:31",
+"url": "https://github.com/dateutil/dateutil/issues/826",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2018-10",
+"url": "https://github.com/dateutil/dateutil/issues/834",
+"kwargs": {}
+},
+{
+"string": "8/04/2018",
+"url": "https://github.com/dateutil/dateutil/issues/841",
+"kwargs": {}
+},
+{
+"string": "10 de abril de 2018",
+"url": "https://github.com/dateutil/dateutil/issues/841",
+"kwargs": {}
+},
+{
+"string": "15 horas e 13 min de 10 de abril de 2018",
+"url": "https://github.com/dateutil/dateutil/issues/841",
+"kwargs": {}
+},
+{
+"string": "2016-06-01T02-01-00+00-00",
+"url": "https://github.com/dateutil/dateutil/issues/845",
+"kwargs": {}
+},
+{
+"string": "2018-12-20 14:30:00 +0400",
+"url": "https://github.com/dateutil/dateutil/issues/846",
+"kwargs": {
+"ignoretz": true
+}
+},
+{
+"string": "Mon Feb 23 13:14:24 2015 PST8PDT",
+"url": "https://github.com/dateutil/dateutil/issues/849",
+"kwargs": {
+"ignoretz": true,
+"fuzzy": true
+}
+},
+{
+"string": "07,19,2018",
+"url": "https://github.com/dateutil/dateutil/issues/852",
+"kwargs": {}
+},
+{
+"string": "--12-13",
+"url": "https://github.com/dateutil/dateutil/issues/854",
+"kwargs": {}
+},
+{
+"string": "A.D.",
+"url": "https://github.com/dateutil/dateutil/issues/885",
+"kwargs": {}
+},
+{
+"string": "P.M.",
+"url": "https://github.com/dateutil/dateutil/issues/885",
+"kwargs": {}
+},
+{
+"string": "2014 January 19 09:00 UTC",
+"url": "https://github.com/dateutil/dateutil/issues/891",
+"kwargs": {}
+},
+{
+"string": "foo2014BarMay__04",
+"url": "https://github.com/dateutil/dateutil/issues/895",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "25th of May 2014 at 7:45 PM",
+"url": "https://github.com/dateutil/dateutil/issues/895",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "7.3.2019",
+"url": "https://github.com/dateutil/dateutil/issues/898",
+"kwargs": {}
+},
+{
+"string": "2019-03-07",
+"url": "https://github.com/dateutil/dateutil/issues/898",
+"kwargs": {}
+},
+{
+"string": "7/3/2019",
+"url": "https://github.com/dateutil/dateutil/issues/898",
+"kwargs": {}
+},
+{
+"string": "12, 12, 2018",
+"url": "https://github.com/dateutil/dateutil/issues/917",
+"kwargs": {}
+},
+{
+"string": "Dec 12, 2018",
+"url": "https://github.com/dateutil/dateutil/issues/917",
+"kwargs": {}
+},
+{
+"string": "Dec, 12, 2018",
+"url": "https://github.com/dateutil/dateutil/issues/917",
+"kwargs": {}
+},
+{
+"string": "Dec 12,2018",
+"url": "https://github.com/dateutil/dateutil/issues/917",
+"kwargs": {}
+},
+{
+"string": "Dec,12,2018",
+"url": "https://github.com/dateutil/dateutil/issues/917",
+"kwargs": {}
+},
+{
+"string": "12, 12,2018",
+"url": "https://github.com/dateutil/dateutil/issues/917",
+"kwargs": {}
+},
+{
+"string": "2019-05-23T09:13:08.080000+1623",
+"url": "https://github.com/dateutil/dateutil/issues/919",
+"kwargs": {}
+},
+{
+"string": "23rd May 2019",
+"url": "https://github.com/dateutil/dateutil/issues/921",
+"kwargs": {}
+},
+{
+"string": "30th Jun 2019",
+"url": "https://github.com/dateutil/dateutil/issues/921",
+"kwargs": {}
+},
+{
+"string": "2018-12-10 17:55:02 (GMT+0:00)",
+"url": "https://github.com/dateutil/dateutil/issues/930",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2023 年 10 月 13 日",
+"url": "https://github.com/dateutil/dateutil/issues/939",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2023年 10 月 13 日",
+"url": "https://github.com/dateutil/dateutil/issues/939",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "22082019",
+"url": "https://github.com/dateutil/dateutil/issues/949",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "02082019",
+"url": "https://github.com/dateutil/dateutil/issues/949",
+"kwargs": {
+"dayfirst": false,
+"yearfirst": false
+}
+},
+{
+"string": "20191212",
+"url": "https://github.com/dateutil/dateutil/issues/949",
+"kwargs": {}
+},
+{
+"string": "20190822",
+"url": "https://github.com/dateutil/dateutil/issues/949",
+"kwargs": {}
+},
+{
+"string": "20192208",
+"url": "https://github.com/dateutil/dateutil/issues/949",
+"kwargs": {
+"dayfirst": false
+}
+},
+{
+"string": "2004_09_17",
+"url": "https://github.com/dateutil/dateutil/issues/959",
+"kwargs": {}
+},
+{
+"string": "2004_02_04",
+"url": "https://github.com/dateutil/dateutil/issues/959",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "2019_01_26",
+"url": "https://github.com/dateutil/dateutil/issues/959",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2004-09-17",
+"url": "https://github.com/dateutil/dateutil/issues/967",
+"kwargs": {}
+},
+{
+"string": "Tue Oct 15 2019 17:00:12 GMT+0200",
+"url": "https://github.com/dateutil/dateutil/issues/968",
+"kwargs": {}
+},
+{
+"string": "0-100",
+"url": "https://github.com/dateutil/dateutil/issues/981",
+"kwargs": {}
+},
+{
+"string": "1986/87",
+"url": "https://github.com/dateutil/dateutil/issues/981",
+"kwargs": {
+"fuzzy": false
+}
+},
+{
+"string": "7H2UWUUU",
+"url": "https://github.com/dateutil/dateutil/issues/988",
+"kwargs": {}
+},
+{
+"string": "2",
+"url": "https://github.com/dateutil/dateutil/issues/988",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Today is May 17,2019 at 8:21:00AM",
+"url": "https://github.com/dateutil/dateutil/issues/1000",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Today is January 1,2019 at 8:21:00AM",
+"url": "https://github.com/dateutil/dateutil/issues/1000",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Today is January 17,2019 at 8:21:00AM",
+"url": "https://github.com/dateutil/dateutil/issues/1000",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "May 17,2019",
+"url": "https://github.com/dateutil/dateutil/issues/1000",
+"kwargs": {}
+},
+{
+"string": "May 17, 2019",
+"url": "https://github.com/dateutil/dateutil/issues/1000",
+"kwargs": {}
+},
+{
+"string": "04.03.2020",
+"url": "https://github.com/dateutil/dateutil/issues/1011",
+"kwargs": {}
+},
+{
+"string": "23.03.2020",
+"url": "https://github.com/dateutil/dateutil/issues/1011",
+"kwargs": {}
+},
+{
+"string": "20180912011721.621000",
+"url": "https://github.com/dateutil/dateutil/issues/1012",
+"kwargs": {}
+},
+{
+"string": "20180912011721.621000-0300",
+"url": "https://github.com/dateutil/dateutil/issues/1012",
+"kwargs": {}
+},
+{
+"string": "20180912011721.621000+0300",
+"url": "https://github.com/dateutil/dateutil/issues/1012",
+"kwargs": {}
+},
+{
+"string": "3h30m",
+"url": "https://github.com/dateutil/dateutil/issues/1013",
+"kwargs": {}
+},
+{
+"string": "2016-12-31T23:59:60",
+"url": "https://github.com/dateutil/dateutil/issues/1018",
+"kwargs": {}
+},
+{
+"string": "£14.99 (25% off, until April 20)",
+"url": "https://github.com/dateutil/dateutil/issues/1029",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "£. (% off, until April 20)",
+"url": "https://github.com/dateutil/dateutil/issues/1029",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "2020-02-15T12:34",
+"url": "https://github.com/dateutil/dateutil/issues/1032",
+"kwargs": {}
+},
+{
+"string": "2020-02-15T12:34:23",
+"url": "https://github.com/dateutil/dateutil/issues/1032",
+"kwargs": {}
+},
+{
+"string": "æå, 22 å\n«æ 2013 11:27:40 +0800",
+"url": "https://github.com/dateutil/dateutil/issues/1038",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Fr 09/15/2017",
+"url": "https://github.com/dateutil/dateutil/issues/1042",
+"kwargs": {}
+},
+{
+"string": "Fr 09/15/2017 12:34:08",
+"url": "https://github.com/dateutil/dateutil/issues/1042",
+"kwargs": {}
+},
+{
+"string": "22:01 PM",
+"url": "https://github.com/dateutil/dateutil/issues/1042",
+"kwargs": {}
+},
+{
+"string": "06-05-2017 16:45 pm",
+"url": "https://github.com/dateutil/dateutil/issues/1042",
+"kwargs": {}
+},
+{
+"string": "July 22, 2017 17:25:43pm",
+"url": "https://github.com/dateutil/dateutil/issues/1042",
+"kwargs": {}
+},
+{
+"string": "6/30/2017 16:01 PM",
+"url": "https://github.com/dateutil/dateutil/issues/1042",
+"kwargs": {}
+},
+{
+"string": "2017-05-31 19:16:59:00",
+"url": "https://github.com/dateutil/dateutil/issues/1042",
+"kwargs": {}
+},
+{
+"string": "43266.8567017361",
+"url": "https://github.com/dateutil/dateutil/issues/1042",
+"kwargs": {}
+},
+{
+"string": "20180225 7225821",
+"url": "https://github.com/dateutil/dateutil/issues/1042",
+"kwargs": {}
+},
+{
+"string": "8400 Erlose 19% USt",
+"url": "https://github.com/dateutil/dateutil/issues/1054",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "June 19,2020,10:37 pm",
+"url": "https://github.com/dateutil/dateutil/issues/1061",
+"kwargs": {}
+},
+{
+"string": "April 8,2020,12:00 am",
+"url": "https://github.com/dateutil/dateutil/issues/1061",
+"kwargs": {}
+},
+{
+"string": "2011:01:08 23:44:36",
+"url": "https://github.com/dateutil/dateutil/issues/1062",
+"kwargs": {}
+},
+{
+"string": "2011-01-08 23:44:36",
+"url": "https://github.com/dateutil/dateutil/issues/1062",
+"kwargs": {}
+},
+{
+"string": "2020:01:01",
+"url": "https://github.com/dateutil/dateutil/issues/1062",
+"kwargs": {}
+},
+{
+"string": "from 13:45 to 17:15",
+"url": "https://github.com/dateutil/dateutil/issues/1063",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "30/062012",
+"url": "https://github.com/dateutil/dateutil/issues/1071",
+"kwargs": {}
+},
+{
+"string": "2020-08-20T03:33:46.000Z",
+"url": "https://github.com/dateutil/dateutil/issues/1073",
+"kwargs": {}
+},
+{
+"string": "20200728121240",
+"url": "https://github.com/dateutil/dateutil/issues/1074",
+"kwargs": {}
+},
+{
+"string": "202001012223",
+"url": "https://github.com/dateutil/dateutil/issues/1074",
+"kwargs": {}
+},
+{
+"string": "202001012323",
+"url": "https://github.com/dateutil/dateutil/issues/1074",
+"kwargs": {}
+},
+{
+"string": "Sep. 19,2013",
+"url": "https://github.com/dateutil/dateutil/issues/1075",
+"kwargs": {}
+},
+{
+"string": "2020-09-01T01:01:01+05:21:10",
+"url": "https://github.com/dateutil/dateutil/issues/1081",
+"kwargs": {}
+},
+{
+"string": "1939-01-01T00:00:00+03:06:52",
+"url": "https://github.com/dateutil/dateutil/issues/1081",
+"kwargs": {}
+},
+{
+"string": "20/12/32",
+"url": "https://github.com/dateutil/dateutil/issues/1084",
+"kwargs": {
+"yearfirst": true
+}
+},
+{
+"string": "2020-11-07T00:30:13.878730Z",
+"url": "https://github.com/dateutil/dateutil/issues/1086",
+"kwargs": {}
+},
+{
+"string": "2020-11-07T00:30:13.878730148Z",
+"url": "https://github.com/dateutil/dateutil/issues/1086",
+"kwargs": {}
+},
+{
+"string": "2020-11-07T00:30:13.878730148234235235346354435987345Z",
+"url": "https://github.com/dateutil/dateutil/issues/1086",
+"kwargs": {}
+},
+{
+"string": "2021-01-17T04:52:45Z",
+"url": "https://github.com/dateutil/dateutil/issues/1102",
+"kwargs": {}
+},
+{
+"string": "02/03/2021",
+"url": "https://github.com/dateutil/dateutil/issues/1103",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "19/040400",
+"url": "https://github.com/dateutil/dateutil/issues/1108",
+"kwargs": {}
+},
+{
+"string": "02:12:11",
+"url": "https://github.com/dateutil/dateutil/issues/1112",
+"kwargs": {}
+},
+{
+"string": "2021-04-19 09:00:42",
+"url": "https://github.com/dateutil/dateutil/issues/1117",
+"kwargs": {}
+},
+{
+"string": "2021-04-19 09:00:42 Z",
+"url": "https://github.com/dateutil/dateutil/issues/1117",
+"kwargs": {}
+},
+{
+"string": "2021-04-19 09:00:42 utc",
+"url": "https://github.com/dateutil/dateutil/issues/1117",
+"kwargs": {}
+},
+{
+"string": "2021-04-19 09:00:42 UTC",
+"url": "https://github.com/dateutil/dateutil/issues/1117",
+"kwargs": {}
+},
+{
+"string": "2014-04-19T",
+"url": "https://github.com/dateutil/dateutil/issues/1122",
+"kwargs": {}
+},
+{
+"string": "10/28/2018",
+"url": "https://github.com/dateutil/dateutil/issues/1140",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "31/2/19",
+"url": "https://github.com/dateutil/dateutil/issues/1140",
+"kwargs": {
+"dayfirst": true,
+"yearfirst": false
+}
+},
+{
+"string": "32/2/19",
+"url": "https://github.com/dateutil/dateutil/issues/1140",
+"kwargs": {
+"dayfirst": true,
+"yearfirst": false
+}
+},
+{
+"string": "1/13/2019",
+"url": "https://github.com/dateutil/dateutil/issues/1140",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2020-11-10",
+"url": "https://github.com/dateutil/dateutil/issues/1150",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "10-11-2020",
+"url": "https://github.com/dateutil/dateutil/issues/1150",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "01/01/2019 - GCH/11687/220227296",
+"url": "https://github.com/dateutil/dateutil/issues/1151",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "01/01/2019 - GCH 11687 220227296",
+"url": "https://github.com/dateutil/dateutil/issues/1151",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "01/01/2019  GCH/11687/220227296",
+"url": "https://github.com/dateutil/dateutil/issues/1151",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "01/01/2019   GCH 11687 220227296",
+"url": "https://github.com/dateutil/dateutil/issues/1151",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": " 01/01/2019  GCH 11687",
+"url": "https://github.com/dateutil/dateutil/issues/1151",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "2020090293457",
+"url": "https://github.com/dateutil/dateutil/issues/1152",
+"kwargs": {
+"ignoretz": true
+}
+},
+{
+"string": "2147483647",
+"url": "https://github.com/dateutil/dateutil/issues/1152",
+"kwargs": {}
+},
+{
+"string": "2147483648",
+"url": "https://github.com/dateutil/dateutil/issues/1152",
+"kwargs": {}
+},
+{
+"string": "February 29,2016",
+"url": "https://github.com/dateutil/dateutil/issues/1155",
+"kwargs": {}
+},
+{
+"string": "February 29;2016",
+"url": "https://github.com/dateutil/dateutil/issues/1156",
+"kwargs": {}
+},
+{
+"string": "February 2016;29",
+"url": "https://github.com/dateutil/dateutil/issues/1156",
+"kwargs": {}
+},
+{
+"string": "February 2016,29",
+"url": "https://github.com/dateutil/dateutil/issues/1156",
+"kwargs": {}
+},
+{
+"string": "Thứ sáu, 6/8/2021, 01:08 (GMT+7)",
+"url": "https://github.com/dateutil/dateutil/issues/1161",
+"kwargs": {
+"dayfirst": true,
+"fuzzy": true
+}
+},
+{
+"string": "22-04-2011",
+"url": "https://github.com/dateutil/dateutil/issues/1163",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "22042011",
+"url": "https://github.com/dateutil/dateutil/issues/1163",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "8/23(月) 00:00 JST",
+"url": "https://github.com/dateutil/dateutil/issues/1166",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "8/23(月) メンテナンス後 JST",
+"url": "https://github.com/dateutil/dateutil/issues/1166",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "t2m",
+"url": "https://github.com/dateutil/dateutil/issues/1180",
+"kwargs": {}
+},
+{
+"string": "03/09/70",
+"url": "https://github.com/dateutil/dateutil/issues/1182",
+"kwargs": {}
+},
+{
+"string": "2021-11-07T09:00:00-00:00",
+"url": "https://github.com/dateutil/dateutil/issues/1183",
+"kwargs": {}
+},
+{
+"string": "1 Jan 1999 (but I could be late)",
+"url": "https://github.com/dateutil/dateutil/issues/1188",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "1 Jan 1999 (but I may be late)",
+"url": "https://github.com/dateutil/dateutil/issues/1188",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "Remind me to discuss lbl2vec with pari at 7 pm",
+"url": "https://github.com/dateutil/dateutil/issues/1189",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Remind me to discuss lblvec with pari at 7 pm",
+"url": "https://github.com/dateutil/dateutil/issues/1189",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "may15,2021",
+"url": "https://github.com/dateutil/dateutil/issues/1191",
+"kwargs": {}
+},
+{
+"string": "2022年3月19日（星期六）香港時間11時53分",
+"url": "https://github.com/dateutil/dateutil/issues/1198",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2022年3月19日（星期六）香港時間11時18分",
+"url": "https://github.com/dateutil/dateutil/issues/1198",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "5'0666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666660h0h9h9h666666666666666666666666666660,0,0a5,'0,0a5'0,",
+"url": "https://github.com/dateutil/dateutil/issues/1199",
+"kwargs": {}
+},
+{
+"string": "Mar 24, 2022, 7:49:10 PM (8 days ago) ",
+"url": "https://github.com/dateutil/dateutil/issues/1201",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2009:03:29 12:30:23",
+"url": "https://github.com/dateutil/dateutil/issues/1209",
+"kwargs": {}
+},
+{
+"string": "05:04:39 Jun 23, 2022 PDT",
+"url": "https://github.com/dateutil/dateutil/issues/1221",
+"kwargs": {}
+},
+{
+"string": "Wed May 20 13:51:10 PDT 2015",
+"url": "https://github.com/dateutil/dateutil/issues/1221",
+"kwargs": {}
+},
+{
+"string": "12.07.2022",
+"url": "https://github.com/dateutil/dateutil/issues/1224",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "13.07.2022",
+"url": "https://github.com/dateutil/dateutil/issues/1224",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "1969-12-31T00:00:00+32:00",
+"url": "https://github.com/dateutil/dateutil/issues/1231",
+"kwargs": {}
+},
+{
+"string": "153 Street Northwest",
+"url": "https://github.com/dateutil/dateutil/issues/1234",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2021-W53-1",
+"url": "https://github.com/dateutil/dateutil/issues/1236",
+"kwargs": {}
+},
+{
+"string": "[13.11.2022, 19:22:15] xy-zz",
+"url": "https://github.com/dateutil/dateutil/issues/1241",
+"kwargs": {
+"dayfirst": true,
+"fuzzy": true
+}
+},
+{
+"string": "Thu Jun 02 11:56:53 B 2011",
+"url": "https://github.com/dateutil/dateutil/issues/1246",
+"kwargs": {}
+},
+{
+"string": "Thu Jun 02 12:56:53 A 2011",
+"url": "https://github.com/dateutil/dateutil/issues/1246",
+"kwargs": {}
+},
+{
+"string": "Thu Jun 02 12:56:53 P 2011",
+"url": "https://github.com/dateutil/dateutil/issues/1246",
+"kwargs": {}
+},
+{
+"string": "Thu Jun 02 13:56:53 A 2011",
+"url": "https://github.com/dateutil/dateutil/issues/1246",
+"kwargs": {}
+},
+{
+"string": "4 May 2022 14:00:00 US/Eastern",
+"url": "https://github.com/dateutil/dateutil/issues/1250",
+"kwargs": {}
+},
+{
+"string": "20170726003206.491-0400",
+"url": "https://github.com/dateutil/dateutil/issues/1252",
+"kwargs": {}
+},
+{
+"string": "20170726003206.491",
+"url": "https://github.com/dateutil/dateutil/issues/1252",
+"kwargs": {}
+},
+{
+"string": "2022-01-01T00:00:00Z+03:00",
+"url": "https://github.com/dateutil/dateutil/issues/1263",
+"kwargs": {}
+},
+{
+"string": "2022-01-01T00:00:00.123456Z+03:00",
+"url": "https://github.com/dateutil/dateutil/issues/1263",
+"kwargs": {}
+},
+{
+"string": "what",
+"url": "https://github.com/dateutil/dateutil/issues/1265",
+"kwargs": {}
+},
+{
+"string": "1p9",
+"url": "https://github.com/dateutil/dateutil/issues/1269",
+"kwargs": {}
+},
+{
+"string": "2023년 4월 29일",
+"url": "https://github.com/dateutil/dateutil/issues/1279",
+"kwargs": {}
+},
+{
+"string": "april2,2021",
+"url": "https://github.com/dateutil/dateutil/issues/1299",
+"kwargs": {}
+},
+{
+"string": "april2,87",
+"url": "https://github.com/dateutil/dateutil/issues/1299",
+"kwargs": {}
+},
+{
+"string": "april2,785",
+"url": "https://github.com/dateutil/dateutil/issues/1299",
+"kwargs": {}
+},
+{
+"string": "January15,7626",
+"url": "https://github.com/dateutil/dateutil/issues/1302",
+"kwargs": {}
+},
+{
+"string": "2023-01-01 01:01:01.000 - text",
+"url": "https://github.com/dateutil/dateutil/issues/1316",
+"kwargs": {}
+},
+{
+"string": "2023-01-01 01:01:01.000 -01:00",
+"url": "https://github.com/dateutil/dateutil/issues/1316",
+"kwargs": {}
+},
+{
+"string": "2023-01-01 01:01:01.000 - 01:00",
+"url": "https://github.com/dateutil/dateutil/issues/1316",
+"kwargs": {}
+},
+{
+"string": "2023-01-01 10:00:00 - INFO - started",
+"url": "https://github.com/dateutil/dateutil/issues/1316",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2002-09-24Z",
+"url": "https://github.com/dateutil/dateutil/issues/1320",
+"kwargs": {}
+},
+{
+"string": "2002-09-24-06:00",
+"url": "https://github.com/dateutil/dateutil/issues/1320",
+"kwargs": {}
+},
+{
+"string": "2006-04-23+09:00",
+"url": "https://github.com/dateutil/dateutil/issues/1320",
+"kwargs": {}
+},
+{
+"string": "june 15,1987",
+"url": "https://github.com/dateutil/dateutil/issues/1321",
+"kwargs": {}
+},
+{
+"string": "june 15, 1987",
+"url": "https://github.com/dateutil/dateutil/issues/1321",
+"kwargs": {}
+},
+{
+"string": "2023年12月4日10点",
+"url": "https://github.com/dateutil/dateutil/issues/1327",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2020-1-10",
+"url": "https://github.com/dateutil/dateutil/issues/1334",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2020-09-30",
+"url": "https://github.com/dateutil/dateutil/issues/1334",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2020-30-09",
+"url": "https://github.com/dateutil/dateutil/issues/1334",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2020-09-31",
+"url": "https://github.com/dateutil/dateutil/issues/1334",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "13/07/2000",
+"url": "https://github.com/dateutil/dateutil/issues/1334",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "12/07/2000",
+"url": "https://github.com/dateutil/dateutil/issues/1334",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2024-01-17T15:21:00-0800",
+"url": "https://github.com/dateutil/dateutil/issues/1341",
+"kwargs": {}
+},
+{
+"string": "2024-01-17T152100-08:00",
+"url": "https://github.com/dateutil/dateutil/issues/1341",
+"kwargs": {}
+},
+{
+"string": "20240117T15:21:00-08:00",
+"url": "https://github.com/dateutil/dateutil/issues/1341",
+"kwargs": {}
+},
+{
+"string": "2024-01-17T152100-0800",
+"url": "https://github.com/dateutil/dateutil/issues/1341",
+"kwargs": {}
+},
+{
+"string": "20240117T15:21:00-0800",
+"url": "https://github.com/dateutil/dateutil/issues/1341",
+"kwargs": {}
+},
+{
+"string": "20240117T152100-08:00",
+"url": "https://github.com/dateutil/dateutil/issues/1341",
+"kwargs": {}
+},
+{
+"string": "April",
+"url": "https://github.com/dateutil/dateutil/issues/1354",
+"kwargs": {}
+},
+{
+"string": "June",
+"url": "https://github.com/dateutil/dateutil/issues/1354",
+"kwargs": {}
+},
+{
+"string": "February",
+"url": "https://github.com/dateutil/dateutil/issues/1354",
+"kwargs": {}
+},
+{
+"string": "2024-03-31 02:00:25 BST+0100",
+"url": "https://github.com/dateutil/dateutil/issues/1357",
+"kwargs": {}
+},
+{
+"string": "9999999999999999999999999999999999999999939999999999999999999999999999:99999999999999999999999999999\n9",
+"url": "https://github.com/dateutil/dateutil/issues/1359",
+"kwargs": {}
+},
+{
+"string": "33333333333333\\x003",
+"url": "https://github.com/dateutil/dateutil/issues/1360",
+"kwargs": {}
+},
+{
+"string": "9999999999999999999999999999999999999999939999999999999999999999999999:999999999",
+"url": "https://github.com/dateutil/dateutil/issues/1360",
+"kwargs": {}
+},
+{
+"string": "2024-04",
+"url": "https://github.com/dateutil/dateutil/issues/1364",
+"kwargs": {}
+},
+{
+"string": "April 2024",
+"url": "https://github.com/dateutil/dateutil/issues/1364",
+"kwargs": {}
+},
+{
+"string": "19970902090807197090209080710h",
+"url": "https://github.com/dateutil/dateutil/issues/1366",
+"kwargs": {}
+},
+{
+"string": "2024-08-08T09:17:24Z",
+"url": "https://github.com/dateutil/dateutil/issues/1366",
+"kwargs": {}
+},
+{
+"string": "2007年10月10日",
+"url": "https://github.com/dateutil/dateutil/issues/1383",
+"kwargs": {
+"ignoretz": true,
+"yearfirst": true
+}
+},
+{
+"string": "Fri 1/01/2020 12:00 PM (GMT-04:00)",
+"url": "https://github.com/dateutil/dateutil/issues/1391",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "Fri 1/01/2020 12:00 PM (-04:00)",
+"url": "https://github.com/dateutil/dateutil/issues/1391",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "2025-1-10,0:57:17.0,+1:0",
+"url": "https://github.com/dateutil/dateutil/issues/1409",
+"kwargs": {}
+},
+{
+"string": "2025-1-1,0:57:17.0,+1:0",
+"url": "https://github.com/dateutil/dateutil/issues/1409",
+"kwargs": {}
+},
+{
+"string": "2024_07_19",
+"url": "https://github.com/dateutil/dateutil/issues/1410",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "1200_07_19",
+"url": "https://github.com/dateutil/dateutil/issues/1410",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "1_07_19",
+"url": "https://github.com/dateutil/dateutil/issues/1410",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2024-07-19",
+"url": "https://github.com/dateutil/dateutil/issues/1410",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "January 1, 2020 to January 5, 2020",
+"url": "https://github.com/dateutil/dateutil/issues/1414",
+"kwargs": {}
+},
+{
+"string": "January 15, 2024 to January 11, 2024",
+"url": "https://github.com/dateutil/dateutil/issues/1414",
+"kwargs": {}
+},
+{
+"string": "01-1 5pm",
+"url": "https://github.com/dateutil/dateutil/issues/1421",
+"kwargs": {}
+},
+{
+"string": "2024-08-27T12:34:56.000Z",
+"url": "https://github.com/dateutil/dateutil/issues/1433",
+"kwargs": {}
+},
+{
+"string": "20010203 040506789",
+"url": "https://github.com/dateutil/dateutil/issues/1442",
+"kwargs": {}
+},
+{
+"string": "2024:03:29 07:19:05",
+"url": "https://github.com/dateutil/dateutil/issues/1446",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "2024-11-06",
+"url": "https://github.com/dateutil/dateutil/issues/1448",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2026-03-11 14:32:45 UTC-4",
+"url": "https://github.com/dateutil/dateutil/issues/1478",
+"kwargs": {}
+},
+{
+"string": "2026-03-11 14:32:45 UTC+4",
+"url": "https://github.com/dateutil/dateutil/issues/1478",
+"kwargs": {}
+},
+{
+"string": "2026-03-11 14:32:45 GMT-5",
+"url": "https://github.com/dateutil/dateutil/issues/1479",
+"kwargs": {}
+},
+{
+"string": "2026-03-11 14:32:45 Z+4",
+"url": "https://github.com/dateutil/dateutil/issues/1479",
+"kwargs": {}
+},
+{
+"string": "092507",
+"url": "https://github.com/dateutil/dateutil/issues/1488",
+"kwargs": {
+"yearfirst": true,
+"dayfirst": true
+}
+},
+{
+"string": "2024-01-15T12:00:00+0060",
+"url": "https://github.com/dateutil/dateutil/issues/1508",
+"kwargs": {}
+},
+{
+"string": "2024-01-15T12:00:00+00:60",
+"url": "https://github.com/dateutil/dateutil/issues/1508",
+"kwargs": {}
+},
+{
+"string": "2024-01-15T12:00:00+0560",
+"url": "https://github.com/dateutil/dateutil/issues/1508",
+"kwargs": {}
+},
+{
+"string": "2024-01-15T12:00:00+0099",
+"url": "https://github.com/dateutil/dateutil/issues/1508",
+"kwargs": {}
+},
+{
+"string": "2024-01-15T12:00:00+2400",
+"url": "https://github.com/dateutil/dateutil/issues/1508",
+"kwargs": {}
+},
+{
+"string": "2024-01-15T12:00:00+9900",
+"url": "https://github.com/dateutil/dateutil/issues/1508",
+"kwargs": {}
+},
+{
+"string": "2023-01-01 12:00 +99:00",
+"url": "https://github.com/dateutil/dateutil/issues/1508",
+"kwargs": {}
+},
+{
+"string": "2023-01-01 12:00 +24",
+"url": "https://github.com/dateutil/dateutil/issues/1508",
+"kwargs": {}
+},
+{
+"string": "2023-01-01 12:00 +9900",
+"url": "https://github.com/dateutil/dateutil/issues/1508",
+"kwargs": {}
+},
+{
+"string": "2025-1-10,0:57:17",
+"url": "https://github.com/dateutil/dateutil/issues/1522",
+"kwargs": {}
+},
+{
+"string": "2025-1-1,0:57:17",
+"url": "https://github.com/dateutil/dateutil/issues/1522",
+"kwargs": {}
+},
+{
+"string": "2021-W53",
+"url": "https://github.com/dateutil/dateutil/issues/1529",
+"kwargs": {}
+},
+{
+"string": "2020-01-01T00:00:00.1234567",
+"url": "https://github.com/dateutil/dateutil/issues/1545",
+"kwargs": {}
+},
+{
+"string": "2020-01-01 00:00:00.1234567",
+"url": "https://github.com/dateutil/dateutil/issues/1546",
+"kwargs": {}
+},
+{
+"string": "11:20 PM - 4 Aug 2015",
+"url": "https://github.com/dateutil/dateutil/issues/1567",
+"kwargs": {}
+},
+{
+"string": "4 Aug 2015 - 11:20 PM",
+"url": "https://github.com/dateutil/dateutil/issues/1567",
+"kwargs": {}
+},
+{
+"string": "2024-W53",
+"url": "https://github.com/dateutil/dateutil/issues/1582",
+"kwargs": {}
+},
+{
+"string": "2024-W53-1",
+"url": "https://github.com/dateutil/dateutil/issues/1582",
+"kwargs": {}
+},
+{
+"string": "2017-01-01T12.5",
+"url": "https://github.com/dateutil/dateutil/issues/1599",
+"kwargs": {}
+},
+{
+"string": "2017-01-01T12:30.5",
+"url": "https://github.com/dateutil/dateutil/issues/1599",
+"kwargs": {}
+},
+{
+"string": "2020-01-01 00:00:59.9999995",
+"url": "https://github.com/dateutil/dateutil/issues/1608",
+"kwargs": {}
+},
+{
+"string": "2020-12-31 23:59:59.9999995",
+"url": "https://github.com/dateutil/dateutil/issues/1608",
+"kwargs": {}
+},
+{
+"string": "Reminder dentist Tue Apr 9 14:00:00 2024 bring card",
+"url": "https://github.com/dateutil/dateutil/issues/1613",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "2024-03-15",
+"url": "https://github.com/dateutil/dateutil/issues/1624",
+"kwargs": {}
+},
+{
+"string": "2025:12:05",
+"url": "https://github.com/dateutil/dateutil/issues/1626",
+"kwargs": {}
+},
+{
+"string": "2025:12:05 19:09:37",
+"url": "https://github.com/dateutil/dateutil/issues/1626",
+"kwargs": {}
+},
+{
+"string": "19:09:37 2025:12:05",
+"url": "https://github.com/dateutil/dateutil/issues/1626",
+"kwargs": {}
+},
+{
+"string": "2025:13:05",
+"url": "https://github.com/dateutil/dateutil/issues/1626",
+"kwargs": {}
+},
+{
+"string": "2024-W01",
+"url": "https://github.com/dateutil/dateutil/issues/1630",
+"kwargs": {}
+},
+{
+"string": "2024-W01-1",
+"url": "https://github.com/dateutil/dateutil/issues/1630",
+"kwargs": {}
+},
+{
+"string": "17052022",
+"url": "https://github.com/dateutil/dateutil/issues/1215",
+"kwargs": {}
+},
+{
+"string": "last Monday",
+"url": "https://github.com/dateutil/dateutil/issues/1215",
+"kwargs": {}
+},
+{
+"string": "20220302095100",
+"url": "https://github.com/dateutil/dateutil/issues/1194",
+"kwargs": {}
+},
+{
+"string": "06.09",
+"url": "https://github.com/dateutil/dateutil/issues/1137",
+"kwargs": {}
+},
+{
+"string": "09.06",
+"url": "https://github.com/dateutil/dateutil/issues/1137",
+"kwargs": {}
+},
+{
+"string": "09.07",
+"url": "https://github.com/dateutil/dateutil/issues/1137",
+"kwargs": {}
+},
+{
+"string": "Friday, 8th February, 2019, 10.55 am.",
+"url": "https://github.com/dateutil/dateutil/issues/1052",
+"kwargs": {}
+},
+{
+"string": "Friday, 8th November, 2019, 8.10 am.",
+"url": "https://github.com/dateutil/dateutil/issues/1052",
+"kwargs": {}
+},
+{
+"string": "24122019",
+"url": "https://github.com/dateutil/dateutil/issues/995",
+"kwargs": {}
+},
+{
+"string": "M5H 3L5",
+"url": "https://github.com/dateutil/dateutil/issues/965",
+"kwargs": {}
+},
+{
+"string": "11/11/11",
+"url": "https://github.com/dateutil/dateutil/issues/904",
+"kwargs": {}
+},
+{
+"string": "11:11:59",
+"url": "https://github.com/dateutil/dateutil/issues/904",
+"kwargs": {}
+},
+{
+"string": "1-nov 19 11:00:59",
+"url": "https://github.com/dateutil/dateutil/issues/904",
+"kwargs": {}
+},
+{
+"string": "10",
+"url": "https://github.com/dateutil/dateutil/issues/904",
+"kwargs": {}
+},
+{
+"string": "jan 19",
+"url": "https://github.com/dateutil/dateutil/issues/904",
+"kwargs": {}
+},
+{
+"string": "2019-01-14 11:13:09 UTC+8:00",
+"url": "https://github.com/dateutil/dateutil/issues/855",
+"kwargs": {}
+},
+{
+"string": "2019-01-14 11:13:09 UTC-8:00",
+"url": "https://github.com/dateutil/dateutil/issues/855",
+"kwargs": {}
+},
+{
+"string": "2019-01-14 11:13:09+8:00",
+"url": "https://github.com/dateutil/dateutil/issues/855",
+"kwargs": {}
+},
+{
+"string": "Supervised and trained a staff of 10-30 team members Education MS, Analytics University of San Francisco, July 2015",
+"url": "https://github.com/dateutil/dateutil/issues/847",
+"kwargs": {
+"fuzzy_with_tokens": true
+}
+},
+{
+"string": "09:55:00.22",
+"url": "https://github.com/dateutil/dateutil/issues/793",
+"kwargs": {}
+},
+{
+"string": "12:00 Noon",
+"url": "https://github.com/dateutil/dateutil/issues/781",
+"kwargs": {}
+},
+{
+"string": "17 Sept 23",
+"url": "https://github.com/dateutil/dateutil/issues/465",
+"kwargs": {}
+},
+{
+"string": "17 Sept 67",
+"url": "https://github.com/dateutil/dateutil/issues/465",
+"kwargs": {}
+},
+{
+"string": "1.12.2017",
+"url": "https://github.com/dateutil/dateutil/issues/402",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2017-12-01",
+"url": "https://github.com/dateutil/dateutil/issues/402",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2018-22-11",
+"url": "https://github.com/dateutil/dateutil/issues/402",
+"kwargs": {}
+},
+{
+"string": "2018-12-11",
+"url": "https://github.com/dateutil/dateutil/issues/402",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2017-02-30",
+"url": "https://github.com/dateutil/dateutil/issues/335",
+"kwargs": {}
+},
+{
+"string": "13:14:15 AM",
+"url": "https://github.com/dateutil/dateutil/issues/335",
+"kwargs": {}
+},
+{
+"string": "14 m 30",
+"url": "https://github.com/dateutil/dateutil/issues/333",
+"kwargs": {}
+},
+{
+"string": "0004-04-01 00:00:00",
+"url": "https://github.com/dateutil/dateutil/issues/293",
+"kwargs": {}
+},
+{
+"string": "March 7, 2008",
+"url": "https://github.com/dateutil/dateutil/issues/261",
+"kwargs": {}
+},
+{
+"string": "March 2008",
+"url": "https://github.com/dateutil/dateutil/issues/261",
+"kwargs": {}
+},
+{
+"string": "about a minute ago",
+"url": "https://github.com/dateutil/dateutil/issues/254",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "one minute ago",
+"url": "https://github.com/dateutil/dateutil/issues/254",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "two days ago",
+"url": "https://github.com/dateutil/dateutil/issues/254",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "today",
+"url": "https://github.com/dateutil/dateutil/issues/254",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Today at 5PM",
+"url": "https://github.com/dateutil/dateutil/issues/254",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "Tomorrow at 5PM",
+"url": "https://github.com/dateutil/dateutil/issues/254",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "5PM",
+"url": "https://github.com/dateutil/dateutil/issues/254",
+"kwargs": {}
+},
+{
+"string": "2015-02-06",
+"url": "https://github.com/dateutil/dateutil/issues/241",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "090131",
+"url": "https://github.com/dateutil/dateutil/issues/217",
+"kwargs": {
+"dayfirst": false,
+"yearfirst": false
+}
+},
+{
+"string": "10-11-12",
+"url": "https://github.com/dateutil/dateutil/issues/217",
+"kwargs": {
+"dayfirst": false,
+"yearfirst": false
+}
+},
+{
+"string": "20/12/21",
+"url": "https://github.com/dateutil/dateutil/issues/217",
+"kwargs": {
+"dayfirst": false,
+"yearfirst": false
+}
+},
+{
+"string": "15/08/14,10:52:07",
+"url": "https://github.com/dateutil/dateutil/issues/203",
+"kwargs": {}
+},
+{
+"string": "Wed, Feb 03 2016. 01 37 PM",
+"url": "https://github.com/dateutil/dateutil/issues/175",
+"kwargs": {
+"fuzzy": true
+}
+},
+{
+"string": "19        2015",
+"url": "https://github.com/dateutil/dateutil/issues/114",
+"kwargs": {}
+},
+{
+"string": "19        2015 08",
+"url": "https://github.com/dateutil/dateutil/issues/114",
+"kwargs": {}
+},
+{
+"string": "19 2015",
+"url": "https://github.com/dateutil/dateutil/issues/114",
+"kwargs": {}
+},
+{
+"string": "January 2",
+"url": "https://github.com/dateutil/dateutil/issues/1405",
+"kwargs": {}
+},
+{
+"string": "2001",
+"url": "https://github.com/dateutil/dateutil/issues/1145",
+"kwargs": {}
+},
+{
+"string": "2001-01",
+"url": "https://github.com/dateutil/dateutil/issues/1145",
+"kwargs": {}
+},
+{
+"string": "2001-01-01",
+"url": "https://github.com/dateutil/dateutil/issues/1145",
+"kwargs": {}
+},
+{
+"string": "@2147483647",
+"url": "https://github.com/dateutil/dateutil/issues/400",
+"kwargs": {}
+},
+{
+"string": "03/08/06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "03/08/2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "3/8/06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "3/8/2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "030806",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "03082006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "03Aug06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "03Aug2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "03-Aug-06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "03-Aug-2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "3Aug06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "3Aug2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "3-Aug-06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "3-Aug-2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "3-August-06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "3-August-2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "060803",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "20060803",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "06/08/03",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "2006/08/03",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "080306",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "08032006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "08/03/06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "08/03/2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "Aug-03-06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "Aug-03-2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "2006-08-03",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "Monday, 3rd of August 2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "Monday",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "Aug-06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "06",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "2006",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "03-Aug-2006 18:55:30.35",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "2006-08-03 18:55:30",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "03-Aug-2006 6:55:30 pm",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "18:55:30",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "6:55:30 pm",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "48:55:30",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "68538.350",
+"url": "https://github.com/dateutil/dateutil/issues/796",
+"kwargs": {}
+},
+{
+"string": "121001",
+"url": "https://github.com/pandas-dev/pandas/issues/2018",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "12-10-01",
+"url": "https://github.com/pandas-dev/pandas/issues/2018",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "13-4-2012",
+"url": "https://github.com/pandas-dev/pandas/issues/2503",
+"kwargs": {}
+},
+{
+"string": "10/01/2010",
+"url": "https://github.com/pandas-dev/pandas/issues/2586",
+"kwargs": {}
+},
+{
+"string": "1880 2",
+"url": "https://github.com/pandas-dev/pandas/issues/2618",
+"kwargs": {
+"dayfirst": false
+}
+},
+{
+"string": "01-13-2012",
+"url": "https://github.com/pandas-dev/pandas/issues/3341",
+"kwargs": {}
+},
+{
+"string": "1/12/2012",
+"url": "https://github.com/pandas-dev/pandas/issues/3341",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "1/13/2012",
+"url": "https://github.com/pandas-dev/pandas/issues/3341",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "14/14/2012",
+"url": "https://github.com/pandas-dev/pandas/issues/3341",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "29.01.1945",
+"url": "https://github.com/pandas-dev/pandas/issues/3341",
+"kwargs": {}
+},
+{
+"string": "1.3.1945",
+"url": "https://github.com/pandas-dev/pandas/issues/3341",
+"kwargs": {}
+},
+{
+"string": "02.03.1945",
+"url": "https://github.com/pandas-dev/pandas/issues/3341",
+"kwargs": {}
+},
+{
+"string": "2012",
+"url": "https://github.com/pandas-dev/pandas/issues/3888",
+"kwargs": {}
+},
+{
+"string": "ssds",
+"url": "https://github.com/pandas-dev/pandas/issues/3888",
+"kwargs": {}
+},
+{
+"string": "01-01-2012 00:00:00-08:00",
+"url": "https://github.com/pandas-dev/pandas/issues/3944",
+"kwargs": {}
+},
+{
+"string": "1980m1",
+"url": "https://github.com/pandas-dev/pandas/issues/5886",
+"kwargs": {}
+},
+{
+"string": "1980m2",
+"url": "https://github.com/pandas-dev/pandas/issues/5886",
+"kwargs": {}
+},
+{
+"string": "10/02/2014",
+"url": "https://github.com/pandas-dev/pandas/issues/5917",
+"kwargs": {}
+},
+{
+"string": "2013-11-01 00:00:00-0500",
+"url": "https://github.com/pandas-dev/pandas/issues/7833",
+"kwargs": {}
+},
+{
+"string": "2013-11-3",
+"url": "https://github.com/pandas-dev/pandas/issues/7833",
+"kwargs": {}
+},
+{
+"string": "2013-11-3 00:00:00 CDT",
+"url": "https://github.com/pandas-dev/pandas/issues/7833",
+"kwargs": {}
+},
+{
+"string": "2013-11-3 00:00:00 EDT",
+"url": "https://github.com/pandas-dev/pandas/issues/7833",
+"kwargs": {}
+},
+{
+"string": "2014-11-02 01:00Z00",
+"url": "https://github.com/pandas-dev/pandas/issues/8910",
+"kwargs": {}
+},
+{
+"string": "0067000000M2M3HAAV",
+"url": "https://github.com/pandas-dev/pandas/issues/9423",
+"kwargs": {}
+},
+{
+"string": "0067000000M2LkvAAF",
+"url": "https://github.com/pandas-dev/pandas/issues/9423",
+"kwargs": {}
+},
+{
+"string": "something",
+"url": "https://github.com/pandas-dev/pandas/issues/10720",
+"kwargs": {}
+},
+{
+"string": "some_nonsense",
+"url": "https://github.com/pandas-dev/pandas/issues/10720",
+"kwargs": {}
+},
+{
+"string": "Jan 1",
+"url": "https://github.com/pandas-dev/pandas/issues/11430",
+"kwargs": {}
+},
+{
+"string": "4pm",
+"url": "https://github.com/pandas-dev/pandas/issues/11430",
+"kwargs": {}
+},
+{
+"string": "16:00",
+"url": "https://github.com/pandas-dev/pandas/issues/11430",
+"kwargs": {}
+},
+{
+"string": "April 3",
+"url": "https://github.com/pandas-dev/pandas/issues/11430",
+"kwargs": {}
+},
+{
+"string": "Aug 2016",
+"url": "https://github.com/pandas-dev/pandas/issues/11430",
+"kwargs": {}
+},
+{
+"string": "2010011",
+"url": "https://github.com/pandas-dev/pandas/issues/11977",
+"kwargs": {}
+},
+{
+"string": "24/1/2015",
+"url": "https://github.com/pandas-dev/pandas/issues/12061",
+"kwargs": {}
+},
+{
+"string": "1/2/2015",
+"url": "https://github.com/pandas-dev/pandas/issues/12061",
+"kwargs": {}
+},
+{
+"string": "01-06-20",
+"url": "https://github.com/pandas-dev/pandas/issues/12585",
+"kwargs": {}
+},
+{
+"string": "13-06-20",
+"url": "https://github.com/pandas-dev/pandas/issues/12585",
+"kwargs": {}
+},
+{
+"string": "01-07-20",
+"url": "https://github.com/pandas-dev/pandas/issues/12585",
+"kwargs": {}
+},
+{
+"string": "13-07-20",
+"url": "https://github.com/pandas-dev/pandas/issues/12585",
+"kwargs": {}
+},
+{
+"string": "foo",
+"url": "https://github.com/pandas-dev/pandas/issues/13176",
+"kwargs": {}
+},
+{
+"string": "28/Jul/2006:10:22:04 -0300",
+"url": "https://github.com/pandas-dev/pandas/issues/13486",
+"kwargs": {}
+},
+{
+"string": "03-01-02",
+"url": "https://github.com/pandas-dev/pandas/issues/13931",
+"kwargs": {}
+},
+{
+"string": "003-01-02",
+"url": "https://github.com/pandas-dev/pandas/issues/13931",
+"kwargs": {}
+},
+{
+"string": "0003-01-02",
+"url": "https://github.com/pandas-dev/pandas/issues/13931",
+"kwargs": {}
+},
+{
+"string": "invalid",
+"url": "https://github.com/pandas-dev/pandas/issues/14561",
+"kwargs": {}
+},
+{
+"string": "next",
+"url": "https://github.com/pandas-dev/pandas/issues/14561",
+"kwargs": {}
+},
+{
+"string": "2017-03-30T12-00-00",
+"url": "https://github.com/pandas-dev/pandas/issues/15899",
+"kwargs": {}
+},
+{
+"string": "2017-07-04 16-51-10",
+"url": "https://github.com/pandas-dev/pandas/issues/16882",
+"kwargs": {}
+},
+{
+"string": "2017-01-01T15:00:00-05:00",
+"url": "https://github.com/pandas-dev/pandas/issues/16898",
+"kwargs": {}
+},
+{
+"string": "2017-01-01T15:00:00-0500",
+"url": "https://github.com/pandas-dev/pandas/issues/16898",
+"kwargs": {}
+},
+{
+"string": "2013, 11, 04",
+"url": "https://github.com/pandas-dev/pandas/issues/17265",
+"kwargs": {}
+},
+{
+"string": "2013,11, 04",
+"url": "https://github.com/pandas-dev/pandas/issues/17265",
+"kwargs": {}
+},
+{
+"string": "2013, 11,04",
+"url": "https://github.com/pandas-dev/pandas/issues/17265",
+"kwargs": {}
+},
+{
+"string": "2013,11,04",
+"url": "https://github.com/pandas-dev/pandas/issues/17265",
+"kwargs": {}
+},
+{
+"string": "199934",
+"url": "https://github.com/pandas-dev/pandas/issues/17410",
+"kwargs": {}
+},
+{
+"string": "2015-11-18 15:30:00+05:30",
+"url": "https://github.com/pandas-dev/pandas/issues/17697",
+"kwargs": {}
+},
+{
+"string": "2017-10-30 09:53:15-08:00",
+"url": "https://github.com/pandas-dev/pandas/issues/17697",
+"kwargs": {}
+},
+{
+"string": "2017-12-08 08:20 PM PST",
+"url": "https://github.com/pandas-dev/pandas/issues/18702",
+"kwargs": {}
+},
+{
+"string": "2017-12-08 08:20 PM EST",
+"url": "https://github.com/pandas-dev/pandas/issues/18702",
+"kwargs": {}
+},
+{
+"string": "22:05 UTC+1",
+"url": "https://github.com/pandas-dev/pandas/issues/19359",
+"kwargs": {}
+},
+{
+"string": "2016-09-01",
+"url": "https://github.com/pandas-dev/pandas/issues/19671",
+"kwargs": {}
+},
+{
+"string": "M1701",
+"url": "https://github.com/pandas-dev/pandas/issues/19671",
+"kwargs": {}
+},
+{
+"string": "2017-12-25",
+"url": "https://github.com/pandas-dev/pandas/issues/19671",
+"kwargs": {}
+},
+{
+"string": "2016.05.06 1",
+"url": "https://github.com/pandas-dev/pandas/issues/21422",
+"kwargs": {}
+},
+{
+"string": "2016.05.06 01",
+"url": "https://github.com/pandas-dev/pandas/issues/21422",
+"kwargs": {}
+},
+{
+"string": "三, 08 8月 2018 17:42:53 GMT",
+"url": "https://github.com/pandas-dev/pandas/issues/21814",
+"kwargs": {}
+},
+{
+"string": "2018-04-11 10:30:00",
+"url": "https://github.com/pandas-dev/pandas/issues/22168",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "2018-04-11  10:30:00",
+"url": "https://github.com/pandas-dev/pandas/issues/22168",
+"kwargs": {
+"dayfirst": true
+}
+},
+{
+"string": "18:53:48",
+"url": "https://github.com/pandas-dev/pandas/issues/23447",
+"kwargs": {}
+},
+{
+"string": "2018-09-04 00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/23449",
+"kwargs": {}
+},
+{
+"string": "2018-09-06 00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/23449",
+"kwargs": {}
+},
+{
+"string": "3000/01/01",
+"url": "https://github.com/pandas-dev/pandas/issues/23528",
+"kwargs": {}
+},
+{
+"string": "2018-01-01 00:00:00+00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/23722",
+"kwargs": {}
+},
+{
+"string": "2018-01-02 00:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/23722",
+"kwargs": {}
+},
+{
+"string": "2018-01-01 00:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/23722",
+"kwargs": {}
+},
+{
+"string": "2018-01-02 00:00:00+00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/23722",
+"kwargs": {}
+},
+{
+"string": "2417-10-27 00:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/23830",
+"kwargs": {}
+},
+{
+"string": "2018-11-28T00:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/24992",
+"kwargs": {}
+},
+{
+"string": "2018-11-28T00:00:00+12:00",
+"url": "https://github.com/pandas-dev/pandas/issues/24992",
+"kwargs": {}
+},
+{
+"string": "2018-11-28T00:00:00+06:00",
+"url": "https://github.com/pandas-dev/pandas/issues/24992",
+"kwargs": {}
+},
+{
+"string": "2016-05-19T10:27:05",
+"url": "https://github.com/pandas-dev/pandas/issues/25143",
+"kwargs": {}
+},
+{
+"string": "20/05/2016 11:28:06",
+"url": "https://github.com/pandas-dev/pandas/issues/25143",
+"kwargs": {}
+},
+{
+"string": "2016-05-19T10:27:05Z",
+"url": "https://github.com/pandas-dev/pandas/issues/25143",
+"kwargs": {}
+},
+{
+"string": "01-May-2021 00:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/25143",
+"kwargs": {}
+},
+{
+"string": "01-Sep-2021 00:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/25143",
+"kwargs": {}
+},
+{
+"string": "March 1, 2018 12:00:00+0400",
+"url": "https://github.com/pandas-dev/pandas/issues/26122",
+"kwargs": {}
+},
+{
+"string": "March 1, 2018 12:00:00+0500",
+"url": "https://github.com/pandas-dev/pandas/issues/26122",
+"kwargs": {}
+},
+{
+"string": "20100240",
+"url": "https://github.com/pandas-dev/pandas/issues/26122",
+"kwargs": {}
+},
+{
+"string": "30/04/19",
+"url": "https://github.com/pandas-dev/pandas/issues/26387",
+"kwargs": {}
+},
+{
+"string": "01/05/19",
+"url": "https://github.com/pandas-dev/pandas/issues/26387",
+"kwargs": {}
+},
+{
+"string": "05-01-2019 00:37",
+"url": "https://github.com/pandas-dev/pandas/issues/27454",
+"kwargs": {}
+},
+{
+"string": "15-01-2019 00:37",
+"url": "https://github.com/pandas-dev/pandas/issues/27454",
+"kwargs": {}
+},
+{
+"string": "200622-12-31",
+"url": "https://github.com/pandas-dev/pandas/issues/28299",
+"kwargs": {}
+},
+{
+"string": "111111-24-11",
+"url": "https://github.com/pandas-dev/pandas/issues/28299",
+"kwargs": {}
+},
+{
+"string": "111111-23-11",
+"url": "https://github.com/pandas-dev/pandas/issues/28299",
+"kwargs": {}
+},
+{
+"string": "Sat Mar 30 2019 21:00:00 GMT+0100",
+"url": "https://github.com/pandas-dev/pandas/issues/30518",
+"kwargs": {}
+},
+{
+"string": "2000-12-31 23:59:59.123456999",
+"url": "https://github.com/pandas-dev/pandas/issues/34621",
+"kwargs": {}
+},
+{
+"string": "13.12.2020",
+"url": "https://github.com/pandas-dev/pandas/issues/36190",
+"kwargs": {}
+},
+{
+"string": "12.13.2020",
+"url": "https://github.com/pandas-dev/pandas/issues/36190",
+"kwargs": {}
+},
+{
+"string": "2020-05-01T18:04:03Z",
+"url": "https://github.com/pandas-dev/pandas/issues/41047",
+"kwargs": {}
+},
+{
+"string": "2020-04-28T17:54:06Z",
+"url": "https://github.com/pandas-dev/pandas/issues/41047",
+"kwargs": {}
+},
+{
+"string": "2020-04-26T18:04:09Z",
+"url": "https://github.com/pandas-dev/pandas/issues/41047",
+"kwargs": {}
+},
+{
+"string": "2020-05-01T18:04:03.0Z",
+"url": "https://github.com/pandas-dev/pandas/issues/41047",
+"kwargs": {}
+},
+{
+"string": "2020-04-28T17:54:06.0Z",
+"url": "https://github.com/pandas-dev/pandas/issues/41047",
+"kwargs": {}
+},
+{
+"string": "2020-04-26T18:04:09.0Z",
+"url": "https://github.com/pandas-dev/pandas/issues/41047",
+"kwargs": {}
+},
+{
+"string": "2020-05-01T18:04:03UTC",
+"url": "https://github.com/pandas-dev/pandas/issues/42068",
+"kwargs": {}
+},
+{
+"string": "2020-05-01T18:04:03+0000",
+"url": "https://github.com/pandas-dev/pandas/issues/42068",
+"kwargs": {}
+},
+{
+"string": "2021-03-14 12:05:45 -0400",
+"url": "https://github.com/pandas-dev/pandas/issues/42229",
+"kwargs": {}
+},
+{
+"string": "2021-03-14 03:06:00 -0400",
+"url": "https://github.com/pandas-dev/pandas/issues/42229",
+"kwargs": {}
+},
+{
+"string": "2021-03-14 01:06:30 -0500",
+"url": "https://github.com/pandas-dev/pandas/issues/42229",
+"kwargs": {}
+},
+{
+"string": "2021-03-13 23:23:40 -0500",
+"url": "https://github.com/pandas-dev/pandas/issues/42229",
+"kwargs": {}
+},
+{
+"string": "2020-10-25T01:30:00+02:00",
+"url": "https://github.com/pandas-dev/pandas/issues/42229",
+"kwargs": {}
+},
+{
+"string": "2020-10-25T02:00:00+01:00",
+"url": "https://github.com/pandas-dev/pandas/issues/42229",
+"kwargs": {}
+},
+{
+"string": "2019-11-03 01:00:00-0700",
+"url": "https://github.com/pandas-dev/pandas/issues/42505",
+"kwargs": {}
+},
+{
+"string": "2021-11-07 01:00:00-0400",
+"url": "https://github.com/pandas-dev/pandas/issues/42505",
+"kwargs": {}
+},
+{
+"string": "Tue 24 Aug 2021 01:30:48 AM",
+"url": "https://github.com/pandas-dev/pandas/issues/43901",
+"kwargs": {}
+},
+{
+"string": "09:00",
+"url": "https://github.com/pandas-dev/pandas/issues/44573",
+"kwargs": {}
+},
+{
+"string": "2020-01-01 01:00 -01:00",
+"url": "https://github.com/pandas-dev/pandas/issues/44949",
+"kwargs": {}
+},
+{
+"string": "2020-01-01 03:00",
+"url": "https://github.com/pandas-dev/pandas/issues/44949",
+"kwargs": {}
+},
+{
+"string": "2022-JAN-14",
+"url": "https://github.com/pandas-dev/pandas/issues/45427",
+"kwargs": {}
+},
+{
+"string": "2022-Jan-14",
+"url": "https://github.com/pandas-dev/pandas/issues/45427",
+"kwargs": {}
+},
+{
+"string": "01/01/2000",
+"url": "https://github.com/pandas-dev/pandas/issues/46210",
+"kwargs": {}
+},
+{
+"string": "31/05/2000",
+"url": "https://github.com/pandas-dev/pandas/issues/46210",
+"kwargs": {}
+},
+{
+"string": "31/05/2001",
+"url": "https://github.com/pandas-dev/pandas/issues/46210",
+"kwargs": {}
+},
+{
+"string": "01/02/2000",
+"url": "https://github.com/pandas-dev/pandas/issues/46210",
+"kwargs": {}
+},
+{
+"string": "15/02/2006",
+"url": "https://github.com/pandas-dev/pandas/issues/46210",
+"kwargs": {}
+},
+{
+"string": "14/01/2000",
+"url": "https://github.com/pandas-dev/pandas/issues/46210",
+"kwargs": {}
+},
+{
+"string": "15/01/2000",
+"url": "https://github.com/pandas-dev/pandas/issues/46210",
+"kwargs": {}
+},
+{
+"string": "11/01/2000",
+"url": "https://github.com/pandas-dev/pandas/issues/46210",
+"kwargs": {}
+},
+{
+"string": "11:0",
+"url": "https://github.com/pandas-dev/pandas/issues/46509",
+"kwargs": {}
+},
+{
+"string": "yesterday",
+"url": "https://github.com/pandas-dev/pandas/issues/47495",
+"kwargs": {}
+},
+{
+"string": "13-01-2020",
+"url": "https://github.com/pandas-dev/pandas/issues/47880",
+"kwargs": {}
+},
+{
+"string": "13-1-2020",
+"url": "https://github.com/pandas-dev/pandas/issues/47880",
+"kwargs": {}
+},
+{
+"string": "13/01/2021",
+"url": "https://github.com/pandas-dev/pandas/issues/47907",
+"kwargs": {}
+},
+{
+"string": "01-31-2000",
+"url": "https://github.com/pandas-dev/pandas/issues/48596",
+"kwargs": {}
+},
+{
+"string": "20-01-2000",
+"url": "https://github.com/pandas-dev/pandas/issues/48596",
+"kwargs": {}
+},
+{
+"string": "31-01-2000",
+"url": "https://github.com/pandas-dev/pandas/issues/48596",
+"kwargs": {}
+},
+{
+"string": "1724-12-20 20:20:20+01:00",
+"url": "https://github.com/pandas-dev/pandas/issues/48678",
+"kwargs": {}
+},
+{
+"string": "2022-01-01 00:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/48678",
+"kwargs": {}
+},
+{
+"string": "2020-01-01 00:00:00 UTC+1",
+"url": "https://github.com/pandas-dev/pandas/issues/48921",
+"kwargs": {}
+},
+{
+"string": "2018-01-01T00:00:00.000",
+"url": "https://github.com/pandas-dev/pandas/issues/49043",
+"kwargs": {}
+},
+{
+"string": "2016",
+"url": "https://github.com/pandas-dev/pandas/issues/49126",
+"kwargs": {}
+},
+{
+"string": "13/2019",
+"url": "https://github.com/pandas-dev/pandas/issues/49144",
+"kwargs": {}
+},
+{
+"string": "13-01-2000",
+"url": "https://github.com/pandas-dev/pandas/issues/50231",
+"kwargs": {}
+},
+{
+"string": "27.03.2003 14:55:00.000",
+"url": "https://github.com/pandas-dev/pandas/issues/50317",
+"kwargs": {}
+},
+{
+"string": "09:30",
+"url": "https://github.com/pandas-dev/pandas/issues/50410",
+"kwargs": {}
+},
+{
+"string": "14:12:08",
+"url": "https://github.com/pandas-dev/pandas/issues/50410",
+"kwargs": {}
+},
+{
+"string": "22:55:32",
+"url": "https://github.com/pandas-dev/pandas/issues/50410",
+"kwargs": {}
+},
+{
+"string": "2022-01-01T09:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/50411",
+"kwargs": {}
+},
+{
+"string": "2022-01-02T09:00:00.123",
+"url": "https://github.com/pandas-dev/pandas/issues/50411",
+"kwargs": {}
+},
+{
+"string": "20010101 123456",
+"url": "https://github.com/pandas-dev/pandas/issues/50411",
+"kwargs": {}
+},
+{
+"string": "201201",
+"url": "https://github.com/pandas-dev/pandas/issues/50411",
+"kwargs": {}
+},
+{
+"string": "2022-01-01T09:00:00.123",
+"url": "https://github.com/pandas-dev/pandas/issues/50411",
+"kwargs": {}
+},
+{
+"string": "2022-01-02T09:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/50411",
+"kwargs": {}
+},
+{
+"string": "2020-01-01",
+"url": "https://github.com/pandas-dev/pandas/issues/50411",
+"kwargs": {}
+},
+{
+"string": "2020-01-01 00:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/50411",
+"kwargs": {}
+},
+{
+"string": "20110519 010000",
+"url": "https://github.com/pandas-dev/pandas/issues/50514",
+"kwargs": {}
+},
+{
+"string": "2016-01-01 01:02:03+05:00",
+"url": "https://github.com/pandas-dev/pandas/issues/50721",
+"kwargs": {}
+},
+{
+"string": "2016-01-01 01:02:03+06:00",
+"url": "https://github.com/pandas-dev/pandas/issues/50721",
+"kwargs": {}
+},
+{
+"string": "Jan 15 2004 03:00 EST",
+"url": "https://github.com/pandas-dev/pandas/issues/50949",
+"kwargs": {}
+},
+{
+"string": "87156549591102612381000001219H5",
+"url": "https://github.com/pandas-dev/pandas/issues/51084",
+"kwargs": {}
+},
+{
+"string": "22-May-2015",
+"url": "https://github.com/pandas-dev/pandas/issues/51758",
+"kwargs": {}
+},
+{
+"string": "01-Jun-2015",
+"url": "https://github.com/pandas-dev/pandas/issues/51758",
+"kwargs": {}
+},
+{
+"string": "09-Jun-2015",
+"url": "https://github.com/pandas-dev/pandas/issues/51758",
+"kwargs": {}
+},
+{
+"string": "06-Jul-2015",
+"url": "https://github.com/pandas-dev/pandas/issues/51758",
+"kwargs": {}
+},
+{
+"string": "10 june 2000 8:30",
+"url": "https://github.com/pandas-dev/pandas/issues/52167",
+"kwargs": {}
+},
+{
+"string": "2019-07-16 00:00:00.333333333",
+"url": "https://github.com/pandas-dev/pandas/issues/52418",
+"kwargs": {}
+},
+{
+"string": "2019-07-16 00:00:00.333333",
+"url": "https://github.com/pandas-dev/pandas/issues/52418",
+"kwargs": {}
+},
+{
+"string": "4/21/2023 11:06:35 AM",
+"url": "https://github.com/pandas-dev/pandas/issues/53147",
+"kwargs": {}
+},
+{
+"string": "2018-10-26 12:00:00",
+"url": "https://github.com/pandas-dev/pandas/issues/54479",
+"kwargs": {}
+},
+{
+"string": "10-3-2014 13:00",
+"url": "https://github.com/pandas-dev/pandas/issues/54479",
+"kwargs": {}
+},
+{
+"string": "10-3-2014 13:AA",
+"url": "https://github.com/pandas-dev/pandas/issues/54479",
+"kwargs": {}
+},
+{
+"string": "10-3-2014 13:00:00 PDT",
+"url": "https://github.com/pandas-dev/pandas/issues/54479",
+"kwargs": {}
+},
+{
+"string": "2023-07-18 21:06:21.214000 PDT",
+"url": "https://github.com/pandas-dev/pandas/issues/54479",
+"kwargs": {}
+},
+{
+"string": "2023/04/27 12:33:24 BST",
+"url": "https://github.com/pandas-dev/pandas/issues/54481",
+"kwargs": {}
+},
+{
+"string": "2023-11-05T08:30:00Z",
+"url": "https://github.com/pandas-dev/pandas/issues/56398",
+"kwargs": {}
+},
+{
+"string": "2023-11-05T08:30:00+0000",
+"url": "https://github.com/pandas-dev/pandas/issues/56398",
+"kwargs": {}
+},
+{
+"string": "2998-01-01",
+"url": "https://github.com/pandas-dev/pandas/issues/57017",
+"kwargs": {}
+},
+{
+"string": "2023-11-09T19:23:46Z",
+"url": "https://github.com/pandas-dev/pandas/issues/57452",
+"kwargs": {}
+},
+{
+"string": "2023-11-09T20:23:46Z",
+"url": "https://github.com/pandas-dev/pandas/issues/57452",
+"kwargs": {}
+},
+{
+"string": "2019",
+"url": "https://github.com/pandas-dev/pandas/issues/57672",
+"kwargs": {}
+},
+{
+"string": "2030-01-01",
+"url": "https://github.com/pandas-dev/pandas/issues/57672",
+"kwargs": {}
+},
+{
+"string": "2020",
+"url": "https://github.com/pandas-dev/pandas/issues/57672",
+"kwargs": {}
+},
+{
+"string": "31 May 2023",
+"url": "https://github.com/pandas-dev/pandas/issues/58328",
+"kwargs": {}
+},
+{
+"string": "1 Apr 2023",
+"url": "https://github.com/pandas-dev/pandas/issues/58328",
+"kwargs": {}
+},
+{
+"string": "2016-03-11",
+"url": "https://github.com/pandas-dev/pandas/issues/58859",
+"kwargs": {}
+},
+{
+"string": "20160311",
+"url": "https://github.com/pandas-dev/pandas/issues/58859",
+"kwargs": {}
+},
+{
+"string": "Wed, 1 Dec 2021 08:00:00 -0600 (CST)",
+"url": "https://github.com/pandas-dev/pandas/issues/59769",
+"kwargs": {}
+},
+{
+"string": "Sun, 14 Apr 2024 20:00:00 +0200 (CET)",
+"url": "https://github.com/pandas-dev/pandas/issues/59769",
+"kwargs": {}
+},
+{
+"string": "2024-03-11 16:00:00.123456000 EDT",
+"url": "https://github.com/pandas-dev/pandas/issues/59769",
+"kwargs": {}
+},
+{
+"string": "2025-01-17 09:19 ADT",
+"url": "https://github.com/pandas-dev/pandas/issues/59769",
+"kwargs": {}
+},
+{
+"string": "2025-03-17 09:19 ADT",
+"url": "https://github.com/pandas-dev/pandas/issues/59769",
+"kwargs": {}
+},
+{
+"string": "2025-06-15T21:25:00.000000Z",
+"url": "https://github.com/pandas-dev/pandas/issues/61663",
+"kwargs": {}
+},
+{
+"string": "2025-06-15T20:24:00.000000Z",
+"url": "https://github.com/pandas-dev/pandas/issues/61663",
+"kwargs": {}
+},
+{
+"string": "2025-06-15T20:25:00.000000Z",
+"url": "https://github.com/pandas-dev/pandas/issues/61663",
+"kwargs": {}
+},
+{
+"string": "May 12, 2025",
+"url": "https://github.com/pandas-dev/pandas/issues/62084",
+"kwargs": {}
+},
+{
+"string": "May 31, 2025",
+"url": "https://github.com/pandas-dev/pandas/issues/62084",
+"kwargs": {}
+},
+{
+"string": "Jun 1, 2025",
+"url": "https://github.com/pandas-dev/pandas/issues/62084",
+"kwargs": {}
+},
+{
+"string": "Jul 1, 2025",
+"url": "https://github.com/pandas-dev/pandas/issues/62084",
+"kwargs": {}
+},
+{
+"string": "Aug 10, 2025",
+"url": "https://github.com/pandas-dev/pandas/issues/62084",
+"kwargs": {}
+},
+{
+"string": "2016-01-01 02:03:04.123456",
+"url": "https://github.com/pandas-dev/pandas/issues/64252",
+"kwargs": {}
+},
+{
+"string": "2016-01-01 02:03:04.123456789",
+"url": "https://github.com/pandas-dev/pandas/issues/64252",
+"kwargs": {}
+},
+{
+"string": "january 1, 2016 02:03:04.123456",
+"url": "https://github.com/pandas-dev/pandas/issues/64252",
+"kwargs": {}
+},
+{
+"string": "january 1, 2016 02:03:04.12345689",
+"url": "https://github.com/pandas-dev/pandas/issues/64252",
+"kwargs": {}
+},
+{
+"string": "january 1, 2016 10h25m33.123456789",
+"url": "https://github.com/pandas-dev/pandas/issues/64252",
+"kwargs": {}
+},
+{
+"string": "january 1, 2016 10h25m33.12345678",
+"url": "https://github.com/pandas-dev/pandas/issues/64252",
+"kwargs": {}
+},
+{
+"string": "Mon Nov 02 2026 15:00:00 GMT+0530",
+"url": "https://github.com/pandas-dev/pandas/issues/71273",
+"kwargs": {}
+},
+{
+"string": "12-01-2000",
+"url": "https://github.com/pandas-dev/pandas/issues/71987",
+"kwargs": {}
+},
+{
+"string": "2020-01-02 08:07:13 UTC+3",
+"url": "https://github.com/pandas-dev/pandas/issues/71273",
+"kwargs": {}
+},
+{
+"string": "2020-01-02 08:07:13 UTC+0300",
+"url": "https://github.com/pandas-dev/pandas/issues/71273",
+"kwargs": {}
+},
+{
+"string": "2020-01-02 08:07:13 UTC+03:00",
+"url": "https://github.com/pandas-dev/pandas/issues/71273",
+"kwargs": {}
+},
+{
+"string": "2020-01-02 08:07:13 GMT+03:00",
+"url": "https://github.com/pandas-dev/pandas/issues/71273",
+"kwargs": {}
+},
+{
+"string": "2020-01-02 08:07:13 UTC-0300",
+"url": "https://github.com/pandas-dev/pandas/issues/71273",
+"kwargs": {}
+}
+]
+}

@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 license = "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND PSF-2.0 AND Unicode-3.0 AND Zlib"
 license-files = ["LICENSE", "LICENSES/*", "NOTICE"]
 authors = [{ name = "Andrew Odendaal" }]
-keywords = ["rust", "pyo3", "ftfy", "json-repair", "datasketch", "minhash", "nltk", "jieba", "tokenizer", "trafilatura", "web-scraping", "warc", "fasttext", "datatrove", "rouge", "bleu", "nlp", "text-cleaning", "deduplication", "llm"]
+keywords = ["rust", "pyo3", "ftfy", "json-repair", "datasketch", "minhash", "nltk", "jieba", "tokenizer", "trafilatura", "web-scraping", "warc", "yaml", "pyyaml", "tabulate", "markdown", "fasttext", "datatrove", "rouge", "bleu", "nlp", "text-cleaning", "deduplication", "llm"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -92,7 +92,11 @@ Changelog = "https://github.com/ao/pyroid/blob/main/CHANGELOG.md"
 # so they are left out there (release.yml tests the windows-arm64 wheels).
 test = [
   "pytest>=9",
-  "packaging>=24",
+  # Also the reference for pyroid.packaging's parity tests (Apache-2.0 OR BSD-2-Clause), whose own
+  # test suite (parity/data/packaging-26.3) also imports pretend and tomli_w.
+  "packaging==26.3",
+  "pretend>=1.0.9",
+  "tomli-w>=1.0",
   "hypothesis>=6.170",
   "pytest-timeout>=2.4",
   "pytest-run-parallel>=0.10",
@@ -112,13 +116,23 @@ test = [
   "nltk==3.10.4",
   "regex==2026.9.29",
   # The reference for pyroid.json_repair's parity tests (MIT, pure Python).
-  "json-repair==0.64.5",
+  "json-repair==0.64.9",
   # The reference for pyroid.datasketch's parity tests (MIT; pulls numpy and scipy).
   "datasketch==2.0.0",
   # The reference for pyroid.jieba and for datatrove's Chinese tokenizer (MIT, pure Python).
   "jieba==0.42.1",
   # The reference for pyroid.warc (Apache-2.0, pure Python).
   "warcio==1.8.2",
+  # The reference for pyroid.yaml (MIT; its pure-Python SafeLoader and SafeDumper are the oracle).
+  # No CPython 3.15 wheels yet: there the parity tests skip and the PyYAML-less tests run.
+  "pyyaml==6.0.3; python_version < '3.15'",
+  # The reference for pyroid.tabulate (MIT, pure Python), and the wide-character widths both use.
+  "tabulate==0.10.0",
+  "wcwidth>=0.2.13",
+  # The reference for pyroid.dateutil (BSD-3-Clause, pure Python): the newest release it reproduces.
+  "python-dateutil==4.0.0",
+  # The reference for pyroid.jmespath (MIT, pure Python).
+  "jmespath==1.1.0",
   # The reference for pyroid.sqlparse (BSD-3-Clause, pure Python).
   "sqlparse==0.6.1",
 ]
@@ -202,9 +216,13 @@ testpaths = ["python/tests"]
 target-version = "py311"
 line-length = 100
 src = ["python"]
-# sqlparse 0.6.1's own modules, vendored unchanged but for their imports (BSD-3-Clause; see
-# python/pyroid/sqlparse/__init__.py). force-exclude: prek passes file names explicitly.
 extend-exclude = [
+  # python-dateutil's own code, kept as released (pyroid.dateutil's reference path).
+  "python/pyroid/dateutil/_reference.py",
+  "python/pyroid/dateutil/_isoreference.py",
+  "python/pyroid/dateutil/_tzlite.py",
+  # sqlparse 0.6.1's own modules, vendored unchanged but for their imports (BSD-3-Clause; see
+  # python/pyroid/sqlparse/__init__.py).
   "python/pyroid/sqlparse/engine/*.py",
   "python/pyroid/sqlparse/filters/*.py",
   "python/pyroid/sqlparse/_own_*.py",
@@ -213,6 +231,7 @@ extend-exclude = [
   "python/pyroid/sqlparse/cli.py",
   "python/pyroid/sqlparse/__main__.py",
 ]
+# prek passes file names explicitly.
 force-exclude = true
 
 [tool.ruff.lint]
@@ -238,6 +257,9 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "!python/pyroid/**" = ["D"]
+# pyroid.difflib's classes and functions carry the standard library's docstrings (set at import,
+# so its doctests run against them); the API docs come from difflib.pyi.
+"python/pyroid/difflib.py" = ["D101", "D103"]
 # Dev scripts and the benchmark/parity harnesses report on stdout. bench/ and parity/ are linted with
 # their own [tool.ruff]; this entry covers the ftfy table generator, oracle and benchmark scripts.
 "{python/scripts,bench,parity}/**" = ["T20"]
@@ -245,6 +267,8 @@ convention = "google"
 "crates/pyroid-core/tests/ftfy_data/*.py" = ["T20"]
 "crates/pyroid-core/tests/datasketch_data/*.py" = ["T20"]
 "crates/pyroid-core/src/warc/generate_tables.py" = ["T20"]
+# pyroid.packaging keeps packaging's exception names (InvalidVersion, InvalidSpecifier, ...).
+"python/pyroid/packaging/**" = ["N818"]
 # warcio's oracle for tests/warc_oracle.rs: raw WARC bytes on long lines, a KELVIN SIGN on purpose.
 "crates/pyroid-core/tests/data/warc/gen.py" = ["T20", "RUF001", "E501", "PERF401"]
 
@@ -260,6 +284,21 @@ files = ["python/pyroid", "python/tests"]
 # pyroid.integrations.nemo_curator and its tests: NeMo Curator 1.4.0 ships no py.typed, and the
 # mypy hook installs neither it nor pandas (pandas-stubs is not a dependency).
 module = ["nemo_curator", "nemo_curator.*", "pandas", "pandas.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# PyYAML 6.0.3 (the reference for pyroid.yaml's tests) ships neither py.typed nor stubs.
+module = ["yaml", "yaml.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# python-dateutil ships no py.typed (types-python-dateutil is not a dependency).
+module = ["dateutil", "dateutil.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# jmespath 1.1.0 (the reference for pyroid.jmespath's tests) ships neither py.typed nor stubs.
+module = ["jmespath", "jmespath.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

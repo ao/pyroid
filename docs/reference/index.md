@@ -14,12 +14,17 @@ source.
 | [`pyroid.translit`](translit.md) | `anyascii`, `unidecode`, `is_ascii`, `UnidecodeError` |
 | [`pyroid.metrics`](metrics.md) | `rouge_scorer`, `scoring`, `tokenizers`, `tokenize` (rouge-score's modules) and `sacrebleu` |
 | [`pyroid.json_repair`](json_repair.md) | `repair_json`, `loads`, `load`, `from_file`, `repair_json_batch`, `NestingError` |
+| [`pyroid.yaml`](yaml.md) | `safe_load`, `safe_load_all`, `safe_dump`, `safe_dump_all`, `load`, `load_all`, `dump`, `dump_all`, PyYAML's exception classes |
+| [`pyroid.tabulate`](tabulate.md) | `tabulate`, `tabulate_formats`, `simple_separated_format`, `TableFormat`, `Line`, `DataRow`, `SEPARATING_LINE` |
+| [`pyroid.jmespath`](jmespath.md) | `search`, `compile`, `Options`, `ParsedResult`, `Parser`, and jmespath's `functions`, `exceptions`, `visitor`, `lexer` and `ast` modules |
+| [`pyroid.difflib`](difflib.md) | the standard library's `difflib` (`SequenceMatcher`, `get_close_matches`, `unified_diff`, `ndiff`, `HtmlDiff`, ...), `ratio_batch`, `close_matches_batch` |
 | [`pyroid.sqlparse`](sqlparse.md) | sqlparse 0.6.1's `parse`, `parsestream`, `format`, `split` and modules (`sql`, `tokens`, `lexer`, `engine`, `filters`, ...), plus `format_batch`, `split_batch` |
 | [`pyroid.datasketch`](datasketch.md) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble` (datasketch's modules), `minhash_batch` |
 | [`pyroid.jieba`](jieba.md) | jieba 0.42.1's API: `cut`, `lcut`, `cut_for_search`, `tokenize`, `add_word`, `load_userdict`, `Tokenizer`, ... |
 | [`pyroid.trafilatura`](trafilatura.md) | `extract`, `bare_extraction`, `extract_with_metadata`, `extract_batch`, `Document`, `LRUCache`, `reset_caches`, the `compat=` modes 2.3.1 and 1.11.0 |
 | [`pyroid.nltk`](nltk.md) | NLTK 3.10.4's `sent_tokenize`, `word_tokenize`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer` |
 | [`pyroid.warc`](warc.md) | warcio 1.8.2's `ArchiveIterator`, `WARCIterator`, `ARCIterator`, `StatusAndHeaders`, `ArcWarcRecord`, `ArchiveLoadFailed`; datatrove's WARC loop: `iter_documents`, `iter_batches` |
+| [`pyroid.packaging`](packaging.md) | packaging 26.3's `version`, `specifiers`, `markers`, `requirements` and `utils` modules (`Version`, `Specifier`, `SpecifierSet`, `Marker`, `Requirement`, `canonicalize_name`, ...), `parse_batch`, `sort_versions`, `contains_batch`, `filter_batch` |
 | [`pyroid.integrations`](integrations.md) | the datatrove steps (`WarcReader` included), the Hugging Face helpers, the FineWeb recipes, `patch` and friends |
 | [`pyroid.text`](text.md) | `normalize_whitespace`, `min_chars`: small examples of pyroid's conventions |
 

@@ -252,29 +252,31 @@ def test_patching_context_manager() -> None:
 
 
 @needs_sqlparse
-def test_version_notice() -> None:
+def test_version_notice(tmp_path: Path) -> None:
+    # Metadata for sqlparse 0.5.3 ahead of the installed 0.6.1's, as if 0.5.3 were installed.
+    info = tmp_path / "sqlparse-0.5.3.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: sqlparse\nVersion: 0.5.3\n")
     out = child(
         """
         import sqlparse
-        sqlparse.__version__ = "0.5.3"  # as if another release were installed
+        sqlparse.__version__ = "0.5.3"
+        sys.path.insert(0, sys.argv[1])
         import pyroid.integrations as pi
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             pi.patch("sqlparse")
         print(json.dumps([(w.category.__name__, str(w.message)) for w in caught]))
-        """
+        """,
+        args=(str(tmp_path),),
     )
-    # pyroid.sqlparse says so when it is imported (by the patch), then the patch does.
-    assert [c for c, _ in out] == ["RuntimeWarning", "PatchWarning", "PatchWarning"]
+    # pyroid.sqlparse says so when the patch imports it; the PatchWarning does not repeat it.
+    assert [c for c, _ in out] == ["VersionMismatchWarning", "PatchWarning"]
     assert out[0][1].startswith(
-        "pyroid.sqlparse reproduces sqlparse 0.6.1, but sqlparse 0.5.3 is installed: pyroid "
-        "shares its token types and classes"
+        "pyroid.sqlparse reproduces sqlparse 0.6.1, but sqlparse 0.5.3 is installed: results "
+        "can differ from it."
     )
-    assert out[2][1] == (
-        "pyroid.integrations.patch: the installed sqlparse is 0.5.3, but pyroid.sqlparse "
-        "reproduces sqlparse 0.6.1: the patched functions give sqlparse 0.6.1's results, the "
-        "rest is sqlparse 0.5.3."
-    )
+    assert out[1][1].startswith("pyroid.integrations.patch: the installed sqlparse now uses")
 
 
 @needs_sqlparse
@@ -919,11 +921,13 @@ def test_sqlparse_older_than_0_5_is_not_patched(tmp_path: Path) -> None:
         assert out[key], key
     assert out["pyroid"] == "select a,\n       b\nfrom t"
     assert out["warnings"] == [
-        "RuntimeWarning: pyroid.sqlparse reproduces sqlparse 0.6.1, but sqlparse 0.4.4 is "
-        "installed: it is older than 0.5.0, so pyroid uses its own copies of the token classes "
-        "(isinstance checks against sqlparse.sql fail on pyroid's trees) and "
-        "pyroid.patch('sqlparse') refuses to patch it. Install sqlparse==0.6.1 to compare like "
-        "for like."
+        "RuntimeWarning: sqlparse 0.4.4 is older than 0.5.0, so pyroid.sqlparse builds its trees "
+        "from its own copies of sqlparse 0.6.1's token classes: isinstance checks against "
+        "sqlparse.sql fail on them, and pyroid.patch('sqlparse') refuses to patch it.",
+        "VersionMismatchWarning: pyroid.sqlparse reproduces sqlparse 0.6.1, but sqlparse 0.4.4 "
+        "is installed: results can differ from it. Install sqlparse==0.6.1 to compare like for "
+        'like (or silence this with warnings.simplefilter("ignore", '
+        "pyroid.VersionMismatchWarning)).",
     ]
 
 

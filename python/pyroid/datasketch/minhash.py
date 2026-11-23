@@ -184,9 +184,32 @@ def _native_permutations(scheme: str, seed: int, num_perm: int) -> Any:
 
 
 class MinHash:
-    """MinHash: estimate the Jaccard similarity of sets (datasketch's ``MinHash``).
+    """MinHash: estimate the Jaccard similarity and cardinality of sets.
 
-    See ``minhash.pyi`` for the arguments; they are datasketch 2.0.0's.
+    Args:
+        num_perm: Number of random permutation functions. Ignored if
+            `hashvalues` is given.
+        seed: The random seed of the permutation functions.
+        gpu_mode: ``"disable"``, ``"detect"`` or ``"always"``. pyroid computes on
+            the CPU in every mode; ``"always"`` raises ``RuntimeError`` if CuPy and
+            a CUDA device are not available, as in datasketch.
+        hashfunc: The hash function: takes a value given to :meth:`update` and
+            returns an int of 32 bits (``"affine32"``, ``"legacy"``) or 64 bits
+            (``"affine64"``). Default: ``sha1_hash32``, or ``sha1_hash64`` for
+            ``"affine64"``. Other functions run in Python (slow path).
+        hashobj: Deprecated since datasketch 1.4.0; a no-op that warns.
+        hashvalues: Initial hash values (another MinHash's :attr:`hashvalues`).
+            `scheme` must then be given.
+        permutations: Permutation parameters (another MinHash's
+            :attr:`permutations`). `scheme` must then be given.
+        scheme: ``"affine32"`` (the default), ``"affine64"`` or ``"legacy"``
+            (datasketch before 2.0.0). MinHash of different schemes cannot be
+            compared, merged or unioned.
+
+    Raises:
+        ValueError: As datasketch: an unknown scheme, `num_perm` out of
+            range, `hashvalues`/`permutations` without `scheme`, mismatched
+            lengths, values out of the scheme's range.
     """
 
     def __init__(
@@ -355,7 +378,14 @@ class MinHash:
             ) from err
 
     def update(self, b: Any) -> None:
-        """Update this MinHash with a new value (see ``minhash.pyi``)."""
+        """Add one value to the set.
+
+        With the default hash function the value must be bytes-like, e.g.
+        ``m.update("text".encode("utf-8"))``.
+
+        Args:
+            b: The value, passed to :attr:`hashfunc`.
+        """
         bits = _native_bits(self.scheme, self.hashfunc)
         if bits:
             new = _native.update_one(self.scheme, self.hashvalues, self.permutations, b, bits)
@@ -393,7 +423,15 @@ class MinHash:
             raise RuntimeError("GPU mode 'always' requested but CuPy/CUDA device is unavailable.")
 
     def update_batch(self, b: Iterable[Any]) -> None:
-        """Update this MinHash with new values (see ``minhash.pyi``)."""
+        """Add many values to the set (faster than :meth:`update` per value).
+
+        Args:
+            b: The values, each passed to :attr:`hashfunc`. An empty batch
+                leaves the hash values unchanged.
+
+        Raises:
+            RuntimeError: ``gpu_mode="always"`` without CuPy and a CUDA device.
+        """
         bits = _native_bits(self.scheme, self.hashfunc)
         if bits:
             tokens = b if type(b) is list or type(b) is tuple else list(b)
@@ -438,7 +476,11 @@ class MinHash:
         self.hashvalues = np.minimum(self.hashvalues, phv.min(axis=0))
 
     def jaccard(self, other: Any) -> float:
-        """Estimate the Jaccard similarity with ``other`` (see ``minhash.pyi``)."""
+        """Estimate the Jaccard similarity with `other`.
+
+        Raises:
+            ValueError: Different schemes, seeds or numbers of permutations.
+        """
         if getattr(other, "scheme", None) != self.scheme:
             raise ValueError(
                 "Cannot compute Jaccard given MinHash with different permutation schemes"
@@ -453,7 +495,7 @@ class MinHash:
         return float(np.count_nonzero(self.hashvalues == other.hashvalues)) / float(len(self))
 
     def count(self) -> float:
-        """Estimate the cardinality of the set (see ``minhash.pyi``)."""
+        """Estimate the cardinality of the set (a ``numpy.float64``)."""
         k = len(self)
         return (
             float(k)
@@ -464,7 +506,11 @@ class MinHash:
         )
 
     def merge(self, other: Any) -> None:
-        """Make this MinHash the union of itself and ``other`` (see ``minhash.pyi``)."""
+        """Make this MinHash the union of itself and `other`.
+
+        Raises:
+            ValueError: Different schemes, seeds or numbers of permutations.
+        """
         if getattr(other, "scheme", None) != self.scheme:
             raise ValueError("Cannot merge MinHash with different permutation schemes")
         if other.seed != self.seed:
@@ -474,19 +520,19 @@ class MinHash:
         self.hashvalues = np.minimum(other.hashvalues, self.hashvalues)
 
     def digest(self) -> Any:
-        """Return a copy of the hash values (see ``minhash.pyi``)."""
+        """Return a copy of :attr:`hashvalues`."""
         return copy.copy(self.hashvalues)
 
     def is_empty(self) -> bool:
-        """True if the MinHash is in its initial state (see ``minhash.pyi``)."""
+        """Return whether the MinHash is in its initial state."""
         return not np.any(self.hashvalues != _SCHEME_MAX_HASHES[self.scheme])
 
     def clear(self) -> None:
-        """Reset the hash values (see ``minhash.pyi``)."""
+        """Reset the hash values to the initial state."""
         self.hashvalues = self._init_hashvalues(len(self))
 
     def copy(self) -> MinHash:
-        """Return a copy; preserves gpu_mode (rehydrates caches lazily)."""
+        """Return a copy (the permutations are shared, as in datasketch)."""
         return MinHash(
             seed=self.seed,
             hashfunc=self.hashfunc,
@@ -509,7 +555,11 @@ class MinHash:
 
     @classmethod
     def union(cls, *mhs: Any) -> Any:
-        """Return a new MinHash, the union of ``mhs`` (see ``minhash.pyi``)."""
+        """Return a new MinHash, the union of `mhs` (at least two).
+
+        Raises:
+            ValueError: Fewer than two, or different seeds, sizes or schemes.
+        """
         if len(mhs) < 2:
             raise ValueError("Cannot union less than 2 MinHash")
         num_perm = len(mhs[0])
@@ -534,14 +584,36 @@ class MinHash:
 
     @classmethod
     def bulk(cls, b: Iterable[Any], *, threads: int | None = None, **minhash_kwargs: Any) -> Any:
-        """Compute MinHashes in bulk (see ``minhash.pyi``)."""
+        """Compute one MinHash per document of `b`.
+
+        Equal to ``[m.copy() updated with update_batch(doc) for doc in b]`` with
+        ``m = MinHash(**minhash_kwargs)``, as in datasketch. Documents that are
+        lists or tuples of ``bytes`` are hashed in parallel on pyroid's thread
+        pool; others run datasketch's code.
+
+        Args:
+            b: The documents, each an iterable of values for :attr:`hashfunc`.
+            threads: pyroid extension: at most this many threads (``None``:
+                the whole pool, ``1``: the calling thread).
+            **minhash_kwargs: Arguments for :class:`MinHash`, used for all.
+
+        Example:
+            ```python
+            data = [[b"token1", b"token2", b"token3"], [b"token4", b"token5"]]
+            minhashes = MinHash.bulk(data, num_perm=64)
+            ```
+        """
         return list(cls.generator(b, threads=threads, **minhash_kwargs))
 
     @classmethod
     def generator(
         cls, b: Iterable[Any], *, threads: int | None = None, **minhash_kwargs: Any
     ) -> Generator[Any, None, None]:
-        """Compute MinHashes in a generator (see ``minhash.pyi``)."""
+        """Yield one MinHash per document of `b` (see :meth:`bulk`).
+
+        pyroid reads up to 2,048 documents ahead to hash them in parallel; the
+        MinHash objects and any error come out in datasketch's order.
+        """
         m = cls(**minhash_kwargs)
         bits = _native_bits(m.scheme, m.hashfunc)
         if type(m) is not MinHash or not bits or m._gpu_mode == "always":
@@ -625,7 +697,43 @@ def minhash_batch(
     ngram: int = 1,
     threads: int | None = None,
 ) -> Any:
-    """Compute MinHash signatures for many documents at once (see ``minhash.pyi``)."""
+    """Compute MinHash signatures for many documents, as a matrix.
+
+    Row ``i`` equals ``MinHash(num_perm, seed, scheme=scheme)`` updated with the
+    tokens of document ``i``, i.e. its :attr:`MinHash.hashvalues` (``uint32`` for
+    ``"affine32"``, ``uint64`` otherwise). Documents are hashed in parallel on
+    pyroid's thread pool. A pyroid extension.
+
+    Args:
+        docs: Token lists (a list or tuple of lists/tuples of ``bytes`` or
+            ``str`` tokens; ``str`` is hashed as UTF-8), or texts (``str``,
+            ``list[str]``, ``tuple[str, ...]`` or an Arrow string array). A text's
+            tokens are its word `ngram`-grams: ``" ".join(words[i:i + ngram])``
+            over ``text.split()``, UTF-8 encoded; a text with fewer words has no
+            tokens. Arrow nulls give the empty signature.
+        num_perm: Number of permutations.
+        seed: The permutation seed.
+        scheme: ``"affine32"`` (default), ``"affine64"`` or ``"legacy"``.
+        ngram: Words per shingle, for texts only.
+        threads: At most this many threads (``None``: the whole pool).
+
+    Returns:
+        A ``(len(docs), num_perm)`` array, or ``(num_perm,)`` for a single ``str``.
+
+    Raises:
+        pyroid.InputError: A document or token of an unsupported type.
+        ValueError: `ngram` below 1, or as :class:`MinHash` for bad parameters.
+        UnicodeEncodeError: A ``str`` with a lone surrogate.
+
+    Example:
+        ```python
+        from pyroid.datasketch import MinHashLSH, minhash_batch
+
+        sigs = minhash_batch(texts, ngram=5, threads=8)  # (len(texts), 128) uint32
+        lsh = MinHashLSH(threshold=0.8)
+        lsh.insert_batch(range(len(texts)), sigs)
+        ```
+    """
     m = MinHash(num_perm=num_perm, seed=seed, scheme=scheme)
     bits = 64 if m.scheme == _SCHEME_AFFINE64 else 32
     n = operator.index(ngram)

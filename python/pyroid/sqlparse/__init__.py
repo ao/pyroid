@@ -22,6 +22,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from typing import Any
 
+from pyroid import _versions
 from pyroid.sqlparse import (
     _backend,
     cli,
@@ -41,6 +42,7 @@ from pyroid.sqlparse._core import warn_fallback as _warn_fallback
 __version__ = "0.6.1"
 #: The sqlparse release pyroid.sqlparse reproduces.
 SQLPARSE_VERSION = _backend.SQLPARSE_VERSION
+_versions.check(__name__, "sqlparse", f"sqlparse=={SQLPARSE_VERSION}")
 
 __all__ = [
     "SQLPARSE_VERSION",
@@ -224,56 +226,74 @@ def _batch_loop(sqls: Any, items: list[Any] | None, one: Any) -> Any:
 
 
 def parse(sql: Any, encoding: str | None = None) -> tuple[Any, ...]:
-    """Parse sql and return a list of statements.
+    """Parse `sql` and return its statements.
 
     Args:
-        sql: A string containing one or more SQL statements.
-        encoding: The encoding of the statement (optional).
+        sql: A string (or bytes, or a text stream) holding one or more SQL statements.
+        encoding: The encoding of bytes input (default: UTF-8, else ``unicode-escape``).
 
     Returns:
-        A tuple of ``sql.Statement`` instances.
+        A tuple of ``sql.Statement`` objects.
+
+    Raises:
+        sqlparse.exceptions.SQLParseError: A statement nests deeper than
+            ``engine.grouping.MAX_GROUPING_DEPTH`` or a token list holds more than
+            ``MAX_GROUPING_TOKENS`` tokens.
     """
     return tuple(_parsestream(sql, encoding, None))
 
 
 def parsestream(stream: Any, encoding: str | None = None) -> Generator[Any, None, None]:
-    """Parse sql statements from file-like object.
+    """Parse the statements of a file-like object, one at a time.
+
+    Nothing is read until the first ``next()``; each statement is grouped when it is reached.
 
     Args:
-        stream: A file-like object.
-        encoding: The encoding of the stream contents (optional).
+        stream: A text stream (or a str or bytes).
+        encoding: The encoding of bytes input.
 
     Returns:
-        A generator of ``sql.Statement`` instances.
+        A generator of ``sql.Statement`` objects.
     """
     return _parsestream(stream, encoding, None)
 
 
 def format(sql: Any, encoding: str | None = None, **options: Any) -> str:
-    """Format *sql* according to *options*.
+    """Format `sql` according to `options`.
 
     Args:
         sql: The SQL text.
-        encoding: The encoding of the statement (optional).
-        **options: sqlparse's formatting options.
+        encoding: The encoding of bytes input.
+        **options: sqlparse's options: ``keyword_case``, ``identifier_case``
+            (``"upper"``, ``"lower"``, ``"capitalize"``), ``strip_comments``,
+            ``strip_whitespace``, ``reindent``, ``reindent_aligned``,
+            ``use_space_around_operators``, ``indent_tabs``, ``indent_width``,
+            ``indent_after_first``, ``indent_columns``, ``wrap_after``, ``comma_first``,
+            ``compact``, ``output_format`` (``"sql"``, ``"python"``, ``"php"``),
+            ``truncate_strings``, ``truncate_char``. ``right_margin`` raises
+            ``NotImplementedError``, as in sqlparse 0.6.1.
 
     Returns:
-        The formatted SQL statement as string.
+        The formatted SQL.
+
+    Raises:
+        sqlparse.exceptions.SQLParseError: An option value is invalid, or a statement passes
+            a DoS limit.
     """
     options = formatter.validate_options(options)
     return _format(sql, encoding, options, None)
 
 
 def split(sql: Any, encoding: str | None = None, strip_semicolon: bool = False) -> list[str]:
-    """Split *sql* into single statements.
+    """Split `sql` into its statements.
 
     Args:
-        sql: A string containing one or more SQL statements.
-        encoding: The encoding of the statement (optional).
-        strip_semicolon: If True, remove trailing semicolons (default: False).
+        sql: A string holding one or more SQL statements.
+        encoding: The encoding of bytes input.
+        strip_semicolon: Remove trailing semicolons.
 
     Returns:
-        A list of strings.
+        The statements, each stripped of surrounding whitespace.
     """
     return _split(sql, encoding, strip_semicolon)
 
@@ -282,10 +302,10 @@ def format_batch(sqls: Any, *, threads: int | None = None, **options: Any) -> An
     """Format every SQL text of `sqls` with `options`, in parallel.
 
     The result equals ``[format(sql, **options) for sql in sqls]``, in the caller's kind: a
-    list for a list, a tuple for a tuple, a ``pyroid.Column`` of strings for an Arrow array
-    or column (nulls stay null), a str for a str (one text). A list or tuple holds what
-    ``format`` takes (str, bytes, text streams), and an item it rejects raises its
-    ``TypeError``, as the loop does; other errors are the loop's too.
+    list for a list, a tuple for a tuple, a ``pyroid.Column`` of strings for an Arrow array or
+    column (nulls stay null), a str for a str (one text). A list or tuple holds what ``format``
+    takes (str, bytes, text streams), and an item it rejects raises its ``TypeError``, as the
+    loop does; other errors are the loop's too.
 
     Args:
         sqls: The SQL texts: a list or tuple, or an Arrow string array or column.

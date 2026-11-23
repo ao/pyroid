@@ -1,0 +1,148 @@
+{
+ "machine": {
+  "label": "EC2 c8g.16xlarge devbox, shared, indicative",
+  "time_utc": "2026-11-14T08:01:17Z",
+  "python": "3.15.2 free-threading build (main, Nov 11 2026, 00:21:34) [Clang 23.1.3 ]",
+  "python_version": "3.15.2",
+  "implementation": "CPython",
+  "free_threaded_build": true,
+  "gil_enabled": false,
+  "platform": "Linux-6.18.62-127.179.amzn2023.aarch64-aarch64-with-glibc2.36",
+  "machine": "aarch64",
+  "cpu_count": 64,
+  "process_cpu_count": 64,
+  "affinity_cpus": 64,
+  "loadavg_before": [
+   39.51,
+   18.75,
+   8.97
+  ],
+  "git_sha": null,
+  "impls": {
+   "json_repair": {
+    "module": "json_repair",
+    "version": "0.64.9"
+   },
+   "pyroid.json_repair": {
+    "module": "pyroid.json_repair",
+    "version": "1.0.0"
+   }
+  }
+ },
+ "args": {
+  "impl": [
+   "json_repair",
+   "pyroid.json_repair"
+  ],
+  "out": "/target/jr-bench-315t-batch.json",
+  "sections": [
+   "batch"
+  ],
+  "families": [
+   "truncated_string",
+   "escaped_code_string",
+   "escaped_code_string_skip_loads",
+   "markdown_in_array",
+   "array_unescaped_quotes",
+   "single_quoted_apostrophes",
+   "markdown_paren_list",
+   "records_missing_separators",
+   "table_rows_continued",
+   "unbalanced_close_braces",
+   "regex_class_quotes",
+   "nested_open_tuples",
+   "nested_open_containers",
+   "valid_records",
+   "valid_records_skip_loads",
+   "broken_records",
+   "prose_fragments"
+  ],
+  "list": false,
+  "quick": false,
+  "seed": 1234,
+  "doc_sizes": [
+   1024,
+   1048576
+  ],
+  "repeat": 15,
+  "min_sample_ms": 20.0,
+  "max_row_s": 4.0,
+  "min_bytes": 2048,
+  "max_bytes": 1048576,
+  "timeout": 20.0,
+  "stop_after": 10.0,
+  "budget": 2.0,
+  "patho_runs": 6,
+  "batch_docs": 10000,
+  "batch_doc_bytes": 1024,
+  "batch_threads": [
+   1,
+   8
+  ],
+  "batch_repeat": 3,
+  "pool_threads": 8
+ },
+ "skipped_impls": [],
+ "batch": [
+  {
+   "impl": "json_repair",
+   "mode": "loop",
+   "threads": 1,
+   "docs": 10000,
+   "bytes": 12029530,
+   "best_ns": 3536286034,
+   "median_ns": 3539139756,
+   "docs_per_s": 2827.8255502676907,
+   "gate": "pass"
+  },
+  {
+   "impl": "json_repair",
+   "mode": "thread pool",
+   "threads": 8,
+   "docs": 10000,
+   "bytes": 12029530,
+   "best_ns": 620095501,
+   "median_ns": 621951138,
+   "docs_per_s": 16126.548223416316,
+   "gate": "pass"
+  },
+  {
+   "impl": "pyroid.json_repair",
+   "mode": "loop",
+   "threads": 1,
+   "docs": 10000,
+   "bytes": 12029530,
+   "best_ns": 208090628,
+   "median_ns": 209971146,
+   "docs_per_s": 48055.98452997124,
+   "gate": "pass"
+  },
+  {
+   "impl": "pyroid.json_repair",
+   "mode": "repair_json_batch",
+   "threads": 1,
+   "docs": 10000,
+   "bytes": 12029530,
+   "best_ns": 203538221,
+   "median_ns": 203962682,
+   "docs_per_s": 49130.82147848782,
+   "gate": "pass"
+  },
+  {
+   "impl": "pyroid.json_repair",
+   "mode": "repair_json_batch",
+   "threads": 8,
+   "docs": 10000,
+   "bytes": 12029530,
+   "best_ns": 38461104,
+   "median_ns": 39111338,
+   "docs_per_s": 260002.93699317626,
+   "gate": "pass"
+  }
+ ],
+ "loadavg_after": [
+  29.78,
+  17.87,
+  8.89
+ ]
+}

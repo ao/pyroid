@@ -1,4 +1,4 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! Python's `str` predicates (`isspace`, `isalpha`, `isdigit`, `isalnum`) per
 //! Unicode version, and the lone-surrogate remapping.
 //!

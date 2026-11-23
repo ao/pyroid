@@ -65,10 +65,12 @@ So with sqlparse installed, `isinstance(t, sqlparse.sql.Identifier)` and `t.ttyp
 sqlparse.tokens.Keyword` hold for pyroid's trees, and trees mix freely: sqlparse's filters run
 on pyroid's trees, `pyroid.sqlparse.engine.grouping.group` groups a statement sqlparse's splitter
 made, pickles and `copy.deepcopy` work as with sqlparse's own trees. The methods of the tokens
-(`get_real_name`, `token_next_by`, ...) are the installed release's Python code; with another
-release than 0.6.1 installed, pyroid warns once at import (a `RuntimeWarning`), because parsing
-and formatting follow 0.6.1. With sqlparse 0.5.0, whose tokens have no `is_newline` (0.5.1 added
-it), pyroid's tokens have none either.
+(`get_real_name`, `token_next_by`, ...) are the installed release's Python code. With another
+release than 0.6.1 installed, `import pyroid.sqlparse` and `pyroid.patch("sqlparse")` say so once
+with a [`VersionMismatchWarning`](../compatibility.md#installed-versions), because parsing and
+formatting follow 0.6.1; a release older than 0.5.0 also gets a `RuntimeWarning`, as its classes
+are not shared. With sqlparse 0.5.0, whose tokens have no `is_newline` (0.5.1 added it), pyroid's
+tokens have none either.
 
 The objects carry sqlparse's state exactly, including what sqlparse leaves stale: a group's
 `value` is the joined values of its children when it was built (and extended), not `str(group)`;

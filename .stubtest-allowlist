@@ -24,6 +24,27 @@ pyroid.integrations.hf.LidModel
 pyroid.nltk._punkt._Set\..*
 pyroid.nltk._punkt._Ortho\..*
 
+# pyroid.packaging's native classes take any arguments in __new__ (a subclass, or unpickling, makes an
+# empty object that __init__ or __setstate__ fills in, as with packaging's object.__new__); the stubs give
+# packaging's __init__ signatures.
+pyroid.packaging.version.Version.__init__
+pyroid.packaging.specifiers.Specifier.__init__
+pyroid.packaging.specifiers.SpecifierSet.__init__
+pyroid.packaging.markers.Marker.__init__
+# PyO3 exposes the reflected slot wrapper of __and__/__or__; it returns NotImplemented, as packaging's
+# missing __rand__/__ror__ do.
+pyroid.packaging.specifiers.SpecifierSet.__rand__
+pyroid.packaging.markers.Marker.__rand__
+pyroid.packaging.markers.Marker.__ror__
+# context's runtime default is a sentinel, so that an explicit None is "another context" as in packaging;
+# the stub shows packaging's default.
+pyroid.packaging.markers.Marker.evaluate
+# Typing aliases: a Literal (mypy sees a Union) and a NewType, the same objects packaging defines.
+pyroid.packaging.markers.EvaluateContext
+pyroid.packaging.utils.NormalizedName
+# A functools.cache wrapper (mypy sees *args, **kwargs).
+pyroid.packaging._compat._cached_default_environment
+
 # pyroid.sqlparse: its private copies of sqlparse 0.6.1's tokens.py, sql.py, keywords.py, lexer.py
 # and exceptions.py (used when sqlparse is not installed). Their classes report the public module
 # as __module__ (pyroid.sqlparse.tokens, ...), which the untyped sources cannot say.
