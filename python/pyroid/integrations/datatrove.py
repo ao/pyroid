@@ -75,6 +75,12 @@ from collections import deque
 from collections.abc import Callable, Iterable
 from typing import Any, Literal, cast
 
+from pyroid._deps import missing
+
+try:
+    import datatrove  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: F401
+except ModuleNotFoundError as _exc:
+    missing(__name__, _exc, "datatrove", "datatrove")
 from datatrove.pipeline.dedup import minhash as _dt_minhash  # type: ignore[import-not-found,import-untyped,unused-ignore]
 from datatrove.pipeline.filters import c4_filters as _dt_c4  # type: ignore[import-not-found,import-untyped,unused-ignore]
 from datatrove.pipeline.filters import fineweb_quality_filter as _dt_fineweb  # type: ignore[import-not-found,import-untyped,unused-ignore]

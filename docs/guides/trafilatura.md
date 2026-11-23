@@ -325,7 +325,9 @@ stops at about 1.5×. A datatrove pipeline gets its parallelism from running one
 Trafilatura, language ID, the quality filters, MinHash dedup, PII) on 8 WARC files of
 CC-MAIN-2026-39 (171,595 HTML records), as stock datatrove with trafilatura 1.11.0, with
 pyroid's drop-in steps in datatrove's executor, and as a native pyroid chain. AWS EC2
-c7i.4xlarge (Intel Xeon Platinum 8488C), CPython 3.13.18, 8 workers on 8 cores or 1 worker:
+c7i.4xlarge (Intel Xeon Platinum 8488C), CPython 3.13.18, 8 workers on 8 cores or 1 worker, on
+2026-11-09 (the [later run](../benchmarks.md#with-pyroids-warc-reader) with pyroid's WARC reader
+too is the one the home page quotes):
 
 | Run | 8 workers | 1 worker |
 |---|---:|---:|

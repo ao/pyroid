@@ -43,8 +43,9 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 
 ## Example: cleaning LLM training data
 
-The end-to-end benchmarks run datatrove's FineWeb pipeline. Without text extraction, that is a
-chain of ftfy, fastText language ID, the Gopher, C4 and FineWeb quality filters and MinHash dedup.
+The end-to-end benchmarks run datatrove's FineWeb pipeline. Without text extraction, they run a
+FineWeb-style chain: ftfy, then the pipeline's fastText language ID, Gopher, C4 and FineWeb quality
+filters and MinHash dedup.
 On 100,000 FineWeb documents on AWS EC2 c7i.4xlarge, pyroid's version of the chain is 27× faster
 than datatrove on 8 processes, with the same output.
 
@@ -63,7 +64,7 @@ CPython 3.15.2. Same output, document for document. On the 100k corpus the ratio
 
 ```console
 $ pip install "pyroid[cli]"
-$ pyroid clean in.parquet out.parquet --recipe fineweb   # datatrove's FineWeb pipeline
+$ pyroid clean in.parquet out.parquet --recipe fineweb   # ftfy, then FineWeb's filters and MinHash
 ```
 
 pyroid's stages also drop into datatrove's own executor. There the chain runs 11.2× faster at 8
@@ -144,7 +145,7 @@ row's corpus, interpreter and source.
 
 | Entry point | What it does |
 |---|---|
-| [`pyroid clean`](https://ataiva.com/open-source/pyroid/docs/guides/cli/) | datatrove's FineWeb pipeline as one command over Parquet or JSONL, or from WARC files |
+| [`pyroid clean`](https://ataiva.com/open-source/pyroid/docs/guides/cli/) | the FineWeb-style chain as one command over Parquet or JSONL, or datatrove's FineWeb pipeline from WARC files |
 | [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
 | [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio` and `nemo_curator` give pyroid's functions, in code you don't own |
 | [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |

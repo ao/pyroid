@@ -45,15 +45,26 @@ const MAX_NGRAM: i32 = 32;
 /// probability near 1e-18 even then (lid.176.ftz's longest run is 75).
 const MAX_PROBE_RUN: usize = 1024;
 
-/// The longest cyclic run of occupied slots (`-1` is empty) in `table`.
-fn longest_run(table: &[i32]) -> usize {
+/// One slot of the word hash table: an entry id (`-1`: empty) and the FNV
+/// hash of the entry, so a probe compares the bytes only when the hashes
+/// match (equal bytes have equal hashes, so the slot found is the same).
+#[derive(Clone, Copy, Debug)]
+struct Slot {
+    id: i32,
+    hash: u32,
+}
+
+const EMPTY: Slot = Slot { id: -1, hash: 0 };
+
+/// The longest cyclic run of occupied slots in `table`.
+fn longest_run(table: &[Slot]) -> usize {
     // `ceil(size / 0.7) > size`: a non-empty table has an empty slot.
-    let Some(start) = table.iter().position(|&e| e == -1) else {
+    let Some(start) = table.iter().position(|e| e.id == -1) else {
         return table.len();
     };
     let (mut best, mut run) = (0, 0);
     for k in 1..=table.len() {
-        if table[(start + k) % table.len()] == -1 {
+        if table[(start + k) % table.len()].id == -1 {
             run = 0;
         } else {
             run += 1;
@@ -119,6 +130,81 @@ impl Hasher for IntHasher {
 
 type PruneMap = HashMap<i32, i32, BuildHasherDefault<IntHasher>>;
 
+/// `a % d` for a fixed `d` without a division instruction (Lemire, Kaser
+/// and Kurz, "Faster Remainder by Direct Computation", 2019): exact for
+/// every `u32` `a` and `d >= 1`. Each token's word-table lookup and each
+/// character n-gram take one.
+#[derive(Clone, Copy, Debug)]
+struct FastMod {
+    d: u64,
+    /// `ceil(2^64 / d)` (0 for `d = 1`, which still gives 0).
+    m: u64,
+}
+
+impl FastMod {
+    fn new(d: u32) -> Self {
+        let d = u64::from(d.max(1));
+        Self {
+            d,
+            m: (u64::MAX / d).wrapping_add(1),
+        }
+    }
+
+    #[inline]
+    fn rem(self, a: u32) -> u32 {
+        let low = self.m.wrapping_mul(u64::from(a));
+        ((u128::from(low) * u128::from(self.d)) >> 64) as u32
+    }
+}
+
+/// How many bucket ids the pruning index's bitmap covers at most (2 MiB of
+/// bits). Real models have 2M buckets (256 KiB); ids past the bitmap go to
+/// the map directly.
+const MAX_PRUNE_BITS: usize = 1 << 24;
+
+/// The keys of the pruning index in `0..len` as a bitmap: most n-grams of a
+/// quantized model were pruned, and one bit test rejects them before a
+/// hash-map probe.
+#[derive(Debug, Default)]
+struct PruneBits {
+    words: Vec<u64>,
+    /// Keys at or past `words.len() * 64` exist (they skip the bitmap).
+    beyond: bool,
+}
+
+impl PruneBits {
+    /// The bitmap of `map`'s keys for lookups of ids in `0..bucket`.
+    fn new(map: &PruneMap, bucket: i32) -> Self {
+        let max = map.keys().copied().max().unwrap_or(-1);
+        let (Ok(max), Ok(bucket)) = (usize::try_from(max), usize::try_from(bucket)) else {
+            return Self::default();
+        };
+        let len = (max + 1).min(bucket).min(MAX_PRUNE_BITS);
+        let mut words = vec![0u64; len.div_ceil(64)];
+        // Every key the bitmap's words cover gets its bit, so a clear bit is a sure "no".
+        let covered = words.len() * 64;
+        let mut beyond = false;
+        for &k in map.keys() {
+            match usize::try_from(k) {
+                Ok(k) if k < covered => words[k / 64] |= 1 << (k % 64),
+                Ok(_) => beyond = true,
+                Err(_) => {}
+            }
+        }
+        Self { words, beyond }
+    }
+
+    /// `false` only if `id` (non-negative) is certainly not a key.
+    #[inline]
+    fn may_contain(&self, id: i32) -> bool {
+        let i = id as usize;
+        match self.words.get(i / 64) {
+            Some(w) => (w >> (i % 64)) & 1 != 0,
+            None => self.beyond,
+        }
+    }
+}
+
 /// Reusable buffers for tokenizing one line.
 #[derive(Debug, Default)]
 pub struct LineScratch {
@@ -145,8 +231,11 @@ pub struct Dictionary {
     ntokens: i64,
     pruneidx_size: i64,
     pruneidx: PruneMap,
+    prune_bits: PruneBits,
     /// Open-addressing table `hash % len -> entry id` (fastText's `word2int_`).
-    word2int: Vec<i32>,
+    word2int: Vec<Slot>,
+    /// `% word2int.len()` (the length is below 2^32: `ceil(i32::MAX / 0.7)`).
+    slot_mod: FastMod,
     /// Subword ids of every entry (CSR): `[i, n-gram ids...]` (`initNgrams`).
     sub_ids: Vec<i32>,
     sub_ends: Vec<usize>,
@@ -157,6 +246,8 @@ pub struct Dictionary {
     minn_signed: i32,
     maxn_signed: i32,
     bucket: i32,
+    /// `% bucket` for character n-gram hashes (`bucket` as `u32`).
+    bucket_mod: FastMod,
     word_ngrams: i32,
 }
 
@@ -229,6 +320,7 @@ impl Dictionary {
             }
         }
 
+        let prune_bits = PruneBits::new(&pruneidx, args.bucket);
         let mut dict = Self {
             bytes,
             ends,
@@ -238,7 +330,9 @@ impl Dictionary {
             ntokens,
             pruneidx_size,
             pruneidx,
+            prune_bits,
             word2int: Vec::new(),
+            slot_mod: FastMod::new(1),
             sub_ids: Vec::new(),
             sub_ends: Vec::with_capacity(size),
             minn: i64::from(args.minn) as u64,
@@ -246,6 +340,7 @@ impl Dictionary {
             minn_signed: args.minn,
             maxn_signed: args.maxn,
             bucket: args.bucket,
+            bucket_mod: FastMod::new(args.bucket as u32),
             word_ngrams: args.word_ngrams,
         };
         dict.check_hashing()?;
@@ -364,6 +459,9 @@ impl Dictionary {
             return;
         }
         let id = if self.pruneidx_size > 0 {
+            if !self.prune_bits.may_contain(id) {
+                return;
+            }
             match self.pruneidx.get(&id) {
                 Some(&v) => v,
                 None => return,
@@ -383,7 +481,6 @@ impl Dictionary {
         mut substrings: Option<&mut Vec<(usize, usize)>>,
     ) {
         let len = word.len();
-        let bucket = self.bucket as u32;
         for i in 0..len {
             if is_continuation(word[i]) {
                 continue;
@@ -401,8 +498,9 @@ impl Dictionary {
                     j += 1;
                 }
                 if n >= self.minn && !(n == 1 && (i == 0 || j == len)) {
-                    // `hash % bucket` is unsigned and below bucket <= i32::MAX.
-                    self.push_hash(out, (h % bucket) as i32);
+                    // `hash % bucket` is unsigned and below bucket <= i32::MAX
+                    // (bucket > 0 whenever n-grams are hashed: `check_hashing`).
+                    self.push_hash(out, self.bucket_mod.rem(h) as i32);
                     if let Some(s) = substrings.as_deref_mut() {
                         s.push((i, j));
                     }
@@ -433,7 +531,8 @@ impl Dictionary {
     fn init_word2int(&mut self) -> Result<(), LoadError> {
         // `int32_t word2intsize = std::ceil(size_ / 0.7);`
         let len = (self.size() as f64 / 0.7).ceil() as usize;
-        self.word2int = vec![-1; len];
+        self.word2int = vec![EMPTY; len];
+        self.slot_mod = FastMod::new(len as u32);
         let clustered = || {
             LoadError::Invalid(format!(
                 "the dictionary's hash table has a run of more than {MAX_PROBE_RUN} occupied \
@@ -441,10 +540,12 @@ impl Dictionary {
             ))
         };
         for i in 0..self.size() {
-            let slot = self
-                .find_bounded(self.entry(i), hash(self.entry(i)))
-                .ok_or_else(clustered)?;
-            self.word2int[slot] = i as i32;
+            let h = hash(self.entry(i));
+            let slot = self.find_bounded(self.entry(i), h).ok_or_else(clustered)?;
+            self.word2int[slot] = Slot {
+                id: i as i32,
+                hash: h,
+            };
         }
         // Entries on consecutive home slots form a long run without any long
         // probe while inserting; every lookup landing in it would scan it.
@@ -458,13 +559,13 @@ impl Dictionary {
     /// `MAX_PROBE_RUN` occupied slots (so building stays linear).
     fn find_bounded(&self, w: &[u8], h: u32) -> Option<usize> {
         let len = self.word2int.len();
-        let mut id = (h as usize) % len;
+        let mut id = self.slot_mod.rem(h) as usize;
         for _ in 0..=MAX_PROBE_RUN {
             let e = self.word2int[id];
-            if e == -1 || self.entry(e as usize) == w {
+            if e.id == -1 || (e.hash == h && self.entry(e.id as usize) == w) {
                 return Some(id);
             }
-            id = (id + 1) % len;
+            id = if id + 1 == len { 0 } else { id + 1 };
         }
         None
     }
@@ -472,22 +573,23 @@ impl Dictionary {
     /// `find`: the slot of `w` (or the empty slot where it would go).
     fn find(&self, w: &[u8], h: u32) -> usize {
         let len = self.word2int.len();
-        let mut id = (h as usize) % len;
+        // `h % len` and `(id + 1) % len`, without divisions.
+        let mut id = self.slot_mod.rem(h) as usize;
         loop {
             let e = self.word2int[id];
-            if e == -1 || self.entry(e as usize) == w {
+            if e.id == -1 || (e.hash == h && self.entry(e.id as usize) == w) {
                 return id;
             }
-            id = (id + 1) % len;
+            id = if id + 1 == len { 0 } else { id + 1 };
         }
     }
 
-    /// `getId`: entry id of `w`, or -1.
+    /// `getId`: entry id of `w`, or -1. `h` must be `hash(w)`.
     pub fn get_id(&self, w: &[u8], h: u32) -> i32 {
         if self.word2int.is_empty() {
             return -1;
         }
-        self.word2int[self.find(w, h)]
+        self.word2int[self.find(w, h)].id
     }
 
     pub fn id(&self, w: &[u8]) -> i32 {
@@ -689,5 +791,62 @@ mod tests {
         for b in [b'a', 0x1c, 0x85, 0xa0] {
             assert!(!is_separator(b));
         }
+    }
+
+    #[test]
+    fn fast_mod_is_exact() {
+        let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed as u32
+        };
+        let edges = [0, 1, 2, 3, 0x7FFF_FFFF, 0x8000_0000, u32::MAX - 1, u32::MAX];
+        for d in [1, 2, 3, 7, 10, 1 << 20, 2_000_000, 2_000_001, 0x7FFF_FFFF] {
+            let f = FastMod::new(d);
+            for &a in &edges {
+                assert_eq!(f.rem(a), a % d, "{a} % {d}");
+            }
+            for _ in 0..100_000 {
+                let a = next();
+                assert_eq!(f.rem(a), a % d, "{a} % {d}");
+            }
+        }
+        for _ in 0..10_000 {
+            let d = next().max(1);
+            let f = FastMod::new(d);
+            for _ in 0..10 {
+                let a = next();
+                assert_eq!(f.rem(a), a % d, "{a} % {d}");
+            }
+        }
+    }
+
+    #[test]
+    fn prune_bits_never_reject_a_key() {
+        let mut map = PruneMap::default();
+        for (k, v) in [(0, 5), (63, 1), (64, 2), (1_999_999, 3), (-4, 7)] {
+            map.insert(k, v);
+        }
+        let bits = PruneBits::new(&map, 2_000_000);
+        for k in [0, 63, 64, 1_999_999] {
+            assert!(bits.may_contain(k));
+        }
+        for k in [1, 62, 65, 1_000_000, 1_999_998, 2_000_000] {
+            assert!(!bits.may_contain(k));
+        }
+        // Keys past the bitmap's cap go to the map.
+        map.insert(i32::MAX - 1, 9);
+        let bits = PruneBits::new(&map, i32::MAX);
+        assert_eq!(bits.words.len(), MAX_PRUNE_BITS / 64);
+        assert!(bits.beyond);
+        assert!(bits.may_contain(i32::MAX - 1));
+        assert!(bits.may_contain(i32::MAX - 2));
+        assert!(!bits.may_contain(65));
+        // No non-negative key: nothing passes.
+        let mut neg = PruneMap::default();
+        neg.insert(-1, 0);
+        assert!(!PruneBits::new(&neg, 10).may_contain(3));
     }
 }

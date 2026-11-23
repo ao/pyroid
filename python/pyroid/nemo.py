@@ -153,7 +153,33 @@ def _hash_key() -> bytes | None:
 def repeating_top_ngrams(
     texts: Any, /, n: int = 2, *, lang: str = "en", threads: int | None = None
 ) -> Any:
-    """``RepeatingTopNGramsFilter(n)``'s score; see ``nemo.pyi``."""
+    """Score each document as NeMo's ``RepeatingTopNGramsFilter(n)`` does.
+
+    The share of characters that removing the most frequent word n-gram (its words joined
+    with single spaces, every non-overlapping occurrence in the text) would remove; 1.0 for a
+    document with fewer than ``n`` words. NeMo keeps a document when
+    ``score <= max_repeating_ngram_ratio`` (0.2).
+
+    When several n-grams share the top count, NeMo takes the first of them in the iteration
+    order of a Python ``set``, which depends on the process's string hash seed
+    (``PYTHONHASHSEED``). The result is the one NeMo gives in the same process; with a fixed
+    ``PYTHONHASHSEED`` it is the same in every run. On 64-bit CPython (siphash13) pyroid reads
+    the process's hash key and reproduces the set's order in Rust, after checking its hashes
+    and set order against the interpreter once; elsewhere it builds the same set in Python.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        n: The n-gram length. Below 1 there are no n-grams and NeMo raises ValueError.
+        lang: As for :func:`symbols_to_words`.
+        threads: As for :func:`non_alpha_numeric`.
+
+    Returns:
+        A float for a str; a float64 numpy array for a batch.
+
+    Raises:
+        ValueError: ``n < 1`` (``max()`` of nothing, as in NeMo), or an Arrow element is null.
+        NotImplementedError: ``lang`` is ``"ja"``.
+    """
     scores, ties = _native._repeating_top_ngrams(
         texts, n, lang=lang, threads=threads, hash_key=_hash_key()
     )
@@ -200,7 +226,26 @@ def slice_text(
     *,
     threads: int | None = None,
 ) -> Any:
-    """Slice each document as ``Slicer(...).modify_document`` does (see ``nemo.pyi``)."""
+    """Slice each document, as ``Slicer(left, right, include_left, include_right, strip)`` does.
+
+    An int bound is a Python slice index (in characters). A str ``left`` starts the slice at its
+    first occurrence (after it when ``include_left`` is false), a str ``right`` ends it at its
+    last occurrence (after it when ``include_right`` is true); the result is ``""`` when either
+    string is missing.
+    ``None`` means the start or the end. ``strip`` strips the result.
+
+    Args:
+        x: The documents.
+        left: The start bound.
+        right: The end bound.
+        include_left: Keep a str ``left`` in the result.
+        include_right: Keep a str ``right`` in the result.
+        strip: Strip whitespace from the result.
+        threads: As for :func:`remove_boilerplate_strings`.
+
+    Returns:
+        The documents, the same kind as ``x``.
+    """
     li, ls = _slice_bound(left)
     ri, rs = _slice_bound(right)
     return _native._slice_text(
@@ -209,7 +254,19 @@ def slice_text(
 
 
 def fasttext_label(x: Any, /, label: object, *, threads: int | None = None) -> Any:
-    """Prefix each document with ``label`` as ``FastTextLabelModifier`` does (see ``nemo.pyi``)."""
+    r"""Prefix each document with a fastText label, as ``FastTextLabelModifier(label)`` does.
+
+    The result is ``f"{label} {text}"`` after replacing ``\n`` and ``__label__`` in the text by
+    spaces. Every document changes.
+
+    Args:
+        x: The documents.
+        label: The label (formatted with ``format(label, "")``, as an f-string does).
+        threads: As for :func:`remove_boilerplate_strings`.
+
+    Returns:
+        The documents, the same kind as ``x``.
+    """
     # FastTextLabelModifier builds f"{label} {text}".
     return _native._fasttext_label(x, format(label, ""), threads=threads)
 

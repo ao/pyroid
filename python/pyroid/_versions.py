@@ -8,8 +8,10 @@ whichever module asks first, and the warning points at the first frame outside p
 user's ``import`` or ``pyroid.patch(...)`` line, or the call that read the data.
 
 The check never imports the incumbent. It costs one ``importlib.util.find_spec`` when the
-incumbent is not installed, and reads its distribution metadata (``importlib.metadata``) only
-when it is.
+incumbent is not installed. When it is, the check reads the version from the ``.dist-info``
+directory on ``sys.path`` as ``importlib.metadata`` finds it, without importing
+``importlib.metadata`` (about 25 ms), which it falls back to for anything else (zip files on
+``sys.path``, ``.egg-info``, other distribution finders).
 """
 
 from __future__ import annotations
@@ -135,17 +137,96 @@ def _installed(
     release: str, same: Collection[str], modes: Mapping[str, str], distributions: Sequence[str]
 ) -> str | None:
     """``"<distribution>==<version>"`` of the first candidate distribution installed, or None."""
-    from importlib import metadata
-
     names = [r.partition("==")[0] for r in (release, *same, *modes)]
     for dist in dict.fromkeys([*names, *distributions]):
-        try:
-            version = metadata.version(dist)
-        except metadata.PackageNotFoundError:
-            continue
+        version = _version(dist)
         if version:  # None for a METADATA without a version
             return f"{dist}=={version}"
     return None
+
+
+class _UnsureError(Exception):
+    """The fast lookup can't tell what ``importlib.metadata`` would find."""
+
+
+def _version(dist: str) -> str | None:
+    """``importlib.metadata.version(dist)``, or None if `dist` is not installed."""
+    try:
+        return _dist_info_version(dist)
+    except _UnsureError:
+        pass
+    from importlib import metadata
+
+    try:
+        return metadata.version(dist)
+    except metadata.PackageNotFoundError:
+        return None
+
+
+def _normalize(name: str) -> str:
+    """importlib.metadata's ``Prepared.normalize``: runs of ``-_.`` become one ``_``, lowercase.
+
+    Without ``re``, which is often not imported yet.
+    """
+    out: list[str] = []
+    for ch in name.lower():
+        if ch in "-_.":
+            if not out or out[-1] != "_":
+                out.append("_")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _dist_info_version(dist: str) -> str | None:
+    """The version importlib.metadata would read for `dist`, from ``sys.path`` directories.
+
+    It searches like importlib.metadata's path finder: each ``sys.path`` entry in order, and in
+    it the first ``<name>-*.dist-info`` or ``.egg-info`` whose name normalizes to `dist`'s.
+    Raises _UnsureError where that finder could differ: another finder of distributions, an entry
+    that is not a directory (a zip file), an ``.egg-info``, or no ``Version`` line.
+    """
+    import importlib.machinery
+
+    for finder in sys.meta_path:
+        if hasattr(finder, "find_distributions") and finder is not importlib.machinery.PathFinder:
+            raise _UnsureError
+    want = _normalize(dist)
+    for entry in sys.path:
+        root = entry or "."
+        if root.lower().endswith(".egg"):  # importlib reads an egg's EGG-INFO too
+            raise _UnsureError
+        try:
+            children = os.listdir(root)
+        except NotADirectoryError:
+            raise _UnsureError from None
+        except OSError:  # missing or unreadable: importlib finds nothing there either
+            continue
+        for child in children:
+            low = child.lower()
+            if not low.endswith((".dist-info", ".egg-info")):
+                continue
+            if _normalize(low.rpartition(".")[0].partition("-")[0]) != want:
+                continue
+            if low.endswith(".egg-info"):
+                raise _UnsureError
+            return _metadata_version(os.path.join(root, child, "METADATA"))
+    return None
+
+
+def _metadata_version(path: str) -> str:
+    """The ``Version`` header of a METADATA file (its headers end at the first empty line)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    break
+                key, sep, value = line.partition(":")
+                if sep and key.strip().lower() == "version":
+                    return value.strip()
+    except (OSError, UnicodeDecodeError):
+        pass
+    raise _UnsureError
 
 
 # Count frames for `stacklevel` instead of passing `skip_file_prefixes`, which CPython 3.11's

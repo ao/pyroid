@@ -156,7 +156,28 @@ class _SortedTable(Sequence[bytes]):
 
 
 class MinHashLSHForest:
-    """The LSH Forest for MinHash (datasketch's ``MinHashLSHForest``). See ``lshforest.pyi``."""
+    """The LSH Forest for MinHash: top-``k`` queries by Jaccard similarity.
+
+    Band keys are kept in sorted arrays, one per prefix tree, as in
+    datasketch. It also works with weighted MinHashes.
+
+    Args:
+        num_perm: The number of permutations of the MinHashes to index (the
+            ``sample_size`` of a weighted MinHash).
+        l: The number of prefix trees.
+
+    Raises:
+        ValueError: ``num_perm`` or ``l`` is not positive, or ``l > num_perm``.
+
+    Attributes:
+        l: The number of prefix trees.
+        k: The maximum depth of a tree, ``int(num_perm / l)``.
+        hashranges: ``[(i * k, (i + 1) * k) for i in range(l)]``.
+        keys: Key -> its band keys (a dict view).
+        hashtables: Per tree: band key -> keys added with it, in order.
+        sorted_hashtables: Per tree: its band keys, sorted at the last
+            :meth:`index`.
+    """
 
     def __init__(self, num_perm: int = 128, l: int = 8) -> None:  # noqa: E741
         if l <= 0 or num_perm <= 0:
@@ -182,7 +203,15 @@ class MinHashLSHForest:
         self._minhash_scheme: str | None = None
 
     def add(self, key: Hashable, minhash: Any) -> None:
-        """Add ``key`` with the MinHash of its set (searchable after :meth:`index`)."""
+        """Add ``key`` with the MinHash of its set.
+
+        The key is searchable after the next :meth:`index` (or now, through
+        band keys that are already indexed).
+
+        Raises:
+            ValueError: The MinHash is shorter than ``k * l``, has another
+                scheme than earlier ones, or ``key`` was already added.
+        """
         if len(minhash) < self.k * self.l:
             raise ValueError("The num_perm of MinHash out of range")
         self._minhash_scheme = _check_scheme_consistency(
@@ -211,7 +240,19 @@ class MinHashLSHForest:
             yield from self._index.prefix_keys(i, hp, prefix_size)
 
     def query(self, minhash: Any, k: int) -> list[Hashable]:
-        """Return up to ``k`` keys with (approximately) the highest Jaccard similarity."""
+        """Return up to ``k`` keys with (approximately) the highest Jaccard similarity.
+
+        Args:
+            minhash: The MinHash of the query set.
+            k: The maximum number of keys to return.
+
+        Returns:
+            The keys, in no particular order.
+
+        Raises:
+            ValueError: ``k <= 0``, or the MinHash is too short or has
+                another scheme.
+        """
         if k <= 0:
             raise ValueError("k must be positive")
         if len(minhash) < self.k * self.l:
@@ -232,7 +273,12 @@ class MinHashLSHForest:
         return list(results)
 
     def get_minhash_hashvalues(self, key: Hashable) -> Any:
-        """Return the hash values stored for ``key`` (``KeyError`` if it is absent)."""
+        """Return the hash values stored for ``key`` (a numpy array).
+
+        Raises:
+            KeyError: ``key`` is not in the forest.
+            ValueError: The stored band keys are not whole 4- or 8-byte values.
+        """
         import numpy as np
 
         byteslist = self.keys.get(key, None)
@@ -274,7 +320,7 @@ class MinHashLSHForest:
         return i
 
     def is_empty(self) -> bool:
-        """Return True if some table has nothing searchable (before :meth:`index`)."""
+        """Return True if some tree has nothing searchable (before :meth:`index`)."""
         return self._index.is_empty()  # type: ignore[no-any-return]
 
     def _H(self, hs: Any) -> bytes:  # noqa: N802

@@ -66,7 +66,13 @@ _UNICODE_VERSION = _unicode_version()
 
 @dataclass(frozen=True)
 class HashConfig:
-    """datatrove's ``HashConfig``: the shingle hash function and its width."""
+    """datatrove's ``HashConfig``: the shingle hash function and its width.
+
+    Attributes:
+        precision: 64 or 32 bits.
+        hash_fc: ``"xxhash"`` (xxHash64/xxHash32, seed 0) or ``"sha1"`` (the
+            first 8 or 4 bytes of SHA-1, little-endian).
+    """
 
     precision: int = 64
     hash_fc: str = "xxhash"
@@ -74,7 +80,18 @@ class HashConfig:
 
 @dataclass(frozen=True)
 class TextNormConfig:
-    """datatrove's ``TextNormConfig``: what ``simplify_text`` does."""
+    """datatrove's ``TextNormConfig``: what :func:`simplify_text` does, in order.
+
+    Attributes:
+        lowercase: ``str.lower()``.
+        norm_numbers: Every run of digits (any script, with at most one
+            ``.``/``,``-style separator inside) becomes ``0``.
+        norm_weekdays: English weekday names become ``WEEKDAY``.
+        norm_monthnames: English month names become ``MONTH``.
+        remove_punctuation: datatrove's punctuation set becomes spaces.
+        norm_whitespace: Strip, and collapse whitespace runs to one space.
+        norm_unicode_diacritics: NFD, then drop combining marks (``Mn``).
+    """
 
     lowercase: bool = True
     norm_whitespace: bool = True
@@ -87,7 +104,17 @@ class TextNormConfig:
 
 @dataclass(frozen=True)
 class MinhashConfig:
-    """datatrove's ``MinhashConfig``, with the same fields and defaults."""
+    """datatrove's ``MinhashConfig``, with the same fields and defaults.
+
+    Attributes:
+        n_grams: Words per shingle.
+        num_buckets: Bands of the LSH index.
+        hashes_per_bucket: Hashes per band; a pair needs all of them equal.
+        seed: Seed of numpy's ``RandomState`` that draws the permutations
+            (0 to 2**32 - 1).
+        norm_config: The :class:`TextNormConfig` applied before shingling.
+        hash_config: The :class:`HashConfig` of the shingle hash.
+    """
 
     n_grams: int = 5
     num_buckets: int = 14
@@ -259,7 +286,46 @@ def minhash_signatures(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """MinHash signature of each document, as datatrove computes it (see ``dedup.pyi``)."""
+    """MinHash signature of each document, identical to datatrove's.
+
+    Each signature is ``num_buckets * hashes_per_bucket`` ints, bucket by
+    bucket (datatrove's ``get_signature`` flattened); ``None`` for a document
+    with fewer than ``n_grams`` words, which datatrove gives no signature.
+    Arrow nulls give ``None`` too.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: A :class:`MinhashConfig`, datatrove's ``MinhashConfig``, a
+            dict of its fields, or ``None`` for the defaults.
+        threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+            ``n`` tasks at once; ``1`` runs on the calling thread.
+        language: datatrove's ``MinhashDedupSignature(language=...)``: the
+            language code whose word tokenizer splits the simplified text (see
+            "Languages" above), or a word tokenizer object.
+        python_tokenizer: Tokenize with datatrove's own tokenizer, in Python
+            on the calling thread (needed for the languages pyroid does not
+            tokenize natively; emits :class:`pyroid.FallbackWarning` once per
+            function and language). ``simplify_text``, shingling and MinHash
+            still run in Rust.
+        **kwargs: ``MinhashConfig`` fields to override, plus ``hash_fc`` and
+            ``precision``.
+
+    Returns:
+        One signature (str input) or a list with one entry per document.
+
+    Raises:
+        pyroid.InputError: ``texts`` is not one of the accepted kinds.
+        TypeError: An unknown or mistyped config field, or a ``language``
+            that is neither a str nor a word tokenizer.
+        ValueError: A config value out of range, or a ``language`` datatrove
+            has no tokenizer for (datatrove's message).
+        NotImplementedError: pyroid does not tokenize ``language`` natively
+            and ``python_tokenizer`` is not set.
+        pyroid.PyroidError: The Python-tokenizer path needs datatrove or the
+            tokenizer's package, and it is not installed.
+        UnicodeEncodeError: A str contains a lone surrogate.
+        UnicodeDecodeError: An Arrow row is not valid UTF-8.
+    """
     cfg = _minhash_config(config, kwargs)
     src = _words_source(language, python_tokenizer, "pyroid.dedup.minhash_signatures")
     if isinstance(src, str):
@@ -278,7 +344,25 @@ def minhash_dedup(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """Keep mask of datatrove's MinHash dedup over ``texts`` (see ``dedup.pyi``)."""
+    """Keep mask of datatrove's MinHash dedup over ``texts`` (one corpus).
+
+    ``minhash_dedup(texts, cfg)`` is ``MinHashDedup(cfg).fit(texts)``: ``False``
+    exactly for the documents datatrove's four stages remove.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: As for :func:`minhash_signatures`.
+        threads: As for :func:`minhash_signatures`.
+        language: As for :func:`minhash_signatures`.
+        python_tokenizer: As for :func:`minhash_signatures`.
+        **kwargs: As for :func:`minhash_signatures`.
+
+    Returns:
+        A mask in the same kind as ``texts``: bool, list, tuple, or a
+        :class:`pyroid.Column` of bools (Arrow nulls stay null).
+
+    Raises the same exceptions as :func:`minhash_signatures`.
+    """
     cfg = _minhash_config(config, kwargs)
     src = _words_source(language, python_tokenizer, "pyroid.dedup.minhash_dedup")
     if isinstance(src, str):
@@ -289,17 +373,81 @@ def minhash_dedup(
 
 
 def simplify_text(texts: Any, config: Any = None, *, threads: int | None = None) -> Any:
-    """Normalise text with datatrove's ``simplify_text`` (see ``dedup.pyi``)."""
+    """Normalise text with datatrove's ``simplify_text`` (what MinHash shingles see).
+
+    Byte-identical to ``datatrove.utils.text.simplify_text`` on the same
+    CPython version (its ``unicodedata``) with the ``regex`` module's digit
+    class. Unchanged documents are returned as the original objects.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: A :class:`TextNormConfig`, datatrove's ``TextNormConfig``, a
+            dict of its fields, or ``None`` for the defaults.
+        threads: As for :func:`minhash_signatures`.
+
+    Returns:
+        The same kind as ``texts``: str, list, tuple, or a :class:`pyroid.Column`
+        of strings.
+
+    Raises:
+        pyroid.InputError: ``texts`` is not one of the accepted kinds.
+        UnicodeEncodeError: A str contains a lone surrogate.
+        UnicodeDecodeError: An Arrow row is not valid UTF-8.
+    """
     return _native._simplify_text(texts, _native_norm(_norm_config(config)), threads=threads)
 
 
 def exact_dedup(texts: Any, *, normalize: Any = False, threads: int | None = None) -> Any:
-    """Keep mask of first copies (see ``dedup.pyi``)."""
+    """Keep mask of exact duplicates: ``True`` for the first copy of each text.
+
+    Texts are compared by a 128-bit XXH3 hash (for 10⁹ documents the chance
+    of any false match is about 10⁻²¹). Arrow nulls stay null and match
+    nothing.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        normalize: ``False`` compares the raw text; ``True`` compares
+            :func:`simplify_text` with the default :class:`TextNormConfig`;
+            a ``TextNormConfig`` (pyroid's or datatrove's) or dict uses that.
+        threads: As for :func:`minhash_signatures`.
+
+    Returns:
+        A mask in the same kind as ``texts``.
+
+    Raises:
+        pyroid.InputError: ``texts`` is not one of the accepted kinds.
+        UnicodeEncodeError: A str contains a lone surrogate.
+        UnicodeDecodeError: An Arrow row is not valid UTF-8.
+    """
     return _native._exact_dedup(texts, _normalize_arg(normalize), threads=threads)
 
 
 class MinHashDedup:
-    """An in-memory MinHash index with datatrove's decisions (see ``dedup.pyi``)."""
+    """An in-memory MinHash index that makes datatrove's removals.
+
+    Add documents in batches with :meth:`add` (only their signatures are
+    kept, ``8 * num_buckets * hashes_per_bucket`` bytes each, in Rust), then
+    read the decisions for everything added so far. Decisions are global:
+    a later batch can change which document of a cluster is kept, so masks
+    are only final once every batch is in. :meth:`fit` does one corpus in a
+    single call. Methods may be called from several threads.
+
+    Example::
+
+        d = MinHashDedup(hash_fc="sha1")       # FineWeb's configuration
+        for batch in batches:
+            d.add(batch)
+        keep = d.keep_mask()                   # one bool per document added
+
+    Args:
+        config: As for :func:`minhash_signatures`.
+        threads: Default ``threads=`` for :meth:`add`, :meth:`fit` and the
+            clustering.
+        language: As for :func:`minhash_signatures`, for every document added.
+        python_tokenizer: As for :func:`minhash_signatures` (the warning is
+            emitted once, when the index is made).
+        **kwargs: As for :func:`minhash_signatures`.
+    """
 
     __slots__ = ("_config", "_language", "_python", "_state", "_tokenizer")
 
@@ -327,11 +475,16 @@ class MinHashDedup:
 
     @property
     def language(self) -> Any:
-        """The ``language`` documents are tokenized for (a code, or a tokenizer object)."""
+        """The ``language`` the documents are tokenized for (a code or a tokenizer object)."""
         return self._language
 
     def add(self, texts: Any, *, threads: int | None = None) -> range:
-        """Add a batch of documents; returns the indices they were given."""
+        """Add a batch of documents.
+
+        Returns:
+            The indices given to the batch's documents (Arrow nulls get one
+            too, and are always kept).
+        """
         if self._tokenizer is not None:
             tokens, _, _ = _python_tokens(
                 texts, self._config, self._tokenizer, threads, "pyroid.dedup.MinHashDedup.add"
@@ -342,7 +495,11 @@ class MinHashDedup:
         return range(start, stop)
 
     def fit(self, texts: Any, *, threads: int | None = None) -> Any:
-        """Replace the index with ``texts`` and return their keep mask."""
+        """Replace the index with ``texts`` and return their keep mask.
+
+        Returns:
+            A mask in the same kind as ``texts`` (see :func:`minhash_dedup`).
+        """
         if self._tokenizer is not None:
             tokens, shape, docs = _python_tokens(
                 texts, self._config, self._tokenizer, threads, "pyroid.dedup.MinHashDedup.fit"
@@ -355,27 +512,36 @@ class MinHashDedup:
         return self._state.keep_mask()  # type: ignore[no-any-return]
 
     def duplicates(self) -> list[int]:
-        """Indices of the documents to remove, ascending."""
+        """Indices of the documents to remove, ascending (datatrove's ``.remove`` file)."""
         return self._state.duplicates()  # type: ignore[no-any-return]
 
     def clusters(self) -> list[list[int]]:
-        """Clusters of near-duplicates: the kept document first, then the removed ones."""
+        """Every cluster of two or more near-duplicates.
+
+        Each cluster lists the kept document first, then the removed ones in
+        ascending order. Clusters are ordered by their smallest member, so
+        ``clusters()[k]`` is datatrove's cluster id ``k``.
+        """
         return self._state.clusters()  # type: ignore[no-any-return]
 
     def cluster_ids(self) -> list[int]:
-        """Per-document ``minhash_cluster_id``, as datatrove writes it (-1: in no cluster)."""
+        """Per-document ``minhash_cluster_id``, as datatrove writes it (``-1``: in no cluster)."""
         return self._state.cluster_ids()  # type: ignore[no-any-return]
 
     def cluster_sizes(self) -> list[int]:
-        """Per-document ``minhash_cluster_size``, as datatrove writes it (1: in no cluster)."""
+        """Per-document ``minhash_cluster_size``, as datatrove writes it (``1``: no cluster)."""
         return self._state.cluster_sizes()  # type: ignore[no-any-return]
 
     def representatives(self) -> list[int]:
-        """For each document, the index of the document kept in its place."""
+        """For each document, the index of its cluster's kept document (itself if kept)."""
         return self._state.representatives()  # type: ignore[no-any-return]
 
     def signature(self, index: int) -> list[int] | None:
-        """The stored signature of document ``index`` (``None``: no shingles)."""
+        """The stored signature of document ``index`` (``None``: no shingles).
+
+        Raises:
+            IndexError: ``index`` is not a document added so far.
+        """
         return self._state.signature(index)  # type: ignore[no-any-return]
 
     def reset(self) -> None:
@@ -392,7 +558,14 @@ class MinHashDedup:
 
 
 class ExactDedup:
-    """Streaming exact dedup: keep the first copy of each text (see ``dedup.pyi``)."""
+    """Streaming exact dedup: keep the first copy of each text, across batches.
+
+    Holds one 128-bit hash per distinct text (see :func:`exact_dedup`), so
+    each batch's mask is final as soon as :meth:`add` returns.
+
+    Args:
+        normalize: As for :func:`exact_dedup`.
+    """
 
     __slots__ = ("_normalize", "_state")
 
@@ -401,7 +574,11 @@ class ExactDedup:
         self._state = _native._ExactState(_normalize_arg(normalize))
 
     def add(self, texts: Any, *, threads: int | None = None) -> Any:
-        """Keep mask for one more batch: ``True`` for each first copy so far."""
+        """Keep mask for one more batch: ``True`` for each first copy so far.
+
+        Returns:
+            A mask in the same kind as ``texts`` (Arrow nulls stay null).
+        """
         return self._state.add(texts, threads=threads)
 
     def reset(self) -> None:
@@ -409,6 +586,7 @@ class ExactDedup:
         self._state.reset()
 
     def __len__(self) -> int:
+        """Number of distinct texts seen."""
         return len(self._state)
 
     def __repr__(self) -> str:
@@ -429,7 +607,25 @@ __all__ += ["SentDedupConfig", "SentenceDedup", "SentenceDedupResult", "sentence
 
 @dataclass(frozen=True)
 class SentDedupConfig:
-    """datatrove's ``SentDedupConfig``, with the same fields and defaults."""
+    """datatrove's ``SentDedupConfig``, with the same fields and defaults.
+
+    Attributes:
+        n_sentences: Sentences per window (C4's three); at least 1.
+        split_sentences: ``True``: the language tokenizer's sentences (datatrove's
+            ``span_tokenize``, ported); ``False``: lines (``str.splitlines()``).
+        only_dedup_in_index: With index files (the datatrove drop-ins only),
+            remove only the windows found in the index. No effect in memory.
+        min_doc_words: A document whose text changed is dropped if it has
+            fewer words (``<= 0``: no minimum).
+        min_num_sentences: A document whose text changed is dropped if it has
+            fewer sentences (``<= 0``: no minimum).
+        min_words_to_remove_span: Restore a removed run whose first sentence
+            has fewer words, as datatrove does: only that first sentence comes
+            back (``<= 0``: never).
+        norm_config: The :class:`TextNormConfig` applied to each sentence
+            before hashing.
+        hash_config: The :class:`HashConfig` of the window hash.
+    """
 
     n_sentences: int = 3
     split_sentences: bool = True
@@ -446,7 +642,11 @@ _SentM = TypeVar("_SentM")
 
 
 class SentenceDedupResult(NamedTuple, Generic[_SentT, _SentM]):
-    """What :func:`sentence_dedup` and :meth:`SentenceDedup.filter` return: ``(text, keep)``."""
+    """What :func:`sentence_dedup` and the :class:`SentenceDedup` methods return.
+
+    Both fields are in the caller's container kind (str/bool, list, tuple, or a
+    :class:`pyroid.Column`; Arrow nulls stay null).
+    """
 
     text: _SentT
     keep: _SentM
@@ -537,7 +737,67 @@ def _no_tokenizer(language: str) -> Exception:
 
 
 class SentenceDedup:
-    """datatrove's sentence-level dedup, in memory (see ``dedup.pyi``)."""
+    """datatrove's sentence-level dedup, in memory and multi-threaded.
+
+    C4's rule ("we discarded all but one of any three-sentence span occurring
+    more than once"), with the same removals and keep decisions as datatrove
+    0.10.1's ``SentenceDedupSignature`` -> ``SentenceFindDedups`` ->
+    ``SentenceDedupFilter`` run as one task:
+
+    1. *Signatures* (:meth:`add`). A document's sentences (datatrove's
+       ``sent_tokenize``: spaCy's sentences, stripped, empty ones dropped; or,
+       with ``split_sentences=False``, its lines) each go through
+       :func:`simplify_text`; every window of ``n_sentences`` consecutive
+       ones, joined by a space, is hashed (``hash_fc``) unless it is blank.
+       A document with fewer than ``n_sentences`` sentences has none.
+    2. *Duplicates* (:meth:`duplicates`). For each hash seen more than once,
+       every window but the first (lowest document, then window) is removed.
+    3. *Filter* (:meth:`filter`). The ``n_sentences`` sentences of each
+       removed window are cut out. Sentences are now spaCy's
+       ``span_tokenize`` spans, each with the whitespace before it, which
+       (unlike step 1) include a whitespace-only last sentence; the result is
+       left-stripped (lines are rejoined with newlines). A document whose
+       text changed is dropped if it has fewer than ``min_doc_words`` words
+       or ``min_num_sentences`` sentences; an empty text is always dropped,
+       even with nothing removed, as in datatrove.
+
+    datatrove's quirks are kept: ``min_words_to_remove_span`` only counts,
+    and only restores, the *first* sentence of a removed run.
+
+    Documents are numbered in the order they are added, as datatrove numbers
+    the documents of one task. Add every batch first, then filter them (pass
+    ``start=`` for batches after the first); :meth:`fit` does one corpus in a
+    single call. Only the signatures are kept (16 bytes per window, in Rust).
+    Methods may be called from several threads.
+
+    Example::
+
+        d = SentenceDedup(min_doc_words=50)          # datatrove's example config
+        ranges = [d.add(batch) for batch in batches]
+        for batch, r in zip(batches, ranges):
+            texts, keep = d.filter(batch, start=r.start)
+
+    Known differences from datatrove:
+
+    - A str with a lone surrogate raises ``UnicodeEncodeError`` (so does
+      datatrove, except with ``split_sentences=False`` on a document with
+      fewer than ``n_sentences`` lines).
+    - ``n_sentences`` below 1 raises ``ValueError``.
+    - A hashed window index past 65,535 raises datatrove's ``OverflowError``
+      (numpy's ``<u2``) when its batch is added, and the batch is not added
+      (datatrove fails when it saves the task's signatures).
+    - Index files: use the datatrove drop-ins
+      (``pyroid.integrations.datatrove``).
+
+    Args:
+        config: As for :func:`sentence_dedup`.
+        language: As for :func:`sentence_dedup`; any code is accepted when no
+            tokenizer is needed (``split_sentences=False`` and the three
+            word/sentence thresholds ``<= 0``).
+        threads: Default ``threads=`` for :meth:`add`, :meth:`filter` and
+            :meth:`fit`.
+        **kwargs: As for :func:`sentence_dedup`.
+    """
 
     __slots__ = ("_config", "_language", "_native", "_state", "_threads")
 
@@ -571,18 +831,37 @@ class SentenceDedup:
         return self._language
 
     def add(self, texts: Any, *, threads: int | None = None) -> range:
-        """Stage 1 for a batch; returns the indices the documents were given."""
+        """Stage 1 for a batch of documents.
+
+        Returns:
+            The indices given to the batch's documents (Arrow nulls get one,
+            and no signatures).
+
+        Raises:
+            OverflowError: A window index past 65,535 (nothing is added).
+        """
         start, stop = self._state.add(texts, threads=threads)
         return range(start, stop)
 
     def duplicates(self) -> list[tuple[int, int]]:
-        """``(document, window)`` pairs to remove, sorted (stage 2's output)."""
+        """Stage 2: the ``(document, window)`` pairs to remove, sorted.
+
+        These are the records of datatrove's ``.c4_dup`` files for the task.
+        """
         return self._state.duplicates().pairs()  # type: ignore[no-any-return]
 
     def filter(
         self, texts: Any, *, start: int = 0, threads: int | None = None
     ) -> SentenceDedupResult[Any, Any]:
-        """Stage 3 for documents ``start``, ``start + 1``, ... (see ``dedup.pyi``)."""
+        """Stage 3 for documents ``start``, ``start + 1``, ... (as added).
+
+        Pass the same documents, in the same order, as to :meth:`add`.
+        Decisions are global, so filter once every batch has been added.
+
+        Returns:
+            A :class:`SentenceDedupResult` ``(text, keep)`` in the caller's
+            kind.
+        """
         first = _int("start", start, 0, _SENT_INT_MAX)
         text, keep, _, _ = self._state.duplicates().filter(
             texts,
@@ -593,7 +872,12 @@ class SentenceDedup:
         return SentenceDedupResult(text, keep)
 
     def fit(self, texts: Any, *, threads: int | None = None) -> SentenceDedupResult[Any, Any]:
-        """Replace the documents with ``texts`` and run the three stages on them."""
+        """Replace the documents with ``texts`` and run the three stages on them.
+
+        Returns:
+            A :class:`SentenceDedupResult` ``(text, keep)`` (see
+            :func:`sentence_dedup`).
+        """
         text, keep = self._state.fit(texts, threads=threads)
         return SentenceDedupResult(text, keep)
 
@@ -602,6 +886,7 @@ class SentenceDedup:
         self._state.reset()
 
     def __len__(self) -> int:
+        """Number of documents added."""
         return len(self._state)
 
     def __repr__(self) -> str:
@@ -618,7 +903,44 @@ def sentence_dedup(
     threads: int | None = None,
     **kwargs: Any,
 ) -> SentenceDedupResult[Any, Any]:
-    """The three sentence-dedup stages of datatrove over one corpus (see ``dedup.pyi``)."""
+    """The three sentence-dedup stages of datatrove over one corpus.
+
+    ``sentence_dedup(texts, cfg)`` is ``SentenceDedup(cfg).fit(texts)``: the
+    texts and keep decisions of datatrove's ``SentenceDedupSignature`` ->
+    ``SentenceFindDedups`` -> ``SentenceDedupFilter`` run as one task (see
+    :class:`SentenceDedup`). The input is read once.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: A :class:`SentDedupConfig`, datatrove's ``SentDedupConfig``, a
+            dict of its fields, or ``None`` for the defaults.
+        language: datatrove's language code (as its ``language=``), for the sentence and
+            word tokenizer: any code ``pyroid.filters.languages()`` marks native
+            (spaCy rule-based languages, Chinese with jieba, Vietnamese with pyvi,
+            Japanese with an installed SudachiDict, Thai with an installed
+            PyThaiNLP, the whitespace and IndicNLP tokenizers). Codes whose
+            datatrove tokenizer pyroid does not port (Stanza, Kiwi, ...) raise
+            ``NotImplementedError``; use the datatrove drop-ins.
+        threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+            ``n`` tasks at once; ``1`` runs on the calling thread.
+        **kwargs: ``SentDedupConfig`` fields to override, plus ``hash_fc`` and
+            ``precision``.
+
+    Returns:
+        A :class:`SentenceDedupResult` ``(text, keep)``.
+
+    Raises:
+        pyroid.InputError: ``texts`` is not one of the accepted kinds.
+        TypeError: An unknown or mistyped config field.
+        ValueError: A config value out of range, ``language`` is not a datatrove
+            code (datatrove's message), or a text of 2**30 characters or more
+            (2**32 - 64 for Thai).
+        NotImplementedError: No native word tokenizer for ``language``.
+        OverflowError: A document has more than 65,536 sentence windows
+            (datatrove's ``<u2`` window index).
+        UnicodeEncodeError: A str contains a lone surrogate.
+        UnicodeDecodeError: An Arrow row is not valid UTF-8.
+    """
     return SentenceDedup(config, language=language, threads=threads, **kwargs).fit(texts)
 
 

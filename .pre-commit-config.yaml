@@ -81,6 +81,13 @@ repos:
         files: \.rs$|(^|/)(Cargo\.toml|Cargo\.lock|clippy\.toml)$
         pass_filenames: false
         require_serial: true
+      # The .py modules carry their stubs' docstrings, so help() shows them at run time.
+      - id: sync-docstrings
+        name: docstrings match the stubs (docs/scripts/sync_docstrings.py)
+        entry: python docs/scripts/sync_docstrings.py --check
+        language: python
+        files: ^python/pyroid/.*\.pyi?$|^docs/scripts/sync_docstrings\.py$
+        pass_filenames: false
       # Strict mypy over python/pyroid and python/tests (config in pyproject.toml), with the
       # third-party packages the tests import. Keep in step with [dependency-groups] test.
       - id: mypy

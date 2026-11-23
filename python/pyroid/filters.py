@@ -58,7 +58,11 @@ STOP_WORDS = ("the", "be", "to", "of", "and", "that", "have", "with")
 
 
 class GopherQuality(NamedTuple):
-    """``GopherQualityFilter``'s parameters and defaults (falsy disables a check)."""
+    """``GopherQualityFilter``'s parameters and defaults.
+
+    A falsy threshold (``None``, ``0``) disables its check, as in datatrove.
+    ``stop_words=None`` means :data:`STOP_WORDS`.
+    """
 
     min_doc_words: float | None = 50
     max_doc_words: float | None = 100000
@@ -74,7 +78,11 @@ class GopherQuality(NamedTuple):
 
 
 class GopherRepetition(NamedTuple):
-    """``GopherRepetitionFilter``'s parameters and defaults (falsy disables a check)."""
+    """``GopherRepetitionFilter``'s parameters and defaults.
+
+    A falsy fraction disables its check. ``top_n_grams`` and ``dup_n_grams``
+    are ``(n, max_fraction)`` pairs, ``n >= 1``.
+    """
 
     dup_line_frac: float | None = 0.3
     dup_para_frac: float | None = 0.3
@@ -93,7 +101,12 @@ class GopherRepetition(NamedTuple):
 
 
 class C4Quality(NamedTuple):
-    """``C4QualityFilter``'s parameters and defaults (``-1`` disables a count)."""
+    """``C4QualityFilter``'s parameters and defaults.
+
+    ``-1`` disables ``min_num_sentences``, ``min_words_per_line`` or
+    ``max_word_length``. ``split_paragraph=False`` filters sentences instead
+    of lines (and joins the kept ones with spaces).
+    """
 
     split_paragraph: bool = True
     remove_citations: bool = True
@@ -109,7 +122,10 @@ class C4Quality(NamedTuple):
 
 
 class FineWebQuality(NamedTuple):
-    """``FineWebQualityFilter``'s parameters and defaults."""
+    """``FineWebQualityFilter``'s parameters and defaults.
+
+    ``stop_chars=None`` means datatrove's ``TERMINAL_PUNCTUATION``.
+    """
 
     line_punct_thr: float = 0.12
     line_punct_exclude_zero: bool = False
@@ -312,7 +328,7 @@ def _as_config(f: Any) -> Config:
 
 
 class Language(NamedTuple):
-    """How datatrove 0.10.1 tokenizes a language code, and whether pyroid does natively."""
+    """How datatrove 0.10.1 tokenizes one language code (an entry of :func:`languages`)."""
 
     tokenizer: str
     arg: str
@@ -323,7 +339,20 @@ _languages_cache: dict[str, dict[str, Language]] = {}
 
 
 def languages() -> dict[str, Language]:
-    """Every datatrove language code with its tokenizer (see ``filters.pyi``)."""
+    """Every language code datatrove 0.10.1 knows, with its tokenizer.
+
+    The keys are what ``language=`` accepts: datatrove's ``tokenizer_assignment.csv``
+    as ``load_word_tokenizer`` reads it (``"deu_Latn"``, ``"deu"``, ``"de"``, ...).
+    ``pyroid.dedup.languages`` is the same function.
+
+    Example::
+
+        >>> pyroid.filters.languages()["cmn_Hani"]
+        Language(tokenizer='SpaCyTokenizer', arg='zh', native=False)
+
+    Returns:
+        ``{code: Language(tokenizer, arg, native)}``, sorted by code.
+    """
     version = _unicode_version()
     table = _languages_cache.get(version)
     if table is None:
@@ -741,7 +770,44 @@ def gopher_quality(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """``GopherQualityFilter``: True for each kept document (see ``filters.pyi``)."""
+    """``GopherQualityFilter``: True for each document datatrove keeps.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column
+            (``string``, ``large_string`` or ``string_view``).
+        config: A :class:`GopherQuality` (or a datatrove
+            ``GopherQualityFilter``); keyword arguments override its fields.
+        threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+            ``n`` tasks at once; ``1`` runs on the calling thread. On the
+            Python-tokenizer path it applies to the Rust part only.
+        python_tokenizer: Tokenize with datatrove's own tokenizer for
+            ``language``, in Python on the calling thread, and run the filter
+            math in Rust on its words (see "Words and languages" above). Needed
+            for the languages pyroid does not tokenize natively; emits
+            :class:`pyroid.FallbackWarning` once per function and language.
+        **kwargs: ``GopherQualityFilter``'s parameters (``language``: a
+            datatrove language code or a word tokenizer object).
+
+    Returns:
+        bool, ``list[bool]``, ``tuple[bool, ...]``, or a :class:`pyroid.Column`
+        of bools (nulls stay null), matching ``texts``.
+
+    Raises:
+        pyroid.InputError: ``texts`` is not one of the accepted kinds.
+        TypeError: A parameter has the wrong type.
+        ValueError: datatrove has no tokenizer for ``language`` (datatrove's
+            message), or a document of 2**30 characters or more (spaCy's
+            limit; 2**32 - 64 for Thai).
+        NotImplementedError: pyroid does not tokenize ``language`` natively
+            and ``python_tokenizer`` is not set (the message names
+            datatrove's tokenizer and what to install).
+        pyroid.PyroidError: The Python-tokenizer path needs datatrove or the
+            tokenizer's package, and it is not installed.
+        ZeroDivisionError: As datatrove, e.g. ``min_doc_words=None`` and a
+            document without words.
+        UnicodeEncodeError: A str contains a lone surrogate.
+        UnicodeDecodeError: An Arrow row is not valid UTF-8.
+    """
     return _run(
         texts, GopherQuality, config, kwargs, "keep", threads, python_tokenizer, "gopher_quality"
     )
@@ -756,7 +822,16 @@ def gopher_quality_reasons(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """``GopherQualityFilter``: datatrove's drop reason per document, ``None`` if kept."""
+    """``GopherQualityFilter``: datatrove's drop reason, ``None`` when kept.
+
+    Reasons: ``gopher_short_doc``, ``gopher_long_doc``,
+    ``gopher_below_avg_threshold``, ``gopher_above_avg_threshold``,
+    ``gopher_too_many_hashes``, ``gopher_too_many_ellipsis``,
+    ``gopher_too_many_bullets``, ``gopher_too_many_end_ellipsis``,
+    ``gopher_below_alpha_threshold``, ``gopher_enough_stop_words``.
+    Arguments and errors as for :func:`gopher_quality`; Arrow input gives a
+    ``string`` :class:`pyroid.Column` (null when kept or null).
+    """
     return _run(
         texts,
         GopherQuality,
@@ -778,7 +853,11 @@ def gopher_repetition(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """``GopherRepetitionFilter``: True for each kept document."""
+    """``GopherRepetitionFilter``: True for each document datatrove keeps.
+
+    Arguments, returns and errors as for :func:`gopher_quality`, with
+    :class:`GopherRepetition` / ``GopherRepetitionFilter`` parameters.
+    """
     return _run(
         texts,
         GopherRepetition,
@@ -800,7 +879,12 @@ def gopher_repetition_reasons(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """``GopherRepetitionFilter``: drop reason per document, ``None`` if kept."""
+    """``GopherRepetitionFilter``: datatrove's drop reason, ``None`` when kept.
+
+    Reasons: ``empty``, ``dup_para_frac``, ``dup_para_char_frac``,
+    ``dup_line_frac``, ``dup_line_char_frac``, ``top_{n}_gram``,
+    ``duplicated_{n}_n_grams``.
+    """
     return _run(
         texts,
         GopherRepetition,
@@ -822,7 +906,12 @@ def c4_quality(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """``C4QualityFilter``: True for each kept document."""
+    """``C4QualityFilter``'s document decision: True for each document kept.
+
+    Arguments, returns and errors as for :func:`gopher_quality`, with
+    :class:`C4Quality` / ``C4QualityFilter`` parameters. The text after line
+    removal is :func:`c4_lines`.
+    """
     return _run(texts, C4Quality, config, kwargs, "keep", threads, python_tokenizer, "c4_quality")
 
 
@@ -835,7 +924,10 @@ def c4_quality_reasons(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """``C4QualityFilter``: drop reason per document, ``None`` if kept."""
+    """``C4QualityFilter``: datatrove's drop reason, ``None`` when kept.
+
+    Reasons: ``lorem_ipsum``, ``curly_bracket``, ``too_few_sentences``.
+    """
     return _run(
         texts, C4Quality, config, kwargs, "reason", threads, python_tokenizer, "c4_quality_reasons"
     )
@@ -850,7 +942,17 @@ def c4_lines(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """``C4QualityFilter`` line removal: each document's ``doc.text`` afterwards."""
+    """``C4QualityFilter``'s line removal: ``doc.text`` after the filter.
+
+    For a kept document, the lines (or sentences) C4 keeps, stripped and
+    re-joined, citations removed; for a dropped one, the input (datatrove
+    leaves it untouched). Unchanged documents are the original objects;
+    Arrow nulls stay null.
+
+    Returns:
+        str, list, tuple, or a :class:`pyroid.Column` of strings
+        (``large_string`` for ``large_string`` input), matching ``texts``.
+    """
     return _run(texts, C4Quality, config, kwargs, "text", threads, python_tokenizer, "c4_lines")
 
 
@@ -863,7 +965,11 @@ def fineweb_quality(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """``FineWebQualityFilter``: True for each kept document."""
+    """``FineWebQualityFilter``: True for each document datatrove keeps.
+
+    Arguments, returns and errors as for :func:`gopher_quality`, with
+    :class:`FineWebQuality` / ``FineWebQualityFilter`` parameters.
+    """
     return _run(
         texts, FineWebQuality, config, kwargs, "keep", threads, python_tokenizer, "fineweb_quality"
     )
@@ -878,7 +984,11 @@ def fineweb_quality_reasons(
     python_tokenizer: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """``FineWebQualityFilter``: drop reason per document, ``None`` if kept."""
+    """``FineWebQualityFilter``: datatrove's drop reason, ``None`` when kept.
+
+    Reasons: ``empty``, ``line_punct_ratio``, ``short_line_ratio``,
+    ``char_dup_ratio``, ``list_ratio``.
+    """
     return _run(
         texts,
         FineWebQuality,
@@ -894,7 +1004,30 @@ def fineweb_quality_reasons(
 def apply(
     texts: Any, filters: Iterable[Any], /, *, threads: Any = None, python_tokenizer: bool = False
 ) -> FilterResult:
-    """Run several filters in one pass, chained as datatrove's executor does."""
+    """Run several filters in order, in one pass over each document.
+
+    The same as running the datatrove filters one after another in a
+    pipeline: a document dropped by one filter is not seen by the next, and
+    a :class:`C4Quality` step's rewritten text is what later steps filter.
+    Steps that see the same text tokenize it once.
+
+    Args:
+        texts: As for :func:`gopher_quality`.
+        filters: Config objects, or datatrove filter instances (or one of either)
+            (``GopherQualityFilter`` etc.) whose settings are read. Each has its
+            own ``language``.
+        threads: As for :func:`gopher_quality`.
+        python_tokenizer: As for :func:`gopher_quality`, for every step.
+            Steps are then run in datatrove's order: consecutive steps with the
+            same tokenizer share one tokenization per document, and a C4 step
+            runs as datatrove's ``C4QualityFilter``, whose rewritten text the
+            later steps tokenize again.
+
+    Returns:
+        ``FilterResult(keep, reason, text)``, each in the caller's kind.
+
+    Raises the same exceptions as :func:`gopher_quality`.
+    """
     if isinstance(filters, _CONFIG_TYPES) or type(filters).__name__ in _DATATROVE:
         filters = [filters]  # one filter, not an iterable of them
     configs = [_as_config(f) for f in filters]
@@ -928,7 +1061,16 @@ PII_IP_REPLACEMENT = (
 
 
 class PII(NamedTuple):
-    """``PIIFormatter``'s parameters and defaults."""
+    """``PIIFormatter``'s parameters and defaults.
+
+    Attributes:
+        remove_emails: Replace email addresses.
+        remove_ips: Replace IPv4 addresses.
+        only_remove_public_ips: Replace only addresses ``ipaddress`` calls
+            ``is_global`` (the running interpreter's tables, as datatrove).
+        email_replacement: Replacements, used in turn (a str is one).
+        ip_replacement: The same for IP addresses.
+    """
 
     remove_emails: bool = True
     remove_ips: bool = True
@@ -965,11 +1107,39 @@ def _public_ip(addr: str) -> bool:
 
 
 class PIIReplacer:
-    """A stateful ``PIIFormatter``: see ``filters.pyi``."""
+    """datatrove's ``PIIFormatter``, keeping its state across calls.
+
+    Each call rewrites a batch of documents exactly as ``PIIFormatter.format``
+    would, one after another: every match of datatrove's email regex becomes
+    the next email replacement, then, in that text, every match of its IPv4
+    regex that ``ipaddress.ip_address`` accepts (and, by default, calls
+    ``is_global``) becomes the next IP replacement. "Next" cycles through each
+    replacement tuple and carries over from one document, and one call, to the
+    next, so feeding a corpus batch by batch gives datatrove's output.
+
+    The matches are found and replaced in Rust, in parallel; the calling
+    thread numbers the replacements and asks ``ipaddress`` about each distinct
+    address once.
+
+    Attributes:
+        config: The :class:`PII` settings.
+        email_index: Index of the next email replacement (datatrove's
+            ``emails_replacer._replace_i``); assignable.
+        ip_index: The same for IP replacements (``ip_replacer._replace_i``).
+    """
 
     __slots__ = ("_native", "_validator", "config", "email_index", "ip_index")
 
     def __init__(self, config: PII | None = None, /, **kwargs: Any) -> None:
+        """A formatter whose counters start at 0.
+
+        Args:
+            config: A :class:`PII`; keyword arguments override its fields.
+            **kwargs: ``PIIFormatter``'s parameters.
+
+        Raises:
+            TypeError: A replacement is not a str.
+        """
         cfg = _config(PII, config, kwargs)
         self.config: PII = cfg
         self._native = _native._PII(
@@ -984,7 +1154,23 @@ class PIIReplacer:
         self.ip_index = 0
 
     def __call__(self, texts: Any, /, *, threads: Any = None) -> Any:
-        """Rewrite each document of ``texts``, continuing the counters."""
+        """Rewrite each document; unchanged documents come back as the same objects.
+
+        Args:
+            texts: A str, a list or tuple of str, or an Arrow string array/column.
+            threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+                ``n`` tasks at once; ``1`` runs on the calling thread.
+
+        Returns:
+            The texts in the caller's kind (a :class:`pyroid.Column` of strings for
+            Arrow input; nulls stay null).
+
+        Raises:
+            pyroid.InputError: ``texts`` is not one of the accepted kinds.
+            IndexError: A match needs a replacement and the tuple is empty (as datatrove).
+            UnicodeEncodeError: A str contains a lone surrogate.
+            UnicodeDecodeError: An Arrow row is not valid UTF-8.
+        """
         out, self.email_index, self.ip_index = self._native.run(
             texts, self.email_index, self.ip_index, self._validator, threads=threads
         )
@@ -998,7 +1184,21 @@ class PIIReplacer:
 
 
 def pii_replace(texts: Any, config: Any = None, /, *, threads: Any = None, **kwargs: Any) -> Any:
-    """``PIIFormatter.format`` over ``texts`` (one fresh formatter per call)."""
+    """``PIIFormatter``: each document's text with emails and IP addresses replaced.
+
+    A fresh formatter per call, so the replacement counters start at 0: one
+    call over a whole corpus gives datatrove's output. To process a corpus in
+    batches, use one :class:`PIIReplacer`.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: A :class:`PII`; keyword arguments override its fields.
+        threads: As for :meth:`PIIReplacer.__call__`.
+        **kwargs: ``PIIFormatter``'s parameters.
+
+    Returns:
+        As :meth:`PIIReplacer.__call__`.
+    """
     return PIIReplacer(config, **kwargs)(texts, threads=threads)
 
 
@@ -1114,7 +1314,26 @@ def _badwords_file(language: str, cache_dir: Any, download: bool) -> Any:
 def load_c4_badwords(
     language: str, *, cache_dir: Any = None, download: bool = True
 ) -> frozenset[str]:
-    """Datatrove's word set for ``language`` (see ``filters.pyi``)."""
+    """Datatrove's bad-word set for ``language``.
+
+    The lists are the LDNOOBW "List of Dirty, Naughty, Obscene, and Otherwise
+    Bad Words" (https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words,
+    CC BY 4.0), at the two commits datatrove pins. pyroid does not ship them:
+    like datatrove, it downloads a list the first time it is needed, into
+    ``cache_dir`` (default ``$PYROID_CACHE_DIR``, else ``$XDG_CACHE_HOME/pyroid``,
+    else ``~/.cache/pyroid``) under ``c4_badwords/``, and checks its sha256.
+    The set is built as datatrove builds it: each line ``strip()``-ed, minus
+    every language's allowlist (``sm``, ``グロ``, ``女の子``, ``性``).
+
+    Args:
+        language: One of :data:`C4_BADWORDS_LANGUAGES`.
+        cache_dir: Where the lists are kept.
+        download: Fetch a missing list (else ``FileNotFoundError``).
+
+    Raises:
+        ValueError: No list for ``language`` (datatrove's message).
+        OSError: The download failed, or the file's sha256 is not the pinned one.
+    """
     if language not in _BADWORDS_SHA256:
         raise ValueError(
             f'There is not badwords list available for "{language}". '
@@ -1130,7 +1349,17 @@ def load_c4_badwords(
 
 
 class C4BadWords(NamedTuple):
-    """``C4BadWordsFilter``'s parameters and defaults (``exclusion_writer`` aside)."""
+    """``C4BadWordsFilter``'s parameters and defaults (``exclusion_writer`` aside).
+
+    Attributes:
+        keep_fraction: The fraction of documents with bad words to keep anyway,
+            decided per document by ``numpy.random.default_rng(seed).uniform()``.
+        fail_on_missing_language: Raise for a language without a list (else keep
+            its documents).
+        seed: ``default_rng``'s seed: a non-negative int, or ``None`` for fresh OS
+            entropy (as numpy).
+        default_language: The language of documents given none.
+    """
 
     keep_fraction: float = 0.0
     fail_on_missing_language: bool = True
@@ -1139,7 +1368,7 @@ class C4BadWords(NamedTuple):
 
 
 class BadWordsResult(NamedTuple):
-    """What :class:`BadWordsFilter` returns, each in the caller's container kind."""
+    """What a :class:`BadWordsFilter` call returns, each in the caller's container kind."""
 
     keep: Any
     reason: Any
@@ -1162,7 +1391,21 @@ def _seed_words(seed: object) -> list[int]:
 
 
 class BadWordsFilter:
-    """A stateful ``C4BadWordsFilter``: see ``filters.pyi``."""
+    r"""datatrove's ``C4BadWordsFilter``, keeping its random state across calls.
+
+    A document is dropped when ``doc.text.lower()`` contains a word of its
+    language's list, flanked by non-word characters (``re``'s ``\W``) or the
+    text's ends (``ja``, ``th`` and ``zh`` words match anywhere), unless
+    ``keep_fraction > 0`` and the next ``uniform()`` draw of numpy's
+    ``default_rng(seed)`` is below it. The draws are numpy's PCG64 stream, bit
+    for bit, one per flagged document in document order, continuing across
+    calls (:attr:`rng_state`). The search runs in Rust, in parallel.
+
+    Attributes:
+        config: The :class:`C4BadWords` settings.
+        rng_state: ``(state, inc)`` of the PCG64 generator (as numpy's
+            ``bit_generator.state["state"]``); assignable.
+    """
 
     def __init__(
         self,
@@ -1174,6 +1417,21 @@ class BadWordsFilter:
         download: bool = True,
         **kwargs: Any,
     ) -> None:
+        """A filter whose generator is ``default_rng(seed)``.
+
+        Args:
+            config: A :class:`C4BadWords`; keyword arguments override its fields.
+            words: Word lists to use instead of datatrove's, by language (any
+                language code; matched literally, not lowercased). Languages
+                not given are loaded with :func:`load_c4_badwords` when first needed.
+            cache_dir: As for :func:`load_c4_badwords`.
+            download: As for :func:`load_c4_badwords`.
+            **kwargs: ``C4BadWordsFilter``'s parameters.
+
+        Raises:
+            TypeError: ``seed`` is not an int or ``None``.
+            ValueError: ``seed`` is negative.
+        """
         cfg = _config(C4BadWords, config, kwargs)
         if not isinstance(cfg.default_language, str):
             raise TypeError("default_language must be a str")
@@ -1231,20 +1489,40 @@ class BadWordsFilter:
         return out
 
     def __call__(self, texts: Any, /, *, languages: Any = None, threads: Any = None) -> Any:
-        """Keep mask and drop reasons, from one pass (one draw per flagged document)."""
+        """Filter ``texts``: keep mask and drop reasons from one pass.
+
+        Args:
+            texts: A str, a list or tuple of str, or an Arrow string array/column.
+            languages: Each document's language (datatrove's ``doc.metadata["language"]``):
+                one str for all, or one entry per document (``None``: the default).
+                Default: ``default_language``.
+            threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+                ``n`` tasks at once; ``1`` runs on the calling thread.
+
+        Returns:
+            ``BadWordsResult(keep, reason)`` in the caller's kind (Arrow nulls stay null).
+
+        Raises:
+            ValueError: A language has no list and ``fail_on_missing_language``
+                (datatrove's message), or ``languages`` has the wrong length.
+            OSError: A list could not be downloaded.
+            pyroid.InputError: ``texts`` is not one of the accepted kinds.
+            UnicodeEncodeError: A str contains a lone surrogate.
+            UnicodeDecodeError: An Arrow row is not valid UTF-8.
+        """
         keep, reason = self._run(texts, languages, "all", threads)
         return BadWordsResult(keep, reason)
 
     def keep(self, texts: Any, /, *, languages: Any = None, threads: Any = None) -> Any:
-        """Keep mask (draws like datatrove's ``filter``)."""
+        """The keep mask only (draws as :meth:`__call__`)."""
         return self._run(texts, languages, "keep", threads)
 
     def reasons(self, texts: Any, /, *, languages: Any = None, threads: Any = None) -> Any:
-        """Drop reasons (draws like datatrove's ``filter``)."""
+        """The drop reasons only (draws as :meth:`__call__`)."""
         return self._run(texts, languages, "reason", threads)
 
     def found(self, texts: Any, /, *, languages: Any = None, threads: Any = None) -> Any:
-        """Whether each document contains a bad word (no draws)."""
+        """Whether each document contains a bad word (no draws; missing lists give False)."""
         return self._run(texts, languages, "found", threads)
 
     def __repr__(self) -> str:
@@ -1261,7 +1539,23 @@ def c4_badwords(
     threads: Any = None,
     **kwargs: Any,
 ) -> Any:
-    """``C4BadWordsFilter``: True for each kept document (see ``filters.pyi``)."""
+    """``C4BadWordsFilter``: True for each document datatrove keeps.
+
+    A fresh :class:`BadWordsFilter` per call, so the draws start from
+    ``default_rng(seed)``: one call over a whole corpus gives datatrove's
+    decisions. For batches, use one :class:`BadWordsFilter`.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: A :class:`C4BadWords`; keyword arguments override its fields.
+        languages: As for :meth:`BadWordsFilter.__call__`.
+        words: As for :class:`BadWordsFilter`.
+        threads: As for :meth:`BadWordsFilter.__call__`.
+        **kwargs: ``C4BadWordsFilter``'s parameters.
+
+    Returns:
+        A keep mask in the caller's kind.
+    """
     return BadWordsFilter(config, words=words, **kwargs).keep(
         texts, languages=languages, threads=threads
     )
@@ -1277,7 +1571,10 @@ def c4_badwords_reasons(
     threads: Any = None,
     **kwargs: Any,
 ) -> Any:
-    """``C4BadWordsFilter``: datatrove's drop reason per document, ``None`` if kept."""
+    """``C4BadWordsFilter``: datatrove's drop reason per document, ``None`` when kept.
+
+    As :func:`c4_badwords`, returning ``"document_removed_with_badwords"`` or ``None``.
+    """
     return BadWordsFilter(config, words=words, **kwargs).reasons(
         texts, languages=languages, threads=threads
     )
@@ -1366,7 +1663,14 @@ def _encodable(s: str) -> bool:
 
 
 class URLFilterConfig(NamedTuple):
-    """``URLFilter``'s parameters and defaults (datatrove 0.10.1)."""
+    """datatrove 0.10.1 ``URLFilter``'s parameters and defaults.
+
+    The lists are read as datatrove's ``parse_list`` reads them: entries starting
+    with ``#`` are skipped (the test is ``x[0] != "#"``, so an empty string raises
+    ``IndexError``, as in datatrove); domains and URLs are ``strip()``-ped; words,
+    subwords and soft words are normalized (every character but ``[a-zA-Z0-9]``
+    removed, then lowercased), so ``"--"`` becomes ``""``. A falsy list adds nothing.
+    """
 
     soft_word_threshold: Any = 2
     extra_domains: Iterable[str] | None = None
@@ -1378,7 +1682,7 @@ class URLFilterConfig(NamedTuple):
 
 
 class DatatroveURLLists(NamedTuple):
-    """The files of datatrove's integrated URL block lists."""
+    """The files of datatrove's integrated URL block lists (see :func:`datatrove_url_lists`)."""
 
     domains: str
     urls: str
@@ -1388,7 +1692,20 @@ class DatatroveURLLists(NamedTuple):
 
 
 def datatrove_url_lists() -> DatatroveURLLists:
-    """Extract datatrove's integrated block lists as datatrove does; return their paths."""
+    """Extract datatrove's integrated URL block lists as datatrove does; return their paths.
+
+    datatrove 0.10.1 ships them in its package (``datatrove/assets``):
+    ``url_filterblacklistsv0_3_0.tar.gz`` (``domains``: 4,558,940 lines; ``urls``:
+    19,587), ``banned_words.txt``, ``banned_subwords.txt`` and
+    ``soft_banned_words.txt``. The archive is extracted once into datatrove's own cache
+    (``huggingface_hub.cached_assets_path("datatrove", "filters", "url_filter")``),
+    under datatrove's lock and ``.completed`` marker, so datatrove and pyroid share
+    one copy. pyroid does not ship these lists: they are not under pyroid's licence.
+
+    Raises:
+        pyroid.PyroidError: datatrove (or huggingface_hub) is not installed.
+        ImportError: fasteners is not installed (datatrove's lock needs it).
+    """
     try:
         from datatrove.io import safely_create_file
         from datatrove.utils._import_utils import ASSETS_PATH
@@ -1539,7 +1856,57 @@ def _resolver(tld: Any) -> Any:
 
 
 class URLFilter:
-    """datatrove's ``URLFilter``, built once (block lists, suffix trie): see ``filters.pyi``."""
+    """datatrove 0.10.1's ``URLFilter``, built once: the same decisions and drop reasons.
+
+    Build it once and reuse it: with the integrated lists it holds 4.56 million
+    blocked domains (about 200 MB, in one Rust string arena with a hash table),
+    and building it takes a second or two. Each URL is checked as datatrove does,
+    in its order, and the first hit is the reason:
+
+    1. ``"domain"``: tldextract's registered domain
+       (``top_domain_under_public_suffix``) is a blocked domain;
+    2. ``"subdomain"``: its FQDN is a blocked domain;
+    3. ``"url"``: the URL itself is blocked;
+    4. ``"hard_blacklisted"``: a word of ``re.split(r"[^a-zA-Z0-9]+", url)`` (case
+       sensitive; ``""`` when the URL starts or ends with another character) is
+       a banned word;
+    5. ``"soft_blacklisted"``: at least ``soft_word_threshold`` distinct words are
+       soft-banned;
+    6. ``"blacklisted_subword"``: a banned subword is a substring of the URL with
+       every character but ``[a-zA-Z0-9]`` removed, lowercased.
+
+    Domains come from tldextract 5.4.0's ``extract_str``, ported to Rust:
+    ``lenient_netloc`` (scheme, userinfo, ``[IPv6]``, port, ``strip()``, trailing
+    dots), U+3002, U+FF0E and U+FF61 as dots, the IPv6 literal test (``ipaddress.IPv6Address``), and
+    the Public Suffix List walk (wildcards such as ``*.ck``, exceptions such as
+    ``!www.ck``), labels lowered with ``str.lower()`` of the running interpreter's
+    Unicode version and ``xn--`` labels decoded as ``idna`` does. The suffix lists
+    are the ones ``tld_extractor`` uses (its cached copy of the Public Suffix List,
+    or tldextract's bundled snapshot), read from it when the filter is built;
+    with its ``include_psl_private_domains`` setting.
+
+    Args:
+        config: A :class:`URLFilterConfig`; keyword arguments override its fields.
+        tld_extractor: A ``tldextract.TLDExtract`` (default: a new
+            ``TLDExtract()``, as datatrove builds).
+        **kwargs: ``URLFilter``'s parameters (see :class:`URLFilterConfig`).
+
+    Raises:
+        TypeError: ``config`` is not a :class:`URLFilterConfig`, or
+            ``soft_word_threshold`` does not compare with an int (datatrove raises
+            this ``TypeError`` at the first URL that reaches the soft-word check).
+        IndexError: A list has an empty string (as datatrove).
+        pyroid.PyroidError: tldextract is not installed, or
+            ``use_integrated_lists=True`` and datatrove is not installed.
+
+    The methods take URLs as a str, a list or tuple of str, or an Arrow string
+    array/column, with ``threads=`` as everywhere in pyroid, and raise
+    ``ValueError`` for an empty URL (datatrove's ``assert url``),
+    ``AttributeError`` as datatrove when the banned subwords are only ``""``
+    (pyahocorasick's automaton then has no words) and a URL reaches that check,
+    ``pyroid.InputError`` for other input kinds, ``UnicodeEncodeError`` for a lone
+    surrogate and ``UnicodeDecodeError`` for invalid UTF-8 in Arrow input.
+    """
 
     config: URLFilterConfig | None
 
@@ -1633,15 +2000,34 @@ class URLFilter:
         )
 
     def keep(self, urls: Any, /, *, threads: Any = None) -> Any:
-        """True for each URL datatrove keeps."""
+        """True for each URL datatrove keeps.
+
+        Returns:
+            bool, ``list[bool]``, ``tuple[bool, ...]``, or a :class:`pyroid.Column`
+            of bools (nulls stay null), matching ``urls``.
+        """
         return self._native.keep(urls, threads=threads)
 
     def reasons(self, urls: Any, /, *, threads: Any = None) -> Any:
-        """The drop reason (datatrove's) per URL, ``None`` when kept."""
+        """The drop reason (datatrove's) per URL, ``None`` when kept.
+
+        Reasons: ``domain``, ``subdomain``, ``url``, ``hard_blacklisted``,
+        ``soft_blacklisted``, ``blacklisted_subword``. Arrow input gives a
+        ``string`` :class:`pyroid.Column` (null when kept or null).
+        """
         return self._native.reasons(urls, threads=threads)
 
     def domains(self, urls: Any, /, *, threads: Any = None) -> tuple[Any, Any]:
-        """The ``(top_domain_under_public_suffix, fqdn)`` tldextract gives each URL."""
+        """The ``(top_domain_under_public_suffix, fqdn)`` tldextract gives each URL.
+
+        What datatrove looks up in the blocked domains (``registered_domain`` is
+        ``top_domain_under_public_suffix``). Both are ``""`` for IP addresses,
+        hosts without a public suffix, and bare suffixes.
+
+        Returns:
+            A pair, each in the kind of ``urls`` (Arrow: ``large_string`` columns
+            for ``large_string`` input, else ``string``; nulls stay null).
+        """
         rd, fqdn = self._native.domains(urls, threads=threads)
         return rd, fqdn
 
@@ -1757,14 +2143,26 @@ def _url_filter(config: Any, kwargs: dict[str, Any]) -> URLFilter:
 
 
 def url_filter(urls: Any, config: Any = None, /, *, threads: Any = None, **kwargs: Any) -> Any:
-    """``URLFilter``: True for each URL datatrove keeps (see ``filters.pyi``)."""
+    """``URLFilter``: True for each URL datatrove keeps.
+
+    ``config`` is a :class:`URLFilterConfig` (keyword arguments override its
+    fields) or a built :class:`URLFilter`. The last two filters built from configs
+    are cached (configs whose lists are lists, tuples, sets or strings), so repeated
+    calls do not reload the block lists.
+
+    Returns:
+        As :meth:`URLFilter.keep`.
+    """
     return _url_filter(config, kwargs).keep(urls, threads=threads)
 
 
 def url_filter_reasons(
     urls: Any, config: Any = None, /, *, threads: Any = None, **kwargs: Any
 ) -> Any:
-    """``URLFilter``: datatrove's drop reason per URL, ``None`` when kept."""
+    """``URLFilter``: datatrove's drop reason per URL, ``None`` when kept.
+
+    Arguments as for :func:`url_filter`; results as :meth:`URLFilter.reasons`.
+    """
     return _url_filter(config, kwargs).reasons(urls, threads=threads)
 
 
@@ -1775,7 +2173,14 @@ __all__ += ["SymbolLines", "symbol_lines"]
 
 
 class SymbolLines(NamedTuple):
-    """``SymbolLinesFormatter``'s parameters and defaults."""
+    r"""``SymbolLinesFormatter``'s parameters and defaults.
+
+    Attributes:
+        symbols_to_remove: The symbols a removed line may consist of (with
+            ``" "``); ``None`` is datatrove's ``PUNCTUATION_SET``.
+        replace_char: What a run of removed lines becomes (``""``: nothing;
+            FineWeb-2 uses ``"\n"``).
+    """
 
     symbols_to_remove: Iterable[str] | None = None
     replace_char: str = ""
@@ -1803,7 +2208,30 @@ def _symbol_lines_native(cfg: SymbolLines) -> Any:
 
 
 def symbol_lines(texts: Any, config: Any = None, /, *, threads: Any = None, **kwargs: Any) -> Any:
-    """``SymbolLinesFormatter.format`` per document (see ``filters.pyi``)."""
+    r"""``SymbolLinesFormatter``: each document without its symbol-only lines.
+
+    As datatrove: over ``text.splitlines()``, a non-blank line made only of
+    ``symbols_to_remove`` and spaces is dropped, a run of them becomes one
+    ``replace_char`` (if not empty), and the kept lines are joined with
+    ``"\n"`` (so ``"\r\n"`` and a trailing newline come out as datatrove's do).
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column.
+        config: A :class:`SymbolLines`; keyword arguments override its fields.
+        threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+            ``n`` tasks at once; ``1`` runs on the calling thread.
+        **kwargs: ``SymbolLinesFormatter``'s parameters.
+
+    Returns:
+        The texts in the caller's kind; a document that comes out equal comes
+        back as the same object (Arrow: a :class:`pyroid.Column`, nulls stay null).
+
+    Raises:
+        pyroid.InputError: ``texts`` is not one of the accepted kinds.
+        TypeError: ``replace_char`` is not a str.
+        UnicodeEncodeError: A str contains a lone surrogate.
+        UnicodeDecodeError: An Arrow row is not valid UTF-8.
+    """
     cfg = _config(SymbolLines, config, kwargs)
     return _symbol_lines_native(cfg).run(texts, threads=threads)
 

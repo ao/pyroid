@@ -423,13 +423,13 @@ def test_invalid_num_threads_env(run_python: RunPython, value: str) -> None:
         """
         import pyroid, pyroid.text as t
         from pyroid._pyroid import _testing
-        # Work that never touches the pool still runs.
-        assert t.normalize_whitespace(["a  b"] * 64) == ["a b"] * 64
+        # Work that never touches the pool still runs (one task's worth: < 128 documents).
+        assert t.normalize_whitespace(["a  b"] * 127) == ["a b"] * 127
         assert t.normalize_whitespace(["a  b"] * 1000, threads=1) == ["a b"] * 1000
         long = " a  b " * 2000  # >= 4096 bytes: detached, but not on the pool
         assert t.normalize_whitespace(long) == " ".join(long.split())
         for call in (
-            lambda: t.normalize_whitespace(["a  b"] * 65),
+            lambda: t.normalize_whitespace(["a  b"] * 128),
             lambda: t.min_chars(["a"] * 1000, 1),
             lambda: t.normalize_whitespace(_testing.column(["a  b"] * 1000)),
             _testing.pool_size,

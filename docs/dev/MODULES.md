@@ -12,7 +12,7 @@ merges without conflicts.
 | `crates/pyroid-core/src/<mod>/` | Pure-Rust kernels (`&str -> ...`). No PyO3, `#![forbid(unsafe_code)]`, unit tests + doctests. Add `pub mod <mod>;` to `crates/pyroid-core/src/lib.rs` (**registration line 1**). |
 | `crates/pyroid-py/src/<mod>.rs` | `#[pyfunction]` wrappers and `pub fn register(parent)`, which creates the native submodule `pyroid.<mod>`. Add `mod <mod>;` and `<mod>::register(m)?;` to `crates/pyroid-py/src/lib.rs` (**registration line 2**). |
 | `python/pyroid/<mod>.py` | Public module: re-exports the native functions (`from pyroid._pyroid import <mod> as _native`). Pure-Python glue only where it adds value. |
-| `python/pyroid/<mod>.pyi` | Hand-written stub: `@overload`s per input kind, Google-style docstrings (the API docs are built from these). |
+| `python/pyroid/<mod>.pyi` | Hand-written stub: `@overload`s per input kind, Google-style docstrings (the API docs are built from these; `docs/scripts/sync_docstrings.py` copies them into `<mod>.py` for `help()`, and a prek hook checks they match). |
 | `python/tests/test_<mod>*.py` | Tests against the installed wheel. |
 
 `python/pyroid/__init__.py` does not import submodules; users write `import pyroid.text`.
@@ -51,7 +51,7 @@ t.normalize_whitespace(docs, threads=4)  # at most 4 tasks at once on the shared
 - **`threads=`** (keyword-only, default `None`): `None` = the whole shared pool
   (sized by `PYROID_NUM_THREADS`, else rayon's default); `n` = at most `n` tasks at once;
   `1` = run on the calling thread. The pool is built on first use and rebuilt in a
-  forked child. Batches of ≤ 64 docs always run on the calling thread.
+  forked child. Tasks hold at least 64 docs, so batches of < 128 docs run on the calling thread.
 - **`pyroid.Column`**: zero-dependency result type; `len()`, `.type`, `.name` (carried over
   from the input field), `.null_count`, `.num_chunks`, `.to_pylist()`,
   `__arrow_c_stream__`, `__arrow_c_array__` (concatenates chunks). pyarrow is never
@@ -82,8 +82,8 @@ t.normalize_whitespace(docs, threads=4)  # at most 4 tasks at once on the shared
   as the Thai and Japanese tokenizers, calls it when it reads it). Never write a version warning
   by hand: the helper is the only source of **`pyroid.VersionMismatchWarning`** (a
   `UserWarning`), once per process per library, at the first frame outside pyroid, with one
-  message shape. It never imports the incumbent, and imports `importlib.metadata` only when the
-  incumbent is importable. Callers that pick the release themselves import the module inside
+  message shape. It never imports the incumbent, and reads an importable incumbent's version
+  from its `.dist-info` (`importlib.metadata`, about 25 ms to import, only as a fallback). Callers that pick the release themselves import the module inside
   `_versions.follow_installed("<module>")`; a new `pyroid.patch()` target needs nothing more
   than its module's check, because `patch()` imports the module. The table in
   `docs/compatibility.md` ("Installed versions") lists every check. Warnings about results

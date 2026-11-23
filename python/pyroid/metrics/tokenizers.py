@@ -33,18 +33,43 @@ class Tokenizer(abc.ABC):
 
 
 class DefaultTokenizer(Tokenizer):
-    """Default tokenizer which tokenizes on whitespace."""
+    """Default tokenizer which tokenizes on whitespace (rouge-score's).
+
+    Example:
+        ```python
+        from pyroid.metrics import tokenizers
+
+        tokenizers.DefaultTokenizer(use_stemmer=True).tokenize("the friends had a meeting")
+        # ['the', 'friend', 'had', 'a', 'meet']
+        ```
+    """
 
     def __init__(self, use_stemmer: bool = False) -> None:
         """Constructor for DefaultTokenizer.
 
         Args:
-          use_stemmer: boolean, indicating whether Porter stemmer should be used to
-          strip word suffixes to improve matching.
+            use_stemmer: boolean, indicating whether Porter stemmer should be used to
+                strip word suffixes to improve matching.
         """
         # rouge-score keeps nltk's PorterStemmer() here, or None; pyroid stems in Rust.
         self._use_stemmer = bool(use_stemmer)
 
     def tokenize(self, text: Any) -> list[str]:
-        """rouge-score's tokens of ``text`` (stemmed if ``use_stemmer``)."""
+        """rouge-score's tokens of ``text``.
+
+        ``text.lower()``, then every run of characters other than ``a-z0-9``
+        separates tokens (Unicode lowercasing included: ``"İ"`` gives ``"i"``,
+        the Kelvin sign gives ``"k"``). With ``use_stemmer``, tokens longer
+        than 3 are Porter-stemmed. ``bytes`` and other objects with a
+        ``lower()`` method are handled as rouge-score handles them.
+
+        Args:
+            text: The text to tokenize.
+
+        Returns:
+            The tokens, in order.
+
+        Raises:
+            UnicodeEncodeError: ``text`` holds a lone surrogate.
+        """
         return _tokens(text, self._use_stemmer)

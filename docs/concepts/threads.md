@@ -26,10 +26,14 @@ The pool is created on first use, not at import. Its size comes from the `PYROID
 environment variable, read once at that point. If it is unset, rayon's default applies
 (`RAYON_NUM_THREADS`, else the number of available CPUs).
 
-Results never depend on `threads`: the same input gives the same output for every value. Batches
-of 64 documents or fewer run on the calling thread, where the pool's overhead would cost more
-than it saves. Worker threads do not survive `fork()`, so the pool is rebuilt in a forked child
-process.
+Results never depend on `threads`: the same input gives the same output for every value.
+
+Each task on the pool holds at least 64 documents, because handing out a task costs more than a
+few documents' work. So a batch of `n` documents uses at most `n / 64` threads: fewer than 128
+documents run on the calling thread whatever `threads` says, 128 documents use two threads, and
+eight threads need 512 documents or more. To spread a smaller batch of slow documents over
+cores, call pyroid from several Python threads instead, on a free-threaded build. Worker threads do not survive `fork()`, so the pool is rebuilt
+in a forked child process.
 
 ## The GIL
 
@@ -37,6 +41,13 @@ While a batch runs, pyroid releases the GIL (the Rust kernels never call into Py
 Python threads keep running, and a pyroid call in one thread doesn't block another thread's
 pyroid call. Converting the results back to Python objects needs the interpreter, so it happens
 on the calling thread after the batch.
+
+A call on a single `str` releases the GIL only for long documents (4 KiB and more) or slow
+kernels (fastText, the filters, MinHash). When another Python thread is busy, getting the GIL
+back after such a call can take up to the interpreter's switch interval
+(`sys.getswitchinterval()`, 5 ms by default), which is far longer than the call itself. So with
+busy threads around, one call per document can be many times slower than alone; a batch call
+releases and retakes the GIL once for the whole batch.
 
 ## Free-threaded Python
 

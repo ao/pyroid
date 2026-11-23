@@ -879,7 +879,7 @@ def _after_warnings(args: dict[str, Any], fast: Any) -> dict[str, Any]:
     return {**args, "fast": fast, "no_fallback": False}
 
 
-def extract(
+def extract(  # noqa: D417  # **kwargs is compat="1.11.0" only, and the stub is 2.3.1's
     filecontent: Any,
     url: str | None = None,
     record_id: str | None = None,
@@ -910,11 +910,59 @@ def extract(
     compat: str = TRAFILATURA_VERSION,
     **kwargs: Any,
 ) -> str | None:
-    """Extract the main text of an HTML page, like ``trafilatura.extract``.
+    """Extract the main text of an HTML page: ``trafilatura.extract``.
 
-    See ``trafilatura.pyi`` for the arguments; ``compat`` selects the trafilatura release to
-    reproduce. Its signature is shown as 2.3.1's: other keywords raise 2.3.1's TypeError, and
-    with ``compat="1.11.0"`` they are ignored, as 1.11.0's ``extract(**kwargs)`` does.
+    >>> page = "<html><body><article><p>" + "Some words. " * 30 + "</p></article></body></html>"
+    >>> extract(page)[:22]
+    'Some words. Some words'
+
+    The arguments, defaults and results are trafilatura 2.3.1's; ``compat`` is pyroid's only
+    addition. The text is NFC-normalized, as trafilatura's.
+
+    Args:
+        filecontent: The page: a str, or bytes (UTF-8, else delegated). lxml trees and response
+            objects are delegated; other types give ``None``, as in trafilatura.
+        url: The page's URL (only metadata and links use it).
+        record_id: An ID for the metadata (not part of the txt output).
+        fast: Skip the readability and jusText comparison.
+        no_fallback: Deprecated alias of ``fast`` (trafilatura's ``DeprecationWarning``).
+        favor_precision: Prefer less text but correct extraction.
+        favor_recall: Prefer more text when unsure (it wins over ``favor_precision``).
+        include_comments: Extract comments along with the main text.
+        output_format: ``"txt"`` runs natively; the others are delegated.
+        tei_validation: Only used for ``"xmltei"`` (delegated).
+        target_language: Delegated (language detection).
+        include_tables: Take ``<table>`` content into account.
+        include_images: Delegated.
+        include_formatting: ``True`` is delegated.
+        include_links: Delegated.
+        deduplicate: ``True`` deduplicates through the module cache :data:`LRU_TEST`; an
+            :class:`LRUCache` scopes it to that cache (a trafilatura ``LRUCache`` is delegated).
+        date_extraction_params: htmldate parameters (only used with metadata).
+        with_metadata: Delegated.
+        only_with_metadata: Delegated.
+        max_tree_size: Deprecated: a truthy value raises trafilatura's ``ValueError``.
+        url_blacklist: A non-empty set is delegated (it needs metadata).
+        author_blacklist: A non-empty set is delegated (it needs metadata).
+        settingsfile: A settings.cfg file overriding the defaults.
+        prune_xpath: Delegated.
+        config: A ``ConfigParser`` with trafilatura's settings (default :data:`DEFAULT_CONFIG`).
+        options: A ``trafilatura.settings.Extractor`` is delegated; other values are ignored, as
+            in trafilatura.
+        compat: The trafilatura release to reproduce, one of :data:`TRAFILATURA_VERSIONS`
+            (``"1.11.0"``: see the module docstring for how its arguments differ).
+
+    Returns:
+        The text, or ``None`` where trafilatura returns ``None`` (nothing extracted, too short,
+        a duplicate, not HTML).
+
+    Raises:
+        ValueError: ``max_tree_size``; a page with a ``&#`` reference of more than 4300 digits
+            (CPython's ``int()`` limit, as in trafilatura); a ``compat`` pyroid does not
+            reproduce.
+        AttributeError: An unknown ``output_format`` (from trafilatura, delegated).
+        pyroid.PyroidError: The call needs trafilatura (see the module docstring), and it is
+            not installed, or is another version than ``compat``.
     """
     args = {k: v for k, v in locals().items() if k not in ("compat", "kwargs")}
     mode = _mode(compat)
@@ -1316,9 +1364,19 @@ def bare_extraction(
     *,
     compat: str = TRAFILATURA_VERSION,
 ) -> Any:
-    """Extract a page's text and trees, like ``trafilatura.bare_extraction``.
+    """Extract a page's text and trees: ``trafilatura.bare_extraction``.
 
-    See ``trafilatura.pyi`` for the arguments and the :class:`Document` returned.
+    The arguments are :func:`extract`'s, with ``output_format="python"`` (native; the others
+    are delegated) and the deprecated ``as_dict`` (``DeprecationWarning``, then
+    ``Document.as_dict()``).
+
+    Returns:
+        A :class:`Document` (``text`` is not NFC-normalized, as in trafilatura), its
+        ``as_dict()`` with ``as_dict=True``, or ``None``.
+
+    Raises:
+        ValueError: As for :func:`extract`.
+        pyroid.PyroidError: As for :func:`extract`.
     """
     args = {k: v for k, v in locals().items() if k != "compat"}
     mode = _mode(compat)
@@ -1374,9 +1432,14 @@ def extract_with_metadata(
     *,
     compat: str = TRAFILATURA_VERSION,
 ) -> Any:
-    """``trafilatura.extract_with_metadata``: always delegated to trafilatura (metadata).
+    """``trafilatura.extract_with_metadata``: always delegated (metadata extraction).
 
-    trafilatura 1.11.0 has no such function: ``compat="1.11.0"`` raises ValueError.
+    Returns trafilatura's ``Document``. Needs trafilatura 2.3.1; a pyroid :class:`LRUCache`
+    passed as ``deduplicate`` is lent to it and updated.
+
+    Raises:
+        pyroid.PyroidError: trafilatura is not installed, or is another version.
+        ValueError: ``compat="1.11.0"`` (trafilatura 1.11.0 has no ``extract_with_metadata``).
     """
     args = {k: v for k, v in locals().items() if k != "compat"}
     mode = _mode(compat, (TRAFILATURA_VERSION,))
@@ -1493,7 +1556,34 @@ def extract_batch(
     compat: str = TRAFILATURA_VERSION,
     **kwargs: Any,
 ) -> Any:
-    """:func:`extract` over many pages, on pyroid's thread pool; see ``trafilatura.pyi``."""
+    """:func:`extract` over many pages, in order, on pyroid's thread pool without the GIL.
+
+    Not part of trafilatura. ``extract_batch(htmls, **kwargs)`` equals
+    ``[extract(html, **kwargs) for html in htmls]``, including with ``deduplicate``: with
+    ``deduplicate=False`` the pages are extracted in parallel; with ``True`` or an
+    :class:`LRUCache` they are parsed in parallel and extracted one after the other in order
+    through the cache, so the result (and the cache afterwards) is the loop's. A batch that holds
+    a non-str item (``bytes``, as :func:`extract` takes them), or uses a delegated option or
+    ``no_fallback``, runs that loop.
+
+    Args:
+        htmls: A list or tuple of pages (str), an Arrow string array/column (pyarrow, polars,
+            ``pyroid.Column``, ...), or one page (str).
+        threads: ``None`` uses pyroid's whole thread pool; ``n`` at most ``n`` tasks at once;
+            ``1`` the calling thread only.
+        compat: As for :func:`extract`.
+        **kwargs: :func:`extract`'s keyword arguments.
+
+    Returns:
+        A list (also for a tuple or Arrow input) with one text or ``None`` per page, in order;
+        ``None`` for each Arrow null. For a str, ``extract(htmls, **kwargs)``.
+
+    Raises:
+        ValueError: As for :func:`extract` (the note names the page); ``threads <= 0``.
+        TypeError: An argument :func:`extract` does not take.
+        pyroid.InputError: ``htmls`` is not a str, list, tuple or Arrow string column, or a list
+            or tuple holds ``None`` (the message gives its index).
+    """
     from pyroid._pyroid import InputError
 
     if isinstance(htmls, str):

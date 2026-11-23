@@ -209,6 +209,101 @@ where
     }
 }
 
+/// [`transform`] for a kernel that can fail on a document. Each failure is
+/// handed, in input order and on the calling thread (attached), to
+/// `on_err(py, doc, text, e)`, which returns the document's result instead (for
+/// example from the incumbent library) or the exception to raise. `doc` is the
+/// index in the list or tuple, or the row counted across the chunks of the
+/// Arrow input (0 for a single `str`); `text` is the document.
+pub fn try_transform<'py, F, E, G>(
+    py: Python<'py>,
+    input: TextInput,
+    threads_arg: Option<Threads>,
+    f: F,
+    mut on_err: G,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    F: for<'a> Fn(&'a str) -> Result<Cow<'a, str>, E> + Sync,
+    E: Send,
+    G: FnMut(Python<'py>, usize, &str, E) -> PyResult<String>,
+{
+    let threads = threads(threads_arg);
+    match &input {
+        TextInput::Str(s) => {
+            let out = if s.len() < SINGLE_DOC_DETACH_BYTES {
+                f(s)
+            } else {
+                py.detach(|| f(s))
+            };
+            let out = match out {
+                Ok(out) => out,
+                Err(e) => Cow::Owned(on_err(py, 0, s, e)?),
+            };
+            Ok(result_str(py, s, &out).into_any())
+        }
+        TextInput::List(docs) | TextInput::Tuple(docs) => {
+            let outs = py
+                .detach(|| par::map(docs.len(), threads, |i| f(&docs[i])))
+                .map_err(|e| BatchError::from(e).into_pyerr(py))?;
+            let mut items = Vec::with_capacity(outs.len());
+            for (i, (d, o)) in docs.iter().zip(outs).enumerate() {
+                let o = match o {
+                    Ok(o) => o,
+                    Err(e) => Cow::Owned(on_err(py, i, d, e)?),
+                };
+                items.push(result_str(py, d, &o));
+            }
+            Ok(match input {
+                TextInput::List(_) => PyList::new(py, items)?.into_any(),
+                _ => PyTuple::new(py, items)?.into_any(),
+            })
+        }
+        TextInput::Arrow(strings) => {
+            let large = strings.field.ty == StrType::LargeUtf8;
+            let mut chunks = Vec::with_capacity(strings.chunks.len());
+            let mut base = 0;
+            // Chunk by chunk: the kernel detached, the failures attached, the buffers detached.
+            for (c, chunk) in strings.chunks.iter().enumerate() {
+                let outs = py
+                    .detach(|| map_chunk(chunk, c, threads, &f))
+                    .map_err(|e| e.into_pyerr(py))?;
+                let mut vals = Vec::with_capacity(outs.len());
+                for (row, out) in outs.into_iter().enumerate() {
+                    vals.push(match out {
+                        None => None,
+                        Some(Ok(s)) => Some(s),
+                        Some(Err(e)) => {
+                            // A failed row is valid UTF-8 (map_chunk checked it).
+                            let text = chunk.get(row).and_then(Result::ok).unwrap_or_default();
+                            Some(Cow::Owned(on_err(py, base + row, text, e)?))
+                        }
+                    });
+                }
+                base += chunk.len();
+                let built = py
+                    .detach(|| -> Result<Vec<Chunk>, BatchError> {
+                        Ok(if large {
+                            vec![Chunk::LargeUtf8(StringBuffers::build(&vals, threads)?)]
+                        } else {
+                            StringBuffers::build_split(&vals, threads)?
+                                .into_iter()
+                                .map(Chunk::Utf8)
+                                .collect()
+                        })
+                    })
+                    .map_err(|e| e.into_pyerr(py))?;
+                chunks.extend(built);
+            }
+            let ty = if large {
+                ColumnType::LargeUtf8
+            } else {
+                ColumnType::Utf8
+            };
+            Ok(Bound::new(py, Column::new(ty, &strings.field.name, chunks))?.into_any())
+        }
+    }
+}
+
 /// Apply a per-document predicate; returns a mask in the caller's kind.
 pub fn predicate<F>(
     py: Python<'_>,
