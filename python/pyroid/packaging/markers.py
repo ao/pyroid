@@ -53,10 +53,7 @@ else:
 
 
 def default_environment() -> Environment:
-    """Return the default marker environment for the current Python process.
-
-    A fresh copy of the environment computed once per process (as packaging 26.3 caches it).
-    """
+    """A copy of the current process's marker environment (computed once per process)."""
     return cast("Environment", dict(_cached_default_environment()))
 
 

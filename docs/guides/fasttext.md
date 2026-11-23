@@ -11,9 +11,19 @@ as built in fasttext-predict 0.9.2.4 ([parity](../compatibility.md#fasttext)).
     platform, so the last bits of a probability depend on the architecture and the C library.
     On Linux (glibc) and Windows x64, pyroid matches fasttext-predict bit for bit. On macOS,
     fasttext-predict's clang build rounds its dot products differently: the largest difference
-    on GitHub's runners was 1.91e-6, on a test model with weights scaled by 20. Different builds
-    of fastText itself differ too: fasttext-numpy2-wheel's probabilities were up to 1.79e-7 away
-    from fasttext-predict's on the same inputs.
+    on GitHub's runners was 1.91e-6, on a test model with weights scaled by 20.
+
+    Builds of fastText itself differ too. On aarch64, upstream fastText 0.9.2's wheels
+    (fasttext-numpy2-wheel, which `datatrove[processing]` installs, and fasttext-wheel) fuse
+    every multiply-add of the output layer, and fasttext-predict fuses fewer, so their
+    probabilities differ by about one float32 ulp (up to 1.2e-7 on lid.176). pyroid follows the
+    build that is installed: with fasttext-numpy2-wheel or fasttext-wheel installed it computes
+    as they do, otherwise as fasttext-predict does. Both were bit-identical over 5,000 FineWeb
+    lines with lid.176.bin and lid.176.ftz, k=1 and k=-1 (EC2 c8g.16xlarge, aarch64). The
+    datatrove drop-in's `LanguageFilter` always computes as fasttext-numpy2-wheel does, as stock
+    datatrove does. `pyroid clean` always computes as fasttext-predict does: for lid.176.bin
+    that gives the same bits on aarch64 as every build gives on x86-64, so its output is the same
+    on every platform. On x86-64 the builds give the same results.
 
 Besides speed, there are two reasons to switch. pyroid has wheels for CPython 3.11–3.15 and
 free-threaded 3.14t/3.15t on Linux (glibc and musl), macOS and Windows, so it installs without a
@@ -38,6 +48,18 @@ $ pip install "pyroid[fasttext]"     # pyroid.fasttext returns numpy arrays
  model.predict("Bonjour tout le monde", k=2)
  # (('__label__fr', '__label__en'), array([9.94570732e-01, 8.63876310e-04]))
 ```
+
+`lid.176.bin` (125 MiB) and the compressed `lid.176.ftz` (916 KiB) are fastText's language-ID
+models for 176 languages, published on the
+[fastText site](https://fasttext.cc/docs/en/language-identification.html) (CC BY-SA 3.0):
+
+```console
+$ curl -LO https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin
+$ curl -LO https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz
+```
+
+`pyroid clean` and `pyroid langid` download `lid.176.bin` themselves on first use
+([details](cli.md#the-language-id-model)).
 
 The inference methods of fastText's `_FastText` are there, with the same results:
 `predict`, `get_sentence_vector`, `get_word_vector`, `get_input_vector`, `get_words`,
@@ -120,6 +142,12 @@ These are deliberate, or harmless for real models (from the module's tests and d
   standard library may order exact ties differently.
 - `get_subwords` returns int64 ids even when empty (fastText gives float64 when every n-gram is
   pruned).
+- The return types are the `fasttext` package's, not fasttext-predict's, which differ:
+  fasttext-predict 0.9.2.4's `predict(text)` gives the probabilities as a tuple of floats (pyroid
+  and `fasttext`: a float64 array), and its `predict(lines)` returns only the labels, so
+  `labels, probs = model.predict(lines)` fails there unless there are exactly two lines. pyroid
+  gives `(labels, probabilities)` for every line, as `fasttext` does. fasttext-predict has no
+  `get_sentence_vector`.
 
 pyroid never delegates to fastText, so it never emits `FallbackWarning`.
 

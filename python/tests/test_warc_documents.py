@@ -345,6 +345,20 @@ def test_random_documents_match_datatrove(
     check(data, tmp_path, gz=layout != "plain")
 
 
+def _same_but_says_what_to_install(
+    got: list[tuple[Any, ...]], want: list[tuple[Any, ...]], dist: str
+) -> None:
+    """The same events as datatrove's, but the ImportError says what installs the module.
+
+    It was datatrove's bare "No module named 'cchardet'", which names neither pyroid[warc]
+    nor the distribution (faust-cchardet).
+    """
+    assert len(got) == len(want)
+    assert got[0][:2] == ("exc", "ModuleNotFoundError")
+    assert got[0][2].endswith(f"pip install 'pyroid[warc]' (or pip install {dist})"), got[0]
+    assert got[1:] == want[1:]
+
+
 def test_missing_cchardet_raises_at_the_first_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -354,7 +368,8 @@ def test_missing_cchardet_raises_at_the_first_record(
     monkeypatch.setitem(sys.modules, "cchardet", None)  # import raises ImportError
     want = reference(path, False)
     assert want[0][:2] in {("exc", "ImportError"), ("exc", "ModuleNotFoundError")}
-    assert candidate(lambda: pw.iter_documents(path)) == want
+    got = candidate(lambda: pw.iter_documents(path))
+    _same_but_says_what_to_install(got, want, "faust-cchardet")
     # No record, no import: an empty file reads without error in both.
     empty = tmp_path / "empty.warc"
     empty.write_bytes(b"")
@@ -373,7 +388,8 @@ def test_missing_magic_raises_at_the_first_record(
     monkeypatch.setitem(sys.modules, "magic", None)
     want = reference(path, True)
     assert want[0][:2] in {("exc", "ImportError"), ("exc", "ModuleNotFoundError")}
-    assert candidate(lambda: pw.iter_documents(path)) == want
+    got = candidate(lambda: pw.iter_documents(path))
+    _same_but_says_what_to_install(got, want, "python-magic")
 
 
 def test_compression_arguments(tmp_path: Path) -> None:

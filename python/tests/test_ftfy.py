@@ -201,6 +201,21 @@ def test_str_subclass_gives_exact_str() -> None:
             assert type(candidate.fix_and_explain(S(text), **kwargs).text) is str
 
 
+def test_fix_encoding_returns_an_unchanged_str_subclass_itself() -> None:
+    # ftfy.fix_encoding hands back the object it was given when nothing changes (unlike
+    # fix_text, which joins its segments into a new str).
+    class S(str):
+        pass
+
+    for text in ("plain", "café", "lone \udc00"):
+        s = S(text)
+        assert ftfy.fix_encoding(s) is s
+        assert candidate.fix_encoding(s) is s
+        assert candidate.fix_encoding_and_explain(s).text is s
+    s = S("â€œ")
+    assert type(candidate.fix_encoding(s)) is type(ftfy.fix_encoding(s)) is str
+
+
 DELEGATING_CALLS: list[tuple[str, Any]] = [
     ("fix_text max_decode_length", lambda: candidate.fix_text("abc", max_decode_length=5.0)),
     ("fix_text normalization", lambda: candidate.fix_text("x", normalization="nfc")),

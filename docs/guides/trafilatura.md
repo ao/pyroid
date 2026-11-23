@@ -66,13 +66,14 @@ says which:
 - `target_language` and `prune_xpath`;
 - `options=` a `trafilatura.settings.Extractor`, and `deduplicate=` a
   `trafilatura.deduplication.LRUCache`;
-- an lxml tree or an HTTP response as input, and bytes that are compressed or not UTF-8;
+- an lxml tree as input, and bytes that are compressed or not UTF-8 (an HTTP response's `data`
+  is read natively, as trafilatura's `load_html` reads it);
 - a negative size setting in `config`, and a `sys.set_int_max_str_digits()` limit other than 4300.
 
 ```python
 trafilatura.extract(html, output_format="xml")  # trafilatura's XML, and:
-# FallbackWarning: pyroid.trafilatura.extract: output_format='xml' is not supported by the Rust
-# port; delegating to trafilatura 2.3.1 (slow path). This warning is shown once.
+# FallbackWarning: pyroid.trafilatura.extract: the Rust port does not handle output_format='xml';
+# delegating to trafilatura 2.3.1 (slow path). This warning is shown once.
 ```
 
 A pyroid `LRUCache` (or the module cache, for `deduplicate=True`) is lent to a delegated call, so
@@ -96,7 +97,10 @@ cache.maxsize, len(cache.cache)  # cache.cache is a read-only copy of the entrie
 `LRUCache` has trafilatura's methods (`get`, `put`, `increment`, `clear`) and is always true. It
 is safe to share between threads: an extraction holds it for the whole page, so extractions
 through one cache run one at a time. It pickles and copies with its entries. Keys are str without
-lone surrogates.
+lone surrogates, and values are ints (the counts deduplication stores): `put("a", 1.5)` raises
+`TypeError`, where trafilatura's stores anything. It is trafilatura 2.3.1's class in both modes:
+with `compat="1.11.0"`, `maxsize` must be at least 1 (trafilatura 1.11.0 accepts 0 and -1), and
+unlike 1.11.0's, it has `increment` and pickles.
 
 ## Many pages: `extract_batch`
 
@@ -142,7 +146,9 @@ pyroid reproduces one combination of releases per mode, selected with `compat=`:
 The second row is what a fresh `pip install 'datatrove[processing]==0.10.1'` resolves.
 `pyroid.trafilatura.TRAFILATURA_VERSIONS` lists the modes, `REPRODUCED_VERSIONS` the versions
 behind each, and `DEFAULT_CONFIGS` each release's settings.cfg. Another version of trafilatura or
-lxml can extract different text from the same page.
+lxml can extract different text from the same page. With a trafilatura other than 2.3.1 installed,
+`import pyroid.trafilatura` emits one `pyroid.VersionMismatchWarning`; for 1.11.0 it says to pass
+`compat="1.11.0"` ([Installed versions](../compatibility.md#installed-versions)).
 
 lxml 6.1.3's Windows wheels bundle libxml2 2.11.9, whose HTML parser builds different trees for
 some pages (it drops `&#0;`, for one), so Trafilatura itself extracts some pages differently on
@@ -258,10 +264,10 @@ too). Everything else comes from the installed trafilatura. The mode follows the
 release: with 1.11.0 installed the shim's functions are 1.11.0's (its `extract` takes
 `**kwargs` and has no `fast`, its `bare_extraction` returns a dict by default), with 2.3.1 they
 are 2.3.1's. Either way they have exactly the installed trafilatura's signatures, without
-`compat`, and `config` defaults to its `DEFAULT_CONFIG`. With another release installed, a
-`PatchWarning` says that the patched functions give trafilatura 2.3.1's results. datatrove's own `Trafilatura` step
-does `from trafilatura import extract` in its child process, so a patch made before the pipeline
-starts (or `pyroid run -p trafilatura`) reaches it. See [`pyroid.patch()`](patch.md).
+`compat`, and `config` defaults to its `DEFAULT_CONFIG`. With another release installed, the
+patched functions give trafilatura 2.3.1's results, and a `pyroid.VersionMismatchWarning` says so.
+datatrove's own `Trafilatura` step does `from trafilatura import extract` in its child process, so a
+patch made before the pipeline starts (or `pyroid run -p trafilatura`) reaches it. See [`pyroid.patch()`](patch.md).
 
 ## Differences from trafilatura
 
@@ -323,7 +329,9 @@ stops at about 1.5×. A datatrove pipeline gets its parallelism from running one
 Trafilatura, language ID, the quality filters, MinHash dedup, PII) on 8 WARC files of
 CC-MAIN-2026-39 (171,595 HTML records), as stock datatrove with trafilatura 1.11.0, with
 pyroid's drop-in steps in datatrove's executor, and as a native pyroid chain. AWS EC2
-c7i.4xlarge (Intel Xeon Platinum 8488C), CPython 3.13.18, 8 workers on 8 cores or 1 worker:
+c7i.4xlarge (Intel Xeon Platinum 8488C), CPython 3.13.18, 8 workers on 8 cores or 1 worker, on
+2026-11-09 (the [later run](../benchmarks.md#with-pyroids-warc-reader) with pyroid's WARC reader
+too is the one the home page quotes):
 
 | Run | 8 workers | 1 worker |
 |---|---:|---:|

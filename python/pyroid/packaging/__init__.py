@@ -11,6 +11,7 @@ versions.
 
 from __future__ import annotations
 
+from pyroid import _versions
 from pyroid._pyroid import packaging as _native
 from pyroid.packaging import _compat, markers, requirements, specifiers, utils, version
 
@@ -20,6 +21,7 @@ _restore = _compat._restore
 #: The packaging release whose behaviour this module reproduces.
 PACKAGING_VERSION = "26.3"
 __version__ = PACKAGING_VERSION
+_versions.check(__name__, "packaging", f"packaging=={PACKAGING_VERSION}")
 
 #: The packaging submodules pyroid ports (``pyroid.patch("packaging")`` without packaging installed
 #: provides shims for these).

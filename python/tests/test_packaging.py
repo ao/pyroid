@@ -424,6 +424,7 @@ def test_batch_threads_agree() -> None:
         )
 
 
+@pytest.mark.thread_unsafe(reason="reload() takes the module out of sys.modules for a moment")
 def test_no_warning_on_import() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")

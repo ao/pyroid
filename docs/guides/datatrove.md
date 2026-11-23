@@ -64,7 +64,9 @@ native APIs of every step are in
 The drop-ins need fewer packages than datatrove's steps. The filters, MinHash and sentence dedup
 need no spaCy for the languages pyroid tokenizes ([below](#languages)). No step needs ftfy,
 trafilatura or `fasttext-numpy2-wheel`, and `LanguageFilter` needs no `fasteners` when
-`model_path` is given. Without trafilatura installed, `Trafilatura` runs the 2.3.1 mode; pass
+`model_path` is given. `LanguageFilter` computes `language_score` as fasttext-numpy2-wheel does
+(what `datatrove[processing]` installs), so it is bit-identical to stock datatrove's on aarch64
+too, whichever fastText build is installed. Without trafilatura installed, `Trafilatura` runs the 2.3.1 mode; pass
 `compat="1.11.0"` to match a stock `datatrove[processing]` install.
 `URLFilter` needs tldextract and fasteners, as datatrove's does.
 
@@ -238,8 +240,9 @@ Also:
 - The steps' timing statistics are per batch, not per document. `WarcReader` times each
   document, including the reading of the records before it, plus once per file for the records
   after the last document (datatrove times each record's `process_record`).
-- With a datatrove other than 0.10.1 installed, importing the module gives one `RuntimeWarning`:
-  the steps reproduce 0.10.1's decisions.
+- With a datatrove other than 0.10.1 installed, importing the module gives one
+  `pyroid.VersionMismatchWarning`: the steps reproduce 0.10.1's decisions
+  ([Installed versions](../compatibility.md#installed-versions)).
 - datatrove's quirks are reproduced, not fixed. For instance, sentence dedup's stage 1 strips
   sentences while stage 3 doesn't, so window indices can shift, and a blank `URLFilter` list
   entry drops every URL without a registered domain.
@@ -316,7 +319,8 @@ From WARC files, with `Trafilatura` in the chain, a c7i.4xlarge ran the pipeline
 (171,595 HTML records) in 89.4 s at 8 workers with pyroid's steps, `WarcReader` included, against
 848.3 s for stock datatrove (9.5×); with datatrove's reader the first run took 104 s against 871 s
 (8.4×), and 776 s against 6,976 s at 1 worker (9.0×). Trafilatura was 5,543 of stock datatrove's
-6,759 CPU seconds at 8 workers ([details](../benchmarks.md#from-warc-files-datatroves-fineweb-pipeline)).
+6,759 CPU seconds at 8 workers in that first run, and 5,403 of 6,593 in the second
+([details](../benchmarks.md#from-warc-files-datatroves-fineweb-pipeline)).
 
 
 The rest of this section comes from earlier runs on a Docker/OrbStack VM on Apple Silicon,

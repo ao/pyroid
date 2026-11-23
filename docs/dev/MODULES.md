@@ -12,7 +12,7 @@ merges without conflicts.
 | `crates/pyroid-core/src/<mod>/` | Pure-Rust kernels (`&str -> ...`). No PyO3, `#![forbid(unsafe_code)]`, unit tests + doctests. Add `pub mod <mod>;` to `crates/pyroid-core/src/lib.rs` (**registration line 1**). |
 | `crates/pyroid-py/src/<mod>.rs` | `#[pyfunction]` wrappers and `pub fn register(parent)`, which creates the native submodule `pyroid.<mod>`. Add `mod <mod>;` and `<mod>::register(m)?;` to `crates/pyroid-py/src/lib.rs` (**registration line 2**). |
 | `python/pyroid/<mod>.py` | Public module: re-exports the native functions (`from pyroid._pyroid import <mod> as _native`). Pure-Python glue only where it adds value. |
-| `python/pyroid/<mod>.pyi` | Hand-written stub: `@overload`s per input kind, Google-style docstrings (the API docs are built from these). |
+| `python/pyroid/<mod>.pyi` | Hand-written stub: `@overload`s per input kind, Google-style docstrings (the API docs are built from these; `docs/scripts/sync_docstrings.py` copies them into `<mod>.py` for `help()`, and a prek hook checks they match). |
 | `python/tests/test_<mod>*.py` | Tests against the installed wheel. |
 
 `python/pyroid/__init__.py` does not import submodules; users write `import pyroid.text`.
@@ -51,7 +51,7 @@ t.normalize_whitespace(docs, threads=4)  # at most 4 tasks at once on the shared
 - **`threads=`** (keyword-only, default `None`): `None` = the whole shared pool
   (sized by `PYROID_NUM_THREADS`, else rayon's default); `n` = at most `n` tasks at once;
   `1` = run on the calling thread. The pool is built on first use and rebuilt in a
-  forked child. Batches of ≤ 64 docs always run on the calling thread.
+  forked child. Tasks hold at least 64 docs, so batches of < 128 docs run on the calling thread.
 - **`pyroid.Column`**: zero-dependency result type; `len()`, `.type`, `.name` (carried over
   from the input field), `.null_count`, `.num_chunks`, `.to_pylist()`,
   `__arrow_c_stream__`, `__arrow_c_array__` (concatenates chunks). pyarrow is never
@@ -73,11 +73,22 @@ t.normalize_whitespace(docs, threads=4)  # at most 4 tasks at once on the shared
   returns the incumbent's result and emits **`pyroid.FallbackWarning`** (a `RuntimeWarning`):
   that class exactly, never a bare `RuntimeWarning` or a subclass, once per process for each
   function and reason. If the incumbent is not installed, raise `PyroidError` instead.
-  Warnings about results (an incumbent at another version, missing Unicode tables) stay
-  plain `RuntimeWarning`s. Users silence the slow-path notice with
+  Users silence the slow-path notice with
   `warnings.simplefilter("ignore", pyroid.FallbackWarning)`; the parity suites ignore it,
-  because it says which code path ran, not what the result is. Any other warning must match
-  the incumbent's.
+  because it says which code path ran, not what the result is.
+- **Installed versions**: a module that reproduces a release of a library calls
+  `pyroid._versions.check(__name__, "<module>", "<dist>==<version>")` once at import, for each
+  library whose behaviour it reproduces (code that reads the incumbent's data at run time, such
+  as the Thai and Japanese tokenizers, calls it when it reads it). Never write a version warning
+  by hand: the helper is the only source of **`pyroid.VersionMismatchWarning`** (a
+  `UserWarning`), once per process per library, at the first frame outside pyroid, with one
+  message shape. It never imports the incumbent, and reads an importable incumbent's version
+  from its `.dist-info` (`importlib.metadata`, about 25 ms to import, only as a fallback). Callers that pick the release themselves import the module inside
+  `_versions.follow_installed("<module>")`; a new `pyroid.patch()` target needs nothing more
+  than its module's check, because `patch()` imports the module. The table in
+  `docs/compatibility.md` ("Installed versions") lists every check. Warnings about results
+  that are not about versions (missing Unicode tables) stay plain `RuntimeWarning`s; any other
+  warning must match the incumbent's.
 
 ## Rust side
 
@@ -109,6 +120,23 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
 - `batch::map_values(py, &x, threads, f) -> Vec<Option<R>>` for anything else (scores,
   hashes, labels); build the output yourself (e.g. `PyList::new` from an exact-size
   iterator, a numpy array via `PyArray1::from_vec`).
+- Detach for a batch with `crate::interrupt::detach_batch(py, || ...)`, not `py.detach`: its
+  `par` maps check for Ctrl-C every 100 ms and return `PoolError::interrupted()`, which
+  `crate::interrupt::pool_error` turns into the signal handler's exception (convert every
+  `PoolError` with it). A `par` map that updates shared state in place goes in
+  `par::uninterruptible`; long loops of your own take a `par::Stop` (`map_tasks_stoppable`).
+- Containers the caller owns can change while you read them (another thread on a free-threaded
+  build; on any build, Python code you run in between). PyO3's dict and set iterators panic when
+  that happens, and so does `PyList::new(py, list.iter())` when the list shrinks. Read a
+  caller's list with `crate::input::list_items` (one atomic `PyList_AsTuple`; `TextInput` does),
+  a converted list argument as `crate::input::Items<T>` instead of `Vec<T>`, and iterate a dict
+  or set only after one copy (`dict.copy()`, `frozenset(s)` in the glue). Never `len()` then
+  `get_item(i)`. `python/tests/test_concurrent_mutation.py` has one stress test per module.
+- Long serial loops of your own (a union-find, zeroing a big buffer) check for Ctrl-C with a
+  `par::Ticker` (`tick()` per item) and return `PoolError::interrupted()`.
+- Call `crate::np::ready(py, ...)` before a batch whose result holds numpy arrays (or before the
+  first array or array type check): rust-numpy's first lookup of NumPy's C API runs Python code
+  inside an `expect`, so a Ctrl-C there would be a `PanicException`.
 - Kernels are **pure Rust**: they run detached on rayon workers and must never call
   Python (clippy's `disallowed-methods` bans `Python::attach`). Anything that needs the
   interpreter happens before or after the batch, on the calling thread.
@@ -155,4 +183,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
 - [ ] Wheel built in Docker; pytest green on the installed wheel on 3.11, 3.12, 3.14t,
       3.15, 3.15t; `sys._is_gil_enabled()` stays False on 3.14t/3.15t.
 - [ ] Every delegation to the incumbent warns once with `pyroid.FallbackWarning`.
+- [ ] The module calls `pyroid._versions.check` at import for each library it reproduces, has
+      a case in `python/tests/test_version_mismatch.py` and a row in `docs/compatibility.md`.
 - [ ] Speed numbers only from the harness (`bench/`), labelled with the machine.

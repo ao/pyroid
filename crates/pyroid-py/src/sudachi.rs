@@ -3,7 +3,9 @@
 //! pyroid does not ship the dictionary (about 200 MB). It reads the one the
 //! user installed with `pip install sudachidict-core`, the package SudachiPy
 //! (and so datatrove) loads by default, or the file `PYROID_SUDACHI_DICT`
-//! names. The package is located without importing it or SudachiPy.
+//! names. The package is located without importing it or SudachiPy. A
+//! package other than sudachidict-core 20261015 (the release parity was
+//! checked with) gets one `VersionMismatchWarning` when it is read.
 
 use std::path::PathBuf;
 
@@ -56,14 +58,26 @@ pub(crate) fn prepare(py: Python<'_>, language: &str) -> PyResult<()> {
     };
     let shown = path.display().to_string();
     py.detach(|| sudachi::ja::install(&path))
-        .map(|_| ())
         .map_err(|e| match e {
             DicError::Io(e) => {
                 PyOSError::new_err(format!("cannot read the Sudachi dictionary {shown}: {e}"))
             }
             DicError::Format(m) => PyValueError::new_err(format!("{shown}: {m}")),
-        })
+        })?;
+    // The package's own dictionary: check its version (a PYROID_SUDACHI_DICT file has none).
+    if std::env::var_os("PYROID_SUDACHI_DICT").is_none() {
+        crate::errors::check_version(
+            py,
+            "pyroid's Japanese tokenizer",
+            "sudachidict_core",
+            &format!("sudachidict-core=={SUDACHIDICT_VERSION}"),
+        )?;
+    }
+    Ok(())
 }
+
+/// The sudachidict-core release parity was checked with (newer ones load too).
+const SUDACHIDICT_VERSION: &str = "20261015";
 
 /// The extra hint for a language pyroid could tokenize with a dictionary.
 pub(crate) fn hint(language: &str) -> &'static str {

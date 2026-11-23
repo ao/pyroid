@@ -249,25 +249,158 @@
       "source": "the parity/ metrics suite, run on 2026-11-06 (the x86_64 rows: bench/results/aws-c7i.4xlarge/2026-11-06/parity)"
     },
     "json_repair": {
-      "reference": "json_repair 0.64.5",
+      "reference": "json_repair 0.64.9",
       "rule": "the same returned string or object, the same repair log, the same exception",
       "checks": [
         {
-          "name": "Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 672 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file",
-          "same": 184403,
+          "name": "Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 821 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file",
+          "same": 184552,
           "diff": 0
         },
         {
-          "name": "Parity suite on free-threaded CPython 3.15t (the 149 schema= replays skipped: no jsonschema)",
-          "same": 184254,
+          "name": "Parity suite on free-threaded CPython 3.14t (the 166 schema= replays skipped: no jsonschema)",
+          "same": 184386,
+          "diff": 0
+        },
+        {
+          "name": "Parity suite on free-threaded CPython 3.15t (the 166 schema= replays skipped: no jsonschema)",
+          "same": 184386,
           "diff": 0
         }
       ],
       "notes": [
         "Skipped by design: 4 calls whose result depends on the hash seed and 3 that depend on the recursion limit.",
-        "The Rust kernel also replays 451 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k."
+        "The Rust kernel also replays 490 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k."
       ],
-      "source": "the parity/ json_repair suite, run on 2026-11-06"
+      "source": "the parity/ json_repair suite on an EC2 c8g.16xlarge devbox, run on 2026-11-14"
+    },
+    "tabulate": {
+      "reference": "tabulate 0.10.0 (live, with wcwidth 0.9.4, numpy 2.5.4 and pandas 3.1.1)",
+      "rule": "the same text and result type (JupyterHTMLStr for html), the same exception type and message, the same warnings",
+      "checks": [
+        {
+          "name": "tabulate 0.10.0's own test suite, unmodified, through pyroid.patch(\"tabulate\") (its CLI tests run python -m pyroid.tabulate; 1 test tabulate skips itself), CPython 3.12",
+          "same": 318,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis: random tables (ints of any size, floats with inf/nan/-0.0, numeric strings, bools, None, bytes, Decimal, dates, numpy scalars, float32 and float16 DataFrames, multiline, wide and ANSI text, lone surrogates, separators in the first or second column) in every input shape and format, with random options (alignments that are not strings too) and module settings; warnings compared by where they point too, CPython 3.12",
+          "same": 20000,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis: float and int format specs (invalid ones too) and strings near tabulate's number grammar (Unicode digits and spaces, ANSI codes), CPython 3.12",
+          "same": 40000,
+          "diff": 0
+        },
+        {
+          "name": "48 public CSV files (seaborn-data, vega-datasets, datahub; first 3,000 rows) in every format and 5 option sets, and DataFrame.to_markdown() in 6 variants, CPython 3.12",
+          "same": 2784,
+          "diff": 0
+        },
+        {
+          "name": "The same four checks on free-threaded CPython 3.14t",
+          "same": 63102,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "A test checks that the Python pyroid keeps from tabulate (normalisation, text wrapping, the per-cell fallbacks, the format callables, and the tabulate() that runs the calls the Rust code does not take) is still tabulate 0.10.0's code, AST for AST.",
+        "The Rust number formatter's integer fast paths are checked against Rust's own formatter (which matches CPython's) on 900,000 doubles, for 1 to 17 significant digits and 0 to 6 decimals."
+      ],
+      "source": "python/tests/test_tabulate_upstream.py, test_tabulate_parity.py and test_tabulate_corpus.py on the EC2 devbox, 2026-11-16"
+    },
+    "dateutil": {
+      "reference": "python-dateutil 4.0.0 and 2.9.0.post0 (parse is the same in both, and in 3.0.0, 2.9.0 and 2.8.2, whose parser code is 2.9.0.post0's; isoparse in each release's form)",
+      "rule": "the same datetime (value, type, fold), the same tzinfo type and repr, the same fuzzy tokens, the same exception type, message and __cause__ type, the same warnings",
+      "checks": [
+        {
+          "name": "python-dateutil 4.0.0's own test_parser.py and test_isoparser.py, run against dateutil and against pyroid: the same outcome for every test (815 passed, 15 xfailed)",
+          "same": 830,
+          "diff": 0
+        },
+        {
+          "name": "python-dateutil 2.9.0.post0's own test_parser.py and test_isoparser.py, the same way (798 passed, 15 xfailed)",
+          "same": 813,
+          "diff": 0
+        },
+        {
+          "name": "Parity suite on CPython 3.12 against python-dateutil 4.0.0, 21 checks: the upstream tests, 747 issue-tracker strings x 10 option sets and with their own keywords, isoparse of them, Hypothesis, parse_batch, 2,000 corpus strings per source x 3 option sets",
+          "same": 222675,
+          "diff": 0
+        },
+        {
+          "name": "The same suite against python-dateutil 2.9.0.post0",
+          "same": 222658,
+          "diff": 0
+        },
+        {
+          "name": "The same suite on free-threaded CPython 3.14t (GIL off), against python-dateutil 4.0.0",
+          "same": 222675,
+          "diff": 0
+        },
+        {
+          "name": "Real strings: all 9,246,745 corpus strings from 35 public sources (system and web server logs, email and HTTP headers, CSV date columns, CLDR date formats in 760 locales) x (parse under 3 option sets, isoparse), against python-dateutil 4.0.0 with TZ=UTC, Europe/London and America/New_York, and against 2.9.0.post0",
+          "same": 147947920,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "Run on EC2 c8g.16xlarge (linux/aarch64), 2026-11-14 and 2026-11-15; the full-corpus run was repeated on 2026-11-15 with that day's fetch (9,243,790 strings: two live NYC exports had changed), again with no difference. The corpus is listed by URL and sha256 in parity/data/dateutil/corpus-manifest.json; the strings stay out of the repository.",
+        "python/tests/test_dateutil_parity.py also runs Hypothesis over date-like strings with lone surrogates, NUL and digits of other scripts, every keyword and default value (3,000 examples per run), and the cargo-fuzz target dateutil checks the kernel for panics."
+      ],
+      "source": "the parity/ dateutil suite and the full-corpus run, 2026-11-14 and 2026-11-15"
+    },
+    "jmespath": {
+      "reference": "jmespath 1.1.0",
+      "rule": "the same result (type, key order, float bits, and the same input objects where jmespath returns them), the same AST, the same exception class, message, args and attributes",
+      "checks": [
+        {
+          "name": "JMESPath compliance suite (jmespath.py 1.1.0's 16 files and its legacy literals, 917 cases), with plain dicts and with dict_cls=OrderedDict, CPython 3.12 and 3.14t",
+          "same": 3668,
+          "diff": 0
+        },
+        {
+          "name": "jmespath.py 1.1.0's own unit tests (test_lexer, test_parser, test_functions, test_search, test_custom_functions) run against pyroid.jmespath, CPython 3.12 and 3.14t",
+          "same": 144,
+          "diff": 0
+        },
+        {
+          "name": "Comparators on edge values (NaN, -0.0, inf, 2**53 + 1, 2**64, booleans, None, lone surrogates), 6 operators x 3 forms, CPython 3.12 and 3.14t",
+          "same": 20736,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis: grammar expressions (valid, mutated, random) over data with OrderedDict, list and dict subclasses, tuples, Decimal, objects with get, huge ints, NaN and surrogates; CPython 3.12 (200,000) and 3.14t (100,000)",
+          "same": 300000,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis with custom functions (pyroid's and jmespath's Functions subclasses, an overridden call_function, a replaced built-in); CPython 3.12 (100,000) and 3.14t (50,000)",
+          "same": 150000,
+          "diff": 0
+        },
+        {
+          "name": "Real queries: botocore 1.44.3's paginator and waiter expressions and AWS CLI examples (8,593 expressions), the AWS CLI user guide's and Ansible's json_query guide's examples, over generated and documented responses, CPython 3.12",
+          "same": 34498,
+          "diff": 0
+        },
+        {
+          "name": "The same, the 358-case sample in parity/data replayed by the tests, CPython 3.12 and 3.14t",
+          "same": 716,
+          "diff": 0
+        },
+        {
+          "name": "Nesting depth at which RecursionError is raised, 10 constructs, main thread, CPython 3.12 and 3.14t",
+          "same": 20,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "botocore 1.44.3's own paginator and waiter tests (tests/unit/test_paginate.py, test_waiters.py, tests/functional/test_paginate.py, test_paginator_config.py, test_waiter_config.py) pass with pyroid.patch(\"jmespath\"): 3,720 passed, as without it.",
+        "Each result comparison also compares the compiled AST (repr and ==) when the expression parses. The lexer and parser are fuzzed in Rust as well (fuzz/fuzz_targets/jmespath.rs, 4 million runs, no failure)."
+      ],
+      "source": "python/tests/test_jmespath_parity.py, bench/jmespath/parity_counts.py and bench/jmespath/real_queries.py, run on 2026-11-15 on the EC2 c8g.16xlarge devbox (linux/aarch64)"
     },
     "packaging": {
       "reference": "packaging 26.3",
@@ -421,6 +554,47 @@
         "Character classes: regex 2026.9.29's \\w, \\d and \\s and CPython 3.11 to 3.15's isupper / islower are dumped code point by code point; the rules hard-coded in Rust (regex's \\s, both engines' (?i) letters) are checked on each interpreter."
       ],
       "source": "the parity/ nltk suite, crates/pyroid-core/src/nltk/testdata/ replays and their large uncommitted recordings, run on 2026-11-09"
+    },
+    "difflib": {
+      "reference": "the running interpreter's difflib (CPython 3.11.18, 3.12.16, 3.13.18, 3.14.10, 3.15.2 and 3.14.10t)",
+      "rule": "the same ratios (float bits), matching blocks with their type, opcodes, b2j/bjunk/bpopular/fullbcount contents and key order, isjunk and linejunk calls, every line of text and HTML, and the same exceptions (type and message)",
+      "checks": [
+        {
+          "name": "CPython's Lib/test/test_difflib.py and its doctests (vendored per version), against pyroid.difflib and against the standard library under pyroid.patch(\"difflib\"), CPython 3.11, 3.12, 3.13, 3.14, 3.15 and 3.14t",
+          "same": 658,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis, SequenceMatcher and get_close_matches: str, bytes and lists of str, int, bytes and other types, junk functions that record their calls or raise, random operation orders on one matcher (caches, attributes, pickling, copies), find_longest_match bounds, subclasses; CPython 3.12 (60,000), 3.14 (60,000) and 3.14t (18,000)",
+          "same": 138000,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis, diff text: ndiff and restore, Differ subclasses, _mdiff, HtmlDiff (tab sizes, wrapping, context, junk functions), unified_diff and context_diff (n, lineterm, names with lone surrogates, color), diff_bytes; CPython 3.12 (60,000), 3.14 (60,000) and 3.14t (18,000)",
+          "same": 138000,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis, the standard library's difflib under pyroid.patch(\"difflib\") (a subclass made before the patch included); CPython 3.12 (10,000), 3.14 (10,000) and 3.14t (3,000)",
+          "same": 23000,
+          "diff": 0
+        },
+        {
+          "name": "Real source files: every *.py file of the standard library between consecutive CPython releases (3.11 to 3.15: 2,549 file pairs, 1,033 changed, 2.48 million lines) with unified_diff, context_diff, ndiff, ratio, get_opcodes and, up to 3,000 lines, HtmlDiff.make_table with and without context; CPython 3.12 and 3.14",
+          "same": 34902,
+          "diff": 0
+        },
+        {
+          "name": "Real names: 1,000 misspelled GeoNames place names and 1,000 SEC company names, scored against the originals with ratio_batch and looked up with get_close_matches among 20,000 names (n=3, cutoff 0.6 and n=10, cutoff 0.3); CPython 3.12 and 3.14",
+          "same": 12000,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "python/tests/test_difflib.py also checks that unittest's assertEqual diffs and pytest's assertion diffs (pytest under pyroid run -p difflib) are the same with and without the patch.",
+        "Two inputs on which CPython raises RecursionError get a diff from pyroid: long runs of similar lines in Differ on 3.11 to 3.13, and HtmlDiff wrapping a line into about 1,000 rows (see the guide's differences)."
+      ],
+      "source": "python/tests/test_difflib_cpython.py, python/tests/test_difflib_parity.py, bench/difflib/parity_counts.py and bench/difflib/real_data.py, run on 2026-11-16 on the EC2 c8g.16xlarge devbox (linux/aarch64)"
     },
     "nemo": {
       "reference": "NeMo Curator 1.4.0 on CPython 3.12 (pandas 3.1.1, regex 2026.11.9, ftfy 6.3.1, jieba 0.42.1, fasttext 0.9.3 built with g++ 12)",
@@ -606,6 +780,47 @@
         "python/tests/test_trafilatura*.py: 544 tests against trafilatura 2.3.1, and 395 against trafilatura 1.11.0 in its own environment, including the datatrove Trafilatura step against datatrove's own step, statistics included."
       ],
       "source": "the parity/ trafilatura suite in both modes (CPython 3.13, run on 2026-11-09), and parity/pyroid_parity/trafilatura_scale.py on AWS EC2 c7i.4xlarge (bench/results/aws-c7i.4xlarge/2026-11-09-warc/scale)"
+    },
+    "yaml": {
+      "reference": "PyYAML 6.0.3's pure-Python SafeLoader and SafeDumper",
+      "rule": "the same objects (types, key order, shared objects) or the same exception class, str() and fields; the same dumped text byte for byte",
+      "checks": [
+        {
+          "name": "Real-file corpus: 11,989 YAML files from 1,855 repositories and Hugging Face cards (GitHub Actions workflows, Kubernetes manifests, Helm charts, docker-compose and conda files, OpenAPI specs, mkdocs configs, model and dataset cards, files of 1 to 100 MB); safe_load_all of the bytes, str and file-object input of the 108 files that raise, and safe_dump_all under 6 option sets",
+          "same": 83490,
+          "diff": 0
+        },
+        {
+          "name": "yaml-test-suite data release 2022-01-17 (402 cases), the same checks",
+          "same": 2154,
+          "diff": 0
+        },
+        {
+          "name": "Mutation fuzzing: 689 seed documents (PyYAML's test data, the test suite) with random edits and splices, safe_load_all as str and bytes and safe_load, 16 processes for 4 minutes",
+          "same": 28258515,
+          "diff": 0
+        },
+        {
+          "name": "Emitter replay: event streams from PyYAML's parser, its dumpers and random generators, under every emitter option; the text, each write boundary and the error",
+          "same": 181660,
+          "diff": 0
+        },
+        {
+          "name": "Floats: safe_dump of random bit patterns and of values exactly between two shortest decimals",
+          "same": 900000,
+          "diff": 0
+        },
+        {
+          "name": "pytest test cases on CPython 3.12 (test_yaml_parity.py): PyYAML's test data (524 files as str, bytes and file objects read in pieces; dumps of 293 files under 6 option sets and both dumpers), the test suite's 706 files, reader errors at chunk boundaries, tagged edge cases, Hypothesis loads of mutated YAML and dumps of random data",
+          "same": 1581,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "RecursionError on deep nesting depends on sys.getrecursionlimit() and the caller's stack; pyroid matches PyYAML's depth within 3 levels.",
+        "CSafeLoader and CSafeDumper are not the reference; how they differ from SafeLoader and SafeDumper on the same data is listed in the guide."
+      ],
+      "source": "bench/yaml/check_oracle.py against bench/yaml/record_oracle.py's recordings, python/tests/test_yaml_parity.py, and the emitter fixture replay in crates/pyroid-core/src/yaml/emitter.rs, run on 2026-11-14 on an EC2 c8g.16xlarge (linux/aarch64)"
     }
   }
 }

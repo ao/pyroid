@@ -23,15 +23,19 @@ _PACKAGING_ITER_PARTS: Any = getattr(getattr(_compat._pr, "Requirement", None), 
 
 
 class Requirement:
-    """Parse a requirement.
+    """A parsed requirement (`name[extras] specifier ; marker`), as packaging 26.3's.
 
-    Parse a given requirement string into its parts, such as name, specifier, URL, and extras.
-    Raises InvalidRequirement on a badly-formed requirement string.
+    The attributes are writable, as packaging's are.
     """
 
     __slots__ = ("extras", "marker", "name", "specifier", "url")
 
     def __init__(self, requirement_string: str) -> None:
+        """Parse `requirement_string`.
+
+        Raises:
+            InvalidRequirement: The string is not a valid PEP 508 requirement.
+        """
         name, url, extras, specifier, marker = _parse(requirement_string)
         self.name: str = name
         self.url: str | None = url or None

@@ -49,7 +49,7 @@ def lid_ref(platform: str) -> str:
 
 # json_repair suite: the pinned version and the option sets every corpus / Hypothesis input is repaired under
 # (keyword arguments of ``repair_json``; ``ensure_ascii`` and ``indent`` are passed on to ``json.dumps``).
-JSON_REPAIR_VERSION = "0.64.5"
+JSON_REPAIR_VERSION = "0.64.9"
 JSON_REPAIR_OPTION_SETS: dict[str, dict[str, Any]] = {
     "default": {},
     "return_objects": {"return_objects": True},
@@ -59,6 +59,27 @@ JSON_REPAIR_OPTION_SETS: dict[str, dict[str, Any]] = {
     "stream_stable": {"stream_stable": True},
     "strict": {"strict": True},
     "indent2": {"indent": 2},
+}
+
+
+# dateutil suite: the option sets (keywords of ``parse``) every issue-tracker, Hypothesis and corpus string is
+# parsed under. ``default`` is a ``datetime`` argument tuple; ``tzinfos="names"`` is a dict of names to offsets,
+# a ``tzoffset`` and a ``TZ`` string (built in tests/test_dateutil.py).
+DATEUTIL_OPTION_SETS: dict[str, dict[str, Any]] = {
+    "default": {"default": (2003, 9, 25)},
+    "today": {},
+    "dayfirst": {"default": (2003, 9, 25), "dayfirst": True},
+    "yearfirst": {"default": (2003, 9, 25), "yearfirst": True},
+    "dayfirst_yearfirst": {"default": (2003, 9, 25), "dayfirst": True, "yearfirst": True},
+    "fuzzy": {"default": (2003, 9, 25), "fuzzy": True},
+    "fuzzy_with_tokens": {"default": (2003, 9, 25), "fuzzy_with_tokens": True},
+    "ignoretz": {"default": (2003, 9, 25), "ignoretz": True},
+    "tzinfos": {"default": (2003, 9, 25), "tzinfos": "names"},
+    "default_leap_end": {"default": (2024, 2, 29, 13, 14, 15, 161718)},
+}
+# The real-string corpus is large: three sets.
+DATEUTIL_CORPUS_OPTION_SETS = {
+    k: DATEUTIL_OPTION_SETS[k] for k in ("default", "dayfirst", "fuzzy_with_tokens")
 }
 
 

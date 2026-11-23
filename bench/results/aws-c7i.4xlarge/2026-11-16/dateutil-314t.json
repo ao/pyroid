@@ -1,0 +1,153 @@
+{
+ "machine": {
+  "python": "3.14.10",
+  "free_threaded": true,
+  "gil_enabled": false,
+  "platform": "Linux-6.18.62-127.179.amzn2023.x86_64-x86_64-with-glibc2.36",
+  "machine": "x86_64",
+  "cpu": "Intel(R) Xeon(R) Platinum 8488C",
+  "cpus": 16,
+  "loadavg": [
+   0.52294921875,
+   0.5615234375,
+   0.65283203125
+  ],
+  "python-dateutil": "2.9.0.post0",
+  "pyroid": "1.0.1",
+  "pyarrow": "26.0.1",
+  "pandas": null,
+  "ciso8601": null
+ },
+ "sources": {
+  "cldr_generated": 20000,
+  "cnb_fx_rates": 8825,
+  "commoncrawl_http_headers": 20000,
+  "covid19india": 1835,
+  "elastic_access_logs": 20000,
+  "enron_email": 20000,
+  "fte_misc": 14032,
+  "fte_russian_troll_tweets": 20000,
+  "fte_uber_2014": 20000,
+  "gharchive_events": 20000,
+  "gnu_mailing_lists": 20000,
+  "ita_http_traces": 20000,
+  "jhu_csse_covid": 3645,
+  "la_crime": 20000,
+  "loghub_android": 20000,
+  "loghub_apache": 16445,
+  "loghub_bgl": 20000,
+  "loghub_hadoop": 20000,
+  "loghub_hdfs": 20000,
+  "loghub_healthapp": 20000,
+  "loghub_linux": 15475,
+  "loghub_mac": 17899,
+  "loghub_openssh": 20000,
+  "loghub_openstack": 20000,
+  "loghub_proxifier": 5457,
+  "loghub_spark": 20000,
+  "loghub_thunderbird": 20000,
+  "loghub_windows": 15008,
+  "loghub_zookeeper": 20000,
+  "nyc_311": 20000,
+  "nyc_crashes": 20000,
+  "sbb_istdaten": 20000,
+  "tatoeba_sentences": 9722,
+  "tidytuesday_misc": 20000,
+  "usgs_earthquakes": 20000
+ },
+ "strings": 608343,
+ "rows": [
+  {
+   "name": "dateutil.parser.parse, loop",
+   "us_per_string": 26.11000270735418,
+   "strings": 608343
+  },
+  {
+   "name": "pyroid parse, loop",
+   "us_per_string": 1.9454731968637844,
+   "strings": 608343,
+   "speedup": 13.420900760516783
+  },
+  {
+   "name": "dateutil.parser.parse, 8 threads",
+   "us_per_string": 4.896121914774689,
+   "strings": 608343,
+   "speedup": 5.332792598273304
+  },
+  {
+   "name": "pyroid parse_batch, list, threads=1",
+   "us_per_string": 1.27318312859744,
+   "strings": 608343,
+   "speedup": 20.50765684911125
+  },
+  {
+   "name": "pyroid parse_batch, list, threads=8",
+   "us_per_string": 0.8456934837743091,
+   "strings": 608343,
+   "speedup": 30.87407341821517
+  },
+  {
+   "name": "pyroid parse_batch, list, threads=None",
+   "us_per_string": 0.71536278382403,
+   "strings": 608343,
+   "speedup": 36.49896709440354
+  },
+  {
+   "name": "pyroid parse_batch, Arrow, threads=1",
+   "us_per_string": 0.7254140608182167,
+   "strings": 608343,
+   "speedup": 35.9932404369222
+  },
+  {
+   "name": "pyroid parse_batch, Arrow, threads=8",
+   "us_per_string": 0.3367397422179768,
+   "strings": 608343,
+   "speedup": 77.53763347140881
+  },
+  {
+   "name": "pyroid parse_batch, Arrow, threads=None",
+   "us_per_string": 0.2678490456857959,
+   "strings": 608343,
+   "speedup": 97.4802902153435
+  },
+  {
+   "name": "dateutil.parser.isoparse, loop",
+   "us_per_string": 3.4417415230824977,
+   "strings": 126638
+  },
+  {
+   "name": "pyroid isoparse, loop",
+   "us_per_string": 0.6222104581542779,
+   "strings": 126638,
+   "speedup": 5.531474885992856
+  },
+  {
+   "name": "pyroid isoparse_batch, list, threads=1",
+   "us_per_string": 0.4831445853553798,
+   "strings": 126638,
+   "speedup": 7.123626399643711
+  },
+  {
+   "name": "pyroid isoparse_batch, list, threads=None",
+   "us_per_string": 0.41814502755740407,
+   "strings": 126638,
+   "speedup": 8.230975609556916
+  },
+  {
+   "name": "datetime.fromisoformat, loop (not dateutil's results)",
+   "us_per_string": 0.164006309320544,
+   "strings": 126638,
+   "speedup": 20.98542145934
+  }
+ ],
+ "gate": {
+  "compared": 734981,
+  "different": 0,
+  "examples": []
+ },
+ "loadavg_after": [
+  1.82958984375,
+  0.9150390625,
+  0.767578125
+ ]
+}

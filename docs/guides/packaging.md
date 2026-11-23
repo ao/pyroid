@@ -187,8 +187,9 @@ or use `pyroid run -p packaging`. pip uses its own vendored copy (`pip._vendor.p
 the patch does not touch.
 
 Importing pyroid never patches anything (pyroid's own build tooling uses packaging). With a
-packaging release other than 26.3 installed, the `PatchWarning` says so: the patched names give
-26.3's results, and the rest is the installed release's ([Versions](#versions)).
+packaging release other than 26.3 installed, `import pyroid.packaging` and the patch give one
+[`VersionMismatchWarning`](../compatibility.md#installed-versions): the patched names give 26.3's
+results, and the rest is the installed release's ([Versions](#versions)).
 
 ## Many versions at once {#batch}
 
@@ -266,13 +267,13 @@ sort the same in all of them. The rest differs:
 | 26.1, 26.2 | 171 each | 26.3's marker and requirement fixes: `UndefinedEnvironmentName`, a `KeyError` subclass, instead of a plain `KeyError`; `"X_Y" in extras`, and an `extra` literal inside parentheses, normalised at parse time; a trailing newline rejected; "Invalid quoted string" instead of a leaked `SyntaxError`; the `.*` suffix message; `is_normalized_name("a--b")` is `False`; wheel and sdist filenames with an empty name or bad tags rejected |
 
 pyroid reproduces 26.3 only. The 25.0 differences are real (a resolver built on 25.0 sees another
-pre-release policy), but 26.0 made them on purpose to follow PEP 440, and 26.3 is what a new
-install gets. Supporting 25.0 as well would take a second specifier engine and a second set of
-error messages. `pyroid.patch("packaging")` with another release installed says so in its
-`PatchWarning`; `import pyroid.packaging` warns about nothing unless the installed release's
-comparison key is one pyroid does not reproduce (rule 1 [above](#interop)). With a release older
-than 26 installed, pyroid's objects do not claim packaging's class (rule 2), because those
-releases' private attributes differ; they still compare and hash with its objects.
+pre-release policy), but 26.0 made them on purpose to follow PEP 440, and 26.3 is what a new install
+gets. Supporting 25.0 as well would take a second specifier engine and a second set of error
+messages. With another release installed, `import pyroid.packaging` and `pyroid.patch("packaging")`
+say so once with a `VersionMismatchWarning`, and a release whose comparison key pyroid does not
+reproduce gets a `RuntimeWarning` too (rule 1 [above](#interop)). With a release older than 26
+installed, pyroid's objects do not claim packaging's class (rule 2), because those releases' private
+attributes differ; they still compare and hash with its objects.
 
 ## Differences from packaging {#differences-from-packaging}
 

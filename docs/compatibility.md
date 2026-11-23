@@ -153,18 +153,77 @@ Reference: rouge-score 0.1.2 (with NLTK 3.10.4's Porter stemmer) and sacrebleu 2
 
 ### pyroid.json_repair {#json_repair}
 
-Reference: json_repair 0.64.5. Rule: the same returned string or object, the same repair log, the same exception.
+Reference: json_repair 0.64.9. Rule: the same returned string or object, the same repair log, the same exception.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
-| Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 672 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file | 184,403 | 184,403 | 0 |
-| Parity suite on free-threaded CPython 3.15t (the 149 schema= replays skipped: no jsonschema) | 184,254 | 184,254 | 0 |
-| **Total** | **368,657** | **368,657** | **0** |
+| Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 821 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file | 184,552 | 184,552 | 0 |
+| Parity suite on free-threaded CPython 3.14t (the 166 schema= replays skipped: no jsonschema) | 184,386 | 184,386 | 0 |
+| Parity suite on free-threaded CPython 3.15t (the 166 schema= replays skipped: no jsonschema) | 184,386 | 184,386 | 0 |
+| **Total** | **553,324** | **553,324** | **0** |
 
 - Skipped by design: 4 calls whose result depends on the hash seed and 3 that depend on the recursion limit.
-- The Rust kernel also replays 451 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k.
+- The Rust kernel also replays 490 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k.
 
-<small>Source: the parity/ json_repair suite, run on 2026-11-06.</small>
+<small>Source: the parity/ json_repair suite on an EC2 c8g.16xlarge devbox, run on 2026-11-14.</small>
+
+### pyroid.tabulate {#tabulate}
+
+Reference: tabulate 0.10.0 (live, with wcwidth 0.9.4, numpy 2.5.4 and pandas 3.1.1). Rule: the same text and result type (JupyterHTMLStr for html), the same exception type and message, the same warnings.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| tabulate 0.10.0's own test suite, unmodified, through pyroid.patch("tabulate") (its CLI tests run python -m pyroid.tabulate; 1 test tabulate skips itself), CPython 3.12 | 318 | 318 | 0 |
+| Hypothesis: random tables (ints of any size, floats with inf/nan/-0.0, numeric strings, bools, None, bytes, Decimal, dates, numpy scalars, float32 and float16 DataFrames, multiline, wide and ANSI text, lone surrogates, separators in the first or second column) in every input shape and format, with random options (alignments that are not strings too) and module settings; warnings compared by where they point too, CPython 3.12 | 20,000 | 20,000 | 0 |
+| Hypothesis: float and int format specs (invalid ones too) and strings near tabulate's number grammar (Unicode digits and spaces, ANSI codes), CPython 3.12 | 40,000 | 40,000 | 0 |
+| 48 public CSV files (seaborn-data, vega-datasets, datahub; first 3,000 rows) in every format and 5 option sets, and DataFrame.to_markdown() in 6 variants, CPython 3.12 | 2,784 | 2,784 | 0 |
+| The same four checks on free-threaded CPython 3.14t | 63,102 | 63,102 | 0 |
+| **Total** | **126,204** | **126,204** | **0** |
+
+- A test checks that the Python pyroid keeps from tabulate (normalisation, text wrapping, the per-cell fallbacks, the format callables, and the tabulate() that runs the calls the Rust code does not take) is still tabulate 0.10.0's code, AST for AST.
+- The Rust number formatter's integer fast paths are checked against Rust's own formatter (which matches CPython's) on 900,000 doubles, for 1 to 17 significant digits and 0 to 6 decimals.
+
+<small>Source: python/tests/test_tabulate_upstream.py, test_tabulate_parity.py and test_tabulate_corpus.py on the EC2 devbox, 2026-11-16.</small>
+
+### pyroid.dateutil {#dateutil}
+
+Reference: python-dateutil 4.0.0 and 2.9.0.post0 (parse is the same in both, and in 3.0.0, 2.9.0 and 2.8.2, whose parser code is 2.9.0.post0's; isoparse in each release's form). Rule: the same datetime (value, type, fold), the same tzinfo type and repr, the same fuzzy tokens, the same exception type, message and __cause__ type, the same warnings.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| python-dateutil 4.0.0's own test_parser.py and test_isoparser.py, run against dateutil and against pyroid: the same outcome for every test (815 passed, 15 xfailed) | 830 | 830 | 0 |
+| python-dateutil 2.9.0.post0's own test_parser.py and test_isoparser.py, the same way (798 passed, 15 xfailed) | 813 | 813 | 0 |
+| Parity suite on CPython 3.12 against python-dateutil 4.0.0, 21 checks: the upstream tests, 747 issue-tracker strings x 10 option sets and with their own keywords, isoparse of them, Hypothesis, parse_batch, 2,000 corpus strings per source x 3 option sets | 222,675 | 222,675 | 0 |
+| The same suite against python-dateutil 2.9.0.post0 | 222,658 | 222,658 | 0 |
+| The same suite on free-threaded CPython 3.14t (GIL off), against python-dateutil 4.0.0 | 222,675 | 222,675 | 0 |
+| Real strings: all 9,246,745 corpus strings from 35 public sources (system and web server logs, email and HTTP headers, CSV date columns, CLDR date formats in 760 locales) x (parse under 3 option sets, isoparse), against python-dateutil 4.0.0 with TZ=UTC, Europe/London and America/New_York, and against 2.9.0.post0 | 147,947,920 | 147,947,920 | 0 |
+| **Total** | **148,617,571** | **148,617,571** | **0** |
+
+- Run on EC2 c8g.16xlarge (linux/aarch64), 2026-11-14 and 2026-11-15; the full-corpus run was repeated on 2026-11-15 with that day's fetch (9,243,790 strings: two live NYC exports had changed), again with no difference. The corpus is listed by URL and sha256 in parity/data/dateutil/corpus-manifest.json; the strings stay out of the repository.
+- python/tests/test_dateutil_parity.py also runs Hypothesis over date-like strings with lone surrogates, NUL and digits of other scripts, every keyword and default value (3,000 examples per run), and the cargo-fuzz target dateutil checks the kernel for panics.
+
+<small>Source: the parity/ dateutil suite and the full-corpus run, 2026-11-14 and 2026-11-15.</small>
+
+### pyroid.jmespath {#jmespath}
+
+Reference: jmespath 1.1.0. Rule: the same result (type, key order, float bits, and the same input objects where jmespath returns them), the same AST, the same exception class, message, args and attributes.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| JMESPath compliance suite (jmespath.py 1.1.0's 16 files and its legacy literals, 917 cases), with plain dicts and with dict_cls=OrderedDict, CPython 3.12 and 3.14t | 3,668 | 3,668 | 0 |
+| jmespath.py 1.1.0's own unit tests (test_lexer, test_parser, test_functions, test_search, test_custom_functions) run against pyroid.jmespath, CPython 3.12 and 3.14t | 144 | 144 | 0 |
+| Comparators on edge values (NaN, -0.0, inf, 2**53 + 1, 2**64, booleans, None, lone surrogates), 6 operators x 3 forms, CPython 3.12 and 3.14t | 20,736 | 20,736 | 0 |
+| Hypothesis: grammar expressions (valid, mutated, random) over data with OrderedDict, list and dict subclasses, tuples, Decimal, objects with get, huge ints, NaN and surrogates; CPython 3.12 (200,000) and 3.14t (100,000) | 300,000 | 300,000 | 0 |
+| Hypothesis with custom functions (pyroid's and jmespath's Functions subclasses, an overridden call_function, a replaced built-in); CPython 3.12 (100,000) and 3.14t (50,000) | 150,000 | 150,000 | 0 |
+| Real queries: botocore 1.44.3's paginator and waiter expressions and AWS CLI examples (8,593 expressions), the AWS CLI user guide's and Ansible's json_query guide's examples, over generated and documented responses, CPython 3.12 | 34,498 | 34,498 | 0 |
+| The same, the 358-case sample in parity/data replayed by the tests, CPython 3.12 and 3.14t | 716 | 716 | 0 |
+| Nesting depth at which RecursionError is raised, 10 constructs, main thread, CPython 3.12 and 3.14t | 20 | 20 | 0 |
+| **Total** | **509,782** | **509,782** | **0** |
+
+- botocore 1.44.3's own paginator and waiter tests (tests/unit/test_paginate.py, test_waiters.py, tests/functional/test_paginate.py, test_paginator_config.py, test_waiter_config.py) pass with pyroid.patch("jmespath"): 3,720 passed, as without it.
+- Each result comparison also compares the compiled AST (repr and ==) when the expression parses. The lexer and parser are fuzzed in Rust as well (fuzz/fuzz_targets/jmespath.rs, 4 million runs, no failure).
+
+<small>Source: python/tests/test_jmespath_parity.py, bench/jmespath/parity_counts.py and bench/jmespath/real_queries.py, run on 2026-11-15 on the EC2 c8g.16xlarge devbox (linux/aarch64).</small>
 
 ### pyroid.packaging {#packaging}
 
@@ -263,6 +322,25 @@ Reference: NLTK 3.10.4 (with regex 2026.9.29). Rule: the same sentences, tokens 
 
 <small>Source: the parity/ nltk suite, crates/pyroid-core/src/nltk/testdata/ replays and their large uncommitted recordings, run on 2026-11-09.</small>
 
+### pyroid.difflib {#difflib}
+
+Reference: the running interpreter's difflib (CPython 3.11.18, 3.12.16, 3.13.18, 3.14.10, 3.15.2 and 3.14.10t). Rule: the same ratios (float bits), matching blocks with their type, opcodes, b2j/bjunk/bpopular/fullbcount contents and key order, isjunk and linejunk calls, every line of text and HTML, and the same exceptions (type and message).
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| CPython's Lib/test/test_difflib.py and its doctests (vendored per version), against pyroid.difflib and against the standard library under pyroid.patch("difflib"), CPython 3.11, 3.12, 3.13, 3.14, 3.15 and 3.14t | 658 | 658 | 0 |
+| Hypothesis, SequenceMatcher and get_close_matches: str, bytes and lists of str, int, bytes and other types, junk functions that record their calls or raise, random operation orders on one matcher (caches, attributes, pickling, copies), find_longest_match bounds, subclasses; CPython 3.12 (60,000), 3.14 (60,000) and 3.14t (18,000) | 138,000 | 138,000 | 0 |
+| Hypothesis, diff text: ndiff and restore, Differ subclasses, _mdiff, HtmlDiff (tab sizes, wrapping, context, junk functions), unified_diff and context_diff (n, lineterm, names with lone surrogates, color), diff_bytes; CPython 3.12 (60,000), 3.14 (60,000) and 3.14t (18,000) | 138,000 | 138,000 | 0 |
+| Hypothesis, the standard library's difflib under pyroid.patch("difflib") (a subclass made before the patch included); CPython 3.12 (10,000), 3.14 (10,000) and 3.14t (3,000) | 23,000 | 23,000 | 0 |
+| Real source files: every *.py file of the standard library between consecutive CPython releases (3.11 to 3.15: 2,549 file pairs, 1,033 changed, 2.48 million lines) with unified_diff, context_diff, ndiff, ratio, get_opcodes and, up to 3,000 lines, HtmlDiff.make_table with and without context; CPython 3.12 and 3.14 | 34,902 | 34,902 | 0 |
+| Real names: 1,000 misspelled GeoNames place names and 1,000 SEC company names, scored against the originals with ratio_batch and looked up with get_close_matches among 20,000 names (n=3, cutoff 0.6 and n=10, cutoff 0.3); CPython 3.12 and 3.14 | 12,000 | 12,000 | 0 |
+| **Total** | **346,560** | **346,560** | **0** |
+
+- python/tests/test_difflib.py also checks that unittest's assertEqual diffs and pytest's assertion diffs (pytest under pyroid run -p difflib) are the same with and without the patch.
+- Two inputs on which CPython raises RecursionError get a diff from pyroid: long runs of similar lines in Differ on 3.11 to 3.13, and HtmlDiff wrapping a line into about 1,000 rows (see the guide's differences).
+
+<small>Source: python/tests/test_difflib_cpython.py, python/tests/test_difflib_parity.py, bench/difflib/parity_counts.py and bench/difflib/real_data.py, run on 2026-11-16 on the EC2 c8g.16xlarge devbox (linux/aarch64).</small>
+
 ### pyroid.nemo and pyroid.integrations.nemo_curator {#nemo}
 
 Reference: NeMo Curator 1.4.0 on CPython 3.12 (pandas 3.1.1, regex 2026.11.9, ftfy 6.3.1, jieba 0.42.1, fasttext 0.9.3 built with g++ 12). Rule: the same score (repr and type), the same exception type and the same modified text; for the stages, the same DataFrame (values, dtypes, index).
@@ -313,6 +391,25 @@ Reference: datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.p
 - The newer drop-ins (PIIFormatter, C4BadWordsFilter, SymbolLinesFormatter, URLFilter, sentence dedup) are counted under pyroid.filters and pyroid.dedup above.
 
 <small>Source: python/tests/test_integrations_*.py, test_cli.py, test_cli_scale.py, test_dedup_files.py and examples/datatrove/verify.py (2026-11-06 to 2026-11-09), and bench/fineweb_warc.py on AWS EC2 c7i.4xlarge (bench/results/aws-c7i.4xlarge/2026-11-09-warc, 2026-11-09).</small>
+
+### pyroid.yaml {#yaml}
+
+Reference: PyYAML 6.0.3's pure-Python SafeLoader and SafeDumper. Rule: the same objects (types, key order, shared objects) or the same exception class, str() and fields; the same dumped text byte for byte.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| Real-file corpus: 11,989 YAML files from 1,855 repositories and Hugging Face cards (GitHub Actions workflows, Kubernetes manifests, Helm charts, docker-compose and conda files, OpenAPI specs, mkdocs configs, model and dataset cards, files of 1 to 100 MB); safe_load_all of the bytes, str and file-object input of the 108 files that raise, and safe_dump_all under 6 option sets | 83,490 | 83,490 | 0 |
+| yaml-test-suite data release 2022-01-17 (402 cases), the same checks | 2,154 | 2,154 | 0 |
+| Mutation fuzzing: 689 seed documents (PyYAML's test data, the test suite) with random edits and splices, safe_load_all as str and bytes and safe_load, 16 processes for 4 minutes | 28,258,515 | 28,258,515 | 0 |
+| Emitter replay: event streams from PyYAML's parser, its dumpers and random generators, under every emitter option; the text, each write boundary and the error | 181,660 | 181,660 | 0 |
+| Floats: safe_dump of random bit patterns and of values exactly between two shortest decimals | 900,000 | 900,000 | 0 |
+| pytest test cases on CPython 3.12 (test_yaml_parity.py): PyYAML's test data (524 files as str, bytes and file objects read in pieces; dumps of 293 files under 6 option sets and both dumpers), the test suite's 706 files, reader errors at chunk boundaries, tagged edge cases, Hypothesis loads of mutated YAML and dumps of random data | 1,581 | 1,581 | 0 |
+| **Total** | **29,427,400** | **29,427,400** | **0** |
+
+- RecursionError on deep nesting depends on sys.getrecursionlimit() and the caller's stack; pyroid matches PyYAML's depth within 3 levels.
+- CSafeLoader and CSafeDumper are not the reference; how they differ from SafeLoader and SafeDumper on the same data is listed in the guide.
+
+<small>Source: bench/yaml/check_oracle.py against bench/yaml/record_oracle.py's recordings, python/tests/test_yaml_parity.py, and the emitter fixture replay in crates/pyroid-core/src/yaml/emitter.rs, run on 2026-11-14 on an EC2 c8g.16xlarge (linux/aarch64).</small>
 <!-- parity:end -->
 
 ### pyroid.warc {#warc}
@@ -357,14 +454,64 @@ as returning an unchanged string as the same object.
 - [Differences from rouge-score](guides/metrics.md#differences-from-rouge-score) and
   [from sacrebleu](guides/metrics.md#differences-from-sacrebleu)
 - [Differences from json_repair](guides/json_repair.md#differences-from-json_repair)
+- [Differences from python-dateutil](guides/dateutil.md#differences-from-dateutil)
 - [Differences from packaging](guides/packaging.md#differences-from-packaging)
 - [Differences from datasketch](guides/datasketch.md#differences-from-datasketch)
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)
 - [Differences from warcio](guides/warc.md#differences-from-warcio)
+- [Differences from difflib](guides/difflib.md#differences-from-difflib)
+- [Differences from PyYAML](guides/yaml.md#differences-from-pyyaml), and how PyYAML's
+  `CSafeLoader` differs from the `SafeLoader` pyroid follows
+  ([list](guides/yaml.md#differences-between-csafeloader-and-safeloader))
 - [Differences from Unidecode](guides/translit.md#differences-from-unidecode).
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).
+
+## Installed versions
+
+Each module reproduces one release of its incumbent (trafilatura two), and the parity above is
+against that release. When another release is installed, the module still gives the reproduced
+release's results, and emits one
+[`pyroid.VersionMismatchWarning`](reference/pyroid.md#pyroid.VersionMismatchWarning) per process
+and library, at the line that imported it (or called `pyroid.patch(...)`):
+
+```text
+script.py:1: VersionMismatchWarning: pyroid.ftfy reproduces ftfy 6.3.1, but ftfy 6.2.0 is installed: results can differ from it. Install ftfy==6.3.1 to compare like for like (or silence this with warnings.simplefilter("ignore", pyroid.VersionMismatchWarning)).
+```
+
+The check reads the installed distribution's metadata and never imports the library. Without
+the library it costs one `importlib.util.find_spec` call; a checkout without metadata is not
+checked. Each library is checked once per process, by whichever module asks first, and
+`pyroid run` warns once per process tree.
+
+| Library | Release reproduced | Checked by |
+|---|---|---|
+| ftfy | ftfy 6.3.1 | `import pyroid.ftfy`, `pyroid.patch("ftfy")` |
+| fastText | fasttext-predict 0.9.2.4, or fasttext-numpy2-wheel 0.9.2 and fasttext-wheel 0.9.2 when one of them is installed; fasttext 0.9.3 gives the same results | `import pyroid.fasttext`, `pyroid.patch("fasttext")` |
+| datatrove | datatrove 0.10.1 | `import pyroid.filters`, `pyroid.dedup`, `pyroid.warc` or `pyroid.integrations.datatrove` |
+| PyThaiNLP | pythainlp 5.4.0 | the Thai tokenizer, when it reads the installed package's word list and model |
+| SudachiDict | sudachidict-core 20261015 | the Japanese tokenizer, when it reads the installed package's dictionary |
+| tldextract | tldextract 5.4.0 | `pyroid.filters.URLFilter`, when it loads tldextract |
+| anyascii | anyascii 0.3.3 | `import pyroid.translit`, `pyroid.patch("anyascii")` |
+| rouge-score | rouge-score 0.1.2 | `import pyroid.metrics.rouge_scorer` (and its `scoring`, `tokenizers` and `tokenize`) |
+| NLTK | nltk 3.10.4 | `import pyroid.nltk`, `pyroid.patch("nltk")`; `pyroid.metrics.rouge_scorer` for its Porter stemmer |
+| sacrebleu | sacrebleu 2.6.0 | `import pyroid.metrics.sacrebleu` |
+| json_repair | json-repair 0.64.9 | `import pyroid.json_repair` |
+| PyYAML | pyyaml 6.0.3; 6.0, 6.0.1 and 6.0.2 give the same results | `import pyroid.yaml`, `pyroid.patch("yaml")` |
+| tabulate | tabulate 0.10.0 | `import pyroid.tabulate`, `pyroid.patch("tabulate")` |
+| python-dateutil | python-dateutil 4.0.0; 3.0.0, 2.9.0.post0, 2.9.0 and 2.8.2 give the same results (`isoparse` follows the installed release) | `import pyroid.dateutil.parser`, `pyroid.patch("dateutil")` |
+| jmespath | jmespath 1.1.0 | `import pyroid.jmespath`, `pyroid.patch("jmespath")` |
+| packaging | packaging 26.3 | `import pyroid.packaging`, `pyroid.patch("packaging")` |
+| datasketch | datasketch 2.0.0 | `import pyroid.datasketch`, `pyroid.patch("datasketch")` |
+| jieba | jieba 0.42.1 | `import pyroid.jieba` |
+| Trafilatura | trafilatura 2.3.1, and 1.11.0 with `compat="1.11.0"` | `import pyroid.trafilatura`, `pyroid.patch("trafilatura")` |
+| warcio | warcio 1.8.2 | `import pyroid.warc`, `pyroid.patch("warcio")` |
+| NeMo Curator | nemo-curator 1.4.0 | `import pyroid.nemo` or `pyroid.integrations.nemo_curator`, `pyroid.patch("nemo_curator")` |
+
+With trafilatura 1.11.0 installed, `import pyroid.trafilatura` says to pass `compat="1.11.0"`.
+`pyroid.patch("trafilatura")`, datatrove's `Trafilatura` step and the FineWeb recipe choose the
+release themselves, so they warn only about a release pyroid does not reproduce.
 
 ## Interpreters and Unicode versions
 

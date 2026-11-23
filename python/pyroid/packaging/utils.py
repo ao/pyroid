@@ -70,11 +70,7 @@ _canonicalize_str = _native.canonicalize_str
 
 
 def canonicalize_name(name: str, *, validate: bool = False) -> NormalizedName:
-    """Normalize a Python package or extra name (PEP 503).
-
-    Args:
-        name: The name to normalize.
-        validate: Check that `name` is a valid distribution name first.
+    """Normalise a project or extra name (PEP 503).
 
     Raises:
         InvalidName: `validate` is true and `name` is not a valid distribution name.
@@ -90,12 +86,12 @@ def canonicalize_name(name: str, *, validate: bool = False) -> NormalizedName:
 
 
 def is_normalized_name(name: str) -> bool:
-    """Whether `name` is a normalized project name."""
+    """Whether `name` is a normalised project name."""
     return _normalized_regex.fullmatch(name) is not None
 
 
 def canonicalize_version(version: Version | str, *, strip_trailing_zero: bool = True) -> str:
-    """Return a canonical form of a version as a string (invalid versions unchanged)."""
+    """The canonical form of a version (an invalid version string comes back unchanged)."""
     return _native.canonicalize_version(version, strip_trailing_zero)
 
 
@@ -104,7 +100,7 @@ def parse_wheel_filename(
     *,
     validate_order: bool = False,
 ) -> tuple[NormalizedName, Version, BuildTag, frozenset[Any]]:
-    """Parse a wheel filename into (name, version, build number, tags).
+    """`(name, version, build tag, tags)` of a wheel filename (packaging's `Tag` objects).
 
     Raises:
         InvalidWheelFilename: The filename does not follow the wheel specification.
@@ -154,7 +150,7 @@ def parse_wheel_filename(
 
 
 def parse_sdist_filename(filename: str) -> tuple[NormalizedName, Version]:
-    """Parse an sdist filename into (name, version).
+    """`(name, version)` of an sdist filename.
 
     Raises:
         InvalidSdistFilename: The filename is not a valid sdist filename.

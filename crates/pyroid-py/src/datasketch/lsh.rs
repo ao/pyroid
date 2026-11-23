@@ -100,7 +100,7 @@ fn capacity_error(e: CapacityError) -> PyErr {
 }
 
 fn pool_error(e: par::PoolError) -> PyErr {
-    PyroidError::new_err(e.to_string())
+    crate::interrupt::pool_error(&e)
 }
 
 fn corrupt() -> PyErr {
@@ -269,6 +269,8 @@ fn new_state<C>(py: Python<'_>, core: C) -> Mutex<State<C>> {
 
 /// Rebuild the key map of a state read with `from_bytes` (ids `0..n`).
 fn restore_keys(py: Python<'_>, objs: &Bound<'_, PyList>, n: usize) -> PyResult<KeyMap> {
+    // The keys' `__eq__`/`__hash__` run while the map is built: read the list once.
+    let objs = crate::input::list_items(objs);
     if objs.len() != n {
         return Err(PyValueError::new_err(format!(
             "invalid pickled index state: {} keys for {n} ids",
@@ -451,13 +453,18 @@ fn signature(
         return Ok(None);
     }
     let arr = hv.cast::<PyUntypedArray>()?;
-    if arr.ndim() < min_ndim.max(1) || !arr.is_c_contiguous() || product(arr.shape()).is_none() {
+    // The shape is read once: another thread may reshape the caller's array
+    // in place (`a.shape = ...`) meanwhile. The values must then fill it.
+    let shape = arr.shape().to_vec();
+    let Some(len) = product(&shape) else {
+        return Ok(None);
+    };
+    if shape.len() < min_ndim.max(1) || !arr.is_c_contiguous() {
         return Ok(None);
     }
-    Ok(values_of(arr).map(|values| Signature {
-        values,
-        shape: arr.shape().to_vec(),
-    }))
+    Ok(values_of(arr)
+        .filter(|values| with_values!(values, v => v.len()) == len)
+        .map(|values| Signature { values, shape }))
 }
 
 /// The band keys a `slow` callback returned (a list of bytes).
@@ -549,7 +556,7 @@ impl LshNative {
         t: par::Threads,
     ) -> PyResult<Vec<Vec<BandKey>>> {
         let bands = self.bands(self.num_tables);
-        py.detach(|| {
+        crate::interrupt::detach_batch(py, || {
             par::map(items.len(), t, |j| match &items[j] {
                 Hs::Python(hs) => hs.clone(),
                 Hs::Native(sig) => sig.band_keys(bands.expect("native band keys need r")),
@@ -633,7 +640,7 @@ impl LshNative {
     {
         let st = lock(py, &self.state)?;
         let core = &st.core;
-        let found = py.detach(|| queries(core)).map_err(pool_error)?;
+        let found = crate::interrupt::detach_batch(py, || queries(core)).map_err(pool_error)?;
         let lists = found
             .iter()
             .map(|ids| PyList::new(py, st.objs(py, ids)?))
@@ -794,8 +801,7 @@ impl LshNative {
         }
         let t = self::threads(threads);
         let hss = match self.bands(self.num_tables) {
-            Some(bands) => py
-                .detach(|| sig.band_keys_many(bands, t))
+            Some(bands) => crate::interrupt::detach_batch(py, || sig.band_keys_many(bands, t))
                 .map_err(pool_error)?,
             None => return Err(PyValueError::new_err("this index has no integer band size")),
         };
@@ -1206,6 +1212,16 @@ impl ForestNative {
             None => Ok(None),
             Some(hs) => bytes_list(py, hs).map(Some),
         }
+    }
+
+    /// `sorted_hashtables[table] = keys`, restoring a pickle datasketch made.
+    fn set_sorted(&self, py: Python<'_>, table: usize, keys: Vec<PyBackedBytes>) -> PyResult<()> {
+        self.check_table(table)?;
+        let keys: Vec<&[u8]> = keys.iter().map(|k| &**k).collect();
+        lock(py, &self.state)?
+            .core
+            .set_sorted(table, &keys)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// `forest.keys[key] = hs`.

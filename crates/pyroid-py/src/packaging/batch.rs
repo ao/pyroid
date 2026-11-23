@@ -2,9 +2,10 @@
 // contributors; modified.
 //! Batch helpers: `parse_batch`, `sort_versions`, `contains_batch`, `filter_batch`.
 //!
-//! Strings are parsed on the shared pool (detached), a chunk at a time, with a signal check
-//! between chunks (Ctrl-C stops a long batch); everything that needs Python (other objects,
-//! digit runs that `int()` may reject, the result objects) happens on the calling thread.
+//! Strings are parsed on the shared pool a chunk at a time, under
+//! `crate::interrupt::detach_batch` (Ctrl-C stops a chunk between items), with a signal check
+//! between chunks for the attached part. Everything that needs Python (other objects, digit runs
+//! that `int()` may reject, the result objects) happens on the calling thread.
 
 use pyo3::exceptions::PyValueError;
 use pyo3::intern;
@@ -23,7 +24,7 @@ use crate::arrow::{Chunk, Column, ColumnType};
 use crate::errors::with_note;
 use crate::input::{TextInput, Threads, ThreadsArg, text_arg};
 
-/// Items parsed per detach: between chunks the batch checks for Ctrl-C.
+/// Items parsed per detached step: a batch holds at most one chunk of parsed versions.
 const CHUNK: usize = 1 << 16;
 
 /// Below this many items a chunk is parsed on the calling thread: waking the pool and freeing
@@ -297,8 +298,10 @@ fn parse_chunk(
     threads: par::Threads,
 ) -> PyResult<Vec<Option<Parsed>>> {
     let threads = pool_for(texts.len(), threads);
-    py.detach(|| par::map(texts.len(), threads, |k| texts[k].map(parse_text)))
-        .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))
+    crate::interrupt::detach_batch(py, || {
+        par::map(texts.len(), threads, |k| texts[k].map(parse_text))
+    })
+    .map_err(|e| crate::interrupt::pool_error(&e))
 }
 
 /// Sort versions by PEP 440 order (``sorted(versions, key=Version)``, stable).
@@ -375,13 +378,12 @@ fn sorted_order(
         .collect();
     let mut runs: Vec<Vec<usize>> = Vec::with_capacity(bounds.len());
     for group in bounds.chunks(at_once) {
-        let sorted = py
-            .detach(|| {
-                par::map_tasks(group, threads, |&r| {
-                    pyroid_core::packaging::sort_run(keys, r, reverse)
-                })
+        let sorted = crate::interrupt::detach_batch(py, || {
+            par::map_tasks(group, threads, |&r| {
+                pyroid_core::packaging::sort_run(keys, r, reverse)
             })
-            .map_err(pool_err)?;
+        })
+        .map_err(pool_err)?;
         runs.extend(sorted);
         py.check_signals()?;
     }
@@ -389,15 +391,14 @@ fn sorted_order(
         let mut next: Vec<Vec<usize>> = Vec::with_capacity(runs.len().div_ceil(2));
         let pairs = runs.chunks(2).collect::<Vec<_>>();
         for group in pairs.chunks(at_once) {
-            let merged = py
-                .detach(|| {
-                    par::map_tasks(group, threads, |pair| match pair {
-                        [l, r] => pyroid_core::packaging::merge_runs(keys, l, r, reverse),
-                        [l] => l.clone(),
-                        _ => Vec::new(),
-                    })
+            let merged = crate::interrupt::detach_batch(py, || {
+                par::map_tasks(group, threads, |pair| match pair {
+                    [l, r] => pyroid_core::packaging::merge_runs(keys, l, r, reverse),
+                    [l] => l.clone(),
+                    _ => Vec::new(),
                 })
-                .map_err(pool_err)?;
+            })
+            .map_err(pool_err)?;
             next.extend(merged);
             py.check_signals()?;
         }
@@ -448,19 +449,18 @@ fn contains_batch<'py>(
         rows.for_each_chunk(py, |start, texts| {
             let pool = pool_for(texts.len(), pool);
             let native: Vec<Option<bool>> = match &plan {
-                Some(plan) => py
-                    .detach(|| {
-                        par::map(texts.len(), pool, |k| {
-                            texts[k].and_then(|s| match vcore::parse(s) {
-                                Some(p) if p.long_runs.is_empty() => {
-                                    Some(plan.contains(Some(&p.version)))
-                                }
-                                Some(_) => None,
-                                None => Some(plan.contains(None)),
-                            })
+                Some(plan) => crate::interrupt::detach_batch(py, || {
+                    par::map(texts.len(), pool, |k| {
+                        texts[k].and_then(|s| match vcore::parse(s) {
+                            Some(p) if p.long_runs.is_empty() => {
+                                Some(plan.contains(Some(&p.version)))
+                            }
+                            Some(_) => None,
+                            None => Some(plan.contains(None)),
                         })
                     })
-                    .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?,
+                })
+                .map_err(|e| crate::batch::BatchError::from(e).into_pyerr(py))?,
                 None => vec![None; texts.len()],
             };
             for (k, r) in native.into_iter().enumerate() {
@@ -555,8 +555,8 @@ fn filter_batch<'py>(
     with_rows(py, &input, |rows, _| {
         rows.for_each_chunk(py, |start, texts| {
             let pool = pool_for(texts.len(), pool);
-            let verdicts: Vec<Option<Option<(bool, bool)>>> = py
-                .detach(|| {
+            let verdicts: Vec<Option<Option<(bool, bool)>>> =
+                crate::interrupt::detach_batch(py, || {
                     par::map(texts.len(), pool, |k| {
                         texts[k].and_then(|s| match parse_text(s) {
                             Parsed::Version(v) => Some(Some(verdict(&v))),
