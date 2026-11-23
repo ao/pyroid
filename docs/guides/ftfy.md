@@ -45,6 +45,10 @@ fixed = ftfy.fix_text_batch(docs, threads=4)  # at most 4 tasks at once
 Documents that need no fixing come back as the original objects, so already-clean text costs no
 copies. Lone surrogates in a `str` are fixed exactly as ftfy fixes them.
 
+The pool splits a batch into tasks of at least 64 documents, so threads help from 128 documents
+on: a batch of 100 runs on the calling thread, as with `threads=1`
+([Threads](../concepts/threads.md#threads)).
+
 ### Arrow columns
 
 Pass a pyarrow, polars or `datasets` string column and get a

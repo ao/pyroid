@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import metrics as _native
 
 __all__ = [
@@ -24,6 +25,11 @@ __all__ = [
     "VALID_TOKEN_RE",
     "tokenize",
 ]
+
+# What the ROUGE modules reproduce: rouge-score, and the NLTK whose Porter stemmer it uses.
+_ROUGE_SCORE = "rouge-score==0.1.2"
+_NLTK = "nltk==3.10.4"
+_versions.check(__name__, "rouge_score", _ROUGE_SCORE)
 
 # Pre-compile regexes that are use often
 NON_ALPHANUM_PATTERN = r"[^a-z0-9]+"
@@ -59,17 +65,18 @@ def _tokens(text: Any, use_stemmer: bool) -> list[str]:
 
 
 def tokenize(text: Any, stemmer: Any) -> list[str]:
-    """Tokenize input text into a list of tokens.
+    """Tokenize input text into a list of tokens, as rouge-score does.
 
     This approach aims to replicate the approach taken by Chin-Yew Lin in
     the original ROUGE implementation.
 
     Args:
-      text: A text blob to tokenize.
-      stemmer: An optional stemmer.
+        text: A text blob to tokenize.
+        stemmer: An optional stemmer (e.g. ``nltk.stem.porter.PorterStemmer()``),
+            applied to tokens longer than 3 characters.
 
     Returns:
-      A list of string tokens extracted from input text.
+        A list of string tokens extracted from input text.
     """
     tokens = _tokens(text, False)
     if stemmer:

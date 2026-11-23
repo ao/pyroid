@@ -9,12 +9,10 @@
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{
-    PyImportError, PyIndexError, PyNotImplementedError, PyUnicodeDecodeError, PyValueError,
-    PyZeroDivisionError,
+    PyIndexError, PyNotImplementedError, PyUnicodeDecodeError, PyValueError, PyZeroDivisionError,
 };
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedStr;
-use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyList, PyString, PyTuple};
 use pyroid_core::fasttext::PredictError;
 use pyroid_core::json_repair::dumps::float_repr;
@@ -29,21 +27,13 @@ use crate::errors::with_note;
 use crate::fasttext::{Model, predict_error};
 use crate::input::{TextInput, ThreadsArg, texts_and_threads};
 
-static NUMPY: PyOnceLock<()> = PyOnceLock::new();
-
-/// rust-numpy needs numpy at the first array: fail with a clear ImportError instead.
+/// numpy for batch results: a clear ImportError without it, and no panic from
+/// rust-numpy's first lookup (see `crate::np`).
 fn require_numpy(py: Python<'_>) -> PyResult<()> {
-    NUMPY
-        .get_or_try_init(py, || {
-            py.import("numpy").map(|_| ()).map_err(|e| {
-                let err = PyImportError::new_err(
-                    "pyroid.nemo returns numpy arrays for batches: pip install numpy",
-                );
-                err.set_cause(py, Some(e));
-                err
-            })
-        })
-        .copied()
+    crate::np::ready(
+        py,
+        "pyroid.nemo returns numpy arrays for batches: pip install numpy",
+    )
 }
 
 fn score_error(e: ScoreError) -> PyErr {
@@ -637,16 +627,17 @@ fn lang_id_strings<'py>(
     scores: &Bound<'py, PyAny>,
     langs: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyList>> {
-    let array = if require_numpy(py).is_ok() {
-        scores.extract::<PyReadonlyArray1<'py, f64>>().ok()
-    } else {
-        None
+    let array = match require_numpy(py) {
+        Ok(()) => scores.extract::<PyReadonlyArray1<'py, f64>>().ok(),
+        // Without numpy, `scores` is a sequence; anything else (a Ctrl-C) propagates.
+        Err(e) if e.is_instance_of::<pyo3::exceptions::PyImportError>(py) => None,
+        Err(e) => return Err(e),
     };
     let scores: Vec<f64> = match array {
         Some(a) => a.as_array().to_vec(),
-        None => scores.extract()?,
+        None => crate::input::frozen(scores).extract()?,
     };
-    let langs: Vec<Bound<'py, PyString>> = langs.extract()?;
+    let langs: Vec<Bound<'py, PyString>> = crate::input::frozen(langs).extract()?;
     if scores.len() != langs.len() {
         return Err(PyValueError::new_err(format!(
             "scores and langs differ in length ({} and {})",

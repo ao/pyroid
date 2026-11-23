@@ -133,7 +133,10 @@ pub fn spacy_languages() -> impl Iterator<Item = &'static str> {
 /// Non-whitespace spans up to this many bytes are cached per thread.
 const CACHE_MAX_SPAN: usize = 32;
 /// Cached spans per thread and tokenizer (the cache is cleared when full).
-const CACHE_CAP: usize = 1 << 16;
+/// About 2 MiB per thread when full: 64 threads hold ~120 MiB per language.
+/// 4x this saved ~3% of a one-thread Gopher batch on FineWeb and held ~4x the
+/// memory; 1/4 of it cost 11-16% (EC2 c8g.16xlarge devbox, shared, indicative).
+const CACHE_CAP: usize = 1 << 14;
 
 /// A cached span tokenization: token offsets within the span.
 #[derive(Debug)]

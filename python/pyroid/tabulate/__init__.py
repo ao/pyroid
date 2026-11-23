@@ -23,6 +23,7 @@ import warnings
 from collections.abc import Callable, Iterable, Sized
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning
 from pyroid._pyroid import tabulate as _native
 from pyroid.tabulate import _port
@@ -78,6 +79,7 @@ __all__ = ["tabulate", "tabulate_formats", "simple_separated_format"]  # noqa: R
 #: The tabulate release whose output this module reproduces.
 TABULATE_VERSION = "0.10.0"
 __version__ = TABULATE_VERSION
+_versions.check(__name__, "tabulate", f"tabulate=={TABULATE_VERSION}")
 
 # minimum extra space in headers
 MIN_PADDING = 2
@@ -457,7 +459,7 @@ def _slow_path(reason: str) -> None:
     """Warn, once for `reason`, that the call runs tabulate's Python code."""
     if _first_time(f"tabulate:{reason}"):
         warnings.warn(
-            f"pyroid.tabulate.tabulate: {reason} is not supported by the Rust port; "
+            f"pyroid.tabulate.tabulate: the Rust port does not handle {reason}; "
             f"running tabulate {TABULATE_VERSION}'s own Python code (slow path). "
             "This warning is shown once.",
             FallbackWarning,
@@ -506,16 +508,54 @@ def tabulate(
     break_long_words: Any = _BREAK_LONG_WORDS,
     break_on_hyphens: Any = _BREAK_ON_HYPHENS,
 ) -> str:
-    """Format a fixed width table for pretty printing, like ``tabulate.tabulate``.
+    """Format a table as text, exactly as `tabulate.tabulate` 0.10.0 does.
 
+    ```python
     >>> print(tabulate([[1, 2.34], [-56, "8.999"], ["2", "10001"]]))
     ---  ---------
       1      2.34
     -56      8.999
       2  10001
     ---  ---------
+    ```
 
-    The arguments, defaults and output are tabulate 0.10.0's; see ``__init__.pyi``.
+    Args:
+        tabular_data: Rows: a list (or other iterable) of lists or tuples, a list of dicts,
+            dataclasses or named tuples, a dict of columns, a 2-D numpy array or record
+            array, a pandas DataFrame (its index is shown by default), or a DB-API cursor.
+        headers: Column headers: a list (aligned to the last columns if shorter),
+            `"firstrow"`, `"keys"` (dict keys, field names or column indices), or a dict
+            mapping the keys of dict rows to headers.
+        tablefmt: A name from `tabulate_formats` or a `TableFormat`; unknown names draw
+            `"simple"`.
+        floatfmt: A format spec for float columns (`"g"`, `".2f"`, ...), or one per column.
+        intfmt: A format spec for int columns (`","`), or one per column.
+        numalign: `"right"`, `"center"`, `"left"`, `"decimal"` (the default) or `None` for
+            number columns.
+        stralign: `"left"` (the default), `"right"`, `"center"` or `None` for text columns.
+        missingval: The text for `None` cells, or one per column.
+        showindex: `"default"` (a DataFrame's index), `"always"` or `True`, `"never"` or
+            `False`, or the index values to show.
+        disable_numparse: Treat numbers as text: `True`, or a list of column indices.
+        colglobalalign: One alignment for every column (before `colalign`).
+        colalign: Per-column alignments; `"global"` keeps the global one.
+        preserve_whitespace: Keep leading and trailing whitespace in cells.
+        maxcolwidths: Wrap text columns at this width (one int, or one per column).
+        headersglobalalign: One alignment for every header.
+        headersalign: Per-header alignments; `"same"` follows the column, `"global"` keeps
+            the global one.
+        rowalign: Vertical alignment of multiline rows (`"top"`, `"center"`, `"bottom"`),
+            or one per row.
+        maxheadercolwidths: Wrap headers at this width (one int, or one per column).
+        break_long_words: Break words longer than the width when wrapping.
+        break_on_hyphens: Break wrapped text at hyphens.
+
+    Returns:
+        The table; a `JupyterHTMLStr` for the `html` and `unsafehtml` formats.
+
+    Raises:
+        TypeError: The data is not two-dimensional, among tabulate's other errors.
+        ValueError: An index of the wrong length, among tabulate's other errors.
     """
     options: dict[str, Any] = {
         "headers": headers,
@@ -795,7 +835,8 @@ def _plain_rows(tabular_data: Any, headers: Any, showindex: Any) -> Any:
     """
     if type(tabular_data) is not list:
         return None
-    rows = tabular_data
+    # One read of the caller's list: another thread may change it while the table is made.
+    rows = list(tabular_data)
     if rows and type(rows[0]) not in _ROW_TYPES:
         return None
     try:

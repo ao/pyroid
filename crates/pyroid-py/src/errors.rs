@@ -10,13 +10,19 @@
 //!   delegates a call to the incumbent library (ftfy, fastText, ...) because
 //!   the Rust port does not handle it. Results are the incumbent's; only the
 //!   speed differs. See `docs/dev/MODULES.md`.
+//! - `VersionMismatchWarning(UserWarning)`: the installed incumbent library is
+//!   another release than the one a module reproduces, so results can differ
+//!   from it. Shown once per process for each library, by
+//!   `pyroid._versions.check` (the Python modules call it at import, the Thai
+//!   and Japanese tokenizers through [`check_version`] when they read the
+//!   incumbent's data). See `docs/dev/MODULES.md`.
 //!
 //! Classes report `__module__ == "pyroid"` so they pickle by their public
 //! name. Each module adds a subclass here with one `create_exception!` (or
 //! `make_type` call for multiple bases) and one line in [`register`].
 
 use pyo3::create_exception;
-use pyo3::exceptions::{PyException, PyRuntimeWarning, PyTypeError};
+use pyo3::exceptions::{PyException, PyRuntimeWarning, PyTypeError, PyUserWarning};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyTuple, PyType};
@@ -33,6 +39,13 @@ create_exception!(
     FallbackWarning,
     PyRuntimeWarning,
     "A pyroid function delegated this call to the incumbent library (slow path)."
+);
+
+create_exception!(
+    pyroid,
+    VersionMismatchWarning,
+    PyUserWarning,
+    "The installed incumbent library is not the release pyroid reproduces: results can differ."
 );
 
 static INPUT_ERROR: PyOnceLock<Py<PyType>> = PyOnceLock::new();
@@ -90,10 +103,30 @@ pub fn with_note(py: Python<'_>, err: PyErr, note: impl AsRef<str>) -> PyErr {
     err
 }
 
+/// Warn with `VersionMismatchWarning`, once per process for `library`, if the
+/// installed `library` is not `release` (a pip requirement such as
+/// `"pythainlp==5.4.0"`): `pyroid._versions.check(module, library, release)`,
+/// the check every Python module makes, so the message, the registry and the
+/// caller's line are the same. `module` is what the message says reproduces it.
+pub(crate) fn check_version(
+    py: Python<'_>,
+    module: &str,
+    library: &str,
+    release: &str,
+) -> PyResult<()> {
+    py.import("pyroid._versions")?
+        .call_method1("check", (module, library, release))?;
+    Ok(())
+}
+
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add("PyroidError", py.get_type::<PyroidError>())?;
     m.add("InputError", input_error_type(py)?)?;
     m.add("FallbackWarning", py.get_type::<FallbackWarning>())?;
+    m.add(
+        "VersionMismatchWarning",
+        py.get_type::<VersionMismatchWarning>(),
+    )?;
     Ok(())
 }

@@ -367,33 +367,60 @@ Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Milliseconds for the 
 
 ### pyroid.json_repair
 
-Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Single documents, best time per call, json_repair 0.64.5 on CPython 3.12 (3.15t was within ±10%). Release wheel; other work kept the load average between 16 and 24. Guide: [json_repair](guides/json_repair.md).
+EC2 c8g.16xlarge devbox (Graviton4, shared), indicative. Single documents, best time per call, json_repair 0.64.9 on CPython 3.12. Release wheel; load average 0.1 to 4.7. Guide: [json_repair](guides/json_repair.md).
 
 | Document and call | json_repair | pyroid | Speedup |
 |---|---:|---:|---:|
-| valid JSON, ~1 KB, `repair_json` | 11.3 µs | 6.6 µs | 1.7× |
-| valid JSON, ~1 KB, `loads` | 6.2 µs | 6.4 µs | 1.0× |
-| broken JSON, ~1 KB, `repair_json` | 600 µs | 20.1 µs | 30× |
-| broken JSON, ~1 KB, `loads` | 589 µs | 22.2 µs | 27× |
-| valid JSON, 1.2 MB, `repair_json` | 9.9 ms | 8.1 ms | 1.2× |
-| broken JSON, 1 MB, `repair_json` | 544 ms | 17.1 ms | 32× |
-| broken JSON, 1 MB, `loads` | 548 ms | 18.6 ms | 30× |
+| valid JSON, ~1 KB, `repair_json` | 12.6 µs | 7.5 µs | 1.7× |
+| valid JSON, ~1 KB, `loads` | 6.6 µs | 6.6 µs | 1.0× |
+| broken JSON, ~1 KB, `repair_json` | 367 µs | 21.0 µs | 17× |
+| broken JSON, ~1 KB, `loads` | 358 µs | 23.6 µs | 15× |
+| valid JSON, 1.2 MB, `repair_json` | 10.1 ms | 7.6 ms | 1.3× |
+| broken JSON, 1 MB, `repair_json` | 232 ms | 16.0 ms | 14.5× |
+| broken JSON, 1 MB, `loads` | 228 ms | 17.6 ms | 13× |
 
-<small>Source: bench/json_repair_bench.py, run on 2026-11-06.</small>
+<small>Source: bench/results/aws-c8g.16xlarge-devbox/2026-11-14-json_repair (bench/json_repair_bench.py).</small>
 
 ### pyroid.json_repair: batches
 
-Docker/OrbStack VM on Apple Silicon (12 vCPU), indicative. Documents per second over 10,000 broken documents of about 1.2 KB, on free-threaded CPython 3.15t with the GIL off. The shared, loaded VM limits the 8-thread rows. Guide: [json_repair](guides/json_repair.md).
+EC2 c8g.16xlarge devbox (Graviton4, shared), indicative. Documents per second over 10,000 broken documents of about 1.2 KB, json_repair 0.64.9 on free-threaded CPython 3.15t with the GIL off. Other work kept the load average between 30 and 40. Guide: [json_repair](guides/json_repair.md).
 
 | Run | Documents/s | vs json_repair in a loop |
 |---|---:|---:|
-| json_repair, loop | 1,204 | 1× |
-| json_repair, 8-thread pool | 4,681 | 3.9× |
-| pyroid `repair_json`, loop | 41,414 | 34× |
-| `repair_json_batch`, threads=1 | 46,221 | 38× |
-| `repair_json_batch`, threads=8 | 156,134 | 130× |
+| json_repair, loop | 2,828 | 1× |
+| json_repair, 8-thread pool | 16,127 | 5.7× |
+| pyroid `repair_json`, loop | 48,056 | 17× |
+| `repair_json_batch`, threads=1 | 49,131 | 17× |
+| `repair_json_batch`, threads=8 | 260,003 | 92× |
 
-<small>Source: bench/json_repair_bench.py, run on 2026-11-06.</small>
+<small>Source: bench/results/aws-c8g.16xlarge-devbox/2026-11-14-json_repair (bench/json_repair_bench.py).</small>
+
+### pyroid.yaml
+
+AWS EC2 c7i.4xlarge (Intel Xeon Sapphire Rapids, 16 vCPU), dedicated, nothing else running. MB/s of YAML read (loads) or written (dumps), one process at a time, each cell in a fresh one, CPython 3.12.16 with PyYAML 6.0.3 and libyaml 0.2.5; load average at most 1.07 (the benchmark itself). The corpus is the 11,878 files of the parity corpus that PyYAML loads (343 MB); the 1, 10 and 100 MB files concatenate real ones. Guide: [yaml](guides/yaml.md).
+
+| Input | pyroid `safe_load_all` | `SafeLoader` | `CSafeLoader` | vs `CSafeLoader` | pyroid `safe_dump_all` | `SafeDumper` | `CSafeDumper` | vs `CSafeDumper` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| corpus, 11,878 files | 42.9 | 0.97 | 4.15 | 10.3× | 37.7 | 1.82 | 7.01 | 5.4× |
+| 1 MB file | 76.5 | 1.50 | 14.9 | 5.1× | 46.0 | 1.76 | 8.90 | 5.2× |
+| 10 MB file | 52.1 | 1.16 | 9.57 | 5.4× | 43.1 | 1.78 | 8.75 | 4.9× |
+| 100 MB file | 42.8 | 1.06 | 5.54 | 7.7× | 40.0 | 1.79 | 8.73 | 4.6× |
+
+For context, on the same inputs: ruamel.yaml 0.19.1's pure-Python safe loader 0.65, 1.02, 0.78 and 0.72 MB/s; with ruamel.yaml.clib 0.2.15, 3.20 and 7.42 MB/s on the corpus and the 1 MB file (42 corpus files and the 10 and 100 MB files raise); rapidyaml 0.15.2's `parse_in_arena`, which builds a parse tree but no Python objects, 156, 202, 167 and 112 MB/s (66 corpus files raise). ruamel.yaml reads YAML 1.2, so its results differ from PyYAML's.
+
+<small>Source: bench/yaml/baseline_bench.py, run on 2026-11-14 (bench/results/aws-c7i.4xlarge/2026-11-14/yaml-corpus.json).</small>
+
+### pyroid.yaml: small documents
+
+AWS EC2 c7i.4xlarge (Intel Xeon Sapphire Rapids, 16 vCPU), dedicated, nothing else running. Time per call, best of 7 rounds interleaved in one process; the 2 KB document is a GitHub Actions workflow. Guide: [yaml](guides/yaml.md).
+
+| Document | pyroid `safe_load` | `CSafeLoader` | `SafeLoader` | pyroid `safe_dump` | `CSafeDumper` | `SafeDumper` |
+|---|---:|---:|---:|---:|---:|---:|
+| 5 bytes | 3.4 µs | 8.0 µs | 49 µs | 4.6 µs | 8.4 µs | 32 µs |
+| 300 bytes | 19 µs | 105 µs | 843 µs | 8.0 µs | 31 µs | 131 µs |
+| 2 KB | 60 µs | 321 µs | 2,913 µs | 23 µs | 112 µs | 518 µs |
+
+<small>Source: bench/yaml/small_docs_bench.py, run on 2026-11-14 (bench/results/aws-c7i.4xlarge/2026-11-14/yaml-small-docs.md).</small>
 
 ### pyroid.datasketch: MinHash signatures
 
@@ -742,6 +769,6 @@ Unidecode. `pyroid.translit.unidecode`'s output is not Unidecode's; see
 
 - The metrics, json_repair, datasketch, jieba, nltk and trafilatura modules, the FineWeb-2
   languages and the newer datatrove steps in the gated harness on EC2. Their numbers above come
-  from each module's own run in the Docker VM; only trafilatura has also run on EC2, inside the
-  WARC pipeline.
+  from each module's own run in the Docker VM (json_repair's from a shared EC2 devbox); only
+  trafilatura has also run on EC2, inside the WARC pipeline.
 - Runs with more than 8 threads. Every EC2 run used 8 of the 16 vCPUs.

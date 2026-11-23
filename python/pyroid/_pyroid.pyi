@@ -10,7 +10,9 @@ __all__ = [
     "FallbackWarning",
     "InputError",
     "PyroidError",
+    "VersionMismatchWarning",
     "__version__",
+    "_numpy_ready",
     "_testing",
     "datasketch",
     "dedup",
@@ -27,6 +29,7 @@ __all__ = [
     "trafilatura",
     "translit",
     "warc",
+    "yaml",
 ]
 
 __version__: Final[str]
@@ -46,8 +49,12 @@ nltk: ModuleType
 nemo: ModuleType
 trafilatura: ModuleType
 warc: ModuleType
+yaml: ModuleType
 tabulate: ModuleType
 _testing: ModuleType
+
+def _numpy_ready() -> None:
+    """Look NumPy's C API up now (for modules that import numpy at import)."""
 
 class PyroidError(Exception):
     """Base class for all pyroid errors."""
@@ -57,6 +64,9 @@ class InputError(PyroidError, TypeError):
 
 class FallbackWarning(RuntimeWarning):
     """A pyroid function delegated this call to the incumbent library (slow path)."""
+
+class VersionMismatchWarning(UserWarning):
+    """The installed incumbent library is not the release pyroid reproduces: results can differ."""
 
 @final
 class Column(Generic[_T_co]):

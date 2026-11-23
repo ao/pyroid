@@ -217,6 +217,36 @@ fn doc_note(input: &TextInput, doc: usize) -> Option<String> {
     }
 }
 
+/// `string` itself when it is an exact `str` of ASCII characters: what anyascii
+/// returns for it, without the general input handling (short strs are mostly
+/// call overhead).
+fn ascii_str<'py>(string: &Bound<'py, PyAny>) -> Option<Bound<'py, PyAny>> {
+    let s = string.cast_exact::<PyString>().ok()?;
+    s.to_str()
+        .ok()
+        .filter(|u| u.is_ascii())
+        .map(|_| string.clone())
+}
+
+/// ``anyascii.anyascii`` as the anyascii package defines it, for
+/// ``pyroid.patch("anyascii")``: a ``str`` is transliterated here; anything else
+/// goes to ``pyroid.translit._anyascii_package``, which treats it as the package
+/// does (an ASCII ``bytes`` comes back as it is, an iterable of characters gives
+/// one ``str``), where :func:`anyascii` would take a list as a batch.
+#[pyfunction]
+#[pyo3(signature = (string))]
+fn anyascii_package<'py>(
+    py: Python<'py>,
+    string: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if string.is_exact_instance_of::<PyString>() {
+        return anyascii(py, string, None);
+    }
+    py.import("pyroid.translit")?
+        .getattr("_anyascii_package")?
+        .call1((string,))
+}
+
 /// Transliterate `s` to ASCII, exactly as ``anyascii.anyascii`` 0.3.3 does.
 ///
 /// Accepts a str, a list/tuple of str, or an Arrow string array/column, and
@@ -229,6 +259,9 @@ fn anyascii<'py>(
     string: &Bound<'py, PyAny>,
     threads: Option<Threads>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(same) = ascii_str(string) {
+        return Ok(same);
+    }
     match text_arg(string, threads, "string") {
         Ok(input) => transform(py, input, threads, kernel::anyascii),
         Err(e) if e.is_instance_of::<PyUnicodeEncodeError>(py) && may_hold_surrogates(string) => {
@@ -351,7 +384,7 @@ impl<'py> Strs<'py> {
             });
         }
         let (kind, items): (Kind, Vec<Bound<'py, PyAny>>) = if let Ok(l) = obj.cast::<PyList>() {
-            (Kind::List, l.iter().collect())
+            (Kind::List, crate::input::list_items(l).iter().collect())
         } else {
             (Kind::Tuple, obj.cast::<PyTuple>()?.iter().collect())
         };
@@ -399,7 +432,7 @@ impl<'py> Strs<'py> {
             })
             .collect::<PyResult<_>>()?;
         let t = threads(threads_arg);
-        py.detach(|| par::map(bytes.len(), t, |i| f(bytes[i])))
+        crate::interrupt::detach_batch(py, || par::map(bytes.len(), t, |i| f(bytes[i])))
             .map_err(|e| BatchError::from(e).into_pyerr(py))
     }
 
@@ -525,7 +558,9 @@ fn is_ascii<'py>(
     let is_list = string.is_instance_of::<PyList>();
     if is_list || string.is_instance_of::<PyTuple>() {
         let items: Vec<Bound<'py, PyAny>> = if is_list {
-            string.cast::<PyList>()?.iter().collect()
+            crate::input::list_items(string.cast::<PyList>()?)
+                .iter()
+                .collect()
         } else {
             string.cast::<PyTuple>()?.iter().collect()
         };
@@ -569,6 +604,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let m = PyModule::new(parent.py(), "pyroid.translit")?;
     m.gil_used(false)?;
     m.add_function(wrap_pyfunction!(anyascii, &m)?)?;
+    m.add_function(wrap_pyfunction!(anyascii_package, &m)?)?;
     m.add_function(wrap_pyfunction!(unidecode, &m)?)?;
     m.add_function(wrap_pyfunction!(is_ascii, &m)?)?;
     parent.add_submodule(&m)

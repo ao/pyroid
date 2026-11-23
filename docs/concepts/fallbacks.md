@@ -23,16 +23,17 @@ So the result is always the incumbent's. The warning tells you that this call to
 | `pyroid.translit` | never | — |
 | `pyroid.metrics` | ROUGE: tokens from a custom tokenizer that are not lists of `str` (to rouge-score). sacrebleu: the `ja-mecab`, `ko-mecab`, `spm`, `flores101`, `flores200` and `spBLEU-1K` tokenizers, `n_bootstrap > 1`, TER, `DATASETS` and the test-set helpers (`pyroid.metrics.sacrebleu.DELEGATED`) | — |
 | `pyroid.tabulate` | text with lone surrogates, an alignment that is not a `str`, `None` or `bool`, a custom `TableFormat` whose lines and rows are not strings or callables (or whose `padding` is not an int), a per-column `missingval` entry that is not a `str` ([the list](../guides/tabulate.md#what-runs-where)). These run tabulate 0.10.0's own Python code, which pyroid carries a copy of, not the installed tabulate | tabulate never needs to be installed |
-| `pyroid.json_repair` | `schema=` calls, non-`str` input, and text holding a character in U+10F800..U+10FFFF (the range the port uses to store lone surrogates) | `repair_json_batch` on Arrow input raises `PyroidError` for those characters instead of delegating (pass a list) |
-| `pyroid.trafilatura` | the other output formats, `include_formatting`, `include_links`, `include_images`, metadata (`with_metadata`, `url_blacklist`, `extract_with_metadata`, ...), `target_language`, `prune_xpath`, `options=`, a trafilatura `LRUCache`, an lxml tree or HTTP response as input, bytes that are compressed or not UTF-8 ([the list](../guides/trafilatura.md#delegated-options)) | the installed trafilatura must be the mode's release (2.3.1, or 1.11.0 with `compat="1.11.0"`); without it, or with another version, these calls raise `PyroidError` |
+| `pyroid.json_repair` | `schema=` calls, non-`str` input, and text holding a character in U+10F800..U+10FFFF (the range the port uses to store lone surrogates); `repair_json_batch` delegates only those documents, from a list or an Arrow column | — |
+| `pyroid.trafilatura` | the other output formats, `include_formatting`, `include_links`, `include_images`, metadata (`with_metadata`, `url_blacklist`, `extract_with_metadata`, ...), `target_language`, `prune_xpath`, `options=`, a trafilatura `LRUCache`, an lxml tree as input, bytes that are compressed or not UTF-8 ([the list](../guides/trafilatura.md#delegated-options)) | the installed trafilatura must be the mode's release (2.3.1, or 1.11.0 with `compat="1.11.0"`); without it, or with another version, these calls raise `PyroidError` |
 | `pyroid.nltk` | Punkt training (`PunktTrainer`, `PunktSentenceTokenizer(train_text)`), a custom `token_cls`, a `PunktLanguageVars` subclass that changes more than `sent_end_chars`, parameters that are not sets of `str`, `dump()` and saving parameters, a Treebank tokenizer whose patterns were changed, a `RegexpTokenizer` pattern that is not one of the native ones | — |
 | `pyroid.jieba` | `pyroid.jieba.posseg`, `pyroid.jieba.analyse`, paddle mode, and `get_dict_file()` for the default dictionary | — |
 | `pyroid.datasketch` | the classes pyroid does not port (`bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `WeightedMinHash`, `HyperLogLog`, ...), Redis and Cassandra storage, and a `hashfunc` other than `sha1_hash32`/`sha1_hash64` (called from Python for each token; the permutations stay in Rust) | — |
+| `pyroid.yaml` | loaders and dumpers with added constructors, representers or resolvers or overridden methods, `BaseLoader`, `load_all` with the full loaders, documents with `!!python/` tags under `FullLoader`/`Loader`/`UnsafeLoader`, objects other than plain data under `Dumper`, dumping a `str` with lone surrogates, and PyYAML's other functions (`scan`, `compose`, ...) | under `SafeDumper`, an object it cannot represent raises PyYAML's `RepresenterError` |
 | `pyroid.integrations.datatrove` | a `language` the step can't tokenize natively runs datatrove's own code for that step, and `Trafilatura` with an installed trafilatura release that pyroid does not reproduce runs datatrove's own step | — |
 
 Without the library a call needs (ftfy, datatrove and the language's segmenter, rouge-score,
-nltk, sacrebleu, json_repair, trafilatura, jieba, datasketch), it raises `pyroid.PyroidError` and
-says what to install.
+nltk, sacrebleu, json_repair, trafilatura, jieba, datasketch, PyYAML), it raises `pyroid.PyroidError`
+and says what to install.
 
 ## `python_tokenizer=True`
 
@@ -71,14 +72,21 @@ warnings.simplefilter("error", pyroid.FallbackWarning)
 `FallbackWarning` is a `RuntimeWarning`. pyroid always emits that exact class for delegation,
 so a filter on it never hides anything else.
 
-Other warnings are about results, not code paths, and stay plain `RuntimeWarning`s. For example,
-a Python whose `unicodedata` is newer than the Unicode tables pyroid ships (17.0) gets a one-time
-`RuntimeWarning`, and pyroid uses its 17.0 tables. Any other warning matches the incumbent's own
-(for example `pyroid.translit.unidecode`'s lone-surrogate warning).
+Other warnings are about results, not code paths. An incumbent installed at another release than
+the one a module reproduces gets one
+[`pyroid.VersionMismatchWarning`](../reference/pyroid.md#pyroid.VersionMismatchWarning) (a
+`UserWarning`) per process, when the module is imported; see
+[Installed versions](../compatibility.md#installed-versions). A Python whose `unicodedata` is
+newer than the Unicode tables pyroid ships (17.0) gets a one-time `RuntimeWarning`, and pyroid
+uses its 17.0 tables. Any other warning matches the incumbent's own (for example
+`pyroid.translit.unidecode`'s lone-surrogate warning).
 
 ## `pyroid.patch()` warns too
 
 [`pyroid.patch()`](../guides/patch.md) is not a fallback but the opposite: it makes code that
-imports ftfy, fastText, anyascii, datasketch, trafilatura, NLTK or tabulate get pyroid's functions instead.
+imports ftfy, fastText, anyascii, datasketch, json_repair, Trafilatura, NLTK, warcio, NeMo Curator,
+PyYAML or tabulate get pyroid's functions instead.
 It announces that with its own `PatchWarning`, once per process for each patched name, so you can
-tell the two apart.
+tell the two apart. An installed package of another release also gets the
+`VersionMismatchWarning` that importing the pyroid module gives (once per process, whichever comes
+first).

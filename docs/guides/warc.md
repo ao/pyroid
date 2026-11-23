@@ -156,6 +156,12 @@ files (7.5 GB, 172,376 HTML documents), from `bench/fineweb_warc.py reader` on o
 All three gave the same documents. Part of the time is the same in each: cchardet's guess for
 the pages that are not UTF-8, and making the Python strings.
 
+Reading every record with `ArchiveIterator` and `content_stream().read()` is mostly inflating
+gzip members, in both readers, so pyroid gains less there. Over the first 210 MB of a
+CC-MAIN-2026-43 WARC file (848 MB inflated), warcio 1.8.2 took 2.37 s, 1.76 s of it in CPython's
+zlib, and `pyroid.warc` took 1.28 s, 1.02 s of it in zlib-rs (1.9×; AWS EC2 c8g.16xlarge, shared,
+indicative; CPython 3.12). That is close to the speedup of the inflater alone.
+
 datatrove's FineWeb pipeline over the same files, end to end at 8 processes on the same machine
 (`bench/fineweb_warc.py`; results in `bench/results/aws-c7i.4xlarge/2026-11-10-warc/`):
 

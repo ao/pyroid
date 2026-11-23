@@ -12,6 +12,7 @@ import warnings
 from types import ModuleType
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning, PyroidError
 
 
@@ -26,6 +27,11 @@ def _require_numpy() -> None:
             "pip install 'pyroid[datasketch]' (or numpy)",
             name="numpy",
         ) from exc
+    # Look NumPy's C API up now, at import, so no later native call does it (an exception there,
+    # such as a Ctrl-C, would otherwise surface as a PanicException).
+    from pyroid._pyroid import _numpy_ready
+
+    _numpy_ready()
 
 
 _require_numpy()
@@ -43,6 +49,9 @@ __all__ = [
 
 #: The datasketch release pyroid.datasketch reproduces.
 DATASKETCH_VERSION = "2.0.0"
+
+# Every pyroid.datasketch module imports this one first, through the package.
+_versions.check("pyroid.datasketch", "datasketch", f"datasketch=={DATASKETCH_VERSION}")
 
 _SCHEME_LEGACY = "legacy"
 _SCHEME_AFFINE32 = "affine32"
@@ -106,16 +115,6 @@ def fallback(name: str, reason: str) -> ModuleType:
             f"datasketch is not installed to fall back to "
             f"(pip install datasketch=={DATASKETCH_VERSION})"
         )
-    if "version" not in _WARNED:
-        _WARNED.add("version")
-        version = getattr(real, "__version__", None)
-        if version is not None and version != DATASKETCH_VERSION:
-            warnings.warn(
-                f"pyroid.datasketch is falling back to datasketch {version}, "
-                f"not {DATASKETCH_VERSION}",
-                RuntimeWarning,
-                stacklevel=_caller_stacklevel(),
-            )
     warn_once(
         f"{name}:{reason}",
         f"pyroid.datasketch.{name}: {reason} is not supported by the Rust port; "

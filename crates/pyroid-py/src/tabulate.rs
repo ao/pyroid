@@ -866,8 +866,9 @@ fn render_inner<'py>(
     let raw = call.flag("raw_rows")?;
     let list_type = builtin_types(py)?[6].bind(py);
     let index_obj = call.obj.getattr("index")?;
-    let index: Option<Bound<'py, PyList>> = if raw && !index_obj.is_none() {
-        Some(index_obj.cast_into::<PyList>().map_err(PyErr::from)?)
+    let index: Option<Bound<'py, PyTuple>> = if raw && !index_obj.is_none() {
+        let list = index_obj.cast_into::<PyList>().map_err(PyErr::from)?;
+        Some(crate::input::list_items(&list))
     } else {
         None
     };
@@ -885,8 +886,10 @@ fn render_inner<'py>(
     };
     for (position, row) in rows.iter().enumerate() {
         host.pacer.tick()?;
+        // Each row is read in one step: the pauses run Python code, and on a free-threaded
+        // build another thread can change a row at any time.
         let row = match row.cast_exact::<PyList>() {
-            Ok(l) => l.clone(),
+            Ok(l) => crate::input::list_items(l),
             Err(_) if raw => {
                 let list = list_type
                     .call1((&row,))?
@@ -897,7 +900,7 @@ fn render_inner<'py>(
                 {
                     read.push((position, list.clone()));
                 }
-                list
+                crate::input::list_items(&list)
             }
             Err(_) => return Err(Fail::Unsupported("a row that is not a list")),
         };

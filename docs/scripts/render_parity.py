@@ -42,6 +42,7 @@ ORDER = [
     "nltk",
     "nemo",
     "integrations",
+    "yaml",
 ]
 TITLES = {
     "ftfy": "pyroid.ftfy",
@@ -58,6 +59,7 @@ TITLES = {
     "nltk": "pyroid.nltk",
     "nemo": "pyroid.nemo and pyroid.integrations.nemo_curator",
     "integrations": "Integrations: datatrove steps, pyroid clean, pyroid.patch()",
+    "yaml": "pyroid.yaml",
 }
 
 

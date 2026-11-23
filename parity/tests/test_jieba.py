@@ -40,7 +40,7 @@ import pytest
 
 from pyroid_parity import data as D
 from pyroid_parity import multilingual as ML
-from pyroid_parity.plugin import _impl, need, need_corpus, reference
+from pyroid_parity.plugin import _impl, need, need_corpus, oracle_pin, reference
 from pyroid_parity.report import Collector
 
 SUITE = "jieba"
@@ -60,8 +60,8 @@ with warnings.catch_warnings():
         jieba.setLogLevel(logging.WARNING)
         _NO_ORACLE = (
             None
-            if jieba.__version__ == JIEBA_VERSION
-            else f"needs jieba {JIEBA_VERSION}, found {jieba.__version__}"
+            if jieba.__version__ == oracle_pin("jieba", JIEBA_VERSION)
+            else f"needs jieba {oracle_pin('jieba', JIEBA_VERSION)}, found {jieba.__version__}"
         )
 
 MODES: dict[str, Callable[[Any, Any], Any]] = {
@@ -152,7 +152,8 @@ def _reference(name: str, mode: str, limit: int) -> list[tuple[Any, ...]]:
 
 def test_oracle_is_pinned_jieba(parity: Collector) -> None:
     j = oracle(parity, "oracle-version")
-    same = parity.record(SUITE, "oracle-version", j.__version__ == JIEBA_VERSION, got=j.__version__)
+    want = oracle_pin("jieba", JIEBA_VERSION)
+    same = parity.record(SUITE, "oracle-version", j.__version__ == want, got=j.__version__, want=want)
     assert same
 
 

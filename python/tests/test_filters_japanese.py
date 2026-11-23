@@ -15,7 +15,7 @@ package, or the file ``$PYROID_SUDACHI_DICT`` names); without one the codes need
   and SudachiPy's input limit.
 - The dictionary in child interpreters: ``$PYROID_SUDACHI_DICT`` naming a missing file or not a
   dictionary, no dictionary at all, a dictionary only SudachiPy finds, the first use from
-  several threads.
+  several threads, and the VersionMismatchWarning for another sudachidict-core release.
 
 ``PYROID_FILTERS_EXAMPLES=n`` sets the Hypothesis examples per test.
 """
@@ -1215,3 +1215,73 @@ def test_first_use_from_threads(run_python: Callable[..., Any]) -> None:
         dd.minhash_signatures(docs, language=JA, n_grams=2),
     ]
     assert json.loads(r.stdout) == want
+
+
+VERSION_CHECK = """
+import sys, warnings
+sys.path.insert(0, $root)  # the stand-in sudachidict_core package and its metadata
+import pyroid, pyroid.filters as pf, pyroid.dedup as dd
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    pf.gopher_quality(["日本語"], language="jpn_Jpan")
+    dd.minhash_signatures(["日本語"], language="ja")
+    pf.gopher_quality(["日本語"], language="jpn")
+for w in caught:
+    if issubclass(w.category, pyroid.VersionMismatchWarning):
+        print(w.category.__name__, w.filename, w.message, sep="|")
+assert "sudachidict_core" not in sys.modules
+"""
+
+
+def _stand_in_sudachidict(root: Path, version: str) -> Path:
+    """A ``sudachidict_core`` package under ``root`` with the real dictionary and ``version``."""
+    real = system_dic()
+    resources = root / "sudachidict_core" / "resources"
+    resources.mkdir(parents=True)
+    (root / "sudachidict_core" / "__init__.py").write_text(
+        "raise RuntimeError('pyroid imported the stand-in sudachidict_core')\n", encoding="utf-8"
+    )
+    try:
+        (resources / "system.dic").symlink_to(real)
+    except OSError:
+        pytest.skip("cannot make a symbolic link to the 200 MB dictionary here")
+    info = root / f"sudachidict_core-{version}.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text(
+        f"Metadata-Version: 2.1\nName: sudachidict-core\nVersion: {version}\n", encoding="utf-8"
+    )
+    return resources / "system.dic"
+
+
+@pytest.mark.thread_unsafe
+@needs_dictionary
+@pytest.mark.parametrize(
+    ("version", "variable", "warned"),
+    [("20250129", False, True), ("20261015", False, False), ("20250129", True, False)],
+)
+def test_sudachidict_version_warning(
+    run_python: Callable[..., Any], tmp_path: Path, version: str, variable: bool, warned: bool
+) -> None:
+    """Another installed sudachidict-core: one VersionMismatchWarning, at the caller's line.
+
+    With ``$PYROID_SUDACHI_DICT`` the file is not the package's, so there is no version to
+    compare.
+    """
+    dic = _stand_in_sudachidict(tmp_path, version)
+    code = string.Template(VERSION_CHECK).substitute(root=repr(str(tmp_path)))
+    r = run_python(code, env={"PYROID_SUDACHI_DICT": str(dic) if variable else None}, timeout=300)
+    assert r.returncode == 0, r.stderr
+    lines = r.stdout.splitlines()
+    if not warned:
+        assert lines == []
+        return
+    assert len(lines) == 1, lines
+    category, filename, message = lines[0].split("|")
+    assert category == "VersionMismatchWarning"
+    assert filename == "<string>"  # the user's call, not pyroid's code
+    assert message == (
+        "pyroid's Japanese tokenizer reproduces sudachidict-core 20261015, but sudachidict-core "
+        "20250129 is installed: results can differ from it. Install sudachidict-core==20261015 "
+        'to compare like for like (or silence this with warnings.simplefilter("ignore", '
+        "pyroid.VersionMismatchWarning))."
+    )

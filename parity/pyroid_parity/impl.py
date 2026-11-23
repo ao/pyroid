@@ -24,7 +24,7 @@ dedup     ``minhash_signatures(texts, **config) -> list[list[int] | None]`` (``N
 metrics   a package with ``rouge_scorer`` (rouge-score's ``RougeScorer``; optional ``score_batch``) and ``sacrebleu``
           (``BLEU``/``CHRF`` with ``corpus_score``/``get_signature``, ``sentence_bleu``/``sentence_chrf``; optional
           ``sentence_bleu_batch``/``sentence_chrf_batch``) submodules; see ``pyroid_parity.metrics_cases``.
-json_repair  json_repair 0.64.5's own API: ``repair_json(json_str="", return_objects=False,
+json_repair  json_repair 0.64.9's own API: ``repair_json(json_str="", return_objects=False,
           skip_json_loads=False, logging=False, json_fd=None, chunk_length=0, stream_stable=False, strict=False,
           schema=None, schema_repair_mode="standard", **json_dumps_args)``, ``loads``, ``load`` and ``from_file``
           with json_repair's signatures. Results must be identical: ``str`` byte for byte, objects and repair logs

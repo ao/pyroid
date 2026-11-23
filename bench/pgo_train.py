@@ -12,9 +12,10 @@ Each module runs on list[str] and Arrow input and single str calls, at every ``-
 ftfy (FineWeb text, plus mojibake made from it), translit, fastText LID (.bin and .ftz), the Gopher, C4 and
 FineWeb filters and the formatters, MinHash and exact and sentence dedup, pyroid.text, pyroid.jieba,
 pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.metrics
-(ROUGE, BLEU, chrF), pyroid.datasketch, pyroid.tabulate (tables of numbers, FineWeb words and mixed cells
-in the common formats), and the FineWeb-2 filter and MinHash configs of every language pyroid tokenizes
-natively here (Japanese only with SudachiDict installed).
+(ROUGE, BLEU, chrF), pyroid.datasketch, pyroid.yaml (generated documents loaded and dumped in several
+styles), pyroid.tabulate (tables of numbers, FineWeb words and mixed cells in the common formats), and the
+FineWeb-2 filter and MinHash configs of every language pyroid tokenizes natively here (Japanese only with
+SudachiDict installed).
 
 Needs only pyroid and numpy. pyarrow is optional: without it, as on Windows ARM64, the Arrow calls are
 skipped. Nothing is checked or timed: an instrumented build is never shipped.
@@ -300,6 +301,62 @@ class Trainer:
             lsh.query(lean)
             m.jaccard(ms[0])
 
+    def yaml(self) -> None:
+        # bench/yaml/ would be imported as a namespace package named yaml; pyroid.yaml has to
+        # see that PyYAML is not installed.
+        here = Path(__file__).resolve().parent
+        saved = sys.path[:]
+        sys.path[:] = [p for p in sys.path if p and Path(p).resolve() != here]
+        try:
+            import pyroid.yaml as Y
+        finally:
+            sys.path[:] = saved
+
+        rnd = random.Random(TRAIN_SEED)
+        words = [w for t in self.texts[:300] for w in t.split()[:30]] or ["x"]
+        odd = ["yes", "no", "on", "1.0", "0x1F", "~", "", "a: b", "- x", "#c", "1e3", "2026-11-16", ".inf"]
+
+        def value(depth: int) -> Any:
+            k = rnd.randrange(10 if depth < 3 else 7)
+            if k == 0:
+                return rnd.randint(-(10**6), 10**6)
+            if k == 1:
+                return rnd.random() * 10 ** rnd.randint(-3, 6)
+            if k == 2:
+                return rnd.choice([True, False, None])
+            if k == 3:
+                return " ".join(rnd.choices(words, k=rnd.randint(1, 8)))
+            if k == 4:
+                return rnd.choice(words)
+            if k in (5, 6):
+                return rnd.choice(odd)
+            if k in (7, 8):
+                return {rnd.choice(words): value(depth + 1) for _ in range(rnd.randint(0, 6))}
+            return [value(depth + 1) for _ in range(rnd.randint(0, 6))]
+
+        docs = [value(0) for _ in range(3000)]
+        styles: list[dict[str, Any]] = [{}, {"default_flow_style": True}, {"sort_keys": False}]
+        styles += [{"allow_unicode": True, "indent": 4, "width": 40}, {"explicit_start": True}]
+        texts = [Y.safe_dump(d, **styles[i % len(styles)]) for i, d in enumerate(docs)]
+        stream = Y.safe_dump_all(docs[:1000])
+        list(Y.safe_load_all(stream))
+        list(Y.safe_load_all(stream.encode()))
+        small = ["a: 1\n", "name: test\nversion: 1.2.3\ndeps: [a, b, c]\nopts: {x: true, y: null}\n" * 4]
+        small += [Y.safe_dump(docs[:12])]
+        # Single calls in the hundreds of thousands, as callers make them: with fewer, the
+        # per-call path stays cold next to the rest of the profile.
+        for _ in range(10):
+            for t, d in zip(texts, docs, strict=True):
+                Y.safe_load(t)
+                Y.safe_dump(d)
+        for _ in range(20_000):
+            for s in small:
+                Y.safe_dump(Y.safe_load(s))
+                Y.load(s, Loader=Y.SafeLoader)
+        for bad in ["a: [1, 2", "a: b: c", "\t- x", "key: 'open", "--- !!python/object:x {}", "&a [*b]"]:
+            with contextlib.suppress(Y.YAMLError):
+                Y.safe_load(bad)
+
     def tabulate(self) -> None:
         import pyroid.tabulate as TB
 
@@ -332,7 +389,7 @@ class Trainer:
     def run(self) -> dict[str, float]:
         warnings.simplefilter("ignore")  # FallbackWarning and friends: the paths still run
         sections = ["ftfy", "translit", "fasttext", "filters", "dedup", "text", "multilingual", "jieba"]
-        sections += ["json_repair", "metrics", "datasketch", "tabulate"]
+        sections += ["json_repair", "metrics", "datasketch", "yaml", "tabulate"]
         for name in sections:
             self.section(name, getattr(self, name))
         return self.timings

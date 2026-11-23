@@ -29,7 +29,13 @@ def _load_extension() -> ModuleType:
 
 _pyroid = _load_extension()
 
-from pyroid._pyroid import Column, FallbackWarning, InputError, PyroidError  # noqa: E402
+from pyroid._pyroid import (  # noqa: E402
+    Column,
+    FallbackWarning,
+    InputError,
+    PyroidError,
+    VersionMismatchWarning,
+)
 
 __version__: str = _pyroid.__version__
 
@@ -57,6 +63,7 @@ __all__ = [
     "FallbackWarning",
     "InputError",
     "PyroidError",
+    "VersionMismatchWarning",
     "__version__",
     "patch",
     "unpatch",

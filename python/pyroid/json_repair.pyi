@@ -1,14 +1,14 @@
-# Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
-# Type stubs for pyroid.json_repair: the signatures of json_repair 0.64.5. The module
+# Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
+# Type stubs for pyroid.json_repair: the signatures of json_repair 0.64.9. The module
 # docstring is kept here on purpose: the API docs are built from this stub.
-"""A drop-in, Rust-backed replacement for json_repair 0.64.5 (``import pyroid.json_repair``).
+"""A drop-in, Rust-backed replacement for json_repair 0.64.9 (``import pyroid.json_repair``).
 
 ``repair_json``, ``loads``, ``load`` and ``from_file`` take json_repair's
 arguments and return the same strings, objects and repair logs. Valid JSON comes
 back as ``json.dumps(json.loads(text))``. Broken JSON (LLM output with missing
 quotes, single quotes, comments, trailing commas, truncation, markdown fences,
 prose around it, Python literals, ...) is repaired with json_repair's heuristics,
-ported line by line to Rust. The port stays linear on 13 input families where
+ported line by line to Rust. The port stays linear on the inputs where
 json_repair's lookaheads are quadratic, and never overflows the stack.
 
 These are delegated to the real json_repair, with a one-time
@@ -26,8 +26,7 @@ Differences from json_repair
   ``RecursionError`` past about 10,000 levels on 3.12 is the same. For string
   results pyroid decodes it at any depth (json_repair raises there too).
 - ``load``/``from_file`` read the file once (``fd.read()``) instead of in
-  ``chunk_length`` pieces. The result is the same, ``chunk_length`` is ignored and
-  unseekable streams work.
+  ``chunk_length`` pieces. The result is the same and ``chunk_length`` is ignored.
 - json_repair's command line (``python -m json_repair``) is not part of this module.
 """
 
@@ -188,7 +187,7 @@ def repair_json_batch(
     strict: bool = False,
     **json_dumps_args: Any,
 ) -> str:
-    """:func:`repair_json` over many documents at once, on pyroid's thread pool.
+    r""":func:`repair_json` over many documents at once, on pyroid's thread pool.
 
     Not part of json_repair. Each result equals ``json_repair.repair_json(doc,
     skip_json_loads=..., stream_stable=..., strict=..., **json_dumps_args)``;
@@ -209,8 +208,11 @@ def repair_json_batch(
         of strings (``large_string`` for ``large_string`` input, else ``string``).
 
     Raises:
-        ValueError: A document fails in strict mode (the note names its index).
+        ValueError: A document fails in strict mode (the note names its index or row).
         NestingError: A document nests deeper than :data:`MAX_DEPTH`.
+        UnicodeEncodeError: Arrow input with ``ensure_ascii=False``, and a result holds a lone
+            surrogate (json_repair keeps an escape such as ``\ud800`` as one), which an Arrow
+            column cannot hold. The note names the row; a list gives json_repair's str.
         pyroid.InputError: ``texts`` is not one of the accepted kinds.
     """
 

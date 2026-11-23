@@ -153,18 +153,19 @@ Reference: rouge-score 0.1.2 (with NLTK 3.10.4's Porter stemmer) and sacrebleu 2
 
 ### pyroid.json_repair {#json_repair}
 
-Reference: json_repair 0.64.5. Rule: the same returned string or object, the same repair log, the same exception.
+Reference: json_repair 0.64.9. Rule: the same returned string or object, the same repair log, the same exception.
 
 | Check | Compared | Identical | Different |
 |---|---:|---:|---:|
-| Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 672 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file | 184,403 | 184,403 | 0 |
-| Parity suite on free-threaded CPython 3.15t (the 149 schema= replays skipped: no jsonschema) | 184,254 | 184,254 | 0 |
-| **Total** | **368,657** | **368,657** | **0** |
+| Parity suite on CPython 3.12, 33 checks: json_repair's own test suite replayed as 821 calls, 20,000 seeded broken LLM outputs x 8 option sets, Hypothesis grammar fuzzing with lone surrogates x 9 option sets, load and from_file | 184,552 | 184,552 | 0 |
+| Parity suite on free-threaded CPython 3.14t (the 166 schema= replays skipped: no jsonschema) | 184,386 | 184,386 | 0 |
+| Parity suite on free-threaded CPython 3.15t (the 166 schema= replays skipped: no jsonschema) | 184,386 | 184,386 | 0 |
+| **Total** | **553,324** | **553,324** | **0** |
 
 - Skipped by design: 4 calls whose result depends on the hash seed and 3 that depend on the recursion limit.
-- The Rust kernel also replays 451 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k.
+- The Rust kernel also replays 490 distinct upstream inputs x 4 option sets, and its Python-semantics tables are checked per interpreter (3.11 to 3.15t): str.isspace/isalpha/isdigit/isalnum on all 1,112,064 code points, json.loads 84k cases, json.dumps 45k, float.__repr__ 145k.
 
-<small>Source: the parity/ json_repair suite, run on 2026-11-06.</small>
+<small>Source: the parity/ json_repair suite on an EC2 c8g.16xlarge devbox, run on 2026-11-14.</small>
 
 ### pyroid.tabulate {#tabulate}
 
@@ -314,6 +315,25 @@ Reference: datatrove 0.10.1's stock FineWeb pipeline (and the libraries pyroid.p
 - The newer drop-ins (PIIFormatter, C4BadWordsFilter, SymbolLinesFormatter, URLFilter, sentence dedup) are counted under pyroid.filters and pyroid.dedup above.
 
 <small>Source: python/tests/test_integrations_*.py, test_cli.py, test_cli_scale.py, test_dedup_files.py and examples/datatrove/verify.py (2026-11-06 to 2026-11-09), and bench/fineweb_warc.py on AWS EC2 c7i.4xlarge (bench/results/aws-c7i.4xlarge/2026-11-09-warc, 2026-11-09).</small>
+
+### pyroid.yaml {#yaml}
+
+Reference: PyYAML 6.0.3's pure-Python SafeLoader and SafeDumper. Rule: the same objects (types, key order, shared objects) or the same exception class, str() and fields; the same dumped text byte for byte.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| Real-file corpus: 11,989 YAML files from 1,855 repositories and Hugging Face cards (GitHub Actions workflows, Kubernetes manifests, Helm charts, docker-compose and conda files, OpenAPI specs, mkdocs configs, model and dataset cards, files of 1 to 100 MB); safe_load_all of the bytes, str and file-object input of the 108 files that raise, and safe_dump_all under 6 option sets | 83,490 | 83,490 | 0 |
+| yaml-test-suite data release 2022-01-17 (402 cases), the same checks | 2,154 | 2,154 | 0 |
+| Mutation fuzzing: 689 seed documents (PyYAML's test data, the test suite) with random edits and splices, safe_load_all as str and bytes and safe_load, 16 processes for 4 minutes | 28,258,515 | 28,258,515 | 0 |
+| Emitter replay: event streams from PyYAML's parser, its dumpers and random generators, under every emitter option; the text, each write boundary and the error | 181,660 | 181,660 | 0 |
+| Floats: safe_dump of random bit patterns and of values exactly between two shortest decimals | 900,000 | 900,000 | 0 |
+| pytest test cases on CPython 3.12 (test_yaml_parity.py): PyYAML's test data (524 files as str, bytes and file objects read in pieces; dumps of 293 files under 6 option sets and both dumpers), the test suite's 706 files, reader errors at chunk boundaries, tagged edge cases, Hypothesis loads of mutated YAML and dumps of random data | 1,581 | 1,581 | 0 |
+| **Total** | **29,427,400** | **29,427,400** | **0** |
+
+- RecursionError on deep nesting depends on sys.getrecursionlimit() and the caller's stack; pyroid matches PyYAML's depth within 3 levels.
+- CSafeLoader and CSafeDumper are not the reference; how they differ from SafeLoader and SafeDumper on the same data is listed in the guide.
+
+<small>Source: bench/yaml/check_oracle.py against bench/yaml/record_oracle.py's recordings, python/tests/test_yaml_parity.py, and the emitter fixture replay in crates/pyroid-core/src/yaml/emitter.rs, run on 2026-11-14 on an EC2 c8g.16xlarge (linux/aarch64).</small>
 <!-- parity:end -->
 
 ### pyroid.warc {#warc}
@@ -362,9 +382,54 @@ as returning an unchanged string as the same object.
 - [Differences from jieba](guides/jieba.md#differences-from-jieba)
 - [Differences from trafilatura](guides/trafilatura.md#differences-from-trafilatura)
 - [Differences from warcio](guides/warc.md#differences-from-warcio)
+- [Differences from PyYAML](guides/yaml.md#differences-from-pyyaml), and how PyYAML's
+  `CSafeLoader` differs from the `SafeLoader` pyroid follows
+  ([list](guides/yaml.md#differences-between-csafeloader-and-safeloader))
 - [Differences from Unidecode](guides/translit.md#differences-from-unidecode).
   `pyroid.translit.unidecode` deliberately does not reproduce Unidecode's output; see
   [how different it is](guides/translit.md#how-different-is-it-from-unidecode).
+
+## Installed versions
+
+Each module reproduces one release of its incumbent (trafilatura two), and the parity above is
+against that release. When another release is installed, the module still gives the reproduced
+release's results, and emits one
+[`pyroid.VersionMismatchWarning`](reference/pyroid.md#pyroid.VersionMismatchWarning) per process
+and library, at the line that imported it (or called `pyroid.patch(...)`):
+
+```text
+script.py:1: VersionMismatchWarning: pyroid.ftfy reproduces ftfy 6.3.1, but ftfy 6.2.0 is installed: results can differ from it. Install ftfy==6.3.1 to compare like for like (or silence this with warnings.simplefilter("ignore", pyroid.VersionMismatchWarning)).
+```
+
+The check reads the installed distribution's metadata and never imports the library. Without
+the library it costs one `importlib.util.find_spec` call; a checkout without metadata is not
+checked. Each library is checked once per process, by whichever module asks first, and
+`pyroid run` warns once per process tree.
+
+| Library | Release reproduced | Checked by |
+|---|---|---|
+| ftfy | ftfy 6.3.1 | `import pyroid.ftfy`, `pyroid.patch("ftfy")` |
+| fastText | fasttext-predict 0.9.2.4, or fasttext-numpy2-wheel 0.9.2 and fasttext-wheel 0.9.2 when one of them is installed; fasttext 0.9.3 gives the same results | `import pyroid.fasttext`, `pyroid.patch("fasttext")` |
+| datatrove | datatrove 0.10.1 | `import pyroid.filters`, `pyroid.dedup`, `pyroid.warc` or `pyroid.integrations.datatrove` |
+| PyThaiNLP | pythainlp 5.4.0 | the Thai tokenizer, when it reads the installed package's word list and model |
+| SudachiDict | sudachidict-core 20261015 | the Japanese tokenizer, when it reads the installed package's dictionary |
+| tldextract | tldextract 5.4.0 | `pyroid.filters.URLFilter`, when it loads tldextract |
+| anyascii | anyascii 0.3.3 | `import pyroid.translit`, `pyroid.patch("anyascii")` |
+| rouge-score | rouge-score 0.1.2 | `import pyroid.metrics.rouge_scorer` (and its `scoring`, `tokenizers` and `tokenize`) |
+| NLTK | nltk 3.10.4 | `import pyroid.nltk`, `pyroid.patch("nltk")`; `pyroid.metrics.rouge_scorer` for its Porter stemmer |
+| sacrebleu | sacrebleu 2.6.0 | `import pyroid.metrics.sacrebleu` |
+| json_repair | json-repair 0.64.9 | `import pyroid.json_repair` |
+| PyYAML | pyyaml 6.0.3; 6.0, 6.0.1 and 6.0.2 give the same results | `import pyroid.yaml`, `pyroid.patch("yaml")` |
+| tabulate | tabulate 0.10.0 | `import pyroid.tabulate`, `pyroid.patch("tabulate")` |
+| datasketch | datasketch 2.0.0 | `import pyroid.datasketch`, `pyroid.patch("datasketch")` |
+| jieba | jieba 0.42.1 | `import pyroid.jieba` |
+| Trafilatura | trafilatura 2.3.1, and 1.11.0 with `compat="1.11.0"` | `import pyroid.trafilatura`, `pyroid.patch("trafilatura")` |
+| warcio | warcio 1.8.2 | `import pyroid.warc`, `pyroid.patch("warcio")` |
+| NeMo Curator | nemo-curator 1.4.0 | `import pyroid.nemo` or `pyroid.integrations.nemo_curator`, `pyroid.patch("nemo_curator")` |
+
+With trafilatura 1.11.0 installed, `import pyroid.trafilatura` says to pass `compat="1.11.0"`.
+`pyroid.patch("trafilatura")`, datatrove's `Trafilatura` step and the FineWeb recipe choose the
+release themselves, so they warn only about a release pyroid does not reproduce.
 
 ## Interpreters and Unicode versions
 

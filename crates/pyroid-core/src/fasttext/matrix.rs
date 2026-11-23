@@ -19,8 +19,10 @@ use super::io::Reader;
 /// The published fastText wheels are built by GCC with `-O3`, which
 /// contracts these loops into fused multiply-adds where the base ISA has
 /// them: on aarch64 the reference rounds once, on baseline x86-64 twice.
-/// The dense `dotRow` is vectorized instead: products four at a time, added
-/// in order, and only its scalar tail is fused (see [`Matrix::dot_row`]).
+/// fasttext-predict's dense `dotRow` is vectorized instead: products four at
+/// a time, added in order, and only its scalar tail is fused; upstream
+/// fastText 0.9.2's wheels (`fasttext-numpy2-wheel`, `fasttext-wheel`) fuse
+/// the whole row (see [`Matrix::dot_row`] and [`Matrix::set_fused_dot`]).
 /// Measured against fasttext-predict 0.9.2.4 on aarch64: with this split, all
 /// 26,464 pinned lid.176 predictions, every synthetic qout/qnorm model and
 /// dense models of every dim from 1 to 33 are bit-identical;
@@ -47,6 +49,8 @@ pub struct Dense {
     rows: usize,
     cols: usize,
     data: Vec<f32>,
+    /// `dotRow` fuses every multiply-add, not only the tail.
+    fused_dot: bool,
 }
 
 /// `ProductQuantizer` (8 bits per code: 256 centroids per sub-quantizer).
@@ -94,12 +98,66 @@ impl Dense {
             .checked_mul(cols as u64)
             .ok_or_else(|| LoadError::Invalid(format!("{what}: {rows} x {cols} overflows")))?;
         let data = r.f32s(count, what)?;
-        Ok(Self { rows, cols, data })
+        Ok(Self {
+            rows,
+            cols,
+            data,
+            fused_dot: false,
+        })
     }
 
     #[inline]
     fn row(&self, i: usize) -> &[f32] {
         &self.data[i * self.cols..(i + 1) * self.cols]
+    }
+
+    /// `x += row i` for each id, in order (every id a row).
+    ///
+    /// Each element of `x` gets the same float additions in the same order
+    /// as one `addRowToVector` per id, so the result is bit-identical. The
+    /// work is regrouped by column blocks over tiles of ids: a block of `x`
+    /// stays in registers across a tile instead of being stored and loaded
+    /// again for every row, which made the store-to-load latency, not the
+    /// row loads, the limit for small `dim` (lid.176 has 16).
+    fn add_rows(&self, x: &mut [f32], ids: &[i32]) {
+        let cols = self.cols;
+        // About 32 KiB of rows per tile, so later column blocks find them in L1.
+        let tile = (8192 / cols.max(1)).clamp(8, 64);
+        for ids in ids.chunks(tile) {
+            let mut c = 0;
+            while c + 16 <= cols {
+                self.add_block::<16>(x, c, ids);
+                c += 16;
+            }
+            if c + 8 <= cols {
+                self.add_block::<8>(x, c, ids);
+                c += 8;
+            }
+            if c + 4 <= cols {
+                self.add_block::<4>(x, c, ids);
+                c += 4;
+            }
+            while c < cols {
+                self.add_block::<1>(x, c, ids);
+                c += 1;
+            }
+        }
+    }
+
+    /// `x[c..c + B] += row[c..c + B]` for each id, in order.
+    #[inline]
+    fn add_block<const B: usize>(&self, x: &mut [f32], c: usize, ids: &[i32]) {
+        let mut acc: [f32; B] = x[c..c + B].try_into().expect("a block of x");
+        for &id in ids {
+            let start = id as usize * self.cols + c;
+            let row: &[f32; B] = self.data[start..start + B]
+                .try_into()
+                .expect("a block of a row");
+            for (a, &r) in acc.iter_mut().zip(row) {
+                *a += r;
+            }
+        }
+        x[c..c + B].copy_from_slice(&acc);
     }
 
     pub fn data(&self) -> &[f32] {
@@ -297,6 +355,29 @@ impl Matrix {
         }
     }
 
+    /// `add_row(x, i)` for each id in `ids`, in order. Every id must be in
+    /// `0..rows`.
+    pub fn add_rows(&self, x: &mut [f32], ids: &[i32]) {
+        match self {
+            Self::Dense(d) => d.add_rows(x, ids),
+            Self::Quant(q) => {
+                for &id in ids {
+                    let i = id as usize;
+                    q.pq.addcode(x, q.code(i), q.norm(i));
+                }
+            }
+        }
+    }
+
+    /// Compute a dense `dotRow` as upstream fastText 0.9.2's wheels do (every
+    /// term fused where [`fused`] fuses) instead of as fasttext-predict does.
+    /// Quantized rows are the same in both.
+    pub fn set_fused_dot(&mut self, on: bool) {
+        if let Self::Dense(d) = self {
+            d.fused_dot = on;
+        }
+    }
+
     /// `dotRow(v, i)`. Dense rows check for NaN like fastText; quantized
     /// rows do not (nor does fastText).
     #[inline]
@@ -304,10 +385,15 @@ impl Matrix {
         match self {
             Self::Dense(d) => {
                 let row = d.row(i);
-                // GCC vectorizes the products four at a time and adds them in
-                // order (two roundings); the scalar tail of `cols % 4` terms
-                // is contracted into fused multiply-adds.
-                let body = row.len() - row.len() % 4;
+                // fasttext-predict: GCC vectorizes the products four at a time
+                // and adds them in order (two roundings); the scalar tail of
+                // `cols % 4` terms is contracted into fused multiply-adds.
+                // Upstream's wheels: one fused multiply-add per term.
+                let body = if d.fused_dot {
+                    0
+                } else {
+                    row.len() - row.len() % 4
+                };
                 let mut acc = 0.0f32;
                 for (&a, &b) in row[..body].iter().zip(v) {
                     acc += a * b;

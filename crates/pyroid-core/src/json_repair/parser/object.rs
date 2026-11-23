@@ -1,4 +1,4 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! `parse_object.py` (without schema support: `schema=` is delegated).
 
 use super::super::value::{Object, Value, new_object};
@@ -444,7 +444,8 @@ impl Parser<'_> {
                 self.splice(a, b, &normalized);
                 self.index = start_index;
                 self.ctx_set(Ctx::ObjectKey);
-                let repaired = self.parse_object()?;
+                // The same level, read again: not one level deeper.
+                let repaired = self.reread(Self::parse_object)?;
                 self.ctx_reset();
                 self.deferred.push(Ctx::ObjectKey);
                 Ok(Some(repaired))
@@ -455,7 +456,7 @@ impl Parser<'_> {
                 });
                 self.index = start_index;
                 self.ctx_set(Ctx::ObjectKey);
-                let repaired = self.parse_array(']')?;
+                let repaired = self.reread(|p| p.parse_array(']'))?;
                 self.ctx_reset();
                 self.deferred.push(Ctx::ObjectKey);
                 Ok(Some(Value::Array(repaired)))
