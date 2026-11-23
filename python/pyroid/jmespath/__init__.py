@@ -15,6 +15,7 @@ import sys
 import warnings
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning, PyroidError
 from pyroid._pyroid import jmespath as _native
 from pyroid.jmespath import _find, ast, exceptions, functions, lexer, parser, visitor
@@ -23,6 +24,7 @@ from pyroid.jmespath.visitor import Options
 #: The jmespath release whose behaviour this module reproduces.
 JMESPATH_VERSION = "1.1.0"
 __version__ = JMESPATH_VERSION
+_versions.check(__name__, "jmespath", f"jmespath=={JMESPATH_VERSION}")
 
 __all__ = [
     "JMESPATH_VERSION",

@@ -1,5 +1,5 @@
-# Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
-"""A drop-in, Rust-backed replacement for json_repair 0.64.5 (``import pyroid.json_repair``).
+# Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
+"""A drop-in, Rust-backed replacement for json_repair 0.64.9 (``import pyroid.json_repair``).
 
 ``repair_json``, ``loads``, ``load`` and ``from_file`` have json_repair's
 signatures and return the same strings and objects. The repair runs in Rust,
@@ -18,6 +18,7 @@ import warnings
 from pathlib import Path
 from typing import Any, TextIO
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning, PyroidError
 from pyroid._pyroid import json_repair as _native
 
@@ -35,7 +36,8 @@ __all__ = [
 ]
 
 #: The json_repair release whose behaviour this module reproduces.
-JSON_REPAIR_VERSION = "0.64.5"
+JSON_REPAIR_VERSION = "0.64.9"
+_versions.check(__name__, "json_repair", f"json-repair=={JSON_REPAIR_VERSION}")
 
 #: Arguments that are always forwarded to the real json_repair (it must be installed).
 DELEGATED = ("schema",)
@@ -97,29 +99,14 @@ def _json_repair(name: str, reason: str) -> Any:
         real = real.__wrapped__
     if real is None:
         raise PyroidError(
-            f"pyroid.json_repair.{name}: {reason} is not supported by pyroid's Rust port, and "
+            f"pyroid.json_repair.{name}: pyroid's Rust port does not handle {reason}, and "
             f"json_repair is not installed to fall back to (pip install "
             f"json-repair=={JSON_REPAIR_VERSION})"
         )
-    if "version" not in _WARNED:
-        _WARNED.add("version")
-        from importlib import metadata
-
-        try:
-            version = metadata.version("json-repair")
-        except metadata.PackageNotFoundError:
-            version = None
-        if version is not None and version != JSON_REPAIR_VERSION:
-            warnings.warn(
-                f"pyroid.json_repair is falling back to json_repair {version}, "
-                f"not {JSON_REPAIR_VERSION}",
-                RuntimeWarning,
-                stacklevel=_caller_stacklevel(),
-            )
     if f"{name}:{reason}" not in _WARNED:
         _WARNED.add(f"{name}:{reason}")
         warnings.warn(
-            f"pyroid.json_repair.{name}: {reason} is not supported by the Rust port; "
+            f"pyroid.json_repair.{name}: the Rust port does not handle {reason}; "
             "delegating to json_repair (slow path). This warning is shown once.",
             FallbackWarning,
             stacklevel=_caller_stacklevel(),
@@ -212,20 +199,44 @@ def repair_json(
     schema_repair_mode: str = "standard",
     **json_dumps_args: Any,
 ) -> Any:
-    """Repair broken JSON, like ``json_repair.repair_json``.
+    """Repair a JSON string, like ``json_repair.repair_json``.
 
-    >>> repair_json("{'a': 1, b: [1, 2,}")
-    '{"a": 1, "b": [1, 2]}'
+    Args:
+        json_str: The text to repair.
+        return_objects: Return the decoded value instead of a JSON string.
+        skip_json_loads: Skip the ``json.loads`` validity check (valid JSON then
+            goes through the repair parser too, as in json_repair).
+        logging: Return ``(value, repair_log)``; the log is a list of
+            ``{"text": ..., "context": ...}`` dicts, empty when nothing was repaired.
+        json_fd: Read the text from this file instead (prefer :func:`load`).
+        chunk_length: Ignored (json_repair's file chunk size).
+        stream_stable: Keep repairs of a growing streamed prefix stable.
+        strict: Raise ``ValueError`` on structural problems instead of repairing them.
+        schema: A JSON Schema or pydantic model guiding the repair (delegated to
+            json_repair; needs json_repair, and jsonschema/pydantic as it does).
+        schema_repair_mode: ``"standard"`` or ``"salvage"`` (requires ``schema``).
+        **json_dumps_args: Passed to ``json.dumps`` for the string result
+            (``ensure_ascii``, ``indent``, ``separators``, ``sort_keys``,
+            ``allow_nan`` are reproduced in Rust; others call ``json.dumps``).
 
-    Valid JSON comes back as ``json.dumps(json.loads(json_str))``; anything else
-    is repaired with json_repair's heuristics. ``return_objects=True`` returns
-    the value instead of a string, ``logging=True`` returns ``(value, repair_log)``.
+    Returns:
+        The repaired JSON string (``""`` when nothing was found), the value with
+        ``return_objects``, or ``(value, log)`` with ``logging``.
+
+    Raises:
+        ValueError: In strict mode, for bad ``schema_repair_mode`` combinations,
+            or from ``int()`` limits, as json_repair does.
+        NestingError: The input nests deeper than :data:`MAX_DEPTH`.
     """
     mode = _normalize_schema_repair_mode(schema_repair_mode)
     if schema is None and mode == "salvage":
         raise ValueError("schema_repair_mode='salvage' requires schema.")
     if schema is not None and strict:
         raise ValueError("schema and strict cannot be used together.")
+    if json_fd is not None and not json_fd.seekable():
+        # As json_repair does: a stream that cannot be rewound is read and repaired as a str.
+        json_str = json_fd.read()
+        json_fd = None
     position = None
     if json_fd is not None:
         position = _tell(json_fd)
@@ -270,7 +281,7 @@ def repair_json(
             if out_mode == _MODE_LOGGING:
                 return value, []
             if dump is _PYTHON_DUMPS:
-                return "" if value == "" else json.dumps(value, **json_dumps_args)
+                return json.dumps(value, **json_dumps_args)
             return value
     result = _native.repair(
         text,
@@ -356,7 +367,7 @@ def loads(
     schema: Any | None = None,
     schema_repair_mode: str = "standard",
 ) -> Any:
-    """Like ``json.loads``, but repairs the JSON first (``json_repair.loads``)."""
+    """Like ``json.loads``, but repairs the text first (``json_repair.loads``)."""
     return repair_json(
         json_str=json_str,
         return_objects=True,
@@ -378,7 +389,7 @@ def load(
     schema: Any | None = None,
     schema_repair_mode: str = "standard",
 ) -> Any:
-    """Like ``json.load``, but repairs the JSON first (``json_repair.load``)."""
+    """Like ``json.load``, but repairs the text first (``json_repair.load``)."""
     return repair_json(
         json_fd=fd,
         chunk_length=chunk_length,
@@ -400,7 +411,7 @@ def from_file(
     schema: Any | None = None,
     schema_repair_mode: str = "standard",
 ) -> Any:
-    """Read, repair and decode the JSON in `filename` (``json_repair.from_file``)."""
+    """Read and repair the JSON in `filename` (``json_repair.from_file``)."""
     with Path(filename).open() as fd:
         return load(
             fd=fd,
@@ -422,10 +433,33 @@ def repair_json_batch(
     strict: bool = False,
     **json_dumps_args: Any,
 ) -> Any:
-    """:func:`repair_json` over many documents at once, on pyroid's thread pool.
+    r""":func:`repair_json` over many documents at once, on pyroid's thread pool.
 
-    Not part of json_repair. Each result equals ``json_repair.repair_json(doc, ...)``.
-    See ``json_repair.pyi`` for details.
+    Not part of json_repair. Each result equals ``json_repair.repair_json(doc,
+    skip_json_loads=..., stream_stable=..., strict=..., **json_dumps_args)``;
+    a document whose repair equals its input comes back as the original object.
+
+    Args:
+        texts: A str, a list or tuple of str, or an Arrow string array/column
+            (``string``, ``large_string`` or ``string_view``; nulls stay null).
+        threads: ``None`` uses pyroid's shared thread pool; ``n`` runs at most
+            ``n`` tasks at once; ``1`` runs on the calling thread.
+        skip_json_loads: As for :func:`repair_json`.
+        stream_stable: As for :func:`repair_json`.
+        strict: As for :func:`repair_json`.
+        **json_dumps_args: As for :func:`repair_json`.
+
+    Returns:
+        The same kind as ``texts``: str, list, tuple, or a :class:`pyroid.Column`
+        of strings (``large_string`` for ``large_string`` input, else ``string``).
+
+    Raises:
+        ValueError: A document fails in strict mode (the note names its index or row).
+        NestingError: A document nests deeper than :data:`MAX_DEPTH`.
+        UnicodeEncodeError: Arrow input with ``ensure_ascii=False``, and a result holds a lone
+            surrogate (json_repair keeps an escape such as ``\ud800`` as one), which an Arrow
+            column cannot hold. The note names the row; a list gives json_repair's str.
+        pyroid.InputError: ``texts`` is not one of the accepted kinds.
     """
     dump = _dump_config(json_dumps_args)
     if dump is _PYTHON_DUMPS:
@@ -448,6 +482,20 @@ def repair_json_batch(
             return one(texts)
         out = [one(doc) for doc in texts]
         return out if isinstance(texts, list) else tuple(out)
+
+    def fallback(doc: str) -> Any:
+        # A document the port does not handle (_RESERVED); also called from Rust for Arrow rows.
+        return _json_repair("repair_json_batch", _RESERVED).repair_json(
+            doc,
+            skip_json_loads=skip_json_loads,
+            stream_stable=stream_stable,
+            strict=strict,
+            **json_dumps_args,
+        )
+
+    if isinstance(texts, list):
+        # One read of the caller's list (atomic): the fallback below indexes the same items.
+        texts = list(texts)
     result, unsupported = _native.repair_batch(
         texts,
         bool(skip_json_loads),
@@ -456,19 +504,10 @@ def repair_json_batch(
         sys.get_int_max_str_digits(),
         dump,
         threads=threads,
+        delegate=fallback,
     )
     if not unsupported:
         return result
-    real = _json_repair("repair_json_batch", _RESERVED)
-
-    def fallback(doc: str) -> Any:
-        return real.repair_json(
-            doc,
-            skip_json_loads=skip_json_loads,
-            stream_stable=stream_stable,
-            strict=strict,
-            **json_dumps_args,
-        )
 
     if isinstance(texts, str):
         return fallback(texts)

@@ -12,9 +12,11 @@ Each module runs on list[str] and Arrow input and single str calls, at every ``-
 ftfy (FineWeb text, plus mojibake made from it), translit, fastText LID (.bin and .ftz), the Gopher, C4 and
 FineWeb filters and the formatters, MinHash and exact and sentence dedup, pyroid.text, pyroid.jieba,
 pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.metrics
-(ROUGE, BLEU, chrF), pyroid.datasketch, pyroid.jmespath (queries over a boto3-style response and over
-records), and the FineWeb-2 filter and MinHash configs of every language pyroid tokenizes natively here
-(Japanese only with SudachiDict installed).
+(ROUGE, BLEU, chrF), pyroid.datasketch, pyroid.yaml (generated documents loaded and dumped in several
+styles), pyroid.tabulate (tables of numbers, FineWeb words and mixed cells in the common formats),
+pyroid.dateutil (dates and times in common formats, valid and not), pyroid.jmespath (queries over a
+boto3-style response and over records), and the FineWeb-2 filter and MinHash configs of every language
+pyroid tokenizes natively here (Japanese only with SudachiDict installed).
 
 Needs only pyroid and numpy. pyarrow is optional: without it, as on Windows ARM64, the Arrow calls are
 skipped. Nothing is checked or timed: an instrumented build is never shipped.
@@ -24,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime
 import json
 import random
 import sys
@@ -300,6 +303,133 @@ class Trainer:
             lsh.query(lean)
             m.jaccard(ms[0])
 
+    def yaml(self) -> None:
+        # bench/yaml/ would be imported as a namespace package named yaml; pyroid.yaml has to
+        # see that PyYAML is not installed.
+        here = Path(__file__).resolve().parent
+        saved = sys.path[:]
+        sys.path[:] = [p for p in sys.path if p and Path(p).resolve() != here]
+        try:
+            import pyroid.yaml as Y
+        finally:
+            sys.path[:] = saved
+
+        rnd = random.Random(TRAIN_SEED)
+        words = [w for t in self.texts[:300] for w in t.split()[:30]] or ["x"]
+        odd = ["yes", "no", "on", "1.0", "0x1F", "~", "", "a: b", "- x", "#c", "1e3", "2026-11-16", ".inf"]
+
+        def value(depth: int) -> Any:
+            k = rnd.randrange(10 if depth < 3 else 7)
+            if k == 0:
+                return rnd.randint(-(10**6), 10**6)
+            if k == 1:
+                return rnd.random() * 10 ** rnd.randint(-3, 6)
+            if k == 2:
+                return rnd.choice([True, False, None])
+            if k == 3:
+                return " ".join(rnd.choices(words, k=rnd.randint(1, 8)))
+            if k == 4:
+                return rnd.choice(words)
+            if k in (5, 6):
+                return rnd.choice(odd)
+            if k in (7, 8):
+                return {rnd.choice(words): value(depth + 1) for _ in range(rnd.randint(0, 6))}
+            return [value(depth + 1) for _ in range(rnd.randint(0, 6))]
+
+        docs = [value(0) for _ in range(3000)]
+        styles: list[dict[str, Any]] = [{}, {"default_flow_style": True}, {"sort_keys": False}]
+        styles += [{"allow_unicode": True, "indent": 4, "width": 40}, {"explicit_start": True}]
+        texts = [Y.safe_dump(d, **styles[i % len(styles)]) for i, d in enumerate(docs)]
+        stream = Y.safe_dump_all(docs[:1000])
+        list(Y.safe_load_all(stream))
+        list(Y.safe_load_all(stream.encode()))
+        small = ["a: 1\n", "name: test\nversion: 1.2.3\ndeps: [a, b, c]\nopts: {x: true, y: null}\n" * 4]
+        small += [Y.safe_dump(docs[:12])]
+        # Single calls in the hundreds of thousands, as callers make them: with fewer, the
+        # per-call path stays cold next to the rest of the profile.
+        for _ in range(10):
+            for t, d in zip(texts, docs, strict=True):
+                Y.safe_load(t)
+                Y.safe_dump(d)
+        for _ in range(20_000):
+            for s in small:
+                Y.safe_dump(Y.safe_load(s))
+                Y.load(s, Loader=Y.SafeLoader)
+        for bad in ["a: [1, 2", "a: b: c", "\t- x", "key: 'open", "--- !!python/object:x {}", "&a [*b]"]:
+            with contextlib.suppress(Y.YAMLError):
+                Y.safe_load(bad)
+
+    def tabulate(self) -> None:
+        import pyroid.tabulate as TB
+
+        rnd = random.Random(TRAIN_SEED)
+        words = [w for t in self.texts[:500] for w in t.split()[:50]] or ["x"]
+
+        def cell(kind: str, i: int, j: int) -> Any:
+            if kind == "numbers":
+                return i * 7 + j if j % 2 == 0 else rnd.random() * 10 ** rnd.randint(-4, 7)
+            if kind == "text":
+                if j % 3 == 2:
+                    return str(rnd.randint(0, 10**7))
+                return " ".join(rnd.choices(words, k=rnd.randint(1, 5)))
+            mixed = [words[i % len(words)], -i, rnd.random() * 1000, None if i % 6 == 0 else "y" * (i % 4)]
+            return [*mixed, f"{i}.5"][j % 5]
+
+        formats = ["simple", "plain", "pipe", "github", "grid", "fancy_grid", "psql", "rst", "orgtbl", "html"]
+        formats += ["latex", "tsv"]
+        for n, cols in ((1, 3), (6, 4), (800, 8), (30_000, 9)):
+            for kind in ("numbers", "text", "mixed"):
+                rows = [[cell(kind, i, j) for j in range(cols)] for i in range(n)]
+                headers = [f"h{j}" for j in range(cols)]
+                for fmt in formats if n <= 800 else formats[:5]:
+                    TB.tabulate(rows, headers=headers, tablefmt=fmt)
+                TB.tabulate(rows, headers="firstrow", floatfmt=".3f", intfmt=",", missingval="-")
+                TB.tabulate(rows, showindex=True, numalign="right", stralign="center")
+        for _ in range(self.per_doc):
+            TB.tabulate([[rnd.random(), rnd.randint(0, 99), rnd.choice(words)]], headers=["a", "b", "c"])
+
+    def dateutil(self) -> None:
+        from pyroid.dateutil import parser as P
+
+        rnd = random.Random(TRAIN_SEED)
+        formats = ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y%m%dT%H%M%SZ"]
+        formats += ["%Y-%m-%dT%H:%M:%S+05:30", "%d/%m/%Y", "%m/%d/%y %I:%M %p", "%d %B %Y", "%B %d, %Y %H:%M"]
+        formats += ["%a, %d %b %Y %H:%M:%S +0000", "%A %d %b %Y", "%b %d %Y %I%p", "%Y.%m.%d", "%d-%b-%y"]
+        formats += ["%H:%M:%S", "%Y-W%W", "%c"]
+        start = datetime.datetime(1975, 1, 1)
+        span = 60 * 365 * 86400
+        stamps = [
+            start + datetime.timedelta(seconds=rnd.randint(0, span), microseconds=rnd.randint(0, 10**6 - 1))
+            for _ in range(20_000)
+        ]
+        dates = [d.strftime(formats[i % len(formats)]) for i, d in enumerate(stamps)]
+        dates += ["not a date", "32/13/2020", "2020-02-30", "", "12:61", "Mon 31 Feb", "1e5"] * 50
+        specs_ = ("auto", "seconds", "milliseconds")
+        isos = [d.isoformat(sep=" " if i % 3 else "T", timespec=specs_[i % 3]) for i, d in enumerate(stamps)]
+        isos += [d.date().isoformat() for d in stamps[:2000]] + ["2021-W05-3", "20210203T1504", "2021-13-01"]
+        prose = [f"{t[:60]} {d}" for t, d in zip(self.texts, dates, strict=False)]
+        for t in self.threads:
+            P.parse_batch(dates, threads=t, errors="coerce")
+            P.parse_batch(dates, threads=t, errors="coerce", dayfirst=True, ignoretz=True)
+            P.parse_batch(prose[:2000], threads=t, errors="coerce", fuzzy=True)
+            P.isoparse_batch(isos, threads=t, errors="coerce")
+            if pa is not None:
+                P.parse_batch(pa.array(dates), threads=t, errors="coerce", ignoretz=True)
+                P.isoparse_batch(pa.array(isos[:5000]), threads=t, errors="coerce")
+        # About two million single calls, as callers make them: with tens of thousands the
+        # per-call path stays cold next to the rest of the profile.
+        tzinfos = {"EST": -18000, "CET": 3600}
+        for _ in range(50):
+            for i, s in enumerate(dates):
+                with contextlib.suppress(ValueError, OverflowError):
+                    P.parse(s)
+                if i % 8 == 0:
+                    with contextlib.suppress(ValueError, OverflowError):
+                        P.parse(s + " EST", tzinfos=tzinfos, yearfirst=True)
+            for s in isos:
+                with contextlib.suppress(ValueError, OverflowError):
+                    P.isoparse(s)
+
     def jmespath(self) -> None:
         # This script's folder holds bench/jmespath/, which Python would import as a namespace
         # package named jmespath; pyroid.jmespath has to see that jmespath is not installed.
@@ -391,7 +521,7 @@ class Trainer:
     def run(self) -> dict[str, float]:
         warnings.simplefilter("ignore")  # FallbackWarning and friends: the paths still run
         sections = ["ftfy", "translit", "fasttext", "filters", "dedup", "text", "multilingual", "jieba"]
-        sections += ["json_repair", "metrics", "datasketch", "jmespath"]
+        sections += ["json_repair", "metrics", "datasketch", "yaml", "tabulate", "dateutil", "jmespath"]
         for name in sections:
             self.section(name, getattr(self, name))
         return self.timings

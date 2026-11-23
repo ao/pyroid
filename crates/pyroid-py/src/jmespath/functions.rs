@@ -315,9 +315,14 @@ fn type_check_single<'py>(
     if n_subtypes == 1 {
         return check_all(subtypes().next().unwrap_or_default());
     }
-    if current.is_truthy()? {
+    // `if current: current[0]`, in one read for a list (it can change between the two).
+    let first_el = match current.cast_exact::<PyList>() {
+        Ok(l) => l.get_item(0).ok(),
+        Err(_) if current.is_truthy()? => Some(current.get_item(0)?),
+        Err(_) => None,
+    };
+    if let Some(first_el) = first_el {
         // The first element's type picks the subtype the others must have.
-        let first_el = current.get_item(0)?;
         let first = type_name(&Val::Py(first_el.clone()))?;
         let mut picked = subtypes().find(|s| reverse_type(s).contains(&first.as_ref()));
         if picked.is_none() {
@@ -419,7 +424,8 @@ pub(crate) fn call<'py>(
             if a.is_instance_of::<PyString>() {
                 a.get_item(c.reverse_slice.bind(py))
             } else if let Ok(l) = a.cast_exact::<PyList>() {
-                let mut items: Vec<Bound<'py, PyAny>> = l.iter().collect();
+                let mut items: Vec<Bound<'py, PyAny>> =
+                    crate::input::list_items(l).iter().collect();
                 items.reverse();
                 Ok(PyList::new(py, items)?.into_any())
             } else {
@@ -689,7 +695,7 @@ fn sort<'py>(ctx: &Ctx<'py, '_>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, P
     let py = ctx.py;
     let mut items = Vec::new();
     if let Ok(l) = a.cast_exact::<PyList>() {
-        items.extend(l.iter());
+        items.extend(crate::input::list_items(l).iter());
     } else {
         // `list(sorted(arg))` on something that is not a list: Python's own sort.
         let r = config(py)?.sorted.bind(py).call1((a,))?;
@@ -731,11 +737,23 @@ fn sort_by<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = ctx.py;
     let array = array.to_py(ctx)?;
-    if !array.is_truthy()? {
+    // A list is read once (another thread may change it meanwhile).
+    let snapshot = array
+        .cast_exact::<PyList>()
+        .ok()
+        .map(crate::input::list_items);
+    let empty = match &snapshot {
+        Some(t) => t.is_empty(),
+        None => !array.is_truthy()?,
+    };
+    if empty {
         return Ok(array);
     }
     // _func_sort_by -> expref.visit -> visit: the first element's type decides.
-    let first = array.get_item(0)?;
+    let first = match &snapshot {
+        Some(t) => t.get_item(0)?,
+        None => array.get_item(0)?,
+    };
     let first_key = apply(ctx, expref, &first, depth + 3)?;
     let required = jmespath_type_of(ctx, &type_name(&Val::Py(first_key))?)?;
     if required != "number" && required != "string" {
@@ -748,10 +766,9 @@ fn sort_by<'py>(
         ));
     }
     // sorted() lists the array, then computes every key (keyfunc -> expref.visit -> visit).
-    let items = if let Ok(l) = array.cast_exact::<PyList>() {
-        l.iter().collect()
-    } else {
-        items_of(ctx, &array)?
+    let items = match &snapshot {
+        Some(t) => t.iter().collect(),
+        None => items_of(ctx, &array)?,
     };
     let mut keys = Vec::with_capacity(items.len());
     for (n, x) in items.iter().enumerate() {

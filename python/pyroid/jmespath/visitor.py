@@ -73,10 +73,10 @@ class Options:
     """Options for evaluating an expression.
 
     Args:
-        dict_cls: The class of the dicts a multi-select hash (``{a: a}``) builds, for example
-            ``collections.OrderedDict``. ``None`` means ``dict``.
-        custom_functions: An instance of a ``pyroid.jmespath.functions.Functions`` subclass
-            (or of jmespath's own ``Functions``) with extra ``_func_*`` functions.
+        dict_cls: The class of the dicts a multi-select hash (`{a: a}`) builds, for example
+            `collections.OrderedDict`. `None` means `dict`.
+        custom_functions: An instance of a `pyroid.jmespath.functions.Functions` subclass (or of
+            jmespath's own `Functions`) with extra `_func_*` functions.
     """
 
     def __init__(self, dict_cls: Any = None, custom_functions: Any = None) -> None:
@@ -110,13 +110,13 @@ if _find.jmespath() is not None:
 
 
 class Visitor:
-    """Dispatch ``visit(node)`` to ``visit_<node type>``."""
+    """Dispatch `visit(node)` to `visit_<node type>`."""
 
     def __init__(self) -> None:
         self._method_cache: dict[Any, Any] = {}
 
     def visit(self, node: Any, *args: Any, **kwargs: Any) -> Any:
-        """Visit ``node``."""
+        """Visit `node`."""
         node_type = node["type"]
         method = self._method_cache.get(node_type)
         if method is None:
@@ -125,7 +125,7 @@ class Visitor:
         return method(node, *args, **kwargs)
 
     def default_visit(self, node: Any, *args: Any, **kwargs: Any) -> Any:
-        """Called for a node type without a ``visit_<type>`` method."""
+        """Called for a node type without a `visit_<type>` method."""
         raise NotImplementedError("default_visit")
 
 

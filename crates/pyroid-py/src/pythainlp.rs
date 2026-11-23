@@ -5,11 +5,12 @@
 //! needs anyway): `corpus/words_th.txt` and `corpus/sentenceseg_crfcut.model`,
 //! the files `pythainlp.tokenize` loads, or those of the directory
 //! `PYROID_PYTHAINLP_CORPUS` names. The package is located without importing
-//! it.
+//! it. A package other than pythainlp 5.4.0 (whose algorithms are ported) gets
+//! one `VersionMismatchWarning` when its files are read.
 
 use std::path::PathBuf;
 
-use pyo3::exceptions::{PyOSError, PyRuntimeWarning, PyValueError};
+use pyo3::exceptions::{PyOSError, PyValueError};
 use pyo3::prelude::*;
 use pyroid_core::filters;
 use pyroid_core::pythainlp::{self, ThaiError};
@@ -61,69 +62,20 @@ pub(crate) fn prepare(py: Python<'_>, language: &str) -> PyResult<()> {
             }
             ThaiError::Format(m) => PyValueError::new_err(format!("{}: {m}", dir.display())),
         })?;
+    // The package's own files: check its version (the files of PYROID_PYTHAINLP_CORPUS have none).
     if loaded_here && std::env::var_os("PYROID_PYTHAINLP_CORPUS").is_none() {
-        warn_version(py)?;
+        crate::errors::check_version(
+            py,
+            "pyroid's Thai tokenizer",
+            "pythainlp",
+            &format!("pythainlp=={PYTHAINLP_VERSION}"),
+        )?;
     }
     Ok(())
 }
 
 /// The PyThaiNLP release whose algorithms the port reproduces.
 pub(crate) const PYTHAINLP_VERSION: &str = "5.4.0";
-
-/// A `RuntimeWarning` if the installed pythainlp, whose word list and model
-/// were just read, is not [`PYTHAINLP_VERSION`]. Called once per process (when
-/// the data is loaded); `PYROID_PYTHAINLP_CORPUS` data has no version to check.
-fn warn_version(py: Python<'_>) -> PyResult<()> {
-    let metadata = py.import("importlib.metadata")?;
-    let version: String = match metadata.call_method1("version", ("pythainlp",)) {
-        Ok(v) => v.extract()?,
-        // Importable but not installed (a checkout): nothing to compare.
-        Err(e) if e.is_instance(py, &metadata.getattr("PackageNotFoundError")?) => {
-            return Ok(());
-        }
-        Err(e) => return Err(e),
-    };
-    if version == PYTHAINLP_VERSION {
-        return Ok(());
-    }
-    let msg = std::ffi::CString::new(format!(
-        "pyroid's Thai tokenizer runs PyThaiNLP {PYTHAINLP_VERSION}'s newmm and crfcut on the \
-         word list and sentence model of the installed pythainlp {version}: results can differ \
-         from PyThaiNLP {version}"
-    ))
-    .expect("no NUL in the message");
-    let category = py.get_type::<PyRuntimeWarning>();
-    PyErr::warn(py, &category, &msg, caller_stacklevel(py))
-}
-
-/// The `stacklevel` that points a warning at the first frame outside pyroid
-/// (as `pyroid.filters._caller_stacklevel` does).
-fn caller_stacklevel(py: Python<'_>) -> i32 {
-    let Ok(mut frame) = py
-        .import("sys")
-        .and_then(|sys| sys.call_method1("_getframe", (0,)))
-    else {
-        return 1;
-    };
-    let mut level = 1;
-    loop {
-        let in_pyroid = frame
-            .getattr("f_globals")
-            .and_then(|g| g.get_item("__name__"))
-            .and_then(|n| n.extract::<String>())
-            .is_ok_and(|n| n.starts_with("pyroid."));
-        let back = match frame.getattr("f_back") {
-            Ok(b) if !b.is_none() => b,
-            _ => break,
-        };
-        if !in_pyroid {
-            break;
-        }
-        frame = back;
-        level += 1;
-    }
-    level
-}
 
 /// The extra hint for a language pyroid could tokenize with PyThaiNLP's data.
 pub(crate) fn hint(language: &str) -> &'static str {

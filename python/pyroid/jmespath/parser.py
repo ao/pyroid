@@ -18,7 +18,7 @@ ParsedResult = _native.ParsedResult
 
 
 class Parser:
-    """jmespath's ``Parser``: ``parse()`` compiles an expression (cached)."""
+    """jmespath's `Parser`: `parse()` compiles an expression (cached)."""
 
     BINDING_POWER = {  # noqa: RUF012 - jmespath's class attribute
         "eof": 0,
@@ -65,7 +65,7 @@ class Parser:
         self._index = 0
 
     def parse(self, expression: Any) -> Any:
-        """Compile ``expression`` (or return the cached result)."""
+        """Compile `expression`, or return the cached `ParsedResult`."""
         return _native.parse(expression)
 
     @classmethod

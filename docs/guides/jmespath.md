@@ -144,8 +144,9 @@ reference counting, and the `==`, `get` and `sum` calls jmespath's semantics req
 pyroid.jmespath reproduces jmespath 1.1.0 (January 2026). jmespath 1.0.1, still common in older
 lockfiles, differs in two places: `avg()` divides by `float(len(arg))` (a different last bit for
 integer sums past 2^53, `OverflowError` for sums past about 1e308), and its parser cache holds 128
-expressions and evicts a random half (with the `random` module) when full. `pyroid.patch("jmespath")`
-with another jmespath installed says so in its `PatchWarning`.
+expressions and evicts a random half (with the `random` module) when full. With another jmespath
+installed, `import pyroid.jmespath` and `pyroid.patch("jmespath")` give one
+[`VersionMismatchWarning`](../compatibility.md#installed-versions).
 
 ## Differences from jmespath {#differences-from-jmespath}
 

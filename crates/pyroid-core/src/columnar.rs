@@ -291,6 +291,56 @@ impl BoolBuffers {
     }
 }
 
+/// Buffers of an Arrow array of 64-bit values (`int64`, `timestamp[us]`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct I64Buffers {
+    /// Number of rows.
+    pub len: usize,
+    /// One value per row (0 for null rows).
+    pub values: Vec<i64>,
+    /// Validity bitmap; `None` when there are no nulls.
+    pub validity: Option<Vec<u8>>,
+    /// Number of null rows.
+    pub null_count: usize,
+}
+
+impl I64Buffers {
+    /// Build from per-row values (`None` = null).
+    pub fn build(values: &[Option<i64>]) -> Self {
+        let len = values.len();
+        let null_count = values.iter().filter(|v| v.is_none()).count();
+        Self {
+            len,
+            values: values.iter().map(|v| v.unwrap_or(0)).collect(),
+            validity: (null_count > 0).then(|| bitmap(values.iter().map(Option::is_some), len)),
+            null_count,
+        }
+    }
+
+    /// Row `i`, or `None` if it is null. Panics if `i >= len`.
+    pub fn get(&self, i: usize) -> Option<i64> {
+        assert!(i < self.len, "row {i} out of range for {} rows", self.len);
+        if self.validity.as_deref().is_some_and(|v| !get_bit(v, i)) {
+            return None;
+        }
+        Some(self.values[i])
+    }
+
+    /// Concatenate several arrays into one.
+    pub fn concat(parts: &[&Self]) -> Self {
+        let len = parts.iter().map(|p| p.len).sum();
+        Self {
+            len,
+            values: parts
+                .iter()
+                .flat_map(|p| p.values.iter().copied())
+                .collect(),
+            validity: concat_validity(parts.iter().map(|p| (p.validity.as_deref(), p.len)), len),
+            null_count: parts.iter().map(|p| p.null_count).sum(),
+        }
+    }
+}
+
 /// Concatenate validity bitmaps; `None` (all valid) if no part has one.
 fn concat_validity<'a>(
     parts: impl Iterator<Item = (Option<&'a [u8]>, usize)> + Clone,

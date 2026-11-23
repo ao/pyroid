@@ -73,6 +73,13 @@ class MinHashLSHForest:
     _index: Any
 
     def __init__(self, num_perm: int = 128, l: int = 8) -> None: ...
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore a pickle: pyroid's own, or one datasketch made (under ``pyroid.patch``).
+
+        datasketch pickles its dicts: the keys are added again in their order (which is
+        the order of every bucket), and the sorted tables of its last ``index()`` set as
+        they were.
+        """
     def add(self, key: Hashable, minhash: _Sketch) -> None:
         """Add ``key`` with the MinHash of its set.
 

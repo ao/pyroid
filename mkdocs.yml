@@ -4,7 +4,7 @@
 # The API reference is generated from the .pyi stubs by mkdocstrings + griffe *without importing*
 # the extension (allow_inspection: false), so no Rust build is needed.
 site_name: pyroid
-site_description: Rust versions of popular Python libraries, with the same API and the same output. Drop-in replacements for ftfy, fastText inference, datatrove's filters and dedup, Trafilatura, NLTK's tokenizers, jieba, datasketch, warcio, rouge-score, sacrebleu, json_repair and jmespath.
+site_description: Rust versions of popular Python libraries, with the same API and the same output. Drop-in replacements for ftfy, fastText inference, datatrove's filters and dedup, Trafilatura, NLTK's tokenizers, jieba, datasketch, warcio, rouge-score, sacrebleu, json_repair, PyYAML, tabulate, jmespath and python-dateutil's date parser.
 site_url: https://ataiva.com/open-source/pyroid/docs/
 repo_url: https://github.com/ao/pyroid
 repo_name: ao/pyroid
@@ -56,11 +56,14 @@ nav:
       - pyroid.translit: guides/translit.md
       - pyroid.metrics: guides/metrics.md
       - pyroid.json_repair: guides/json_repair.md
+      - pyroid.dateutil: guides/dateutil.md
       - pyroid.datasketch: guides/datasketch.md
       - pyroid.jieba: guides/jieba.md
       - pyroid.trafilatura: guides/trafilatura.md
       - pyroid.nltk: guides/nltk.md
       - pyroid.warc: guides/warc.md
+      - pyroid.yaml: guides/yaml.md
+      - pyroid.tabulate: guides/tabulate.md
       - pyroid.jmespath: guides/jmespath.md
       - Languages: guides/languages.md
   - Integrations:
@@ -85,11 +88,14 @@ nav:
       - pyroid.translit: reference/translit.md
       - pyroid.metrics: reference/metrics.md
       - pyroid.json_repair: reference/json_repair.md
+      - pyroid.dateutil.parser: reference/dateutil.md
       - pyroid.datasketch: reference/datasketch.md
       - pyroid.jieba: reference/jieba.md
       - pyroid.trafilatura: reference/trafilatura.md
       - pyroid.nltk: reference/nltk.md
       - pyroid.warc: reference/warc.md
+      - pyroid.yaml: reference/yaml.md
+      - pyroid.tabulate: reference/tabulate.md
       - pyroid.jmespath: reference/jmespath.md
       - pyroid.nemo: reference/nemo.md
       - pyroid.integrations: reference/integrations.md

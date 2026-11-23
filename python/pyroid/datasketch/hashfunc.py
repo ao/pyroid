@@ -14,24 +14,10 @@ __all__ = ["sha1_hash32", "sha1_hash64"]
 
 
 def sha1_hash32(data: Any) -> int:
-    """A 32-bit hash function based on SHA1.
-
-    Args:
-        data (bytes): the data to generate 32-bit integer hash from.
-
-    Returns:
-        int: an integer hash value that can be encoded using 32 bits.
-    """
+    """Return the first 4 bytes of ``sha1(data)`` as a little-endian int."""
     return struct.unpack("<I", hashlib.sha1(data).digest()[:4])[0]  # type: ignore[no-any-return]
 
 
 def sha1_hash64(data: Any) -> int:
-    """A 64-bit hash function based on SHA1.
-
-    Args:
-        data (bytes): the data to generate 64-bit integer hash from.
-
-    Returns:
-        int: an integer hash value that can be encoded using 64 bits.
-    """
+    """Return the first 8 bytes of ``sha1(data)`` as a little-endian int."""
     return struct.unpack("<Q", hashlib.sha1(data).digest()[:8])[0]  # type: ignore[no-any-return]

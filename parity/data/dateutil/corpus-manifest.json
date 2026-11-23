@@ -1,0 +1,554 @@
+{
+ "generated_at": "2026-11-14T12:45:14+00:00",
+ "total_strings": 9246745,
+ "how": "fetched and extracted on the devbox with fetch_corpus.py (kept out of the repo); one <name>.txt per source, one string per line, exact duplicates dropped, at most 1,000,000 per source",
+ "sources": [
+  {
+   "name": "loghub_apache",
+   "kind": "syslog",
+   "strings": 16445,
+   "output_sha256": "959be6d2946e30768291a548432f2c2b825d635f352046f386eb149a4da1e6ca",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/Apache.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "f2cb5014453c8a0f71596838e1639a2131ff6d360839ad280409f621a6cac452"
+   ]
+  },
+  {
+   "name": "loghub_linux",
+   "kind": "syslog",
+   "strings": 15475,
+   "output_sha256": "66dbfab78c587d46c4009538e08ede117237a438afbccdaab0eec284d1be7cf5",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/Linux.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "7e1f820d8d45ae086032e515d9ce8d079a102a9b37dcff5b41a8e60b1f857820"
+   ]
+  },
+  {
+   "name": "loghub_openssh",
+   "kind": "syslog",
+   "strings": 271456,
+   "output_sha256": "2386728599a589fbc63bbd19e24b9a5ae7800db88ca2a827ff02f83b245616ed",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/SSH.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "296610a35773f58b7c295e5407fc5ccdf48beb3c544fc14a6309addf904a2712"
+   ]
+  },
+  {
+   "name": "loghub_mac",
+   "kind": "syslog",
+   "strings": 17899,
+   "output_sha256": "b3d206242f43b2bc8085b2837dda20262497a637c4e82a89bbdb315f8d1a93e4",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/Mac.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "a3ebaae341af38f397924cc4f00f2e0e95ff9db4e97abd0dd23986eda239a5a3"
+   ]
+  },
+  {
+   "name": "loghub_hdfs",
+   "kind": "syslog",
+   "strings": 132373,
+   "output_sha256": "271202f0b19b47898cacdd613d86db55d0c465a26102638bd93cd3c950e1d012",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/HDFS_v1.zip?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "04f919f2185821f23f045dca611a7586429bdabc601bd7b43f30005f8e289b01"
+   ]
+  },
+  {
+   "name": "loghub_bgl",
+   "kind": "syslog",
+   "strings": 1000000,
+   "output_sha256": "d9325f5d1a84be2eb53dd27b8f319e11ddfd95ad918cf4b3711ff69eb37d6c05",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/BGL.zip?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "d67fd82a711aea0157a9b83175892c6ee60e384a2ddf5bc51f39118453816da8"
+   ]
+  },
+  {
+   "name": "loghub_spark",
+   "kind": "syslog",
+   "strings": 110305,
+   "output_sha256": "d7aa1541419562d03c058ba4a0b16629054b79c23d2ed096d3fd78833dad820b",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/Spark.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "f11e5df5a98ce25d0f80adb7631b022ae6f1193f510079387447ef4e0fdccef7"
+   ]
+  },
+  {
+   "name": "loghub_android",
+   "kind": "syslog",
+   "strings": 640913,
+   "output_sha256": "936a4dfdc273c18eef6df3ef5c23e3672d65c360bc00fb5ebed4bed823f92950",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/Android_v1.zip?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "0d04afa769e9eb59f9551151698127127e08c0c831b423c974024c78ce8c4d71"
+   ]
+  },
+  {
+   "name": "loghub_healthapp",
+   "kind": "syslog",
+   "strings": 161759,
+   "output_sha256": "046167b2716181652515787617b238f6702f37c35f28c69b343a7c664239e92b",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/HealthApp.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "157f5ae299b2cc3ece65d61541ade6f5f4282d428bb0cddb50f6b466d3ee6ffd"
+   ]
+  },
+  {
+   "name": "loghub_hadoop",
+   "kind": "syslog",
+   "strings": 116434,
+   "output_sha256": "2b5caac15d2e7a29969fc1ea7a68670e9f45fcd435fc3bf393f456941902c87b",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/Hadoop.zip?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "79e63c6521e90ae164754a29d13e04e0c6c5e782490a7fe1e2b124f4f5737ced"
+   ]
+  },
+  {
+   "name": "loghub_zookeeper",
+   "kind": "syslog",
+   "strings": 33390,
+   "output_sha256": "aa7ac0e779628f87b6bbd13208de01ab18c2fb96dc6d5e49993efcc084ba9902",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/Zookeeper.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "ea350b0d3ff22bca4764ae4a1521bd1b79c448db4ee99aac02fd82b9a0995f19"
+   ]
+  },
+  {
+   "name": "loghub_openstack",
+   "kind": "syslog",
+   "strings": 201243,
+   "output_sha256": "7993dd53492376833747f7c836061d4a31ab08feb9ad3e75431cf8926774710c",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/OpenStack.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "87c98c5ed03262e05cdb7a6f3717033df76d88fda0f7d2db23bd9fa4200f1879"
+   ]
+  },
+  {
+   "name": "loghub_proxifier",
+   "kind": "syslog",
+   "strings": 5457,
+   "output_sha256": "c93b2cb51ed3bd0619e24cf5f75a583446fb1d34b10a8d9d7e514b79dc856235",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/Proxifier.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "b56d93eb87188e1284b5b35e92cb6f4151aec22975d82c5387d8e81a52d2a96d"
+   ]
+  },
+  {
+   "name": "loghub_thunderbird",
+   "kind": "syslog",
+   "strings": 1000000,
+   "output_sha256": "61a4e9bc876ba9dca0ade1edd16b4fead6c147884211dd0572062708cb9304f0",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/Thunderbird.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "5f4d1ed10a745e21d13160dfb98ece71d73d0c2bea056da2eacfb2546bc5c736"
+   ]
+  },
+  {
+   "name": "loghub_windows",
+   "kind": "syslog",
+   "strings": 15008,
+   "output_sha256": "52be13f3badf79af316e7b653288decc84e39ce13db485cf26e58be7048982d9",
+   "urls": [
+    "https://zenodo.org/records/8196385/files/Windows.tar.gz?download=1"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "e19f7442ed115274854874a2af8aebbb9d57d1485b6293aebd1a557726900d2e"
+   ]
+  },
+  {
+   "name": "ita_http_traces",
+   "kind": "web_access_log",
+   "strings": 1000000,
+   "output_sha256": "6006176fb3851617278bfbfb143853f71054d8d1344a025d851fd22245f11ee9",
+   "urls": [
+    "https://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz",
+    "https://ita.ee.lbl.gov/traces/NASA_access_log_Aug95.gz",
+    "https://ita.ee.lbl.gov/traces/clarknet_access_log_Aug28.gz",
+    "https://ita.ee.lbl.gov/traces/clarknet_access_log_Sep4.gz",
+    "https://ita.ee.lbl.gov/traces/calgary_access_log.gz"
+   ],
+   "url_count": 6,
+   "download_sha256": [
+    "199109ed0f273e095da6ccd5fc9dc4cd8bb58daa06d62135e62090fea9d27488",
+    "14995aed0ba4558ab832613ebea9a3ef2d87cb4297fc67f5694e0032bbb6b788",
+    "bbd0e7433bd58fa7429d958266433a2e30db6f8361249878a9f1f17c8d15cb51",
+    "4b4715bbbbd33ccf7c002ef277a9ab50aef79e73eb5ec367be6e430d288aab48",
+    "273a2ad7acdd5fbbc3537d2ebd230954423736f01fabfcbe97f0bf70cfed26d9"
+   ]
+  },
+  {
+   "name": "elastic_access_logs",
+   "kind": "web_access_log",
+   "strings": 46086,
+   "output_sha256": "42e5f3ddcc7eaa33e747eb61d682440415de4d79e83c76d69b8e7f8e06049258",
+   "urls": [
+    "https://raw.githubusercontent.com/elastic/examples/6d86454ebb7a850bcd7e80abe86fe683370018a6/Common%20Data%20Formats/apache_logs/apache_logs",
+    "https://raw.githubusercontent.com/elastic/examples/6d86454ebb7a850bcd7e80abe86fe683370018a6/Common%20Data%20Formats/nginx_logs/nginx_logs"
+   ],
+   "url_count": 2,
+   "download_sha256": [
+    "f15c31e905f86c7b4b6ab44aee74d0a2086dce89f010187d983edea7ef0364ef",
+    "526832433ab552466dc8623390fd92dc052b4f301b2eec94836a5c42a46937df"
+   ]
+  },
+  {
+   "name": "enron_email",
+   "kind": "email_header",
+   "strings": 360812,
+   "output_sha256": "c61506e677e8ccbf73d62eb62bb32ffda037a736e699be44403999d17435fd13",
+   "urls": [
+    "https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "b3da1b3fe0369ec3140bb4fbce94702c33b7da810ec15d718b3fadf5cd748ca7"
+   ]
+  },
+  {
+   "name": "gnu_mailing_lists",
+   "kind": "email_header",
+   "strings": 180987,
+   "output_sha256": "6122105321ba2d815fe81ee768bbedf561bcfa475217b47373bc2ef77ae48df7",
+   "urls": [
+    "https://lists.gnu.org/archive/mbox/info-gnu/2000-09",
+    "https://lists.gnu.org/archive/mbox/info-gnu/2000-10",
+    "https://lists.gnu.org/archive/mbox/info-gnu/2000-11",
+    "https://lists.gnu.org/archive/mbox/info-gnu/2000-12",
+    "https://lists.gnu.org/archive/mbox/info-gnu/2001-01"
+   ],
+   "url_count": 608,
+   "download_sha256": [
+    "97a36e6f494e487d3a62f04d8be305dea8c6aae70ecb9aa30768d93ccf6ce0b1",
+    "2811f071cb297acc2d07f9d0da7ff09b65e59aca77072b59573398f1477beaf6",
+    "9fdfd97fcd1217d33104995c44007f91943f40b77d421b7b59caff8d3e043cd4",
+    "150d82d03669e84554fb0a03ec95761ad5e1112459988d5b24a58d69b00d2043",
+    "553bb555aeb852a0f84cb6491e0785ade680d466e37bff0cad5284d746509357"
+   ]
+  },
+  {
+   "name": "commoncrawl_http_headers",
+   "kind": "http_header",
+   "strings": 349720,
+   "output_sha256": "53f8fe4a0edf7a82c7a03f70cfbc88d346035b4cf412686e97494e83e3752fcf",
+   "urls": [
+    "https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/robotstxt/CC-MAIN-20240220211055-20240221001055-00000.warc.gz",
+    "https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/robotstxt/CC-MAIN-20240220211055-20240221001055-00050.warc.gz",
+    "https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/robotstxt/CC-MAIN-20240220211055-20240221001055-00100.warc.gz",
+    "https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/robotstxt/CC-MAIN-20240220211055-20240221001055-00150.warc.gz",
+    "https://data.commoncrawl.org/crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/robotstxt/CC-MAIN-20240220211055-20240221001055-00200.warc.gz"
+   ],
+   "url_count": 299,
+   "download_sha256": [
+    "0a1e9f369c5342b8c832ee4cea19901634fd377ea2adaaf9302a785351db41e7",
+    "d58b01af5d367dce1429754ca18ba9389852cf9ba71fffe76a339bb6b81efbb0",
+    "68ea1d8a154fdd00343a4fda7f012fb9bed50bf5f0bb5a396568ba32f9837083",
+    "6f3da0acb9d189ff24b834cc0abcedfcccfc5a7e913bc45e417282fc66d097e7",
+    "752f8bd8ba30124ee4a6ef8974a36e7bc5736281a979752d2418f555a83a971c"
+   ]
+  },
+  {
+   "name": "gharchive_events",
+   "kind": "json_field",
+   "strings": 87977,
+   "output_sha256": "528fd74b1f9f34aeeea45e3bbb81879dee5f5c6066eb80341eea64220b74d88d",
+   "urls": [
+    "https://data.gharchive.org/2011-06-01-12.json.gz",
+    "https://data.gharchive.org/2012-03-11-16.json.gz",
+    "https://data.gharchive.org/2012-06-01-12.json.gz",
+    "https://data.gharchive.org/2013-06-01-12.json.gz",
+    "https://data.gharchive.org/2014-06-01-12.json.gz"
+   ],
+   "url_count": 8,
+   "download_sha256": [
+    "60c3d9f6988c90a49f8ca3b9310f0380ffdd3f1eb56c77cca749b6a47752889f",
+    "a064b507b2f8b658bd5a9f882a7b8f899beb7bc56ab4812db82d2b1336c5c5f4",
+    "c5595db696545754a234e6b7fb9697fac0e94413689947065f8210bf4399fef1",
+    "7935e6d31fcd78bfcc469d47dc07b7eef77c760e05a18955b11c892cd39080d2",
+    "225912615cbf158265d68de119120f47c13c4d2285bfc2df34da6af9b3630c6c"
+   ]
+  },
+  {
+   "name": "fte_russian_troll_tweets",
+   "kind": "csv_column",
+   "strings": 355357,
+   "output_sha256": "a40335058bf975499746ceb480fd44188a071e37c393c3d7ac69c0d9321092b0",
+   "urls": [
+    "https://raw.githubusercontent.com/fivethirtyeight/russian-troll-tweets/7edb01bfe167e3fec093d55cea10773aae15454f/IRAhandle_tweets_1.csv",
+    "https://raw.githubusercontent.com/fivethirtyeight/russian-troll-tweets/7edb01bfe167e3fec093d55cea10773aae15454f/IRAhandle_tweets_2.csv",
+    "https://raw.githubusercontent.com/fivethirtyeight/russian-troll-tweets/7edb01bfe167e3fec093d55cea10773aae15454f/IRAhandle_tweets_3.csv"
+   ],
+   "url_count": 3,
+   "download_sha256": [
+    "724a43882886e0276aa9d3aa53e500894dc07adbc1cb15019acae7bf7769b6ae",
+    "c5a4dfd46b11ff356cfd9e83fd3fa7fc138352e39576b6132b4c3c30c2b1b0de",
+    "82c4b8e84ff06a1117b300466b6b702efbecbe170115c941485b488c3259cf2d"
+   ]
+  },
+  {
+   "name": "fte_uber_2014",
+   "kind": "csv_column",
+   "strings": 128468,
+   "output_sha256": "ac5f012092446426219bf7ab86058a4a08b1ff688b74c6560acb9e9906e6264c",
+   "urls": [
+    "https://raw.githubusercontent.com/fivethirtyeight/uber-tlc-foil-response/63bb878b76f47f69b4527d50af57aac26dead983/uber-trip-data/uber-raw-data-apr14.csv",
+    "https://raw.githubusercontent.com/fivethirtyeight/uber-tlc-foil-response/63bb878b76f47f69b4527d50af57aac26dead983/uber-trip-data/uber-raw-data-may14.csv",
+    "https://raw.githubusercontent.com/fivethirtyeight/uber-tlc-foil-response/63bb878b76f47f69b4527d50af57aac26dead983/uber-trip-data/uber-raw-data-jun14.csv"
+   ],
+   "url_count": 3,
+   "download_sha256": [
+    "4c92b95b9918e73ae84bade0bffef6e758e792c247469523130d3c1ad7b646e0",
+    "3940ebee250998e32e810fed596fa2e5ac170e6926e0da43b977b6f76c6921e9",
+    "ca999fb126a068a429c266d6781b1e8825b2acc1c74644481222ca6f01dbb557"
+   ]
+  },
+  {
+   "name": "fte_misc",
+   "kind": "csv_column",
+   "strings": 14032,
+   "output_sha256": "daf5867e79802a4b1161dae5fd95ac14cbdd9e083e9ff8f486107c0262b6f14c",
+   "urls": [
+    "https://raw.githubusercontent.com/fivethirtyeight/data/4c1ff5e3aef1816ae04af63218015066e186c147/comic-characters/dc-wikia-data.csv",
+    "https://raw.githubusercontent.com/fivethirtyeight/data/4c1ff5e3aef1816ae04af63218015066e186c147/comic-characters/marvel-wikia-data.csv",
+    "https://raw.githubusercontent.com/fivethirtyeight/data/4c1ff5e3aef1816ae04af63218015066e186c147/nba-elo/nbaallelo.csv"
+   ],
+   "url_count": 3,
+   "download_sha256": [
+    "a0d4823d79efd6bc12cc21d6e628e7027e179aabb480de85dfc3f59c14ee78a1",
+    "f30f02ab3575aa145fe32dc0709b7931d72a664de0557150abc43a25113f8277",
+    "d46ed3540ee8d9eca31b3e94cc8c777e0be5156173d814ebf65b8195e8d616bc"
+   ]
+  },
+  {
+   "name": "jhu_csse_covid",
+   "kind": "csv_column",
+   "strings": 3645,
+   "output_sha256": "e04fd0cd6762df603682b5617d031f7c90a602172fa64104eb3652944da89f37",
+   "urls": [
+    "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/4360e50239b4eb6b22f3a1759323748f36752177/csse_covid_19_data/csse_covid_19_daily_reports/01-22-2020.csv",
+    "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/4360e50239b4eb6b22f3a1759323748f36752177/csse_covid_19_data/csse_covid_19_daily_reports/01-23-2020.csv",
+    "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/4360e50239b4eb6b22f3a1759323748f36752177/csse_covid_19_data/csse_covid_19_daily_reports/01-24-2020.csv",
+    "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/4360e50239b4eb6b22f3a1759323748f36752177/csse_covid_19_data/csse_covid_19_daily_reports/01-25-2020.csv",
+    "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/4360e50239b4eb6b22f3a1759323748f36752177/csse_covid_19_data/csse_covid_19_daily_reports/01-26-2020.csv"
+   ],
+   "url_count": 101,
+   "download_sha256": [
+    "9e6591e7187bf50edc216003c117dae2886d7520d891cf54046860182191f082",
+    "c481b59f1c71c983a11aeb7daadcfbe37153c13b146623facb4650f5ea3d995b",
+    "523262227a0e9eeb0e4d2ff577751ea2b8d4f5069fc9397684aaf7c1d6953b26",
+    "26d2b5766526cf3432e90ef13c5a0154aaf1e1061d144b12d485c0bb828b7a89",
+    "a21916e79ab50820839c91ec95b174ac0878d866ce52bc1d2de39568a8344f57"
+   ]
+  },
+  {
+   "name": "covid19india",
+   "kind": "csv_column",
+   "strings": 1835,
+   "output_sha256": "7b441f6b1d190e78583e6b3d81ae074b339b065894a72b7d668eed3bc693f5b1",
+   "urls": [
+    "https://raw.githubusercontent.com/covid19india/api/75e3f721e845abe4be76580e3670588a4e192935/csv/latest/raw_data1.csv",
+    "https://raw.githubusercontent.com/covid19india/api/75e3f721e845abe4be76580e3670588a4e192935/csv/latest/raw_data10.csv",
+    "https://raw.githubusercontent.com/covid19india/api/75e3f721e845abe4be76580e3670588a4e192935/csv/latest/raw_data20.csv",
+    "https://raw.githubusercontent.com/covid19india/api/75e3f721e845abe4be76580e3670588a4e192935/csv/latest/raw_data32.csv",
+    "https://raw.githubusercontent.com/covid19india/api/75e3f721e845abe4be76580e3670588a4e192935/csv/latest/case_time_series.csv"
+   ],
+   "url_count": 10,
+   "download_sha256": [
+    "35247229688511ab262992cdccb636f83a86597ca4a3039dd6f1b3cec59f1be5",
+    "e4187bd9dcb7e416d3ab83e45221572c23d0828974a1381becd79f40ec0f5281",
+    "41056df18e4a9b995e96b4219fad0b5e0adc59bcabf69a192039b979ef48ce90",
+    "e95f5f03cd38305498b058a55165bdc814d89494058ce841b27e1df5e2bdbfb0",
+    "49d97accc2aebd6f0f6d5b5b8309cc1d5f46d466bc0ded7d7405b82d47e35ce3"
+   ]
+  },
+  {
+   "name": "nyc_311",
+   "kind": "csv_column",
+   "strings": 1000000,
+   "output_sha256": "465035cc9aecc054d9bfd021ef7cc005eba9db83350bbffa14976325d307ff01",
+   "urls": [
+    "https://data.cityofnewyork.us/api/views/erm2-nwe9/rows.csv?accessType=DOWNLOAD"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "ce0ab763a7d6d554d631eaed886a9d130236150bd337fd5d0574148ed4a71f51"
+   ]
+  },
+  {
+   "name": "nyc_crashes",
+   "kind": "csv_column",
+   "strings": 258514,
+   "output_sha256": "ddf411c208dcee573922d460bb2585855efd3d827a7c15f7d169505b6fceb523",
+   "urls": [
+    "https://data.cityofnewyork.us/api/views/h9gi-nx95/rows.csv?accessType=DOWNLOAD"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "f163d0db3d8d823d80cee271e55d0c1aa80edae5391f78841f0c1daf541087aa"
+   ]
+  },
+  {
+   "name": "la_crime",
+   "kind": "csv_column",
+   "strings": 63148,
+   "output_sha256": "fa9e45257c4e91bd232a488cf729db1749b4e4e8b36a454d3968641fe71385b4",
+   "urls": [
+    "https://data.lacity.org/api/views/2nrs-mtv8/rows.csv?accessType=DOWNLOAD"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "bc0da9558e333b80639b3a53eef438aac06b9aca8c8fd54206879396dc0ba6f8"
+   ]
+  },
+  {
+   "name": "sbb_istdaten",
+   "kind": "csv_column",
+   "strings": 693560,
+   "output_sha256": "e072866dc1fcf5884d76f6d8a94bc14332cd11ebd505ced645e8aad6a6426757",
+   "urls": [
+    "https://archive.opentransportdata.swiss/istdaten/2024/ist-daten-2024-01.zip"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "b8348aeeab66d4aade3dc69ca323a711abbf49e4781cb10b9a344df2cde748b1"
+   ]
+  },
+  {
+   "name": "cnb_fx_rates",
+   "kind": "csv_column",
+   "strings": 8825,
+   "output_sha256": "035a3745b84dedbc313cf70e97412bfd3c66188bdfb9426d50a901f0c14a0ea9",
+   "urls": [
+    "https://www.cnb.cz/en/financial-markets/foreign-exchange-market/central-bank-exchange-rate-fixing/central-bank-exchange-rate-fixing/year.txt?year=1991",
+    "https://www.cnb.cz/en/financial-markets/foreign-exchange-market/central-bank-exchange-rate-fixing/central-bank-exchange-rate-fixing/year.txt?year=1992",
+    "https://www.cnb.cz/en/financial-markets/foreign-exchange-market/central-bank-exchange-rate-fixing/central-bank-exchange-rate-fixing/year.txt?year=1993",
+    "https://www.cnb.cz/en/financial-markets/foreign-exchange-market/central-bank-exchange-rate-fixing/central-bank-exchange-rate-fixing/year.txt?year=1994",
+    "https://www.cnb.cz/en/financial-markets/foreign-exchange-market/central-bank-exchange-rate-fixing/central-bank-exchange-rate-fixing/year.txt?year=1995"
+   ],
+   "url_count": 35,
+   "download_sha256": [
+    "e88f26b39bd607ff3fb5686188a8089fed1355e83ef6a12c5a89aabdb1b63142",
+    "f46b4fbfa1fce2767f384c44361ddc384c9f03d0a5d309ce2cc5a09a6c60a85b",
+    "37e526aff47274a9cffb9e03968ee96d6cc782742ce0a48484e437a36fcf1458",
+    "c83a66289ff239e96da495661e26e35ad599a620052448dd7fa224a53d76bdf8",
+    "3afa3858670bc435e6d9ae3ee19da8d540f243f25741dbddbf4632e7c39e9b2d"
+   ]
+  },
+  {
+   "name": "usgs_earthquakes",
+   "kind": "csv_column",
+   "strings": 394397,
+   "output_sha256": "735bffe51a36aa027ada1b841eebcab0080e028087debd9183e36bf5966f796c",
+   "urls": [
+    "https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime=2015-01-01&endtime=2015-04-01&minmagnitude=2.5&orderby=time-asc",
+    "https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime=2015-04-01&endtime=2015-07-01&minmagnitude=2.5&orderby=time-asc",
+    "https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime=2015-07-01&endtime=2015-10-01&minmagnitude=2.5&orderby=time-asc",
+    "https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime=2015-10-01&endtime=2016-01-01&minmagnitude=2.5&orderby=time-asc",
+    "https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime=2016-01-01&endtime=2016-04-01&minmagnitude=2.5&orderby=time-asc"
+   ],
+   "url_count": 40,
+   "download_sha256": [
+    "a4d198eabfb88ad161ddd643ed13784ea9ac443c1ff302b409d0696d896c22c0",
+    "cd0a9572ae4b1e116d9cc58f5703825da6fd3d951248f4c339ac288c94da876f",
+    "ee571726bd6625ee2103e0039d26d04e9ffc77311ea4a8121c206e789553e3b9",
+    "b51979675e9ee874a99919113b3439c2bd4df50551be454433981241c9f1af00",
+    "9a6aa5e8729e6a208c43f849e6070e6e9de233355fa1488f0ebf1d02ada34484"
+   ]
+  },
+  {
+   "name": "tidytuesday_misc",
+   "kind": "csv_column",
+   "strings": 177587,
+   "output_sha256": "98df7a6a4cf1646390424dea281006cd1f7d5f94fe5bd2cf8e393dced628e22c",
+   "urls": [
+    "https://raw.githubusercontent.com/rfordatascience/tidytuesday/54ea581e1352f6c55b9343feb77df0fc29c78621/data/2021/2021-04-20/netflix_titles.csv",
+    "https://raw.githubusercontent.com/rfordatascience/tidytuesday/54ea581e1352f6c55b9343feb77df0fc29c78621/data/2019/2019-06-25/ufo_sightings.csv",
+    "https://raw.githubusercontent.com/rfordatascience/tidytuesday/54ea581e1352f6c55b9343feb77df0fc29c78621/data/2023/2023-06-20/ufo_sightings.csv",
+    "https://raw.githubusercontent.com/rfordatascience/tidytuesday/54ea581e1352f6c55b9343feb77df0fc29c78621/data/2020/2020-01-21/spotify_songs.csv",
+    "https://raw.githubusercontent.com/rfordatascience/tidytuesday/54ea581e1352f6c55b9343feb77df0fc29c78621/data/2019/2019-04-23/raw_anime.csv"
+   ],
+   "url_count": 5,
+   "download_sha256": [
+    "7a3aaf076348237cef99e678025d2fed84b9212fddde5c09370e2a10cb9fc143",
+    "47fcda1b0986122d6132035add2ccdc0ed9a697fb429d816eb939566891e1bc0",
+    "ad72ebc6cd34001144e8bea85524d34390f8e12d13b352b184ed57557a980647",
+    "9902920cfe4940f0914ebb6716801a42f7f19ac88fbd6693eaae7e2822b16845",
+    "ae09122542122188b8f3a43a6cc0733d8fa82701cec7439c917be89d2c321b02"
+   ]
+  },
+  {
+   "name": "cldr_generated",
+   "kind": "locale_generated",
+   "strings": 373916,
+   "output_sha256": "dce2a762716559c0f7505f788adc5ad6174ec80540c541a610ab44ec4bf97745",
+   "urls": [
+    "https://registry.npmjs.org/cldr-dates-full/-/cldr-dates-full-49.0.0.tgz"
+   ],
+   "url_count": 1,
+   "download_sha256": [
+    "3e194fae3317cfceb1548a223f849407d4f97c827015c1280ddd981eca4214a6"
+   ]
+  },
+  {
+   "name": "tatoeba_sentences",
+   "kind": "natural_language",
+   "strings": 9722,
+   "output_sha256": "b0ddb3463faf5f280d882b8c53aa453aaf64d388008235b38635b7f9c7f953dc",
+   "urls": [
+    "https://downloads.tatoeba.org/exports/per_language/eng/eng_sentences.tsv.bz2",
+    "https://downloads.tatoeba.org/exports/per_language/deu/deu_sentences.tsv.bz2",
+    "https://downloads.tatoeba.org/exports/per_language/fra/fra_sentences.tsv.bz2",
+    "https://downloads.tatoeba.org/exports/per_language/spa/spa_sentences.tsv.bz2"
+   ],
+   "url_count": 4,
+   "download_sha256": [
+    "3b5b3ecfcac5037b09f81ef048fa16fedc4d24838db5b6fbeedca1dfab374cbf",
+    "798c9f3d31a0ba58be45347d0441e46c8c838093a112586319da94f046096a06",
+    "102b245952878f647d101ce4b38fc60ffb9b289df22b0aeb59415c25e6341cc6",
+    "06b518dde1ba30a5547d8902c8e458ba0e45e67f22d3ca88855f701edbd5b359"
+   ]
+  }
+ ]
+}

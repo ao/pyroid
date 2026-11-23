@@ -34,11 +34,15 @@ and `patch()` is the only switch. Each patched name emits one
 |---|---|---|---|
 | `"ftfy"` | [`pyroid.ftfy`](ftfy.md) (ftfy 6.3.1) | `fix_text`, `fix_text_segment`, `fix_encoding`, `fix_and_explain`, `fix_encoding_and_explain`, `TextFixerConfig`, `ExplainedText`, `ExplanationStep`, the `ftfy` alias, `fix_text_batch` | `apply_plan`, `explain_unicode`, `fix_file`, `guess_bytes`, `ftfy.fixes` and the other submodules |
 | `"fasttext"` | [`pyroid.fasttext`](fasttext.md) (fastText 0.9.2's inference, as fasttext-predict 0.9.2.4) | `load_model`, `tokenize`, `fasttext.FastText.load_model`, and `fasttext.FastText._FastText(path)` (which returns a pyroid model) | training (`train_supervised`, ...) and `_FastText()` without a model file |
-| `"anyascii"` | [`pyroid.translit.anyascii`](translit.md) (anyascii 0.3.3) | `anyascii` | the rest of the package |
+| `"anyascii"` | [`pyroid.translit.anyascii`](translit.md) (anyascii 0.3.3) | `anyascii`, taking what the package's function takes (see below) | the rest of the package |
 | `"datasketch"` | [`pyroid.datasketch`](datasketch.md) (datasketch 2.0.0) | `MinHash`, `LeanMinHash`, `MinHashLSH`, `MinHashLSHForest`, `MinHashLSHEnsemble`, `sha1_hash32`, `sha1_hash64`, `minhash_batch`, the `WeightedMinHashLSH` and `WeightedMinHashLSHForest` aliases, and the `minhash`, `lean_minhash`, `hashfunc`, `lsh`, `lshforest` and `lshensemble` submodules with them | `WeightedMinHash`, `HyperLogLog`, `bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `storage` and the other submodules |
+| `"json_repair"` | [`pyroid.json_repair`](json_repair.md) (json_repair 0.64.9) | `repair_json`, `loads`, `load`, `from_file` and `JSONReturnType`, on `json_repair` and `json_repair.json_repair` | the command line and the internal modules; `schema=` calls, which pyroid hands to it |
 | `"trafilatura"` | [`pyroid.trafilatura`](trafilatura.md) (trafilatura 2.3.1 or 1.11.0, following the installed release) | `extract`, `bare_extraction`, with 2.3.1 `extract_with_metadata` (delegated), with the installed release's signatures, in `trafilatura` and `trafilatura.core`, `trafilatura.deduplication.LRUCache` and `LRU_TEST`, `trafilatura.meta.reset_caches` | metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the other submodules |
 | `"nltk"` | [`pyroid.nltk`](nltk.md) (NLTK 3.10.4's tokenizers) | `sent_tokenize`, `word_tokenize`, `punkt_model_available`, `PunktSentenceTokenizer`, `PunktTokenizer`, `TreebankWordTokenizer`, `NLTKWordTokenizer`, `TreebankWordDetokenizer`, `wordpunct_tokenize`, `regexp_tokenize`, `blankline_tokenize`, `RegexpTokenizer`, `WordPunctTokenizer`, `WhitespaceTokenizer`, `BlanklineTokenizer`, on `nltk`, `nltk.tokenize` and its `punkt`, `treebank`, `destructive` and `regexp` modules | everything else: `PunktTrainer`, the taggers, corpora, stemmers, the other tokenizers |
+| `"yaml"` | [`pyroid.yaml`](yaml.md) (PyYAML 6.0.3's safe loader and dumper) | `safe_load`, `safe_load_all`, `load`, `load_all`, `full_load`, `full_load_all`, `unsafe_load`, `unsafe_load_all`, `safe_dump`, `safe_dump_all`, `dump`, `dump_all`, set on PyYAML's own `yaml` module (shims of `yaml` and its error, loader and dumper submodules without PyYAML) | everything else: the loader and dumper classes, `add_constructor`, `scan`, `parse`, `compose`, `YAMLObject`; customised loaders and dumpers and `!!python/` tags are handed to PyYAML |
+| `"tabulate"` | [`pyroid.tabulate`](tabulate.md) (tabulate 0.10.0) | a shim of `tabulate` with `tabulate`, `tabulate_formats`, `simple_separated_format`, `TableFormat`, `Line`, `DataRow`, `SEPARATING_LINE`, `multiline_formats`, `_table_formats` and tabulate's other functions, private helpers included; writes of `MIN_PADDING`, `PRESERVE_WHITESPACE` and `WIDE_CHARS_MODE` reach pyroid.tabulate. `DataFrame.to_markdown()` then uses it | only the modules tabulate imports (`re`, `textwrap`, ...) |
 | `"warcio"` | [`pyroid.warc`](warc.md) (warcio 1.8.2's reader) | `ArchiveIterator` (on `warcio` and `warcio.archiveiterator`), `WARCIterator` and `ARCIterator` (on `warcio.archiveiterator`), making warcio's own `StatusAndHeaders`, `ArcWarcRecord` (a subclass, with pyroid's `content_stream()`), `DigestChecker` and `ArchiveLoadFailed` | `WARCWriter`, `capture_http`, the indexer, the checker, the command line |
+| `"dateutil"` | [`pyroid.dateutil.parser`](dateutil.md) (python-dateutil 2.8.2 to 4.0.0) | `parse` and `isoparse`, on `dateutil.parser`, `dateutil.parser._parser` and `dateutil.parser.isoparser` (they use dateutil's own `DEFAULTPARSER` and `DEFAULT_ISOPARSER`) | `dateutil.tz`, `relativedelta`, `rrule`, `easter`, the `parser` and `isoparser` classes |
 | `"jmespath"` | [`pyroid.jmespath`](jmespath.md) (jmespath 1.1.0) | `search` and `compile`, set on jmespath's own module (shims of `jmespath` and its `exceptions`, `functions`, `visitor`, `parser`, `lexer` and `ast` submodules without jmespath); exceptions stay jmespath's classes | `jmespath.parser.Parser`, `jmespath.lexer.Lexer`, `TreeInterpreter` and the rest of the package |
 
 `fasttext.FastText._FastText(path)` is how datatrove and others load models, and
@@ -46,6 +50,22 @@ and `patch()` is the only switch. Each patched name emits one
 real package (an ftfy option value the Rust port does not support, `_FastText()` without a model
 file) go to the real one, with the usual one-time
 [`pyroid.FallbackWarning`](../concepts/fallbacks.md).
+
+A patched name takes and returns what the package's own function does. Where pyroid's
+function treats an input differently, the shim keeps the package's meaning. `anyascii.anyascii`
+joins the characters of any iterable into one `str` (`anyascii(list("Björk"))` is `'Bjork'`) and
+returns an ASCII `bytes` as it is, while `pyroid.translit.anyascii` takes a list as a batch;
+so the patched `anyascii` is a separate function that transliterates a `str` in Rust and handles
+everything else as the package does. Where the package raises, pyroid may accept more: NLTK's
+tokenizer classes and fastText's `predict` also take a list, tuple or Arrow column as a batch. A
+wrong type raises [`pyroid.InputError`](../concepts/errors.md), a `TypeError`, where ftfy or
+NLTK raise `AttributeError` or a `TypeError` of their own.
+
+The fastText shim follows the `fasttext` package's return types, also when the installed
+`fasttext` is fasttext-predict, whose types differ: `predict(text)` gives the probabilities as
+a numpy array (fasttext-predict: a tuple of floats), and `predict(lines)` gives
+`(labels, probabilities)` for every line (fasttext-predict 0.9.2.4 returns only the labels, so
+unpacking its result fails unless there are exactly two lines).
 
 ### Why there is no `"unidecode"`
 
@@ -58,7 +78,8 @@ import pyroid
 
 pyroid.patch("unidecode")
 # ValueError: cannot patch 'unidecode': the supported names are 'ftfy', 'fasttext', 'anyascii',
-# 'datasketch', 'trafilatura', 'nltk', 'warcio', 'nemo_curator', 'jmespath'
+# 'datasketch', 'json_repair', 'trafilatura', 'nltk', 'warcio', 'nemo_curator', 'yaml',
+# 'tabulate', 'dateutil', 'jmespath'
 # (pyroid.translit.unidecode transliterates with anyascii's tables, so its output differs from
 # Unidecode's: it is not a drop-in)
 ```
@@ -156,9 +177,12 @@ $ python script.py
   pyroid.patch("ftfy")
 ```
 
-It warns once more if the installed package is a version pyroid does not reproduce (for
-trafilatura, neither 2.3.1 nor 1.11.0). The patched functions then still give the reproduced
-version's results (trafilatura 2.3.1's for trafilatura), and the rest is the installed version's.
+If the installed package is a release pyroid does not reproduce (for trafilatura, neither 2.3.1
+nor 1.11.0), `patch()` also emits the `pyroid.VersionMismatchWarning` that importing the pyroid
+module gives, at the same line: once per process for each package, whichever comes first
+([Installed versions](../compatibility.md#installed-versions)). The patched functions then still
+give the reproduced release's results (trafilatura 2.3.1's for trafilatura), and the rest is the
+installed release's.
 `PatchWarning` is a `UserWarning`, distinct from `pyroid.FallbackWarning`. To silence it:
 
 ```python
@@ -177,19 +201,23 @@ every Python process it starts, without editing a line:
 
 ```console
 $ pyroid run -p ftfy,fasttext train.py --epochs 3
+pyroid run: PatchWarning: ftfy, fasttext patched with pyroid.ftfy, pyroid.fasttext, in this process and the Python processes it starts
 ```
+
+That one line replaces the `PatchWarning` that `patch()` gives for each name;
+`PYTHONWARNINGS=ignore::UserWarning` silences it.
 
 ```text
 usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
 
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
-`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
-`warcio` / `nemo_curator` / `jmespath` giving pyroid's drop-ins. The Python processes it starts
-(multiprocessing workers, subprocesses) are patched too.
+`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
+`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` giving pyroid's
+drop-ins. The Python processes it starts (multiprocessing workers, subprocesses) are patched too.
 
 options:
-  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, trafilatura, nltk, warcio, nemo_curator, jmespath
-                     (default: $PYROID_PATCH, else ftfy,fasttext)
+  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate, dateutil, jmespath
+                     (repeatable; default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
 ```
@@ -218,7 +246,7 @@ if __name__ == "__main__":
     subprocess.run(child, check=True)
 ```
 
-`pyroid run -p ftfy,fasttext train.py --epochs 3` prints (after the two `PatchWarning`s):
+`pyroid run -p ftfy,fasttext train.py --epochs 3` prints (after the `PatchWarning` line):
 
 ```text
 main: True ['--epochs', '3']
@@ -228,8 +256,9 @@ subprocess: True
 
 `pyroid run`:
 
-- patches `NAMES` (comma-separated). Without `-p` it patches the names in `$PYROID_PATCH`, else
-  `ftfy,fasttext`, and then skips `fasttext`, with a `PatchWarning`, if numpy is missing;
+- patches `NAMES` (comma-separated; `-p` can be repeated, and the names add up). Without `-p` it
+  patches the names in `$PYROID_PATCH`, else `ftfy,fasttext`, and then skips `fasttext`, with a
+  `PatchWarning`, if numpy is missing;
 - sets `PYROID_PATCH` to those names and puts pyroid's start-up hook directory first on
   `PYTHONPATH`. The hook is a `sitecustomize.py`, which Python imports at start-up. It applies
   `$PYROID_PATCH` in every Python process started from there (`multiprocessing` spawn and
@@ -237,11 +266,14 @@ subprocess: True
   one. Forked workers inherit the patch anyway;
 - runs the target in the same process, as `python SCRIPT ARGS` / `python -m MODULE ARGS` would
   (`sys.argv`, `sys.path[0]`, `__name__ == "__main__"`). It exits with the target's exit code: 0
-  when it finishes, 2 for a usage error or a missing script, 1 when the module can't be found.
+  when it finishes, 2 for a usage error or a missing script, 1 when the module can't be found. An
+  uncaught exception's traceback starts at the target's own first frame, as with `python`. One
+  process runs one target at a time: a second `pyroid.integrations.run(...)` while a target runs,
+  from another thread or from the target, exits with status 2.
 
-`PatchWarning` is shown once per process tree, not in every worker. The hook does nothing in an
-interpreter that can't import pyroid, nor in one started with `-I` or `-E` (which ignore
-`PYTHONPATH`).
+`PatchWarning` and `VersionMismatchWarning` are shown once per process tree, not in every worker.
+The hook does nothing in an interpreter that can't import pyroid, nor in one started with `-I` or
+`-E` (which ignore `PYTHONPATH`).
 
 ### Without `pyroid run`
 
@@ -307,6 +339,13 @@ warnings are the ones warcio gives. datatrove's `WarcReader` imports `ArchiveIte
 warcio`) reads WARC files with pyroid in stock datatrove. Without warcio, `warcio` and
 `warcio.archiveiterator` are shims holding pyroid.warc's classes.
 
+`"dateutil"` works like `"nltk"`: pyroid's `parse` and `isoparse` are set on python-dateutil's
+own modules, and they parse with dateutil's own `DEFAULTPARSER`, `parser` class and
+`DEFAULT_ISOPARSER`, so a word added to `DEFAULTPARSER.info` still counts and `isoparse` follows
+the installed release ([details](dateutil.md#pyroidpatchdateutil)). `pandas.to_datetime` calls
+`DEFAULTPARSER._parse`, which stays dateutil's. Without python-dateutil, `dateutil` and
+`dateutil.parser` are shims holding pyroid.dateutil.parser's names.
+
 `"jmespath"` sets `search` and `compile` on the installed jmespath, so boto3's and botocore's
 paginators and waiters (`paginator.search(...)`, `waiter.wait(...)`), the AWS CLI's `--query` and
 Ansible's `json_query`, which call `jmespath.compile(...)` or `jmespath.search(...)` through the
@@ -318,9 +357,9 @@ botocore 1.44.3's paginator and waiter tests (3,720) pass patched.
 - A shim is not the real module object: code that already holds the real module (imported before
   `patch()`), or compares module objects, is not redirected.
 - `importlib.reload` of a shim is not supported.
-- Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`
-  and `jmespath` can be patched. pyroid's filters and dedup reach datatrove pipelines through the
-  [drop-in steps](datatrove.md) instead.
+- Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`,
+  `nemo_curator`, `yaml`, `tabulate`, `dateutil` and `jmespath` can be patched. pyroid's filters
+  and dedup reach datatrove pipelines through the [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked
   children inherit them).

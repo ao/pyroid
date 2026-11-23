@@ -26,6 +26,9 @@
 use super::config::{MinhashConfig, Precision};
 use crate::par::{self, PoolError, Threads};
 
+/// Values zeroed between two interrupt checks when a store grows (8 MiB).
+const ZERO_STEP: usize = 1 << 20;
+
 /// More documents than a `u32` index (datatrove's doc ids are `u32`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CapacityError;
@@ -82,12 +85,15 @@ impl SignatureStore {
         self.present.clear();
     }
 
+    /// An error if `len + additional` documents pass `u32::MAX`.
+    fn check_room(len: usize, additional: usize) -> Result<(), CapacityError> {
+        let total = len.checked_add(additional).ok_or(CapacityError)?;
+        u32::try_from(total).map(|_| ()).map_err(|_| CapacityError)
+    }
+
     /// Room for `additional` more documents, or an error past `u32::MAX`.
     pub fn reserve(&mut self, additional: usize) -> Result<(), CapacityError> {
-        let total = self.len().checked_add(additional).ok_or(CapacityError)?;
-        if total > u32::MAX as usize {
-            return Err(CapacityError);
-        }
+        Self::check_room(self.len(), additional)?;
         self.present.reserve(additional);
         self.data.reserve(additional * self.num_hashes());
         Ok(())
@@ -97,14 +103,16 @@ impl SignatureStore {
     /// per-document allocation or copy: it gets the `n * num_hashes` new
     /// values (zeroed, one row per document) and returns whether each
     /// document has a signature. Rows of documents without one are zeroed
-    /// again afterwards. If `fill` fails or panics, the store is left as it
-    /// was.
+    /// again afterwards. If `fill` fails or panics, or the call is interrupted
+    /// ([`par::Ticker`]) while the new values are zeroed, the store is left as
+    /// it was.
     pub fn append_with<E, F>(&mut self, n: usize, fill: F) -> Result<(), E>
     where
-        E: From<CapacityError>,
+        E: From<CapacityError> + From<PoolError>,
         F: FnOnce(&mut [u64]) -> Result<Vec<bool>, E>,
     {
-        /// Truncates the values back to `start` unless disarmed (on error or unwind).
+        /// Truncates the values back to `start` unless disarmed (on error or
+        /// unwind); an empty store gives its allocation back.
         struct Rollback<'a> {
             data: &'a mut Vec<u64>,
             start: usize,
@@ -113,20 +121,45 @@ impl SignatureStore {
         impl Drop for Rollback<'_> {
             fn drop(&mut self) {
                 if self.armed {
-                    self.data.truncate(self.start);
+                    if self.start == 0 {
+                        *self.data = Vec::new();
+                    } else {
+                        self.data.truncate(self.start);
+                    }
                 }
             }
         }
 
-        self.reserve(n)?;
+        Self::check_room(self.present.len(), n)?;
         let h = self.num_hashes();
         let start = self.data.len();
+        let values = n.checked_mul(h).ok_or(CapacityError)?;
         let mut guard = Rollback {
             data: &mut self.data,
             start,
             armed: true,
         };
-        guard.data.resize(start + n * h, 0);
+        if start == 0 {
+            // Zeroed memory from the allocator (calloc): the system maps zero
+            // pages that `fill` touches as it writes them, in a loop that
+            // checks for interrupts. Writing the zeros here took seconds for
+            // millions of documents (1.8 GB for 2 million), with no check:
+            // Ctrl-C waited for them.
+            *guard.data = vec![0; values];
+        } else {
+            guard.data.reserve(values);
+            // Appending to filled rows: zero the new ones a step at a time.
+            let end = start + values;
+            let mut ticker = par::Ticker::new();
+            while guard.data.len() < end {
+                if ticker.tick() {
+                    return Err(PoolError::interrupted().into());
+                }
+                let next = end.min(guard.data.len() + ZERO_STEP);
+                guard.data.resize(next, 0);
+            }
+        }
+        self.present.reserve(n);
         let present = fill(&mut guard.data[start..])?;
         assert_eq!(present.len(), n, "one presence flag per document");
         for (row, &has) in guard.data[start..].chunks_mut(h).zip(&present) {
@@ -172,11 +205,17 @@ impl SignatureStore {
     }
 
     /// Stage 2 for one bucket: datatrove's duplicate pairs, in its order.
-    pub fn bucket_pairs(&self, bucket: usize) -> Vec<(u32, u32)> {
+    /// On the thread that called in, an interrupted call stops it between
+    /// documents and between runs of equal first values ([`par::Ticker`]).
+    pub fn bucket_pairs(&self, bucket: usize) -> Result<Vec<(u32, u32)>, PoolError> {
         assert!(bucket < self.num_buckets, "bucket out of range");
         let skip_max = self.precision == Precision::P32;
+        let mut ticker = par::Ticker::new();
         let mut keys: Vec<(u64, u32)> = Vec::with_capacity(self.len());
         for (i, &p) in self.present.iter().enumerate() {
+            if ticker.tick() {
+                return Err(PoolError::interrupted());
+            }
             if !p {
                 continue;
             }
@@ -192,9 +231,13 @@ impl SignatureStore {
         // Sort by (first value, index); then order each run that shares a
         // first value by the rest of the band, giving (band, index) order.
         keys.sort_unstable();
+        par::checkpoint()?;
         let mut pairs = Vec::new();
         let mut start = 0;
         while start < keys.len() {
+            if ticker.tick() {
+                return Err(PoolError::interrupted());
+            }
             let first = keys[start].0;
             let mut end = start + 1;
             while end < keys.len() && keys[end].0 == first {
@@ -217,21 +260,20 @@ impl SignatureStore {
             }
             start = end;
         }
-        pairs
+        Ok(pairs)
     }
 
     /// Stages 2 and 3: every bucket's pairs (buckets in parallel), unioned in
     /// datatrove's order.
     pub fn cluster(&self, threads: Threads) -> Result<Clusters, PoolError> {
-        let mut per_bucket: Vec<Vec<(u32, u32)>> = vec![Vec::new(); self.num_buckets];
-        let items: Vec<(usize, &mut Vec<(u32, u32)>)> = per_bucket.iter_mut().enumerate().collect();
+        type Pairs = Result<Vec<(u32, u32)>, PoolError>;
+        let mut per_bucket: Vec<Pairs> = vec![Ok(Vec::new()); self.num_buckets];
+        let items: Vec<(usize, &mut Pairs)> = per_bucket.iter_mut().enumerate().collect();
         par::for_each(items, self.len(), threads, |(b, slot)| {
             *slot = self.bucket_pairs(b);
         })?;
-        Ok(Clusters::from_pairs(
-            self.len(),
-            per_bucket.iter().flatten().copied(),
-        ))
+        let per_bucket = per_bucket.into_iter().collect::<Result<Vec<_>, _>>()?;
+        Clusters::from_pairs(self.len(), per_bucket.iter().flatten().copied())
     }
 }
 
@@ -301,10 +343,18 @@ pub struct Clusters {
 }
 
 impl Clusters {
-    /// Union `pairs` (in order) over documents `0..n`.
-    pub fn from_pairs(n: usize, pairs: impl IntoIterator<Item = (u32, u32)>) -> Self {
+    /// Union `pairs` (in order) over documents `0..n`. On the thread that
+    /// called in, an interrupted call stops it ([`par::Ticker`]).
+    pub fn from_pairs(
+        n: usize,
+        pairs: impl IntoIterator<Item = (u32, u32)>,
+    ) -> Result<Self, PoolError> {
         let mut uf = UnionFind::new(n);
+        let mut ticker = par::Ticker::new();
         for (a, b) in pairs {
+            if ticker.tick() {
+                return Err(PoolError::interrupted());
+            }
             uf.union(a, b);
         }
         let mut root = Vec::with_capacity(n);
@@ -313,6 +363,9 @@ impl Clusters {
         let mut id_of_root: Vec<i64> = vec![-1; n];
         let mut next_id = 0i64;
         for i in 0..n {
+            if ticker.tick() {
+                return Err(PoolError::interrupted());
+            }
             #[allow(clippy::cast_possible_truncation)]
             let x = i as u32;
             if !uf.in_set[i] {
@@ -329,13 +382,13 @@ impl Clusters {
             cluster_id[i] = *slot;
             cluster_size[i] = uf.size[r as usize];
         }
-        Self {
+        Ok(Self {
             root,
             cluster_id,
             cluster_size,
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             count: next_id as usize,
-        }
+        })
     }
 
     pub fn len(&self) -> usize {
@@ -466,13 +519,13 @@ mod tests {
     fn union_by_size_picks_the_larger_root() {
         // {1,2} (root 1) and {3,4} (root 3); then 0-3 makes root 3's side
         // size 3, so 2-4 joins {1,2} under root 3.
-        let c = Clusters::from_pairs(5, [(1, 2), (3, 4), (0, 3), (2, 4)]);
+        let c = Clusters::from_pairs(5, [(1, 2), (3, 4), (0, 3), (2, 4)]).unwrap();
         assert_eq!(c.keep_mask(), [false, false, false, true, false]);
         assert_eq!(c.clusters(), [vec![3, 0, 1, 2, 4]]);
         assert_eq!(c.cluster_ids(), [0, 0, 0, 0, 0]);
         assert_eq!(c.cluster_sizes(), [5, 5, 5, 5, 5]);
         // Same pairs, different order: the tie now goes to root 1.
-        let c = Clusters::from_pairs(5, [(1, 2), (3, 4), (2, 4), (0, 3)]);
+        let c = Clusters::from_pairs(5, [(1, 2), (3, 4), (2, 4), (0, 3)]).unwrap();
         assert_eq!(c.keep_mask(), [false, true, false, false, false]);
         assert_eq!(c.duplicates(), [0, 2, 3, 4]);
     }
@@ -498,7 +551,7 @@ mod tests {
                 })
                 .filter(|(a, b)| a != b)
                 .collect();
-            let c = Clusters::from_pairs(n as usize, pairs.iter().copied());
+            let c = Clusters::from_pairs(n as usize, pairs.iter().copied()).unwrap();
             assert_eq!(c.keep_mask(), reference(n as usize, &pairs), "{pairs:?}");
         }
     }
@@ -512,7 +565,7 @@ mod tests {
         }
         s.push(None).unwrap();
         // Bands sorted: (3,2):{3,6} (3,9):{1,5} (5,1):{0,2,4}
-        assert_eq!(s.bucket_pairs(0), [(3, 6), (1, 5), (0, 2), (2, 4)]);
+        assert_eq!(s.bucket_pairs(0).unwrap(), [(3, 6), (1, 5), (0, 2), (2, 4)]);
         let c = s.cluster(Threads::ONE).unwrap();
         assert_eq!(
             c.keep_mask(),
@@ -528,7 +581,7 @@ mod tests {
         for sig in [[m, 1], [m, 1], [7, 1], [7, 1]] {
             s.push(Some(&sig)).unwrap();
         }
-        assert_eq!(s.bucket_pairs(0), [(2, 3)]);
+        assert_eq!(s.bucket_pairs(0).unwrap(), [(2, 3)]);
     }
 
     #[test]
@@ -547,6 +600,24 @@ mod tests {
         assert_eq!(c.clusters(), Vec::<Vec<u32>>::new());
     }
 
+    #[derive(Debug, PartialEq, Eq)]
+    enum AppendError {
+        Capacity,
+        Pool(PoolError),
+    }
+
+    impl From<CapacityError> for AppendError {
+        fn from(_: CapacityError) -> Self {
+            Self::Capacity
+        }
+    }
+
+    impl From<PoolError> for AppendError {
+        fn from(e: PoolError) -> Self {
+            Self::Pool(e)
+        }
+    }
+
     #[test]
     fn append_with_matches_push_and_rolls_back() {
         let cfg = config(2, 2, Precision::P64);
@@ -560,22 +631,82 @@ mod tests {
             .append_with(2, |rows: &mut [u64]| {
                 assert_eq!(rows, [0; 8]);
                 rows.copy_from_slice(&[1, 2, 3, 4, 7, 7, 7, 7]); // row 1 written, then "no signature"
-                Ok::<_, CapacityError>(vec![true, false])
+                Ok::<_, AppendError>(vec![true, false])
             })
             .unwrap();
         assert_eq!(filled.len(), 3);
         assert_eq!(filled.data, pushed.data); // the absent row is zeroed again
         assert_eq!(filled.present, pushed.present);
 
-        let err = filled.append_with(1, |_: &mut [u64]| Err(CapacityError));
-        assert_eq!(err, Err(CapacityError));
+        let err = filled.append_with(1, |_: &mut [u64]| Err(AppendError::Capacity));
+        assert_eq!(err, Err(AppendError::Capacity));
         let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let _ = filled.append_with(5, |_: &mut [u64]| -> Result<Vec<bool>, CapacityError> {
+            let _ = filled.append_with(5, |_: &mut [u64]| -> Result<Vec<bool>, AppendError> {
                 panic!("kernel bug")
             });
         }));
         assert!(unwound.is_err());
         assert_eq!(filled.data, pushed.data);
         assert_eq!(filled.present, pushed.present);
+
+        // A fresh store: the same rows, and a failure leaves it empty.
+        let mut fresh = SignatureStore::new(&cfg);
+        let err = fresh.append_with(3, |_: &mut [u64]| Err(AppendError::Capacity));
+        assert_eq!(err, Err(AppendError::Capacity));
+        assert!(fresh.is_empty() && fresh.data.is_empty());
+        fresh
+            .append_with(3, |rows: &mut [u64]| {
+                assert_eq!(rows, [0; 12]);
+                rows.copy_from_slice(&[9, 9, 9, 9, 1, 2, 3, 4, 5, 5, 5, 5]);
+                Ok::<_, AppendError>(vec![true, true, false])
+            })
+            .unwrap();
+        assert_eq!(fresh.data, pushed.data);
+        assert_eq!(fresh.present, pushed.present);
+    }
+
+    /// With an interrupt check that stops at its first ask, each long loop
+    /// stops, and an interrupted append leaves the store as it was.
+    #[test]
+    fn long_loops_stop_when_the_call_is_interrupted() {
+        par::testing::arm(par::Poll::Continue, 1);
+        let cfg = config(2, 2, Precision::P64);
+        let mut s = SignatureStore::new(&cfg);
+        s.push(Some(&[1, 2, 3, 4])).unwrap();
+        let before = s.clone();
+        let after_interval = || std::thread::sleep(par::POLL_INTERVAL);
+        let r = par::interruptible(|| {
+            after_interval();
+            s.append_with(
+                4 * ZERO_STEP,
+                |_: &mut [u64]| -> Result<Vec<bool>, AppendError> {
+                    unreachable!("zeroing stops first")
+                },
+            )
+        });
+        assert_eq!(r, Err(AppendError::Pool(PoolError::interrupted())));
+        assert_eq!((s.data.len(), s.present.len()), (before.data.len(), 1));
+        for _ in 0..1000 {
+            s.push(Some(&[1, 2, 3, 4])).unwrap();
+        }
+        let r = par::interruptible(|| {
+            after_interval();
+            s.bucket_pairs(0)
+        });
+        assert!(r.unwrap_err().is_interrupted());
+        let r = par::interruptible(|| {
+            after_interval();
+            s.cluster(Threads::ONE)
+        });
+        assert!(r.unwrap_err().is_interrupted());
+        let pairs: Vec<(u32, u32)> = (0..1000).map(|i| (i, i + 1)).collect();
+        let r = par::interruptible(|| {
+            after_interval();
+            Clusters::from_pairs(1001, pairs.iter().copied())
+        });
+        assert!(r.unwrap_err().is_interrupted());
+        // Outside an interruptible call nothing stops.
+        assert_eq!(s.bucket_pairs(0).unwrap().len(), 1000);
+        assert_eq!(s.cluster(Threads::ONE).unwrap().num_clusters(), 1);
     }
 }

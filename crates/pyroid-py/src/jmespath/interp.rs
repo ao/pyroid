@@ -130,14 +130,12 @@ pub(crate) fn for_each<'py>(
     mut f: impl FnMut(Bound<'py, PyAny>) -> PyResult<bool>,
 ) -> PyResult<()> {
     if let Ok(l) = x.cast_exact::<PyList>() {
-        // As list iteration: the length is read again at every step.
-        let mut i = 0;
-        while i < l.len() {
+        // One read of the list: another thread (or a custom function) may change it meanwhile.
+        for el in crate::input::list_items(l).iter() {
             ctx.tick()?;
-            if !f(l.get_item(i)?)? {
+            if !f(el)? {
                 break;
             }
-            i += 1;
         }
         return Ok(());
     }
@@ -506,7 +504,7 @@ fn visit_flatten<'py>(
     let mut merged = Vec::new();
     for_each(ctx, &base, |el| {
         if let Ok(l) = el.cast_exact::<PyList>() {
-            merged.extend(l.iter());
+            merged.extend(crate::input::list_items(l).iter());
         } else if is_list(&el) {
             // list.extend iterates a list subclass with its own __iter__.
             for item in el.try_iter()? {
@@ -530,12 +528,11 @@ fn visit_index<'py>(
         return Ok(none(py));
     }
     if let (Ok(l), Some(i)) = (value.cast_exact::<PyList>(), fast) {
-        let n = isize::try_from(l.len())?;
-        let j = if i < 0 { i + n } else { i };
-        return match usize::try_from(j) {
-            Ok(j) if j < l.len() => l.get_item(j),
-            _ => Ok(none(py)),
-        };
+        // One read of one item (the list can change between a len() and a get_item()); a
+        // negative index goes through list.__getitem__, which reads the length with the item.
+        if let Ok(i) = usize::try_from(i) {
+            return Ok(l.get_item(i).unwrap_or_else(|_| none(py)));
+        }
     }
     match value.get_item(index) {
         Ok(v) => Ok(v),
