@@ -249,7 +249,8 @@ filter pipeline, MinHash or sentence dedup is built for a Japanese code. A dicti
 format raises `ValueError`, and a path that cannot be read `OSError`. `languages()` does not open
 the file, so with `PYROID_SUDACHI_DICT` naming a file that cannot be read, the Japanese codes still
 show `native=True` and the datatrove steps do not fall back to datatrove's code. Parity was
-checked with sudachidict-core 20261015 ([Parity](#parity)).
+checked with sudachidict-core 20261015 ([Parity](#parity)): reading another release's dictionary
+emits one `pyroid.VersionMismatchWarning` per process (none for a `PYROID_SUDACHI_DICT` file).
 
 One error differs in type: where SudachiPy's input limit stops datatrove (a 40,000-byte chunk
 whose normalization passes 65,535 bytes), datatrove raises `sudachipy.errors.SudachiError` and
@@ -328,8 +329,9 @@ set, the files of the directory it names are read instead. A file that cannot be
 `OSError`, and a model that is not a CRFsuite model `ValueError`. The algorithms are PyThaiNLP
 5.4.0's, and parity was checked with PyThaiNLP 5.4.0 ([Parity](#parity)); other releases change
 the word list, which pyroid then reads. When the installed pythainlp is not 5.4.0, loading its
-files emits one `RuntimeWarning` per process that names both versions (none for the files of
-`PYROID_PYTHAINLP_CORPUS`, which have no version).
+files emits one `pyroid.VersionMismatchWarning` per process that names both versions (none for
+the files of `PYROID_PYTHAINLP_CORPUS`, which have no version; see
+[Installed versions](../compatibility.md#installed-versions)).
 
 One limit is pyroid's own: a text of 2\*\*32 - 64 characters or more raises `ValueError`, where
 PyThaiNLP has no limit.

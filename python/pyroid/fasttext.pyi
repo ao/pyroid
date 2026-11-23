@@ -28,6 +28,12 @@ def load_model(path: str | os.PathLike[str]) -> Model:
     The whole file is read and validated in one pass (the GIL is released
     meanwhile). The model is immutable: share it across threads.
 
+    Its probabilities are those of the fastText build that is installed:
+    fasttext-numpy2-wheel's or fasttext-wheel's (upstream fastText 0.9.2, what
+    ``datatrove[processing]`` installs) when one of them is, else
+    fasttext-predict 0.9.2.4's. The two differ only on aarch64, in the last
+    bits.
+
     Args:
         path: The model file.
 
@@ -42,6 +48,20 @@ def load_model(path: str | os.PathLike[str]) -> Model:
             ``PermissionError``, ...; fastText raises ``ValueError`` here).
         MemoryError: A matrix of a valid file does not fit in memory (as
             fastText's ``std::bad_alloc``).
+    """
+
+def _load_upstream(path: str | os.PathLike[str]) -> Model:
+    """:func:`load_model` computing as upstream fastText 0.9.2's wheels do, whatever is installed.
+
+    For the steps that reproduce datatrove, whose ``processing`` extra installs
+    fasttext-numpy2-wheel.
+    """
+
+def _load_predict(path: str | os.PathLike[str]) -> Model:
+    """:func:`load_model` computing as fasttext-predict 0.9.2.4 does, whatever is installed.
+
+    For lid.176.bin that gives the same bits on aarch64 as every build gives on
+    x86-64: ``pyroid clean``'s output is the same on every platform.
     """
 
 def tokenize(text: str) -> list[str]:

@@ -26,6 +26,7 @@ import warnings
 from collections.abc import Callable
 from typing import Any
 
+from pyroid import _versions
 from pyroid._pyroid import FallbackWarning
 from pyroid._pyroid import dateutil as _native
 from pyroid.dateutil import _isoreference, _reference, _upstream
@@ -93,28 +94,11 @@ def _stacklevel_outside(prefixes: tuple[str, ...]) -> int:
 
 def _version_check() -> None:
     """Warn once if the installed python-dateutil is a release this module does not reproduce."""
-    try:
-        from pyroid import _versions  # type: ignore[attr-defined,unused-ignore]
-    except ImportError:
-        _versions = None
-    if _versions is not None:
-        _versions.check(
-            __name__,
-            "dateutil",
-            f"python-dateutil=={DATEUTIL_VERSION}",
-            same=tuple(f"python-dateutil=={v}" for v in DATEUTIL_VERSIONS[1:]),
-        )
-        return
-    found = _upstream.INSTALLED_VERSION
-    if found is None or found in DATEUTIL_VERSIONS:
-        return
-    others = ", ".join(DATEUTIL_VERSIONS[1:])
-    warnings.warn(
-        f"{__name__} reproduces python-dateutil {DATEUTIL_VERSION} (and {others}), but "
-        f"python-dateutil {found} is installed: results can differ from it. Install one of "
-        "those releases to compare like for like.",
-        RuntimeWarning,
-        stacklevel=_stacklevel_outside(("pyroid", "importlib")),
+    _versions.check(
+        __name__,
+        "dateutil",
+        f"python-dateutil=={DATEUTIL_VERSION}",
+        same=tuple(f"python-dateutil=={v}" for v in DATEUTIL_VERSIONS[1:]),
     )
 
 
@@ -214,11 +198,10 @@ _INFO_HOOKS = (
 
 
 class parser(_reference.parser):  # noqa: N801 - dateutil's name
-    """dateutil's ``parser``: ``parser(info=None).parse(timestr, ...)``.
+    """dateutil's ``parser``: ``parser(info).parse(timestr, ...)``.
 
-    ``info`` is a :class:`parserinfo` (or dateutil's own). The parsing runs in Rust unless a
-    subclass overrides one of the private methods dateutil documents as hooks, in which case
-    dateutil's algorithm runs with them.
+    Args:
+        info: A :class:`parserinfo` (or dateutil's), the default one if ``None``.
     """
 
     def __init__(self, info: Any = None) -> None:
@@ -397,10 +380,17 @@ def _iso_mode(compat: str | None) -> str:
 class isoparser(_isoreference.isoparser):  # noqa: N801 - dateutil's name
     """dateutil's ``isoparser(sep=None)``, plus the keyword-only ``compat``.
 
-    ``compat`` picks whose ``isoparse`` to reproduce: ``"4.0.0"`` (each field exactly N ASCII
-    digits), or ``"3.0.0"``, ``"2.9.0.post0"``, ``"2.9.0"`` or ``"2.8.2"`` (fields read with
-    ``int()``, so ``2014- 4-21`` parses). ``None``, the default, follows the installed
-    python-dateutil, and is 4.0.0 without it.
+    Args:
+        sep: The one character that must separate date and time (``"T"`` for strict ISO 8601);
+            any character if ``None``.
+        compat: Whose ``isoparse`` to reproduce. ``"4.0.0"``: every numeric field is exactly N
+            ASCII digits. ``"3.0.0"``, ``"2.9.0.post0"``, ``"2.9.0"`` and ``"2.8.2"``: fields are
+            read with ``int()``, so ``"2014- 4-21"`` parses. ``None`` (the default): the installed
+            python-dateutil's release, and 4.0.0 without one.
+
+    Raises:
+        ValueError: ``sep`` is not a single non-digit ASCII character, or ``compat`` is not one
+            of :data:`DATEUTIL_VERSIONS`.
     """
 
     def __init__(self, sep: str | None = None, *, compat: str | None = None) -> None:
@@ -410,7 +400,11 @@ class isoparser(_isoreference.isoparser):  # noqa: N801 - dateutil's name
 
     @_isoreference._takes_ascii
     def isoparse(self, dt_str: Any) -> datetime.datetime:
-        """Parse an ISO-8601 datetime string into a :class:`datetime.datetime`."""
+        """Parse an ISO 8601 date and time string (dateutil's ``isoparser.isoparse``).
+
+        Raises:
+            ValueError: The string is not ISO 8601 in a form dateutil accepts.
+        """
         return _native.isoparser_isoparse(self, dt_str)  # type: ignore[no-any-return]
 
 
@@ -542,7 +536,7 @@ def _patched_functions() -> tuple[Callable[..., Any], Callable[..., datetime.dat
     return up_parse, up_isoparse
 
 
-def parse_batch(
+def parse_batch(  # noqa: D417 - documented keyword by keyword, as in the stub
     timestrs: Any,
     parserinfo: Any = None,
     *,
@@ -550,9 +544,37 @@ def parse_batch(
     errors: str = "raise",
     **kwargs: Any,
 ) -> Any:
-    """:func:`parse` over many strings at once, on pyroid's thread pool (not part of dateutil).
+    """:func:`parse` over many strings at once, on pyroid's thread pool.
 
-    See ``parser.pyi``.
+    Not part of dateutil. Each result is what ``parse(s, ...)`` gives, except that
+    ``default=None`` means today at midnight as read once for the batch.
+
+    >>> parse_batch(["2003-09-25", "Sep 26 2003 10:00"])
+    [datetime.datetime(2003, 9, 25, 0, 0), datetime.datetime(2003, 9, 26, 10, 0)]
+
+    Args:
+        timestrs: A str, a list or tuple of str, or an Arrow string array or chunked array.
+        parserinfo: As for :func:`parse`.
+        threads: At most this many tasks at once on the shared pool (``None``: the whole pool).
+        errors: ``"raise"`` raises the first failing string's exception (with a note naming its
+            index); ``"coerce"`` gives ``None`` for the strings that raise ``ValueError`` (such
+            as ``ParserError``) or ``OverflowError``.
+        default: As for :func:`parse`.
+        ignoretz: As for :func:`parse`.
+        tzinfos: As for :func:`parse`.
+        dayfirst: As for :func:`parse`.
+        yearfirst: As for :func:`parse`.
+        fuzzy: As for :func:`parse`. ``fuzzy_with_tokens`` is not accepted.
+
+    Returns:
+        The results in the input's kind: a ``datetime`` (or ``None``) for a str, a list for a
+        list, a tuple for a tuple. Arrow input gives a :class:`pyroid.Column` of
+        ``timestamp[us]``: wall time with no time zone when every result is naive, UTC instants
+        (``tz="UTC"``) when every result is aware; Arrow nulls and coerced failures are nulls.
+
+    Raises:
+        ParserError: A string is not a date (``errors="raise"``).
+        ValueError: Arrow input whose results mix naive and aware datetimes.
     """
     return _native.parse_batch(timestrs, parserinfo, threads, errors, kwargs)
 
@@ -565,9 +587,24 @@ def isoparse_batch(
     sep: str | None = None,
     compat: str | None = None,
 ) -> Any:
-    """:func:`isoparse` over many strings at once, on pyroid's thread pool (not part of dateutil).
+    """:func:`isoparse` over many strings at once, on pyroid's thread pool.
 
-    See ``parser.pyi``.
+    Not part of dateutil. Each result is what ``isoparser(sep, compat=compat).isoparse(s)``
+    gives.
+
+    Args:
+        dt_strs: A str, a list or tuple of str, or an Arrow string array or chunked array.
+        threads: At most this many tasks at once on the shared pool (``None``: the whole pool).
+        errors: ``"raise"`` or ``"coerce"``, as for :func:`parse_batch`.
+        sep: As for :class:`isoparser`.
+        compat: As for :class:`isoparser`.
+
+    Returns:
+        The results in the input's kind, as for :func:`parse_batch`.
+
+    Raises:
+        ValueError: A string is not ISO 8601 (``errors="raise"``), or Arrow input whose results
+            mix naive and aware datetimes.
     """
     p = DEFAULT_ISOPARSER if sep is None and compat is None else isoparser(sep, compat=compat)
     return _native.isoparse_batch(dt_strs, p, threads, errors)

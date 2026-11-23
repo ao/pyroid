@@ -37,7 +37,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from hypothesis import given, settings
@@ -52,6 +52,7 @@ except ImportError:  # pragma: no cover - numpy is the one dependency of pyroid[
 import pyroid
 import pyroid.fasttext as ft
 import pyroid.text
+from pyroid import _versions
 from pyroid._pyroid import _testing
 
 FREE_THREADED = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
@@ -1752,6 +1753,48 @@ def test_pruned_subwords_list_more_strings_than_ids(zoo: Zoo) -> None:
 
 
 # ---- 7. numpy is required ----------------------------------------------------------------
+
+
+@pytest.mark.thread_unsafe(reason="runs a subprocess")
+def test_upstream_arithmetic(zoo: Zoo) -> None:
+    """``_load_upstream`` fuses every multiply-add of the dense output layer, as upstream fastText
+    0.9.2's wheels do on aarch64; elsewhere it computes exactly what ``load_model`` does."""
+    entry = zoo["softmax-dense"]
+    default = cast(Any, ft)._native.load_model(entry.path)
+    upstream = ft._load_upstream(entry.path)
+    rng = np.random.default_rng(3)
+    lines = [" ".join(rng.choice(list(map(str, WORDS)), size=12)) for _ in range(400)]
+    a = default.predict(lines, k=-1, threads=1)
+    b = upstream.predict(lines, k=-1, threads=1)
+    assert a[0] == b[0] or platform.machine().lower() in ("aarch64", "arm64")
+    differ = sum(x.tobytes() != y.tobytes() for x, y in zip(a[1], b[1], strict=True))
+    if platform.machine().lower() in ("aarch64", "arm64"):
+        assert differ > 0
+        assert max(float(np.max(np.abs(x - y))) for x, y in zip(a[1], b[1], strict=True)) < 1e-5
+    else:
+        assert differ == 0
+    # The installed build decides what load_model does (fasttext-predict in the test groups).
+    installed = _versions.distribution(
+        "fasttext", ("fasttext-predict", "fasttext-numpy2-wheel", "fasttext-wheel")
+    )
+    assert cast(Any, ft)._UPSTREAM is (installed in ("fasttext-numpy2-wheel", "fasttext-wheel"))
+
+
+def test_numpy_is_imported_by_the_first_array(run_python: RunPython, zoo: Zoo) -> None:
+    # Importing numpy takes ~90 ms; importing pyroid.fasttext and loading a model need none.
+    path = zoo["softmax-dense"].path
+    proc = run_python(
+        f"""
+        import sys
+        import pyroid.fasttext as ft
+        assert "numpy" not in sys.modules
+        m = ft.load_model({str(path)!r})
+        assert m.get_words()[:2] == ["</s>", "the"] and "numpy" not in sys.modules
+        labels, probs = m.predict("the cat")
+        assert "numpy" in sys.modules and type(probs).__module__ == "numpy"
+        """
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
 @pytest.mark.thread_unsafe(reason="runs a subprocess")

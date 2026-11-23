@@ -147,9 +147,14 @@ fn with_scratch<R>(f: impl FnOnce(&mut Scratch) -> R) -> R {
     let mut f = Some(f);
     let done = SCRATCH
         .try_with(|s| {
-            s.try_borrow_mut()
-                .ok()
-                .map(|mut s| (f.take().expect("called once"))(&mut s))
+            s.try_borrow_mut().ok().map(|mut s| {
+                let r = (f.take().expect("called once"))(&mut s);
+                // The buffers scale with the document's words.
+                if crate::scratch::too_big(&s.spans) || crate::scratch::too_big(&s.slots) {
+                    *s = Scratch::default();
+                }
+                r
+            })
         })
         .ok()
         .flatten();

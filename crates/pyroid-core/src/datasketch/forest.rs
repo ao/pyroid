@@ -126,6 +126,29 @@ impl ForestIndex {
         Some(self.slots.release(id))
     }
 
+    /// `sorted_hashtables[table] = keys`, as a datasketch pickle holds it:
+    /// strictly increasing band keys of that table (those of its last
+    /// `index()`).
+    ///
+    /// # Panics
+    /// If `table` is out of range.
+    pub fn set_sorted(&mut self, table: usize, keys: &[&[u8]]) -> Result<(), FormatError> {
+        if keys.windows(2).any(|w| w[0] >= w[1]) {
+            return Err(FormatError::new("sorted table is not sorted"));
+        }
+        let t = &self.tables[table];
+        let sorted = keys
+            .iter()
+            .map(|k| {
+                t.get_key_value(*k)
+                    .map(|(h, _)| Arc::clone(h))
+                    .ok_or_else(|| FormatError::new("a sorted band key is not in its table"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.sorted[table] = sorted;
+        Ok(())
+    }
+
     /// `index()`: sort every table's band keys.
     pub fn index(&mut self) {
         for (table, sorted) in self.tables.iter().zip(&mut self.sorted) {

@@ -23,20 +23,24 @@ mod fasttext;
 mod filters;
 mod ftfy;
 mod input;
+mod interrupt;
 mod jieba;
 mod json_repair;
 mod metrics;
 mod nemo;
 mod nemo_modifiers;
 mod nltk;
+mod np;
 mod pythainlp;
 mod segmenters;
 mod sudachi;
+mod tabulate;
 mod testing;
 mod text;
 mod trafilatura;
 mod translit;
 mod warc;
+mod yaml;
 
 use pyo3::prelude::*;
 
@@ -51,6 +55,8 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     errors::register(m)?;
     m.add_class::<arrow::Column>()?;
     testing::register(m)?;
+    np::register(m)?;
+    interrupt::register();
     // Product modules: one registration line each.
     text::register(m)?;
     ftfy::register(m)?;
@@ -67,5 +73,7 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     jieba::register(m)?;
     trafilatura::register(m)?;
     warc::register(m)?;
+    yaml::register(m)?;
+    tabulate::register(m)?;
     Ok(())
 }

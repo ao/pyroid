@@ -34,7 +34,7 @@ import numpy as np
 import pytest
 
 from pyroid_parity import data as D
-from pyroid_parity.plugin import _impl, effective_limit, need_corpus, reference
+from pyroid_parity.plugin import _impl, effective_limit, need_corpus, oracle_pin, reference
 from pyroid_parity.report import Collector
 
 SUITE = "datasketch"
@@ -108,7 +108,7 @@ def work(datasketch_impl: Any, request: pytest.FixtureRequest) -> Workload:
 
 
 def test_live_oracle_is_pinned_datasketch() -> None:
-    assert md.version("datasketch") == DATASKETCH_VERSION
+    assert md.version("datasketch") == oracle_pin("datasketch", DATASKETCH_VERSION)
 
 
 @pytest.mark.parametrize("scheme", SCHEMES)

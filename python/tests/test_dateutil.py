@@ -1453,14 +1453,9 @@ def test_version_warning_and_isoparse_mode(monkeypatch: pytest.MonkeyPatch) -> N
         monkeypatch.setattr(_upstream, "INSTALLED_VERSION", release)
         assert ppx.isoparser().isoparse("2014- 4-21") == D(2014, 4, 21)
         assert ppx.isoparser().isoparse("20200728121240") == D(2020, 7, 28, 21, 24)
-    # Other releases warn, and get the closer of the two forms.
+    # Other releases get the closer of the two forms (the warning: test_version_mismatch.py).
     for release, lenient in (("2.8.1", True), ("2.7.5", True), ("4.1.0", False)):
         monkeypatch.setattr(_upstream, "INSTALLED_VERSION", release)
-        try:
-            from pyroid import _versions  # type: ignore[attr-defined]  # noqa: F401
-        except ImportError:
-            with pytest.warns(RuntimeWarning, match=rf"but python-dateutil {release} is installed"):
-                ppx._version_check()
         assert ppx.isoparser()._lenient is lenient
     monkeypatch.setattr(_upstream, "INSTALLED_VERSION", None)
     assert ppx.isoparser()._lenient is False

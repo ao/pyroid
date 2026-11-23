@@ -34,16 +34,17 @@ each file is the full list.
 | `dateutil` | 2 option bytes (`dayfirst`/`yearfirst`/`fuzzy`/`fuzzy_with_tokens`, Unicode tables, `int()` digit limit, a custom parserinfo, an isoparse separator), text | `dateutil::parse` and `isoparser::isoparse` in both modes: no panic or overflow; deterministic; `ampm` 0 or 1; fuzzy tokens non-empty and no longer than the text; microseconds below 1,000,000. Exactness against python-dateutil is checked by the parity suite (`parity/tests/test_dateutil.py`) |
 | `sudachi_dic` | text length byte, text (at most 32 bytes), a `SudachiBinaryDic` file, loaded as given and with 72 MB of zeros appended (a loadable dictionary needs a 5968 x 5968 connection matrix) | `Dictionary::from_bytes`, then `tokenize`: header comment and signature, POS ids; morphemes are contiguous byte ranges on char boundaries; OOV word ids carry their POS; deterministic, also after another text. Seeds: small dictionaries the target writes with `PYROID_FUZZ_SEEDS=<dir>`. Bounds: header comment of `fuzz_targets/sudachi_dic.rs` |
 | `jieba_dict` | flags byte (HMM off, a main dictionary up to the first NUL, load twice), text length byte, text, user dictionary | `from_entries`, and `load_userdict`'s lines (`re_userdict`) through `add_word` and `suggest_freq`: words keep their last frequency and their prefixes, `total` and `len(FREQ)` add up, `FREQ.items()` agrees with `get`; `cut` fails only for a zero total, else its words are non-empty and join to the text; `tokenize` offsets; `cut_for_search` equals `tokenize(mode="search")`; `get_DAG`'s shape; deterministic |
+| `yaml` | flags byte (emitter indent, canonical, allow_unicode, width, a reader limit in eighths of the text), text (the characters PyYAML's reader rejects are removed) | PyYAML 6.0.3's reader, scanner, parser and composer: no panic or stack overflow at any depth; deterministic; with a limit (a file object with a decoding error part way), the full text's result or the pending reader error; the events of what parses go through the emitter without a panic, and its output parses again with at most a YAML error. Exactness against PyYAML is checked in `python/tests/test_yaml_parity.py` |
 
 ### Bounded inputs
 
 Three targets limit what they run, so that a run is not spent on costs the
 reference libraries have too:
 
-- json_repair 0.64.5's parser rescans the rest of the text in places, so some
+- json_repair's parser rescans the rest of the text in places, so some
   inputs take time quadratic in their length, in json_repair as in pyroid (a
   62-byte unit of garbage repeated to 31,744 characters: 18.4 s in json_repair
-  and 1.9 s in pyroid 1.0.0rc1, Docker/OrbStack VM, linux/arm64), and with
+  0.64.5 and 1.9 s in pyroid 1.0.0rc1, Docker/OrbStack VM, linux/arm64), and with
   `logging` the log grows the same way. `json_repair` turns logging off past
   8 KiB and skips texts over 16 KiB unless their repeated middle is valid JSON.
 - A Sudachi trie value can list any number of word entries, each a lattice node

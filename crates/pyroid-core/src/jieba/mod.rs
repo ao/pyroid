@@ -93,9 +93,14 @@ thread_local! {
 fn with_scratch<R>(f: impl FnOnce(&mut Scratch) -> R) -> R {
     let mut f = Some(f);
     let r = SCRATCH.with(|s| {
-        s.try_borrow_mut()
-            .ok()
-            .map(|mut s| (f.take().expect("once"))(&mut s))
+        s.try_borrow_mut().ok().map(|mut s| {
+            let r = (f.take().expect("once"))(&mut s);
+            // The buffers scale with the block's characters.
+            if crate::scratch::too_big(&s.dag) || crate::scratch::too_big(&s.route) {
+                *s = Scratch::default();
+            }
+            r
+        })
     });
     match r {
         Some(r) => r,
