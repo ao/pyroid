@@ -27,6 +27,7 @@ __all__ = [
     "metrics",
     "nemo",
     "nltk",
+    "packaging",
     "tabulate",
     "text",
     "trafilatura",
@@ -52,6 +53,7 @@ dateutil: ModuleType
 jieba: ModuleType
 jmespath: ModuleType
 nltk: ModuleType
+packaging: ModuleType
 nemo: ModuleType
 trafilatura: ModuleType
 warc: ModuleType

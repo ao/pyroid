@@ -32,11 +32,12 @@ So the result is always the incumbent's. The warning tells you that this call to
 | `pyroid.difflib` | `SequenceMatcher` over elements other than `str`, `int`, `bool` and `bytes` (tuples, floats, subclasses that define their own comparisons, hash or indexing, ...), over `str` mixed with `bytes` under `python -b`, or over sequences other than `str`, `bytes`, `bytearray`, `list` and `tuple` (and their subclasses that keep those); and every name on a CPython version after 3.15 (one warning at import) | a custom `charjunk` or an overridden `Differ`/`HtmlDiff` helper is not a fallback: the standard library's Python code runs with pyroid's native `SequenceMatcher` |
 | `pyroid.datasketch` | the classes pyroid does not port (`bBitMinHash`, `HNSW`, `MinHashLSHBloom`, `WeightedMinHash`, `HyperLogLog`, ...), Redis and Cassandra storage, and a `hashfunc` other than `sha1_hash32`/`sha1_hash64` (called from Python for each token; the permutations stay in Rust) | — |
 | `pyroid.yaml` | loaders and dumpers with added constructors, representers or resolvers or overridden methods, `BaseLoader`, `load_all` with the full loaders, documents with `!!python/` tags under `FullLoader`/`Loader`/`UnsafeLoader`, objects other than plain data under `Dumper`, dumping a `str` with lone surrogates, and PyYAML's other functions (`scan`, `compose`, ...) | under `SafeDumper`, an object it cannot represent raises PyYAML's `RepresenterError` |
+| `pyroid.packaging` | `SpecifierSet.to_range()`, `is_subset()`, `is_superset()` and `is_disjoint()`, which run packaging 26.3's own `VersionRange` code on pyroid's objects | without packaging these raise `PyroidError`; everything else is native, with or without packaging |
 | `pyroid.integrations.datatrove` | a `language` the step can't tokenize natively runs datatrove's own code for that step, and `Trafilatura` with an installed trafilatura release that pyroid does not reproduce runs datatrove's own step | — |
 
 Without the library a call needs (ftfy, datatrove and the language's segmenter, rouge-score,
-nltk, sacrebleu, json_repair, trafilatura, jieba, datasketch, PyYAML), it raises `pyroid.PyroidError`
-and says what to install.
+nltk, sacrebleu, json_repair, trafilatura, jieba, datasketch, PyYAML, packaging), it raises
+`pyroid.PyroidError` and says what to install.
 
 ## `python_tokenizer=True`
 
@@ -88,7 +89,7 @@ uses its 17.0 tables. Any other warning matches the incumbent's own (for example
 
 [`pyroid.patch()`](../guides/patch.md) is not a fallback but the opposite: it makes code that
 imports ftfy, fastText, anyascii, datasketch, json_repair, Trafilatura, NLTK, warcio, NeMo Curator,
-PyYAML, tabulate, python-dateutil, jmespath or difflib get pyroid's functions instead. It announces
-that with its own `PatchWarning`, once per process for each patched name, so you can tell the two
-apart. An installed package of another release also gets the `VersionMismatchWarning` that importing
-the pyroid module gives (once per process, whichever comes first).
+PyYAML, tabulate, python-dateutil, jmespath, difflib or packaging get pyroid's functions instead. It
+announces that with its own `PatchWarning`, once per process for each patched name, so you can tell
+the two apart. An installed package of another release also gets the `VersionMismatchWarning` that
+importing the pyroid module gives (once per process, whichever comes first).

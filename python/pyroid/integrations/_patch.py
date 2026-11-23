@@ -142,6 +142,16 @@ themselves (so instances, subclasses and ``isinstance`` checks stay difflib's, i
 imported earlier), and its ``get_close_matches``, ``unified_diff``, ``context_diff`` and
 ``_mdiff`` on the module, which covers ``ndiff`` and unittest's and pytest's assertion diffs.
 
+``"packaging"`` works like ``"nltk"`` when packaging is installed, and goes further: it imports
+packaging and its submodules, then replaces each of packaging's ported objects (``Version``,
+``parse``, ``Specifier``, ``SpecifierSet``, ``Marker``, ``default_environment``, ``Requirement``
+and the name, version and filename helpers of ``packaging.utils``) wherever a ``packaging.*``
+module holds it, so packaging's own ``ranges``, ``metadata``, ``pylock`` and
+``dependency_groups`` use :mod:`pyroid.packaging`'s classes, which reproduce packaging 26.3.
+The exception classes stay packaging's. Without packaging, ``packaging`` and its ``version``,
+``specifiers``, ``markers``, ``requirements`` and ``utils`` submodules are shims holding
+:mod:`pyroid.packaging`'s names.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -151,6 +161,7 @@ from __future__ import annotations
 import contextlib
 import importlib
 import importlib.util
+import operator
 import os
 import pkgutil
 import runpy
@@ -194,6 +205,7 @@ SUPPORTED: tuple[str, ...] = (
     "dateutil",
     "jmespath",
     "difflib",
+    "packaging",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -1006,6 +1018,131 @@ def _build_difflib(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     return {}, [impl._switch_off]
 
 
+# The packaging submodules patch("packaging") imports first, so that every global holding one of
+# packaging's ported objects is found and replaced (also in ranges, metadata, pylock, ...).
+_PACKAGING_MODULES = (
+    "version",
+    "specifiers",
+    "markers",
+    "requirements",
+    "utils",
+    "tags",
+    "_structures",
+    "_tokenizer",
+    "_parser",
+    "_ranges",
+    "ranges",
+    "errors",
+    "licenses",
+    "metadata",
+    "dependency_groups",
+    "direct_url",
+    "pylock",
+)
+
+
+def _build_packaging(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    from pyroid._pyroid import packaging as native
+
+    if real is None:  # no packaging: shims providing pyroid.packaging's modules
+        shims: dict[str, types.ModuleType] = {}
+        for sub in impl.PORTED:
+            sub_impl = importlib.import_module(f"{impl.__name__}.{sub}")
+            provided = {n: getattr(sub_impl, n) for n in sub_impl.__all__}
+            shims[f"packaging.{sub}"] = _shim(
+                f"packaging.{sub}", None, missing, sub_impl, provided, package=False
+            )
+        top = _shim(
+            "packaging",
+            None,
+            missing,
+            impl,
+            {sub: shims[f"packaging.{sub}"] for sub in impl.PORTED},
+            package=True,
+            version=impl.PACKAGING_VERSION,
+        )
+        return {"packaging": top, **shims}, []
+    for sub in _PACKAGING_MODULES:
+        with contextlib.suppress(ImportError):
+            importlib.import_module(f"packaging.{sub}")
+    # Each of packaging's ported objects, wherever a packaging module holds it, becomes pyroid's.
+    replace: dict[int, tuple[Any, Any]] = {}
+    for module_name, attr, new in impl._patch_targets():
+        module = sys.modules.get(module_name)
+        original = module.__dict__.get(attr, _MISSING) if module is not None else _MISSING
+        if original is not _MISSING and original is not new:
+            replace[id(original)] = (original, new)
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for key, module in list(sys.modules.items()):
+        if not _owned(key, "packaging") or not isinstance(module, types.ModuleType):
+            continue
+        for attr, value in list(vars(module).items()):
+            hit = replace.get(id(value))
+            if hit is not None and hit[0] is value:
+                saved.append((module, attr, value))
+                setattr(module, attr, hit[1])
+    # packaging.specifiers keeps Version's comparison methods in a table (_DIRECT_COMPARE_OPS)
+    # that its Specifier calls with a parsed version: pyroid's now, which the original methods'
+    # `super()` rejects. While patched, the table holds the plain operators.
+    ops = {f"__{n}__": getattr(operator, n) for n in ("lt", "le", "eq", "ne", "ge", "gt")}
+    methods = {
+        id(f): ops[name]
+        for original, _ in replace.values()
+        if isinstance(original, type)
+        for name, f in vars(original).items()
+        if name in ops
+    }
+    tables: list[tuple[dict[Any, Any], Any, Any]] = []
+    for key, module in list(sys.modules.items()):
+        if not _owned(key, "packaging") or not isinstance(module, types.ModuleType):
+            continue
+        for value in list(vars(module).values()):
+            if type(value) is dict:
+                for k, f in list(value.items()):
+                    if id(f) in methods:
+                        tables.append((value, k, f))
+                        value[k] = methods[id(f)]
+    # Objects made before the patch keep packaging's original classes. pickle finds a class by
+    # its name, `packaging.version.Version`, which is pyroid's class now; while patched, such an
+    # object pickles as the pyroid object it equals.
+    reduced: list[tuple[type, Any]] = []
+    for original, new in replace.values():
+        if isinstance(original, type):
+            reduced.append((original, original.__dict__.get("__reduce_ex__", _MISSING)))
+            original.__reduce_ex__ = _pickle_as(original, new)  # type: ignore[method-assign,assignment]
+    # Under the patch packaging's classes are pyroid's: objects stop claiming the originals, and
+    # pyroid's constructors take objects of the originals by value.
+    native._set_patched(True)
+
+    def undo() -> None:
+        for module, attr, original in reversed(saved):
+            setattr(module, attr, original)
+        for table, k, f in reversed(tables):
+            table[k] = f
+        for cls, previous in reversed(reduced):
+            if previous is _MISSING:
+                del cls.__reduce_ex__
+            else:
+                cls.__reduce_ex__ = previous
+        native._set_patched(False)
+
+    return {}, [undo]
+
+
+def _pickle_as(original: type, new: Any) -> Callable[[Any, Any], Any]:
+    """``__reduce_ex__`` for packaging's `original` class while patched: pickle as `new`."""
+    base: Any = original.__reduce_ex__
+    restore = importlib.import_module("pyroid.packaging")._restore
+
+    def reduce_ex(self: Any, protocol: Any) -> Any:
+        if type(self) is not original:  # a subclass: pickled by its own name
+            return base(self, protocol)
+        return (restore, (new, self.__getstate__()))
+
+    reduce_ex.__name__ = reduce_ex.__qualname__ = "__reduce_ex__"
+    return reduce_ex
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -1116,10 +1253,27 @@ _TARGETS: dict[str, _Target] = {
         " (restore, diff_bytes, IS_LINE_JUNK, Match)",
         _build_difflib,
     ),
+    "packaging": _Target(
+        "pyroid.packaging",
+        "which reproduces packaging 26.3's Version, Specifier, SpecifierSet, Marker, Requirement "
+        "and the name, version and filename helpers of packaging.utils",
+        "pip install packaging==26.3",
+        " (tags, metadata, pylock, ranges, dependency groups; they now use pyroid's classes)",
+        _build_packaging,
+    ),
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator", "yaml", "dateutil", "jmespath", "difflib")
+_SWAPPED = (
+    "nltk",
+    "warcio",
+    "nemo_curator",
+    "yaml",
+    "dateutil",
+    "jmespath",
+    "difflib",
+    "packaging",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1200,6 +1354,18 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
         what = f"`import {name}` now gives pyroid's drop-in"
         if real is None:
             rest = f"Everything else{target.rest} is unavailable: {missing} ({target.pip})."
+        elif name == "packaging":
+            # The unported modules the installed release has (24.2 has no pylock, say).
+            unported = [
+                m.replace("_", " ")
+                for m in ("tags", "metadata", "pylock", "ranges", "dependency_groups")
+                if f"packaging.{m}" in sys.modules
+            ]
+            rest = (
+                f"Everything else ({', '.join(unported)}; they now use pyroid's classes) is "
+                "still packaging's own. Names imported from packaging before this call (from "
+                "packaging.version import Version) keep packaging's objects."
+            )
         elif name in _SWAPPED:
             what = f"the installed {name} now uses pyroid's drop-ins"
             example = {
@@ -1210,6 +1376,7 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
                 "dateutil": "from dateutil.parser import parse",
                 "jmespath": "from jmespath import search",
                 "difflib": "from difflib import unified_diff",
+                "packaging": "from packaging.version import Version",
             }[name]
             rest = (
                 f"Everything else{target.rest} is still {name}'s own. Names imported from "
@@ -1289,7 +1456,8 @@ def patch(*names: str) -> None:
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
             ``"json_repair"``, ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"``,
-            ``"yaml"``, ``"tabulate"``, ``"dateutil"``, ``"jmespath"`` and/or ``"difflib"``.
+            ``"yaml"``, ``"tabulate"``, ``"dateutil"``, ``"jmespath"``, ``"difflib"`` and/or
+            ``"packaging"``.
 
     Raises:
         TypeError: No names were given.
@@ -1433,9 +1601,9 @@ _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
-`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` / `difflib`
-giving pyroid's drop-ins. The Python processes it starts (multiprocessing workers, subprocesses)
-are patched too.
+`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` / `difflib` /
+`packaging` giving pyroid's drop-ins. The Python processes it starts (multiprocessing workers,
+subprocesses) are patched too.
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}

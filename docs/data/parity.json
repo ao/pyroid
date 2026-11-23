@@ -402,6 +402,41 @@
       ],
       "source": "python/tests/test_jmespath_parity.py, bench/jmespath/parity_counts.py and bench/jmespath/real_queries.py, run on 2026-11-15 on the EC2 c8g.16xlarge devbox (linux/aarch64)"
     },
+    "packaging": {
+      "reference": "packaging 26.3",
+      "rule": "the same result (strings, properties, order, hashes, equality across the two libraries, pickles) or the same exception class and message",
+      "checks": [
+        {
+          "name": "packaging 26.3's own tests of versions, specifiers, markers, requirements, utils, ranges, metadata, pylock and dependency groups, and its property tests, unchanged, with pyroid.patch(\"packaging\") on and packaging's pytest settings (warnings are errors; pyroid.FallbackWarning ignored) (tests passed)",
+          "same": 62499,
+          "diff": 0
+        },
+        {
+          "name": "Hypothesis differential fuzzing from the PEP 440 and PEP 508 grammars plus mutations (Python whitespace, letters re.IGNORECASE folds onto ASCII, other digits, lone surrogates): versions, version ordering, from_parts and __replace__, Specifier, SpecifierSet, markers, requirements, wheel and sdist filenames, names; 9 properties x 20,000 cases",
+          "same": 180000,
+          "diff": 0
+        },
+        {
+          "name": "PyPI corpus, the top 9,996 projects: every release version (828,241) parsed, printed, keyed and hashed, and canonicalize_version of each; each project's release list sorted, natively and with sort_versions, and all of them sorted together",
+          "same": 1676475,
+          "diff": 0
+        },
+        {
+          "name": "PyPI corpus: the 25,930 distinct Requires-Python values parsed; contains of 61 CPython versions with prereleases None, True and False (4,731,831); filter over the project's own releases; contains_batch",
+          "same": 4809475,
+          "diff": 0
+        },
+        {
+          "name": "PyPI corpus: 69,162 distinct Requires-Dist values (the latest release of each project and the last 10 releases of the top 1,000) parsed and printed; == and hash against packaging's objects; each marker evaluated in 4 environments x 3 extras x 3 contexts (1,852,272); each specifier's filter over the dependency's own release list (186,519, and filter_batch)",
+          "same": 2239283,
+          "diff": 0
+        }
+      ],
+      "notes": [
+        "The test suite runs with packaging's own modules (ranges, metadata, pylock, dependency_groups) using pyroid's classes. packaging's tests of platform tags (test_tags, test_manylinux, test_musllinux, test_elffile), licenses, direct URLs and errors are not run: pyroid does not port those modules."
+      ],
+      "source": "python/tests/test_packaging_patch.py::test_packagings_own_test_suite (PYROID_PACKAGING_UPSTREAM=all), python/tests/test_packaging_parity.py (PYROID_PACKAGING_EXAMPLES=20000) and bench/packaging/pypi_corpus.py (PyPI JSON API, fetched 2026-11-16; counts in bench/results/aws-c8g.16xlarge/2026-11-16/packaging-corpus.json), CPython 3.12.16 on linux/aarch64 (an AWS EC2 c8g.16xlarge), run on 2026-11-16"
+    },
     "datasketch": {
       "reference": "datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1)",
       "rule": "identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets",

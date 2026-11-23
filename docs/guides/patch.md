@@ -45,6 +45,7 @@ and `patch()` is the only switch. Each patched name emits one
 | `"warcio"` | [`pyroid.warc`](warc.md) (warcio 1.8.2's reader) | `ArchiveIterator` (on `warcio` and `warcio.archiveiterator`), `WARCIterator` and `ARCIterator` (on `warcio.archiveiterator`), making warcio's own `StatusAndHeaders`, `ArcWarcRecord` (a subclass, with pyroid's `content_stream()`), `DigestChecker` and `ArchiveLoadFailed` | `WARCWriter`, `capture_http`, the indexer, the checker, the command line |
 | `"dateutil"` | [`pyroid.dateutil.parser`](dateutil.md) (python-dateutil 2.8.2 to 4.0.0) | `parse` and `isoparse`, on `dateutil.parser`, `dateutil.parser._parser` and `dateutil.parser.isoparser` (they use dateutil's own `DEFAULTPARSER` and `DEFAULT_ISOPARSER`) | `dateutil.tz`, `relativedelta`, `rrule`, `easter`, the `parser` and `isoparser` classes |
 | `"jmespath"` | [`pyroid.jmespath`](jmespath.md) (jmespath 1.1.0) | `search` and `compile`, set on jmespath's own module (shims of `jmespath` and its `exceptions`, `functions`, `visitor`, `parser`, `lexer` and `ast` submodules without jmespath); exceptions stay jmespath's classes | `jmespath.parser.Parser`, `jmespath.lexer.Lexer`, `TreeInterpreter` and the rest of the package |
+| `"packaging"` | [`pyroid.packaging`](packaging.md) (packaging 26.3) | `Version`, `parse`, `Specifier`, `SpecifierSet`, `Marker`, `default_environment`, `Requirement`, `canonicalize_name`, `canonicalize_version`, `is_normalized_name`, `parse_wheel_filename` and `parse_sdist_filename`, set wherever a `packaging.*` module holds packaging's original (shims of `packaging` and its `version`, `specifiers`, `markers`, `requirements` and `utils` submodules without packaging); exceptions stay packaging's classes | `tags`, `metadata`, `pylock`, `ranges`, `dependency_groups`, `direct_url` and `licenses`, which then use pyroid's classes |
 
 `fasttext.FastText._FastText(path)` is how datatrove and others load models, and
 `isinstance(model, _FastText)` is true for pyroid's models too. Calls that pyroid hands to the
@@ -80,7 +81,7 @@ import pyroid
 pyroid.patch("unidecode")
 # ValueError: cannot patch 'unidecode': the supported names are 'ftfy', 'fasttext', 'anyascii',
 # 'datasketch', 'json_repair', 'trafilatura', 'nltk', 'warcio', 'nemo_curator', 'yaml',
-# 'tabulate', 'dateutil', 'jmespath', 'difflib'
+# 'tabulate', 'dateutil', 'jmespath', 'difflib', 'packaging'
 # (pyroid.translit.unidecode transliterates with anyascii's tables, so its output differs from
 # Unidecode's: it is not a drop-in)
 ```
@@ -213,12 +214,12 @@ usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]
 
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
-`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` / `difflib`
-giving pyroid's drop-ins. The Python processes it starts (multiprocessing workers, subprocesses)
-are patched too.
+`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` / `difflib` /
+`packaging` giving pyroid's drop-ins. The Python processes it starts (multiprocessing workers,
+subprocesses) are patched too.
 
 options:
-  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate, dateutil, jmespath, difflib
+  -p, --patch NAMES  comma-separated modules to patch: ftfy, fasttext, anyascii, datasketch, json_repair, trafilatura, nltk, warcio, nemo_curator, yaml, tabulate, dateutil, jmespath, difflib, packaging
                      (repeatable; default: $PYROID_PATCH, else ftfy,fasttext)
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
@@ -354,14 +355,24 @@ Ansible's `json_query`, which call `jmespath.compile(...)` or `jmespath.search(.
 module, evaluate with pyroid. Custom `jmespath.functions.Functions` subclasses keep working.
 botocore 1.44.3's paginator and waiter tests (3,720) pass patched.
 
+`"packaging"` goes further than `"nltk"`: it imports packaging and its submodules, then replaces
+each of packaging's ported objects wherever a `packaging.*` module holds it, so packaging's own
+`ranges`, `metadata`, `pylock` and `dependency_groups` use pyroid's classes, as does code that
+imports from packaging afterwards. Objects made before the patch keep working with each other
+and with new ones (they compare and hash equal, and packaging's code accepts them), but
+`isinstance(old_object, packaging.version.Version)` is false once that name is pyroid's class.
+packaging 26.3's own tests (62,499) pass patched, with `-W ignore::pyroid.FallbackWarning` under
+their warnings-as-errors setting. [`pyroid.packaging`](packaging.md#patch) has the details.
+
 ## Limitations
 
 - A shim is not the real module object: code that already holds the real module (imported before
   `patch()`), or compares module objects, is not redirected.
 - `importlib.reload` of a shim is not supported.
 - Only `ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`,
-  `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath` and `difflib` can be patched. pyroid's
-  filters and dedup reach datatrove pipelines through the [drop-in steps](datatrove.md) instead.
+  `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `difflib` and `packaging` can be
+  patched. pyroid's filters and dedup reach datatrove pipelines through the
+  [drop-in steps](datatrove.md) instead.
 - Patches made with `patch()` stay in the process that made them; child processes need
   [`pyroid run`](#pyroid-run-programs-and-their-child-processes) or `PYROID_PATCH` (forked
   children inherit them).

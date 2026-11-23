@@ -114,6 +114,12 @@ WATCH: dict[str, Watch] = {
         "pyroid.jmespath reproduces jmespath. No parity suite covers it here: its parity tests are "
         "python/tests/test_jmespath_parity.py, which compare against the pinned jmespath.",
     ),
+    "packaging": Watch(
+        (),
+        "pyroid.packaging reproduces packaging. No parity suite covers it here: its parity tests are "
+        "python/tests/test_packaging_parity.py and packaging's own tests (parity/data/packaging-26.3), which "
+        "compare against the pinned packaging.",
+    ),
     # Libraries an oracle depends on whose behaviour pyroid reproduces too.
     "lxml": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces trafilatura on lxml's (libxml2's) parse tree."),
     "justext": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces jusText, trafilatura's fallback extractor."),

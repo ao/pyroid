@@ -54,6 +54,7 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 | Tables | [`pyroid.tabulate`](guides/tabulate.md) | [tabulate](https://github.com/astanin/python-tabulate) 0.10.0, `DataFrame.to_markdown()` included | the same text, byte for byte, in every format ([parity](compatibility.md#tabulate)) |
 | Dates | [`pyroid.dateutil.parser`](guides/dateutil.md) | [python-dateutil](https://github.com/dateutil/dateutil)'s `parse` and `isoparse`, 2.8.2 to 4.0.0 | same datetimes, tz objects, exceptions and messages ([parity](compatibility.md#dateutil)) |
 | Diffs and fuzzy matching | [`pyroid.difflib`](guides/difflib.md) | the standard library's [`difflib`](https://docs.python.org/3/library/difflib.html) (CPython 3.11 to 3.15) | the interpreter's own ratios (float bits), opcodes, diff lines and HTML ([parity](compatibility.md#difflib)) |
+| Python packaging | [`pyroid.packaging`](guides/packaging.md) | [packaging](https://github.com/pypa/packaging) 26.3's versions, specifiers, markers, requirements and name helpers | same parsing, order, hashes, strings and exceptions; packaging's own tests pass under the patch ([parity](compatibility.md#packaging)) |
 
 ## Example: cleaning LLM training data
 
@@ -132,7 +133,7 @@ wheels for Linux (glibc and musl), macOS and Windows, on x86-64 and ARM64. See
 |---|---|
 | [`pyroid clean`](guides/cli.md) | the FineWeb-style chain as one command over Parquet or JSONL, or datatrove's FineWeb pipeline from WARC files, with datatrove's output document for document |
 | [Large datasets](guides/large-datasets.md) | the same commands over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards in datatrove's file format |
-| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil` and `jmespath` give pyroid's functions, in code you don't own, and patches `difflib` in place |
+| [`pyroid.patch()`](guides/patch.md) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath` and `packaging` give pyroid's functions, in code you don't own, and patches `difflib` in place |
 | [datatrove steps](guides/datatrove.md) | `pyroid.integrations.datatrove`: datatrove's pipeline steps with the same names and signatures, `Trafilatura` included, as a one-import change |
 | [NeMo Curator stages](guides/nemo-curator.md) | `pyroid.integrations.nemo_curator`: NeMo Curator 1.4.0's CPU text stages, subclassing NeMo's classes with the same arguments |
 | [Hugging Face `datasets`](guides/huggingface.md) | `pyroid.integrations.hf`: batched callables for `Dataset.map` and `Dataset.filter`, and the FineWeb recipe |
@@ -211,7 +212,8 @@ PSF-2.0 AND Unicode-3.0 AND Zlib`:
   sacrebleu, Trafilatura, SudachiPy and warcio ports;
 - MIT for the fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (and
   its dictionary), libxml2 (HTML parser), PyYAML, tabulate and jmespath ports;
-- BSD-2-Clause for the jusText port and its stoplists;
+- BSD-2-Clause for the jusText port and its stoplists, and the packaging port (packaging is
+  dual-licensed Apache-2.0 OR BSD-2-Clause);
 - BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract and lxml;
 - PSF-2.0 for CPython's `ipaddress`, float formatting and `difflib`;
 - ISC for anyascii's data;

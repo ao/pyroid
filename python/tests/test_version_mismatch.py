@@ -262,6 +262,17 @@ CASES = [
         patch="jmespath",
         imports=True,  # pyroid.jmespath uses jmespath's exception classes when it imports
     ),
+    Case(
+        "packaging",
+        "import pyroid.packaging",
+        "packaging",
+        "packaging",
+        _version("pyroid.packaging", "PACKAGING_VERSION"),
+        "pyroid.packaging",
+        ("packaging",),
+        patch="packaging",
+        imports=True,  # pyroid.packaging uses packaging's exception classes when it imports
+    ),
 ]
 PATCHED = [c for c in CASES if c.patch is not None]
 

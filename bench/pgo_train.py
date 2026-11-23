@@ -16,8 +16,9 @@ pyroid.json_repair (broken LLM output from its parity corpus generator, with ano
 styles), pyroid.tabulate (tables of numbers, FineWeb words and mixed cells in the common formats),
 pyroid.dateutil (dates and times in common formats, valid and not), pyroid.jmespath (queries over a
 boto3-style response and over records), pyroid.difflib (diffs of FineWeb lines, name ratios and close
-matches), and the FineWeb-2 filter and MinHash configs of every language pyroid tokenizes natively here
-(Japanese only with SudachiDict installed).
+matches), pyroid.packaging (versions, specifiers, markers and requirements), and the FineWeb-2 filter
+and MinHash configs of every language pyroid tokenizes natively here (Japanese only with SudachiDict
+installed).
 
 Needs only pyroid and numpy. pyarrow is optional: without it, as on Windows ARM64, the Arrow calls are
 skipped. Nothing is checked or timed: an instrumented build is never shipped.
@@ -579,11 +580,100 @@ class Trainer:
         for q in typos[:300]:
             D.get_close_matches(q, names[:10_000])
 
+    def packaging(self) -> None:
+        # bench/packaging/ would be imported as a namespace package named packaging; pyroid.packaging has to
+        # see that packaging is not installed.
+        here = Path(__file__).resolve().parent
+        saved = sys.path[:]
+        sys.path[:] = [p for p in sys.path if p and Path(p).resolve() != here]
+        try:
+            import pyroid.packaging as RP
+            from pyroid.packaging import markers as RM
+            from pyroid.packaging import requirements as RR
+            from pyroid.packaging import specifiers as RS
+            from pyroid.packaging import utils as RU
+            from pyroid.packaging import version as RV
+        finally:
+            sys.path[:] = saved
+
+        rnd = random.Random(TRAIN_SEED)
+
+        def version(i: int) -> str:
+            v = ".".join(str(rnd.randint(0, 40)) for _ in range(rnd.randint(1, 4)))
+            k = i % 11
+            if k == 1:
+                v += rnd.choice(["a", "b", "rc", "alpha", "c", "pre"]) + str(rnd.randint(0, 9))
+            elif k == 2:
+                v += f".post{rnd.randint(0, 9)}"
+            elif k == 3:
+                v += f".dev{rnd.randint(0, 9)}"
+            elif k == 4:
+                v += f"+local.{rnd.randint(0, 99)}"
+            elif k == 5:
+                v = f"{rnd.randint(1, 3)}!{v}"
+            elif k == 6:
+                v = "v" + v + "-1"
+            elif k == 7:
+                v += rnd.choice([" ", "-", "_"]) + "foo"
+            return v
+
+        versions = [version(i) for i in range(100_000)]
+        specs = [">=1.0,<2", "~=1.4.2", "!=1.5.*", "==2.*", ">3,<=20.1", "===1.0", ">=4.2,!=4.3.*,<30"]
+        specs += ["~=12.4", "", "<0.5.dev0", ">=1.0a1"]
+        markers = ['python_version < "3.10"', 'sys_platform == "linux" and platform_machine != "aarch64"']
+        markers += ["extra == 'test' or python_full_version >= '3.12.1'", 'os_name == "nt"']
+        markers += ['implementation_name == "cpython" and python_version in "3.11 3.12"']
+        reqs = ["requests>=2.8.1", "requests[security,socks]>=2.8.1,==2.8.*; python_version < '2.7'"]
+        reqs += ["numpy (>=1.26)", "pip @ https://example.org/pip-24.0-py3-none-any.whl", "attrs"]
+        reqs += ["foo[bar]~=1.2; extra == 'baz'", "Django>=4.2,<5.0", "zope.interface ; os_name != 'nt'"]
+        for t in self.threads:
+            RP.parse_batch(versions, errors="none", threads=t)
+            valid = [v for v in RP.parse_batch(versions, errors="none", threads=t) if v is not None]
+            RP.sort_versions(valid, threads=t)
+            for s in specs:
+                RP.contains_batch(s, valid, threads=t)
+                RP.filter_batch(s, valid, threads=t)
+            if pa is not None:
+                RP.parse_batch(pa.array(versions), errors="none", threads=t)
+                RP.contains_batch(specs[0], pa.array([str(v) for v in valid]), threads=t)
+        # Single calls in the hundreds of thousands, as callers make them: with fewer, the
+        # per-call path stays cold next to the rest of the profile.
+        objs = []
+        for _ in range(5):
+            for s in versions:
+                with contextlib.suppress(RV.InvalidVersion):
+                    objs.append(RV.Version(s))
+        sample = objs[:100_000]
+        sorted(sample)
+        set(sample)
+        for v in sample:
+            str(v)
+            _ = (v.public, v.base_version, v.is_prerelease, v.release, v.local)
+        parsed = RP.parse_batch(versions, errors="none")
+        strs = [s for s, v in zip(versions, parsed, strict=True) if v is not None]
+        sorted(strs[:50_000], key=RV.Version)
+        for s in specs * 20_000:
+            ss = RS.SpecifierSet(s)
+            ss.contains(sample[rnd.randrange(len(sample))])
+            ss.contains("1.6.2", prereleases=True)
+        for m in markers * 20_000:
+            RM.Marker(m).evaluate({"extra": "test"})
+        for r in reqs * 20_000:
+            str(RR.Requirement(r))
+        for n in ("Foo.Bar_baz", "requests", "Zope-Interface", "a__b") * 50_000:
+            RU.canonicalize_name(n)
+        for s in versions[:50_000]:
+            with contextlib.suppress(RV.InvalidVersion):
+                RU.canonicalize_version(s)
+        for f in ("pyroid-1.0.1-cp311-abi3-manylinux_2_34_x86_64.whl", "pip-24.0.tar.gz") * 20_000:
+            with contextlib.suppress(RU.InvalidWheelFilename, RU.InvalidSdistFilename):
+                RU.parse_wheel_filename(f) if f.endswith(".whl") else RU.parse_sdist_filename(f)
+
     def run(self) -> dict[str, float]:
         warnings.simplefilter("ignore")  # FallbackWarning and friends: the paths still run
         sections = ["ftfy", "translit", "fasttext", "filters", "dedup", "text", "multilingual", "jieba"]
         sections += ["json_repair", "metrics", "datasketch", "yaml", "tabulate", "dateutil", "jmespath"]
-        sections += ["difflib"]
+        sections += ["difflib", "packaging"]
         for name in sections:
             self.section(name, getattr(self, name))
         return self.timings

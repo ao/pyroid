@@ -24,11 +24,12 @@ Modules and what they match:
 - `pyroid.tabulate`: tabulate 0.10.0's `tabulate()` (every format and option, `DataFrame.to_markdown()` through `pyroid.patch("tabulate")`), the same text byte for byte.
 - `pyroid.dateutil.parser` (`from pyroid.dateutil import parser`): python-dateutil's `parse`, `parser`, `parserinfo`, `isoparse` and `isoparser`, with the same datetimes, tz objects, exceptions and messages as 2.8.2 to 4.0.0; `parse_batch` and `isoparse_batch` parse lists and Arrow columns in parallel; `pyroid.patch("dateutil")` swaps `parse` and `isoparse` into an installed python-dateutil.
 - `pyroid.difflib`: the standard library's difflib (CPython 3.11 to 3.15) with the interpreter's own results (ratios to the float bit, opcodes, diff lines, HTML); `ratio_batch` and `close_matches_batch` for many strings; `pyroid.patch("difflib")` patches the standard library in place.
+- `pyroid.packaging` (`from pyroid.packaging.version import Version`): packaging 26.3's `Version`, `Specifier`, `SpecifierSet`, `Marker`, `Requirement` and `utils` with the same parsing, order, hashes, strings and exceptions; its objects compare and hash equal to packaging's and, with packaging 26 installed, pass its `isinstance` checks; `parse_batch`, `sort_versions`, `contains_batch`, `filter_batch` for many versions; `pyroid.patch("packaging")` makes installed packaging use it.
 
 Integrations:
 
 - `pyroid clean IN OUT --recipe fineweb`, the command line (`--recipe fineweb-warc` from WARC files). It takes many files, `--workers`, `--shard I/N`, s3:// gs:// hf:// inputs and resumable runs; `pyroid dedup signatures|buckets|cluster|filter` runs MinHash dedup across shards.
-- `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `difflib`).
+- `pyroid.patch("ftfy", "fasttext")` for code you don't own (also `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath`, `difflib`, `packaging`).
 - `pyroid.integrations.datatrove`: drop-in datatrove steps, `WarcReader` and `Trafilatura` included. Its `Trafilatura` has no 1 s timeout, so results do not vary between runs.
 - `pyroid.integrations.nemo_curator`: drop-in NeMo Curator 1.4.0 CPU text stages (`ScoreFilter`, `Score`, `Filter`, `Modify`, the heuristic and fastText filters, the modifiers).
 - `pyroid.integrations.hf`: Hugging Face `datasets` helpers.
@@ -71,13 +72,14 @@ Conventions shared by every module:
 - [pyroid.nltk](https://ataiva.com/open-source/pyroid/docs/guides/nltk/): drop-in NLTK 3.10.4 Punkt, Treebank and regexp tokenizers, punkt_tab models, differences from NLTK
 - [pyroid.warc](https://ataiva.com/open-source/pyroid/docs/guides/warc/): drop-in warcio 1.8.2 `ArchiveIterator`, datatrove's WARC documents (`iter_documents`, `iter_batches`), `patch("warcio")`, differences from warcio
 - [pyroid.dateutil](https://ataiva.com/open-source/pyroid/docs/guides/dateutil/): drop-in python-dateutil `parse` and `isoparse` (2.8.2 to 4.0.0), `parse_batch` to Arrow, `patch("dateutil")`, differences from dateutil
+- [pyroid.packaging](https://ataiva.com/open-source/pyroid/docs/guides/packaging/): drop-in packaging 26.3, mixing with packaging's objects, `patch("packaging")`, batch functions, packaging releases, differences
 - [Languages](https://ataiva.com/open-source/pyroid/docs/guides/languages/): which datatrove language codes are native, which need `python_tokenizer=True`, how to choose
 
 ## Integrations
 
 - [The pyroid command line](https://ataiva.com/open-source/pyroid/docs/guides/cli/): `pyroid clean`, `langid`, `dedup`, `translit`, `run`; every option
 - [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/): thousands of files, `--workers`, `--shard`, remote inputs, resuming, MinHash dedup across shards
-- [pyroid.patch()](https://ataiva.com/open-source/pyroid/docs/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil` or `jmespath` to pyroid in code you don't own, or patch `difflib` in place
+- [pyroid.patch()](https://ataiva.com/open-source/pyroid/docs/guides/patch/): redirect `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath` or `packaging` to pyroid in code you don't own, or patch `difflib` in place
 - [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/): drop-in datatrove pipeline steps with the same names and signatures
 - [NeMo Curator stages](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/): drop-in NeMo Curator 1.4.0 text stages, and `pyroid.nemo`'s kernels
 - [Hugging Face datasets](https://ataiva.com/open-source/pyroid/docs/guides/huggingface/): batched callables for `Dataset.map`/`filter`, the FineWeb recipe
@@ -102,6 +104,7 @@ Conventions shared by every module:
 - [pyroid.nltk](https://ataiva.com/open-source/pyroid/docs/reference/nltk/)
 - [pyroid.warc](https://ataiva.com/open-source/pyroid/docs/reference/warc/)
 - [pyroid.dateutil](https://ataiva.com/open-source/pyroid/docs/reference/dateutil/)
+- [pyroid.packaging](https://ataiva.com/open-source/pyroid/docs/reference/packaging/)
 - [pyroid.nemo](https://ataiva.com/open-source/pyroid/docs/reference/nemo/)
 - [pyroid.integrations](https://ataiva.com/open-source/pyroid/docs/reference/integrations/)
 - [pyroid.text](https://ataiva.com/open-source/pyroid/docs/reference/text/)

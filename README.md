@@ -45,6 +45,7 @@ json_repair.repair_json("{'a': 1, 'b': [2, 3")  # '{"a": 1, "b": [2, 3]}'
 | Tables | [`pyroid.tabulate`](https://ataiva.com/open-source/pyroid/docs/guides/tabulate/) | tabulate 0.10.0, `DataFrame.to_markdown()` included |
 | Dates | [`pyroid.dateutil.parser`](https://ataiva.com/open-source/pyroid/docs/guides/dateutil/) | python-dateutil's `parse` and `isoparse` (2.8.2 to 4.0.0) |
 | Diffs and fuzzy matching | [`pyroid.difflib`](https://ataiva.com/open-source/pyroid/docs/guides/difflib/) | the standard library's `difflib` (CPython 3.11 to 3.15): `SequenceMatcher`, `get_close_matches`, `unified_diff`, `ndiff`, `HtmlDiff` |
+| Python packaging | [`pyroid.packaging`](https://ataiva.com/open-source/pyroid/docs/guides/packaging/) | packaging 26.3's versions, specifiers, markers, requirements and name helpers (PEP 440, PEP 508) |
 
 ## Example: cleaning LLM training data
 
@@ -147,6 +148,10 @@ queries of a boto3-style response, 7 to 20× over 10,000 records.
 on diffs of real source files, 12 to 15× on `get_close_matches` on one thread (up to 31× on 16
 threads), with the same results.
 
+`pyroid.packaging`, on AWS EC2 c7i.4xlarge: 3 to 8× faster than packaging 26.3 on `Version()`, 8×
+on `SpecifierSet.contains`, 17× on `filter` over a release list, 21× on parsing markers and 6 to
+7× on requirements.
+
 The other modules have only been measured in a Docker VM on a Mac or on a shared EC2 machine,
 so treat these as indicative (one thread unless stated):
 
@@ -171,7 +176,7 @@ row's corpus, interpreter and source.
 |---|---|
 | [`pyroid clean`](https://ataiva.com/open-source/pyroid/docs/guides/cli/) | the FineWeb-style chain as one command over Parquet or JSONL, or datatrove's FineWeb pipeline from WARC files |
 | [Large datasets](https://ataiva.com/open-source/pyroid/docs/guides/large-datasets/) | `pyroid clean` over thousands of files: worker processes, `--shard I/N` across machines, `s3://`, `gs://` and `hf://` inputs, resumable runs, and MinHash dedup across shards with datatrove's files |
-| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil` and `jmespath` give pyroid's functions, in code you don't own, and patches `difflib` in place |
+| [`pyroid.patch()`](https://ataiva.com/open-source/pyroid/docs/guides/patch/) | makes `import ftfy`, `fasttext`, `anyascii`, `datasketch`, `json_repair`, `trafilatura`, `nltk`, `warcio`, `nemo_curator`, `yaml`, `tabulate`, `dateutil`, `jmespath` and `packaging` give pyroid's functions, in code you don't own, and patches `difflib` in place |
 | [datatrove steps](https://ataiva.com/open-source/pyroid/docs/guides/datatrove/) | datatrove's pipeline steps with the same names and signatures, `Trafilatura` included |
 | [NeMo Curator stages](https://ataiva.com/open-source/pyroid/docs/guides/nemo-curator/) | NeMo Curator 1.4.0's CPU text stages (`ScoreFilter`, the heuristic filters, the modifiers) with the same classes and arguments |
 | [Hugging Face `datasets`](https://ataiva.com/open-source/pyroid/docs/guides/huggingface/) | batched callables for `Dataset.map` and `Dataset.filter` |
@@ -230,7 +235,8 @@ expression is
   tokenizers), sacrebleu, Trafilatura, SudachiPy and warcio;
 - MIT: ported from fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba
   (with its dictionary), libxml2 (the HTML parser), PyYAML, tabulate and jmespath;
-- BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists);
+- BSD-2-Clause: jusText (Trafilatura's paragraph classifier and its stoplists) and packaging
+  (dual-licensed Apache-2.0 OR BSD-2-Clause, used under BSD-2-Clause);
 - BSD-3-Clause: numpy's random generator (for C4 bad words), scipy's QUADPACK integration (for
   MinHashLSH's parameters), tldextract, lxml and python-dateutil (its later contributions are
   also Apache-2.0);

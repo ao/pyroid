@@ -533,3 +533,26 @@ def test_difflib() -> None:
     over_states(lambda a: list(pd.unified_diff(a, base)), lines)
     over_states(lambda a: list(pd.ndiff(a, base)), lines)
     over_states(lambda a: pd.SequenceMatcher(None, a, base).get_opcodes(), lines)
+
+
+def test_packaging() -> None:
+    import pyroid.packaging as pp
+    from pyroid.packaging.markers import Marker
+
+    versions: tuple[list[str], ...] = (
+        [f"{i % 9}.{i % 7}.{i}" for i in range(300)] + ["1.0rc1"],
+        ["2.0", "1.0.post1"] * 20,
+        [],
+    )
+    over_states(pp.parse_batch, versions)
+    over_states(pp.sort_versions, versions)
+    over_states(lambda v: pp.contains_batch(">=1.0,!=5.*", v), versions)
+    over_states(lambda v: pp.filter_batch(">=1.0,!=5.*", v), versions)
+    env = {"python_version": "3.12", "os_name": "posix"}
+    marker = Marker('python_version >= "3.12" and os_name == "posix"')
+    allowed = [marker.evaluate(dict(env, os_name=o)) for o in ("posix", "nt")]
+    hammer(
+        lambda: marker.evaluate(env),
+        lambda i: env.update(os_name="nt" if i % 2 else "posix"),
+        allowed,
+    )

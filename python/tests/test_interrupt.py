@@ -101,6 +101,17 @@ elif case == "difflib-close_matches_batch":
     docs = names[: 300 * scale]
     small = docs[:5]
     call = lambda d: pd.close_matches_batch(d, names, threads=threads)
+elif case.startswith("packaging-"):
+    import pyroid.packaging as pp
+    # 1,000 distinct versions, repeated: sort_versions parses every item (parse_batch's path).
+    docs = [f"{i % 97}.{i % 89}.{i % 83}" + ("rc1" if i % 7 == 0 else "") for i in range(1000)]
+    docs *= n // 1000
+    small = docs[:200]
+    call = {
+        "packaging-sort_versions": lambda d: pp.sort_versions(d, threads=threads),
+        "packaging-contains_batch": lambda d: pp.contains_batch(">=1.0,!=5.*", d, threads=threads),
+        "packaging-filter_batch": lambda d: pp.filter_batch(">=1.0,!=5.*", d, threads=threads),
+    }[case]
 else:
     raise SystemExit(f"unknown case {case}")
 
@@ -145,6 +156,9 @@ CASES = [
     "dateutil-isoparse",
     "difflib-ratio_batch",
     "difflib-close_matches_batch",
+    "packaging-sort_versions",
+    "packaging-contains_batch",
+    "packaging-filter_batch",
 ]
 
 

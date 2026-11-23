@@ -33,6 +33,7 @@ mod nemo;
 mod nemo_modifiers;
 mod nltk;
 mod np;
+mod packaging;
 mod pythainlp;
 mod segmenters;
 mod sudachi;
@@ -79,5 +80,6 @@ fn _pyroid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tabulate::register(m)?;
     jmespath::register(m)?;
     difflib::register(m)?;
+    packaging::register(m)?;
     Ok(())
 }
