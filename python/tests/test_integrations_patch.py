@@ -12,7 +12,6 @@ import json
 import os
 import subprocess
 import sys
-import sysconfig
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -984,29 +983,6 @@ def test_run_script(tmp_path: Path) -> None:
     )
 
 
-def test_run_refuses_a_second_target_while_one_runs(tmp_path: Path) -> None:
-    """A target owns the process (sys.argv, sys.path[0]): a second one is refused, not mixed in.
-    Once the first has finished, the next runs."""
-    (tmp_path / "inner.py").write_text("import sys; print('inner', sys.argv[1:])\n")
-    (tmp_path / "outer.py").write_text(
-        "import sys, threading\n"
-        "from pyroid.integrations._patch import run\n"
-        "codes = []\n"
-        "t = threading.Thread(target=lambda: codes.append(run(['inner.py', 'b'])))\n"
-        "t.start(); t.join()\n"
-        "print('outer', codes, run(['inner.py', 'c']), sys.argv[1:])\n"
-    )
-    code = f"{RUN[: RUN.index('sys.exit')]}run(sys.argv[1:]); sys.exit(run(['inner.py', 'd']))"
-    proc = child(code, args=("-p", "ftfy", "outer.py", "a"), cwd=tmp_path, prelude=False)
-    assert proc.returncode == 0, proc.stderr
-    assert proc.stdout == "outer [2] 2 ['a']\ninner ['d']\n"
-    refused = (
-        "pyroid run: error: another target is running in this process (pyroid run makes its "
-        "target the program: sys.argv, sys.path[0]); run each in its own process\n"
-    )
-    assert proc.stderr.endswith(refused * 2), proc.stderr
-
-
 def test_run_module(tmp_path: Path) -> None:
     (tmp_path / "probe.py").write_text(PROBE)
     (tmp_path / "pkg").mkdir()
@@ -1035,64 +1011,6 @@ def test_run_target_exceptions_propagate(tmp_path: Path) -> None:
     assert proc.returncode == 1
     assert "ValueError: boom" in proc.stderr
     assert 'boom.py", line 1' in proc.stderr
-
-
-def test_run_tracebacks_start_at_the_target(tmp_path: Path) -> None:
-    """As ``python boom.py`` shows it: no frames of pyroid run or runpy above the script's."""
-    (tmp_path / "boom.py").write_text("def f():\n    raise ValueError('boom')\n\n\nf()\n")
-    (tmp_path / "bad.py").write_text("x = (\n")
-    launcher = Path(sysconfig.get_path("scripts")) / ("pyroid.exe" if os.name == "nt" else "pyroid")
-    runs = [run_cli(["-p", "ftfy", "boom.py"], cwd=tmp_path)]
-    if launcher.exists():
-        cmd = [str(launcher), "run", "-p", "ftfy", "boom.py"]
-        runs.append(subprocess.run(cmd, cwd=tmp_path, capture_output=True, text=True, check=False))
-    for proc in runs:
-        assert proc.returncode == 1
-        tb = proc.stderr.split("Traceback (most recent call last):\n", 1)[1].splitlines()
-        assert tb[0] == '  File "boom.py", line 5, in <module>', proc.stderr
-        assert [ln for ln in tb if ln.startswith("  File ")] == [
-            '  File "boom.py", line 5, in <module>',
-            '  File "boom.py", line 2, in f',
-        ]
-        assert tb[-1] == "ValueError: boom"
-    proc = run_cli(["-p", "ftfy", "bad.py"], cwd=tmp_path)
-    assert proc.returncode == 1
-    assert "runpy" not in proc.stderr
-    assert proc.stderr.rstrip().endswith("SyntaxError: '(' was never closed")
-
-
-def test_run_repeated_p_options_add_up(tmp_path: Path) -> None:
-    (tmp_path / "probe.py").write_text(PROBE)
-    out = ok(run_cli(["-p", "ftfy", "--patch", "anyascii", "probe.py"], cwd=tmp_path))
-    assert out["env"] == "ftfy,anyascii"  # the last -p alone won before
-    out = ok(run_cli(["-pftfy", "-p", "ftfy,anyascii", "--patch=ftfy", "probe.py"], cwd=tmp_path))
-    assert out["env"] == "ftfy,anyascii"
-
-
-def test_run_finds_a_module_in_the_working_directory(tmp_path: Path) -> None:
-    """``pyroid run -m pkg`` through the installed launcher, whose sys.path[0] is its own
-    directory: the module is looked up after sys.path[0] is the working directory, as
-    ``python -m pkg`` does (it said "No module named pkg")."""
-    launcher = Path(sysconfig.get_path("scripts")) / ("pyroid.exe" if os.name == "nt" else "pyroid")
-    if not launcher.exists():
-        pytest.skip(f"no {launcher}")
-    (tmp_path / "showmod").mkdir()
-    (tmp_path / "showmod/__init__.py").write_text("")
-    (tmp_path / "showmod/__main__.py").write_text(PROBE)
-    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYROID_PATCH")}
-    cmd = [str(launcher), "run", "-p", "ftfy", "-m", "showmod", "0"]
-    proc = subprocess.run(cmd, cwd=tmp_path, env=env, capture_output=True, text=True, check=False)
-    out = ok(proc)
-    assert out["spec"] == "showmod.__main__"
-    assert out["path0"] == str(tmp_path)
-
-
-def test_run_warning_has_one_prefix(tmp_path: Path) -> None:
-    (tmp_path / "probe.py").write_text(PROBE)
-    proc = child(RUN, args=("probe.py",), cwd=tmp_path, hide=("numpy",))
-    ok(proc)
-    assert "pyroid run: PatchWarning: not patching fasttext: " in proc.stderr
-    assert "PatchWarning: pyroid:" not in proc.stderr
 
 
 @pytest.mark.parametrize(

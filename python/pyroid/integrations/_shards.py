@@ -15,20 +15,16 @@ and a rerun redoes only unfinished units.
 
 from __future__ import annotations
 
-import contextlib
-import errno
+import concurrent.futures as cf
 import hashlib
 import json
 import multiprocessing
 import os
-import pickle
-import signal
 import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from multiprocessing import connection as mp_connection
 from pathlib import Path
 from typing import Any
 
@@ -157,10 +153,7 @@ class State:
         if size is not None and r.get("size") not in (None, size):
             return False
         recorded = [self._load(p) for p in r.get("outputs", [])]
-        # The current paths are as the command names them (relative to the working directory),
-        # the recorded ones relative to the state's directory.
-        now = [os.path.normpath(os.path.abspath(p)) for p in outputs or ()]
-        if outputs is not None and sorted(recorded) != sorted(now):
+        if outputs is not None and sorted(recorded) != sorted(self._load(p) for p in outputs):
             return False
         return all(os.path.exists(p) for p in recorded)
 
@@ -282,58 +275,12 @@ def summary(
 
 def print_summary(d: Mapping[str, Any]) -> None:
     """``--stats``: counts and drops by reason, on stderr."""
-    lines = [f"pyroid {d['command']}: {d['docs_in']:,} in, {d['docs_out']:,} out, {d['wall_s']} s"]
+    w = sys.stderr.write
+    w(f"pyroid {d['command']}: {d['docs_in']:,} in, {d['docs_out']:,} out, {d['wall_s']} s\n")
     width = max((len(k) for k in d["removed"]), default=0)
     for k, n in d["removed"].items():
         pct = 100 * n / d["docs_in"] if d["docs_in"] else 0.0
-        lines.append(f"  dropped {k:<{width}}  {n:>9,}  {pct:5.1f}%")
-    say("".join(f"{ln}\n" for ln in lines))
-
-
-_muted: Any = None  # the stderr that was a closed pipe: messages to it are dropped
-_WINDOWS = sys.platform == "win32"
-
-
-def closed_pipe(e: BaseException) -> bool:
-    """True for the error of a write to a pipe that nobody reads any more.
-
-    POSIX raises BrokenPipeError. On Windows the C runtime reports the same write as EINVAL
-    (from ERROR_NO_DATA), and Python raises a plain OSError.
-    """
-    if isinstance(e, BrokenPipeError):
-        return True
-    return _WINDOWS and isinstance(e, OSError) and e.errno == errno.EINVAL
-
-
-def say(text: str) -> None:
-    """Write ``text`` to stderr, for people (progress, stats, errors).
-
-    When stderr is a pipe that closed (``2>&1 | head -1``), this and later messages to it are
-    dropped and the run goes on: its outputs and exit status do not depend on them. The runs of a
-    process share stderr; once ``sys.stderr`` is replaced, messages go to the new one.
-    """
-    global _muted
-    stream = sys.stderr
-    if stream is _muted:
-        return
-    try:
-        stream.write(text)
-        stream.flush()
-    except (OSError, ValueError) as e:  # ValueError: stderr was closed
-        if isinstance(e, OSError) and not closed_pipe(e):
-            raise
-        _muted = stream
-        mute(stream)
-
-
-def mute(stream: Any) -> None:
-    """Point ``stream``'s descriptor at the null device: nothing more fails on it, nor at exit."""
-    with contextlib.suppress(Exception):
-        null = os.open(os.devnull, os.O_WRONLY)
-        try:
-            os.dup2(null, stream.fileno())
-        finally:
-            os.close(null)
+        w(f"  dropped {k:<{width}}  {n:>9,}  {pct:5.1f}%\n")
 
 
 # --------------------------------------------------------------------------------------- progress
@@ -388,17 +335,19 @@ class Progress:
         text = self.line()
         if self._tty:
             pad = " " * max(0, self._width - len(text))
-            say(f"\r{text}{pad}")
+            sys.stderr.write(f"\r{text}{pad}")
             self._width = len(text)
         else:
-            say(text + "\n")
+            sys.stderr.write(text + "\n")
+        sys.stderr.flush()
 
     def close(self) -> None:
         if not self.enabled:
             return
         self.show(force=True)
         if self._tty:
-            say("\n")
+            sys.stderr.write("\n")
+            sys.stderr.flush()
 
 
 def _si(x: float) -> str:
@@ -432,103 +381,28 @@ class Unit:
 Report = Callable[[int], None]
 UnitFn = Callable[[Any, Report], dict[str, Any]]
 
-#: Seconds the main process gives its workers to stop (each drops the unit it is on and removes
-#: its temporary files, usually within a second) before it kills them.
-STOP_GRACE = 10.0
-_SIGNALS = (signal.SIGINT, signal.SIGTERM)
-
-_interrupted = False  # set in a worker by its first Ctrl-C or SIGTERM
+_queue: Any = None  # the worker processes' progress queue (set by _init_worker)
+_interrupted = False  # set in a worker by Ctrl-C or SIGTERM: queued units then fail at once
+_in_unit = False  # a worker is running a unit
 
 
 class Terminated(KeyboardInterrupt):
     """SIGTERM, raised in the main thread (as ``KeyboardInterrupt`` is for SIGINT)."""
 
 
-class _WorkerError(Exception):
-    """The traceback of an exception a worker raised: its ``__cause__`` in the main process."""
-
-    def __init__(self, tb: str) -> None:
-        super().__init__(tb)
-        self.tb = tb
-
-    def __str__(self) -> str:
-        return self.tb
-
-
 def _on_signal(signum: int, frame: Any) -> None:
-    """A worker's SIGINT and SIGTERM handler: the first signal raises KeyboardInterrupt.
-
-    The unit the worker is on (or its wait for the next one) stops there, and the worker exits.
-    Later signals do nothing: Ctrl-C reaches every process of the group and the main process
-    then sends SIGTERM, and a second KeyboardInterrupt would cut short the unit's clean-up, which
-    removes its temporary files. When Python has to drop the KeyboardInterrupt (see
-    :func:`redelivering`), the worker stops at its next batch instead.
-    """
     global _interrupted
-    if _interrupted:
-        return
     _interrupted = True
+    if not _in_unit:
+        os._exit(128 + signum)  # between units: nothing to clean up
     raise KeyboardInterrupt
-
-
-def redelivering(previous: Callable[[Any], object]) -> Callable[[Any], None]:
-    """A ``sys.unraisablehook`` for a process that a run owns, chained to ``previous``.
-
-    Python runs a signal's handler at its next check, which can be inside a weakref callback,
-    a ``__del__`` or a GC callback. The KeyboardInterrupt (or :class:`Terminated`) raised there
-    cannot propagate: Python prints "Exception ignored" with a traceback and drops it.
-
-    With this hook a worker drops it quietly: it has noted its signal and stops at its next
-    batch, or when its connection closes. The main process gets the signal again, from another
-    thread a moment later (once this hook has returned), and its handler runs outside that code.
-    """
-    import threading
-
-    def hook(args: Any) -> None:
-        exc_type = args.exc_type
-        if not (
-            isinstance(exc_type, type)
-            and issubclass(exc_type, KeyboardInterrupt)
-            and threading.current_thread() is threading.main_thread()
-        ):
-            previous(args)
-            return
-        if _interrupted:  # a worker's own signal
-            return
-        signum = signal.SIGTERM if issubclass(exc_type, Terminated) else signal.SIGINT
-        if not hasattr(signal, "pthread_kill"):  # pragma: no cover - Windows
-            previous(args)
-            return
-        resend = (threading.get_ident(), signum, hook.__code__)
-        try:
-            threading.Thread(target=_resend, args=resend, daemon=True).start()
-        except RuntimeError:  # the interpreter is shutting down
-            previous(args)
-
-    return hook
-
-
-def _resend(thread: int, signum: int, hook: Any) -> None:
-    """Send ``signum`` to ``thread`` once the unraisable hook (code ``hook``) has returned there.
-
-    Sent sooner, Python would run the handler inside the hook, where it cannot raise either.
-    """
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline:
-        frame = sys._current_frames().get(thread)
-        while frame is not None and frame.f_code is not hook:
-            frame = frame.f_back
-        if frame is None:
-            break
-        time.sleep(0.001)
-    signal.pthread_kill(thread, signum)
 
 
 def _watch_parent() -> None:
     """Stop this worker when its parent dies (killed, crashed): nothing else would.
 
-    The running unit is interrupted as by SIGTERM (its temporary outputs are removed); a
-    worker waiting for its next unit sees its connection close.
+    The running unit is interrupted as by Ctrl-C (its temporary outputs are removed);
+    a worker waiting for its next unit would otherwise wait forever.
     """
     import _thread
     import threading
@@ -539,14 +413,24 @@ def _watch_parent() -> None:
 
     def watch() -> None:
         parent.join()
-        _thread.interrupt_main(signal.SIGTERM)  # handled even where SIGINT is ignored
+        _thread.interrupt_main()
         time.sleep(5.0)
         os._exit(1)
 
     threading.Thread(target=watch, name="pyroid-parent-watch", daemon=True).start()
 
 
-def _setup_threads(threads: int | None) -> None:
+def _init_worker(threads: int | None, queue: Any) -> None:
+    global _queue
+    _queue = queue
+    import signal
+
+    # Ctrl-C reaches every process of the group, and the parent sends SIGTERM to its workers
+    # when it is interrupted or terminated: the running unit aborts (its outputs are dropped),
+    # and the units already handed to this worker must not start afterwards.
+    signal.signal(signal.SIGINT, _on_signal)
+    signal.signal(signal.SIGTERM, _on_signal)
+    _watch_parent()
     if threads is not None:
         # Before pyroid's pool is first used in this process (it is built lazily).
         os.environ["PYROID_NUM_THREADS"] = str(threads)
@@ -559,281 +443,20 @@ def _setup_threads(threads: int | None) -> None:
             pass
 
 
-def _portable(e: BaseException) -> tuple[BaseException, str]:
-    """``e`` if it pickles (else a RuntimeError with its text), and its formatted traceback."""
-    import traceback
+def _report_to_queue(n: int) -> None:
+    if _queue is not None and n:
+        _queue.put(n)
 
-    tb = "".join(traceback.format_exception(e))
+
+def _call(fn: UnitFn, payload: Any) -> dict[str, Any]:
+    global _in_unit
+    if _interrupted:
+        raise KeyboardInterrupt
+    _in_unit = True
     try:
-        pickle.loads(pickle.dumps(e))
-    except Exception:
-        e = RuntimeError(f"{type(e).__name__}: {e}")
-    return e, tb
-
-
-def _worker(conn: Any, threads: int | None, progress: bool, sigint: bool = True) -> None:
-    """A worker process: run the units the main process sends, one at a time.
-
-    Messages to the main process: ``("progress", rows)``, then ``("done", result)`` or
-    ``("error", exception, traceback)`` per unit. The worker stops when the main process closes
-    the connection or dies, and at its first SIGINT or SIGTERM (after reporting the interrupted
-    unit). It shares no lock with another process, so it can stop at any point. With
-    ``sigint`` false (the main process ignores SIGINT) it ignores SIGINT too.
-    """
-    global _interrupted
-    try:
-        sys.unraisablehook = redelivering(sys.unraisablehook)
-        signal.signal(signal.SIGINT, _on_signal if sigint else signal.SIG_IGN)
-        signal.signal(signal.SIGTERM, _on_signal)
-        if hasattr(signal, "pthread_sigmask"):
-            # The main process started this one with both blocked; one that came in the meantime
-            # is delivered now, to _on_signal.
-            signal.pthread_sigmask(signal.SIG_UNBLOCK, _SIGNALS)
-        _watch_parent()
-        _setup_threads(threads)
-
-        def report(n: int) -> None:
-            if _interrupted:  # the KeyboardInterrupt was swallowed (by the unit, or by Python)
-                raise KeyboardInterrupt
-            if progress and n:
-                conn.send(("progress", n))
-
-        while True:
-            try:
-                msg = conn.recv()
-            except (EOFError, OSError):
-                return
-            except Exception as e:  # the unit does not unpickle here
-                conn.send(("error", *_portable(e)))
-                continue
-            if _interrupted:  # a signal Python had to drop (see redelivering): stop here
-                conn.send(("error", *_portable(KeyboardInterrupt())))
-                return
-            fn, payload = msg
-            try:
-                result = fn(payload, report)
-            except BaseException as e:
-                conn.send(("error", *_portable(e)))
-                if isinstance(e, KeyboardInterrupt):
-                    return
-                continue
-            try:
-                conn.send(("done", result))
-            except (pickle.PicklingError, TypeError, AttributeError) as e:  # does not pickle
-                conn.send(("error", *_portable(e)))
-    except (KeyboardInterrupt, OSError):
-        return  # interrupted, or the main process stopped or lost this worker
+        return fn(payload, _report_to_queue)
     finally:
-        _interrupted = True  # stopping: a signal from here on (as the process exits) is a no-op
-
-
-@dataclass
-class _Worker:
-    proc: Any
-    conn: Any
-    unit: Unit | None = None
-
-
-def _spawn(ctx: Any, count: int, threads: int | None, progress: bool) -> list[_Worker]:
-    """Start ``count`` workers, each with SIGINT and SIGTERM blocked until its handlers are set.
-
-    Python's own handlers would otherwise raise KeyboardInterrupt (and print a traceback) in a
-    worker that is still importing.
-
-    This process holds the two signals until every worker has started, and acts on them after.
-    The mask is per thread, and a signal the main thread blocks is taken by another thread
-    (pyarrow's, pyroid's), after which Python raises it in the main thread all the same. Raised
-    inside ``Process.start``, it left a child without its start-up data (an EOFError traceback).
-
-    The workers ignore SIGINT when this process does, as a background job of a shell script
-    does: Ctrl-C in the terminal stops the script, not the job.
-    """
-    pool: list[_Worker] = []
-    mask = hasattr(signal, "pthread_sigmask")
-    sigint = signal.getsignal(signal.SIGINT) is not signal.SIG_IGN
-    try:
-        with _held_signals(redeliver=True):
-            old = signal.pthread_sigmask(signal.SIG_BLOCK, _SIGNALS) if mask else None
-            try:
-                for _ in range(count):
-                    mine, theirs = ctx.Pipe()
-                    proc = ctx.Process(
-                        target=_worker,
-                        args=(theirs, threads, progress, sigint),
-                        name="pyroid-worker",
-                    )
-                    pool.append(_Worker(proc, mine))
-                    proc.start()
-                    theirs.close()
-            finally:
-                if old is not None:
-                    signal.pthread_sigmask(signal.SIG_SETMASK, old)
-    except BaseException:
-        _stop(pool, gently=False)
-        raise
-    return pool
-
-
-@contextlib.contextmanager
-def _held_signals(*, redeliver: bool) -> Iterator[list[int]]:
-    """Note SIGINT and SIGTERM instead of acting on them, in the main thread, during the block.
-
-    Yields the list of the signals that came. With ``redeliver``, the first is raised again after
-    the block, for the handler it would have reached.
-    """
-    import threading
-
-    got: list[int] = []
-    if threading.current_thread() is not threading.main_thread():
-        yield got
-        return
-
-    def note(signum: int, frame: Any) -> None:
-        got.append(signum)
-
-    old: dict[signal.Signals, Any] = {}
-    try:
-        for s in _SIGNALS:  # old[s] first: a signal raised in between leaves nothing replaced
-            h = signal.getsignal(s)
-            if h is signal.SIG_IGN:
-                # An ignored signal stays ignored: workers started during the block inherit that
-                # through exec, from their first instruction. A handler here would be reset to the
-                # default in them, and a group Ctrl-C during their imports would raise there.
-                continue
-            old[s] = h
-            signal.signal(s, note)
-        yield got
-    finally:
-        for s, h in old.items():
-            signal.signal(s, h if h is not None else signal.SIG_DFL)  # None: set outside Python
-    if got and redeliver:
-        signal.raise_signal(got[0])
-
-
-def _how(code: int | None) -> str:
-    """How a worker process ended, for a message."""
-    if code is not None and code < 0:
-        try:
-            name = signal.Signals(-code).name
-        except ValueError:
-            name = f"signal {-code}"
-        return f"killed by {name}" + (", out of memory?" if -code == 9 else "")
-    return f"exit code {code}"
-
-
-def _stop(pool: Sequence[_Worker], *, gently: bool) -> None:
-    """End every worker and wait for it.
-
-    ``gently``: the run is complete; the workers are idle and exit when their connection closes.
-    Otherwise each gets SIGTERM and drops the unit it is on, removing its temporary files.
-    Workers still alive after :data:`STOP_GRACE` seconds, or after another Ctrl-C or SIGTERM
-    meanwhile, are killed.
-    """
-    started = [w for w in pool if w.proc.pid is not None]
-    with _held_signals(redeliver=gently) as held:
-        for w in started:
-            if not gently and w.proc.exitcode is None:
-                with contextlib.suppress(OSError):
-                    w.proc.terminate()
-            with contextlib.suppress(OSError):
-                w.conn.close()
-        deadline = time.monotonic() + STOP_GRACE
-        while not held:
-            alive = [w.proc.sentinel for w in started if w.proc.exitcode is None]
-            left = deadline - time.monotonic()
-            if not alive or left <= 0:
-                break
-            mp_connection.wait(alive, timeout=min(left, 0.1))
-        killed = [w for w in started if w.proc.exitcode is None]
-        for w in killed:
-            with contextlib.suppress(OSError):
-                w.proc.kill()
-        for w in started:
-            w.proc.join()
-        if killed and not held:
-            say(
-                f"pyroid: killed {len(killed)} worker process(es) that did not stop within "
-                f"{STOP_GRACE:.0f} s\n"
-            )
-
-
-def _collect(
-    w: _Worker, progress: Progress | None, out: list[tuple[Unit, dict[str, Any]]]
-) -> BaseException | None:
-    """Read what worker ``w`` sent; return the failure of its unit, if it failed or died."""
-    while w.unit is not None:
-        try:
-            if not w.conn.poll():
-                break
-            msg = w.conn.recv()
-        except (EOFError, OSError):
-            break
-        if msg[0] == "progress":
-            if progress is not None:
-                progress.docs_seen(msg[1])
-            continue
-        u, w.unit = w.unit, None
-        if msg[0] == "done":
-            if progress is not None:
-                progress.unit_done(u.size)
-            out.append((u, msg[1]))
-            return None
-        exc, tb = msg[1], msg[2]
-        exc.__cause__ = _WorkerError(tb)
-        return _noted(exc, u.label)
-    if w.unit is not None and w.proc.exitcode is not None:
-        u, w.unit = w.unit, None
-        return ChildProcessError(
-            f"a worker process exited ({_how(w.proc.exitcode)}) while processing {u.label}"
-        )
-    return None
-
-
-def _run_workers(
-    units: Sequence[Unit], fn: UnitFn, workers: int, threads: int | None, progress: Progress | None
-) -> list[tuple[Unit, dict[str, Any]]]:
-    ctx = multiprocessing.get_context("spawn")
-    show = progress is not None and progress.enabled
-    out: list[tuple[Unit, dict[str, Any]]] = []
-    todo = list(reversed(units))  # pop() takes them in order
-    failure: BaseException | None = None
-    pool: list[_Worker] = []
-    try:
-        pool = _spawn(ctx, min(workers, len(units)), worker_threads(workers, threads), show)
-        while True:
-            for w in pool:
-                if w.unit is not None or not todo or failure is not None:
-                    continue
-                u = todo.pop()
-                try:
-                    w.conn.send((fn, u.payload))
-                except OSError:  # the worker died while idle (killed?)
-                    w.proc.join(5.0)
-                    failure = ChildProcessError(
-                        f"a worker process exited ({_how(w.proc.exitcode)}) before processing "
-                        f"{u.label}"
-                    )
-                    continue
-                w.unit = u
-            busy = [w for w in pool if w.unit is not None]
-            if not busy:
-                break
-            waits = [w.conn for w in busy] + [w.proc.sentinel for w in busy]
-            ready = set(mp_connection.wait(waits, timeout=0.5))
-            for w in busy:
-                if w.conn in ready or w.proc.sentinel in ready:
-                    err = _collect(w, progress, out)
-                    if failure is None:
-                        failure = err
-    except BaseException:
-        # Ctrl-C, SIGTERM or an error here: stop the workers now. A worker that got no signal
-        # itself (the main process alone was signalled) would finish its unit first.
-        _stop(pool, gently=False)
-        raise
-    _stop(pool, gently=True)
-    if failure is not None:
-        raise failure
-    return out
+        _in_unit = False
 
 
 def worker_threads(workers: int, threads: int | None) -> int | None:
@@ -861,17 +484,15 @@ def run_units(
     workers: int = 1,
     threads: int | None = None,
     progress: Progress | None = None,
-) -> list[tuple[Unit, dict[str, Any]]]:
-    """Run ``fn(unit.payload, report)`` for every unit; return ``(unit, result)`` as they finished.
+) -> Iterator[tuple[Unit, dict[str, Any]]]:
+    """Run ``fn(unit.payload, report)`` for every unit; yield ``(unit, result)`` as they finish.
 
     With ``workers > 1`` the units run in that many spawned processes (``fn`` and the payloads
     must pickle), each with ``worker_threads(workers, threads)`` pyroid threads. On the first
     failure no new unit starts, the running ones finish (their outputs and records are kept),
-    and the failure is raised with a note naming its unit. On Ctrl-C, SIGTERM or an error in
-    this process, every worker stops at once, dropping the unit it is on.
+    and the failure is raised with a note naming its unit.
     """
     if workers <= 1 or len(units) <= 1:
-        out = []
         for u in units:
             report = progress.docs_seen if progress is not None else _noop
             try:
@@ -881,9 +502,70 @@ def run_units(
                 raise
             if progress is not None:
                 progress.unit_done(u.size)
-            out.append((u, result))
-        return out
-    return _run_workers(units, fn, workers, threads, progress)
+            yield u, result
+        return
+
+    ctx = multiprocessing.get_context("spawn")
+    queue = ctx.SimpleQueue() if progress is not None and progress.enabled else None
+    per = worker_threads(workers, threads)
+    with cf.ProcessPoolExecutor(
+        max_workers=min(workers, len(units)),
+        mp_context=ctx,
+        initializer=_init_worker,
+        initargs=(per, queue),
+    ) as pool:
+        futures = {pool.submit(_call, fn, u.payload): u for u in units}
+        waiting = set(futures)
+        failure: tuple[Unit, BaseException] | None = None
+        broken: list[str] = []  # the units a dead worker process took down
+        try:
+            while waiting:
+                done, waiting = cf.wait(waiting, timeout=0.5, return_when=cf.FIRST_COMPLETED)
+                if queue is not None and progress is not None:
+                    while not queue.empty():
+                        progress.docs_seen(queue.get())
+                for f in done:
+                    if f.cancelled():
+                        continue
+                    u = futures[f]
+                    exc = f.exception()
+                    if exc is not None:
+                        if isinstance(exc, cf.process.BrokenProcessPool):
+                            broken.append(u.label)
+                        if failure is None:
+                            failure = (u, exc)
+                            for g in waiting:
+                                g.cancel()
+                        continue
+                    if progress is not None:
+                        progress.unit_done(u.size)
+                    yield u, f.result()
+                if failure is not None:
+                    waiting = {g for g in waiting if not g.cancelled()}
+        except BaseException:
+            # Ctrl-C, SIGTERM or an error here: stop the workers now. A worker that got no
+            # signal itself (the parent alone was signalled) would finish its unit first.
+            _stop_workers(pool)
+            pool.shutdown(wait=True, cancel_futures=True)
+            raise
+        if failure is not None:
+            u, exc = failure
+            if broken:
+                shown = ", ".join(broken[:5]) + (", ..." if len(broken) > 5 else "")
+                exc.add_note(
+                    "a worker process exited (killed, or out of memory?) while processing one "
+                    f"of: {shown}"
+                )
+                raise exc
+            raise _noted(exc, u.label)
+
+
+def _stop_workers(pool: cf.ProcessPoolExecutor) -> None:
+    """SIGTERM every live worker of ``pool``: each aborts its unit, as on Ctrl-C."""
+    procs = getattr(pool, "_processes", None) or {}
+    for proc in list(procs.values()):
+        if proc.is_alive():
+            proc.terminate()
 
 
 def _noop(n: int) -> None:

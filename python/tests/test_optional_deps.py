@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Callable
-from pathlib import Path
 
 import pytest
 
@@ -92,31 +91,3 @@ def test_bare_install_modules_import(run_python: RunPython) -> None:
         """
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
-
-
-@pytest.mark.thread_unsafe(reason="runs a subprocess")
-def test_pyroid_run_needs_no_optional_dependency(run_python: RunPython, tmp_path: Path) -> None:
-    # `pyroid run` only patches imports; the other commands need pyarrow and say so.
-    script = tmp_path / "uses_ftfy.py"
-    script.write_text(
-        "import ftfy\nprint(ftfy.fix_text('âœ” done'), ftfy.__pyroid__)\n", encoding="utf-8"
-    )
-    proc = run_python(
-        f"""
-        import sys
-        for m in {OPTIONAL!r}:
-            sys.modules[m] = None
-        from pyroid.cli import main
-        assert main(["run", "-p", "ftfy", {str(script)!r}]) == 0
-        assert "pyarrow" not in sys.modules or sys.modules["pyarrow"] is None
-        try:
-            main(["clean", "--recipe", "fineweb", "in.jsonl", "out.parquet"])
-        except SystemExit as e:
-            print(e)
-        """
-    )
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert proc.stdout.splitlines() == [
-        "✔ done True",
-        "pyroid: this command needs pyarrow (and numpy): pip install 'pyroid[cli]'",
-    ], proc.stdout

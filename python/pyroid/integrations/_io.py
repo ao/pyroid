@@ -551,44 +551,11 @@ def _parse_json(chunk: bytes, schema: Any) -> Any:
     )
 
 
-def _bad_line(chunk: bytes, first: int, source: Source) -> ValueError | None:
-    """The first line of ``chunk`` (line ``first`` of the file) that is not JSON, as an error.
-
-    pyarrow's parse errors name a row of its block, and some name the wrong problem (an
-    unterminated string is "Invalid encoding in string"). Lines may end in CRLF.
-    """
-    for i, line in enumerate(chunk.split(b"\n")):
-        if not line.strip():
-            continue
-        if line.endswith(b"\r"):  # else json names the CR in an unterminated string
-            line = line[:-1]
-        try:
-            json.loads(line)
-        except UnicodeDecodeError as e:
-            return ValueError(f"{source.uri}: line {first + i}: not UTF-8 (byte {e.start})")
-        except json.JSONDecodeError as e:
-            n = first + i
-            if e.msg.endswith(" at"):  # "Unterminated string starting at"
-                return ValueError(f"{source.uri}: line {n}: {e.msg} column {e.colno}")
-            return ValueError(f"{source.uri}: line {n}, column {e.colno}: {e.msg}")
-        except ValueError as e:
-            return ValueError(f"{source.uri}: line {first + i}: {e}")
-    return None
-
-
 def _json_batches(
     stream: Any, source: Source, *, schema: Any = None, columns: Sequence[str] | None = None
 ) -> Iterator[Any]:
-    line = 1
     for chunk in _json_chunks(stream):
-        try:
-            t = _parse_json(chunk, schema)
-        except pa.ArrowInvalid as e:
-            bad = _bad_line(chunk, line, source)
-            if bad is None:
-                raise
-            raise bad from e
-        line += chunk.count(b"\n")
+        t = _parse_json(chunk, schema)
         if schema is None:
             schema = t.schema
             if columns is not None:
@@ -737,8 +704,8 @@ def read_schema(source: Source) -> pa.Schema | None:
         with _errors(source), _open_file(source) as f, pq.ParquetFile(f) as pf:
             return pf.schema_arrow
     with _errors(source), _open_stream(source) as stream:
-        for t in _json_batches(stream, source):
-            return t.schema
+        for chunk in _json_chunks(stream):
+            return _parse_json(chunk, None).schema
     return None
 
 
@@ -896,11 +863,7 @@ _O_BINARY = getattr(os, "O_BINARY", 0)  # Windows: no newline translation
 
 
 def _sibling(path: Path, ext: str) -> tuple[Path, int]:
-    """Create a hidden, uniquely named file next to ``path``; return it and its open descriptor.
-
-    Callers enter their ``try`` (which removes the file on failure) right after this returns.
-    A KeyboardInterrupt raised in here, even just after the file is made, removes it.
-    """
+    """Create a hidden, uniquely named file next to ``path``; return it and its open descriptor."""
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_BINARY
     for _ in range(100):
         tmp = path.with_name(f".{path.name[:200]}.{secrets.token_hex(4)}{ext}")
@@ -908,11 +871,6 @@ def _sibling(path: Path, ext: str) -> tuple[Path, int]:
             return tmp, os.open(tmp, flags, 0o666)  # the umask applies, as for any new file
         except FileExistsError:
             continue
-        except BaseException:
-            # O_EXCL and a random name: a file there now is the one this call made.
-            with contextlib.suppress(OSError):
-                os.unlink(tmp)
-            raise
     raise FileExistsError(f"{path}: no free name for a temporary file next to it")
 
 
@@ -983,10 +941,10 @@ class Writer:
     def _open(self, schema: Any) -> Path:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp, fd = _sibling(self.path, ".partial")
-        self.tmp = tmp  # before anything that can be interrupted: abort() removes it
+        os.close(fd)
+        self.tmp = tmp
+        self._schema = schema
         try:
-            os.close(fd)
-            self._schema = schema
             self._sink = pa.OSFile(str(tmp), "wb")
             if self.format == "parquet":
                 import pyarrow.parquet as pq

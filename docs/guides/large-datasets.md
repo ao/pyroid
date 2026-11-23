@@ -31,7 +31,9 @@ IN can be any mix of:
 Files are listed, then sorted by name within each IN, and each file's position in that list is its
 *rank*. Files are streamed in Arrow batches of `--batch-size` rows (10,000 by default), one Parquet
 row group at a time, and the next batch is read while the current one is processed: memory holds
-about one row group and two batches per process.
+about one row group and two batches per process. Rows that wait in a work directory (the MinHash
+survivors of `clean`, the parts of a merged Parquet OUT) are compressed on another thread, one
+batch behind, which holds one batch more.
 
 OUT, and the folders of the [MinHash stages](#minhash-dedup-across-shards), are local paths (or a
 shared filesystem such as NFS, EFS or Lustre). Outputs are not written to object stores directly.
@@ -65,11 +67,8 @@ $ pyroid clean data/ out/ --recipe fineweb --workers 8   # redoes only the unfin
 Ctrl-C (SIGINT) and SIGTERM, what `kill`, `timeout`, systemd, Kubernetes and SLURM send, stop the
 run within a second or two: the main process stops its workers, each worker drops the file it was
 on (its temporary outputs are removed), and the command prints `pyroid clean: interrupted` (or
-`terminated`) and exits with status 130 (or 143). This holds for Ctrl-C in a terminal too, which
-reaches the workers as well as the main process. A worker that has not stopped after 10 seconds is
-killed. A worker whose main process was killed with SIGKILL stops by itself. A signal that comes
-after the command has finished, as the process exits, ends it at once: the shell still sees 130
-(or 143), and the outputs are complete.
+`terminated`) and exits with status 130 (or 143). A worker whose main process was killed with
+SIGKILL stops by itself.
 
 Each record holds a fingerprint of the command, its options, the input list (names relative to
 IN, and sizes) and the pyroid version, plus the files the unit wrote, as paths relative to OUT. A
@@ -77,10 +76,8 @@ file counts as done only if its outputs are still there and are the ones the com
 now, so a deleted output, another `--format` or another `--excluded` redoes that file. If the
 fingerprint changes, pyroid refuses to mix the two runs; `--overwrite` redoes everything. Since
 nothing depends on absolute paths, a machine that mounts the data and OUT somewhere else resumes
-the same run. A file OUT keeps the same records next to it (`.out.parquet.pyroid/`) while it runs.
-When it is done, only the record that the file is complete stays there, so the same command run
-again does nothing and exits with status 0, as for a directory OUT. A run that stops before it
-finishes any file removes its records and work directory.
+the same run. A file OUT keeps the same records next to it (`.out.parquet.pyroid/`) while it runs
+and removes them when it is done.
 
 ## Many machines: `--shard`
 

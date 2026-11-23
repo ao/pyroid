@@ -47,7 +47,7 @@ fn arg_of(what: &str) -> &str {
 /// The items of a list or tuple (what the Python side always passes).
 fn items<'py>(obj: &Bound<'py, PyAny>, what: &str) -> PyResult<Vec<Bound<'py, PyAny>>> {
     if let Ok(list) = obj.cast::<PyList>() {
-        return Ok(crate::input::list_items(list).iter().collect());
+        return Ok(list.iter().collect());
     }
     if let Ok(tuple) = obj.cast::<PyTuple>() {
         return Ok(tuple.iter().collect());

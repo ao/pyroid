@@ -160,10 +160,6 @@ HOOK_DIR: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_autop
 # Names whose PatchWarning was already shown in this process tree (inherited by children).
 _WARNED_ENV = "_PYROID_PATCH_WARNED"
 
-# Held while pyroid run runs a target, which owns the process (sys.argv, sys.path[0], the
-# environment, sys.excepthook): one at a time.
-_RUN_LOCK = threading.Lock()
-
 
 class PatchWarning(UserWarning):
     """:func:`patch` replaced a module with pyroid's drop-in.
@@ -1164,7 +1160,7 @@ Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, wi
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}
-                     (repeatable; default: ${ENV_VAR}, else {",".join(DEFAULT_RUN_NAMES)})
+                     (default: ${ENV_VAR}, else {",".join(DEFAULT_RUN_NAMES)})
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
 """
@@ -1177,16 +1173,9 @@ class _UsageError(Exception):
 _Parsed = tuple[str | None, str | None, str | None, list[str]]
 
 
-def _joined(given: Sequence[str]) -> str | None:
-    return ",".join(given) if given else None
-
-
 def _parse_run(argv: Sequence[str]) -> _Parsed | None:
-    """``(names, module, script, args)``, or None for ``--help``; options stop at the target.
-
-    Repeated ``-p`` options add up: ``-p yaml -p ftfy`` is ``-p yaml,ftfy``.
-    """
-    given: list[str] = []
+    """``(names, module, script, args)``, or None for ``--help``; options stop at the target."""
+    names: str | None = None
     i = 0
     while i < len(argv):
         arg = argv[i]
@@ -1195,33 +1184,32 @@ def _parse_run(argv: Sequence[str]) -> _Parsed | None:
         if arg in ("-p", "--patch"):
             if i + 1 == len(argv):
                 raise _UsageError(f"argument {arg}: expected a comma-separated list of names")
-            given.append(argv[i + 1])
+            names = argv[i + 1]
             i += 2
         elif arg.startswith("--patch="):
-            given.append(arg.partition("=")[2])
+            names = arg.partition("=")[2]
             i += 1
         elif arg.startswith("-p"):
-            given.append(arg[2:])
+            names = arg[2:]
             i += 1
         elif arg.startswith("-m"):
             module = arg[2:] or (argv[i + 1] if i + 1 < len(argv) else "")
             if not module:
                 raise _UsageError("argument -m: expected a module name")
-            return _joined(given), module, None, list(argv[i + (1 if arg[2:] else 2) :])
+            return names, module, None, list(argv[i + (1 if arg[2:] else 2) :])
         elif arg == "--":
             if i + 1 == len(argv):
                 raise _UsageError("no script given after --")
-            return _joined(given), None, argv[i + 1], list(argv[i + 2 :])
+            return names, None, argv[i + 1], list(argv[i + 2 :])
         elif arg.startswith("-"):
             raise _UsageError(f"unrecognized option {arg!r} (reading stdin is not supported)")
         else:
-            return _joined(given), None, arg, list(argv[i + 1 :])
+            return names, None, arg, list(argv[i + 1 :])
     raise _UsageError("give a SCRIPT or -m MODULE to run")
 
 
 def _show_run_warning(message: Warning | str, category: type[Warning], *_: Any, **__: Any) -> None:
-    text = str(message).removeprefix("pyroid: ")  # the line already starts with "pyroid run:"
-    sys.stderr.write(f"pyroid run: {category.__name__}: {text}\n")
+    sys.stderr.write(f"pyroid run: {category.__name__}: {message}\n")
 
 
 def run(argv: Sequence[str]) -> int:
@@ -1233,8 +1221,7 @@ def run(argv: Sequence[str]) -> int:
     processes are patched too), then runs the target in this process with :mod:`runpy`, as
     ``python -m MODULE ARGS`` / ``python SCRIPT ARGS`` would: ``sys.argv``, ``sys.path[0]``,
     ``__name__ == "__main__"``. It is meant to be the last thing a process does: the patches,
-    the environment and ``sys.argv`` stay as they are afterwards. A second call while a target
-    runs (from another thread, or the target itself) is refused with status 2.
+    the environment and ``sys.argv`` stay as they are afterwards.
 
     Args:
         argv: The arguments after ``pyroid run``.
@@ -1275,88 +1262,51 @@ def run(argv: Sequence[str]) -> int:
         path = os.path.abspath(script)
         sys.stderr.write(f"pyroid run: can't open file {path!r}: No such file or directory\n")
         return 2
-    if not _RUN_LOCK.acquire(blocking=False):
-        sys.stderr.write(
-            "pyroid run: error: another target is running in this process (pyroid run makes "
-            "its target the program: sys.argv, sys.path[0]); run each in its own process\n"
-        )
-        return 2
     try:
-        try:
-            # The warnings have no line of the user's to point at (pyroid run is the caller): show
-            # them as plain lines. The warning filters (-W, PYTHONWARNINGS) still apply. One short
-            # PatchWarning for all the names replaces patch()'s one per name.
-            warned = set(_split(os.environ.get(_WARNED_ENV, "")))
-            with warnings.catch_warnings():
-                warnings.showwarning = _show_run_warning
-                done = _apply(names, lenient=lenient, announce=False)
-                new = [n for n in done if n not in warned]
-                if new:
-                    warnings.warn(
-                        f"{', '.join(new)} patched with "
-                        f"{', '.join(_TARGETS[n].impl for n in new)}, in this process "
-                        "and the Python processes it starts",
-                        PatchWarning,
-                        stacklevel=1,
-                    )
-        except ImportError as exc:
-            sys.stderr.write(f"pyroid run: error: cannot patch: {exc}\n")
-            return 2
-        _export(done)
-        if module is not None:
-            if not sys.flags.safe_path:
-                _set_path0(os.getcwd())  # before the lookup: python -m finds packages in the cwd
-            try:
-                found = importlib.util.find_spec(module)
-            except (ImportError, ValueError) as exc:
-                sys.stderr.write(
-                    f"pyroid run: error while finding module specification for {module!r} "
-                    f"({type(exc).__name__}: {exc})\n"
+        # The warnings have no line of the user's to point at (pyroid run is the caller): show
+        # them as plain lines. The warning filters (-W, PYTHONWARNINGS) still apply. One short
+        # PatchWarning for all the names replaces patch()'s one per name.
+        warned = set(_split(os.environ.get(_WARNED_ENV, "")))
+        with warnings.catch_warnings():
+            warnings.showwarning = _show_run_warning
+            done = _apply(names, lenient=lenient, announce=False)
+            new = [n for n in done if n not in warned]
+            if new:
+                warnings.warn(
+                    f"{', '.join(new)} patched with "
+                    f"{', '.join(_TARGETS[n].impl for n in new)}, in this process "
+                    "and the Python processes it starts",
+                    PatchWarning,
+                    stacklevel=1,
                 )
-                return 1
-            if found is None:
-                sys.stderr.write(f"pyroid run: No module named {module}\n")
-                return 1
-            sys.argv[:] = [module, *args]  # runpy sets argv[0] to the module's file
-            _trim_tracebacks()
-            runpy.run_module(module, run_name="__main__", alter_sys=True)
-            return 0
-        assert script is not None
-        sys.argv[:] = [script, *args]
-        # A directory or zip file is a sys.path entry that runpy puts first itself.
-        if not sys.flags.safe_path and pkgutil.get_importer(script) is None:
-            _set_path0(os.path.dirname(os.path.realpath(script)))
-        _trim_tracebacks()
-        runpy.run_path(script, run_name="__main__")
+    except ImportError as exc:
+        sys.stderr.write(f"pyroid run: error: cannot patch: {exc}\n")
+        return 2
+    _export(done)
+    if module is not None:
+        try:
+            found = importlib.util.find_spec(module)
+        except (ImportError, ValueError) as exc:
+            sys.stderr.write(
+                f"pyroid run: error while finding module specification for {module!r} "
+                f"({type(exc).__name__}: {exc})\n"
+            )
+            return 1
+        if found is None:
+            sys.stderr.write(f"pyroid run: No module named {module}\n")
+            return 1
+        sys.argv[:] = [module, *args]  # runpy sets argv[0] to the module's file
+        if not sys.flags.safe_path:
+            _set_path0(os.getcwd())
+        runpy.run_module(module, run_name="__main__", alter_sys=True)
         return 0
-    finally:
-        _RUN_LOCK.release()
-
-
-def _trim_tracebacks() -> None:
-    """Show an uncaught exception of the target from its own first frame, as ``python`` does.
-
-    The frames of the ``pyroid`` launcher, :func:`run` and :mod:`runpy` above it are left out.
-    The exception still propagates (``python`` then exits with status 1, or as killed by SIGINT
-    for KeyboardInterrupt); a hook the target installs itself replaces this one.
-    """
-    previous = sys.excepthook
-    runpy_files = {runpy.__file__, "<frozen runpy>"}
-
-    def hook(kind: type[BaseException], exc: BaseException, tb: types.TracebackType | None) -> None:
-        t = tb
-        while t is not None and t.tb_frame.f_code is not run.__code__:
-            t = t.tb_next
-        if t is not None:  # skip run() and the runpy frames below it
-            t = t.tb_next
-            while t is not None and t.tb_frame.f_code.co_filename in runpy_files:
-                t = t.tb_next
-            tb = t
-            # Python prints the exception's own traceback (the argument only when it has none).
-            exc.with_traceback(tb)
-        previous(kind, exc, tb)
-
-    sys.excepthook = hook
+    assert script is not None
+    sys.argv[:] = [script, *args]
+    # A directory or zip file is a sys.path entry that runpy puts first itself.
+    if not sys.flags.safe_path and pkgutil.get_importer(script) is None:
+        _set_path0(os.path.dirname(os.path.realpath(script)))
+    runpy.run_path(script, run_name="__main__")
+    return 0
 
 
 def _set_path0(entry: str) -> None:

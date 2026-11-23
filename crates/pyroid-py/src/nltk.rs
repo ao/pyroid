@@ -105,7 +105,7 @@ fn docs(x: &TextInput) -> Vec<Option<&str>> {
 /// Tokens as one buffer and their byte ranges in it.
 struct Tokens {
     buf: String,
-    spans: Vec<(usize, usize)>,
+    spans: Vec<(u32, u32)>,
 }
 
 impl Tokens {
@@ -119,14 +119,15 @@ impl Tokens {
     fn push(&mut self, tok: &str) {
         let start = self.buf.len();
         self.buf.push_str(tok);
-        self.spans.push((start, self.buf.len()));
+        #[allow(clippy::cast_possible_truncation)] // documents are < 4 GiB (Arrow string offsets)
+        self.spans.push((start as u32, self.buf.len() as u32));
     }
 
     fn list<'py, 'd>(&'d self, strs: &mut Strs<'py, 'd>) -> PyResult<Bound<'py, PyAny>> {
         let items: Vec<_> = self
             .spans
             .iter()
-            .map(|&(a, b)| strs.get(&self.buf[a..b]))
+            .map(|&(a, b)| strs.get(&self.buf[a as usize..b as usize]))
             .collect();
         Ok(PyList::new(strs.py, items)?.into_any())
     }

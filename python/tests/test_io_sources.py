@@ -752,45 +752,6 @@ def test_atomic_write_uses_a_hidden_sibling(
     assert os.listdir(tmp_path) == ["stats.json"]
 
 
-class _InterruptAfter:
-    """``os`` as _io sees it, with one function raising KeyboardInterrupt after it ran.
-
-    That is where Ctrl-C lands when Python checks for signals as a call returns.
-    """
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-    def __getattr__(self, attr: str) -> Any:
-        real = getattr(os, attr)
-        if attr != self.name:
-            return real
-
-        def call(*args: Any, **kwargs: Any) -> Any:
-            out = real(*args, **kwargs)
-            if attr == "open":
-                os.close(out)  # the descriptor itself is lost with the result
-            raise KeyboardInterrupt
-
-        return call
-
-
-@pytest.mark.thread_unsafe(reason="patches _io.os")
-@pytest.mark.parametrize("call", ["open", "close"])
-def test_an_interrupt_as_a_temporary_file_is_made_leaves_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call: str
-) -> None:
-    """Ctrl-C just after the hidden sibling is made: it is removed (a done record's .tmp stayed)."""
-    with monkeypatch.context() as m:
-        m.setattr(_io, "os", _InterruptAfter(call))
-        if call == "open":
-            with pytest.raises(KeyboardInterrupt):
-                _io.atomic_write_text(tmp_path / "done.json", "{}")
-        with pytest.raises(KeyboardInterrupt):
-            _io.Writer(tmp_path / "out.parquet").write(_table(2))
-    assert os.listdir(tmp_path) == []
-
-
 # ------------------------------------------------------------------------------------- Writer
 
 

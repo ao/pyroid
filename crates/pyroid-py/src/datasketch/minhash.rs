@@ -190,7 +190,7 @@ fn token_hashes(tokens: &Bound<'_, PyAny>, bits: Sha1Bits) -> Option<Vec<u64>> {
             .map(|b| bits.hash(b.as_bytes()))
     };
     if let Ok(list) = tokens.cast_exact::<PyList>() {
-        crate::input::list_items(list).iter().map(hash).collect()
+        list.iter().map(hash).collect()
     } else if let Ok(tuple) = tokens.cast_exact::<PyTuple>() {
         tuple.iter().map(hash).collect()
     } else {
@@ -247,7 +247,7 @@ fn update_hashes<'py>(
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
     let scheme = scheme_arg(scheme)?;
     let mut hs = Vec::with_capacity(hashes.len());
-    for h in crate::input::list_items(hashes).iter() {
+    for h in hashes.iter() {
         if !h.is_exact_instance_of::<PyInt>() {
             return Ok(None);
         }
@@ -333,7 +333,7 @@ fn extract_doc(
         doc.cast::<PyTuple>().ok()
     };
     let items: Vec<Bound<'_, PyAny>> = if let Some(list) = list {
-        crate::input::list_items(list).iter().collect()
+        list.iter().collect()
     } else if let Some(tuple) = tuple {
         tuple.iter().collect()
     } else if mode == Tokens::BytesOnly {
@@ -382,7 +382,7 @@ fn extract_doc(
 /// `fallback`.
 fn extract_round(
     arena: &mut Arena,
-    docs: &Bound<'_, PyTuple>,
+    docs: &Bound<'_, PyList>,
     start: usize,
     budget: usize,
     mode: Tokens,
@@ -431,14 +431,11 @@ fn hash_round<T: Value>(
 /// pipelined: a helper thread waits for the pool to hash round `i` while the
 /// calling thread copies round `i + 1`; the calling thread only waits for the
 /// pool while detached.
-/// Rows of `initial` values written between two Ctrl-C checks in [`bulk_rows`].
-const FILL_ROWS: usize = 8192;
-
 fn bulk_rows<T: Value>(
     py: Python<'_>,
     perm: &Permutations,
     initial: &[T],
-    docs: &Bound<'_, PyTuple>,
+    docs: &Bound<'_, PyList>,
     bits: Sha1Bits,
     mode: Tokens,
     threads: par::Threads,
@@ -446,13 +443,7 @@ fn bulk_rows<T: Value>(
     let k = initial.len();
     let n = docs.len();
     let mut out: Vec<T> = Vec::with_capacity(n * k);
-    // Every row starts as `initial`: n * k values (2 GB for 2 million documents of 128
-    // permutations), written before the first document is hashed. That takes seconds where page
-    // faults are slow, so Ctrl-C is checked between steps of FILL_ROWS rows.
-    for i in 0..n {
-        if i % FILL_ROWS == FILL_ROWS - 1 {
-            py.check_signals()?;
-        }
+    for _ in 0..n {
         out.extend_from_slice(initial);
     }
     let mut fallback = Vec::new();
@@ -555,7 +546,7 @@ fn bulk_any<'py>(
     scheme: Scheme,
     initial: &Bound<'py, PyAny>,
     permutations: &Bound<'py, PyAny>,
-    docs: &Bound<'py, PyTuple>,
+    docs: &Bound<'py, PyList>,
     bits: Sha1Bits,
     mode: Tokens,
     threads: par::Threads,
@@ -605,7 +596,7 @@ fn bulk<'py>(
         scheme,
         initial,
         permutations,
-        &crate::input::list_items(docs),
+        docs,
         bits,
         Tokens::BytesOnly,
         self::threads(threads),
@@ -630,7 +621,7 @@ fn batch_tokens<'py>(
         scheme,
         initial,
         permutations,
-        &crate::input::list_items(docs),
+        docs,
         bits,
         Tokens::BytesOrStr,
         self::threads(threads),

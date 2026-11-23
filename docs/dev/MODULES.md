@@ -125,15 +125,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
   `crate::interrupt::pool_error` turns into the signal handler's exception (convert every
   `PoolError` with it). A `par` map that updates shared state in place goes in
   `par::uninterruptible`; long loops of your own take a `par::Stop` (`map_tasks_stoppable`).
-- Containers the caller owns can change while you read them (another thread on a free-threaded
-  build; on any build, Python code you run in between). PyO3's dict and set iterators panic when
-  that happens, and so does `PyList::new(py, list.iter())` when the list shrinks. Read a
-  caller's list with `crate::input::list_items` (one atomic `PyList_AsTuple`; `TextInput` does),
-  a converted list argument as `crate::input::Items<T>` instead of `Vec<T>`, and iterate a dict
-  or set only after one copy (`dict.copy()`, `frozenset(s)` in the glue). Never `len()` then
-  `get_item(i)`. `python/tests/test_concurrent_mutation.py` has one stress test per module.
-- Long serial loops of your own (a union-find, zeroing a big buffer) check for Ctrl-C with a
-  `par::Ticker` (`tick()` per item) and return `PoolError::interrupted()`.
 - Call `crate::np::ready(py, ...)` before a batch whose result holds numpy arrays (or before the
   first array or array type check): rust-numpy's first lookup of NumPy's C API runs Python code
   inside an `expect`, so a Ctrl-C there would be a `PanicException`.

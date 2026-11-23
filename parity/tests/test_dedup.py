@@ -37,7 +37,7 @@ def test_corpus_order_matches_reference(ref, corpus):
 
 
 def test_signatures(ref, corpus, dedup_impl, parity, request):
-    n = min(effective_limit(request.config, dedup_impl) or len(corpus), len(corpus))
+    n = effective_limit(request.config, dedup_impl) or len(corpus)
     got = dedup_impl.obj.signatures(corpus.texts[:n], dict(specs.MINHASH_CONFIG))
     assert len(got) == n
     bad = []

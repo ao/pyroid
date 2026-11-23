@@ -493,9 +493,6 @@ def repair_json_batch(
             **json_dumps_args,
         )
 
-    if isinstance(texts, list):
-        # One read of the caller's list (atomic): the fallback below indexes the same items.
-        texts = list(texts)
     result, unsupported = _native.repair_batch(
         texts,
         bool(skip_json_loads),

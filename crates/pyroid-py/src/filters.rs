@@ -30,7 +30,7 @@ use pyroid_core::par::{self, PoolError};
 use crate::arrow::{Chunk, Column, ColumnType, StrChunk, StrType, build_error};
 use crate::batch::{BatchError, DocCost, detach_one};
 use crate::errors::{input_error, type_name, with_note};
-use crate::input::{TextInput, ThreadsArg, list_items, texts_and_threads};
+use crate::input::{TextInput, ThreadsArg, texts_and_threads};
 
 /// The stand-in tokenizer of the steps whose words come from Python
 /// (datatrove's own tokenizer, run by the shim). Asking it for words is the
@@ -523,7 +523,7 @@ fn word_list(obj: &Bound<'_, PyAny>, i: usize) -> PyResult<Option<Vec<PyBackedSt
         return Ok(None);
     }
     let items: Vec<Bound<'_, PyAny>> = if let Ok(l) = obj.cast::<PyList>() {
-        list_items(l).iter().collect()
+        l.iter().collect()
     } else if let Ok(t) = obj.cast::<PyTuple>() {
         t.iter().collect()
     } else {
@@ -585,7 +585,6 @@ fn _run_list<'py>(
     };
     let words: Option<Vec<Option<Vec<PyBackedStr>>>> = words
         .map(|w| {
-            let w = list_items(w);
             if w.len() != docs.len() {
                 return Err(PyValueError::new_err(format!(
                     "{} word lists for {} documents",
@@ -708,7 +707,7 @@ fn _to_list<'py>(
     })
 }
 
-fn opt_strs(list: &Bound<'_, PyTuple>) -> PyResult<Vec<Option<PyBackedStr>>> {
+fn opt_strs(list: &Bound<'_, PyList>) -> PyResult<Vec<Option<PyBackedStr>>> {
     list.iter()
         .map(|v| {
             if v.is_none() {
@@ -737,7 +736,6 @@ fn _pack<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let what = What::parse(what)?;
     let n_threads = crate::input::threads(threads);
-    let (keep, reason, text) = (list_items(keep), list_items(reason), list_items(text));
     let n = keep.len();
     if reason.len() != n || text.len() != n {
         return Err(PyValueError::new_err(
@@ -800,34 +798,33 @@ fn _pack<'py>(
                     .collect();
                 Ok(Bound::new(py, Column::new(ColumnType::Bool, name, chunks))?.into_any())
             };
-            let str_col =
-                |list: &Bound<'py, PyTuple>, large: bool| -> PyResult<Bound<'py, PyAny>> {
-                    let vals = opt_strs(list)?;
-                    let mut chunks = Vec::new();
-                    for r in ranges() {
-                        if large {
-                            chunks.push(Chunk::LargeUtf8(
-                                StringBuffers::build(&vals[r], n_threads).map_err(build_error)?,
-                            ));
-                        } else {
-                            let built = StringBuffers::build_split(&vals[r], n_threads)
-                                .map_err(build_error)?;
-                            chunks.extend(built.into_iter().map(Chunk::Utf8));
-                        }
-                    }
-                    let ty = if large {
-                        ColumnType::LargeUtf8
+            let str_col = |list: &Bound<'py, PyList>, large: bool| -> PyResult<Bound<'py, PyAny>> {
+                let vals = opt_strs(list)?;
+                let mut chunks = Vec::new();
+                for r in ranges() {
+                    if large {
+                        chunks.push(Chunk::LargeUtf8(
+                            StringBuffers::build(&vals[r], n_threads).map_err(build_error)?,
+                        ));
                     } else {
-                        ColumnType::Utf8
-                    };
-                    Ok(Bound::new(py, Column::new(ty, name, chunks))?.into_any())
+                        let built =
+                            StringBuffers::build_split(&vals[r], n_threads).map_err(build_error)?;
+                        chunks.extend(built.into_iter().map(Chunk::Utf8));
+                    }
+                }
+                let ty = if large {
+                    ColumnType::LargeUtf8
+                } else {
+                    ColumnType::Utf8
                 };
+                Ok(Bound::new(py, Column::new(ty, name, chunks))?.into_any())
+            };
             pack(
                 py,
                 what,
                 keep_col,
-                || str_col(&reason, false),
-                || str_col(&text, *large),
+                || str_col(reason, false),
+                || str_col(text, *large),
             )
         }
     }
@@ -1341,7 +1338,7 @@ mod badwords {
     fn _badwords_run<'py>(
         py: Python<'py>,
         texts: &Bound<'py, PyAny>,
-        lists: crate::input::Items<Py<NativeBadWords>>,
+        lists: Vec<Py<NativeBadWords>>,
         lang: i64,
         ids: Option<Vec<i64>>,
         keep_fraction: f64,
@@ -1355,8 +1352,7 @@ mod badwords {
         let v = UnicodeVersion::from_unidata_version(unicode_version).ok_or_else(|| {
             PyValueError::new_err(format!("unsupported Unicode version {unicode_version}"))
         })?;
-        // `lists` is a filter's own list, which another thread using the filter may extend.
-        let lists: Vec<&BadWords> = lists.0.iter().map(|l| &l.get().0).collect();
+        let lists: Vec<&BadWords> = lists.iter().map(|l| &l.get().0).collect();
         let pick = |i: usize| -> Option<&BadWords> {
             let id = ids.as_ref().map_or(lang, |ids| ids[i]);
             usize::try_from(id).ok().and_then(|k| lists.get(k).copied())

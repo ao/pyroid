@@ -67,7 +67,7 @@ def test_fineweb2_signatures(lang, dedup_impl, parity, request):
     need(ML.slice_rel(lang))
     docs = ML.with_near_duplicates(lang)
     want, _ = _reference(lang, docs)
-    n = min(effective_limit(request.config, dedup_impl) or len(docs), len(docs))
+    n = effective_limit(request.config, dedup_impl) or len(docs)
     got = dedup_impl.obj.signatures(docs.texts[:n], ML.minhash_config(lang))
     bad = []
     for i in range(n):

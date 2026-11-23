@@ -625,7 +625,7 @@ fn extract_batch<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let py = htmls.py();
     let items: Vec<Bound<'py, PyAny>> = if let Ok(l) = htmls.cast::<PyList>() {
-        crate::input::list_items(l).iter().collect()
+        l.iter().collect()
     } else if let Ok(t) = htmls.cast::<PyTuple>() {
         t.iter().collect()
     } else {

@@ -443,11 +443,10 @@ def iter_documents(
     ``ri`` is the record's index among all records of the file. ``cchardet``
     (faust-cchardet) and ``magic`` (python-magic) are imported at the first ``next()``, as
     datatrove imports them at its first record; if either import fails, datatrove's own loop
-    runs on :class:`ArchiveIterator` over CPython's ``gzip.GzipFile``, so the
-    ``ImportError`` comes at the first record (for a module that is not installed, it names
-    ``pip install 'pyroid[warc]'``).
-    The file is opened at the first ``next()``; up to 64 documents (16 MiB of payload) are read
-    ahead, and messages and errors are delivered at the document they belong to.
+    runs on :class:`ArchiveIterator` over CPython's ``gzip.GzipFile``, so the ``ImportError``
+    comes at the first record. The file is opened at the first ``next()``; up to 64 documents
+    (16 MiB of payload) are read ahead, and messages and errors are delivered at the document
+    they belong to.
 
     Args:
         source: A path, or a binary file object.

@@ -178,7 +178,7 @@ fn newline_error(obj: &Bound<'_, PyAny>, msg: &'static str) -> Option<PyErr> {
         return Some(PyValueError::new_err(msg));
     }
     let items: Vec<Bound<'_, PyAny>> = if let Ok(list) = obj.cast::<PyList>() {
-        crate::input::list_items(list).iter().collect()
+        list.iter().collect()
     } else if let Ok(tuple) = obj.cast::<PyTuple>() {
         tuple.iter().collect()
     } else {

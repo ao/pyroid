@@ -351,9 +351,7 @@ fn with_surrogates<'py>(
     }
     let is_list = texts.is_instance_of::<PyList>();
     let items: Vec<Bound<'py, PyAny>> = if is_list {
-        crate::input::list_items(texts.cast::<PyList>()?)
-            .iter()
-            .collect()
+        texts.cast::<PyList>()?.iter().collect()
     } else {
         texts.cast::<PyTuple>()?.iter().collect()
     };

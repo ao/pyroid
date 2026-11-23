@@ -67,13 +67,9 @@ def _counting_set_method(name: str) -> Any:
     base = getattr(set, name)
 
     def method(self: _Set, *args: Any) -> Any:
-        try:
-            return base(self, *args)
-        finally:
-            # Counted after the change: a tokenizer that read the old contents meanwhile
-            # cached them under the old count, so its next call sees the change.
-            self._gen += 1
-            _GEN[0] += 1
+        self._gen += 1
+        _GEN[0] += 1
+        return base(self, *args)
 
     method.__name__ = name
     return method
@@ -114,11 +110,9 @@ def _counting_dict_method(name: str) -> Any:
     base = getattr(defaultdict, name)
 
     def method(self: _Ortho, *args: Any, **kwargs: Any) -> Any:
-        try:
-            return base(self, *args, **kwargs)
-        finally:
-            self._gen += 1  # after the change, as for _Set
-            _GEN[0] += 1
+        self._gen += 1
+        _GEN[0] += 1
+        return base(self, *args, **kwargs)
 
     method.__name__ = name
     return method
@@ -408,24 +402,19 @@ def _fingerprint(params: Any) -> tuple[Any, ...] | None:
 
 def _native_params(params: Any, end_chars: str) -> Any:
     """A native Punkt for `params`, or None if they hold values Rust cannot represent."""
-    # One copy of each, made in one step (also on free-threaded builds): another thread may
-    # change the parameters meanwhile, and iterating a set or dict that changes size raises.
-    abbrev_types = frozenset(params.abbrev_types)
-    collocations = frozenset(params.collocations)
-    sent_starters = frozenset(params.sent_starters)
     oc = []
-    for k, v in dict(params.ortho_context).items():
+    for k, v in params.ortho_context.items():
         if type(k) is not str or not isinstance(v, int):
             return None
         oc.append((k, v & 0x7F))
     return _native._Punkt(
-        [s for s in abbrev_types if type(s) is str],
+        [s for s in params.abbrev_types if type(s) is str],
         [
             c
-            for c in collocations
+            for c in params.collocations
             if type(c) is tuple and len(c) == 2 and type(c[0]) is str and type(c[1]) is str
         ],
-        [s for s in sent_starters if type(s) is str],
+        [s for s in params.sent_starters if type(s) is str],
         oc,
         end_chars,
         UNICODE_VERSION,
@@ -516,9 +505,6 @@ class PunktSentenceTokenizer:
 
     def _impl(self) -> Any:
         """The native Punkt for the current parameters, or None (then NLTK runs)."""
-        # The count before the parameters are read: a change another thread makes while they
-        # are read is counted after it is made, so this cache entry is never stale for it.
-        gen = _GEN[0]
         params = self.__dict__["_params_"]
         lang_vars = self._lang_vars
         fast = self._fast
@@ -526,7 +512,7 @@ class PunktSentenceTokenizer:
             fast is not None
             and fast[0] is params
             and fast[1] is lang_vars
-            and fast[2] == gen
+            and fast[2] == _GEN[0]
             and fast[3] is getattr(lang_vars, "sent_end_chars", None)
             and fast[4] is self._Token
         ):
@@ -545,7 +531,7 @@ class PunktSentenceTokenizer:
             (
                 params,
                 lang_vars,
-                gen,
+                _GEN[0],
                 getattr(lang_vars, "sent_end_chars", None),
                 self._Token,
                 native,

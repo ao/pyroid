@@ -27,7 +27,7 @@ use crate::batch::{
     BatchError, DocCost, doc_count, fill_rows, map_values, map_values_cost, transform,
 };
 use crate::errors::{input_error, type_name, with_note};
-use crate::input::{TextInput, Threads, ThreadsArg, list_items, texts_and_threads, threads};
+use crate::input::{TextInput, Threads, ThreadsArg, texts_and_threads, threads};
 
 fn unicode_version(v: &str) -> PyResult<UnicodeVersion> {
     UnicodeVersion::from_unidata_version(v)
@@ -224,12 +224,6 @@ impl From<CapacityError> for AddError {
     }
 }
 
-impl From<par::PoolError> for AddError {
-    fn from(e: par::PoolError) -> Self {
-        Self::Pool(e)
-    }
-}
-
 impl AddError {
     fn into_pyerr(self, py: Python<'_>) -> PyErr {
         match self {
@@ -281,7 +275,7 @@ fn token_lists(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<PyBackedStr>>> {
             format!("expected list[list[str]], got {}", type_name(obj)),
         ));
     };
-    list_items(outer)
+    outer
         .iter()
         .enumerate()
         .map(|(i, doc)| {
@@ -294,8 +288,7 @@ fn token_lists(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<PyBackedStr>>> {
                     ),
                 ));
             };
-            list_items(doc)
-                .iter()
+            doc.iter()
                 .map(|t| {
                     t.cast_into::<PyString>()
                         .map_err(|e| input_error(py, format!("expected str tokens: {e}")))
@@ -647,12 +640,12 @@ impl MinHashState {
 
     /// Stage-2 duplicate pairs of one bucket, in datatrove's order (test hook).
     fn _bucket_pairs<'py>(&self, py: Python<'py>, bucket: usize) -> PyResult<Bound<'py, PyList>> {
-        let pairs = crate::interrupt::detach_batch(py, || {
+        let pairs = py.detach(|| {
             let inner = lock(&self.inner);
             (bucket < inner.store.num_buckets()).then(|| inner.store.bucket_pairs(bucket))
         });
         let pairs = pairs.ok_or_else(|| PyIndexError::new_err("bucket out of range"))?;
-        PyList::new(py, pairs.map_err(|e| crate::interrupt::pool_error(&e))?)
+        PyList::new(py, pairs)
     }
 
     /// The signature of document ``i`` (``None`` if it has no shingles).
@@ -1209,8 +1202,7 @@ mod sentence {
 
     /// `bytes` (contents) or a path (`str` / `os.PathLike`) per source.
     fn source_specs(objs: &Bound<'_, PyList>) -> PyResult<Vec<SourceSpec>> {
-        crate::input::list_items(objs)
-            .iter()
+        objs.iter()
             .map(|o| {
                 if let Ok(b) = o.extract::<PyBackedBytes>() {
                     Ok(SourceSpec::Bytes(b))
@@ -1497,22 +1489,10 @@ mod files {
     fn io_error(py: Python<'_>, path: &Path, err: io::Error) -> PyErr {
         if let Some(code) = err.raw_os_error() {
             let built = (|| -> PyResult<PyErr> {
-                let oserror = py.get_type::<PyOSError>();
-                let exc = if cfg!(windows) {
-                    // A Windows error (5 = ERROR_ACCESS_DENIED), not an errno ("[Errno 5]
-                    // Input/output error"): as OSError's winerror it gives the errno and
-                    // the subclass. io::Error's Display appends " (os error N)", and
-                    // CPython's own messages have no trailing period.
-                    let msg = err.to_string();
-                    let strerror = msg
-                        .strip_suffix(&format!(" (os error {code})"))
-                        .unwrap_or(&msg)
-                        .trim_end_matches(['.', ' ']);
-                    oserror.call1((code, strerror, path.as_os_str(), code))?
-                } else {
-                    let strerror = py.import("os")?.call_method1("strerror", (code,))?;
-                    oserror.call1((code, strerror, path.as_os_str()))?
-                };
+                let strerror = py.import("os")?.call_method1("strerror", (code,))?;
+                let exc = py
+                    .get_type::<PyOSError>()
+                    .call1((code, strerror, path.as_os_str()))?;
                 Ok(PyErr::from_value(exc))
             })();
             if let Ok(e) = built {

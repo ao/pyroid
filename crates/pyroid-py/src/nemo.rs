@@ -635,9 +635,9 @@ fn lang_id_strings<'py>(
     };
     let scores: Vec<f64> = match array {
         Some(a) => a.as_array().to_vec(),
-        None => crate::input::frozen(scores).extract()?,
+        None => scores.extract()?,
     };
-    let langs: Vec<Bound<'py, PyString>> = crate::input::frozen(langs).extract()?;
+    let langs: Vec<Bound<'py, PyString>> = langs.extract()?;
     if scores.len() != langs.len() {
         return Err(PyValueError::new_err(format!(
             "scores and langs differ in length ({} and {})",

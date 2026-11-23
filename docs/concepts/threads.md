@@ -111,31 +111,6 @@ against 6.63 µs with Arrow input ([Benchmarks](../benchmarks.md#thread-scaling)
     output strings one after another on the calling thread. See
     [Benchmarks](../benchmarks.md#thread-scaling).
 
-## Inputs that another thread changes
-
-A call may get a list, dict or set that another thread changes while the call runs. That can
-happen on any build, and on a free-threaded one at any moment. pyroid never crashes or raises
-`PanicException` because of it:
-
-- A list of documents, and the other lists pyroid's Rust code reads (such as `remove_lines`'
-  patterns), is read once, in one step, at the start of the call. The result is for the list
-  as it was at that moment; later changes don't reach the call, and a call never sees part of
-  one change.
-- A set or dict that pyroid reads, such as `PunktParameters`' sets and `ortho_context`, is copied
-  in one step first. A change made during a call shows from the next call on.
-- Configuration objects (a filter config and the lists in it) are read by pyroid's Python code
-  as a call starts, as any Python code reads them: a list changed at that moment can be read
-  partly before and partly after the change.
-- APIs that take any iterable and mirror a library that iterates it lazily
-  (`MinHash.bulk`, `MinHash.generator`, `update_batch` with a generator) go through it as that
-  library does, with Python's iterator.
-- Objects that hold state, such as a `MinHashLSH` or a `pyroid.warc` reader, can be used from
-  several threads; each call takes the object's lock.
-
-A NumPy array is different. NumPy doesn't guard an array against a thread that writes,
-resizes or reshapes it while another reads it, and pyroid can't either. Don't change an array
-in place while a pyroid call that got it is running.
-
 ## What can bring the GIL back
 
 pyroid itself never re-enables the GIL, but a library it hands work to can:

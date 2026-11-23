@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use pyroid_core::nemo::modifiers::{self as m, SliceBound};
 
 use crate::batch::transform;
-use crate::input::{Items, TextInput, Threads};
+use crate::input::{TextInput, Threads};
 
 /// ``BoilerPlateStringModifier(remove_if_at_top_or_bottom).modify_document`` for each document.
 #[pyfunction]
@@ -72,10 +72,10 @@ fn remove_urls(
 fn remove_lines(
     py: Python<'_>,
     x: TextInput,
-    patterns: Items<String>,
+    patterns: Vec<String>,
     threads: Option<Threads>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    transform(py, x, threads, |s| m::remove_lines(s, &patterns.0))
+    transform(py, x, threads, |s| m::remove_lines(s, &patterns))
 }
 
 fn slice_bound(index: Option<i64>, sub: Option<String>) -> SliceBound {

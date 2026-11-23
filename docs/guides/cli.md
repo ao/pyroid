@@ -15,22 +15,14 @@ The per-document digest of a `pyroid clean` run equals the stock chain's on the 
 FineWeb dev slice and on the 13,232-document parity corpus
 ([parity](../compatibility.md#integrations)).
 
-On aarch64, `language_score` can differ from stock datatrove's in its last bits: 749 of the 8,407
-documents kept from the FineWeb dev slice differed, by at most 1.19e-7 (two float32 ulps; EC2
-c8g, datatrove 0.10.1 with fasttext-numpy2-wheel 0.9.2). That fastText build, which
-`datatrove[processing]` installs, fuses every multiply-add of the output layer on aarch64.
-`pyroid clean` computes as fasttext-predict does, which for `lid.176.bin` gives the bits every
-build gives on x86-64, so its output is the same on every platform. The kept documents, their text
-and `language` are the same. pyroid's datatrove `LanguageFilter` gives stock datatrove's scores on
-both ([fastText builds](fasttext.md)).
-
 datatrove's `examples/fineweb.py` has no ftfy step, and datatrove's own `FTFYFormatter()` uses
 another ftfy config than ftfy's defaults: it keeps curly quotes, ligatures, character widths and
 line breaks, and does not normalize to NFC. `--ftfy datatrove` uses that config, and `--ftfy off`
 leaves ftfy out.
 
 Files are streamed in Arrow batches, so memory holds about one row group and two batches per
-process, whatever the size of the dataset; MinHash dedup sorts its signatures on disk.
+process (three while rows are compressed into the [work directory](#the-minhash-work-directory)),
+whatever the size of the dataset; MinHash dedup sorts its signatures on disk.
 `python -m pyroid` is the same program. For thousands of files and many machines, see
 [Large datasets](large-datasets.md).
 
@@ -228,11 +220,10 @@ it has seen every document. Survivors wait in Arrow IPC files, and their MinHash
 datatrove's on-disk format, in a work directory next to OUT (`.OUT.pyroid/` for a file OUT,
 `OUT/.pyroid/` for a directory), or under `--tmp-dir`. Then the survivors are written in input
 order and the work directory is deleted. Plan disk space there for the survivors plus about 1 KB
-of signatures per survivor. If the run fails or is interrupted after some files are done, the work
-directory stays, and the same command resumes from it. Under `--tmp-dir` the work directory is
-created with mode 0700, and pyroid refuses to reuse one that is a link, belongs to another user or
-is writable by others. `--no-dedup` skips MinHash, and the output is then the chain up to
-`FineWebQualityFilter`.
+of signatures per survivor. If the run fails or is interrupted, the work directory stays, and the
+same command resumes from it. Under `--tmp-dir` the work directory is created with mode 0700, and
+pyroid refuses to reuse one that is a link, belongs to another user or is writable by others.
+`--no-dedup` skips MinHash, and the output is then the chain up to `FineWebQualityFilter`.
 
 ## `pyroid clean`: FineWeb from WARC files
 
@@ -303,16 +294,8 @@ These rules hold for every command:
   Otherwise it is a directory with one output file per input file, under the same relative name
   ([layouts](large-datasets.md#output-layout)). Every output is written under a hidden temporary
   name and renamed when complete, so a failed or interrupted run never leaves a truncated file.
-  An existing OUT file that pyroid did not write is not replaced unless you pass `--overwrite`.
-- Outputs never overlap. OUT, `--excluded`, `--tmp-dir`, `--stats-json` and the inputs must be
-  different files once links are resolved, and a directory OUT and a directory `--excluded` must
-  not be inside each other. pyroid refuses such a run before it reads anything.
-- Running a finished command again does nothing and exits with status 0, for a file OUT as for a
-  directory OUT: a file OUT keeps a small record that it is complete next to it
-  (`.OUT.pyroid/`). Other options or inputs are a different run, which pyroid refuses without
-  `--overwrite`. A run that fails before it finishes any file leaves no record or work directory.
-- `--stats` and `--progress` write to stderr. If stderr is a pipe that closes early
-  (`2>&1 | head -1`), the messages stop and the run goes on.
+  An existing OUT file is not replaced unless you pass `--overwrite`, and an output path equal to
+  the input path is refused.
 - `--text-column` names the text column (default `text`). Every other column is passed through
   unchanged.
 - `--batch-size` sets the rows per Arrow batch (default 10,000).
@@ -320,12 +303,8 @@ These rules hold for every command:
 Errors exit with status 1 and a one-line message, for example:
 
 ```console
-$ pyroid clean sample.parquet notes.parquet --recipe fineweb   # a notes.parquet of your own
-pyroid: notes.parquet exists (pass --overwrite to replace it)
-$ pyroid clean sample.parquet clean.parquet --recipe fineweb --ftfy off
-pyroid clean: clean.parquet comes from a different run (other options, inputs or pyroid version); pass --overwrite to redo it, or use another output path
-$ pyroid clean sample.parquet out.parquet --recipe fineweb --excluded out.parquet
-pyroid: OUT and --excluded are the same file (out.parquet)
+$ pyroid clean sample.parquet clean.parquet --recipe fineweb
+pyroid: clean.parquet exists (pass --overwrite to replace it)
 $ pyroid clean sample.parquet x.parquet --recipe fineweb --text-column body
 pyroid: sample.parquet: no column 'body' (columns: text, id, dump, url, date, file_path, language, language_score, token_count)
 ```
@@ -343,12 +322,6 @@ that is a directory, an unwritable output or a failed model download; `ValueErro
 for a truncated compressed file), a text column of another type (`pyroid.InputError`) and missing
 dependencies (`ImportError`), `PYROID_DEBUG=1` shows the traceback instead. Bad options exit with
 status 2 (argparse's usage error).
-
-From Python, `pyroid.cli.main(["clean", ...])` runs a command and returns its exit status. Calls
-in several threads of one process can run at once, each with its own OUT: a call that fails
-removes only what its own runs left, and each call loads its own models. They share stderr and
-the signal handlers, which only the main thread's call sets. `pyroid run` is the exception, as its
-target becomes the program: a second `run` while one is running exits with status 2.
 
 A directory of shards in, compressed JSONL out, two threads:
 
@@ -445,7 +418,7 @@ usage: pyroid translit [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--t
                        [--batch-size BATCH_SIZE] [--shard I/N] [--workers N] [--merge]
                        [--format FMT] [--stats] [--stats-json PATH] [--progress]
                        [--compression COMPRESSION] [--overwrite] [--mode {anyascii,unidecode}]
-                       [--errors {ignore,replace,strict,preserve}] [--replace-str REPLACE_STR]
+                       [--errors ERRORS] [--replace-str REPLACE_STR]
                        [--output-column OUTPUT_COLUMN]
                        [IN ...] OUT
 ```
@@ -453,8 +426,8 @@ usage: pyroid translit [-h] [--files-from PATH] [--text-column TEXT_COLUMN] [--t
 Transliterates the text column to ASCII with [`pyroid.translit`](translit.md) (anyascii's data,
 ISC). `--mode anyascii` is the default. `--mode unidecode` takes Unidecode's `--errors`
 (`ignore`, `replace`, `strict` or `preserve`; default `ignore`) and `--replace-str` (default
-`?`); with `--mode anyascii` they are refused. `--output-column` writes a new column instead of
-replacing the text. No row is dropped, so there is no `--excluded`.
+`?`). `--output-column` writes a new column instead of replacing the text. No row is dropped, so
+there is no `--excluded`.
 
 ```console
 $ pyroid translit names.parquet ascii.jsonl --text-column name --output-column name_ascii
