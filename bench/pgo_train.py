@@ -11,9 +11,14 @@ Run it once per interpreter the release wheels serve, with an instrumented build
 Each module runs on list[str] and Arrow input and single str calls, at every ``--threads`` value:
 ftfy (FineWeb text, plus mojibake made from it), translit, fastText LID (.bin and .ftz), the Gopher, C4 and
 FineWeb filters and the formatters, MinHash and exact and sentence dedup, pyroid.text, pyroid.jieba,
-pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.langdetect, pyroid.metrics
-(ROUGE, BLEU, chrF), pyroid.datasketch, and the FineWeb-2 filter and MinHash configs of every language
-pyroid tokenizes natively here (Japanese only with SudachiDict installed).
+pyroid.json_repair (broken LLM output from its parity corpus generator, with another seed), pyroid.langdetect,
+pyroid.metrics (ROUGE, BLEU, chrF), pyroid.datasketch, pyroid.yaml (generated documents loaded and dumped in
+several styles), pyroid.tabulate (tables of numbers, FineWeb words and mixed cells in the common formats),
+pyroid.dateutil (dates and times in common formats, valid and not), pyroid.jmespath (queries over a
+boto3-style response and over records), pyroid.difflib (diffs of FineWeb lines, name ratios and close
+matches), pyroid.packaging (versions, specifiers, markers and requirements), pyroid.sqlparse (generated
+SQL), and the FineWeb-2 filter and MinHash configs of every language pyroid tokenizes natively here
+(Japanese only with SudachiDict installed).
 
 Needs only pyroid and numpy. pyarrow is optional: without it, as on Windows ARM64, the Arrow calls are
 skipped. Nothing is checked or timed: an instrumented build is never shipped.
@@ -23,7 +28,9 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime
 import json
+import random
 import sys
 import time
 import warnings
@@ -298,6 +305,408 @@ class Trainer:
             lsh.query(lean)
             m.jaccard(ms[0])
 
+    def yaml(self) -> None:
+        # bench/yaml/ would be imported as a namespace package named yaml; pyroid.yaml has to
+        # see that PyYAML is not installed.
+        here = Path(__file__).resolve().parent
+        saved = sys.path[:]
+        sys.path[:] = [p for p in sys.path if p and Path(p).resolve() != here]
+        try:
+            import pyroid.yaml as Y
+        finally:
+            sys.path[:] = saved
+
+        rnd = random.Random(TRAIN_SEED)
+        words = [w for t in self.texts[:300] for w in t.split()[:30]] or ["x"]
+        odd = ["yes", "no", "on", "1.0", "0x1F", "~", "", "a: b", "- x", "#c", "1e3", "2026-11-16", ".inf"]
+
+        def value(depth: int) -> Any:
+            k = rnd.randrange(10 if depth < 3 else 7)
+            if k == 0:
+                return rnd.randint(-(10**6), 10**6)
+            if k == 1:
+                return rnd.random() * 10 ** rnd.randint(-3, 6)
+            if k == 2:
+                return rnd.choice([True, False, None])
+            if k == 3:
+                return " ".join(rnd.choices(words, k=rnd.randint(1, 8)))
+            if k == 4:
+                return rnd.choice(words)
+            if k in (5, 6):
+                return rnd.choice(odd)
+            if k in (7, 8):
+                return {rnd.choice(words): value(depth + 1) for _ in range(rnd.randint(0, 6))}
+            return [value(depth + 1) for _ in range(rnd.randint(0, 6))]
+
+        docs = [value(0) for _ in range(3000)]
+        styles: list[dict[str, Any]] = [{}, {"default_flow_style": True}, {"sort_keys": False}]
+        styles += [{"allow_unicode": True, "indent": 4, "width": 40}, {"explicit_start": True}]
+        texts = [Y.safe_dump(d, **styles[i % len(styles)]) for i, d in enumerate(docs)]
+        stream = Y.safe_dump_all(docs[:1000])
+        list(Y.safe_load_all(stream))
+        list(Y.safe_load_all(stream.encode()))
+        small = ["a: 1\n", "name: test\nversion: 1.2.3\ndeps: [a, b, c]\nopts: {x: true, y: null}\n" * 4]
+        small += [Y.safe_dump(docs[:12])]
+        # Single calls in the hundreds of thousands, as callers make them: with fewer, the
+        # per-call path stays cold next to the rest of the profile.
+        for _ in range(10):
+            for t, d in zip(texts, docs, strict=True):
+                Y.safe_load(t)
+                Y.safe_dump(d)
+        for _ in range(20_000):
+            for s in small:
+                Y.safe_dump(Y.safe_load(s))
+                Y.load(s, Loader=Y.SafeLoader)
+        for bad in ["a: [1, 2", "a: b: c", "\t- x", "key: 'open", "--- !!python/object:x {}", "&a [*b]"]:
+            with contextlib.suppress(Y.YAMLError):
+                Y.safe_load(bad)
+
+    def tabulate(self) -> None:
+        import pyroid.tabulate as TB
+
+        rnd = random.Random(TRAIN_SEED)
+        words = [w for t in self.texts[:500] for w in t.split()[:50]] or ["x"]
+
+        def cell(kind: str, i: int, j: int) -> Any:
+            if kind == "numbers":
+                return i * 7 + j if j % 2 == 0 else rnd.random() * 10 ** rnd.randint(-4, 7)
+            if kind == "text":
+                if j % 3 == 2:
+                    return str(rnd.randint(0, 10**7))
+                return " ".join(rnd.choices(words, k=rnd.randint(1, 5)))
+            mixed = [words[i % len(words)], -i, rnd.random() * 1000, None if i % 6 == 0 else "y" * (i % 4)]
+            return [*mixed, f"{i}.5"][j % 5]
+
+        formats = ["simple", "plain", "pipe", "github", "grid", "fancy_grid", "psql", "rst", "orgtbl", "html"]
+        formats += ["latex", "tsv"]
+        for n, cols in ((1, 3), (6, 4), (800, 8), (30_000, 9)):
+            for kind in ("numbers", "text", "mixed"):
+                rows = [[cell(kind, i, j) for j in range(cols)] for i in range(n)]
+                headers = [f"h{j}" for j in range(cols)]
+                for fmt in formats if n <= 800 else formats[:5]:
+                    TB.tabulate(rows, headers=headers, tablefmt=fmt)
+                TB.tabulate(rows, headers="firstrow", floatfmt=".3f", intfmt=",", missingval="-")
+                TB.tabulate(rows, showindex=True, numalign="right", stralign="center")
+        for _ in range(self.per_doc):
+            TB.tabulate([[rnd.random(), rnd.randint(0, 99), rnd.choice(words)]], headers=["a", "b", "c"])
+
+    def dateutil(self) -> None:
+        from pyroid.dateutil import parser as P
+
+        rnd = random.Random(TRAIN_SEED)
+        formats = ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y%m%dT%H%M%SZ"]
+        formats += ["%Y-%m-%dT%H:%M:%S+05:30", "%d/%m/%Y", "%m/%d/%y %I:%M %p", "%d %B %Y", "%B %d, %Y %H:%M"]
+        formats += ["%a, %d %b %Y %H:%M:%S +0000", "%A %d %b %Y", "%b %d %Y %I%p", "%Y.%m.%d", "%d-%b-%y"]
+        formats += ["%H:%M:%S", "%Y-W%W", "%c"]
+        start = datetime.datetime(1975, 1, 1)
+        span = 60 * 365 * 86400
+        stamps = [
+            start + datetime.timedelta(seconds=rnd.randint(0, span), microseconds=rnd.randint(0, 10**6 - 1))
+            for _ in range(20_000)
+        ]
+        dates = [d.strftime(formats[i % len(formats)]) for i, d in enumerate(stamps)]
+        dates += ["not a date", "32/13/2020", "2020-02-30", "", "12:61", "Mon 31 Feb", "1e5"] * 50
+        specs_ = ("auto", "seconds", "milliseconds")
+        isos = [d.isoformat(sep=" " if i % 3 else "T", timespec=specs_[i % 3]) for i, d in enumerate(stamps)]
+        isos += [d.date().isoformat() for d in stamps[:2000]] + ["2021-W05-3", "20210203T1504", "2021-13-01"]
+        prose = [f"{t[:60]} {d}" for t, d in zip(self.texts, dates, strict=False)]
+        for t in self.threads:
+            P.parse_batch(dates, threads=t, errors="coerce")
+            P.parse_batch(dates, threads=t, errors="coerce", dayfirst=True, ignoretz=True)
+            P.parse_batch(prose[:2000], threads=t, errors="coerce", fuzzy=True)
+            P.isoparse_batch(isos, threads=t, errors="coerce")
+            if pa is not None:
+                P.parse_batch(pa.array(dates), threads=t, errors="coerce", ignoretz=True)
+                P.isoparse_batch(pa.array(isos[:5000]), threads=t, errors="coerce")
+        # About two million single calls, as callers make them: with tens of thousands the
+        # per-call path stays cold next to the rest of the profile.
+        tzinfos = {"EST": -18000, "CET": 3600}
+        for _ in range(50):
+            for i, s in enumerate(dates):
+                with contextlib.suppress(ValueError, OverflowError):
+                    P.parse(s)
+                if i % 8 == 0:
+                    with contextlib.suppress(ValueError, OverflowError):
+                        P.parse(s + " EST", tzinfos=tzinfos, yearfirst=True)
+            for s in isos:
+                with contextlib.suppress(ValueError, OverflowError):
+                    P.isoparse(s)
+
+    def jmespath(self) -> None:
+        # This script's folder holds bench/jmespath/, which Python would import as a namespace
+        # package named jmespath; pyroid.jmespath has to see that jmespath is not installed.
+        here = Path(__file__).resolve().parent
+        saved = sys.path[:]
+        sys.path[:] = [p for p in sys.path if p and Path(p).resolve() != here]
+        try:
+            import pyroid.jmespath as JM
+        finally:
+            sys.path[:] = saved
+
+        rnd = random.Random(TRAIN_SEED)
+        words = [w for t in self.texts[:200] for w in t.split()[:20]] or ["x"]
+        states = ["running", "stopped", "pending"]
+        response = {
+            "Reservations": [
+                {
+                    "Instances": [
+                        {
+                            "InstanceId": f"i-{r:04x}{i:04x}",
+                            "InstanceType": rnd.choice(["t3.micro", "m7g.large", "c7i.4xlarge"]),
+                            "State": {"Name": rnd.choice(states), "Code": rnd.randint(0, 80)},
+                            "LaunchTime": f"2026-{rnd.randint(1, 12):02d}-{rnd.randint(1, 28):02d}",
+                            "Tags": [
+                                {"Key": "Name", "Value": rnd.choice(words)},
+                                {"Key": "env", "Value": "web-1"},
+                            ],
+                        }
+                        for i in range(rnd.randint(1, 4))
+                    ]
+                }
+                for r in range(12)
+            ]
+        }
+        small = [
+            "Reservations",
+            "Reservations[0].Instances[0].State.Name",
+            "Reservations[].Instances[].InstanceId",
+            "Reservations[].Instances[?State.Name=='running'].InstanceId[]",
+            "Reservations[].Instances[].{id: InstanceId, type: InstanceType}",
+            "Reservations[].Instances[].Tags[?Key=='Name'].Value[]",
+            "sort_by(Reservations[].Instances[], &LaunchTime)[-1].InstanceId",
+            "!contains(Reservations[].Instances[].InstanceType, 'x') && length(Reservations) > `3`",
+            "join(', ', Reservations[].Instances[].InstanceId)",
+            "Reservations[*].Instances[*].State | [0][0]",
+        ]
+        # Single calls in the hundreds of thousands, as callers make them: with fewer, the
+        # per-call path stays cold next to the rest of the profile.
+        for e in small:
+            compiled = JM.compile(e)
+            for _ in range(50_000):
+                compiled.search(response)
+            for _ in range(20_000):
+                JM.search(e, response)
+        for i in range(20_000):
+            e = f"Reservations[].Instances[?State.Name=='{states[i % 3]}' && Tags[?Value=='w{i}']]"
+            JM.search(e, response)
+        records = [
+            {
+                "id": i,
+                "name": words[i % len(words)],
+                "age": rnd.randint(1, 99),
+                "score": rnd.random() * 100,
+                "tags": ["a", "b", "c"][: i % 4],
+                "address": {"city": rnd.choice(words), "zip": f"{i:06d}"},
+            }
+            for i in range(50_000)
+        ]
+        queries = [
+            "[*].address.city",
+            "[?age > `40`].name",
+            "[?age > `40` && address.zip != '000001'].id",
+            "[*].{n: name, c: address.city}",
+            "sort_by(@, &age)[0].id",
+            "max_by(@, &score).id",
+            "min_by(@, &age).name",
+            "sum([*].age)",
+            "avg([*].score)",
+            "[?contains(tags, 'a')] | length(@)",
+            "[*].tags[]",
+            "sort([*].name)[-1]",
+            "reverse(@)[0].id",
+            "[*].[id, age]",
+            "@[?score < `50`] | [*].address",
+        ]
+        for e in queries:
+            JM.compile(e).search(records)
+
+    def difflib(self) -> None:
+        import pyroid.difflib as D
+
+        rnd = random.Random(TRAIN_SEED)
+        words = [w for t in self.texts[:2000] for w in t.split()[:20] if w.isalpha()] or ["x"]
+        names = list(dict.fromkeys(words))[:20_000]
+
+        def typo(s: str) -> str:
+            i = rnd.randrange(max(1, len(s)))
+            return [s[:i] + s[i + 1 :], s[:i] + rnd.choice("aeiorst") + s[i:], s.upper(), s[::-1]][i % 4]
+
+        def edited(xs: list[str]) -> list[str]:
+            out = []
+            for x in xs:
+                k = rnd.randrange(10)
+                if k == 0:
+                    continue
+                out.append(typo(x) + "\n" if k == 1 else x)
+                if k == 2:
+                    out.append(rnd.choice(xs))
+            return out
+
+        lines = [s + "\n" for t in self.texts[:3000] for s in t.split(". ") if s]
+        files = [lines[i : i + rnd.randint(20, 300)] for i in range(0, len(lines), 300)][:200]
+        for a in files:
+            b = edited(a)
+            list(D.unified_diff(a, b))
+            list(D.context_diff(a, b, n=1))
+            list(D.ndiff(a[:80], b[:80]))
+            sm = D.SequenceMatcher(None, a, b)
+            sm.get_opcodes()
+            list(sm.get_grouped_opcodes())
+        for a in files[:30]:
+            b = edited(a)
+            D.HtmlDiff().make_file(a[:100], b[:100])
+            D.HtmlDiff(wrapcolumn=60).make_table(a[:60], b[:60], context=True)
+        typos = [typo(n) for n in names]
+        paras = [t[:500] for t in self.texts[:2000]]
+        changed = [typo(typo(p)) for p in paras]
+        for t in self.threads:
+            D.ratio_batch(typos, names, threads=t)
+            D.ratio_batch(paras, changed, threads=t)
+            D.close_matches_batch(typos[:300], names[:5000], threads=t)
+            if pa is not None:
+                D.ratio_batch(pa.array(typos), pa.array(names), threads=t)
+        # Single calls in the hundreds of thousands, as callers make them: with fewer, the
+        # per-call path stays cold next to the rest of the profile.
+        for _ in range(20):
+            for x, y in zip(typos, names, strict=True):
+                D.SequenceMatcher(None, x, y).ratio()
+        for x, y in zip(typos[:50_000], names, strict=False):
+            sm = D.SequenceMatcher(lambda c: c == " ", x, y)
+            sm.quick_ratio()
+            sm.get_matching_blocks()
+            D.SequenceMatcher(None, x.encode(), y.encode()).ratio()
+        for x, y in zip(paras, changed, strict=True):
+            D.SequenceMatcher(None, x, y).ratio()
+        for q in typos[:300]:
+            D.get_close_matches(q, names[:10_000])
+
+    def packaging(self) -> None:
+        # bench/packaging/ would be imported as a namespace package named packaging; pyroid.packaging has to
+        # see that packaging is not installed.
+        here = Path(__file__).resolve().parent
+        saved = sys.path[:]
+        sys.path[:] = [p for p in sys.path if p and Path(p).resolve() != here]
+        try:
+            import pyroid.packaging as RP
+            from pyroid.packaging import markers as RM
+            from pyroid.packaging import requirements as RR
+            from pyroid.packaging import specifiers as RS
+            from pyroid.packaging import utils as RU
+            from pyroid.packaging import version as RV
+        finally:
+            sys.path[:] = saved
+
+        rnd = random.Random(TRAIN_SEED)
+
+        def version(i: int) -> str:
+            v = ".".join(str(rnd.randint(0, 40)) for _ in range(rnd.randint(1, 4)))
+            k = i % 11
+            if k == 1:
+                v += rnd.choice(["a", "b", "rc", "alpha", "c", "pre"]) + str(rnd.randint(0, 9))
+            elif k == 2:
+                v += f".post{rnd.randint(0, 9)}"
+            elif k == 3:
+                v += f".dev{rnd.randint(0, 9)}"
+            elif k == 4:
+                v += f"+local.{rnd.randint(0, 99)}"
+            elif k == 5:
+                v = f"{rnd.randint(1, 3)}!{v}"
+            elif k == 6:
+                v = "v" + v + "-1"
+            elif k == 7:
+                v += rnd.choice([" ", "-", "_"]) + "foo"
+            return v
+
+        versions = [version(i) for i in range(100_000)]
+        specs = [">=1.0,<2", "~=1.4.2", "!=1.5.*", "==2.*", ">3,<=20.1", "===1.0", ">=4.2,!=4.3.*,<30"]
+        specs += ["~=12.4", "", "<0.5.dev0", ">=1.0a1"]
+        markers = ['python_version < "3.10"', 'sys_platform == "linux" and platform_machine != "aarch64"']
+        markers += ["extra == 'test' or python_full_version >= '3.12.1'", 'os_name == "nt"']
+        markers += ['implementation_name == "cpython" and python_version in "3.11 3.12"']
+        reqs = ["requests>=2.8.1", "requests[security,socks]>=2.8.1,==2.8.*; python_version < '2.7'"]
+        reqs += ["numpy (>=1.26)", "pip @ https://example.org/pip-24.0-py3-none-any.whl", "attrs"]
+        reqs += ["foo[bar]~=1.2; extra == 'baz'", "Django>=4.2,<5.0", "zope.interface ; os_name != 'nt'"]
+        for t in self.threads:
+            RP.parse_batch(versions, errors="none", threads=t)
+            valid = [v for v in RP.parse_batch(versions, errors="none", threads=t) if v is not None]
+            RP.sort_versions(valid, threads=t)
+            for s in specs:
+                RP.contains_batch(s, valid, threads=t)
+                RP.filter_batch(s, valid, threads=t)
+            if pa is not None:
+                RP.parse_batch(pa.array(versions), errors="none", threads=t)
+                RP.contains_batch(specs[0], pa.array([str(v) for v in valid]), threads=t)
+        # Single calls in the hundreds of thousands, as callers make them: with fewer, the
+        # per-call path stays cold next to the rest of the profile.
+        objs = []
+        for _ in range(5):
+            for s in versions:
+                with contextlib.suppress(RV.InvalidVersion):
+                    objs.append(RV.Version(s))
+        sample = objs[:100_000]
+        sorted(sample)
+        set(sample)
+        for v in sample:
+            str(v)
+            _ = (v.public, v.base_version, v.is_prerelease, v.release, v.local)
+        parsed = RP.parse_batch(versions, errors="none")
+        strs = [s for s, v in zip(versions, parsed, strict=True) if v is not None]
+        sorted(strs[:50_000], key=RV.Version)
+        for s in specs * 20_000:
+            ss = RS.SpecifierSet(s)
+            ss.contains(sample[rnd.randrange(len(sample))])
+            ss.contains("1.6.2", prereleases=True)
+        for m in markers * 20_000:
+            RM.Marker(m).evaluate({"extra": "test"})
+        for r in reqs * 20_000:
+            str(RR.Requirement(r))
+        for n in ("Foo.Bar_baz", "requests", "Zope-Interface", "a__b") * 50_000:
+            RU.canonicalize_name(n)
+        for s in versions[:50_000]:
+            with contextlib.suppress(RV.InvalidVersion):
+                RU.canonicalize_version(s)
+        for f in ("pyroid-1.0.1-cp311-abi3-manylinux_2_34_x86_64.whl", "pip-24.0.tar.gz") * 20_000:
+            with contextlib.suppress(RU.InvalidWheelFilename, RU.InvalidSdistFilename):
+                RU.parse_wheel_filename(f) if f.endswith(".whl") else RU.parse_sdist_filename(f)
+
+    def sqlparse(self) -> None:
+        import pyroid.sqlparse as SP
+
+        rng = __import__("random").Random(TRAIN_SEED)
+        cols = [
+            "id",
+            "name",
+            '"Weird Col"',
+            "t.x",
+            "count(*)",
+            "sum(a + b) as s",
+            "case when a > 1 then 2 else 3 end",
+        ]
+        docs = []
+        for i in range(max(len(self.texts) // 2, 200)):
+            c = ", ".join(rng.sample(cols, 3))
+            docs.append(
+                f"-- q{i}\nSELECT {c} FROM t{i % 9} t JOIN u ON t.id = u.tid "
+                f"WHERE t.a = {i} AND t.b IN ('x', 'y') AND t.c BETWEEN 1 AND 2 GROUP BY 1 ORDER BY 2 DESC;\n"
+                f"insert into t (a, b) values ({i}, 'v{i}'), ({i + 1}, $$d$$);\nupdate t set a = a + 1 /* c */ where b = '{i}'"
+            )
+        opts = [
+            {},
+            {"reindent": True},
+            {"reindent_aligned": True},
+            {"keyword_case": "upper", "strip_comments": True},
+            {"reindent": True, "comma_first": True, "wrap_after": 40, "output_format": "python"},
+        ]
+        for t in self.threads:
+            for o in opts:
+                SP.format_batch(docs, threads=t, **o)
+            SP.split_batch(docs, threads=t)
+        for d in docs[: self.per_doc]:
+            SP.parse(d)
+            SP.split(d)
+            for o in opts:
+                SP.format(d, **o)
+
     def langdetect(self) -> None:
         import pyroid.langdetect as LD
 
@@ -317,7 +726,8 @@ class Trainer:
     def run(self) -> dict[str, float]:
         warnings.simplefilter("ignore")  # FallbackWarning and friends: the paths still run
         sections = ["ftfy", "translit", "fasttext", "filters", "dedup", "text", "multilingual", "jieba"]
-        sections += ["json_repair", "metrics", "datasketch", "langdetect"]
+        sections += ["json_repair", "metrics", "datasketch", "yaml", "tabulate", "dateutil", "jmespath"]
+        sections += ["difflib", "packaging", "sqlparse", "langdetect"]
         for name in sections:
             self.section(name, getattr(self, name))
         return self.timings

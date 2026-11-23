@@ -1,7 +1,7 @@
-# Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+# Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 """pyroid.json_repair: the API surface, options, errors, delegation and the batch function.
 
-Results are compared with json_repair 0.64.5 where it is installed (the test group pins it);
+Results are compared with json_repair 0.64.9 where it is installed (the test group pins it);
 test_json_repair_parity.py and test_json_repair_upstream.py hold the differential suites.
 """
 
@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import json
 import math
+import re
 import sys
 import warnings
 from pathlib import Path
@@ -106,8 +107,73 @@ def test_types_of_numbers_and_literals() -> None:
 def test_empty_result_is_empty_string() -> None:
     assert jr.repair_json("") == ""
     assert jr.repair_json("nothing") == ""
-    assert jr.repair_json('""') == ""
+    assert jr.repair_json('"unterminated') == ""
     assert jr.loads("nothing") == ""
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_valid_empty_string_is_json(strict: bool) -> None:
+    # json_repair 0.64.6: valid JSON holding "" is written as JSON; only a failed repair gives "".
+    assert jr.repair_json('""', strict=strict) == '""'
+    assert jr.repair_json('""', strict=strict, indent=2, sort_keys=True) == '""'
+    assert jr.repair_json('""', strict=strict, cls=json.JSONEncoder) == '""'
+    assert jr.repair_json('""', strict=strict, return_objects=True) == ""
+    assert jr.repair_json('""', strict=strict, logging=True) == ("", [])
+    assert jr.repair_json('""', skip_json_loads=True) == ""
+    assert jr.repair_json_batch(['""', "x"]) == ['""', ""]
+
+
+@pytest.mark.parametrize(
+    ("doc", "expected", "log"),
+    [
+        # json_repair 0.64.8: consecutive commas after an object value's number.
+        ('{"a": 1,, "b": 2}', {"a": 1, "b": 2}, "Found consecutive commas after an object number"),
+        ('{"a":1,,2,"b":3}', {"a": 1, "b": 3}, "Discarded stray number between object fields"),
+        ('{"a": 1,,2}', {"a": 1}, "Found consecutive commas after an object number"),
+        # json_repair 0.64.8: a dangling exponent is dropped.
+        ("[1e, 2]", [1, 2], "Discarded dangling exponent from number"),
+        (
+            '{"n": 1.5E-, "next": 2}',
+            {"n": 1.5, "next": 2},
+            "Discarded dangling exponent from number",
+        ),
+    ],
+)
+def test_number_repairs(doc: str, expected: Any, log: str) -> None:
+    for skip in (False, True):
+        value, entries = jr.repair_json(doc, logging=True, skip_json_loads=skip)
+        assert value == expected
+        assert log in [e["text"] for e in entries]
+        assert same(
+            jr.loads(doc, logging=True, skip_json_loads=skip),
+            ref.loads(doc, logging=True, skip_json_loads=skip),
+        )
+        with pytest.raises(ValueError, match="strict mode") as info:
+            jr.repair_json(doc, strict=True, skip_json_loads=skip)
+        with pytest.raises(ValueError, match=f"^{re.escape(str(info.value))}$"):
+            ref.repair_json(doc, strict=True, skip_json_loads=skip)
+
+
+class _Pipe(io.StringIO):
+    """A text stream that cannot seek (json_repair 0.64.6 reads those whole, as a str)."""
+
+    def seekable(self) -> bool:
+        return False
+
+    def tell(self) -> int:
+        raise OSError("not seekable")
+
+
+@pytest.mark.parametrize("doc", ['{"key": 1}', '{"key": }', 'text [1, 2] {"a": 1} more'])
+def test_load_non_seekable_stream(doc: str) -> None:
+    load: Any = jr.load  # the option sets below cross the stubs' overloads
+    repair: Any = jr.repair_json
+    for kw in ({}, {"skip_json_loads": True}, {"logging": True}):
+        fd, ref_fd = _Pipe("ignored" + doc), _Pipe("ignored" + doc)
+        fd.read(7)
+        ref_fd.read(7)
+        assert same(load(fd, **kw), ref.load(ref_fd, **kw))
+        assert same(load(_Pipe(doc), **kw), repair(doc, return_objects=True, **kw))
 
 
 @pytest.mark.parametrize(
@@ -175,6 +241,16 @@ def test_load_and_from_file(tmp_path: Path) -> None:
     assert same(jr.load(io.StringIO(doc)), ref.load(io.StringIO(doc)))
     assert same(jr.load(io.StringIO('{"a": 1}')), {"a": 1})
     assert jr.repair_json(json_fd=io.StringIO(doc)) == ref.repair_json(json_fd=io.StringIO(doc))
+
+
+@pytest.mark.parametrize("unit", ["[", '{"a":', '{"a":[', "[{", "{[", "[[{", "[{["])
+def test_max_depth_counts_levels_in_any_mix(unit: str) -> None:
+    # An empty object re-read as an array is one level: "[{" * 334 used to raise at 668.
+    per = unit.count("[") + unit.count("{")
+    n = jr.MAX_DEPTH // per
+    assert isinstance(jr.repair_json(unit * n), str)
+    with pytest.raises(jr.NestingError):
+        jr.repair_json(unit * (n + 1))
 
 
 def test_nesting_error() -> None:
@@ -267,6 +343,10 @@ def test_delegation_without_json_repair(monkeypatch: pytest.MonkeyPatch) -> None
         jr.repair_json("{}", schema={"type": "object"})
     # The Rust port itself needs nothing.
     assert jr.repair_json("{'a': 1}") == '{"a": 1}'
+    col = _testing.column(["{}", "{'a': '\U0010fffe'"])
+    with pytest.raises(pyroid.PyroidError, match="json_repair is not installed") as info:
+        jr.repair_json_batch(col)
+    assert any("row 1 of the Arrow input" in n for n in info.value.__notes__)
 
 
 @pytest.mark.thread_unsafe
@@ -339,6 +419,34 @@ def test_batch_surrogates() -> None:
     assert jr.repair_json_batch(docs) == [ref.repair_json(d) for d in docs]
 
 
+@pytest.mark.parametrize("large", [False, True])
+def test_batch_arrow_result_with_lone_surrogate(large: bool) -> None:
+    # json_repair keeps the escape \ud800 (and an escaped pair it parses itself) as lone
+    # surrogates; with ensure_ascii=False its str holds them, which Arrow cannot. The port
+    # stores them in U+10F800..U+10FFFF, which must never reach the column.
+    docs = ['{"ok": 1,}', '{"emoji": "\\ud83d\\ude00", "ok": true,}', '"\\ud800"']
+    col = _testing.column(docs, large=large, chunks=2)
+    want = [ref.repair_json(d, ensure_ascii=False) for d in docs]
+    assert jr.repair_json_batch(docs, ensure_ascii=False) == want
+    with pytest.raises(UnicodeEncodeError) as info:
+        jr.repair_json_batch(col, ensure_ascii=False)
+    assert info.value.object == want[1]
+    assert any("row 1 of the Arrow input" in n for n in info.value.__notes__)
+    for kw in [{}, {"ensure_ascii": True}]:
+        assert jr.repair_json_batch(col, **kw).to_pylist() == [ref.repair_json(d) for d in docs]
+    # A result without one is unaffected.
+    assert jr.repair_json_batch(_testing.column(docs[:1]), ensure_ascii=False).to_pylist() == [
+        want[0]
+    ]
+
+
+def test_batch_arrow_error_names_the_row() -> None:
+    col = _testing.column(["{}", None, "[1]", '{"a" 1}'], chunks=2)
+    with pytest.raises(ValueError, match="Missing ':'") as info:
+        jr.repair_json_batch(col, strict=True, skip_json_loads=True)
+    assert any("row 3 of the Arrow input" in n for n in info.value.__notes__)
+
+
 @pytest.mark.thread_unsafe
 def test_batch_delegates_reserved_items() -> None:
     docs = ["{'a': 1}", "{'a': '\U0010fffe'}"]
@@ -347,8 +455,32 @@ def test_batch_delegates_reserved_items() -> None:
         assert jr.repair_json_batch(docs) == [ref.repair_json(d) for d in docs]
 
 
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize("large", [False, True])
+def test_batch_arrow_delegates_only_the_reserved_rows(large: bool) -> None:
+    # It raised PyroidError for the whole column; a list delegated just those documents.
+    docs: list[str | None] = [
+        "{'a': 1",
+        "{'a': '\U0010fffe'",
+        None,
+        '"\\udbff\\udfff"',
+        "[1, 2,",
+    ]
+    want = [None if d is None else ref.repair_json(d) for d in docs]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pyroid.FallbackWarning)
+        col = jr.repair_json_batch(_testing.column(docs, large=large, chunks=2))
+        assert col.to_pylist() == want
+        got = jr.repair_json_batch(
+            _testing.column(docs, chunks=2), ensure_ascii=False, indent=1
+        ).to_pylist()
+    assert got == [
+        None if d is None else ref.repair_json(d, ensure_ascii=False, indent=1) for d in docs
+    ]
+
+
 def test_constants() -> None:
-    assert jr.JSON_REPAIR_VERSION == "0.64.5"
+    assert jr.JSON_REPAIR_VERSION == "0.64.9"
     assert jr.DELEGATED == ("schema",)
     assert jr.MAX_DEPTH == 1000
     assert jr.repair_json.__module__ == "pyroid.json_repair"

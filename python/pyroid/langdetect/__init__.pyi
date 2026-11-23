@@ -94,7 +94,8 @@ def detect_batch(
     a second.
 
     Args:
-        texts: A list or tuple of str, or an Arrow string array (pyarrow, polars, ...).
+        texts: A list or tuple of str, or an Arrow string array (pyarrow, polars, ...). A
+            single str is not accepted.
         errors: ``"raise"``: the first text langdetect cannot detect (no letters, only a URL)
             raises :class:`LangDetectException`, with a note naming its index; ``"none"``: its
             result is ``None``.
@@ -107,7 +108,8 @@ def detect_batch(
 
     Raises:
         LangDetectException: With ``errors="raise"``, for a text with no features.
-        TypeError: An item is not a str (langdetect's own message, with a note).
+        TypeError: `texts` is not a list, tuple or Arrow string array, or an item is not a str
+            (langdetect's own message, with a note).
         ValueError: `errors` is not ``"raise"`` or ``"none"``.
     """
 
@@ -142,7 +144,9 @@ def detect_langs_batch(
         Arrow null, and with ``errors="none"`` for a text with no features.
 
     Raises:
-        As for :func:`detect_batch`.
+        LangDetectException: With ``errors="raise"``, for a text with no features.
+        TypeError: `texts` is not a list, tuple or Arrow string array, or an item is not a str.
+        ValueError: `errors` is not ``"raise"`` or ``"none"``.
     """
 
 @overload

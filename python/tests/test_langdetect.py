@@ -426,10 +426,8 @@ def test_another_langdetect_release_warns(
             warnings.simplefilter("always")
             import pyroid
             pyroid.patch("langdetect")  # imports pyroid.langdetect
-            import pyroid.langdetect._compat as c
-            c.check_version()  # once per process
         import pyroid.integrations as pi
-        ours = [x for x in w if x.category is RuntimeWarning]
+        ours = [x for x in w if x.category is pyroid.VersionMismatchWarning]
         versions = [x for x in w if x.category is pi.PatchWarning and "{version}" in str(x.message)]
         print(len(ours), len(versions), all("{version}" in str(x.message) for x in ours))
         print(*{{x.filename for x in ours}})

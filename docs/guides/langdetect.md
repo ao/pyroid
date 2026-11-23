@@ -190,14 +190,17 @@ submodules) give pyroid's classes. `langdetect.detector_factory` reads and sets 
 
 pyroid reproduces langdetect 1.0.9. Releases 1.0.7 and 1.0.8 have the same detection code and
 profiles, and detect the same. With another release installed, `import pyroid.langdetect` (and
-so `pyroid.patch("langdetect")`) warns once per process with a `RuntimeWarning`: detections
-follow 1.0.9, and `Language`, `LangDetectException` and `ErrorCode` are the installed
-release's classes. To silence it:
+so `pyroid.patch("langdetect")`) warns once per process with a
+[`pyroid.VersionMismatchWarning`](../compatibility.md#installed-versions): detections follow
+1.0.9, and `Language`, `LangDetectException` and `ErrorCode` are the installed release's classes.
+To silence it:
 
 ```python
 import warnings
 
-warnings.filterwarnings("ignore", message="pyroid.langdetect reproduces", category=RuntimeWarning)
+import pyroid
+
+warnings.simplefilter("ignore", pyroid.VersionMismatchWarning)
 ```
 
 ## Differences from langdetect

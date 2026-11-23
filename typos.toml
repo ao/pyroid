@@ -61,7 +61,13 @@ extend-exclude = [
   # Charts copied byte for byte from bench/results/ (matplotlib SVGs).
   "docs/assets/*.svg",
   "parity/data/",
+  # python-dateutil's own code, kept as released (its comments have typos).
+  "python/pyroid/dateutil/_reference.py",
+  "python/pyroid/dateutil/_isoreference.py",
+  "python/pyroid/dateutil/_tzlite.py",
   "parity/tests/",
+  # sqlparse 0.6.1's keyword list, vendored as it is (its keywords include "TRANSATION").
+  "python/pyroid/sqlparse/_own_keywords.py",
   "parity/pyroid_parity/refs.py",
   "parity/pyroid_parity/strategies.py",
   # cargo-fuzz corpora: arbitrary bytes and generated text, kept exactly as the fuzzers wrote them.
@@ -86,6 +92,13 @@ extend-exclude = [
 ]
 
 [default.extend-words]
+# German month names: pyroid.dateutil's parserinfo tests and guide parse German dates.
+Januar = "Januar"
+Februar = "Februar"
+Juni = "Juni"
+Juli = "Juli"
+Oktober = "Oktober"
+Dezember = "Dezember"
 # numpy's ndarray.flags.writeable (pyroid.datasketch keeps cached arrays read-only).
 writeable = "writeable"
 # datatrove's parameter names (line_punct_thr, short_line_thr), kept for drop-in parity.
@@ -123,6 +136,8 @@ arro3 = "arro3"
 # jusText, the paragraph classifier Trafilatura falls back on (github.com/miso-belica/jusText); typos
 # would otherwise split it into "jus" + "Text".
 jusText = "jusText"
+# difflib's find_longest_match(alo, ahi, blo, bhi) parameter names, kept in pyroid.difflib's port.
+alo = "alo"
 
 # bench/gates.py names near-duplicate pairs `nd` (not a misspelt "and"). typos matches file types by file name
 # only, so this type covers files named gates.py; there is one, and every other word in it is still checked.

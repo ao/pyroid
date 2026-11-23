@@ -1,0 +1,328 @@
+{
+ "machine": {
+  "python": "3.12.16",
+  "platform": "Linux-6.18.62-127.179.amzn2023.aarch64-aarch64-with-glibc2.36",
+  "cpus": 64,
+  "cpu": "0xd4f",
+  "mem": "129538956 kB",
+  "loadavg": [
+   0.4462890625,
+   0.83544921875,
+   2.13818359375
+  ],
+  "jmespath": "1.1.0",
+  "pyroid": "1.0.1"
+ },
+ "sections": {
+  "small": [
+   {
+    "case": "field, search()",
+    "expression": "Reservations",
+    "jmespath_us": 1.6152417101157648,
+    "pyroid_us": 0.1923813084153697,
+    "jmespath_median_us": 1.6264365106905934,
+    "pyroid_median_us": 0.19296024079197352,
+    "speedup": 8.396042855828295
+   },
+   {
+    "case": "field, compiled",
+    "expression": "Reservations",
+    "jmespath_us": 1.250154416252568,
+    "pyroid_us": 0.11023347604176759,
+    "jmespath_median_us": 1.2617209228138533,
+    "pyroid_median_us": 0.11084623613005154,
+    "speedup": 11.340968833994522
+   },
+   {
+    "case": "path, search()",
+    "expression": "Reservations[0].Instances[0].State.Name",
+    "jmespath_us": 4.5691556728168745,
+    "pyroid_us": 0.2862184248891069,
+    "jmespath_median_us": 4.597213720350826,
+    "pyroid_median_us": 0.28773944750567343,
+    "speedup": 15.963876799989933
+   },
+   {
+    "case": "path, compiled",
+    "expression": "Reservations[0].Instances[0].State.Name",
+    "jmespath_us": 4.192686002198397,
+    "pyroid_us": 0.19616482869959398,
+    "jmespath_median_us": 4.214485545785857,
+    "pyroid_median_us": 0.19711518928475105,
+    "speedup": 21.373280980042857
+   },
+   {
+    "case": "projection, search()",
+    "expression": "Reservations[].Instances[].InstanceId",
+    "jmespath_us": 4.661385331433215,
+    "pyroid_us": 0.5322944554052517,
+    "jmespath_median_us": 4.6765026481794445,
+    "pyroid_median_us": 0.5337110541879844,
+    "speedup": 8.757155525665514
+   },
+   {
+    "case": "projection, compiled",
+    "expression": "Reservations[].Instances[].InstanceId",
+    "jmespath_us": 4.256194973960622,
+    "pyroid_us": 0.43608775542197925,
+    "jmespath_median_us": 4.271009098718256,
+    "pyroid_median_us": 0.4369765563459979,
+    "speedup": 9.759950654523939
+   },
+   {
+    "case": "filter, search()",
+    "expression": "Reservations[].Instances[?State.Name=='running'].InstanceId[]",
+    "jmespath_us": 12.904597976004789,
+    "pyroid_us": 0.8376245577370776,
+    "jmespath_median_us": 12.942934562641744,
+    "pyroid_median_us": 0.8386808194498063,
+    "speedup": 15.406183900419286
+   },
+   {
+    "case": "filter, compiled",
+    "expression": "Reservations[].Instances[?State.Name=='running'].InstanceId[]",
+    "jmespath_us": 12.469502181206142,
+    "pyroid_us": 0.721751620397926,
+    "jmespath_median_us": 12.497590402779947,
+    "pyroid_median_us": 0.7302819375768363,
+    "speedup": 17.27672211436295
+   },
+   {
+    "case": "multi-select, search()",
+    "expression": "Reservations[].Instances[].{id: InstanceId, type: InstanceType}",
+    "jmespath_us": 8.398375411070317,
+    "pyroid_us": 0.7251820851046777,
+    "jmespath_median_us": 8.456841560896867,
+    "pyroid_median_us": 0.7269413933955615,
+    "speedup": 11.581057480009367
+   },
+   {
+    "case": "multi-select, compiled",
+    "expression": "Reservations[].Instances[].{id: InstanceId, type: InstanceType}",
+    "jmespath_us": 7.982986699172141,
+    "pyroid_us": 0.6147187939447614,
+    "jmespath_median_us": 8.056981257494181,
+    "pyroid_median_us": 0.6202881432053295,
+    "speedup": 12.986404153912192
+   },
+   {
+    "case": "tag lookup, search()",
+    "expression": "Reservations[].Instances[].Tags[?Key=='Name'].Value[]",
+    "jmespath_us": 18.119020526491052,
+    "pyroid_us": 1.3299987490831513,
+    "jmespath_median_us": 18.223337796061134,
+    "pyroid_median_us": 1.3343584905794705,
+    "speedup": 13.623336517407699
+   },
+   {
+    "case": "tag lookup, compiled",
+    "expression": "Reservations[].Instances[].Tags[?Key=='Name'].Value[]",
+    "jmespath_us": 17.687979668854574,
+    "pyroid_us": 1.2348298168745004,
+    "jmespath_median_us": 17.789783885702317,
+    "pyroid_median_us": 1.2380436629218121,
+    "speedup": 14.324224623620548
+   },
+   {
+    "case": "sort_by, search()",
+    "expression": "sort_by(Reservations[].Instances[], &LaunchTime)[-1].InstanceId",
+    "jmespath_us": 12.493167315053899,
+    "pyroid_us": 0.8790111617429991,
+    "jmespath_median_us": 12.533862515895182,
+    "pyroid_median_us": 0.8831122128130898,
+    "speedup": 14.212751622267328
+   },
+   {
+    "case": "sort_by, compiled",
+    "expression": "sort_by(Reservations[].Instances[], &LaunchTime)[-1].InstanceId",
+    "jmespath_us": 12.03688302552895,
+    "pyroid_us": 0.7711429080620041,
+    "jmespath_median_us": 12.101869966921683,
+    "pyroid_median_us": 0.7731897864983581,
+    "speedup": 15.609147020205908
+   },
+   {
+    "case": "join, search()",
+    "expression": "join(', ', Reservations[].Instances[].InstanceId)",
+    "jmespath_us": 7.681666005968668,
+    "pyroid_us": 0.8359042971079408,
+    "jmespath_median_us": 7.721390037206847,
+    "pyroid_median_us": 0.8399675760264979,
+    "speedup": 9.189647705539585
+   },
+   {
+    "case": "join, compiled",
+    "expression": "join(', ', Reservations[].Instances[].InstanceId)",
+    "jmespath_us": 7.296152419609914,
+    "pyroid_us": 0.7106421344148199,
+    "jmespath_median_us": 7.321739516438327,
+    "pyroid_median_us": 0.7145870881735438,
+    "speedup": 10.266985401334173
+   }
+  ],
+  "uncached": [
+   {
+    "case": "parse + search",
+    "expression": "Reservations[].Instances[?State.Name=='running' && Tags[?Value=='web-{0}']].InstanceId",
+    "jmespath_us": 52.329999004045185,
+    "pyroid_us": 5.637443826545665,
+    "jmespath_median_us": 53.93974651363884,
+    "pyroid_median_us": 5.664140375582563,
+    "speedup": 9.282575687518701
+   }
+  ],
+  "records_10000": [
+   {
+    "case": "projection",
+    "expression": "[*].address.city",
+    "jmespath_us": 7893.744333159702,
+    "pyroid_us": 387.35831450990634,
+    "jmespath_median_us": 7955.64583313535,
+    "pyroid_median_us": 388.6404354841121,
+    "speedup": 20.378404277050382
+   },
+   {
+    "case": "filter",
+    "expression": "[?age > `30`].name",
+    "jmespath_us": 16816.43699976121,
+    "pyroid_us": 692.5328285693207,
+    "jmespath_median_us": 16878.100499525317,
+    "pyroid_median_us": 694.0339571363958,
+    "speedup": 24.282512403782643
+   },
+   {
+    "case": "filter, and",
+    "expression": "[?age > `30` && address.city == 'Oslo'].id",
+    "jmespath_us": 34244.02699965867,
+    "pyroid_us": 1402.2826470168452,
+    "jmespath_median_us": 34335.297999859904,
+    "pyroid_median_us": 1403.6177941199962,
+    "speedup": 24.420203068552492
+   },
+   {
+    "case": "multi-select",
+    "expression": "[*].{n: name, c: address.city}",
+    "jmespath_us": 18468.766998921637,
+    "pyroid_us": 1240.8020811071274,
+    "jmespath_median_us": 18705.742999372887,
+    "pyroid_median_us": 1242.3752972657944,
+    "speedup": 14.88453902530737
+   },
+   {
+    "case": "sort_by",
+    "expression": "sort_by(@, &age)[0].id",
+    "jmespath_us": 6826.879428574883,
+    "pyroid_us": 455.4588623759294,
+    "jmespath_median_us": 6878.402714262067,
+    "pyroid_median_us": 455.72301835342904,
+    "speedup": 14.989014360072042
+   },
+   {
+    "case": "max_by",
+    "expression": "max_by(@, &score).id",
+    "jmespath_us": 6131.363999884343,
+    "pyroid_us": 441.6559818061863,
+    "jmespath_median_us": 6154.161624863264,
+    "pyroid_median_us": 443.1514454567646,
+    "speedup": 13.882669436083841
+   },
+   {
+    "case": "sum",
+    "expression": "sum([*].age)",
+    "jmespath_us": 3427.8565713715843,
+    "pyroid_us": 364.91211278900624,
+    "jmespath_median_us": 3443.7182143197524,
+    "pyroid_median_us": 366.25114285528895,
+    "speedup": 9.39364973437751
+   },
+   {
+    "case": "contains",
+    "expression": "[?contains(tags, 'a')] | length(@)",
+    "jmespath_us": 21780.87799984496,
+    "pyroid_us": 1131.9235581627147,
+    "jmespath_median_us": 21968.30550019513,
+    "pyroid_median_us": 1134.037348852279,
+    "speedup": 19.24235770408265
+   }
+  ],
+  "records_1000000": [
+   {
+    "case": "projection",
+    "expression": "[*].address.city",
+    "jmespath_us": 775804.9399999436,
+    "pyroid_us": 44369.85000029381,
+    "jmespath_median_us": 786555.1649992994,
+    "pyroid_median_us": 44558.19299982977,
+    "speedup": 17.48495746536908
+   },
+   {
+    "case": "filter",
+    "expression": "[?age > `30`].name",
+    "jmespath_us": 1673780.8109992328,
+    "pyroid_us": 76581.89299945661,
+    "jmespath_median_us": 1687667.23599947,
+    "pyroid_median_us": 76674.58200012334,
+    "speedup": 21.856090851803692
+   },
+   {
+    "case": "filter, and",
+    "expression": "[?age > `30` && address.city == 'Oslo'].id",
+    "jmespath_us": 3447838.1640001317,
+    "pyroid_us": 149492.84700014687,
+    "jmespath_median_us": 3454163.492999214,
+    "pyroid_median_us": 149836.89899963792,
+    "speedup": 23.063566138363427
+   },
+   {
+    "case": "multi-select",
+    "expression": "[*].{n: name, c: address.city}",
+    "jmespath_us": 1912915.2559999055,
+    "pyroid_us": 179452.75899910484,
+    "jmespath_median_us": 1934764.6760015776,
+    "pyroid_median_us": 180479.86600140575,
+    "speedup": 10.659714939291893
+   },
+   {
+    "case": "sort_by",
+    "expression": "sort_by(@, &age)[0].id",
+    "jmespath_us": 722047.7490009216,
+    "pyroid_us": 77624.19199934811,
+    "jmespath_median_us": 725282.3099988746,
+    "pyroid_median_us": 79196.14300044486,
+    "speedup": 9.301839161262837
+   },
+   {
+    "case": "max_by",
+    "expression": "max_by(@, &score).id",
+    "jmespath_us": 620078.5330001963,
+    "pyroid_us": 48368.149999078014,
+    "jmespath_median_us": 624772.9920014535,
+    "pyroid_median_us": 48621.88700099068,
+    "speedup": 12.819976224271885
+   },
+   {
+    "case": "sum",
+    "expression": "sum([*].age)",
+    "jmespath_us": 347972.6329987898,
+    "pyroid_us": 43562.96799960546,
+    "jmespath_median_us": 348914.8110002134,
+    "pyroid_median_us": 43866.966998393764,
+    "speedup": 7.987808199889899
+   },
+   {
+    "case": "contains",
+    "expression": "[?contains(tags, 'a')] | length(@)",
+    "jmespath_us": 2190003.0329998117,
+    "pyroid_us": 120104.59299926879,
+    "jmespath_median_us": 2199991.449000663,
+    "pyroid_median_us": 120358.24099984893,
+    "speedup": 18.234132253486298
+   }
+  ]
+ },
+ "loadavg_after": [
+  0.97509765625,
+  0.91650390625,
+  1.9296875
+ ]
+}

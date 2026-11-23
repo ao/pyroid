@@ -100,7 +100,7 @@ type Types<'py> = (Vec<RougeType>, Vec<Bound<'py, PyAny>>);
 /// loop in Python). The first invalid type raises rouge-score's `ValueError`.
 fn parse_types<'py>(types: &Bound<'py, PyAny>) -> PyResult<Option<Types<'py>>> {
     let items: Vec<Bound<'py, PyAny>> = if let Ok(l) = types.cast_exact::<PyList>() {
-        l.iter().collect()
+        crate::input::list_items(l).iter().collect()
     } else if let Ok(t) = types.cast_exact::<PyTuple>() {
         t.iter().collect()
     } else {
@@ -271,8 +271,8 @@ fn rouge_score_batch<'py>(
         _ => None,
     };
     let scorer = Scorer::new(types, use_stemmer);
-    let results = py
-        .detach(|| -> Result<Vec<Option<Vec<Score>>>, BatchError> {
+    let results =
+        crate::interrupt::detach_batch(py, || -> Result<Vec<Option<Vec<Score>>>, BatchError> {
             let tr = rows(&targets)?;
             let pr = rows(&predictions)?;
             Ok(par::map(n, t, |i| {
@@ -297,7 +297,7 @@ fn rouge_score_batch<'py>(
 /// then scores it).
 fn token_list(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<PyBackedStr>>> {
     let items: Vec<Bound<'_, PyAny>> = if let Ok(l) = obj.cast_exact::<PyList>() {
-        l.iter().collect()
+        crate::input::list_items(l).iter().collect()
     } else if let Ok(t) = obj.cast_exact::<PyTuple>() {
         t.iter().collect()
     } else {
@@ -320,7 +320,7 @@ fn token_list(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<PyBackedStr>>> {
 /// A list of token lists; `None` as for [`token_list`].
 fn sentence_lists(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<Vec<PyBackedStr>>>> {
     let items: Vec<Bound<'_, PyAny>> = if let Ok(l) = obj.cast_exact::<PyList>() {
-        l.iter().collect()
+        crate::input::list_items(l).iter().collect()
     } else if let Ok(t) = obj.cast_exact::<PyTuple>() {
         t.iter().collect()
     } else {
@@ -384,8 +384,7 @@ fn rouge_score_tokens<'py>(
         });
     }
     let t = crate::input::threads(threads);
-    let scores = py
-        .detach(|| par::map(work.len(), t, |i| work[i].run()))
+    let scores = crate::interrupt::detach_batch(py, || par::map(work.len(), t, |i| work[i].run()))
         .map_err(|e| BatchError::from(e).into_pyerr(py))?;
     let out = scores
         .into_iter()

@@ -1090,8 +1090,14 @@ impl RawStream {
 
     /// `LimitReader.limit`: the bytes left (`None` when the record has no length).
     #[getter]
-    fn limit(&self) -> Option<i64> {
-        lock_plain(&self.handle).limit()
+    fn limit(&self, py: Python<'_>) -> PyResult<Option<i64>> {
+        // The reader's lock first, as every other method takes it: a read of
+        // this record on another thread holds the record's own lock while it
+        // calls `fh.read()`, which may release the GIL (taking that lock
+        // here, attached, could then deadlock), and from inside that read
+        // this is the reader's re-entry error, not a deadlock.
+        let _reader = self.reader.get().state.lock(py)?;
+        Ok(lock_plain(&self.handle).limit())
     }
 
     /// A decoder over this stream (`content_stream()`), or `None` where warcio returns the
@@ -1515,7 +1521,12 @@ impl RowBatch {
     /// The rows whose text needs Python: `[(row, conversion, mime_type, content, utf8), ...]`
     /// for rows without a payload type (`magic`) or whose content is not UTF-8 (`cchardet`).
     fn pending<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let guard = lock_plain(&self.rows);
+        // Held while Python objects are made (which may run the GC): another
+        // thread waits for it detached, so a stop-the-world never waits for it.
+        let guard = self
+            .rows
+            .lock_py_attached(py)
+            .unwrap_or_else(PoisonError::into_inner);
         let out = PyList::empty(py);
         let Some(rows) = guard.as_ref() else {
             return Ok(out);
@@ -1636,7 +1647,7 @@ fn chunk_values<'py>(py: Python<'py>, chunk: &Chunk) -> PyResult<Bound<'py, PyLi
                 }
             }
         }
-        Chunk::Utf8(_) | Chunk::Bool(_) => {
+        Chunk::Utf8(_) | Chunk::Bool(_) | Chunk::TimestampUs(_) | Chunk::TimestampUsUtc(_) => {
             return Err(PyRuntimeError::new_err(
                 "pyroid.warc: unexpected column type",
             ));

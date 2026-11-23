@@ -10,23 +10,32 @@ __all__ = [
     "FallbackWarning",
     "InputError",
     "PyroidError",
+    "VersionMismatchWarning",
     "__version__",
+    "_numpy_ready",
     "_testing",
     "datasketch",
+    "dateutil",
     "dedup",
+    "difflib",
     "fasttext",
     "filters",
     "ftfy",
     "jieba",
+    "jmespath",
     "json_repair",
     "langdetect",
     "metrics",
     "nemo",
     "nltk",
+    "packaging",
+    "sqlparse",
+    "tabulate",
     "text",
     "trafilatura",
     "translit",
     "warc",
+    "yaml",
 ]
 
 __version__: Final[str]
@@ -37,17 +46,27 @@ ftfy: ModuleType
 fasttext: ModuleType
 filters: ModuleType
 dedup: ModuleType
+difflib: ModuleType
 translit: ModuleType
 metrics: ModuleType
 json_repair: ModuleType
 datasketch: ModuleType
+dateutil: ModuleType
 jieba: ModuleType
+jmespath: ModuleType
 langdetect: ModuleType
 nltk: ModuleType
+packaging: ModuleType
 nemo: ModuleType
+sqlparse: ModuleType
 trafilatura: ModuleType
 warc: ModuleType
+yaml: ModuleType
+tabulate: ModuleType
 _testing: ModuleType
+
+def _numpy_ready() -> None:
+    """Look NumPy's C API up now (for modules that import numpy at import)."""
 
 class PyroidError(Exception):
     """Base class for all pyroid errors."""
@@ -57,6 +76,9 @@ class InputError(PyroidError, TypeError):
 
 class FallbackWarning(RuntimeWarning):
     """A pyroid function delegated this call to the incumbent library (slow path)."""
+
+class VersionMismatchWarning(UserWarning):
+    """The installed incumbent library is not the release pyroid reproduces: results can differ."""
 
 @final
 class Column(Generic[_T_co]):

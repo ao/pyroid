@@ -11,6 +11,7 @@ pool, each one as a separate ``detect`` call would.
 
 from typing import Any as _Any
 
+from pyroid import _versions
 from pyroid._pyroid import langdetect as _native
 from pyroid.langdetect import _compat
 from pyroid.langdetect._compat import LANGDETECT_VERSION, ErrorCode, LangDetectException, Language
@@ -42,7 +43,12 @@ __all__ = [
 
 __version__ = LANGDETECT_VERSION
 
-_compat.check_version()
+_versions.check(
+    __name__,
+    "langdetect",
+    f"langdetect=={LANGDETECT_VERSION}",
+    same=tuple(f"langdetect=={v}" for v in _compat.SAME_RELEASES),
+)
 
 
 def _errors_none(errors: _Any) -> bool:

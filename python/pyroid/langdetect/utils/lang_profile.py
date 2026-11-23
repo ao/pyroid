@@ -33,7 +33,7 @@ class LangProfile:
         self.n_words = n_words
 
     def add(self, gram: Any) -> None:
-        """Add one n-gram."""
+        """Count one n-gram."""
         if self.name is None or gram is None:  # Illegal
             return
         length = len(gram)
@@ -43,7 +43,7 @@ class LangProfile:
         self.freq[gram] += 1
 
     def omit_less_freq(self) -> None:
-        """Remove rare n-grams, and Latin ones from a profile with few Latin letters."""
+        """Drop rare n-grams, and Latin ones from a profile with few Latin letters."""
         if self.name is None:  # Illegal
             return
         threshold = max(self.n_words[0] // self.LESS_FREQ_RATIO, self.MINIMUM_FREQ)

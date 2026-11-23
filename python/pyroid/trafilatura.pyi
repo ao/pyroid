@@ -24,7 +24,8 @@ function and reason): the other output formats, ``include_formatting``, ``includ
 ``include_images``, metadata (``with_metadata``, ``only_with_metadata``, ``url_blacklist``,
 ``author_blacklist``, :func:`extract_with_metadata`), ``target_language``, ``prune_xpath``,
 ``options=Extractor(...)``, ``deduplicate=trafilatura.deduplication.LRUCache(...)``, an lxml
-tree or a response object as input, bytes that are compressed or not UTF-8, a negative size
+tree as input (a response object's ``data`` is read natively), bytes that are compressed or not
+UTF-8, a negative size
 setting, and ``sys.set_int_max_str_digits()`` limits other than 4300. Without trafilatura, or
 with another version of it, these raise ``pyroid.PyroidError`` and say why.
 

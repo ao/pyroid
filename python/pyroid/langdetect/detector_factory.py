@@ -75,7 +75,12 @@ class DetectorFactory:
 
     @property
     def word_lang_prob_map(self) -> Mapping[Any, list[Any]]:
-        """n-gram -> probability per language, a read-only view of the loaded profiles."""
+        """n-gram -> probability per language, a read-only view of the loaded profiles.
+
+        It is langdetect's dict itself when a profile probability is not a float (numpy
+        counts) or a map of another shape was assigned; detections then run langdetect's
+        Python algorithm on it.
+        """
         if self._exotic is not None:
             return self._exotic  # type: ignore[no-any-return]
         return _WordMap(self._profiles)
@@ -89,7 +94,13 @@ class DetectorFactory:
             self._profiles, self._exotic = _native._Profiles(), word_map
 
     def load_profile(self, profile_directory: Any) -> None:
-        """Load every profile file in `profile_directory` (in ``os.listdir`` order)."""
+        """Load every profile file in `profile_directory`, in ``os.listdir`` order.
+
+        Raises:
+            LangDetectException: No files (``NeedLoadProfileError``), a file that cannot be
+                read (``FileLoadError``) or parsed, or a language loaded twice
+                (``FormatError``).
+        """
         self._load_files(profile_directory, os.listdir(profile_directory))
 
     def _load_files(self, profile_directory: Any, list_files: list[str]) -> None:
@@ -130,7 +141,12 @@ class DetectorFactory:
                     f.close()
 
     def load_json_profile(self, json_profiles: Any) -> None:
-        """Load profiles from JSON strings (at least two)."""
+        """Load profiles from JSON strings (at least two).
+
+        Raises:
+            LangDetectException: Fewer than two (``NeedLoadProfileError``), or one that is not
+                a profile (``FormatError``).
+        """
         langsize, index = len(json_profiles), 0
         if langsize < 2:
             raise LangDetectException(ErrorCode.NeedLoadProfileError, "Need more than 2 profiles.")
@@ -145,7 +161,11 @@ class DetectorFactory:
                 raise LangDetectException(ErrorCode.FormatError, "Profile format error.")  # noqa: B904
 
     def add_profile(self, profile: Any, index: Any, langsize: Any) -> None:
-        """Add one :class:`LangProfile` as language number `index` of `langsize`."""
+        """Add one :class:`LangProfile` as language number `index` of `langsize`.
+
+        Raises:
+            LangDetectException: The language is loaded already (``DuplicateLangError``).
+        """
         lang = profile.name
         if lang in self.langlist:
             raise LangDetectException(
@@ -201,7 +221,11 @@ class DetectorFactory:
         self._exotic = None
 
     def create(self, alpha: float | None = None) -> Detector:
-        """Construct a :class:`Detector`, with smoothing parameter `alpha` if given."""
+        """A new :class:`Detector`, with smoothing parameter `alpha` if given.
+
+        Raises:
+            LangDetectException: No profiles are loaded (``NeedLoadProfileError``).
+        """
         detector = self._create_detector()
         if alpha is not None:
             detector.set_alpha(alpha)
@@ -213,7 +237,7 @@ class DetectorFactory:
         return Detector(self)
 
     def set_seed(self, seed: Any) -> None:
-        """Set this factory's seed (``None``: a fresh random seed per detection)."""
+        """Set this factory's seed."""
         self.seed = seed
 
     def get_lang_list(self) -> list[Any]:
@@ -323,10 +347,10 @@ def _fast(factory: Any, text: Any, probs: bool) -> Any:
 
 
 def detect(text: str) -> Any:
-    """The language of `text` (``'unknown'`` if no language is above the threshold).
+    """The language of `text` (``'unknown'`` if none is above the threshold).
 
     Raises:
-        LangDetectException: The text has no features (no letters, only URLs, ...).
+        LangDetectException: `text` has no features (no letters, only URLs, ...).
     """
     init_factory()
     factory: Any = _factory
@@ -343,7 +367,7 @@ def detect_langs(text: str) -> list[Any]:
     """The languages of `text` with their probabilities, most probable first.
 
     Raises:
-        LangDetectException: The text has no features (no letters, only URLs, ...).
+        LangDetectException: `text` has no features (no letters, only URLs, ...).
     """
     init_factory()
     factory: Any = _factory

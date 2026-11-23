@@ -323,8 +323,12 @@ def _finish_block(self: Any, result: tuple[Any, int, Any]) -> None:
 class Detector:
     """Detect the language of a text: langdetect's ``Detector``.
 
-    Made by :meth:`DetectorFactory.create`. ``append`` the text, then call :meth:`detect` or
-    :meth:`get_probabilities`.
+    Made by :meth:`DetectorFactory.create`. :meth:`append` the text, then call :meth:`detect`
+    or :meth:`get_probabilities`. Detections with :meth:`set_verbose`, with attributes of
+    other types than langdetect's (a ``Decimal`` alpha, a seed of an unusual type), or with
+    customised classes (``URL_RE`` or ``MAIL_RE`` set, methods overridden in a subclass,
+    ``NGram``'s tables changed) run langdetect's algorithm in Python, with the same results.
+    A subclass that overrides only :meth:`cleaning_text` keeps the Rust trials.
     """
 
     ALPHA_DEFAULT = 0.5
@@ -371,9 +375,8 @@ class Detector:
     def random(self) -> _random.Random:
         """A ``random.Random``, as langdetect makes one per detector.
 
-        pyroid's detections draw from their own generator, seeded the same way, and do not use
-        it; one that is not a ``random.Random`` (a subclass) is used, by langdetect's Python
-        algorithm.
+        pyroid's detections draw from their own generator, seeded the same way; a generator of
+        another class set here (a subclass) is used, by langdetect's Python algorithm.
         """
         r = self.__dict__.get("_random")
         if r is None:
@@ -385,15 +388,20 @@ class Detector:
         self.__dict__["_random"] = value
 
     def set_verbose(self) -> None:
-        """Print what the detection does (slow: runs langdetect's Python algorithm)."""
+        """Print each step of the detection, as langdetect does (slow)."""
         self.verbose = True
 
     def set_alpha(self, alpha: float) -> None:
-        """Set the smoothing parameter."""
+        """Set the smoothing parameter (default 0.5)."""
         self.alpha = alpha
 
     def set_prior_map(self, prior_map: Any) -> None:
-        """Set prior information about language probabilities."""
+        """Set prior probabilities per language.
+
+        Raises:
+            LangDetectException: A negative probability, or none above zero
+                (``InitParamError``).
+        """
         self.prior_map = [0.0] * len(self.langlist)
         sump = 0.0
         for i in range(len(self.prior_map)):
@@ -414,28 +422,36 @@ class Detector:
             self.prior_map[i] /= sump
 
     def set_max_text_length(self, max_text_length: int) -> None:
-        """Specify max size of target text to use for language detection (default 10000)."""
+        """Use at most this many characters of the text (default 10,000)."""
         self.max_text_length = max_text_length
 
     def append(self, text: str) -> None:
-        """Append the target text; the part past ``max_text_length`` is cut off."""
+        """Append text: URLs and mail addresses become spaces, runs of spaces one space."""
         _append(self, text)
 
     def cleaning_text(self) -> None:
-        """Remove Latin letters from a text that is mostly not Latin, as langdetect does."""
+        """Remove Latin letters from a text that is mostly in another script."""
         cleaned = _native.clean_text(self.text)
         if cleaned is not None:
             self.text = cleaned
 
     def detect(self) -> Any:
-        """The language with the highest probability, or ``'unknown'``."""
+        """The language with the highest probability, or ``'unknown'``.
+
+        Raises:
+            LangDetectException: The text has no features (``CantDetectError``).
+        """
         probabilities = self.get_probabilities()
         if probabilities:
             return probabilities[0].lang
         return self.UNKNOWN_LANG
 
     def get_probabilities(self) -> list[Any]:
-        """The languages above ``PROB_THRESHOLD``, most probable first."""
+        """The languages above ``PROB_THRESHOLD``, most probable first.
+
+        Raises:
+            LangDetectException: The text has no features (``CantDetectError``).
+        """
         if self.langprob is None:
             self._detect_block()
         return self._sort_probability(self.langprob)

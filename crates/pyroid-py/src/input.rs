@@ -13,7 +13,7 @@ use pyo3::types::{PyBool, PyByteArray, PyBytes, PyList, PyMemoryView, PyString, 
 use pyroid_core::par;
 
 use crate::arrow::{self, ArrowStrings};
-use crate::errors::{PyroidError, input_error, type_name, with_note};
+use crate::errors::{input_error, type_name, with_note};
 
 const EXPECTED: &str = "expected str, list[str], tuple[str, ...] or an Arrow string array/column";
 
@@ -21,7 +21,8 @@ const EXPECTED: &str = "expected str, list[str], tuple[str, ...] or an Arrow str
 /// kind. Extracting it never copies text:
 /// - `str`, `list[str]`, `tuple[str, ...]` become [`PyBackedStr`]s, which
 ///   borrow each str's UTF-8 (CPython caches it on the str for non-ASCII) and
-///   convert back into the *original* object;
+///   convert back into the *original* object. A list is read once, in one
+///   step ([`list_items`]): the call works on the list as it was then;
 /// - anything with `__arrow_c_stream__` / `__arrow_c_array__` (pyarrow,
 ///   polars, pandas, HF datasets, nanoarrow, arro3, duckdb, `pyroid.Column`)
 ///   is imported zero-copy through the Arrow PyCapsule interface.
@@ -55,6 +56,44 @@ fn backed(s: &Bound<'_, PyString>, index: Option<usize>) -> PyResult<PyBackedStr
             ),
         )
     })
+}
+
+/// The items of a caller's list, read once and in one step: `PyList_AsTuple`
+/// copies the list while it holds the list's lock on free-threaded builds (and
+/// runs no Python code). Another thread changing the list meanwhile can then
+/// neither mix old and new items into one call nor change their count while
+/// pyroid reads them; the call sees the list as it was at that moment. Read
+/// every list a caller passes in through this, never with `PyList::iter`, a
+/// `len()` then `get_item(i)` loop, or `PyList::new(py, list.iter())` (which
+/// panics when the list shrinks meanwhile).
+pub fn list_items<'py>(list: &Bound<'py, PyList>) -> Bound<'py, PyTuple> {
+    list.to_tuple()
+}
+
+/// [`list_items`] of `obj` if it is a list, else `obj`: for arguments that
+/// PyO3 converts (`extract::<Vec<T>>()`), so that a list is read in one step.
+pub fn frozen<'py>(obj: &Bound<'py, PyAny>) -> Bound<'py, PyAny> {
+    match obj.cast::<PyList>() {
+        Ok(list) => list_items(list).into_any(),
+        Err(_) => obj.clone(),
+    }
+}
+
+/// A `Vec<T>` argument whose list is read in one step ([`frozen`]); a tuple or
+/// other sequence is read as `Vec<T>` reads it. For list arguments of public
+/// functions that PyO3 converts (its `Vec<T>` reads a list item by item).
+#[derive(Debug)]
+pub struct Items<T>(pub Vec<T>);
+
+impl<'a, 'py, T> FromPyObject<'a, 'py> for Items<T>
+where
+    T: pyo3::conversion::FromPyObjectOwned<'py>,
+{
+    type Error = PyErr;
+
+    fn extract(obj: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
+        frozen(&obj).extract().map(Self)
+    }
 }
 
 fn not_a_str(item: &Bound<'_, PyAny>, i: usize) -> PyErr {
@@ -149,14 +188,17 @@ fn docs_par<'py>(
         1
     } else {
         par::max_tasks(threads)
-            .map_err(|e| PyroidError::new_err(e.to_string()))?
+            .map_err(|e| crate::interrupt::pool_error(&e))?
             .min(total / PAR_MIN_CHARS_PER_TASK)
     };
-    let out = if tasks < 2 {
+    let serial = || {
         strs.iter()
             .enumerate()
             .map(|(i, s)| backed(s.bind(py), Some(i)))
-            .collect::<PyResult<Vec<_>>>()?
+            .collect::<PyResult<Vec<_>>>()
+    };
+    let out = if tasks < 2 {
+        serial()?
     } else {
         // Attach-sized ranges, dealt out in order to at most `tasks` tasks.
         let ranges = attach_ranges(&lens, total.div_ceil(tasks).min(PAR_CHARS_PER_ATTACH));
@@ -174,16 +216,21 @@ fn docs_par<'py>(
                     part
                 })
             })
-            .map_err(|e| PyroidError::new_err(e.to_string()))?;
+            .map_err(|e| crate::interrupt::pool_error(&e))?;
         // Back on the calling thread (attached): every PyBackedStr is dropped
         // here, and the error of the lowest failing index is raised here.
         let failed = first_err.into_inner();
-        if failed != usize::MAX {
+        if failed == usize::MAX {
+            parts.into_iter().flatten().collect()
+        } else {
             drop(parts);
-            return Err(backed(strs[failed].bind(py), Some(failed))
-                .expect_err("a str that failed to encode on the pool fails again"));
+            match backed(strs[failed].bind(py), Some(failed)) {
+                Err(e) => return Err(e),
+                // A failure that does not repeat (a MemoryError on the pool):
+                // the calling thread extracts the batch instead.
+                Ok(_) => serial()?,
+            }
         }
-        parts.into_iter().flatten().collect()
     };
     match not_str {
         Some(err) => Err(err),
@@ -280,7 +327,12 @@ impl TextInput {
     pub fn extract_with(obj: &Bound<'_, PyAny>, threads_arg: Option<Threads>) -> PyResult<Self> {
         let py = obj.py();
         if let Ok(list) = obj.cast::<PyList>() {
-            return Ok(Self::List(docs_par(py, list.iter(), threads(threads_arg))?));
+            let items = list_items(list);
+            return Ok(Self::List(docs_par(
+                py,
+                items.iter(),
+                threads(threads_arg),
+            )?));
         }
         if let Ok(tuple) = obj.cast::<PyTuple>() {
             return Ok(Self::Tuple(docs_par(
@@ -302,7 +354,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for TextInput {
             return Ok(Self::Str(backed(&s, None)?));
         }
         if let Ok(list) = obj.cast::<PyList>() {
-            return Ok(Self::List(docs(list.iter())?));
+            return Ok(Self::List(docs(list_items(&list).iter())?));
         }
         if let Ok(tuple) = obj.cast::<PyTuple>() {
             return Ok(Self::Tuple(docs(tuple.iter())?));

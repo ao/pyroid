@@ -17,18 +17,23 @@ The names are ``"ftfy"`` (:mod:`pyroid.ftfy`, which reproduces ftfy 6.3.1), ``"f
 ``FastText.load_model`` give pyroid models), ``"anyascii"`` (:func:`pyroid.translit.anyascii`)
 and ``"datasketch"`` (:mod:`pyroid.datasketch`, which reproduces datasketch 2.0.0: ``datasketch``
 and its ``minhash``, ``lean_minhash``, ``hashfunc``, ``lsh``, ``lshforest`` and ``lshensemble``
-submodules give pyroid's classes), ``"trafilatura"`` (:mod:`pyroid.trafilatura`, which
+submodules give pyroid's classes), ``"json_repair"`` (:mod:`pyroid.json_repair`, which reproduces
+json_repair 0.64.9: ``repair_json``, ``loads``, ``load`` and ``from_file`` of ``json_repair``
+and ``json_repair.json_repair``), ``"trafilatura"`` (:mod:`pyroid.trafilatura`, which
 reproduces trafilatura 2.3.1 or 1.11.0, following the installed release: ``extract``,
 ``bare_extraction`` and (2.3.1) ``extract_with_metadata`` of ``trafilatura`` and
 ``trafilatura.core``, ``trafilatura.deduplication.LRUCache`` / ``LRU_TEST`` and
 ``trafilatura.meta.reset_caches``), ``"nltk"`` (:mod:`pyroid.nltk`, which reproduces NLTK
 3.10.4's tokenizers) and ``"warcio"`` (:mod:`pyroid.warc`, which reproduces warcio 1.8.2's
-``ArchiveIterator``, ``WARCIterator`` and ``ARCIterator``). There is no ``"unidecode"``:
-:func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its output differs
-from Unidecode's.
+``ArchiveIterator``, ``WARCIterator`` and ``ARCIterator``) and ``"dateutil"``
+(:mod:`pyroid.dateutil.parser`: ``dateutil.parser.parse`` and ``isoparse``). There is no
+``"unidecode"``: :func:`pyroid.translit.unidecode` transliterates with anyascii's tables, so its
+output differs from Unidecode's.
 
 :func:`patch` puts a shim in ``sys.modules[name]``: a module named like the real one whose
-functions are pyroid's (the same objects, so a call costs what calling pyroid costs). If the
+functions are pyroid's (the same objects, so a call costs what calling pyroid costs; the
+exception is ``anyascii.anyascii``, a separate native function that takes what the package's
+function takes, as pyroid's takes a list as a batch). If the
 real package is installed, :func:`patch` imports it right away, because the shim needs its
 ``__path__`` and ``__spec__`` up front (loading it later under the shim's name would be
 fragile). Then:
@@ -50,7 +55,8 @@ delegates, are the real ftfy's when it is installed. Calls that pyroid hands to 
 (option values the Rust port does not support; ``_FastText()`` without a model file) go to the
 real one, never back to the shim, with the usual one-time :class:`pyroid.FallbackWarning`, or
 raise :class:`pyroid.PyroidError` if it is not installed. :func:`patch` warns once per process
-and name with :class:`PatchWarning`.
+and name with :class:`PatchWarning`, and, like importing the pyroid module, once per process
+with :class:`pyroid.VersionMismatchWarning` if the installed package is another release.
 
 Child processes: :func:`run` is ``pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]``. It
 patches ``NAMES`` (default ``$PYROID_PATCH``, else ``ftfy,fasttext``) and runs the target as
@@ -66,6 +72,9 @@ any. The same works by hand, with no ``pyroid run``::
 
 The hook warns once per process tree, not in every worker. It does nothing in an interpreter that
 cannot import pyroid, nor in one started with ``-I`` or ``-E`` (``PYTHONPATH`` is ignored there).
+A name that :func:`patch` refuses with ``ImportError`` (``"fasttext"`` without numpy, ``"sqlparse"``
+with sqlparse older than 0.5.0) is skipped by the hook with a :class:`PatchWarning`, while ``pyroid
+run`` stops with that error.
 
 ``"nltk"`` works differently when NLTK is installed: no shim, but ``sent_tokenize``,
 ``word_tokenize``, ``punkt_model_available``, ``PunktSentenceTokenizer``, ``PunktTokenizer``,
@@ -94,6 +103,58 @@ set on NeMo's own modules (``nemo_curator.stages.text.filters`` and the modules 
 them), so pipelines built afterwards, including from NeMo's YAML configs, use them. Ray workers
 need no patch: the stages they receive are pyroid's classes.
 
+``"yaml"`` works like ``"nltk"`` when PyYAML is installed: ``safe_load``, ``safe_load_all``,
+``load``, ``load_all``, ``full_load``, ``full_load_all``, ``unsafe_load``, ``unsafe_load_all``,
+``safe_dump``, ``safe_dump_all``, ``dump`` and ``dump_all`` on the ``yaml`` module become
+:mod:`pyroid.yaml`'s, which reproduce PyYAML 6.0.3's pure-Python ``SafeLoader`` and
+``SafeDumper`` and hand everything they do not port (customised loaders and dumpers,
+``!!python/`` tags) to PyYAML's own classes. Exceptions stay PyYAML's classes. Without PyYAML,
+``yaml`` and its ``error``, ``reader``, ``scanner``, ``parser``, ``composer``, ``constructor``,
+``representer``, ``emitter``, ``serializer``, ``resolver``, ``loader`` and ``dumper`` submodules
+are shims holding :mod:`pyroid.yaml`'s functions and classes. With PyYAML 5.x installed it raises
+``ImportError`` and changes nothing: 5.x's ``load`` and ``load_all`` take no ``Loader``, and some
+of its results differ from 6.0's.
+
+``"tabulate"`` is a shim whether or not tabulate is installed: ``tabulate.tabulate`` and the
+other names of :mod:`pyroid.tabulate` (``TableFormat``, ``tabulate_formats``, ``_table_formats``,
+...) are pyroid's, which reproduce tabulate 0.10.0, so ``DataFrame.to_markdown()`` uses them.
+Setting ``tabulate.MIN_PADDING``, ``PRESERVE_WHITESPACE`` or ``WIDE_CHARS_MODE`` on the shim
+sets them for :mod:`pyroid.tabulate` too.
+
+``"dateutil"`` works like ``"nltk"`` too. With python-dateutil installed, ``parse`` and
+``isoparse`` on ``dateutil.parser`` (and ``dateutil.parser._parser.parse``,
+``dateutil.parser.isoparser.isoparse``) become pyroid's. They behave as dateutil's module-level
+functions do: they use dateutil's own ``DEFAULTPARSER``, ``parser`` class and ``DEFAULT_ISOPARSER``,
+so changes made to those still apply, and ``isoparse`` follows the installed release.
+``dateutil.tz``, ``relativedelta``, ``rrule``, ``easter``, the ``parser`` and ``isoparser`` classes
+and ``DEFAULTPARSER._parse`` (which ``pandas.to_datetime`` calls) stay dateutil's. Without
+python-dateutil, ``dateutil`` and ``dateutil.parser`` are shims holding
+:mod:`pyroid.dateutil.parser`'s names.
+
+``"jmespath"`` works like ``"nltk"`` when jmespath is installed: ``search`` and ``compile`` on
+the ``jmespath`` module become :mod:`pyroid.jmespath`'s, which reproduce jmespath 1.1.0 (the
+same results, ASTs and exceptions, which stay jmespath's classes), so boto3's and botocore's
+``jmespath.compile(...)``/``jmespath.search(...)`` calls run natively. Custom ``Functions``
+subclasses keep working. Without jmespath, ``jmespath`` and its ``exceptions``, ``functions``,
+``visitor``, ``parser``, ``lexer`` and ``ast`` submodules are shims holding
+:mod:`pyroid.jmespath`'s names.
+
+``"difflib"`` patches the standard library's difflib in place: :mod:`pyroid.difflib`'s
+methods are set on ``difflib.SequenceMatcher``, ``difflib.Differ`` and ``difflib.HtmlDiff``
+themselves (so instances, subclasses and ``isinstance`` checks stay difflib's, including classes
+imported earlier), and its ``get_close_matches``, ``unified_diff``, ``context_diff`` and
+``_mdiff`` on the module, which covers ``ndiff`` and unittest's and pytest's assertion diffs.
+
+``"packaging"`` works like ``"nltk"`` when packaging is installed, and goes further: it imports
+packaging and its submodules, then replaces each of packaging's ported objects (``Version``,
+``parse``, ``Specifier``, ``SpecifierSet``, ``Marker``, ``default_environment``, ``Requirement``
+and the name, version and filename helpers of ``packaging.utils``) wherever a ``packaging.*``
+module holds it, so packaging's own ``ranges``, ``metadata``, ``pylock`` and
+``dependency_groups`` use :mod:`pyroid.packaging`'s classes, which reproduce packaging 26.3.
+The exception classes stay packaging's. Without packaging, ``packaging`` and its ``version``,
+``specifiers``, ``markers``, ``requirements`` and ``utils`` submodules are shims holding
+:mod:`pyroid.packaging`'s names.
+
 ``"langdetect"`` (:mod:`pyroid.langdetect`, which reproduces langdetect 1.0.9) patches the
 installed langdetect in place: four of its functions (``detect``, ``detect_langs``,
 ``Detector.append`` and ``Detector._detect_block``) run pyroid's code as the same objects, so names
@@ -110,6 +171,7 @@ from __future__ import annotations
 import contextlib
 import importlib
 import importlib.util
+import operator
 import os
 import pkgutil
 import runpy
@@ -122,7 +184,7 @@ from dataclasses import dataclass, field
 from importlib.machinery import ModuleSpec
 from typing import Any
 
-from pyroid import FallbackWarning, PyroidError
+from pyroid import FallbackWarning, PyroidError, _versions
 
 __all__ = [
     "DEFAULT_RUN_NAMES",
@@ -143,10 +205,18 @@ SUPPORTED: tuple[str, ...] = (
     "fasttext",
     "anyascii",
     "datasketch",
+    "json_repair",
     "trafilatura",
     "nltk",
     "warcio",
     "nemo_curator",
+    "yaml",
+    "tabulate",
+    "dateutil",
+    "jmespath",
+    "difflib",
+    "packaging",
+    "sqlparse",
     "langdetect",
 )
 
@@ -162,13 +232,19 @@ HOOK_DIR: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_autop
 # Names whose PatchWarning was already shown in this process tree (inherited by children).
 _WARNED_ENV = "_PYROID_PATCH_WARNED"
 
+# Held while pyroid run runs a target, which owns the process (sys.argv, sys.path[0], the
+# environment, sys.excepthook): one at a time.
+_RUN_LOCK = threading.Lock()
+
 
 class PatchWarning(UserWarning):
     """:func:`patch` replaced a module with pyroid's drop-in.
 
     Says what was patched, which version pyroid reproduces and how to undo it; shown once per
-    process for each name, plus once more if the installed package is another version. Silence
-    it with ``warnings.simplefilter("ignore", pyroid.integrations.PatchWarning)``.
+    process for each name. Silence it with
+    ``warnings.simplefilter("ignore", pyroid.integrations.PatchWarning)``. An installed package
+    of another version gets a :class:`pyroid.VersionMismatchWarning` instead, as importing the
+    pyroid module would.
     """
 
 
@@ -281,16 +357,16 @@ _Built = tuple[dict[str, types.ModuleType], list[Callable[[], None]]]
 
 @dataclass(frozen=True)
 class _Target:
-    impl: str  # the pyroid module providing the drop-in
+    # The pyroid module providing the drop-in. patch() imports it through _impl(), so the module's
+    # own _versions.check() at import is the patch-side version check: a new target needs no
+    # version code here, only that check in its module.
+    impl: str
     reproduces: str  # what it reproduces, for the warning
-    version_attr: str | None  # impl attribute: the real __version__ pyroid reproduces
     pip: str  # how to install the real package
     rest: str  # examples of what the real package still provides, for the warning
     build: Callable[[types.ModuleType, Any, str], _Built]
-    # impl attribute: the real versions pyroid reproduces as modes (no version warning for them)
-    modes_attr: str | None = None
-    # the installed version, from the real module (default: its __version__)
-    installed: Callable[[Any], str | None] | None = None
+    # the warning's second sentence without the real package, when pyroid provides all of it
+    standalone: str | None = None
 
 
 def _caller_stacklevel() -> int:
@@ -389,10 +465,25 @@ def _build_fasttext(impl: types.ModuleType, real: Any, missing: str) -> _Built:
 
 
 def _build_anyascii(impl: types.ModuleType, real: Any, missing: str) -> _Built:
-    provided = {"anyascii": impl.anyascii}
+    # Not impl.anyascii, which takes a list as a batch: the package's function joins the
+    # characters of any iterable into one str and returns an ASCII bytes as it is.
+    provided = {"anyascii": impl._native.anyascii_package}
     version = impl.ANYASCII_VERSION
     shim = _shim("anyascii", real, missing, impl, provided, package=True, version=version)
     return {"anyascii": shim}, []
+
+
+def _build_json_repair(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    # json_repair and its json_repair submodule (`from json_repair.json_repair import repair_json`).
+    provided = {n: getattr(impl, n) for n in ("repair_json", "loads", "load", "from_file")}
+    provided["JSONReturnType"] = impl.JSONReturnType
+    full = "json_repair.json_repair"
+    real_sub = sys.modules.get(full) if real is not None else None
+    sub_missing = missing if real is None else "the installed json_repair has no json_repair module"
+    sub = _shim(full, real_sub, sub_missing, impl, provided, package=False)
+    top = _shim("json_repair", real, missing, impl, {**provided, "json_repair": sub}, package=True)
+    # pyroid.json_repair's own fallback (schema=, bytes) sees through the shim to `__wrapped__`.
+    return {"json_repair": top, full: sub}, []
 
 
 # datasketch's submodules that pyroid ports, and what each shim provides; the others
@@ -776,25 +867,369 @@ def _build_langdetect(impl: types.ModuleType, real: Any, missing: str) -> _Built
     return {}, [lp.install()]  # langdetect's own classes, with pyroid's methods
 
 
-def _distribution_version(name: str) -> Callable[[Any], str | None]:
-    """The installed version of distribution `name` (for packages without ``__version__``)."""
+# What patch("sqlparse") sets on an installed sqlparse (pyroid.sqlparse._patched's functions).
+_SQLPARSE_SWAPS: dict[str, tuple[str, ...]] = {
+    "sqlparse": ("parse", "parsestream", "format", "split"),
+    "sqlparse.lexer": ("tokenize",),
+    "sqlparse.engine.grouping": ("group",),
+}
+# Without sqlparse, these pyroid.sqlparse modules stand in for sqlparse's. sqlparse.cli and
+# sqlparse.__main__ are not aliased: they hold no state, and `python -m sqlparse.cli` needs a module
+# found under that name.
+_SQLPARSE_MODULES = (
+    "",
+    ".sql",
+    ".tokens",
+    ".keywords",
+    ".lexer",
+    ".exceptions",
+    ".utils",
+    ".formatter",
+    ".engine",
+    ".engine.grouping",
+    ".engine.filter_stack",
+    ".engine.statement_splitter",
+    ".filters",
+    ".filters.aligned_indent",
+    ".filters.others",
+    ".filters.output",
+    ".filters.reindent",
+    ".filters.right_margin",
+    ".filters.tokens",
+)
 
-    def installed(real: Any) -> str | None:
-        from importlib.metadata import PackageNotFoundError, version
 
-        try:
-            return version(name)
-        except PackageNotFoundError:
-            return None
+def _build_sqlparse(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    from pyroid.sqlparse import _backend, _patched
 
-    return installed
+    if real is None:
+        mods = {
+            f"sqlparse{s}": importlib.import_module(f"pyroid.sqlparse{s}")
+            for s in _SQLPARSE_MODULES
+        }
+        return mods, []
+    refusal = _backend.patch_refusal(real)  # pyroid's trees are not made of its classes
+    if refusal is not None:
+        raise ImportError(refusal)
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for mod, names in _SQLPARSE_SWAPS.items():
+        module = importlib.import_module(mod)
+        for n in names:
+            saved.append((module, n, module.__dict__.get(n, _MISSING)))
+            setattr(module, n, getattr(_patched, n))
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
+# What patch("yaml") sets on PyYAML's `yaml` module.
+_YAML_SWAPS = (
+    "safe_load",
+    "safe_load_all",
+    "load",
+    "load_all",
+    "full_load",
+    "full_load_all",
+    "unsafe_load",
+    "unsafe_load_all",
+    "safe_dump",
+    "safe_dump_all",
+    "dump",
+    "dump_all",
+)
+# The shims without PyYAML: submodule -> the pyroid.yaml names it holds.
+_YAML_SHIMS: dict[str, tuple[str, ...]] = {
+    "yaml.error": ("Mark", "YAMLError", "MarkedYAMLError"),
+    "yaml.reader": ("ReaderError",),
+    "yaml.scanner": ("ScannerError",),
+    "yaml.parser": ("ParserError",),
+    "yaml.composer": ("ComposerError",),
+    "yaml.constructor": ("ConstructorError",),
+    "yaml.representer": ("RepresenterError",),
+    "yaml.emitter": ("EmitterError",),
+    "yaml.serializer": ("SerializerError",),
+    "yaml.resolver": ("ResolverError",),
+    "yaml.loader": ("BaseLoader", "FullLoader", "SafeLoader", "Loader", "UnsafeLoader"),
+    "yaml.dumper": ("SafeDumper", "Dumper"),
+}
+
+
+def _build_yaml(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if real is None:  # no PyYAML: shims holding pyroid.yaml's names
+        shims: dict[str, types.ModuleType] = {}
+        for mod, names in _YAML_SHIMS.items():
+            shims[mod] = _shim(
+                mod, None, missing, impl, {n: getattr(impl, n) for n in names}, package=False
+            )
+        provided: dict[str, Any] = {n: getattr(impl, n) for n in impl.__all__}
+        provided.update({k.rpartition(".")[2]: v for k, v in shims.items()})
+        provided["__with_libyaml__"] = False
+        shims["yaml"] = _shim(
+            "yaml", None, missing, impl, provided, package=True, version=impl.PYYAML_VERSION
+        )
+        return shims, []
+    refusal = impl._patch_refusal(real)  # PyYAML 5.x: other arguments and results
+    if refusal is not None:
+        raise ImportError(refusal)
+    saved: list[tuple[Any, str, Any]] = []
+    for n in _YAML_SWAPS:
+        saved.append((real, n, real.__dict__.get(n, _MISSING)))
+        setattr(real, n, getattr(impl, n))
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
+def _build_tabulate(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    shim = _shim(
+        "tabulate",
+        real,
+        missing,
+        impl,
+        impl._patched_names(),
+        package=True,
+        version=impl.TABULATE_VERSION,
+    )
+    impl._share_settings(shim, real)
+    return {"tabulate": shim}, []
+
+
+# What patch("dateutil") sets on python-dateutil's modules: parse and isoparse only.
+_DATEUTIL_SWAPS: dict[str, tuple[str, ...]] = {
+    "dateutil.parser": ("parse", "isoparse"),
+    "dateutil.parser._parser": ("parse",),
+    "dateutil.parser.isoparser": ("isoparse",),
+}
+
+
+def _build_dateutil(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if real is None:  # no python-dateutil: dateutil.parser is a shim holding pyroid's parser
+        provided = {n: getattr(impl, n) for n in impl.__all__ if not n.startswith("DATEUTIL")}
+        sub = _shim("dateutil.parser", None, missing, impl, provided, package=True)
+        top = _shim("dateutil", None, missing, impl, {"parser": sub}, package=True)
+        return {"dateutil": top, "dateutil.parser": sub}, []
+    parse, isoparse = impl._patched_functions()
+    new = {"parse": parse, "isoparse": isoparse}
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for mod, names in _DATEUTIL_SWAPS.items():
+        module = importlib.import_module(mod)
+        for n in names:
+            saved.append((module, n, module.__dict__.get(n, _MISSING)))
+            setattr(module, n, new[n])
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
+# What patch("jmespath") sets on jmespath's own module.
+_JMESPATH_SWAPS = ("search", "compile")
+# The shims without jmespath: submodule -> the pyroid.jmespath submodule behind it.
+_JMESPATH_SHIMS = ("exceptions", "functions", "visitor", "parser", "lexer", "ast")
+
+
+def _build_jmespath(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if real is None:  # no jmespath: shims holding pyroid.jmespath's names
+        shims: dict[str, types.ModuleType] = {}
+        for sub in _JMESPATH_SHIMS:
+            module = getattr(impl, sub)
+            names = getattr(module, "__all__", None) or [n for n in vars(module) if n[:1] != "_"]
+            provided = {n: getattr(module, n) for n in names}
+            if sub == "visitor":
+                provided["_Expression"] = module._Expression
+            shims[f"jmespath.{sub}"] = _shim(
+                f"jmespath.{sub}", None, missing, impl, provided, package=False
+            )
+        top: dict[str, Any] = {n: getattr(impl, n) for n in ("search", "compile", "Options")}
+        top.update({k.rpartition(".")[2]: v for k, v in shims.items()})
+        shims["jmespath"] = _shim(
+            "jmespath", None, missing, impl, top, package=True, version=impl.JMESPATH_VERSION
+        )
+        return shims, []
+    saved: list[tuple[Any, str, Any]] = []
+    for n in _JMESPATH_SWAPS:
+        saved.append((real, n, real.__dict__.get(n, _MISSING)))
+        setattr(real, n, getattr(impl, n))
+
+    def undo() -> None:
+        for module, n, original in reversed(saved):
+            if original is _MISSING:
+                module.__dict__.pop(n, None)
+            else:
+                setattr(module, n, original)
+
+    return {}, [undo]
+
+
+def _build_difflib(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    if not impl._KNOWN:  # pyroid.difflib is the standard library's here: nothing to patch
+        return {}, []
+    swaps = [(real.SequenceMatcher, name, value) for name, value in impl._SM_METHODS.items()]
+    swaps += [
+        (real.Differ, "compare", impl._PATCH_COMPARE),
+        (real.HtmlDiff, "make_table", impl._PATCH_MAKE_TABLE),
+    ]
+    swaps += [(real, name, value) for name, value in impl._PATCH_FUNCTIONS.items()]
+    # One native step sets all of them (or none, if one fails); only then (every method and
+    # lazy attribute in place) do pyroid's methods give difflib's matchers native state. The
+    # undo, also native, first gives matchers made or used under the patch difflib's own state,
+    # so they keep working with difflib's methods (one that another thread's set_seq* is
+    # changing at this moment gets it when that call ends), then puts every attribute back.
+    # Neither stops half-way on Ctrl-C; one that lands just after the patch is undone here.
+    try:
+        impl._switch_on(tuple(swaps), _MISSING)
+    except BaseException:
+        impl._switch_off()
+        raise
+    return {}, [impl._switch_off]
+
+
+# The packaging submodules patch("packaging") imports first, so that every global holding one of
+# packaging's ported objects is found and replaced (also in ranges, metadata, pylock, ...).
+_PACKAGING_MODULES = (
+    "version",
+    "specifiers",
+    "markers",
+    "requirements",
+    "utils",
+    "tags",
+    "_structures",
+    "_tokenizer",
+    "_parser",
+    "_ranges",
+    "ranges",
+    "errors",
+    "licenses",
+    "metadata",
+    "dependency_groups",
+    "direct_url",
+    "pylock",
+)
+
+
+def _build_packaging(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    from pyroid._pyroid import packaging as native
+
+    if real is None:  # no packaging: shims providing pyroid.packaging's modules
+        shims: dict[str, types.ModuleType] = {}
+        for sub in impl.PORTED:
+            sub_impl = importlib.import_module(f"{impl.__name__}.{sub}")
+            provided = {n: getattr(sub_impl, n) for n in sub_impl.__all__}
+            shims[f"packaging.{sub}"] = _shim(
+                f"packaging.{sub}", None, missing, sub_impl, provided, package=False
+            )
+        top = _shim(
+            "packaging",
+            None,
+            missing,
+            impl,
+            {sub: shims[f"packaging.{sub}"] for sub in impl.PORTED},
+            package=True,
+            version=impl.PACKAGING_VERSION,
+        )
+        return {"packaging": top, **shims}, []
+    for sub in _PACKAGING_MODULES:
+        with contextlib.suppress(ImportError):
+            importlib.import_module(f"packaging.{sub}")
+    # Each of packaging's ported objects, wherever a packaging module holds it, becomes pyroid's.
+    replace: dict[int, tuple[Any, Any]] = {}
+    for module_name, attr, new in impl._patch_targets():
+        module = sys.modules.get(module_name)
+        original = module.__dict__.get(attr, _MISSING) if module is not None else _MISSING
+        if original is not _MISSING and original is not new:
+            replace[id(original)] = (original, new)
+    saved: list[tuple[types.ModuleType, str, Any]] = []
+    for key, module in list(sys.modules.items()):
+        if not _owned(key, "packaging") or not isinstance(module, types.ModuleType):
+            continue
+        for attr, value in list(vars(module).items()):
+            hit = replace.get(id(value))
+            if hit is not None and hit[0] is value:
+                saved.append((module, attr, value))
+                setattr(module, attr, hit[1])
+    # packaging.specifiers keeps Version's comparison methods in a table (_DIRECT_COMPARE_OPS)
+    # that its Specifier calls with a parsed version: pyroid's now, which the original methods'
+    # `super()` rejects. While patched, the table holds the plain operators.
+    ops = {f"__{n}__": getattr(operator, n) for n in ("lt", "le", "eq", "ne", "ge", "gt")}
+    methods = {
+        id(f): ops[name]
+        for original, _ in replace.values()
+        if isinstance(original, type)
+        for name, f in vars(original).items()
+        if name in ops
+    }
+    tables: list[tuple[dict[Any, Any], Any, Any]] = []
+    for key, module in list(sys.modules.items()):
+        if not _owned(key, "packaging") or not isinstance(module, types.ModuleType):
+            continue
+        for value in list(vars(module).values()):
+            if type(value) is dict:
+                for k, f in list(value.items()):
+                    if id(f) in methods:
+                        tables.append((value, k, f))
+                        value[k] = methods[id(f)]
+    # Objects made before the patch keep packaging's original classes. pickle finds a class by
+    # its name, `packaging.version.Version`, which is pyroid's class now; while patched, such an
+    # object pickles as the pyroid object it equals.
+    reduced: list[tuple[type, Any]] = []
+    for original, new in replace.values():
+        if isinstance(original, type):
+            reduced.append((original, original.__dict__.get("__reduce_ex__", _MISSING)))
+            original.__reduce_ex__ = _pickle_as(original, new)  # type: ignore[method-assign,assignment]
+    # Under the patch packaging's classes are pyroid's: objects stop claiming the originals, and
+    # pyroid's constructors take objects of the originals by value.
+    native._set_patched(True)
+
+    def undo() -> None:
+        for module, attr, original in reversed(saved):
+            setattr(module, attr, original)
+        for table, k, f in reversed(tables):
+            table[k] = f
+        for cls, previous in reversed(reduced):
+            if previous is _MISSING:
+                del cls.__reduce_ex__
+            else:
+                cls.__reduce_ex__ = previous
+        native._set_patched(False)
+
+    return {}, [undo]
+
+
+def _pickle_as(original: type, new: Any) -> Callable[[Any, Any], Any]:
+    """``__reduce_ex__`` for packaging's `original` class while patched: pickle as `new`."""
+    base: Any = original.__reduce_ex__
+    restore = importlib.import_module("pyroid.packaging")._restore
+
+    def reduce_ex(self: Any, protocol: Any) -> Any:
+        if type(self) is not original:  # a subclass: pickled by its own name
+            return base(self, protocol)
+        return (restore, (new, self.__getstate__()))
+
+    reduce_ex.__name__ = reduce_ex.__qualname__ = "__reduce_ex__"
+    return reduce_ex
 
 
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
         "which reproduces ftfy 6.3.1",
-        "FTFY_VERSION",
         "pip install ftfy==6.3.1",
         " (apply_plan, explain_unicode, fix_file, guess_bytes, ftfy.fixes and the other"
         " submodules)",
@@ -804,7 +1239,6 @@ _TARGETS: dict[str, _Target] = {
         "pyroid.fasttext",
         "fastText 0.9.2's inference, as fasttext-predict 0.9.2.4: load_model, tokenize and "
         "FastText._FastText(path) give pyroid models",
-        None,
         "pip install fasttext-predict",
         " (training, ...)",
         _build_fasttext,
@@ -812,7 +1246,6 @@ _TARGETS: dict[str, _Target] = {
     "anyascii": _Target(
         "pyroid.translit",
         "anyascii(), which reproduces anyascii 0.3.3",
-        "ANYASCII_VERSION",
         "pip install anyascii==0.3.3",
         "",
         _build_anyascii,
@@ -821,29 +1254,32 @@ _TARGETS: dict[str, _Target] = {
         "pyroid.datasketch",
         "which reproduces datasketch 2.0.0's MinHash, LeanMinHash, MinHashLSH, MinHashLSHForest "
         "and MinHashLSHEnsemble",
-        "DATASKETCH_VERSION",
         "pip install datasketch==2.0.0",
         " (WeightedMinHash, HyperLogLog, bBitMinHash, HNSW, MinHashLSHBloom, Redis and Cassandra"
         " storage)",
         _build_datasketch,
     ),
+    "json_repair": _Target(
+        "pyroid.json_repair",
+        "which reproduces repair_json, loads, load and from_file of json_repair 0.64.9",
+        "pip install json-repair==0.64.9",
+        " (the command line and the internal modules; schema= calls are handed to it)",
+        _build_json_repair,
+    ),
     "trafilatura": _Target(
         "pyroid.trafilatura",
         "which reproduces the extract and bare_extraction of trafilatura 2.3.1 or 1.11.0, "
         "following the installed release; options it does not port go to the installed one",
-        "TRAFILATURA_VERSION",
         "pip install trafilatura==2.3.1",
         " (metadata extraction, downloads, feeds, sitemaps, the spider, the command line and the "
         "other submodules)",
         _build_trafilatura,
-        modes_attr="TRAFILATURA_VERSIONS",
     ),
     "nltk": _Target(
         "pyroid.nltk",
         "NLTK 3.10.4's sent_tokenize, word_tokenize, PunktSentenceTokenizer, PunktTokenizer, "
         "TreebankWordTokenizer, NLTKWordTokenizer, TreebankWordDetokenizer and the regexp "
         "tokenizers",
-        "NLTK_VERSION",
         "pip install nltk==3.10.4",
         " (training, tagging, corpora, the other tokenizers)",
         _build_nltk,
@@ -851,28 +1287,79 @@ _TARGETS: dict[str, _Target] = {
     "warcio": _Target(
         "pyroid.warc",
         "which reproduces warcio 1.8.2's ArchiveIterator, WARCIterator and ARCIterator",
-        "WARCIO_VERSION",
         "pip install warcio==1.8.2",
         " (WARCWriter, capture_http, the indexer, the checker, the command line)",
         _build_warcio,
-        installed=_distribution_version("warcio"),
     ),
     "nemo_curator": _Target(
         "pyroid.integrations.nemo_curator",
         "whose ScoreFilter, Score, Filter and Modify stages, heuristic filters, fastText filters, "
         "UnicodeReformatter and string modifiers reproduce NeMo Curator 1.4.0's",
-        "NEMO_CURATOR_VERSION",
         "pip install nemo-curator==1.4.0",
         " (readers, writers, deduplication, classifiers, the other stages)",
         _build_nemo_curator,
+    ),
+    "yaml": _Target(
+        "pyroid.yaml",
+        "which reproduces PyYAML 6.0.3's safe_load, safe_load_all, safe_dump and safe_dump_all, "
+        "and load/dump with the stock loaders and dumpers",
+        "pip install pyyaml==6.0.3",
+        " (customised loaders and dumpers, !!python/ tags, the event and token APIs, YAMLObject)",
+        _build_yaml,
+    ),
+    "tabulate": _Target(
+        "pyroid.tabulate",
+        "which reproduces tabulate 0.10.0",
+        "pip install tabulate==0.10.0",
+        " (the modules and names tabulate imports, such as `re`)",
+        _build_tabulate,
+    ),
+    "dateutil": _Target(
+        "pyroid.dateutil.parser",
+        "whose parse and isoparse reproduce python-dateutil 2.8.2 to 4.0.0 "
+        "(isoparse following the installed release)",
+        "pip install python-dateutil",
+        " (dateutil.tz, relativedelta, rrule, easter, and the parser and isoparser classes)",
+        _build_dateutil,
+    ),
+    "jmespath": _Target(
+        "pyroid.jmespath",
+        "which reproduces jmespath 1.1.0's search and compile",
+        "pip install jmespath==1.1.0",
+        " (its Parser, Lexer and TreeInterpreter classes)",
+        _build_jmespath,
+    ),
+    "difflib": _Target(
+        "pyroid.difflib",
+        "which reproduces this Python's difflib",
+        "difflib is part of the standard library",
+        " (restore, diff_bytes, IS_LINE_JUNK, Match)",
+        _build_difflib,
+    ),
+    "packaging": _Target(
+        "pyroid.packaging",
+        "which reproduces packaging 26.3's Version, Specifier, SpecifierSet, Marker, Requirement "
+        "and the name, version and filename helpers of packaging.utils",
+        "pip install packaging==26.3",
+        " (tags, metadata, pylock, ranges, dependency groups; they now use pyroid's classes)",
+        _build_packaging,
+    ),
+    "sqlparse": _Target(
+        "pyroid.sqlparse",
+        "which reproduces sqlparse 0.6.1's parse, parsestream, format, split, lexer.tokenize "
+        "and engine.grouping.group",
+        "pip install sqlparse==0.6.1",
+        " (the token classes and their methods, FilterStack and the filters, the command line)",
+        _build_sqlparse,
+        standalone=(
+            "sqlparse is not installed, so sqlparse and its submodules are pyroid.sqlparse's, "
+            "which include sqlparse 0.6.1's Python modules."
+        ),
     ),
     "langdetect": _Target(
         "pyroid.langdetect",
         "which reproduces langdetect 1.0.9's detect, detect_langs, DetectorFactory and Detector, "
         "with the same results for the same seed",
-        # No version notice here: importing pyroid.langdetect warns once about a release
-        # that detects differently (not 1.0.7, 1.0.8 or 1.0.9).
-        None,
         "pip install langdetect==1.0.9",
         " (langdetect.utils.messages and langdetect.utils.unicode_block)",
         _build_langdetect,
@@ -880,7 +1367,18 @@ _TARGETS: dict[str, _Target] = {
 }
 
 # Names patched by setting pyroid's objects on the installed package's own modules (no shims).
-_SWAPPED = ("nltk", "warcio", "nemo_curator", "langdetect")
+_SWAPPED = (
+    "nltk",
+    "warcio",
+    "nemo_curator",
+    "yaml",
+    "dateutil",
+    "jmespath",
+    "difflib",
+    "packaging",
+    "sqlparse",
+    "langdetect",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -941,19 +1439,52 @@ def _check(names: Sequence[str]) -> list[str]:
 
 
 def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> None:
-    """The once-per-process PatchWarning(s) for `name`."""
+    """The once-per-process PatchWarning for `name`, whose pyroid module is `impl`.
+
+    The installed version was checked when :func:`_impl` imported the pyroid module.
+    """
     target = _TARGETS[name]
     if name not in _WARNED:
         _WARNED.add(name)
+        if name == "difflib" and not impl._KNOWN:
+            v = sys.version_info
+            warnings.warn(
+                "pyroid.integrations.patch: nothing was patched: pyroid.difflib reproduces difflib "
+                f"of CPython 3.11 to 3.15, not {v[0]}.{v[1]}'s, so difflib stays the standard "
+                "library's. This warning is shown once.",
+                PatchWarning,
+                stacklevel=_caller_stacklevel(),
+            )
+            return
         what = f"`import {name}` now gives pyroid's drop-in"
-        if real is None:
+        if real is None and target.standalone is not None:
+            rest = target.standalone
+        elif real is None:
             rest = f"Everything else{target.rest} is unavailable: {missing} ({target.pip})."
+        elif name == "packaging":
+            # The unported modules the installed release has (24.2 has no pylock, say).
+            unported = [
+                m.replace("_", " ")
+                for m in ("tags", "metadata", "pylock", "ranges", "dependency_groups")
+                if f"packaging.{m}" in sys.modules
+            ]
+            rest = (
+                f"Everything else ({', '.join(unported)}; they now use pyroid's classes) is "
+                "still packaging's own. Names imported from packaging before this call (from "
+                "packaging.version import Version) keep packaging's objects."
+            )
         elif name in _SWAPPED:
             what = f"the installed {name} now uses pyroid's drop-ins"
             example = {
                 "nltk": "from nltk import word_tokenize",
                 "warcio": "from warcio.archiveiterator import ArchiveIterator",
                 "nemo_curator": "from nemo_curator.stages.text.filters import ScoreFilter",
+                "yaml": "from yaml import safe_load",
+                "dateutil": "from dateutil.parser import parse",
+                "jmespath": "from jmespath import search",
+                "difflib": "from difflib import unified_diff",
+                "packaging": "from packaging.version import Version",
+                "sqlparse": "from sqlparse import format",
                 "langdetect": "from langdetect import detect",
             }[name]
             rest = (
@@ -978,25 +1509,16 @@ def _announce(name: str, impl: types.ModuleType, real: Any, missing: str) -> Non
             PatchWarning,
             stacklevel=_caller_stacklevel(),
         )
-    expected = getattr(impl, target.version_attr) if target.version_attr else None
-    if real is None:
-        found = None
-    elif target.installed is not None:
-        found = target.installed(real)
-    else:
-        found = getattr(real, "__version__", None)
-    modes = getattr(impl, target.modes_attr) if target.modes_attr else ()
-    if real is not None and expected is not None and found != expected and found not in modes:
-        key = f"{name}:version"
-        if key not in _WARNED:
-            _WARNED.add(key)
-            warnings.warn(
-                f"pyroid.integrations.patch: the installed {name} is {found or 'unversioned'}, "
-                f"but {target.impl} reproduces {name} {expected}: the patched functions give "
-                f"{name} {expected}'s results, the rest is {name} {found or '(unversioned)'}.",
-                PatchWarning,
-                stacklevel=_caller_stacklevel(),
-            )
+
+
+def _impl(name: str) -> types.ModuleType:
+    """The pyroid module behind `name`, imported (its import checks the installed version).
+
+    patch() follows the installed release where pyroid reproduces several (trafilatura), so
+    the check does not suggest a ``compat=`` there.
+    """
+    with _versions.follow_installed(name):
+        return importlib.import_module(_TARGETS[name].impl)
 
 
 def _install(name: str, *, warn: bool) -> None:
@@ -1009,7 +1531,7 @@ def _install(name: str, *, warn: bool) -> None:
                     sys.modules[key] = module
             return
         target = _TARGETS[name]
-        impl = importlib.import_module(target.impl)
+        impl = _impl(name)
         saved = {k: v for k, v in sys.modules.copy().items() if _owned(k, name)}
         real, missing = _real(name)
         try:
@@ -1048,24 +1570,29 @@ def patch(*names: str) -> None:
 
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
-            ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"`` and/or
-            ``"langdetect"``.
+            ``"json_repair"``, ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"``,
+            ``"yaml"``, ``"tabulate"``, ``"dateutil"``, ``"jmespath"``, ``"difflib"``,
+            ``"packaging"``, ``"sqlparse"`` and/or ``"langdetect"``.
 
     Raises:
         TypeError: No names were given.
         ValueError: A name is not supported (nothing is patched then).
         ImportError: The pyroid module behind a name cannot be imported (``pyroid.fasttext``
-            and ``pyroid.datasketch`` need numpy).
+            and ``pyroid.datasketch`` need numpy), or the installed package cannot take
+            pyroid's objects (``"nemo_curator"`` needs NeMo Curator; ``"sqlparse"`` needs
+            sqlparse 0.5.0 or later, or none; ``"yaml"`` needs PyYAML 6.0 or later, or none).
 
     Warns:
-        PatchWarning: Once per process for each name: what was patched and how to undo it;
-            and if the installed package is not the version pyroid reproduces.
+        PatchWarning: Once per process for each name: what was patched and how to undo it.
+        pyroid.VersionMismatchWarning: The installed package is not the release pyroid
+            reproduces (once per process for each package, shared with the pyroid modules'
+            own check at import).
     """
     if not names:
         raise TypeError(f"patch() needs at least one name: {', '.join(map(repr, SUPPORTED))}")
     checked = _check(names)
     for name in checked:  # fail before patching anything
-        importlib.import_module(_TARGETS[name].impl)
+        _impl(name)
     for name in checked:
         _install(name, warn=True)
 
@@ -1133,24 +1660,32 @@ def _split(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
-def _apply(names: Sequence[str], *, lenient: bool) -> list[str]:
+def _apply(names: Sequence[str], *, lenient: bool, announce: bool = True) -> list[str]:
     """Patch checked `names`, warning once per process tree; return the names patched.
 
-    ``lenient``: skip (with a PatchWarning) a name whose pyroid module cannot be imported.
+    ``lenient``: skip (with a PatchWarning) a name that cannot be patched (ImportError: its
+    pyroid module cannot be imported, or the installed package cannot take pyroid's objects).
+    ``announce=False``: no PatchWarning per name (the caller says it in one line).
     """
     warned = set(_split(os.environ.get(_WARNED_ENV, "")))
     done: list[str] = []
     for name in names:
-        try:
-            importlib.import_module(_TARGETS[name].impl)
-        except ImportError as exc:
-            if not lenient:
-                raise
-            warnings.warn(
-                f"pyroid: not patching {name}: {exc}", PatchWarning, stacklevel=_caller_stacklevel()
-            )
-            continue
-        _install(name, warn=name not in warned)
+        # A name the process tree already warned about: its version checks stay quiet too.
+        with _versions.quiet() if name in warned else contextlib.nullcontext():
+            try:
+                _impl(name)
+                _install(name, warn=announce and name not in warned)
+            except ImportError as exc:
+                if not lenient:
+                    raise
+                warnings.warn(
+                    f"pyroid: not patching {name}: {exc}",
+                    PatchWarning,
+                    stacklevel=_caller_stacklevel(),
+                )
+                continue
+            if not announce:
+                _WARNED.add(name)
         done.append(name)
     os.environ[_WARNED_ENV] = ",".join(n for n in SUPPORTED if n in warned or n in done)
     return done
@@ -1181,13 +1716,14 @@ def _export(names: Sequence[str]) -> None:
 _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
-`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `trafilatura` / `nltk` /
-`warcio` / `nemo_curator` / `langdetect` giving pyroid's drop-ins. The Python processes it starts
+`import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
+`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` / `dateutil` / `jmespath` / `difflib` /
+`packaging` / `sqlparse` / `langdetect` giving pyroid's drop-ins. The Python processes it starts
 (multiprocessing workers, subprocesses) are patched too.
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}
-                     (default: ${ENV_VAR}, else {",".join(DEFAULT_RUN_NAMES)})
+                     (repeatable; default: ${ENV_VAR}, else {",".join(DEFAULT_RUN_NAMES)})
   -m MODULE          run a library module as a script
   -h, --help         show this help and exit
 """
@@ -1200,9 +1736,16 @@ class _UsageError(Exception):
 _Parsed = tuple[str | None, str | None, str | None, list[str]]
 
 
+def _joined(given: Sequence[str]) -> str | None:
+    return ",".join(given) if given else None
+
+
 def _parse_run(argv: Sequence[str]) -> _Parsed | None:
-    """``(names, module, script, args)``, or None for ``--help``; options stop at the target."""
-    names: str | None = None
+    """``(names, module, script, args)``, or None for ``--help``; options stop at the target.
+
+    Repeated ``-p`` options add up: ``-p yaml -p ftfy`` is ``-p yaml,ftfy``.
+    """
+    given: list[str] = []
     i = 0
     while i < len(argv):
         arg = argv[i]
@@ -1211,32 +1754,33 @@ def _parse_run(argv: Sequence[str]) -> _Parsed | None:
         if arg in ("-p", "--patch"):
             if i + 1 == len(argv):
                 raise _UsageError(f"argument {arg}: expected a comma-separated list of names")
-            names = argv[i + 1]
+            given.append(argv[i + 1])
             i += 2
         elif arg.startswith("--patch="):
-            names = arg.partition("=")[2]
+            given.append(arg.partition("=")[2])
             i += 1
         elif arg.startswith("-p"):
-            names = arg[2:]
+            given.append(arg[2:])
             i += 1
         elif arg.startswith("-m"):
             module = arg[2:] or (argv[i + 1] if i + 1 < len(argv) else "")
             if not module:
                 raise _UsageError("argument -m: expected a module name")
-            return names, module, None, list(argv[i + (1 if arg[2:] else 2) :])
+            return _joined(given), module, None, list(argv[i + (1 if arg[2:] else 2) :])
         elif arg == "--":
             if i + 1 == len(argv):
                 raise _UsageError("no script given after --")
-            return names, None, argv[i + 1], list(argv[i + 2 :])
+            return _joined(given), None, argv[i + 1], list(argv[i + 2 :])
         elif arg.startswith("-"):
             raise _UsageError(f"unrecognized option {arg!r} (reading stdin is not supported)")
         else:
-            return names, None, arg, list(argv[i + 1 :])
+            return _joined(given), None, arg, list(argv[i + 1 :])
     raise _UsageError("give a SCRIPT or -m MODULE to run")
 
 
 def _show_run_warning(message: Warning | str, category: type[Warning], *_: Any, **__: Any) -> None:
-    sys.stderr.write(f"pyroid run: {category.__name__}: {message}\n")
+    text = str(message).removeprefix("pyroid: ")  # the line already starts with "pyroid run:"
+    sys.stderr.write(f"pyroid run: {category.__name__}: {text}\n")
 
 
 def run(argv: Sequence[str]) -> int:
@@ -1248,7 +1792,8 @@ def run(argv: Sequence[str]) -> int:
     processes are patched too), then runs the target in this process with :mod:`runpy`, as
     ``python -m MODULE ARGS`` / ``python SCRIPT ARGS`` would: ``sys.argv``, ``sys.path[0]``,
     ``__name__ == "__main__"``. It is meant to be the last thing a process does: the patches,
-    the environment and ``sys.argv`` stay as they are afterwards.
+    the environment and ``sys.argv`` stay as they are afterwards. A second call while a target
+    runs (from another thread, or the target itself) is refused with status 2.
 
     Args:
         argv: The arguments after ``pyroid run``.
@@ -1289,40 +1834,88 @@ def run(argv: Sequence[str]) -> int:
         path = os.path.abspath(script)
         sys.stderr.write(f"pyroid run: can't open file {path!r}: No such file or directory\n")
         return 2
-    try:
-        # The PatchWarnings have no line of the user's to point at (pyroid run is the caller):
-        # show them as plain lines. The warning filters (-W, PYTHONWARNINGS) still apply.
-        with warnings.catch_warnings():
-            warnings.showwarning = _show_run_warning
-            done = _apply(names, lenient=lenient)
-    except ImportError as exc:
-        sys.stderr.write(f"pyroid run: error: cannot patch: {exc}\n")
+    if not _RUN_LOCK.acquire(blocking=False):
+        sys.stderr.write(
+            "pyroid run: error: another target is running in this process (pyroid run makes "
+            "its target the program: sys.argv, sys.path[0]); run each in its own process\n"
+        )
         return 2
-    _export(done)
-    if module is not None:
+    try:
         try:
-            found = importlib.util.find_spec(module)
-        except (ImportError, ValueError) as exc:
-            sys.stderr.write(
-                f"pyroid run: error while finding module specification for {module!r} "
-                f"({type(exc).__name__}: {exc})\n"
-            )
-            return 1
-        if found is None:
-            sys.stderr.write(f"pyroid run: No module named {module}\n")
-            return 1
-        sys.argv[:] = [module, *args]  # runpy sets argv[0] to the module's file
-        if not sys.flags.safe_path:
-            _set_path0(os.getcwd())
-        runpy.run_module(module, run_name="__main__", alter_sys=True)
+            # The warnings have no line of the user's to point at (pyroid run is the caller): show
+            # them as plain lines. The warning filters (-W, PYTHONWARNINGS) still apply. One short
+            # PatchWarning for all the names replaces patch()'s one per name.
+            warned = set(_split(os.environ.get(_WARNED_ENV, "")))
+            with warnings.catch_warnings():
+                warnings.showwarning = _show_run_warning
+                done = _apply(names, lenient=lenient, announce=False)
+                new = [n for n in done if n not in warned]
+                if new:
+                    warnings.warn(
+                        f"{', '.join(new)} patched with "
+                        f"{', '.join(_TARGETS[n].impl for n in new)}, in this process "
+                        "and the Python processes it starts",
+                        PatchWarning,
+                        stacklevel=1,
+                    )
+        except ImportError as exc:
+            sys.stderr.write(f"pyroid run: error: cannot patch: {exc}\n")
+            return 2
+        _export(done)
+        if module is not None:
+            if not sys.flags.safe_path:
+                _set_path0(os.getcwd())  # before the lookup: python -m finds packages in the cwd
+            try:
+                found = importlib.util.find_spec(module)
+            except (ImportError, ValueError) as exc:
+                sys.stderr.write(
+                    f"pyroid run: error while finding module specification for {module!r} "
+                    f"({type(exc).__name__}: {exc})\n"
+                )
+                return 1
+            if found is None:
+                sys.stderr.write(f"pyroid run: No module named {module}\n")
+                return 1
+            sys.argv[:] = [module, *args]  # runpy sets argv[0] to the module's file
+            _trim_tracebacks()
+            runpy.run_module(module, run_name="__main__", alter_sys=True)
+            return 0
+        assert script is not None
+        sys.argv[:] = [script, *args]
+        # A directory or zip file is a sys.path entry that runpy puts first itself.
+        if not sys.flags.safe_path and pkgutil.get_importer(script) is None:
+            _set_path0(os.path.dirname(os.path.realpath(script)))
+        _trim_tracebacks()
+        runpy.run_path(script, run_name="__main__")
         return 0
-    assert script is not None
-    sys.argv[:] = [script, *args]
-    # A directory or zip file is a sys.path entry that runpy puts first itself.
-    if not sys.flags.safe_path and pkgutil.get_importer(script) is None:
-        _set_path0(os.path.dirname(os.path.realpath(script)))
-    runpy.run_path(script, run_name="__main__")
-    return 0
+    finally:
+        _RUN_LOCK.release()
+
+
+def _trim_tracebacks() -> None:
+    """Show an uncaught exception of the target from its own first frame, as ``python`` does.
+
+    The frames of the ``pyroid`` launcher, :func:`run` and :mod:`runpy` above it are left out.
+    The exception still propagates (``python`` then exits with status 1, or as killed by SIGINT
+    for KeyboardInterrupt); a hook the target installs itself replaces this one.
+    """
+    previous = sys.excepthook
+    runpy_files = {runpy.__file__, "<frozen runpy>"}
+
+    def hook(kind: type[BaseException], exc: BaseException, tb: types.TracebackType | None) -> None:
+        t = tb
+        while t is not None and t.tb_frame.f_code is not run.__code__:
+            t = t.tb_next
+        if t is not None:  # skip run() and the runpy frames below it
+            t = t.tb_next
+            while t is not None and t.tb_frame.f_code.co_filename in runpy_files:
+                t = t.tb_next
+            tb = t
+            # Python prints the exception's own traceback (the argument only when it has none).
+            exc.with_traceback(tb)
+        previous(kind, exc, tb)
+
+    sys.excepthook = hook
 
 
 def _set_path0(entry: str) -> None:

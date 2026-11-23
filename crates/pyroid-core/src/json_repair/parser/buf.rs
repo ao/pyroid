@@ -1,4 +1,4 @@
-// Derived from json_repair 0.64.5 (MIT), © Stefano Baccianella; modified.
+// Derived from json_repair 0.64.9 (MIT), © Stefano Baccianella; modified.
 //! The parser's text buffer: json_repair's `self.json_str`, as chars.
 //!
 //! json_repair rewrites its input in two places: it inserts a `{` where a

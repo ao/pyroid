@@ -84,7 +84,12 @@ class _CjkMap(dict[str, str]):
 
 
 class NGram:
-    """The last three normalised characters of a text, as langdetect's ``NGram``."""
+    """The last three normalised characters of a text, as langdetect's ``NGram``.
+
+    The class attributes are langdetect's tables. Changing one (``N_GRAM``,
+    ``LATIN1_EXCLUDED``, an entry of ``CJK_MAP``, ...) changes the detections as in
+    langdetect, which then run langdetect's Python algorithm (langdetect's speed).
+    """
 
     LATIN1_EXCLUDED = _tables.LATIN1_EXCLUDED
     N_GRAM = 3
@@ -94,7 +99,7 @@ class NGram:
         self.capitalword = False
 
     def add_char(self, ch: str) -> None:
-        """Append a character into the n-gram buffer."""
+        """Append one character."""
         ch = self.normalize(ch)
         last_char = self.grams[-1]
         if last_char == " ":
@@ -148,7 +153,7 @@ class NGram:
 
     @classmethod
     def normalize_vi(cls, text: Any) -> str:
-        """Fold a Vietnamese letter followed by a combining mark into one character."""
+        """Fold a Vietnamese letter and a following combining mark into one character."""
         try:
             stock = isinstance(text, str) and _vi_stock(cls)
         except Exception:

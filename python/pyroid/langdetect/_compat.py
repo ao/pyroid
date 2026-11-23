@@ -14,7 +14,6 @@ import importlib
 import importlib.util
 import os
 import sys
-import warnings
 from typing import Any
 
 from pyroid.langdetect import _classes
@@ -66,54 +65,3 @@ def _profiles_dir() -> str | None:
     """The profile directory of the installed langdetect, if any."""
     pkg = _installed_package_dir()
     return os.path.join(pkg, "profiles") if pkg is not None else None
-
-
-_WARNED = False
-
-
-def check_version() -> None:
-    """Warn once per process if the installed langdetect detects differently from 1.0.9.
-
-    langdetect 1.0.7 and 1.0.8 detect as 1.0.9 does (:data:`SAME_RELEASES`), so only other
-    releases warn. Until ``pyroid._versions`` lands this is a ``RuntimeWarning`` in
-    json_repair's shape; then the whole function becomes ``_versions.check(...)`` with
-    ``same=`` those releases.
-    """
-    global _WARNED
-    if _WARNED or _real is None:
-        return
-    _WARNED = True
-    pkg = _installed_package_dir()
-    if pkg is None:
-        return
-    parent = os.path.dirname(pkg)
-    for release in (LANGDETECT_VERSION, *SAME_RELEASES):
-        if os.path.isdir(os.path.join(parent, f"langdetect-{release}.dist-info")):
-            return
-    from importlib import metadata
-
-    try:
-        version = metadata.version("langdetect")
-    except metadata.PackageNotFoundError:
-        return
-    if version in (LANGDETECT_VERSION, *SAME_RELEASES):
-        return
-    # The first frame outside pyroid and importlib. warnings skips importlib's bootstrap frames
-    # itself when it counts `stacklevel`, so they are not counted here either.
-    level = 1
-    frame: Any = sys._getframe(1)
-    while frame is not None:
-        filename = frame.f_code.co_filename
-        if not ("importlib" in filename and "_bootstrap" in filename):
-            level += 1
-            if not str(frame.f_globals.get("__name__", "")).startswith(("pyroid", "importlib")):
-                break
-        frame = frame.f_back
-    warnings.warn(
-        f"pyroid.langdetect reproduces langdetect {LANGDETECT_VERSION}, but langdetect {version} "
-        f"is installed: detections follow {LANGDETECT_VERSION} (and 1.0.7 and 1.0.8, which detect "
-        f"the same), and Language, LangDetectException and ErrorCode are the installed "
-        f"release's classes.",
-        RuntimeWarning,
-        stacklevel=level,
-    )
