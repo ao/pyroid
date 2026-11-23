@@ -50,6 +50,7 @@ See [`pyroid.patch()`](guides/patch.md) for the libraries it covers.
 | Evaluation | [`pyroid.metrics`](guides/metrics.md) | [rouge-score](https://github.com/google-research/google-research/tree/master/rouge) 0.1.2 and [sacrebleu](https://github.com/mjpost/sacrebleu) 2.6.0 (BLEU, chrF, chrF++) | identical scores and signatures, no tolerance ([parity](compatibility.md#metrics)) |
 | JSON | [`pyroid.json_repair`](guides/json_repair.md) | [json_repair](https://github.com/mangiucugna/json_repair) 0.64.9 | same output, linear where json_repair is still quadratic ([parity](compatibility.md#json_repair)) |
 | YAML | [`pyroid.yaml`](guides/yaml.md) | [PyYAML](https://github.com/yaml/pyyaml) 6.0.3's `safe_load` and `safe_dump` | same objects, text and errors as PyYAML's pure-Python `SafeLoader` and `SafeDumper`, faster than `CSafeLoader` ([parity](compatibility.md#yaml)) |
+| Tables | [`pyroid.tabulate`](guides/tabulate.md) | [tabulate](https://github.com/astanin/python-tabulate) 0.10.0, `DataFrame.to_markdown()` included | the same text, byte for byte, in every format ([parity](compatibility.md#tabulate)) |
 
 ## Example: cleaning LLM training data
 
@@ -206,10 +207,10 @@ PSF-2.0 AND Unicode-3.0 AND Zlib`:
 - Apache-2.0 for the ftfy, datatrove, rouge-score, NLTK (Porter stemmer and tokenizers),
   sacrebleu, Trafilatura, SudachiPy and warcio ports;
 - MIT for the fastText, spaCy, indic-nlp-library, urduhack, json_repair, datasketch, jieba (and
-  its dictionary), libxml2 (HTML parser) and PyYAML ports;
+  its dictionary), libxml2 (HTML parser), PyYAML and tabulate ports;
 - BSD-2-Clause for the jusText port and its stoplists;
 - BSD-3-Clause for numpy's random generator, scipy's QUADPACK integration, tldextract and lxml;
-- PSF-2.0 for CPython's `ipaddress`;
+- PSF-2.0 for CPython's `ipaddress` and float formatting;
 - ISC for anyascii's data;
 - Unicode-3.0 for Unicode Character Database data;
 - Zlib for zlib-rs, the Rust crate behind `pyroid.warc`'s gzip decoding.

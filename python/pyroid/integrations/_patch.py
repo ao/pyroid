@@ -111,6 +111,12 @@ are shims holding :mod:`pyroid.yaml`'s functions and classes. With PyYAML 5.x in
 ``ImportError`` and changes nothing: 5.x's ``load`` and ``load_all`` take no ``Loader``, and some
 of its results differ from 6.0's.
 
+``"tabulate"`` is a shim whether or not tabulate is installed: ``tabulate.tabulate`` and the
+other names of :mod:`pyroid.tabulate` (``TableFormat``, ``tabulate_formats``, ``_table_formats``,
+...) are pyroid's, which reproduce tabulate 0.10.0, so ``DataFrame.to_markdown()`` uses them.
+Setting ``tabulate.MIN_PADDING``, ``PRESERVE_WHITESPACE`` or ``WIDE_CHARS_MODE`` on the shim
+sets them for :mod:`pyroid.tabulate` too.
+
 Limitations: a shim is not the real module object, so code that already holds the real module (or
 compares module objects) is not redirected; ``importlib.reload`` of a shim is not supported.
 """
@@ -159,6 +165,7 @@ SUPPORTED: tuple[str, ...] = (
     "warcio",
     "nemo_curator",
     "yaml",
+    "tabulate",
 )
 
 #: What ``pyroid run`` patches when neither ``-p`` nor ``$PYROID_PATCH`` says.
@@ -862,6 +869,20 @@ def _build_yaml(impl: types.ModuleType, real: Any, missing: str) -> _Built:
     return {}, [undo]
 
 
+def _build_tabulate(impl: types.ModuleType, real: Any, missing: str) -> _Built:
+    shim = _shim(
+        "tabulate",
+        real,
+        missing,
+        impl,
+        impl._patched_names(),
+        package=True,
+        version=impl.TABULATE_VERSION,
+    )
+    impl._share_settings(shim, real)
+    return {"tabulate": shim}, []
+
+
 _TARGETS: dict[str, _Target] = {
     "ftfy": _Target(
         "pyroid.ftfy",
@@ -942,6 +963,13 @@ _TARGETS: dict[str, _Target] = {
         "pip install pyyaml==6.0.3",
         " (customised loaders and dumpers, !!python/ tags, the event and token APIs, YAMLObject)",
         _build_yaml,
+    ),
+    "tabulate": _Target(
+        "pyroid.tabulate",
+        "which reproduces tabulate 0.10.0",
+        "pip install tabulate==0.10.0",
+        " (the modules and names tabulate imports, such as `re`)",
+        _build_tabulate,
     ),
 }
 
@@ -1102,8 +1130,8 @@ def patch(*names: str) -> None:
 
     Args:
         *names: ``"ftfy"``, ``"fasttext"``, ``"anyascii"``, ``"datasketch"``,
-            ``"json_repair"``, ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"``
-            and/or ``"yaml"``.
+            ``"json_repair"``, ``"trafilatura"``, ``"nltk"``, ``"warcio"``, ``"nemo_curator"``,
+            ``"yaml"`` and/or ``"tabulate"``.
 
     Raises:
         TypeError: No names were given.
@@ -1247,8 +1275,8 @@ _RUN_USAGE = "usage: pyroid run [-p NAMES] (-m MODULE | SCRIPT) [ARGS...]\n"
 _RUN_HELP = f"""{_RUN_USAGE}
 Run a Python script or module, as `python SCRIPT` / `python -m MODULE` would, with
 `import ftfy` / `fasttext` / `anyascii` / `datasketch` / `json_repair` / `trafilatura` /
-`nltk` / `warcio` / `nemo_curator` / `yaml` giving pyroid's drop-ins. The Python processes it
-starts (multiprocessing workers, subprocesses) are patched too.
+`nltk` / `warcio` / `nemo_curator` / `yaml` / `tabulate` giving pyroid's drop-ins. The Python
+processes it starts (multiprocessing workers, subprocesses) are patched too.
 
 options:
   -p, --patch NAMES  comma-separated modules to patch: {", ".join(SUPPORTED)}

@@ -24,6 +24,7 @@ __all__ = [
     "metrics",
     "nemo",
     "nltk",
+    "tabulate",
     "text",
     "trafilatura",
     "translit",
@@ -49,6 +50,7 @@ nemo: ModuleType
 trafilatura: ModuleType
 warc: ModuleType
 yaml: ModuleType
+tabulate: ModuleType
 _testing: ModuleType
 
 def _numpy_ready() -> None:

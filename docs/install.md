@@ -20,9 +20,9 @@ pyroid has no runtime dependencies. Extras:
 | `pyroid[all]` | all of the above | everything; on CPython 3.15 it leaves out `datatrove`, `hf` and `warc` (see below) |
 
 Extras combine: `pip install "pyroid[cli,fasttext]"`. `pyroid.ftfy`, `pyroid.filters`,
-`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.trafilatura`,
-`pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader, `pyroid.yaml` and `pyroid.patch()` need none
-of them.
+`pyroid.dedup`, `pyroid.translit`, `pyroid.metrics`, `pyroid.json_repair`, `pyroid.tabulate`,
+`pyroid.trafilatura`, `pyroid.nltk`, `pyroid.jieba`, `pyroid.warc`'s reader, `pyroid.yaml` and
+`pyroid.patch()` need none of them.
 
 Some dependencies of the `datatrove`, `hf` and `warc` extras (orjson, tokenizers, PyYAML and
 faust-cchardet) publish no wheels for CPython 3.15 and 3.15t yet, and orjson none for 3.14t. There
@@ -47,6 +47,8 @@ Optional libraries, needed only by the features that use them:
     - json_repair 0.64.9 for `schema=`;
     - PyYAML 6.0.3 for customised loaders and dumpers, `!!python/` tags and its other functions
       (`scan`, `compose`, `YAMLObject`, ...);
+    - wcwidth for `pyroid.tabulate`'s wide-character widths (its few calls that the Rust code does
+      not take run pyroid's copy of tabulate 0.10.0's code: tabulate itself is never needed);
     - datasketch 2.0.0 for its classes pyroid does not port (`WeightedMinHash`, `HyperLogLog`,
       ...) and for Redis or Cassandra LSH storage.
 

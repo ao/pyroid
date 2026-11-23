@@ -454,3 +454,15 @@ def test_yaml() -> None:
             config.clear()
 
     hammer(lambda: y.safe_dump(config), grow_or_clear)
+
+
+def test_tabulate() -> None:
+    from pyroid.tabulate import tabulate
+
+    rows = ([[i, f"name {i}", i * 0.5] for i in range(200)], [["x", None, 2]] * 3)
+    over_states(tabulate, rows)
+    over_states(lambda r: tabulate(r, headers="firstrow", tablefmt="grid"), rows)
+    row = [1, "two", 3.0]
+    over_states(lambda r: tabulate([r, row]), ([1, 2, 3], ["a", "b"]))
+    columns = {"a": list(range(150)), "b": ["x"] * 150}
+    hammer(lambda: tabulate(columns, headers="keys"), lambda i: columns.update(c=[i] * (i % 150)))

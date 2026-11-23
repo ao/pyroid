@@ -1,0 +1,2 @@
+# Vendored from tabulate 0.10.0 (MIT): keep test/ byte-identical, never lint or reformat it.
+extend-exclude = ["test"]

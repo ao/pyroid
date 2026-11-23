@@ -98,6 +98,12 @@ WATCH: dict[str, Watch] = {
         "pyroid.yaml reproduces PyYAML's pure-Python SafeLoader and SafeDumper. No parity suite covers it here: "
         "its parity tests are python/tests/test_yaml_parity.py, which compare against the pinned PyYAML.",
     ),
+    "tabulate": Watch(
+        (),
+        "pyroid.tabulate reproduces tabulate. No parity suite covers it here: its parity tests are "
+        "python/tests/test_tabulate_parity.py and test_tabulate_upstream.py, which compare against the "
+        "pinned tabulate.",
+    ),
     # Libraries an oracle depends on whose behaviour pyroid reproduces too.
     "lxml": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces trafilatura on lxml's (libxml2's) parse tree."),
     "justext": Watch(_BOTH_MODES, "pyroid.trafilatura reproduces jusText, trafilatura's fallback extractor."),

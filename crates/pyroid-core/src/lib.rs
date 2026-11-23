@@ -20,6 +20,7 @@
 //! - [`sudachi`]: Japanese morphemes as SudachiPy 0.7.0 gives them, from an
 //!   installed SudachiDict (datatrove's Japanese tokenizer in the filters).
 //! - [`warc`]: warcio 1.8.2's WARC/ARC reader, ported exactly (`pyroid.warc`).
+//! - [`tabulate`]: tabulate 0.10.0's table rendering (`pyroid.tabulate`).
 //! - [`pyvi`]: Vietnamese words as spaCy's tokenizer gets them from pyvi 0.1.1
 //!   (datatrove's Vietnamese tokenizer in the filters).
 //! - [`pythainlp`]: Thai words and sentences as PyThaiNLP 5.4.0 gives them,
@@ -51,6 +52,7 @@ pub mod pythainlp;
 pub mod pyvi;
 pub mod scratch;
 pub mod sudachi;
+pub mod tabulate;
 pub mod text;
 pub mod trafilatura;
 pub mod translit;

@@ -167,6 +167,24 @@ Reference: json_repair 0.64.9. Rule: the same returned string or object, the sam
 
 <small>Source: the parity/ json_repair suite on an EC2 c8g.16xlarge devbox, run on 2026-11-14.</small>
 
+### pyroid.tabulate {#tabulate}
+
+Reference: tabulate 0.10.0 (live, with wcwidth 0.9.4, numpy 2.5.4 and pandas 3.1.1). Rule: the same text and result type (JupyterHTMLStr for html), the same exception type and message, the same warnings.
+
+| Check | Compared | Identical | Different |
+|---|---:|---:|---:|
+| tabulate 0.10.0's own test suite, unmodified, through pyroid.patch("tabulate") (its CLI tests run python -m pyroid.tabulate; 1 test tabulate skips itself), CPython 3.12 | 318 | 318 | 0 |
+| Hypothesis: random tables (ints of any size, floats with inf/nan/-0.0, numeric strings, bools, None, bytes, Decimal, dates, numpy scalars, float32 and float16 DataFrames, multiline, wide and ANSI text, lone surrogates, separators in the first or second column) in every input shape and format, with random options (alignments that are not strings too) and module settings; warnings compared by where they point too, CPython 3.12 | 20,000 | 20,000 | 0 |
+| Hypothesis: float and int format specs (invalid ones too) and strings near tabulate's number grammar (Unicode digits and spaces, ANSI codes), CPython 3.12 | 40,000 | 40,000 | 0 |
+| 48 public CSV files (seaborn-data, vega-datasets, datahub; first 3,000 rows) in every format and 5 option sets, and DataFrame.to_markdown() in 6 variants, CPython 3.12 | 2,784 | 2,784 | 0 |
+| The same four checks on free-threaded CPython 3.14t | 63,102 | 63,102 | 0 |
+| **Total** | **126,204** | **126,204** | **0** |
+
+- A test checks that the Python pyroid keeps from tabulate (normalisation, text wrapping, the per-cell fallbacks, the format callables, and the tabulate() that runs the calls the Rust code does not take) is still tabulate 0.10.0's code, AST for AST.
+- The Rust number formatter's integer fast paths are checked against Rust's own formatter (which matches CPython's) on 900,000 doubles, for 1 to 17 significant digits and 0 to 6 decimals.
+
+<small>Source: python/tests/test_tabulate_upstream.py, test_tabulate_parity.py and test_tabulate_corpus.py on the EC2 devbox, 2026-11-16.</small>
+
 ### pyroid.datasketch {#datasketch}
 
 Reference: datasketch 2.0.0 (live, with numpy 2.5.4 and scipy 1.18.1). Rule: identical hash values and dtypes, identical LeanMinHash bytes, identical (b, r), identical query result sets.
@@ -402,6 +420,7 @@ checked. Each library is checked once per process, by whichever module asks firs
 | sacrebleu | sacrebleu 2.6.0 | `import pyroid.metrics.sacrebleu` |
 | json_repair | json-repair 0.64.9 | `import pyroid.json_repair` |
 | PyYAML | pyyaml 6.0.3; 6.0, 6.0.1 and 6.0.2 give the same results | `import pyroid.yaml`, `pyroid.patch("yaml")` |
+| tabulate | tabulate 0.10.0 | `import pyroid.tabulate`, `pyroid.patch("tabulate")` |
 | datasketch | datasketch 2.0.0 | `import pyroid.datasketch`, `pyroid.patch("datasketch")` |
 | jieba | jieba 0.42.1 | `import pyroid.jieba` |
 | Trafilatura | trafilatura 2.3.1, and 1.11.0 with `compat="1.11.0"` | `import pyroid.trafilatura`, `pyroid.patch("trafilatura")` |

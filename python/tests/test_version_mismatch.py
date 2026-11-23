@@ -230,6 +230,16 @@ CASES = [
         patch="yaml",
         imports=True,  # pyroid.yaml uses PyYAML's exception classes when it imports
     ),
+    Case(
+        "tabulate",
+        "import pyroid.tabulate",
+        "tabulate",
+        "tabulate",
+        _version("pyroid.tabulate", "TABULATE_VERSION"),
+        "pyroid.tabulate",
+        ("tabulate",),
+        patch="tabulate",
+    ),
 ]
 PATCHED = [c for c in CASES if c.patch is not None]
 

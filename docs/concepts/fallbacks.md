@@ -22,6 +22,7 @@ So the result is always the incumbent's. The warning tells you that this call to
 | `pyroid.dedup` | MinHash with `python_tokenizer=True`, as for the filters: datatrove's tokenizer splits the words, everything else stays in Rust | without it, such a language raises `NotImplementedError`; sentence dedup has no Python-tokenizer path |
 | `pyroid.translit` | never | — |
 | `pyroid.metrics` | ROUGE: tokens from a custom tokenizer that are not lists of `str` (to rouge-score). sacrebleu: the `ja-mecab`, `ko-mecab`, `spm`, `flores101`, `flores200` and `spBLEU-1K` tokenizers, `n_bootstrap > 1`, TER, `DATASETS` and the test-set helpers (`pyroid.metrics.sacrebleu.DELEGATED`) | — |
+| `pyroid.tabulate` | text with lone surrogates, an alignment that is not a `str`, `None` or `bool`, a custom `TableFormat` whose lines and rows are not strings or callables (or whose `padding` is not an int), a per-column `missingval` entry that is not a `str` ([the list](../guides/tabulate.md#what-runs-where)). These run tabulate 0.10.0's own Python code, which pyroid carries a copy of, not the installed tabulate | tabulate never needs to be installed |
 | `pyroid.json_repair` | `schema=` calls, non-`str` input, and text holding a character in U+10F800..U+10FFFF (the range the port uses to store lone surrogates); `repair_json_batch` delegates only those documents, from a list or an Arrow column | — |
 | `pyroid.trafilatura` | the other output formats, `include_formatting`, `include_links`, `include_images`, metadata (`with_metadata`, `url_blacklist`, `extract_with_metadata`, ...), `target_language`, `prune_xpath`, `options=`, a trafilatura `LRUCache`, an lxml tree as input, bytes that are compressed or not UTF-8 ([the list](../guides/trafilatura.md#delegated-options)) | the installed trafilatura must be the mode's release (2.3.1, or 1.11.0 with `compat="1.11.0"`); without it, or with another version, these calls raise `PyroidError` |
 | `pyroid.nltk` | Punkt training (`PunktTrainer`, `PunktSentenceTokenizer(train_text)`), a custom `token_cls`, a `PunktLanguageVars` subclass that changes more than `sent_end_chars`, parameters that are not sets of `str`, `dump()` and saving parameters, a Treebank tokenizer whose patterns were changed, a `RegexpTokenizer` pattern that is not one of the native ones | — |
@@ -31,8 +32,8 @@ So the result is always the incumbent's. The warning tells you that this call to
 | `pyroid.integrations.datatrove` | a `language` the step can't tokenize natively runs datatrove's own code for that step, and `Trafilatura` with an installed trafilatura release that pyroid does not reproduce runs datatrove's own step | — |
 
 Without the library a call needs (ftfy, datatrove and the language's segmenter, rouge-score,
-nltk, sacrebleu, json_repair, trafilatura, jieba, datasketch, PyYAML), it raises `pyroid.PyroidError` and
-says what to install.
+nltk, sacrebleu, json_repair, trafilatura, jieba, datasketch, PyYAML), it raises `pyroid.PyroidError`
+and says what to install.
 
 ## `python_tokenizer=True`
 
@@ -83,7 +84,8 @@ uses its 17.0 tables. Any other warning matches the incumbent's own (for example
 ## `pyroid.patch()` warns too
 
 [`pyroid.patch()`](../guides/patch.md) is not a fallback but the opposite: it makes code that
-imports ftfy, fastText, anyascii, datasketch, trafilatura or NLTK get pyroid's functions instead.
+imports ftfy, fastText, anyascii, datasketch, json_repair, Trafilatura, NLTK, warcio, NeMo Curator,
+PyYAML or tabulate get pyroid's functions instead.
 It announces that with its own `PatchWarning`, once per process for each patched name, so you can
 tell the two apart. An installed package of another release also gets the
 `VersionMismatchWarning` that importing the pyroid module gives (once per process, whichever comes
