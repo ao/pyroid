@@ -254,12 +254,15 @@ def _private_work(path: Path) -> None:
     """
     import stat
 
-    path.parent.mkdir(parents=True, exist_ok=True)
+    from pyroid.integrations import _io
+
+    _io.makedirs(path.parent)
     try:
         os.mkdir(path, 0o700)
         return
-    except FileExistsError:
-        pass
+    except OSError:
+        if not os.path.lexists(path):  # see _io.makedirs: decided by the disk, not the errno
+            raise
     hint = "remove it, or pass another --tmp-dir"
     st = os.lstat(path)
     # Windows: a reparse tag with the name-surrogate bit (a symlink, a junction) points elsewhere.
@@ -276,6 +279,8 @@ def _private_work(path: Path) -> None:
 
 def _check_out(layout: Layout, overwrite: bool) -> None:
     """Refuse to replace files a previous, unrelated command wrote."""
+    from pyroid.integrations import _io
+
     if layout.merge and layout.final is not None and layout.out_dir is None:
         if layout.final.exists() and not overwrite and not layout.state_root.exists():
             raise SystemExit(f"pyroid: {layout.final} exists (pass --overwrite to replace it)")
@@ -285,7 +290,7 @@ def _check_out(layout: Layout, overwrite: bool) -> None:
     if layout.out_dir is not None and layout.out_dir.is_dir() and not overwrite:
         # Another shard may be creating .pyroid right now: a directory with it is ours.
         ours = layout.state_root.exists()
-        if not ours and any(p.name != ".pyroid" for p in layout.out_dir.iterdir()):
+        if not ours and any(p.name != ".pyroid" for p in _io.iterdir(layout.out_dir)):
             raise SystemExit(
                 f"pyroid: {layout.out_dir} is not empty and was not written by pyroid "
                 "(pass --overwrite to write into it anyway)"
@@ -586,7 +591,7 @@ class _Ipc:
         from pyroid.integrations import _io
 
         if self._writer is None:
-            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+            _io.makedirs(Path(self.path).parent)
             # Written through the descriptor of a file made here, never through a planted link.
             fh = open(_io.create_new(self.path + ".partial"), "wb", buffering=1 << 20)  # noqa: SIM115
             self._sink = pa.PythonFile(fh, mode="w")
@@ -1442,7 +1447,7 @@ def _tidy_failed(run: Run) -> None:
     ended before any (a wrong option, a missing model, an input it cannot read) leaves no hidden
     ``.NAME.pyroid`` or ``OUT/.pyroid`` behind, nor a directory OUT it made.
     """
-    from pyroid.integrations import _shards
+    from pyroid.integrations import _io, _shards
 
     lay = run.layout
     if run.state.records():
@@ -1457,10 +1462,10 @@ def _tidy_failed(run: Run) -> None:
     if run.shard.count > 1:
         return  # OUT/.pyroid is shared with the other shards, which may be starting now
     with contextlib.suppress(OSError):
-        if {p.name for p in root.iterdir()} <= {"run.json"}:
+        if {p.name for p in _io.iterdir(root)} <= {"run.json"}:
             _shards.rmtree(root)
     with contextlib.suppress(OSError):
-        if not run.out_existed and not any(lay.out_dir.iterdir()):
+        if not run.out_existed and not _io.iterdir(lay.out_dir):
             lay.out_dir.rmdir()
 
 
@@ -1610,7 +1615,8 @@ def _move(src: Path, dest: Path) -> None:
     try:
         _io.replace(src, dest)
     except OSError as e:
-        if e.errno != errno.EXDEV:
+        # EAGAIN may stand for EXDEV (see _io.makedirs): then the devices tell.
+        if e.errno != errno.EXDEV and not (isinstance(e, BlockingIOError) and _apart_fs(src, dest)):
             raise
         # An O_EXCL sibling with a random name: a planted symlink is never written through.
         tmp, fd = _io._sibling(dest, ".copy.partial")
@@ -1624,6 +1630,14 @@ def _move(src: Path, dest: Path) -> None:
             _io.remove(tmp)
             raise
         _io.remove(src)
+
+
+def _apart_fs(src: Path, dest: Path) -> bool:
+    """``src`` and the directory of ``dest`` are on different file systems."""
+    try:
+        return os.stat(src).st_dev != os.stat(dest.parent).st_dev
+    except OSError:
+        return False
 
 
 def _ipc_schema(path: Path) -> Any:
@@ -1664,7 +1678,7 @@ def _concat(parts: Sequence[Path], dest: Path, compression: str | None) -> None:
     """Concatenate part files (all in ``dest``'s format) into ``dest``, atomically."""
     from pyroid.integrations import _io
 
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    _io.makedirs(dest.parent)
     present = [p for p in parts if p.exists()]
     ipc = any(p.suffix == ".arrow" for p in present)
     if len(present) == 1 and not ipc:
@@ -1894,8 +1908,8 @@ def _minhash_middle(
 
     with cf.ThreadPoolExecutor(conc) as pool:
         list(pool.map(bucket, units))
-    removed.mkdir(parents=True, exist_ok=True)
-    for old in removed.iterdir():  # lists of an earlier, unfinished attempt
+    _io.makedirs(removed)
+    for old in _io.iterdir(removed):  # lists of an earlier, unfinished attempt
         _io.remove(old)
     res = _native._minhash_cluster(_minhash.dups_files(dups), str(removed))
     run.state.mark("minhash", {"outputs": [str(removed)], "cluster": res})
@@ -2127,11 +2141,13 @@ def _stage_cfg(a: argparse.Namespace, meta: dict[str, Any] | None, where: Path) 
 
 
 def _check_complete(folder: Path, meta: dict[str, Any] | None, what: str, hint: str) -> None:
+    from pyroid.integrations import _io
+
     if meta is None:
         return
     want = meta.get("inputs", {}).get("count")
     done = folder / ".pyroid" / "done"
-    have = len(list(done.glob("*.json"))) if done.is_dir() else 0
+    have = len(_io.glob(done, "*.json")) if done.is_dir() else 0
     if want is not None and have < want:
         raise SystemExit(
             f"pyroid dedup: {folder} is incomplete: {have} of {want} {what} are done ({hint})"
@@ -2146,14 +2162,14 @@ def _simple_state(folder: Path, command: str, info: dict[str, Any]) -> Any:
 
 
 def _stage_buckets(a: argparse.Namespace) -> int:
-    from pyroid.integrations import _minhash, _shards
+    from pyroid.integrations import _io, _minhash, _shards
 
     sigs, out = Path(a.sigs), Path(a.output)
     if not sigs.is_dir():
         raise SystemExit(f"pyroid dedup buckets: {sigs}: no such directory")
     _apart(out, sigs, "dedup buckets: DUPS", "SIGS")
     meta = _stage_meta(sigs)
-    if meta is None and next(sigs.glob("bucket_*/*.minhash.sig"), None) is None:
+    if meta is None and not _io.glob(sigs, "bucket_*/*.minhash.sig"):
         raise SystemExit(
             f"pyroid dedup buckets: {sigs} holds no signatures (bucket_*/*.minhash.sig): give "
             "the directory 'pyroid dedup signatures' wrote"
@@ -2246,9 +2262,9 @@ def _stage_cluster(a: argparse.Namespace) -> int:
             f"{cfg['num_buckets']} buckets"
         )
     t0 = time.perf_counter()
-    out.mkdir(parents=True, exist_ok=True)
+    _io.makedirs(out)
     _io.remove(out / ".pyroid" / "run.json")  # written again only once this run is complete
-    for old in out.iterdir():  # an earlier cluster run's lists must not survive this one
+    for old in _io.iterdir(out):  # an earlier cluster run's lists must not survive this one
         if old.suffix in (".remove", ".clusters", ".sizes") and old.stem.isdigit():
             _io.remove(old)
     res = _native._minhash_cluster(
@@ -2277,7 +2293,7 @@ def _stage_cluster(a: argparse.Namespace) -> int:
 
 
 def _stage_filter(a: argparse.Namespace) -> int:
-    from pyroid.integrations import _minhash, _shards
+    from pyroid.integrations import _io, _minhash, _shards
 
     removed = Path(a.removed)
     if not removed.is_dir():
@@ -2292,7 +2308,7 @@ def _stage_filter(a: argparse.Namespace) -> int:
             "run 'pyroid dedup cluster' again"
         )
     lists = ("*.remove", "*.clusters", "*.sizes")
-    if meta is None and not any(removed.glob("*.remove")):
+    if meta is None and not _io.glob(removed, "*.remove"):
         _shards.say(
             f"pyroid dedup filter: {removed} has no .remove files: no document is removed\n"
         )

@@ -250,32 +250,31 @@ def _walk(root: str, glob: _Glob | None, excluded: Sequence[str]) -> list[tuple[
     while stack:
         rel, real_dir, abs_dir = stack.pop()
         try:
-            entries = os.scandir(abs_dir)
-        except (FileNotFoundError, NotADirectoryError):
-            if rel:
+            entries = scandir(abs_dir)
+        except OSError:
+            if rel or os.path.isdir(abs_dir):  # see makedirs: not by the errno
                 raise
             break  # a glob's root that does not exist: no match
-        with entries:
-            for e in entries:
-                if e.name.startswith((".", "_")):
+        for e in entries:
+            if e.name.startswith((".", "_")):
+                continue
+            r = f"{rel}/{e.name}" if rel else e.name
+            if e.is_dir():
+                if glob is not None and not glob.may_match_below(r):
                     continue
-                r = f"{rel}/{e.name}" if rel else e.name
-                if e.is_dir():
-                    if glob is not None and not glob.may_match_below(r):
-                        continue
-                    sub = _canon(e.path) if e.is_symlink() else os.path.join(real_dir, e.name)
-                    sub = os.path.normcase(sub)
-                    if sub in visited or _excluded(sub, excluded):
-                        continue
-                    visited.add(sub)
-                    stack.append((r, sub, e.path))
-                elif e.is_file() and _known(e.name) and (glob is None or glob(r)):
-                    key = os.path.join(real_dir, os.path.normcase(e.name))
-                    if _excluded(key, excluded):
-                        continue
-                    uri = os.path.join(root, *r.split("/"))
-                    src = Source(uri, r, e.stat().st_size, file_format(e.name), None, e.path)
-                    found.append((key, src))
+                sub = _canon(e.path) if e.is_symlink() else os.path.join(real_dir, e.name)
+                sub = os.path.normcase(sub)
+                if sub in visited or _excluded(sub, excluded):
+                    continue
+                visited.add(sub)
+                stack.append((r, sub, e.path))
+            elif e.is_file() and _known(e.name) and (glob is None or glob(r)):
+                key = os.path.join(real_dir, os.path.normcase(e.name))
+                if _excluded(key, excluded):
+                    continue
+                uri = os.path.join(root, *r.split("/"))
+                src = Source(uri, r, e.stat().st_size, file_format(e.name), None, e.path)
+                found.append((key, src))
     found.sort(key=lambda kv: kv[1].name)
     return found
 
@@ -927,12 +926,76 @@ def commit(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
 
 
 def remove(path: str | os.PathLike[str], *, missing_ok: bool = True) -> None:
-    """Delete the file ``path``, retrying while Windows reports it in use."""
+    """Delete the file ``path``, retrying while Windows reports it in use.
+
+    Whether it was missing is read from the disk, not from the error (see :func:`makedirs`).
+    """
     try:
         _retry(os.unlink, path)
-    except FileNotFoundError:
-        if not missing_ok:
+    except OSError:
+        if not missing_ok or os.path.lexists(path):
             raise
+
+
+# The errno of a failed os call is not always its own. On free-threaded CPython linked with
+# musl (Alpine), a thread whose call fails, or whose directory listing ends, while another
+# thread stops the world (a garbage collection) can see EAGAIN instead: the thread keeps errno
+# across re-attaching only in debug builds, and musl's sem_wait sets EAGAIN even when it
+# succeeds (CPython gh-161769). So the helpers below decide by what is on disk rather than by an
+# error's type (FileNotFoundError, FileExistsError), and list a directory again when its listing
+# reports EAGAIN, which no listing reports for real.
+_LISTINGS = 8  # tries
+
+
+def makedirs(path: str | os.PathLike[str]) -> None:
+    """Create the directory ``path`` and its missing parents; nothing if it exists.
+
+    ``Path.mkdir(parents=True)`` creates the parents only when ``mkdir`` fails with
+    FileNotFoundError; ``os.makedirs`` checks which parents exist first.
+    """
+    os.makedirs(path, exist_ok=True)
+
+
+def scandir(path: str | os.PathLike[str]) -> list[os.DirEntry[str]]:
+    """The entries of the directory ``path`` (as :func:`os.scandir` yields them)."""
+    for tries in range(_LISTINGS, 0, -1):
+        try:
+            with os.scandir(path) as it:
+                return list(it)
+        except BlockingIOError:
+            if tries == 1:
+                raise
+    raise AssertionError("unreachable")
+
+
+def iterdir(path: str | os.PathLike[str]) -> list[Path]:
+    """``Path(path).iterdir()``, as a list (see :func:`scandir`)."""
+    return [Path(path, e.name) for e in scandir(path)]
+
+
+def glob(root: str | os.PathLike[str], pattern: str) -> list[Path]:
+    """``Path(root).glob(pattern)`` for a pattern of ``/``-separated names and wildcards.
+
+    A directory that cannot be listed matches nothing, as in pathlib; one whose listing
+    reports EAGAIN is listed again (see :func:`scandir`).
+    """
+    found = [Path(root)]
+    parts = pattern.split("/")
+    for depth, part in enumerate(parts):
+        last = depth == len(parts) - 1
+        level = []
+        for d in found:
+            try:
+                entries = scandir(d)
+            except OSError:
+                continue
+            level += [
+                Path(d, e.name)
+                for e in entries
+                if fnmatch.fnmatch(e.name, part) and (last or e.is_dir())
+            ]
+        found = level
+    return found
 
 
 _O_BINARY = getattr(os, "O_BINARY", 0)  # Windows: no newline translation
@@ -949,8 +1012,10 @@ def _sibling(path: Path, ext: str) -> tuple[Path, int]:
         tmp = path.with_name(f".{path.name[:200]}.{secrets.token_hex(4)}{ext}")
         try:
             return tmp, os.open(tmp, flags, 0o666)  # the umask applies, as for any new file
-        except FileExistsError:
-            continue
+        except OSError:
+            if os.path.lexists(tmp):  # the name is taken (see makedirs: not by the errno)
+                continue
+            raise
         except BaseException:
             # O_EXCL and a random name: a file there now is the one this call made.
             with contextlib.suppress(OSError):
@@ -968,7 +1033,9 @@ def create_new(path: str | os.PathLike[str]) -> int:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_BINARY | getattr(os, "O_NOFOLLOW", 0)
     try:
         return os.open(path, flags, 0o666)  # the umask applies, as for any new file
-    except FileExistsError:
+    except OSError:
+        if not os.path.lexists(path):  # see makedirs: not by the errno
+            raise
         remove(path)
         return os.open(path, flags, 0o666)
 
@@ -984,7 +1051,7 @@ def _fsync(path: Path) -> None:
 def atomic_write_bytes(path: str | os.PathLike[str], data: bytes) -> None:
     """Write ``data`` to ``path`` atomically: a synced hidden sibling, then a rename."""
     p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
+    makedirs(p.parent)
     tmp, fd = _sibling(p, ".tmp")
     try:
         with open(fd, "wb") as f:
@@ -1024,7 +1091,7 @@ class Writer:
         self._state = "open"
 
     def _open(self, schema: Any) -> Path:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        makedirs(self.path.parent)
         tmp, fd = _sibling(self.path, ".partial")
         self.tmp = tmp  # before anything that can be interrupted: abort() removes it
         try:

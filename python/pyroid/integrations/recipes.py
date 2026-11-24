@@ -167,7 +167,7 @@ def lid_model_path(path: str | os.PathLike[str] | None = None, *, download: bool
             f"no fastText LID model: pass a path, set PYROID_LID_MODEL, or put lid.176.bin in "
             f"{target.parent}"
         )
-    target.parent.mkdir(parents=True, exist_ok=True)
+    os.makedirs(target.parent, exist_ok=True)  # Path.mkdir(parents=True): see _io.makedirs
     sys.stderr.write(
         f"pyroid: downloading fastText's lid.176.bin ({LID_176_SIZE / 2**20:.0f} MiB, once) to "
         f"{target}; to use a copy you already have, set PYROID_LID_MODEL=FILE (or pass "

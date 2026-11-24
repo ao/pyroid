@@ -96,7 +96,7 @@ def folder_digest(folder: str | os.PathLike[str], *patterns: str) -> str:
     """A short hash of the names and sizes of the files matching ``patterns`` under ``folder``."""
     root = Path(folder)
     h = hashlib.sha256()
-    names = sorted({p for pat in patterns for p in root.glob(pat) if p.is_file()})
+    names = sorted({p for pat in patterns for p in _io.glob(root, pat) if p.is_file()})
     for p in names:
         h.update(f"{p.relative_to(root).as_posix()}\t{p.stat().st_size}\n".encode())
     return h.hexdigest()[:16]
@@ -190,7 +190,7 @@ class State:
         if not self.done_dir.is_dir():
             return []
         out = []
-        for p in sorted(self.done_dir.glob("*.json")):
+        for p in sorted(_io.glob(self.done_dir, "*.json")):
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
             except (OSError, ValueError):
@@ -891,25 +891,30 @@ def _noop(n: int) -> None:
 
 
 def rmtree(path: str | os.PathLike[str]) -> None:
-    """Remove a directory tree, retrying files Windows reports as in use; best effort."""
+    """Remove a directory tree, retrying files Windows reports as in use; best effort.
+
+    A pass that leaves something behind is run again: a failed call or listing can report
+    another error than its own (see ``_io.makedirs``).
+    """
     import shutil
 
-    def retry(func: Callable[..., Any], p: str, _exc: BaseException) -> None:
+    def retry(func: Callable[..., Any], p: str, exc: BaseException) -> None:
+        if not isinstance(exc, PermissionError):
+            return  # gone already, or for the next pass
         for delay in (0.05, 0.1, 0.2, 0.4, 0.8):
             time.sleep(delay)
             try:
                 func(p)
-                return
-            except FileNotFoundError:
                 return
             except PermissionError:
                 continue
             except OSError:
                 return
 
-    if not os.path.exists(path):
-        return
-    if sys.version_info >= (3, 12):
-        shutil.rmtree(path, onexc=retry)
-    else:  # pragma: no cover - 3.11
-        shutil.rmtree(path, onerror=lambda f, p, ei: retry(f, p, ei[1]))
+    for _ in range(3):
+        if not os.path.exists(path):
+            return
+        if sys.version_info >= (3, 12):
+            shutil.rmtree(path, onexc=retry)
+        else:  # pragma: no cover - 3.11
+            shutil.rmtree(path, onerror=lambda f, p, ei: retry(f, p, ei[1]))
