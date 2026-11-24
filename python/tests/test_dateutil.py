@@ -1282,9 +1282,12 @@ def test_ctrl_c_interrupts_a_batch(run_python: Any, case: str, threads: int) -> 
     assert proc.returncode == 0, proc.stdout + proc.stderr
     word, latency, whole = lines[0].split()
     assert word == "interrupted", lines
-    # The batch checks every 50 ms (and every 1,024 rows it builds), not at its end; the rest is
-    # headroom for a loaded runner and a debug build.
-    assert float(latency) < min(2.0, float(whole) / 2), lines
+    # The batch checks every 50 ms (and every 1,024 rows it builds), not at its end: it stops
+    # within 2 s of the signal (headroom for a loaded runner and a debug build), and before the
+    # whole call would have ended (the signal comes 0.3 s in). A slow free-threaded macOS x86_64
+    # runner took 0.9 s of a 1.3 s call, mostly freeing the half-built result.
+    assert float(latency) < 2.0, lines
+    assert 0.3 + float(latency) < float(whole), lines
     assert lines[1] == "after 200", lines
 
 
